@@ -1,0 +1,8 @@
+node_modules/
+.session/
+.debug/
+last-catalog.json
+last-majors.json
+sync-progress.json
+.env
+.DS_Store

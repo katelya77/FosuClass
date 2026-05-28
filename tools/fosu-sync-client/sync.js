@@ -103,14 +103,43 @@ async function uploadToVps(endpoint, data) {
  * 初始化已登录的 Playwright 上下文
  */
 async function initBrowserContext() {
-  const browser = await chromium.launch({
-    headless: true, // 默默在后台运行
-    args: [
-      "--disable-blink-features=AutomationControlled",
-      "--ignore-certificate-errors",
-      "--disable-web-security"
-    ],
-  });
+  const launchArgs = [
+    "--disable-blink-features=AutomationControlled",
+    "--ignore-certificate-errors",
+    "--disable-web-security",
+    "--allow-running-insecure-content"
+  ];
+
+  let browser;
+  // 优先尝试系统边缘浏览器，其次是 Chrome，最后回退内置 Chromium
+  const channels = ["msedge", "chrome", null];
+  for (const channel of channels) {
+    try {
+      const config = {
+        headless: false, // 设为 false 以确保与系统通道的最大兼容性，并且能够直观展示同步过程
+        args: launchArgs,
+      };
+      if (channel) {
+        config.channel = channel;
+        console.log(`尝试使用系统浏览器通道: ${channel} ...`);
+      } else {
+        console.log("使用内置 Chromium 浏览器 ...");
+      }
+      browser = await chromium.launch(config);
+      break; // 成功启动则退出循环
+    } catch (e) {
+      console.warn(`⚠️ 浏览器通道 ${channel || "内置"} 启动失败: ${e.message}`);
+      if (channel === null) {
+        console.error("\n💡 提示: 如果您想使用内置 Chromium 浏览器，请先运行以下命令安装：");
+        console.error("   npx playwright install chromium");
+      }
+    }
+  }
+
+  if (!browser) {
+    console.error("❌ 无法启动任何浏览器！请检查 Playwright 安装是否完整。");
+    process.exit(1);
+  }
 
   let context;
 
@@ -183,10 +212,11 @@ async function checkSession(page) {
  */
 async function syncCatalog(page) {
   console.log("\n=== [步骤 1] 开始抓取 Catalog ===");
+  
+  // 1. 访问行政班级课表页面获取基础 catalog
   await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
-
-  const html = await page.content();
-  const $ = cheerio.load(html);
+  let html = await page.content();
+  let $ = cheerio.load(html);
 
   // 解析学期
   const semesters = [];
@@ -196,16 +226,25 @@ async function syncCatalog(page) {
     if (val) semesters.push({ value: val, label: text });
   });
 
-  // 解析学院
-  const colleges = [];
-  $("select[name='skyx'] option").each((_, el) => {
-    const val = $(el).attr("value");
-    const text = $(el).text().trim();
-    if (val && !text.includes("请选择") && !text.includes("全部")) {
-      const cleanName = text.replace(/^\[[a-zA-Z0-9_-]+\]/, "").trim();
-      colleges.push({ code: val, name: cleanName, rawLabel: text });
-    }
-  });
+  // 使用 Map 管理学院列表，方便根据 code 去重
+  const collegeMap = new Map();
+  
+  function addCollegesFromSelect(selectHtml) {
+    const $select = cheerio.load(selectHtml);
+    $select("select[name='skyx'] option").each((_, el) => {
+      const val = $select(el).attr("value");
+      const text = $select(el).text().trim();
+      if (val && !text.includes("请选择") && !text.includes("全部")) {
+        const cleanName = text.replace(/^\[[a-zA-Z0-9_-]+\]/, "").trim();
+        if (!collegeMap.has(val)) {
+          collegeMap.set(val, { code: val, name: cleanName, rawLabel: text });
+        }
+      }
+    });
+  }
+
+  // 提取班级课表页面的学院
+  addCollegesFromSelect(html);
 
   // 解析年级
   const grades = [];
@@ -216,6 +255,26 @@ async function syncCatalog(page) {
       grades.push(val);
     }
   });
+
+  // 2. 依次访问教师课表、教室课表和课程课表以补充学院选项
+  const extraPages = [
+    { name: "教师课表", path: "/kbcx/kbxx_teacher" },
+    { name: "教室课表", path: "/kbcx/kbxx_classroom" },
+    { name: "课程课表", path: "/kbcx/kbxx_kc" }
+  ];
+
+  for (const item of extraPages) {
+    try {
+      console.log(`   正在访问 ${item.name} (${item.path}) 补充院系选项...`);
+      await gotoPage(page, item.path, { waitUntil: "networkidle" });
+      const pageHtml = await page.content();
+      addCollegesFromSelect(pageHtml);
+    } catch (e) {
+      console.warn(`   ⚠️ 补充访问 ${item.name} 失败: ${e.message} (将忽略并继续)`);
+    }
+  }
+
+  const colleges = Array.from(collegeMap.values());
 
   // 默认周次
   const weeks = Array.from({ length: 20 }, (_, i) => ({
@@ -261,7 +320,7 @@ async function syncMajors(page, catalog) {
 
   console.log(`🔄 共有 ${colleges.length} 个学院, ${grades.length} 个年级，共计 ${colleges.length * grades.length} 次联动请求。`);
 
-  // 打开页面以确保环境支持 fetch
+  // 打开页面以确保联动操作可用
   await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
 
   let count = 0;
@@ -270,32 +329,75 @@ async function syncMajors(page, catalog) {
       count++;
       console.log(`   [${count}/${colleges.length * grades.length}] 抓取中: ${college.name} - ${grade}级 ...`);
       
+      let responseText = "";
+      let success = false;
+      
+      // 1. 优先使用 evaluate fetch
       try {
-        // 在页面上下文执行 fetch
-        const responseText = await page.evaluate(async (params) => {
+        responseText = await page.evaluate(async (params) => {
           const res = await fetch(`/kbcx/getZyByAjax?skyx=${params.collegeCode}&sknj=${params.grade}`);
           return res.text();
         }, { collegeCode: college.code, grade });
+        success = true;
+      } catch (ajaxErr) {
+        console.warn(`      ⚠️  Ajax 抓取专业失败 (${ajaxErr.message})，尝试使用 DOM 联动 Fallback...`);
+      }
 
-        // 解析联动数据
-        const parsed = parser.parseMajorAjaxResponse(responseText, { collegeCode: college.code, grade });
-        const majors = (parsed.majors || [])
-          .map((m) => ({
-            code: m.code,
-            name: m.name,
+      let majors = [];
+      if (success && responseText) {
+        try {
+          const parsed = parser.parseMajorAjaxResponse(responseText, { collegeCode: college.code, grade });
+          majors = (parsed.majors || [])
+            .map((m) => ({
+              code: m.code,
+              name: m.name,
+              collegeCode: college.code,
+              grade: grade,
+            }));
+        } catch (e) {
+          console.warn(`      ⚠️  Ajax 响应解析失败: ${e.message}，将尝试 DOM Fallback...`);
+          success = false;
+        }
+      }
+
+      // 2. 如果 evaluate fetch 失败，采用页面级 DOM 操作联动
+      if (!success) {
+        try {
+          // 选择学院
+          await page.selectOption("select[name='skyx']", college.code);
+          // 选择年级
+          await page.selectOption("select[name='sknj']", grade);
+          // 等待 DOM 反应
+          await page.waitForTimeout(800);
+          
+          // 获取专业下拉框所有选项
+          const options = await page.evaluate(() => {
+            const sel = document.querySelector("select[name='skzy']");
+            if (!sel) return [];
+            return Array.from(sel.options)
+              .map(opt => ({ value: opt.value, label: opt.textContent.trim() }))
+              .filter(opt => opt.value && !opt.label.includes("选择") && !opt.label.includes("全部"));
+          });
+
+          majors = options.map(opt => ({
+            code: opt.value,
+            name: opt.label.replace(/^\[[a-zA-Z0-9_-]+\]/, "").trim(),
             collegeCode: college.code,
             grade: grade,
           }));
-
-        if (majors.length > 0) {
-          console.log(`      Found ${majors.length} majors.`);
-          allMajors.push(...majors);
+        } catch (domErr) {
+          console.error(`      ❌ DOM 联动 Fallback 也彻底失败: ${domErr.message}`);
         }
-      } catch (err) {
-        console.error(`      ⚠️  抓取失败 ${college.name}-${grade}: ${err.message}`);
       }
 
-      await sleep(150); // 适度延时避免对教务系统造成过大压力
+      if (majors.length > 0) {
+        console.log(`      成功获取到 ${majors.length} 个专业。`);
+        allMajors.push(...majors);
+      } else {
+        console.log(`      没有专业数据。`);
+      }
+
+      await sleep(300); // 适度延时保护教务系统
     }
   }
 
@@ -307,6 +409,54 @@ async function syncMajors(page, catalog) {
   fs.writeFileSync(path.join(__dirname, "last-majors.json"), JSON.stringify(allMajors, null, 2), "utf-8");
   console.log("💾 Majors 临时数据已保存至本地 last-majors.json");
   return allMajors;
+}
+
+/**
+ * 3. 同步 Class Schedules 班级课表
+ */
+/**
+ * 获取当前登录学生的班级名称
+ */
+async function getCurrentStudentClass(page) {
+  console.log("🔍 正在定位当前登录学生的班级信息...");
+  try {
+    await gotoPage(page, "/xskb/xskb_list.do", { waitUntil: "networkidle" });
+    const htmlText = await page.content();
+    const $ = cheerio.load(htmlText);
+    
+    const bodyText = $("body").text();
+    let className = "";
+    
+    // 匹配类似 "班级：[123456] 动物医学2023级1班" 或 "行政班级：动物医学221"
+    const match = bodyText.match(/(?:行政)?班级[：:]\s*(?:\[\d+\])?\s*([^\s[\]#]+)/i);
+    if (match) {
+      className = match[1].trim();
+      console.log(`🎉 成功识别当前登录学生班级: ${className}`);
+      return className;
+    }
+
+    // 备选 DOM 遍历
+    $("td, th, span, div").each((_, el) => {
+      const text = $(el).text().trim();
+      if (text.includes("班级：") || text.includes("行政班级：") || text.includes("班级:")) {
+        const m = text.match(/(?:行政)?班级[：:]\s*(?:\[\d+\])?\s*([^\s[\]#]+)/i);
+        if (m) {
+          className = m[1].trim();
+        }
+      }
+    });
+
+    if (className) {
+      console.log(`🎉 从页面 DOM 匹配当前登录学生班级: ${className}`);
+      return className;
+    }
+    
+    console.warn("⚠️ 个人课表页面中未提取到明确班级文本。");
+    return "";
+  } catch (error) {
+    console.error(`⚠️ 抓取当前学生班级出错: ${error.message}`);
+    return "";
+  }
 }
 
 /**
@@ -332,20 +482,63 @@ async function syncClassSchedules(page, catalog, majors) {
     }
   }
 
+  const debugDir = path.join(__dirname, ".debug");
+  const rawPagesDir = path.join(debugDir, "raw-pages");
+  if (!fs.existsSync(rawPagesDir)) {
+    fs.mkdirSync(rawPagesDir, { recursive: true });
+  }
+
+  const PROGRESS_PATH = path.join(debugDir, "sync-progress.json");
+  let progress = { completed: [] };
+  if (fs.existsSync(PROGRESS_PATH)) {
+    try {
+      progress = JSON.parse(fs.readFileSync(PROGRESS_PATH, "utf-8"));
+      console.log(`ℹ️ 加载到本地同步进度，已完成 ${progress.completed.length} 个专业。`);
+    } catch (e) {
+      console.warn("⚠️ 读取断点进度失败，将全新抓取");
+    }
+  }
+
   // 默认使用最新学期
   const activeSemester = catalog.semesters[0]?.value || "2025-2026-2";
   console.log(`📅 抓取学期: ${activeSemester}`);
-  console.log(`🔄 共有 ${majors.length} 个专业需抓取班级课表。`);
 
-  // 打开页面以确保 Ajax 环境可用
+  // 定位当前学生班级
+  const currentStudentClass = await getCurrentStudentClass(page);
+
+  // 第一阶段只同步目标专业
+  const targetMajors = majors.filter(major => {
+    const college = catalog.colleges.find(c => c.code === major.collegeCode);
+    const isDongKe = college && college.name.includes("动物科技");
+    const is2025 = major.grade === "2025";
+    const isDongWu = major.name.includes("动物医学") || major.name.includes("动物科学");
+    
+    const isCurrentStudentMajor = currentStudentClass && 
+      currentStudentClass.includes(major.name) && 
+      currentStudentClass.includes(major.grade);
+
+    return (isDongKe && is2025) || isDongWu || isCurrentStudentMajor;
+  });
+
+  console.log(`🎯 阶段一目标专业总计: ${targetMajors.length} 个。`);
+
+  // 剔除已完成部分
+  const pendingMajors = targetMajors.filter(major => {
+    const key = `${major.grade}_${major.code}`;
+    return !progress.completed.includes(key);
+  });
+
+  console.log(`🔄 本轮待同步专业: ${pendingMajors.length} 个。`);
+
+  // 打开行政班级课表页面以确保 Ajax 环境可用
   await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
 
   const allClassSchedules = [];
   let count = 0;
 
-  for (const major of majors) {
+  for (const major of pendingMajors) {
     count++;
-    console.log(`   [${count}/${majors.length}] 正在抓取: ${major.grade}级 - ${major.name} 专业课表 ...`);
+    console.log(`   [${count}/${pendingMajors.length}] 正在抓取: ${major.grade}级 - ${major.name} 专业课表 ...`);
 
     try {
       // 页面内 POST 请求课表 HTML
@@ -375,6 +568,10 @@ async function syncClassSchedules(page, catalog, majors) {
         grade: major.grade,
         majorCode: major.code,
       });
+
+      // 保存 raw HTML 到本地，便于调试且不提交到 git
+      const rawHtmlPath = path.join(rawPagesDir, `class_${major.grade}_${major.code}.html`);
+      fs.writeFileSync(rawHtmlPath, htmlText, "utf-8");
 
       // 解析课表 HTML
       const parsed = parser.parseClassScheduleIfrHtml(htmlText, {
@@ -407,18 +604,36 @@ async function syncClassSchedules(page, catalog, majors) {
         console.log(`      没有排课数据。`);
       }
 
+      // 将该专业标记为已完成
+      progress.completed.push(`${major.grade}_${major.code}`);
+      fs.writeFileSync(PROGRESS_PATH, JSON.stringify(progress, null, 2), "utf-8");
+
     } catch (err) {
       console.error(`      ⚠️  抓取失败: ${err.message}`);
     }
 
-    await sleep(250); // 适度延时保护教务系统
+    // 随机限流延迟 (800ms - 1500ms)
+    const delay = Math.floor(Math.random() * (1500 - 800 + 1)) + 800;
+    await sleep(delay);
   }
 
   console.log(`📊 班级课表抓取完毕，共整理出 ${allClassSchedules.length} 个行政班级的课表。`);
   
-  // 上传至 VPS
-  await uploadToVps("/api/admin/sync/class-schedules", allClassSchedules);
-  console.log(`✅ 所有班级课表数据同步完成！`);
+  if (allClassSchedules.length > 0) {
+    // 上传至 VPS
+    await uploadToVps("/api/admin/sync/class-schedules", allClassSchedules);
+    console.log(`✅ 本轮抓取的班级课表数据同步完成！`);
+  } else {
+    console.log("ℹ️ 本轮没有新抓取到任何班级课表，无需上传。");
+  }
+
+  // 如果全部都已同步完成，重置进度文件
+  if (progress.completed.length >= targetMajors.length) {
+    try {
+      fs.unlinkSync(PROGRESS_PATH);
+      console.log("🎉 所有目标专业已同步完成，进度已重置。");
+    } catch (e) {}
+  }
 }
 
 /**

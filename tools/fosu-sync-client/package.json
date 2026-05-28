@@ -7,6 +7,8 @@
     "diagnose": "node diagnose.js",
     "diagnose:browser": "node diagnose-browser.js",
     "login": "node login.js",
+    "discover:fosu": "node discover.js",
+    "analyze:har": "node analyze-har.js",
     "sync:catalog": "node sync.js catalog",
     "sync:majors": "node sync.js majors",
     "sync:class": "node sync.js class",
