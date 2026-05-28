@@ -426,13 +426,85 @@ router.post(
   }
 );
 
-// 3. 同步 Class Schedules
+// 3. 同步 Class Schedules (支持 merge 增量合并与 replace 全量覆盖)
 router.post(
   "/sync/class-schedules",
   verifyAdminToken,
-  createSyncHandler("class-schedules", (data) => {
-    return Array.isArray(data);
-  })
+  (req, res) => {
+    const payload = req.body;
+    const mode = req.query.mode || "merge"; // 默认增量合并模式
+
+    if (!payload || !Array.isArray(payload)) {
+      return res.status(400).json({
+        success: false,
+        message: "请求体不能为空，且必须是行政班级课表数组",
+      });
+    }
+
+    if (containsSensitiveData(payload)) {
+      safeLog("sensitive-data-blocked", { type: "class-schedules" });
+      return res.status(400).json({
+        success: false,
+        message: "数据中包含敏感词，已被拒绝写入",
+      });
+    }
+
+    try {
+      const filePath = FILE_MAP["class-schedules"];
+      let finalData = [];
+
+      if (mode === "merge" && fs.existsSync(filePath)) {
+        try {
+          const existingData = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+          if (Array.isArray(existingData)) {
+            // 建立 className -> item 的 map
+            const map = new Map();
+            existingData.forEach(item => {
+              if (item && item.className) {
+                map.set(item.className, item);
+              }
+            });
+            // 用 payload 里的数据去覆盖或新增
+            payload.forEach(item => {
+              if (item && item.className) {
+                map.set(item.className, item);
+              }
+            });
+            finalData = Array.from(map.values());
+          } else {
+            finalData = payload;
+          }
+        } catch (e) {
+          console.error("Failed to parse existing class-schedules.json, fallback to rewrite", e);
+          finalData = payload;
+        }
+      } else {
+        // replace 模式或者原文件不存在
+        finalData = payload;
+      }
+
+      fs.writeFileSync(filePath, JSON.stringify(finalData, null, 2), "utf-8");
+      
+      const count = finalData.length;
+      updateSyncMeta("class-schedules", count, "local-sync-client");
+
+      safeLog("admin-sync-success", { key: "class-schedules", count, mode });
+
+      return res.json({
+        success: true,
+        message: `数据同步成功 (${mode === 'merge' ? '增量合并' : '全量覆盖'})`,
+        updatedAt: new Date().toISOString(),
+        itemCount: count,
+        uploadedCount: payload.length
+      });
+    } catch (error) {
+      safeLog("admin-sync-failed", { key: "class-schedules", error: error.message });
+      return res.status(500).json({
+        success: false,
+        message: `数据持久化失败: ${error.message}`,
+      });
+    }
+  }
 );
 
 // 4. 同步 Teacher Schedules

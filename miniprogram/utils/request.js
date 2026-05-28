@@ -10,7 +10,7 @@ function translateErrorMessage(payload, defaultMsg) {
   const msgLower = msg.toLowerCase();
   
   if (reasonCode === "NO_SYNC_DATA") {
-    return "暂未同步该范围的课表数据。\n\n你也可以导入自己的课表，帮助完善班级课表数据。";
+    return "该专业课表尚未同步，维护者同步后即可查看。";
   }
   
   if (
@@ -79,7 +79,9 @@ function request(url, method = "GET", data = {}, options = {}) {
 
         // 统一处理 HTTP 状态码非 200 的情况
         if (res.statusCode !== 200) {
-          showError("暂时无法连接教务数据服务");
+          if (!opt.silentError) {
+            showError("暂时无法连接教务数据服务");
+          }
           reject(new Error(`HTTP status error: ${res.statusCode}`));
           return;
         }
@@ -89,8 +91,12 @@ function request(url, method = "GET", data = {}, options = {}) {
         // 统一处理接口内部的 success: false 逻辑
         if (payload && payload.success === false) {
           const errMsg = translateErrorMessage(payload, payload.message);
-          showError(errMsg);
-          reject(new Error(errMsg));
+          if (!opt.silentError) {
+            showError(errMsg);
+          }
+          const err = new Error(errMsg);
+          err.payload = payload;
+          reject(err);
           return;
         }
 
@@ -101,7 +107,9 @@ function request(url, method = "GET", data = {}, options = {}) {
           wx.hideLoading();
         }
         const errMsg = translateErrorMessage(null, err.errMsg || "");
-        showError(errMsg);
+        if (!opt.silentError) {
+          showError(errMsg);
+        }
         console.error("wx.request failed", err);
         reject(err);
       },

@@ -41,6 +41,7 @@ Page({
     loading: false,
     updatedAtText: "",
     dataSourceText: "教务数据",
+    catalogEmpty: false,
   },
 
   onLoad() {
@@ -119,13 +120,13 @@ Page({
 
   // 1. 获取全校 Catalog 选项
   fetchSchoolCatalog() {
-    this.setData({ loading: true });
+    this.setData({ loading: true, catalogEmpty: false });
     // NOTE: 优先请求 bootstrap 接口，以便统一载入并进行版本/数据状态控制
     request.get("/api/fosu/bootstrap", {
       semester: "2025-2026-2",
-    }, { showLoading: false })
+    }, { showLoading: false, silentError: true })
       .then((res) => {
-        if (res && res.success && res.catalog) {
+        if (res && res.ready && res.catalog && Array.isArray(res.catalog.colleges) && res.catalog.colleges.length > 0) {
           const catalogData = {
             ...res.catalog,
             dataSource: res.dataSource || "cache",
@@ -134,9 +135,9 @@ Page({
           };
           this.originalCatalogData = catalogData;
           this.applyCatalogFilter();
-          this.setData({ loading: false });
+          this.setData({ loading: false, catalogEmpty: false });
         } else {
-          console.warn("Bootstrap success is false, fallback to catalog");
+          console.warn("Bootstrap not ready or missing catalog, fallback to catalog");
           this.fallbackToCatalog();
         }
       })
@@ -146,18 +147,23 @@ Page({
       });
   },
 
-  // 降级使用旧的 catalog 接口，防止 bootstrap 404 导致完全白屏
+  // 降级使用旧的 catalog 接口，防止 bootstrap 异常导致完全白屏
   fallbackToCatalog() {
     request.get("/api/fosu/catalog", {
       semester: "2025-2026-2",
-    }, { showLoading: false })
+    }, { showLoading: false, silentError: true })
       .then((data) => {
-        this.originalCatalogData = data;
-        this.applyCatalogFilter();
-        this.setData({ loading: false });
+        if (data && data.success && Array.isArray(data.colleges) && data.colleges.length > 0) {
+          this.originalCatalogData = data;
+          this.applyCatalogFilter();
+          this.setData({ loading: false, catalogEmpty: false });
+        } else {
+          console.warn("Catalog data is empty");
+          this.setData({ loading: false, catalogEmpty: true });
+        }
       })
       .catch((err) => {
-        this.setData({ loading: false });
+        this.setData({ loading: false, catalogEmpty: true });
         console.error("fetchSchoolCatalog (fallback) fail", err);
       });
   },

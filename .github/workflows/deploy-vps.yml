@@ -57,6 +57,10 @@ jobs:
             # 保证工作目录存在并进入
             cd ${{ secrets.VPS_APP_DIR }}/server
             
+            # 创建宿主机持久化 storage 目录并配置权限，不删除也不覆盖
+            mkdir -p storage
+            chmod 755 storage
+            
             # 自动生成 .env 配置文件，直接写入
             cat << 'EOF' > .env
             NODE_ENV=production

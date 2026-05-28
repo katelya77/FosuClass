@@ -1,10 +1,18 @@
 <view class="page school-page">
   <view class="page-header">
     <view class="title">查找佛大课表</view>
-    <view class="subtitle">班级、教师、教室和课程数据全部实时来自佛山大学教务系统</view>
+    <view class="subtitle">班级、教师、教室和课程数据全部来自佛山大学教务系统</view>
   </view>
 
-  <view class="search-card card">
+  <view wx:if="{{catalogEmpty}}" class="card" style="margin: 24rpx; padding: 60rpx 40rpx; text-align: center; border-radius: 16rpx; background: #ffffff; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.05);">
+    <empty-state
+      title="暂未同步全校课表数据"
+      desc="全校课表数据尚未同步，维护者同步后即可查看。请稍后再试。"
+    />
+  </view>
+
+  <block wx:else>
+    <view class="search-card card">
     <view class="search-row" wx:if="{{activeTab === 'teacher' || activeTab === 'classroom' || activeTab === 'course'}}">
       <text class="search-icon">⌕</text>
       <input
@@ -248,5 +256,5 @@
       title="输入课程名并查询" 
       desc="输入如：动物解剖学、有机化学，查看该门课程的开课详情。" 
     />
-  </view>
+  </block>
 </view>

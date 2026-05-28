@@ -1089,21 +1089,57 @@ async function syncClassSchedules(page, catalog, majors) {
   // 定位当前学生班级
   const currentStudentClass = await getCurrentStudentClass(page);
 
-  // 第一阶段只同步目标专业
-  const targetMajors = majors.filter(major => {
-    const college = catalog.colleges.find(c => c.code === major.collegeCode);
-    const isDongKe = college && college.name.includes("动物科技");
-    const is2025 = major.grade === "2025";
-    const isDongWu = major.name.includes("动物医学") || major.name.includes("动物科学");
-    
-    const isCurrentStudentMajor = currentStudentClass && 
-      currentStudentClass.includes(major.name) && 
-      currentStudentClass.includes(major.grade);
+  // 解析环境变量过滤条件
+  const syncCollegeCodes = process.env.SYNC_CLASS_COLLEGE_CODES ? process.env.SYNC_CLASS_COLLEGE_CODES.split(",").map(c => c.trim()).filter(Boolean) : null;
+  const syncGrades = process.env.SYNC_CLASS_GRADES ? process.env.SYNC_CLASS_GRADES.split(",").map(g => g.trim()).filter(Boolean) : null;
+  const syncMajorCodes = process.env.SYNC_CLASS_MAJOR_CODES ? process.env.SYNC_CLASS_MAJOR_CODES.split(",").map(m => m.trim()).filter(Boolean) : null;
+  const isFiltered = !!(syncCollegeCodes || syncGrades || syncMajorCodes);
 
-    return (isDongKe && is2025) || isDongWu || isCurrentStudentMajor;
+  if (isFiltered) {
+    console.log("ℹ️ 课表同步已启用环境变量限制过滤：");
+    if (syncCollegeCodes) console.log(`   - 学院限制: ${syncCollegeCodes.join(", ")}`);
+    if (syncGrades) console.log(`   - 年级限制: ${syncGrades.join(", ")}`);
+    if (syncMajorCodes) console.log(`   - 专业代码限制: ${syncMajorCodes.join(", ")}`);
+  } else {
+    console.log("ℹ️ 课表同步未设置环境变量限制。默认将仅同步在校活跃年级，并启用限速。");
+  }
+
+  // 筛选出目标专业
+  const targetMajors = majors.filter(major => {
+    // 1. 如果指定了 collegeCodes 限制且当前 major 不在其中，过滤掉
+    if (syncCollegeCodes && !syncCollegeCodes.includes(major.collegeCode)) {
+      return false;
+    }
+    // 2. 如果指定了 grades 限制且当前 major 不在其中，过滤掉
+    if (syncGrades && !syncGrades.includes(major.grade)) {
+      return false;
+    }
+    // 3. 如果指定了 majorCodes 限制且当前 major 不在其中，过滤掉
+    if (syncMajorCodes && !syncMajorCodes.includes(major.code)) {
+      return false;
+    }
+
+    // 4. 如果没有指定任何环境变量限制，则默认只同步活跃在校年级
+    if (!isFiltered) {
+      let activeGrades = [];
+      try {
+        activeGrades = getActiveGradesBySemester(activeSemester, { originalGrades: catalog.grades });
+      } catch (e) {
+        // 兜底：如果报错，则默认只同步最近 5 个年级
+        const currentYear = new Date().getFullYear();
+        for (let i = 4; i >= 0; i--) {
+          activeGrades.push(String(currentYear - i));
+        }
+      }
+      if (!activeGrades.includes(major.grade)) {
+        return false;
+      }
+    }
+
+    return true;
   });
 
-  console.log(`🎯 阶段一目标专业总计: ${targetMajors.length} 个。`);
+  console.log(`🎯 匹配的目标专业总计: ${targetMajors.length} 个。`);
 
   // 剔除已完成部分
   const pendingMajors = targetMajors.filter(major => {
@@ -1195,16 +1231,19 @@ async function syncClassSchedules(page, catalog, majors) {
       console.error(`      ⚠️  抓取失败: ${err.message}`);
     }
 
-    // 随机限流延迟 (800ms - 1500ms)
-    const delay = Math.floor(Math.random() * (1500 - 800 + 1)) + 800;
+    // 随机限流延迟：如果是全量同步则进一步限速保护教务系统
+    const delayMin = isFiltered ? 800 : 1500;
+    const delayMax = isFiltered ? 1500 : 3000;
+    const delay = Math.floor(Math.random() * (delayMax - delayMin + 1)) + delayMin;
+    console.log(`      ⏳ 随机等待 ${delay}ms...`);
     await sleep(delay);
   }
 
   console.log(`📊 班级课表抓取完毕，共整理出 ${allClassSchedules.length} 个行政班级的课表。`);
   
   if (allClassSchedules.length > 0) {
-    // 上传至 VPS
-    await uploadToVps("/api/admin/sync/class-schedules", allClassSchedules);
+    // 上传至 VPS (默认是 merge 模式，只更新/新增有变动的班级)
+    await uploadToVps("/api/admin/sync/class-schedules?mode=merge", allClassSchedules);
     console.log(`✅ 本轮抓取的班级课表数据同步完成！`);
   } else {
     console.log("ℹ️ 本轮没有新抓取到任何班级课表，无需上传。");
