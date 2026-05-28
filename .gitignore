@@ -13,5 +13,6 @@ server/node_modules/
 server/storage/*.json
 !server/storage/.gitkeep
 tools/fosu-sync-client/.env
-tools/fosu-sync-client/session.json
+tools/fosu-sync-client/.session/
+tools/fosu-sync-client/.debug/
 

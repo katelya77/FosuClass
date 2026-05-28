@@ -4,6 +4,44 @@
 
 const { API_BASE_URL } = require("../config/api");
 
+function translateErrorMessage(payload, defaultMsg) {
+  const reasonCode = payload ? payload.reasonCode : "";
+  const msg = (payload ? payload.message : defaultMsg) || "请求服务发生网络异常";
+  const msgLower = msg.toLowerCase();
+  
+  if (reasonCode === "NO_SYNC_DATA") {
+    return "暂未同步该范围的课表数据。\n\n你也可以导入自己的课表，帮助完善班级课表数据。";
+  }
+  
+  if (
+    reasonCode === "FOSU_INTRANET_ONLY" ||
+    msgLower.includes("enotfound") ||
+    msgLower.includes("node_tls_handshake_failed") ||
+    msgLower.includes("tls") ||
+    msgLower.includes("handshake") ||
+    msgLower.includes("disconnected") ||
+    msgLower.includes("timeout") ||
+    msgLower.includes("fail")
+  ) {
+    return "该数据需要维护者在校园网/VPN环境下同步后才能查看。\n\n你也可以导入自己的课表，帮助完善班级课表数据。";
+  }
+  
+  const hasTechnicalKey = 
+    msgLower.includes("captcha") ||
+    msgLower.includes("login") ||
+    msgLower.includes("fallback") ||
+    msgLower.includes("mock") ||
+    msgLower.includes("har") ||
+    msgLower.includes("bnsk") ||
+    msgLower.includes("debug");
+    
+  if (hasTechnicalKey) {
+    return "该数据需要维护者在校园网/VPN环境下同步后才能查看。\n\n你也可以导入自己的课表，帮助完善班级课表数据。";
+  }
+  
+  return msg;
+}
+
 /**
  * 基础请求封装
  * @param {string} url 相对路径，例如 '/api/fosu/catalog'
@@ -50,7 +88,7 @@ function request(url, method = "GET", data = {}, options = {}) {
         
         // 统一处理接口内部的 success: false 逻辑
         if (payload && payload.success === false) {
-          const errMsg = payload.message || "请求教务数据服务失败";
+          const errMsg = translateErrorMessage(payload, payload.message);
           showError(errMsg);
           reject(new Error(errMsg));
           return;
@@ -62,7 +100,8 @@ function request(url, method = "GET", data = {}, options = {}) {
         if (opt.showLoading) {
           wx.hideLoading();
         }
-        showError("暂时无法连接教务数据服务");
+        const errMsg = translateErrorMessage(null, err.errMsg || "");
+        showError(errMsg);
         console.error("wx.request failed", err);
         reject(err);
       },

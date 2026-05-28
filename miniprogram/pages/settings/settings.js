@@ -86,6 +86,12 @@ Page({
       url: "/pages/login/login",
     });
   },
+  
+  goContribute() {
+    wx.navigateTo({
+      url: "/pages/contribute/contribute",
+    });
+  },
 
   showDeveloperApi() {
     wx.showModal({

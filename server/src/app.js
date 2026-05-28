@@ -13,6 +13,7 @@ const { safeLog } = require("./utils/safeLogger");
 const healthRouter = require("./routes/health");
 const fosuRouter = require("./routes/fosu");
 const adminRouter = require("./routes/admin");
+const contributeRouter = require("./routes/contribute");
 
 const app = express();
 
@@ -22,10 +23,8 @@ app.use(helmet());
 // 2. CORS 跨域配置
 const corsOptions = {
   origin: (origin, callback) => {
-    // 允许没有 origin 的请求 (如移动端、curl、本地测试脚本)
     if (!origin) return callback(null, true);
     
-    // 如果配置了通配符，或请求 Origin 在允许列表中
     if (
       config.CORS_ALLOWED_ORIGINS.includes("*") || 
       config.CORS_ALLOWED_ORIGINS.includes(origin) ||
@@ -51,7 +50,8 @@ app.use(express.urlencoded({ extended: true }));
 // 5. 挂载路由
 app.use("/api/health", healthRouter);
 app.use("/api/fosu", fosuRouter);
-app.use("/api/admin/sync", adminRouter);
+app.use("/api/admin", adminRouter);
+app.use("/api/contribute", contributeRouter);
 
 // 6. 404 错误处理
 app.use((req, res, next) => {
