@@ -5,7 +5,7 @@ const defaultSettings = {
   semester: "2025-2026学年第二学期",
   currentWeek: 12,
   hideInactiveCourses: false,
-  showWeekend: true,
+  showWeekend: false,
 };
 
 function getSettings() {

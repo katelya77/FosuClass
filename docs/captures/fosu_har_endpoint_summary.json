@@ -1,0 +1,783 @@
+[
+  {
+    "index": 0,
+    "method": "POST",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbcx/kbxx_kc_ifr",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 512647,
+    "postParams": [
+      [
+        "xnxqh",
+        "2025-2026-2"
+      ],
+      [
+        "skyx",
+        "03"
+      ],
+      [
+        "kkyx",
+        ""
+      ],
+      [
+        "zzdKcSX",
+        ""
+      ],
+      [
+        "kc",
+        ""
+      ],
+      [
+        "zc1",
+        ""
+      ],
+      [
+        "zc2",
+        ""
+      ],
+      [
+        "jc1",
+        ""
+      ],
+      [
+        "jc2",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 1,
+    "method": "GET",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbcx/kbxx_kc",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 25569,
+    "postParams": []
+  },
+  {
+    "index": 2,
+    "method": "POST",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbcx/kbxx_classroom_ifr",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 416219,
+    "postParams": [
+      [
+        "xnxqh",
+        "2025-2026-2"
+      ],
+      [
+        "skyx",
+        "02"
+      ],
+      [
+        "xqid",
+        "2"
+      ],
+      [
+        "jzwid",
+        ""
+      ],
+      [
+        "zc1",
+        ""
+      ],
+      [
+        "zc2",
+        ""
+      ],
+      [
+        "jc1",
+        ""
+      ],
+      [
+        "jc2",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 3,
+    "method": "GET",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbxx/initJc",
+    "query": "xnxq=2025-2026-2",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 30,
+    "postParams": []
+  },
+  {
+    "index": 4,
+    "method": "POST",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbcx/kbxx_teacher_ifr",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 4600,
+    "postParams": [
+      [
+        "xnxqh",
+        "2025-2026-2"
+      ],
+      [
+        "skyx",
+        "02"
+      ],
+      [
+        "jszc",
+        "010"
+      ],
+      [
+        "zc1",
+        ""
+      ],
+      [
+        "zc2",
+        ""
+      ],
+      [
+        "jc1",
+        ""
+      ],
+      [
+        "jc2",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 5,
+    "method": "GET",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbcx/kbxx_teacher",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 32491,
+    "postParams": []
+  },
+  {
+    "index": 8,
+    "method": "POST",
+    "host": "100.fosu.edu.cn",
+    "path": "/xskb/xskb_print.do",
+    "query": "xnxq01id=2025-2026-2&zc=",
+    "status": 200,
+    "mimeType": "application/msexcel",
+    "textLength": 16896,
+    "postParams": []
+  },
+  {
+    "index": 10,
+    "method": "POST",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbcx/kbxx_xzb_ifr",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 49463,
+    "postParams": [
+      [
+        "xnxqh",
+        "2025-2026-2"
+      ],
+      [
+        "skyx",
+        "04"
+      ],
+      [
+        "sknj",
+        "2025"
+      ],
+      [
+        "skzy",
+        "3C3A6B4C710B4C8C9079446B5F5FCD96"
+      ],
+      [
+        "zc1",
+        ""
+      ],
+      [
+        "zc2",
+        ""
+      ],
+      [
+        "jc1",
+        ""
+      ],
+      [
+        "jc2",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 11,
+    "method": "POST",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbcx/kbxx_xzb_ifr",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 49463,
+    "postParams": [
+      [
+        "xnxqh",
+        "2025-2026-2"
+      ],
+      [
+        "skyx",
+        "04"
+      ],
+      [
+        "sknj",
+        "2025"
+      ],
+      [
+        "skzy",
+        "3C3A6B4C710B4C8C9079446B5F5FCD96"
+      ],
+      [
+        "zc1",
+        ""
+      ],
+      [
+        "zc2",
+        ""
+      ],
+      [
+        "jc1",
+        ""
+      ],
+      [
+        "jc2",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 12,
+    "method": "GET",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbcx/getZyByAjax",
+    "query": "&skyx=04&sknj=2025",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 351,
+    "postParams": []
+  },
+  {
+    "index": 13,
+    "method": "GET",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbcx/getZyByAjax",
+    "query": "&skyx=04&sknj=",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 1003,
+    "postParams": []
+  },
+  {
+    "index": 14,
+    "method": "POST",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbcx/kbxx_xzb_ifr",
+    "query": "",
+    "status": 0,
+    "mimeType": "",
+    "textLength": 0,
+    "postParams": [
+      [
+        "xnxqh",
+        "2025-2026-2"
+      ],
+      [
+        "skyx",
+        ""
+      ],
+      [
+        "sknj",
+        ""
+      ],
+      [
+        "skzy",
+        ""
+      ],
+      [
+        "zc1",
+        ""
+      ],
+      [
+        "zc2",
+        ""
+      ],
+      [
+        "jc1",
+        ""
+      ],
+      [
+        "jc2",
+        ""
+      ]
+    ]
+  },
+  {
+    "index": 15,
+    "method": "GET",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbxx/initJc",
+    "query": "xnxq=2025-2026-2",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 30,
+    "postParams": []
+  },
+  {
+    "index": 16,
+    "method": "GET",
+    "host": "100.fosu.edu.cn",
+    "path": "/kbcx/kbxx_xzb",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 20241,
+    "postParams": []
+  },
+  {
+    "index": 17,
+    "method": "POST",
+    "host": "100.fosu.edu.cn",
+    "path": "/xskb/xskb_list.do",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 56999,
+    "postParams": [
+      [
+        "cj0701id",
+        ""
+      ],
+      [
+        "zc",
+        ""
+      ],
+      [
+        "demo",
+        ""
+      ],
+      [
+        "xnxq01id",
+        "2025-2026-2"
+      ],
+      [
+        "sfFD",
+        "1"
+      ],
+      [
+        "sfBZ",
+        "1"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "8322DE4968464D0A882070659FEDFDE0-1-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "8322DE4968464D0A882070659FEDFDE0-1-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "8322DE4968464D0A882070659FEDFDE0-1-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "8322DE4968464D0A882070659FEDFDE0-2-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "8322DE4968464D0A882070659FEDFDE0-2-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "8322DE4968464D0A882070659FEDFDE0-2-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "8322DE4968464D0A882070659FEDFDE0-3-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "8322DE4968464D0A882070659FEDFDE0-3-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "8322DE4968464D0A882070659FEDFDE0-3-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "8322DE4968464D0A882070659FEDFDE0-4-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "8322DE4968464D0A882070659FEDFDE0-4-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "8322DE4968464D0A882070659FEDFDE0-4-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "8322DE4968464D0A882070659FEDFDE0-5-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "8322DE4968464D0A882070659FEDFDE0-5-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "8322DE4968464D0A882070659FEDFDE0-5-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "8322DE4968464D0A882070659FEDFDE0-6-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "8322DE4968464D0A882070659FEDFDE0-6-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "8322DE4968464D0A882070659FEDFDE0-6-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "8322DE4968464D0A882070659FEDFDE0-7-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "8322DE4968464D0A882070659FEDFDE0-7-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "8322DE4968464D0A882070659FEDFDE0-7-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "6A9EE05F954549FE927F6D81EE3B3F65-1-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "6A9EE05F954549FE927F6D81EE3B3F65-1-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "6A9EE05F954549FE927F6D81EE3B3F65-1-3"
+      ]
+    ]
+  },
+  {
+    "index": 18,
+    "method": "POST",
+    "host": "100.fosu.edu.cn",
+    "path": "/xskb/xskb_list.do",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 55346,
+    "postParams": [
+      [
+        "cj0701id",
+        ""
+      ],
+      [
+        "zc",
+        ""
+      ],
+      [
+        "demo",
+        ""
+      ],
+      [
+        "xnxq01id",
+        "2025-2026-1"
+      ],
+      [
+        "sfFD",
+        "1"
+      ],
+      [
+        "sfBZ",
+        "1"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "49C512F3A8CE410AADDCE3A37F81AE46-1-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "49C512F3A8CE410AADDCE3A37F81AE46-1-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "49C512F3A8CE410AADDCE3A37F81AE46-1-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "49C512F3A8CE410AADDCE3A37F81AE46-2-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "49C512F3A8CE410AADDCE3A37F81AE46-2-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "49C512F3A8CE410AADDCE3A37F81AE46-2-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "49C512F3A8CE410AADDCE3A37F81AE46-3-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "49C512F3A8CE410AADDCE3A37F81AE46-3-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "49C512F3A8CE410AADDCE3A37F81AE46-3-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "49C512F3A8CE410AADDCE3A37F81AE46-4-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "49C512F3A8CE410AADDCE3A37F81AE46-4-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "49C512F3A8CE410AADDCE3A37F81AE46-4-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "49C512F3A8CE410AADDCE3A37F81AE46-5-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "49C512F3A8CE410AADDCE3A37F81AE46-5-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "49C512F3A8CE410AADDCE3A37F81AE46-5-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "49C512F3A8CE410AADDCE3A37F81AE46-6-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "49C512F3A8CE410AADDCE3A37F81AE46-6-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "49C512F3A8CE410AADDCE3A37F81AE46-6-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "49C512F3A8CE410AADDCE3A37F81AE46-7-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "49C512F3A8CE410AADDCE3A37F81AE46-7-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "49C512F3A8CE410AADDCE3A37F81AE46-7-3"
+      ],
+      [
+        "jx0415zbdiv_1",
+        "2D74ACFCA6FD4D7AB1AD7F6975467C72-1-1"
+      ],
+      [
+        "jx0415zbdiv_2",
+        "2D74ACFCA6FD4D7AB1AD7F6975467C72-1-2"
+      ],
+      [
+        "jx0415zbdiv_3",
+        "2D74ACFCA6FD4D7AB1AD7F6975467C72-1-3"
+      ]
+    ]
+  },
+  {
+    "index": 20,
+    "method": "GET",
+    "host": "100.fosu.edu.cn",
+    "path": "/xskb/xskb_list.do",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 56999,
+    "postParams": []
+  },
+  {
+    "index": 24,
+    "method": "POST",
+    "host": "100.fosu.edu.cn",
+    "path": "/xskb/xskb_print.do",
+    "query": "xnxq01id=2025-2026-2&zc=",
+    "status": 200,
+    "mimeType": "application/msexcel",
+    "textLength": 16896,
+    "postParams": []
+  },
+  {
+    "index": 25,
+    "method": "POST",
+    "host": "authserver.fosu.edu.cn",
+    "path": "/authserver/login",
+    "query": "service=http%3A%2F%2F100.fosu.edu.cn%2Fcaslogin.jsp%3FkstzType%3Dnull",
+    "status": 302,
+    "mimeType": "",
+    "textLength": 0,
+    "postParams": [
+      [
+        "username",
+        "[REDACTED]"
+      ],
+      [
+        "password",
+        "[REDACTED]"
+      ],
+      [
+        "captcha",
+        "[REDACTED]"
+      ],
+      [
+        "_eventId",
+        "submit"
+      ],
+      [
+        "lt",
+        "[REDACTED]"
+      ],
+      [
+        "cllt",
+        "[REDACTED]"
+      ],
+      [
+        "dllt",
+        "[REDACTED]"
+      ],
+      [
+        "execution",
+        "[REDACTED]"
+      ]
+    ]
+  },
+  {
+    "index": 27,
+    "method": "GET",
+    "host": "100.fosu.edu.cn",
+    "path": "/xskb/xskb_list.do",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 56999,
+    "postParams": []
+  },
+  {
+    "index": 58,
+    "method": "GET",
+    "host": "100.fosu.edu.cn",
+    "path": "/framework/xsMain.jsp",
+    "query": "",
+    "status": 200,
+    "mimeType": "text/html",
+    "textLength": 66463,
+    "postParams": []
+  },
+  {
+    "index": 59,
+    "method": "GET",
+    "host": "100.fosu.edu.cn",
+    "path": "/caslogin.jsp",
+    "query": "kstzType=null",
+    "status": 302,
+    "mimeType": "text/html",
+    "textLength": 0,
+    "postParams": []
+  },
+  {
+    "index": 60,
+    "method": "GET",
+    "host": "100.fosu.edu.cn",
+    "path": "/caslogin.jsp",
+    "query": "kstzType=null&ticket=[REDACTED]",
+    "status": 302,
+    "mimeType": "",
+    "textLength": 0,
+    "postParams": []
+  },
+  {
+    "index": 61,
+    "method": "POST",
+    "host": "authserver.fosu.edu.cn",
+    "path": "/authserver/login",
+    "query": "service=http%3A%2F%2F100.fosu.edu.cn%2Fcaslogin.jsp%3FkstzType%3Dnull",
+    "status": 302,
+    "mimeType": "",
+    "textLength": 0,
+    "postParams": [
+      [
+        "username",
+        "[REDACTED]"
+      ],
+      [
+        "password",
+        "[REDACTED]"
+      ],
+      [
+        "captcha",
+        "[REDACTED]"
+      ],
+      [
+        "_eventId",
+        "submit"
+      ],
+      [
+        "lt",
+        "[REDACTED]"
+      ],
+      [
+        "cllt",
+        "[REDACTED]"
+      ],
+      [
+        "dllt",
+        "[REDACTED]"
+      ],
+      [
+        "execution",
+        "[REDACTED]"
+      ]
+    ]
+  },
+  {
+    "index": 62,
+    "method": "GET",
+    "host": "authserver.fosu.edu.cn",
+    "path": "/authserver/fosuThemeCaptcha/customStatic/mobile/img/eye.png",
+    "query": "",
+    "status": 200,
+    "mimeType": "image/png",
+    "textLength": 931,
+    "postParams": []
+  }
+]

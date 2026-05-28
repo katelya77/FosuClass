@@ -2,9 +2,9 @@
   <view class="popup-panel" catchtap="noop">
     <view class="popup-handle"></view>
     <view class="popup-header">
-      <view>
+      <view class="popup-title-block">
         <view class="course-title">{{course.courseName}}</view>
-        <view class="course-subtitle">{{course.className}} · {{course.semester}}</view>
+        <view class="course-subtitle">{{course.semester || "当前学期"}}</view>
       </view>
       <button class="close-button" bindtap="close">×</button>
     </view>
@@ -19,18 +19,26 @@
         <text class="detail-value">{{course.classroom || "待补充"}}</text>
       </view>
       <view class="detail-item">
+        <text class="detail-label">周次</text>
+        <text class="detail-value">{{course.weekText}} · {{weekTypeText}}</text>
+      </view>
+      <view class="detail-item">
         <text class="detail-label">节次</text>
         <text class="detail-value">{{sectionText}}</text>
       </view>
       <view class="detail-item">
-        <text class="detail-label">周次</text>
-        <text class="detail-value">{{course.weekText}} · {{weekTypeText}}</text>
+        <text class="detail-label">时间</text>
+        <text class="detail-value">{{timeText || "待补充"}}</text>
+      </view>
+      <view class="detail-item full">
+        <text class="detail-label">班级</text>
+        <text class="detail-value">{{course.className || "当前班级"}}</text>
       </view>
     </view>
 
-    <view wx:if="{{course.remark}}" class="remark">
+    <view class="remark">
       <view class="detail-label">备注</view>
-      <view class="remark-text">{{course.remark}}</view>
+      <view class="remark-text">{{course.remark || "暂无备注"}}</view>
     </view>
   </view>
 </view>

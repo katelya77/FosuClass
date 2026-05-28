@@ -1,7 +1,12 @@
 .week-switcher {
   display: flex;
   align-items: center;
-  gap: 10rpx;
+  gap: 6rpx;
+  flex: 0 0 auto;
+  padding: 4rpx;
+  border: 1rpx solid #e4eaf2;
+  border-radius: 999rpx;
+  background: #f7f9fc;
 }
 
 .week-button,
@@ -9,23 +14,25 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  height: 64rpx;
+  height: 48rpx;
   border-radius: 999rpx;
-  background: #ffffff;
+  background: transparent;
   color: #172033;
-  box-shadow: 0 8rpx 24rpx rgba(16, 31, 55, 0.08);
 }
 
 .week-button {
-  width: 64rpx;
-  font-size: 42rpx;
-  font-weight: 500;
+  width: 48rpx;
+  color: #5a6678;
+  font-size: 36rpx;
+  font-weight: 600;
 }
 
 .week-current {
-  min-width: 150rpx;
-  padding: 0 28rpx;
+  min-width: 112rpx;
+  padding: 0 18rpx;
+  background: #ffffff;
   color: #c62828;
-  font-size: 28rpx;
-  font-weight: 700;
+  font-size: 23rpx;
+  font-weight: 800;
+  box-shadow: 0 6rpx 16rpx rgba(16, 31, 55, 0.06);
 }

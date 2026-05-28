@@ -1,6 +1,6 @@
 <view class="page index-page">
-  <view class="hero card">
-    <view class="hero-top">
+  <view class="compact-header card">
+    <view class="header-main">
       <view class="brand">
         <image
           wx:if="{{showLogo}}"
@@ -12,44 +12,34 @@
         <view wx:else class="brand-logo fallback-logo">佛</view>
         <view class="brand-copy">
           <view class="app-title">{{appName}}</view>
-          <view class="app-subtitle">{{className}} · {{semester}}</view>
         </view>
       </view>
+      <view class="week-badge">第{{currentWeek}}周</view>
+    </view>
+
+    <view class="class-line">{{className}} · {{semester}} · {{dataSourceText}}</view>
+
+    <view class="control-row">
       <week-switcher current-week="{{currentWeek}}" total-weeks="{{totalWeeks}}" bind:change="onWeekChange" />
-    </view>
-    <view class="hero-meta">
-      <view class="meta-pill">第{{currentWeek}}周 · {{weekDateText}}</view>
-      <view class="meta-pill">{{showWeekend ? "显示周末" : "隐藏周末"}}</view>
-      <view class="meta-pill">{{hideInactiveCourses ? "仅当前周" : "灰显非当前周"}}</view>
-    </view>
-    <view class="hero-actions">
-      <button class="action-button" bindtap="goSchool">切换班级</button>
-      <button class="action-button" bindtap="goTimetable">作息时间</button>
-      <button class="sync-button" bindtap="goLogin">同步课表</button>
+      <scroll-view class="action-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+        <view class="action-list">
+          <button class="chip-button" bindtap="goSchool">全校班级</button>
+          <button class="chip-button" bindtap="goTimetable">作息时间</button>
+          <button class="chip-button sync-chip" bindtap="goLogin">同步课表</button>
+        </view>
+      </scroll-view>
     </view>
   </view>
 
   <view class="schedule card">
     <view class="schedule-title-row">
       <view class="section-title">周课表</view>
-      <view class="schedule-hint">1-13节</view>
-    </view>
-    <view class="schedule-header">
-      <view class="time-head">节次</view>
-      <view class="weekday-heads">
-        <view
-          wx:for="{{weekdays}}"
-          wx:key="weekday"
-          class="weekday-head {{item.isToday ? 'is-today' : ''}}"
-        >
-          <view>{{item.label}}</view>
-          <view wx:if="{{item.isToday}}" class="today-dot"></view>
-        </view>
-      </view>
+      <view class="schedule-hint">{{showWeekend ? "周一至周日，可横向滑动" : "周一至周五"}}</view>
     </view>
 
-    <view class="schedule-body" style="height: {{scheduleHeight}}rpx;">
-      <view class="time-column">
+    <view class="table-shell">
+      <view class="time-axis">
+        <view class="time-head">节次</view>
         <view
           wx:for="{{sections}}"
           wx:key="section"
@@ -61,25 +51,46 @@
           <view class="time-text">{{item.end}}</view>
         </view>
       </view>
-      <view class="days-area">
-        <view wx:for="{{dayColumns}}" wx:key="weekday" class="day-column">
-          <view
-            wx:for="{{sections}}"
-            wx:for-item="section"
-            wx:key="section"
-            class="section-slot"
-            style="height: {{sectionHeight}}rpx;"
-          ></view>
-          <course-card
-            wx:for="{{item.courses}}"
-            wx:for-item="course"
-            wx:key="id"
-            course="{{course}}"
-            card-style="{{course.cardStyle}}"
-            bind:tapcourse="onCourseTap"
-          />
+
+      <scroll-view
+        class="day-scroll {{showWeekend ? 'has-weekend' : ''}}"
+        scroll-x="{{showWeekend}}"
+        enhanced
+        show-scrollbar="{{false}}"
+      >
+        <view class="day-track">
+          <view class="weekday-heads">
+            <view
+              wx:for="{{weekdays}}"
+              wx:key="weekday"
+              class="weekday-head {{item.isToday ? 'is-today' : ''}}"
+            >
+              <view>{{item.label}}</view>
+              <view wx:if="{{item.isToday}}" class="today-dot"></view>
+            </view>
+          </view>
+
+          <view class="days-area" style="height: {{scheduleHeight}}rpx;">
+            <view wx:for="{{dayColumns}}" wx:key="weekday" class="day-column {{item.isToday ? 'is-today' : ''}}">
+              <view
+                wx:for="{{sections}}"
+                wx:for-item="section"
+                wx:key="section"
+                class="section-slot"
+                style="height: {{sectionHeight}}rpx;"
+              ></view>
+              <course-card
+                wx:for="{{item.courses}}"
+                wx:for-item="course"
+                wx:key="id"
+                course="{{course}}"
+                card-style="{{course.cardStyle}}"
+                bind:tapcourse="onCourseTap"
+              />
+            </view>
+          </view>
         </view>
-      </view>
+      </scroll-view>
     </view>
   </view>
 

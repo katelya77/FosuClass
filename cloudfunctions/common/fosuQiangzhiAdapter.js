@@ -23,48 +23,65 @@ class FosuQiangzhiAdapter {
     return `${this.baseUrl}${path}`;
   }
 
-  async login(studentId, password) {
-    if (!studentId || !password) {
-      throw new Error("缺少学号或密码。");
-    }
-    // TODO: 根据脱敏抓包补充真实登录 URL、Method、Form Data、验证码处理方式和返回结构。
-    // 不绕过验证码，不保存明文密码，不打印密码、Cookie、Token 或 Session。
+  notConnected() {
     assertNotConnected();
+  }
+
+  async login(studentId, password) {
+    void studentId;
+    void password;
+    // TODO: 用 DevTools 脱敏抓包补充真实登录 URL、Method、Form Data、验证码/二次校验规则和返回结构。
+    // 禁止打印 password、Cookie、Token、JSESSIONID；后续只允许写入脱敏日志。
+    return this.notConnected();
   }
 
   async fetchPersonalSchedule(session, params) {
-    // TODO: 接入 /xskb/xskb_list.do，解析“我的课表 / 学期理论课表”。
-    assertNotConnected();
+    void session;
+    void params;
+    // TODO: 将 /xskb/xskb_list.do 的 URL、Method、Query Params、Form Data 和 HTML/JSON 响应样例填到这里。
+    return this.notConnected();
   }
 
   async fetchClassSchedule(session, params) {
-    // TODO: 接入 /kbcx/kbxx_xzb，解析行政班级课表。
-    assertNotConnected();
+    void session;
+    void params;
+    // TODO: 将 /kbcx/kbxx_xzb 的 URL、Method、Query Params、Form Data 和 HTML/JSON 响应样例填到这里。
+    return this.notConnected();
   }
 
   async fetchTeacherSchedule(session, params) {
-    // TODO: 接入 /kbcx/kbxx_teacher，解析教师课表。
-    assertNotConnected();
+    void session;
+    void params;
+    // TODO: 将 /kbcx/kbxx_teacher 的 URL、Method、Query Params、Form Data 和 HTML/JSON 响应样例填到这里。
+    return this.notConnected();
   }
 
   async fetchClassroomSchedule(session, params) {
-    // TODO: 接入 /kbcx/kbxx_classroom，解析教室课表。
-    assertNotConnected();
+    void session;
+    void params;
+    // TODO: 将 /kbcx/kbxx_classroom 的 URL、Method、Query Params、Form Data 和 HTML/JSON 响应样例填到这里。
+    return this.notConnected();
   }
 
   async fetchCourseSchedule(session, params) {
-    // TODO: 接入 /kbcx/kbxx_kc，解析课程课表。
-    assertNotConnected();
+    void session;
+    void params;
+    // TODO: 将 /kbcx/kbxx_kc 的 URL、Method、Query Params、Form Data 和 HTML/JSON 响应样例填到这里。
+    return this.notConnected();
   }
 
   async fetchCalendar(session, params) {
-    // TODO: 接入后台“教学日历查看”页面。
-    assertNotConnected();
+    void session;
+    void params;
+    // TODO: 抓取“教学日历查看”页面后，把真实 path、Method、Form Data 和响应样例填到这里。
+    return this.notConnected();
   }
 
   async fetchScores(session, params) {
-    // TODO: 接入 /kscj/cjcx_query?Ves632DSdyV=NEW_XSD_XJCJ。
-    assertNotConnected();
+    void session;
+    void params;
+    // TODO: 将 /kscj/cjcx_query?Ves632DSdyV=NEW_XSD_XJCJ 的 URL、Method、Query Params、Form Data 和响应样例填到这里。
+    return this.notConnected();
   }
 }
 

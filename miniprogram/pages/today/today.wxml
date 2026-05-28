@@ -1,8 +1,12 @@
 <view class="page today-page">
   <view class="today-hero card">
-    <view class="date-text">{{dateText}}</view>
+    <view class="hero-topline">
+      <view class="date-text">{{dateText}}</view>
+      <view class="source-pill">{{dataSourceText}}</view>
+    </view>
     <view class="today-title">{{weekdayText}} · 第{{currentWeek}}周</view>
-    <view class="today-subtitle">{{className}} 今日课程</view>
+    <view class="today-subtitle">{{className}}</view>
+    <view class="today-count">{{courseCountText}}</view>
   </view>
 
   <view wx:if="{{courses.length}}" class="today-list">

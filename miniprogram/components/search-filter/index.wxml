@@ -4,7 +4,7 @@
     <input
       class="search-input"
       value="{{keyword}}"
-      placeholder="搜索班级、专业、课程名"
+      placeholder="搜索学院、专业、班级"
       placeholder-class="search-placeholder"
       confirm-type="search"
       bindinput="onKeywordInput"

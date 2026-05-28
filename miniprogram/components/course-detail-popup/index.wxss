@@ -12,15 +12,15 @@
 
 .popup-panel {
   width: 100%;
-  padding: 18rpx 28rpx calc(34rpx + env(safe-area-inset-bottom));
-  border-radius: 28rpx 28rpx 0 0;
+  padding: 16rpx 24rpx calc(30rpx + env(safe-area-inset-bottom));
+  border-radius: 24rpx 24rpx 0 0;
   background: #ffffff;
 }
 
 .popup-handle {
   width: 76rpx;
   height: 8rpx;
-  margin: 0 auto 22rpx;
+  margin: 0 auto 18rpx;
   border-radius: 999rpx;
   background: #d9dee8;
 }
@@ -32,41 +32,53 @@
   gap: 20rpx;
 }
 
+.popup-title-block {
+  min-width: 0;
+}
+
 .course-title {
+  overflow: hidden;
   color: #172033;
-  font-size: 38rpx;
+  font-size: 34rpx;
   font-weight: 800;
-  line-height: 1.25;
+  line-height: 1.28;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .course-subtitle {
-  margin-top: 10rpx;
+  overflow: hidden;
+  margin-top: 8rpx;
   color: #778297;
-  font-size: 24rpx;
+  font-size: 23rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .close-button {
-  width: 64rpx;
-  height: 64rpx;
+  flex: 0 0 auto;
+  width: 56rpx;
+  height: 56rpx;
   border-radius: 50%;
   background: #f1f3f7;
   color: #687386;
-  font-size: 46rpx;
-  line-height: 58rpx;
+  font-size: 40rpx;
+  line-height: 50rpx;
 }
 
 .detail-grid {
   display: flex;
   flex-wrap: wrap;
-  gap: 16rpx;
-  margin-top: 28rpx;
+  gap: 12rpx;
+  margin-top: 24rpx;
 }
 
 .detail-item,
 .remark {
-  padding: 22rpx;
-  border-radius: 16rpx;
-  background: #f7f8fa;
+  padding: 18rpx;
+  border: 1rpx solid #edf0f5;
+  border-radius: 12rpx;
+  background: #f8fafc;
 }
 
 .detail-item {
@@ -74,22 +86,26 @@
   min-width: 0;
 }
 
+.detail-item.full {
+  flex-basis: 100%;
+}
+
 .detail-label {
   display: block;
   color: #8a94a6;
-  font-size: 22rpx;
+  font-size: 21rpx;
 }
 
 .detail-value,
 .remark-text {
   display: block;
-  margin-top: 8rpx;
+  margin-top: 7rpx;
   color: #172033;
-  font-size: 28rpx;
+  font-size: 25rpx;
   font-weight: 600;
   line-height: 1.35;
 }
 
 .remark {
-  margin-top: 16rpx;
+  margin-top: 12rpx;
 }

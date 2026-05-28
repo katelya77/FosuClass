@@ -4,11 +4,11 @@
 
 ## 当前功能
 
-- 首页周课表：彩色课程方块、周一到周日、第 1 节到第 13 节、周次切换、课程详情弹窗。
+- 首页周课表：彩色课程方块、默认周一到周五、第 1 节到第 14 节、周次切换、课程详情弹窗；开启周末后课表支持横向滑动。
 - 全校课表：班级、学院、年级、专业搜索筛选，当前使用 Mock 班级数据。
-- 今日课程：按当前班级、当前周、今天星期筛选课程。
+- 今日课程：按当前班级、当前周、今天星期筛选课程，显示时间、节次、教室、教师、周次和上课状态。
 - 教学周历：展示 2025-2026 学年第二学期第 1-20 周 Mock 周历。
-- 作息时间：第 1-13 节可配置 Mock 时间。
+- 作息时间：第 1-14 节可配置 Mock 时间。
 - 登录同步：只做 UI 和 Mock 流程，不真实登录、不保存密码。
 - 设置页：当前班级、当前学期、当前周、隐藏非当前周课程、显示周末、清除缓存、隐私说明。
 
@@ -22,15 +22,37 @@
 
 没有额外 npm 依赖需要安装。
 
+## 真机调试体积优化
+
+微信开发者工具“自动真机调试”对 source size 有 2MB 限制。当前项目已经做了这些处理：
+
+- `project.config.json` 关闭 `setting.uploadWithSourceMap`，保留 `minified`、`minifyWXML`、`minifyWXSS` 为 `true`。
+- `packOptions.ignore` 忽略 README、docs、tools、node_modules、miniprogram_npm、source map、日志、密钥占位文件等不会参与小程序运行的文件。
+- 删除微信云开发 quickstart 遗留大图和未引用的大图标；首页 logo 缺失时使用“佛”字 CSS fallback，不为了 logo 引入大图。
+
+Windows PowerShell 可用下面命令检查小程序目录内的大文件：
+
+```powershell
+Get-ChildItem -Recurse miniprogram | Sort-Object Length -Descending | Select-Object -First 30 FullName,Length
+```
+
+如果自动真机调试仍然报 `source size exceed max limit 2MB`，可以先用普通“预览”或“上传体验版”验证功能，后续再继续做分包。
+
+分包预留方案：
+
+- 主包：只保留首页课表、今日课表、设置基础功能。
+- 分包：全校课表、教学周历、作息时间、登录同步、开发中查询页。
+- 当前 V2 先不强行拆分页面，避免一次性调整路由带来路径风险。
+
 ## Logo
 
-请把准备好的 logo 放到：
+logo 是可选资源。请尽量使用极小尺寸 PNG，并放到：
 
 ```text
 miniprogram/assets/logo/favicon.png
 ```
 
-当前首页已经引用该路径，并带有缺失时的“佛”字占位回退。
+当前首页已经引用该路径，并带有缺失时的“佛”字占位回退。不要放大尺寸背景图，也不要在 WXML/WXSS 中塞入大体积 base64 图片。
 
 ## 主要目录
 
@@ -64,6 +86,41 @@ weekText, weekType, color, remark, rawText, rawHtml
 
 真实教务接口接入后，应先在 adapter/parser 层转换成该结构，再交给页面渲染。
 
+可用轻量 smoke test 验证强智课表文本解析：
+
+```powershell
+node tools/parser-smoke-test.js
+```
+
+## V3：脱敏 HAR 离线导入课表
+
+V3 先做“真实数据预览”，只从 ProxyPin 导出的脱敏 HAR 中离线提取个人课表 HTML，不做自动登录，也不请求佛大教务系统。
+
+1. 把脱敏 HAR 放到：
+
+```text
+docs/captures/ProxyPin5-28_16_57_23.sanitized.har
+```
+
+2. 运行：
+
+```powershell
+node tools/extract-har-schedule.js
+```
+
+3. 脚本会从 `/xskb/xskb_list.do` 的 `table#kbtable` 中解析课程，并生成：
+
+```text
+docs/captures/personal-schedule.parsed.json
+miniprogram/data/importedCourses.js
+```
+
+4. 重新编译微信开发者工具。首页和今日课程页会优先使用 `importedCourses.js`；如果导入数据为空，则自动回退到 `mockCourses`。
+
+5. 如果解析不准确，对照 `docs/captures/personal-schedule.parsed.json` 里的 `rawText` / `rawHtml` 调整 parser，再重新运行导入脚本。
+
+注意：`*.har` 和 `docs/captures/*.har` 已加入 `.gitignore`。仓库可以保留脱敏报告和解析后的 JSON/JS，但不要提交原始 HAR、Cookie、Token、JSESSIONID、Authorization 或密码。
+
 ## 后续接入真实佛大教务接口
 
 佛山大学教务系统地址：
@@ -73,6 +130,12 @@ https://100.fosu.edu.cn/
 ```
 
 该系统页面底部显示“湖南强智科技发展有限公司”，因此当前项目按强智教务系统方向预留，不使用正方教务系统方案作为主线。
+
+详细抓包流程见：
+
+```text
+docs/API_CAPTURE.md
+```
 
 后续抓包建议：
 
@@ -91,6 +154,14 @@ https://100.fosu.edu.cn/
 6. 找到对应请求，复制 URL、Method、Query Params、Form Data、Response。
 7. 复制前必须删除 Cookie、密码、Token、JSESSIONID、Authorization 等敏感内容。
 8. 把脱敏后的接口信息交给 AI 接入 `cloudfunctions/common/fosuQiangzhiAdapter.js`。
+
+如果导出 HAR 文件，先运行脱敏脚本：
+
+```powershell
+node tools/sanitize-har.js ./capture.har
+```
+
+脚本会输出 `sanitized.har`。`tools/` 已在 `project.config.json` 的 `packOptions.ignore` 中忽略，不会打进小程序源码包。
 
 ## 安全规范
 

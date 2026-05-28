@@ -2,6 +2,8 @@
 .env.*.local
 local.secrets.json
 *.log
+*.har
+docs/captures/*.har
+!docs/captures/.gitkeep
 node_modules/
 miniprogram_npm/
-
