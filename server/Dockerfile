@@ -4,6 +4,9 @@ FROM node:18-alpine
 # 设置工作目录
 WORKDIR /app
 
+# 确保持久化 storage 目录存在
+RUN mkdir -p /app/storage
+
 # 复制 package.json 和 package-lock.json
 COPY package*.json ./
 

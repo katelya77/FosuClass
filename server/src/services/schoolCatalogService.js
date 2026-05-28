@@ -399,12 +399,14 @@ async function getBootstrap(semester) {
   const hasCatalog = isCatalogSuccess && catalogRes.dataSource !== "empty";
   const hasMajors = majorsCount > 0;
 
-  const success = hasCatalog || hasMajors;
+  const success = true;
+  const ready = !!(hasCatalog && hasMajors);
   const dataSource = hasCatalog ? catalogRes.dataSource : (hasMajors ? "cache" : "empty");
   const updatedAt = catalogRes.updatedAt || catalogMeta.updatedAt || new Date().toISOString();
 
   const response = {
     success,
+    ready,
     dataSource,
     updatedAt,
     catalog: catalogData,
@@ -426,6 +428,11 @@ async function getBootstrap(semester) {
       majors: majorsMeta,
     }
   };
+
+  if (!ready) {
+    response.reasonCode = "NO_SYNC_DATA";
+    response.message = "暂未同步教务数据，请稍后再试。";
+  }
 
   if (!hasCatalog && hasMajors) {
     response.warning = "Catalog data is missing but major data is available.";
