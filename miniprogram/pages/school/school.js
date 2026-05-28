@@ -120,6 +120,34 @@ Page({
   // 1. 获取全校 Catalog 选项
   fetchSchoolCatalog() {
     this.setData({ loading: true });
+    // NOTE: 优先请求 bootstrap 接口，以便统一载入并进行版本/数据状态控制
+    request.get("/api/fosu/bootstrap", {
+      semester: "2025-2026-2",
+    }, { showLoading: false })
+      .then((res) => {
+        if (res && res.success && res.catalog) {
+          const catalogData = {
+            ...res.catalog,
+            dataSource: res.dataSource || "cache",
+            updatedAt: res.updatedAt || "",
+            success: true
+          };
+          this.originalCatalogData = catalogData;
+          this.applyCatalogFilter();
+          this.setData({ loading: false });
+        } else {
+          console.warn("Bootstrap success is false, fallback to catalog");
+          this.fallbackToCatalog();
+        }
+      })
+      .catch((err) => {
+        console.warn("Bootstrap request failed, fallback to catalog", err);
+        this.fallbackToCatalog();
+      });
+  },
+
+  // 降级使用旧的 catalog 接口，防止 bootstrap 404 导致完全白屏
+  fallbackToCatalog() {
     request.get("/api/fosu/catalog", {
       semester: "2025-2026-2",
     }, { showLoading: false })
@@ -130,9 +158,10 @@ Page({
       })
       .catch((err) => {
         this.setData({ loading: false });
-        console.error("fetchSchoolCatalog fail", err);
+        console.error("fetchSchoolCatalog (fallback) fail", err);
       });
   },
+
 
   // 2. 学期选择改变
   onSemesterChange(event) {

@@ -39,6 +39,20 @@ function handleRouteError(res, error, label) {
 }
 
 /**
+ * 0. 系统启动 Bootstrap，聚合 Catalog 和计数信息
+ * GET /api/fosu/bootstrap
+ */
+router.get("/bootstrap", async (req, res) => {
+  const semester = req.query.semester;
+  try {
+    const data = await schoolCatalogService.getBootstrap(semester);
+    res.json(data);
+  } catch (error) {
+    handleRouteError(res, error, "get-bootstrap-failed");
+  }
+});
+
+/**
  * 1. 获取全校 Catalog
  * GET /api/fosu/catalog
  */
