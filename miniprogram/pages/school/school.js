@@ -1,11 +1,3 @@
-const {
-  mockClasses,
-  collegeOptions,
-  gradeOptions,
-  majorOptions,
-} = require("../../data/mockClasses");
-const { saveSettings } = require("../../utils/storage");
-
 const tabs = [
   { key: "class", label: "班级" },
   { key: "teacher", label: "教师" },
@@ -13,213 +5,353 @@ const tabs = [
   { key: "course", label: "课程" },
 ];
 
-const teacherSamples = [
-  { id: "teacher-wangjun", teacherName: "汪军", college: "动物科技学院", title: "副教授", scheduleReady: false },
-  { id: "teacher-chenfang", teacherName: "陈芳", college: "动物科技学院", title: "副教授", scheduleReady: false },
-  { id: "teacher-zhaomengmeng", teacherName: "赵孟孟", college: "生命科学与工程学院", title: "讲师", scheduleReady: false },
-];
-
-const classroomSamples = [
-  { id: "room-c7-503", campus: "仙溪校区", building: "C7", roomName: "C7-503", scheduleReady: false },
-  { id: "room-c7-305", campus: "仙溪校区", building: "C7", roomName: "C7-305", scheduleReady: false },
-  { id: "room-b5-304", campus: "仙溪校区", building: "B5", roomName: "B5-304", scheduleReady: false },
-];
-
-const courseSamples = [
-  { id: "course-organic", courseName: "有机化学", college: "动物科技学院", scheduleReady: true },
-  { id: "course-anatomy", courseName: "动物解剖学", college: "动物科技学院", scheduleReady: true },
-  { id: "course-english", courseName: "大学英语2", college: "外国语学院", scheduleReady: false },
-];
-
-function normalizeAllOption(value) {
-  return /^全部/.test(value || "") ? "" : value;
-}
+const request = require("../../utils/request");
 
 Page({
   data: {
     tabs,
     activeTab: "class",
     keyword: "",
-    colleges: ["全部学院"].concat(collegeOptions),
-    grades: ["全部年级"].concat(gradeOptions),
-    majors: ["全部专业"].concat(majorOptions),
-    classOptions: ["全部班级"].concat(mockClasses.map((item) => item.className)),
-    campusOptions: ["全部校区", "仙溪校区", "江湾校区", "河滨校区"],
-    buildingOptions: ["全部教学楼", "C7", "B5", "B8"],
-    titleOptions: ["全部职称", "教授", "副教授", "讲师", "助教"],
-    selectedCollege: "",
-    selectedGrade: "",
-    selectedMajor: "",
-    selectedClassName: "",
-    selectedCampus: "",
-    selectedBuilding: "",
-    selectedTitle: "",
-    classes: mockClasses,
-    visibleClasses: mockClasses,
-    visibleTeachers: teacherSamples,
-    visibleClassrooms: classroomSamples,
-    visibleCourses: courseSamples,
+    
+    // 下拉选择选项
+    semesters: [],
+    colleges: [],
+    grades: [],
+    majors: [],
+    
+    selectedSemesterIndex: 0,
+    selectedCollegeIndex: -1,
+    selectedGradeIndex: -1,
+    selectedMajorIndex: -1,
+    
+    // 教师筛选项
+    titleOptions: ["正高级", "副高级", "中级", "助理级", "员级", "其他"],
+    selectedTitleIndex: -1,
+    
+    // 教室/课程筛选项
+    campusOptions: ["仙溪校区", "江湾校区", "河滨校区"],
+    selectedCampusIndex: -1,
+    
+    // 查询得到的结果列表
+    classesResult: [],
+    teachersResult: [],
+    classroomsResult: [],
+    coursesResult: [],
+    
+    loading: false,
+    updatedAtText: "",
+    dataSourceText: "教务数据",
   },
 
   onLoad() {
-    this.applyFilters();
+    this.fetchSchoolCatalog();
   },
 
   onTabChange(event) {
+    const tabKey = event.currentTarget.dataset.key;
     this.setData({
-      activeTab: event.currentTarget.dataset.key,
+      activeTab: tabKey,
       keyword: "",
-    }, () => this.applyFilters());
+      // 清空当前结果，避免误导
+      classesResult: [],
+      teachersResult: [],
+      classroomsResult: [],
+      coursesResult: [],
+      updatedAtText: "",
+    });
   },
 
   onKeywordInput(event) {
     this.setData({
       keyword: event.detail.value,
-    }, () => this.applyFilters());
+    });
   },
 
+  // 1. 获取全校 Catalog 选项
+  fetchSchoolCatalog() {
+    this.setData({ loading: true });
+    request.get("/api/fosu/catalog", {
+      semester: "2025-2026-2",
+    }, { showLoading: false })
+      .then((data) => {
+        this.setData({
+          semesters: data.semesters || [],
+          colleges: data.colleges || [],
+          grades: data.grades || [],
+          loading: false,
+        });
+      })
+      .catch((err) => {
+        this.setData({ loading: false });
+        console.error("fetchSchoolCatalog fail", err);
+      });
+  },
+
+  // 2. 学期选择改变
+  onSemesterChange(event) {
+    this.setData({
+      selectedSemesterIndex: Number(event.detail.value),
+    });
+  },
+
+  // 3. 学院选择改变
   onCollegeChange(event) {
+    const index = Number(event.detail.value);
     this.setData({
-      selectedCollege: normalizeAllOption(this.data.colleges[Number(event.detail.value)]),
-    }, () => this.applyFilters());
+      selectedCollegeIndex: index,
+      selectedMajorIndex: -1,
+      majors: [], // 重置专业
+    }, () => {
+      this.fetchMajors();
+    });
   },
 
+  // 4. 年级选择改变
   onGradeChange(event) {
+    const index = Number(event.detail.value);
     this.setData({
-      selectedGrade: normalizeAllOption(this.data.grades[Number(event.detail.value)]),
-    }, () => this.applyFilters());
+      selectedGradeIndex: index,
+      selectedMajorIndex: -1,
+      majors: [], // 重置专业
+    }, () => {
+      this.fetchMajors();
+    });
   },
 
+  // 5. 联动查询专业
+  fetchMajors() {
+    const { colleges, selectedCollegeIndex, grades, selectedGradeIndex } = this.data;
+    if (selectedCollegeIndex < 0 || selectedGradeIndex < 0) {
+      return; // 必须同时选了学院和年级，强智系统才会联动返回专业
+    }
+
+    const collegeCode = colleges[selectedCollegeIndex].code;
+    const grade = grades[selectedGradeIndex];
+
+    this.setData({ loading: true });
+    request.get("/api/fosu/majors", { collegeCode, grade }, { showLoading: false })
+      .then((data) => {
+        this.setData({
+          majors: data.majors || [],
+          loading: false,
+        });
+      })
+      .catch((err) => {
+        this.setData({ loading: false });
+        console.error("fetchMajors fail", err);
+      });
+  },
+
+  // 6. 专业选择改变
   onMajorChange(event) {
     this.setData({
-      selectedMajor: normalizeAllOption(this.data.majors[Number(event.detail.value)]),
-    }, () => this.applyFilters());
+      selectedMajorIndex: Number(event.detail.value),
+    });
   },
 
-  onClassChange(event) {
-    this.setData({
-      selectedClassName: normalizeAllOption(this.data.classOptions[Number(event.detail.value)]),
-    }, () => this.applyFilters());
-  },
-
-  onCampusChange(event) {
-    this.setData({
-      selectedCampus: normalizeAllOption(this.data.campusOptions[Number(event.detail.value)]),
-    }, () => this.applyFilters());
-  },
-
-  onBuildingChange(event) {
-    this.setData({
-      selectedBuilding: normalizeAllOption(this.data.buildingOptions[Number(event.detail.value)]),
-    }, () => this.applyFilters());
-  },
-
+  // 7. 职称选择改变 (教师 Tab)
   onTitleChange(event) {
     this.setData({
-      selectedTitle: normalizeAllOption(this.data.titleOptions[Number(event.detail.value)]),
-    }, () => this.applyFilters());
+      selectedTitleIndex: Number(event.detail.value),
+    });
   },
 
-  applyFilters() {
-    const keyword = this.data.keyword.trim().toLowerCase();
+  // 8. 校区选择改变 (教室 Tab)
+  onCampusChange(event) {
     this.setData({
-      visibleClasses: this.filterClasses(keyword),
-      visibleTeachers: this.filterTeachers(keyword),
-      visibleClassrooms: this.filterClassrooms(keyword),
-      visibleCourses: this.filterCourses(keyword),
+      selectedCampusIndex: Number(event.detail.value),
     });
   },
 
-  filterClasses(keyword) {
-    return this.data.classes.filter((item) => {
-      const matchesKeyword =
-        !keyword ||
-        `${item.className} ${item.college} ${item.grade} ${item.major}`.toLowerCase().indexOf(keyword) >= 0;
-      const matchesCollege = !this.data.selectedCollege || item.college === this.data.selectedCollege;
-      const matchesGrade = !this.data.selectedGrade || item.grade === this.data.selectedGrade;
-      const matchesMajor = !this.data.selectedMajor || item.major === this.data.selectedMajor;
-      const matchesClass = !this.data.selectedClassName || item.className === this.data.selectedClassName;
-      return matchesKeyword && matchesCollege && matchesGrade && matchesMajor && matchesClass;
-    });
-  },
+  // ================== 查询按钮动作 ==================
 
-  filterTeachers(keyword) {
-    return teacherSamples.filter((item) => {
-      const matchesKeyword =
-        !keyword || `${item.teacherName} ${item.college} ${item.title}`.toLowerCase().indexOf(keyword) >= 0;
-      const matchesCollege = !this.data.selectedCollege || item.college === this.data.selectedCollege;
-      const matchesTitle = !this.data.selectedTitle || item.title === this.data.selectedTitle;
-      return matchesKeyword && matchesCollege && matchesTitle;
-    });
-  },
+  searchClassSchedule() {
+    const { semesters, selectedSemesterIndex, colleges, selectedCollegeIndex, grades, selectedGradeIndex, majors, selectedMajorIndex } = this.data;
 
-  filterClassrooms(keyword) {
-    return classroomSamples.filter((item) => {
-      const matchesKeyword =
-        !keyword || `${item.campus} ${item.building} ${item.roomName}`.toLowerCase().indexOf(keyword) >= 0;
-      const matchesCampus = !this.data.selectedCampus || item.campus === this.data.selectedCampus;
-      const matchesBuilding = !this.data.selectedBuilding || item.building === this.data.selectedBuilding;
-      return matchesKeyword && matchesCampus && matchesBuilding;
-    });
-  },
-
-  filterCourses(keyword) {
-    return courseSamples.filter((item) => {
-      const matchesKeyword = !keyword || `${item.courseName} ${item.college}`.toLowerCase().indexOf(keyword) >= 0;
-      const matchesCollege = !this.data.selectedCollege || item.college === this.data.selectedCollege;
-      return matchesKeyword && matchesCollege;
-    });
-  },
-
-  chooseClass(event) {
-    const classInfo = this.data.visibleClasses[Number(event.currentTarget.dataset.index)];
-    if (!classInfo) {
-      return;
-    }
-    if (!classInfo.scheduleReady) {
-      wx.showModal({
-        title: "暂未同步",
-        content: "该班级课表暂未缓存，请稍后或由管理员同步。",
-        showCancel: false,
-        confirmText: "知道了",
+    if (selectedCollegeIndex < 0 || selectedGradeIndex < 0 || selectedMajorIndex < 0) {
+      wx.showToast({
+        title: "请选择完整筛选项",
+        icon: "none",
       });
       return;
     }
-    saveSettings({
-      className: classInfo.className,
-      semester: classInfo.semester,
-    });
-    wx.showToast({
-      title: "已切换班级",
-      icon: "success",
-      duration: 900,
-    });
-    setTimeout(() => {
-      wx.switchTab({
-        url: "/pages/index/index",
+
+    const semester = semesters[selectedSemesterIndex].value;
+    const collegeCode = colleges[selectedCollegeIndex].code;
+    const grade = grades[selectedGradeIndex];
+    const majorCode = majors[selectedMajorIndex].code;
+    const majorName = majors[selectedMajorIndex].name;
+
+    request.post("/api/fosu/class-schedule", {
+      semester,
+      collegeCode,
+      grade,
+      majorCode,
+      majorName,
+    }, { loadingTitle: "正在从教务系统获取数据..." })
+      .then((data) => {
+        const formatTime = new Date(data.updatedAt).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
+        
+        this.setData({
+          classesResult: data.classes || [],
+          updatedAtText: `教务数据 · 更新于 ${formatTime}`,
+        });
+
+        if (!data.classes || data.classes.length === 0) {
+          wx.showToast({
+            title: "教务网无对应班级课表",
+            icon: "none",
+          });
+        }
+      })
+      .catch((err) => {
+        console.error("searchClassSchedule fail", err);
       });
-    }, 650);
   },
 
-  previewTeacher(event) {
-    const item = this.data.visibleTeachers[Number(event.currentTarget.dataset.index)];
-    if (!item) {
+  searchTeacherSchedule() {
+    const { semesters, selectedSemesterIndex, colleges, selectedCollegeIndex, titleOptions, selectedTitleIndex, keyword } = this.data;
+
+    if (!keyword.trim()) {
+      wx.showToast({
+        title: "请输入教师姓名",
+        icon: "none",
+      });
       return;
     }
-    wx.showModal({
-      title: item.teacherName,
-      content: "教师课表接口结构已接入云函数适配层。当前教师课表尚未缓存，后续由服务端同步后展示。",
-      showCancel: false,
-      confirmText: "知道了",
-    });
+
+    const semester = semesters[selectedSemesterIndex]?.value || "2025-2026-2";
+    const collegeCode = selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex].code : "";
+    const collegeName = selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex].name : "";
+    const titleCode = selectedTitleIndex >= 0 ? titleOptions[selectedTitleIndex] : "";
+
+    request.post("/api/fosu/teacher-schedule", {
+      semester,
+      collegeCode,
+      collegeName,
+      titleCode,
+      keyword: keyword.trim(),
+    }, { loadingTitle: "正在从教务系统获取数据..." })
+      .then((data) => {
+        const formatTime = new Date(data.updatedAt).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
+
+        this.setData({
+          teachersResult: data.teachers || [],
+          updatedAtText: `教务数据 · 更新于 ${formatTime}`,
+        });
+      })
+      .catch((err) => {
+        console.error("searchTeacherSchedule fail", err);
+      });
   },
 
-  showPendingSync() {
-    wx.showModal({
-      title: "待同步",
-      content: "该课表尚未同步。小程序端只读取缓存，真实请求会由云函数低频执行。",
-      showCancel: false,
-      confirmText: "知道了",
+  searchClassroomSchedule() {
+    const { semesters, selectedSemesterIndex, campusOptions, selectedCampusIndex, keyword } = this.data;
+
+    if (!keyword.trim()) {
+      wx.showToast({
+        title: "请输入教室名称 (如C7-503)",
+        icon: "none",
+      });
+      return;
+    }
+
+    const semester = semesters[selectedSemesterIndex]?.value || "2025-2026-2";
+    const campus = selectedCampusIndex >= 0 ? campusOptions[selectedCampusIndex] : "";
+
+    request.post("/api/fosu/classroom-schedule", {
+      semester,
+      campusId: campus === "仙溪校区" ? "2" : campus === "江湾校区" ? "1" : "",
+      classroomName: keyword.trim(),
+    }, { loadingTitle: "正在从教务系统获取数据..." })
+      .then((data) => {
+        const formatTime = new Date(data.updatedAt).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
+        
+        this.setData({
+          classroomsResult: data.classrooms || [],
+          updatedAtText: `教务数据 · 更新于 ${formatTime}`,
+        });
+      })
+      .catch((err) => {
+        console.error("searchClassroomSchedule fail", err);
+      });
+  },
+
+  searchCourseSchedule() {
+    const { semesters, selectedSemesterIndex, keyword } = this.data;
+
+    if (!keyword.trim()) {
+      wx.showToast({
+        title: "请输入课程名 (如有机化学)",
+        icon: "none",
+      });
+      return;
+    }
+
+    const semester = semesters[selectedSemesterIndex]?.value || "2025-2026-2";
+
+    request.post("/api/fosu/course-schedule", {
+      semester,
+      courseName: keyword.trim(),
+    }, { loadingTitle: "正在从教务系统获取数据..." })
+      .then((data) => {
+        const formatTime = new Date(data.updatedAt).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
+
+        this.setData({
+          coursesResult: data.coursesList || [],
+          updatedAtText: `教务数据 · 更新于 ${formatTime}`,
+        });
+      })
+      .catch((err) => {
+        console.error("searchCourseSchedule fail", err);
+      });
+  },
+
+  // ================== 卡片点击进入课表详情 ==================
+
+  viewClassSchedule(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    const item = this.data.classesResult[index];
+    if (!item) return;
+
+    this.navigateToScheduleView("class", item.className, item.courses);
+  },
+
+  viewTeacherSchedule(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    const item = this.data.teachersResult[index];
+    if (!item) return;
+
+    this.navigateToScheduleView("teacher", item.teacherName, item.courses);
+  },
+
+  viewClassroomSchedule(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    const item = this.data.classroomsResult[index];
+    if (!item) return;
+
+    this.navigateToScheduleView("classroom", item.roomName, item.courses);
+  },
+
+  viewCourseSchedule(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    const item = this.data.coursesResult[index];
+    if (!item) return;
+
+    this.navigateToScheduleView("course", item.courseName, item.courses);
+  },
+
+  navigateToScheduleView(type, name, courses) {
+    const semester = this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
+    
+    wx.navigateTo({
+      url: `/pages/schedule-view/schedule-view?type=${type}&name=${encodeURIComponent(name)}&semester=${semester}`,
+      success: (res) => {
+        // 利用 EventChannel 传递大体积课程数据
+        res.eventChannel.emit("acceptDataFromOpenerPage", {
+          courses: courses || [],
+        });
+      },
     });
   },
 });

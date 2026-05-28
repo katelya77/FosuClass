@@ -6,7 +6,8 @@
     "pages/calendar/calendar",
     "pages/settings/settings",
     "pages/timetable/timetable",
-    "pages/login/login"
+    "pages/login/login",
+    "pages/schedule-view/schedule-view"
   ],
   "window": {
     "backgroundColor": "#f7f8fa",

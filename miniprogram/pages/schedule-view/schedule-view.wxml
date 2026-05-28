@@ -1,0 +1,112 @@
+<view class="page schedule-view-page">
+  <view class="view-header card">
+    <view class="header-top">
+      <view class="target-info">
+        <view class="target-title">{{title}}</view>
+        <view class="target-subtitle">{{semester}} · {{typeText}}</view>
+      </view>
+      <button 
+        class="bind-button {{isCurrentTarget ? 'active' : ''}}" 
+        bindtap="toggleBindTarget"
+      >
+        {{isCurrentTarget ? "已设为当前课表" : "设为当前课表"}}
+      </button>
+    </view>
+    
+    <view class="date-line" wx:if="{{weekRangeText}}">
+      {{weekRangeText}} · {{weekScopeText}}
+    </view>
+
+    <view class="control-row">
+      <week-switcher
+        current-week="{{currentWeek}}"
+        total-weeks="{{totalWeeks}}"
+        week-label="{{weekSwitcherLabel}}"
+        bind:change="onWeekChange"
+      />
+    </view>
+  </view>
+
+  <view class="schedule card">
+    <view class="schedule-title-row">
+      <view class="section-title">周课表</view>
+      <view class="schedule-hint">{{showWeekend ? "周一至周日，可横向滑动" : "周一至周五"}}</view>
+    </view>
+
+    <view class="table-shell" wx:if="{{courses && courses.length}}">
+      <scroll-view
+        class="schedule-scroll-x {{showWeekend ? 'has-weekend' : ''}}"
+        scroll-x="{{showWeekend}}"
+        enhanced
+        show-scrollbar="{{false}}"
+      >
+        <view class="schedule-grid" style="width: {{gridWidth}}rpx;">
+          <view class="time-axis">
+            <view class="time-head">节次</view>
+            <view
+              wx:for="{{sections}}"
+              wx:key="section"
+              class="time-cell"
+              style="height: {{sectionHeight}}rpx;"
+            >
+              <view class="section-no">{{item.section}}</view>
+              <view class="time-text">{{item.start}}</view>
+              <view class="time-text">{{item.end}}</view>
+            </view>
+          </view>
+
+          <view class="day-track" style="width: {{dayTrackWidth}}rpx;">
+            <view class="weekday-heads">
+              <view
+                wx:for="{{weekdays}}"
+                wx:key="weekday"
+                class="weekday-head {{item.isToday ? 'is-today' : ''}}"
+                style="width: {{dayColumnWidth}}rpx;"
+              >
+                <view>{{item.label}}</view>
+                <view class="weekday-date">{{item.dateLabel}}</view>
+                <view wx:if="{{item.isToday}}" class="today-dot"></view>
+              </view>
+            </view>
+
+            <view class="days-area" style="height: {{scheduleHeight}}rpx;">
+              <view
+                wx:for="{{dayColumns}}"
+                wx:key="weekday"
+                class="day-column {{item.isToday ? 'is-today' : ''}}"
+                style="width: {{dayColumnWidth}}rpx;"
+              >
+                <view
+                  wx:for="{{sections}}"
+                  wx:for-item="section"
+                  wx:key="section"
+                  class="section-slot"
+                  style="height: {{sectionHeight}}rpx;"
+                ></view>
+                <course-card
+                  wx:for="{{item.courses}}"
+                  wx:for-item="course"
+                  wx:key="id"
+                  course="{{course}}"
+                  card-style="{{course.cardStyle}}"
+                  bind:tapcourse="onCourseTap"
+                />
+              </view>
+            </view>
+          </view>
+        </view>
+      </scroll-view>
+    </view>
+    
+    <view class="empty-wrap" wx:else>
+      <image class="empty-icon" src="/images/icons/business.png" style="opacity: 0.15; width: 120rpx; height: 120rpx; margin-bottom: 20rpx;" />
+      <view class="empty-text">该课表暂无课程数据</view>
+    </view>
+  </view>
+
+  <course-detail-popup
+    visible="{{detailVisible}}"
+    course="{{selectedCourse}}"
+    bind:close="closeCourseDetail"
+  />
+</view>

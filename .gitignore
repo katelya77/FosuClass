@@ -8,3 +8,5 @@ docs/captures/*.har
 node_modules/
 miniprogram_npm/
 cloudfunctions/*/node_modules/
+server/.env
+server/node_modules/

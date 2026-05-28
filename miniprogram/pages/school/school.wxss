@@ -1,21 +1,23 @@
 .school-page {
   width: 100%;
+  padding: 16rpx 16rpx calc(24rpx + env(safe-area-inset-bottom));
   overflow-x: hidden;
 }
 
 .page-header {
-  margin-bottom: 18rpx;
+  margin-bottom: 20rpx;
+  padding: 0 8rpx;
 }
 
 .title {
   color: #172033;
-  font-size: 38rpx;
+  font-size: 40rpx;
   font-weight: 900;
   line-height: 1.2;
 }
 
 .subtitle {
-  margin-top: 8rpx;
+  margin-top: 10rpx;
   color: #778297;
   font-size: 24rpx;
   line-height: 1.45;
@@ -23,6 +25,9 @@
 
 .search-card {
   padding: 16rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  box-shadow: 0 4rpx 16rpx rgba(162, 178, 201, 0.08);
 }
 
 .search-row {
@@ -54,7 +59,7 @@
 .tabs {
   display: flex;
   gap: 8rpx;
-  margin-top: 16rpx;
+  margin-top: 14rpx;
   padding: 6rpx;
   border-radius: 14rpx;
   background: #f6f8fb;
@@ -79,57 +84,82 @@
 }
 
 .tab-panel {
-  margin-top: 18rpx;
+  margin-top: 20rpx;
 }
 
-.filter-row {
+/* 过滤面板卡片 */
+.filter-card {
+  padding: 24rpx 20rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  box-shadow: 0 4rpx 16rpx rgba(162, 178, 201, 0.08);
+  margin-bottom: 20rpx;
+}
+
+.filter-item {
   display: flex;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  padding: 16rpx;
+  align-items: center;
+  margin-bottom: 20rpx;
+  border-bottom: 1rpx solid #f2f5f9;
+  padding-bottom: 16rpx;
+}
+
+.filter-item:last-of-type {
+  margin-bottom: 24rpx;
+}
+
+.filter-label {
+  flex: 0 0 120rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #3e4e68;
 }
 
 picker {
-  flex: 1 1 30%;
+  flex: 1;
   min-width: 0;
 }
 
 .filter-pill {
+  font-size: 26rpx;
+  color: #172033;
+  padding: 4rpx 10rpx;
   overflow: hidden;
-  height: 64rpx;
-  padding: 0 12rpx;
-  border: 1rpx solid #e5eaf2;
-  border-radius: 999rpx;
-  color: #4c586a;
-  font-size: 23rpx;
-  line-height: 62rpx;
-  text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.sync-note {
-  margin-top: 16rpx;
-  padding: 20rpx 22rpx;
-  border-color: #dbe9ff;
-  background: #f7fbff;
-}
-
-.note-title {
-  color: #1f61b5;
-  font-size: 26rpx;
+.primary-search-btn {
+  width: 100% !important;
+  height: 80rpx;
+  border-radius: 40rpx;
+  background: #c62828;
+  color: #ffffff;
+  font-size: 28rpx;
   font-weight: 800;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 8rpx 20rpx rgba(198, 40, 40, 0.2);
 }
 
-.note-desc {
-  margin-top: 8rpx;
-  color: #536174;
-  font-size: 23rpx;
-  line-height: 1.45;
+.primary-search-btn:active {
+  transform: scale(0.98);
 }
 
+.updated-hint {
+  font-size: 22rpx;
+  color: #778297;
+  padding: 8rpx 12rpx;
+  margin-bottom: 12rpx;
+  background: #f1f4f8;
+  border-radius: 8rpx;
+  display: inline-block;
+}
+
+/* 结果列表与卡片 */
 .result-list {
-  margin-top: 18rpx;
+  margin-top: 10rpx;
 }
 
 .result-card {
@@ -138,24 +168,32 @@ picker {
   justify-content: space-between;
   gap: 20rpx;
   margin-bottom: 16rpx;
-  padding: 22rpx;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  box-shadow: 0 4rpx 16rpx rgba(162, 178, 201, 0.08);
+}
+
+.result-card:active {
+  background: #f8fafc;
 }
 
 .result-main {
   min-width: 0;
+  flex: 1;
 }
 
 .result-title {
   overflow: hidden;
   color: #172033;
-  font-size: 31rpx;
+  font-size: 32rpx;
   font-weight: 800;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .result-meta {
-  margin-top: 10rpx;
+  margin-top: 8rpx;
   color: #778297;
   font-size: 24rpx;
   line-height: 1.35;
@@ -170,7 +208,7 @@ picker {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 104rpx;
+  min-width: 120rpx;
   height: 48rpx;
   border-radius: 999rpx;
   font-size: 22rpx;
@@ -180,11 +218,6 @@ picker {
 .status.ready {
   background: #e9f8f1;
   color: #16a36b;
-}
-
-.status.pending {
-  background: #fff4e2;
-  color: #c98218;
 }
 
 .count {

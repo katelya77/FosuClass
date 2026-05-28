@@ -1,0 +1,30 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch: # 支持手动触发部署
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploying application to VPS
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            # 保证工作目录存在并进入
+            cd ${{ secrets.VPS_APP_DIR }}
+            
+            # 拉取最新代码
+            git pull origin main
+            
+            # 进入 server 目录，运行 1Panel 友好的默认 Compose 文件
+            # 这将仅启动 FosuClass API 容器，绑定在 localhost:18318，避免强占 80/443 端口与 3000 端口
+            cd server
+            docker compose up -d --build

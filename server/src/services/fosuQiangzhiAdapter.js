@@ -1,8 +1,11 @@
+/**
+ * 强智教务网 HTTP 接口适配器：定义教务系统的各个功能 URL 并发送请求，结合 casSession 实现请求重试。
+ */
+
 const { URLSearchParams } = require("url");
 const { requestWithRetry } = require("./casSession");
-const { safeLog } = require("./safeLogger");
-
-const baseUrl = "https://100.fosu.edu.cn";
+const { safeLog } = require("../utils/safeLogger");
+const config = require("../config");
 
 const paths = {
   personalSchedule: "/xskb/xskb_list.do",
@@ -16,9 +19,11 @@ const paths = {
   courseSchedulePage: "/kbcx/kbxx_kc",
   courseScheduleIfr: "/kbcx/kbxx_kc_ifr",
   initJc: "/kbxx/initJc",
-  scorePath: "/kscj/cjcx_query?Ves632DSdyV=NEW_XSD_XJCJ",
 };
 
+/**
+ * 过滤空字段参数
+ */
 function compactParams(params) {
   const output = {};
   Object.keys(params || {}).forEach((key) => {
@@ -28,10 +33,16 @@ function compactParams(params) {
   return output;
 }
 
+/**
+ * 将对象序列化为 x-www-form-urlencoded
+ */
 function encodeForm(params) {
   return new URLSearchParams(compactParams(params)).toString();
 }
 
+/**
+ * 拼接 URL query 参数
+ */
 function buildQuery(path, params) {
   const query = encodeForm(params);
   return query ? `${path}?${query}` : path;
@@ -39,19 +50,22 @@ function buildQuery(path, params) {
 
 class FosuQiangzhiAdapter {
   constructor(options) {
-    const config = options || {};
-    this.baseUrl = config.baseUrl || baseUrl;
-    this.timeout = config.timeout || 12000;
+    const opt = options || {};
+    this.baseUrl = opt.baseUrl || config.FOSU_BASE_URL;
+    this.timeout = opt.timeout || config.REQUEST_TIMEOUT_MS;
   }
 
   buildUrl(path) {
     return `${this.baseUrl}${path}`;
   }
 
+  /**
+   * 发起强智请求，整合 CAS 登录重试机制
+   */
   async request(path, options) {
-    const config = options || {};
-    const method = config.method || "GET";
-    const body = config.body || "";
+    const opt = options || {};
+    const method = opt.method || "GET";
+    const body = opt.body || "";
     const url = this.buildUrl(path);
 
     safeLog("fosu-adapter-request", { method, path, hasBody: Boolean(body) });
@@ -62,7 +76,7 @@ class FosuQiangzhiAdapter {
           Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
           Referer: this.buildUrl(paths.classSchedulePage),
         },
-        config.headers || {}
+        opt.headers || {}
       );
       if (body) {
         headers["Content-Type"] = "application/x-www-form-urlencoded";
@@ -101,31 +115,27 @@ class FosuQiangzhiAdapter {
     });
   }
 
-  // 兼容老代码的 session 占位入参，忽略 session 并走内建安全 CAS 会话
-  async fetchPersonalSchedule(session, params) {
-    const form = compactParams({
-      cj0701id: "",
-      zc: params && params.week ? params.week : "",
-      demo: "",
-      xnxq01id: (params && params.semester) || "2025-2026-2",
-      sfFD: "1",
-      sfBZ: "1",
-    });
-    return this.post(paths.personalSchedule, form);
-  }
-
-  async fetchClassOptionsPage(session) {
+  /**
+   * 获取全校 Catalog 页面
+   */
+  async fetchClassOptionsPage() {
     return this.get(paths.classSchedulePage);
   }
 
-  async fetchMajorOptions(session, params) {
+  /**
+   * 获取联动专业列表
+   */
+  async fetchMajorOptions(params) {
     return this.get(paths.majorAjax, {
       skyx: params && params.collegeCode,
       sknj: params && params.grade,
     });
   }
 
-  async fetchClassSchedule(session, params) {
+  /**
+   * 获取班级课表
+   */
+  async fetchClassSchedule(params) {
     return this.post(paths.classScheduleIfr, {
       xnxqh: (params && params.semester) || "2025-2026-2",
       skyx: params && params.collegeCode,
@@ -138,7 +148,10 @@ class FosuQiangzhiAdapter {
     });
   }
 
-  async fetchTeacherSchedule(session, params) {
+  /**
+   * 获取教师课表
+   */
+  async fetchTeacherSchedule(params) {
     return this.post(paths.teacherScheduleIfr, {
       xnxqh: (params && params.semester) || "2025-2026-2",
       skyx: params && params.collegeCode,
@@ -150,7 +163,10 @@ class FosuQiangzhiAdapter {
     });
   }
 
-  async fetchClassroomSchedule(session, params) {
+  /**
+   * 获取教室课表
+   */
+  async fetchClassroomSchedule(params) {
     return this.post(paths.classroomScheduleIfr, {
       xnxqh: (params && params.semester) || "2025-2026-2",
       skyx: params && params.collegeCode,
@@ -163,7 +179,10 @@ class FosuQiangzhiAdapter {
     });
   }
 
-  async fetchCourseSchedule(session, params) {
+  /**
+   * 获取课程课表
+   */
+  async fetchCourseSchedule(params) {
     return this.post(paths.courseScheduleIfr, {
       xnxqh: (params && params.semester) || "2025-2026-2",
       skyx: params && params.collegeCode,
@@ -176,16 +195,8 @@ class FosuQiangzhiAdapter {
       jc2: params && params.sectionEnd,
     });
   }
-
-  async fetchInitJc(session, params) {
-    return this.get(paths.initJc, {
-      xnxq: (params && params.semester) || "2025-2026-2",
-    });
-  }
 }
 
 module.exports = {
   FosuQiangzhiAdapter,
-  baseUrl,
-  paths,
 };

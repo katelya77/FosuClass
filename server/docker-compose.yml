@@ -1,0 +1,19 @@
+version: "3.8"
+
+services:
+  fosu-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fosuclass-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      # 将端口绑定限制在 HOST_BIND_IP 宿主机本地环回 IP，防范公网安全风险
+      - "${HOST_BIND_IP:-127.0.0.1}:${HOST_API_PORT:-18318}:${PORT:-3000}"
+    healthcheck:
+      test: ["CMD", "node", "scripts/test-health.js"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
