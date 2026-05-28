@@ -300,10 +300,10 @@ async function getClassSchedule(params) {
   }
 
   return {
-    success: true,
+    success: false,
     dataSource: "empty",
     reasonCode: "NO_SYNC_DATA",
-    message: "暂未同步班级课表数据，请稍后再试。",
+    message: "暂未同步该范围的课表数据。",
   };
 }
 
@@ -433,10 +433,10 @@ async function getTeacherSchedule(params) {
   }
 
   return {
-    success: true,
+    success: false,
     dataSource: "empty",
     reasonCode: "NO_SYNC_DATA",
-    message: "暂未同步教师课表数据，请稍后再试。",
+    message: "暂未同步该范围的课表数据。",
   };
 }
 
@@ -565,10 +565,10 @@ async function getClassroomSchedule(params) {
   }
 
   return {
-    success: true,
+    success: false,
     dataSource: "empty",
     reasonCode: "NO_SYNC_DATA",
-    message: "暂未同步教室课表数据，请稍后再试。",
+    message: "暂未同步该范围的课表数据。",
   };
 }
 
@@ -698,10 +698,10 @@ async function getCourseSchedule(params) {
   }
 
   return {
-    success: true,
+    success: false,
     dataSource: "empty",
     reasonCode: "NO_SYNC_DATA",
-    message: "暂未同步课程课表数据，请稍后再试。",
+    message: "暂未同步该范围的课表数据。",
   };
 }
 

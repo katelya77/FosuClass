@@ -89,6 +89,10 @@
       <view class="row-title">登录同步个人课表</view>
       <view class="row-arrow">›</view>
     </view>
+    <view class="setting-row" bindtap="goContribute">
+      <view class="row-title">贡献班级课表</view>
+      <view class="row-arrow">›</view>
+    </view>
     <!--
     <view class="setting-row" bindtap="showDeveloperApi">
       <view>

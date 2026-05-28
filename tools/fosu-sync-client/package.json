@@ -5,6 +5,7 @@
   "main": "sync.js",
   "scripts": {
     "diagnose": "node diagnose.js",
+    "diagnose:browser": "node diagnose-browser.js",
     "login": "node login.js",
     "sync:catalog": "node sync.js catalog",
     "sync:majors": "node sync.js majors",

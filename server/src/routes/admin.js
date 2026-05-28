@@ -25,6 +25,7 @@ const FILE_MAP = {
   "classroom-schedules": path.join(STORAGE_DIR, "classroom-schedules.json"),
   "course-schedules": path.join(STORAGE_DIR, "course-schedules.json"),
   "sync-meta": path.join(STORAGE_DIR, "sync-meta.json"),
+  contributions: path.join(STORAGE_DIR, "contributions.json"),
 };
 
 /**
@@ -182,17 +183,16 @@ function createSyncHandler(key, validateFn) {
 
 // 1. 同步 Catalog
 router.post(
-  "/catalog",
+  "/sync/catalog",
   verifyAdminToken,
   createSyncHandler("catalog", (data) => {
-    // 必须包含 colleges, semesters, grades 且 success 是 true
     return data && Array.isArray(data.colleges) && Array.isArray(data.semesters) && Array.isArray(data.grades);
   })
 );
 
 // 2. 同步 Majors
 router.post(
-  "/majors",
+  "/sync/majors",
   verifyAdminToken,
   createSyncHandler("majors", (data) => {
     return Array.isArray(data);
@@ -201,7 +201,7 @@ router.post(
 
 // 3. 同步 Class Schedules
 router.post(
-  "/class-schedules",
+  "/sync/class-schedules",
   verifyAdminToken,
   createSyncHandler("class-schedules", (data) => {
     return Array.isArray(data);
@@ -210,7 +210,7 @@ router.post(
 
 // 4. 同步 Teacher Schedules
 router.post(
-  "/teacher-schedules",
+  "/sync/teacher-schedules",
   verifyAdminToken,
   createSyncHandler("teacher-schedules", (data) => {
     return Array.isArray(data);
@@ -219,7 +219,7 @@ router.post(
 
 // 5. 同步 Classroom Schedules
 router.post(
-  "/classroom-schedules",
+  "/sync/classroom-schedules",
   verifyAdminToken,
   createSyncHandler("classroom-schedules", (data) => {
     return Array.isArray(data);
@@ -228,15 +228,15 @@ router.post(
 
 // 6. 同步 Course Schedules
 router.post(
-  "/course-schedules",
+  "/sync/course-schedules",
   verifyAdminToken,
   createSyncHandler("course-schedules", (data) => {
     return Array.isArray(data);
   })
 );
 
-// 7. 获取当前缓存状态 (公开，或也可以加上 Token，这里根据用户要求: /api/admin/sync/status 不需要限制，若需要可限制。题目未提及是否限制 Token，为方便展示且不泄露 Token，可直接公开)
-router.get("/status", (req, res) => {
+// 7. 获取当前缓存状态
+router.get("/sync/status", (req, res) => {
   const meta = getSyncMeta();
   res.json({
     success: true,
@@ -251,5 +251,112 @@ router.get("/status", (req, res) => {
     metaDetails: meta,
   });
 });
+
+// 8. 管理员审核贡献接口
+// POST /api/admin/review/contributions
+router.post(
+  "/review/contributions",
+  verifyAdminToken,
+  (req, res) => {
+    const { id, action } = req.body;
+    if (!id || !action) {
+      return res.status(400).json({
+        success: false,
+        message: "id 和 action 参数是必需的",
+      });
+    }
+
+    if (action !== "approve" && action !== "reject") {
+      return res.status(400).json({
+        success: false,
+        message: "action 必须是 'approve' 或 'reject'",
+      });
+    }
+
+    try {
+      // 1. 读取贡献数据
+      let contributions = [];
+      const contribPath = FILE_MAP["contributions"];
+      if (fs.existsSync(contribPath)) {
+        contributions = JSON.parse(fs.readFileSync(contribPath, "utf-8"));
+      }
+
+      const index = contributions.findIndex((c) => c.id === id);
+      if (index === -1) {
+        return res.status(404).json({
+          success: false,
+          message: "找不到该贡献记录",
+        });
+      }
+
+      const contrib = contributions[index];
+      
+      if (action === "reject") {
+        contrib.reviewed = true;
+        contrib.rejected = true;
+        contrib.updatedAt = new Date().toISOString();
+        fs.writeFileSync(contribPath, JSON.stringify(contributions, null, 2), "utf-8");
+        return res.json({
+          success: true,
+          message: "已成功拒绝该贡献课表",
+        });
+      }
+
+      // 2. approve 合并逻辑
+      contrib.reviewed = true;
+      contrib.rejected = false;
+      contrib.updatedAt = new Date().toISOString();
+
+      const classSchedPath = FILE_MAP["class-schedules"];
+      let classSchedules = [];
+      if (fs.existsSync(classSchedPath)) {
+        classSchedules = JSON.parse(fs.readFileSync(classSchedPath, "utf-8"));
+      }
+
+      // 查找相同班级的课表进行覆盖，或者追加
+      const classIndex = classSchedules.findIndex(
+        (c) => c.className === contrib.className
+      );
+
+      const targetClassSchedule = {
+        className: contrib.className,
+        collegeCode: contrib.collegeCode || "",
+        collegeName: contrib.collegeName || "",
+        grade: contrib.grade || "",
+        majorCode: contrib.majorCode || "",
+        majorName: contrib.majorName || "",
+        courses: contrib.courses,
+      };
+
+      if (classIndex >= 0) {
+        classSchedules[classIndex] = targetClassSchedule;
+        console.log(`[Review] 已覆盖已有的班级课表: ${contrib.className}`);
+      } else {
+        classSchedules.push(targetClassSchedule);
+        console.log(`[Review] 已追加新班级课表: ${contrib.className}`);
+      }
+
+      // 3. 写入文件
+      fs.writeFileSync(classSchedPath, JSON.stringify(classSchedules, null, 2), "utf-8");
+      fs.writeFileSync(contribPath, JSON.stringify(contributions, null, 2), "utf-8");
+
+      // 4. 更新同步元数据
+      updateSyncMeta("class-schedules", classSchedules.length, "user-contribution");
+
+      return res.json({
+        success: true,
+        message: "贡献审核通过，课表已成功合并进公共缓存",
+        className: contrib.className,
+      });
+
+    } catch (error) {
+      safeLog("review-contribution-failed", { error: error.message });
+      return res.status(500).json({
+        success: false,
+        message: `审核处理失败: ${error.message}`,
+      });
+    }
+  }
+);
 
 module.exports = router;

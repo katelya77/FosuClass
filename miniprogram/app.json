@@ -7,7 +7,8 @@
     "pages/settings/settings",
     "pages/timetable/timetable",
     "pages/login/login",
-    "pages/schedule-view/schedule-view"
+    "pages/schedule-view/schedule-view",
+    "pages/contribute/contribute"
   ],
   "window": {
     "backgroundColor": "#f7f8fa",

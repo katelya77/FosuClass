@@ -18,10 +18,30 @@ const FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 const FOSU_API_BASE = process.env.FOSU_API_BASE || "https://class.katelya.eu.org";
 const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || "";
 const FOSU_SYNC_AUTH_MODE = process.env.FOSU_SYNC_AUTH_MODE || "playwright-manual";
-const SESSION_PATH = path.join(__dirname, "session.json");
+const SESSION_PATH = path.join(__dirname, ".session", "session.json");
 
 // 延迟辅助函数
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * 兼容 HTTP/HTTPS 的 Playwright 导航辅助函数
+ */
+async function gotoPage(page, relativePath, options = { waitUntil: "networkidle" }) {
+  // 确保相对路径以 / 开头
+  const cleanPath = relativePath.startsWith("/") ? relativePath : `/${relativePath}`;
+  const httpUrl = `${FOSU_BASE_URL.replace(/^https:/i, "http:")}${cleanPath}`;
+  const httpsUrl = `${FOSU_BASE_URL}${cleanPath}`;
+  
+  try {
+    await page.goto(httpUrl, options);
+  } catch (err) {
+    try {
+      await page.goto(httpsUrl, options);
+    } catch (httpsErr) {
+      throw new Error(`导航到 ${cleanPath} 彻底失败 (HTTP: ${err.message}, HTTPS: ${httpsErr.message})`);
+    }
+  }
+}
 
 /**
  * 将 manual-cookie 字符串解析为 Playwright 的 Cookie 对象数组
@@ -85,7 +105,11 @@ async function uploadToVps(endpoint, data) {
 async function initBrowserContext() {
   const browser = await chromium.launch({
     headless: true, // 默默在后台运行
-    args: ["--disable-blink-features=AutomationControlled"],
+    args: [
+      "--disable-blink-features=AutomationControlled",
+      "--ignore-certificate-errors",
+      "--disable-web-security"
+    ],
   });
 
   let context;
@@ -93,7 +117,7 @@ async function initBrowserContext() {
   if (FOSU_SYNC_AUTH_MODE === "playwright-manual") {
     if (!fs.existsSync(SESSION_PATH)) {
       console.error("❌ 本地未找到 session.json 登录会话文件！");
-      console.error("💡 请先运行 'npm run login' 完成首次登录认证。");
+      console.error("💡 提示: 登录状态已过期，请重新运行 npm run login。");
       await browser.close();
       process.exit(1);
     }
@@ -128,17 +152,25 @@ async function initBrowserContext() {
  */
 async function checkSession(page) {
   console.log("🔒 正在校验会话有效性...");
-  await page.goto(`${FOSU_BASE_URL}/framework/xsMain.jsp`, { waitUntil: "networkidle" });
+  try {
+    await gotoPage(page, "/framework/xsMain.jsp", { waitUntil: "networkidle" });
+  } catch (error) {
+    console.error(`❌ 导航至教务页失败，可能未连内网或握手彻底失败: ${error.message}`);
+    console.error("💡 提示: 登录状态已过期，请重新运行 npm run login。");
+    return false;
+  }
   
   const currentUrl = page.url();
   if (currentUrl.includes("authserver.fosu.edu.cn") || currentUrl.includes("login")) {
     console.error("❌ 会话已过期或无效！被重定向到了登录页面。");
-    console.error("💡 提示:");
-    if (FOSU_SYNC_AUTH_MODE === "playwright-manual") {
-      console.error("   请重新运行 'npm run login' 进行手动登录。");
-    } else {
-      console.error("   请更新本地 .env 中的 FOSU_MANUAL_COOKIE。");
-    }
+    console.error("💡 提示: 登录状态已过期，请重新运行 npm run login。");
+    return false;
+  }
+  
+  const content = await page.content();
+  if (content.includes("统一身份认证") || content.includes("密码登录")) {
+    console.error("❌ 会话已过期！页面包含登录标识。");
+    console.error("💡 提示: 登录状态已过期，请重新运行 npm run login。");
     return false;
   }
   
@@ -151,7 +183,7 @@ async function checkSession(page) {
  */
 async function syncCatalog(page) {
   console.log("\n=== [步骤 1] 开始抓取 Catalog ===");
-  await page.goto(`${FOSU_BASE_URL}/kbcx/kbxx_xzb`, { waitUntil: "networkidle" });
+  await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
 
   const html = await page.content();
   const $ = cheerio.load(html);
@@ -230,7 +262,7 @@ async function syncMajors(page, catalog) {
   console.log(`🔄 共有 ${colleges.length} 个学院, ${grades.length} 个年级，共计 ${colleges.length * grades.length} 次联动请求。`);
 
   // 打开页面以确保环境支持 fetch
-  await page.goto(`${FOSU_BASE_URL}/kbcx/kbxx_xzb`, { waitUntil: "networkidle" });
+  await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
 
   let count = 0;
   for (const college of colleges) {
@@ -306,7 +338,7 @@ async function syncClassSchedules(page, catalog, majors) {
   console.log(`🔄 共有 ${majors.length} 个专业需抓取班级课表。`);
 
   // 打开页面以确保 Ajax 环境可用
-  await page.goto(`${FOSU_BASE_URL}/kbcx/kbxx_xzb`, { waitUntil: "networkidle" });
+  await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
 
   const allClassSchedules = [];
   let count = 0;

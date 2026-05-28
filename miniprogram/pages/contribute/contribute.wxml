@@ -1,0 +1,75 @@
+<view class="page contribute-page">
+  <!-- 头部引导说明 -->
+  <view class="header-card card">
+    <view class="title">贡献班级课表</view>
+    <view class="desc">
+      为免去其他同学连接 EasyConnect 的繁琐步骤，您可以贡献已获取的课表数据。审核通过后将合并进公共课表缓存，造福该行政班级的所有同学！
+    </view>
+  </view>
+
+  <form bindsubmit="onSubmit">
+    <!-- 课表关联信息 -->
+    <view class="form-card card">
+      <view class="group-title">课表基本信息</view>
+      
+      <view class="form-item">
+        <view class="label">学期</view>
+        <picker mode="selector" range="{{semesterOptions}}" value="{{selectedSemesterIndex}}" bindchange="onSemesterChange">
+          <view class="picker-value">
+            {{semesterOptions[selectedSemesterIndex]}}
+            <text class="arrow">›</text>
+          </view>
+        </picker>
+      </view>
+
+      <view class="form-item">
+        <view class="label">年级</view>
+        <input name="grade" placeholder="如 2024" value="{{grade}}" placeholder-class="placeholder" />
+      </view>
+
+      <view class="form-item">
+        <view class="label">学院名称</view>
+        <input name="collegeName" placeholder="如 物理与光电工程学院" value="{{collegeName}}" placeholder-class="placeholder" />
+      </view>
+
+      <view class="form-item">
+        <view class="label">专业名称</view>
+        <input name="majorName" placeholder="如 光电信息科学与工程" value="{{majorName}}" placeholder-class="placeholder" />
+      </view>
+
+      <view class="form-item">
+        <view class="label">行政班级</view>
+        <input name="className" placeholder="如 光电2024级1班" value="{{className}}" placeholder-class="placeholder" />
+      </view>
+    </view>
+
+    <!-- 课表数据粘贴区 -->
+    <view class="form-card card">
+      <view class="group-title-row">
+        <text class="group-title">课表数据 (JSON 格式)</text>
+        <button class="template-btn" size="mini" catchtap="loadTemplate">加载示例模板</button>
+      </view>
+      <view class="textarea-container">
+        <textarea 
+          name="jsonText" 
+          placeholder='请在此处粘贴导出的课表 JSON 数组或包含 "courses" 的对象数据' 
+          value="{{jsonText}}"
+          maxlength="-1" 
+          placeholder-class="placeholder" 
+        />
+      </view>
+    </view>
+
+    <!-- 隐私安全提示 -->
+    <view class="privacy-card card">
+      <view class="privacy-title">🔒 隐私与数据安全说明</view>
+      <view class="privacy-item">1. **脱敏保护**：贡献的课表数据只包含课程名称、周次、上课时间地点、任课老师和关联班级，绝不上传您的学号、姓名与密码凭证。</view>
+      <view class="privacy-item">2. **人工审核**：上传的课表不会被自动公开，需待管理员在后台核对确认无误后方可合并发布。</view>
+    </view>
+
+    <!-- 提交按钮 -->
+    <button class="submit-btn" form-type="submit" loading="{{loading}}">
+      {{loading ? '正在提交...' : '确认并上传为班级公共课表'}}
+    </button>
+  </form>
+</view>
