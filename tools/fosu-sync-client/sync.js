@@ -7,6 +7,7 @@ const fs = require("fs");
 const path = require("path");
 const axios = require("axios");
 const cheerio = require("cheerio");
+const crypto = require("crypto");
 const diagnose = require("./diagnose");
 require("dotenv").config();
 
@@ -208,6 +209,93 @@ async function checkSession(page) {
 }
 
 /**
+ * 自动推断合理的当前学期
+ */
+function inferPreferredSemester() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth() + 1;
+  if (month >= 1 && month <= 8) {
+    return `${year - 1}-${year}-2`;
+  } else {
+    return `${year}-${year}-1`;
+  }
+}
+
+/**
+ * 规范化单个专业数据项，识别需要丢弃的数据
+ */
+function normalizeMajorItem(item) {
+  const majorCodeRaw = item.majorCode || item.code || item.value;
+  const majorNameRaw = item.majorName || item.name || item.rawLabel || item.text || item.label;
+
+  const majorName = typeof majorNameRaw === "string" ? majorNameRaw.trim() : (majorNameRaw ? String(majorNameRaw).trim() : "");
+  let majorCode = typeof majorCodeRaw === "string" ? majorCodeRaw.trim() : (majorCodeRaw ? String(majorCodeRaw).trim() : "");
+
+  if (!majorCode && !majorName) {
+    return { status: "drop_empty", item };
+  }
+  if (!majorName) {
+    return { status: "drop_empty", item };
+  }
+
+  const placeholders = ["请选择", "全部", "全部专业", "--请选择--", "请选择专业"];
+  if (placeholders.includes(majorName)) {
+    return { status: "drop_placeholder", item };
+  }
+
+  let generated = false;
+  if (!majorCode) {
+    majorCode = crypto.createHash("md5").update(majorName).digest("hex").substring(0, 8);
+    generated = true;
+  }
+
+  return {
+    status: "keep",
+    generated,
+    normalized: {
+      code: majorCode,
+      name: majorName,
+      majorCode,
+      majorName,
+      collegeCode: item.collegeCode,
+      grade: item.grade
+    }
+  };
+}
+
+/**
+ * 批量清洗专业 Payload
+ */
+function cleanMajorsPayload(rawItems) {
+  const cleaned = [];
+  const droppedEmpty = [];
+  const droppedPlaceholder = [];
+  let generatedCount = 0;
+
+  for (const item of rawItems) {
+    const res = normalizeMajorItem(item);
+    if (res.status === "keep") {
+      cleaned.push(res.normalized);
+      if (res.generated) {
+        generatedCount++;
+      }
+    } else if (res.status === "drop_empty") {
+      droppedEmpty.push(res.item);
+    } else if (res.status === "drop_placeholder") {
+      droppedPlaceholder.push(res.item);
+    }
+  }
+
+  return {
+    cleaned,
+    droppedEmpty,
+    droppedPlaceholder,
+    generatedCount
+  };
+}
+
+/**
  * 1. 同步 Catalog 基础选项数据
  */
 async function syncCatalog(page) {
@@ -218,13 +306,49 @@ async function syncCatalog(page) {
   let html = await page.content();
   let $ = cheerio.load(html);
 
-  // 解析学期
+  // 解析所有可选学期
   const semesters = [];
   $("select[name='xnxqh'] option").each((_, el) => {
     const val = $(el).attr("value");
     const text = $(el).text().trim();
     if (val) semesters.push({ value: val, label: text });
   });
+
+  // 匹配并选择目标学期
+  const preferredSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  console.log(`配置学期：${preferredSemester}`);
+
+  let matchedOption = null;
+  for (const sem of semesters) {
+    if (sem.value.includes(preferredSemester) || sem.label.includes(preferredSemester)) {
+      matchedOption = sem;
+      break;
+    }
+  }
+
+  if (!matchedOption) {
+    console.error(`❌ 无法在教务系统中匹配到目标学期: ${preferredSemester}`);
+    console.error("可选学期列表如下：");
+    semesters.forEach(s => console.error(`  - 值: ${s.value}, 文本: ${s.label}`));
+    throw new Error(`未找到匹配的学期: ${preferredSemester}`);
+  }
+
+  console.log(`页面匹配学期：${matchedOption.label}`);
+  console.log(`最终使用学期：${preferredSemester}`);
+
+  // 在教务页面中选择该学期
+  await page.selectOption("select[name='xnxqh']", matchedOption.value);
+  await page.waitForTimeout(1000); // 等待可能发生的联动
+
+  // 重新获取选择学期后的页面内容
+  html = await page.content();
+  $ = cheerio.load(html);
+
+  // 重新整理 semesters 列表，将匹配到的学期排在首位
+  const reorderedSemesters = [
+    matchedOption,
+    ...semesters.filter(s => s.value !== matchedOption.value)
+  ];
 
   // 使用 Map 管理学院列表，方便根据 code 去重
   const collegeMap = new Map();
@@ -284,13 +408,13 @@ async function syncCatalog(page) {
 
   const catalogPayload = {
     colleges,
-    semesters,
+    semesters: reorderedSemesters,
     grades,
     weeks,
     sections: [],
   };
 
-  console.log(`📊 抓取完毕: 学院 ${colleges.length} 个, 学期 ${semesters.length} 个, 年级 ${grades.length} 个`);
+  console.log(`📊 抓取完毕: 学院 ${colleges.length} 个, 学期 ${reorderedSemesters.length} 个, 年级 ${grades.length} 个`);
   
   // 上传至 VPS
   await uploadToVps("/api/admin/sync/catalog", catalogPayload);
@@ -474,37 +598,51 @@ async function syncMajors(page, catalog) {
     }
   }
 
-  console.log(`📊 专业联动抓取完毕，共整理出 ${allMajors.length} 个专业。`);
+  console.log(`📊 专业联动抓取完毕，共整理出 ${allMajors.length} 个原始专业数据。`);
   
-  // 1. 上传前把 majors 数据保存到本地 .debug/last-majors-upload.json
+  // 1. 进行数据清洗
+  const { cleaned, droppedEmpty, droppedPlaceholder, generatedCount } = cleanMajorsPayload(allMajors);
+  const sampleDroppedItems = [...droppedEmpty, ...droppedPlaceholder].slice(0, 10);
+
+  console.log("\n🧹 === [专业清洗数据统计] ===");
+  console.log(`- rawMajorsCount: ${allMajors.length}`);
+  console.log(`- cleanedMajorsCount: ${cleaned.length}`);
+  console.log(`- droppedEmptyNameCount: ${droppedEmpty.length}`);
+  console.log(`- droppedPlaceholderCount: ${droppedPlaceholder.length}`);
+  console.log(`- generatedMajorCodeCount: ${generatedCount}`);
+  console.log(`- sampleDroppedItems (前 10 条):`, JSON.stringify(sampleDroppedItems, null, 2));
+  console.log("=============================\n");
+
+  // 2. 保存调试文件
   const debugDir = path.join(__dirname, ".debug");
   if (!fs.existsSync(debugDir)) {
     fs.mkdirSync(debugDir, { recursive: true });
   }
+  fs.writeFileSync(path.join(debugDir, "last-majors-raw.json"), JSON.stringify(allMajors, null, 2), "utf-8");
   const debugUploadPath = path.join(debugDir, "last-majors-upload.json");
-  fs.writeFileSync(debugUploadPath, JSON.stringify(allMajors, null, 2), "utf-8");
+  fs.writeFileSync(debugUploadPath, JSON.stringify(cleaned, null, 2), "utf-8");
   
-  // 2. 统计上传摘要数据
-  const payloadStr = JSON.stringify(allMajors);
+  // 3. 统计上传摘要数据
+  const payloadStr = JSON.stringify(cleaned);
   const payloadSizeKB = (payloadStr.length / 1024).toFixed(2);
   
-  const collegeCodes = new Set(allMajors.map(m => m.collegeCode));
-  const majorGrades = new Set(allMajors.map(m => m.grade));
+  const collegeCodes = new Set(cleaned.map(m => m.collegeCode));
+  const majorGrades = new Set(cleaned.map(m => m.grade));
   
   // 统计每个学院的专业数以找出最大值
   const collegeMajorCounts = {};
-  allMajors.forEach(m => {
+  cleaned.forEach(m => {
     collegeMajorCounts[m.collegeCode] = (collegeMajorCounts[m.collegeCode] || 0) + 1;
   });
   const largestCollegeMajorCount = Math.max(...Object.values(collegeMajorCounts), 0);
   
-  const hasEmptyCollegeCode = allMajors.some(m => !m.collegeCode);
-  const hasEmptyMajorCode = allMajors.some(m => !m.code);
+  const hasEmptyCollegeCode = cleaned.some(m => !m.collegeCode);
+  const hasEmptyMajorCode = cleaned.some(m => !m.code);
   
   // 重复 key 校验
   const seenKeys = new Set();
   let hasDuplicateKey = false;
-  for (const m of allMajors) {
+  for (const m of cleaned) {
     const key = `${m.collegeCode}_${m.grade}_${m.code}`;
     if (seenKeys.has(key)) {
       hasDuplicateKey = true;
@@ -516,7 +654,7 @@ async function syncMajors(page, catalog) {
   console.log("\n📦 === [上传摘要] ===");
   console.log(`- collegesCount: ${collegeCodes.size}`);
   console.log(`- gradesCount: ${majorGrades.size}`);
-  console.log(`- majorsCount: ${allMajors.length}`);
+  console.log(`- majorsCount: ${cleaned.length}`);
   console.log(`- payloadSizeKB: ${payloadSizeKB} KB`);
   console.log(`- semester: ${activeSemester}`);
   console.log(`- gradeRange: ${gradeRangeEnv}`);
@@ -526,9 +664,9 @@ async function syncMajors(page, catalog) {
   console.log(`- 是否存在重复 key: ${hasDuplicateKey ? "⚠️ 是" : "否"}`);
   console.log("=====================\n");
 
-  // 3. 上传至 VPS 并做详细的错误捕捉
+  // 4. 上传至 VPS 并做详细的错误捕捉
   try {
-    await uploadToVps("/api/admin/sync/majors", allMajors);
+    await uploadToVps("/api/admin/sync/majors", cleaned);
   } catch (err) {
     console.error(`❌ Majors 数据同步至 VPS 失败！`);
     if (err.response) {
@@ -542,9 +680,9 @@ async function syncMajors(page, catalog) {
     throw err;
   }
   
-  fs.writeFileSync(path.join(__dirname, "last-majors.json"), JSON.stringify(allMajors, null, 2), "utf-8");
+  fs.writeFileSync(path.join(__dirname, "last-majors.json"), JSON.stringify(cleaned, null, 2), "utf-8");
   console.log("💾 Majors 临时数据已保存至本地 last-majors.json");
-  return allMajors;
+  return cleaned;
 }
 
 /**

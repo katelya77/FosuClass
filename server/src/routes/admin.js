@@ -217,50 +217,21 @@ router.post(
       });
     }
 
-    // 2. Schema 校验（检测空 collegeCode, grade, majorName 并返回详细 400）
-    for (let i = 0; i < payload.length; i++) {
-      const item = payload[i];
-      if (!item || typeof item !== 'object') {
-        return res.status(400).json({
-          success: false,
-          message: "数据 Schema 格式校验未通过",
-          detail: `第 ${i} 条数据不是有效的对象`,
-          hint: "每条专业数据必须是包含 collegeCode、grade、name 的对象"
-        });
+    // 脱敏辅助函数，移除敏感信息
+    const sanitizeItem = (obj) => {
+      if (!obj || typeof obj !== 'object') return obj;
+      const copy = { ...obj };
+      const sensitiveKeys = ["cookie", "cookies", "password", "passwd", "session", "sessionid", "jsessionid", "token", "ticket"];
+      for (const k of Object.keys(copy)) {
+        if (sensitiveKeys.includes(k.toLowerCase())) {
+          delete copy[k];
+        }
       }
-      
-      const collegeCode = item.collegeCode;
-      const grade = item.grade;
-      const majorName = item.name || item.majorName;
-      
-      if (collegeCode === undefined || collegeCode === null || String(collegeCode).trim() === '') {
-        return res.status(400).json({
-          success: false,
-          message: "数据校验未通过：缺失 collegeCode",
-          detail: `第 ${i} 条数据缺失学院代码，数据内容: ${JSON.stringify(item)}`,
-          hint: "请确保所有专业都包含有效的 collegeCode"
-        });
-      }
-      if (grade === undefined || grade === null || String(grade).trim() === '') {
-        return res.status(400).json({
-          success: false,
-          message: "数据校验未通过：缺失 grade",
-          detail: `第 ${i} 条数据缺失年级，数据内容: ${JSON.stringify(item)}`,
-          hint: "请确保所有专业都包含有效的 grade"
-        });
-      }
-      if (majorName === undefined || majorName === null || String(majorName).trim() === '') {
-        return res.status(400).json({
-          success: false,
-          message: "数据校验未通过：缺失 majorName",
-          detail: `第 ${i} 条数据缺失专业名称，数据内容: ${JSON.stringify(item)}`,
-          hint: "请确保所有专业都包含有效的 name 字段"
-        });
-      }
-    }
+      return copy;
+    };
 
     try {
-      // 3. 读取已存 catalog.json 辅助映射与提取学期
+      // 2. 读取已存 catalog.json 辅助映射与提取学期
       const catalogPath = path.join(STORAGE_DIR, "catalog.json");
       let catalog = {};
       if (fs.existsSync(catalogPath)) {
@@ -281,39 +252,71 @@ router.post(
       const semester = catalog.semesters?.[0]?.value || "2025-2026-2";
       const startYear = parseInt(semester.match(/^(\d{4})/)?.[1] || "2025", 10);
 
-      // 4. 清洗与过滤
+      // 3. 清洗与过滤
       const cleanedMajors = [];
       const seen = new Set();
       const crypto = require("crypto");
+      
+      const rawCount = payload.length;
+      let skippedCount = 0;
+      let generatedCodeCount = 0;
 
-      for (const item of payload) {
-        const collegeCode = String(item.collegeCode).trim();
-        const grade = String(item.grade).trim();
-        const majorName = String(item.name || item.majorName).trim();
-        let majorCode = item.code || item.majorCode;
+      const placeholders = ["请选择", "全部", "全部专业", "--请选择--", "请选择专业"];
 
-        if (!collegeCode || !grade || !majorName) {
-          continue; // 过滤空字段 (虽然Schema校验已做，这里再次防御)
+      for (let i = 0; i < payload.length; i++) {
+        const item = payload[i];
+        if (!item || typeof item !== 'object') {
+          skippedCount++;
+          continue;
         }
 
+        const collegeCodeRaw = item.collegeCode;
+        const gradeRaw = item.grade;
+        const majorCodeRaw = item.majorCode || item.code || item.value;
+        const majorNameRaw = item.majorName || item.name || item.rawLabel || item.text || item.label;
+
+        const collegeCode = collegeCodeRaw !== undefined && collegeCodeRaw !== null ? String(collegeCodeRaw).trim() : '';
+        const grade = gradeRaw !== undefined && gradeRaw !== null ? String(gradeRaw).trim() : '';
+        
+        const majorName = typeof majorNameRaw === 'string' ? majorNameRaw.trim() : (majorNameRaw !== undefined && majorNameRaw !== null ? String(majorNameRaw).trim() : '');
+        let majorCode = typeof majorCodeRaw === 'string' ? majorCodeRaw.trim() : (majorCodeRaw !== undefined && majorCodeRaw !== null ? String(majorCodeRaw).trim() : '');
+
+        // 校验基础结构
+        if (!collegeCode || !grade) {
+          // 如果缺失了必要的属性，在脱敏后返回 400 指出具体字段
+          return res.status(400).json({
+            success: false,
+            message: `数据校验未通过：缺失 collegeCode 或 grade`,
+            detail: `第 ${i} 条数据不合规，内容: ${JSON.stringify(sanitizeItem(item))}`,
+            hint: "请确保所有专业都包含有效的 collegeCode 和 grade 字段"
+          });
+        }
+
+        // 跳过无效专业项 (空专业名或占位符)
+        if (!majorName || placeholders.includes(majorName) || (!majorCode && !majorName)) {
+          skippedCount++;
+          continue;
+        }
+
+        // 如果没有 majorCode 但 majorName 有效，则使用 stable hash 生成
         if (!majorCode) {
-          // stable hash 作为 fallback code
           majorCode = crypto.createHash("md5").update(majorName).digest("hex").substring(0, 8);
-        } else {
-          majorCode = String(majorCode).trim();
+          generatedCodeCount++;
         }
 
         // 非法年级过滤：如果不允许历史年级，则必须在 [startYear - 4, startYear] 范围内
         if (!allowHistorical) {
           const gradeNum = parseInt(grade, 10);
           if (isNaN(gradeNum) || gradeNum < (startYear - 4) || gradeNum > startYear) {
+            skippedCount++;
             continue; // 过滤非在校年级
           }
         }
 
         const uniqueKey = `${collegeCode}_${grade}_${majorCode}`;
         if (seen.has(uniqueKey)) {
-          continue; // 去重
+          skippedCount++;
+          continue; // 去重跳过
         }
         seen.add(uniqueKey);
 
@@ -322,6 +325,16 @@ router.post(
           grade,
           code: majorCode,
           name: majorName
+        });
+      }
+
+      // 4. 清洗后如果有效专业数量为 0，返回 400
+      if (cleanedMajors.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "没有有效专业数据",
+          code: "NO_VALID_MAJORS",
+          hint: "请检查教务联动解析结果。"
         });
       }
 
@@ -393,9 +406,12 @@ router.post(
 
       return res.json({
         success: true,
-        message: "数据同步成功",
-        updatedAt: now.toISOString(),
-        itemCount: cleanedMajors.length
+        message: "Majors synced",
+        rawCount,
+        savedCount: cleanedMajors.length,
+        skippedCount,
+        generatedCodeCount,
+        version
       });
 
     } catch (err) {
