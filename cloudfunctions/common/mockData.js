@@ -12,7 +12,7 @@ try {
 
 const fallbackCourses = [
   {
-    id: "mock-organic-chemistry",
+    id: "fallback-organic-chemistry",
     source: "school",
     semester: "2025-2026学年第二学期",
     className: "25动物医学6",
@@ -28,7 +28,7 @@ const fallbackCourses = [
     weekText: "9-16周",
     weekType: "all",
     color: "#5d9cec",
-    remark: "Cloud function fallback mock.",
+    remark: "云函数本地缓存兜底数据。",
     rawText: "",
     rawHtml: "",
   },
@@ -48,10 +48,11 @@ const fallbackClasses = [
 
 const fallbackCalendar = [
   {
-    week: 12,
+    semester: "2025-2026-2",
+    weekNo: 12,
     startDate: "2026-05-25",
     endDate: "2026-05-31",
-    note: "当前周 Mock 高亮",
+    notes: "当前日期所在教学周",
   },
 ];
 

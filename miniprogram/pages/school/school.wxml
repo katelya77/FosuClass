@@ -1,61 +1,171 @@
 <view class="page school-page">
   <view class="page-header">
-    <view class="title">查找佛大班级课表</view>
-    <view class="subtitle">支持按学院、专业、班级搜索</view>
+    <view class="title">查找佛大课表</view>
+    <view class="subtitle">班级、教师、教室和课程课表统一从教务数据缓存读取。</view>
   </view>
 
-  <search-filter
-    keyword="{{keyword}}"
-    colleges="{{colleges}}"
-    grades="{{grades}}"
-    majors="{{majors}}"
-    selected-college="{{selectedCollege}}"
-    selected-grade="{{selectedGrade}}"
-    selected-major="{{selectedMajor}}"
-    bind:change="onFilterChange"
-  />
+  <view class="search-card card">
+    <view class="search-row">
+      <text class="search-icon">⌕</text>
+      <input
+        class="search-input"
+        value="{{keyword}}"
+        placeholder="搜索班级 / 专业 / 教师 / 课程 / 教室"
+        placeholder-class="search-placeholder"
+        confirm-type="search"
+        bindinput="onKeywordInput"
+      />
+    </view>
 
-  <view class="class-list" wx:if="{{visibleClasses.length}}">
-    <view
-      wx:for="{{visibleClasses}}"
-      wx:key="id"
-      class="class-card card"
-      data-index="{{index}}"
-      bindtap="chooseClass"
-    >
-      <view class="class-main">
-        <view class="class-name">{{item.className}}</view>
-        <view class="class-meta">{{item.college}} · {{item.grade}} · {{item.major}}</view>
-      </view>
-      <view class="class-side">
-        <view class="status {{item.scheduleReady ? 'ready' : 'pending'}}">
-          {{item.scheduleReady ? "可演示" : "待接入"}}
+    <view class="tabs">
+      <view
+        wx:for="{{tabs}}"
+        wx:key="key"
+        class="tab-item {{activeTab === item.key ? 'active' : ''}}"
+        data-key="{{item.key}}"
+        bindtap="onTabChange"
+      >{{item.label}}</view>
+    </view>
+  </view>
+
+  <view wx:if="{{activeTab === 'class'}}" class="tab-panel">
+    <view class="filter-row card">
+      <picker mode="selector" range="{{colleges}}" bindchange="onCollegeChange">
+        <view class="filter-pill">{{selectedCollege || "全部学院"}}</view>
+      </picker>
+      <picker mode="selector" range="{{grades}}" bindchange="onGradeChange">
+        <view class="filter-pill">{{selectedGrade || "全部年级"}}</view>
+      </picker>
+      <picker mode="selector" range="{{majors}}" bindchange="onMajorChange">
+        <view class="filter-pill">{{selectedMajor || "全部专业"}}</view>
+      </picker>
+      <picker mode="selector" range="{{classOptions}}" bindchange="onClassChange">
+        <view class="filter-pill">{{selectedClassName || "全部班级"}}</view>
+      </picker>
+    </view>
+
+    <view class="sync-note card">
+      <view class="note-title">全校课表同步</view>
+      <view class="note-desc">已缓存班级可直接查看；待同步专业会由服务端低频同步，不在小程序端请求教务系统。</view>
+    </view>
+
+    <view class="result-list" wx:if="{{visibleClasses.length}}">
+      <view
+        wx:for="{{visibleClasses}}"
+        wx:key="id"
+        class="result-card card"
+        data-index="{{index}}"
+        bindtap="chooseClass"
+      >
+        <view class="result-main">
+          <view class="result-title">{{item.className}}</view>
+          <view class="result-meta">{{item.college}} · {{item.grade}} · {{item.major}}</view>
         </view>
-        <view class="count">{{item.studentCount}}人</view>
+        <view class="result-side">
+          <view class="status {{item.scheduleReady ? 'ready' : 'pending'}}">
+            {{item.scheduleReady ? "已缓存" : "待同步"}}
+          </view>
+          <view class="count">{{item.studentCount}}人</view>
+        </view>
       </view>
     </view>
+
+    <empty-state
+      wx:else
+      title="没有找到班级"
+      desc="换个关键词，或清空学院、年级、专业筛选。"
+    />
   </view>
 
-  <empty-state
-    wx:else
-    title="没有找到班级"
-    desc="换个关键词，或清空学院、年级、专业筛选。"
-  />
-
-  <view class="extension card">
-    <view class="section-title">扩展查询</view>
-    <view
-      wx:for="{{extensionEntries}}"
-      wx:key="type"
-      class="extension-row"
-      data-title="{{item.title}}"
-      bindtap="showDeveloping"
-    >
-      <view>
-        <view class="extension-title">{{item.title}}</view>
-        <view class="extension-desc">{{item.desc}}</view>
-      </view>
-      <view class="extension-tag">开发中</view>
+  <view wx:elif="{{activeTab === 'teacher'}}" class="tab-panel">
+    <view class="filter-row card">
+      <picker mode="selector" range="{{colleges}}" bindchange="onCollegeChange">
+        <view class="filter-pill">{{selectedCollege || "全部学院"}}</view>
+      </picker>
+      <picker mode="selector" range="{{titleOptions}}" bindchange="onTitleChange">
+        <view class="filter-pill">{{selectedTitle || "全部职称"}}</view>
+      </picker>
     </view>
+
+    <view class="result-list" wx:if="{{visibleTeachers.length}}">
+      <view
+        wx:for="{{visibleTeachers}}"
+        wx:key="id"
+        class="result-card card"
+        data-index="{{index}}"
+        bindtap="previewTeacher"
+      >
+        <view class="result-main">
+          <view class="result-title">{{item.teacherName}}</view>
+          <view class="result-meta">{{item.college}} · {{item.title}} · 2025-2026学年第二学期</view>
+        </view>
+        <view class="result-side">
+          <view class="status {{item.scheduleReady ? 'ready' : 'pending'}}">
+            {{item.scheduleReady ? "已缓存" : "待同步"}}
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <empty-state wx:else title="没有找到教师" desc="输入教师姓名，或调整学院、职称筛选。" />
+  </view>
+
+  <view wx:elif="{{activeTab === 'classroom'}}" class="tab-panel">
+    <view class="filter-row card">
+      <picker mode="selector" range="{{campusOptions}}" bindchange="onCampusChange">
+        <view class="filter-pill">{{selectedCampus || "全部校区"}}</view>
+      </picker>
+      <picker mode="selector" range="{{buildingOptions}}" bindchange="onBuildingChange">
+        <view class="filter-pill">{{selectedBuilding || "全部教学楼"}}</view>
+      </picker>
+    </view>
+
+    <view class="result-list" wx:if="{{visibleClassrooms.length}}">
+      <view
+        wx:for="{{visibleClassrooms}}"
+        wx:key="id"
+        class="result-card card"
+        bindtap="showPendingSync"
+      >
+        <view class="result-main">
+          <view class="result-title">{{item.roomName}}</view>
+          <view class="result-meta">{{item.campus}} · {{item.building}} · 后续支持空教室查询</view>
+        </view>
+        <view class="result-side">
+          <view class="status pending">待同步</view>
+        </view>
+      </view>
+    </view>
+
+    <empty-state wx:else title="没有找到教室" desc="输入教室号，或调整校区、教学楼筛选。" />
+  </view>
+
+  <view wx:else class="tab-panel">
+    <view class="filter-row card">
+      <picker mode="selector" range="{{colleges}}" bindchange="onCollegeChange">
+        <view class="filter-pill">{{selectedCollege || "全部开课院系"}}</view>
+      </picker>
+    </view>
+
+    <view class="result-list" wx:if="{{visibleCourses.length}}">
+      <view
+        wx:for="{{visibleCourses}}"
+        wx:key="id"
+        class="result-card card"
+        bindtap="showPendingSync"
+      >
+        <view class="result-main">
+          <view class="result-title">{{item.courseName}}</view>
+          <view class="result-meta">{{item.college}} · 课程课表</view>
+        </view>
+        <view class="result-side">
+          <view class="status {{item.scheduleReady ? 'ready' : 'pending'}}">
+            {{item.scheduleReady ? "已缓存" : "待同步"}}
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <empty-state wx:else title="没有找到课程" desc="输入课程名，或调整开课院系筛选。" />
   </view>
 </view>

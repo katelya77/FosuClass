@@ -1,5 +1,11 @@
 const { clearAppCache, getSettings, saveSettings } = require("../../utils/storage");
-const { TOTAL_WEEKS } = require("../../utils/week");
+const { mockCalendar } = require("../../data/mockCalendar");
+const {
+  TERM_START_DATE,
+  TOTAL_WEEKS,
+  clampWeek,
+  getTodayTeachingInfo,
+} = require("../../utils/week");
 
 function buildWeekOptions() {
   const options = [];
@@ -12,6 +18,8 @@ function buildWeekOptions() {
 Page({
   data: {
     settings: {},
+    teachingInfo: {},
+    termStartDate: TERM_START_DATE,
     weekOptions: buildWeekOptions(),
   },
 
@@ -20,8 +28,14 @@ Page({
   },
 
   loadSettings() {
+    const settings = getSettings();
+    const teachingInfo = getTodayTeachingInfo(new Date(), mockCalendar);
+    const effectiveWeek = settings.manualWeekOverride ? clampWeek(settings.currentWeek) : teachingInfo.weekNo;
     this.setData({
-      settings: getSettings(),
+      settings: Object.assign({}, settings, {
+        currentWeek: effectiveWeek,
+      }),
+      teachingInfo,
     });
   },
 
@@ -29,8 +43,22 @@ Page({
     const currentWeek = Number(event.detail.value) + 1;
     saveSettings({
       currentWeek,
+      manualWeekOverride: true,
     });
     this.loadSettings();
+  },
+
+  restoreAutoWeek() {
+    const teachingInfo = getTodayTeachingInfo(new Date(), mockCalendar);
+    saveSettings({
+      currentWeek: teachingInfo.weekNo,
+      manualWeekOverride: false,
+    });
+    this.loadSettings();
+    wx.showToast({
+      title: "已恢复自动",
+      icon: "success",
+    });
   },
 
   onSwitchChange(event) {
@@ -79,8 +107,8 @@ Page({
         if (!res.confirm) {
           return;
         }
-        const settings = clearAppCache();
-        this.setData({ settings });
+        clearAppCache();
+        this.loadSettings();
         wx.showToast({
           title: "已清除",
           icon: "success",
@@ -92,7 +120,7 @@ Page({
   showAbout() {
     wx.showModal({
       title: "关于佛大课表",
-      content: "佛大课表是面向佛山大学的课程表小程序模板。第一阶段使用 Mock 数据，后续通过脱敏抓包接入强智教务系统。",
+      content: "佛大课表是面向佛山大学的课程表小程序。当前支持本地缓存课表、全校课表入口和强智教务接口适配层。",
       showCancel: false,
       confirmText: "知道了",
     });

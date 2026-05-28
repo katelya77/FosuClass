@@ -19,15 +19,40 @@
         <view class="row-desc">{{settings.semester}}</view>
       </view>
     </view>
+    <view class="setting-row">
+      <view>
+        <view class="row-title">当前教学周</view>
+        <view class="row-desc">{{teachingInfo.rangeText}} · 第{{teachingInfo.weekNo}}周</view>
+      </view>
+    </view>
+    <view class="setting-row">
+      <view>
+        <view class="row-title">当前日期对应周次</view>
+        <view class="row-desc">{{teachingInfo.dateLabel}} {{teachingInfo.weekdayLabel}} · 第{{teachingInfo.weekNo}}周</view>
+      </view>
+    </view>
+    <view class="setting-row">
+      <view>
+        <view class="row-title">开学日期</view>
+        <view class="row-desc">{{termStartDate}} · 周一</view>
+      </view>
+    </view>
     <picker mode="selector" range="{{weekOptions}}" value="{{settings.currentWeek - 1}}" bindchange="onWeekChange">
       <view class="setting-row">
         <view>
-          <view class="row-title">当前周</view>
-          <view class="row-desc">第{{settings.currentWeek}}周</view>
+          <view class="row-title">手动修正当前周</view>
+          <view class="row-desc">第{{settings.currentWeek}}周<text wx:if="{{settings.manualWeekOverride}}"> · 已手动覆盖</text><text wx:else> · 自动计算</text></view>
         </view>
         <view class="row-arrow">›</view>
       </view>
     </picker>
+    <view wx:if="{{settings.manualWeekOverride}}" class="setting-row" bindtap="restoreAutoWeek">
+      <view>
+        <view class="row-title">恢复自动周次</view>
+        <view class="row-desc">重新按教学日历和当前日期计算</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
     <view class="setting-row">
       <view>
         <view class="row-title">隐藏非当前周课程</view>

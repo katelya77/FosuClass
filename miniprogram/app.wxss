@@ -1,6 +1,8 @@
 page {
+  width: 100%;
   min-height: 100vh;
   box-sizing: border-box;
+  overflow-x: hidden;
   background: #f7f8fa;
   color: #172033;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
@@ -29,8 +31,10 @@ button::after {
 }
 
 .page {
+  width: 100%;
   min-height: 100vh;
   padding: 28rpx 24rpx calc(32rpx + env(safe-area-inset-bottom));
+  overflow-x: hidden;
 }
 
 .safe-bottom {

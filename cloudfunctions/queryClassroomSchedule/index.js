@@ -6,7 +6,7 @@ cloud.init({
 
 exports.main = async () => ({
   success: true,
-  mock: true,
+  demo: true,
   source: "queryClassroomSchedule",
   targetPath: "https://100.fosu.edu.cn/kbcx/kbxx_classroom",
   courses: [],

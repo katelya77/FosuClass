@@ -17,13 +17,23 @@
       <view class="week-badge">第{{currentWeek}}周</view>
     </view>
 
-    <view class="class-line">{{className}} · {{semester}} · {{dataSourceText}}</view>
+    <view class="class-line">{{className}} · {{semester}}</view>
+    <view class="date-line">{{weekRangeText}} · {{weekScopeText}}</view>
+    <view class="today-line">今日：{{todayText}}</view>
+    <view class="source-line">{{dataSourceText}}<text wx:if="{{lastSyncText}}"> · 上次同步：{{lastSyncText}}</text></view>
 
     <view class="control-row">
-      <week-switcher current-week="{{currentWeek}}" total-weeks="{{totalWeeks}}" bind:change="onWeekChange" />
+      <week-switcher
+        current-week="{{currentWeek}}"
+        total-weeks="{{totalWeeks}}"
+        week-label="{{weekSwitcherLabel}}"
+        bind:change="onWeekChange"
+      />
+    </view>
+    <view class="action-row">
       <scroll-view class="action-scroll" scroll-x enhanced show-scrollbar="{{false}}">
         <view class="action-list">
-          <button class="chip-button" bindtap="goSchool">全校班级</button>
+          <button class="chip-button" bindtap="goSchool">全校课表</button>
           <button class="chip-button" bindtap="goTimetable">作息时间</button>
           <button class="chip-button sync-chip" bindtap="goLogin">同步课表</button>
         </view>
@@ -38,40 +48,48 @@
     </view>
 
     <view class="table-shell">
-      <view class="time-axis">
-        <view class="time-head">节次</view>
-        <view
-          wx:for="{{sections}}"
-          wx:key="section"
-          class="time-cell"
-          style="height: {{sectionHeight}}rpx;"
-        >
-          <view class="section-no">{{item.section}}</view>
-          <view class="time-text">{{item.start}}</view>
-          <view class="time-text">{{item.end}}</view>
-        </view>
-      </view>
-
       <scroll-view
-        class="day-scroll {{showWeekend ? 'has-weekend' : ''}}"
+        class="schedule-scroll-x {{showWeekend ? 'has-weekend' : ''}}"
         scroll-x="{{showWeekend}}"
         enhanced
         show-scrollbar="{{false}}"
       >
-        <view class="day-track">
-          <view class="weekday-heads">
+        <view class="schedule-grid" style="width: {{gridWidth}}rpx;">
+          <view class="time-axis">
+            <view class="time-head">节次</view>
             <view
-              wx:for="{{weekdays}}"
-              wx:key="weekday"
-              class="weekday-head {{item.isToday ? 'is-today' : ''}}"
+              wx:for="{{sections}}"
+              wx:key="section"
+              class="time-cell"
+              style="height: {{sectionHeight}}rpx;"
             >
-              <view>{{item.label}}</view>
-              <view wx:if="{{item.isToday}}" class="today-dot"></view>
+              <view class="section-no">{{item.section}}</view>
+              <view class="time-text">{{item.start}}</view>
+              <view class="time-text">{{item.end}}</view>
             </view>
           </view>
 
-          <view class="days-area" style="height: {{scheduleHeight}}rpx;">
-            <view wx:for="{{dayColumns}}" wx:key="weekday" class="day-column {{item.isToday ? 'is-today' : ''}}">
+          <view class="day-track" style="width: {{dayTrackWidth}}rpx;">
+            <view class="weekday-heads">
+              <view
+                wx:for="{{weekdays}}"
+                wx:key="weekday"
+                class="weekday-head {{item.isToday ? 'is-today' : ''}}"
+                style="width: {{dayColumnWidth}}rpx;"
+              >
+                <view>{{item.label}}</view>
+                <view class="weekday-date">{{item.dateLabel}}</view>
+                <view wx:if="{{item.isToday}}" class="today-dot"></view>
+              </view>
+            </view>
+
+            <view class="days-area" style="height: {{scheduleHeight}}rpx;">
+            <view
+              wx:for="{{dayColumns}}"
+              wx:key="weekday"
+              class="day-column {{item.isToday ? 'is-today' : ''}}"
+              style="width: {{dayColumnWidth}}rpx;"
+            >
               <view
                 wx:for="{{sections}}"
                 wx:for-item="section"
@@ -87,6 +105,7 @@
                 card-style="{{course.cardStyle}}"
                 bind:tapcourse="onCourseTap"
               />
+            </view>
             </view>
           </view>
         </view>

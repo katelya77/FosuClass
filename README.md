@@ -1,16 +1,17 @@
 # 佛大课表 FosuClass
 
-面向佛山大学的原生微信小程序课表模板。第一阶段使用本地 Mock 数据，不依赖后端服务器，也不真实请求佛山大学教务系统。
+面向佛山大学的原生微信小程序课表模板。V4 开始把脱敏 HAR 样本沉淀为强智教务接口适配层，产品侧采用“云函数同步 + 小程序读取缓存”的长期架构。
 
 ## 当前功能
 
-- 首页周课表：彩色课程方块、默认周一到周五、第 1 节到第 14 节、周次切换、课程详情弹窗；开启周末后课表支持横向滑动。
-- 全校课表：班级、学院、年级、专业搜索筛选，当前使用 Mock 班级数据。
-- 今日课程：按当前班级、当前周、今天星期筛选课程，显示时间、节次、教室、教师、周次和上课状态。
-- 教学周历：展示 2025-2026 学年第二学期第 1-20 周 Mock 周历。
+- 首页周课表：彩色课程方块、默认周一到周五、第 1 节到第 14 节、日期范围 + 周次切换、课程详情弹窗；开启周末后只有课表网格内部横向滑动。
+- 全校课表：班级 / 教师 / 教室 / 课程四个入口，班级支持学院、年级、专业筛选，教师端已预留搜索与云函数同步结构。
+- 今日课程：按当前班级、当前教学周、今天星期筛选课程，显示日期、星期、周次、时间、节次、教室、教师、周次和上课状态。
+- 教学周历：展示 2025-2026 学年第二学期第 1-20 周，按当前日期高亮对应周并显示日期范围。
 - 作息时间：第 1-14 节可配置 Mock 时间。
-- 登录同步：只做 UI 和 Mock 流程，不真实登录、不保存密码。
+- 登录同步：只做 UI 和演示流程，不真实登录、不保存密码。
 - 设置页：当前班级、当前学期、当前周、隐藏非当前周课程、显示周末、清除缓存、隐私说明。
+- 教务同步架构：云函数适配强智个人、行政班级、教师、教室、课程、专业联动和节次初始化接口；默认不在小程序端请求学校教务系统。
 
 ## 运行方式
 
@@ -68,6 +69,11 @@ cloudfunctions/
   eduLogin/
   syncSchedule/
   getSchoolSchedule/
+  syncSchoolOptions/
+  syncClassSchedule/
+  syncTeacherSchedule/
+  getSchoolOptions/
+  getCachedSchedule/
   getCalendar/
   queryTeacherSchedule/
   queryClassroomSchedule/
@@ -79,7 +85,7 @@ cloudfunctions/
 前端 Mock 课程遵循 `CourseItem` 结构，字段包括：
 
 ```text
-id, source, semester, className, courseName, teacherName, classroom,
+id, source, sourceType, audienceType, semester, className, courseName, teacherName, classroom,
 weekday, startSection, endSection, startWeek, endWeek, weeks,
 weekText, weekType, color, remark, rawText, rawHtml
 ```
@@ -201,3 +207,13 @@ local.secrets.example.json
 - `/kscj/cjcx_query?Ves632DSdyV=NEW_XSD_XJCJ`
 
 第一阶段这些方法不会真实请求学校系统，会抛出明确错误：真实教务接口尚未接入，请先提供脱敏抓包信息。
+
+## V4：服务端同步与缓存读取
+
+长期同步策略见：
+
+```text
+docs/SYNC_DESIGN.md
+```
+
+V4 的原则是：HAR 只作为接口样本，不作为长期产品能力。全校课表和教师课表应由云函数低频同步到缓存，小程序端调用 `getSchoolOptions`、`getCachedSchedule` 等云函数读取缓存。真实请求默认只能在云函数中执行，并且需要显式启用网络、配置合法登录态和限流。
