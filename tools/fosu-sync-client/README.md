@@ -212,3 +212,22 @@ npm run sync:majors
 
 2. **验证微信小程序展示**：
    打开小程序中的“查找佛大课表”页面，切换到“班级” Tab，如能正确拉出刚刚同步的学院和年级，并在底端看到类似 “数据更新于：xxxx-xx-xx xx:xx” 的提示，即代表同步链路大功告成！
+
+3. **PowerShell 调试与验证命令**：
+
+   在 PowerShell 中运行以下命令，以本地验证数据抓取和清洗结果：
+
+   - **检查 `.env` 是否能被正常读取**：
+     ```powershell
+     node -e "require('dotenv').config(); console.log(process.env.PREFERRED_SEMESTER, process.env.SYNC_GRADES)"
+     ```
+
+   - **检查原始抓取的专业数据**：
+     ```powershell
+     node -e "const fs=require('fs');const p='.debug/last-majors-raw.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));const arr=j.items||j.majors||j.data||j;console.log(arr.length);console.log(Object.keys(arr[0]||{}));console.dir(arr.slice(0,5),{depth:10});"
+     ```
+
+   - **检查清洗后准备上传的专业数据**：
+     ```powershell
+     node -e "const fs=require('fs');const p='.debug/last-majors-upload.json';const j=JSON.parse(fs.readFileSync(p,'utf8'));const arr=j.items||j.majors||j.data||j;console.log('total=',arr.length);console.log('empty=',arr.filter(x=>!String(x.majorName||x.name||x.rawLabel||'').trim()).length);console.dir(arr.slice(0,5),{depth:10});"
+     ```
