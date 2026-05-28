@@ -4,11 +4,19 @@
 
 ## 当前架构推荐
 
-为了提高教务网数据获取的稳定性和安全性，目前项目已从微信云开发架构整体迁移为以下自建 VPS 后端 API 方案：
+为了解决佛山大学强智教务网 `100.fosu.edu.cn` 仅限校园网内网（VPN）访问的问题，并保障系统安全与稳定性，本项目采用了**缓存优先（Cache-First）的离线同步架构**：
 
-**微信小程序前端** → `wx.request` (HTTPS) → **自建 VPS 后端 API (Node.js)** → **佛山大学教务系统**
+```
+[ 本地 Windows 同步器 (已连 VPN) ] --(抓取)--> [ 佛大教务网 ]
+                 |
+             (上传数据)
+                 v
+       [ 自建 VPS 后端 (Node.js) ] --(读取缓存)--> [ 微信小程序 FosuClass ]
+```
 
-新架构为 **1Panel 友好部署设计**，将 API 服务端口绑定限制在宿主机 `127.0.0.1:18318`，从而与服务器上已运行的 Nginx/OpenResty (1Panel) 以及 DecoTV (占用 3000 端口) 完美兼容，保障了 VPS 服务的稳定运行和接口安全。
+- **本地同步器**：在您的 Windows 本地电脑连接 EasyConnect VPN 后运行，负责抓取教务网数据并批量安全推送至 VPS。
+- **VPS 后端**：负责静态数据缓存及公开 API 提供，对外绑定端口限制在宿主机 `127.0.0.1:18318`，保障了 VPS 服务的稳定运行和接口安全。
+- **小程序**：直接从 VPS 后端读取同步后的教务静态缓存，不直接访问内网教务系统，避免了验证码、防刷等复杂安全限制。
 
 > [!NOTE]
 > 原微信云开发云函数方案（`cloudfunctions` 目录）已保留作为备用/可选的历史方案。如果需要使用云开发，请参阅 `cloudfunctions` 内的逻辑。
@@ -27,13 +35,18 @@
    ```bash
    cp .env.example .env
    ```
-   编辑 `server/.env`，在 `FOSU_SERVICE_USERNAME` 和 `FOSU_SERVICE_PASSWORD` 处填入您的佛大教务网服务账号和密码（本地调试需要真实账号，此文件已在 Git 中忽略）。
+   编辑 `server/.env`：
+   - 设定 `DATA_SOURCE_MODE=cache-first`
+   - 设定 `ADMIN_API_TOKEN`（您自定义的同步鉴权 Token，如 `test-token-123`）
 
 3. 运行本地开发服务：
    ```bash
    npm run dev
    ```
    服务将默认运行在 `http://localhost:3000`。
+   
+4. **运行本地同步器同步数据**：
+   本地启动后端后，需运行同步器向本地后端注入初始数据。请参阅 [本地同步器 README](file:///c:/Users/Katelya/Documents/VScode/FosuClass/tools/fosu-sync-client/README.md) 引导登录并运行 `npm run sync:all` 进行同步。
 
 ### 运行本地接口测试
 
@@ -82,12 +95,11 @@ npm run test-teacher-schedule
 #### GitHub Actions 自动部署配置
 
 1. 在 GitHub 仓库的 **Settings** -> **Secrets and variables** -> **Actions** 中添加以下 Repository Secrets：
-   - `VPS_HOST`：您的 VPS 公网 IP (例如 `146.235.201.244`)
-   - `VPS_USER`：登录 VPS 的用户名 (例如 `ubuntu`。在连接您的 VPS 服务器后，默认就是 ubuntu 用户名，可以直接输入 `sudo -i` 获取 root 权限)
-   - `VPS_SSH_KEY`：您的 SSH 私钥内容 (即 `~/.ssh/id_rsa` 或其它私钥，用于免密登录 VPS)
-   - `VPS_APP_DIR`：在 VPS 上的应用运行目录位置 (例如 `/home/ubuntu/FosuClass`)
-   - `FOSU_SERVICE_USERNAME`：佛大教务网服务账号
-   - `FOSU_SERVICE_PASSWORD`：佛大教务网服务密码
+    - `VPS_HOST`：您的 VPS 公网 IP (例如 `146.235.201.244`)
+    - `VPS_USER`：登录 VPS 的用户名 (例如 `ubuntu`)
+    - `VPS_SSH_KEY`：您的 SSH 私钥内容 (用于免密登录 VPS)
+    - `VPS_APP_DIR`：在 VPS 上的应用运行目录位置 (例如 `/home/ubuntu/FosuClass`)
+    - `ADMIN_API_TOKEN`：数据同步鉴权密钥 Token（本地同步器和 VPS 后端之间校验用的 Token）
 
 2. 部署机制说明：
    - **触发方式**：当您向 `main` 分支执行 `git push` 或者在 GitHub 仓库的 Actions 页面手动触发 `workflow_dispatch` 时，工作流将自动运行。
