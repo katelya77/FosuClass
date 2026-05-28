@@ -1,0 +1,19 @@
+<view class="page timetable-page">
+  <view class="header card">
+    <view class="title">佛山大学作息时间表</view>
+    <view class="subtitle">第1节到第13节，第一阶段使用可配置 Mock 时间。</view>
+  </view>
+
+  <view wx:for="{{groups}}" wx:key="period" class="time-group card">
+    <view class="group-title">{{item.period}}</view>
+    <view
+      wx:for="{{item.items}}"
+      wx:for-item="time"
+      wx:key="section"
+      class="time-row"
+    >
+      <view class="section-badge">第{{time.section}}节</view>
+      <view class="time-range">{{time.start}} - {{time.end}}</view>
+    </view>
+  </view>
+</view>

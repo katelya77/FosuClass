@@ -1,0 +1,10 @@
+<view
+  class="course-card {{layout === 'list' ? 'course-card-list' : 'course-card-grid'}} {{isMuted ? 'is-muted' : ''}}"
+  style="{{layout === 'list' ? listStyle : cardStyle}}"
+  bindtap="handleTap"
+>
+  <view class="course-name">{{course.courseName}}</view>
+  <view class="course-meta">{{course.classroom}}</view>
+  <view class="course-meta">{{course.teacherName}}</view>
+  <view class="course-week">{{course.weekText}}</view>
+</view>

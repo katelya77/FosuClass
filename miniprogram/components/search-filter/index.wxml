@@ -1,0 +1,24 @@
+<view class="search-filter">
+  <view class="search-row">
+    <text class="search-icon">⌕</text>
+    <input
+      class="search-input"
+      value="{{keyword}}"
+      placeholder="搜索班级、专业、课程名"
+      placeholder-class="search-placeholder"
+      confirm-type="search"
+      bindinput="onKeywordInput"
+    />
+  </view>
+  <view class="filter-row">
+    <picker mode="selector" range="{{colleges}}" bindchange="onCollegeChange">
+      <view class="filter-pill">{{selectedCollege || "全部学院"}}</view>
+    </picker>
+    <picker mode="selector" range="{{grades}}" bindchange="onGradeChange">
+      <view class="filter-pill">{{selectedGrade || "全部年级"}}</view>
+    </picker>
+    <picker mode="selector" range="{{majors}}" bindchange="onMajorChange">
+      <view class="filter-pill">{{selectedMajor || "全部专业"}}</view>
+    </picker>
+  </view>
+</view>

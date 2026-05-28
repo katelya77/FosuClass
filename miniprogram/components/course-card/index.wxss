@@ -1,0 +1,58 @@
+.course-card {
+  overflow: hidden;
+  border-radius: 12rpx;
+  color: #ffffff;
+}
+
+.course-card-grid {
+  position: absolute;
+  left: 6rpx;
+  right: 6rpx;
+  padding: 10rpx 8rpx;
+  box-shadow: 0 10rpx 20rpx rgba(26, 50, 89, 0.12);
+}
+
+.course-card-list {
+  position: relative;
+  min-height: 132rpx;
+  padding: 20rpx 22rpx;
+  border-left: 8rpx solid #5d9cec;
+  background: #ffffff;
+  color: #172033;
+  box-shadow: 0 10rpx 30rpx rgba(16, 31, 55, 0.06);
+}
+
+.course-name {
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.course-meta,
+.course-week {
+  margin-top: 6rpx;
+  font-size: 18rpx;
+  line-height: 1.25;
+  opacity: 0.92;
+}
+
+.course-card-list .course-name {
+  font-size: 30rpx;
+  color: #172033;
+}
+
+.course-card-list .course-meta,
+.course-card-list .course-week {
+  font-size: 24rpx;
+  color: #687386;
+}
+
+.is-muted {
+  color: #6f7b8d;
+  box-shadow: none;
+}
+
+.is-muted .course-meta,
+.is-muted .course-week {
+  opacity: 0.72;
+}

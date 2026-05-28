@@ -1,0 +1,5 @@
+<view class="week-switcher">
+  <button class="week-button" bindtap="prevWeek">‹</button>
+  <button class="week-current" bindtap="backToCurrent">第{{currentWeek}}周</button>
+  <button class="week-button" bindtap="nextWeek">›</button>
+</view>

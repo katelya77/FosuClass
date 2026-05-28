@@ -1,0 +1,30 @@
+.empty-state {
+  padding: 80rpx 30rpx;
+  text-align: center;
+  color: #8a94a6;
+}
+
+.empty-symbol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 96rpx;
+  height: 96rpx;
+  margin: 0 auto 22rpx;
+  border-radius: 50%;
+  background: #eef2f7;
+  color: #a4afbf;
+  font-size: 48rpx;
+}
+
+.empty-title {
+  color: #4c586a;
+  font-size: 30rpx;
+  font-weight: 700;
+}
+
+.empty-desc {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  line-height: 1.5;
+}

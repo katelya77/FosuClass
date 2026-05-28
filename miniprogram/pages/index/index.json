@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "佛大课表",
+  "usingComponents": {
+    "course-card": "/components/course-card/index",
+    "course-detail-popup": "/components/course-detail-popup/index",
+    "week-switcher": "/components/week-switcher/index"
+  }
+}

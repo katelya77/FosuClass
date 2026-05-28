@@ -1,0 +1,67 @@
+.calendar-header {
+  padding: 30rpx;
+}
+
+.calendar-title {
+  color: #172033;
+  font-size: 38rpx;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.calendar-subtitle {
+  margin-top: 12rpx;
+  color: #778297;
+  font-size: 25rpx;
+}
+
+.week-list {
+  margin-top: 22rpx;
+}
+
+.week-card {
+  display: flex;
+  gap: 22rpx;
+  margin-bottom: 16rpx;
+  padding: 24rpx;
+}
+
+.week-card.active {
+  border-color: rgba(198, 40, 40, 0.32);
+  background: #fff7f7;
+}
+
+.week-index {
+  display: flex;
+  flex: 0 0 112rpx;
+  align-items: center;
+  justify-content: center;
+  height: 64rpx;
+  border-radius: 999rpx;
+  background: #eef3fb;
+  color: #536174;
+  font-size: 24rpx;
+  font-weight: 800;
+}
+
+.week-card.active .week-index {
+  background: #c62828;
+  color: #ffffff;
+}
+
+.week-info {
+  min-width: 0;
+}
+
+.week-date {
+  color: #172033;
+  font-size: 28rpx;
+  font-weight: 800;
+}
+
+.week-note {
+  margin-top: 10rpx;
+  color: #778297;
+  font-size: 24rpx;
+  line-height: 1.45;
+}

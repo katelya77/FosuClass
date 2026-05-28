@@ -1,0 +1,29 @@
+<view class="page today-page">
+  <view class="today-hero card">
+    <view class="date-text">{{dateText}}</view>
+    <view class="today-title">{{weekdayText}} · 第{{currentWeek}}周</view>
+    <view class="today-subtitle">{{className}} 今日课程</view>
+  </view>
+
+  <view wx:if="{{courses.length}}" class="today-list">
+    <course-card
+      wx:for="{{courses}}"
+      wx:key="id"
+      course="{{item}}"
+      layout="list"
+      bind:tapcourse="onCourseTap"
+    />
+  </view>
+
+  <empty-state
+    wx:else
+    title="今天没有课程，好好休息"
+    desc="这里会根据当前班级、教学周和星期自动筛选课程。"
+  />
+
+  <course-detail-popup
+    visible="{{detailVisible}}"
+    course="{{selectedCourse}}"
+    bind:close="closeCourseDetail"
+  />
+</view>

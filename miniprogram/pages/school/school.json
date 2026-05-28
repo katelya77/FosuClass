@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "全校课表",
+  "usingComponents": {
+    "search-filter": "/components/search-filter/index",
+    "empty-state": "/components/empty-state/index"
+  }
+}

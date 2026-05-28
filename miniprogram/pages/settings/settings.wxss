@@ -1,0 +1,62 @@
+.profile,
+.settings-card {
+  padding: 26rpx;
+}
+
+.profile-title {
+  color: #172033;
+  font-size: 42rpx;
+  font-weight: 900;
+}
+
+.profile-subtitle {
+  margin-top: 10rpx;
+  color: #778297;
+  font-size: 25rpx;
+}
+
+.settings-card {
+  margin-top: 22rpx;
+}
+
+.group-title {
+  margin-bottom: 10rpx;
+  color: #172033;
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  min-height: 96rpx;
+  border-bottom: 1rpx solid #eef1f6;
+}
+
+.setting-row:last-child {
+  border-bottom: 0;
+}
+
+.row-title {
+  color: #172033;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.row-desc {
+  margin-top: 8rpx;
+  color: #8a94a6;
+  font-size: 23rpx;
+}
+
+.row-arrow {
+  color: #a4afbf;
+  font-size: 46rpx;
+  line-height: 1;
+}
+
+.danger .row-title {
+  color: #c62828;
+}

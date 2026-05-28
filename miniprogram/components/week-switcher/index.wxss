@@ -1,0 +1,31 @@
+.week-switcher {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+}
+
+.week-button,
+.week-current {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 64rpx;
+  border-radius: 999rpx;
+  background: #ffffff;
+  color: #172033;
+  box-shadow: 0 8rpx 24rpx rgba(16, 31, 55, 0.08);
+}
+
+.week-button {
+  width: 64rpx;
+  font-size: 42rpx;
+  font-weight: 500;
+}
+
+.week-current {
+  min-width: 150rpx;
+  padding: 0 28rpx;
+  color: #c62828;
+  font-size: 28rpx;
+  font-weight: 700;
+}

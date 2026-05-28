@@ -1,0 +1,61 @@
+<view class="page school-page">
+  <view class="page-header">
+    <view class="title">全校课表</view>
+    <view class="subtitle">先用 Mock 班级数据演示，后续接入行政班级课表查询。</view>
+  </view>
+
+  <search-filter
+    keyword="{{keyword}}"
+    colleges="{{colleges}}"
+    grades="{{grades}}"
+    majors="{{majors}}"
+    selected-college="{{selectedCollege}}"
+    selected-grade="{{selectedGrade}}"
+    selected-major="{{selectedMajor}}"
+    bind:change="onFilterChange"
+  />
+
+  <view class="class-list" wx:if="{{visibleClasses.length}}">
+    <view
+      wx:for="{{visibleClasses}}"
+      wx:key="id"
+      class="class-card card"
+      data-index="{{index}}"
+      bindtap="chooseClass"
+    >
+      <view class="class-main">
+        <view class="class-name">{{item.className}}</view>
+        <view class="class-meta">{{item.college}} · {{item.grade}} · {{item.major}}</view>
+      </view>
+      <view class="class-side">
+        <view class="status {{item.scheduleReady ? 'ready' : 'pending'}}">
+          {{item.scheduleReady ? "可演示" : "待接入"}}
+        </view>
+        <view class="count">{{item.studentCount}}人</view>
+      </view>
+    </view>
+  </view>
+
+  <empty-state
+    wx:else
+    title="没有找到班级"
+    desc="换个关键词，或清空学院、年级、专业筛选。"
+  />
+
+  <view class="extension card">
+    <view class="section-title">扩展查询</view>
+    <view
+      wx:for="{{extensionEntries}}"
+      wx:key="type"
+      class="extension-row"
+      data-title="{{item.title}}"
+      bindtap="showDeveloping"
+    >
+      <view>
+        <view class="extension-title">{{item.title}}</view>
+        <view class="extension-desc">{{item.desc}}</view>
+      </view>
+      <view class="extension-tag">开发中</view>
+    </view>
+  </view>
+</view>

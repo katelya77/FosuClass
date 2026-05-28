@@ -1,0 +1,84 @@
+<view class="page settings-page">
+  <view class="profile card">
+    <view class="profile-title">佛大课表</view>
+    <view class="profile-subtitle">{{settings.className}} · {{settings.semester}}</view>
+  </view>
+
+  <view class="settings-card card">
+    <view class="group-title">课表设置</view>
+    <view class="setting-row" bindtap="goSchool">
+      <view>
+        <view class="row-title">当前班级</view>
+        <view class="row-desc">{{settings.className}}</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+    <view class="setting-row">
+      <view>
+        <view class="row-title">当前学期</view>
+        <view class="row-desc">{{settings.semester}}</view>
+      </view>
+    </view>
+    <picker mode="selector" range="{{weekOptions}}" value="{{settings.currentWeek - 1}}" bindchange="onWeekChange">
+      <view class="setting-row">
+        <view>
+          <view class="row-title">当前周</view>
+          <view class="row-desc">第{{settings.currentWeek}}周</view>
+        </view>
+        <view class="row-arrow">›</view>
+      </view>
+    </picker>
+    <view class="setting-row">
+      <view>
+        <view class="row-title">隐藏非当前周课程</view>
+        <view class="row-desc">关闭时会灰显未上课课程</view>
+      </view>
+      <switch
+        checked="{{settings.hideInactiveCourses}}"
+        color="#c62828"
+        data-key="hideInactiveCourses"
+        bindchange="onSwitchChange"
+      />
+    </view>
+    <view class="setting-row">
+      <view>
+        <view class="row-title">显示周末</view>
+        <view class="row-desc">关闭后首页只显示周一到周五</view>
+      </view>
+      <switch
+        checked="{{settings.showWeekend}}"
+        color="#c62828"
+        data-key="showWeekend"
+        bindchange="onSwitchChange"
+      />
+    </view>
+  </view>
+
+  <view class="settings-card card">
+    <view class="group-title">入口</view>
+    <view class="setting-row" bindtap="goTimetable">
+      <view class="row-title">作息时间表</view>
+      <view class="row-arrow">›</view>
+    </view>
+    <view class="setting-row" bindtap="goLogin">
+      <view class="row-title">登录同步个人课表</view>
+      <view class="row-arrow">›</view>
+    </view>
+  </view>
+
+  <view class="settings-card card">
+    <view class="group-title">其他</view>
+    <view class="setting-row" bindtap="showPrivacy">
+      <view class="row-title">隐私说明</view>
+      <view class="row-arrow">›</view>
+    </view>
+    <view class="setting-row" bindtap="showAbout">
+      <view class="row-title">关于佛大课表</view>
+      <view class="row-arrow">›</view>
+    </view>
+    <view class="setting-row danger" bindtap="clearCache">
+      <view class="row-title">清除缓存</view>
+      <view class="row-arrow">›</view>
+    </view>
+  </view>
+</view>

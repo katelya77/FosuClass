@@ -1,0 +1,29 @@
+.today-hero {
+  padding: 30rpx;
+  background: linear-gradient(135deg, #ffffff 0%, #f3f8ff 100%);
+}
+
+.date-text {
+  color: #778297;
+  font-size: 26rpx;
+}
+
+.today-title {
+  margin-top: 12rpx;
+  color: #172033;
+  font-size: 44rpx;
+  font-weight: 900;
+}
+
+.today-subtitle {
+  margin-top: 10rpx;
+  color: #536174;
+  font-size: 26rpx;
+}
+
+.today-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+  margin-top: 24rpx;
+}

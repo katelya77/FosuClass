@@ -1,0 +1,95 @@
+.popup-mask {
+  position: fixed;
+  z-index: 99;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(16, 24, 40, 0.42);
+}
+
+.popup-panel {
+  width: 100%;
+  padding: 18rpx 28rpx calc(34rpx + env(safe-area-inset-bottom));
+  border-radius: 28rpx 28rpx 0 0;
+  background: #ffffff;
+}
+
+.popup-handle {
+  width: 76rpx;
+  height: 8rpx;
+  margin: 0 auto 22rpx;
+  border-radius: 999rpx;
+  background: #d9dee8;
+}
+
+.popup-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.course-title {
+  color: #172033;
+  font-size: 38rpx;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
+.course-subtitle {
+  margin-top: 10rpx;
+  color: #778297;
+  font-size: 24rpx;
+}
+
+.close-button {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 50%;
+  background: #f1f3f7;
+  color: #687386;
+  font-size: 46rpx;
+  line-height: 58rpx;
+}
+
+.detail-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 28rpx;
+}
+
+.detail-item,
+.remark {
+  padding: 22rpx;
+  border-radius: 16rpx;
+  background: #f7f8fa;
+}
+
+.detail-item {
+  flex: 1 1 42%;
+  min-width: 0;
+}
+
+.detail-label {
+  display: block;
+  color: #8a94a6;
+  font-size: 22rpx;
+}
+
+.detail-value,
+.remark-text {
+  display: block;
+  margin-top: 8rpx;
+  color: #172033;
+  font-size: 28rpx;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.remark {
+  margin-top: 16rpx;
+}

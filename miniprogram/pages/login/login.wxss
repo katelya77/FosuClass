@@ -1,0 +1,86 @@
+.login-card,
+.security-card {
+  padding: 30rpx;
+}
+
+.login-title {
+  color: #172033;
+  font-size: 42rpx;
+  font-weight: 900;
+}
+
+.login-desc {
+  margin-top: 12rpx;
+  color: #687386;
+  font-size: 25rpx;
+  line-height: 1.5;
+}
+
+form {
+  margin-top: 30rpx;
+}
+
+.form-field {
+  margin-bottom: 22rpx;
+}
+
+.field-label {
+  margin-bottom: 10rpx;
+  color: #4c586a;
+  font-size: 25rpx;
+  font-weight: 700;
+}
+
+.field-input {
+  height: 88rpx;
+  padding: 0 24rpx;
+  border: 1rpx solid #e1e7f0;
+  border-radius: 16rpx;
+  background: #f7f8fa;
+  color: #172033;
+  font-size: 28rpx;
+}
+
+.placeholder {
+  color: #a5adba;
+}
+
+.submit-button {
+  margin-top: 28rpx;
+}
+
+.success-message,
+.error-message {
+  margin-top: 22rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 14rpx;
+  font-size: 25rpx;
+  line-height: 1.4;
+}
+
+.success-message {
+  background: #e9f8f1;
+  color: #128257;
+}
+
+.error-message {
+  background: #fff0f0;
+  color: #c62828;
+}
+
+.security-card {
+  margin-top: 22rpx;
+}
+
+.security-title {
+  color: #172033;
+  font-size: 30rpx;
+  font-weight: 800;
+}
+
+.security-text {
+  margin-top: 12rpx;
+  color: #687386;
+  font-size: 25rpx;
+  line-height: 1.5;
+}

@@ -1,0 +1,45 @@
+<view class="page login-page">
+  <view class="login-card card">
+    <view class="login-title">同步个人课表</view>
+    <view class="login-desc">密码仅用于登录佛山大学教务系统同步课表，不会明文保存。</view>
+
+    <form bindsubmit="handleSubmit">
+      <view class="form-field">
+        <view class="field-label">学号</view>
+        <input
+          class="field-input"
+          name="studentId"
+          type="text"
+          placeholder="请输入学号"
+          placeholder-class="placeholder"
+          confirm-type="next"
+        />
+      </view>
+
+      <view class="form-field">
+        <view class="field-label">教务网密码</view>
+        <input
+          class="field-input"
+          name="password"
+          password
+          placeholder="请输入教务网密码"
+          placeholder-class="placeholder"
+          confirm-type="done"
+        />
+      </view>
+
+      <button class="primary-button submit-button" form-type="submit" loading="{{syncing}}">
+        {{syncing ? "同步中..." : "同步个人课表"}}
+      </button>
+    </form>
+
+    <view wx:if="{{message}}" class="success-message">{{message}}</view>
+    <view wx:if="{{error}}" class="error-message">{{error}}</view>
+  </view>
+
+  <view class="security-card card">
+    <view class="security-title">安全边界</view>
+    <view class="security-text">第一版只走 Mock 流程，不真实请求教务系统。</view>
+    <view class="security-text">后续真实同步会通过云函数封装强智教务适配器，并加入限流、脱敏日志和错误提示。</view>
+  </view>
+</view>
