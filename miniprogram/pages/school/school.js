@@ -47,6 +47,56 @@ Page({
     this.fetchSchoolCatalog();
   },
 
+  onShow() {
+    // 每次显示页面时，重新触发过滤，确保设置页开关的修改能实时反映
+    if (this.originalCatalogData) {
+      this.applyCatalogFilter();
+    }
+  },
+
+  applyCatalogFilter() {
+    const data = this.originalCatalogData;
+    if (!data) return;
+
+    const { getSettings } = require("../../utils/storage");
+    const settings = getSettings();
+    const showHistorical = settings.showHistoricalGrades || false;
+
+    let grades = data.grades || [];
+    if (!showHistorical) {
+      // 默认只显示 5 个有效本科年级
+      const activeSemester = (data.semesters && data.semesters[0]?.value) || "2025-2026-2";
+      const match = activeSemester.match(/^(\d{4})/);
+      if (match) {
+        const startYear = parseInt(match[1], 10);
+        const activeGrades = [];
+        for (let i = 4; i >= 0; i--) {
+          activeGrades.push(String(startYear - i));
+        }
+        grades = grades.filter((g) => activeGrades.includes(g));
+      } else {
+        grades = grades.filter((g) => ["2021", "2022", "2023", "2024", "2025"].includes(g));
+      }
+    }
+
+    // 严谨校验与更新选中的 index
+    let newSelectedIndex = -1;
+    if (this.data.selectedGradeIndex >= 0 && this.data.grades.length > 0) {
+      const prevSelectedGrade = this.data.grades[this.data.selectedGradeIndex];
+      newSelectedIndex = grades.indexOf(prevSelectedGrade);
+    }
+
+    this.setData({
+      semesters: data.semesters || [],
+      colleges: data.colleges || [],
+      grades: grades,
+      selectedGradeIndex: newSelectedIndex,
+      // 如果年级索引越界重置为 -1，需连带清空之前联动的专业
+      majors: newSelectedIndex < 0 ? [] : this.data.majors,
+      selectedMajorIndex: newSelectedIndex < 0 ? -1 : this.data.selectedMajorIndex
+    });
+  },
+
   onTabChange(event) {
     const tabKey = event.currentTarget.dataset.key;
     this.setData({
@@ -74,12 +124,9 @@ Page({
       semester: "2025-2026-2",
     }, { showLoading: false })
       .then((data) => {
-        this.setData({
-          semesters: data.semesters || [],
-          colleges: data.colleges || [],
-          grades: data.grades || [],
-          loading: false,
-        });
+        this.originalCatalogData = data;
+        this.applyCatalogFilter();
+        this.setData({ loading: false });
       })
       .catch((err) => {
         this.setData({ loading: false });

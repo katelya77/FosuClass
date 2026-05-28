@@ -8,6 +8,7 @@ const defaultSettings = {
   manualWeekOverride: false,
   hideInactiveCourses: false,
   showWeekend: false,
+  showHistoricalGrades: false,
 };
 
 function getSettings() {
