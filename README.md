@@ -75,21 +75,41 @@ npm run test-teacher-schedule
 - `22` (SSH) — 供管理登录。
 - **注意**：无需公网放行 `18318`，此端口已被限制在本地 `127.0.0.1` 环回接口；无需公网放行 `3000`，本服务不会占用宿主机的 3000 端口。
 
-### 3. VPS 部署步骤
-在您的 VPS 服务器上克隆并运行服务：
-```bash
-# 1. 克隆代码
-git clone https://github.com/katelya77/FosuClass.git
-cd FosuClass/server
+### 3. VPS 部署步骤 (通过 GitHub Actions 自动部署)
 
-# 2. 拷贝并配置生产环境变量
-cp .env.example .env
-nano .env  # 填写 FOSU_SERVICE_USERNAME 和 FOSU_SERVICE_PASSWORD
+本项目推荐使用 GitHub Actions 进行自动部署，特别适用于私有仓库，因为 **VPS 侧不需要拥有访问 GitHub 私有仓库的权限，也不用在服务器上执行 `git clone/pull`**。
 
-# 3. 编译并启动容器
-docker compose up -d --build
-```
-启动后，可在 VPS 本地终端使用 `curl http://127.0.0.1:18318/api/health` 验证服务可用性。
+#### GitHub Actions 自动部署配置
+
+1. 在 GitHub 仓库的 **Settings** -> **Secrets and variables** -> **Actions** 中添加以下 Repository Secrets：
+   - `VPS_HOST`：您的 VPS 公网 IP (例如 `146.235.201.244`)
+   - `VPS_USER`：登录 VPS 的用户名 (例如 `ubuntu`。在连接您的 VPS 服务器后，默认就是 ubuntu 用户名，可以直接输入 `sudo -i` 获取 root 权限)
+   - `VPS_SSH_KEY`：您的 SSH 私钥内容 (即 `~/.ssh/id_rsa` 或其它私钥，用于免密登录 VPS)
+   - `VPS_APP_DIR`：在 VPS 上的应用运行目录位置 (例如 `/home/ubuntu/FosuClass`)
+   - `FOSU_SERVICE_USERNAME`：佛大教务网服务账号
+   - `FOSU_SERVICE_PASSWORD`：佛大教务网服务密码
+
+2. 部署机制说明：
+   - **触发方式**：当您向 `main` 分支执行 `git push` 或者在 GitHub 仓库的 Actions 页面手动触发 `workflow_dispatch` 时，工作流将自动运行。
+   - **运行流程**：
+     1. GitHub Actions 在 Runner 上检出代码，并前置检查所有必须的 Secrets 是否存在。
+     2. 将 `server/` 目录上传到 VPS 的 `${VPS_APP_DIR}/server` 目录下，且自动忽略 `node_modules`、`.env` 等多余或开发相关文件。
+     3. 在 VPS 上自动生成 `server/.env` 配置文件（密码通过 GitHub Actions 变量直接安全写入，不打印在控制台日志中）。
+     4. 执行 `docker compose up -d --build` (如果 `ubuntu` 账号缺少 Docker 权限，会自动 fallback 使用 `sudo docker compose`)。
+     5. 容器启动后，会在本地执行健康检查 `curl -f http://127.0.0.1:18318/api/health` 验证无误后完成部署。
+
+3. 服务器端本地验证：
+   在 VPS 上，执行以下命令验证容器健康状态：
+   ```bash
+   curl http://127.0.0.1:18318/api/health
+   ```
+   如果返回以下 JSON，说明运行成功：
+   ```json
+   {
+     "success": true,
+     "message": "FosuClass API is running"
+   }
+   ```
 
 ### 4. 1Panel 配置反向代理与 SSL
 1. 打开 1Panel 后台 -> 进入 **“网站”** -> **“反向代理”** 面板。

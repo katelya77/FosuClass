@@ -10,7 +10,44 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploying application to VPS
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Check GitHub Secrets
+        run: |
+          declare -A secrets_map
+          secrets_map=(
+            ["VPS_HOST"]="${{ secrets.VPS_HOST }}"
+            ["VPS_USER"]="${{ secrets.VPS_USER }}"
+            ["VPS_SSH_KEY"]="${{ secrets.VPS_SSH_KEY }}"
+            ["VPS_APP_DIR"]="${{ secrets.VPS_APP_DIR }}"
+            ["FOSU_SERVICE_USERNAME"]="${{ secrets.FOSU_SERVICE_USERNAME }}"
+            ["FOSU_SERVICE_PASSWORD"]="${{ secrets.FOSU_SERVICE_PASSWORD }}"
+          )
+          
+          has_missing=false
+          for key in "${!secrets_map[@]}"; do
+            if [ -z "${secrets_map[$key]}" ]; then
+              echo "::error::缺少 GitHub Secret: $key，请在 Settings → Secrets and variables → Actions 中配置。"
+              has_missing=true
+            fi
+          done
+          
+          if [ "$has_missing" = true ]; then
+            exit 1
+          fi
+
+      - name: Upload server/ directory via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          source: "server/**,!server/node_modules/**,!server/.env"
+          target: "${{ secrets.VPS_APP_DIR }}"
+
+      - name: SSH Remote Deploy & Health Check
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
@@ -19,12 +56,42 @@ jobs:
           port: 22
           script: |
             # 保证工作目录存在并进入
-            cd ${{ secrets.VPS_APP_DIR }}
+            cd ${{ secrets.VPS_APP_DIR }}/server
             
-            # 拉取最新代码
-            git pull origin main
+            # 自动生成 .env 配置文件，直接写入（不通过命令行或 echo 打印密码以保护隐私）
+            cat << 'EOF' > .env
+            NODE_ENV=production
+            PORT=3000
+            HOST_BIND_IP=127.0.0.1
+            HOST_API_PORT=18318
+            PUBLIC_API_ORIGIN=https://class.katelya.eu.org
+            FOSU_BASE_URL=https://100.fosu.edu.cn
+            FOSU_AUTH_URL=https://authserver.fosu.edu.cn
+            FOSU_SERVICE_USERNAME=${{ secrets.FOSU_SERVICE_USERNAME }}
+            FOSU_SERVICE_PASSWORD=${{ secrets.FOSU_SERVICE_PASSWORD }}
+            CACHE_TTL_CATALOG=600
+            CACHE_TTL_MAJOR=1800
+            CACHE_TTL_SCHEDULE=600
+            REQUEST_TIMEOUT_MS=15000
+            CORS_ALLOWED_ORIGINS=https://class.katelya.eu.org,http://127.0.0.1:18318
+            EOF
             
-            # 进入 server 目录，运行 1Panel 友好的默认 Compose 文件
-            # 这将仅启动 FosuClass API 容器，绑定在 localhost:18318，避免强占 80/443 端口与 3000 端口
-            cd server
-            docker compose up -d --build
+            # 启动容器，如果 ubuntu 用户没有 docker 权限，则自动 fallback
+            docker compose up -d --build || sudo docker compose up -d --build
+            
+            # 延迟几秒让容器初始化
+            sleep 3
+            
+            # 健康检查
+            curl -f http://127.0.0.1:18318/api/health
+
+      - name: Show Deployment Info
+        run: |
+          echo "=================================================="
+          echo "🎉 部署完成 / Deployment Completed!"
+          echo "=================================================="
+          echo "- 容器名：fosuclass-api"
+          echo "- 本机健康检查：http://127.0.0.1:18318/api/health"
+          echo "- 1Panel 反代目标：http://127.0.0.1:18318"
+          echo "- 小程序 API 域名：https://class.katelya.eu.org"
+          echo "=================================================="
