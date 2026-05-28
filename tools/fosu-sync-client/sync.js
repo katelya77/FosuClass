@@ -9,7 +9,15 @@ const axios = require("axios");
 const cheerio = require("cheerio");
 const crypto = require("crypto");
 const diagnose = require("./diagnose");
-require("dotenv").config();
+const envPath = path.resolve(__dirname, ".env");
+require("dotenv").config({ path: envPath });
+
+console.log(`[env] .env path: ${envPath}`);
+console.log(`[env] FOSU_API_BASE: ${process.env.FOSU_API_BASE || "https://class.katelya.eu.org"}`);
+console.log(`[env] PREFERRED_SEMESTER: ${process.env.PREFERRED_SEMESTER || "未配置"}`);
+console.log(`[env] SYNC_GRADE_RANGE: ${process.env.SYNC_GRADE_RANGE || "未配置"}`);
+console.log(`[env] SYNC_GRADES: ${process.env.SYNC_GRADES || "未配置"}`);
+console.log(`[env] ADMIN_API_TOKEN: ${process.env.ADMIN_API_TOKEN ? "present" : "missing"}`);
 
 // 引入后端已有的解析与规范化逻辑以确保格式 100% 兼容
 const parser = require("../../server/src/utils/parser");
@@ -223,6 +231,289 @@ function inferPreferredSemester() {
 }
 
 /**
+ * 强制在页面选择指定学期并等待联动
+ */
+async function selectSemester(page, preferredSemester) {
+  if (!preferredSemester) {
+    return null;
+  }
+  
+  console.log(`配置学期：${preferredSemester}`);
+
+  // 在页面中寻找匹配的 select 和 option
+  const selectResult = await page.evaluate((prefSem) => {
+    const selects = Array.from(document.querySelectorAll("select"));
+    for (let sIdx = 0; sIdx < selects.length; sIdx++) {
+      const sel = selects[sIdx];
+      const name = sel.getAttribute("name") || "";
+      const id = sel.getAttribute("id") || "";
+      
+      for (let oIdx = 0; oIdx < sel.options.length; oIdx++) {
+        const opt = sel.options[oIdx];
+        const val = opt.value || "";
+        const txt = opt.textContent || "";
+        
+        if (val.includes(prefSem) || txt.includes(prefSem)) {
+          return {
+            selectIndex: sIdx,
+            selectName: name,
+            selectId: id,
+            optionValue: val,
+            optionText: txt.trim()
+          };
+        }
+      }
+    }
+    return null;
+  }, preferredSemester);
+
+  if (!selectResult) {
+    // 打印教务系统的可选学期，以供调试
+    const allSemOptions = await page.evaluate(() => {
+      const selects = Array.from(document.querySelectorAll("select"));
+      const debugInfo = [];
+      selects.forEach((sel) => {
+        const name = sel.getAttribute("name") || sel.getAttribute("id") || "unnamed";
+        if (/xnxq/i.test(name)) {
+          const opts = Array.from(sel.options).map(o => ({ value: o.value, text: o.textContent.trim() }));
+          debugInfo.push({ name, opts });
+        }
+      });
+      return debugInfo;
+    });
+    
+    console.error(`❌ 无法在教务系统中匹配到目标学期: ${preferredSemester}`);
+    if (allSemOptions.length > 0) {
+      console.error("教务系统中学期下拉框的可选值如下：");
+      allSemOptions.forEach(sel => {
+        sel.opts.forEach(opt => {
+          console.error(`  - 值: ${opt.value}, 文本: ${opt.text}`);
+        });
+      });
+    }
+    throw new Error(`未找到匹配的学期: ${preferredSemester}`);
+  }
+
+  // 构造选择器
+  let selector = "";
+  if (selectResult.selectName) {
+    selector = `select[name="${selectResult.selectName}"]`;
+  } else if (selectResult.selectId) {
+    selector = `select[id="${selectResult.selectId}"]`;
+  } else {
+    selector = `select:nth-of-type(${selectResult.selectIndex + 1})`;
+  }
+
+  console.log(`页面匹配学期：${selectResult.optionText}`);
+  
+  // 选择选项并等待
+  await page.selectOption(selector, selectResult.optionValue);
+  await page.waitForTimeout(1500); // 必须等待页面联动更新
+
+  // 验证最终使用学期是否是要求的学期
+  const finalValue = await page.$eval(selector, el => el.value);
+  if (!finalValue.includes(preferredSemester)) {
+    throw new Error(`选择学期后校验失败：最终选中的值 ${finalValue} 与期望值 ${preferredSemester} 不匹配！`);
+  }
+
+  console.log(`最终使用学期：${preferredSemester}`);
+  return {
+    value: selectResult.optionValue,
+    label: selectResult.optionText
+  };
+}
+
+/**
+ * 提取学院名称的安全拼音/英文 Slug，供样本文件名使用
+ */
+function getCollegeSlug(collegeName) {
+  const map = {
+    "人文": "human",
+    "传": "college",
+    "动物": "animal",
+    "动科": "animal",
+    "生命": "life",
+    "商": "business",
+    "法": "law",
+    "医": "medical",
+    "工": "engineering",
+    "理": "science",
+    "材料": "materials",
+    "电信": "telecom",
+    "机电": "mechatronic",
+    "计算机": "computer",
+    "数学": "math",
+    "物理": "physics",
+    "化学": "chemistry",
+    "环境": "env",
+    "土木": "civil",
+    "食品": "food",
+    "设计": "design",
+    "艺术": "art",
+    "体育": "sports",
+    "马克思": "marx",
+    "国际": "intl",
+    "继教": "continue"
+  };
+  
+  let slug = "college";
+  for (const [key, val] of Object.entries(map)) {
+    if (collegeName.includes(key)) {
+      slug = val;
+      break;
+    }
+  }
+  return slug;
+}
+
+let savedSampleCount = 0;
+
+/**
+ * 保存原始专业联动响应样本
+ */
+function saveMajorResponseSample(rawText, meta, parsedCount, emptyNameCount) {
+  if (savedSampleCount >= 3) return;
+  savedSampleCount++;
+
+  const sampleDir = path.join(__dirname, ".debug", "major-response-samples");
+  if (!fs.existsSync(sampleDir)) {
+    fs.mkdirSync(sampleDir, { recursive: true });
+  }
+
+  const slug = getCollegeSlug(meta.collegeName);
+  const safeName = `${meta.collegeCode}-${meta.grade}-${slug}-college`;
+  const rawPath = path.join(sampleDir, `${safeName}.raw.txt`);
+  const metaPath = path.join(sampleDir, `${safeName}.meta.json`);
+
+  // 脱敏原始响应体：移除敏感 SessionID 或 Cookie 等
+  let sanitizedRaw = rawText;
+  sanitizedRaw = sanitizedRaw.replace(/JSESSIONID=[a-zA-Z0-9.\-_]+/gi, "JSESSIONID=REDACTED");
+  sanitizedRaw = sanitizedRaw.replace(/cookie/gi, "REDACTED");
+
+  fs.writeFileSync(rawPath, sanitizedRaw, "utf-8");
+
+  const metaData = {
+    collegeCode: meta.collegeCode,
+    collegeName: meta.collegeName,
+    grade: meta.grade,
+    semester: meta.semester,
+    requestUrl: meta.requestUrl,
+    method: meta.method || "GET",
+    status: meta.status || 200,
+    contentType: meta.contentType || (rawText.trim().startsWith("<") ? "text/html" : "application/json"),
+    rawLength: rawText.length,
+    parsedCount,
+    emptyNameCount
+  };
+
+  fs.writeFileSync(metaPath, JSON.stringify(metaData, null, 2), "utf-8");
+  console.log(`💾 已保存原始响应样本及元数据至: ${rawPath}`);
+}
+
+/**
+ * 从不同格式的专业联动响应中解析出专业列表
+ */
+function parseMajorOptionsFromResponse(raw, meta) {
+  if (!raw) return [];
+  const { collegeCode = "", collegeName = "", grade = "", semester = "", requestUrl = "" } = meta || {};
+  const rawStr = String(raw).trim();
+  const items = [];
+
+  const formatItem = (codeVal, nameVal) => {
+    const code = typeof codeVal === "string" ? codeVal.trim() : (codeVal ? String(codeVal).trim() : "");
+    const name = typeof nameVal === "string" ? nameVal.trim() : (nameVal ? String(nameVal).trim() : "");
+    if (!code && !name) return null;
+
+    return {
+      code,
+      name,
+      majorCode: code,
+      majorName: name,
+      rawLabel: name,
+      collegeCode,
+      collegeName,
+      grade,
+      semester
+    };
+  };
+
+  // 1. 尝试 JSON 数组格式
+  try {
+    let parsed = null;
+    if (rawStr.startsWith("[") || rawStr.startsWith("{")) {
+      parsed = JSON.parse(rawStr);
+    } else {
+      // 提取中括号包裹的疑似 JSON 数组
+      const jsonRegex = /\[\s*\{[\s\S]*\}\s*\]/;
+      const match = rawStr.match(jsonRegex);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch (e) {
+          // 尝试宽容解析或 eval 提取
+          try {
+            parsed = eval(`(${match[0]})`);
+          } catch (evalErr) {
+            // ignore
+          }
+        }
+      }
+    }
+
+    if (parsed) {
+      const list = Array.isArray(parsed)
+        ? parsed
+        : (parsed.rows || parsed.data || parsed.list || parsed.majors || parsed.items) || [];
+      if (Array.isArray(list)) {
+        for (const item of list) {
+          if (!item) continue;
+          const codeVal = item.majorCode || item.code || item.value || item.id || item.dm || item.DM || item.zyh || item.ZYH || item.bh || item.BH;
+          const nameVal = item.majorName || item.name || item.label || item.text || item.mc || item.MC || item.zymc || item.ZYMC || item.dmmc || item.DMMC || item.title;
+          const formatted = formatItem(codeVal, nameVal);
+          if (formatted) items.push(formatted);
+        }
+      }
+    }
+  } catch (jsonErr) {
+    // ignore
+  }
+
+  // 2. 如果没有解析出 JSON，尝试 HTML Cheerio 解析
+  if (items.length === 0) {
+    try {
+      const $ = cheerio.load(rawStr, { decodeEntities: false });
+      $("option").each((_, el) => {
+        const val = $(el).val() || $(el).attr("value") || "";
+        const text = $(el).text().trim();
+        // 跳过空值和请选择占位符
+        if (val) {
+          const formatted = formatItem(val, text);
+          if (formatted) items.push(formatted);
+        }
+      });
+    } catch (htmlErr) {
+      // ignore
+    }
+  }
+
+  // 3. 正则兜底解析 HTML option 格式
+  if (items.length === 0) {
+    const optionRegex = /<option\s+[^>]*value=["']([^"']*)["'][^>]*>([\s\S]*?)<\/option>/gi;
+    let match;
+    while ((match = optionRegex.exec(rawStr)) !== null) {
+      const val = match[1];
+      const text = match[2].replace(/<[^>]+>/g, "").trim();
+      if (val) {
+        const formatted = formatItem(val, text);
+        if (formatted) items.push(formatted);
+      }
+    }
+  }
+
+  return items;
+}
+
+/**
  * 规范化单个专业数据项，识别需要丢弃的数据
  */
 function normalizeMajorItem(item) {
@@ -306,6 +597,13 @@ async function syncCatalog(page) {
   let html = await page.content();
   let $ = cheerio.load(html);
 
+  const preferredSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  const semResult = await selectSemester(page, preferredSemester);
+
+  // 重新获取选择学期后的页面内容
+  html = await page.content();
+  $ = cheerio.load(html);
+
   // 解析所有可选学期
   const semesters = [];
   $("select[name='xnxqh'] option").each((_, el) => {
@@ -314,37 +612,7 @@ async function syncCatalog(page) {
     if (val) semesters.push({ value: val, label: text });
   });
 
-  // 匹配并选择目标学期
-  const preferredSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
-  console.log(`配置学期：${preferredSemester}`);
-
-  let matchedOption = null;
-  for (const sem of semesters) {
-    if (sem.value.includes(preferredSemester) || sem.label.includes(preferredSemester)) {
-      matchedOption = sem;
-      break;
-    }
-  }
-
-  if (!matchedOption) {
-    console.error(`❌ 无法在教务系统中匹配到目标学期: ${preferredSemester}`);
-    console.error("可选学期列表如下：");
-    semesters.forEach(s => console.error(`  - 值: ${s.value}, 文本: ${s.label}`));
-    throw new Error(`未找到匹配的学期: ${preferredSemester}`);
-  }
-
-  console.log(`页面匹配学期：${matchedOption.label}`);
-  console.log(`最终使用学期：${preferredSemester}`);
-
-  // 在教务页面中选择该学期
-  await page.selectOption("select[name='xnxqh']", matchedOption.value);
-  await page.waitForTimeout(1000); // 等待可能发生的联动
-
-  // 重新获取选择学期后的页面内容
-  html = await page.content();
-  $ = cheerio.load(html);
-
-  // 重新整理 semesters 列表，将匹配到的学期排在首位
+  const matchedOption = semesters.find(s => s.value === semResult.value) || semResult;
   const reorderedSemesters = [
     matchedOption,
     ...semesters.filter(s => s.value !== matchedOption.value)
@@ -494,7 +762,13 @@ async function syncMajors(page, catalog) {
   }
 
   const { colleges, grades } = catalog;
-  const activeSemester = catalog.semesters[0]?.value || "2025-2026-2";
+  // 打开页面以确保联动操作可用
+  await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
+
+  const preferredSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  const semResult = await selectSemester(page, preferredSemester);
+  const activeSemester = preferredSemester;
+
   const startYear = parseInt(activeSemester.match(/^(\d{4})/)?.[1] || "2025", 10);
   const gradeRangeEnv = process.env.SYNC_GRADE_RANGE || 'active';
 
@@ -517,9 +791,6 @@ async function syncMajors(page, catalog) {
 
   const allMajors = [];
 
-  // 打开页面以确保联动操作可用
-  await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
-
   let count = 0;
   for (const college of colleges) {
     for (const grade of filteredGrades) {
@@ -528,6 +799,7 @@ async function syncMajors(page, catalog) {
       
       let responseText = "";
       let success = false;
+      let dropdownHtml = "";
       
       // 1. 优先使用 evaluate fetch
       try {
@@ -543,14 +815,13 @@ async function syncMajors(page, catalog) {
       let majors = [];
       if (success && responseText) {
         try {
-          const parsed = parser.parseMajorAjaxResponse(responseText, { collegeCode: college.code, grade });
-          majors = (parsed.majors || [])
-            .map((m) => ({
-              code: m.code,
-              name: m.name,
-              collegeCode: college.code,
-              grade: grade,
-            }));
+          majors = parseMajorOptionsFromResponse(responseText, {
+            collegeCode: college.code,
+            collegeName: college.name,
+            grade,
+            semester: activeSemester,
+            requestUrl: `/kbcx/getZyByAjax?skyx=${college.code}&sknj=${grade}`
+          });
         } catch (e) {
           console.warn(`      ⚠️  Ajax 响应解析失败: ${e.message}，将尝试 DOM Fallback...`);
           success = false;
@@ -558,7 +829,7 @@ async function syncMajors(page, catalog) {
       }
 
       // 2. 如果 evaluate fetch 失败，采用页面级 DOM 操作联动
-      if (!success) {
+      if (!success || majors.length === 0) {
         try {
           // 选择学院
           await page.selectOption("select[name='skyx']", college.code);
@@ -567,28 +838,57 @@ async function syncMajors(page, catalog) {
           // 等待 DOM 反应
           await page.waitForTimeout(800);
           
-          // 获取专业下拉框所有选项
-          const options = await page.evaluate(() => {
+          // 获取专业下拉框的 HTML 内容，然后用我们的通用 parser 解析
+          dropdownHtml = await page.evaluate(() => {
             const sel = document.querySelector("select[name='skzy']");
-            if (!sel) return [];
-            return Array.from(sel.options)
-              .map(opt => ({ value: opt.value, label: opt.textContent.trim() }))
-              .filter(opt => opt.value && !opt.label.includes("选择") && !opt.label.includes("全部"));
+            return sel ? sel.outerHTML : "";
           });
 
-          majors = options.map(opt => ({
-            code: opt.value,
-            name: opt.label.replace(/^\[[a-zA-Z0-9_-]+\]/, "").trim(),
-            collegeCode: college.code,
-            grade: grade,
-          }));
+          if (dropdownHtml) {
+            majors = parseMajorOptionsFromResponse(dropdownHtml, {
+              collegeCode: college.code,
+              collegeName: college.name,
+              grade,
+              semester: activeSemester,
+              requestUrl: "DOM_SELECT_skzy"
+            });
+          }
         } catch (domErr) {
           console.error(`      ❌ DOM 联动 Fallback 也彻底失败: ${domErr.message}`);
         }
       }
 
       if (majors.length > 0) {
-        console.log(`      成功获取到 ${majors.length} 个专业。`);
+        const rawCount = majors.length;
+        const emptyNameCount = majors.filter(m => !String(m.name || m.majorName || m.rawLabel || "").trim()).length;
+        const validCount = rawCount - emptyNameCount;
+        
+        console.log(`      原始选项数：${rawCount}`);
+        console.log(`      有效专业数：${validCount}`);
+        console.log(`      空名称数：${emptyNameCount}`);
+
+        if (emptyNameCount === rawCount) {
+          console.warn(`      ⚠️ 严重警告：本次联动只解析到专业 code，没有解析到专业名称，请检查 parser 或 raw response 样本。`);
+        }
+
+        if (savedSampleCount < 3) {
+          saveMajorResponseSample(
+            responseText || dropdownHtml,
+            {
+              collegeCode: college.code,
+              collegeName: college.name,
+              grade,
+              semester: activeSemester,
+              requestUrl: responseText ? `/kbcx/getZyByAjax?skyx=${college.code}&sknj=${grade}` : "DOM_SELECT_skzy",
+              method: responseText ? "GET" : "DOM_INTERACTION",
+              status: 200,
+              contentType: responseText ? (responseText.trim().startsWith("<") ? "text/html" : "application/json") : "text/html"
+            },
+            rawCount,
+            emptyNameCount
+          );
+        }
+
         allMajors.push(...majors);
       } else {
         console.log(`      没有专业数据。`);
@@ -612,6 +912,15 @@ async function syncMajors(page, catalog) {
   console.log(`- generatedMajorCodeCount: ${generatedCount}`);
   console.log(`- sampleDroppedItems (前 10 条):`, JSON.stringify(sampleDroppedItems, null, 2));
   console.log("=============================\n");
+
+  if (cleaned.length === 0) {
+    console.error(`❌ 没有有效专业数据，已停止上传。`);
+    console.error(`请检查：`);
+    console.error(`1. 当前学期是否正确。`);
+    console.error(`2. major-response-samples 中的 raw 响应格式。`);
+    console.error(`3. parseMajorOptionsFromResponse 是否正确解析 option text / JSON name 字段。`);
+    throw new Error("没有有效专业数据，已停止上传。");
+  }
 
   // 2. 保存调试文件
   const debugDir = path.join(__dirname, ".debug");
@@ -964,4 +1273,13 @@ async function main() {
 
 if (require.main === module) {
   main();
+} else {
+  module.exports = {
+    selectSemester,
+    getCollegeSlug,
+    saveMajorResponseSample,
+    parseMajorOptionsFromResponse,
+    cleanMajorsPayload,
+    normalizeMajorItem
+  };
 }
