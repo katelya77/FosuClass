@@ -9,8 +9,8 @@ exports.main = async (event) => {
   const studentId = String((event && event.studentId) || "").trim();
   return {
     success: true,
-    mock: true,
+    demo: true,
     studentId: maskStudentId(studentId),
-    message: "Mock 登录成功。真实教务接口尚未接入，请先提供脱敏抓包信息。",
+    message: "登录演示成功。真实登录流程尚未接入。",
   };
 };

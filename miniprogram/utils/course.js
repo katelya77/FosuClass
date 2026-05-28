@@ -5,8 +5,8 @@ const { colorForCourse } = require("./color");
 const { isCourseInWeek } = require("./week");
 
 const SOURCE_TEXT = {
-  imported: "HAR 导入数据",
-  mock: "Mock 数据",
+  imported: "教务课表 · 本地缓存",
+  mock: "演示数据 · 本地缓存",
 };
 
 function normalizeCourse(course) {
@@ -17,6 +17,8 @@ function normalizeCourse(course) {
   normalized.weekday = Number(normalized.weekday);
   normalized.startWeek = Number(normalized.startWeek);
   normalized.endWeek = Number(normalized.endWeek);
+  normalized.audienceType = normalized.audienceType || "student";
+  normalized.sourceType = normalized.sourceType || (normalized.source === "har" ? "personal" : "class");
   return normalized;
 }
 

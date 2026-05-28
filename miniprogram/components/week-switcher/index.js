@@ -8,6 +8,10 @@ Component({
       type: Number,
       value: 20,
     },
+    weekLabel: {
+      type: String,
+      value: "",
+    },
   },
 
   methods: {

@@ -7,3 +7,4 @@ docs/captures/*.har
 !docs/captures/.gitkeep
 node_modules/
 miniprogram_npm/
+cloudfunctions/*/node_modules/

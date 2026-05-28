@@ -2,13 +2,15 @@
   overflow: hidden;
   border-radius: 10rpx;
   color: #ffffff;
+  max-width: 100%;
 }
 
 .course-card-grid {
   position: absolute;
-  left: 5rpx;
-  right: 5rpx;
-  padding: 8rpx 8rpx;
+  left: 4rpx;
+  right: 4rpx;
+  padding: 7rpx 7rpx;
+  border-radius: 8rpx;
   box-shadow: 0 8rpx 18rpx rgba(26, 50, 89, 0.1);
 }
 
@@ -45,11 +47,11 @@
 .course-name {
   display: -webkit-box;
   overflow: hidden;
-  font-size: 21rpx;
+  font-size: 20rpx;
   font-weight: 700;
-  line-height: 1.2;
+  line-height: 1.16;
   -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 1;
 }
 
 .course-card-list .course-name {
@@ -58,6 +60,7 @@
   font-size: 32rpx;
   font-weight: 900;
   line-height: 1.25;
+  -webkit-line-clamp: 2;
 }
 
 .status-pill {
@@ -145,8 +148,8 @@
 .course-meta,
 .course-week {
   overflow: hidden;
-  margin-top: 5rpx;
-  font-size: 18rpx;
+  margin-top: 4rpx;
+  font-size: 17rpx;
   line-height: 1.18;
   opacity: 0.92;
   text-overflow: ellipsis;

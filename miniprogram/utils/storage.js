@@ -2,8 +2,10 @@ const STORAGE_KEY = "FOSU_CLASS_SETTINGS";
 
 const defaultSettings = {
   className: "25动物医学6",
+  semesterId: "2025-2026-2",
   semester: "2025-2026学年第二学期",
   currentWeek: 12,
+  manualWeekOverride: false,
   hideInactiveCourses: false,
   showWeekend: false,
 };

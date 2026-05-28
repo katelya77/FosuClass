@@ -1,19 +1,22 @@
 const { mockCalendar } = require("../../data/mockCalendar");
-const { getSettings } = require("../../utils/storage");
+const { formatWeekRange, getTodayTeachingInfo } = require("../../utils/week");
 
 Page({
   data: {
     title: "2025-2026学年第二学期教学周历",
     currentWeek: 12,
+    currentWeekText: "",
     weeks: [],
   },
 
   onShow() {
-    const settings = getSettings();
+    const todayInfo = getTodayTeachingInfo(new Date(), mockCalendar);
     this.setData({
-      currentWeek: settings.currentWeek,
+      currentWeek: todayInfo.weekNo,
+      currentWeekText: `${todayInfo.dateLabel} ${todayInfo.weekdayLabel} · 第${todayInfo.weekNo}周`,
       weeks: mockCalendar.map((item) => Object.assign({}, item, {
-        active: item.week === settings.currentWeek,
+        rangeText: formatWeekRange(item.startDate, item.endDate),
+        active: item.weekNo === todayInfo.weekNo,
       })),
     });
   },

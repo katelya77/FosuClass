@@ -1,4 +1,4 @@
-function mockSyncSchedule(studentId, password) {
+function simulateSyncSchedule(studentId, password) {
   return new Promise((resolve, reject) => {
     setTimeout(() => {
       if (!studentId || !password) {
@@ -6,7 +6,7 @@ function mockSyncSchedule(studentId, password) {
         return;
       }
       if (studentId.toLowerCase() === "fail") {
-        reject(new Error("Mock 同步失败，请稍后再试。"));
+        reject(new Error("同步失败，请稍后再试。"));
         return;
       }
       resolve({
@@ -41,7 +41,7 @@ Page({
     try {
       // TODO: 后续改为 wx.cloud.callFunction({ name: "syncSchedule", data: { studentId, password } })。
       // password 只在本次请求中临时使用，不写入 Storage、日志或云数据库。
-      await mockSyncSchedule(studentId, password);
+      await simulateSyncSchedule(studentId, password);
       this.setData({
         syncing: false,
         message: "同步成功，已更新个人课表",
