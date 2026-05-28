@@ -1,5 +1,5 @@
 const { courseTimes } = require("../../data/courseTimes");
-const { buildScheduleColumns, getCoursesByClass } = require("../../utils/course");
+const { buildScheduleColumns, getCourseDataSource, getCoursesByClass } = require("../../utils/course");
 const { getSettings, saveSettings } = require("../../utils/storage");
 const {
   TOTAL_WEEKS,
@@ -9,7 +9,7 @@ const {
   getWeekDateRange,
 } = require("../../utils/week");
 
-const SECTION_HEIGHT = 96;
+const SECTION_HEIGHT = 90;
 
 Page({
   data: {
@@ -18,6 +18,7 @@ Page({
     appName: "佛大课表",
     className: "25动物医学6",
     semester: "2025-2026学年第二学期",
+    dataSourceText: "Mock 数据",
     currentWeek: 12,
     totalWeeks: TOTAL_WEEKS,
     weekDateText: "",
@@ -27,7 +28,7 @@ Page({
     weekdays: [],
     dayColumns: [],
     hideInactiveCourses: false,
-    showWeekend: true,
+    showWeekend: false,
     selectedCourse: null,
     detailVisible: false,
   },
@@ -45,6 +46,7 @@ Page({
     const currentWeek = clampWeek(settings.currentWeek || getCurrentTeachingWeek());
     const weekdays = getVisibleWeekdays(settings.showWeekend);
     const courses = getCoursesByClass(settings.className);
+    const dataSource = getCourseDataSource();
     const dayColumns = buildScheduleColumns(courses, weekdays, currentWeek, {
       sectionHeight: SECTION_HEIGHT,
       hideInactiveCourses: settings.hideInactiveCourses,
@@ -54,6 +56,7 @@ Page({
     this.setData({
       className: settings.className,
       semester: settings.semester,
+      dataSourceText: dataSource.text,
       currentWeek,
       weekDateText: weekRange.shortText,
       weekdays,

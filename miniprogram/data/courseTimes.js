@@ -12,6 +12,7 @@ const courseTimes = [
   { section: 11, start: "19:00", end: "19:45", period: "晚上" },
   { section: 12, start: "19:50", end: "20:35", period: "晚上" },
   { section: 13, start: "20:40", end: "21:25", period: "晚上" },
+  { section: 14, start: "21:30", end: "22:15", period: "晚上" },
 ];
 
 module.exports = {

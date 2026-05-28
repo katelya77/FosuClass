@@ -1,3 +1,6 @@
+const { courseTimes } = require("../../data/courseTimes");
+const { getCourseTimeRange } = require("../../utils/course");
+
 Component({
   properties: {
     visible: {
@@ -12,6 +15,7 @@ Component({
 
   data: {
     sectionText: "",
+    timeText: "",
     weekTypeText: "",
   },
 
@@ -24,6 +28,7 @@ Component({
       };
       this.setData({
         sectionText: course && course.startSection ? `第${course.startSection}-${course.endSection}节` : "",
+        timeText: course ? course.timeText || getCourseTimeRange(course, courseTimes) : "",
         weekTypeText: weekTypeMap[(course && course.weekType) || "all"],
       });
     },

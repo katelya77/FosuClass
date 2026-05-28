@@ -1,18 +1,18 @@
 .search-filter {
-  padding: 18rpx;
-  border: 1rpx solid #edf0f5;
-  border-radius: 18rpx;
+  padding: 16rpx;
+  border: 1rpx solid #e5ebf3;
+  border-radius: 16rpx;
   background: #ffffff;
-  box-shadow: 0 12rpx 34rpx rgba(16, 31, 55, 0.06);
+  box-shadow: 0 10rpx 28rpx rgba(16, 31, 55, 0.06);
 }
 
 .search-row {
   display: flex;
   align-items: center;
-  min-height: 76rpx;
+  min-height: 82rpx;
   padding: 0 22rpx;
   border-radius: 14rpx;
-  background: #f4f6fa;
+  background: #f2f5f9;
 }
 
 .search-icon {
@@ -25,7 +25,7 @@
   flex: 1;
   min-width: 0;
   color: #172033;
-  font-size: 28rpx;
+  font-size: 29rpx;
 }
 
 .search-placeholder {

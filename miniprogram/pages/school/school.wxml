@@ -1,7 +1,7 @@
 <view class="page school-page">
   <view class="page-header">
-    <view class="title">全校课表</view>
-    <view class="subtitle">先用 Mock 班级数据演示，后续接入行政班级课表查询。</view>
+    <view class="title">查找佛大班级课表</view>
+    <view class="subtitle">支持按学院、专业、班级搜索</view>
   </view>
 
   <search-filter

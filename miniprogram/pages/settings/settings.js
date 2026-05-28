@@ -59,6 +59,16 @@ Page({
     });
   },
 
+  showDeveloperApi() {
+    wx.showModal({
+      title: "开发者接口接入",
+      content:
+        "下一步抓包接口：\n/xskb/xskb_list.do\n/kbcx/kbxx_xzb\n/kbcx/kbxx_teacher\n/kbcx/kbxx_classroom\n/kbcx/kbxx_kc\n/kscj/cjcx_query?Ves632DSdyV=NEW_XSD_XJCJ\n\n提交给 AI 前必须删除 Cookie、Token、JSESSIONID、密码等敏感信息。",
+      showCancel: false,
+      confirmText: "知道了",
+    });
+  },
+
   clearCache() {
     wx.showModal({
       title: "清除缓存",

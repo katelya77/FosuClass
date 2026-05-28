@@ -1,24 +1,65 @@
+.today-page {
+  padding-top: 22rpx;
+}
+
 .today-hero {
-  padding: 30rpx;
-  background: linear-gradient(135deg, #ffffff 0%, #f3f8ff 100%);
+  padding: 28rpx;
+  border-color: #f0e4e4;
+  background: linear-gradient(135deg, #fffafa 0%, #ffffff 48%, #f3f8ff 100%);
+}
+
+.hero-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
 }
 
 .date-text {
+  min-width: 0;
   color: #778297;
   font-size: 26rpx;
+  font-weight: 600;
+}
+
+.source-pill {
+  flex: 0 0 auto;
+  height: 44rpx;
+  padding: 0 18rpx;
+  border-radius: 999rpx;
+  background: #fff1f1;
+  color: #b4232a;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 44rpx;
 }
 
 .today-title {
-  margin-top: 12rpx;
+  margin-top: 16rpx;
   color: #172033;
   font-size: 44rpx;
   font-weight: 900;
+  line-height: 1.15;
 }
 
 .today-subtitle {
-  margin-top: 10rpx;
+  margin-top: 12rpx;
   color: #536174;
-  font-size: 26rpx;
+  font-size: 27rpx;
+  font-weight: 700;
+}
+
+.today-count {
+  display: inline-flex;
+  align-items: center;
+  min-height: 46rpx;
+  margin-top: 18rpx;
+  padding: 0 18rpx;
+  border-radius: 999rpx;
+  background: #172033;
+  color: #ffffff;
+  font-size: 23rpx;
+  font-weight: 800;
 }
 
 .today-list {

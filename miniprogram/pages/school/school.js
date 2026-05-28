@@ -18,9 +18,10 @@ Page({
     classes: mockClasses,
     visibleClasses: mockClasses,
     extensionEntries: [
-      { title: "教师课表查询", desc: "对应 /kbcx/kbxx_teacher", type: "teacher" },
-      { title: "教室课表查询", desc: "对应 /kbcx/kbxx_classroom", type: "classroom" },
-      { title: "课程课表查询", desc: "对应 /kbcx/kbxx_kc", type: "course" },
+      { title: "行政班级课表", desc: "对应 /kbcx/kbxx_xzb", type: "class" },
+      { title: "教师课表", desc: "对应 /kbcx/kbxx_teacher", type: "teacher" },
+      { title: "教室课表", desc: "对应 /kbcx/kbxx_classroom", type: "classroom" },
+      { title: "课程课表", desc: "对应 /kbcx/kbxx_kc", type: "course" },
     ],
   },
 
