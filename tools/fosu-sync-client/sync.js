@@ -304,6 +304,60 @@ async function syncCatalog(page) {
 /**
  * 2. 同步 Majors 专业映射数据
  */
+/**
+ * 动态年级过滤函数
+ * @param {string} semester 学期，形如 "2025-2026-2" 或 "2025-2026学年第二学期"
+ * @param {Object} options 过滤参数
+ */
+function getActiveGradesBySemester(semester, options = {}) {
+  const { originalGrades = [] } = options;
+  const gradeRangeEnv = process.env.SYNC_GRADE_RANGE || 'active';
+  const syncGradesEnv = process.env.SYNC_GRADES;
+  const confirmFullSync = process.env.CONFIRM_FULL_SYNC === 'true';
+
+  const match = semester.match(/^(\d{4})/);
+  if (!match) {
+    throw new Error(`无法从学期标识 "${semester}" 中提取学年起始年份，请检查学期格式。`);
+  }
+  const startYear = parseInt(match[1], 10);
+
+  let targetGrades = [];
+
+  if (gradeRangeEnv === 'active') {
+    // 默认本科保守保留 5 个年级
+    for (let i = 4; i >= 0; i--) {
+      targetGrades.push(String(startYear - i));
+    }
+  } else if (gradeRangeEnv === 'recent4') {
+    // 只同步最近 4 个年级
+    for (let i = 3; i >= 0; i--) {
+      targetGrades.push(String(startYear - i));
+    }
+  } else if (gradeRangeEnv === 'custom') {
+    if (!syncGradesEnv) {
+      throw new Error("检测到 SYNC_GRADE_RANGE=custom，但未设置 SYNC_GRADES 环境变量。");
+    }
+    targetGrades = syncGradesEnv.split(',').map(g => g.trim()).filter(Boolean);
+  } else if (gradeRangeEnv === 'all') {
+    if (!confirmFullSync) {
+      console.error("❌ 检测到 SYNC_GRADE_RANGE=all，但未设置 CONFIRM_FULL_SYNC=true。为避免同步过多历史年级，已中止。");
+      process.exit(1);
+    }
+    return originalGrades;
+  } else {
+    // 默认 active
+    for (let i = 4; i >= 0; i--) {
+      targetGrades.push(String(startYear - i));
+    }
+  }
+
+  // 过滤出在教务系统原始年级中匹配的部分
+  return originalGrades.filter(g => targetGrades.includes(g));
+}
+
+/**
+ * 2. 同步 Majors 专业映射数据
+ */
 async function syncMajors(page, catalog) {
   console.log("\n=== [步骤 2] 开始抓取 Majors 专业联动 ===");
   if (!catalog) {
@@ -316,18 +370,37 @@ async function syncMajors(page, catalog) {
   }
 
   const { colleges, grades } = catalog;
-  const allMajors = [];
+  const activeSemester = catalog.semesters[0]?.value || "2025-2026-2";
+  const startYear = parseInt(activeSemester.match(/^(\d{4})/)?.[1] || "2025", 10);
+  const gradeRangeEnv = process.env.SYNC_GRADE_RANGE || 'active';
 
-  console.log(`🔄 共有 ${colleges.length} 个学院, ${grades.length} 个年级，共计 ${colleges.length * grades.length} 次联动请求。`);
+  // 过滤年级
+  let filteredGrades = [];
+  try {
+    filteredGrades = getActiveGradesBySemester(activeSemester, { originalGrades: grades });
+  } catch (err) {
+    console.error(`❌ 年级过滤失败: ${err.message}`);
+    process.exit(1);
+  }
+
+  console.log(`当前学期：${activeSemester}`);
+  console.log(`学年起始年份：${startYear}`);
+  console.log(`年级过滤模式：${gradeRangeEnv}`);
+  console.log(`本次同步年级：${filteredGrades.join(", ")}`);
+  console.log(`原始年级数量：${grades.length}`);
+  console.log(`过滤后年级数量：${filteredGrades.length}`);
+  console.log(`本次联动请求数：${colleges.length} × ${filteredGrades.length} = ${colleges.length * filteredGrades.length}`);
+
+  const allMajors = [];
 
   // 打开页面以确保联动操作可用
   await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
 
   let count = 0;
   for (const college of colleges) {
-    for (const grade of grades) {
+    for (const grade of filteredGrades) {
       count++;
-      console.log(`   [${count}/${colleges.length * grades.length}] 抓取中: ${college.name} - ${grade}级 ...`);
+      console.log(`   [${count}/${colleges.length * filteredGrades.length}] 抓取中: ${college.name} - ${grade}级 ...`);
       
       let responseText = "";
       let success = false;
@@ -403,8 +476,71 @@ async function syncMajors(page, catalog) {
 
   console.log(`📊 专业联动抓取完毕，共整理出 ${allMajors.length} 个专业。`);
   
-  // 上传至 VPS
-  await uploadToVps("/api/admin/sync/majors", allMajors);
+  // 1. 上传前把 majors 数据保存到本地 .debug/last-majors-upload.json
+  const debugDir = path.join(__dirname, ".debug");
+  if (!fs.existsSync(debugDir)) {
+    fs.mkdirSync(debugDir, { recursive: true });
+  }
+  const debugUploadPath = path.join(debugDir, "last-majors-upload.json");
+  fs.writeFileSync(debugUploadPath, JSON.stringify(allMajors, null, 2), "utf-8");
+  
+  // 2. 统计上传摘要数据
+  const payloadStr = JSON.stringify(allMajors);
+  const payloadSizeKB = (payloadStr.length / 1024).toFixed(2);
+  
+  const collegeCodes = new Set(allMajors.map(m => m.collegeCode));
+  const majorGrades = new Set(allMajors.map(m => m.grade));
+  
+  // 统计每个学院的专业数以找出最大值
+  const collegeMajorCounts = {};
+  allMajors.forEach(m => {
+    collegeMajorCounts[m.collegeCode] = (collegeMajorCounts[m.collegeCode] || 0) + 1;
+  });
+  const largestCollegeMajorCount = Math.max(...Object.values(collegeMajorCounts), 0);
+  
+  const hasEmptyCollegeCode = allMajors.some(m => !m.collegeCode);
+  const hasEmptyMajorCode = allMajors.some(m => !m.code);
+  
+  // 重复 key 校验
+  const seenKeys = new Set();
+  let hasDuplicateKey = false;
+  for (const m of allMajors) {
+    const key = `${m.collegeCode}_${m.grade}_${m.code}`;
+    if (seenKeys.has(key)) {
+      hasDuplicateKey = true;
+      break;
+    }
+    seenKeys.add(key);
+  }
+  
+  console.log("\n📦 === [上传摘要] ===");
+  console.log(`- collegesCount: ${collegeCodes.size}`);
+  console.log(`- gradesCount: ${majorGrades.size}`);
+  console.log(`- majorsCount: ${allMajors.length}`);
+  console.log(`- payloadSizeKB: ${payloadSizeKB} KB`);
+  console.log(`- semester: ${activeSemester}`);
+  console.log(`- gradeRange: ${gradeRangeEnv}`);
+  console.log(`- largestCollegeMajorCount: ${largestCollegeMajorCount}`);
+  console.log(`- 是否存在空 collegeCode: ${hasEmptyCollegeCode ? "⚠️ 是" : "否"}`);
+  console.log(`- 是否存在空 majorCode: ${hasEmptyMajorCode ? "⚠️ 是" : "否"}`);
+  console.log(`- 是否存在重复 key: ${hasDuplicateKey ? "⚠️ 是" : "否"}`);
+  console.log("=====================\n");
+
+  // 3. 上传至 VPS 并做详细的错误捕捉
+  try {
+    await uploadToVps("/api/admin/sync/majors", allMajors);
+  } catch (err) {
+    console.error(`❌ Majors 数据同步至 VPS 失败！`);
+    if (err.response) {
+      console.error(`- status: ${err.response.status}`);
+      console.error(`- response body: ${JSON.stringify(err.response.data)}`);
+    } else {
+      console.error(`- error message: ${err.message}`);
+    }
+    console.error(`- request payload size: ${payloadSizeKB} KB`);
+    console.error(`- 本地调试文件路径: ${debugUploadPath}`);
+    throw err;
+  }
   
   fs.writeFileSync(path.join(__dirname, "last-majors.json"), JSON.stringify(allMajors, null, 2), "utf-8");
   console.log("💾 Majors 临时数据已保存至本地 last-majors.json");

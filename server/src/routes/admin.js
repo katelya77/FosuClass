@@ -190,13 +190,224 @@ router.post(
   })
 );
 
-// 2. 同步 Majors
+// 2. 同步 Majors (自定义 handler)
 router.post(
   "/sync/majors",
   verifyAdminToken,
-  createSyncHandler("majors", (data) => {
-    return Array.isArray(data);
-  })
+  (req, res) => {
+    console.log("[DEBUG /sync/majors] Received request, body length:", req.body ? req.body.length : "null");
+    const payload = req.body;
+    const allowHistorical = req.query.allowHistorical === 'true' || req.body.allowHistorical === true;
+
+    // 1. 基础数组与空校验
+    if (!payload || !Array.isArray(payload)) {
+      return res.status(400).json({
+        success: false,
+        message: "请求体不能为空，且必须是专业数据数组",
+        detail: "Payload must be a non-empty array of majors",
+        hint: "确保客户端上传的数据为 Array 格式"
+      });
+    }
+
+    if (containsSensitiveData(payload)) {
+      safeLog("sensitive-data-blocked", { type: "majors" });
+      return res.status(400).json({
+        success: false,
+        message: "数据中包含敏感词（如 Cookie/JSESSIONID/密码），已被拒绝写入",
+      });
+    }
+
+    // 2. Schema 校验（检测空 collegeCode, grade, majorName 并返回详细 400）
+    for (let i = 0; i < payload.length; i++) {
+      const item = payload[i];
+      if (!item || typeof item !== 'object') {
+        return res.status(400).json({
+          success: false,
+          message: "数据 Schema 格式校验未通过",
+          detail: `第 ${i} 条数据不是有效的对象`,
+          hint: "每条专业数据必须是包含 collegeCode、grade、name 的对象"
+        });
+      }
+      
+      const collegeCode = item.collegeCode;
+      const grade = item.grade;
+      const majorName = item.name || item.majorName;
+      
+      if (collegeCode === undefined || collegeCode === null || String(collegeCode).trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: "数据校验未通过：缺失 collegeCode",
+          detail: `第 ${i} 条数据缺失学院代码，数据内容: ${JSON.stringify(item)}`,
+          hint: "请确保所有专业都包含有效的 collegeCode"
+        });
+      }
+      if (grade === undefined || grade === null || String(grade).trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: "数据校验未通过：缺失 grade",
+          detail: `第 ${i} 条数据缺失年级，数据内容: ${JSON.stringify(item)}`,
+          hint: "请确保所有专业都包含有效的 grade"
+        });
+      }
+      if (majorName === undefined || majorName === null || String(majorName).trim() === '') {
+        return res.status(400).json({
+          success: false,
+          message: "数据校验未通过：缺失 majorName",
+          detail: `第 ${i} 条数据缺失专业名称，数据内容: ${JSON.stringify(item)}`,
+          hint: "请确保所有专业都包含有效的 name 字段"
+        });
+      }
+    }
+
+    try {
+      // 3. 读取已存 catalog.json 辅助映射与提取学期
+      const catalogPath = path.join(STORAGE_DIR, "catalog.json");
+      let catalog = {};
+      if (fs.existsSync(catalogPath)) {
+        try {
+          catalog = JSON.parse(fs.readFileSync(catalogPath, "utf-8"));
+        } catch (e) {
+          console.error("Failed to parse catalog.json:", e);
+        }
+      }
+
+      const collegeMap = {};
+      if (catalog.colleges) {
+        catalog.colleges.forEach(c => {
+          collegeMap[c.code] = c.name;
+        });
+      }
+
+      const semester = catalog.semesters?.[0]?.value || "2025-2026-2";
+      const startYear = parseInt(semester.match(/^(\d{4})/)?.[1] || "2025", 10);
+
+      // 4. 清洗与过滤
+      const cleanedMajors = [];
+      const seen = new Set();
+      const crypto = require("crypto");
+
+      for (const item of payload) {
+        const collegeCode = String(item.collegeCode).trim();
+        const grade = String(item.grade).trim();
+        const majorName = String(item.name || item.majorName).trim();
+        let majorCode = item.code || item.majorCode;
+
+        if (!collegeCode || !grade || !majorName) {
+          continue; // 过滤空字段 (虽然Schema校验已做，这里再次防御)
+        }
+
+        if (!majorCode) {
+          // stable hash 作为 fallback code
+          majorCode = crypto.createHash("md5").update(majorName).digest("hex").substring(0, 8);
+        } else {
+          majorCode = String(majorCode).trim();
+        }
+
+        // 非法年级过滤：如果不允许历史年级，则必须在 [startYear - 4, startYear] 范围内
+        if (!allowHistorical) {
+          const gradeNum = parseInt(grade, 10);
+          if (isNaN(gradeNum) || gradeNum < (startYear - 4) || gradeNum > startYear) {
+            continue; // 过滤非在校年级
+          }
+        }
+
+        const uniqueKey = `${collegeCode}_${grade}_${majorCode}`;
+        if (seen.has(uniqueKey)) {
+          continue; // 去重
+        }
+        seen.add(uniqueKey);
+
+        cleanedMajors.push({
+          collegeCode,
+          grade,
+          code: majorCode,
+          name: majorName
+        });
+      }
+
+      // 5. 组织嵌套的 majors-index.json 数据结构
+      const collegesObj = {};
+      for (const major of cleanedMajors) {
+        const { collegeCode, grade, code, name } = major;
+        const collegeName = collegeMap[collegeCode] || "未知学院";
+
+        if (!collegesObj[collegeCode]) {
+          collegesObj[collegeCode] = {
+            collegeCode,
+            collegeName,
+            grades: {}
+          };
+        }
+
+        if (!collegesObj[collegeCode].grades[grade]) {
+          collegesObj[collegeCode].grades[grade] = {
+            grade,
+            majors: []
+          };
+        }
+
+        collegesObj[collegeCode].grades[grade].majors.push({
+          majorCode: code,
+          majorName: name,
+          rawLabel: name
+        });
+      }
+
+      const collegesList = Object.values(collegesObj).map(c => {
+        return {
+          collegeCode: c.collegeCode,
+          collegeName: c.collegeName,
+          grades: Object.values(c.grades).map(g => {
+            g.majors.sort((a, b) => a.majorCode.localeCompare(b.majorCode));
+            return g;
+          }).sort((a, b) => b.grade.localeCompare(a.grade))
+        };
+      }).sort((a, b) => a.collegeCode.localeCompare(b.collegeCode));
+
+      const gradesSet = new Set(cleanedMajors.map(m => m.grade));
+      const gradesList = Array.from(gradesSet).sort((a, b) => b.localeCompare(a));
+
+      const now = new Date();
+      const yy = String(now.getFullYear()).substring(2);
+      const mm = String(now.getMonth() + 1).padStart(2, '0');
+      const dd = String(now.getDate()).padStart(2, '0');
+      const version = `${yy}.${mm}.${dd}.01`;
+
+      const majorsIndexPayload = {
+        version,
+        semester,
+        gradeRange: allowHistorical ? "all" : "active",
+        grades: gradesList,
+        updatedAt: now.toISOString(),
+        colleges: collegesList
+      };
+
+      // 6. 持久化存储
+      const majorsIndexPath = path.join(STORAGE_DIR, "majors-index.json");
+      fs.writeFileSync(majorsIndexPath, JSON.stringify(majorsIndexPayload, null, 2), "utf-8");
+
+      // 更新同步元数据 (注意：元数据中的 itemCount 设为清洗后的专业总数)
+      updateSyncMeta("majors", cleanedMajors.length, "local-sync-client");
+
+      safeLog("admin-sync-success", { key: "majors", count: cleanedMajors.length });
+
+      return res.json({
+        success: true,
+        message: "数据同步成功",
+        updatedAt: now.toISOString(),
+        itemCount: cleanedMajors.length
+      });
+
+    } catch (err) {
+      console.error('[sync/majors] failed:', err);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to save majors cache",
+        detail: err.message,
+        hint: "检查 server/storage 权限或数据结构"
+      });
+    }
+  }
 );
 
 // 3. 同步 Class Schedules

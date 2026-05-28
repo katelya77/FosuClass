@@ -104,6 +104,58 @@ npm run sync:all
 
 ---
 
+### 7. 专业同步的高级过滤与自定义年级
+
+为了避免因教务系统存在数十个毕业已久的远古年级而引发大量的垃圾数据抓取（例如 1990级、2001级等），本工具在运行 `sync:majors` 时支持通过环境变量来动态限定年级范围。
+
+#### 环境变量说明
+
+- `SYNC_GRADE_RANGE`：控制同步年级范围，可选值如下：
+  - `active` (默认值)：只同步当前在校的最近 5 个本科年级。例如当前学期是 `2025-2026-2`，则提取起始学年 `2025`，只保留 `2021` 至 `2025` 五个年级。
+  - `recent4`：只同步最近 4 个年级（即 `2022` 至 `2025`）。
+  - `custom`：使用自定义的年级列表，配合下面的 `SYNC_GRADES` 变量使用。
+  - `all`：同步教务下拉菜单里展示的所有年级（全量历史年级）。**必须同时设置 `CONFIRM_FULL_SYNC=true` 才能运行，否则为了避免过多请求导致风控，脚本将强行终止**。
+- `SYNC_GRADES`：配合 `SYNC_GRADE_RANGE=custom` 使用，逗号分隔多个年级，例如 `2023,2024,2025`。
+- `CONFIRM_FULL_SYNC`：在 `SYNC_GRADE_RANGE=all` 时必须显式设为 `true`。
+
+#### 使用示例
+
+**在 Linux/macOS/Git Bash 环境下运行：**
+
+```bash
+# 默认模式（等价于 active）
+npm run sync:majors
+
+# 自定义只同步 2023, 2024, 2025 三个年级
+SYNC_GRADE_RANGE=custom SYNC_GRADES=2023,2024,2025 npm run sync:majors
+
+# 全量同步历史年级（需要二次确认开关）
+SYNC_GRADE_RANGE=all CONFIRM_FULL_SYNC=true npm run sync:majors
+```
+
+**在 Windows PowerShell 环境下运行：**
+
+```powershell
+# 自定义同步年级
+$env:SYNC_GRADE_RANGE="custom"
+$env:SYNC_GRADES="2021,2022,2023,2024,2025"
+npm run sync:majors
+
+# 重置环境变量
+$env:SYNC_GRADE_RANGE=$null
+$env:SYNC_GRADES=$null
+```
+
+**在 Windows CMD 命令提示符环境下运行：**
+
+```cmd
+set SYNC_GRADE_RANGE=custom
+set SYNC_GRADES=2023,2024
+npm run sync:majors
+```
+
+---
+
 ## 长期数据来源设计与多维贡献策略
 
 为了项目不长期单点依赖开发者的个人学号，且符合“不在海外 VPS 安装 EasyConnect”、“不缓存普通用户密码”的安全底线，FosuClass 采取以下两阶段的可持续数据生态：

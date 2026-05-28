@@ -15,7 +15,7 @@ const config = require("../config");
 const STORAGE_DIR = path.join(__dirname, "../../storage");
 const FILE_MAP = {
   catalog: path.join(STORAGE_DIR, "catalog.json"),
-  majors: path.join(STORAGE_DIR, "majors.json"),
+  majors: path.join(STORAGE_DIR, "majors-index.json"),
   "sync-meta": path.join(STORAGE_DIR, "sync-meta.json"),
 };
 
@@ -275,11 +275,19 @@ async function getMajors(collegeCode, grade) {
   }
 
   // 3. cache-first 模式
-  const allMajors = readJsonFile(FILE_MAP["majors"]);
-  if (Array.isArray(allMajors) && allMajors.length > 0) {
-    const filtered = allMajors
-      .filter((m) => String(m.collegeCode) === String(collegeCode) && String(m.grade) === String(grade))
-      .map((m) => ({ code: m.code, name: m.name }));
+  const majorsIndex = readJsonFile(FILE_MAP["majors"]);
+  if (majorsIndex && Array.isArray(majorsIndex.colleges)) {
+    const college = majorsIndex.colleges.find((c) => String(c.collegeCode) === String(collegeCode));
+    let filtered = [];
+    if (college && Array.isArray(college.grades)) {
+      const gradeObj = college.grades.find((g) => String(g.grade) === String(grade));
+      if (gradeObj && Array.isArray(gradeObj.majors)) {
+        filtered = gradeObj.majors.map((m) => ({
+          code: m.majorCode,
+          name: m.majorName,
+        }));
+      }
+    }
 
     const meta = getMeta("majors");
     return {
@@ -287,7 +295,7 @@ async function getMajors(collegeCode, grade) {
       collegeCode,
       grade,
       majors: filtered,
-      updatedAt: meta.updatedAt || new Date().toISOString(),
+      updatedAt: majorsIndex.updatedAt || meta.updatedAt || new Date().toISOString(),
       dataSource: "cache",
       syncSource: meta.syncSource || "local-sync-client",
       itemCount: filtered.length,

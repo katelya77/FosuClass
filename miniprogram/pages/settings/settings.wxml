@@ -77,6 +77,18 @@
         bindchange="onSwitchChange"
       />
     </view>
+    <view class="setting-row">
+      <view>
+        <view class="row-title">显示历史年级</view>
+        <view class="row-desc">开启后将在学校查找中显示毕业历史年级</view>
+      </view>
+      <switch
+        checked="{{settings.showHistoricalGrades}}"
+        color="#c62828"
+        data-key="showHistoricalGrades"
+        bindchange="onSwitchChange"
+      />
+    </view>
   </view>
 
   <view class="settings-card card">
