@@ -1,12 +1,182 @@
 /**
- * 课表查询服务：负责从教务系统抓取班级、教师、教室、课程课表并结合 parser 解析、正常化、缓存及容灾。
+ * 课表查询服务：负责从缓存（cache-first 静态文件模式）或教务系统（realtime 调试模式）中
+ * 读取并过滤班级、教师、教室、课程课表。
  */
 
+const fs = require("fs");
+const path = require("path");
+const dns = require("dns").promises;
 const { FosuQiangzhiAdapter } = require("./fosuQiangzhiAdapter");
 const parser = require("../utils/parser");
 const normalizer = require("../utils/scheduleNormalizer");
 const cache = require("../utils/cache");
 const { safeLog } = require("../utils/safeLogger");
+const config = require("../config");
+
+const STORAGE_DIR = path.join(__dirname, "../../storage");
+const FILE_MAP = {
+  "class-schedules": path.join(STORAGE_DIR, "class-schedules.json"),
+  "teacher-schedules": path.join(STORAGE_DIR, "teacher-schedules.json"),
+  "classroom-schedules": path.join(STORAGE_DIR, "classroom-schedules.json"),
+  "course-schedules": path.join(STORAGE_DIR, "course-schedules.json"),
+  "sync-meta": path.join(STORAGE_DIR, "sync-meta.json"),
+};
+
+/**
+ * 安全读取 JSON 文件
+ */
+function readJsonFile(filePath) {
+  if (fs.existsSync(filePath)) {
+    try {
+      const content = fs.readFileSync(filePath, "utf-8");
+      return JSON.parse(content);
+    } catch (error) {
+      safeLog("read-json-file-error", { filePath, error: error.message });
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * 获取元数据
+ */
+function getMeta(key) {
+  const metaPath = FILE_MAP["sync-meta"];
+  const meta = readJsonFile(metaPath);
+  return meta && meta[key] ? meta[key] : {};
+}
+
+/**
+ * 辅助检查域名是否能解析
+ */
+async function checkDns(hostname) {
+  try {
+    await dns.lookup(hostname);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+/**
+ * 获取开发环境下的班级课表 Demo 数据
+ */
+function getDemoClassSchedule(params) {
+  return {
+    success: true,
+    dataSource: "demo",
+    updatedAt: new Date().toISOString(),
+    semester: params.semester || "2025-2026-2",
+    classes: [
+      {
+        className: "动物科学2023级1班 (Demo)",
+        collegeCode: params.collegeCode,
+        grade: params.grade,
+        majorCode: params.majorCode,
+        majorName: params.majorName || "动物科学",
+        courses: [
+          {
+            courseName: "动物解剖学",
+            teacherName: "张教授 (Demo)",
+            weeks: [1, 2, 3, 4, 5, 6, 7, 8],
+            dayOfWeek: 1, // 周一
+            sections: [1, 2], // 1-2节
+            classroom: "C7-302",
+          },
+          {
+            courseName: "动物生理学",
+            teacherName: "李副教授 (Demo)",
+            weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
+            dayOfWeek: 3, // 周三
+            sections: [3, 4], // 3-4节
+            classroom: "C7-405",
+          }
+        ]
+      }
+    ]
+  };
+}
+
+/**
+ * 获取开发环境下的教师课表 Demo 数据
+ */
+function getDemoTeacherSchedule(params) {
+  return {
+    success: true,
+    dataSource: "demo",
+    updatedAt: new Date().toISOString(),
+    teachers: [
+      {
+        teacherName: params.keyword || "汪军 (Demo)",
+        college: params.collegeName || "物理与光电工程学院",
+        title: "教授",
+        courses: [
+          {
+            courseName: "大学物理实验",
+            className: "光电2024级1班",
+            weeks: [1, 2, 3, 4, 5, 6, 7, 8],
+            dayOfWeek: 2,
+            sections: [5, 6, 7],
+            classroom: "B5-202",
+          }
+        ]
+      }
+    ]
+  };
+}
+
+/**
+ * 获取开发环境下的教室课表 Demo 数据
+ */
+function getDemoClassroomSchedule(params) {
+  return {
+    success: true,
+    dataSource: "demo",
+    updatedAt: new Date().toISOString(),
+    classrooms: [
+      {
+        roomName: params.classroomName || "C7-503 (Demo)",
+        courses: [
+          {
+            courseName: "动物生物化学",
+            teacherName: "赵老师",
+            className: "动医2023级2班",
+            weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+            dayOfWeek: 4,
+            sections: [1, 2],
+          }
+        ]
+      }
+    ]
+  };
+}
+
+/**
+ * 获取开发环境下的课程课表 Demo 数据
+ */
+function getDemoCourseSchedule(params) {
+  return {
+    success: true,
+    dataSource: "demo",
+    updatedAt: new Date().toISOString(),
+    coursesList: [
+      {
+        courseName: params.courseName || "有机化学 (Demo)",
+        courses: [
+          {
+            teacherName: "钱老师",
+            className: "化工2024级1班",
+            weeks: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16],
+            dayOfWeek: 5,
+            sections: [1, 2],
+            classroom: "D3-102",
+          }
+        ]
+      }
+    ]
+  };
+}
 
 /**
  * 1. 获取行政班级课表
@@ -18,10 +188,6 @@ async function getClassSchedule(params) {
     grade,
     majorCode,
     majorName,
-    weekStart = "",
-    weekEnd = "",
-    sectionStart = "",
-    sectionEnd = "",
   } = params;
 
   if (!collegeCode || !grade || !majorCode) {
@@ -33,92 +199,112 @@ async function getClassSchedule(params) {
     collegeCode,
     grade,
     majorCode,
-    weekStart,
-    weekEnd,
-    sectionStart,
-    sectionEnd,
+    majorName,
   };
 
-  const cacheKey = cache.keys.getClassScheduleKey(
-    queryParams.semester,
-    collegeCode,
-    grade,
-    majorCode
-  );
+  const mode = config.DATA_SOURCE_MODE;
 
-  // 1. 尝试从短期内存缓存中获取选项
-  const cached = cache.get(cacheKey);
-  if (cached && cached.dataSource === "fosu-realtime") {
-    safeLog("class-schedule-hit-cache", { majorCode });
-    return cached;
-  }
-
-  try {
-    safeLog("class-schedule-fetch-realtime", { majorCode });
-    const adapter = new FosuQiangzhiAdapter();
-    
-    // 2. 发送 POST 请求获取课表 HTML
-    const res = await adapter.fetchClassSchedule(queryParams);
-    if (res.statusCode !== 200) {
-      throw new Error(`教务课表接口请求失败，HTTP 状态码: ${res.statusCode}`);
-    }
-
-    // 3. 解析课表 HTML
-    const parsed = parser.parseClassScheduleIfrHtml(res.text, {
-      semester: queryParams.semester,
-    });
-
-    const courses = normalizer.normalizeCourseList(parsed.courses || [], {
-      semester: queryParams.semester,
-      sourceType: "class",
-      audienceType: "student",
-    });
-    
-    const warnings = parsed.warnings || [];
-
-    // 4. 按班级名称分组 (Group By)
-    const grouped = normalizer.groupCoursesBy(courses, "className", "未命名班级");
-    
-    const classes = Object.keys(grouped).map((clsName) => ({
-      className: clsName,
-      collegeCode,
-      grade,
-      majorCode,
-      majorName: majorName || "",
-      courses: grouped[clsName],
-    }));
-
-    const resultPayload = {
-      success: true,
-      dataSource: "fosu-realtime",
-      updatedAt: new Date().toISOString(),
-      semester: queryParams.semester,
-      classes,
-      warnings,
+  // 1. disabled 模式
+  if (mode === "disabled") {
+    return {
+      success: false,
+      message: "教务课表查询服务暂时关闭维护中。",
     };
+  }
 
-    // 5. 将专业的整体查询结果存入短期缓存
-    cache.set(cacheKey, resultPayload, cache.TTL.SCHEDULE);
-
-    // 同时也缓存一份班级独立课表（便于可能存在的单个班级检索，这里做内存辅助缓存）
-    classes.forEach((cls) => {
-      const singleClassKey = `schedule:single-class:${queryParams.semester}:${cls.className}`;
-      cache.set(singleClassKey, cls, cache.TTL.SCHEDULE);
-    });
-
-    return resultPayload;
-  } catch (error) {
-    safeLog("class-schedule-fetch-failed", { error: error.message });
-    
-    // 容灾处理：尝试读取没有过期的或旧的本地缓存
-    const fallback = cache.get(cacheKey);
-    if (fallback) {
-      fallback.warning = `无法实时连接教务系统，已使用历史数据。原因：${error.message}`;
-      return fallback;
+  // 2. realtime 模式
+  if (mode === "realtime") {
+    const host = new URL(config.FOSU_BASE_URL).hostname;
+    const canResolve = await checkDns(host);
+    if (!canResolve) {
+      return {
+        success: false,
+        reasonCode: "FOSU_INTRANET_ONLY",
+        message: "100.fosu.edu.cn 仅校园网或 EasyConnect VPN 可访问，当前服务器无法直连。",
+      };
     }
 
-    throw error;
+    try {
+      safeLog("class-schedule-fetch-realtime", { majorCode });
+      const adapter = new FosuQiangzhiAdapter();
+      const res = await adapter.fetchClassSchedule(queryParams);
+      if (res.statusCode !== 200) {
+        throw new Error(`教务课表接口请求失败，HTTP 状态码: ${res.statusCode}`);
+      }
+
+      const parsed = parser.parseClassScheduleIfrHtml(res.text, {
+        semester: queryParams.semester,
+      });
+
+      const courses = normalizer.normalizeCourseList(parsed.courses || [], {
+        semester: queryParams.semester,
+        sourceType: "class",
+        audienceType: "student",
+      });
+      
+      const warnings = parsed.warnings || [];
+      const grouped = normalizer.groupCoursesBy(courses, "className", "未命名班级");
+      
+      const classes = Object.keys(grouped).map((clsName) => ({
+        className: clsName,
+        collegeCode,
+        grade,
+        majorCode,
+        majorName: majorName || "",
+        courses: grouped[clsName],
+      }));
+
+      return {
+        success: true,
+        dataSource: "fosu-realtime",
+        updatedAt: new Date().toISOString(),
+        semester: queryParams.semester,
+        classes,
+        warnings,
+      };
+    } catch (error) {
+      safeLog("class-schedule-realtime-failed", { error: error.message });
+      return {
+        success: false,
+        reasonCode: "FOSU_INTRANET_ONLY",
+        message: `无法实时连接教务系统获取课表: ${error.message}`,
+      };
+    }
   }
+
+  // 3. cache-first 模式
+  const allClassSchedules = readJsonFile(FILE_MAP["class-schedules"]);
+  if (Array.isArray(allClassSchedules) && allClassSchedules.length > 0) {
+    // 匹配符合条件的班级
+    const filtered = allClassSchedules.filter(
+      (c) =>
+        String(c.collegeCode) === String(collegeCode) &&
+        String(c.grade) === String(grade) &&
+        String(c.majorCode) === String(majorCode)
+    );
+
+    const meta = getMeta("class-schedules");
+    return {
+      success: true,
+      dataSource: "cache",
+      updatedAt: meta.updatedAt || new Date().toISOString(),
+      syncSource: meta.syncSource || "local-sync-client",
+      semester: queryParams.semester,
+      classes: filtered,
+    };
+  }
+
+  // 开发环境 Demo 降级
+  if (config.NODE_ENV !== "production") {
+    return getDemoClassSchedule(queryParams);
+  }
+
+  return {
+    success: true,
+    dataSource: "empty",
+    reasonCode: "NO_SYNC_DATA",
+    message: "暂未同步班级课表数据，请稍后再试。",
+  };
 }
 
 /**
@@ -131,98 +317,127 @@ async function getTeacherSchedule(params) {
     collegeName = "",
     titleCode = "",
     keyword = "",
-    weekStart = "",
-    weekEnd = "",
   } = params;
 
   const queryParams = {
     semester: semester || "2025-2026-2",
-    collegeCode: collegeCode || "02", // 默认测试物理与光电工程学院，或由前台传入
+    collegeCode,
+    collegeName,
     teacherTitleCode: titleCode,
-    weekStart,
-    weekEnd,
-    sectionStart: "",
-    sectionEnd: "",
+    keyword,
   };
 
-  const cacheKey = cache.keys.getTeacherScheduleKey(
-    queryParams.semester,
-    queryParams.collegeCode,
-    keyword
-  );
+  const mode = config.DATA_SOURCE_MODE;
 
-  // 1. 尝试从缓存中获取
-  const cached = cache.get(cacheKey);
-  if (cached && cached.dataSource === "fosu-realtime") {
-    safeLog("teacher-schedule-hit-cache", { keyword });
-    return cached;
+  // 1. disabled
+  if (mode === "disabled") {
+    return {
+      success: false,
+      message: "教务课表查询服务暂时关闭维护中。",
+    };
   }
 
-  try {
-    safeLog("teacher-schedule-fetch-realtime", { keyword });
-    const adapter = new FosuQiangzhiAdapter();
-    
-    // 2. 发送 POST 请求获取课表 HTML
-    const res = await adapter.fetchTeacherSchedule(queryParams);
-    if (res.statusCode !== 200) {
-      throw new Error(`教务教师课表接口请求失败，HTTP 状态码: ${res.statusCode}`);
+  // 2. realtime
+  if (mode === "realtime") {
+    const host = new URL(config.FOSU_BASE_URL).hostname;
+    const canResolve = await checkDns(host);
+    if (!canResolve) {
+      return {
+        success: false,
+        reasonCode: "FOSU_INTRANET_ONLY",
+        message: "100.fosu.edu.cn 仅校园网或 EasyConnect VPN 可访问，当前服务器无法直连。",
+      };
     }
 
-    // 3. 解析教师课表 HTML
-    const parsed = parser.parseTeacherScheduleIfrHtml(res.text, {
-      semester: queryParams.semester,
-    });
+    try {
+      safeLog("teacher-schedule-fetch-realtime", { keyword });
+      const adapter = new FosuQiangzhiAdapter();
+      const res = await adapter.fetchTeacherSchedule({
+        semester: queryParams.semester,
+        collegeCode: queryParams.collegeCode || "02",
+        teacherTitleCode: queryParams.teacherTitleCode,
+      });
 
-    const courses = normalizer.normalizeCourseList(parsed.courses || [], {
-      semester: queryParams.semester,
-      sourceType: "teacher",
-      audienceType: "teacher",
-    });
-    
-    const warnings = parsed.warnings || [];
+      if (res.statusCode !== 200) {
+        throw new Error(`教务教师课表接口请求失败，HTTP 状态码: ${res.statusCode}`);
+      }
 
-    // 4. 按教师姓名分组 (Group By)
-    const grouped = normalizer.groupCoursesBy(courses, "teacherName", "未知教师");
+      const parsed = parser.parseTeacherScheduleIfrHtml(res.text, {
+        semester: queryParams.semester,
+      });
 
-    // 5. 组装教师列表并进行姓名关键字过滤
-    let teachers = Object.keys(grouped).map((tName) => ({
-      teacherName: tName,
-      college: collegeName || "已知院系", // 供前端展示
-      title: "", // 职称
-      courses: grouped[tName],
-    }));
+      const courses = normalizer.normalizeCourseList(parsed.courses || [], {
+        semester: queryParams.semester,
+        sourceType: "teacher",
+        audienceType: "teacher",
+      });
+      
+      const warnings = parsed.warnings || [];
+      const grouped = normalizer.groupCoursesBy(courses, "teacherName", "未知教师");
 
+      let teachers = Object.keys(grouped).map((tName) => ({
+        teacherName: tName,
+        college: collegeName || "已知院系",
+        title: "",
+        courses: grouped[tName],
+      }));
+
+      if (keyword) {
+        const cleanKeyword = String(keyword).trim().toLowerCase();
+        teachers = teachers.filter((t) => 
+          t.teacherName.toLowerCase().includes(cleanKeyword)
+        );
+      }
+
+      return {
+        success: true,
+        dataSource: "fosu-realtime",
+        updatedAt: new Date().toISOString(),
+        teachers,
+        warnings,
+      };
+    } catch (error) {
+      safeLog("teacher-schedule-realtime-failed", { error: error.message });
+      return {
+        success: false,
+        reasonCode: "FOSU_INTRANET_ONLY",
+        message: `无法实时连接教务系统获取教师课表: ${error.message}`,
+      };
+    }
+  }
+
+  // 3. cache-first
+  const allTeacherSchedules = readJsonFile(FILE_MAP["teacher-schedules"]);
+  if (Array.isArray(allTeacherSchedules) && allTeacherSchedules.length > 0) {
+    let filtered = allTeacherSchedules;
     if (keyword) {
       const cleanKeyword = String(keyword).trim().toLowerCase();
-      teachers = teachers.filter((t) => 
+      filtered = filtered.filter((t) =>
         t.teacherName.toLowerCase().includes(cleanKeyword)
       );
     }
 
-    const resultPayload = {
+    const meta = getMeta("teacher-schedules");
+    return {
       success: true,
-      dataSource: "fosu-realtime",
-      updatedAt: new Date().toISOString(),
-      teachers,
-      warnings,
+      dataSource: "cache",
+      updatedAt: meta.updatedAt || new Date().toISOString(),
+      syncSource: meta.syncSource || "local-sync-client",
+      teachers: filtered,
     };
-
-    // 6. 保存本次查询的整体结果到缓存
-    cache.set(cacheKey, resultPayload, cache.TTL.SCHEDULE);
-
-    return resultPayload;
-  } catch (error) {
-    safeLog("teacher-schedule-fetch-failed", { error: error.message });
-    
-    // 容灾读取旧缓存
-    const fallback = cache.get(cacheKey);
-    if (fallback) {
-      fallback.warning = `无法实时连接教务系统，已使用历史数据。原因：${error.message}`;
-      return fallback;
-    }
-
-    throw error;
   }
+
+  // 开发环境 Demo 降级
+  if (config.NODE_ENV !== "production") {
+    return getDemoTeacherSchedule(queryParams);
+  }
+
+  return {
+    success: true,
+    dataSource: "empty",
+    reasonCode: "NO_SYNC_DATA",
+    message: "暂未同步教师课表数据，请稍后再试。",
+  };
 }
 
 /**
@@ -235,8 +450,6 @@ async function getClassroomSchedule(params) {
     campusId = "",
     buildingId = "",
     classroomName = "",
-    weekStart = "",
-    weekEnd = "",
   } = params;
 
   const queryParams = {
@@ -244,84 +457,119 @@ async function getClassroomSchedule(params) {
     collegeCode,
     campusId,
     buildingId,
-    weekStart,
-    weekEnd,
-    sectionStart: "",
-    sectionEnd: "",
+    classroomName,
   };
 
-  const cacheKey = cache.keys.getClassroomScheduleKey(
-    queryParams.semester,
-    campusId,
-    classroomName
-  );
+  const mode = config.DATA_SOURCE_MODE;
 
-  // 1. 尝试从缓存中获取
-  const cached = cache.get(cacheKey);
-  if (cached && cached.dataSource === "fosu-realtime") {
-    safeLog("classroom-schedule-hit-cache", { classroomName });
-    return cached;
+  // 1. disabled
+  if (mode === "disabled") {
+    return {
+      success: false,
+      message: "教务课表查询服务暂时关闭维护中。",
+    };
   }
 
-  try {
-    safeLog("classroom-schedule-fetch-realtime", { classroomName });
-    const adapter = new FosuQiangzhiAdapter();
-    
-    const res = await adapter.fetchClassroomSchedule(queryParams);
-    if (res.statusCode !== 200) {
-      throw new Error(`教务教室课表接口请求失败，HTTP 状态码: ${res.statusCode}`);
+  // 2. realtime
+  if (mode === "realtime") {
+    const host = new URL(config.FOSU_BASE_URL).hostname;
+    const canResolve = await checkDns(host);
+    if (!canResolve) {
+      return {
+        success: false,
+        reasonCode: "FOSU_INTRANET_ONLY",
+        message: "100.fosu.edu.cn 仅校园网或 EasyConnect VPN 可访问，当前服务器无法直连。",
+      };
     }
 
-    const parsed = parser.parseClassroomScheduleIfrHtml(res.text, {
-      semester: queryParams.semester,
-    });
+    try {
+      safeLog("classroom-schedule-fetch-realtime", { classroomName });
+      const adapter = new FosuQiangzhiAdapter();
+      const res = await adapter.fetchClassroomSchedule({
+        semester: queryParams.semester,
+        collegeCode: queryParams.collegeCode,
+        campusId: queryParams.campusId,
+        buildingId: queryParams.buildingId,
+      });
 
-    const courses = normalizer.normalizeCourseList(parsed.courses || [], {
-      semester: queryParams.semester,
-      sourceType: "classroom",
-      audienceType: "classroom",
-    });
-    
-    const warnings = parsed.warnings || [];
+      if (res.statusCode !== 200) {
+        throw new Error(`教务教室课表接口请求失败，HTTP 状态码: ${res.statusCode}`);
+      }
 
-    // 按教室名称分组 (Group By)
-    const grouped = normalizer.groupCoursesBy(courses, "classroom", "未知教室");
+      const parsed = parser.parseClassroomScheduleIfrHtml(res.text, {
+        semester: queryParams.semester,
+      });
 
-    let classrooms = Object.keys(grouped).map((rName) => ({
-      roomName: rName,
-      courses: grouped[rName],
-    }));
+      const courses = normalizer.normalizeCourseList(parsed.courses || [], {
+        semester: queryParams.semester,
+        sourceType: "classroom",
+        audienceType: "classroom",
+      });
+      
+      const warnings = parsed.warnings || [];
+      const grouped = normalizer.groupCoursesBy(courses, "classroom", "未知教室");
 
+      let classrooms = Object.keys(grouped).map((rName) => ({
+        roomName: rName,
+        courses: grouped[rName],
+      }));
+
+      if (classroomName) {
+        const cleanKeyword = String(classroomName).trim().toLowerCase();
+        classrooms = classrooms.filter((r) => 
+          r.roomName.toLowerCase().includes(cleanKeyword)
+        );
+      }
+
+      return {
+        success: true,
+        dataSource: "fosu-realtime",
+        updatedAt: new Date().toISOString(),
+        classrooms,
+        warnings,
+      };
+    } catch (error) {
+      safeLog("classroom-schedule-realtime-failed", { error: error.message });
+      return {
+        success: false,
+        reasonCode: "FOSU_INTRANET_ONLY",
+        message: `无法实时连接教务系统获取教室课表: ${error.message}`,
+      };
+    }
+  }
+
+  // 3. cache-first
+  const allClassroomSchedules = readJsonFile(FILE_MAP["classroom-schedules"]);
+  if (Array.isArray(allClassroomSchedules) && allClassroomSchedules.length > 0) {
+    let filtered = allClassroomSchedules;
     if (classroomName) {
       const cleanKeyword = String(classroomName).trim().toLowerCase();
-      classrooms = classrooms.filter((r) => 
+      filtered = filtered.filter((r) =>
         r.roomName.toLowerCase().includes(cleanKeyword)
       );
     }
 
-    const resultPayload = {
+    const meta = getMeta("classroom-schedules");
+    return {
       success: true,
-      dataSource: "fosu-realtime",
-      updatedAt: new Date().toISOString(),
-      classrooms,
-      warnings,
+      dataSource: "cache",
+      updatedAt: meta.updatedAt || new Date().toISOString(),
+      syncSource: meta.syncSource || "local-sync-client",
+      classrooms: filtered,
     };
-
-    // 保存本次查询的整体结果到缓存
-    cache.set(cacheKey, resultPayload, cache.TTL.SCHEDULE);
-
-    return resultPayload;
-  } catch (error) {
-    safeLog("classroom-schedule-fetch-failed", { error: error.message });
-    
-    const fallback = cache.get(cacheKey);
-    if (fallback) {
-      fallback.warning = `无法实时连接教务系统，已使用历史数据。原因：${error.message}`;
-      return fallback;
-    }
-
-    throw error;
   }
+
+  // 开发环境 Demo 降级
+  if (config.NODE_ENV !== "production") {
+    return getDemoClassroomSchedule(queryParams);
+  }
+
+  return {
+    success: true,
+    dataSource: "empty",
+    reasonCode: "NO_SYNC_DATA",
+    message: "暂未同步教室课表数据，请稍后再试。",
+  };
 }
 
 /**
@@ -334,8 +582,6 @@ async function getCourseSchedule(params) {
     openCollegeCode = "",
     courseAttr = "",
     courseName = "",
-    weekStart = "",
-    weekEnd = "",
   } = params;
 
   const queryParams = {
@@ -344,83 +590,119 @@ async function getCourseSchedule(params) {
     openCollegeCode,
     courseAttr,
     courseName,
-    weekStart,
-    weekEnd,
-    sectionStart: "",
-    sectionEnd: "",
   };
 
-  const cacheKey = cache.keys.getCourseScheduleKey(
-    queryParams.semester,
-    courseName
-  );
+  const mode = config.DATA_SOURCE_MODE;
 
-  // 1. 尝试从缓存中获取
-  const cached = cache.get(cacheKey);
-  if (cached && cached.dataSource === "fosu-realtime") {
-    safeLog("course-schedule-hit-cache", { courseName });
-    return cached;
+  // 1. disabled
+  if (mode === "disabled") {
+    return {
+      success: false,
+      message: "教务课表查询服务暂时关闭维护中。",
+    };
   }
 
-  try {
-    safeLog("course-schedule-fetch-realtime", { courseName });
-    const adapter = new FosuQiangzhiAdapter();
-    
-    const res = await adapter.fetchCourseSchedule(queryParams);
-    if (res.statusCode !== 200) {
-      throw new Error(`教务课程课表接口请求失败，HTTP 状态码: ${res.statusCode}`);
+  // 2. realtime
+  if (mode === "realtime") {
+    const host = new URL(config.FOSU_BASE_URL).hostname;
+    const canResolve = await checkDns(host);
+    if (!canResolve) {
+      return {
+        success: false,
+        reasonCode: "FOSU_INTRANET_ONLY",
+        message: "100.fosu.edu.cn 仅校园网或 EasyConnect VPN 可访问，当前服务器无法直连。",
+      };
     }
 
-    const parsed = parser.parseCourseScheduleIfrHtml(res.text, {
-      semester: queryParams.semester,
-    });
+    try {
+      safeLog("course-schedule-fetch-realtime", { courseName });
+      const adapter = new FosuQiangzhiAdapter();
+      const res = await adapter.fetchCourseSchedule({
+        semester: queryParams.semester,
+        collegeCode: queryParams.collegeCode,
+        openCollegeCode: queryParams.openCollegeCode,
+        courseAttr: queryParams.courseAttr,
+        courseName: queryParams.courseName,
+      });
 
-    const courses = normalizer.normalizeCourseList(parsed.courses || [], {
-      semester: queryParams.semester,
-      sourceType: "course",
-      audienceType: "course",
-    });
-    
-    const warnings = parsed.warnings || [];
+      if (res.statusCode !== 200) {
+        throw new Error(`教务课程课表接口请求失败，HTTP 状态码: ${res.statusCode}`);
+      }
 
-    // 按课程名称分组 (Group By)
-    const grouped = normalizer.groupCoursesBy(courses, "courseName", "未知课程");
+      const parsed = parser.parseCourseScheduleIfrHtml(res.text, {
+        semester: queryParams.semester,
+      });
 
-    let coursesList = Object.keys(grouped).map((cName) => ({
-      courseName: cName,
-      courses: grouped[cName],
-    }));
+      const courses = normalizer.normalizeCourseList(parsed.courses || [], {
+        semester: queryParams.semester,
+        sourceType: "course",
+        audienceType: "course",
+      });
+      
+      const warnings = parsed.warnings || [];
+      const grouped = normalizer.groupCoursesBy(courses, "courseName", "未知课程");
 
+      let coursesList = Object.keys(grouped).map((cName) => ({
+        courseName: cName,
+        courses: grouped[cName],
+      }));
+
+      if (courseName) {
+        const cleanKeyword = String(courseName).trim().toLowerCase();
+        coursesList = coursesList.filter((c) => 
+          c.courseName.toLowerCase().includes(cleanKeyword)
+        );
+      }
+
+      return {
+        success: true,
+        dataSource: "fosu-realtime",
+        updatedAt: new Date().toISOString(),
+        coursesList,
+        warnings,
+      };
+    } catch (error) {
+      safeLog("course-schedule-realtime-failed", { error: error.message });
+      return {
+        success: false,
+        reasonCode: "FOSU_INTRANET_ONLY",
+        message: `无法实时连接教务系统获取课程课表: ${error.message}`,
+      };
+    }
+  }
+
+  // 3. cache-first
+  const allCourseSchedules = readJsonFile(FILE_MAP["course-schedules"]);
+  if (Array.isArray(allCourseSchedules) && allCourseSchedules.length > 0) {
+    let filtered = allCourseSchedules;
     if (courseName) {
       const cleanKeyword = String(courseName).trim().toLowerCase();
-      coursesList = coursesList.filter((c) => 
+      filtered = filtered.filter((c) =>
         c.courseName.toLowerCase().includes(cleanKeyword)
       );
     }
 
-    const resultPayload = {
+    const meta = getMeta("course-schedules");
+    return {
       success: true,
-      dataSource: "fosu-realtime",
-      updatedAt: new Date().toISOString(),
-      coursesList,
-      warnings,
+      dataSource: "cache",
+      updatedAt: meta.updatedAt || new Date().toISOString(),
+      syncSource: meta.syncSource || "local-sync-client",
+      coursesList: filtered,
     };
-
-    // 保存本次查询的整体结果到缓存
-    cache.set(cacheKey, resultPayload, cache.TTL.SCHEDULE);
-
-    return resultPayload;
-  } catch (error) {
-    safeLog("course-schedule-fetch-failed", { error: error.message });
-    
-    const fallback = cache.get(cacheKey);
-    if (fallback) {
-      fallback.warning = `无法实时连接教务系统，已使用历史数据。原因：${error.message}`;
-      return fallback;
-    }
-
-    throw error;
   }
+
+  // 开发环境 Demo 降级
+  if (config.NODE_ENV !== "production") {
+    return getDemoCourseSchedule(queryParams);
+  }
+
+  return {
+    success: true,
+    dataSource: "empty",
+    reasonCode: "NO_SYNC_DATA",
+    message: "暂未同步课程课表数据，请稍后再试。",
+  };
 }
 
 module.exports = {

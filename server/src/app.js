@@ -12,6 +12,7 @@ const { safeLog } = require("./utils/safeLogger");
 // 路由引入
 const healthRouter = require("./routes/health");
 const fosuRouter = require("./routes/fosu");
+const adminRouter = require("./routes/admin");
 
 const app = express();
 
@@ -50,6 +51,7 @@ app.use(express.urlencoded({ extended: true }));
 // 5. 挂载路由
 app.use("/api/health", healthRouter);
 app.use("/api/fosu", fosuRouter);
+app.use("/api/admin/sync", adminRouter);
 
 // 6. 404 错误处理
 app.use((req, res, next) => {

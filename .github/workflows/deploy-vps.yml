@@ -21,8 +21,7 @@ jobs:
             ["VPS_USER"]="${{ secrets.VPS_USER }}"
             ["VPS_SSH_KEY"]="${{ secrets.VPS_SSH_KEY }}"
             ["VPS_APP_DIR"]="${{ secrets.VPS_APP_DIR }}"
-            ["FOSU_SERVICE_USERNAME"]="${{ secrets.FOSU_SERVICE_USERNAME }}"
-            ["FOSU_SERVICE_PASSWORD"]="${{ secrets.FOSU_SERVICE_PASSWORD }}"
+            ["ADMIN_API_TOKEN"]="${{ secrets.ADMIN_API_TOKEN }}"
           )
           
           has_missing=false
@@ -58,17 +57,17 @@ jobs:
             # 保证工作目录存在并进入
             cd ${{ secrets.VPS_APP_DIR }}/server
             
-            # 自动生成 .env 配置文件，直接写入（不通过命令行或 echo 打印密码以保护隐私）
+            # 自动生成 .env 配置文件，直接写入
             cat << 'EOF' > .env
             NODE_ENV=production
             PORT=3000
             HOST_BIND_IP=127.0.0.1
             HOST_API_PORT=18318
             PUBLIC_API_ORIGIN=https://class.katelya.eu.org
+            DATA_SOURCE_MODE=cache-first
+            ADMIN_API_TOKEN=${{ secrets.ADMIN_API_TOKEN }}
             FOSU_BASE_URL=https://100.fosu.edu.cn
             FOSU_AUTH_URL=https://authserver.fosu.edu.cn
-            FOSU_SERVICE_USERNAME=${{ secrets.FOSU_SERVICE_USERNAME }}
-            FOSU_SERVICE_PASSWORD=${{ secrets.FOSU_SERVICE_PASSWORD }}
             CACHE_TTL_CATALOG=600
             CACHE_TTL_MAJOR=1800
             CACHE_TTL_SCHEDULE=600

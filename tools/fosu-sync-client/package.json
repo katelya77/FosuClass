@@ -1,0 +1,20 @@
+{
+  "name": "fosu-sync-client",
+  "version": "1.0.0",
+  "description": "FosuClass Local Synchronizer for Windows",
+  "main": "sync.js",
+  "scripts": {
+    "diagnose": "node diagnose.js",
+    "login": "node login.js",
+    "sync:catalog": "node sync.js catalog",
+    "sync:majors": "node sync.js majors",
+    "sync:class": "node sync.js class",
+    "sync:all": "node sync.js all"
+  },
+  "dependencies": {
+    "axios": "^1.6.8",
+    "cheerio": "^1.0.0-rc.12",
+    "dotenv": "^16.4.5",
+    "playwright": "^1.43.0"
+  }
+}

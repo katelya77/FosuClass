@@ -21,7 +21,10 @@ FosuClass Node.js API 服务。将对强智教务系统的页面请求、解析�
    ```bash
    cp .env.example .env
    ```
-   修改 `.env` 中的 `FOSU_SERVICE_USERNAME` 和 `FOSU_SERVICE_PASSWORD` 为您本人的教务服务账号密码（仅供本地开发和测试，请确保本文件不被提交）。
+   修改 `.env` 中的参数：
+   - 设定 `DATA_SOURCE_MODE=cache-first`（支持 cache-first、realtime、disabled）
+   - 设定 `ADMIN_API_TOKEN`（数据同步 Token，供本地同步器推送数据时校验）
+
 
 3. 运行开发服务器：
    ```bash
@@ -79,12 +82,11 @@ npm run test-teacher-schedule
 #### GitHub Actions 自动部署配置
 
 1. 在 GitHub 仓库的 **Settings** -> **Secrets and variables** -> **Actions** 中添加以下 Repository Secrets：
-   - `VPS_HOST`：您的 VPS 公网 IP (例如 `146.235.201.244`)
-   - `VPS_USER`：登录 VPS 的用户名 (例如 `ubuntu`。在连接您的 VPS 服务器后，默认就是 ubuntu 用户名，可以直接输入 `sudo -i` 获取 root 权限)
-   - `VPS_SSH_KEY`：您的 SSH 私钥内容 (即 `~/.ssh/id_rsa` 或其它私钥，用于免密登录 VPS)
-   - `VPS_APP_DIR`：在 VPS 上的应用运行目录位置 (例如 `/home/ubuntu/FosuClass`)
-   - `FOSU_SERVICE_USERNAME`：佛大教务网服务账号
-   - `FOSU_SERVICE_PASSWORD`：佛大教务网服务密码
+    - `VPS_HOST`：您的 VPS 公网 IP (例如 `146.235.201.244`)
+    - `VPS_USER`：登录 VPS 的用户名 (例如 `ubuntu`)
+    - `VPS_SSH_KEY`：您的 SSH 私钥内容 (用于免密登录 VPS)
+    - `VPS_APP_DIR`：在 VPS 上的应用运行目录位置 (例如 `/home/ubuntu/FosuClass`)
+    - `ADMIN_API_TOKEN`：数据同步鉴权密钥 Token（本地同步器和 VPS 后端之间校验用的 Token）
 
 2. 部署机制说明：
    - **触发方式**：当您向 `main` 分支执行 `git push` 或者在 GitHub 仓库的 Actions 页面手动触发 `workflow_dispatch` 时，工作流将自动运行。

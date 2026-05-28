@@ -18,14 +18,16 @@ const config = {
   // API 公网域名起源
   PUBLIC_API_ORIGIN: process.env.PUBLIC_API_ORIGIN || "http://localhost:3000",
 
+  // 数据源模式: cache-first | realtime | disabled
+  DATA_SOURCE_MODE: process.env.DATA_SOURCE_MODE || "cache-first",
+
+  // 管理端同步 API Token
+  ADMIN_API_TOKEN: process.env.ADMIN_API_TOKEN || "",
+
   // 强智教务网基础地址
   FOSU_BASE_URL: process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn",
   // 强智 CAS 统一认证地址
   FOSU_AUTH_URL: process.env.FOSU_AUTH_URL || "https://authserver.fosu.edu.cn",
-
-  // 强智服务登录账号与密码
-  FOSU_SERVICE_USERNAME: process.env.FOSU_SERVICE_USERNAME || "",
-  FOSU_SERVICE_PASSWORD: process.env.FOSU_SERVICE_PASSWORD || "",
 
   // 缓存生存时间 (单位: 秒)
   CACHE_TTL: {
