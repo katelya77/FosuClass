@@ -1,3 +1,7 @@
+/**
+ * 强智教务网 HTML / JSON 解析器：提供教务系统返回页面的各项提取和结构化数据归集功能
+ */
+
 const DEFAULT_TOTAL_WEEKS = 20;
 
 const TITLE_SUFFIXES = [
@@ -28,6 +32,9 @@ const HTML_ENTITIES = {
   apos: "'",
 };
 
+/**
+ * 辅助生成周数范围数组
+ */
 function range(start, end) {
   const values = [];
   for (let value = start; value <= end; value += 1) {
@@ -36,6 +43,9 @@ function range(start, end) {
   return values;
 }
 
+/**
+ * 数字去重并排序
+ */
 function uniqueNumbers(numbers) {
   const seen = {};
   return numbers
@@ -49,6 +59,9 @@ function uniqueNumbers(numbers) {
     .sort((a, b) => a - b);
 }
 
+/**
+ * 解码 HTML 实体字符
+ */
 function decodeHtmlEntities(text) {
   return String(text || "").replace(/&(#x?[0-9a-f]+|[a-z]+);/gi, (match, entity) => {
     const key = String(entity).toLowerCase();
@@ -61,12 +74,18 @@ function decodeHtmlEntities(text) {
   });
 }
 
+/**
+ * 将全角数字转为半角数字
+ */
 function normalizeFullWidthDigits(text) {
   return String(text || "").replace(/[０-９]/g, (char) => {
     return String(char.charCodeAt(0) - 0xff10);
   });
 }
 
+/**
+ * 清除 HTML 标签，只保留换行和可读文本
+ */
 function normalizeLineBreaks(text) {
   return decodeHtmlEntities(String(text || ""))
     .replace(/<script[\s\S]*?<\/script>/gi, "")
@@ -82,10 +101,16 @@ function normalizeLineBreaks(text) {
     .replace(/\n[ \t]+/g, "\n");
 }
 
+/**
+ * 转换全角破折号与中文“至”为半角短横线
+ */
 function normalizeDash(text) {
   return String(text || "").replace(/[－—–~～至]/g, "-");
 }
 
+/**
+ * 剔除教师名称后的职称后缀
+ */
 function stripTeacherTitle(name) {
   let value = String(name || "").trim();
   let changed = true;
@@ -101,6 +126,9 @@ function stripTeacherTitle(name) {
   return value.trim();
 }
 
+/**
+ * 探测周次单双类型
+ */
 function detectWeekType(rawText) {
   if (/双周|双/.test(rawText)) {
     return "even";
@@ -111,6 +139,9 @@ function detectWeekType(rawText) {
   return "all";
 }
 
+/**
+ * 过滤单双周
+ */
 function filterWeekType(weeks, weekType) {
   return weeks.filter((week) => {
     if (weekType === "odd") {
@@ -123,6 +154,9 @@ function filterWeekType(weeks, weekType) {
   });
 }
 
+/**
+ * 解析周次文本 (如: "1-16周(单)", "2,4,6-10周")
+ */
 function parseWeekText(text, options) {
   const config = options || {};
   const raw = normalizeDash(normalizeFullWidthDigits(decodeHtmlEntities(text))).trim();
@@ -169,6 +203,9 @@ function parseWeekText(text, options) {
   };
 }
 
+/**
+ * 解析节次文本 (如: "仙溪C7-503[1-2节]")
+ */
 function parseSectionText(text) {
   const value = normalizeDash(normalizeFullWidthDigits(decodeHtmlEntities(text))).trim();
   const match = value.match(/([\s\S]*?)[\[［【]([0-9\s,，、\-]+)[\]］】]\s*节?/);
@@ -192,6 +229,9 @@ function parseSectionText(text) {
   };
 }
 
+/**
+ * 切分教务格子里的多个课程块
+ */
 function splitCourseBlocks(text) {
   return normalizeLineBreaks(text)
     .split(/\n?\s*(?:-{5,}|—{3,}|─{3,}|={4,}|_{4,})\s*\n?/g)
@@ -217,10 +257,12 @@ function cleanRemark(line) {
 
 function isClassNameLine(line) {
   const value = String(line || "").trim();
-  // 匹配类似 25动物医学6, 24机电1班, 23环境与化工3, 动物医学25-1 等班级名特征
   return /^\d{2,4}[\u4e00-\u9fa5]+/.test(value) || /[\u4e00-\u9fa5]+\d+班?$/.test(value) || /^(班级|行政班级)[:：]/.test(value);
 }
 
+/**
+ * 解析单个格子文本块的课程属性
+ */
 function parseCourseText(rawText, options) {
   const config = options || {};
   return splitCourseBlocks(rawText)
@@ -363,6 +405,9 @@ function getColumnGroupSize(rows) {
   return Math.max(1, Math.round((maxCells - 1) / 7));
 }
 
+/**
+ * 解析通用的课表页面 HTML 结构并映射到 CourseItem 列表
+ */
 function parseScheduleHtml(html, context, parserOptions) {
   const config = parserOptions || {};
   const tableHtml = extractKbTableHtml(html);
@@ -508,6 +553,9 @@ function extractSelectOptions(html, patterns) {
   return result;
 }
 
+/**
+ * 解析全校选项页面：提取学期、学院和年级列表
+ */
 function parseSchoolOptionsHtml(html) {
   const semesters = extractSelectOptions(html, [/xnxq/, /xnxqh/, /semester/]);
   const colleges = extractSelectOptions(html, [/skyx/, /xy/, /college/]);
@@ -549,6 +597,9 @@ function normalizeMajorItem(item, context) {
   };
 }
 
+/**
+ * 解析联动获取专业的 AJAX HTML / JSON 响应
+ */
 function parseMajorAjaxResponse(text, context) {
   const warnings = [];
   let payload = [];

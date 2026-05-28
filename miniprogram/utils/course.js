@@ -23,6 +23,19 @@ function normalizeCourse(course) {
 }
 
 function getCourseDataset() {
+  try {
+    const target = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
+    if (target && Array.isArray(target.courses) && target.courses.length) {
+      return {
+        courses: target.courses,
+        source: "realtime",
+        sourceText: `教务数据 · 更新于 ${target.updateTime || ""}`,
+      };
+    }
+  } catch (error) {
+    // 忽略异常，继续降级
+  }
+
   if (Array.isArray(importedCourses) && importedCourses.length) {
     return {
       courses: importedCourses,
@@ -46,8 +59,13 @@ function getCourseDataSource() {
 }
 
 function getCoursesByClass(className) {
-  const targetClassName = className || "25动物医学6";
   const dataset = getCourseDataset();
+  if (dataset.source === "realtime") {
+    // 实时教务数据绑定，无需按班级名二次过滤
+    return dataset.courses.map(normalizeCourse);
+  }
+  
+  const targetClassName = className || "25动物医学6";
   const courses = dataset.courses
     .filter((course) => course.className === targetClassName)
     .map(normalizeCourse);

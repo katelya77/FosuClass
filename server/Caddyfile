@@ -1,0 +1,7 @@
+class.katelya.eu.org {
+    # 开启 gzip 压缩
+    encode gzip
+
+    # 反向代理到 Node.js 容器的 3000 端口
+    reverse_proxy fosu-api:3000
+}

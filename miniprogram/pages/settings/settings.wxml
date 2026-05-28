@@ -89,6 +89,7 @@
       <view class="row-title">登录同步个人课表</view>
       <view class="row-arrow">›</view>
     </view>
+    <!--
     <view class="setting-row" bindtap="showDeveloperApi">
       <view>
         <view class="row-title">开发者接口接入</view>
@@ -96,6 +97,7 @@
       </view>
       <view class="row-arrow">›</view>
     </view>
+    -->
   </view>
 
   <view class="settings-card card">

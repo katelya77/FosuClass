@@ -1,0 +1,90 @@
+@import "../index/index.wxss";
+
+.schedule-view-page {
+  width: 100%;
+  padding: 16rpx 16rpx calc(24rpx + env(safe-area-inset-bottom));
+  overflow-x: hidden;
+}
+
+.view-header {
+  padding: 24rpx;
+  border-radius: 14rpx;
+  background: #ffffff;
+  box-shadow: 0 4rpx 16rpx rgba(162, 178, 201, 0.08);
+}
+
+.header-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.target-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.target-title {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #172033;
+  line-height: 1.25;
+  word-break: break-all;
+}
+
+.target-subtitle {
+  font-size: 24rpx;
+  color: #8a94a6;
+  margin-top: 6rpx;
+}
+
+.bind-button {
+  flex: 0 0 auto;
+  min-width: 180rpx;
+  height: 60rpx;
+  padding: 0 24rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  border-radius: 30rpx;
+  border: 1rpx solid #c62828;
+  background: #ffffff;
+  color: #c62828;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  transition: all 0.2s ease;
+}
+
+.bind-button.active {
+  background: #c62828;
+  color: #ffffff;
+}
+
+.bind-button:active {
+  transform: scale(0.96);
+}
+
+.date-line {
+  margin-top: 14rpx;
+  color: #6b7688;
+  font-size: 22rpx;
+}
+
+.control-row {
+  margin-top: 16rpx;
+}
+
+.empty-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 100rpx 40rpx;
+}
+
+.empty-text {
+  font-size: 26rpx;
+  color: #8a94a6;
+}

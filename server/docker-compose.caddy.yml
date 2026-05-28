@@ -1,0 +1,45 @@
+# =========================================================================
+# WARNING: 本文件是非 1Panel 部署环境下的可选编排配置文件（含 Caddy 反向代理自动 SSL 申领）。
+# 如果您使用的是 1Panel 面板管理您的 Docker 和网站，请直接使用默认的 docker-compose.yml 部署，
+# 不要使用本文件，避免 80/443 以及端口冲突导致 1Panel/OpenResty 服务中断。
+# =========================================================================
+
+version: "3.8"
+
+services:
+  fosu-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fosuclass-api-caddy-mode
+    restart: unless-stopped
+    env_file:
+      - .env
+    expose:
+      - "3000"
+    networks:
+      - caddy-network
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy-proxy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - fosu-api
+    networks:
+      - caddy-network
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  caddy-network:
+    driver: bridge

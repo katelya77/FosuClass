@@ -1,0 +1,10 @@
+{
+  "navigationBarTitleText": "课表详情",
+  "navigationBarBackgroundColor": "#ffffff",
+  "navigationBarTextStyle": "black",
+  "usingComponents": {
+    "course-card": "/components/course-card/index",
+    "course-detail-popup": "/components/course-detail-popup/index",
+    "week-switcher": "/components/week-switcher/index"
+  }
+}

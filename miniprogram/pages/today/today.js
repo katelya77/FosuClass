@@ -72,10 +72,18 @@ Page({
     const courses = decorateTodayCourses(getTodayCourses(sourceCourses, currentWeek, weekday), now);
     const dataSource = getCourseDataSource();
 
+    const target = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
+    let displayClassName = settings.className;
+    if (target) {
+      displayClassName = target.type === "teacher"
+        ? `${target.name} 老师`
+        : (target.type === "classroom" ? `${target.name} 教室` : target.name);
+    }
+
     this.setData({
       dateText: todayInfo.fullDateLabel,
       weekdayText: todayInfo.weekdayLabel,
-      className: settings.className,
+      className: displayClassName,
       currentWeek,
       dataSourceText: dataSource.text,
       courseCountText: `今日共 ${courses.length} 门课`,

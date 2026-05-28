@@ -1,0 +1,12 @@
+{
+  "name": "getCourseScheduleRealtime",
+  "version": "1.0.0",
+  "main": "index.js",
+  "dependencies": {
+    "wx-server-sdk": "latest",
+    "axios": "^1.6.0",
+    "axios-cookiejar-support": "^4.0.0",
+    "tough-cookie": "^4.1.3",
+    "iconv-lite": "^0.6.3"
+  }
+}

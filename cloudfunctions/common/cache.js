@@ -1,5 +1,9 @@
 const { mockClasses, mockCourses } = require("./mockData");
 
+// 内存级缓存容器
+const CACHE_STORE = {};
+
+// 旧版内存存储，用作备用和容灾
 const STORE = {
   schoolOptions: null,
   classSchedules: {},
@@ -10,6 +14,40 @@ const STORE = {
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+/**
+ * 缓存读写助手
+ */
+function setCache(key, data, ttlMinutes) {
+  CACHE_STORE[key] = {
+    data: JSON.parse(JSON.stringify(data)), // 深拷贝
+    expiresAt: Date.now() + ttlMinutes * 60 * 1000,
+    updatedAt: nowIso(),
+  };
+}
+
+function getCache(key) {
+  const item = CACHE_STORE[key];
+  if (!item) {
+    return null;
+  }
+  if (Date.now() > item.expiresAt) {
+    delete CACHE_STORE[key];
+    return null;
+  }
+  return item.data;
+}
+
+/**
+ * 统一的缓存 Key 生成器
+ */
+function getCatalogKey(semester) {
+  return `catalog:${semester || "current"}`;
+}
+
+function getMajorsKey(collegeCode, grade) {
+  return `majors:${collegeCode || ""}:${grade || ""}`;
 }
 
 function classKey(params) {
@@ -27,6 +65,9 @@ function genericKey(type, params) {
   return `${type}:${JSON.stringify(params || {})}`;
 }
 
+/**
+ * 备用的硬编码选项，当教务网不可达时回退使用
+ */
 function buildDefaultSchoolOptions() {
   const colleges = [];
   const grades = [];
@@ -71,32 +112,69 @@ function buildDefaultSchoolOptions() {
   };
 }
 
-function getSchoolOptions() {
+// ================== Catalog 缓存读写 ==================
+
+function getSchoolOptions(semester) {
+  const cacheKey = getCatalogKey(semester);
+  const cached = getCache(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  // 读旧版或默认值
   return STORE.schoolOptions || buildDefaultSchoolOptions();
 }
 
-function saveSchoolOptions(options) {
-  STORE.schoolOptions = Object.assign({}, options || {}, {
+function saveSchoolOptions(options, semester) {
+  const cacheKey = getCatalogKey(semester);
+  const enriched = Object.assign({}, options || {}, {
     updatedAt: nowIso(),
   });
-  return STORE.schoolOptions;
+  // 缓存 10 分钟
+  setCache(cacheKey, enriched, 10);
+  STORE.schoolOptions = enriched;
+  return enriched;
 }
+
+// ================== Majors 缓存读写 ==================
+
+function getMajorsByCollegeCache(collegeCode, grade) {
+  const key = getMajorsKey(collegeCode, grade);
+  return getCache(key);
+}
+
+function saveMajorsByCollegeCache(collegeCode, grade, majors) {
+  const key = getMajorsKey(collegeCode, grade);
+  // 缓存 30 分钟
+  setCache(key, majors, 30);
+}
+
+// ================== 课表缓存读写 ==================
 
 function saveClassSchedules(classes, params) {
   (classes || []).forEach((item) => {
-    STORE.classSchedules[classKey({ className: item.className })] = Object.assign({}, item, {
+    const key = classKey({ className: item.className });
+    const payload = Object.assign({}, item, {
       params: params || {},
       updatedAt: nowIso(),
     });
+    // 班级课表缓存 10 分钟
+    setCache(key, payload, 10);
+    STORE.classSchedules[key] = payload;
   });
   return classes || [];
 }
 
 function getClassSchedule(params) {
-  const direct = STORE.classSchedules[classKey(params)];
+  const key = classKey(params);
+  const cached = getCache(key);
+  if (cached) {
+    return cached;
+  }
+  const direct = STORE.classSchedules[key];
   if (direct) {
     return direct;
   }
+  // 回退：演示班级数据
   const className = params && params.className;
   if (!className) {
     return null;
@@ -114,26 +192,44 @@ function getClassSchedule(params) {
 
 function saveTeacherSchedules(teachers, params) {
   (teachers || []).forEach((item) => {
-    STORE.teacherSchedules[teacherKey({ teacherName: item.teacherName, semester: params && params.semester })] = Object.assign({}, item, {
+    const key = teacherKey({ teacherName: item.teacherName, semester: params && params.semester });
+    const payload = Object.assign({}, item, {
       params: params || {},
       updatedAt: nowIso(),
     });
+    // 教师课表缓存 10 分钟
+    setCache(key, payload, 10);
+    STORE.teacherSchedules[key] = payload;
   });
   return teachers || [];
 }
 
 function getTeacherSchedule(params) {
-  return STORE.teacherSchedules[teacherKey(params)] || null;
+  const key = teacherKey(params);
+  const cached = getCache(key);
+  if (cached) {
+    return cached;
+  }
+  return STORE.teacherSchedules[key] || null;
 }
 
 function saveGenericSchedule(type, keyParams, payload) {
-  STORE[`${type}Schedules`][genericKey(type, keyParams)] = Object.assign({}, payload || {}, {
+  const key = genericKey(type, keyParams);
+  const data = Object.assign({}, payload || {}, {
     updatedAt: nowIso(),
   });
+  // 教室/课程课表缓存 10 分钟
+  setCache(key, data, 10);
+  STORE[`${type}Schedules`][key] = data;
 }
 
 function getGenericSchedule(type, keyParams) {
-  return STORE[`${type}Schedules`][genericKey(type, keyParams)] || null;
+  const key = genericKey(type, keyParams);
+  const cached = getCache(key);
+  if (cached) {
+    return cached;
+  }
+  return STORE[`${type}Schedules`][key] || null;
 }
 
 function getCachedSchedule(params) {
@@ -160,4 +256,6 @@ module.exports = {
   saveGenericSchedule,
   saveSchoolOptions,
   saveTeacherSchedules,
+  getMajorsByCollegeCache,
+  saveMajorsByCollegeCache,
 };

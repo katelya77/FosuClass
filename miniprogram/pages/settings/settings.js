@@ -89,9 +89,9 @@ Page({
 
   showDeveloperApi() {
     wx.showModal({
-      title: "开发者接口接入",
+      title: "开发者接口调试",
       content:
-        "下一步抓包接口：\n/xskb/xskb_list.do\n/kbcx/kbxx_xzb\n/kbcx/kbxx_teacher\n/kbcx/kbxx_classroom\n/kbcx/kbxx_kc\n/kscj/cjcx_query?Ves632DSdyV=NEW_XSD_XJCJ\n\n提交给 AI 前必须删除 Cookie、Token、JSESSIONID、密码等敏感信息。",
+        "强智接口路径：\n/xskb/xskb_list.do\n/kbcx/kbxx_xzb\n/kbcx/kbxx_teacher\n/kbcx/kbxx_classroom\n/kbcx/kbxx_kc\n\n提交给 AI 调试前请确认已脱敏 Cookie、Token 等数据。",
       showCancel: false,
       confirmText: "知道了",
     });
@@ -108,6 +108,7 @@ Page({
           return;
         }
         clearAppCache();
+        wx.removeStorageSync("FOSU_CURRENT_SCHEDULE_TARGET"); // 清空实时选择的课表绑定
         this.loadSettings();
         wx.showToast({
           title: "已清除",
@@ -118,9 +119,16 @@ Page({
   },
 
   showAbout() {
+    // 连续点击 5 次关于，触发开发者模式彩蛋
+    this.clickCount = (this.clickCount || 0) + 1;
+    if (this.clickCount >= 5) {
+      this.clickCount = 0;
+      this.showDeveloperApi();
+      return;
+    }
     wx.showModal({
       title: "关于佛大课表",
-      content: "佛大课表是面向佛山大学的课程表小程序。当前支持本地缓存课表、全校课表入口和强智教务接口适配层。",
+      content: "佛大课表是面向佛山大学的课程表小程序。当前已接入学校强智教务系统，支持全校行政班级、教师、教室、课程实时获取及展示。",
       showCancel: false,
       confirmText: "知道了",
     });
@@ -129,7 +137,7 @@ Page({
   showPrivacy() {
     wx.showModal({
       title: "隐私说明",
-      content: "第一版不会真实登录教务系统，也不会保存教务网密码。后续同步功能仅会在请求时临时使用密码，并且不会把密码写入本地缓存、云数据库或日志。",
+      content: "佛大课表严格保护您的隐私，小程序绝不会在前端保存您的教务系统密码。云函数会在每次向教务网查询数据时，仅使用服务端预设的环境变量服务账号模拟登录，不会记录您的个人密码，也不会在任何地方记录 Cookie 等敏感登录态。",
       showCancel: false,
       confirmText: "知道了",
     });

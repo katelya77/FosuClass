@@ -105,8 +105,16 @@ Page({
     const gridWidth = TIME_AXIS_WIDTH + dayTrackWidth;
     const weekRangeText = formatWeekRange(weekInfo.startDate, weekInfo.endDate);
 
+    const target = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
+    let displayClassName = settings.className;
+    if (target) {
+      displayClassName = target.type === "teacher"
+        ? `${target.name} 老师`
+        : (target.type === "classroom" ? `${target.name} 教室` : target.name);
+    }
+
     this.setData({
-      className: settings.className,
+      className: displayClassName,
       semester: settings.semester,
       dataSourceText: dataSource.text,
       currentWeek,
