@@ -117,6 +117,10 @@ Page({
     selectedGradeIndex: -1,
     selectedMajorIndex: -1,
     
+    // 班级筛选项
+    classesOptions: [],
+    selectedClassIndex: -1,
+    
     // 教师筛选项
     titleOptions: ["正高级", "副高级", "中级", "助理级", "员级", "其他"],
     selectedTitleIndex: -1,
@@ -276,6 +280,8 @@ Page({
   onSemesterChange(event) {
     this.setData({
       selectedSemesterIndex: Number(event.detail.value),
+      selectedClassIndex: -1,
+      classesOptions: [],
       classesResult: [],
       classAdminResults: [],
       classAggregateResults: [],
@@ -289,7 +295,9 @@ Page({
     this.setData({
       selectedCollegeIndex: index,
       selectedMajorIndex: -1,
+      selectedClassIndex: -1,
       majors: [], // 重置专业
+      classesOptions: [],
       classesResult: [],
       classAdminResults: [],
       classAggregateResults: [],
@@ -305,7 +313,9 @@ Page({
     this.setData({
       selectedGradeIndex: index,
       selectedMajorIndex: -1,
+      selectedClassIndex: -1,
       majors: [], // 重置专业
+      classesOptions: [],
       classesResult: [],
       classAdminResults: [],
       classAggregateResults: [],
@@ -343,10 +353,72 @@ Page({
   onMajorChange(event) {
     this.setData({
       selectedMajorIndex: Number(event.detail.value),
+      selectedClassIndex: -1,
+      classesOptions: [],
       classesResult: [],
       classAdminResults: [],
       classAggregateResults: [],
       classNoticeText: "",
+    }, () => {
+      this.fetchClasses();
+    });
+  },
+
+  // 6.5. 异步获取班级列表
+  fetchClasses() {
+    const { semesters, selectedSemesterIndex, colleges, selectedCollegeIndex, grades, selectedGradeIndex, majors, selectedMajorIndex } = this.data;
+    if (selectedCollegeIndex < 0 || selectedGradeIndex < 0 || selectedMajorIndex < 0) {
+      return;
+    }
+
+    const semester = semesters[selectedSemesterIndex].value;
+    const collegeCode = colleges[selectedCollegeIndex].code;
+    const grade = grades[selectedGradeIndex];
+    const majorCode = majors[selectedMajorIndex].code;
+
+    this.setData({ loading: true });
+    request.get("/api/fosu/classes", { semester, collegeCode, grade, majorCode }, { showLoading: false })
+      .then((res) => {
+        const classesOptions = [];
+        if (res && res.success) {
+          const adminClasses = res.adminClasses || [];
+          const majorAggregates = res.majorAggregates || [];
+
+          adminClasses.forEach(c => {
+            classesOptions.push({
+              classId: c.classId,
+              className: c.className,
+              label: c.className,
+              isAggregated: false,
+              group: "admin"
+            });
+          });
+
+          majorAggregates.forEach(c => {
+            classesOptions.push({
+              classId: c.classId,
+              className: c.className,
+              label: c.className.includes("共享") ? c.className : `${c.className} (共享课表)`,
+              isAggregated: true,
+              group: "aggregate"
+            });
+          });
+        }
+        this.setData({
+          classesOptions,
+          loading: false
+        });
+      })
+      .catch((err) => {
+        this.setData({ loading: false });
+        console.error("fetchClasses fail", err);
+      });
+  },
+
+  // 6.6. 班级选择改变
+  onClassChange(event) {
+    this.setData({
+      selectedClassIndex: Number(event.detail.value)
     });
   },
 
@@ -367,7 +439,7 @@ Page({
   // ================== 查询按钮动作 ==================
 
   searchClassSchedule() {
-    const { semesters, selectedSemesterIndex, colleges, selectedCollegeIndex, grades, selectedGradeIndex, majors, selectedMajorIndex } = this.data;
+    const { semesters, selectedSemesterIndex, colleges, selectedCollegeIndex, grades, selectedGradeIndex, majors, selectedMajorIndex, classesOptions, selectedClassIndex } = this.data;
 
     if (selectedCollegeIndex < 0 || selectedGradeIndex < 0 || selectedMajorIndex < 0) {
       wx.showToast({
@@ -383,6 +455,40 @@ Page({
     const majorCode = majors[selectedMajorIndex].code;
     const majorName = majors[selectedMajorIndex].name;
 
+    // 如果选到了具体班级，直接精准查询并跳转
+    if (selectedClassIndex >= 0 && classesOptions[selectedClassIndex]) {
+      const selectedClass = classesOptions[selectedClassIndex];
+      request.post("/api/fosu/class-schedule", {
+        semester,
+        collegeCode,
+        grade,
+        majorCode,
+        majorName,
+        className: selectedClass.className,
+      }, { loadingTitle: "正在加载课表...", silentError: true })
+        .then((data) => {
+          if (data && data.success && data.classes && data.classes.length > 0) {
+            const matchedClass = data.classes[0];
+            const formatted = formatClassResultItem(matchedClass);
+            this.navigateToScheduleView("class", formatted.className, formatted.courses, formatted);
+          } else {
+            wx.showToast({
+              title: "未找到该班级课表数据",
+              icon: "none",
+            });
+          }
+        })
+        .catch((err) => {
+          wx.showToast({
+            title: err.message || "课表数据查询失败",
+            icon: "none",
+          });
+          console.error("fetch single class schedule fail", err);
+        });
+      return;
+    }
+
+    // 未选择具体班级，获取该专业下所有班级并显示在下方
     request.post("/api/fosu/class-schedule", {
       semester,
       collegeCode,

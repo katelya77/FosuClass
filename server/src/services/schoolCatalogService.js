@@ -325,124 +325,174 @@ async function getMajors(collegeCode, grade) {
   };
 }
 
+const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
+const CURRENT_SNAPSHOT_PATH = path.join(SNAPSHOTS_DIR, "current.json");
+
+let snapshotCache = null;
+let snapshotCacheTime = 0;
+
 /**
- * 获取全校 Bootstrap 数据，聚合 Catalog 和各种计数信息
- * @param {string} semester 学期，如 "2025-2026-2"
- * @returns {Promise<Object>} 聚合后的 Bootstrap 数据
+ * 安全获取当前最新的快照数据，支持内存缓存
+ * @returns {Object|null}
+ */
+function getSnapshot() {
+  if (fs.existsSync(CURRENT_SNAPSHOT_PATH)) {
+    try {
+      const stat = fs.statSync(CURRENT_SNAPSHOT_PATH);
+      const mtime = stat.mtimeMs;
+      // 如果文件修改时间未变，则使用缓存
+      if (snapshotCache && snapshotCacheTime === mtime) {
+        return snapshotCache;
+      }
+      const content = fs.readFileSync(CURRENT_SNAPSHOT_PATH, "utf-8");
+      snapshotCache = JSON.parse(content);
+      snapshotCacheTime = mtime;
+      return snapshotCache;
+    } catch (error) {
+      safeLog("read-snapshot-error", { error: error.message });
+      return null;
+    }
+  }
+  return null;
+}
+
+/**
+ * 安全解码 URI 组件，防乱码
+ */
+function safeDecode(str) {
+  try {
+    return decodeURIComponent(str);
+  } catch (e) {
+    return str;
+  }
+}
+
+/**
+ * 系统启动引导数据，优先从快照加载
  */
 async function getBootstrap(semester) {
-  const semesterParam = semester || "2025-2026-2";
-
-  // 1. 获取 Catalog 数据
-  const catalogRes = await getCatalog(semesterParam);
-  const isCatalogSuccess = catalogRes && catalogRes.success && catalogRes.dataSource !== "empty";
-
-  // 2. 读取同步元数据 sync-meta.json
-  const syncMeta = readJsonFile(FILE_MAP["sync-meta"]) || {};
-
-  // 3. 计算 majorsCount
-  let majorsCount = 0;
-  const majorsIndex = readJsonFile(FILE_MAP["majors"]);
-  if (majorsIndex && Array.isArray(majorsIndex.colleges)) {
-    majorsIndex.colleges.forEach((c) => {
-      if (Array.isArray(c.grades)) {
-        c.grades.forEach((g) => {
-          if (Array.isArray(g.majors)) {
-            majorsCount += g.majors.length;
-          }
-        });
+  const snapshot = getSnapshot();
+  if (snapshot) {
+    return {
+      success: true,
+      dataSource: "snapshot",
+      updatedAt: snapshot.updatedAt,
+      version: snapshot.version,
+      semester: snapshot.semester,
+      catalog: snapshot.catalog,
+      counts: snapshot.coverage,
+      versions: {
+        snapshot: snapshot.version
+      },
+      metaDetails: {
+        source: snapshot.source,
+        disclaimer: snapshot.disclaimer
       }
-    });
-  }
-  // NOTE: 如果 majorsIndex 为空，尝试从 sync-meta.json 的 itemCount 兜底
-  if (majorsCount === 0 && syncMeta.majors) {
-    majorsCount = syncMeta.majors.itemCount || 0;
+    };
   }
 
-  // 4. 读取其它 Schedules 文件以计算条目数
-  const classSchedulesPath = path.join(STORAGE_DIR, "class-schedules.json");
-  const teacherSchedulesPath = path.join(STORAGE_DIR, "teacher-schedules.json");
-  const classroomSchedulesPath = path.join(STORAGE_DIR, "classroom-schedules.json");
-  const courseSchedulesPath = path.join(STORAGE_DIR, "course-schedules.json");
-
-  const classSchedules = readJsonFile(classSchedulesPath) || [];
-  const teacherSchedules = readJsonFile(teacherSchedulesPath) || [];
-  const classroomSchedules = readJsonFile(classroomSchedulesPath) || [];
-  const courseSchedules = readJsonFile(courseSchedulesPath) || [];
-
-  const classSchedulesCount = classSchedules.length;
-  const teacherScheduleCount = teacherSchedules.length;
-  const classroomScheduleCount = classroomSchedules.length;
-  const courseScheduleCount = courseSchedules.length;
-  
-  // NOTE: 行政班级数采用 classSchedules 的长度，如果没有则为 0
-  const classesCount = classSchedulesCount;
-
-  // 5. 组合版本信息和元数据
-  const catalogMeta = syncMeta.catalog || {};
-  const majorsMeta = syncMeta.majors || {};
-
-  const catalogData = isCatalogSuccess ? {
-    semesters: catalogRes.semesters || [],
-    colleges: catalogRes.colleges || [],
-    grades: catalogRes.grades || [],
-    weeks: catalogRes.weeks || [],
-    sections: catalogRes.sections || [],
-  } : {
-    semesters: [],
-    colleges: [],
-    grades: [],
-    weeks: [],
-    sections: [],
-  };
-
-  const hasCatalog = isCatalogSuccess && catalogRes.dataSource !== "empty";
-  const hasMajors = majorsCount > 0;
-
-  const success = true;
-  const ready = !!(hasCatalog && hasMajors);
-  const dataSource = hasCatalog ? catalogRes.dataSource : (hasMajors ? "cache" : "empty");
-  const updatedAt = catalogRes.updatedAt || catalogMeta.updatedAt || new Date().toISOString();
-
-  const response = {
-    success,
-    ready,
-    dataSource,
-    updatedAt,
-    catalog: catalogData,
+  // 降级使用旧版文件
+  const catalog = await getCatalog(semester);
+  const meta = readJsonFile(FILE_MAP["sync-meta"]) || {};
+  return {
+    success: catalog.success,
+    dataSource: catalog.dataSource === "empty" ? "empty" : "legacy",
+    updatedAt: catalog.updatedAt,
+    semester: semester || "2025-2026-2",
+    catalog: {
+      semesters: catalog.semesters || [],
+      colleges: catalog.colleges || [],
+      grades: catalog.grades || [],
+      weeks: catalog.weeks || [],
+      sections: catalog.sections || []
+    },
     counts: {
-      collegesCount: catalogData.colleges.length,
-      majorsCount,
-      classesCount,
-      classSchedulesCount,
-      teacherScheduleCount,
-      classroomScheduleCount,
-      courseScheduleCount,
+      collegeCount: (catalog.colleges || []).length,
+      majorCount: meta.majors?.itemCount || 0,
+      classScheduleCount: meta["class-schedules"]?.itemCount || 0,
+      adminClassCount: meta["class-schedules"]?.adminClassCount || 0,
+      majorAggregateCount: meta["class-schedules"]?.majorAggregateCount || 0,
     },
     versions: {
-      catalog: catalogMeta.updatedAt || "",
-      majors: (majorsIndex && majorsIndex.version) || majorsMeta.updatedAt || "",
+      legacy: meta.version || "1.0.0"
     },
     metaDetails: {
-      catalog: catalogMeta,
-      majors: majorsMeta,
+      disclaimer: "课表数据仅供参考，具体以佛山大学教务系统、任课教师通知为准。"
     }
   };
+}
 
-  if (!ready) {
-    response.reasonCode = "NO_SYNC_DATA";
-    response.message = "暂未同步教务数据，请稍后再试。";
+/**
+ * 根据筛选获取班级列表，按 adminClass 和 majorAggregate 分组
+ */
+async function getClasses(query = {}) {
+  const semester = query.semester || "2025-2026-2";
+  const collegeCode = query.collegeCode;
+  const grade = query.grade;
+  const majorCode = query.majorCode;
+
+  if (!collegeCode || !grade || !majorCode) {
+    return {
+      success: false,
+      message: "缺少必要筛选参数 (collegeCode, grade, majorCode)",
+      adminClasses: [],
+      majorAggregates: []
+    };
   }
 
-  if (!hasCatalog && hasMajors) {
-    response.warning = "Catalog data is missing but major data is available.";
+  let schedules = [];
+  const snapshot = getSnapshot();
+
+  if (snapshot && Array.isArray(snapshot.classSchedules)) {
+    schedules = snapshot.classSchedules;
+  } else {
+    // 降级使用 class-schedules.json
+    const legacyPath = path.join(STORAGE_DIR, "class-schedules.json");
+    schedules = readJsonFile(legacyPath) || [];
   }
 
-  return response;
+  // 过滤出符合条件的课表项
+  const filtered = schedules.filter(
+    (item) =>
+      String(item.semester || "") === String(semester) &&
+      String(item.collegeCode || "") === String(collegeCode) &&
+      String(item.grade || "") === String(grade) &&
+      String(item.majorCode || "") === String(majorCode)
+  );
+
+  const adminClasses = [];
+  const majorAggregates = [];
+
+  filtered.forEach((item) => {
+    // 对班级名进行解码，防止乱码
+    const decodedName = safeDecode(item.className || "");
+    const classObj = {
+      classId: item.classId || item.className, // 优先使用 classId，如无则使用 className 兜底
+      className: decodedName,
+      displayType: item.displayType,
+      isAggregated: !!item.isAggregated
+    };
+
+    if (item.displayType === "class-schedule" && !item.isAggregated) {
+      adminClasses.push(classObj);
+    } else {
+      majorAggregates.push(classObj);
+    }
+  });
+
+  return {
+    success: true,
+    adminClasses,
+    majorAggregates
+  };
 }
 
 module.exports = {
   getCatalog,
   getMajors,
   getBootstrap,
+  getClasses,
+  getSnapshot
 };
+
+

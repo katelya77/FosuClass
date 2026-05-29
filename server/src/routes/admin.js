@@ -11,10 +11,20 @@ const { safeLog } = require("../utils/safeLogger");
 const scheduleNormalizer = require("../utils/scheduleNormalizer");
 
 const STORAGE_DIR = path.join(__dirname, "../../storage");
+const zlib = require("zlib");
+
+const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
+const HISTORY_DIR = path.join(SNAPSHOTS_DIR, "history");
 
 // 确保目录存在
 if (!fs.existsSync(STORAGE_DIR)) {
   fs.mkdirSync(STORAGE_DIR, { recursive: true });
+}
+if (!fs.existsSync(SNAPSHOTS_DIR)) {
+  fs.mkdirSync(SNAPSHOTS_DIR, { recursive: true });
+}
+if (!fs.existsSync(HISTORY_DIR)) {
+  fs.mkdirSync(HISTORY_DIR, { recursive: true });
 }
 
 // 缓存文件路径映射
@@ -683,16 +693,233 @@ router.post(
   })
 );
 
+function getActiveSnapshotMeta() {
+  const currentJsonPath = path.join(SNAPSHOTS_DIR, "current.json");
+  if (!fs.existsSync(currentJsonPath)) {
+    return null;
+  }
+  try {
+    const stat = fs.statSync(currentJsonPath);
+    if (!global.cachedSnapshotMeta || global.cachedSnapshotMeta.mtime !== stat.mtimeMs) {
+      const content = fs.readFileSync(currentJsonPath, "utf-8");
+      const snapshot = JSON.parse(content);
+      global.cachedSnapshotMeta = {
+        mtime: stat.mtimeMs,
+        updatedAt: snapshot.updatedAt,
+        version: snapshot.version,
+        semester: snapshot.semester,
+        collegesCount: snapshot.coverage?.collegeCount ?? (snapshot.catalog?.colleges?.length ?? 0),
+        majorsCount: snapshot.coverage?.majorCount ?? (snapshot.majors?.length ?? 0),
+        classScheduleCount: snapshot.coverage?.classScheduleCount ?? (snapshot.classSchedules?.length ?? 0),
+        adminClassCount: snapshot.coverage?.adminClassCount ?? 0,
+        majorAggregateCount: snapshot.coverage?.majorAggregateCount ?? 0,
+      };
+    }
+    return global.cachedSnapshotMeta;
+  } catch (error) {
+    console.error("Failed to read current snapshot metadata:", error);
+    return null;
+  }
+}
+
+// 6.5. 上传快照临时文件
+router.post(
+  "/snapshot/upload",
+  verifyAdminToken,
+  express.raw({ type: "*/*", limit: "150mb" }),
+  async (req, res) => {
+    try {
+      const buffer = req.body;
+      if (!buffer || buffer.length === 0) {
+        return res.status(400).json({ success: false, message: "上传内容不能为空" });
+      }
+
+      // Check magic bytes for gzip: 1f 8b
+      const isGzip = buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
+      let jsonStr;
+      
+      if (isGzip) {
+        try {
+          jsonStr = zlib.gunzipSync(buffer).toString("utf-8");
+        } catch (err) {
+          return res.status(400).json({ success: false, message: "无效的 Gzip 压缩数据: " + err.message });
+        }
+      } else {
+        jsonStr = buffer.toString("utf-8");
+      }
+
+      // Verify valid JSON
+      let snapshotData;
+      try {
+        snapshotData = JSON.parse(jsonStr);
+      } catch (err) {
+        return res.status(400).json({ success: false, message: "解析 JSON 失败，数据可能损坏: " + err.message });
+      }
+
+      const tempJsonPath = path.join(SNAPSHOTS_DIR, "temp_upload.json");
+      const tempGzPath = path.join(SNAPSHOTS_DIR, "temp_upload.json.gz");
+
+      if (isGzip) {
+        fs.writeFileSync(tempGzPath, buffer);
+        fs.writeFileSync(tempJsonPath, jsonStr, "utf-8");
+      } else {
+        fs.writeFileSync(tempJsonPath, jsonStr, "utf-8");
+        const gzBuffer = zlib.gzipSync(Buffer.from(jsonStr, "utf-8"));
+        fs.writeFileSync(tempGzPath, gzBuffer);
+      }
+
+      return res.json({
+        success: true,
+        message: "快照上传成功，暂存在临时文件，请调用 activate 接口激活",
+        isGzip,
+        size: buffer.length,
+        version: snapshotData.version,
+        semester: snapshotData.semester
+      });
+    } catch (error) {
+      console.error("Snapshot upload failed:", error);
+      return res.status(500).json({ success: false, message: "上传处理失败: " + error.message });
+    }
+  }
+);
+
+// 6.6. 激活临时文件为正式快照
+router.post(
+  "/snapshot/activate",
+  verifyAdminToken,
+  async (req, res) => {
+    try {
+      const tempJsonPath = path.join(SNAPSHOTS_DIR, "temp_upload.json");
+      const tempGzPath = path.join(SNAPSHOTS_DIR, "temp_upload.json.gz");
+
+      if (!fs.existsSync(tempJsonPath) || !fs.existsSync(tempGzPath)) {
+        return res.status(400).json({ success: false, message: "未找到待激活的快照临时文件，请先上传" });
+      }
+
+      const jsonStr = fs.readFileSync(tempJsonPath, "utf-8");
+      const snapshot = JSON.parse(jsonStr);
+
+      if (!snapshot.version || !snapshot.semester || !snapshot.catalog || !snapshot.majors || !snapshot.classSchedules) {
+        return res.status(400).json({ success: false, message: "快照数据校验失败：缺少关键快照属性" });
+      }
+
+      const classSchedulesCount = snapshot.classSchedules.length;
+      const collegesCount = snapshot.catalog.colleges ? snapshot.catalog.colleges.length : 0;
+      const majorsCount = snapshot.majors.length;
+
+      if (classSchedulesCount <= 0) {
+        return res.status(400).json({ success: false, message: "快照校验失败：classSchedules 数量必须大于 0" });
+      }
+      if (collegesCount <= 0) {
+        return res.status(400).json({ success: false, message: "快照校验失败：catalog.colleges 数量必须大于 0" });
+      }
+      if (majorsCount <= 0) {
+        return res.status(400).json({ success: false, message: "快照校验失败：majors 数量必须大于 0" });
+      }
+
+      const currentJsonPath = path.join(SNAPSHOTS_DIR, "current.json");
+      const currentGzPath = path.join(SNAPSHOTS_DIR, "current.json.gz");
+
+      if (fs.existsSync(currentGzPath)) {
+        const timestamp = Date.now();
+        let oldSemester = snapshot.semester;
+        try {
+          if (fs.existsSync(currentJsonPath)) {
+            const oldSnapshot = JSON.parse(fs.readFileSync(currentJsonPath, "utf-8"));
+            oldSemester = oldSnapshot.semester || oldSemester;
+          }
+        } catch (e) {}
+
+        const backupGzPath = path.join(HISTORY_DIR, `snapshot-${oldSemester}-${timestamp}.json.gz`);
+        fs.copyFileSync(currentGzPath, backupGzPath);
+        console.log(`[Snapshot] Old snapshot backed up to: ${backupGzPath}`);
+
+        try {
+          const files = fs.readdirSync(HISTORY_DIR)
+            .filter(f => f.startsWith("snapshot-") && f.endsWith(".json.gz"))
+            .map(f => ({ name: f, path: path.join(HISTORY_DIR, f), time: fs.statSync(path.join(HISTORY_DIR, f)).mtimeMs }));
+          
+          if (files.length > 5) {
+            files.sort((a, b) => a.time - b.time);
+            const toDeleteCount = files.length - 5;
+            for (let i = 0; i < toDeleteCount; i++) {
+              fs.unlinkSync(files[i].path);
+              console.log(`[Snapshot] Deleted old history file: ${files[i].path}`);
+            }
+          }
+        } catch (err) {
+          console.error("Failed to clean snapshot history:", err);
+        }
+      }
+
+      fs.renameSync(tempJsonPath, currentJsonPath);
+      fs.renameSync(tempGzPath, currentGzPath);
+
+      global.cachedSnapshotMeta = null;
+      global.cachedSnapshotData = null;
+
+      const nowStr = new Date().toISOString();
+      const meta = getSyncMeta();
+      meta["snapshot"] = {
+        updatedAt: nowStr,
+        version: snapshot.version,
+        semester: snapshot.semester,
+        itemCount: classSchedulesCount,
+        syncSource: snapshot.source || "local-sync-client",
+      };
+      meta["catalog"] = {
+        updatedAt: nowStr,
+        itemCount: collegesCount,
+        syncSource: snapshot.source || "local-sync-client",
+      };
+      meta["majors"] = {
+        updatedAt: nowStr,
+        itemCount: majorsCount,
+        syncSource: snapshot.source || "local-sync-client",
+      };
+      meta["class-schedules"] = {
+        updatedAt: nowStr,
+        itemCount: classSchedulesCount,
+        syncSource: snapshot.source || "local-sync-client",
+      };
+
+      fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
+
+      return res.json({
+        success: true,
+        message: "快照激活成功，系统已切换至最新快照",
+        version: snapshot.version,
+        semester: snapshot.semester,
+        counts: {
+          collegesCount,
+          majorsCount,
+          classScheduleCount: classSchedulesCount
+        }
+      });
+    } catch (error) {
+      console.error("Snapshot activation failed:", error);
+      return res.status(500).json({ success: false, message: "激活失败: " + error.message });
+    }
+  }
+);
+
 // 7. 获取当前缓存状态
 router.get("/sync/status", (req, res) => {
   const meta = getSyncMeta();
+  const snapshotMeta = getActiveSnapshotMeta();
+  
   res.json({
     success: true,
     dataSourceMode: config.DATA_SOURCE_MODE,
+    snapshotUpdatedAt: snapshotMeta ? snapshotMeta.updatedAt : (meta.snapshot ? meta.snapshot.updatedAt : null),
+    snapshotVersion: snapshotMeta ? snapshotMeta.version : (meta.snapshot ? meta.snapshot.version : null),
+    semester: snapshotMeta ? snapshotMeta.semester : (meta.snapshot ? meta.snapshot.semester : "2025-2026-2"),
+    collegesCount: snapshotMeta ? snapshotMeta.collegesCount : getItemCount("catalog"),
+    majorsCount: snapshotMeta ? snapshotMeta.majorsCount : getItemCount("majors"),
+    classScheduleCount: snapshotMeta ? snapshotMeta.classScheduleCount : getItemCount("class-schedules"),
+    adminClassCount: snapshotMeta ? snapshotMeta.adminClassCount : 0,
+    majorAggregateCount: snapshotMeta ? snapshotMeta.majorAggregateCount : 0,
     catalogUpdatedAt: getUpdatedAt("catalog"),
-    collegesCount: getItemCount("catalog"),
-    majorsCount: getItemCount("majors"),
-    classScheduleCount: getItemCount("class-schedules"),
     classSchedulesUpdatedAt: getUpdatedAt("class-schedules"),
     teacherScheduleCount: getItemCount("teacher-schedules"),
     classroomScheduleCount: getItemCount("classroom-schedules"),

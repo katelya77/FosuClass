@@ -23,9 +23,16 @@ console.log(`[env] SYNC_SKIP_NO_SCHEDULE_CACHE: ${process.env.SYNC_SKIP_NO_SCHED
 console.log(`[env] SYNC_RECHECK_NO_SCHEDULE: ${process.env.SYNC_RECHECK_NO_SCHEDULE || "false"}`);
 console.log(`[env] ADMIN_API_TOKEN: ${process.env.ADMIN_API_TOKEN ? "present" : "missing"}`);
 
-// 引入后端已有的解析与规范化逻辑以确保格式 100% 兼容
 const parser = require("../../server/src/utils/parser");
 const normalizer = require("../../server/src/utils/scheduleNormalizer");
+
+// 清理代理环境变量，防止上传 VPS 请求走本地代理
+delete process.env.HTTP_PROXY;
+delete process.env.HTTPS_PROXY;
+delete process.env.ALL_PROXY;
+delete process.env.http_proxy;
+delete process.env.https_proxy;
+delete process.env.all_proxy;
 
 const FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 const FOSU_API_BASE = process.env.FOSU_API_BASE || "https://class.katelya.eu.org";
@@ -205,6 +212,7 @@ async function uploadToVps(endpoint, data) {
         "Content-Type": "application/json",
         "x-admin-token": ADMIN_API_TOKEN,
       },
+      proxy: false, // 显式禁用代理
       maxContentLength: Infinity,
       maxBodyLength: Infinity,
     });
@@ -226,11 +234,156 @@ async function fetchVpsSyncStatus() {
 
   const response = await axios.get(url, {
     headers: ADMIN_API_TOKEN ? { "x-admin-token": ADMIN_API_TOKEN } : {},
+    proxy: false, // 显式禁用代理
     maxContentLength: Infinity,
     maxBodyLength: Infinity,
   });
 
   return response.data;
+}
+
+function generateSnapshotVersion() {
+  const now = new Date();
+  const yy = String(now.getFullYear()).slice(-2);
+  const mm = String(now.getMonth() + 1).padStart(2, "0");
+  const dd = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  return `${yy}.${mm}.${dd}.${hh}`;
+}
+
+function buildSnapshot(catalog, majors, allClassSchedules) {
+  const version = generateSnapshotVersion();
+  const activeSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  const noScheduleCachePath = path.join(__dirname, ".debug", "no-schedule-majors.json");
+  const noScheduleMajors = readJsonArray(noScheduleCachePath);
+  
+  const collegeCount = (catalog.colleges || []).length;
+  const majorCount = (majors || []).length;
+  const classScheduleCount = (allClassSchedules || []).length;
+  const adminClassCount = (allClassSchedules || []).filter(
+    (item) => item.displayType === "class-schedule" && !item.isAggregated
+  ).length;
+  const majorAggregateCount = classScheduleCount - adminClassCount;
+  const noScheduleMajorCount = noScheduleMajors.length;
+  
+  const md5 = (str) => crypto.createHash("md5").update(str).digest("hex");
+  const updatedSchedules = (allClassSchedules || []).map((item) => {
+    const classId = item.classId || md5(`${item.semester}_${item.collegeCode}_${item.grade}_${item.majorCode}_${item.className}`);
+    return Object.assign({}, item, { classId });
+  });
+
+  const timeTableSections = [
+    { section: 1, start: "08:00", end: "08:40" },
+    { section: 2, start: "08:45", end: "09:25" },
+    { section: 3, start: "09:40", end: "10:20" },
+    { section: 4, start: "10:25", end: "11:05" },
+    { section: 5, start: "11:10", end: "11:50" },
+    { section: 6, start: "13:30", end: "14:10" },
+    { section: 7, start: "14:15", end: "14:55" },
+    { section: 8, start: "15:10", end: "15:50" },
+    { section: 9, start: "15:55", end: "16:35" },
+    { section: 10, start: "16:40", end: "17:20" },
+    { section: 11, start: "18:30", end: "19:10" },
+    { section: 12, start: "19:15", end: "19:55" },
+    { section: 13, start: "20:05", end: "20:45" },
+    { section: 14, start: "20:50", end: "21:30" }
+  ];
+
+  return {
+    version,
+    semester: activeSemester,
+    updatedAt: new Date().toISOString(),
+    source: "local-sync-client",
+    disclaimer: "课表数据仅供参考，具体以佛山大学教务系统、任课教师通知为准。",
+    catalog: {
+      semesters: catalog.semesters || [],
+      colleges: catalog.colleges || [],
+      grades: catalog.grades || [],
+      weeks: catalog.weeks || [],
+      sections: catalog.sections || []
+    },
+    majors: majors || [],
+    classSchedules: updatedSchedules,
+    timeTable: {
+      sections: timeTableSections
+    },
+    coverage: {
+      collegeCount,
+      majorCount,
+      classScheduleCount,
+      adminClassCount,
+      majorAggregateCount,
+      noScheduleMajorCount
+    }
+  };
+}
+
+async function uploadSnapshot(buffer) {
+  const url = `${FOSU_API_BASE}/api/admin/snapshot/upload`;
+  console.log(`📤 正在上传快照 (体积: ${(buffer.length / 1024 / 1024).toFixed(2)} MB) to: ${url}...`);
+  try {
+    const response = await axios.post(url, buffer, {
+      headers: {
+        "Content-Type": "application/octet-stream",
+        "x-admin-token": ADMIN_API_TOKEN
+      },
+      proxy: false, // 显式禁用代理
+      maxContentLength: Infinity,
+      maxBodyLength: Infinity
+    });
+    console.log(`✅ 快照上传 VPS 成功: ${JSON.stringify(response.data)}`);
+    return response.data;
+  } catch (error) {
+    console.error(`❌ 快照上传 VPS 失败: ${error.message}`);
+    if (error.response) {
+      console.error(`   VPS 错误状态码: ${error.response.status}`);
+      console.error(`   VPS 错误详情: ${JSON.stringify(error.response.data)}`);
+    }
+    throw error;
+  }
+}
+
+async function activateSnapshot(version) {
+  const url = `${FOSU_API_BASE}/api/admin/snapshot/activate`;
+  console.log(`🔔 正在请求激活快照 (版本: ${version}) to: ${url}...`);
+  try {
+    const response = await axios.post(url, { version }, {
+      headers: {
+        "Content-Type": "application/json",
+        "x-admin-token": ADMIN_API_TOKEN
+      },
+      proxy: false, // 显式禁用代理
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`❌ 快照激活失败: ${error.message}`);
+    if (error.response) {
+      console.error(`   VPS 错误状态码: ${error.response.status}`);
+      console.error(`   VPS 错误详情: ${JSON.stringify(error.response.data)}`);
+    }
+    throw error;
+  }
+}
+
+async function verifyEndpoints() {
+  const bootstrapUrl = `${FOSU_API_BASE}/api/fosu/bootstrap`;
+  const statusUrl = `${FOSU_API_BASE}/api/admin/sync/status`;
+  
+  console.log(`🔎 正在验证 bootstrap 接口: ${bootstrapUrl}...`);
+  const bRes = await axios.get(bootstrapUrl, { proxy: false });
+  console.log(`   成功: ${bRes.data.success}, 数据源: ${bRes.data.dataSource}, 班级数: ${bRes.data.counts?.classScheduleCount}`);
+  
+  console.log(`🔎 正在验证管理员状态接口: ${statusUrl}...`);
+  const sRes = await axios.get(statusUrl, {
+    headers: ADMIN_API_TOKEN ? { "x-admin-token": ADMIN_API_TOKEN } : {},
+    proxy: false
+  });
+  console.log(`   快照版本: ${sRes.data.snapshotVersion}, 快照更新时间: ${sRes.data.snapshotUpdatedAt}`);
+  
+  return {
+    bootstrap: bRes.data,
+    status: sRes.data
+  };
 }
 
 function getUploadChunkSize() {
@@ -596,6 +749,64 @@ async function handleUploadOnly() {
     printPowerShellCommands();
     process.exit(1);
   }
+}
+
+/**
+ * 处理离线发布逻辑 (OFFLINE RELEASE 模式入口)
+ */
+async function handleOfflineRelease() {
+  const zlib = require("zlib");
+  console.log("🚀 开始在 offline-release 模式下发布快照...");
+  
+  const catalogPath = path.join(__dirname, "last-catalog.json");
+  const majorsPath = path.join(__dirname, "last-majors.json");
+  const schedPath = path.join(__dirname, ".debug", "class-schedules-latest.json");
+  
+  if (!fs.existsSync(catalogPath) || !fs.existsSync(majorsPath) || !fs.existsSync(schedPath)) {
+    throw new Error("离线模式下，必须存在 last-catalog.json, last-majors.json 和 .debug/class-schedules-latest.json 缓存文件！");
+  }
+  
+  const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf-8"));
+  const majors = JSON.parse(fs.readFileSync(majorsPath, "utf-8"));
+  const schedJson = JSON.parse(fs.readFileSync(schedPath, "utf-8"));
+  const allClassSchedules = Array.isArray(schedJson) ? schedJson : (schedJson.items || []);
+  
+  if (!allClassSchedules || allClassSchedules.length === 0) {
+    throw new Error("本地课表缓存文件中的班级课表数量为 0");
+  }
+
+  console.log(`📖 成功从本地加载基础配置与课表缓存 (共计 ${allClassSchedules.length} 条课表)`);
+
+  const snapshot = buildSnapshot(catalog, majors, allClassSchedules);
+  const snapshotJson = JSON.stringify(snapshot, null, 2);
+  const snapshotBuffer = Buffer.from(snapshotJson, "utf-8");
+  const compressedBuffer = zlib.gzipSync(snapshotBuffer);
+
+  const debugDir = path.join(__dirname, ".debug");
+  if (!fs.existsSync(debugDir)) {
+    fs.mkdirSync(debugDir, { recursive: true });
+  }
+  fs.writeFileSync(path.join(debugDir, "snapshot-latest.json"), snapshotJson, "utf-8");
+  fs.writeFileSync(path.join(debugDir, "snapshot-latest.json.gz"), compressedBuffer);
+  console.log(`\n💾 本地快照已生成并压缩：.debug/snapshot-latest.json 和 .debug/snapshot-latest.json.gz (体积: ${(compressedBuffer.length / 1024).toFixed(2)} KB)`);
+
+  await uploadSnapshot(compressedBuffer);
+  const activateRes = await activateSnapshot(snapshot.version);
+  console.log(`✅ 快照激活成功! 响应: ${JSON.stringify(activateRes)}`);
+  
+  const verifyRes = await verifyEndpoints();
+  const report = {
+    success: true,
+    version: snapshot.version,
+    semester: snapshot.semester,
+    updatedAt: snapshot.updatedAt,
+    coverage: snapshot.coverage,
+    uploadSize: compressedBuffer.length,
+    serverStatus: verifyRes,
+  };
+  fs.writeFileSync(path.join(debugDir, "sync-report-latest.json"), JSON.stringify(report, null, 2), "utf-8");
+  console.log(`💾 总结报告已保存至 .debug/sync-report-latest.json`);
+  console.log("\n🎉 [Release] 离线暴力快照发布完成！");
 }
 
 /**
@@ -1622,6 +1833,11 @@ async function syncClassSchedules(page, catalog, majors) {
 
   const syncClassScope = process.env.SYNC_CLASS_SCOPE || "";
 
+  const isFiveYearMajor = (name) => {
+    const n = name || "";
+    return n.includes("动物医学") || n.includes("建筑学") || n.includes("临床医学") || n.includes("医学");
+  };
+
   // 筛选出目标专业
   const targetMajors = majors.filter(major => {
     // 1. 如果指定了 collegeCodes 限制且当前 major 不在其中，过滤掉
@@ -1630,7 +1846,13 @@ async function syncClassSchedules(page, catalog, majors) {
     }
     // 2. 如果指定了 grades 限制且当前 major 不在其中，过滤掉
     if (syncGrades && !syncGrades.includes(major.grade)) {
-      return false;
+      const includeFiveYear = getEnvFlag("SYNC_INCLUDE_FIVE_YEAR", true);
+      const isFiveYear = isFiveYearMajor(major.name || major.majorName);
+      if (includeFiveYear && isFiveYear && major.grade === "2021") {
+        // 允许抓取五年制专业的2021级
+      } else {
+        return false;
+      }
     }
     // 3. 如果指定了 majorCodes 限制且当前 major 不在其中，过滤掉
     if (syncMajorCodes && !syncMajorCodes.includes(major.code)) {
@@ -1925,6 +2147,8 @@ async function syncClassSchedules(page, catalog, majors) {
       console.log("🎉 所有目标专业已同步完成，进度已重置。");
     } catch (e) {}
   }
+
+  return allClassSchedules;
 }
 
 /**
@@ -1942,11 +2166,24 @@ async function main() {
     return;
   }
 
+  // 1.5. 拦截并处理离线 release 模式
+  const offlineMode = getEnvFlag("SYNC_RELEASE_OFFLINE", false);
+  if (action === "release" && offlineMode) {
+    await handleOfflineRelease();
+    return;
+  }
+
   // 2. 网络连接检测
   const isNetOk = await diagnose();
   if (!isNetOk) {
-    console.error("❌ 本地网络未通过校园网/VPN诊断，中止同步任务！");
-    printPowerShellCommands();
+    if (action === "release") {
+      console.warn("⚠️ 本地网络未通过校园网/VPN诊断！无法在线抓取数据。");
+      console.log("💡 提示: 检测到当前非校园网环境，你可以使用离线模式直接打包本地已抓取的缓存发布快照：");
+      console.log("   PowerShell 命令: $env:SYNC_RELEASE_OFFLINE=\"true\"; npm run sync:release");
+    } else {
+      console.error("❌ 本地网络未通过校园网/VPN诊断，中止同步任务！");
+      printPowerShellCommands();
+    }
     process.exit(1);
   }
 
@@ -1969,6 +2206,59 @@ async function main() {
       await syncMajors(page);
     } else if (action === "class") {
       await syncClassSchedules(page);
+    } else if (action === "release") {
+      // 暴力快照发布默认环境变量配置
+      if (!process.env.SYNC_CLASS_GRADES) {
+        process.env.SYNC_CLASS_GRADES = "2025,2024,2023,2022";
+      }
+      if (process.env.SYNC_INCLUDE_FIVE_YEAR === undefined) {
+        process.env.SYNC_INCLUDE_FIVE_YEAR = "true";
+      }
+      if (process.env.SYNC_SKIP_NO_SCHEDULE_CACHE === undefined) {
+        process.env.SYNC_SKIP_NO_SCHEDULE_CACHE = "true";
+      }
+      if (process.env.SYNC_RECHECK_NO_SCHEDULE === undefined) {
+        process.env.SYNC_RECHECK_NO_SCHEDULE = "false";
+      }
+      if (process.env.SYNC_CLASS_SCOPE === undefined) {
+        process.env.SYNC_CLASS_SCOPE = "all";
+      }
+
+      catalog = await syncCatalog(page);
+      majors = await syncMajors(page, catalog);
+      process.env.SYNC_CLASS_CRAWL_ONLY = "true";
+      const allClassSchedules = await syncClassSchedules(page, catalog, majors);
+      if (!allClassSchedules || allClassSchedules.length === 0) {
+        throw new Error("没有抓取到任何班级课表，快照发布中断");
+      }
+      const snapshot = buildSnapshot(catalog, majors, allClassSchedules);
+      const zlib = require("zlib");
+      const snapshotJson = JSON.stringify(snapshot, null, 2);
+      const snapshotBuffer = Buffer.from(snapshotJson, "utf-8");
+      const compressedBuffer = zlib.gzipSync(snapshotBuffer);
+      const debugDir = path.join(__dirname, ".debug");
+      if (!fs.existsSync(debugDir)) {
+        fs.mkdirSync(debugDir, { recursive: true });
+      }
+      fs.writeFileSync(path.join(debugDir, "snapshot-latest.json"), snapshotJson, "utf-8");
+      fs.writeFileSync(path.join(debugDir, "snapshot-latest.json.gz"), compressedBuffer);
+      console.log(`\n💾 本地快照已生成并压缩：.debug/snapshot-latest.json 和 .debug/snapshot-latest.json.gz (体积: ${(compressedBuffer.length / 1024).toFixed(2)} KB)`);
+      await uploadSnapshot(compressedBuffer);
+      const activateRes = await activateSnapshot(snapshot.version);
+      console.log(`✅ 快照激活成功! 响应: ${JSON.stringify(activateRes)}`);
+      const verifyRes = await verifyEndpoints();
+      const report = {
+        success: true,
+        version: snapshot.version,
+        semester: snapshot.semester,
+        updatedAt: snapshot.updatedAt,
+        coverage: snapshot.coverage,
+        uploadSize: compressedBuffer.length,
+        serverStatus: verifyRes,
+      };
+      fs.writeFileSync(path.join(debugDir, "sync-report-latest.json"), JSON.stringify(report, null, 2), "utf-8");
+      console.log(`💾 总结报告已保存至 .debug/sync-report-latest.json`);
+      console.log("\n🎉 [Release] 全校课表暴力快照发布成功！");
     } else if (action === "all") {
       catalog = await syncCatalog(page);
       majors = await syncMajors(page, catalog);

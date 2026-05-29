@@ -12,7 +12,8 @@
     "sync:catalog": "node sync.js catalog",
     "sync:majors": "node sync.js majors",
     "sync:class": "node sync.js class",
-    "sync:all": "node sync.js all"
+    "sync:all": "node sync.js all",
+    "sync:release": "node sync.js release"
   },
   "dependencies": {
     "axios": "^1.6.8",

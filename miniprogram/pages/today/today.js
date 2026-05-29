@@ -5,6 +5,7 @@ const {
   getCoursesByClass,
   getTodayCourses,
   groupElectiveLikeCourses,
+  normalizeCourse,
 } = require("../../utils/course");
 const { mockCalendar } = require("../../data/mockCalendar");
 const { getSettings } = require("../../utils/storage");
@@ -69,13 +70,61 @@ Page({
     const currentWeek = settings.manualWeekOverride
       ? clampWeek(settings.currentWeek)
       : getCurrentTeachingWeek(now, mockCalendar);
-    const sourceCourses = getCoursesByClass(settings.className);
-    const todayRawCourses = getTodayCourses(sourceCourses, currentWeek, weekday);
-    const groupedCourses = groupElectiveLikeCourses(todayRawCourses);
-    const courses = decorateTodayCourses(groupedCourses, now);
+
+    let sourceCourses = [];
+    const target = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
+    if (target && Array.isArray(target.courses)) {
+      sourceCourses = target.courses.map(normalizeCourse);
+    } else {
+      sourceCourses = getCoursesByClass(settings.className);
+    }
+
+    // 1. 过滤：非当前周，非今天的课程
+    const { isCourseInWeek } = require("../../utils/week");
+    const todayRawCourses = sourceCourses.filter(course => {
+      const inWeek = isCourseInWeek(course, currentWeek);
+      const isToday = Number(course.weekday) === Number(weekday);
+      return inWeek && isToday;
+    });
+
+    // 2. 去重 key: semester + className + week + weekday + startSection + endSection + courseName + classroom + teacher
+    const seenKeys = new Set();
+    const uniqueCourses = [];
+    todayRawCourses.forEach((c) => {
+      const sem = c.semester || target?.semester || settings.semester || "2025-2026-2";
+      const clsName = c.className || target?.name || settings.className || "未知班级";
+      const teacher = c.teacherName || "";
+      const room = c.classroom || "";
+      
+      const key = [
+        sem,
+        clsName,
+        currentWeek,
+        weekday,
+        c.startSection,
+        c.endSection,
+        c.courseName,
+        room,
+        teacher
+      ].join("_");
+      
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        uniqueCourses.push(c);
+      }
+    });
+
+    // 3. 排序
+    uniqueCourses.sort((a, b) => {
+      if (a.startSection !== b.startSection) {
+        return a.startSection - b.startSection;
+      }
+      return a.endSection - b.endSection;
+    });
+
+    const courses = decorateTodayCourses(uniqueCourses, now);
     const dataSource = getCourseDataSource();
 
-    const target = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
     let displayClassName = settings.className;
     if (target) {
       displayClassName = target.type === "teacher"

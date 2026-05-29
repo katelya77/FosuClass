@@ -156,8 +156,23 @@ function isLikelyClassName(name, context = {}) {
   }
 
   if (Array.isArray(context.courses)) {
-    const equalsAnyCourseName = context.courses.some((course) => compactText(course && course.courseName) === compact);
-    if (equalsAnyCourseName) {
+    const cleanClassName = compact.replace(/^(20\d{2}|\d{2})级?/, "").replace(/\d+班$/, "").replace(/班$/, "");
+    const isConfused = context.courses.some((course) => {
+      if (!course || !course.courseName) return false;
+      const cName = compactText(course.courseName);
+      const cleanCName = cName.replace(/\d+$/, "");
+      if (compact === cName) return true;
+      if (cleanClassName && cleanCName) {
+        if (cleanClassName === cleanCName) return true;
+        if (cleanClassName.includes(cleanCName) || cleanCName.includes(cleanClassName)) {
+          if (cleanClassName.length >= 2 && cleanCName.length >= 2) {
+            return true;
+          }
+        }
+      }
+      return false;
+    });
+    if (isConfused) {
       return false;
     }
   }

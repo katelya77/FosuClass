@@ -29,16 +29,17 @@ Page({
       sdkVersion: "",
       courseTimesVersion: "",
       courseTimesUpdatedAt: "",
+      snapshotVersion: "-",
+      semester: "-",
       collegesCount: "-",
       majorsCount: "-",
       classScheduleCount: "-",
-      teacherScheduleCount: "-",
-      classroomScheduleCount: "-",
-      courseScheduleCount: "-",
+      adminClassCount: "-",
+      majorAggregateCount: "-",
+      noScheduleMajorCount: "-",
       syncTimeText: "-",
       dataSource: "-",
-      storageMounted: "未知",
-      storagePath: "未知",
+      disclaimer: "课表仅供参考，以教务系统和教师通知为准。",
     },
   },
 
@@ -125,7 +126,7 @@ Page({
   clearCache() {
     wx.showModal({
       title: "清除缓存",
-      content: "将恢复默认班级、当前周和显示设置。",
+      content: "将恢复默认班级、当前周 and 显示设置。",
       confirmText: "清除",
       confirmColor: "#c62828",
       success: (res) => {
@@ -171,7 +172,6 @@ Page({
   showDataVersionDetail() {
     const sysInfo = wx.getSystemInfoSync();
     
-    // 默认展示本地状态
     this.setData({
       versionDetailVisible: true,
       "versionData.sdkVersion": sysInfo.SDKVersion || "未知",
@@ -202,20 +202,16 @@ Page({
             }
           }
 
-          let dataSource = "cache-first";
-          if (res.dataSource) {
-            if (res.dataSource === "fosu-realtime") {
-              dataSource = "local-sync-client / realtime";
-            } else if (res.dataSource === "cache") {
-              dataSource = "local-sync-client / cache-first";
-            } else {
-              dataSource = res.dataSource;
-            }
+          let dataSource = res.dataSource || "cache-first";
+          if (dataSource === "snapshot") {
+            dataSource = "全校发布快照 (snapshot)";
+          } else if (dataSource === "fosu-realtime") {
+            dataSource = "教务系统直连实时 (realtime)";
+          } else if (dataSource === "cache") {
+            dataSource = "服务端本地分块 (cache)";
           }
 
           const details = res.metaDetails || {};
-          const isMounted = res.ready ? "active (已挂载)" : "warning (未挂载)";
-          const storagePath = (details.catalog && details.catalog.storagePath) || "/data/fosu-storage";
 
           this.setData({
             versionData: {
@@ -223,16 +219,19 @@ Page({
               sdkVersion: sysInfo.SDKVersion || "未知",
               courseTimesVersion: courseTimesMeta.version,
               courseTimesUpdatedAt: courseTimesMeta.updatedAt,
-              collegesCount: counts.collegesCount || 0,
-              majorsCount: counts.majorsCount || 0,
-              classScheduleCount: counts.classSchedulesCount || counts.classesCount || 0,
-              teacherScheduleCount: counts.teacherScheduleCount || 0,
-              classroomScheduleCount: counts.classroomScheduleCount || 0,
-              courseScheduleCount: counts.courseScheduleCount || 0,
+              
+              snapshotVersion: res.version || "legacy",
+              semester: res.semester || "-",
+              collegesCount: counts.collegeCount || counts.collegesCount || "-",
+              majorsCount: counts.majorCount || counts.majorsCount || "-",
+              classScheduleCount: counts.classScheduleCount || counts.classSchedulesCount || counts.classesCount || "-",
+              adminClassCount: counts.adminClassCount || "-",
+              majorAggregateCount: counts.majorAggregateCount || "-",
+              noScheduleMajorCount: counts.noScheduleMajorCount || "-",
+              
               syncTimeText,
               dataSource,
-              storageMounted: isMounted,
-              storagePath,
+              disclaimer: details.disclaimer || "课表仅供参考，以教务系统和教师通知为准。",
             }
           });
         }
