@@ -17,6 +17,7 @@ console.log(`[env] FOSU_API_BASE: ${process.env.FOSU_API_BASE || "https://class.
 console.log(`[env] PREFERRED_SEMESTER: ${process.env.PREFERRED_SEMESTER || "未配置"}`);
 console.log(`[env] SYNC_GRADE_RANGE: ${process.env.SYNC_GRADE_RANGE || "未配置"}`);
 console.log(`[env] SYNC_GRADES: ${process.env.SYNC_GRADES || "未配置"}`);
+console.log(`[env] SYNC_UPLOAD_CHUNK_SIZE: ${process.env.SYNC_UPLOAD_CHUNK_SIZE || "100"}`);
 console.log(`[env] ADMIN_API_TOKEN: ${process.env.ADMIN_API_TOKEN ? "present" : "missing"}`);
 
 // 引入后端已有的解析与规范化逻辑以确保格式 100% 兼容
@@ -106,6 +107,59 @@ async function uploadToVps(endpoint, data) {
     }
     throw error;
   }
+}
+
+async function fetchVpsSyncStatus() {
+  const url = `${FOSU_API_BASE}/api/admin/sync/status`;
+  console.log(`🔎 正在读取 VPS 同步状态: ${url} ...`);
+
+  const response = await axios.get(url, {
+    headers: ADMIN_API_TOKEN ? { "x-admin-token": ADMIN_API_TOKEN } : {},
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+  });
+
+  return response.data;
+}
+
+function getUploadChunkSize() {
+  const parsed = parseInt(process.env.SYNC_UPLOAD_CHUNK_SIZE || "100", 10);
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return parsed;
+  }
+  console.warn(`⚠️ SYNC_UPLOAD_CHUNK_SIZE=${process.env.SYNC_UPLOAD_CHUNK_SIZE} 无效，已回退为 100。`);
+  return 100;
+}
+
+async function uploadClassSchedulesInChunks(classSchedules, debugDir) {
+  const chunkSize = getUploadChunkSize();
+  const totalChunks = Math.ceil(classSchedules.length / chunkSize);
+
+  if (!fs.existsSync(debugDir)) {
+    fs.mkdirSync(debugDir, { recursive: true });
+  }
+
+  console.log(`📦 开始分块上传班级课表: ${classSchedules.length} 条，每批 ${chunkSize} 条，共 ${totalChunks} 批。`);
+
+  for (let index = 0; index < totalChunks; index++) {
+    const chunkNumber = index + 1;
+    const start = index * chunkSize;
+    const chunk = classSchedules.slice(start, start + chunkSize);
+
+    try {
+      await uploadToVps("/api/admin/sync/class-schedules?mode=merge", chunk);
+      console.log(`[chunk ${chunkNumber}/${totalChunks}] uploaded ${chunk.length} items`);
+    } catch (error) {
+      const failedPath = path.join(debugDir, `failed-class-schedules-chunk-${chunkNumber}.json`);
+      fs.writeFileSync(failedPath, JSON.stringify(chunk, null, 2), "utf-8");
+      console.error(`❌ [chunk ${chunkNumber}/${totalChunks}] 上传失败，失败批次已保存: ${failedPath}`);
+      throw error;
+    }
+  }
+
+  const status = await fetchVpsSyncStatus();
+  console.log(`📊 VPS classScheduleCount: ${status.classScheduleCount ?? 0}`);
+  return status;
 }
 
 /**
@@ -1208,6 +1262,7 @@ async function syncClassSchedules(page, catalog, majors) {
       const grouped = normalizer.groupCoursesBy(courses, "className", "未命名班级");
       
       const classes = Object.keys(grouped).map((clsName) => ({
+        semester: activeSemester,
         className: clsName,
         collegeCode: major.collegeCode,
         grade: major.grade,
@@ -1243,7 +1298,7 @@ async function syncClassSchedules(page, catalog, majors) {
   
   if (allClassSchedules.length > 0) {
     // 上传至 VPS (默认是 merge 模式，只更新/新增有变动的班级)
-    await uploadToVps("/api/admin/sync/class-schedules?mode=merge", allClassSchedules);
+    await uploadClassSchedulesInChunks(allClassSchedules, debugDir);
     console.log(`✅ 本轮抓取的班级课表数据同步完成！`);
   } else {
     console.log("ℹ️ 本轮没有新抓取到任何班级课表，无需上传。");
