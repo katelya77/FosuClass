@@ -15,6 +15,7 @@ RUN npm ci --only=production
 
 # 复制所有源代码
 COPY src/ ./src/
+COPY scripts/ ./scripts/
 
 # 暴露接口服务端口
 EXPOSE 3000

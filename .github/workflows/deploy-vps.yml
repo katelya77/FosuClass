@@ -36,6 +36,12 @@ jobs:
             exit 1
           fi
 
+      - name: Predeploy server module checks
+        working-directory: server
+        run: |
+          node -e "require('./src/utils/courseNormalizer'); console.log('courseNormalizer ok')"
+          node -e "require('./src/utils/scheduleNormalizer'); console.log('scheduleNormalizer ok')"
+
       - name: Upload server/ directory via SCP
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -79,14 +85,26 @@ jobs:
             CORS_ALLOWED_ORIGINS=https://class.katelya.eu.org,http://127.0.0.1:18318
             EOF
             
-            # 启动容器，如果 ubuntu 用户没有 docker 权限，则自动 fallback
-            docker compose up -d --build || sudo docker compose up -d --build
+            # 启动容器。直接使用 sudo，避免无权限时先失败一次造成误导日志。
+            sudo docker compose up -d --build
             
-            # 延迟几秒让容器初始化
-            sleep 3
+            # 最多等待 30 秒，循环检查容器内 API 是否真正启动成功。
+            healthy=false
+            for i in $(seq 1 30); do
+              if curl -fsS http://127.0.0.1:18318/api/health; then
+                healthy=true
+                break
+              fi
+              echo "Waiting for fosuclass-api health check... ($i/30)"
+              sleep 1
+            done
             
-            # 健康检查
-            curl -f http://127.0.0.1:18318/api/health
+            if [ "$healthy" != "true" ]; then
+              echo "::error::fosuclass-api health check failed after 30 seconds"
+              sudo docker ps -a
+              sudo docker logs fosuclass-api --tail=200 || true
+              exit 1
+            fi
 
       - name: Show Deployment Info
         run: |
