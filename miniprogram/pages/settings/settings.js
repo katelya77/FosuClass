@@ -6,6 +6,8 @@ const {
   clampWeek,
   getTodayTeachingInfo,
 } = require("../../utils/week");
+const request = require("../../utils/request");
+const { courseTimesMeta } = require("../../data/courseTimes");
 
 function buildWeekOptions() {
   const options = [];
@@ -21,6 +23,23 @@ Page({
     teachingInfo: {},
     termStartDate: TERM_START_DATE,
     weekOptions: buildWeekOptions(),
+    versionDetailVisible: false,
+    versionData: {
+      appVersion: "1.0.0",
+      sdkVersion: "",
+      courseTimesVersion: "",
+      courseTimesUpdatedAt: "",
+      collegesCount: "-",
+      majorsCount: "-",
+      classScheduleCount: "-",
+      teacherScheduleCount: "-",
+      classroomScheduleCount: "-",
+      courseScheduleCount: "-",
+      syncTimeText: "-",
+      dataSource: "-",
+      storageMounted: "未知",
+      storagePath: "未知",
+    },
   },
 
   onShow() {
@@ -148,4 +167,87 @@ Page({
       confirmText: "知道了",
     });
   },
+
+  showDataVersionDetail() {
+    const sysInfo = wx.getSystemInfoSync();
+    
+    // 默认展示本地状态
+    this.setData({
+      versionDetailVisible: true,
+      "versionData.sdkVersion": sysInfo.SDKVersion || "未知",
+      "versionData.courseTimesVersion": courseTimesMeta.version,
+      "versionData.courseTimesUpdatedAt": courseTimesMeta.updatedAt,
+    });
+
+    wx.showLoading({ title: "加载中..." });
+    request.get("/api/fosu/bootstrap", { semester: this.data.settings.semester || "2025-2026-2" }, { showLoading: false })
+      .then((res) => {
+        wx.hideLoading();
+        if (res && res.success) {
+          const counts = res.counts || {};
+          
+          let syncTimeText = "-";
+          if (res.updatedAt) {
+            const date = new Date(res.updatedAt);
+            if (!Number.isNaN(date.getTime())) {
+              const now = new Date();
+              const isToday = date.toDateString() === now.toDateString();
+              const timeStr = date.toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
+              if (isToday) {
+                syncTimeText = `今天 ${timeStr}`;
+              } else {
+                const dateStr = date.toLocaleDateString("zh-CN").replace(/\//g, "-");
+                syncTimeText = `${dateStr} ${timeStr}`;
+              }
+            }
+          }
+
+          let dataSource = "cache-first";
+          if (res.dataSource) {
+            if (res.dataSource === "fosu-realtime") {
+              dataSource = "local-sync-client / realtime";
+            } else if (res.dataSource === "cache") {
+              dataSource = "local-sync-client / cache-first";
+            } else {
+              dataSource = res.dataSource;
+            }
+          }
+
+          const details = res.metaDetails || {};
+          const isMounted = res.ready ? "active (已挂载)" : "warning (未挂载)";
+          const storagePath = (details.catalog && details.catalog.storagePath) || "/data/fosu-storage";
+
+          this.setData({
+            versionData: {
+              appVersion: "1.0.0",
+              sdkVersion: sysInfo.SDKVersion || "未知",
+              courseTimesVersion: courseTimesMeta.version,
+              courseTimesUpdatedAt: courseTimesMeta.updatedAt,
+              collegesCount: counts.collegesCount || 0,
+              majorsCount: counts.majorsCount || 0,
+              classScheduleCount: counts.classSchedulesCount || counts.classesCount || 0,
+              teacherScheduleCount: counts.teacherScheduleCount || 0,
+              classroomScheduleCount: counts.classroomScheduleCount || 0,
+              courseScheduleCount: counts.courseScheduleCount || 0,
+              syncTimeText,
+              dataSource,
+              storageMounted: isMounted,
+              storagePath,
+            }
+          });
+        }
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        console.error("fetch bootstrap in settings failed", err);
+      });
+  },
+
+  hideDataVersionDetail() {
+    this.setData({
+      versionDetailVisible: false
+    });
+  },
+
+  noop() {}
 });

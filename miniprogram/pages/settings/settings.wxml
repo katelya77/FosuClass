@@ -122,6 +122,10 @@
       <view class="row-title">隐私说明</view>
       <view class="row-arrow">›</view>
     </view>
+    <view class="setting-row" bindtap="showDataVersionDetail">
+      <view class="row-title">数据版本详情</view>
+      <view class="row-arrow">›</view>
+    </view>
     <view class="setting-row" bindtap="showAbout">
       <view class="row-title">关于佛大课表</view>
       <view class="row-arrow">›</view>
@@ -129,6 +133,90 @@
     <view class="setting-row danger" bindtap="clearCache">
       <view class="row-title">清除缓存</view>
       <view class="row-arrow">›</view>
+    </view>
+  </view>
+
+  <view wx:if="{{versionDetailVisible}}" class="popup-mask" bindtap="hideDataVersionDetail">
+    <view class="popup-panel" catchtap="noop">
+      <view class="popup-handle"></view>
+      <view class="popup-header">
+        <view class="popup-title-block">
+          <view class="popup-title">数据版本详情</view>
+          <view class="popup-subtitle">本地及服务器运行状态监控</view>
+        </view>
+        <button class="close-button" bindtap="hideDataVersionDetail">×</button>
+      </view>
+
+      <scroll-view scroll-y class="detail-scroll">
+        <view class="detail-grid">
+          <view class="detail-row">
+            <view class="detail-label">应用版本</view>
+            <view class="detail-value">{{versionData.appVersion}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">基础库版本</view>
+            <view class="detail-value">{{versionData.sdkVersion}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">作息时间版本</view>
+            <view class="detail-value">{{versionData.courseTimesVersion}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">作息更新时间</view>
+            <view class="detail-value">{{versionData.courseTimesUpdatedAt}}</view>
+          </view>
+          
+          <view class="detail-divider"></view>
+          
+          <view class="detail-row">
+            <view class="detail-label">学院数量</view>
+            <view class="detail-value">{{versionData.collegesCount}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">专业数量</view>
+            <view class="detail-value">{{versionData.majorsCount}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">班级课表数量</view>
+            <view class="detail-value">{{versionData.classScheduleCount}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">教师课表数量</view>
+            <view class="detail-value">{{versionData.teacherScheduleCount}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">教室课表数量</view>
+            <view class="detail-value">{{versionData.classroomScheduleCount}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">课程课表数量</view>
+            <view class="detail-value">{{versionData.courseScheduleCount}}</view>
+          </view>
+          
+          <view class="detail-divider"></view>
+          
+          <view class="detail-row">
+            <view class="detail-label">最近同步时间</view>
+            <view class="detail-value">{{versionData.syncTimeText}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">数据来源</view>
+            <view class="detail-value">{{versionData.dataSource}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">服务器状态</view>
+            <view class="detail-value">{{versionData.storageMounted}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">持久化路径</view>
+            <view class="detail-value">{{versionData.storagePath}}</view>
+          </view>
+        </view>
+      </scroll-view>
+
+      <view class="popup-footer">
+        <button class="footer-btn" bindtap="hideDataVersionDetail">知道了</button>
+      </view>
     </view>
   </view>
 </view>

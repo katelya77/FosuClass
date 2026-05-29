@@ -35,9 +35,9 @@
   </block>
 
   <block wx:else>
-    <view class="course-name">{{course.courseName}}</view>
-    <view class="course-meta">{{course.classroom}}</view>
-    <view class="course-meta">{{course.teacherName}}</view>
-    <view class="course-week">{{course.weekText}}</view>
+    <view class="course-name {{span === 1 ? 'span-1' : ''}}">{{course.courseName}}</view>
+    <view class="course-meta classroom-highlight" wx:if="{{course.classroom}}">{{course.classroom}}</view>
+    <view class="course-meta" wx:if="{{span > 1 && course.teacherName}}">{{course.teacherName}}</view>
+    <view class="course-week" wx:if="{{span > 2 && course.weekText}}">{{course.weekText}}</view>
   </block>
 </view>

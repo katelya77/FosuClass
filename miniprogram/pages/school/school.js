@@ -15,10 +15,31 @@ function formatUpdateTime(updatedAt) {
   return date.toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
 }
 
+function safeDecodeURIComponent(value) {
+  const text = String(value || "");
+  try {
+    return decodeURIComponent(text);
+  } catch (error) {
+    return text;
+  }
+}
+
+function isValidClassName(name) {
+  if (!name) return false;
+  const excludeKeywords = ['体育', '化学', '解剖', '微积分', '物理', '英语', '毛泽东', '马克思', '形势与政策', '创业', '心理', '美育', '军事', '劳动', '思想道德', '大学', '程序设计', '基础', '俱乐部', '指导'];
+  for (const kw of excludeKeywords) {
+    if (name.includes(kw)) return false;
+  }
+  const reg = /\d/;
+  if (!reg.test(name)) return false;
+  return true;
+}
+
 function formatClassResultItem(item) {
   const source = item || {};
-  const isAggregated = Boolean(source.isAggregated || source.displayType === "major-schedule");
-  const className = source.className || "";
+  const isAggregated = Boolean(source.isAggregated || source.displayType === "major-schedule" || source.displayType === "major-shared-schedule");
+  const rawClassName = source.className || "";
+  const className = safeDecodeURIComponent(rawClassName);
   const courseCount = Array.isArray(source.courses) ? source.courses.length : 0;
   return Object.assign({}, source, {
     scheduleKey: `${source.semester || ""}-${source.collegeCode || ""}-${source.grade || ""}-${source.majorCode || ""}-${className}`,
@@ -31,9 +52,15 @@ function formatClassResultItem(item) {
 }
 
 function splitClassResultGroups(items) {
-  const list = (items || []).map(formatClassResultItem);
+  const list = (items || [])
+    .map(formatClassResultItem)
+    .filter(item => item.isAggregated || isValidClassName(item.className));
+  
   const admin = list.filter((item) => !item.isAggregated);
-  const aggregate = list.filter((item) => item.isAggregated);
+  
+  const activeAdminMajorGrades = new Set(admin.map(item => `${item.majorCode}_${item.grade}`));
+  const aggregate = list.filter((item) => item.isAggregated && !activeAdminMajorGrades.has(`${item.majorCode}_${item.grade}`));
+
   return {
     list,
     admin,
@@ -77,6 +104,7 @@ Page({
     tabs,
     activeTab: "class",
     keyword: "",
+    showAggregate: false,
     
     // 下拉选择选项
     semesters: [],
@@ -544,4 +572,10 @@ Page({
       },
     });
   },
+
+  toggleAggregate() {
+    this.setData({
+      showAggregate: !this.data.showAggregate
+    });
+  }
 });

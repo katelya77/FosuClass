@@ -223,16 +223,22 @@
 
 .section-no {
   color: #172033;
-  font-size: 22rpx;
+  font-size: 19rpx;
   font-weight: 800;
 }
 
-.time-text {
-  margin-top: 2rpx;
-  color: #9aa4b5;
-  font-size: 16rpx;
-  line-height: 1.08;
+.time-text-single {
+  margin-top: 4rpx;
+  color: #8a94a6;
+  font-size: 17rpx;
+  line-height: 1.1;
+  font-weight: 600;
 }
+
+.section-divider {
+  border-bottom: 2rpx solid rgba(198, 40, 40, 0.25) !important;
+}
+
 
 .day-track {
   flex: 0 0 auto;
