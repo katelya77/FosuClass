@@ -94,6 +94,7 @@ Page({
     overviewExpanded: true,
     hasCurrentWeekCourses: false,
     currentWeekCourseCount: 0,
+    scheduleMeta: null,
     
     currentWeek: 12,
     totalWeeks: TOTAL_WEEKS,
@@ -154,6 +155,7 @@ Page({
             displayType: nextDisplayType,
             isAggregated: nextAggregated,
             scheduleKindText: getScheduleKindText(this.data.type, nextDisplayType, nextAggregated),
+            scheduleMeta: schedule,
           }, () => {
             this.initScheduleLayout();
           });
@@ -260,12 +262,17 @@ Page({
     }
 
     const nowStr = new Date().toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
+    const meta = this.data.scheduleMeta || {};
     const target = {
       type: this.data.type,
       name: this.data.name,
       semester: this.data.semester,
       courses: this.data.allCourses,
       updateTime: nowStr,
+      classId: meta.classId || "",
+      className: meta.className || this.data.name || "",
+      displayType: meta.displayType || this.data.displayType || "",
+      isAggregated: this.data.isAggregated,
     };
 
     wx.setStorageSync("FOSU_CURRENT_SCHEDULE_TARGET", target);
@@ -274,6 +281,7 @@ Page({
     saveSettings({
       className: this.data.name,
       semester: this.data.semester,
+      classId: meta.classId || "",
     });
 
     this.setData({

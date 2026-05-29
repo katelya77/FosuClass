@@ -21,8 +21,8 @@
 
   <empty-state
     wx:else
-    title="今天没有课程，好好休息"
-    desc="这里会根据当前班级、教学周和星期自动筛选课程。"
+    title="{{emptyTitle || '今天没有课程，好好休息'}}"
+    desc="{{emptyDesc || '这里会根据当前班级、教学周和星期自动筛选课程。'}}"
   />
 
   <course-detail-popup
