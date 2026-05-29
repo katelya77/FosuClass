@@ -3,7 +3,7 @@
     <view class="popup-handle"></view>
     <view class="popup-header">
       <view class="popup-title-block">
-        <view class="course-title">{{course.courseName}}</view>
+        <view class="course-title">{{course.displayCourseName || course.canonicalCourseName || course.courseName}}</view>
         <view class="course-subtitle">{{course.semester || "当前学期"}}</view>
       </view>
       <button class="close-button" bindtap="close">×</button>
@@ -13,11 +13,11 @@
       <view class="detail-grid" wx:if="{{!course.isGrouped}}">
         <view class="detail-item">
           <text class="detail-label">教师</text>
-          <text class="detail-value">{{course.teacherName || "待补充"}}</text>
+          <text class="detail-value">{{course.displayTeacherName || course.canonicalTeacherName || course.teacherName || "待补充"}}</text>
         </view>
         <view class="detail-item">
           <text class="detail-label">教室</text>
-          <text class="detail-value">{{course.classroom || "待补充"}}</text>
+          <text class="detail-value">{{course.displayClassroom || course.canonicalClassroom || course.classroom || "待补充"}}</text>
         </view>
         <view class="detail-item">
           <text class="detail-label">周次</text>
@@ -43,11 +43,11 @@
           <view class="grouped-item-title">教学班 #{{index + 1}}</view>
           <view class="grouped-meta-row">
             <text class="grouped-meta-label">教师</text>
-            <text class="grouped-meta-value">{{item.teacherName || "待补充"}}</text>
+            <text class="grouped-meta-value">{{item.displayTeacherName || item.canonicalTeacherName || item.teacherName || "待补充"}}</text>
           </view>
           <view class="grouped-meta-row">
             <text class="grouped-meta-label">教室</text>
-            <text class="grouped-meta-value">{{item.classroom || "待补充"}}</text>
+            <text class="grouped-meta-value">{{item.displayClassroom || item.canonicalClassroom || item.classroom || "待补充"}}</text>
           </view>
           <view class="grouped-meta-row" wx:if="{{item.className}}">
             <text class="grouped-meta-label">班级</text>

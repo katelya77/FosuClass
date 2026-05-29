@@ -125,10 +125,10 @@
         data-index="{{index}}"
         bindtap="onOverviewCourseTap"
       >
-        <view class="overview-course-title">{{item.courseName}}</view>
+        <view class="overview-course-title">{{item.displayCourseName || item.canonicalCourseName || item.courseName}}</view>
         <view class="overview-meta-row">
-          <text>{{item.teacherName || "教师待补充"}}</text>
-          <text>{{item.classroom || "教室待补充"}}</text>
+          <text>{{item.displayTeacherName || item.canonicalTeacherName || item.teacherName || "教师待补充"}}</text>
+          <text>{{item.displayClassroom || item.canonicalClassroom || item.classroom || "教室待补充"}}</text>
         </view>
         <view class="overview-meta-row muted">
           <text>{{item.weekText || "周次待补充"}}</text>

@@ -523,7 +523,10 @@ async function getTeacherSchedule(params) {
   }
 
   // 3. cache-first
-  const allTeacherSchedules = readJsonFile(FILE_MAP["teacher-schedules"]);
+  const snapshot = getSnapshot();
+  const allTeacherSchedules = snapshot && snapshot.resources && Array.isArray(snapshot.resources.teacherSchedules)
+    ? snapshot.resources.teacherSchedules
+    : readJsonFile(FILE_MAP["teacher-schedules"]);
   if (Array.isArray(allTeacherSchedules) && allTeacherSchedules.length > 0) {
     let filtered = allTeacherSchedules;
     if (keyword) {
@@ -536,9 +539,9 @@ async function getTeacherSchedule(params) {
     const meta = getMeta("teacher-schedules");
     return {
       success: true,
-      dataSource: "cache",
-      updatedAt: meta.updatedAt || new Date().toISOString(),
-      syncSource: meta.syncSource || "local-sync-client",
+      dataSource: snapshot ? "snapshot" : "cache",
+      updatedAt: snapshot ? snapshot.updatedAt : (meta.updatedAt || new Date().toISOString()),
+      syncSource: snapshot ? snapshot.source : (meta.syncSource || "local-sync-client"),
       teachers: filtered,
     };
   }
@@ -655,7 +658,10 @@ async function getClassroomSchedule(params) {
   }
 
   // 3. cache-first
-  const allClassroomSchedules = readJsonFile(FILE_MAP["classroom-schedules"]);
+  const snapshot = getSnapshot();
+  const allClassroomSchedules = snapshot && snapshot.resources && Array.isArray(snapshot.resources.classroomSchedules)
+    ? snapshot.resources.classroomSchedules
+    : readJsonFile(FILE_MAP["classroom-schedules"]);
   if (Array.isArray(allClassroomSchedules) && allClassroomSchedules.length > 0) {
     let filtered = allClassroomSchedules;
     if (classroomName) {
@@ -668,9 +674,9 @@ async function getClassroomSchedule(params) {
     const meta = getMeta("classroom-schedules");
     return {
       success: true,
-      dataSource: "cache",
-      updatedAt: meta.updatedAt || new Date().toISOString(),
-      syncSource: meta.syncSource || "local-sync-client",
+      dataSource: snapshot ? "snapshot" : "cache",
+      updatedAt: snapshot ? snapshot.updatedAt : (meta.updatedAt || new Date().toISOString()),
+      syncSource: snapshot ? snapshot.source : (meta.syncSource || "local-sync-client"),
       classrooms: filtered,
     };
   }
@@ -788,7 +794,10 @@ async function getCourseSchedule(params) {
   }
 
   // 3. cache-first
-  const allCourseSchedules = readJsonFile(FILE_MAP["course-schedules"]);
+  const snapshot = getSnapshot();
+  const allCourseSchedules = snapshot && snapshot.resources && Array.isArray(snapshot.resources.courseSchedules)
+    ? snapshot.resources.courseSchedules
+    : readJsonFile(FILE_MAP["course-schedules"]);
   if (Array.isArray(allCourseSchedules) && allCourseSchedules.length > 0) {
     let filtered = allCourseSchedules;
     if (courseName) {
@@ -801,9 +810,9 @@ async function getCourseSchedule(params) {
     const meta = getMeta("course-schedules");
     return {
       success: true,
-      dataSource: "cache",
-      updatedAt: meta.updatedAt || new Date().toISOString(),
-      syncSource: meta.syncSource || "local-sync-client",
+      dataSource: snapshot ? "snapshot" : "cache",
+      updatedAt: snapshot ? snapshot.updatedAt : (meta.updatedAt || new Date().toISOString()),
+      syncSource: snapshot ? snapshot.source : (meta.syncSource || "local-sync-client"),
       coursesList: filtered,
     };
   }

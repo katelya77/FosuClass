@@ -713,6 +713,9 @@ function getActiveSnapshotMeta() {
         classScheduleCount: snapshot.coverage?.classScheduleCount ?? (snapshot.classSchedules?.length ?? 0),
         adminClassCount: snapshot.coverage?.adminClassCount ?? 0,
         majorAggregateCount: snapshot.coverage?.majorAggregateCount ?? 0,
+        teacherScheduleCount: snapshot.coverage?.teacherScheduleCount ?? (snapshot.resources?.teacherSchedules?.length ?? 0),
+        classroomScheduleCount: snapshot.coverage?.classroomScheduleCount ?? (snapshot.resources?.classroomSchedules?.length ?? 0),
+        courseScheduleCount: snapshot.coverage?.courseScheduleCount ?? (snapshot.resources?.courseSchedules?.length ?? 0),
       };
     }
     return global.cachedSnapshotMeta;
@@ -806,6 +809,9 @@ router.post(
       const classSchedulesCount = snapshot.classSchedules.length;
       const collegesCount = snapshot.catalog.colleges ? snapshot.catalog.colleges.length : 0;
       const majorsCount = snapshot.majors.length;
+      const teacherScheduleCount = snapshot.resources?.teacherSchedules?.length || 0;
+      const classroomScheduleCount = snapshot.resources?.classroomSchedules?.length || 0;
+      const courseScheduleCount = snapshot.resources?.courseSchedules?.length || 0;
 
       if (classSchedulesCount <= 0) {
         return res.status(400).json({ success: false, message: "快照校验失败：classSchedules 数量必须大于 0" });
@@ -882,6 +888,21 @@ router.post(
         itemCount: classSchedulesCount,
         syncSource: snapshot.source || "local-sync-client",
       };
+      meta["teacher-schedules"] = {
+        updatedAt: nowStr,
+        itemCount: teacherScheduleCount,
+        syncSource: snapshot.source || "local-sync-client",
+      };
+      meta["classroom-schedules"] = {
+        updatedAt: nowStr,
+        itemCount: classroomScheduleCount,
+        syncSource: snapshot.source || "local-sync-client",
+      };
+      meta["course-schedules"] = {
+        updatedAt: nowStr,
+        itemCount: courseScheduleCount,
+        syncSource: snapshot.source || "local-sync-client",
+      };
 
       fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
 
@@ -893,7 +914,10 @@ router.post(
         counts: {
           collegesCount,
           majorsCount,
-          classScheduleCount: classSchedulesCount
+          classScheduleCount: classSchedulesCount,
+          teacherScheduleCount,
+          classroomScheduleCount,
+          courseScheduleCount
         }
       });
     } catch (error) {
@@ -919,11 +943,11 @@ router.get("/sync/status", (req, res) => {
     classScheduleCount: snapshotMeta ? snapshotMeta.classScheduleCount : getItemCount("class-schedules"),
     adminClassCount: snapshotMeta ? snapshotMeta.adminClassCount : 0,
     majorAggregateCount: snapshotMeta ? snapshotMeta.majorAggregateCount : 0,
+    teacherScheduleCount: snapshotMeta ? snapshotMeta.teacherScheduleCount : getItemCount("teacher-schedules"),
+    classroomScheduleCount: snapshotMeta ? snapshotMeta.classroomScheduleCount : getItemCount("classroom-schedules"),
+    courseScheduleCount: snapshotMeta ? snapshotMeta.courseScheduleCount : getItemCount("course-schedules"),
     catalogUpdatedAt: getUpdatedAt("catalog"),
     classSchedulesUpdatedAt: getUpdatedAt("class-schedules"),
-    teacherScheduleCount: getItemCount("teacher-schedules"),
-    classroomScheduleCount: getItemCount("classroom-schedules"),
-    courseScheduleCount: getItemCount("course-schedules"),
     storageMounted: isStorageMounted(),
     storagePath: STORAGE_DIR,
     metaDetails: meta,

@@ -3,6 +3,11 @@ const { importedCourses } = require("../data/importedCourses");
 const { courseTimes, courseTimesMeta } = require("../data/courseTimes");
 const { colorForCourse } = require("./color");
 const { isCourseInWeek } = require("./week");
+const {
+  mergeCanonicalCoursesForDisplay,
+  normalizeCourseIdentity,
+  toRenderableCourse,
+} = require("./courseNormalizer");
 
 
 
@@ -12,8 +17,8 @@ const SOURCE_TEXT = {
 };
 
 function normalizeCourse(course) {
-  const normalized = Object.assign({}, course);
-  normalized.color = normalized.color || colorForCourse(normalized.courseName);
+  const normalized = toRenderableCourse(Object.assign({}, course));
+  normalized.color = normalized.color || colorForCourse(normalized.canonicalCourseName || normalized.courseName);
   normalized.startSection = Number(normalized.startSection);
   normalized.endSection = Number(normalized.endSection);
   normalized.weekday = Number(normalized.weekday);
@@ -179,15 +184,16 @@ function getTodayCourses(courses, currentWeek, todayWeekday, options) {
 
 function normalizeCourseKey(course) {
   if (!course) return "";
+  const normalized = normalizeCourseIdentity(course);
   return [
-    course.courseName || "",
+    normalized.canonicalCourseName || normalized.displayCourseName || course.courseName || "",
     course.weekday || "",
     course.startSection || "",
     course.endSection || "",
     course.startWeek || "",
     course.endWeek || "",
-    course.teacherName || "",
-    course.classroom || "",
+    normalized.canonicalTeacherName || course.teacherName || "",
+    normalized.canonicalClassroom || course.classroom || "",
   ].join("_");
 }
 
@@ -204,7 +210,7 @@ function dedupeCourses(courses) {
 }
 
 function groupElectiveLikeCourses(courses) {
-  const deduped = dedupeCourses(courses);
+  const deduped = dedupeCourses((courses || []).map(normalizeCourse));
   const groups = {};
   const groupKeys = [];
   for (const c of deduped) {
@@ -261,6 +267,7 @@ module.exports = {
   normalizeCourseKey,
   dedupeCourses,
   groupElectiveLikeCourses,
+  mergeCanonicalCoursesForDisplay,
+  normalizeCourseIdentity,
   courseTimesMeta,
 };
-
