@@ -20,6 +20,151 @@ function ensureWeeks(course) {
   return weeks;
 }
 
+function compactText(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .replace(/[【】\[\]（）()《》<>]/g, "");
+}
+
+const UNRELIABLE_CLASS_NAMES = new Set([
+  "未命名",
+  "未命名班级",
+  "未知",
+  "未知班级",
+  "暂无",
+  "暂无班级",
+  "无班级",
+]);
+
+const COURSE_NAME_KEYWORDS = [
+  "大学体育",
+  "形势与政策",
+  "职业发展",
+  "就业指导",
+  "实验技术",
+  "大学英语",
+  "英语",
+  "有机化学",
+  "军事理论",
+  "创新创业",
+  "劳动教育",
+  "心理健康",
+  "思想道德",
+  "马克思主义",
+  "近现代史",
+  "毛泽东思想",
+  "高等数学",
+  "线性代数",
+  "概率论",
+];
+
+function hasClassNameShape(name) {
+  const compact = compactText(name);
+  const hasGradeToken = /(?:^|[^\d])(?:20\d{2}|\d{2})级?/.test(compact);
+  const hasMajorText = /[\u4e00-\u9fa5A-Za-z]{2,}/.test(compact);
+  const hasClassNo = /\d{1,2}班?$/.test(compact) || /[一二三四五六七八九十]{1,3}班$/.test(compact);
+  return hasGradeToken && hasMajorText && hasClassNo;
+}
+
+function isReliableClassName(name, options = {}) {
+  const compact = compactText(name);
+  if (!compact || UNRELIABLE_CLASS_NAMES.has(compact)) {
+    return false;
+  }
+
+  if (/^(未命名|未知|暂无|无).*(班级|行政班|班)?$/.test(compact)) {
+    return false;
+  }
+
+  const courseName = compactText(options.courseName);
+  if (courseName && compact === courseName) {
+    return false;
+  }
+
+  if (Array.isArray(options.courses)) {
+    const equalsAnyCourseName = options.courses.some((course) => compactText(course && course.courseName) === compact);
+    if (equalsAnyCourseName) {
+      return false;
+    }
+  }
+
+  if (COURSE_NAME_KEYWORDS.some((keyword) => compact.includes(keyword))) {
+    return false;
+  }
+
+  return hasClassNameShape(compact);
+}
+
+function buildMajorScheduleName(context = {}) {
+  const grade = context.grade || "";
+  const majorName = context.majorName || "未知专业";
+  return `${grade}级${majorName}专业课表`;
+}
+
+function withDisplayClassName(course, className, extra = {}) {
+  return Object.assign({}, course, extra, {
+    originalClassName: course && course.className ? course.className : "",
+    className,
+  });
+}
+
+function buildClassScheduleEntries(courses, context = {}) {
+  const classGroups = new Map();
+  const unresolvedCourses = [];
+
+  (courses || []).forEach((course) => {
+    const className = String((course && course.className) || "").trim();
+    if (isReliableClassName(className, { courseName: course && course.courseName })) {
+      if (!classGroups.has(className)) {
+        classGroups.set(className, []);
+      }
+      classGroups.get(className).push(withDisplayClassName(course, className));
+    } else {
+      unresolvedCourses.push(course);
+    }
+  });
+
+  if (classGroups.size === 0) {
+    if (!courses || courses.length === 0) {
+      return [];
+    }
+    const aggregateName = buildMajorScheduleName(context);
+    return [{
+      semester: context.semester,
+      className: aggregateName,
+      displayType: "major-schedule",
+      isAggregated: true,
+      collegeCode: context.collegeCode,
+      collegeName: context.collegeName || "",
+      grade: context.grade,
+      majorCode: context.majorCode,
+      majorName: context.majorName,
+      courses: courses.map((course) => withDisplayClassName(course, aggregateName, {
+        sourceClassNameUnreliable: true,
+      })),
+    }];
+  }
+
+  return Array.from(classGroups.entries()).map(([className, groupedCourses]) => {
+    const copiedUnresolved = unresolvedCourses.map((course) => withDisplayClassName(course, className, {
+      sourceClassNameUnreliable: true,
+    }));
+    return {
+      semester: context.semester,
+      className,
+      displayType: "class-schedule",
+      isAggregated: false,
+      collegeCode: context.collegeCode,
+      collegeName: context.collegeName || "",
+      grade: context.grade,
+      majorCode: context.majorCode,
+      majorName: context.majorName,
+      courses: groupedCourses.concat(copiedUnresolved),
+    };
+  });
+}
+
 /**
  * 规范化单个课程项
  * @param {Object} course 课程项
@@ -85,7 +230,10 @@ function groupCoursesBy(courses, key, fallbackName) {
 }
 
 module.exports = {
+  buildClassScheduleEntries,
+  buildMajorScheduleName,
   groupCoursesBy,
+  isReliableClassName,
   normalizeCourseItem,
   normalizeCourseList,
 };

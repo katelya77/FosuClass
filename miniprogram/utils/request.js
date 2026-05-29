@@ -9,8 +9,16 @@ function translateErrorMessage(payload, defaultMsg) {
   const msg = (payload ? payload.message : defaultMsg) || "请求服务发生网络异常";
   const msgLower = msg.toLowerCase();
   
-  if (reasonCode === "NO_SYNC_DATA") {
-    return "该专业课表尚未同步，维护者同步后即可查看。";
+  if (reasonCode === "NO_SYNC_DATA" || reasonCode === "NO_SCHEDULE_SYNCED") {
+    return "暂未同步该专业课表，可稍后再试或联系维护者补充同步。";
+  }
+
+  if (reasonCode === "NO_MATCHED_CLASS") {
+    return "已同步该专业课表，但没有匹配到指定班级。";
+  }
+
+  if (reasonCode === "INVALID_FILTER") {
+    return "请选择学院、年级和专业后再查询课表。";
   }
   
   if (

@@ -31,8 +31,8 @@
         <text class="detail-value">{{timeText || "待补充"}}</text>
       </view>
       <view class="detail-item full">
-        <text class="detail-label">班级</text>
-        <text class="detail-value">{{course.className || "当前班级"}}</text>
+        <text class="detail-label">班级/专业</text>
+        <text class="detail-value">{{course.className || "当前班级/专业"}}</text>
       </view>
     </view>
 

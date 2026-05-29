@@ -47,6 +47,57 @@ function getMeta(key) {
   return meta && meta[key] ? meta[key] : {};
 }
 
+function normalizeFilterValue(value) {
+  return String(value || "").trim();
+}
+
+function matchesFilter(actual, expected) {
+  const normalizedExpected = normalizeFilterValue(expected);
+  if (!normalizedExpected) {
+    return true;
+  }
+  return normalizeFilterValue(actual) === normalizedExpected;
+}
+
+function filterClassSchedules(schedules, queryParams) {
+  const baseFiltered = (schedules || []).filter(
+    (item) =>
+      matchesFilter(item.semester, queryParams.semester) &&
+      matchesFilter(item.collegeCode, queryParams.collegeCode) &&
+      matchesFilter(item.grade, queryParams.grade) &&
+      matchesFilter(item.majorCode, queryParams.majorCode)
+  );
+
+  if (!queryParams.className) {
+    return {
+      baseFiltered,
+      filtered: baseFiltered,
+    };
+  }
+
+  return {
+    baseFiltered,
+    filtered: baseFiltered.filter((item) => matchesFilter(item.className, queryParams.className)),
+  };
+}
+
+function buildNoClassScheduleResponse(queryParams, reasonCode) {
+  const messageMap = {
+    INVALID_FILTER: "请选择学院、年级和专业后再查询课表。",
+    NO_MATCHED_CLASS: "已同步该专业课表，但没有匹配到指定班级。",
+    NO_SCHEDULE_SYNCED: "暂未同步该专业课表，可稍后再试或联系维护者补充同步。",
+  };
+
+  return {
+    success: false,
+    dataSource: "cache",
+    reasonCode,
+    message: messageMap[reasonCode] || messageMap.NO_SCHEDULE_SYNCED,
+    semester: queryParams.semester,
+    classes: [],
+  };
+}
+
 /**
  * 辅助检查域名是否能解析
  */
@@ -188,10 +239,17 @@ async function getClassSchedule(params) {
     grade,
     majorCode,
     majorName,
+    className,
   } = params;
 
   if (!collegeCode || !grade || !majorCode) {
-    throw new Error("collegeCode, grade and majorCode are required parameters.");
+    return buildNoClassScheduleResponse({
+      semester: semester || "2025-2026-2",
+      collegeCode,
+      grade,
+      majorCode,
+      className,
+    }, "INVALID_FILTER");
   }
 
   const queryParams = {
@@ -200,6 +258,7 @@ async function getClassSchedule(params) {
     grade,
     majorCode,
     majorName,
+    className,
   };
 
   const mode = config.DATA_SOURCE_MODE;
@@ -243,23 +302,29 @@ async function getClassSchedule(params) {
       });
       
       const warnings = parsed.warnings || [];
-      const grouped = normalizer.groupCoursesBy(courses, "className", "未命名班级");
-      
-      const classes = Object.keys(grouped).map((clsName) => ({
-        className: clsName,
+      const builtClasses = normalizer.buildClassScheduleEntries(courses, {
+        semester: queryParams.semester,
         collegeCode,
         grade,
         majorCode,
         majorName: majorName || "",
-        courses: grouped[clsName],
-      }));
+      });
+      const { baseFiltered, filtered } = filterClassSchedules(builtClasses, queryParams);
+
+      if (!baseFiltered.length) {
+        return buildNoClassScheduleResponse(queryParams, "NO_SCHEDULE_SYNCED");
+      }
+
+      if (queryParams.className && !filtered.length) {
+        return buildNoClassScheduleResponse(queryParams, "NO_MATCHED_CLASS");
+      }
 
       return {
         success: true,
         dataSource: "fosu-realtime",
         updatedAt: new Date().toISOString(),
         semester: queryParams.semester,
-        classes,
+        classes: filtered,
         warnings,
       };
     } catch (error) {
@@ -275,13 +340,15 @@ async function getClassSchedule(params) {
   // 3. cache-first 模式
   const allClassSchedules = readJsonFile(FILE_MAP["class-schedules"]);
   if (Array.isArray(allClassSchedules) && allClassSchedules.length > 0) {
-    // 匹配符合条件的班级
-    const filtered = allClassSchedules.filter(
-      (c) =>
-        String(c.collegeCode) === String(collegeCode) &&
-        String(c.grade) === String(grade) &&
-        String(c.majorCode) === String(majorCode)
-    );
+    const { baseFiltered, filtered } = filterClassSchedules(allClassSchedules, queryParams);
+
+    if (!baseFiltered.length) {
+      return buildNoClassScheduleResponse(queryParams, "NO_SCHEDULE_SYNCED");
+    }
+
+    if (queryParams.className && !filtered.length) {
+      return buildNoClassScheduleResponse(queryParams, "NO_MATCHED_CLASS");
+    }
 
     const meta = getMeta("class-schedules");
     return {
@@ -302,8 +369,9 @@ async function getClassSchedule(params) {
   return {
     success: false,
     dataSource: "empty",
-    reasonCode: "NO_SYNC_DATA",
-    message: "暂未同步该范围的课表数据。",
+    reasonCode: "NO_SCHEDULE_SYNCED",
+    message: "暂未同步该专业课表，可稍后再试或联系维护者补充同步。",
+    classes: [],
   };
 }
 

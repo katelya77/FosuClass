@@ -18,6 +18,8 @@ console.log(`[env] PREFERRED_SEMESTER: ${process.env.PREFERRED_SEMESTER || "未�
 console.log(`[env] SYNC_GRADE_RANGE: ${process.env.SYNC_GRADE_RANGE || "未配置"}`);
 console.log(`[env] SYNC_GRADES: ${process.env.SYNC_GRADES || "未配置"}`);
 console.log(`[env] SYNC_UPLOAD_CHUNK_SIZE: ${process.env.SYNC_UPLOAD_CHUNK_SIZE || "100"}`);
+console.log(`[env] SYNC_SKIP_NO_SCHEDULE_CACHE: ${process.env.SYNC_SKIP_NO_SCHEDULE_CACHE || "true"}`);
+console.log(`[env] SYNC_RECHECK_NO_SCHEDULE: ${process.env.SYNC_RECHECK_NO_SCHEDULE || "false"}`);
 console.log(`[env] ADMIN_API_TOKEN: ${process.env.ADMIN_API_TOKEN ? "present" : "missing"}`);
 
 // 引入后端已有的解析与规范化逻辑以确保格式 100% 兼容
@@ -32,6 +34,95 @@ const SESSION_PATH = path.join(__dirname, ".session", "session.json");
 
 // 延迟辅助函数
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+function getEnvFlag(name, defaultValue) {
+  const value = process.env[name];
+  if (value === undefined || value === "") {
+    return defaultValue;
+  }
+  return String(value).toLowerCase() === "true";
+}
+
+function readJsonArray(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    console.warn(`⚠️ 读取 JSON 文件失败，将按空数组处理: ${filePath} (${error.message})`);
+    return [];
+  }
+}
+
+function writeJsonFile(filePath, data) {
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+}
+
+function getMajorIdentityKey(major, semester) {
+  return [
+    semester,
+    major.collegeCode || "",
+    major.grade || "",
+    major.code || major.majorCode || "",
+  ].join("::");
+}
+
+function getLegacyMajorProgressKey(major) {
+  return `${major.grade}_${major.code || major.majorCode || ""}`;
+}
+
+function hasCompletedMajor(progress, major, semester) {
+  const completed = progress && Array.isArray(progress.completed) ? progress.completed : [];
+  return completed.includes(getMajorIdentityKey(major, semester)) || completed.includes(getLegacyMajorProgressKey(major));
+}
+
+function markCompletedMajor(progress, major, semester) {
+  const key = getMajorIdentityKey(major, semester);
+  if (!Array.isArray(progress.completed)) {
+    progress.completed = [];
+  }
+  if (!progress.completed.includes(key)) {
+    progress.completed.push(key);
+  }
+}
+
+function upsertNoScheduleMajor(records, item) {
+  const key = getMajorIdentityKey({
+    collegeCode: item.collegeCode,
+    grade: item.grade,
+    code: item.majorCode,
+  }, item.semester);
+  const index = records.findIndex((record) => getMajorIdentityKey({
+    collegeCode: record.collegeCode,
+    grade: record.grade,
+    code: record.majorCode,
+  }, record.semester) === key);
+  if (index >= 0) {
+    records[index] = item;
+  } else {
+    records.push(item);
+  }
+  return records;
+}
+
+function removeNoScheduleMajor(records, major, semester) {
+  const key = getMajorIdentityKey(major, semester);
+  return records.filter((record) => getMajorIdentityKey({
+    collegeCode: record.collegeCode,
+    grade: record.grade,
+    code: record.majorCode,
+  }, record.semester) !== key);
+}
+
+async function waitBetweenClassSyncRequests(isFiltered) {
+  const delayMin = isFiltered ? 800 : 1500;
+  const delayMax = isFiltered ? 1500 : 3000;
+  const delay = Math.floor(Math.random() * (delayMax - delayMin + 1)) + delayMin;
+  console.log(`      ⏳ 随机等待 ${delay}ms...`);
+  await sleep(delay);
+}
 
 /**
  * 兼容 HTTP/HTTPS 的 Playwright 导航辅助函数
@@ -756,7 +847,7 @@ async function syncCatalog(page) {
  * @param {Object} options 过滤参数
  */
 function getActiveGradesBySemester(semester, options = {}) {
-  const { originalGrades = [] } = options;
+  const { originalGrades = [], activeGradeCount = 5 } = options;
   const gradeRangeEnv = process.env.SYNC_GRADE_RANGE || 'active';
   const syncGradesEnv = process.env.SYNC_GRADES;
   const confirmFullSync = process.env.CONFIRM_FULL_SYNC === 'true';
@@ -770,8 +861,8 @@ function getActiveGradesBySemester(semester, options = {}) {
   let targetGrades = [];
 
   if (gradeRangeEnv === 'active') {
-    // 默认本科保守保留 5 个年级
-    for (let i = 4; i >= 0; i--) {
+    // 默认本科保守保留 activeGradeCount 个年级；sync:class 会传入 4，majors 仍保留 5。
+    for (let i = activeGradeCount - 1; i >= 0; i--) {
       targetGrades.push(String(startYear - i));
     }
   } else if (gradeRangeEnv === 'recent4') {
@@ -792,7 +883,7 @@ function getActiveGradesBySemester(semester, options = {}) {
     return originalGrades;
   } else {
     // 默认 active
-    for (let i = 4; i >= 0; i--) {
+    for (let i = activeGradeCount - 1; i >= 0; i--) {
       targetGrades.push(String(startYear - i));
     }
   }
@@ -1142,10 +1233,29 @@ async function syncClassSchedules(page, catalog, majors) {
 
   // 定位当前学生班级
   const currentStudentClass = await getCurrentStudentClass(page);
+  if (currentStudentClass) {
+    console.log(`ℹ️ 当前登录学生班级仅用于诊断参考: ${currentStudentClass}`);
+  }
+
+  const collegeNameByCode = new Map((catalog.colleges || []).map((college) => [String(college.code), college.name]));
+  const noScheduleCachePath = path.join(debugDir, "no-schedule-majors.json");
+  let noScheduleMajors = readJsonArray(noScheduleCachePath);
+  const skipNoScheduleCache = getEnvFlag("SYNC_SKIP_NO_SCHEDULE_CACHE", true);
+  const recheckNoSchedule = getEnvFlag("SYNC_RECHECK_NO_SCHEDULE", false);
+  const cachedNoScheduleKeys = new Set(
+    noScheduleMajors
+      .filter((item) => item && item.semester === activeSemester)
+      .map((item) => getMajorIdentityKey({
+        collegeCode: item.collegeCode,
+        grade: item.grade,
+        code: item.majorCode,
+      }, item.semester))
+  );
 
   // 解析环境变量过滤条件
   const syncCollegeCodes = process.env.SYNC_CLASS_COLLEGE_CODES ? process.env.SYNC_CLASS_COLLEGE_CODES.split(",").map(c => c.trim()).filter(Boolean) : null;
-  const syncGrades = process.env.SYNC_CLASS_GRADES ? process.env.SYNC_CLASS_GRADES.split(",").map(g => g.trim()).filter(Boolean) : null;
+  const explicitClassGrades = process.env.SYNC_CLASS_GRADES || process.env.SYNC_GRADES || "";
+  const syncGrades = explicitClassGrades ? explicitClassGrades.split(",").map(g => g.trim()).filter(Boolean) : null;
   const syncMajorCodes = process.env.SYNC_CLASS_MAJOR_CODES ? process.env.SYNC_CLASS_MAJOR_CODES.split(",").map(m => m.trim()).filter(Boolean) : null;
   const isFiltered = !!(syncCollegeCodes || syncGrades || syncMajorCodes);
 
@@ -1155,7 +1265,13 @@ async function syncClassSchedules(page, catalog, majors) {
     if (syncGrades) console.log(`   - 年级限制: ${syncGrades.join(", ")}`);
     if (syncMajorCodes) console.log(`   - 专业代码限制: ${syncMajorCodes.join(", ")}`);
   } else {
-    console.log("ℹ️ 课表同步未设置环境变量限制。默认将仅同步在校活跃年级，并启用限速。");
+    console.log("ℹ️ 课表同步未设置环境变量限制。默认仅同步当前学年起最近 4 个在校活跃年级，并启用限速。");
+  }
+
+  if (skipNoScheduleCache && !recheckNoSchedule) {
+    console.log(`ℹ️ 已启用无排课缓存跳过策略，本学期缓存命中候选 ${cachedNoScheduleKeys.size} 个。`);
+  } else if (recheckNoSchedule) {
+    console.log("ℹ️ SYNC_RECHECK_NO_SCHEDULE=true，将重新检查此前确认无排课的专业。");
   }
 
   // 筛选出目标专业
@@ -1177,11 +1293,11 @@ async function syncClassSchedules(page, catalog, majors) {
     if (!isFiltered) {
       let activeGrades = [];
       try {
-        activeGrades = getActiveGradesBySemester(activeSemester, { originalGrades: catalog.grades });
+        activeGrades = getActiveGradesBySemester(activeSemester, { originalGrades: catalog.grades, activeGradeCount: 4 });
       } catch (e) {
-        // 兜底：如果报错，则默认只同步最近 5 个年级
+        // 兜底：如果报错，则默认只同步最近 4 个年级
         const currentYear = new Date().getFullYear();
-        for (let i = 4; i >= 0; i--) {
+        for (let i = 3; i >= 0; i--) {
           activeGrades.push(String(currentYear - i));
         }
       }
@@ -1195,11 +1311,24 @@ async function syncClassSchedules(page, catalog, majors) {
 
   console.log(`🎯 匹配的目标专业总计: ${targetMajors.length} 个。`);
 
-  // 剔除已完成部分
-  const pendingMajors = targetMajors.filter(major => {
-    const key = `${major.grade}_${major.code}`;
-    return !progress.completed.includes(key);
+  const effectiveTargetMajors = targetMajors.filter((major) => {
+    if (!skipNoScheduleCache || recheckNoSchedule) {
+      return true;
+    }
+    const key = getMajorIdentityKey(major, activeSemester);
+    if (cachedNoScheduleKeys.has(key)) {
+      console.log(`   跳过已确认无排课专业: ${major.grade}级 - ${major.name} (${major.code})`);
+      return false;
+    }
+    return true;
   });
+
+  if (effectiveTargetMajors.length !== targetMajors.length) {
+    console.log(`⏭️ 已按无排课缓存跳过 ${targetMajors.length - effectiveTargetMajors.length} 个专业，本轮实际待判断 ${effectiveTargetMajors.length} 个。`);
+  }
+
+  // 剔除已完成部分
+  const pendingMajors = effectiveTargetMajors.filter(major => !hasCompletedMajor(progress, major, activeSemester));
 
   console.log(`🔄 本轮待同步专业: ${pendingMajors.length} 个。`);
 
@@ -1258,40 +1387,61 @@ async function syncClassSchedules(page, catalog, majors) {
         audienceType: "student",
       });
 
-      // 按班级名称分组 (Group By)
-      const grouped = normalizer.groupCoursesBy(courses, "className", "未命名班级");
-      
-      const classes = Object.keys(grouped).map((clsName) => ({
+      if (courses.length === 0) {
+        const noScheduleRecord = {
+          semester: activeSemester,
+          collegeCode: major.collegeCode,
+          collegeName: collegeNameByCode.get(String(major.collegeCode)) || major.collegeName || "",
+          grade: major.grade,
+          majorCode: major.code,
+          majorName: major.name,
+          checkedAt: new Date().toISOString(),
+        };
+        noScheduleMajors = upsertNoScheduleMajor(noScheduleMajors, noScheduleRecord);
+        writeJsonFile(noScheduleCachePath, noScheduleMajors);
+        console.log(`      没有排课数据，已记录到 ${noScheduleCachePath}`);
+
+        // 将该专业标记为已完成
+        markCompletedMajor(progress, major, activeSemester);
+        writeJsonFile(PROGRESS_PATH, progress);
+        await waitBetweenClassSyncRequests(isFiltered);
+        continue;
+      }
+
+      const beforeNoScheduleCount = noScheduleMajors.length;
+      noScheduleMajors = removeNoScheduleMajor(noScheduleMajors, major, activeSemester);
+      if (noScheduleMajors.length !== beforeNoScheduleCount) {
+        writeJsonFile(noScheduleCachePath, noScheduleMajors);
+        console.log("      此前无排课缓存已失效，本次抓到课程并已移除缓存记录。");
+      }
+
+      // 按可靠行政班名分组；无法识别行政班时降级为专业聚合课表，不丢弃课程。
+      const classes = normalizer.buildClassScheduleEntries(courses, {
         semester: activeSemester,
-        className: clsName,
         collegeCode: major.collegeCode,
+        collegeName: collegeNameByCode.get(String(major.collegeCode)) || major.collegeName || "",
         grade: major.grade,
         majorCode: major.code,
         majorName: major.name,
-        courses: grouped[clsName],
-      }));
+      });
 
       if (classes.length > 0) {
-        console.log(`      发现班级数: ${classes.length} (${classes.map(c => c.className).join(", ")})`);
+        const aggregateCount = classes.filter((item) => item.isAggregated).length;
+        const classCount = classes.length - aggregateCount;
+        console.log(`      整理课表条目: 行政班 ${classCount} 个，专业聚合 ${aggregateCount} 个 (${classes.map(c => c.className).join(", ")})`);
         allClassSchedules.push(...classes);
-      } else {
-        console.log(`      没有排课数据。`);
       }
 
       // 将该专业标记为已完成
-      progress.completed.push(`${major.grade}_${major.code}`);
-      fs.writeFileSync(PROGRESS_PATH, JSON.stringify(progress, null, 2), "utf-8");
+      markCompletedMajor(progress, major, activeSemester);
+      writeJsonFile(PROGRESS_PATH, progress);
 
     } catch (err) {
       console.error(`      ⚠️  抓取失败: ${err.message}`);
     }
 
     // 随机限流延迟：如果是全量同步则进一步限速保护教务系统
-    const delayMin = isFiltered ? 800 : 1500;
-    const delayMax = isFiltered ? 1500 : 3000;
-    const delay = Math.floor(Math.random() * (delayMax - delayMin + 1)) + delayMin;
-    console.log(`      ⏳ 随机等待 ${delay}ms...`);
-    await sleep(delay);
+    await waitBetweenClassSyncRequests(isFiltered);
   }
 
   console.log(`📊 班级课表抓取完毕，共整理出 ${allClassSchedules.length} 个行政班级的课表。`);
@@ -1305,7 +1455,8 @@ async function syncClassSchedules(page, catalog, majors) {
   }
 
   // 如果全部都已同步完成，重置进度文件
-  if (progress.completed.length >= targetMajors.length) {
+  const allEffectiveTargetsDone = effectiveTargetMajors.every((major) => hasCompletedMajor(progress, major, activeSemester));
+  if (allEffectiveTargetsDone) {
     try {
       fs.unlinkSync(PROGRESS_PATH);
       console.log("🎉 所有目标专业已同步完成，进度已重置。");

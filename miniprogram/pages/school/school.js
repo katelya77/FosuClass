@@ -7,6 +7,58 @@ const tabs = [
 
 const request = require("../../utils/request");
 
+function formatUpdateTime(updatedAt) {
+  const date = updatedAt ? new Date(updatedAt) : new Date();
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+  return date.toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
+}
+
+function formatClassResultItem(item) {
+  const source = item || {};
+  const isAggregated = Boolean(source.isAggregated || source.displayType === "major-schedule");
+  const className = source.className || "";
+  return Object.assign({}, source, {
+    scheduleKey: `${source.semester || ""}-${source.collegeCode || ""}-${source.grade || ""}-${source.majorCode || ""}-${className}`,
+    displayTitle: className,
+    displaySubtitle: isAggregated
+      ? "暂未拆分行政班，已展示该专业教务排课"
+      : `${source.majorName || "未知专业"} · ${source.grade}级 · 教务数据`,
+    statusText: isAggregated ? "专业课表" : "教务数据",
+    isAggregated,
+    courses: Array.isArray(source.courses) ? source.courses : [],
+  });
+}
+
+function getClassEmptyState(reasonCode) {
+  if (reasonCode === "NO_SCHEDULE_SYNCED" || reasonCode === "NO_SYNC_DATA") {
+    return {
+      title: "暂未同步该专业课表",
+      desc: "暂未同步该专业课表，可稍后再试或联系维护者补充同步。",
+    };
+  }
+
+  if (reasonCode === "NO_MATCHED_CLASS") {
+    return {
+      title: "没有匹配到班级",
+      desc: "已同步该专业课表，但没有匹配到所选班级。",
+    };
+  }
+
+  if (reasonCode === "INVALID_FILTER") {
+    return {
+      title: "请选择完整筛选项",
+      desc: "请选择学院、年级和专业后再查询班级课表。",
+    };
+  }
+
+  return {
+    title: "请选择上方筛选并查询",
+    desc: "数据来自佛山大学教务系统，查询后将展示行政班级课表。",
+  };
+}
+
 Page({
   data: {
     tabs,
@@ -42,6 +94,8 @@ Page({
     updatedAtText: "",
     dataSourceText: "教务数据",
     catalogEmpty: false,
+    classEmptyTitle: "请选择上方筛选并查询",
+    classEmptyDesc: "数据来自佛山大学教务系统，查询后将展示行政班级课表。",
   },
 
   onLoad() {
@@ -65,18 +119,18 @@ Page({
 
     let grades = data.grades || [];
     if (!showHistorical) {
-      // 默认只显示 5 个有效本科年级
+      // 默认只显示最近 4 个有效本科年级
       const activeSemester = (data.semesters && data.semesters[0]?.value) || "2025-2026-2";
       const match = activeSemester.match(/^(\d{4})/);
       if (match) {
         const startYear = parseInt(match[1], 10);
         const activeGrades = [];
-        for (let i = 4; i >= 0; i--) {
+        for (let i = 3; i >= 0; i--) {
           activeGrades.push(String(startYear - i));
         }
         grades = grades.filter((g) => activeGrades.includes(g));
       } else {
-        grades = grades.filter((g) => ["2021", "2022", "2023", "2024", "2025"].includes(g));
+        grades = grades.filter((g) => ["2022", "2023", "2024", "2025"].includes(g));
       }
     }
 
@@ -109,6 +163,8 @@ Page({
       classroomsResult: [],
       coursesResult: [],
       updatedAtText: "",
+      classEmptyTitle: "请选择上方筛选并查询",
+      classEmptyDesc: "数据来自佛山大学教务系统，查询后将展示行政班级课表。",
     });
   },
 
@@ -270,16 +326,20 @@ Page({
       grade,
       majorCode,
       majorName,
-    }, { loadingTitle: "正在从教务系统获取数据..." })
+    }, { loadingTitle: "正在从教务系统获取数据...", silentError: true })
       .then((data) => {
-        const formatTime = new Date(data.updatedAt).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
+        const formatTime = formatUpdateTime(data.updatedAt);
+        const classes = (data.classes || []).map(formatClassResultItem);
+        const emptyState = getClassEmptyState("");
         
         this.setData({
-          classesResult: data.classes || [],
-          updatedAtText: `教务数据 · 更新于 ${formatTime}`,
+          classesResult: classes,
+          updatedAtText: formatTime ? `教务数据 · 更新于 ${formatTime}` : "教务数据",
+          classEmptyTitle: emptyState.title,
+          classEmptyDesc: emptyState.desc,
         });
 
-        if (!data.classes || data.classes.length === 0) {
+        if (!classes.length) {
           wx.showToast({
             title: "教务网无对应班级课表",
             icon: "none",
@@ -287,6 +347,20 @@ Page({
         }
       })
       .catch((err) => {
+        const payload = err && err.payload ? err.payload : {};
+        const emptyState = getClassEmptyState(payload.reasonCode);
+        this.setData({
+          classesResult: [],
+          updatedAtText: "",
+          classEmptyTitle: emptyState.title,
+          classEmptyDesc: emptyState.desc,
+        });
+        if (payload.reasonCode === "NO_SCHEDULE_SYNCED" || payload.reasonCode === "NO_SYNC_DATA") {
+          wx.showToast({
+            title: "暂未同步该专业课表",
+            icon: "none",
+          });
+        }
         console.error("searchClassSchedule fail", err);
       });
   },

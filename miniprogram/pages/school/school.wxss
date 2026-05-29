@@ -220,6 +220,11 @@ picker {
   color: #16a36b;
 }
 
+.status.aggregate {
+  background: #eef2ff;
+  color: #3b5bdb;
+}
+
 .count {
   margin-top: 8rpx;
   color: #9aa4b5;
