@@ -42,6 +42,42 @@ function getTypeText(type) {
   }
 }
 
+function safeDecodeURIComponent(value) {
+  const text = String(value || "");
+  try {
+    return decodeURIComponent(text);
+  } catch (error) {
+    return text;
+  }
+}
+
+function isTruthyParam(value) {
+  return value === true || value === "1" || value === "true";
+}
+
+function getScheduleKindText(type, displayType, isAggregated) {
+  if (type !== "class") {
+    return getTypeText(type);
+  }
+  if (isAggregated || displayType === "major-schedule" || displayType === "major-shared-schedule") {
+    return "专业聚合课表 · 暂未拆分行政班";
+  }
+  return "行政班级课表";
+}
+
+function getWeekdayText(weekday) {
+  const map = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+  return map[Number(weekday)] || "";
+}
+
+function getCourseOverview(courses) {
+  return (courses || []).map(normalizeCourse).map((course, index) => Object.assign({}, course, {
+    overviewKey: `${course.id || course.courseName || "course"}-${index}`,
+    weekdayText: getWeekdayText(course.weekday),
+    sectionText: `第${course.startSection}-${course.endSection}节`,
+  }));
+}
+
 Page({
   data: {
     type: "class",
@@ -49,8 +85,15 @@ Page({
     name: "",
     title: "",
     semester: "2025-2026-2",
+    displayType: "",
+    isAggregated: false,
+    scheduleKindText: "行政班级课表",
     isCurrentTarget: false,
     allCourses: [],
+    overviewCourses: [],
+    overviewExpanded: true,
+    hasCurrentWeekCourses: false,
+    currentWeekCourseCount: 0,
     
     currentWeek: 12,
     totalWeeks: TOTAL_WEEKS,
@@ -71,16 +114,29 @@ Page({
   },
 
   onLoad(options) {
-    const { type = "class", name = "", semester = "2025-2026-2" } = options;
-    const title = name;
+    const { type = "class", name = "", semester = "2025-2026-2", displayType = "", isAggregated = "" } = options;
+    const decodedName = safeDecodeURIComponent(name);
+    const decodedSemester = safeDecodeURIComponent(semester);
+    const decodedDisplayType = safeDecodeURIComponent(displayType);
+    const aggregated = isTruthyParam(isAggregated) || decodedDisplayType === "major-schedule" || decodedDisplayType === "major-shared-schedule";
+    const title = decodedName;
     
     this.setData({
       type,
       typeText: getTypeText(type),
-      name,
+      name: decodedName,
       title,
-      semester,
+      semester: decodedSemester,
+      displayType: decodedDisplayType,
+      isAggregated: aggregated,
+      scheduleKindText: getScheduleKindText(type, decodedDisplayType, aggregated),
     });
+
+    if (title) {
+      wx.setNavigationBarTitle({
+        title,
+      });
+    }
 
     // 检查是否已经是当前的绑定目标
     this.checkCurrentTargetStatus();
@@ -90,8 +146,14 @@ Page({
     if (eventChannel && typeof eventChannel.on === "function") {
       eventChannel.on("acceptDataFromOpenerPage", (data) => {
         if (data && Array.isArray(data.courses)) {
+          const schedule = data.schedule || {};
+          const nextDisplayType = schedule.displayType || this.data.displayType;
+          const nextAggregated = Boolean(schedule.isAggregated || this.data.isAggregated || nextDisplayType === "major-schedule" || nextDisplayType === "major-shared-schedule");
           this.setData({
             allCourses: data.courses,
+            displayType: nextDisplayType,
+            isAggregated: nextAggregated,
+            scheduleKindText: getScheduleKindText(this.data.type, nextDisplayType, nextAggregated),
           }, () => {
             this.initScheduleLayout();
           });
@@ -150,6 +212,7 @@ Page({
       sectionHeight: SECTION_HEIGHT,
       hideInactiveCourses: settings.hideInactiveCourses,
     });
+    const currentWeekCourseCount = dayColumns.reduce((total, day) => total + (day.courses || []).length, 0);
 
     const contentWidth = getContentWidthRpx();
     const dayColumnWidth = this.data.showWeekend
@@ -168,6 +231,9 @@ Page({
       dayColumnWidth,
       weekdays,
       dayColumns,
+      overviewCourses: getCourseOverview(this.data.allCourses),
+      hasCurrentWeekCourses: currentWeekCourseCount > 0,
+      currentWeekCourseCount,
     });
   },
 
@@ -230,6 +296,22 @@ Page({
   onCourseTap(event) {
     this.setData({
       selectedCourse: event.detail.course,
+      detailVisible: true,
+    });
+  },
+
+  toggleOverview() {
+    this.setData({
+      overviewExpanded: !this.data.overviewExpanded,
+    });
+  },
+
+  onOverviewCourseTap(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    const course = this.data.overviewCourses[index];
+    if (!course) return;
+    this.setData({
+      selectedCourse: course,
       detailVisible: true,
     });
   },

@@ -255,9 +255,180 @@ function cleanRemark(line) {
   return String(line || "").replace(/^备注[:：]?/, "").trim();
 }
 
+function compactClassText(value) {
+  return normalizeFullWidthDigits(decodeHtmlEntities(String(value || "")))
+    .replace(/\s+/g, "")
+    .replace(/[【】\[\]（）()《》<>]/g, "")
+    .trim();
+}
+
+function dedupeStrings(values) {
+  const seen = {};
+  const result = [];
+  (values || []).forEach((value) => {
+    const text = String(value || "").trim();
+    if (!text || seen[text]) {
+      return;
+    }
+    seen[text] = true;
+    result.push(text);
+  });
+  return result;
+}
+
+function getClassNameMatches(text) {
+  const value = normalizeFullWidthDigits(decodeHtmlEntities(String(text || "")))
+    .replace(/&nbsp;/gi, " ")
+    .replace(/\u00a0/g, " ");
+  const matches = [];
+  const pattern = /(?:20\d{2}|\d{2})级?[\u4e00-\u9fa5A-Za-z]{2,40}\d{1,2}班?/g;
+  let match = null;
+  while ((match = pattern.exec(value)) !== null) {
+    matches.push(match[0]);
+  }
+  return dedupeStrings(matches);
+}
+
+function splitClassNames(text) {
+  const value = normalizeFullWidthDigits(decodeHtmlEntities(String(text || "")))
+    .replace(/(?:上课班级|授课对象|行政班级|行政班|班级|教学班|上课对象)\s*[:：]/g, " ")
+    .replace(/[；;,，、/／|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return dedupeStrings(getClassNameMatches(value));
+}
+
+function getHiddenInputText(rawHtml) {
+  const values = [];
+  String(rawHtml || "").replace(/<input\b([^>]*)>/gi, (match, attrText) => {
+    const attrs = parseAttributes(attrText);
+    const value = attrs.value || attrs.title || attrs.alt || "";
+    if (value) {
+      values.push(value);
+    }
+    return match;
+  });
+  return values.join("\n");
+}
+
+function extractClassInfoFromText(rawText, options) {
+  const config = options || {};
+  const pieces = [
+    rawText,
+    config.className,
+    config.cellTitle,
+    config.hiddenInputText,
+    config.nearbyText,
+  ].filter(Boolean);
+  const text = normalizeLineBreaks(pieces.join("\n"));
+  const labelMatches = [];
+  const fieldMap = {};
+  const labelPattern = /(上课班级|授课对象|行政班级|行政班|班级|教学班|上课对象)\s*[:：]\s*([^\n\r<>{}]+)/g;
+  let labelMatch = null;
+
+  while ((labelMatch = labelPattern.exec(text)) !== null) {
+    const label = labelMatch[1];
+    const value = String(labelMatch[2] || "").trim();
+    if (!value || /节次/.test(value)) {
+      continue;
+    }
+    labelMatches.push(`${label}：${value}`);
+    const names = splitClassNames(value);
+    if (/授课对象|上课对象/.test(label)) {
+      fieldMap.audience = value;
+    } else if (/教学班|上课班级/.test(label)) {
+      fieldMap.teachingClass = value;
+    } else if (/行政班|班级/.test(label)) {
+      fieldMap.adminClass = value;
+    }
+    if (names.length) {
+      fieldMap.classNames = (fieldMap.classNames || []).concat(names);
+    }
+  }
+
+  const classNames = dedupeStrings((fieldMap.classNames || []).concat(splitClassNames(text)));
+  return {
+    className: classNames[0] || "",
+    classNames,
+    audience: fieldMap.audience || "",
+    teachingClass: fieldMap.teachingClass || "",
+    adminClass: fieldMap.adminClass || "",
+    rawClassText: labelMatches.join("\n") || classNames.join("、"),
+  };
+}
+
 function isClassNameLine(line) {
   const value = String(line || "").trim();
-  return /^\d{2,4}[\u4e00-\u9fa5]+/.test(value) || /[\u4e00-\u9fa5]+\d+班?$/.test(value) || /^(班级|行政班级)[:：]/.test(value);
+  return splitClassNames(value).length > 0 || /^(班级|行政班级|上课班级|授课对象)[:：]/.test(value);
+}
+
+function isClassInfoLine(line) {
+  return /^(班级|行政班级|行政班|上课班级|授课对象|教学班|上课对象)[:：]/.test(String(line || "").trim());
+}
+
+function looksLikeLocationLine(line) {
+  const value = String(line || "").trim();
+  if (!value || isWeekLine(value) || isClassInfoLine(value)) {
+    return false;
+  }
+  return /^[A-Za-z]\d[\w-]*|^\d+[A-Za-z]?[-－]\d+|楼|室|报告厅|实验室|语音室|校区|体育馆|操场/.test(value);
+}
+
+function looksLikeCourseStart(lines, index) {
+  const line = String(lines[index] || "").trim();
+  if (!line || isWeekLine(line) || isSectionLine(line) || isClassInfoLine(line) || looksLikeLocationLine(line)) {
+    return false;
+  }
+  for (let offset = 1; offset <= 3; offset += 1) {
+    if (isWeekLine(lines[index + offset] || "")) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function splitSequentialCourseBlock(block) {
+  const lines = String(block || "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  if (lines.length <= 5) {
+    return [String(block || "").trim()].filter(Boolean);
+  }
+
+  const blocks = [];
+  let start = 0;
+  while (start < lines.length) {
+    const weekIndex = lines.findIndex((line, index) => index > start && isWeekLine(line));
+    if (weekIndex < 0) {
+      const rest = lines.slice(start).join("\n").trim();
+      if (rest) {
+        blocks.push(rest);
+      }
+      break;
+    }
+
+    let nextStart = -1;
+    for (let index = weekIndex + 1; index < lines.length; index += 1) {
+      if (looksLikeCourseStart(lines, index)) {
+        nextStart = index;
+        break;
+      }
+    }
+
+    const end = nextStart >= 0 ? nextStart : lines.length;
+    const current = lines.slice(start, end).join("\n").trim();
+    if (current) {
+      blocks.push(current);
+    }
+    if (nextStart < 0) {
+      break;
+    }
+    start = nextStart;
+  }
+
+  return blocks;
 }
 
 /**
@@ -266,6 +437,7 @@ function isClassNameLine(line) {
 function parseCourseText(rawText, options) {
   const config = options || {};
   return splitCourseBlocks(rawText)
+    .reduce((list, block) => list.concat(splitSequentialCourseBlock(block)), [])
     .map((block, index) => {
       const lines = block
         .split("\n")
@@ -278,6 +450,7 @@ function parseCourseText(rawText, options) {
       const weekIndex = lines.findIndex(isWeekLine);
       const sectionIndex = lines.findIndex(isSectionLine);
       const remarkIndexes = {};
+      const ignoreIndexes = {};
       lines.forEach((line, lineIndex) => {
         if (/^备注[:：]?/.test(line)) {
           remarkIndexes[lineIndex] = true;
@@ -285,36 +458,43 @@ function parseCourseText(rawText, options) {
       });
 
       const courseName = cleanCourseName(lines[0]);
-      const candidateIndexes = [];
-      lines.forEach((line, lineIndex) => {
-        if (lineIndex > 0 && lineIndex !== weekIndex && lineIndex !== sectionIndex && !remarkIndexes[lineIndex]) {
-          candidateIndexes.push(lineIndex);
-        }
+      let teacherName = "";
+      let locationLine = "";
+      const classInfo = extractClassInfoFromText(block, {
+        className: config.className,
+        cellTitle: config.cellTitle,
+        hiddenInputText: config.hiddenInputText,
+        nearbyText: config.nearbyText,
       });
 
-      let teacherName = "";
-      let className = config.className || "";
-
-      candidateIndexes.forEach((lineIndex) => {
-        const line = lines[lineIndex];
-        if ((isClassNameLine(line) || /班级|级/.test(line)) && (!className || className === config.className)) {
-          className = line.replace(/^(班级|行政班级)[:：]/, "").trim();
-        } else if (!teacherName) {
+      lines.forEach((line, lineIndex) => {
+        if (lineIndex === 0 || lineIndex === weekIndex || lineIndex === sectionIndex || remarkIndexes[lineIndex]) {
+          return;
+        }
+        if (isClassInfoLine(line) || isClassNameLine(line)) {
+          ignoreIndexes[lineIndex] = true;
+        } else if (weekIndex >= 0 && lineIndex > weekIndex && !locationLine) {
+          locationLine = line;
+        } else if (weekIndex < 0 && looksLikeLocationLine(line) && !locationLine) {
+          locationLine = line;
+        } else if (lineIndex < weekIndex && !teacherName) {
           teacherName = stripTeacherTitle(line);
-        } else {
+        } else if (!teacherName && weekIndex < 0 && !looksLikeLocationLine(line)) {
+          teacherName = stripTeacherTitle(line);
+        } else if (line !== locationLine) {
           remarkIndexes[lineIndex] = true;
         }
       });
 
       const weekLine = weekIndex >= 0 ? lines[weekIndex] : "";
-      const sectionLine = sectionIndex >= 0 ? lines[sectionIndex] : "";
+      const sectionLine = sectionIndex >= 0 ? lines[sectionIndex] : locationLine;
       const weekInfo = parseWeekText(weekLine, {
         defaultStartWeek: config.defaultStartWeek || 1,
         defaultEndWeek: config.defaultEndWeek || DEFAULT_TOTAL_WEEKS,
       });
       const sectionInfo = parseSectionText(sectionLine);
       const remark = lines
-        .filter((line, lineIndex) => remarkIndexes[lineIndex])
+        .filter((line, lineIndex) => remarkIndexes[lineIndex] && !ignoreIndexes[lineIndex])
         .map(cleanRemark)
         .filter(Boolean)
         .join("\n");
@@ -324,7 +504,12 @@ function parseCourseText(rawText, options) {
           id: `${config.idPrefix || "parsed-course"}-${index + 1}`,
           source: config.source || "school",
           semester: config.semester || "",
-          className,
+          className: classInfo.className || config.className || "",
+          classNames: classInfo.classNames || [],
+          audience: classInfo.audience || "",
+          teachingClass: classInfo.teachingClass || "",
+          adminClass: classInfo.adminClass || "",
+          rawClassText: classInfo.rawClassText || "",
           courseName,
           teacherName,
           classroom: sectionInfo.classroom,
@@ -386,6 +571,32 @@ function parseTableRows(tableHtml) {
   return rows;
 }
 
+function parseHeaderSectionText(text) {
+  const value = normalizeFullWidthDigits(String(text || "")).replace(/\s+/g, "");
+  if (!value) {
+    return null;
+  }
+  const bracketMatch = value.match(/[\[［【]?([0-9,，、\-]+)[\]］】]?/);
+  const raw = bracketMatch ? bracketMatch[1] : value;
+  let sections = [];
+
+  if (/^\d{4,}$/.test(raw) && raw.length % 2 === 0) {
+    sections = raw.match(/\d{2}/g).map(Number);
+  } else {
+    sections = raw.split(/[^0-9]+/).map(Number).filter(Boolean);
+  }
+
+  sections = sections.filter(Boolean);
+  if (!sections.length) {
+    return null;
+  }
+
+  return {
+    startSection: sections[0],
+    endSection: sections[sections.length - 1],
+  };
+}
+
 function isLikelyCourseCell(text) {
   const value = String(text || "").trim();
   if (!value) {
@@ -433,6 +644,10 @@ function parseScheduleHtml(html, context, parserOptions) {
   };
 
   rows.forEach((row, rowIndex) => {
+    const rowHeader = row[0] ? normalizeLineBreaks(row[0].html || row[0].text).trim() : "";
+    const rowClassInfo = extractClassInfoFromText(rowHeader);
+    const rowClassName = rowClassInfo.className || "";
+
     row.forEach((cell, cellIndex) => {
       if (cellIndex === 0 || !isLikelyCourseCell(cell.text)) {
         return;
@@ -440,15 +655,22 @@ function parseScheduleHtml(html, context, parserOptions) {
       try {
         const dataColumnIndex = Math.max(0, cellIndex - 1);
         const weekday = Math.min(7, Math.floor(dataColumnIndex / columnGroupSize) + 1);
-        const fallbackSection = Math.max(1, rowIndex);
+        const headerSection = parseHeaderSectionText(rows[1] && rows[1][cellIndex] ? rows[1][cellIndex].text : "");
+        const fallbackSection = headerSection ? headerSection.startSection : Math.max(1, rowIndex);
+        const fallbackEndSection = headerSection ? headerSection.endSection : fallbackSection;
+        const effectiveClassName = rowClassName || (context && context.className) || "";
+        const hiddenInputText = getHiddenInputText(cell.rawHtml);
         const parsed = parseCourseText(cell.html, {
           idPrefix: `${config.idPrefix || "schedule"}-${rowIndex}-${cellIndex}`,
           source: config.source || "school",
           semester: context && context.semester,
-          className: context && context.className,
+          className: effectiveClassName,
+          cellTitle: cell.attrs.title || "",
+          hiddenInputText,
+          nearbyText: [rowHeader, cell.attrs.title || ""].filter(Boolean).join("\n"),
           weekday,
           fallbackStartSection: fallbackSection,
-          fallbackEndSection: fallbackSection,
+          fallbackEndSection,
           rawHtml: cell.rawHtml,
           extra: Object.assign(
             {
@@ -477,6 +699,76 @@ function parseScheduleHtml(html, context, parserOptions) {
     courses,
     warnings,
     meta,
+  };
+}
+
+function extractClassNameCandidates(html, context) {
+  const source = String(html || "");
+  const text = normalizeLineBreaks(source).replace(/\n{3,}/g, "\n\n");
+  const keywords = ["行政班", "班级", "上课班级", "授课对象", "25动物", "24", "2025"];
+  const candidates = [];
+  const classNames = [];
+
+  keywords.forEach((keyword) => {
+    let start = 0;
+    while (start < text.length) {
+      const index = text.indexOf(keyword, start);
+      if (index < 0) {
+        break;
+      }
+      const snippet = text.slice(Math.max(0, index - 80), Math.min(text.length, index + 180)).replace(/\s+/g, " ").trim();
+      const names = splitClassNames(snippet);
+      if (snippet) {
+        candidates.push({
+          source: "keyword",
+          keyword,
+          text: snippet,
+          classNames: names,
+        });
+      }
+      classNames.push.apply(classNames, names);
+      start = index + keyword.length;
+    }
+  });
+
+  const tableHtml = extractKbTableHtml(source);
+  parseTableRows(tableHtml).forEach((row, rowIndex) => {
+    const rowHeader = row[0] ? normalizeLineBreaks(row[0].html || row[0].text).trim() : "";
+    const names = splitClassNames(rowHeader);
+    if (names.length) {
+      candidates.push({
+        source: "row-header",
+        rowIndex,
+        text: rowHeader,
+        classNames: names,
+      });
+      classNames.push.apply(classNames, names);
+    }
+
+    row.forEach((cell, cellIndex) => {
+      const values = [cell.attrs.title || "", getHiddenInputText(cell.rawHtml)].filter(Boolean);
+      values.forEach((value) => {
+        const namesFromValue = splitClassNames(value);
+        if (namesFromValue.length) {
+          candidates.push({
+            source: "cell-attribute",
+            rowIndex,
+            cellIndex,
+            text: value,
+            classNames: namesFromValue,
+          });
+          classNames.push.apply(classNames, namesFromValue);
+        }
+      });
+    });
+  });
+
+  return {
+    semester: context && context.semester,
+    majorCode: context && context.majorCode,
+    majorName: context && context.majorName,
+    classNames: dedupeStrings(classNames),
+    candidates,
   };
 }
 
@@ -632,6 +924,8 @@ module.exports = {
   parseClassScheduleIfrHtml,
   parseClassroomScheduleIfrHtml,
   parseCourseText,
+  extractClassInfoFromText,
+  extractClassNameCandidates,
   parseCourseScheduleIfrHtml,
   parseMajorAjaxResponse,
   parsePersonalScheduleHtml,

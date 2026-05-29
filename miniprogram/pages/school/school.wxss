@@ -162,6 +162,42 @@ picker {
   margin-top: 10rpx;
 }
 
+.class-result-notice {
+  margin: 8rpx 0 16rpx;
+  padding: 18rpx 22rpx;
+  border: 1rpx solid #dfe7f3;
+  border-radius: 12rpx;
+  background: #f8fbff;
+  color: #536174;
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+
+.result-group {
+  margin-bottom: 24rpx;
+}
+
+.result-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin: 6rpx 4rpx 14rpx;
+}
+
+.result-group-title {
+  color: #172033;
+  font-size: 28rpx;
+  font-weight: 900;
+}
+
+.result-group-count {
+  color: #8a94a6;
+  font-size: 22rpx;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .result-card {
   display: flex;
   align-items: center;
@@ -172,6 +208,10 @@ picker {
   border-radius: 16rpx;
   background: #ffffff;
   box-shadow: 0 4rpx 16rpx rgba(162, 178, 201, 0.08);
+}
+
+.aggregate-card {
+  border: 1rpx solid #e5eaff;
 }
 
 .result-card:active {

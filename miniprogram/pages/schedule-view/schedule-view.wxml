@@ -3,7 +3,7 @@
     <view class="header-top">
       <view class="target-info">
         <view class="target-title">{{title}}</view>
-        <view class="target-subtitle">{{semester}} · {{typeText}}</view>
+        <view class="target-subtitle">{{semester}} · {{scheduleKindText}}</view>
       </view>
       <button 
         class="bind-button {{isCurrentTarget ? 'active' : ''}}" 
@@ -33,7 +33,7 @@
       <view class="schedule-hint">{{showWeekend ? "周一至周日，可横向滑动" : "周一至周五"}}</view>
     </view>
 
-    <view class="table-shell" wx:if="{{courses && courses.length}}">
+    <view class="table-shell" wx:if="{{allCourses && allCourses.length && hasCurrentWeekCourses}}">
       <scroll-view
         class="schedule-scroll-x {{showWeekend ? 'has-weekend' : ''}}"
         scroll-x="{{showWeekend}}"
@@ -97,10 +97,45 @@
         </view>
       </scroll-view>
     </view>
+
+    <view class="empty-week-wrap" wx:elif="{{allCourses && allCourses.length}}">
+      <view class="empty-week-title">本周暂无课程</view>
+      <view class="empty-week-desc">该课表共有 {{allCourses.length}} 门课，可切换周次查看，或查看下方课程总览。</view>
+    </view>
     
     <view class="empty-wrap" wx:else>
       <image class="empty-icon" src="/images/icons/business.png" style="opacity: 0.15; width: 120rpx; height: 120rpx; margin-bottom: 20rpx;" />
       <view class="empty-text">该课表暂无课程数据</view>
+    </view>
+  </view>
+
+  <view class="course-overview card" wx:if="{{allCourses && allCourses.length}}">
+    <view class="overview-head" bindtap="toggleOverview">
+      <view>
+        <view class="section-title">课程总览</view>
+        <view class="overview-subtitle">全部 {{allCourses.length}} 门课</view>
+      </view>
+      <view class="overview-toggle">{{overviewExpanded ? "收起" : "展开"}}</view>
+    </view>
+
+    <view class="overview-list" wx:if="{{overviewExpanded}}">
+      <view
+        wx:for="{{overviewCourses}}"
+        wx:key="overviewKey"
+        class="overview-item"
+        data-index="{{index}}"
+        bindtap="onOverviewCourseTap"
+      >
+        <view class="overview-course-title">{{item.courseName}}</view>
+        <view class="overview-meta-row">
+          <text>{{item.teacherName || "教师待补充"}}</text>
+          <text>{{item.classroom || "教室待补充"}}</text>
+        </view>
+        <view class="overview-meta-row muted">
+          <text>{{item.weekText || "周次待补充"}}</text>
+          <text>{{item.weekdayText}} · {{item.sectionText}}</text>
+        </view>
+      </view>
     </view>
   </view>
 

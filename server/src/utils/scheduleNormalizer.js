@@ -39,6 +39,7 @@ const UNRELIABLE_CLASS_NAMES = new Set([
 
 const COURSE_NAME_KEYWORDS = [
   "大学体育",
+  "大学生职业发展",
   "形势与政策",
   "职业发展",
   "就业指导",
@@ -46,6 +47,11 @@ const COURSE_NAME_KEYWORDS = [
   "大学英语",
   "英语",
   "有机化学",
+  "分析化学",
+  "动物解剖学",
+  "动物生物化学",
+  "动物机能学",
+  "动物学",
   "军事理论",
   "创新创业",
   "劳动教育",
@@ -59,16 +65,83 @@ const COURSE_NAME_KEYWORDS = [
   "概率论",
 ];
 
-function hasClassNameShape(name) {
-  const compact = compactText(name);
-  const hasGradeToken = /(?:^|[^\d])(?:20\d{2}|\d{2})级?/.test(compact);
-  const hasMajorText = /[\u4e00-\u9fa5A-Za-z]{2,}/.test(compact);
-  const hasClassNo = /\d{1,2}班?$/.test(compact) || /[一二三四五六七八九十]{1,3}班$/.test(compact);
-  return hasGradeToken && hasMajorText && hasClassNo;
+function dedupeStrings(values) {
+  const seen = {};
+  const result = [];
+  (values || []).forEach((value) => {
+    const text = String(value || "").trim();
+    if (!text || seen[text]) {
+      return;
+    }
+    seen[text] = true;
+    result.push(text);
+  });
+  return result;
 }
 
-function isReliableClassName(name, options = {}) {
+function normalizeClassName(name) {
+  const compact = compactText(name)
+    .replace(/^(班级|行政班级|行政班|上课班级|授课对象|教学班|上课对象)[:：]?/, "")
+    .replace(/专业课表$/, "")
+    .trim();
+  if (/\d$/.test(compact)) {
+    return `${compact}班`;
+  }
+  return compact;
+}
+
+function splitClassNameCandidates(value) {
+  const raw = Array.isArray(value) ? value.join("、") : String(value || "");
+  const normalized = raw
+    .replace(/(?:上课班级|授课对象|行政班级|行政班|班级|教学班|上课对象)\s*[:：]/g, " ")
+    .replace(/[；;,，、/／|]+/g, " ");
+  const matches = [];
+  const pattern = /(?:20\d{2}|\d{2})级?[\u4e00-\u9fa5A-Za-z]{2,40}\d{1,2}班?/g;
+  let match = null;
+  while ((match = pattern.exec(normalized)) !== null) {
+    matches.push(normalizeClassName(match[0]));
+  }
+  return dedupeStrings(matches);
+}
+
+function getMajorAliases(majorName) {
+  const clean = compactText(majorName)
+    .replace(/[（(].*?[）)]/g, "")
+    .replace(/专业|方向|微/g, "");
+  const aliases = [clean];
+  if (clean.includes("动物科学")) {
+    aliases.push("动物科学", "动科");
+  }
+  if (clean.includes("动物医学")) {
+    aliases.push("动物医学", "动医");
+  }
+  if (clean.includes("机械设计制造及其自动化")) {
+    aliases.push("机械设计", "机械");
+  }
+  if (clean.includes("数学与应用数学")) {
+    aliases.push("数学", "应用数学");
+  }
+  if (clean.length >= 2) {
+    aliases.push(clean.slice(0, 2));
+  }
+  if (clean.length >= 4) {
+    aliases.push(clean.slice(0, 4));
+  }
+  return dedupeStrings(aliases.filter((item) => item && item.length >= 2));
+}
+
+function hasClassNameShape(name, context = {}) {
   const compact = compactText(name);
+  const hasGradeToken = /(?:^|[^\d])(?:20\d{2}|\d{2})级?/.test(compact) || /^(?:20\d{2}|\d{2})/.test(compact);
+  const hasMajorText = /[\u4e00-\u9fa5A-Za-z]{2,}/.test(compact);
+  const hasClassNo = /\d{1,2}班?$/.test(compact) || /[一二三四五六七八九十]{1,3}班$/.test(compact);
+  const majorAliases = getMajorAliases(context.majorName);
+  const hasMajorName = majorAliases.length ? majorAliases.some((alias) => compact.includes(alias)) : true;
+  return hasGradeToken && hasMajorText && hasClassNo && hasMajorName;
+}
+
+function isLikelyClassName(name, context = {}) {
+  const compact = compactText(normalizeClassName(name));
   if (!compact || UNRELIABLE_CLASS_NAMES.has(compact)) {
     return false;
   }
@@ -77,13 +150,13 @@ function isReliableClassName(name, options = {}) {
     return false;
   }
 
-  const courseName = compactText(options.courseName);
+  const courseName = compactText(context.courseName);
   if (courseName && compact === courseName) {
     return false;
   }
 
-  if (Array.isArray(options.courses)) {
-    const equalsAnyCourseName = options.courses.some((course) => compactText(course && course.courseName) === compact);
+  if (Array.isArray(context.courses)) {
+    const equalsAnyCourseName = context.courses.some((course) => compactText(course && course.courseName) === compact);
     if (equalsAnyCourseName) {
       return false;
     }
@@ -93,13 +166,47 @@ function isReliableClassName(name, options = {}) {
     return false;
   }
 
-  return hasClassNameShape(compact);
+  return hasClassNameShape(compact, context);
+}
+
+function isReliableClassName(name, options = {}) {
+  return isLikelyClassName(name, options);
+}
+
+function getReliableClassNamesForCourse(course, context = {}) {
+  const candidates = [];
+  if (Array.isArray(course && course.classNames)) {
+    candidates.push.apply(candidates, course.classNames);
+  }
+  [
+    course && course.className,
+    course && course.adminClass,
+    course && course.teachingClass,
+    course && course.audience,
+    course && course.rawClassText,
+  ].forEach((value) => {
+    candidates.push.apply(candidates, splitClassNameCandidates(value));
+  });
+
+  return dedupeStrings(candidates.map(normalizeClassName)).filter((className) =>
+    isLikelyClassName(className, {
+      courseName: course && course.courseName,
+      courses: context.courses,
+      majorName: context.majorName,
+    })
+  );
 }
 
 function buildMajorScheduleName(context = {}) {
   const grade = context.grade || "";
   const majorName = context.majorName || "未知专业";
   return `${grade}级${majorName}专业课表`;
+}
+
+function buildMajorSharedScheduleName(context = {}) {
+  const grade = context.grade || "";
+  const majorName = context.majorName || "未知专业";
+  return `${grade}级${majorName}专业共享课程`;
 }
 
 function withDisplayClassName(course, className, extra = {}) {
@@ -112,14 +219,17 @@ function withDisplayClassName(course, className, extra = {}) {
 function buildClassScheduleEntries(courses, context = {}) {
   const classGroups = new Map();
   const unresolvedCourses = [];
+  const config = Object.assign({}, context, { courses });
 
   (courses || []).forEach((course) => {
-    const className = String((course && course.className) || "").trim();
-    if (isReliableClassName(className, { courseName: course && course.courseName })) {
-      if (!classGroups.has(className)) {
-        classGroups.set(className, []);
-      }
-      classGroups.get(className).push(withDisplayClassName(course, className));
+    const reliableClassNames = getReliableClassNamesForCourse(course, config);
+    if (reliableClassNames.length) {
+      reliableClassNames.forEach((className) => {
+        if (!classGroups.has(className)) {
+          classGroups.set(className, []);
+        }
+        classGroups.get(className).push(withDisplayClassName(course, className));
+      });
     } else {
       unresolvedCourses.push(course);
     }
@@ -146,9 +256,12 @@ function buildClassScheduleEntries(courses, context = {}) {
     }];
   }
 
-  return Array.from(classGroups.entries()).map(([className, groupedCourses]) => {
+  const classEntries = Array.from(classGroups.entries())
+    .sort(([left], [right]) => left.localeCompare(right, "zh-CN", { numeric: true }))
+    .map(([className, groupedCourses]) => {
     const copiedUnresolved = unresolvedCourses.map((course) => withDisplayClassName(course, className, {
       sourceClassNameUnreliable: true,
+      sharedByMajor: true,
     }));
     return {
       semester: context.semester,
@@ -163,6 +276,27 @@ function buildClassScheduleEntries(courses, context = {}) {
       courses: groupedCourses.concat(copiedUnresolved),
     };
   });
+
+  if (unresolvedCourses.length) {
+    const sharedName = buildMajorSharedScheduleName(context);
+    classEntries.push({
+      semester: context.semester,
+      className: sharedName,
+      displayType: "major-shared-schedule",
+      isAggregated: true,
+      collegeCode: context.collegeCode,
+      collegeName: context.collegeName || "",
+      grade: context.grade,
+      majorCode: context.majorCode,
+      majorName: context.majorName,
+      courses: unresolvedCourses.map((course) => withDisplayClassName(course, sharedName, {
+        sourceClassNameUnreliable: true,
+        sharedByMajor: true,
+      })),
+    });
+  }
+
+  return classEntries;
 }
 
 /**
@@ -178,6 +312,11 @@ function normalizeCourseItem(course, context) {
   normalized.id = normalized.id || `${normalized.sourceType || "course"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
   normalized.semester = normalized.semester || config.semester || "2025-2026学年第二学期";
   normalized.className = normalized.className || config.className || "";
+  normalized.classNames = Array.isArray(normalized.classNames) ? normalized.classNames : splitClassNameCandidates(normalized.className);
+  normalized.audience = normalized.audience || "";
+  normalized.teachingClass = normalized.teachingClass || "";
+  normalized.adminClass = normalized.adminClass || "";
+  normalized.rawClassText = normalized.rawClassText || "";
   normalized.teacherName = normalized.teacherName || config.teacherName || "";
   normalized.classroom = normalized.classroom || config.classroom || "";
   normalized.courseName = normalized.courseName || "";
@@ -232,7 +371,9 @@ function groupCoursesBy(courses, key, fallbackName) {
 module.exports = {
   buildClassScheduleEntries,
   buildMajorScheduleName,
+  buildMajorSharedScheduleName,
   groupCoursesBy,
+  isLikelyClassName,
   isReliableClassName,
   normalizeCourseItem,
   normalizeCourseList,

@@ -116,6 +116,25 @@ function removeNoScheduleMajor(records, major, semester) {
   }, record.semester) !== key);
 }
 
+function upsertClassNameCandidateRecord(records, item) {
+  const key = getMajorIdentityKey({
+    collegeCode: item.collegeCode,
+    grade: item.grade,
+    code: item.majorCode,
+  }, item.semester);
+  const index = records.findIndex((record) => getMajorIdentityKey({
+    collegeCode: record.collegeCode,
+    grade: record.grade,
+    code: record.majorCode,
+  }, record.semester) === key);
+  if (index >= 0) {
+    records[index] = item;
+  } else {
+    records.push(item);
+  }
+  return records;
+}
+
 async function waitBetweenClassSyncRequests(isFiltered) {
   const delayMin = isFiltered ? 800 : 1500;
   const delayMax = isFiltered ? 1500 : 3000;
@@ -1239,7 +1258,9 @@ async function syncClassSchedules(page, catalog, majors) {
 
   const collegeNameByCode = new Map((catalog.colleges || []).map((college) => [String(college.code), college.name]));
   const noScheduleCachePath = path.join(debugDir, "no-schedule-majors.json");
+  const classNameCandidatesPath = path.join(debugDir, "class-name-candidates.json");
   let noScheduleMajors = readJsonArray(noScheduleCachePath);
+  let classNameCandidateRecords = readJsonArray(classNameCandidatesPath);
   const skipNoScheduleCache = getEnvFlag("SYNC_SKIP_NO_SCHEDULE_CACHE", true);
   const recheckNoSchedule = getEnvFlag("SYNC_RECHECK_NO_SCHEDULE", false);
   const cachedNoScheduleKeys = new Set(
@@ -1375,9 +1396,35 @@ async function syncClassSchedules(page, catalog, majors) {
       const rawHtmlPath = path.join(rawPagesDir, `class_${major.grade}_${major.code}.html`);
       fs.writeFileSync(rawHtmlPath, htmlText, "utf-8");
 
+      const candidateResult = parser.extractClassNameCandidates(htmlText, {
+        semester: activeSemester,
+        collegeCode: major.collegeCode,
+        grade: major.grade,
+        majorCode: major.code,
+        majorName: major.name,
+      });
+      classNameCandidateRecords = upsertClassNameCandidateRecord(classNameCandidateRecords, {
+        semester: activeSemester,
+        collegeCode: major.collegeCode,
+        collegeName: collegeNameByCode.get(String(major.collegeCode)) || major.collegeName || "",
+        grade: major.grade,
+        majorCode: major.code,
+        majorName: major.name,
+        rawHtmlPath,
+        classNames: candidateResult.classNames || [],
+        candidates: (candidateResult.candidates || []).slice(0, 80),
+        checkedAt: new Date().toISOString(),
+      });
+      writeJsonFile(classNameCandidatesPath, classNameCandidateRecords);
+      console.log(`      班级文本候选: ${(candidateResult.classNames || []).join(", ") || "未发现"}`);
+
       // 解析课表 HTML
       const parsed = parser.parseClassScheduleIfrHtml(htmlText, {
         semester: activeSemester,
+        collegeCode: major.collegeCode,
+        grade: major.grade,
+        majorCode: major.code,
+        majorName: major.name,
       });
 
       // 规范化课表

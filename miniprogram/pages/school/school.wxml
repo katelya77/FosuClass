@@ -71,7 +71,7 @@
           </view>
 
           <button class="primary-search-btn" loading="{{loading}}" bindtap="searchClassSchedule">
-            查询班级课表
+            查看班级课表
           </button>
         </view>
 
@@ -79,21 +79,54 @@
           {{updatedAtText}}
         </view>
 
-        <view class="result-list" wx:if="{{classesResult.length}}">
-          <view
-            wx:for="{{classesResult}}"
-            wx:key="scheduleKey"
-            class="result-card card"
-            data-index="{{index}}"
-            bindtap="viewClassSchedule"
-          >
-            <view class="result-main">
-              <view class="result-title">{{item.displayTitle || item.className}}</view>
-              <view class="result-meta">{{item.displaySubtitle}}</view>
+        <view class="class-result-notice" wx:if="{{classNoticeText}}">
+          {{classNoticeText}}
+        </view>
+
+        <view class="result-list" wx:if="{{classAdminResults.length || classAggregateResults.length}}">
+          <view class="result-group" wx:if="{{classAdminResults.length}}">
+            <view class="result-group-head">
+              <view class="result-group-title">行政班级</view>
+              <view class="result-group-count">{{classAdminResults.length}}个班</view>
             </view>
-            <view class="result-side">
-              <view class="status ready {{item.isAggregated ? 'aggregate' : ''}}">{{item.statusText || "教务数据"}}</view>
-              <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}门课</view>
+            <view
+              wx:for="{{classAdminResults}}"
+              wx:key="scheduleKey"
+              class="result-card card"
+              data-group="admin"
+              data-index="{{index}}"
+              bindtap="viewClassSchedule"
+            >
+              <view class="result-main">
+                <view class="result-title">{{item.displayTitle || item.className}}</view>
+                <view class="result-meta">{{item.displaySubtitle}}</view>
+              </view>
+              <view class="result-side">
+                <view class="status ready">{{item.statusText || "行政班"}}</view>
+              </view>
+            </view>
+          </view>
+
+          <view class="result-group" wx:if="{{classAggregateResults.length}}">
+            <view class="result-group-head">
+              <view class="result-group-title">专业共享课表</view>
+              <view class="result-group-count">{{classAggregateResults.length}}项</view>
+            </view>
+            <view
+              wx:for="{{classAggregateResults}}"
+              wx:key="scheduleKey"
+              class="result-card card aggregate-card"
+              data-group="aggregate"
+              data-index="{{index}}"
+              bindtap="viewClassSchedule"
+            >
+              <view class="result-main">
+                <view class="result-title">{{item.displayTitle || item.className}}</view>
+                <view class="result-meta">{{item.displaySubtitle}}</view>
+              </view>
+              <view class="result-side">
+                <view class="status ready aggregate">{{item.statusText || "专业聚合"}}</view>
+              </view>
             </view>
           </view>
         </view>

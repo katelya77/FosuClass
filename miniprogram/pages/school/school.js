@@ -19,16 +19,29 @@ function formatClassResultItem(item) {
   const source = item || {};
   const isAggregated = Boolean(source.isAggregated || source.displayType === "major-schedule");
   const className = source.className || "";
+  const courseCount = Array.isArray(source.courses) ? source.courses.length : 0;
   return Object.assign({}, source, {
     scheduleKey: `${source.semester || ""}-${source.collegeCode || ""}-${source.grade || ""}-${source.majorCode || ""}-${className}`,
     displayTitle: className,
-    displaySubtitle: isAggregated
-      ? "暂未拆分行政班，已展示该专业教务排课"
-      : `${source.majorName || "未知专业"} · ${source.grade}级 · 教务数据`,
-    statusText: isAggregated ? "专业课表" : "教务数据",
+    displaySubtitle: `${source.majorName || "未知专业"} · ${source.grade || ""}级 · ${courseCount}门课`,
+    statusText: isAggregated ? "专业聚合" : "行政班",
     isAggregated,
     courses: Array.isArray(source.courses) ? source.courses : [],
   });
+}
+
+function splitClassResultGroups(items) {
+  const list = (items || []).map(formatClassResultItem);
+  const admin = list.filter((item) => !item.isAggregated);
+  const aggregate = list.filter((item) => item.isAggregated);
+  return {
+    list,
+    admin,
+    aggregate,
+    noticeText: !admin.length && aggregate.length
+      ? "暂未拆出行政班，已展示该专业完整排课。"
+      : "",
+  };
 }
 
 function getClassEmptyState(reasonCode) {
@@ -86,6 +99,8 @@ Page({
     
     // 查询得到的结果列表
     classesResult: [],
+    classAdminResults: [],
+    classAggregateResults: [],
     teachersResult: [],
     classroomsResult: [],
     coursesResult: [],
@@ -96,6 +111,7 @@ Page({
     catalogEmpty: false,
     classEmptyTitle: "请选择上方筛选并查询",
     classEmptyDesc: "数据来自佛山大学教务系统，查询后将展示行政班级课表。",
+    classNoticeText: "",
   },
 
   onLoad() {
@@ -159,12 +175,15 @@ Page({
       keyword: "",
       // 清空当前结果，避免误导
       classesResult: [],
+      classAdminResults: [],
+      classAggregateResults: [],
       teachersResult: [],
       classroomsResult: [],
       coursesResult: [],
       updatedAtText: "",
       classEmptyTitle: "请选择上方筛选并查询",
       classEmptyDesc: "数据来自佛山大学教务系统，查询后将展示行政班级课表。",
+      classNoticeText: "",
     });
   },
 
@@ -229,6 +248,10 @@ Page({
   onSemesterChange(event) {
     this.setData({
       selectedSemesterIndex: Number(event.detail.value),
+      classesResult: [],
+      classAdminResults: [],
+      classAggregateResults: [],
+      classNoticeText: "",
     });
   },
 
@@ -239,6 +262,10 @@ Page({
       selectedCollegeIndex: index,
       selectedMajorIndex: -1,
       majors: [], // 重置专业
+      classesResult: [],
+      classAdminResults: [],
+      classAggregateResults: [],
+      classNoticeText: "",
     }, () => {
       this.fetchMajors();
     });
@@ -251,6 +278,10 @@ Page({
       selectedGradeIndex: index,
       selectedMajorIndex: -1,
       majors: [], // 重置专业
+      classesResult: [],
+      classAdminResults: [],
+      classAggregateResults: [],
+      classNoticeText: "",
     }, () => {
       this.fetchMajors();
     });
@@ -284,6 +315,10 @@ Page({
   onMajorChange(event) {
     this.setData({
       selectedMajorIndex: Number(event.detail.value),
+      classesResult: [],
+      classAdminResults: [],
+      classAggregateResults: [],
+      classNoticeText: "",
     });
   },
 
@@ -329,38 +364,31 @@ Page({
     }, { loadingTitle: "正在从教务系统获取数据...", silentError: true })
       .then((data) => {
         const formatTime = formatUpdateTime(data.updatedAt);
-        const classes = (data.classes || []).map(formatClassResultItem);
+        const grouped = splitClassResultGroups(data.classes || []);
         const emptyState = getClassEmptyState("");
         
         this.setData({
-          classesResult: classes,
+          classesResult: grouped.list,
+          classAdminResults: grouped.admin,
+          classAggregateResults: grouped.aggregate,
           updatedAtText: formatTime ? `教务数据 · 更新于 ${formatTime}` : "教务数据",
           classEmptyTitle: emptyState.title,
           classEmptyDesc: emptyState.desc,
+          classNoticeText: grouped.noticeText,
         });
-
-        if (!classes.length) {
-          wx.showToast({
-            title: "教务网无对应班级课表",
-            icon: "none",
-          });
-        }
       })
       .catch((err) => {
         const payload = err && err.payload ? err.payload : {};
         const emptyState = getClassEmptyState(payload.reasonCode);
         this.setData({
           classesResult: [],
+          classAdminResults: [],
+          classAggregateResults: [],
           updatedAtText: "",
           classEmptyTitle: emptyState.title,
           classEmptyDesc: emptyState.desc,
+          classNoticeText: "",
         });
-        if (payload.reasonCode === "NO_SCHEDULE_SYNCED" || payload.reasonCode === "NO_SYNC_DATA") {
-          wx.showToast({
-            title: "暂未同步该专业课表",
-            icon: "none",
-          });
-        }
         console.error("searchClassSchedule fail", err);
       });
   },
@@ -467,10 +495,12 @@ Page({
 
   viewClassSchedule(event) {
     const index = Number(event.currentTarget.dataset.index);
-    const item = this.data.classesResult[index];
+    const group = event.currentTarget.dataset.group;
+    const source = group === "aggregate" ? this.data.classAggregateResults : this.data.classAdminResults;
+    const item = source[index];
     if (!item) return;
 
-    this.navigateToScheduleView("class", item.className, item.courses);
+    this.navigateToScheduleView("class", item.className, item.courses, item);
   },
 
   viewTeacherSchedule(event) {
@@ -497,15 +527,19 @@ Page({
     this.navigateToScheduleView("course", item.courseName, item.courses);
   },
 
-  navigateToScheduleView(type, name, courses) {
+  navigateToScheduleView(type, name, courses, scheduleMeta) {
     const semester = this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
+    const meta = scheduleMeta || {};
+    const displayType = meta.displayType || "";
+    const isAggregated = meta.isAggregated ? "1" : "0";
     
     wx.navigateTo({
-      url: `/pages/schedule-view/schedule-view?type=${type}&name=${encodeURIComponent(name)}&semester=${semester}`,
+      url: `/pages/schedule-view/schedule-view?type=${type}&name=${encodeURIComponent(name)}&semester=${semester}&displayType=${encodeURIComponent(displayType)}&isAggregated=${isAggregated}`,
       success: (res) => {
         // 利用 EventChannel 传递大体积课程数据
         res.eventChannel.emit("acceptDataFromOpenerPage", {
           courses: courses || [],
+          schedule: meta,
         });
       },
     });
