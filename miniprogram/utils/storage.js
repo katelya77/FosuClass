@@ -1,4 +1,8 @@
 const STORAGE_KEY = "FOSU_CLASS_SETTINGS";
+const BOOTSTRAP_CACHE_KEY = "FOSU_BOOTSTRAP_CACHE";
+const SCHOOL_FILTER_CACHE_KEY = "FOSU_SCHOOL_FILTER_CACHE";
+const CURRENT_SCHEDULE_TARGET_KEY = "FOSU_CURRENT_SCHEDULE_TARGET";
+const RECENT_SCHEDULES_KEY = "FOSU_RECENT_SCHEDULES";
 
 const defaultSettings = {
   className: "25动物医学6",
@@ -36,10 +40,28 @@ function clearAppCache() {
   return Object.assign({}, defaultSettings);
 }
 
+function clearDataCaches() {
+  wx.removeStorageSync(BOOTSTRAP_CACHE_KEY);
+  wx.removeStorageSync("FOSU_CATALOG_CACHE");
+  wx.removeStorageSync("FOSU_SCHEDULE_CACHE");
+  wx.removeStorageSync("FOSU_CLASS_SCHEDULE_CACHE");
+}
+
+function clearLocalSelection() {
+  wx.removeStorageSync(CURRENT_SCHEDULE_TARGET_KEY);
+  wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
+}
+
 module.exports = {
+  BOOTSTRAP_CACHE_KEY,
+  CURRENT_SCHEDULE_TARGET_KEY,
+  RECENT_SCHEDULES_KEY,
+  SCHOOL_FILTER_CACHE_KEY,
   STORAGE_KEY,
   defaultSettings,
   clearAppCache,
+  clearDataCaches,
+  clearLocalSelection,
   getSettings,
   resetSettings,
   saveSettings,

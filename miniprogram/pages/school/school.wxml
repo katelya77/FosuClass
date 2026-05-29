@@ -1,7 +1,7 @@
 <view class="page school-page">
   <view class="page-header">
     <view class="title">查找佛大课表</view>
-    <view class="subtitle">班级、教师、教室和课程数据全部来自佛山大学教务系统</view>
+    <view class="subtitle">数据来自佛山大学教务系统同步快照，仅供参考，具体以教务系统及任课教师通知为准。</view>
   </view>
 
   <block wx:if="{{catalogEmpty}}">
@@ -90,6 +90,27 @@
           <button class="reset-filter-btn" bindtap="resetFilters">
             重置筛选
           </button>
+        </view>
+
+        <view class="recent-card card" wx:if="{{recentSchedules.length}}">
+          <view class="result-group-head">
+            <view class="result-group-title">最近查看课表</view>
+            <view class="result-group-count">{{recentSchedules.length}}项</view>
+          </view>
+          <view
+            wx:for="{{recentSchedules}}"
+            wx:key="scheduleKey"
+            class="recent-item"
+            data-index="{{index}}"
+            bindtap="viewRecentSchedule"
+          >
+            <view class="recent-main">
+              <view class="recent-title">{{item.title}}</view>
+              <view class="recent-meta">{{item.collegeName}} · {{item.grade}}级 · {{item.majorName}}</view>
+              <view class="recent-meta">{{item.updatedAt}}</view>
+            </view>
+            <view class="recent-side">{{item.courseCount}}门课</view>
+          </view>
         </view>
 
         <view class="updated-hint" wx:if="{{updatedAtText}}">

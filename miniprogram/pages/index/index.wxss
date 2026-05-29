@@ -107,6 +107,14 @@
   font-size: 21rpx;
 }
 
+.disclaimer-line {
+  margin-top: 8rpx;
+  color: #9aa4b5;
+  font-size: 21rpx;
+  line-height: 1.45;
+  white-space: normal;
+}
+
 .control-row,
 .action-row {
   width: 100%;

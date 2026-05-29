@@ -102,6 +102,31 @@ npm run sync:all
 >   - **断点续传**：已成功同步的专业会记录在 `.debug/sync-progress.json`，若中断可再次运行，直接从断点处继续抓取。
 >   - **Raw HTML 留底**：抓取的 HTML 会保存在 `.debug/raw-pages/` 供离线分析。
 
+### 6.1 发布完整 release 快照
+
+```bash
+npm run sync:release
+```
+
+`sync:release` 会完整执行 catalog、majors、class schedules 抓取，生成离线快照，上传到 VPS 的 release 存储，并在服务端校验通过后激活。任一步失败都不会切换线上 active release，旧快照会继续可用。
+
+如果只需要从本地 `.debug/class-schedules-latest.json` 继续上传，不重新打开浏览器抓取：
+
+```bash
+npm run sync:upload-cache
+```
+
+资源维度基础框架：
+
+```bash
+npm run sync:teachers
+npm run sync:classrooms
+npm run sync:courses
+npm run sync:resources
+```
+
+Windows 定时任务说明见 `tools/fosu-sync-client/docs/sync-automation.md`。
+
 ---
 
 ### 7. 学期选择与常见问题配置

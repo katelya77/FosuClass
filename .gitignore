@@ -11,8 +11,9 @@ cloudfunctions/*/node_modules/
 server/.env
 server/node_modules/
 server/storage/*.json
+server/storage/*.jsonl
+server/storage/releases/
 !server/storage/.gitkeep
 tools/fosu-sync-client/.env
 tools/fosu-sync-client/.session/
 tools/fosu-sync-client/.debug/
-

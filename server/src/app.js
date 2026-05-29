@@ -14,6 +14,7 @@ const healthRouter = require("./routes/health");
 const fosuRouter = require("./routes/fosu");
 const adminRouter = require("./routes/admin");
 const contributeRouter = require("./routes/contribute");
+const feedbackRouter = require("./routes/feedback");
 
 const app = express();
 
@@ -70,6 +71,7 @@ app.use("/api/health", healthRouter);
 app.use("/api/fosu", fosuRouter);
 app.use("/api/admin", adminRouter);
 app.use("/api/contribute", contributeRouter);
+app.use("/api/feedback", feedbackRouter);
 
 // 6. 404 错误处理
 app.use((req, res, next) => {

@@ -11,6 +11,7 @@ const { parseSchoolOptionsHtml, parseMajorAjaxResponse } = require("../utils/par
 const cache = require("../utils/cache");
 const { safeLog } = require("../utils/safeLogger");
 const config = require("../config");
+const releaseService = require("./releaseService");
 
 const STORAGE_DIR = path.join(__dirname, "../../storage");
 const FILE_MAP = {
@@ -336,6 +337,11 @@ let snapshotCacheTime = 0;
  * @returns {Object|null}
  */
 function getSnapshot() {
+  const activeReleaseSnapshot = releaseService.readActiveReleaseSnapshot();
+  if (activeReleaseSnapshot) {
+    return activeReleaseSnapshot;
+  }
+
   if (fs.existsSync(CURRENT_SNAPSHOT_PATH)) {
     try {
       const stat = fs.statSync(CURRENT_SNAPSHOT_PATH);
@@ -373,20 +379,36 @@ function safeDecode(str) {
 async function getBootstrap(semester) {
   const snapshot = getSnapshot();
   if (snapshot) {
+    const derivedCounts = releaseService.countRelease(snapshot);
+    const counts = Object.assign({}, derivedCounts, snapshot.coverage || {});
+    ["teacherScheduleCount", "classroomScheduleCount", "courseScheduleCount", "classScheduleCount", "majorCount", "majorsCount", "collegeCount", "collegesCount"].forEach((key) => {
+      if (counts[key] === null || counts[key] === undefined) {
+        counts[key] = derivedCounts[key] || 0;
+      }
+    });
+    const updatedAt = snapshot.updatedAt || new Date().toISOString();
     return {
       success: true,
       dataSource: "snapshot",
-      updatedAt: snapshot.updatedAt,
+      updatedAt,
       version: snapshot.version,
       semester: snapshot.semester,
       catalog: snapshot.catalog,
-      counts: snapshot.coverage,
+      counts,
       versions: {
-        snapshot: snapshot.version
+        snapshot: snapshot.version,
+        catalog: snapshot.version,
+        majors: snapshot.version,
+        classSchedules: snapshot.version,
+        resources: snapshot.version,
       },
       metaDetails: {
         source: snapshot.source,
-        disclaimer: snapshot.disclaimer
+        disclaimer: snapshot.disclaimer || "数据来自佛山大学教务系统同步快照，仅供参考，具体以教务系统及任课教师通知为准。",
+        catalogUpdatedAt: updatedAt,
+        majorsUpdatedAt: updatedAt,
+        classSchedulesUpdatedAt: updatedAt,
+        resourcesUpdatedAt: updatedAt,
       }
     };
   }
@@ -420,7 +442,11 @@ async function getBootstrap(semester) {
       legacy: meta.version || "1.0.0"
     },
     metaDetails: {
-      disclaimer: "课表数据仅供参考，具体以佛山大学教务系统、任课教师通知为准。"
+      disclaimer: "数据来自佛山大学教务系统同步快照，仅供参考，具体以教务系统及任课教师通知为准。",
+      catalogUpdatedAt: meta.catalog?.updatedAt || catalog.updatedAt || null,
+      majorsUpdatedAt: meta.majors?.updatedAt || null,
+      classSchedulesUpdatedAt: meta["class-schedules"]?.updatedAt || null,
+      resourcesUpdatedAt: meta["teacher-schedules"]?.updatedAt || meta["classroom-schedules"]?.updatedAt || meta["course-schedules"]?.updatedAt || null,
     }
   };
 }
@@ -497,4 +523,3 @@ module.exports = {
   getClasses,
   getSnapshot
 };
-
