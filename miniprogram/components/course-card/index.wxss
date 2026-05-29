@@ -89,6 +89,19 @@
   white-space: nowrap;
 }
 
+.header-pills {
+  display: flex;
+  gap: 8rpx;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.merged-pill {
+  background: #fff3e0 !important;
+  color: #ff9800 !important;
+  border: 1rpx solid #ffe0b2;
+}
+
 .status-ongoing {
   background: #2e7d32;
   color: #ffffff;

@@ -6,7 +6,10 @@
   <block wx:if="{{layout === 'list'}}">
     <view class="list-header">
       <view class="course-name">{{course.courseName}}</view>
-      <view wx:if="{{course.statusText}}" class="status-pill {{statusClass}}">{{course.statusText}}</view>
+      <view class="header-pills">
+        <view wx:if="{{course.isMerged}}" class="status-pill merged-pill">多地点</view>
+        <view wx:if="{{course.statusText}}" class="status-pill {{statusClass}}">{{course.statusText}}</view>
+      </view>
     </view>
 
     <view class="time-row">

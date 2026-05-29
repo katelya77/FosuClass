@@ -14,6 +14,12 @@
   </block>
 
   <block wx:else>
+    <!-- 缓存恢复状态小提示栏 -->
+    <view class="restore-hint-bar" wx:if="{{restoreHint}}">
+      <text class="restore-hint-icon">✓</text>
+      <text class="restore-hint-text">{{restoreHint}}</text>
+    </view>
+
     <view class="search-card card">
       <view class="search-row" wx:if="{{activeTab === 'teacher' || activeTab === 'classroom' || activeTab === 'course'}}">
         <text class="search-icon">⌕</text>
@@ -78,7 +84,11 @@
           </view>
 
           <button class="primary-search-btn" loading="{{loading}}" bindtap="searchClassSchedule">
-            {{selectedClassIndex < 0 ? '查看班级课表' : '查看课表'}}
+            {{selectedClassIndex >= 0 && classesOptions[selectedClassIndex] ? '查看 ' + classesOptions[selectedClassIndex].className + ' 课表' : '查看班级课表'}}
+          </button>
+          
+          <button class="reset-filter-btn" bindtap="resetFilters">
+            重置筛选
           </button>
         </view>
 

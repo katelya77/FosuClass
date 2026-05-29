@@ -144,6 +144,7 @@ Page({
     classEmptyTitle: "请选择上方筛选并查询",
     classEmptyDesc: "数据来自佛山大学教务系统，查询后将展示行政班级课表。",
     classNoticeText: "",
+    restoreHint: "",
   },
 
   onLoad() {
@@ -243,6 +244,7 @@ Page({
           this.originalCatalogData = catalogData;
           this.applyCatalogFilter();
           this.setData({ loading: false, catalogEmpty: false });
+          this.restoreFilterCache();
         } else {
           console.warn("Bootstrap not ready or missing catalog, fallback to catalog");
           this.fallbackToCatalog();
@@ -264,6 +266,7 @@ Page({
           this.originalCatalogData = data;
           this.applyCatalogFilter();
           this.setData({ loading: false, catalogEmpty: false });
+          this.restoreFilterCache();
         } else {
           console.warn("Catalog data is empty");
           this.setData({ loading: false, catalogEmpty: true });
@@ -276,6 +279,191 @@ Page({
   },
 
 
+  // ================== 本地缓存状态存取与联动 ==================
+
+  saveFilterCache() {
+    const {
+      semesters, selectedSemesterIndex,
+      colleges, selectedCollegeIndex,
+      grades, selectedGradeIndex,
+      majors, selectedMajorIndex,
+      classesOptions, selectedClassIndex
+    } = this.data;
+
+    const cache = {
+      semesterValue: semesters[selectedSemesterIndex]?.value || "",
+      semesterLabel: semesters[selectedSemesterIndex]?.label || "",
+      collegeCode: selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex]?.code : "",
+      collegeName: selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex]?.name : "",
+      grade: selectedGradeIndex >= 0 ? grades[selectedGradeIndex] : "",
+      majorCode: selectedMajorIndex >= 0 ? majors[selectedMajorIndex]?.code : "",
+      majorName: selectedMajorIndex >= 0 ? majors[selectedMajorIndex]?.name : "",
+      classId: (selectedClassIndex >= 0 && classesOptions[selectedClassIndex]) ? classesOptions[selectedClassIndex].classId : "",
+      className: (selectedClassIndex >= 0 && classesOptions[selectedClassIndex]) ? classesOptions[selectedClassIndex].className : "",
+      classType: (selectedClassIndex >= 0 && classesOptions[selectedClassIndex]) ? (classesOptions[selectedClassIndex].isAggregated ? "aggregate" : "admin") : "",
+      lastUpdatedAt: Date.now()
+    };
+
+    wx.setStorageSync("FOSU_SCHOOL_FILTER_CACHE", cache);
+  },
+
+  restoreFilterCache() {
+    const cache = wx.getStorageSync("FOSU_SCHOOL_FILTER_CACHE");
+    if (!cache) {
+      this.printSchoolDebugLog(false, "", "无缓存数据");
+      return;
+    }
+
+    // 1. 恢复学期
+    let selectedSemesterIndex = 0;
+    if (cache.semesterValue) {
+      const semIdx = this.data.semesters.findIndex(s => s.value === cache.semesterValue);
+      if (semIdx >= 0) selectedSemesterIndex = semIdx;
+    }
+
+    // 2. 校验并恢复学院
+    const collegeIdx = this.data.colleges.findIndex(c => c.code === cache.collegeCode);
+    if (collegeIdx < 0) {
+      this.setData({ selectedSemesterIndex });
+      this.printSchoolDebugLog(true, "未恢复", `学院 ${cache.collegeName || cache.collegeCode} 在当前快照中已不存在`);
+      return;
+    }
+
+    // 3. 校验并恢复年级
+    const gradeIdx = this.data.grades.indexOf(cache.grade);
+    if (gradeIdx < 0) {
+      this.setData({
+        selectedSemesterIndex,
+        selectedCollegeIndex: collegeIdx
+      });
+      this.printSchoolDebugLog(true, "学院级", `年级 ${cache.grade} 在当前年级列表中已不存在`);
+      this.showRestoreHint();
+      return;
+    }
+
+    // 4. 设置学期、学院、年级索引并异步拉取专业进行恢复
+    this.setData({
+      selectedSemesterIndex,
+      selectedCollegeIndex: collegeIdx,
+      selectedGradeIndex: gradeIdx
+    }, () => {
+      this.fetchMajors().then((majors) => {
+        // 校验并恢复专业
+        const majorIdx = majors.findIndex(m => m.code === cache.majorCode);
+        if (majorIdx < 0) {
+          this.printSchoolDebugLog(true, "学院+年级级", `专业 ${cache.majorName || cache.majorCode} 不存在于该学院或年级下`);
+          this.showRestoreHint();
+          return;
+        }
+
+        this.setData({
+          selectedMajorIndex: majorIdx
+        }, () => {
+          // 校验并恢复班级
+          this.fetchClasses().then((classesOptions) => {
+            let classIdx = -1;
+            if (cache.classId) {
+              classIdx = classesOptions.findIndex(c => c.classId === cache.classId);
+            }
+            if (classIdx < 0 && cache.className) {
+              classIdx = classesOptions.findIndex(c => c.className === cache.className);
+            }
+
+            if (classIdx < 0) {
+              this.printSchoolDebugLog(true, "专业级", `班级 ${cache.className || cache.classId} 在该专业下已不存在`);
+              this.showRestoreHint();
+              return;
+            }
+
+            this.setData({
+              selectedClassIndex: classIdx
+            });
+            this.printSchoolDebugLog(true, "班级级 (完全恢复)", "已完全恢复上次筛选状态");
+            this.showRestoreHint();
+          }).catch(err => {
+            this.printSchoolDebugLog(true, "专业级", "拉取班级列表失败: " + err.message);
+            this.showRestoreHint();
+          });
+        });
+      }).catch(err => {
+        this.printSchoolDebugLog(true, "学院+年级级", "拉取专业列表失败: " + err.message);
+        this.showRestoreHint();
+      });
+    });
+  },
+
+  showRestoreHint() {
+    const { colleges, selectedCollegeIndex, grades, selectedGradeIndex, majors, selectedMajorIndex, classesOptions, selectedClassIndex } = this.data;
+    const parts = [];
+    if (selectedCollegeIndex >= 0 && colleges[selectedCollegeIndex]) {
+      parts.push(colleges[selectedCollegeIndex].name);
+    }
+    if (selectedGradeIndex >= 0 && grades[selectedGradeIndex]) {
+      parts.push(grades[selectedGradeIndex]);
+    }
+    if (selectedMajorIndex >= 0 && majors[selectedMajorIndex]) {
+      parts.push(majors[selectedMajorIndex].name);
+    }
+    if (selectedClassIndex >= 0 && classesOptions[selectedClassIndex]) {
+      parts.push(classesOptions[selectedClassIndex].className);
+    }
+    
+    if (parts.length > 0) {
+      const hint = `已恢复上次选择：${parts.join(" / ")}`;
+      this.setData({
+        restoreHint: hint
+      });
+      if (this.restoreTimer) {
+        clearTimeout(this.restoreTimer);
+      }
+      this.restoreTimer = setTimeout(() => {
+        this.setData({
+          restoreHint: ""
+        });
+      }, 2000);
+    }
+  },
+
+  resetFilters() {
+    wx.removeStorageSync("FOSU_SCHOOL_FILTER_CACHE");
+    this.setData({
+      selectedSemesterIndex: 0,
+      selectedCollegeIndex: -1,
+      selectedGradeIndex: -1,
+      selectedMajorIndex: -1,
+      selectedClassIndex: -1,
+      majors: [],
+      classesOptions: [],
+      classesResult: [],
+      classAdminResults: [],
+      classAggregateResults: [],
+      classNoticeText: "",
+      restoreHint: ""
+    });
+    wx.showToast({
+      title: "已清除筛选缓存",
+      icon: "success",
+      duration: 1000
+    });
+  },
+
+  printSchoolDebugLog(hit, level, reason) {
+    const envVersion = wx.getSystemInfoSync().platform === 'devtools' || (wx.getAccountInfoSync && wx.getAccountInfoSync().miniProgram.envVersion === 'develop');
+    if (envVersion) {
+      console.log("========== [开发环境全校页面调试日志] ==========");
+      console.log("- 是否命中 FOSU_SCHOOL_FILTER_CACHE:", hit ? "是" : "否");
+      if (hit) {
+        console.log("- 恢复到了哪一级:", level);
+        if (reason) {
+          console.log("- 缓存失效原因 / 说明:", reason);
+        }
+      } else {
+        console.log("- 未命中原因:", reason);
+      }
+      console.log("=================================================");
+    }
+  },
+
   // 2. 学期选择改变
   onSemesterChange(event) {
     this.setData({
@@ -286,6 +474,11 @@ Page({
       classAdminResults: [],
       classAggregateResults: [],
       classNoticeText: "",
+    }, () => {
+      if (this.data.selectedCollegeIndex >= 0 && this.data.selectedGradeIndex >= 0 && this.data.selectedMajorIndex >= 0) {
+        this.fetchClasses();
+      }
+      this.saveFilterCache();
     });
   },
 
@@ -294,6 +487,7 @@ Page({
     const index = Number(event.detail.value);
     this.setData({
       selectedCollegeIndex: index,
+      selectedGradeIndex: -1,
       selectedMajorIndex: -1,
       selectedClassIndex: -1,
       majors: [], // 重置专业
@@ -303,7 +497,7 @@ Page({
       classAggregateResults: [],
       classNoticeText: "",
     }, () => {
-      this.fetchMajors();
+      this.saveFilterCache();
     });
   },
 
@@ -322,6 +516,7 @@ Page({
       classNoticeText: "",
     }, () => {
       this.fetchMajors();
+      this.saveFilterCache();
     });
   },
 
@@ -329,23 +524,26 @@ Page({
   fetchMajors() {
     const { colleges, selectedCollegeIndex, grades, selectedGradeIndex } = this.data;
     if (selectedCollegeIndex < 0 || selectedGradeIndex < 0) {
-      return; // 必须同时选了学院和年级，强智系统才会联动返回专业
+      return Promise.resolve([]);
     }
 
     const collegeCode = colleges[selectedCollegeIndex].code;
     const grade = grades[selectedGradeIndex];
 
     this.setData({ loading: true });
-    request.get("/api/fosu/majors", { collegeCode, grade }, { showLoading: false })
+    return request.get("/api/fosu/majors", { collegeCode, grade }, { showLoading: false })
       .then((data) => {
+        const majors = data.majors || [];
         this.setData({
-          majors: data.majors || [],
+          majors: majors,
           loading: false,
         });
+        return majors;
       })
       .catch((err) => {
         this.setData({ loading: false });
         console.error("fetchMajors fail", err);
+        throw err;
       });
   },
 
@@ -361,6 +559,7 @@ Page({
       classNoticeText: "",
     }, () => {
       this.fetchClasses();
+      this.saveFilterCache();
     });
   },
 
@@ -368,7 +567,7 @@ Page({
   fetchClasses() {
     const { semesters, selectedSemesterIndex, colleges, selectedCollegeIndex, grades, selectedGradeIndex, majors, selectedMajorIndex } = this.data;
     if (selectedCollegeIndex < 0 || selectedGradeIndex < 0 || selectedMajorIndex < 0) {
-      return;
+      return Promise.resolve([]);
     }
 
     const semester = semesters[selectedSemesterIndex].value;
@@ -377,7 +576,7 @@ Page({
     const majorCode = majors[selectedMajorIndex].code;
 
     this.setData({ loading: true });
-    request.get("/api/fosu/classes", { semester, collegeCode, grade, majorCode }, { showLoading: false })
+    return request.get("/api/fosu/classes", { semester, collegeCode, grade, majorCode }, { showLoading: false })
       .then((res) => {
         const classesOptions = [];
         if (res && res.success) {
@@ -408,10 +607,12 @@ Page({
           classesOptions,
           loading: false
         });
+        return classesOptions;
       })
       .catch((err) => {
         this.setData({ loading: false });
         console.error("fetchClasses fail", err);
+        throw err;
       });
   },
 
@@ -419,6 +620,8 @@ Page({
   onClassChange(event) {
     this.setData({
       selectedClassIndex: Number(event.detail.value)
+    }, () => {
+      this.saveFilterCache();
     });
   },
 
