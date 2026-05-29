@@ -169,6 +169,14 @@
           <view class="detail-divider"></view>
           
           <view class="detail-row">
+            <view class="detail-label">快照版本</view>
+            <view class="detail-value">{{versionData.snapshotVersion}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">当前学期</view>
+            <view class="detail-value">{{versionData.semester}}</view>
+          </view>
+          <view class="detail-row">
             <view class="detail-label">学院数量</view>
             <view class="detail-value">{{versionData.collegesCount}}</view>
           </view>
@@ -180,23 +188,23 @@
             <view class="detail-label">班级课表数量</view>
             <view class="detail-value">{{versionData.classScheduleCount}}</view>
           </view>
-          <view class="detail-row">
-            <view class="detail-label">教师课表数量</view>
-            <view class="detail-value">{{versionData.teacherScheduleCount}}</view>
+          <view class="detail-row" wx:if="{{versionData.adminClassCount !== '-'}}">
+            <view class="detail-label">行政班数量</view>
+            <view class="detail-value">{{versionData.adminClassCount}}</view>
           </view>
-          <view class="detail-row">
-            <view class="detail-label">教室课表数量</view>
-            <view class="detail-value">{{versionData.classroomScheduleCount}}</view>
+          <view class="detail-row" wx:if="{{versionData.majorAggregateCount !== '-'}}">
+            <view class="detail-label">专业共享课表数量</view>
+            <view class="detail-value">{{versionData.majorAggregateCount}}</view>
           </view>
-          <view class="detail-row">
-            <view class="detail-label">课程课表数量</view>
-            <view class="detail-value">{{versionData.courseScheduleCount}}</view>
+          <view class="detail-row" wx:if="{{versionData.noScheduleMajorCount !== '-'}}">
+            <view class="detail-label">确认无课专业数</view>
+            <view class="detail-value">{{versionData.noScheduleMajorCount}}</view>
           </view>
           
           <view class="detail-divider"></view>
           
           <view class="detail-row">
-            <view class="detail-label">最近同步时间</view>
+            <view class="detail-label">数据更新时间</view>
             <view class="detail-value">{{versionData.syncTimeText}}</view>
           </view>
           <view class="detail-row">
@@ -204,12 +212,8 @@
             <view class="detail-value">{{versionData.dataSource}}</view>
           </view>
           <view class="detail-row">
-            <view class="detail-label">服务器状态</view>
-            <view class="detail-value">{{versionData.storageMounted}}</view>
-          </view>
-          <view class="detail-row">
-            <view class="detail-label">持久化路径</view>
-            <view class="detail-value">{{versionData.storagePath}}</view>
+            <view class="detail-label">说明</view>
+            <view class="detail-value" style="font-size: 24rpx; color: #757575;">{{versionData.disclaimer}}</view>
           </view>
         </view>
       </scroll-view>

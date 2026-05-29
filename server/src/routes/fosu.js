@@ -53,6 +53,19 @@ router.get("/bootstrap", async (req, res) => {
 });
 
 /**
+ * 0.5. 根据筛选获取班级列表，按 adminClass 和 majorAggregate 分组
+ * GET /api/fosu/classes
+ */
+router.get("/classes", async (req, res) => {
+  try {
+    const data = await schoolCatalogService.getClasses(req.query);
+    res.json(data);
+  } catch (error) {
+    handleRouteError(res, error, "get-classes-failed");
+  }
+});
+
+/**
  * 1. 获取全校 Catalog
  * GET /api/fosu/catalog
  */

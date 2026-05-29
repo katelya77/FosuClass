@@ -12,6 +12,7 @@ const normalizer = require("../utils/scheduleNormalizer");
 const cache = require("../utils/cache");
 const { safeLog } = require("../utils/safeLogger");
 const config = require("../config");
+const { getSnapshot } = require("./schoolCatalogService");
 
 const STORAGE_DIR = path.join(__dirname, "../../storage");
 const FILE_MAP = {
@@ -59,6 +60,14 @@ function matchesFilter(actual, expected) {
   return normalizeFilterValue(actual) === normalizedExpected;
 }
 
+function safeDecode(str) {
+  try {
+    return decodeURIComponent(str);
+  } catch (e) {
+    return str;
+  }
+}
+
 function filterClassSchedules(schedules, queryParams) {
   const baseFiltered = (schedules || []).filter(
     (item) =>
@@ -75,9 +84,12 @@ function filterClassSchedules(schedules, queryParams) {
     };
   }
 
+  const cleanQueryName = safeDecode(queryParams.className);
   return {
     baseFiltered,
-    filtered: baseFiltered.filter((item) => matchesFilter(item.className, queryParams.className)),
+    filtered: baseFiltered.filter((item) => {
+      return safeDecode(item.className) === cleanQueryName || item.classId === queryParams.className;
+    }),
   };
 }
 
@@ -242,7 +254,36 @@ async function getClassSchedule(params) {
     className,
   } = params;
 
+  // 允许通过 className 或 classId 精准查找行政班课表
   if (!collegeCode || !grade || !majorCode) {
+    if (className) {
+      const semesterParam = semester || "2025-2026-2";
+      let allSchedules = [];
+      const snapshot = getSnapshot();
+      if (snapshot && Array.isArray(snapshot.classSchedules)) {
+        allSchedules = snapshot.classSchedules;
+      } else {
+        allSchedules = readJsonFile(FILE_MAP["class-schedules"]) || [];
+      }
+
+      const cleanQueryName = safeDecode(className);
+      const found = allSchedules.find(item =>
+        String(item.semester || "") === String(semesterParam) &&
+        (safeDecode(item.className) === cleanQueryName || item.classId === className)
+      );
+
+      if (found) {
+        const meta = getMeta("class-schedules");
+        return {
+          success: true,
+          dataSource: snapshot ? "snapshot" : "cache",
+          updatedAt: snapshot ? snapshot.updatedAt : (meta.updatedAt || new Date().toISOString()),
+          semester: semesterParam,
+          classes: [found],
+        };
+      }
+    }
+
     return buildNoClassScheduleResponse({
       semester: semester || "2025-2026-2",
       collegeCode,
@@ -338,7 +379,14 @@ async function getClassSchedule(params) {
   }
 
   // 3. cache-first 模式
-  const allClassSchedules = readJsonFile(FILE_MAP["class-schedules"]);
+  let allClassSchedules = null;
+  const snapshot = getSnapshot();
+  if (snapshot && Array.isArray(snapshot.classSchedules)) {
+    allClassSchedules = snapshot.classSchedules;
+  } else {
+    allClassSchedules = readJsonFile(FILE_MAP["class-schedules"]);
+  }
+
   if (Array.isArray(allClassSchedules) && allClassSchedules.length > 0) {
     const { baseFiltered, filtered } = filterClassSchedules(allClassSchedules, queryParams);
 
@@ -353,9 +401,9 @@ async function getClassSchedule(params) {
     const meta = getMeta("class-schedules");
     return {
       success: true,
-      dataSource: "cache",
-      updatedAt: meta.updatedAt || new Date().toISOString(),
-      syncSource: meta.syncSource || "local-sync-client",
+      dataSource: snapshot ? "snapshot" : "cache",
+      updatedAt: snapshot ? snapshot.updatedAt : (meta.updatedAt || new Date().toISOString()),
+      syncSource: snapshot ? snapshot.source : (meta.syncSource || "local-sync-client"),
       semester: queryParams.semester,
       classes: filtered,
     };

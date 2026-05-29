@@ -70,8 +70,15 @@
             </picker>
           </view>
 
+          <view class="filter-item" wx:if="{{selectedMajorIndex >= 0}}">
+            <text class="filter-label">班级：</text>
+            <picker mode="selector" range="{{classesOptions}}" range-key="label" bindchange="onClassChange">
+              <view class="filter-pill">{{classesOptions[selectedClassIndex].label || (classesOptions.length ? "选择班级 (可选)" : "无班级数据")}}</view>
+            </picker>
+          </view>
+
           <button class="primary-search-btn" loading="{{loading}}" bindtap="searchClassSchedule">
-            查看班级课表
+            {{selectedClassIndex < 0 ? '查看班级课表' : '查看课表'}}
           </button>
         </view>
 
