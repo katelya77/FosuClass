@@ -105,6 +105,8 @@ jobs:
               sudo docker logs fosuclass-api --tail=200 || true
               exit 1
             fi
+            
+            sudo docker ps --filter "name=fosuclass-api"
 
       - name: Show Deployment Info
         run: |
