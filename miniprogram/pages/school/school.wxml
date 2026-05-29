@@ -4,257 +4,268 @@
     <view class="subtitle">班级、教师、教室和课程数据全部来自佛山大学教务系统</view>
   </view>
 
-  <view wx:if="{{catalogEmpty}}" class="card" style="margin: 24rpx; padding: 60rpx 40rpx; text-align: center; border-radius: 16rpx; background: #ffffff; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.05);">
-    <empty-state
-      title="暂未同步全校课表数据"
-      desc="全校课表数据尚未同步，维护者同步后即可查看。请稍后再试。"
-    />
-  </view>
+  <block wx:if="{{catalogEmpty}}">
+    <view class="card" style="margin: 24rpx; padding: 60rpx 40rpx; text-align: center; border-radius: 16rpx; background: #ffffff; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.05);">
+      <empty-state
+        title="暂未同步全校课表数据"
+        desc="全校课表数据尚未同步，维护者同步后即可查看。请稍后再试。"
+      />
+    </view>
+  </block>
 
   <block wx:else>
     <view class="search-card card">
-    <view class="search-row" wx:if="{{activeTab === 'teacher' || activeTab === 'classroom' || activeTab === 'course'}}">
-      <text class="search-icon">⌕</text>
-      <input
-        class="search-input"
-        value="{{keyword}}"
-        placeholder="{{activeTab === 'teacher' ? '搜索教师姓名 (例如: 汪军)' : (activeTab === 'classroom' ? '搜索教室号 (例如: C7-503)' : '搜索课程名 (例如: 有机化学)')}}"
-        placeholder-class="search-placeholder"
-        confirm-type="search"
-        bindinput="onKeywordInput"
-      />
-    </view>
-
-    <view class="tabs">
-      <view
-        wx:for="{{tabs}}"
-        wx:key="key"
-        class="tab-item {{activeTab === item.key ? 'active' : ''}}"
-        data-key="{{item.key}}"
-        bindtap="onTabChange"
-      >{{item.label}}</view>
-    </view>
-  </view>
-
-  <!-- 1. 班级 Tab -->
-  <view wx:if="{{activeTab === 'class'}}" class="tab-panel">
-    <view class="filter-card card">
-      <view class="filter-item">
-        <text class="filter-label">学期：</text>
-        <picker mode="selector" range="{{semesters}}" range-key="label" bindchange="onSemesterChange">
-          <view class="filter-pill">{{semesters[selectedSemesterIndex].label || "选择学期"}}</view>
-        </picker>
-      </view>
-      
-      <view class="filter-item">
-        <text class="filter-label">学院：</text>
-        <picker mode="selector" range="{{colleges}}" range-key="name" bindchange="onCollegeChange">
-          <view class="filter-pill">{{colleges[selectedCollegeIndex].name || "选择学院"}}</view>
-        </picker>
+      <view class="search-row" wx:if="{{activeTab === 'teacher' || activeTab === 'classroom' || activeTab === 'course'}}">
+        <text class="search-icon">⌕</text>
+        <input
+          class="search-input"
+          value="{{keyword}}"
+          placeholder="{{activeTab === 'teacher' ? '搜索教师姓名 (例如: 汪军)' : (activeTab === 'classroom' ? '搜索教室号 (例如: C7-503)' : '搜索课程名 (例如: 有机化学)')}}"
+          placeholder-class="search-placeholder"
+          confirm-type="search"
+          bindinput="onKeywordInput"
+        />
       </view>
 
-      <view class="filter-item">
-        <text class="filter-label">年级：</text>
-        <picker mode="selector" range="{{grades}}" bindchange="onGradeChange">
-          <view class="filter-pill">{{grades[selectedGradeIndex] || "选择年级"}}</view>
-        </picker>
+      <view class="tabs">
+        <view
+          wx:for="{{tabs}}"
+          wx:key="key"
+          class="tab-item {{activeTab === item.key ? 'active' : ''}}"
+          data-key="{{item.key}}"
+          bindtap="onTabChange"
+        >{{item.label}}</view>
       </view>
-
-      <view class="filter-item">
-        <text class="filter-label">专业：</text>
-        <picker mode="selector" range="{{majors}}" range-key="name" bindchange="onMajorChange">
-          <view class="filter-pill">{{majors[selectedMajorIndex].name || (selectedCollegeIndex >= 0 && selectedGradeIndex >= 0 ? (majors.length ? "选择专业" : "加载中或无专业") : "请先选择学院和年级")}}</view>
-        </picker>
-      </view>
-
-      <button class="primary-search-btn" loading="{{loading}}" bindtap="searchClassSchedule">
-        查询班级课表
-      </button>
     </view>
 
-    <view class="updated-hint" wx:if="{{updatedAtText}}">
-      {{updatedAtText}}
-    </view>
+    <block wx:if="{{activeTab === 'class'}}">
+      <!-- 1. 班级 Tab -->
+      <view class="tab-panel">
+        <view class="filter-card card">
+          <view class="filter-item">
+            <text class="filter-label">学期：</text>
+            <picker mode="selector" range="{{semesters}}" range-key="label" bindchange="onSemesterChange">
+              <view class="filter-pill">{{semesters[selectedSemesterIndex].label || "选择学期"}}</view>
+            </picker>
+          </view>
 
-    <view class="result-list" wx:if="{{classesResult.length}}">
-      <view
-        wx:for="{{classesResult}}"
-        wx:key="className"
-        class="result-card card"
-        data-index="{{index}}"
-        bindtap="viewClassSchedule"
-      >
-        <view class="result-main">
-          <view class="result-title">{{item.className}}</view>
-          <view class="result-meta">{{item.majorName || "未知专业"}} · {{item.grade}}级 · 教务数据</view>
+          <view class="filter-item">
+            <text class="filter-label">学院：</text>
+            <picker mode="selector" range="{{colleges}}" range-key="name" bindchange="onCollegeChange">
+              <view class="filter-pill">{{colleges[selectedCollegeIndex].name || "选择学院"}}</view>
+            </picker>
+          </view>
+
+          <view class="filter-item">
+            <text class="filter-label">年级：</text>
+            <picker mode="selector" range="{{grades}}" bindchange="onGradeChange">
+              <view class="filter-pill">{{grades[selectedGradeIndex] || "选择年级"}}</view>
+            </picker>
+          </view>
+
+          <view class="filter-item">
+            <text class="filter-label">专业：</text>
+            <picker mode="selector" range="{{majors}}" range-key="name" bindchange="onMajorChange">
+              <view class="filter-pill">{{majors[selectedMajorIndex].name || (selectedCollegeIndex >= 0 && selectedGradeIndex >= 0 ? (majors.length ? "选择专业" : "加载中或无专业") : "请先选择学院和年级")}}</view>
+            </picker>
+          </view>
+
+          <button class="primary-search-btn" loading="{{loading}}" bindtap="searchClassSchedule">
+            查询班级课表
+          </button>
         </view>
-        <view class="result-side">
-          <view class="status ready">教务数据</view>
-          <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}门课</view>
+
+        <view class="updated-hint" wx:if="{{updatedAtText}}">
+          {{updatedAtText}}
         </view>
-      </view>
-    </view>
 
-    <empty-state
-      wx:elif="{{!loading}}"
-      title="请选择上方筛选并查询"
-      desc="数据来自佛山大学教务系统，查询后将展示行政班级课表。"
-    />
-  </view>
-
-  <!-- 2. 教师 Tab -->
-  <view wx:elif="{{activeTab === 'teacher'}}" class="tab-panel">
-    <view class="filter-card card">
-      <view class="filter-item">
-        <text class="filter-label">学期：</text>
-        <picker mode="selector" range="{{semesters}}" range-key="label" bindchange="onSemesterChange">
-          <view class="filter-pill">{{semesters[selectedSemesterIndex].label || "选择学期"}}</view>
-        </picker>
-      </view>
-      
-      <view class="filter-item">
-        <text class="filter-label">院系：</text>
-        <picker mode="selector" range="{{colleges}}" range-key="name" bindchange="onCollegeChange">
-          <view class="filter-pill">{{colleges[selectedCollegeIndex].name || "所有学院 (可选)"}}</view>
-        </picker>
-      </view>
-
-      <view class="filter-item">
-        <text class="filter-label">职称：</text>
-        <picker mode="selector" range="{{titleOptions}}" bindchange="onTitleChange">
-          <view class="filter-pill">{{titleOptions[selectedTitleIndex] || "所有职称 (可选)"}}</view>
-        </picker>
-      </view>
-
-      <button class="primary-search-btn" loading="{{loading}}" bindtap="searchTeacherSchedule">
-        搜索教师课表
-      </button>
-    </view>
-
-    <view class="updated-hint" wx:if="{{updatedAtText}}">
-      {{updatedAtText}}
-    </view>
-
-    <view class="result-list" wx:if="{{teachersResult.length}}">
-      <view
-        wx:for="{{teachersResult}}"
-        wx:key="teacherName"
-        class="result-card card"
-        data-index="{{index}}"
-        bindtap="viewTeacherSchedule"
-      >
-        <view class="result-main">
-          <view class="result-title">{{item.teacherName}} 老师</view>
-          <view class="result-meta">{{item.college}} · 教务数据</view>
+        <view class="result-list" wx:if="{{classesResult.length}}">
+          <view
+            wx:for="{{classesResult}}"
+            wx:key="className"
+            class="result-card card"
+            data-index="{{index}}"
+            bindtap="viewClassSchedule"
+          >
+            <view class="result-main">
+              <view class="result-title">{{item.className}}</view>
+              <view class="result-meta">{{item.majorName || "未知专业"}} · {{item.grade}}级 · 教务数据</view>
+            </view>
+            <view class="result-side">
+              <view class="status ready">教务数据</view>
+              <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}门课</view>
+            </view>
+          </view>
         </view>
-        <view class="result-side">
-          <view class="status ready">教务数据</view>
-          <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}门课</view>
+
+        <empty-state
+          wx:elif="{{!loading}}"
+          title="请选择上方筛选并查询"
+          desc="数据来自佛山大学教务系统，查询后将展示行政班级课表。"
+        />
+      </view>
+    </block>
+
+    <block wx:elif="{{activeTab === 'teacher'}}">
+      <!-- 2. 教师 Tab -->
+      <view class="tab-panel">
+        <view class="filter-card card">
+          <view class="filter-item">
+            <text class="filter-label">学期：</text>
+            <picker mode="selector" range="{{semesters}}" range-key="label" bindchange="onSemesterChange">
+              <view class="filter-pill">{{semesters[selectedSemesterIndex].label || "选择学期"}}</view>
+            </picker>
+          </view>
+
+          <view class="filter-item">
+            <text class="filter-label">院系：</text>
+            <picker mode="selector" range="{{colleges}}" range-key="name" bindchange="onCollegeChange">
+              <view class="filter-pill">{{colleges[selectedCollegeIndex].name || "所有学院 (可选)"}}</view>
+            </picker>
+          </view>
+
+          <view class="filter-item">
+            <text class="filter-label">职称：</text>
+            <picker mode="selector" range="{{titleOptions}}" bindchange="onTitleChange">
+              <view class="filter-pill">{{titleOptions[selectedTitleIndex] || "所有职称 (可选)"}}</view>
+            </picker>
+          </view>
+
+          <button class="primary-search-btn" loading="{{loading}}" bindtap="searchTeacherSchedule">
+            搜索教师课表
+          </button>
         </view>
-      </view>
-    </view>
 
-    <empty-state 
-      wx:elif="{{!loading}}" 
-      title="输入姓名并搜索" 
-      desc="可任选学院、职称作为辅佐筛选项，查询教师当前排课。" 
-    />
-  </view>
-
-  <!-- 3. 教室 Tab -->
-  <view wx:elif="{{activeTab === 'classroom'}}" class="tab-panel">
-    <view class="filter-card card">
-      <view class="filter-item">
-        <text class="filter-label">学期：</text>
-        <picker mode="selector" range="{{semesters}}" range-key="label" bindchange="onSemesterChange">
-          <view class="filter-pill">{{semesters[selectedSemesterIndex].label || "选择学期"}}</view>
-        </picker>
-      </view>
-
-      <view class="filter-item">
-        <text class="filter-label">校区：</text>
-        <picker mode="selector" range="{{campusOptions}}" bindchange="onCampusChange">
-          <view class="filter-pill">{{campusOptions[selectedCampusIndex] || "所有校区 (可选)"}}</view>
-        </picker>
-      </view>
-
-      <button class="primary-search-btn" loading="{{loading}}" bindtap="searchClassroomSchedule">
-        查询教室占用
-      </button>
-    </view>
-
-    <view class="updated-hint" wx:if="{{updatedAtText}}">
-      {{updatedAtText}}
-    </view>
-
-    <view class="result-list" wx:if="{{classroomsResult.length}}">
-      <view
-        wx:for="{{classroomsResult}}"
-        wx:key="roomName"
-        class="result-card card"
-        data-index="{{index}}"
-        bindtap="viewClassroomSchedule"
-      >
-        <view class="result-main">
-          <view class="result-title">{{item.roomName}} 教室</view>
-          <view class="result-meta">教务数据 · 可点击查看该教室排课占用</view>
+        <view class="updated-hint" wx:if="{{updatedAtText}}">
+          {{updatedAtText}}
         </view>
-        <view class="result-side">
-          <view class="status ready">教务数据</view>
-          <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}课次</view>
+
+        <view class="result-list" wx:if="{{teachersResult.length}}">
+          <view
+            wx:for="{{teachersResult}}"
+            wx:key="teacherName"
+            class="result-card card"
+            data-index="{{index}}"
+            bindtap="viewTeacherSchedule"
+          >
+            <view class="result-main">
+              <view class="result-title">{{item.teacherName}} 老师</view>
+              <view class="result-meta">{{item.college}} · 教务数据</view>
+            </view>
+            <view class="result-side">
+              <view class="status ready">教务数据</view>
+              <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}门课</view>
+            </view>
+          </view>
         </view>
+
+        <empty-state
+          wx:elif="{{!loading}}"
+          title="输入姓名并搜索"
+          desc="可任选学院、职称作为辅佐筛选项，查询教师当前排课。"
+        />
       </view>
-    </view>
+    </block>
 
-    <empty-state 
-      wx:elif="{{!loading}}" 
-      title="输入教室名称并查询" 
-      desc="例如输入 C7-503，即可获取教务系统的教室周课表。" 
-    />
-  </view>
+    <block wx:elif="{{activeTab === 'classroom'}}">
+      <!-- 3. 教室 Tab -->
+      <view class="tab-panel">
+        <view class="filter-card card">
+          <view class="filter-item">
+            <text class="filter-label">学期：</text>
+            <picker mode="selector" range="{{semesters}}" range-key="label" bindchange="onSemesterChange">
+              <view class="filter-pill">{{semesters[selectedSemesterIndex].label || "选择学期"}}</view>
+            </picker>
+          </view>
 
-  <!-- 4. 课程 Tab -->
-  <view wx:else class="tab-panel">
-    <view class="filter-card card">
-      <view class="filter-item">
-        <text class="filter-label">学期：</text>
-        <picker mode="selector" range="{{semesters}}" range-key="label" bindchange="onSemesterChange">
-          <view class="filter-pill">{{semesters[selectedSemesterIndex].label || "选择学期"}}</view>
-        </picker>
-      </view>
+          <view class="filter-item">
+            <text class="filter-label">校区：</text>
+            <picker mode="selector" range="{{campusOptions}}" bindchange="onCampusChange">
+              <view class="filter-pill">{{campusOptions[selectedCampusIndex] || "所有校区 (可选)"}}</view>
+            </picker>
+          </view>
 
-      <button class="primary-search-btn" loading="{{loading}}" bindtap="searchCourseSchedule">
-        查询课程安排
-      </button>
-    </view>
-
-    <view class="updated-hint" wx:if="{{updatedAtText}}">
-      {{updatedAtText}}
-    </view>
-
-    <view class="result-list" wx:if="{{coursesResult.length}}">
-      <view
-        wx:for="{{coursesResult}}"
-        wx:key="courseName"
-        class="result-card card"
-        data-index="{{index}}"
-        bindtap="viewCourseSchedule"
-      >
-        <view class="result-main">
-          <view class="result-title">{{item.courseName}}</view>
-          <view class="result-meta">教务数据 · 点击查看该课程在全校的排课分布</view>
+          <button class="primary-search-btn" loading="{{loading}}" bindtap="searchClassroomSchedule">
+            查询教室占用
+          </button>
         </view>
-        <view class="result-side">
-          <view class="status ready">教务数据</view>
-          <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}次排课</view>
-        </view>
-      </view>
-    </view>
 
-    <empty-state 
-      wx:elif="{{!loading}}" 
-      title="输入课程名并查询" 
-      desc="输入如：动物解剖学、有机化学，查看该门课程的开课详情。" 
-    />
+        <view class="updated-hint" wx:if="{{updatedAtText}}">
+          {{updatedAtText}}
+        </view>
+
+        <view class="result-list" wx:if="{{classroomsResult.length}}">
+          <view
+            wx:for="{{classroomsResult}}"
+            wx:key="roomName"
+            class="result-card card"
+            data-index="{{index}}"
+            bindtap="viewClassroomSchedule"
+          >
+            <view class="result-main">
+              <view class="result-title">{{item.roomName}} 教室</view>
+              <view class="result-meta">教务数据 · 可点击查看该教室排课占用</view>
+            </view>
+            <view class="result-side">
+              <view class="status ready">教务数据</view>
+              <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}课次</view>
+            </view>
+          </view>
+        </view>
+
+        <empty-state
+          wx:elif="{{!loading}}"
+          title="输入教室名称并查询"
+          desc="例如输入 C7-503，即可获取教务系统的教室周课表。"
+        />
+      </view>
+    </block>
+
+    <block wx:else>
+      <!-- 4. 课程 Tab -->
+      <view class="tab-panel">
+        <view class="filter-card card">
+          <view class="filter-item">
+            <text class="filter-label">学期：</text>
+            <picker mode="selector" range="{{semesters}}" range-key="label" bindchange="onSemesterChange">
+              <view class="filter-pill">{{semesters[selectedSemesterIndex].label || "选择学期"}}</view>
+            </picker>
+          </view>
+
+          <button class="primary-search-btn" loading="{{loading}}" bindtap="searchCourseSchedule">
+            查询课程安排
+          </button>
+        </view>
+
+        <view class="updated-hint" wx:if="{{updatedAtText}}">
+          {{updatedAtText}}
+        </view>
+
+        <view class="result-list" wx:if="{{coursesResult.length}}">
+          <view
+            wx:for="{{coursesResult}}"
+            wx:key="courseName"
+            class="result-card card"
+            data-index="{{index}}"
+            bindtap="viewCourseSchedule"
+          >
+            <view class="result-main">
+              <view class="result-title">{{item.courseName}}</view>
+              <view class="result-meta">教务数据 · 点击查看该课程在全校的排课分布</view>
+            </view>
+            <view class="result-side">
+              <view class="status ready">教务数据</view>
+              <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}次排课</view>
+            </view>
+          </view>
+        </view>
+
+        <empty-state
+          wx:elif="{{!loading}}"
+          title="输入课程名并查询"
+          desc="输入如：动物解剖学、有机化学，查看该门课程的开课详情。"
+        />
+      </view>
+    </block>
   </block>
 </view>
