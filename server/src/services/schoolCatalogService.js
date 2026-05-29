@@ -412,6 +412,9 @@ async function getBootstrap(semester) {
       classScheduleCount: meta["class-schedules"]?.itemCount || 0,
       adminClassCount: meta["class-schedules"]?.adminClassCount || 0,
       majorAggregateCount: meta["class-schedules"]?.majorAggregateCount || 0,
+      teacherScheduleCount: meta["teacher-schedules"]?.itemCount || 0,
+      classroomScheduleCount: meta["classroom-schedules"]?.itemCount || 0,
+      courseScheduleCount: meta["course-schedules"]?.itemCount || 0,
     },
     versions: {
       legacy: meta.version || "1.0.0"
@@ -494,5 +497,4 @@ module.exports = {
   getClasses,
   getSnapshot
 };
-
 

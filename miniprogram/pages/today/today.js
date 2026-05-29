@@ -5,6 +5,7 @@ const {
   getCoursesByClass,
   getTodayCourses,
   groupElectiveLikeCourses,
+  mergeCanonicalCoursesForDisplay,
   normalizeCourse,
 } = require("../../utils/course");
 const { mockCalendar } = require("../../data/mockCalendar");
@@ -225,8 +226,12 @@ Page({
       return;
     }
 
-    const sourceCourses = schedule.courses.map(normalizeCourse);
-    const rawTodayCount = sourceCourses.length;
+    const rawTodayCount = schedule.courses.length;
+    const sourceCourses = schedule.courses.map((course) => normalizeCourse(Object.assign({}, course, {
+      semester: course.semester || semester,
+      classId: course.classId || classId,
+      className: course.className || className,
+    })));
 
     let filteredOutCount = 0;
     const todayRawCourses = sourceCourses.filter(course => {
@@ -252,113 +257,18 @@ Page({
       return keep;
     });
 
-    const seenStrictKeys = new Set();
-    const strictUniqueCourses = [];
-    todayRawCourses.forEach((c) => {
-      const sem = c.semester || semester || "2025-2026-2";
-      const clsName = c.className || className || "未知班级";
-      const teacher = c.teacherName || "";
-      const room = c.classroom || "";
-      
-      const strictKey = [
-        sem,
-        clsName,
-        currentWeek,
-        weekday,
-        c.startSection,
-        c.endSection,
-        c.courseName,
-        room,
-        teacher
-      ].join("_");
-      
-      if (!seenStrictKeys.has(strictKey)) {
-        seenStrictKeys.add(strictKey);
-        strictUniqueCourses.push(c);
-      }
+    const mergeResult = mergeCanonicalCoursesForDisplay(todayRawCourses, {
+      semester,
+      classId,
+      className,
+      currentWeek,
+      weekday,
     });
-
-    const resolvedClass = classId || className || "未知班级";
-    const groups = {};
-    const groupKeys = [];
-
-    strictUniqueCourses.forEach((c) => {
-      const sem = c.semester || semester || "2025-2026-2";
-      const normName = normalizeCourseName(c.courseName);
-      
-      const displayGroupKey = [
-        sem,
-        resolvedClass,
-        currentWeek,
-        weekday,
-        c.startSection,
-        c.endSection,
-        normName
-      ].join("_");
-
-      if (!groups[displayGroupKey]) {
-        groups[displayGroupKey] = [];
-        groupKeys.push(displayGroupKey);
-      }
-      groups[displayGroupKey].push(c);
-    });
-
-    const displayCourses = [];
-    const mergedGroups = [];
-
-    groupKeys.forEach((key) => {
-      const group = groups[key];
-      if (group.length === 1) {
-        const single = Object.assign({}, group[0]);
-        displayCourses.push(single);
-      } else {
-        const base = Object.assign({}, group[0]);
-        const normName = normalizeCourseName(base.courseName);
-
-        const classrooms = [...new Set(group.map(c => c.classroom).filter(Boolean))];
-        const teachers = [...new Set(group.map(c => c.teacherName).filter(Boolean))];
-
-        let resolvedClassroom = base.classroom;
-        if (classrooms.length > 1) {
-          resolvedClassroom = "多个地点";
-        } else if (classrooms.length === 0) {
-          resolvedClassroom = "多地点/见教师通知";
-        }
-
-        let resolvedTeacher = base.teacherName;
-        if (teachers.length > 1) {
-          resolvedTeacher = "多个教师";
-        } else if (teachers.length === 0) {
-          resolvedTeacher = "见教师通知";
-        }
-
-        const isPhysicalEducation = normName.includes("体育") || normName.includes("大学体育") || group.some(c => (c.courseName || "").includes("体育"));
-
-        if (isPhysicalEducation) {
-          resolvedClassroom = "多个地点";
-          resolvedTeacher = "多个教师";
-          base.remark = "体育课地点以教师/实际选课通知为准";
-        } else {
-          base.remark = group.map((c, i) => `[地点${i+1}] 教师: ${c.teacherName || "未知"}, 教室: ${c.classroom || "未知"}`).join("\n");
-        }
-
-        base.id = key;
-        base.courseName = normName;
-        base.classroom = resolvedClassroom;
-        base.teacherName = resolvedTeacher;
-        base.isMerged = true;
-        base.mergedCount = group.length;
-
-        displayCourses.push(base);
-
-        mergedGroups.push({
-          key,
-          courseName: normName,
-          count: group.length,
-          items: group.map(c => ({ classroom: c.classroom, teacherName: c.teacherName }))
-        });
-      }
-    });
+    const displayCourses = mergeResult.courses;
+    const normalizedTodayCourses = mergeResult.normalizedCourses;
+    const mergedGroups = mergeResult.mergedGroups;
+    const venueCourseNameCount = normalizedTodayCourses.filter((course) => course.isVenueCandidate).length;
+    const peMergedGroupCount = mergedGroups.filter((group) => group.isPhysicalEducationLike).length;
 
     displayCourses.sort((a, b) => {
       if (a.startSection !== b.startSection) {
@@ -367,7 +277,10 @@ Page({
       if (a.endSection !== b.endSection) {
         return a.endSection - b.endSection;
       }
-      return (a.courseName || "").localeCompare(b.courseName || "", "zh");
+      return (a.displayCourseName || a.canonicalCourseName || a.courseName || "").localeCompare(
+        b.displayCourseName || b.canonicalCourseName || b.courseName || "",
+        "zh"
+      );
     });
 
     const courses = decorateTodayCourses(displayCourses, now);
@@ -395,14 +308,42 @@ Page({
 
     const envVersion = wx.getSystemInfoSync().platform === 'devtools' || (wx.getAccountInfoSync && wx.getAccountInfoSync().miniProgram.envVersion === 'develop');
     if (envVersion) {
-      console.log("========== [开发环境今日页面调试日志] ==========");
-      console.log("- 当前绑定课表 (className/classId): " + className + " / " + (classId || "无"));
-      console.log("- 原始今日课程数量 (rawTodayCount):", rawTodayCount);
-      console.log("- 过滤后进入去重的今日课程数量:", todayRawCourses.length);
-      console.log("- 被过滤课程数量 (filteredOutCount):", filteredOutCount);
-      console.log("- 合并后展示课程数量 (displayTodayCount):", courses.length);
-      console.log("- 被合并课程组 (mergedGroups):", JSON.stringify(mergedGroups, null, 2));
-      console.log("===============================================");
+      const sampleNormalizedCourses = normalizedTodayCourses.slice(0, 10).map((course) => ({
+        rawCourseName: course.rawCourseName || course.courseName,
+        rawTeacherName: course.rawTeacherName || course.teacherName,
+        courseName: course.courseName,
+        canonicalCourseName: course.canonicalCourseName,
+        classroom: course.classroom,
+        canonicalClassroom: course.canonicalClassroom,
+        teacherName: course.teacherName,
+        normalizationReason: course.normalizationReason,
+        isVenueCandidate: course.isVenueCandidate,
+        isPhysicalEducationLike: course.isPhysicalEducationLike,
+      }));
+      const venueCorrections = normalizedTodayCourses.filter((course) =>
+        course.isVenueCandidate &&
+        course.rawCourseName &&
+        course.canonicalCourseName &&
+        course.rawCourseName !== course.canonicalCourseName
+      );
+
+      console.log("[Today Normalize Debug]", {
+        boundClassName: className,
+        classId,
+        rawTodayCount,
+        normalizedTodayCount: normalizedTodayCourses.length,
+        displayTodayCount: courses.length,
+        venueCourseNameCount,
+        peMergedGroupCount,
+        filteredOutCount,
+        sampleNormalizedCourses,
+        mergedGroups,
+      });
+      venueCorrections.forEach((course) => {
+        console.warn(
+          `[Today Normalize Debug] courseName=${course.rawCourseName}, teacherName=${course.rawTeacherName || ""} -> canonicalCourseName=${course.canonicalCourseName}, classroom=${course.canonicalClassroom || course.classroom || ""}`
+        );
+      });
     }
   },
 

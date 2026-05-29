@@ -5,9 +5,9 @@
 >
   <block wx:if="{{layout === 'list'}}">
     <view class="list-header">
-      <view class="course-name">{{course.courseName}}</view>
+      <view class="course-name">{{course.displayCourseName || course.canonicalCourseName || course.courseName}}</view>
       <view class="header-pills">
-        <view wx:if="{{course.isMerged}}" class="status-pill merged-pill">多地点</view>
+        <view wx:if="{{course.isMerged}}" class="status-pill merged-pill">{{course.tag || "多地点"}}</view>
         <view wx:if="{{course.statusText}}" class="status-pill {{statusClass}}">{{course.statusText}}</view>
       </view>
     </view>
@@ -20,11 +20,11 @@
     <view class="meta-grid">
       <view class="meta-item">
         <text class="meta-label">教室</text>
-        <text class="meta-value">{{course.classroom || "待补充"}}</text>
+        <text class="meta-value">{{course.displayClassroom || course.canonicalClassroom || course.classroom || "待补充"}}</text>
       </view>
       <view class="meta-item">
         <text class="meta-label">教师</text>
-        <text class="meta-value">{{course.teacherName || "待补充"}}</text>
+        <text class="meta-value">{{course.displayTeacherName || course.canonicalTeacherName || course.teacherName || "待补充"}}</text>
       </view>
       <view class="meta-item">
         <text class="meta-label">周次</text>
@@ -38,9 +38,9 @@
   </block>
 
   <block wx:else>
-    <view class="course-name {{span === 1 ? 'span-1' : ''}}">{{course.courseName}}</view>
-    <view class="course-meta classroom-highlight" wx:if="{{course.classroom}}">{{course.classroom}}</view>
-    <view class="course-meta" wx:if="{{span > 1 && course.teacherName}}">{{course.teacherName}}</view>
+    <view class="course-name {{span === 1 ? 'span-1' : ''}}">{{course.displayCourseName || course.canonicalCourseName || course.courseName}}</view>
+    <view class="course-meta classroom-highlight" wx:if="{{course.displayClassroom || course.canonicalClassroom || course.classroom}}">{{course.displayClassroom || course.canonicalClassroom || course.classroom}}</view>
+    <view class="course-meta" wx:if="{{span > 1 && (course.displayTeacherName || course.canonicalTeacherName || course.teacherName)}}">{{course.displayTeacherName || course.canonicalTeacherName || course.teacherName}}</view>
     <view class="course-week" wx:if="{{span > 2 && course.weekText}}">{{course.weekText}}</view>
   </block>
 </view>

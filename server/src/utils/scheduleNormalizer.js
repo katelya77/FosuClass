@@ -1,3 +1,5 @@
+const { toRenderableCourse } = require("./courseNormalizer");
+
 /**
  * 课表规范器：对解析出的 CourseItem 进行字段规范化和默认值补全。
  */
@@ -349,7 +351,7 @@ function normalizeCourseItem(course, context) {
   normalized.rawText = normalized.rawText || "";
   normalized.rawHtml = normalized.rawHtml || "";
   
-  return normalized;
+  return toRenderableCourse(normalized);
 }
 
 /**

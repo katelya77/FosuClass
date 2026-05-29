@@ -25,6 +25,7 @@ console.log(`[env] ADMIN_API_TOKEN: ${process.env.ADMIN_API_TOKEN ? "present" : 
 
 const parser = require("../../server/src/utils/parser");
 const normalizer = require("../../server/src/utils/scheduleNormalizer");
+const courseIdentity = require("../../server/src/utils/courseNormalizer");
 
 // 清理代理环境变量，防止上传 VPS 请求走本地代理
 delete process.env.HTTP_PROXY;
@@ -33,6 +34,9 @@ delete process.env.ALL_PROXY;
 delete process.env.http_proxy;
 delete process.env.https_proxy;
 delete process.env.all_proxy;
+process.env.NO_PROXY = "*";
+process.env.no_proxy = "*";
+axios.defaults.proxy = false;
 
 const FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 const FOSU_API_BASE = process.env.FOSU_API_BASE || "https://class.katelya.eu.org";
@@ -251,26 +255,245 @@ function generateSnapshotVersion() {
   return `${yy}.${mm}.${dd}.${hh}`;
 }
 
-function buildSnapshot(catalog, majors, allClassSchedules) {
+function normalizeScheduleEntryCourses(entry, fallbackContext = {}) {
+  const context = Object.assign({}, fallbackContext, {
+    semester: entry.semester || fallbackContext.semester,
+    className: entry.className || fallbackContext.className,
+    sourceType: entry.sourceType || fallbackContext.sourceType || "class",
+    audienceType: entry.audienceType || fallbackContext.audienceType || "student",
+  });
+  const courses = normalizer.normalizeCourseList(entry.courses || [], context);
+  return Object.assign({}, entry, { courses });
+}
+
+function parsePositiveLimit(value) {
+  const number = parseInt(value || "", 10);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
+function isUsableResourceName(value) {
+  const text = String(value || "").trim();
+  return Boolean(text) &&
+    !["待补充", "暂无", "无", "未知", "多个地点", "多个教师", "见通知", "多个教师/见通知"].includes(text);
+}
+
+function limitMapEntries(map, limit) {
+  const entries = Array.from(map.entries()).sort(([left], [right]) => left.localeCompare(right, "zh-CN", { numeric: true }));
+  return limit > 0 ? entries.slice(0, limit) : entries;
+}
+
+function pushGroupedCourse(map, key, course) {
+  if (!map.has(key)) {
+    map.set(key, []);
+  }
+  map.get(key).push(course);
+}
+
+function buildSnapshotResources(classSchedules) {
+  const includeTeachers = getEnvFlag("SYNC_RESOURCES_TEACHERS", false);
+  const includeClassrooms = getEnvFlag("SYNC_RESOURCES_CLASSROOMS", false);
+  const includeCourses = getEnvFlag("SYNC_RESOURCES_COURSES", false);
+  const limit = parsePositiveLimit(process.env.SYNC_RESOURCE_LIMIT);
+  const teacherMap = new Map();
+  const classroomMap = new Map();
+  const courseMap = new Map();
+
+  (classSchedules || []).forEach((schedule) => {
+    (schedule.courses || []).forEach((course) => {
+      const baseCourse = Object.assign({}, course, {
+        semester: course.semester || schedule.semester,
+        classId: course.classId || schedule.classId || "",
+        className: course.className || schedule.className || "",
+        collegeCode: course.collegeCode || schedule.collegeCode || "",
+        collegeName: course.collegeName || schedule.collegeName || "",
+        grade: course.grade || schedule.grade || "",
+        majorCode: course.majorCode || schedule.majorCode || "",
+        majorName: course.majorName || schedule.majorName || "",
+      });
+      const courseName = baseCourse.canonicalCourseName || baseCourse.displayCourseName || baseCourse.courseName;
+      const teacherName = baseCourse.canonicalTeacherName || baseCourse.displayTeacherName || baseCourse.teacherName;
+      const classroom = baseCourse.canonicalClassroom || baseCourse.displayClassroom || baseCourse.classroom;
+
+      if (includeTeachers && isUsableResourceName(teacherName) && !baseCourse.isTeacherFieldActuallyCourseName && !courseIdentity.isCourseLike(teacherName)) {
+        pushGroupedCourse(teacherMap, teacherName, baseCourse);
+      }
+      if (includeClassrooms && isUsableResourceName(classroom)) {
+        pushGroupedCourse(classroomMap, classroom, baseCourse);
+      }
+      if (includeCourses && isUsableResourceName(courseName) && !courseIdentity.isVenueLike(courseName)) {
+        pushGroupedCourse(courseMap, courseName, baseCourse);
+      }
+    });
+  });
+
+  const teacherEntries = limitMapEntries(teacherMap, limit);
+  const classroomEntries = limitMapEntries(classroomMap, limit);
+  const courseEntries = limitMapEntries(courseMap, limit);
+
+  return {
+    teachers: teacherEntries.map(([teacherName, courses]) => ({ teacherName, courseCount: courses.length })),
+    classrooms: classroomEntries.map(([roomName, courses]) => ({ roomName, courseCount: courses.length })),
+    courses: courseEntries.map(([courseName, courses]) => ({ courseName, courseCount: courses.length })),
+    teacherSchedules: teacherEntries.map(([teacherName, courses]) => ({ teacherName, courses })),
+    classroomSchedules: classroomEntries.map(([roomName, courses]) => ({ roomName, courses })),
+    courseSchedules: courseEntries.map(([courseName, courses]) => ({ courseName, courses })),
+  };
+}
+
+function emptySnapshotResources() {
+  return {
+    teachers: [],
+    classrooms: [],
+    courses: [],
+    teacherSchedules: [],
+    classroomSchedules: [],
+    courseSchedules: [],
+  };
+}
+
+function normalizeSnapshotResources(resources) {
+  const source = Object.assign(emptySnapshotResources(), resources || {});
+  return {
+    teachers: source.teachers || [],
+    classrooms: source.classrooms || [],
+    courses: source.courses || [],
+    teacherSchedules: (source.teacherSchedules || []).map((item) => normalizeScheduleEntryCourses(item, {
+      sourceType: "teacher",
+      audienceType: "teacher",
+    })),
+    classroomSchedules: (source.classroomSchedules || []).map((item) => normalizeScheduleEntryCourses(item, {
+      sourceType: "classroom",
+      audienceType: "classroom",
+    })),
+    courseSchedules: (source.courseSchedules || []).map((item) => normalizeScheduleEntryCourses(item, {
+      sourceType: "course",
+      audienceType: "course",
+    })),
+  };
+}
+
+function collectSnapshotCourses(snapshot) {
+  const result = [];
+  (snapshot.classSchedules || []).forEach((schedule) => {
+    (schedule.courses || []).forEach((course) => result.push({ scheduleType: "class", scheduleName: schedule.className, course }));
+  });
+  const resources = snapshot.resources || {};
+  [
+    ["teacher", resources.teacherSchedules || [], "teacherName"],
+    ["classroom", resources.classroomSchedules || [], "roomName"],
+    ["course", resources.courseSchedules || [], "courseName"],
+  ].forEach(([scheduleType, schedules, nameKey]) => {
+    schedules.forEach((schedule) => {
+      (schedule.courses || []).forEach((course) => result.push({
+        scheduleType,
+        scheduleName: schedule[nameKey],
+        course,
+      }));
+    });
+  });
+  return result;
+}
+
+function buildNormalizeReport(snapshot) {
+  const entries = collectSnapshotCourses(snapshot);
+  const reasons = {};
+  const samples = [];
+  let normalizedCourseCount = 0;
+  let venueCourseNameCount = 0;
+  let teacherFieldCourseNameCount = 0;
+  let physicalEducationLikeCount = 0;
+
+  entries.forEach((entry) => {
+    const course = entry.course || {};
+    const reason = course.normalizationReason || "normal";
+    reasons[reason] = (reasons[reason] || 0) + 1;
+    const changed =
+      reason !== "normal" ||
+      (course.rawCourseName && course.canonicalCourseName && course.rawCourseName !== course.canonicalCourseName) ||
+      (course.rawClassroom && course.canonicalClassroom && course.rawClassroom !== course.canonicalClassroom) ||
+      (course.rawTeacherName && course.canonicalTeacherName && course.rawTeacherName !== course.canonicalTeacherName);
+
+    if (changed) {
+      normalizedCourseCount++;
+      if (samples.length < 30) {
+        samples.push({
+          scheduleType: entry.scheduleType,
+          scheduleName: entry.scheduleName,
+          rawCourseName: course.rawCourseName || course.courseName,
+          rawTeacherName: course.rawTeacherName || course.teacherName,
+          rawClassroom: course.rawClassroom || course.classroom,
+          canonicalCourseName: course.canonicalCourseName,
+          canonicalClassroom: course.canonicalClassroom,
+          canonicalTeacherName: course.canonicalTeacherName,
+          normalizationReason: reason,
+        });
+      }
+    }
+    if (course.isVenueCandidate) {
+      venueCourseNameCount++;
+    }
+    if (course.isTeacherFieldActuallyCourseName) {
+      teacherFieldCourseNameCount++;
+    }
+    if (course.isPhysicalEducationLike) {
+      physicalEducationLikeCount++;
+    }
+  });
+
+  return {
+    generatedAt: new Date().toISOString(),
+    snapshotVersion: snapshot.version,
+    semester: snapshot.semester,
+    totalCourseCount: entries.length,
+    normalizedCourseCount,
+    venueCourseNameCount,
+    teacherFieldCourseNameCount,
+    physicalEducationLikeCount,
+    reasons,
+    samples,
+  };
+}
+
+function writeSnapshotDebugFiles(debugDir, snapshot, compressedBuffer) {
+  const snapshotJson = JSON.stringify(snapshot, null, 2);
+  fs.writeFileSync(path.join(debugDir, "snapshot-latest.json"), snapshotJson, "utf-8");
+  fs.writeFileSync(path.join(debugDir, "snapshot-latest.json.gz"), compressedBuffer);
+  const normalizeReport = buildNormalizeReport(snapshot);
+  fs.writeFileSync(path.join(debugDir, "normalize-report-latest.json"), JSON.stringify(normalizeReport, null, 2), "utf-8");
+  console.log(`💾 规范化报告已保存至 .debug/normalize-report-latest.json，修正课程 ${normalizeReport.normalizedCourseCount}/${normalizeReport.totalCourseCount} 条`);
+  return normalizeReport;
+}
+
+function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules) {
   const version = generateSnapshotVersion();
   const activeSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
   const noScheduleCachePath = path.join(__dirname, ".debug", "no-schedule-majors.json");
   const noScheduleMajors = readJsonArray(noScheduleCachePath);
+  const md5 = (str) => crypto.createHash("md5").update(str).digest("hex");
+  const updatedSchedules = (allClassSchedules || []).map((item) => {
+    const classId = item.classId || md5(`${item.semester}_${item.collegeCode}_${item.grade}_${item.majorCode}_${item.className}`);
+    const withClassId = Object.assign({}, item, { classId });
+    return normalizeScheduleEntryCourses(withClassId, {
+      semester: item.semester || activeSemester,
+      classId,
+      className: item.className,
+      sourceType: "class",
+      audienceType: "student",
+    });
+  });
+  const resources = normalizeSnapshotResources(resourceSchedules || buildSnapshotResources(updatedSchedules));
   
   const collegeCount = (catalog.colleges || []).length;
   const majorCount = (majors || []).length;
-  const classScheduleCount = (allClassSchedules || []).length;
-  const adminClassCount = (allClassSchedules || []).filter(
+  const classScheduleCount = updatedSchedules.length;
+  const adminClassCount = updatedSchedules.filter(
     (item) => item.displayType === "class-schedule" && !item.isAggregated
   ).length;
   const majorAggregateCount = classScheduleCount - adminClassCount;
   const noScheduleMajorCount = noScheduleMajors.length;
-  
-  const md5 = (str) => crypto.createHash("md5").update(str).digest("hex");
-  const updatedSchedules = (allClassSchedules || []).map((item) => {
-    const classId = item.classId || md5(`${item.semester}_${item.collegeCode}_${item.grade}_${item.majorCode}_${item.className}`);
-    return Object.assign({}, item, { classId });
-  });
+  const teacherScheduleCount = resources.teacherSchedules.length;
+  const classroomScheduleCount = resources.classroomSchedules.length;
+  const courseScheduleCount = resources.courseSchedules.length;
 
   const timeTableSections = [
     { section: 1, start: "08:00", end: "08:40" },
@@ -304,6 +527,7 @@ function buildSnapshot(catalog, majors, allClassSchedules) {
     },
     majors: majors || [],
     classSchedules: updatedSchedules,
+    resources,
     timeTable: {
       sections: timeTableSections
     },
@@ -313,7 +537,10 @@ function buildSnapshot(catalog, majors, allClassSchedules) {
       classScheduleCount,
       adminClassCount,
       majorAggregateCount,
-      noScheduleMajorCount
+      noScheduleMajorCount,
+      teacherScheduleCount,
+      classroomScheduleCount,
+      courseScheduleCount
     }
   };
 }
@@ -786,8 +1013,7 @@ async function handleOfflineRelease() {
   if (!fs.existsSync(debugDir)) {
     fs.mkdirSync(debugDir, { recursive: true });
   }
-  fs.writeFileSync(path.join(debugDir, "snapshot-latest.json"), snapshotJson, "utf-8");
-  fs.writeFileSync(path.join(debugDir, "snapshot-latest.json.gz"), compressedBuffer);
+  const normalizeReport = writeSnapshotDebugFiles(debugDir, snapshot, compressedBuffer);
   console.log(`\n💾 本地快照已生成并压缩：.debug/snapshot-latest.json 和 .debug/snapshot-latest.json.gz (体积: ${(compressedBuffer.length / 1024).toFixed(2)} KB)`);
 
   await uploadSnapshot(compressedBuffer);
@@ -801,12 +1027,57 @@ async function handleOfflineRelease() {
     semester: snapshot.semester,
     updatedAt: snapshot.updatedAt,
     coverage: snapshot.coverage,
+    normalizeReport,
     uploadSize: compressedBuffer.length,
     serverStatus: verifyRes,
   };
   fs.writeFileSync(path.join(debugDir, "sync-report-latest.json"), JSON.stringify(report, null, 2), "utf-8");
   console.log(`💾 总结报告已保存至 .debug/sync-report-latest.json`);
   console.log("\n🎉 [Release] 离线暴力快照发布完成！");
+}
+
+async function handleResourcesSync() {
+  const debugDir = path.join(__dirname, ".debug");
+  if (!fs.existsSync(debugDir)) {
+    fs.mkdirSync(debugDir, { recursive: true });
+  }
+
+  const { items, filePath } = readClassSchedulesFromFile();
+  const normalizedClassSchedules = items.map((item) => normalizeScheduleEntryCourses(item, {
+    semester: item.semester || process.env.PREFERRED_SEMESTER || inferPreferredSemester(),
+    sourceType: "class",
+    audienceType: "student",
+  }));
+  const resources = buildSnapshotResources(normalizedClassSchedules);
+  const resourcesPath = path.join(debugDir, "resources-latest.json");
+  fs.writeFileSync(resourcesPath, JSON.stringify(resources, null, 2), "utf-8");
+
+  const report = {
+    success: true,
+    generatedAt: new Date().toISOString(),
+    sourceFile: filePath,
+    flags: {
+      SYNC_RESOURCES_TEACHERS: getEnvFlag("SYNC_RESOURCES_TEACHERS", false),
+      SYNC_RESOURCES_CLASSROOMS: getEnvFlag("SYNC_RESOURCES_CLASSROOMS", false),
+      SYNC_RESOURCES_COURSES: getEnvFlag("SYNC_RESOURCES_COURSES", false),
+      SYNC_RESOURCE_LIMIT: parsePositiveLimit(process.env.SYNC_RESOURCE_LIMIT),
+    },
+    counts: {
+      teachers: resources.teachers.length,
+      classrooms: resources.classrooms.length,
+      courses: resources.courses.length,
+      teacherSchedules: resources.teacherSchedules.length,
+      classroomSchedules: resources.classroomSchedules.length,
+      courseSchedules: resources.courseSchedules.length,
+    },
+  };
+  fs.writeFileSync(path.join(debugDir, "resources-report-latest.json"), JSON.stringify(report, null, 2), "utf-8");
+  console.log(`💾 资源维度数据已生成: ${resourcesPath}`);
+  console.log(`📊 resources counts: ${JSON.stringify(report.counts)}`);
+  if (!report.flags.SYNC_RESOURCES_TEACHERS && !report.flags.SYNC_RESOURCES_CLASSROOMS && !report.flags.SYNC_RESOURCES_COURSES) {
+    console.log("ℹ️ 当前未开启 SYNC_RESOURCES_TEACHERS / SYNC_RESOURCES_CLASSROOMS / SYNC_RESOURCES_COURSES，资源数组保持为空。");
+  }
+  return resources;
 }
 
 /**
@@ -817,7 +1088,8 @@ async function initBrowserContext() {
     "--disable-blink-features=AutomationControlled",
     "--ignore-certificate-errors",
     "--disable-web-security",
-    "--allow-running-insecure-content"
+    "--allow-running-insecure-content",
+    "--no-proxy-server"
   ];
 
   let browser;
@@ -2109,7 +2381,7 @@ async function syncClassSchedules(page, catalog, majors) {
       console.log(`📁 完整课表数据已保存至: ${latestPath}`);
       console.log(`📊 共抓取班级课表数量 (itemCount): ${allClassSchedules.length} 条`);
       printPowerShellCommands();
-      return;
+      return allClassSchedules;
     }
 
     try {
@@ -2170,6 +2442,11 @@ async function main() {
   const offlineMode = getEnvFlag("SYNC_RELEASE_OFFLINE", false);
   if (action === "release" && offlineMode) {
     await handleOfflineRelease();
+    return;
+  }
+
+  if (action === "resources") {
+    await handleResourcesSync();
     return;
   }
 
@@ -2240,8 +2517,7 @@ async function main() {
       if (!fs.existsSync(debugDir)) {
         fs.mkdirSync(debugDir, { recursive: true });
       }
-      fs.writeFileSync(path.join(debugDir, "snapshot-latest.json"), snapshotJson, "utf-8");
-      fs.writeFileSync(path.join(debugDir, "snapshot-latest.json.gz"), compressedBuffer);
+      const normalizeReport = writeSnapshotDebugFiles(debugDir, snapshot, compressedBuffer);
       console.log(`\n💾 本地快照已生成并压缩：.debug/snapshot-latest.json 和 .debug/snapshot-latest.json.gz (体积: ${(compressedBuffer.length / 1024).toFixed(2)} KB)`);
       await uploadSnapshot(compressedBuffer);
       const activateRes = await activateSnapshot(snapshot.version);
@@ -2253,6 +2529,7 @@ async function main() {
         semester: snapshot.semester,
         updatedAt: snapshot.updatedAt,
         coverage: snapshot.coverage,
+        normalizeReport,
         uploadSize: compressedBuffer.length,
         serverStatus: verifyRes,
       };
@@ -2266,7 +2543,7 @@ async function main() {
       console.log("\n🎉 [同步大成功] 本地所有数据已全量同步至 VPS！");
     } else {
       console.error(`❌ 未知的同步参数: ${action}`);
-      console.log("支持的参数: catalog | majors | class | all");
+      console.log("支持的参数: catalog | majors | class | resources | release | all");
     }
 
   } catch (error) {
