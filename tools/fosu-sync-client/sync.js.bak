@@ -16,9 +16,8 @@ console.log(`[env] .env path: ${envPath}`);
 console.log(`[env] FOSU_API_BASE: ${process.env.FOSU_API_BASE || "https://class.katelya.eu.org"}`);
 console.log(`[env] PREFERRED_SEMESTER: ${process.env.PREFERRED_SEMESTER || "未配置"}`);
 console.log(`[env] SYNC_GRADE_RANGE: ${process.env.SYNC_GRADE_RANGE || "未配置"}`);
-console.log(`[env] SYNC_GRADES (专业同步使用): ${process.env.SYNC_GRADES || "未配置"}`);
-console.log(`[env] SYNC_CLASS_GRADES (班级课表同步使用): ${process.env.SYNC_CLASS_GRADES || "未配置"}`);
-console.log(`[env] SYNC_UPLOAD_CHUNK_SIZE: ${process.env.SYNC_UPLOAD_CHUNK_SIZE || "10"}`);
+console.log(`[env] SYNC_GRADES: ${process.env.SYNC_GRADES || "未配置"}`);
+console.log(`[env] SYNC_UPLOAD_CHUNK_SIZE: ${process.env.SYNC_UPLOAD_CHUNK_SIZE || "100"}`);
 console.log(`[env] SYNC_SKIP_NO_SCHEDULE_CACHE: ${process.env.SYNC_SKIP_NO_SCHEDULE_CACHE || "true"}`);
 console.log(`[env] SYNC_RECHECK_NO_SCHEDULE: ${process.env.SYNC_RECHECK_NO_SCHEDULE || "false"}`);
 console.log(`[env] ADMIN_API_TOKEN: ${process.env.ADMIN_API_TOKEN ? "present" : "missing"}`);
@@ -234,199 +233,15 @@ async function fetchVpsSyncStatus() {
 }
 
 function getUploadChunkSize() {
-  const parsed = parseInt(process.env.SYNC_UPLOAD_CHUNK_SIZE || "10", 10);
+  const parsed = parseInt(process.env.SYNC_UPLOAD_CHUNK_SIZE || "100", 10);
   if (Number.isFinite(parsed) && parsed > 0) {
     return parsed;
   }
-  console.warn(`⚠️ SYNC_UPLOAD_CHUNK_SIZE=${process.env.SYNC_UPLOAD_CHUNK_SIZE} 无效，已回退为 10。`);
-  return 10;
+  console.warn(`⚠️ SYNC_UPLOAD_CHUNK_SIZE=${process.env.SYNC_UPLOAD_CHUNK_SIZE} 无效，已回退为 100。`);
+  return 100;
 }
 
-/**
- * 格式化当前时间为 YYYYMMDD-HHmmss 格式
- * @returns {string} 格式化后的时间戳
- */
-function getFormattedTimestamp() {
-  const now = new Date();
-  const pad = (n) => String(n).padStart(2, '0');
-  const yyyy = now.getFullYear();
-  const MM = pad(now.getMonth() + 1);
-  const dd = pad(now.getDate());
-  const hh = pad(now.getHours());
-  const mm = pad(now.getMinutes());
-  const ss = pad(now.getSeconds());
-  return `${yyyy}${MM}${dd}-${hh}${mm}${ss}`;
-}
-
-/**
- * 判断 Axios 错误是否可以重试
- * @param {Error} error Axios 错误对象
- * @returns {boolean} 是否可以重试
- */
-function shouldRetryError(error) {
-  if (!error) return false;
-
-  // 校验 HTTP 状态码
-  if (error.response) {
-    const status = error.response.status;
-    // 502, 503, 504 属于可重试的服务器错误
-    if ([502, 503, 504].includes(status)) {
-      return true;
-    }
-    // 400, 401, 403 属于客户端错误，不重试
-    if ([400, 401, 403].includes(status)) {
-      return false;
-    }
-  }
-
-  const errCode = error.code || "";
-  const errMessage = error.message || "";
-
-  // 常见网络和超时错误代码
-  const retryCodes = ["ECONNRESET", "ETIMEDOUT", "ENOTFOUND", "EAI_AGAIN"];
-  if (retryCodes.includes(errCode)) {
-    return true;
-  }
-
-  // 常见网络挂起及 SSL/TLS 握手错误信息
-  const retryMessages = [
-    "socket hang up",
-    "timeout",
-    "Client network socket disconnected before secure TLS connection was established",
-    "disconnected before secure TLS connection"
-  ];
-
-  if (retryMessages.some((msg) => errMessage.includes(msg))) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
- * 带重试机制的单块上传函数
- * @param {string} endpoint 接口地址
- * @param {Array} chunk 课表数据分块
- * @param {number} chunkNumber 当前分块序号
- * @param {number} totalChunks 分块总数
- */
-async function uploadWithRetry(endpoint, chunk, chunkNumber, totalChunks) {
-  const maxRetries = 5;
-  const retryDelays = [2000, 5000, 10000, 20000, 30000];
-
-  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-    try {
-      await uploadToVps(endpoint, chunk);
-      console.log(`   ✅ [chunk ${chunkNumber}/${totalChunks}] 上传成功 (共 ${chunk.length} 条)`);
-      return;
-    } catch (error) {
-      const isRetryable = shouldRetryError(error);
-      const attemptStr = `[chunk ${chunkNumber}/${totalChunks}] 第 ${attempt} 次尝试失败.`;
-
-      if (attempt <= maxRetries && isRetryable) {
-        const delay = retryDelays[attempt - 1] || 30000;
-        console.warn(`   ⚠️ ${attemptStr} 错误可重试: ${error.message}。将在 ${delay / 1000}s 后进行第 ${attempt + 1} 次尝试...`);
-        await sleep(delay);
-      } else {
-        console.error(`   ❌ ${attemptStr} 发生不可重试错误或重试次数超限。错误: ${error.message}`);
-        throw error;
-      }
-    }
-  }
-}
-
-/**
- * 读取断点续传进度
- * @param {string} sourceFilePath 数据源文件路径
- * @returns {Object} 进度对象
- */
-function readUploadProgress(sourceFilePath) {
-  const progressPath = path.join(__dirname, ".debug", "class-upload-progress.json");
-  const forceRestart = getEnvFlag("SYNC_UPLOAD_FORCE_RESTART", false);
-
-  if (forceRestart) {
-    console.log("ℹ️ SYNC_UPLOAD_FORCE_RESTART=true，忽略已存在的上传进度，将从头开始重新上传。");
-    return { uploadedChunkIndexes: [] };
-  }
-
-  if (fs.existsSync(progressPath)) {
-    try {
-      const progress = JSON.parse(fs.readFileSync(progressPath, "utf-8"));
-      // 只有源文件路径一致时进度才有效
-      if (progress.sourceFile === sourceFilePath) {
-        console.log(`ℹ️ 恢复上次上传进度，已成功上传批次: ${progress.uploadedChunkIndexes.join(", ")}`);
-        return progress;
-      } else {
-        console.log(`ℹ️ 进度文件中的源文件不匹配 (${progress.sourceFile} vs ${sourceFilePath})，重新开始。`);
-      }
-    } catch (e) {
-      console.warn("⚠️ 读取上传进度文件失败，将重新上传。");
-    }
-  }
-  return { uploadedChunkIndexes: [] };
-}
-
-/**
- * 写入断点续传进度
- * @param {string} sourceFilePath 数据源文件路径
- * @param {string} semester 当前学期
- * @param {number} total 数据总条数
- * @param {number} chunkSize 分块大小
- * @param {Array<number>} uploadedChunkIndexes 已成功的分块序号列表
- */
-function writeUploadProgress(sourceFilePath, semester, total, chunkSize, uploadedChunkIndexes) {
-  const progressPath = path.join(__dirname, ".debug", "class-upload-progress.json");
-  const progress = {
-    sourceFile: sourceFilePath,
-    semester,
-    total,
-    chunkSize,
-    uploadedChunkIndexes,
-    updatedAt: new Date().toISOString()
-  };
-  fs.writeFileSync(progressPath, JSON.stringify(progress, null, 2), "utf-8");
-}
-
-/**
- * 将完整的班级课表数据存盘
- * @param {Array} allClassSchedules 整理好的班级课表
- * @param {string} semester 学期
- * @returns {Object} 包含所保存的文件路径
- */
-function saveFullClassSchedules(allClassSchedules, semester) {
-  const debugDir = path.join(__dirname, ".debug");
-  if (!fs.existsSync(debugDir)) {
-    fs.mkdirSync(debugDir, { recursive: true });
-  }
-
-  const payload = {
-    success: true,
-    type: "class-schedules",
-    semester: semester,
-    generatedAt: new Date().toISOString(),
-    itemCount: allClassSchedules.length,
-    items: allClassSchedules
-  };
-
-  const latestPath = path.join(debugDir, "class-schedules-latest.json");
-  const timestampPath = path.join(debugDir, `class-schedules-${getFormattedTimestamp()}.json`);
-
-  fs.writeFileSync(latestPath, JSON.stringify(payload, null, 2), "utf-8");
-  fs.writeFileSync(timestampPath, JSON.stringify(payload, null, 2), "utf-8");
-
-  console.log(`💾 完整课表数据已保存至:\n  - ${latestPath}\n  - ${timestampPath}`);
-  return { latestPath, timestampPath };
-}
-
-/**
- * 分块上传班级课表
- * @param {Array} classSchedules 课表数组
- * @param {string} debugDir 调试目录
- * @param {string} sourceFilePath 数据源路径，用于断点进度校验
- * @param {string} semester 关联学期
- * @returns {Object} VPS 同步状态
- */
-async function uploadClassSchedulesInChunks(classSchedules, debugDir, sourceFilePath, semester) {
+async function uploadClassSchedulesInChunks(classSchedules, debugDir) {
   const chunkSize = getUploadChunkSize();
   const totalChunks = Math.ceil(classSchedules.length / chunkSize);
 
@@ -434,168 +249,27 @@ async function uploadClassSchedulesInChunks(classSchedules, debugDir, sourceFile
     fs.mkdirSync(debugDir, { recursive: true });
   }
 
-  // 获取并恢复上次上传的断点进度
-  const progress = readUploadProgress(sourceFilePath);
-  const uploadedChunkIndexes = progress.uploadedChunkIndexes || [];
-
   console.log(`📦 开始分块上传班级课表: ${classSchedules.length} 条，每批 ${chunkSize} 条，共 ${totalChunks} 批。`);
 
   for (let index = 0; index < totalChunks; index++) {
     const chunkNumber = index + 1;
-    if (uploadedChunkIndexes.includes(chunkNumber)) {
-      console.log(`⏭️ [chunk ${chunkNumber}/${totalChunks}] 该分块已上传过，自动跳过。`);
-      continue;
-    }
-
     const start = index * chunkSize;
     const chunk = classSchedules.slice(start, start + chunkSize);
 
     try {
-      await uploadWithRetry("/api/admin/sync/class-schedules?mode=merge", chunk, chunkNumber, totalChunks);
-
-      // 更新并记录当前上传成功的进度
-      uploadedChunkIndexes.push(chunkNumber);
-      writeUploadProgress(sourceFilePath, semester, classSchedules.length, chunkSize, uploadedChunkIndexes);
+      await uploadToVps("/api/admin/sync/class-schedules?mode=merge", chunk);
+      console.log(`[chunk ${chunkNumber}/${totalChunks}] uploaded ${chunk.length} items`);
     } catch (error) {
-      // 写入失败的分块文件以供后续诊断
       const failedPath = path.join(debugDir, `failed-class-schedules-chunk-${chunkNumber}.json`);
       fs.writeFileSync(failedPath, JSON.stringify(chunk, null, 2), "utf-8");
-      console.error(`❌ [chunk ${chunkNumber}/${totalChunks}] 历经多次重试上传失败，失败批次已保存: ${failedPath}`);
-      console.error(`⚠️ 完整课表数据已保存至 .debug/class-schedules-latest.json，可稍后执行 upload-only 继续上传。`);
+      console.error(`❌ [chunk ${chunkNumber}/${totalChunks}] 上传失败，失败批次已保存: ${failedPath}`);
       throw error;
     }
   }
 
-  // 上传全部成功，删除进度文件
-  try {
-    const progressPath = path.join(debugDir, "class-upload-progress.json");
-    if (fs.existsSync(progressPath)) {
-      fs.unlinkSync(progressPath);
-      console.log("🎉 所有分块已上传成功，已清除断点续传进度。");
-    }
-  } catch (e) {}
-
   const status = await fetchVpsSyncStatus();
-  console.log("\n🔍 === [VPS 同步状态验证] ===");
-  console.log(`- classScheduleCount: ${status.classScheduleCount ?? "未获取"}`);
-  console.log(`- classSchedulesUpdatedAt: ${status.classSchedulesUpdatedAt ?? "未获取"}`);
-  console.log(`- storageMounted: ${status.storageMounted ?? "未获取"}`);
-  console.log(`- storagePath: ${status.storagePath ?? "未获取"}`);
-  console.log("==============================\n");
-
+  console.log(`📊 VPS classScheduleCount: ${status.classScheduleCount ?? 0}`);
   return status;
-}
-
-/**
- * 从本地文件中尝试读取课表缓存
- * @returns {Object} 包含 items (数组) 和 filePath (绝对路径)
- */
-function readClassSchedulesFromFile() {
-  const debugDir = path.join(__dirname, ".debug");
-  const candidates = [];
-
-  // 1. 优先读取环境变量指定的路径
-  if (process.env.SYNC_CLASS_UPLOAD_FILE) {
-    candidates.push(path.resolve(process.env.SYNC_CLASS_UPLOAD_FILE));
-  }
-
-  // 2. 依次读取可能存在的文件
-  candidates.push(path.join(debugDir, "class-schedules-latest.json"));
-  candidates.push(path.join(debugDir, "last-class-schedules.json"));
-  candidates.push(path.join(debugDir, "last-class-schedules-upload.json"));
-
-  for (const filePath of candidates) {
-    if (fs.existsSync(filePath)) {
-      try {
-        console.log(`📖 正在从本地文件读取课表数据: ${filePath}`);
-        const content = fs.readFileSync(filePath, "utf-8");
-        const json = JSON.parse(content);
-
-        let items = null;
-        if (Array.isArray(json)) {
-          items = json;
-        } else if (json && Array.isArray(json.items)) {
-          items = json.items;
-        } else if (json && Array.isArray(json.data)) {
-          items = json.data;
-        } else if (json && Array.isArray(json.classSchedules)) {
-          items = json.classSchedules;
-        }
-
-        if (items && items.length > 0) {
-          console.log(`✅ 成功提取出 ${items.length} 条课表数据。`);
-          return { items, filePath };
-        }
-      } catch (err) {
-        console.warn(`⚠️ 读取文件失败，尝试下一个路径: ${filePath} (${err.message})`);
-      }
-    }
-  }
-
-  // 都没读到则抛出详细错误
-  const errorMessage = [
-    "❌ 未找到任何有效的完整课表缓存文件！",
-    "已检查的路径列表如下："
-  ];
-  candidates.forEach((c) => errorMessage.push(`  - ${c}`));
-
-  // 检查是否仅存在分块失败的文件
-  if (fs.existsSync(debugDir)) {
-    const files = fs.readdirSync(debugDir);
-    const failedChunks = files.filter((f) => f.startsWith("failed-class-schedules-chunk-"));
-    if (failedChunks.length > 0) {
-      errorMessage.push(`当前目录下仅发现分块失败文件: ${failedChunks.join(", ")}，这些文件不是完整数据。`);
-    }
-  }
-
-  throw new Error(errorMessage.join("\n"));
-}
-
-/**
- * 打印 PowerShell 的执行命令建议
- */
-function printPowerShellCommands() {
-  console.log("\n💡 Windows PowerShell 常用命令指南：");
-  console.log("--------------------------------------------------");
-  console.log("👉 只抓取不上传 (Crawl Only):");
-  console.log('   $env:SYNC_CLASS_SCOPE="all"');
-  console.log('   $env:SYNC_CLASS_GRADES="2025,2024,2023,2022"');
-  console.log('   $env:SYNC_CLASS_MAX_CONCURRENCY="1"');
-  console.log('   $env:SYNC_CLASS_REQUEST_DELAY_MS="900"');
-  console.log('   $env:SYNC_CLASS_CRAWL_ONLY="true"');
-  console.log("   npm run sync:class");
-  console.log("");
-  console.log("👉 只上传本地缓存 (Upload Only):");
-  console.log('   $env:SYNC_CLASS_CRAWL_ONLY=""');
-  console.log('   $env:SYNC_CLASS_UPLOAD_ONLY="true"');
-  console.log('   $env:SYNC_UPLOAD_CHUNK_SIZE="10"');
-  console.log("   npm run sync:class");
-  console.log("");
-  console.log("👉 强制重新上传本地缓存 (Force Restart Upload):");
-  console.log('   $env:SYNC_UPLOAD_FORCE_RESTART="true"');
-  console.log('   $env:SYNC_CLASS_UPLOAD_ONLY="true"');
-  console.log('   $env:SYNC_UPLOAD_CHUNK_SIZE="10"');
-  console.log("   npm run sync:class");
-  console.log("--------------------------------------------------\n");
-}
-
-/**
- * 处理仅上传逻辑 (UPLOAD_ONLY 模式入口)
- */
-async function handleUploadOnly() {
-  const debugDir = path.join(__dirname, ".debug");
-  try {
-    const { items, filePath } = readClassSchedulesFromFile();
-    const semester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
-    console.log(`🚀 开始在 upload-only 模式下上传数据，数据源：${filePath}，共计 ${items.length} 条。`);
-
-    await uploadClassSchedulesInChunks(items, debugDir, filePath, semester);
-    console.log(`✅ 本地缓存数据上传同步成功！`);
-  } catch (error) {
-    console.error(`❌ 执行 upload-only 模式失败: \n${error.message}`);
-    printPowerShellCommands();
-    process.exit(1);
-  }
 }
 
 /**
@@ -1601,7 +1275,8 @@ async function syncClassSchedules(page, catalog, majors) {
 
   // 解析环境变量过滤条件
   const syncCollegeCodes = process.env.SYNC_CLASS_COLLEGE_CODES ? process.env.SYNC_CLASS_COLLEGE_CODES.split(",").map(c => c.trim()).filter(Boolean) : null;
-  const syncGrades = process.env.SYNC_CLASS_GRADES ? process.env.SYNC_CLASS_GRADES.split(",").map(g => g.trim()).filter(Boolean) : null;
+  const explicitClassGrades = process.env.SYNC_CLASS_GRADES || process.env.SYNC_GRADES || "";
+  const syncGrades = explicitClassGrades ? explicitClassGrades.split(",").map(g => g.trim()).filter(Boolean) : null;
   const syncMajorCodes = process.env.SYNC_CLASS_MAJOR_CODES ? process.env.SYNC_CLASS_MAJOR_CODES.split(",").map(m => m.trim()).filter(Boolean) : null;
   const isFiltered = !!(syncCollegeCodes || syncGrades || syncMajorCodes);
 
@@ -1876,30 +1551,11 @@ async function syncClassSchedules(page, catalog, majors) {
   }
 
   console.log(`📊 班级课表抓取完毕，共整理出 ${allClassSchedules.length} 个行政班级的课表。`);
-
+  
   if (allClassSchedules.length > 0) {
-    // 无论后续上传成功与否，强制在上传前保存完整全量文件
-    const { latestPath } = saveFullClassSchedules(allClassSchedules, activeSemester);
-
-    // 如果设置了 crawl-only 模式，则仅抓取并保存本地，不执行上传
-    if (getEnvFlag("SYNC_CLASS_CRAWL_ONLY", false)) {
-      console.log(`\n🎉 [Crawl Only] 抓取完成！`);
-      console.log(`📁 完整课表数据已保存至: ${latestPath}`);
-      console.log(`📊 共抓取班级课表数量 (itemCount): ${allClassSchedules.length} 条`);
-      printPowerShellCommands();
-      return;
-    }
-
-    try {
-      // 传入最新保存的文件路径，作为断点续传进度的 sourceFilePath
-      await uploadClassSchedulesInChunks(allClassSchedules, debugDir, latestPath, activeSemester);
-      console.log(`✅ 本轮抓取的班级课表数据同步完成！`);
-    } catch (uploadError) {
-      console.error(`❌ 同步至 VPS 失败：${uploadError.message}`);
-      console.error(`⚠️ 完整课表数据已保存至 .debug/class-schedules-latest.json，可稍后执行 upload-only 继续上传。`);
-      printPowerShellCommands();
-      throw uploadError;
-    }
+    // 上传至 VPS (默认是 merge 模式，只更新/新增有变动的班级)
+    await uploadClassSchedulesInChunks(allClassSchedules, debugDir);
+    console.log(`✅ 本轮抓取的班级课表数据同步完成！`);
   } else {
     console.log("ℹ️ 本轮没有新抓取到任何班级课表，无需上传。");
   }
@@ -1934,28 +1590,19 @@ async function main() {
   const args = process.argv.slice(2);
   const action = args[0] || "all";
 
-  // 1. 拦截并处理 upload-only 模式，免去网络诊断和浏览器初始化
-  const uploadOnlyMode = getEnvFlag("SYNC_CLASS_UPLOAD_ONLY", false);
-  if (uploadOnlyMode) {
-    console.log("ℹ️ 检测到 SYNC_CLASS_UPLOAD_ONLY=true，将直接执行本地文件上传。");
-    await handleUploadOnly();
-    return;
-  }
-
-  // 2. 网络连接检测
+  // 1. 网络连接检测
   const isNetOk = await diagnose();
   if (!isNetOk) {
     console.error("❌ 本地网络未通过校园网/VPN诊断，中止同步任务！");
-    printPowerShellCommands();
     process.exit(1);
   }
 
-  // 3. 初始化 Playwright 并启动
+  // 2. 初始化 Playwright 并启动
   const { browser, context } = await initBrowserContext();
   const page = await context.newPage();
 
   try {
-    // 4. 校验 Session 状态
+    // 3. 校验 Session 状态
     const isSessionOk = await checkSession(page);
     if (!isSessionOk) {
       process.exit(1);
@@ -1982,7 +1629,6 @@ async function main() {
   } catch (error) {
     console.error(`❌ 执行同步时发生致命异常: ${error.message}`);
     console.error(error.stack);
-    printPowerShellCommands();
   } finally {
     await browser.close();
     console.log("浏览器已安全关闭。同步任务结束。");
