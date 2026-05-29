@@ -309,3 +309,49 @@ picker {
 .reset-filter-btn:active {
   background: #e2e8f0;
 }
+
+.recent-card {
+  margin-bottom: 20rpx;
+  padding: 22rpx 20rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  box-shadow: 0 4rpx 16rpx rgba(162, 178, 201, 0.08);
+}
+
+.recent-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  padding: 18rpx 4rpx;
+  border-top: 1rpx solid #f2f5f9;
+}
+
+.recent-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.recent-title {
+  overflow: hidden;
+  color: #172033;
+  font-size: 28rpx;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-meta {
+  margin-top: 6rpx;
+  color: #778297;
+  font-size: 22rpx;
+  line-height: 1.35;
+}
+
+.recent-side {
+  flex: 0 0 auto;
+  color: #c62828;
+  font-size: 23rpx;
+  font-weight: 800;
+  white-space: nowrap;
+}

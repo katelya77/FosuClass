@@ -26,17 +26,27 @@ console.log(`[env] ADMIN_API_TOKEN: ${process.env.ADMIN_API_TOKEN ? "present" : 
 const parser = require("../../server/src/utils/parser");
 const normalizer = require("../../server/src/utils/scheduleNormalizer");
 const courseIdentity = require("../../server/src/utils/courseNormalizer");
+const releaseService = require("../../server/src/services/releaseService");
 
-// 清理代理环境变量，防止上传 VPS 请求走本地代理
-delete process.env.HTTP_PROXY;
-delete process.env.HTTPS_PROXY;
-delete process.env.ALL_PROXY;
-delete process.env.http_proxy;
-delete process.env.https_proxy;
-delete process.env.all_proxy;
-process.env.NO_PROXY = "*";
-process.env.no_proxy = "*";
-axios.defaults.proxy = false;
+const proxyEnvNames = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"];
+const detectedProxyEnv = proxyEnvNames
+  .map((name) => [name, process.env[name]])
+  .filter(([, value]) => Boolean(value));
+const disableProxy = String(process.env.SYNC_DISABLE_PROXY || "true").toLowerCase() !== "false";
+if (detectedProxyEnv.length > 0) {
+  console.warn(`⚠️ 检测到代理环境变量: ${detectedProxyEnv.map(([name, value]) => `${name}=${value}`).join(", ")}`);
+  if (disableProxy) {
+    console.warn("⚠️ 同步上传默认禁用环境代理，避免 127.0.0.1:10808 等本地代理污染 VPS 上传。");
+  }
+}
+if (disableProxy) {
+  proxyEnvNames.forEach((name) => {
+    delete process.env[name];
+  });
+  process.env.NO_PROXY = "*";
+  process.env.no_proxy = "*";
+  axios.defaults.proxy = false;
+}
 
 const FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 const FOSU_API_BASE = process.env.FOSU_API_BASE || "https://class.katelya.eu.org";
@@ -201,7 +211,13 @@ function parseCookieString(cookieStr, domain) {
 /**
  * 向 VPS 发送 POST 请求（管理员 Token 认证）
  */
-async function uploadToVps(endpoint, data) {
+function getRetryDelay(attempt) {
+  const base = Math.min(30000, 1000 * Math.pow(2, attempt - 1));
+  const jitter = Math.floor(Math.random() * 500);
+  return base + jitter;
+}
+
+async function uploadToVps(endpoint, data, options = {}) {
   if (!ADMIN_API_TOKEN) {
     console.error("❌ 本地未配置 ADMIN_API_TOKEN！无法向 VPS 写入数据。");
     throw new Error("Missing ADMIN_API_TOKEN");
@@ -209,26 +225,36 @@ async function uploadToVps(endpoint, data) {
 
   const url = `${FOSU_API_BASE}${endpoint}`;
   console.log(`📤 正在上传数据到 VPS: ${url} ...`);
-  
-  try {
-    const response = await axios.post(url, data, {
-      headers: {
-        "Content-Type": "application/json",
-        "x-admin-token": ADMIN_API_TOKEN,
-      },
-      proxy: false, // 显式禁用代理
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity,
-    });
-    console.log(`✅ VPS 响应: ${JSON.stringify(response.data)}`);
-    return response.data;
-  } catch (error) {
-    console.error(`❌ 上传失败: ${error.message}`);
-    if (error.response) {
-      console.error(`   VPS 错误状态码: ${error.response.status}`);
-      console.error(`   VPS 错误详情: ${JSON.stringify(error.response.data)}`);
+
+  const maxRetries = options.maxRetries === undefined ? 4 : options.maxRetries;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await axios.post(url, data, {
+        headers: {
+          "Content-Type": "application/json",
+          "x-admin-token": ADMIN_API_TOKEN,
+        },
+        proxy: false,
+        timeout: parseInt(process.env.SYNC_UPLOAD_TIMEOUT_MS || "120000", 10),
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+      });
+      console.log(`✅ VPS 响应: ${JSON.stringify(response.data)}`);
+      return response.data;
+    } catch (error) {
+      const retryable = shouldRetryError(error);
+      console.error(`❌ 上传失败 (${attempt}/${maxRetries}): ${error.message}`);
+      if (error.response) {
+        console.error(`   VPS 错误状态码: ${error.response.status}`);
+        console.error(`   VPS 错误详情: ${JSON.stringify(error.response.data)}`);
+      }
+      if (!retryable || attempt >= maxRetries) {
+        throw error;
+      }
+      const delay = getRetryDelay(attempt);
+      console.warn(`   ⏳ 网络抖动可重试，${delay}ms 后继续...`);
+      await sleep(delay);
     }
-    throw error;
   }
 }
 
@@ -248,11 +274,13 @@ async function fetchVpsSyncStatus() {
 
 function generateSnapshotVersion() {
   const now = new Date();
-  const yy = String(now.getFullYear()).slice(-2);
+  const yyyy = String(now.getFullYear());
   const mm = String(now.getMonth() + 1).padStart(2, "0");
   const dd = String(now.getDate()).padStart(2, "0");
   const hh = String(now.getHours()).padStart(2, "0");
-  return `${yy}.${mm}.${dd}.${hh}`;
+  const mi = String(now.getMinutes()).padStart(2, "0");
+  const ss = String(now.getSeconds()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${hh}-${mi}-${ss}`;
 }
 
 function normalizeScheduleEntryCourses(entry, fallbackContext = {}) {
@@ -289,10 +317,16 @@ function pushGroupedCourse(map, key, course) {
   map.get(key).push(course);
 }
 
-function buildSnapshotResources(classSchedules) {
-  const includeTeachers = getEnvFlag("SYNC_RESOURCES_TEACHERS", false);
-  const includeClassrooms = getEnvFlag("SYNC_RESOURCES_CLASSROOMS", false);
-  const includeCourses = getEnvFlag("SYNC_RESOURCES_COURSES", false);
+function buildSnapshotResources(classSchedules, options = {}) {
+  const includeTeachers = options.includeTeachers !== undefined
+    ? options.includeTeachers
+    : getEnvFlag("SYNC_RESOURCES_TEACHERS", false);
+  const includeClassrooms = options.includeClassrooms !== undefined
+    ? options.includeClassrooms
+    : getEnvFlag("SYNC_RESOURCES_CLASSROOMS", false);
+  const includeCourses = options.includeCourses !== undefined
+    ? options.includeCourses
+    : getEnvFlag("SYNC_RESOURCES_COURSES", false);
   const limit = parsePositiveLimit(process.env.SYNC_RESOURCE_LIMIT);
   const teacherMap = new Map();
   const classroomMap = new Map();
@@ -464,7 +498,7 @@ function writeSnapshotDebugFiles(debugDir, snapshot, compressedBuffer) {
   return normalizeReport;
 }
 
-function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules) {
+function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, options = {}) {
   const version = generateSnapshotVersion();
   const activeSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
   const noScheduleCachePath = path.join(__dirname, ".debug", "no-schedule-majors.json");
@@ -481,7 +515,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules) {
       audienceType: "student",
     });
   });
-  const resources = normalizeSnapshotResources(resourceSchedules || buildSnapshotResources(updatedSchedules));
+  const resources = normalizeSnapshotResources(resourceSchedules || buildSnapshotResources(updatedSchedules, options.resources || {}));
   
   const collegeCount = (catalog.colleges || []).length;
   const majorCount = (majors || []).length;
@@ -546,32 +580,41 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules) {
 }
 
 async function uploadSnapshot(buffer) {
-  const url = `${FOSU_API_BASE}/api/admin/snapshot/upload`;
+  const url = `${FOSU_API_BASE}/api/admin/release/upload`;
   console.log(`📤 正在上传快照 (体积: ${(buffer.length / 1024 / 1024).toFixed(2)} MB) to: ${url}...`);
-  try {
-    const response = await axios.post(url, buffer, {
-      headers: {
-        "Content-Type": "application/octet-stream",
-        "x-admin-token": ADMIN_API_TOKEN
-      },
-      proxy: false, // 显式禁用代理
-      maxContentLength: Infinity,
-      maxBodyLength: Infinity
-    });
-    console.log(`✅ 快照上传 VPS 成功: ${JSON.stringify(response.data)}`);
-    return response.data;
-  } catch (error) {
-    console.error(`❌ 快照上传 VPS 失败: ${error.message}`);
-    if (error.response) {
-      console.error(`   VPS 错误状态码: ${error.response.status}`);
-      console.error(`   VPS 错误详情: ${JSON.stringify(error.response.data)}`);
+  const maxRetries = 4;
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const response = await axios.post(url, buffer, {
+        headers: {
+          "Content-Type": "application/octet-stream",
+          "x-admin-token": ADMIN_API_TOKEN
+        },
+        proxy: false,
+        timeout: parseInt(process.env.SYNC_UPLOAD_TIMEOUT_MS || "120000", 10),
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      });
+      console.log(`✅ 快照上传 VPS 成功: ${JSON.stringify(response.data)}`);
+      return response.data;
+    } catch (error) {
+      console.error(`❌ 快照上传 VPS 失败 (${attempt}/${maxRetries}): ${error.message}`);
+      if (error.response) {
+        console.error(`   VPS 错误状态码: ${error.response.status}`);
+        console.error(`   VPS 错误详情: ${JSON.stringify(error.response.data)}`);
+      }
+      if (!shouldRetryError(error) || attempt >= maxRetries) {
+        throw error;
+      }
+      const delay = getRetryDelay(attempt);
+      console.warn(`   ⏳ 快照上传将在 ${delay}ms 后重试...`);
+      await sleep(delay);
     }
-    throw error;
   }
 }
 
 async function activateSnapshot(version) {
-  const url = `${FOSU_API_BASE}/api/admin/snapshot/activate`;
+  const url = `${FOSU_API_BASE}/api/admin/release/activate`;
   console.log(`🔔 正在请求激活快照 (版本: ${version}) to: ${url}...`);
   try {
     const response = await axios.post(url, { version }, {
@@ -595,6 +638,7 @@ async function activateSnapshot(version) {
 async function verifyEndpoints() {
   const bootstrapUrl = `${FOSU_API_BASE}/api/fosu/bootstrap`;
   const statusUrl = `${FOSU_API_BASE}/api/admin/sync/status`;
+  const releaseStatusUrl = `${FOSU_API_BASE}/api/admin/release/status`;
   
   console.log(`🔎 正在验证 bootstrap 接口: ${bootstrapUrl}...`);
   const bRes = await axios.get(bootstrapUrl, { proxy: false });
@@ -606,11 +650,52 @@ async function verifyEndpoints() {
     proxy: false
   });
   console.log(`   快照版本: ${sRes.data.snapshotVersion}, 快照更新时间: ${sRes.data.snapshotUpdatedAt}`);
+
+  console.log(`🔎 正在验证 release 状态接口: ${releaseStatusUrl}...`);
+  const rRes = await axios.get(releaseStatusUrl, {
+    headers: ADMIN_API_TOKEN ? { "x-admin-token": ADMIN_API_TOKEN } : {},
+    proxy: false
+  });
+  console.log(`   Active release: ${rRes.data.activeReleaseVersion}, updatedAt: ${rRes.data.activeReleaseUpdatedAt}`);
   
   return {
     bootstrap: bRes.data,
-    status: sRes.data
+    status: sRes.data,
+    releaseStatus: rRes.data
   };
+}
+
+function printReleaseSummary(snapshot, uploadResponse, activateResponse, verifyResponse) {
+  const coverage = snapshot.coverage || {};
+  const dryRun = Boolean(uploadResponse && uploadResponse.dryRun);
+  console.log("\n================ [sync:release 发布摘要] ================");
+  console.log(`- semester: ${snapshot.semester}`);
+  console.log(`- collegesCount: ${coverage.collegeCount || coverage.collegesCount || 0}`);
+  console.log(`- majorsCount: ${coverage.majorCount || coverage.majorsCount || 0}`);
+  console.log(`- classScheduleCount: ${coverage.classScheduleCount || 0}`);
+  console.log(`- teacherScheduleCount: ${coverage.teacherScheduleCount || 0}`);
+  console.log(`- classroomScheduleCount: ${coverage.classroomScheduleCount || 0}`);
+  console.log(`- courseScheduleCount: ${coverage.courseScheduleCount || 0}`);
+  console.log(`- snapshotVersion: ${snapshot.version}`);
+  console.log(`- updatedAt: ${snapshot.updatedAt}`);
+  console.log(`- upload batches: ${dryRun ? 0 : (uploadResponse ? 1 : 0)}`);
+  console.log(`- failed batches: 0`);
+  console.log(`- activeReleaseVersion: ${dryRun ? "(dry-run, not activated)" : (activateResponse?.version || verifyResponse?.releaseStatus?.activeReleaseVersion || "")}`);
+  console.log("=======================================================\n");
+}
+
+function validateLocalReleaseSnapshot(snapshot) {
+  const validation = releaseService.validateReleaseSnapshot(snapshot);
+  if (!validation.valid) {
+    console.error("❌ 本地 release 校验失败：");
+    validation.errors.slice(0, 20).forEach((error) => console.error(`   - ${error}`));
+    if (validation.errors.length > 20) {
+      console.error(`   ... 还有 ${validation.errors.length - 20} 个错误`);
+    }
+    throw new Error("Release validation failed");
+  }
+  console.log(`✅ 本地 release 校验通过：classScheduleCount=${validation.counts.classScheduleCount}`);
+  return validation;
 }
 
 function getUploadChunkSize() {
@@ -696,7 +781,7 @@ async function uploadWithRetry(endpoint, chunk, chunkNumber, totalChunks) {
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
-      await uploadToVps(endpoint, chunk);
+      await uploadToVps(endpoint, chunk, { maxRetries: 1 });
       console.log(`   ✅ [chunk ${chunkNumber}/${totalChunks}] 上传成功 (共 ${chunk.length} 条)`);
       return;
     } catch (error) {
@@ -949,7 +1034,7 @@ function printPowerShellCommands() {
   console.log('   $env:SYNC_CLASS_CRAWL_ONLY=""');
   console.log('   $env:SYNC_CLASS_UPLOAD_ONLY="true"');
   console.log('   $env:SYNC_UPLOAD_CHUNK_SIZE="10"');
-  console.log("   npm run sync:class");
+  console.log("   npm run sync:upload-cache");
   console.log("");
   console.log("👉 强制重新上传本地缓存 (Force Restart Upload):");
   console.log('   $env:SYNC_UPLOAD_FORCE_RESTART="true"');
@@ -1004,7 +1089,14 @@ async function handleOfflineRelease() {
 
   console.log(`📖 成功从本地加载基础配置与课表缓存 (共计 ${allClassSchedules.length} 条课表)`);
 
-  const snapshot = buildSnapshot(catalog, majors, allClassSchedules);
+  const includeReleaseResources = getEnvFlag("SYNC_RELEASE_INCLUDE_RESOURCES", true);
+  const snapshot = buildSnapshot(catalog, majors, allClassSchedules, null, {
+    resources: {
+      includeTeachers: includeReleaseResources,
+      includeClassrooms: includeReleaseResources,
+      includeCourses: includeReleaseResources,
+    },
+  });
   const snapshotJson = JSON.stringify(snapshot, null, 2);
   const snapshotBuffer = Buffer.from(snapshotJson, "utf-8");
   const compressedBuffer = zlib.gzipSync(snapshotBuffer);
@@ -1015,12 +1107,30 @@ async function handleOfflineRelease() {
   }
   const normalizeReport = writeSnapshotDebugFiles(debugDir, snapshot, compressedBuffer);
   console.log(`\n💾 本地快照已生成并压缩：.debug/snapshot-latest.json 和 .debug/snapshot-latest.json.gz (体积: ${(compressedBuffer.length / 1024).toFixed(2)} KB)`);
+  validateLocalReleaseSnapshot(snapshot);
 
-  await uploadSnapshot(compressedBuffer);
+  if (getEnvFlag("SYNC_RELEASE_DRY_RUN", false)) {
+    printReleaseSummary(snapshot, { dryRun: true }, { version: snapshot.version }, null);
+    fs.writeFileSync(path.join(debugDir, "sync-report-latest.json"), JSON.stringify({
+      success: true,
+      dryRun: true,
+      version: snapshot.version,
+      semester: snapshot.semester,
+      updatedAt: snapshot.updatedAt,
+      coverage: snapshot.coverage,
+      normalizeReport,
+      uploadSize: compressedBuffer.length,
+    }, null, 2), "utf-8");
+    console.log("ℹ️ SYNC_RELEASE_DRY_RUN=true，已完成本地 release 构建与校验，未上传或激活 VPS。");
+    return;
+  }
+
+  const uploadRes = await uploadSnapshot(compressedBuffer);
   const activateRes = await activateSnapshot(snapshot.version);
   console.log(`✅ 快照激活成功! 响应: ${JSON.stringify(activateRes)}`);
   
   const verifyRes = await verifyEndpoints();
+  printReleaseSummary(snapshot, uploadRes, activateRes, verifyRes);
   const report = {
     success: true,
     version: snapshot.version,
@@ -1036,30 +1146,109 @@ async function handleOfflineRelease() {
   console.log("\n🎉 [Release] 离线暴力快照发布完成！");
 }
 
-async function handleResourcesSync() {
+const RESOURCE_SYNC_CONFIGS = {
+  teacher: {
+    flag: "SYNC_RESOURCES_TEACHERS",
+    schedulesKey: "teacherSchedules",
+    indexKey: "teachers",
+    endpointType: "teacher",
+    label: "教师",
+  },
+  classroom: {
+    flag: "SYNC_RESOURCES_CLASSROOMS",
+    schedulesKey: "classroomSchedules",
+    indexKey: "classrooms",
+    endpointType: "classroom",
+    label: "教室",
+  },
+  course: {
+    flag: "SYNC_RESOURCES_COURSES",
+    schedulesKey: "courseSchedules",
+    indexKey: "courses",
+    endpointType: "course",
+    label: "课程",
+  },
+};
+
+function normalizeResourceTypeList(types) {
+  const list = Array.isArray(types) && types.length ? types : ["teacher", "classroom", "course"];
+  return list.filter((type) => RESOURCE_SYNC_CONFIGS[type]);
+}
+
+function getResourceDelayConfig() {
+  const min = parseInt(process.env.SYNC_RESOURCE_DELAY_MIN_MS || "800", 10);
+  const max = parseInt(process.env.SYNC_RESOURCE_DELAY_MAX_MS || "1500", 10);
+  return {
+    concurrency: parseInt(process.env.SYNC_RESOURCE_CONCURRENCY || "1", 10) || 1,
+    minDelayMs: Number.isFinite(min) ? min : 800,
+    maxDelayMs: Number.isFinite(max) ? max : 1500,
+  };
+}
+
+async function uploadResourceSchedules(resources, resourceTypes, semester) {
+  const results = {};
+  for (const type of normalizeResourceTypeList(resourceTypes)) {
+    const config = RESOURCE_SYNC_CONFIGS[type];
+    const items = resources[config.schedulesKey] || [];
+    const payload = {
+      resourceType: type,
+      semester,
+      items,
+      generatedAt: new Date().toISOString(),
+    };
+    console.log(`📤 上传${config.label}资源: ${items.length} 条`);
+    results[type] = await uploadToVps(`/api/admin/sync/resources?type=${config.endpointType}`, payload);
+  }
+  return results;
+}
+
+async function handleResourcesSync(resourceTypes) {
   const debugDir = path.join(__dirname, ".debug");
   if (!fs.existsSync(debugDir)) {
     fs.mkdirSync(debugDir, { recursive: true });
   }
 
   const { items, filePath } = readClassSchedulesFromFile();
+  const types = normalizeResourceTypeList(resourceTypes);
+  const includeOptions = {
+    includeTeachers: types.includes("teacher"),
+    includeClassrooms: types.includes("classroom"),
+    includeCourses: types.includes("course"),
+  };
+  const semester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
   const normalizedClassSchedules = items.map((item) => normalizeScheduleEntryCourses(item, {
-    semester: item.semester || process.env.PREFERRED_SEMESTER || inferPreferredSemester(),
+    semester: item.semester || semester,
     sourceType: "class",
     audienceType: "student",
   }));
-  const resources = buildSnapshotResources(normalizedClassSchedules);
+  const resources = buildSnapshotResources(normalizedClassSchedules, includeOptions);
   const resourcesPath = path.join(debugDir, "resources-latest.json");
   fs.writeFileSync(resourcesPath, JSON.stringify(resources, null, 2), "utf-8");
+
+  const uploadResults = await uploadResourceSchedules(resources, types, semester);
+  types.forEach((type) => {
+    const config = RESOURCE_SYNC_CONFIGS[type];
+    fs.writeFileSync(
+      path.join(debugDir, `${type}-schedules-latest.json`),
+      JSON.stringify({
+        resourceType: type,
+        semester,
+        items: resources[config.schedulesKey] || [],
+      }, null, 2),
+      "utf-8"
+    );
+  });
 
   const report = {
     success: true,
     generatedAt: new Date().toISOString(),
     sourceFile: filePath,
+    resourceTypes: types,
+    resourceRequestPolicy: getResourceDelayConfig(),
     flags: {
-      SYNC_RESOURCES_TEACHERS: getEnvFlag("SYNC_RESOURCES_TEACHERS", false),
-      SYNC_RESOURCES_CLASSROOMS: getEnvFlag("SYNC_RESOURCES_CLASSROOMS", false),
-      SYNC_RESOURCES_COURSES: getEnvFlag("SYNC_RESOURCES_COURSES", false),
+      SYNC_RESOURCES_TEACHERS: includeOptions.includeTeachers,
+      SYNC_RESOURCES_CLASSROOMS: includeOptions.includeClassrooms,
+      SYNC_RESOURCES_COURSES: includeOptions.includeCourses,
       SYNC_RESOURCE_LIMIT: parsePositiveLimit(process.env.SYNC_RESOURCE_LIMIT),
     },
     counts: {
@@ -1070,13 +1259,11 @@ async function handleResourcesSync() {
       classroomSchedules: resources.classroomSchedules.length,
       courseSchedules: resources.courseSchedules.length,
     },
+    uploadResults,
   };
   fs.writeFileSync(path.join(debugDir, "resources-report-latest.json"), JSON.stringify(report, null, 2), "utf-8");
   console.log(`💾 资源维度数据已生成: ${resourcesPath}`);
   console.log(`📊 resources counts: ${JSON.stringify(report.counts)}`);
-  if (!report.flags.SYNC_RESOURCES_TEACHERS && !report.flags.SYNC_RESOURCES_CLASSROOMS && !report.flags.SYNC_RESOURCES_COURSES) {
-    console.log("ℹ️ 当前未开启 SYNC_RESOURCES_TEACHERS / SYNC_RESOURCES_CLASSROOMS / SYNC_RESOURCES_COURSES，资源数组保持为空。");
-  }
   return resources;
 }
 
@@ -2432,8 +2619,8 @@ async function main() {
 
   // 1. 拦截并处理 upload-only 模式，免去网络诊断和浏览器初始化
   const uploadOnlyMode = getEnvFlag("SYNC_CLASS_UPLOAD_ONLY", false);
-  if (uploadOnlyMode) {
-    console.log("ℹ️ 检测到 SYNC_CLASS_UPLOAD_ONLY=true，将直接执行本地文件上传。");
+  if (uploadOnlyMode || action === "upload-cache") {
+    console.log("ℹ️ 将直接执行本地课表缓存上传，不重新打开浏览器抓取。");
     await handleUploadOnly();
     return;
   }
@@ -2446,7 +2633,17 @@ async function main() {
   }
 
   if (action === "resources") {
-    await handleResourcesSync();
+    await handleResourcesSync(["teacher", "classroom", "course"]);
+    return;
+  }
+
+  if (action === "teachers" || action === "classrooms" || action === "courses") {
+    const typeMap = {
+      teachers: "teacher",
+      classrooms: "classroom",
+      courses: "course",
+    };
+    await handleResourcesSync([typeMap[action]]);
     return;
   }
 
@@ -2508,7 +2705,14 @@ async function main() {
       if (!allClassSchedules || allClassSchedules.length === 0) {
         throw new Error("没有抓取到任何班级课表，快照发布中断");
       }
-      const snapshot = buildSnapshot(catalog, majors, allClassSchedules);
+      const includeReleaseResources = getEnvFlag("SYNC_RELEASE_INCLUDE_RESOURCES", true);
+      const snapshot = buildSnapshot(catalog, majors, allClassSchedules, null, {
+        resources: {
+          includeTeachers: includeReleaseResources,
+          includeClassrooms: includeReleaseResources,
+          includeCourses: includeReleaseResources,
+        },
+      });
       const zlib = require("zlib");
       const snapshotJson = JSON.stringify(snapshot, null, 2);
       const snapshotBuffer = Buffer.from(snapshotJson, "utf-8");
@@ -2519,10 +2723,28 @@ async function main() {
       }
       const normalizeReport = writeSnapshotDebugFiles(debugDir, snapshot, compressedBuffer);
       console.log(`\n💾 本地快照已生成并压缩：.debug/snapshot-latest.json 和 .debug/snapshot-latest.json.gz (体积: ${(compressedBuffer.length / 1024).toFixed(2)} KB)`);
-      await uploadSnapshot(compressedBuffer);
+      validateLocalReleaseSnapshot(snapshot);
+      if (getEnvFlag("SYNC_RELEASE_DRY_RUN", false)) {
+        printReleaseSummary(snapshot, { dryRun: true }, { version: snapshot.version }, null);
+        const report = {
+          success: true,
+          dryRun: true,
+          version: snapshot.version,
+          semester: snapshot.semester,
+          updatedAt: snapshot.updatedAt,
+          coverage: snapshot.coverage,
+          normalizeReport,
+          uploadSize: compressedBuffer.length,
+        };
+        fs.writeFileSync(path.join(debugDir, "sync-report-latest.json"), JSON.stringify(report, null, 2), "utf-8");
+        console.log("ℹ️ SYNC_RELEASE_DRY_RUN=true，已完成本地 release 构建与校验，未上传或激活 VPS。");
+        return;
+      }
+      const uploadRes = await uploadSnapshot(compressedBuffer);
       const activateRes = await activateSnapshot(snapshot.version);
       console.log(`✅ 快照激活成功! 响应: ${JSON.stringify(activateRes)}`);
       const verifyRes = await verifyEndpoints();
+      printReleaseSummary(snapshot, uploadRes, activateRes, verifyRes);
       const report = {
         success: true,
         version: snapshot.version,

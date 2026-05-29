@@ -1,4 +1,12 @@
-const { clearAppCache, getSettings, saveSettings } = require("../../utils/storage");
+const {
+  BOOTSTRAP_CACHE_KEY,
+  CURRENT_SCHEDULE_TARGET_KEY,
+  clearAppCache,
+  clearDataCaches,
+  clearLocalSelection,
+  getSettings,
+  saveSettings,
+} = require("../../utils/storage");
 const { mockCalendar } = require("../../data/mockCalendar");
 const {
   TERM_START_DATE,
@@ -8,6 +16,10 @@ const {
 } = require("../../utils/week");
 const request = require("../../utils/request");
 const { courseTimesMeta } = require("../../data/courseTimes");
+const { contactConfig } = require("../../config/contact");
+
+const APP_VERSION = "1.0.0";
+const FEEDBACK_TYPES = ["课表错误", "数据过期", "页面问题", "功能建议", "其他"];
 
 function buildWeekOptions() {
   const options = [];
@@ -17,33 +29,120 @@ function buildWeekOptions() {
   return options;
 }
 
+function formatFullDateTime(value) {
+  if (!value) {
+    return "-";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return String(value);
+  }
+  const pad = (num) => String(num).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function getSelectedSchedule() {
+  const target = wx.getStorageSync(CURRENT_SCHEDULE_TARGET_KEY) || null;
+  const filter = wx.getStorageSync("FOSU_SCHOOL_FILTER_CACHE") || null;
+  return {
+    target,
+    filter,
+  };
+}
+
+function buildSelectedScheduleText(selected) {
+  const target = selected && selected.target;
+  if (target && target.name) {
+    return target.type === "teacher"
+      ? `${target.name} 老师`
+      : (target.type === "classroom" ? `${target.name} 教室` : target.name);
+  }
+  const filter = selected && selected.filter;
+  if (filter && (filter.className || filter.majorName || filter.collegeName)) {
+    return [filter.collegeName, filter.grade, filter.majorName, filter.className]
+      .filter(Boolean)
+      .join(" / ");
+  }
+  return "未绑定课表";
+}
+
+function summarizeSelectedSchedule(selected) {
+  const target = selected && selected.target ? selected.target : null;
+  const filter = selected && selected.filter ? selected.filter : null;
+  return {
+    target: target ? {
+      type: target.type || "",
+      name: target.name || "",
+      classId: target.classId || "",
+      className: target.className || "",
+      semester: target.semester || "",
+      displayType: target.displayType || "",
+      isAggregated: Boolean(target.isAggregated),
+      courseCount: Array.isArray(target.courses) ? target.courses.length : 0,
+      updateTime: target.updateTime || "",
+    } : null,
+    filter: filter ? {
+      semesterValue: filter.semesterValue || "",
+      collegeCode: filter.collegeCode || "",
+      collegeName: filter.collegeName || "",
+      grade: filter.grade || "",
+      majorCode: filter.majorCode || "",
+      majorName: filter.majorName || "",
+      classId: filter.classId || "",
+      className: filter.className || "",
+      classType: filter.classType || "",
+      catalogVersion: filter.catalogVersion || "",
+    } : null,
+  };
+}
+
 Page({
   data: {
     settings: {},
     teachingInfo: {},
     termStartDate: TERM_START_DATE,
     weekOptions: buildWeekOptions(),
+    feedbackTypes: FEEDBACK_TYPES,
+    feedbackVisible: false,
+    feedbackSubmitting: false,
+    feedbackForm: {
+      typeIndex: 0,
+      contact: "",
+      content: "",
+    },
+    contactConfig,
+    selectedScheduleText: "未绑定课表",
     versionDetailVisible: false,
     versionData: {
-      appVersion: "1.0.0",
+      appVersion: APP_VERSION,
       sdkVersion: "",
       courseTimesVersion: "",
       courseTimesUpdatedAt: "",
       snapshotVersion: "-",
       semester: "-",
+      catalogUpdatedAt: "-",
+      majorsUpdatedAt: "-",
+      classSchedulesUpdatedAt: "-",
       collegesCount: "-",
       majorsCount: "-",
       classScheduleCount: "-",
-      adminClassCount: "-",
-      majorAggregateCount: "-",
-      noScheduleMajorCount: "-",
+      teacherScheduleCount: "-",
+      classroomScheduleCount: "-",
+      courseScheduleCount: "-",
       syncTimeText: "-",
       dataSource: "-",
-      disclaimer: "课表仅供参考，以教务系统和教师通知为准。",
+      selectedScheduleText: "未绑定课表",
+      disclaimer: "数据来自佛山大学教务系统同步快照，仅供参考，具体以教务系统及任课教师通知为准。",
     },
   },
 
   onShow() {
+    if (wx.showShareMenu) {
+      wx.showShareMenu({
+        withShareTicket: true,
+        menus: ["shareAppMessage", "shareTimeline"],
+      });
+    }
     this.loadSettings();
   },
 
@@ -51,11 +150,13 @@ Page({
     const settings = getSettings();
     const teachingInfo = getTodayTeachingInfo(new Date(), mockCalendar);
     const effectiveWeek = settings.manualWeekOverride ? clampWeek(settings.currentWeek) : teachingInfo.weekNo;
+    const selectedSchedule = getSelectedSchedule();
     this.setData({
       settings: Object.assign({}, settings, {
         currentWeek: effectiveWeek,
       }),
       teachingInfo,
+      selectedScheduleText: buildSelectedScheduleText(selectedSchedule),
     });
   },
 
@@ -113,6 +214,158 @@ Page({
     });
   },
 
+  showFeedback() {
+    this.setData({
+      feedbackVisible: true,
+    });
+  },
+
+  hideFeedback() {
+    if (this.data.feedbackSubmitting) {
+      return;
+    }
+    this.setData({
+      feedbackVisible: false,
+    });
+  },
+
+  onFeedbackTypeChange(event) {
+    this.setData({
+      "feedbackForm.typeIndex": Number(event.detail.value),
+    });
+  },
+
+  onFeedbackContactInput(event) {
+    this.setData({
+      "feedbackForm.contact": event.detail.value,
+    });
+  },
+
+  onFeedbackContentInput(event) {
+    this.setData({
+      "feedbackForm.content": event.detail.value,
+    });
+  },
+
+  buildFeedbackPayload() {
+    const selectedSchedule = getSelectedSchedule();
+    const selectedScheduleSummary = summarizeSelectedSchedule(selectedSchedule);
+    const sysInfo = wx.getSystemInfoSync();
+    const bootstrap = getApp().globalData.bootstrapData || wx.getStorageSync(BOOTSTRAP_CACHE_KEY) || {};
+    const settings = this.data.settings || getSettings();
+    return {
+      type: FEEDBACK_TYPES[this.data.feedbackForm.typeIndex] || "其他",
+      contact: this.data.feedbackForm.contact,
+      content: this.data.feedbackForm.content,
+      page: "pages/settings/settings",
+      selectedSchedule: selectedScheduleSummary,
+      selectedClass: selectedScheduleSummary.target || selectedScheduleSummary.filter || null,
+      semester: bootstrap.semester || settings.semesterId || settings.semester,
+      appVersion: APP_VERSION,
+      dataVersion: bootstrap.version || bootstrap.versions?.snapshot || bootstrap.updatedAt || "",
+      platform: `${sysInfo.platform || "unknown"} / ${sysInfo.system || ""} / SDK ${sysInfo.SDKVersion || ""}`,
+    };
+  },
+
+  submitFeedback() {
+    const content = String(this.data.feedbackForm.content || "").trim();
+    if (!content) {
+      wx.showToast({
+        title: "请填写反馈内容",
+        icon: "none",
+      });
+      return;
+    }
+
+    this.setData({ feedbackSubmitting: true });
+    request.post("/api/feedback", this.buildFeedbackPayload(), { loadingTitle: "正在提交..." })
+      .then(() => {
+        this.setData({
+          feedbackSubmitting: false,
+          feedbackVisible: false,
+          feedbackForm: {
+            typeIndex: 0,
+            contact: "",
+            content: "",
+          },
+        });
+        wx.showToast({
+          title: "已收到反馈",
+          icon: "success",
+        });
+      })
+      .catch((err) => {
+        this.setData({ feedbackSubmitting: false });
+        console.error("submit feedback failed", err);
+      });
+  },
+
+  showContactFallback() {
+    const lines = [
+      `QQ 群：${contactConfig.qqGroup}`,
+      `邮箱：${contactConfig.email}`,
+      `GitHub Issues：${contactConfig.githubIssues}`,
+      contactConfig.wechatHint,
+    ];
+    wx.showModal({
+      title: "联系开发者",
+      content: lines.join("\n"),
+      showCancel: false,
+      confirmText: "知道了",
+    });
+  },
+
+  refreshBootstrapData() {
+    wx.showLoading({ title: "正在刷新..." });
+    clearDataCaches();
+    request.get("/api/fosu/bootstrap", {}, { showLoading: false, silentError: true })
+      .then((res) => {
+        wx.hideLoading();
+        if (res && res.success) {
+          getApp().globalData.bootstrapData = res;
+          wx.setStorageSync(BOOTSTRAP_CACHE_KEY, res);
+          this.showDataVersionDetail();
+          wx.showToast({
+            title: "已更新到最新数据",
+            icon: "success",
+          });
+        } else {
+          wx.showToast({
+            title: "刷新失败",
+            icon: "none",
+          });
+        }
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        wx.showToast({
+          title: "刷新失败",
+          icon: "none",
+        });
+        console.error("refresh bootstrap failed", err);
+      });
+  },
+
+  clearLocalSelectionOnly() {
+    wx.showModal({
+      title: "清除本地选择",
+      content: "将清空当前课表选择和全校页筛选记录，下次进入时重新选择。",
+      confirmText: "清除",
+      confirmColor: "#c62828",
+      success: (res) => {
+        if (!res.confirm) {
+          return;
+        }
+        clearLocalSelection();
+        this.loadSettings();
+        wx.showToast({
+          title: "已清除",
+          icon: "success",
+        });
+      },
+    });
+  },
+
   showDeveloperApi() {
     wx.showModal({
       title: "开发者接口调试",
@@ -134,7 +387,7 @@ Page({
           return;
         }
         clearAppCache();
-        wx.removeStorageSync("FOSU_CURRENT_SCHEDULE_TARGET"); // 清空实时选择的课表绑定
+        clearLocalSelection();
         this.loadSettings();
         wx.showToast({
           title: "已清除",
@@ -185,22 +438,10 @@ Page({
         wx.hideLoading();
         if (res && res.success) {
           const counts = res.counts || {};
-          
-          let syncTimeText = "-";
-          if (res.updatedAt) {
-            const date = new Date(res.updatedAt);
-            if (!Number.isNaN(date.getTime())) {
-              const now = new Date();
-              const isToday = date.toDateString() === now.toDateString();
-              const timeStr = date.toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
-              if (isToday) {
-                syncTimeText = `今天 ${timeStr}`;
-              } else {
-                const dateStr = date.toLocaleDateString("zh-CN").replace(/\//g, "-");
-                syncTimeText = `${dateStr} ${timeStr}`;
-              }
-            }
-          }
+          const metaDetails = res.metaDetails || {};
+          const selectedSchedule = getSelectedSchedule();
+          const selectedScheduleText = buildSelectedScheduleText(selectedSchedule);
+          const syncTimeText = formatFullDateTime(res.updatedAt);
 
           let dataSource = res.dataSource || "cache-first";
           if (dataSource === "snapshot") {
@@ -211,27 +452,29 @@ Page({
             dataSource = "服务端本地分块 (cache)";
           }
 
-          const details = res.metaDetails || {};
-
           this.setData({
             versionData: {
-              appVersion: "1.0.0",
+              appVersion: APP_VERSION,
               sdkVersion: sysInfo.SDKVersion || "未知",
               courseTimesVersion: courseTimesMeta.version,
               courseTimesUpdatedAt: courseTimesMeta.updatedAt,
               
               snapshotVersion: res.version || "legacy",
               semester: res.semester || "-",
+              catalogUpdatedAt: formatFullDateTime(metaDetails.catalogUpdatedAt),
+              majorsUpdatedAt: formatFullDateTime(metaDetails.majorsUpdatedAt),
+              classSchedulesUpdatedAt: formatFullDateTime(metaDetails.classSchedulesUpdatedAt),
               collegesCount: counts.collegeCount || counts.collegesCount || "-",
               majorsCount: counts.majorCount || counts.majorsCount || "-",
               classScheduleCount: counts.classScheduleCount || counts.classSchedulesCount || counts.classesCount || "-",
-              adminClassCount: counts.adminClassCount || "-",
-              majorAggregateCount: counts.majorAggregateCount || "-",
-              noScheduleMajorCount: counts.noScheduleMajorCount || "-",
+              teacherScheduleCount: counts.teacherScheduleCount || "-",
+              classroomScheduleCount: counts.classroomScheduleCount || "-",
+              courseScheduleCount: counts.courseScheduleCount || "-",
               
               syncTimeText,
               dataSource,
-              disclaimer: details.disclaimer || "课表仅供参考，以教务系统和教师通知为准。",
+              selectedScheduleText,
+              disclaimer: metaDetails.disclaimer || "数据来自佛山大学教务系统同步快照，仅供参考，具体以教务系统及任课教师通知为准。",
             }
           });
         }
@@ -246,6 +489,39 @@ Page({
     this.setData({
       versionDetailVisible: false
     });
+  },
+
+  buildSharePath() {
+    const selected = getSelectedSchedule();
+    const filter = selected.filter || {};
+    const target = selected.target || {};
+    const params = [];
+    const append = (key, value) => {
+      if (value) {
+        params.push(`${key}=${encodeURIComponent(value)}`);
+      }
+    };
+    append("semester", target.semester || filter.semesterValue);
+    append("collegeCode", filter.collegeCode);
+    append("grade", filter.grade);
+    append("majorCode", filter.majorCode);
+    append("majorName", filter.majorName);
+    append("className", target.className || target.name || filter.className);
+    return params.length ? `/pages/school/school?${params.join("&")}` : "/pages/school/school";
+  },
+
+  onShareAppMessage() {
+    return {
+      title: "佛大课表｜一键查看全校课表，课程数据仅供参考",
+      path: this.buildSharePath(),
+    };
+  },
+
+  onShareTimeline() {
+    return {
+      title: "佛大课表｜一键查看全校课表，课程数据仅供参考",
+      query: this.buildSharePath().split("?")[1] || "",
+    };
   },
 
   noop() {}

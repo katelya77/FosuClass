@@ -9,6 +9,8 @@ const router = express.Router();
 const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
 const scheduleNormalizer = require("../utils/scheduleNormalizer");
+const feedbackService = require("../services/feedbackService");
+const releaseService = require("../services/releaseService");
 
 const STORAGE_DIR = path.join(__dirname, "../../storage");
 const zlib = require("zlib");
@@ -37,6 +39,12 @@ const FILE_MAP = {
   "course-schedules": path.join(STORAGE_DIR, "course-schedules.json"),
   "sync-meta": path.join(STORAGE_DIR, "sync-meta.json"),
   contributions: path.join(STORAGE_DIR, "contributions.json"),
+};
+
+const RESOURCE_FILE_BY_TYPE = {
+  teacher: "teacher-schedules",
+  classroom: "classroom-schedules",
+  course: "course-schedules",
 };
 
 /**
@@ -693,6 +701,53 @@ router.post(
   })
 );
 
+router.post(
+  "/sync/resources",
+  verifyAdminToken,
+  (req, res) => {
+    const resourceType = String(req.query.type || req.body.resourceType || "").trim();
+    const key = RESOURCE_FILE_BY_TYPE[resourceType];
+    if (!key) {
+      return res.status(400).json({
+        success: false,
+        message: "type must be teacher, classroom, or course",
+      });
+    }
+
+    const items = Array.isArray(req.body) ? req.body : req.body.items;
+    if (!Array.isArray(items)) {
+      return res.status(400).json({
+        success: false,
+        message: "resources payload must be an array or { items: [] }",
+      });
+    }
+    if (containsSensitiveData(req.body)) {
+      safeLog("sensitive-data-blocked", { type: key });
+      return res.status(400).json({
+        success: false,
+        message: "数据中包含敏感字段，已拒绝写入",
+      });
+    }
+
+    try {
+      fs.writeFileSync(FILE_MAP[key], JSON.stringify(items, null, 2), "utf-8");
+      updateSyncMeta(key, items.length, "local-sync-client");
+      return res.json({
+        success: true,
+        resourceType,
+        itemCount: items.length,
+        updatedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      safeLog("admin-sync-resources-failed", { key, error: error.message });
+      return res.status(500).json({
+        success: false,
+        message: `resources persist failed: ${error.message}`,
+      });
+    }
+  }
+);
+
 function getActiveSnapshotMeta() {
   const currentJsonPath = path.join(SNAPSHOTS_DIR, "current.json");
   if (!fs.existsSync(currentJsonPath)) {
@@ -724,6 +779,128 @@ function getActiveSnapshotMeta() {
     return null;
   }
 }
+
+router.post(
+  "/release/upload",
+  verifyAdminToken,
+  express.raw({ type: "*/*", limit: "150mb" }),
+  (req, res) => {
+    try {
+      const parsed = releaseService.parseSnapshotBuffer(req.body || Buffer.alloc(0));
+      const written = releaseService.writeReleaseSnapshot(parsed.snapshot);
+      return res.json({
+        success: true,
+        message: "release uploaded and validated",
+        version: written.version,
+        semester: written.manifest.semester,
+        counts: written.manifest.counts,
+        size: parsed.size,
+        isGzip: parsed.isGzip,
+      });
+    } catch (error) {
+      const validation = error.validation;
+      safeLog("release-upload-failed", { error: error.message, validation });
+      return res.status(validation ? 400 : 500).json({
+        success: false,
+        message: validation ? "release validation failed" : error.message,
+        errors: validation ? validation.errors : undefined,
+      });
+    }
+  }
+);
+
+router.post(
+  "/release/activate",
+  verifyAdminToken,
+  (req, res) => {
+    try {
+      let result;
+      if (req.body && req.body.snapshot) {
+        result = releaseService.activateReleaseFromSnapshot(req.body.snapshot);
+      } else {
+        result = releaseService.activateReleaseVersion(req.body && req.body.version);
+      }
+      const status = releaseService.getReleaseStatus();
+      global.cachedSnapshotMeta = null;
+      global.cachedSnapshotData = null;
+
+      const meta = getSyncMeta();
+      const counts = status.counts || {};
+      const updatedAt = status.activeReleaseUpdatedAt || new Date().toISOString();
+      meta.snapshot = {
+        updatedAt,
+        version: status.activeReleaseVersion,
+        semester: status.semester,
+        itemCount: counts.classScheduleCount || 0,
+        syncSource: "local-sync-client",
+      };
+      meta.catalog = {
+        updatedAt,
+        itemCount: counts.collegeCount || counts.collegesCount || 0,
+        syncSource: "local-sync-client",
+      };
+      meta.majors = {
+        updatedAt,
+        itemCount: counts.majorCount || counts.majorsCount || 0,
+        syncSource: "local-sync-client",
+      };
+      meta["class-schedules"] = {
+        updatedAt,
+        itemCount: counts.classScheduleCount || 0,
+        adminClassCount: counts.adminClassCount || 0,
+        majorAggregateCount: counts.majorAggregateCount || 0,
+        syncSource: "local-sync-client",
+      };
+      meta["teacher-schedules"] = {
+        updatedAt,
+        itemCount: counts.teacherScheduleCount || 0,
+        syncSource: "local-sync-client",
+      };
+      meta["classroom-schedules"] = {
+        updatedAt,
+        itemCount: counts.classroomScheduleCount || 0,
+        syncSource: "local-sync-client",
+      };
+      meta["course-schedules"] = {
+        updatedAt,
+        itemCount: counts.courseScheduleCount || 0,
+        syncSource: "local-sync-client",
+      };
+      fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
+
+      return res.json({
+        success: true,
+        message: "release activated",
+        version: status.activeReleaseVersion,
+        semester: status.semester,
+        counts: status.counts,
+        validation: result.validation,
+      });
+    } catch (error) {
+      const validation = error.validation;
+      safeLog("release-activate-failed", { error: error.message, validation });
+      return res.status(error.statusCode || (validation ? 400 : 500)).json({
+        success: false,
+        message: validation ? "release validation failed" : error.message,
+        errors: validation ? validation.errors : undefined,
+      });
+    }
+  }
+);
+
+router.get("/release/status", verifyAdminToken, (req, res) => {
+  res.json({
+    success: true,
+    ...releaseService.getReleaseStatus(),
+  });
+});
+
+router.get("/release/list", verifyAdminToken, (req, res) => {
+  res.json({
+    success: true,
+    releases: releaseService.listReleases(req.query.limit),
+  });
+});
 
 // 6.5. 上传快照临时文件
 router.post(
@@ -931,10 +1108,14 @@ router.post(
 router.get("/sync/status", (req, res) => {
   const meta = getSyncMeta();
   const snapshotMeta = getActiveSnapshotMeta();
+  const releaseStatus = releaseService.getReleaseStatus();
   
   res.json({
     success: true,
     dataSourceMode: config.DATA_SOURCE_MODE,
+    activeReleaseVersion: releaseStatus.activeReleaseVersion,
+    activeReleaseUpdatedAt: releaseStatus.activeReleaseUpdatedAt,
+    activeReleaseActivatedAt: releaseStatus.activeReleaseActivatedAt,
     snapshotUpdatedAt: snapshotMeta ? snapshotMeta.updatedAt : (meta.snapshot ? meta.snapshot.updatedAt : null),
     snapshotVersion: snapshotMeta ? snapshotMeta.version : (meta.snapshot ? meta.snapshot.version : null),
     semester: snapshotMeta ? snapshotMeta.semester : (meta.snapshot ? meta.snapshot.semester : "2025-2026-2"),
@@ -1060,5 +1241,36 @@ router.post(
     }
   }
 );
+
+router.get("/feedback", verifyAdminToken, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      feedback: feedbackService.listFeedback(req.query.limit),
+    });
+  } catch (error) {
+    safeLog("admin-feedback-list-failed", { error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.post("/feedback/:id/status", verifyAdminToken, (req, res) => {
+  try {
+    const record = feedbackService.updateFeedbackStatus(req.params.id, req.body.status);
+    return res.json({
+      success: true,
+      feedback: record,
+    });
+  } catch (error) {
+    safeLog("admin-feedback-status-failed", { id: req.params.id, error: error.message });
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
 
 module.exports = router;

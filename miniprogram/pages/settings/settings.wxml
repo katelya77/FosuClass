@@ -117,13 +117,66 @@
   </view>
 
   <view class="settings-card card">
+    <view class="group-title">反馈与分享</view>
+    <view class="setting-row" bindtap="showFeedback">
+      <view>
+        <view class="row-title">问题反馈 / 建议反馈</view>
+        <view class="row-desc">课表错误、数据过期、页面问题都可以告诉我们</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+    <button class="setting-row setting-row-button" open-type="contact" binderror="showContactFallback">
+      <view>
+        <view class="row-title">联系客服 / 联系开发者</view>
+        <view class="row-desc">优先使用微信小程序客服，无法打开时可查看备用方式</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </button>
+    <view class="setting-row" bindtap="showContactFallback">
+      <view>
+        <view class="row-title">备用联系方式</view>
+        <view class="row-desc">QQ 群、邮箱、GitHub Issues</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+    <button class="setting-row setting-row-button" open-type="share">
+      <view>
+        <view class="row-title">分享给同学</view>
+        <view class="row-desc">会尽量带上当前选择的班级课表</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </button>
+  </view>
+
+  <view class="settings-card card">
+    <view class="group-title">数据状态</view>
+    <view class="setting-row" bindtap="showDataVersionDetail">
+      <view>
+        <view class="row-title">数据版本详情</view>
+        <view class="row-desc">{{selectedScheduleText}}</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+    <view class="setting-row" bindtap="refreshBootstrapData">
+      <view>
+        <view class="row-title">手动刷新数据</view>
+        <view class="row-desc">清理本地 bootstrap / catalog / schedule 缓存后重新拉取</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+    <view class="setting-row danger" bindtap="clearLocalSelectionOnly">
+      <view>
+        <view class="row-title">清除本地选择</view>
+        <view class="row-desc">清空当前课表选择和全校页筛选缓存</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+  </view>
+
+  <view class="settings-card card">
     <view class="group-title">其他</view>
     <view class="setting-row" bindtap="showPrivacy">
       <view class="row-title">隐私说明</view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row" bindtap="showDataVersionDetail">
-      <view class="row-title">数据版本详情</view>
       <view class="row-arrow">›</view>
     </view>
     <view class="setting-row" bindtap="showAbout">
@@ -177,6 +230,22 @@
             <view class="detail-value">{{versionData.semester}}</view>
           </view>
           <view class="detail-row">
+            <view class="detail-label">课表数据更新时间</view>
+            <view class="detail-value">{{versionData.syncTimeText}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">catalogUpdatedAt</view>
+            <view class="detail-value">{{versionData.catalogUpdatedAt}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">majorsUpdatedAt</view>
+            <view class="detail-value">{{versionData.majorsUpdatedAt}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">classSchedulesUpdatedAt</view>
+            <view class="detail-value">{{versionData.classSchedulesUpdatedAt}}</view>
+          </view>
+          <view class="detail-row">
             <view class="detail-label">学院数量</view>
             <view class="detail-value">{{versionData.collegesCount}}</view>
           </view>
@@ -188,28 +257,28 @@
             <view class="detail-label">班级课表数量</view>
             <view class="detail-value">{{versionData.classScheduleCount}}</view>
           </view>
-          <view class="detail-row" wx:if="{{versionData.adminClassCount !== '-'}}">
-            <view class="detail-label">行政班数量</view>
-            <view class="detail-value">{{versionData.adminClassCount}}</view>
+          <view class="detail-row">
+            <view class="detail-label">教师课表数量</view>
+            <view class="detail-value">{{versionData.teacherScheduleCount}}</view>
           </view>
-          <view class="detail-row" wx:if="{{versionData.majorAggregateCount !== '-'}}">
-            <view class="detail-label">专业共享课表数量</view>
-            <view class="detail-value">{{versionData.majorAggregateCount}}</view>
+          <view class="detail-row">
+            <view class="detail-label">教室课表数量</view>
+            <view class="detail-value">{{versionData.classroomScheduleCount}}</view>
           </view>
-          <view class="detail-row" wx:if="{{versionData.noScheduleMajorCount !== '-'}}">
-            <view class="detail-label">确认无课专业数</view>
-            <view class="detail-value">{{versionData.noScheduleMajorCount}}</view>
+          <view class="detail-row">
+            <view class="detail-label">课程课表数量</view>
+            <view class="detail-value">{{versionData.courseScheduleCount}}</view>
           </view>
           
           <view class="detail-divider"></view>
           
           <view class="detail-row">
-            <view class="detail-label">数据更新时间</view>
-            <view class="detail-value">{{versionData.syncTimeText}}</view>
-          </view>
-          <view class="detail-row">
             <view class="detail-label">数据来源</view>
             <view class="detail-value">{{versionData.dataSource}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">当前选择课表</view>
+            <view class="detail-value">{{versionData.selectedScheduleText}}</view>
           </view>
           <view class="detail-row">
             <view class="detail-label">说明</view>
@@ -220,6 +289,55 @@
 
       <view class="popup-footer">
         <button class="footer-btn" bindtap="hideDataVersionDetail">知道了</button>
+      </view>
+    </view>
+  </view>
+
+  <view wx:if="{{feedbackVisible}}" class="popup-mask" bindtap="hideFeedback">
+    <view class="popup-panel" catchtap="noop">
+      <view class="popup-handle"></view>
+      <view class="popup-header">
+        <view class="popup-title-block">
+          <view class="popup-title">问题反馈</view>
+          <view class="popup-subtitle">会自动附带当前课表和数据版本</view>
+        </view>
+        <button class="close-button" bindtap="hideFeedback">×</button>
+      </view>
+
+      <view class="feedback-form">
+        <picker mode="selector" range="{{feedbackTypes}}" value="{{feedbackForm.typeIndex}}" bindchange="onFeedbackTypeChange">
+          <view class="feedback-field">
+            <view class="feedback-label">反馈类型</view>
+            <view class="feedback-picker">{{feedbackTypes[feedbackForm.typeIndex]}}</view>
+          </view>
+        </picker>
+
+        <view class="feedback-field">
+          <view class="feedback-label">联系方式（选填）</view>
+          <input
+            class="feedback-input"
+            value="{{feedbackForm.contact}}"
+            placeholder="微信号 / QQ / 邮箱"
+            placeholder-class="feedback-placeholder"
+            bindinput="onFeedbackContactInput"
+          />
+        </view>
+
+        <view class="feedback-field feedback-content-field">
+          <view class="feedback-label">反馈内容</view>
+          <textarea
+            class="feedback-textarea"
+            value="{{feedbackForm.content}}"
+            maxlength="3000"
+            placeholder="请描述你遇到的问题或建议"
+            placeholder-class="feedback-placeholder"
+            bindinput="onFeedbackContentInput"
+          />
+        </view>
+      </view>
+
+      <view class="popup-footer">
+        <button class="footer-btn" loading="{{feedbackSubmitting}}" bindtap="submitFeedback">提交反馈</button>
       </view>
     </view>
   </view>

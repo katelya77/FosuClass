@@ -6,13 +6,18 @@ const tabs = [
 ];
 
 const request = require("../../utils/request");
+const {
+  RECENT_SCHEDULES_KEY,
+  SCHOOL_FILTER_CACHE_KEY,
+} = require("../../utils/storage");
 
 function formatUpdateTime(updatedAt) {
   const date = updatedAt ? new Date(updatedAt) : new Date();
   if (Number.isNaN(date.getTime())) {
     return "";
   }
-  return date.toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
+  const pad = (num) => String(num).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function safeDecodeURIComponent(value) {
@@ -145,9 +150,13 @@ Page({
     classEmptyDesc: "数据来自佛山大学教务系统，查询后将展示行政班级课表。",
     classNoticeText: "",
     restoreHint: "",
+    catalogVersion: "",
+    catalogUpdatedAt: "",
+    recentSchedules: [],
   },
 
-  onLoad() {
+  onLoad(options) {
+    this.sharedQuery = options || {};
     this.fetchSchoolCatalog();
   },
 
@@ -156,6 +165,7 @@ Page({
     if (this.originalCatalogData) {
       this.applyCatalogFilter();
     }
+    this.loadRecentSchedules();
   },
 
   applyCatalogFilter() {
@@ -228,23 +238,35 @@ Page({
 
   // 1. 获取全校 Catalog 选项
   fetchSchoolCatalog() {
+    this.loadRecentSchedules();
     this.setData({ loading: true, catalogEmpty: false });
     // NOTE: 优先请求 bootstrap 接口，以便统一载入并进行版本/数据状态控制
     request.get("/api/fosu/bootstrap", {
       semester: "2025-2026-2",
     }, { showLoading: false, silentError: true })
       .then((res) => {
-        if (res && res.ready && res.catalog && Array.isArray(res.catalog.colleges) && res.catalog.colleges.length > 0) {
+        if (res && res.success && res.catalog && Array.isArray(res.catalog.colleges) && res.catalog.colleges.length > 0) {
           const catalogData = {
             ...res.catalog,
             dataSource: res.dataSource || "cache",
             updatedAt: res.updatedAt || "",
+            version: res.version || res.versions?.snapshot || res.updatedAt || "",
             success: true
           };
           this.originalCatalogData = catalogData;
           this.applyCatalogFilter();
-          this.setData({ loading: false, catalogEmpty: false });
-          this.restoreFilterCache();
+          this.setData({
+            loading: false,
+            catalogEmpty: false,
+            catalogVersion: catalogData.version,
+            catalogUpdatedAt: catalogData.updatedAt,
+            dataSourceText: res.dataSource === "snapshot" ? "同步快照" : "教务数据",
+          });
+          if (this.hasSharedQuery()) {
+            this.applySharedQueryIfNeeded();
+          } else {
+            this.restoreFilterCache();
+          }
         } else {
           console.warn("Bootstrap not ready or missing catalog, fallback to catalog");
           this.fallbackToCatalog();
@@ -265,8 +287,17 @@ Page({
         if (data && data.success && Array.isArray(data.colleges) && data.colleges.length > 0) {
           this.originalCatalogData = data;
           this.applyCatalogFilter();
-          this.setData({ loading: false, catalogEmpty: false });
-          this.restoreFilterCache();
+          this.setData({
+            loading: false,
+            catalogEmpty: false,
+            catalogVersion: data.version || data.updatedAt || "",
+            catalogUpdatedAt: data.updatedAt || "",
+          });
+          if (this.hasSharedQuery()) {
+            this.applySharedQueryIfNeeded();
+          } else {
+            this.restoreFilterCache();
+          }
         } else {
           console.warn("Catalog data is empty");
           this.setData({ loading: false, catalogEmpty: true });
@@ -280,6 +311,42 @@ Page({
 
 
   // ================== 本地缓存状态存取与联动 ==================
+
+  loadRecentSchedules() {
+    const recent = wx.getStorageSync(RECENT_SCHEDULES_KEY);
+    this.setData({
+      recentSchedules: Array.isArray(recent) ? recent.slice(0, 8) : [],
+    });
+  },
+
+  saveRecentSchedule(item) {
+    const meta = item || {};
+    const recent = wx.getStorageSync(RECENT_SCHEDULES_KEY);
+    const list = Array.isArray(recent) ? recent : [];
+    const semester = meta.semester || this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
+    const courseCount = Array.isArray(meta.courses) ? meta.courses.length : 0;
+    const record = {
+      scheduleKey: meta.scheduleKey || `${semester}-${meta.classId || meta.className || meta.displayTitle}`,
+      type: "class",
+      title: meta.displayTitle || meta.className || "班级课表",
+      className: meta.className || meta.displayTitle || "",
+      collegeName: meta.collegeName || this.data.colleges[this.data.selectedCollegeIndex]?.name || "",
+      collegeCode: meta.collegeCode || this.data.colleges[this.data.selectedCollegeIndex]?.code || "",
+      grade: meta.grade || this.data.grades[this.data.selectedGradeIndex] || "",
+      majorName: meta.majorName || this.data.majors[this.data.selectedMajorIndex]?.name || "",
+      majorCode: meta.majorCode || this.data.majors[this.data.selectedMajorIndex]?.code || "",
+      semester,
+      courseCount,
+      updatedAt: meta.updatedAtText || formatUpdateTime(meta.updatedAt || new Date()),
+      courses: Array.isArray(meta.courses) ? meta.courses : [],
+      schedule: meta,
+    };
+    const next = [record]
+      .concat(list.filter((old) => old.scheduleKey !== record.scheduleKey))
+      .slice(0, 8);
+    wx.setStorageSync(RECENT_SCHEDULES_KEY, next);
+    this.setData({ recentSchedules: next });
+  },
 
   saveFilterCache() {
     const {
@@ -301,16 +368,104 @@ Page({
       classId: (selectedClassIndex >= 0 && classesOptions[selectedClassIndex]) ? classesOptions[selectedClassIndex].classId : "",
       className: (selectedClassIndex >= 0 && classesOptions[selectedClassIndex]) ? classesOptions[selectedClassIndex].className : "",
       classType: (selectedClassIndex >= 0 && classesOptions[selectedClassIndex]) ? (classesOptions[selectedClassIndex].isAggregated ? "aggregate" : "admin") : "",
+      catalogVersion: this.data.catalogVersion || "",
+      catalogUpdatedAt: this.data.catalogUpdatedAt || "",
       lastUpdatedAt: Date.now()
     };
 
-    wx.setStorageSync("FOSU_SCHOOL_FILTER_CACHE", cache);
+    wx.setStorageSync(SCHOOL_FILTER_CACHE_KEY, cache);
+  },
+
+  hasSharedQuery() {
+    const query = this.sharedQuery || {};
+    return Boolean(query.className || query.collegeCode || query.grade || query.majorCode);
+  },
+
+  applySharedQueryIfNeeded() {
+    if (!this.hasSharedQuery()) {
+      return;
+    }
+    const query = this.sharedQuery || {};
+    this.sharedQuery = {};
+
+    const selectedSemesterIndex = query.semester
+      ? Math.max(0, this.data.semesters.findIndex((item) => item.value === query.semester))
+      : this.data.selectedSemesterIndex;
+    const selectedCollegeIndex = query.collegeCode
+      ? this.data.colleges.findIndex((item) => item.code === query.collegeCode)
+      : this.data.selectedCollegeIndex;
+    const selectedGradeIndex = query.grade
+      ? this.data.grades.indexOf(query.grade)
+      : this.data.selectedGradeIndex;
+
+    if (selectedCollegeIndex < 0 || selectedGradeIndex < 0) {
+      if (query.className) {
+        this.openSharedClassByName(query);
+      }
+      return;
+    }
+
+    this.setData({
+      selectedSemesterIndex: selectedSemesterIndex >= 0 ? selectedSemesterIndex : 0,
+      selectedCollegeIndex,
+      selectedGradeIndex,
+    }, () => {
+      this.fetchMajors().then((majors) => {
+        const selectedMajorIndex = query.majorCode
+          ? majors.findIndex((item) => item.code === query.majorCode)
+          : -1;
+        if (selectedMajorIndex < 0) {
+          if (query.className) {
+            this.openSharedClassByName(query);
+          }
+          return;
+        }
+        this.setData({
+          selectedMajorIndex,
+        }, () => {
+          this.fetchClasses().then((classesOptions) => {
+            const selectedClassIndex = query.className
+              ? classesOptions.findIndex((item) => item.className === query.className)
+              : -1;
+            this.setData({
+              selectedClassIndex,
+            }, () => {
+              this.saveFilterCache();
+              if (query.className && selectedClassIndex >= 0) {
+                this.searchClassSchedule();
+              } else if (query.className) {
+                this.openSharedClassByName(query);
+              }
+            });
+          });
+        });
+      });
+    });
+  },
+
+  openSharedClassByName(query) {
+    request.post("/api/fosu/class-schedule", {
+      semester: query.semester || "2025-2026-2",
+      className: query.className,
+    }, { loadingTitle: "正在加载课表...", silentError: true })
+      .then((data) => {
+        if (data && data.success && data.classes && data.classes.length > 0) {
+          const formatted = formatClassResultItem(data.classes[0]);
+          formatted.updatedAt = data.updatedAt;
+          this.saveRecentSchedule(formatted);
+          this.navigateToScheduleView("class", formatted.className, formatted.courses, formatted);
+        }
+      })
+      .catch((err) => {
+        console.warn("open shared class failed", err);
+      });
   },
 
   restoreFilterCache() {
-    const cache = wx.getStorageSync("FOSU_SCHOOL_FILTER_CACHE");
+    const cache = wx.getStorageSync(SCHOOL_FILTER_CACHE_KEY);
     if (!cache) {
       this.printSchoolDebugLog(false, "", "无缓存数据");
+      this.applySharedQueryIfNeeded();
       return;
     }
 
@@ -326,6 +481,8 @@ Page({
     if (collegeIdx < 0) {
       this.setData({ selectedSemesterIndex });
       this.printSchoolDebugLog(true, "未恢复", `学院 ${cache.collegeName || cache.collegeCode} 在当前快照中已不存在`);
+      wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
+      this.showFilterChangedHint("部分筛选项已更新，请重新选择");
       return;
     }
 
@@ -337,7 +494,8 @@ Page({
         selectedCollegeIndex: collegeIdx
       });
       this.printSchoolDebugLog(true, "学院级", `年级 ${cache.grade} 在当前年级列表中已不存在`);
-      this.showRestoreHint();
+      this.saveFilterCache();
+      this.showFilterChangedHint("部分筛选项已更新，请重新选择");
       return;
     }
 
@@ -352,7 +510,8 @@ Page({
         const majorIdx = majors.findIndex(m => m.code === cache.majorCode);
         if (majorIdx < 0) {
           this.printSchoolDebugLog(true, "学院+年级级", `专业 ${cache.majorName || cache.majorCode} 不存在于该学院或年级下`);
-          this.showRestoreHint();
+          this.saveFilterCache();
+          this.showFilterChangedHint("部分筛选项已更新，请重新选择");
           return;
         }
 
@@ -371,7 +530,8 @@ Page({
 
             if (classIdx < 0) {
               this.printSchoolDebugLog(true, "专业级", `班级 ${cache.className || cache.classId} 在该专业下已不存在`);
-              this.showRestoreHint();
+              this.saveFilterCache();
+              this.showFilterChangedHint("部分筛选项已更新，请重新选择");
               return;
             }
 
@@ -380,14 +540,15 @@ Page({
             });
             this.printSchoolDebugLog(true, "班级级 (完全恢复)", "已完全恢复上次筛选状态");
             this.showRestoreHint();
+            this.applySharedQueryIfNeeded();
           }).catch(err => {
             this.printSchoolDebugLog(true, "专业级", "拉取班级列表失败: " + err.message);
-            this.showRestoreHint();
+            this.showFilterChangedHint("部分筛选项已更新，请重新选择");
           });
         });
       }).catch(err => {
         this.printSchoolDebugLog(true, "学院+年级级", "拉取专业列表失败: " + err.message);
-        this.showRestoreHint();
+        this.showFilterChangedHint("部分筛选项已更新，请重新选择");
       });
     });
   },
@@ -424,8 +585,28 @@ Page({
     }
   },
 
+  showFilterChangedHint(message) {
+    const text = message || "部分筛选项已更新，请重新选择";
+    this.setData({
+      restoreHint: text
+    });
+    wx.showToast({
+      title: text,
+      icon: "none",
+      duration: 1600
+    });
+    if (this.restoreTimer) {
+      clearTimeout(this.restoreTimer);
+    }
+    this.restoreTimer = setTimeout(() => {
+      this.setData({
+        restoreHint: ""
+      });
+    }, 2600);
+  },
+
   resetFilters() {
-    wx.removeStorageSync("FOSU_SCHOOL_FILTER_CACHE");
+    wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
     this.setData({
       selectedSemesterIndex: 0,
       selectedCollegeIndex: -1,
@@ -673,6 +854,8 @@ Page({
           if (data && data.success && data.classes && data.classes.length > 0) {
             const matchedClass = data.classes[0];
             const formatted = formatClassResultItem(matchedClass);
+            formatted.updatedAt = data.updatedAt;
+            this.saveRecentSchedule(formatted);
             this.navigateToScheduleView("class", formatted.className, formatted.courses, formatted);
           } else {
             wx.showToast({
@@ -700,9 +883,12 @@ Page({
       majorName,
     }, { loadingTitle: "正在从教务系统获取数据...", silentError: true })
       .then((data) => {
-        const formatTime = formatUpdateTime(data.updatedAt);
-        const grouped = splitClassResultGroups(data.classes || []);
-        const emptyState = getClassEmptyState("");
+          const formatTime = formatUpdateTime(data.updatedAt);
+          const grouped = splitClassResultGroups(data.classes || []);
+          grouped.list.forEach((item) => {
+            item.updatedAt = data.updatedAt;
+          });
+          const emptyState = getClassEmptyState("");
         
         this.setData({
           classesResult: grouped.list,
@@ -837,6 +1023,7 @@ Page({
     const item = source[index];
     if (!item) return;
 
+    this.saveRecentSchedule(item);
     this.navigateToScheduleView("class", item.className, item.courses, item);
   },
 
@@ -862,6 +1049,14 @@ Page({
     if (!item) return;
 
     this.navigateToScheduleView("course", item.courseName, item.courses);
+  },
+
+  viewRecentSchedule(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    const item = this.data.recentSchedules[index];
+    if (!item) return;
+    const schedule = item.schedule || item;
+    this.navigateToScheduleView("class", item.className || item.title, item.courses || [], schedule);
   },
 
   navigateToScheduleView(type, name, courses, scheduleMeta) {

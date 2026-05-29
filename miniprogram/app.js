@@ -1,4 +1,5 @@
 const request = require("./utils/request");
+const { BOOTSTRAP_CACHE_KEY } = require("./utils/storage");
 
 App({
   globalData: {
@@ -27,7 +28,7 @@ App({
       .then((res) => {
         if (res && res.success) {
           this.globalData.bootstrapData = res;
-          wx.setStorageSync("FOSU_BOOTSTRAP_CACHE", res);
+          wx.setStorageSync(BOOTSTRAP_CACHE_KEY, res);
           console.log("🚀 [Bootstrap] 引导数据加载成功", res);
           if (this.bootstrapCallback) {
             this.bootstrapCallback(res);
@@ -36,7 +37,7 @@ App({
       })
       .catch((err) => {
         console.warn("⚠️ [Bootstrap] 接口网络请求失败，尝试从本地缓存恢复", err);
-        const cached = wx.getStorageSync("FOSU_BOOTSTRAP_CACHE");
+        const cached = wx.getStorageSync(BOOTSTRAP_CACHE_KEY);
         if (cached) {
           this.globalData.bootstrapData = cached;
           console.log("🚀 [Bootstrap] 读取本地离线缓存成功", cached);

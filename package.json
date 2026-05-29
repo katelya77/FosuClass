@@ -11,6 +11,7 @@
     "analyze:har": "node tools/analyze-third-party-har.js",
     "sync:release": "npm --prefix tools/fosu-sync-client run sync:release",
     "sync:resources": "npm --prefix tools/fosu-sync-client run sync:resources",
+    "sync:upload-cache": "npm --prefix tools/fosu-sync-client run sync:upload-cache",
     "test:course-normalizer": "node tools/test-course-normalizer.js"
   },
   "repository": {

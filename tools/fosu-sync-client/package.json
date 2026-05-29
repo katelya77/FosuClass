@@ -12,9 +12,13 @@
     "sync:catalog": "node sync.js catalog",
     "sync:majors": "node sync.js majors",
     "sync:class": "node sync.js class",
+    "sync:teachers": "node sync.js teachers",
+    "sync:classrooms": "node sync.js classrooms",
+    "sync:courses": "node sync.js courses",
     "sync:all": "node sync.js all",
     "sync:release": "node sync.js release",
-    "sync:resources": "node sync.js resources"
+    "sync:resources": "node sync.js resources",
+    "sync:upload-cache": "node sync.js upload-cache"
   },
   "dependencies": {
     "axios": "^1.6.8",
