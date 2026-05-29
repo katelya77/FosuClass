@@ -1295,6 +1295,8 @@ async function syncClassSchedules(page, catalog, majors) {
     console.log("ℹ️ SYNC_RECHECK_NO_SCHEDULE=true，将重新检查此前确认无排课的专业。");
   }
 
+  const syncClassScope = process.env.SYNC_CLASS_SCOPE || "";
+
   // 筛选出目标专业
   const targetMajors = majors.filter(major => {
     // 1. 如果指定了 collegeCodes 限制且当前 major 不在其中，过滤掉
@@ -1310,8 +1312,12 @@ async function syncClassSchedules(page, catalog, majors) {
       return false;
     }
 
-    // 4. 如果没有指定任何环境变量限制，则默认只同步活跃在校年级
+    // 4. 如果没有指定任何精准过滤限制
     if (!isFiltered) {
+      if (syncClassScope !== "all") {
+        return false;
+      }
+
       let activeGrades = [];
       try {
         activeGrades = getActiveGradesBySemester(activeSemester, { originalGrades: catalog.grades, activeGradeCount: 4 });
@@ -1329,6 +1335,10 @@ async function syncClassSchedules(page, catalog, majors) {
 
     return true;
   });
+
+  if (!isFiltered && syncClassScope !== "all") {
+    console.log("⚠️ 未检测到精准同步环境变量限制 (SYNC_CLASS_COLLEGE_CODES 等)，且未显式设置 SYNC_CLASS_SCOPE=all。跳过全校同步。");
+  }
 
   console.log(`🎯 匹配的目标专业总计: ${targetMajors.length} 个。`);
 
@@ -1355,6 +1365,12 @@ async function syncClassSchedules(page, catalog, majors) {
 
   // 打开行政班级课表页面以确保 Ajax 环境可用
   await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
+
+  let totalCoursesFetched = 0;
+  let totalDedupledCount = 0;
+  let totalGroupedCount = 0;
+  const skipNoScheduleCount = targetMajors.length - effectiveTargetMajors.length;
+  let newNoScheduleCount = 0;
 
   const allClassSchedules = [];
   let count = 0;
@@ -1434,7 +1450,50 @@ async function syncClassSchedules(page, catalog, majors) {
         audienceType: "student",
       });
 
+      totalCoursesFetched += courses.length;
+      if (courses.length > 0) {
+        const seenKeys = new Set();
+        const uniqueCourses = courses.filter(c => {
+          const key = [
+            c.courseName || "",
+            c.weekday || "",
+            c.startSection || "",
+            c.endSection || "",
+            c.startWeek || "",
+            c.endWeek || "",
+            c.teacherName || "",
+            c.classroom || "",
+          ].join("_");
+          if (seenKeys.has(key)) return false;
+          seenKeys.add(key);
+          return true;
+        });
+        const dedupedDiff = courses.length - uniqueCourses.length;
+        totalDedupledCount += dedupedDiff;
+
+        const groupMap = {};
+        uniqueCourses.forEach(c => {
+          const key = [
+            c.courseName || "",
+            c.weekday || "",
+            c.startSection || "",
+            c.endSection || "",
+            c.startWeek || "",
+            c.endWeek || "",
+          ].join("_");
+          groupMap[key] = (groupMap[key] || 0) + 1;
+        });
+        let groupedCoursesNum = 0;
+        Object.keys(groupMap).forEach(key => {
+          if (groupMap[key] > 1) {
+            groupedCoursesNum++;
+          }
+        });
+        totalGroupedCount += groupedCoursesNum;
+      }
+
       if (courses.length === 0) {
+        newNoScheduleCount++;
         const noScheduleRecord = {
           semester: activeSemester,
           collegeCode: major.collegeCode,
@@ -1500,6 +1559,19 @@ async function syncClassSchedules(page, catalog, majors) {
   } else {
     console.log("ℹ️ 本轮没有新抓取到任何班级课表，无需上传。");
   }
+
+  const finalAggregateCount = allClassSchedules.filter((item) => item.isAggregated).length;
+  const finalClassCount = allClassSchedules.length - finalAggregateCount;
+  const finalTotalSkipCount = skipNoScheduleCount + newNoScheduleCount;
+
+  console.log("\n================ [同步任务总结报告] ================");
+  console.log(`- 行政班数量: ${finalClassCount} 个`);
+  console.log(`- 专业共享课表数量: ${finalAggregateCount} 个`);
+  console.log(`- 课程总数: ${totalCoursesFetched} 门`);
+  console.log(`- 重复课程去重数量: ${totalDedupledCount} 门`);
+  console.log(`- 分组课程数量: ${totalGroupedCount} 组`);
+  console.log(`- 跳过无课表专业数量: ${finalTotalSkipCount} 个 (其中缓存跳过 ${skipNoScheduleCount}，本次新确认 ${newNoScheduleCount})`);
+  console.log("==================================================\n");
 
   // 如果全部都已同步完成，重置进度文件
   const allEffectiveTargetsDone = effectiveTargetMajors.every((major) => hasCompletedMajor(progress, major, activeSemester));

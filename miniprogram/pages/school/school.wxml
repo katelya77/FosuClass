@@ -108,24 +108,26 @@
           </view>
 
           <view class="result-group" wx:if="{{classAggregateResults.length}}">
-            <view class="result-group-head">
+            <view class="result-group-head" bindtap="toggleAggregate" style="cursor: pointer;">
               <view class="result-group-title">专业共享课表</view>
-              <view class="result-group-count">{{classAggregateResults.length}}项</view>
+              <view class="result-group-count">{{classAggregateResults.length}}项 {{showAggregate ? '▼' : '▶'}}</view>
             </view>
-            <view
-              wx:for="{{classAggregateResults}}"
-              wx:key="scheduleKey"
-              class="result-card card aggregate-card"
-              data-group="aggregate"
-              data-index="{{index}}"
-              bindtap="viewClassSchedule"
-            >
-              <view class="result-main">
-                <view class="result-title">{{item.displayTitle || item.className}}</view>
-                <view class="result-meta">{{item.displaySubtitle}}</view>
-              </view>
-              <view class="result-side">
-                <view class="status ready aggregate">{{item.statusText || "专业聚合"}}</view>
+            <view wx:if="{{showAggregate}}">
+              <view
+                wx:for="{{classAggregateResults}}"
+                wx:key="scheduleKey"
+                class="result-card card aggregate-card"
+                data-group="aggregate"
+                data-index="{{index}}"
+                bindtap="viewClassSchedule"
+              >
+                <view class="result-main">
+                  <view class="result-title">{{item.displayTitle || item.className}}</view>
+                  <view class="result-meta">{{item.displaySubtitle}}</view>
+                </view>
+                <view class="result-side">
+                  <view class="status ready aggregate">{{item.statusText || "专业聚合"}}</view>
+                </view>
               </view>
             </view>
           </view>

@@ -1,8 +1,10 @@
 const { mockCourses } = require("../data/mockCourses");
 const { importedCourses } = require("../data/importedCourses");
-const { courseTimes } = require("../data/courseTimes");
+const { courseTimes, courseTimesMeta } = require("../data/courseTimes");
 const { colorForCourse } = require("./color");
 const { isCourseInWeek } = require("./week");
+
+
 
 const SOURCE_TEXT = {
   imported: "教务课表 · 本地缓存",
@@ -175,6 +177,76 @@ function getTodayCourses(courses, currentWeek, todayWeekday, options) {
     });
 }
 
+function normalizeCourseKey(course) {
+  if (!course) return "";
+  return [
+    course.courseName || "",
+    course.weekday || "",
+    course.startSection || "",
+    course.endSection || "",
+    course.startWeek || "",
+    course.endWeek || "",
+    course.teacherName || "",
+    course.classroom || "",
+  ].join("_");
+}
+
+function dedupeCourses(courses) {
+  const seen = new Set();
+  return (courses || []).filter((course) => {
+    const key = normalizeCourseKey(course);
+    if (seen.has(key)) {
+      return false;
+    }
+    seen.add(key);
+    return true;
+  });
+}
+
+function groupElectiveLikeCourses(courses) {
+  const deduped = dedupeCourses(courses);
+  const groups = {};
+  const groupKeys = [];
+  for (const c of deduped) {
+    const key = [
+      c.courseName || "",
+      c.weekday || "",
+      c.startSection || "",
+      c.endSection || "",
+      c.startWeek || "",
+      c.endWeek || "",
+    ].join("_");
+    
+    if (!groups[key]) {
+      groups[key] = [];
+      groupKeys.push(key);
+    }
+    groups[key].push(c);
+  }
+  
+  const result = [];
+  for (const key of groupKeys) {
+    const items = groups[key];
+    if (items.length === 1) {
+      result.push(items[0]);
+    } else {
+      const base = Object.assign({}, items[0]);
+      base.isGrouped = true;
+      base.groupedCount = items.length;
+      base.groupedItems = items;
+      base.displayTeacherText = "多个教师";
+      base.displayClassroomText = "多个地点";
+      base.groupLabel = "多个教学班可选";
+      
+      base.teacherName = "多个教师";
+      base.classroom = "多个地点";
+      
+      result.push(base);
+    }
+  }
+  return result;
+}
+
 module.exports = {
   buildScheduleColumns,
   getCourseDataSource,
@@ -186,4 +258,9 @@ module.exports = {
   getCoursesForWeek,
   getTodayCourses,
   normalizeCourse,
+  normalizeCourseKey,
+  dedupeCourses,
+  groupElectiveLikeCourses,
+  courseTimesMeta,
 };
+

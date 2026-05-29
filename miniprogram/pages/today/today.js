@@ -1,14 +1,15 @@
-const { courseTimes } = require("../../data/courseTimes");
 const {
   getCourseDataSource,
   getCourseStatus,
   getCourseTimeRange,
   getCoursesByClass,
   getTodayCourses,
+  groupElectiveLikeCourses,
 } = require("../../utils/course");
 const { mockCalendar } = require("../../data/mockCalendar");
 const { getSettings } = require("../../utils/storage");
 const { clampWeek, getCurrentTeachingWeek, getTodayTeachingInfo, getTodayWeekday } = require("../../utils/week");
+
 
 function getStatusText(status, isNext) {
   if (status === "ongoing") {
@@ -30,7 +31,7 @@ function decorateTodayCourses(courses, now) {
       active: status !== "finished",
       sectionText: `第${course.startSection}-${course.endSection}节`,
       status,
-      timeText: getCourseTimeRange(course, courseTimes),
+      timeText: getCourseTimeRange(course),
     });
   });
   const nextIndex = decorated.findIndex((course) => course.status === "upcoming");
@@ -69,7 +70,9 @@ Page({
       ? clampWeek(settings.currentWeek)
       : getCurrentTeachingWeek(now, mockCalendar);
     const sourceCourses = getCoursesByClass(settings.className);
-    const courses = decorateTodayCourses(getTodayCourses(sourceCourses, currentWeek, weekday), now);
+    const todayRawCourses = getTodayCourses(sourceCourses, currentWeek, weekday);
+    const groupedCourses = groupElectiveLikeCourses(todayRawCourses);
+    const courses = decorateTodayCourses(groupedCourses, now);
     const dataSource = getCourseDataSource();
 
     const target = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
@@ -90,6 +93,7 @@ Page({
       courses,
     });
   },
+
 
   onCourseTap(event) {
     this.setData({

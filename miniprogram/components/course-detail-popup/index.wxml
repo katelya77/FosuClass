@@ -9,36 +9,61 @@
       <button class="close-button" bindtap="close">×</button>
     </view>
 
-    <view class="detail-grid">
-      <view class="detail-item">
-        <text class="detail-label">教师</text>
-        <text class="detail-value">{{course.teacherName || "待补充"}}</text>
+    <scroll-view scroll-y class="popup-scroll-content">
+      <view class="detail-grid" wx:if="{{!course.isGrouped}}">
+        <view class="detail-item">
+          <text class="detail-label">教师</text>
+          <text class="detail-value">{{course.teacherName || "待补充"}}</text>
+        </view>
+        <view class="detail-item">
+          <text class="detail-label">教室</text>
+          <text class="detail-value">{{course.classroom || "待补充"}}</text>
+        </view>
+        <view class="detail-item">
+          <text class="detail-label">周次</text>
+          <text class="detail-value">{{course.weekText}} · {{weekTypeText}}</text>
+        </view>
+        <view class="detail-item">
+          <text class="detail-label">节次</text>
+          <text class="detail-value">{{sectionText}}</text>
+        </view>
+        <view class="detail-item">
+          <text class="detail-label">时间</text>
+          <text class="detail-value">{{timeText || "待补充"}}</text>
+        </view>
+        <view class="detail-item full">
+          <text class="detail-label">班级/专业</text>
+          <text class="detail-value">{{course.className || "当前班级/专业"}}</text>
+        </view>
       </view>
-      <view class="detail-item">
-        <text class="detail-label">教室</text>
-        <text class="detail-value">{{course.classroom || "待补充"}}</text>
-      </view>
-      <view class="detail-item">
-        <text class="detail-label">周次</text>
-        <text class="detail-value">{{course.weekText}} · {{weekTypeText}}</text>
-      </view>
-      <view class="detail-item">
-        <text class="detail-label">节次</text>
-        <text class="detail-value">{{sectionText}}</text>
-      </view>
-      <view class="detail-item">
-        <text class="detail-label">时间</text>
-        <text class="detail-value">{{timeText || "待补充"}}</text>
-      </view>
-      <view class="detail-item full">
-        <text class="detail-label">班级/专业</text>
-        <text class="detail-value">{{course.className || "当前班级/专业"}}</text>
-      </view>
-    </view>
 
-    <view class="remark">
-      <view class="detail-label">备注</view>
-      <view class="remark-text">{{course.remark || "暂无备注"}}</view>
-    </view>
+      <view class="grouped-detail-list" wx:else>
+        <view class="grouped-title-hint">该课程包含 {{course.groupedCount}} 个教学班候选：</view>
+        <view class="grouped-item-box" wx:for="{{course.groupedItems}}" wx:key="id">
+          <view class="grouped-item-title">教学班 #{{index + 1}}</view>
+          <view class="grouped-meta-row">
+            <text class="grouped-meta-label">教师</text>
+            <text class="grouped-meta-value">{{item.teacherName || "待补充"}}</text>
+          </view>
+          <view class="grouped-meta-row">
+            <text class="grouped-meta-label">教室</text>
+            <text class="grouped-meta-value">{{item.classroom || "待补充"}}</text>
+          </view>
+          <view class="grouped-meta-row" wx:if="{{item.className}}">
+            <text class="grouped-meta-label">班级</text>
+            <text class="grouped-meta-value">{{item.className}}</text>
+          </view>
+          <view class="grouped-meta-row">
+            <text class="grouped-meta-label">周次</text>
+            <text class="grouped-meta-value">{{item.weekText}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="remark">
+        <view class="detail-label">备注</view>
+        <view class="remark-text">{{course.remark || "暂无备注"}}</view>
+      </view>
+    </scroll-view>
   </view>
 </view>

@@ -46,12 +46,11 @@
             <view
               wx:for="{{sections}}"
               wx:key="section"
-              class="time-cell"
+              class="time-cell {{item.section === 5 || item.section === 10 ? 'section-divider' : ''}}"
               style="height: {{sectionHeight}}rpx;"
             >
-              <view class="section-no">{{item.section}}</view>
-              <view class="time-text">{{item.start}}</view>
-              <view class="time-text">{{item.end}}</view>
+              <view class="section-no">第{{item.section}}节</view>
+              <view class="time-text-single">{{item.axisLabel}}</view>
             </view>
           </view>
 
@@ -80,7 +79,7 @@
                   wx:for="{{sections}}"
                   wx:for-item="section"
                   wx:key="section"
-                  class="section-slot"
+                  class="section-slot {{section.section === 5 || section.section === 10 ? 'section-divider' : ''}}"
                   style="height: {{sectionHeight}}rpx;"
                 ></view>
                 <course-card
