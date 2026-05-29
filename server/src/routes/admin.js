@@ -114,6 +114,110 @@ function containsSensitiveData(data) {
   );
 }
 
+function normalizeString(value) {
+  if (value === undefined || value === null) {
+    return "";
+  }
+  return String(value).trim();
+}
+
+function getFallbackSemester() {
+  if (process.env.PREFERRED_SEMESTER) {
+    return process.env.PREFERRED_SEMESTER;
+  }
+
+  try {
+    const catalogPath = FILE_MAP.catalog;
+    if (fs.existsSync(catalogPath)) {
+      const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf-8"));
+      const semester = catalog?.semesters?.[0]?.value;
+      if (semester) {
+        return semester;
+      }
+    }
+  } catch (error) {
+    safeLog("read-fallback-semester-failed", { error: error.message });
+  }
+
+  return "2025-2026-2";
+}
+
+function parseClassSchedulesPayload(body) {
+  if (Array.isArray(body)) {
+    return {
+      schedules: body,
+      semester: "",
+    };
+  }
+
+  if (body && typeof body === "object") {
+    const schedules = body.classSchedules || body.schedules || body.items;
+    return {
+      schedules,
+      semester: normalizeString(body.semester || body.preferredSemester),
+    };
+  }
+
+  return {
+    schedules: null,
+    semester: "",
+  };
+}
+
+function normalizeClassScheduleItem(item, fallbackSemester) {
+  if (!item || typeof item !== "object") {
+    return null;
+  }
+
+  const semester = normalizeString(item.semester || fallbackSemester || getFallbackSemester());
+  const collegeCode = normalizeString(item.collegeCode);
+  const grade = normalizeString(item.grade);
+  const majorCode = normalizeString(item.majorCode || item.code);
+  const majorName = normalizeString(item.majorName || item.name);
+  const className =
+    normalizeString(item.className) ||
+    `未命名班级-${collegeCode}-${grade}-${majorCode}`;
+
+  return {
+    ...item,
+    semester,
+    collegeCode,
+    grade,
+    majorCode,
+    majorName,
+    className,
+    courses: Array.isArray(item.courses) ? item.courses : [],
+  };
+}
+
+function getClassScheduleCompositeKey(item) {
+  return [
+    item.semester,
+    item.collegeCode,
+    item.grade,
+    item.majorCode,
+    item.className,
+  ].map(normalizeString).join("::");
+}
+
+function normalizeClassScheduleList(items, fallbackSemester) {
+  return items
+    .map((item) => normalizeClassScheduleItem(item, fallbackSemester))
+    .filter(Boolean);
+}
+
+function isStorageMounted() {
+  try {
+    return (
+      fs.existsSync(STORAGE_DIR) &&
+      fs.statSync(STORAGE_DIR).isDirectory() &&
+      fs.accessSync(STORAGE_DIR, fs.constants.R_OK | fs.constants.W_OK) === undefined
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
 /**
  * 通用同步处理逻辑
  * @param {string} key 缓存的 key，如 'catalog', 'majors' 等
@@ -431,17 +535,18 @@ router.post(
   "/sync/class-schedules",
   verifyAdminToken,
   (req, res) => {
-    const payload = req.body;
+    const rawPayload = req.body;
+    const { schedules, semester: payloadSemester } = parseClassSchedulesPayload(rawPayload);
     const mode = req.query.mode || "merge"; // 默认增量合并模式
 
-    if (!payload || !Array.isArray(payload)) {
+    if (!Array.isArray(schedules)) {
       return res.status(400).json({
         success: false,
         message: "请求体不能为空，且必须是行政班级课表数组",
       });
     }
 
-    if (containsSensitiveData(payload)) {
+    if (containsSensitiveData(rawPayload)) {
       safeLog("sensitive-data-blocked", { type: "class-schedules" });
       return res.status(400).json({
         success: false,
@@ -451,36 +556,34 @@ router.post(
 
     try {
       const filePath = FILE_MAP["class-schedules"];
+      const fallbackSemester = payloadSemester || getFallbackSemester();
+      const normalizedPayload = normalizeClassScheduleList(schedules, fallbackSemester);
       let finalData = [];
 
       if (mode === "merge" && fs.existsSync(filePath)) {
         try {
           const existingData = JSON.parse(fs.readFileSync(filePath, "utf-8"));
           if (Array.isArray(existingData)) {
-            // 建立 className -> item 的 map
+            // 建立 semester + collegeCode + grade + majorCode + className 的稳定唯一 key
             const map = new Map();
-            existingData.forEach(item => {
-              if (item && item.className) {
-                map.set(item.className, item);
-              }
+            normalizeClassScheduleList(existingData, fallbackSemester).forEach((item) => {
+              map.set(getClassScheduleCompositeKey(item), item);
             });
             // 用 payload 里的数据去覆盖或新增
-            payload.forEach(item => {
-              if (item && item.className) {
-                map.set(item.className, item);
-              }
+            normalizedPayload.forEach((item) => {
+              map.set(getClassScheduleCompositeKey(item), item);
             });
             finalData = Array.from(map.values());
           } else {
-            finalData = payload;
+            finalData = normalizedPayload;
           }
         } catch (e) {
           console.error("Failed to parse existing class-schedules.json, fallback to rewrite", e);
-          finalData = payload;
+          finalData = normalizedPayload;
         }
       } else {
         // replace 模式或者原文件不存在
-        finalData = payload;
+        finalData = normalizedPayload;
       }
 
       fs.writeFileSync(filePath, JSON.stringify(finalData, null, 2), "utf-8");
@@ -495,7 +598,7 @@ router.post(
         message: `数据同步成功 (${mode === 'merge' ? '增量合并' : '全量覆盖'})`,
         updatedAt: new Date().toISOString(),
         itemCount: count,
-        uploadedCount: payload.length
+        uploadedCount: normalizedPayload.length
       });
     } catch (error) {
       safeLog("admin-sync-failed", { key: "class-schedules", error: error.message });
@@ -544,9 +647,12 @@ router.get("/sync/status", (req, res) => {
     collegesCount: getItemCount("catalog"),
     majorsCount: getItemCount("majors"),
     classScheduleCount: getItemCount("class-schedules"),
+    classSchedulesUpdatedAt: getUpdatedAt("class-schedules"),
     teacherScheduleCount: getItemCount("teacher-schedules"),
     classroomScheduleCount: getItemCount("classroom-schedules"),
     courseScheduleCount: getItemCount("course-schedules"),
+    storageMounted: isStorageMounted(),
+    storagePath: STORAGE_DIR,
     metaDetails: meta,
   });
 });

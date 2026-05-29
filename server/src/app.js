@@ -44,8 +44,26 @@ app.use(cors(corsOptions));
 app.use(globalLimiter);
 
 // 4. 解析请求体
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+app.use((err, req, res, next) => {
+  if (err && (err.type === "entity.too.large" || err.status === 413)) {
+    safeLog("payload-too-large", {
+      path: req.path,
+      method: req.method,
+      limit: err.limit,
+      length: err.length,
+    });
+    return res.status(413).json({
+      success: false,
+      code: "PAYLOAD_TOO_LARGE",
+      message: "上传数据过大，请使用分块上传或缩小同步范围。",
+    });
+  }
+
+  return next(err);
+});
 
 // 5. 挂载路由
 app.use("/api/health", healthRouter);
