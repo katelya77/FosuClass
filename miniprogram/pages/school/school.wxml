@@ -82,17 +82,17 @@
         <view class="result-list" wx:if="{{classesResult.length}}">
           <view
             wx:for="{{classesResult}}"
-            wx:key="className"
+            wx:key="scheduleKey"
             class="result-card card"
             data-index="{{index}}"
             bindtap="viewClassSchedule"
           >
             <view class="result-main">
-              <view class="result-title">{{item.className}}</view>
-              <view class="result-meta">{{item.majorName || "未知专业"}} · {{item.grade}}级 · 教务数据</view>
+              <view class="result-title">{{item.displayTitle || item.className}}</view>
+              <view class="result-meta">{{item.displaySubtitle}}</view>
             </view>
             <view class="result-side">
-              <view class="status ready">教务数据</view>
+              <view class="status ready {{item.isAggregated ? 'aggregate' : ''}}">{{item.statusText || "教务数据"}}</view>
               <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}门课</view>
             </view>
           </view>
@@ -100,8 +100,8 @@
 
         <empty-state
           wx:elif="{{!loading}}"
-          title="请选择上方筛选并查询"
-          desc="数据来自佛山大学教务系统，查询后将展示行政班级课表。"
+          title="{{classEmptyTitle}}"
+          desc="{{classEmptyDesc}}"
         />
       </view>
     </block>

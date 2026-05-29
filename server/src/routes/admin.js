@@ -8,6 +8,7 @@ const path = require("path");
 const router = express.Router();
 const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
+const scheduleNormalizer = require("../utils/scheduleNormalizer");
 
 const STORAGE_DIR = path.join(__dirname, "../../storage");
 
@@ -108,6 +109,8 @@ function containsSensitiveData(data) {
   return (
     str.includes("cookie") ||
     str.includes("jsessionid") ||
+    str.includes("authorization") ||
+    str.includes("token") ||
     str.includes("casticket") ||
     str.includes("password") ||
     str.includes("passwd")
@@ -171,23 +174,40 @@ function normalizeClassScheduleItem(item, fallbackSemester) {
 
   const semester = normalizeString(item.semester || fallbackSemester || getFallbackSemester());
   const collegeCode = normalizeString(item.collegeCode);
+  const collegeName = normalizeString(item.collegeName);
   const grade = normalizeString(item.grade);
   const majorCode = normalizeString(item.majorCode || item.code);
   const majorName = normalizeString(item.majorName || item.name);
+  const isAggregated = Boolean(item.isAggregated) || normalizeString(item.displayType) === "major-schedule";
+  const displayType = normalizeString(item.displayType) || (isAggregated ? "major-schedule" : "class-schedule");
   const className =
     normalizeString(item.className) ||
-    `未命名班级-${collegeCode}-${grade}-${majorCode}`;
+    (isAggregated
+      ? scheduleNormalizer.buildMajorScheduleName({ grade, majorName })
+      : `未命名班级-${collegeCode}-${grade}-${majorCode}`);
 
   return {
     ...item,
     semester,
     collegeCode,
+    collegeName,
     grade,
     majorCode,
     majorName,
     className,
+    displayType,
+    isAggregated,
     courses: Array.isArray(item.courses) ? item.courses : [],
   };
+}
+
+function getClassScheduleMajorKey(item) {
+  return [
+    item.semester,
+    item.collegeCode,
+    item.grade,
+    item.majorCode,
+  ].map(normalizeString).join("::");
 }
 
 function getClassScheduleCompositeKey(item) {
@@ -566,7 +586,33 @@ router.post(
           if (Array.isArray(existingData)) {
             // 建立 semester + collegeCode + grade + majorCode + className 的稳定唯一 key
             const map = new Map();
+            const touchedMajorKeys = new Set(normalizedPayload.map(getClassScheduleMajorKey));
+            const payloadMajorInfo = new Map();
+            normalizedPayload.forEach((item) => {
+              const majorKey = getClassScheduleMajorKey(item);
+              const info = payloadMajorInfo.get(majorKey) || { hasAdminClass: false };
+              info.hasAdminClass = info.hasAdminClass || (!item.isAggregated && item.displayType !== "major-schedule");
+              payloadMajorInfo.set(majorKey, info);
+            });
             normalizeClassScheduleList(existingData, fallbackSemester).forEach((item) => {
+              const majorKey = getClassScheduleMajorKey(item);
+              const sameMajorUploaded = touchedMajorKeys.has(majorKey);
+              const incomingInfo = payloadMajorInfo.get(majorKey) || {};
+              const staleUnreliableClass =
+                sameMajorUploaded &&
+                !item.isAggregated &&
+                item.displayType !== "major-schedule" &&
+                !scheduleNormalizer.isReliableClassName(item.className, { courses: item.courses });
+              const staleAggregate =
+                sameMajorUploaded &&
+                incomingInfo.hasAdminClass &&
+                (item.isAggregated || item.displayType === "major-schedule");
+              if (staleUnreliableClass) {
+                return;
+              }
+              if (staleAggregate) {
+                return;
+              }
               map.set(getClassScheduleCompositeKey(item), item);
             });
             // 用 payload 里的数据去覆盖或新增

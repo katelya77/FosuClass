@@ -82,16 +82,19 @@ router.get("/majors", async (req, res) => {
 
 /**
  * 3. 获取行政班级课表
- * POST /api/fosu/class-schedule
+ * GET/POST /api/fosu/class-schedule
  */
-router.post("/class-schedule", scheduleLimiter, async (req, res) => {
+async function handleClassScheduleRequest(req, res) {
   try {
-    const data = await scheduleService.getClassSchedule(req.body);
+    const data = await scheduleService.getClassSchedule(req.method === "GET" ? req.query : req.body);
     res.json(data);
   } catch (error) {
     handleRouteError(res, error, "get-class-schedule-failed");
   }
-});
+}
+
+router.get("/class-schedule", scheduleLimiter, handleClassScheduleRequest);
+router.post("/class-schedule", scheduleLimiter, handleClassScheduleRequest);
 
 /**
  * 4. 获取教师课表
