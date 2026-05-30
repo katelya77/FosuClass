@@ -14,7 +14,7 @@
     "backgroundColor": "#f7f8fa",
     "backgroundTextStyle": "light",
     "navigationBarBackgroundColor": "#ffffff",
-    "navigationBarTitleText": "佛大课表",
+    "navigationBarTitleText": "佛课小表",
     "navigationBarTextStyle": "black"
   },
   "tabBar": {

@@ -1,9 +1,10 @@
 const request = require("./utils/request");
 const { BOOTSTRAP_CACHE_KEY } = require("./utils/storage");
+const BRAND = require("./config/brand");
 
 App({
   globalData: {
-    appName: "佛大课表",
+    appName: BRAND.appName,
     logoPath: "/assets/logo/favicon.png",
     env: "",
     bootstrapData: null,

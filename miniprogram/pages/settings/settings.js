@@ -1,3 +1,4 @@
+const BRAND = require("../../config/brand");
 const {
   BOOTSTRAP_CACHE_KEY,
   CURRENT_SCHEDULE_TARGET_KEY,
@@ -98,6 +99,7 @@ function summarizeSelectedSchedule(selected) {
 
 Page({
   data: {
+    brand: BRAND,
     settings: {},
     teachingInfo: {},
     termStartDate: TERM_START_DATE,
@@ -132,7 +134,7 @@ Page({
       syncTimeText: "-",
       dataSource: "-",
       selectedScheduleText: "未绑定课表",
-      disclaimer: "数据来自佛山大学教务系统同步快照，仅供参考，具体以教务系统及任课教师通知为准。",
+      disclaimer: BRAND.disclaimer,
     },
   },
 
@@ -446,8 +448,8 @@ Page({
       return;
     }
     wx.showModal({
-      title: "关于佛大课表",
-      content: "佛大课表是学生自制的课程表工具，非佛山大学官方产品。数据来自教务系统同步快照，仅供参考，具体安排以教务系统、任课教师通知和学院通知为准。\n\n联系邮箱：katelya77@protonmail.com",
+      title: "关于" + BRAND.appName,
+      content: BRAND.appName + "是个人开发的课程时间管理工具，主要用于查看课程安排、今日课程提醒和作息时间。本工具非学校官方服务，课程数据由开发者整理维护及用户反馈修正，仅供学习生活参考，具体安排请以任课教师通知及正式通知为准。\n\n联系邮箱：" + BRAND.contactEmail,
       showCancel: false,
       confirmText: "知道了",
     });
@@ -456,7 +458,7 @@ Page({
   showPrivacy() {
     wx.showModal({
       title: "隐私说明",
-      content: "佛大课表严格保护您的隐私，小程序绝不会在前端保存您的教务系统密码。云函数会在每次向教务网查询数据时，仅使用服务端预设的环境变量服务账号模拟登录，不会记录您的个人密码，也不会在任何地方记录 Cookie 等敏感登录态。",
+      content: BRAND.appName + "严格保护您的隐私，小程序绝不会在前端保存您的教务密码。数据查询由服务器向公共数据源获取，不会记录您的个人密码，也不会在任何地方记录 Cookie 等敏感登录态。",
       showCancel: false,
       confirmText: "知道了",
     });
@@ -485,11 +487,11 @@ Page({
 
           let dataSource = res.dataSource || "cache-first";
           if (dataSource === "snapshot") {
-            dataSource = "全校发布快照 (snapshot)";
+            dataSource = "全校数据快照 (snapshot)";
           } else if (dataSource === "fosu-realtime") {
-            dataSource = "教务系统直连实时 (realtime)";
+            dataSource = "后台服务直连实时 (realtime)";
           } else if (dataSource === "cache") {
-            dataSource = "服务端本地分块 (cache)";
+            dataSource = "服务端本地缓存 (cache)";
           }
 
           this.setData({
@@ -514,7 +516,7 @@ Page({
               syncTimeText,
               dataSource,
               selectedScheduleText,
-              disclaimer: metaDetails.disclaimer || "数据来自佛山大学教务系统同步快照，仅供参考，具体以教务系统及任课教师通知为准。",
+              disclaimer: metaDetails.disclaimer || BRAND.disclaimer,
             }
           });
         }
@@ -533,14 +535,14 @@ Page({
 
   onShareAppMessage() {
     return {
-      title: "佛大课表｜快捷查看课表作息",
+      title: BRAND.appName + "｜查看课程安排",
       path: "/pages/index/index",
     };
   },
 
   onShareTimeline() {
     return {
-      title: "佛大课表｜快捷查看课表作息",
+      title: BRAND.appName + "｜查看课程安排",
       query: "",
     };
   },

@@ -416,7 +416,7 @@ async function getBootstrap(semester) {
       },
       metaDetails: {
         source: snapshot.source,
-        disclaimer: snapshot.disclaimer || "数据来自佛山大学教务系统同步快照，仅供参考，具体以教务系统及任课教师通知为准。",
+        disclaimer: snapshot.disclaimer || "本工具为个人开发，非学校官方服务。课程数据由开发者整理维护及用户反馈修正，仅供参考，具体安排请以任课教师通知及正式通知为准。",
         catalogUpdatedAt: updatedAt,
         majorsUpdatedAt: updatedAt,
         classSchedulesUpdatedAt: updatedAt,
@@ -455,7 +455,7 @@ async function getBootstrap(semester) {
       resources: meta.snapshot?.version || meta.version || "1.0.0",
     },
     metaDetails: {
-      disclaimer: "数据来自佛山大学教务系统同步快照，仅供参考，具体以教务系统及任课教师通知为准。",
+      disclaimer: "本工具为个人开发，非学校官方服务。课程数据由开发者整理维护及用户反馈修正，仅供参考，具体安排请以任课教师通知及正式通知为准。",
       catalogUpdatedAt: meta.catalog?.updatedAt || catalog.updatedAt || null,
       majorsUpdatedAt: meta.majors?.updatedAt || null,
       classSchedulesUpdatedAt: meta["class-schedules"]?.updatedAt || null,

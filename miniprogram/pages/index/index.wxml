@@ -10,7 +10,7 @@
           mode="aspectFill"
           binderror="onLogoError"
         />
-        <view wx:else class="brand-logo fallback-logo">佛</view>
+        <view wx:else class="brand-logo fallback-logo">课</view>
         <view class="brand-copy" bindtap="showTodayReminderManual">
           <view class="app-title">{{appName}}</view>
         </view>
@@ -26,10 +26,10 @@
         <text class="today-tag" bindtap="showTodayReminderManual">今日：{{todayText}}</text>
       </view>
       <view class="source-line" wx:if="{{lastSyncText}}">
-        <text>教务数据 · 更新于 {{lastSyncText}}</text>
+        <text>课程数据 · 更新于 {{lastSyncText}}</text>
       </view>
       <view class="disclaimer-short" bindtap="showDisclaimer">
-        数据仅供参考，以教务系统和教师通知为准 <text class="info-icon">i</text>
+        数据仅供参考，以学校及教师通知为准 <text class="info-icon">i</text>
       </view>
     </view>
 
@@ -140,7 +140,7 @@
 
   <!-- 底部免责声明 -->
   <view class="footer-disclaimer" wx:if="{{hasBoundTarget}}">
-    数据来自教务系统同步快照，仅供参考，具体课程安排以教务系统、任课教师通知和学院通知为准。
+    {{brand.disclaimer}}
   </view>
 
   <course-detail-popup
@@ -245,11 +245,11 @@
     <view class="popup-panel init-panel">
       <view class="init-header">
         <image class="init-logo" src="{{logoPath}}" mode="aspectFill" />
-        <view class="init-brand-title">佛大课表</view>
+        <view class="init-brand-title">{{brand.appName}}</view>
       </view>
       <view class="init-body">
         <view class="init-title">选择你的课表</view>
-        <view class="init-subtitle">用于首页、今日课程和提醒展示；全校数据仅供参考，具体以教务系统及任课教师通知为准。</view>
+        <view class="init-subtitle">用于首页、今日课程和提醒展示；课程数据仅供时间管理与学习生活参考，具体安排以正式通知为准。</view>
         
         <button class="init-btn primary-btn" bindtap="goToSelectClass">去选择班级课表</button>
         <button class="init-btn secondary-btn" bindtap="skipSelect">先浏览全校课表</button>
@@ -258,12 +258,12 @@
       </view>
     </view>
   </view>
-
+ 
   <!-- 更多菜单模态框 -->
   <view class="popup-mask menu-popup" wx:if="{{showMoreMenu}}" bindtap="hideMoreMenu">
     <view class="menu-panel" catchtap="noop">
       <view class="menu-item" bindtap="refreshData">
-        <text class="menu-icon">↻</text>刷新教务数据
+        <text class="menu-icon">↻</text>刷新课程数据
       </view>
       <view class="menu-item" bindtap="showDisclaimer">
         <text class="menu-icon">i</text>查看免责声明
@@ -274,7 +274,7 @@
       <view class="menu-cancel" bindtap="hideMoreMenu">取消</view>
     </view>
   </view>
-
+ 
   <!-- 完整免责声明弹窗 -->
   <view class="popup-mask disclaimer-popup" wx:if="{{showDisclaimerPopup}}" bindtap="closeDisclaimer">
     <view class="popup-panel disclaimer-panel" catchtap="noop">
@@ -284,13 +284,13 @@
       </view>
       <scroll-view scroll-y class="disclaimer-scroll">
         <view class="disclaimer-text">
-          本程序（佛大课表）为学生自制的课程表查询工具，非佛山大学官方产品。
+          本程序（{{brand.appName}}）为个人开发的课程表查询与管理工具，非官方发布产品。
         </view>
         <view class="disclaimer-text">
-          所有课表数据均来自学校教务管理系统同步快照。因教务系统数据可能存在延迟、临时调度或变更，本程序展示的课程安排仅供参考。
+          所有课表时间数据由开发者整理维护及用户反馈修正。因课程安排可能存在临时调度、调整或变更，本程序展示的课程安排仅供日常学习生活时间参考。
         </view>
         <view class="disclaimer-text">
-          具体上课时间、地点、任课教师等，请务必以佛山大学官方教务管理系统实时信息、各学院官方通知以及任课教师发布的即时通知为准。
+          具体上课时间、地点、任课教师等，请务必以学校及任课教师发布的正式通知为准。
         </view>
       </scroll-view>
       <view class="popup-footer">

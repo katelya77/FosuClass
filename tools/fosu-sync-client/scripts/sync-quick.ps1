@@ -1,4 +1,4 @@
-# FosuClass 佛大课表 - 一键快速同步脚本 (Windows PowerShell)
+# FosuClass 佛课小表 - 一键快速同步脚本 (Windows PowerShell)
 # 作用：同一学期内，不拉取 catalog 和 majors，只重新抓取全校课表并发布上线。
 
 # 切换到同步客户端目录

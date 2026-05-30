@@ -1,6 +1,6 @@
 # FosuClass 本地同步器 (fosu-sync-client)
 
-本工具是 **佛大课表 FosuClass** 小程序项目的本地教务数据同步客户端。
+本工具是 **佛课小表 FosuClass** 小程序项目的本地教务数据同步客户端。
 
 ## 为什么需要此同步器？
 
@@ -236,7 +236,7 @@ npm run sync:majors
    访问 `https://class.katelya.eu.org/api/admin/sync/status`，若返回结果中 `success` 为 `true`，且 `catalogUpdatedAt`、`collegesCount`、`majorsCount`、`classScheduleCount` 显示了您的同步时间及正确条目数，说明 VPS 已成功接收并写入静态缓存。
 
 2. **验证微信小程序展示**：
-   打开小程序中的“查找佛大课表”页面，切换到“班级” Tab，如能正确拉出刚刚同步的学院和年级，并在底端看到类似 “数据更新于：xxxx-xx-xx xx:xx” 的提示，即代表同步链路大功告成！
+   打开小程序中的“查找课表”页面，切换到“班级” Tab，如能正确拉出刚刚同步的学院和年级，并在底端看到类似 “数据更新于：xxxx-xx-xx xx:xx” 的提示，即代表同步链路大功告成！
 
 3. **PowerShell 调试与验证命令**：
 

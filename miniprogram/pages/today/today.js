@@ -1,13 +1,15 @@
 const { getTodayCoursesData } = require("../../utils/todayReminder");
 const { getSettings } = require("../../utils/storage");
+const BRAND = require("../../config/brand");
 
 Page({
   data: {
+    brand: BRAND,
     dateText: "",
     weekdayText: "",
-    className: "25动物医学6",
+    className: "未选择当前课表",
     currentWeek: 12,
-    dataSourceText: "教务课表 · 本地缓存",
+    dataSourceText: "课程数据 · 本地缓存",
     courseCountText: "今日共 0 门课",
     courses: [],
     selectedCourse: null,

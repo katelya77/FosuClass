@@ -3,7 +3,7 @@
   <view class="profile card settings-profile">
     <image class="settings-logo" src="/assets/logo/favicon.png" mode="aspectFill" />
     <view class="settings-brand-info">
-      <view class="settings-app-title">佛大课表</view>
+      <view class="settings-app-title">{{brand.appName}}</view>
       <view class="settings-app-version">Version 1.0.0</view>
       <view class="settings-app-current" wx:if="{{settings.className}}">当前课表：{{settings.className}}</view>
       <view class="settings-app-current" wx:else>尚未绑定课表</view>
@@ -213,7 +213,7 @@
       <view class="row-arrow">›</view>
     </view>
     <view class="setting-row" bindtap="showAbout">
-      <view class="row-title">关于佛大课表</view>
+      <view class="row-title">关于{{brand.appName}}</view>
       <view class="row-arrow">›</view>
     </view>
     <view class="setting-row danger" bindtap="clearCache">

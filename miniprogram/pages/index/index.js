@@ -3,6 +3,7 @@ const { mockCalendar } = require("../../data/mockCalendar");
 const { buildScheduleColumns, getCourseDataSource, getCoursesByClass } = require("../../utils/course");
 const { getSettings, saveSettings } = require("../../utils/storage");
 const { getTodayCoursesData } = require("../../utils/todayReminder");
+const BRAND = require("../../config/brand");
 const {
   TOTAL_WEEKS,
   clampWeek,
@@ -12,6 +13,7 @@ const {
   getTodayTeachingInfo,
   getVisibleWeekdays,
   getWeekRangeByWeekNo,
+  mockCalendar: _mc, // 避开未用提示
 } = require("../../utils/week");
 
 const PAGE_PADDING_RPX = 32;
@@ -42,12 +44,13 @@ function resolveDisplayWeek(settings, now) {
 
 Page({
   data: {
+    brand: BRAND,
     logoPath: "/assets/logo/favicon.png",
     showLogo: true,
-    appName: "佛大课表",
+    appName: BRAND.appName,
     className: "未选择课表",
     semester: "2025-2026学年第二学期",
-    dataSourceText: "教务课表 · 本地缓存",
+    dataSourceText: "课程数据 · 本地缓存",
     lastSyncText: "",
     currentWeek: 12,
     totalWeeks: TOTAL_WEEKS,
@@ -376,8 +379,12 @@ Page({
   },
 
   onShareAppMessage() {
+    const className = this.data.className;
+    const title = className && className !== "未选择课表" && className !== "请选择课表"
+      ? `${className}的课程安排 · ${BRAND.appName}`
+      : `${BRAND.appName}｜查看课程安排`;
     return {
-      title: "佛大课表",
+      title: title,
       path: "/pages/index/index"
     };
   },

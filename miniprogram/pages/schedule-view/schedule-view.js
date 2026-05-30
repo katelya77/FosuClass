@@ -1,3 +1,4 @@
+const BRAND = require("../../config/brand");
 const { courseTimes } = require("../../data/courseTimes");
 const { mockCalendar } = require("../../data/mockCalendar");
 const { buildScheduleColumns, normalizeCourse } = require("../../utils/course");
@@ -80,6 +81,7 @@ function getCourseOverview(courses) {
 
 Page({
   data: {
+    brand: BRAND,
     type: "class",
     typeText: "班级课表",
     name: "",
@@ -420,7 +422,7 @@ Page({
   onShareAppMessage() {
     const meta = this.data.scheduleMeta || {};
     return {
-      title: `${this.data.name}的课表 · 佛大课表`,
+      title: `${this.data.name}的课程安排 · ${BRAND.appName}`,
       path: `/pages/schedule-view/schedule-view?shareScheduleId=${encodeURIComponent(meta.classId || this.data.name)}&name=${encodeURIComponent(this.data.name)}&type=${this.data.type}&semester=${encodeURIComponent(this.data.semester)}&displayType=${encodeURIComponent(this.data.displayType || "")}&isAggregated=${this.data.isAggregated ? "1" : "0"}&preview=1`
     };
   }
