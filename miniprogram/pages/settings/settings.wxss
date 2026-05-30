@@ -237,3 +237,43 @@
   font-size: 28rpx;
   line-height: 1.5;
 }
+
+/* 设置页 Logo 区域 */
+.settings-profile {
+  display: flex;
+  align-items: center;
+  gap: 24rpx;
+  padding: 36rpx 26rpx;
+}
+
+.settings-logo {
+  width: 108rpx;
+  height: 108rpx;
+  border-radius: 24rpx;
+  background: #f1f4f8;
+  box-shadow: 0 8rpx 20rpx rgba(16, 31, 55, 0.08);
+}
+
+.settings-brand-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.settings-app-title {
+  color: #172033;
+  font-size: 36rpx;
+  font-weight: 900;
+}
+
+.settings-app-version {
+  font-size: 21rpx;
+  color: #8a94a6;
+  margin-top: 4rpx;
+}
+
+.settings-app-current {
+  font-size: 23rpx;
+  color: #536174;
+  margin-top: 8rpx;
+  font-weight: 700;
+}
