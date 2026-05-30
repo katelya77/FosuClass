@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "FosuClass VPS API Backend",
   "main": "src/app.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "start": "node src/app.js",
     "dev": "node src/app.js",

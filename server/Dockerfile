@@ -1,5 +1,5 @@
-# 使用 Node.js 18 作为基础镜像
-FROM node:18-alpine
+# 使用 Node.js 20 作为基础镜像
+FROM node:20-alpine
 
 # 设置工作目录
 WORKDIR /app
@@ -11,7 +11,7 @@ RUN mkdir -p /app/storage
 COPY package*.json ./
 
 # 安装生产环境依赖
-RUN npm ci --only=production
+RUN npm ci --omit=dev
 
 # 复制所有源代码
 COPY src/ ./src/

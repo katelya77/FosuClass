@@ -314,8 +314,73 @@ async function loginAndGetJar(sessionId, studentId, password) {
   };
 }
 
+/**
+ * 诊断教务网及统一身份认证网的连通性
+ * @returns {Promise<Object>} 连通性诊断报告
+ */
+async function checkFosuNetwork() {
+  const dns = require("dns").promises;
+  const axios = require("axios");
+
+  const jwcUrl = "https://100.fosu.edu.cn/";
+  const authUrl = "https://authserver.fosu.edu.cn/authserver/login";
+
+  let jwcDns = false;
+  let jwcHttp = false;
+  let authDns = false;
+  let authHttp = false;
+
+  // 1. 测试 100.fosu.edu.cn
+  try {
+    const ips = await dns.lookup("100.fosu.edu.cn");
+    if (ips && ips.address) {
+      jwcDns = true;
+    }
+  } catch (e) {}
+
+  if (jwcDns) {
+    try {
+      const res = await axios.get(jwcUrl, { timeout: 3000, validateStatus: () => true });
+      if (res.status >= 200 && res.status < 400) {
+        jwcHttp = true;
+      }
+    } catch (e) {}
+  }
+
+  // 2. 测试 authserver.fosu.edu.cn
+  try {
+    const ips = await dns.lookup("authserver.fosu.edu.cn");
+    if (ips && ips.address) {
+      authDns = true;
+    }
+  } catch (e) {}
+
+  if (authDns) {
+    try {
+      const res = await axios.get(authUrl, { timeout: 3000, validateStatus: () => true });
+      if (res.status >= 200 && res.status < 400) {
+        authHttp = true;
+      }
+    } catch (e) {}
+  }
+
+  const campusNetwork = jwcDns && jwcHttp;
+
+  return {
+    success: true,
+    campusNetwork,
+    details: {
+      jwcDns,
+      jwcHttp,
+      authDns,
+      authHttp,
+    },
+  };
+}
+
 module.exports = {
   startPersonalSession,
   verifyPersonalSlider,
   loginAndGetJar,
+  checkFosuNetwork,
 };
