@@ -95,21 +95,44 @@
         <view class="recent-card card" wx:if="{{recentSchedules.length}}">
           <view class="result-group-head">
             <view class="result-group-title">最近查看课表</view>
-            <view class="result-group-count">{{recentSchedules.length}}项</view>
+            <view class="recent-actions" wx:if="{{recentSchedules.length > 0}}">
+              <text class="result-group-count">{{recentSchedules.length}}项</text>
+              <view class="clear-btn" bindtap="clearRecentSchedules">清空</view>
+            </view>
           </view>
           <view
             wx:for="{{recentSchedules}}"
             wx:key="scheduleKey"
             class="recent-item"
             data-index="{{index}}"
-            bindtap="viewRecentSchedule"
+            data-key="{{item.scheduleKey}}"
+            bindtouchstart="onRecentTouchStart"
+            bindtouchmove="onRecentTouchMove"
+            bindtouchend="onRecentTouchEnd"
           >
-            <view class="recent-main">
-              <view class="recent-title">{{item.title}}</view>
-              <view class="recent-meta">{{item.collegeName}} · {{item.grade}}级 · {{item.majorName}}</view>
-              <view class="recent-meta">{{item.updatedAt}}</view>
+            <view 
+              class="recent-item-content {{openedRecentKey === item.scheduleKey ? 'opened' : ''}}"
+              data-index="{{index}}"
+              bindtap="goRecentSchedule"
+            >
+              <view class="recent-main">
+                <view class="recent-title">{{item.title || '课表'}}</view>
+                <view class="recent-meta">
+                  <block wx:if="{{item.collegeName}}">{{item.collegeName}} · </block>
+                  <block wx:if="{{item.grade}}">{{item.grade}}级 · </block>
+                  <block>{{item.majorName || '暂无专业信息'}}</block>
+                </view>
+                <view class="recent-meta">{{item.updatedAt || '最近查看'}}</view>
+              </view>
+              <view class="recent-side">{{item.courseCount ? item.courseCount + '门课' : '课表'}}</view>
             </view>
-            <view class="recent-side">{{item.courseCount}}门课</view>
+            <view 
+              class="recent-delete-btn"
+              data-key="{{item.scheduleKey}}"
+              catchtap="deleteRecentSchedule"
+            >
+              删除
+            </view>
           </view>
         </view>
 
