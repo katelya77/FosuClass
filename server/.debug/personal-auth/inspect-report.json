@@ -1,0 +1,28 @@
+{
+  "authserverReachable": false,
+  "loginPageStatus": 0,
+  "containsLoginForm": false,
+  "captchaSwitch": "",
+  "needCaptcha": "",
+  "contextPath": "",
+  "detectedScripts": [],
+  "detectedEndpoints": {
+    "openSliderCaptcha": "/authserver/common/openSliderCaptcha.htl",
+    "verifySliderCaptcha": "/authserver/common/verifySliderCaptcha.htl",
+    "checkNeedCaptcha": "/authserver/checkNeedCaptcha.htl",
+    "getCaptcha": "/authserver/getCaptcha.htl",
+    "toSliderCaptcha": "/authserver/common/toSliderCaptcha.htl"
+  },
+  "detectedPasswordEncrypt": {
+    "functionName": "encryptPassword",
+    "saltField": "pwdEncryptSalt"
+  },
+  "detectedCasFields": {
+    "execution": false,
+    "lt": false,
+    "cllt": false,
+    "dllt": false,
+    "eventId": false,
+    "pwdEncryptSalt": false
+  }
+}

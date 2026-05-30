@@ -283,12 +283,24 @@ Page({
     let title = "提示";
     let content = defaultMsg || "系统繁忙，请稍后再试";
 
-    if (code === "CAMPUS_NETWORK_REQUIRED") {
-      content = "当前服务器暂时无法访问学校教务网，请确认是否已连通校园网。您可先使用全校课表选择班级查阅。";
-    } else if (code === "INVALID_CREDENTIALS") {
-      content = "您的学号或密码可能不正确，请重新输入核对。";
+    if (code === "EDU100_DNS_FAILED") {
+      content = "当前同步节点无法解析教务 100 网，请稍后再试。你仍可使用全校课表。";
+    } else if (code === "EDU100_UNREACHABLE" || code === "CAMPUS_NETWORK_REQUIRED") {
+      content = "当前同步节点无法访问教务 100 网，可能需要校园网或校 VPN 环境。";
+    } else if (code === "AUTHSERVER_UNREACHABLE") {
+      content = "暂时无法连接统一身份认证服务，请稍后再试。";
+    } else if (code === "LOGIN_PAGE_CHANGED") {
+      content = "学校登录页面结构可能已更新，个人同步暂时不可用。";
+    } else if (code === "SLIDER_ENDPOINT_FAILED") {
+      content = "滑块验证资源加载失败，请稍后再试。";
     } else if (code === "SLIDER_VERIFY_FAILED") {
-      content = "滑块安全验证已过期或校验失败，请重新点击登录验证。";
+      content = "滑块验证失败，请重新拖动验证。";
+    } else if (code === "CAS_LOGIN_FAILED" || code === "INVALID_CREDENTIALS") {
+      content = "登录失败，请检查学号、密码或验证码。";
+    } else if (code === "SCHEDULE_PAGE_UNREACHABLE") {
+      content = "已登录，但暂时无法打开个人课表页面。";
+    } else if (code === "SCHEDULE_PARSE_FAILED" || code === "PERSONAL_SCHEDULE_PARSE_FAILED") {
+      content = "已打开个人课表页面，但解析课程失败。";
     } else if (code === "PERSONAL_SCHEDULE_EMPTY") {
       content = "同步成功，但是您在该学期中似乎没有课程排课记录。";
     }

@@ -19,27 +19,43 @@ const { safeLog, maskStudentId } = require("../utils/safeLogger");
 function handlePersonalError(res, error) {
   const errMsg = error.message || "";
   
-  if (errMsg.includes("CAMPUS_NETWORK_REQUIRED")) {
+  if (errMsg.includes("EDU100_DNS_FAILED")) {
     return res.status(200).json({
       success: false,
-      code: "CAMPUS_NETWORK_REQUIRED",
-      message: "当前服务器暂时无法访问学校教务系统，请先使用全校课表选择班级。",
+      code: "EDU100_DNS_FAILED",
+      message: "当前同步节点无法解析教务 100 网，请稍后再试。你仍可使用全校课表。",
     });
   }
 
-  if (errMsg.includes("LOGIN_PAGE_PARSE_FAILED")) {
+  if (errMsg.includes("EDU100_UNREACHABLE")) {
     return res.status(200).json({
       success: false,
-      code: "LOGIN_PAGE_PARSE_FAILED",
-      message: "教务登录页参数解析失败，可能教务系统布局已变更，请联系开发者反馈。",
+      code: "EDU100_UNREACHABLE",
+      message: "当前同步节点无法访问教务 100 网，可能需要校园网或校 VPN 环境。",
     });
   }
 
-  if (errMsg.includes("SLIDER_TOKEN_NOT_FOUND")) {
+  if (errMsg.includes("AUTHSERVER_UNREACHABLE")) {
     return res.status(200).json({
       success: false,
-      code: "SLIDER_TOKEN_NOT_FOUND",
-      message: "滑块验证码令牌解析失败，请检查教务网联通性或稍后再试。",
+      code: "AUTHSERVER_UNREACHABLE",
+      message: "暂时无法连接统一身份认证服务，请稍后再试。",
+    });
+  }
+
+  if (errMsg.includes("LOGIN_PAGE_CHANGED")) {
+    return res.status(200).json({
+      success: false,
+      code: "LOGIN_PAGE_CHANGED",
+      message: "学校登录页面结构可能已更新，个人同步暂时不可用。",
+    });
+  }
+
+  if (errMsg.includes("SLIDER_ENDPOINT_FAILED")) {
+    return res.status(200).json({
+      success: false,
+      code: "SLIDER_ENDPOINT_FAILED",
+      message: "滑块验证资源加载失败，请稍后再试。",
     });
   }
 
@@ -55,23 +71,31 @@ function handlePersonalError(res, error) {
     return res.status(200).json({
       success: false,
       code: "SLIDER_VERIFY_FAILED",
-      message: "滑块验证失败，请重试。",
+      message: "滑块验证失败，请重新拖动验证。",
     });
   }
 
-  if (errMsg.includes("INVALID_CREDENTIALS")) {
+  if (errMsg.includes("CAS_LOGIN_FAILED") || errMsg.includes("INVALID_CREDENTIALS")) {
     return res.status(200).json({
       success: false,
-      code: "INVALID_CREDENTIALS",
-      message: "账号或密码不正确，请重新输入。",
+      code: "CAS_LOGIN_FAILED",
+      message: "登录失败，请检查学号、密码或验证码。",
     });
   }
 
-  if (errMsg.includes("CAS_TICKET_MISSING") || errMsg.includes("JWC_SESSION_FAILED")) {
+  if (errMsg.includes("SCHEDULE_PAGE_UNREACHABLE") || errMsg.includes("JWC_SESSION_FAILED")) {
     return res.status(200).json({
       success: false,
-      code: "JWC_SESSION_FAILED",
-      message: "统一身份认证跳转教务网会话建立失败，请重试。",
+      code: "SCHEDULE_PAGE_UNREACHABLE",
+      message: "已登录，但暂时无法打开个人课表页面。",
+    });
+  }
+
+  if (errMsg.includes("PERSONAL_SCHEDULE_PARSE_FAILED") || errMsg.includes("SCHEDULE_PARSE_FAILED")) {
+    return res.status(200).json({
+      success: false,
+      code: "SCHEDULE_PARSE_FAILED",
+      message: "已打开个人课表页面，但解析课程失败。",
     });
   }
 
@@ -89,14 +113,6 @@ function handlePersonalError(res, error) {
       success: false,
       code: "PERSONAL_SCHEDULE_EMPTY",
       message: "教务系统中该学期没有您的课程安排记录。",
-    });
-  }
-
-  if (errMsg.includes("PERSONAL_SCHEDULE_PARSE_FAILED")) {
-    return res.status(200).json({
-      success: false,
-      code: "PERSONAL_SCHEDULE_PARSE_FAILED",
-      message: "课表数据解析失败，请反馈给开发者。",
     });
   }
 
