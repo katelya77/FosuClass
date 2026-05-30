@@ -781,9 +781,12 @@ async function uploadWithRetry(endpoint, chunk, chunkNumber, totalChunks) {
 
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
-      await uploadToVps(endpoint, chunk, { maxRetries: 1 });
+      const result = await uploadToVps(endpoint, chunk, { maxRetries: 1 });
+      if (!Array.isArray(chunk) && Array.isArray(chunk && chunk.items)) {
+        chunk.length = chunk.items.length;
+      }
       console.log(`   ✅ [chunk ${chunkNumber}/${totalChunks}] 上传成功 (共 ${chunk.length} 条)`);
-      return;
+      return result;
     } catch (error) {
       const isRetryable = shouldRetryError(error);
       const attemptStr = `[chunk ${chunkNumber}/${totalChunks}] 第 ${attempt} 次尝试失败.`;
@@ -1176,28 +1179,66 @@ function normalizeResourceTypeList(types) {
 }
 
 function getResourceDelayConfig() {
-  const min = parseInt(process.env.SYNC_RESOURCE_DELAY_MIN_MS || "800", 10);
-  const max = parseInt(process.env.SYNC_RESOURCE_DELAY_MAX_MS || "1500", 10);
+  const requestDelay = parseInt(process.env.SYNC_RESOURCE_REQUEST_DELAY_MS || "", 10);
+  const min = parseInt(process.env.SYNC_RESOURCE_DELAY_MIN_MS || process.env.SYNC_RESOURCE_REQUEST_DELAY_MS || "800", 10);
+  const max = parseInt(process.env.SYNC_RESOURCE_DELAY_MAX_MS || process.env.SYNC_RESOURCE_REQUEST_DELAY_MS || "1500", 10);
   return {
-    concurrency: parseInt(process.env.SYNC_RESOURCE_CONCURRENCY || "1", 10) || 1,
+    concurrency: parseInt(process.env.SYNC_RESOURCE_MAX_CONCURRENCY || process.env.SYNC_RESOURCE_CONCURRENCY || "1", 10) || 1,
+    requestDelayMs: Number.isFinite(requestDelay) && requestDelay >= 0 ? requestDelay : null,
     minDelayMs: Number.isFinite(min) ? min : 800,
     maxDelayMs: Number.isFinite(max) ? max : 1500,
   };
 }
 
+function getResourceUploadChunkSize() {
+  const value = parseInt(process.env.SYNC_RESOURCE_UPLOAD_CHUNK_SIZE || process.env.SYNC_UPLOAD_CHUNK_SIZE || "20", 10);
+  return Number.isFinite(value) && value > 0 ? value : 20;
+}
+
+function buildResourceUploadId(type) {
+  return `${type}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
+}
+
 async function uploadResourceSchedules(resources, resourceTypes, semester) {
   const results = {};
+  const chunkSize = getResourceUploadChunkSize();
+  const delayConfig = getResourceDelayConfig();
+  const requestDelayMs = delayConfig.requestDelayMs !== null
+    ? delayConfig.requestDelayMs
+    : Math.max(0, delayConfig.minDelayMs);
   for (const type of normalizeResourceTypeList(resourceTypes)) {
     const config = RESOURCE_SYNC_CONFIGS[type];
     const items = resources[config.schedulesKey] || [];
-    const payload = {
+    const totalChunks = Math.max(1, Math.ceil(items.length / chunkSize));
+    const uploadId = buildResourceUploadId(type);
+    console.log(`[resources] uploading ${type}: ${items.length} items, ${chunkSize} per chunk, ${totalChunks} chunks`);
+
+    let finalResult = null;
+    for (let index = 0; index < totalChunks; index += 1) {
+      const chunkNumber = index + 1;
+      const chunk = items.slice(index * chunkSize, (index + 1) * chunkSize);
+      const payload = {
+        resourceType: type,
+        semester,
+        uploadId,
+        chunkIndex: chunkNumber,
+        totalChunks,
+        chunkItemCount: chunk.length,
+        items: chunk,
+        generatedAt: new Date().toISOString(),
+      };
+      finalResult = await uploadWithRetry(`/api/admin/sync/resources?type=${config.endpointType}`, payload, chunkNumber, totalChunks);
+      if (chunkNumber < totalChunks && requestDelayMs > 0) {
+        await sleep(requestDelayMs);
+      }
+    }
+
+    results[type] = Object.assign({
       resourceType: type,
-      semester,
-      items,
-      generatedAt: new Date().toISOString(),
-    };
-    console.log(`📤 上传${config.label}资源: ${items.length} 条`);
-    results[type] = await uploadToVps(`/api/admin/sync/resources?type=${config.endpointType}`, payload);
+      uploadId,
+      chunkSize,
+      totalChunks,
+    }, finalResult || {});
   }
   return results;
 }

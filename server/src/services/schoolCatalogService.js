@@ -379,6 +379,7 @@ function safeDecode(str) {
 async function getBootstrap(semester) {
   const snapshot = getSnapshot();
   if (snapshot) {
+    const meta = readJsonFile(FILE_MAP["sync-meta"]) || {};
     const derivedCounts = releaseService.countRelease(snapshot);
     const counts = Object.assign({}, derivedCounts, snapshot.coverage || {});
     ["teacherScheduleCount", "classroomScheduleCount", "courseScheduleCount", "classScheduleCount", "majorCount", "majorsCount", "collegeCount", "collegesCount"].forEach((key) => {
@@ -386,7 +387,18 @@ async function getBootstrap(semester) {
         counts[key] = derivedCounts[key] || 0;
       }
     });
+    const resourceMeta = {
+      teacherScheduleCount: meta["teacher-schedules"]?.itemCount || 0,
+      classroomScheduleCount: meta["classroom-schedules"]?.itemCount || 0,
+      courseScheduleCount: meta["course-schedules"]?.itemCount || 0,
+    };
+    Object.keys(resourceMeta).forEach((key) => {
+      if (resourceMeta[key] > 0) {
+        counts[key] = resourceMeta[key];
+      }
+    });
     const updatedAt = snapshot.updatedAt || new Date().toISOString();
+    const resourcesUpdatedAt = meta["teacher-schedules"]?.updatedAt || meta["classroom-schedules"]?.updatedAt || meta["course-schedules"]?.updatedAt || updatedAt;
     return {
       success: true,
       dataSource: "snapshot",
@@ -400,7 +412,7 @@ async function getBootstrap(semester) {
         catalog: snapshot.version,
         majors: snapshot.version,
         classSchedules: snapshot.version,
-        resources: snapshot.version,
+        resources: meta.snapshot?.version || snapshot.version,
       },
       metaDetails: {
         source: snapshot.source,
@@ -408,7 +420,7 @@ async function getBootstrap(semester) {
         catalogUpdatedAt: updatedAt,
         majorsUpdatedAt: updatedAt,
         classSchedulesUpdatedAt: updatedAt,
-        resourcesUpdatedAt: updatedAt,
+        resourcesUpdatedAt,
       }
     };
   }
@@ -439,7 +451,8 @@ async function getBootstrap(semester) {
       courseScheduleCount: meta["course-schedules"]?.itemCount || 0,
     },
     versions: {
-      legacy: meta.version || "1.0.0"
+      legacy: meta.version || "1.0.0",
+      resources: meta.snapshot?.version || meta.version || "1.0.0",
     },
     metaDetails: {
       disclaimer: "数据来自佛山大学教务系统同步快照，仅供参考，具体以教务系统及任课教师通知为准。",

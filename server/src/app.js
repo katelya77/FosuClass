@@ -13,6 +13,7 @@ const { safeLog } = require("./utils/safeLogger");
 const healthRouter = require("./routes/health");
 const fosuRouter = require("./routes/fosu");
 const adminRouter = require("./routes/admin");
+const adminPageRouter = require("./routes/adminPages");
 const contributeRouter = require("./routes/contribute");
 const feedbackRouter = require("./routes/feedback");
 
@@ -70,6 +71,7 @@ app.use((err, req, res, next) => {
 app.use("/api/health", healthRouter);
 app.use("/api/fosu", fosuRouter);
 app.use("/api/admin", adminRouter);
+app.use("/admin", adminPageRouter);
 app.use("/api/contribute", contributeRouter);
 app.use("/api/feedback", feedbackRouter);
 

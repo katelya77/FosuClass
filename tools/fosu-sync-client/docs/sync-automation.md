@@ -74,3 +74,55 @@ curl.exe -H "x-admin-token: $env:ADMIN_API_TOKEN" https://class.katelya.eu.org/a
 curl.exe -H "x-admin-token: $env:ADMIN_API_TOKEN" https://class.katelya.eu.org/api/admin/release/list
 curl.exe -H "x-admin-token: $env:ADMIN_API_TOKEN" https://class.katelya.eu.org/api/admin/sync/status
 ```
+
+## 日常运维命令
+
+查看线上状态：
+
+```powershell
+curl https://class.katelya.eu.org/api/health
+curl https://class.katelya.eu.org/api/fosu/bootstrap
+curl https://class.katelya.eu.org/api/admin/sync/status
+```
+
+Windows 校园网环境清理代理：
+
+```powershell
+Remove-Item Env:HTTP_PROXY -ErrorAction SilentlyContinue
+Remove-Item Env:HTTPS_PROXY -ErrorAction SilentlyContinue
+Remove-Item Env:ALL_PROXY -ErrorAction SilentlyContinue
+Remove-Item Env:http_proxy -ErrorAction SilentlyContinue
+Remove-Item Env:https_proxy -ErrorAction SilentlyContinue
+Remove-Item Env:all_proxy -ErrorAction SilentlyContinue
+$env:SYNC_DISABLE_PROXY="true"
+```
+
+小规模测试资源同步：
+
+```powershell
+$env:SYNC_RESOURCE_LIMIT="20"
+$env:SYNC_RESOURCE_MAX_CONCURRENCY="1"
+$env:SYNC_RESOURCE_REQUEST_DELAY_MS="1000"
+npm run sync:resources
+```
+
+正式同步资源：
+
+```powershell
+Remove-Item Env:SYNC_RESOURCE_LIMIT -ErrorAction SilentlyContinue
+npm run sync:resources
+```
+
+离线快照发布：
+
+```powershell
+$env:SYNC_RELEASE_OFFLINE="true"
+npm run sync:release
+```
+
+查看反馈：
+
+```text
+浏览器打开：https://class.katelya.eu.org/admin/feedback
+输入 ADMIN_API_TOKEN 查看。
+```

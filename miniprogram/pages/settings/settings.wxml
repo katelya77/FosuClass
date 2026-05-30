@@ -127,7 +127,7 @@
     </view>
     <button class="setting-row setting-row-button" open-type="contact" binderror="showContactFallback">
       <view>
-        <view class="row-title">联系客服 / 联系开发者</view>
+        <view class="row-title">联系开发者</view>
         <view class="row-desc">优先使用微信小程序客服，无法打开时可查看备用方式</view>
       </view>
       <view class="row-arrow">›</view>
@@ -135,7 +135,7 @@
     <view class="setting-row" bindtap="showContactFallback">
       <view>
         <view class="row-title">备用联系方式</view>
-        <view class="row-desc">QQ 群、邮箱、GitHub Issues</view>
+        <view class="row-desc">邮箱：katelya77@protonmail.com</view>
       </view>
       <view class="row-arrow">›</view>
     </view>
@@ -317,7 +317,7 @@
           <input
             class="feedback-input"
             value="{{feedbackForm.contact}}"
-            placeholder="微信号 / QQ / 邮箱"
+            placeholder="微信号 / 邮箱"
             placeholder-class="feedback-placeholder"
             bindinput="onFeedbackContactInput"
           />
