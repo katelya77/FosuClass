@@ -32,6 +32,7 @@ const proxyEnvNames = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "
 const detectedProxyEnv = proxyEnvNames
   .map((name) => [name, process.env[name]])
   .filter(([, value]) => Boolean(value));
+const INITIAL_DETECTED_PROXIES = [...detectedProxyEnv]; // 备份初始代理，以便在 preflight 中输出
 const disableProxy = String(process.env.SYNC_DISABLE_PROXY || "true").toLowerCase() !== "false";
 if (detectedProxyEnv.length > 0) {
   console.warn(`⚠️ 检测到代理环境变量: ${detectedProxyEnv.map(([name, value]) => `${name}=${value}`).join(", ")}`);
@@ -1249,7 +1250,66 @@ async function handleResourcesSync(resourceTypes) {
     fs.mkdirSync(debugDir, { recursive: true });
   }
 
+  const manifestPath = path.join(debugDir, "class-schedules-manifest.json");
+  const preferredSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+
+  // 1. 读取并校验清单文件是否存在
+  if (!fs.existsSync(manifestPath)) {
+    console.error("❌ 没有找到班级课表抓取清单，sync:resources 只能基于本地班级课表缓存派生资源。请先运行 npm run sync:class 或 npm run sync:fresh。");
+    throw new Error("Missing class-schedules-manifest.json");
+  }
+
+  let manifest;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+  } catch (err) {
+    console.error(`❌ 读取或解析班级课表抓取清单失败: ${err.message}`);
+    throw err;
+  }
+
+  // 2. 校验 semester 是否与当前配置一致
+  if (manifest.semester !== preferredSemester) {
+    const allowStale = getEnvFlag("SYNC_RESOURCES_ALLOW_STALE", false);
+    if (!allowStale) {
+      console.error(`❌ 班级课表抓取清单的学期 [${manifest.semester}] 与当前配置的 Preferred Semester [${preferredSemester}] 不一致！`);
+      console.error("💡 提示: 已阻止执行以防止派生错误数据。如果您确实需要，请设置环境变量: $env:SYNC_RESOURCES_ALLOW_STALE=\"true\"。");
+      throw new Error("Semester mismatch in manifest");
+    } else {
+      console.warn(`⚠️ 警告: 班级课表学期 [${manifest.semester}] 与配置的 [${preferredSemester}] 不一致，但已设置 SYNC_RESOURCES_ALLOW_STALE=true，将继续执行。`);
+    }
+  }
+
+  // 3. 校验 crawledAt 是否过期
+  const crawledTime = new Date(manifest.crawledAt).getTime();
+  const nowTime = Date.now();
+  const diffHours = (nowTime - crawledTime) / (1000 * 60 * 60);
+
+  if (diffHours > 24) {
+    console.warn(`⚠️ 强警告: 本地班级课表缓存生成时间 [${manifest.crawledAt}] 距今已超过 ${diffHours.toFixed(1)} 小时，本地班级课表缓存可能不是最新数据。`);
+  }
+
+  const requireFresh = getEnvFlag("SYNC_RESOURCES_REQUIRE_FRESH", false);
+  if (requireFresh && diffHours > 6) {
+    console.error(`❌ 本地班级课表缓存已过期！生成时间距今已超过 6 小时 (${diffHours.toFixed(1)} 小时)，且设置了 SYNC_RESOURCES_REQUIRE_FRESH=true。`);
+    throw new Error("Class schedules cache is stale (exceeded 6 hours)");
+  }
+
   const { items, filePath } = readClassSchedulesFromFile();
+
+  let fileMtime = "未知";
+  try {
+    const stat = fs.statSync(filePath);
+    fileMtime = stat.mtime.toISOString();
+  } catch (e) {}
+
+  console.log("\n=================== [sync:resources 开始派生资源] ===================");
+  console.log(`- 当前读取的 class-schedules-latest.json 路径: ${filePath}`);
+  console.log(`- 该文件实际修改时间 (mtime): ${fileMtime}`);
+  console.log(`- 抓取清单学期 (manifest semester): ${manifest.semester}`);
+  console.log(`- 抓取清单生成时间 (manifest crawledAt): ${manifest.crawledAt}`);
+  console.log(`- 抓取清单班级课表数量 (classScheduleCount): ${manifest.classScheduleCount || items.length}`);
+  console.log("- 说明：此命令不会访问教务 100 网，只会基于刚才抓取的班级课表缓存派生教师/教室/课程维度。");
+  console.log("===================================================================\n");
   const types = normalizeResourceTypeList(resourceTypes);
   const includeOptions = {
     includeTeachers: types.includes("teacher"),
@@ -1305,6 +1365,27 @@ async function handleResourcesSync(resourceTypes) {
   fs.writeFileSync(path.join(debugDir, "resources-report-latest.json"), JSON.stringify(report, null, 2), "utf-8");
   console.log(`💾 资源维度数据已生成: ${resourcesPath}`);
   console.log(`📊 resources counts: ${JSON.stringify(report.counts)}`);
+
+  // 生成并写入 resources-manifest.json
+  let resourcesChecksum = "";
+  try {
+    const fileContent = fs.readFileSync(resourcesPath, "utf-8");
+    resourcesChecksum = crypto.createHash("md5").update(fileContent).digest("hex");
+  } catch (e) {}
+
+  const resourcesManifest = {
+    semester,
+    generatedAt: report.generatedAt,
+    source: path.basename(filePath),
+    teacherScheduleCount: resources.teacherSchedules.length,
+    classroomScheduleCount: resources.classroomSchedules.length,
+    courseScheduleCount: resources.courseSchedules.length,
+    checksum: resourcesChecksum
+  };
+  const resourcesManifestPath = path.join(debugDir, "resources-manifest.json");
+  fs.writeFileSync(resourcesManifestPath, JSON.stringify(resourcesManifest, null, 2), "utf-8");
+  console.log(`💾 资源维度清单已保存至: ${resourcesManifestPath}`);
+
   return resources;
 }
 
@@ -2603,6 +2684,42 @@ async function syncClassSchedules(page, catalog, majors) {
     // 无论后续上传成功与否，强制在上传前保存完整全量文件
     const { latestPath } = saveFullClassSchedules(allClassSchedules, activeSemester);
 
+    // 写入 manifest：.debug/class-schedules-manifest.json
+    const manifestPath = path.join(debugDir, "class-schedules-manifest.json");
+    let checksum = "";
+    try {
+      const fileContent = fs.readFileSync(latestPath, "utf-8");
+      checksum = crypto.createHash("md5").update(fileContent).digest("hex");
+    } catch (e) {
+      console.warn(`⚠️ 计算 class-schedules-latest.json 的 checksum 失败: ${e.message}`);
+    }
+
+    let syncClientVersion = "1.0.0";
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, "package.json"), "utf-8"));
+      syncClientVersion = pkg.version || "1.0.0";
+    } catch (e) {}
+
+    const adminClassCount = allClassSchedules.filter(
+      (item) => item.displayType === "class-schedule" && !item.isAggregated
+    ).length;
+    const majorAggregateCount = allClassSchedules.length - adminClassCount;
+
+    const manifestData = {
+      semester: activeSemester,
+      grades: syncGrades || (catalog.grades || []),
+      crawledAt: new Date().toISOString(),
+      source: "100.fosu.edu.cn",
+      classScheduleCount: allClassSchedules.length,
+      adminClassCount,
+      majorAggregateCount,
+      checksum,
+      syncClientVersion
+    };
+
+    fs.writeFileSync(manifestPath, JSON.stringify(manifestData, null, 2), "utf-8");
+    console.log(`💾 班级课表抓取清单已保存至: ${manifestPath}`);
+
     // 如果设置了 crawl-only 模式，则仅抓取并保存本地，不执行上传
     if (getEnvFlag("SYNC_CLASS_CRAWL_ONLY", false)) {
       console.log(`\n🎉 [Crawl Only] 抓取完成！`);
@@ -2652,11 +2769,175 @@ async function syncClassSchedules(page, catalog, majors) {
 }
 
 /**
+ * 预检同步环境与代理状态
+ */
+function runPreflight() {
+  console.log("\n================ [Preflight 预检环境配置] ================");
+  console.log(`- .env path: ${envPath}`);
+  console.log(`- FOSU_API_BASE: ${process.env.FOSU_API_BASE || "https://class.katelya.eu.org"}`);
+  console.log(`- PREFERRED_SEMESTER: ${process.env.PREFERRED_SEMESTER || "未配置"}`);
+  
+  const syncClassGrades = process.env.SYNC_CLASS_GRADES || "未配置";
+  const syncGrades = process.env.SYNC_GRADES || "未配置";
+  console.log(`- SYNC_CLASS_GRADES (班级课表同步使用): ${syncClassGrades}`);
+  console.log(`- SYNC_GRADES (专业同步使用): ${syncGrades}`);
+  
+  const tokenExists = Boolean(process.env.ADMIN_API_TOKEN);
+  console.log(`- ADMIN_API_TOKEN: ${tokenExists ? "已配置" : "❌ 未配置！(可能会导致 VPS 校验失败)"}`);
+
+  if (INITIAL_DETECTED_PROXIES.length > 0) {
+    console.warn(`⚠️ 检测到代理环境变量:`);
+    INITIAL_DETECTED_PROXIES.forEach(([name, value]) => {
+      console.warn(`   - ${name}=${value}`);
+      if (value.includes("127.0.0.1:10808") || value.includes("localhost:10808")) {
+        console.warn("   ⚠️ 【警告】检测到代理指向 127.0.0.1:10808，可能是 v2rayN 系统代理残留，会导致上传 VPS 失败！");
+      }
+    });
+  } else {
+    console.log("- 代理环境变量: 未检测到");
+  }
+
+  const disableProxy = String(process.env.SYNC_DISABLE_PROXY || "true").toLowerCase() !== "false";
+  console.log(`- SYNC_DISABLE_PROXY: ${disableProxy}`);
+  if (disableProxy) {
+    console.log("ℹ️ 已启用强制禁用代理配置。所有上传阶段将强制不使用代理。");
+  }
+  console.log("========================================================\n");
+}
+
+/**
+ * 输出最终同步任务总结报告
+ */
+function printFinalSyncSummary(catalog, majors, allClassSchedules, resources, verifyRes) {
+  const preferredSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  const classScheduleCount = allClassSchedules ? allClassSchedules.length : 0;
+  const adminClassCount = allClassSchedules ? allClassSchedules.filter(
+    (item) => item.displayType === "class-schedule" && !item.isAggregated
+  ).length : 0;
+  const majorAggregateCount = classScheduleCount - adminClassCount;
+
+  const teacherScheduleCount = (resources && resources.teacherSchedules) ? resources.teacherSchedules.length : 0;
+  const classroomScheduleCount = (resources && resources.classroomSchedules) ? resources.classroomSchedules.length : 0;
+  const courseScheduleCount = (resources && resources.courseSchedules) ? resources.courseSchedules.length : 0;
+
+  const snapshotVersion = verifyRes?.status?.snapshotVersion || verifyRes?.releaseStatus?.activeReleaseVersion || "未知";
+  const bootstrapDataSource = verifyRes?.bootstrap?.dataSource || "未知";
+  const isActivated = verifyRes?.bootstrap?.success ? "已成功发布并激活" : "❌ 未确认激活成功";
+  const clientDataVersion = verifyRes?.bootstrap?.version || verifyRes?.status?.snapshotVersion || "未知";
+
+  console.log("\n=================== [一键同步任务总结报告] ===================");
+  console.log(`- 当前学期 (preferredSemester): ${preferredSemester}`);
+  console.log(`- catalog 学院数量: ${catalog && catalog.colleges ? catalog.colleges.length : 0} 个`);
+  console.log(`- majors 专业数量: ${majors ? majors.length : 0} 个`);
+  console.log(`- classScheduleCount (班级课表数): ${classScheduleCount} 条`);
+  console.log(`- adminClassCount (行政班数量): ${adminClassCount} 个`);
+  console.log(`- majorAggregateCount (专业共享数量): ${majorAggregateCount} 个`);
+  console.log(`- teacherScheduleCount (教师课表数): ${teacherScheduleCount} 条`);
+  console.log(`- classroomScheduleCount (教室课表数): ${classroomScheduleCount} 条`);
+  console.log(`- courseScheduleCount (课程课表数): ${courseScheduleCount} 条`);
+  console.log(`- snapshotVersion (线上快照版本): ${snapshotVersion}`);
+  console.log(`- bootstrap dataSource (最终数据源): ${bootstrapDataSource}`);
+  console.log(`- 发布状态: ${isActivated}`);
+  console.log(`- 小程序应看到的数据版本 (clientDataVersion): ${clientDataVersion}`);
+  console.log("============================================================\n");
+}
+
+/**
+ * 处理一键完整同步 (sync:fresh)
+ */
+async function handleFreshSync(page) {
+  console.log("\n================ [开始执行一键完整同步 (sync:fresh)] ================");
+
+  // 1. 同步 catalog 并上传 VPS
+  const catalog = await syncCatalog(page);
+
+  // 2. 同步 majors 并上传 VPS
+  const majors = await syncMajors(page, catalog);
+
+  // 3. 同步 class 课表并上传 VPS
+  delete process.env.SYNC_CLASS_CRAWL_ONLY; 
+  const allClassSchedules = await syncClassSchedules(page, catalog, majors);
+  if (!allClassSchedules || allClassSchedules.length === 0) {
+    throw new Error("一键完整同步抓取班级课表结果为空，同步中断！");
+  }
+
+  // 4. 派生资源维度数据并上传 VPS
+  console.log("\n[sync:fresh] 正在基于新抓取的班级课表派生资源维度...");
+  const resources = await handleResourcesSync(["teacher", "classroom", "course"]);
+
+  // 5. 离线发布与激活
+  console.log("\n[sync:fresh] 正在以离线发布模式 (SYNC_RELEASE_OFFLINE=true) 生成发布并激活线上快照...");
+  process.env.SYNC_RELEASE_OFFLINE = "true";
+  await handleOfflineRelease();
+
+  // 6. 校验线上接口
+  console.log("\n[sync:fresh] 同步动作已完成，开始校验线上端点...");
+  let verifyRes = null;
+  try {
+    verifyRes = await verifyEndpoints();
+  } catch (err) {
+    console.error(`⚠️ 校验线上接口出现异常: ${err.message}`);
+  }
+
+  // 7. 打印报告
+  printFinalSyncSummary(catalog, majors, allClassSchedules, resources, verifyRes);
+}
+
+/**
+ * 处理一键快速同步 (sync:quick)
+ */
+async function handleQuickSync(page) {
+  console.log("\n================ [开始执行一键快速同步 (sync:quick)] ================");
+
+  // 1. 从历史缓存中加载 catalog 和 majors
+  const catalogPath = path.join(__dirname, "last-catalog.json");
+  const majorsPath = path.join(__dirname, "last-majors.json");
+  if (!fs.existsSync(catalogPath) || !fs.existsSync(majorsPath)) {
+    throw new Error("没有找到本地 catalog 或 majors 历史缓存！请先运行一次 npm run sync:fresh。");
+  }
+  const catalog = JSON.parse(fs.readFileSync(catalogPath, "utf-8"));
+  const majors = JSON.parse(fs.readFileSync(majorsPath, "utf-8"));
+
+  // 2. 重新抓取班级课表并上传 VPS
+  delete process.env.SYNC_CLASS_CRAWL_ONLY;
+  const allClassSchedules = await syncClassSchedules(page, catalog, majors);
+  if (!allClassSchedules || allClassSchedules.length === 0) {
+    throw new Error("快速同步抓取班级课表结果为空，同步中断！");
+  }
+
+  // 3. 派生资源维度数据并上传 VPS
+  console.log("\n[sync:quick] 正在基于新抓取的班级课表派生资源维度...");
+  const resources = await handleResourcesSync(["teacher", "classroom", "course"]);
+
+  // 4. 离线发布与激活
+  console.log("\n[sync:quick] 正在以离线发布模式 (SYNC_RELEASE_OFFLINE=true) 生成发布并激活线上快照...");
+  process.env.SYNC_RELEASE_OFFLINE = "true";
+  await handleOfflineRelease();
+
+  // 5. 校验线上接口
+  console.log("\n[sync:quick] 同步动作已完成，开始校验线上端点...");
+  let verifyRes = null;
+  try {
+    verifyRes = await verifyEndpoints();
+  } catch (err) {
+    console.error(`⚠️ 校验线上接口出现异常: ${err.message}`);
+  }
+
+  // 6. 打印报告
+  printFinalSyncSummary(catalog, majors, allClassSchedules, resources, verifyRes);
+}
+
+/**
  * 主程序入口
  */
 async function main() {
   const args = process.argv.slice(2);
   const action = args[0] || "all";
+
+  // 如果是一键同步任务，则强制执行环境预检
+  if (action === "fresh" || action === "quick") {
+    runPreflight();
+  }
 
   // 1. 拦截并处理 upload-only 模式，免去网络诊断和浏览器初始化
   const uploadOnlyMode = getEnvFlag("SYNC_CLASS_UPLOAD_ONLY", false);
@@ -2721,6 +3002,10 @@ async function main() {
       await syncMajors(page);
     } else if (action === "class") {
       await syncClassSchedules(page);
+    } else if (action === "fresh") {
+      await handleFreshSync(page);
+    } else if (action === "quick") {
+      await handleQuickSync(page);
     } else if (action === "release") {
       // 暴力快照发布默认环境变量配置
       if (!process.env.SYNC_CLASS_GRADES) {
@@ -2806,7 +3091,7 @@ async function main() {
       console.log("\n🎉 [同步大成功] 本地所有数据已全量同步至 VPS！");
     } else {
       console.error(`❌ 未知的同步参数: ${action}`);
-      console.log("支持的参数: catalog | majors | class | resources | release | all");
+      console.log("支持的参数: catalog | majors | class | resources | release | fresh | quick | all");
     }
 
   } catch (error) {

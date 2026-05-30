@@ -7,7 +7,7 @@ async function runTest() {
       semester: "2025-2026-2",
       collegeCode: "04",
       titleCode: "",
-      keyword: "汪军",
+      keyword: "安哲明",
       weekStart: "",
       weekEnd: ""
     });

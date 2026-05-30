@@ -171,7 +171,7 @@ function getDemoTeacherSchedule(params) {
     updatedAt: new Date().toISOString(),
     teachers: [
       {
-        teacherName: params.keyword || "汪军 (Demo)",
+        teacherName: params.keyword || "张三 (Demo)",
         college: params.collegeName || "物理与光电工程学院",
         title: "教授",
         courses: [

@@ -5,6 +5,11 @@ const tabs = [
   { key: "course", label: "课程" },
 ];
 
+const TEACHER_SEARCH_PLACEHOLDER = "搜索教师姓名（例如：张三）";
+const CLASSROOM_SEARCH_PLACEHOLDER = "搜索教室（例如：C7-305）";
+const COURSE_SEARCH_PLACEHOLDER = "搜索课程（例如：有机化学）";
+const CLASS_SEARCH_PLACEHOLDER = "搜索班级（例如：25动物科学3班）";
+
 const request = require("../../utils/request");
 const {
   RECENT_SCHEDULES_KEY,
@@ -110,6 +115,12 @@ Page({
     activeTab: "class",
     keyword: "",
     showAggregate: false,
+    
+    // 搜索框占位符
+    TEACHER_SEARCH_PLACEHOLDER,
+    CLASSROOM_SEARCH_PLACEHOLDER,
+    COURSE_SEARCH_PLACEHOLDER,
+    CLASS_SEARCH_PLACEHOLDER,
     
     // 下拉选择选项
     semesters: [],
