@@ -26,7 +26,7 @@
         <input
           class="search-input"
           value="{{keyword}}"
-          placeholder="{{activeTab === 'teacher' ? '搜索教师姓名 (例如: 汪军)' : (activeTab === 'classroom' ? '搜索教室号 (例如: C7-503)' : '搜索课程名 (例如: 有机化学)')}}"
+          placeholder="{{activeTab === 'teacher' ? TEACHER_SEARCH_PLACEHOLDER : (activeTab === 'classroom' ? CLASSROOM_SEARCH_PLACEHOLDER : COURSE_SEARCH_PLACEHOLDER)}}"
           placeholder-class="search-placeholder"
           confirm-type="search"
           bindinput="onKeywordInput"
@@ -234,7 +234,7 @@
 
         <empty-state
           wx:elif="{{!loading}}"
-          title="输入姓名并搜索"
+          title="输入教师姓名，例如：张三"
           desc="可任选学院、职称作为辅佐筛选项，查询教师当前排课。"
         />
       </view>
@@ -289,7 +289,7 @@
         <empty-state
           wx:elif="{{!loading}}"
           title="输入教室名称并查询"
-          desc="例如输入 C7-503，即可获取教务系统的教室周课表。"
+          desc="例如输入 C7-305，即可获取教务系统的教室周课表。"
         />
       </view>
     </block>

@@ -17,7 +17,7 @@ const fallbackCourses = [
     semester: "2025-2026学年第二学期",
     className: "25动物医学6",
     courseName: "有机化学",
-    teacherName: "汪军",
+    teacherName: "张三",
     classroom: "C7-503",
     weekday: 2,
     startSection: 3,

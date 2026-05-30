@@ -18,7 +18,9 @@
     "sync:all": "node sync.js all",
     "sync:release": "node sync.js release",
     "sync:resources": "node sync.js resources",
-    "sync:upload-cache": "node sync.js upload-cache"
+    "sync:upload-cache": "node sync.js upload-cache",
+    "sync:fresh": "node sync.js fresh",
+    "sync:quick": "node sync.js quick"
   },
   "dependencies": {
     "axios": "^1.6.8",
