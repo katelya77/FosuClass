@@ -16,6 +16,7 @@ const adminRouter = require("./routes/admin");
 const adminPageRouter = require("./routes/adminPages");
 const contributeRouter = require("./routes/contribute");
 const feedbackRouter = require("./routes/feedback");
+const personalRouter = require("./routes/personal");
 
 const app = express();
 
@@ -70,6 +71,7 @@ app.use((err, req, res, next) => {
 // 5. 挂载路由
 app.use("/api/health", healthRouter);
 app.use("/api/fosu", fosuRouter);
+app.use("/api/fosu/personal", personalRouter);
 app.use("/api/admin", adminRouter);
 app.use("/admin", adminPageRouter);
 app.use("/api/contribute", contributeRouter);

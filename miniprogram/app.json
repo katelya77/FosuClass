@@ -8,7 +8,8 @@
     "pages/timetable/timetable",
     "pages/login/login",
     "pages/schedule-view/schedule-view",
-    "pages/contribute/contribute"
+    "pages/contribute/contribute",
+    "pages/personal-sync/personal-sync"
   ],
   "window": {
     "backgroundColor": "#f7f8fa",

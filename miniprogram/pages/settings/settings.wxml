@@ -22,8 +22,8 @@
     </view>
     <view class="setting-row" bindtap="goLogin">
       <view>
-        <view class="row-title">个人课表同步（内测中）</view>
-        <view class="row-desc">即将支持学号密码同步个人课表</view>
+        <view class="row-title">个人课表同步（实验版）</view>
+        <view class="row-desc">使用学号密码登录并同步个人课表</view>
       </view>
       <view class="row-arrow">›</view>
     </view>

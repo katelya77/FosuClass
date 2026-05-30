@@ -17,7 +17,10 @@
     "sync:upload-cache": "npm --prefix tools/fosu-sync-client run sync:upload-cache",
     "sync:fresh": "npm --prefix tools/fosu-sync-client run sync:fresh",
     "sync:quick": "npm --prefix tools/fosu-sync-client run sync:quick",
-    "test:course-normalizer": "node tools/test-course-normalizer.js"
+    "test:course-normalizer": "node tools/test-course-normalizer.js",
+    "test:personal-encrypt": "node server/scripts/test-personal-encrypt.js",
+    "test:personal-parser": "node server/scripts/test-personal-parser.js",
+    "sync:personal": "node server/scripts/sync-personal.js"
   },
   "repository": {
     "type": "git",
