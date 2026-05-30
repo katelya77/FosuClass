@@ -68,9 +68,14 @@
     </view>
 
     <view class="table-shell">
+      <!-- 左右滑动查看周末提示 -->
+      <view class="swipe-hint-bar" wx:if="{{showWeekend && weekendShowMode === 'detail'}}" style="background: #fff5f5; border-bottom: 1rpx solid #edf0f5; padding: 12rpx 24rpx; text-align: center;">
+        <text class="swipe-hint-text" style="font-size: 20rpx; color: #c62828; font-weight: bold;">💡 左右滑动查看周末课表</text>
+      </view>
+
       <scroll-view
         class="schedule-scroll-x {{showWeekend ? 'has-weekend' : ''}}"
-        scroll-x="{{showWeekend}}"
+        scroll-x="{{scrollX}}"
         enhanced
         show-scrollbar="{{false}}"
       >
@@ -122,6 +127,7 @@
                   wx:key="id"
                   course="{{course}}"
                   card-style="{{course.cardStyle}}"
+                  layout="{{showWeekend && weekendShowMode === 'overview' ? 'overview' : 'grid'}}"
                   bind:tapcourse="onCourseTap"
                 />
               </view>
@@ -147,64 +153,89 @@
   <view class="popup-mask reminder-popup" wx:if="{{showTodayReminder}}" bindtap="closeTodayReminder">
     <view class="popup-panel reminder-panel" catchtap="noop">
       <view class="popup-handle"></view>
+      
+      <!-- 弹窗顶部：轻量图标 + 标题 + 右上角关闭 -->
       <view class="popup-header">
-        <view class="popup-title-block">
+        <view class="popup-title-left">
+          <image class="reminder-mini-logo" src="/assets/logo/favicon.png" mode="aspectFill" />
           <view class="popup-title">今日课程提醒</view>
-          <view class="popup-subtitle">{{todayReminderData.dateText}} · {{todayReminderData.className}}</view>
         </view>
         <button class="close-button" bindtap="closeTodayReminder">×</button>
       </view>
 
       <scroll-view scroll-y class="reminder-scroll">
-        <view class="reminder-summary">
-          <block wx:if="{{todayReminderData.courses.length > 0}}">
-            今天共 <text class="highlight-count">{{todayReminderData.courses.length}}</text> 门课
-          </block>
-          <block wx:else>
-            今天没有课程安排，好好休息吧~
-          </block>
-        </view>
-
-        <view class="reminder-list" wx:if="{{todayReminderData.courses.length > 0}}">
-          <view 
-            class="reminder-item {{item.status === 'ongoing' ? 'ongoing' : (item.isNext ? 'next' : '')}} {{item.status === 'finished' ? 'finished' : ''}}"
-            wx:for="{{todayReminderData.courses}}" 
-            wx:key="id"
-          >
-            <view class="reminder-item-header">
-              <view class="reminder-course-name">{{item.courseName}}</view>
-              <view class="reminder-status-badge {{item.status}}">{{item.statusText}}</view>
-            </view>
-            <view class="reminder-item-meta">
-              <view class="reminder-meta-col">
-                <text class="reminder-meta-label">时间：</text>
-                <text class="reminder-meta-val">{{item.timeText}} ({{item.sectionText}})</text>
-              </view>
-              <view class="reminder-meta-col">
-                <text class="reminder-meta-label">教室：</text>
-                <text class="reminder-meta-val highlight-room">{{item.classroom || "待补充"}}</text>
-              </view>
-              <view class="reminder-meta-col" wx:if="{{item.teacherName}}">
-                <text class="reminder-meta-label">教师：</text>
-                <text class="reminder-meta-val">{{item.teacherName}}</text>
-              </view>
-              <view class="reminder-meta-col">
-                <text class="reminder-meta-label">周次：</text>
-                <text class="reminder-meta-val">{{item.weekText || "单双周"}}</text>
-              </view>
-            </view>
+        <view class="reminder-content">
+          <!-- 基础元信息区 -->
+          <view class="reminder-meta-banner">
+            <view class="reminder-meta-date">{{todayReminderData.dateText}} {{todayReminderData.weekdayText}} · 第{{todayReminderData.currentWeek}}周</view>
+            <view class="reminder-meta-class" wx:if="{{todayReminderData.className}}">当前课表：{{todayReminderData.className}}</view>
           </view>
-        </view>
 
-        <view class="reminder-empty" wx:else>
-          <image class="reminder-empty-img" src="/images/icons/goods-active.png" mode="aspectFit" />
-          <view class="reminder-empty-tip">Enjoy your day!</view>
+          <!-- 无课状态 -->
+          <block wx:if="{{todayReminderData.courses.length === 0}}">
+            <view class="no-course-card">
+              <view class="no-course-title">今天没有课程安排</view>
+              <view class="no-course-desc">好好休息，享受你的自由时光吧☕️</view>
+              
+              <!-- 下一节课预告 -->
+              <view class="next-course-preview-box" wx:if="{{todayReminderData.nextCoursePreview}}">
+                <view class="preview-tag">下堂课预告</view>
+                <view class="preview-course-name">{{todayReminderData.nextCoursePreview.courseName}}</view>
+                <view class="preview-course-detail">
+                  <text class="preview-time">{{todayReminderData.nextCoursePreview.timeLabel}}</text>
+                  <text class="preview-dot">·</text>
+                  <text class="preview-room">{{todayReminderData.nextCoursePreview.classroom}}</text>
+                </view>
+              </view>
+            </view>
+          </block>
+
+          <!-- 有课状态 -->
+          <block wx:else>
+            <view class="has-course-container">
+              <view class="reminder-summary-line">
+                今天共 <text class="highlight-count">{{todayReminderData.courses.length}}</text> 门课
+              </view>
+              
+              <!-- 第一张重点卡：下一节课或正在上的课 -->
+              <view class="focus-course-card {{todayReminderData.courses[0].status}}">
+                <view class="focus-card-header">
+                  <text class="focus-status-tag">{{todayReminderData.courses[0].statusText}}</text>
+                  <text class="focus-time-label">{{todayReminderData.courses[0].timeText}} ({{todayReminderData.courses[0].sectionText}})</text>
+                </view>
+                <view class="focus-course-name">{{todayReminderData.courses[0].courseName}}</view>
+                <view class="focus-course-room" wx:if="{{todayReminderData.courses[0].classroom}}">
+                  📍 {{todayReminderData.courses[0].classroom}}
+                </view>
+              </view>
+
+              <!-- 其他课程列表 (最多展示剩余的 2 条) -->
+              <view class="other-courses-list" wx:if="{{todayReminderData.courses.length > 1}}">
+                <view class="other-course-item" 
+                      wx:for="{{todayReminderData.courses}}" 
+                      wx:key="id" 
+                      wx:if="{{index > 0 && index < 3}}"
+                >
+                  <view class="other-left">
+                    <text class="other-section">{{item.sectionText}}</text>
+                    <text class="other-name">{{item.courseName}}</text>
+                  </view>
+                  <text class="other-room">{{item.classroom || "待定"}}</text>
+                </view>
+                
+                <!-- 超过 3 条显示“查看全部今日课程” -->
+                <view class="view-all-hint" wx:if="{{todayReminderData.courses.length > 3}}" bindtap="goToTodayPage">
+                  查看全部 {{todayReminderData.courses.length}} 门今日课程 ›
+                </view>
+              </view>
+            </view>
+          </block>
         </view>
       </scroll-view>
 
       <view class="popup-footer">
         <button class="footer-btn secondary-btn" bindtap="closeTodayReminder">知道了</button>
-        <button class="footer-btn primary-btn" bindtap="goToTodayPage">查看今日课程</button>
+        <button class="footer-btn primary-btn" bindtap="goToTodayPage" wx:if="{{todayReminderData.courses.length > 0}}">查看今日课程</button>
       </view>
     </view>
   </view>

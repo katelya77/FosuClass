@@ -1,5 +1,5 @@
 <view
-  class="course-card {{layout === 'list' ? 'course-card-list' : 'course-card-grid'}} {{isMuted ? 'is-muted' : ''}} {{course.isNext ? 'is-next' : ''}} {{course.status === 'ongoing' ? 'is-ongoing' : ''}}"
+  class="course-card {{layout === 'list' ? 'course-card-list' : (layout === 'overview' ? 'course-card-grid overview-card' : 'course-card-grid')}} {{isMuted ? 'is-muted' : ''}} {{course.isNext ? 'is-next' : ''}} {{course.status === 'ongoing' ? 'is-ongoing' : ''}}"
   style="{{layout === 'list' ? listStyle : cardStyle}}"
   bindtap="handleTap"
 >
@@ -35,6 +35,11 @@
         <text class="meta-value">{{course.className || "当前班级"}}</text>
       </view>
     </view>
+  </block>
+
+  <block wx:elif="{{layout === 'overview'}}">
+    <view class="course-name overview-name">{{course.displayCourseName || course.canonicalCourseName || course.courseName}}</view>
+    <view class="course-meta overview-meta" wx:if="{{course.displayClassroom || course.canonicalClassroom || course.classroom}}">{{course.displayClassroom || course.canonicalClassroom || course.classroom}}</view>
   </block>
 
   <block wx:else>

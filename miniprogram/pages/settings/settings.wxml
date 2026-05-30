@@ -20,6 +20,13 @@
       </view>
       <view class="row-arrow">›</view>
     </view>
+    <view class="setting-row" bindtap="goLogin">
+      <view>
+        <view class="row-title">个人课表同步（内测中）</view>
+        <view class="row-desc">即将支持学号密码同步个人课表</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
     <view class="setting-row">
       <view>
         <view class="row-title">当前学期</view>
@@ -83,6 +90,18 @@
         bindchange="onSwitchChange"
       />
     </view>
+    <picker wx:if="{{settings.showWeekend}}" mode="selector" range="{{['七天概览', '七天详细']}}" value="{{settings.weekendShowMode === 'detail' ? 1 : 0}}" bindchange="onWeekendModeChange">
+      <view class="setting-row">
+        <view>
+          <view class="row-title">周末显示模式</view>
+          <view class="row-desc">概览一屏展示，详细横向滑动</view>
+        </view>
+        <view class="picker-value-wrapper" style="display: flex; align-items: center; gap: 8rpx;">
+          <text class="row-desc" style="color: #c62828; font-weight: bold;">{{settings.weekendShowMode === 'detail' ? '七天详细' : '七天概览'}}</text>
+          <text class="row-arrow" style="margin-top: 0;">›</text>
+        </view>
+      </view>
+    </picker>
     <view class="setting-row">
       <view>
         <view class="row-title">显示历史年级</view>
@@ -141,6 +160,13 @@
       <view>
         <view class="row-title">清除本地选择</view>
         <view class="row-desc">清空当前课表绑定和全校页筛选缓存</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+    <view class="setting-row danger" bindtap="resetToNewUser">
+      <view>
+        <view class="row-title">重置为新用户状态</view>
+        <view class="row-desc">清空所有状态并重置为首次打开的引导状态</view>
       </view>
       <view class="row-arrow">›</view>
     </view>

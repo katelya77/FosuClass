@@ -94,22 +94,19 @@ function isCourseActiveInCurrentWeek(course, currentWeek) {
  */
 function getCurrentBoundSchedule() {
   const settings = getSettings();
-  const target = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
-  const currentSchedule = wx.getStorageSync("CURRENT_SCHEDULE") || wx.getStorageSync("SELECTED_SCHEDULE");
+  const { getCurrentScheduleTarget } = require("./storage");
+  const target = getCurrentScheduleTarget();
   
-  let classId = settings.classId || target?.classId || currentSchedule?.classId || "";
-  let className = settings.className || target?.name || target?.className || currentSchedule?.className || currentSchedule?.name || "";
+  let classId = settings.classId || target?.classId || "";
+  let className = settings.className || target?.name || target?.className || "";
   
-  let semester = target?.semester || currentSchedule?.semester || settings.semester || "2025-2026-2";
+  let semester = target?.semester || settings.semester || "2025-2026-2";
   let schedule = null;
   let source = "";
 
   if (target && Array.isArray(target.courses) && target.courses.length > 0) {
     schedule = target;
     source = "FOSU_CURRENT_SCHEDULE_TARGET";
-  } else if (currentSchedule && Array.isArray(currentSchedule.courses) && currentSchedule.courses.length > 0) {
-    schedule = currentSchedule;
-    source = "CURRENT_SCHEDULE_OR_SELECTED_SCHEDULE";
   }
 
   if (!schedule && className) {
@@ -132,6 +129,45 @@ function getCurrentBoundSchedule() {
     schedule,
     source
   };
+}
+
+/**
+ * 预测接下来的第一节课
+ */
+function getNextCoursePreview(allCourses, currentWeek, todayWeekday) {
+  if (!allCourses || !allCourses.length) return null;
+  const { courseTimes } = require("../data/courseTimes");
+  const days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+  
+  // 循环未来 7 天
+  for (let i = 1; i <= 7; i++) {
+    const nextDay = ((todayWeekday + i - 1) % 7) + 1;
+    const isNextWeek = (todayWeekday + i) > 7;
+    const targetWeek = isNextWeek ? currentWeek + 1 : currentWeek;
+    if (targetWeek > 20) continue; // 超过最长周数
+    
+    const activeCourses = allCourses.map(normalizeCourse).filter(c => {
+      return Number(c.weekday) === nextDay && isCourseActiveInCurrentWeek(c, targetWeek);
+    });
+    
+    if (activeCourses.length) {
+      // 按照节次排序，选出最早的课
+      activeCourses.sort((a, b) => Number(a.startSection) - Number(b.startSection));
+      const first = activeCourses[0];
+      const weekLabel = isNextWeek ? "下周" : "本周";
+      const dayLabel = days[nextDay - 1];
+      const startSection = Number(first.startSection);
+      const startInfo = courseTimes.find(t => Number(t.section) === startSection);
+      const startTime = startInfo ? startInfo.start : "";
+      const timeLabel = `${weekLabel}${dayLabel} ${startTime || ('第' + startSection + '节')}`;
+      return {
+        courseName: first.courseName || first.displayCourseName || first.canonicalCourseName || "",
+        timeLabel,
+        classroom: first.classroom || first.displayClassroom || first.canonicalClassroom || "待定",
+      };
+    }
+  }
+  return null;
 }
 
 /**
@@ -234,6 +270,7 @@ function getTodayCoursesData() {
     return Object.assign({}, course, {
       isNext,
       statusText,
+      status: course.status,
     });
   });
 
@@ -251,6 +288,11 @@ function getTodayCoursesData() {
     }
   }
 
+  let nextCoursePreview = null;
+  if (finalCourses.length === 0) {
+    nextCoursePreview = getNextCoursePreview(sourceCourses, currentWeek, Number(weekday));
+  }
+
   return {
     hasSchedule: true,
     dateText: todayInfo.fullDateLabel,
@@ -260,6 +302,7 @@ function getTodayCoursesData() {
     courses: finalCourses,
     totalCount: finalCourses.length,
     state,
+    nextCoursePreview,
   };
 }
 

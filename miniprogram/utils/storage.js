@@ -53,6 +53,69 @@ function clearLocalSelection() {
   wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
 }
 
+function getCurrentScheduleTarget() {
+  try {
+    const target = wx.getStorageSync(CURRENT_SCHEDULE_TARGET_KEY);
+    if (target && target.name && target.type) {
+      return target;
+    }
+  } catch (error) {
+    console.error("getCurrentScheduleTarget error", error);
+  }
+  return null;
+}
+
+function setCurrentScheduleTarget(target) {
+  if (target && target.name) {
+    wx.setStorageSync(CURRENT_SCHEDULE_TARGET_KEY, target);
+    wx.setStorageSync("hasInitializedSchedule", true);
+    wx.setStorageSync("currentScheduleId", target.classId || target.name || "");
+    wx.setStorageSync("currentScheduleName", target.name || "");
+    wx.setStorageSync("currentScheduleSource", target.type || "class");
+    saveSettings({
+      className: target.name,
+      semester: target.semester || "2025-2026-2",
+      classId: target.classId || "",
+    });
+    return true;
+  }
+  return false;
+}
+
+function clearCurrentScheduleTarget() {
+  wx.removeStorageSync(CURRENT_SCHEDULE_TARGET_KEY);
+  wx.removeStorageSync("hasInitializedSchedule");
+  wx.removeStorageSync("currentScheduleId");
+  wx.removeStorageSync("currentScheduleName");
+  wx.removeStorageSync("currentScheduleSource");
+  saveSettings({
+    className: "",
+    classId: "",
+  });
+}
+
+function isScheduleInitialized() {
+  try {
+    const initialized = wx.getStorageSync("hasInitializedSchedule") === true;
+    const target = getCurrentScheduleTarget();
+    return Boolean(initialized && target);
+  } catch (error) {
+    return false;
+  }
+}
+
+function validateCurrentScheduleTarget(bootstrapData) {
+  const target = getCurrentScheduleTarget();
+  if (!target) {
+    return false;
+  }
+  if (target.type === "personal-login" || target.type === "personal") {
+    return Array.isArray(target.courses);
+  }
+  // 宽容校验：只要含有 courses 数组即视为结构合法
+  return Array.isArray(target.courses);
+}
+
 module.exports = {
   BOOTSTRAP_CACHE_KEY,
   CURRENT_SCHEDULE_TARGET_KEY,
@@ -66,4 +129,10 @@ module.exports = {
   getSettings,
   resetSettings,
   saveSettings,
+  getCurrentScheduleTarget,
+  setCurrentScheduleTarget,
+  clearCurrentScheduleTarget,
+  isScheduleInitialized,
+  validateCurrentScheduleTarget,
 };
+

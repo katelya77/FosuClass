@@ -203,8 +203,11 @@ Page({
   },
 
   goLogin() {
-    wx.navigateTo({
-      url: "/pages/login/login",
+    wx.showModal({
+      title: "个人课表同步",
+      content: "个人账号同步功能正在内测。当前可先通过全校课表选择班级使用。",
+      showCancel: false,
+      confirmText: "知道了"
     });
   },
   
@@ -396,6 +399,44 @@ Page({
     });
   },
 
+  onWeekendModeChange(event) {
+    const mode = Number(event.detail.value) === 1 ? "detail" : "overview";
+    saveSettings({
+      weekendShowMode: mode,
+    });
+    this.loadSettings();
+    wx.showToast({
+      title: "模式已更改",
+      icon: "success",
+    });
+  },
+
+  resetToNewUser() {
+    wx.showModal({
+      title: "重置为新用户状态",
+      content: "确定要重置当前所有的课表状态，回到首次打开小程序的引导界面吗？",
+      confirmColor: "#c62828",
+      success: (res) => {
+        if (res.confirm) {
+          const { clearCurrentScheduleTarget, clearLocalSelection } = require("../../utils/storage");
+          clearCurrentScheduleTarget();
+          clearLocalSelection();
+          wx.removeStorageSync("lastTodayReminderDate");
+          this.loadSettings();
+          wx.showToast({
+            title: "已重置状态",
+            icon: "success"
+          });
+          setTimeout(() => {
+            wx.switchTab({
+              url: "/pages/index/index"
+            });
+          }, 800);
+        }
+      }
+    });
+  },
+
   showAbout() {
     // 连续点击 5 次关于，触发开发者模式彩蛋
     this.clickCount = (this.clickCount || 0) + 1;
@@ -490,36 +531,17 @@ Page({
     });
   },
 
-  buildSharePath() {
-    const selected = getSelectedSchedule();
-    const filter = selected.filter || {};
-    const target = selected.target || {};
-    const params = [];
-    const append = (key, value) => {
-      if (value) {
-        params.push(`${key}=${encodeURIComponent(value)}`);
-      }
-    };
-    append("semester", target.semester || filter.semesterValue);
-    append("collegeCode", filter.collegeCode);
-    append("grade", filter.grade);
-    append("majorCode", filter.majorCode);
-    append("majorName", filter.majorName);
-    append("className", target.className || target.name || filter.className);
-    return params.length ? `/pages/school/school?${params.join("&")}` : "/pages/school/school";
-  },
-
   onShareAppMessage() {
     return {
-      title: "佛大课表｜一键查看全校课表，课程数据仅供参考",
-      path: this.buildSharePath(),
+      title: "佛大课表｜快捷查看课表作息",
+      path: "/pages/index/index",
     };
   },
 
   onShareTimeline() {
     return {
-      title: "佛大课表｜一键查看全校课表，课程数据仅供参考",
-      query: this.buildSharePath().split("?")[1] || "",
+      title: "佛大课表｜快捷查看课表作息",
+      query: "",
     };
   },
 

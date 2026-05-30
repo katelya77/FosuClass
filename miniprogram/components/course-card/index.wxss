@@ -210,3 +210,27 @@
 .is-muted .course-week {
   opacity: 0.86;
 }
+
+/* ================== 七天概览模式专用样式 ================== */
+.course-card.overview-card {
+  left: 2rpx;
+  right: 2rpx;
+  padding: 2rpx 4rpx;
+  border-radius: 6rpx;
+}
+
+.overview-name {
+  font-size: 15rpx;
+  font-weight: 700;
+  -webkit-line-clamp: 2;
+  line-height: 1.1;
+  word-break: break-all;
+}
+
+.overview-meta {
+  font-size: 13rpx;
+  margin-top: 1rpx;
+  line-height: 1.05;
+  color: #ffeb3b !important;
+  opacity: 1 !important;
+}
