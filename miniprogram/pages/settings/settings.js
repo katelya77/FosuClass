@@ -302,10 +302,9 @@ Page({
 
   showContactFallback() {
     const lines = [
-      `QQ 群：${contactConfig.qqGroup}`,
-      `邮箱：${contactConfig.email}`,
-      `GitHub Issues：${contactConfig.githubIssues}`,
       contactConfig.wechatHint,
+      `备用邮箱：${contactConfig.email}`,
+      "反馈课表错误时建议附带：班级、周次、课程名、截图",
     ];
     wx.showModal({
       title: "联系开发者",

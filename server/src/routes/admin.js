@@ -17,6 +17,7 @@ const zlib = require("zlib");
 
 const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
 const HISTORY_DIR = path.join(SNAPSHOTS_DIR, "history");
+const RESOURCE_UPLOAD_DIR = path.join(STORAGE_DIR, "resource-upload-staging");
 
 // 确保目录存在
 if (!fs.existsSync(STORAGE_DIR)) {
@@ -27,6 +28,9 @@ if (!fs.existsSync(SNAPSHOTS_DIR)) {
 }
 if (!fs.existsSync(HISTORY_DIR)) {
   fs.mkdirSync(HISTORY_DIR, { recursive: true });
+}
+if (!fs.existsSync(RESOURCE_UPLOAD_DIR)) {
+  fs.mkdirSync(RESOURCE_UPLOAD_DIR, { recursive: true });
 }
 
 // 缓存文件路径映射
@@ -47,11 +51,19 @@ const RESOURCE_FILE_BY_TYPE = {
   course: "course-schedules",
 };
 
+const RESOURCE_NAME_KEY_BY_TYPE = {
+  teacher: "teacherName",
+  classroom: "roomName",
+  course: "courseName",
+};
+
 /**
  * 校验管理员 Token
  */
 function verifyAdminToken(req, res, next) {
-  const token = req.headers["x-admin-token"];
+  const authHeader = String(req.headers.authorization || "");
+  const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+  const token = req.headers["x-admin-token"] || (bearerMatch ? bearerMatch[1] : "");
   
   if (!config.ADMIN_API_TOKEN) {
     safeLog("admin-sync-auth-failed", { reason: "ADMIN_API_TOKEN not configured on server" });
@@ -65,7 +77,7 @@ function verifyAdminToken(req, res, next) {
     safeLog("admin-sync-auth-failed", { reason: "Invalid or missing token" });
     return res.status(401).json({
       success: false,
-      message: "未授权：无效的管理员 Token",
+      message: "管理员令牌无效",
     });
   }
 
@@ -140,6 +152,147 @@ function normalizeString(value) {
     return "";
   }
   return String(value).trim();
+}
+
+function sanitizeUploadId(value) {
+  return normalizeString(value).replace(/[^a-zA-Z0-9._-]/g, "").slice(0, 80);
+}
+
+function readJsonArray(filePath) {
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    return Array.isArray(data) ? data : [];
+  } catch (error) {
+    safeLog("read-json-array-failed", { filePath, error: error.message });
+    return [];
+  }
+}
+
+function writeJsonAtomic(filePath, data) {
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+  fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
+  fs.renameSync(tempPath, filePath);
+}
+
+function getResourceItemKey(resourceType, item, index) {
+  const nameKey = RESOURCE_NAME_KEY_BY_TYPE[resourceType];
+  const name = normalizeString(item && (item[nameKey] || item.name || item.title));
+  return [
+    resourceType,
+    normalizeString(item && item.semester),
+    name || `index-${index}`,
+  ].join("::");
+}
+
+function mergeResourceItems(resourceType, existingItems, incomingItems) {
+  const merged = new Map();
+  existingItems.forEach((item, index) => {
+    merged.set(getResourceItemKey(resourceType, item, index), item);
+  });
+  incomingItems.forEach((item, index) => {
+    merged.set(getResourceItemKey(resourceType, item, index), item);
+  });
+  return Array.from(merged.values());
+}
+
+function persistResourceItems(resourceType, key, items, syncSource) {
+  const filePath = FILE_MAP[key];
+  writeJsonAtomic(filePath, items);
+  updateSyncMeta(key, items.length, syncSource || "local-sync-client");
+  return {
+    success: true,
+    resourceType,
+    itemCount: items.length,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function stageResourceChunk(resourceType, key, body, items) {
+  const uploadId = sanitizeUploadId(body.uploadId);
+  const totalChunks = parseInt(body.totalChunks || "0", 10);
+  const chunkIndex = parseInt(body.chunkIndex || "0", 10);
+
+  if (!uploadId || !Number.isFinite(totalChunks) || totalChunks <= 1) {
+    const existing = body.mode === "merge" ? readJsonArray(FILE_MAP[key]) : [];
+    const finalItems = body.mode === "merge"
+      ? mergeResourceItems(resourceType, existing, items)
+      : items;
+    return persistResourceItems(resourceType, key, finalItems, body.syncSource);
+  }
+
+  if (!Number.isFinite(chunkIndex) || chunkIndex < 1 || chunkIndex > totalChunks) {
+    const err = new Error("invalid resource chunk index");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const typeDir = path.join(RESOURCE_UPLOAD_DIR, resourceType);
+  const uploadDir = path.join(typeDir, uploadId);
+  const completePath = path.join(typeDir, `${uploadId}.complete.json`);
+  fs.mkdirSync(typeDir, { recursive: true });
+  if (fs.existsSync(completePath)) {
+    return JSON.parse(fs.readFileSync(completePath, "utf-8"));
+  }
+  fs.mkdirSync(uploadDir, { recursive: true });
+
+  const chunkPath = path.join(uploadDir, `chunk-${String(chunkIndex).padStart(6, "0")}.json`);
+  writeJsonAtomic(chunkPath, {
+    resourceType,
+    chunkIndex,
+    totalChunks,
+    items,
+    receivedAt: new Date().toISOString(),
+  });
+
+  const chunkFiles = fs.readdirSync(uploadDir)
+    .filter((file) => /^chunk-\d+\.json$/.test(file))
+    .sort();
+  if (chunkFiles.length < totalChunks) {
+    return {
+      success: true,
+      resourceType,
+      uploadId,
+      chunkIndex,
+      totalChunks,
+      stagedCount: chunkFiles.length,
+      completed: false,
+    };
+  }
+
+  const finalItems = [];
+  for (let index = 1; index <= totalChunks; index += 1) {
+    const filePath = path.join(uploadDir, `chunk-${String(index).padStart(6, "0")}.json`);
+    if (!fs.existsSync(filePath)) {
+      return {
+        success: true,
+        resourceType,
+        uploadId,
+        chunkIndex,
+        totalChunks,
+        stagedCount: chunkFiles.length,
+        completed: false,
+      };
+    }
+    const chunk = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    finalItems.push(...(Array.isArray(chunk.items) ? chunk.items : []));
+  }
+
+  const result = persistResourceItems(resourceType, key, finalItems, body.syncSource);
+  const completedResult = Object.assign(result, {
+    uploadId,
+    totalChunks,
+    completed: true,
+  });
+  writeJsonAtomic(completePath, completedResult);
+  try {
+    fs.rmSync(uploadDir, { recursive: true, force: true });
+  } catch (error) {
+    safeLog("resource-upload-cleanup-failed", { uploadDir, error: error.message });
+  }
+  return completedResult;
 }
 
 function getFallbackSemester() {
@@ -714,7 +867,8 @@ router.post(
       });
     }
 
-    const items = Array.isArray(req.body) ? req.body : req.body.items;
+    const body = Array.isArray(req.body) ? { items: req.body } : (req.body || {});
+    const items = body.items;
     if (!Array.isArray(items)) {
       return res.status(400).json({
         success: false,
@@ -730,17 +884,10 @@ router.post(
     }
 
     try {
-      fs.writeFileSync(FILE_MAP[key], JSON.stringify(items, null, 2), "utf-8");
-      updateSyncMeta(key, items.length, "local-sync-client");
-      return res.json({
-        success: true,
-        resourceType,
-        itemCount: items.length,
-        updatedAt: new Date().toISOString(),
-      });
+      return res.json(stageResourceChunk(resourceType, key, body, items));
     } catch (error) {
       safeLog("admin-sync-resources-failed", { key, error: error.message });
-      return res.status(500).json({
+      return res.status(error.statusCode || 500).json({
         success: false,
         message: `resources persist failed: ${error.message}`,
       });
@@ -1109,6 +1256,11 @@ router.get("/sync/status", (req, res) => {
   const meta = getSyncMeta();
   const snapshotMeta = getActiveSnapshotMeta();
   const releaseStatus = releaseService.getReleaseStatus();
+  const feedbackStats = feedbackService.getFeedbackStats();
+  const resourcesUpdatedAt = getUpdatedAt("teacher-schedules") || getUpdatedAt("classroom-schedules") || getUpdatedAt("course-schedules") || (snapshotMeta ? snapshotMeta.updatedAt : null);
+  const teacherScheduleCount = getItemCount("teacher-schedules") || (snapshotMeta ? snapshotMeta.teacherScheduleCount : 0);
+  const classroomScheduleCount = getItemCount("classroom-schedules") || (snapshotMeta ? snapshotMeta.classroomScheduleCount : 0);
+  const courseScheduleCount = getItemCount("course-schedules") || (snapshotMeta ? snapshotMeta.courseScheduleCount : 0);
   
   res.json({
     success: true,
@@ -1124,9 +1276,13 @@ router.get("/sync/status", (req, res) => {
     classScheduleCount: snapshotMeta ? snapshotMeta.classScheduleCount : getItemCount("class-schedules"),
     adminClassCount: snapshotMeta ? snapshotMeta.adminClassCount : 0,
     majorAggregateCount: snapshotMeta ? snapshotMeta.majorAggregateCount : 0,
-    teacherScheduleCount: snapshotMeta ? snapshotMeta.teacherScheduleCount : getItemCount("teacher-schedules"),
-    classroomScheduleCount: snapshotMeta ? snapshotMeta.classroomScheduleCount : getItemCount("classroom-schedules"),
-    courseScheduleCount: snapshotMeta ? snapshotMeta.courseScheduleCount : getItemCount("course-schedules"),
+    teacherScheduleCount,
+    classroomScheduleCount,
+    courseScheduleCount,
+    resourcesUpdatedAt,
+    resourcesVersion: snapshotMeta ? snapshotMeta.version : (releaseStatus.activeReleaseVersion || (meta.snapshot ? meta.snapshot.version : null)),
+    feedbackCount: feedbackStats.total,
+    openFeedbackCount: feedbackStats.open,
     catalogUpdatedAt: getUpdatedAt("catalog"),
     classSchedulesUpdatedAt: getUpdatedAt("class-schedules"),
     storageMounted: isStorageMounted(),
@@ -1244,13 +1400,56 @@ router.post(
 
 router.get("/feedback", verifyAdminToken, (req, res) => {
   try {
+    const overview = feedbackService.getFeedbackOverview();
+    const feedback = feedbackService.listFeedback(req.query);
     return res.json({
       success: true,
-      feedback: feedbackService.listFeedback(req.query.limit),
+      feedback,
+      items: feedback,
+      total: feedback.length,
+      stats: overview.stats,
+      types: overview.types,
+      filters: {
+        limit: req.query.limit || "100",
+        status: req.query.status || "",
+        type: req.query.type || "",
+        keyword: req.query.keyword || "",
+        days: req.query.days || "",
+      },
     });
   } catch (error) {
     safeLog("admin-feedback-list-failed", { error: error.message });
     return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.get("/feedback/export.csv", verifyAdminToken, (req, res) => {
+  try {
+    const csv = feedbackService.exportFeedbackCsv(req.query);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="fosu-feedback-${Date.now()}.csv"`);
+    return res.send(csv);
+  } catch (error) {
+    safeLog("admin-feedback-export-failed", { error: error.message });
+    return res.status(500).json({
+      success: false,
+      message: error.message,
+    });
+  }
+});
+
+router.get("/feedback/:id", verifyAdminToken, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      feedback: feedbackService.getFeedbackById(req.params.id),
+    });
+  } catch (error) {
+    safeLog("admin-feedback-detail-failed", { id: req.params.id, error: error.message });
+    return res.status(error.statusCode || 500).json({
       success: false,
       message: error.message,
     });
@@ -1263,6 +1462,7 @@ router.post("/feedback/:id/status", verifyAdminToken, (req, res) => {
     return res.json({
       success: true,
       feedback: record,
+      stats: feedbackService.getFeedbackStats(),
     });
   } catch (error) {
     safeLog("admin-feedback-status-failed", { id: req.params.id, error: error.message });

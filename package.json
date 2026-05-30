@@ -9,6 +9,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "analyze:har": "node tools/analyze-third-party-har.js",
+    "sync:teachers": "npm --prefix tools/fosu-sync-client run sync:teachers",
+    "sync:classrooms": "npm --prefix tools/fosu-sync-client run sync:classrooms",
+    "sync:courses": "npm --prefix tools/fosu-sync-client run sync:courses",
     "sync:release": "npm --prefix tools/fosu-sync-client run sync:release",
     "sync:resources": "npm --prefix tools/fosu-sync-client run sync:resources",
     "sync:upload-cache": "npm --prefix tools/fosu-sync-client run sync:upload-cache",
