@@ -12,8 +12,11 @@ const CLASS_SEARCH_PLACEHOLDER = "搜索班级（例如：25动物科学3班）"
 
 const request = require("../../utils/request");
 const {
-  RECENT_SCHEDULES_KEY,
   SCHOOL_FILTER_CACHE_KEY,
+  getRecentSchedules,
+  addRecentSchedule,
+  removeRecentSchedule,
+  clearRecentSchedules,
 } = require("../../utils/storage");
 
 function formatUpdateTime(updatedAt) {
@@ -164,6 +167,9 @@ Page({
     catalogVersion: "",
     catalogUpdatedAt: "",
     recentSchedules: [],
+    openedRecentKey: "",
+    touchStartX: 0,
+    touchStartY: 0,
   },
 
   onLoad(options) {
@@ -339,16 +345,15 @@ Page({
   // ================== 本地缓存状态存取与联动 ==================
 
   loadRecentSchedules() {
-    const recent = wx.getStorageSync(RECENT_SCHEDULES_KEY);
+    // NOTE: 使用封装的存储接口读取缓存，保障数据格式鲁棒
+    const recent = getRecentSchedules();
     this.setData({
-      recentSchedules: Array.isArray(recent) ? recent.slice(0, 8) : [],
+      recentSchedules: recent,
     });
   },
 
   saveRecentSchedule(item) {
     const meta = item || {};
-    const recent = wx.getStorageSync(RECENT_SCHEDULES_KEY);
-    const list = Array.isArray(recent) ? recent : [];
     const semester = meta.semester || this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
     const courseCount = Array.isArray(meta.courses) ? meta.courses.length : 0;
     const record = {
@@ -367,11 +372,138 @@ Page({
       courses: Array.isArray(meta.courses) ? meta.courses : [],
       schedule: meta,
     };
-    const next = [record]
-      .concat(list.filter((old) => old.scheduleKey !== record.scheduleKey))
-      .slice(0, 8);
-    wx.setStorageSync(RECENT_SCHEDULES_KEY, next);
+    
+    // NOTE: 直接通过 storage 模块的 addRecentSchedule 写入，避免在此处零散操作 Storage
+    const next = addRecentSchedule(record);
     this.setData({ recentSchedules: next });
+  },
+
+  /**
+   * 最近查看项的触摸开始事件
+   * NOTE: 记录触摸起始坐标。当用户摸了其他项时，自动折叠已经滑出的删除按钮以保持界面整洁
+   */
+  onRecentTouchStart(e) {
+    if (e.touches.length === 1) {
+      const key = e.currentTarget.dataset.key;
+      if (this.data.openedRecentKey && this.data.openedRecentKey !== key) {
+        this.setData({
+          openedRecentKey: ""
+        });
+      }
+      this.setData({
+        touchStartX: e.touches[0].clientX,
+        touchStartY: e.touches[0].clientY
+      });
+    }
+  },
+
+  /**
+   * 最近查看项的触摸移动事件
+   */
+  onRecentTouchMove(e) {
+    // 预留，当前采用 touchend 统一裁决，无需做频繁 setData
+  },
+
+  /**
+   * 最近查看项的触摸结束事件
+   * NOTE: 计算 X、Y 偏移量差以确定滑动意图，合理规避斜向滑动等误触情况
+   */
+  onRecentTouchEnd(e) {
+    if (e.changedTouches.length === 1) {
+      const endX = e.changedTouches[0].clientX;
+      const endY = e.changedTouches[0].clientY;
+      const startX = this.data.touchStartX;
+      const startY = this.data.touchStartY;
+      
+      const diffX = startX - endX;
+      const diffY = Math.abs(startY - endY);
+
+      // 横向滑动距离超过 40 且纵向偏离在 35 以内则视为有效滑动
+      if (diffX > 40 && diffY < 35) {
+        const key = e.currentTarget.dataset.key;
+        this.setData({
+          openedRecentKey: key
+        });
+      } else if (diffX < -40 && diffY < 35) {
+        const key = e.currentTarget.dataset.key;
+        if (this.data.openedRecentKey === key) {
+          this.setData({
+            openedRecentKey: ""
+          });
+        }
+      }
+    }
+  },
+
+  /**
+   * 关闭所有被滑出的删除按钮
+   */
+  closeRecentSwipe() {
+    if (this.data.openedRecentKey) {
+      this.setData({
+        openedRecentKey: ""
+      });
+    }
+  },
+
+  /**
+   * 删除单条最近查看记录
+   * NOTE: 删除只在本地缓存触发，不需要请求后端，完成删除后主动收起滑动状态
+   */
+  deleteRecentSchedule(e) {
+    const key = e.currentTarget.dataset.key;
+    const next = removeRecentSchedule(key);
+    this.setData({
+      recentSchedules: next,
+      openedRecentKey: ""
+    });
+    wx.showToast({
+      title: "已删除",
+      icon: "success",
+      duration: 1000
+    });
+  },
+
+  /**
+   * 清空所有最近查看历史记录
+   * NOTE: 提供确认弹窗引导以防误操作
+   */
+  clearRecentSchedules() {
+    wx.showModal({
+      title: "提示",
+      content: "确定清空最近查看记录吗？",
+      confirmColor: "#c62828",
+      success: (res) => {
+        if (res.confirm) {
+          clearRecentSchedules();
+          this.setData({
+            recentSchedules: [],
+            openedRecentKey: ""
+          });
+          wx.showToast({
+            title: "已清空",
+            icon: "success",
+            duration: 1000
+          });
+        }
+      }
+    });
+  },
+
+  /**
+   * 点击最近查看的课表记录
+   * NOTE: 如果有滑出的删除按钮，本次点击仅执行“收起”操作，以防用户误触跳转
+   */
+  goRecentSchedule(e) {
+    if (this.data.openedRecentKey) {
+      this.closeRecentSwipe();
+      return;
+    }
+    const index = Number(e.currentTarget.dataset.index);
+    const item = this.data.recentSchedules[index];
+    if (!item) return;
+    const schedule = item.schedule || item;
+    this.navigateToScheduleView("class", item.className || item.title, item.courses || [], schedule);
   },
 
   saveFilterCache() {
@@ -1077,13 +1209,6 @@ Page({
     this.navigateToScheduleView("course", item.courseName, item.courses);
   },
 
-  viewRecentSchedule(event) {
-    const index = Number(event.currentTarget.dataset.index);
-    const item = this.data.recentSchedules[index];
-    if (!item) return;
-    const schedule = item.schedule || item;
-    this.navigateToScheduleView("class", item.className || item.title, item.courses || [], schedule);
-  },
 
   navigateToScheduleView(type, name, courses, scheduleMeta) {
     const semester = this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";

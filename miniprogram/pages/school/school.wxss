@@ -318,13 +318,49 @@ picker {
   box-shadow: 0 4rpx 16rpx rgba(162, 178, 201, 0.08);
 }
 
+.recent-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.clear-btn {
+  color: #c62828;
+  font-size: 22rpx;
+  font-weight: 700;
+  padding: 4rpx 14rpx;
+  background-color: #ffebee;
+  border-radius: 20rpx;
+  transition: background-color 0.2s ease;
+}
+
+.clear-btn:active {
+  background-color: #ffcdd2;
+}
+
 .recent-item {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  border-top: 1rpx solid #f2f5f9;
+}
+
+.recent-item-content {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 18rpx;
   padding: 18rpx 4rpx;
-  border-top: 1rpx solid #f2f5f9;
+  width: 100%;
+  box-sizing: border-box;
+  transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  z-index: 2;
+  background: #ffffff;
+}
+
+.recent-item-content.opened {
+  transform: translateX(-120rpx);
 }
 
 .recent-main {
@@ -354,4 +390,22 @@ picker {
   font-size: 23rpx;
   font-weight: 800;
   white-space: nowrap;
+}
+
+.recent-delete-btn {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 120rpx;
+  height: 100%;
+  background: #c62828;
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1;
+  border-top-right-radius: 8rpx;
+  border-bottom-right-radius: 8rpx;
 }
