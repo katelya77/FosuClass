@@ -172,11 +172,26 @@ Page({
   },
 
   onShow() {
-    // 每次显示页面时，重新触发过滤，确保设置页开关的修改能实时反映
-    if (this.originalCatalogData) {
+    const { getSettings } = require("../../utils/storage");
+    const settings = getSettings();
+    const showHistorical = settings.showHistoricalGrades || false;
+
+    if (this.originalCatalogData && this.lastShowHistoricalGrades !== showHistorical) {
+      this.lastShowHistoricalGrades = showHistorical;
       this.applyCatalogFilter();
     }
     this.loadRecentSchedules();
+
+    // 检查是否是从强制选择课表的引导跳转过来的
+    const isInitSelect = wx.getStorageSync("initSelectMode");
+    if (isInitSelect) {
+      wx.removeStorageSync("initSelectMode");
+      wx.showToast({
+        title: "请选择学院、年级、专业和班级，并设为我的课表",
+        icon: "none",
+        duration: 3500
+      });
+    }
   },
 
   applyCatalogFilter() {

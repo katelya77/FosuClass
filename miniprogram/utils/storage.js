@@ -5,7 +5,7 @@ const CURRENT_SCHEDULE_TARGET_KEY = "FOSU_CURRENT_SCHEDULE_TARGET";
 const RECENT_SCHEDULES_KEY = "FOSU_RECENT_SCHEDULES";
 
 const defaultSettings = {
-  className: "25动物医学6",
+  className: "",
   semesterId: "2025-2026-2",
   semester: "2025-2026学年第二学期",
   currentWeek: 12,
@@ -13,6 +13,7 @@ const defaultSettings = {
   hideInactiveCourses: false,
   showWeekend: false,
   showHistoricalGrades: false,
+  enableTodayStartupReminder: true,
 };
 
 function getSettings() {

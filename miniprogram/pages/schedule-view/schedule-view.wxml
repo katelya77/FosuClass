@@ -1,4 +1,10 @@
 <view class="page schedule-view-page">
+  <!-- 分享来源预览提示条 -->
+  <view class="share-preview-bar" wx:if="{{isFromShare && !isCurrentTarget}}">
+    <view class="share-preview-text">这是同学分享的课表，是否设为你的当前课表？</view>
+    <button class="share-bind-btn" bindtap="toggleBindTarget">设为我的课表</button>
+  </view>
+
   <view class="view-header card">
     <view class="header-top">
       <view class="target-info">

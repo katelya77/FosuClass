@@ -1,15 +1,22 @@
 <view class="page settings-page">
-  <view class="profile card">
-    <view class="profile-title">佛大课表</view>
-    <view class="profile-subtitle">{{settings.className}} · {{settings.semester}}</view>
+  <!-- 顶部 Logo 与基本信息 -->
+  <view class="profile card settings-profile">
+    <image class="settings-logo" src="/assets/logo/favicon.png" mode="aspectFill" />
+    <view class="settings-brand-info">
+      <view class="settings-app-title">佛大课表</view>
+      <view class="settings-app-version">Version 1.0.0</view>
+      <view class="settings-app-current" wx:if="{{settings.className}}">当前课表：{{settings.className}}</view>
+      <view class="settings-app-current" wx:else>尚未绑定课表</view>
+    </view>
   </view>
 
+  <!-- 1. 我的课表 -->
   <view class="settings-card card">
-    <view class="group-title">课表设置</view>
+    <view class="group-title">我的课表</view>
     <view class="setting-row" bindtap="goSchool">
       <view>
         <view class="row-title">当前班级</view>
-        <view class="row-desc">{{settings.className}}</view>
+        <view class="row-desc">{{settings.className || "点击选择班级"}}</view>
       </view>
       <view class="row-arrow">›</view>
     </view>
@@ -21,14 +28,8 @@
     </view>
     <view class="setting-row">
       <view>
-        <view class="row-title">当前教学周</view>
-        <view class="row-desc">{{teachingInfo.rangeText}} · 第{{teachingInfo.weekNo}}周</view>
-      </view>
-    </view>
-    <view class="setting-row">
-      <view>
         <view class="row-title">当前日期对应周次</view>
-        <view class="row-desc">{{teachingInfo.dateLabel}} {{teachingInfo.weekdayLabel}} · 第{{teachingInfo.weekNo}}周</view>
+        <view class="row-desc">{{teachingInfo.dateLabel}} {{teachingInfo.weekdayLabel}} · 第{{settings.currentWeek}}周</view>
       </view>
     </view>
     <view class="setting-row">
@@ -37,6 +38,11 @@
         <view class="row-desc">{{termStartDate}} · 周一</view>
       </view>
     </view>
+  </view>
+
+  <!-- 2. 课表设置 -->
+  <view class="settings-card card">
+    <view class="group-title">课表设置</view>
     <picker mode="selector" range="{{weekOptions}}" value="{{settings.currentWeek - 1}}" bindchange="onWeekChange">
       <view class="setting-row">
         <view>
@@ -80,7 +86,7 @@
     <view class="setting-row">
       <view>
         <view class="row-title">显示历史年级</view>
-        <view class="row-desc">开启后将在学校查找中显示毕业历史年级</view>
+        <view class="row-desc">开启后将在全校查询中显示毕业历史年级</view>
       </view>
       <switch
         checked="{{settings.showHistoricalGrades}}"
@@ -91,63 +97,30 @@
     </view>
   </view>
 
+  <!-- 3. 今日提醒 -->
   <view class="settings-card card">
-    <view class="group-title">入口</view>
-    <view class="setting-row" bindtap="goTimetable">
-      <view class="row-title">作息时间表</view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row" bindtap="goLogin">
-      <view class="row-title">登录同步个人课表</view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row" bindtap="goContribute">
-      <view class="row-title">贡献班级课表</view>
-      <view class="row-arrow">›</view>
-    </view>
-    <!--
-    <view class="setting-row" bindtap="showDeveloperApi">
+    <view class="group-title">今日提醒</view>
+    <view class="setting-row">
       <view>
-        <view class="row-title">开发者接口接入</view>
-        <view class="row-desc">查看强智接口路径和抓包脱敏提醒</view>
+        <view class="row-title">打开小程序时显示今日提醒</view>
+        <view class="row-desc">每日首次打开时智能弹出今日课程提醒总览</view>
       </view>
-      <view class="row-arrow">›</view>
+      <switch
+        checked="{{settings.enableTodayStartupReminder}}"
+        color="#c62828"
+        data-key="enableTodayStartupReminder"
+        bindchange="onSwitchChange"
+      />
     </view>
-    -->
+    <view class="setting-row">
+      <view>
+        <view class="row-title">课前智能提醒</view>
+        <view class="row-desc">即将支持</view>
+      </view>
+    </view>
   </view>
 
-  <view class="settings-card card">
-    <view class="group-title">反馈与分享</view>
-    <view class="setting-row" bindtap="showFeedback">
-      <view>
-        <view class="row-title">问题反馈 / 建议反馈</view>
-        <view class="row-desc">课表错误、数据过期、页面问题都可以告诉我们</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <button class="setting-row setting-row-button" open-type="contact" binderror="showContactFallback">
-      <view>
-        <view class="row-title">联系开发者</view>
-        <view class="row-desc">优先使用微信小程序客服，无法打开时可查看备用方式</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </button>
-    <view class="setting-row" bindtap="showContactFallback">
-      <view>
-        <view class="row-title">备用联系方式</view>
-        <view class="row-desc">邮箱：katelya77@protonmail.com</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <button class="setting-row setting-row-button" open-type="share">
-      <view>
-        <view class="row-title">分享给同学</view>
-        <view class="row-desc">会尽量带上当前选择的班级课表</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </button>
-  </view>
-
+  <!-- 4. 数据状态 -->
   <view class="settings-card card">
     <view class="group-title">数据状态</view>
     <view class="setting-row" bindtap="showDataVersionDetail">
@@ -160,19 +133,53 @@
     <view class="setting-row" bindtap="refreshBootstrapData">
       <view>
         <view class="row-title">手动刷新数据</view>
-        <view class="row-desc">清理本地 bootstrap / catalog / schedule 缓存后重新拉取</view>
+        <view class="row-desc">清理缓存并重新拉取学校最新数据</view>
       </view>
       <view class="row-arrow">›</view>
     </view>
     <view class="setting-row danger" bindtap="clearLocalSelectionOnly">
       <view>
         <view class="row-title">清除本地选择</view>
-        <view class="row-desc">清空当前课表选择和全校页筛选缓存</view>
+        <view class="row-desc">清空当前课表绑定和全校页筛选缓存</view>
       </view>
       <view class="row-arrow">›</view>
     </view>
   </view>
 
+  <!-- 5. 反馈与联系 -->
+  <view class="settings-card card">
+    <view class="group-title">反馈与联系</view>
+    <view class="setting-row" bindtap="showFeedback">
+      <view>
+        <view class="row-title">问题反馈 / 建议反馈</view>
+        <view class="row-desc">课表错误、页面问题或新功能建议都可以告诉我们</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+    <button class="setting-row setting-row-button" open-type="contact" binderror="showContactFallback">
+      <view>
+        <view class="row-title">联系在线客服</view>
+        <view class="row-desc">优先使用微信小程序在线客服系统进行留言</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </button>
+    <view class="setting-row" bindtap="showContactFallback">
+      <view>
+        <view class="row-title">备用联系邮箱</view>
+        <view class="row-desc">邮箱：katelya77@protonmail.com</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+    <button class="setting-row setting-row-button" open-type="share">
+      <view>
+        <view class="row-title">分享给同学</view>
+        <view class="row-desc">将这个课表小程序推荐给你的同班同学</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </button>
+  </view>
+
+  <!-- 6. 其他 -->
   <view class="settings-card card">
     <view class="group-title">其他</view>
     <view class="setting-row" bindtap="showPrivacy">
@@ -184,7 +191,7 @@
       <view class="row-arrow">›</view>
     </view>
     <view class="setting-row danger" bindtap="clearCache">
-      <view class="row-title">清除缓存</view>
+      <view class="row-title">恢复默认设置 (重置缓存)</view>
       <view class="row-arrow">›</view>
     </view>
   </view>

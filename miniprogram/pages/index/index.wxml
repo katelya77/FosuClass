@@ -1,4 +1,5 @@
 <view class="page index-page">
+  <!-- 顶部压缩状态卡 -->
   <view class="compact-header card">
     <view class="header-main">
       <view class="brand">
@@ -10,42 +11,60 @@
           binderror="onLogoError"
         />
         <view wx:else class="brand-logo fallback-logo">佛</view>
-        <view class="brand-copy">
+        <view class="brand-copy" bindtap="showTodayReminderManual">
           <view class="app-title">{{appName}}</view>
         </view>
       </view>
       <view class="week-badge">第{{currentWeek}}周</view>
     </view>
 
-    <view class="class-line">{{className}} · {{semester}}</view>
-    <view class="date-line">{{weekRangeText}} · {{weekScopeText}}</view>
-    <view class="today-line">今日：{{todayText}}</view>
-    <view class="source-line">{{dataSourceText}}<text wx:if="{{lastSyncText}}"> · 上次同步：{{lastSyncText}}</text></view>
-    <view class="disclaimer-line">数据来自佛山大学教务系统同步快照，仅供参考，具体以教务系统及任课教师通知为准。</view>
-
-    <view class="control-row">
-      <week-switcher
-        current-week="{{currentWeek}}"
-        total-weeks="{{totalWeeks}}"
-        week-label="{{weekSwitcherLabel}}"
-        bind:change="onWeekChange"
-      />
+    <view class="info-grid">
+      <view class="class-line">{{className}}</view>
+      <view class="date-line">
+        <text>{{weekRangeText}}</text>
+        <text class="separator">·</text>
+        <text class="today-tag" bindtap="showTodayReminderManual">今日：{{todayText}}</text>
+      </view>
+      <view class="source-line" wx:if="{{lastSyncText}}">
+        <text>教务数据 · 更新于 {{lastSyncText}}</text>
+      </view>
+      <view class="disclaimer-short" bindtap="showDisclaimer">
+        数据仅供参考，以教务系统和教师通知为准 <text class="info-icon">i</text>
+      </view>
     </view>
-    <view class="action-row">
-      <scroll-view class="action-scroll" scroll-x enhanced show-scrollbar="{{false}}">
-        <view class="action-list">
-          <button class="chip-button" bindtap="goSchool">全校课表</button>
-          <button class="chip-button" bindtap="goTimetable">作息时间</button>
-          <button class="chip-button sync-chip" bindtap="goLogin">同步课表</button>
-        </view>
-      </scroll-view>
+
+    <!-- 操作按钮平铺排布 -->
+    <view class="action-grid">
+      <button class="action-btn" bindtap="goTimetable">作息时间</button>
+      <button class="action-btn sync-btn" bindtap="goLogin">同步课表</button>
+      <button class="action-btn" bindtap="toggleMoreMenu">更多</button>
     </view>
   </view>
 
-  <view class="schedule card">
+  <!-- 如果未绑定课表，展示空状态卡片 -->
+  <view class="empty-schedule-card card" wx:if="{{!hasBoundTarget}}">
+    <empty-state
+      title="请选择一个班级课表作为首页展示"
+      desc="全校数据仅供参考，绑定后即可查看周课表、今日课程智能提醒和上课倒计时。"
+    />
+    <view class="empty-actions">
+      <button class="empty-btn primary" bindtap="goSchool">选择课表</button>
+      <button class="empty-btn" bindtap="goSchool">浏览全校</button>
+    </view>
+  </view>
+
+  <!-- 如果已绑定课表，展示周课表网格 -->
+  <view class="schedule card" wx:else>
     <view class="schedule-title-row">
       <view class="section-title">周课表</view>
-      <view class="schedule-hint">{{showWeekend ? "周一至周日，可横向滑动" : "周一至周五"}}</view>
+      <view class="schedule-control-wrapper">
+        <week-switcher
+          current-week="{{currentWeek}}"
+          total-weeks="{{totalWeeks}}"
+          week-label="{{weekSwitcherLabel}}"
+          bind:change="onWeekChange"
+        />
+      </view>
     </view>
 
     <view class="table-shell">
@@ -84,28 +103,28 @@
             </view>
 
             <view class="days-area" style="height: {{scheduleHeight}}rpx;">
-            <view
-              wx:for="{{dayColumns}}"
-              wx:key="weekday"
-              class="day-column {{item.isToday ? 'is-today' : ''}}"
-              style="width: {{dayColumnWidth}}rpx;"
-            >
               <view
-                wx:for="{{sections}}"
-                wx:for-item="section"
-                wx:key="section"
-                class="section-slot {{section.section === 5 || section.section === 10 ? 'section-divider' : ''}}"
-                style="height: {{sectionHeight}}rpx;"
-              ></view>
-              <course-card
-                wx:for="{{item.courses}}"
-                wx:for-item="course"
-                wx:key="id"
-                course="{{course}}"
-                card-style="{{course.cardStyle}}"
-                bind:tapcourse="onCourseTap"
-              />
-            </view>
+                wx:for="{{dayColumns}}"
+                wx:key="weekday"
+                class="day-column {{item.isToday ? 'is-today' : ''}}"
+                style="width: {{dayColumnWidth}}rpx;"
+              >
+                <view
+                  wx:for="{{sections}}"
+                  wx:for-item="section"
+                  wx:key="section"
+                  class="section-slot {{section.section === 5 || section.section === 10 ? 'section-divider' : ''}}"
+                  style="height: {{sectionHeight}}rpx;"
+                ></view>
+                <course-card
+                  wx:for="{{item.courses}}"
+                  wx:for-item="course"
+                  wx:key="id"
+                  course="{{course}}"
+                  card-style="{{course.cardStyle}}"
+                  bind:tapcourse="onCourseTap"
+                />
+              </view>
             </view>
           </view>
         </view>
@@ -113,9 +132,139 @@
     </view>
   </view>
 
+  <!-- 底部免责声明 -->
+  <view class="footer-disclaimer" wx:if="{{hasBoundTarget}}">
+    数据来自教务系统同步快照，仅供参考，具体课程安排以教务系统、任课教师通知和学院通知为准。
+  </view>
+
   <course-detail-popup
     visible="{{detailVisible}}"
     course="{{selectedCourse}}"
     bind:close="closeCourseDetail"
   />
+
+  <!-- 今日课程提醒总览弹窗 -->
+  <view class="popup-mask reminder-popup" wx:if="{{showTodayReminder}}" bindtap="closeTodayReminder">
+    <view class="popup-panel reminder-panel" catchtap="noop">
+      <view class="popup-handle"></view>
+      <view class="popup-header">
+        <view class="popup-title-block">
+          <view class="popup-title">今日课程提醒</view>
+          <view class="popup-subtitle">{{todayReminderData.dateText}} · {{todayReminderData.className}}</view>
+        </view>
+        <button class="close-button" bindtap="closeTodayReminder">×</button>
+      </view>
+
+      <scroll-view scroll-y class="reminder-scroll">
+        <view class="reminder-summary">
+          <block wx:if="{{todayReminderData.courses.length > 0}}">
+            今天共 <text class="highlight-count">{{todayReminderData.courses.length}}</text> 门课
+          </block>
+          <block wx:else>
+            今天没有课程安排，好好休息吧~
+          </block>
+        </view>
+
+        <view class="reminder-list" wx:if="{{todayReminderData.courses.length > 0}}">
+          <view 
+            class="reminder-item {{item.status === 'ongoing' ? 'ongoing' : (item.isNext ? 'next' : '')}} {{item.status === 'finished' ? 'finished' : ''}}"
+            wx:for="{{todayReminderData.courses}}" 
+            wx:key="id"
+          >
+            <view class="reminder-item-header">
+              <view class="reminder-course-name">{{item.courseName}}</view>
+              <view class="reminder-status-badge {{item.status}}">{{item.statusText}}</view>
+            </view>
+            <view class="reminder-item-meta">
+              <view class="reminder-meta-col">
+                <text class="reminder-meta-label">时间：</text>
+                <text class="reminder-meta-val">{{item.timeText}} ({{item.sectionText}})</text>
+              </view>
+              <view class="reminder-meta-col">
+                <text class="reminder-meta-label">教室：</text>
+                <text class="reminder-meta-val highlight-room">{{item.classroom || "待补充"}}</text>
+              </view>
+              <view class="reminder-meta-col" wx:if="{{item.teacherName}}">
+                <text class="reminder-meta-label">教师：</text>
+                <text class="reminder-meta-val">{{item.teacherName}}</text>
+              </view>
+              <view class="reminder-meta-col">
+                <text class="reminder-meta-label">周次：</text>
+                <text class="reminder-meta-val">{{item.weekText || "单双周"}}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <view class="reminder-empty" wx:else>
+          <image class="reminder-empty-img" src="/images/icons/goods-active.png" mode="aspectFit" />
+          <view class="reminder-empty-tip">Enjoy your day!</view>
+        </view>
+      </scroll-view>
+
+      <view class="popup-footer">
+        <button class="footer-btn secondary-btn" bindtap="closeTodayReminder">知道了</button>
+        <button class="footer-btn primary-btn" bindtap="goToTodayPage">查看今日课程</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 选择课表引导弹窗 -->
+  <view class="popup-mask init-popup" wx:if="{{showInitModal}}">
+    <view class="popup-panel init-panel">
+      <view class="init-header">
+        <image class="init-logo" src="{{logoPath}}" mode="aspectFill" />
+        <view class="init-brand-title">佛大课表</view>
+      </view>
+      <view class="init-body">
+        <view class="init-title">选择你的课表</view>
+        <view class="init-subtitle">用于首页、今日课程和提醒展示；全校数据仅供参考，具体以教务系统及任课教师通知为准。</view>
+        
+        <button class="init-btn primary-btn" bindtap="goToSelectClass">去选择班级课表</button>
+        <button class="init-btn secondary-btn" bindtap="skipSelect">先浏览全校课表</button>
+        
+        <button class="init-sync-btn" bindtap="goToSyncLogin">登录同步个人课表 (即将支持)</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- 更多菜单模态框 -->
+  <view class="popup-mask menu-popup" wx:if="{{showMoreMenu}}" bindtap="hideMoreMenu">
+    <view class="menu-panel" catchtap="noop">
+      <view class="menu-item" bindtap="refreshData">
+        <text class="menu-icon">↻</text>刷新教务数据
+      </view>
+      <view class="menu-item" bindtap="showDisclaimer">
+        <text class="menu-icon">i</text>查看免责声明
+      </view>
+      <view class="menu-item danger-item" bindtap="clearLocalCache">
+        <text class="menu-icon">🗑</text>清除本地缓存
+      </view>
+      <view class="menu-cancel" bindtap="hideMoreMenu">取消</view>
+    </view>
+  </view>
+
+  <!-- 完整免责声明弹窗 -->
+  <view class="popup-mask disclaimer-popup" wx:if="{{showDisclaimerPopup}}" bindtap="closeDisclaimer">
+    <view class="popup-panel disclaimer-panel" catchtap="noop">
+      <view class="popup-header">
+        <view class="popup-title">免责声明</view>
+        <button class="close-button" bindtap="closeDisclaimer">×</button>
+      </view>
+      <scroll-view scroll-y class="disclaimer-scroll">
+        <view class="disclaimer-text">
+          本程序（佛大课表）为学生自制的课程表查询工具，非佛山大学官方产品。
+        </view>
+        <view class="disclaimer-text">
+          所有课表数据均来自学校教务管理系统同步快照。因教务系统数据可能存在延迟、临时调度或变更，本程序展示的课程安排仅供参考。
+        </view>
+        <view class="disclaimer-text">
+          具体上课时间、地点、任课教师等，请务必以佛山大学官方教务管理系统实时信息、各学院官方通知以及任课教师发布的即时通知为准。
+        </view>
+      </scroll-view>
+      <view class="popup-footer">
+        <button class="footer-btn primary-btn" bindtap="closeDisclaimer">我已了解</button>
+      </view>
+    </view>
+  </view>
 </view>

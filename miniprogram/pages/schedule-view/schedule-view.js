@@ -112,15 +112,17 @@ Page({
     showWeekend: false,
     detailVisible: false,
     selectedCourse: null,
+    isFromShare: false,
   },
 
   onLoad(options) {
-    const { type = "class", name = "", semester = "2025-2026-2", displayType = "", isAggregated = "" } = options;
+    const { type = "class", name = "", semester = "2025-2026-2", displayType = "", isAggregated = "", shareScheduleId = "" } = options;
     const decodedName = safeDecodeURIComponent(name);
     const decodedSemester = safeDecodeURIComponent(semester);
     const decodedDisplayType = safeDecodeURIComponent(displayType);
     const aggregated = isTruthyParam(isAggregated) || decodedDisplayType === "major-schedule" || decodedDisplayType === "major-shared-schedule";
     const title = decodedName;
+    const isFromShare = !!shareScheduleId;
     
     this.setData({
       type,
@@ -131,6 +133,7 @@ Page({
       displayType: decodedDisplayType,
       isAggregated: aggregated,
       scheduleKindText: getScheduleKindText(type, decodedDisplayType, aggregated),
+      isFromShare,
     });
 
     if (title) {
@@ -143,10 +146,12 @@ Page({
     this.checkCurrentTargetStatus();
 
     // 通过 EventChannel 获取上一页传过来的课程数据
+    let hasLoadedData = false;
     const eventChannel = this.getOpenerEventChannel();
     if (eventChannel && typeof eventChannel.on === "function") {
       eventChannel.on("acceptDataFromOpenerPage", (data) => {
         if (data && Array.isArray(data.courses)) {
+          hasLoadedData = true;
           const schedule = data.schedule || {};
           const nextDisplayType = schedule.displayType || this.data.displayType;
           const nextAggregated = Boolean(schedule.isAggregated || this.data.isAggregated || nextDisplayType === "major-schedule" || nextDisplayType === "major-shared-schedule");
@@ -161,10 +166,66 @@ Page({
           });
         }
       });
-    } else {
-      // 降级处理：如果没有 EventChannel (比如直接扫码进入等)，尝试在 Storage 中寻找是否有该缓存
-      this.initScheduleLayout();
     }
+
+    // 降级与分享异步拉取处理
+    setTimeout(() => {
+      if (!hasLoadedData && decodedName) {
+        wx.showLoading({ title: "正在拉取课表..." });
+        const request = require("../../utils/request");
+        let apiUrl = "/api/fosu/class-schedule";
+        let requestParams = {
+          semester: decodedSemester,
+        };
+
+        if (type === "teacher") {
+          apiUrl = "/api/fosu/teacher-schedule";
+          requestParams.keyword = decodedName;
+        } else if (type === "classroom") {
+          apiUrl = "/api/fosu/classroom-schedule";
+          requestParams.classroomName = decodedName;
+        } else if (type === "course") {
+          apiUrl = "/api/fosu/course-schedule";
+          requestParams.courseName = decodedName;
+        } else {
+          apiUrl = "/api/fosu/class-schedule";
+          requestParams.className = decodedName;
+        }
+
+        request.post(apiUrl, requestParams, { showLoading: false, silentError: true })
+          .then((res) => {
+            wx.hideLoading();
+            let courses = [];
+            let scheduleMeta = null;
+            if (res && res.success) {
+              if (type === "class" && Array.isArray(res.classes) && res.classes.length > 0) {
+                courses = res.classes[0].courses || [];
+                scheduleMeta = res.classes[0];
+              } else if (type === "teacher" && Array.isArray(res.teachers) && res.teachers.length > 0) {
+                courses = res.teachers[0].courses || [];
+              } else if (type === "classroom" && Array.isArray(res.classrooms) && res.classrooms.length > 0) {
+                courses = res.classrooms[0].courses || [];
+              } else if (type === "course" && Array.isArray(res.coursesList) && res.coursesList.length > 0) {
+                courses = res.coursesList[0].courses || [];
+              }
+            }
+
+            this.setData({
+              allCourses: courses,
+              scheduleMeta: scheduleMeta || this.data.scheduleMeta,
+            }, () => {
+              this.initScheduleLayout();
+            });
+          })
+          .catch((err) => {
+            wx.hideLoading();
+            console.error("异步拉取课表失败", err);
+            this.initScheduleLayout();
+          });
+      } else if (!hasLoadedData) {
+        this.initScheduleLayout();
+      }
+    }, 300);
   },
 
   checkCurrentTargetStatus() {
@@ -276,6 +337,10 @@ Page({
     };
 
     wx.setStorageSync("FOSU_CURRENT_SCHEDULE_TARGET", target);
+    wx.setStorageSync("hasInitializedSchedule", true);
+    wx.setStorageSync("currentScheduleId", meta.classId || this.data.name || "");
+    wx.setStorageSync("currentScheduleName", this.data.name || "");
+    wx.setStorageSync("currentScheduleSource", target.type || "class");
     
     // 兼容原班级选项，设置页能自适应
     saveSettings({

@@ -33,7 +33,7 @@
 .search-row {
   display: flex;
   align-items: center;
-  min-height: 82rpx;
+  min-height: 72rpx;
   padding: 0 22rpx;
   border-radius: 14rpx;
   background: #f2f5f9;
