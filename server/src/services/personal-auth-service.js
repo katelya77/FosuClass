@@ -3,6 +3,8 @@
  * NOTE: 负责初始化登录会话、滑块验证、以及手动追踪跨域 302 重定向以安全交换统一认证登录票据。
  */
 
+const dns = require("dns").promises;
+const axios = require("axios");
 const cheerio = require("cheerio");
 const { createClient } = require("../utils/requestClient");
 const { createSession, getSession, destroySession } = require("../utils/fosu-cookie-jar");
@@ -10,16 +12,34 @@ const { encryptFosuPassword } = require("../utils/fosu-password-encrypt");
 const { safeLog, maskStudentId } = require("../utils/safeLogger");
 
 /**
+ * 判断是否为 DNS 解析错误
+ * @param {Error} error 错误对象
+ * @returns {boolean} 是否为 DNS 错误
+ */
+function isDnsError(error) {
+  const code = error.code || "";
+  return code === "ENOTFOUND" || code === "EAI_AGAIN";
+}
+
+/**
  * 初始化个人登录会话，抓取 CAS 登录页与滑块验证码
  * @param {string} [studentId] 预检学号（不写日志）
  * @returns {Promise<Object>} 会话 ID 与滑块 Base64 图片等数据
  */
 async function startPersonalSession(studentId) {
-  // 1. 初始化内存会话并生成 Session ID
+  // 1. 预检 100 网的 DNS 解析是否正常
+  try {
+    await dns.lookup("100.fosu.edu.cn");
+  } catch (error) {
+    safeLog("personal-session-dns-precheck-failed", { error: error.message });
+    throw new Error("EDU100_DNS_FAILED");
+  }
+
+  // 2. 初始化内存会话并生成 Session ID
   const session = createSession();
   const sessionId = session.sessionId;
 
-  // 2. 创建绑定会话 CookieJar 的 Axios 客户端
+  // 3. 创建绑定会话 CookieJar 的 Axios 客户端
   const client = createClient({ jar: session.authCookieJar });
 
   const serviceUrl = "http://100.fosu.edu.cn/caslogin.jsp?kstzType=null";
@@ -30,59 +50,40 @@ async function startPersonalSession(studentId) {
 
   let response;
   try {
-    response = await client.get(loginUrl);
+    response = await client.get(loginUrl, { timeout: 10000 });
   } catch (error) {
     safeLog("personal-session-network-error", { error: error.message });
-    throw new Error("CAMPUS_NETWORK_REQUIRED");
+    if (isDnsError(error)) {
+      throw new Error("AUTHSERVER_UNREACHABLE"); // DNS 解析失败，判定为认证站不可达
+    }
+    throw new Error("AUTHSERVER_UNREACHABLE");
   }
 
   const html = response.data;
 
-  // 3. 解析隐藏字段
+  // 4. 解析隐藏字段
   const $ = cheerio.load(html);
   const execution = $("#execution").val() || $("input[name='execution']").val() || "";
   const pwdEncryptSalt = $("#pwdEncryptSalt").val() || "";
   const lt = $("#lt").val() || $("input[name='lt']").val() || "";
 
-  // 4. 正则解析滑块 Token lcpz7WKu
-  const regexes = [
-    /lcpz7WKu\s*[:=]\s*["']([^"']+)["']/i,
-    /lcpz7WKu\s*=\s*["']([^"']+)["']/i,
-    /["']lcpz7WKu["']\s*[:=]\s*["']([^"']+)["']/i,
-    /openSliderCaptcha\.htl\?.*?lcpz7WKu=([^"&'\s]+)/i,
-  ];
-
-  let lcpz7WKu = "";
-  for (const regex of regexes) {
-    const match = html.match(regex);
-    if (match && match[1]) {
-      lcpz7WKu = match[1];
-      break;
-    }
-  }
-
-  if (!execution) {
-    throw new Error("LOGIN_PAGE_PARSE_FAILED: execution 字段解析失败");
-  }
-  if (!pwdEncryptSalt) {
-    throw new Error("LOGIN_PAGE_PARSE_FAILED: pwdEncryptSalt 字段解析失败");
-  }
-  if (!lcpz7WKu) {
-    throw new Error("SLIDER_TOKEN_NOT_FOUND");
+  if (!execution || !pwdEncryptSalt) {
+    throw new Error("LOGIN_PAGE_CHANGED");
   }
 
   session.execution = execution;
   session.pwdEncryptSalt = pwdEncryptSalt;
   session.lt = lt;
-  session.lcpz7WKu = lcpz7WKu;
 
   // 5. 拉取滑块图片 JSON
-  const captchaUrl = `https://authserver.fosu.edu.cn/authserver/common/openSliderCaptcha.htl?_=${Date.now()}&lcpz7WKu=${lcpz7WKu}`;
+  // NOTE: 根据 login.js 逻辑，直接通过 contextPath 拼接 /common/openSliderCaptcha.htl 请求，不再携带 lcpz7WKu 动态参数
+  const captchaUrl = `https://authserver.fosu.edu.cn/authserver/common/openSliderCaptcha.htl?_=${Date.now()}`;
   let captchaRes;
   try {
-    captchaRes = await client.get(captchaUrl);
+    captchaRes = await client.get(captchaUrl, { timeout: 5000 });
   } catch (error) {
-    throw new Error("CAMPUS_NETWORK_REQUIRED");
+    safeLog("personal-session-captcha-fetch-failed", { error: error.message });
+    throw new Error("SLIDER_ENDPOINT_FAILED");
   }
 
   let captchaData = captchaRes.data;
@@ -90,12 +91,12 @@ async function startPersonalSession(studentId) {
     try {
       captchaData = JSON.parse(captchaData);
     } catch (e) {
-      throw new Error("LOGIN_PAGE_PARSE_FAILED: 无法解析滑块验证码数据");
+      throw new Error("SLIDER_ENDPOINT_FAILED");
     }
   }
 
   if (!captchaData || !captchaData.bigImage || !captchaData.smallImage) {
-    throw new Error("LOGIN_PAGE_PARSE_FAILED: 滑块验证码响应图为空");
+    throw new Error("SLIDER_ENDPOINT_FAILED");
   }
 
   return {
@@ -121,11 +122,12 @@ async function startPersonalSession(studentId) {
 async function verifyPersonalSlider(sessionId, canvasLength, moveLength) {
   const session = getSession(sessionId);
   if (!session) {
-    throw new Error("SESSION_EXPIRED: 会话已失效，请重新生成验证码");
+    throw new Error("SESSION_EXPIRED");
   }
 
   const client = createClient({ jar: session.authCookieJar });
-  const verifyUrl = `https://authserver.fosu.edu.cn/authserver/common/verifySliderCaptcha.htl?lcpz7WKu=${session.lcpz7WKu}`;
+  // NOTE: 根据 longbow.slidercaptchas.js，直接请求 verifySliderCaptcha.htl，移除 query 参数中过时的 lcpz7WKu 字段
+  const verifyUrl = "https://authserver.fosu.edu.cn/authserver/common/verifySliderCaptcha.htl";
 
   const postData = new URLSearchParams();
   postData.append("canvasLength", String(canvasLength || 340));
@@ -138,9 +140,11 @@ async function verifyPersonalSlider(sessionId, canvasLength, moveLength) {
         "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
         Referer: session.loginUrl,
       },
+      timeout: 5000,
     });
   } catch (error) {
-    throw new Error("CAMPUS_NETWORK_REQUIRED");
+    safeLog("personal-slider-verify-network-error", { error: error.message });
+    throw new Error("SLIDER_VERIFY_FAILED");
   }
 
   let resData = response.data;
@@ -148,7 +152,7 @@ async function verifyPersonalSlider(sessionId, canvasLength, moveLength) {
     try {
       resData = JSON.parse(resData);
     } catch (e) {
-      throw new Error("SLIDER_VERIFY_FAILED: 无法解析验证结果");
+      throw new Error("SLIDER_VERIFY_FAILED");
     }
   }
 
@@ -210,10 +214,12 @@ async function loginAndGetJar(sessionId, studentId, password) {
       },
       maxRedirects: 0,
       validateStatus: (status) => status >= 200 && status < 400,
+      timeout: 10000,
     });
   } catch (error) {
     safeLog("personal-login-post-error", { error: error.message });
-    throw new Error("CAMPUS_NETWORK_REQUIRED");
+    destroySession(sessionId);
+    throw new Error("AUTHSERVER_UNREACHABLE");
   }
 
   // 3. 判断是否返回 302 凭证 Location
@@ -221,16 +227,16 @@ async function loginAndGetJar(sessionId, studentId, password) {
   const location = loginRes.headers["location"];
 
   if (status !== 302 || !location) {
-    // 登录失败，销毁 session
+    // 登录失败，销毁 session 并抛出统一登录失败异常
     safeLog("personal-login-credentials-invalid", { studentId: maskStudentId(studentId) });
     destroySession(sessionId);
-    throw new Error("INVALID_CREDENTIALS");
+    throw new Error("CAS_LOGIN_FAILED");
   }
 
   if (!location.includes("ticket=")) {
     safeLog("personal-login-ticket-missing", { location });
     destroySession(sessionId);
-    throw new Error("CAS_TICKET_MISSING");
+    throw new Error("CAS_LOGIN_FAILED");
   }
 
   // 4. 手动跟踪 302 跳转获取 JWC 会话 Cookie
@@ -246,17 +252,22 @@ async function loginAndGetJar(sessionId, studentId, password) {
       res = await client.get(nextUrl, {
         maxRedirects: 0,
         validateStatus: (status) => status >= 200 && status < 400,
+        timeout: 8000,
       });
     } catch (err) {
       safeLog("personal-login-redirect-error", { error: err.message });
       destroySession(sessionId);
-      throw new Error("JWC_SESSION_FAILED");
+      if (isDnsError(err)) {
+        throw new Error("EDU100_DNS_FAILED");
+      } else {
+        throw new Error("EDU100_UNREACHABLE");
+      }
     }
 
     if (res.status === 302 || res.status === 301) {
       nextUrl = res.headers["location"];
       if (nextUrl && !nextUrl.startsWith("http")) {
-        const urlObj = new URL(nextUrl, "https://100.fosu.edu.cn");
+        const urlObj = new URL(nextUrl, "http://100.fosu.edu.cn");
         nextUrl = urlObj.toString();
       }
     } else {
@@ -264,23 +275,29 @@ async function loginAndGetJar(sessionId, studentId, password) {
     }
   }
 
-  // 5. 校验 framework/xsMain.jsp
+  // 5. 校验 framework/xsMain.jsp 以验证会话建立
   let mainRes;
   try {
-    mainRes = await client.get("https://100.fosu.edu.cn/framework/xsMain.jsp", {
+    mainRes = await client.get("http://100.fosu.edu.cn/framework/xsMain.jsp", {
       maxRedirects: 0,
       validateStatus: (status) => status >= 200 && status < 400,
+      timeout: 8000,
     });
   } catch (err) {
+    safeLog("personal-login-xsmain-network-error", { error: err.message });
     destroySession(sessionId);
-    throw new Error("JWC_SESSION_FAILED");
+    if (isDnsError(err)) {
+      throw new Error("EDU100_DNS_FAILED");
+    } else {
+      throw new Error("EDU100_UNREACHABLE");
+    }
   }
 
   const xsMainHtml = mainRes.data;
   if (mainRes.status !== 200 || (!xsMainHtml.includes("桌面") && !xsMainHtml.includes("教学综合信息服务平台"))) {
     safeLog("personal-login-framework-failed", { status: mainRes.status });
     destroySession(sessionId);
-    throw new Error("INVALID_CREDENTIALS");
+    throw new Error("SCHEDULE_PAGE_UNREACHABLE");
   }
 
   // 6. 解析学生基本信息
@@ -319,62 +336,119 @@ async function loginAndGetJar(sessionId, studentId, password) {
  * @returns {Promise<Object>} 连通性诊断报告
  */
 async function checkFosuNetwork() {
-  const dns = require("dns").promises;
-  const axios = require("axios");
+  const authUrl = "https://authserver.fosu.edu.cn/authserver/login?service=http%3A%2F%2F100.fosu.edu.cn%2Fcaslogin.jsp%3FkstzType%3Dnull";
+  const eduHost = "100.fosu.edu.cn";
+  const authHost = "authserver.fosu.edu.cn";
 
-  const jwcUrl = "https://100.fosu.edu.cn/";
-  const authUrl = "https://authserver.fosu.edu.cn/authserver/login";
+  let eduDnsResolved = false;
+  let eduReachable = false;
+  let eduErrorCode = undefined;
+  let eduMessage = undefined;
 
-  let jwcDns = false;
-  let jwcHttp = false;
-  let authDns = false;
-  let authHttp = false;
+  let authserverReachable = false;
+  let authPageStatus = 0;
+  let containsLoginPage = false;
+  let captchaSwitch = "";
+  let needCaptcha = "";
+  let contextPath = "";
 
-  // 1. 测试 100.fosu.edu.cn
+  // 1. 诊断 100 网 DNS 及 HTTP 可达性
   try {
-    const ips = await dns.lookup("100.fosu.edu.cn");
-    if (ips && ips.address) {
-      jwcDns = true;
-    }
-  } catch (e) {}
-
-  if (jwcDns) {
-    try {
-      const res = await axios.get(jwcUrl, { timeout: 3000, validateStatus: () => true });
-      if (res.status >= 200 && res.status < 400) {
-        jwcHttp = true;
-      }
-    } catch (e) {}
+    await dns.lookup(eduHost);
+    eduDnsResolved = true;
+  } catch (error) {
+    eduDnsResolved = false;
+    eduErrorCode = "EDU100_DNS_FAILED";
+    eduMessage = "当前同步节点无法解析 100.fosu.edu.cn";
   }
 
-  // 2. 测试 authserver.fosu.edu.cn
-  try {
-    const ips = await dns.lookup("authserver.fosu.edu.cn");
-    if (ips && ips.address) {
-      authDns = true;
+  if (eduDnsResolved) {
+    try {
+      const res = await axios.get(`http://${eduHost}`, { timeout: 3000, validateStatus: () => true });
+      if (res.status >= 200 && res.status < 400) {
+        eduReachable = true;
+      } else {
+        eduErrorCode = "EDU100_UNREACHABLE";
+        eduMessage = `教务 100 网首页响应非正常状态码: ${res.status}`;
+      }
+    } catch (e) {
+      eduReachable = false;
+      eduErrorCode = "EDU100_UNREACHABLE";
+      eduMessage = `当前同步节点无法连接教务 100 网: ${e.message}`;
     }
+  }
+
+  // 2. 诊断 authserver DNS 及 HTTP(S) 可达性，解析参数
+  let authDnsResolved = false;
+  try {
+    await dns.lookup(authHost);
+    authDnsResolved = true;
   } catch (e) {}
 
-  if (authDns) {
+  if (authDnsResolved) {
     try {
       const res = await axios.get(authUrl, { timeout: 3000, validateStatus: () => true });
-      if (res.status >= 200 && res.status < 400) {
-        authHttp = true;
+      authserverReachable = true;
+      authPageStatus = res.status;
+
+      if (res.status === 200 && res.data) {
+        const $ = cheerio.load(res.data);
+        containsLoginPage = $("form#casLoginForm, form").length > 0;
+
+        const scriptText = $("script").map((i, el) => $(el).html()).get().join("\n");
+        const matchCaptchaSwitch = scriptText.match(/captchaSwitch\s*=\s*["']([^"']*)["']/i);
+        const matchNeedCaptcha = scriptText.match(/needCaptcha\s*=\s*["']([^"']*)["']/i);
+        const matchContextPath = scriptText.match(/contextPath\s*=\s*["']([^"']*)["']/i);
+
+        captchaSwitch = matchCaptchaSwitch ? matchCaptchaSwitch[1] : "";
+        needCaptcha = matchNeedCaptcha ? matchNeedCaptcha[1] : "";
+        contextPath = matchContextPath ? matchContextPath[1] : "";
       }
-    } catch (e) {}
+    } catch (e) {
+      authserverReachable = false;
+    }
   }
 
-  const campusNetwork = jwcDns && jwcHttp;
+  // 3. 推荐结论
+  let recommendation = "";
+  if (authserverReachable && !eduDnsResolved) {
+    recommendation = "authserver 可访问，但 100.fosu.edu.cn 在当前容器内 DNS 解析失败。请先修复 100 网解析/校园网/VPN/内网路由，再继续调试个人课表同步。";
+  } else if (authserverReachable && eduDnsResolved && !eduReachable) {
+    recommendation = "authserver 可访问，100 网域名可解析但无法连通。个人课表同步需要后端能连通 100 网。请检查服务器是否处于校园网/校 VPN、网络防火墙或内网代理设置。";
+  } else if (!authserverReachable) {
+    recommendation = "当前同步节点无法连接学校统一身份认证站点。请先检查服务器公网出站规则与网络连通性。";
+  } else {
+    recommendation = "网络连接与域名解析均正常。您可以正常使用个人课表同步功能。";
+  }
 
   return {
     success: true,
-    campusNetwork,
-    details: {
-      jwcDns,
-      jwcHttp,
-      authDns,
-      authHttp,
+    authserver: {
+      reachable: authserverReachable,
+      status: authPageStatus,
+      containsLoginPage,
+      captchaSwitch,
+      needCaptcha,
+      contextPath,
     },
+    edu100: {
+      dnsResolved: eduDnsResolved,
+      reachable: eduReachable,
+      errorCode: eduErrorCode,
+      message: eduMessage,
+    },
+    captcha: {
+      mode: "slider-or-image",
+      detectedEndpoints: [
+        "/common/openSliderCaptcha.htl",
+        "/common/verifySliderCaptcha.htl",
+        "/checkNeedCaptcha.htl",
+        "/getCaptcha.htl",
+        "/common/toSliderCaptcha.htl",
+      ],
+      sliderTokenRequired: false,
+    },
+    recommendation,
   };
 }
 

@@ -1,6 +1,9 @@
 # 使用 Node.js 20 作为基础镜像
 FROM node:20-alpine
 
+# 安装基础网络诊断与 CA 证书依赖
+RUN apk add --no-cache curl bind-tools ca-certificates
+
 # 设置工作目录
 WORKDIR /app
 
