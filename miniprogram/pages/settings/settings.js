@@ -205,11 +205,8 @@ Page({
   },
 
   goLogin() {
-    wx.showModal({
-      title: "个人课表同步",
-      content: "个人账号同步功能正在内测。当前可先通过全校课表选择班级使用。",
-      showCancel: false,
-      confirmText: "知道了"
+    wx.navigateTo({
+      url: "/pages/personal-sync/personal-sync",
     });
   },
   

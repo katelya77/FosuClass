@@ -1,0 +1,149 @@
+<view class="page personal-sync-page">
+  <!-- 头部说明卡片 -->
+  <view class="card intro-card">
+    <view class="intro-title">
+      <icon type="info" size="20" color="#c62828" class="intro-icon" />
+      <text>同步说明</text>
+    </view>
+    <view class="intro-content">
+      <view class="intro-item">1. 本功能通过学校统一认证网关（CAS）安全抓取您的个人课表。</view>
+      <view class="intro-item">2. 您的密码仅在本次登录校验中瞬时使用，<text class="highlight">绝不会</text>被落盘保存或写入任何日志。</view>
+      <view class="intro-item">3. 本服务需要处于校内网/校园网环境方可联通，外网或未开启校园 VPN 时可能暂时无法访问。</view>
+    </view>
+  </view>
+
+  <!-- 输入表单卡片 -->
+  <view class="card form-card" wx:if="{{!syncSuccess}}">
+    <view class="form-title">教务登录认证</view>
+    
+    <view class="form-group">
+      <text class="form-label">学号</text>
+      <input
+        class="form-input"
+        type="number"
+        value="{{studentId}}"
+        placeholder="请输入教务网学号"
+        placeholder-class="input-placeholder"
+        bindinput="onStudentIdInput"
+      />
+    </view>
+
+    <view class="form-group">
+      <text class="form-label">密码</text>
+      <input
+        class="form-input"
+        password
+        value="{{password}}"
+        placeholder="请输入统一认证密码"
+        placeholder-class="input-placeholder"
+        bindinput="onPasswordInput"
+      />
+    </view>
+
+    <view class="form-group">
+      <text class="form-label">目标同步学期</text>
+      <picker mode="selector" range="{{semesterOptions}}" value="{{semesterIndex}}" bindchange="onSemesterChange">
+        <view class="picker-selector">
+          <text>{{semesterOptions[semesterIndex]}}</text>
+          <text class="picker-arrow">▼</text>
+        </view>
+      </picker>
+    </view>
+
+    <button
+      class="btn-submit"
+      loading="{{startingSession}}"
+      disabled="{{!studentId || !password || startingSession}}"
+      bindtap="startLoginFlow"
+    >
+      {{startingSession ? '正在初始化...' : '开始登录校验'}}
+    </button>
+  </view>
+
+  <!-- 校验及同步成功结果展示 -->
+  <view class="card result-card animated fadeIn" wx:else>
+    <view class="success-header">
+      <icon type="success" size="64" color="#2e7d32" class="success-icon" />
+      <view class="success-title">课表抓取成功！</view>
+    </view>
+    
+    <view class="result-details">
+      <view class="result-row">
+        <text class="result-label">学生姓名</text>
+        <text class="result-value">{{syncResult.student.studentName}}</text>
+      </view>
+      <view class="result-row">
+        <text class="result-label">学号</text>
+        <text class="result-value">{{studentIdMasked}}</text>
+      </view>
+      <view class="result-row">
+        <text class="result-label">同步学期</text>
+        <text class="result-value">{{syncResult.semester}}</text>
+      </view>
+      <view class="result-row">
+        <text class="result-label">课程数量</text>
+        <text class="result-value">{{syncResult.schedule.courses.length}} 门课程</text>
+      </view>
+    </view>
+
+    <button class="btn-bind" bindtap="bindToLocal">设为当前课表</button>
+    <button class="btn-back" bindtap="goBack">返回上级</button>
+  </view>
+
+  <!-- 人工滑块验证弹窗 -->
+  <view class="captcha-modal {{showCaptchaModal ? 'visible' : ''}}" wx:if="{{showCaptchaModal}}" catchtouchmove="noop">
+    <view class="captcha-mask" bindtap="closeCaptchaModal"></view>
+    <view class="captcha-container-box animate-scale">
+      <view class="captcha-header">
+        <text class="captcha-title">安全验证</text>
+        <text class="captcha-close" bindtap="closeCaptchaModal">×</text>
+      </view>
+      
+      <view class="captcha-body">
+        <view class="captcha-tip-text">请拖动滑块拼合下方拼图</view>
+        
+        <!-- 验证码图片区域 -->
+        <view class="captcha-image-area" style="width: 340px; height: 150px;">
+          <!-- 背景图 -->
+          <image
+            class="captcha-big-img"
+            src="{{captchaData.bigImage}}"
+            style="width: 340px; height: 150px;"
+            mode="aspectFill"
+          />
+          <!-- 拼图滑块 -->
+          <image
+            class="captcha-small-img"
+            src="{{captchaData.smallImage}}"
+            style="width: 93px; height: 150px; left: {{sliderX}}px; top: 0px;"
+            mode="aspectFill"
+          />
+        </view>
+        
+        <!-- 拖动滑竿 -->
+        <view class="slider-track-area">
+          <view class="slider-track-bg">向右拖动滑块对齐缺口</view>
+          <!-- 拖过的进度条 -->
+          <view class="slider-track-progress" style="width: {{sliderX + 20}}px;"></view>
+          <!-- 拖动按钮手柄 -->
+          <view
+            class="slider-handle"
+            style="left: {{sliderX}}px;"
+            catchtouchstart="onTouchStart"
+            catchtouchmove="onTouchMove"
+            catchtouchend="onTouchEnd"
+          >
+            <text class="slider-icon">↔</text>
+          </view>
+        </view>
+
+        <!-- 验证状态提示 -->
+        <view class="verify-status-msg {{verifyStatus}}">
+          <text wx:if="{{verifyStatus === 'verifying'}}">正在验证滑块拼图...</text>
+          <text wx:elif="{{verifyStatus === 'success'}}">验证通过！正在同步课表...</text>
+          <text wx:elif="{{verifyStatus === 'fail'}}">验证失败，请重新对齐</text>
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

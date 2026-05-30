@@ -11,11 +11,17 @@ const SECRET_KEY_PATTERN = /(password|passwd|pwd|cookie|token|session|jsessionid
  * @returns {string} 脱敏后的学号
  */
 function maskStudentId(studentId) {
-  const value = String(studentId || "");
-  if (value.length <= 4) {
-    return value ? "****" : "";
+  const value = String(studentId || "").trim();
+  if (!value) {
+    return "";
   }
-  return `${value.slice(0, 2)}****${value.slice(-2)}`;
+  if (value.length <= 8) {
+    if (value.length <= 4) {
+      return "****";
+    }
+    return `${value.slice(0, 2)}****${value.slice(-2)}`;
+  }
+  return `${value.slice(0, 4)}****${value.slice(-4)}`;
 }
 
 /**
