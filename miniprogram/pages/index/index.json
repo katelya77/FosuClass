@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "佛大课表",
+  "navigationBarTitleText": "佛课小表",
   "usingComponents": {
     "course-card": "/components/course-card/index",
     "course-detail-popup": "/components/course-detail-popup/index",

@@ -12,7 +12,7 @@ const {
 
 
 const SOURCE_TEXT = {
-  imported: "教务课表 · 本地缓存",
+  imported: "课程数据 · 本地缓存",
   mock: "演示数据 · 本地缓存",
 };
 
@@ -37,7 +37,7 @@ function getCourseDataset() {
       return {
         courses: target.courses,
         source: "realtime",
-        sourceText: `教务数据 · 更新于 ${target.updateTime || ""}`,
+        sourceText: `课程数据 · 更新于 ${target.updateTime || ""}`,
       };
     }
   } catch (error) {

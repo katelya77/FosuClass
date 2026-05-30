@@ -23,7 +23,7 @@ const courseTimes = [
 
 const courseTimesMeta = {
   version: "26.05.29.02",
-  name: "佛山大学作息时间",
+  name: "推荐作息时间",
   source: "参考伴你上课时间轴校准",
   updatedAt: "2026-05-29"
 };

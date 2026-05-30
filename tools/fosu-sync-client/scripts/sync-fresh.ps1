@@ -1,4 +1,4 @@
-# FosuClass 佛大课表 - 一键完整同步脚本 (Windows PowerShell)
+# FosuClass 佛课小表 - 一键完整同步脚本 (Windows PowerShell)
 # 作用：清理可能残留的系统代理，保证与 VPS 上传的连通性，拉取教务系统最新数据并发布。
 
 # 切换到同步客户端目录

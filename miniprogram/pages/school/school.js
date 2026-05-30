@@ -1,3 +1,5 @@
+const BRAND = require("../../config/brand");
+
 const tabs = [
   { key: "class", label: "班级" },
   { key: "teacher", label: "教师" },
@@ -108,12 +110,13 @@ function getClassEmptyState(reasonCode) {
 
   return {
     title: "请选择上方筛选并查询",
-    desc: "数据来自佛山大学教务系统，查询后将展示行政班级课表。",
+    desc: "查询后将展示行政班级课表，结果仅供参考。",
   };
 }
 
 Page({
   data: {
+    brand: BRAND,
     tabs,
     activeTab: "class",
     keyword: "",
@@ -158,10 +161,10 @@ Page({
     
     loading: false,
     updatedAtText: "",
-    dataSourceText: "教务数据",
+    dataSourceText: "课程数据",
     catalogEmpty: false,
     classEmptyTitle: "请选择上方筛选并查询",
-    classEmptyDesc: "数据来自佛山大学教务系统，查询后将展示行政班级课表。",
+    classEmptyDesc: "查询后将展示行政班级课表，结果仅供参考。",
     classNoticeText: "",
     restoreHint: "",
     catalogVersion: "",
@@ -257,7 +260,7 @@ Page({
       coursesResult: [],
       updatedAtText: "",
       classEmptyTitle: "请选择上方筛选并查询",
-      classEmptyDesc: "数据来自佛山大学教务系统，查询后将展示行政班级课表。",
+      classEmptyDesc: "查询后将展示行政班级课表，结果仅供参考。",
       classNoticeText: "",
     });
   },
@@ -292,7 +295,7 @@ Page({
             catalogEmpty: false,
             catalogVersion: catalogData.version,
             catalogUpdatedAt: catalogData.updatedAt,
-            dataSourceText: res.dataSource === "snapshot" ? "同步快照" : "教务数据",
+            dataSourceText: res.dataSource === "snapshot" ? "同步数据" : "课程数据",
           });
           if (this.hasSharedQuery()) {
             this.applySharedQueryIfNeeded();
@@ -1039,7 +1042,7 @@ Page({
       grade,
       majorCode,
       majorName,
-    }, { loadingTitle: "正在从教务系统获取数据...", silentError: true })
+    }, { loadingTitle: "正在获取数据...", silentError: true })
       .then((data) => {
           const formatTime = formatUpdateTime(data.updatedAt);
           const grouped = splitClassResultGroups(data.classes || []);
@@ -1052,7 +1055,7 @@ Page({
           classesResult: grouped.list,
           classAdminResults: grouped.admin,
           classAggregateResults: grouped.aggregate,
-          updatedAtText: formatTime ? `教务数据 · 更新于 ${formatTime}` : "教务数据",
+          updatedAtText: formatTime ? `课程数据 · 更新于 ${formatTime}` : "课程数据",
           classEmptyTitle: emptyState.title,
           classEmptyDesc: emptyState.desc,
           classNoticeText: grouped.noticeText,
@@ -1096,13 +1099,13 @@ Page({
       collegeName,
       titleCode,
       keyword: keyword.trim(),
-    }, { loadingTitle: "正在从教务系统获取数据..." })
+    }, { loadingTitle: "正在获取数据..." })
       .then((data) => {
         const formatTime = new Date(data.updatedAt).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
 
         this.setData({
           teachersResult: data.teachers || [],
-          updatedAtText: `教务数据 · 更新于 ${formatTime}`,
+          updatedAtText: `课程数据 · 更新于 ${formatTime}`,
         });
       })
       .catch((err) => {
@@ -1128,13 +1131,13 @@ Page({
       semester,
       campusId: campus === "仙溪校区" ? "2" : campus === "江湾校区" ? "1" : "",
       classroomName: keyword.trim(),
-    }, { loadingTitle: "正在从教务系统获取数据..." })
+    }, { loadingTitle: "正在获取数据..." })
       .then((data) => {
         const formatTime = new Date(data.updatedAt).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
         
         this.setData({
           classroomsResult: data.classrooms || [],
-          updatedAtText: `教务数据 · 更新于 ${formatTime}`,
+          updatedAtText: `课程数据 · 更新于 ${formatTime}`,
         });
       })
       .catch((err) => {
@@ -1158,13 +1161,13 @@ Page({
     request.post("/api/fosu/course-schedule", {
       semester,
       courseName: keyword.trim(),
-    }, { loadingTitle: "正在从教务系统获取数据..." })
+    }, { loadingTitle: "正在获取数据..." })
       .then((data) => {
         const formatTime = new Date(data.updatedAt).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
 
         this.setData({
           coursesResult: data.coursesList || [],
-          updatedAtText: `教务数据 · 更新于 ${formatTime}`,
+          updatedAtText: `课程数据 · 更新于 ${formatTime}`,
         });
       })
       .catch((err) => {
