@@ -110,6 +110,19 @@ function handlePersonalError(res, error) {
 }
 
 /**
+ * 0. 网络连通性健康诊断
+ * GET /api/fosu/personal/diagnose
+ */
+router.get("/diagnose", async (req, res) => {
+  try {
+    const data = await personalAuthService.checkFosuNetwork();
+    res.json(data);
+  } catch (error) {
+    handlePersonalError(res, error);
+  }
+});
+
+/**
  * 1. 初始化个人登录会话
  * POST /api/fosu/personal/session/start
  */
