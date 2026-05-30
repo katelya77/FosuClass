@@ -29,7 +29,8 @@ Page({
     const dataSource = getCourseDataSource();
 
     let displayClassName = className;
-    const target = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
+    const { getCurrentScheduleTarget } = require("../../utils/storage");
+    const target = getCurrentScheduleTarget();
     if (target) {
       displayClassName = target.type === "teacher"
         ? `${target.name} 老师`

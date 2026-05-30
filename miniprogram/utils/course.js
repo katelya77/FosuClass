@@ -31,7 +31,8 @@ function normalizeCourse(course) {
 
 function getCourseDataset() {
   try {
-    const target = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
+    const { getCurrentScheduleTarget } = require("./storage");
+    const target = getCurrentScheduleTarget();
     if (target && Array.isArray(target.courses) && target.courses.length) {
       return {
         courses: target.courses,
@@ -72,13 +73,14 @@ function getCoursesByClass(className) {
     return dataset.courses.map(normalizeCourse);
   }
   
-  const targetClassName = className || "25动物医学6";
+  if (!className) {
+    return []; // 如果未绑定或未传入 className，不默认显示任何课表数据
+  }
+  
+  const targetClassName = className;
   const courses = dataset.courses
     .filter((course) => course.className === targetClassName)
     .map(normalizeCourse);
-  if (!courses.length && dataset.source === "imported") {
-    return dataset.courses.map(normalizeCourse);
-  }
   return courses;
 }
 

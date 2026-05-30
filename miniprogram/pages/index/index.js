@@ -88,8 +88,9 @@ Page({
   },
 
   onShow() {
-    const initialized = wx.getStorageSync("hasInitializedSchedule");
-    const target = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
+    const { isScheduleInitialized, getCurrentScheduleTarget } = require("../../utils/storage");
+    const initialized = isScheduleInitialized();
+    const target = getCurrentScheduleTarget();
     if (!initialized || !target) {
       this.setData({
         showInitModal: true,
@@ -109,11 +110,18 @@ Page({
 
   loadSchedule() {
     const settings = getSettings();
+    const { getCurrentScheduleTarget } = require("../../utils/storage");
+    const target = getCurrentScheduleTarget();
+    const hasBoundTarget = !!target;
+    
     const now = new Date();
     const todayInfo = getTodayTeachingInfo(now, mockCalendar);
     const currentWeek = resolveDisplayWeek(settings, now);
     const weekInfo = getWeekRangeByWeekNo(currentWeek, mockCalendar);
-    const baseWeekdays = getVisibleWeekdays(settings.showWeekend, now);
+    const showWeekend = settings.showWeekend || false;
+    const weekendShowMode = settings.weekendShowMode || "overview";
+    
+    const baseWeekdays = getVisibleWeekdays(showWeekend, now);
     const weekdays = baseWeekdays.map((day, index) => {
       const date = addDays(weekInfo.startDate, index);
       return Object.assign({}, day, {
@@ -122,19 +130,32 @@ Page({
       });
     });
     
-    const target = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
-    const hasBoundTarget = !!target;
-    
     const courses = getCoursesByClass(settings.className);
     const dataSource = getCourseDataSource();
     const dayColumns = buildScheduleColumns(courses, weekdays, currentWeek, {
       sectionHeight: 90,
       hideInactiveCourses: settings.hideInactiveCourses,
     });
+    
     const contentWidth = getContentWidthRpx();
-    const dayColumnWidth = settings.showWeekend
-      ? WEEKEND_DAY_WIDTH
-      : Math.floor((contentWidth - TIME_AXIS_WIDTH) / weekdays.length);
+    let dayColumnWidth = 128;
+    let scrollX = false;
+    
+    if (showWeekend) {
+      if (weekendShowMode === "detail") {
+        dayColumnWidth = WEEKEND_DAY_WIDTH; // 142
+        scrollX = true;
+      } else {
+        // 七天概览模式，一屏显示周一至周日，无横滚
+        dayColumnWidth = Math.floor((contentWidth - TIME_AXIS_WIDTH) / 7); // (750 - 32 - 76) / 7 = 91
+        scrollX = false;
+      }
+    } else {
+      // 五天详细，一屏无横滚
+      dayColumnWidth = Math.floor((contentWidth - TIME_AXIS_WIDTH) / 5); // 128
+      scrollX = false;
+    }
+    
     const dayTrackWidth = dayColumnWidth * weekdays.length;
     const gridWidth = TIME_AXIS_WIDTH + dayTrackWidth;
     const weekRangeText = formatWeekRange(weekInfo.startDate, weekInfo.endDate);
@@ -155,7 +176,7 @@ Page({
       lastSyncText,
       currentWeek,
       weekRangeText,
-      weekScopeText: settings.showWeekend ? "周一至周日" : "周一至周五",
+      weekScopeText: showWeekend ? "周一至周日" : "周一至周五",
       todayText: `${todayInfo.dateLabel} ${todayInfo.weekdayLabel}`,
       weekSwitcherLabel: `${weekRangeText} · 第${currentWeek}周`,
       gridWidth,
@@ -164,7 +185,9 @@ Page({
       weekdays,
       dayColumns,
       hideInactiveCourses: settings.hideInactiveCourses,
-      showWeekend: settings.showWeekend,
+      showWeekend: showWeekend,
+      weekendShowMode: weekendShowMode,
+      scrollX: scrollX,
       hasBoundTarget,
     });
   },
@@ -206,8 +229,11 @@ Page({
   },
 
   goLogin() {
-    wx.navigateTo({
-      url: "/pages/login/login",
+    wx.showModal({
+      title: "个人课表同步",
+      content: "个人账号同步功能正在内测。当前可先通过全校课表选择班级使用。",
+      showCancel: false,
+      confirmText: "知道了"
     });
   },
 
@@ -226,8 +252,9 @@ Page({
   },
 
   skipSelect() {
+    const { clearCurrentScheduleTarget } = require("../../utils/storage");
+    clearCurrentScheduleTarget();
     wx.setStorageSync("hasInitializedSchedule", true);
-    wx.removeStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
     this.setData({
       showInitModal: false,
       hasBoundTarget: false,
@@ -237,8 +264,11 @@ Page({
   },
 
   goToSyncLogin() {
-    wx.navigateTo({
-      url: "/pages/login/login"
+    wx.showModal({
+      title: "个人课表同步",
+      content: "个人账号同步功能正在内测。当前可先通过全校课表选择班级使用。",
+      showCancel: false,
+      confirmText: "知道了"
     });
   },
 
@@ -323,10 +353,9 @@ Page({
       content: "确定要清除所有缓存吗？",
       success: (res) => {
         if (res.confirm) {
-          const { clearAppCache, clearLocalSelection } = require("../../utils/storage");
+          const { clearAppCache, clearCurrentScheduleTarget } = require("../../utils/storage");
           clearAppCache();
-          clearLocalSelection();
-          wx.removeStorageSync("hasInitializedSchedule");
+          clearCurrentScheduleTarget();
           this.onShow();
         }
       }
@@ -347,13 +376,6 @@ Page({
   },
 
   onShareAppMessage() {
-    const target = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
-    if (target && target.name) {
-      return {
-        title: `${target.name} · 佛大课表`,
-        path: `/pages/index/index?shareScheduleId=${target.classId || target.name}&shareScheduleName=${encodeURIComponent(target.name)}`
-      };
-    }
     return {
       title: "佛大课表",
       path: "/pages/index/index"

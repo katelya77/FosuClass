@@ -1,45 +1,13 @@
 <view class="page login-page">
-  <view class="login-card card">
-    <view class="login-title">同步个人课表</view>
-    <view class="login-desc">密码仅用于登录佛山大学教务系统同步课表，不会明文保存。</view>
-
-    <form bindsubmit="handleSubmit">
-      <view class="form-field">
-        <view class="field-label">学号</view>
-        <input
-          class="field-input"
-          name="studentId"
-          type="text"
-          placeholder="请输入学号"
-          placeholder-class="placeholder"
-          confirm-type="next"
-        />
-      </view>
-
-      <view class="form-field">
-        <view class="field-label">教务网密码</view>
-        <input
-          class="field-input"
-          name="password"
-          password
-          placeholder="请输入教务网密码"
-          placeholder-class="placeholder"
-          confirm-type="done"
-        />
-      </view>
-
-      <button class="primary-button submit-button" form-type="submit" loading="{{syncing}}">
-        {{syncing ? "同步中..." : "同步个人课表"}}
-      </button>
-    </form>
-
-    <view wx:if="{{message}}" class="success-message">{{message}}</view>
-    <view wx:if="{{error}}" class="error-message">{{error}}</view>
-  </view>
-
-  <view class="security-card card">
-    <view class="security-title">安全边界</view>
-    <view class="security-text">第一版只走 Mock 流程，不真实请求教务系统。</view>
-    <view class="security-text">后续真实同步会通过云函数封装强智教务适配器，并加入限流、脱敏日志和错误提示。</view>
+  <view class="login-card card" style="padding: 48rpx 32rpx; text-align: center;">
+    <view class="login-title" style="font-size: 36rpx; font-weight: 800; color: #172033; margin-bottom: 24rpx;">个人课表同步（内测中）</view>
+    <view class="login-desc" style="font-size: 26rpx; color: #536174; line-height: 1.6; text-align: left; margin-bottom: 32rpx;">
+      为了保障您的账号与密码安全，并遵循小程序的隐私安全规范，**当前版本已关闭手动输入学号密码的同步入口**。
+    </view>
+    <view class="security-text" style="font-size: 24rpx; color: #778297; line-height: 1.6; text-align: left; background: #f8fafc; padding: 24rpx; border-radius: 12rpx; border: 1rpx solid #edf0f5; margin-bottom: 40rpx;">
+      💡 **温馨提示**：全校课表已同步了学校绝大多数班级的排课数据。您可以直接通过首页的“选择课表”引导或“全校”页面，查找您的班级并绑定，这已经能完美展示您的一周课表。
+    </view>
+    
+    <button class="primary-button" style="width: 100%; border-radius: 999rpx; background: #c62828; color: #ffffff;" bindtap="goBack">返回首页</button>
   </view>
 </view>

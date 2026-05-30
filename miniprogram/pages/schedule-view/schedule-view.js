@@ -248,7 +248,8 @@ Page({
       
     this.setData({
       currentWeek,
-      showWeekend: settings.showWeekend,
+      showWeekend: settings.showWeekend || false,
+      weekendShowMode: settings.weekendShowMode || "overview",
     }, () => {
       this.renderSchedule();
     });
@@ -260,7 +261,10 @@ Page({
     const todayInfo = getTodayTeachingInfo(now, mockCalendar);
     const currentWeek = this.data.currentWeek;
     const weekInfo = getWeekRangeByWeekNo(currentWeek, mockCalendar);
-    const baseWeekdays = getVisibleWeekdays(this.data.showWeekend, now);
+    
+    const showWeekend = this.data.showWeekend;
+    const weekendShowMode = this.data.weekendShowMode || "overview";
+    const baseWeekdays = getVisibleWeekdays(showWeekend, now);
     
     const weekdays = baseWeekdays.map((day, index) => {
       const date = addDays(weekInfo.startDate, index);
@@ -278,22 +282,39 @@ Page({
     const currentWeekCourseCount = dayColumns.reduce((total, day) => total + (day.courses || []).length, 0);
 
     const contentWidth = getContentWidthRpx();
-    const dayColumnWidth = this.data.showWeekend
-      ? WEEKEND_DAY_WIDTH
-      : Math.floor((contentWidth - TIME_AXIS_WIDTH) / weekdays.length);
+    let dayColumnWidth = 128;
+    let scrollX = false;
+
+    if (showWeekend) {
+      if (weekendShowMode === "detail") {
+        dayColumnWidth = WEEKEND_DAY_WIDTH; // 142
+        scrollX = true;
+      } else {
+        // 七天概览模式，一屏显示周一至周日，无横滚
+        dayColumnWidth = Math.floor((contentWidth - TIME_AXIS_WIDTH) / 7); // (750 - 32 - 76) / 7 = 91
+        scrollX = false;
+      }
+    } else {
+      // 五天详细，一屏无横滚
+      dayColumnWidth = Math.floor((contentWidth - TIME_AXIS_WIDTH) / 5); // 128
+      scrollX = false;
+    }
+
     const dayTrackWidth = dayColumnWidth * weekdays.length;
     const gridWidth = TIME_AXIS_WIDTH + dayTrackWidth;
     const weekRangeText = formatWeekRange(weekInfo.startDate, weekInfo.endDate);
 
     this.setData({
       weekRangeText,
-      weekScopeText: this.data.showWeekend ? "周一至周日" : "周一至周五",
+      weekScopeText: showWeekend ? "周一至周日" : "周一至周五",
       weekSwitcherLabel: `${weekRangeText} · 第${currentWeek}周`,
       gridWidth,
       dayTrackWidth,
       dayColumnWidth,
       weekdays,
       dayColumns,
+      scrollX,
+      weekendShowMode,
       overviewCourses: getCourseOverview(this.data.allCourses),
       hasCurrentWeekCourses: currentWeekCourseCount > 0,
       currentWeekCourseCount,
@@ -395,4 +416,12 @@ Page({
       detailVisible: false,
     });
   },
+
+  onShareAppMessage() {
+    const meta = this.data.scheduleMeta || {};
+    return {
+      title: `${this.data.name}的课表 · 佛大课表`,
+      path: `/pages/schedule-view/schedule-view?shareScheduleId=${encodeURIComponent(meta.classId || this.data.name)}&name=${encodeURIComponent(this.data.name)}&type=${this.data.type}&semester=${encodeURIComponent(this.data.semester)}&displayType=${encodeURIComponent(this.data.displayType || "")}&isAggregated=${this.data.isAggregated ? "1" : "0"}&preview=1`
+    };
+  }
 });
