@@ -20,3 +20,13 @@
 {"time":"2026-05-31T18:11:15.477Z","action":"delete","module":"notices","target":"6cd5fe3b-a76c-4ec2-a1ed-a68aaddc057d","operator":"admin","summary":"删除公告 id: 6cd5fe3b-a76c-4ec2-a1ed-a68aaddc057d","ip":"::1"}
 {"time":"2026-05-31T18:11:15.483Z","action":"delete","module":"notices","target":"b88a22cc-2cf4-402b-81b2-b2ef2bf7c565","operator":"admin","summary":"删除公告 id: b88a22cc-2cf4-402b-81b2-b2ef2bf7c565","ip":"::1"}
 {"time":"2026-05-31T18:11:15.492Z","action":"delete","module":"notices","target":"d392f38c-33e8-41d0-87a4-a07a981ea507","operator":"admin","summary":"删除公告 id: d392f38c-33e8-41d0-87a4-a07a981ea507","ip":"::1"}
+{"time":"2026-05-31T18:32:47.396Z","action":"create","module":"notices","target":"f6827901-ae46-45d5-889f-1efce3537ed1","operator":"admin","summary":"创建公告: 自动化公告-1780252367379","ip":"::1"}
+{"time":"2026-05-31T18:32:47.406Z","action":"create","module":"notices","target":"4abc57f9-7f3c-43db-bb3d-d6450bdbc769","operator":"admin","summary":"创建公告: 停用公告-1780252367379","ip":"::1"}
+{"time":"2026-05-31T18:32:47.415Z","action":"create","module":"notices","target":"11706923-ca49-42c1-8245-c7fe84cb3000","operator":"admin","summary":"创建公告: 未来公告-1780252367379","ip":"::1"}
+{"time":"2026-05-31T18:32:47.427Z","action":"create","module":"notices","target":"4008b1af-d096-4746-9cfd-7194e51cb28b","operator":"admin","summary":"创建公告: 过期公告-1780252367379","ip":"::1"}
+{"time":"2026-05-31T18:32:47.437Z","action":"update","module":"notices","target":"f6827901-ae46-45d5-889f-1efce3537ed1","operator":"admin","summary":"编辑公告: 自动化公告-1780252367379","ip":"::1"}
+{"time":"2026-05-31T18:32:47.443Z","action":"save","module":"config","target":"admin-config","operator":"admin","summary":"保存系统配置并应用","ip":"::1"}
+{"time":"2026-05-31T18:32:47.451Z","action":"delete","module":"notices","target":"f6827901-ae46-45d5-889f-1efce3537ed1","operator":"admin","summary":"删除公告 id: f6827901-ae46-45d5-889f-1efce3537ed1","ip":"::1"}
+{"time":"2026-05-31T18:32:47.458Z","action":"delete","module":"notices","target":"4abc57f9-7f3c-43db-bb3d-d6450bdbc769","operator":"admin","summary":"删除公告 id: 4abc57f9-7f3c-43db-bb3d-d6450bdbc769","ip":"::1"}
+{"time":"2026-05-31T18:32:47.464Z","action":"delete","module":"notices","target":"11706923-ca49-42c1-8245-c7fe84cb3000","operator":"admin","summary":"删除公告 id: 11706923-ca49-42c1-8245-c7fe84cb3000","ip":"::1"}
+{"time":"2026-05-31T18:32:47.474Z","action":"delete","module":"notices","target":"4008b1af-d096-4746-9cfd-7194e51cb28b","operator":"admin","summary":"删除公告 id: 4008b1af-d096-4746-9cfd-7194e51cb28b","ip":"::1"}

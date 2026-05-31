@@ -833,6 +833,38 @@ const adminConsoleHtml = `<!doctype html>
       font-weight: 700;
       margin-top: 2px;
     }
+
+    /* 全局运行时错误条 */
+    .admin-runtime-error-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      background: var(--danger);
+      color: #ffffff;
+      padding: 12px 24px;
+      font-size: 13px;
+      font-weight: 600;
+      text-align: center;
+      z-index: 99999;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
+    }
+    .admin-runtime-error-bar button {
+      background: rgba(255, 255, 255, 0.2);
+      border: 1px solid rgba(255, 255, 255, 0.4);
+      color: #ffffff;
+      padding: 4px 8px;
+      font-size: 11px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .admin-runtime-error-bar button:hover {
+      background: rgba(255, 255, 255, 0.3);
+    }
   </style>
 </head>
 <body>
@@ -1637,6 +1669,43 @@ const adminConsoleHtml = `<!doctype html>
   </div>
 
   <script>
+    function showAdminRuntimeError(message) {
+      var errBar = document.getElementById("adminRuntimeErrorBar");
+      if (!errBar) {
+        errBar = document.createElement("div");
+        errBar.id = "adminRuntimeErrorBar";
+        errBar.className = "admin-runtime-error-bar";
+        document.body.appendChild(errBar);
+      }
+      errBar.textContent = "";
+      
+      var span = document.createElement("span");
+      span.textContent = "⚠️ 运行时错误: " + (message || "脚本运行失败") + " (页面: " + window.location.pathname + ") ";
+      errBar.appendChild(span);
+      
+      var btn = document.createElement("button");
+      btn.textContent = "一键刷新页面";
+      btn.addEventListener("click", function() {
+        window.location.reload();
+      });
+      errBar.appendChild(btn);
+      
+      var tip = document.createElement("span");
+      tip.style = "opacity: 0.8; font-size: 11px; margin-left: 8px;";
+      tip.textContent = "[建议按 F12 打开 DevTools Console 检查]";
+      errBar.appendChild(tip);
+    }
+
+    window.addEventListener("error", function(event) {
+      console.error("[Admin Runtime Error]", event.error || event.message);
+      showAdminRuntimeError(event.message || "页面脚本运行失败");
+    });
+
+    window.addEventListener("unhandledrejection", function(event) {
+      console.error("[Admin Promise Rejection]", event.reason);
+      showAdminRuntimeError((event.reason && event.reason.message) || "后台接口请求失败");
+    });
+
     (function () {
       // 1. 状态管理
       var state = {
@@ -1926,19 +1995,39 @@ const adminConsoleHtml = `<!doctype html>
         // 3. 今日反馈预览
         var feedWrap = $("recentFeedbackPreview");
         feedWrap.textContent = "";
-        var recent = state.feedbacks.filter(x => x.status === "open").slice(0, 3);
+        var recent = state.feedbacks.filter(function(x) { return x.status === "open"; }).slice(0, 3);
         if (recent.length === 0) {
-          feedWrap.innerHTML = "<div style='color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0;'>当前没有待处理反馈 ☕️</div>";
+          var emptyDiv = document.createElement("div");
+          emptyDiv.style = "color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0;";
+          emptyDiv.textContent = "当前没有待处理反馈 ☕️";
+          feedWrap.appendChild(emptyDiv);
         } else {
           recent.forEach(function (fb) {
             var item = document.createElement("div");
             item.className = "preview-item";
             item.style = "padding: 10px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; font-size: 13px;";
-            item.innerHTML = "<div>" +
-                             "<div style='font-weight: 700; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;'>" + escapeHtml(fb.content) + "</div>" +
-                             "<div style='font-size: 11px; color: var(--muted); margin-top: 2px;'>" + fb.type + " · " + formatDate(fb.createdAt) + "</div>" +
-                             "</div>" +
-                             "<button class='btn secondary' style='padding: 2px 8px; font-size: 11px;' onclick='openFeedbackDrawerById(\"" + fb.id + "\")'>处理</button>";
+            
+            var left = document.createElement("div");
+            var contentDiv = document.createElement("div");
+            contentDiv.style = "font-weight: 700; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;";
+            contentDiv.textContent = fb.content || "";
+            left.appendChild(contentDiv);
+            
+            var metaDiv = document.createElement("div");
+            metaDiv.style = "font-size: 11px; color: var(--muted); margin-top: 2px;";
+            metaDiv.textContent = (fb.type || "反馈") + " · " + formatDate(fb.createdAt);
+            left.appendChild(metaDiv);
+            
+            var btn = document.createElement("button");
+            btn.className = "btn secondary";
+            btn.style = "padding: 2px 8px; font-size: 11px;";
+            btn.textContent = "处理";
+            btn.addEventListener("click", function() {
+              openFeedbackDrawerById(fb.id);
+            });
+            
+            item.appendChild(left);
+            item.appendChild(btn);
             feedWrap.appendChild(item);
           });
         }
@@ -1981,7 +2070,7 @@ const adminConsoleHtml = `<!doctype html>
               cell.style.background = "var(--primary)";
               cell.style.color = op > 0.5 ? "#ffffff" : "var(--text)";
               cell.textContent = val + "%";
-              cell.title = "星期" + ["一", "二", "三", "四", "五", "六", "日"][day] + " 第" + section + "节\n综合占用率: " + val + "%";
+              cell.title = "星期" + ["一", "二", "三", "四", "五", "六", "日"][day] + " 第" + section + "节\\n综合占用率: " + val + "%";
               
               heatmapWrap.appendChild(cell);
             }
@@ -2058,7 +2147,17 @@ const adminConsoleHtml = `<!doctype html>
                             "<td>" + item.semester + "</td>" +
                             "<td><span class='badge info'>" + item.coursesCount + " 节</span></td>" +
                             "<td>" + (item.hidden ? "<span class='badge danger'>隐藏</span>" : "<span class='badge success'>显示</span>") + "</td>" +
-                            "<td><button class='btn secondary' style='padding: 2px 8px; font-size:11px;' onclick='openCatalogDetail(\"class\", \"" + encodeURIComponent(item.className) + "\")'>查看 & 配置</button></td>";
+                            "<td class='action-cell'></td>";
+            
+            var btn = document.createElement("button");
+            btn.className = "btn secondary";
+            btn.style = "padding: 2px 8px; font-size:11px;";
+            btn.textContent = "查看 & 配置";
+            btn.addEventListener("click", function() {
+              openCatalogDetail("class", item.className);
+            });
+            tr.querySelector(".action-cell").appendChild(btn);
+            
           } else if (type === "teacher") {
             tr.innerHTML = "<td><strong>" + escapeHtml(item.teacherName) + "</strong></td>" +
                             "<td>" + escapeHtml(item.displayName || "-") + "</td>" +
@@ -2066,7 +2165,17 @@ const adminConsoleHtml = `<!doctype html>
                             "<td>" + item.semester + "</td>" +
                             "<td>" + item.coursesCount + "</td>" +
                             "<td>" + item.classesCount + " 班</td>" +
-                            "<td><button class='btn secondary' style='padding: 2px 8px; font-size:11px;' onclick='openCatalogDetail(\"teacher\", \"" + encodeURIComponent(item.teacherName) + "\")'>查看 & 配置</button></td>";
+                            "<td class='action-cell'></td>";
+            
+            var btn = document.createElement("button");
+            btn.className = "btn secondary";
+            btn.style = "padding: 2px 8px; font-size:11px;";
+            btn.textContent = "查看 & 配置";
+            btn.addEventListener("click", function() {
+              openCatalogDetail("teacher", item.teacherName);
+            });
+            tr.querySelector(".action-cell").appendChild(btn);
+            
           } else if (type === "classroom") {
             tr.innerHTML = "<td><strong>" + escapeHtml(item.roomName) + "</strong></td>" +
                             "<td>" + escapeHtml(item.displayName || "-") + "</td>" +
@@ -2074,7 +2183,17 @@ const adminConsoleHtml = `<!doctype html>
                             "<td>" + item.semester + "</td>" +
                             "<td>" + item.coursesCount + "</td>" +
                             "<td><span class='badge info'>" + item.occupationRate + "</span></td>" +
-                            "<td><button class='btn secondary' style='padding: 2px 8px; font-size:11px;' onclick='openCatalogDetail(\"classroom\", \"" + encodeURIComponent(item.roomName) + "\")'>查看 & 配置</button></td>";
+                            "<td class='action-cell'></td>";
+            
+            var btn = document.createElement("button");
+            btn.className = "btn secondary";
+            btn.style = "padding: 2px 8px; font-size:11px;";
+            btn.textContent = "查看 & 配置";
+            btn.addEventListener("click", function() {
+              openCatalogDetail("classroom", item.roomName);
+            });
+            tr.querySelector(".action-cell").appendChild(btn);
+            
           } else if (type === "course") {
             tr.innerHTML = "<td><strong>" + escapeHtml(item.courseName) + "</strong></td>" +
                             "<td>" + escapeHtml(item.displayName || "-") + "</td>" +
@@ -2083,7 +2202,17 @@ const adminConsoleHtml = `<!doctype html>
                             "<td>" + item.teachersCount + " 师</td>" +
                             "<td>" + item.classesCount + " 班</td>" +
                             "<td>" + item.classroomsCount + " 室</td>" +
-                            "<td><button class='btn secondary' style='padding: 2px 8px; font-size:11px;' onclick='openCatalogDetail(\"course\", \"" + encodeURIComponent(item.courseName) + "\")'>查看 & 配置</button></td>";
+                            "<td class='action-cell'></td>";
+            
+            var btn = document.createElement("button");
+            btn.className = "btn secondary";
+            btn.style = "padding: 2px 8px; font-size:11px;";
+            btn.textContent = "查看 & 配置";
+            btn.addEventListener("click", function() {
+              openCatalogDetail("course", item.courseName);
+            });
+            tr.querySelector(".action-cell").appendChild(btn);
+            
           } else if (type === "major") {
             tr.innerHTML = "<td><strong>" + escapeHtml(item.majorName) + "</strong></td>" +
                             "<td><code>" + item.majorCode + "</code></td>" +
@@ -2095,7 +2224,16 @@ const adminConsoleHtml = `<!doctype html>
                             "<td>" + item.size + "</td>" +
                             "<td>" + formatDate(item.createdAt) + "</td>" +
                             "<td>" + item.type + "</td>" +
-                            "<td><button class='btn secondary' style='padding: 2px 8px; font-size:11px;' onclick='downloadSnapshot(\"" + encodeURIComponent(item.filename) + "\")'>下载 JSON</button></td>";
+                            "<td class='action-cell'></td>";
+            
+            var btn = document.createElement("button");
+            btn.className = "btn secondary";
+            btn.style = "padding: 2px 8px; font-size:11px;";
+            btn.textContent = "下载 JSON";
+            btn.addEventListener("click", function() {
+              downloadSnapshot(item.filename);
+            });
+            tr.querySelector(".action-cell").appendChild(btn);
           }
           
           tbody.appendChild(tr);
@@ -2212,8 +2350,8 @@ const adminConsoleHtml = `<!doctype html>
               
               courseBlock.textContent = uniqNames.join("/");
               courseBlock.title = slotCourses.map(function(c) {
-                return c.courseName + "\n📍" + (c.classroom || "未定") + "\n👨‍🏫" + (c.teacherName || "未知");
-              }).join("\n---\n");
+                return c.courseName + "\\n📍" + (c.classroom || "未定") + "\\n👨‍🏫" + (c.teacherName || "未知");
+              }).join("\\n---\\n");
               
               cell.appendChild(courseBlock);
             }
@@ -2321,11 +2459,30 @@ const adminConsoleHtml = `<!doctype html>
         cmds.forEach(function(c) {
           var box = document.createElement("div");
           box.style = "padding: 10px; border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: space-between;";
-          box.innerHTML = "<div>" +
-                          "<strong style='font-family: monospace; font-size:12px; color: var(--primary);'>" + c.cmd + "</strong>" +
-                          "<div style='font-size: 11px; color: var(--muted); margin-top:2px;'>" + c.desc + (c.local ? " (⚠️需校园网)" : "") + "</div>" +
-                          "</div>" +
-                          "<button class='btn ghost' style='padding: 2px 8px; font-size: 11px;' onclick='copyText(\"" + c.cmd + "\")'>复制</button>";
+          
+          var infoDiv = document.createElement("div");
+          
+          var cmdStrong = document.createElement("strong");
+          cmdStrong.style = "font-family: monospace; font-size:12px; color: var(--primary);";
+          cmdStrong.textContent = c.cmd;
+          infoDiv.appendChild(cmdStrong);
+          
+          var descDiv = document.createElement("div");
+          descDiv.style = "font-size: 11px; color: var(--muted); margin-top:2px;";
+          descDiv.textContent = c.desc + (c.local ? " (⚠️需校园网)" : "");
+          infoDiv.appendChild(descDiv);
+          
+          box.appendChild(infoDiv);
+          
+          var btn = document.createElement("button");
+          btn.className = "btn ghost";
+          btn.style = "padding: 2px 8px; font-size: 11px;";
+          btn.textContent = "复制";
+          btn.addEventListener("click", function() {
+            copyText(c.cmd);
+          });
+          box.appendChild(btn);
+          
           cmdWrap.appendChild(box);
         });
       }
@@ -2482,7 +2639,17 @@ const adminConsoleHtml = `<!doctype html>
                           "<td style='white-space: normal; min-width: 150px;'>" + escapeHtml(an.original) + "</td>" +
                           "<td style='white-space: normal; color: var(--muted);'>" + escapeHtml(an.suggestion) + "</td>" +
                           "<td><span class='badge " + badgeClass + "'>" + badgeText + "</span></td>" +
-                          "<td><button class='btn ghost' style='padding: 2px 8px; font-size:11px;' onclick='markAnomalyKnown(\"" + an.type + "\", \"" + encodeURIComponent(an.target) + "\")'>忽略问题</button></td>";
+                          "<td class='action-cell'></td>";
+                          
+          var btn = document.createElement("button");
+          btn.className = "btn ghost";
+          btn.style = "padding: 2px 8px; font-size:11px;";
+          btn.textContent = "忽略问题";
+          btn.addEventListener("click", function() {
+            markAnomalyKnown(an.type, an.target);
+          });
+          tr.querySelector(".action-cell").appendChild(btn);
+          
           tbody.appendChild(tr);
         });
       }
@@ -2553,7 +2720,17 @@ const adminConsoleHtml = `<!doctype html>
                           "<td><span class='badge " + badgeClass + "'>" + badgeText + "</span></td>" +
                           "<td>" + escapeHtml(fb.contact || "-") + "</td>" +
                           "<td>" + formatDate(fb.createdAt) + "</td>" +
-                          "<td><button class='btn secondary' style='padding: 2px 8px; font-size:11px;' onclick='openFeedbackDrawerById(\"" + fb.id + "\")'>查看 & 回复</button></td>";
+                          "<td class='action-cell'></td>";
+                          
+          var btn = document.createElement("button");
+          btn.className = "btn secondary";
+          btn.style = "padding: 2px 8px; font-size:11px;";
+          btn.textContent = "查看 & 回复";
+          btn.addEventListener("click", function() {
+            openFeedbackDrawerById(fb.id);
+          });
+          tr.querySelector(".action-cell").appendChild(btn);
+          
           tbody.appendChild(tr);
         });
 
@@ -2658,10 +2835,28 @@ const adminConsoleHtml = `<!doctype html>
           tr.innerHTML = "<td><code>" + escapeHtml(b.filename) + "</code></td>" +
                           "<td>" + b.size + "</td>" +
                           "<td>" + formatDate(b.createdAt) + "</td>" +
-                          "<td>" +
-                          "<button class='btn secondary' style='padding: 2px 8px; font-size:11px;' onclick='downloadBackup(\"" + encodeURIComponent(b.filename) + "\")'>下载</button> " +
-                          "<button class='btn danger' style='padding: 2px 8px; font-size:11px;' onclick='deleteBackup(\"" + encodeURIComponent(b.filename) + "\")'>删除</button>" +
-                          "</td>";
+                          "<td class='action-cell'></td>";
+          
+          var downloadBtn = document.createElement("button");
+          downloadBtn.className = "btn secondary";
+          downloadBtn.style = "padding: 2px 8px; font-size:11px;";
+          downloadBtn.textContent = "下载";
+          downloadBtn.addEventListener("click", function() {
+            downloadBackup(b.filename);
+          });
+          tr.querySelector(".action-cell").appendChild(downloadBtn);
+          
+          tr.querySelector(".action-cell").appendChild(document.createTextNode(" "));
+          
+          var deleteBtn = document.createElement("button");
+          deleteBtn.className = "btn danger";
+          deleteBtn.style = "padding: 2px 8px; font-size:11px;";
+          deleteBtn.textContent = "删除";
+          deleteBtn.addEventListener("click", function() {
+            deleteBackup(b.filename);
+          });
+          tr.querySelector(".action-cell").appendChild(deleteBtn);
+          
           tbody.appendChild(tr);
         });
       }
@@ -2836,13 +3031,28 @@ const adminConsoleHtml = `<!doctype html>
                           "<td><code>" + item.targetPage + "</code></td>" +
                           "<td>" + (item.enabled ? "<span class='badge success'>启用</span>" : "<span class='badge muted'>已停用</span>") + "</td>" +
                           "<td>" + formatDate(item.updatedAt) + "</td>" +
-                          "<td>" +
-                          "<button class='btn secondary' style='padding: 2px 8px; font-size:11px;' id='edit-notice-" + item.id + "'>编辑</button> " +
-                          "<button class='btn danger' style='padding: 2px 8px; font-size:11px;' id='del-notice-" + item.id + "'>删除</button>" +
-                          "</td>";
+                          "<td class='action-cell'></td>";
           
-          tr.querySelector("#edit-notice-" + item.id).onclick = function () { editNotice(item); };
-          tr.querySelector("#del-notice-" + item.id).onclick = function () { deleteNotice(item.id); };
+          var editBtn = document.createElement("button");
+          editBtn.className = "btn secondary";
+          editBtn.style = "padding: 2px 8px; font-size:11px;";
+          editBtn.textContent = "编辑";
+          editBtn.addEventListener("click", function() {
+            editNotice(item);
+          });
+          tr.querySelector(".action-cell").appendChild(editBtn);
+          
+          tr.querySelector(".action-cell").appendChild(document.createTextNode(" "));
+          
+          var delBtn = document.createElement("button");
+          delBtn.className = "btn danger";
+          delBtn.style = "padding: 2px 8px; font-size:11px;";
+          delBtn.textContent = "删除";
+          delBtn.addEventListener("click", function() {
+            deleteNotice(item.id);
+          });
+          tr.querySelector(".action-cell").appendChild(delBtn);
+          
           tbody.appendChild(tr);
         });
       }
@@ -2947,13 +3157,28 @@ const adminConsoleHtml = `<!doctype html>
                           "<td><span class='badge info'>" + item.tag + "</span></td>" +
                           "<td><code>" + (item.date ? item.date.slice(0, 10) : "-") + "</code></td>" +
                           "<td>" + (item.enabled ? "<span class='badge success'>启用</span>" : "<span class='badge muted'>已停用</span>") + "</td>" +
-                          "<td>" +
-                          "<button class='btn secondary' style='padding: 2px 8px; font-size:11px;' id='edit-news-" + item.id + "'>编辑</button> " +
-                          "<button class='btn danger' style='padding: 2px 8px; font-size:11px;' id='del-news-" + item.id + "'>删除</button>" +
-                          "</td>";
+                          "<td class='action-cell'></td>";
           
-          tr.querySelector("#edit-news-" + item.id).onclick = function () { editNews(item); };
-          tr.querySelector("#del-news-" + item.id).onclick = function () { deleteNews(item.id); };
+          var editBtn = document.createElement("button");
+          editBtn.className = "btn secondary";
+          editBtn.style = "padding: 2px 8px; font-size:11px;";
+          editBtn.textContent = "编辑";
+          editBtn.addEventListener("click", function() {
+            editNews(item);
+          });
+          tr.querySelector(".action-cell").appendChild(editBtn);
+          
+          tr.querySelector(".action-cell").appendChild(document.createTextNode(" "));
+          
+          var delBtn = document.createElement("button");
+          delBtn.className = "btn danger";
+          delBtn.style = "padding: 2px 8px; font-size:11px;";
+          delBtn.textContent = "删除";
+          delBtn.addEventListener("click", function() {
+            deleteNews(item.id);
+          });
+          tr.querySelector(".action-cell").appendChild(delBtn);
+          
           tbody.appendChild(tr);
         });
       }
@@ -3025,14 +3250,35 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function loadAll() {
-        showDashboard();
-        setStatus("正在获取佛课后台全局配置...");
-        return Promise.all([loadDashboard(), loadConfig(), loadNotices(), loadNews(), loadFeedbacks()])
-          .then(function () {
-            setStatus("最近一键刷新时间：" + formatDate(new Date().toISOString()));
-            showToast("控制台面板状态已同步", "success");
-          })
-          .catch(function (error) { setStatus(error.message); });
+        try {
+          switchSection("dashboard");
+          setStatus("正在获取佛课后台全局配置...");
+
+          var tasks = [
+            loadDashboard(),
+            loadConfig(),
+            loadNotices(),
+            loadNews(),
+            loadFeedbacks().catch(function(error) {
+              console.warn("[Admin Console] feedback load failed:", error);
+              state.feedbacks = [];
+            })
+          ];
+
+          return Promise.all(tasks)
+            .then(function () {
+              setStatus("最近一键刷新时间：" + formatDate(new Date().toISOString()));
+              showToast("控制台面板状态已同步", "success");
+            })
+            .catch(function (error) {
+              console.error("[Admin Console] loadAll failed:", error);
+              setStatus("加载失败：" + (error.message || "未知错误"));
+              showToast(error.message || "后台数据加载失败", "error");
+            });
+        } catch (error) {
+          console.error("[Admin Console] loadAll exception:", error);
+          setStatus("加载异常");
+        }
       }
 
       // 绑定导航与事件
@@ -3193,7 +3439,7 @@ function sendAdminHtml(res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self'; img-src 'self' data:; base-uri 'self'; form-action 'self'"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data:; base-uri 'self'; form-action 'self'"
   );
   res.type("html").send(adminConsoleHtml);
 }
@@ -3216,4 +3462,5 @@ router.get(["/dashboard", "/feedback"], (req, res) => {
   return sendAdminHtml(res);
 });
 
+router.adminConsoleHtml = adminConsoleHtml;
 module.exports = router;
