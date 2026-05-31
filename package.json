@@ -24,6 +24,7 @@
     "test:app-config-admin": "npm --prefix server run test-app-config-admin",
     "sync:personal": "node server/scripts/sync-personal.js",
     "inspect:personal-auth": "node server/scripts/inspect-personal-auth.js",
+    "test:admin-inline-script": "node tools/check-admin-inline-script.js",
     "diagnose:personal-network": "node server/scripts/diagnose-personal-network.js"
   },
   "repository": {
