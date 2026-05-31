@@ -16,11 +16,10 @@
         </view>
       </view>
       <view class="week-badge">第{{currentWeek}}周</view>
-      <button class="header-edit-btn" bindtap="goCustomCourses">编辑</button>
     </view>
 
     <view class="info-grid">
-      <view class="class-line">{{className}}</view>
+      <view class="class-line">{{className}} <text class="semester-text" style="font-size: 22rpx; font-weight: normal; color: #687386; margin-left: 8rpx;">({{semester}})</text></view>
       <view class="date-line">
         <text>{{weekRangeText}}</text>
         <text class="separator">·</text>
@@ -31,9 +30,6 @@
       </view>
       <view class="source-line" wx:elif="{{dataVersionText}}">
         <text>{{dataVersionText}}</text>
-      </view>
-      <view class="disclaimer-short" bindtap="showDisclaimer">
-        数据仅供参考，以学校及教师通知为准 <text class="info-icon">i</text>
       </view>
     </view>
 

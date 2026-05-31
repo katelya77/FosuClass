@@ -14,7 +14,7 @@ function getDefaultForm() {
     startSectionIndex: 0,
     endSectionIndex: 1,
     weekText: "1-16周",
-    color: "",
+    color: "#3b82f6",
     note: "",
     enabled: true,
   };
@@ -31,7 +31,7 @@ function courseToForm(course) {
     startSectionIndex: Math.max(0, Number(source.startSection || 1) - 1),
     endSectionIndex: Math.max(0, Number(source.endSection || 2) - 1),
     weekText: source.weekText || "1-16周",
-    color: source.color || "",
+    color: source.color || "#3b82f6",
     note: source.note || source.remark || "",
     enabled: source.enabled !== false,
   };
@@ -59,6 +59,8 @@ Page({
     weekdayOptions,
     sectionOptions,
     form: getDefaultForm(),
+    importToolsCollapsed: true,
+    predefinedColors: ["#3b82f6", "#10b981", "#f59e0b", "#ef4444", "#8b5cf6", "#ec4899", "#6b7280"]
   },
 
   onLoad() {
@@ -216,6 +218,19 @@ Page({
     wx.showToast({
       title: `${label} 即将支持`,
       icon: "none",
+    });
+  },
+
+  toggleImportTools() {
+    this.setData({
+      importToolsCollapsed: !this.data.importToolsCollapsed
+    });
+  },
+
+  selectColor(event) {
+    const color = event.currentTarget.dataset.color;
+    this.setData({
+      "form.color": color
     });
   },
 

@@ -199,18 +199,20 @@ function getTodayCoursesData() {
     };
   }
 
+  const { dedupeCourses } = require("./course");
   const baseCourses = schedule.courses.map((course) => normalizeCourse(Object.assign({}, course, {
     semester: course.semester || semester,
     classId: course.classId || classId,
     className: course.className || className,
   })));
-  const sourceCourses = baseCourses.concat(customCourseService.getEnabledCustomCourses().map((course) => {
+  const customCourses = customCourseService.getEnabledCustomCourses().map((course) => {
     return normalizeCourse(Object.assign({}, course, {
       semester: course.semester || semester,
       classId: course.classId || classId,
       className: course.className || className,
     }));
-  }));
+  });
+  const sourceCourses = dedupeCourses(baseCourses.concat(customCourses));
 
   const todayRawCourses = sourceCourses.filter(course => {
     const inWeek = isCourseActiveInCurrentWeek(course, currentWeek);

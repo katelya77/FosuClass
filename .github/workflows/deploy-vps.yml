@@ -15,25 +15,36 @@ jobs:
 
       - name: Check GitHub Secrets
         run: |
-          declare -A secrets_map
-          secrets_map=(
+          declare -A required_secrets
+          required_secrets=(
             ["VPS_HOST"]="${{ secrets.VPS_HOST }}"
             ["VPS_USER"]="${{ secrets.VPS_USER }}"
             ["VPS_SSH_KEY"]="${{ secrets.VPS_SSH_KEY }}"
             ["VPS_APP_DIR"]="${{ secrets.VPS_APP_DIR }}"
-            ["ADMIN_API_TOKEN"]="${{ secrets.ADMIN_API_TOKEN }}"
             ["ADMIN_PASSWORD"]="${{ secrets.ADMIN_PASSWORD }}"
           )
           
-          has_missing=false
-          for key in "${!secrets_map[@]}"; do
-            if [ -z "${secrets_map[$key]}" ]; then
-              echo "::error::缺少 GitHub Secret: $key，请在 Settings → Secrets and variables → Actions 中配置。"
-              has_missing=true
+          has_missing_required=false
+          for key in "${!required_secrets[@]}"; do
+            if [ -z "${required_secrets[$key]}" ]; then
+              if [ "$key" = "ADMIN_PASSWORD" ]; then
+                echo "::error::缺少 ADMIN_PASSWORD：后台登录密码未配置，请到 GitHub Settings → Secrets and variables → Actions 新增。"
+              else
+                echo "::error::缺少 GitHub Secret: $key，请在 Settings → Secrets and variables → Actions 中配置。"
+              fi
+              has_missing_required=true
             fi
           done
           
-          if [ "$has_missing" = true ]; then
+          if [ -z "${{ secrets.ADMIN_API_TOKEN }}" ]; then
+            echo "::warning::缺少 ADMIN_API_TOKEN：后台管理 API Token 未配置。系统将自动根据 ADMIN_PASSWORD 派生，用于强智同步脚本认证。"
+          fi
+          
+          if [ -z "${{ secrets.ADMIN_TOKEN }}" ]; then
+            echo "::warning::缺少 ADMIN_TOKEN::管理端静态 Token 未配置。系统将仅允许使用 ADMIN_PASSWORD 登录后台。"
+          fi
+          
+          if [ "$has_missing_required" = true ]; then
             exit 1
           fi
 

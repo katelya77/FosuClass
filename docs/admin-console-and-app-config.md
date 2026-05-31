@@ -15,13 +15,20 @@
 - `GET/POST/PUT/DELETE /api/admin/news`
 - `GET /api/admin/feedbacks`、`PUT /api/admin/feedbacks/:id`
 
-## 环境变量
+## 环境变量与 Secrets 配置
 
-- `ADMIN_API_TOKEN`：同步器上传和 release/sync 管理接口使用。
-- `ADMIN_PASSWORD`：Web 后台登录密码。
-- `ADMIN_TOKEN`：可选，后台 API Bearer Token。
+为了保证安全和部署便捷性，系统环境变量配置说明如下：
 
-生产环境未配置 `ADMIN_PASSWORD` 或 `ADMIN_TOKEN` 时，后台登录会被关闭。
+- `ADMIN_PASSWORD`：必须。Web 后台登录密码。如果未配置，生产环境将关闭后台登录功能。
+- `ADMIN_API_TOKEN`：可选。数据同步鉴权使用。若未配置此项，后台将基于 `ADMIN_PASSWORD` 自动进行安全派生，保证强智同步功能不中断。
+- `ADMIN_TOKEN`：可选。管理端静态 Token，配置后可作为管理 API 的 Bearer 鉴权凭证或登录密码。
+
+### GitHub Actions Secrets 配置建议
+请到 GitHub Settings → Secrets and variables → Actions 中配置：
+1. `VPS_HOST`、`VPS_USER`、`VPS_SSH_KEY`、`VPS_APP_DIR` (用于远程服务器自动化部署)
+2. `ADMIN_PASSWORD` (后台登录密码，必配置项)
+3. `ADMIN_API_TOKEN` (可选，不配置则自动从 `ADMIN_PASSWORD` 派生，用于本地同步脚本认证)
+4. `ADMIN_TOKEN` (可选)
 
 ## 小程序验收
 
