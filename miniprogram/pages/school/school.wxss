@@ -5,7 +5,7 @@
 }
 
 .page-header {
-  margin-bottom: 20rpx;
+  margin-bottom: 12rpx;
   padding: 0 8rpx;
 }
 
@@ -17,7 +17,7 @@
 }
 
 .subtitle {
-  margin-top: 10rpx;
+  margin-top: 6rpx;
   color: #778297;
   font-size: 24rpx;
   line-height: 1.45;
@@ -84,7 +84,39 @@
 }
 
 .tab-panel {
-  margin-top: 20rpx;
+  margin-top: 14rpx;
+}
+
+.school-notice {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  margin: 12rpx 0 0;
+  padding: 12rpx 16rpx;
+  border-radius: 12rpx;
+  background: #f3f6ff;
+  border: 1rpx solid #dbe4ff;
+}
+
+.school-notice-tag {
+  flex: 0 0 auto;
+  height: 30rpx;
+  padding: 0 10rpx;
+  border-radius: 15rpx;
+  background: #eef2ff;
+  color: #3654d4;
+  font-size: 18rpx;
+  font-weight: 900;
+  line-height: 30rpx;
+}
+
+.school-notice-text {
+  overflow: hidden;
+  color: #4a5568;
+  font-size: 22rpx;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 过滤面板卡片 */
@@ -408,4 +440,12 @@ picker {
   z-index: 1;
   border-top-right-radius: 8rpx;
   border-bottom-right-radius: 8rpx;
+}
+
+.school-footer-disclaimer {
+  margin: 30rpx 12rpx 10rpx;
+  color: #9aa4b5;
+  font-size: 21rpx;
+  line-height: 1.5;
+  text-align: center;
 }

@@ -16,6 +16,7 @@ const {
   getTodayTeachingInfo,
 } = require("../../utils/week");
 const request = require("../../utils/request");
+const appConfigService = require("../../services/appConfigService");
 const { courseTimesMeta } = require("../../data/courseTimes");
 const { contactConfig } = require("../../config/contact");
 
@@ -114,6 +115,12 @@ Page({
     },
     contactConfig,
     selectedScheduleText: "未绑定课表",
+    appConfig: { dataVersion: {}, notices: [], news: [] },
+    appConfigUpdatedText: "",
+    noticeHistoryVisible: false,
+    newsVisible: false,
+    noticeHistory: [],
+    newsList: [],
     versionDetailVisible: false,
     versionData: {
       appVersion: APP_VERSION,
@@ -146,6 +153,23 @@ Page({
       });
     }
     this.loadSettings();
+    this.loadAppConfig();
+  },
+
+  loadAppConfig() {
+    appConfigService.loadAppConfig()
+      .then((config) => {
+        const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
+        this.setData({
+          appConfig: config,
+          appConfigUpdatedText: latestUpdatedAt ? appConfigService.formatConfigTime(latestUpdatedAt) : "",
+          noticeHistory: config.notices || [],
+          newsList: config.news || [],
+        });
+      })
+      .catch((err) => {
+        console.warn("设置页公告配置加载失败", err);
+      });
   },
 
   loadSettings() {
@@ -207,6 +231,12 @@ Page({
   goLogin() {
     wx.navigateTo({
       url: "/pages/personal-sync/personal-sync",
+    });
+  },
+
+  goCustomCourses() {
+    wx.navigateTo({
+      url: "/pages/custom-courses/custom-courses",
     });
   },
   
@@ -325,6 +355,7 @@ Page({
         if (res && res.success) {
           getApp().globalData.bootstrapData = res;
           wx.setStorageSync(BOOTSTRAP_CACHE_KEY, res);
+          getApp().loadAppConfigData({ force: true }).then(() => this.loadAppConfig());
           this.showDataVersionDetail();
           wx.showToast({
             title: "已更新到最新数据",
@@ -522,6 +553,30 @@ Page({
         wx.hideLoading();
         console.error("fetch bootstrap in settings failed", err);
       });
+  },
+
+  showNoticeHistory() {
+    this.setData({
+      noticeHistoryVisible: true,
+    });
+  },
+
+  hideNoticeHistory() {
+    this.setData({
+      noticeHistoryVisible: false,
+    });
+  },
+
+  showNewsList() {
+    this.setData({
+      newsVisible: true,
+    });
+  },
+
+  hideNewsList() {
+    this.setData({
+      newsVisible: false,
+    });
   },
 
   hideDataVersionDetail() {

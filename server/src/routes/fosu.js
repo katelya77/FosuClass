@@ -4,6 +4,7 @@
 
 const express = require("express");
 const router = express.Router();
+const appConfigService = require("../services/appConfigService");
 const schoolCatalogService = require("../services/schoolCatalogService");
 const scheduleService = require("../services/scheduleService");
 const { scheduleLimiter } = require("../utils/rateLimit");
@@ -37,6 +38,18 @@ function handleRouteError(res, error, label) {
     error: process.env.NODE_ENV === "development" ? errMsg : undefined,
   });
 }
+
+/**
+ * 运行时配置：公告、最新动态和数据版本信息。
+ * GET /api/fosu/app-config
+ */
+router.get("/app-config", (req, res) => {
+  try {
+    res.json(appConfigService.getPublicAppConfig());
+  } catch (error) {
+    handleRouteError(res, error, "get-app-config-failed");
+  }
+});
 
 /**
  * 0. 系统启动 Bootstrap，聚合 Catalog 和计数信息

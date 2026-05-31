@@ -290,6 +290,41 @@ function updateFeedbackStatus(id, status) {
   return records[index];
 }
 
+function updateFeedbackReview(id, patch) {
+  if (!id) {
+    const err = new Error("id is required");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const source = patch && typeof patch === "object" ? patch : {};
+  const records = readAllFeedbackRecords();
+  const index = records.findIndex((item) => item.id === id);
+  if (index < 0) {
+    const err = new Error("feedback not found");
+    err.statusCode = 404;
+    throw err;
+  }
+
+  const next = Object.assign({}, records[index], {
+    updatedAt: new Date().toISOString(),
+  });
+
+  if (source.status !== undefined && source.status !== "") {
+    next.status = validateStatus(source.status);
+  }
+  if (source.adminNote !== undefined || source.note !== undefined) {
+    next.adminNote = toText(source.adminNote !== undefined ? source.adminNote : source.note, 2000);
+  }
+  if (next.status === "resolved" || next.status === "ignored") {
+    next.handledAt = next.handledAt || new Date().toISOString();
+  }
+
+  records[index] = next;
+  writeJsonArrayFile(records);
+  return next;
+}
+
 module.exports = {
   createFeedback,
   exportFeedbackCsv,
@@ -298,5 +333,6 @@ module.exports = {
   getFeedbackStats,
   getFeedbackTypes,
   listFeedback,
+  updateFeedbackReview,
   updateFeedbackStatus,
 };

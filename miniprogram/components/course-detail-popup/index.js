@@ -38,6 +38,11 @@ Component({
     close() {
       this.triggerEvent("close");
     },
+    copyAsCustom() {
+      this.triggerEvent("copycustom", {
+        course: this.data.course,
+      });
+    },
     noop() {},
   },
 });

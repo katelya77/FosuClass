@@ -388,6 +388,13 @@ function buildTodayDisplayGroupKey(course, context) {
   const classKey = config.classId || course.classId || config.className || course.className || "";
   const currentWeek = config.currentWeek || "";
   const weekday = config.weekday || course.weekday || "";
+  const sourceKey = course.source || course.sourceType || "";
+  const weekKey = Array.isArray(course.weeks) && course.weeks.length
+    ? course.weeks.join(",")
+    : (course.weekText || `${course.startWeek || ""}-${course.endWeek || ""}`);
+  const customVenueKey = sourceKey === "custom"
+    ? normalizeText(course.canonicalClassroom || course.classroom || "")
+    : "";
   const canonicalCourseName = normalizeText(
     course.canonicalCourseName || course.displayCourseName || course.courseName || ""
   );
@@ -399,6 +406,9 @@ function buildTodayDisplayGroupKey(course, context) {
     course.startSection || "",
     course.endSection || "",
     canonicalCourseName,
+    sourceKey,
+    weekKey,
+    customVenueKey,
   ].join("_");
 }
 
@@ -419,6 +429,8 @@ function mergeCanonicalCoursesForDisplay(courses, context) {
       normalizeText(course.canonicalCourseName || course.courseName || ""),
       normalizeText(course.canonicalClassroom || course.classroom || ""),
       normalizeText(course.canonicalTeacherName || course.teacherName || ""),
+      course.source || course.sourceType || "",
+      Array.isArray(course.weeks) ? course.weeks.join(",") : (course.weekText || ""),
     ].join("_");
     if (!strictSeen[strictKey]) {
       strictSeen[strictKey] = true;

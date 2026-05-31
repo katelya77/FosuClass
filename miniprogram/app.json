@@ -5,6 +5,7 @@
     "pages/today/today",
     "pages/calendar/calendar",
     "pages/settings/settings",
+    "pages/custom-courses/custom-courses",
     "pages/timetable/timetable",
     "pages/login/login",
     "pages/schedule-view/schedule-view",

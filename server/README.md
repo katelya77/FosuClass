@@ -24,6 +24,7 @@ FosuClass Node.js API 服务。将对强智教务系统的页面请求、解析�
    修改 `.env` 中的参数：
    - 设定 `DATA_SOURCE_MODE=cache-first`（支持 cache-first、realtime、disabled）
    - 设定 `ADMIN_API_TOKEN`（数据同步 Token，供本地同步器推送数据时校验）
+   - 设定 `ADMIN_PASSWORD` 或 `ADMIN_TOKEN`（Web 管理后台 `/admin` 登录使用）
 
 
 3. 运行开发服务器：
@@ -87,6 +88,8 @@ npm run test-teacher-schedule
     - `VPS_SSH_KEY`：您的 SSH 私钥内容 (用于免密登录 VPS)
     - `VPS_APP_DIR`：在 VPS 上的应用运行目录位置 (例如 `/home/ubuntu/FosuClass`)
     - `ADMIN_API_TOKEN`：数据同步鉴权密钥 Token（本地同步器和 VPS 后端之间校验用的 Token）
+    - `ADMIN_PASSWORD`：Web 管理后台登录密码
+    - `ADMIN_TOKEN`：可选，后台 API Bearer Token；未配置时只使用 `ADMIN_PASSWORD` 登录
 
 2. 部署机制说明：
    - **触发方式**：当您向 `main` 分支执行 `git push` 或者在 GitHub 仓库的 Actions 页面手动触发 `workflow_dispatch` 时，工作流将自动运行。

@@ -21,6 +21,7 @@
     "test:personal-encrypt": "node server/scripts/test-personal-encrypt.js",
     "test:personal-parser": "node server/scripts/test-personal-parser.js",
     "test:personal-degradation": "node server/scripts/test-personal-degradation.js",
+    "test:app-config-admin": "npm --prefix server run test-app-config-admin",
     "sync:personal": "node server/scripts/sync-personal.js",
     "inspect:personal-auth": "node server/scripts/inspect-personal-auth.js",
     "diagnose:personal-network": "node server/scripts/diagnose-personal-network.js"

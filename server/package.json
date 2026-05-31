@@ -13,7 +13,8 @@
     "test-catalog": "node scripts/test-catalog.js",
     "test-major": "node scripts/test-major.js",
     "test-class-schedule": "node scripts/test-class-schedule.js",
-    "test-teacher-schedule": "node scripts/test-teacher-schedule.js"
+    "test-teacher-schedule": "node scripts/test-teacher-schedule.js",
+    "test-app-config-admin": "node scripts/test-app-config-admin.js"
   },
   "dependencies": {
     "axios": "^1.6.8",

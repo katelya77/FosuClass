@@ -7,7 +7,18 @@
     <view class="today-title">{{weekdayText}} · 第{{currentWeek}}周</view>
     <view class="today-subtitle">{{className}}</view>
     <view class="today-count">{{courseCountText}}</view>
+    <view class="today-version" wx:if="{{dataVersionText}}">{{dataVersionText}}</view>
     <view class="disclaimer-line">{{brand.disclaimer}}</view>
+  </view>
+
+  <view class="today-alert urgent" wx:if="{{urgentNotice}}">
+    <view class="alert-title">{{urgentNotice.title}}</view>
+    <view class="alert-content">{{urgentNotice.content}}</view>
+  </view>
+
+  <view class="today-alert" wx:elif="{{releaseNote || dataVersionText}}">
+    <view class="alert-title">今日提醒</view>
+    <view class="alert-content">{{releaseNote || dataVersionText}}</view>
   </view>
 
   <view wx:if="{{courses.length}}" class="today-list">
@@ -30,5 +41,6 @@
     visible="{{detailVisible}}"
     course="{{selectedCourse}}"
     bind:close="closeCourseDetail"
+    bind:copycustom="onCopyCourseToCustom"
   />
 </view>

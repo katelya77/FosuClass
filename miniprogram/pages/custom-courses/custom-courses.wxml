@@ -1,0 +1,117 @@
+<view class="page custom-page">
+  <view class="custom-hero card">
+    <view>
+      <view class="hero-kicker">个性化课程</view>
+      <view class="hero-title">补充你的专属课表</view>
+      <view class="hero-desc">当前绑定：{{targetLabel}}</view>
+    </view>
+    <button class="hero-btn" bindtap="showAddForm">添加课程</button>
+  </view>
+
+  <view class="import-card card">
+    <view class="group-title">导入导出</view>
+    <view class="import-grid">
+      <button bindtap="exportJson">导出 JSON</button>
+      <button bindtap="importJson">导入 JSON</button>
+      <button data-label="WakeUp 课程表导入" bindtap="showImportPlaceholder">WakeUp</button>
+      <button data-label="ICS 导入" bindtap="showImportPlaceholder">ICS</button>
+      <button data-label="粘贴文本导入" bindtap="showImportPlaceholder">粘贴文本</button>
+    </view>
+  </view>
+
+  <view wx:if="{{courses.length}}" class="course-list">
+    <view wx:for="{{courses}}" wx:key="id" class="custom-course-card card">
+      <view class="course-top">
+        <view class="course-main">
+          <view class="course-title">{{item.courseName}}</view>
+          <view class="course-meta">{{weekdayOptions[item.weekday - 1] || weekdayOptions[item.weekDay - 1]}} · 第{{item.startSection}}-{{item.endSection}}节 · {{item.weekText}}</view>
+          <view class="course-meta">{{item.teacherName || "教师待补充"}} · {{item.classroom || "教室待补充"}}</view>
+        </view>
+        <switch checked="{{item.enabled}}" color="#3654d4" data-id="{{item.id}}" bindchange="toggleCourse" />
+      </view>
+      <view class="course-note" wx:if="{{item.note}}">{{item.note}}</view>
+      <view class="course-actions">
+        <button data-id="{{item.id}}" bindtap="editCourse">编辑</button>
+        <button class="danger" data-id="{{item.id}}" bindtap="deleteCourse">删除</button>
+      </view>
+    </view>
+  </view>
+
+  <empty-state
+    wx:else
+    title="还没有自定义课程"
+    desc="添加后会叠加到当前绑定课表，不会修改全校课表数据。"
+  />
+
+  <view wx:if="{{formVisible}}" class="popup-mask" bindtap="hideForm">
+    <view class="popup-panel" catchtap="noop">
+      <view class="popup-handle"></view>
+      <view class="popup-header">
+        <view>
+          <view class="popup-title">{{formTitle}}</view>
+          <view class="popup-subtitle">保存后立即应用到首页和今日课程</view>
+        </view>
+        <button class="close-button" bindtap="hideForm">×</button>
+      </view>
+
+      <scroll-view scroll-y class="form-scroll">
+        <view class="form-grid">
+          <view class="field full">
+            <view class="label">课程名</view>
+            <input value="{{form.courseName}}" data-key="courseName" placeholder="例如：大学英语" bindinput="onInput" />
+          </view>
+          <view class="field">
+            <view class="label">教师</view>
+            <input value="{{form.teacherName}}" data-key="teacherName" placeholder="选填" bindinput="onInput" />
+          </view>
+          <view class="field">
+            <view class="label">教室</view>
+            <input value="{{form.classroom}}" data-key="classroom" placeholder="选填" bindinput="onInput" />
+          </view>
+          <view class="field">
+            <view class="label">星期</view>
+            <picker range="{{weekdayOptions}}" value="{{form.weekdayIndex}}" data-key="weekdayIndex" bindchange="onPickerChange">
+              <view class="picker-value">{{weekdayOptions[form.weekdayIndex]}}</view>
+            </picker>
+          </view>
+          <view class="field">
+            <view class="label">开始节次</view>
+            <picker range="{{sectionOptions}}" value="{{form.startSectionIndex}}" data-key="startSectionIndex" bindchange="onPickerChange">
+              <view class="picker-value">{{sectionOptions[form.startSectionIndex]}}</view>
+            </picker>
+          </view>
+          <view class="field">
+            <view class="label">结束节次</view>
+            <picker range="{{sectionOptions}}" value="{{form.endSectionIndex}}" data-key="endSectionIndex" bindchange="onPickerChange">
+              <view class="picker-value">{{sectionOptions[form.endSectionIndex]}}</view>
+            </picker>
+          </view>
+          <view class="field">
+            <view class="label">颜色</view>
+            <input value="{{form.color}}" data-key="color" placeholder="#3654d4，可选" bindinput="onInput" />
+          </view>
+          <view class="field full">
+            <view class="label">周次</view>
+            <input value="{{form.weekText}}" data-key="weekText" placeholder="例如：1-8,10-15周" bindinput="onInput" />
+          </view>
+          <view class="field full">
+            <view class="label">备注</view>
+            <textarea value="{{form.note}}" data-key="note" placeholder="选填" bindinput="onInput" />
+          </view>
+          <view class="field switch-field">
+            <view>
+              <view class="label">启用课程</view>
+              <view class="hint">关闭后保留数据但不显示</view>
+            </view>
+            <switch checked="{{form.enabled}}" color="#3654d4" bindchange="onEnabledChange" />
+          </view>
+        </view>
+      </scroll-view>
+
+      <view class="popup-footer">
+        <button class="footer-btn secondary" bindtap="hideForm">取消</button>
+        <button class="footer-btn primary" bindtap="saveCourse">保存</button>
+      </view>
+    </view>
+  </view>
+</view>

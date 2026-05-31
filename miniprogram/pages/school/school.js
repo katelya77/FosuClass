@@ -13,6 +13,7 @@ const COURSE_SEARCH_PLACEHOLDER = "搜索课程（例如：有机化学）";
 const CLASS_SEARCH_PLACEHOLDER = "搜索班级（例如：25动物科学3班）";
 
 const request = require("../../utils/request");
+const appConfigService = require("../../services/appConfigService");
 const {
   SCHOOL_FILTER_CACHE_KEY,
   getRecentSchedules,
@@ -169,6 +170,9 @@ Page({
     restoreHint: "",
     catalogVersion: "",
     catalogUpdatedAt: "",
+    schoolNotice: null,
+    dataVersionText: "",
+    runtimeDisclaimer: BRAND.disclaimer,
     recentSchedules: [],
     openedRecentKey: "",
     touchStartX: 0,
@@ -190,6 +194,7 @@ Page({
       this.applyCatalogFilter();
     }
     this.loadRecentSchedules();
+    this.loadPageConfig();
 
     // 检查是否是从强制选择课表的引导跳转过来的
     const isInitSelect = wx.getStorageSync("initSelectMode");
@@ -201,6 +206,22 @@ Page({
         duration: 3500
       });
     }
+  },
+
+  loadPageConfig() {
+    appConfigService.loadAppConfig()
+      .then((config) => {
+        const schoolNotice = appConfigService.getPrimaryNotice(config, "school", ["ticker", "banner", "card"]);
+        const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
+        this.setData({
+          schoolNotice,
+          dataVersionText: latestUpdatedAt ? `数据更新于 ${appConfigService.formatConfigTime(latestUpdatedAt)}` : "",
+          runtimeDisclaimer: config.disclaimer || BRAND.disclaimer,
+        });
+      })
+      .catch((err) => {
+        console.warn("全校页公告配置加载失败", err);
+      });
   },
 
   applyCatalogFilter() {

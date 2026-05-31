@@ -9,6 +9,8 @@ const router = express.Router();
 const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
 const scheduleNormalizer = require("../utils/scheduleNormalizer");
+const adminAuth = require("../services/adminAuth");
+const appConfigService = require("../services/appConfigService");
 const feedbackService = require("../services/feedbackService");
 const releaseService = require("../services/releaseService");
 
@@ -84,6 +86,48 @@ function verifyAdminToken(req, res, next) {
   next();
 }
 
+router.post("/login", adminAuth.adminLoginLimiter, (req, res) => {
+  if (!adminAuth.isAdminConfiguredForCurrentEnv()) {
+    return res.status(503).json({
+      success: false,
+      message: "生产环境未配置 ADMIN_TOKEN 或 ADMIN_PASSWORD，后台已关闭",
+    });
+  }
+
+  const credential = (req.body && (req.body.password || req.body.token)) || "";
+  if (!adminAuth.isLoginCredentialValid(credential)) {
+    safeLog("admin-login-failed", { reason: "invalid credential", ip: req.ip });
+    return res.status(401).json({
+      success: false,
+      message: "后台密码或令牌不正确",
+    });
+  }
+
+  const sessionToken = adminAuth.createSessionToken();
+  adminAuth.setSessionCookie(res, sessionToken);
+  return res.json({
+    success: true,
+    message: "登录成功",
+    expiresIn: 12 * 60 * 60,
+  });
+});
+
+router.post("/logout", (req, res) => {
+  adminAuth.clearSessionCookie(res);
+  return res.json({
+    success: true,
+    message: "已退出后台",
+  });
+});
+
+router.get("/session", (req, res) => {
+  return res.json({
+    success: true,
+    authenticated: adminAuth.isAdminRequest(req),
+    configured: adminAuth.isAdminConfiguredForCurrentEnv(),
+  });
+});
+
 /**
  * 读取或初始化元数据
  */
@@ -102,14 +146,19 @@ function getSyncMeta() {
  * 写入元数据
  */
 function updateSyncMeta(key, dataCount, syncSource) {
+  const updatedAt = new Date().toISOString();
   const meta = getSyncMeta();
   meta[key] = {
-    updatedAt: new Date().toISOString(),
+    updatedAt,
     itemCount: dataCount,
     syncSource: syncSource || "local-sync-client",
   };
   try {
     fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
+    appConfigService.touchDataVersionForSyncKey(key, {
+      updatedAt,
+      releaseNote: "全校课表数据已更新",
+    });
   } catch (error) {
     safeLog("write-sync-meta-failed", { error: error.message });
   }
@@ -1014,6 +1063,12 @@ router.post(
         syncSource: "local-sync-client",
       };
       fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
+      appConfigService.touchDataVersionForSyncKey("release", {
+        updatedAt,
+        releaseVersion: status.activeReleaseVersion,
+        semester: status.semester,
+        releaseNote: "全校课表数据已更新",
+      });
 
       return res.json({
         success: true,
@@ -1229,6 +1284,12 @@ router.post(
       };
 
       fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
+      appConfigService.touchDataVersionForSyncKey("snapshot", {
+        updatedAt: nowStr,
+        releaseVersion: snapshot.version,
+        semester: snapshot.semester,
+        releaseNote: "全校课表数据已更新",
+      });
 
       return res.json({
         success: true,
@@ -1252,7 +1313,7 @@ router.post(
 );
 
 // 7. 获取当前缓存状态
-router.get("/sync/status", (req, res) => {
+router.get("/sync/status", verifyAdminToken, (req, res) => {
   const meta = getSyncMeta();
   const snapshotMeta = getActiveSnapshotMeta();
   const releaseStatus = releaseService.getReleaseStatus();
@@ -1397,6 +1458,168 @@ router.post(
     }
   }
 );
+
+router.get("/dashboard", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json(appConfigService.getAdminDashboard());
+  } catch (error) {
+    safeLog("admin-dashboard-failed", { error: error.message });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/config", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      data: appConfigService.getAdminConfig(),
+      publicConfig: appConfigService.getPublicAppConfig().data,
+    });
+  } catch (error) {
+    safeLog("admin-config-get-failed", { error: error.message });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/config", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      data: appConfigService.saveAdminConfig(req.body || {}),
+      publicConfig: appConfigService.getPublicAppConfig().data,
+    });
+  } catch (error) {
+    safeLog("admin-config-save-failed", { error: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/notices", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      items: appConfigService.listNotices(),
+    });
+  } catch (error) {
+    safeLog("admin-notices-list-failed", { error: error.message });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/notices", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      item: appConfigService.createNotice(req.body || {}),
+    });
+  } catch (error) {
+    safeLog("admin-notice-create-failed", { error: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.put("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      item: appConfigService.updateNotice(req.params.id, req.body || {}),
+    });
+  } catch (error) {
+    safeLog("admin-notice-update-failed", { id: req.params.id, error: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.delete("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      deleted: appConfigService.deleteNotice(req.params.id),
+    });
+  } catch (error) {
+    safeLog("admin-notice-delete-failed", { id: req.params.id, error: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/news", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      items: appConfigService.listNews(),
+    });
+  } catch (error) {
+    safeLog("admin-news-list-failed", { error: error.message });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/news", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      item: appConfigService.createNews(req.body || {}),
+    });
+  } catch (error) {
+    safeLog("admin-news-create-failed", { error: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.put("/news/:id", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      item: appConfigService.updateNews(req.params.id, req.body || {}),
+    });
+  } catch (error) {
+    safeLog("admin-news-update-failed", { id: req.params.id, error: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.delete("/news/:id", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      deleted: appConfigService.deleteNews(req.params.id),
+    });
+  } catch (error) {
+    safeLog("admin-news-delete-failed", { id: req.params.id, error: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/feedbacks", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const overview = feedbackService.getFeedbackOverview();
+    const items = feedbackService.listFeedback(req.query);
+    return res.json({
+      success: true,
+      items,
+      total: items.length,
+      stats: overview.stats,
+      types: overview.types,
+    });
+  } catch (error) {
+    safeLog("admin-feedbacks-list-failed", { error: error.message });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.put("/feedbacks/:id", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const record = feedbackService.updateFeedbackReview(req.params.id, req.body || {});
+    return res.json({
+      success: true,
+      item: record,
+      stats: feedbackService.getFeedbackStats(),
+    });
+  } catch (error) {
+    safeLog("admin-feedbacks-update-failed", { id: req.params.id, error: error.message });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
 
 router.get("/feedback", verifyAdminToken, (req, res) => {
   try {

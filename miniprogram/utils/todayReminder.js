@@ -7,6 +7,7 @@ const {
 } = require("./course");
 const { mockCalendar } = require("../data/mockCalendar");
 const { getSettings } = require("./storage");
+const customCourseService = require("../services/customCourseService");
 const { clampWeek, getCurrentTeachingWeek, getTodayTeachingInfo, getTodayWeekday } = require("./week");
 
 /**
@@ -198,11 +199,18 @@ function getTodayCoursesData() {
     };
   }
 
-  const sourceCourses = schedule.courses.map((course) => normalizeCourse(Object.assign({}, course, {
+  const baseCourses = schedule.courses.map((course) => normalizeCourse(Object.assign({}, course, {
     semester: course.semester || semester,
     classId: course.classId || classId,
     className: course.className || className,
   })));
+  const sourceCourses = baseCourses.concat(customCourseService.getEnabledCustomCourses().map((course) => {
+    return normalizeCourse(Object.assign({}, course, {
+      semester: course.semester || semester,
+      classId: course.classId || classId,
+      className: course.className || className,
+    }));
+  }));
 
   const todayRawCourses = sourceCourses.filter(course => {
     const inWeek = isCourseActiveInCurrentWeek(course, currentWeek);

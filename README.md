@@ -75,6 +75,7 @@ Body:
    编辑 `server/.env`：
    - 设定 `DATA_SOURCE_MODE=cache-first`
    - 设定 `ADMIN_API_TOKEN`（您自定义的同步鉴权 Token，如 `test-token-123`）
+   - 设定 `ADMIN_PASSWORD` 或 `ADMIN_TOKEN`（用于访问 `http://localhost:3000/admin` 管理后台）
 
 3. 运行本地开发服务：
    ```bash
@@ -104,6 +105,9 @@ npm run test-class-schedule
 
 # 测试获取教师课表
 npm run test-teacher-schedule
+
+# 测试公开 app-config 与后台公告 API（需后端已配置 ADMIN_TOKEN 或 ADMIN_API_TOKEN）
+npm run test:app-config-admin
 ```
 
 ---
@@ -137,6 +141,8 @@ npm run test-teacher-schedule
     - `VPS_SSH_KEY`：您的 SSH 私钥内容 (用于免密登录 VPS)
     - `VPS_APP_DIR`：在 VPS 上的应用运行目录位置 (例如 `/home/ubuntu/FosuClass`)
     - `ADMIN_API_TOKEN`：数据同步鉴权密钥 Token（本地同步器和 VPS 后端之间校验用的 Token）
+    - `ADMIN_PASSWORD`：Web 管理后台登录密码
+    - `ADMIN_TOKEN`：可选，后台 API Bearer Token；建议与 `ADMIN_API_TOKEN` 分开
 
 2. 部署机制说明：
    - **触发方式**：当您向 `main` 分支执行 `git push` 或者在 GitHub 仓库的 Actions 页面手动触发 `workflow_dispatch` 时，工作流将自动运行。
