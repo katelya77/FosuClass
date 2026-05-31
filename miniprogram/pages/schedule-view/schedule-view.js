@@ -3,6 +3,7 @@ const { courseTimes } = require("../../data/courseTimes");
 const { mockCalendar } = require("../../data/mockCalendar");
 const { buildScheduleColumns, normalizeCourse } = require("../../utils/course");
 const { getSettings, saveSettings } = require("../../utils/storage");
+const customCourseService = require("../../services/customCourseService");
 const {
   TOTAL_WEEKS,
   clampWeek,
@@ -417,6 +418,21 @@ Page({
       selectedCourse: null,
       detailVisible: false,
     });
+  },
+
+  onCopyCourseToCustom(event) {
+    try {
+      customCourseService.saveCustomCourseDraft(event.detail.course || this.data.selectedCourse);
+      this.closeCourseDetail();
+      wx.navigateTo({
+        url: "/pages/custom-courses/custom-courses",
+      });
+    } catch (error) {
+      wx.showToast({
+        title: "课程信息不完整",
+        icon: "none",
+      });
+    }
   },
 
   onShareAppMessage() {

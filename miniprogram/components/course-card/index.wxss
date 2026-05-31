@@ -102,6 +102,26 @@
   border: 1rpx solid #ffe0b2;
 }
 
+.custom-pill {
+  background: #eef2ff !important;
+  color: #3654d4 !important;
+  border: 1rpx solid #dbe4ff;
+}
+
+.grid-custom-tag {
+  align-self: flex-start;
+  max-width: 78rpx;
+  height: 24rpx;
+  margin-bottom: 3rpx;
+  padding: 0 6rpx;
+  border-radius: 6rpx;
+  background: rgba(255, 255, 255, 0.22);
+  color: #ffffff;
+  font-size: 15rpx;
+  font-weight: 800;
+  line-height: 24rpx;
+}
+
 .status-ongoing {
   background: #2e7d32;
   color: #ffffff;

@@ -64,6 +64,10 @@
         <view class="detail-label">备注</view>
         <view class="remark-text">{{course.remark || "暂无备注"}}</view>
       </view>
+
+      <view class="detail-actions">
+        <button class="copy-custom-btn" bindtap="copyAsCustom">复制为自定义课程</button>
+      </view>
     </scroll-view>
   </view>
 </view>

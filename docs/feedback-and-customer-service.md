@@ -15,7 +15,7 @@
 FosuClass 自己的“问题反馈 / 建议反馈”表单才会提交到 VPS 的 `/app/storage/feedback.jsonl`，同时兼容 `/app/storage/feedbacks.json`。这类反馈可以在 Web 后台查看：
 
 ```text
-https://class.katelya.eu.org/admin/feedback
+https://class.katelya.eu.org/admin
 ```
 
-打开页面后输入 `ADMIN_API_TOKEN`，后台会通过 `/api/admin/feedback` 读取反馈列表。
+打开页面后使用 `ADMIN_PASSWORD` 或 `ADMIN_TOKEN` 登录。登录成功后在「反馈查看」模块处理反馈状态和管理员备注；旧的 `/admin/feedback` 会跳转到同一个后台控制台。

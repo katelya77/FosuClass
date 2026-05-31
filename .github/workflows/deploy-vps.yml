@@ -22,6 +22,7 @@ jobs:
             ["VPS_SSH_KEY"]="${{ secrets.VPS_SSH_KEY }}"
             ["VPS_APP_DIR"]="${{ secrets.VPS_APP_DIR }}"
             ["ADMIN_API_TOKEN"]="${{ secrets.ADMIN_API_TOKEN }}"
+            ["ADMIN_PASSWORD"]="${{ secrets.ADMIN_PASSWORD }}"
           )
           
           has_missing=false
@@ -76,6 +77,8 @@ jobs:
             PUBLIC_API_ORIGIN=https://class.katelya.eu.org
             DATA_SOURCE_MODE=cache-first
             ADMIN_API_TOKEN=${{ secrets.ADMIN_API_TOKEN }}
+            ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
+            ADMIN_TOKEN=${{ secrets.ADMIN_TOKEN }}
             FOSU_BASE_URL=https://100.fosu.edu.cn
             FOSU_AUTH_URL=https://authserver.fosu.edu.cn
             CACHE_TTL_CATALOG=600

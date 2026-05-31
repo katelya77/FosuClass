@@ -238,6 +238,42 @@
   line-height: 1.5;
 }
 
+.news-item {
+  margin: 0 24rpx 18rpx;
+  padding: 20rpx;
+  border: 1rpx solid #edf0f5;
+  border-radius: 14rpx;
+  background: #f8fafc;
+}
+
+.news-title {
+  color: #172033;
+  font-size: 28rpx;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.news-meta {
+  margin-top: 8rpx;
+  color: #7a8494;
+  font-size: 22rpx;
+}
+
+.news-summary {
+  margin-top: 12rpx;
+  color: #536174;
+  font-size: 24rpx;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.modal-empty {
+  padding: 52rpx 24rpx;
+  color: #9aa4b5;
+  font-size: 25rpx;
+  text-align: center;
+}
+
 /* 设置页 Logo 区域 */
 .settings-profile {
   display: flex;

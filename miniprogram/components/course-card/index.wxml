@@ -7,6 +7,7 @@
     <view class="list-header">
       <view class="course-name">{{course.displayCourseName || course.canonicalCourseName || course.courseName}}</view>
       <view class="header-pills">
+        <view wx:if="{{course.source === 'custom' || course.sourceType === 'custom'}}" class="status-pill custom-pill">自定义</view>
         <view wx:if="{{course.isMerged}}" class="status-pill merged-pill">{{course.tag || "多地点"}}</view>
         <view wx:if="{{course.statusText}}" class="status-pill {{statusClass}}">{{course.statusText}}</view>
       </view>
@@ -38,11 +39,13 @@
   </block>
 
   <block wx:elif="{{layout === 'overview'}}">
+    <view wx:if="{{course.source === 'custom' || course.sourceType === 'custom'}}" class="grid-custom-tag">自定义</view>
     <view class="course-name overview-name">{{course.displayCourseName || course.canonicalCourseName || course.courseName}}</view>
     <view class="course-meta overview-meta" wx:if="{{course.displayClassroom || course.canonicalClassroom || course.classroom}}">{{course.displayClassroom || course.canonicalClassroom || course.classroom}}</view>
   </block>
 
   <block wx:else>
+    <view wx:if="{{course.source === 'custom' || course.sourceType === 'custom'}}" class="grid-custom-tag">自定义</view>
     <view class="course-name {{span === 1 ? 'span-1' : ''}}">{{course.displayCourseName || course.canonicalCourseName || course.courseName}}</view>
     <view class="course-meta classroom-highlight" wx:if="{{course.displayClassroom || course.canonicalClassroom || course.classroom}}">{{course.displayClassroom || course.canonicalClassroom || course.classroom}}</view>
     <view class="course-meta" wx:if="{{span > 1 && (course.displayTeacherName || course.canonicalTeacherName || course.teacherName)}}">{{course.displayTeacherName || course.canonicalTeacherName || course.teacherName}}</view>

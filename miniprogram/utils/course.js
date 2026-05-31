@@ -3,6 +3,7 @@ const { importedCourses } = require("../data/importedCourses");
 const { courseTimes, courseTimesMeta } = require("../data/courseTimes");
 const { colorForCourse } = require("./color");
 const { isCourseInWeek } = require("./week");
+const customCourseService = require("../services/customCourseService");
 const {
   mergeCanonicalCoursesForDisplay,
   normalizeCourseIdentity,
@@ -68,20 +69,27 @@ function getCourseDataSource() {
 
 function getCoursesByClass(className) {
   const dataset = getCourseDataset();
+  let courses = [];
   if (dataset.source === "realtime") {
     // 实时教务数据绑定，无需按班级名二次过滤
-    return dataset.courses.map(normalizeCourse);
+    courses = dataset.courses.map(normalizeCourse);
+    return mergeCustomCoursesForCurrentTarget(courses);
   }
   
   if (!className) {
-    return []; // 如果未绑定或未传入 className，不默认显示任何课表数据
+    return mergeCustomCoursesForCurrentTarget([]);
   }
   
   const targetClassName = className;
-  const courses = dataset.courses
+  courses = dataset.courses
     .filter((course) => course.className === targetClassName)
     .map(normalizeCourse);
-  return courses;
+  return mergeCustomCoursesForCurrentTarget(courses);
+}
+
+function mergeCustomCoursesForCurrentTarget(baseCourses) {
+  const customCourses = customCourseService.getEnabledCustomCourses().map(normalizeCourse);
+  return (baseCourses || []).concat(customCourses);
 }
 
 function getCoursesForWeek(courses, week, options) {
@@ -267,6 +275,7 @@ module.exports = {
   getTodayCourses,
   normalizeCourse,
   normalizeCourseKey,
+  mergeCustomCoursesForCurrentTarget,
   dedupeCourses,
   groupElectiveLikeCourses,
   mergeCanonicalCoursesForDisplay,

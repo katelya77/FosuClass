@@ -1,7 +1,7 @@
 <view class="page school-page">
   <view class="page-header">
     <view class="title">查找课表</view>
-    <view class="subtitle">可按班级、教师、教室或课程查看课程安排，结果仅供参考。</view>
+    <view class="subtitle">{{dataVersionText || "可按班级、教师、教室或课程查看课程安排。"}} </view>
   </view>
 
   <block wx:if="{{catalogEmpty}}">
@@ -42,6 +42,11 @@
           bindtap="onTabChange"
         >{{item.label}}</view>
       </view>
+    </view>
+
+    <view class="school-notice" wx:if="{{schoolNotice}}">
+      <text class="school-notice-tag">{{schoolNotice.priority === 'urgent' ? '紧急' : '公告'}}</text>
+      <text class="school-notice-text">{{schoolNotice.title}}</text>
     </view>
 
     <block wx:if="{{activeTab === 'class'}}">
@@ -363,5 +368,6 @@
         />
       </view>
     </block>
+    <view class="school-footer-disclaimer">{{runtimeDisclaimer}}</view>
   </block>
 </view>

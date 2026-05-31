@@ -75,6 +75,18 @@
   line-height: 48rpx;
 }
 
+.header-edit-btn {
+  flex: 0 0 auto;
+  height: 48rpx;
+  padding: 0 18rpx;
+  border-radius: 999rpx;
+  background: #eef2ff;
+  color: #3654d4;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 48rpx;
+}
+
 .class-line,
 .date-line,
 .today-line,
@@ -405,6 +417,82 @@
   border-radius: 12rpx;
   background: #f7f9fc;
   color: #364358;
+}
+
+.notice-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14rpx;
+  margin-top: 12rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 14rpx;
+  background: linear-gradient(135deg, #eef4ff, #fbf8ff);
+}
+
+.notice-main {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 12rpx;
+}
+
+.notice-label {
+  flex: 0 0 auto;
+  height: 34rpx;
+  padding: 0 12rpx;
+  border-radius: 17rpx;
+  background: #e8f1ff;
+  color: #3654d4;
+  font-size: 19rpx;
+  font-weight: 900;
+  line-height: 34rpx;
+}
+
+.notice-label.urgent {
+  background: #fff0f3;
+  color: #d94c6a;
+}
+
+.notice-label.important {
+  background: #fff7e9;
+  color: #c27c13;
+}
+
+.notice-title {
+  overflow: hidden;
+  color: #172033;
+  font-size: 24rpx;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notice-close {
+  flex: 0 0 auto;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
+  color: #8a94a6;
+  font-size: 30rpx;
+  line-height: 38rpx;
+  padding: 0;
+}
+
+.ticker-strip {
+  overflow: hidden;
+  margin-top: 10rpx;
+  padding: 12rpx 18rpx;
+  border-radius: 12rpx;
+  background: #172033;
+}
+
+.ticker-text {
+  color: #ffffff;
+  font-size: 22rpx;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .action-btn.sync-btn {
@@ -957,6 +1045,61 @@
   align-self: center;
   border-radius: 24rpx;
   padding: 24rpx;
+}
+
+.notice-detail-panel {
+  width: 84%;
+  align-self: center;
+  border-radius: 24rpx;
+  padding: 20rpx;
+}
+
+.app-notice-panel {
+  width: 82%;
+  align-self: center;
+  align-items: center;
+  padding: 42rpx 34rpx 34rpx;
+  border-radius: 28rpx;
+  text-align: center;
+}
+
+.notice-modal-icon {
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 20rpx;
+  background: linear-gradient(135deg, #edf4ff, #f4efff);
+  color: #3654d4;
+  font-size: 26rpx;
+  font-weight: 900;
+  line-height: 64rpx;
+}
+
+.notice-modal-title {
+  margin-top: 22rpx;
+  color: #172033;
+  font-size: 32rpx;
+  font-weight: 900;
+  line-height: 1.3;
+}
+
+.notice-modal-content {
+  margin-top: 16rpx;
+  color: #536174;
+  font-size: 24rpx;
+  line-height: 1.65;
+  white-space: pre-wrap;
+  text-align: left;
+}
+
+.notice-modal-btn {
+  width: 100%;
+  height: 76rpx;
+  margin-top: 30rpx;
+  border-radius: 38rpx;
+  background: #3654d4;
+  color: #ffffff;
+  font-size: 26rpx;
+  font-weight: 900;
 }
 
 .disclaimer-scroll {

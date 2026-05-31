@@ -16,6 +16,7 @@
         </view>
       </view>
       <view class="week-badge">第{{currentWeek}}周</view>
+      <button class="header-edit-btn" bindtap="goCustomCourses">编辑</button>
     </view>
 
     <view class="info-grid">
@@ -28,6 +29,9 @@
       <view class="source-line" wx:if="{{lastSyncText}}">
         <text>课程数据 · 更新于 {{lastSyncText}}</text>
       </view>
+      <view class="source-line" wx:elif="{{dataVersionText}}">
+        <text>{{dataVersionText}}</text>
+      </view>
       <view class="disclaimer-short" bindtap="showDisclaimer">
         数据仅供参考，以学校及教师通知为准 <text class="info-icon">i</text>
       </view>
@@ -36,9 +40,22 @@
     <!-- 操作按钮平铺排布 -->
     <view class="action-grid">
       <button class="action-btn" bindtap="goTimetable">作息时间</button>
+      <button class="action-btn" bindtap="goCustomCourses">个性化</button>
       <button class="action-btn sync-btn" bindtap="goLogin">同步课表</button>
       <button class="action-btn" bindtap="toggleMoreMenu">更多</button>
     </view>
+  </view>
+
+  <view class="notice-strip card" wx:if="{{homeNotice}}" bindtap="showNotice" data-type="home">
+    <view class="notice-main">
+      <view class="notice-label {{homeNotice.priority}}">{{homeNotice.priority === 'urgent' ? '紧急' : (homeNotice.priority === 'important' ? '重要' : '公告')}}</view>
+      <view class="notice-title">{{homeNotice.title}}</view>
+    </view>
+    <button wx:if="{{homeNotice.closable}}" class="notice-close" catchtap="dismissHomeNotice">×</button>
+  </view>
+
+  <view class="ticker-strip" wx:if="{{tickerNotice}}" bindtap="showNotice" data-type="ticker">
+    <view class="ticker-text">{{tickerNotice.title}} · {{tickerNotice.content}}</view>
   </view>
 
   <!-- 如果未绑定课表，展示空状态卡片 -->
@@ -147,6 +164,7 @@
     visible="{{detailVisible}}"
     course="{{selectedCourse}}"
     bind:close="closeCourseDetail"
+    bind:copycustom="onCopyCourseToCustom"
   />
 
   <!-- 今日课程提醒总览弹窗 -->
@@ -169,6 +187,7 @@
           <view class="reminder-meta-banner">
             <view class="reminder-meta-date">{{todayReminderData.dateText}} {{todayReminderData.weekdayText}} · 第{{todayReminderData.currentWeek}}周</view>
             <view class="reminder-meta-class" wx:if="{{todayReminderData.className}}">当前课表：{{todayReminderData.className}}</view>
+            <view class="reminder-meta-class" wx:if="{{dataVersionText}}">{{dataVersionText}}</view>
           </view>
 
           <!-- 无课状态 -->
@@ -268,6 +287,9 @@
       <view class="menu-item" bindtap="showDisclaimer">
         <text class="menu-icon">i</text>查看免责声明
       </view>
+      <view class="menu-item" bindtap="goCustomCourses">
+        <text class="menu-icon">+</text>个性化课程
+      </view>
       <view class="menu-item danger-item" bindtap="clearLocalCache">
         <text class="menu-icon">🗑</text>清除本地缓存
       </view>
@@ -296,6 +318,34 @@
       <view class="popup-footer">
         <button class="footer-btn primary-btn" bindtap="closeDisclaimer">我已了解</button>
       </view>
+    </view>
+  </view>
+
+  <view class="popup-mask notice-detail-popup" wx:if="{{showNoticeDetail}}" bindtap="closeNoticeDetail">
+    <view class="popup-panel notice-detail-panel" catchtap="noop">
+      <view class="popup-handle"></view>
+      <view class="popup-header">
+        <view class="popup-title-block">
+          <view class="popup-title">{{selectedNotice.title}}</view>
+          <view class="popup-subtitle">{{selectedNotice.type}} · {{selectedNotice.priority}}</view>
+        </view>
+        <button class="close-button" bindtap="closeNoticeDetail">×</button>
+      </view>
+      <scroll-view scroll-y class="disclaimer-scroll">
+        <view class="disclaimer-text">{{selectedNotice.content}}</view>
+      </scroll-view>
+      <view class="popup-footer">
+        <button class="footer-btn primary-btn" bindtap="closeNoticeDetail">知道了</button>
+      </view>
+    </view>
+  </view>
+
+  <view class="popup-mask notice-detail-popup" wx:if="{{showAppNoticeModal}}" bindtap="closeAppNoticeModal">
+    <view class="popup-panel app-notice-panel" catchtap="noop">
+      <view class="notice-modal-icon">告</view>
+      <view class="notice-modal-title">{{modalNotice.title}}</view>
+      <view class="notice-modal-content">{{modalNotice.content}}</view>
+      <button class="notice-modal-btn" bindtap="closeAppNoticeModal">我知道了</button>
     </view>
   </view>
 </view>

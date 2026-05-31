@@ -24,6 +24,10 @@ const config = {
   // 管理端同步 API Token
   ADMIN_API_TOKEN: process.env.ADMIN_API_TOKEN || "",
 
+  // Web 后台登录凭据。ADMIN_API_TOKEN 仅保留给同步工具使用。
+  ADMIN_TOKEN: process.env.ADMIN_TOKEN || "",
+  ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || "",
+
   // 强智教务网基础地址
   FOSU_BASE_URL: process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn",
   // 强智 CAS 统一认证地址

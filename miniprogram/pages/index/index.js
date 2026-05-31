@@ -3,6 +3,8 @@ const { mockCalendar } = require("../../data/mockCalendar");
 const { buildScheduleColumns, getCourseDataSource, getCoursesByClass } = require("../../utils/course");
 const { getSettings, saveSettings } = require("../../utils/storage");
 const { getTodayCoursesData } = require("../../utils/todayReminder");
+const appConfigService = require("../../services/appConfigService");
+const customCourseService = require("../../services/customCourseService");
 const BRAND = require("../../config/brand");
 const {
   TOTAL_WEEKS,
@@ -78,6 +80,14 @@ Page({
     hasBoundTarget: false,
     showDisclaimerPopup: false,
     showMoreMenu: false,
+    appConfig: null,
+    dataVersionText: "",
+    homeNotice: null,
+    tickerNotice: null,
+    modalNotice: null,
+    selectedNotice: null,
+    showNoticeDetail: false,
+    showAppNoticeModal: false,
   },
 
   onLoad(options) {
@@ -101,14 +111,50 @@ Page({
         className: "未选择课表",
       });
       this.loadSchedule();
+      this.loadPageConfig();
     } else {
       this.setData({
         showInitModal: false,
         hasBoundTarget: true,
       });
       this.loadSchedule();
+      this.loadPageConfig();
       this.checkTodayReminder();
     }
+  },
+
+  loadPageConfig() {
+    appConfigService.loadAppConfig()
+      .then((config) => {
+        const homeNotice = appConfigService.getPrimaryNotice(config, "home", ["banner", "card"]);
+        const tickerNotice = appConfigService.getPrimaryNotice(config, "home", ["ticker"]);
+        const modalNotice = appConfigService.getPrimaryNotice(config, "home", ["modal"]);
+        const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
+        const dataVersionText = latestUpdatedAt
+          ? `数据更新于 ${appConfigService.formatConfigTime(latestUpdatedAt)}`
+          : "";
+        const app = getApp();
+        const modalKey = modalNotice ? `${modalNotice.id}:${modalNotice.version}` : "";
+        const shouldShowModal = modalNotice &&
+          appConfigService.shouldShowNotice(modalNotice) &&
+          !(app.globalData.shownModalNoticeIds || {})[modalKey];
+        if (shouldShowModal) {
+          app.globalData.shownModalNoticeIds = Object.assign({}, app.globalData.shownModalNoticeIds, {
+            [modalKey]: true,
+          });
+        }
+        this.setData({
+          appConfig: config,
+          dataVersionText,
+          homeNotice,
+          tickerNotice,
+          modalNotice,
+          showAppNoticeModal: Boolean(shouldShowModal),
+        });
+      })
+      .catch((err) => {
+        console.warn("首页公告配置加载失败", err);
+      });
   },
 
   loadSchedule() {
@@ -219,6 +265,21 @@ Page({
     });
   },
 
+  onCopyCourseToCustom(event) {
+    try {
+      customCourseService.saveCustomCourseDraft(event.detail.course || this.data.selectedCourse);
+      this.closeCourseDetail();
+      wx.navigateTo({
+        url: "/pages/custom-courses/custom-courses",
+      });
+    } catch (error) {
+      wx.showToast({
+        title: "课程信息不完整",
+        icon: "none",
+      });
+    }
+  },
+
   onLogoError() {
     this.setData({
       showLogo: false,
@@ -240,6 +301,12 @@ Page({
   goTimetable() {
     wx.navigateTo({
       url: "/pages/timetable/timetable",
+    });
+  },
+
+  goCustomCourses() {
+    wx.navigateTo({
+      url: "/pages/custom-courses/custom-courses",
     });
   },
 
@@ -336,6 +403,7 @@ Page({
     const { clearDataCaches } = require("../../utils/storage");
     clearDataCaches();
     getApp().loadBootstrapData();
+    getApp().loadAppConfigData({ force: true }).then(() => this.loadPageConfig());
     setTimeout(() => {
       wx.hideLoading();
       this.loadSchedule();
@@ -372,6 +440,43 @@ Page({
     });
   },
 
+  showNotice(event) {
+    const type = event.currentTarget.dataset.type;
+    const notice = type === "ticker" ? this.data.tickerNotice : this.data.homeNotice;
+    if (!notice) return;
+    this.setData({
+      selectedNotice: notice,
+      showNoticeDetail: true,
+    });
+  },
+
+  closeNoticeDetail() {
+    this.setData({
+      showNoticeDetail: false,
+      selectedNotice: null,
+    });
+  },
+
+  dismissHomeNotice() {
+    const notice = this.data.homeNotice;
+    if (notice) {
+      appConfigService.dismissNotice(notice);
+    }
+    this.setData({
+      homeNotice: null,
+    });
+  },
+
+  closeAppNoticeModal() {
+    const notice = this.data.modalNotice;
+    if (notice && notice.closable !== false) {
+      appConfigService.dismissNotice(notice);
+    }
+    this.setData({
+      showAppNoticeModal: false,
+    });
+  },
+
   onShareAppMessage() {
     const className = this.data.className;
     const title = className && className !== "未选择课表" && className !== "请选择课表"
@@ -382,4 +487,6 @@ Page({
       path: "/pages/index/index"
     };
   },
+
+  noop() {},
 });

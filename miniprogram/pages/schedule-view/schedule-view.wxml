@@ -155,5 +155,6 @@
     visible="{{detailVisible}}"
     course="{{selectedCourse}}"
     bind:close="closeCourseDetail"
+    bind:copycustom="onCopyCourseToCustom"
   />
 </view>

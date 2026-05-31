@@ -27,6 +27,13 @@
       </view>
       <view class="row-arrow">›</view>
     </view>
+    <view class="setting-row" bindtap="goCustomCourses">
+      <view>
+        <view class="row-title">个性化课程</view>
+        <view class="row-desc">添加、编辑或隐藏本地自定义课程</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
     <view class="setting-row">
       <view>
         <view class="row-title">当前学期</view>
@@ -139,7 +146,39 @@
     </view>
   </view>
 
-  <!-- 4. 数据状态 -->
+  <!-- 4. 数据与公告 -->
+  <view class="settings-card card">
+    <view class="group-title">数据与公告</view>
+    <view class="setting-row" bindtap="showDataVersionDetail">
+      <view>
+        <view class="row-title">当前数据版本</view>
+        <view class="row-desc">{{appConfig.dataVersion.releaseVersion || versionData.snapshotVersion || "待同步"}}</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+    <view class="setting-row">
+      <view>
+        <view class="row-title">最近更新时间</view>
+        <view class="row-desc">{{appConfigUpdatedText || "暂无更新时间"}}</view>
+      </view>
+    </view>
+    <view class="setting-row" bindtap="showNewsList">
+      <view>
+        <view class="row-title">查看最新动态</view>
+        <view class="row-desc">{{newsList.length ? newsList.length + " 条动态" : "暂无动态"}}</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+    <view class="setting-row" bindtap="showNoticeHistory">
+      <view>
+        <view class="row-title">查看公告历史</view>
+        <view class="row-desc">{{noticeHistory.length ? noticeHistory.length + " 条公告" : "暂无公告"}}</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+  </view>
+
+  <!-- 5. 数据状态 -->
   <view class="settings-card card">
     <view class="group-title">数据状态</view>
     <view class="setting-row" bindtap="showDataVersionDetail">
@@ -172,7 +211,7 @@
     </view>
   </view>
 
-  <!-- 5. 反馈与联系 -->
+  <!-- 6. 反馈与联系 -->
   <view class="settings-card card">
     <view class="group-title">反馈与联系</view>
     <view class="setting-row" bindtap="showFeedback">
@@ -205,7 +244,7 @@
     </button>
   </view>
 
-  <!-- 6. 其他 -->
+  <!-- 7. 其他 -->
   <view class="settings-card card">
     <view class="group-title">其他</view>
     <view class="setting-row" bindtap="showPrivacy">
@@ -323,6 +362,48 @@
       <view class="popup-footer">
         <button class="footer-btn" bindtap="hideDataVersionDetail">知道了</button>
       </view>
+    </view>
+  </view>
+
+  <view wx:if="{{newsVisible}}" class="popup-mask" bindtap="hideNewsList">
+    <view class="popup-panel" catchtap="noop">
+      <view class="popup-handle"></view>
+      <view class="popup-header">
+        <view class="popup-title-block">
+          <view class="popup-title">最新动态</view>
+          <view class="popup-subtitle">来自维护后台的实时状态</view>
+        </view>
+        <button class="close-button" bindtap="hideNewsList">×</button>
+      </view>
+      <scroll-view scroll-y class="detail-scroll">
+        <view class="news-item" wx:for="{{newsList}}" wx:key="id">
+          <view class="news-title">{{item.title}}</view>
+          <view class="news-meta">{{item.tag || "动态"}} · {{item.date}}</view>
+          <view class="news-summary">{{item.summary || item.detail}}</view>
+        </view>
+        <view wx:if="{{!newsList.length}}" class="modal-empty">暂无最新动态</view>
+      </scroll-view>
+    </view>
+  </view>
+
+  <view wx:if="{{noticeHistoryVisible}}" class="popup-mask" bindtap="hideNoticeHistory">
+    <view class="popup-panel" catchtap="noop">
+      <view class="popup-handle"></view>
+      <view class="popup-header">
+        <view class="popup-title-block">
+          <view class="popup-title">公告历史</view>
+          <view class="popup-subtitle">仅展示当前有效公告</view>
+        </view>
+        <button class="close-button" bindtap="hideNoticeHistory">×</button>
+      </view>
+      <scroll-view scroll-y class="detail-scroll">
+        <view class="news-item" wx:for="{{noticeHistory}}" wx:key="id">
+          <view class="news-title">{{item.title}}</view>
+          <view class="news-meta">{{item.priority}} · {{item.targetPage}} · {{item.displayMode}}</view>
+          <view class="news-summary">{{item.content}}</view>
+        </view>
+        <view wx:if="{{!noticeHistory.length}}" class="modal-empty">暂无公告</view>
+      </scroll-view>
     </view>
   </view>
 

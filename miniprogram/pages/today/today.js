@@ -1,5 +1,7 @@
 const { getTodayCoursesData } = require("../../utils/todayReminder");
 const { getSettings } = require("../../utils/storage");
+const appConfigService = require("../../services/appConfigService");
+const customCourseService = require("../../services/customCourseService");
 const BRAND = require("../../config/brand");
 
 Page({
@@ -12,6 +14,9 @@ Page({
     dataSourceText: "课程数据 · 本地缓存",
     courseCountText: "今日共 0 门课",
     courses: [],
+    urgentNotice: null,
+    dataVersionText: "",
+    releaseNote: "",
     selectedCourse: null,
     detailVisible: false,
     emptyTitle: "今天没有课程，好好休息",
@@ -20,6 +25,24 @@ Page({
 
   onShow() {
     this.loadToday();
+    this.loadPageConfig();
+  },
+
+  loadPageConfig() {
+    appConfigService.loadAppConfig()
+      .then((config) => {
+        const urgentNotice = appConfigService.getPageNotices(config, "today")
+          .find((notice) => notice.priority === "urgent");
+        const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
+        this.setData({
+          urgentNotice,
+          dataVersionText: latestUpdatedAt ? `数据更新于 ${appConfigService.formatConfigTime(latestUpdatedAt)}` : "",
+          releaseNote: (config.dataVersion && config.dataVersion.releaseNote) || "",
+        });
+      })
+      .catch((err) => {
+        console.warn("今日页公告配置加载失败", err);
+      });
   },
 
   loadToday() {
@@ -80,5 +103,20 @@ Page({
       selectedCourse: null,
       detailVisible: false,
     });
+  },
+
+  onCopyCourseToCustom(event) {
+    try {
+      customCourseService.saveCustomCourseDraft(event.detail.course || this.data.selectedCourse);
+      this.closeCourseDetail();
+      wx.navigateTo({
+        url: "/pages/custom-courses/custom-courses",
+      });
+    } catch (error) {
+      wx.showToast({
+        title: "课程信息不完整",
+        icon: "none",
+      });
+    }
   },
 });

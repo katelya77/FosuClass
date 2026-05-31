@@ -1,5 +1,6 @@
 const request = require("./utils/request");
 const { BOOTSTRAP_CACHE_KEY } = require("./utils/storage");
+const appConfigService = require("./services/appConfigService");
 const BRAND = require("./config/brand");
 
 App({
@@ -8,6 +9,8 @@ App({
     logoPath: "/assets/logo/favicon.png",
     env: "",
     bootstrapData: null,
+    appConfig: null,
+    shownModalNoticeIds: {},
   },
 
   onLaunch() {
@@ -22,6 +25,22 @@ App({
     }
 
     this.loadBootstrapData();
+    this.loadAppConfigData();
+  },
+
+  loadAppConfigData(options) {
+    return appConfigService.loadAppConfig(options)
+      .then((config) => {
+        this.globalData.appConfig = config;
+        if (this.appConfigCallback) {
+          this.appConfigCallback(config);
+        }
+        return config;
+      })
+      .catch((err) => {
+        console.warn("公告配置加载失败，将使用本地缓存", err);
+        return null;
+      });
   },
 
   loadBootstrapData() {
