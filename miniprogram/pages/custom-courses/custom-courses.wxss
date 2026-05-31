@@ -290,3 +290,21 @@ textarea {
   background: #f7f9fc;
   color: #536174;
 }
+
+/* 颜色选择色块动效 */
+.color-dot {
+  transition: all 0.2s ease;
+}
+.color-dot:active {
+  transform: scale(0.9);
+}
+.color-dot.active {
+  transform: scale(1.1);
+}
+
+/* 覆盖空状态图标样式 */
+.empty-state .empty-symbol {
+  background: #eef2ff !important;
+  color: #3654d4 !important;
+  font-size: 42rpx !important;
+}

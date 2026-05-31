@@ -5,6 +5,7 @@
 
 const path = require("path");
 const dotenv = require("dotenv");
+const crypto = require("crypto");
 
 // NOTE: 载入当前 server 目录下的 .env 文件
 dotenv.config({ path: path.join(__dirname, "../.env") });
@@ -21,8 +22,10 @@ const config = {
   // 数据源模式: cache-first | realtime | disabled
   DATA_SOURCE_MODE: process.env.DATA_SOURCE_MODE || "cache-first",
 
-  // 管理端同步 API Token
-  ADMIN_API_TOKEN: process.env.ADMIN_API_TOKEN || "",
+  // 管理端同步 API Token。如果未配置则根据密码自动安全派生，保证同步客户端正常访问
+  ADMIN_API_TOKEN: process.env.ADMIN_API_TOKEN || (process.env.ADMIN_PASSWORD
+    ? crypto.createHash("sha256").update(process.env.ADMIN_PASSWORD + "fosu_api_salt").digest("hex")
+    : ""),
 
   // Web 后台登录凭据。ADMIN_API_TOKEN 仅保留给同步工具使用。
   ADMIN_TOKEN: process.env.ADMIN_TOKEN || "",

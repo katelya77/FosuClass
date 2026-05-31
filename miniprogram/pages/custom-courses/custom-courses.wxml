@@ -9,13 +9,16 @@
   </view>
 
   <view class="import-card card">
-    <view class="group-title">导入导出</view>
-    <view class="import-grid">
-      <button bindtap="exportJson">导出 JSON</button>
-      <button bindtap="importJson">导入 JSON</button>
-      <button data-label="WakeUp 课程表导入" bindtap="showImportPlaceholder">WakeUp</button>
-      <button data-label="ICS 导入" bindtap="showImportPlaceholder">ICS</button>
-      <button data-label="粘贴文本导入" bindtap="showImportPlaceholder">粘贴文本</button>
+    <view class="group-title" bindtap="toggleImportTools" style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+      <text>导入 / 导出工具</text>
+      <text class="collapse-icon" style="font-size: 24rpx; color: #8a94a6;">{{importToolsCollapsed ? '▼ 展开' : '▲ 收起'}}</text>
+    </view>
+    <view class="import-grid" wx:if="{{!importToolsCollapsed}}" style="margin-top: 20rpx;">
+      <button class="import-btn" bindtap="exportJson">导出 JSON</button>
+      <button class="import-btn" bindtap="importJson">导入 JSON</button>
+      <button class="import-btn disabled" disabled style="background: #f1f3f5; color: #adb5bd; cursor: not-allowed;">WakeUp (即将支持)</button>
+      <button class="import-btn disabled" disabled style="background: #f1f3f5; color: #adb5bd; cursor: not-allowed;">ICS (即将支持)</button>
+      <button class="import-btn disabled" disabled style="background: #f1f3f5; color: #adb5bd; cursor: not-allowed;">粘贴文本 (即将支持)</button>
     </view>
   </view>
 
@@ -86,9 +89,18 @@
               <view class="picker-value">{{sectionOptions[form.endSectionIndex]}}</view>
             </picker>
           </view>
-          <view class="field">
-            <view class="label">颜色</view>
-            <input value="{{form.color}}" data-key="color" placeholder="#3654d4，可选" bindinput="onInput" />
+          <view class="field full">
+            <view class="label">选择卡片颜色</view>
+            <view class="color-picker-grid" style="display: flex; gap: 16rpx; flex-wrap: wrap; margin-top: 10rpx;">
+              <view 
+                wx:for="{{predefinedColors}}" 
+                wx:key="*this" 
+                class="color-dot {{form.color === item ? 'active' : ''}}" 
+                style="width: 54rpx; height: 54rpx; border-radius: 50%; background: {{item}}; box-sizing: border-box; border: 4rpx solid {{form.color === item ? '#ffffff' : 'transparent'}}; box-shadow: {{form.color === item ? '0 0 0 4rpx ' + item : '0 4rpx 10rpx rgba(0,0,0,0.06)'}};" 
+                data-color="{{item}}" 
+                bindtap="selectColor"
+              ></view>
+            </view>
           </view>
           <view class="field full">
             <view class="label">周次</view>

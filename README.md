@@ -136,13 +136,13 @@ npm run test:app-config-admin
 #### GitHub Actions 自动部署配置
 
 1. 在 GitHub 仓库的 **Settings** -> **Secrets and variables** -> **Actions** 中添加以下 Repository Secrets：
-    - `VPS_HOST`：您的 VPS 公网 IP (例如 `146.235.201.244`)
-    - `VPS_USER`：登录 VPS 的用户名 (例如 `ubuntu`)
-    - `VPS_SSH_KEY`：您的 SSH 私钥内容 (用于免密登录 VPS)
-    - `VPS_APP_DIR`：在 VPS 上的应用运行目录位置 (例如 `/home/ubuntu/FosuClass`)
-    - `ADMIN_API_TOKEN`：数据同步鉴权密钥 Token（本地同步器和 VPS 后端之间校验用的 Token）
-    - `ADMIN_PASSWORD`：Web 管理后台登录密码
-    - `ADMIN_TOKEN`：可选，后台 API Bearer Token；建议与 `ADMIN_API_TOKEN` 分开
+    - `VPS_HOST`：您的 VPS 公网 IP (必须，例如 `146.235.201.244`)
+    - `VPS_USER`：登录 VPS 的用户名 (必须，例如 `ubuntu`)
+    - `VPS_SSH_KEY`：您的 SSH 私钥内容 (必须，用于免密登录 VPS)
+    - `VPS_APP_DIR`：在 VPS 上的应用运行目录位置 (必须，例如 `/home/ubuntu/FosuClass`)
+    - `ADMIN_PASSWORD`：Web 管理后台登录密码 (必须，用作后台主密码及派生密钥)
+    - `ADMIN_API_TOKEN`：可选，数据同步鉴权密钥 Token。若留空，后台会自动依据 `ADMIN_PASSWORD` 进行 SHA-256 派生，用于强智同步脚本认证。
+    - `ADMIN_TOKEN`：可选，后台管理静态 Token，若配置则额外支持使用该 Token 进行 API 登录或 Bearer 鉴权。
 
 2. 部署机制说明：
    - **触发方式**：当您向 `main` 分支执行 `git push` 或者在 GitHub 仓库的 Actions 页面手动触发 `workflow_dispatch` 时，工作流将自动运行。
