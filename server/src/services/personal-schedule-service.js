@@ -183,6 +183,74 @@ async function fetchAndParseSchedule(jar, student, targetSemester) {
   };
 }
 
+/**
+ * 校园代理模式获取个人课表
+ * @param {string} studentId 学号
+ * @param {string} password 密码
+ * @param {string} semester 目标学期
+ * @returns {Promise<Object>} 标准化个人课表结构
+ */
+async function fetchAndParseScheduleViaAgent(studentId, password, semester) {
+  const config = require("../config");
+  const axios = require("axios");
+
+  if (!config.CAMPUS_AGENT_BASE_URL) {
+    throw new Error("VPN_GATEWAY_UNAVAILABLE");
+  }
+
+  // 保证路径拼接正确
+  const agentUrl = `${config.CAMPUS_AGENT_BASE_URL.replace(/\/$/, "")}/api/fosu/personal-sync`;
+  safeLog("personal-schedule-agent-fetch-start", {
+    studentId: maskStudentId(studentId),
+    semester,
+  });
+
+  try {
+    const response = await axios.post(
+      agentUrl,
+      {
+        studentId,
+        password,
+        semester,
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${config.CAMPUS_AGENT_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        timeout: 20000, // 20s 超时时间
+      }
+    );
+
+    const resData = response.data;
+    if (!resData || resData.success === false) {
+      const errMsg = resData?.message || "校园代理抓取失败";
+      throw new Error(errMsg);
+    }
+
+    // 结果规范化，安全起见脱敏返回结构中的学号
+    if (resData.student) {
+      resData.student.studentId = maskStudentId(studentId);
+    }
+    if (resData.schedule && Array.isArray(resData.schedule.courses)) {
+      safeLog("personal-schedule-agent-fetch-success", {
+        studentId: maskStudentId(studentId),
+        courseCount: resData.schedule.courses.length,
+      });
+    }
+
+    return resData;
+  } catch (error) {
+    safeLog("personal-schedule-agent-fetch-failed", { error: error.message });
+    if (error.message && error.message.includes("VPN_GATEWAY_UNAVAILABLE")) {
+      throw error;
+    }
+    // 其他错误统一转换为 VPN 代理不可达
+    throw new Error("VPN_GATEWAY_UNAVAILABLE");
+  }
+}
+
 module.exports = {
   fetchAndParseSchedule,
+  fetchAndParseScheduleViaAgent,
 };

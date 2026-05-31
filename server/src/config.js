@@ -44,6 +44,11 @@ const config = {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
+
+  // 校园代理 Agent 配置
+  CAMPUS_AGENT_ENABLED: process.env.CAMPUS_AGENT_ENABLED === "true",
+  CAMPUS_AGENT_BASE_URL: process.env.CAMPUS_AGENT_BASE_URL || "",
+  CAMPUS_AGENT_TOKEN: process.env.CAMPUS_AGENT_TOKEN || "",
 };
 
 module.exports = config;

@@ -11,6 +11,9 @@ const { destroySession } = require("../utils/fosu-cookie-jar");
 const { scheduleLimiter } = require("../utils/rateLimit");
 const { safeLog, maskStudentId } = require("../utils/safeLogger");
 
+const config = require("../config");
+const { redactSecrets } = require("../utils/safeLogger");
+
 /**
  * 统一错误拦截映射函数，将抛出的异常映射为符合标准规范的业务错误响应
  * @param {express.Response} res Express 响应对象
@@ -18,110 +21,114 @@ const { safeLog, maskStudentId } = require("../utils/safeLogger");
  */
 function handlePersonalError(res, error) {
   const errMsg = error.message || "";
+  const errCode = error.code || "";
   
-  if (errMsg.includes("EDU100_DNS_FAILED")) {
-    return res.status(200).json({
-      success: false,
-      code: "EDU100_DNS_FAILED",
-      message: "当前同步节点无法解析教务 100 网，请稍后再试。你仍可使用全校课表。",
-    });
+  let code = "UNKNOWN_ERROR";
+  let message = "同步服务出现未知异常，请稍后再试或联系管理员。";
+  let detail = process.env.NODE_ENV === "development" ? errMsg : undefined;
+
+  // 1. 校园网不可达限制
+  if (
+    errMsg.includes("CAMPUS_NETWORK_REQUIRED") || 
+    errMsg.includes("EDU100_UNREACHABLE") || 
+    errMsg.includes("AUTHSERVER_UNREACHABLE")
+  ) {
+    code = "CAMPUS_NETWORK_REQUIRED";
+    message = "当前服务器暂时无法访问学校教务系统，请先使用全校课表选择班级课表。";
+  }
+  // 2. DNS 解析失败
+  else if (
+    errMsg.includes("UPSTREAM_DNS_FAILED") || 
+    errMsg.includes("DNS_FAILED") || 
+    errMsg.includes("EDU100_DNS_FAILED") ||
+    errCode === "ENOTFOUND" || 
+    errCode === "EAI_AGAIN"
+  ) {
+    code = "UPSTREAM_DNS_FAILED";
+    message = "当前同步节点无法解析教务网，请稍后再试。你仍可使用全校课表。";
+  }
+  // 3. 连接超时
+  else if (
+    errMsg.includes("UPSTREAM_TIMEOUT") || 
+    errMsg.includes("TIMEOUT") || 
+    errMsg.includes("timeout") ||
+    errCode === "ECONNABORTED" || 
+    errCode === "ETIMEDOUT"
+  ) {
+    code = "UPSTREAM_TIMEOUT";
+    message = "与学校教务系统连接超时，请连接校园网或校园 VPN 后重试。";
+  }
+  // 4. 接口或页面不存在 (404)
+  else if (
+    errMsg.includes("UPSTREAM_404") || 
+    errMsg.includes("404") || 
+    errMsg.includes("status code 404")
+  ) {
+    code = "UPSTREAM_404";
+    message = "学校教务页面未找到(404)，可能教务网接口已变更，个人同步暂时不可用。";
+  }
+  // 5. 滑块或登录令牌未找到
+  else if (
+    errMsg.includes("SLIDER_TOKEN_NOT_FOUND") || 
+    errMsg.includes("SLIDER_ENDPOINT_FAILED")
+  ) {
+    code = "SLIDER_TOKEN_NOT_FOUND";
+    message = "滑块验证资源加载失败或令牌解析失败，请稍后再试。";
+  }
+  // 6. 校园代理不可达
+  else if (
+    errMsg.includes("VPN_GATEWAY_UNAVAILABLE")
+  ) {
+    code = "VPN_GATEWAY_UNAVAILABLE";
+    message = "校园代理网关未配置或暂时不可用，请联系管理员或使用全校课表。";
+  }
+  // 7. 登录失败
+  else if (
+    errMsg.includes("CAS_LOGIN_FAILED") || 
+    errMsg.includes("INVALID_CREDENTIALS")
+  ) {
+    code = "CAS_LOGIN_FAILED";
+    message = "登录失败，请检查学号、密码或验证码。";
+  }
+  // 8. 其他会话及流程错误
+  else if (errMsg.includes("SESSION_EXPIRED")) {
+    code = "SESSION_EXPIRED";
+    message = "登录会话已过期，请重新点击检测或开始。";
+  }
+  else if (errMsg.includes("SLIDER_VERIFY_FAILED")) {
+    code = "SLIDER_VERIFY_FAILED";
+    message = "滑块验证失败，请重新拖动验证。";
+  }
+  else if (errMsg.includes("LOGIN_PAGE_CHANGED")) {
+    code = "LOGIN_PAGE_CHANGED";
+    message = "学校登录页面结构可能已更新，个人同步暂时不可用。";
+  }
+  else if (errMsg.includes("SCHEDULE_PAGE_UNREACHABLE") || errMsg.includes("JWC_SESSION_FAILED")) {
+    code = "SCHEDULE_PAGE_UNREACHABLE";
+    message = "已登录，但暂时无法打开个人课表页面。";
+  }
+  else if (errMsg.includes("PERSONAL_SCHEDULE_PARSE_FAILED") || errMsg.includes("SCHEDULE_PARSE_FAILED")) {
+    code = "SCHEDULE_PARSE_FAILED";
+    message = "已打开个人课表页面，但解析课程失败。";
+  }
+  else if (errMsg.includes("SEMESTER_NOT_FOUND")) {
+    code = "SEMESTER_NOT_FOUND";
+    message = "未在教务系统中找到所选学期的课程数据。";
+  }
+  else if (errMsg.includes("PERSONAL_SCHEDULE_EMPTY")) {
+    code = "PERSONAL_SCHEDULE_EMPTY";
+    message = "教务系统中该学期没有您的课程安排记录。";
   }
 
-  if (errMsg.includes("EDU100_UNREACHABLE")) {
-    return res.status(200).json({
-      success: false,
-      code: "EDU100_UNREACHABLE",
-      message: "当前同步节点无法访问教务 100 网，可能需要校园网或校 VPN 环境。",
-    });
-  }
+  // 严禁在日志中包含明文密码、验证码等敏感参数，进行脱敏
+  const sanitizedDetail = detail ? redactSecrets(detail) : undefined;
+  safeLog("personal-route-error", { code, error: errMsg, detail: sanitizedDetail });
 
-  if (errMsg.includes("AUTHSERVER_UNREACHABLE")) {
-    return res.status(200).json({
-      success: false,
-      code: "AUTHSERVER_UNREACHABLE",
-      message: "暂时无法连接统一身份认证服务，请稍后再试。",
-    });
-  }
-
-  if (errMsg.includes("LOGIN_PAGE_CHANGED")) {
-    return res.status(200).json({
-      success: false,
-      code: "LOGIN_PAGE_CHANGED",
-      message: "学校登录页面结构可能已更新，个人同步暂时不可用。",
-    });
-  }
-
-  if (errMsg.includes("SLIDER_ENDPOINT_FAILED")) {
-    return res.status(200).json({
-      success: false,
-      code: "SLIDER_ENDPOINT_FAILED",
-      message: "滑块验证资源加载失败，请稍后再试。",
-    });
-  }
-
-  if (errMsg.includes("SESSION_EXPIRED")) {
-    return res.status(200).json({
-      success: false,
-      code: "SESSION_EXPIRED",
-      message: "登录会话已过期，请重新点击开始验证。",
-    });
-  }
-
-  if (errMsg.includes("SLIDER_VERIFY_FAILED")) {
-    return res.status(200).json({
-      success: false,
-      code: "SLIDER_VERIFY_FAILED",
-      message: "滑块验证失败，请重新拖动验证。",
-    });
-  }
-
-  if (errMsg.includes("CAS_LOGIN_FAILED") || errMsg.includes("INVALID_CREDENTIALS")) {
-    return res.status(200).json({
-      success: false,
-      code: "CAS_LOGIN_FAILED",
-      message: "登录失败，请检查学号、密码或验证码。",
-    });
-  }
-
-  if (errMsg.includes("SCHEDULE_PAGE_UNREACHABLE") || errMsg.includes("JWC_SESSION_FAILED")) {
-    return res.status(200).json({
-      success: false,
-      code: "SCHEDULE_PAGE_UNREACHABLE",
-      message: "已登录，但暂时无法打开个人课表页面。",
-    });
-  }
-
-  if (errMsg.includes("PERSONAL_SCHEDULE_PARSE_FAILED") || errMsg.includes("SCHEDULE_PARSE_FAILED")) {
-    return res.status(200).json({
-      success: false,
-      code: "SCHEDULE_PARSE_FAILED",
-      message: "已打开个人课表页面，但解析课程失败。",
-    });
-  }
-
-  if (errMsg.includes("SEMESTER_NOT_FOUND")) {
-    return res.status(200).json({
-      success: false,
-      code: "SEMESTER_NOT_FOUND",
-      message: "未在教务系统中找到所选学期的课程数据。",
-      availableSemesters: error.availableSemesters || [],
-    });
-  }
-
-  if (errMsg.includes("PERSONAL_SCHEDULE_EMPTY")) {
-    return res.status(200).json({
-      success: false,
-      code: "PERSONAL_SCHEDULE_EMPTY",
-      message: "教务系统中该学期没有您的课程安排记录。",
-    });
-  }
-
-  safeLog("personal-route-unknown-error", { error: errMsg, stack: error.stack });
   return res.status(200).json({
     success: false,
-    code: "UNKNOWN_ERROR",
-    message: "同步服务出现未知异常，请稍后再试或联系管理员。",
-    error: process.env.NODE_ENV === "development" ? errMsg : undefined,
+    code,
+    message,
+    detail: sanitizedDetail,
   });
 }
 
@@ -180,44 +187,64 @@ router.post("/session/verify-slider", scheduleLimiter, async (req, res) => {
   }
 });
 
-/**
- * 3. 登录并同步个人课表
- * POST /api/fosu/personal/session/login-and-sync
- */
 router.post("/session/login-and-sync", scheduleLimiter, async (req, res) => {
   let { sessionId, studentId, password, semester } = req.body;
 
-  if (!sessionId || !studentId || !password || !semester) {
-    return res.status(200).json({
-      success: false,
-      code: "INVALID_PARAMS",
-      message: "参数校验失败，学号、密码及目标学期均不可为空",
-    });
+  // 1. 判断是否开启校园代理，按需校验参数
+  const useAgent = config.CAMPUS_AGENT_ENABLED;
+  if (useAgent) {
+    if (!studentId || !password || !semester) {
+      return res.status(200).json({
+        success: false,
+        code: "INVALID_PARAMS",
+        message: "参数校验失败，学号、密码及目标学期均不可为空",
+      });
+    }
+  } else {
+    if (!sessionId || !studentId || !password || !semester) {
+      return res.status(200).json({
+        success: false,
+        code: "INVALID_PARAMS",
+        message: "参数校验失败，学号、密码及目标学期均不可为空",
+      });
+    }
   }
 
   try {
-    // 1. 统一认证登录并获取 jar 会话
-    const { studentJar, student } = await personalAuthService.loginAndGetJar(
-      sessionId,
-      studentId,
-      password
-    );
-
-    // 2. 联动抓取个人课表 HTML 并调用解析
-    const result = await personalScheduleService.fetchAndParseSchedule(
-      studentJar,
-      student,
-      semester
-    );
+    let result;
+    if (useAgent) {
+      // 2. 校园代理转发模式
+      result = await personalScheduleService.fetchAndParseScheduleViaAgent(
+        studentId,
+        password,
+        semester
+      );
+    } else {
+      // 3. 直连校园网传统模式
+      const { studentJar, student } = await personalAuthService.loginAndGetJar(
+        sessionId,
+        studentId,
+        password
+      );
+      result = await personalScheduleService.fetchAndParseSchedule(
+        studentJar,
+        student,
+        semester
+      );
+    }
 
     res.json(result);
   } catch (error) {
     handlePersonalError(res, error);
   } finally {
-    // 3. 安全要求：无论成功还是失败，均立刻擦除密码局部变量并销毁内存会话以防泄露
+    // 4. 安全要求：无论成功还是失败，均立刻擦除密码局部变量并销毁内存会话以防泄露
     password = null;
-    destroySession(sessionId);
+    if (sessionId) {
+      destroySession(sessionId);
+    }
   }
 });
+
+router.handlePersonalError = handlePersonalError;
 
 module.exports = router;

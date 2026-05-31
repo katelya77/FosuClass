@@ -66,6 +66,31 @@ function saveSliderImage(base64Data, filename) {
 async function runCli() {
   console.log("=== FosuClass 个人课表本地 CLI 同步调试 ===");
 
+  // 0. 校验本地环境可达性，防范公网直连调试误导
+  try {
+    const dns = require("dns").promises;
+    const axios = require("axios");
+    
+    // 1) DNS 校验
+    try {
+      await dns.lookup("100.fosu.edu.cn");
+    } catch (err) {
+      console.error("\n[错误] 当前环境无法访问 100.fosu.edu.cn，请连接校园网或校园 VPN 后再试。(DNS 解析失败)");
+      process.exit(1);
+    }
+
+    // 2) HTTP 连通性校验
+    try {
+      await axios.get("http://100.fosu.edu.cn", { timeout: 3000, validateStatus: () => true });
+    } catch (err) {
+      console.error("\n[错误] 当前环境无法访问 100.fosu.edu.cn，请连接校园网或校园 VPN 后再试。(网络超时或无法建立连接)");
+      process.exit(1);
+    }
+  } catch (err) {
+    console.error("\n[错误] 当前环境无法访问 100.fosu.edu.cn，请连接校园网或校园 VPN 后再试。");
+    process.exit(1);
+  }
+
   const studentId = process.env.FOSU_PERSONAL_STUDENT_ID || await askQuestion("请输入学号: ");
   if (!studentId) {
     console.error("学号不可为空！");
