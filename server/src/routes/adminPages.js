@@ -48,6 +48,10 @@ const adminConsoleHtml = `<!doctype html>
       line-height: 1.5;
     }
 
+    [hidden] {
+      display: none !important;
+    }
+
     /* 现代卡片与面板 */
     .card {
       background: var(--panel);
@@ -1669,7 +1673,7 @@ const adminConsoleHtml = `<!doctype html>
   </div>
 
   <script>
-    function showAdminRuntimeError(message) {
+    function showAdminRuntimeError(error) {
       var errBar = document.getElementById("adminRuntimeErrorBar");
       if (!errBar) {
         errBar = document.createElement("div");
@@ -1678,32 +1682,45 @@ const adminConsoleHtml = `<!doctype html>
         document.body.appendChild(errBar);
       }
       errBar.textContent = "";
-      
-      var span = document.createElement("span");
-      span.textContent = "⚠️ 运行时错误: " + (message || "脚本运行失败") + " (页面: " + window.location.pathname + ") ";
-      errBar.appendChild(span);
-      
-      var btn = document.createElement("button");
-      btn.textContent = "一键刷新页面";
-      btn.addEventListener("click", function() {
-        window.location.reload();
-      });
-      errBar.appendChild(btn);
+
+      var errorName = "RuntimeError";
+      var errorMessage = "脚本运行失败";
+      if (typeof error === "string") {
+        errorMessage = error;
+      } else if (error) {
+        errorName = error.name || errorName;
+        errorMessage = error.message || String(error);
+      }
+
+      var title = document.createElement("strong");
+      title.textContent = errorName + ":";
+      errBar.appendChild(title);
+
+      var message = document.createElement("span");
+      message.textContent = errorMessage;
+      errBar.appendChild(message);
       
       var tip = document.createElement("span");
       tip.style = "opacity: 0.8; font-size: 11px; margin-left: 8px;";
-      tip.textContent = "[建议按 F12 打开 DevTools Console 检查]";
+      tip.textContent = "请打开 Console 查看完整堆栈。页面: " + window.location.pathname;
       errBar.appendChild(tip);
+
+      var closeBtn = document.createElement("button");
+      closeBtn.textContent = "关闭";
+      closeBtn.addEventListener("click", function() {
+        errBar.remove();
+      });
+      errBar.appendChild(closeBtn);
     }
 
     window.addEventListener("error", function(event) {
       console.error("[Admin Runtime Error]", event.error || event.message);
-      showAdminRuntimeError(event.message || "页面脚本运行失败");
+      showAdminRuntimeError(event.error || { name: "Error", message: event.message || "页面脚本运行失败" });
     });
 
     window.addEventListener("unhandledrejection", function(event) {
       console.error("[Admin Promise Rejection]", event.reason);
-      showAdminRuntimeError((event.reason && event.reason.message) || "后台接口请求失败");
+      showAdminRuntimeError(event.reason || { name: "PromiseRejection", message: "后台接口请求失败" });
     });
 
     (function () {
@@ -1757,10 +1774,50 @@ const adminConsoleHtml = `<!doctype html>
       var statusLine = document.getElementById("statusLine");
 
       function $(id) { return document.getElementById(id); }
-      function setStatus(text) { statusLine.textContent = text || ""; }
-      function value(id) { return $(id).value.trim(); }
-      function setValue(id, val) { $(id).value = val == null ? "" : String(val); }
-      function boolValue(id) { return $(id).value === "true"; }
+      function setStatus(text) {
+        if (statusLine) statusLine.textContent = text || "";
+      }
+      function value(id) {
+        var el = $(id);
+        return el ? el.value.trim() : "";
+      }
+      function setValue(id, val) {
+        var el = $(id);
+        if (el) el.value = val == null ? "" : String(val);
+      }
+      function boolValue(id) {
+        var el = $(id);
+        return el ? el.value === "true" : false;
+      }
+
+      function safeBind(id, eventName, handler) {
+        var el = $(id);
+        if (!el) {
+          console.warn("[Admin Console] missing element:", id);
+          return;
+        }
+        el.addEventListener(eventName, handler);
+      }
+
+      function showLoginView() {
+        if (loginView) loginView.hidden = false;
+        if (dashboardView) dashboardView.hidden = true;
+        document.body.classList.add("is-login-page");
+        document.body.classList.remove("is-dashboard-page");
+      }
+
+      function showDashboardView() {
+        if (loginView) loginView.hidden = true;
+        if (dashboardView) dashboardView.hidden = false;
+        document.body.classList.remove("is-login-page");
+        document.body.classList.add("is-dashboard-page");
+      }
+
+      function ignoreLoadError(promise) {
+        if (promise && typeof promise.catch === "function") {
+          promise.catch(function () {});
+        }
+      }
       
       function escapeHtml(str) {
         if (str === undefined || str === null) return "";
@@ -1795,19 +1852,38 @@ const adminConsoleHtml = `<!doctype html>
 
       function api(path, options) {
         options = options || {};
-        options.credentials = "include";
         options.headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
+        options.credentials = "include";
+
         return fetch(path, options).then(function (res) {
-          if (res.status === 401) {
-            location.href = "/admin/login";
-            throw new Error("请先登录后台");
-          }
-          return res.json().then(function (data) {
-            if (!res.ok || data.success === false) {
-              throw new Error(data.message || "请求失败");
+          return res.text().then(function (text) {
+            var data = {};
+            try {
+              data = text ? JSON.parse(text) : {};
+            } catch (e) {
+              data = { success: false, message: text || res.statusText };
             }
+
+            if (res.status === 401) {
+              if (location.pathname.indexOf("/admin/login") < 0) {
+                window.location.href = "/admin/login";
+              }
+              throw new Error(data.message || "登录已过期，请重新登录");
+            }
+
+            if (!res.ok || data.success === false) {
+              throw new Error(data.message || ("HTTP " + res.status));
+            }
+
             return data;
           });
+        });
+      }
+
+      function clearAdminClientState() {
+        ["adminToken", "adminSession", "admin_api_token"].forEach(function (key) {
+          try { localStorage.removeItem(key); } catch (e) {}
+          try { sessionStorage.removeItem(key); } catch (e) {}
         });
       }
 
@@ -1818,16 +1894,12 @@ const adminConsoleHtml = `<!doctype html>
           $("loginError").textContent = "请输入验证密码";
           return;
         }
-        fetch("/api/admin/login", {
+        api("/api/admin/login", {
           method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ password: password })
-        }).then(function (res) {
-          return res.json().then(function (data) {
-            if (!res.ok || !data.success) throw new Error(data.message || "密码不正确");
-            location.href = "/admin/dashboard";
-          });
+        }).then(function () {
+          $("loginError").textContent = "";
+          window.location.href = "/admin/dashboard";
         }).catch(function (error) {
           $("loginError").textContent = error.message;
         });
@@ -1835,7 +1907,12 @@ const adminConsoleHtml = `<!doctype html>
 
       function logout() {
         api("/api/admin/logout", { method: "POST", body: "{}" }).then(function () {
-          location.href = "/admin/login";
+          clearAdminClientState();
+          window.location.href = "/admin/login";
+        }).catch(function (error) {
+          clearAdminClientState();
+          console.error("[Admin Console] logout failed:", error);
+          window.location.href = "/admin/login";
         });
       }
 
@@ -1864,16 +1941,75 @@ const adminConsoleHtml = `<!doctype html>
         
         // 切页面后自动获取对应页面数据
         if (section === "catalog") {
-          loadCatalog();
+          ignoreLoadError(loadCatalog());
         } else if (section === "sync") {
-          loadSyncStatus();
+          ignoreLoadError(loadSyncStatus());
         } else if (section === "quality") {
-          loadQualityReport();
+          ignoreLoadError(loadQualityReport());
         } else if (section === "settings") {
-          loadSettingsLogs();
+          ignoreLoadError(loadSettingsLogs());
         } else if (section === "feedback") {
-          loadFeedbacks();
+          ignoreLoadError(loadFeedbacks());
         }
+      }
+
+      function loadDashboard() {
+        setStatus("正在读取后台数据概览...");
+        return api("/api/admin/dashboard")
+          .then(function (res) {
+            state.dashboard = res.data || res || {};
+            renderDashboard();
+            setStatus("数据概览已更新：" + formatDate(new Date().toISOString()));
+            return state.dashboard;
+          })
+          .catch(function (error) {
+            console.error("[Admin Console] loadDashboard failed:", error);
+            setStatus("数据概览加载失败：" + (error.message || "未知错误"));
+            showToast(error.message || "数据概览加载失败", "error");
+            throw error;
+          });
+      }
+
+      function loadConfig() {
+        return api("/api/admin/config")
+          .then(function (res) {
+            state.config = res.data || {};
+            renderConfigForm();
+            return state.config;
+          })
+          .catch(function (error) {
+            console.error("[Admin Console] loadConfig failed:", error);
+            showToast(error.message || "系统配置加载失败", "error");
+            throw error;
+          });
+      }
+
+      function loadNotices() {
+        return api("/api/admin/notices")
+          .then(function (res) {
+            state.notices = res.items || [];
+            renderNotices();
+            return state.notices;
+          })
+          .catch(function (error) {
+            console.error("[Admin Console] loadNotices failed:", error);
+            showToast(error.message || "公告配置加载失败", "error");
+            throw error;
+          });
+      }
+
+      function loadNews() {
+        return api("/api/admin/news")
+          .then(function (res) {
+            state.news = res.items || [];
+            renderNews();
+            return state.news;
+          })
+          .catch(function (error) {
+            console.error("[Admin Console] loadNews failed:", error);
+            showToast(error.message || "最新动态加载失败", "error");
+            throw error;
+          });
       }
 
       // Panel 1: Dashboard 数据渲染
@@ -2567,7 +2703,7 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       // 上传文件 Staging 后端交互
-      $("syncFileInput").addEventListener("change", function(e) {
+      safeBind("syncFileInput", "change", function(e) {
         var file = e.target.files[0];
         if (!file) return;
         
@@ -2577,7 +2713,7 @@ const adminConsoleHtml = `<!doctype html>
         setTimeout(function() {
           $("uploadFileInfo").innerHTML = "<span style='color: var(--success);'>✓ 校验成功: 格式为合规 class-schedules 数组。已创建备份并热载入。</span>";
           showToast("Staging 文件上传热载入成功");
-          loadDashboard();
+          ignoreLoadError(loadDashboard());
         }, 1200);
       });
 
@@ -2669,7 +2805,7 @@ const adminConsoleHtml = `<!doctype html>
           });
       };
 
-      $("exportQualityBtn").addEventListener("click", function() {
+      safeBind("exportQualityBtn", "click", function() {
         var dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state.qualityReport, null, 2));
         var downloadAnchor = document.createElement("a");
         downloadAnchor.setAttribute("href", dataStr);
@@ -2687,15 +2823,20 @@ const adminConsoleHtml = `<!doctype html>
         var pageSize = state.feedbackFilter.pageSize;
         
         setStatus("正在获取反馈列表...");
-        api("/api/admin/feedbacks?status=" + status + "&keyword=" + encodeURIComponent(keyword) + "&limit=100")
+        return api("/api/admin/feedbacks?status=" + status + "&keyword=" + encodeURIComponent(keyword) + "&limit=100")
           .then(function(res) {
             state.feedbacks = res.items || [];
-            state.feedbackFilter.total = res.items.length;
+            state.feedbackFilter.total = state.feedbacks.length;
             renderFeedbacksTable();
+            if (state.section === "dashboard" && state.dashboard) {
+              renderDashboardVisuals();
+            }
             setStatus("反馈载入成功。");
+            return state.feedbacks;
           })
           .catch(function(err) {
             showToast(err.message, "error");
+            throw err;
           });
       }
 
@@ -2787,8 +2928,8 @@ const adminConsoleHtml = `<!doctype html>
           .then(function() {
             showToast("反馈处理记录保存并备份成功。");
             closeFeedbackDrawer();
-            loadFeedbacks();
-            loadDashboard(); // 刷新待处理反馈数
+            ignoreLoadError(loadFeedbacks());
+            ignoreLoadError(loadDashboard()); // 刷新待处理反馈数
           })
           .catch(function(err) {
             showToast(err.message, "error");
@@ -3254,30 +3395,32 @@ const adminConsoleHtml = `<!doctype html>
           switchSection("dashboard");
           setStatus("正在获取佛课后台全局配置...");
 
-          var tasks = [
+          return Promise.allSettled([
             loadDashboard(),
             loadConfig(),
             loadNotices(),
             loadNews(),
-            loadFeedbacks().catch(function(error) {
-              console.warn("[Admin Console] feedback load failed:", error);
-              state.feedbacks = [];
-            })
-          ];
-
-          return Promise.all(tasks)
-            .then(function () {
+            loadFeedbacks()
+          ]).then(function (results) {
+            var failed = results.filter(function (r) { return r.status === "rejected"; });
+            if (failed.length > 0) {
+              console.warn("[Admin Console] partial load failed:", failed);
+              setStatus("部分模块加载失败，但后台基础功能可用。失败模块数：" + failed.length);
+              showToast("部分模块加载失败，请查看 Console 或接口状态。", "warning");
+            } else {
               setStatus("最近一键刷新时间：" + formatDate(new Date().toISOString()));
               showToast("控制台面板状态已同步", "success");
-            })
-            .catch(function (error) {
-              console.error("[Admin Console] loadAll failed:", error);
-              setStatus("加载失败：" + (error.message || "未知错误"));
-              showToast(error.message || "后台数据加载失败", "error");
-            });
+            }
+          }).catch(function (error) {
+            console.error("[Admin Console] loadAll fatal:", error);
+            setStatus("加载异常：" + (error.message || "未知错误"));
+            showToast(error.message || "后台数据加载失败", "error");
+            showAdminRuntimeError(error);
+          });
         } catch (error) {
           console.error("[Admin Console] loadAll exception:", error);
-          setStatus("加载异常");
+          setStatus("加载异常：" + (error.message || "未知错误"));
+          showAdminRuntimeError(error);
         }
       }
 
@@ -3290,45 +3433,46 @@ const adminConsoleHtml = `<!doctype html>
 
       // 实时预览监听
       ["noticeTitle", "noticeContent", "noticeVersion"].forEach(function (id) {
-        $(id).addEventListener("input", updateNoticePreview);
+        safeBind(id, "input", updateNoticePreview);
       });
       ["noticeType", "noticeDisplayMode", "noticePriority"].forEach(function (id) {
-        $(id).addEventListener("change", updateNoticePreview);
+        safeBind(id, "change", updateNoticePreview);
       });
 
       ["newsTitle", "newsSummary", "newsTag", "newsDate"].forEach(function (id) {
-        $(id).addEventListener("input", updateNewsPreview);
+        safeBind(id, "input", updateNewsPreview);
       });
 
-      $("loginButton").addEventListener("click", login);
-      $("loginPassword").addEventListener("keydown", function (event) { if (event.key === "Enter") login(); });
-      $("logoutButton").addEventListener("click", logout);
-      $("refreshButton").addEventListener("click", loadAll);
-      $("saveConfigButton").addEventListener("click", saveConfig);
-      $("saveNoticeButton").addEventListener("click", saveNotice);
-      $("clearNoticeButton").addEventListener("click", clearNoticeForm);
-      $("saveNewsButton").addEventListener("click", saveNews);
-      $("clearNewsButton").addEventListener("click", clearNewsForm);
+      safeBind("loginButton", "click", login);
+      safeBind("loginPassword", "keydown", function (event) { if (event.key === "Enter") login(); });
+      safeBind("logoutButton", "click", logout);
+      safeBind("refreshButton", "click", loadAll);
+      safeBind("saveConfigButton", "click", saveConfig);
+      safeBind("saveNoticeButton", "click", saveNotice);
+      safeBind("clearNoticeButton", "click", clearNoticeForm);
+      safeBind("saveNewsButton", "click", saveNews);
+      safeBind("clearNewsButton", "click", clearNewsForm);
       
       document.querySelectorAll(".text-btn-time").forEach(function (btn) {
         btn.addEventListener("click", function (e) {
           e.preventDefault();
-          $(btn.dataset.target).value = new Date().toISOString();
+          var target = $(btn.dataset.target);
+          if (target) target.value = new Date().toISOString();
         });
       });
 
-      $("generateVersionBtn").addEventListener("click", function(e) {
+      safeBind("generateVersionBtn", "click", function(e) {
         e.preventDefault();
         generateReleaseVersion();
       });
 
-      $("disclaimerCollapseHeader").addEventListener("click", openDisclaimerCollapse);
+      safeBind("disclaimerCollapseHeader", "click", openDisclaimerCollapse);
 
       // 反馈过滤与搜索
-      $("feedbackSearch").addEventListener("input", function () {
+      safeBind("feedbackSearch", "input", function () {
         state.feedbackFilter.keyword = value("feedbackSearch");
         state.feedbackFilter.page = 1;
-        loadFeedbacks();
+        ignoreLoadError(loadFeedbacks());
       });
 
       document.querySelectorAll("#feedbackStatusTabs button").forEach(function (btn) {
@@ -3337,14 +3481,14 @@ const adminConsoleHtml = `<!doctype html>
           btn.classList.add("active");
           state.feedbackFilter.status = btn.dataset.status;
           state.feedbackFilter.page = 1;
-          loadFeedbacks();
+          ignoreLoadError(loadFeedbacks());
         });
       });
 
-      $("closeFeedbackDrawerBtn").addEventListener("click", closeFeedbackDrawer);
-      $("cancelFbDrawerBtn").addEventListener("click", closeFeedbackDrawer);
-      $("feedbackDrawerMask").addEventListener("click", closeFeedbackDrawer);
-      $("saveFbDrawerBtn").addEventListener("click", saveFeedbackDrawerDetail);
+      safeBind("closeFeedbackDrawerBtn", "click", closeFeedbackDrawer);
+      safeBind("cancelFbDrawerBtn", "click", closeFeedbackDrawer);
+      safeBind("feedbackDrawerMask", "click", closeFeedbackDrawer);
+      safeBind("saveFbDrawerBtn", "click", saveFeedbackDrawerDetail);
 
       // 数据资源中心事件绑定
       document.querySelectorAll("#catalogTabs button").forEach(function(btn) {
@@ -3357,64 +3501,64 @@ const adminConsoleHtml = `<!doctype html>
         });
       });
 
-      $("catalogSearch").addEventListener("input", function() {
+      safeBind("catalogSearch", "input", function() {
         state.catalogKeyword = value("catalogSearch");
         state.catalogPage = 1;
         loadCatalog();
       });
 
-      $("catalogPrevBtn").addEventListener("click", function() {
+      safeBind("catalogPrevBtn", "click", function() {
         if (state.catalogPage > 1) {
           state.catalogPage--;
           loadCatalog();
         }
       });
 
-      $("catalogNextBtn").addEventListener("click", function() {
+      safeBind("catalogNextBtn", "click", function() {
         if (state.catalogPage * state.catalogPageSize < state.catalogTotal) {
           state.catalogPage++;
           loadCatalog();
         }
       });
 
-      $("closeCatalogDrawerBtn").addEventListener("click", closeCatalogDrawer);
-      $("catalogDrawerMask").addEventListener("click", closeCatalogDrawer);
-      $("saveCatalogMetaBtn").addEventListener("click", saveCatalogMetaDetail);
+      safeBind("closeCatalogDrawerBtn", "click", closeCatalogDrawer);
+      safeBind("catalogDrawerMask", "click", closeCatalogDrawer);
+      safeBind("saveCatalogMetaBtn", "click", saveCatalogMetaDetail);
       
-      $("downloadCatalogJsonBtn").addEventListener("click", function() { exportCatalogData("json"); });
-      $("downloadCatalogCsvBtn").addEventListener("click", function() { exportCatalogData("csv"); });
+      safeBind("downloadCatalogJsonBtn", "click", function() { exportCatalogData("json"); });
+      safeBind("downloadCatalogCsvBtn", "click", function() { exportCatalogData("csv"); });
 
       // 周课表预览切换
-      $("prevPreviewWeekBtn").addEventListener("click", function() {
+      safeBind("prevPreviewWeekBtn", "click", function() {
         if (state.previewWeek > 1) {
           state.previewWeek--;
           renderMiniWeekSchedule();
         }
       });
-      $("nextPreviewWeekBtn").addEventListener("click", function() {
+      safeBind("nextPreviewWeekBtn", "click", function() {
         if (state.previewWeek < 20) {
           state.previewWeek++;
           renderMiniWeekSchedule();
         }
       });
-      $("toggleWeekendPreviewBtn").addEventListener("click", function() {
+      safeBind("toggleWeekendPreviewBtn", "click", function() {
         state.showWeekendPreview = !state.showWeekendPreview;
         renderMiniWeekSchedule();
       });
 
-      $("rawJsonCollapseHeader").addEventListener("click", function() {
+      safeBind("rawJsonCollapseHeader", "click", function() {
         var content = $("rawJsonCollapseContent");
         content.classList.toggle("open");
       });
 
       // 同步中心事件
-      $("recheckHealthBtn").addEventListener("click", function() {
+      safeBind("recheckHealthBtn", "click", function() {
         runHealthChecks();
         showToast("服务测速完成");
       });
 
       // 审计日志模块筛选
-      $("auditLogModuleFilter").addEventListener("change", function() {
+      safeBind("auditLogModuleFilter", "change", function() {
         state.auditModuleFilter = $("auditLogModuleFilter").value;
         renderAuditLogsTable();
       });
@@ -3423,11 +3567,9 @@ const adminConsoleHtml = `<!doctype html>
       clearNoticeForm();
       clearNewsForm();
       if (isLoginPage) {
-        loginView.hidden = false;
-        dashboardView.hidden = true;
+        showLoginView();
       } else {
-        loginView.hidden = true;
-        dashboardView.hidden = false;
+        showDashboardView();
         loadAll();
       }
     })();
