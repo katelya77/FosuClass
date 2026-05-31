@@ -2,8 +2,8 @@
  * 安全日志工具：提供敏感信息脱敏功能，防止在控制台或日志文件中泄露学号、密码、Cookie 或 Ticket 等信息。
  */
 
-// 敏感词正则，匹配包含密码、Cookie、Token、JSESSIONID、Session、Ticket等字段
-const SECRET_KEY_PATTERN = /(password|passwd|pwd|cookie|token|session|jsessionid|authorization|ticket)/i;
+// 敏感词正则，匹配包含密码、Cookie、Token、JSESSIONID、Session、Ticket、Execution、Captcha等字段
+const SECRET_KEY_PATTERN = /(password|passwd|pwd|cookie|token|session|jsessionid|authorization|ticket|execution|captcha)/i;
 
 /**
  * 脱敏学号
@@ -45,7 +45,7 @@ function redactSecrets(value) {
     return value
       .replace(/(JSESSIONID=)[^;\s]+/gi, "$1[REDACTED]")
       .replace(/(ticket=)[^&\s]+/gi, "$1[REDACTED]")
-      .replace(/(password|passwd|pwd|token|authorization)=([^&\s]+)/gi, "$1=[REDACTED]");
+      .replace(/(password|passwd|pwd|token|authorization|execution|captcha)=([^&\s]+)/gi, "$1=[REDACTED]");
   }
   return value;
 }

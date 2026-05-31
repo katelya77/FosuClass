@@ -444,3 +444,84 @@
 .animate-scale {
   animation: scaleUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
+
+/* 环境检测状态样式 */
+.env-status-box {
+  background: #f8fafc;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  margin-bottom: 40rpx;
+  border: 1rpx solid #e2e8f0;
+}
+
+.env-status-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.status-label {
+  font-size: 28rpx;
+  color: #5a6474;
+}
+
+.status-value {
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.status-pending {
+  color: #94a3b8;
+}
+
+.status-ok {
+  color: #16a34a;
+}
+
+.status-err {
+  color: #dc2626;
+}
+
+.env-diagnose-desc {
+  font-size: 24rpx;
+  color: #7a8494;
+  line-height: 1.5;
+  margin-top: 10rpx;
+  padding-top: 10rpx;
+  border-top: 1rpx dashed #cbd5e0;
+}
+
+/* 辅助与次级按钮 */
+.btn-secondary {
+  margin-top: 24rpx;
+  background: #ffffff;
+  color: #5a6474;
+  border: 2rpx solid #cbd5e0;
+  border-radius: 50rpx;
+  height: 100rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-secondary:active {
+  background: #f8fafc;
+}
+
+.form-footer-links {
+  display: flex;
+  justify-content: center;
+  margin-top: 30rpx;
+}
+
+.link-recheck {
+  font-size: 26rpx;
+  color: #c62828;
+  text-decoration: underline;
+  padding: 10rpx 20rpx;
+}
+

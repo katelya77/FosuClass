@@ -22,18 +22,58 @@ function isDnsError(error) {
 }
 
 /**
+ * 校验校园网及教务网连通性
+ */
+async function assertCampusNetworkReachable() {
+  const eduHost = "100.fosu.edu.cn";
+  const authHost = "authserver.fosu.edu.cn";
+
+  // 1. DNS 是否能解析 100.fosu.edu.cn
+  try {
+    await dns.lookup(eduHost);
+  } catch (error) {
+    safeLog("personal-reachability-dns-failed", { host: eduHost, error: error.message });
+    throw new Error("CAMPUS_NETWORK_REQUIRED");
+  }
+
+  // 2. authserver.fosu.edu.cn 是否能访问
+  try {
+    await axios.get(`https://${authHost}`, { timeout: 3000, validateStatus: () => true });
+  } catch (error) {
+    safeLog("personal-reachability-auth-failed", { host: authHost, error: error.message });
+    throw new Error("CAMPUS_NETWORK_REQUIRED");
+  }
+
+  // 3. 100.fosu.edu.cn 是否能访问
+  try {
+    await axios.get(`http://${eduHost}`, { timeout: 3000, validateStatus: () => true });
+  } catch (error) {
+    safeLog("personal-reachability-edu-failed", { host: eduHost, error: error.message });
+    throw new Error("CAMPUS_NETWORK_REQUIRED");
+  }
+}
+
+/**
  * 初始化个人登录会话，抓取 CAS 登录页与滑块验证码
  * @param {string} [studentId] 预检学号（不写日志）
  * @returns {Promise<Object>} 会话 ID 与滑块 Base64 图片等数据
  */
 async function startPersonalSession(studentId) {
-  // 1. 预检 100 网的 DNS 解析是否正常
-  try {
-    await dns.lookup("100.fosu.edu.cn");
-  } catch (error) {
-    safeLog("personal-session-dns-precheck-failed", { error: error.message });
-    throw new Error("EDU100_DNS_FAILED");
+  const config = require("../config");
+  if (config.CAMPUS_AGENT_ENABLED) {
+    if (!config.CAMPUS_AGENT_BASE_URL) {
+      throw new Error("VPN_GATEWAY_UNAVAILABLE");
+    }
+    return {
+      success: true,
+      useAgent: true,
+      sessionId: "agent-session-temp",
+      expiresIn: 300
+    };
   }
+
+  // 1. 预检 100 网的 DNS 解析及连通性是否正常
+  await assertCampusNetworkReachable();
 
   // 2. 初始化内存会话并生成 Session ID
   const session = createSession();
@@ -336,6 +376,42 @@ async function loginAndGetJar(sessionId, studentId, password) {
  * @returns {Promise<Object>} 连通性诊断报告
  */
 async function checkFosuNetwork() {
+  const config = require("../config");
+  if (config.CAMPUS_AGENT_ENABLED) {
+    let agentReachable = false;
+    let agentStatus = 0;
+    let agentMessage = "";
+    try {
+      if (!config.CAMPUS_AGENT_BASE_URL) {
+        throw new Error("CAMPUS_AGENT_BASE_URL 未配置");
+      }
+      // 对配置的校园代理基地址进行 GET 测试，以验证连通性
+      const res = await axios.get(config.CAMPUS_AGENT_BASE_URL, { timeout: 3000, validateStatus: () => true });
+      agentStatus = res.status;
+      if (res.status >= 200 && res.status < 500) {
+        agentReachable = true;
+      } else {
+        agentMessage = `校园代理响应异常状态码: ${res.status}`;
+      }
+    } catch (e) {
+      agentReachable = false;
+      agentMessage = `无法连接校园代理: ${e.message}`;
+    }
+
+    return {
+      success: true,
+      agentMode: true,
+      agent: {
+        reachable: agentReachable,
+        status: agentStatus,
+        message: agentMessage,
+      },
+      recommendation: agentReachable
+        ? "校园代理连接正常。当前处于实验版校园网代理网关环境，可正常同步。"
+        : `校园代理暂时不可用。原因: ${agentMessage || "连接超时"}。请检查您的代理 Agent 状态。`,
+    };
+  }
+
   const authUrl = "https://authserver.fosu.edu.cn/authserver/login?service=http%3A%2F%2F100.fosu.edu.cn%2Fcaslogin.jsp%3FkstzType%3Dnull";
   const eduHost = "100.fosu.edu.cn";
   const authHost = "authserver.fosu.edu.cn";
@@ -453,6 +529,7 @@ async function checkFosuNetwork() {
 }
 
 module.exports = {
+  assertCampusNetworkReachable,
   startPersonalSession,
   verifyPersonalSlider,
   loginAndGetJar,

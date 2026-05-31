@@ -22,6 +22,13 @@ Page({
     sessionId: "",
     captchaData: null,
 
+    // 同步环境诊断状态
+    envChecked: false,
+    envAvailable: false,
+    checkingEnv: false,
+    diagnoseMsg: "",
+    mainBtnText: "检测同步环境",
+
     // 滑块交互状态
     sliderX: 0,
     isDragging: false,
@@ -45,6 +52,104 @@ Page({
         semesterIndex: index,
       });
     }
+  },
+
+  /**
+   * 主按钮点击事件，分流检测逻辑与全校课表跳转
+   */
+  onMainBtnTap() {
+    if (this.data.envChecked && !this.data.envAvailable) {
+      // 若检测失败，文案为“暂不可用，使用全校课表”，点击后直接跳转全校课表
+      this.goToSchoolPage();
+    } else {
+      // 否则进行环境检测
+      this.diagnoseEnvironment();
+    }
+  },
+
+  /**
+   * 检测服务器的教务网连通环境
+   */
+  diagnoseEnvironment() {
+    if (this.data.checkingEnv) return;
+
+    this.setData({
+      checkingEnv: true,
+      diagnoseMsg: ""
+    });
+
+    request.get(
+      "/api/fosu/personal/diagnose",
+      {},
+      { silentError: true, showLoading: true, loadingTitle: "正在检测网络..." }
+    )
+      .then((res) => {
+        let available = false;
+        let msg = "";
+
+        if (res.agentMode) {
+          // 校园代理模式
+          available = res.agent && res.agent.reachable;
+          msg = res.recommendation || (available ? "已成功连接到校园代理网关。" : "校园代理网关连通异常。");
+        } else {
+          // 直连教务网模式
+          const authOk = res.authserver && res.authserver.reachable;
+          const eduOk = res.edu100 && res.edu100.reachable;
+          available = authOk && eduOk;
+          msg = res.recommendation || (available ? "教务网及认证系统直连通畅。" : "教务系统目前直连受限。");
+        }
+
+        this.setData({
+          checkingEnv: false,
+          envChecked: true,
+          envAvailable: available,
+          diagnoseMsg: msg,
+          mainBtnText: available ? "开始登录校验" : "暂不可用，使用全校课表"
+        });
+
+        if (!available) {
+          this.showFriendlyError("CAMPUS_NETWORK_REQUIRED", "当前服务器网络受限，无法直接访问学校教务网，请暂时使用全校课表。");
+        }
+      })
+      .catch((err) => {
+        const payload = err.payload || {};
+        let errMsg = payload.message || err.message || "请求诊断接口失败";
+        this.setData({
+          checkingEnv: false,
+          envChecked: true,
+          envAvailable: false,
+          diagnoseMsg: "服务器连接失败: " + errMsg,
+          mainBtnText: "暂不可用，使用全校课表"
+        });
+        this.showFriendlyError(payload.code, errMsg);
+      });
+  },
+
+  /**
+   * 跳转到全校课表并开启班级引导模式
+   */
+  goToSchoolPage() {
+    // 设置本地标记，开启强制引导
+    wx.setStorageSync("initSelectMode", true);
+    wx.switchTab({
+      url: "/pages/school/school",
+      success: () => {
+        // 跳转成功后重置本页诊断状态，便于返回时重新检测
+        this.resetEnvCheck();
+      }
+    });
+  },
+
+  /**
+   * 重置环境检测状态
+   */
+  resetEnvCheck() {
+    this.setData({
+      envChecked: false,
+      envAvailable: false,
+      diagnoseMsg: "",
+      mainBtnText: "检测同步环境"
+    });
   },
 
   /**
@@ -85,17 +190,26 @@ Page({
     request.post(
       "/api/fosu/personal/session/start",
       { studentId: this.data.studentId },
-      { silentError: true, loadingTitle: "正在连接教务网..." }
+      { silentError: true, loadingTitle: "正在初始化同步..." }
     )
       .then((res) => {
         this.setData({
           startingSession: false,
-          showCaptchaModal: true,
           sessionId: res.sessionId,
-          captchaData: res.captcha,
-          sliderX: 0,
-          verifyStatus: "",
         });
+
+        if (res.useAgent) {
+          // 校园代理模式：直接执行登录并抓取同步，不呼起滑块校验
+          this.loginAndSyncSchedule();
+        } else {
+          // 直连模式：呼起滑块验证
+          this.setData({
+            showCaptchaModal: true,
+            captchaData: res.captcha,
+            sliderX: 0,
+            verifyStatus: "",
+          });
+        }
       })
       .catch((err) => {
         this.setData({ startingSession: false });
@@ -283,16 +397,16 @@ Page({
     let title = "提示";
     let content = defaultMsg || "系统繁忙，请稍后再试";
 
-    if (code === "EDU100_DNS_FAILED") {
-      content = "当前同步节点无法解析教务 100 网，请稍后再试。你仍可使用全校课表。";
+    if (code === "EDU100_DNS_FAILED" || code === "UPSTREAM_DNS_FAILED") {
+      content = "当前同步节点无法解析教务网，请稍后再试。你仍可使用全校课表。";
     } else if (code === "EDU100_UNREACHABLE" || code === "CAMPUS_NETWORK_REQUIRED") {
-      content = "当前同步节点无法访问教务 100 网，可能需要校园网或校 VPN 环境。";
+      content = "当前同步服务器无法直接访问学校教务网，请先使用全校课表选择班级课表。";
     } else if (code === "AUTHSERVER_UNREACHABLE") {
       content = "暂时无法连接统一身份认证服务，请稍后再试。";
     } else if (code === "LOGIN_PAGE_CHANGED") {
       content = "学校登录页面结构可能已更新，个人同步暂时不可用。";
-    } else if (code === "SLIDER_ENDPOINT_FAILED") {
-      content = "滑块验证资源加载失败，请稍后再试。";
+    } else if (code === "SLIDER_ENDPOINT_FAILED" || code === "SLIDER_TOKEN_NOT_FOUND") {
+      content = "滑块验证资源加载失败或令牌解析失败，请稍后再试。";
     } else if (code === "SLIDER_VERIFY_FAILED") {
       content = "滑块验证失败，请重新拖动验证。";
     } else if (code === "CAS_LOGIN_FAILED" || code === "INVALID_CREDENTIALS") {
@@ -303,6 +417,12 @@ Page({
       content = "已打开个人课表页面，但解析课程失败。";
     } else if (code === "PERSONAL_SCHEDULE_EMPTY") {
       content = "同步成功，但是您在该学期中似乎没有课程排课记录。";
+    } else if (code === "VPN_GATEWAY_UNAVAILABLE") {
+      content = "校园代理网关未配置或暂时不可用，请联系管理员或使用全校课表。";
+    } else if (code === "UPSTREAM_TIMEOUT") {
+      content = "连接教务系统超时，当前公网服务器暂不支持直接同步，请稍后再试。";
+    } else if (code === "UPSTREAM_404") {
+      content = "教务系统接口或页面不存在(404)，个人同步暂时不可用。";
     }
 
     wx.showModal({

@@ -23,6 +23,41 @@
 - **用户自发贡献**：当某些班级的课表数据未被同步时，学生可以通过小程序端“设置 -> 贡献班级课表”功能，粘贴本地导出的课表数据。贡献数据默认进入待审核状态，待管理员在后台核对通过后合并发布，从而彻底免去对单一维护者学号的长期依赖。
 - **第三方 HAR 警示**：虽然我们对第三方已有小程序（如“伴你上课”）的抓包 HAR 文件进行了脱敏分析，以对齐数据结构，但分析表明其直接在非受控第三方服务器上收集学生的学号与密码，存在极高安全隐患。**FosuClass 正式方案中严禁使用或依赖任何第三方接口。**
 
+### 2. 预留“校园代理 Agent”机制（实验功能）
+
+针对公网服务器（如 Oracle VPS 等）无法访问 `100.fosu.edu.cn` 的限制，本项目预留了“校园代理 Agent”转发架构。
+
+#### 代理部署硬件推荐
+后续您可以在以下任意能够连通学校内网（如直接处于校园网环境，或保持 EasyConnect VPN 在线）的设备上部署专属代理 Agent：
+- **宿舍闲置电脑 / 笔记本**
+- **N100 软路由 / 小主机**
+- **树莓派 / 玩客云 / 各种开发板**
+- **校内闲置服务器**
+
+#### 主服务配置
+在公网运行的 FosuClass 主服务 `server/.env` 中配置以下环境变量即可激活：
+```bash
+# 是否开启代理转发 (true / false)
+CAMPUS_AGENT_ENABLED=true
+# 校园网内 Agent 代理服务的公网/局域网暴露地址
+CAMPUS_AGENT_BASE_URL=http://your-agent-host:port
+# 主服务与 Agent 之间的鉴权 Token
+CAMPUS_AGENT_TOKEN=your_secure_agent_token_here
+```
+
+#### 代理协议说明
+当 `CAMPUS_AGENT_ENABLED=true` 时，个人同步将跳过滑块校验和主服务直连，自动以 `Authorization: Bearer ${CAMPUS_AGENT_TOKEN}` 鉴权头向 Agent 节点发起一次性请求：
+```json
+POST /api/fosu/personal-sync
+Body:
+{
+  "studentId": "...",
+  "password": "...",
+  "semester": "..."
+}
+```
+主服务只负责透传与对返回的数据结果进行格式遮蔽脱敏，绝不保存学生密码，确保安全。
+
 ---
 
 ## 本地运行后端 (server)

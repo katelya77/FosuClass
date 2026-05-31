@@ -2,62 +2,102 @@
   <!-- 头部说明卡片 -->
   <view class="card intro-card">
     <view class="intro-title">
-      <icon type="info" size="20" color="#c62828" class="intro-icon" />
-      <text>同步说明</text>
+      <icon type="warn" size="20" color="#c62828" class="intro-icon" />
+      <text>同步说明（实验功能）</text>
     </view>
     <view class="intro-content">
-      <view class="intro-item">1. 本功能通过学校统一认证网关（CAS）安全抓取您的个人课表。</view>
-      <view class="intro-item">2. 您的密码仅在本次登录校验中瞬时使用，<text class="highlight">绝不会</text>被落盘保存或写入任何日志。</view>
-      <view class="intro-item">3. 本服务需要处于校内网/校园网环境方可联通，外网或未开启校园 VPN 时可能暂时无法访问。</view>
+      <view class="intro-item">1. 本功能需要校园网 / 校园 VPN 环境。当前公网上的主服务器无法直接访问学校 100 网。</view>
+      <view class="intro-item">2. 您的学号与密码仅在登录校验中瞬时处理，<text class="highlight">绝不会</text>被落库保存、不会写入任何日志，请放心使用。</view>
+      <view class="intro-item">3. 个人课表同步功能当前仍处于实验与适配阶段。推荐您暂时通过<text class="highlight">“全校课表”</text>直接选择并保存您的班级课表。</view>
     </view>
   </view>
 
   <!-- 输入表单卡片 -->
   <view class="card form-card" wx:if="{{!syncSuccess}}">
-    <view class="form-title">教务登录认证</view>
-    
-    <view class="form-group">
-      <text class="form-label">学号</text>
-      <input
-        class="form-input"
-        type="number"
-        value="{{studentId}}"
-        placeholder="请输入教务网学号"
-        placeholder-class="input-placeholder"
-        bindinput="onStudentIdInput"
-      />
-    </view>
-
-    <view class="form-group">
-      <text class="form-label">密码</text>
-      <input
-        class="form-input"
-        password
-        value="{{password}}"
-        placeholder="请输入统一认证密码"
-        placeholder-class="input-placeholder"
-        bindinput="onPasswordInput"
-      />
-    </view>
-
-    <view class="form-group">
-      <text class="form-label">目标同步学期</text>
-      <picker mode="selector" range="{{semesterOptions}}" value="{{semesterIndex}}" bindchange="onSemesterChange">
-        <view class="picker-selector">
-          <text>{{semesterOptions[semesterIndex]}}</text>
-          <text class="picker-arrow">▼</text>
+    <!-- 如果还没有检测或检测不可用，显示环境检测区 -->
+    <view class="env-check-section" wx:if="{{!envChecked || !envAvailable}}">
+      <view class="form-title">同步环境检测</view>
+      
+      <view class="env-status-box">
+        <view class="env-status-row">
+          <text class="status-label">服务器网络状态：</text>
+          <text class="status-value {{envChecked ? (envAvailable ? 'status-ok' : 'status-err') : 'status-pending'}}">
+            {{envChecked ? (envAvailable ? '正常' : '异常') : '未检测'}}
+          </text>
         </view>
-      </picker>
+        <view class="env-diagnose-desc" wx:if="{{diagnoseMsg}}">
+          {{diagnoseMsg}}
+        </view>
+      </view>
+      
+      <button
+        class="btn-submit"
+        loading="{{checkingEnv}}"
+        disabled="{{checkingEnv}}"
+        bindtap="onMainBtnTap"
+      >
+        {{checkingEnv ? '正在检测中...' : mainBtnText}}
+      </button>
+
+      <button
+        class="btn-secondary"
+        bindtap="goToSchoolPage"
+      >
+        去选择班级课表
+      </button>
     </view>
 
-    <button
-      class="btn-submit"
-      loading="{{startingSession}}"
-      disabled="{{!studentId || !password || startingSession}}"
-      bindtap="startLoginFlow"
-    >
-      {{startingSession ? '正在初始化...' : '开始登录校验'}}
-    </button>
+    <!-- 检测通过后，显示输入表单 -->
+    <view class="form-fields-section" wx:else>
+      <view class="form-title">教务登录认证 (实验网关)</view>
+      
+      <view class="form-group">
+        <text class="form-label">学号</text>
+        <input
+          class="form-input"
+          type="number"
+          value="{{studentId}}"
+          placeholder="请输入教务网学号"
+          placeholder-class="input-placeholder"
+          bindinput="onStudentIdInput"
+        />
+      </view>
+
+      <view class="form-group">
+        <text class="form-label">密码</text>
+        <input
+          class="form-input"
+          password
+          value="{{password}}"
+          placeholder="请输入统一认证密码"
+          placeholder-class="input-placeholder"
+          bindinput="onPasswordInput"
+        />
+      </view>
+
+      <view class="form-group">
+        <text class="form-label">目标同步学期</text>
+        <picker mode="selector" range="{{semesterOptions}}" value="{{semesterIndex}}" bindchange="onSemesterChange">
+          <view class="picker-selector">
+            <text>{{semesterOptions[semesterIndex]}}</text>
+            <text class="picker-arrow">▼</text>
+          </view>
+        </picker>
+      </view>
+
+      <button
+        class="btn-submit"
+        loading="{{startingSession}}"
+        disabled="{{!studentId || !password || startingSession}}"
+        bindtap="startLoginFlow"
+      >
+        {{startingSession ? '正在初始化...' : '开始登录校验'}}
+      </button>
+
+      <view class="form-footer-links">
+        <text class="link-recheck" bindtap="resetEnvCheck">重新检测环境</text>
+      </view>
+    </view>
   </view>
 
   <!-- 校验及同步成功结果展示 -->
