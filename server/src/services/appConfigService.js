@@ -63,7 +63,15 @@ function writeJsonAtomic(filePath, data) {
   ensureStorageDir();
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
-  fs.renameSync(tempPath, filePath);
+  try {
+    if (fs.existsSync(filePath) && process.platform === "win32") {
+      try { fs.unlinkSync(filePath); } catch (e) {}
+    }
+    fs.renameSync(tempPath, filePath);
+  } catch (error) {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+    try { fs.unlinkSync(tempPath); } catch (e) {}
+  }
 }
 
 function toText(value, maxLength) {

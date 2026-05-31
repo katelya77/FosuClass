@@ -109,17 +109,21 @@
 }
 
 .grid-custom-tag {
-  align-self: flex-start;
-  max-width: 78rpx;
-  height: 24rpx;
-  margin-bottom: 3rpx;
+  position: absolute;
+  right: 6rpx;
+  top: 6rpx;
   padding: 0 6rpx;
-  border-radius: 6rpx;
-  background: rgba(255, 255, 255, 0.22);
-  color: #ffffff;
-  font-size: 15rpx;
+  border-radius: 4rpx;
+  background: rgba(0, 0, 0, 0.15);
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 14rpx;
   font-weight: 800;
-  line-height: 24rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  height: 20rpx;
+  pointer-events: none;
 }
 
 .status-ongoing {

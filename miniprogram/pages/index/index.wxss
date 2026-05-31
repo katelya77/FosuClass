@@ -72,7 +72,10 @@
   color: #b4232a;
   font-size: 23rpx;
   font-weight: 800;
-  line-height: 48rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .header-edit-btn {
@@ -84,7 +87,10 @@
   color: #3654d4;
   font-size: 22rpx;
   font-weight: 800;
-  line-height: 48rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .class-line,
@@ -446,7 +452,10 @@
   color: #3654d4;
   font-size: 19rpx;
   font-weight: 900;
-  line-height: 34rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .notice-label.urgent {
@@ -476,7 +485,10 @@
   background: rgba(255, 255, 255, 0.72);
   color: #8a94a6;
   font-size: 30rpx;
-  line-height: 38rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
   padding: 0;
 }
 
@@ -517,7 +529,6 @@
 
 .empty-btn {
   height: 72rpx;
-  line-height: 70rpx;
   font-size: 24rpx;
   font-weight: bold;
   border-radius: 36rpx;
@@ -525,6 +536,10 @@
   background: #f7f9fc;
   color: #4a5568;
   border: 1rpx solid #cbd5e0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .empty-btn.primary {
@@ -532,6 +547,10 @@
   color: #ffffff;
   border-color: #c62828;
   box-shadow: 0 4rpx 12rpx rgba(198, 40, 40, 0.2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 /* 周课表控制区 */
@@ -635,11 +654,13 @@
 .footer-btn {
   flex: 1;
   height: 80rpx;
-  line-height: 80rpx;
   font-size: 26rpx;
   font-weight: bold;
   border-radius: 40rpx;
-  text-align: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .footer-btn.primary-btn {
@@ -970,11 +991,14 @@
 .init-btn {
   width: 100% !important;
   height: 80rpx;
-  line-height: 80rpx;
   border-radius: 40rpx;
   font-size: 26rpx;
   font-weight: bold;
   margin-bottom: 16rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .init-btn.primary-btn {
@@ -994,6 +1018,10 @@
   font-size: 20rpx;
   border: none;
   margin-top: 10rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 /* 更多菜单 */
@@ -1071,7 +1099,10 @@
   color: #3654d4;
   font-size: 26rpx;
   font-weight: 900;
-  line-height: 64rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .notice-modal-title {
@@ -1100,6 +1131,10 @@
   color: #ffffff;
   font-size: 26rpx;
   font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .disclaimer-scroll {

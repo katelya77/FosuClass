@@ -1,5 +1,5 @@
 <view class="empty-state">
-  <view class="empty-symbol">∅</view>
+  <view class="empty-symbol">{{symbol}}</view>
   <view class="empty-title">{{title}}</view>
   <view wx:if="{{desc}}" class="empty-desc">{{desc}}</view>
 </view>
