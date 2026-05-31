@@ -21,6 +21,13 @@ const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
 const HISTORY_DIR = path.join(SNAPSHOTS_DIR, "history");
 const RESOURCE_UPLOAD_DIR = path.join(STORAGE_DIR, "resource-upload-staging");
 
+const DATA_DIR = path.join(__dirname, "../../data");
+const BACKUPS_DIR = path.join(DATA_DIR, "backups");
+const AUDIT_LOG_PATH = path.join(DATA_DIR, "admin-audit-log.jsonl");
+const CATALOG_META_PATH = path.join(STORAGE_DIR, "catalog-meta.json");
+const QUALITY_IGNORES_PATH = path.join(STORAGE_DIR, "quality-ignores.json");
+const SYNC_HISTORY_PATH = path.join(DATA_DIR, "sync-history.json");
+
 // 确保目录存在
 if (!fs.existsSync(STORAGE_DIR)) {
   fs.mkdirSync(STORAGE_DIR, { recursive: true });
@@ -33,6 +40,61 @@ if (!fs.existsSync(HISTORY_DIR)) {
 }
 if (!fs.existsSync(RESOURCE_UPLOAD_DIR)) {
   fs.mkdirSync(RESOURCE_UPLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(DATA_DIR)) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+}
+if (!fs.existsSync(BACKUPS_DIR)) {
+  fs.mkdirSync(BACKUPS_DIR, { recursive: true });
+}
+
+/**
+ * 自动备份机制
+ */
+function createBackup(type, sourceFile) {
+  try {
+    if (!fs.existsSync(sourceFile)) return;
+    const now = new Date();
+    const pad = (num) => String(num).padStart(2, "0");
+    const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    const backupName = `${type}-${timestamp}.json`;
+    const destPath = path.join(BACKUPS_DIR, backupName);
+    fs.copyFileSync(sourceFile, destPath);
+    
+    // 保留最近 30 个备份文件
+    const files = fs.readdirSync(BACKUPS_DIR)
+      .filter(f => f.startsWith(`${type}-`) && f.endsWith(".json"))
+      .map(f => ({ name: f, path: path.join(BACKUPS_DIR, f), time: fs.statSync(path.join(BACKUPS_DIR, f)).mtime.getTime() }))
+      .sort((a, b) => b.time - a.time);
+      
+    if (files.length > 30) {
+      files.slice(30).forEach(f => {
+        try { fs.unlinkSync(f.path); } catch (e) {}
+      });
+    }
+  } catch (error) {
+    safeLog("create-backup-failed", { type, error: error.message });
+  }
+}
+
+/**
+ * 审计日志写入
+ */
+function writeAuditLog(req, action, moduleName, target, summary) {
+  try {
+    const logItem = {
+      time: new Date().toISOString(),
+      action,
+      module: moduleName,
+      target: target || "",
+      operator: "admin",
+      summary: summary || "",
+      ip: req.ip || req.headers["x-forwarded-for"] || ""
+    };
+    fs.appendFileSync(AUDIT_LOG_PATH, `${JSON.stringify(logItem)}\n`, "utf-8");
+  } catch (error) {
+    safeLog("write-audit-log-failed", { error: error.message });
+  }
 }
 
 // 缓存文件路径映射
@@ -223,7 +285,15 @@ function readJsonArray(filePath) {
 function writeJsonAtomic(filePath, data) {
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
-  fs.renameSync(tempPath, filePath);
+  try {
+    if (fs.existsSync(filePath) && process.platform === "win32") {
+      try { fs.unlinkSync(filePath); } catch (e) {}
+    }
+    fs.renameSync(tempPath, filePath);
+  } catch (error) {
+    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+    try { fs.unlinkSync(tempPath); } catch (e) {}
+  }
 }
 
 function getResourceItemKey(resourceType, item, index) {
@@ -1461,7 +1531,38 @@ router.post(
 
 router.get("/dashboard", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    return res.json(appConfigService.getAdminDashboard());
+    const dashboardData = appConfigService.getAdminDashboard();
+    if (dashboardData.success && dashboardData.data) {
+      // 聚合全校教室占用热力图数据
+      const classrooms = readJsonArray(FILE_MAP["classroom-schedules"]);
+      const heatmap = Array.from({ length: 7 }, () => Array(14).fill(0));
+      
+      classrooms.forEach(room => {
+        (room.courses || []).forEach(c => {
+          const day = (c.dayOfWeek || c.weekday || 1) - 1;
+          const sections = c.sections || [];
+          if (day >= 0 && day < 7) {
+            sections.forEach(s => {
+              const secIdx = parseInt(s, 10) - 1;
+              if (secIdx >= 0 && secIdx < 14) {
+                heatmap[day][secIdx]++;
+              }
+            });
+          }
+        });
+      });
+      
+      const totalRooms = classrooms.length || 1;
+      const heatmapPercent = Array.from({ length: 7 }, () => Array(14).fill(0));
+      for (let d = 0; d < 7; d++) {
+        for (let s = 0; s < 14; s++) {
+          heatmapPercent[d][s] = Math.min(100, Math.round((heatmap[d][s] / totalRooms) * 100));
+        }
+      }
+      
+      dashboardData.data.classroomHeatmap = heatmapPercent;
+    }
+    return res.json(dashboardData);
   } catch (error) {
     safeLog("admin-dashboard-failed", { error: error.message });
     return res.status(500).json({ success: false, message: error.message });
@@ -1483,9 +1584,12 @@ router.get("/config", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.post("/config", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    createBackup("config", appConfigService.CONFIG_PATH);
+    const result = appConfigService.saveAdminConfig(req.body || {});
+    writeAuditLog(req, "save", "config", "admin-config", "保存系统配置并应用");
     return res.json({
       success: true,
-      data: appConfigService.saveAdminConfig(req.body || {}),
+      data: result,
       publicConfig: appConfigService.getPublicAppConfig().data,
     });
   } catch (error) {
@@ -1508,9 +1612,12 @@ router.get("/notices", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.post("/notices", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    createBackup("notices", appConfigService.NOTICES_PATH);
+    const item = appConfigService.createNotice(req.body || {});
+    writeAuditLog(req, "create", "notices", item.id, `创建公告: ${item.title}`);
     return res.json({
       success: true,
-      item: appConfigService.createNotice(req.body || {}),
+      item,
     });
   } catch (error) {
     safeLog("admin-notice-create-failed", { error: error.message });
@@ -1520,9 +1627,12 @@ router.post("/notices", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.put("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    createBackup("notices", appConfigService.NOTICES_PATH);
+    const item = appConfigService.updateNotice(req.params.id, req.body || {});
+    writeAuditLog(req, "update", "notices", req.params.id, `编辑公告: ${item.title}`);
     return res.json({
       success: true,
-      item: appConfigService.updateNotice(req.params.id, req.body || {}),
+      item,
     });
   } catch (error) {
     safeLog("admin-notice-update-failed", { id: req.params.id, error: error.message });
@@ -1532,9 +1642,12 @@ router.put("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.delete("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    createBackup("notices", appConfigService.NOTICES_PATH);
+    const deleted = appConfigService.deleteNotice(req.params.id);
+    writeAuditLog(req, "delete", "notices", req.params.id, `删除公告 id: ${req.params.id}`);
     return res.json({
       success: true,
-      deleted: appConfigService.deleteNotice(req.params.id),
+      deleted,
     });
   } catch (error) {
     safeLog("admin-notice-delete-failed", { id: req.params.id, error: error.message });
@@ -1556,9 +1669,12 @@ router.get("/news", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.post("/news", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    createBackup("news", appConfigService.NEWS_PATH);
+    const item = appConfigService.createNews(req.body || {});
+    writeAuditLog(req, "create", "news", item.id, `创建动态: ${item.title}`);
     return res.json({
       success: true,
-      item: appConfigService.createNews(req.body || {}),
+      item,
     });
   } catch (error) {
     safeLog("admin-news-create-failed", { error: error.message });
@@ -1568,9 +1684,12 @@ router.post("/news", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.put("/news/:id", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    createBackup("news", appConfigService.NEWS_PATH);
+    const item = appConfigService.updateNews(req.params.id, req.body || {});
+    writeAuditLog(req, "update", "news", req.params.id, `编辑动态: ${item.title}`);
     return res.json({
       success: true,
-      item: appConfigService.updateNews(req.params.id, req.body || {}),
+      item,
     });
   } catch (error) {
     safeLog("admin-news-update-failed", { id: req.params.id, error: error.message });
@@ -1580,9 +1699,12 @@ router.put("/news/:id", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.delete("/news/:id", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    createBackup("news", appConfigService.NEWS_PATH);
+    const deleted = appConfigService.deleteNews(req.params.id);
+    writeAuditLog(req, "delete", "news", req.params.id, `删除动态 id: ${req.params.id}`);
     return res.json({
       success: true,
-      deleted: appConfigService.deleteNews(req.params.id),
+      deleted,
     });
   } catch (error) {
     safeLog("admin-news-delete-failed", { id: req.params.id, error: error.message });
@@ -1609,7 +1731,10 @@ router.get("/feedbacks", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.put("/feedbacks/:id", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    const feedbackFile = path.join(STORAGE_DIR, "feedbacks.json");
+    createBackup("feedback", feedbackFile);
     const record = feedbackService.updateFeedbackReview(req.params.id, req.body || {});
+    writeAuditLog(req, "update", "feedback", req.params.id, `编辑反馈备注及状态: ${req.body.status || record.status}`);
     return res.json({
       success: true,
       item: record,
@@ -1679,20 +1804,797 @@ router.get("/feedback/:id", verifyAdminToken, (req, res) => {
   }
 });
 
-router.post("/feedback/:id/status", verifyAdminToken, (req, res) => {
+/**
+ * 数据质量检测中心检测核心逻辑
+ */
+function generateQualityReport() {
+  const classes = readJsonArray(FILE_MAP["class-schedules"]);
+  const teachers = readJsonArray(FILE_MAP["teacher-schedules"]);
+  const classrooms = readJsonArray(FILE_MAP["classroom-schedules"]);
+  
+  let totalCoursesCount = 0;
+  let missingTeacher = 0;
+  let missingClassroom = 0;
+  let missingWeeks = 0;
+  let missingSections = 0;
+  let duplicateCount = 0;
+  let emptyClassSchedules = 0;
+  let abnormalLessCourses = 0;
+  
+  const anomalies = [];
+  
+  let ignores = [];
   try {
-    const record = feedbackService.updateFeedbackStatus(req.params.id, req.body.status);
+    if (fs.existsSync(QUALITY_IGNORES_PATH)) {
+      ignores = JSON.parse(fs.readFileSync(QUALITY_IGNORES_PATH, "utf-8"));
+    }
+  } catch (e) {}
+  
+  const isIgnored = (type, target) => Array.isArray(ignores) && ignores.some(ig => ig.type === type && ig.target === target);
+
+  classes.forEach(c => {
+    const className = c.className || "";
+    const courses = c.courses || [];
+    totalCoursesCount += courses.length;
+    
+    if (courses.length === 0) {
+      emptyClassSchedules++;
+      if (!isIgnored("empty-schedule", className)) {
+        anomalies.push({
+          type: "empty-schedule",
+          target: className,
+          original: "课表无课程安排数据",
+          suggestion: "核实班级是否本学期确无课，或重新同步",
+          severity: "warning"
+        });
+      }
+    } else if (courses.length < 3) {
+      abnormalLessCourses++;
+      if (!isIgnored("few-courses", className)) {
+        anomalies.push({
+          type: "few-courses",
+          target: className,
+          original: `课程数量较少: 仅 ${courses.length} 门课`,
+          suggestion: "核查该班级排课数据是否解析完整",
+          severity: "info"
+        });
+      }
+    }
+    
+    const timeSlots = {};
+    courses.forEach(course => {
+      if (!course.courseName) {
+        if (!isIgnored("missing-coursename", className)) {
+          anomalies.push({
+            type: "missing-coursename",
+            target: className,
+            original: "包含空的课程名称",
+            suggestion: "核对并补充该课程的名称",
+            severity: "danger"
+          });
+        }
+      }
+      if (!course.teacherName) {
+        missingTeacher++;
+        if (!isIgnored("missing-teacher", `${className}:${course.courseName}`)) {
+          anomalies.push({
+            type: "missing-teacher",
+            target: `${className}:${course.courseName}`,
+            original: `课程《${course.courseName}》缺少授课教师`,
+            suggestion: "补充授课教师姓名或填写'见通知'",
+            severity: "info"
+          });
+        }
+      }
+      if (!course.classroom) {
+        missingClassroom++;
+        if (!isIgnored("missing-classroom", `${className}:${course.courseName}`)) {
+          anomalies.push({
+            type: "missing-classroom",
+            target: `${className}:${course.courseName}`,
+            original: `课程《${course.courseName}》缺少上课教室`,
+            suggestion: "补充上课课室名称",
+            severity: "warning"
+          });
+        }
+      }
+      
+      const weeks = course.weeks || [];
+      const sections = course.sections || [];
+      const day = course.dayOfWeek || course.weekday || 0;
+      
+      if (weeks.length === 0) missingWeeks++;
+      if (sections.length === 0) missingSections++;
+      
+      weeks.forEach(w => {
+        sections.forEach(s => {
+          const key = `${w}_${day}_${s}`;
+          if (timeSlots[key] && timeSlots[key] !== course.courseName) {
+            duplicateCount++;
+            const targetKey = `${className}:${key}`;
+            if (!isIgnored("class-conflict", targetKey)) {
+              anomalies.push({
+                type: "class-conflict",
+                target: targetKey,
+                original: `班级课表第 ${w} 周星期 ${day} 第 ${s} 节课程重叠: 《${timeSlots[key]}》与《${course.courseName}》`,
+                suggestion: "确认是否为合班课、多地点可选课程，或解析数据重叠",
+                severity: "danger"
+              });
+            }
+          }
+          timeSlots[key] = course.courseName;
+        });
+      });
+    });
+  });
+
+  teachers.forEach(t => {
+    const teacherName = t.teacherName || "";
+    const courses = t.courses || [];
+    const timeSlots = {};
+    courses.forEach(course => {
+      const weeks = course.weeks || [];
+      const sections = course.sections || [];
+      const day = course.dayOfWeek || course.weekday || 0;
+      const room = course.classroom || "未知";
+      
+      weeks.forEach(w => {
+        sections.forEach(s => {
+          const key = `${w}_${day}_${s}`;
+          if (timeSlots[key] && timeSlots[key] !== room) {
+            const targetKey = `${teacherName}:${key}`;
+            if (!isIgnored("teacher-conflict", targetKey)) {
+              anomalies.push({
+                type: "teacher-conflict",
+                target: targetKey,
+                original: `教师冲突: 同一时间在 [${timeSlots[key]}] 与 [${room}] 均有上课安排`,
+                suggestion: "检查教师是否同时被派往两地授课",
+                severity: "danger"
+              });
+            }
+          }
+          timeSlots[key] = room;
+        });
+      });
+    });
+  });
+
+  classrooms.forEach(c => {
+    const roomName = c.roomName || c.classroom || "";
+    if (!roomName) return;
+    const courses = c.courses || [];
+    const timeSlots = {};
+    courses.forEach(course => {
+      const weeks = course.weeks || [];
+      const sections = course.sections || [];
+      const day = course.dayOfWeek || course.weekday || 0;
+      const desc = `${course.teacherName || "未知"}:${course.className || "未知"}`;
+      
+      weeks.forEach(w => {
+        sections.forEach(s => {
+          const key = `${w}_${day}_${s}`;
+          if (timeSlots[key] && timeSlots[key] !== desc) {
+            const targetKey = `${roomName}:${key}`;
+            if (!isIgnored("classroom-conflict", targetKey)) {
+              anomalies.push({
+                type: "classroom-conflict",
+                target: targetKey,
+                original: `教室冲突: 同一时间被 [${timeSlots[key]}] 和 [${desc}] 重叠使用`,
+                suggestion: "核实该教室是否为多班合课，或发生撞室排错",
+                severity: "danger"
+              });
+            }
+          }
+          timeSlots[key] = desc;
+        });
+      });
+    });
+  });
+
+  return {
+    stats: {
+      totalCoursesCount,
+      missingTeacher,
+      missingClassroom,
+      missingWeeks,
+      missingSections,
+      duplicateCount,
+      emptyClassSchedules,
+      abnormalLessCourses,
+      anomalyCount: anomalies.length
+    },
+    anomalies
+  };
+}
+
+function getCatalogMeta() {
+  try {
+    if (fs.existsSync(CATALOG_META_PATH)) {
+      return JSON.parse(fs.readFileSync(CATALOG_META_PATH, "utf-8"));
+    }
+  } catch (e) {}
+  return {};
+}
+
+function saveCatalogMeta(meta) {
+  try {
+    writeJsonAtomic(CATALOG_META_PATH, meta);
+  } catch (e) {
+    safeLog("save-catalog-meta-failed", { error: e.message });
+  }
+}
+
+/**
+ * 1. GET /api/admin/catalog/stats
+ * 数据资源指标统计
+ */
+router.get("/catalog/stats", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const catalog = readJsonFile(FILE_MAP.catalog, { colleges: [], semesters: [], grades: [] });
+    const classes = readJsonArray(FILE_MAP["class-schedules"]);
+    const teachers = readJsonArray(FILE_MAP["teacher-schedules"]);
+    const classrooms = readJsonArray(FILE_MAP["classroom-schedules"]);
+    const courses = readJsonArray(FILE_MAP["course-schedules"]);
+    
+    const meta = resolveDataVersion(appConfigService.getAdminConfig());
+    
     return res.json({
       success: true,
-      feedback: record,
-      stats: feedbackService.getFeedbackStats(),
+      data: {
+        classCount: classes.length,
+        teacherCount: teachers.length,
+        classroomCount: classrooms.length,
+        courseCount: courses.length,
+        collegeCount: (catalog.colleges || []).length,
+        semesterCount: (catalog.semesters || []).length,
+        gradeCount: (catalog.grades || []).length,
+        currentSemester: catalog.semesters?.[0]?.value || "2025-2026-2",
+        updatedAt: meta.classScheduleUpdatedAt || new Date().toISOString()
+      }
     });
   } catch (error) {
-    safeLog("admin-feedback-status-failed", { id: req.params.id, error: error.message });
-    return res.status(error.statusCode || 500).json({
-      success: false,
-      message: error.message,
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 2. GET /api/admin/catalog/list
+ * 数据分类列表查询 (行政班、教师、教室、课程、学院专业、原始快照)
+ */
+router.get("/catalog/list", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const { type, semester, keyword, page = 1, pageSize = 20 } = req.query;
+    const limit = parseInt(pageSize, 10);
+    const offset = (parseInt(page, 10) - 1) * limit;
+    const kw = String(keyword || "").trim().toLowerCase();
+    
+    const catMeta = getCatalogMeta();
+    let list = [];
+    
+    if (type === "class") {
+      const raw = readJsonArray(FILE_MAP["class-schedules"]);
+      list = raw.map(item => {
+        const metaInfo = catMeta[`class::${item.className}`] || {};
+        return {
+          id: item.className,
+          className: item.className,
+          collegeName: item.collegeName || "其他",
+          majorName: item.majorName || "通用",
+          grade: item.grade || "-",
+          semester: item.semester || semester || "-",
+          coursesCount: (item.courses || []).length,
+          displayName: metaInfo.displayName || "",
+          note: metaInfo.note || "",
+          hidden: !!metaInfo.hidden,
+          tags: metaInfo.tags || []
+        };
+      });
+      if (semester) {
+        list = list.filter(x => x.semester === semester);
+      }
+      if (kw) {
+        list = list.filter(x => 
+          x.className.toLowerCase().includes(kw) || 
+          x.collegeName.toLowerCase().includes(kw) || 
+          x.majorName.toLowerCase().includes(kw) ||
+          (x.displayName && x.displayName.toLowerCase().includes(kw))
+        );
+      }
+    } else if (type === "teacher") {
+      const raw = readJsonArray(FILE_MAP["teacher-schedules"]);
+      list = raw.map(item => {
+        const metaInfo = catMeta[`teacher::${item.teacherName}`] || {};
+        const classes = Array.from(new Set((item.courses || []).map(c => c.className).filter(Boolean)));
+        return {
+          id: item.teacherName,
+          teacherName: item.teacherName,
+          collegeName: item.collegeName || "教务系统",
+          semester: item.semester || semester || "-",
+          coursesCount: (item.courses || []).length,
+          classesCount: classes.length,
+          displayName: metaInfo.displayName || "",
+          note: metaInfo.note || "",
+          hidden: !!metaInfo.hidden,
+          tags: metaInfo.tags || []
+        };
+      });
+      if (semester) {
+        list = list.filter(x => x.semester === semester);
+      }
+      if (kw) {
+        list = list.filter(x => 
+          x.teacherName.toLowerCase().includes(kw) || 
+          x.collegeName.toLowerCase().includes(kw) ||
+          (x.displayName && x.displayName.toLowerCase().includes(kw))
+        );
+      }
+    } else if (type === "classroom") {
+      const raw = readJsonArray(FILE_MAP["classroom-schedules"]);
+      list = raw.map(item => {
+        const metaInfo = catMeta[`classroom::${item.roomName}`] || {};
+        const count = (item.courses || []).length;
+        const sectionsSet = new Set();
+        (item.courses || []).forEach(c => {
+          (c.weeks || []).forEach(w => {
+            (c.sections || []).forEach(s => {
+              sectionsSet.add(`${w}_${c.dayOfWeek || c.weekday}_${s}`);
+            });
+          });
+        });
+        const occupationRate = Math.min(100, Math.round((sectionsSet.size / 98) * 100)); // 估算 7天*14节 = 98节 为满额
+        
+        let buildingName = "其他";
+        const buildingMatch = item.roomName.match(/^([^\d]+)/);
+        if (buildingMatch) {
+          buildingName = buildingMatch[1].trim();
+        }
+        
+        return {
+          id: item.roomName,
+          roomName: item.roomName,
+          buildingName,
+          semester: item.semester || semester || "-",
+          coursesCount: count,
+          occupationRate: `${occupationRate}%`,
+          displayName: metaInfo.displayName || "",
+          note: metaInfo.note || "",
+          hidden: !!metaInfo.hidden,
+          tags: metaInfo.tags || []
+        };
+      });
+      if (semester) {
+        list = list.filter(x => x.semester === semester);
+      }
+      if (kw) {
+        list = list.filter(x => 
+          x.roomName.toLowerCase().includes(kw) || 
+          x.buildingName.toLowerCase().includes(kw) ||
+          (x.displayName && x.displayName.toLowerCase().includes(kw))
+        );
+      }
+    } else if (type === "course") {
+      const raw = readJsonArray(FILE_MAP["course-schedules"]);
+      list = raw.map(item => {
+        const metaInfo = catMeta[`course::${item.courseName}`] || {};
+        const teachers = Array.from(new Set((item.courses || []).map(c => c.teacherName).filter(Boolean)));
+        const classes = Array.from(new Set((item.courses || []).map(c => c.className).filter(Boolean)));
+        const classrooms = Array.from(new Set((item.courses || []).map(c => c.classroom).filter(Boolean)));
+        return {
+          id: item.courseName,
+          courseName: item.courseName,
+          collegeName: item.collegeName || "教务公开课",
+          semester: item.semester || semester || "-",
+          teachersCount: teachers.length,
+          classesCount: classes.length,
+          classroomsCount: classrooms.length,
+          displayName: metaInfo.displayName || "",
+          note: metaInfo.note || "",
+          hidden: !!metaInfo.hidden,
+          tags: metaInfo.tags || []
+        };
+      });
+      if (semester) {
+        list = list.filter(x => x.semester === semester);
+      }
+      if (kw) {
+        list = list.filter(x => 
+          x.courseName.toLowerCase().includes(kw) || 
+          x.collegeName.toLowerCase().includes(kw) ||
+          (x.displayName && x.displayName.toLowerCase().includes(kw))
+        );
+      }
+    } else if (type === "major") {
+      const majorsPayload = readJsonFile(path.join(STORAGE_DIR, "majors-index.json"), { colleges: [] });
+      const flat = [];
+      (majorsPayload.colleges || []).forEach(college => {
+        (college.grades || []).forEach(gradeItem => {
+          (gradeItem.majors || []).forEach(m => {
+            flat.push({
+              collegeCode: college.collegeCode,
+              collegeName: college.collegeName,
+              grade: gradeItem.grade,
+              majorCode: m.majorCode,
+              majorName: m.majorName,
+              semester: majorsPayload.semester || "-"
+            });
+          });
+        });
+      });
+      list = flat;
+      if (kw) {
+        list = list.filter(x => 
+          x.majorName.toLowerCase().includes(kw) || 
+          x.collegeName.toLowerCase().includes(kw) || 
+          x.grade.includes(kw)
+        );
+      }
+    } else if (type === "snapshot") {
+      const snapFiles = fs.existsSync(SNAPSHOTS_DIR) ? fs.readdirSync(SNAPSHOTS_DIR) : [];
+      list = snapFiles
+        .filter(f => f.endsWith(".json"))
+        .map(f => {
+          const stat = fs.statSync(path.join(SNAPSHOTS_DIR, f));
+          return {
+            id: f,
+            filename: f,
+            size: `${Math.round(stat.size / 1024)} KB`,
+            createdAt: stat.mtime.toISOString(),
+            type: f.includes("normalized") ? "标准化后" : "教务快照"
+          };
+        });
+      if (kw) {
+        list = list.filter(x => x.filename.toLowerCase().includes(kw));
+      }
+    }
+    
+    const paginated = list.slice(offset, offset + limit);
+    
+    return res.json({
+      success: true,
+      items: paginated,
+      total: list.length,
+      page: parseInt(page, 10),
+      pageSize: limit
     });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 3. GET /api/admin/catalog/detail
+ * 获取单项资源的原始和可视化预览数据
+ */
+router.get("/catalog/detail", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const { type, id } = req.query;
+    if (!type || !id) {
+      return res.status(400).json({ success: false, message: "缺少必要参数 type 或 id" });
+    }
+    
+    let original = null;
+    const catMeta = getCatalogMeta();
+    const metaKey = `${type}::${id}`;
+    const metaInfo = catMeta[metaKey] || {};
+    
+    if (type === "class") {
+      const raw = readJsonArray(FILE_MAP["class-schedules"]);
+      original = raw.find(x => x.className === id);
+    } else if (type === "teacher") {
+      const raw = readJsonArray(FILE_MAP["teacher-schedules"]);
+      original = raw.find(x => x.teacherName === id);
+    } else if (type === "classroom") {
+      const raw = readJsonArray(FILE_MAP["classroom-schedules"]);
+      original = raw.find(x => x.roomName === id);
+    } else if (type === "course") {
+      const raw = readJsonArray(FILE_MAP["course-schedules"]);
+      original = raw.find(x => x.courseName === id);
+    }
+    
+    if (!original) {
+      return res.status(404).json({ success: false, message: "资源未找到" });
+    }
+    
+    return res.json({
+      success: true,
+      data: {
+        id,
+        type,
+        metaInfo,
+        original,
+        courses: original.courses || []
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 4. POST /api/admin/catalog/meta
+ * 修改资源别名、备注、标记隐藏、置顶等
+ */
+router.post("/catalog/meta", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const { type, id, displayName, note, hidden, tags } = req.body;
+    if (!type || !id) {
+      return res.status(400).json({ success: false, message: "缺少必要参数 type 或 id" });
+    }
+    
+    createBackup("catalog-meta", CATALOG_META_PATH);
+    const catMeta = getCatalogMeta();
+    const key = `${type}::${id}`;
+    
+    catMeta[key] = {
+      displayName: String(displayName || "").trim(),
+      note: String(note || "").trim(),
+      hidden: !!hidden,
+      tags: Array.isArray(tags) ? tags : [],
+      updatedAt: new Date().toISOString()
+    };
+    
+    saveCatalogMeta(catMeta);
+    writeAuditLog(req, "update", "catalog-meta", key, `修改数据资源 [${type}] ${id} 的元数据别名和备注`);
+    
+    return res.json({ success: true, message: "修改成功", metaInfo: catMeta[key] });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 5. GET /api/admin/sync/status
+ * 获取同步中心状态及健康度检查
+ */
+router.get("/sync/status", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const meta = resolveDataVersion(appConfigService.getAdminConfig());
+    const syncMeta = getSyncMeta();
+    
+    return res.json({
+      success: true,
+      data: {
+        releaseVersion: meta.releaseVersion || "-",
+        semester: appConfigService.getAdminConfig().currentSemester,
+        classScheduleUpdatedAt: syncMeta["class-schedules"]?.updatedAt || null,
+        teacherScheduleUpdatedAt: syncMeta["teacher-schedules"]?.updatedAt || null,
+        classroomScheduleUpdatedAt: syncMeta["classroom-schedules"]?.updatedAt || null,
+        courseScheduleUpdatedAt: syncMeta["course-schedules"]?.updatedAt || null,
+        lastUploadTime: syncMeta["class-schedules"]?.updatedAt || syncMeta["sync-meta"]?.updatedAt || null
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 6. GET /api/admin/sync/history
+ * 同步历史查询
+ */
+router.get("/sync/history", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const history = readJsonArray(SYNC_HISTORY_PATH);
+    return res.json({
+      success: true,
+      items: history.slice(0, 100) // 最多取 100 条
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 7. POST /api/admin/sync/record
+ * 记录一次同步结果
+ */
+router.post("/sync/record", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const { type, semester, source, count, success, errorMsg } = req.body;
+    const history = readJsonArray(SYNC_HISTORY_PATH);
+    
+    const record = {
+      id: `sync_${Date.now()}`,
+      time: new Date().toISOString(),
+      type: type || "manual",
+      semester: semester || "2025-2026-2",
+      source: source || "web-admin",
+      count: parseInt(count, 10) || 0,
+      success: success !== false,
+      errorMsg: errorMsg || "",
+      operator: "admin"
+    };
+    
+    history.unshift(record);
+    writeJsonAtomic(SYNC_HISTORY_PATH, history.slice(0, 500)); // 保持 500 条
+    writeAuditLog(req, "sync", "sync-history", type, `上报同步数据: ${type}, 导入: ${count} 条`);
+    
+    return res.json({ success: true, record });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 8. GET /api/admin/quality/report
+ * 获取数据质量报告
+ */
+router.get("/quality/report", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const report = generateQualityReport();
+    return res.json({
+      success: true,
+      data: report
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 9. POST /api/admin/quality/mark
+ * 标记质量异常为已知/忽略
+ */
+router.post("/quality/mark", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const { type, target, ignore } = req.body;
+    if (!type || !target) {
+      return res.status(400).json({ success: false, message: "缺少必要参数 type 或 target" });
+    }
+    
+    let ignores = [];
+    try {
+      if (fs.existsSync(QUALITY_IGNORES_PATH)) {
+        ignores = JSON.parse(fs.readFileSync(QUALITY_IGNORES_PATH, "utf-8"));
+      }
+    } catch (e) {}
+    
+    if (ignore) {
+      if (!ignores.some(x => x.type === type && x.target === target)) {
+        ignores.push({ type, target, markedAt: new Date().toISOString() });
+      }
+    } else {
+      ignores = ignores.filter(x => !(x.type === type && x.target === target));
+    }
+    
+    writeJsonAtomic(QUALITY_IGNORES_PATH, ignores);
+    writeAuditLog(req, "ignore", "quality", `${type}:${target}`, `${ignore ? "标记忽略" : "取消忽略"} 质量缺陷`);
+    
+    return res.json({ success: true, ignores });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 10. GET /api/admin/export
+ * 数据导出 API (支持导出 JSON / CSV)
+ */
+router.get("/export", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const { type, id, format = "json" } = req.query;
+    if (!type || !id) {
+      return res.status(400).json({ success: false, message: "缺少 type 或 id" });
+    }
+    
+    let original = null;
+    if (type === "class") {
+      original = readJsonArray(FILE_MAP["class-schedules"]).find(x => x.className === id);
+    } else if (type === "teacher") {
+      original = readJsonArray(FILE_MAP["teacher-schedules"]).find(x => x.teacherName === id);
+    } else if (type === "classroom") {
+      original = readJsonArray(FILE_MAP["classroom-schedules"]).find(x => x.roomName === id);
+    } else if (type === "course") {
+      original = readJsonArray(FILE_MAP["course-schedules"]).find(x => x.courseName === id);
+    }
+    
+    if (!original) {
+      return res.status(404).json({ success: false, message: "资源未找到" });
+    }
+    
+    if (format === "csv") {
+      const headers = ["courseName", "teacherName", "classroom", "weekday", "sections", "weeks", "note"];
+      const rows = (original.courses || []).map(c => [
+        `"${String(c.courseName || "").replace(/"/g, '""')}"`,
+        `"${String(c.teacherName || "").replace(/"/g, '""')}"`,
+        `"${String(c.classroom || "").replace(/"/g, '""')}"`,
+        c.dayOfWeek || c.weekday || 1,
+        `"${(c.sections || []).join("-")}"`,
+        `"${(c.weeks || []).join(",")}"`,
+        `"${String(c.note || "").replace(/"/g, '""')}"`
+      ].join(","));
+      
+      const csv = `\uFEFF${headers.join(",")}\n${rows.join("\n")}\n`;
+      res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(id)}.csv"`);
+      res.type("text/csv");
+      return res.send(csv);
+    }
+    
+    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(id)}.json"`);
+    res.type("json");
+    return res.json(original);
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 11. GET /api/admin/backups
+ * 备份文件管理 API
+ */
+router.get("/backups", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    if (!fs.existsSync(BACKUPS_DIR)) {
+      return res.json({ success: true, items: [] });
+    }
+    const files = fs.readdirSync(BACKUPS_DIR)
+      .filter(f => f.endsWith(".json"))
+      .map(f => {
+        const stat = fs.statSync(path.join(BACKUPS_DIR, f));
+        return {
+          filename: f,
+          size: `${Math.round(stat.size / 1024)} KB`,
+          createdAt: stat.mtime.toISOString()
+        };
+      })
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+    return res.json({ success: true, items: files });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+router.get("/backups/download", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const file = req.query.filename;
+    const safeFile = path.basename(file);
+    const filePath = path.join(BACKUPS_DIR, safeFile);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: "备份文件不存在" });
+    }
+    return res.download(filePath);
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+router.delete("/backups", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const file = req.query.filename;
+    const safeFile = path.basename(file);
+    const filePath = path.join(BACKUPS_DIR, safeFile);
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ success: false, message: "备份文件不存在" });
+    }
+    fs.unlinkSync(filePath);
+    writeAuditLog(req, "delete", "backups", safeFile, `删除数据备份: ${safeFile}`);
+    return res.json({ success: true, message: "删除备份成功" });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+/**
+ * 12. GET /api/admin/audit-logs
+ * 审计日志 API
+ */
+router.get("/audit-logs", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    if (!fs.existsSync(AUDIT_LOG_PATH)) {
+      return res.json({ success: true, items: [] });
+    }
+    const lines = fs.readFileSync(AUDIT_LOG_PATH, "utf-8")
+      .split(/\r?\n/)
+      .map(l => l.trim())
+      .filter(Boolean)
+      .map(l => {
+        try { return JSON.parse(l); } catch(err) { return null; }
+      })
+      .filter(Boolean)
+      .reverse();
+    return res.json({ success: true, items: lines.slice(0, 100) });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
   }
 });
 

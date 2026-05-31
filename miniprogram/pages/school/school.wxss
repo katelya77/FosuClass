@@ -73,7 +73,10 @@
   color: #687386;
   font-size: 24rpx;
   font-weight: 800;
-  line-height: 58rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
   text-align: center;
 }
 
@@ -107,7 +110,10 @@
   color: #3654d4;
   font-size: 18rpx;
   font-weight: 900;
-  line-height: 30rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .school-notice-text {
@@ -364,6 +370,10 @@ picker {
   background-color: #ffebee;
   border-radius: 20rpx;
   transition: background-color 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .clear-btn:active {

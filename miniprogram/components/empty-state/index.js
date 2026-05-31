@@ -8,5 +8,9 @@ Component({
       type: String,
       value: "",
     },
+    symbol: {
+      type: String,
+      value: "∅",
+    },
   },
 });

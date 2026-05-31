@@ -30,26 +30,32 @@
 
 .hero-desc {
   margin-top: 8rpx;
-  color: #66718a;
-  font-size: 23rpx;
+  color: #3654d4;
+  font-size: 24rpx;
+  font-weight: 600;
   line-height: 1.4;
+  opacity: 0.95;
 }
 
 .hero-btn {
   flex: 0 0 auto;
   height: 64rpx;
-  padding: 0 24rpx;
+  padding: 0 28rpx;
   border-radius: 32rpx;
   background: #3654d4;
   color: #ffffff;
   font-size: 24rpx;
   font-weight: 800;
-  line-height: 64rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-shadow: 0 4rpx 12rpx rgba(54, 84, 212, 0.2);
 }
 
 .import-card {
   margin-top: 16rpx;
-  padding: 20rpx;
+  padding: 24rpx;
   border-radius: 16rpx;
 }
 
@@ -60,20 +66,30 @@
 }
 
 .import-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 12rpx;
   margin-top: 16rpx;
 }
 
 .import-grid button {
-  min-width: 150rpx;
-  height: 58rpx;
-  border-radius: 29rpx;
+  width: 100% !important;
+  height: 68rpx;
+  border-radius: 34rpx;
   background: #f1f5ff;
   color: #3654d4;
-  font-size: 23rpx;
-  font-weight: 800;
+  font-size: 24rpx;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.import-grid button.disabled {
+  background: #f0f3f6 !important;
+  color: #8a94a6 !important;
+  opacity: 0.8;
 }
 
 .course-list {
@@ -131,12 +147,16 @@
 
 .course-actions button {
   flex: 1;
-  height: 58rpx;
-  border-radius: 29rpx;
+  height: 64rpx;
+  border-radius: 32rpx;
   background: #f1f5ff;
   color: #3654d4;
-  font-size: 23rpx;
+  font-size: 24rpx;
   font-weight: 800;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .course-actions button.danger {
@@ -199,7 +219,10 @@
   background: #f1f3f7;
   color: #687386;
   font-size: 38rpx;
-  line-height: 50rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .form-scroll {
@@ -240,7 +263,7 @@ input,
 textarea,
 .picker-value {
   width: 100%;
-  min-height: 72rpx;
+  height: 76rpx;
   padding: 0 18rpx;
   border: 1rpx solid #e2e8f0;
   border-radius: 14rpx;
@@ -251,7 +274,9 @@ textarea,
 }
 
 .picker-value {
-  line-height: 72rpx;
+  display: flex;
+  align-items: center;
+  line-height: 1;
 }
 
 textarea {
@@ -275,10 +300,14 @@ textarea {
 
 .footer-btn {
   flex: 1;
-  height: 76rpx;
-  border-radius: 38rpx;
-  font-size: 26rpx;
+  height: 84rpx;
+  border-radius: 42rpx;
+  font-size: 28rpx;
   font-weight: 900;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 
 .footer-btn.primary {

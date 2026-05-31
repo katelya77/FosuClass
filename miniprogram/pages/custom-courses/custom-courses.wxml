@@ -13,12 +13,12 @@
       <text>导入 / 导出工具</text>
       <text class="collapse-icon" style="font-size: 24rpx; color: #8a94a6;">{{importToolsCollapsed ? '▼ 展开' : '▲ 收起'}}</text>
     </view>
-    <view class="import-grid" wx:if="{{!importToolsCollapsed}}" style="margin-top: 20rpx;">
+    <view class="import-grid" wx:if="{{!importToolsCollapsed}}">
       <button class="import-btn" bindtap="exportJson">导出 JSON</button>
       <button class="import-btn" bindtap="importJson">导入 JSON</button>
-      <button class="import-btn disabled" disabled style="background: #f1f3f5; color: #adb5bd; cursor: not-allowed;">WakeUp (即将支持)</button>
-      <button class="import-btn disabled" disabled style="background: #f1f3f5; color: #adb5bd; cursor: not-allowed;">ICS (即将支持)</button>
-      <button class="import-btn disabled" disabled style="background: #f1f3f5; color: #adb5bd; cursor: not-allowed;">粘贴文本 (即将支持)</button>
+      <button class="import-btn disabled" disabled>WakeUp (即将支持)</button>
+      <button class="import-btn disabled" disabled>ICS (即将支持)</button>
+      <button class="import-btn disabled" disabled>粘贴文本 (即将支持)</button>
     </view>
   </view>
 
@@ -42,8 +42,9 @@
 
   <empty-state
     wx:else
-    title="还没有自定义课程"
-    desc="添加后会叠加到当前绑定课表，不会修改全校课表数据。"
+    title="还没有补充课程"
+    desc="添加实验课、选修课或临时调课，让课表更贴近你的真实安排。"
+    symbol="🗓️"
   />
 
   <view wx:if="{{formVisible}}" class="popup-mask" bindtap="hideForm">
@@ -65,11 +66,11 @@
           </view>
           <view class="field">
             <view class="label">教师</view>
-            <input value="{{form.teacherName}}" data-key="teacherName" placeholder="选填" bindinput="onInput" />
+            <input value="{{form.teacherName}}" data-key="teacherName" placeholder="例如：张老师 (选填)" bindinput="onInput" />
           </view>
           <view class="field">
             <view class="label">教室</view>
-            <input value="{{form.classroom}}" data-key="classroom" placeholder="选填" bindinput="onInput" />
+            <input value="{{form.classroom}}" data-key="classroom" placeholder="例如：A1-101 (选填)" bindinput="onInput" />
           </view>
           <view class="field">
             <view class="label">星期</view>
@@ -106,9 +107,9 @@
             <view class="label">周次</view>
             <input value="{{form.weekText}}" data-key="weekText" placeholder="例如：1-8,10-15周" bindinput="onInput" />
           </view>
-          <view class="field full">
+          <view class="field pointer full">
             <view class="label">备注</view>
-            <textarea value="{{form.note}}" data-key="note" placeholder="选填" bindinput="onInput" />
+            <textarea value="{{form.note}}" data-key="note" placeholder="例如：第12周周二临时调课到周四（选填）" bindinput="onInput" />
           </view>
           <view class="field switch-field">
             <view>

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "202597ec-4d8c-4029-9676-b34a178b6244",
+    "title": "自动化公告-1780251021216",
+    "content": "这条公告应出现在公开 app-config 中",
+    "type": "info",
+    "priority": "urgent",
+    "displayMode": "banner",
+    "targetPage": "all",
+    "startAt": "",
+    "endAt": "",
+    "enabled": true,
+    "closable": true,
+    "version": "test-1780251021216",
+    "createdAt": "2026-05-31T18:10:21.225Z",
+    "updatedAt": "2026-05-31T18:10:21.225Z"
+  }
+]

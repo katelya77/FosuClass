@@ -1,0 +1,34 @@
+[
+  {
+    "id": "202597ec-4d8c-4029-9676-b34a178b6244",
+    "title": "自动化公告-1780251021216",
+    "content": "这条公告应出现在公开 app-config 中",
+    "type": "info",
+    "priority": "urgent",
+    "displayMode": "banner",
+    "targetPage": "all",
+    "startAt": "",
+    "endAt": "",
+    "enabled": true,
+    "closable": true,
+    "version": "test-1780251021216",
+    "createdAt": "2026-05-31T18:10:21.225Z",
+    "updatedAt": "2026-05-31T18:10:21.225Z"
+  },
+  {
+    "id": "f4015ef7-db6e-41d2-a0e8-0759b6c56f0e",
+    "title": "停用公告-1780251021216",
+    "content": "disabled notice",
+    "type": "info",
+    "priority": "normal",
+    "displayMode": "banner",
+    "targetPage": "all",
+    "startAt": "",
+    "endAt": "",
+    "enabled": false,
+    "closable": true,
+    "version": "v1780251021230",
+    "createdAt": "2026-05-31T18:10:21.230Z",
+    "updatedAt": "2026-05-31T18:10:21.230Z"
+  }
+]

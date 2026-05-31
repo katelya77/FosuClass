@@ -1,0 +1,18 @@
+[
+  {
+    "id": "d392f38c-33e8-41d0-87a4-a07a981ea507",
+    "title": "过期公告-1780251075400",
+    "content": "expired notice",
+    "type": "info",
+    "priority": "normal",
+    "displayMode": "banner",
+    "targetPage": "all",
+    "startAt": "",
+    "endAt": "2026-05-30T18:11:15.433Z",
+    "enabled": true,
+    "closable": true,
+    "version": "v1780251075441",
+    "createdAt": "2026-05-31T18:11:15.441Z",
+    "updatedAt": "2026-05-31T18:11:15.441Z"
+  }
+]
