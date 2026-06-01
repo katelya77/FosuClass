@@ -44,6 +44,20 @@ function resolveDisplayWeek(settings, now) {
   return getCurrentTeachingWeek(now, mockCalendar);
 }
 
+function buildPersonalXlsHeader(target) {
+  const metadata = (target && target.metadata) || {};
+  const title = target.title || target.name || (metadata.className
+    ? `${metadata.className}课表`
+    : (metadata.studentName ? `${metadata.studentName}的课表` : "个人课表"));
+  const term = metadata.term || target.semester || "";
+  const subtitle = target.subtitle || [metadata.studentName, term, "XLS导入"].filter(Boolean).join(" · ");
+  return {
+    title,
+    subtitle,
+    sourceText: target.sourceText || "100网 XLS 手动导入",
+  };
+}
+
 Page({
   data: {
     brand: BRAND,
@@ -51,9 +65,11 @@ Page({
     showLogo: true,
     appName: BRAND.appName,
     className: "未选择课表",
+    scheduleSubtitle: "",
     semester: "2025-2026学年第二学期",
     dataSourceText: "课程数据 · 本地缓存",
     lastSyncText: "",
+    syncActionText: "同步课表",
     currentWeek: 12,
     totalWeeks: TOTAL_WEEKS,
     weekRangeText: "",
@@ -126,9 +142,9 @@ Page({
   loadPageConfig() {
     appConfigService.loadAppConfig()
       .then((config) => {
-        const homeNotice = appConfigService.getPrimaryNotice(config, "home", ["banner", "card"]);
-        const tickerNotice = appConfigService.getPrimaryNotice(config, "home", ["ticker"]);
-        const modalNotice = appConfigService.getPrimaryNotice(config, "home", ["modal"]);
+        const homeNotice = appConfigService.getPrimaryNotice(config, "home", ["banner", "card"]) || null;
+        const tickerNotice = appConfigService.getPrimaryNotice(config, "home", ["ticker"]) || null;
+        const modalNotice = appConfigService.getPrimaryNotice(config, "home", ["modal"]) || null;
         const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
         const dataVersionText = latestUpdatedAt
           ? `数据更新于 ${appConfigService.formatConfigTime(latestUpdatedAt)}`
@@ -210,19 +226,32 @@ Page({
     const weekRangeText = formatWeekRange(weekInfo.startDate, weekInfo.endDate);
 
     let displayClassName = settings.className || "未选择课表";
+    let scheduleSubtitle = "";
     let lastSyncText = "";
+    let syncActionText = "同步课表";
+    let sourceText = dataSource.text;
     if (target) {
-      displayClassName = target.type === "teacher"
-        ? `${target.name} 老师`
-        : (target.type === "classroom" ? `${target.name} 教室` : target.name);
+      if (target.type === "personal-xls") {
+        const header = buildPersonalXlsHeader(target);
+        displayClassName = header.title;
+        scheduleSubtitle = header.subtitle;
+        sourceText = header.sourceText;
+        syncActionText = "更新导入";
+      } else {
+        displayClassName = target.type === "teacher"
+          ? `${target.name} 老师`
+          : (target.type === "classroom" ? `${target.name} 教室` : target.name);
+      }
       lastSyncText = target.updateTime || "";
     }
 
     this.setData({
       className: displayClassName,
+      scheduleSubtitle,
       semester: settings.semester,
-      dataSourceText: dataSource.text,
+      dataSourceText: sourceText,
       lastSyncText,
+      syncActionText,
       currentWeek,
       weekRangeText,
       weekScopeText: showWeekend ? "周一至周日" : "周一至周五",
@@ -293,8 +322,12 @@ Page({
   },
 
   goLogin() {
+    const { getCurrentScheduleTarget } = require("../../utils/storage");
+    const target = getCurrentScheduleTarget();
     wx.navigateTo({
-      url: "/pages/personal-sync/personal-sync"
+      url: target && target.type === "personal-xls"
+        ? "/pages/personal-sync/personal-sync?tab=xls"
+        : "/pages/personal-sync/personal-sync"
     });
   },
 
@@ -332,7 +365,7 @@ Page({
 
   goToSyncLogin() {
     wx.navigateTo({
-      url: "/pages/personal-sync/personal-sync"
+      url: "/pages/personal-sync/personal-sync?tab=xls"
     });
   },
 

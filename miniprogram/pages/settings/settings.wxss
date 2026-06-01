@@ -64,6 +64,13 @@
   font-size: 23rpx;
 }
 
+.row-desc.subtle,
+.settings-app-current-meta {
+  color: #9aa4b5;
+  font-size: 21rpx;
+  line-height: 1.45;
+}
+
 .row-arrow {
   color: #a4afbf;
   font-size: 46rpx;

@@ -34,7 +34,7 @@ function handlePersonalError(res, error) {
     errMsg.includes("AUTHSERVER_UNREACHABLE")
   ) {
     code = "CAMPUS_NETWORK_REQUIRED";
-    message = "当前服务器暂时无法访问学校教务系统，请先使用全校课表选择班级课表。";
+    message = "公网服务器无法访问学校内网 100.fosu.edu.cn，账号密码同步不可用。该状态不代表你的手机网络，推荐使用 XLS 手动导入。";
   }
   // 2. DNS 解析失败
   else if (
@@ -45,7 +45,7 @@ function handlePersonalError(res, error) {
     errCode === "EAI_AGAIN"
   ) {
     code = "UPSTREAM_DNS_FAILED";
-    message = "当前同步节点无法解析教务网，请稍后再试。你仍可使用全校课表。";
+    message = "公网服务器当前无法解析学校内网 100.fosu.edu.cn，账号密码同步不可用。推荐使用 XLS 手动导入。";
   }
   // 3. 连接超时
   else if (
@@ -56,7 +56,7 @@ function handlePersonalError(res, error) {
     errCode === "ETIMEDOUT"
   ) {
     code = "UPSTREAM_TIMEOUT";
-    message = "与学校教务系统连接超时，请连接校园网或校园 VPN 后重试。";
+    message = "公网服务器连接学校教务网超时。该检测基于服务器环境，不代表你的手机网络状态，推荐使用 XLS 手动导入。";
   }
   // 4. 接口或页面不存在 (404)
   else if (
@@ -273,12 +273,13 @@ router.post("/import-xls", scheduleLimiter, async (req, res) => {
 
   try {
     const buffer = Buffer.from(fileBase64, "base64");
-    const result = parsePersonalXlsBuffer(buffer, targetTerm);
+    const result = parsePersonalXlsBuffer(buffer, targetTerm, filename || "学生个人课表.xls");
 
     return res.json({
       success: true,
       filename: filename || "学生个人课表.xls",
       term: result.term,
+      metadata: result.metadata,
       courseCount: result.courses.length,
       courses: result.courses,
     });

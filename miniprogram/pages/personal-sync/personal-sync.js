@@ -8,6 +8,25 @@ const { getSettings, setCurrentScheduleTarget } = require("../../utils/storage")
 
 const MAX_SLIDE_RANGE = 247; // 340px (背景) - 93px (滑块) = 247px 有效拖拽区间
 
+function buildXlsScheduleDisplay(result) {
+  const metadata = (result && result.metadata) || {};
+  const term = metadata.term || (result && result.term) || "";
+  let title = "个人课表";
+  if (metadata.className) {
+    title = `${metadata.className}课表`;
+  } else if (metadata.studentName) {
+    title = `${metadata.studentName}的课表`;
+  }
+  const subtitleParts = [metadata.studentName, term, "XLS导入"].filter(Boolean);
+  const summaryParts = [metadata.className, metadata.studentName, term].filter(Boolean);
+  return {
+    title,
+    subtitle: subtitleParts.join(" · ") || "XLS导入",
+    summary: summaryParts.join(" · ") || title,
+    sourceText: "100网 XLS 手动导入",
+  };
+}
+
 Page({
   data: {
     // 双通道模式控制
@@ -26,7 +45,8 @@ Page({
     envAvailable: false,
     checkingEnv: false,
     diagnoseMsg: "",
-    mainBtnText: "检测同步环境",
+    diagnoseSubMsg: "该检测基于服务器环境，不代表你的手机网络状态。",
+    mainBtnText: "检测服务器环境",
 
     // XLS 导入字段
     selectedFile: null,  // { name, path, size, sizeStr }
@@ -191,6 +211,7 @@ Page({
           .then((res) => {
             wx.hideLoading();
             if (res.success) {
+              const displayInfo = buildXlsScheduleDisplay(res);
               wx.showToast({
                 title: "解析成功",
                 icon: "success"
@@ -200,7 +221,7 @@ Page({
                 syncSuccess: true,
                 importMode: "xls",
                 loadingXls: false,
-                syncResult: res,
+                syncResult: Object.assign({}, res, { displayInfo }),
                 previewSearchKey: "",
                 previewDayFilter: "all",
                 filteredCourses: res.courses || []
@@ -302,7 +323,7 @@ Page({
    */
   onMainBtnTap() {
     if (this.data.envChecked && !this.data.envAvailable) {
-      this.goToSchoolPage();
+      this.goToXlsImport();
     } else {
       this.diagnoseEnvironment();
     }
@@ -327,15 +348,23 @@ Page({
       .then((res) => {
         let available = false;
         let msg = "";
+        let subMsg = "该检测基于服务器环境，不代表你的手机网络状态。";
 
         if (res.agentMode) {
           available = res.agent && res.agent.reachable;
-          msg = res.recommendation || (available ? "已成功连接到校园代理网关。" : "校园代理网关连通异常。");
+          msg = res.userMessage || res.recommendation || (available ? "校园网后端代理可用。" : "校园网后端代理不可用。");
         } else {
-          const authOk = res.authserver && res.authserver.reachable;
-          const eduOk = res.edu100 && res.edu100.reachable;
+          const authOk = typeof res.authserverReachable === "boolean"
+            ? res.authserverReachable
+            : (res.authserver && res.authserver.reachable);
+          const eduOk = typeof res.jwReachable === "boolean"
+            ? res.jwReachable
+            : (res.edu100 && res.edu100.reachable);
           available = authOk && eduOk;
-          msg = res.recommendation || (available ? "教务网及认证系统直连通畅。" : "教务系统目前直连受限。");
+          msg = res.userMessage || res.recommendation || (available ? "服务器可访问学校认证与教务网络。" : "公网服务器无法访问学校内网 100.fosu.edu.cn。");
+          if (res.clientHint && res.clientHint.message) {
+            subMsg = res.clientHint.message;
+          }
         }
 
         this.setData({
@@ -343,11 +372,12 @@ Page({
           envChecked: true,
           envAvailable: available,
           diagnoseMsg: msg,
-          mainBtnText: available ? "开始登录校验" : "暂不可用，使用全校课表"
+          diagnoseSubMsg: subMsg,
+          mainBtnText: available ? "开始登录校验" : "服务器暂不可用"
         });
 
         if (!available) {
-          this.showFriendlyError("CAMPUS_NETWORK_REQUIRED", "当前服务器网络受限，无法直接访问学校教务网，请暂时使用全校课表。");
+          this.showFriendlyError("CAMPUS_NETWORK_REQUIRED", msg);
         }
       })
       .catch((err) => {
@@ -358,7 +388,8 @@ Page({
           envChecked: true,
           envAvailable: false,
           diagnoseMsg: "服务器连接失败: " + errMsg,
-          mainBtnText: "暂不可用，使用全校课表"
+          diagnoseSubMsg: "该检测基于服务器环境，不代表你的手机网络状态。",
+          mainBtnText: "服务器暂不可用"
         });
         this.showFriendlyError(payload.code, errMsg);
       });
@@ -374,12 +405,23 @@ Page({
     });
   },
 
+  goToXlsImport() {
+    this.setData({
+      currentTab: "xls",
+      syncSuccess: false,
+      syncResult: null,
+      selectedFile: null,
+      loadingXls: false,
+    });
+  },
+
   resetEnvCheck() {
     this.setData({
       envChecked: false,
       envAvailable: false,
       diagnoseMsg: "",
-      mainBtnText: "检测同步环境"
+      diagnoseSubMsg: "该检测基于服务器环境，不代表你的手机网络状态。",
+      mainBtnText: "检测服务器环境"
     });
   },
 
@@ -403,6 +445,10 @@ Page({
 
   startLoginFlow() {
     if (this.data.startingSession) return;
+    if (this.data.envChecked && !this.data.envAvailable) {
+      this.showFriendlyError("CAMPUS_NETWORK_REQUIRED");
+      return;
+    }
     this.setData({ startingSession: true });
 
     request.post(
@@ -546,17 +592,25 @@ Page({
     let target = null;
 
     if (mode === "xls") {
+      const metadata = result.metadata || {};
+      const displayInfo = buildXlsScheduleDisplay(result);
+      const importedAt = new Date().toISOString();
       // XLS 导入生成的本地绑定结构
       target = {
-        type: "personal",
-        name: "个人课表 (XLS导入)",
-        classId: "personal-xskb-xls",
-        semester: result.term,
+        type: "personal-xls",
+        name: displayInfo.title,
+        title: displayInfo.title,
+        subtitle: displayInfo.subtitle,
+        classId: metadata.studentId ? `personal-xls-${metadata.studentId}` : "personal-xskb-xls",
+        semester: metadata.term || result.term,
         courses: result.courses,
-        updateTime: new Date().toISOString().slice(0, 10),
+        updateTime: importedAt.slice(0, 10),
+        importedAt,
+        sourceText: displayInfo.sourceText,
+        metadata,
         student: {
-          studentName: "XLS导入课表",
-          studentId: "100网理论课表"
+          studentName: metadata.studentName || "XLS导入课表",
+          studentId: metadata.studentId || "100网理论课表"
         }
       };
     } else {
@@ -612,9 +666,9 @@ Page({
     let content = defaultMsg || "系统网络繁忙，请稍后再试";
 
     if (code === "EDU100_DNS_FAILED" || code === "UPSTREAM_DNS_FAILED") {
-      content = "当前同步节点无法解析教务网，请稍后再试。您也可以使用全校课表或 XLS 手动导入。";
+      content = "公网服务器当前无法解析学校内网 100.fosu.edu.cn。该状态不代表你的手机网络，推荐使用 XLS 手动导入。";
     } else if (code === "EDU100_UNREACHABLE" || code === "CAMPUS_NETWORK_REQUIRED") {
-      content = "同步服务器目前无法访问教务网，建议切换成左侧的 “XLS 手动导入” 方案，不受网络限制。";
+      content = "公网服务器无法访问学校内网 100.fosu.edu.cn，账号密码同步不可用。你的手机连接校园网不会改变服务器网络，请使用 XLS 手动导入。";
     } else if (code === "AUTHSERVER_UNREACHABLE") {
       content = "暂时无法连接统一身份认证服务，请稍后再试。";
     } else if (code === "LOGIN_PAGE_CHANGED") {
@@ -634,7 +688,7 @@ Page({
     } else if (code === "VPN_GATEWAY_UNAVAILABLE") {
       content = "校园代理网关连通受限，请尝试使用 XLS 手动导入。";
     } else if (code === "UPSTREAM_TIMEOUT") {
-      content = "连接教务网超时，校园系统网络拥堵或受限，推荐使用 XLS 手动导入。";
+      content = "公网服务器连接教务网超时。该检测基于服务器环境，不代表你的手机网络，推荐使用 XLS 手动导入。";
     } else if (code === "UPSTREAM_404") {
       content = "教务接口未找到(404)，个人课表在线同步暂时受限。";
     }

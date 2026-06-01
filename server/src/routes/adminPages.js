@@ -616,10 +616,11 @@ const adminConsoleHtml = `<!doctype html>
     }
     .heatmap-container {
       display: grid;
-      grid-template-columns: 56px repeat(7, minmax(24px, 1fr));
-      gap: 4px;
+      grid-template-columns: 64px repeat(7, minmax(72px, 1fr));
+      gap: 6px;
       margin-top: 10px;
-      max-width: 760px;
+      width: 100%;
+      min-width: 720px;
     }
     .heatmap-header {
       font-size: 11px;
@@ -629,14 +630,17 @@ const adminConsoleHtml = `<!doctype html>
       padding: 4px;
     }
     .heatmap-cell {
-      height: 24px;
-      border-radius: 4px;
+      height: 30px;
+      border-radius: 6px;
       display: flex;
       align-items: center;
       justify-content: center;
       transition: var(--transition);
       cursor: pointer;
       border: 1px solid rgba(15, 23, 42, 0.04);
+      color: rgba(15, 23, 42, 0.52);
+      font-size: 10px;
+      font-weight: 800;
     }
     .heatmap-cell:hover {
       transform: translateY(-1px);
@@ -1030,20 +1034,42 @@ const adminConsoleHtml = `<!doctype html>
       z-index: 99;
       box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
     }
+    .mobile-topbar-title {
+      min-width: 0;
+      flex: 1;
+      padding: 0 12px;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 800;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .mobile-logo-wrap {
       display: flex;
       align-items: center;
       gap: 10px;
+      min-width: 0;
+      flex: 0 0 auto;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 800;
     }
     .mobile-menu-toggle {
       border: 1px solid var(--border);
       background: var(--panel-2);
       border-radius: 8px;
-      padding: 6px 10px;
+      width: 40px;
+      height: 40px;
+      padding: 0;
       cursor: pointer;
       color: var(--text);
-      font-size: 13px;
-      font-weight: 600;
+      font-size: 20px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
     }
     .mobile-menu-toggle:hover {
       background: var(--border);
@@ -1075,7 +1101,7 @@ const adminConsoleHtml = `<!doctype html>
     .heatmap-summary-card {
       background: var(--panel-2);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 8px;
       padding: 12px 16px;
       display: flex;
       flex-direction: column;
@@ -1102,12 +1128,45 @@ const adminConsoleHtml = `<!doctype html>
       margin-top: 2px;
     }
 
+    .heatmap-toolbar {
+      display: flex;
+      justify-content: flex-end;
+      margin: 0 0 14px;
+    }
+    .heatmap-scroller {
+      width: 100%;
+      overflow-x: auto;
+      padding-bottom: 4px;
+    }
+    .heatmap-legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: center;
+      gap: 10px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .heatmap-legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      white-space: nowrap;
+    }
+    .heatmap-legend-swatch {
+      width: 14px;
+      height: 14px;
+      border-radius: 4px;
+      border: 1px solid rgba(15, 23, 42, 0.08);
+    }
+
     /* 详情面板 */
     .heatmap-detail-panel {
       margin-top: 16px;
       background: var(--panel-2);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 8px;
       padding: 16px;
       display: none;
       animation: fadeIn 0.2s ease-out;
@@ -1148,6 +1207,40 @@ const adminConsoleHtml = `<!doctype html>
     .heatmap-detail-teacher {
       color: var(--muted);
       margin-top: 2px;
+    }
+    .heatmap-detail-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 800;
+    }
+    .heatmap-detail-stat {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .heatmap-detail-stat div {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+    }
+    .heatmap-detail-stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+    }
+    .heatmap-detail-stat strong {
+      display: block;
+      margin-top: 2px;
+      color: var(--text);
+      font-size: 14px;
     }
 
     /* 响应式断点控制 */
@@ -1192,18 +1285,22 @@ const adminConsoleHtml = `<!doctype html>
       }
       .mobile-topbar {
         display: flex;
+        grid-column: 1 / -1;
       }
       .sidebar {
         position: fixed;
-        top: 0; left: -260px;
-        width: 240px;
+        top: 0;
+        left: 0;
+        width: 78vw;
+        max-width: 320px;
         height: 100vh;
-        z-index: 99;
-        transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 100;
+        transform: translateX(-105%);
+        transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
         box-shadow: 4px 0 24px rgba(15, 23, 42, 0.15);
       }
       .sidebar.show {
-        left: 0;
+        transform: translateX(0);
       }
       .main-content {
         padding: 16px;
@@ -1228,6 +1325,25 @@ const adminConsoleHtml = `<!doctype html>
       }
       .table-container {
         width: 100%;
+      }
+      .heatmap-card-head {
+        flex-direction: column;
+      }
+      .heatmap-meta {
+        justify-content: flex-start;
+        max-width: none;
+      }
+      .heatmap-toolbar {
+        justify-content: flex-start;
+      }
+      .heatmap-container {
+        min-width: 720px;
+      }
+      .heatmap-cell span {
+        display: none;
+      }
+      .heatmap-detail-stat {
+        grid-template-columns: 1fr;
       }
     }
 
@@ -1277,8 +1393,18 @@ const adminConsoleHtml = `<!doctype html>
 
   <!-- 控制台主页面 -->
   <main id="dashboardView" class="app-shell" hidden>
+    <div class="mobile-topbar" id="mobileAdminTopbar">
+      <div class="mobile-logo-wrap">
+        <img class="brand-logo" ${ADMIN_LOGO_IMG_ATTRS}>
+        <span>佛课小表</span>
+      </div>
+      <div class="mobile-topbar-title" id="mobilePageTitle">数据概览</div>
+      <button id="mobileMenuBtn" class="mobile-menu-toggle" type="button" aria-label="打开后台导航">☰</button>
+    </div>
+    <div id="sidebarOverlay" class="sidebar-overlay"></div>
+
     <!-- 左侧导航侧边栏 -->
-    <aside class="sidebar">
+    <aside id="appSidebar" class="sidebar">
       <div>
         <div class="brand sidebar-brand">
           <img class="brand-logo" ${ADMIN_LOGO_IMG_ATTRS}>
@@ -1359,24 +1485,40 @@ const adminConsoleHtml = `<!doctype html>
             <div>
               <h3 class="card-title" style="margin-bottom: 8px;">全校教室占用热力图</h3>
               <div style="font-size: 12px; color: var(--muted);">
-                按星期一至星期日、第1节至第14节汇总真实教室排课占用。
+                按星期与节次统计真实教室排课占用情况。
               </div>
             </div>
             <div class="heatmap-meta" id="classroomHeatmapMeta"></div>
           </div>
-          <div id="classroomHeatmapNotice"></div>
-          <div class="heatmap-container" id="classroomHeatmap">
-            <!-- 动态生成教室占用热力图 -->
-          </div>
-          <div style="display: flex; justify-content: flex-end; align-items: center; gap: 12px; margin-top: 12px; font-size: 11px; color: var(--muted);">
-            <span>占用度:</span>
-            <div style="display: flex; align-items: center; gap: 4px;">
-              <span style="display: inline-block; width: 12px; height: 12px; background: var(--primary); opacity: 0.05; border-radius: 2px;"></span> 空闲 (0%)
-              <span style="display: inline-block; width: 12px; height: 12px; background: var(--primary); opacity: 0.25; border-radius: 2px;"></span> 25%
-              <span style="display: inline-block; width: 12px; height: 12px; background: var(--primary); opacity: 0.5; border-radius: 2px;"></span> 50%
-              <span style="display: inline-block; width: 12px; height: 12px; background: var(--primary); opacity: 0.75; border-radius: 2px;"></span> 75%
-              <span style="display: inline-block; width: 12px; height: 12px; background: var(--primary); opacity: 1.0; border-radius: 2px;"></span> 繁忙 (100%)
+          <div class="heatmap-summary-container" id="classroomHeatmapSummary"></div>
+          <div class="heatmap-toolbar">
+            <div class="tab-filter" id="heatmapDayType">
+              <button class="active" data-daytype="all">全周</button>
+              <button data-daytype="workday">工作日</button>
+              <button data-daytype="weekend">周末</button>
             </div>
+          </div>
+          <div id="classroomHeatmapNotice"></div>
+          <div class="heatmap-scroller">
+            <div class="heatmap-container" id="classroomHeatmap">
+              <!-- 动态生成教室占用热力图 -->
+            </div>
+          </div>
+          <div class="heatmap-legend" id="classroomHeatmapLegend">
+            <span>占用度</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #EEF3F8;"></span>空闲</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #D8E8FF;"></span>较低</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #9CC7FF;"></span>一般</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #4D8FEF;"></span>较高</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #1D4ED8;"></span>繁忙</span>
+          </div>
+          <div class="heatmap-detail-panel" id="classroomHeatmapDetailPanel">
+            <div class="heatmap-detail-title">
+              <span id="heatmapDetailTitle">时段详情</span>
+              <button id="closeHmDetailBtn" class="ghost" style="padding: 4px 8px; font-size: 11px;">收起</button>
+            </div>
+            <div class="heatmap-detail-stat" id="heatmapDetailStats"></div>
+            <div class="heatmap-detail-grid" id="heatmapDetailList"></div>
           </div>
         </div>
       </section>
@@ -2149,6 +2291,8 @@ const adminConsoleHtml = `<!doctype html>
         syncHistory: [],
         healthChecks: [],
         qualityReport: null,
+        heatmapDayType: "all",
+        classroomHeatmapData: null,
         
         // 系统设置
         backups: [],
@@ -2208,6 +2352,20 @@ const adminConsoleHtml = `<!doctype html>
         if (dashboardView) dashboardView.hidden = false;
         document.body.classList.remove("is-login-page");
         document.body.classList.add("is-dashboard-page");
+      }
+
+      function openMobileDrawer() {
+        var sidebar = $("appSidebar");
+        var overlay = $("sidebarOverlay");
+        if (sidebar) sidebar.classList.add("show");
+        if (overlay) overlay.classList.add("show");
+      }
+
+      function closeMobileDrawer() {
+        var sidebar = $("appSidebar");
+        var overlay = $("sidebarOverlay");
+        if (sidebar) sidebar.classList.remove("show");
+        if (overlay) overlay.classList.remove("show");
       }
 
       function ignoreLoadError(promise) {
@@ -2384,7 +2542,12 @@ const adminConsoleHtml = `<!doctype html>
           feedback: "反馈管理",
           settings: "系统设置与日志"
         };
-        $("pageTitle").textContent = titles[section] || "Admin Console";
+        var nextTitle = titles[section] || "Admin Console";
+        $("pageTitle").textContent = nextTitle;
+        if ($("mobilePageTitle")) {
+          $("mobilePageTitle").textContent = nextTitle;
+        }
+        closeMobileDrawer();
         
         // 切页面后自动获取对应页面数据
         if (section === "catalog") {
@@ -2566,7 +2729,7 @@ const adminConsoleHtml = `<!doctype html>
           var row = document.createElement("div");
           row.className = "bar-chart-row";
           row.innerHTML = "<div class='bar-chart-label'>" + escapeHtml(r.roomName || "-") + "</div>" +
-                          "<div class='bar-chart-track'><div class='bar-chart-bar' style='width: " + rate + "%; background: var(--success);'></div></div>" +
+                          "<div class='bar-chart-track'><div class='bar-chart-bar' style='width: " + rate + "%; background: var(--primary);'></div></div>" +
                           "<div class='bar-chart-value'>" + rate + "%</div>";
           classrWrap.appendChild(row);
         });
@@ -2619,11 +2782,11 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function heatmapColor(value) {
-        if (value <= 0) return "#edf2f7";
-        if (value <= 25) return "#bfdbfe";
-        if (value <= 50) return "#60a5fa";
-        if (value <= 75) return "#34d399";
-        return "#059669";
+        if (value <= 0) return "#EEF3F8";
+        if (value <= 25) return "#D8E8FF";
+        if (value <= 50) return "#9CC7FF";
+        if (value <= 75) return "#4D8FEF";
+        return "#1D4ED8";
       }
 
       function renderHeatmapMeta(meta) {
@@ -2633,7 +2796,7 @@ const adminConsoleHtml = `<!doctype html>
         [
           "数据源：" + (meta.source || "-"),
           "教室总数：" + (meta.totalClassrooms || 0),
-          "已占用槽位：" + (meta.totalOccupiedSlots || 0),
+          "已占用峰值：" + (meta.maxOccupancy || 0),
           "更新时间：" + formatDate(meta.updatedAt)
         ].forEach(function(text) {
           var badge = document.createElement("span");
@@ -2643,58 +2806,158 @@ const adminConsoleHtml = `<!doctype html>
         });
       }
 
-      function renderGithubStyleHeatmap(data) {
+      function renderHeatmapSummary(meta) {
+        var wrap = $("classroomHeatmapSummary");
+        if (!wrap) return;
+        wrap.textContent = "";
+        var summary = (meta && meta.summary) || {};
+        [
+          { title: "最繁忙时段", value: summary.maxOccupancyTime || "-", desc: (summary.maxOccupancyRate || 0) + "% 占用率" },
+          { title: "最空闲时段", value: summary.minOccupancyTime || "-", desc: (summary.minOccupancyRate || 0) + "% 占用率" },
+          { title: "工作日平均占用率", value: (summary.workdayAvg || 0) + "%", desc: "周一至周五" },
+          { title: "周末平均占用率", value: (summary.weekendAvg || 0) + "%", desc: "周六至周日" }
+        ].forEach(function(item) {
+          var card = document.createElement("div");
+          card.className = "heatmap-summary-card";
+          card.innerHTML = "<div class='heatmap-summary-title'>" + escapeHtml(item.title) + "</div>" +
+            "<div class='heatmap-summary-value'>" + escapeHtml(item.value) + "</div>" +
+            "<div class='heatmap-summary-desc'>" + escapeHtml(item.desc) + "</div>";
+          wrap.appendChild(card);
+        });
+      }
+
+      function getVisibleHeatmapDays(dayType) {
+        if (dayType === "workday") return [0, 1, 2, 3, 4];
+        if (dayType === "weekend") return [5, 6];
+        return [0, 1, 2, 3, 4, 5, 6];
+      }
+
+      function renderHeatmapDetail(payload) {
+        var panel = $("classroomHeatmapDetailPanel");
+        var title = $("heatmapDetailTitle");
+        var stats = $("heatmapDetailStats");
+        var list = $("heatmapDetailList");
+        if (!panel || !title || !stats || !list) return;
+
+        var details = Array.isArray(payload.details) ? payload.details : [];
+        title.textContent = payload.weekdayLabel + " 第" + payload.section + "节";
+        stats.innerHTML = "<div><span>当前时段</span><strong>" + escapeHtml(payload.weekdayLabel + " 第" + payload.section + "节") + "</strong></div>" +
+          "<div><span>占用率</span><strong>" + payload.rate + "%</strong></div>" +
+          "<div><span>占用教室数</span><strong>" + payload.occupied + " / " + payload.totalClassrooms + "</strong></div>";
+
+        list.textContent = "";
+        if (details.length === 0) {
+          var empty = document.createElement("div");
+          empty.className = "heatmap-detail-item";
+          empty.textContent = "该时段暂无已识别课程样例。";
+          list.appendChild(empty);
+          panel.classList.add("show");
+          return;
+        }
+
+        var roomMap = {};
+        details.forEach(function(item) {
+          var roomName = item.roomName || "未标明教室";
+          if (!roomMap[roomName]) roomMap[roomName] = 0;
+          roomMap[roomName] += 1;
+        });
+        Object.keys(roomMap).sort(function(left, right) {
+          return roomMap[right] - roomMap[left];
+        }).slice(0, 10).forEach(function(roomName) {
+          var item = document.createElement("div");
+          item.className = "heatmap-detail-item";
+          item.innerHTML = "<span class='heatmap-detail-room'>" + escapeHtml(roomName) + "</span>" +
+            "<span class='heatmap-detail-teacher'>占用记录：" + roomMap[roomName] + "</span>";
+          list.appendChild(item);
+        });
+
+        details.slice(0, 5).forEach(function(course) {
+          var item = document.createElement("div");
+          item.className = "heatmap-detail-item";
+          item.innerHTML = "<span class='heatmap-detail-course'>" + escapeHtml(course.courseName || "未知课程") + "</span>" +
+            "<span class='heatmap-detail-room'>" + escapeHtml(course.roomName || "未标明教室") + "</span>" +
+            "<span class='heatmap-detail-teacher'>" + escapeHtml(course.teacher || "未知教师") + "</span>";
+          list.appendChild(item);
+        });
+
+        panel.classList.add("show");
+      }
+
+      function renderGithubStyleHeatmap(data, dayType) {
         data = data || {};
         var heatmapWrap = $("classroomHeatmap");
         var noticeWrap = $("classroomHeatmapNotice");
         var heatmapData = data.classroomHeatmap || [];
         var countData = data.classroomHeatmapCounts || [];
+        var detailData = data.classroomHeatmapDetails || [];
         var meta = data.classroomHeatmapMeta || {};
         var weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+        var visibleDays = getVisibleHeatmapDays(dayType || state.heatmapDayType || "all");
+        state.classroomHeatmapData = data;
         renderHeatmapMeta(meta);
+        renderHeatmapSummary(meta);
+        if (!heatmapWrap || !noticeWrap) return;
         heatmapWrap.innerHTML = "";
         noticeWrap.textContent = "";
 
         if ((meta.totalClassrooms || 0) === 0) {
           heatmapWrap.className = "heatmap-empty";
-          heatmapWrap.textContent = "暂无教室课表数据，上传或同步 classroom-schedules 后将自动生成热力图。";
+          heatmapWrap.textContent = "缺少可计算的教室课表数据源。当前读取到：" + (meta.source || "未知来源") + "；教室总数 0；已识别占用槽位 " + (meta.totalOccupiedSlots || 0) + "。无法计算原因：" + (meta.emptyReason || "未读取到 classroomSchedules 或 classSchedules。");
           return;
         }
 
         heatmapWrap.className = "heatmap-container";
+        heatmapWrap.style.gridTemplateColumns = "64px repeat(" + visibleDays.length + ", minmax(72px, 1fr))";
         if ((meta.totalOccupiedSlots || 0) === 0) {
           var alert = document.createElement("div");
           alert.className = "heatmap-alert";
-          alert.textContent = "已读取到教室数据，但未识别到节次字段，请检查数据结构。";
+          alert.textContent = "已读取到 " + (meta.totalClassrooms || 0) + " 间教室，但未识别到有效节次字段。数据源：" + (meta.source || "-") + "，原因：" + (meta.emptyReason || "no-recognized-course-slots");
           noticeWrap.appendChild(alert);
         }
 
-        ["节次"].concat(weekdays).forEach(function(label) {
+        ["节次"].concat(visibleDays.map(function(day) { return weekdays[day]; })).forEach(function(label) {
           var div = document.createElement("div");
           div.className = "heatmap-header";
           div.textContent = label;
           heatmapWrap.appendChild(div);
         });
 
-        for (var section = 1; section <= 14; section++) {
+        for (let section = 1; section <= 14; section++) {
           var axis = document.createElement("div");
           axis.className = "heatmap-axis";
           axis.textContent = "第" + section + "节";
           heatmapWrap.appendChild(axis);
 
-          for (var day = 0; day < 7; day++) {
+          visibleDays.forEach(function(day) {
             var val = heatmapData[day] && heatmapData[day][section - 1] !== undefined
               ? Number(heatmapData[day][section - 1])
               : 0;
             var occupied = countData[day] && countData[day][section - 1] !== undefined
               ? Number(countData[day][section - 1])
               : 0;
+            var details = detailData[day] && Array.isArray(detailData[day][section - 1])
+              ? detailData[day][section - 1]
+              : [];
             var cell = document.createElement("div");
             cell.className = "heatmap-cell";
             cell.style.background = heatmapColor(val);
             cell.title = weekdays[day] + " 第" + section + "节\\n占用率：" + val + "%\\n占用教室：" + occupied + "/" + (meta.totalClassrooms || 0);
+            cell.setAttribute("aria-label", weekdays[day] + " 第" + section + "节，占用率 " + val + "%");
+            var label = document.createElement("span");
+            label.textContent = val + "%";
+            cell.appendChild(label);
+            cell.addEventListener("click", function() {
+              renderHeatmapDetail({
+                weekdayLabel: weekdays[day],
+                section: section,
+                rate: val,
+                occupied: occupied,
+                totalClassrooms: meta.totalClassrooms || 0,
+                details: details
+              });
+            });
             heatmapWrap.appendChild(cell);
-          }
+          });
         }
       }
 
@@ -3935,10 +4198,17 @@ const adminConsoleHtml = `<!doctype html>
         }
       }
 
+      window.openMobileDrawer = openMobileDrawer;
+      window.closeMobileDrawer = closeMobileDrawer;
+      window.switchAdminPage = switchSection;
+      window.loadDashboard = loadDashboard;
+      window.renderDashboard = renderDashboard;
+
       // 绑定导航与事件
       document.querySelectorAll(".sidebar nav ul li[data-section]").forEach(function (item) {
         item.addEventListener("click", function () {
           switchSection(item.dataset.section);
+          closeMobileDrawer();
         });
       });
 
@@ -4079,16 +4349,10 @@ const adminConsoleHtml = `<!doctype html>
 
       // 移动端侧边栏交互绑定
       safeBind("mobileMenuBtn", "click", function() {
-        var sidebar = $("appSidebar");
-        var overlay = $("sidebarOverlay");
-        if (sidebar) sidebar.classList.add("show");
-        if (overlay) overlay.classList.add("show");
+        openMobileDrawer();
       });
       safeBind("sidebarOverlay", "click", function() {
-        var sidebar = $("appSidebar");
-        var overlay = $("sidebarOverlay");
-        if (sidebar) sidebar.classList.remove("show");
-        if (overlay) overlay.classList.remove("show");
+        closeMobileDrawer();
       });
 
       // 热力图切换全周/工作日/周末视图绑定
@@ -4103,18 +4367,6 @@ const adminConsoleHtml = `<!doctype html>
         });
       });
 
-      // 热力图筛选器选择事件绑定
-      safeBind("heatmapSemester", "change", function() { loadClassroomHeatmap(false); });
-      safeBind("heatmapWeek", "change", function() { loadClassroomHeatmap(false); });
-      
-      var buildingTimeout = null;
-      safeBind("heatmapBuilding", "input", function() {
-        if (buildingTimeout) clearTimeout(buildingTimeout);
-        buildingTimeout = setTimeout(function() {
-          loadClassroomHeatmap(false);
-        }, 400);
-      });
-
       // 收起热力图详情面板
       safeBind("closeHmDetailBtn", "click", function() {
         var panel = $("classroomHeatmapDetailPanel");
@@ -4122,68 +4374,70 @@ const adminConsoleHtml = `<!doctype html>
       });
 
       // 管理员个人 XLS 课表测试调试上传绑定
-      safeBind("xlsTestSelectBtn", "click", function() {
-        var input = $("xlsTestInput");
-        if (input) input.click();
-      });
+      if ($("xlsTestSelectBtn") && $("xlsTestInput")) {
+        safeBind("xlsTestSelectBtn", "click", function() {
+          var input = $("xlsTestInput");
+          if (input) input.click();
+        });
 
-      safeBind("xlsTestInput", "change", function(e) {
-        var file = e.target.files[0];
-        if (!file) return;
+        safeBind("xlsTestInput", "change", function(e) {
+          var file = e.target.files[0];
+          if (!file) return;
 
-        if (file.size > 10 * 1024 * 1024) {
-          showToast("测试文件大小不能超过 10MB", "error");
-          return;
-        }
+          if (file.size > 10 * 1024 * 1024) {
+            showToast("测试文件大小不能超过 10MB", "error");
+            return;
+          }
 
-        $("xlsTestInfo").textContent = "正在读取文件：" + file.name + "...";
-        
-        var reader = new FileReader();
-        reader.onload = function(evt) {
-          var base64 = evt.target.result.split(",")[1];
-          $("xlsTestInfo").textContent = "正在测试解析中...";
-          
-          api("/api/fosu/personal/import-xls", {
-            method: "POST",
-            body: JSON.stringify({
-              filename: file.name,
-              fileBase64: base64,
-              targetTerm: (state.dashboard && state.dashboard.currentSemester) || "2025-2026-2"
+          $("xlsTestInfo").textContent = "正在读取文件：" + file.name + "...";
+
+          var reader = new FileReader();
+          reader.onload = function(evt) {
+            var base64 = evt.target.result.split(",")[1];
+            $("xlsTestInfo").textContent = "正在测试解析中...";
+
+            api("/api/fosu/personal/import-xls", {
+              method: "POST",
+              body: JSON.stringify({
+                filename: file.name,
+                fileBase64: base64,
+                targetTerm: (state.dashboard && state.dashboard.currentSemester) || "2025-2026-2"
+              })
             })
-          })
-          .then(function(res) {
-            var resultDiv = $("xlsTestResult");
-            if (res.success) {
-              $("xlsTestInfo").innerHTML = "✔ 解析成功！文件名：" + escapeHtml(res.filename);
-              resultDiv.style.display = "block";
-              resultDiv.style.borderColor = "var(--success)";
-              
-              var html = "<strong>解析概要：</strong><br/>" +
-                         "· 学期：" + res.term + "<br/>" +
-                         "· 课程总数：" + res.courseCount + " 门<br/><br/>" +
-                         "<strong>解析课程明细列表：</strong><br/>";
-              
-              res.courses.forEach(function(c, idx) {
-                html += (idx + 1) + ". <strong>" + escapeHtml(c.courseName) + "</strong> - " + escapeHtml(c.teacherName) + " | 周" + c.weekDay + " [" + c.sections.join(",") + "]节 | " + escapeHtml(c.classroom || "无教室") + " | " + c.weeks.length + "周<br/>";
-              });
-              resultDiv.innerHTML = html;
-            } else {
-              $("xlsTestInfo").textContent = "✘ 解析失败";
+            .then(function(res) {
+              var resultDiv = $("xlsTestResult");
+              if (res.success) {
+                $("xlsTestInfo").innerHTML = "✔ 解析成功！文件名：" + escapeHtml(res.filename);
+                resultDiv.style.display = "block";
+                resultDiv.style.borderColor = "var(--success)";
+
+                var html = "<strong>解析概要：</strong><br/>" +
+                           "· 学期：" + res.term + "<br/>" +
+                           "· 课程总数：" + res.courseCount + " 门<br/><br/>" +
+                           "<strong>解析课程明细列表：</strong><br/>";
+
+                res.courses.forEach(function(c, idx) {
+                  html += (idx + 1) + ". <strong>" + escapeHtml(c.courseName) + "</strong> - " + escapeHtml(c.teacherName) + " | 周" + c.weekDay + " [" + c.sections.join(",") + "]节 | " + escapeHtml(c.classroom || "无教室") + " | " + c.weeks.length + "周<br/>";
+                });
+                resultDiv.innerHTML = html;
+              } else {
+                $("xlsTestInfo").textContent = "✘ 解析失败";
+                resultDiv.style.display = "block";
+                resultDiv.style.borderColor = "var(--danger)";
+                resultDiv.innerHTML = "<span style='color: var(--danger); font-weight:700;'>解析错误信息：</span><br/>" + escapeHtml(res.message || "未知错误");
+              }
+            })
+            .catch(function(err) {
+              $("xlsTestInfo").textContent = "✘ 上传失败";
+              var resultDiv = $("xlsTestResult");
               resultDiv.style.display = "block";
               resultDiv.style.borderColor = "var(--danger)";
-              resultDiv.innerHTML = "<span style='color: var(--danger); font-weight:700;'>解析错误信息：</span><br/>" + escapeHtml(res.message || "未知错误");
-            }
-          })
-          .catch(function(err) {
-            $("xlsTestInfo").textContent = "✘ 上传失败";
-            var resultDiv = $("xlsTestResult");
-            resultDiv.style.display = "block";
-            resultDiv.style.borderColor = "var(--danger)";
-            resultDiv.innerHTML = "<span style='color: var(--danger); font-weight:700;'>网络请求错误：</span><br/>" + escapeHtml(err.message || "请求失败");
-          });
-        };
-        reader.readAsDataURL(file);
-      });
+              resultDiv.innerHTML = "<span style='color: var(--danger); font-weight:700;'>网络请求错误：</span><br/>" + escapeHtml(err.message || "请求失败");
+            });
+          };
+          reader.readAsDataURL(file);
+        });
+      }
 
       // 13. 初始化
       clearNoticeForm();

@@ -400,15 +400,27 @@ async function checkFosuNetwork() {
 
     return {
       success: true,
+      ok: agentReachable,
+      mode: "server",
       agentMode: true,
       agent: {
         reachable: agentReachable,
         status: agentStatus,
         message: agentMessage,
       },
+      serverReachability: {
+        agentReachable,
+      },
+      clientHint: {
+        checked: false,
+        message: "小程序端未直接检测 100.fosu.edu.cn；当前结果仅代表服务器/代理环境。",
+      },
       recommendation: agentReachable
         ? "校园代理连接正常。当前处于实验版校园网代理网关环境，可正常同步。"
-        : `校园代理暂时不可用。原因: ${agentMessage || "连接超时"}。请检查您的代理 Agent 状态。`,
+        : `校园代理暂时不可用。原因: ${agentMessage || "连接超时"}。请使用 XLS 手动导入。`,
+      userMessage: agentReachable
+        ? "校园网后端代理可用，可以尝试账号密码同步。"
+        : "校园网后端代理暂不可用，账号密码同步不可用。推荐使用 XLS 手动导入。",
     };
   }
 
@@ -485,20 +497,46 @@ async function checkFosuNetwork() {
     }
   }
 
-  // 3. 推荐结论
-  let recommendation = "";
-  if (authserverReachable && !eduDnsResolved) {
-    recommendation = "authserver 可访问，但 100.fosu.edu.cn 在当前容器内 DNS 解析失败。请先修复 100 网解析/校园网/VPN/内网路由，再继续调试个人课表同步。";
-  } else if (authserverReachable && eduDnsResolved && !eduReachable) {
-    recommendation = "authserver 可访问，100 网域名可解析但无法连通。个人课表同步需要后端能连通 100 网。请检查服务器是否处于校园网/校 VPN、网络防火墙或内网代理设置。";
+  // 3. 推荐结论。该检查发生在 VPS / Docker 服务端，不代表用户手机网络。
+  const ok = authserverReachable && eduDnsResolved && eduReachable;
+  let reason = "";
+  if (!eduDnsResolved) {
+    reason = "VPS_OR_CONTAINER_CANNOT_RESOLVE_100_FOSU";
+  } else if (!eduReachable) {
+    reason = "VPS_OR_CONTAINER_CANNOT_REACH_100_FOSU";
   } else if (!authserverReachable) {
-    recommendation = "当前同步节点无法连接学校统一身份认证站点。请先检查服务器公网出站规则与网络连通性。";
+    reason = "AUTHSERVER_UNREACHABLE_FROM_SERVER";
+  }
+
+  let recommendation = "";
+  let userMessage = "";
+  if (!ok) {
+    userMessage = "公网服务器当前无法访问学校内网 100.fosu.edu.cn，账号密码同步不可用。推荐使用 XLS 手动导入。";
+    recommendation = "该检测基于服务器环境，不代表你的手机网络状态。如果没有部署校园网内代理或 VPN，账号密码同步不可用。";
   } else {
-    recommendation = "网络连接与域名解析均正常。您可以正常使用个人课表同步功能。";
+    userMessage = "服务器可访问学校认证与教务网络，可以尝试账号密码同步。";
+    recommendation = "服务器网络连接与域名解析均正常。你可以继续使用个人课表同步功能。";
   }
 
   return {
     success: true,
+    ok,
+    mode: "server",
+    authserverReachable,
+    jwReachable: eduReachable,
+    dnsResolved: eduDnsResolved,
+    reason,
+    userMessage,
+    serverReachability: {
+      authserverReachable,
+      jwReachable: eduReachable,
+      dnsResolved: eduDnsResolved,
+      reason,
+    },
+    clientHint: {
+      checked: false,
+      message: "小程序端未直接检测 100.fosu.edu.cn；当前结果仅代表服务器环境。",
+    },
     authserver: {
       reachable: authserverReachable,
       status: authPageStatus,
