@@ -3627,7 +3627,7 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
         name: "项目内本机同步 (管理员使用，需要项目根目录)",
         command: `npm run sync:local-campus -- --term=${term} --start=${start} --output=./staging/${term}-full.json`,
         scene: "管理员自己电脑已连校园网，直接抓取全校课表并生成本地 Staging JSON",
-        precondition: "需要项目根目录、完整源码、Node.js 环境及 npm install 依赖；且处于校园网/学校 VPN 环境",
+        precondition: "需要项目根目录、完整源码、Node.js 环境及 npm install 依赖；且处于校园网/学校 VPN 环境。生成的 Staging JSON 文件将统一输出到项目根目录的 staging 目录下。",
         duration: "8 ~ 20 分钟",
         intranetRequired: true,
         risk: "中",
@@ -3638,8 +3638,14 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
         id: "local-upload",
         name: "上传本地 Staging (管理员使用，需要项目根目录)",
         command: `npm run sync:local-upload -- --file=./staging/${term}-full.json --server=https://class.katelya.eu.org`,
-        scene: "管理员将本地已生成的 Staging JSON 上传到 VPS 暂存区",
-        precondition: "已生成合法 Staging JSON，并持有管理员上传令牌 (ADMIN_API_TOKEN)",
+        scene: "管理员将本地已生成的 Staging JSON 上传到 VPS 暂存区。优先使用绝对路径或明确提示以防相对路径在子进程 cwd 变化时出现错误。",
+        precondition: `已生成合法 Staging JSON，并持有管理员上传令牌 (ADMIN_API_TOKEN)。\n` +
+          `【PowerShell 推荐写法】建议通过绝对路径以防路径重复拼接错误：\n` +
+          `$file = (Resolve-Path ".\\staging\\${term}-full.json").Path\n` +
+          `npm run sync:local-upload -- --file="$file" --server=https://class.katelya.eu.org\n\n` +
+          `【兼容旧路径写法】若生成的文件位于 tools/fosu-sync-client/staging：\n` +
+          `$file = (Resolve-Path ".\\tools\\fosu-sync-client\\staging\\${term}-full.json").Path\n` +
+          `npm run sync:local-upload -- --file="$file" --server=https://class.katelya.eu.org`,
         duration: "15 ~ 60 秒",
         intranetRequired: false,
         risk: "低",

@@ -15,6 +15,7 @@ const ALL_SCOPES = ["classSchedules", "teacherSchedules", "classroomSchedules", 
 
 console.log(`[env] .env path: ${envPath}`);
 console.log(`[env] FOSU_API_BASE: ${process.env.FOSU_API_BASE || "https://class.katelya.eu.org"}`);
+
 console.log(`[env] PREFERRED_SEMESTER: ${process.env.PREFERRED_SEMESTER || "未配置"}`);
 console.log(`[env] SYNC_GRADE_RANGE: ${process.env.SYNC_GRADE_RANGE || "未配置"}`);
 console.log(`[env] SYNC_GRADES (专业同步使用): ${process.env.SYNC_GRADES || "未配置"}`);
@@ -52,13 +53,137 @@ if (disableProxy) {
 
 const FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 const FOSU_API_BASE = process.env.FOSU_API_BASE || "https://class.katelya.eu.org";
-const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || "";
-const FOSU_SYNC_AUTH_MODE = process.env.FOSU_SYNC_AUTH_MODE || "playwright-manual";
-const SESSION_PATH = path.join(__dirname, ".session", "session.json");
-const PROJECT_ROOT = path.resolve(__dirname, "../..");
+
+let cachedProjectRoot = null;
+
+function resolveProjectPath() {
+  if (cachedProjectRoot) return cachedProjectRoot;
+
+  const startDir = process.cwd();
+  let currentDir = startDir;
+
+  while (true) {
+    const serverPath = path.join(currentDir, "server");
+    const miniprogramPath = path.join(currentDir, "miniprogram");
+
+    // 检查是否同时存在这两个目录
+    if (fs.existsSync(serverPath) && fs.statSync(serverPath).isDirectory() &&
+        fs.existsSync(miniprogramPath) && fs.statSync(miniprogramPath).isDirectory()) {
+      cachedProjectRoot = currentDir;
+      return currentDir;
+    }
+
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+    currentDir = parentDir;
+  }
+
+  // Fallback to static mapping using __dirname
+  const fallbackPath = path.resolve(__dirname, "../..");
+  cachedProjectRoot = fallbackPath;
+  return fallbackPath;
+}
+
+const PROJECT_ROOT = resolveProjectPath();
+
+function resolveInputFilePath(fileArg) {
+  if (!fileArg) {
+    return {
+      resolved: null,
+      tried: []
+    };
+  }
+
+  // 1. 如果已经是绝对路径，直接返回
+  if (path.isAbsolute(fileArg)) {
+    return {
+      resolved: fileArg,
+      tried: [fileArg]
+    };
+  }
+
+  const cwd = process.cwd();
+  const projectRoot = resolveProjectPath();
+  const tried = [];
+
+  // 规范化路径
+  const normalizedFile = path.normalize(fileArg).replace(/\\/g, "/");
+
+  // 2. 如果用户传入的相对路径以 tools/fosu-sync-client/ 开头
+  if (normalizedFile.startsWith("tools/fosu-sync-client/")) {
+    // 优先按 projectRoot 拼接：projectRoot/tools/fosu-sync-client/...
+    const pRootJoined = path.resolve(projectRoot, fileArg);
+    tried.push(pRootJoined);
+    if (fs.existsSync(pRootJoined)) {
+      return { resolved: pRootJoined, tried };
+    }
+
+    // 尝试去除 tools/fosu-sync-client/ 前缀后相对 cwd 拼接 (如果 cwd 是 tools/fosu-sync-client)
+    const relativePart = normalizedFile.substring("tools/fosu-sync-client/".length);
+    const pCwdStripped = path.resolve(cwd, relativePart);
+    tried.push(pCwdStripped);
+    if (fs.existsSync(pCwdStripped)) {
+      return { resolved: pCwdStripped, tried };
+    }
+  } else {
+    // 3. 否则，依次尝试以下路径：
+    // - 当前 cwd/fileArg (包括 staging/xxx.json 或 ./staging/xxx.json)
+    const pCwd = path.resolve(cwd, fileArg);
+    tried.push(pCwd);
+    if (fs.existsSync(pCwd)) {
+      return { resolved: pCwd, tried };
+    }
+
+    // - projectRoot/fileArg (如果是在项目根目录运行，例如 ./staging/xxx.json)
+    if (projectRoot) {
+      const pRoot = path.resolve(projectRoot, fileArg);
+      tried.push(pRoot);
+      if (fs.existsSync(pRoot)) {
+        return { resolved: pRoot, tried };
+      }
+
+      // - projectRoot/tools/fosu-sync-client/fileArg (在 tools/fosu-sync-client 下的相对路径，但在 projectRoot 中运行)
+      const pClient = path.resolve(projectRoot, "tools/fosu-sync-client", fileArg);
+      tried.push(pClient);
+      if (fs.existsSync(pClient)) {
+        return { resolved: pClient, tried };
+      }
+    }
+  }
+
+  // 均未找到
+  return {
+    resolved: null,
+    tried
+  };
+}
+
+function resolveOutputFilePath(outputArg) {
+  if (!outputArg) return null;
+  if (path.isAbsolute(outputArg)) return outputArg;
+
+  const cwd = process.cwd();
+  const projectRoot = resolveProjectPath();
+  const normalizedFile = path.normalize(outputArg).replace(/\\/g, "/");
+
+  if (normalizedFile.startsWith("tools/fosu-sync-client/")) {
+    return path.resolve(projectRoot, outputArg);
+  }
+
+  // 如果处于项目根目录下，则优先拼接在 projectRoot 下，以保持 local-campus 默认输出建议统一到 projectRoot/staging/{term}-full.json
+  if (projectRoot) {
+    return path.resolve(projectRoot, outputArg);
+  }
+  return path.resolve(cwd, outputArg);
+}
 
 // 延迟辅助函数
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || "";
+const FOSU_SYNC_AUTH_MODE = process.env.FOSU_SYNC_AUTH_MODE || "playwright-manual";
+const SESSION_PATH = path.join(__dirname, ".session", "session.json");
 
 function getEnvFlag(name, defaultValue) {
   const value = process.env[name];
@@ -1340,13 +1465,21 @@ async function handleOfflineRelease() {
 }
 
 async function handleLocalStagingUpload(params) {
-  const filePath = path.resolve(process.cwd(), params.file || params.input || "");
-  if (!params.file && !params.input) {
-    throw new Error("缺少 --file=./staging/term-full.json 参数");
+  const fileArg = params.file || params.input || "";
+  const { resolved: filePath, tried } = resolveInputFilePath(fileArg);
+
+  if (!filePath || !fs.existsSync(filePath)) {
+    const errorMsg = [
+      "Staging JSON 文件不存在。",
+      `Received file arg: ${fileArg}`,
+      `Current working directory (cwd): ${process.cwd()}`,
+      `Detected project root: ${resolveProjectPath()}`,
+      "Tried candidate paths:",
+      ...tried.map(p => `  - ${p}`)
+    ].join("\n");
+    throw new Error(errorMsg);
   }
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Staging JSON 文件不存在: ${filePath}`);
-  }
+
   if (!ADMIN_API_TOKEN) {
     throw new Error("缺少 ADMIN_API_TOKEN，无法上传到后台 Staging 区");
   }
@@ -1470,7 +1603,8 @@ async function handleLocalCampusStaging(page, params) {
   }
   validateLocalReleaseSnapshot(snapshot);
 
-  const output = path.resolve(process.cwd(), params.output || path.join("staging", `${snapshot.semester || params.term || "term"}-full.json`));
+  const defaultOutput = path.join("staging", `${snapshot.semester || params.term || "term"}-full.json`);
+  const output = resolveOutputFilePath(params.output || defaultOutput);
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, JSON.stringify(snapshot, null, 2), "utf-8");
   console.log(`💾 Staging JSON 已生成: ${output}`);
