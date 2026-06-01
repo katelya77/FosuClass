@@ -3,13 +3,18 @@ const adminAuth = require("../services/adminAuth");
 
 const router = express.Router();
 
+const ADMIN_LOGO_URL = "https://pan.katelya.eu.org/file/tgs_eyJ2IjoxLCJmIjoiQWdBQ0FnVUFBeUVGQUFUYW1yME1BQUlCcjJvZEZiTTBGUVFjQzFUclVwVWlDNFdadG0tckFBSnBFR3NidWJQb1ZITjJyQjhxcWZNbkFRQURBZ0FEZVFBRE93USIsImUiOiJqcGciLCJuIjoicGhvdG9fNDMxLmpwZyIsIm0iOiJpbWFnZS9qcGVnIiwicyI6MTE0ODAwLCJ0IjoxNzgwMjkwOTk2MjkyLCJtaWQiOjQzMX0.pCRB9D4sdHdjeP1XpKnQfMVMlSCh37uQE67VGaKBWFw.jpg";
+const ADMIN_LOGO_FALLBACK_URL = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%271%27%20y2%3D%271%27%3E%3Cstop%20stop-color%3D%27%233b82f6%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%238b5cf6%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2716%27%20fill%3D%27url(%23g)%27%2F%3E%3Crect%20x%3D%2716%27%20y%3D%2716%27%20width%3D%2732%27%20height%3D%2734%27%20rx%3D%276%27%20fill%3D%27white%27%20opacity%3D%27.96%27%2F%3E%3Cpath%20d%3D%27M23%2024h18M23%2032h18M23%2040h10%27%20stroke%3D%27%233b82f6%27%20stroke-width%3D%274%27%20stroke-linecap%3D%27round%27%2F%3E%3C%2Fsvg%3E";
+const ADMIN_LOGO_IMG_ATTRS = `src="${ADMIN_LOGO_URL}" alt="佛课小表" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${ADMIN_LOGO_FALLBACK_URL}';"`;
+
 const adminConsoleHtml = `<!doctype html>
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>佛课小表 Admin Console</title>
-  <link rel="icon" type="image/png" href="/favicon.png">
+  <link rel="icon" type="image/jpeg" href="${ADMIN_LOGO_URL}">
+  <link rel="apple-touch-icon" href="${ADMIN_LOGO_URL}">
   <style>
     :root {
       --bg: #f8fafc;
@@ -175,49 +180,52 @@ const adminConsoleHtml = `<!doctype html>
       height: 100vh;
       z-index: 50;
     }
-    .brand {
+    .brand,
+    .sidebar-brand {
       display: flex;
       align-items: center;
       gap: 12px;
       margin-bottom: 24px;
       padding: 0 8px;
+      overflow: hidden;
     }
-    .brand-icon {
-      width: 32px;
-      height: 32px;
-      border-radius: 6px;
-      background: var(--primary);
-      color: white;
-      font-size: 18px;
-      font-weight: 800;
-      display: grid;
-      place-items: center;
-    }
-    .brand-logo {
-      width: 32px;
-      height: 32px;
-      border-radius: 8px;
-      object-fit: cover;
-      flex: 0 0 auto;
-      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15);
-    }
+    .brand-logo,
     .login-logo {
-      width: 56px;
-      height: 56px;
+      display: block;
+      width: 42px;
+      height: 42px;
+      min-width: 42px;
       border-radius: 12px;
       object-fit: cover;
-      display: block;
-      margin-bottom: 20px;
-      box-shadow: 0 8px 20px rgba(239, 68, 68, 0.18);
+      object-position: center;
+      background: #fff;
+      box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
     }
-    .brand-title {
+    .brand-logo {
+      flex: 0 0 42px;
+    }
+    .login-logo {
+      margin-bottom: 20px;
+    }
+    .sidebar-brand-text {
+      min-width: 0;
+    }
+    .brand-title,
+    .sidebar-brand-title {
       font-size: 15px;
       font-weight: 700;
       color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
-    .brand-subtitle {
+    .brand-subtitle,
+    .sidebar-brand-subtitle {
       font-size: 11px;
       color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .nav-list {
@@ -982,7 +990,7 @@ const adminConsoleHtml = `<!doctype html>
   <!-- 登录页视图 -->
   <main id="loginView" class="login-wrap" style="width: min(400px, calc(100% - 32px)); margin: 15vh auto;" hidden>
     <div class="card" style="padding: 32px;">
-      <img class="login-logo" src="/assets/logo.png" alt="佛课小表">
+      <img class="login-logo" ${ADMIN_LOGO_IMG_ATTRS}>
       <h1 style="font-size: 20px; font-weight: 800; margin-bottom: 8px;">佛课小表后台</h1>
       <p style="color: var(--muted); font-size: 13px; margin-bottom: 24px;">管理端控制台安全验证。请输入管理员密码进行登录。</p>
       <div class="login-form">
@@ -1001,11 +1009,11 @@ const adminConsoleHtml = `<!doctype html>
     <!-- 左侧导航侧边栏 -->
     <aside class="sidebar">
       <div>
-        <div class="brand">
-          <img class="brand-logo" src="/assets/logo.png" alt="佛课小表">
-          <div>
-            <div class="brand-title">佛课小表</div>
-            <div class="brand-subtitle">Admin Console v1.5</div>
+        <div class="brand sidebar-brand">
+          <img class="brand-logo" ${ADMIN_LOGO_IMG_ATTRS}>
+          <div class="sidebar-brand-text">
+            <div class="brand-title sidebar-brand-title">佛课小表</div>
+            <div class="brand-subtitle sidebar-brand-subtitle">Admin Console v1.5</div>
           </div>
         </div>
         <nav>
@@ -3820,7 +3828,7 @@ function sendAdminHtml(res) {
   res.setHeader("Cache-Control", "no-store");
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data:; base-uri 'self'; form-action 'self'"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data: https://pan.katelya.eu.org; base-uri 'self'; form-action 'self'"
   );
   res.type("html").send(adminConsoleHtml);
 }
