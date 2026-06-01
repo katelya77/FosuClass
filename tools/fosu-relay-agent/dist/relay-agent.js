@@ -1,10 +1,370 @@
 #!/usr/bin/env node
+var __getOwnPropNames = Object.getOwnPropertyNames;
+var __commonJS = (cb, mod) => function __require() {
+  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+};
+
+// ../fosu-sync-client/upload.js
+var require_upload = __commonJS({
+  "../fosu-sync-client/upload.js"(exports2, module2) {
+    var axios = require("axios");
+    var crypto = require("crypto");
+    var fs2 = require("fs");
+    var os2 = require("os");
+    var path2 = require("path");
+    var { pipeline } = require("stream/promises");
+    var zlib = require("zlib");
+    function parseArgs2(argv) {
+      const args = {};
+      for (const arg of argv) {
+        if (!arg.startsWith("--")) continue;
+        const match = arg.match(/^--([^=]+)=(.*)$/);
+        if (match) {
+          args[match[1]] = match[2];
+        } else {
+          args[arg.slice(2)] = true;
+        }
+      }
+      return args;
+    }
+    function resolveProjectRoot(startDir) {
+      let current = path2.resolve(startDir || process.cwd());
+      while (true) {
+        const hasServer = fs2.existsSync(path2.join(current, "server"));
+        const hasMiniprogram = fs2.existsSync(path2.join(current, "miniprogram"));
+        const hasPackage = fs2.existsSync(path2.join(current, "package.json"));
+        const hasGit = fs2.existsSync(path2.join(current, ".git"));
+        if (hasServer && hasMiniprogram || hasPackage && hasGit) {
+          return current;
+        }
+        const parent = path2.dirname(current);
+        if (parent === current) break;
+        current = parent;
+      }
+      return path2.resolve(__dirname, "../..");
+    }
+    function resolveInputFilePath2(fileArg, options = {}) {
+      if (!fileArg) {
+        return { resolved: null, tried: [] };
+      }
+      if (path2.isAbsolute(fileArg)) {
+        return { resolved: fileArg, tried: [fileArg] };
+      }
+      const cwd = path2.resolve(options.cwd || process.cwd());
+      const projectRoot = options.projectRoot || resolveProjectRoot(cwd);
+      const normalized = path2.normalize(fileArg).replace(/\\/g, "/");
+      const candidates = [];
+      if (normalized.startsWith("tools/fosu-sync-client/")) {
+        candidates.push(path2.resolve(projectRoot, fileArg));
+        candidates.push(path2.resolve(cwd, normalized.slice("tools/fosu-sync-client/".length)));
+      } else {
+        candidates.push(path2.resolve(cwd, fileArg));
+        candidates.push(path2.resolve(projectRoot, fileArg));
+        candidates.push(path2.resolve(projectRoot, "tools/fosu-sync-client", fileArg));
+      }
+      const tried = [];
+      for (const candidate of candidates) {
+        if (tried.includes(candidate)) continue;
+        tried.push(candidate);
+        if (fs2.existsSync(candidate)) {
+          return { resolved: candidate, tried };
+        }
+      }
+      return { resolved: null, tried };
+    }
+    function toBytesMb(value, fallbackMb) {
+      const num = Number(value);
+      if (!Number.isFinite(num) || num <= 0) {
+        return fallbackMb * 1024 * 1024;
+      }
+      return Math.floor(num * 1024 * 1024);
+    }
+    function hashFile(filePath) {
+      return new Promise((resolve, reject) => {
+        const hash = crypto.createHash("sha256");
+        const stream = fs2.createReadStream(filePath);
+        stream.on("data", (chunk) => hash.update(chunk));
+        stream.on("error", reject);
+        stream.on("end", () => resolve(hash.digest("hex")));
+      });
+    }
+    async function gzipFile(inputPath, outputPath) {
+      await pipeline(
+        fs2.createReadStream(inputPath),
+        zlib.createGzip({ level: 9 }),
+        fs2.createWriteStream(outputPath)
+      );
+      return outputPath;
+    }
+    function readLeadingText2(filePath, maxBytes = 4 * 1024 * 1024) {
+      const stat = fs2.statSync(filePath);
+      const length = Math.min(stat.size, maxBytes);
+      const fd = fs2.openSync(filePath, "r");
+      try {
+        const buffer = Buffer.alloc(length);
+        fs2.readSync(fd, buffer, 0, length, 0);
+        return buffer.toString("utf-8");
+      } finally {
+        fs2.closeSync(fd);
+      }
+    }
+    function extractJsonMetadata(filePath) {
+      const head = readLeadingText2(filePath);
+      const pick = (key) => {
+        const match = head.match(new RegExp(`"${key}"\\s*:\\s*"([^"]+)"`));
+        return match ? match[1] : "";
+      };
+      return {
+        term: pick("term") || pick("semester"),
+        releaseVersion: pick("releaseVersion") || pick("version"),
+        generatedAt: pick("generatedAt") || pick("updatedAt")
+      };
+    }
+    function formatMb(bytes) {
+      return (Number(bytes || 0) / 1024 / 1024).toFixed(2);
+    }
+    function getAuthHeaders(mode, token) {
+      if (mode === "relay") {
+        return {
+          "x-relay-token": token,
+          Authorization: `Bearer ${token}`
+        };
+      }
+      return {
+        "x-admin-token": token,
+        Authorization: `Bearer ${token}`
+      };
+    }
+    function shouldRetry(error) {
+      if (!error) return false;
+      if (!error.response) return true;
+      const status = error.response.status;
+      return status === 408 || status === 425 || status === 429 || status >= 500;
+    }
+    function retryDelayMs(attempt) {
+      return Math.min(15e3, 700 * Math.pow(2, attempt - 1));
+    }
+    async function postJson(url, body, headers, timeoutMs) {
+      const response = await axios.post(url, body, {
+        headers: Object.assign({ "Content-Type": "application/json" }, headers),
+        timeout: timeoutMs,
+        proxy: false,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      });
+      return response.data;
+    }
+    async function uploadChunkWithRetry(url, buffer, headers, timeoutMs, attemptCount) {
+      let lastError;
+      for (let attempt = 1; attempt <= attemptCount; attempt += 1) {
+        try {
+          const response = await axios.post(url, buffer, {
+            headers: Object.assign({
+              "Content-Type": "application/octet-stream",
+              "Content-Length": buffer.length,
+              "x-chunk-sha256": crypto.createHash("sha256").update(buffer).digest("hex")
+            }, headers),
+            timeout: timeoutMs,
+            proxy: false,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+          });
+          return response.data;
+        } catch (error) {
+          lastError = error;
+          const detail = error.response ? `${error.response.status} ${JSON.stringify(error.response.data || {})}` : error.message;
+          console.warn(`chunk upload failed (${attempt}/${attemptCount}): ${detail}`);
+          if (!shouldRetry(error) || attempt >= attemptCount) {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs(attempt)));
+        }
+      }
+      throw lastError;
+    }
+    function readChunk(filePath, start, endInclusive) {
+      const length = endInclusive - start + 1;
+      const buffer = Buffer.allocUnsafe(length);
+      const fd = fs2.openSync(filePath, "r");
+      try {
+        fs2.readSync(fd, buffer, 0, length, start);
+        return buffer;
+      } finally {
+        fs2.closeSync(fd);
+      }
+    }
+    function normalizeServer2(value) {
+      return String(value || "https://class.katelya.eu.org").replace(/\/+$/, "");
+    }
+    async function prepareUploadFile(filePath, params) {
+      const stat = fs2.statSync(filePath);
+      const originalSize = stat.size;
+      const originalSha256 = await hashFile(filePath);
+      const shouldGzip = params.gzip === true || params.gzip === "true" || params["no-gzip"] !== true;
+      if (!shouldGzip) {
+        return {
+          uploadPath: filePath,
+          contentEncoding: "identity",
+          originalSize,
+          originalSha256
+        };
+      }
+      const gzipPath = path2.resolve(
+        params["gzip-output"] || params.gzipOutput || `${filePath}.gz`
+      );
+      console.log(`gzip: ${filePath}`);
+      console.log(`gzip output: ${gzipPath}`);
+      await gzipFile(filePath, gzipPath);
+      return {
+        uploadPath: gzipPath,
+        contentEncoding: "gzip",
+        originalSize,
+        originalSha256
+      };
+    }
+    async function uploadStagingFile2(options) {
+      const params = options.params || {};
+      const filePath = path2.resolve(options.filePath);
+      if (!fs2.existsSync(filePath)) {
+        throw new Error(`file not found: ${filePath}`);
+      }
+      const mode = options.authMode || "admin";
+      const token = options.token || "";
+      if (!token) {
+        throw new Error(mode === "relay" ? "missing relay token" : "missing ADMIN_API_TOKEN");
+      }
+      const server = normalizeServer2(options.server);
+      const endpointBase = mode === "relay" ? `${server}/api/relay/staging/upload` : `${server}/api/admin/staging/upload`;
+      const timeoutMs = Number(params.timeout || params.timeoutMs || process.env.SYNC_UPLOAD_TIMEOUT_MS || 18e4);
+      const retryCount = Number(params.retries || process.env.SYNC_UPLOAD_RETRIES || 3);
+      const chunkSize = toBytesMb(params["chunk-mb"] || params.chunkMb || process.env.SYNC_LOCAL_UPLOAD_CHUNK_MB, 8);
+      const metadata = Object.assign({}, extractJsonMetadata(filePath), options.metadata || {});
+      const prepared = await prepareUploadFile(filePath, params);
+      const uploadStat = fs2.statSync(prepared.uploadPath);
+      const uploadSha256 = await hashFile(prepared.uploadPath);
+      const totalChunks = Math.ceil(uploadStat.size / chunkSize);
+      const headers = getAuthHeaders(mode, token);
+      console.log(`source file: ${filePath}`);
+      console.log(`source size: ${formatMb(prepared.originalSize)} MB`);
+      console.log(`upload file: ${prepared.uploadPath}`);
+      console.log(`upload size: ${formatMb(uploadStat.size)} MB`);
+      console.log(`chunk size: ${formatMb(chunkSize)} MB, chunks: ${totalChunks}`);
+      console.log(`server: ${server}`);
+      const initBody = {
+        fileName: path2.basename(filePath),
+        term: metadata.term || options.term || "",
+        releaseVersion: metadata.releaseVersion || "",
+        note: options.note || params.note || "",
+        source: options.source || (mode === "relay" ? "relay-agent" : "local-upload-cli"),
+        contentEncoding: prepared.contentEncoding,
+        contentType: "application/json",
+        chunkSize,
+        totalChunks,
+        uploadSize: uploadStat.size,
+        uploadSha256,
+        originalSize: prepared.originalSize,
+        originalSha256: prepared.originalSha256
+      };
+      const init = await postJson(`${endpointBase}/init`, initBody, headers, timeoutMs);
+      const uploadId = init.uploadId || init.upload?.uploadId;
+      if (!uploadId) {
+        throw new Error(`init response missing uploadId: ${JSON.stringify(init)}`);
+      }
+      const startedAt = Date.now();
+      let uploaded = 0;
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+        const start = chunkIndex * chunkSize;
+        const end = Math.min(uploadStat.size - 1, start + chunkSize - 1);
+        const buffer = readChunk(prepared.uploadPath, start, end);
+        const chunkUrl = `${endpointBase}/chunk?uploadId=${encodeURIComponent(uploadId)}&chunkIndex=${chunkIndex}`;
+        await uploadChunkWithRetry(chunkUrl, buffer, headers, timeoutMs, retryCount);
+        uploaded += buffer.length;
+        const elapsed = Math.max(1, (Date.now() - startedAt) / 1e3);
+        const percent = (uploaded / uploadStat.size * 100).toFixed(2);
+        const speed = formatMb(uploaded / elapsed);
+        console.log(`[${chunkIndex + 1}/${totalChunks}] ${percent}% ${formatMb(uploaded)}/${formatMb(uploadStat.size)} MB, ${speed} MB/s`);
+      }
+      const finalize = await postJson(`${endpointBase}/finalize`, {
+        uploadId,
+        uploadSize: uploadStat.size,
+        uploadSha256,
+        originalSize: prepared.originalSize,
+        originalSha256: prepared.originalSha256,
+        totalChunks,
+        note: options.note || params.note || "",
+        uploaderNote: options.note || params.note || "",
+        environment: options.environment || metadata.environment || ""
+      }, headers, timeoutMs);
+      const payload = finalize.data || finalize.upload || finalize;
+      console.log("upload finalized:");
+      console.log(JSON.stringify({
+        uploadId,
+        stagingId: finalize.stagingId || uploadId,
+        relayUploadId: payload.relayUploadId || finalize.relayUploadId,
+        term: payload.term || finalize.term || metadata.term || "",
+        releaseVersion: payload.releaseVersion || finalize.releaseVersion || metadata.releaseVersion || "",
+        counts: payload.counts || payload.summary || finalize.counts || {},
+        status: payload.status || finalize.status || "pending-review"
+      }, null, 2));
+      return finalize;
+    }
+    async function runFromCli(argv = process.argv.slice(2)) {
+      const params = parseArgs2(argv);
+      const fileArg = params.file || params.input;
+      const resolved = resolveInputFilePath2(fileArg || "");
+      if (!resolved.resolved) {
+        throw new Error([
+          "Staging JSON file not found.",
+          `received: ${fileArg || ""}`,
+          `cwd: ${process.cwd()}`,
+          `projectRoot: ${resolveProjectRoot(process.cwd())}`,
+          "tried:",
+          ...resolved.tried.map((item) => `  - ${item}`)
+        ].join(os2.EOL));
+      }
+      const mode = params.relay ? "relay" : "admin";
+      const token = params.token || (mode === "relay" ? process.env.RELAY_TOKEN : process.env.ADMIN_API_TOKEN);
+      return uploadStagingFile2({
+        filePath: resolved.resolved,
+        server: params.server || process.env.FOSU_API_BASE || "https://class.katelya.eu.org",
+        token,
+        authMode: mode,
+        params,
+        term: params.term,
+        note: params.note
+      });
+    }
+    if (require.main === module2) {
+      runFromCli().catch((error) => {
+        const response = error.response;
+        if (response) {
+          console.error(`upload failed: HTTP ${response.status}`);
+          console.error(JSON.stringify(response.data || {}, null, 2));
+        } else {
+          console.error(`upload failed: ${error.stack || error.message}`);
+        }
+        process.exit(1);
+      });
+    }
+    module2.exports = {
+      parseArgs: parseArgs2,
+      resolveInputFilePath: resolveInputFilePath2,
+      resolveProjectRoot,
+      runFromCli,
+      uploadStagingFile: uploadStagingFile2
+    };
+  }
+});
 
 // relay-agent.js
 var fs = require("fs");
 var os = require("os");
 var path = require("path");
 var readline = require("readline/promises");
+var {
+  resolveInputFilePath,
+  uploadStagingFile
+} = require_upload();
 var SECRET_KEY_PATTERN = /(studentId|student_id|password|passwd|pwd|cookie|ticket|execution|session|token|authorization|jsessionid|captcha)/i;
 function parseArgs(argv) {
   const args = {};
@@ -61,50 +421,88 @@ async function loadTask(server, token) {
   }
   return data.task;
 }
-function containsSensitiveData(value) {
-  if (value === void 0 || value === null) return false;
-  if (Array.isArray(value)) {
-    return value.some((item) => containsSensitiveData(item));
+function readLeadingText(filePath, maxBytes = 4 * 1024 * 1024) {
+  const stat = fs.statSync(filePath);
+  const length = Math.min(stat.size, maxBytes);
+  const fd = fs.openSync(filePath, "r");
+  try {
+    const buffer = Buffer.alloc(length);
+    fs.readSync(fd, buffer, 0, length, 0);
+    return buffer.toString("utf-8");
+  } finally {
+    fs.closeSync(fd);
   }
-  if (typeof value === "object") {
-    return Object.keys(value).some((key) => {
-      if (SECRET_KEY_PATTERN.test(key)) return true;
-      return containsSensitiveData(value[key]);
-    });
-  }
-  if (typeof value === "string") {
-    return /(JSESSIONID|CASTGC|password=|passwd=|ticket=|execution=|Authorization:|Bearer\s+[A-Za-z0-9._-]+)/i.test(value);
-  }
-  return false;
 }
-function readStagingJson(args, task) {
-  const defaultPath = path.resolve(process.cwd(), "staging", `${args.term || task.term}-full.json`);
-  const filePath = path.resolve(process.cwd(), args.file || args.input || defaultPath);
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`\u672A\u627E\u5230 Staging JSON: ${filePath}
-\u8BF7\u5148\u5728\u6821\u56ED\u7F51\u7535\u8111\u751F\u6210\u6587\u4EF6\uFF0C\u6216\u4F7F\u7528 --file=\u8DEF\u5F84 \u6307\u5B9A\u3002`);
+function pickJsonString(head, key) {
+  const match = head.match(new RegExp(`"${key}"\\s*:\\s*"([^"]+)"`));
+  return match ? match[1] : "";
+}
+function pickJsonNumber(head, key) {
+  const match = head.match(new RegExp(`"${key}"\\s*:\\s*(\\d+)`));
+  return match ? Number(match[1]) : 0;
+}
+function extractSummary(filePath) {
+  const head = readLeadingText(filePath);
+  return {
+    term: pickJsonString(head, "term") || pickJsonString(head, "semester"),
+    releaseVersion: pickJsonString(head, "releaseVersion") || pickJsonString(head, "version"),
+    generatedAt: pickJsonString(head, "generatedAt") || pickJsonString(head, "updatedAt"),
+    classScheduleCount: pickJsonNumber(head, "classScheduleCount"),
+    teacherScheduleCount: pickJsonNumber(head, "teacherScheduleCount"),
+    classroomScheduleCount: pickJsonNumber(head, "classroomScheduleCount"),
+    courseScheduleCount: pickJsonNumber(head, "courseScheduleCount"),
+    teacherCount: pickJsonNumber(head, "teacherCount"),
+    classroomCount: pickJsonNumber(head, "classroomCount"),
+    courseCount: pickJsonNumber(head, "courseCount")
+  };
+}
+function scanFileForSensitiveData(filePath) {
+  const fd = fs.openSync(filePath, "r");
+  const buffer = Buffer.alloc(1024 * 1024);
+  let carry = "";
+  try {
+    while (true) {
+      const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null);
+      if (bytesRead <= 0) break;
+      const chunk = carry + buffer.subarray(0, bytesRead).toString("utf-8");
+      if (SECRET_KEY_PATTERN.test(chunk) || /(JSESSIONID|CASTGC|password=|passwd=|ticket=|execution=|Authorization:|Bearer\s+[A-Za-z0-9._-]+)/i.test(chunk)) {
+        return true;
+      }
+      carry = chunk.slice(-200);
+    }
+    return false;
+  } finally {
+    fs.closeSync(fd);
   }
-  const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  if (containsSensitiveData(data)) {
+}
+function resolveStagingJson(args, task) {
+  const fileArg = args.file || args.input || path.join("staging", `${args.term || task.term}-full.json`);
+  const resolved = resolveInputFilePath(fileArg, { cwd: process.cwd() });
+  const filePath = resolved.resolved || path.resolve(process.cwd(), fileArg);
+  if (!fs.existsSync(filePath)) {
+    const tried = resolved.tried && resolved.tried.length ? `
+\u5C1D\u8BD5\u8DEF\u5F84\uFF1A
+${resolved.tried.map((item) => `- ${item}`).join("\n")}` : "";
+    throw new Error(`\u672A\u627E\u5230 Staging JSON: ${filePath}
+\u8BF7\u5148\u5728\u6821\u56ED\u7F51\u7535\u8111\u751F\u6210\u6587\u4EF6\uFF0C\u6216\u4F7F\u7528 --file=\u8DEF\u5F84 \u6307\u5B9A\u3002${tried}`);
+  }
+  if (scanFileForSensitiveData(filePath)) {
     throw new Error("Staging JSON \u4E2D\u5305\u542B\u7591\u4F3C\u5BC6\u7801\u3001Cookie\u3001ticket\u3001session \u6216 token \u5B57\u6BB5\uFF0C\u5DF2\u505C\u6B62\u4E0A\u4F20\u3002");
   }
-  return { filePath, data };
+  return { filePath, summary: extractSummary(filePath) };
 }
-function summarize(data) {
-  const resources = data.resources || {};
-  const classSchedules = Array.isArray(data.classSchedules) ? data.classSchedules : [];
-  return {
-    term: data.term || data.semester || "",
-    releaseVersion: data.releaseVersion || data.version || "",
-    generatedAt: data.generatedAt || data.updatedAt || "",
-    classScheduleCount: classSchedules.length,
-    teacherScheduleCount: Array.isArray(resources.teacherSchedules) ? resources.teacherSchedules.length : 0,
-    classroomScheduleCount: Array.isArray(resources.classroomSchedules) ? resources.classroomSchedules.length : 0,
-    courseScheduleCount: Array.isArray(resources.courseSchedules) ? resources.courseSchedules.length : 0,
-    teacherCount: Array.isArray(resources.teachers) ? resources.teachers.length : 0,
-    classroomCount: Array.isArray(resources.classrooms) ? resources.classrooms.length : 0,
-    courseCount: Array.isArray(resources.courses) ? resources.courses.length : 0
-  };
+function resolveToolScript(scriptName) {
+  const candidates = [
+    path.resolve(process.cwd(), scriptName),
+    path.resolve(__dirname, scriptName),
+    path.resolve(__dirname, "..", "fosu-sync-client", scriptName)
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(`\u672A\u627E\u5230\u63A5\u529B\u91C7\u96C6\u811A\u672C ${scriptName}\uFF0C\u8BF7\u91CD\u65B0\u4E0B\u8F7D\u5B8C\u6574\u63A5\u529B\u5DE5\u5177\u5305\u3002`);
 }
 async function confirmUpload(args, summary) {
   if (args.yes) return true;
@@ -126,32 +524,25 @@ async function confirmUpload(args, summary) {
     rl.close();
   }
 }
-async function upload(server, token, args, data) {
-  const payload = {
+async function upload(server, token, args, filePath, task) {
+  const environment = [
+    `platform=${process.platform}`,
+    `arch=${process.arch}`,
+    `hostname=${os.hostname()}`,
+    `node=${process.version}`
+  ].join("; ");
+  return uploadStagingFile({
+    filePath,
+    server,
     token,
-    uploaderNote: args.note || "",
-    environment: [
-      `platform=${process.platform}`,
-      `arch=${process.arch}`,
-      `hostname=${os.hostname()}`,
-      `node=${process.version}`
-    ].join("; "),
-    data
-  };
-  const res = await fetchWithTimeout(`${server}/api/relay/staging/upload`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-relay-token": token
-    },
-    body: JSON.stringify(payload),
-    timeoutMs: 12e4
+    authMode: "relay",
+    params: args,
+    term: task.term,
+    note: args.note || "",
+    environment,
+    source: "relay-agent",
+    metadata: { term: task.term, environment }
   });
-  const result = await res.json().catch(() => ({}));
-  if (!res.ok || result.success === false) {
-    throw new Error(result.message || `\u63A5\u529B\u4E0A\u4F20\u5931\u8D25: HTTP ${res.status}`);
-  }
-  return result;
 }
 function cleanupSession() {
   try {
@@ -224,7 +615,11 @@ async function main() {
   console.log("\u5373\u5C06\u4E3A\u60A8\u542F\u52A8\u7CFB\u7EDF\u6D4F\u89C8\u5668\u767B\u5F55\u6559\u52A1\u7CFB\u7EDF\uFF0C\u8BF7\u5728\u5F39\u51FA\u7684\u6D4F\u89C8\u5668\u4E2D\u624B\u52A8\u767B\u5F55\u3002");
   const child_process = require("child_process");
   try {
-    child_process.execSync("node login.js", { stdio: "inherit" });
+    const loginScript = resolveToolScript("login.js");
+    child_process.execFileSync(process.execPath, [loginScript], {
+      cwd: path.dirname(loginScript),
+      stdio: "inherit"
+    });
     console.log("\u2713 \u767B\u5F55\u6210\u529F\u5E76\u5DF2\u4FDD\u5B58\u672C\u5730\u4F1A\u8BDD\u3002");
   } catch (err) {
     console.error("\n\u274C \u767B\u5F55\u6559\u52A1\u7CFB\u7EDF\u5931\u8D25\uFF1A" + err.message);
@@ -234,15 +629,18 @@ async function main() {
   console.log("\n================ [\u6B65\u9AA4 2\uFF1A\u6293\u53D6\u5168\u6821\u8BFE\u8868\u6570\u636E] ================");
   console.log(`\u5F00\u59CB\u6293\u53D6\u5168\u6821\u8BFE\u7A0B\u6570\u636E\uFF08\u5B66\u671F\uFF1A${task.term}\uFF09\uFF0C\u6B64\u8FC7\u7A0B\u7EA6\u9700\u8981 10 \u5206\u949F\u3002\u671F\u95F4\u8BF7\u4E0D\u8981\u5173\u95ED\u6D4F\u89C8\u5668\u7A97\u53E3\u3002`);
   try {
-    child_process.execSync(`node sync.js local-campus --term=${task.term}`, { stdio: "inherit" });
+    const syncScript = resolveToolScript("sync.js");
+    child_process.execFileSync(process.execPath, [syncScript, "local-campus", `--term=${task.term}`], {
+      cwd: path.dirname(syncScript),
+      stdio: "inherit"
+    });
     console.log("\u2713 \u5168\u6821\u8BFE\u8868\u6570\u636E\u6293\u53D6\u5B8C\u6BD5\uFF0C\u5DF2\u751F\u6210\u672C\u5730 Staging JSON\u3002");
   } catch (err) {
     console.error("\n\u274C \u6293\u53D6\u5168\u6821\u8BFE\u8868\u5931\u8D25\uFF1A" + err.message);
     cleanupSession();
     process.exit(1);
   }
-  const { filePath, data } = readStagingJson(args, task);
-  const summary = summarize(data);
+  const { filePath, summary } = resolveStagingJson(args, task);
   console.log(`
 \u5DF2\u8BFB\u53D6 Staging JSON\uFF1A${filePath}`);
   const confirmed = await confirmUpload(args, summary);
@@ -251,7 +649,7 @@ async function main() {
     cleanupSession();
     return;
   }
-  const result = await upload(server, token, args, data);
+  const result = await upload(server, token, args, filePath, task);
   console.log("\n\u5DF2\u6210\u529F\u4E0A\u4F20\u63A5\u529B Staging JSON\uFF0C\u7B49\u5F85\u7BA1\u7406\u5458\u5BA1\u6838\u53D1\u5E03\u3002");
   console.log(`\u4E0A\u4F20\u7F16\u53F7\uFF1A${result.upload && result.upload.id ? result.upload.id : "-"}`);
   cleanupSession();

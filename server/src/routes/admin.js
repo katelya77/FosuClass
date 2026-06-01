@@ -14,6 +14,7 @@ const appConfigService = require("../services/appConfigService");
 const feedbackService = require("../services/feedbackService");
 const releaseService = require("../services/releaseService");
 const relayService = require("../services/relayService");
+const stagingUploadService = require("../services/stagingUploadService");
 
 const STORAGE_DIR = path.join(__dirname, "../../storage");
 const zlib = require("zlib");
@@ -3090,6 +3091,130 @@ function buildStagingSafety(data, activeSnapshot) {
 /**
  * Relay Agent: 管理员创建与审核接力采集任务。
  */
+function buildAdminStagingUploadActor(req) {
+  return {
+    type: "admin",
+    id: adminAuth.isAdminRequest(req) ? "admin-session" : "admin-token",
+  };
+}
+
+function buildStagingUploadSummary(stagingData, safety, extra = {}) {
+  return Object.assign({
+    term: stagingData.term || stagingData.semester || "",
+    releaseVersion: stagingData.releaseVersion || stagingData.version || "",
+    generatedAt: stagingData.generatedAt || stagingData.updatedAt || "",
+    counts: safety?.counts || summarizeStagingData(stagingData).counts,
+  }, extra);
+}
+
+router.get("/staging/upload", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      uploads: stagingUploadService.listUploads(req.query.limit || 20),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/staging/upload/init", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const upload = stagingUploadService.initUpload(req.body || {}, buildAdminStagingUploadActor(req));
+    return res.json({
+      success: true,
+      uploadId: upload.uploadId,
+      upload,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.post(
+  "/staging/upload/chunk",
+  adminAuth.verifyAdminAccess,
+  express.raw({ type: "*/*", limit: "12mb" }),
+  (req, res) => {
+    try {
+      const uploadId = req.query.uploadId || req.headers["x-upload-id"];
+      const chunkIndex = req.query.chunkIndex || req.headers["x-chunk-index"];
+      const status = stagingUploadService.writeChunk(
+        uploadId,
+        chunkIndex,
+        req.body,
+        buildAdminStagingUploadActor(req),
+        { chunkSha256: req.headers["x-chunk-sha256"] }
+      );
+      return res.json({ success: true, upload: status });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+    }
+  }
+);
+
+router.post("/staging/upload/finalize", adminAuth.verifyAdminAccess, async (req, res) => {
+  const uploadId = req.body && req.body.uploadId;
+  try {
+    const finalized = await stagingUploadService.finalizeUpload(uploadId, buildAdminStagingUploadActor(req), req.body || {});
+    let stagingData = stagingUploadService.normalizeStagingData(finalized.stagingData);
+    stagingData.stagingUploadId = finalized.manifest.uploadId;
+    stagingData.meta = Object.assign({}, stagingData.meta || {}, {
+      stagingUploadId: finalized.manifest.uploadId,
+      stagingUploadStatus: "pending-review",
+    });
+
+    const validation = validateStagingData(stagingData);
+    if (!validation.valid) {
+      stagingUploadService.markUploadFailed(uploadId, validation.errors.join("; "));
+      return res.status(400).json({
+        success: false,
+        message: "Staging JSON validation failed",
+        errors: validation.errors,
+        warnings: validation.warnings,
+      });
+    }
+
+    writeJsonAtomic(STAGING_LATEST_PATH, stagingData);
+    const activeSnapshot = releaseService.readActiveReleaseSnapshot();
+    const safety = buildStagingSafety(stagingData, activeSnapshot);
+    const summary = buildStagingUploadSummary(stagingData, safety, {
+      warnings: safety.warnings,
+      blockers: safety.blockers,
+    });
+    const upload = stagingUploadService.markUploadPendingReview(uploadId, summary);
+    writeAuditLog(req, "upload", "staging-upload", uploadId, `CLI chunk upload finalized: ${stagingData.term || ""}`);
+
+    return res.json({
+      success: true,
+      message: "Staging upload finalized and queued for review",
+      stagingId: uploadId,
+      upload,
+      data: {
+        term: stagingData.term,
+        termStartDate: stagingData.termStartDate,
+        releaseVersion: stagingData.releaseVersion,
+        generatedAt: stagingData.generatedAt,
+        counts: safety.counts,
+        safety,
+      },
+      warnings: validation.warnings.concat(safety.warnings || []),
+    });
+  } catch (error) {
+    stagingUploadService.markUploadFailed(uploadId, error.message);
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/staging/upload/:uploadId/status", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const status = stagingUploadService.getUploadStatus(req.params.uploadId, buildAdminStagingUploadActor(req));
+    return res.json({ success: true, upload: status });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
 router.post("/relay/tasks", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     const task = relayService.createTask(req.body || {});
@@ -3524,6 +3649,9 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
     });
 
     writeAuditLog(req, "publish", "sync-release", status.activeReleaseVersion, `将 Staging 数据正式发布为版本 ${status.activeReleaseVersion}`);
+    if (stagingData.stagingUploadId) {
+      stagingUploadService.markUploadPublished(stagingData.stagingUploadId, status.activeReleaseVersion);
+    }
     if (stagingData.relayUploadId) {
       relayService.markUploadPublished(stagingData.relayUploadId, status.activeReleaseVersion);
     }

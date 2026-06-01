@@ -11,6 +11,8 @@ const TEACHER_SEARCH_PLACEHOLDER = "搜索教师姓名（例如：张三）";
 const CLASSROOM_SEARCH_PLACEHOLDER = "搜索教室（例如：C7-305）";
 const COURSE_SEARCH_PLACEHOLDER = "搜索课程（例如：有机化学）";
 const CLASS_SEARCH_PLACEHOLDER = "搜索班级（例如：25动物科学3班）";
+const SCHEDULE_DETAIL_CACHE_PREFIX = "FOSU_SCHEDULE_DETAIL";
+const SCHEDULE_DETAIL_CACHE_TTL = 6 * 60 * 60 * 1000;
 
 const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
@@ -113,6 +115,31 @@ function getClassEmptyState(reasonCode) {
     title: "请选择上方筛选并查询",
     desc: "查询后将展示行政班级课表，结果仅供参考。",
   };
+}
+
+function normalizeIndexedScheduleItem(type, item, version) {
+  const source = item || {};
+  const name = source.name || source.teacherName || source.roomName || source.classroomName || source.courseName || "";
+  const common = Object.assign({}, source, {
+    detailId: source.id || name,
+    scheduleVersion: version || source.version || "",
+    courses: Array.isArray(source.courses) ? source.courses : [],
+    courseCount: Number(source.courseCount || (Array.isArray(source.courses) ? source.courses.length : 0)) || 0,
+  });
+  if (type === "teacher") {
+    return Object.assign(common, {
+      teacherName: source.teacherName || name,
+      college: source.college || source.collegeName || "教师课表",
+    });
+  }
+  if (type === "classroom") {
+    return Object.assign(common, {
+      roomName: source.roomName || source.classroomName || name,
+    });
+  }
+  return Object.assign(common, {
+    courseName: source.courseName || source.displayCourseName || source.canonicalCourseName || name,
+  });
 }
 
 Page({
@@ -289,9 +316,21 @@ Page({
   },
 
   onKeywordInput(event) {
-    this.setData({
-      keyword: event.detail.value,
-    });
+    const keyword = event.detail.value;
+    this.setData({ keyword });
+    if (this.keywordSearchTimer) {
+      clearTimeout(this.keywordSearchTimer);
+    }
+    const activeTab = this.data.activeTab;
+    if (!["teacher", "classroom", "course"].includes(activeTab) || keyword.trim().length < 2) {
+      return;
+    }
+    this.keywordSearchTimer = setTimeout(() => {
+      if (this.data.keyword.trim() !== keyword.trim()) return;
+      if (activeTab === "teacher") this.searchTeacherSchedule();
+      if (activeTab === "classroom") this.searchClassroomSchedule();
+      if (activeTab === "course") this.searchCourseSchedule();
+    }, 350);
   },
 
   // 1. 获取全校 Catalog 选项
@@ -1116,22 +1155,26 @@ Page({
     const collegeName = selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex].name : "";
     const titleCode = selectedTitleIndex >= 0 ? titleOptions[selectedTitleIndex] : "";
 
-    request.post("/api/fosu/teacher-schedule", {
+    this.setData({ loading: true });
+    request.get("/api/fosu/search/teachers", {
       semester,
       collegeCode,
       collegeName,
       titleCode,
-      keyword: keyword.trim(),
+      q: keyword.trim(),
+      limit: 50,
     }, { loadingTitle: "正在获取数据..." })
       .then((data) => {
-        const formatTime = new Date(data.updatedAt).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
-
+        const formatTime = formatUpdateTime(data.updatedAt);
+        const teachers = (data.items || []).map(item => normalizeIndexedScheduleItem("teacher", item, data.version));
         this.setData({
-          teachersResult: data.teachers || [],
-          updatedAtText: `课程数据 · 更新于 ${formatTime}`,
+          teachersResult: teachers,
+          updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
+          loading: false,
         });
       })
       .catch((err) => {
+        this.setData({ teachersResult: [], loading: false });
         console.error("searchTeacherSchedule fail", err);
       });
   },
@@ -1150,20 +1193,24 @@ Page({
     const semester = semesters[selectedSemesterIndex]?.value || "2025-2026-2";
     const campus = selectedCampusIndex >= 0 ? campusOptions[selectedCampusIndex] : "";
 
-    request.post("/api/fosu/classroom-schedule", {
+    this.setData({ loading: true });
+    request.get("/api/fosu/search/classrooms", {
       semester,
-      campusId: campus === "仙溪校区" ? "2" : campus === "江湾校区" ? "1" : "",
-      classroomName: keyword.trim(),
+      campus,
+      q: keyword.trim(),
+      limit: 50,
     }, { loadingTitle: "正在获取数据..." })
       .then((data) => {
-        const formatTime = new Date(data.updatedAt).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
-        
+        const formatTime = formatUpdateTime(data.updatedAt);
+        const classrooms = (data.items || []).map(item => normalizeIndexedScheduleItem("classroom", item, data.version));
         this.setData({
-          classroomsResult: data.classrooms || [],
-          updatedAtText: `课程数据 · 更新于 ${formatTime}`,
+          classroomsResult: classrooms,
+          updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
+          loading: false,
         });
       })
       .catch((err) => {
+        this.setData({ classroomsResult: [], loading: false });
         console.error("searchClassroomSchedule fail", err);
       });
   },
@@ -1181,20 +1228,72 @@ Page({
 
     const semester = semesters[selectedSemesterIndex]?.value || "2025-2026-2";
 
-    request.post("/api/fosu/course-schedule", {
+    this.setData({ loading: true });
+    request.get("/api/fosu/search/courses", {
       semester,
-      courseName: keyword.trim(),
+      q: keyword.trim(),
+      limit: 50,
     }, { loadingTitle: "正在获取数据..." })
       .then((data) => {
-        const formatTime = new Date(data.updatedAt).toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
-
+        const formatTime = formatUpdateTime(data.updatedAt);
+        const courses = (data.items || []).map(item => normalizeIndexedScheduleItem("course", item, data.version));
         this.setData({
-          coursesResult: data.coursesList || [],
-          updatedAtText: `课程数据 · 更新于 ${formatTime}`,
+          coursesResult: courses,
+          updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
+          loading: false,
         });
       })
       .catch((err) => {
+        this.setData({ coursesResult: [], loading: false });
         console.error("searchCourseSchedule fail", err);
+      });
+  },
+
+  getScheduleDetailCache(type, id, version) {
+    const cacheKey = `${SCHEDULE_DETAIL_CACHE_PREFIX}:${type}:${id}`;
+    try {
+      const cached = wx.getStorageSync(cacheKey);
+      if (!cached || cached.version !== version) return null;
+      if (Date.now() - cached.savedAt > SCHEDULE_DETAIL_CACHE_TTL) return null;
+      return cached.schedule || null;
+    } catch (error) {
+      return null;
+    }
+  },
+
+  setScheduleDetailCache(type, id, version, schedule) {
+    const cacheKey = `${SCHEDULE_DETAIL_CACHE_PREFIX}:${type}:${id}`;
+    try {
+      wx.setStorageSync(cacheKey, {
+        version,
+        savedAt: Date.now(),
+        schedule,
+      });
+    } catch (error) {
+      // 缓存失败不影响课表查看。
+    }
+  },
+
+  openIndexedSchedule(type, item, displayName) {
+    const detailId = item.detailId || item.id || displayName;
+    const cached = this.getScheduleDetailCache(type, detailId, item.scheduleVersion);
+    if (cached) {
+      this.navigateToScheduleView(type, displayName, cached.courses || [], Object.assign({}, item, cached));
+      return;
+    }
+
+    wx.showLoading({ title: "正在打开课表...", mask: true });
+    request.get(`/api/fosu/schedule/${type}/${encodeURIComponent(detailId)}`, {}, { showLoading: false, silentError: true })
+      .then((data) => {
+        wx.hideLoading();
+        const schedule = data.schedule || {};
+        this.setScheduleDetailCache(type, detailId, data.version || item.scheduleVersion, schedule);
+        this.navigateToScheduleView(type, displayName, schedule.courses || [], Object.assign({}, item, schedule));
+      })
+      .catch((err) => {
+        wx.hideLoading();
+        wx.showToast({ title: "课表详情加载失败", icon: "none" });
+        console.error("openIndexedSchedule fail", err);
       });
   },
 
@@ -1216,7 +1315,11 @@ Page({
     const item = this.data.teachersResult[index];
     if (!item) return;
 
-    this.navigateToScheduleView("teacher", item.teacherName, item.courses);
+    if (Array.isArray(item.courses) && item.courses.length > 0) {
+      this.navigateToScheduleView("teacher", item.teacherName, item.courses, item);
+      return;
+    }
+    this.openIndexedSchedule("teacher", item, item.teacherName);
   },
 
   viewClassroomSchedule(event) {
@@ -1224,7 +1327,11 @@ Page({
     const item = this.data.classroomsResult[index];
     if (!item) return;
 
-    this.navigateToScheduleView("classroom", item.roomName, item.courses);
+    if (Array.isArray(item.courses) && item.courses.length > 0) {
+      this.navigateToScheduleView("classroom", item.roomName, item.courses, item);
+      return;
+    }
+    this.openIndexedSchedule("classroom", item, item.roomName);
   },
 
   viewCourseSchedule(event) {
@@ -1232,7 +1339,11 @@ Page({
     const item = this.data.coursesResult[index];
     if (!item) return;
 
-    this.navigateToScheduleView("course", item.courseName, item.courses);
+    if (Array.isArray(item.courses) && item.courses.length > 0) {
+      this.navigateToScheduleView("course", item.courseName, item.courses, item);
+      return;
+    }
+    this.openIndexedSchedule("course", item, item.courseName);
   },
 
 

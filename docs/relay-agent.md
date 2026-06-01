@@ -19,10 +19,10 @@ Relay Agent 用于把轻量采集/上传能力交给在校同学使用。接力�
 接力同学在校园网电脑上运行：
 
 ```powershell
-npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=RELAY_TOKEN --term=2026-2027-1 --file=./staging/2026-2027-1-full.json
+npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=RELAY_TOKEN --term=2026-2027-1
 ```
 
-代理端会显示任务、有效期、网络检测结果和将要上传的数据摘要。输入 `yes` 后才会上传。
+代理端会显示任务、有效期和网络检测结果，自动打开浏览器让接力同学手动登录教务网，随后本机生成 `./staging/{term}-full.json`。确认摘要并输入 `yes` 后才会 gzip 分片上传。
 
 当前代理端不会保存密码，不绕过验证码，不上传学号密码。Staging JSON 中出现 `password`、`cookie`、`ticket`、`session`、`token` 等敏感字段会被拒绝。
 
@@ -32,7 +32,7 @@ npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=RELAY_
 npm run build:relay-agent
 ```
 
-输出目录：`tools/fosu-relay-agent/dist/`。Windows 用户可运行 `fosu-relay-agent-win-x64.cmd`。该打包产物只包含 relay agent 脚本，不包含后台管理页面源码、VPS SSH 信息、GitHub Secret、`ADMIN_PASSWORD`、`ADMIN_TOKEN` 或 `ADMIN_API_TOKEN`。
+输出目录：`tools/fosu-relay-agent/dist/`。Windows 用户解压 `fosu-relay-agent-win-x64.zip` 后运行 `start.bat`。该打包产物只包含 relay agent 脚本，不包含后台管理页面源码、VPS SSH 信息、GitHub Secret、`ADMIN_PASSWORD`、`ADMIN_TOKEN` 或 `ADMIN_API_TOKEN`。
 
 ## relay token 权限
 
@@ -40,6 +40,9 @@ relay token 只能调用：
 
 - `GET /api/relay/tasks/:token`
 - `POST /api/relay/staging/upload`
+- `POST /api/relay/staging/upload/init`
+- `POST /api/relay/staging/upload/chunk`
+- `POST /api/relay/staging/upload/finalize`
 
 relay token 不能调用：
 

@@ -414,5 +414,6 @@ module.exports = {
   revokeTask,
   safeTaskForAgent,
   summarizeStagingData,
+  validateTokenForUpload,
   validateStagingData,
 };

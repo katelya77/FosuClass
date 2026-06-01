@@ -4,6 +4,10 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const readline = require("readline/promises");
+const {
+  resolveInputFilePath,
+  uploadStagingFile,
+} = require("../fosu-sync-client/upload");
 
 const SECRET_KEY_PATTERN = /(studentId|student_id|password|passwd|pwd|cookie|ticket|execution|session|token|authorization|jsessionid|captcha)/i;
 
@@ -90,34 +94,91 @@ function containsSensitiveData(value) {
   return false;
 }
 
-function readStagingJson(args, task) {
-  const defaultPath = path.resolve(process.cwd(), "staging", `${args.term || task.term}-full.json`);
-  const filePath = path.resolve(process.cwd(), args.file || args.input || defaultPath);
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`未找到 Staging JSON: ${filePath}\n请先在校园网电脑生成文件，或使用 --file=路径 指定。`);
+function readLeadingText(filePath, maxBytes = 4 * 1024 * 1024) {
+  const stat = fs.statSync(filePath);
+  const length = Math.min(stat.size, maxBytes);
+  const fd = fs.openSync(filePath, "r");
+  try {
+    const buffer = Buffer.alloc(length);
+    fs.readSync(fd, buffer, 0, length, 0);
+    return buffer.toString("utf-8");
+  } finally {
+    fs.closeSync(fd);
   }
-  const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-  if (containsSensitiveData(data)) {
-    throw new Error("Staging JSON 中包含疑似密码、Cookie、ticket、session 或 token 字段，已停止上传。");
-  }
-  return { filePath, data };
 }
 
-function summarize(data) {
-  const resources = data.resources || {};
-  const classSchedules = Array.isArray(data.classSchedules) ? data.classSchedules : [];
+function pickJsonString(head, key) {
+  const match = head.match(new RegExp(`"${key}"\\s*:\\s*"([^"]+)"`));
+  return match ? match[1] : "";
+}
+
+function pickJsonNumber(head, key) {
+  const match = head.match(new RegExp(`"${key}"\\s*:\\s*(\\d+)`));
+  return match ? Number(match[1]) : 0;
+}
+
+function extractSummary(filePath) {
+  const head = readLeadingText(filePath);
   return {
-    term: data.term || data.semester || "",
-    releaseVersion: data.releaseVersion || data.version || "",
-    generatedAt: data.generatedAt || data.updatedAt || "",
-    classScheduleCount: classSchedules.length,
-    teacherScheduleCount: Array.isArray(resources.teacherSchedules) ? resources.teacherSchedules.length : 0,
-    classroomScheduleCount: Array.isArray(resources.classroomSchedules) ? resources.classroomSchedules.length : 0,
-    courseScheduleCount: Array.isArray(resources.courseSchedules) ? resources.courseSchedules.length : 0,
-    teacherCount: Array.isArray(resources.teachers) ? resources.teachers.length : 0,
-    classroomCount: Array.isArray(resources.classrooms) ? resources.classrooms.length : 0,
-    courseCount: Array.isArray(resources.courses) ? resources.courses.length : 0,
+    term: pickJsonString(head, "term") || pickJsonString(head, "semester"),
+    releaseVersion: pickJsonString(head, "releaseVersion") || pickJsonString(head, "version"),
+    generatedAt: pickJsonString(head, "generatedAt") || pickJsonString(head, "updatedAt"),
+    classScheduleCount: pickJsonNumber(head, "classScheduleCount"),
+    teacherScheduleCount: pickJsonNumber(head, "teacherScheduleCount"),
+    classroomScheduleCount: pickJsonNumber(head, "classroomScheduleCount"),
+    courseScheduleCount: pickJsonNumber(head, "courseScheduleCount"),
+    teacherCount: pickJsonNumber(head, "teacherCount"),
+    classroomCount: pickJsonNumber(head, "classroomCount"),
+    courseCount: pickJsonNumber(head, "courseCount"),
   };
+}
+
+function scanFileForSensitiveData(filePath) {
+  const fd = fs.openSync(filePath, "r");
+  const buffer = Buffer.alloc(1024 * 1024);
+  let carry = "";
+  try {
+    while (true) {
+      const bytesRead = fs.readSync(fd, buffer, 0, buffer.length, null);
+      if (bytesRead <= 0) break;
+      const chunk = carry + buffer.subarray(0, bytesRead).toString("utf-8");
+      if (SECRET_KEY_PATTERN.test(chunk) || /(JSESSIONID|CASTGC|password=|passwd=|ticket=|execution=|Authorization:|Bearer\s+[A-Za-z0-9._-]+)/i.test(chunk)) {
+        return true;
+      }
+      carry = chunk.slice(-200);
+    }
+    return false;
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+function resolveStagingJson(args, task) {
+  const fileArg = args.file || args.input || path.join("staging", `${args.term || task.term}-full.json`);
+  const resolved = resolveInputFilePath(fileArg, { cwd: process.cwd() });
+  const filePath = resolved.resolved || path.resolve(process.cwd(), fileArg);
+  if (!fs.existsSync(filePath)) {
+    const tried = resolved.tried && resolved.tried.length ? `\n尝试路径：\n${resolved.tried.map(item => `- ${item}`).join("\n")}` : "";
+    throw new Error(`未找到 Staging JSON: ${filePath}\n请先在校园网电脑生成文件，或使用 --file=路径 指定。${tried}`);
+  }
+  if (scanFileForSensitiveData(filePath)) {
+    throw new Error("Staging JSON 中包含疑似密码、Cookie、ticket、session 或 token 字段，已停止上传。");
+  }
+  return { filePath, summary: extractSummary(filePath) };
+}
+
+function resolveToolScript(scriptName) {
+  const candidates = [
+    path.resolve(process.cwd(), scriptName),
+    path.resolve(__dirname, scriptName),
+    path.resolve(__dirname, "..", "fosu-sync-client", scriptName),
+  ];
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  throw new Error(`未找到接力采集脚本 ${scriptName}，请重新下载完整接力工具包。`);
 }
 
 async function confirmUpload(args, summary) {
@@ -141,32 +202,25 @@ async function confirmUpload(args, summary) {
   }
 }
 
-async function upload(server, token, args, data) {
-  const payload = {
-    token,
-    uploaderNote: args.note || "",
-    environment: [
+async function upload(server, token, args, filePath, task) {
+  const environment = [
       `platform=${process.platform}`,
       `arch=${process.arch}`,
       `hostname=${os.hostname()}`,
       `node=${process.version}`,
-    ].join("; "),
-    data,
-  };
-  const res = await fetchWithTimeout(`${server}/api/relay/staging/upload`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-relay-token": token,
-    },
-    body: JSON.stringify(payload),
-    timeoutMs: 120000,
+  ].join("; ");
+  return uploadStagingFile({
+    filePath,
+    server,
+    token,
+    authMode: "relay",
+    params: args,
+    term: task.term,
+    note: args.note || "",
+    environment,
+    source: "relay-agent",
+    metadata: { term: task.term, environment },
   });
-  const result = await res.json().catch(() => ({}));
-  if (!res.ok || result.success === false) {
-    throw new Error(result.message || `接力上传失败: HTTP ${res.status}`);
-  }
-  return result;
 }
 
 function cleanupSession() {
@@ -250,7 +304,11 @@ async function main() {
   console.log("即将为您启动系统浏览器登录教务系统，请在弹出的浏览器中手动登录。");
   const child_process = require("child_process");
   try {
-    child_process.execSync("node login.js", { stdio: "inherit" });
+    const loginScript = resolveToolScript("login.js");
+    child_process.execFileSync(process.execPath, [loginScript], {
+      cwd: path.dirname(loginScript),
+      stdio: "inherit",
+    });
     console.log("✓ 登录成功并已保存本地会话。");
   } catch (err) {
     console.error("\n❌ 登录教务系统失败：" + err.message);
@@ -261,7 +319,11 @@ async function main() {
   console.log("\n================ [步骤 2：抓取全校课表数据] ================");
   console.log(`开始抓取全校课程数据（学期：${task.term}），此过程约需要 10 分钟。期间请不要关闭浏览器窗口。`);
   try {
-    child_process.execSync(`node sync.js local-campus --term=${task.term}`, { stdio: "inherit" });
+    const syncScript = resolveToolScript("sync.js");
+    child_process.execFileSync(process.execPath, [syncScript, "local-campus", `--term=${task.term}`], {
+      cwd: path.dirname(syncScript),
+      stdio: "inherit",
+    });
     console.log("✓ 全校课表数据抓取完毕，已生成本地 Staging JSON。");
   } catch (err) {
     console.error("\n❌ 抓取全校课表失败：" + err.message);
@@ -269,8 +331,7 @@ async function main() {
     process.exit(1);
   }
 
-  const { filePath, data } = readStagingJson(args, task);
-  const summary = summarize(data);
+  const { filePath, summary } = resolveStagingJson(args, task);
   console.log(`\n已读取 Staging JSON：${filePath}`);
   
   const confirmed = await confirmUpload(args, summary);
@@ -280,7 +341,7 @@ async function main() {
     return;
   }
 
-  const result = await upload(server, token, args, data);
+  const result = await upload(server, token, args, filePath, task);
   console.log("\n已成功上传接力 Staging JSON，等待管理员审核发布。");
   console.log(`上传编号：${result.upload && result.upload.id ? result.upload.id : "-"}`);
   
