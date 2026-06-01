@@ -17,3 +17,5 @@ server/storage/releases/
 tools/fosu-sync-client/.env
 tools/fosu-sync-client/.session/
 tools/fosu-sync-client/.debug/
+
+tools/fosu-sync-client/staging/

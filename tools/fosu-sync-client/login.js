@@ -80,18 +80,19 @@ async function login() {
 
   const page = await context.newPage();
 
-  // 优先访问 HTTP，若失败再尝试 HTTPS
-  const httpUrl = FOSU_BASE_URL.replace(/^https:/i, "http:");
-  console.log(`优先通过 HTTP 访问教务系统: ${httpUrl} ...`);
+  const CAS_SERVICE_URL = 'http://100.fosu.edu.cn/caslogin.jsp?kstzType=null';
+  const AUTH_LOGIN_URL = 'https://authserver.fosu.edu.cn/authserver/login?type=userNameLogin&service=' + encodeURIComponent(CAS_SERVICE_URL);
+
+  console.log(`优先通过账号密码登录页进行登录: ${AUTH_LOGIN_URL} ...`);
   try {
-    await page.goto(httpUrl, { timeout: 15000 });
+    await page.goto(AUTH_LOGIN_URL, { timeout: 25000 });
   } catch (error) {
-    console.warn(`⚠️ HTTP 导航失败 (${error.message})，正在尝试 HTTPS 导航: ${FOSU_BASE_URL} ...`);
+    console.warn(`⚠️ 访问账号密码登录页失败 (${error.message})，尝试直接访问统一身份认证登录路径...`);
     try {
-      await page.goto(FOSU_BASE_URL, { timeout: 15000 });
-    } catch (httpsError) {
-      console.error(`❌ 导航教务系统彻底失败: ${httpsError.message}`);
-      console.log("💡 请确认 EasyConnect 是否成功连接，且能打开教务网页。");
+      await page.goto('https://authserver.fosu.edu.cn/authserver/login', { timeout: 25000 });
+    } catch (authError) {
+      console.error(`❌ 导航统一身份认证系统彻底失败: ${authError.message}`);
+      console.log("💡 请确认 EasyConnect 是否成功连接，或已处于校园网环境中。");
     }
   }
 
@@ -106,6 +107,7 @@ async function login() {
   try {
     // 轮询检查登录态是否成功
     let loggedIn = false;
+    let hasClickedTab = false; // 新增 Flag，防止频繁点击干扰用户输入
     const checkInterval = 1000;
     const maxWaitTime = 300000; // 5分钟
     let elapsed = 0;
@@ -116,6 +118,92 @@ async function login() {
       }
 
       const currentUrl = page.url();
+
+      // 1. 如果检测到当前 URL 包含 type=fidoLogin，则自动跳转或替换为 type=userNameLogin
+      if (currentUrl.includes("type=fidoLogin")) {
+        console.log("⚠️ 检测到当前进入了生物识别登录页 (fidoLogin)，正在自动替换 URL 为账号密码登录页 (userNameLogin)...");
+        const newUrl = currentUrl.replace("type=fidoLogin", "type=userNameLogin");
+        try {
+          await page.goto(newUrl, { timeout: 15000 });
+          hasClickedTab = false; // 重置点击状态
+          continue;
+        } catch (e) {
+          console.warn(`⚠️ 自动跳转到账号密码登录页失败: ${e.message}`);
+        }
+      }
+
+      // 2. 如果页面存在“账号登录”tab，且尚未点击过，且 URL 不包含 userNameLogin，则优先点击账号登录
+      if (!hasClickedTab && !currentUrl.includes("type=userNameLogin")) {
+        try {
+          const tabs = [
+            "text=/^账号登录$/",
+            "text=/^密码登录$/",
+            "text=/^账号密码登录$/",
+            "#userNameLogin",
+            ".userNameLogin"
+          ];
+          for (const tabSelector of tabs) {
+            const tab = page.locator(tabSelector).first();
+            if (await tab.isVisible()) {
+              console.log(`💡 检测到“账号密码登录”相关标签 (${tabSelector})，尝试点击切换...`);
+              await tab.click();
+              hasClickedTab = true; // 标记已点击，避免重复频繁点击
+              await page.waitForTimeout(1000);
+              break;
+            }
+          }
+        } catch (e) {
+          // 忽略检查/点击标签时的异常
+        }
+      }
+
+      // 3. 支持用户手动输入账号密码登录，不要强制自动填密码。但如果有配置环境变量可以作为便利性辅助填充。
+      const username = process.env.FOSU_USERNAME;
+      const password = process.env.FOSU_PASSWORD;
+      if (username && password) {
+        try {
+          const userSelectors = ['input[name="username"]', '#username', 'input[type="text"]'];
+          const passSelectors = ['input[name="password"]', '#password', 'input[type="password"]'];
+          
+          let userEl = null;
+          for (const sel of userSelectors) {
+            const locator = page.locator(sel).first();
+            if (await locator.isVisible()) {
+              const val = await locator.inputValue();
+              if (!val) {
+                userEl = locator;
+                break;
+              }
+            }
+          }
+          
+          let passEl = null;
+          for (const sel of passSelectors) {
+            const locator = page.locator(sel).first();
+            if (await locator.isVisible()) {
+              const val = await locator.inputValue();
+              if (!val) {
+                passEl = locator;
+                break;
+              }
+            }
+          }
+          
+          if (userEl && passEl) {
+            console.log("检测到未填写的账号密码输入框，尝试自动填充...");
+            await userEl.fill(username);
+            await passEl.fill(password);
+            console.log("✅ 账号密码自动填充成功，请手动完成验证（如验证码、滑块等）并提交登录。");
+          }
+        } catch (e) {
+          // 忽略自动填充错误
+        }
+      }
+
+      // 4. 登录成功判定条件扩展
+      const leftAuthserver = !currentUrl.includes("/authserver/login") && !currentUrl.includes("authserver.fosu.edu.cn/authserver/");
+      const isCasLogin = currentUrl.includes("100.fosu.edu.cn/caslogin.jsp");
+      const isEduSys = currentUrl.includes("100.fosu.edu.cn") && !currentUrl.includes("caslogin.jsp");
       const hasMainUrl = currentUrl.includes("/framework/xsMain.jsp") || 
                          currentUrl.includes("/framework/index.jsp") || 
                          currentUrl.includes("/xsMain.jsp");
@@ -130,7 +218,7 @@ async function login() {
         // 忽略页面加载或导航时的临时错误
       }
 
-      if (hasMainUrl || hasMainContent) {
+      if ((leftAuthserver && (isCasLogin || isEduSys)) || hasMainUrl || hasMainContent) {
         loggedIn = true;
         break;
       }
@@ -159,12 +247,15 @@ async function login() {
     console.log("该文件包含敏感登录凭证，请勿将其提交到 Git 或共享给他人。");
 
   } catch (error) {
-    if (error.name === "TimeoutError" || error.message.includes("Timeout")) {
-      console.error("\n❌ 登录超时 (5分钟)。您是否未在规定时间内完成登录？");
+    if (error.name === "TimeoutError" || error.message.includes("Timeout") || error.message.includes("登录超时或未检测到登录成功的页面状态")) {
+      console.error("\n❌ 登录超时或失败！");
     } else {
       console.error(`\n❌ 登录过程中发生错误: ${error.message}`);
     }
-    console.log("💡 建议重新运行 'npm run login' 进行登录。");
+    console.error("💡 提示：");
+    console.error("   - 请确认是否处于校园网 / 校园 VPN 环境（100.fosu.edu.cn 必须能正常解析和访问）");
+    console.error("   - 请确认是否切换到账号登录，且已正确完成验证码或滑块验证等安全核验");
+    console.error("   - 请重新执行 npm run login");
   } finally {
     await browser.close();
     console.log("浏览器已关闭。");
