@@ -18,6 +18,7 @@
     "sync:fresh": "npm --prefix tools/fosu-sync-client run sync:fresh",
     "sync:quick": "npm --prefix tools/fosu-sync-client run sync:quick",
     "test:course-normalizer": "node tools/test-course-normalizer.js",
+    "test:import-personal-xls": "npm --prefix server run test:import-personal-xls",
     "test:admin-heatmap": "node tools/test-admin-heatmap.js",
     "test:admin-auth-modes": "node tools/test-admin-auth-modes.js",
     "test:personal-encrypt": "node server/scripts/test-personal-encrypt.js",

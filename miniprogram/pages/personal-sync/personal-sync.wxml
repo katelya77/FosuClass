@@ -2,7 +2,7 @@
   <!-- 顶部 Tab 切换（仅在未成功导入/解析前展示） -->
   <view class="tab-nav" wx:if="{{!syncSuccess}}">
     <view class="tab-nav-item {{currentTab === 'xls' ? 'active' : ''}}" data-tab="xls" bindtap="switchTab">XLS 手动导入 (推荐)</view>
-    <view class="tab-nav-item {{currentTab === 'account' ? 'active' : ''}}" data-tab="account" bindtap="switchTab">账号密码同步</view>
+    <view class="tab-nav-item {{currentTab === 'account' ? 'active' : ''}}" data-tab="account" bindtap="switchTab">账号密码同步（需校园网后端）</view>
   </view>
 
   <!-- XLS 手动导入工作区 -->
@@ -75,10 +75,15 @@
         <text>同步说明（实验功能）</text>
       </view>
       <view class="intro-content">
-        <view class="intro-item">1. 本功能需要校园网 / 校园 VPN 连通环境。公网主服务器无法直接访问教务内网。</view>
+        <view class="intro-item">1. 本功能由服务器代为访问教务网，需要服务器处于校园网、校园 VPN 或已配置校内代理。</view>
         <view class="intro-item">2. 您的学号与密码仅在登录校验中瞬时处理，<text class="highlight">绝不会</text>被落库保存或写入任何日志。</view>
-        <view class="intro-item">3. 账号同步适配较复杂，若无法登录，强烈推荐使用左侧 <text class="highlight">“XLS 手动导入”</text> 方案，更安全稳定。</view>
+        <view class="intro-item">3. 手机连接校园网不会改变服务器网络。默认推荐 <text class="highlight">XLS 手动导入</text>，安全且稳定。</view>
       </view>
+    </view>
+
+    <view class="server-network-card">
+      <view class="server-network-title">为什么我连了校园网还是不可用？</view>
+      <view class="server-network-desc">当前账号密码同步由服务器代为访问教务网，因此检测的是服务器网络。你的手机连接校园网不会改变服务器网络。若服务器不在校园网/VPN环境中，请使用 XLS 手动导入。</view>
     </view>
 
     <view class="card form-card">
@@ -95,12 +100,15 @@
           <view class="env-diagnose-desc" wx:if="{{diagnoseMsg}}">
             {{diagnoseMsg}}
           </view>
+          <view class="env-diagnose-note" wx:if="{{diagnoseSubMsg}}">
+            {{diagnoseSubMsg}}
+          </view>
         </view>
         
         <button
           class="btn-submit"
           loading="{{checkingEnv}}"
-          disabled="{{checkingEnv}}"
+          disabled="{{checkingEnv || (envChecked && !envAvailable)}}"
           bindtap="onMainBtnTap"
         >
           {{checkingEnv ? '正在检测中...' : mainBtnText}}
@@ -108,9 +116,16 @@
 
         <button
           class="btn-secondary"
-          bindtap="goToSchoolPage"
+          bindtap="goToXlsImport"
         >
-          去选择班级课表
+          使用 XLS 手动导入
+        </button>
+        <button
+          class="btn-secondary light"
+          wx:if="{{envChecked && !envAvailable}}"
+          bindtap="resetEnvCheck"
+        >
+          重新检测服务器环境
         </button>
       </view>
 
@@ -155,7 +170,7 @@
         <button
           class="btn-submit"
           loading="{{startingSession}}"
-          disabled="{{!studentId || !password || startingSession}}"
+          disabled="{{!studentId || !password || startingSession || !envAvailable}}"
           bindtap="startLoginFlow"
         >
           {{startingSession ? '正在初始化...' : '开始登录校验'}}
@@ -177,7 +192,7 @@
         <icon type="success" size="32" color="#2e7d32" class="preview-icon" />
         <view class="preview-title-box">
           <view class="preview-title">表格解析成功</view>
-          <view class="preview-subtitle">文件名: {{syncResult.filename}}</view>
+          <view class="preview-subtitle">{{syncResult.displayInfo.subtitle || syncResult.filename}}</view>
         </view>
       </view>
 
@@ -190,6 +205,15 @@
           <text class="stat-lbl">课程总数</text>
           <text class="stat-val">{{syncResult.courseCount}} 门</text>
         </view>
+      </view>
+
+      <view class="metadata-card" wx:if="{{syncResult.metadata}}">
+        <view class="metadata-title">{{syncResult.displayInfo.title || '个人课表'}}</view>
+        <view class="metadata-row" wx:if="{{syncResult.metadata.className}}">班级：{{syncResult.metadata.className}}</view>
+        <view class="metadata-row" wx:if="{{syncResult.metadata.studentName}}">学生：{{syncResult.metadata.studentName}}</view>
+        <view class="metadata-row" wx:if="{{syncResult.metadata.collegeName}}">学院：{{syncResult.metadata.collegeName}}</view>
+        <view class="metadata-row" wx:if="{{syncResult.metadata.printDate}}">打印日期：{{syncResult.metadata.printDate}}</view>
+        <view class="metadata-row">来源：100网 XLS 手动导入</view>
       </view>
 
       <!-- 检索与过滤条 -->

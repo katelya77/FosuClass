@@ -29,6 +29,102 @@ function fillMergedCells(sheet, rows) {
   });
 }
 
+function normalizeHeaderCell(value) {
+  return String(value || "")
+    .replace(/\u00a0/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function normalizeDateText(value) {
+  const text = normalizeHeaderCell(value);
+  const match = text.match(/(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})/);
+  if (!match) {
+    return text;
+  }
+  const pad = (num) => String(num).padStart(2, "0");
+  return `${match[1]}-${pad(match[2])}-${pad(match[3])}`;
+}
+
+function buildHeaderRows(rows) {
+  return rows.slice(0, 5).map((row) => (Array.isArray(row) ? row : []).map(normalizeHeaderCell));
+}
+
+function findHeaderLabelValue(headerRows, label) {
+  const exactRe = new RegExp("^" + label + "\\s*[:：]\\s*(.+)$");
+  const labelOnlyRe = new RegExp("^" + label + "\\s*[:：]?\\s*$");
+
+  for (const row of headerRows) {
+    for (let c = 0; c < row.length; c += 1) {
+      const cell = row[c] || "";
+      const inlineMatch = cell.match(exactRe);
+      if (inlineMatch && inlineMatch[1]) {
+        return inlineMatch[1].trim();
+      }
+      if (labelOnlyRe.test(cell)) {
+        for (let next = c + 1; next < row.length; next += 1) {
+          if (row[next]) {
+            return row[next].trim();
+          }
+        }
+      }
+    }
+  }
+  return "";
+}
+
+function extractPersonalXlsMetadata(rows, sourceFileName, finalTerm) {
+  const headerRows = buildHeaderRows(rows);
+  const headerText = headerRows
+    .map((row) => row.filter(Boolean).join(" "))
+    .filter(Boolean)
+    .join(" ");
+  const filename = normalizeHeaderCell(sourceFileName);
+
+  const titleNameMatch = headerText.match(/佛山大学\s*(.+?)\s*学生(?:个人)?(?:理论)?课表/);
+  const fileStudentIdMatch = filename.match(/(\d{8,12})/);
+  const termMatch = headerText.match(/学年学期\s*[:：]\s*(\d{4}-\d{4}-\d)/);
+  const classMatch = headerText.match(/(?:^|\s)班级\s*[:：]\s*([^\s]+)/);
+  const majorMatch = headerText.match(/所属班级\s*[:：]\s*([^\s]+)/);
+  const collegeMatch = headerText.match(/学院\s*[:：]\s*([^\s]+)/);
+  const printDateMatch = headerText.match(/打印日期\s*[:：]\s*([0-9年./-]+(?:月[0-9]{1,2}日?)?)/);
+
+  const studentName = (titleNameMatch && titleNameMatch[1])
+    || findHeaderLabelValue(headerRows, "姓名")
+    || "";
+  const studentId = (fileStudentIdMatch && fileStudentIdMatch[1])
+    || findHeaderLabelValue(headerRows, "学号")
+    || "";
+  const term = (termMatch && termMatch[1])
+    || findHeaderLabelValue(headerRows, "学年学期")
+    || finalTerm
+    || "";
+  const className = (classMatch && classMatch[1])
+    || findHeaderLabelValue(headerRows, "班级")
+    || "";
+  const majorName = (majorMatch && majorMatch[1])
+    || findHeaderLabelValue(headerRows, "所属班级")
+    || "";
+  const collegeName = (collegeMatch && collegeMatch[1])
+    || findHeaderLabelValue(headerRows, "学院")
+    || "";
+  const printDate = normalizeDateText((printDateMatch && printDateMatch[1])
+    || findHeaderLabelValue(headerRows, "打印日期")
+    || "");
+
+  return {
+    studentName: studentName.trim(),
+    studentId: studentId.trim(),
+    term: term.trim(),
+    className: className.trim(),
+    majorName: majorName.trim(),
+    collegeName: collegeName.trim(),
+    printDate,
+    source: "fosu-100-print-xls",
+    sourceFileName: filename,
+  };
+}
+
 /**
  * 合并相同课程在同一节次但不同地点的记录（如多场地体育课）
  * @param {Array<Object>} courses 课程对象列表
@@ -74,9 +170,10 @@ function mergeMultiVenueCourses(courses) {
  * 解析个人理论课表 XLS 的 Buffer 二进制内容
  * @param {Buffer} buffer 文件 Buffer
  * @param {string} targetTermFromUser 用户传入的目标学期
+ * @param {string} sourceFileName 用户上传的源文件名
  * @returns {Object} 包含学期与已解析去重的课程数组
  */
-function parsePersonalXlsBuffer(buffer, targetTermFromUser) {
+function parsePersonalXlsBuffer(buffer, targetTermFromUser, sourceFileName) {
   // 1. 读取 xls
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false, raw: false });
   const firstSheetName = workbook.SheetNames[0];
@@ -107,6 +204,7 @@ function parsePersonalXlsBuffer(buffer, targetTermFromUser) {
     }
   }
   const finalTerm = detectedTerm || targetTermFromUser || "2025-2026-2";
+  const metadata = extractPersonalXlsMetadata(rows, sourceFileName, finalTerm);
 
   // 4. 定位星期表头行
   let headerRowIndex = -1;
@@ -284,11 +382,15 @@ function parsePersonalXlsBuffer(buffer, targetTermFromUser) {
   safeLog("personal-xls-parsed", { term: finalTerm, courseCount: uniqueCourses.length });
 
   return {
-    term: finalTerm,
+    term: metadata.term || finalTerm,
+    metadata,
     courses: uniqueCourses,
   };
 }
 
 module.exports = {
   parsePersonalXlsBuffer,
+  _test: {
+    extractPersonalXlsMetadata,
+  },
 };

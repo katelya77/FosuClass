@@ -19,14 +19,16 @@
     </view>
 
     <view class="info-grid">
-      <view class="class-line">{{className}} <text class="semester-text" style="font-size: 22rpx; font-weight: normal; color: #687386; margin-left: 8rpx;">({{semester}})</text></view>
+      <view class="class-line">{{className}}</view>
+      <view class="schedule-subtitle" wx:if="{{scheduleSubtitle}}">{{scheduleSubtitle}}</view>
+      <view class="schedule-subtitle" wx:else>{{semester}}</view>
       <view class="date-line">
         <text>{{weekRangeText}}</text>
         <text class="separator">·</text>
         <text class="today-tag" bindtap="showTodayReminderManual">今日：{{todayText}}</text>
       </view>
       <view class="source-line" wx:if="{{lastSyncText}}">
-        <text>课程数据 · 更新于 {{lastSyncText}}</text>
+        <text>{{dataSourceText}} · 更新于 {{lastSyncText}}</text>
       </view>
       <view class="source-line" wx:elif="{{dataVersionText}}">
         <text>{{dataVersionText}}</text>
@@ -37,7 +39,7 @@
     <view class="action-grid">
       <button class="action-btn" bindtap="goTimetable">作息时间</button>
       <button class="action-btn" bindtap="goCustomCourses">个性化</button>
-      <button class="action-btn sync-btn" bindtap="goLogin">同步课表</button>
+      <button class="action-btn sync-btn" bindtap="goLogin">{{syncActionText}}</button>
       <button class="action-btn" bindtap="toggleMoreMenu">更多</button>
     </view>
   </view>
@@ -267,7 +269,7 @@
         <button class="init-btn primary-btn" bindtap="goToSelectClass">去选择班级课表</button>
         <button class="init-btn secondary-btn" bindtap="skipSelect">先浏览全校课表</button>
         
-        <button class="init-sync-btn" bindtap="goToSyncLogin">登录同步个人课表 (即将支持)</button>
+        <button class="init-sync-btn" bindtap="goToSyncLogin">XLS 手动导入个人课表</button>
       </view>
     </view>
   </view>

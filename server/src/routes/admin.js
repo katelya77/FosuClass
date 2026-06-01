@@ -648,7 +648,10 @@ function buildClassroomHeatmap(options) {
     });
   }
 
-  const totalClassrooms = filteredRooms.length;
+  const classroomIndex = Array.isArray(opt.classrooms) ? opt.classrooms : [];
+  const totalClassrooms = targetBuilding
+    ? filteredRooms.length
+    : (classroomIndex.length > 0 ? classroomIndex.length : filteredRooms.length);
   const counts = Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => new Set()));
   const roomSlotCounts = new Map();
   
@@ -801,6 +804,7 @@ function resolveClassroomHeatmapData(filterOptions) {
   if (classroomSource.items.length > 0) {
     return buildClassroomHeatmap(Object.assign({
       classroomSchedules: classroomSource.items,
+      classrooms: classroomSource.snapshot?.resources?.classrooms || [],
       source: classroomSource.source,
       updatedAt: classroomSource.updatedAt,
     }, opts));
@@ -2118,6 +2122,7 @@ router.get("/dashboard", adminAuth.verifyAdminAccess, (req, res) => {
       const heatmap = resolveClassroomHeatmapData();
       dashboardData.data.classroomHeatmap = heatmap.classroomHeatmap;
       dashboardData.data.classroomHeatmapCounts = heatmap.classroomHeatmapCounts;
+      dashboardData.data.classroomHeatmapDetails = heatmap.classroomHeatmapDetails;
       dashboardData.data.classroomHeatmapMeta = heatmap.classroomHeatmapMeta;
       dashboardData.data.collegeDistribution = buildCollegeDistribution();
     }

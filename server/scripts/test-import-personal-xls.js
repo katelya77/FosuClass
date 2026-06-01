@@ -13,10 +13,10 @@ const { parsePersonalXlsBuffer } = require("../src/utils/personal-xls-parser");
  */
 function buildMockXlsBuffer() {
   const data = [
-    // 0: 学期行
-    ["2025-2026学年第二学期 学生个人理论课表", "", "", "", "", "", "", "", ""],
-    // 1: 个人信息行
-    ["学号：20250410303", "姓名：脱敏同学", "", "", "", "", "", "", ""],
+    // 0: 标题行
+    ["佛山大学 王奕章 学生个人课表", "", "", "", "", "", "", "", ""],
+    // 1: 元信息行
+    ["学年学期：2025-2026-2", "班级：25动物医学6", "所属班级：动物医学", "学院：动物科技学院", "打印日期：2026-06-01", "", "", "", ""],
     // 2: 星期表头行
     ["节次", "时间", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"],
     // 3: 星期一 1-2 节：普通单课程
@@ -41,7 +41,6 @@ function buildMockXlsBuffer() {
   // 模拟合并单元格 merges
   ws["!merges"] = [
     { s: { r: 0, c: 0 }, e: { r: 0, c: 8 } }, // 第一行标题合并
-    { s: { r: 1, c: 0 }, e: { r: 1, c: 1 } }, // 个人信息合并
   ];
 
   const wb = XLSX.utils.book_new();
@@ -55,11 +54,18 @@ function runTests() {
   console.log("[Test] 开始进行 100 网 xls 课表解析测试...");
   
   const buffer = buildMockXlsBuffer();
-  const result = parsePersonalXlsBuffer(buffer, "2025-2026-2");
+  const result = parsePersonalXlsBuffer(buffer, "2025-2026-2", "学生个人课表_20250410303.xls");
 
   // 1. 验证学期提取
   console.log(`[Test] 识别到的学期为: ${result.term}`);
   assert.strictEqual(result.term, "2025-2026-2", "学期提取不正确");
+  assert.strictEqual(result.metadata.studentName, "王奕章", "学生姓名 metadata 提取不正确");
+  assert.strictEqual(result.metadata.studentId, "20250410303", "学号 metadata 应优先从文件名提取");
+  assert.strictEqual(result.metadata.className, "25动物医学6", "班级 metadata 提取不正确");
+  assert.strictEqual(result.metadata.majorName, "动物医学", "所属班级 metadata 提取不正确");
+  assert.strictEqual(result.metadata.collegeName, "动物科技学院", "学院 metadata 提取不正确");
+  assert.strictEqual(result.metadata.printDate, "2026-06-01", "打印日期 metadata 提取不正确");
+  assert.strictEqual(result.metadata.source, "fosu-100-print-xls", "source metadata 提取不正确");
 
   // 2. 验证解析到的课程总数
   console.log(`[Test] 解析出的课程条目数（去重后）: ${result.courses.length}`);

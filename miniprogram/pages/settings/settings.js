@@ -55,6 +55,12 @@ function getSelectedSchedule() {
 function buildSelectedScheduleText(selected) {
   const target = selected && selected.target;
   if (target && target.name) {
+    if (target.type === "personal-xls") {
+      const metadata = target.metadata || {};
+      return [metadata.className, metadata.studentName, metadata.term]
+        .filter(Boolean)
+        .join(" · ") || target.title || target.name;
+    }
     return target.type === "teacher"
       ? `${target.name} 老师`
       : (target.type === "classroom" ? `${target.name} 教室` : target.name);
@@ -66,6 +72,26 @@ function buildSelectedScheduleText(selected) {
       .join(" / ");
   }
   return "未绑定课表";
+}
+
+function buildSelectedScheduleMeta(selected) {
+  const target = selected && selected.target;
+  if (!target) {
+    return {
+      sourceText: "",
+      importText: "",
+    };
+  }
+  if (target.type === "personal-xls") {
+    return {
+      sourceText: "来源：100网 XLS 手动导入",
+      importText: target.importedAt ? `导入时间：${formatFullDateTime(target.importedAt)}` : "",
+    };
+  }
+  return {
+    sourceText: target.type ? `来源：${target.type}` : "",
+    importText: target.updateTime ? `更新时间：${target.updateTime}` : "",
+  };
 }
 
 function summarizeSelectedSchedule(selected) {
@@ -115,6 +141,8 @@ Page({
     },
     contactConfig,
     selectedScheduleText: "未绑定课表",
+    selectedScheduleSourceText: "",
+    selectedScheduleImportText: "",
     appConfig: { dataVersion: {}, notices: [], news: [] },
     appConfigUpdatedText: "",
     noticeHistoryVisible: false,
@@ -177,12 +205,15 @@ Page({
     const teachingInfo = getTodayTeachingInfo(new Date(), mockCalendar);
     const effectiveWeek = settings.manualWeekOverride ? clampWeek(settings.currentWeek) : teachingInfo.weekNo;
     const selectedSchedule = getSelectedSchedule();
+    const selectedMeta = buildSelectedScheduleMeta(selectedSchedule);
     this.setData({
       settings: Object.assign({}, settings, {
         currentWeek: effectiveWeek,
       }),
       teachingInfo,
       selectedScheduleText: buildSelectedScheduleText(selectedSchedule),
+      selectedScheduleSourceText: selectedMeta.sourceText,
+      selectedScheduleImportText: selectedMeta.importText,
     });
   },
 
