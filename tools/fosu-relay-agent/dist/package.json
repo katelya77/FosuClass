@@ -1,0 +1,13 @@
+{
+  "name": "fosu-relay-agent",
+  "version": "1.0.0",
+  "description": "FosuClass Distributable Relay Agent",
+  "main": "relay-agent.js",
+  "private": true,
+  "dependencies": {
+    "playwright": "^1.43.0",
+    "cheerio": "^1.0.0-rc.12",
+    "axios": "^1.6.8",
+    "dotenv": "^16.4.5"
+  }
+}

@@ -3510,39 +3510,39 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
     const commands = [
       {
         id: "local-campus",
-        name: "本机校园网同步",
+        name: "项目内本机同步 (管理员使用，需要项目根目录)",
         command: `npm run sync:local-campus -- --term=${term} --start=${start} --output=./staging/${term}-full.json`,
-        scene: "管理员自己的电脑已连接校园网，直接访问 100.fosu.edu.cn 抓取全校课表并生成 Staging JSON",
-        precondition: "本机处于校园网或学校 VPN 环境，已完成教务系统登录授权",
+        scene: "管理员自己电脑已连校园网，直接抓取全校课表并生成本地 Staging JSON",
+        precondition: "需要项目根目录、完整源码、Node.js 环境及 npm install 依赖；且处于校园网/学校 VPN 环境",
         duration: "8 ~ 20 分钟",
         intranetRequired: true,
         risk: "中",
-        failureReason: "本机未连校园网、登录态过期、教务系统限流或新学期课表尚未发布",
-        solution: "在本机重新登录教务系统，确认能访问 100.fosu.edu.cn 后重跑；输出只生成 Staging，不会发布线上"
+        failureReason: "未连校园网、学期填错、教务系统崩溃",
+        solution: "重新登录教务系统，确认能访问 100.fosu.edu.cn 后重跑；只生成 Staging，不自动发布线上"
       },
       {
         id: "local-upload",
-        name: "上传本地 Staging",
+        name: "上传本地 Staging (管理员使用，需要项目根目录)",
         command: `npm run sync:local-upload -- --file=./staging/${term}-full.json --server=https://class.katelya.eu.org`,
-        scene: "把本机生成的 Staging JSON 上传到 VPS 后台暂存区，等待管理员比对与发布",
-        precondition: "已生成合法 Staging JSON，并持有管理员上传令牌",
+        scene: "管理员将本地已生成的 Staging JSON 上传到 VPS 暂存区",
+        precondition: "已生成合法 Staging JSON，并持有管理员上传令牌 (ADMIN_API_TOKEN)",
         duration: "15 ~ 60 秒",
         intranetRequired: false,
         risk: "低",
-        failureReason: "JSON 校验不通过、ADMIN_API_TOKEN 无效、VPS 上传超时",
-        solution: "先运行 npm run test:course-normalizer，再检查 Staging JSON 的 schemaVersion、term、classSchedules 等字段"
+        failureReason: "JSON 校验不通过、ADMIN_API_TOKEN 无效、VPS 连通超时",
+        solution: "运行 npm run test:course-normalizer 检查 JSON 数据合法性，或检查 .env 中的 ADMIN_API_TOKEN 配置"
       },
       {
         id: "relay-agent",
-        name: "接力代理端同步",
-        command: `npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=RELAY_TOKEN --term=${term}`,
-        scene: "把轻量采集器发给在校同学，由对方在校园网环境上传 Staging JSON 到接力审核区",
-        precondition: "管理员已创建未过期 relay task；接力同学在校园网环境运行代理端",
+        name: "分发命令 (同学使用，使用 relay-agent 工具包)",
+        command: `【接力端一键运行】解压 fosu-relay-agent-win-x64.zip，双击 start.bat 输入 token 即可`,
+        scene: "将轻量级接力采集包分发给校园网内的同学，委托其采集数据并上传到 Staging 审核区",
+        precondition: "已在后台创建接力任务（未吊销、未过期）；接力同学处于校园网环境，且本地有 Node 运行环境",
         duration: "8 ~ 20 分钟",
         intranetRequired: true,
         risk: "低",
-        failureReason: "relay token 过期、上传次数用尽、接力端未连接校园网",
-        solution: "在后台重新创建接力任务；接力上传后必须由管理员提升为 Staging 并再次发布"
+        failureReason: "relay token 过期、上传次数用尽、同学未连校园网",
+        solution: "在后台重新创建接力任务；接力上传后需要管理员在后台提升为 Staging 并发布"
       },
       {
         id: "release",
