@@ -104,23 +104,31 @@ function generateFrontendCommand(opts) {
   if (majorCodes) {
     cliArgs.push("--major-codes=" + majorCodes);
   }
+  if (opts.forceRefresh) {
+    cliArgs.push("--force-refresh");
+  }
   
   var cliArgsStr = cliArgs.join(" ");
   var commandText = "";
   var shell = opts.shell || "powershell";
+  var projectDirWin = "C:\\Users\\Katelya\\Documents\\VScode\\FosuClass";
+  var projectDirBash = "/c/Users/Katelya/Documents/VScode/FosuClass";
   
   if (shell === "cmd") {
+    commandText += "cd /d " + projectDirWin + "\n";
     envVars.forEach(function(ev) {
       commandText += "set " + ev.name + "=" + ev.val + "\n";
     });
     commandText += "npm run sync:" + source + " -- " + cliArgsStr;
   } else if (shell === "powershell") {
+    commandText += "cd " + projectDirWin + "\n";
     envVars.forEach(function(ev) {
       commandText += '$env:' + ev.name + '="' + ev.val + '"\n';
     });
     commandText += "npm run sync:" + source + " -- " + cliArgsStr;
   } else {
     // bash
+    commandText += "cd " + projectDirBash + "\n";
     envVars.forEach(function(ev) {
       commandText += ev.name + "=" + ev.val + " \\\n";
     });
@@ -237,6 +245,18 @@ async function runTests() {
   const grades_2026_1 = getRecommendGrades("2026-2027-1");
   assert.strictEqual(grades_2026_1, "2026,2025,2024,2023,2022");
   console.log("   ✅ [测试 5] 通过!");
+
+  console.log("🧪 [测试 6] 测试强制全量刷新参数进入命令...");
+  const cmdForce = generateFrontendCommand({
+    term: "2025-2026-2",
+    scopes: ["classSchedules", "teacherSchedules", "classroomSchedules", "courseSchedules", "classrooms", "teachers", "courses"],
+    forceRefresh: true,
+    shell: "powershell"
+  });
+  assert.ok(cmdForce.cliArgsStr.includes("--force-refresh"));
+  assert.ok(cmdForce.cliArgsStr.includes("--class-scope=all"));
+  assert.ok(cmdForce.commandText.includes("cd C:\\Users\\Katelya\\Documents\\VScode\\FosuClass"));
+  console.log("   ✅ [测试 6] 通过!");
 
   console.log("\n🎉 所有同步向导与拦截发布逻辑的断言测试全部通过！");
 }

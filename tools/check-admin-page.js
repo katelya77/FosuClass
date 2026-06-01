@@ -1,0 +1,123 @@
+const vm = require("vm");
+
+process.env.NODE_ENV = process.env.NODE_ENV || "development";
+process.env.ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || "test-admin-token";
+process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "test-admin-password";
+
+const router = require("../server/src/routes/adminPages");
+
+function fail(message) {
+  console.error(`Admin page smoke check failed: ${message}`);
+  process.exit(1);
+}
+
+function assertIncludes(source, needle, label) {
+  if (!source.includes(needle)) {
+    fail(`missing ${label}: ${needle}`);
+  }
+}
+
+function countMatches(source, pattern) {
+  const matches = source.match(pattern);
+  return matches ? matches.length : 0;
+}
+
+function extractScripts(html) {
+  const scripts = [];
+  const re = /<script\b(?![^>]*type=["']application\/json["'])[^>]*>([\s\S]*?)<\/script>/gi;
+  let match;
+  while ((match = re.exec(html)) !== null) {
+    scripts.push(match[1]);
+  }
+  return scripts;
+}
+
+function assertStaticHtml(html) {
+  if (!html || html.length < 1000) {
+    fail("adminConsoleHtml is empty or unexpectedly short");
+  }
+
+  assertIncludes(html, 'id="loginView"', "login view");
+  assertIncludes(html, "佛课小表后台", "login heading");
+  assertIncludes(html, 'id="dashboardView"', "admin shell");
+  assertIncludes(html, 'id="appSidebar"', "sidebar");
+  assertIncludes(html, 'id="mobileMenuBtn"', "mobile menu");
+  assertIncludes(html, 'id="section-sync"', "sync section");
+  assertIncludes(html, "bootAdminConsole", "boot script");
+  assertIncludes(html, 'window.addEventListener("error"', "global error handler");
+  assertIncludes(html, 'window.addEventListener("unhandledrejection"', "global rejection handler");
+
+  const openScriptCount = countMatches(html, /<script\b/gi);
+  const closeScriptCount = countMatches(html, /<\/script>/gi);
+  if (openScriptCount !== closeScriptCount) {
+    fail(`script tag count mismatch: open=${openScriptCount}, close=${closeScriptCount}`);
+  }
+
+  const scripts = extractScripts(html);
+  if (scripts.length === 0) {
+    fail("no executable script block found");
+  }
+  scripts.forEach((script, index) => {
+    try {
+      new vm.Script(script, { filename: `admin-inline-${index + 1}.js` });
+    } catch (error) {
+      fail(`inline script ${index + 1} is not valid JavaScript: ${error.message}`);
+    }
+  });
+
+  if (/<script[\s\S]*commandText \+= "set "[\s\S]*"\r?\n"/.test(html)) {
+    fail("detected a commandText string with a raw newline inside script");
+  }
+}
+
+function assertRoutes() {
+  const paths = new Set();
+  router.stack.forEach((layer) => {
+    const routePath = layer.route && layer.route.path;
+    if (Array.isArray(routePath)) {
+      routePath.forEach((item) => paths.add(item));
+    } else if (routePath) {
+      paths.add(routePath);
+    }
+  });
+
+  ["/login", "/dashboard", "/feedback", "/sync", "/settings", "/quality", "/catalog"].forEach((routePath) => {
+    if (!paths.has(routePath)) {
+      fail(`admin route is not registered: ${routePath}`);
+    }
+  });
+}
+
+async function assertRemoteHtml(baseUrl) {
+  const root = String(baseUrl || "").replace(/\/+$/, "");
+  const targets = [
+    { path: "/admin/login", expect: "佛课小表后台" },
+    { path: "/admin/dashboard", expectAny: ["佛课小表后台", "数据概览", "Found. Redirecting to /admin/login"] },
+    { path: "/admin/sync", expectAny: ["佛课小表后台", "同步中心", "Found. Redirecting to /admin/login"] },
+  ];
+
+  for (const target of targets) {
+    const response = await fetch(root + target.path, { redirect: "manual" });
+    const text = await response.text();
+    if (!text || text.trim().length === 0) {
+      fail(`${target.path} returned empty body`);
+    }
+    const expected = target.expectAny || [target.expect];
+    if (!expected.some((needle) => text.includes(needle))) {
+      fail(`${target.path} did not contain expected admin content`);
+    }
+  }
+}
+
+async function main() {
+  assertStaticHtml(router.adminConsoleHtml || "");
+  assertRoutes();
+
+  if (process.env.ADMIN_PAGE_BASE_URL) {
+    await assertRemoteHtml(process.env.ADMIN_PAGE_BASE_URL);
+  }
+
+  console.log("Admin page smoke check passed.");
+}
+
+main().catch((error) => fail(error.stack || error.message));

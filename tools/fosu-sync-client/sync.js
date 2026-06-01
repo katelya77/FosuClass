@@ -160,6 +160,12 @@ function upsertClassNameCandidateRecord(records, item) {
 }
 
 async function waitBetweenClassSyncRequests(isFiltered) {
+  const configuredDelay = Number(process.env.SYNC_CLASS_REQUEST_DELAY_MS || 0);
+  if (Number.isFinite(configuredDelay) && configuredDelay >= 0 && process.env.SYNC_CLASS_REQUEST_DELAY_MS !== undefined) {
+    console.log(`      ⏳ 按 CLI/env 配置等待 ${configuredDelay}ms...`);
+    await sleep(configuredDelay);
+    return;
+  }
   const delayMin = isFiltered ? 800 : 1500;
   const delayMax = isFiltered ? 1500 : 3000;
   const delay = Math.floor(Math.random() * (delayMax - delayMin + 1)) + delayMin;
@@ -587,6 +593,26 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
 
   const cliParams = global.CLI_PARAMS || {};
   const generatedCommand = global.GENERATED_COMMAND || `node sync.js local-campus ${process.argv.slice(2).join(" ")}`;
+  const cacheUsage = global.CLASS_SCHEDULE_CACHE_USAGE || {};
+  const metaWarnings = [];
+  if (cacheUsage.warning) {
+    metaWarnings.push(cacheUsage.warning);
+  }
+  const counts = {
+    classScheduleCount,
+    adminClassCount,
+    majorAggregateCount,
+    teacherScheduleCount,
+    classroomScheduleCount,
+    courseScheduleCount,
+    classroomCount: resources.classrooms.length,
+    teacherCount: resources.teachers.length,
+    courseCount: resources.courses.length,
+    collegeCount,
+    majorCount,
+    gradeCount: (catalog.grades || []).length,
+    noScheduleMajorCount,
+  };
 
   // 拼接 scopeSummary 文本
   const summaryParts = [];
@@ -614,12 +640,27 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     
     // 注入 meta
     meta: {
+      term: activeSemester,
+      startDate: cliParams.start || "2026-09-01",
       includeScopes,
+      classScope: cliParams.classScope || cliParams["class-scope"] || process.env.SYNC_CLASS_SCOPE || "",
+      grades: cliParams.grades || process.env.SYNC_CLASS_GRADES || "",
+      forceRefresh: Boolean(cliParams.forceRefresh || cliParams["force-refresh"]),
+      ignoreProgress: Boolean(cliParams.ignoreProgress || cliParams["ignore-progress"]),
+      ignoreNoScheduleCache: Boolean(cliParams.ignoreNoScheduleCache || cliParams["ignore-no-schedule-cache"]),
       scopeSummary,
       generatedCommand,
       generatedAt: new Date().toISOString(),
-      term: activeSemester,
-      startDate: cliParams.start || "2026-09-01"
+      counts,
+      cacheUsage: {
+        usedClassScheduleCache: Boolean(cacheUsage.usedClassScheduleCache || cacheUsage.used),
+        cacheSource: cacheUsage.cacheSource || cacheUsage.source || null,
+        cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null,
+      },
+      warnings: metaWarnings,
+      usedClassScheduleCache: Boolean(cacheUsage.usedClassScheduleCache || cacheUsage.used),
+      cacheSource: cacheUsage.cacheSource || cacheUsage.source || null,
+      cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null,
     },
 
     catalog: {
@@ -1090,6 +1131,70 @@ function readClassSchedulesFromFile() {
   throw new Error(errorMessage.join("\n"));
 }
 
+function tryReadClassSchedulesFromFile() {
+  try {
+    return readClassSchedulesFromFile();
+  } catch (error) {
+    return { items: [], filePath: null, error };
+  }
+}
+
+function readClassScheduleCacheForSemester(semester) {
+  const cache = tryReadClassSchedulesFromFile();
+  const items = Array.isArray(cache.items) ? cache.items : [];
+  if (items.length === 0) {
+    return cache;
+  }
+
+  const matchedItems = items.filter((item) => {
+    const itemSemester = item && (item.semester || item.term || item.xnxqh);
+    return !itemSemester || !semester || itemSemester === semester;
+  });
+
+  if (matchedItems.length === 0) {
+    return {
+      items: [],
+      filePath: cache.filePath,
+      error: new Error(`历史 classSchedules 缓存存在，但没有匹配学期 ${semester} 的课表记录。`),
+    };
+  }
+
+  if (matchedItems.length !== items.length) {
+    console.log(`ℹ️ 历史课表缓存按学期 ${semester} 过滤: ${items.length} -> ${matchedItems.length} 条。`);
+  }
+  return { items: matchedItems, filePath: cache.filePath };
+}
+
+function getClassScheduleIdentity(item) {
+  if (!item || typeof item !== "object") {
+    return "";
+  }
+  return item.classId || [
+    item.semester || item.term || "",
+    item.collegeCode || "",
+    item.grade || "",
+    item.majorCode || item.code || "",
+    item.className || item.name || "",
+  ].join("::");
+}
+
+function mergeClassSchedules(existing, incoming) {
+  const merged = new Map();
+  (existing || []).forEach((item) => {
+    const key = getClassScheduleIdentity(item);
+    if (key) {
+      merged.set(key, item);
+    }
+  });
+  (incoming || []).forEach((item) => {
+    const key = getClassScheduleIdentity(item);
+    if (key) {
+      merged.set(key, item);
+    }
+  });
+  return Array.from(merged.values());
+}
+
 /**
  * 打印 PowerShell 的执行命令建议
  */
@@ -1251,6 +1356,39 @@ async function handleLocalStagingUpload(params) {
   return response.data;
 }
 
+function writeLocalStagingDebugFailure(params, catalog, majors, error) {
+  const term = params.term || process.env.PREFERRED_SEMESTER || catalog?.semesters?.[0]?.value || "term";
+  const debugPayload = {
+    success: false,
+    type: "local-campus-staging-debug",
+    generatedAt: new Date().toISOString(),
+    error: error && (error.stack || error.message) || String(error),
+    meta: {
+      term,
+      startDate: params.start || process.env.SYNC_TERM_START_DATE || "",
+      includeScopes: global.CLI_PARAMS?.includeScopes || ALL_SCOPES,
+      classScope: params.classScope || params["class-scope"] || process.env.SYNC_CLASS_SCOPE || "",
+      grades: params.grades || process.env.SYNC_CLASS_GRADES || "",
+      forceRefresh: Boolean(params.forceRefresh || params["force-refresh"]),
+      ignoreProgress: Boolean(params.ignoreProgress || params["ignore-progress"]),
+      ignoreNoScheduleCache: Boolean(params.ignoreNoScheduleCache || params["ignore-no-schedule-cache"]),
+      generatedCommand: global.GENERATED_COMMAND || process.argv.join(" "),
+      counts: {
+        collegeCount: catalog?.colleges?.length || 0,
+        majorCount: majors?.length || 0,
+        classScheduleCount: 0,
+      },
+      cacheUsage: global.CLASS_SCHEDULE_CACHE_USAGE || null,
+      warnings: ["未生成正式 Staging JSON，请按 error 字段处理后重新运行。"],
+    },
+  };
+  const output = path.resolve(process.cwd(), params.debugOutput || path.join("staging", `debug-${term}.json`));
+  fs.mkdirSync(path.dirname(output), { recursive: true });
+  fs.writeFileSync(output, JSON.stringify(debugPayload, null, 2), "utf-8");
+  console.error(`🧪 已生成 debug JSON，不会作为正式 Staging 发布: ${output}`);
+  return output;
+}
+
 async function handleLocalCampusStaging(page, params) {
   console.log("\n================ [本机校园网采集 Staging] ================");
   process.env.SYNC_LOCAL_STAGING_ONLY = "true";
@@ -1274,14 +1412,31 @@ async function handleLocalCampusStaging(page, params) {
   
   let allClassSchedules = [];
   if (includeScopes.includes("classSchedules")) {
-    allClassSchedules = await syncClassSchedules(page, catalog, majors);
+    try {
+      allClassSchedules = await syncClassSchedules(page, catalog, majors);
+    } catch (error) {
+      const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
+      throw new Error(`${error.message} 已生成 debug JSON: ${debugPath}`);
+    }
     if (!allClassSchedules || allClassSchedules.length === 0) {
-      throw new Error("本机校园网采集结果为空，未生成 Staging JSON");
+      const error = new Error("本机校园网采集结果为空，未生成正式 Staging JSON");
+      const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
+      throw new Error(`${error.message}。已生成 debug JSON: ${debugPath}`);
     }
   } else {
-    console.log("ℹ️ 同步范围不包含行政班课表 (classSchedules)。从本地加载已有缓存。");
-    const { items } = readClassSchedulesFromFile();
-    allClassSchedules = items || [];
+    console.log("ℹ️ 同步范围不包含行政班课表 (classSchedules)。从本地加载已有缓存以保护学生课表。");
+    const cache = readClassScheduleCacheForSemester(process.env.PREFERRED_SEMESTER || params.term || catalog.semesters?.[0]?.value);
+    allClassSchedules = cache.items || [];
+    if (!allClassSchedules.length) {
+      const error = cache.error || new Error("只更新公共资源时未找到可合并的历史 classSchedules，禁止生成会清空学生课表的 Staging。");
+      const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
+      throw new Error(`${error.message} 已生成 debug JSON: ${debugPath}`);
+    }
+    global.CLASS_SCHEDULE_CACHE_USAGE = {
+      usedClassScheduleCache: true,
+      cacheSource: cache.filePath,
+      cacheWarning: "同步范围不包含 classSchedules，已合并历史行政班课表缓存以防止发布后清空学生课表。",
+    };
   }
 
   const snapshot = buildSnapshot(catalog, majors, allClassSchedules, null, {
@@ -1294,6 +1449,11 @@ async function handleLocalCampusStaging(page, params) {
       includeCourseSchedules: includeScopes.includes("courseSchedules"),
     },
   });
+  if (includeScopes.includes("classSchedules") && (!snapshot.classSchedules || snapshot.classSchedules.length === 0)) {
+    const error = new Error("includeScopes 包含 classSchedules，但最终快照 classSchedules 为 0，已禁止生成正式 Staging。");
+    const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
+    throw new Error(`${error.message} 已生成 debug JSON: ${debugPath}`);
+  }
   validateLocalReleaseSnapshot(snapshot);
 
   const output = path.resolve(process.cwd(), params.output || path.join("staging", `${snapshot.semester || params.term || "term"}-full.json`));
@@ -2520,20 +2680,34 @@ async function syncClassSchedules(page, catalog, majors) {
     fs.mkdirSync(rawPagesDir, { recursive: true });
   }
 
+  // 默认使用最新学期
+  const activeSemester = catalog.semesters[0]?.value || "2025-2026-2";
+  console.log(`📅 抓取学期: ${activeSemester}`);
+
+  const cliParams = global.CLI_PARAMS || {};
+  const forceRefresh = Boolean(cliParams.forceRefresh || cliParams["force-refresh"]);
+  const ignoreProgress = forceRefresh || Boolean(cliParams.ignoreProgress || cliParams["ignore-progress"]);
+  const ignoreNoScheduleCache = forceRefresh || Boolean(cliParams.ignoreNoScheduleCache || cliParams["ignore-no-schedule-cache"]);
+  const clearProgress = Boolean(cliParams.clearProgress || cliParams["clear-progress"]);
+  const clearNoScheduleCache = Boolean(cliParams.clearNoScheduleCache || cliParams["clear-no-schedule-cache"]);
+
   const PROGRESS_PATH = path.join(debugDir, "sync-progress.json");
+  if ((clearProgress || forceRefresh) && fs.existsSync(PROGRESS_PATH)) {
+    fs.unlinkSync(PROGRESS_PATH);
+    console.log(`🧹 已清理本地同步进度文件: ${PROGRESS_PATH}`);
+  }
+
   let progress = { completed: [] };
-  if (fs.existsSync(PROGRESS_PATH)) {
+  if (!ignoreProgress && fs.existsSync(PROGRESS_PATH)) {
     try {
       progress = JSON.parse(fs.readFileSync(PROGRESS_PATH, "utf-8"));
       console.log(`ℹ️ 加载到本地同步进度，已完成 ${progress.completed.length} 个专业。`);
     } catch (e) {
       console.warn("⚠️ 读取断点进度失败，将全新抓取");
     }
+  } else if (ignoreProgress) {
+    console.log("ℹ️ 已忽略本地同步进度缓存，本轮会重新判断目标专业。");
   }
-
-  // 默认使用最新学期
-  const activeSemester = catalog.semesters[0]?.value || "2025-2026-2";
-  console.log(`📅 抓取学期: ${activeSemester}`);
 
   // 定位当前学生班级
   const currentStudentClass = await getCurrentStudentClass(page);
@@ -2545,17 +2719,23 @@ async function syncClassSchedules(page, catalog, majors) {
   const noScheduleCachePath = path.join(debugDir, "no-schedule-majors.json");
   const classNameCandidatesPath = path.join(debugDir, "class-name-candidates.json");
   let noScheduleMajors = readJsonArray(noScheduleCachePath);
+  if ((clearNoScheduleCache || forceRefresh) && noScheduleMajors.length > 0) {
+    const before = noScheduleMajors.length;
+    noScheduleMajors = noScheduleMajors.filter((item) => item && item.semester !== activeSemester);
+    writeJsonFile(noScheduleCachePath, noScheduleMajors);
+    console.log(`🧹 已清理本学期无排课缓存: ${before - noScheduleMajors.length} 条 (${activeSemester})。`);
+  }
   let classNameCandidateRecords = readJsonArray(classNameCandidatesPath);
-  const skipNoScheduleCache = getEnvFlag("SYNC_SKIP_NO_SCHEDULE_CACHE", true);
+  const skipNoScheduleCache = getEnvFlag("SYNC_SKIP_NO_SCHEDULE_CACHE", true) && !ignoreNoScheduleCache;
   const recheckNoSchedule = getEnvFlag("SYNC_RECHECK_NO_SCHEDULE", false);
   const cachedNoScheduleKeys = new Set(
-    noScheduleMajors
+    skipNoScheduleCache && !recheckNoSchedule ? noScheduleMajors
       .filter((item) => item && item.semester === activeSemester)
       .map((item) => getMajorIdentityKey({
         collegeCode: item.collegeCode,
         grade: item.grade,
         code: item.majorCode,
-      }, item.semester))
+      }, item.semester)) : []
   );
 
   // 解析环境变量过滤条件
@@ -2666,8 +2846,45 @@ async function syncClassSchedules(page, catalog, majors) {
 
   // 剔除已完成部分
   const pendingMajors = effectiveTargetMajors.filter(major => !hasCompletedMajor(progress, major, activeSemester));
+  const completedProgressCount = effectiveTargetMajors.length - pendingMajors.length;
+  const skipNoScheduleCount = targetMajors.length - effectiveTargetMajors.length;
+  let cachedClassSchedules = [];
+  global.CLASS_SCHEDULE_CACHE_USAGE = {
+    usedClassScheduleCache: false,
+    cacheSource: null,
+    cacheWarning: null,
+  };
+
+  if (completedProgressCount > 0 || pendingMajors.length === 0) {
+    const cache = readClassScheduleCacheForSemester(activeSemester);
+    if (cache.items && cache.items.length > 0) {
+      cachedClassSchedules = cache.items;
+      global.CLASS_SCHEDULE_CACHE_USAGE = {
+        usedClassScheduleCache: true,
+        cacheSource: cache.filePath,
+        cacheWarning: `本轮有 ${completedProgressCount} 个专业被 progress 跳过，已从历史 classSchedules 缓存恢复 ${cachedClassSchedules.length} 条课表。`,
+      };
+      console.log(`♻️ 已从历史缓存恢复 ${cachedClassSchedules.length} 条 classSchedules: ${cache.filePath}`);
+    } else if (completedProgressCount > 0) {
+      const detail = cache.error ? ` (${cache.error.message})` : "";
+      throw new Error(`本地进度缓存与结果缓存不一致：${completedProgressCount} 个专业将被 progress 跳过，但没有可用于构建 Staging 的历史 classSchedules${detail}。请使用 --force-refresh 或 --clear-progress 重新抓取。`);
+    }
+  }
 
   console.log(`🔄 本轮待同步专业: ${pendingMajors.length} 个。`);
+
+  if (pendingMajors.length === 0) {
+    if (cachedClassSchedules.length > 0) {
+      console.log("ℹ️ 本轮没有待抓取专业，直接使用历史 classSchedules 缓存构建 Staging。");
+      return cachedClassSchedules;
+    }
+
+    if (completedProgressCount > 0 && skipNoScheduleCount > 0) {
+      throw new Error("本地进度缓存与结果缓存不一致：所有专业都被 progress/no-schedule cache 跳过，但没有可用于构建 Staging 的历史 classSchedules。请使用 --force-refresh 或 --clear-progress 重新抓取。");
+    }
+
+    throw new Error("本轮待同步专业为 0，且没有可用于构建 Staging 的历史 classSchedules。请使用 --force-refresh 重新抓取，或检查 --grades/--college-codes/--major-codes 过滤条件。");
+  }
 
   // 打开行政班级课表页面以确保 Ajax 环境可用
   await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
@@ -2675,10 +2892,9 @@ async function syncClassSchedules(page, catalog, majors) {
   let totalCoursesFetched = 0;
   let totalDedupledCount = 0;
   let totalGroupedCount = 0;
-  const skipNoScheduleCount = targetMajors.length - effectiveTargetMajors.length;
   let newNoScheduleCount = 0;
 
-  const allClassSchedules = [];
+  let allClassSchedules = cachedClassSchedules.slice();
   let count = 0;
 
   for (const major of pendingMajors) {
@@ -2841,7 +3057,7 @@ async function syncClassSchedules(page, catalog, majors) {
         const aggregateCount = classes.filter((item) => item.isAggregated).length;
         const classCount = classes.length - aggregateCount;
         console.log(`      整理课表条目: 行政班 ${classCount} 个，专业聚合 ${aggregateCount} 个 (${classes.map(c => c.className).join(", ")})`);
-        allClassSchedules.push(...classes);
+        allClassSchedules = mergeClassSchedules(allClassSchedules, classes);
       }
 
       // 将该专业标记为已完成
@@ -3130,6 +3346,12 @@ async function main() {
 
   // 还原真实执行指令
   global.GENERATED_COMMAND = `node sync.js ${action} ${args.join(" ")}`;
+  params.forceRefresh = Boolean(params["force-refresh"] || params.forceRefresh);
+  params.ignoreProgress = Boolean(params["ignore-progress"] || params.ignoreProgress || params.forceRefresh);
+  params.ignoreNoScheduleCache = Boolean(params["ignore-no-schedule-cache"] || params.ignoreNoScheduleCache || params.forceRefresh);
+  params.clearProgress = Boolean(params["clear-progress"] || params.clearProgress);
+  params.clearNoScheduleCache = Boolean(params["clear-no-schedule-cache"] || params.clearNoScheduleCache);
+  params.classScope = params["class-scope"] || params.classScope || "";
 
   // 将 CLI 参数映射到环境变量
   if (params.term) {
@@ -3156,9 +3378,14 @@ async function main() {
   }
   if (params.concurrency) {
     process.env.SYNC_RESOURCE_MAX_CONCURRENCY = params.concurrency;
+    process.env.SYNC_CLASS_MAX_CONCURRENCY = params.concurrency;
   }
   if (params["delay-ms"]) {
     process.env.SYNC_RESOURCE_REQUEST_DELAY_MS = params["delay-ms"];
+    process.env.SYNC_CLASS_REQUEST_DELAY_MS = params["delay-ms"];
+  }
+  if (params.forceRefresh || params.ignoreNoScheduleCache) {
+    process.env.SYNC_SKIP_NO_SCHEDULE_CACHE = "false";
   }
   if (params["crawl-only"]) {
     process.env.SYNC_CLASS_CRAWL_ONLY = "true";

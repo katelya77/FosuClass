@@ -33,6 +33,7 @@
     "sync:personal": "node server/scripts/sync-personal.js",
     "inspect:personal-auth": "node server/scripts/inspect-personal-auth.js",
     "test:admin-inline-script": "node tools/check-admin-inline-script.js",
+    "test:admin-page": "node tools/check-admin-page.js",
     "diagnose:personal-network": "node server/scripts/diagnose-personal-network.js"
   },
   "repository": {

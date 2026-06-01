@@ -2939,6 +2939,39 @@ router.post("/catalog/meta", adminAuth.verifyAdminAccess, (req, res) => {
 
 const STAGING_LATEST_PATH = path.join(STORAGE_DIR, "staging-latest.json");
 
+function getStagingIncludeScopes(data) {
+  const scopes = data?.meta?.includeScopes;
+  return Array.isArray(scopes) ? scopes : [];
+}
+
+function getStagingClassSchedules(data) {
+  return data?.classSchedules || data?.resources?.classSchedules || [];
+}
+
+function summarizeStagingData(data) {
+  const classSchedules = getStagingClassSchedules(data);
+  const resources = data?.resources || {};
+  const adminClassCount = classSchedules.filter((item) => item.displayType === "class-schedule" && !item.isAggregated).length;
+  const counts = {
+    classScheduleCount: classSchedules.length,
+    adminClassCount,
+    majorAggregateCount: classSchedules.length - adminClassCount,
+    teacherScheduleCount: resources.teacherSchedules?.length || data?.teacherSchedules?.length || 0,
+    classroomScheduleCount: resources.classroomSchedules?.length || data?.classroomSchedules?.length || 0,
+    courseScheduleCount: resources.courseSchedules?.length || data?.courseSchedules?.length || 0,
+    classroomCount: resources.classrooms?.length || data?.classrooms?.length || 0,
+    teacherCount: resources.teachers?.length || data?.teachers?.length || 0,
+    courseCount: resources.courses?.length || data?.courses?.length || 0,
+    collegeCount: data?.catalog?.colleges?.length || data?.colleges?.length || 0,
+    gradeCount: data?.catalog?.grades?.length || data?.grades?.length || 0,
+  };
+  return { classSchedules, counts };
+}
+
+function areStagingCountsAllZero(counts) {
+  return Object.values(counts || {}).every((value) => Number(value || 0) === 0);
+}
+
 function validateStagingData(data) {
   const errors = [];
   const warnings = [];
@@ -2955,11 +2988,11 @@ function validateStagingData(data) {
     }
   });
 
-  const includeScopes = data.meta?.includeScopes || [];
+  const includeScopes = getStagingIncludeScopes(data);
   const hasClassSchedules = includeScopes.length === 0 || includeScopes.includes("classSchedules");
+  const { classSchedules, counts } = summarizeStagingData(data);
 
   // 支持在 resources 内部或顶层
-  const classSchedules = data.classSchedules || data.resources?.classSchedules;
   if (hasClassSchedules) {
     if (!classSchedules || !Array.isArray(classSchedules) || classSchedules.length === 0) {
       errors.push("缺少班级课程表数据 (classSchedules)");
@@ -2972,6 +3005,25 @@ function validateStagingData(data) {
         }
       });
     }
+  }
+
+  if (areStagingCountsAllZero(counts)) {
+    errors.push("Staging 数据计数全部为 0，疑似空包，禁止暂存或发布");
+  }
+
+  if (data.meta?.counts) {
+    const reportedClassCount = Number(data.meta.counts.classScheduleCount || 0);
+    if (hasClassSchedules && reportedClassCount === 0 && classSchedules.length > 0) {
+      warnings.push("meta.counts.classScheduleCount 为 0，但实际 classSchedules 非空；已按实际数据重新计算");
+    }
+  }
+
+  const cacheUsage = data.meta?.cacheUsage || {};
+  if (data.meta?.usedClassScheduleCache || cacheUsage.usedClassScheduleCache) {
+    warnings.push(`本次 Staging 使用了历史 classSchedules 缓存: ${data.meta?.cacheSource || cacheUsage.cacheSource || "未知来源"}`);
+  }
+  if (data.meta?.cacheWarning || cacheUsage.cacheWarning) {
+    warnings.push(data.meta?.cacheWarning || cacheUsage.cacheWarning);
   }
 
   const resourceKeys = [
@@ -2993,6 +3045,45 @@ function validateStagingData(data) {
     valid: errors.length === 0,
     errors,
     warnings
+  };
+}
+
+function buildStagingSafety(data, activeSnapshot) {
+  const includeScopes = getStagingIncludeScopes(data);
+  const hasClassSchedules = includeScopes.length === 0 || includeScopes.includes("classSchedules");
+  const { counts } = summarizeStagingData(data);
+  const validation = validateStagingData(data);
+  const blockers = validation.errors.slice();
+  const warnings = validation.warnings.slice();
+  const activeClassCount = (activeSnapshot?.classSchedules || []).length;
+  const dropRate = activeClassCount > 0
+    ? (activeClassCount - counts.classScheduleCount) / activeClassCount
+    : 0;
+
+  if (hasClassSchedules && counts.classScheduleCount === 0 && !blockers.includes("缺少班级课程表数据 (classSchedules)")) {
+    blockers.push("includeScopes 包含 classSchedules，但 classSchedules=0");
+  }
+  if (!data.term) {
+    blockers.push("term 为空");
+  }
+  if (!data.releaseVersion) {
+    blockers.push("releaseVersion 为空");
+  }
+  if (areStagingCountsAllZero(counts)) {
+    blockers.push("counts 全部为 0");
+  }
+  if (activeClassCount > 0 && counts.classScheduleCount < activeClassCount * 0.5) {
+    warnings.push(`行政班课表数量从线上 ${activeClassCount} 降至 ${counts.classScheduleCount}，减少超过 50%，发布需要二次确认。`);
+  }
+
+  return {
+    allowPublish: blockers.length === 0,
+    requiresForceConfirm: activeClassCount > 0 && dropRate > 0.5,
+    blockers,
+    warnings,
+    counts,
+    activeClassScheduleCount: activeClassCount,
+    classScheduleDropRate: parseFloat(Math.max(0, dropRate * 100).toFixed(2)),
   };
 }
 
@@ -3203,29 +3294,21 @@ router.post(
       // 写入暂存区
       fs.writeFileSync(STAGING_LATEST_PATH, JSON.stringify(stagingData, null, 2), "utf-8");
       
-      const classSchedules = stagingData.classSchedules || [];
-      const adminClassCount = classSchedules.filter((item) => item.displayType === "class-schedule" && !item.isAggregated).length;
+      const activeSnapshot = releaseService.readActiveReleaseSnapshot();
+      const safety = buildStagingSafety(stagingData, activeSnapshot);
 
       return res.json({
         success: true,
         message: "Staging JSON 上传并校验成功，已暂存",
-        warnings: validation.warnings,
+        warnings: safety.warnings,
         data: {
           term: stagingData.term,
           termStartDate: stagingData.termStartDate,
           releaseVersion: stagingData.releaseVersion,
           generatedAt: stagingData.generatedAt,
-          counts: {
-            classScheduleCount: classSchedules.length,
-            adminClassCount,
-            majorAggregateCount: classSchedules.length - adminClassCount,
-            teacherScheduleCount: stagingData.resources?.teacherSchedules?.length || 0,
-            classroomScheduleCount: stagingData.resources?.classroomSchedules?.length || 0,
-            courseScheduleCount: stagingData.resources?.courseSchedules?.length || 0,
-            classroomCount: stagingData.resources?.classrooms?.length || 0,
-            teacherCount: stagingData.resources?.teachers?.length || 0,
-            courseCount: stagingData.resources?.courses?.length || 0,
-          }
+          meta: stagingData.meta || null,
+          counts: safety.counts,
+          safety,
         }
       });
     } catch (error) {
@@ -3274,8 +3357,8 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
     const changeRate = (deletedClasses.length + addedClasses.length) / baseCount;
     const isBigChange = changeRate > 0.3;
 
-    const classSchedules = stagingData.classSchedules || [];
-    const adminClassCount = classSchedules.filter((item) => item.displayType === "class-schedule" && !item.isAggregated).length;
+    const { counts } = summarizeStagingData(stagingData);
+    const safety = buildStagingSafety(stagingData, activeSnapshot);
 
     return res.json({
       success: true,
@@ -3286,17 +3369,8 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
         generatedAt: stagingData.generatedAt,
         releaseNote: stagingData.releaseNote || "",
         meta: stagingData.meta || null,
-        counts: {
-          classScheduleCount: classSchedules.length,
-          adminClassCount,
-          majorAggregateCount: classSchedules.length - adminClassCount,
-          teacherScheduleCount: stagingData.resources?.teacherSchedules?.length || 0,
-          classroomScheduleCount: stagingData.resources?.classroomSchedules?.length || 0,
-          courseScheduleCount: stagingData.resources?.courseSchedules?.length || 0,
-          classroomCount: stagingData.resources?.classrooms?.length || 0,
-          teacherCount: stagingData.resources?.teachers?.length || 0,
-          courseCount: stagingData.resources?.courses?.length || 0,
-        },
+        counts,
+        safety,
         diff: {
           classDelta: stagingStats.classCount - activeStats.classCount,
           courseDelta: stagingStats.courseCount - activeStats.courseCount,
@@ -3328,6 +3402,27 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
 
     const stagingData = JSON.parse(fs.readFileSync(STAGING_LATEST_PATH, "utf-8"));
     const activeSnapshot = releaseService.readActiveReleaseSnapshot();
+    const safety = buildStagingSafety(stagingData, activeSnapshot);
+    const forcePublish = req.body.force === true;
+
+    if (!safety.allowPublish) {
+      return res.status(400).json({
+        success: false,
+        code: "STAGING_SAFETY_BLOCKED",
+        message: "Staging 数据未通过发布安全校验，禁止发布。",
+        blockers: safety.blockers,
+        warnings: safety.warnings,
+      });
+    }
+
+    if (safety.requiresForceConfirm && !forcePublish) {
+      return res.status(400).json({
+        success: false,
+        code: "CLASS_COUNT_DROP_BLOCKED",
+        message: `行政班课表数量较线上减少 ${safety.classScheduleDropRate}%（线上 ${safety.activeClassScheduleCount}，Staging ${safety.counts.classScheduleCount}），必须二次确认后才能发布。`,
+        safety,
+      });
+    }
 
     // 变动率限制校验
     if (activeSnapshot) {
@@ -3340,7 +3435,7 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
       const baseCount = Math.max(activeClassNames.length, 1);
       const changeRate = (deletedClasses.length + addedClasses.length) / baseCount;
       
-      if (changeRate > 0.3 && req.body.force !== true) {
+      if (changeRate > 0.3 && !forcePublish) {
         return res.status(400).json({
           success: false,
           code: "BIG_CHANGE_BLOCKED",
@@ -3832,6 +3927,9 @@ router._test = {
   deriveClassroomSchedulesFromClassSchedules,
   normalizeCourseSlot,
   verifyAdminWriteAccess,
+  summarizeStagingData,
+  validateStagingData,
+  buildStagingSafety,
 };
 
 module.exports = router;

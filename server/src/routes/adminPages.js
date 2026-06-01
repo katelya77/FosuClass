@@ -4,7 +4,7 @@ const adminAuth = require("../services/adminAuth");
 const router = express.Router();
 
 const ADMIN_LOGO_URL = "https://pan.katelya.eu.org/file/tgs_eyJ2IjoxLCJmIjoiQWdBQ0FnVUFBeUVGQUFUYW1yME1BQUlCcjJvZEZiTTBGUVFjQzFUclVwVWlDNFdadG0tckFBSnBFR3NidWJQb1ZITjJyQjhxcWZNbkFRQURBZ0FEZVFBRE93USIsImUiOiJqcGciLCJuIjoicGhvdG9fNDMxLmpwZyIsIm0iOiJpbWFnZS9qcGVnIiwicyI6MTE0ODAwLCJ0IjoxNzgwMjkwOTk2MjkyLCJtaWQiOjQzMX0.pCRB9D4sdHdjeP1XpKnQfMVMlSCh37uQE67VGaKBWFw.jpg";
-const ADMIN_LOGO_FALLBACK_URL = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Cdefs%3E%3ClinearGradient%20id%3D%27g%27%20x1%3D%270%27%20y1%3D%270%27%20x2%3D%271%27%20y2%3D%271%27%3E%3Cstop%20stop-color%3D%27%233b82f6%27%2F%3E%3Cstop%20offset%3D%271%27%20stop-color%3D%27%238b5cf6%27%2F%3E%3C%2FlinearGradient%3E%3C%2Fdefs%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2716%27%20fill%3D%27url(%23g)%27%2F%3E%3Crect%20x%3D%2716%27%20y%3D%2716%27%20width%3D%2732%27%20height%3D%2734%27%20rx%3D%276%27%20fill%3D%27white%27%20opacity%3D%27.96%27%2F%3E%3Cpath%20d%3D%27M23%2024h18M23%2032h18M23%2040h10%27%20stroke%3D%27%233b82f6%27%20stroke-width%3D%274%27%20stroke-linecap%3D%27round%27%2F%3E%3C%2Fsvg%3E";
+const ADMIN_LOGO_FALLBACK_URL = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2714%27%20fill%3D%27%233b82f6%27%2F%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20text-anchor%3D%27middle%27%20font-size%3D%2732%27%20font-family%3D%27Arial%2Csans-serif%27%20font-weight%3D%27700%27%20fill%3D%27white%27%3E%E8%AF%BE%3C%2Ftext%3E%3C%2Fsvg%3E";
 const ADMIN_LOGO_IMG_ATTRS = `src="${ADMIN_LOGO_URL}" alt="佛课小表" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${ADMIN_LOGO_FALLBACK_URL}';"`;
 
 const adminConsoleHtml = `<!doctype html>
@@ -1280,15 +1280,27 @@ const adminConsoleHtml = `<!doctype html>
     }
 
     @media (max-width: 767.98px) {
+      html,
+      body {
+        max-width: 100%;
+        overflow-x: hidden;
+      }
       .app-shell {
         grid-template-columns: 1fr;
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
       }
       .mobile-topbar {
         display: flex;
-        grid-column: 1 / -1;
+        grid-column: 1;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
       }
       .sidebar {
         position: fixed;
+        grid-column: 1;
         top: 0;
         left: 0;
         width: 78vw;
@@ -1303,16 +1315,30 @@ const adminConsoleHtml = `<!doctype html>
         transform: translateX(0);
       }
       .main-content {
+        grid-column: 1;
         padding: 16px;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
       }
       .topbar {
         flex-direction: column;
         align-items: flex-start;
         gap: 12px;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
       }
       .topbar-actions {
         width: 100%;
         justify-content: flex-end;
+      }
+      .section,
+      .sync-hero,
+      .stats-grid,
+      .card {
+        max-width: 100%;
+        min-width: 0;
       }
       .dash-columns {
         grid-template-columns: 1fr;
@@ -2181,11 +2207,11 @@ const adminConsoleHtml = `<!doctype html>
           </div>
           <div class="heatmap-legend" id="classroomHeatmapLegend">
             <span>占用度</span>
-            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #EEF3F8;"></span>空闲</span>
-            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #D8E8FF;"></span>较低</span>
-            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #9CC7FF;"></span>一般</span>
-            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #4D8FEF;"></span>较高</span>
-            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #1D4ED8;"></span>繁忙</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #eef3f8;"></span>0%</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #cfe0ff;"></span>1-25%</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #8fbaff;"></span>26-50%</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #4f86e8;"></span>51-75%</span>
+            <span class="heatmap-legend-item"><span class="heatmap-legend-swatch" style="background: #1d4ed8;"></span>76-100%</span>
           </div>
           <div class="heatmap-detail-panel" id="classroomHeatmapDetailPanel">
             <div class="heatmap-detail-title">
@@ -2370,12 +2396,21 @@ const adminConsoleHtml = `<!doctype html>
                       <h4 style="font-size: 13.5px; margin-bottom: 12px;">Step 2: 选择数据同步预设模式</h4>
                       <div class="preset-card-grid">
                         <div class="preset-card active" id="preset-full">
-                          <div class="preset-title">🌟 全校完整同步模式</div>
-                          <div class="preset-desc">推荐正式发布使用。全量爬取课表，派生并更新全部公共资源。</div>
+                          <div class="preset-title">🌟 全校完整同步，使用缓存</div>
+                          <div class="preset-desc">适合日常更新。允许使用 progress 与无排课缓存，速度更快。</div>
                           <div class="preset-tags">
                             <span class="preset-tag">全选</span>
                             <span class="preset-tag">活跃5个年级</span>
                             <span class="preset-tag">延时900ms</span>
+                          </div>
+                        </div>
+                        <div class="preset-card" id="preset-force">
+                          <div class="preset-title">🧹 全校强制刷新</div>
+                          <div class="preset-desc">适合新学期第一次正式同步。忽略 progress 与无排课缓存，耗时更久但结果最干净。</div>
+                          <div class="preset-tags">
+                            <span class="preset-tag">--force-refresh</span>
+                            <span class="preset-tag">全选</span>
+                            <span class="preset-tag">活跃5个年级</span>
                           </div>
                         </div>
                         <div class="preset-card" id="preset-fast">
@@ -2464,6 +2499,9 @@ const adminConsoleHtml = `<!doctype html>
                           <input type="number" id="wizardDelay" value="900" min="0" step="100">
                         </div>
                       </div>
+                      <label class="sync-range-item" style="margin-top: 12px;">
+                        <input type="checkbox" id="wizardForceRefresh"> 强制全量刷新，忽略 progress 与无排课缓存
+                      </label>
                     </div>
 
                     <!-- Step 4: 生成命令 -->
@@ -2560,6 +2598,26 @@ const adminConsoleHtml = `<!doctype html>
                               <div class="staging-item-title">课程总数</div>
                               <div class="staging-item-value" id="stagingValCourseCount">0</div>
                               <div class="staging-item-diff" id="stagingDiffCourseCount">-</div>
+                            </div>
+                            <div class="staging-item">
+                              <div class="staging-item-title">学院 / 年级</div>
+                              <div class="staging-item-value" id="stagingValCollegeGradeCount">0 / 0</div>
+                              <div class="staging-item-diff">元数据</div>
+                            </div>
+                            <div class="staging-item">
+                              <div class="staging-item-title">历史缓存</div>
+                              <div class="staging-item-value" id="stagingValCacheUsed">否</div>
+                              <div class="staging-item-diff" id="stagingCacheSource">-</div>
+                            </div>
+                            <div class="staging-item">
+                              <div class="staging-item-title">强制刷新</div>
+                              <div class="staging-item-value" id="stagingValForceRefresh">否</div>
+                              <div class="staging-item-diff">运行参数</div>
+                            </div>
+                            <div class="staging-item">
+                              <div class="staging-item-title">允许发布</div>
+                              <div class="staging-item-value" id="stagingValAllowPublish">待校验</div>
+                              <div class="staging-item-diff" id="stagingPublishGate">-</div>
                             </div>
                           </div>
 
@@ -3975,11 +4033,27 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function heatmapColor(value) {
-        if (value <= 0) return "#EEF3F8";
-        if (value <= 25) return "#D8E8FF";
-        if (value <= 50) return "#9CC7FF";
-        if (value <= 75) return "#4D8FEF";
-        return "#1D4ED8";
+        if (value <= 0) return "#eef3f8";
+        if (value <= 25) return "#cfe0ff";
+        if (value <= 50) return "#8fbaff";
+        if (value <= 75) return "#4f86e8";
+        return "#1d4ed8";
+      }
+
+      function getHotBuildingsFromDetails(details) {
+        var counts = {};
+        (details || []).forEach(function(item) {
+          var roomName = String(item.roomName || "").trim();
+          if (!roomName) return;
+          var match = roomName.match(/^([A-Za-z]*\\d+|[^\\d\\s-]+)/);
+          var building = match ? match[1] : roomName.split(/[\\s-]/)[0];
+          if (!building) return;
+          counts[building] = (counts[building] || 0) + 1;
+        });
+        var ranked = Object.keys(counts).sort(function(left, right) {
+          return counts[right] - counts[left];
+        });
+        return ranked.slice(0, 3).join("、") || "暂无";
       }
 
       function renderHeatmapMeta(meta) {
@@ -4134,7 +4208,8 @@ const adminConsoleHtml = `<!doctype html>
             var cell = document.createElement("div");
             cell.className = "heatmap-cell";
             cell.style.background = heatmapColor(val);
-            cell.title = weekdays[day] + " 第" + section + "节\\n占用率：" + val + "%\\n占用教室：" + occupied + "/" + (meta.totalClassrooms || 0);
+            var hotBuildings = getHotBuildingsFromDetails(details);
+            cell.title = weekdays[day] + " 第" + section + "节\\n占用率：" + val + "%\\n占用教室：" + occupied + "/" + (meta.totalClassrooms || 0) + "\\n热门教学楼：" + hotBuildings;
             cell.setAttribute("aria-label", weekdays[day] + " 第" + section + "节，占用率 " + val + "%");
             var label = document.createElement("span");
             label.textContent = val + "%";
@@ -4823,6 +4898,7 @@ const adminConsoleHtml = `<!doctype html>
         var startDate = value("wizardStartDate") || "2026-09-01";
         var source = value("wizardSource") || "local-campus";
         var note = value("wizardNote") || (term + " 新学期全校课表首版");
+        var forceRefresh = Boolean($("wizardForceRefresh") && $("wizardForceRefresh").checked);
 
         // 自动计算版本并填充到 UI
         var versionInput = $("wizardVersion");
@@ -4920,27 +4996,38 @@ const adminConsoleHtml = `<!doctype html>
         if (majorCodes) {
           cliArgs.push("--major-codes=" + majorCodes);
         }
+        if (forceRefresh) {
+          cliArgs.push("--force-refresh");
+        }
 
         var cliArgsStr = cliArgs.join(" ");
 
-        // 构造命令文本
+        // 构造命令文本。换行和 bash 续行符用运行时字符生成，避免服务端模板字符串提前展开成浏览器脚本中的非法换行。
         var commandText = "";
         var shell = state.currentShell || "powershell";
+        var lineBreak = String.fromCharCode(10);
+        var bashContinuation = " " + String.fromCharCode(92) + lineBreak;
+        var winSlash = String.fromCharCode(92);
+        var projectDirWin = ["C:", "Users", "Katelya", "Documents", "VScode", "FosuClass"].join(winSlash);
+        var projectDirBash = "/c/Users/Katelya/Documents/VScode/FosuClass";
 
         if (shell === "cmd") {
+          commandText += "cd /d " + projectDirWin + lineBreak;
           envVars.forEach(function(ev) {
-            commandText += "set " + ev.name + "=" + ev.val + "\n";
+            commandText += "set " + ev.name + "=" + ev.val + lineBreak;
           });
           commandText += "npm run sync:" + source + " -- " + cliArgsStr;
         } else if (shell === "powershell") {
+          commandText += "cd " + projectDirWin + lineBreak;
           envVars.forEach(function(ev) {
-            commandText += '$env:' + ev.name + '="' + ev.val + '"\n';
+            commandText += '$env:' + ev.name + '="' + ev.val + '"' + lineBreak;
           });
           commandText += "npm run sync:" + source + " -- " + cliArgsStr;
         } else {
           // bash
+          commandText += "cd " + projectDirBash + lineBreak;
           envVars.forEach(function(ev) {
-            commandText += ev.name + "=" + ev.val + " \\\n";
+            commandText += ev.name + "=" + ev.val + bashContinuation;
           });
           commandText += "npm run sync:" + source + " -- " + cliArgsStr;
         }
@@ -5319,6 +5406,27 @@ const adminConsoleHtml = `<!doctype html>
               $("stagingValRoomCount").textContent = d.counts.classroomCount;
               $("stagingValTeacherCount").textContent = d.counts.teacherCount;
               $("stagingValCourseCount").textContent = d.counts.courseCount;
+              if ($("stagingValCollegeGradeCount")) {
+                $("stagingValCollegeGradeCount").textContent = (d.counts.collegeCount || 0) + " / " + (d.counts.gradeCount || 0);
+              }
+              var cacheUsage = meta.cacheUsage || {};
+              var usedCache = Boolean(meta.usedClassScheduleCache || cacheUsage.usedClassScheduleCache);
+              if ($("stagingValCacheUsed")) {
+                $("stagingValCacheUsed").textContent = usedCache ? "是" : "否";
+              }
+              if ($("stagingCacheSource")) {
+                $("stagingCacheSource").textContent = usedCache ? (meta.cacheSource || cacheUsage.cacheSource || "历史 classSchedules") : "-";
+              }
+              if ($("stagingValForceRefresh")) {
+                $("stagingValForceRefresh").textContent = meta.forceRefresh ? "是" : "否";
+              }
+              var safety = d.safety || {};
+              if ($("stagingValAllowPublish")) {
+                $("stagingValAllowPublish").textContent = safety.allowPublish === false ? "否" : "是";
+              }
+              if ($("stagingPublishGate")) {
+                $("stagingPublishGate").textContent = safety.allowPublish === false ? "后端已拦截" : (safety.requiresForceConfirm ? "需二次确认" : "可发布");
+              }
               
               // 3. 填充差异 Diff 趋势
               var renderDiffSpan = function(elId, delta) {
@@ -5385,6 +5493,13 @@ const adminConsoleHtml = `<!doctype html>
               if (res.warnings && res.warnings.length > 0) {
                 warnings = warnings.concat(res.warnings);
               }
+              if (safety.warnings && safety.warnings.length > 0) {
+                warnings = warnings.concat(safety.warnings);
+              }
+              if (safety.blockers && safety.blockers.length > 0) {
+                warnings = warnings.concat(safety.blockers.map(function(item) { return "发布阻断: " + item; }));
+                if (publishBtn) publishBtn.disabled = true;
+              }
               
               // 防呆熔断判断：若 classSchedules 数量为 0 且前端勾选了行政班，强行禁用发布并警告
               var isClassChecked = $("rangeClass") ? $("rangeClass").checked : true;
@@ -5415,10 +5530,10 @@ const adminConsoleHtml = `<!doctype html>
               var forceBox = $("forceConfirmContainer");
               var forceCheckbox = $("stagingForceConfirm");
               if (forceBox) {
-                if (d.diff.isBigChange) {
+                if (d.diff.isBigChange || safety.requiresForceConfirm) {
                   forceBox.style.display = "block";
                   if (forceCheckbox) forceCheckbox.checked = false;
-                  showToast("⚠️ 上传的数据变动率达 " + d.diff.changeRate + "%，已触发安全熔断，发布需要勾选下方二次确认！", "warning");
+                  showToast("⚠️ 上传的数据变动较大，发布需要勾选下方二次确认。", "warning");
                 } else {
                   forceBox.style.display = "none";
                 }
@@ -6143,6 +6258,13 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function getInitialSection() {
+        if (location.pathname.indexOf("/sync") >= 0) return "sync";
+        if (location.pathname.indexOf("/settings") >= 0) return "settings";
+        if (location.pathname.indexOf("/catalog") >= 0 || location.pathname.indexOf("/resources") >= 0) return "catalog";
+        if (location.pathname.indexOf("/quality") >= 0) return "quality";
+        if (location.pathname.indexOf("/notices") >= 0) return "notices";
+        if (location.pathname.indexOf("/news") >= 0) return "news";
+        if (location.pathname.indexOf("/config") >= 0 || location.pathname.indexOf("/version") >= 0) return "config";
         if (location.pathname.indexOf("/feedback") >= 0) return "feedback";
         return "dashboard";
       }
@@ -6507,7 +6629,7 @@ const adminConsoleHtml = `<!doctype html>
         });
 
         // 2. Preset 卡片切换绑定
-        var presets = ["full", "fast", "resources", "debug"];
+        var presets = ["full", "force", "fast", "resources", "debug"];
         presets.forEach(function(pr) {
           var card = $("preset-" + pr);
           if (card) {
@@ -6519,7 +6641,10 @@ const adminConsoleHtml = `<!doctype html>
               card.classList.add("active");
 
               // 应用 Preset 配置到 UI 控件
-              if (pr === "full") {
+              var forceBox = $("wizardForceRefresh");
+              if (forceBox) forceBox.checked = false;
+
+              if (pr === "full" || pr === "force") {
                 ["rangeClass", "rangeTeacher", "rangeClassroom", "rangeCourse", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
                   var cb = $(id);
                   if (cb) cb.checked = true;
@@ -6530,6 +6655,7 @@ const adminConsoleHtml = `<!doctype html>
                 if (cc) cc.value = "1";
                 var dy = $("wizardDelay");
                 if (dy) dy.value = "900";
+                if (forceBox && pr === "force") forceBox.checked = true;
               } else if (pr === "fast") {
                 ["rangeClass", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
                   var cb = $(id);
@@ -6634,6 +6760,7 @@ const adminConsoleHtml = `<!doctype html>
         ["wizardTerm", "wizardSource", "wizardConcurrency"].forEach(function(id) {
           safeBind(id, "change", updateWizardCommand);
         });
+        safeBind("wizardForceRefresh", "change", updateWizardCommand);
         ["rangeClass", "rangeTeacher", "rangeClassroom", "rangeCourse", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
           safeBind(id, "change", updateWizardCommand);
         });
@@ -6800,7 +6927,19 @@ router.get("/login", (req, res) => {
   sendAdminHtml(res);
 });
 
-router.get(["/dashboard", "/feedback"], (req, res) => {
+router.get([
+  "/dashboard",
+  "/feedback",
+  "/sync",
+  "/settings",
+  "/catalog",
+  "/resources",
+  "/quality",
+  "/notices",
+  "/news",
+  "/config",
+  "/version",
+], (req, res) => {
   if (!adminAuth.isAdminCookieValid(req)) {
     return res.redirect("/admin/login");
   }
