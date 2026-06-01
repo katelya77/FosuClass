@@ -245,6 +245,48 @@ router.post("/session/login-and-sync", scheduleLimiter, async (req, res) => {
   }
 });
 
+const { parsePersonalXlsBuffer } = require("../utils/personal-xls-parser");
+
+/**
+ * 3. 导入个人理论课表 XLS
+ * POST /api/fosu/personal/import-xls
+ */
+router.post("/import-xls", scheduleLimiter, async (req, res) => {
+  const { filename, fileBase64, targetTerm } = req.body;
+
+  if (!fileBase64) {
+    return res.status(200).json({
+      success: false,
+      code: "INVALID_PARAMS",
+      message: "参数校验失败，缺少 fileBase64 文件内容",
+    });
+  }
+
+  // 预估大小限制：大约 10MB 的 XLS 文件
+  if (fileBase64.length > 15 * 1024 * 1024) {
+    return res.status(200).json({
+      success: false,
+      code: "FILE_TOO_LARGE",
+      message: "文件过大，上传的课表文件大小不能超过 10MB",
+    });
+  }
+
+  try {
+    const buffer = Buffer.from(fileBase64, "base64");
+    const result = parsePersonalXlsBuffer(buffer, targetTerm);
+
+    return res.json({
+      success: true,
+      filename: filename || "学生个人课表.xls",
+      term: result.term,
+      courseCount: result.courses.length,
+      courses: result.courses,
+    });
+  } catch (error) {
+    return handlePersonalError(res, error);
+  }
+});
+
 router.handlePersonalError = handlePersonalError;
 
 module.exports = router;

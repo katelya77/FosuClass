@@ -14,6 +14,7 @@
       <text class="collapse-icon" style="font-size: 24rpx; color: #8a94a6;">{{importToolsCollapsed ? '▼ 展开' : '▲ 收起'}}</text>
     </view>
     <view class="import-grid" wx:if="{{!importToolsCollapsed}}">
+      <button class="import-btn import-xls-btn" bindtap="importXls">100网 xls 导入</button>
       <button class="import-btn" bindtap="exportJson">导出 JSON</button>
       <button class="import-btn" bindtap="importJson">导入 JSON</button>
       <button class="import-btn disabled" disabled>WakeUp (即将支持)</button>

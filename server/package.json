@@ -14,7 +14,10 @@
     "test-major": "node scripts/test-major.js",
     "test-class-schedule": "node scripts/test-class-schedule.js",
     "test-teacher-schedule": "node scripts/test-teacher-schedule.js",
-    "test-app-config-admin": "node scripts/test-app-config-admin.js"
+    "test-app-config-admin": "node scripts/test-app-config-admin.js",
+    "test:course-normalizer": "node scripts/test-catalog.js",
+    "test:personal-parser": "node scripts/test-personal-parser.js",
+    "test:import-personal-xls": "node scripts/test-import-personal-xls.js"
   },
   "dependencies": {
     "axios": "^1.6.8",
@@ -27,6 +30,7 @@
     "helmet": "^7.1.0",
     "iconv-lite": "^0.6.3",
     "node-cache": "^5.1.2",
-    "tough-cookie": "^4.1.4"
+    "tough-cookie": "^4.1.4",
+    "xlsx": "^0.18.5"
   }
 }

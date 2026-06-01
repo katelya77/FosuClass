@@ -22,10 +22,17 @@
       </view>
       <view class="row-arrow">›</view>
     </view>
+    <view class="setting-row" bindtap="goImportXls">
+      <view>
+        <view class="row-title">手动导入 100 网课表 (推荐)</view>
+        <view class="row-desc">免教务密码，直接上传下载的 xls 文件生成课表</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
     <view class="setting-row" bindtap="goLogin">
       <view>
-        <view class="row-title">个人课表同步（实验版）</view>
-        <view class="row-desc">使用学号密码登录并同步个人课表</view>
+        <view class="row-title">在线账号同步（实验版）</view>
+        <view class="row-desc">使用学号密码连接校园内网自动同步个人课表</view>
       </view>
       <view class="row-arrow">›</view>
     </view>

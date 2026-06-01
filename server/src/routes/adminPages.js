@@ -33,7 +33,7 @@ const adminConsoleHtml = `<!doctype html>
       --warning-soft: #fef3c7;
       --danger: #ef4444;
       --danger-soft: #fee2e2;
-      --radius: 8px;
+      --radius: 16px;
       --shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.02);
       --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
       --font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -107,12 +107,13 @@ const adminConsoleHtml = `<!doctype html>
     }
 
     /* 按钮规范 */
-    button, .btn, .pill, .badge {
+    button, .btn, .pill, .badge, .tag, .segmented-item {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       font-family: inherit;
-      line-height: normal;
+      line-height: 1;
+      box-sizing: border-box;
     }
     button, .btn {
       font-size: 14px;
@@ -982,6 +983,276 @@ const adminConsoleHtml = `<!doctype html>
     }
     .admin-runtime-error-bar button:hover {
       background: rgba(255, 255, 255, 0.3);
+    }
+
+    /* ========================================================
+     * 响应式与防重叠优化样式
+     * ======================================================== */
+    
+    /* 强状态防重叠规则 */
+    body.is-login-page #loginView {
+      display: block !important;
+    }
+    body.is-login-page #dashboardView {
+      display: none !important;
+    }
+    body.is-dashboard-page #loginView {
+      display: none !important;
+    }
+    body.is-dashboard-page #dashboardView {
+      display: grid !important;
+    }
+
+    /* 登录页美化及垂直居中 */
+    body.is-login-page {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      background: var(--bg);
+      padding: 16px;
+    }
+    body.is-login-page #loginView {
+      margin: 0 !important;
+    }
+
+    /* 顶部导航栏（移动端） */
+    .mobile-topbar {
+      display: none;
+      align-items: center;
+      justify-content: space-between;
+      height: 56px;
+      padding: 0 16px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 99;
+      box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+    }
+    .mobile-logo-wrap {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .mobile-menu-toggle {
+      border: 1px solid var(--border);
+      background: var(--panel-2);
+      border-radius: 8px;
+      padding: 6px 10px;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 600;
+    }
+    .mobile-menu-toggle:hover {
+      background: var(--border);
+    }
+
+    /* 侧边栏遮罩 */
+    .sidebar-overlay {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(15, 23, 42, 0.4);
+      backdrop-filter: blur(4px);
+      z-index: 98;
+      display: none;
+      opacity: 0;
+      transition: opacity 0.25s ease;
+    }
+    .sidebar-overlay.show {
+      display: block;
+      opacity: 1;
+    }
+
+    /* 热力图摘要卡片 */
+    .heatmap-summary-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .heatmap-summary-card {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      transition: var(--transition);
+    }
+    .heatmap-summary-card:hover {
+      border-color: var(--border-hover);
+    }
+    .heatmap-summary-title {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .heatmap-summary-value {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .heatmap-summary-desc {
+      font-size: 10px;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* 详情面板 */
+    .heatmap-detail-panel {
+      margin-top: 16px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      display: none;
+      animation: fadeIn 0.2s ease-out;
+    }
+    .heatmap-detail-panel.show {
+      display: block;
+    }
+    .heatmap-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 8px;
+      margin-top: 12px;
+      max-height: 200px;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .heatmap-detail-item {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      display: flex;
+      flex-direction: column;
+      font-size: 11px;
+    }
+    .heatmap-detail-room {
+      font-weight: 700;
+      color: var(--primary);
+    }
+    .heatmap-detail-course {
+      color: var(--text);
+      font-weight: 600;
+      margin-top: 2px;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+      overflow: hidden;
+    }
+    .heatmap-detail-teacher {
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    /* 响应式断点控制 */
+    @media (min-width: 768px) and (max-width: 1199.98px) {
+      .app-shell {
+        grid-template-columns: 80px 1fr;
+      }
+      .sidebar {
+        padding: 20px 8px;
+      }
+      .sidebar-brand-text {
+        display: none;
+      }
+      .sidebar-brand {
+        justify-content: center;
+        padding: 0;
+      }
+      .nav-item button {
+        justify-content: center;
+        padding: 12px 0;
+        font-size: 11px;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .sidebar-footer {
+        padding-top: 12px;
+      }
+      .env-info {
+        flex-direction: column;
+        gap: 6px;
+        align-items: center;
+      }
+      #logoutButton {
+        font-size: 10px;
+        padding: 4px;
+      }
+    }
+
+    @media (max-width: 767.98px) {
+      .app-shell {
+        grid-template-columns: 1fr;
+      }
+      .mobile-topbar {
+        display: flex;
+      }
+      .sidebar {
+        position: fixed;
+        top: 0; left: -260px;
+        width: 240px;
+        height: 100vh;
+        z-index: 99;
+        transition: left 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 4px 0 24px rgba(15, 23, 42, 0.15);
+      }
+      .sidebar.show {
+        left: 0;
+      }
+      .main-content {
+        padding: 16px;
+      }
+      .topbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+      }
+      .topbar-actions {
+        width: 100%;
+        justify-content: flex-end;
+      }
+      .dash-columns {
+        grid-template-columns: 1fr;
+      }
+      .stats-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .split-layout {
+        grid-template-columns: 1fr;
+      }
+      .table-container {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 479.98px) {
+      .stats-grid {
+        grid-template-columns: 1fr;
+      }
+      .form-row {
+        grid-template-columns: 1fr !important;
+      }
+      .topbar-actions {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .topbar-actions button {
+        width: 100%;
+      }
+      .tab-filter {
+        width: 100%;
+        overflow-x: auto;
+      }
+      .tab-filter button {
+        flex: 1;
+        white-space: nowrap;
+      }
     }
   </style>
 </head>
@@ -3804,6 +4075,114 @@ const adminConsoleHtml = `<!doctype html>
       safeBind("auditLogModuleFilter", "change", function() {
         state.auditModuleFilter = $("auditLogModuleFilter").value;
         renderAuditLogsTable();
+      });
+
+      // 移动端侧边栏交互绑定
+      safeBind("mobileMenuBtn", "click", function() {
+        var sidebar = $("appSidebar");
+        var overlay = $("sidebarOverlay");
+        if (sidebar) sidebar.classList.add("show");
+        if (overlay) overlay.classList.add("show");
+      });
+      safeBind("sidebarOverlay", "click", function() {
+        var sidebar = $("appSidebar");
+        var overlay = $("sidebarOverlay");
+        if (sidebar) sidebar.classList.remove("show");
+        if (overlay) overlay.classList.remove("show");
+      });
+
+      // 热力图切换全周/工作日/周末视图绑定
+      document.querySelectorAll("#heatmapDayType button").forEach(function(btn) {
+        btn.addEventListener("click", function() {
+          document.querySelectorAll("#heatmapDayType button").forEach(function(b) { b.classList.remove("active"); });
+          btn.classList.add("active");
+          state.heatmapDayType = btn.dataset.daytype;
+          if (state.classroomHeatmapData) {
+            renderGithubStyleHeatmap(state.classroomHeatmapData, state.heatmapDayType);
+          }
+        });
+      });
+
+      // 热力图筛选器选择事件绑定
+      safeBind("heatmapSemester", "change", function() { loadClassroomHeatmap(false); });
+      safeBind("heatmapWeek", "change", function() { loadClassroomHeatmap(false); });
+      
+      var buildingTimeout = null;
+      safeBind("heatmapBuilding", "input", function() {
+        if (buildingTimeout) clearTimeout(buildingTimeout);
+        buildingTimeout = setTimeout(function() {
+          loadClassroomHeatmap(false);
+        }, 400);
+      });
+
+      // 收起热力图详情面板
+      safeBind("closeHmDetailBtn", "click", function() {
+        var panel = $("classroomHeatmapDetailPanel");
+        if (panel) panel.classList.remove("show");
+      });
+
+      // 管理员个人 XLS 课表测试调试上传绑定
+      safeBind("xlsTestSelectBtn", "click", function() {
+        var input = $("xlsTestInput");
+        if (input) input.click();
+      });
+
+      safeBind("xlsTestInput", "change", function(e) {
+        var file = e.target.files[0];
+        if (!file) return;
+
+        if (file.size > 10 * 1024 * 1024) {
+          showToast("测试文件大小不能超过 10MB", "error");
+          return;
+        }
+
+        $("xlsTestInfo").textContent = "正在读取文件：" + file.name + "...";
+        
+        var reader = new FileReader();
+        reader.onload = function(evt) {
+          var base64 = evt.target.result.split(",")[1];
+          $("xlsTestInfo").textContent = "正在测试解析中...";
+          
+          api("/api/fosu/personal/import-xls", {
+            method: "POST",
+            body: JSON.stringify({
+              filename: file.name,
+              fileBase64: base64,
+              targetTerm: (state.dashboard && state.dashboard.currentSemester) || "2025-2026-2"
+            })
+          })
+          .then(function(res) {
+            var resultDiv = $("xlsTestResult");
+            if (res.success) {
+              $("xlsTestInfo").innerHTML = "✔ 解析成功！文件名：" + escapeHtml(res.filename);
+              resultDiv.style.display = "block";
+              resultDiv.style.borderColor = "var(--success)";
+              
+              var html = "<strong>解析概要：</strong><br/>" +
+                         "· 学期：" + res.term + "<br/>" +
+                         "· 课程总数：" + res.courseCount + " 门<br/><br/>" +
+                         "<strong>解析课程明细列表：</strong><br/>";
+              
+              res.courses.forEach(function(c, idx) {
+                html += (idx + 1) + ". <strong>" + escapeHtml(c.courseName) + "</strong> - " + escapeHtml(c.teacherName) + " | 周" + c.weekDay + " [" + c.sections.join(",") + "]节 | " + escapeHtml(c.classroom || "无教室") + " | " + c.weeks.length + "周<br/>";
+              });
+              resultDiv.innerHTML = html;
+            } else {
+              $("xlsTestInfo").textContent = "✘ 解析失败";
+              resultDiv.style.display = "block";
+              resultDiv.style.borderColor = "var(--danger)";
+              resultDiv.innerHTML = "<span style='color: var(--danger); font-weight:700;'>解析错误信息：</span><br/>" + escapeHtml(res.message || "未知错误");
+            }
+          })
+          .catch(function(err) {
+            $("xlsTestInfo").textContent = "✘ 上传失败";
+            var resultDiv = $("xlsTestResult");
+            resultDiv.style.display = "block";
+            resultDiv.style.borderColor = "var(--danger)";
+            resultDiv.innerHTML = "<span style='color: var(--danger); font-weight:700;'>网络请求错误：</span><br/>" + escapeHtml(err.message || "请求失败");
+          });
+        };
+        reader.readAsDataURL(file);
       });
 
       // 13. 初始化

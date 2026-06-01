@@ -187,6 +187,12 @@ Page({
     }
   },
 
+  importXls() {
+    wx.navigateTo({
+      url: "/pages/personal-sync/personal-sync?tab=xls",
+    });
+  },
+
   exportJson() {
     const text = JSON.stringify(this.data.courses, null, 2);
     wx.setClipboardData({
