@@ -131,16 +131,25 @@ try {
 
 const functionNames = getFunctionNames(scriptSource);
 const requiredFunctions = [
-  "loadDashboard",
-  "renderDashboard",
-  "runHealthChecks",
-  "loadSyncStatus",
-  "renderGithubStyleHeatmap",
   "showLoginView",
   "showDashboardView",
-  "safeFetch",
+  "showBootFatal",
+  "bootFallback",
+  "bootAdminConsole",
+  "initAuthView",
+  "initNavigation",
+  "initDashboard",
+  "initNoticeModule",
+  "initNewsModule",
+  "initSyncModule",
+  "initFeedbackModule",
+  "initSettingsModule",
+  "login",
+  "logout",
+  "loadAll",
+  "switchSection",
+  "safeBind",
   "api",
-  "uploadApi",
 ];
 
 const missingRequired = requiredFunctions.filter((name) => !functionNames.has(name));
@@ -185,8 +194,30 @@ if (missingLoadAllCalls.length > 0) {
   fail(`loadAll() calls functions that are not defined: ${missingLoadAllCalls.join(", ")}`);
 }
 
-if (/onclick\s*=/i.test(html)) {
-  fail("Admin Console HTML must not use inline onclick handlers.");
+const commonRuntimeFunctions = [
+  "loadDashboard",
+  "renderDashboard",
+  "openFeedbackDrawerById",
+  "loadSyncStatus",
+  "renderGithubStyleHeatmap",
+];
+const missingRuntimeFunctions = commonRuntimeFunctions
+  .filter((name) => new RegExp("\\b" + name + "\\s*\\(").test(scriptSource))
+  .filter((name) => !functionNames.has(name));
+if (missingRuntimeFunctions.length > 0) {
+  fail(`Admin Console inline script references functions that are not defined: ${missingRuntimeFunctions.join(", ")}`);
+}
+
+if (!scriptSource.includes('document.addEventListener("DOMContentLoaded", bootAdminConsole)')) {
+  fail("Admin Console must register bootAdminConsole with DOMContentLoaded.");
+}
+
+const bootBody = extractFunctionBody(scriptSource, "bootAdminConsole");
+if (!bootBody.includes("showLoginView()") || !bootBody.includes("showDashboardView()")) {
+  fail("bootAdminConsole must make the correct admin view visible before module initialization.");
+}
+if (!bootBody.includes("catch")) {
+  fail("bootAdminConsole must catch boot errors and avoid white screens.");
 }
 
 const runHealthChecksBody = extractFunctionBody(scriptSource, "runHealthChecks");

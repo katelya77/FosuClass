@@ -13,6 +13,7 @@ const adminAuth = require("../services/adminAuth");
 const appConfigService = require("../services/appConfigService");
 const feedbackService = require("../services/feedbackService");
 const releaseService = require("../services/releaseService");
+const relayService = require("../services/relayService");
 
 const STORAGE_DIR = path.join(__dirname, "../../storage");
 const zlib = require("zlib");
@@ -1966,6 +1967,8 @@ router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
   const courseScheduleCount = getItemCount("course-schedules") || (snapshotMeta ? snapshotMeta.courseScheduleCount : 0);
   const semester = snapshotMeta ? snapshotMeta.semester : (meta.snapshot ? meta.snapshot.semester : "2025-2026-2");
   const classSchedulesUpdatedAt = getUpdatedAt("class-schedules");
+  const relayUploads = relayService.listUploads();
+  const latestRelayUpload = relayUploads[0] || null;
   const payload = {
     dataSourceMode: config.DATA_SOURCE_MODE,
     activeReleaseVersion: releaseStatus.activeReleaseVersion,
@@ -1994,11 +1997,24 @@ router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
     classroomScheduleUpdatedAt: getUpdatedAt("classroom-schedules"),
     courseScheduleUpdatedAt: getUpdatedAt("course-schedules"),
     lastUploadTime: classSchedulesUpdatedAt || resourcesUpdatedAt || (snapshotMeta ? snapshotMeta.updatedAt : null),
+    intranetAccessible: false,
+    intranetMessage: "公网服务器无法访问学校内网是预期情况；主流程请在校园网电脑或接力代理端采集。",
+    latestRelayUpload,
     storageMounted: isStorageMounted(),
     storagePath: STORAGE_DIR,
     metaDetails: meta,
     adminSessionAuthenticated: adminAuth.isAdminRequest(req),
     apiTokenConfigured: Boolean(config.ADMIN_API_TOKEN),
+  };
+  payload.counts = {
+    collegeCount: payload.collegesCount || 0,
+    majorCount: payload.majorsCount || 0,
+    classScheduleCount: payload.classScheduleCount || 0,
+    adminClassCount: payload.adminClassCount || 0,
+    majorAggregateCount: payload.majorAggregateCount || 0,
+    teacherScheduleCount: payload.teacherScheduleCount || 0,
+    classroomScheduleCount: payload.classroomScheduleCount || 0,
+    courseScheduleCount: payload.courseScheduleCount || 0,
   };
 
   res.json({
@@ -2976,6 +2992,97 @@ function validateStagingData(data) {
 }
 
 /**
+ * Relay Agent: 管理员创建与审核接力采集任务。
+ */
+router.post("/relay/tasks", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const task = relayService.createTask(req.body || {});
+    writeAuditLog(req, "create", "relay-task", task.id, `创建接力任务 ${task.term}`);
+    return res.json({
+      success: true,
+      message: "接力任务已创建",
+      task,
+      runCommand: `npm run sync:relay-agent -- --server=${req.protocol}://${req.get("host")} --token=${task.relayToken} --term=${task.term}`,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/relay/tasks", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      tasks: relayService.listTasks(),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/relay/tasks/:id/revoke", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const task = relayService.revokeTask(req.params.id);
+    if (!task) {
+      return res.status(404).json({ success: false, message: "接力任务不存在" });
+    }
+    writeAuditLog(req, "revoke", "relay-task", req.params.id, "吊销接力任务 token");
+    return res.json({ success: true, message: "接力任务已吊销", task });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/relay/uploads", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      uploads: relayService.listUploads(),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/relay/uploads/:id/promote-to-staging", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const uploadResult = relayService.readUploadPayload(req.params.id);
+    if (!uploadResult) {
+      return res.status(404).json({ success: false, message: "接力上传记录不存在或文件已丢失" });
+    }
+
+    const stagingData = relayService.normalizeStagingData(uploadResult.payload, {
+      taskId: uploadResult.upload.taskId,
+      uploadId: uploadResult.upload.id,
+      uploaderNote: uploadResult.upload.uploaderNote,
+    });
+    const validation = validateStagingData(stagingData);
+    if (!validation.valid) {
+      return res.status(400).json({
+        success: false,
+        message: "接力上传无法提升为 Staging，数据校验不通过",
+        errors: validation.errors,
+        warnings: validation.warnings,
+      });
+    }
+
+    writeJsonAtomic(STAGING_LATEST_PATH, stagingData);
+    const upload = relayService.markUploadStaged(req.params.id);
+    writeAuditLog(req, "promote", "relay-upload", req.params.id, `将接力上传设为当前 Staging: ${stagingData.term}`);
+
+    return res.json({
+      success: true,
+      message: "接力上传已提升为当前 Staging，请继续核对 diff 后发布",
+      upload,
+      warnings: validation.warnings,
+      summary: relayService.summarizeStagingData(stagingData),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
  * 5. GET /api/admin/sync/status
  * 获取同步中心状态及健康度检查 (带教务网DNS解析测试)
  */
@@ -2997,6 +3104,7 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
       intranetAccessible = false;
     }
 
+    const relayUploads = relayService.listUploads();
     return res.json({
       success: true,
       data: {
@@ -3008,6 +3116,10 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
         courseScheduleUpdatedAt: syncMeta["course-schedules"]?.updatedAt || null,
         lastUploadTime: syncMeta["class-schedules"]?.updatedAt || syncMeta["sync-meta"]?.updatedAt || null,
         intranetAccessible,
+        intranetMessage: intranetAccessible
+          ? "当前服务器 DNS 能解析教务域名，但主流程仍建议使用本机校园网采集。"
+          : "公网服务器无法访问学校内网是预期情况；请使用本机校园网同步或接力代理端。",
+        latestRelayUpload: relayUploads[0] || null,
         counts: {
           classScheduleCount: syncMeta["class-schedules"]?.itemCount || 0,
           adminClassCount: syncMeta["class-schedules"]?.adminClassCount || 0,
@@ -3298,6 +3410,9 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
     });
 
     writeAuditLog(req, "publish", "sync-release", status.activeReleaseVersion, `将 Staging 数据正式发布为版本 ${status.activeReleaseVersion}`);
+    if (stagingData.relayUploadId) {
+      relayService.markUploadPublished(stagingData.relayUploadId, status.activeReleaseVersion);
+    }
 
     return res.json({
       success: true,
@@ -3392,59 +3507,54 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
     const term = req.query.term || "2026-2027-1";
     const start = req.query.start || "2026-09-01";
     const note = req.query.note || `${term}新学期课表首版`;
-    const isDryRun = req.query.dryRun === "true";
-    const publish = req.query.publish === "true";
-    
-    const outputSuffix = isDryRun ? "dry-run" : "full";
-
     const commands = [
       {
-        id: "quick",
-        name: "快速同步",
-        command: `npm run sync:quick -- --term=${term}`,
-        scene: "日常课表小更新、快速修复、刷新当前学期基础数据",
-        precondition: "教务系统中有小范围改动，且已在本地获得登录态 Cookie",
-        duration: "1 ~ 3 分钟",
-        intranetRequired: true,
-        risk: "低",
-        failureReason: "登录 Cookie 过期、学校 DNS 故障、网络请求超时",
-        solution: "运行 npm run login 重新登录授权，并诊断网络后再试"
-      },
-      {
-        id: "fresh",
-        name: "全量同步",
-        command: `npm run sync:fresh -- --term=${term} --start=${start}`,
-        scene: "新学期首次课表同步，抓取全校年级专业以重建行政班级排课",
-        precondition: "已在本地完成教务授权登录，且教务系统已发布该学期课表",
-        duration: "5 ~ 15 分钟",
+        id: "local-campus",
+        name: "本机校园网同步",
+        command: `npm run sync:local-campus -- --term=${term} --start=${start} --output=./staging/${term}-full.json`,
+        scene: "管理员自己的电脑已连接校园网，直接访问 100.fosu.edu.cn 抓取全校课表并生成 Staging JSON",
+        precondition: "本机处于校园网或学校 VPN 环境，已完成教务系统登录授权",
+        duration: "8 ~ 20 分钟",
         intranetRequired: true,
         risk: "中",
-        failureReason: "网络高频请求触发教务网限流封禁、内网 VPN 掉线",
-        solution: "调整 SYNC_CLASS_GRADES 过滤条件，减少单轮抓取数量或重新拨号"
+        failureReason: "本机未连校园网、登录态过期、教务系统限流或新学期课表尚未发布",
+        solution: "在本机重新登录教务系统，确认能访问 100.fosu.edu.cn 后重跑；输出只生成 Staging，不会发布线上"
       },
       {
-        id: "resources",
-        name: "资源同步",
-        command: `npm run sync:resources -- --term=${term}`,
-        scene: "基于已有班级课表派生出教师课表、教室占用、全校课程以及构建教室热力图所需的资源维度数据",
-        precondition: "已经成功抓取并上传当前学期的班级课表，可以直连教务网或 EasyConnect",
-        duration: "2 ~ 5 分钟",
+        id: "local-upload",
+        name: "上传本地 Staging",
+        command: `npm run sync:local-upload -- --file=./staging/${term}-full.json --server=https://class.katelya.eu.org`,
+        scene: "把本机生成的 Staging JSON 上传到 VPS 后台暂存区，等待管理员比对与发布",
+        precondition: "已生成合法 Staging JSON，并持有管理员上传令牌",
+        duration: "15 ~ 60 秒",
+        intranetRequired: false,
+        risk: "低",
+        failureReason: "JSON 校验不通过、ADMIN_API_TOKEN 无效、VPS 上传超时",
+        solution: "先运行 npm run test:course-normalizer，再检查 Staging JSON 的 schemaVersion、term、classSchedules 等字段"
+      },
+      {
+        id: "relay-agent",
+        name: "接力代理端同步",
+        command: `npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=RELAY_TOKEN --term=${term}`,
+        scene: "把轻量采集器发给在校同学，由对方在校园网环境上传 Staging JSON 到接力审核区",
+        precondition: "管理员已创建未过期 relay task；接力同学在校园网环境运行代理端",
+        duration: "8 ~ 20 分钟",
         intranetRequired: true,
-        risk: "中高",
-        failureReason: "本地没有当前学期已抓取的班级课表缓存数据",
-        solution: "先执行 sync:fresh 同步全校课表，生成基础缓存后再执行本命令"
+        risk: "低",
+        failureReason: "relay token 过期、上传次数用尽、接力端未连接校园网",
+        solution: "在后台重新创建接力任务；接力上传后必须由管理员提升为 Staging 并再次发布"
       },
       {
         id: "release",
-        name: "生成发布快照",
-        command: `npm run sync:release -- --term=${term} --note="${note}"`,
-        scene: "打包本地缓存数据，正式激活生成微信小程序端拉取的数据版本快照",
-        precondition: "本地已经同步好了完备的班级与资源数据缓存，校验无误",
+        name: "发布当前 Staging",
+        command: "在后台 Staging 预览中点击「发布为正式版本」",
+        scene: "VPS 将当前 Staging 校验通过的数据发布为正式 release，发布前会备份旧版本",
+        precondition: "Staging 已上传、diff 已核对；大幅变动需要管理员强确认",
         duration: "15 ~ 30 秒",
         intranetRequired: false,
         risk: "中 (影响小程序线上展示)",
-        failureReason: "本地数据结构校验失败 (如关键排课字段缺失)、ADMIN_API_TOKEN 配置无效",
-        solution: "运行 test:course-normalizer，排查校验提示对数据源字段进行修补"
+        failureReason: "Staging 数据校验失败、变动率超过熔断阈值、release 写入失败",
+        solution: "查看 Staging diff 与校验警告，确认是新学期更替后再强制发布"
       },
       {
         id: "normalizer",
@@ -3459,16 +3569,16 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
         solution: "检查 miniprogram/utils/courseNormalizer.js 中对体育课等合并机制的适配"
       },
       {
-        id: "new-term",
-        name: "新学期一键向导聚合脚本",
-        command: `npm run sync:new-term -- --term=${term} --start=${start} --note="${note}" --output=./staging/${term}-${outputSuffix}.json${publish ? " --publish=true" : ""}`,
-        scene: "新学期开学前，一键自动完成网络连通诊断、全量拉取、资源派生、本地校验，并输出 Staging JSON 成果物",
-        precondition: "确保本地 EasyConnect VPN 连通良好并完成教务网登录",
+        id: "server-direct",
+        name: "服务器直连兼容模式",
+        command: `npm run sync:fresh -- --term=${term} --start=${start}`,
+        scene: "仅保留给未来具备校园网出口的服务器环境；当前 VPS 不能访问 100.fosu.edu.cn 是预期情况",
+        precondition: "服务器必须真实处于可访问学校内网的网络环境",
         duration: "8 ~ 20 分钟",
         intranetRequired: true,
-        risk: "中 (生成 Staging JSON 不影响小程序线上数据)",
-        failureReason: "前面各抓取脚本出错提前返回、或者 normalizer 测试未通过",
-        solution: "详细分析终端打印的报错，若是教务网未公布课表或新生班级过少，可使用本地 staging 机制手动修补后上传"
+        risk: "中高",
+        failureReason: "公网 VPS 无法访问学校内网或校园 VPN，不是用户本机网络异常",
+        solution: "切回本机校园网同步或接力代理端同步"
       }
     ];
 

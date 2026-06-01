@@ -219,6 +219,11 @@ function getRetryDelay(attempt) {
 }
 
 async function uploadToVps(endpoint, data, options = {}) {
+  if (getEnvFlag("SYNC_LOCAL_STAGING_ONLY", false)) {
+    console.log(`ℹ️ 本机 Staging 模式：跳过 VPS 写入 ${endpoint}`);
+    return { success: true, skipped: true, endpoint };
+  }
+
   if (!ADMIN_API_TOKEN) {
     console.error("❌ 本地未配置 ADMIN_API_TOKEN！无法向 VPS 写入数据。");
     throw new Error("Missing ADMIN_API_TOKEN");
@@ -1167,6 +1172,67 @@ async function handleOfflineRelease() {
   fs.writeFileSync(path.join(debugDir, "sync-report-latest.json"), JSON.stringify(report, null, 2), "utf-8");
   console.log(`💾 总结报告已保存至 .debug/sync-report-latest.json`);
   console.log("\n🎉 [Release] 离线暴力快照发布完成！");
+}
+
+async function handleLocalStagingUpload(params) {
+  const filePath = path.resolve(process.cwd(), params.file || params.input || "");
+  if (!params.file && !params.input) {
+    throw new Error("缺少 --file=./staging/term-full.json 参数");
+  }
+  if (!fs.existsSync(filePath)) {
+    throw new Error(`Staging JSON 文件不存在: ${filePath}`);
+  }
+  if (!ADMIN_API_TOKEN) {
+    throw new Error("缺少 ADMIN_API_TOKEN，无法上传到后台 Staging 区");
+  }
+
+  const server = String(params.server || FOSU_API_BASE).replace(/\/+$/, "");
+  const url = `${server}/api/admin/sync/staging/upload`;
+  const body = fs.readFileSync(filePath);
+  console.log(`📤 正在上传本地 Staging JSON 到 VPS 暂存区: ${url}`);
+  const response = await axios.post(url, body, {
+    headers: {
+      "Content-Type": "application/json",
+      "x-admin-token": ADMIN_API_TOKEN,
+    },
+    proxy: false,
+    timeout: parseInt(process.env.SYNC_UPLOAD_TIMEOUT_MS || "120000", 10),
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+  });
+  console.log(`✅ Staging 上传成功: ${JSON.stringify(response.data)}`);
+  console.log("ℹ️ 该操作只写入 Staging，不会发布到小程序线上 release。");
+  return response.data;
+}
+
+async function handleLocalCampusStaging(page, params) {
+  console.log("\n================ [本机校园网采集 Staging] ================");
+  process.env.SYNC_LOCAL_STAGING_ONLY = "true";
+  process.env.SYNC_CLASS_CRAWL_ONLY = "true";
+
+  const catalog = await syncCatalog(page);
+  const majors = await syncMajors(page, catalog);
+  const allClassSchedules = await syncClassSchedules(page, catalog, majors);
+  if (!allClassSchedules || allClassSchedules.length === 0) {
+    throw new Error("本机校园网采集结果为空，未生成 Staging JSON");
+  }
+
+  const snapshot = buildSnapshot(catalog, majors, allClassSchedules, null, {
+    resources: {
+      includeTeachers: true,
+      includeClassrooms: true,
+      includeCourses: true,
+    },
+  });
+  validateLocalReleaseSnapshot(snapshot);
+
+  const output = path.resolve(process.cwd(), params.output || path.join("staging", `${snapshot.semester || params.term || "term"}-full.json`));
+  fs.mkdirSync(path.dirname(output), { recursive: true });
+  fs.writeFileSync(output, JSON.stringify(snapshot, null, 2), "utf-8");
+  console.log(`💾 Staging JSON 已生成: ${output}`);
+  console.log(`📊 行政班课表: ${snapshot.coverage.classScheduleCount || 0}, 教师课表: ${snapshot.coverage.teacherScheduleCount || 0}, 教室课表: ${snapshot.coverage.classroomScheduleCount || 0}, 课程课表: ${snapshot.coverage.courseScheduleCount || 0}`);
+  console.log("ℹ️ 当前命令不会上传、不会发布；下一步运行 sync:local-upload 上传到 VPS Staging。");
+  return snapshot;
 }
 
 const RESOURCE_SYNC_CONFIGS = {
@@ -2982,7 +3048,7 @@ async function main() {
   }
 
   // 如果是一键同步任务，则强制执行环境预检
-  if (action === "fresh" || action === "quick") {
+  if (action === "fresh" || action === "quick" || action === "local-campus") {
     runPreflight();
   }
 
@@ -2991,6 +3057,11 @@ async function main() {
   if (uploadOnlyMode || action === "upload-cache") {
     console.log("ℹ️ 将直接执行本地课表缓存上传，不重新打开浏览器抓取。");
     await handleUploadOnly();
+    return;
+  }
+
+  if (action === "local-upload") {
+    await handleLocalStagingUpload(params);
     return;
   }
 
@@ -3053,6 +3124,8 @@ async function main() {
       await handleFreshSync(page);
     } else if (action === "quick") {
       await handleQuickSync(page);
+    } else if (action === "local-campus") {
+      await handleLocalCampusStaging(page, params);
     } else if (action === "release") {
       // 暴力快照发布默认环境变量配置
       if (!process.env.SYNC_CLASS_GRADES) {
@@ -3138,7 +3211,7 @@ async function main() {
       console.log("\n🎉 [同步大成功] 本地所有数据已全量同步至 VPS！");
     } else {
       console.error(`❌ 未知的同步参数: ${action}`);
-      console.log("支持的参数: catalog | majors | class | resources | release | fresh | quick | all");
+      console.log("支持的参数: catalog | majors | class | resources | local-campus | local-upload | release | fresh | quick | all");
     }
 
   } catch (error) {
