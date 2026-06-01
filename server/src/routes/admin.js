@@ -2955,18 +2955,23 @@ function validateStagingData(data) {
     }
   });
 
+  const includeScopes = data.meta?.includeScopes || [];
+  const hasClassSchedules = includeScopes.length === 0 || includeScopes.includes("classSchedules");
+
   // 支持在 resources 内部或顶层
   const classSchedules = data.classSchedules || data.resources?.classSchedules;
-  if (!classSchedules || !Array.isArray(classSchedules) || classSchedules.length === 0) {
-    errors.push("缺少班级课程表数据 (classSchedules)");
-  } else {
-    classSchedules.forEach((item, index) => {
-      if (index < 5) {
-        if (!item.className) {
-          warnings.push(`classSchedules[${index}] 缺少 className 字段`);
+  if (hasClassSchedules) {
+    if (!classSchedules || !Array.isArray(classSchedules) || classSchedules.length === 0) {
+      errors.push("缺少班级课程表数据 (classSchedules)");
+    } else {
+      classSchedules.forEach((item, index) => {
+        if (index < 5) {
+          if (!item.className) {
+            warnings.push(`classSchedules[${index}] 缺少 className 字段`);
+          }
         }
-      }
-    });
+      });
+    }
   }
 
   const resourceKeys = [
@@ -3280,6 +3285,7 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
         releaseVersion: stagingData.releaseVersion,
         generatedAt: stagingData.generatedAt,
         releaseNote: stagingData.releaseNote || "",
+        meta: stagingData.meta || null,
         counts: {
           classScheduleCount: classSchedules.length,
           adminClassCount,

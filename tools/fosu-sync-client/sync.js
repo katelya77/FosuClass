@@ -11,6 +11,7 @@ const crypto = require("crypto");
 const diagnose = require("./diagnose");
 const envPath = path.resolve(__dirname, ".env");
 require("dotenv").config({ path: envPath });
+const ALL_SCOPES = ["classSchedules", "teacherSchedules", "classroomSchedules", "courseSchedules", "classrooms", "teachers", "courses"];
 
 console.log(`[env] .env path: ${envPath}`);
 console.log(`[env] FOSU_API_BASE: ${process.env.FOSU_API_BASE || "https://class.katelya.eu.org"}`);
@@ -533,7 +534,27 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       audienceType: "student",
     });
   });
-  const resources = normalizeSnapshotResources(resourceSchedules || buildSnapshotResources(updatedSchedules, options.resources || {}));
+
+  // 读取本地已有的 resources 缓存用于合并
+  let oldResources = { teachers: [], classrooms: [], courses: [], teacherSchedules: [], classroomSchedules: [], courseSchedules: [] };
+  const oldResourcesPath = path.join(__dirname, ".debug", "resources-latest.json");
+  if (fs.existsSync(oldResourcesPath)) {
+    try {
+      oldResources = JSON.parse(fs.readFileSync(oldResourcesPath, "utf-8"));
+    } catch (e) {}
+  }
+
+  const includeScopes = global.CLI_PARAMS?.includeScopes || ALL_SCOPES;
+  const derivedResources = buildSnapshotResources(updatedSchedules, options.resources || {});
+  
+  const resources = normalizeSnapshotResources(resourceSchedules || {
+    teachers: options.resources?.includeTeachers ? derivedResources.teachers : (oldResources.teachers || []),
+    classrooms: options.resources?.includeClassrooms ? derivedResources.classrooms : (oldResources.classrooms || []),
+    courses: options.resources?.includeCourses ? derivedResources.courses : (oldResources.courses || []),
+    teacherSchedules: options.resources?.includeTeacherSchedules ? derivedResources.teacherSchedules : (oldResources.teacherSchedules || []),
+    classroomSchedules: options.resources?.includeClassroomSchedules ? derivedResources.classroomSchedules : (oldResources.classroomSchedules || []),
+    courseSchedules: options.resources?.includeCourseSchedules ? derivedResources.courseSchedules : (oldResources.courseSchedules || []),
+  });
   
   const collegeCount = (catalog.colleges || []).length;
   const majorCount = (majors || []).length;
@@ -565,6 +586,19 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
   ];
 
   const cliParams = global.CLI_PARAMS || {};
+  const generatedCommand = global.GENERATED_COMMAND || `node sync.js local-campus ${process.argv.slice(2).join(" ")}`;
+
+  // 拼接 scopeSummary 文本
+  const summaryParts = [];
+  if (includeScopes.includes("classSchedules")) summaryParts.push("行政班课表");
+  if (includeScopes.includes("teachers")) summaryParts.push("教师列表");
+  if (includeScopes.includes("teacherSchedules")) summaryParts.push("教师课表");
+  if (includeScopes.includes("classrooms")) summaryParts.push("教室列表");
+  if (includeScopes.includes("classroomSchedules")) summaryParts.push("教室课表");
+  if (includeScopes.includes("courses")) summaryParts.push("课程列表");
+  if (includeScopes.includes("courseSchedules")) summaryParts.push("课程课表");
+  const scopeSummary = "更新: " + summaryParts.join(", ") + "; 保留其他历史数据";
+
   return {
     schemaVersion: "1.0",
     releaseVersion: cliParams.version || version,
@@ -577,6 +611,17 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     releaseNote: cliParams.note || "全校课表数据已更新",
     source: "local-sync-client",
     disclaimer: "本工具为个人开发，非学校官方服务。课程数据由开发者整理维护及用户反馈修正，仅供参考，具体安排请以任课教师通知及正式通知为准。",
+    
+    // 注入 meta
+    meta: {
+      includeScopes,
+      scopeSummary,
+      generatedCommand,
+      generatedAt: new Date().toISOString(),
+      term: activeSemester,
+      startDate: cliParams.start || "2026-09-01"
+    },
+
     catalog: {
       semesters: catalog.semesters || [],
       colleges: catalog.colleges || [],
@@ -599,10 +644,11 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       noScheduleMajorCount,
       teacherScheduleCount,
       classroomScheduleCount,
-      courseScheduleCount
+      courseScheduleCount,
     }
   };
 }
+
 
 async function uploadSnapshot(buffer) {
   const url = `${FOSU_API_BASE}/api/admin/release/upload`;
@@ -1210,22 +1256,42 @@ async function handleLocalCampusStaging(page, params) {
   process.env.SYNC_LOCAL_STAGING_ONLY = "true";
   process.env.SYNC_CLASS_CRAWL_ONLY = "true";
 
-  if (!process.env.SYNC_CLASS_SCOPE) {
-    process.env.SYNC_CLASS_SCOPE = "all";
+  const includeScopes = global.CLI_PARAMS?.includeScopes || ALL_SCOPES;
+
+  const syncCollegeCodes = process.env.SYNC_CLASS_COLLEGE_CODES ? process.env.SYNC_CLASS_COLLEGE_CODES.split(",").map(c => c.trim()).filter(Boolean) : null;
+  const syncGrades = process.env.SYNC_CLASS_GRADES ? process.env.SYNC_CLASS_GRADES.split(",").map(g => g.trim()).filter(Boolean) : null;
+  const syncMajorCodes = process.env.SYNC_CLASS_MAJOR_CODES ? process.env.SYNC_CLASS_MAJOR_CODES.split(",").map(m => m.trim()).filter(Boolean) : null;
+  const isFiltered = !!(syncCollegeCodes || syncGrades || syncMajorCodes);
+
+  if (!isFiltered && includeScopes.includes("classSchedules")) {
+    if (!process.env.SYNC_CLASS_SCOPE) {
+      process.env.SYNC_CLASS_SCOPE = "all";
+    }
   }
 
   const catalog = await syncCatalog(page);
   const majors = await syncMajors(page, catalog);
-  const allClassSchedules = await syncClassSchedules(page, catalog, majors);
-  if (!allClassSchedules || allClassSchedules.length === 0) {
-    throw new Error("本机校园网采集结果为空，未生成 Staging JSON");
+  
+  let allClassSchedules = [];
+  if (includeScopes.includes("classSchedules")) {
+    allClassSchedules = await syncClassSchedules(page, catalog, majors);
+    if (!allClassSchedules || allClassSchedules.length === 0) {
+      throw new Error("本机校园网采集结果为空，未生成 Staging JSON");
+    }
+  } else {
+    console.log("ℹ️ 同步范围不包含行政班课表 (classSchedules)。从本地加载已有缓存。");
+    const { items } = readClassSchedulesFromFile();
+    allClassSchedules = items || [];
   }
 
   const snapshot = buildSnapshot(catalog, majors, allClassSchedules, null, {
     resources: {
-      includeTeachers: true,
-      includeClassrooms: true,
-      includeCourses: true,
+      includeTeachers: includeScopes.includes("teachers"),
+      includeClassrooms: includeScopes.includes("classrooms"),
+      includeCourses: includeScopes.includes("courses"),
+      includeTeacherSchedules: includeScopes.includes("teacherSchedules"),
+      includeClassroomSchedules: includeScopes.includes("classroomSchedules"),
+      includeCourseSchedules: includeScopes.includes("courseSchedules"),
     },
   });
   validateLocalReleaseSnapshot(snapshot);
@@ -2498,13 +2564,25 @@ async function syncClassSchedules(page, catalog, majors) {
   const syncMajorCodes = process.env.SYNC_CLASS_MAJOR_CODES ? process.env.SYNC_CLASS_MAJOR_CODES.split(",").map(m => m.trim()).filter(Boolean) : null;
   const isFiltered = !!(syncCollegeCodes || syncGrades || syncMajorCodes);
 
+  const includeScopes = global.CLI_PARAMS?.includeScopes || ALL_SCOPES;
+  const syncClassScope = global.CLI_PARAMS?.classScope || process.env.SYNC_CLASS_SCOPE || "";
+
+  // 拦截防误爬空跑：如果勾选了行政班课表且不是精准过滤，且未设 all
+  if (includeScopes.includes("classSchedules")) {
+    if (!isFiltered && syncClassScope !== "all") {
+      const errMsg = `❌ 运行终止：当前 includeScopes 包含行政班课表，但未设置 SYNC_CLASS_SCOPE=all 或 --class-scope=all，且没有精准过滤条件。请使用后台同步中心生成的完整命令。`;
+      console.error(errMsg);
+      throw new Error(errMsg);
+    }
+  }
+
   if (isFiltered) {
     console.log("ℹ️ 课表同步已启用环境变量限制过滤：");
     if (syncCollegeCodes) console.log(`   - 学院限制: ${syncCollegeCodes.join(", ")}`);
     if (syncGrades) console.log(`   - 年级限制: ${syncGrades.join(", ")}`);
     if (syncMajorCodes) console.log(`   - 专业代码限制: ${syncMajorCodes.join(", ")}`);
   } else {
-    console.log("ℹ️ 课表同步未设置环境变量限制。默认仅同步当前学年起最近 4 个在校活跃年级，并启用限速。");
+    console.log("ℹ️ 课表同步未设置环境变量限制。默认仅同步当前学年起最近 5 个在校活跃年级，并启用限速。");
   }
 
   if (skipNoScheduleCache && !recheckNoSchedule) {
@@ -2513,7 +2591,6 @@ async function syncClassSchedules(page, catalog, majors) {
     console.log("ℹ️ SYNC_RECHECK_NO_SCHEDULE=true，将重新检查此前确认无排课的专业。");
   }
 
-  const syncClassScope = process.env.SYNC_CLASS_SCOPE || "";
 
   const isFiveYearMajor = (name) => {
     const n = name || "";
@@ -2549,11 +2626,11 @@ async function syncClassSchedules(page, catalog, majors) {
 
       let activeGrades = [];
       try {
-        activeGrades = getActiveGradesBySemester(activeSemester, { originalGrades: catalog.grades, activeGradeCount: 4 });
+        activeGrades = getActiveGradesBySemester(activeSemester, { originalGrades: catalog.grades, activeGradeCount: 5 });
       } catch (e) {
-        // 兜底：如果报错，则默认只同步最近 4 个年级
+        // 兜底：如果报错，则默认只同步最近 5 个年级
         const currentYear = new Date().getFullYear();
-        for (let i = 3; i >= 0; i--) {
+        for (let i = 4; i >= 0; i--) {
           activeGrades.push(String(currentYear - i));
         }
       }
@@ -3051,11 +3128,54 @@ async function main() {
     }
   }
 
-  global.CLI_PARAMS = params;
+  // 还原真实执行指令
+  global.GENERATED_COMMAND = `node sync.js ${action} ${args.join(" ")}`;
 
+  // 将 CLI 参数映射到环境变量
   if (params.term) {
     process.env.PREFERRED_SEMESTER = params.term;
   }
+  if (params.start) {
+    process.env.SYNC_TERM_START_DATE = params.start;
+  }
+  if (params.include) {
+    process.env.SYNC_INCLUDE_SCOPES = params.include;
+  }
+  if (params["class-scope"]) {
+    process.env.SYNC_CLASS_SCOPE = params["class-scope"];
+  }
+  if (params.grades) {
+    process.env.SYNC_CLASS_GRADES = params.grades;
+    process.env.SYNC_GRADES = params.grades;
+  }
+  if (params["college-codes"]) {
+    process.env.SYNC_CLASS_COLLEGE_CODES = params["college-codes"];
+  }
+  if (params["major-codes"]) {
+    process.env.SYNC_CLASS_MAJOR_CODES = params["major-codes"];
+  }
+  if (params.concurrency) {
+    process.env.SYNC_RESOURCE_MAX_CONCURRENCY = params.concurrency;
+  }
+  if (params["delay-ms"]) {
+    process.env.SYNC_RESOURCE_REQUEST_DELAY_MS = params["delay-ms"];
+  }
+  if (params["crawl-only"]) {
+    process.env.SYNC_CLASS_CRAWL_ONLY = "true";
+  }
+  if (params["upload-only"]) {
+    process.env.SYNC_CLASS_UPLOAD_ONLY = "true";
+  }
+  if (params.verbose) {
+    process.env.SYNC_VERBOSE = "true";
+  }
+
+  const includeStr = params.include || process.env.SYNC_INCLUDE_SCOPES || "";
+  const includeScopes = includeStr ? includeStr.split(",").map(x => x.trim()).filter(Boolean) : ALL_SCOPES;
+  params.includeScopes = includeScopes;
+  
+  global.CLI_PARAMS = params;
+
   if (params["dry-run"] || params["dry_run"]) {
     process.env.SYNC_RELEASE_DRY_RUN = "true";
   }
