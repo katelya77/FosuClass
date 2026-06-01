@@ -148,6 +148,26 @@ function verifyAdminToken(req, res, next) {
   next();
 }
 
+function verifyAdminWriteAccess(req, res, next) {
+  if (!adminAuth.isAdminConfiguredForCurrentEnv()) {
+    safeLog("admin-write-auth-failed", { reason: "ADMIN_TOKEN or ADMIN_PASSWORD not configured" });
+    return res.status(503).json({
+      success: false,
+      message: "生产环境未配置 ADMIN_TOKEN 或 ADMIN_PASSWORD，后台已关闭",
+    });
+  }
+
+  if (adminAuth.isAdminRequest(req)) {
+    return next();
+  }
+
+  safeLog("admin-write-auth-failed", { reason: "missing cookie session or ADMIN_API_TOKEN" });
+  return res.status(401).json({
+    success: false,
+    message: "请先登录后台或提供有效 ADMIN_API_TOKEN",
+  });
+}
+
 router.post("/login", adminAuth.adminLoginLimiter, (req, res) => {
   if (!adminAuth.isAdminConfiguredForCurrentEnv()) {
     return res.status(503).json({
@@ -280,6 +300,462 @@ function readJsonArray(filePath) {
     safeLog("read-json-array-failed", { filePath, error: error.message });
     return [];
   }
+}
+
+function readJsonFile(filePath, fallback) {
+  if (!fs.existsSync(filePath)) {
+    return fallback;
+  }
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    return data == null ? fallback : data;
+  } catch (error) {
+    safeLog("read-json-file-failed", { filePath, error: error.message });
+    return fallback;
+  }
+}
+
+function toInteger(value) {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return Math.trunc(value);
+  }
+  const match = String(value == null ? "" : value).match(/\d+/);
+  return match ? parseInt(match[0], 10) : NaN;
+}
+
+function uniqueNumbers(values, min, max) {
+  const seen = new Set();
+  const result = [];
+  (values || []).forEach((value) => {
+    const num = toInteger(value);
+    if (Number.isFinite(num) && num >= min && num <= max && !seen.has(num)) {
+      seen.add(num);
+      result.push(num);
+    }
+  });
+  return result.sort((left, right) => left - right);
+}
+
+function rangeNumbers(start, end, min, max) {
+  const first = toInteger(start);
+  const last = toInteger(end);
+  if (!Number.isFinite(first)) {
+    return [];
+  }
+  if (!Number.isFinite(last)) {
+    return uniqueNumbers([first], min, max);
+  }
+  const low = Math.min(first, last);
+  const high = Math.max(first, last);
+  const values = [];
+  for (let value = low; value <= high; value += 1) {
+    values.push(value);
+  }
+  return uniqueNumbers(values, min, max);
+}
+
+function parseChineseWeekday(text) {
+  const value = String(text == null ? "" : text);
+  const map = {
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    日: 7,
+    天: 7,
+  };
+  const match = value.match(/[一二三四五六日天]/);
+  return match ? map[match[0]] : NaN;
+}
+
+function normalizeWeekday(value, key) {
+  const chinese = parseChineseWeekday(value);
+  if (Number.isFinite(chinese)) {
+    return chinese;
+  }
+  const num = toInteger(value);
+  if (!Number.isFinite(num)) {
+    return NaN;
+  }
+  if (key === "dayIndex" && num >= 0 && num <= 6) {
+    return num + 1;
+  }
+  return num >= 1 && num <= 7 ? num : NaN;
+}
+
+function parseSectionSequence(text) {
+  const source = String(text == null ? "" : text);
+  const raw = source.match(/\d{1,2}/g) || [];
+  const nums = raw.map((item) => parseInt(item, 10)).filter((num) => Number.isFinite(num));
+  if (nums.length === 2 && /[-~～至到]/.test(source)) {
+    return rangeNumbers(nums[0], nums[1], 1, 14);
+  }
+  return uniqueNumbers(nums, 1, 14);
+}
+
+function parseSectionText(text) {
+  const source = String(text == null ? "" : text);
+  const sections = [];
+  const patterns = [
+    /[\[【(（]\s*(\d{1,2}(?:\s*[-,，、~～至到]\s*\d{1,2})*)\s*[\]】)）]\s*节?/g,
+    /第\s*(\d{1,2})\s*(?:[-~～至到]\s*(\d{1,2}))?\s*节/g,
+    /(?:^|[^\dA-Za-z])(\d{1,2}(?:\s*[-~～]\s*\d{1,2})+)\s*节/g,
+  ];
+
+  patterns.forEach((pattern) => {
+    let match;
+    while ((match = pattern.exec(source)) !== null) {
+      if (match[2]) {
+        sections.push(...rangeNumbers(match[1], match[2], 1, 14));
+      } else {
+        sections.push(...parseSectionSequence(match[1]));
+      }
+    }
+  });
+  return uniqueNumbers(sections, 1, 14);
+}
+
+function parseWeekText(text) {
+  const source = String(text == null ? "" : text);
+  if (!source) {
+    return [];
+  }
+  if (source.includes("单周")) {
+    return uniqueNumbers(Array.from({ length: 13 }, (_, index) => index * 2 + 1), 1, 30);
+  }
+  if (source.includes("双周")) {
+    return uniqueNumbers(Array.from({ length: 15 }, (_, index) => (index + 1) * 2), 1, 30);
+  }
+  if (!source.includes("周")) {
+    return [];
+  }
+
+  const weeks = [];
+  const re = /(\d{1,2})(?:\s*[-~～至到]\s*(\d{1,2}))?\s*周/g;
+  let match;
+  while ((match = re.exec(source)) !== null) {
+    if (match[2]) {
+      weeks.push(...rangeNumbers(match[1], match[2], 1, 30));
+    } else {
+      weeks.push(toInteger(match[1]));
+    }
+  }
+  return uniqueNumbers(weeks, 1, 30);
+}
+
+function normalizeCourseSlot(course) {
+  const source = course && typeof course === "object" ? course : {};
+  const weekdayKeys = ["weekday", "weekDay", "dayOfWeek", "day", "xqj", "dayIndex"];
+  let weekday = NaN;
+  for (const key of weekdayKeys) {
+    if (source[key] !== undefined && source[key] !== null && source[key] !== "") {
+      weekday = normalizeWeekday(source[key], key);
+      if (Number.isFinite(weekday)) {
+        break;
+      }
+    }
+  }
+
+  let sections = [];
+  if (Array.isArray(source.sections)) {
+    sections = uniqueNumbers(source.sections, 1, 14);
+  }
+  if (sections.length === 0) {
+    sections = uniqueNumbers([source.section, source.sectionIndex], 1, 14);
+  }
+
+  const pairs = [
+    ["startSection", "endSection"],
+    ["sectionStart", "sectionEnd"],
+    ["start", "end"],
+  ];
+  for (const pair of pairs) {
+    if (sections.length > 0) {
+      break;
+    }
+    if (source[pair[0]] !== undefined || source[pair[1]] !== undefined) {
+      sections = rangeNumbers(source[pair[0]], source[pair[1]], 1, 14);
+    }
+  }
+
+  if (sections.length === 0) {
+    [
+      { text: source.section, loose: true },
+      { text: source.sectionIndex, loose: true },
+      { text: source.sectionText, loose: true },
+      { text: source.sectionsText, loose: true },
+      { text: source.rawSection, loose: true },
+      { text: source.rawSections, loose: true },
+      { text: source.timeText, loose: false },
+      { text: source.period, loose: true },
+      { text: source.periodText, loose: true },
+      { text: source.rawText, loose: false },
+    ].some((item) => {
+      sections = parseSectionText(item.text);
+      if (sections.length === 0 && item.loose && /[-,，、~～至到]/.test(String(item.text == null ? "" : item.text))) {
+        sections = parseSectionSequence(item.text);
+      }
+      return sections.length > 0;
+    });
+  }
+
+  let weeks = [];
+  ["weeks", "weekList", "weekNumbers"].some((key) => {
+    if (Array.isArray(source[key])) {
+      weeks = uniqueNumbers(source[key], 1, 30);
+      return weeks.length > 0;
+    }
+    return false;
+  });
+  if (weeks.length === 0) {
+    ["weeksText", "rawWeeks", "weekRange", "weekText", "rawText"].some((key) => {
+      weeks = parseWeekText(source[key]);
+      return weeks.length > 0;
+    });
+  }
+
+  return {
+    weekday: Number.isFinite(weekday) ? weekday : null,
+    sections,
+    weeks,
+  };
+}
+
+function getScheduleCourses(schedule) {
+  if (!schedule || typeof schedule !== "object") {
+    return [];
+  }
+  const keys = ["courses", "items", "schedule", "lessons", "courseList"];
+  for (const key of keys) {
+    if (Array.isArray(schedule[key])) {
+      return schedule[key];
+    }
+  }
+  return [];
+}
+
+function getClassroomNameFromSchedule(schedule, index) {
+  const name = normalizeString(schedule && (
+    schedule.roomName ||
+    schedule.classroom ||
+    schedule.displayClassroom ||
+    schedule.canonicalClassroom ||
+    schedule.name ||
+    schedule.title
+  ));
+  return name || `classroom-${index + 1}`;
+}
+
+function getClassroomNameFromCourse(course) {
+  return normalizeString(course && (
+    course.classroom ||
+    course.displayClassroom ||
+    course.canonicalClassroom ||
+    course.rawClassroom ||
+    course.roomName ||
+    course.room ||
+    course.location ||
+    course.venue
+  ));
+}
+
+function deriveClassroomSchedulesFromClassSchedules(classSchedules) {
+  const rooms = new Map();
+  (Array.isArray(classSchedules) ? classSchedules : []).forEach((schedule) => {
+    getScheduleCourses(schedule).forEach((course) => {
+      const roomName = getClassroomNameFromCourse(course);
+      if (!roomName) {
+        return;
+      }
+      if (!rooms.has(roomName)) {
+        rooms.set(roomName, { roomName, courses: [] });
+      }
+      rooms.get(roomName).courses.push(course);
+    });
+  });
+  return Array.from(rooms.values());
+}
+
+function getActiveSnapshotDataSafe() {
+  try {
+    if (typeof releaseService.getActiveSnapshotData === "function") {
+      return releaseService.getActiveSnapshotData();
+    }
+    return releaseService.readActiveReleaseSnapshot();
+  } catch (error) {
+    safeLog("admin-active-snapshot-read-failed", { error: error.message });
+    return null;
+  }
+}
+
+function getSnapshotResourceArray(snapshot, key) {
+  if (!snapshot || typeof snapshot !== "object") {
+    return [];
+  }
+  const resources = snapshot.resources || {};
+  const map = {
+    "class-schedules": snapshot.classSchedules,
+    "teacher-schedules": resources.teacherSchedules,
+    "classroom-schedules": resources.classroomSchedules || snapshot.classroomSchedules,
+    "course-schedules": resources.courseSchedules,
+  };
+  return Array.isArray(map[key]) ? map[key] : [];
+}
+
+function getResourceArrayWithSource(key) {
+  const snapshot = getActiveSnapshotDataSafe();
+  const snapshotItems = getSnapshotResourceArray(snapshot, key);
+  if (snapshotItems.length > 0) {
+    return {
+      items: snapshotItems,
+      source: key === "classroom-schedules" ? "release.resources.classroomSchedules" : `release.${key}`,
+      updatedAt: snapshot.updatedAt || null,
+      snapshot,
+    };
+  }
+
+  const filePath = FILE_MAP[key];
+  return {
+    items: readJsonArray(filePath),
+    source: `storage.${key}`,
+    updatedAt: fs.existsSync(filePath) ? fs.statSync(filePath).mtime.toISOString() : null,
+    snapshot,
+  };
+}
+
+function buildClassroomHeatmap(options) {
+  const opt = options || {};
+  const source = opt.source || "unknown";
+  let classroomSchedules = Array.isArray(opt.classroomSchedules) ? opt.classroomSchedules : [];
+  const classSchedules = Array.isArray(opt.classSchedules) ? opt.classSchedules : [];
+
+  if (classroomSchedules.length === 0 && classSchedules.length > 0) {
+    classroomSchedules = deriveClassroomSchedulesFromClassSchedules(classSchedules);
+  }
+
+  const totalClassrooms = classroomSchedules.length;
+  const counts = Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => new Set()));
+  const roomSlotCounts = new Map();
+
+  classroomSchedules.forEach((room, index) => {
+    const roomName = getClassroomNameFromSchedule(room, index);
+    const roomSlots = roomSlotCounts.get(roomName) || new Set();
+    getScheduleCourses(room).forEach((course) => {
+      const slot = normalizeCourseSlot(course);
+      if (!slot.weekday || slot.sections.length === 0) {
+        return;
+      }
+      slot.sections.forEach((section) => {
+        const dayIndex = slot.weekday - 1;
+        const sectionIndex = section - 1;
+        counts[dayIndex][sectionIndex].add(roomName);
+        roomSlots.add(`${slot.weekday}-${section}`);
+      });
+    });
+    roomSlotCounts.set(roomName, roomSlots);
+  });
+
+  const heatmap = Array.from({ length: 7 }, () => Array(14).fill(0));
+  const rawCounts = Array.from({ length: 7 }, () => Array(14).fill(0));
+  let totalOccupiedSlots = 0;
+  let maxOccupancy = 0;
+
+  for (let day = 0; day < 7; day += 1) {
+    for (let section = 0; section < 14; section += 1) {
+      const occupied = counts[day][section].size;
+      rawCounts[day][section] = occupied;
+      if (occupied > 0) {
+        totalOccupiedSlots += 1;
+      }
+      maxOccupancy = Math.max(maxOccupancy, occupied);
+      heatmap[day][section] = totalClassrooms > 0
+        ? Math.min(100, Math.round((occupied / totalClassrooms) * 100))
+        : 0;
+    }
+  }
+
+  const topRooms = Array.from(roomSlotCounts.entries())
+    .map(([roomName, slots]) => ({
+      roomName,
+      occupiedSlots: slots.size,
+      occupationRate: Math.min(100, Math.round((slots.size / 98) * 100)),
+    }))
+    .filter((item) => item.occupiedSlots > 0)
+    .sort((left, right) => right.occupiedSlots - left.occupiedSlots)
+    .slice(0, 6);
+
+  const hasRecognizedSlots = totalOccupiedSlots > 0;
+  return {
+    classroomHeatmap: heatmap,
+    classroomHeatmapCounts: rawCounts,
+    classroomHeatmapMeta: {
+      totalClassrooms,
+      totalOccupiedSlots,
+      source,
+      updatedAt: opt.updatedAt || null,
+      maxOccupancy,
+      topRooms,
+      emptyReason: totalClassrooms === 0
+        ? "no-classroom-schedules"
+        : (hasRecognizedSlots ? "" : "no-recognized-course-slots"),
+    },
+  };
+}
+
+function resolveClassroomHeatmapData() {
+  const classroomSource = getResourceArrayWithSource("classroom-schedules");
+  if (classroomSource.items.length > 0) {
+    return buildClassroomHeatmap({
+      classroomSchedules: classroomSource.items,
+      source: classroomSource.source,
+      updatedAt: classroomSource.updatedAt,
+    });
+  }
+
+  const snapshotClassSchedules = getSnapshotResourceArray(classroomSource.snapshot, "class-schedules");
+  if (snapshotClassSchedules.length > 0) {
+    return buildClassroomHeatmap({
+      classSchedules: snapshotClassSchedules,
+      source: "derived-from-classSchedules",
+      updatedAt: classroomSource.snapshot && classroomSource.snapshot.updatedAt,
+    });
+  }
+
+  const storageClassSchedules = readJsonArray(FILE_MAP["class-schedules"]);
+  return buildClassroomHeatmap({
+    classSchedules: storageClassSchedules,
+    source: storageClassSchedules.length > 0 ? "derived-from-classSchedules" : "storage.classroom-schedules",
+    updatedAt: getUpdatedAt("class-schedules") || getUpdatedAt("classroom-schedules"),
+  });
+}
+
+function buildCollegeDistribution() {
+  const classSource = getResourceArrayWithSource("class-schedules");
+  const classes = classSource.items;
+  const counts = new Map();
+  classes.forEach((item) => {
+    const name = normalizeString(item.collegeName || item.college || item.schoolName);
+    if (!name) {
+      return;
+    }
+    counts.set(name, (counts.get(name) || 0) + 1);
+  });
+  const max = Math.max(0, ...counts.values());
+  return Array.from(counts.entries())
+    .map(([name, count]) => ({
+      name,
+      count,
+      pct: max > 0 ? Math.max(4, Math.round((count / max) * 100)) : 0,
+    }))
+    .sort((left, right) => right.count - left.count)
+    .slice(0, 6);
+}
+
+function getAdminDataVersion() {
+  const dashboard = appConfigService.getAdminDashboard();
+  return (dashboard && dashboard.data && dashboard.data.dataVersion) || {};
 }
 
 function writeJsonAtomic(filePath, data) {
@@ -598,7 +1074,7 @@ function createSyncHandler(key, validateFn) {
 // 1. 同步 Catalog
 router.post(
   "/sync/catalog",
-  verifyAdminToken,
+  verifyAdminWriteAccess,
   createSyncHandler("catalog", (data) => {
     return data && Array.isArray(data.colleges) && Array.isArray(data.semesters) && Array.isArray(data.grades);
   })
@@ -607,7 +1083,7 @@ router.post(
 // 2. 同步 Majors (自定义 handler)
 router.post(
   "/sync/majors",
-  verifyAdminToken,
+  verifyAdminWriteAccess,
   (req, res) => {
     console.log("[DEBUG /sync/majors] Received request, body length:", req.body ? req.body.length : "null");
     const payload = req.body;
@@ -843,7 +1319,7 @@ router.post(
 // 3. 同步 Class Schedules (支持 merge 增量合并与 replace 全量覆盖)
 router.post(
   "/sync/class-schedules",
-  verifyAdminToken,
+  verifyAdminWriteAccess,
   (req, res) => {
     const rawPayload = req.body;
     const { schedules, semester: payloadSemester } = parseClassSchedulesPayload(rawPayload);
@@ -949,7 +1425,7 @@ router.post(
 // 4. 同步 Teacher Schedules
 router.post(
   "/sync/teacher-schedules",
-  verifyAdminToken,
+  verifyAdminWriteAccess,
   createSyncHandler("teacher-schedules", (data) => {
     return Array.isArray(data);
   })
@@ -958,7 +1434,7 @@ router.post(
 // 5. 同步 Classroom Schedules
 router.post(
   "/sync/classroom-schedules",
-  verifyAdminToken,
+  verifyAdminWriteAccess,
   createSyncHandler("classroom-schedules", (data) => {
     return Array.isArray(data);
   })
@@ -967,7 +1443,7 @@ router.post(
 // 6. 同步 Course Schedules
 router.post(
   "/sync/course-schedules",
-  verifyAdminToken,
+  verifyAdminWriteAccess,
   createSyncHandler("course-schedules", (data) => {
     return Array.isArray(data);
   })
@@ -975,7 +1451,7 @@ router.post(
 
 router.post(
   "/sync/resources",
-  verifyAdminToken,
+  verifyAdminWriteAccess,
   (req, res) => {
     const resourceType = String(req.query.type || req.body.resourceType || "").trim();
     const key = RESOURCE_FILE_BY_TYPE[resourceType];
@@ -1048,7 +1524,7 @@ function getActiveSnapshotMeta() {
 
 router.post(
   "/release/upload",
-  verifyAdminToken,
+  verifyAdminWriteAccess,
   express.raw({ type: "*/*", limit: "150mb" }),
   (req, res) => {
     try {
@@ -1077,7 +1553,7 @@ router.post(
 
 router.post(
   "/release/activate",
-  verifyAdminToken,
+  verifyAdminWriteAccess,
   (req, res) => {
     try {
       let result;
@@ -1160,14 +1636,14 @@ router.post(
   }
 );
 
-router.get("/release/status", verifyAdminToken, (req, res) => {
+router.get("/release/status", verifyAdminWriteAccess, (req, res) => {
   res.json({
     success: true,
     ...releaseService.getReleaseStatus(),
   });
 });
 
-router.get("/release/list", verifyAdminToken, (req, res) => {
+router.get("/release/list", verifyAdminWriteAccess, (req, res) => {
   res.json({
     success: true,
     releases: releaseService.listReleases(req.query.limit),
@@ -1177,7 +1653,7 @@ router.get("/release/list", verifyAdminToken, (req, res) => {
 // 6.5. 上传快照临时文件
 router.post(
   "/snapshot/upload",
-  verifyAdminToken,
+  verifyAdminWriteAccess,
   express.raw({ type: "*/*", limit: "150mb" }),
   async (req, res) => {
     try {
@@ -1238,7 +1714,7 @@ router.post(
 // 6.6. 激活临时文件为正式快照
 router.post(
   "/snapshot/activate",
-  verifyAdminToken,
+  verifyAdminWriteAccess,
   async (req, res) => {
     try {
       const tempJsonPath = path.join(SNAPSHOTS_DIR, "temp_upload.json");
@@ -1383,7 +1859,7 @@ router.post(
 );
 
 // 7. 获取当前缓存状态
-router.get("/sync/status", verifyAdminToken, (req, res) => {
+router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
   const meta = getSyncMeta();
   const snapshotMeta = getActiveSnapshotMeta();
   const releaseStatus = releaseService.getReleaseStatus();
@@ -1392,16 +1868,17 @@ router.get("/sync/status", verifyAdminToken, (req, res) => {
   const teacherScheduleCount = getItemCount("teacher-schedules") || (snapshotMeta ? snapshotMeta.teacherScheduleCount : 0);
   const classroomScheduleCount = getItemCount("classroom-schedules") || (snapshotMeta ? snapshotMeta.classroomScheduleCount : 0);
   const courseScheduleCount = getItemCount("course-schedules") || (snapshotMeta ? snapshotMeta.courseScheduleCount : 0);
-  
-  res.json({
-    success: true,
+  const semester = snapshotMeta ? snapshotMeta.semester : (meta.snapshot ? meta.snapshot.semester : "2025-2026-2");
+  const classSchedulesUpdatedAt = getUpdatedAt("class-schedules");
+  const payload = {
     dataSourceMode: config.DATA_SOURCE_MODE,
     activeReleaseVersion: releaseStatus.activeReleaseVersion,
     activeReleaseUpdatedAt: releaseStatus.activeReleaseUpdatedAt,
     activeReleaseActivatedAt: releaseStatus.activeReleaseActivatedAt,
     snapshotUpdatedAt: snapshotMeta ? snapshotMeta.updatedAt : (meta.snapshot ? meta.snapshot.updatedAt : null),
     snapshotVersion: snapshotMeta ? snapshotMeta.version : (meta.snapshot ? meta.snapshot.version : null),
-    semester: snapshotMeta ? snapshotMeta.semester : (meta.snapshot ? meta.snapshot.semester : "2025-2026-2"),
+    releaseVersion: releaseStatus.activeReleaseVersion || (meta.snapshot ? meta.snapshot.version : "-"),
+    semester,
     collegesCount: snapshotMeta ? snapshotMeta.collegesCount : getItemCount("catalog"),
     majorsCount: snapshotMeta ? snapshotMeta.majorsCount : getItemCount("majors"),
     classScheduleCount: snapshotMeta ? snapshotMeta.classScheduleCount : getItemCount("class-schedules"),
@@ -1415,10 +1892,23 @@ router.get("/sync/status", verifyAdminToken, (req, res) => {
     feedbackCount: feedbackStats.total,
     openFeedbackCount: feedbackStats.open,
     catalogUpdatedAt: getUpdatedAt("catalog"),
-    classSchedulesUpdatedAt: getUpdatedAt("class-schedules"),
+    classSchedulesUpdatedAt,
+    classScheduleUpdatedAt: classSchedulesUpdatedAt,
+    teacherScheduleUpdatedAt: getUpdatedAt("teacher-schedules"),
+    classroomScheduleUpdatedAt: getUpdatedAt("classroom-schedules"),
+    courseScheduleUpdatedAt: getUpdatedAt("course-schedules"),
+    lastUploadTime: classSchedulesUpdatedAt || resourcesUpdatedAt || (snapshotMeta ? snapshotMeta.updatedAt : null),
     storageMounted: isStorageMounted(),
     storagePath: STORAGE_DIR,
     metaDetails: meta,
+    adminSessionAuthenticated: adminAuth.isAdminRequest(req),
+    apiTokenConfigured: Boolean(config.ADMIN_API_TOKEN),
+  };
+
+  res.json({
+    success: true,
+    data: payload,
+    ...payload,
   });
 });
 
@@ -1426,7 +1916,7 @@ router.get("/sync/status", verifyAdminToken, (req, res) => {
 // POST /api/admin/review/contributions
 router.post(
   "/review/contributions",
-  verifyAdminToken,
+  verifyAdminWriteAccess,
   (req, res) => {
     const { id, action } = req.body;
     if (!id || !action) {
@@ -1533,34 +2023,11 @@ router.get("/dashboard", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     const dashboardData = appConfigService.getAdminDashboard();
     if (dashboardData.success && dashboardData.data) {
-      // 聚合全校教室占用热力图数据
-      const classrooms = readJsonArray(FILE_MAP["classroom-schedules"]);
-      const heatmap = Array.from({ length: 7 }, () => Array(14).fill(0));
-      
-      classrooms.forEach(room => {
-        (room.courses || []).forEach(c => {
-          const day = (c.dayOfWeek || c.weekday || 1) - 1;
-          const sections = c.sections || [];
-          if (day >= 0 && day < 7) {
-            sections.forEach(s => {
-              const secIdx = parseInt(s, 10) - 1;
-              if (secIdx >= 0 && secIdx < 14) {
-                heatmap[day][secIdx]++;
-              }
-            });
-          }
-        });
-      });
-      
-      const totalRooms = classrooms.length || 1;
-      const heatmapPercent = Array.from({ length: 7 }, () => Array(14).fill(0));
-      for (let d = 0; d < 7; d++) {
-        for (let s = 0; s < 14; s++) {
-          heatmapPercent[d][s] = Math.min(100, Math.round((heatmap[d][s] / totalRooms) * 100));
-        }
-      }
-      
-      dashboardData.data.classroomHeatmap = heatmapPercent;
+      const heatmap = resolveClassroomHeatmapData();
+      dashboardData.data.classroomHeatmap = heatmap.classroomHeatmap;
+      dashboardData.data.classroomHeatmapCounts = heatmap.classroomHeatmapCounts;
+      dashboardData.data.classroomHeatmapMeta = heatmap.classroomHeatmapMeta;
+      dashboardData.data.collegeDistribution = buildCollegeDistribution();
     }
     return res.json(dashboardData);
   } catch (error) {
@@ -2030,13 +2497,14 @@ function saveCatalogMeta(meta) {
  */
 router.get("/catalog/stats", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const catalog = readJsonFile(FILE_MAP.catalog, { colleges: [], semesters: [], grades: [] });
-    const classes = readJsonArray(FILE_MAP["class-schedules"]);
-    const teachers = readJsonArray(FILE_MAP["teacher-schedules"]);
-    const classrooms = readJsonArray(FILE_MAP["classroom-schedules"]);
-    const courses = readJsonArray(FILE_MAP["course-schedules"]);
+    const snapshot = getActiveSnapshotDataSafe();
+    const catalog = snapshot?.catalog || readJsonFile(FILE_MAP.catalog, { colleges: [], semesters: [], grades: [] });
+    const classes = getResourceArrayWithSource("class-schedules").items;
+    const teachers = getResourceArrayWithSource("teacher-schedules").items;
+    const classrooms = getResourceArrayWithSource("classroom-schedules").items;
+    const courses = getResourceArrayWithSource("course-schedules").items;
     
-    const meta = resolveDataVersion(appConfigService.getAdminConfig());
+    const meta = getAdminDataVersion();
     
     return res.json({
       success: true,
@@ -2072,7 +2540,7 @@ router.get("/catalog/list", adminAuth.verifyAdminAccess, (req, res) => {
     let list = [];
     
     if (type === "class") {
-      const raw = readJsonArray(FILE_MAP["class-schedules"]);
+      const raw = getResourceArrayWithSource("class-schedules").items;
       list = raw.map(item => {
         const metaInfo = catMeta[`class::${item.className}`] || {};
         return {
@@ -2101,7 +2569,7 @@ router.get("/catalog/list", adminAuth.verifyAdminAccess, (req, res) => {
         );
       }
     } else if (type === "teacher") {
-      const raw = readJsonArray(FILE_MAP["teacher-schedules"]);
+      const raw = getResourceArrayWithSource("teacher-schedules").items;
       list = raw.map(item => {
         const metaInfo = catMeta[`teacher::${item.teacherName}`] || {};
         const classes = Array.from(new Set((item.courses || []).map(c => c.className).filter(Boolean)));
@@ -2129,7 +2597,7 @@ router.get("/catalog/list", adminAuth.verifyAdminAccess, (req, res) => {
         );
       }
     } else if (type === "classroom") {
-      const raw = readJsonArray(FILE_MAP["classroom-schedules"]);
+      const raw = getResourceArrayWithSource("classroom-schedules").items;
       list = raw.map(item => {
         const metaInfo = catMeta[`classroom::${item.roomName}`] || {};
         const count = (item.courses || []).length;
@@ -2173,7 +2641,7 @@ router.get("/catalog/list", adminAuth.verifyAdminAccess, (req, res) => {
         );
       }
     } else if (type === "course") {
-      const raw = readJsonArray(FILE_MAP["course-schedules"]);
+      const raw = getResourceArrayWithSource("course-schedules").items;
       list = raw.map(item => {
         const metaInfo = catMeta[`course::${item.courseName}`] || {};
         const teachers = Array.from(new Set((item.courses || []).map(c => c.teacherName).filter(Boolean)));
@@ -2278,16 +2746,16 @@ router.get("/catalog/detail", adminAuth.verifyAdminAccess, (req, res) => {
     const metaInfo = catMeta[metaKey] || {};
     
     if (type === "class") {
-      const raw = readJsonArray(FILE_MAP["class-schedules"]);
+      const raw = getResourceArrayWithSource("class-schedules").items;
       original = raw.find(x => x.className === id);
     } else if (type === "teacher") {
-      const raw = readJsonArray(FILE_MAP["teacher-schedules"]);
+      const raw = getResourceArrayWithSource("teacher-schedules").items;
       original = raw.find(x => x.teacherName === id);
     } else if (type === "classroom") {
-      const raw = readJsonArray(FILE_MAP["classroom-schedules"]);
+      const raw = getResourceArrayWithSource("classroom-schedules").items;
       original = raw.find(x => x.roomName === id);
     } else if (type === "course") {
-      const raw = readJsonArray(FILE_MAP["course-schedules"]);
+      const raw = getResourceArrayWithSource("course-schedules").items;
       original = raw.find(x => x.courseName === id);
     }
     
@@ -2348,7 +2816,7 @@ router.post("/catalog/meta", adminAuth.verifyAdminAccess, (req, res) => {
  */
 router.get("/sync/status", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const meta = resolveDataVersion(appConfigService.getAdminConfig());
+    const meta = getAdminDataVersion();
     const syncMeta = getSyncMeta();
     
     return res.json({
@@ -2477,16 +2945,16 @@ router.get("/export", adminAuth.verifyAdminAccess, (req, res) => {
       return res.status(400).json({ success: false, message: "缺少 type 或 id" });
     }
     
-    let original = null;
-    if (type === "class") {
-      original = readJsonArray(FILE_MAP["class-schedules"]).find(x => x.className === id);
-    } else if (type === "teacher") {
-      original = readJsonArray(FILE_MAP["teacher-schedules"]).find(x => x.teacherName === id);
-    } else if (type === "classroom") {
-      original = readJsonArray(FILE_MAP["classroom-schedules"]).find(x => x.roomName === id);
-    } else if (type === "course") {
-      original = readJsonArray(FILE_MAP["course-schedules"]).find(x => x.courseName === id);
-    }
+  let original = null;
+  if (type === "class") {
+    original = getResourceArrayWithSource("class-schedules").items.find(x => x.className === id);
+  } else if (type === "teacher") {
+    original = getResourceArrayWithSource("teacher-schedules").items.find(x => x.teacherName === id);
+  } else if (type === "classroom") {
+    original = getResourceArrayWithSource("classroom-schedules").items.find(x => x.roomName === id);
+  } else if (type === "course") {
+    original = getResourceArrayWithSource("course-schedules").items.find(x => x.courseName === id);
+  }
     
     if (!original) {
       return res.status(404).json({ success: false, message: "资源未找到" });
@@ -2597,5 +3065,12 @@ router.get("/audit-logs", adminAuth.verifyAdminAccess, (req, res) => {
     return res.status(500).json({ success: false, message: e.message });
   }
 });
+
+router._test = {
+  buildClassroomHeatmap,
+  deriveClassroomSchedulesFromClassSchedules,
+  normalizeCourseSlot,
+  verifyAdminWriteAccess,
+};
 
 module.exports = router;

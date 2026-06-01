@@ -1,0 +1,23 @@
+<view wx:if="{{currentNotice}}" class="notice-ticker notice-ticker-{{currentNotice.priority || 'normal'}}" style="margin-top: {{safeAreaTop}}rpx;" bindtap="openNoticeDetail">
+  <view class="notice-ticker-icon">告</view>
+  <view class="notice-ticker-track">
+    <view class="notice-ticker-line {{currentNotice.shouldScroll ? 'is-scroll' : 'is-static'}}">
+      <text>{{currentNotice.tickerText}}</text>
+      <text wx:if="{{currentNotice.shouldScroll}}">{{currentNotice.tickerText}}</text>
+    </view>
+  </view>
+  <button class="notice-ticker-view" catchtap="openNoticeDetail">查看</button>
+  <button wx:if="{{currentNotice.closable}}" class="notice-ticker-close" catchtap="dismissNotice">×</button>
+</view>
+
+<view wx:if="{{detailVisible}}" class="notice-ticker-mask" bindtap="closeNoticeDetail">
+  <view class="notice-ticker-panel" catchtap="noop">
+    <view class="notice-ticker-panel-head">
+      <view class="notice-ticker-panel-tag {{currentNotice.priority || 'normal'}}">{{currentNotice.priority === 'urgent' ? '紧急' : (currentNotice.priority === 'important' ? '重要' : '公告')}}</view>
+      <button class="notice-ticker-panel-close" bindtap="closeNoticeDetail">×</button>
+    </view>
+    <view class="notice-ticker-panel-title">{{currentNotice.title}}</view>
+    <view class="notice-ticker-panel-content">{{currentNotice.content}}</view>
+    <button class="notice-ticker-panel-button" bindtap="closeNoticeDetail">我知道了</button>
+  </view>
+</view>

@@ -10,6 +10,8 @@
     </view>
   </view>
 
+  <notice-ticker notices="{{appConfig.notices}}" page-key="settings" max-count="1" />
+
   <!-- 1. 我的课表 -->
   <view class="settings-card card">
     <view class="group-title">我的课表</view>

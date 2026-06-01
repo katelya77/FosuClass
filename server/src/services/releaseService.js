@@ -403,6 +403,39 @@ function readActiveReleaseSnapshot() {
   });
 }
 
+function readCurrentSnapshotCompat() {
+  const current = readJsonFile(CURRENT_SNAPSHOT_PATH);
+  if (current) {
+    return current;
+  }
+
+  try {
+    if (fs.existsSync(CURRENT_SNAPSHOT_GZ_PATH)) {
+      return JSON.parse(zlib.gunzipSync(fs.readFileSync(CURRENT_SNAPSHOT_GZ_PATH)).toString("utf-8"));
+    }
+  } catch (error) {
+    safeLog("release-read-current-gzip-failed", { error: error.message });
+  }
+  return null;
+}
+
+function getActiveSnapshotData() {
+  const releaseSnapshot = readActiveReleaseSnapshot();
+  if (releaseSnapshot) {
+    return Object.assign({}, releaseSnapshot, {
+      snapshotSource: "release",
+    });
+  }
+
+  const currentSnapshot = readCurrentSnapshotCompat();
+  if (currentSnapshot) {
+    return Object.assign({}, currentSnapshot, {
+      snapshotSource: "legacy-current",
+    });
+  }
+  return null;
+}
+
 function getReleaseStatus() {
   const active = getActiveReleaseInfo();
   const snapshot = active ? readReleaseSnapshot(active.version) : null;
@@ -456,6 +489,7 @@ module.exports = {
   activateReleaseFromSnapshot,
   activateReleaseVersion,
   countRelease,
+  getActiveSnapshotData,
   getReleaseStatus,
   listReleases,
   normalizeVersion,

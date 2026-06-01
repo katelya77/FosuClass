@@ -170,6 +170,7 @@ Page({
     restoreHint: "",
     catalogVersion: "",
     catalogUpdatedAt: "",
+    appConfig: { notices: [] },
     schoolNotice: null,
     dataVersionText: "",
     runtimeDisclaimer: BRAND.disclaimer,
@@ -211,9 +212,10 @@ Page({
   loadPageConfig() {
     appConfigService.loadAppConfig()
       .then((config) => {
-        const schoolNotice = appConfigService.getPrimaryNotice(config, "school", ["ticker", "banner", "card"]);
+        const schoolNotice = appConfigService.getPrimaryNotice(config, "school", ["banner", "card"]);
         const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
         this.setData({
+          appConfig: config,
           schoolNotice,
           dataVersionText: latestUpdatedAt ? `数据更新于 ${appConfigService.formatConfigTime(latestUpdatedAt)}` : "",
           runtimeDisclaimer: config.disclaimer || BRAND.disclaimer,

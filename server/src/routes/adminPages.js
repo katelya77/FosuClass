@@ -9,6 +9,7 @@ const adminConsoleHtml = `<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>佛课小表 Admin Console</title>
+  <link rel="icon" type="image/png" href="/favicon.png">
   <style>
     :root {
       --bg: #f8fafc;
@@ -101,11 +102,14 @@ const adminConsoleHtml = `<!doctype html>
     }
 
     /* 按钮规范 */
-    button, .btn {
+    button, .btn, .pill, .badge {
       display: inline-flex;
       align-items: center;
       justify-content: center;
       font-family: inherit;
+      line-height: normal;
+    }
+    button, .btn {
       font-size: 14px;
       font-weight: 600;
       padding: 8px 16px;
@@ -188,6 +192,23 @@ const adminConsoleHtml = `<!doctype html>
       font-weight: 800;
       display: grid;
       place-items: center;
+    }
+    .brand-logo {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      object-fit: cover;
+      flex: 0 0 auto;
+      box-shadow: 0 1px 3px rgba(15, 23, 42, 0.15);
+    }
+    .login-logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 12px;
+      object-fit: cover;
+      display: block;
+      margin-bottom: 20px;
+      box-shadow: 0 8px 20px rgba(239, 68, 68, 0.18);
     }
     .brand-title {
       font-size: 15px;
@@ -543,11 +564,53 @@ const adminConsoleHtml = `<!doctype html>
     }
 
     /* 可视化组件：7x14 教室热力图 */
+    .heatmap-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+    .heatmap-meta {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+      max-width: 520px;
+    }
+    .heatmap-meta .badge {
+      background: var(--panel-2);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      padding: 4px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .heatmap-alert {
+      background: var(--warning-soft);
+      color: #92400e;
+      border: 1px solid #fde68a;
+      border-radius: 6px;
+      padding: 10px 12px;
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    .heatmap-empty {
+      background: var(--panel-2);
+      border: 1px dashed var(--border-hover);
+      border-radius: 8px;
+      color: var(--muted);
+      padding: 28px 16px;
+      text-align: center;
+      font-size: 13px;
+    }
     .heatmap-container {
       display: grid;
-      grid-template-columns: repeat(8, 1fr);
-      gap: 3px;
+      grid-template-columns: 56px repeat(7, minmax(24px, 1fr));
+      gap: 4px;
       margin-top: 10px;
+      max-width: 760px;
     }
     .heatmap-header {
       font-size: 11px;
@@ -557,21 +620,18 @@ const adminConsoleHtml = `<!doctype html>
       padding: 4px;
     }
     .heatmap-cell {
-      height: 26px;
-      border-radius: 3px;
-      background: var(--primary);
-      opacity: 0.05;
+      height: 24px;
+      border-radius: 4px;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 9px;
-      font-weight: bold;
-      color: var(--text);
       transition: var(--transition);
       cursor: pointer;
+      border: 1px solid rgba(15, 23, 42, 0.04);
     }
     .heatmap-cell:hover {
-      box-shadow: 0 0 0 2px var(--primary);
+      transform: translateY(-1px);
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.35);
     }
     .heatmap-axis {
       font-size: 10px;
@@ -740,12 +800,58 @@ const adminConsoleHtml = `<!doctype html>
     .mini-modal button { padding: 4px; border-radius: 4px; font-size: 10px; width: 100%; background: var(--primary); color: white; border: none;}
 
     .mini-ticker {
-      background: #1e293b;
-      color: #ffffff;
-      padding: 4px 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      background: #eff6ff;
+      color: #1d4ed8;
+      padding: 6px 8px;
       font-size: 9px;
       overflow: hidden;
-      border-radius: 4px;
+      border-radius: 999px;
+      border: 1px solid #bfdbfe;
+      min-height: 28px;
+    }
+    .mini-ticker.important {
+      background: #fff7ed;
+      color: #c2410c;
+      border-color: #fed7aa;
+    }
+    .mini-ticker.urgent {
+      background: #fef2f2;
+      color: #b91c1c;
+      border-color: #fecaca;
+    }
+    .mini-ticker-icon {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: rgba(255, 255, 255, 0.75);
+      font-size: 8px;
+      font-weight: 800;
+      flex: 0 0 auto;
+    }
+    .mini-ticker-track {
+      flex: 1;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .mini-ticker-text {
+      display: inline-flex;
+      gap: 24px;
+      min-width: 100%;
+      animation: miniTickerScroll 12s linear infinite;
+    }
+    .mini-ticker-action {
+      flex: 0 0 auto;
+      font-weight: 800;
+    }
+    @keyframes miniTickerScroll {
+      from { transform: translateX(0); }
+      to { transform: translateX(-50%); }
     }
 
     .mini-card {
@@ -876,7 +982,7 @@ const adminConsoleHtml = `<!doctype html>
   <!-- 登录页视图 -->
   <main id="loginView" class="login-wrap" style="width: min(400px, calc(100% - 32px)); margin: 15vh auto;" hidden>
     <div class="card" style="padding: 32px;">
-      <div class="brand-icon" style="width: 48px; height: 48px; font-size: 24px; border-radius: 8px; margin-bottom: 20px;">课</div>
+      <img class="login-logo" src="/assets/logo.png" alt="佛课小表">
       <h1 style="font-size: 20px; font-weight: 800; margin-bottom: 8px;">佛课小表后台</h1>
       <p style="color: var(--muted); font-size: 13px; margin-bottom: 24px;">管理端控制台安全验证。请输入管理员密码进行登录。</p>
       <div class="login-form">
@@ -896,7 +1002,7 @@ const adminConsoleHtml = `<!doctype html>
     <aside class="sidebar">
       <div>
         <div class="brand">
-          <div class="brand-icon">课</div>
+          <img class="brand-logo" src="/assets/logo.png" alt="佛课小表">
           <div>
             <div class="brand-title">佛课小表</div>
             <div class="brand-subtitle">Admin Console v1.5</div>
@@ -970,10 +1076,16 @@ const adminConsoleHtml = `<!doctype html>
         </div>
 
         <div class="card" style="margin-top: 24px;">
-          <h3 class="card-title" style="margin-bottom: 8px;">全校教室占用热力图 (星期一至星期日 vs 第1节至第14节)</h3>
-          <div style="font-size: 12px; color: var(--muted); margin-bottom: 16px;">
-            通过汇总全校全部教室的所有课表排课记录，计算每个时段的综合占用率。
+          <div class="heatmap-card-head">
+            <div>
+              <h3 class="card-title" style="margin-bottom: 8px;">全校教室占用热力图</h3>
+              <div style="font-size: 12px; color: var(--muted);">
+                按星期一至星期日、第1节至第14节汇总真实教室排课占用。
+              </div>
+            </div>
+            <div class="heatmap-meta" id="classroomHeatmapMeta"></div>
           </div>
+          <div id="classroomHeatmapNotice"></div>
           <div class="heatmap-container" id="classroomHeatmap">
             <!-- 动态生成教室占用热力图 -->
           </div>
@@ -1048,7 +1160,7 @@ const adminConsoleHtml = `<!doctype html>
             <div style="border: 2px dashed var(--border); border-radius: 6px; padding: 20px; text-align: center; font-size: 13px;" id="uploadDropzone">
               <p style="color: var(--muted); margin-bottom: 10px;">点击或拖拽同步 JSON 文件进行更新校验</p>
               <input type="file" id="syncFileInput" style="display: none;" accept=".json">
-              <button class="ghost" onclick="document.getElementById('syncFileInput').click()">选择 JSON 文件</button>
+              <button class="ghost" id="syncSelectFileBtn">选择 JSON 文件</button>
               <div id="uploadFileInfo" style="margin-top: 10px; font-weight: 600; color: var(--primary);"></div>
             </div>
           </div>
@@ -1499,6 +1611,12 @@ const adminConsoleHtml = `<!doctype html>
         </div>
 
         <div class="dash-columns">
+          <div class="card" style="display: flex; flex-direction: column; gap: 12px;">
+            <h3 class="card-title">后台快捷操作</h3>
+            <button id="copyAppConfigUrlBtn" class="secondary">复制当前 app-config 接口地址</button>
+            <button id="copyPublicConfigJsonBtn" class="secondary">复制公开配置 JSON</button>
+            <button id="clearAdminCacheBtn" class="ghost">清理本地后台缓存</button>
+          </div>
           <div class="card" style="display: flex; flex-direction: column; gap: 16px;">
             <h3 class="card-title">系统历史备份文件</h3>
             <div class="table-container">
@@ -1865,10 +1983,13 @@ const adminConsoleHtml = `<!doctype html>
             }
 
             if (res.status === 401) {
-              if (location.pathname.indexOf("/admin/login") < 0) {
+              var message = data.message || "后台登录已过期，请重新登录";
+              var isSessionCheck = path.indexOf("/api/admin/session") >= 0;
+              if (isSessionCheck && location.pathname.indexOf("/admin/login") < 0) {
+                showToast("后台登录已过期，请重新登录", "error");
                 window.location.href = "/admin/login";
               }
-              throw new Error(data.message || "登录已过期，请重新登录");
+              throw new Error(message);
             }
 
             if (!res.ok || data.success === false) {
@@ -1877,6 +1998,53 @@ const adminConsoleHtml = `<!doctype html>
 
             return data;
           });
+        });
+      }
+
+      function safeFetch(path, options) {
+        options = options || {};
+        var startedAt = Date.now();
+        return fetch(path, Object.assign({ credentials: "include" }, options))
+          .then(function (res) {
+            return res.text().then(function (text) {
+              var data = {};
+              try {
+                data = text ? JSON.parse(text) : {};
+              } catch (e) {
+                data = { success: false, message: text || res.statusText };
+              }
+              return {
+                ok: res.ok && data.success !== false,
+                status: res.status,
+                duration: Date.now() - startedAt,
+                data: data,
+                message: data.message || res.statusText || ""
+              };
+            });
+          })
+          .catch(function (error) {
+            return {
+              ok: false,
+              status: 0,
+              duration: Date.now() - startedAt,
+              data: null,
+              message: error.message || "网络断开"
+            };
+          });
+      }
+
+      function uploadApi(path, options) {
+        return api(path, options || {});
+      }
+
+      function ensureAdminSession() {
+        return api("/api/admin/session").then(function (res) {
+          if (!res.authenticated) {
+            showToast("后台登录已过期，请重新登录", "error");
+            window.location.href = "/admin/login";
+            throw new Error("后台登录已过期，请重新登录");
+          }
+          return res;
         });
       }
 
@@ -2090,22 +2258,18 @@ const adminConsoleHtml = `<!doctype html>
           timeWrap.appendChild(div);
         });
 
-        // 2. 模拟学院与占用率横向柱状图
+        // 2. 真实学院与教室占用横向柱状图
         var collWrap = $("collegeBarChart");
         collWrap.innerHTML = "";
-        
-        // 精选统计数据展示，使信息密度更真实
-        var collData = [
-          { name: "物理与光电工程学院", count: 42, pct: 100 },
-          { name: "动物科技学院", count: 35, pct: 83 },
-          { name: "计算机学院 (示例)", count: 28, pct: 66 },
-          { name: "人文与传播学院 (示例)", count: 18, pct: 42 }
-        ];
-        
+
+        var collData = data.collegeDistribution || [];
+        if (collData.length === 0) {
+          collWrap.innerHTML = "<div style='color: var(--muted); font-size: 13px; padding: 12px 0;'>暂无学院分布数据</div>";
+        }
         collData.forEach(function(c) {
           var row = document.createElement("div");
           row.className = "bar-chart-row";
-          row.innerHTML = "<div class='bar-chart-label'>" + c.name + "</div>" +
+          row.innerHTML = "<div class='bar-chart-label'>" + escapeHtml(c.name) + "</div>" +
                           "<div class='bar-chart-track'><div class='bar-chart-bar' style='width: " + c.pct + "%'></div></div>" +
                           "<div class='bar-chart-value'>" + c.count + "</div>";
           collWrap.appendChild(row);
@@ -2113,18 +2277,18 @@ const adminConsoleHtml = `<!doctype html>
 
         var classrWrap = $("classroomBarChart");
         classrWrap.innerHTML = "";
-        var roomData = [
-          { name: "仙溪B2报告厅", rate: "76%", pct: 76 },
-          { name: "仙溪C7-302", rate: "62%", pct: 62 },
-          { name: "江湾1号楼202", rate: "45%", pct: 45 },
-          { name: "体育馆羽毛球场", rate: "20%", pct: 20 }
-        ];
+        var heatmapMeta = data.classroomHeatmapMeta || {};
+        var roomData = heatmapMeta.topRooms || [];
+        if (roomData.length === 0) {
+          classrWrap.innerHTML = "<div style='color: var(--muted); font-size: 13px; padding: 12px 0;'>暂无真实教室占用排行数据</div>";
+        }
         roomData.forEach(function(r) {
+          var rate = Number(r.occupationRate || 0);
           var row = document.createElement("div");
           row.className = "bar-chart-row";
-          row.innerHTML = "<div class='bar-chart-label'>" + r.name + "</div>" +
-                          "<div class='bar-chart-track'><div class='bar-chart-bar' style='width: " + r.pct + "%; background: var(--success);'></div></div>" +
-                          "<div class='bar-chart-value'>" + r.rate + "</div>";
+          row.innerHTML = "<div class='bar-chart-label'>" + escapeHtml(r.roomName || "-") + "</div>" +
+                          "<div class='bar-chart-track'><div class='bar-chart-bar' style='width: " + rate + "%; background: var(--success);'></div></div>" +
+                          "<div class='bar-chart-value'>" + rate + "%</div>";
           classrWrap.appendChild(row);
         });
 
@@ -2171,45 +2335,86 @@ const adminConsoleHtml = `<!doctype html>
         // 4. 绘制教室占用热力图
         var heatmapWrap = $("classroomHeatmap");
         if (heatmapWrap) {
-          heatmapWrap.innerHTML = "";
-          var heatmapData = data.classroomHeatmap || [];
-          var daysHeader = ["节次", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-          
-          // 渲染第一行：表头
-          daysHeader.forEach(function(day) {
-            var div = document.createElement("div");
-            div.className = "heatmap-header";
-            div.textContent = day;
-            heatmapWrap.appendChild(div);
-          });
-          
-          // 渲染 14 大节
-          for (var section = 1; section <= 14; section++) {
-            // 第一列是节次坐标轴
-            var axis = document.createElement("div");
-            axis.className = "heatmap-axis";
-            axis.textContent = "第" + section + "节";
-            heatmapWrap.appendChild(axis);
-            
-            // 接着 7 列是星期的占用格子
-            for (var day = 0; day < 7; day++) {
-              var cell = document.createElement("div");
-              cell.className = "heatmap-cell";
-              
-              var val = 0;
-              if (heatmapData[day] && heatmapData[day][section - 1] !== undefined) {
-                val = heatmapData[day][section - 1];
-              }
-              
-              var op = 0.05 + (val / 100) * 0.95; // 映射到 0.05 到 1.0 范围
-              cell.style.opacity = op;
-              cell.style.background = "var(--primary)";
-              cell.style.color = op > 0.5 ? "#ffffff" : "var(--text)";
-              cell.textContent = val + "%";
-              cell.title = "星期" + ["一", "二", "三", "四", "五", "六", "日"][day] + " 第" + section + "节\\n综合占用率: " + val + "%";
-              
-              heatmapWrap.appendChild(cell);
-            }
+          renderGithubStyleHeatmap(data);
+        }
+      }
+
+      function heatmapColor(value) {
+        if (value <= 0) return "#edf2f7";
+        if (value <= 25) return "#bfdbfe";
+        if (value <= 50) return "#60a5fa";
+        if (value <= 75) return "#34d399";
+        return "#059669";
+      }
+
+      function renderHeatmapMeta(meta) {
+        var wrap = $("classroomHeatmapMeta");
+        if (!wrap) return;
+        wrap.textContent = "";
+        [
+          "数据源：" + (meta.source || "-"),
+          "教室总数：" + (meta.totalClassrooms || 0),
+          "已占用槽位：" + (meta.totalOccupiedSlots || 0),
+          "更新时间：" + formatDate(meta.updatedAt)
+        ].forEach(function(text) {
+          var badge = document.createElement("span");
+          badge.className = "badge";
+          badge.textContent = text;
+          wrap.appendChild(badge);
+        });
+      }
+
+      function renderGithubStyleHeatmap(data) {
+        data = data || {};
+        var heatmapWrap = $("classroomHeatmap");
+        var noticeWrap = $("classroomHeatmapNotice");
+        var heatmapData = data.classroomHeatmap || [];
+        var countData = data.classroomHeatmapCounts || [];
+        var meta = data.classroomHeatmapMeta || {};
+        var weekdays = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+        renderHeatmapMeta(meta);
+        heatmapWrap.innerHTML = "";
+        noticeWrap.textContent = "";
+
+        if ((meta.totalClassrooms || 0) === 0) {
+          heatmapWrap.className = "heatmap-empty";
+          heatmapWrap.textContent = "暂无教室课表数据，上传或同步 classroom-schedules 后将自动生成热力图。";
+          return;
+        }
+
+        heatmapWrap.className = "heatmap-container";
+        if ((meta.totalOccupiedSlots || 0) === 0) {
+          var alert = document.createElement("div");
+          alert.className = "heatmap-alert";
+          alert.textContent = "已读取到教室数据，但未识别到节次字段，请检查数据结构。";
+          noticeWrap.appendChild(alert);
+        }
+
+        ["节次"].concat(weekdays).forEach(function(label) {
+          var div = document.createElement("div");
+          div.className = "heatmap-header";
+          div.textContent = label;
+          heatmapWrap.appendChild(div);
+        });
+
+        for (var section = 1; section <= 14; section++) {
+          var axis = document.createElement("div");
+          axis.className = "heatmap-axis";
+          axis.textContent = "第" + section + "节";
+          heatmapWrap.appendChild(axis);
+
+          for (var day = 0; day < 7; day++) {
+            var val = heatmapData[day] && heatmapData[day][section - 1] !== undefined
+              ? Number(heatmapData[day][section - 1])
+              : 0;
+            var occupied = countData[day] && countData[day][section - 1] !== undefined
+              ? Number(countData[day][section - 1])
+              : 0;
+            var cell = document.createElement("div");
+            cell.className = "heatmap-cell";
+            cell.style.background = heatmapColor(val);
+            cell.title = weekdays[day] + " 第" + section + "节\\n占用率：" + val + "%\\n占用教室：" + occupied + "/" + (meta.totalClassrooms || 0);
+            heatmapWrap.appendChild(cell);
           }
         }
       }
@@ -2540,7 +2745,7 @@ const adminConsoleHtml = `<!doctype html>
       // Panel 3: 同步中心 Sync Center
       function loadSyncStatus() {
         setStatus("正在获取系统同步状态与命令指南...");
-        api("/api/admin/sync/status")
+        return api("/api/admin/sync/status")
           .then(function(res) {
             state.syncStatus = res.data;
             renderSyncStatusGrid();
@@ -2568,6 +2773,8 @@ const adminConsoleHtml = `<!doctype html>
         var list = [
           { label: "当前版本", val: data.releaseVersion || "-", icon: "🏷️", foot: "在线 release 版本" },
           { label: "配置学期", val: data.semester || "-", icon: "📅", foot: "佛大教务默认学期" },
+          { label: "Cookie Session", val: data.adminSessionAuthenticated ? "有效" : "未确认", icon: "🔐", foot: "后台网页登录态" },
+          { label: "API Token", val: data.apiTokenConfigured ? "已配置" : "未配置", icon: "🔑", foot: "仅显示配置状态，不暴露值" },
           { label: "课表最后同步", val: formatDate(data.classScheduleUpdatedAt), icon: "🏫", foot: "行政班课表" },
           { label: "教室最后同步", val: formatDate(data.classroomScheduleUpdatedAt), icon: "🚪", foot: "课室占用" },
         ];
@@ -2633,6 +2840,29 @@ const adminConsoleHtml = `<!doctype html>
         showToast("命令已复制到剪贴板。");
       };
 
+      function copyAppConfigUrl() {
+        copyText(location.origin + "/api/fosu/app-config");
+      }
+
+      function copyPublicConfigJson() {
+        safeFetch("/api/fosu/app-config").then(function(result) {
+          if (!result.ok) {
+            showToast(result.message || "公开配置读取失败", "error");
+            return;
+          }
+          copyText(JSON.stringify(result.data, null, 2));
+        });
+      }
+
+      function clearAdminCache() {
+        clearAdminClientState();
+        ["FOSU_ADMIN_CACHE", "FOSU_ADMIN_LAST_SECTION"].forEach(function(key) {
+          try { localStorage.removeItem(key); } catch (e) {}
+          try { sessionStorage.removeItem(key); } catch (e) {}
+        });
+        showToast("本地后台缓存已清理", "success");
+      }
+
       function renderSyncHistoryTable() {
         var list = state.syncHistory;
         var tbody = $("syncHistoryTable");
@@ -2678,31 +2908,29 @@ const adminConsoleHtml = `<!doctype html>
           grid.appendChild(item);
           
           var start = Date.now();
-          fetch(a.path, { credentials: "include" })
-            .then(function(res) {
-              var duration = Date.now() - start;
+          safeFetch(a.path)
+            .then(function(result) {
               var speedBadge = $("health-speed-" + btoa(a.path).replace(/=/g, ""));
               if (speedBadge) {
-                if (res.ok) {
+                if (result.ok) {
                   speedBadge.className = "badge success";
-                  speedBadge.textContent = duration + "ms · 正常";
+                  speedBadge.textContent = result.status + " · " + result.duration + "ms · 正常";
                 } else {
                   speedBadge.className = "badge danger";
-                  speedBadge.textContent = res.status + " · 异常";
+                  var summary = result.status === 401 ? "需管理员权限/令牌" : (result.message || "异常");
+                  speedBadge.textContent = (result.status || "断开") + " · " + result.duration + "ms · " + summary.slice(0, 18);
                 }
-              }
-            })
-            .catch(function(err) {
-              var speedBadge = $("health-speed-" + btoa(a.path).replace(/=/g, ""));
-              if (speedBadge) {
-                speedBadge.className = "badge danger";
-                speedBadge.textContent = "断开";
               }
             });
         });
       }
 
       // 上传文件 Staging 后端交互
+      safeBind("syncSelectFileBtn", "click", function() {
+        var input = $("syncFileInput");
+        if (input) input.click();
+      });
+
       safeBind("syncFileInput", "change", function(e) {
         var file = e.target.files[0];
         if (!file) return;
@@ -3080,22 +3308,26 @@ const adminConsoleHtml = `<!doctype html>
         if (mode === "banner" || mode === "card") {
           var banner = document.createElement("div");
           banner.className = "mini-banner " + (priority === "urgent" ? "urgent" : (priority === "important" ? "warning" : ""));
-          banner.innerHTML = "<div style='font-weight: 800;'>【" + type + "】" + title + "</div>" +
-                             "<div style='margin-top: 4px; font-size: 9px; line-height:1.3;'>" + content + "</div>";
+          banner.innerHTML = "<div style='font-weight: 800;'>【" + escapeHtml(type) + "】" + escapeHtml(title) + "</div>" +
+                             "<div style='margin-top: 4px; font-size: 9px; line-height:1.3;'>" + escapeHtml(content) + "</div>";
           screen.appendChild(banner);
         } else if (mode === "modal") {
           var mask = document.createElement("div");
           mask.className = "mini-modal-mask";
           mask.innerHTML = "<div class='mini-modal'>" +
-                           "<h4>" + title + "</h4>" +
-                           "<p>" + content + "</p>" +
+                           "<h4>" + escapeHtml(title) + "</h4>" +
+                           "<p>" + escapeHtml(content) + "</p>" +
                            "<button>我知道了</button>" +
                            "</div>";
           screen.appendChild(mask);
         } else if (mode === "ticker") {
           var ticker = document.createElement("div");
-          ticker.className = "mini-ticker";
-          ticker.textContent = "【" + priority + "】" + title + ": " + content;
+          ticker.className = "mini-ticker " + priority;
+          ticker.innerHTML = "<span class='mini-ticker-icon'>告</span>" +
+            "<span class='mini-ticker-track'><span class='mini-ticker-text'><span>" +
+            escapeHtml(title + " · " + content) + "</span><span>" +
+            escapeHtml(title + " · " + content) + "</span></span></span>" +
+            "<span class='mini-ticker-action'>查看</span>";
           screen.appendChild(ticker);
         }
       }
@@ -3489,6 +3721,9 @@ const adminConsoleHtml = `<!doctype html>
       safeBind("cancelFbDrawerBtn", "click", closeFeedbackDrawer);
       safeBind("feedbackDrawerMask", "click", closeFeedbackDrawer);
       safeBind("saveFbDrawerBtn", "click", saveFeedbackDrawerDetail);
+      safeBind("copyAppConfigUrlBtn", "click", copyAppConfigUrl);
+      safeBind("copyPublicConfigJsonBtn", "click", copyPublicConfigJson);
+      safeBind("clearAdminCacheBtn", "click", clearAdminCache);
 
       // 数据资源中心事件绑定
       document.querySelectorAll("#catalogTabs button").forEach(function(btn) {
@@ -3570,7 +3805,11 @@ const adminConsoleHtml = `<!doctype html>
         showLoginView();
       } else {
         showDashboardView();
-        loadAll();
+        ensureAdminSession()
+          .then(loadAll)
+          .catch(function(error) {
+            console.warn("[Admin Console] session check failed:", error.message);
+          });
       }
     })();
   </script>
