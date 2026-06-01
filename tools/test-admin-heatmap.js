@@ -5,6 +5,7 @@ process.env.ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "test-admin-password"
 process.env.ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || "test-admin-token";
 
 const adminRouter = require("../server/src/routes/admin");
+const adminPages = require("../server/src/routes/adminPages");
 const {
   buildClassroomHeatmap,
   normalizeCourseSlot,
@@ -52,5 +53,13 @@ assertOccupied(derived, 4, 6, "derived classroom schedule should produce heatmap
 const empty = buildClassroomHeatmap({ source: "empty" });
 assert.strictEqual(empty.classroomHeatmapMeta.totalClassrooms, 0, "empty heatmap should keep totalClassrooms at 0");
 assert.strictEqual(empty.classroomHeatmapMeta.emptyReason, "no-classroom-schedules", "empty heatmap should explain emptyReason");
+
+const adminHtml = adminPages.adminConsoleHtml || "";
+const heatmapColorBodyMatch = adminHtml.match(/function heatmapColor\(value\) \{([\s\S]*?)\n      \}/);
+assert(heatmapColorBodyMatch, "admin heatmap renderer should define heatmapColor()");
+["#eef3f8", "#cfe0ff", "#8fbaff", "#4f86e8", "#1d4ed8"].forEach((color) => {
+  assert(heatmapColorBodyMatch[1].includes(color), `heatmapColor should include ${color}`);
+});
+assert(!/#(?:10b981|22c55e|16a34a|059669|065f46)/i.test(heatmapColorBodyMatch[1]), "heatmapColor should not use green shades");
 
 console.log("Admin heatmap parser tests passed.");

@@ -55,6 +55,7 @@ const FOSU_API_BASE = process.env.FOSU_API_BASE || "https://class.katelya.eu.org
 const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || "";
 const FOSU_SYNC_AUTH_MODE = process.env.FOSU_SYNC_AUTH_MODE || "playwright-manual";
 const SESSION_PATH = path.join(__dirname, ".session", "session.json");
+const PROJECT_ROOT = path.resolve(__dirname, "../..");
 
 // 延迟辅助函数
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -65,6 +66,18 @@ function getEnvFlag(name, defaultValue) {
     return defaultValue;
   }
   return String(value).toLowerCase() === "true";
+}
+
+function getTermStartDate(term) {
+  const map = {
+    "2025-2026-1": "2025-09-01",
+    "2025-2026-2": "2026-03-09",
+    "2026-2027-1": "2026-09-01",
+    "2026-2027-2": "2027-03-01",
+    "2027-2028-1": "2027-09-01",
+    "2027-2028-2": "2028-03-01",
+  };
+  return map[term] || "";
 }
 
 function readJsonArray(filePath) {
@@ -593,6 +606,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
 
   const cliParams = global.CLI_PARAMS || {};
   const generatedCommand = global.GENERATED_COMMAND || `node sync.js local-campus ${process.argv.slice(2).join(" ")}`;
+  const termStartDate = cliParams.start || getTermStartDate(activeSemester) || "2026-03-09";
   const cacheUsage = global.CLASS_SCHEDULE_CACHE_USAGE || {};
   const metaWarnings = [];
   if (cacheUsage.warning) {
@@ -629,7 +643,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     schemaVersion: "1.0",
     releaseVersion: cliParams.version || version,
     term: activeSemester,
-    termStartDate: cliParams.start || "2026-09-01",
+    termStartDate,
     generatedAt: new Date().toISOString(),
     version,
     semester: activeSemester,
@@ -641,7 +655,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     // 注入 meta
     meta: {
       term: activeSemester,
-      startDate: cliParams.start || "2026-09-01",
+      startDate: termStartDate,
       includeScopes,
       classScope: cliParams.classScope || cliParams["class-scope"] || process.env.SYNC_CLASS_SCOPE || "",
       grades: cliParams.grades || process.env.SYNC_CLASS_GRADES || "",
@@ -1786,12 +1800,27 @@ async function initBrowserContext() {
  * 获取会话过期的自适应友好提示语
  */
 function getExpiredSessionTip() {
-  const isSubDir = path.basename(process.cwd()) === 'fosu-sync-client';
-  if (isSubDir) {
-    return "💡 提示: 会话已过期，请在项目根目录执行：npm run login\n   或执行：npm run login";
-  } else {
-    return "💡 提示: 会话已过期，请在项目根目录执行：npm run login";
+  const invocationCwd = path.resolve(process.env.INIT_CWD || process.cwd());
+  const isProjectRoot = invocationCwd === PROJECT_ROOT;
+  const rootPackageJson = path.join(PROJECT_ROOT, "package.json");
+  const hasRootLoginScript = (() => {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(rootPackageJson, "utf-8"));
+      return Boolean(pkg.scripts && pkg.scripts.login);
+    } catch (error) {
+      return false;
+    }
+  })();
+  const lines = [
+    "请在项目根目录执行 npm run login，登录成功后重新运行当前同步命令。"
+  ];
+  if (!isProjectRoot) {
+    lines.push("你可能不在项目根目录，请先 cd 到 FosuClass 根目录。");
   }
+  if (!hasRootLoginScript) {
+    lines.push("当前根目录 package.json 未检测到 login script，请补充后再重试。");
+  }
+  return lines.join("\n");
 }
 
 /**
