@@ -1370,6 +1370,239 @@ const adminConsoleHtml = `<!doctype html>
         white-space: nowrap;
       }
     }
+    
+    /* === 同步运维与Staging样式 === */
+    .sync-wizard-form {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .sync-range-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .sync-range-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      cursor: pointer;
+    }
+    .sync-range-item input[type="checkbox"] {
+      width: auto;
+      cursor: pointer;
+    }
+    .command-card-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .command-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      background: var(--panel-2);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      transition: var(--transition);
+    }
+    .command-card:hover {
+      border-color: var(--primary);
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .command-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+    .command-title {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .command-tag {
+      font-size: 10px;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    .command-tag.low { background: var(--success-soft); color: var(--success); }
+    .command-tag.medium { background: var(--warning-soft); color: var(--warning); }
+    .command-tag.high { background: var(--danger-soft); color: var(--danger); }
+    
+    .command-code-box {
+      display: flex;
+      align-items: center;
+      background: #0f172a;
+      color: #38bdf8;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .command-code-box code {
+      word-break: break-all;
+    }
+    .command-code-box button {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      padding: 3px 8px;
+      font-size: 11px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: var(--transition);
+    }
+    .command-code-box button:hover {
+      background: rgba(255,255,255,0.25);
+    }
+    
+    .command-meta-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+      font-size: 12px;
+      border-top: 1px dashed var(--border);
+      padding-top: 8px;
+      margin-top: 2px;
+    }
+    .command-meta-item {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .command-meta-item strong {
+      color: var(--muted);
+      font-weight: 600;
+      font-size: 10px;
+    }
+    .command-meta-item span {
+      color: var(--text);
+      font-size: 11px;
+    }
+    .command-tip-box {
+      font-size: 11px;
+      color: var(--muted);
+      background: rgba(0,0,0,0.02);
+      border-left: 3px solid var(--primary);
+      padding: 6px 10px;
+      border-radius: 0 4px 4px 0;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    
+    .staging-preview-container {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      border: 1px dashed var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      background: var(--panel-2);
+      margin-top: 16px;
+    }
+    .staging-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 12px;
+    }
+    .staging-item {
+      background: var(--panel);
+      padding: 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      text-align: center;
+      box-shadow: var(--shadow);
+    }
+    .staging-item-title {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .staging-item-value {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--text);
+      margin: 4px 0;
+    }
+    .staging-item-diff {
+      font-size: 10px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+    }
+    .diff-plus { color: var(--success); }
+    .diff-minus { color: var(--danger); }
+    .diff-equal { color: var(--muted); }
+    
+    .warnings-list {
+      background: var(--warning-soft);
+      border: 1px solid var(--warning);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 12px;
+      color: #854d0e;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .warnings-list strong {
+      font-weight: 700;
+    }
+    
+    .diff-classes-list {
+      max-height: 140px;
+      overflow-y: auto;
+      font-size: 11px;
+      background: var(--panel);
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      margin-top: 8px;
+      line-height: 1.6;
+    }
+    .diff-classes-list strong {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 2px;
+    }
+    .diff-classes-list strong:first-child {
+      margin-top: 0;
+    }
+    .diff-classes-list span {
+      display: inline-block;
+      margin-right: 8px;
+      background: var(--panel-2);
+      padding: 1px 6px;
+      border-radius: 4px;
+      margin-top: 4px;
+    }
+    
+    .wizard-command-preview {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
   </style>
 </head>
 <body>
@@ -1568,34 +1801,244 @@ const adminConsoleHtml = `<!doctype html>
         </div>
 
         <div class="dash-columns">
-          <div class="card" style="display: flex; flex-direction: column; gap: 16px;">
-            <div style="display: flex; justify-content: space-between; align-items: center;">
-              <h3 class="card-title" style="margin-bottom: 0;">API 健康状态检测</h3>
-              <button class="secondary" id="recheckHealthBtn" style="padding: 4px 10px; font-size: 12px;">一键测试</button>
-            </div>
-            <div class="health-grid" id="healthGrid">
-              <!-- 接口连通度 -->
+          <div style="display: flex; flex-direction: column; gap: 20px;">
+            <!-- 新学期同步向导 -->
+            <div class="card">
+              <h3 class="card-title">📅 新学期一键同步向导</h3>
+              <form id="wizardForm" class="sync-wizard-form" onsubmit="return false;">
+                <div class="form-row">
+                  <div>
+                    <label for="wizardTerm">目标学期 (term)</label>
+                    <input type="text" id="wizardTerm" placeholder="例如: 2026-2027-1" value="2026-2027-1">
+                  </div>
+                  <div>
+                    <label for="wizardStartDate">学期开始日期 (StartDate)</label>
+                    <input type="date" id="wizardStartDate" value="2026-09-01">
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div>
+                    <label for="wizardVersion">发布版本 (releaseVersion)</label>
+                    <input type="text" id="wizardVersion" placeholder="自动生成或自定义" readonly>
+                  </div>
+                  <div>
+                    <label for="wizardSource">数据来源 (source)</label>
+                    <select id="wizardSource">
+                      <option value="server-direct" selected>服务器直接同步 (server-direct)</option>
+                      <option value="staging-upload">本地 JSON 上传 (staging-upload)</option>
+                      <option value="manual-maintain">手动维护 (manual-maintain)</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="form-row full">
+                  <div>
+                    <label for="wizardNote">发布说明 (releaseNote)</label>
+                    <input type="text" id="wizardNote" placeholder="例如: 2026-2027-1 新学期全校课表首版">
+                  </div>
+                </div>
+
+                <div>
+                  <label>同步范围</label>
+                  <div class="sync-range-grid">
+                    <label class="sync-range-item">
+                      <input type="checkbox" id="rangeClass" checked> 行政班课表
+                    </label>
+                    <label class="sync-range-item">
+                      <input type="checkbox" id="rangeTeacher" checked> 教师课表
+                    </label>
+                    <label class="sync-range-item">
+                      <input type="checkbox" id="rangeClassroom" checked> 教室课表
+                    </label>
+                    <label class="sync-range-item">
+                      <input type="checkbox" id="rangeCourse" checked> 课程课表
+                    </label>
+                    <label class="sync-range-item">
+                      <input type="checkbox" id="rangeClassroomList" checked> 教室列表
+                    </label>
+                    <label class="sync-range-item">
+                      <input type="checkbox" id="rangeTeacherList" checked> 教师列表
+                    </label>
+                    <label class="sync-range-item">
+                      <input type="checkbox" id="rangeCourseList" checked> 课程列表
+                    </label>
+                  </div>
+                </div>
+
+                <div class="form-row">
+                  <div>
+                    <label for="wizardMode">操作模式</label>
+                    <select id="wizardMode">
+                      <option value="dry-run">只测试不发布 (dry-run)</option>
+                      <option value="staging" selected>生成候选版本 (staging)</option>
+                      <option value="publish">直接发布 (publish) - [不推荐]</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div class="wizard-command-preview">
+                  <label style="margin-bottom: 2px;">📋 推荐运行的同步指令：</label>
+                  <div class="command-code-box">
+                    <code id="wizardCommandCode">加载中...</code>
+                    <button type="button" id="wizardCopyBtn">复制命令</button>
+                  </div>
+                  <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                    💡 提示：将上述命令复制到服务器终端，或者在本地校园网环境下的客户端中运行。
+                  </div>
+                </div>
+              </form>
             </div>
 
-            <h3 class="card-title" style="margin-bottom: 0; margin-top: 10px;">上传本地同步文件 (Staging)</h3>
-            <div style="border: 2px dashed var(--border); border-radius: 6px; padding: 20px; text-align: center; font-size: 13px;" id="uploadDropzone">
-              <p style="color: var(--muted); margin-bottom: 10px;">点击或拖拽同步 JSON 文件进行更新校验</p>
-              <input type="file" id="syncFileInput" style="display: none;" accept=".json">
-              <button class="ghost" id="syncSelectFileBtn">选择 JSON 文件</button>
-              <div id="uploadFileInfo" style="margin-top: 10px; font-weight: 600; color: var(--primary);"></div>
+            <!-- Staging JSON 上传与校验预览面板 -->
+            <div class="card">
+              <h3 class="card-title">📤 Staging JSON 上传、比对与发布</h3>
+              <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
+                Staging 机制：在本地或校园网电脑运行同步脚本生成 JSON 快照，在此处上传进行安全校验，比对线上数据无误后，再行正式发布。
+              </p>
+              
+              <div style="border: 2px dashed var(--border); border-radius: var(--radius); padding: 30px 20px; text-align: center; font-size: 13px; cursor: pointer; transition: var(--transition);" id="uploadDropzone" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
+                <p style="color: var(--muted); margin-bottom: 10px; font-weight: 600;">点击或拖拽本地生成的 Staging JSON 文件至此</p>
+                <input type="file" id="syncFileInput" style="display: none;" accept=".json">
+                <button type="button" class="secondary" id="syncSelectFileBtn">选择 JSON 文件</button>
+                <div id="uploadFileInfo" style="margin-top: 10px; font-weight: 600; color: var(--primary);"></div>
+              </div>
+
+              <!-- Staging 预览比对容器 -->
+              <div id="stagingPreviewBox" style="display: none;">
+                <div class="staging-preview-container">
+                  <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+                    <strong style="font-size: 14px; color: var(--text);">📋 上传的 Staging 数据预览</strong>
+                    <span class="badge info" id="stagingMetaBadge">学期: - | 版本: -</span>
+                  </div>
+
+                  <!-- 资源统计与差异 -->
+                  <div class="staging-grid">
+                    <div class="staging-item">
+                      <div class="staging-item-title">行政班课表</div>
+                      <div class="staging-item-value" id="stagingValClass">0</div>
+                      <div class="staging-item-diff" id="stagingDiffClass">-</div>
+                    </div>
+                    <div class="staging-item">
+                      <div class="staging-item-title">教师课表</div>
+                      <div class="staging-item-value" id="stagingValTeacher">0</div>
+                      <div class="staging-item-diff" id="stagingDiffTeacher">-</div>
+                    </div>
+                    <div class="staging-item">
+                      <div class="staging-item-title">教室课表</div>
+                      <div class="staging-item-value" id="stagingValClassroom">0</div>
+                      <div class="staging-item-diff" id="stagingDiffClassroom">-</div>
+                    </div>
+                    <div class="staging-item">
+                      <div class="staging-item-title">课程课表</div>
+                      <div class="staging-item-value" id="stagingValCourse">0</div>
+                      <div class="staging-item-diff" id="stagingDiffCourse">-</div>
+                    </div>
+                  </div>
+
+                  <div class="staging-grid">
+                    <div class="staging-item">
+                      <div class="staging-item-title">教室总数</div>
+                      <div class="staging-item-value" id="stagingValRoomCount">0</div>
+                      <div class="staging-item-diff" id="stagingDiffRoomCount">-</div>
+                    </div>
+                    <div class="staging-item">
+                      <div class="staging-item-title">教师总数</div>
+                      <div class="staging-item-value" id="stagingValTeacherCount">0</div>
+                      <div class="staging-item-diff" id="stagingDiffTeacherCount">-</div>
+                    </div>
+                    <div class="staging-item">
+                      <div class="staging-item-title">课程总数</div>
+                      <div class="staging-item-value" id="stagingValCourseCount">0</div>
+                      <div class="staging-item-diff" id="stagingDiffCourseCount">-</div>
+                    </div>
+                  </div>
+
+                  <!-- 校验 Warning 列表 -->
+                  <div id="stagingWarningsBox" class="warnings-list" style="display: none;">
+                    <strong>⚠️ 数据合规性校验警告:</strong>
+                    <div id="stagingWarningsList"></div>
+                  </div>
+
+                  <!-- 详细班级 Diff 列表 -->
+                  <div>
+                    <strong style="font-size: 12px; color: var(--text);">🏫 行政班级变动明细：</strong>
+                    <div class="diff-classes-list" id="stagingDiffClassesList">
+                      暂无变动。
+                    </div>
+                  </div>
+
+                  <!-- 变动熔断与二次强确认发布控制 -->
+                  <div style="border-top: 1px solid var(--border); padding-top: 14px; display: flex; flex-direction: column; gap: 10px;">
+                    <div id="forceConfirmContainer" style="display: none; background: var(--danger-soft); border: 1px solid var(--danger); padding: 12px; border-radius: 8px; font-size: 12px; color: #991b1b;">
+                      <strong>⚠️ 警报: 数据变动幅度超过熔断阈值(30%)!</strong>
+                      <p style="margin-top: 4px; margin-bottom: 8px;">本次同步的行政班/课表记录变动量较大，为防止误清空线上数据，直接发布已被拦截。若确属新学期全量重构，请在下方手动勾选确认后强行发布。</p>
+                      <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #991b1b; font-weight: 700; margin-bottom:0;">
+                        <input type="checkbox" id="stagingForceConfirm"> 我已知晓风险，确认本次数据变动为正常新学期更迭，强行发布
+                      </label>
+                    </div>
+
+                    <div style="display: flex; justify-content: flex-end; gap: 12px; align-items: center;">
+                      <span id="publishStatusText" style="font-size:12px; color:var(--muted);"></span>
+                      <button type="button" class="primary" id="stagingPublishBtn" style="padding: 10px 20px;">🚀 发布为正式版本</button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div class="card" style="display: flex; flex-direction: column; gap: 16px;">
-            <h3 class="card-title" style="margin-bottom: 0;">同步运维命令指南</h3>
-            <div id="syncCommands" style="display: flex; flex-direction: column; gap: 10px; font-size: 12px;">
-              <!-- 动态命令列表 -->
+          <div style="display: flex; flex-direction: column; gap: 20px;">
+            <!-- 同步运维命令指南 -->
+            <div class="card" style="display: flex; flex-direction: column; gap: 16px;">
+              <h3 class="card-title" style="margin-bottom: 0;">🛠️ 同步运维命令说明</h3>
+              <div id="syncCommands" class="command-card-list">
+                <!-- 动态命令列表 -->
+              </div>
+            </div>
+
+            <!-- API 健康检测 -->
+            <div class="card" style="display: flex; flex-direction: column; gap: 16px;">
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <h3 class="card-title" style="margin-bottom: 0;">🌐 API 健康状态检测</h3>
+                <button class="secondary" id="recheckHealthBtn" style="padding: 4px 10px; font-size: 12px;">一键测试</button>
+              </div>
+              <div class="health-grid" id="healthGrid">
+                <!-- 接口连通度 -->
+              </div>
             </div>
           </div>
         </div>
 
+        <!-- 版本发布历史与一键秒级回滚 -->
         <div class="card" style="margin-top: 20px;">
-          <h3 class="card-title">最近同步历史</h3>
+          <h3 class="card-title">⏪ 版本发布历史与回滚控制</h3>
+          <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
+            展示最近发布的 5 个课表快照版本。发生数据污染、排课失误或临时调整时，可通过回滚键秒级切回历史版本，即时触碰小程序配置。
+          </p>
+          <div class="table-container">
+            <table>
+              <thead>
+                <tr>
+                  <th>版本号</th>
+                  <th>目标学期</th>
+                  <th>发布时间 / 备份</th>
+                  <th>数据范围统计</th>
+                  <th>说明备注</th>
+                  <th>当前状态</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="releasesTableBody">
+                <tr><td colspan="7" style="text-align: center; color: var(--muted); padding: 20px 0;">获取数据中...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 最近数据同步上报日志 -->
+        <div class="card" style="margin-top: 20px;">
+          <h3 class="card-title">📜 最近同步历史日志</h3>
           <div class="table-container">
             <table>
               <thead>
@@ -3150,147 +3593,17 @@ const adminConsoleHtml = `<!doctype html>
             $("catalogMetaHidden").value = String(!!res.data.metaInfo.hidden);
             $("catalogMetaTags").value = (res.data.metaInfo.tags || []).join(", ");
             
-            // 写入 meta 基础数据
-            var metaWrap = $("catalogDrawerMeta");
-            metaWrap.innerHTML = "<div><strong>系统 ID:</strong> " + escapeHtml(id) + "</div>" +
-                                 "<div><strong>关联课程:</strong> " + (res.data.courses || []).length + " 门节次</div>" +
-                                 "<div><strong>更新日期:</strong> " + formatDate(res.data.original.updatedAt || new Date()) + "</div>" +
-                                 "<div><strong>学期代码:</strong> " + (res.data.original.semester || "-") + "</div>";
-            
-            $("catalogRawJson").textContent = JSON.stringify(res.data.original, null, 2);
-            
-            renderMiniWeekSchedule();
-            
-            // 展示 Drawer
-            $("catalogDrawerMask").classList.add("show");
-            $("catalogDrawer").classList.add("show");
-            setStatus("已展开资源 " + id + " 配置面板。");
-          })
-          .catch(function(err) {
-            showToast(err.message, "error");
-          });
-      };
-
-      function closeCatalogDrawer() {
-        $("catalogDrawerMask").classList.remove("show");
-        $("catalogDrawer").classList.remove("show");
-        state.currentCatalogDetail = null;
-      }
-
-      // 可视化周课表生成算法
-      function renderMiniWeekSchedule() {
-        var detail = state.currentCatalogDetail;
-        if (!detail) return;
-        
-        var courses = detail.courses || [];
-        var activeWeek = state.previewWeek;
-        var showWeekend = state.showWeekendPreview;
-        
-        var grid = $("miniScheduleGrid");
-        grid.innerHTML = "";
-        
-        var cols = showWeekend ? 8 : 6;
-        grid.style.gridTemplateColumns = "50px repeat(" + (cols - 1) + ", 1fr)";
-        
-        // 渲染表头
-        var days = ["节次", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-        for(var c = 0; c < cols; c++) {
-          var div = document.createElement("div");
-          div.className = "mini-sched-head";
-          div.textContent = days[c];
-          grid.appendChild(div);
-        }
-        
-        // 渲染 14 大节课
-        for(var section = 1; section <= 14; section++) {
-          var label = document.createElement("div");
-          label.className = "mini-sched-row-label";
-          label.textContent = "第" + section + "节";
-          grid.appendChild(label);
-          
-          for(var weekday = 1; weekday < cols; weekday++) {
-            var cell = document.createElement("div");
-            cell.className = "mini-sched-cell";
-            
-            // 筛出在这个时间段和这周上课的课程
-            var slotCourses = courses.filter(function(course) {
-              var dayMatch = (course.dayOfWeek === weekday || course.weekday === weekday);
-              var secMatch = (course.sections || []).includes(section) || (course.startSection <= section && course.endSection >= section);
-              var weekMatch = true;
-              if (course.weeks && course.weeks.length > 0) {
-                weekMatch = course.weeks.includes(activeWeek);
-              }
-              return dayMatch && secMatch && weekMatch;
-            });
-            
-            if (slotCourses.length > 0) {
-              var courseBlock = document.createElement("div");
-              courseBlock.className = "mini-sched-course-block";
-              
-              // 聚合展示
-              var names = slotCourses.map(function(c) { return c.courseName; });
-              var uniqNames = Array.from(new Set(names));
-              
-              courseBlock.textContent = uniqNames.join("/");
-              courseBlock.title = slotCourses.map(function(c) {
-                return c.courseName + "\\n📍" + (c.classroom || "未定") + "\\n👨‍🏫" + (c.teacherName || "未知");
-              }).join("\\n---\\n");
-              
-              cell.appendChild(courseBlock);
-            }
-            
-            grid.appendChild(cell);
-          }
-        }
-        
-        $("previewWeekLabel").textContent = "第 " + activeWeek + " 周";
-        $("toggleWeekendPreviewBtn").textContent = showWeekend ? "隐藏周末" : "显示周末";
-      }
-
-      function saveCatalogMetaDetail() {
-        var detail = state.currentCatalogDetail;
-        if (!detail) return;
-        
-        var tagsStr = $("catalogMetaTags").value;
-        var tags = tagsStr.split(",").map(function(t) { return t.trim(); }).filter(Boolean);
-        
-        var payload = {
-          type: detail.type,
-          id: detail.id,
-          displayName: $("catalogMetaDisplayName").value,
-          note: $("catalogMetaNote").value,
-          hidden: $("catalogMetaHidden").value === "true",
-          tags: tags
-        };
-        
-        api("/api/admin/catalog/meta", {
-          method: "POST",
-          body: JSON.stringify(payload)
-        })
-          .then(function(res) {
-            showToast("元数据配置已成功更新并备份。");
-            closeCatalogDrawer();
-            loadCatalog();
-          })
-          .catch(function(err) {
-            showToast(err.message, "error");
-          });
-      }
-
-      // 资源配置与导出
-      function exportCatalogData(format) {
-        var detail = state.currentCatalogDetail;
-        if (!detail) return;
-        window.open("/api/admin/export?type=" + detail.type + "&id=" + encodeURIComponent(detail.id) + "&format=" + format);
-      }
-
+            // Panel 3: 同步中心 Sync Center
       // Panel 3: 同步中心 Sync Center
       function loadSyncStatus() {
-        setStatus("正在获取系统同步状态与命令指南...");
+        setStatus("正在获取系统同步状态与运维指南...");
         return api("/api/admin/sync/status")
           .then(function(res) {
             state.syncStatus = res.data;
             renderSyncStatusGrid();
+            
+            // 更新向导命令
+            updateWizardCommand();
             
             // 拉取历史
             return api("/api/admin/sync/history");
@@ -3298,6 +3611,13 @@ const adminConsoleHtml = `<!doctype html>
           .then(function(res) {
             state.syncHistory = res.items || [];
             renderSyncHistoryTable();
+            
+            // 拉取 release 历史
+            return api("/api/admin/sync/releases");
+          })
+          .then(function(res) {
+            state.releasesHistory = res.releases || [];
+            renderReleaseHistoryTable();
             
             // 自动测速
             runHealthChecks();
@@ -3314,11 +3634,11 @@ const adminConsoleHtml = `<!doctype html>
         
         var list = [
           { label: "当前版本", val: data.releaseVersion || "-", icon: "🏷️", foot: "在线 release 版本" },
-          { label: "配置学期", val: data.semester || "-", icon: "📅", foot: "佛大教务默认学期" },
-          { label: "Cookie Session", val: data.adminSessionAuthenticated ? "有效" : "未确认", icon: "🔐", foot: "后台网页登录态" },
-          { label: "API Token", val: data.apiTokenConfigured ? "已配置" : "未配置", icon: "🔑", foot: "仅显示配置状态，不暴露值" },
-          { label: "课表最后同步", val: formatDate(data.classScheduleUpdatedAt), icon: "🏫", foot: "行政班课表" },
-          { label: "教室最后同步", val: formatDate(data.classroomScheduleUpdatedAt), icon: "🚪", foot: "课室占用" },
+          { label: "配置学期", val: data.semester || "-", icon: "📅", foot: "教务系统学期" },
+          { label: "校园网连通", val: data.intranetAccessible ? "连通 🟢" : "未连通 🔴", icon: "🌐", foot: "教务内网 DNS" },
+          { label: "行政班总数", val: (data.counts?.classScheduleCount || 0) + " 个", icon: "🏫", foot: "行政班课表" },
+          { label: "课程总数", val: (data.counts?.courseScheduleCount || 0) + " 门", icon: "📚", foot: "资源关联课表" },
+          { label: "最后同步时间", val: formatDate(data.classScheduleUpdatedAt), icon: "🕒", foot: "行政班更新" },
         ];
         
         list.forEach(function(item) {
@@ -3329,47 +3649,192 @@ const adminConsoleHtml = `<!doctype html>
                            "<div class='stat-foot'>" + item.foot + "</div>";
           wrap.appendChild(card);
         });
+      }
 
-        // 渲染命令生成器
-        var cmdWrap = $("syncCommands");
-        cmdWrap.innerHTML = "";
-        var cmds = [
-          { cmd: "npm run sync:quick", desc: "快速同步行政班课表结构，耗时短，覆盖今日及周历基础字段。", local: false },
-          { cmd: "npm run sync:fresh", desc: "全量抓取并重构当前学期，进行全级别专业与班级解析。", local: false },
-          { cmd: "npm run sync:resources", desc: "爬取教师、课室和公开课程的资源网（需接入校园网）。", local: true },
-          { cmd: "npm run sync:release", desc: "打包本地缓存数据，发布增量 snapshot 快照版本。", local: false },
-          { cmd: "npm run test:course-normalizer", desc: "运行课表标准化校验器，测试地名/人名提取准确度。", local: false },
-        ];
+      // 生成发布版本号
+      function getAutoGeneratedVersion(term) {
+        var now = new Date();
+        var yyyy = now.getFullYear();
+        var mm = String(now.getMonth() + 1).padStart(2, "0");
+        var dd = String(now.getDate()).padStart(2, "0");
+        var hh = String(now.getHours()).padStart(2, "0");
+        var min = String(now.getMinutes()).padStart(2, "0");
+        var sec = String(now.getSeconds()).padStart(2, "0");
         
-        cmds.forEach(function(c) {
-          var box = document.createElement("div");
-          box.style = "padding: 10px; border: 1px solid var(--border); border-radius: 6px; display: flex; align-items: center; justify-content: space-between;";
-          
-          var infoDiv = document.createElement("div");
-          
-          var cmdStrong = document.createElement("strong");
-          cmdStrong.style = "font-family: monospace; font-size:12px; color: var(--primary);";
-          cmdStrong.textContent = c.cmd;
-          infoDiv.appendChild(cmdStrong);
-          
-          var descDiv = document.createElement("div");
-          descDiv.style = "font-size: 11px; color: var(--muted); margin-top:2px;";
-          descDiv.textContent = c.desc + (c.local ? " (⚠️需校园网)" : "");
-          infoDiv.appendChild(descDiv);
-          
-          box.appendChild(infoDiv);
-          
-          var btn = document.createElement("button");
-          btn.className = "btn ghost";
-          btn.style = "padding: 2px 8px; font-size: 11px;";
-          btn.textContent = "复制";
-          btn.addEventListener("click", function() {
-            copyText(c.cmd);
+        // 比如 2026-2027-1 -> 202620271
+        var termClean = (term || "2026-2027-1").replace(/-/g, "");
+        return termClean + "-" + yyyy + mm + dd + "-" + hh + min + sec;
+      }
+
+      // 更新向导命令预览与运维卡片列表
+      function updateWizardCommand() {
+        var term = $("wizardTerm").value.trim() || "2026-2027-1";
+        var startDate = $("wizardStartDate").value;
+        var note = $("wizardNote").value.trim() || (term + " 新学期全校课表首版");
+        var mode = $("wizardMode").value;
+        var source = $("wizardSource").value;
+        
+        // 自动计算版本
+        var versionInput = $("wizardVersion");
+        if (versionInput) {
+          if (!versionInput.dataset.modifiedByUser || !versionInput.value) {
+            versionInput.value = getAutoGeneratedVersion(term);
+          }
+        }
+        
+        var isDryRun = (mode === "dry-run");
+        var publish = (mode === "publish");
+        
+        var query = "?term=" + encodeURIComponent(term) +
+                    "&start=" + encodeURIComponent(startDate) +
+                    "&note=" + encodeURIComponent(note) +
+                    "&dryRun=" + isDryRun +
+                    "&publish=" + publish;
+                    
+        api("/api/admin/sync/command-guide" + query)
+          .then(function(res) {
+            if (res.success && res.commands) {
+              var cmds = res.commands;
+              
+              // 1. 渲染向导的一键同步命令预览 (最后一条为 sync:new-term)
+              var wizardCmd = cmds.find(function(c) { return c.id === "new-term"; }) || cmds[cmds.length - 1];
+              var cmdText = wizardCmd ? wizardCmd.command : "npm run sync:new-term";
+              
+              // 如果来源是 staging-upload，向导指示上传，就不使用命令行 sync 啦
+              if (source === "staging-upload") {
+                $("wizardCommandCode").textContent = "已选 [本地 JSON 上传] 来源，请在下方上传 Staging JSON，无需运行命令行。";
+                if ($("wizardCopyBtn")) $("wizardCopyBtn").style.display = "none";
+              } else {
+                $("wizardCommandCode").textContent = cmdText;
+                if ($("wizardCopyBtn")) $("wizardCopyBtn").style.display = "block";
+              }
+              
+              // 2. 渲染动态命令说明卡片列表
+              var syncCommandsWrap = $("syncCommands");
+              if (syncCommandsWrap) {
+                syncCommandsWrap.innerHTML = "";
+                
+                // 过滤出除了 new-term 以外的前面 5 个命令
+                var normalCmds = cmds.filter(function(c) { return c.id !== "new-term"; });
+                normalCmds.forEach(function(c) {
+                  var riskClass = c.risk.indexOf("低") >= 0 ? "low" : (c.risk.indexOf("中高") >= 0 ? "high" : "medium");
+                  var riskBadge = "<span class='command-tag " + riskClass + "'>风险: " + c.risk + "</span>";
+                  var intranetBadge = c.intranetRequired ? "<span class='command-tag high'>⚠️ 需校园网</span>" : "<span class='command-tag low'>外网可用</span>";
+                  
+                  var item = document.createElement("div");
+                  item.className = "command-card";
+                  item.innerHTML = 
+                    "<div class='command-header'>" +
+                      "<div class='command-title'>🔧 " + c.name + "</div>" +
+                      "<div style='display:flex; gap:6px;'>" + riskBadge + intranetBadge + "</div>" +
+                    "</div>" +
+                    "<div class='command-code-box'>" +
+                      "<code>" + c.command + "</code>" +
+                      "<button type='button' onclick='window.copyText(\"" + c.command + "\")'>复制</button>" +
+                    "</div>" +
+                    "<div class='command-meta-grid'>" +
+                      "<div class='command-meta-item'><strong>适用场景</strong><span>" + c.scene + "</span></div>" +
+                      "<div class='command-meta-item'><strong>前置条件</strong><span>" + c.precondition + "</span></div>" +
+                      "<div class='command-meta-item'><strong>预计耗时</strong><span>" + c.duration + "</span></div>" +
+                      "<div class='command-meta-item'><strong>常见失败原因</strong><span>" + c.failureReason + "</span></div>" +
+                    "</div>" +
+                    "<div class='command-tip-box'>" +
+                      "<strong>💡 修复建议:</strong><span>" + c.solution + "</span>" +
+                    "</div>";
+                  syncCommandsWrap.appendChild(item);
+                });
+              }
+            }
+          })
+          .catch(function(err) {
+            console.error("加载运维指南失败:", err);
           });
-          box.appendChild(btn);
+      }
+
+      // 绑定向导的表单值变化监听以更新推荐命令
+      ["wizardTerm", "wizardStartDate", "wizardNote"].forEach(function(id) {
+        safeBind(id, "input", updateWizardCommand);
+      });
+      ["wizardMode", "wizardSource"].forEach(function(id) {
+        safeBind(id, "change", updateWizardCommand);
+      });
+      safeBind("wizardCopyBtn", "click", function() {
+        var code = $("wizardCommandCode").textContent;
+        if (code && code.indexOf("无需运行命令行") < 0) {
+          copyText(code);
+        }
+      });
+
+      // 渲染 Releases 列表
+      function renderReleaseHistoryTable() {
+        var list = state.releasesHistory || [];
+        var tbody = $("releasesTableBody");
+        tbody.innerHTML = "";
+        
+        if (list.length === 0) {
+          tbody.innerHTML = "<tr><td colspan='7' style='text-align: center; color: var(--muted); padding: 24px 0;'>暂无历史 Release 数据包。</td></tr>";
+          return;
+        }
+        
+        var currentActiveVer = state.syncStatus ? state.syncStatus.releaseVersion : "";
+        
+        list.forEach(function(r) {
+          var tr = document.createElement("tr");
+          var isActive = (r.version === currentActiveVer);
+          var statusCell = isActive ? "<span class='badge success'>运行中 (Active)</span>" : "<span class='badge muted'>历史版本</span>";
           
-          cmdWrap.appendChild(box);
+          var countText = 
+            "行政班: " + (r.counts?.classScheduleCount || 0) + "<br/>" +
+            "教师课表: " + (r.counts?.teacherScheduleCount || 0) + "<br/>" +
+            "教室课表: " + (r.counts?.classroomScheduleCount || 0) + "<br/>" +
+            "课程课表: " + (r.counts?.courseScheduleCount || 0);
+            
+          var actionBtn = document.createElement("button");
+          actionBtn.className = "btn ghost";
+          actionBtn.style = "padding: 4px 10px; font-size:12px;";
+          if (isActive) {
+            actionBtn.textContent = "当前活跃";
+            actionBtn.disabled = true;
+          } else {
+            actionBtn.textContent = "⏪ 一键回滚";
+            actionBtn.addEventListener("click", function() {
+              rollbackToVersion(r.version);
+            });
+          }
+          
+          tr.innerHTML = 
+            "<td><strong style='font-family: monospace; font-size:12px; color: var(--primary);'>" + r.version + "</strong></td>" +
+            "<td>" + r.semester + "</td>" +
+            "<td><span style='font-size:11px;'>" + formatDate(r.updatedAt) + "</span></td>" +
+            "<td style='font-size:11px; line-height: 1.4;'>" + countText + "</td>" +
+            "<td style='max-width:180px; font-size:12px; white-space:normal;'>" + (r.counts?.releaseNote || "-") + "</td>" +
+            "<td>" + statusCell + "</td>" +
+            "<td class='action-cell'></td>";
+            
+          tr.querySelector(".action-cell").appendChild(actionBtn);
+          tbody.appendChild(tr);
         });
+      }
+
+      // 执行回滚
+      function rollbackToVersion(version) {
+        if (!confirm("🚨 警告：确定要将线上全校课表一键回滚到快照 [" + version + "] 吗？\n该操作会立即覆盖小程序端当前的可见数据，并自动创建当前版本的备份！")) {
+          return;
+        }
+        
+        setStatus("正在将快照版本回滚为 " + version + "...");
+        api("/api/admin/sync/releases/rollback", {
+          method: "POST",
+          body: JSON.stringify({ version: version })
+        })
+          .then(function(res) {
+            showToast("回滚成功！系统已被重置为历史版本: " + version, "success");
+            loadSyncStatus();
+          })
+          .catch(function(err) {
+            showToast(err.message, "error");
+            loadSyncStatus();
+          });
       }
 
       window.copyText = function(text) {
@@ -3473,19 +3938,242 @@ const adminConsoleHtml = `<!doctype html>
         if (input) input.click();
       });
 
-      safeBind("syncFileInput", "change", function(e) {
-        var file = e.target.files[0];
+      function handleStagingFile(file) {
         if (!file) return;
         
-        $("uploadFileInfo").textContent = "正在校验并上传: " + file.name + " (" + Math.round(file.size/1024) + " KB)...";
+        var uploadInfo = $("uploadFileInfo");
+        uploadInfo.innerHTML = "正在解析并读取: <strong>" + escapeHtml(file.name) + "</strong>...";
         
-        // 此处预留真实上传Staging逻辑，并触发备份与diff摘要显示
-        setTimeout(function() {
-          $("uploadFileInfo").innerHTML = "<span style='color: var(--success);'>✓ 校验成功: 格式为合规 class-schedules 数组。已创建备份并热载入。</span>";
-          showToast("Staging 文件上传热载入成功");
-          ignoreLoadError(loadDashboard());
-        }, 1200);
+        var reader = new FileReader();
+        reader.onload = function(e) {
+          var text = e.target.result;
+          try {
+            var parsed = JSON.parse(text);
+            // 简单校验格式，是否存在基本元数据或资源
+            if (!parsed.term) {
+              uploadInfo.innerHTML = "<span style='color: var(--danger);'>❌ 错误: JSON 缺少 term (学期) 字段，不符合 Staging 标准格式。</span>";
+              return;
+            }
+            
+            uploadInfo.innerHTML = "正在校验并上传至服务器 Staging 区...";
+            
+            api("/api/admin/sync/staging/upload", {
+              method: "POST",
+              body: text
+            })
+              .then(function(res) {
+                uploadInfo.innerHTML = "<span style='color: var(--success);'>✓ " + escapeHtml(res.message || "上传校验暂存成功！") + "</span>";
+                showToast("Staging JSON 上传并校验成功，请查看下方比对详情并确认发布");
+                loadStagingPreview();
+              })
+              .catch(function(err) {
+                uploadInfo.innerHTML = "<span style='color: var(--danger);'>❌ 上传失败: " + escapeHtml(err.message) + "</span>";
+                showToast(err.message, "error");
+              });
+          } catch (err) {
+            uploadInfo.innerHTML = "<span style='color: var(--danger);'>❌ 错误: 文件不是合法的 JSON 格式。(" + escapeHtml(err.message) + ")</span>";
+            showToast("JSON 格式错误: " + err.message, "error");
+          }
+        };
+        reader.onerror = function() {
+          uploadInfo.innerHTML = "<span style='color: var(--danger);'>❌ 错误: 文件读取失败。</span>";
+          showToast("文件读取失败", "error");
+        };
+        reader.readAsText(file);
+      }
+
+      safeBind("syncFileInput", "change", function(e) {
+        var file = e.target.files[0];
+        handleStagingFile(file);
       });
+
+      // 拖拽上传支持
+      setTimeout(function() {
+        var dropzone = $("uploadDropzone");
+        if (dropzone) {
+          dropzone.addEventListener("dragover", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.style.borderColor = "var(--primary)";
+            dropzone.style.background = "var(--primary-soft)";
+          });
+          dropzone.addEventListener("dragenter", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.style.borderColor = "var(--primary)";
+            dropzone.style.background = "var(--primary-soft)";
+          });
+          dropzone.addEventListener("dragleave", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.style.borderColor = "var(--border)";
+            dropzone.style.background = "transparent";
+          });
+          dropzone.addEventListener("drop", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            dropzone.style.borderColor = "var(--border)";
+            dropzone.style.background = "transparent";
+            
+            var dt = e.dataTransfer;
+            var file = dt.files[0];
+            handleStagingFile(file);
+          });
+        }
+      }, 500);
+
+      // 获取 Staging 差异比对与展示
+      function loadStagingPreview() {
+        var previewBox = $("stagingPreviewBox");
+        if (!previewBox) return;
+        
+        api("/api/admin/sync/staging/current")
+          .then(function(res) {
+            if (res.success && res.data) {
+              previewBox.style.display = "block";
+              var d = res.data;
+              
+              // 1. 元数据
+              var timeStr = d.generatedAt ? formatDate(d.generatedAt) : "未知";
+              $("stagingMetaBadge").textContent = "学期: " + d.term + " | 版本: " + d.releaseVersion + " | 生成时间: " + timeStr;
+              
+              // 2. 填充数值
+              $("stagingValClass").textContent = d.counts.classScheduleCount;
+              $("stagingValTeacher").textContent = d.counts.teacherScheduleCount;
+              $("stagingValClassroom").textContent = d.counts.classroomScheduleCount;
+              $("stagingValCourse").textContent = d.counts.courseScheduleCount;
+              
+              $("stagingValRoomCount").textContent = d.counts.classroomCount;
+              $("stagingValTeacherCount").textContent = d.counts.teacherCount;
+              $("stagingValCourseCount").textContent = d.counts.courseCount;
+              
+              // 3. 填充差异 Diff 趋势
+              var renderDiffSpan = function(elId, delta) {
+                var el = $(elId);
+                if (!el) return;
+                if (delta > 0) {
+                  el.className = "staging-item-diff diff-plus";
+                  el.textContent = "↑ +" + delta;
+                } else if (delta < 0) {
+                  el.className = "staging-item-diff diff-minus";
+                  el.textContent = "↓ " + delta;
+                } else {
+                  el.className = "staging-item-diff diff-equal";
+                  el.textContent = "— 无变化";
+                }
+              };
+              
+              renderDiffSpan("stagingDiffClass", d.diff.classDelta);
+              renderDiffSpan("stagingDiffTeacher", d.diff.teacherDelta);
+              renderDiffSpan("stagingDiffClassroom", d.diff.classroomDelta);
+              renderDiffSpan("stagingDiffCourse", d.diff.courseDelta);
+              
+              // 资产列表差异 (教室、教师、课程)
+              renderDiffSpan("stagingDiffRoomCount", d.diff.classroomDelta);
+              renderDiffSpan("stagingDiffTeacherCount", d.diff.teacherDelta);
+              renderDiffSpan("stagingDiffCourseCount", d.diff.courseDelta);
+              
+              // 4. 详细行政班级列表变动明细
+              var diffListEl = $("stagingDiffClassesList");
+              if (diffListEl) {
+                var html = "";
+                if (d.diff.deletedCount > 0) {
+                  html += "<strong style='color:var(--danger);'>❌ 删除了以下行政班 (" + d.diff.deletedCount + " 个)：</strong>";
+                  html += "<div>" + d.diff.deletedClasses.map(function(c) { return "<span>" + escapeHtml(c) + "</span>"; }).join("") + "</div>";
+                }
+                if (d.diff.addedCount > 0) {
+                  html += "<strong style='color:var(--success);'>➕ 新增了以下行政班 (" + d.diff.addedCount + " 个)：</strong>";
+                  html += "<div>" + d.diff.addedClasses.map(function(c) { return "<span>" + escapeHtml(c) + "</span>"; }).join("") + "</div>";
+                }
+                if (d.diff.deletedCount === 0 && d.diff.addedCount === 0) {
+                  html = "<div style='color: var(--muted); padding: 8px 0;'>行政班级名单完全一致，无增删变化。</div>";
+                }
+                diffListEl.innerHTML = html;
+              }
+              
+              // 5. 校验警告
+              var warnBox = $("stagingWarningsBox");
+              var warnList = $("stagingWarningsList");
+              if (warnBox && warnList) {
+                var warnings = [];
+                
+                // 新生班少判定：行政班课表相比之前减少 50%
+                var activeClassCount = d.counts.classScheduleCount - d.diff.classDelta;
+                if (activeClassCount > 20 && d.counts.classScheduleCount < activeClassCount * 0.5) {
+                  warnings.push("警告: 行政班课表总数 (" + d.counts.classScheduleCount + "个) 相比当前线上版本 (" + activeClassCount + "个) 减少超过 50%，可能导致大范围课表缺失！");
+                }
+                
+                if (res.warnings && res.warnings.length > 0) {
+                  warnings = warnings.concat(res.warnings);
+                }
+                
+                if (warnings.length > 0) {
+                  warnBox.style.display = "flex";
+                  warnList.innerHTML = warnings.map(function(w) { return "<div>• " + escapeHtml(w) + "</div>"; }).join("");
+                } else {
+                  warnBox.style.display = "none";
+                }
+              }
+              
+              // 6. 熔断触发逻辑
+              var forceBox = $("forceConfirmContainer");
+              var forceCheckbox = $("stagingForceConfirm");
+              if (forceBox) {
+                if (d.diff.isBigChange) {
+                  forceBox.style.display = "block";
+                  if (forceCheckbox) forceCheckbox.checked = false;
+                  showToast("⚠️ 上传的数据变动率达 " + d.diff.changeRate + "%，已触发安全熔断，发布需要勾选下方二次确认！", "warning");
+                } else {
+                  forceBox.style.display = "none";
+                }
+              }
+              
+              // 启用发布按钮
+              var publishBtn = $("stagingPublishBtn");
+              if (publishBtn) {
+                publishBtn.disabled = false;
+              }
+            }
+          })
+          .catch(function(err) {
+            showToast("拉取 Staging 预览详情失败: " + err.message, "error");
+          });
+      }
+
+      function publishStaging() {
+        var forceConfirm = $("stagingForceConfirm");
+        var force = forceConfirm ? forceConfirm.checked : false;
+        
+        setStatus("正在正式发布课表快照版本...");
+        var publishBtn = $("stagingPublishBtn");
+        if (publishBtn) publishBtn.disabled = true;
+        
+        api("/api/admin/sync/staging/publish", {
+          method: "POST",
+          body: JSON.stringify({ force: force })
+        })
+          .then(function(res) {
+            showToast("发布成功！线上课表数据已更新。", "success");
+            // 隐藏 Staging 预览，清空文件信息
+            $("stagingPreviewBox").style.display = "none";
+            $("uploadFileInfo").textContent = "";
+            $("syncFileInput").value = "";
+            if (forceConfirm) forceConfirm.checked = false;
+            $("forceConfirmContainer").style.display = "none";
+            // 重新载入状态
+            loadSyncStatus();
+          })
+          .catch(function(err) {
+            if (publishBtn) publishBtn.disabled = false;
+            // 如果是因为变动大被拦截且有BIG_CHANGE_BLOCKED代码
+            if (err.message.indexOf("安全熔断值") >= 0 || err.message.indexOf("熔断") >= 0) {
+              $("forceConfirmContainer").style.display = "block";
+              showToast("由于数据变动大已熔断拦截，请二次勾选确认后再提交发布。", "warning");
+            } else {
+              showToast(err.message, "error");
+            }
+          });
+      }
 
       // Panel 4: 数据质量 Data Quality
       function loadQualityReport() {

@@ -2921,15 +2921,82 @@ router.post("/catalog/meta", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
+const STAGING_LATEST_PATH = path.join(STORAGE_DIR, "staging-latest.json");
+
+function validateStagingData(data) {
+  const errors = [];
+  const warnings = [];
+
+  if (!data || typeof data !== "object") {
+    errors.push("Staging 数据必须是 JSON 对象");
+    return { valid: false, errors, warnings };
+  }
+
+  const requiredFields = ["schemaVersion", "releaseVersion", "term", "termStartDate", "generatedAt"];
+  requiredFields.forEach(f => {
+    if (!data[f]) {
+      errors.push(`缺少关键元数据字段: ${f}`);
+    }
+  });
+
+  // 支持在 resources 内部或顶层
+  const classSchedules = data.classSchedules || data.resources?.classSchedules;
+  if (!classSchedules || !Array.isArray(classSchedules) || classSchedules.length === 0) {
+    errors.push("缺少班级课程表数据 (classSchedules)");
+  } else {
+    classSchedules.forEach((item, index) => {
+      if (index < 5) {
+        if (!item.className) {
+          warnings.push(`classSchedules[${index}] 缺少 className 字段`);
+        }
+      }
+    });
+  }
+
+  const resourceKeys = [
+    "teacherSchedules",
+    "classroomSchedules",
+    "courseSchedules",
+    "classrooms",
+    "teachers",
+    "courses"
+  ];
+  resourceKeys.forEach(k => {
+    const list = data[k] || data.resources?.[k];
+    if (!list || !Array.isArray(list)) {
+      warnings.push(`缺少资源维度数据: ${k}`);
+    }
+  });
+
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings
+  };
+}
+
 /**
  * 5. GET /api/admin/sync/status
- * 获取同步中心状态及健康度检查
+ * 获取同步中心状态及健康度检查 (带教务网DNS解析测试)
  */
-router.get("/sync/status", adminAuth.verifyAdminAccess, (req, res) => {
+router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
   try {
     const meta = getAdminDataVersion();
     const syncMeta = getSyncMeta();
     
+    // 快速进行 EasyConnect / 教务网 DNS 解析诊断 (1秒超时)
+    const dns = require("dns").promises;
+    let intranetAccessible = false;
+    try {
+      const hostname = new URL(config.FOSU_BASE_URL || "https://100.fosu.edu.cn").hostname;
+      const lookupPromise = dns.lookup(hostname);
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 1000));
+      await Promise.race([lookupPromise, timeoutPromise]);
+      intranetAccessible = true;
+    } catch (e) {
+      intranetAccessible = false;
+    }
+
     return res.json({
       success: true,
       data: {
@@ -2939,8 +3006,475 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, (req, res) => {
         teacherScheduleUpdatedAt: syncMeta["teacher-schedules"]?.updatedAt || null,
         classroomScheduleUpdatedAt: syncMeta["classroom-schedules"]?.updatedAt || null,
         courseScheduleUpdatedAt: syncMeta["course-schedules"]?.updatedAt || null,
-        lastUploadTime: syncMeta["class-schedules"]?.updatedAt || syncMeta["sync-meta"]?.updatedAt || null
+        lastUploadTime: syncMeta["class-schedules"]?.updatedAt || syncMeta["sync-meta"]?.updatedAt || null,
+        intranetAccessible,
+        counts: {
+          classScheduleCount: syncMeta["class-schedules"]?.itemCount || 0,
+          adminClassCount: syncMeta["class-schedules"]?.adminClassCount || 0,
+          majorAggregateCount: syncMeta["class-schedules"]?.majorAggregateCount || 0,
+          teacherScheduleCount: syncMeta["teacher-schedules"]?.itemCount || 0,
+          classroomScheduleCount: syncMeta["classroom-schedules"]?.itemCount || 0,
+          courseScheduleCount: syncMeta["course-schedules"]?.itemCount || 0,
+        }
       }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 5.1 POST /api/admin/sync/staging/upload
+ * 上传 Staging JSON 数据包并校验，仅写入 staging 不激活
+ */
+router.post(
+  "/sync/staging/upload",
+  adminAuth.verifyAdminAccess,
+  express.raw({ type: "*/*", limit: "150mb" }),
+  async (req, res) => {
+    try {
+      const buffer = req.body;
+      if (!buffer || buffer.length === 0) {
+        return res.status(400).json({ success: false, message: "上传内容不能为空" });
+      }
+
+      const isGzip = buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
+      let jsonStr;
+      
+      if (isGzip) {
+        try {
+          jsonStr = zlib.gunzipSync(buffer).toString("utf-8");
+        } catch (err) {
+          return res.status(400).json({ success: false, message: "无效的 Gzip 压缩数据: " + err.message });
+        }
+      } else {
+        jsonStr = buffer.toString("utf-8");
+      }
+
+      let stagingData;
+      try {
+        stagingData = JSON.parse(jsonStr);
+      } catch (err) {
+        return res.status(400).json({ success: false, message: "解析 JSON 失败，数据可能损坏: " + err.message });
+      }
+
+      // 规范化字段位置
+      if (!stagingData.classSchedules && stagingData.resources?.classSchedules) {
+        stagingData.classSchedules = stagingData.resources.classSchedules;
+      }
+      if (!stagingData.resources) {
+        stagingData.resources = {
+          teacherSchedules: stagingData.teacherSchedules || [],
+          classroomSchedules: stagingData.classroomSchedules || [],
+          courseSchedules: stagingData.courseSchedules || [],
+          classrooms: stagingData.classrooms || [],
+          teachers: stagingData.teachers || [],
+          courses: stagingData.courses || [],
+        };
+      }
+
+      const validation = validateStagingData(stagingData);
+      if (!validation.valid) {
+        return res.status(400).json({
+          success: false,
+          message: "Staging JSON 格式校验不通过",
+          errors: validation.errors,
+          warnings: validation.warnings
+        });
+      }
+
+      // 写入暂存区
+      fs.writeFileSync(STAGING_LATEST_PATH, JSON.stringify(stagingData, null, 2), "utf-8");
+      
+      const classSchedules = stagingData.classSchedules || [];
+      const adminClassCount = classSchedules.filter((item) => item.displayType === "class-schedule" && !item.isAggregated).length;
+
+      return res.json({
+        success: true,
+        message: "Staging JSON 上传并校验成功，已暂存",
+        warnings: validation.warnings,
+        data: {
+          term: stagingData.term,
+          termStartDate: stagingData.termStartDate,
+          releaseVersion: stagingData.releaseVersion,
+          generatedAt: stagingData.generatedAt,
+          counts: {
+            classScheduleCount: classSchedules.length,
+            adminClassCount,
+            majorAggregateCount: classSchedules.length - adminClassCount,
+            teacherScheduleCount: stagingData.resources?.teacherSchedules?.length || 0,
+            classroomScheduleCount: stagingData.resources?.classroomSchedules?.length || 0,
+            courseScheduleCount: stagingData.resources?.courseSchedules?.length || 0,
+            classroomCount: stagingData.resources?.classrooms?.length || 0,
+            teacherCount: stagingData.resources?.teachers?.length || 0,
+            courseCount: stagingData.resources?.courses?.length || 0,
+          }
+        }
+      });
+    } catch (error) {
+      console.error("Staging upload failed:", error);
+      return res.status(500).json({ success: false, message: "上传处理失败: " + error.message });
+    }
+  }
+);
+
+/**
+ * 5.2 GET /api/admin/sync/staging/current
+ * 获取当前 Staging 的预览与线上版本对比差异统计
+ */
+router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    if (!fs.existsSync(STAGING_LATEST_PATH)) {
+      return res.json({ success: false, message: "暂无暂存的 Staging 数据，请先上传" });
+    }
+
+    const stagingData = JSON.parse(fs.readFileSync(STAGING_LATEST_PATH, "utf-8"));
+    const activeSnapshot = releaseService.readActiveReleaseSnapshot();
+
+    const getStats = (snapshot) => {
+      if (!snapshot) return { classCount: 0, courseCount: 0, teacherCount: 0, classroomCount: 0, classNames: [] };
+      const classSchedules = snapshot.classSchedules || [];
+      const classNames = classSchedules.map(c => c.className).filter(Boolean);
+      return {
+        classCount: classSchedules.length,
+        courseCount: snapshot.resources?.courses?.length || snapshot.resources?.courseSchedules?.length || 0,
+        teacherCount: snapshot.resources?.teachers?.length || snapshot.resources?.teacherSchedules?.length || 0,
+        classroomCount: snapshot.resources?.classrooms?.length || snapshot.resources?.classroomSchedules?.length || 0,
+        classNames
+      };
+    };
+
+    const stagingStats = getStats(stagingData);
+    const activeStats = getStats(activeSnapshot);
+
+    const stagingClassNamesSet = new Set(stagingStats.classNames);
+    const activeClassNamesSet = new Set(activeStats.classNames);
+
+    const deletedClasses = activeStats.classNames.filter(name => !stagingClassNamesSet.has(name));
+    const addedClasses = stagingStats.classNames.filter(name => !activeClassNamesSet.has(name));
+
+    const baseCount = Math.max(activeStats.classCount, 1);
+    const changeRate = (deletedClasses.length + addedClasses.length) / baseCount;
+    const isBigChange = changeRate > 0.3;
+
+    const classSchedules = stagingData.classSchedules || [];
+    const adminClassCount = classSchedules.filter((item) => item.displayType === "class-schedule" && !item.isAggregated).length;
+
+    return res.json({
+      success: true,
+      data: {
+        term: stagingData.term,
+        termStartDate: stagingData.termStartDate,
+        releaseVersion: stagingData.releaseVersion,
+        generatedAt: stagingData.generatedAt,
+        releaseNote: stagingData.releaseNote || "",
+        counts: {
+          classScheduleCount: classSchedules.length,
+          adminClassCount,
+          majorAggregateCount: classSchedules.length - adminClassCount,
+          teacherScheduleCount: stagingData.resources?.teacherSchedules?.length || 0,
+          classroomScheduleCount: stagingData.resources?.classroomSchedules?.length || 0,
+          courseScheduleCount: stagingData.resources?.courseSchedules?.length || 0,
+          classroomCount: stagingData.resources?.classrooms?.length || 0,
+          teacherCount: stagingData.resources?.teachers?.length || 0,
+          courseCount: stagingData.resources?.courses?.length || 0,
+        },
+        diff: {
+          classDelta: stagingStats.classCount - activeStats.classCount,
+          courseDelta: stagingStats.courseCount - activeStats.courseCount,
+          teacherDelta: stagingStats.teacherCount - activeStats.teacherCount,
+          classroomDelta: stagingStats.classroomCount - activeStats.classroomCount,
+          deletedClasses: deletedClasses.slice(0, 100),
+          deletedCount: deletedClasses.length,
+          addedClasses: addedClasses.slice(0, 100),
+          addedCount: addedClasses.length,
+          changeRate: parseFloat((changeRate * 100).toFixed(2)),
+          isBigChange,
+        }
+      }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 5.3 POST /api/admin/sync/staging/publish
+ * 发布当前 Staging JSON 为正式 Release (变动>30%需要force强制参数)
+ */
+router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, res) => {
+  try {
+    if (!fs.existsSync(STAGING_LATEST_PATH)) {
+      return res.status(400).json({ success: false, message: "暂存数据不存在，请先上传 Staging JSON" });
+    }
+
+    const stagingData = JSON.parse(fs.readFileSync(STAGING_LATEST_PATH, "utf-8"));
+    const activeSnapshot = releaseService.readActiveReleaseSnapshot();
+
+    // 变动率限制校验
+    if (activeSnapshot) {
+      const activeClassNames = (activeSnapshot.classSchedules || []).map(c => c.className).filter(Boolean);
+      const stagingClassNamesSet = new Set((stagingData.classSchedules || []).map(c => c.className).filter(Boolean));
+      
+      const deletedClasses = activeClassNames.filter(name => !stagingClassNamesSet.has(name));
+      const addedClasses = (stagingData.classSchedules || []).map(c => c.className).filter(name => name && !new Set(activeClassNames).has(name));
+      
+      const baseCount = Math.max(activeClassNames.length, 1);
+      const changeRate = (deletedClasses.length + addedClasses.length) / baseCount;
+      
+      if (changeRate > 0.3 && req.body.force !== true) {
+        return res.status(400).json({
+          success: false,
+          code: "BIG_CHANGE_BLOCKED",
+          message: `Staging 数据变动率达 ${parseFloat((changeRate * 100).toFixed(2))}% (超过 30% 安全熔断值)。为避免新学期数据丢失或覆盖线上，必须勾选“确认强制发布”后方可提交发布。`,
+        });
+      }
+    }
+
+    // 备份当前线上版本
+    const activeInfo = releaseService.getActiveReleaseInfo();
+    if (activeInfo && activeInfo.version) {
+      const activeFiles = releaseService.getReleaseFiles(activeInfo.version);
+      if (fs.existsSync(activeFiles.snapshotPath)) {
+        createBackup("release-snapshot", activeFiles.snapshotPath);
+      }
+    }
+
+    // 正式激活发布
+    const result = releaseService.activateReleaseFromSnapshot(stagingData);
+    
+    // 更新元数据
+    const status = releaseService.getReleaseStatus();
+    const counts = status.counts || {};
+    const updatedAt = new Date().toISOString();
+    const meta = getSyncMeta();
+    meta.snapshot = {
+      updatedAt,
+      version: status.activeReleaseVersion,
+      semester: status.semester,
+      itemCount: counts.classScheduleCount || 0,
+      syncSource: "local-sync-client",
+    };
+    meta.catalog = {
+      updatedAt,
+      itemCount: counts.collegeCount || counts.collegesCount || 0,
+      syncSource: "local-sync-client",
+    };
+    meta.majors = {
+      updatedAt,
+      itemCount: counts.majorCount || counts.majorsCount || 0,
+      syncSource: "local-sync-client",
+    };
+    meta["class-schedules"] = {
+      updatedAt,
+      itemCount: counts.classScheduleCount || 0,
+      adminClassCount: counts.adminClassCount || 0,
+      majorAggregateCount: counts.majorAggregateCount || 0,
+      syncSource: "local-sync-client",
+    };
+    meta["teacher-schedules"] = {
+      updatedAt,
+      itemCount: counts.teacherScheduleCount || 0,
+      syncSource: "local-sync-client",
+    };
+    meta["classroom-schedules"] = {
+      updatedAt,
+      itemCount: counts.classroomScheduleCount || 0,
+      syncSource: "local-sync-client",
+    };
+    meta["course-schedules"] = {
+      updatedAt,
+      itemCount: counts.courseScheduleCount || 0,
+      syncSource: "local-sync-client",
+    };
+    fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
+
+    // 更新配置中发布版本号，使小程序端生效
+    appConfigService.touchDataVersionForSyncKey("release", {
+      updatedAt,
+      releaseVersion: status.activeReleaseVersion,
+      semester: status.semester,
+      releaseNote: req.body.releaseNote || stagingData.releaseNote || "通过管理端 Staging 校验发布新版本"
+    });
+
+    writeAuditLog(req, "publish", "sync-release", status.activeReleaseVersion, `将 Staging 数据正式发布为版本 ${status.activeReleaseVersion}`);
+
+    return res.json({
+      success: true,
+      message: "Staging 新版本已成功发布上线！",
+      version: status.activeReleaseVersion,
+      semester: status.semester,
+    });
+  } catch (error) {
+    console.error("Staging publish failed:", error);
+    return res.status(500).json({ success: false, message: "发布失败: " + error.message });
+  }
+});
+
+/**
+ * 5.4 GET /api/admin/sync/releases
+ * 获取最近发布的历史 Release 快照版本列表 (限 10 条，用于回滚)
+ */
+router.get("/sync/releases", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const list = releaseService.listReleases(10);
+    return res.json({
+      success: true,
+      releases: list,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+/**
+ * 5.5 POST /api/admin/sync/releases/rollback
+ * 一键回滚到指定的历史版本
+ */
+router.post("/sync/releases/rollback", adminAuth.verifyAdminAccess, async (req, res) => {
+  try {
+    const version = req.body.version;
+    if (!version) {
+      return res.status(400).json({ success: false, message: "缺少必要参数 version" });
+    }
+
+    // 备份当前活跃快照 (在回滚前)
+    const activeInfo = releaseService.getActiveReleaseInfo();
+    if (activeInfo && activeInfo.version) {
+      const activeFiles = releaseService.getReleaseFiles(activeInfo.version);
+      if (fs.existsSync(activeFiles.snapshotPath)) {
+        createBackup("release-snapshot", activeFiles.snapshotPath);
+      }
+    }
+
+    const result = releaseService.activateReleaseVersion(version);
+
+    // 触碰版本，同步更新缓存
+    const status = releaseService.getReleaseStatus();
+    const counts = status.counts || {};
+    const updatedAt = new Date().toISOString();
+    const meta = getSyncMeta();
+    Object.keys(meta).forEach(key => {
+      if (meta[key] && typeof meta[key] === "object") {
+        meta[key].updatedAt = updatedAt;
+        meta[key].version = version;
+      }
+    });
+    fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
+
+    appConfigService.touchDataVersionForSyncKey("release", {
+      updatedAt,
+      releaseVersion: version,
+      semester: status.semester,
+      releaseNote: `一键回滚数据至历史版本 ${version}`
+    });
+
+    writeAuditLog(req, "rollback", "sync-release", version, `一键回滚数据至版本 ${version}`);
+
+    return res.json({
+      success: true,
+      message: `已成功回滚至版本 ${version}`,
+      version,
+      semester: status.semester,
+    });
+  } catch (error) {
+    console.error("Rollback failed:", error);
+    return res.status(500).json({ success: false, message: "回滚失败: " + error.message });
+  }
+});
+
+/**
+ * 5.6 GET /api/admin/sync/command-guide
+ * 前端拉取动态生成一键同步脚本运维指南
+ */
+router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const term = req.query.term || "2026-2027-1";
+    const start = req.query.start || "2026-09-01";
+    const note = req.query.note || `${term}新学期课表首版`;
+    const isDryRun = req.query.dryRun === "true";
+    const publish = req.query.publish === "true";
+    
+    const outputSuffix = isDryRun ? "dry-run" : "full";
+
+    const commands = [
+      {
+        id: "quick",
+        name: "快速同步",
+        command: `npm run sync:quick -- --term=${term}`,
+        scene: "日常课表小更新、快速修复、刷新当前学期基础数据",
+        precondition: "教务系统中有小范围改动，且已在本地获得登录态 Cookie",
+        duration: "1 ~ 3 分钟",
+        intranetRequired: true,
+        risk: "低",
+        failureReason: "登录 Cookie 过期、学校 DNS 故障、网络请求超时",
+        solution: "运行 npm run login 重新登录授权，并诊断网络后再试"
+      },
+      {
+        id: "fresh",
+        name: "全量同步",
+        command: `npm run sync:fresh -- --term=${term} --start=${start}`,
+        scene: "新学期首次课表同步，抓取全校年级专业以重建行政班级排课",
+        precondition: "已在本地完成教务授权登录，且教务系统已发布该学期课表",
+        duration: "5 ~ 15 分钟",
+        intranetRequired: true,
+        risk: "中",
+        failureReason: "网络高频请求触发教务网限流封禁、内网 VPN 掉线",
+        solution: "调整 SYNC_CLASS_GRADES 过滤条件，减少单轮抓取数量或重新拨号"
+      },
+      {
+        id: "resources",
+        name: "资源同步",
+        command: `npm run sync:resources -- --term=${term}`,
+        scene: "基于已有班级课表派生出教师课表、教室占用、全校课程以及构建教室热力图所需的资源维度数据",
+        precondition: "已经成功抓取并上传当前学期的班级课表，可以直连教务网或 EasyConnect",
+        duration: "2 ~ 5 分钟",
+        intranetRequired: true,
+        risk: "中高",
+        failureReason: "本地没有当前学期已抓取的班级课表缓存数据",
+        solution: "先执行 sync:fresh 同步全校课表，生成基础缓存后再执行本命令"
+      },
+      {
+        id: "release",
+        name: "生成发布快照",
+        command: `npm run sync:release -- --term=${term} --note="${note}"`,
+        scene: "打包本地缓存数据，正式激活生成微信小程序端拉取的数据版本快照",
+        precondition: "本地已经同步好了完备的班级与资源数据缓存，校验无误",
+        duration: "15 ~ 30 秒",
+        intranetRequired: false,
+        risk: "中 (影响小程序线上展示)",
+        failureReason: "本地数据结构校验失败 (如关键排课字段缺失)、ADMIN_API_TOKEN 配置无效",
+        solution: "运行 test:course-normalizer，排查校验提示对数据源字段进行修补"
+      },
+      {
+        id: "normalizer",
+        name: "课程格式校验",
+        command: "npm run test:course-normalizer",
+        scene: "每次同步前后或发布快照前运行，确保体育课多地点、教师地名正常化提取准确",
+        precondition: "无，本地随时运行测试",
+        duration: "1 ~ 3 秒",
+        intranetRequired: false,
+        risk: "低",
+        failureReason: "测试硬编码断言异常 (通常因为别名合并算法更新改变了提取特征)",
+        solution: "检查 miniprogram/utils/courseNormalizer.js 中对体育课等合并机制的适配"
+      },
+      {
+        id: "new-term",
+        name: "新学期一键向导聚合脚本",
+        command: `npm run sync:new-term -- --term=${term} --start=${start} --note="${note}" --output=./staging/${term}-${outputSuffix}.json${publish ? " --publish=true" : ""}`,
+        scene: "新学期开学前，一键自动完成网络连通诊断、全量拉取、资源派生、本地校验，并输出 Staging JSON 成果物",
+        precondition: "确保本地 EasyConnect VPN 连通良好并完成教务网登录",
+        duration: "8 ~ 20 分钟",
+        intranetRequired: true,
+        risk: "中 (生成 Staging JSON 不影响小程序线上数据)",
+        failureReason: "前面各抓取脚本出错提前返回、或者 normalizer 测试未通过",
+        solution: "详细分析终端打印的报错，若是教务网未公布课表或新生班级过少，可使用本地 staging 机制手动修补后上传"
+      }
+    ];
+
+    return res.json({
+      success: true,
+      commands
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
