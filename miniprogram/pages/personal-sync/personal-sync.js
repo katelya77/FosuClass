@@ -1,6 +1,6 @@
 /**
  * 个人课表同步页面 JS
- * NOTE: 负责收集账号密码表单、实现前台触屏拖拽滑块的像素百分比计算，以及与后端三步同步协议进行交互和异常提示拦截。
+ * NOTE: 支持教务网账号在线同步与 XLS 本地文件聊天记录上传解析两大导入途径，包含导入预览和实时课程搜索。
  */
 
 const request = require("../../utils/request");
@@ -10,65 +10,306 @@ const MAX_SLIDE_RANGE = 247; // 340px (背景) - 93px (滑块) = 247px 有效拖
 
 Page({
   data: {
+    // 双通道模式控制
+    currentTab: "xls", // "xls" | "account"
+    importMode: "xls",  // "xls" | "account"
+    
+    // 账号同步字段
     studentId: "",
     password: "",
     studentIdMasked: "",
-
-    semesterOptions: ["2025-2026-2", "2025-2026-1", "2024-2025-2", "2024-2025-1"],
-    semesterIndex: 0,
-
     startingSession: false,
     showCaptchaModal: false,
     sessionId: "",
     captchaData: null,
-
-    // 同步环境诊断状态
     envChecked: false,
     envAvailable: false,
     checkingEnv: false,
     diagnoseMsg: "",
     mainBtnText: "检测同步环境",
 
-    // 滑块交互状态
+    // XLS 导入字段
+    selectedFile: null,  // { name, path, size, sizeStr }
+    loadingXls: false,
+    previewSearchKey: "",
+    previewDayFilter: "all", // "all" | 1-7
+    filteredCourses: [],
+
+    // 公用字段
+    semesterOptions: ["2025-2026-2", "2025-2026-1", "2024-2025-2", "2024-2025-1"],
+    semesterIndex: 0,
+    
+    // 滑块验证字段
     sliderX: 0,
     isDragging: false,
     startX: 0,
     startSliderX: 0,
-
     verifyStatus: "", // 'verifying' | 'success' | 'fail' | ''
+    
+    // 同步成功返回
     syncSuccess: false,
-    syncResult: null,
+    syncResult: null, // XLS 模式下含 filename, term, courses; 账号模式下含 student, schedule
   },
 
-  onLoad() {
+  onLoad(options) {
     // 默认使用当前全局设置的学期
     const settings = getSettings();
     const currentSemesterId = settings.semesterId || settings.semester || "2025-2026-2";
     
     // 匹配下拉框索引
     const index = this.data.semesterOptions.indexOf(currentSemesterId);
-    if (index >= 0) {
+    this.setData({
+      semesterIndex: index >= 0 ? index : 0,
+    });
+
+    // 支持从外部传参直接定位 Tab
+    if (options && options.tab) {
       this.setData({
-        semesterIndex: index,
+        currentTab: options.tab
       });
     }
   },
 
   /**
-   * 主按钮点击事件，分流检测逻辑与全校课表跳转
+   * 切换同步导航 Tab
+   */
+  switchTab(e) {
+    const tab = e.currentTarget.dataset.tab;
+    this.setData({
+      currentTab: tab,
+      selectedFile: null,
+      loadingXls: false,
+      syncSuccess: false,
+      syncResult: null
+    });
+  },
+
+  /* ========================================================
+   * 100 网手动作业：XLS 文件导入解析逻辑
+   * ======================================================== */
+
+  /**
+   * XLS 按钮触发入口：分流选择文件与上传解析
+   */
+  onXlsBtnTap() {
+    if (!this.data.selectedFile) {
+      this.chooseAndImportXls();
+    } else {
+      this.parseUploadedXls();
+    }
+  },
+
+  /**
+   * 调用微信 API 在聊天记录里选择课表 xls 文件
+   */
+  chooseAndImportXls() {
+    wx.chooseMessageFile({
+      count: 1,
+      type: "file",
+      extension: ["xls", "xlsx"],
+      success: (res) => {
+        const file = res.tempFiles[0];
+        if (!file) return;
+
+        // 限制文件大小不能超过 5MB
+        if (file.size > 5 * 1024 * 1024) {
+          wx.showModal({
+            title: "文件过大",
+            content: "上传的课表表格文件大小不能超过 5MB，请重新选择。",
+            showCancel: false
+          });
+          return;
+        }
+
+        const sizeStr = file.size > 1024 * 1024 
+          ? (file.size / (1024 * 1024)).toFixed(1) + " MB" 
+          : (file.size / 1024).toFixed(1) + " KB";
+
+        this.setData({
+          selectedFile: {
+            name: file.name,
+            path: file.path,
+            size: file.size,
+            sizeStr: sizeStr
+          }
+        });
+      },
+      fail: (err) => {
+        if (err.errMsg.indexOf("cancel") === -1) {
+          wx.showToast({
+            title: "文件选择失败",
+            icon: "none"
+          });
+        }
+      }
+    });
+  },
+
+  /**
+   * 清除当前已经选择的文件
+   */
+  clearSelectedFile() {
+    this.setData({
+      selectedFile: null,
+      loadingXls: false
+    });
+  },
+
+  /**
+   * 将选定的 xls 读取为 base64，并调用后端解析 API 接口
+   */
+  parseUploadedXls() {
+    const file = this.data.selectedFile;
+    if (!file || this.data.loadingXls) return;
+
+    this.setData({
+      loadingXls: true
+    });
+
+    wx.showLoading({
+      title: "读取并上传中..."
+    });
+
+    const fsManager = wx.getFileSystemManager();
+    fsManager.readFile({
+      filePath: file.path,
+      encoding: "base64",
+      success: (readRes) => {
+        const base64Str = readRes.data;
+        const targetTerm = this.data.semesterOptions[this.data.semesterIndex];
+
+        request.post(
+          "/api/fosu/personal/import-xls",
+          {
+            filename: file.name,
+            fileBase64: base64Str,
+            source: "fosu-100-print-xls",
+            targetTerm: targetTerm
+          },
+          { silentError: true }
+        )
+          .then((res) => {
+            wx.hideLoading();
+            if (res.success) {
+              wx.showToast({
+                title: "解析成功",
+                icon: "success"
+              });
+
+              this.setData({
+                syncSuccess: true,
+                importMode: "xls",
+                loadingXls: false,
+                syncResult: res,
+                previewSearchKey: "",
+                previewDayFilter: "all",
+                filteredCourses: res.courses || []
+              });
+            } else {
+              this.setData({ loadingXls: false });
+              this.showFriendlyError(res.code, res.message || "课表解析失败");
+            }
+          })
+          .catch((err) => {
+            wx.hideLoading();
+            this.setData({ loadingXls: false });
+            const payload = err.payload || {};
+            this.showFriendlyError(payload.code, payload.message || err.message || "网络请求失败");
+          });
+      },
+      fail: (readErr) => {
+        wx.hideLoading();
+        this.setData({ loadingXls: false });
+        wx.showModal({
+          title: "文件读取失败",
+          content: "无法读取微信文件，可能该文件已被系统微信缓存清理，请重新在微信聊天框接收后重试。",
+          showCancel: false
+        });
+      }
+    });
+  },
+
+  /**
+   * 预览页：输入框进行搜索过滤
+   */
+  onPreviewSearch(e) {
+    const key = e.detail.value.trim().toLowerCase();
+    this.setData({
+      previewSearchKey: key
+    });
+    this.applyPreviewFilters();
+  },
+
+  /**
+   * 预览页：星期 Tab 点击切换
+   */
+  onPreviewDayFilterTap(e) {
+    const day = e.currentTarget.dataset.day;
+    this.setData({
+      previewDayFilter: day
+    });
+    this.applyPreviewFilters();
+  },
+
+  /**
+   * 预览页：根据过滤项重新计算展示的数据集
+   */
+  applyPreviewFilters() {
+    const courses = (this.data.syncResult && this.data.syncResult.courses) || [];
+    const searchKey = this.data.previewSearchKey;
+    const dayFilter = this.data.previewDayFilter;
+
+    let filtered = courses;
+
+    // 1. 过滤星期
+    if (dayFilter !== "all") {
+      const targetDay = Number(dayFilter);
+      filtered = filtered.filter(c => c.weekDay === targetDay);
+    }
+
+    // 2. 搜索课程名
+    if (searchKey) {
+      filtered = filtered.filter(c => 
+        String(c.courseName).toLowerCase().includes(searchKey) ||
+        String(c.teacherName).toLowerCase().includes(searchKey) ||
+        String(c.classroom).toLowerCase().includes(searchKey)
+      );
+    }
+
+    this.setData({
+      filteredCourses: filtered
+    });
+  },
+
+  /**
+   * 放弃当前导入的课表预览，回到文件选择状态
+   */
+  cancelImport() {
+    this.setData({
+      syncSuccess: false,
+      syncResult: null,
+      selectedFile: null,
+      loadingXls: false
+    });
+  },
+
+  /* ========================================================
+   * 原有教务账号统一同步逻辑
+   * ======================================================== */
+
+  /**
+   * 账号同步的主按钮点击
    */
   onMainBtnTap() {
     if (this.data.envChecked && !this.data.envAvailable) {
-      // 若检测失败，文案为“暂不可用，使用全校课表”，点击后直接跳转全校课表
       this.goToSchoolPage();
     } else {
-      // 否则进行环境检测
       this.diagnoseEnvironment();
     }
   },
 
   /**
-   * 检测服务器的教务网连通环境
+   * 同步环境诊断
    */
   diagnoseEnvironment() {
     if (this.data.checkingEnv) return;
@@ -88,11 +329,9 @@ Page({
         let msg = "";
 
         if (res.agentMode) {
-          // 校园代理模式
           available = res.agent && res.agent.reachable;
           msg = res.recommendation || (available ? "已成功连接到校园代理网关。" : "校园代理网关连通异常。");
         } else {
-          // 直连教务网模式
           const authOk = res.authserver && res.authserver.reachable;
           const eduOk = res.edu100 && res.edu100.reachable;
           available = authOk && eduOk;
@@ -125,24 +364,16 @@ Page({
       });
   },
 
-  /**
-   * 跳转到全校课表并开启班级引导模式
-   */
   goToSchoolPage() {
-    // 设置本地标记，开启强制引导
     wx.setStorageSync("initSelectMode", true);
     wx.switchTab({
       url: "/pages/school/school",
       success: () => {
-        // 跳转成功后重置本页诊断状态，便于返回时重新检测
         this.resetEnvCheck();
       }
     });
   },
 
-  /**
-   * 重置环境检测状态
-   */
   resetEnvCheck() {
     this.setData({
       envChecked: false,
@@ -152,39 +383,26 @@ Page({
     });
   },
 
-  /**
-   * 学号输入事件
-   */
   onStudentIdInput(e) {
     this.setData({
       studentId: e.detail.value.trim(),
     });
   },
 
-  /**
-   * 密码输入事件
-   */
   onPasswordInput(e) {
     this.setData({
       password: e.detail.value,
     });
   },
 
-  /**
-   * 学期变更事件
-   */
   onSemesterChange(e) {
     this.setData({
       semesterIndex: Number(e.detail.value),
     });
   },
 
-  /**
-   * 步骤 1：开始登录流程，呼起会话获取验证码
-   */
   startLoginFlow() {
     if (this.data.startingSession) return;
-    
     this.setData({ startingSession: true });
 
     request.post(
@@ -199,10 +417,8 @@ Page({
         });
 
         if (res.useAgent) {
-          // 校园代理模式：直接执行登录并抓取同步，不呼起滑块校验
           this.loginAndSyncSchedule();
         } else {
-          // 直连模式：呼起滑块验证
           this.setData({
             showCaptchaModal: true,
             captchaData: res.captcha,
@@ -218,9 +434,6 @@ Page({
       });
   },
 
-  /**
-   * 触摸开始：初始化滑块物理拖拽起点
-   */
   onTouchStart(e) {
     if (this.data.verifyStatus === "verifying" || this.data.verifyStatus === "success") {
       return;
@@ -234,36 +447,23 @@ Page({
     });
   },
 
-  /**
-   * 触摸移动：更新滑块偏移并保持在安全有效宽度 [0, 247] px 内
-   */
   onTouchMove(e) {
     if (!this.data.isDragging) return;
     const touch = e.touches[0];
     const deltaX = touch.clientX - this.data.startX;
     let newSliderX = this.data.startSliderX + deltaX;
-
-    // 限幅控制
     newSliderX = Math.max(0, Math.min(newSliderX, MAX_SLIDE_RANGE));
-
     this.setData({
       sliderX: newSliderX,
     });
   },
 
-  /**
-   * 触摸结束：松手，立即将偏移量作为 moveLength 发起验证请求
-   */
   onTouchEnd() {
     if (!this.data.isDragging) return;
     this.setData({ isDragging: false });
-
     this.verifySliderCaptcha();
   },
 
-  /**
-   * 步骤 2：提交滑块偏移量进行验证
-   */
   verifySliderCaptcha() {
     this.setData({ verifyStatus: "verifying" });
 
@@ -278,7 +478,6 @@ Page({
     )
       .then(() => {
         this.setData({ verifyStatus: "success" });
-        // 延迟 400ms 让用户看到绿色勾选动画，再触发登录抓取
         setTimeout(() => {
           this.loginAndSyncSchedule();
         }, 400);
@@ -286,7 +485,7 @@ Page({
       .catch((err) => {
         this.setData({
           verifyStatus: "fail",
-          sliderX: 0, // 失败归零重来
+          sliderX: 0,
         });
         const payload = err.payload || {};
         wx.showToast({
@@ -296,12 +495,9 @@ Page({
       });
   },
 
-  /**
-   * 步骤 3：正式登录并同步课表
-   */
   loginAndSyncSchedule() {
     this.setData({
-      showCaptchaModal: false, // 关掉滑块框
+      showCaptchaModal: false,
     });
 
     const targetSemester = this.data.semesterOptions[this.data.semesterIndex];
@@ -317,42 +513,64 @@ Page({
       { silentError: true, loadingTitle: "正在同步个人课表..." }
     )
       .then((res) => {
-        // 脱敏学号用于展示
         const id = this.data.studentId;
         const idMasked = id.length > 8 ? `${id.slice(0, 4)}****${id.slice(-4)}` : `${id.slice(0, 2)}****${id.slice(-2)}`;
 
         this.setData({
           syncSuccess: true,
+          importMode: "account",
           syncResult: res,
           studentIdMasked: idMasked,
-          // 成功后清空明文密码变量
           password: "",
         });
       })
       .catch((err) => {
-        // 失败也清空明文密码以保证隐私安全
         this.setData({ password: "" });
         const payload = err.payload || {};
         this.showFriendlyError(payload.code, payload.message || err.message);
       });
   },
 
+  /* ========================================================
+   * 绑定课表及返回操作
+   * ======================================================== */
+
   /**
-   * 将同步拉取的课表设为当前课表
+   * 将同步或 XLS 导入的结果写入本地个人课表缓存中并设为首页课表
    */
   bindToLocal() {
     if (!this.data.syncResult) return;
 
     const result = this.data.syncResult;
-    const target = {
-      type: "personal",
-      name: "个人课表",
-      classId: "personal-xskb",
-      semester: result.semester,
-      courses: result.schedule.courses,
-      updateTime: result.updatedAt ? result.updatedAt.slice(0, 10) : "",
-      student: result.student,
-    };
+    const mode = this.data.importMode;
+    let target = null;
+
+    if (mode === "xls") {
+      // XLS 导入生成的本地绑定结构
+      target = {
+        type: "personal",
+        name: "个人课表 (XLS导入)",
+        classId: "personal-xskb-xls",
+        semester: result.term,
+        courses: result.courses,
+        updateTime: new Date().toISOString().slice(0, 10),
+        student: {
+          studentName: "XLS导入课表",
+          studentId: "100网理论课表"
+        }
+      };
+    } else {
+      // 账号同步的原绑定结构
+      target = {
+        type: "personal",
+        name: "个人课表",
+        classId: "personal-xskb",
+        semester: result.semester,
+        courses: result.schedule.courses,
+        updateTime: result.updatedAt ? result.updatedAt.slice(0, 10) : "",
+        student: result.student,
+      };
+    }
 
     const success = setCurrentScheduleTarget(target);
     if (success) {
@@ -372,16 +590,10 @@ Page({
     }
   },
 
-  /**
-   * 返回上一页
-   */
   goBack() {
     wx.navigateBack();
   },
 
-  /**
-   * 关闭滑块弹窗
-   */
   closeCaptchaModal() {
     this.setData({
       showCaptchaModal: false,
@@ -390,39 +602,41 @@ Page({
     });
   },
 
+  noop() {},
+
   /**
    * 针对不同业务错误码展示更友好直观的中文提示
    */
   showFriendlyError(code, defaultMsg) {
     let title = "提示";
-    let content = defaultMsg || "系统繁忙，请稍后再试";
+    let content = defaultMsg || "系统网络繁忙，请稍后再试";
 
     if (code === "EDU100_DNS_FAILED" || code === "UPSTREAM_DNS_FAILED") {
-      content = "当前同步节点无法解析教务网，请稍后再试。你仍可使用全校课表。";
+      content = "当前同步节点无法解析教务网，请稍后再试。您也可以使用全校课表或 XLS 手动导入。";
     } else if (code === "EDU100_UNREACHABLE" || code === "CAMPUS_NETWORK_REQUIRED") {
-      content = "当前同步服务器无法直接访问学校教务网，请先使用全校课表选择班级课表。";
+      content = "同步服务器目前无法访问教务网，建议切换成左侧的 “XLS 手动导入” 方案，不受网络限制。";
     } else if (code === "AUTHSERVER_UNREACHABLE") {
       content = "暂时无法连接统一身份认证服务，请稍后再试。";
     } else if (code === "LOGIN_PAGE_CHANGED") {
-      content = "学校登录页面结构可能已更新，个人同步暂时不可用。";
+      content = "统一身份认证页面结构可能已更新，在线同步暂时不可用。请使用 XLS 导入。";
     } else if (code === "SLIDER_ENDPOINT_FAILED" || code === "SLIDER_TOKEN_NOT_FOUND") {
-      content = "滑块验证资源加载失败或令牌解析失败，请稍后再试。";
+      content = "滑块验证码资源加载失败，请重试或使用 XLS 导入。";
     } else if (code === "SLIDER_VERIFY_FAILED") {
       content = "滑块验证失败，请重新拖动验证。";
     } else if (code === "CAS_LOGIN_FAILED" || code === "INVALID_CREDENTIALS") {
-      content = "登录失败，请检查学号、密码或验证码。";
+      content = "登录失败，请核对学号与统一认证密码。";
     } else if (code === "SCHEDULE_PAGE_UNREACHABLE") {
-      content = "已登录，但暂时无法打开个人课表页面。";
+      content = "教务认证成功，但拉取理论课表页面失败，请稍后重试。";
     } else if (code === "SCHEDULE_PARSE_FAILED" || code === "PERSONAL_SCHEDULE_PARSE_FAILED") {
-      content = "已打开个人课表页面，但解析课程失败。";
+      content = "打开课表成功，但解析课程数据失败。请联系客服或尝试 XLS 手动导入。";
     } else if (code === "PERSONAL_SCHEDULE_EMPTY") {
-      content = "同步成功，但是您在该学期中似乎没有课程排课记录。";
+      content = "同步成功，但是在该学期中似乎没有您的排课记录。";
     } else if (code === "VPN_GATEWAY_UNAVAILABLE") {
-      content = "校园代理网关未配置或暂时不可用，请联系管理员或使用全校课表。";
+      content = "校园代理网关连通受限，请尝试使用 XLS 手动导入。";
     } else if (code === "UPSTREAM_TIMEOUT") {
-      content = "连接教务系统超时，当前公网服务器暂不支持直接同步，请稍后再试。";
+      content = "连接教务网超时，校园系统网络拥堵或受限，推荐使用 XLS 手动导入。";
     } else if (code === "UPSTREAM_404") {
-      content = "教务系统接口或页面不存在(404)，个人同步暂时不可用。";
+      content = "教务接口未找到(404)，个人课表在线同步暂时受限。";
     }
 
     wx.showModal({
@@ -432,6 +646,4 @@ Page({
       confirmText: "知道了",
     });
   },
-
-  noop() {},
 });

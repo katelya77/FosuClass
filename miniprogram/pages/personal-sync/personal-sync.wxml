@@ -1,82 +1,35 @@
 <view class="page personal-sync-page">
-  <!-- 头部说明卡片 -->
-  <view class="card intro-card">
-    <view class="intro-title">
-      <icon type="warn" size="20" color="#c62828" class="intro-icon" />
-      <text>同步说明（实验功能）</text>
-    </view>
-    <view class="intro-content">
-      <view class="intro-item">1. 本功能需要校园网 / 校园 VPN 环境。当前公网上的主服务器无法直接访问学校 100 网。</view>
-      <view class="intro-item">2. 您的学号与密码仅在登录校验中瞬时处理，<text class="highlight">绝不会</text>被落库保存、不会写入任何日志，请放心使用。</view>
-      <view class="intro-item">3. 个人课表同步功能当前仍处于实验与适配阶段。推荐您暂时通过<text class="highlight">“全校课表”</text>直接选择并保存您的班级课表。</view>
-    </view>
+  <!-- 顶部 Tab 切换（仅在未成功导入/解析前展示） -->
+  <view class="tab-nav" wx:if="{{!syncSuccess}}">
+    <view class="tab-nav-item {{currentTab === 'xls' ? 'active' : ''}}" data-tab="xls" bindtap="switchTab">XLS 手动导入 (推荐)</view>
+    <view class="tab-nav-item {{currentTab === 'account' ? 'active' : ''}}" data-tab="account" bindtap="switchTab">账号密码同步</view>
   </view>
 
-  <!-- 输入表单卡片 -->
-  <view class="card form-card" wx:if="{{!syncSuccess}}">
-    <!-- 如果还没有检测或检测不可用，显示环境检测区 -->
-    <view class="env-check-section" wx:if="{{!envChecked || !envAvailable}}">
-      <view class="form-title">同步环境检测</view>
-      
-      <view class="env-status-box">
-        <view class="env-status-row">
-          <text class="status-label">服务器网络状态：</text>
-          <text class="status-value {{envChecked ? (envAvailable ? 'status-ok' : 'status-err') : 'status-pending'}}">
-            {{envChecked ? (envAvailable ? '正常' : '异常') : '未检测'}}
-          </text>
-        </view>
-        <view class="env-diagnose-desc" wx:if="{{diagnoseMsg}}">
-          {{diagnoseMsg}}
-        </view>
+  <!-- XLS 手动导入工作区 -->
+  <view class="tab-content" wx:if="{{!syncSuccess && currentTab === 'xls'}}">
+    <!-- 图文操作指导卡 -->
+    <view class="card intro-card">
+      <view class="intro-title">
+        <icon type="info" size="20" color="#1976d2" class="intro-icon" />
+        <text>导入操作步骤</text>
       </view>
-      
-      <button
-        class="btn-submit"
-        loading="{{checkingEnv}}"
-        disabled="{{checkingEnv}}"
-        bindtap="onMainBtnTap"
-      >
-        {{checkingEnv ? '正在检测中...' : mainBtnText}}
-      </button>
-
-      <button
-        class="btn-secondary"
-        bindtap="goToSchoolPage"
-      >
-        去选择班级课表
-      </button>
+      <view class="intro-content">
+        <view class="intro-step"><text class="step-num">1</text> 电脑浏览器登录 <text class="highlight">100.fosu.edu.cn</text></view>
+        <view class="intro-step"><text class="step-num">2</text> 进入“我的课表 → 学期理论课表”</view>
+        <view class="intro-step"><text class="step-num">3</text> 选择学期后点击“打印”，下载个人课表 xls 文件</view>
+        <view class="intro-step"><text class="step-num">4</text> 将该 xls 文件发送到微信“文件传输助手”</view>
+        <view class="intro-step"><text class="step-num">5</text> 回到小程序，点击下方按钮从聊天记录选择并导入</view>
+      </view>
+      <view class="intro-tip-box">
+        <text class="intro-tip-title">💡 隐私与安全说明：</text>
+        <text class="intro-tip-text">导入方案无需输入或上传教务密码，解析过程完全在瞬时内存中处理且不落库。生成的课表数据仅存储在您的手机本地缓存中，不会污染公共课表。</text>
+      </view>
     </view>
 
-    <!-- 检测通过后，显示输入表单 -->
-    <view class="form-fields-section" wx:else>
-      <view class="form-title">教务登录认证 (实验网关)</view>
-      
+    <!-- 选择文件及上传配置 -->
+    <view class="card upload-card">
       <view class="form-group">
-        <text class="form-label">学号</text>
-        <input
-          class="form-input"
-          type="number"
-          value="{{studentId}}"
-          placeholder="请输入教务网学号"
-          placeholder-class="input-placeholder"
-          bindinput="onStudentIdInput"
-        />
-      </view>
-
-      <view class="form-group">
-        <text class="form-label">密码</text>
-        <input
-          class="form-input"
-          password
-          value="{{password}}"
-          placeholder="请输入统一认证密码"
-          placeholder-class="input-placeholder"
-          bindinput="onPasswordInput"
-        />
-      </view>
-
-      <view class="form-group">
-        <text class="form-label">目标同步学期</text>
+        <text class="form-label">指定导入目标学期</text>
         <picker mode="selector" range="{{semesterOptions}}" value="{{semesterIndex}}" bindchange="onSemesterChange">
           <view class="picker-selector">
             <text>{{semesterOptions[semesterIndex]}}</text>
@@ -84,53 +37,265 @@
           </view>
         </picker>
       </view>
+      
+      <!-- 已选文件卡片提示 -->
+      <view class="selected-file-box animated fadeIn" wx:if="{{selectedFile}}">
+        <view class="file-icon">📄</view>
+        <view class="file-details">
+          <view class="file-name">{{selectedFile.name}}</view>
+          <view class="file-meta">{{selectedFile.sizeStr}}</view>
+        </view>
+        <view class="btn-remove-file" bindtap="clearSelectedFile">✕</view>
+      </view>
 
       <button
         class="btn-submit"
-        loading="{{startingSession}}"
-        disabled="{{!studentId || !password || startingSession}}"
-        bindtap="startLoginFlow"
+        loading="{{loadingXls}}"
+        disabled="{{loadingXls}}"
+        bindtap="onXlsBtnTap"
       >
-        {{startingSession ? '正在初始化...' : '开始登录校验'}}
+        {{selectedFile ? '确认并开始解析' : '选择 xls / xlsx 课表文件'}}
       </button>
+      
+      <button
+        class="btn-secondary"
+        wx:if="{{selectedFile}}"
+        bindtap="clearSelectedFile"
+      >
+        重新选择
+      </button>
+    </view>
+  </view>
 
-      <view class="form-footer-links">
-        <text class="link-recheck" bindtap="resetEnvCheck">重新检测环境</text>
+  <!-- 原有账号密码同步工作区 -->
+  <view class="tab-content" wx:if="{{!syncSuccess && currentTab === 'account'}}">
+    <view class="card intro-card">
+      <view class="intro-title">
+        <icon type="warn" size="20" color="#c62828" class="intro-icon" />
+        <text>同步说明（实验功能）</text>
+      </view>
+      <view class="intro-content">
+        <view class="intro-item">1. 本功能需要校园网 / 校园 VPN 连通环境。公网主服务器无法直接访问教务内网。</view>
+        <view class="intro-item">2. 您的学号与密码仅在登录校验中瞬时处理，<text class="highlight">绝不会</text>被落库保存或写入任何日志。</view>
+        <view class="intro-item">3. 账号同步适配较复杂，若无法登录，强烈推荐使用左侧 <text class="highlight">“XLS 手动导入”</text> 方案，更安全稳定。</view>
+      </view>
+    </view>
+
+    <view class="card form-card">
+      <!-- 环境检测 -->
+      <view class="env-check-section" wx:if="{{!envChecked || !envAvailable}}">
+        <view class="form-title">同步环境检测</view>
+        <view class="env-status-box">
+          <view class="env-status-row">
+            <text class="status-label">服务器网络状态：</text>
+            <text class="status-value {{envChecked ? (envAvailable ? 'status-ok' : 'status-err') : 'status-pending'}}">
+              {{envChecked ? (envAvailable ? '正常' : '异常') : '未检测'}}
+            </text>
+          </view>
+          <view class="env-diagnose-desc" wx:if="{{diagnoseMsg}}">
+            {{diagnoseMsg}}
+          </view>
+        </view>
+        
+        <button
+          class="btn-submit"
+          loading="{{checkingEnv}}"
+          disabled="{{checkingEnv}}"
+          bindtap="onMainBtnTap"
+        >
+          {{checkingEnv ? '正在检测中...' : mainBtnText}}
+        </button>
+
+        <button
+          class="btn-secondary"
+          bindtap="goToSchoolPage"
+        >
+          去选择班级课表
+        </button>
+      </view>
+
+      <!-- 检测通过表单 -->
+      <view class="form-fields-section" wx:else>
+        <view class="form-title">教务登录认证 (实验网关)</view>
+        
+        <view class="form-group">
+          <text class="form-label">学号</text>
+          <input
+            class="form-input"
+            type="number"
+            value="{{studentId}}"
+            placeholder="请输入教务网学号"
+            placeholder-class="input-placeholder"
+            bindinput="onStudentIdInput"
+          />
+        </view>
+
+        <view class="form-group">
+          <text class="form-label">密码</text>
+          <input
+            class="form-input"
+            password
+            value="{{password}}"
+            placeholder="请输入统一认证密码"
+            placeholder-class="input-placeholder"
+            bindinput="onPasswordInput"
+          />
+        </view>
+
+        <view class="form-group">
+          <text class="form-label">目标同步学期</text>
+          <picker mode="selector" range="{{semesterOptions}}" value="{{semesterIndex}}" bindchange="onSemesterChange">
+            <view class="picker-selector">
+              <text>{{semesterOptions[semesterIndex]}}</text>
+              <text class="picker-arrow">▼</text>
+            </view>
+          </picker>
+        </view>
+
+        <button
+          class="btn-submit"
+          loading="{{startingSession}}"
+          disabled="{{!studentId || !password || startingSession}}"
+          bindtap="startLoginFlow"
+        >
+          {{startingSession ? '正在初始化...' : '开始登录校验'}}
+        </button>
+
+        <view class="form-footer-links">
+          <text class="link-recheck" bindtap="resetEnvCheck">重新检测环境</text>
+        </view>
       </view>
     </view>
   </view>
 
   <!-- 校验及同步成功结果展示 -->
-  <view class="card result-card animated fadeIn" wx:else>
-    <view class="success-header">
-      <icon type="success" size="64" color="#2e7d32" class="success-icon" />
-      <view class="success-title">课表抓取成功！</view>
-    </view>
+  <view class="card result-card animated fadeIn" wx:if="{{syncSuccess}}">
     
-    <view class="result-details">
-      <view class="result-row">
-        <text class="result-label">学生姓名</text>
-        <text class="result-value">{{syncResult.student.studentName}}</text>
+    <!-- 方式一：XLS 导入预览页 -->
+    <view class="xls-preview-wrapper" wx:if="{{importMode === 'xls'}}">
+      <view class="preview-header">
+        <icon type="success" size="32" color="#2e7d32" class="preview-icon" />
+        <view class="preview-title-box">
+          <view class="preview-title">表格解析成功</view>
+          <view class="preview-subtitle">文件名: {{syncResult.filename}}</view>
+        </view>
       </view>
-      <view class="result-row">
-        <text class="result-label">学号</text>
-        <text class="result-value">{{studentIdMasked}}</text>
+
+      <view class="preview-stats">
+        <view class="stat-item">
+          <text class="stat-lbl">识别学期</text>
+          <text class="stat-val highlight">{{syncResult.term}}</text>
+        </view>
+        <view class="stat-item">
+          <text class="stat-lbl">课程总数</text>
+          <text class="stat-val">{{syncResult.courseCount}} 门</text>
+        </view>
       </view>
-      <view class="result-row">
-        <text class="result-label">同步学期</text>
-        <text class="result-value">{{syncResult.semester}}</text>
+
+      <!-- 检索与过滤条 -->
+      <view class="preview-filter-bar">
+        <input 
+          class="preview-search" 
+          placeholder="🔍 搜索课程名称" 
+          value="{{previewSearchKey}}"
+          bindinput="onPreviewSearch"
+        />
+        
+        <!-- 星期切换 Tab -->
+        <scroll-view class="weekday-scroll" scroll-x>
+          <view class="weekday-bar">
+            <view 
+              class="weekday-tab {{previewDayFilter === 'all' ? 'active' : ''}}" 
+              data-day="all"
+              bindtap="onPreviewDayFilterTap"
+            >全部</view>
+            <view 
+              wx:for="{{['一','二','三','四','五','六','日']}}" 
+              wx:key="index"
+              class="weekday-tab {{previewDayFilter === (index + 1) ? 'active' : ''}}" 
+              data-day="{{index + 1}}"
+              bindtap="onPreviewDayFilterTap"
+            >周{{item}}</view>
+          </view>
+        </scroll-view>
       </view>
-      <view class="result-row">
-        <text class="result-label">课程数量</text>
-        <text class="result-value">{{syncResult.schedule.courses.length}} 门课程</text>
+
+      <!-- 课程卡片列表预览 -->
+      <scroll-view class="preview-course-list" scroll-y>
+        <view class="empty-preview" wx:if="{{filteredCourses.length === 0}}">
+          没有找到匹配的课程记录
+        </view>
+        <view 
+          class="preview-course-card" 
+          wx:for="{{filteredCourses}}" 
+          wx:key="index"
+        >
+          <view class="course-card-head">
+            <text class="course-card-title">{{item.courseName}}</text>
+            <text class="course-card-badge">周{{['一','二','三','四','五','六','日'][item.weekDay - 1]}} 第{{item.startSection}}-{{item.endSection}}节</text>
+          </view>
+          <view class="course-card-row">
+            <text class="row-icon">👤</text>
+            <text class="row-label">教师：</text>
+            <text class="row-value">{{item.teacherName || '未标明'}}</text>
+          </view>
+          <view class="course-card-row">
+            <text class="row-icon">📍</text>
+            <text class="row-label">教室：</text>
+            <text class="row-value">{{item.classroom || '未安排'}}</text>
+          </view>
+          <view class="course-card-row">
+            <text class="row-icon">📅</text>
+            <text class="row-label">周次：</text>
+            <text class="row-value">{{item.weekText || '全周'}}</text>
+          </view>
+          <view class="course-card-row" wx:if="{{item.note}}">
+            <text class="row-icon">💬</text>
+            <text class="row-label">备注：</text>
+            <text class="row-value note-value">{{item.note}}</text>
+          </view>
+        </view>
+      </scroll-view>
+
+      <!-- 底部控制按钮 -->
+      <view class="preview-actions">
+        <button class="btn-bind" bindtap="bindToLocal">确认导入并设为当前课表</button>
+        <button class="btn-cancel" bindtap="cancelImport">放弃并返回</button>
       </view>
     </view>
 
-    <button class="btn-bind" bindtap="bindToLocal">设为当前课表</button>
-    <button class="btn-back" bindtap="goBack">返回上级</button>
+    <!-- 方式二：原本账号密码同步成功结果 -->
+    <view class="account-result-wrapper" wx:else>
+      <view class="success-header">
+        <icon type="success" size="64" color="#2e7d32" class="success-icon" />
+        <view class="success-title">个人课表同步成功！</view>
+      </view>
+      
+      <view class="result-details">
+        <view class="result-row">
+          <text class="result-label">学生姓名</text>
+          <text class="result-value">{{syncResult.student.studentName}}</text>
+        </view>
+        <view class="result-row">
+          <text class="result-label">学号</text>
+          <text class="result-value">{{studentIdMasked}}</text>
+        </view>
+        <view class="result-row">
+          <text class="result-label">同步学期</text>
+          <text class="result-value">{{syncResult.semester}}</text>
+        </view>
+        <view class="result-row">
+          <text class="result-label">课程数量</text>
+          <text class="result-value">{{syncResult.schedule.courses.length}} 门课程</text>
+        </view>
+      </view>
+
+      <button class="btn-bind" bindtap="bindToLocal">设为当前课表</button>
+      <button class="btn-back" bindtap="goBack">返回上级</button>
+    </view>
   </view>
 
-  <!-- 人工滑块验证弹窗 -->
+  <!-- 人工滑块验证弹窗（账号同步模式） -->
   <view class="captcha-modal {{showCaptchaModal ? 'visible' : ''}}" wx:if="{{showCaptchaModal}}" catchtouchmove="noop">
     <view class="captcha-mask" bindtap="closeCaptchaModal"></view>
     <view class="captcha-container-box animate-scale">
@@ -142,16 +307,13 @@
       <view class="captcha-body">
         <view class="captcha-tip-text">请拖动滑块拼合下方拼图</view>
         
-        <!-- 验证码图片区域 -->
         <view class="captcha-image-area" style="width: 340px; height: 150px;">
-          <!-- 背景图 -->
           <image
             class="captcha-big-img"
             src="{{captchaData.bigImage}}"
             style="width: 340px; height: 150px;"
             mode="aspectFill"
           />
-          <!-- 拼图滑块 -->
           <image
             class="captcha-small-img"
             src="{{captchaData.smallImage}}"
@@ -160,12 +322,9 @@
           />
         </view>
         
-        <!-- 拖动滑竿 -->
         <view class="slider-track-area">
           <view class="slider-track-bg">向右拖动滑块对齐缺口</view>
-          <!-- 拖过的进度条 -->
           <view class="slider-track-progress" style="width: {{sliderX + 20}}px;"></view>
-          <!-- 拖动按钮手柄 -->
           <view
             class="slider-handle"
             style="left: {{sliderX}}px;"
@@ -177,7 +336,6 @@
           </view>
         </view>
 
-        <!-- 验证状态提示 -->
         <view class="verify-status-msg {{verifyStatus}}">
           <text wx:if="{{verifyStatus === 'verifying'}}">正在验证滑块拼图...</text>
           <text wx:elif="{{verifyStatus === 'success'}}">验证通过！正在同步课表...</text>

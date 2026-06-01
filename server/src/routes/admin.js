@@ -635,23 +635,61 @@ function buildClassroomHeatmap(options) {
     classroomSchedules = deriveClassroomSchedulesFromClassSchedules(classSchedules);
   }
 
-  const totalClassrooms = classroomSchedules.length;
+  // 1. 获取并应用动态筛选维度
+  const targetSemester = opt.semester; // 比如 "2025-2026-2"
+  const targetWeek = opt.week && opt.week !== "all" ? parseInt(opt.week, 10) : null;
+  const targetBuilding = opt.building; // 模糊匹配，如 "C7" 或 "B8"
+
+  let filteredRooms = classroomSchedules;
+  if (targetBuilding) {
+    filteredRooms = filteredRooms.filter((room, index) => {
+      const roomName = getClassroomNameFromSchedule(room, index);
+      return roomName.toLowerCase().includes(targetBuilding.toLowerCase());
+    });
+  }
+
+  const totalClassrooms = filteredRooms.length;
   const counts = Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => new Set()));
   const roomSlotCounts = new Map();
+  
+  // 记录每个格子被哪些教室占用以及什么课程，供前端点击展示详情
+  const slotDetails = Array.from({ length: 7 }, () => Array.from({ length: 14 }, () => []));
 
-  classroomSchedules.forEach((room, index) => {
+  filteredRooms.forEach((room, index) => {
     const roomName = getClassroomNameFromSchedule(room, index);
     const roomSlots = roomSlotCounts.get(roomName) || new Set();
+    
     getScheduleCourses(room).forEach((course) => {
+      // 学期过滤
+      const courseTerm = course.term || course.semester || room.semester || room.term || opt.updatedSemester;
+      if (targetSemester && courseTerm && courseTerm !== targetSemester) {
+        return;
+      }
+
       const slot = normalizeCourseSlot(course);
       if (!slot.weekday || slot.sections.length === 0) {
         return;
       }
+
+      // 周次过滤
+      if (targetWeek && slot.weeks.length > 0 && !slot.weeks.includes(targetWeek)) {
+        return;
+      }
+
       slot.sections.forEach((section) => {
         const dayIndex = slot.weekday - 1;
         const sectionIndex = section - 1;
         counts[dayIndex][sectionIndex].add(roomName);
         roomSlots.add(`${slot.weekday}-${section}`);
+        
+        // 限制每个格子详情数量为 30 个，防止返回体积过大
+        if (slotDetails[dayIndex][sectionIndex].length < 30) {
+          slotDetails[dayIndex][sectionIndex].push({
+            roomName: roomName,
+            courseName: course.courseName || course.name || "未知课程",
+            teacher: course.teacherName || course.teacher || "未知教师",
+          });
+        }
       });
     });
     roomSlotCounts.set(roomName, roomSlots);
@@ -662,6 +700,13 @@ function buildClassroomHeatmap(options) {
   let totalOccupiedSlots = 0;
   let maxOccupancy = 0;
 
+  // 统计摘要指标
+  let maxOccupancyRate = 0;
+  let maxOccupancyTime = "";
+  let minOccupancyRate = 100;
+  let minOccupancyTime = "";
+  const weekdaysMap = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+
   for (let day = 0; day < 7; day += 1) {
     for (let section = 0; section < 14; section += 1) {
       const occupied = counts[day][section].size;
@@ -670,12 +715,48 @@ function buildClassroomHeatmap(options) {
         totalOccupiedSlots += 1;
       }
       maxOccupancy = Math.max(maxOccupancy, occupied);
-      heatmap[day][section] = totalClassrooms > 0
+      
+      const rate = totalClassrooms > 0
         ? Math.min(100, Math.round((occupied / totalClassrooms) * 100))
         : 0;
+      heatmap[day][section] = rate;
+
+      // 寻找最繁忙/最空闲时段
+      if (rate > maxOccupancyRate) {
+        maxOccupancyRate = rate;
+        maxOccupancyTime = `${weekdaysMap[day]} 第${section + 1}节`;
+      }
+      if (rate < minOccupancyRate) {
+        minOccupancyRate = rate;
+        minOccupancyTime = `${weekdaysMap[day]} 第${section + 1}节`;
+      }
     }
   }
 
+  // 计算工作日与周末平均占用率
+  let workdaySum = 0;
+  let weekendSum = 0;
+  for (let section = 0; section < 14; section += 1) {
+    for (let day = 0; day < 5; day += 1) {
+      workdaySum += heatmap[day][section];
+    }
+    for (let day = 5; day < 7; day += 1) {
+      weekendSum += heatmap[day][section];
+    }
+  }
+  const workdayAvg = Math.round(workdaySum / (5 * 14));
+  const weekendAvg = Math.round(weekendSum / (2 * 14));
+
+  // 晚课占用率 (第 11 节至第 14 节)
+  let nightSum = 0;
+  for (let day = 0; day < 7; day += 1) {
+    for (let section = 10; section < 14; section += 1) {
+      nightSum += heatmap[day][section];
+    }
+  }
+  const nightAvg = Math.round(nightSum / (7 * 4));
+
+  // Top 10 繁忙教室
   const topRooms = Array.from(roomSlotCounts.entries())
     .map(([roomName, slots]) => ({
       roomName,
@@ -684,12 +765,13 @@ function buildClassroomHeatmap(options) {
     }))
     .filter((item) => item.occupiedSlots > 0)
     .sort((left, right) => right.occupiedSlots - left.occupiedSlots)
-    .slice(0, 6);
+    .slice(0, 10);
 
   const hasRecognizedSlots = totalOccupiedSlots > 0;
   return {
     classroomHeatmap: heatmap,
     classroomHeatmapCounts: rawCounts,
+    classroomHeatmapDetails: slotDetails,
     classroomHeatmapMeta: {
       totalClassrooms,
       totalOccupiedSlots,
@@ -697,6 +779,15 @@ function buildClassroomHeatmap(options) {
       updatedAt: opt.updatedAt || null,
       maxOccupancy,
       topRooms,
+      summary: {
+        maxOccupancyRate,
+        maxOccupancyTime: maxOccupancyRate > 0 ? maxOccupancyTime : "无 (0%)",
+        minOccupancyRate,
+        minOccupancyTime: minOccupancyRate === 0 ? minOccupancyTime : "无 (都大于0%)",
+        workdayAvg,
+        weekendAvg,
+        nightAvg
+      },
       emptyReason: totalClassrooms === 0
         ? "no-classroom-schedules"
         : (hasRecognizedSlots ? "" : "no-recognized-course-slots"),
@@ -704,31 +795,32 @@ function buildClassroomHeatmap(options) {
   };
 }
 
-function resolveClassroomHeatmapData() {
+function resolveClassroomHeatmapData(filterOptions) {
   const classroomSource = getResourceArrayWithSource("classroom-schedules");
+  const opts = filterOptions || {};
   if (classroomSource.items.length > 0) {
-    return buildClassroomHeatmap({
+    return buildClassroomHeatmap(Object.assign({
       classroomSchedules: classroomSource.items,
       source: classroomSource.source,
       updatedAt: classroomSource.updatedAt,
-    });
+    }, opts));
   }
 
   const snapshotClassSchedules = getSnapshotResourceArray(classroomSource.snapshot, "class-schedules");
   if (snapshotClassSchedules.length > 0) {
-    return buildClassroomHeatmap({
+    return buildClassroomHeatmap(Object.assign({
       classSchedules: snapshotClassSchedules,
       source: "derived-from-classSchedules",
       updatedAt: classroomSource.snapshot && classroomSource.snapshot.updatedAt,
-    });
+    }, opts));
   }
 
   const storageClassSchedules = readJsonArray(FILE_MAP["class-schedules"]);
-  return buildClassroomHeatmap({
+  return buildClassroomHeatmap(Object.assign({
     classSchedules: storageClassSchedules,
     source: storageClassSchedules.length > 0 ? "derived-from-classSchedules" : "storage.classroom-schedules",
     updatedAt: getUpdatedAt("class-schedules") || getUpdatedAt("classroom-schedules"),
-  });
+  }, opts));
 }
 
 function buildCollegeDistribution() {
@@ -2032,6 +2124,20 @@ router.get("/dashboard", adminAuth.verifyAdminAccess, (req, res) => {
     return res.json(dashboardData);
   } catch (error) {
     safeLog("admin-dashboard-failed", { error: error.message });
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/classroom-heatmap", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const { semester, week, building } = req.query;
+    const heatmap = resolveClassroomHeatmapData({ semester, week, building });
+    return res.json({
+      success: true,
+      data: heatmap
+    });
+  } catch (error) {
+    safeLog("admin-classroom-heatmap-failed", { error: error.message });
     return res.status(500).json({ success: false, message: error.message });
   }
 });

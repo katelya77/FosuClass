@@ -228,9 +228,15 @@ Page({
     });
   },
 
+  goImportXls() {
+    wx.navigateTo({
+      url: "/pages/personal-sync/personal-sync?tab=xls",
+    });
+  },
+
   goLogin() {
     wx.navigateTo({
-      url: "/pages/personal-sync/personal-sync",
+      url: "/pages/personal-sync/personal-sync?tab=account",
     });
   },
 

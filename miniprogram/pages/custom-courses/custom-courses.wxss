@@ -337,3 +337,14 @@ textarea {
   color: #3654d4 !important;
   font-size: 42rpx !important;
 }
+
+.import-xls-btn {
+  background: #ffebee !important;
+  color: #c62828 !important;
+  box-shadow: 0 4rpx 10rpx rgba(198, 40, 40, 0.08) !important;
+  font-weight: 800 !important;
+}
+
+.import-xls-btn:active {
+  background: #ffcdd2 !important;
+}
