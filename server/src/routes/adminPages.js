@@ -1891,8 +1891,162 @@ const adminConsoleHtml = `<!doctype html>
         grid-template-columns: 1fr;
       }
     }
+
+    /* Stepper 进度指示器样式 */
+    .stepper-indicator {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 24px;
+      position: relative;
+    }
+    .step-indicator-item {
+      position: relative;
+      z-index: 3;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      flex: 1;
+    }
+    .step-num {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--border);
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 14px;
+      transition: var(--transition);
+      border: 2px solid var(--border);
+    }
+    .step-indicator-item.active .step-num {
+      background: var(--primary-soft);
+      color: var(--primary);
+      border-color: var(--primary);
+    }
+    .step-indicator-item.completed .step-num {
+      background: var(--success);
+      color: white;
+      border-color: var(--success);
+    }
+    .step-label {
+      font-size: 12px;
+      margin-top: 8px;
+      font-weight: 600;
+      color: var(--muted);
+      transition: var(--transition);
+      text-align: center;
+    }
+    .step-indicator-item.active .step-label {
+      color: var(--primary);
+    }
+    .step-indicator-item.completed .step-label {
+      color: var(--success);
+    }
+
+    /* 模式预设卡片样式 */
+    .preset-card-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .preset-card {
+      background: var(--panel);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+      cursor: pointer;
+      transition: var(--transition);
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .preset-card:hover {
+      border-color: var(--border-hover);
+      transform: translateY(-2px);
+      box-shadow: var(--shadow-lg);
+    }
+    .preset-card.active {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+    }
+    .preset-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .preset-desc {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .preset-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      margin-top: 4px;
+    }
+    .preset-tag {
+      font-size: 10px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--panel-2);
+      color: var(--muted);
+    }
+    .preset-card.active .preset-tag {
+      background: white;
+      color: var(--primary);
+    }
+
+    /* Stepper 内容显示隐藏 */
+    .step-content {
+      display: none;
+      animation: fadeIn 0.2s ease-out;
+    }
+    .step-content.active {
+      display: block;
+    }
+    
+    /* 目标 Shell 按钮组 */
+    .segmented-control {
+      display: flex;
+      background: var(--panel-2);
+      padding: 4px;
+      border-radius: 8px;
+      gap: 2px;
+      margin-bottom: 12px;
+      width: 100%;
+    }
+    .segmented-control button {
+      flex: 1;
+      padding: 8px 12px;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      border: none;
+      cursor: pointer;
+      transition: var(--transition);
+    }
+    .segmented-control button.active {
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+    
+    .stepper-actions {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 20px;
+      border-top: 1px solid var(--border);
+      padding-top: 16px;
+    }
   </style>
-</head>
+  </head>
 <body>
 
   <!-- 登录页视图 -->
@@ -2127,238 +2281,332 @@ const adminConsoleHtml = `<!doctype html>
               <div class="flow-field"><strong>前置条件：</strong><span>已生成 Staging JSON，或已在下方创建并派发接力任务 Token。</span></div>
               <div class="flow-field"><strong>预计耗时：</strong><span>上传及后台校验秒级完成。</span></div>
               <div class="flow-field"><strong>常见失败原因：</strong><span>JSON 字段缺失、Token 已过期或被吊销。</span></div>
-              <div class="flow-cmd-section">
-                <strong>同学运行指令：</strong>
-                <div class="flow-code-box">
-                  <code id="flowCmdTextRelay">双击运行接力代理端工具包中的 start.bat 并粘贴 token</code>
-                  <button type="button" class="copy-flow-btn" id="flowCopyBtnRelay">复制</button>
-                </div>
-                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">（同学使用 relay-agent 工具包，无需项目源码与后台管理员密码）</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Step 3: 后台发布与回滚 -->
-          <div class="flow-card">
-            <div class="flow-step">Step 3</div>
-            <div class="flow-title">后台发布与回滚</div>
-            <div class="flow-content">
-              <div class="flow-field"><strong>适用场景：</strong><span>在后台预览数据 Diff 确认无误后，正式推送至小程序端，或在异常时一键回滚。</span></div>
-              <div class="flow-field"><strong>前置条件：</strong><span>Staging 区已有校验通过的数据；变动率超 30% 需勾选二次确认。</span></div>
-              <div class="flow-field"><strong>预计耗时：</strong><span>秒级即时生效。</span></div>
-              <div class="flow-field"><strong>常见失败原因：</strong><span>触发安全熔断但未勾选强行发布确认。</span></div>
-              <div class="flow-cmd-section">
-                <strong>交互操作：</strong>
-                <div class="flow-action-box">
-                  <span class="action-hint">直接在下方上传区点击“发布”或历史区点击“一键回滚”</span>
-                  <button type="button" class="flow-go-btn" onclick="document.getElementById('staging-upload-panel').scrollIntoView({behavior: 'smooth'})">前往操作区</button>
-                </div>
-              </div>
             </div>
           </div>
         </div>
 
-        <!-- 4. sync-dashboard-grid -->
-        <div class="sync-dashboard-grid">
-          <!-- 左栏：主交互区 -->
-          <div class="sync-main-col">
-            
-            <!-- 5. staging-upload-panel -->
-            <div class="card" id="staging-upload-panel">
-              <h3 class="card-title">📤 Staging JSON 上传、比对与发布</h3>
-              
-              <!-- 可折叠的同步向导表单 -->
-              <div class="wizard-collapse-container" style="border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 20px; background: var(--panel-2);">
-                <div class="wizard-collapse-header" id="wizardCollapseHeader" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
-                  <strong style="font-size: 13.5px; color: var(--text); display: flex; align-items: center; gap: 8px;">📅 新学期同步向导配置 & 指令生成器</strong>
-                  <span id="wizardCollapseIcon" style="font-size: 12px; color: var(--muted); transition: transform 0.2s;">▼</span>
-                </div>
+        <!-- 5. staging-upload-panel (Stepper container) -->
+        <div class="card" id="staging-upload-panel">
+              <!-- 新版 6-Step 同步向导与指令生成器 -->
+              <div class="wizard-stepper-container" style="position: relative;">
                 
-                <div class="wizard-collapse-body" id="wizardCollapseBody" style="display: none; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px;">
+                <!-- Stepper Progress Indicator -->
+                <div class="stepper-indicator">
+                  <div style="position: absolute; top: 15px; left: 0; right: 0; height: 2px; background: var(--border); z-index: 1;"></div>
+                  <div id="stepperProgressLine" style="position: absolute; top: 15px; left: 0; width: 0%; height: 2px; background: var(--primary); z-index: 2; transition: var(--transition);"></div>
+                  
+                  <div class="step-indicator-item active" data-step="1">
+                    <div class="step-num">1</div>
+                    <div class="step-label">学期/日期</div>
+                  </div>
+                  <div class="step-indicator-item" data-step="2">
+                    <div class="step-num">2</div>
+                    <div class="step-label">选择模式</div>
+                  </div>
+                  <div class="step-indicator-item" data-step="3">
+                    <div class="step-num">3</div>
+                    <div class="step-label">范围/年级</div>
+                  </div>
+                  <div class="step-indicator-item" data-step="4">
+                    <div class="step-num">4</div>
+                    <div class="step-label">生成指令</div>
+                  </div>
+                  <div class="step-indicator-item" data-step="5">
+                    <div class="step-num">5</div>
+                    <div class="step-label">上传Staging</div>
+                  </div>
+                  <div class="step-indicator-item" data-step="6">
+                    <div class="step-num">6</div>
+                    <div class="step-label">校验发布</div>
+                  </div>
+                </div>
+
+                <!-- Stepper Content Body -->
+                <div class="stepper-body" style="border-top: 1px solid var(--border); padding-top: 20px; margin-top: 20px;">
                   <form id="wizardForm" class="sync-wizard-form" onsubmit="return false;">
-                    <div class="form-row">
-                      <div>
-                        <label for="wizardTerm">目标学期 (term)</label>
-                        <div style="display: flex; gap: 8px; width: 100%;">
-                          <select id="wizardTerm" style="flex: 1;"></select>
-                          <input type="text" id="wizardTermCustom" placeholder="自定义学期" style="display: none; flex: 1;">
+                    
+                    <!-- Step 1: 选择学期与日期 -->
+                    <div class="step-content active" id="step-content-1">
+                      <h4 style="font-size: 13.5px; margin-bottom: 12px;">Step 1: 配置目标学期与开学日期</h4>
+                      <div class="form-row">
+                        <div>
+                          <label for="wizardTerm">目标学期 (term)</label>
+                          <div style="display: flex; gap: 8px; width: 100%;">
+                            <select id="wizardTerm" style="flex: 1;"></select>
+                            <input type="text" id="wizardTermCustom" placeholder="自定义学期" style="display: none; flex: 1;">
+                          </div>
+                        </div>
+                        <div>
+                          <label for="wizardStartDate">学期开始日期 (StartDate)</label>
+                          <input type="date" id="wizardStartDate" value="2026-09-01">
                         </div>
                       </div>
-                      <div>
-                        <label for="wizardStartDate">学期开始日期 (StartDate)</label>
-                        <input type="date" id="wizardStartDate" value="2026-09-01">
+                      <div class="form-row">
+                        <div>
+                          <label for="wizardVersion">发布版本 (releaseVersion)</label>
+                          <input type="text" id="wizardVersion" placeholder="自动生成或自定义" readonly>
+                        </div>
+                        <div>
+                          <label for="wizardSource">数据来源 (source)</label>
+                          <select id="wizardSource">
+                            <option value="local-campus" selected>本机校园网采集 (local-campus)</option>
+                            <option value="relay-agent">接力代理端 (relay-agent)</option>
+                            <option value="staging-upload">手动 Staging JSON 上传 (staging-upload)</option>
+                            <option value="manual-maintain">手动维护 (manual-maintain)</option>
+                            <option value="server-direct">服务器直连兼容模式 (server-direct)</option>
+                          </select>
+                        </div>
+                      </div>
+                      <div class="form-row full">
+                        <div>
+                          <label for="wizardNote">发布说明 (releaseNote)</label>
+                          <input type="text" id="wizardNote" placeholder="例如: 2026-2027-1 新学期全校课表首版">
+                        </div>
                       </div>
                     </div>
 
-                    <div class="form-row">
-                      <div>
-                        <label for="wizardVersion">发布版本 (releaseVersion)</label>
-                        <input type="text" id="wizardVersion" placeholder="自动生成或自定义" readonly>
-                      </div>
-                      <div>
-                        <label for="wizardSource">数据来源 (source)</label>
-                        <select id="wizardSource">
-                          <option value="local-campus" selected>本机校园网采集 (local-campus)</option>
-                          <option value="relay-agent">接力代理端 (relay-agent)</option>
-                          <option value="staging-upload">手动 Staging JSON 上传 (staging-upload)</option>
-                          <option value="manual-maintain">手动维护 (manual-maintain)</option>
-                          <option value="server-direct">服务器直连兼容模式 (server-direct)</option>
-                        </select>
-                      </div>
-                    </div>
-
-                    <div class="form-row full">
-                      <div>
-                        <label for="wizardNote">发布说明 (releaseNote)</label>
-                        <input type="text" id="wizardNote" placeholder="例如: 2026-2027-1 新学期全校课表首版">
-                      </div>
-                    </div>
-
-                    <div>
-                      <label>同步范围</label>
-                      <div class="sync-range-grid">
-                        <label class="sync-range-item">
-                          <input type="checkbox" id="rangeClass" checked> 行政班课表
-                        </label>
-                        <label class="sync-range-item">
-                          <input type="checkbox" id="rangeTeacher" checked> 教师课表
-                        </label>
-                        <label class="sync-range-item">
-                          <input type="checkbox" id="rangeClassroom" checked> 教室课表
-                        </label>
-                        <label class="sync-range-item">
-                          <input type="checkbox" id="rangeCourse" checked> 课程课表
-                        </label>
-                        <label class="sync-range-item">
-                          <input type="checkbox" id="rangeClassroomList" checked> 教室列表
-                        </label>
-                        <label class="sync-range-item">
-                          <input type="checkbox" id="rangeTeacherList" checked> 教师列表
-                        </label>
-                        <label class="sync-range-item">
-                          <input type="checkbox" id="rangeCourseList" checked> 课程列表
-                        </label>
+                    <!-- Step 2: 选择同步模式预设 -->
+                    <div class="step-content" id="step-content-2">
+                      <h4 style="font-size: 13.5px; margin-bottom: 12px;">Step 2: 选择数据同步预设模式</h4>
+                      <div class="preset-card-grid">
+                        <div class="preset-card active" id="preset-full">
+                          <div class="preset-title">🌟 全校完整同步模式</div>
+                          <div class="preset-desc">推荐正式发布使用。全量爬取课表，派生并更新全部公共资源。</div>
+                          <div class="preset-tags">
+                            <span class="preset-tag">全选</span>
+                            <span class="preset-tag">活跃5个年级</span>
+                            <span class="preset-tag">延时900ms</span>
+                          </div>
+                        </div>
+                        <div class="preset-card" id="preset-fast">
+                          <div class="preset-title">⚡ 新生开学极速模式</div>
+                          <div class="preset-desc">开学季快速覆盖。只抓取新生行政班课表，不爬老生课表。</div>
+                          <div class="preset-tags">
+                            <span class="preset-tag">仅抓新生年级</span>
+                            <span class="preset-tag">行政班课表</span>
+                            <span class="preset-tag">公共资源列表</span>
+                          </div>
+                        </div>
+                        <div class="preset-card" id="preset-resources">
+                          <div class="preset-title">🏢 只更新公共资源模式</div>
+                          <div class="preset-desc">不更新学生课表，仅派生/更新教师、教室、课程及对应课表。</div>
+                          <div class="preset-tags">
+                            <span class="preset-tag">跳过行政班</span>
+                            <span class="preset-tag">只更新公共资源</span>
+                          </div>
+                        </div>
+                        <div class="preset-card" id="preset-debug">
+                          <div class="preset-title">🔧 调试小范围模式</div>
+                          <div class="preset-desc">仅同步指定年级/学院/专业数据，适合开发调试及边界条件验证。</div>
+                          <div class="preset-tags">
+                            <span class="preset-tag">支持精准过滤</span>
+                            <span class="preset-tag">输出为 debug JSON</span>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
-                    <div class="form-row">
-                      <div>
-                        <label for="wizardMode">操作模式</label>
-                        <select id="wizardMode">
-                          <option value="dry-run">只测试不发布 (dry-run)</option>
-                          <option value="staging" selected>生成候选版本 (staging)</option>
-                          <option value="publish">直接发布 (publish) - [不推荐]</option>
-                        </select>
+                    <!-- Step 3: 选择同步范围与过滤 -->
+                    <div class="step-content" id="step-content-3">
+                      <h4 style="font-size: 13.5px; margin-bottom: 12px;">Step 3: 自定义同步范围与过滤规则</h4>
+                      <div style="margin-bottom: 16px;">
+                        <label>同步数据模块范围</label>
+                        <div class="sync-range-grid">
+                          <label class="sync-range-item"><input type="checkbox" id="rangeClass" checked> 行政班课表</label>
+                          <label class="sync-range-item"><input type="checkbox" id="rangeTeacher" checked> 教师课表</label>
+                          <label class="sync-range-item"><input type="checkbox" id="rangeClassroom" checked> 教室课表</label>
+                          <label class="sync-range-item"><input type="checkbox" id="rangeCourse" checked> 课程课表</label>
+                          <label class="sync-range-item"><input type="checkbox" id="rangeClassroomList" checked> 教室列表</label>
+                          <label class="sync-range-item"><input type="checkbox" id="rangeTeacherList" checked> 教师列表</label>
+                          <label class="sync-range-item"><input type="checkbox" id="rangeCourseList" checked> 课程列表</label>
+                        </div>
+                      </div>
+
+                      <div class="form-row" style="margin-bottom: 12px;">
+                        <div>
+                          <label>年级筛选范围</label>
+                          <select id="wizardGradesMode">
+                            <option value="recommend" selected>自动推荐 (当前活跃 5 个年级)</option>
+                            <option value="all">全部年级 (不限制)</option>
+                            <option value="freshman">仅新生年级</option>
+                            <option value="custom">自定义输入年级</option>
+                          </select>
+                        </div>
+                        <div id="wizardGradesCustomRow" style="display: none;">
+                          <label for="wizardGradesCustom">自定义年级 (逗号分隔)</label>
+                          <input type="text" id="wizardGradesCustom" placeholder="例如: 2026,2025,2024">
+                        </div>
+                      </div>
+
+                      <div class="form-row" id="wizardFiltersRow">
+                        <div>
+                          <label for="wizardCollegesFilter">精准筛选学院代码 (选填，多值逗号隔开)</label>
+                          <input type="text" id="wizardCollegesFilter" placeholder="例如: 01,02">
+                        </div>
+                        <div>
+                          <label for="wizardMajorsFilter">精准筛选专业代码 (选填，多值逗号隔开)</label>
+                          <input type="text" id="wizardMajorsFilter" placeholder="例如: 080901,080902">
+                        </div>
+                      </div>
+
+                      <div class="form-row">
+                        <div>
+                          <label for="wizardConcurrency">单线程并发数 (concurrency)</label>
+                          <select id="wizardConcurrency">
+                            <option value="1" selected>1 (推荐安全并发)</option>
+                            <option value="2">2</option>
+                            <option value="3">3</option>
+                            <option value="5">5 (高风险)</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label for="wizardDelay">请求间隔延迟毫秒数 (delay)</label>
+                          <input type="number" id="wizardDelay" value="900" min="0" step="100">
+                        </div>
                       </div>
                     </div>
 
-                    <div class="wizard-command-preview">
-                      <label style="margin-bottom: 2px;">📋 推荐运行的同步指令：</label>
-                      <div class="command-code-box">
-                        <code id="wizardCommandCode">加载中...</code>
-                        <button type="button" id="wizardCopyBtn">复制命令</button>
+                    <!-- Step 4: 生成命令 -->
+                    <div class="step-content" id="step-content-4">
+                      <h4 style="font-size: 13.5px; margin-bottom: 8px;">Step 4: 推荐运行的同步命令</h4>
+                      
+                      <label>目标操作系统 Shell 终端</label>
+                      <div class="segmented-control">
+                        <button type="button" class="active" id="shell-powershell">PowerShell (Windows)</button>
+                        <button type="button" id="shell-cmd">CMD (Windows)</button>
+                        <button type="button" id="shell-bash">Bash (macOS/Linux)</button>
                       </div>
-                      <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
-                        提示：主流程是在已连接校园网的本机运行采集命令；VPS 只负责保存、校验、预览、发布和回滚。
+
+                      <div class="wizard-command-preview" style="margin-top: 12px;">
+                        <div class="command-code-box" style="margin-top: 4px;">
+                          <code id="wizardCommandCode" style="white-space: pre-wrap; font-family: monospace;">加载中...</code>
+                        </div>
+                      </div>
+
+                      <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px; flex-wrap: wrap;">
+                        <button type="button" class="secondary" id="wizardCopyBtn" style="padding: 6px 12px; font-size:12px;">复制当前命令</button>
+                        <button type="button" class="secondary" id="downloadCmdBtn" style="padding: 6px 12px; font-size:12px;">下载 run-sync.cmd</button>
+                        <button type="button" class="secondary" id="downloadPs1Btn" style="padding: 6px 12px; font-size:12px;">下载 run-sync.ps1</button>
                       </div>
                     </div>
+
+                    <!-- Step 5: 上传 Staging -->
+                    <div class="step-content" id="step-content-5">
+                      <h4 style="font-size: 13.5px; margin-bottom: 12px;">Step 5: 上传生成的 Staging JSON 文件</h4>
+                      <p style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+                        请在您的本地校园网终端执行上述 Step 4 生成的脚本。执行完毕后，在项目根目录的 <code>staging/</code> 目录下会产生 <code>[学期]-full.json</code> 文件。请将该文件拖入或上传到下方。
+                      </p>
+                      
+                      <div style="border: 2px dashed var(--border); border-radius: var(--radius); padding: 30px 20px; text-align: center; font-size: 13px; cursor: pointer; transition: var(--transition); background: var(--panel-2);" id="uploadDropzone" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
+                        <p style="color: var(--muted); margin-bottom: 10px; font-weight: 600;">点击或拖拽本地生成的 Staging JSON 文件至此</p>
+                        <input type="file" id="syncFileInput" style="display: none;" accept=".json">
+                        <button type="button" class="secondary" id="syncSelectFileBtn">选择 JSON 文件</button>
+                        <div id="uploadFileInfo" style="margin-top: 10px; font-weight: 600; color: var(--primary);"></div>
+                      </div>
+                    </div>
+
+                    <!-- Step 6: 校验并发布 -->
+                    <div class="step-content" id="step-content-6">
+                      <h4 style="font-size: 13.5px; margin-bottom: 12px;">Step 6: 比对预览及发布确认</h4>
+                      
+                      <div id="stagingEmptyState" style="text-align: center; padding: 20px; color: var(--muted); font-size: 13px;">
+                        请先在 Step 5 中上传 Staging JSON，系统将自动加载详细的数据比对和发布选项。
+                      </div>
+
+                      <!-- Staging 预览比对容器 -->
+                      <div id="stagingPreviewBox" style="display: none;">
+                        <div class="staging-preview-container">
+                          <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
+                            <strong style="font-size: 14px; color: var(--text);">📋 上传的 Staging 数据预览</strong>
+                            <span class="badge info" id="stagingMetaBadge">学期: - | 版本: -</span>
+                          </div>
+
+                          <!-- 资源统计与差异 -->
+                          <div class="staging-grid">
+                            <div class="staging-item">
+                              <div class="staging-item-title">行政班课表</div>
+                              <div class="staging-item-value" id="stagingValClass">0</div>
+                              <div class="staging-item-diff" id="stagingDiffClass">-</div>
+                            </div>
+                            <div class="staging-item">
+                              <div class="staging-item-title">教师课表</div>
+                              <div class="staging-item-value" id="stagingValTeacher">0</div>
+                              <div class="staging-item-diff" id="stagingDiffTeacher">-</div>
+                            </div>
+                            <div class="staging-item">
+                              <div class="staging-item-title">教室课表</div>
+                              <div class="staging-item-value" id="stagingValClassroom">0</div>
+                              <div class="staging-item-diff" id="stagingDiffClassroom">-</div>
+                            </div>
+                            <div class="staging-item">
+                              <div class="staging-item-title">课程课表</div>
+                              <div class="staging-item-value" id="stagingValCourse">0</div>
+                              <div class="staging-item-diff" id="stagingDiffCourse">-</div>
+                            </div>
+                          </div>
+
+                          <div class="staging-grid">
+                            <div class="staging-item">
+                              <div class="staging-item-title">教室总数</div>
+                              <div class="staging-item-value" id="stagingValRoomCount">0</div>
+                              <div class="staging-item-diff" id="stagingDiffRoomCount">-</div>
+                            </div>
+                            <div class="staging-item">
+                              <div class="staging-item-title">教师总数</div>
+                              <div class="staging-item-value" id="stagingValTeacherCount">0</div>
+                              <div class="staging-item-diff" id="stagingDiffTeacherCount">-</div>
+                            </div>
+                            <div class="staging-item">
+                              <div class="staging-item-title">课程总数</div>
+                              <div class="staging-item-value" id="stagingValCourseCount">0</div>
+                              <div class="staging-item-diff" id="stagingDiffCourseCount">-</div>
+                            </div>
+                          </div>
+
+                          <!-- 校验 Warning 列表 -->
+                          <div id="stagingWarningsBox" class="warnings-list" style="display: none;">
+                            <strong>⚠️ 数据合规性校验警告:</strong>
+                            <div id="stagingWarningsList"></div>
+                          </div>
+
+                          <!-- 详细班级 Diff 列表 -->
+                          <div>
+                            <strong style="font-size: 12px; color: var(--text);">🏫 行政班级变动明细：</strong>
+                            <div class="diff-classes-list" id="stagingDiffClassesList">
+                              暂无变动。
+                            </div>
+                          </div>
+
+                          <!-- 变动熔断与二次强确认发布控制 -->
+                          <div style="border-top: 1px solid var(--border); padding-top: 14px; display: flex; flex-direction: column; gap: 10px;">
+                            <div id="forceConfirmContainer" style="display: none; background: var(--danger-soft); border: 1px solid var(--danger); padding: 12px; border-radius: 8px; font-size: 12px; color: #991b1b;">
+                              <strong>⚠️ 警报: 数据变动幅度超过熔断阈值(30%)!</strong>
+                              <p style="margin-top: 4px; margin-bottom: 8px;">本次同步的行政班/课表记录变动量较大，为防止误清空线上数据，直接发布已被拦截。若确属新学期全量重构，请在下方手动勾选确认后强行发布。</p>
+                              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #991b1b; font-weight: 700; margin-bottom:0;">
+                                <input type="checkbox" id="stagingForceConfirm"> 我已知晓风险，确认本次数据变动为正常新学期更迭，强行发布
+                              </label>
+                            </div>
+
+                            <div style="display: flex; justify-content: flex-end; gap: 12px; align-items: center;">
+                              <span id="publishStatusText" style="font-size:12px; color:var(--muted);"></span>
+                              <button type="button" class="primary" id="stagingPublishBtn" style="padding: 10px 20px;">🚀 发布为正式版本</button>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
                   </form>
                 </div>
-              </div>
 
-              <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
-                Staging 机制：在本地或校园网电脑运行同步脚本生成 JSON 快照，在此处上传进行安全校验，比对线上数据无误后，再行正式发布。
-              </p>
-              
-              <div style="border: 2px dashed var(--border); border-radius: var(--radius); padding: 30px 20px; text-align: center; font-size: 13px; cursor: pointer; transition: var(--transition);" id="uploadDropzone" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
-                <p style="color: var(--muted); margin-bottom: 10px; font-weight: 600;">点击或拖拽本地生成的 Staging JSON 文件至此</p>
-                <input type="file" id="syncFileInput" style="display: none;" accept=".json">
-                <button type="button" class="secondary" id="syncSelectFileBtn">选择 JSON 文件</button>
-                <div id="uploadFileInfo" style="margin-top: 10px; font-weight: 600; color: var(--primary);"></div>
-              </div>
-
-              <!-- Staging 预览比对容器 -->
-              <div id="stagingPreviewBox" style="display: none;">
-                <div class="staging-preview-container">
-                  <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-                    <strong style="font-size: 14px; color: var(--text);">📋 上传的 Staging 数据预览</strong>
-                    <span class="badge info" id="stagingMetaBadge">学期: - | 版本: -</span>
-                  </div>
-
-                  <!-- 资源统计与差异 -->
-                  <div class="staging-grid">
-                    <div class="staging-item">
-                      <div class="staging-item-title">行政班课表</div>
-                      <div class="staging-item-value" id="stagingValClass">0</div>
-                      <div class="staging-item-diff" id="stagingDiffClass">-</div>
-                    </div>
-                    <div class="staging-item">
-                      <div class="staging-item-title">教师课表</div>
-                      <div class="staging-item-value" id="stagingValTeacher">0</div>
-                      <div class="staging-item-diff" id="stagingDiffTeacher">-</div>
-                    </div>
-                    <div class="staging-item">
-                      <div class="staging-item-title">教室课表</div>
-                      <div class="staging-item-value" id="stagingValClassroom">0</div>
-                      <div class="staging-item-diff" id="stagingDiffClassroom">-</div>
-                    </div>
-                    <div class="staging-item">
-                      <div class="staging-item-title">课程课表</div>
-                      <div class="staging-item-value" id="stagingValCourse">0</div>
-                      <div class="staging-item-diff" id="stagingDiffCourse">-</div>
-                    </div>
-                  </div>
-
-                  <div class="staging-grid">
-                    <div class="staging-item">
-                      <div class="staging-item-title">教室总数</div>
-                      <div class="staging-item-value" id="stagingValRoomCount">0</div>
-                      <div class="staging-item-diff" id="stagingDiffRoomCount">-</div>
-                    </div>
-                    <div class="staging-item">
-                      <div class="staging-item-title">教师总数</div>
-                      <div class="staging-item-value" id="stagingValTeacherCount">0</div>
-                      <div class="staging-item-diff" id="stagingDiffTeacherCount">-</div>
-                    </div>
-                    <div class="staging-item">
-                      <div class="staging-item-title">课程总数</div>
-                      <div class="staging-item-value" id="stagingValCourseCount">0</div>
-                      <div class="staging-item-diff" id="stagingDiffCourseCount">-</div>
-                    </div>
-                  </div>
-
-                  <!-- 校验 Warning 列表 -->
-                  <div id="stagingWarningsBox" class="warnings-list" style="display: none;">
-                    <strong>⚠️ 数据合规性校验警告:</strong>
-                    <div id="stagingWarningsList"></div>
-                  </div>
-
-                  <!-- 详细班级 Diff 列表 -->
-                  <div>
-                    <strong style="font-size: 12px; color: var(--text);">🏫 行政班级变动明细：</strong>
-                    <div class="diff-classes-list" id="stagingDiffClassesList">
-                      暂无变动。
-                    </div>
-                  </div>
-
-                  <!-- 变动熔断与二次强确认发布控制 -->
-                  <div style="border-top: 1px solid var(--border); padding-top: 14px; display: flex; flex-direction: column; gap: 10px;">
-                    <div id="forceConfirmContainer" style="display: none; background: var(--danger-soft); border: 1px solid var(--danger); padding: 12px; border-radius: 8px; font-size: 12px; color: #991b1b;">
-                      <strong>⚠️ 警报: 数据变动幅度超过熔断阈值(30%)!</strong>
-                      <p style="margin-top: 4px; margin-bottom: 8px;">本次同步的行政班/课表记录变动量较大，为防止误清空线上数据，直接发布已被拦截。若确属新学期全量重构，请在下方手动勾选确认后强行发布。</p>
-                      <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #991b1b; font-weight: 700; margin-bottom:0;">
-                        <input type="checkbox" id="stagingForceConfirm"> 我已知晓风险，确认本次数据变动为正常新学期更迭，强行发布
-                      </label>
-                    </div>
-
-                    <div style="display: flex; justify-content: flex-end; gap: 12px; align-items: center;">
-                      <span id="publishStatusText" style="font-size:12px; color:var(--muted);"></span>
-                      <button type="button" class="primary" id="stagingPublishBtn" style="padding: 10px 20px;">🚀 发布为正式版本</button>
-                    </div>
-                  </div>
+                <!-- Stepper Actions Navigation -->
+                <div class="stepper-actions">
+                  <button type="button" class="ghost" id="stepperPrevBtn" disabled>上一步</button>
+                  <button type="button" class="primary" id="stepperNextBtn">下一步</button>
                 </div>
               </div>
             </div>
+
 
             <!-- 6. relay-task-panel -->
             <div class="card" id="relay-task-panel">
@@ -4532,62 +4780,192 @@ const adminConsoleHtml = `<!doctype html>
         return termClean + "-" + yyyy + mm + dd + "-" + hh + min + sec;
       }
 
+      // 当前选中的 Shell，默认是 powershell
+      state.currentShell = "powershell";
+      state.activeStep = 1;
+
+      // 自动生成版本号
+      function getAutoGeneratedVersion(term) {
+        var now = new Date();
+        var yyyy = now.getFullYear();
+        var mm = String(now.getMonth() + 1).padStart(2, "0");
+        var dd = String(now.getDate()).padStart(2, "0");
+        var hh = String(now.getHours()).padStart(2, "0");
+        var min = String(now.getMinutes()).padStart(2, "0");
+        var sec = String(now.getSeconds()).padStart(2, "0");
+        
+        var termClean = (term || "2026-2027-1").replace(/-/g, "");
+        return termClean + "-" + yyyy + mm + dd + "-" + hh + min + sec;
+      }
+
+      // 获取推荐的 5 个活跃年级
+      function getRecommendGrades(term) {
+        var match = term.match(/^(\d{4})/);
+        if (match) {
+          var startYear = parseInt(match[1], 10);
+          var grades = [];
+          for (var i = 0; i < 5; i++) {
+            grades.push(startYear - i);
+          }
+          return grades.join(",");
+        }
+        return "2026,2025,2024,2023,2022";
+      }
+
+      function getFreshmanGrade(term) {
+        var match = term.match(/^(\d{4})/);
+        return match ? match[1] : "2026";
+      }
+
       // 更新向导命令预览与运维卡片列表
       function updateWizardCommand() {
         var term = getTermValue("wizardTerm", "wizardTermCustom") || "2026-2027-1";
         var startDate = value("wizardStartDate") || "2026-09-01";
-        var note = value("wizardNote") || (term + " 新学期全校课表首版");
-        var mode = value("wizardMode") || "staging";
         var source = value("wizardSource") || "local-campus";
-        
-        // 自动计算版本
+        var note = value("wizardNote") || (term + " 新学期全校课表首版");
+
+        // 自动计算版本并填充到 UI
         var versionInput = $("wizardVersion");
         if (versionInput) {
           if (!versionInput.dataset.modifiedByUser || !versionInput.value) {
             versionInput.value = getAutoGeneratedVersion(term);
           }
         }
-        
-        var isDryRun = (mode === "dry-run");
-        var publish = (mode === "publish");
-        
-        var query = "?term=" + encodeURIComponent(term) +
-                    "&start=" + encodeURIComponent(startDate) +
-                    "&note=" + encodeURIComponent(note) +
-                    "&dryRun=" + isDryRun +
-                    "&publish=" + publish;
-                    
-        api("/api/admin/sync/command-guide" + query)
+        var version = versionInput ? versionInput.value : "";
+
+        // 提取勾选的同步范围
+        var scopes = [];
+        if ($("rangeClass") && $("rangeClass").checked) scopes.push("classSchedules");
+        if ($("rangeTeacher") && $("rangeTeacher").checked) scopes.push("teacherSchedules");
+        if ($("rangeClassroom") && $("rangeClassroom").checked) scopes.push("classroomSchedules");
+        if ($("rangeCourse") && $("rangeCourse").checked) scopes.push("courseSchedules");
+        if ($("rangeClassroomList") && $("rangeClassroomList").checked) scopes.push("classrooms");
+        if ($("rangeTeacherList") && $("rangeTeacherList").checked) scopes.push("teachers");
+        if ($("rangeCourseList") && $("rangeCourseList").checked) scopes.push("courses");
+
+        var scopesStr = scopes.join(",");
+
+        // 年级范围
+        var gradesMode = value("wizardGradesMode") || "recommend";
+        var gradesVal = "";
+        if (gradesMode === "recommend") {
+          gradesVal = getRecommendGrades(term);
+        } else if (gradesMode === "freshman") {
+          gradesVal = getFreshmanGrade(term);
+        } else if (gradesMode === "custom") {
+          gradesVal = (value("wizardGradesCustom") || "").trim();
+        }
+
+        // 学院 & 专业过滤
+        var collegeCodes = (value("wizardCollegesFilter") || "").trim();
+        var majorCodes = (value("wizardMajorsFilter") || "").trim();
+
+        // 并发 & 延迟
+        var concurrency = value("wizardConcurrency") || "1";
+        var delay = value("wizardDelay") || "900";
+
+        // 判断是否为调试模式 (根据选取的 Preset 来判断，或者只要输出路径为 debug)
+        var isDebugMode = document.getElementById("preset-debug") && document.getElementById("preset-debug").classList.contains("active");
+        var output = isDebugMode ? "./staging/debug-" + term + ".json" : "./staging/" + term + "-full.json";
+
+        // 是否勾选行政班课表
+        var hasClassSchedules = scopes.indexOf("classSchedules") >= 0;
+
+        // 生成环境变量
+        var envVars = [];
+        if (hasClassSchedules) {
+          envVars.push({ name: "SYNC_CLASS_SCOPE", val: "all" });
+        }
+        if (gradesVal) {
+          envVars.push({ name: "SYNC_CLASS_GRADES", val: gradesVal });
+        }
+        if (scopesStr) {
+          envVars.push({ name: "SYNC_INCLUDE_SCOPES", val: scopesStr });
+        }
+        if (concurrency) {
+          envVars.push({ name: "SYNC_CLASS_MAX_CONCURRENCY", val: concurrency });
+        }
+        if (delay) {
+          envVars.push({ name: "SYNC_CLASS_REQUEST_DELAY_MS", val: delay });
+        }
+        if (collegeCodes) {
+          envVars.push({ name: "SYNC_CLASS_COLLEGE_CODES", val: collegeCodes });
+        }
+        if (majorCodes) {
+          envVars.push({ name: "SYNC_CLASS_MAJOR_CODES", val: majorCodes });
+        }
+
+        // 生成 CLI 参数
+        var cliArgs = [
+          "--term=" + term,
+          "--start=" + startDate,
+          "--output=" + output,
+          "--include=" + scopesStr
+        ];
+        if (hasClassSchedules) {
+          cliArgs.push("--class-scope=all");
+        }
+        if (gradesVal) {
+          cliArgs.push("--grades=" + gradesVal);
+        }
+        if (concurrency) {
+          cliArgs.push("--concurrency=" + concurrency);
+        }
+        if (delay) {
+          cliArgs.push("--delay-ms=" + delay);
+        }
+        if (collegeCodes) {
+          cliArgs.push("--college-codes=" + collegeCodes);
+        }
+        if (majorCodes) {
+          cliArgs.push("--major-codes=" + majorCodes);
+        }
+
+        var cliArgsStr = cliArgs.join(" ");
+
+        // 构造命令文本
+        var commandText = "";
+        var shell = state.currentShell || "powershell";
+
+        if (shell === "cmd") {
+          envVars.forEach(function(ev) {
+            commandText += "set " + ev.name + "=" + ev.val + "\n";
+          });
+          commandText += "npm run sync:" + source + " -- " + cliArgsStr;
+        } else if (shell === "powershell") {
+          envVars.forEach(function(ev) {
+            commandText += '$env:' + ev.name + '="' + ev.val + '"\n';
+          });
+          commandText += "npm run sync:" + source + " -- " + cliArgsStr;
+        } else {
+          // bash
+          envVars.forEach(function(ev) {
+            commandText += ev.name + "=" + ev.val + " \\\n";
+          });
+          commandText += "npm run sync:" + source + " -- " + cliArgsStr;
+        }
+
+        // 显示到界面
+        if ($("wizardCommandCode")) {
+          $("wizardCommandCode").textContent = commandText;
+        }
+        if ($("flowCmdTextLocal")) {
+          $("flowCmdTextLocal").textContent = "npm run sync:local-campus -- " + cliArgsStr;
+        }
+
+        // 异步更新右侧运维说明卡片列表
+        api("/api/admin/sync/command-guide?term=" + term + "&start=" + startDate)
           .then(function(res) {
             if (res.success && res.commands) {
               var cmds = res.commands;
-              
-              var commandIdBySource = {
-                "local-campus": "local-campus",
-                "relay-agent": "relay-agent",
-                "staging-upload": "local-upload",
-                "manual-maintain": "local-upload",
-                "server-direct": "server-direct"
-              };
-              var wizardCmd = cmds.find(function(c) { return c.id === commandIdBySource[source]; }) || cmds[0];
-              var cmdText = wizardCmd ? wizardCmd.command : "npm run sync:local-campus";
-              if ($("wizardCommandCode")) $("wizardCommandCode").textContent = cmdText;
-              if ($("flowCmdTextLocal")) $("flowCmdTextLocal").textContent = cmdText;
-              if ($("wizardCopyBtn")) $("wizardCopyBtn").style.display = "block";
-              
-              // 2. 渲染动态命令说明卡片列表
               var syncCommandsWrap = $("syncCommands");
               if (syncCommandsWrap) {
                 syncCommandsWrap.innerHTML = "";
-                
-                // 过滤出除了 new-term 以外的前面 5 个命令
                 var normalCmds = cmds.filter(function(c) { return c.id !== "new-term"; });
                 normalCmds.forEach(function(c) {
                   var riskClass = c.risk.indexOf("低") >= 0 ? "low" : (c.risk.indexOf("中高") >= 0 ? "high" : "medium");
                   var riskBadge = "<span class='command-tag " + riskClass + "'>风险: " + c.risk + "</span>";
                   var intranetBadge = c.intranetRequired ? "<span class='command-tag high'>⚠️ 需校园网</span>" : "<span class='command-tag low'>外网可用</span>";
-                  
-                  // 默认展开本机校园网同步 (local-campus) 和上传本地 Staging (local-upload)
                   var isDefaultExpanded = (c.id === "local-campus" || c.id === "local-upload" || c.id === "staging-upload");
                   
                   var item = document.createElement("div");
@@ -4617,7 +4995,6 @@ const adminConsoleHtml = `<!doctype html>
                     if (e.target.classList.contains("command-tag")) return;
                     item.classList.toggle("collapsed");
                   });
-                  
                   syncCommandsWrap.appendChild(item);
                 });
                 
@@ -4638,7 +5015,7 @@ const adminConsoleHtml = `<!doctype html>
       ["wizardStartDate", "wizardNote"].forEach(function(id) {
         safeBind(id, "input", updateWizardCommand);
       });
-      ["wizardTerm", "wizardMode", "wizardSource"].forEach(function(id) {
+      ["wizardTerm", "wizardSource"].forEach(function(id) {
         safeBind(id, "change", updateWizardCommand);
       });
       safeBind("wizardCopyBtn", "click", function() {
@@ -4921,9 +5298,17 @@ const adminConsoleHtml = `<!doctype html>
               previewBox.style.display = "block";
               var d = res.data;
               
-              // 1. 元数据
+              // 1. 元数据与同步范围信息
+              var meta = d.meta || {};
+              var scopesText = meta.includeScopes ? meta.includeScopes : "全量数据";
               var timeStr = d.generatedAt ? formatDate(d.generatedAt) : "未知";
-              $("stagingMetaBadge").textContent = "学期: " + d.term + " | 版本: " + d.releaseVersion + " | 生成时间: " + timeStr;
+              
+              $("stagingMetaBadge").innerHTML = 
+                "目标学期: " + (d.term || meta.term || "-") + 
+                " | 版本: " + (d.releaseVersion || "-") + 
+                "<br>数据来源: " + (d.source || meta.source || "本机校园网采集") +
+                "<br>包含模块: <code style='font-size:11.5px; font-weight:700; color:var(--primary);'>" + scopesText + "</code>" +
+                "<br>生成时间: " + timeStr;
               
               // 2. 填充数值
               $("stagingValClass").textContent = d.counts.classScheduleCount;
@@ -4982,25 +5367,48 @@ const adminConsoleHtml = `<!doctype html>
               // 5. 校验警告
               var warnBox = $("stagingWarningsBox");
               var warnList = $("stagingWarningsList");
-              if (warnBox && warnList) {
-                var warnings = [];
-                
-                // 新生班少判定：行政班课表相比之前减少 50%
-                var activeClassCount = d.counts.classScheduleCount - d.diff.classDelta;
-                if (activeClassCount > 20 && d.counts.classScheduleCount < activeClassCount * 0.5) {
-                  warnings.push("警告: 行政班课表总数 (" + d.counts.classScheduleCount + "个) 相比当前线上版本 (" + activeClassCount + "个) 减少超过 50%，可能导致大范围课表缺失！");
+              
+              // 默认启用发布按钮
+              var publishBtn = $("stagingPublishBtn");
+              if (publishBtn) {
+                publishBtn.disabled = false;
+              }
+              
+              var warnings = [];
+              
+              // 新生班少判定：行政班课表相比之前减少 50%
+              var activeClassCount = d.counts.classScheduleCount - d.diff.classDelta;
+              if (activeClassCount > 20 && d.counts.classScheduleCount < activeClassCount * 0.5) {
+                warnings.push("警告: 行政班课表总数 (" + d.counts.classScheduleCount + "个) 相比当前线上版本 (" + activeClassCount + "个) 减少超过 50%，可能导致大范围课表缺失！");
+              }
+              
+              if (res.warnings && res.warnings.length > 0) {
+                warnings = warnings.concat(res.warnings);
+              }
+              
+              // 防呆熔断判断：若 classSchedules 数量为 0 且前端勾选了行政班，强行禁用发布并警告
+              var isClassChecked = $("rangeClass") ? $("rangeClass").checked : true;
+              if (d.counts.classScheduleCount === 0 && isClassChecked) {
+                if (publishBtn) publishBtn.disabled = true;
+                if (warnBox && warnList) {
+                  warnBox.style.display = "flex";
+                  warnList.innerHTML = "<div style='color: var(--danger); font-weight: bold;'>🚨 熔断拦截: 本次上传的行政班课表数为 0，但您的同步范围中勾选了行政班。这可能意味着本地同步没有成功跑完行政班抓取，或者没有在本地命令中正确传入 SYNC_CLASS_SCOPE=all。为了防止发布空包清空小程序线上数据，正式发布已被强行禁用！请使用命令生成器推荐的完整命令重新抓取。</div>";
                 }
+                showToast("🚨 行政班课表为空，疑似同步未生效！发布已被强行禁止。", "error");
                 
-                if (res.warnings && res.warnings.length > 0) {
-                  warnings = warnings.concat(res.warnings);
-                }
-                
-                if (warnings.length > 0) {
+                // 触发熔断二次强确认面板显示为 none 避免混淆
+                var forceBox = $("forceConfirmContainer");
+                if (forceBox) forceBox.style.display = "none";
+                return;
+              }
+              
+              if (warnings.length > 0) {
+                if (warnBox && warnList) {
                   warnBox.style.display = "flex";
                   warnList.innerHTML = warnings.map(function(w) { return "<div>• " + escapeHtml(w) + "</div>"; }).join("");
-                } else {
-                  warnBox.style.display = "none";
                 }
+              } else {
+                if (warnBox) warnBox.style.display = "none";
               }
               
               // 6. 熔断触发逻辑
@@ -5014,12 +5422,6 @@ const adminConsoleHtml = `<!doctype html>
                 } else {
                   forceBox.style.display = "none";
                 }
-              }
-              
-              // 启用发布按钮
-              var publishBtn = $("stagingPublishBtn");
-              if (publishBtn) {
-                publishBtn.disabled = false;
               }
             }
           })
@@ -6062,7 +6464,7 @@ const adminConsoleHtml = `<!doctype html>
       function initSyncModule() {
         updateWizardCommand();
         
-        // 绑定向导折叠/展开
+        // 绑定向导折叠/展开 (如果存在的话，向后兼容)
         var wizardHeader = $("wizardCollapseHeader");
         var wizardBody = $("wizardCollapseBody");
         var wizardIcon = $("wizardCollapseIcon");
@@ -6085,6 +6487,234 @@ const adminConsoleHtml = `<!doctype html>
           var text = $("flowCmdTextRelay").textContent;
           if (text) copyText(text);
         });
+
+        // ------------------ 新版同步向导初始化 ------------------
+        // 1. Shell 切换绑定
+        var shells = ["powershell", "cmd", "bash"];
+        shells.forEach(function(sh) {
+          var btn = $("shell-" + sh);
+          if (btn) {
+            btn.addEventListener("click", function() {
+              shells.forEach(function(s) {
+                var b = $("shell-" + s);
+                if (b) b.classList.remove("active");
+              });
+              btn.classList.add("active");
+              state.currentShell = sh;
+              updateWizardCommand();
+            });
+          }
+        });
+
+        // 2. Preset 卡片切换绑定
+        var presets = ["full", "fast", "resources", "debug"];
+        presets.forEach(function(pr) {
+          var card = $("preset-" + pr);
+          if (card) {
+            card.addEventListener("click", function() {
+              presets.forEach(function(p) {
+                var c = $("preset-" + p);
+                if (c) c.classList.remove("active");
+              });
+              card.classList.add("active");
+
+              // 应用 Preset 配置到 UI 控件
+              if (pr === "full") {
+                ["rangeClass", "rangeTeacher", "rangeClassroom", "rangeCourse", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
+                  var cb = $(id);
+                  if (cb) cb.checked = true;
+                });
+                var gm = $("wizardGradesMode");
+                if (gm) gm.value = "recommend";
+                var cc = $("wizardConcurrency");
+                if (cc) cc.value = "1";
+                var dy = $("wizardDelay");
+                if (dy) dy.value = "900";
+              } else if (pr === "fast") {
+                ["rangeClass", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
+                  var cb = $(id);
+                  if (cb) cb.checked = true;
+                });
+                ["rangeTeacher", "rangeClassroom", "rangeCourse"].forEach(function(id) {
+                  var cb = $(id);
+                  if (cb) cb.checked = false;
+                });
+                var gm = $("wizardGradesMode");
+                if (gm) gm.value = "freshman";
+                var cc = $("wizardConcurrency");
+                if (cc) cc.value = "1";
+                var dy = $("wizardDelay");
+                if (dy) dy.value = "900";
+              } else if (pr === "resources") {
+                var cbClass = $("rangeClass");
+                if (cbClass) cbClass.checked = false;
+                ["rangeTeacher", "rangeClassroom", "rangeCourse", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
+                  var cb = $(id);
+                  if (cb) cb.checked = true;
+                });
+                var gm = $("wizardGradesMode");
+                if (gm) gm.value = "all";
+                var cc = $("wizardConcurrency");
+                if (cc) cc.value = "1";
+                var dy = $("wizardDelay");
+                if (dy) dy.value = "900";
+              } else if (pr === "debug") {
+                ["rangeClass"].forEach(function(id) {
+                  var cb = $(id);
+                  if (cb) cb.checked = true;
+                });
+                ["rangeTeacher", "rangeClassroom", "rangeCourse", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
+                  var cb = $(id);
+                  if (cb) cb.checked = false;
+                });
+                var gm = $("wizardGradesMode");
+                if (gm) gm.value = "custom";
+                var cg = $("wizardGradesCustom");
+                var term = getTermValue("wizardTerm", "wizardTermCustom") || "2026-2027-1";
+                if (cg) cg.value = getFreshmanGrade(term);
+                var cc = $("wizardConcurrency");
+                if (cc) cc.value = "1";
+                var dy = $("wizardDelay");
+                if (dy) dy.value = "900";
+              }
+
+              // 触发年级模式切换
+              var gmEl = $("wizardGradesMode");
+              if (gmEl) gmEl.dispatchEvent(new Event("change"));
+
+              updateWizardCommand();
+            });
+          }
+        });
+
+        // 3. 年级选择模式联动
+        safeBind("wizardGradesMode", "change", function() {
+          var mode = value("wizardGradesMode");
+          var customRow = $("wizardGradesCustomRow");
+          if (customRow) {
+            if (mode === "custom") {
+              customRow.style.display = "block";
+            } else {
+              customRow.style.display = "none";
+            }
+          }
+          updateWizardCommand();
+        });
+
+        // 4. Stepper 导航按钮绑定
+        safeBind("stepperPrevBtn", "click", function() {
+          if (state.activeStep > 1) {
+            state.activeStep--;
+            updateStepperUI();
+          }
+        });
+
+        safeBind("stepperNextBtn", "click", function() {
+          if (state.activeStep < 6) {
+            state.activeStep++;
+            updateStepperUI();
+          }
+        });
+
+        // 点击指示器也允许跳转
+        document.querySelectorAll(".step-indicator-item").forEach(function(item) {
+          item.addEventListener("click", function() {
+            var step = parseInt(item.dataset.step, 10);
+            if (step) {
+              state.activeStep = step;
+              updateStepperUI();
+            }
+          });
+        });
+
+        // 5. 各种 Input 的变化事件重新生成命令
+        ["wizardStartDate", "wizardNote", "wizardGradesCustom", "wizardCollegesFilter", "wizardMajorsFilter", "wizardDelay"].forEach(function(id) {
+          safeBind(id, "input", updateWizardCommand);
+        });
+        ["wizardTerm", "wizardSource", "wizardConcurrency"].forEach(function(id) {
+          safeBind(id, "change", updateWizardCommand);
+        });
+        ["rangeClass", "rangeTeacher", "rangeClassroom", "rangeCourse", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
+          safeBind(id, "change", updateWizardCommand);
+        });
+
+        // 6. 下载脚本绑定
+        safeBind("downloadCmdBtn", "click", function() {
+          state.currentShell = "cmd";
+          updateWizardCommand();
+          var content = $("wizardCommandCode").textContent;
+          downloadScript("run-sync.cmd", content);
+        });
+
+        safeBind("downloadPs1Btn", "click", function() {
+          state.currentShell = "powershell";
+          updateWizardCommand();
+          var content = $("wizardCommandCode").textContent;
+          downloadScript("run-sync.ps1", content);
+        });
+
+        // 触发一次 UI 刷新
+        updateStepperUI();
+      }
+
+      function downloadScript(filename, content) {
+        var blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+        var link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast("脚本文件 " + filename + " 已开始下载");
+      }
+
+      function updateStepperUI() {
+        var step = state.activeStep;
+        
+        // 1. 更新 Indicator 状态
+        document.querySelectorAll(".step-indicator-item").forEach(function(item) {
+          var s = parseInt(item.dataset.step, 10);
+          item.classList.remove("active", "completed");
+          if (s === step) {
+            item.classList.add("active");
+          } else if (s < step) {
+            item.classList.add("completed");
+          }
+        });
+
+        // 2. 更新进度条
+        var progressLine = $("stepperProgressLine");
+        if (progressLine) {
+          progressLine.style.width = ((step - 1) / 5) * 100 + "%";
+        }
+
+        // 3. 更新内容卡片显隐
+        for (var i = 1; i <= 6; i++) {
+          var cont = $("step-content-" + i);
+          if (cont) {
+            if (i === step) {
+              cont.classList.add("active");
+            } else {
+              cont.classList.remove("active");
+            }
+          }
+        }
+
+        // 4. 更新按钮状态
+        var prevBtn = $("stepperPrevBtn");
+        var nextBtn = $("stepperNextBtn");
+        if (prevBtn) {
+          prevBtn.disabled = (step === 1);
+        }
+        if (nextBtn) {
+          if (step === 6) {
+            nextBtn.textContent = "已是最后一步";
+            nextBtn.disabled = true;
+          } else {
+            nextBtn.textContent = "下一步";
+            nextBtn.disabled = false;
+          }
+        }
       }
 
       function initFeedbackModule() {
