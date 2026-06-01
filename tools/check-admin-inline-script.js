@@ -131,14 +131,16 @@ try {
 
 const functionNames = getFunctionNames(scriptSource);
 const requiredFunctions = [
-  "login",
-  "logout",
   "loadDashboard",
-  "loadConfig",
-  "loadNotices",
-  "loadNews",
-  "loadFeedbacks",
   "renderDashboard",
+  "runHealthChecks",
+  "loadSyncStatus",
+  "renderGithubStyleHeatmap",
+  "showLoginView",
+  "showDashboardView",
+  "safeFetch",
+  "api",
+  "uploadApi",
 ];
 
 const missingRequired = requiredFunctions.filter((name) => !functionNames.has(name));
@@ -181,6 +183,18 @@ const missingLoadAllCalls = Array.from(getDirectCalls(loadAllBody))
 
 if (missingLoadAllCalls.length > 0) {
   fail(`loadAll() calls functions that are not defined: ${missingLoadAllCalls.join(", ")}`);
+}
+
+if (/onclick\s*=/i.test(html)) {
+  fail("Admin Console HTML must not use inline onclick handlers.");
+}
+
+const runHealthChecksBody = extractFunctionBody(scriptSource, "runHealthChecks");
+if (!runHealthChecksBody.includes("safeFetch(")) {
+  fail("runHealthChecks() must use safeFetch() so health-check 401s do not redirect the admin page.");
+}
+if (/runHealthChecks[\s\S]*?api\(/.test(runHealthChecksBody)) {
+  fail("runHealthChecks() must not call api().");
 }
 
 try {

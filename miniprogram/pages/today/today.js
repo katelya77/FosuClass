@@ -14,6 +14,7 @@ Page({
     dataSourceText: "课程数据 · 本地缓存",
     courseCountText: "今日共 0 门课",
     courses: [],
+    appConfig: { notices: [] },
     urgentNotice: null,
     dataVersionText: "",
     releaseNote: "",
@@ -32,9 +33,10 @@ Page({
     appConfigService.loadAppConfig()
       .then((config) => {
         const urgentNotice = appConfigService.getPageNotices(config, "today")
-          .find((notice) => notice.priority === "urgent");
+          .find((notice) => notice.priority === "urgent" && notice.displayMode !== "ticker");
         const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
         this.setData({
+          appConfig: config,
           urgentNotice,
           dataVersionText: latestUpdatedAt ? `数据更新于 ${appConfigService.formatConfigTime(latestUpdatedAt)}` : "",
           releaseNote: (config.dataVersion && config.dataVersion.releaseNote) || "",

@@ -11,6 +11,8 @@
     <view class="disclaimer-line">{{brand.disclaimer}}</view>
   </view>
 
+  <notice-ticker notices="{{appConfig.notices}}" page-key="today" max-count="1" />
+
   <view class="today-alert urgent" wx:if="{{urgentNotice}}">
     <view class="alert-title">{{urgentNotice.title}}</view>
     <view class="alert-content">{{urgentNotice.content}}</view>

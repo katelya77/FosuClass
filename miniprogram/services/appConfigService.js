@@ -91,7 +91,9 @@ function getPageNotices(config, pageName) {
 
 function getPrimaryNotice(config, pageName, displayModes) {
   const modes = Array.isArray(displayModes) ? displayModes : [displayModes];
-  return getPageNotices(config, pageName).find((notice) => modes.includes(notice.displayMode));
+  return getPageNotices(config, pageName).find((notice) => {
+    return modes.includes(notice.displayMode) && shouldShowNotice(notice);
+  });
 }
 
 function getDismissedMap() {

@@ -3,6 +3,7 @@
   "usingComponents": {
     "course-card": "/components/course-card/index",
     "course-detail-popup": "/components/course-detail-popup/index",
+    "notice-ticker": "/components/notice-ticker/notice-ticker",
     "week-switcher": "/components/week-switcher/index"
   }
 }

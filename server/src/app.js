@@ -5,6 +5,7 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const path = require("path");
 const config = require("./config");
 const { globalLimiter } = require("./utils/rateLimit");
 const { safeLog } = require("./utils/safeLogger");
@@ -49,6 +50,10 @@ app.use(globalLimiter);
 // 4. 解析请求体
 app.use(express.json({ limit: "150mb" }));
 app.use(express.urlencoded({ extended: true, limit: "150mb" }));
+
+app.use(express.static(path.join(__dirname, "../public"), {
+  maxAge: config.NODE_ENV === "production" ? "1h" : 0,
+}));
 
 app.use((err, req, res, next) => {
   if (err && (err.type === "entity.too.large" || err.status === 413)) {

@@ -4,6 +4,8 @@
     <view class="subtitle">{{dataVersionText || "可按班级、教师、教室或课程查看课程安排。"}} </view>
   </view>
 
+  <notice-ticker notices="{{appConfig.notices}}" page-key="school" max-count="1" />
+
   <block wx:if="{{catalogEmpty}}">
     <view class="card" style="margin: 24rpx; padding: 60rpx 40rpx; text-align: center; border-radius: 16rpx; background: #ffffff; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.05);">
       <empty-state

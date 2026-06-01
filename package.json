@@ -18,6 +18,8 @@
     "sync:fresh": "npm --prefix tools/fosu-sync-client run sync:fresh",
     "sync:quick": "npm --prefix tools/fosu-sync-client run sync:quick",
     "test:course-normalizer": "node tools/test-course-normalizer.js",
+    "test:admin-heatmap": "node tools/test-admin-heatmap.js",
+    "test:admin-auth-modes": "node tools/test-admin-auth-modes.js",
     "test:personal-encrypt": "node server/scripts/test-personal-encrypt.js",
     "test:personal-parser": "node server/scripts/test-personal-parser.js",
     "test:personal-degradation": "node server/scripts/test-personal-degradation.js",
