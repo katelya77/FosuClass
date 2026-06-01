@@ -3129,6 +3129,19 @@ router.post("/relay/tasks/:id/revoke", adminAuth.verifyAdminAccess, (req, res) =
   }
 });
 
+router.delete("/relay/tasks/:id", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const deleted = relayService.deleteTask(req.params.id);
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: "接力任务不存在" });
+    }
+    writeAuditLog(req, "delete", "relay-task", req.params.id, "删除接力任务记录");
+    return res.json({ success: true, message: "接力任务已删除", deleted: true });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 router.get("/relay/uploads", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     return res.json({

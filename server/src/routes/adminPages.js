@@ -33,7 +33,7 @@ const adminConsoleHtml = `<!doctype html>
       --warning-soft: #fef3c7;
       --danger: #ef4444;
       --danger-soft: #fee2e2;
-      --radius: 16px;
+      --radius: 10px;
       --shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.02);
       --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
       --font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -64,7 +64,7 @@ const adminConsoleHtml = `<!doctype html>
       border: 1px solid var(--border);
       border-radius: var(--radius);
       box-shadow: var(--shadow);
-      padding: 24px;
+      padding: 16px;
       transition: var(--transition);
     }
     .card:hover {
@@ -73,7 +73,7 @@ const adminConsoleHtml = `<!doctype html>
     .card-title {
       font-size: 16px;
       font-weight: 700;
-      margin-bottom: 16px;
+      margin-bottom: 10px;
       color: var(--text);
     }
 
@@ -87,7 +87,7 @@ const adminConsoleHtml = `<!doctype html>
     }
     input, textarea, select {
       width: 100%;
-      padding: 10px 14px;
+      padding: 8px 12px;
       border: 1px solid var(--border);
       border-radius: 6px;
       background: var(--panel);
@@ -118,7 +118,7 @@ const adminConsoleHtml = `<!doctype html>
     button, .btn {
       font-size: 14px;
       font-weight: 600;
-      padding: 8px 16px;
+      padding: 7px 14px;
       border-radius: 6px;
       border: 1px solid transparent;
       cursor: pointer;
@@ -175,7 +175,7 @@ const adminConsoleHtml = `<!doctype html>
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      padding: 24px 16px;
+      padding: 18px 12px;
       position: sticky;
       top: 0;
       height: 100vh;
@@ -186,7 +186,7 @@ const adminConsoleHtml = `<!doctype html>
       display: flex;
       align-items: center;
       gap: 12px;
-      margin-bottom: 24px;
+      margin-bottom: 16px;
       padding: 0 8px;
       overflow: hidden;
     }
@@ -279,7 +279,7 @@ const adminConsoleHtml = `<!doctype html>
     
     /* 主体内容区 */
     .main-content {
-      padding: 32px 40px;
+      padding: 20px 24px;
       overflow-y: auto;
       max-width: 1400px;
       width: 100%;
@@ -291,9 +291,9 @@ const adminConsoleHtml = `<!doctype html>
       display: flex;
       align-items: center;
       justify-content: space-between;
-      margin-bottom: 24px;
+      margin-bottom: 16px;
       border-bottom: 1px solid var(--border);
-      padding-bottom: 16px;
+      padding-bottom: 12px;
     }
     .topbar h2 {
       font-size: 22px;
@@ -328,15 +328,15 @@ const adminConsoleHtml = `<!doctype html>
     .stats-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
+      gap: 8px;
+      margin-bottom: 16px;
     }
     .stat-card {
       display: flex;
       flex-direction: column;
       justify-content: space-between;
-      min-height: 100px;
-      padding: 20px;
+      min-height: 84px;
+      padding: 14px;
     }
     .stat-head {
       display: flex;
@@ -364,7 +364,8 @@ const adminConsoleHtml = `<!doctype html>
     .dash-columns {
       display: grid;
       grid-template-columns: 1.2fr 0.8fr;
-      gap: 20px;
+      gap: 14px;
+      align-items: start;
     }
 
     /* Tab 筛选控制条 */
@@ -415,7 +416,7 @@ const adminConsoleHtml = `<!doctype html>
       text-align: left;
     }
     th, td {
-      padding: 10px 16px;
+      padding: 8px 12px;
       border-bottom: 1px solid var(--border);
       font-size: 13px;
       white-space: nowrap;
@@ -797,7 +798,7 @@ const adminConsoleHtml = `<!doctype html>
       background: rgba(0,0,0,0.3);
       display: grid;
       place-items: center;
-      padding: 16px;
+      padding: 12px;
       z-index: 10;
     }
     .mini-modal {
@@ -1177,7 +1178,7 @@ const adminConsoleHtml = `<!doctype html>
     .heatmap-detail-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 8px;
+      gap: 6px;
       margin-top: 12px;
       max-height: 200px;
       overflow-y: auto;
@@ -1467,7 +1468,7 @@ const adminConsoleHtml = `<!doctype html>
     
     .command-code-box {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       background: #0f172a;
       color: #38bdf8;
       border-radius: 6px;
@@ -1476,9 +1477,16 @@ const adminConsoleHtml = `<!doctype html>
       font-size: 12px;
       justify-content: space-between;
       gap: 8px;
+      max-width: 100%;
+      overflow-x: auto;
     }
     .command-code-box code {
-      word-break: break-all;
+      display: block;
+      flex: 1 1 auto;
+      min-width: 0;
+      white-space: pre;
+      word-break: normal;
+      overflow-x: auto;
     }
     .command-code-box button {
       background: rgba(255,255,255,0.1);
@@ -1490,6 +1498,7 @@ const adminConsoleHtml = `<!doctype html>
       cursor: pointer;
       font-family: inherit;
       transition: var(--transition);
+      flex: 0 0 auto;
     }
     .command-code-box button:hover {
       background: rgba(255,255,255,0.25);
@@ -1532,18 +1541,18 @@ const adminConsoleHtml = `<!doctype html>
     .sync-mode-grid {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 12px;
-      margin: 16px 0 20px;
+      gap: 10px;
+      margin: 12px 0 14px;
     }
     .sync-mode-card {
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 14px;
+      padding: 12px;
       background: var(--panel);
       display: flex;
       flex-direction: column;
       gap: 8px;
-      min-height: 150px;
+      min-height: 0;
     }
     .sync-mode-card strong {
       color: var(--text);
@@ -1561,7 +1570,7 @@ const adminConsoleHtml = `<!doctype html>
     .relay-task-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 10px;
+      gap: 8px;
     }
     .relay-table td {
       vertical-align: top;
@@ -1569,10 +1578,26 @@ const adminConsoleHtml = `<!doctype html>
     }
     .relay-token {
       display: inline-block;
-      max-width: 180px;
+      max-width: 160px;
       overflow: hidden;
       text-overflow: ellipsis;
       vertical-align: bottom;
+    }
+    .relay-command {
+      display: block;
+      max-width: 260px;
+      margin-top: 4px;
+      overflow-x: auto;
+      overflow-y: hidden;
+      text-overflow: clip;
+      white-space: nowrap;
+    }
+    .relay-table th,
+    .relay-table td,
+    #release-history-panel th,
+    #release-history-panel td {
+      padding: 6px 8px;
+      font-size: 12px;
     }
     @media (max-width: 900px) {
       .sync-mode-grid,
@@ -1584,12 +1609,12 @@ const adminConsoleHtml = `<!doctype html>
     .staging-preview-container {
       display: flex;
       flex-direction: column;
-      gap: 16px;
+      gap: 10px;
       border: 1px dashed var(--border);
       border-radius: var(--radius);
-      padding: 20px;
+      padding: 14px;
       background: var(--panel-2);
-      margin-top: 16px;
+      margin-top: 10px;
     }
     .staging-grid {
       display: grid;
@@ -1686,8 +1711,8 @@ const adminConsoleHtml = `<!doctype html>
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 16px 20px;
-      margin-bottom: 20px;
+      padding: 12px 16px;
+      margin-bottom: 14px;
       display: flex;
       align-items: center;
       gap: 12px;
@@ -1714,19 +1739,19 @@ const adminConsoleHtml = `<!doctype html>
 
     .sync-primary-flow {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
-      margin-bottom: 24px;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 0;
     }
     .flow-card {
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 20px;
+      padding: 14px;
       box-shadow: var(--shadow);
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
       transition: var(--transition);
       position: relative;
     }
@@ -1758,7 +1783,7 @@ const adminConsoleHtml = `<!doctype html>
       display: flex;
       flex-direction: column;
       gap: 8px;
-      flex: 1;
+      flex: 0 1 auto;
     }
     .flow-field {
       font-size: 12px;
@@ -1772,7 +1797,7 @@ const adminConsoleHtml = `<!doctype html>
       color: var(--text);
     }
     .flow-cmd-section {
-      margin-top: auto;
+      margin-top: 4px;
       border-top: 1px dashed var(--border);
       padding-top: 10px;
       display: flex;
@@ -1794,11 +1819,15 @@ const adminConsoleHtml = `<!doctype html>
       font-size: 11px;
       justify-content: space-between;
       gap: 8px;
+      max-width: 100%;
+      overflow-x: auto;
     }
     .flow-code-box code {
-      word-break: break-all;
-      overflow: hidden;
-      text-overflow: ellipsis;
+      flex: 1 1 auto;
+      min-width: 0;
+      word-break: normal;
+      overflow-x: auto;
+      text-overflow: clip;
       white-space: nowrap;
     }
     .copy-flow-btn, .flow-go-btn {
@@ -1849,30 +1878,48 @@ const adminConsoleHtml = `<!doctype html>
 
     .sync-dashboard-grid {
       display: grid;
-      grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
-      gap: 20px;
+      grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.85fr);
+      gap: 14px;
       align-items: start;
     }
     .sync-main-col {
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 12px;
+      min-width: 0;
     }
     .sync-side-col {
       display: flex;
       flex-direction: column;
-      gap: 20px;
+      gap: 12px;
+      min-width: 0;
+      position: sticky;
+      top: 16px;
+      align-self: start;
+    }
+    .sync-side-col .health-grid {
+      grid-template-columns: 1fr;
+      gap: 8px;
+    }
+    .sync-side-col .command-card-list {
+      gap: 8px;
+    }
+    .sync-side-col .command-meta-grid {
+      grid-template-columns: 1fr;
+    }
+    .sync-side-col .command-tip-box {
+      display: none;
     }
     
     /* 运维手册折叠样式 */
     .command-card {
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 16px;
+      padding: 12px;
       background: var(--panel);
       display: flex;
       flex-direction: column;
-      gap: 12px;
+      gap: 8px;
       transition: var(--transition);
     }
     .command-header {
@@ -1913,6 +1960,9 @@ const adminConsoleHtml = `<!doctype html>
       .sync-dashboard-grid {
         grid-template-columns: 1fr;
       }
+      .sync-side-col {
+        position: static;
+      }
       .sync-primary-flow {
         grid-template-columns: 1fr;
       }
@@ -1922,7 +1972,7 @@ const adminConsoleHtml = `<!doctype html>
     .stepper-indicator {
       display: flex;
       justify-content: space-between;
-      margin-bottom: 24px;
+      margin-bottom: 12px;
       position: relative;
     }
     .step-indicator-item {
@@ -1935,8 +1985,8 @@ const adminConsoleHtml = `<!doctype html>
       flex: 1;
     }
     .step-num {
-      width: 32px;
-      height: 32px;
+      width: 26px;
+      height: 26px;
       border-radius: 50%;
       background: var(--border);
       color: var(--muted);
@@ -1944,7 +1994,7 @@ const adminConsoleHtml = `<!doctype html>
       align-items: center;
       justify-content: center;
       font-weight: 700;
-      font-size: 14px;
+      font-size: 12px;
       transition: var(--transition);
       border: 2px solid var(--border);
     }
@@ -1959,8 +2009,8 @@ const adminConsoleHtml = `<!doctype html>
       border-color: var(--success);
     }
     .step-label {
-      font-size: 12px;
-      margin-top: 8px;
+      font-size: 11px;
+      margin-top: 5px;
       font-weight: 600;
       color: var(--muted);
       transition: var(--transition);
@@ -1977,19 +2027,19 @@ const adminConsoleHtml = `<!doctype html>
     .preset-card-grid {
       display: grid;
       grid-template-columns: repeat(2, 1fr);
-      gap: 16px;
-      margin-bottom: 16px;
+      gap: 10px;
+      margin-bottom: 10px;
     }
     .preset-card {
       background: var(--panel);
       border: 2px solid var(--border);
       border-radius: 12px;
-      padding: 16px;
+      padding: 10px;
       cursor: pointer;
       transition: var(--transition);
       display: flex;
       flex-direction: column;
-      gap: 6px;
+      gap: 4px;
     }
     .preset-card:hover {
       border-color: var(--border-hover);
@@ -2036,6 +2086,10 @@ const adminConsoleHtml = `<!doctype html>
     .step-content.active {
       display: block;
     }
+    .stepper-body {
+      padding-top: 12px !important;
+      margin-top: 12px !important;
+    }
     
     /* 目标 Shell 按钮组 */
     .segmented-control {
@@ -2044,7 +2098,7 @@ const adminConsoleHtml = `<!doctype html>
       padding: 4px;
       border-radius: 8px;
       gap: 2px;
-      margin-bottom: 12px;
+      margin-bottom: 8px;
       width: 100%;
     }
     .segmented-control button {
@@ -2067,9 +2121,9 @@ const adminConsoleHtml = `<!doctype html>
     .stepper-actions {
       display: flex;
       justify-content: space-between;
-      margin-top: 20px;
+      margin-top: 12px;
       border-top: 1px solid var(--border);
-      padding-top: 16px;
+      padding-top: 10px;
     }
   </style>
   </head>
@@ -2276,6 +2330,8 @@ const adminConsoleHtml = `<!doctype html>
           <!-- 同步状态卡片 -->
         </div>
 
+        <div class="sync-dashboard-grid">
+          <div class="sync-main-col">
         <!-- 3. sync-primary-flow -->
         <div class="sync-primary-flow" id="sync-primary-flow">
           <!-- Step 1: 本机校园网同步 -->
@@ -2364,7 +2420,7 @@ const adminConsoleHtml = `<!doctype html>
                         </div>
                         <div>
                           <label for="wizardStartDate">学期开始日期 (StartDate)</label>
-                          <input type="date" id="wizardStartDate" value="2026-09-01">
+                          <input type="date" id="wizardStartDate" value="2026-03-09">
                         </div>
                       </div>
                       <div class="form-row">
@@ -2517,7 +2573,7 @@ const adminConsoleHtml = `<!doctype html>
 
                       <div class="wizard-command-preview" style="margin-top: 12px;">
                         <div class="command-code-box" style="margin-top: 4px;">
-                          <code id="wizardCommandCode" style="white-space: pre-wrap; font-family: monospace;">加载中...</code>
+                          <code id="wizardCommandCode" style="white-space: pre; font-family: monospace; overflow-x: auto;">加载中...</code>
                         </div>
                       </div>
 
@@ -2752,41 +2808,38 @@ const adminConsoleHtml = `<!doctype html>
                 <!-- 接口连通度 -->
               </div>
             </div>
+            <!-- 7. release-history-panel -->
+            <div class="card" id="release-history-panel">
+              <h3 class="card-title">Release 历史</h3>
+              <p style="font-size: 12px; color: var(--muted); margin-bottom: 10px;">
+                最近发布的课表快照。发生数据污染、排课错误或临时调整时，可秒级回滚到历史版本。
+              </p>
+              <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px; gap: 8px;">
+                <label for="releaseTermFilter" style="margin-bottom: 0; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--muted);">筛选学期：</label>
+                <select id="releaseTermFilter" style="width: auto; padding: 4px 10px; font-size: 12px; height: 32px;"></select>
+              </div>
+              <div class="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>版本</th>
+                      <th>学期</th>
+                      <th>发布时间</th>
+                      <th>状态</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="releasesTableBody">
+                    <tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 16px 0;">获取数据中...</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
           </div>
         </div>
 
         <!-- 底部通栏或双栏自适应布局 -->
-        <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr; gap: 20px;">
-          <!-- 7. release-history-panel -->
-          <div class="card" id="release-history-panel">
-            <h3 class="card-title">⏪ 版本发布历史与回滚控制</h3>
-            <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
-              展示最近发布的 5 个课表快照版本。发生数据污染、排课失误或临时调整时，可通过回滚键秒级切回历史版本，即时触碰小程序配置。
-            </p>
-            <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px; gap: 8px;">
-              <label for="releaseTermFilter" style="margin-bottom: 0; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--muted);">筛选学期：</label>
-              <select id="releaseTermFilter" style="width: auto; padding: 4px 10px; font-size: 12px; height: 32px;"></select>
-            </div>
-            <div class="table-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th>版本号</th>
-                    <th>目标学期</th>
-                    <th>发布时间 / 备份</th>
-                    <th>数据范围统计</th>
-                    <th>说明备注</th>
-                    <th>当前状态</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody id="releasesTableBody">
-                  <tr><td colspan="7" style="text-align: center; color: var(--muted); padding: 20px 0;">获取数据中...</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-
+        <div style="margin-top: 14px; display: grid; grid-template-columns: 1fr; gap: 12px;">
           <!-- 8. sync-log-panel -->
           <div class="card" id="sync-log-panel">
             <h3 class="card-title">📜 最近同步历史日志</h3>
@@ -3541,6 +3594,7 @@ const adminConsoleHtml = `<!doctype html>
         qualityReport: null,
         heatmapDayType: "all",
         classroomHeatmapData: null,
+        wizardStartDateTouched: false,
         
         // 系统设置
         backups: [],
@@ -4513,6 +4567,29 @@ const adminConsoleHtml = `<!doctype html>
         return terms;
       }
 
+      function getTermStartDate(term) {
+        var map = {
+          "2025-2026-1": "2025-09-01",
+          "2025-2026-2": "2026-03-09",
+          "2026-2027-1": "2026-09-01",
+          "2026-2027-2": "2027-03-01",
+          "2027-2028-1": "2027-09-01",
+          "2027-2028-2": "2028-03-01"
+        };
+        return map[term] || "";
+      }
+
+      function syncWizardStartDateWithTerm(force) {
+        var input = $("wizardStartDate");
+        if (!input) return;
+        var term = getTermValue("wizardTerm", "wizardTermCustom") || "2025-2026-2";
+        var mappedStartDate = getTermStartDate(term);
+        if (!mappedStartDate) return;
+        if (force || !state.wizardStartDateTouched || !input.value) {
+          input.value = mappedStartDate;
+        }
+      }
+
       function initTermSelect(selectId, customInputId, defaultTerm, includeAllOption) {
         var select = $(selectId);
         if (!select) return;
@@ -4557,6 +4634,7 @@ const adminConsoleHtml = `<!doctype html>
               customInput.value = select.value;
             }
             if (selectId === "wizardTerm") {
+              syncWizardStartDateWithTerm(false);
               updateWizardCommand();
             }
           });
@@ -4564,6 +4642,7 @@ const adminConsoleHtml = `<!doctype html>
           if (customInput) {
             customInput.addEventListener("input", function() {
               if (selectId === "wizardTerm") {
+                syncWizardStartDateWithTerm(false);
                 updateWizardCommand();
               }
             });
@@ -4595,11 +4674,12 @@ const adminConsoleHtml = `<!doctype html>
             renderSyncStatusGrid();
             
             // 初始化所有学期下拉选择器
-            var defaultTerm = state.syncStatus ? state.syncStatus.semester : "";
+            var defaultTerm = state.syncStatus ? state.syncStatus.semester : "2025-2026-2";
             if (!state.termSelectsInitialized) {
               initTermSelect("wizardTerm", "wizardTermCustom", defaultTerm);
               initTermSelect("relayTaskTerm", "relayTaskTermCustom", defaultTerm);
               initTermSelect("releaseTermFilter", null, defaultTerm, true);
+              syncWizardStartDateWithTerm(true);
               state.termSelectsInitialized = true;
             }
 
@@ -4705,7 +4785,7 @@ const adminConsoleHtml = `<!doctype html>
           var command = buildRelayRunCommand(task);
           tr.innerHTML =
             "<td><strong>" + escapeHtml(task.term) + "</strong><br><span style='color:var(--muted);'>" + escapeHtml(task.description || "") + "</span><br><span style='color:var(--muted);'>有效期：" + formatDate(task.expiresAt) + "</span></td>" +
-            "<td><code class='relay-token'>" + escapeHtml(task.relayToken) + "</code><br><code class='relay-token'>" + escapeHtml(command) + "</code></td>" +
+            "<td><code class='relay-token'>" + escapeHtml(task.relayToken) + "</code><code class='relay-token relay-command'>" + escapeHtml(command) + "</code></td>" +
             "<td><span class='badge info'>" + relayStatusText(task.status) + "</span><br><span style='color:var(--muted);'>上传 " + (task.uploadCount || 0) + "/" + (task.maxUploads || 1) + "</span></td>" +
             "<td class='action-cell'></td>";
           var copyBtn = document.createElement("button");
@@ -4884,7 +4964,7 @@ const adminConsoleHtml = `<!doctype html>
           }
           return grades.join(",");
         }
-        return "2026,2025,2024,2023,2022";
+        return "2025,2024,2023,2022,2021";
       }
 
       function getFreshmanGrade(term) {
@@ -4894,8 +4974,8 @@ const adminConsoleHtml = `<!doctype html>
 
       // 更新向导命令预览与运维卡片列表
       function updateWizardCommand() {
-        var term = getTermValue("wizardTerm", "wizardTermCustom") || "2026-2027-1";
-        var startDate = value("wizardStartDate") || "2026-09-01";
+        var term = getTermValue("wizardTerm", "wizardTermCustom") || "2025-2026-2";
+        var startDate = value("wizardStartDate") || getTermStartDate(term) || "2026-03-09";
         var source = value("wizardSource") || "local-campus";
         var note = value("wizardNote") || (term + " 新学期全校课表首版");
         var forceRefresh = Boolean($("wizardForceRefresh") && $("wizardForceRefresh").checked);
@@ -5037,7 +5117,7 @@ const adminConsoleHtml = `<!doctype html>
           $("wizardCommandCode").textContent = commandText;
         }
         if ($("flowCmdTextLocal")) {
-          $("flowCmdTextLocal").textContent = "npm run sync:local-campus -- " + cliArgsStr;
+          $("flowCmdTextLocal").textContent = commandText;
         }
 
         // 异步更新右侧运维说明卡片列表
@@ -5099,9 +5179,11 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       // 绑定向导的表单值变化监听以更新推荐命令
-      ["wizardStartDate", "wizardNote"].forEach(function(id) {
-        safeBind(id, "input", updateWizardCommand);
+      safeBind("wizardStartDate", "input", function() {
+        state.wizardStartDateTouched = true;
+        updateWizardCommand();
       });
+      safeBind("wizardNote", "input", updateWizardCommand);
       ["wizardTerm", "wizardSource"].forEach(function(id) {
         safeBind(id, "change", updateWizardCommand);
       });
@@ -5124,7 +5206,7 @@ const adminConsoleHtml = `<!doctype html>
         tbody.innerHTML = "";
         
         if (filteredList.length === 0) {
-          tbody.innerHTML = "<tr><td colspan='7' style='text-align: center; color: var(--muted); padding: 24px 0;'>暂无历史 Release 数据包。</td></tr>";
+          tbody.innerHTML = "<tr><td colspan='5' style='text-align: center; color: var(--muted); padding: 16px 0;'>暂无历史 Release 数据包。</td></tr>";
           return;
         }
         
@@ -5135,31 +5217,29 @@ const adminConsoleHtml = `<!doctype html>
           var isActive = (r.version === currentActiveVer);
           var statusCell = isActive ? "<span class='badge success'>运行中 (Active)</span>" : "<span class='badge muted'>历史版本</span>";
           
-          var countText = 
-            "行政班: " + (r.counts?.classScheduleCount || 0) + "<br/>" +
-            "教师课表: " + (r.counts?.teacherScheduleCount || 0) + "<br/>" +
-            "教室课表: " + (r.counts?.classroomScheduleCount || 0) + "<br/>" +
-            "课程课表: " + (r.counts?.courseScheduleCount || 0);
+          var countText =
+            "班 " + (r.counts?.classScheduleCount || 0) +
+            " / 师 " + (r.counts?.teacherScheduleCount || 0) +
+            " / 室 " + (r.counts?.classroomScheduleCount || 0) +
+            " / 课 " + (r.counts?.courseScheduleCount || 0);
             
           var actionBtn = document.createElement("button");
           actionBtn.className = "btn ghost";
-          actionBtn.style = "padding: 4px 10px; font-size:12px;";
+          actionBtn.style = "padding: 3px 8px; font-size:11px;";
           if (isActive) {
             actionBtn.textContent = "当前活跃";
             actionBtn.disabled = true;
           } else {
-            actionBtn.textContent = "⏪ 一键回滚";
+            actionBtn.textContent = "回滚";
             actionBtn.addEventListener("click", function() {
               rollbackToVersion(r.version);
             });
           }
           
           tr.innerHTML = 
-            "<td><strong style='font-family: monospace; font-size:12px; color: var(--primary);'>" + r.version + "</strong></td>" +
-            "<td>" + r.semester + "</td>" +
+            "<td><strong style='font-family: monospace; font-size:12px; color: var(--primary);'>" + r.version + "</strong><br><span style='color:var(--muted);font-size:11px;'>" + countText + "</span></td>" +
+            "<td>" + r.semester + "<br><span style='color:var(--muted);font-size:11px;'>" + (r.counts?.releaseNote || "-") + "</span></td>" +
             "<td><span style='font-size:11px;'>" + formatDate(r.updatedAt) + "</span></td>" +
-            "<td style='font-size:11px; line-height: 1.4;'>" + countText + "</td>" +
-            "<td style='max-width:180px; font-size:12px; white-space:normal;'>" + (r.counts?.releaseNote || "-") + "</td>" +
             "<td>" + statusCell + "</td>" +
             "<td class='action-cell'></td>";
             
@@ -6754,7 +6834,11 @@ const adminConsoleHtml = `<!doctype html>
         });
 
         // 5. 各种 Input 的变化事件重新生成命令
-        ["wizardStartDate", "wizardNote", "wizardGradesCustom", "wizardCollegesFilter", "wizardMajorsFilter", "wizardDelay"].forEach(function(id) {
+        safeBind("wizardStartDate", "input", function() {
+          state.wizardStartDateTouched = true;
+          updateWizardCommand();
+        });
+        ["wizardNote", "wizardGradesCustom", "wizardCollegesFilter", "wizardMajorsFilter", "wizardDelay"].forEach(function(id) {
           safeBind(id, "input", updateWizardCommand);
         });
         ["wizardTerm", "wizardSource", "wizardConcurrency"].forEach(function(id) {
