@@ -18,6 +18,7 @@ const adminPageRouter = require("./routes/adminPages");
 const contributeRouter = require("./routes/contribute");
 const feedbackRouter = require("./routes/feedback");
 const personalRouter = require("./routes/personal");
+const relayRouter = require("./routes/relay");
 
 const app = express();
 
@@ -79,6 +80,7 @@ app.use("/api/fosu", fosuRouter);
 app.use("/api/fosu/personal", personalRouter);
 app.use("/api/admin", adminRouter);
 app.use("/admin", adminPageRouter);
+app.use("/api/relay", relayRouter);
 app.use("/api/contribute", contributeRouter);
 app.use("/api/feedback", feedbackRouter);
 

@@ -1503,6 +1503,57 @@ const adminConsoleHtml = `<!doctype html>
       flex-direction: column;
       gap: 4px;
     }
+    .sync-mode-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin: 16px 0 20px;
+    }
+    .sync-mode-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      min-height: 150px;
+    }
+    .sync-mode-card strong {
+      color: var(--text);
+      font-size: 14px;
+    }
+    .sync-mode-card p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      margin: 0;
+    }
+    .sync-mode-card .command-tag {
+      width: fit-content;
+    }
+    .relay-task-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .relay-table td {
+      vertical-align: top;
+      font-size: 12px;
+    }
+    .relay-token {
+      display: inline-block;
+      max-width: 180px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: bottom;
+    }
+    @media (max-width: 900px) {
+      .sync-mode-grid,
+      .relay-task-grid {
+        grid-template-columns: 1fr;
+      }
+    }
     
     .staging-preview-container {
       display: flex;
@@ -1800,6 +1851,27 @@ const adminConsoleHtml = `<!doctype html>
           <!-- 同步状态卡片 -->
         </div>
 
+        <div class="sync-mode-grid">
+          <div class="sync-mode-card">
+            <span class="command-tag low">推荐</span>
+            <strong>本机校园网同步</strong>
+            <p>管理员在已连接校园网的 Windows / Mac / Linux 电脑运行本地同步客户端，访问 100.fosu.edu.cn，生成 Staging JSON 后上传后台。</p>
+            <code>npm run sync:local-campus -- --term=2026-2027-1</code>
+          </div>
+          <div class="sync-mode-card">
+            <span class="command-tag low">长期运营推荐</span>
+            <strong>接力代理端同步</strong>
+            <p>把轻量采集器和 relay token 发给在校同学。接力端只上传 Staging JSON，不拥有后台管理员权限。</p>
+            <code>npm run sync:relay-agent -- --token=xxx</code>
+          </div>
+          <div class="sync-mode-card">
+            <span class="command-tag high">兼容模式</span>
+            <strong>服务器直连同步</strong>
+            <p>仅保留为兼容路径。VPS 无法访问 100.fosu.edu.cn 属于预期情况，不代表本机校园网异常。</p>
+            <code>不作为主流程</code>
+          </div>
+        </div>
+
         <div class="dash-columns">
           <div style="display: flex; flex-direction: column; gap: 20px;">
             <!-- 新学期同步向导 -->
@@ -1825,9 +1897,11 @@ const adminConsoleHtml = `<!doctype html>
                   <div>
                     <label for="wizardSource">数据来源 (source)</label>
                     <select id="wizardSource">
-                      <option value="server-direct" selected>服务器直接同步 (server-direct)</option>
-                      <option value="staging-upload">本地 JSON 上传 (staging-upload)</option>
+                      <option value="local-campus" selected>本机校园网采集 (local-campus)</option>
+                      <option value="relay-agent">接力代理端 (relay-agent)</option>
+                      <option value="staging-upload">手动 Staging JSON 上传 (staging-upload)</option>
                       <option value="manual-maintain">手动维护 (manual-maintain)</option>
+                      <option value="server-direct">服务器直连兼容模式 (server-direct)</option>
                     </select>
                   </div>
                 </div>
@@ -1884,7 +1958,7 @@ const adminConsoleHtml = `<!doctype html>
                     <button type="button" id="wizardCopyBtn">复制命令</button>
                   </div>
                   <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
-                    💡 提示：将上述命令复制到服务器终端，或者在本地校园网环境下的客户端中运行。
+                    提示：主流程是在已连接校园网的本机运行采集命令；VPS 只负责保存、校验、预览、发布和回滚。
                   </div>
                 </div>
               </form>
@@ -1984,6 +2058,68 @@ const adminConsoleHtml = `<!doctype html>
                     </div>
                   </div>
                 </div>
+              </div>
+            </div>
+
+            <!-- 接力任务管理 -->
+            <div class="card">
+              <h3 class="card-title">接力任务管理</h3>
+              <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
+                relay token 只允许接力端读取任务与上传 Staging JSON，不允许访问 /api/admin、发布 release 或读取敏感配置。
+              </p>
+              <div class="relay-task-grid">
+                <div>
+                  <label>目标学期</label>
+                  <input id="relayTaskTerm" placeholder="2026-2027-1" value="2026-2027-1">
+                </div>
+                <div>
+                  <label>有效期</label>
+                  <select id="relayTaskExpiresIn">
+                    <option value="24">24 小时</option>
+                    <option value="168">7 天</option>
+                  </select>
+                </div>
+                <div>
+                  <label>最大上传次数</label>
+                  <input id="relayTaskMaxUploads" type="number" min="1" max="20" value="1">
+                </div>
+                <div>
+                  <label>任务说明</label>
+                  <input id="relayTaskDescription" placeholder="全校课表接力采集">
+                </div>
+              </div>
+              <div style="display:flex; justify-content:flex-end; margin-top: 12px;">
+                <button type="button" class="primary" id="createRelayTaskBtn">创建接力任务</button>
+              </div>
+              <div class="table-container" style="margin-top: 14px;">
+                <table class="relay-table">
+                  <thead>
+                    <tr>
+                      <th>任务</th>
+                      <th>Token / 命令</th>
+                      <th>状态</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="relayTaskTableBody">
+                    <tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px;">暂无接力任务</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="table-container" style="margin-top: 14px;">
+                <table class="relay-table">
+                  <thead>
+                    <tr>
+                      <th>上传记录</th>
+                      <th>摘要</th>
+                      <th>状态</th>
+                      <th>操作</th>
+                    </tr>
+                  </thead>
+                  <tbody id="relayUploadTableBody">
+                    <tr><td colspan="4" style="text-align:center;color:var(--muted);padding:16px;">暂无接力上传</td></tr>
+                  </tbody>
+                </table>
               </div>
             </div>
           </div>
@@ -2655,6 +2791,54 @@ const adminConsoleHtml = `<!doctype html>
   </div>
 
   <script>
+    function escapeHtml(str) {
+      if (str === undefined || str === null) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+    function showBootFatal(error) {
+      const root = document.body;
+      root.innerHTML =
+        '<main style="max-width:520px;margin:12vh auto;padding:24px;font-family:system-ui">' +
+          '<h1>佛课小表后台启动失败</h1>' +
+          '<p>后台页面 JS 初始化异常，基础服务可能仍在运行。</p>' +
+          '<pre style="white-space:pre-wrap;background:#f1f5f9;padding:12px;border-radius:8px">' +
+            escapeHtml(error && (error.stack || error.message) || String(error)) +
+          '</pre>' +
+          '<button onclick="location.href=\\'/admin/login\\'">返回登录页</button>' +
+          '<button onclick="location.reload()">刷新重试</button>' +
+        '</main>';
+    }
+
+    function bootFallback(error) {
+      try {
+        var loginView = document.getElementById("loginView");
+        var dashboardView = document.getElementById("dashboardView");
+        var isLoginPage = window.location.pathname.indexOf("/login") >= 0;
+        if (isLoginPage) {
+          if (loginView) loginView.hidden = false;
+          if (dashboardView) dashboardView.hidden = true;
+          document.body.classList.add("is-login-page");
+          document.body.classList.remove("is-dashboard-page");
+        } else {
+          if (loginView) loginView.hidden = true;
+          if (dashboardView) dashboardView.hidden = false;
+          document.body.classList.add("is-dashboard-page");
+          document.body.classList.remove("is-login-page");
+        }
+        if (error) {
+          showAdminRuntimeError(error);
+        }
+      } catch (fallbackError) {
+        showBootFatal(fallbackError);
+      }
+    }
+
     function showAdminRuntimeError(error) {
       var errBar = document.getElementById("adminRuntimeErrorBar");
       if (!errBar) {
@@ -2698,6 +2882,9 @@ const adminConsoleHtml = `<!doctype html>
     window.addEventListener("error", function(event) {
       console.error("[Admin Runtime Error]", event.error || event.message);
       showAdminRuntimeError(event.error || { name: "Error", message: event.message || "页面脚本运行失败" });
+      if (!window.__adminConsoleBooted) {
+        bootFallback(event.error || { name: "Error", message: event.message || "页面脚本运行失败" });
+      }
     });
 
     window.addEventListener("unhandledrejection", function(event) {
@@ -2732,6 +2919,8 @@ const adminConsoleHtml = `<!doctype html>
         // 同步与质量
         syncStatus: null,
         syncHistory: [],
+        relayTasks: [],
+        relayUploads: [],
         healthChecks: [],
         qualityReport: null,
         heatmapDayType: "all",
@@ -2938,18 +3127,19 @@ const adminConsoleHtml = `<!doctype html>
       // 登录与登出
       function login() {
         var password = value("loginPassword");
+        var loginError = $("loginError");
         if (!password) {
-          $("loginError").textContent = "请输入验证密码";
+          if (loginError) loginError.textContent = "请输入验证密码";
           return;
         }
         api("/api/admin/login", {
           method: "POST",
           body: JSON.stringify({ password: password })
         }).then(function () {
-          $("loginError").textContent = "";
+          if (loginError) loginError.textContent = "";
           window.location.href = "/admin/dashboard";
         }).catch(function (error) {
-          $("loginError").textContent = error.message;
+          if (loginError) loginError.textContent = error.message;
         });
       }
 
@@ -2986,7 +3176,9 @@ const adminConsoleHtml = `<!doctype html>
           settings: "系统设置与日志"
         };
         var nextTitle = titles[section] || "Admin Console";
-        $("pageTitle").textContent = nextTitle;
+        if ($("pageTitle")) {
+          $("pageTitle").textContent = nextTitle;
+        }
         if ($("mobilePageTitle")) {
           $("mobilePageTitle").textContent = nextTitle;
         }
@@ -3404,10 +3596,11 @@ const adminConsoleHtml = `<!doctype html>
         }
       }
 
-      window.openFeedbackDrawerById = function(id) {
+      function openFeedbackDrawerById(id) {
         var fb = state.feedbacks.find(x => x.id === id);
         if (fb) openFeedbackDrawer(fb);
-      };
+      }
+      window.openFeedbackDrawerById = openFeedbackDrawerById;
 
       // Panel 2: 数据资源 Data Catalog
       function loadCatalog() {
@@ -3592,8 +3785,82 @@ const adminConsoleHtml = `<!doctype html>
             $("catalogMetaNote").value = res.data.metaInfo.note || "";
             $("catalogMetaHidden").value = String(!!res.data.metaInfo.hidden);
             $("catalogMetaTags").value = (res.data.metaInfo.tags || []).join(", ");
-            
-            // Panel 3: 同步中心 Sync Center
+            renderMiniWeekSchedule();
+            if ($("catalogRawJson")) {
+              $("catalogRawJson").textContent = JSON.stringify(res.data.original || res.data, null, 2);
+            }
+            if ($("catalogDrawerMask")) $("catalogDrawerMask").classList.add("show");
+            if ($("catalogDrawer")) $("catalogDrawer").classList.add("show");
+          })
+          .catch(function(error) {
+            showToast(error.message || "读取资源详情失败", "error");
+          });
+      };
+
+      function closeCatalogDrawer() {
+        if ($("catalogDrawerMask")) $("catalogDrawerMask").classList.remove("show");
+        if ($("catalogDrawer")) $("catalogDrawer").classList.remove("show");
+      }
+
+      function saveCatalogMetaDetail() {
+        var data = state.currentCatalogDetail || {};
+        if (!data.type || !data.id) {
+          showToast("当前没有可保存的资源详情", "error");
+          return;
+        }
+        api("/api/admin/catalog/meta", {
+          method: "POST",
+          body: JSON.stringify({
+            type: data.type,
+            id: data.id,
+            displayName: value("catalogMetaDisplayName"),
+            note: value("catalogMetaNote"),
+            hidden: boolValue("catalogMetaHidden"),
+            tags: value("catalogMetaTags").split(",").map(function(item) { return item.trim(); }).filter(Boolean)
+          })
+        })
+          .then(function() {
+            showToast("资源元数据已保存", "success");
+            closeCatalogDrawer();
+            loadCatalog();
+          })
+          .catch(function(error) {
+            showToast(error.message || "保存失败", "error");
+          });
+      }
+
+      function exportCatalogData(format) {
+        var data = state.currentCatalogDetail || {};
+        if (!data.type || !data.id) {
+          showToast("当前没有可导出的资源详情", "error");
+          return;
+        }
+        window.open("/api/admin/export?type=" + encodeURIComponent(data.type) + "&id=" + encodeURIComponent(data.id) + "&format=" + encodeURIComponent(format || "json"));
+      }
+
+      function renderMiniWeekSchedule() {
+        var grid = $("miniScheduleGrid");
+        if (!grid) return;
+        var detail = state.currentCatalogDetail || {};
+        var courses = (detail.data && detail.data.courses) || detail.courses || (detail.original && detail.original.courses) || [];
+        grid.innerHTML = "";
+        if (!Array.isArray(courses) || courses.length === 0) {
+          grid.innerHTML = "<div style='padding:12px;color:var(--muted);font-size:12px;'>暂无课程明细可预览。</div>";
+          return;
+        }
+        if ($("previewWeekLabel")) {
+          $("previewWeekLabel").textContent = "第 " + state.previewWeek + " 周";
+        }
+        courses.slice(0, 60).forEach(function(course) {
+          var item = document.createElement("div");
+          item.className = "mini-course";
+          item.innerHTML =
+            "<strong>" + escapeHtml(course.courseName || course.displayCourseName || course.name || "课程") + "</strong>" +
+            "<span>" + escapeHtml(course.teacherName || course.teacher || "-") + " · " + escapeHtml(course.classroom || course.roomName || course.location || "-") + "</span>";
+          grid.appendChild(item);
+        });
+      }
+
       // Panel 3: 同步中心 Sync Center
       function loadSyncStatus() {
         setStatus("正在获取系统同步状态与运维指南...");
@@ -3618,8 +3885,22 @@ const adminConsoleHtml = `<!doctype html>
           .then(function(res) {
             state.releasesHistory = res.releases || [];
             renderReleaseHistoryTable();
-            
-            // 自动测速
+            return Promise.allSettled([
+              api("/api/admin/relay/tasks"),
+              api("/api/admin/relay/uploads")
+            ]);
+          })
+          .then(function(results) {
+            var taskResult = results[0];
+            var uploadResult = results[1];
+            if (taskResult && taskResult.status === "fulfilled") {
+              state.relayTasks = taskResult.value.tasks || [];
+            }
+            if (uploadResult && uploadResult.status === "fulfilled") {
+              state.relayUploads = uploadResult.value.uploads || [];
+            }
+            renderRelayTasks();
+            renderRelayUploads();
             runHealthChecks();
           })
           .catch(function(err) {
@@ -3635,7 +3916,8 @@ const adminConsoleHtml = `<!doctype html>
         var list = [
           { label: "当前版本", val: data.releaseVersion || "-", icon: "🏷️", foot: "在线 release 版本" },
           { label: "配置学期", val: data.semester || "-", icon: "📅", foot: "教务系统学期" },
-          { label: "校园网连通", val: data.intranetAccessible ? "连通 🟢" : "未连通 🔴", icon: "🌐", foot: "教务内网 DNS" },
+          { label: "Staging 状态", val: data.latestRelayUpload ? data.latestRelayUpload.status : "等待上传", icon: "📦", foot: "候选数据需审核发布" },
+          { label: "接力上传", val: data.latestRelayUpload ? formatDate(data.latestRelayUpload.uploadedAt) : "暂无", icon: "🔁", foot: "最近 relay-agent 上传" },
           { label: "行政班总数", val: (data.counts?.classScheduleCount || 0) + " 个", icon: "🏫", foot: "行政班课表" },
           { label: "课程总数", val: (data.counts?.courseScheduleCount || 0) + " 门", icon: "📚", foot: "资源关联课表" },
           { label: "最后同步时间", val: formatDate(data.classScheduleUpdatedAt), icon: "🕒", foot: "行政班更新" },
@@ -3649,6 +3931,147 @@ const adminConsoleHtml = `<!doctype html>
                            "<div class='stat-foot'>" + item.foot + "</div>";
           wrap.appendChild(card);
         });
+      }
+
+      function relayStatusText(status) {
+        var map = {
+          pending: "未开始",
+          running: "运行中",
+          uploaded: "已上传",
+          "pending-review": "待审核",
+          staged: "已设为 Staging",
+          published: "已发布",
+          expired: "已过期",
+          revoked: "已吊销"
+        };
+        return map[status] || status || "-";
+      }
+
+      function buildRelayRunCommand(task) {
+        return "npm run sync:relay-agent -- --server=" + location.origin + " --token=" + task.relayToken + " --term=" + task.term;
+      }
+
+      function renderRelayTasks() {
+        var tbody = $("relayTaskTableBody");
+        if (!tbody) return;
+        var list = state.relayTasks || [];
+        tbody.innerHTML = "";
+        if (list.length === 0) {
+          tbody.innerHTML = "<tr><td colspan='4' style='text-align:center;color:var(--muted);padding:16px;'>暂无接力任务</td></tr>";
+          return;
+        }
+        list.slice(0, 20).forEach(function(task) {
+          var tr = document.createElement("tr");
+          var command = buildRelayRunCommand(task);
+          tr.innerHTML =
+            "<td><strong>" + escapeHtml(task.term) + "</strong><br><span style='color:var(--muted);'>" + escapeHtml(task.description || "") + "</span><br><span style='color:var(--muted);'>有效期：" + formatDate(task.expiresAt) + "</span></td>" +
+            "<td><code class='relay-token'>" + escapeHtml(task.relayToken) + "</code><br><code class='relay-token'>" + escapeHtml(command) + "</code></td>" +
+            "<td><span class='badge info'>" + relayStatusText(task.status) + "</span><br><span style='color:var(--muted);'>上传 " + (task.uploadCount || 0) + "/" + (task.maxUploads || 1) + "</span></td>" +
+            "<td class='action-cell'></td>";
+          var copyBtn = document.createElement("button");
+          copyBtn.className = "btn secondary";
+          copyBtn.style = "padding: 3px 8px; font-size:11px;";
+          copyBtn.textContent = "复制命令";
+          copyBtn.addEventListener("click", function() {
+            window.copyText(command);
+          });
+          tr.querySelector(".action-cell").appendChild(copyBtn);
+          tr.querySelector(".action-cell").appendChild(document.createTextNode(" "));
+          var revokeBtn = document.createElement("button");
+          revokeBtn.className = "btn danger";
+          revokeBtn.style = "padding: 3px 8px; font-size:11px;";
+          revokeBtn.textContent = "吊销";
+          revokeBtn.disabled = task.status === "revoked" || task.status === "published";
+          revokeBtn.addEventListener("click", function() {
+            revokeRelayTask(task.id);
+          });
+          tr.querySelector(".action-cell").appendChild(revokeBtn);
+          tbody.appendChild(tr);
+        });
+      }
+
+      function renderRelayUploads() {
+        var tbody = $("relayUploadTableBody");
+        if (!tbody) return;
+        var list = state.relayUploads || [];
+        tbody.innerHTML = "";
+        if (list.length === 0) {
+          tbody.innerHTML = "<tr><td colspan='4' style='text-align:center;color:var(--muted);padding:16px;'>暂无接力上传</td></tr>";
+          return;
+        }
+        list.slice(0, 20).forEach(function(upload) {
+          var summary = upload.summary || {};
+          var tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td><strong>" + escapeHtml(upload.term || summary.term || "-") + "</strong><br><span style='color:var(--muted);'>" + formatDate(upload.uploadedAt) + "</span><br><span style='color:var(--muted);'>" + escapeHtml(upload.uploaderNote || "-") + "</span></td>" +
+            "<td>行政班 " + (summary.classScheduleCount || 0) + "，课程 " + (summary.courseScheduleCount || 0) + "<br>教师 " + (summary.teacherScheduleCount || 0) + "，教室 " + (summary.classroomScheduleCount || 0) + "</td>" +
+            "<td><span class='badge info'>" + relayStatusText(upload.status) + "</span></td>" +
+            "<td class='action-cell'></td>";
+          var promoteBtn = document.createElement("button");
+          promoteBtn.className = "btn primary";
+          promoteBtn.style = "padding: 3px 8px; font-size:11px;";
+          promoteBtn.textContent = "设为 Staging";
+          promoteBtn.disabled = upload.status === "published";
+          promoteBtn.addEventListener("click", function() {
+            promoteRelayUpload(upload.id);
+          });
+          tr.querySelector(".action-cell").appendChild(promoteBtn);
+          tbody.appendChild(tr);
+        });
+      }
+
+      function createRelayTask() {
+        var payload = {
+          term: value("relayTaskTerm") || value("wizardTerm") || "2026-2027-1",
+          description: value("relayTaskDescription") || "全校课表接力采集",
+          expiresInHours: parseInt(value("relayTaskExpiresIn") || "24", 10),
+          maxUploads: parseInt(value("relayTaskMaxUploads") || "1", 10)
+        };
+        api("/api/admin/relay/tasks", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        })
+          .then(function(res) {
+            showToast("接力任务已创建", "success");
+            if (res.runCommand) {
+              window.copyText(res.runCommand);
+            }
+            return loadSyncStatus();
+          })
+          .catch(function(error) {
+            showToast(error.message, "error");
+          });
+      }
+
+      function revokeRelayTask(id) {
+        if (!confirm("确定吊销这个接力任务吗？吊销后该 relay token 将无法继续上传。")) return;
+        api("/api/admin/relay/tasks/" + encodeURIComponent(id) + "/revoke", {
+          method: "POST",
+          body: "{}"
+        })
+          .then(function() {
+            showToast("接力任务已吊销", "success");
+            return loadSyncStatus();
+          })
+          .catch(function(error) {
+            showToast(error.message, "error");
+          });
+      }
+
+      function promoteRelayUpload(id) {
+        if (!confirm("确定将这次接力上传设为当前 Staging 吗？这不会直接发布到小程序，仍需再执行正式发布。")) return;
+        api("/api/admin/relay/uploads/" + encodeURIComponent(id) + "/promote-to-staging", {
+          method: "POST",
+          body: "{}"
+        })
+          .then(function() {
+            showToast("接力上传已设为 Staging，请检查 diff 后发布", "success");
+            loadStagingPreview();
+            return loadSyncStatus();
+          })
+          .catch(function(error) {
+            showToast(error.message, "error");
+          });
       }
 
       // 生成发布版本号
@@ -3668,11 +4091,11 @@ const adminConsoleHtml = `<!doctype html>
 
       // 更新向导命令预览与运维卡片列表
       function updateWizardCommand() {
-        var term = $("wizardTerm").value.trim() || "2026-2027-1";
-        var startDate = $("wizardStartDate").value;
-        var note = $("wizardNote").value.trim() || (term + " 新学期全校课表首版");
-        var mode = $("wizardMode").value;
-        var source = $("wizardSource").value;
+        var term = value("wizardTerm") || "2026-2027-1";
+        var startDate = value("wizardStartDate") || "2026-09-01";
+        var note = value("wizardNote") || (term + " 新学期全校课表首版");
+        var mode = value("wizardMode") || "staging";
+        var source = value("wizardSource") || "local-campus";
         
         // 自动计算版本
         var versionInput = $("wizardVersion");
@@ -3696,18 +4119,17 @@ const adminConsoleHtml = `<!doctype html>
             if (res.success && res.commands) {
               var cmds = res.commands;
               
-              // 1. 渲染向导的一键同步命令预览 (最后一条为 sync:new-term)
-              var wizardCmd = cmds.find(function(c) { return c.id === "new-term"; }) || cmds[cmds.length - 1];
-              var cmdText = wizardCmd ? wizardCmd.command : "npm run sync:new-term";
-              
-              // 如果来源是 staging-upload，向导指示上传，就不使用命令行 sync 啦
-              if (source === "staging-upload") {
-                $("wizardCommandCode").textContent = "已选 [本地 JSON 上传] 来源，请在下方上传 Staging JSON，无需运行命令行。";
-                if ($("wizardCopyBtn")) $("wizardCopyBtn").style.display = "none";
-              } else {
-                $("wizardCommandCode").textContent = cmdText;
-                if ($("wizardCopyBtn")) $("wizardCopyBtn").style.display = "block";
-              }
+              var commandIdBySource = {
+                "local-campus": "local-campus",
+                "relay-agent": "relay-agent",
+                "staging-upload": "local-upload",
+                "manual-maintain": "local-upload",
+                "server-direct": "server-direct"
+              };
+              var wizardCmd = cmds.find(function(c) { return c.id === commandIdBySource[source]; }) || cmds[0];
+              var cmdText = wizardCmd ? wizardCmd.command : "npm run sync:local-campus";
+              if ($("wizardCommandCode")) $("wizardCommandCode").textContent = cmdText;
+              if ($("wizardCopyBtn")) $("wizardCopyBtn").style.display = "block";
               
               // 2. 渲染动态命令说明卡片列表
               var syncCommandsWrap = $("syncCommands");
@@ -3729,8 +4151,8 @@ const adminConsoleHtml = `<!doctype html>
                       "<div style='display:flex; gap:6px;'>" + riskBadge + intranetBadge + "</div>" +
                     "</div>" +
                     "<div class='command-code-box'>" +
-                      "<code>" + c.command + "</code>" +
-                      "<button type='button' onclick='window.copyText(\"" + c.command + "\")'>复制</button>" +
+                      "<code>" + escapeHtml(c.command) + "</code>" +
+                      "<button type='button' class='copy-command-btn' data-copy-command='" + escapeHtml(c.command) + "'>复制</button>" +
                     "</div>" +
                     "<div class='command-meta-grid'>" +
                       "<div class='command-meta-item'><strong>适用场景</strong><span>" + c.scene + "</span></div>" +
@@ -3742,6 +4164,11 @@ const adminConsoleHtml = `<!doctype html>
                       "<strong>💡 修复建议:</strong><span>" + c.solution + "</span>" +
                     "</div>";
                   syncCommandsWrap.appendChild(item);
+                });
+                syncCommandsWrap.querySelectorAll(".copy-command-btn").forEach(function(btn) {
+                  btn.addEventListener("click", function() {
+                    copyText(btn.dataset.copyCommand || "");
+                  });
                 });
               }
             }
@@ -3818,7 +4245,7 @@ const adminConsoleHtml = `<!doctype html>
 
       // 执行回滚
       function rollbackToVersion(version) {
-        if (!confirm("🚨 警告：确定要将线上全校课表一键回滚到快照 [" + version + "] 吗？\n该操作会立即覆盖小程序端当前的可见数据，并自动创建当前版本的备份！")) {
+        if (!confirm("🚨 警告：确定要将线上全校课表一键回滚到快照 [" + version + "] 吗？\\n该操作会立即覆盖小程序端当前的可见数据，并自动创建当前版本的备份！")) {
           return;
         }
         
@@ -4852,9 +5279,15 @@ const adminConsoleHtml = `<!doctype html>
         icon.textContent = content.classList.contains("open") ? "▲" : "▼";
       }
 
-      function loadAll() {
+      function getInitialSection() {
+        if (location.pathname.indexOf("/feedback") >= 0) return "feedback";
+        return "dashboard";
+      }
+
+      function loadAll(targetSection) {
         try {
-          switchSection("dashboard");
+          var section = typeof targetSection === "string" ? targetSection : (state.section || getInitialSection());
+          switchSection(section);
           setStatus("正在获取佛课后台全局配置...");
 
           return Promise.allSettled([
@@ -5028,6 +5461,7 @@ const adminConsoleHtml = `<!doctype html>
         runHealthChecks();
         showToast("服务测速完成");
       });
+      safeBind("createRelayTaskBtn", "click", createRelayTask);
 
       // 审计日志模块筛选
       safeBind("auditLogModuleFilter", "change", function() {
@@ -5127,18 +5561,104 @@ const adminConsoleHtml = `<!doctype html>
         });
       }
 
-      // 13. 初始化
-      clearNoticeForm();
-      clearNewsForm();
-      if (isLoginPage) {
-        showLoginView();
-      } else {
-        showDashboardView();
-        ensureAdminSession()
-          .then(loadAll)
-          .catch(function(error) {
-            console.warn("[Admin Console] session check failed:", error.message);
-          });
+      function runAdminInitModule(name, fn) {
+        try {
+          return fn();
+        } catch (error) {
+          console.error("[Admin Console] init module failed:", name, error);
+          showAdminRuntimeError(error);
+          return null;
+        }
+      }
+
+      function initAuthView() {
+        if (isLoginPage && $("loginPassword")) {
+          $("loginPassword").focus();
+        }
+      }
+
+      function initNavigation() {
+        closeMobileDrawer();
+        state.section = getInitialSection();
+      }
+
+      function initDashboard() {
+        setStatus("后台基础界面已启动，正在加载数据模块...");
+      }
+
+      function initNoticeModule() {
+        if ($("noticeFormTitle")) {
+          clearNoticeForm();
+        }
+      }
+
+      function initNewsModule() {
+        if ($("newsFormTitle")) {
+          clearNewsForm();
+        }
+      }
+
+      function initSyncModule() {
+        updateWizardCommand();
+      }
+
+      function initFeedbackModule() {
+        if (location.pathname.indexOf("/feedback") >= 0) {
+          state.section = "feedback";
+        }
+      }
+
+      function initSettingsModule() {
+        return true;
+      }
+
+      function bootAdminConsole() {
+        if (window.__adminConsoleBooted) {
+          return;
+        }
+
+        try {
+          if (isLoginPage) {
+            showLoginView();
+          } else {
+            showDashboardView();
+          }
+          window.__adminConsoleBooted = true;
+
+          runAdminInitModule("auth", initAuthView);
+          if (isLoginPage) {
+            return;
+          }
+
+          ensureAdminSession()
+            .then(function() {
+              [
+                ["navigation", initNavigation],
+                ["dashboard", initDashboard],
+                ["notice", initNoticeModule],
+                ["news", initNewsModule],
+                ["sync", initSyncModule],
+                ["feedback", initFeedbackModule],
+                ["settings", initSettingsModule],
+              ].forEach(function(item) {
+                runAdminInitModule(item[0], item[1]);
+              });
+              return loadAll(getInitialSection());
+            })
+            .catch(function(error) {
+              console.warn("[Admin Console] session check failed:", error.message);
+              showAdminRuntimeError(error);
+            });
+        } catch (error) {
+          console.error("[Admin Console] boot fatal:", error);
+          bootFallback(error);
+        }
+      }
+
+      window.bootAdminConsole = bootAdminConsole;
+      document.addEventListener("DOMContentLoaded", bootAdminConsole);
+      if (document.readyState === "interactive" || document.readyState === "complete") {
+        window.setTimeout(bootAdminConsole, 0);
       }
     })();
   </script>

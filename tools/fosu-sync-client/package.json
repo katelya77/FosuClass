@@ -17,6 +17,8 @@
     "sync:courses": "node sync.js courses",
     "sync:all": "node sync.js all",
     "sync:release": "node sync.js release",
+    "sync:local-campus": "node sync.js local-campus",
+    "sync:local-upload": "node sync.js local-upload",
     "sync:resources": "node sync.js resources",
     "sync:upload-cache": "node sync.js upload-cache",
     "sync:fresh": "node sync.js fresh",

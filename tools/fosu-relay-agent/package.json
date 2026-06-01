@@ -1,0 +1,15 @@
+{
+  "name": "fosu-relay-agent",
+  "version": "1.0.0",
+  "description": "Lightweight FosuClass relay collector uploader",
+  "main": "relay-agent.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node relay-agent.js",
+    "build": "node build.js"
+  },
+  "bin": {
+    "fosu-relay-agent": "relay-agent.js"
+  },
+  "license": "UNLICENSED"
+}
