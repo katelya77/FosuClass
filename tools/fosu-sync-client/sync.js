@@ -29,6 +29,7 @@ const parser = require("../../server/src/utils/parser");
 const normalizer = require("../../server/src/utils/scheduleNormalizer");
 const courseIdentity = require("../../server/src/utils/courseNormalizer");
 const releaseService = require("../../server/src/services/releaseService");
+const stagingUploader = require("./upload");
 
 const proxyEnvNames = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"];
 const detectedProxyEnv = proxyEnvNames
@@ -646,7 +647,7 @@ function writeSnapshotDebugFiles(debugDir, snapshot, compressedBuffer) {
   
   const cliParams = global.CLI_PARAMS || {};
   if (cliParams.output) {
-    const outputPath = path.resolve(process.cwd(), cliParams.output);
+    const outputPath = resolveOutputFilePath(cliParams.output);
     const outputDir = path.dirname(outputPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
@@ -1484,23 +1485,18 @@ async function handleLocalStagingUpload(params) {
     throw new Error("缺少 ADMIN_API_TOKEN，无法上传到后台 Staging 区");
   }
 
-  const server = String(params.server || FOSU_API_BASE).replace(/\/+$/, "");
-  const url = `${server}/api/admin/sync/staging/upload`;
-  const body = fs.readFileSync(filePath);
-  console.log(`📤 正在上传本地 Staging JSON 到 VPS 暂存区: ${url}`);
-  const response = await axios.post(url, body, {
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-token": ADMIN_API_TOKEN,
-    },
-    proxy: false,
-    timeout: parseInt(process.env.SYNC_UPLOAD_TIMEOUT_MS || "120000", 10),
-    maxContentLength: Infinity,
-    maxBodyLength: Infinity,
+  console.log(`Staging JSON resolved path: ${filePath}`);
+  console.log("local-upload uses gzip + chunk upload and only writes pending-review Staging; it does not publish release.");
+  return stagingUploader.uploadStagingFile({
+    filePath,
+    server: params.server || FOSU_API_BASE,
+    token: ADMIN_API_TOKEN,
+    authMode: "admin",
+    params,
+    term: params.term || process.env.PREFERRED_SEMESTER || "",
+    note: params.note || "",
+    source: "local-upload-cli",
   });
-  console.log(`✅ Staging 上传成功: ${JSON.stringify(response.data)}`);
-  console.log("ℹ️ 该操作只写入 Staging，不会发布到小程序线上 release。");
-  return response.data;
 }
 
 function writeLocalStagingDebugFailure(params, catalog, majors, error) {
@@ -1529,7 +1525,7 @@ function writeLocalStagingDebugFailure(params, catalog, majors, error) {
       warnings: ["未生成正式 Staging JSON，请按 error 字段处理后重新运行。"],
     },
   };
-  const output = path.resolve(process.cwd(), params.debugOutput || path.join("staging", `debug-${term}.json`));
+  const output = resolveOutputFilePath(params.debugOutput || path.join("staging", `debug-${term}.json`));
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, JSON.stringify(debugPayload, null, 2), "utf-8");
   console.error(`🧪 已生成 debug JSON，不会作为正式 Staging 发布: ${output}`);

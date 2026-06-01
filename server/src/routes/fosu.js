@@ -7,6 +7,7 @@ const router = express.Router();
 const appConfigService = require("../services/appConfigService");
 const schoolCatalogService = require("../services/schoolCatalogService");
 const scheduleService = require("../services/scheduleService");
+const releaseService = require("../services/releaseService");
 const { scheduleLimiter } = require("../utils/rateLimit");
 
 /**
@@ -37,6 +38,35 @@ function handleRouteError(res, error, label) {
     message: "暂时无法连接教务数据服务",
     error: process.env.NODE_ENV === "development" ? errMsg : undefined,
   });
+}
+
+function sendCacheableJson(req, res, payload, maxAgeSeconds) {
+  const etag = payload && payload.etag;
+  if (etag) {
+    res.setHeader("ETag", etag);
+    if (req.headers["if-none-match"] === etag) {
+      return res.status(304).end();
+    }
+  }
+  res.setHeader("Cache-Control", `public, max-age=${maxAgeSeconds || 60}`);
+  return res.json(payload);
+}
+
+function normalizeScheduleResponse(kind, result) {
+  if (!result.success) {
+    return result;
+  }
+  const schedule = result.schedule || {};
+  if (kind === "class") {
+    return Object.assign({}, result, { classes: schedule ? [schedule] : [] });
+  }
+  if (kind === "teacher") {
+    return Object.assign({}, result, { teachers: schedule ? [schedule] : [] });
+  }
+  if (kind === "classroom") {
+    return Object.assign({}, result, { classrooms: schedule ? [schedule] : [] });
+  }
+  return Object.assign({}, result, { coursesList: schedule ? [schedule] : [] });
 }
 
 /**
@@ -75,6 +105,42 @@ router.get("/classes", async (req, res) => {
     res.json(data);
   } catch (error) {
     handleRouteError(res, error, "get-classes-failed");
+  }
+});
+
+router.get("/search/classes", scheduleLimiter, (req, res) => {
+  try {
+    const result = releaseService.searchActiveIndex("class", req.query.q, req.query);
+    return sendCacheableJson(req, res, result, 120);
+  } catch (error) {
+    handleRouteError(res, error, "search-classes-failed");
+  }
+});
+
+router.get("/search/teachers", scheduleLimiter, (req, res) => {
+  try {
+    const result = releaseService.searchActiveIndex("teacher", req.query.q, req.query);
+    return sendCacheableJson(req, res, result, 120);
+  } catch (error) {
+    handleRouteError(res, error, "search-teachers-failed");
+  }
+});
+
+router.get("/search/classrooms", scheduleLimiter, (req, res) => {
+  try {
+    const result = releaseService.searchActiveIndex("classroom", req.query.q, req.query);
+    return sendCacheableJson(req, res, result, 120);
+  } catch (error) {
+    handleRouteError(res, error, "search-classrooms-failed");
+  }
+});
+
+router.get("/search/courses", scheduleLimiter, (req, res) => {
+  try {
+    const result = releaseService.searchActiveIndex("course", req.query.q, req.query);
+    return sendCacheableJson(req, res, result, 120);
+  } catch (error) {
+    handleRouteError(res, error, "search-courses-failed");
   }
 });
 
@@ -158,6 +224,42 @@ router.post("/course-schedule", scheduleLimiter, async (req, res) => {
     res.json(data);
   } catch (error) {
     handleRouteError(res, error, "get-course-schedule-failed");
+  }
+});
+
+router.get("/schedule/class/:id", scheduleLimiter, (req, res) => {
+  try {
+    const result = normalizeScheduleResponse("class", releaseService.readActiveSchedule("class", req.params.id));
+    return sendCacheableJson(req, res, result, 300);
+  } catch (error) {
+    handleRouteError(res, error, "get-indexed-class-schedule-failed");
+  }
+});
+
+router.get("/schedule/teacher/:id", scheduleLimiter, (req, res) => {
+  try {
+    const result = normalizeScheduleResponse("teacher", releaseService.readActiveSchedule("teacher", req.params.id));
+    return sendCacheableJson(req, res, result, 300);
+  } catch (error) {
+    handleRouteError(res, error, "get-indexed-teacher-schedule-failed");
+  }
+});
+
+router.get("/schedule/classroom/:id", scheduleLimiter, (req, res) => {
+  try {
+    const result = normalizeScheduleResponse("classroom", releaseService.readActiveSchedule("classroom", req.params.id));
+    return sendCacheableJson(req, res, result, 300);
+  } catch (error) {
+    handleRouteError(res, error, "get-indexed-classroom-schedule-failed");
+  }
+});
+
+router.get("/schedule/course/:id", scheduleLimiter, (req, res) => {
+  try {
+    const result = normalizeScheduleResponse("course", releaseService.readActiveSchedule("course", req.params.id));
+    return sendCacheableJson(req, res, result, 300);
+  } catch (error) {
+    handleRouteError(res, error, "get-indexed-course-schedule-failed");
   }
 });
 

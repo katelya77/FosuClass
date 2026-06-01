@@ -79,6 +79,14 @@ function getReleaseFiles(version) {
     resourcesPath: path.join(releaseDir, "resources.json"),
     snapshotPath: path.join(releaseDir, "snapshot.json"),
     manifestPath: path.join(releaseDir, "manifest.json"),
+    classesIndexPath: path.join(releaseDir, "classes-index.json"),
+    teachersIndexPath: path.join(releaseDir, "teachers-index.json"),
+    classroomsIndexPath: path.join(releaseDir, "classrooms-index.json"),
+    coursesIndexPath: path.join(releaseDir, "courses-index.json"),
+    classScheduleDir: path.join(releaseDir, "schedules", "class"),
+    teacherScheduleDir: path.join(releaseDir, "schedules", "teacher"),
+    classroomScheduleDir: path.join(releaseDir, "schedules", "classroom"),
+    courseScheduleDir: path.join(releaseDir, "schedules", "course"),
   };
 }
 
@@ -90,14 +98,37 @@ function getResources(snapshot) {
   const source = snapshot && snapshot.resources && typeof snapshot.resources === "object"
     ? snapshot.resources
     : {};
+  const topLevel = snapshot && typeof snapshot === "object" ? snapshot : {};
   return {
-    teachers: asArray(source.teachers),
-    classrooms: asArray(source.classrooms),
-    courses: asArray(source.courses),
-    teacherSchedules: asArray(source.teacherSchedules),
-    classroomSchedules: asArray(source.classroomSchedules),
-    courseSchedules: asArray(source.courseSchedules),
+    teachers: asArray(source.teachers).length ? asArray(source.teachers) : asArray(topLevel.teachers),
+    classrooms: asArray(source.classrooms).length ? asArray(source.classrooms) : asArray(topLevel.classrooms),
+    courses: asArray(source.courses).length ? asArray(source.courses) : asArray(topLevel.courses),
+    teacherSchedules: asArray(source.teacherSchedules).length ? asArray(source.teacherSchedules) : asArray(topLevel.teacherSchedules),
+    classroomSchedules: asArray(source.classroomSchedules).length ? asArray(source.classroomSchedules) : asArray(topLevel.classroomSchedules),
+    courseSchedules: asArray(source.courseSchedules).length ? asArray(source.courseSchedules) : asArray(topLevel.courseSchedules),
   };
+}
+
+function readLegacyResourceArray(fileName) {
+  const value = readJsonFile(path.join(STORAGE_DIR, fileName));
+  return Array.isArray(value) ? value : [];
+}
+
+function hydrateLegacySnapshotResources(snapshot) {
+  const resources = getResources(snapshot);
+  if (resources.teacherSchedules.length || resources.classroomSchedules.length || resources.courseSchedules.length) {
+    return Object.assign({}, snapshot, { resources });
+  }
+  return Object.assign({}, snapshot, {
+    resources: Object.assign({}, resources, {
+      teacherSchedules: readLegacyResourceArray("teacher-schedules.json"),
+      classroomSchedules: readLegacyResourceArray("classroom-schedules.json"),
+      courseSchedules: readLegacyResourceArray("course-schedules.json"),
+      teachers: readLegacyResourceArray("teachers.json"),
+      classrooms: readLegacyResourceArray("classrooms.json"),
+      courses: readLegacyResourceArray("courses.json"),
+    }),
+  });
 }
 
 function countRelease(snapshot) {
@@ -118,6 +149,173 @@ function countRelease(snapshot) {
     classroomScheduleCount: resources.classroomSchedules.length,
     courseScheduleCount: resources.courseSchedules.length,
   };
+}
+
+function stableScheduleId(kind, value, index) {
+  const key = `${kind}:${String(value || "")}:${index}`;
+  return cryptoHash(key).slice(0, 16);
+}
+
+function cryptoHash(value) {
+  return require("crypto").createHash("sha1").update(String(value || "")).digest("hex");
+}
+
+function safeScheduleId(kind, value, fallbackValue, index) {
+  const raw = String(value || "").trim();
+  const fallback = stableScheduleId(kind, fallbackValue || raw, index);
+  const safe = raw
+    .replace(/[\\/:*?"<>|\s]+/g, "-")
+    .replace(/[^a-zA-Z0-9._\-\u4e00-\u9fa5]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  if (!safe || safe.length > 80) {
+    return fallback;
+  }
+  return safe;
+}
+
+function getFirstText(item, keys) {
+  for (const key of keys) {
+    if (item && item[key] !== undefined && item[key] !== null && String(item[key]).trim()) {
+      return String(item[key]).trim();
+    }
+  }
+  return "";
+}
+
+function summarizeCourses(schedule) {
+  const courses = Array.isArray(schedule?.courses) ? schedule.courses : [];
+  return {
+    courseCount: courses.length,
+    firstCourseName: getFirstText(courses[0], ["displayCourseName", "canonicalCourseName", "courseName", "name", "title"]),
+  };
+}
+
+function stripDebugCourseFields(course) {
+  if (!course || typeof course !== "object") {
+    return course;
+  }
+  const copy = Object.assign({}, course);
+  delete copy.rawHtml;
+  delete copy.rawCellHtml;
+  delete copy.sourceHtml;
+  delete copy.debugHtml;
+  return copy;
+}
+
+function buildSchedulePayload(schedule, extra) {
+  const payload = Object.assign({}, schedule || {}, extra || {});
+  if (Array.isArray(payload.courses)) {
+    payload.courses = payload.courses.map(stripDebugCourseFields);
+  }
+  return payload;
+}
+
+function buildClassDerivedFiles(snapshot, files) {
+  ensureDir(files.classScheduleDir);
+  const index = asArray(snapshot.classSchedules).map((item, position) => {
+    const name = getFirstText(item, ["className", "title", "name"]) || `class-${position + 1}`;
+    const id = safeScheduleId("class", item.classId || item.id, `${snapshot.semester}:${name}`, position);
+    const summary = summarizeCourses(item);
+    const payload = buildSchedulePayload(item, { id });
+    writeJsonAtomic(path.join(files.classScheduleDir, `${id}.json`), payload);
+    return {
+      id,
+      name,
+      className: name,
+      semester: item.semester || snapshot.semester || "",
+      collegeCode: item.collegeCode || "",
+      collegeName: item.collegeName || "",
+      grade: item.grade || "",
+      majorCode: item.majorCode || "",
+      majorName: item.majorName || "",
+      displayType: item.displayType || "",
+      isAggregated: !!item.isAggregated,
+      courseCount: summary.courseCount,
+      firstCourseName: summary.firstCourseName,
+      updatedAt: item.updatedAt || snapshot.updatedAt || "",
+    };
+  });
+  writeJsonAtomic(files.classesIndexPath, index);
+  return index;
+}
+
+function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names, nameKeys, dirPath, indexPath) {
+  ensureDir(dirPath);
+  const scheduleByName = new Map();
+  asArray(schedules).forEach((schedule, index) => {
+    const name = getFirstText(schedule, nameKeys);
+    if (!name) return;
+    if (!scheduleByName.has(name)) {
+      scheduleByName.set(name, { schedule, index });
+    }
+  });
+
+  const seen = new Set();
+  const index = [];
+  const addItem = (source, sourceIndex) => {
+    const name = getFirstText(source, nameKeys);
+    if (!name || seen.has(name)) return;
+    seen.add(name);
+    const matched = scheduleByName.get(name);
+    const schedule = matched ? matched.schedule : Object.assign({}, source, { courses: [] });
+    const id = safeScheduleId(kind, source.id || source[`${kind}Id`] || schedule.id, `${snapshot.semester}:${name}`, sourceIndex);
+    const summary = summarizeCourses(schedule);
+    writeJsonAtomic(path.join(dirPath, `${id}.json`), buildSchedulePayload(schedule, { id }));
+    index.push({
+      id,
+      name,
+      [`${kind}Name`]: name,
+      semester: schedule.semester || snapshot.semester || "",
+      collegeCode: source.collegeCode || schedule.collegeCode || "",
+      collegeName: source.collegeName || schedule.collegeName || "",
+      campus: source.campus || schedule.campus || "",
+      courseCount: summary.courseCount,
+      firstCourseName: summary.firstCourseName,
+      updatedAt: schedule.updatedAt || snapshot.updatedAt || "",
+    });
+  };
+
+  asArray(names).forEach(addItem);
+  asArray(schedules).forEach((schedule, indexNum) => addItem(schedule, indexNum));
+  writeJsonAtomic(indexPath, index);
+  return index;
+}
+
+function writeDerivedIndexes(snapshot, files) {
+  const resources = getResources(snapshot);
+  const classes = buildClassDerivedFiles(snapshot, files);
+  const teachers = buildNamedScheduleDerivedFiles(
+    snapshot,
+    files,
+    "teacher",
+    resources.teacherSchedules,
+    resources.teachers,
+    ["teacherName", "name", "title"],
+    files.teacherScheduleDir,
+    files.teachersIndexPath
+  );
+  const classrooms = buildNamedScheduleDerivedFiles(
+    snapshot,
+    files,
+    "classroom",
+    resources.classroomSchedules,
+    resources.classrooms,
+    ["roomName", "classroomName", "classroom", "name"],
+    files.classroomScheduleDir,
+    files.classroomsIndexPath
+  );
+  const courses = buildNamedScheduleDerivedFiles(
+    snapshot,
+    files,
+    "course",
+    resources.courseSchedules,
+    resources.courses,
+    ["courseName", "displayCourseName", "canonicalCourseName", "name", "title"],
+    files.courseScheduleDir,
+    files.coursesIndexPath
+  );
+  return { classes, teachers, classrooms, courses };
 }
 
 function hasCourseTiming(course) {
@@ -287,12 +485,14 @@ function writeReleaseSnapshot(rawSnapshot) {
   writeJsonAtomic(files.classSchedulesPath, snapshot.classSchedules || []);
   writeJsonAtomic(files.resourcesPath, snapshot.resources || {});
   writeJsonAtomic(files.manifestPath, manifest);
+  const derived = writeDerivedIndexes(snapshot, files);
 
   return {
     version,
     releaseDir: files.releaseDir,
     manifest,
     bootstrap,
+    derived,
     snapshot,
   };
 }
@@ -473,6 +673,201 @@ function listReleases(limit = 20) {
   return entries.slice(0, limit);
 }
 
+const derivedCache = new Map();
+
+function getDerivedFileInfo(kind, files) {
+  const map = {
+    class: { indexPath: files.classesIndexPath, scheduleDir: files.classScheduleDir },
+    teacher: { indexPath: files.teachersIndexPath, scheduleDir: files.teacherScheduleDir },
+    classroom: { indexPath: files.classroomsIndexPath, scheduleDir: files.classroomScheduleDir },
+    course: { indexPath: files.coursesIndexPath, scheduleDir: files.courseScheduleDir },
+  };
+  return map[kind] || null;
+}
+
+function getReadableReleaseInfo() {
+  const active = getActiveReleaseInfo();
+  if (active && active.version) {
+    return {
+      source: "active-release",
+      version: active.version,
+      semester: active.semester,
+      updatedAt: active.updatedAt,
+      snapshot: null,
+    };
+  }
+
+  const snapshot = readCurrentSnapshotCompat();
+  if (!snapshot) {
+    return null;
+  }
+  const updatedAt = snapshot.updatedAt || snapshot.generatedAt || "";
+  const version = normalizeVersion(
+    snapshot.version ||
+    snapshot.releaseVersion ||
+    `legacy-current-${cryptoHash(`${snapshot.semester || ""}:${updatedAt}`).slice(0, 12)}`
+  );
+  return {
+    source: "legacy-current",
+    version,
+    semester: snapshot.semester || snapshot.term || "",
+    updatedAt,
+    snapshot: hydrateLegacySnapshotResources(Object.assign({}, snapshot, { version })),
+  };
+}
+
+function ensureDerivedIndexes(version, fallbackSnapshot) {
+  const files = getReleaseFiles(version);
+  const allExist = fs.existsSync(files.classesIndexPath) &&
+    fs.existsSync(files.teachersIndexPath) &&
+    fs.existsSync(files.classroomsIndexPath) &&
+    fs.existsSync(files.coursesIndexPath);
+  if (allExist) {
+    if (fallbackSnapshot) {
+      const resources = getResources(fallbackSnapshot);
+      const classIndex = readJsonFile(files.classesIndexPath, []);
+      const teacherIndex = readJsonFile(files.teachersIndexPath, []);
+      const classroomIndex = readJsonFile(files.classroomsIndexPath, []);
+      const courseIndex = readJsonFile(files.coursesIndexPath, []);
+      const shouldRefresh =
+        (asArray(fallbackSnapshot.classSchedules).length > 0 && asArray(classIndex).length === 0) ||
+        (resources.teacherSchedules.length > 0 && asArray(teacherIndex).length === 0) ||
+        (resources.classroomSchedules.length > 0 && asArray(classroomIndex).length === 0) ||
+        (resources.courseSchedules.length > 0 && asArray(courseIndex).length === 0);
+      if (!shouldRefresh) {
+        return files;
+      }
+    } else {
+      return files;
+    }
+  }
+  const snapshot = fallbackSnapshot ? coerceSnapshot(Object.assign({}, fallbackSnapshot, { version })) : readReleaseSnapshot(version);
+  if (snapshot) {
+    writeDerivedIndexes(snapshot, files);
+  }
+  return files;
+}
+
+function readActiveIndex(kind) {
+  const active = getReadableReleaseInfo();
+  if (!active || !active.version) {
+    return { success: false, reasonCode: "NO_RELEASE_DATA", items: [] };
+  }
+  const files = ensureDerivedIndexes(active.version, active.snapshot);
+  const info = getDerivedFileInfo(kind, files);
+  if (!info || !fs.existsSync(info.indexPath)) {
+    return { success: false, reasonCode: "NO_INDEX", items: [] };
+  }
+  const stat = fs.statSync(info.indexPath);
+  const cacheKey = `${active.version}:${kind}:index`;
+  const cached = derivedCache.get(cacheKey);
+  if (cached && cached.mtimeMs === stat.mtimeMs) {
+    return cached.value;
+  }
+  const items = readJsonFile(info.indexPath) || [];
+  const value = {
+    success: true,
+    dataSource: active.source === "legacy-current" ? "legacy-current-index" : "release-index",
+    version: active.version,
+    semester: active.semester,
+    updatedAt: active.updatedAt,
+    etag: `"${active.version}-${kind}-${Math.floor(stat.mtimeMs)}-${stat.size}"`,
+    items: Array.isArray(items) ? items : [],
+  };
+  derivedCache.set(cacheKey, { mtimeMs: stat.mtimeMs, value });
+  return value;
+}
+
+function searchActiveIndex(kind, query, options = {}) {
+  const index = readActiveIndex(kind);
+  if (!index.success) {
+    return index;
+  }
+  const q = String(query || "").trim().toLowerCase();
+  const limit = Math.min(Math.max(parseInt(options.limit || "30", 10) || 30, 1), 100);
+  const offset = Math.max(parseInt(options.offset || "0", 10) || 0, 0);
+  const source = index.items || [];
+  const matchesField = (item, optionValue, keys) => {
+    const expected = String(optionValue || "").trim();
+    if (!expected) return true;
+    return keys.some((key) => String(item[key] || "").trim() === expected);
+  };
+  const scoped = source.filter((item) => {
+    if (!matchesField(item, options.semester, ["semester"])) return false;
+    if (!matchesField(item, options.collegeCode, ["collegeCode"])) return false;
+    if (!matchesField(item, options.collegeName, ["collegeName", "college"])) return false;
+    if (!matchesField(item, options.grade, ["grade"])) return false;
+    if (!matchesField(item, options.majorCode, ["majorCode"])) return false;
+    if (!matchesField(item, options.majorName, ["majorName"])) return false;
+    if (!matchesField(item, options.campus, ["campus", "campusName"])) return false;
+    return true;
+  });
+  const filtered = q
+    ? scoped.filter((item) => {
+        const haystack = [
+          item.id,
+          item.name,
+          item.className,
+          item.teacherName,
+          item.roomName,
+          item.classroomName,
+          item.courseName,
+          item.collegeName,
+          item.majorName,
+          item.grade,
+          item.firstCourseName,
+        ].join(" ").toLowerCase();
+        return haystack.includes(q);
+      })
+    : scoped;
+  return Object.assign({}, index, {
+    query: q,
+    total: filtered.length,
+    limit,
+    offset,
+    items: filtered.slice(offset, offset + limit),
+  });
+}
+
+function readActiveSchedule(kind, id) {
+  const active = getReadableReleaseInfo();
+  if (!active || !active.version) {
+    return { success: false, reasonCode: "NO_RELEASE_DATA" };
+  }
+  const files = ensureDerivedIndexes(active.version, active.snapshot);
+  const info = getDerivedFileInfo(kind, files);
+  if (!info) {
+    return { success: false, reasonCode: "INVALID_KIND" };
+  }
+  const safeId = safeScheduleId(kind, id, id, 0);
+  const filePath = path.join(info.scheduleDir, `${safeId}.json`);
+  const relative = path.relative(info.scheduleDir, filePath);
+  if (relative.startsWith("..") || path.isAbsolute(relative)) {
+    return { success: false, reasonCode: "INVALID_ID" };
+  }
+  const stat = fs.existsSync(filePath) ? fs.statSync(filePath) : null;
+  if (!stat) {
+    return { success: false, reasonCode: "NOT_FOUND" };
+  }
+  const cacheKey = `${active.version}:${kind}:schedule:${safeId}`;
+  const cached = derivedCache.get(cacheKey);
+  if (cached && cached.mtimeMs === stat.mtimeMs) {
+    return cached.value;
+  }
+  const schedule = readJsonFile(filePath);
+  const value = {
+    success: true,
+    dataSource: active.source === "legacy-current" ? "legacy-current-index" : "release-index",
+    version: active.version,
+    semester: schedule?.semester || active.semester,
+    updatedAt: schedule?.updatedAt || active.updatedAt,
+    etag: `"${active.version}-${kind}-${safeId}-${Math.floor(stat.mtimeMs)}-${stat.size}"`,
+    schedule,
+  };
+  derivedCache.set(cacheKey, { mtimeMs: stat.mtimeMs, value });
+  return value;
+}
+
 function parseSnapshotBuffer(buffer) {
   const isGzip = buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
   const jsonText = isGzip ? zlib.gunzipSync(buffer).toString("utf-8") : buffer.toString("utf-8");
@@ -491,10 +886,14 @@ module.exports = {
   countRelease,
   getActiveSnapshotData,
   getReleaseStatus,
+  readActiveIndex,
+  readActiveSchedule,
   listReleases,
   normalizeVersion,
   parseSnapshotBuffer,
   readActiveReleaseSnapshot,
+  searchActiveIndex,
   validateReleaseSnapshot,
+  writeDerivedIndexes,
   writeReleaseSnapshot,
 };

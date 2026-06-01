@@ -1896,6 +1896,9 @@ const adminConsoleHtml = `<!doctype html>
       position: sticky;
       top: 16px;
       align-self: start;
+      max-height: calc(100vh - 24px);
+      overflow-y: auto;
+      overscroll-behavior: contain;
     }
     .sync-side-col .health-grid {
       grid-template-columns: 1fr;
@@ -1962,6 +1965,8 @@ const adminConsoleHtml = `<!doctype html>
       }
       .sync-side-col {
         position: static;
+        max-height: none;
+        overflow: visible;
       }
       .sync-primary-flow {
         grid-template-columns: 1fr;
@@ -1974,6 +1979,66 @@ const adminConsoleHtml = `<!doctype html>
       justify-content: space-between;
       margin-bottom: 12px;
       position: relative;
+    }
+
+    .staging-cli-panel {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
+      gap: 12px;
+      align-items: stretch;
+    }
+    .staging-cli-main,
+    .staging-cli-side {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-width: 0;
+    }
+    .staging-status-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .staging-status-pill {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      background: var(--panel-2);
+      min-width: 0;
+    }
+    .staging-status-pill strong {
+      display: block;
+      font-size: 12px;
+      margin-bottom: 3px;
+    }
+    .staging-status-pill span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .staging-inline-upload {
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      background: var(--panel-2);
+      cursor: pointer;
+      min-height: 0;
+    }
+    .staging-inline-upload:hover {
+      border-color: var(--primary);
+    }
+    .release-history-wide {
+      width: 100%;
+      min-width: 0;
+    }
+    .release-history-wide .table-container {
+      max-width: 100%;
+      overflow-x: auto;
+    }
+    @media (max-width: 900px) {
+      .staging-cli-panel,
+      .staging-status-strip {
+        grid-template-columns: 1fr;
+      }
     }
     .step-indicator-item {
       position: relative;
@@ -2363,6 +2428,59 @@ const adminConsoleHtml = `<!doctype html>
               <div class="flow-field"><strong>前置条件：</strong><span>已生成 Staging JSON，或已在下方创建并派发接力任务 Token。</span></div>
               <div class="flow-field"><strong>预计耗时：</strong><span>上传及后台校验秒级完成。</span></div>
               <div class="flow-field"><strong>常见失败原因：</strong><span>JSON 字段缺失、Token 已过期或被吊销。</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" id="staging-cli-upload-panel">
+          <h3 class="card-title">Staging JSON 上传 / CLI 上传</h3>
+          <p style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
+            主流程使用 CLI gzip 分片上传。网页上传保留为小文件测试和应急入口；全量 100MB+ 文件建议使用 CLI 上传，网页上传仅用于小文件测试。
+          </p>
+          <div class="staging-cli-panel">
+            <div class="staging-cli-main">
+              <div class="staging-status-strip">
+                <div class="staging-status-pill"><strong>上传中</strong><span>CLI 显示 chunk 进度与速度</span></div>
+                <div class="staging-status-pill"><strong>校验中</strong><span>服务端合并、解压、校验 hash/size/schema</span></div>
+                <div class="staging-status-pill"><strong>等待发布</strong><span>pending-review，只能管理员发布</span></div>
+                <div class="staging-status-pill"><strong>发布成功</strong><span>生成 release 索引并切换小程序数据</span></div>
+              </div>
+              <div class="command-code-box">
+                <code id="quickUploadCommand" style="white-space: pre; font-family: monospace; overflow-x: auto;">npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=https://class.katelya.eu.org</code>
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+                <button type="button" class="secondary" id="quickCopyUploadCmdBtn" style="padding: 6px 12px; font-size:12px;">复制 CLI 上传命令</button>
+                <button type="button" class="secondary" id="refreshStagingUploadsBtn" style="padding: 6px 12px; font-size:12px;">刷新上传列表</button>
+              </div>
+              <div class="table-container">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>stagingId</th>
+                      <th>学期 / 版本</th>
+                      <th>状态</th>
+                      <th>上传进度</th>
+                      <th>更新时间</th>
+                    </tr>
+                  </thead>
+                  <tbody id="stagingUploadListBody">
+                    <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:12px 0;">暂无 CLI 上传记录</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            <div class="staging-cli-side">
+              <div class="staging-inline-upload" id="quickUploadDropzone">
+                <strong>小文件网页上传入口</strong>
+                <p style="font-size:12px;color:var(--muted);margin:6px 0 10px;">适合 debug JSON 或 100MB 以下应急测试；185MB 全量包请使用左侧 CLI。</p>
+                <input type="file" id="quickSyncFileInput" accept=".json,application/json" style="display:none;">
+                <button type="button" class="secondary" id="quickSelectUploadFileBtn" style="padding:6px 10px;font-size:12px;">选择 Staging JSON</button>
+                <div id="quickUploadFileInfo" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>
+              </div>
+              <div class="staging-inline-upload" style="cursor: default;">
+                <strong>网页上传失败时的处理</strong>
+                <p style="font-size:12px;color:var(--muted);margin:6px 0 0;">常见原因是浏览器内存、反向代理 body 限制或网络中断。直接改用 CLI 分片上传，不需要调大单次 body 作为主方案。</p>
+              </div>
             </div>
           </div>
         </div>
@@ -2809,14 +2927,14 @@ const adminConsoleHtml = `<!doctype html>
               </div>
             </div>
             <!-- 7. release-history-panel -->
-            <div class="card" id="release-history-panel">
+            <div class="card" id="release-history-panel-side-disabled" style="display:none;">
               <h3 class="card-title">Release 历史</h3>
               <p style="font-size: 12px; color: var(--muted); margin-bottom: 10px;">
                 最近发布的课表快照。发生数据污染、排课错误或临时调整时，可秒级回滚到历史版本。
               </p>
               <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px; gap: 8px;">
-                <label for="releaseTermFilter" style="margin-bottom: 0; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--muted);">筛选学期：</label>
-                <select id="releaseTermFilter" style="width: auto; padding: 4px 10px; font-size: 12px; height: 32px;"></select>
+                <label for="releaseTermFilterSide" style="margin-bottom: 0; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--muted);">筛选学期：</label>
+                <select id="releaseTermFilterSide" style="width: auto; padding: 4px 10px; font-size: 12px; height: 32px;"></select>
               </div>
               <div class="table-container">
                 <table>
@@ -2829,7 +2947,7 @@ const adminConsoleHtml = `<!doctype html>
                       <th>操作</th>
                     </tr>
                   </thead>
-                  <tbody id="releasesTableBody">
+                  <tbody id="releasesTableBodySide">
                     <tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 16px 0;">获取数据中...</td></tr>
                   </tbody>
                 </table>
@@ -2840,6 +2958,35 @@ const adminConsoleHtml = `<!doctype html>
 
         <!-- 底部通栏或双栏自适应布局 -->
         <div style="margin-top: 14px; display: grid; grid-template-columns: 1fr; gap: 12px;">
+          <div class="card release-history-wide" id="release-history-panel">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:10px;">
+              <div>
+                <h3 class="card-title" style="margin-bottom:4px;">Release 历史</h3>
+                <p style="font-size:12px;color:var(--muted);margin:0;">最近 5 个发布快照，支持查看当前状态、回滚和下载摘要。</p>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <label for="releaseTermFilter" style="margin-bottom:0;white-space:nowrap;font-size:12px;font-weight:600;color:var(--muted);">筛选学期：</label>
+                <select id="releaseTermFilter" style="width:auto;padding:4px 10px;font-size:12px;height:32px;"></select>
+              </div>
+            </div>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>version</th>
+                    <th>term</th>
+                    <th>发布时间</th>
+                    <th>数据统计</th>
+                    <th>状态</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="releasesTableBody">
+                  <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px 0;">获取 Release 历史中...</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
           <!-- 8. sync-log-panel -->
           <div class="card" id="sync-log-panel">
             <h3 class="card-title">📜 最近同步历史日志</h3>
@@ -3590,6 +3737,7 @@ const adminConsoleHtml = `<!doctype html>
         syncHistory: [],
         relayTasks: [],
         relayUploads: [],
+        stagingUploads: [],
         healthChecks: [],
         qualityReport: null,
         heatmapDayType: "all",
@@ -3705,6 +3853,20 @@ const adminConsoleHtml = `<!doctype html>
           toast.classList.remove("show");
           setTimeout(function() { toast.remove(); }, 300);
         }, 3000);
+      }
+
+      function setButtonLoading(btn, loadingText) {
+        if (!btn) {
+          return function() {};
+        }
+        var originalText = btn.textContent;
+        var originalDisabled = btn.disabled;
+        btn.disabled = true;
+        btn.textContent = loadingText || "处理中...";
+        return function() {
+          btn.disabled = originalDisabled;
+          btn.textContent = originalText;
+        };
       }
 
       function api(path, options) {
@@ -4701,20 +4863,26 @@ const adminConsoleHtml = `<!doctype html>
             renderReleaseHistoryTable();
             return Promise.allSettled([
               api("/api/admin/relay/tasks"),
-              api("/api/admin/relay/uploads")
+              api("/api/admin/relay/uploads"),
+              api("/api/admin/staging/upload")
             ]);
           })
           .then(function(results) {
             var taskResult = results[0];
             var uploadResult = results[1];
+            var stagingUploadResult = results[2];
             if (taskResult && taskResult.status === "fulfilled") {
               state.relayTasks = taskResult.value.tasks || [];
             }
             if (uploadResult && uploadResult.status === "fulfilled") {
               state.relayUploads = uploadResult.value.uploads || [];
             }
+            if (stagingUploadResult && stagingUploadResult.status === "fulfilled") {
+              state.stagingUploads = stagingUploadResult.value.uploads || [];
+            }
             renderRelayTasks();
             renderRelayUploads();
+            renderStagingUploads();
             runHealthChecks();
           })
           .catch(function(err) {
@@ -4803,7 +4971,7 @@ const adminConsoleHtml = `<!doctype html>
           revokeBtn.textContent = "吊销";
           revokeBtn.disabled = task.status === "revoked" || task.status === "published";
           revokeBtn.addEventListener("click", function() {
-            revokeRelayTask(task.id);
+            revokeRelayTask(task.id, revokeBtn);
           });
           tr.querySelector(".action-cell").appendChild(revokeBtn);
           
@@ -4813,7 +4981,7 @@ const adminConsoleHtml = `<!doctype html>
           deleteBtn.style = "padding: 3px 8px; font-size:11px;";
           deleteBtn.textContent = "删除";
           deleteBtn.addEventListener("click", function() {
-            deleteRelayTask(task.id);
+            deleteRelayTask(task.id, deleteBtn);
           });
           tr.querySelector(".action-cell").appendChild(deleteBtn);
           
@@ -4844,9 +5012,35 @@ const adminConsoleHtml = `<!doctype html>
           promoteBtn.textContent = "设为 Staging";
           promoteBtn.disabled = upload.status === "published";
           promoteBtn.addEventListener("click", function() {
-            promoteRelayUpload(upload.id);
+            promoteRelayUpload(upload.id, promoteBtn);
           });
           tr.querySelector(".action-cell").appendChild(promoteBtn);
+          tbody.appendChild(tr);
+        });
+      }
+
+      function renderStagingUploads() {
+        var tbody = $("stagingUploadListBody");
+        if (!tbody) return;
+        var list = state.stagingUploads || [];
+        tbody.innerHTML = "";
+        if (list.length === 0) {
+          tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;color:var(--muted);padding:12px 0;'>暂无 CLI 上传记录</td></tr>";
+          return;
+        }
+        list.slice(0, 10).forEach(function(upload) {
+          var summary = upload.summary || {};
+          var received = upload.receivedBytes || 0;
+          var total = upload.uploadSize || 0;
+          var progress = upload.progress != null ? upload.progress : (total > 0 ? Math.min(100, received / total * 100) : 0);
+          var statusLabel = relayStatusText(upload.status);
+          var tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td><code>" + escapeHtml(upload.uploadId || "-") + "</code><br><span style='color:var(--muted);'>" + escapeHtml(upload.fileName || "") + "</span></td>" +
+            "<td><strong>" + escapeHtml(upload.term || summary.term || "-") + "</strong><br><span style='color:var(--muted);'>" + escapeHtml(upload.releaseVersion || summary.releaseVersion || "-") + "</span></td>" +
+            "<td><span class='badge info'>" + escapeHtml(statusLabel) + "</span>" + (upload.failureReason ? "<br><span style='color:var(--danger);'>" + escapeHtml(upload.failureReason) + "</span>" : "") + "</td>" +
+            "<td>" + progress.toFixed(1) + "%<br><span style='color:var(--muted);'>" + (upload.receivedCount || 0) + "/" + (upload.totalChunks || 0) + " chunks</span></td>" +
+            "<td>" + formatDate(upload.updatedAt || upload.createdAt) + "</td>";
           tbody.appendChild(tr);
         });
       }
@@ -4874,8 +5068,9 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
-      function revokeRelayTask(id) {
+      function revokeRelayTask(id, btn) {
         if (!confirm("确定吊销这个接力任务吗？吊销后该 relay token 将无法继续上传。")) return;
+        var restoreButton = setButtonLoading(btn, "吊销中...");
         api("/api/admin/relay/tasks/" + encodeURIComponent(id) + "/revoke", {
           method: "POST",
           body: "{}"
@@ -4885,17 +5080,21 @@ const adminConsoleHtml = `<!doctype html>
             return loadSyncStatus();
           })
           .catch(function(error) {
+            restoreButton();
             showToast(error.message, "error");
           });
       }
 
-      function deleteRelayTask(id) {
+      function deleteRelayTask(id, btn) {
         var msg = "确认删除这个接力任务吗？删除后不会影响已经发布的课表数据，但该 token 和任务记录将从后台列表移除。";
         if (!confirm(msg)) return;
+        var restoreButton = setButtonLoading(btn, "删除中...");
         api("/api/admin/relay/tasks/" + encodeURIComponent(id), {
           method: "DELETE"
         })
           .then(function() {
+            state.relayTasks = (state.relayTasks || []).filter(function(task) { return task.id !== id; });
+            renderRelayTasks();
             showToast("接力任务已彻底删除", "success");
             return loadSyncStatus();
           })
@@ -4904,8 +5103,9 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
-      function promoteRelayUpload(id) {
+      function promoteRelayUpload(id, btn) {
         if (!confirm("确定将这次接力上传设为当前 Staging 吗？这不会直接发布到小程序，仍需再执行正式发布。")) return;
+        var restoreButton = setButtonLoading(btn, "校验中...");
         api("/api/admin/relay/uploads/" + encodeURIComponent(id) + "/promote-to-staging", {
           method: "POST",
           body: "{}"
@@ -4916,6 +5116,8 @@ const adminConsoleHtml = `<!doctype html>
             return loadSyncStatus();
           })
           .catch(function(error) {
+            restoreButton();
+            restoreButton();
             showToast(error.message, "error");
           });
       }
@@ -5119,6 +5321,9 @@ const adminConsoleHtml = `<!doctype html>
         if ($("flowCmdTextLocal")) {
           $("flowCmdTextLocal").textContent = commandText;
         }
+        if ($("quickUploadCommand")) {
+          $("quickUploadCommand").textContent = "npm run sync:local-upload -- --file=" + output + " --server=https://class.katelya.eu.org";
+        }
 
         // 异步更新右侧运维说明卡片列表
         api("/api/admin/sync/command-guide?term=" + term + "&start=" + startDate)
@@ -5206,7 +5411,7 @@ const adminConsoleHtml = `<!doctype html>
         tbody.innerHTML = "";
         
         if (filteredList.length === 0) {
-          tbody.innerHTML = "<tr><td colspan='5' style='text-align: center; color: var(--muted); padding: 16px 0;'>暂无历史 Release 数据包。</td></tr>";
+          tbody.innerHTML = "<tr><td colspan='6' style='text-align: center; color: var(--muted); padding: 16px 0;'>暂无历史 Release 数据包。</td></tr>";
           return;
         }
         
@@ -5232,14 +5437,15 @@ const adminConsoleHtml = `<!doctype html>
           } else {
             actionBtn.textContent = "回滚";
             actionBtn.addEventListener("click", function() {
-              rollbackToVersion(r.version);
+              rollbackToVersion(r.version, actionBtn);
             });
           }
           
-          tr.innerHTML = 
-            "<td><strong style='font-family: monospace; font-size:12px; color: var(--primary);'>" + r.version + "</strong><br><span style='color:var(--muted);font-size:11px;'>" + countText + "</span></td>" +
-            "<td>" + r.semester + "<br><span style='color:var(--muted);font-size:11px;'>" + (r.counts?.releaseNote || "-") + "</span></td>" +
+          tr.innerHTML =
+            "<td><strong style='font-family: monospace; font-size:12px; color: var(--primary);'>" + r.version + "</strong></td>" +
+            "<td>" + r.semester + "</td>" +
             "<td><span style='font-size:11px;'>" + formatDate(r.updatedAt) + "</span></td>" +
+            "<td><span style='font-size:11px;'>" + countText + "</span></td>" +
             "<td>" + statusCell + "</td>" +
             "<td class='action-cell'></td>";
             
@@ -5249,12 +5455,13 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       // 执行回滚
-      function rollbackToVersion(version) {
+      function rollbackToVersion(version, btn) {
         if (!confirm("🚨 警告：确定要将线上全校课表一键回滚到快照 [" + version + "] 吗？\\n该操作会立即覆盖小程序端当前的可见数据，并自动创建当前版本的备份！")) {
           return;
         }
         
         setStatus("正在将快照版本回滚为 " + version + "...");
+        var restoreButton = setButtonLoading(btn, "回滚中...");
         api("/api/admin/sync/releases/rollback", {
           method: "POST",
           body: JSON.stringify({ version: version })
@@ -5264,6 +5471,7 @@ const adminConsoleHtml = `<!doctype html>
             loadSyncStatus();
           })
           .catch(function(err) {
+            restoreButton();
             showToast(err.message, "error");
             loadSyncStatus();
           });
@@ -5370,10 +5578,16 @@ const adminConsoleHtml = `<!doctype html>
         if (input) input.click();
       });
 
-      function handleStagingFile(file) {
+      function handleStagingFile(file, infoId) {
         if (!file) return;
         
-        var uploadInfo = $("uploadFileInfo");
+        var uploadInfo = $(infoId || "uploadFileInfo");
+        if (!uploadInfo) return;
+        if (file.size > 100 * 1024 * 1024) {
+          uploadInfo.innerHTML = "<span style='color: var(--danger);'>文件 " + escapeHtml(file.name) + " 超过 100MB。全量大文件请使用 CLI 分片上传，网页上传仅用于小文件测试。</span>";
+          showToast("100MB+ Staging JSON 请使用 CLI 分片上传", "error");
+          return;
+        }
         uploadInfo.innerHTML = "正在解析并读取: <strong>" + escapeHtml(file.name) + "</strong>...";
         
         var reader = new FileReader();
@@ -5416,7 +5630,34 @@ const adminConsoleHtml = `<!doctype html>
 
       safeBind("syncFileInput", "change", function(e) {
         var file = e.target.files[0];
-        handleStagingFile(file);
+        handleStagingFile(file, "uploadFileInfo");
+      });
+
+      safeBind("quickSyncFileInput", "change", function(e) {
+        var file = e.target.files[0];
+        handleStagingFile(file, "quickUploadFileInfo");
+      });
+
+      safeBind("quickSelectUploadFileBtn", "click", function() {
+        var input = $("quickSyncFileInput");
+        if (input) input.click();
+      });
+
+      safeBind("quickCopyUploadCmdBtn", "click", function() {
+        var code = $("quickUploadCommand") ? $("quickUploadCommand").textContent : "";
+        if (code) copyText(code);
+      });
+
+      safeBind("refreshStagingUploadsBtn", "click", function() {
+        api("/api/admin/staging/upload")
+          .then(function(res) {
+            state.stagingUploads = res.uploads || [];
+            renderStagingUploads();
+            showToast("上传列表已刷新", "success");
+          })
+          .catch(function(err) {
+            showToast(err.message, "error");
+          });
       });
 
       // 拖拽上传支持
@@ -5449,7 +5690,43 @@ const adminConsoleHtml = `<!doctype html>
             
             var dt = e.dataTransfer;
             var file = dt.files[0];
-            handleStagingFile(file);
+            handleStagingFile(file, "uploadFileInfo");
+          });
+        }
+
+        var quickDropzone = $("quickUploadDropzone");
+        if (quickDropzone) {
+          quickDropzone.addEventListener("click", function(e) {
+            if (e.target && e.target.id === "quickSelectUploadFileBtn") return;
+            var input = $("quickSyncFileInput");
+            if (input) input.click();
+          });
+          quickDropzone.addEventListener("dragover", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            quickDropzone.style.borderColor = "var(--primary)";
+            quickDropzone.style.background = "var(--primary-soft)";
+          });
+          quickDropzone.addEventListener("dragenter", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            quickDropzone.style.borderColor = "var(--primary)";
+            quickDropzone.style.background = "var(--primary-soft)";
+          });
+          quickDropzone.addEventListener("dragleave", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            quickDropzone.style.borderColor = "var(--border)";
+            quickDropzone.style.background = "transparent";
+          });
+          quickDropzone.addEventListener("drop", function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            quickDropzone.style.borderColor = "var(--border)";
+            quickDropzone.style.background = "transparent";
+            var dt = e.dataTransfer;
+            var file = dt.files[0];
+            handleStagingFile(file, "quickUploadFileInfo");
           });
         }
       }, 500);
@@ -5631,7 +5908,7 @@ const adminConsoleHtml = `<!doctype html>
         
         setStatus("正在正式发布课表快照版本...");
         var publishBtn = $("stagingPublishBtn");
-        if (publishBtn) publishBtn.disabled = true;
+        var restoreButton = setButtonLoading(publishBtn, "发布中...");
         
         api("/api/admin/sync/staging/publish", {
           method: "POST",
@@ -5649,7 +5926,7 @@ const adminConsoleHtml = `<!doctype html>
             loadSyncStatus();
           })
           .catch(function(err) {
-            if (publishBtn) publishBtn.disabled = false;
+            restoreButton();
             // 如果是因为变动大被拦截且有BIG_CHANGE_BLOCKED代码
             if (err.message.indexOf("安全熔断值") >= 0 || err.message.indexOf("熔断") >= 0) {
               $("forceConfirmContainer").style.display = "block";

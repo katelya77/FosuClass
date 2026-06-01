@@ -44,6 +44,9 @@ function assertStaticHtml(html) {
   assertIncludes(html, 'id="mobileMenuBtn"', "mobile menu");
   assertIncludes(html, 'id="section-sync"', "sync section");
   assertIncludes(html, 'class="sync-dashboard-grid"', "compact sync two-column layout");
+  assertIncludes(html, 'id="staging-cli-upload-panel"', "always-visible staging upload panel");
+  assertIncludes(html, 'id="quickUploadCommand"', "quick staging CLI command");
+  assertIncludes(html, 'id="release-history-panel"', "bottom release history panel");
   assertIncludes(html, '"2025-2026-2": "2026-03-09"', "2025-2026-2 startDate mapping");
   assertIncludes(html, "syncWizardStartDateWithTerm", "term startDate auto-sync helper");
   ["#eef3f8", "#cfe0ff", "#8fbaff", "#4f86e8", "#1d4ed8"].forEach((color) => {

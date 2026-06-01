@@ -86,6 +86,17 @@ Body:
 4. **运行本地同步器同步数据**：
    本地启动后端后，需运行同步器向本地后端注入初始数据。请参阅 [本地同步器 README](file:///c:/Users/Katelya/Documents/VScode/FosuClass/tools/fosu-sync-client/README.md) 引导登录并运行 `npm run sync:all` 进行同步。
 
+### 全校课表 Staging 同步主命令
+
+生产全量数据同步走“本机校园网采集 -> CLI 分片上传 -> 后台审核发布”链路：
+
+```powershell
+npm run sync:local-campus -- --term=2025-2026-2 --start=2026-03-09 --output=./staging/2025-2026-2-full.json --include=classSchedules,teacherSchedules,classroomSchedules,courseSchedules,classrooms,teachers,courses --class-scope=all --grades=2025,2024,2023,2022,2021 --concurrency=1 --delay-ms=900
+npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=https://class.katelya.eu.org
+```
+
+`sync:local-upload` 会 gzip 并按分片上传大体积 JSON，只进入 VPS Staging 区，不会自动发布。管理员需要在 `/admin/sync` 检查 diff、质量提示和熔断提示后手动发布正式 release。接力同学使用 `npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=RELAY_TOKEN --term=2025-2026-2`，无需后台密码。
+
 ### 运行本地接口测试
 
 可以使用预设脚本对本地运行的接口进行验证：

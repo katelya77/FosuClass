@@ -1927,7 +1927,15 @@ var require_releaseService = __commonJS({
         classSchedulesPath: path2.join(releaseDir, "class-schedules.json"),
         resourcesPath: path2.join(releaseDir, "resources.json"),
         snapshotPath: path2.join(releaseDir, "snapshot.json"),
-        manifestPath: path2.join(releaseDir, "manifest.json")
+        manifestPath: path2.join(releaseDir, "manifest.json"),
+        classesIndexPath: path2.join(releaseDir, "classes-index.json"),
+        teachersIndexPath: path2.join(releaseDir, "teachers-index.json"),
+        classroomsIndexPath: path2.join(releaseDir, "classrooms-index.json"),
+        coursesIndexPath: path2.join(releaseDir, "courses-index.json"),
+        classScheduleDir: path2.join(releaseDir, "schedules", "class"),
+        teacherScheduleDir: path2.join(releaseDir, "schedules", "teacher"),
+        classroomScheduleDir: path2.join(releaseDir, "schedules", "classroom"),
+        courseScheduleDir: path2.join(releaseDir, "schedules", "course")
       };
     }
     function asArray(value) {
@@ -1962,6 +1970,139 @@ var require_releaseService = __commonJS({
         classroomScheduleCount: resources.classroomSchedules.length,
         courseScheduleCount: resources.courseSchedules.length
       };
+    }
+    function stableScheduleId(kind, value, index) {
+      const key = `${kind}:${String(value || "")}:${index}`;
+      return cryptoHash(key).slice(0, 16);
+    }
+    function cryptoHash(value) {
+      return require("crypto").createHash("sha1").update(String(value || "")).digest("hex");
+    }
+    function safeScheduleId(kind, value, fallbackValue, index) {
+      const raw2 = String(value || "").trim();
+      const fallback = stableScheduleId(kind, fallbackValue || raw2, index);
+      const safe = raw2.replace(/[\\/:*?"<>|\s]+/g, "-").replace(/[^a-zA-Z0-9._\-\u4e00-\u9fa5]/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
+      if (!safe || safe.length > 80) {
+        return fallback;
+      }
+      return safe;
+    }
+    function getFirstText(item, keys) {
+      for (const key of keys) {
+        if (item && item[key] !== void 0 && item[key] !== null && String(item[key]).trim()) {
+          return String(item[key]).trim();
+        }
+      }
+      return "";
+    }
+    function summarizeCourses(schedule) {
+      const courses = Array.isArray(schedule?.courses) ? schedule.courses : [];
+      return {
+        courseCount: courses.length,
+        firstCourseName: getFirstText(courses[0], ["displayCourseName", "canonicalCourseName", "courseName", "name", "title"])
+      };
+    }
+    function buildClassDerivedFiles(snapshot, files) {
+      ensureDir(files.classScheduleDir);
+      const index = asArray(snapshot.classSchedules).map((item, position) => {
+        const name = getFirstText(item, ["className", "title", "name"]) || `class-${position + 1}`;
+        const id = safeScheduleId("class", item.classId || item.id, `${snapshot.semester}:${name}`, position);
+        const summary = summarizeCourses(item);
+        const payload = Object.assign({}, item, { id });
+        writeJsonAtomic(path2.join(files.classScheduleDir, `${id}.json`), payload);
+        return {
+          id,
+          name,
+          className: name,
+          semester: item.semester || snapshot.semester || "",
+          collegeCode: item.collegeCode || "",
+          collegeName: item.collegeName || "",
+          grade: item.grade || "",
+          majorCode: item.majorCode || "",
+          majorName: item.majorName || "",
+          displayType: item.displayType || "",
+          isAggregated: !!item.isAggregated,
+          courseCount: summary.courseCount,
+          firstCourseName: summary.firstCourseName,
+          updatedAt: item.updatedAt || snapshot.updatedAt || ""
+        };
+      });
+      writeJsonAtomic(files.classesIndexPath, index);
+      return index;
+    }
+    function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names, nameKeys, dirPath, indexPath) {
+      ensureDir(dirPath);
+      const scheduleByName = /* @__PURE__ */ new Map();
+      asArray(schedules).forEach((schedule, index2) => {
+        const name = getFirstText(schedule, nameKeys);
+        if (!name) return;
+        if (!scheduleByName.has(name)) {
+          scheduleByName.set(name, { schedule, index: index2 });
+        }
+      });
+      const seen = /* @__PURE__ */ new Set();
+      const index = [];
+      const addItem = (source, sourceIndex) => {
+        const name = getFirstText(source, nameKeys);
+        if (!name || seen.has(name)) return;
+        seen.add(name);
+        const matched = scheduleByName.get(name);
+        const schedule = matched ? matched.schedule : Object.assign({}, source, { courses: [] });
+        const id = safeScheduleId(kind, source.id || source[`${kind}Id`] || schedule.id, `${snapshot.semester}:${name}`, sourceIndex);
+        const summary = summarizeCourses(schedule);
+        writeJsonAtomic(path2.join(dirPath, `${id}.json`), Object.assign({}, schedule, { id }));
+        index.push({
+          id,
+          name,
+          [`${kind}Name`]: name,
+          semester: schedule.semester || snapshot.semester || "",
+          collegeCode: source.collegeCode || schedule.collegeCode || "",
+          collegeName: source.collegeName || schedule.collegeName || "",
+          campus: source.campus || schedule.campus || "",
+          courseCount: summary.courseCount,
+          firstCourseName: summary.firstCourseName,
+          updatedAt: schedule.updatedAt || snapshot.updatedAt || ""
+        });
+      };
+      asArray(names).forEach(addItem);
+      asArray(schedules).forEach((schedule, indexNum) => addItem(schedule, indexNum));
+      writeJsonAtomic(indexPath, index);
+      return index;
+    }
+    function writeDerivedIndexes(snapshot, files) {
+      const resources = getResources(snapshot);
+      const classes = buildClassDerivedFiles(snapshot, files);
+      const teachers = buildNamedScheduleDerivedFiles(
+        snapshot,
+        files,
+        "teacher",
+        resources.teacherSchedules,
+        resources.teachers,
+        ["teacherName", "name", "title"],
+        files.teacherScheduleDir,
+        files.teachersIndexPath
+      );
+      const classrooms = buildNamedScheduleDerivedFiles(
+        snapshot,
+        files,
+        "classroom",
+        resources.classroomSchedules,
+        resources.classrooms,
+        ["roomName", "classroomName", "classroom", "name"],
+        files.classroomScheduleDir,
+        files.classroomsIndexPath
+      );
+      const courses = buildNamedScheduleDerivedFiles(
+        snapshot,
+        files,
+        "course",
+        resources.courseSchedules,
+        resources.courses,
+        ["courseName", "displayCourseName", "canonicalCourseName", "name", "title"],
+        files.courseScheduleDir,
+        files.coursesIndexPath
+      );
+      return { classes, teachers, classrooms, courses };
     }
     function hasCourseTiming(course) {
       return course.weekday !== void 0 || course.dayOfWeek !== void 0 || course.week !== void 0;
@@ -2109,11 +2250,13 @@ var require_releaseService = __commonJS({
       writeJsonAtomic(files.classSchedulesPath, snapshot.classSchedules || []);
       writeJsonAtomic(files.resourcesPath, snapshot.resources || {});
       writeJsonAtomic(files.manifestPath, manifest);
+      const derived = writeDerivedIndexes(snapshot, files);
       return {
         version,
         releaseDir: files.releaseDir,
         manifest,
         bootstrap,
+        derived,
         snapshot
       };
     }
@@ -2274,6 +2417,142 @@ var require_releaseService = __commonJS({
       }).sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
       return entries.slice(0, limit);
     }
+    var derivedCache = /* @__PURE__ */ new Map();
+    function getDerivedFileInfo(kind, files) {
+      const map = {
+        class: { indexPath: files.classesIndexPath, scheduleDir: files.classScheduleDir },
+        teacher: { indexPath: files.teachersIndexPath, scheduleDir: files.teacherScheduleDir },
+        classroom: { indexPath: files.classroomsIndexPath, scheduleDir: files.classroomScheduleDir },
+        course: { indexPath: files.coursesIndexPath, scheduleDir: files.courseScheduleDir }
+      };
+      return map[kind] || null;
+    }
+    function ensureDerivedIndexes(version) {
+      const files = getReleaseFiles(version);
+      if (fs2.existsSync(files.classesIndexPath) && fs2.existsSync(files.teachersIndexPath) && fs2.existsSync(files.classroomsIndexPath) && fs2.existsSync(files.coursesIndexPath)) {
+        return files;
+      }
+      const snapshot = readReleaseSnapshot(version);
+      if (snapshot) {
+        writeDerivedIndexes(snapshot, files);
+      }
+      return files;
+    }
+    function readActiveIndex(kind) {
+      const active = getActiveReleaseInfo();
+      if (!active || !active.version) {
+        return { success: false, reasonCode: "NO_ACTIVE_RELEASE", items: [] };
+      }
+      const files = ensureDerivedIndexes(active.version);
+      const info = getDerivedFileInfo(kind, files);
+      if (!info || !fs2.existsSync(info.indexPath)) {
+        return { success: false, reasonCode: "NO_INDEX", items: [] };
+      }
+      const stat = fs2.statSync(info.indexPath);
+      const cacheKey = `${active.version}:${kind}:index`;
+      const cached = derivedCache.get(cacheKey);
+      if (cached && cached.mtimeMs === stat.mtimeMs) {
+        return cached.value;
+      }
+      const items2 = readJsonFile(info.indexPath) || [];
+      const value = {
+        success: true,
+        dataSource: "release-index",
+        version: active.version,
+        semester: active.semester,
+        updatedAt: active.updatedAt,
+        etag: `"${active.version}-${kind}-${Math.floor(stat.mtimeMs)}-${stat.size}"`,
+        items: Array.isArray(items2) ? items2 : []
+      };
+      derivedCache.set(cacheKey, { mtimeMs: stat.mtimeMs, value });
+      return value;
+    }
+    function searchActiveIndex(kind, query, options = {}) {
+      const index = readActiveIndex(kind);
+      if (!index.success) {
+        return index;
+      }
+      const q = String(query || "").trim().toLowerCase();
+      const limit = Math.min(Math.max(parseInt(options.limit || "30", 10) || 30, 1), 100);
+      const offset = Math.max(parseInt(options.offset || "0", 10) || 0, 0);
+      const source = index.items || [];
+      const matchesField = (item, optionValue, keys) => {
+        const expected = String(optionValue || "").trim();
+        if (!expected) return true;
+        return keys.some((key) => String(item[key] || "").trim() === expected);
+      };
+      const scoped = source.filter((item) => {
+        if (!matchesField(item, options.semester, ["semester"])) return false;
+        if (!matchesField(item, options.collegeCode, ["collegeCode"])) return false;
+        if (!matchesField(item, options.collegeName, ["collegeName", "college"])) return false;
+        if (!matchesField(item, options.grade, ["grade"])) return false;
+        if (!matchesField(item, options.majorCode, ["majorCode"])) return false;
+        if (!matchesField(item, options.majorName, ["majorName"])) return false;
+        if (!matchesField(item, options.campus, ["campus", "campusName"])) return false;
+        return true;
+      });
+      const filtered = q ? scoped.filter((item) => {
+        const haystack = [
+          item.id,
+          item.name,
+          item.className,
+          item.teacherName,
+          item.roomName,
+          item.classroomName,
+          item.courseName,
+          item.collegeName,
+          item.majorName,
+          item.grade,
+          item.firstCourseName
+        ].join(" ").toLowerCase();
+        return haystack.includes(q);
+      }) : scoped;
+      return Object.assign({}, index, {
+        query: q,
+        total: filtered.length,
+        limit,
+        offset,
+        items: filtered.slice(offset, offset + limit)
+      });
+    }
+    function readActiveSchedule(kind, id) {
+      const active = getActiveReleaseInfo();
+      if (!active || !active.version) {
+        return { success: false, reasonCode: "NO_ACTIVE_RELEASE" };
+      }
+      const files = ensureDerivedIndexes(active.version);
+      const info = getDerivedFileInfo(kind, files);
+      if (!info) {
+        return { success: false, reasonCode: "INVALID_KIND" };
+      }
+      const safeId = safeScheduleId(kind, id, id, 0);
+      const filePath = path2.join(info.scheduleDir, `${safeId}.json`);
+      const relative = path2.relative(info.scheduleDir, filePath);
+      if (relative.startsWith("..") || path2.isAbsolute(relative)) {
+        return { success: false, reasonCode: "INVALID_ID" };
+      }
+      const stat = fs2.existsSync(filePath) ? fs2.statSync(filePath) : null;
+      if (!stat) {
+        return { success: false, reasonCode: "NOT_FOUND" };
+      }
+      const cacheKey = `${active.version}:${kind}:schedule:${safeId}`;
+      const cached = derivedCache.get(cacheKey);
+      if (cached && cached.mtimeMs === stat.mtimeMs) {
+        return cached.value;
+      }
+      const schedule = readJsonFile(filePath);
+      const value = {
+        success: true,
+        dataSource: "release-index",
+        version: active.version,
+        semester: schedule?.semester || active.semester,
+        updatedAt: schedule?.updatedAt || active.updatedAt,
+        etag: `"${active.version}-${kind}-${safeId}-${Math.floor(stat.mtimeMs)}-${stat.size}"`,
+        schedule
+      };
+      derivedCache.set(cacheKey, { mtimeMs: stat.mtimeMs, value });
+      return value;
+    }
     function parseSnapshotBuffer(buffer) {
       const isGzip = buffer.length >= 2 && buffer[0] === 31 && buffer[1] === 139;
       const jsonText = isGzip ? zlib.gunzipSync(buffer).toString("utf-8") : buffer.toString("utf-8");
@@ -2291,12 +2570,368 @@ var require_releaseService = __commonJS({
       countRelease,
       getActiveSnapshotData,
       getReleaseStatus,
+      readActiveIndex,
+      readActiveSchedule,
       listReleases,
       normalizeVersion,
       parseSnapshotBuffer,
       readActiveReleaseSnapshot,
+      searchActiveIndex,
       validateReleaseSnapshot,
+      writeDerivedIndexes,
       writeReleaseSnapshot
+    };
+  }
+});
+
+// ../fosu-sync-client/upload.js
+var require_upload = __commonJS({
+  "../fosu-sync-client/upload.js"(exports2, module2) {
+    var axios2 = require("axios");
+    var crypto2 = require("crypto");
+    var fs2 = require("fs");
+    var os = require("os");
+    var path2 = require("path");
+    var { pipeline } = require("stream/promises");
+    var zlib = require("zlib");
+    function parseArgs(argv) {
+      const args = {};
+      for (const arg of argv) {
+        if (!arg.startsWith("--")) continue;
+        const match2 = arg.match(/^--([^=]+)=(.*)$/);
+        if (match2) {
+          args[match2[1]] = match2[2];
+        } else {
+          args[arg.slice(2)] = true;
+        }
+      }
+      return args;
+    }
+    function resolveProjectRoot(startDir) {
+      let current = path2.resolve(startDir || process.cwd());
+      while (true) {
+        const hasServer = fs2.existsSync(path2.join(current, "server"));
+        const hasMiniprogram = fs2.existsSync(path2.join(current, "miniprogram"));
+        const hasPackage = fs2.existsSync(path2.join(current, "package.json"));
+        const hasGit = fs2.existsSync(path2.join(current, ".git"));
+        if (hasServer && hasMiniprogram || hasPackage && hasGit) {
+          return current;
+        }
+        const parent = path2.dirname(current);
+        if (parent === current) break;
+        current = parent;
+      }
+      return path2.resolve(__dirname, "../..");
+    }
+    function resolveInputFilePath2(fileArg, options = {}) {
+      if (!fileArg) {
+        return { resolved: null, tried: [] };
+      }
+      if (path2.isAbsolute(fileArg)) {
+        return { resolved: fileArg, tried: [fileArg] };
+      }
+      const cwd = path2.resolve(options.cwd || process.cwd());
+      const projectRoot = options.projectRoot || resolveProjectRoot(cwd);
+      const normalized = path2.normalize(fileArg).replace(/\\/g, "/");
+      const candidates = [];
+      if (normalized.startsWith("tools/fosu-sync-client/")) {
+        candidates.push(path2.resolve(projectRoot, fileArg));
+        candidates.push(path2.resolve(cwd, normalized.slice("tools/fosu-sync-client/".length)));
+      } else {
+        candidates.push(path2.resolve(cwd, fileArg));
+        candidates.push(path2.resolve(projectRoot, fileArg));
+        candidates.push(path2.resolve(projectRoot, "tools/fosu-sync-client", fileArg));
+      }
+      const tried = [];
+      for (const candidate of candidates) {
+        if (tried.includes(candidate)) continue;
+        tried.push(candidate);
+        if (fs2.existsSync(candidate)) {
+          return { resolved: candidate, tried };
+        }
+      }
+      return { resolved: null, tried };
+    }
+    function toBytesMb(value, fallbackMb) {
+      const num = Number(value);
+      if (!Number.isFinite(num) || num <= 0) {
+        return fallbackMb * 1024 * 1024;
+      }
+      return Math.floor(num * 1024 * 1024);
+    }
+    function hashFile(filePath) {
+      return new Promise((resolve, reject) => {
+        const hash = crypto2.createHash("sha256");
+        const stream = fs2.createReadStream(filePath);
+        stream.on("data", (chunk) => hash.update(chunk));
+        stream.on("error", reject);
+        stream.on("end", () => resolve(hash.digest("hex")));
+      });
+    }
+    async function gzipFile(inputPath, outputPath) {
+      await pipeline(
+        fs2.createReadStream(inputPath),
+        zlib.createGzip({ level: 9 }),
+        fs2.createWriteStream(outputPath)
+      );
+      return outputPath;
+    }
+    function readLeadingText(filePath, maxBytes = 4 * 1024 * 1024) {
+      const stat = fs2.statSync(filePath);
+      const length = Math.min(stat.size, maxBytes);
+      const fd = fs2.openSync(filePath, "r");
+      try {
+        const buffer = Buffer.alloc(length);
+        fs2.readSync(fd, buffer, 0, length, 0);
+        return buffer.toString("utf-8");
+      } finally {
+        fs2.closeSync(fd);
+      }
+    }
+    function extractJsonMetadata(filePath) {
+      const head = readLeadingText(filePath);
+      const pick = (key) => {
+        const match2 = head.match(new RegExp(`"${key}"\\s*:\\s*"([^"]+)"`));
+        return match2 ? match2[1] : "";
+      };
+      return {
+        term: pick("term") || pick("semester"),
+        releaseVersion: pick("releaseVersion") || pick("version"),
+        generatedAt: pick("generatedAt") || pick("updatedAt")
+      };
+    }
+    function formatMb(bytes) {
+      return (Number(bytes || 0) / 1024 / 1024).toFixed(2);
+    }
+    function getAuthHeaders(mode, token) {
+      if (mode === "relay") {
+        return {
+          "x-relay-token": token,
+          Authorization: `Bearer ${token}`
+        };
+      }
+      return {
+        "x-admin-token": token,
+        Authorization: `Bearer ${token}`
+      };
+    }
+    function shouldRetry(error) {
+      if (!error) return false;
+      if (!error.response) return true;
+      const status = error.response.status;
+      return status === 408 || status === 425 || status === 429 || status >= 500;
+    }
+    function retryDelayMs(attempt) {
+      return Math.min(15e3, 700 * Math.pow(2, attempt - 1));
+    }
+    async function postJson(url, body, headers, timeoutMs) {
+      const response = await axios2.post(url, body, {
+        headers: Object.assign({ "Content-Type": "application/json" }, headers),
+        timeout: timeoutMs,
+        proxy: false,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      });
+      return response.data;
+    }
+    async function uploadChunkWithRetry(url, buffer, headers, timeoutMs, attemptCount) {
+      let lastError;
+      for (let attempt = 1; attempt <= attemptCount; attempt += 1) {
+        try {
+          const response = await axios2.post(url, buffer, {
+            headers: Object.assign({
+              "Content-Type": "application/octet-stream",
+              "Content-Length": buffer.length,
+              "x-chunk-sha256": crypto2.createHash("sha256").update(buffer).digest("hex")
+            }, headers),
+            timeout: timeoutMs,
+            proxy: false,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+          });
+          return response.data;
+        } catch (error) {
+          lastError = error;
+          const detail = error.response ? `${error.response.status} ${JSON.stringify(error.response.data || {})}` : error.message;
+          console.warn(`chunk upload failed (${attempt}/${attemptCount}): ${detail}`);
+          if (!shouldRetry(error) || attempt >= attemptCount) {
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs(attempt)));
+        }
+      }
+      throw lastError;
+    }
+    function readChunk(filePath, start, endInclusive) {
+      const length = endInclusive - start + 1;
+      const buffer = Buffer.allocUnsafe(length);
+      const fd = fs2.openSync(filePath, "r");
+      try {
+        fs2.readSync(fd, buffer, 0, length, start);
+        return buffer;
+      } finally {
+        fs2.closeSync(fd);
+      }
+    }
+    function normalizeServer(value) {
+      return String(value || "https://class.katelya.eu.org").replace(/\/+$/, "");
+    }
+    async function prepareUploadFile(filePath, params) {
+      const stat = fs2.statSync(filePath);
+      const originalSize = stat.size;
+      const originalSha256 = await hashFile(filePath);
+      const shouldGzip = params.gzip === true || params.gzip === "true" || params["no-gzip"] !== true;
+      if (!shouldGzip) {
+        return {
+          uploadPath: filePath,
+          contentEncoding: "identity",
+          originalSize,
+          originalSha256
+        };
+      }
+      const gzipPath = path2.resolve(
+        params["gzip-output"] || params.gzipOutput || `${filePath}.gz`
+      );
+      console.log(`gzip: ${filePath}`);
+      console.log(`gzip output: ${gzipPath}`);
+      await gzipFile(filePath, gzipPath);
+      return {
+        uploadPath: gzipPath,
+        contentEncoding: "gzip",
+        originalSize,
+        originalSha256
+      };
+    }
+    async function uploadStagingFile(options) {
+      const params = options.params || {};
+      const filePath = path2.resolve(options.filePath);
+      if (!fs2.existsSync(filePath)) {
+        throw new Error(`file not found: ${filePath}`);
+      }
+      const mode = options.authMode || "admin";
+      const token = options.token || "";
+      if (!token) {
+        throw new Error(mode === "relay" ? "missing relay token" : "missing ADMIN_API_TOKEN");
+      }
+      const server = normalizeServer(options.server);
+      const endpointBase = mode === "relay" ? `${server}/api/relay/staging/upload` : `${server}/api/admin/staging/upload`;
+      const timeoutMs = Number(params.timeout || params.timeoutMs || process.env.SYNC_UPLOAD_TIMEOUT_MS || 18e4);
+      const retryCount = Number(params.retries || process.env.SYNC_UPLOAD_RETRIES || 3);
+      const chunkSize = toBytesMb(params["chunk-mb"] || params.chunkMb || process.env.SYNC_LOCAL_UPLOAD_CHUNK_MB, 8);
+      const metadata = Object.assign({}, extractJsonMetadata(filePath), options.metadata || {});
+      const prepared = await prepareUploadFile(filePath, params);
+      const uploadStat = fs2.statSync(prepared.uploadPath);
+      const uploadSha256 = await hashFile(prepared.uploadPath);
+      const totalChunks = Math.ceil(uploadStat.size / chunkSize);
+      const headers = getAuthHeaders(mode, token);
+      console.log(`source file: ${filePath}`);
+      console.log(`source size: ${formatMb(prepared.originalSize)} MB`);
+      console.log(`upload file: ${prepared.uploadPath}`);
+      console.log(`upload size: ${formatMb(uploadStat.size)} MB`);
+      console.log(`chunk size: ${formatMb(chunkSize)} MB, chunks: ${totalChunks}`);
+      console.log(`server: ${server}`);
+      const initBody = {
+        fileName: path2.basename(filePath),
+        term: metadata.term || options.term || "",
+        releaseVersion: metadata.releaseVersion || "",
+        note: options.note || params.note || "",
+        source: options.source || (mode === "relay" ? "relay-agent" : "local-upload-cli"),
+        contentEncoding: prepared.contentEncoding,
+        contentType: "application/json",
+        chunkSize,
+        totalChunks,
+        uploadSize: uploadStat.size,
+        uploadSha256,
+        originalSize: prepared.originalSize,
+        originalSha256: prepared.originalSha256
+      };
+      const init = await postJson(`${endpointBase}/init`, initBody, headers, timeoutMs);
+      const uploadId = init.uploadId || init.upload?.uploadId;
+      if (!uploadId) {
+        throw new Error(`init response missing uploadId: ${JSON.stringify(init)}`);
+      }
+      const startedAt = Date.now();
+      let uploaded = 0;
+      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+        const start = chunkIndex * chunkSize;
+        const end = Math.min(uploadStat.size - 1, start + chunkSize - 1);
+        const buffer = readChunk(prepared.uploadPath, start, end);
+        const chunkUrl = `${endpointBase}/chunk?uploadId=${encodeURIComponent(uploadId)}&chunkIndex=${chunkIndex}`;
+        await uploadChunkWithRetry(chunkUrl, buffer, headers, timeoutMs, retryCount);
+        uploaded += buffer.length;
+        const elapsed = Math.max(1, (Date.now() - startedAt) / 1e3);
+        const percent = (uploaded / uploadStat.size * 100).toFixed(2);
+        const speed = formatMb(uploaded / elapsed);
+        console.log(`[${chunkIndex + 1}/${totalChunks}] ${percent}% ${formatMb(uploaded)}/${formatMb(uploadStat.size)} MB, ${speed} MB/s`);
+      }
+      const finalize = await postJson(`${endpointBase}/finalize`, {
+        uploadId,
+        uploadSize: uploadStat.size,
+        uploadSha256,
+        originalSize: prepared.originalSize,
+        originalSha256: prepared.originalSha256,
+        totalChunks,
+        note: options.note || params.note || "",
+        uploaderNote: options.note || params.note || "",
+        environment: options.environment || metadata.environment || ""
+      }, headers, timeoutMs);
+      const payload = finalize.data || finalize.upload || finalize;
+      console.log("upload finalized:");
+      console.log(JSON.stringify({
+        uploadId,
+        stagingId: finalize.stagingId || uploadId,
+        relayUploadId: payload.relayUploadId || finalize.relayUploadId,
+        term: payload.term || finalize.term || metadata.term || "",
+        releaseVersion: payload.releaseVersion || finalize.releaseVersion || metadata.releaseVersion || "",
+        counts: payload.counts || payload.summary || finalize.counts || {},
+        status: payload.status || finalize.status || "pending-review"
+      }, null, 2));
+      return finalize;
+    }
+    async function runFromCli(argv = process.argv.slice(2)) {
+      const params = parseArgs(argv);
+      const fileArg = params.file || params.input;
+      const resolved = resolveInputFilePath2(fileArg || "");
+      if (!resolved.resolved) {
+        throw new Error([
+          "Staging JSON file not found.",
+          `received: ${fileArg || ""}`,
+          `cwd: ${process.cwd()}`,
+          `projectRoot: ${resolveProjectRoot(process.cwd())}`,
+          "tried:",
+          ...resolved.tried.map((item) => `  - ${item}`)
+        ].join(os.EOL));
+      }
+      const mode = params.relay ? "relay" : "admin";
+      const token = params.token || (mode === "relay" ? process.env.RELAY_TOKEN : process.env.ADMIN_API_TOKEN);
+      return uploadStagingFile({
+        filePath: resolved.resolved,
+        server: params.server || process.env.FOSU_API_BASE || "https://class.katelya.eu.org",
+        token,
+        authMode: mode,
+        params,
+        term: params.term,
+        note: params.note
+      });
+    }
+    if (require.main === module2) {
+      runFromCli().catch((error) => {
+        const response = error.response;
+        if (response) {
+          console.error(`upload failed: HTTP ${response.status}`);
+          console.error(JSON.stringify(response.data || {}, null, 2));
+        } else {
+          console.error(`upload failed: ${error.stack || error.message}`);
+        }
+        process.exit(1);
+      });
+    }
+    module2.exports = {
+      parseArgs,
+      resolveInputFilePath: resolveInputFilePath2,
+      resolveProjectRoot,
+      runFromCli,
+      uploadStagingFile
     };
   }
 });
@@ -2311,6 +2946,7 @@ var crypto = require("crypto");
 var diagnose = require_diagnose();
 var envPath = path.resolve(__dirname, ".env");
 require("dotenv").config({ path: envPath });
+var ALL_SCOPES = ["classSchedules", "teacherSchedules", "classroomSchedules", "courseSchedules", "classrooms", "teachers", "courses"];
 console.log(`[env] .env path: ${envPath}`);
 console.log(`[env] FOSU_API_BASE: ${process.env.FOSU_API_BASE || "https://class.katelya.eu.org"}`);
 console.log(`[env] PREFERRED_SEMESTER: ${process.env.PREFERRED_SEMESTER || "\u672A\u914D\u7F6E"}`);
@@ -2325,6 +2961,7 @@ var parser = require_parser();
 var normalizer = require_scheduleNormalizer();
 var courseIdentity = require_courseNormalizer();
 var releaseService = require_releaseService();
+var stagingUploader = require_upload();
 var proxyEnvNames = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"];
 var detectedProxyEnv = proxyEnvNames.map((name) => [name, process.env[name]]).filter(([, value]) => Boolean(value));
 var INITIAL_DETECTED_PROXIES = [...detectedProxyEnv];
@@ -2345,16 +2982,117 @@ if (disableProxy) {
 }
 var FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 var FOSU_API_BASE = process.env.FOSU_API_BASE || "https://class.katelya.eu.org";
+var cachedProjectRoot = null;
+function resolveProjectPath() {
+  if (cachedProjectRoot) return cachedProjectRoot;
+  const startDir = process.cwd();
+  let currentDir = startDir;
+  while (true) {
+    const serverPath = path.join(currentDir, "server");
+    const miniprogramPath = path.join(currentDir, "miniprogram");
+    if (fs.existsSync(serverPath) && fs.statSync(serverPath).isDirectory() && fs.existsSync(miniprogramPath) && fs.statSync(miniprogramPath).isDirectory()) {
+      cachedProjectRoot = currentDir;
+      return currentDir;
+    }
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+    currentDir = parentDir;
+  }
+  const fallbackPath = path.resolve(__dirname, "../..");
+  cachedProjectRoot = fallbackPath;
+  return fallbackPath;
+}
+var PROJECT_ROOT = resolveProjectPath();
+function resolveInputFilePath(fileArg) {
+  if (!fileArg) {
+    return {
+      resolved: null,
+      tried: []
+    };
+  }
+  if (path.isAbsolute(fileArg)) {
+    return {
+      resolved: fileArg,
+      tried: [fileArg]
+    };
+  }
+  const cwd = process.cwd();
+  const projectRoot = resolveProjectPath();
+  const tried = [];
+  const normalizedFile = path.normalize(fileArg).replace(/\\/g, "/");
+  if (normalizedFile.startsWith("tools/fosu-sync-client/")) {
+    const pRootJoined = path.resolve(projectRoot, fileArg);
+    tried.push(pRootJoined);
+    if (fs.existsSync(pRootJoined)) {
+      return { resolved: pRootJoined, tried };
+    }
+    const relativePart = normalizedFile.substring("tools/fosu-sync-client/".length);
+    const pCwdStripped = path.resolve(cwd, relativePart);
+    tried.push(pCwdStripped);
+    if (fs.existsSync(pCwdStripped)) {
+      return { resolved: pCwdStripped, tried };
+    }
+  } else {
+    const pCwd = path.resolve(cwd, fileArg);
+    tried.push(pCwd);
+    if (fs.existsSync(pCwd)) {
+      return { resolved: pCwd, tried };
+    }
+    if (projectRoot) {
+      const pRoot = path.resolve(projectRoot, fileArg);
+      tried.push(pRoot);
+      if (fs.existsSync(pRoot)) {
+        return { resolved: pRoot, tried };
+      }
+      const pClient = path.resolve(projectRoot, "tools/fosu-sync-client", fileArg);
+      tried.push(pClient);
+      if (fs.existsSync(pClient)) {
+        return { resolved: pClient, tried };
+      }
+    }
+  }
+  return {
+    resolved: null,
+    tried
+  };
+}
+function resolveOutputFilePath(outputArg) {
+  if (!outputArg) return null;
+  if (path.isAbsolute(outputArg)) return outputArg;
+  const cwd = process.cwd();
+  const projectRoot = resolveProjectPath();
+  const normalizedFile = path.normalize(outputArg).replace(/\\/g, "/");
+  if (normalizedFile.startsWith("tools/fosu-sync-client/")) {
+    return path.resolve(projectRoot, outputArg);
+  }
+  if (projectRoot) {
+    return path.resolve(projectRoot, outputArg);
+  }
+  return path.resolve(cwd, outputArg);
+}
+var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 var ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || "";
 var FOSU_SYNC_AUTH_MODE = process.env.FOSU_SYNC_AUTH_MODE || "playwright-manual";
 var SESSION_PATH = path.join(__dirname, ".session", "session.json");
-var sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 function getEnvFlag(name, defaultValue) {
   const value = process.env[name];
   if (value === void 0 || value === "") {
     return defaultValue;
   }
   return String(value).toLowerCase() === "true";
+}
+function getTermStartDate(term) {
+  const map = {
+    "2025-2026-1": "2025-09-01",
+    "2025-2026-2": "2026-03-09",
+    "2026-2027-1": "2026-09-01",
+    "2026-2027-2": "2027-03-01",
+    "2027-2028-1": "2027-09-01",
+    "2027-2028-2": "2028-03-01"
+  };
+  return map[term] || "";
 }
 function readJsonArray(filePath) {
   if (!fs.existsSync(filePath)) {
@@ -2440,6 +3178,12 @@ function upsertClassNameCandidateRecord(records, item) {
   return records;
 }
 async function waitBetweenClassSyncRequests(isFiltered) {
+  const configuredDelay = Number(process.env.SYNC_CLASS_REQUEST_DELAY_MS || 0);
+  if (Number.isFinite(configuredDelay) && configuredDelay >= 0 && process.env.SYNC_CLASS_REQUEST_DELAY_MS !== void 0) {
+    console.log(`      \u23F3 \u6309 CLI/env \u914D\u7F6E\u7B49\u5F85 ${configuredDelay}ms...`);
+    await sleep(configuredDelay);
+    return;
+  }
   const delayMin = isFiltered ? 800 : 1500;
   const delayMax = isFiltered ? 1500 : 3e3;
   const delay = Math.floor(Math.random() * (delayMax - delayMin + 1)) + delayMin;
@@ -2728,7 +3472,7 @@ function writeSnapshotDebugFiles(debugDir, snapshot, compressedBuffer) {
   fs.writeFileSync(path.join(debugDir, "snapshot-latest.json.gz"), compressedBuffer);
   const cliParams = global.CLI_PARAMS || {};
   if (cliParams.output) {
-    const outputPath = path.resolve(process.cwd(), cliParams.output);
+    const outputPath = resolveOutputFilePath(cliParams.output);
     const outputDir = path.dirname(outputPath);
     if (!fs.existsSync(outputDir)) {
       fs.mkdirSync(outputDir, { recursive: true });
@@ -2758,7 +3502,24 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       audienceType: "student"
     });
   });
-  const resources = normalizeSnapshotResources(resourceSchedules || buildSnapshotResources(updatedSchedules, options.resources || {}));
+  let oldResources = { teachers: [], classrooms: [], courses: [], teacherSchedules: [], classroomSchedules: [], courseSchedules: [] };
+  const oldResourcesPath = path.join(__dirname, ".debug", "resources-latest.json");
+  if (fs.existsSync(oldResourcesPath)) {
+    try {
+      oldResources = JSON.parse(fs.readFileSync(oldResourcesPath, "utf-8"));
+    } catch (e2) {
+    }
+  }
+  const includeScopes = global.CLI_PARAMS?.includeScopes || ALL_SCOPES;
+  const derivedResources = buildSnapshotResources(updatedSchedules, options.resources || {});
+  const resources = normalizeSnapshotResources(resourceSchedules || {
+    teachers: options.resources?.includeTeachers ? derivedResources.teachers : oldResources.teachers || [],
+    classrooms: options.resources?.includeClassrooms ? derivedResources.classrooms : oldResources.classrooms || [],
+    courses: options.resources?.includeCourses ? derivedResources.courses : oldResources.courses || [],
+    teacherSchedules: options.resources?.includeTeacherSchedules ? derivedResources.teacherSchedules : oldResources.teacherSchedules || [],
+    classroomSchedules: options.resources?.includeClassroomSchedules ? derivedResources.classroomSchedules : oldResources.classroomSchedules || [],
+    courseSchedules: options.resources?.includeCourseSchedules ? derivedResources.courseSchedules : oldResources.courseSchedules || []
+  });
   const collegeCount = (catalog.colleges || []).length;
   const majorCount = (majors || []).length;
   const classScheduleCount = updatedSchedules.length;
@@ -2787,11 +3548,42 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     { section: 14, start: "20:50", end: "21:30" }
   ];
   const cliParams = global.CLI_PARAMS || {};
+  const generatedCommand = global.GENERATED_COMMAND || `node sync.js local-campus ${process.argv.slice(2).join(" ")}`;
+  const termStartDate = cliParams.start || getTermStartDate(activeSemester) || "2026-03-09";
+  const cacheUsage = global.CLASS_SCHEDULE_CACHE_USAGE || {};
+  const metaWarnings = [];
+  if (cacheUsage.warning) {
+    metaWarnings.push(cacheUsage.warning);
+  }
+  const counts = {
+    classScheduleCount,
+    adminClassCount,
+    majorAggregateCount,
+    teacherScheduleCount,
+    classroomScheduleCount,
+    courseScheduleCount,
+    classroomCount: resources.classrooms.length,
+    teacherCount: resources.teachers.length,
+    courseCount: resources.courses.length,
+    collegeCount,
+    majorCount,
+    gradeCount: (catalog.grades || []).length,
+    noScheduleMajorCount
+  };
+  const summaryParts = [];
+  if (includeScopes.includes("classSchedules")) summaryParts.push("\u884C\u653F\u73ED\u8BFE\u8868");
+  if (includeScopes.includes("teachers")) summaryParts.push("\u6559\u5E08\u5217\u8868");
+  if (includeScopes.includes("teacherSchedules")) summaryParts.push("\u6559\u5E08\u8BFE\u8868");
+  if (includeScopes.includes("classrooms")) summaryParts.push("\u6559\u5BA4\u5217\u8868");
+  if (includeScopes.includes("classroomSchedules")) summaryParts.push("\u6559\u5BA4\u8BFE\u8868");
+  if (includeScopes.includes("courses")) summaryParts.push("\u8BFE\u7A0B\u5217\u8868");
+  if (includeScopes.includes("courseSchedules")) summaryParts.push("\u8BFE\u7A0B\u8BFE\u8868");
+  const scopeSummary = "\u66F4\u65B0: " + summaryParts.join(", ") + "; \u4FDD\u7559\u5176\u4ED6\u5386\u53F2\u6570\u636E";
   return {
     schemaVersion: "1.0",
     releaseVersion: cliParams.version || version,
     term: activeSemester,
-    termStartDate: cliParams.start || "2026-09-01",
+    termStartDate,
     generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
     version,
     semester: activeSemester,
@@ -2799,6 +3591,30 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     releaseNote: cliParams.note || "\u5168\u6821\u8BFE\u8868\u6570\u636E\u5DF2\u66F4\u65B0",
     source: "local-sync-client",
     disclaimer: "\u672C\u5DE5\u5177\u4E3A\u4E2A\u4EBA\u5F00\u53D1\uFF0C\u975E\u5B66\u6821\u5B98\u65B9\u670D\u52A1\u3002\u8BFE\u7A0B\u6570\u636E\u7531\u5F00\u53D1\u8005\u6574\u7406\u7EF4\u62A4\u53CA\u7528\u6237\u53CD\u9988\u4FEE\u6B63\uFF0C\u4EC5\u4F9B\u53C2\u8003\uFF0C\u5177\u4F53\u5B89\u6392\u8BF7\u4EE5\u4EFB\u8BFE\u6559\u5E08\u901A\u77E5\u53CA\u6B63\u5F0F\u901A\u77E5\u4E3A\u51C6\u3002",
+    // 注入 meta
+    meta: {
+      term: activeSemester,
+      startDate: termStartDate,
+      includeScopes,
+      classScope: cliParams.classScope || cliParams["class-scope"] || process.env.SYNC_CLASS_SCOPE || "",
+      grades: cliParams.grades || process.env.SYNC_CLASS_GRADES || "",
+      forceRefresh: Boolean(cliParams.forceRefresh || cliParams["force-refresh"]),
+      ignoreProgress: Boolean(cliParams.ignoreProgress || cliParams["ignore-progress"]),
+      ignoreNoScheduleCache: Boolean(cliParams.ignoreNoScheduleCache || cliParams["ignore-no-schedule-cache"]),
+      scopeSummary,
+      generatedCommand,
+      generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      counts,
+      cacheUsage: {
+        usedClassScheduleCache: Boolean(cacheUsage.usedClassScheduleCache || cacheUsage.used),
+        cacheSource: cacheUsage.cacheSource || cacheUsage.source || null,
+        cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null
+      },
+      warnings: metaWarnings,
+      usedClassScheduleCache: Boolean(cacheUsage.usedClassScheduleCache || cacheUsage.used),
+      cacheSource: cacheUsage.cacheSource || cacheUsage.source || null,
+      cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null
+    },
     catalog: {
       semesters: catalog.semesters || [],
       colleges: catalog.colleges || [],
@@ -3158,6 +3974,63 @@ function readClassSchedulesFromFile() {
   }
   throw new Error(errorMessage.join("\n"));
 }
+function tryReadClassSchedulesFromFile() {
+  try {
+    return readClassSchedulesFromFile();
+  } catch (error) {
+    return { items: [], filePath: null, error };
+  }
+}
+function readClassScheduleCacheForSemester(semester2) {
+  const cache = tryReadClassSchedulesFromFile();
+  const items2 = Array.isArray(cache.items) ? cache.items : [];
+  if (items2.length === 0) {
+    return cache;
+  }
+  const matchedItems = items2.filter((item) => {
+    const itemSemester = item && (item.semester || item.term || item.xnxqh);
+    return !itemSemester || !semester2 || itemSemester === semester2;
+  });
+  if (matchedItems.length === 0) {
+    return {
+      items: [],
+      filePath: cache.filePath,
+      error: new Error(`\u5386\u53F2 classSchedules \u7F13\u5B58\u5B58\u5728\uFF0C\u4F46\u6CA1\u6709\u5339\u914D\u5B66\u671F ${semester2} \u7684\u8BFE\u8868\u8BB0\u5F55\u3002`)
+    };
+  }
+  if (matchedItems.length !== items2.length) {
+    console.log(`\u2139\uFE0F \u5386\u53F2\u8BFE\u8868\u7F13\u5B58\u6309\u5B66\u671F ${semester2} \u8FC7\u6EE4: ${items2.length} -> ${matchedItems.length} \u6761\u3002`);
+  }
+  return { items: matchedItems, filePath: cache.filePath };
+}
+function getClassScheduleIdentity(item) {
+  if (!item || typeof item !== "object") {
+    return "";
+  }
+  return item.classId || [
+    item.semester || item.term || "",
+    item.collegeCode || "",
+    item.grade || "",
+    item.majorCode || item.code || "",
+    item.className || item.name || ""
+  ].join("::");
+}
+function mergeClassSchedules(existing, incoming) {
+  const merged = /* @__PURE__ */ new Map();
+  (existing || []).forEach((item) => {
+    const key = getClassScheduleIdentity(item);
+    if (key) {
+      merged.set(key, item);
+    }
+  });
+  (incoming || []).forEach((item) => {
+    const key = getClassScheduleIdentity(item);
+    if (key) {
+      merged.set(key, item);
+    }
+  });
+  return Array.from(merged.values());
+}
 function printPowerShellCommands() {
   console.log("\n\u{1F4A1} Windows PowerShell \u5E38\u7528\u547D\u4EE4\u6307\u5357\uFF1A");
   console.log("--------------------------------------------------");
@@ -3268,53 +4141,129 @@ async function handleOfflineRelease() {
   console.log("\n\u{1F389} [Release] \u79BB\u7EBF\u66B4\u529B\u5FEB\u7167\u53D1\u5E03\u5B8C\u6210\uFF01");
 }
 async function handleLocalStagingUpload(params) {
-  const filePath = path.resolve(process.cwd(), params.file || params.input || "");
-  if (!params.file && !params.input) {
-    throw new Error("\u7F3A\u5C11 --file=./staging/term-full.json \u53C2\u6570");
-  }
-  if (!fs.existsSync(filePath)) {
-    throw new Error(`Staging JSON \u6587\u4EF6\u4E0D\u5B58\u5728: ${filePath}`);
+  const fileArg = params.file || params.input || "";
+  const { resolved: filePath, tried } = resolveInputFilePath(fileArg);
+  if (!filePath || !fs.existsSync(filePath)) {
+    const errorMsg = [
+      "Staging JSON \u6587\u4EF6\u4E0D\u5B58\u5728\u3002",
+      `Received file arg: ${fileArg}`,
+      `Current working directory (cwd): ${process.cwd()}`,
+      `Detected project root: ${resolveProjectPath()}`,
+      "Tried candidate paths:",
+      ...tried.map((p) => `  - ${p}`)
+    ].join("\n");
+    throw new Error(errorMsg);
   }
   if (!ADMIN_API_TOKEN) {
     throw new Error("\u7F3A\u5C11 ADMIN_API_TOKEN\uFF0C\u65E0\u6CD5\u4E0A\u4F20\u5230\u540E\u53F0 Staging \u533A");
   }
-  const server = String(params.server || FOSU_API_BASE).replace(/\/+$/, "");
-  const url = `${server}/api/admin/sync/staging/upload`;
-  const body = fs.readFileSync(filePath);
-  console.log(`\u{1F4E4} \u6B63\u5728\u4E0A\u4F20\u672C\u5730 Staging JSON \u5230 VPS \u6682\u5B58\u533A: ${url}`);
-  const response = await axios.post(url, body, {
-    headers: {
-      "Content-Type": "application/json",
-      "x-admin-token": ADMIN_API_TOKEN
-    },
-    proxy: false,
-    timeout: parseInt(process.env.SYNC_UPLOAD_TIMEOUT_MS || "120000", 10),
-    maxContentLength: Infinity,
-    maxBodyLength: Infinity
+  console.log(`Staging JSON resolved path: ${filePath}`);
+  console.log("local-upload uses gzip + chunk upload and only writes pending-review Staging; it does not publish release.");
+  return stagingUploader.uploadStagingFile({
+    filePath,
+    server: params.server || FOSU_API_BASE,
+    token: ADMIN_API_TOKEN,
+    authMode: "admin",
+    params,
+    term: params.term || process.env.PREFERRED_SEMESTER || "",
+    note: params.note || "",
+    source: "local-upload-cli"
   });
-  console.log(`\u2705 Staging \u4E0A\u4F20\u6210\u529F: ${JSON.stringify(response.data)}`);
-  console.log("\u2139\uFE0F \u8BE5\u64CD\u4F5C\u53EA\u5199\u5165 Staging\uFF0C\u4E0D\u4F1A\u53D1\u5E03\u5230\u5C0F\u7A0B\u5E8F\u7EBF\u4E0A release\u3002");
-  return response.data;
+}
+function writeLocalStagingDebugFailure(params, catalog, majors, error) {
+  const term = params.term || process.env.PREFERRED_SEMESTER || catalog?.semesters?.[0]?.value || "term";
+  const debugPayload = {
+    success: false,
+    type: "local-campus-staging-debug",
+    generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    error: error && (error.stack || error.message) || String(error),
+    meta: {
+      term,
+      startDate: params.start || process.env.SYNC_TERM_START_DATE || "",
+      includeScopes: global.CLI_PARAMS?.includeScopes || ALL_SCOPES,
+      classScope: params.classScope || params["class-scope"] || process.env.SYNC_CLASS_SCOPE || "",
+      grades: params.grades || process.env.SYNC_CLASS_GRADES || "",
+      forceRefresh: Boolean(params.forceRefresh || params["force-refresh"]),
+      ignoreProgress: Boolean(params.ignoreProgress || params["ignore-progress"]),
+      ignoreNoScheduleCache: Boolean(params.ignoreNoScheduleCache || params["ignore-no-schedule-cache"]),
+      generatedCommand: global.GENERATED_COMMAND || process.argv.join(" "),
+      counts: {
+        collegeCount: catalog?.colleges?.length || 0,
+        majorCount: majors?.length || 0,
+        classScheduleCount: 0
+      },
+      cacheUsage: global.CLASS_SCHEDULE_CACHE_USAGE || null,
+      warnings: ["\u672A\u751F\u6210\u6B63\u5F0F Staging JSON\uFF0C\u8BF7\u6309 error \u5B57\u6BB5\u5904\u7406\u540E\u91CD\u65B0\u8FD0\u884C\u3002"]
+    }
+  };
+  const output = resolveOutputFilePath(params.debugOutput || path.join("staging", `debug-${term}.json`));
+  fs.mkdirSync(path.dirname(output), { recursive: true });
+  fs.writeFileSync(output, JSON.stringify(debugPayload, null, 2), "utf-8");
+  console.error(`\u{1F9EA} \u5DF2\u751F\u6210 debug JSON\uFF0C\u4E0D\u4F1A\u4F5C\u4E3A\u6B63\u5F0F Staging \u53D1\u5E03: ${output}`);
+  return output;
 }
 async function handleLocalCampusStaging(page, params) {
   console.log("\n================ [\u672C\u673A\u6821\u56ED\u7F51\u91C7\u96C6 Staging] ================");
   process.env.SYNC_LOCAL_STAGING_ONLY = "true";
   process.env.SYNC_CLASS_CRAWL_ONLY = "true";
+  const includeScopes = global.CLI_PARAMS?.includeScopes || ALL_SCOPES;
+  const syncCollegeCodes = process.env.SYNC_CLASS_COLLEGE_CODES ? process.env.SYNC_CLASS_COLLEGE_CODES.split(",").map((c) => c.trim()).filter(Boolean) : null;
+  const syncGrades = process.env.SYNC_CLASS_GRADES ? process.env.SYNC_CLASS_GRADES.split(",").map((g) => g.trim()).filter(Boolean) : null;
+  const syncMajorCodes = process.env.SYNC_CLASS_MAJOR_CODES ? process.env.SYNC_CLASS_MAJOR_CODES.split(",").map((m) => m.trim()).filter(Boolean) : null;
+  const isFiltered = !!(syncCollegeCodes || syncGrades || syncMajorCodes);
+  if (!isFiltered && includeScopes.includes("classSchedules")) {
+    if (!process.env.SYNC_CLASS_SCOPE) {
+      process.env.SYNC_CLASS_SCOPE = "all";
+    }
+  }
   const catalog = await syncCatalog(page);
   const majors = await syncMajors(page, catalog);
-  const allClassSchedules = await syncClassSchedules(page, catalog, majors);
-  if (!allClassSchedules || allClassSchedules.length === 0) {
-    throw new Error("\u672C\u673A\u6821\u56ED\u7F51\u91C7\u96C6\u7ED3\u679C\u4E3A\u7A7A\uFF0C\u672A\u751F\u6210 Staging JSON");
+  let allClassSchedules = [];
+  if (includeScopes.includes("classSchedules")) {
+    try {
+      allClassSchedules = await syncClassSchedules(page, catalog, majors);
+    } catch (error) {
+      const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
+      throw new Error(`${error.message} \u5DF2\u751F\u6210 debug JSON: ${debugPath}`);
+    }
+    if (!allClassSchedules || allClassSchedules.length === 0) {
+      const error = new Error("\u672C\u673A\u6821\u56ED\u7F51\u91C7\u96C6\u7ED3\u679C\u4E3A\u7A7A\uFF0C\u672A\u751F\u6210\u6B63\u5F0F Staging JSON");
+      const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
+      throw new Error(`${error.message}\u3002\u5DF2\u751F\u6210 debug JSON: ${debugPath}`);
+    }
+  } else {
+    console.log("\u2139\uFE0F \u540C\u6B65\u8303\u56F4\u4E0D\u5305\u542B\u884C\u653F\u73ED\u8BFE\u8868 (classSchedules)\u3002\u4ECE\u672C\u5730\u52A0\u8F7D\u5DF2\u6709\u7F13\u5B58\u4EE5\u4FDD\u62A4\u5B66\u751F\u8BFE\u8868\u3002");
+    const cache = readClassScheduleCacheForSemester(process.env.PREFERRED_SEMESTER || params.term || catalog.semesters?.[0]?.value);
+    allClassSchedules = cache.items || [];
+    if (!allClassSchedules.length) {
+      const error = cache.error || new Error("\u53EA\u66F4\u65B0\u516C\u5171\u8D44\u6E90\u65F6\u672A\u627E\u5230\u53EF\u5408\u5E76\u7684\u5386\u53F2 classSchedules\uFF0C\u7981\u6B62\u751F\u6210\u4F1A\u6E05\u7A7A\u5B66\u751F\u8BFE\u8868\u7684 Staging\u3002");
+      const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
+      throw new Error(`${error.message} \u5DF2\u751F\u6210 debug JSON: ${debugPath}`);
+    }
+    global.CLASS_SCHEDULE_CACHE_USAGE = {
+      usedClassScheduleCache: true,
+      cacheSource: cache.filePath,
+      cacheWarning: "\u540C\u6B65\u8303\u56F4\u4E0D\u5305\u542B classSchedules\uFF0C\u5DF2\u5408\u5E76\u5386\u53F2\u884C\u653F\u73ED\u8BFE\u8868\u7F13\u5B58\u4EE5\u9632\u6B62\u53D1\u5E03\u540E\u6E05\u7A7A\u5B66\u751F\u8BFE\u8868\u3002"
+    };
   }
   const snapshot = buildSnapshot(catalog, majors, allClassSchedules, null, {
     resources: {
-      includeTeachers: true,
-      includeClassrooms: true,
-      includeCourses: true
+      includeTeachers: includeScopes.includes("teachers"),
+      includeClassrooms: includeScopes.includes("classrooms"),
+      includeCourses: includeScopes.includes("courses"),
+      includeTeacherSchedules: includeScopes.includes("teacherSchedules"),
+      includeClassroomSchedules: includeScopes.includes("classroomSchedules"),
+      includeCourseSchedules: includeScopes.includes("courseSchedules")
     }
   });
+  if (includeScopes.includes("classSchedules") && (!snapshot.classSchedules || snapshot.classSchedules.length === 0)) {
+    const error = new Error("includeScopes \u5305\u542B classSchedules\uFF0C\u4F46\u6700\u7EC8\u5FEB\u7167 classSchedules \u4E3A 0\uFF0C\u5DF2\u7981\u6B62\u751F\u6210\u6B63\u5F0F Staging\u3002");
+    const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
+    throw new Error(`${error.message} \u5DF2\u751F\u6210 debug JSON: ${debugPath}`);
+  }
   validateLocalReleaseSnapshot(snapshot);
-  const output = path.resolve(process.cwd(), params.output || path.join("staging", `${snapshot.semester || params.term || "term"}-full.json`));
+  const defaultOutput = path.join("staging", `${snapshot.semester || params.term || "term"}-full.json`);
+  const output = resolveOutputFilePath(params.output || defaultOutput);
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, JSON.stringify(snapshot, null, 2), "utf-8");
   console.log(`\u{1F4BE} Staging JSON \u5DF2\u751F\u6210: ${output}`);
@@ -3574,7 +4523,7 @@ async function initBrowserContext() {
   if (FOSU_SYNC_AUTH_MODE === "playwright-manual") {
     if (!fs.existsSync(SESSION_PATH)) {
       console.error("\u274C \u672C\u5730\u672A\u627E\u5230 session.json \u767B\u5F55\u4F1A\u8BDD\u6587\u4EF6\uFF01");
-      console.error("\u{1F4A1} \u63D0\u793A: \u767B\u5F55\u72B6\u6001\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u8FD0\u884C npm run login\u3002");
+      console.error(getExpiredSessionTip());
       await browser.close();
       process.exit(1);
     }
@@ -3601,25 +4550,48 @@ async function initBrowserContext() {
   }
   return { browser, context };
 }
+function getExpiredSessionTip() {
+  const invocationCwd = path.resolve(process.env.INIT_CWD || process.cwd());
+  const isProjectRoot = invocationCwd === PROJECT_ROOT;
+  const rootPackageJson = path.join(PROJECT_ROOT, "package.json");
+  const hasRootLoginScript = (() => {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(rootPackageJson, "utf-8"));
+      return Boolean(pkg.scripts && pkg.scripts.login);
+    } catch (error) {
+      return false;
+    }
+  })();
+  const lines = [
+    "\u8BF7\u5728\u9879\u76EE\u6839\u76EE\u5F55\u6267\u884C npm run login\uFF0C\u767B\u5F55\u6210\u529F\u540E\u91CD\u65B0\u8FD0\u884C\u5F53\u524D\u540C\u6B65\u547D\u4EE4\u3002"
+  ];
+  if (!isProjectRoot) {
+    lines.push("\u4F60\u53EF\u80FD\u4E0D\u5728\u9879\u76EE\u6839\u76EE\u5F55\uFF0C\u8BF7\u5148 cd \u5230 FosuClass \u6839\u76EE\u5F55\u3002");
+  }
+  if (!hasRootLoginScript) {
+    lines.push("\u5F53\u524D\u6839\u76EE\u5F55 package.json \u672A\u68C0\u6D4B\u5230 login script\uFF0C\u8BF7\u8865\u5145\u540E\u518D\u91CD\u8BD5\u3002");
+  }
+  return lines.join("\n");
+}
 async function checkSession(page) {
   console.log("\u{1F512} \u6B63\u5728\u6821\u9A8C\u4F1A\u8BDD\u6709\u6548\u6027...");
   try {
     await gotoPage(page, "/framework/xsMain.jsp", { waitUntil: "networkidle" });
   } catch (error) {
     console.error(`\u274C \u5BFC\u822A\u81F3\u6559\u52A1\u9875\u5931\u8D25\uFF0C\u53EF\u80FD\u672A\u8FDE\u5185\u7F51\u6216\u63E1\u624B\u5F7B\u5E95\u5931\u8D25: ${error.message}`);
-    console.error("\u{1F4A1} \u63D0\u793A: \u767B\u5F55\u72B6\u6001\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u8FD0\u884C npm run login\u3002");
+    console.error(getExpiredSessionTip());
     return false;
   }
   const currentUrl = page.url();
   if (currentUrl.includes("authserver.fosu.edu.cn") || currentUrl.includes("login")) {
     console.error("\u274C \u4F1A\u8BDD\u5DF2\u8FC7\u671F\u6216\u65E0\u6548\uFF01\u88AB\u91CD\u5B9A\u5411\u5230\u4E86\u767B\u5F55\u9875\u9762\u3002");
-    console.error("\u{1F4A1} \u63D0\u793A: \u767B\u5F55\u72B6\u6001\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u8FD0\u884C npm run login\u3002");
+    console.error(getExpiredSessionTip());
     return false;
   }
   const content = await page.content();
   if (content.includes("\u7EDF\u4E00\u8EAB\u4EFD\u8BA4\u8BC1") || content.includes("\u5BC6\u7801\u767B\u5F55")) {
     console.error("\u274C \u4F1A\u8BDD\u5DF2\u8FC7\u671F\uFF01\u9875\u9762\u5305\u542B\u767B\u5F55\u6807\u8BC6\u3002");
-    console.error("\u{1F4A1} \u63D0\u793A: \u767B\u5F55\u72B6\u6001\u5DF2\u8FC7\u671F\uFF0C\u8BF7\u91CD\u65B0\u8FD0\u884C npm run login\u3002");
+    console.error(getExpiredSessionTip());
     return false;
   }
   console.log("\u{1F389} \u4F1A\u8BDD\u6709\u6548\uFF0C\u6559\u52A1\u7CFB\u7EDF\u4E3B\u9875\u52A0\u8F7D\u6B63\u5E38\u3002");
@@ -4284,18 +5256,30 @@ async function syncClassSchedules(page, catalog, majors) {
   if (!fs.existsSync(rawPagesDir)) {
     fs.mkdirSync(rawPagesDir, { recursive: true });
   }
+  const activeSemester = catalog.semesters[0]?.value || "2025-2026-2";
+  console.log(`\u{1F4C5} \u6293\u53D6\u5B66\u671F: ${activeSemester}`);
+  const cliParams = global.CLI_PARAMS || {};
+  const forceRefresh = Boolean(cliParams.forceRefresh || cliParams["force-refresh"]);
+  const ignoreProgress = forceRefresh || Boolean(cliParams.ignoreProgress || cliParams["ignore-progress"]);
+  const ignoreNoScheduleCache = forceRefresh || Boolean(cliParams.ignoreNoScheduleCache || cliParams["ignore-no-schedule-cache"]);
+  const clearProgress = Boolean(cliParams.clearProgress || cliParams["clear-progress"]);
+  const clearNoScheduleCache = Boolean(cliParams.clearNoScheduleCache || cliParams["clear-no-schedule-cache"]);
   const PROGRESS_PATH = path.join(debugDir, "sync-progress.json");
+  if ((clearProgress || forceRefresh) && fs.existsSync(PROGRESS_PATH)) {
+    fs.unlinkSync(PROGRESS_PATH);
+    console.log(`\u{1F9F9} \u5DF2\u6E05\u7406\u672C\u5730\u540C\u6B65\u8FDB\u5EA6\u6587\u4EF6: ${PROGRESS_PATH}`);
+  }
   let progress = { completed: [] };
-  if (fs.existsSync(PROGRESS_PATH)) {
+  if (!ignoreProgress && fs.existsSync(PROGRESS_PATH)) {
     try {
       progress = JSON.parse(fs.readFileSync(PROGRESS_PATH, "utf-8"));
       console.log(`\u2139\uFE0F \u52A0\u8F7D\u5230\u672C\u5730\u540C\u6B65\u8FDB\u5EA6\uFF0C\u5DF2\u5B8C\u6210 ${progress.completed.length} \u4E2A\u4E13\u4E1A\u3002`);
     } catch (e2) {
       console.warn("\u26A0\uFE0F \u8BFB\u53D6\u65AD\u70B9\u8FDB\u5EA6\u5931\u8D25\uFF0C\u5C06\u5168\u65B0\u6293\u53D6");
     }
+  } else if (ignoreProgress) {
+    console.log("\u2139\uFE0F \u5DF2\u5FFD\u7565\u672C\u5730\u540C\u6B65\u8FDB\u5EA6\u7F13\u5B58\uFF0C\u672C\u8F6E\u4F1A\u91CD\u65B0\u5224\u65AD\u76EE\u6807\u4E13\u4E1A\u3002");
   }
-  const activeSemester = catalog.semesters[0]?.value || "2025-2026-2";
-  console.log(`\u{1F4C5} \u6293\u53D6\u5B66\u671F: ${activeSemester}`);
   const currentStudentClass = await getCurrentStudentClass(page);
   if (currentStudentClass) {
     console.log(`\u2139\uFE0F \u5F53\u524D\u767B\u5F55\u5B66\u751F\u73ED\u7EA7\u4EC5\u7528\u4E8E\u8BCA\u65AD\u53C2\u8003: ${currentStudentClass}`);
@@ -4304,34 +5288,48 @@ async function syncClassSchedules(page, catalog, majors) {
   const noScheduleCachePath = path.join(debugDir, "no-schedule-majors.json");
   const classNameCandidatesPath = path.join(debugDir, "class-name-candidates.json");
   let noScheduleMajors = readJsonArray(noScheduleCachePath);
+  if ((clearNoScheduleCache || forceRefresh) && noScheduleMajors.length > 0) {
+    const before = noScheduleMajors.length;
+    noScheduleMajors = noScheduleMajors.filter((item) => item && item.semester !== activeSemester);
+    writeJsonFile(noScheduleCachePath, noScheduleMajors);
+    console.log(`\u{1F9F9} \u5DF2\u6E05\u7406\u672C\u5B66\u671F\u65E0\u6392\u8BFE\u7F13\u5B58: ${before - noScheduleMajors.length} \u6761 (${activeSemester})\u3002`);
+  }
   let classNameCandidateRecords = readJsonArray(classNameCandidatesPath);
-  const skipNoScheduleCache = getEnvFlag("SYNC_SKIP_NO_SCHEDULE_CACHE", true);
+  const skipNoScheduleCache = getEnvFlag("SYNC_SKIP_NO_SCHEDULE_CACHE", true) && !ignoreNoScheduleCache;
   const recheckNoSchedule = getEnvFlag("SYNC_RECHECK_NO_SCHEDULE", false);
   const cachedNoScheduleKeys = new Set(
-    noScheduleMajors.filter((item) => item && item.semester === activeSemester).map((item) => getMajorIdentityKey({
+    skipNoScheduleCache && !recheckNoSchedule ? noScheduleMajors.filter((item) => item && item.semester === activeSemester).map((item) => getMajorIdentityKey({
       collegeCode: item.collegeCode,
       grade: item.grade,
       code: item.majorCode
-    }, item.semester))
+    }, item.semester)) : []
   );
   const syncCollegeCodes = process.env.SYNC_CLASS_COLLEGE_CODES ? process.env.SYNC_CLASS_COLLEGE_CODES.split(",").map((c) => c.trim()).filter(Boolean) : null;
   const syncGrades = process.env.SYNC_CLASS_GRADES ? process.env.SYNC_CLASS_GRADES.split(",").map((g) => g.trim()).filter(Boolean) : null;
   const syncMajorCodes = process.env.SYNC_CLASS_MAJOR_CODES ? process.env.SYNC_CLASS_MAJOR_CODES.split(",").map((m) => m.trim()).filter(Boolean) : null;
   const isFiltered = !!(syncCollegeCodes || syncGrades || syncMajorCodes);
+  const includeScopes = global.CLI_PARAMS?.includeScopes || ALL_SCOPES;
+  const syncClassScope = global.CLI_PARAMS?.classScope || process.env.SYNC_CLASS_SCOPE || "";
+  if (includeScopes.includes("classSchedules")) {
+    if (!isFiltered && syncClassScope !== "all") {
+      const errMsg = `\u274C \u8FD0\u884C\u7EC8\u6B62\uFF1A\u5F53\u524D includeScopes \u5305\u542B\u884C\u653F\u73ED\u8BFE\u8868\uFF0C\u4F46\u672A\u8BBE\u7F6E SYNC_CLASS_SCOPE=all \u6216 --class-scope=all\uFF0C\u4E14\u6CA1\u6709\u7CBE\u51C6\u8FC7\u6EE4\u6761\u4EF6\u3002\u8BF7\u4F7F\u7528\u540E\u53F0\u540C\u6B65\u4E2D\u5FC3\u751F\u6210\u7684\u5B8C\u6574\u547D\u4EE4\u3002`;
+      console.error(errMsg);
+      throw new Error(errMsg);
+    }
+  }
   if (isFiltered) {
     console.log("\u2139\uFE0F \u8BFE\u8868\u540C\u6B65\u5DF2\u542F\u7528\u73AF\u5883\u53D8\u91CF\u9650\u5236\u8FC7\u6EE4\uFF1A");
     if (syncCollegeCodes) console.log(`   - \u5B66\u9662\u9650\u5236: ${syncCollegeCodes.join(", ")}`);
     if (syncGrades) console.log(`   - \u5E74\u7EA7\u9650\u5236: ${syncGrades.join(", ")}`);
     if (syncMajorCodes) console.log(`   - \u4E13\u4E1A\u4EE3\u7801\u9650\u5236: ${syncMajorCodes.join(", ")}`);
   } else {
-    console.log("\u2139\uFE0F \u8BFE\u8868\u540C\u6B65\u672A\u8BBE\u7F6E\u73AF\u5883\u53D8\u91CF\u9650\u5236\u3002\u9ED8\u8BA4\u4EC5\u540C\u6B65\u5F53\u524D\u5B66\u5E74\u8D77\u6700\u8FD1 4 \u4E2A\u5728\u6821\u6D3B\u8DC3\u5E74\u7EA7\uFF0C\u5E76\u542F\u7528\u9650\u901F\u3002");
+    console.log("\u2139\uFE0F \u8BFE\u8868\u540C\u6B65\u672A\u8BBE\u7F6E\u73AF\u5883\u53D8\u91CF\u9650\u5236\u3002\u9ED8\u8BA4\u4EC5\u540C\u6B65\u5F53\u524D\u5B66\u5E74\u8D77\u6700\u8FD1 5 \u4E2A\u5728\u6821\u6D3B\u8DC3\u5E74\u7EA7\uFF0C\u5E76\u542F\u7528\u9650\u901F\u3002");
   }
   if (skipNoScheduleCache && !recheckNoSchedule) {
     console.log(`\u2139\uFE0F \u5DF2\u542F\u7528\u65E0\u6392\u8BFE\u7F13\u5B58\u8DF3\u8FC7\u7B56\u7565\uFF0C\u672C\u5B66\u671F\u7F13\u5B58\u547D\u4E2D\u5019\u9009 ${cachedNoScheduleKeys.size} \u4E2A\u3002`);
   } else if (recheckNoSchedule) {
     console.log("\u2139\uFE0F SYNC_RECHECK_NO_SCHEDULE=true\uFF0C\u5C06\u91CD\u65B0\u68C0\u67E5\u6B64\u524D\u786E\u8BA4\u65E0\u6392\u8BFE\u7684\u4E13\u4E1A\u3002");
   }
-  const syncClassScope = process.env.SYNC_CLASS_SCOPE || "";
   const isFiveYearMajor = (name) => {
     const n = name || "";
     return n.includes("\u52A8\u7269\u533B\u5B66") || n.includes("\u5EFA\u7B51\u5B66") || n.includes("\u4E34\u5E8A\u533B\u5B66") || n.includes("\u533B\u5B66");
@@ -4357,10 +5355,10 @@ async function syncClassSchedules(page, catalog, majors) {
       }
       let activeGrades = [];
       try {
-        activeGrades = getActiveGradesBySemester(activeSemester, { originalGrades: catalog.grades, activeGradeCount: 4 });
+        activeGrades = getActiveGradesBySemester(activeSemester, { originalGrades: catalog.grades, activeGradeCount: 5 });
       } catch (e2) {
         const currentYear = (/* @__PURE__ */ new Date()).getFullYear();
-        for (let i = 3; i >= 0; i--) {
+        for (let i = 4; i >= 0; i--) {
           activeGrades.push(String(currentYear - i));
         }
       }
@@ -4389,14 +5387,46 @@ async function syncClassSchedules(page, catalog, majors) {
     console.log(`\u23ED\uFE0F \u5DF2\u6309\u65E0\u6392\u8BFE\u7F13\u5B58\u8DF3\u8FC7 ${targetMajors.length - effectiveTargetMajors.length} \u4E2A\u4E13\u4E1A\uFF0C\u672C\u8F6E\u5B9E\u9645\u5F85\u5224\u65AD ${effectiveTargetMajors.length} \u4E2A\u3002`);
   }
   const pendingMajors = effectiveTargetMajors.filter((major) => !hasCompletedMajor(progress, major, activeSemester));
+  const completedProgressCount = effectiveTargetMajors.length - pendingMajors.length;
+  const skipNoScheduleCount = targetMajors.length - effectiveTargetMajors.length;
+  let cachedClassSchedules = [];
+  global.CLASS_SCHEDULE_CACHE_USAGE = {
+    usedClassScheduleCache: false,
+    cacheSource: null,
+    cacheWarning: null
+  };
+  if (completedProgressCount > 0 || pendingMajors.length === 0) {
+    const cache = readClassScheduleCacheForSemester(activeSemester);
+    if (cache.items && cache.items.length > 0) {
+      cachedClassSchedules = cache.items;
+      global.CLASS_SCHEDULE_CACHE_USAGE = {
+        usedClassScheduleCache: true,
+        cacheSource: cache.filePath,
+        cacheWarning: `\u672C\u8F6E\u6709 ${completedProgressCount} \u4E2A\u4E13\u4E1A\u88AB progress \u8DF3\u8FC7\uFF0C\u5DF2\u4ECE\u5386\u53F2 classSchedules \u7F13\u5B58\u6062\u590D ${cachedClassSchedules.length} \u6761\u8BFE\u8868\u3002`
+      };
+      console.log(`\u267B\uFE0F \u5DF2\u4ECE\u5386\u53F2\u7F13\u5B58\u6062\u590D ${cachedClassSchedules.length} \u6761 classSchedules: ${cache.filePath}`);
+    } else if (completedProgressCount > 0) {
+      const detail = cache.error ? ` (${cache.error.message})` : "";
+      throw new Error(`\u672C\u5730\u8FDB\u5EA6\u7F13\u5B58\u4E0E\u7ED3\u679C\u7F13\u5B58\u4E0D\u4E00\u81F4\uFF1A${completedProgressCount} \u4E2A\u4E13\u4E1A\u5C06\u88AB progress \u8DF3\u8FC7\uFF0C\u4F46\u6CA1\u6709\u53EF\u7528\u4E8E\u6784\u5EFA Staging \u7684\u5386\u53F2 classSchedules${detail}\u3002\u8BF7\u4F7F\u7528 --force-refresh \u6216 --clear-progress \u91CD\u65B0\u6293\u53D6\u3002`);
+    }
+  }
   console.log(`\u{1F504} \u672C\u8F6E\u5F85\u540C\u6B65\u4E13\u4E1A: ${pendingMajors.length} \u4E2A\u3002`);
+  if (pendingMajors.length === 0) {
+    if (cachedClassSchedules.length > 0) {
+      console.log("\u2139\uFE0F \u672C\u8F6E\u6CA1\u6709\u5F85\u6293\u53D6\u4E13\u4E1A\uFF0C\u76F4\u63A5\u4F7F\u7528\u5386\u53F2 classSchedules \u7F13\u5B58\u6784\u5EFA Staging\u3002");
+      return cachedClassSchedules;
+    }
+    if (completedProgressCount > 0 && skipNoScheduleCount > 0) {
+      throw new Error("\u672C\u5730\u8FDB\u5EA6\u7F13\u5B58\u4E0E\u7ED3\u679C\u7F13\u5B58\u4E0D\u4E00\u81F4\uFF1A\u6240\u6709\u4E13\u4E1A\u90FD\u88AB progress/no-schedule cache \u8DF3\u8FC7\uFF0C\u4F46\u6CA1\u6709\u53EF\u7528\u4E8E\u6784\u5EFA Staging \u7684\u5386\u53F2 classSchedules\u3002\u8BF7\u4F7F\u7528 --force-refresh \u6216 --clear-progress \u91CD\u65B0\u6293\u53D6\u3002");
+    }
+    throw new Error("\u672C\u8F6E\u5F85\u540C\u6B65\u4E13\u4E1A\u4E3A 0\uFF0C\u4E14\u6CA1\u6709\u53EF\u7528\u4E8E\u6784\u5EFA Staging \u7684\u5386\u53F2 classSchedules\u3002\u8BF7\u4F7F\u7528 --force-refresh \u91CD\u65B0\u6293\u53D6\uFF0C\u6216\u68C0\u67E5 --grades/--college-codes/--major-codes \u8FC7\u6EE4\u6761\u4EF6\u3002");
+  }
   await gotoPage(page, "/kbcx/kbxx_xzb", { waitUntil: "networkidle" });
   let totalCoursesFetched = 0;
   let totalDedupledCount = 0;
   let totalGroupedCount = 0;
-  const skipNoScheduleCount = targetMajors.length - effectiveTargetMajors.length;
   let newNoScheduleCount = 0;
-  const allClassSchedules = [];
+  let allClassSchedules = cachedClassSchedules.slice();
   let count = 0;
   for (const major of pendingMajors) {
     count++;
@@ -4539,7 +5569,7 @@ async function syncClassSchedules(page, catalog, majors) {
         const aggregateCount = classes.filter((item) => item.isAggregated).length;
         const classCount = classes.length - aggregateCount;
         console.log(`      \u6574\u7406\u8BFE\u8868\u6761\u76EE: \u884C\u653F\u73ED ${classCount} \u4E2A\uFF0C\u4E13\u4E1A\u805A\u5408 ${aggregateCount} \u4E2A (${classes.map((c) => c.className).join(", ")})`);
-        allClassSchedules.push(...classes);
+        allClassSchedules = mergeClassSchedules(allClassSchedules, classes);
       }
       markCompletedMajor(progress, major, activeSemester);
       writeJsonFile(PROGRESS_PATH, progress);
@@ -4752,10 +5782,59 @@ async function main() {
       action = arg;
     }
   }
-  global.CLI_PARAMS = params;
+  global.GENERATED_COMMAND = `node sync.js ${action} ${args.join(" ")}`;
+  params.forceRefresh = Boolean(params["force-refresh"] || params.forceRefresh);
+  params.ignoreProgress = Boolean(params["ignore-progress"] || params.ignoreProgress || params.forceRefresh);
+  params.ignoreNoScheduleCache = Boolean(params["ignore-no-schedule-cache"] || params.ignoreNoScheduleCache || params.forceRefresh);
+  params.clearProgress = Boolean(params["clear-progress"] || params.clearProgress);
+  params.clearNoScheduleCache = Boolean(params["clear-no-schedule-cache"] || params.clearNoScheduleCache);
+  params.classScope = params["class-scope"] || params.classScope || "";
   if (params.term) {
     process.env.PREFERRED_SEMESTER = params.term;
   }
+  if (params.start) {
+    process.env.SYNC_TERM_START_DATE = params.start;
+  }
+  if (params.include) {
+    process.env.SYNC_INCLUDE_SCOPES = params.include;
+  }
+  if (params["class-scope"]) {
+    process.env.SYNC_CLASS_SCOPE = params["class-scope"];
+  }
+  if (params.grades) {
+    process.env.SYNC_CLASS_GRADES = params.grades;
+    process.env.SYNC_GRADES = params.grades;
+  }
+  if (params["college-codes"]) {
+    process.env.SYNC_CLASS_COLLEGE_CODES = params["college-codes"];
+  }
+  if (params["major-codes"]) {
+    process.env.SYNC_CLASS_MAJOR_CODES = params["major-codes"];
+  }
+  if (params.concurrency) {
+    process.env.SYNC_RESOURCE_MAX_CONCURRENCY = params.concurrency;
+    process.env.SYNC_CLASS_MAX_CONCURRENCY = params.concurrency;
+  }
+  if (params["delay-ms"]) {
+    process.env.SYNC_RESOURCE_REQUEST_DELAY_MS = params["delay-ms"];
+    process.env.SYNC_CLASS_REQUEST_DELAY_MS = params["delay-ms"];
+  }
+  if (params.forceRefresh || params.ignoreNoScheduleCache) {
+    process.env.SYNC_SKIP_NO_SCHEDULE_CACHE = "false";
+  }
+  if (params["crawl-only"]) {
+    process.env.SYNC_CLASS_CRAWL_ONLY = "true";
+  }
+  if (params["upload-only"]) {
+    process.env.SYNC_CLASS_UPLOAD_ONLY = "true";
+  }
+  if (params.verbose) {
+    process.env.SYNC_VERBOSE = "true";
+  }
+  const includeStr = params.include || process.env.SYNC_INCLUDE_SCOPES || "";
+  const includeScopes = includeStr ? includeStr.split(",").map((x) => x.trim()).filter(Boolean) : ALL_SCOPES;
+  params.includeScopes = includeScopes;
+  global.CLI_PARAMS = params;
   if (params["dry-run"] || params["dry_run"]) {
     process.env.SYNC_RELEASE_DRY_RUN = "true";
   }

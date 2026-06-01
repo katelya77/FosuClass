@@ -257,7 +257,7 @@
             </view>
             <view class="result-side">
               <view class="status ready">课程数据</view>
-              <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}门课</view>
+              <view class="count" wx:if="{{item.courseCount || item.courses.length}}">{{item.courseCount || item.courses.length}}门课</view>
             </view>
           </view>
         </view>
@@ -311,7 +311,7 @@
             </view>
             <view class="result-side">
               <view class="status ready">课程数据</view>
-              <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}课次</view>
+              <view class="count" wx:if="{{item.courseCount || item.courses.length}}">{{item.courseCount || item.courses.length}}课次</view>
             </view>
           </view>
         </view>
@@ -358,7 +358,7 @@
             </view>
             <view class="result-side">
               <view class="status ready">课程数据</view>
-              <view class="count" wx:if="{{item.courses.length}}">{{item.courses.length}}次排课</view>
+              <view class="count" wx:if="{{item.courseCount || item.courses.length}}">{{item.courseCount || item.courses.length}}次排课</view>
             </view>
           </view>
         </view>

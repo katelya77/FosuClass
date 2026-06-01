@@ -34,6 +34,9 @@
     "inspect:personal-auth": "node server/scripts/inspect-personal-auth.js",
     "test:admin-inline-script": "node tools/check-admin-inline-script.js",
     "test:admin-page": "node tools/check-admin-page.js",
+    "test:admin-sync-page": "node tools/test-admin-sync-page.js",
+    "test:staging-upload": "node tools/test-staging-upload.js",
+    "test:relay-agent": "node tools/test-relay-agent.js",
     "diagnose:personal-network": "node server/scripts/diagnose-personal-network.js"
   },
   "repository": {

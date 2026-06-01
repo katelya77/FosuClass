@@ -85,4 +85,11 @@ npm run sync:local-campus -- --term=2026-2027-1 --start=2026-09-01 --output=./st
 npm run sync:local-upload -- --file=./staging/2026-2027-1-full.json --server=https://class.katelya.eu.org
 ```
 
-上传后在后台检查 diff，再发布正式 release。
+上传命令会自动 gzip 并按默认 8MB 分片调用：
+
+- `POST /api/admin/staging/upload/init`
+- `POST /api/admin/staging/upload/chunk`
+- `POST /api/admin/staging/upload/finalize`
+- `GET /api/admin/staging/upload/:uploadId/status`
+
+后台会校验分片数量、压缩后 SHA-256、解压后大小、原始 JSON SHA-256 和 Staging schema。上传后在后台检查 diff，再发布正式 release。

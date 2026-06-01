@@ -213,17 +213,18 @@ async function login() {
     ignoreHTTPSErrors: true
   });
   const page = await context.newPage();
-  const httpUrl = FOSU_BASE_URL.replace(/^https:/i, "http:");
-  console.log(`\u4F18\u5148\u901A\u8FC7 HTTP \u8BBF\u95EE\u6559\u52A1\u7CFB\u7EDF: ${httpUrl} ...`);
+  const CAS_SERVICE_URL = "http://100.fosu.edu.cn/caslogin.jsp?kstzType=null";
+  const AUTH_LOGIN_URL = "https://authserver.fosu.edu.cn/authserver/login?type=userNameLogin&service=" + encodeURIComponent(CAS_SERVICE_URL);
+  console.log(`\u4F18\u5148\u901A\u8FC7\u8D26\u53F7\u5BC6\u7801\u767B\u5F55\u9875\u8FDB\u884C\u767B\u5F55: ${AUTH_LOGIN_URL} ...`);
   try {
-    await page.goto(httpUrl, { timeout: 15e3 });
+    await page.goto(AUTH_LOGIN_URL, { timeout: 25e3 });
   } catch (error) {
-    console.warn(`\u26A0\uFE0F HTTP \u5BFC\u822A\u5931\u8D25 (${error.message})\uFF0C\u6B63\u5728\u5C1D\u8BD5 HTTPS \u5BFC\u822A: ${FOSU_BASE_URL} ...`);
+    console.warn(`\u26A0\uFE0F \u8BBF\u95EE\u8D26\u53F7\u5BC6\u7801\u767B\u5F55\u9875\u5931\u8D25 (${error.message})\uFF0C\u5C1D\u8BD5\u76F4\u63A5\u8BBF\u95EE\u7EDF\u4E00\u8EAB\u4EFD\u8BA4\u8BC1\u767B\u5F55\u8DEF\u5F84...`);
     try {
-      await page.goto(FOSU_BASE_URL, { timeout: 15e3 });
-    } catch (httpsError) {
-      console.error(`\u274C \u5BFC\u822A\u6559\u52A1\u7CFB\u7EDF\u5F7B\u5E95\u5931\u8D25: ${httpsError.message}`);
-      console.log("\u{1F4A1} \u8BF7\u786E\u8BA4 EasyConnect \u662F\u5426\u6210\u529F\u8FDE\u63A5\uFF0C\u4E14\u80FD\u6253\u5F00\u6559\u52A1\u7F51\u9875\u3002");
+      await page.goto("https://authserver.fosu.edu.cn/authserver/login", { timeout: 25e3 });
+    } catch (authError) {
+      console.error(`\u274C \u5BFC\u822A\u7EDF\u4E00\u8EAB\u4EFD\u8BA4\u8BC1\u7CFB\u7EDF\u5F7B\u5E95\u5931\u8D25: ${authError.message}`);
+      console.log("\u{1F4A1} \u8BF7\u786E\u8BA4 EasyConnect \u662F\u5426\u6210\u529F\u8FDE\u63A5\uFF0C\u6216\u5DF2\u5904\u4E8E\u6821\u56ED\u7F51\u73AF\u5883\u4E2D\u3002");
     }
   }
   console.log("\n\u{1F4E2} [\u64CD\u4F5C\u63D0\u793A]");
@@ -235,6 +236,7 @@ async function login() {
   console.log("========================================================");
   try {
     let loggedIn = false;
+    let hasClickedTab = false;
     const checkInterval = 1e3;
     const maxWaitTime = 3e5;
     let elapsed = 0;
@@ -243,6 +245,79 @@ async function login() {
         break;
       }
       const currentUrl = page.url();
+      if (currentUrl.includes("type=fidoLogin")) {
+        console.log("\u26A0\uFE0F \u68C0\u6D4B\u5230\u5F53\u524D\u8FDB\u5165\u4E86\u751F\u7269\u8BC6\u522B\u767B\u5F55\u9875 (fidoLogin)\uFF0C\u6B63\u5728\u81EA\u52A8\u66FF\u6362 URL \u4E3A\u8D26\u53F7\u5BC6\u7801\u767B\u5F55\u9875 (userNameLogin)...");
+        const newUrl = currentUrl.replace("type=fidoLogin", "type=userNameLogin");
+        try {
+          await page.goto(newUrl, { timeout: 15e3 });
+          hasClickedTab = false;
+          continue;
+        } catch (e) {
+          console.warn(`\u26A0\uFE0F \u81EA\u52A8\u8DF3\u8F6C\u5230\u8D26\u53F7\u5BC6\u7801\u767B\u5F55\u9875\u5931\u8D25: ${e.message}`);
+        }
+      }
+      if (!hasClickedTab && !currentUrl.includes("type=userNameLogin")) {
+        try {
+          const tabs = [
+            "text=/^\u8D26\u53F7\u767B\u5F55$/",
+            "text=/^\u5BC6\u7801\u767B\u5F55$/",
+            "text=/^\u8D26\u53F7\u5BC6\u7801\u767B\u5F55$/",
+            "#userNameLogin",
+            ".userNameLogin"
+          ];
+          for (const tabSelector of tabs) {
+            const tab = page.locator(tabSelector).first();
+            if (await tab.isVisible()) {
+              console.log(`\u{1F4A1} \u68C0\u6D4B\u5230\u201C\u8D26\u53F7\u5BC6\u7801\u767B\u5F55\u201D\u76F8\u5173\u6807\u7B7E (${tabSelector})\uFF0C\u5C1D\u8BD5\u70B9\u51FB\u5207\u6362...`);
+              await tab.click();
+              hasClickedTab = true;
+              await page.waitForTimeout(1e3);
+              break;
+            }
+          }
+        } catch (e) {
+        }
+      }
+      const username = process.env.FOSU_USERNAME;
+      const password = process.env.FOSU_PASSWORD;
+      if (username && password) {
+        try {
+          const userSelectors = ['input[name="username"]', "#username", 'input[type="text"]'];
+          const passSelectors = ['input[name="password"]', "#password", 'input[type="password"]'];
+          let userEl = null;
+          for (const sel of userSelectors) {
+            const locator = page.locator(sel).first();
+            if (await locator.isVisible()) {
+              const val = await locator.inputValue();
+              if (!val) {
+                userEl = locator;
+                break;
+              }
+            }
+          }
+          let passEl = null;
+          for (const sel of passSelectors) {
+            const locator = page.locator(sel).first();
+            if (await locator.isVisible()) {
+              const val = await locator.inputValue();
+              if (!val) {
+                passEl = locator;
+                break;
+              }
+            }
+          }
+          if (userEl && passEl) {
+            console.log("\u68C0\u6D4B\u5230\u672A\u586B\u5199\u7684\u8D26\u53F7\u5BC6\u7801\u8F93\u5165\u6846\uFF0C\u5C1D\u8BD5\u81EA\u52A8\u586B\u5145...");
+            await userEl.fill(username);
+            await passEl.fill(password);
+            console.log("\u2705 \u8D26\u53F7\u5BC6\u7801\u81EA\u52A8\u586B\u5145\u6210\u529F\uFF0C\u8BF7\u624B\u52A8\u5B8C\u6210\u9A8C\u8BC1\uFF08\u5982\u9A8C\u8BC1\u7801\u3001\u6ED1\u5757\u7B49\uFF09\u5E76\u63D0\u4EA4\u767B\u5F55\u3002");
+          }
+        } catch (e) {
+        }
+      }
+      const leftAuthserver = !currentUrl.includes("/authserver/login") && !currentUrl.includes("authserver.fosu.edu.cn/authserver/");
+      const isCasLogin = currentUrl.includes("100.fosu.edu.cn/caslogin.jsp");
+      const isEduSys = currentUrl.includes("100.fosu.edu.cn") && !currentUrl.includes("caslogin.jsp");
       const hasMainUrl = currentUrl.includes("/framework/xsMain.jsp") || currentUrl.includes("/framework/index.jsp") || currentUrl.includes("/xsMain.jsp");
       let hasMainContent = false;
       try {
@@ -250,7 +325,7 @@ async function login() {
         hasMainContent = content.includes("\u6559\u5B66\u4E00\u4F53\u5316\u670D\u52A1\u5E73\u53F0") || content.includes("\u6211\u7684\u684C\u9762") || content.includes("\u5B66\u671F\u7406\u8BBA\u8BFE\u8868");
       } catch (e) {
       }
-      if (hasMainUrl || hasMainContent) {
+      if (leftAuthserver && (isCasLogin || isEduSys) || hasMainUrl || hasMainContent) {
         loggedIn = true;
         break;
       }
@@ -269,13 +344,16 @@ async function login() {
     console.log(`\u2705 \u767B\u5F55\u6001\u5DF2\u6210\u529F\u4FDD\u5B58\u81F3\u672C\u5730\u6587\u4EF6: tools/fosu-sync-client/.session/session.json`);
     console.log("\u8BE5\u6587\u4EF6\u5305\u542B\u654F\u611F\u767B\u5F55\u51ED\u8BC1\uFF0C\u8BF7\u52FF\u5C06\u5176\u63D0\u4EA4\u5230 Git \u6216\u5171\u4EAB\u7ED9\u4ED6\u4EBA\u3002");
   } catch (error) {
-    if (error.name === "TimeoutError" || error.message.includes("Timeout")) {
-      console.error("\n\u274C \u767B\u5F55\u8D85\u65F6 (5\u5206\u949F)\u3002\u60A8\u662F\u5426\u672A\u5728\u89C4\u5B9A\u65F6\u95F4\u5185\u5B8C\u6210\u767B\u5F55\uFF1F");
+    if (error.name === "TimeoutError" || error.message.includes("Timeout") || error.message.includes("\u767B\u5F55\u8D85\u65F6\u6216\u672A\u68C0\u6D4B\u5230\u767B\u5F55\u6210\u529F\u7684\u9875\u9762\u72B6\u6001")) {
+      console.error("\n\u274C \u767B\u5F55\u8D85\u65F6\u6216\u5931\u8D25\uFF01");
     } else {
       console.error(`
 \u274C \u767B\u5F55\u8FC7\u7A0B\u4E2D\u53D1\u751F\u9519\u8BEF: ${error.message}`);
     }
-    console.log("\u{1F4A1} \u5EFA\u8BAE\u91CD\u65B0\u8FD0\u884C 'npm run login' \u8FDB\u884C\u767B\u5F55\u3002");
+    console.error("\u{1F4A1} \u63D0\u793A\uFF1A");
+    console.error("   - \u8BF7\u786E\u8BA4\u662F\u5426\u5904\u4E8E\u6821\u56ED\u7F51 / \u6821\u56ED VPN \u73AF\u5883\uFF08100.fosu.edu.cn \u5FC5\u987B\u80FD\u6B63\u5E38\u89E3\u6790\u548C\u8BBF\u95EE\uFF09");
+    console.error("   - \u8BF7\u786E\u8BA4\u662F\u5426\u5207\u6362\u5230\u8D26\u53F7\u767B\u5F55\uFF0C\u4E14\u5DF2\u6B63\u786E\u5B8C\u6210\u9A8C\u8BC1\u7801\u6216\u6ED1\u5757\u9A8C\u8BC1\u7B49\u5B89\u5168\u6838\u9A8C");
+    console.error("   - \u8BF7\u91CD\u65B0\u6267\u884C npm run login");
   } finally {
     await browser.close();
     console.log("\u6D4F\u89C8\u5668\u5DF2\u5173\u95ED\u3002");
