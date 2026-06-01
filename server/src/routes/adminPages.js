@@ -1654,6 +1654,243 @@ const adminConsoleHtml = `<!doctype html>
       flex-direction: column;
       gap: 10px;
     }
+
+    /* === 数据同步中心新布局样式 === */
+    .sync-hero {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      box-shadow: var(--shadow);
+    }
+    .sync-hero-badge {
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 8px;
+      border-radius: 6px;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .sync-hero-text {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .sync-primary-flow {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+      margin-bottom: 24px;
+    }
+    .flow-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: var(--transition);
+      position: relative;
+    }
+    .flow-card:hover {
+      border-color: var(--primary);
+    }
+    .flow-step {
+      font-size: 10px;
+      font-weight: 800;
+      color: var(--primary);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      background: var(--primary-soft);
+      padding: 2px 6px;
+      border-radius: 4px;
+      width: fit-content;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+    }
+    .flow-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .flow-content {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      flex: 1;
+    }
+    .flow-field {
+      font-size: 12px;
+      line-height: 1.4;
+    }
+    .flow-field strong {
+      color: var(--muted);
+      font-weight: 600;
+    }
+    .flow-field span {
+      color: var(--text);
+    }
+    .flow-cmd-section {
+      margin-top: auto;
+      border-top: 1px dashed var(--border);
+      padding-top: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .flow-cmd-section strong {
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .flow-code-box {
+      display: flex;
+      align-items: center;
+      background: #0f172a;
+      color: #38bdf8;
+      border-radius: 6px;
+      padding: 8px 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .flow-code-box code {
+      word-break: break-all;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .copy-flow-btn, .flow-go-btn {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.15);
+      color: #fff;
+      padding: 3px 8px;
+      font-size: 11px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: inherit;
+      transition: var(--transition);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      line-height: 1;
+      height: 22px;
+      white-space: nowrap;
+    }
+    .copy-flow-btn:hover, .flow-go-btn:hover {
+      background: rgba(255,255,255,0.25);
+    }
+    .flow-action-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      background: var(--panel-2);
+      border-radius: 6px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+    }
+    .action-hint {
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.2;
+    }
+    .flow-go-btn {
+      background: var(--primary-soft);
+      border: 1px solid var(--primary);
+      color: var(--primary);
+      height: 22px;
+    }
+    .flow-go-btn:hover {
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .sync-dashboard-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr);
+      gap: 20px;
+      align-items: start;
+    }
+    .sync-main-col {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    .sync-side-col {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+    
+    /* 运维手册折叠样式 */
+    .command-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px;
+      background: var(--panel);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      transition: var(--transition);
+    }
+    .command-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .command-title {
+      font-weight: 700;
+      font-size: 14px;
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .command-card .command-body {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .command-card.collapsed .command-body {
+      display: none;
+    }
+    .command-header::after {
+      content: '▼';
+      font-size: 10px;
+      color: var(--muted);
+      transition: transform 0.2s;
+    }
+    .command-card.collapsed .command-header::after {
+      transform: rotate(-90deg);
+    }
+    
+    @media (max-width: 1200px) {
+      .sync-dashboard-grid {
+        grid-template-columns: 1fr;
+      }
+      .sync-primary-flow {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -1846,127 +2083,184 @@ const adminConsoleHtml = `<!doctype html>
       </section>
 
       <!-- 面板三：同步中心 Sync Center -->
+      <!-- 面板三：同步中心 Sync Center -->
       <section id="section-sync" class="section">
+        <!-- 1. sync-hero -->
+        <div class="sync-hero" id="sync-hero">
+          <div class="sync-hero-badge">同步运行模式</div>
+          <div class="sync-hero-text">当前推荐：在连接校园网的本机生成 Staging JSON，再上传到 VPS 后台审核发布。</div>
+        </div>
+
+        <!-- 2. sync-status-grid -->
         <div class="stats-grid" id="syncStatsGrid">
           <!-- 同步状态卡片 -->
         </div>
 
-        <div class="sync-mode-grid">
-          <div class="sync-mode-card">
-            <span class="command-tag low">推荐</span>
-            <strong>本机校园网同步</strong>
-            <p>管理员在已连接校园网的 Windows / Mac / Linux 电脑运行本地同步客户端，访问 100.fosu.edu.cn，生成 Staging JSON 后上传后台。</p>
-            <code>npm run sync:local-campus -- --term=2026-2027-1</code>
+        <!-- 3. sync-primary-flow -->
+        <div class="sync-primary-flow" id="sync-primary-flow">
+          <!-- Step 1: 本机校园网同步 -->
+          <div class="flow-card">
+            <div class="flow-step">Step 1</div>
+            <div class="flow-title">本机校园网同步</div>
+            <div class="flow-content">
+              <div class="flow-field"><strong>适用场景：</strong><span>管理员在已连接校园网的本机抓取课表数据并生成 Staging JSON。</span></div>
+              <div class="flow-field"><strong>前置条件：</strong><span>本地电脑已接入佛大校园网（有线、无线或 VPN 拨号）。</span></div>
+              <div class="flow-field"><strong>预计耗时：</strong><span>3 ~ 15 分钟（视网络情况与教务系统响应而定）。</span></div>
+              <div class="flow-field"><strong>常见失败原因：</strong><span>未连校园网、学期填错、教务系统崩溃。</span></div>
+              <div class="flow-cmd-section">
+                <strong>运行命令：</strong>
+                <div class="flow-code-box">
+                  <code id="flowCmdTextLocal">npm run sync:local-campus -- --term=2026-2027-1</code>
+                  <button type="button" class="copy-flow-btn" id="flowCopyBtnLocal">复制</button>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="sync-mode-card">
-            <span class="command-tag low">长期运营推荐</span>
-            <strong>接力代理端同步</strong>
-            <p>把轻量采集器和 relay token 发给在校同学。接力端只上传 Staging JSON，不拥有后台管理员权限。</p>
-            <code>npm run sync:relay-agent -- --token=xxx</code>
+
+          <!-- Step 2: 上传 Staging / 接力代理端 -->
+          <div class="flow-card">
+            <div class="flow-step">Step 2</div>
+            <div class="flow-title">上传 Staging / 接力同步</div>
+            <div class="flow-content">
+              <div class="flow-field"><strong>适用场景：</strong><span>将本机生成的 JSON 文件上传到后台进行校验，或由在校同学使用 Token 接力上传。</span></div>
+              <div class="flow-field"><strong>前置条件：</strong><span>已生成 Staging JSON，或已在下方创建并派发接力任务 Token。</span></div>
+              <div class="flow-field"><strong>预计耗时：</strong><span>上传及后台校验秒级完成。</span></div>
+              <div class="flow-field"><strong>常见失败原因：</strong><span>JSON 字段缺失、Token 已过期或被吊销。</span></div>
+              <div class="flow-cmd-section">
+                <strong>运行命令：</strong>
+                <div class="flow-code-box">
+                  <code id="flowCmdTextRelay">npm run sync:relay-agent -- --server=... --token=...</code>
+                  <button type="button" class="copy-flow-btn" id="flowCopyBtnRelay">复制</button>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="sync-mode-card">
-            <span class="command-tag high">兼容模式</span>
-            <strong>服务器直连同步</strong>
-            <p>仅保留为兼容路径。VPS 无法访问 100.fosu.edu.cn 属于预期情况，不代表本机校园网异常。</p>
-            <code>不作为主流程</code>
+
+          <!-- Step 3: 后台发布与回滚 -->
+          <div class="flow-card">
+            <div class="flow-step">Step 3</div>
+            <div class="flow-title">后台发布与回滚</div>
+            <div class="flow-content">
+              <div class="flow-field"><strong>适用场景：</strong><span>在后台预览数据 Diff 确认无误后，正式推送至小程序端，或在异常时一键回滚。</span></div>
+              <div class="flow-field"><strong>前置条件：</strong><span>Staging 区已有校验通过的数据；变动率超 30% 需勾选二次确认。</span></div>
+              <div class="flow-field"><strong>预计耗时：</strong><span>秒级即时生效。</span></div>
+              <div class="flow-field"><strong>常见失败原因：</strong><span>触发安全熔断但未勾选强行发布确认。</span></div>
+              <div class="flow-cmd-section">
+                <strong>交互操作：</strong>
+                <div class="flow-action-box">
+                  <span class="action-hint">直接在下方上传区点击“发布”或历史区点击“一键回滚”</span>
+                  <button type="button" class="flow-go-btn" onclick="document.getElementById('staging-upload-panel').scrollIntoView({behavior: 'smooth'})">前往操作区</button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <div class="dash-columns">
-          <div style="display: flex; flex-direction: column; gap: 20px;">
-            <!-- 新学期同步向导 -->
-            <div class="card">
-              <h3 class="card-title">📅 新学期一键同步向导</h3>
-              <form id="wizardForm" class="sync-wizard-form" onsubmit="return false;">
-                <div class="form-row">
-                  <div>
-                    <label for="wizardTerm">目标学期 (term)</label>
-                    <input type="text" id="wizardTerm" placeholder="例如: 2026-2027-1" value="2026-2027-1">
-                  </div>
-                  <div>
-                    <label for="wizardStartDate">学期开始日期 (StartDate)</label>
-                    <input type="date" id="wizardStartDate" value="2026-09-01">
-                  </div>
-                </div>
-
-                <div class="form-row">
-                  <div>
-                    <label for="wizardVersion">发布版本 (releaseVersion)</label>
-                    <input type="text" id="wizardVersion" placeholder="自动生成或自定义" readonly>
-                  </div>
-                  <div>
-                    <label for="wizardSource">数据来源 (source)</label>
-                    <select id="wizardSource">
-                      <option value="local-campus" selected>本机校园网采集 (local-campus)</option>
-                      <option value="relay-agent">接力代理端 (relay-agent)</option>
-                      <option value="staging-upload">手动 Staging JSON 上传 (staging-upload)</option>
-                      <option value="manual-maintain">手动维护 (manual-maintain)</option>
-                      <option value="server-direct">服务器直连兼容模式 (server-direct)</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div class="form-row full">
-                  <div>
-                    <label for="wizardNote">发布说明 (releaseNote)</label>
-                    <input type="text" id="wizardNote" placeholder="例如: 2026-2027-1 新学期全校课表首版">
-                  </div>
-                </div>
-
-                <div>
-                  <label>同步范围</label>
-                  <div class="sync-range-grid">
-                    <label class="sync-range-item">
-                      <input type="checkbox" id="rangeClass" checked> 行政班课表
-                    </label>
-                    <label class="sync-range-item">
-                      <input type="checkbox" id="rangeTeacher" checked> 教师课表
-                    </label>
-                    <label class="sync-range-item">
-                      <input type="checkbox" id="rangeClassroom" checked> 教室课表
-                    </label>
-                    <label class="sync-range-item">
-                      <input type="checkbox" id="rangeCourse" checked> 课程课表
-                    </label>
-                    <label class="sync-range-item">
-                      <input type="checkbox" id="rangeClassroomList" checked> 教室列表
-                    </label>
-                    <label class="sync-range-item">
-                      <input type="checkbox" id="rangeTeacherList" checked> 教师列表
-                    </label>
-                    <label class="sync-range-item">
-                      <input type="checkbox" id="rangeCourseList" checked> 课程列表
-                    </label>
-                  </div>
-                </div>
-
-                <div class="form-row">
-                  <div>
-                    <label for="wizardMode">操作模式</label>
-                    <select id="wizardMode">
-                      <option value="dry-run">只测试不发布 (dry-run)</option>
-                      <option value="staging" selected>生成候选版本 (staging)</option>
-                      <option value="publish">直接发布 (publish) - [不推荐]</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div class="wizard-command-preview">
-                  <label style="margin-bottom: 2px;">📋 推荐运行的同步指令：</label>
-                  <div class="command-code-box">
-                    <code id="wizardCommandCode">加载中...</code>
-                    <button type="button" id="wizardCopyBtn">复制命令</button>
-                  </div>
-                  <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
-                    提示：主流程是在已连接校园网的本机运行采集命令；VPS 只负责保存、校验、预览、发布和回滚。
-                  </div>
-                </div>
-              </form>
-            </div>
-
-            <!-- Staging JSON 上传与校验预览面板 -->
-            <div class="card">
+        <!-- 4. sync-dashboard-grid -->
+        <div class="sync-dashboard-grid">
+          <!-- 左栏：主交互区 -->
+          <div class="sync-main-col">
+            
+            <!-- 5. staging-upload-panel -->
+            <div class="card" id="staging-upload-panel">
               <h3 class="card-title">📤 Staging JSON 上传、比对与发布</h3>
+              
+              <!-- 可折叠的同步向导表单 -->
+              <div class="wizard-collapse-container" style="border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 20px; background: var(--panel-2);">
+                <div class="wizard-collapse-header" id="wizardCollapseHeader" style="display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none;">
+                  <strong style="font-size: 13.5px; color: var(--text); display: flex; align-items: center; gap: 8px;">📅 新学期同步向导配置 & 指令生成器</strong>
+                  <span id="wizardCollapseIcon" style="font-size: 12px; color: var(--muted); transition: transform 0.2s;">▼</span>
+                </div>
+                
+                <div class="wizard-collapse-body" id="wizardCollapseBody" style="display: none; margin-top: 14px; border-top: 1px solid var(--border); padding-top: 14px;">
+                  <form id="wizardForm" class="sync-wizard-form" onsubmit="return false;">
+                    <div class="form-row">
+                      <div>
+                        <label for="wizardTerm">目标学期 (term)</label>
+                        <input type="text" id="wizardTerm" placeholder="例如: 2026-2027-1" value="2026-2027-1">
+                      </div>
+                      <div>
+                        <label for="wizardStartDate">学期开始日期 (StartDate)</label>
+                        <input type="date" id="wizardStartDate" value="2026-09-01">
+                      </div>
+                    </div>
+
+                    <div class="form-row">
+                      <div>
+                        <label for="wizardVersion">发布版本 (releaseVersion)</label>
+                        <input type="text" id="wizardVersion" placeholder="自动生成或自定义" readonly>
+                      </div>
+                      <div>
+                        <label for="wizardSource">数据来源 (source)</label>
+                        <select id="wizardSource">
+                          <option value="local-campus" selected>本机校园网采集 (local-campus)</option>
+                          <option value="relay-agent">接力代理端 (relay-agent)</option>
+                          <option value="staging-upload">手动 Staging JSON 上传 (staging-upload)</option>
+                          <option value="manual-maintain">手动维护 (manual-maintain)</option>
+                          <option value="server-direct">服务器直连兼容模式 (server-direct)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="form-row full">
+                      <div>
+                        <label for="wizardNote">发布说明 (releaseNote)</label>
+                        <input type="text" id="wizardNote" placeholder="例如: 2026-2027-1 新学期全校课表首版">
+                      </div>
+                    </div>
+
+                    <div>
+                      <label>同步范围</label>
+                      <div class="sync-range-grid">
+                        <label class="sync-range-item">
+                          <input type="checkbox" id="rangeClass" checked> 行政班课表
+                        </label>
+                        <label class="sync-range-item">
+                          <input type="checkbox" id="rangeTeacher" checked> 教师课表
+                        </label>
+                        <label class="sync-range-item">
+                          <input type="checkbox" id="rangeClassroom" checked> 教室课表
+                        </label>
+                        <label class="sync-range-item">
+                          <input type="checkbox" id="rangeCourse" checked> 课程课表
+                        </label>
+                        <label class="sync-range-item">
+                          <input type="checkbox" id="rangeClassroomList" checked> 教室列表
+                        </label>
+                        <label class="sync-range-item">
+                          <input type="checkbox" id="rangeTeacherList" checked> 教师列表
+                        </label>
+                        <label class="sync-range-item">
+                          <input type="checkbox" id="rangeCourseList" checked> 课程列表
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="form-row">
+                      <div>
+                        <label for="wizardMode">操作模式</label>
+                        <select id="wizardMode">
+                          <option value="dry-run">只测试不发布 (dry-run)</option>
+                          <option value="staging" selected>生成候选版本 (staging)</option>
+                          <option value="publish">直接发布 (publish) - [不推荐]</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div class="wizard-command-preview">
+                      <label style="margin-bottom: 2px;">📋 推荐运行的同步指令：</label>
+                      <div class="command-code-box">
+                        <code id="wizardCommandCode">加载中...</code>
+                        <button type="button" id="wizardCopyBtn">复制命令</button>
+                      </div>
+                      <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">
+                        提示：主流程是在已连接校园网的本机运行采集命令；VPS 只负责保存、校验、预览、发布和回滚。
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+
               <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
                 Staging 机制：在本地或校园网电脑运行同步脚本生成 JSON 快照，在此处上传进行安全校验，比对线上数据无误后，再行正式发布。
               </p>
@@ -2061,9 +2355,9 @@ const adminConsoleHtml = `<!doctype html>
               </div>
             </div>
 
-            <!-- 接力任务管理 -->
-            <div class="card">
-              <h3 class="card-title">接力任务管理</h3>
+            <!-- 6. relay-task-panel -->
+            <div class="card" id="relay-task-panel">
+              <h3 class="card-title">🔁 接力任务管理</h3>
               <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
                 relay token 只允许接力端读取任务与上传 Staging JSON，不允许访问 /api/admin、发布 release 或读取敏感配置。
               </p>
@@ -2124,18 +2418,19 @@ const adminConsoleHtml = `<!doctype html>
             </div>
           </div>
 
-          <div style="display: flex; flex-direction: column; gap: 20px;">
-            <!-- 同步运维命令指南 -->
-            <div class="card" style="display: flex; flex-direction: column; gap: 16px;">
-              <h3 class="card-title" style="margin-bottom: 0;">🛠️ 同步运维命令说明</h3>
+          <!-- 右栏：辅助信息区 -->
+          <div class="sync-side-col">
+            <!-- 4. sync-command-accordion -->
+            <div class="card" id="sync-command-accordion">
+              <h3 class="card-title">📖 同步运维命令手册</h3>
               <div id="syncCommands" class="command-card-list">
-                <!-- 动态命令列表 -->
+                <!-- 动态命令列表 (折叠手风琴) -->
               </div>
             </div>
 
-            <!-- API 健康检测 -->
-            <div class="card" style="display: flex; flex-direction: column; gap: 16px;">
-              <div style="display: flex; justify-content: space-between; align-items: center;">
+            <!-- 9. api-health-panel -->
+            <div class="card" id="api-health-panel">
+              <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
                 <h3 class="card-title" style="margin-bottom: 0;">🌐 API 健康状态检测</h3>
                 <button class="secondary" id="recheckHealthBtn" style="padding: 4px 10px; font-size: 12px;">一键测试</button>
               </div>
@@ -2146,50 +2441,53 @@ const adminConsoleHtml = `<!doctype html>
           </div>
         </div>
 
-        <!-- 版本发布历史与一键秒级回滚 -->
-        <div class="card" style="margin-top: 20px;">
-          <h3 class="card-title">⏪ 版本发布历史与回滚控制</h3>
-          <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
-            展示最近发布的 5 个课表快照版本。发生数据污染、排课失误或临时调整时，可通过回滚键秒级切回历史版本，即时触碰小程序配置。
-          </p>
-          <div class="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>版本号</th>
-                  <th>目标学期</th>
-                  <th>发布时间 / 备份</th>
-                  <th>数据范围统计</th>
-                  <th>说明备注</th>
-                  <th>当前状态</th>
-                  <th>操作</th>
-                </tr>
-              </thead>
-              <tbody id="releasesTableBody">
-                <tr><td colspan="7" style="text-align: center; color: var(--muted); padding: 20px 0;">获取数据中...</td></tr>
-              </tbody>
-            </table>
+        <!-- 底部通栏或双栏自适应布局 -->
+        <div style="margin-top: 20px; display: grid; grid-template-columns: 1fr; gap: 20px;">
+          <!-- 7. release-history-panel -->
+          <div class="card" id="release-history-panel">
+            <h3 class="card-title">⏪ 版本发布历史与回滚控制</h3>
+            <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
+              展示最近发布的 5 个课表快照版本。发生数据污染、排课失误或临时调整时，可通过回滚键秒级切回历史版本，即时触碰小程序配置。
+            </p>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>版本号</th>
+                    <th>目标学期</th>
+                    <th>发布时间 / 备份</th>
+                    <th>数据范围统计</th>
+                    <th>说明备注</th>
+                    <th>当前状态</th>
+                    <th>操作</th>
+                  </tr>
+                </thead>
+                <tbody id="releasesTableBody">
+                  <tr><td colspan="7" style="text-align: center; color: var(--muted); padding: 20px 0;">获取数据中...</td></tr>
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
 
-        <!-- 最近数据同步上报日志 -->
-        <div class="card" style="margin-top: 20px;">
-          <h3 class="card-title">📜 最近同步历史日志</h3>
-          <div class="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>时间</th>
-                  <th>类型</th>
-                  <th>学期</th>
-                  <th>来源</th>
-                  <th>记录数</th>
-                  <th>状态</th>
-                  <th>报错信息</th>
-                </tr>
-              </thead>
-              <tbody id="syncHistoryTable"></tbody>
-            </table>
+          <!-- 8. sync-log-panel -->
+          <div class="card" id="sync-log-panel">
+            <h3 class="card-title">📜 最近同步历史日志</h3>
+            <div class="table-container">
+              <table>
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>类型</th>
+                    <th>学期</th>
+                    <th>来源</th>
+                    <th>记录数</th>
+                    <th>状态</th>
+                    <th>报错信息</th>
+                  </tr>
+                </thead>
+                <tbody id="syncHistoryTable"></tbody>
+              </table>
+            </div>
           </div>
         </div>
       </section>
@@ -3955,6 +4253,12 @@ const adminConsoleHtml = `<!doctype html>
         var tbody = $("relayTaskTableBody");
         if (!tbody) return;
         var list = state.relayTasks || [];
+        
+        // 动态更新 Step 2 流程卡片中的接力命令
+        var activeRelayTask = list.find(function(t) { return t.status !== "revoked" && t.status !== "expired" && t.status !== "published"; });
+        var flowRelayCmd = activeRelayTask ? buildRelayRunCommand(activeRelayTask) : "npm run sync:relay-agent -- --server=" + location.origin + " --token=YOUR_TOKEN --term=2026-2027-1";
+        if ($("flowCmdTextRelay")) $("flowCmdTextRelay").textContent = flowRelayCmd;
+        
         tbody.innerHTML = "";
         if (list.length === 0) {
           tbody.innerHTML = "<tr><td colspan='4' style='text-align:center;color:var(--muted);padding:16px;'>暂无接力任务</td></tr>";
@@ -4129,6 +4433,7 @@ const adminConsoleHtml = `<!doctype html>
               var wizardCmd = cmds.find(function(c) { return c.id === commandIdBySource[source]; }) || cmds[0];
               var cmdText = wizardCmd ? wizardCmd.command : "npm run sync:local-campus";
               if ($("wizardCommandCode")) $("wizardCommandCode").textContent = cmdText;
+              if ($("flowCmdTextLocal")) $("flowCmdTextLocal").textContent = cmdText;
               if ($("wizardCopyBtn")) $("wizardCopyBtn").style.display = "block";
               
               // 2. 渲染动态命令说明卡片列表
@@ -4143,28 +4448,40 @@ const adminConsoleHtml = `<!doctype html>
                   var riskBadge = "<span class='command-tag " + riskClass + "'>风险: " + c.risk + "</span>";
                   var intranetBadge = c.intranetRequired ? "<span class='command-tag high'>⚠️ 需校园网</span>" : "<span class='command-tag low'>外网可用</span>";
                   
+                  // 默认展开本机校园网同步 (local-campus) 和上传本地 Staging (local-upload)
+                  var isDefaultExpanded = (c.id === "local-campus" || c.id === "local-upload" || c.id === "staging-upload");
+                  
                   var item = document.createElement("div");
-                  item.className = "command-card";
+                  item.className = "command-card" + (isDefaultExpanded ? "" : " collapsed");
                   item.innerHTML = 
                     "<div class='command-header'>" +
                       "<div class='command-title'>🔧 " + c.name + "</div>" +
-                      "<div style='display:flex; gap:6px;'>" + riskBadge + intranetBadge + "</div>" +
+                      "<div style='display:flex; gap:6px; align-items: center;'>" + riskBadge + intranetBadge + "</div>" +
                     "</div>" +
-                    "<div class='command-code-box'>" +
-                      "<code>" + escapeHtml(c.command) + "</code>" +
-                      "<button type='button' class='copy-command-btn' data-copy-command='" + escapeHtml(c.command) + "'>复制</button>" +
-                    "</div>" +
-                    "<div class='command-meta-grid'>" +
-                      "<div class='command-meta-item'><strong>适用场景</strong><span>" + c.scene + "</span></div>" +
-                      "<div class='command-meta-item'><strong>前置条件</strong><span>" + c.precondition + "</span></div>" +
-                      "<div class='command-meta-item'><strong>预计耗时</strong><span>" + c.duration + "</span></div>" +
-                      "<div class='command-meta-item'><strong>常见失败原因</strong><span>" + c.failureReason + "</span></div>" +
-                    "</div>" +
-                    "<div class='command-tip-box'>" +
-                      "<strong>💡 修复建议:</strong><span>" + c.solution + "</span>" +
+                    "<div class='command-body'>" +
+                      "<div class='command-code-box'>" +
+                        "<code>" + escapeHtml(c.command) + "</code>" +
+                        "<button type='button' class='copy-command-btn' data-copy-command='" + escapeHtml(c.command) + "'>复制</button>" +
+                      "</div>" +
+                      "<div class='command-meta-grid'>" +
+                        "<div class='command-meta-item'><strong>适用场景</strong><span>" + c.scene + "</span></div>" +
+                        "<div class='command-meta-item'><strong>前置条件</strong><span>" + c.precondition + "</span></div>" +
+                        "<div class='command-meta-item'><strong>预计耗时</strong><span>" + c.duration + "</span></div>" +
+                        "<div class='command-meta-item'><strong>常见失败原因</strong><span>" + c.failureReason + "</span></div>" +
+                      "</div>" +
+                      "<div class='command-tip-box'>" +
+                        "<strong>💡 修复建议:</strong><span>" + c.solution + "</span>" +
+                      "</div>" +
                     "</div>";
+                  
+                  item.querySelector(".command-header").addEventListener("click", function(e) {
+                    if (e.target.classList.contains("command-tag")) return;
+                    item.classList.toggle("collapsed");
+                  });
+                  
                   syncCommandsWrap.appendChild(item);
                 });
+                
                 syncCommandsWrap.querySelectorAll(".copy-command-btn").forEach(function(btn) {
                   btn.addEventListener("click", function() {
                     copyText(btn.dataset.copyCommand || "");
@@ -5600,6 +5917,30 @@ const adminConsoleHtml = `<!doctype html>
 
       function initSyncModule() {
         updateWizardCommand();
+        
+        // 绑定向导折叠/展开
+        var wizardHeader = $("wizardCollapseHeader");
+        var wizardBody = $("wizardCollapseBody");
+        var wizardIcon = $("wizardCollapseIcon");
+        if (wizardHeader && wizardBody) {
+          wizardHeader.addEventListener("click", function() {
+            var isHidden = wizardBody.style.display === "none";
+            wizardBody.style.display = isHidden ? "block" : "none";
+            if (wizardIcon) {
+              wizardIcon.textContent = isHidden ? "▲" : "▼";
+            }
+          });
+        }
+
+        // 绑定主流程 Step 1 & Step 2 的复制按钮
+        safeBind("flowCopyBtnLocal", "click", function() {
+          var text = $("flowCmdTextLocal").textContent;
+          if (text) copyText(text);
+        });
+        safeBind("flowCopyBtnRelay", "click", function() {
+          var text = $("flowCmdTextRelay").textContent;
+          if (text) copyText(text);
+        });
       }
 
       function initFeedbackModule() {
