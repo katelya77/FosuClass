@@ -1210,6 +1210,10 @@ async function handleLocalCampusStaging(page, params) {
   process.env.SYNC_LOCAL_STAGING_ONLY = "true";
   process.env.SYNC_CLASS_CRAWL_ONLY = "true";
 
+  if (!process.env.SYNC_CLASS_SCOPE) {
+    process.env.SYNC_CLASS_SCOPE = "all";
+  }
+
   const catalog = await syncCatalog(page);
   const majors = await syncMajors(page, catalog);
   const allClassSchedules = await syncClassSchedules(page, catalog, majors);
@@ -1522,7 +1526,7 @@ async function initBrowserContext() {
   if (FOSU_SYNC_AUTH_MODE === "playwright-manual") {
     if (!fs.existsSync(SESSION_PATH)) {
       console.error("❌ 本地未找到 session.json 登录会话文件！");
-      console.error("💡 提示: 登录状态已过期，请重新运行 npm run login。");
+      console.error(getExpiredSessionTip());
       await browser.close();
       process.exit(1);
     }
@@ -1553,6 +1557,18 @@ async function initBrowserContext() {
 }
 
 /**
+ * 获取会话过期的自适应友好提示语
+ */
+function getExpiredSessionTip() {
+  const isSubDir = path.basename(process.cwd()) === 'fosu-sync-client';
+  if (isSubDir) {
+    return "💡 提示: 会话已过期，请在项目根目录执行：npm run login\n   或执行：npm run login";
+  } else {
+    return "💡 提示: 会话已过期，请在项目根目录执行：npm run login";
+  }
+}
+
+/**
  * 校验登录态是否仍然有效
  */
 async function checkSession(page) {
@@ -1561,21 +1577,21 @@ async function checkSession(page) {
     await gotoPage(page, "/framework/xsMain.jsp", { waitUntil: "networkidle" });
   } catch (error) {
     console.error(`❌ 导航至教务页失败，可能未连内网或握手彻底失败: ${error.message}`);
-    console.error("💡 提示: 登录状态已过期，请重新运行 npm run login。");
+    console.error(getExpiredSessionTip());
     return false;
   }
   
   const currentUrl = page.url();
   if (currentUrl.includes("authserver.fosu.edu.cn") || currentUrl.includes("login")) {
     console.error("❌ 会话已过期或无效！被重定向到了登录页面。");
-    console.error("💡 提示: 登录状态已过期，请重新运行 npm run login。");
+    console.error(getExpiredSessionTip());
     return false;
   }
   
   const content = await page.content();
   if (content.includes("统一身份认证") || content.includes("密码登录")) {
     console.error("❌ 会话已过期！页面包含登录标识。");
-    console.error("💡 提示: 登录状态已过期，请重新运行 npm run login。");
+    console.error(getExpiredSessionTip());
     return false;
   }
   
