@@ -343,13 +343,35 @@ function getPublicAppConfig() {
   const config = getAdminConfig();
   const dataVersion = resolveDataVersion(config);
   const now = new Date();
+  
+  let notices = listNotices().filter((notice) => isInDisplayWindow(notice, now));
+  
+  // 检查当前学期是否已发布数据
+  const snapshot = releaseService.readActiveReleaseSnapshot();
+  if (!snapshot || snapshot.semester !== config.currentSemester) {
+    notices.unshift({
+      id: "temp_new_semester_syncing",
+      title: "温馨提示",
+      content: "新学期课表正在同步中，请稍后查看。",
+      type: "warning",
+      priority: "important",
+      displayMode: "banner",
+      targetPage: "all",
+      enabled: true,
+      closable: false,
+      version: "temp_sync",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+  }
+
   return {
     success: true,
     data: {
       appName: config.appName,
       currentSemester: config.currentSemester,
       dataVersion,
-      notices: listNotices().filter((notice) => isInDisplayWindow(notice, now)),
+      notices,
       news: listNews().filter((item) => item.enabled === true),
       disclaimer: config.disclaimer || DEFAULT_DISCLAIMER,
       updatedAt: config.updatedAt || "",

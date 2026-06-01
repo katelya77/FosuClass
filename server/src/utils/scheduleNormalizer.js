@@ -338,12 +338,25 @@ function normalizeCourseItem(course, context) {
   normalized.classroom = normalized.classroom || config.classroom || "";
   normalized.courseName = normalized.courseName || "";
   normalized.weekday = toNumber(normalized.weekday, 1);
-  normalized.startSection = toNumber(normalized.startSection, 1);
+  
+  // 检查是否缺失节次
+  const hasNoSections = normalized.startSection === undefined && normalized.endSection === undefined && !normalized.sections;
+  normalized.startSection = toNumber(normalized.startSection, hasNoSections ? null : 1);
   normalized.endSection = toNumber(normalized.endSection, normalized.startSection);
-  normalized.startWeek = toNumber(normalized.startWeek, 1);
+  
+  // 检查是否缺失周次
+  const hasNoWeeks = (!normalized.weeks || normalized.weeks.length === 0) && normalized.startWeek === undefined && normalized.endWeek === undefined;
+  normalized.startWeek = toNumber(normalized.startWeek, hasNoWeeks ? null : 1);
   normalized.endWeek = toNumber(normalized.endWeek, normalized.startWeek);
-  normalized.weeks = ensureWeeks(normalized);
-  normalized.weekText = normalized.weekText || `${normalized.startWeek}-${normalized.endWeek}周`;
+  
+  if (hasNoWeeks) {
+    normalized.weeks = [];
+    normalized.weekText = "待确认周次";
+  } else {
+    normalized.weeks = ensureWeeks(normalized);
+    normalized.weekText = normalized.weekText || `${normalized.startWeek}-${normalized.endWeek}周`;
+  }
+  
   normalized.weekType = normalized.weekType || "all";
   normalized.source = normalized.source || "school";
   normalized.sourceType = normalized.sourceType || config.sourceType || "class";
@@ -363,7 +376,16 @@ function normalizeCourseItem(course, context) {
 function normalizeCourseList(courses, context) {
   return (courses || [])
     .map((course) => normalizeCourseItem(course, context))
-    .filter((course) => course.courseName);
+    .filter((course) => {
+      // 必须有课程名
+      if (!course.courseName) return false;
+      // 节次为空：禁止发布
+      if (course.startSection === null || course.endSection === null) {
+        console.warn(`⚠️ 过滤非法课程: 节次为空 《${course.courseName}》`);
+        return false;
+      }
+      return true;
+    });
 }
 
 /**

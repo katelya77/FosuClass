@@ -493,6 +493,18 @@ function writeSnapshotDebugFiles(debugDir, snapshot, compressedBuffer) {
   const snapshotJson = JSON.stringify(snapshot, null, 2);
   fs.writeFileSync(path.join(debugDir, "snapshot-latest.json"), snapshotJson, "utf-8");
   fs.writeFileSync(path.join(debugDir, "snapshot-latest.json.gz"), compressedBuffer);
+  
+  const cliParams = global.CLI_PARAMS || {};
+  if (cliParams.output) {
+    const outputPath = path.resolve(process.cwd(), cliParams.output);
+    const outputDir = path.dirname(outputPath);
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
+    fs.writeFileSync(outputPath, snapshotJson, "utf-8");
+    console.log(`💾 已按 output 参数导出数据至: ${outputPath}`);
+  }
+
   const normalizeReport = buildNormalizeReport(snapshot);
   fs.writeFileSync(path.join(debugDir, "normalize-report-latest.json"), JSON.stringify(normalizeReport, null, 2), "utf-8");
   console.log(`💾 规范化报告已保存至 .debug/normalize-report-latest.json，修正课程 ${normalizeReport.normalizedCourseCount}/${normalizeReport.totalCourseCount} 条`);
@@ -547,10 +559,17 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     { section: 14, start: "20:50", end: "21:30" }
   ];
 
+  const cliParams = global.CLI_PARAMS || {};
   return {
+    schemaVersion: "1.0",
+    releaseVersion: cliParams.version || version,
+    term: activeSemester,
+    termStartDate: cliParams.start || "2026-09-01",
+    generatedAt: new Date().toISOString(),
     version,
     semester: activeSemester,
     updatedAt: new Date().toISOString(),
+    releaseNote: cliParams.note || "全校课表数据已更新",
     source: "local-sync-client",
     disclaimer: "本工具为个人开发，非学校官方服务。课程数据由开发者整理维护及用户反馈修正，仅供参考，具体安排请以任课教师通知及正式通知为准。",
     catalog: {
@@ -2932,7 +2951,35 @@ async function handleQuickSync(page) {
  */
 async function main() {
   const args = process.argv.slice(2);
-  const action = args[0] || "all";
+  let action = "all";
+  const params = {};
+  for (const arg of args) {
+    if (arg.startsWith("--")) {
+      const match = arg.match(/^--([^=]+)=(.*)$/);
+      if (match) {
+        params[match[1]] = match[2];
+      } else {
+        const flagMatch = arg.match(/^--([^=]+)$/);
+        if (flagMatch) {
+          params[flagMatch[1]] = true;
+        }
+      }
+    } else if (!arg.startsWith("-")) {
+      action = arg;
+    }
+  }
+
+  global.CLI_PARAMS = params;
+
+  if (params.term) {
+    process.env.PREFERRED_SEMESTER = params.term;
+  }
+  if (params["dry-run"] || params["dry_run"]) {
+    process.env.SYNC_RELEASE_DRY_RUN = "true";
+  }
+  if (params.publish === "false" || params.publish === false) {
+    process.env.SYNC_RELEASE_DRY_RUN = "true";
+  }
 
   // 如果是一键同步任务，则强制执行环境预检
   if (action === "fresh" || action === "quick") {
