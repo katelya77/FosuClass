@@ -168,6 +168,15 @@ function revokeTask(id) {
   });
 }
 
+function deleteTask(id) {
+  const tasks = readTasks();
+  const index = tasks.findIndex((task) => task.id === id);
+  if (index < 0) return false;
+  tasks.splice(index, 1);
+  writeTasks(tasks);
+  return true;
+}
+
 function validateTokenForUpload(token) {
   const task = findTaskByToken(token);
   if (!task) {
@@ -391,6 +400,7 @@ function markUploadPublished(id, version) {
 
 module.exports = {
   createTask,
+  deleteTask,
   findTaskById,
   findTaskByToken,
   getTaskStatus,

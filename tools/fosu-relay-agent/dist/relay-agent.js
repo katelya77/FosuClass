@@ -1,12 +1,11 @@
 #!/usr/bin/env node
 
-const fs = require("fs");
-const os = require("os");
-const path = require("path");
-const readline = require("readline/promises");
-
-const SECRET_KEY_PATTERN = /(studentId|student_id|password|passwd|pwd|cookie|ticket|execution|session|token|authorization|jsessionid|captcha)/i;
-
+// relay-agent.js
+var fs = require("fs");
+var os = require("os");
+var path = require("path");
+var readline = require("readline/promises");
+var SECRET_KEY_PATTERN = /(studentId|student_id|password|passwd|pwd|cookie|ticket|execution|session|token|authorization|jsessionid|captcha)/i;
 function parseArgs(argv) {
   const args = {};
   argv.forEach((arg) => {
@@ -20,36 +19,27 @@ function parseArgs(argv) {
   });
   return args;
 }
-
 function normalizeServer(value) {
   return String(value || "https://class.katelya.eu.org").replace(/\/+$/, "");
 }
-
-function assertRequiredArgs(args) {
-  if (!args.token) {
-    throw new Error("缺少 --token=xxx。请使用后台接力任务生成的 relay token。");
-  }
-}
-
 async function fetchWithTimeout(url, options = {}) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 8000);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 8e3);
   try {
     return await fetch(url, Object.assign({}, options, { signal: controller.signal }));
   } finally {
     clearTimeout(timeout);
   }
 }
-
 async function checkUrl(label, url) {
   const startedAt = Date.now();
   try {
-    const res = await fetchWithTimeout(url, { method: "GET", timeoutMs: 8000 });
+    const res = await fetchWithTimeout(url, { method: "GET", timeoutMs: 8e3 });
     return {
       label,
       ok: res.status > 0 && res.status < 500,
       status: res.status,
-      duration: Date.now() - startedAt,
+      duration: Date.now() - startedAt
     };
   } catch (error) {
     return {
@@ -57,24 +47,22 @@ async function checkUrl(label, url) {
       ok: false,
       status: 0,
       duration: Date.now() - startedAt,
-      error: error.message,
+      error: error.message
     };
   }
 }
-
 async function loadTask(server, token) {
   const res = await fetchWithTimeout(`${server}/api/relay/tasks/${encodeURIComponent(token)}`, {
-    timeoutMs: 12000,
+    timeoutMs: 12e3
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok || data.success === false) {
-    throw new Error(data.message || `接力任务读取失败: HTTP ${res.status}`);
+    throw new Error(data.message || `\u63A5\u529B\u4EFB\u52A1\u8BFB\u53D6\u5931\u8D25: HTTP ${res.status}`);
   }
   return data.task;
 }
-
 function containsSensitiveData(value) {
-  if (value === undefined || value === null) return false;
+  if (value === void 0 || value === null) return false;
   if (Array.isArray(value)) {
     return value.some((item) => containsSensitiveData(item));
   }
@@ -89,20 +77,19 @@ function containsSensitiveData(value) {
   }
   return false;
 }
-
 function readStagingJson(args, task) {
   const defaultPath = path.resolve(process.cwd(), "staging", `${args.term || task.term}-full.json`);
   const filePath = path.resolve(process.cwd(), args.file || args.input || defaultPath);
   if (!fs.existsSync(filePath)) {
-    throw new Error(`未找到 Staging JSON: ${filePath}\n请先在校园网电脑生成文件，或使用 --file=路径 指定。`);
+    throw new Error(`\u672A\u627E\u5230 Staging JSON: ${filePath}
+\u8BF7\u5148\u5728\u6821\u56ED\u7F51\u7535\u8111\u751F\u6210\u6587\u4EF6\uFF0C\u6216\u4F7F\u7528 --file=\u8DEF\u5F84 \u6307\u5B9A\u3002`);
   }
   const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
   if (containsSensitiveData(data)) {
-    throw new Error("Staging JSON 中包含疑似密码、Cookie、ticket、session 或 token 字段，已停止上传。");
+    throw new Error("Staging JSON \u4E2D\u5305\u542B\u7591\u4F3C\u5BC6\u7801\u3001Cookie\u3001ticket\u3001session \u6216 token \u5B57\u6BB5\uFF0C\u5DF2\u505C\u6B62\u4E0A\u4F20\u3002");
   }
   return { filePath, data };
 }
-
 function summarize(data) {
   const resources = data.resources || {};
   const classSchedules = Array.isArray(data.classSchedules) ? data.classSchedules : [];
@@ -116,31 +103,29 @@ function summarize(data) {
     courseScheduleCount: Array.isArray(resources.courseSchedules) ? resources.courseSchedules.length : 0,
     teacherCount: Array.isArray(resources.teachers) ? resources.teachers.length : 0,
     classroomCount: Array.isArray(resources.classrooms) ? resources.classrooms.length : 0,
-    courseCount: Array.isArray(resources.courses) ? resources.courses.length : 0,
+    courseCount: Array.isArray(resources.courses) ? resources.courses.length : 0
   };
 }
-
 async function confirmUpload(args, summary) {
   if (args.yes) return true;
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
   try {
-    console.log("\n将要上传的数据摘要：");
-    console.log(`- 学期: ${summary.term || "-"}`);
-    console.log(`- 行政班课表: ${summary.classScheduleCount}`);
-    console.log(`- 教师课表: ${summary.teacherScheduleCount}`);
-    console.log(`- 教室课表: ${summary.classroomScheduleCount}`);
-    console.log(`- 课程课表: ${summary.courseScheduleCount}`);
-    console.log(`- 教师数: ${summary.teacherCount}`);
-    console.log(`- 教室数: ${summary.classroomCount}`);
-    console.log(`- 课程数: ${summary.courseCount}`);
-    console.log(`- 生成时间: ${summary.generatedAt || "-"}`);
-    const answer = await rl.question("\n确认上传课程表公开数据且不包含个人密码？输入 yes 继续: ");
+    console.log("\n\u5C06\u8981\u4E0A\u4F20\u7684\u6570\u636E\u6458\u8981\uFF1A");
+    console.log(`- \u5B66\u671F: ${summary.term || "-"}`);
+    console.log(`- \u884C\u653F\u73ED\u8BFE\u8868: ${summary.classScheduleCount}`);
+    console.log(`- \u6559\u5E08\u8BFE\u8868: ${summary.teacherScheduleCount}`);
+    console.log(`- \u6559\u5BA4\u8BFE\u8868: ${summary.classroomScheduleCount}`);
+    console.log(`- \u8BFE\u7A0B\u8BFE\u8868: ${summary.courseScheduleCount}`);
+    console.log(`- \u6559\u5E08\u6570: ${summary.teacherCount}`);
+    console.log(`- \u6559\u5BA4\u6570: ${summary.classroomCount}`);
+    console.log(`- \u8BFE\u7A0B\u6570: ${summary.courseCount}`);
+    console.log(`- \u751F\u6210\u65F6\u95F4: ${summary.generatedAt || "-"}`);
+    const answer = await rl.question("\n\u786E\u8BA4\u4E0A\u4F20\u8BFE\u7A0B\u8868\u516C\u5F00\u6570\u636E\u4E14\u4E0D\u5305\u542B\u4E2A\u4EBA\u5BC6\u7801\uFF1F\u8F93\u5165 yes \u7EE7\u7EED: ");
     return answer.trim().toLowerCase() === "yes";
   } finally {
     rl.close();
   }
 }
-
 async function upload(server, token, args, data) {
   const payload = {
     token,
@@ -149,146 +134,131 @@ async function upload(server, token, args, data) {
       `platform=${process.platform}`,
       `arch=${process.arch}`,
       `hostname=${os.hostname()}`,
-      `node=${process.version}`,
+      `node=${process.version}`
     ].join("; "),
-    data,
+    data
   };
   const res = await fetchWithTimeout(`${server}/api/relay/staging/upload`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "x-relay-token": token,
+      "x-relay-token": token
     },
     body: JSON.stringify(payload),
-    timeoutMs: 120000,
+    timeoutMs: 12e4
   });
   const result = await res.json().catch(() => ({}));
   if (!res.ok || result.success === false) {
-    throw new Error(result.message || `接力上传失败: HTTP ${res.status}`);
+    throw new Error(result.message || `\u63A5\u529B\u4E0A\u4F20\u5931\u8D25: HTTP ${res.status}`);
   }
   return result;
 }
-
 function cleanupSession() {
   try {
     const paths = [
       path.resolve(process.cwd(), ".session", "session.json"),
       path.resolve(__dirname, ".session", "session.json")
     ];
-    paths.forEach(p => {
+    paths.forEach((p) => {
       if (fs.existsSync(p)) {
         fs.unlinkSync(p);
       }
     });
-    console.log("🧹 登录会话文件已安全清理。");
+    console.log("\u{1F9F9} \u767B\u5F55\u4F1A\u8BDD\u6587\u4EF6\u5DF2\u5B89\u5168\u6E05\u7406\u3002");
   } catch (e) {
-    console.warn("⚠️ 清理登录会话文件失败: " + e.message);
+    console.warn("\u26A0\uFE0F \u6E05\u7406\u767B\u5F55\u4F1A\u8BDD\u6587\u4EF6\u5931\u8D25: " + e.message);
   }
 }
-
 async function main() {
   const args = parseArgs(process.argv.slice(2));
-  
   let config = {};
   const configPath = path.resolve(process.cwd(), "config.json");
   if (fs.existsSync(configPath)) {
     try {
       config = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    } catch (e) {}
+    } catch (e) {
+    }
   }
-
   let token = args.token || config.token;
   let server = args.server || config.server || "https://class.katelya.eu.org";
-
   if (!token) {
-    console.log("佛课小表接力采集器 - 初始化配置");
+    console.log("\u4F5B\u8BFE\u5C0F\u8868\u63A5\u529B\u91C7\u96C6\u5668 - \u521D\u59CB\u5316\u914D\u7F6E");
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     try {
-      const serverInput = await rl.question("请输入/确认后台服务器 URL (默认 https://class.katelya.eu.org): ");
+      const serverInput = await rl.question("\u8BF7\u8F93\u5165/\u786E\u8BA4\u540E\u53F0\u670D\u52A1\u5668 URL (\u9ED8\u8BA4 https://class.katelya.eu.org): ");
       if (serverInput.trim()) {
         server = serverInput.trim();
       }
-      const tokenInput = await rl.question("请输入您的接力 Token (必填): ");
+      const tokenInput = await rl.question("\u8BF7\u8F93\u5165\u60A8\u7684\u63A5\u529B Token (\u5FC5\u586B): ");
       token = tokenInput.trim();
       if (!token) {
-        console.error("❌ 必须输入接力 Token 才能继续运行。");
+        console.error("\u274C \u5FC5\u987B\u8F93\u5165\u63A5\u529B Token \u624D\u80FD\u7EE7\u7EED\u8FD0\u884C\u3002");
         process.exit(1);
       }
-      // 保存至 config.json
       fs.writeFileSync(configPath, JSON.stringify({ server, token }, null, 2), "utf-8");
-      console.log(`✅ 接力配置已保存到 config.json`);
+      console.log(`\u2705 \u63A5\u529B\u914D\u7F6E\u5DF2\u4FDD\u5B58\u5230 config.json`);
     } finally {
       rl.close();
     }
   }
-
   server = normalizeServer(server);
   token = String(token);
-  
-  console.log("\n佛课小表接力采集器");
-  console.log(`服务器：${server}`);
-
+  console.log("\n\u4F5B\u8BFE\u5C0F\u8868\u63A5\u529B\u91C7\u96C6\u5668");
+  console.log(`\u670D\u52A1\u5668\uFF1A${server}`);
   const task = await loadTask(server, token);
-  console.log(`当前任务：${task.term} ${task.description || "全校课表采集"}`);
-  console.log(`任务有效期：${task.expiresAt}`);
-
-  console.log("\n网络检测：");
+  console.log(`\u5F53\u524D\u4EFB\u52A1\uFF1A${task.term} ${task.description || "\u5168\u6821\u8BFE\u8868\u91C7\u96C6"}`);
+  console.log(`\u4EFB\u52A1\u6709\u6548\u671F\uFF1A${task.expiresAt}`);
+  console.log("\n\u7F51\u7EDC\u68C0\u6D4B\uFF1A");
   const checks = await Promise.all([
     checkUrl("100.fosu.edu.cn", "https://100.fosu.edu.cn"),
     checkUrl("authserver.fosu.edu.cn", "https://authserver.fosu.edu.cn"),
-    checkUrl(new URL(server).hostname, `${server}/api/health`),
+    checkUrl(new URL(server).hostname, `${server}/api/health`)
   ]);
   checks.forEach((item) => {
-    console.log(`- ${item.label}: ${item.ok ? "可访问" : "不可访问"} (${item.status || item.error || "no response"}, ${item.duration}ms)`);
+    console.log(`- ${item.label}: ${item.ok ? "\u53EF\u8BBF\u95EE" : "\u4E0D\u53EF\u8BBF\u95EE"} (${item.status || item.error || "no response"}, ${item.duration}ms)`);
   });
-  
   if (!checks[0].ok || !checks[1].ok) {
-    console.log("\n⚠️ 警告：无法正常访问学校教务网，请确保您当前已连接佛大校园网或已启动学校 VPN 拨号。");
+    console.log("\n\u26A0\uFE0F \u8B66\u544A\uFF1A\u65E0\u6CD5\u6B63\u5E38\u8BBF\u95EE\u5B66\u6821\u6559\u52A1\u7F51\uFF0C\u8BF7\u786E\u4FDD\u60A8\u5F53\u524D\u5DF2\u8FDE\u63A5\u4F5B\u5927\u6821\u56ED\u7F51\u6216\u5DF2\u542F\u52A8\u5B66\u6821 VPN \u62E8\u53F7\u3002");
   }
-
-  console.log("\n================ [步骤 1：登录教务系统] ================");
-  console.log("即将为您启动系统浏览器登录教务系统，请在弹出的浏览器中手动登录。");
+  console.log("\n================ [\u6B65\u9AA4 1\uFF1A\u767B\u5F55\u6559\u52A1\u7CFB\u7EDF] ================");
+  console.log("\u5373\u5C06\u4E3A\u60A8\u542F\u52A8\u7CFB\u7EDF\u6D4F\u89C8\u5668\u767B\u5F55\u6559\u52A1\u7CFB\u7EDF\uFF0C\u8BF7\u5728\u5F39\u51FA\u7684\u6D4F\u89C8\u5668\u4E2D\u624B\u52A8\u767B\u5F55\u3002");
   const child_process = require("child_process");
   try {
     child_process.execSync("node login.js", { stdio: "inherit" });
-    console.log("✓ 登录成功并已保存本地会话。");
+    console.log("\u2713 \u767B\u5F55\u6210\u529F\u5E76\u5DF2\u4FDD\u5B58\u672C\u5730\u4F1A\u8BDD\u3002");
   } catch (err) {
-    console.error("\n❌ 登录教务系统失败：" + err.message);
+    console.error("\n\u274C \u767B\u5F55\u6559\u52A1\u7CFB\u7EDF\u5931\u8D25\uFF1A" + err.message);
     cleanupSession();
     process.exit(1);
   }
-
-  console.log("\n================ [步骤 2：抓取全校课表数据] ================");
-  console.log(`开始抓取全校课程数据（学期：${task.term}），此过程约需要 10 分钟。期间请不要关闭浏览器窗口。`);
+  console.log("\n================ [\u6B65\u9AA4 2\uFF1A\u6293\u53D6\u5168\u6821\u8BFE\u8868\u6570\u636E] ================");
+  console.log(`\u5F00\u59CB\u6293\u53D6\u5168\u6821\u8BFE\u7A0B\u6570\u636E\uFF08\u5B66\u671F\uFF1A${task.term}\uFF09\uFF0C\u6B64\u8FC7\u7A0B\u7EA6\u9700\u8981 10 \u5206\u949F\u3002\u671F\u95F4\u8BF7\u4E0D\u8981\u5173\u95ED\u6D4F\u89C8\u5668\u7A97\u53E3\u3002`);
   try {
     child_process.execSync(`node sync.js local-campus --term=${task.term}`, { stdio: "inherit" });
-    console.log("✓ 全校课表数据抓取完毕，已生成本地 Staging JSON。");
+    console.log("\u2713 \u5168\u6821\u8BFE\u8868\u6570\u636E\u6293\u53D6\u5B8C\u6BD5\uFF0C\u5DF2\u751F\u6210\u672C\u5730 Staging JSON\u3002");
   } catch (err) {
-    console.error("\n❌ 抓取全校课表失败：" + err.message);
+    console.error("\n\u274C \u6293\u53D6\u5168\u6821\u8BFE\u8868\u5931\u8D25\uFF1A" + err.message);
     cleanupSession();
     process.exit(1);
   }
-
   const { filePath, data } = readStagingJson(args, task);
   const summary = summarize(data);
-  console.log(`\n已读取 Staging JSON：${filePath}`);
-  
+  console.log(`
+\u5DF2\u8BFB\u53D6 Staging JSON\uFF1A${filePath}`);
   const confirmed = await confirmUpload(args, summary);
   if (!confirmed) {
-    console.log("已取消上传。");
+    console.log("\u5DF2\u53D6\u6D88\u4E0A\u4F20\u3002");
     cleanupSession();
     return;
   }
-
   const result = await upload(server, token, args, data);
-  console.log("\n已成功上传接力 Staging JSON，等待管理员审核发布。");
-  console.log(`上传编号：${result.upload && result.upload.id ? result.upload.id : "-"}`);
-  
+  console.log("\n\u5DF2\u6210\u529F\u4E0A\u4F20\u63A5\u529B Staging JSON\uFF0C\u7B49\u5F85\u7BA1\u7406\u5458\u5BA1\u6838\u53D1\u5E03\u3002");
+  console.log(`\u4E0A\u4F20\u7F16\u53F7\uFF1A${result.upload && result.upload.id ? result.upload.id : "-"}`);
   cleanupSession();
 }
-
 main().catch((error) => {
-  console.error(`\n接力采集器执行失败：${error.message}`);
+  console.error(`
+\u63A5\u529B\u91C7\u96C6\u5668\u6267\u884C\u5931\u8D25\uFF1A${error.message}`);
   cleanupSession();
   process.exit(1);
 });

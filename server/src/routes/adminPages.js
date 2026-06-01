@@ -2108,11 +2108,12 @@ const adminConsoleHtml = `<!doctype html>
               <div class="flow-field"><strong>预计耗时：</strong><span>3 ~ 15 分钟（视网络情况与教务系统响应而定）。</span></div>
               <div class="flow-field"><strong>常见失败原因：</strong><span>未连校园网、学期填错、教务系统崩溃。</span></div>
               <div class="flow-cmd-section">
-                <strong>运行命令：</strong>
+                <strong>管理员运行命令：</strong>
                 <div class="flow-code-box">
                   <code id="flowCmdTextLocal">npm run sync:local-campus -- --term=2026-2027-1</code>
                   <button type="button" class="copy-flow-btn" id="flowCopyBtnLocal">复制</button>
                 </div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">（管理员本机使用，需要进入项目根目录并拥有源码与 Node.js 环境）</div>
               </div>
             </div>
           </div>
@@ -2127,11 +2128,12 @@ const adminConsoleHtml = `<!doctype html>
               <div class="flow-field"><strong>预计耗时：</strong><span>上传及后台校验秒级完成。</span></div>
               <div class="flow-field"><strong>常见失败原因：</strong><span>JSON 字段缺失、Token 已过期或被吊销。</span></div>
               <div class="flow-cmd-section">
-                <strong>运行命令：</strong>
+                <strong>同学运行指令：</strong>
                 <div class="flow-code-box">
-                  <code id="flowCmdTextRelay">npm run sync:relay-agent -- --server=... --token=...</code>
+                  <code id="flowCmdTextRelay">双击运行接力代理端工具包中的 start.bat 并粘贴 token</code>
                   <button type="button" class="copy-flow-btn" id="flowCopyBtnRelay">复制</button>
                 </div>
+                <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">（同学使用 relay-agent 工具包，无需项目源码与后台管理员密码）</div>
               </div>
             </div>
           </div>
@@ -2177,7 +2179,10 @@ const adminConsoleHtml = `<!doctype html>
                     <div class="form-row">
                       <div>
                         <label for="wizardTerm">目标学期 (term)</label>
-                        <input type="text" id="wizardTerm" placeholder="例如: 2026-2027-1" value="2026-2027-1">
+                        <div style="display: flex; gap: 8px; width: 100%;">
+                          <select id="wizardTerm" style="flex: 1;"></select>
+                          <input type="text" id="wizardTermCustom" placeholder="自定义学期" style="display: none; flex: 1;">
+                        </div>
                       </div>
                       <div>
                         <label for="wizardStartDate">学期开始日期 (StartDate)</label>
@@ -2359,12 +2364,15 @@ const adminConsoleHtml = `<!doctype html>
             <div class="card" id="relay-task-panel">
               <h3 class="card-title">🔁 接力任务管理</h3>
               <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
-                relay token 只允许接力端读取任务与上传 Staging JSON，不允许访问 /api/admin、发布 release 或读取敏感配置。
+                接力任务适合把采集任务临时交给在校同学。对方只获得一次性 relay token，只能读取任务并上传候选 Staging JSON，不能登录后台、不能发布课表、不能查看管理员配置。
               </p>
               <div class="relay-task-grid">
                 <div>
                   <label>目标学期</label>
-                  <input id="relayTaskTerm" placeholder="2026-2027-1" value="2026-2027-1">
+                  <div style="display: flex; gap: 8px; width: 100%;">
+                    <select id="relayTaskTerm" style="flex: 1;"></select>
+                    <input type="text" id="relayTaskTermCustom" placeholder="自定义学期" style="display: none; flex: 1;">
+                  </div>
                 </div>
                 <div>
                   <label>有效期</label>
@@ -2449,6 +2457,10 @@ const adminConsoleHtml = `<!doctype html>
             <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
               展示最近发布的 5 个课表快照版本。发生数据污染、排课失误或临时调整时，可通过回滚键秒级切回历史版本，即时触碰小程序配置。
             </p>
+            <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 12px; gap: 8px;">
+              <label for="releaseTermFilter" style="margin-bottom: 0; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--muted);">筛选学期：</label>
+              <select id="releaseTermFilter" style="width: auto; padding: 4px 10px; font-size: 12px; height: 32px;"></select>
+            </div>
             <div class="table-container">
               <table>
                 <thead>
@@ -4159,6 +4171,98 @@ const adminConsoleHtml = `<!doctype html>
         });
       }
 
+      function generateTermList(defaultTerm) {
+        var currentYear = new Date().getFullYear();
+        var startYear = currentYear - 2;
+        var terms = [];
+        for (var i = 0; i < 5; i++) {
+          var y = startYear + i;
+          terms.push(y + "-" + (y + 1) + "-1");
+          terms.push(y + "-" + (y + 1) + "-2");
+        }
+        if (defaultTerm && terms.indexOf(defaultTerm) === -1 && defaultTerm !== "custom" && defaultTerm !== "all") {
+          terms.push(defaultTerm);
+        }
+        // 降序排序，最新的学期在最前面
+        terms.sort(function(a, b) {
+          return b.localeCompare(a);
+        });
+        return terms;
+      }
+
+      function initTermSelect(selectId, customInputId, defaultTerm, includeAllOption) {
+        var select = $(selectId);
+        if (!select) return;
+        select.innerHTML = "";
+        
+        if (includeAllOption) {
+          var optAll = document.createElement("option");
+          optAll.value = "all";
+          optAll.textContent = "全部学期";
+          select.appendChild(optAll);
+        }
+        
+        var terms = generateTermList(defaultTerm);
+        terms.forEach(function(t) {
+          var opt = document.createElement("option");
+          opt.value = t;
+          opt.textContent = t;
+          if (t === defaultTerm && !includeAllOption) {
+            opt.selected = true;
+          }
+          select.appendChild(opt);
+        });
+        
+        if (customInputId) {
+          var optCustom = document.createElement("option");
+          optCustom.value = "custom";
+          optCustom.textContent = "自定义学期...";
+          select.appendChild(optCustom);
+          
+          var customInput = $(customInputId);
+          if (customInput) {
+            customInput.style.display = "none";
+            customInput.value = defaultTerm || "";
+          }
+          
+          select.addEventListener("change", function() {
+            if (select.value === "custom") {
+              customInput.style.display = "inline-block";
+              customInput.focus();
+            } else {
+              customInput.style.display = "none";
+              customInput.value = select.value;
+            }
+            if (selectId === "wizardTerm") {
+              updateWizardCommand();
+            }
+          });
+          
+          if (customInput) {
+            customInput.addEventListener("input", function() {
+              if (selectId === "wizardTerm") {
+                updateWizardCommand();
+              }
+            });
+          }
+        } else {
+          select.addEventListener("change", function() {
+            if (selectId === "releaseTermFilter") {
+              renderReleaseHistoryTable();
+            }
+          });
+        }
+      }
+
+      function getTermValue(selectId, customInputId) {
+        var sel = $(selectId);
+        if (sel && sel.value === "custom") {
+          var customInput = $(customInputId);
+          return customInput ? customInput.value.trim() : "";
+        }
+        return sel ? sel.value : "";
+      }
+
       // Panel 3: 同步中心 Sync Center
       function loadSyncStatus() {
         setStatus("正在获取系统同步状态与运维指南...");
@@ -4167,6 +4271,15 @@ const adminConsoleHtml = `<!doctype html>
             state.syncStatus = res.data;
             renderSyncStatusGrid();
             
+            // 初始化所有学期下拉选择器
+            var defaultTerm = state.syncStatus ? state.syncStatus.semester : "";
+            if (!state.termSelectsInitialized) {
+              initTermSelect("wizardTerm", "wizardTermCustom", defaultTerm);
+              initTermSelect("relayTaskTerm", "relayTaskTermCustom", defaultTerm);
+              initTermSelect("releaseTermFilter", null, defaultTerm, true);
+              state.termSelectsInitialized = true;
+            }
+
             // 更新向导命令
             updateWizardCommand();
             
@@ -4290,6 +4403,17 @@ const adminConsoleHtml = `<!doctype html>
             revokeRelayTask(task.id);
           });
           tr.querySelector(".action-cell").appendChild(revokeBtn);
+          
+          tr.querySelector(".action-cell").appendChild(document.createTextNode(" "));
+          var deleteBtn = document.createElement("button");
+          deleteBtn.className = "btn danger";
+          deleteBtn.style = "padding: 3px 8px; font-size:11px;";
+          deleteBtn.textContent = "删除";
+          deleteBtn.addEventListener("click", function() {
+            deleteRelayTask(task.id);
+          });
+          tr.querySelector(".action-cell").appendChild(deleteBtn);
+          
           tbody.appendChild(tr);
         });
       }
@@ -4326,7 +4450,7 @@ const adminConsoleHtml = `<!doctype html>
 
       function createRelayTask() {
         var payload = {
-          term: value("relayTaskTerm") || value("wizardTerm") || "2026-2027-1",
+          term: getTermValue("relayTaskTerm", "relayTaskTermCustom") || getTermValue("wizardTerm", "wizardTermCustom") || "2026-2027-1",
           description: value("relayTaskDescription") || "全校课表接力采集",
           expiresInHours: parseInt(value("relayTaskExpiresIn") || "24", 10),
           maxUploads: parseInt(value("relayTaskMaxUploads") || "1", 10)
@@ -4359,6 +4483,21 @@ const adminConsoleHtml = `<!doctype html>
           })
           .catch(function(error) {
             showToast(error.message, "error");
+          });
+      }
+
+      function deleteRelayTask(id) {
+        var msg = "确认删除这个接力任务吗？删除后不会影响已经发布的课表数据，但该 token 和任务记录将从后台列表移除。";
+        if (!confirm(msg)) return;
+        api("/api/admin/relay/tasks/" + encodeURIComponent(id), {
+          method: "DELETE"
+        })
+          .then(function() {
+            showToast("接力任务已彻底删除", "success");
+            return loadSyncStatus();
+          })
+          .catch(function(error) {
+            showToast(error.message || "删除失败", "error");
           });
       }
 
@@ -4395,7 +4534,7 @@ const adminConsoleHtml = `<!doctype html>
 
       // 更新向导命令预览与运维卡片列表
       function updateWizardCommand() {
-        var term = value("wizardTerm") || "2026-2027-1";
+        var term = getTermValue("wizardTerm", "wizardTermCustom") || "2026-2027-1";
         var startDate = value("wizardStartDate") || "2026-09-01";
         var note = value("wizardNote") || (term + " 新学期全校课表首版");
         var mode = value("wizardMode") || "staging";
@@ -4496,10 +4635,10 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       // 绑定向导的表单值变化监听以更新推荐命令
-      ["wizardTerm", "wizardStartDate", "wizardNote"].forEach(function(id) {
+      ["wizardStartDate", "wizardNote"].forEach(function(id) {
         safeBind(id, "input", updateWizardCommand);
       });
-      ["wizardMode", "wizardSource"].forEach(function(id) {
+      ["wizardTerm", "wizardMode", "wizardSource"].forEach(function(id) {
         safeBind(id, "change", updateWizardCommand);
       });
       safeBind("wizardCopyBtn", "click", function() {
@@ -4512,17 +4651,22 @@ const adminConsoleHtml = `<!doctype html>
       // 渲染 Releases 列表
       function renderReleaseHistoryTable() {
         var list = state.releasesHistory || [];
+        var filterTerm = $("releaseTermFilter") ? $("releaseTermFilter").value : "all";
+        var filteredList = list;
+        if (filterTerm !== "all") {
+          filteredList = list.filter(function(r) { return r.semester === filterTerm; });
+        }
         var tbody = $("releasesTableBody");
         tbody.innerHTML = "";
         
-        if (list.length === 0) {
+        if (filteredList.length === 0) {
           tbody.innerHTML = "<tr><td colspan='7' style='text-align: center; color: var(--muted); padding: 24px 0;'>暂无历史 Release 数据包。</td></tr>";
           return;
         }
         
         var currentActiveVer = state.syncStatus ? state.syncStatus.releaseVersion : "";
         
-        list.forEach(function(r) {
+        filteredList.forEach(function(r) {
           var tr = document.createElement("tr");
           var isActive = (r.version === currentActiveVer);
           var statusCell = isActive ? "<span class='badge success'>运行中 (Active)</span>" : "<span class='badge muted'>历史版本</span>";
