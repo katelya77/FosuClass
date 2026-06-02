@@ -298,7 +298,7 @@ const adminConsoleHtml = `<!doctype html>
     .topbar h2 {
       font-size: 22px;
       font-weight: 800;
-      letter-spacing: -0.5px;
+      letter-spacing: 0;
     }
     .topbar p {
       color: var(--muted);
@@ -1720,12 +1720,45 @@ const adminConsoleHtml = `<!doctype html>
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      padding: 12px 16px;
+      padding: 14px 16px;
       margin-bottom: 14px;
       display: flex;
       align-items: center;
+      justify-content: space-between;
       gap: 12px;
       box-shadow: var(--shadow);
+    }
+    .sync-hero-main {
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+    }
+    .sync-hero-title {
+      color: var(--text);
+      font-size: 20px;
+      font-weight: 850;
+      line-height: 1.1;
+    }
+    .sync-hero-subtitle {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.5;
+    }
+    .sync-hero-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      flex-wrap: wrap;
+      flex: 0 0 auto;
+    }
+    .sync-last-refresh {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
     }
     .sync-hero-badge {
       background: var(--primary-soft);
@@ -1745,12 +1778,23 @@ const adminConsoleHtml = `<!doctype html>
       font-weight: 600;
       color: var(--text);
     }
+    @media (max-width: 760px) {
+      .sync-hero {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      .sync-hero-actions {
+        justify-content: flex-start;
+      }
+    }
 
     .sync-primary-flow {
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 12px;
       margin-bottom: 0;
+      min-width: 0;
+      max-width: 100%;
     }
     .flow-card {
       background: var(--panel);
@@ -1763,6 +1807,8 @@ const adminConsoleHtml = `<!doctype html>
       gap: 8px;
       transition: var(--transition);
       position: relative;
+      min-width: 0;
+      overflow: hidden;
     }
     .flow-card:hover {
       border-color: var(--primary);
@@ -1793,6 +1839,7 @@ const adminConsoleHtml = `<!doctype html>
       flex-direction: column;
       gap: 8px;
       flex: 0 1 auto;
+      min-width: 0;
     }
     .flow-field {
       font-size: 12px;
@@ -1812,6 +1859,7 @@ const adminConsoleHtml = `<!doctype html>
       display: flex;
       flex-direction: column;
       gap: 6px;
+      min-width: 0;
     }
     .flow-cmd-section strong {
       font-size: 11px;
@@ -1886,29 +1934,111 @@ const adminConsoleHtml = `<!doctype html>
       color: #fff;
     }
 
-    .sync-dashboard-grid {
+    .code-preview.command-code-box,
+    .code-preview.flow-code-box {
+      display: block;
+      background: #0d1117;
+      color: #c9d1d9;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      padding: 0;
+      overflow: hidden;
+      max-width: 100%;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      min-width: 0;
+    }
+    .code-preview-toolbar {
+      min-height: 34px;
+      padding: 7px 8px 7px 12px;
+      border-bottom: 1px solid #30363d;
+      background: #161b22;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .code-preview-toolbar span {
+      color: #8b949e;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .code-preview-toolbar button,
+    .code-preview .copy-flow-btn,
+    .code-preview .copy-command-btn {
+      height: 24px;
+      padding: 0 9px;
+      border-radius: 6px;
+      border: 1px solid #30363d;
+      background: #21262d;
+      color: #f0f6fc;
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .code-preview-toolbar button:hover,
+    .code-preview .copy-flow-btn:hover,
+    .code-preview .copy-command-btn:hover {
+      background: #30363d;
+    }
+    .code-preview .code-raw {
+      display: none;
+    }
+    .code-preview-scroller {
+      width: 100%;
+      max-width: 100%;
+      overflow-x: auto;
+      overflow-y: hidden;
+      background: #0d1117;
+    }
+    .code-preview-lines {
+      min-width: 100%;
+      display: flex;
+      flex-direction: column;
+      padding: 6px 0;
+    }
+    .code-line {
       display: grid;
-      grid-template-columns: minmax(0, 1.45fr) minmax(300px, 0.85fr);
-      gap: 14px;
-      align-items: start;
+      grid-template-columns: 48px minmax(max-content, 1fr);
+      min-height: 22px;
+      line-height: 22px;
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .code-line-number {
+      background: #161b22;
+      color: #7d8590;
+      text-align: right;
+      padding: 0 12px 0 8px;
+      border-right: 1px solid #30363d;
+      user-select: none;
+    }
+    .code-line-content {
+      background: #0d1117;
+      color: #d1d5db;
+      white-space: pre;
+      padding: 0 14px;
+    }
+
+    .sync-dashboard-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      align-items: stretch;
     }
     .sync-main-col {
       display: flex;
       flex-direction: column;
       gap: 12px;
       min-width: 0;
+      width: 100%;
     }
     .sync-side-col {
-      display: flex;
-      flex-direction: column;
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
       gap: 12px;
+      width: 100%;
       min-width: 0;
-      position: sticky;
-      top: 16px;
-      align-self: start;
-      max-height: calc(100vh - 24px);
-      overflow-y: auto;
-      overscroll-behavior: contain;
     }
     .sync-side-col .health-grid {
       grid-template-columns: 1fr;
@@ -1974,9 +2104,7 @@ const adminConsoleHtml = `<!doctype html>
         grid-template-columns: 1fr;
       }
       .sync-side-col {
-        position: static;
-        max-height: none;
-        overflow: visible;
+        grid-template-columns: 1fr;
       }
       .sync-primary-flow {
         grid-template-columns: 1fr;
@@ -2039,6 +2167,56 @@ const adminConsoleHtml = `<!doctype html>
     .staging-upload-table td {
       vertical-align: top;
       white-space: normal;
+    }
+    .staging-upload-table th,
+    .staging-upload-table td {
+      padding: 8px 10px;
+    }
+    .staging-progress {
+      min-width: 116px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .staging-progress-track {
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .staging-progress-fill {
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, var(--primary), var(--success));
+    }
+    .staging-state-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 22px;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      background: var(--primary-soft);
+      color: var(--primary);
+      white-space: nowrap;
+    }
+    .staging-state-badge.pending-review {
+      background: var(--warning-soft);
+      color: #92400e;
+    }
+    .staging-state-badge.published {
+      background: var(--success-soft);
+      color: var(--success);
+    }
+    .staging-state-badge.failed {
+      background: var(--danger-soft);
+      color: var(--danger);
     }
     .staging-size-stack,
     .staging-count-stack {
@@ -2481,8 +2659,17 @@ const adminConsoleHtml = `<!doctype html>
       <section id="section-sync" class="section">
         <!-- 1. sync-hero -->
         <div class="sync-hero" id="sync-hero">
-          <div class="sync-hero-badge">同步运行模式</div>
-          <div class="sync-hero-text">当前推荐：在连接校园网的本机生成 Staging JSON，再上传到 VPS 后台审核发布。</div>
+          <div class="sync-hero-main">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <div class="sync-hero-title">数据同步中心</div>
+              <div class="sync-hero-badge">推荐链路</div>
+            </div>
+            <div class="sync-hero-subtitle">本机校园网生成 Staging JSON → CLI gzip 分片上传 → 后台审核发布 → 小程序读取最新 release 索引</div>
+          </div>
+          <div class="sync-hero-actions">
+            <span class="sync-last-refresh" id="syncLastRefreshAt">最近刷新：-</span>
+            <button type="button" class="secondary" id="syncRefreshInlineBtn" style="padding:6px 12px;font-size:12px;">刷新状态</button>
+          </div>
         </div>
 
         <!-- 2. sync-status-grid -->
@@ -2505,9 +2692,13 @@ const adminConsoleHtml = `<!doctype html>
               <div class="flow-field"><strong>常见失败原因：</strong><span>未连校园网、学期填错、教务系统崩溃。</span></div>
               <div class="flow-cmd-section">
                 <strong>管理员运行命令：</strong>
-                <div class="flow-code-box">
-                  <pre><code id="flowCmdTextLocal">npm run sync:local-campus -- --term=2026-2027-1</code></pre>
-                  <button type="button" class="copy-flow-btn" id="flowCopyBtnLocal">复制全部命令</button>
+                <div class="code-preview flow-code-box">
+                  <div class="code-preview-toolbar">
+                    <span>PowerShell / 本机采集</span>
+                    <button type="button" class="copy-flow-btn" id="flowCopyBtnLocal">复制全部命令</button>
+                  </div>
+                  <pre class="code-raw"><code id="flowCmdTextLocal">npm run sync:local-campus -- --term=2026-2027-1</code></pre>
+                  <div class="code-preview-scroller"><div class="code-preview-lines"></div></div>
                 </div>
                 <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">（管理员本机使用，需要进入项目根目录并拥有源码与 Node.js 环境）</div>
               </div>
@@ -2525,9 +2716,13 @@ const adminConsoleHtml = `<!doctype html>
               <div class="flow-field"><strong>常见失败原因：</strong><span>JSON 字段缺失、Token 已过期或被吊销。</span></div>
               <div class="flow-cmd-section">
                 <strong>接力同学运行命令：</strong>
-                <div class="flow-code-box">
-                  <pre><code id="flowCmdTextRelay">npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=YOUR_TOKEN --term=2026-2027-1</code></pre>
-                  <button type="button" class="copy-flow-btn" id="flowCopyBtnRelay">复制全部命令</button>
+                <div class="code-preview flow-code-box">
+                  <div class="code-preview-toolbar">
+                    <span>PowerShell / 接力同步</span>
+                    <button type="button" class="copy-flow-btn" id="flowCopyBtnRelay">复制全部命令</button>
+                  </div>
+                  <pre class="code-raw"><code id="flowCmdTextRelay">npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=YOUR_TOKEN --term=2026-2027-1</code></pre>
+                  <div class="code-preview-scroller"><div class="code-preview-lines"></div></div>
                 </div>
               </div>
             </div>
@@ -2547,12 +2742,16 @@ const adminConsoleHtml = `<!doctype html>
                 <div class="staging-status-pill"><strong>等待发布</strong><span>pending-review，只能管理员发布</span></div>
                 <div class="staging-status-pill"><strong>发布成功</strong><span>生成 release 索引并切换小程序数据</span></div>
               </div>
-              <div class="command-code-box">
-                <pre><code id="quickUploadCommand">cd C:\Users\Katelya\Documents\VScode\FosuClass
+              <div class="code-preview command-code-box">
+                <div class="code-preview-toolbar">
+                  <span>PowerShell / CLI 上传</span>
+                  <button type="button" id="quickCopyUploadCmdBtn">复制全部命令</button>
+                </div>
+                <pre class="code-raw"><code id="quickUploadCommand">cd C:\Users\Katelya\Documents\VScode\FosuClass
 npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=https://class.katelya.eu.org</code></pre>
+                <div class="code-preview-scroller"><div class="code-preview-lines"></div></div>
               </div>
               <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-                <button type="button" class="secondary" id="quickCopyUploadCmdBtn" style="padding: 6px 12px; font-size:12px;">复制 CLI 上传命令</button>
                 <button type="button" class="secondary" id="refreshStagingUploadsBtn" style="padding: 6px 12px; font-size:12px;">刷新上传列表</button>
               </div>
               <div class="table-container">
@@ -3928,6 +4127,36 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           .replace(/'/g, "&#039;");
       }
 
+      function renderCodePreview(codeEl) {
+        if (!codeEl) return;
+        var box = codeEl.closest(".code-preview");
+        if (!box) return;
+        var linesWrap = box.querySelector(".code-preview-lines");
+        if (!linesWrap) return;
+        var text = codeEl.textContent || "";
+        var lines = text.split(/\\r?\\n/);
+        if (lines.length === 0) lines = [""];
+        linesWrap.innerHTML = "";
+        lines.forEach(function(line, index) {
+          var row = document.createElement("div");
+          row.className = "code-line";
+          var numberCell = document.createElement("span");
+          numberCell.className = "code-line-number";
+          numberCell.textContent = String(index + 1);
+          var contentCell = document.createElement("span");
+          contentCell.className = "code-line-content";
+          contentCell.textContent = line || " ";
+          row.appendChild(numberCell);
+          row.appendChild(contentCell);
+          linesWrap.appendChild(row);
+        });
+      }
+
+      function renderAllCodePreviews(root) {
+        var scope = root || document;
+        scope.querySelectorAll(".code-preview code").forEach(renderCodePreview);
+      }
+
       function formatDate(value) {
         if (!value) return "-";
         var d = new Date(value);
@@ -4928,6 +5157,9 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           .then(function(res) {
             state.syncStatus = res.data;
             renderSyncStatusGrid();
+            if ($("syncLastRefreshAt")) {
+              $("syncLastRefreshAt").textContent = "最近刷新：" + formatDate(new Date().toISOString());
+            }
             
             // 初始化所有学期下拉选择器
             var defaultTerm = state.syncStatus ? state.syncStatus.semester : "2025-2026-2";
@@ -4990,13 +5222,11 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         wrap.innerHTML = "";
         
         var list = [
-          { label: "当前版本", val: data.releaseVersion || "-", icon: "🏷️", foot: "在线 release 版本" },
-          { label: "配置学期", val: data.semester || "-", icon: "📅", foot: "教务系统学期" },
-          { label: "Staging 状态", val: data.latestStagingUpload ? data.latestStagingUpload.status : "等待上传", icon: "📦", foot: "CLI 候选数据需审核发布" },
-          { label: "接力上传", val: data.latestRelayUpload ? formatDate(data.latestRelayUpload.uploadedAt) : "暂无", icon: "🔁", foot: "最近 relay-agent 上传" },
-          { label: "行政班总数", val: (data.counts?.classScheduleCount || 0) + " 个", icon: "🏫", foot: "行政班课表" },
-          { label: "课程总数", val: (data.counts?.courseScheduleCount || 0) + " 门", icon: "📚", foot: "资源关联课表" },
-          { label: "最后同步时间", val: formatDate(data.classScheduleUpdatedAt), icon: "🕒", foot: "行政班更新" },
+          { label: "当前正式版本", val: data.releaseVersion || "-", icon: "🏷️", foot: "小程序读取的 active release" },
+          { label: "当前学期", val: data.semester || "-", icon: "📅", foot: "后台配置学期" },
+          { label: "Staging 状态", val: data.latestStagingUpload ? relayStatusText(data.latestStagingUpload.status) : "等待上传", icon: "📦", foot: "候选数据审核状态" },
+          { label: "最近上传", val: data.latestStagingUpload ? formatDate(data.latestStagingUpload.updatedAt || data.latestStagingUpload.createdAt) : "暂无", icon: "⬆️", foot: "CLI gzip 分片上传" },
+          { label: "最后发布", val: formatDate(data.classScheduleUpdatedAt || data.lastUploadTime), icon: "🕒", foot: "线上课表更新时间" },
         ];
         
         list.forEach(function(item) {
@@ -5130,7 +5360,9 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           var uploadedChunks = upload.uploadedChunks || upload.receivedCount || 0;
           var chunkCount = upload.chunkCount || upload.totalChunks || 0;
           var progress = upload.progress != null ? upload.progress : (chunkCount > 0 ? Math.min(100, uploadedChunks / chunkCount * 100) : 0);
+          var progressWidth = Math.max(0, Math.min(100, progress));
           var statusLabel = relayStatusText(upload.status);
+          var statusClass = String(upload.status || "").replace(/[^a-z0-9_-]/gi, "-");
           var duplicateBadge = upload.duplicateReleaseVersion
             ? "<br><span class='badge warning'>" + (upload.duplicateKeepLatest ? "重复候选版本 · 最新" : "重复候选版本 · 可删旧") + "</span>"
             : "";
@@ -5139,8 +5371,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             "<td><code>" + escapeHtml(upload.uploadId || "-") + "</code><br><span style='color:var(--muted);'>" + escapeHtml(upload.fileName || "") + "</span></td>" +
             "<td><strong>" + escapeHtml(upload.term || summary.term || "-") + "</strong><br><span style='color:var(--muted);'>" + escapeHtml(upload.releaseVersion || summary.releaseVersion || "-") + "</span>" + duplicateBadge + "</td>" +
             "<td><div class='staging-size-stack'><span>JSON " + formatBytes(sourceSize) + "</span><span>gzip " + (gzipSize ? formatBytes(gzipSize) : "-") + "</span></div></td>" +
-            "<td>" + progress.toFixed(1) + "%<br><span style='color:var(--muted);'>" + uploadedChunks + "/" + chunkCount + " chunks</span></td>" +
-            "<td><span class='badge info'>" + escapeHtml(statusLabel) + "</span>" + (upload.failureReason ? "<br><span style='color:var(--danger);'>" + escapeHtml(upload.failureReason) + "</span>" : "") + "</td>" +
+            "<td><div class='staging-progress'><div class='staging-progress-track'><div class='staging-progress-fill' style='width:" + progressWidth.toFixed(1) + "%'></div></div><span>" + progress.toFixed(1) + "% · " + uploadedChunks + "/" + chunkCount + " chunks</span></div></td>" +
+            "<td><span class='staging-state-badge " + statusClass + "'>" + escapeHtml(statusLabel) + "</span>" + (upload.failureReason ? "<br><span style='color:var(--danger);font-size:11px;'>" + escapeHtml(upload.failureReason) + "</span>" : "") + "</td>" +
             "<td><div class='staging-count-stack'><span>class " + (counts.classScheduleCount || 0) + "</span><span>teacher " + (counts.teacherScheduleCount || 0) + "</span><span>room " + (counts.classroomScheduleCount || 0) + "</span><span>course " + (counts.courseScheduleCount || 0) + "</span></div></td>" +
             "<td>" + formatDate(upload.updatedAt || upload.createdAt) + "</td>" +
             "<td class='action-cell'><div class='staging-action-row'></div></td>";
@@ -5483,6 +5715,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         if ($("quickUploadCommand")) {
           $("quickUploadCommand").textContent = "cd " + projectDirWin + lineBreak + "npm run sync:local-upload -- --file=" + output + " --server=https://class.katelya.eu.org";
         }
+        renderAllCodePreviews();
 
         // 异步更新右侧运维说明卡片列表
         api("/api/admin/sync/command-guide?term=" + term + "&start=" + startDate)
@@ -5497,7 +5730,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
                   var riskClass = c.risk.indexOf("低") >= 0 ? "low" : (c.risk.indexOf("中高") >= 0 ? "high" : "medium");
                   var riskBadge = "<span class='command-tag " + riskClass + "'>风险: " + c.risk + "</span>";
                   var intranetBadge = c.intranetRequired ? "<span class='command-tag high'>⚠️ 需校园网</span>" : "<span class='command-tag low'>外网可用</span>";
-                  var isDefaultExpanded = (c.id === "local-campus" || c.id === "local-upload" || c.id === "staging-upload");
+                  var isDefaultExpanded = false;
                   
                   var item = document.createElement("div");
                   item.className = "command-card" + (isDefaultExpanded ? "" : " collapsed");
@@ -5507,9 +5740,10 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
                       "<div style='display:flex; gap:6px; align-items: center;'>" + riskBadge + intranetBadge + "</div>" +
                     "</div>" +
                     "<div class='command-body'>" +
-                      "<div class='command-code-box'>" +
-                        "<pre><code>" + escapeHtml(c.command) + "</code></pre>" +
-                        "<button type='button' class='copy-command-btn'>复制全部命令</button>" +
+                      "<div class='code-preview command-code-box'>" +
+                        "<div class='code-preview-toolbar'><span>PowerShell / 运维命令</span><button type='button' class='copy-command-btn'>复制全部命令</button></div>" +
+                        "<pre class='code-raw'><code>" + escapeHtml(c.command) + "</code></pre>" +
+                        "<div class='code-preview-scroller'><div class='code-preview-lines'></div></div>" +
                       "</div>" +
                       "<div class='command-meta-grid'>" +
                         "<div class='command-meta-item'><strong>适用场景</strong><span>" + escapeHtml(c.scene) + "</span></div>" +
@@ -5529,6 +5763,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
                   });
                   syncCommandsWrap.appendChild(item);
                 });
+                renderAllCodePreviews(syncCommandsWrap);
                 
                 syncCommandsWrap.querySelectorAll(".copy-command-btn").forEach(function(btn) {
                   btn.addEventListener("click", function() {
@@ -6148,10 +6383,15 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
               
               var warnings = [];
               
-              // 新生班少判定：行政班课表相比之前减少 50%
-              var activeClassCount = d.counts.classScheduleCount - d.diff.classDelta;
-              if (activeClassCount > 20 && d.counts.classScheduleCount < activeClassCount * 0.5) {
-                warnings.push("警告: 行政班课表总数 (" + d.counts.classScheduleCount + "个) 相比当前线上版本 (" + activeClassCount + "个) 减少超过 50%，可能导致大范围课表缺失！");
+              if (safety.riskDrops && safety.riskDrops.length > 0) {
+                safety.riskDrops.forEach(function(item) {
+                  warnings.push(
+                    item.label + ": 线上 " + item.activeCount +
+                    " -> Staging " + item.stagingCount +
+                    "，下降 " + item.dropPercent + "%" +
+                    (item.severity === "danger" ? "，必须强制确认。" : "，请核对。")
+                  );
+                });
               }
               
               if (res.warnings && res.warnings.length > 0) {
@@ -6194,7 +6434,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
               var forceBox = $("forceConfirmContainer");
               var forceCheckbox = $("stagingForceConfirm");
               if (forceBox) {
-                if (d.diff.isBigChange || safety.requiresForceConfirm) {
+                if (safety.requiresForceConfirm || Number(d.diff.changeRate || 0) > 50) {
                   forceBox.style.display = "block";
                   if (forceCheckbox) forceCheckbox.checked = false;
                   showToast("⚠️ 上传的数据变动较大，发布需要勾选下方二次确认。", "warning");
@@ -7272,6 +7512,9 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         safeBind("flowCopyBtnRelay", "click", function() {
           var text = $("flowCmdTextRelay").textContent;
           if (text) copyText(text);
+        });
+        safeBind("syncRefreshInlineBtn", "click", function() {
+          loadSyncStatus();
         });
 
         // ------------------ 新版同步向导初始化 ------------------

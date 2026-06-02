@@ -3056,7 +3056,8 @@ function buildStagingSafety(data, activeSnapshot) {
   const validation = validateStagingData(data);
   const blockers = validation.errors.slice();
   const warnings = validation.warnings.slice();
-  const activeClassCount = (activeSnapshot?.classSchedules || []).length;
+  const activeCounts = activeSnapshot ? releaseService.countRelease(activeSnapshot) : {};
+  const activeClassCount = activeCounts.classScheduleCount || (activeSnapshot?.classSchedules || []).length;
   const currentTerm = appConfigService.getAdminConfig().currentSemester || "";
   const stagingTerm = data.term || data.semester || "";
   const releaseVersion = data.releaseVersion || data.version || "";
@@ -3064,9 +3065,43 @@ function buildStagingSafety(data, activeSnapshot) {
     releaseVersion &&
     releaseService.listReleases(200).some((item) => item.version === releaseVersion)
   );
-  const dropRate = activeClassCount > 0
-    ? (activeClassCount - counts.classScheduleCount) / activeClassCount
-    : 0;
+  const riskDrops = [];
+  let maxDropRate = 0;
+  let severeDrop = false;
+
+  [
+    { key: "classScheduleCount", label: "行政班课表变化" },
+    { key: "teacherScheduleCount", label: "教师课表变化" },
+    { key: "classroomScheduleCount", label: "教室课表变化" },
+    { key: "courseScheduleCount", label: "课程课表变化" },
+  ].forEach((item) => {
+    const activeCount = Number(activeCounts[item.key] || 0);
+    const stagingCount = Number(counts[item.key] || 0);
+    if (!activeSnapshot || activeCount <= 0 || stagingCount >= activeCount) {
+      return;
+    }
+    const dropRate = (activeCount - stagingCount) / activeCount;
+    if (dropRate <= 0.3) {
+      return;
+    }
+    const dropPercent = parseFloat((dropRate * 100).toFixed(2));
+    maxDropRate = Math.max(maxDropRate, dropRate);
+    if (dropRate > 0.5) {
+      severeDrop = true;
+    }
+    riskDrops.push({
+      key: item.key,
+      label: item.label,
+      activeCount,
+      stagingCount,
+      dropPercent,
+      severity: dropRate > 0.5 ? "danger" : "warning",
+    });
+    warnings.push(
+      `${item.label}: 线上 ${activeCount} -> Staging ${stagingCount}，下降 ${dropPercent}%` +
+      (dropRate > 0.5 ? "，默认禁止发布，必须勾选强制确认。" : "，请核对是否为正常新学期变化。")
+    );
+  });
 
   if (hasClassSchedules && counts.classScheduleCount === 0 && !blockers.includes("缺少班级课程表数据 (classSchedules)")) {
     blockers.push("includeScopes 包含 classSchedules，但 classSchedules=0");
@@ -3080,9 +3115,6 @@ function buildStagingSafety(data, activeSnapshot) {
   if (areStagingCountsAllZero(counts)) {
     blockers.push("counts 全部为 0");
   }
-  if (activeClassCount > 0 && counts.classScheduleCount < activeClassCount * 0.5) {
-    warnings.push(`行政班课表数量从线上 ${activeClassCount} 降至 ${counts.classScheduleCount}，减少超过 50%，发布需要二次确认。`);
-  }
   if (currentTerm && stagingTerm && currentTerm !== stagingTerm) {
     warnings.push(`Staging 学期 ${stagingTerm} 与当前后台配置学期 ${currentTerm} 不一致，请确认不是误传旧学期数据。`);
   }
@@ -3092,12 +3124,14 @@ function buildStagingSafety(data, activeSnapshot) {
 
   return {
     allowPublish: blockers.length === 0,
-    requiresForceConfirm: (activeClassCount > 0 && dropRate > 0.5) || releaseVersionExists,
+    requiresForceConfirm: severeDrop || releaseVersionExists,
     blockers,
     warnings,
     counts,
+    activeCounts,
+    riskDrops,
     activeClassScheduleCount: activeClassCount,
-    classScheduleDropRate: parseFloat(Math.max(0, dropRate * 100).toFixed(2)),
+    classScheduleDropRate: parseFloat(Math.max(0, maxDropRate * 100).toFixed(2)),
     currentTerm,
     stagingTerm,
     releaseVersionExists,
@@ -3600,10 +3634,15 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
     }
 
     if (safety.requiresForceConfirm && !forcePublish) {
+      const riskText = (safety.riskDrops || [])
+        .map((item) => `${item.label}下降 ${item.dropPercent}%（线上 ${item.activeCount}，Staging ${item.stagingCount}）`)
+        .join("；");
       return res.status(400).json({
         success: false,
         code: "CLASS_COUNT_DROP_BLOCKED",
-        message: `行政班课表数量较线上减少 ${safety.classScheduleDropRate}%（线上 ${safety.activeClassScheduleCount}，Staging ${safety.counts.classScheduleCount}），必须二次确认后才能发布。`,
+        message: riskText
+          ? `${riskText}，必须二次确认后才能发布。`
+          : "候选 releaseVersion 已存在或数据风险较高，必须二次确认后才能发布。",
         safety,
       });
     }
@@ -3619,11 +3658,11 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
       const baseCount = Math.max(activeClassNames.length, 1);
       const changeRate = (deletedClasses.length + addedClasses.length) / baseCount;
       
-      if (changeRate > 0.3 && !forcePublish) {
+      if (changeRate > 0.5 && !forcePublish) {
         return res.status(400).json({
           success: false,
           code: "BIG_CHANGE_BLOCKED",
-          message: `Staging 数据变动率达 ${parseFloat((changeRate * 100).toFixed(2))}% (超过 30% 安全熔断值)。为避免新学期数据丢失或覆盖线上，必须勾选“确认强制发布”后方可提交发布。`,
+          message: `Staging 数据变动率达 ${parseFloat((changeRate * 100).toFixed(2))}% (超过 50% 安全熔断值)。为避免新学期数据丢失或覆盖线上，必须勾选“确认强制发布”后方可提交发布。`,
         });
       }
     }
