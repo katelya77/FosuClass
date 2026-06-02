@@ -3,7 +3,7 @@ const path = require("path");
 const zlib = require("zlib");
 const { safeLog } = require("../utils/safeLogger");
 
-const STORAGE_DIR = path.join(__dirname, "../../storage");
+const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const RELEASES_DIR = path.join(STORAGE_DIR, "releases");
 const ACTIVE_RELEASE_PATH = path.join(RELEASES_DIR, "active.json");
 const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
@@ -579,7 +579,47 @@ function activateReleaseFromSnapshot(rawSnapshot) {
 
 function getActiveReleaseInfo() {
   ensureStorageDirs();
-  return readJsonFile(ACTIVE_RELEASE_PATH);
+  const active = readJsonFile(ACTIVE_RELEASE_PATH);
+  if (!active || !active.version) {
+    return null;
+  }
+
+  const files = getReleaseFiles(active.version);
+  const snapshot = readReleaseSnapshot(active.version);
+  const validation = snapshot ? validateReleaseSnapshot(snapshot) : null;
+  const counts = validation?.counts || active.counts || {};
+  const semester = active.semester || snapshot?.semester || snapshot?.term || "";
+
+  return Object.assign({}, active, {
+    version: active.version,
+    releaseVersion: active.version,
+    term: semester,
+    semester,
+    publishedAt: active.activatedAt || active.updatedAt || "",
+    counts,
+    source: "release",
+    status: "active",
+    paths: {
+      releaseDir: files.releaseDir,
+      snapshotPath: files.snapshotPath,
+      manifestPath: files.manifestPath,
+      classesIndexPath: files.classesIndexPath,
+      teachersIndexPath: files.teachersIndexPath,
+      classroomsIndexPath: files.classroomsIndexPath,
+      coursesIndexPath: files.coursesIndexPath,
+    },
+    snapshot: snapshot ? {
+      version: snapshot.version || active.version,
+      releaseVersion: snapshot.releaseVersion || snapshot.version || active.version,
+      term: snapshot.term || snapshot.semester || semester,
+      semester,
+      updatedAt: snapshot.updatedAt || active.updatedAt || "",
+      generatedAt: snapshot.generatedAt || "",
+      source: snapshot.source || "",
+    } : null,
+    valid: validation ? validation.valid : false,
+    errors: validation ? validation.errors : [],
+  });
 }
 
 function readActiveReleaseSnapshot() {
@@ -910,7 +950,9 @@ module.exports = {
   activateReleaseFromSnapshot,
   activateReleaseVersion,
   countRelease,
+  getActiveReleaseInfo,
   getActiveSnapshotData,
+  getReleaseFiles,
   getReleaseStatus,
   deleteReleaseVersion,
   readActiveIndex,

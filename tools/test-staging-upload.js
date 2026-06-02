@@ -6,9 +6,11 @@ const path = require("path");
 const zlib = require("zlib");
 
 const tempRoot = path.join(os.tmpdir(), `fosu-staging-upload-test-${process.pid}-${Date.now()}`);
-process.env.STAGING_DIR = tempRoot;
+process.env.STAGING_DIR = path.join(tempRoot, "staging-uploads");
+process.env.FOSU_STORAGE_DIR = path.join(tempRoot, "storage");
 
 const stagingUploadService = require("../server/src/services/stagingUploadService");
+const releaseService = require("../server/src/services/releaseService");
 
 function sha256(buffer) {
   return crypto.createHash("sha256").update(buffer).digest("hex");
@@ -77,6 +79,49 @@ function buildSnapshot() {
   };
 }
 
+function assertReleasePublishRegression() {
+  assert.strictEqual(
+    typeof releaseService.getActiveReleaseInfo,
+    "function",
+    "releaseService should export getActiveReleaseInfo for staging publish"
+  );
+  assert.strictEqual(
+    typeof releaseService.getReleaseFiles,
+    "function",
+    "releaseService should export getReleaseFiles for active release backup"
+  );
+
+  const snapshot = buildSnapshot();
+  snapshot.releaseVersion = "test-publish-regression-2026-06-02";
+  snapshot.version = snapshot.releaseVersion;
+
+  const published = releaseService.activateReleaseFromSnapshot(snapshot);
+  assert.strictEqual(published.active.version, snapshot.releaseVersion, "activation should update active pointer");
+
+  const active = releaseService.getActiveReleaseInfo();
+  assert(active, "getActiveReleaseInfo should return active release metadata");
+  assert.strictEqual(active.version, snapshot.releaseVersion, "active version should match published staging");
+  assert.strictEqual(active.releaseVersion, snapshot.releaseVersion, "active releaseVersion alias should be populated");
+  assert.strictEqual(active.term, snapshot.term, "active term alias should be populated");
+  assert.strictEqual(active.status, "active", "active release status should be active");
+  assert.strictEqual(active.source, "release", "active release source should identify release storage");
+  assert.strictEqual(active.counts.classScheduleCount, 1, "active counts should be available");
+  assert(active.publishedAt, "active publishedAt should be populated");
+  assert(active.paths && active.paths.snapshotPath, "active release paths should include snapshotPath");
+  assert(active.snapshot && active.snapshot.releaseVersion === snapshot.releaseVersion, "active snapshot summary should be available");
+
+  const status = releaseService.getReleaseStatus();
+  assert.strictEqual(status.activeReleaseVersion, snapshot.releaseVersion, "release status should point at active version");
+
+  const activeSnapshot = releaseService.readActiveReleaseSnapshot();
+  assert(activeSnapshot, "active release snapshot should be readable after publish");
+  assert.strictEqual(activeSnapshot.version, snapshot.releaseVersion, "active snapshot version should match published staging");
+
+  const files = releaseService.getReleaseFiles(snapshot.releaseVersion);
+  assert(fs.existsSync(files.snapshotPath), "published release snapshot should exist");
+  assert(fs.existsSync(files.classesIndexPath), "published release should build class search index");
+}
+
 async function main() {
   const snapshotBuffer = Buffer.from(JSON.stringify(buildSnapshot()), "utf-8");
   const uploadBuffer = zlib.gzipSync(snapshotBuffer);
@@ -140,6 +185,9 @@ async function main() {
   const deleted = stagingUploadService.deleteUpload(upload.uploadId, actor);
   assert.strictEqual(deleted.uploadId, upload.uploadId, "deleteUpload should return deleted upload id");
   assert(!stagingUploadService.listUploads(10).some((item) => item.uploadId === upload.uploadId), "deleted upload should be removed from list");
+
+  assertReleasePublishRegression();
+  console.log("Staging publish regression smoke test passed.");
 
   const resolvedRoot = path.resolve(tempRoot);
   const relativeRoot = path.relative(os.tmpdir(), resolvedRoot);
