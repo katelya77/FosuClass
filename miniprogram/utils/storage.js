@@ -244,6 +244,54 @@ function clearRecentSchedules() {
   return [];
 }
 
+function getSchoolIndexCacheKey(term, releaseVersion, type, params = {}) {
+  const base = `school:index:${term}:${releaseVersion}:${type}`;
+  const subPieces = [];
+  if (params.q) subPieces.push(`q=${encodeURIComponent(params.q)}`);
+  if (params.collegeCode) subPieces.push(`college=${params.collegeCode}`);
+  if (params.grade) subPieces.push(`grade=${params.grade}`);
+  if (params.majorCode) subPieces.push(`major=${params.majorCode}`);
+  if (params.campus) subPieces.push(`campus=${encodeURIComponent(params.campus)}`);
+  if (params.limit) subPieces.push(`limit=${params.limit}`);
+  if (subPieces.length > 0) {
+    return `${base}:${subPieces.join("&")}`;
+  }
+  return base;
+}
+
+function getSchoolFilterCacheKey(term, releaseVersion) {
+  return `school:filters:${term}:${releaseVersion}`;
+}
+
+function getScheduleDetailCacheKey(term, releaseVersion, type, id) {
+  return `school:detail:${term}:${releaseVersion}:${type}:${id}`;
+}
+
+function readSameVersionIndexCache(term, releaseVersion, type, params = {}) {
+  try {
+    const key = getSchoolIndexCacheKey(term, releaseVersion, type, params);
+    const cached = wx.getStorageSync(key);
+    if (!cached) return null;
+    const ttl = 30 * 60 * 1000; // 30 mins ttl
+    if (Date.now() - cached.savedAt > ttl) return null;
+    return cached.data || null;
+  } catch (error) {
+    return null;
+  }
+}
+
+function writeSameVersionIndexCache(term, releaseVersion, type, data, params = {}) {
+  try {
+    const key = getSchoolIndexCacheKey(term, releaseVersion, type, params);
+    wx.setStorageSync(key, {
+      savedAt: Date.now(),
+      data,
+    });
+  } catch (error) {
+    // ignore
+  }
+}
+
 function clearAllSchoolCaches() {
   try {
     const info = wx.getStorageInfoSync();
@@ -299,6 +347,11 @@ module.exports = {
   removeRecentSchedule,
   clearRecentSchedules,
   clearAllSchoolCaches,
+  getSchoolIndexCacheKey,
+  getSchoolFilterCacheKey,
+  getScheduleDetailCacheKey,
+  readSameVersionIndexCache,
+  writeSameVersionIndexCache,
 };
 
 

@@ -6,7 +6,38 @@
 
   <notice-ticker notices="{{appConfig.notices}}" page-key="school" max-count="1" />
 
-  <block wx:if="{{catalogEmpty}}">
+  <!-- 1. 全局加载中/骨架屏状态 -->
+  <block wx:if="{{dataLoadState === 'loading' || dataLoadState === 'slow'}}">
+    <view class="school-skeleton-global card" style="margin: 24rpx; padding: 60rpx 40rpx; text-align: center; border-radius: 16rpx; background: #ffffff;">
+      <view class="skeleton-line wide" style="height: 40rpx; background: #f2f2f2; margin-bottom: 20rpx; border-radius: 8rpx; width: 60%; margin-left: auto; margin-right: auto;"></view>
+      <view class="skeleton-line" style="height: 30rpx; background: #f2f2f2; margin-bottom: 20rpx; border-radius: 8rpx; width: 80%; margin-left: auto; margin-right: auto;"></view>
+      <view class="skeleton-line short" style="height: 30rpx; background: #f2f2f2; border-radius: 8rpx; width: 40%; margin-left: auto; margin-right: auto;"></view>
+      <view class="slow-loading-hint" wx:if="{{dataLoadState === 'slow'}}" style="margin-top: 40rpx; color: #888; font-size: 26rpx; display: flex; align-items: center; justify-content: center;">
+        <text class="slow-loading-icon" style="margin-right: 10rpx; animation: spin 2s linear infinite;">⏳</text>网络较慢，数据正在加载，可点击重试
+      </view>
+    </view>
+  </block>
+
+  <!-- 2. 全局网络超时 -->
+  <block wx:elif="{{dataLoadState === 'timeout'}}">
+    <view class="error-retry-card card" style="margin: 24rpx; padding: 60rpx 40rpx; text-align: center; border-radius: 16rpx; background: #ffffff; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.05);">
+      <view class="error-retry-title" style="font-size: 32rpx; font-weight: bold; color: #333; margin-bottom: 16rpx;">网络请求超时</view>
+      <view class="error-retry-desc" style="font-size: 26rpx; color: #666; margin-bottom: 30rpx;">由于服务器距离较远或网络波动，加载时间较长。</view>
+      <button class="error-retry-btn" bindtap="onRetryLoading" style="background: #1890ff; color: #fff; border-radius: 8rpx; font-size: 28rpx; width: 240rpx;">重新加载</button>
+    </view>
+  </block>
+
+  <!-- 3. 全局网络连接失败 -->
+  <block wx:elif="{{dataLoadState === 'networkError'}}">
+    <view class="error-retry-card card" style="margin: 24rpx; padding: 60rpx 40rpx; text-align: center; border-radius: 16rpx; background: #ffffff; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.05);">
+      <view class="error-retry-title" style="font-size: 32rpx; font-weight: bold; color: #333; margin-bottom: 16rpx;">课表索引加载失败</view>
+      <view class="error-retry-desc" style="font-size: 26rpx; color: #666; margin-bottom: 30rpx;">无法连接到教务服务，请检查网络后重试。</view>
+      <button class="error-retry-btn" bindtap="onRetryLoading" style="background: #1890ff; color: #fff; border-radius: 8rpx; font-size: 28rpx; width: 240rpx;">重新加载</button>
+    </view>
+  </block>
+
+  <!-- 4. 全局未同步课程数据 -->
+  <block wx:elif="{{dataLoadState === 'noRelease' || catalogEmpty}}">
     <view class="card" style="margin: 24rpx; padding: 60rpx 40rpx; text-align: center; border-radius: 16rpx; background: #ffffff; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.05);">
       <empty-state
         title="暂未同步课程数据"
@@ -15,6 +46,7 @@
     </view>
   </block>
 
+  <!-- 5. 页面加载成功，展示核心内容 -->
   <block wx:else>
     <!-- 缓存恢复状态小提示栏 -->
     <view class="restore-hint-bar" wx:if="{{restoreHint}}">
@@ -163,10 +195,10 @@
         </block>
 
         <!-- 超时重试卡片 -->
-        <block wx:if="{{loadingState === 'timeout'}}">
+        <block wx:if="{{loadingState === 'timeout' || loadingState === 'networkError'}}">
           <view class="error-retry-card card">
-            <view class="error-retry-title">加载较慢</view>
-            <view class="error-retry-desc">可能由于服务器距离较远或网络波动，加载时间较长。</view>
+            <view class="error-retry-title">{{loadingState === 'timeout' ? '请求超时' : '请求失败'}}</view>
+            <view class="error-retry-desc">{{loadingState === 'timeout' ? '网络较慢，数据正在加载，可点击重试' : '课表索引加载失败，请重试'}}</view>
             <button class="error-retry-btn" bindtap="onRetryLoading">重新加载</button>
           </view>
         </block>
@@ -280,10 +312,10 @@
         </block>
 
         <!-- 超时重试卡片 -->
-        <block wx:if="{{loadingState === 'timeout'}}">
+        <block wx:if="{{loadingState === 'timeout' || loadingState === 'networkError'}}">
           <view class="error-retry-card card">
-            <view class="error-retry-title">加载较慢</view>
-            <view class="error-retry-desc">可能由于服务器距离较远或网络波动，加载时间较长。</view>
+            <view class="error-retry-title">{{loadingState === 'timeout' ? '请求超时' : '请求失败'}}</view>
+            <view class="error-retry-desc">{{loadingState === 'timeout' ? '网络较慢，数据正在加载，可点击重试' : '课表索引加载失败，请重试'}}</view>
             <button class="error-retry-btn" bindtap="onRetryLoading">重新加载</button>
           </view>
         </block>
@@ -355,10 +387,10 @@
         </block>
 
         <!-- 超时重试卡片 -->
-        <block wx:if="{{loadingState === 'timeout'}}">
+        <block wx:if="{{loadingState === 'timeout' || loadingState === 'networkError'}}">
           <view class="error-retry-card card">
-            <view class="error-retry-title">加载较慢</view>
-            <view class="error-retry-desc">可能由于服务器距离较远或网络波动，加载时间较长。</view>
+            <view class="error-retry-title">{{loadingState === 'timeout' ? '请求超时' : '请求失败'}}</view>
+            <view class="error-retry-desc">{{loadingState === 'timeout' ? '网络较慢，数据正在加载，可点击重试' : '课表索引加载失败，请重试'}}</view>
             <button class="error-retry-btn" bindtap="onRetryLoading">重新加载</button>
           </view>
         </block>
@@ -423,10 +455,10 @@
         </block>
 
         <!-- 超时重试卡片 -->
-        <block wx:if="{{loadingState === 'timeout'}}">
+        <block wx:if="{{loadingState === 'timeout' || loadingState === 'networkError'}}">
           <view class="error-retry-card card">
-            <view class="error-retry-title">加载较慢</view>
-            <view class="error-retry-desc">可能由于服务器距离较远或网络波动，加载时间较长。</view>
+            <view class="error-retry-title">{{loadingState === 'timeout' ? '请求超时' : '请求失败'}}</view>
+            <view class="error-retry-desc">{{loadingState === 'timeout' ? '网络较慢，数据正在加载，可点击重试' : '课表索引加载失败，请重试'}}</view>
             <button class="error-retry-btn" bindtap="onRetryLoading">重新加载</button>
           </view>
         </block>

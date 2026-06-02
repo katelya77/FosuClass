@@ -55,7 +55,7 @@ function loadAppConfig(options) {
 
   // 拼接时间戳 ts 避免 CDN/客户端 HTTP 缓存
   const url = `/api/fosu/app-config?ts=${Date.now()}`;
-  return request.get(url, {}, { showLoading: false, silentError: true, timeout: 5000 })
+  return request.get(url, {}, { showLoading: false, silentError: true, timeout: 8000 })
     .then((res) => {
       const config = normalizeConfig(res);
       cacheAppConfig(config);
