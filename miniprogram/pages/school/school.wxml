@@ -90,8 +90,8 @@
             </picker>
           </view>
 
-          <button class="primary-search-btn" loading="{{loading}}" bindtap="searchClassSchedule">
-            {{selectedClassIndex >= 0 && classesOptions[selectedClassIndex] ? '查看 ' + classesOptions[selectedClassIndex].className + ' 课表' : '查看班级课表'}}
+          <button class="primary-search-btn {{ (selectedCollegeIndex < 0 || selectedGradeIndex < 0 || selectedMajorIndex < 0) ? 'disabled' : '' }}" disabled="{{selectedCollegeIndex < 0 || selectedGradeIndex < 0 || selectedMajorIndex < 0}}" loading="{{loading}}" bindtap="searchClassSchedule">
+            {{ (selectedCollegeIndex < 0 || selectedGradeIndex < 0 || selectedMajorIndex < 0) ? '请选择完整条件' : (selectedClassIndex >= 0 && classesOptions[selectedClassIndex] ? '查看 ' + classesOptions[selectedClassIndex].className + ' 课表' : '查看班级课表') }}
           </button>
           
           <button class="reset-filter-btn" bindtap="resetFilters">
@@ -123,7 +123,10 @@
               bindtap="goRecentSchedule"
             >
               <view class="recent-main">
-                <view class="recent-title">{{item.title || '课表'}}</view>
+                <view class="recent-title-row">
+                  <view class="recent-title">{{item.title || '课表'}}</view>
+                  <view class="old-version-badge" wx:if="{{item.isOldVersion}}">旧版本</view>
+                </view>
                 <view class="recent-meta">
                   <block wx:if="{{item.collegeName}}">{{item.collegeName}} · </block>
                   <block wx:if="{{item.grade}}">{{item.grade}}级 · </block>
@@ -395,5 +398,26 @@
       </view>
     </block>
     <view class="school-footer-disclaimer">{{runtimeDisclaimer}}</view>
+
+    <!-- 仅开发版/体验版展示的诊断调试面板 -->
+    <view class="debug-panel" wx:if="{{isDebugMode}}">
+      <view class="debug-title">🔍 全校页面版本调试面板</view>
+      <view class="debug-grid">
+        <view class="debug-row"><text class="debug-label">配置版本:</text><text class="debug-val">{{debugInfo.appConfigVersion}}</text></view>
+        <view class="debug-row"><text class="debug-label">页面版本:</text><text class="debug-val">{{debugInfo.pageConfigVersion}}</text></view>
+        <view class="debug-row"><text class="debug-label">缓存版本:</text><text class="debug-val">{{debugInfo.cachedConfigVersion}}</text></view>
+        <view class="debug-row"><text class="debug-label">当前学期:</text><text class="debug-val">{{debugInfo.term}}</text></view>
+        <view class="debug-row"><text class="debug-label">最后请求:</text><text class="debug-val">{{debugInfo.lastRequestTime || '无'}}</text></view>
+        <view class="debug-row"><text class="debug-label">命中缓存:</text><text class="debug-val">{{debugInfo.hitCache ? '是' : '否'}}</text></view>
+      </view>
+      <view class="debug-counts-title">当前版本索引项数：</view>
+      <view class="debug-grid">
+        <view class="debug-row"><text class="debug-label">班级数:</text><text class="debug-val">{{debugInfo.counts.classes || 0}}</text></view>
+        <view class="debug-row"><text class="debug-label">教师数:</text><text class="debug-val">{{debugInfo.counts.teachers || 0}}</text></view>
+        <view class="debug-row"><text class="debug-label">教室数:</text><text class="debug-val">{{debugInfo.counts.classrooms || 0}}</text></view>
+        <view class="debug-row"><text class="debug-label">课程数:</text><text class="debug-val">{{debugInfo.counts.courses || 0}}</text></view>
+      </view>
+      <button class="debug-clear-btn" bindtap="forceReloadAllCaches">清理全校课表缓存并重新加载</button>
+    </view>
   </block>
 </view>

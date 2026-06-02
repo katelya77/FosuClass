@@ -3741,11 +3741,48 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
       relayService.markUploadPublished(stagingData.relayUploadId, status.activeReleaseVersion);
     }
 
+    // Clear old memory cache
+    releaseService.clearDerivedCache();
+
+    // Rebuild and pre-warm indices for the active release
+    let indexBuildResult = { success: true, count: 0 };
+    try {
+      const kinds = ["class", "teacher", "classroom", "course"];
+      let totalItems = 0;
+      kinds.forEach((kind) => {
+        const warmed = releaseService.readActiveIndex(kind, status.activeReleaseVersion);
+        if (warmed && warmed.success) {
+          totalItems += (warmed.items || []).length;
+        } else {
+          throw new Error(`Failed to build index for ${kind}: ${warmed ? warmed.reasonCode : 'unknown'}`);
+        }
+      });
+      indexBuildResult.count = totalItems;
+    } catch (indexErr) {
+      console.error("Failed to build index on publish:", indexErr);
+      indexBuildResult = { success: false, error: indexErr.message };
+    }
+
+    if (!indexBuildResult.success) {
+      return res.status(500).json({
+        success: false,
+        message: "发布成功但索引构建失败：" + indexBuildResult.error,
+        version: status.activeReleaseVersion,
+        semester: status.semester,
+        counts,
+        indexBuildResult
+      });
+    }
+
     return res.json({
       success: true,
       message: "Staging 新版本已成功发布上线！",
       version: status.activeReleaseVersion,
+      releaseVersion: status.activeReleaseVersion,
+      term: status.semester,
       semester: status.semester,
+      counts,
+      indexBuildResult
     });
   } catch (error) {
     console.error("Staging publish failed:", error);
@@ -3836,6 +3873,143 @@ router.delete("/sync/releases/:version", adminAuth.verifyAdminAccess, (req, res)
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/sync/releases/rebuild-index", adminAuth.verifyAdminAccess, async (req, res) => {
+  console.log("👉 [admin.js] 收到重建索引请求, version =", req.body.version);
+  try {
+    const version = req.body.version;
+    if (!version) {
+      return res.status(400).json({ success: false, message: "缺少必要参数 version" });
+    }
+    
+    // Clear index memory cache first
+    releaseService.clearDerivedCache();
+    
+    const files = releaseService.getReleaseFiles(version);
+    const snapshot = releaseService.readReleaseSnapshot(version);
+    if (!snapshot) {
+      return res.status(404).json({ success: false, message: `找不到版本 ${version} 的数据快照` });
+    }
+    
+    // Re-write derived files and search indexes (only rebuild indexes to prevent I/O timeouts)
+    const derived = releaseService.writeDerivedIndexes(snapshot, files, true);
+    
+    // Warm cache
+    const kinds = ["class", "teacher", "classroom", "course"];
+    let totalItems = 0;
+    kinds.forEach((kind) => {
+      const warmed = releaseService.readActiveIndex(kind, version);
+      if (warmed && warmed.success) {
+        totalItems += (warmed.items || []).length;
+      }
+    });
+    
+    writeAuditLog(req, "rebuild-index", "sync-release", version, `重建版本 ${version} 的轻量索引`);
+    
+    return res.json({
+      success: true,
+      message: `已成功重建版本 ${version} 的轻量索引`,
+      version,
+      totalItems,
+      derived
+    });
+  } catch (error) {
+    console.error("Rebuild index failed:", error);
+    return res.status(500).json({ success: false, message: "重建索引失败: " + error.message });
+  }
+});
+
+router.get("/sync/releases/check-availability", adminAuth.verifyAdminAccess, async (req, res) => {
+  try {
+    const active = releaseService.getActiveReleaseInfo();
+    const result = {
+      activeReleaseVersion: active ? active.version : null,
+      appConfig: { status: "unknown", message: "" },
+      searchIndex: { status: "unknown", details: {} },
+      scheduleDetail: { status: "unknown", details: {} }
+    };
+    
+    // 1. Check App Config
+    try {
+      const publicConfig = appConfigService.getPublicAppConfig();
+      if (publicConfig && publicConfig.success && publicConfig.data) {
+        result.appConfig.status = "OK";
+        result.appConfig.message = `学期: ${publicConfig.data.currentSemester}, 版本: ${publicConfig.data.dataVersion?.releaseVersion || '无'}`;
+      } else {
+        result.appConfig.status = "Fail";
+        result.appConfig.message = "返回 success: false 或无数据";
+      }
+    } catch (e) {
+      result.appConfig.status = "Fail";
+      result.appConfig.message = e.message;
+    }
+    
+    // If there is no active release, we cannot check index & details
+    if (!active || !active.version) {
+      result.searchIndex.status = "Fail";
+      result.searchIndex.message = "无当前活跃 Release 版本";
+      result.scheduleDetail.status = "Fail";
+      result.scheduleDetail.message = "无当前活跃 Release 版本";
+      return res.json({ success: true, result });
+    }
+    
+    // 2. Check Search Index
+    try {
+      const kinds = ["class", "teacher", "classroom", "course"];
+      let allOk = true;
+      kinds.forEach((kind) => {
+        const indexResult = releaseService.readActiveIndex(kind, active.version);
+        if (indexResult && indexResult.success) {
+          result.searchIndex.details[kind] = { status: "OK", count: (indexResult.items || []).length };
+        } else {
+          result.searchIndex.details[kind] = { status: "Fail", message: indexResult ? indexResult.reasonCode : "未知错误" };
+          allOk = false;
+        }
+      });
+      result.searchIndex.status = allOk ? "OK" : "Fail";
+    } catch (e) {
+      result.searchIndex.status = "Fail";
+      result.searchIndex.message = e.message;
+    }
+    
+    // 3. Check Schedule Details by reading a few items from index
+    try {
+      const kinds = ["class", "teacher", "classroom", "course"];
+      let allOk = true;
+      for (const kind of kinds) {
+        const indexResult = releaseService.readActiveIndex(kind, active.version);
+        if (indexResult && indexResult.success && indexResult.items && indexResult.items.length > 0) {
+          // Take first item and read schedule detail
+          const firstItem = indexResult.items[0];
+          const firstId = firstItem.id || firstItem.detailId || firstItem.classId;
+          if (firstId) {
+            const detailResult = releaseService.readActiveSchedule(kind, firstId, active.version);
+            if (detailResult && detailResult.success && detailResult.schedule) {
+              result.scheduleDetail.details[kind] = { status: "OK", testId: firstId, testName: firstItem.name || "" };
+            } else {
+              result.scheduleDetail.details[kind] = { status: "Fail", testId: firstId, message: detailResult ? detailResult.reasonCode : "读取失败" };
+              allOk = false;
+            }
+          } else {
+            result.scheduleDetail.details[kind] = { status: "Fail", message: "索引项中没有有效的 ID" };
+            allOk = false;
+          }
+        } else {
+          result.scheduleDetail.details[kind] = { status: "Empty", message: "没有索引项可测试" };
+          allOk = false;
+        }
+      }
+      result.scheduleDetail.status = allOk ? "OK" : "Fail";
+    } catch (e) {
+      result.scheduleDetail.status = "Fail";
+      result.scheduleDetail.message = e.message;
+    }
+    
+    return res.json({ success: true, result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
   }
 });
 

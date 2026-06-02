@@ -5858,6 +5858,15 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           }
           actions.appendChild(actionBtn);
 
+          var rebuildBtn = document.createElement("button");
+          rebuildBtn.className = "btn ghost";
+          rebuildBtn.style = "padding: 3px 8px; font-size:11px; margin-right: 4px;";
+          rebuildBtn.textContent = "重建索引";
+          rebuildBtn.addEventListener("click", function() {
+            rebuildReleaseIndex(r.version, rebuildBtn);
+          });
+          actions.appendChild(rebuildBtn);
+
           var deleteBtn = document.createElement("button");
           deleteBtn.className = "btn danger";
           deleteBtn.style = "padding: 3px 8px; font-size:11px;";
@@ -5869,6 +5878,54 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           actions.appendChild(deleteBtn);
           tbody.appendChild(card);
         });
+      }
+
+      function rebuildReleaseIndex(version, btn) {
+        var restoreButton = setButtonLoading(btn, "重建中...");
+        api("/api/admin/sync/releases/rebuild-index", {
+          method: "POST",
+          body: JSON.stringify({ version: version })
+        })
+          .then(function(res) {
+            showToast("重建索引成功！共处理 " + res.totalItems + " 项。", "success");
+            loadSyncStatus();
+          })
+          .catch(function(err) {
+            restoreButton();
+            showToast(err.message || "重建索引失败", "error");
+          });
+      }
+
+      window.checkActiveReleaseAvailability = function(btn) {
+        var restoreButton = setButtonLoading(btn, "检查中...");
+        api("/api/admin/sync/releases/check-availability")
+          .then(function(res) {
+            restoreButton();
+            var r = res.result;
+            var report = "Active Release 诊断结果：\n\n";
+            report += "活跃版本: " + (r.activeReleaseVersion || "无") + "\n";
+            report += "App 配置: " + r.appConfig.status + " (" + r.appConfig.message + ")\n\n";
+            
+            report += "索引文件状态:\n";
+            Object.keys(r.searchIndex.details || {}).forEach(function(k) {
+              var d = r.searchIndex.details[k];
+              report += " - [" + k + "] " + d.status + (d.count != null ? " (" + d.count + "项)" : " (" + d.message + ")") + "\n";
+            });
+            report += "索引总体: " + r.searchIndex.status + "\n\n";
+            
+            report += "详情加载状态:\n";
+            Object.keys(r.scheduleDetail.details || {}).forEach(function(k) {
+              var d = r.scheduleDetail.details[k];
+              report += " - [" + k + "] " + d.status + (d.testId ? " (测试ID: " + d.testId + ", 名: " + d.testName + ")" : " (" + d.message + ")") + "\n";
+            });
+            report += "详情总体: " + r.scheduleDetail.status + "\n";
+            
+            alert(report);
+          })
+          .catch(function(err) {
+            restoreButton();
+            showToast("可用性检查失败: " + err.message, "error");
+          });
       }
 
       // 执行回滚

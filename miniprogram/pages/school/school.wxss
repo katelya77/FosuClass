@@ -490,3 +490,93 @@ picker {
   line-height: 1.5;
   text-align: center;
 }
+
+/* 旧版本徽章样式 */
+.recent-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.old-version-badge {
+  font-size: 18rpx;
+  color: #d32f2f;
+  background-color: #ffebee;
+  padding: 2rpx 8rpx;
+  border-radius: 4rpx;
+  font-weight: bold;
+}
+
+/* 按钮禁用状态样式 */
+.primary-search-btn.disabled {
+  background: #cbd5e1 !important;
+  color: #64748b !important;
+  box-shadow: none !important;
+}
+
+/* 诊断调试面板样式 */
+.debug-panel {
+  margin: 32rpx 12rpx calc(32rpx + env(safe-area-inset-bottom));
+  padding: 24rpx;
+  border-radius: 16rpx;
+  background-color: #1e293b;
+  color: #e2e8f0;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.2);
+}
+
+.debug-title {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #38bdf8;
+  margin-bottom: 16rpx;
+  border-bottom: 1rpx solid #334155;
+  padding-bottom: 8rpx;
+}
+
+.debug-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12rpx 20rpx;
+  margin-bottom: 20rpx;
+}
+
+.debug-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 22rpx;
+}
+
+.debug-label {
+  color: #94a3b8;
+}
+
+.debug-val {
+  color: #f1f5f9;
+  font-family: monospace;
+}
+
+.debug-counts-title {
+  font-size: 22rpx;
+  font-weight: bold;
+  color: #38bdf8;
+  margin: 16rpx 0 8rpx;
+}
+
+.debug-clear-btn {
+  width: 100% !important;
+  height: 64rpx;
+  border-radius: 8rpx;
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 12rpx;
+}
+
+.debug-clear-btn:active {
+  background: #dc2626;
+}
