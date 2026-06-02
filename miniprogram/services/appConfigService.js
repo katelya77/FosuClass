@@ -42,27 +42,24 @@ function cacheAppConfig(config) {
   }
 }
 
+let freshConfigFetched = false;
+
 function loadAppConfig(options) {
   const opt = Object.assign({ force: false }, options || {});
   const cached = getCachedAppConfig();
-  if (cached && !opt.force) {
-    request.get("/api/fosu/app-config", {}, { showLoading: false, silentError: true })
-      .then((res) => {
-        const config = normalizeConfig(res);
-        cacheAppConfig(config);
-        const app = getApp();
-        if (app && app.globalData) {
-          app.globalData.appConfig = config;
-        }
-      })
-      .catch(() => {});
+
+  // 如果在当前 Session 中已经网络加载过，且不需要 force，则直接返回本地缓存
+  if (cached && !opt.force && freshConfigFetched) {
     return Promise.resolve(cached);
   }
 
-  return request.get("/api/fosu/app-config", {}, { showLoading: false, silentError: true })
+  // 拼接时间戳 ts 避免 CDN/客户端 HTTP 缓存
+  const url = `/api/fosu/app-config?ts=${Date.now()}`;
+  return request.get(url, {}, { showLoading: false, silentError: true })
     .then((res) => {
       const config = normalizeConfig(res);
       cacheAppConfig(config);
+      freshConfigFetched = true; // 置为已成功获取最新网络配置
       const app = getApp();
       if (app && app.globalData) {
         app.globalData.appConfig = config;
@@ -70,6 +67,7 @@ function loadAppConfig(options) {
       return config;
     })
     .catch((error) => {
+      console.warn("⚠️ [appConfigService] 网络请求 app-config 失败", error);
       if (cached) {
         return cached;
       }

@@ -37,7 +37,11 @@
     "test:admin-sync-page": "node tools/test-admin-sync-page.js",
     "test:staging-upload": "node tools/test-staging-upload.js",
     "test:relay-agent": "node tools/test-relay-agent.js",
-    "diagnose:personal-network": "node server/scripts/diagnose-personal-network.js"
+    "diagnose:personal-network": "node server/scripts/diagnose-personal-network.js",
+    "test:release-index": "node server/scripts/test-release-index.js",
+    "test:fusu-search-index": "node server/scripts/test-fusu-search-index.js",
+    "test:fusu-schedule-detail": "node server/scripts/test-fusu-schedule-detail.js",
+    "test:miniprogram-cache-version": "node server/scripts/test-miniprogram-cache-version.js"
   },
   "repository": {
     "type": "git",

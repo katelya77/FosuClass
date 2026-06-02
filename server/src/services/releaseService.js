@@ -211,14 +211,16 @@ function buildSchedulePayload(schedule, extra) {
   return payload;
 }
 
-function buildClassDerivedFiles(snapshot, files) {
+function buildClassDerivedFiles(snapshot, files, onlyIndexes = false) {
   ensureDir(files.classScheduleDir);
   const index = asArray(snapshot.classSchedules).map((item, position) => {
     const name = getFirstText(item, ["className", "title", "name"]) || `class-${position + 1}`;
     const id = safeScheduleId("class", item.classId || item.id, `${snapshot.semester}:${name}`, position);
     const summary = summarizeCourses(item);
-    const payload = buildSchedulePayload(item, { id });
-    writeJsonAtomic(path.join(files.classScheduleDir, `${id}.json`), payload);
+    if (!onlyIndexes) {
+      const payload = buildSchedulePayload(item, { id });
+      writeJsonAtomic(path.join(files.classScheduleDir, `${id}.json`), payload);
+    }
     return {
       id,
       name,
@@ -240,7 +242,7 @@ function buildClassDerivedFiles(snapshot, files) {
   return index;
 }
 
-function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names, nameKeys, dirPath, indexPath) {
+function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names, nameKeys, dirPath, indexPath, onlyIndexes = false) {
   ensureDir(dirPath);
   const scheduleByName = new Map();
   asArray(schedules).forEach((schedule, index) => {
@@ -261,7 +263,9 @@ function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names,
     const schedule = matched ? matched.schedule : Object.assign({}, source, { courses: [] });
     const id = safeScheduleId(kind, source.id || source[`${kind}Id`] || schedule.id, `${snapshot.semester}:${name}`, sourceIndex);
     const summary = summarizeCourses(schedule);
-    writeJsonAtomic(path.join(dirPath, `${id}.json`), buildSchedulePayload(schedule, { id }));
+    if (!onlyIndexes) {
+      writeJsonAtomic(path.join(dirPath, `${id}.json`), buildSchedulePayload(schedule, { id }));
+    }
     index.push({
       id,
       name,
@@ -282,9 +286,9 @@ function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names,
   return index;
 }
 
-function writeDerivedIndexes(snapshot, files) {
+function writeDerivedIndexes(snapshot, files, onlyIndexes = false) {
   const resources = getResources(snapshot);
-  const classes = buildClassDerivedFiles(snapshot, files);
+  const classes = buildClassDerivedFiles(snapshot, files, onlyIndexes);
   const teachers = buildNamedScheduleDerivedFiles(
     snapshot,
     files,
@@ -293,7 +297,8 @@ function writeDerivedIndexes(snapshot, files) {
     resources.teachers,
     ["teacherName", "name", "title"],
     files.teacherScheduleDir,
-    files.teachersIndexPath
+    files.teachersIndexPath,
+    onlyIndexes
   );
   const classrooms = buildNamedScheduleDerivedFiles(
     snapshot,
@@ -303,7 +308,8 @@ function writeDerivedIndexes(snapshot, files) {
     resources.classrooms,
     ["roomName", "classroomName", "classroom", "name"],
     files.classroomScheduleDir,
-    files.classroomsIndexPath
+    files.classroomsIndexPath,
+    onlyIndexes
   );
   const courses = buildNamedScheduleDerivedFiles(
     snapshot,
@@ -313,7 +319,8 @@ function writeDerivedIndexes(snapshot, files) {
     resources.courses,
     ["courseName", "displayCourseName", "canonicalCourseName", "name", "title"],
     files.courseScheduleDir,
-    files.coursesIndexPath
+    files.coursesIndexPath,
+    onlyIndexes
   );
   return { classes, teachers, classrooms, courses };
 }
@@ -814,8 +821,24 @@ function ensureDerivedIndexes(version, fallbackSnapshot) {
   return files;
 }
 
-function readActiveIndex(kind) {
-  const active = getReadableReleaseInfo();
+function readActiveIndex(kind, version) {
+  let active;
+  if (version) {
+    const normalized = normalizeVersion(version);
+    const snapshot = readReleaseSnapshot(normalized);
+    if (snapshot) {
+      active = {
+        source: "release",
+        version: normalized,
+        semester: snapshot.semester || snapshot.term || "",
+        updatedAt: snapshot.updatedAt || "",
+        snapshot,
+      };
+    }
+  }
+  if (!active) {
+    active = getReadableReleaseInfo();
+  }
   if (!active || !active.version) {
     return { success: false, reasonCode: "NO_RELEASE_DATA", items: [] };
   }
@@ -833,7 +856,7 @@ function readActiveIndex(kind) {
   const items = readJsonFile(info.indexPath) || [];
   const value = {
     success: true,
-    dataSource: active.source === "legacy-current" ? "legacy-current-index" : "release-index",
+    dataSource: active.source === "legacy-current" ? "legacy-current-index" : (version ? "release-isolated-index" : "release-index"),
     version: active.version,
     semester: active.semester,
     updatedAt: active.updatedAt,
@@ -845,7 +868,8 @@ function readActiveIndex(kind) {
 }
 
 function searchActiveIndex(kind, query, options = {}) {
-  const index = readActiveIndex(kind);
+  const version = options.releaseVersion || options.version;
+  const index = readActiveIndex(kind, version);
   if (!index.success) {
     return index;
   }
@@ -895,8 +919,24 @@ function searchActiveIndex(kind, query, options = {}) {
   });
 }
 
-function readActiveSchedule(kind, id) {
-  const active = getReadableReleaseInfo();
+function readActiveSchedule(kind, id, version) {
+  let active;
+  if (version) {
+    const normalized = normalizeVersion(version);
+    const snapshot = readReleaseSnapshot(normalized);
+    if (snapshot) {
+      active = {
+        source: "release",
+        version: normalized,
+        semester: snapshot.semester || snapshot.term || "",
+        updatedAt: snapshot.updatedAt || "",
+        snapshot,
+      };
+    }
+  }
+  if (!active) {
+    active = getReadableReleaseInfo();
+  }
   if (!active || !active.version) {
     return { success: false, reasonCode: "NO_RELEASE_DATA" };
   }
@@ -923,7 +963,7 @@ function readActiveSchedule(kind, id) {
   const schedule = readJsonFile(filePath);
   const value = {
     success: true,
-    dataSource: active.source === "legacy-current" ? "legacy-current-index" : "release-index",
+    dataSource: active.source === "legacy-current" ? "legacy-current-index" : (version ? "release-isolated-index" : "release-index"),
     version: active.version,
     semester: schedule?.semester || active.semester,
     updatedAt: schedule?.updatedAt || active.updatedAt,
@@ -944,6 +984,10 @@ function parseSnapshotBuffer(buffer) {
   };
 }
 
+function clearDerivedCache() {
+  derivedCache.clear();
+}
+
 module.exports = {
   ACTIVE_RELEASE_PATH,
   RELEASES_DIR,
@@ -961,8 +1005,10 @@ module.exports = {
   normalizeVersion,
   parseSnapshotBuffer,
   readActiveReleaseSnapshot,
+  readReleaseSnapshot,
   searchActiveIndex,
   validateReleaseSnapshot,
   writeDerivedIndexes,
   writeReleaseSnapshot,
+  clearDerivedCache,
 };

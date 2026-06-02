@@ -208,10 +208,35 @@ Page({
     openedRecentKey: "",
     touchStartX: 0,
     touchStartY: 0,
+    isDebugMode: false,
+    debugInfo: {
+      appConfigVersion: "",
+      pageConfigVersion: "",
+      cachedConfigVersion: "",
+      term: "",
+      counts: {
+        classes: 0,
+        teachers: 0,
+        classrooms: 0,
+        courses: 0
+      },
+      lastRequestTime: "",
+      hitCache: false
+    }
   },
 
   onLoad(options) {
     this.sharedQuery = options || {};
+
+    // 检测是否为开发版/体验版
+    const accountInfo = wx.getAccountInfoSync ? wx.getAccountInfoSync() : null;
+    const envVersion = accountInfo ? accountInfo.miniProgram.envVersion : "release";
+    const isDebugMode = envVersion === "develop" || envVersion === "trial";
+
+    this.setData({
+      isDebugMode
+    });
+
     this.fetchSchoolCatalog();
   },
 
@@ -244,12 +269,46 @@ Page({
       .then((config) => {
         const schoolNotice = appConfigService.getPrimaryNotice(config, "school", ["banner", "card"]);
         const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
+
+        const activeRelease = config.dataVersion || {};
+        const term = config.currentSemester || "2025-2026-2";
+        const releaseVersion = activeRelease.releaseVersion || "";
+        const dataUpdatedAt = activeRelease.classScheduleUpdatedAt || config.updatedAt || "";
+
+        const remoteReleaseKey = `${term}:${releaseVersion}:${dataUpdatedAt}`;
+        const localReleaseKey = wx.getStorageSync("FOSU_LOCAL_RELEASE_KEY");
+
+        let didRefresh = false;
+        if (localReleaseKey && localReleaseKey !== remoteReleaseKey) {
+          console.log("🔄 检测到课表新版本，自动清理全校缓存：", localReleaseKey, "->", remoteReleaseKey);
+          const { clearAllSchoolCaches } = require("../../utils/storage");
+          clearAllSchoolCaches();
+
+          wx.showToast({
+            title: "检测到课表新版本，已自动刷新",
+            icon: "none",
+            duration: 2000
+          });
+
+          didRefresh = true;
+          this.fetchSchoolCatalog();
+        }
+
+        wx.setStorageSync("FOSU_LOCAL_RELEASE_KEY", remoteReleaseKey);
+
         this.setData({
           appConfig: config,
           schoolNotice,
           dataVersionText: latestUpdatedAt ? `数据更新于 ${appConfigService.formatConfigTime(latestUpdatedAt)}` : "",
           runtimeDisclaimer: config.disclaimer || BRAND.disclaimer,
+          catalogVersion: releaseVersion,
         });
+
+        if (didRefresh) {
+          this.loadRecentSchedules();
+        }
+
+        this.updateDebugInfo();
       })
       .catch((err) => {
         console.warn("全校页公告配置加载失败", err);
@@ -262,10 +321,11 @@ Page({
 
   buildIndexCacheKey(type, params, version) {
     const source = params || {};
-    const term = source.semester || source.term || this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
+    const term = source.semester || source.term || (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
     const releaseVersion = this.getReleaseVersionForCache(version);
     const pieces = [
-      SCHOOL_INDEX_CACHE_PREFIX,
+      "school",
+      "index",
       term,
       releaseVersion,
       type,
@@ -306,14 +366,29 @@ Page({
 
   fetchSearchIndex(type, params, options = {}) {
     const query = Object.assign({ type }, params || {});
+    if (!query.term && !query.semester) {
+      query.term = (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
+    }
+    if (!query.releaseVersion) {
+      query.releaseVersion = this.getReleaseVersionForCache();
+    }
+
     const cached = this.readIndexCache(type, query);
     if (cached) {
-      return Promise.resolve(Object.assign({}, cached, { fromStorage: true }));
+      const payload = Object.assign({}, cached, { fromStorage: true });
+      this.updateDebugRequestInfo(type, true, payload);
+      return Promise.resolve(payload);
     }
+
     return request.get("/api/fosu/search-index", query, Object.assign({ showLoading: false, silentError: true }, options))
       .then((data) => {
         this.writeIndexCache(type, query, data);
+        this.updateDebugRequestInfo(type, false, data);
         return data;
+      })
+      .catch((err) => {
+        this.updateDebugRequestInfo(type, false, null, err);
+        throw err;
       });
   },
 
@@ -476,8 +551,14 @@ Page({
   loadRecentSchedules() {
     // NOTE: 使用封装的存储接口读取缓存，保障数据格式鲁棒
     const recent = getRecentSchedules();
+    const activeVersion = this.getReleaseVersionForCache();
+    const processed = recent.map((item) => {
+      return Object.assign({}, item, {
+        isOldVersion: item.releaseVersion ? (item.releaseVersion !== activeVersion) : true
+      });
+    });
     this.setData({
-      recentSchedules: recent,
+      recentSchedules: processed,
     });
   },
 
@@ -631,8 +712,31 @@ Page({
     const index = Number(e.currentTarget.dataset.index);
     const item = this.data.recentSchedules[index];
     if (!item) return;
-    const schedule = item.schedule || item;
-    this.navigateToScheduleView("class", item.className || item.title, item.courses || [], schedule);
+
+    const activeVersion = this.getReleaseVersionForCache();
+    // 只有当版本号一致，且课程数据存在时才直接跳转
+    if (item.releaseVersion && item.releaseVersion === activeVersion && Array.isArray(item.courses) && item.courses.length > 0) {
+      const schedule = item.schedule || item;
+      this.navigateToScheduleView("class", item.className || item.title, item.courses || [], schedule);
+    } else {
+      // 否则强制重新拉取最新版本详情
+      const detailId = item.id || item.scheduleId || item.className || item.title;
+      const semester = item.semester || (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
+
+      const queryItem = Object.assign({}, item, {
+        detailId: detailId,
+        semester: semester,
+        scheduleVersion: activeVersion
+      });
+
+      this.openIndexedSchedule("class", queryItem, item.className || item.title);
+    }
+  },
+
+  getFilterCacheKey() {
+    const term = (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
+    const releaseVersion = this.getReleaseVersionForCache();
+    return `school:filters:${term}:${releaseVersion}`;
   },
 
   saveFilterCache() {
@@ -660,7 +764,7 @@ Page({
       lastUpdatedAt: Date.now()
     };
 
-    wx.setStorageSync(SCHOOL_FILTER_CACHE_KEY, cache);
+    wx.setStorageSync(this.getFilterCacheKey(), cache);
   },
 
   hasSharedQuery() {
@@ -749,7 +853,8 @@ Page({
   },
 
   restoreFilterCache() {
-    const cache = wx.getStorageSync(SCHOOL_FILTER_CACHE_KEY);
+    const cacheKey = this.getFilterCacheKey();
+    const cache = wx.getStorageSync(cacheKey);
     if (!cache) {
       this.printSchoolDebugLog(false, "", "无缓存数据");
       this.applySharedQueryIfNeeded();
@@ -768,7 +873,7 @@ Page({
     if (collegeIdx < 0) {
       this.setData({ selectedSemesterIndex });
       this.printSchoolDebugLog(true, "未恢复", `学院 ${cache.collegeName || cache.collegeCode} 在当前快照中已不存在`);
-      wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
+      wx.removeStorageSync(cacheKey);
       this.showFilterChangedHint("部分筛选项已更新，请重新选择");
       return;
     }
@@ -893,7 +998,7 @@ Page({
   },
 
   resetFilters() {
-    wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
+    wx.removeStorageSync(this.getFilterCacheKey());
     this.setData({
       selectedSemesterIndex: 0,
       selectedCollegeIndex: -1,
@@ -1345,7 +1450,8 @@ Page({
   },
 
   getScheduleDetailCache(type, id, version, term) {
-    const cacheKey = `${SCHEDULE_DETAIL_CACHE_PREFIX}:${term || "unknown"}:${version || "unknown"}:${type}:${id}`;
+    const activeVersion = this.getReleaseVersionForCache(version);
+    const cacheKey = `school:detail:${term || "unknown"}:${activeVersion || "unknown"}:${type}:${id}`;
     try {
       const cached = wx.getStorageSync(cacheKey);
       if (Date.now() - cached.savedAt > SCHEDULE_DETAIL_CACHE_TTL) return null;
@@ -1356,7 +1462,8 @@ Page({
   },
 
   setScheduleDetailCache(type, id, version, term, schedule) {
-    const cacheKey = `${SCHEDULE_DETAIL_CACHE_PREFIX}:${term || "unknown"}:${version || "unknown"}:${type}:${id}`;
+    const activeVersion = this.getReleaseVersionForCache(version);
+    const cacheKey = `school:detail:${term || "unknown"}:${activeVersion || "unknown"}:${type}:${id}`;
     try {
       wx.setStorageSync(cacheKey, {
         savedAt: Date.now(),
@@ -1384,6 +1491,7 @@ Page({
       term: semester,
       type,
       id: detailId,
+      releaseVersion: version, // 显式带上 releaseVersion
     }, { showLoading: false, silentError: true })
       .then((data) => {
         wx.hideLoading();
@@ -1476,6 +1584,57 @@ Page({
   toggleAggregate() {
     this.setData({
       showAggregate: !this.data.showAggregate
+    });
+  },
+
+  updateDebugInfo() {
+    if (!this.data.isDebugMode) return;
+    const term = (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
+    const releaseVersion = this.getReleaseVersionForCache();
+    const appConfigVersion = this.data.appConfig?.dataVersion?.releaseVersion || "";
+    const cachedConfigVersion = wx.getStorageSync("FOSU_LOCAL_RELEASE_KEY") || "";
+    
+    this.setData({
+      "debugInfo.appConfigVersion": appConfigVersion,
+      "debugInfo.pageConfigVersion": releaseVersion,
+      "debugInfo.cachedConfigVersion": cachedConfigVersion,
+      "debugInfo.term": term,
+    });
+  },
+
+  updateDebugRequestInfo(type, fromCache, resData, error) {
+    if (!this.data.isDebugMode) return;
+    const update = {
+      "debugInfo.lastRequestTime": new Date().toLocaleTimeString(),
+      "debugInfo.hitCache": fromCache
+    };
+    if (resData && resData.counts) {
+      if (resData.counts.classes !== undefined) update["debugInfo.counts.classes"] = resData.counts.classes;
+      if (resData.counts.teachers !== undefined) update["debugInfo.counts.teachers"] = resData.counts.teachers;
+      if (resData.counts.classrooms !== undefined) update["debugInfo.counts.classrooms"] = resData.counts.classrooms;
+      if (resData.counts.courses !== undefined) update["debugInfo.counts.courses"] = resData.counts.courses;
+    }
+    this.setData(update);
+  },
+
+  forceReloadAllCaches() {
+    wx.showModal({
+      title: "提示",
+      content: "确认清理全校所有课表及索引缓存并重新加载吗？",
+      success: (res) => {
+        if (res.confirm) {
+          const { clearAllSchoolCaches } = require("../../utils/storage");
+          clearAllSchoolCaches();
+          wx.removeStorageSync("FOSU_LOCAL_RELEASE_KEY");
+          wx.showToast({
+            title: "清理成功，重载中",
+            icon: "success",
+            duration: 1500
+          });
+          this.fetchSchoolCatalog();
+          this.loadPageConfig();
+        }
+      }
     });
   }
 });

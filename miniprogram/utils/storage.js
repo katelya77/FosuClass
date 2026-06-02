@@ -205,6 +205,7 @@ function addRecentSchedule(item) {
     viewedAt: new Date().toISOString(),
     courses: Array.isArray(item.courses) ? item.courses : [],
     schedule: item.schedule || item,
+    releaseVersion: item.releaseVersion || item.scheduleVersion || "",
   };
 
   const next = [record]
@@ -243,6 +244,37 @@ function clearRecentSchedules() {
   return [];
 }
 
+function clearAllSchoolCaches() {
+  try {
+    const info = wx.getStorageInfoSync();
+    const keys = info.keys || [];
+    keys.forEach((key) => {
+      if (
+        key.startsWith("school:") ||
+        key.startsWith("FOSU_SCHOOL_FILTER") ||
+        key === "school_search_index" ||
+        key === "school_filter_options" ||
+        key === "school_class_list" ||
+        key === "school_teacher_list" ||
+        key === "school_classroom_list" ||
+        key === "school_course_list" ||
+        key === "school_schedule_detail" ||
+        key === "schedule_detail_cache" ||
+        key === "all_school_cache" ||
+        key === "classSchedules" ||
+        key === "teachers" ||
+        key === "classrooms" ||
+        key === "courses"
+      ) {
+        wx.removeStorageSync(key);
+        console.log("🧹 [Storage] 已清理全校缓存键:", key);
+      }
+    });
+  } catch (e) {
+    console.error("clearAllSchoolCaches error", e);
+  }
+}
+
 module.exports = {
   BOOTSTRAP_CACHE_KEY,
   CURRENT_SCHEDULE_TARGET_KEY,
@@ -266,6 +298,7 @@ module.exports = {
   addRecentSchedule,
   removeRecentSchedule,
   clearRecentSchedules,
+  clearAllSchoolCaches,
 };
 
 

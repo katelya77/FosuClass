@@ -44,7 +44,7 @@ App({
   },
 
   loadBootstrapData() {
-    request.get("/api/fosu/bootstrap", {}, { showLoading: false, silentError: true })
+    request.get(`/api/fosu/bootstrap?ts=${Date.now()}`, {}, { showLoading: false, silentError: true })
       .then((res) => {
         if (res && res.success) {
           this.globalData.bootstrapData = res;
