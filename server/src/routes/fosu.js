@@ -441,27 +441,37 @@ router.get("/client-diagnosis", scheduleLimiter, (req, res) => {
     const term = String(req.query.term || req.query.semester || activeInfo.term || activeInfo.semester || "").trim();
     const kinds = ["class", "teacher", "classroom", "course"];
     const indexResults = {};
-    const counts = {};
+    const indexCounts = {};
     const cacheStatus = {};
+    const indexExists = {};
 
     kinds.forEach((kind) => {
       const result = releaseService.readActiveIndex(kind, requestedReleaseVersion);
       indexResults[kind] = result;
-      counts[kind] = Array.isArray(result.items) ? result.items.length : 0;
+      indexCounts[kind] = Array.isArray(result.items) ? result.items.length : 0;
+      indexExists[kind] = Boolean(result.success);
       cacheStatus[kind] = result.success ? (result.dataSource || "index") : (result.code || result.reasonCode || "INDEX_NOT_FOUND");
     });
 
+    const releaseCounts = activeInfo.counts || {};
+    const fallbackIndex = indexResults.class || indexResults.teacher || indexResults.classroom || indexResults.course || {};
+    const effectiveReleaseVersion = activeInfo.releaseVersion || activeInfo.version || fallbackIndex.releaseVersion || fallbackIndex.version || "";
+    const effectiveTerm = term || activeInfo.term || activeInfo.semester || fallbackIndex.term || fallbackIndex.semester || "";
     return res.json({
       success: true,
-      activeReleaseVersion: activeInfo.releaseVersion || activeInfo.version || "",
-      activeTerm: activeInfo.term || activeInfo.semester || "",
+      activeReleaseVersion: effectiveReleaseVersion,
+      activeTerm: activeInfo.term || activeInfo.semester || fallbackIndex.term || fallbackIndex.semester || "",
+      term: effectiveTerm,
       requestedReleaseVersion,
       requestedTerm: term,
+      indexExists,
       hasClassIndex: Boolean(indexResults.class && indexResults.class.success),
       hasTeacherIndex: Boolean(indexResults.teacher && indexResults.teacher.success),
       hasClassroomIndex: Boolean(indexResults.classroom && indexResults.classroom.success),
       hasCourseIndex: Boolean(indexResults.course && indexResults.course.success),
-      counts,
+      counts: Object.assign({}, releaseCounts, { indexes: indexCounts }),
+      releaseCounts,
+      indexCounts,
       serverTime: new Date().toISOString(),
       cacheStatus,
     });

@@ -17,6 +17,10 @@ const SOURCE_TEXT = {
   mock: "演示数据 · 本地缓存",
 };
 
+function isCourseActiveInCurrentWeek(course, currentWeek) {
+  return isCourseInWeek(course || {}, currentWeek);
+}
+
 function normalizeCourse(course) {
   const normalized = toRenderableCourse(Object.assign({}, course));
   normalized.color = normalized.color || colorForCourse(normalized.canonicalCourseName || normalized.courseName);
@@ -97,7 +101,7 @@ function getCoursesForWeek(courses, week, options) {
   return (courses || [])
     .map(normalizeCourse)
     .filter((course) => {
-      const active = isCourseInWeek(course, week);
+      const active = isCourseActiveInCurrentWeek(course, week);
       return config.hideInactiveCourses ? active : true;
     });
 }
@@ -106,27 +110,168 @@ function getCoursesForDay(courses, weekday, week, options) {
   return getTodayCourses(courses, week, weekday, options);
 }
 
+function sectionsOverlap(a, b) {
+  if (!a || !b) return false;
+  return Number(a.startSection) <= Number(b.endSection) && Number(b.startSection) <= Number(a.endSection);
+}
+
+function buildConflictLabel(count, type) {
+  if (!count) return "";
+  if (type === "active") {
+    return `另有 ${count} 门本周冲突`;
+  }
+  return `另有 ${count} 门非本周课程`;
+}
+
+function summarizeConflictCourses(courses) {
+  return (courses || []).map((course) => ({
+    id: course.id,
+    courseName: course.displayCourseName || course.canonicalCourseName || course.courseName || "",
+    teacherName: course.displayTeacherName || course.canonicalTeacherName || course.teacherName || "",
+    classroom: course.displayClassroom || course.canonicalClassroom || course.classroom || "",
+    weekText: course.weekText || "",
+    startSection: course.startSection,
+    endSection: course.endSection,
+  }));
+}
+
+function withScheduleGeometry(course, sectionHeight) {
+  const top = (course.startSection - 1) * sectionHeight + 6;
+  const span = course.endSection - course.startSection + 1;
+  const height = span * sectionHeight - 12;
+  return Object.assign({}, course, {
+    top,
+    span,
+    height,
+  });
+}
+
+function assignOverlapLanes(courses) {
+  const sorted = (courses || []).slice().sort((a, b) => {
+    if (a.startSection !== b.startSection) return a.startSection - b.startSection;
+    if (a.endSection !== b.endSection) return a.endSection - b.endSection;
+    if (a.active !== b.active) return a.active ? -1 : 1;
+    return String(a.id || a.courseName || "").localeCompare(String(b.id || b.courseName || ""));
+  });
+  const groups = [];
+  let currentGroup = [];
+  let currentEnd = 0;
+
+  sorted.forEach((course) => {
+    if (!currentGroup.length || course.startSection <= currentEnd) {
+      currentGroup.push(course);
+      currentEnd = Math.max(currentEnd, course.endSection);
+      return;
+    }
+    groups.push(currentGroup);
+    currentGroup = [course];
+    currentEnd = course.endSection;
+  });
+  if (currentGroup.length) {
+    groups.push(currentGroup);
+  }
+
+  groups.forEach((group) => {
+    const laneEnds = [];
+    group.forEach((course) => {
+      let lane = laneEnds.findIndex((end) => end < course.startSection);
+      if (lane === -1) {
+        lane = laneEnds.length;
+      }
+      laneEnds[lane] = course.endSection;
+      course.lane = lane;
+    });
+    const laneCount = Math.max(1, laneEnds.length);
+    group.forEach((course) => {
+      course.laneCount = laneCount;
+      if (laneCount > 1) {
+        const activeConflicts = group.filter((item) => item !== course && item.active && sectionsOverlap(item, course));
+        if (course.active && activeConflicts.length) {
+          course.activeConflictCount = activeConflicts.length;
+          course.activeConflictLabel = buildConflictLabel(activeConflicts.length, "active");
+          course.activeConflicts = summarizeConflictCourses(activeConflicts);
+        }
+      }
+    });
+  });
+
+  return sorted;
+}
+
+function buildCardStyle(course) {
+  const background = course.active ? course.color : "#eef2f7";
+  const zIndex = course.active ? 30 + (course.lane || 0) : 10 + (course.lane || 0);
+  const base = [
+    `top:${course.top}rpx`,
+    `height:${course.height}rpx`,
+    `background:${background}`,
+    `z-index:${zIndex}`,
+  ];
+  if (course.laneCount > 1) {
+    const width = 100 / course.laneCount;
+    base.push(`left:${(course.lane * width).toFixed(4)}%`);
+    base.push(`right:auto`);
+    base.push(`width:${width.toFixed(4)}%`);
+  } else {
+    base.push("left:4rpx");
+    base.push("right:4rpx");
+  }
+  return `${base.join(";")};`;
+}
+
+function buildVisibleScheduleCourses(courses, week, sectionHeight, hideInactiveCourses) {
+  const dayCourses = (courses || [])
+    .map(normalizeCourse)
+    .map((course) => {
+      const active = isCourseActiveInCurrentWeek(course, week);
+      return withScheduleGeometry(Object.assign({}, course, { active }), sectionHeight);
+    });
+
+  if (hideInactiveCourses) {
+    return dayCourses.filter((course) => course.active);
+  }
+
+  const activeCourses = dayCourses.filter((course) => course.active);
+  const inactiveCourses = dayCourses.filter((course) => !course.active);
+  const visibleInactive = [];
+
+  inactiveCourses.forEach((inactiveCourse) => {
+    const conflictingActive = activeCourses.filter((activeCourse) => sectionsOverlap(activeCourse, inactiveCourse));
+    if (!conflictingActive.length) {
+      visibleInactive.push(inactiveCourse);
+      return;
+    }
+    conflictingActive.forEach((activeCourse) => {
+      if (!activeCourse.inactiveConflicts) {
+        activeCourse.inactiveConflicts = [];
+      }
+      activeCourse.inactiveConflicts.push(inactiveCourse);
+    });
+  });
+
+  activeCourses.forEach((course) => {
+    const conflicts = course.inactiveConflicts || [];
+    course.inactiveConflictCount = conflicts.length;
+    course.inactiveConflictLabel = buildConflictLabel(conflicts.length, "inactive");
+    course.inactiveConflicts = summarizeConflictCourses(conflicts);
+  });
+
+  return activeCourses.concat(visibleInactive);
+}
+
 function buildScheduleColumns(courses, weekdays, week, options) {
   const sectionHeight = (options && options.sectionHeight) || 96;
   const hideInactiveCourses = Boolean(options && options.hideInactiveCourses);
   return weekdays.map((day) => {
-    const dayCourses = (courses || [])
-      .map(normalizeCourse)
-      .filter((course) => course.weekday === day.weekday)
-      .map((course) => {
-        const active = isCourseInWeek(course, week);
-        const top = (course.startSection - 1) * sectionHeight + 6;
-        const span = course.endSection - course.startSection + 1;
-        const height = span * sectionHeight - 12;
-        return Object.assign({}, course, {
-          active,
-          cardStyle: `top:${top}rpx;height:${height}rpx;background:${active ? course.color : "#eef2f7"};`,
-        });
-      })
-      .filter((course) => (hideInactiveCourses ? course.active : true))
-      .sort((a, b) => a.startSection - b.startSection);
+    const rawDayCourses = (courses || []).filter((course) => Number(course.weekday) === Number(day.weekday));
+    const visibleCourses = buildVisibleScheduleCourses(rawDayCourses, week, sectionHeight, hideInactiveCourses);
+    const dayCourses = assignOverlapLanes(visibleCourses).map((course) => Object.assign({}, course, {
+      cardStyle: buildCardStyle(course),
+    }));
     return Object.assign({}, day, {
       courses: dayCourses,
+      activeCourseCount: dayCourses.filter((course) => course.active).length,
+      visibleCourseCount: dayCourses.length,
     });
   });
 }
@@ -273,6 +418,7 @@ module.exports = {
   getCoursesForDay,
   getCoursesForWeek,
   getTodayCourses,
+  isCourseActiveInCurrentWeek,
   normalizeCourse,
   normalizeCourseKey,
   mergeCustomCoursesForCurrentTarget,

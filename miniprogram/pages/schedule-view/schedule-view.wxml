@@ -40,7 +40,7 @@
       <view class="schedule-hint">{{showWeekend ? "周一至周日，可横向滑动" : "周一至周五"}}</view>
     </view>
 
-    <view class="table-shell" wx:if="{{allCourses && allCourses.length && hasCurrentWeekCourses}}">
+    <view class="table-shell" wx:if="{{allCourses && allCourses.length && hasVisibleWeekCourses}}">
       <!-- 左右滑动查看周末提示 -->
       <view class="swipe-hint-bar" wx:if="{{showWeekend && weekendShowMode === 'detail'}}" style="background: #fff5f5; border-bottom: 1rpx solid #edf0f5; padding: 12rpx 24rpx; text-align: center;">
         <text class="swipe-hint-text" style="font-size: 20rpx; color: #c62828; font-weight: bold;">💡 左右滑动查看周末课表</text>

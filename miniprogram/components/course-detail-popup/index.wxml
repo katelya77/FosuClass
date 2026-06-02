@@ -65,6 +65,12 @@
         <view class="remark-text">{{course.remark || "暂无备注"}}</view>
       </view>
 
+      <view class="remark conflict-detail" wx:if="{{course.activeConflictLabel || course.inactiveConflictLabel}}">
+        <view class="detail-label">冲突提示</view>
+        <view class="remark-text" wx:if="{{course.activeConflictLabel}}">{{course.activeConflictLabel}}，请核对课程总览或教务通知。</view>
+        <view class="remark-text" wx:if="{{course.inactiveConflictLabel}}">{{course.inactiveConflictLabel}}，已折叠为提示，不会遮挡本周课程。</view>
+      </view>
+
       <view class="detail-actions">
         <button class="copy-custom-btn" bindtap="copyAsCustom">复制为自定义课程</button>
       </view>
