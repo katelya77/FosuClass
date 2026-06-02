@@ -574,9 +574,21 @@ Page({
           let courseIndexCount = 0;
 
           keys.forEach((key) => {
-            if (key.startsWith(`school:index:${localTerm}:${localReleaseVersion}:`)) {
+            if (key.startsWith(`school:v3:index:${localTerm}:${localReleaseVersion}:`)) {
               const keyParts = key.split(":");
-              const type = keyParts[4]; // school:index:term:version:type:...
+              const type = keyParts[5]; // school:v3:index:term:version:type:...
+              try {
+                const cached = wx.getStorageSync(key);
+                const list = cached && cached.data && (cached.data.items || cached.data.list || cached.data);
+                const count = Array.isArray(list) ? list.length : 0;
+                if (type === "class") classIndexCount += count;
+                else if (type === "teacher") teacherIndexCount += count;
+                else if (type === "classroom") classroomIndexCount += count;
+                else if (type === "course") courseIndexCount += count;
+              } catch (e) {}
+            } else if (key.startsWith(`school:index:${localTerm}:${localReleaseVersion}:`)) {
+              const keyParts = key.split(":");
+              const type = keyParts[4];
               try {
                 const cached = wx.getStorageSync(key);
                 const list = cached && cached.data && (cached.data.items || cached.data.list || cached.data);

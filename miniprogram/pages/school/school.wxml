@@ -37,7 +37,7 @@
   </block>
 
   <!-- 4. 全局未同步课程数据 -->
-  <block wx:elif="{{dataLoadState === 'noRelease' || catalogEmpty}}">
+  <block wx:elif="{{dataLoadState === 'noRelease'}}">
     <view class="card" style="margin: 24rpx; padding: 60rpx 40rpx; text-align: center; border-radius: 16rpx; background: #ffffff; box-shadow: 0 4rpx 16rpx rgba(0,0,0,0.05);">
       <empty-state
         title="暂未同步课程数据"

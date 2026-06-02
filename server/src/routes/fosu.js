@@ -190,6 +190,23 @@ router.get("/search-index", scheduleLimiter, (req, res) => {
       });
     }
     const result = releaseService.searchActiveIndex(type, query.q, query);
+    if (!result.success) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      const code = result.code || result.reasonCode || "INTERNAL_ERROR";
+      return res.json({
+        success: false,
+        code,
+        reasonCode: code,
+        message: code,
+        term: query.semester || query.term || "",
+        releaseVersion: result.releaseVersion || result.version || releaseVersion || "",
+        updatedAt: result.updatedAt || "",
+        items: [],
+        total: 0,
+      });
+    }
     const items = (result.items || []).map((item) => ({
       id: item.id,
       name: item.name || item.teacherName || item.roomName || item.classroomName || item.courseName || item.className || "",
@@ -223,7 +240,14 @@ router.get("/search-index", scheduleLimiter, (req, res) => {
       counts: activeInfo.counts || {}
     };
 
-    const payload = Object.assign({}, result, { items, meta });
+    const payload = Object.assign({}, result, {
+      term: meta.term,
+      releaseVersion: meta.releaseVersion,
+      updatedAt: meta.dataUpdatedAt,
+      items,
+      total: result.total || items.length,
+      meta,
+    });
 
     if (releaseVersion) {
       return sendCacheableJson(req, res, payload, 300); // 5 mins cache
@@ -234,7 +258,15 @@ router.get("/search-index", scheduleLimiter, (req, res) => {
       return res.json(payload);
     }
   } catch (error) {
-    handleRouteError(res, error, "get-search-index-failed");
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.status(200).json({
+      success: false,
+      code: error && error.code ? error.code : "INDEX_BUILD_FAILED",
+      reasonCode: error && error.code ? error.code : "INDEX_BUILD_FAILED",
+      message: "search-index failed",
+      items: [],
+      total: 0,
+    });
   }
 });
 
@@ -395,6 +427,51 @@ router.get("/schedule-detail", scheduleLimiter, (req, res) => {
     }
   } catch (error) {
     handleRouteError(res, error, "get-schedule-detail-failed");
+  }
+});
+
+router.get("/client-diagnosis", scheduleLimiter, (req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+
+    const activeInfo = releaseService.getActiveReleaseInfo() || {};
+    const requestedReleaseVersion = String(req.query.releaseVersion || req.query.version || activeInfo.releaseVersion || activeInfo.version || "").trim();
+    const term = String(req.query.term || req.query.semester || activeInfo.term || activeInfo.semester || "").trim();
+    const kinds = ["class", "teacher", "classroom", "course"];
+    const indexResults = {};
+    const counts = {};
+    const cacheStatus = {};
+
+    kinds.forEach((kind) => {
+      const result = releaseService.readActiveIndex(kind, requestedReleaseVersion);
+      indexResults[kind] = result;
+      counts[kind] = Array.isArray(result.items) ? result.items.length : 0;
+      cacheStatus[kind] = result.success ? (result.dataSource || "index") : (result.code || result.reasonCode || "INDEX_NOT_FOUND");
+    });
+
+    return res.json({
+      success: true,
+      activeReleaseVersion: activeInfo.releaseVersion || activeInfo.version || "",
+      activeTerm: activeInfo.term || activeInfo.semester || "",
+      requestedReleaseVersion,
+      requestedTerm: term,
+      hasClassIndex: Boolean(indexResults.class && indexResults.class.success),
+      hasTeacherIndex: Boolean(indexResults.teacher && indexResults.teacher.success),
+      hasClassroomIndex: Boolean(indexResults.classroom && indexResults.classroom.success),
+      hasCourseIndex: Boolean(indexResults.course && indexResults.course.success),
+      counts,
+      serverTime: new Date().toISOString(),
+      cacheStatus,
+    });
+  } catch (error) {
+    res.status(200).json({
+      success: false,
+      code: "INTERNAL_ERROR",
+      message: "client diagnosis failed",
+      serverTime: new Date().toISOString(),
+    });
   }
 });
 
