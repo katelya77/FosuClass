@@ -79,7 +79,7 @@ function request(url, method = "GET", data = {}, options = {}) {
       header: {
         "content-type": method.toUpperCase() === "POST" ? "application/json" : "application/x-www-form-urlencoded",
       },
-      timeout: 15000, // 默认超时时间 15 秒
+      timeout: options.timeout || 15000, // 默认超时时间 15 秒
       success: (res) => {
         if (opt.showLoading) {
           wx.hideLoading();

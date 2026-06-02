@@ -208,39 +208,34 @@ Page({
     openedRecentKey: "",
     touchStartX: 0,
     touchStartY: 0,
-    isDebugMode: false,
-    debugInfo: {
-      appConfigVersion: "",
-      pageConfigVersion: "",
-      cachedConfigVersion: "",
-      term: "",
-      counts: {
-        classes: 0,
-        teachers: 0,
-        classrooms: 0,
-        courses: 0
-      },
-      lastRequestTime: "",
-      hitCache: false
-    }
+    loadingState: "none", // "none" | "loading" | "skeleton" | "slow" | "timeout"
   },
+  
+  // 缓存清理后自动重载标志
+  needAutoSearch: false,
 
   onLoad(options) {
     this.sharedQuery = options || {};
-
-    // 检测是否为开发版/体验版
-    const accountInfo = wx.getAccountInfoSync ? wx.getAccountInfoSync() : null;
-    const envVersion = accountInfo ? accountInfo.miniProgram.envVersion : "release";
-    const isDebugMode = envVersion === "develop" || envVersion === "trial";
-
-    this.setData({
-      isDebugMode
-    });
-
     this.fetchSchoolCatalog();
   },
 
   onShow() {
+    // 拦截设置页清除缓存引发的重载标志
+    const needAutoReload = wx.getStorageSync("FOSU_SCHOOL_NEED_AUTO_RELOAD");
+    if (needAutoReload) {
+      wx.removeStorageSync("FOSU_SCHOOL_NEED_AUTO_RELOAD");
+      this.setData({
+        classesResult: [],
+        classAdminResults: [],
+        classAggregateResults: [],
+        teachersResult: [],
+        classroomsResult: [],
+        coursesResult: [],
+        updatedAtText: "",
+      });
+      this.fetchSchoolCatalog();
+    }
+
     const { getSettings } = require("../../utils/storage");
     const settings = getSettings();
     const showHistorical = settings.showHistoricalGrades || false;
@@ -265,7 +260,8 @@ Page({
   },
 
   loadPageConfig() {
-    appConfigService.loadAppConfig()
+    // 每次进入 school 页面 onShow 时，强制请求网络最新 app-config 
+    appConfigService.loadAppConfig({ force: true })
       .then((config) => {
         const schoolNotice = appConfigService.getPrimaryNotice(config, "school", ["banner", "card"]);
         const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
@@ -273,9 +269,10 @@ Page({
         const activeRelease = config.dataVersion || {};
         const term = config.currentSemester || "2025-2026-2";
         const releaseVersion = activeRelease.releaseVersion || "";
-        const dataUpdatedAt = activeRelease.classScheduleUpdatedAt || config.updatedAt || "";
+        const cacheEpoch = config.cacheEpoch || activeRelease.cacheEpoch || config.updatedAt || activeRelease.classScheduleUpdatedAt || "";
 
-        const remoteReleaseKey = `${term}:${releaseVersion}:${dataUpdatedAt}`;
+        // 统一 releaseKey 格式: term:releaseVersion:cacheEpoch
+        const remoteReleaseKey = `${term}:${releaseVersion}:${cacheEpoch}`;
         const localReleaseKey = wx.getStorageSync("FOSU_LOCAL_RELEASE_KEY");
 
         let didRefresh = false;
@@ -284,13 +281,25 @@ Page({
           const { clearAllSchoolCaches } = require("../../utils/storage");
           clearAllSchoolCaches();
 
+          // 清空页面已有 school index 状态
+          this.setData({
+            classesResult: [],
+            classAdminResults: [],
+            classAggregateResults: [],
+            teachersResult: [],
+            classroomsResult: [],
+            coursesResult: [],
+            updatedAtText: "",
+          });
+
           wx.showToast({
-            title: "检测到课表新版本，已自动刷新",
+            title: "检测到课表新版本，已自动更新",
             icon: "none",
             duration: 2000
           });
 
           didRefresh = true;
+          this.needAutoSearch = true; // 标记需要在 fetchSchoolCatalog 成功后自动重新拉取当前 tab 索引
           this.fetchSchoolCatalog();
         }
 
@@ -307,8 +316,6 @@ Page({
         if (didRefresh) {
           this.loadRecentSchedules();
         }
-
-        this.updateDebugInfo();
       })
       .catch((err) => {
         console.warn("全校页公告配置加载失败", err);
@@ -479,7 +486,7 @@ Page({
     // NOTE: 优先请求 bootstrap 接口，以便统一载入并进行版本/数据状态控制
     request.get("/api/fosu/bootstrap", {
       semester: "2025-2026-2",
-    }, { showLoading: false, silentError: true })
+    }, { showLoading: false, silentError: true, timeout: 8000 })
       .then((res) => {
         if (res && res.success && res.catalog && Array.isArray(res.catalog.colleges) && res.catalog.colleges.length > 0) {
           const catalogData = {
@@ -503,6 +510,11 @@ Page({
           } else {
             this.restoreFilterCache();
           }
+          
+          if (this.needAutoSearch) {
+            this.needAutoSearch = false;
+            this.triggerActiveTabSearch();
+          }
         } else {
           console.warn("Bootstrap not ready or missing catalog, fallback to catalog");
           this.fallbackToCatalog();
@@ -518,7 +530,7 @@ Page({
   fallbackToCatalog() {
     request.get("/api/fosu/catalog", {
       semester: "2025-2026-2",
-    }, { showLoading: false, silentError: true })
+    }, { showLoading: false, silentError: true, timeout: 8000 })
       .then((data) => {
         if (data && data.success && Array.isArray(data.colleges) && data.colleges.length > 0) {
           this.originalCatalogData = data;
@@ -533,6 +545,11 @@ Page({
             this.applySharedQueryIfNeeded();
           } else {
             this.restoreFilterCache();
+          }
+          
+          if (this.needAutoSearch) {
+            this.needAutoSearch = false;
+            this.triggerActiveTabSearch();
           }
         } else {
           console.warn("Catalog data is empty");
@@ -1275,6 +1292,7 @@ Page({
 
     const semester = semesters[selectedSemesterIndex].value;
     const collegeCode = colleges[selectedCollegeIndex].code;
+    const collegeName = colleges[selectedCollegeIndex].name;
     const grade = grades[selectedGradeIndex];
     const majorCode = majors[selectedMajorIndex].code;
     const majorName = majors[selectedMajorIndex].name;
@@ -1292,51 +1310,53 @@ Page({
       return;
     }
 
-    // 未选择具体班级，仅获取轻量 class index，点击结果后再取详情。
-    this.setData({ loading: true });
-    this.fetchSearchIndex("class", {
+    const params = {
       semester,
       collegeCode,
+      collegeName,
       grade,
       majorCode,
       majorName,
       limit: 100,
-    })
-      .then((data) => {
-          const formatTime = formatUpdateTime(data.updatedAt);
-          const grouped = splitClassResultGroups(data.items || []);
-          grouped.list.forEach((item) => {
-            item.updatedAt = data.updatedAt;
-            item.scheduleVersion = data.version || item.scheduleVersion || "";
-          });
-          const emptyState = getClassEmptyState("");
-        
-        this.setData({
-          classesResult: grouped.list,
-          classAdminResults: grouped.admin,
-          classAggregateResults: grouped.aggregate,
-          updatedAtText: formatTime ? `课程数据 · 更新于 ${formatTime}` : "课程数据",
-          classEmptyTitle: emptyState.title,
-          classEmptyDesc: emptyState.desc,
-          classNoticeText: grouped.noticeText,
-          loading: false,
-        });
-      })
-      .catch((err) => {
-        const payload = err && err.payload ? err.payload : {};
-        const emptyState = getClassEmptyState(payload.reasonCode);
-        this.setData({
-          classesResult: [],
-          classAdminResults: [],
-          classAggregateResults: [],
-          updatedAtText: "",
-          classEmptyTitle: emptyState.title,
-          classEmptyDesc: emptyState.desc,
-          classNoticeText: "",
-          loading: false,
-        });
-        console.error("searchClassSchedule fail", err);
+    };
+
+    const renderFn = (data, isFromCache) => {
+      const formatTime = formatUpdateTime(data.updatedAt);
+      const grouped = splitClassResultGroups(data.items || []);
+      grouped.list.forEach((item) => {
+        item.updatedAt = data.updatedAt;
+        item.scheduleVersion = data.version || item.scheduleVersion || "";
       });
+      const emptyState = getClassEmptyState("");
+    
+      this.setData({
+        classesResult: grouped.list,
+        classAdminResults: grouped.admin,
+        classAggregateResults: grouped.aggregate,
+        dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
+        updatedAtText: formatTime ? `课程数据 · 更新于 ${formatTime}` : "课程数据",
+        classEmptyTitle: emptyState.title,
+        classEmptyDesc: emptyState.desc,
+        classNoticeText: grouped.noticeText,
+      });
+    };
+
+    const catchFn = (err) => {
+      const payload = err && err.payload ? err.payload : {};
+      const emptyState = getClassEmptyState(payload.reasonCode);
+      this.setData({
+        classesResult: [],
+        classAdminResults: [],
+        classAggregateResults: [],
+        updatedAtText: "",
+        dataVersionText: "",
+        classEmptyTitle: emptyState.title,
+        classEmptyDesc: emptyState.desc,
+        classNoticeText: "",
+      });
+    };
+
+    this.executeSearch("class", params, renderFn, catchFn);
   },
 
   searchTeacherSchedule() {
@@ -1355,28 +1375,30 @@ Page({
     const collegeName = selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex].name : "";
     const titleCode = selectedTitleIndex >= 0 ? titleOptions[selectedTitleIndex] : "";
 
-    this.setData({ loading: true });
-    this.fetchSearchIndex("teacher", {
+    const params = {
       semester,
       collegeCode,
       collegeName,
       titleCode,
       q: keyword.trim(),
       limit: 50,
-    })
-      .then((data) => {
-        const formatTime = formatUpdateTime(data.updatedAt);
-        const teachers = (data.items || []).map(item => normalizeIndexedScheduleItem("teacher", item, data.version));
-        this.setData({
-          teachersResult: teachers,
-          updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
-          loading: false,
-        });
-      })
-      .catch((err) => {
-        this.setData({ teachersResult: [], loading: false });
-        console.error("searchTeacherSchedule fail", err);
+    };
+
+    const renderFn = (data, isFromCache) => {
+      const formatTime = formatUpdateTime(data.updatedAt);
+      const teachers = (data.items || []).map(item => normalizeIndexedScheduleItem("teacher", item, data.version));
+      this.setData({
+        teachersResult: teachers,
+        dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
+        updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
       });
+    };
+
+    const catchFn = () => {
+      this.setData({ teachersResult: [], updatedAtText: "", dataVersionText: "" });
+    };
+
+    this.executeSearch("teacher", params, renderFn, catchFn);
   },
 
   searchClassroomSchedule() {
@@ -1393,26 +1415,28 @@ Page({
     const semester = semesters[selectedSemesterIndex]?.value || "2025-2026-2";
     const campus = selectedCampusIndex >= 0 ? campusOptions[selectedCampusIndex] : "";
 
-    this.setData({ loading: true });
-    this.fetchSearchIndex("classroom", {
+    const params = {
       semester,
       campus,
       q: keyword.trim(),
       limit: 50,
-    })
-      .then((data) => {
-        const formatTime = formatUpdateTime(data.updatedAt);
-        const classrooms = (data.items || []).map(item => normalizeIndexedScheduleItem("classroom", item, data.version));
-        this.setData({
-          classroomsResult: classrooms,
-          updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
-          loading: false,
-        });
-      })
-      .catch((err) => {
-        this.setData({ classroomsResult: [], loading: false });
-        console.error("searchClassroomSchedule fail", err);
+    };
+
+    const renderFn = (data, isFromCache) => {
+      const formatTime = formatUpdateTime(data.updatedAt);
+      const classrooms = (data.items || []).map(item => normalizeIndexedScheduleItem("classroom", item, data.version));
+      this.setData({
+        classroomsResult: classrooms,
+        dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
+        updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
       });
+    };
+
+    const catchFn = () => {
+      this.setData({ classroomsResult: [], updatedAtText: "", dataVersionText: "" });
+    };
+
+    this.executeSearch("classroom", params, renderFn, catchFn);
   },
 
   searchCourseSchedule() {
@@ -1428,25 +1452,27 @@ Page({
 
     const semester = semesters[selectedSemesterIndex]?.value || "2025-2026-2";
 
-    this.setData({ loading: true });
-    this.fetchSearchIndex("course", {
+    const params = {
       semester,
       q: keyword.trim(),
       limit: 50,
-    })
-      .then((data) => {
-        const formatTime = formatUpdateTime(data.updatedAt);
-        const courses = (data.items || []).map(item => normalizeIndexedScheduleItem("course", item, data.version));
-        this.setData({
-          coursesResult: courses,
-          updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
-          loading: false,
-        });
-      })
-      .catch((err) => {
-        this.setData({ coursesResult: [], loading: false });
-        console.error("searchCourseSchedule fail", err);
+    };
+
+    const renderFn = (data, isFromCache) => {
+      const formatTime = formatUpdateTime(data.updatedAt);
+      const courses = (data.items || []).map(item => normalizeIndexedScheduleItem("course", item, data.version));
+      this.setData({
+        coursesResult: courses,
+        dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
+        updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
       });
+    };
+
+    const catchFn = () => {
+      this.setData({ coursesResult: [], updatedAtText: "", dataVersionText: "" });
+    };
+
+    this.executeSearch("course", params, renderFn, catchFn);
   },
 
   getScheduleDetailCache(type, id, version, term) {
@@ -1587,54 +1613,134 @@ Page({
     });
   },
 
-  updateDebugInfo() {
-    if (!this.data.isDebugMode) return;
-    const term = (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
-    const releaseVersion = this.getReleaseVersionForCache();
-    const appConfigVersion = this.data.appConfig?.dataVersion?.releaseVersion || "";
-    const cachedConfigVersion = wx.getStorageSync("FOSU_LOCAL_RELEASE_KEY") || "";
-    
+  // ================== 多级加载计时器逻辑 ==================
+
+  startLoadingTimer(retryFn) {
+    this.clearLoadingTimer();
+    this.retryFn = retryFn;
     this.setData({
-      "debugInfo.appConfigVersion": appConfigVersion,
-      "debugInfo.pageConfigVersion": releaseVersion,
-      "debugInfo.cachedConfigVersion": cachedConfigVersion,
-      "debugInfo.term": term,
+      loadingState: 'loading', // 0-300ms 保持当前内容
+    });
+    
+    // 300ms 后显示轻量 skeleton 并将 loading 置为 true，但清空之前的内容
+    this.loadingTimer300 = setTimeout(() => {
+      this.setData({
+        loadingState: 'skeleton',
+        loading: true,
+        classesResult: [],
+        classAdminResults: [],
+        classAggregateResults: [],
+        teachersResult: [],
+        classroomsResult: [],
+        coursesResult: [],
+        updatedAtText: '',
+      });
+    }, 300);
+
+    // 3s 后显示 “网络较慢，正在继续加载”
+    this.loadingTimer3000 = setTimeout(() => {
+      this.setData({
+        loadingState: 'slow'
+      });
+    }, 3000);
+
+    // 8s 后显示 “加载较慢，可重试”
+    this.loadingTimer8000 = setTimeout(() => {
+      this.setData({
+        loadingState: 'timeout',
+        loading: false
+      });
+    }, 8000);
+  },
+
+  clearLoadingTimer() {
+    if (this.loadingTimer300) clearTimeout(this.loadingTimer300);
+    if (this.loadingTimer3000) clearTimeout(this.loadingTimer3000);
+    if (this.loadingTimer8000) clearTimeout(this.loadingTimer8000);
+    this.setData({
+      loadingState: 'none',
+      loading: false
     });
   },
 
-  updateDebugRequestInfo(type, fromCache, resData, error) {
-    if (!this.data.isDebugMode) return;
-    const update = {
-      "debugInfo.lastRequestTime": new Date().toLocaleTimeString(),
-      "debugInfo.hitCache": fromCache
-    };
-    if (resData && resData.counts) {
-      if (resData.counts.classes !== undefined) update["debugInfo.counts.classes"] = resData.counts.classes;
-      if (resData.counts.teachers !== undefined) update["debugInfo.counts.teachers"] = resData.counts.teachers;
-      if (resData.counts.classrooms !== undefined) update["debugInfo.counts.classrooms"] = resData.counts.classrooms;
-      if (resData.counts.courses !== undefined) update["debugInfo.counts.courses"] = resData.counts.courses;
+  onRetryLoading() {
+    if (typeof this.retryFn === 'function') {
+      this.retryFn();
     }
-    this.setData(update);
   },
 
-  forceReloadAllCaches() {
-    wx.showModal({
-      title: "提示",
-      content: "确认清理全校所有课表及索引缓存并重新加载吗？",
-      success: (res) => {
-        if (res.confirm) {
-          const { clearAllSchoolCaches } = require("../../utils/storage");
-          clearAllSchoolCaches();
-          wx.removeStorageSync("FOSU_LOCAL_RELEASE_KEY");
-          wx.showToast({
-            title: "清理成功，重载中",
-            icon: "success",
-            duration: 1500
-          });
-          this.fetchSchoolCatalog();
-          this.loadPageConfig();
-        }
+  triggerActiveTabSearch() {
+    const activeTab = this.data.activeTab;
+    if (activeTab === "class") {
+      const { selectedCollegeIndex, selectedGradeIndex, selectedMajorIndex } = this.data;
+      if (selectedCollegeIndex >= 0 && selectedGradeIndex >= 0 && selectedMajorIndex >= 0) {
+        this.searchClassSchedule();
       }
-    });
+    } else if (activeTab === "teacher" && this.data.keyword.trim()) {
+      this.searchTeacherSchedule();
+    } else if (activeTab === "classroom" && this.data.keyword.trim()) {
+      this.searchClassroomSchedule();
+    } else if (activeTab === "course" && this.data.keyword.trim()) {
+      this.searchCourseSchedule();
+    }
+  },
+
+  // ================== 查询内核执行器 (支持缓存兜底/版本隔离/静默刷新) ==================
+
+  executeSearch(type, params, renderFn, catchFn) {
+    const query = Object.assign({ type }, params || {});
+    if (!query.term && !query.semester) {
+      query.term = (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
+    }
+    if (!query.releaseVersion) {
+      query.releaseVersion = this.getReleaseVersionForCache();
+    }
+
+    // 1. 尝试从本地缓存读取同版本的索引数据
+    const cached = this.readIndexCache(type, query);
+
+    const doNetworkRequest = () => {
+      if (!cached) {
+        this.startLoadingTimer(doNetworkRequest);
+      } else {
+        this.clearLoadingTimer();
+      }
+
+      request.get("/api/fosu/search-index", query, { showLoading: false, silentError: true, timeout: 8000 })
+        .then((data) => {
+          this.clearLoadingTimer();
+          this.writeIndexCache(type, query, data);
+          renderFn(data, false);
+        })
+        .catch((err) => {
+          this.clearLoadingTimer();
+          if (cached) {
+            // 刷新失败但已有同版本缓存，不清空页面，默默 toast 提示
+            wx.showToast({
+              title: "刷新失败，正在使用本地缓存",
+              icon: "none",
+              duration: 2000
+            });
+          } else {
+            // 版本变化或无缓存时新索引加载失败，提示新版本加载失败并执行失败回调清理状态
+            wx.showToast({
+              title: "课表版本加载失败，请重试",
+              icon: "none",
+              duration: 2000
+            });
+            catchFn(err);
+          }
+        });
+    };
+
+    if (cached) {
+      // 立即使用本地缓存渲染
+      renderFn(cached, true);
+      // 静默发起后台网络刷新
+      doNetworkRequest();
+    } else {
+      // 无缓存，发起网络加载
+      doNetworkRequest();
+    }
   }
 });

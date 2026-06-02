@@ -369,6 +369,53 @@
             <view class="detail-label">说明</view>
             <view class="detail-value" style="font-size: 24rpx; color: #757575;">{{versionData.disclaimer}}</view>
           </view>
+
+          <view class="detail-divider"></view>
+          <view class="detail-section-title">🔍 数据诊断</view>
+          
+          <view class="detail-row">
+            <view class="detail-label">当前正式版本</view>
+            <view class="detail-value">{{versionData.remoteReleaseVersion || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">当前正式学期</view>
+            <view class="detail-value">{{versionData.remoteTerm || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">课表数据更新时间</view>
+            <view class="detail-value">{{versionData.remoteScheduleUpdatedAt || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">catalogUpdatedAt</view>
+            <view class="detail-value">{{versionData.remoteCatalogUpdatedAt || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">本地缓存版本</view>
+            <view class="detail-value">{{versionData.localReleaseVersion || '未感知'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">本地缓存学期</view>
+            <view class="detail-value">{{versionData.localTerm || '未感知'}}</view>
+          </view>
+          
+          <view class="detail-row">
+            <view class="detail-label">班级索引缓存数</view>
+            <view class="detail-value">{{versionData.classIndexCount || 0}} 项</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">教师索引缓存数</view>
+            <view class="detail-value">{{versionData.teacherIndexCount || 0}} 项</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">教室索引缓存数</view>
+            <view class="detail-value">{{versionData.classroomIndexCount || 0}} 项</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">课程索引缓存数</view>
+            <view class="detail-value">{{versionData.courseIndexCount || 0}} 项</view>
+          </view>
+          
+          <button class="diagnose-btn" bindtap="diagnoseClearAllCaches">清理全校缓存并重新加载</button>
         </view>
       </scroll-view>
 

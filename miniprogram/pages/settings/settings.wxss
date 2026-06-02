@@ -325,3 +325,31 @@
   margin-top: 8rpx;
   font-weight: 700;
 }
+
+.detail-section-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #172033;
+  padding: 16rpx 0 8rpx;
+  border-bottom: 2rpx solid #eef1f6;
+  margin-top: 24rpx;
+}
+
+.diagnose-btn {
+  margin: 30rpx 0 10rpx !important;
+  background: #c62828 !important;
+  color: #ffffff !important;
+  font-size: 26rpx;
+  font-weight: bold;
+  height: 80rpx;
+  border-radius: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100% !important;
+  padding: 0 !important;
+}
+
+.diagnose-btn:active {
+  background: #b71c1c !important;
+}
