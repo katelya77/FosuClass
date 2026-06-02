@@ -94,6 +94,15 @@ function writeIndex(list) {
 function publicManifest(manifest) {
   if (!manifest) return null;
   const copy = Object.assign({}, manifest);
+  const chunkStatus = getChunkStatus(manifest);
+  copy.sourceSize = manifest.originalSize || 0;
+  copy.gzipSize = manifest.contentEncoding === "gzip" ? manifest.uploadSize || 0 : 0;
+  copy.chunkCount = manifest.totalChunks || 0;
+  copy.uploadedChunks = chunkStatus.receivedCount;
+  copy.receivedCount = chunkStatus.receivedCount;
+  copy.receivedBytes = chunkStatus.receivedBytes;
+  copy.progress = chunkStatus.progress;
+  copy.counts = manifest.summary?.counts || manifest.summary || {};
   delete copy.uploadDir;
   delete copy.joinedPath;
   delete copy.jsonPath;
@@ -140,6 +149,9 @@ function normalizeHash(value) {
 }
 
 function checkActor(manifest, actor) {
+  if (actor && actor.type === "admin") {
+    return true;
+  }
   if (!manifest.actorType || manifest.actorType === "admin") {
     return true;
   }
@@ -444,7 +456,61 @@ function getUploadStatus(uploadId, actor) {
 }
 
 function listUploads(limit = 20) {
-  return readIndex().slice(0, toPositiveInteger(limit, 20, 100));
+  const raw = readIndex().slice(0, toPositiveInteger(limit, 20, 100));
+  const hydrated = raw.map((item) => {
+    try {
+      return publicManifest(readManifest(item.uploadId));
+    } catch (error) {
+      return publicManifest(item);
+    }
+  });
+
+  const versions = new Map();
+  hydrated.forEach((item) => {
+    const version = String(item.releaseVersion || item.summary?.releaseVersion || "").trim();
+    if (!version) return;
+    if (!versions.has(version)) versions.set(version, []);
+    versions.get(version).push(item.uploadId);
+  });
+
+  return hydrated.map((item) => {
+    const version = String(item.releaseVersion || item.summary?.releaseVersion || "").trim();
+    const duplicates = version ? versions.get(version) || [] : [];
+    return Object.assign({}, item, {
+      duplicateReleaseVersion: duplicates.length > 1,
+      duplicateKeepLatest: duplicates.length > 1 ? duplicates[0] === item.uploadId : true,
+      duplicateUploadIds: duplicates,
+    });
+  });
+}
+
+function deleteUpload(uploadId, actor) {
+  const safeId = String(uploadId || "").replace(/[^a-zA-Z0-9_-]/g, "");
+  if (!safeId) {
+    const error = new Error("Missing uploadId");
+    error.statusCode = 400;
+    throw error;
+  }
+
+  let manifest = null;
+  try {
+    manifest = readManifest(safeId);
+    checkActor(manifest, actor);
+  } catch (error) {
+    if (error.statusCode !== 404) {
+      throw error;
+    }
+  }
+
+  const dir = getUploadDir(safeId);
+  assertInside(UPLOAD_ROOT, dir);
+  if (fs.existsSync(dir)) {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+
+  const next = readIndex().filter((item) => item.uploadId !== safeId);
+  writeIndex(next);
+  return publicManifest(manifest || { uploadId: safeId, status: "deleted" });
 }
 
 function normalizeStagingData(data) {
@@ -471,6 +537,7 @@ module.exports = {
   finalizeUpload,
   getUploadStatus,
   initUpload,
+  deleteUpload,
   listUploads,
   markUploadFailed,
   markUploadPendingReview,

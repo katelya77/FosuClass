@@ -1478,14 +1478,22 @@ const adminConsoleHtml = `<!doctype html>
       justify-content: space-between;
       gap: 8px;
       max-width: 100%;
+      overflow: hidden;
+    }
+    .command-code-box pre,
+    .flow-code-box pre {
+      margin: 0;
+      flex: 1 1 auto;
+      min-width: 0;
+      max-width: 100%;
       overflow-x: auto;
     }
     .command-code-box code {
       display: block;
       flex: 1 1 auto;
       min-width: 0;
-      white-space: pre;
-      word-break: normal;
+      white-space: pre-wrap;
+      word-break: break-word;
       overflow-x: auto;
     }
     .command-code-box button {
@@ -1590,7 +1598,8 @@ const adminConsoleHtml = `<!doctype html>
       overflow-x: auto;
       overflow-y: hidden;
       text-overflow: clip;
-      white-space: nowrap;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     .relay-table th,
     .relay-table td,
@@ -1810,7 +1819,7 @@ const adminConsoleHtml = `<!doctype html>
     }
     .flow-code-box {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       background: #0f172a;
       color: #38bdf8;
       border-radius: 6px;
@@ -1820,15 +1829,16 @@ const adminConsoleHtml = `<!doctype html>
       justify-content: space-between;
       gap: 8px;
       max-width: 100%;
-      overflow-x: auto;
+      overflow: hidden;
     }
     .flow-code-box code {
+      display: block;
       flex: 1 1 auto;
       min-width: 0;
-      word-break: normal;
+      word-break: break-word;
       overflow-x: auto;
       text-overflow: clip;
-      white-space: nowrap;
+      white-space: pre-wrap;
     }
     .copy-flow-btn, .flow-go-btn {
       background: rgba(255,255,255,0.1);
@@ -2026,9 +2036,94 @@ const adminConsoleHtml = `<!doctype html>
     .staging-inline-upload:hover {
       border-color: var(--primary);
     }
+    .staging-upload-table td {
+      vertical-align: top;
+      white-space: normal;
+    }
+    .staging-size-stack,
+    .staging-count-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 120px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+    .staging-action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+    }
     .release-history-wide {
       width: 100%;
       min-width: 0;
+    }
+    .release-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+      gap: 10px;
+      min-width: 0;
+    }
+    .release-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 12px;
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .release-card.active {
+      border-color: rgba(16, 185, 129, 0.55);
+      background: var(--success-soft);
+    }
+    .release-card-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .release-version {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      font-weight: 800;
+      color: var(--primary);
+      overflow-wrap: anywhere;
+    }
+    .release-meta,
+    .release-counts {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.5;
+    }
+    .release-actions {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .release-empty {
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 18px;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+      background: var(--panel-2);
+    }
+    @media (max-width: 700px) {
+      .release-strip {
+        display: flex;
+        overflow-x: auto;
+        padding-bottom: 4px;
+        scroll-snap-type: x proximity;
+      }
+      .release-card {
+        min-width: 260px;
+        scroll-snap-align: start;
+      }
     }
     .release-history-wide .table-container {
       max-width: 100%;
@@ -2411,8 +2506,8 @@ const adminConsoleHtml = `<!doctype html>
               <div class="flow-cmd-section">
                 <strong>管理员运行命令：</strong>
                 <div class="flow-code-box">
-                  <code id="flowCmdTextLocal">npm run sync:local-campus -- --term=2026-2027-1</code>
-                  <button type="button" class="copy-flow-btn" id="flowCopyBtnLocal">复制</button>
+                  <pre><code id="flowCmdTextLocal">npm run sync:local-campus -- --term=2026-2027-1</code></pre>
+                  <button type="button" class="copy-flow-btn" id="flowCopyBtnLocal">复制全部命令</button>
                 </div>
                 <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">（管理员本机使用，需要进入项目根目录并拥有源码与 Node.js 环境）</div>
               </div>
@@ -2428,6 +2523,13 @@ const adminConsoleHtml = `<!doctype html>
               <div class="flow-field"><strong>前置条件：</strong><span>已生成 Staging JSON，或已在下方创建并派发接力任务 Token。</span></div>
               <div class="flow-field"><strong>预计耗时：</strong><span>上传及后台校验秒级完成。</span></div>
               <div class="flow-field"><strong>常见失败原因：</strong><span>JSON 字段缺失、Token 已过期或被吊销。</span></div>
+              <div class="flow-cmd-section">
+                <strong>接力同学运行命令：</strong>
+                <div class="flow-code-box">
+                  <pre><code id="flowCmdTextRelay">npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=YOUR_TOKEN --term=2026-2027-1</code></pre>
+                  <button type="button" class="copy-flow-btn" id="flowCopyBtnRelay">复制全部命令</button>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -2446,25 +2548,29 @@ const adminConsoleHtml = `<!doctype html>
                 <div class="staging-status-pill"><strong>发布成功</strong><span>生成 release 索引并切换小程序数据</span></div>
               </div>
               <div class="command-code-box">
-                <code id="quickUploadCommand" style="white-space: pre; font-family: monospace; overflow-x: auto;">npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=https://class.katelya.eu.org</code>
+                <pre><code id="quickUploadCommand">cd C:\Users\Katelya\Documents\VScode\FosuClass
+npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=https://class.katelya.eu.org</code></pre>
               </div>
               <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
                 <button type="button" class="secondary" id="quickCopyUploadCmdBtn" style="padding: 6px 12px; font-size:12px;">复制 CLI 上传命令</button>
                 <button type="button" class="secondary" id="refreshStagingUploadsBtn" style="padding: 6px 12px; font-size:12px;">刷新上传列表</button>
               </div>
               <div class="table-container">
-                <table>
+                <table class="staging-upload-table">
                   <thead>
                     <tr>
                       <th>stagingId</th>
                       <th>学期 / 版本</th>
+                      <th>大小</th>
+                      <th>分片</th>
                       <th>状态</th>
-                      <th>上传进度</th>
+                      <th>counts</th>
                       <th>更新时间</th>
+                      <th>操作</th>
                     </tr>
                   </thead>
                   <tbody id="stagingUploadListBody">
-                    <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:12px 0;">暂无 CLI 上传记录</td></tr>
+                    <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:12px 0;">暂无 CLI 上传记录</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -2472,7 +2578,7 @@ const adminConsoleHtml = `<!doctype html>
             <div class="staging-cli-side">
               <div class="staging-inline-upload" id="quickUploadDropzone">
                 <strong>小文件网页上传入口</strong>
-                <p style="font-size:12px;color:var(--muted);margin:6px 0 10px;">适合 debug JSON 或 100MB 以下应急测试；185MB 全量包请使用左侧 CLI。</p>
+                <p style="font-size:12px;color:var(--muted);margin:6px 0 10px;">适合 debug JSON 或小文件应急测试；185MB 全量包主流程请使用左侧 CLI gzip 分片上传。若仍使用网页入口，浏览器只按 Blob 分片上传，不会一次性 JSON.parse 大文件。</p>
                 <input type="file" id="quickSyncFileInput" accept=".json,application/json" style="display:none;">
                 <button type="button" class="secondary" id="quickSelectUploadFileBtn" style="padding:6px 10px;font-size:12px;">选择 Staging JSON</button>
                 <div id="quickUploadFileInfo" style="font-size:12px;color:var(--muted);margin-top:10px;"></div>
@@ -2570,8 +2676,8 @@ const adminConsoleHtml = `<!doctype html>
                       <h4 style="font-size: 13.5px; margin-bottom: 12px;">Step 2: 选择数据同步预设模式</h4>
                       <div class="preset-card-grid">
                         <div class="preset-card active" id="preset-full">
-                          <div class="preset-title">🌟 全校完整同步，使用缓存</div>
-                          <div class="preset-desc">适合日常更新。允许使用 progress 与无排课缓存，速度更快。</div>
+                          <div class="preset-title">全量同步</div>
+                          <div class="preset-desc">全部 scope，使用当前学期推导的 5 个活跃年级，适合正式全量候选版本。</div>
                           <div class="preset-tags">
                             <span class="preset-tag">全选</span>
                             <span class="preset-tag">活跃5个年级</span>
@@ -2579,37 +2685,36 @@ const adminConsoleHtml = `<!doctype html>
                           </div>
                         </div>
                         <div class="preset-card" id="preset-force">
-                          <div class="preset-title">🧹 全校强制刷新</div>
-                          <div class="preset-desc">适合新学期第一次正式同步。忽略 progress 与无排课缓存，耗时更久但结果最干净。</div>
+                          <div class="preset-title">只刷新教师课表</div>
+                          <div class="preset-desc">仅同步 teacherSchedules 与 teachers，用于教师课表局部更新。</div>
                           <div class="preset-tags">
-                            <span class="preset-tag">--force-refresh</span>
-                            <span class="preset-tag">全选</span>
-                            <span class="preset-tag">活跃5个年级</span>
+                            <span class="preset-tag">teacherSchedules</span>
+                            <span class="preset-tag">teachers</span>
                           </div>
                         </div>
                         <div class="preset-card" id="preset-fast">
-                          <div class="preset-title">⚡ 新生开学极速模式</div>
-                          <div class="preset-desc">开学季快速覆盖。只抓取新生行政班课表，不爬老生课表。</div>
+                          <div class="preset-title">新生同步</div>
+                          <div class="preset-desc">只同步当前入学年行政班课表，适合新生数据先行验证。</div>
                           <div class="preset-tags">
                             <span class="preset-tag">仅抓新生年级</span>
                             <span class="preset-tag">行政班课表</span>
-                            <span class="preset-tag">公共资源列表</span>
                           </div>
                         </div>
                         <div class="preset-card" id="preset-resources">
-                          <div class="preset-title">🏢 只更新公共资源模式</div>
-                          <div class="preset-desc">不更新学生课表，仅派生/更新教师、教室、课程及对应课表。</div>
+                          <div class="preset-title">轻量同步</div>
+                          <div class="preset-desc">只同步 classSchedules、courses、classrooms，适合先生成轻量候选包。</div>
                           <div class="preset-tags">
-                            <span class="preset-tag">跳过行政班</span>
-                            <span class="preset-tag">只更新公共资源</span>
+                            <span class="preset-tag">classSchedules</span>
+                            <span class="preset-tag">courses</span>
+                            <span class="preset-tag">classrooms</span>
                           </div>
                         </div>
                         <div class="preset-card" id="preset-debug">
-                          <div class="preset-title">🔧 调试小范围模式</div>
-                          <div class="preset-desc">仅同步指定年级/学院/专业数据，适合开发调试及边界条件验证。</div>
+                          <div class="preset-title">只刷新教室占用</div>
+                          <div class="preset-desc">仅同步 classroomSchedules 与 classrooms，用于教室占用修复。</div>
                           <div class="preset-tags">
-                            <span class="preset-tag">支持精准过滤</span>
-                            <span class="preset-tag">输出为 debug JSON</span>
+                            <span class="preset-tag">classroomSchedules</span>
+                            <span class="preset-tag">classrooms</span>
                           </div>
                         </div>
                       </div>
@@ -2691,7 +2796,7 @@ const adminConsoleHtml = `<!doctype html>
 
                       <div class="wizard-command-preview" style="margin-top: 12px;">
                         <div class="command-code-box" style="margin-top: 4px;">
-                          <code id="wizardCommandCode" style="white-space: pre; font-family: monospace; overflow-x: auto;">加载中...</code>
+                          <pre><code id="wizardCommandCode">加载中...</code></pre>
                         </div>
                       </div>
 
@@ -2707,6 +2812,7 @@ const adminConsoleHtml = `<!doctype html>
                       <h4 style="font-size: 13.5px; margin-bottom: 12px;">Step 5: 上传生成的 Staging JSON 文件</h4>
                       <p style="font-size: 12px; color: var(--muted); margin-bottom: 12px;">
                         请在您的本地校园网终端执行上述 Step 4 生成的脚本。执行完毕后，在项目根目录的 <code>staging/</code> 目录下会产生 <code>[学期]-full.json</code> 文件。请将该文件拖入或上传到下方。
+                        网页上传只作为小文件/调试入口；全量 100MB+ JSON 的主流程是 CLI gzip chunk 上传。
                       </p>
                       
                       <div style="border: 2px dashed var(--border); border-radius: var(--radius); padding: 30px 20px; text-align: center; font-size: 13px; cursor: pointer; transition: var(--transition); background: var(--panel-2);" id="uploadDropzone" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
@@ -2970,21 +3076,9 @@ const adminConsoleHtml = `<!doctype html>
               </div>
             </div>
             <div class="table-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th>version</th>
-                    <th>term</th>
-                    <th>发布时间</th>
-                    <th>数据统计</th>
-                    <th>状态</th>
-                    <th>操作</th>
-                  </tr>
-                </thead>
-                <tbody id="releasesTableBody">
-                  <tr><td colspan="6" style="text-align:center;color:var(--muted);padding:16px 0;">获取 Release 历史中...</td></tr>
-                </tbody>
-              </table>
+                <div id="releasesTableBody" class="release-strip">
+                  <div class="release-empty">获取 Release 历史中...</div>
+                </div>
             </div>
           </div>
           <!-- 8. sync-log-panel -->
@@ -4864,7 +4958,7 @@ const adminConsoleHtml = `<!doctype html>
             return Promise.allSettled([
               api("/api/admin/relay/tasks"),
               api("/api/admin/relay/uploads"),
-              api("/api/admin/staging/upload")
+              api("/api/admin/staging/status")
             ]);
           })
           .then(function(results) {
@@ -4898,7 +4992,7 @@ const adminConsoleHtml = `<!doctype html>
         var list = [
           { label: "当前版本", val: data.releaseVersion || "-", icon: "🏷️", foot: "在线 release 版本" },
           { label: "配置学期", val: data.semester || "-", icon: "📅", foot: "教务系统学期" },
-          { label: "Staging 状态", val: data.latestRelayUpload ? data.latestRelayUpload.status : "等待上传", icon: "📦", foot: "候选数据需审核发布" },
+          { label: "Staging 状态", val: data.latestStagingUpload ? data.latestStagingUpload.status : "等待上传", icon: "📦", foot: "CLI 候选数据需审核发布" },
           { label: "接力上传", val: data.latestRelayUpload ? formatDate(data.latestRelayUpload.uploadedAt) : "暂无", icon: "🔁", foot: "最近 relay-agent 上传" },
           { label: "行政班总数", val: (data.counts?.classScheduleCount || 0) + " 个", icon: "🏫", foot: "行政班课表" },
           { label: "课程总数", val: (data.counts?.courseScheduleCount || 0) + " 门", icon: "📚", foot: "资源关联课表" },
@@ -5025,24 +5119,73 @@ const adminConsoleHtml = `<!doctype html>
         var list = state.stagingUploads || [];
         tbody.innerHTML = "";
         if (list.length === 0) {
-          tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;color:var(--muted);padding:12px 0;'>暂无 CLI 上传记录</td></tr>";
+          tbody.innerHTML = "<tr><td colspan='8' style='text-align:center;color:var(--muted);padding:12px 0;'>暂无 CLI 上传记录</td></tr>";
           return;
         }
         list.slice(0, 10).forEach(function(upload) {
           var summary = upload.summary || {};
-          var received = upload.receivedBytes || 0;
-          var total = upload.uploadSize || 0;
-          var progress = upload.progress != null ? upload.progress : (total > 0 ? Math.min(100, received / total * 100) : 0);
+          var counts = upload.counts || summary.counts || summary || {};
+          var sourceSize = upload.sourceSize || upload.originalSize || 0;
+          var gzipSize = upload.gzipSize || (upload.contentEncoding === "gzip" ? upload.uploadSize : 0);
+          var uploadedChunks = upload.uploadedChunks || upload.receivedCount || 0;
+          var chunkCount = upload.chunkCount || upload.totalChunks || 0;
+          var progress = upload.progress != null ? upload.progress : (chunkCount > 0 ? Math.min(100, uploadedChunks / chunkCount * 100) : 0);
           var statusLabel = relayStatusText(upload.status);
+          var duplicateBadge = upload.duplicateReleaseVersion
+            ? "<br><span class='badge warning'>" + (upload.duplicateKeepLatest ? "重复候选版本 · 最新" : "重复候选版本 · 可删旧") + "</span>"
+            : "";
           var tr = document.createElement("tr");
           tr.innerHTML =
             "<td><code>" + escapeHtml(upload.uploadId || "-") + "</code><br><span style='color:var(--muted);'>" + escapeHtml(upload.fileName || "") + "</span></td>" +
-            "<td><strong>" + escapeHtml(upload.term || summary.term || "-") + "</strong><br><span style='color:var(--muted);'>" + escapeHtml(upload.releaseVersion || summary.releaseVersion || "-") + "</span></td>" +
+            "<td><strong>" + escapeHtml(upload.term || summary.term || "-") + "</strong><br><span style='color:var(--muted);'>" + escapeHtml(upload.releaseVersion || summary.releaseVersion || "-") + "</span>" + duplicateBadge + "</td>" +
+            "<td><div class='staging-size-stack'><span>JSON " + formatBytes(sourceSize) + "</span><span>gzip " + (gzipSize ? formatBytes(gzipSize) : "-") + "</span></div></td>" +
+            "<td>" + progress.toFixed(1) + "%<br><span style='color:var(--muted);'>" + uploadedChunks + "/" + chunkCount + " chunks</span></td>" +
             "<td><span class='badge info'>" + escapeHtml(statusLabel) + "</span>" + (upload.failureReason ? "<br><span style='color:var(--danger);'>" + escapeHtml(upload.failureReason) + "</span>" : "") + "</td>" +
-            "<td>" + progress.toFixed(1) + "%<br><span style='color:var(--muted);'>" + (upload.receivedCount || 0) + "/" + (upload.totalChunks || 0) + " chunks</span></td>" +
-            "<td>" + formatDate(upload.updatedAt || upload.createdAt) + "</td>";
+            "<td><div class='staging-count-stack'><span>class " + (counts.classScheduleCount || 0) + "</span><span>teacher " + (counts.teacherScheduleCount || 0) + "</span><span>room " + (counts.classroomScheduleCount || 0) + "</span><span>course " + (counts.courseScheduleCount || 0) + "</span></div></td>" +
+            "<td>" + formatDate(upload.updatedAt || upload.createdAt) + "</td>" +
+            "<td class='action-cell'><div class='staging-action-row'></div></td>";
+          var actions = tr.querySelector(".staging-action-row");
+          var previewBtn = document.createElement("button");
+          previewBtn.className = "btn ghost";
+          previewBtn.style = "padding: 3px 8px; font-size:11px;";
+          previewBtn.textContent = "预览";
+          previewBtn.disabled = upload.status !== "pending-review" && upload.status !== "published";
+          previewBtn.addEventListener("click", function() {
+            loadStagingPreview();
+            state.activeStep = 6;
+            updateStepperUI();
+          });
+          actions.appendChild(previewBtn);
+
+          var publishBtn = document.createElement("button");
+          publishBtn.className = "btn primary";
+          publishBtn.style = "padding: 3px 8px; font-size:11px;";
+          publishBtn.textContent = "发布";
+          publishBtn.disabled = upload.status !== "pending-review";
+          publishBtn.addEventListener("click", function() {
+            publishStaging(publishBtn);
+          });
+          actions.appendChild(publishBtn);
+
+          var deleteBtn = document.createElement("button");
+          deleteBtn.className = "btn danger";
+          deleteBtn.style = "padding: 3px 8px; font-size:11px;";
+          deleteBtn.textContent = "删除";
+          deleteBtn.disabled = upload.status === "published";
+          deleteBtn.addEventListener("click", function() {
+            deleteStagingUpload(upload.uploadId, deleteBtn);
+          });
+          actions.appendChild(deleteBtn);
           tbody.appendChild(tr);
         });
+      }
+
+      function formatBytes(bytes) {
+        var value = Number(bytes || 0);
+        if (!value) return "-";
+        var mb = value / 1024 / 1024;
+        if (mb >= 1) return mb.toFixed(2) + " MB";
+        return (value / 1024).toFixed(1) + " KB";
       }
 
       function createRelayTask() {
@@ -5099,6 +5242,24 @@ const adminConsoleHtml = `<!doctype html>
             return loadSyncStatus();
           })
           .catch(function(error) {
+            restoreButton();
+            showToast(error.message || "删除失败", "error");
+          });
+      }
+
+      function deleteStagingUpload(id, btn) {
+        if (!id) return;
+        if (!confirm("确认删除这条 Staging 上传记录吗？删除后该候选包不会进入发布流程。")) return;
+        var restoreButton = setButtonLoading(btn, "删除中...");
+        api("/api/admin/staging/" + encodeURIComponent(id), { method: "DELETE" })
+          .then(function() {
+            state.stagingUploads = (state.stagingUploads || []).filter(function(item) { return item.uploadId !== id; });
+            renderStagingUploads();
+            showToast("Staging 上传记录已删除", "success");
+            return loadSyncStatus();
+          })
+          .catch(function(error) {
+            restoreButton();
             showToast(error.message || "删除失败", "error");
           });
       }
@@ -5222,9 +5383,7 @@ const adminConsoleHtml = `<!doctype html>
         var concurrency = value("wizardConcurrency") || "1";
         var delay = value("wizardDelay") || "900";
 
-        // 判断是否为调试模式 (根据选取的 Preset 来判断，或者只要输出路径为 debug)
-        var isDebugMode = document.getElementById("preset-debug") && document.getElementById("preset-debug").classList.contains("active");
-        var output = isDebugMode ? "./staging/debug-" + term + ".json" : "./staging/" + term + "-full.json";
+        var output = "./staging/" + term + "-full.json";
 
         // 是否勾选行政班课表
         var hasClassSchedules = scopes.indexOf("classSchedules") >= 0;
@@ -5322,7 +5481,7 @@ const adminConsoleHtml = `<!doctype html>
           $("flowCmdTextLocal").textContent = commandText;
         }
         if ($("quickUploadCommand")) {
-          $("quickUploadCommand").textContent = "npm run sync:local-upload -- --file=" + output + " --server=https://class.katelya.eu.org";
+          $("quickUploadCommand").textContent = "cd " + projectDirWin + lineBreak + "npm run sync:local-upload -- --file=" + output + " --server=https://class.katelya.eu.org";
         }
 
         // 异步更新右侧运维说明卡片列表
@@ -5344,24 +5503,25 @@ const adminConsoleHtml = `<!doctype html>
                   item.className = "command-card" + (isDefaultExpanded ? "" : " collapsed");
                   item.innerHTML = 
                     "<div class='command-header'>" +
-                      "<div class='command-title'>🔧 " + c.name + "</div>" +
+                      "<div class='command-title'>🔧 " + escapeHtml(c.name) + "</div>" +
                       "<div style='display:flex; gap:6px; align-items: center;'>" + riskBadge + intranetBadge + "</div>" +
                     "</div>" +
                     "<div class='command-body'>" +
                       "<div class='command-code-box'>" +
-                        "<code>" + escapeHtml(c.command) + "</code>" +
-                        "<button type='button' class='copy-command-btn' data-copy-command='" + escapeHtml(c.command) + "'>复制</button>" +
+                        "<pre><code>" + escapeHtml(c.command) + "</code></pre>" +
+                        "<button type='button' class='copy-command-btn'>复制全部命令</button>" +
                       "</div>" +
                       "<div class='command-meta-grid'>" +
-                        "<div class='command-meta-item'><strong>适用场景</strong><span>" + c.scene + "</span></div>" +
-                        "<div class='command-meta-item'><strong>前置条件</strong><span>" + c.precondition + "</span></div>" +
-                        "<div class='command-meta-item'><strong>预计耗时</strong><span>" + c.duration + "</span></div>" +
-                        "<div class='command-meta-item'><strong>常见失败原因</strong><span>" + c.failureReason + "</span></div>" +
+                        "<div class='command-meta-item'><strong>适用场景</strong><span>" + escapeHtml(c.scene) + "</span></div>" +
+                        "<div class='command-meta-item'><strong>前置条件</strong><span>" + escapeHtml(c.precondition) + "</span></div>" +
+                        "<div class='command-meta-item'><strong>预计耗时</strong><span>" + escapeHtml(c.duration) + "</span></div>" +
+                        "<div class='command-meta-item'><strong>常见失败原因</strong><span>" + escapeHtml(c.failureReason) + "</span></div>" +
                       "</div>" +
                       "<div class='command-tip-box'>" +
-                        "<strong>💡 修复建议:</strong><span>" + c.solution + "</span>" +
+                        "<strong>💡 修复建议:</strong><span>" + escapeHtml(c.solution) + "</span>" +
                       "</div>" +
                     "</div>";
+                  item.__copyCommand = c.command || "";
                   
                   item.querySelector(".command-header").addEventListener("click", function(e) {
                     if (e.target.classList.contains("command-tag")) return;
@@ -5372,7 +5532,8 @@ const adminConsoleHtml = `<!doctype html>
                 
                 syncCommandsWrap.querySelectorAll(".copy-command-btn").forEach(function(btn) {
                   btn.addEventListener("click", function() {
-                    copyText(btn.dataset.copyCommand || "");
+                    var card = btn.closest(".command-card");
+                    copyText((card && card.__copyCommand) || "");
                   });
                 });
               }
@@ -5411,23 +5572,43 @@ const adminConsoleHtml = `<!doctype html>
         tbody.innerHTML = "";
         
         if (filteredList.length === 0) {
-          tbody.innerHTML = "<tr><td colspan='6' style='text-align: center; color: var(--muted); padding: 16px 0;'>暂无历史 Release 数据包。</td></tr>";
+          tbody.innerHTML = "<div class='release-empty'>暂无历史 Release 数据包。</div>";
           return;
         }
         
         var currentActiveVer = state.syncStatus ? state.syncStatus.releaseVersion : "";
         
         filteredList.forEach(function(r) {
-          var tr = document.createElement("tr");
+          var card = document.createElement("div");
           var isActive = (r.version === currentActiveVer);
-          var statusCell = isActive ? "<span class='badge success'>运行中 (Active)</span>" : "<span class='badge muted'>历史版本</span>";
+          card.className = "release-card" + (isActive ? " active" : "");
+          var statusCell = isActive ? "<span class='badge success'>active</span>" : "<span class='badge muted'>archived</span>";
           
           var countText =
-            "班 " + (r.counts?.classScheduleCount || 0) +
-            " / 师 " + (r.counts?.teacherScheduleCount || 0) +
-            " / 室 " + (r.counts?.classroomScheduleCount || 0) +
-            " / 课 " + (r.counts?.courseScheduleCount || 0);
+            "class " + (r.counts?.classScheduleCount || 0) +
+            " / teacher " + (r.counts?.teacherScheduleCount || 0) +
+            " / classroom " + (r.counts?.classroomScheduleCount || 0) +
+            " / course " + (r.counts?.courseScheduleCount || 0);
             
+          card.innerHTML =
+            "<div class='release-card-head'>" +
+              "<div class='release-version'>" + escapeHtml(r.version) + "</div>" +
+              statusCell +
+            "</div>" +
+            "<div class='release-meta'>term " + escapeHtml(r.semester || "-") + "<br>发布 " + formatDate(r.updatedAt) + "</div>" +
+            "<div class='release-counts'>" + escapeHtml(countText) + "</div>" +
+            "<div class='release-actions'></div>";
+
+          var actions = card.querySelector(".release-actions");
+          var viewBtn = document.createElement("button");
+          viewBtn.className = "btn ghost";
+          viewBtn.style = "padding: 3px 8px; font-size:11px;";
+          viewBtn.textContent = "查看";
+          viewBtn.addEventListener("click", function() {
+            copyText(r.version);
+          });
+          actions.appendChild(viewBtn);
+
           var actionBtn = document.createElement("button");
           actionBtn.className = "btn ghost";
           actionBtn.style = "padding: 3px 8px; font-size:11px;";
@@ -5440,17 +5621,18 @@ const adminConsoleHtml = `<!doctype html>
               rollbackToVersion(r.version, actionBtn);
             });
           }
-          
-          tr.innerHTML =
-            "<td><strong style='font-family: monospace; font-size:12px; color: var(--primary);'>" + r.version + "</strong></td>" +
-            "<td>" + r.semester + "</td>" +
-            "<td><span style='font-size:11px;'>" + formatDate(r.updatedAt) + "</span></td>" +
-            "<td><span style='font-size:11px;'>" + countText + "</span></td>" +
-            "<td>" + statusCell + "</td>" +
-            "<td class='action-cell'></td>";
-            
-          tr.querySelector(".action-cell").appendChild(actionBtn);
-          tbody.appendChild(tr);
+          actions.appendChild(actionBtn);
+
+          var deleteBtn = document.createElement("button");
+          deleteBtn.className = "btn danger";
+          deleteBtn.style = "padding: 3px 8px; font-size:11px;";
+          deleteBtn.textContent = "删除";
+          deleteBtn.disabled = isActive;
+          deleteBtn.addEventListener("click", function() {
+            deleteReleaseVersion(r.version, deleteBtn);
+          });
+          actions.appendChild(deleteBtn);
+          tbody.appendChild(card);
         });
       }
 
@@ -5478,9 +5660,25 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       window.copyText = function(text) {
-        var input = document.createElement("input");
+        var value = text == null ? "" : String(text);
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(value)
+            .then(function() { showToast("命令已复制到剪贴板。"); })
+            .catch(function() { fallbackCopyText(value); });
+          return;
+        }
+        fallbackCopyText(value);
+      };
+
+      function fallbackCopyText(text) {
+        var input = document.createElement("textarea");
         input.value = text;
+        input.setAttribute("readonly", "readonly");
+        input.style.position = "fixed";
+        input.style.top = "-1000px";
+        input.style.left = "-1000px";
         document.body.appendChild(input);
+        input.focus();
         input.select();
         document.execCommand("copy");
         input.remove();
@@ -5584,48 +5782,149 @@ const adminConsoleHtml = `<!doctype html>
         var uploadInfo = $(infoId || "uploadFileInfo");
         if (!uploadInfo) return;
         if (file.size > 100 * 1024 * 1024) {
-          uploadInfo.innerHTML = "<span style='color: var(--danger);'>文件 " + escapeHtml(file.name) + " 超过 100MB。全量大文件请使用 CLI 分片上传，网页上传仅用于小文件测试。</span>";
-          showToast("100MB+ Staging JSON 请使用 CLI 分片上传", "error");
+          var ok = confirm("该文件超过 100MB。主流程建议使用 CLI gzip chunk 上传。若继续使用网页入口，浏览器将按 Blob 分片上传且不会一次性 JSON.parse。是否继续？");
+          if (!ok) {
+            uploadInfo.innerHTML = "<span style='color: var(--danger);'>文件 " + escapeHtml(file.name) + " 超过 100MB。全量大文件请使用 CLI 分片上传，网页上传仅用于小文件测试。</span>";
+            showToast("100MB+ Staging JSON 请使用 CLI 分片上传", "error");
+            return;
+          }
+        }
+        uploadStagingFileByChunks(file, uploadInfo);
+      }
+
+      function readFileHead(file, maxBytes) {
+        return new Promise(function(resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function(e) {
+            resolve(e.target.result || "");
+          };
+          reader.onerror = function() {
+            reject(new Error("文件头读取失败"));
+          };
+          reader.readAsText(file.slice(0, Math.min(file.size, maxBytes || 4 * 1024 * 1024)));
+        });
+      }
+
+      function extractStagingMetadataFromHead(head) {
+        function pick(key) {
+          var re = new RegExp('"' + key + '"\\\\s*:\\\\s*"([^"]+)"');
+          var match = re.exec(head || "");
+          return match ? match[1] : "";
+        }
+        return {
+          term: pick("term") || pick("semester"),
+          releaseVersion: pick("releaseVersion") || pick("version"),
+          generatedAt: pick("generatedAt") || pick("updatedAt"),
+        };
+      }
+
+      function uploadRawChunk(url, blob) {
+        return fetch(url, {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/octet-stream" },
+          body: blob,
+        }).then(function(res) {
+          return res.text().then(function(text) {
+            var data = {};
+            try { data = text ? JSON.parse(text) : {}; } catch (error) { data = { message: text }; }
+            if (!res.ok || data.success === false) {
+              throw new Error(data.message || ("HTTP " + res.status));
+            }
+            return data;
+          });
+        });
+      }
+
+      function uploadStagingFileByChunks(file, uploadInfo) {
+        var chunkSize = 8 * 1024 * 1024;
+        var totalChunks = Math.ceil(file.size / chunkSize);
+        var uploadId = "";
+        uploadInfo.innerHTML = "正在初始化分片上传: <strong>" + escapeHtml(file.name) + "</strong> (" + totalChunks + " chunks)...";
+
+        readFileHead(file, 4 * 1024 * 1024)
+          .then(function(head) {
+            var meta = extractStagingMetadataFromHead(head);
+            if (!meta.term) {
+              uploadInfo.innerHTML = "<span style='color: var(--danger);'>❌ 错误: 文件头未读取到 term 字段，请确认这是 Staging JSON。</span>";
+              throw new Error("Staging JSON 缺少 term 字段");
+            }
+            return api("/api/admin/staging/upload/init", {
+              method: "POST",
+              body: JSON.stringify({
+                fileName: file.name,
+                term: meta.term,
+                releaseVersion: meta.releaseVersion || "",
+                source: "web-admin-blob-upload",
+                contentEncoding: "identity",
+                contentType: "application/json",
+                chunkSize: chunkSize,
+                totalChunks: totalChunks,
+                uploadSize: file.size,
+                originalSize: file.size,
+              })
+            });
+          })
+          .then(function(init) {
+            uploadId = init.uploadId || (init.upload && init.upload.uploadId);
+            if (!uploadId) {
+              throw new Error("上传初始化失败：缺少 uploadId");
+            }
+            var chain = Promise.resolve();
+            for (var index = 0; index < totalChunks; index += 1) {
+              (function(chunkIndex) {
+                chain = chain.then(function() {
+                  var start = chunkIndex * chunkSize;
+                  var end = Math.min(file.size, start + chunkSize);
+                  uploadInfo.innerHTML = "正在上传分片 " + (chunkIndex + 1) + "/" + totalChunks + " · " + ((end / file.size) * 100).toFixed(1) + "%";
+                  return uploadRawChunk("/api/admin/staging/upload/chunk?uploadId=" + encodeURIComponent(uploadId) + "&chunkIndex=" + chunkIndex, file.slice(start, end));
+                });
+              })(index);
+            }
+            return chain;
+          })
+          .then(function() {
+            uploadInfo.innerHTML = "分片上传完成，正在服务端合并、校验并进入 pending-review...";
+            return api("/api/admin/staging/upload/finalize", {
+              method: "POST",
+              body: JSON.stringify({
+                uploadId: uploadId,
+                uploadSize: file.size,
+                originalSize: file.size,
+                totalChunks: totalChunks,
+              })
+            });
+          })
+          .then(function(res) {
+            uploadInfo.innerHTML = "<span style='color: var(--success);'>✓ " + escapeHtml(res.message || "分片上传校验成功，已进入 pending-review。") + "</span>";
+            showToast("Staging JSON 已分片上传并进入 pending-review", "success");
+            loadStagingPreview();
+            return loadSyncStatus();
+          })
+          .catch(function(err) {
+            if (uploadId) {
+              api("/api/admin/staging/" + encodeURIComponent(uploadId), { method: "DELETE" }).catch(function() {});
+            }
+            uploadInfo.innerHTML = "<span style='color: var(--danger);'>❌ 上传失败: " + escapeHtml(err.message) + "</span>";
+            showToast(err.message, "error");
+          });
+      }
+
+      function deleteReleaseVersion(version, btn) {
+        if (!confirm("确认删除历史 Release [" + version + "] 吗？当前 active 版本不能被删除。")) {
           return;
         }
-        uploadInfo.innerHTML = "正在解析并读取: <strong>" + escapeHtml(file.name) + "</strong>...";
-        
-        var reader = new FileReader();
-        reader.onload = function(e) {
-          var text = e.target.result;
-          try {
-            var parsed = JSON.parse(text);
-            // 简单校验格式，是否存在基本元数据或资源
-            if (!parsed.term) {
-              uploadInfo.innerHTML = "<span style='color: var(--danger);'>❌ 错误: JSON 缺少 term (学期) 字段，不符合 Staging 标准格式。</span>";
-              return;
-            }
-            
-            uploadInfo.innerHTML = "正在校验并上传至服务器 Staging 区...";
-            
-            api("/api/admin/sync/staging/upload", {
-              method: "POST",
-              body: text
-            })
-              .then(function(res) {
-                uploadInfo.innerHTML = "<span style='color: var(--success);'>✓ " + escapeHtml(res.message || "上传校验暂存成功！") + "</span>";
-                showToast("Staging JSON 上传并校验成功，请查看下方比对详情并确认发布");
-                loadStagingPreview();
-              })
-              .catch(function(err) {
-                uploadInfo.innerHTML = "<span style='color: var(--danger);'>❌ 上传失败: " + escapeHtml(err.message) + "</span>";
-                showToast(err.message, "error");
-              });
-          } catch (err) {
-            uploadInfo.innerHTML = "<span style='color: var(--danger);'>❌ 错误: 文件不是合法的 JSON 格式。(" + escapeHtml(err.message) + ")</span>";
-            showToast("JSON 格式错误: " + err.message, "error");
-          }
-        };
-        reader.onerror = function() {
-          uploadInfo.innerHTML = "<span style='color: var(--danger);'>❌ 错误: 文件读取失败。</span>";
-          showToast("文件读取失败", "error");
-        };
-        reader.readAsText(file);
+        var restoreButton = setButtonLoading(btn, "删除中...");
+        api("/api/admin/sync/releases/" + encodeURIComponent(version), { method: "DELETE" })
+          .then(function() {
+            state.releasesHistory = (state.releasesHistory || []).filter(function(item) { return item.version !== version; });
+            renderReleaseHistoryTable();
+            showToast("历史 Release 已删除", "success");
+          })
+          .catch(function(err) {
+            restoreButton();
+            showToast(err.message || "删除失败", "error");
+          });
       }
 
       safeBind("syncFileInput", "change", function(e) {
@@ -5648,14 +5947,22 @@ const adminConsoleHtml = `<!doctype html>
         if (code) copyText(code);
       });
 
+      safeBind("stagingPublishBtn", "click", function() {
+        publishStaging();
+      });
+
       safeBind("refreshStagingUploadsBtn", "click", function() {
-        api("/api/admin/staging/upload")
+        var btn = $("refreshStagingUploadsBtn");
+        var restoreButton = setButtonLoading(btn, "刷新中...");
+        api("/api/admin/staging/status")
           .then(function(res) {
             state.stagingUploads = res.uploads || [];
             renderStagingUploads();
             showToast("上传列表已刷新", "success");
+            restoreButton();
           })
           .catch(function(err) {
+            restoreButton();
             showToast(err.message, "error");
           });
       });
@@ -5902,12 +6209,12 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
-      function publishStaging() {
+      function publishStaging(sourceButton) {
         var forceConfirm = $("stagingForceConfirm");
         var force = forceConfirm ? forceConfirm.checked : false;
         
         setStatus("正在正式发布课表快照版本...");
-        var publishBtn = $("stagingPublishBtn");
+        var publishBtn = sourceButton || $("stagingPublishBtn");
         var restoreButton = setButtonLoading(publishBtn, "发布中...");
         
         api("/api/admin/sync/staging/publish", {
@@ -5917,11 +6224,11 @@ const adminConsoleHtml = `<!doctype html>
           .then(function(res) {
             showToast("发布成功！线上课表数据已更新。", "success");
             // 隐藏 Staging 预览，清空文件信息
-            $("stagingPreviewBox").style.display = "none";
-            $("uploadFileInfo").textContent = "";
-            $("syncFileInput").value = "";
+            if ($("stagingPreviewBox")) $("stagingPreviewBox").style.display = "none";
+            if ($("uploadFileInfo")) $("uploadFileInfo").textContent = "";
+            if ($("syncFileInput")) $("syncFileInput").value = "";
             if (forceConfirm) forceConfirm.checked = false;
-            $("forceConfirmContainer").style.display = "none";
+            if ($("forceConfirmContainer")) $("forceConfirmContainer").style.display = "none";
             // 重新载入状态
             loadSyncStatus();
           })
@@ -7001,7 +7308,7 @@ const adminConsoleHtml = `<!doctype html>
               var forceBox = $("wizardForceRefresh");
               if (forceBox) forceBox.checked = false;
 
-              if (pr === "full" || pr === "force") {
+              if (pr === "full") {
                 ["rangeClass", "rangeTeacher", "rangeClassroom", "rangeCourse", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
                   var cb = $(id);
                   if (cb) cb.checked = true;
@@ -7012,13 +7319,27 @@ const adminConsoleHtml = `<!doctype html>
                 if (cc) cc.value = "1";
                 var dy = $("wizardDelay");
                 if (dy) dy.value = "900";
-                if (forceBox && pr === "force") forceBox.checked = true;
-              } else if (pr === "fast") {
-                ["rangeClass", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
+              } else if (pr === "force") {
+                ["rangeTeacher", "rangeTeacherList"].forEach(function(id) {
                   var cb = $(id);
                   if (cb) cb.checked = true;
                 });
-                ["rangeTeacher", "rangeClassroom", "rangeCourse"].forEach(function(id) {
+                ["rangeClass", "rangeClassroom", "rangeCourse", "rangeClassroomList", "rangeCourseList"].forEach(function(id) {
+                  var cb = $(id);
+                  if (cb) cb.checked = false;
+                });
+                var gmTeacher = $("wizardGradesMode");
+                if (gmTeacher) gmTeacher.value = "all";
+                var ccTeacher = $("wizardConcurrency");
+                if (ccTeacher) ccTeacher.value = "1";
+                var dyTeacher = $("wizardDelay");
+                if (dyTeacher) dyTeacher.value = "900";
+              } else if (pr === "fast") {
+                ["rangeClass"].forEach(function(id) {
+                  var cb = $(id);
+                  if (cb) cb.checked = true;
+                });
+                ["rangeTeacher", "rangeClassroom", "rangeCourse", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
                   var cb = $(id);
                   if (cb) cb.checked = false;
                 });
@@ -7029,32 +7350,31 @@ const adminConsoleHtml = `<!doctype html>
                 var dy = $("wizardDelay");
                 if (dy) dy.value = "900";
               } else if (pr === "resources") {
-                var cbClass = $("rangeClass");
-                if (cbClass) cbClass.checked = false;
-                ["rangeTeacher", "rangeClassroom", "rangeCourse", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
+                ["rangeClass", "rangeCourseList", "rangeClassroomList"].forEach(function(id) {
                   var cb = $(id);
                   if (cb) cb.checked = true;
                 });
+                ["rangeTeacher", "rangeClassroom", "rangeCourse", "rangeTeacherList"].forEach(function(id) {
+                  var cb = $(id);
+                  if (cb) cb.checked = false;
+                });
                 var gm = $("wizardGradesMode");
-                if (gm) gm.value = "all";
+                if (gm) gm.value = "recommend";
                 var cc = $("wizardConcurrency");
                 if (cc) cc.value = "1";
                 var dy = $("wizardDelay");
                 if (dy) dy.value = "900";
               } else if (pr === "debug") {
-                ["rangeClass"].forEach(function(id) {
+                ["rangeClassroom", "rangeClassroomList"].forEach(function(id) {
                   var cb = $(id);
                   if (cb) cb.checked = true;
                 });
-                ["rangeTeacher", "rangeClassroom", "rangeCourse", "rangeClassroomList", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
+                ["rangeClass", "rangeTeacher", "rangeCourse", "rangeTeacherList", "rangeCourseList"].forEach(function(id) {
                   var cb = $(id);
                   if (cb) cb.checked = false;
                 });
                 var gm = $("wizardGradesMode");
-                if (gm) gm.value = "custom";
-                var cg = $("wizardGradesCustom");
-                var term = getTermValue("wizardTerm", "wizardTermCustom") || "2026-2027-1";
-                if (cg) cg.value = getFreshmanGrade(term);
+                if (gm) gm.value = "all";
                 var cc = $("wizardConcurrency");
                 if (cc) cc.value = "1";
                 var dy = $("wizardDelay");

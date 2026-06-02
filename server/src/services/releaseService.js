@@ -673,6 +673,32 @@ function listReleases(limit = 20) {
   return entries.slice(0, limit);
 }
 
+function deleteReleaseVersion(version) {
+  ensureStorageDirs();
+  const normalizedVersion = normalizeVersion(version);
+  const active = getActiveReleaseInfo();
+  if (active && active.version === normalizedVersion) {
+    const err = new Error("不能删除当前 active release，请先回滚或激活其他版本");
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const files = getReleaseFiles(normalizedVersion);
+  const relative = path.relative(RELEASES_DIR, files.releaseDir);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    const err = new Error("Invalid release path");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!fs.existsSync(files.releaseDir)) {
+    const err = new Error(`Release ${normalizedVersion} not found`);
+    err.statusCode = 404;
+    throw err;
+  }
+  fs.rmSync(files.releaseDir, { recursive: true, force: true });
+  return { version: normalizedVersion, deleted: true };
+}
+
 const derivedCache = new Map();
 
 function getDerivedFileInfo(kind, files) {
@@ -886,6 +912,7 @@ module.exports = {
   countRelease,
   getActiveSnapshotData,
   getReleaseStatus,
+  deleteReleaseVersion,
   readActiveIndex,
   readActiveSchedule,
   listReleases,

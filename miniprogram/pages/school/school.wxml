@@ -147,6 +147,12 @@
           {{updatedAtText}}
         </view>
 
+        <view class="school-skeleton" wx:if="{{loading}}">
+          <view class="skeleton-line wide"></view>
+          <view class="skeleton-line"></view>
+          <view class="skeleton-line short"></view>
+        </view>
+
         <view class="class-result-notice" wx:if="{{classNoticeText}}">
           {{classNoticeText}}
         </view>
@@ -243,6 +249,12 @@
           {{updatedAtText}}
         </view>
 
+        <view class="school-skeleton" wx:if="{{loading}}">
+          <view class="skeleton-line wide"></view>
+          <view class="skeleton-line"></view>
+          <view class="skeleton-line short"></view>
+        </view>
+
         <view class="result-list" wx:if="{{teachersResult.length}}">
           <view
             wx:for="{{teachersResult}}"
@@ -297,6 +309,12 @@
           {{updatedAtText}}
         </view>
 
+        <view class="school-skeleton" wx:if="{{loading}}">
+          <view class="skeleton-line wide"></view>
+          <view class="skeleton-line"></view>
+          <view class="skeleton-line short"></view>
+        </view>
+
         <view class="result-list" wx:if="{{classroomsResult.length}}">
           <view
             wx:for="{{classroomsResult}}"
@@ -342,6 +360,12 @@
 
         <view class="updated-hint" wx:if="{{updatedAtText}}">
           {{updatedAtText}}
+        </view>
+
+        <view class="school-skeleton" wx:if="{{loading}}">
+          <view class="skeleton-line wide"></view>
+          <view class="skeleton-line"></view>
+          <view class="skeleton-line short"></view>
         </view>
 
         <view class="result-list" wx:if="{{coursesResult.length}}">

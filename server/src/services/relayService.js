@@ -4,7 +4,9 @@ const path = require("path");
 const { safeLog } = require("../utils/safeLogger");
 
 const STORAGE_DIR = path.join(__dirname, "../../storage");
-const RELAY_DIR = path.join(STORAGE_DIR, "relay");
+const RELAY_DIR = process.env.RELAY_DIR
+  ? path.resolve(process.env.RELAY_DIR)
+  : path.join(STORAGE_DIR, "relay");
 const PAYLOAD_DIR = path.join(RELAY_DIR, "uploads");
 const TASKS_PATH = path.join(RELAY_DIR, "tasks.json");
 const UPLOADS_PATH = path.join(RELAY_DIR, "uploads.json");

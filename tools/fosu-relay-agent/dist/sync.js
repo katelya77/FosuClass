@@ -1943,14 +1943,35 @@ var require_releaseService = __commonJS({
     }
     function getResources(snapshot) {
       const source = snapshot && snapshot.resources && typeof snapshot.resources === "object" ? snapshot.resources : {};
+      const topLevel = snapshot && typeof snapshot === "object" ? snapshot : {};
       return {
-        teachers: asArray(source.teachers),
-        classrooms: asArray(source.classrooms),
-        courses: asArray(source.courses),
-        teacherSchedules: asArray(source.teacherSchedules),
-        classroomSchedules: asArray(source.classroomSchedules),
-        courseSchedules: asArray(source.courseSchedules)
+        teachers: asArray(source.teachers).length ? asArray(source.teachers) : asArray(topLevel.teachers),
+        classrooms: asArray(source.classrooms).length ? asArray(source.classrooms) : asArray(topLevel.classrooms),
+        courses: asArray(source.courses).length ? asArray(source.courses) : asArray(topLevel.courses),
+        teacherSchedules: asArray(source.teacherSchedules).length ? asArray(source.teacherSchedules) : asArray(topLevel.teacherSchedules),
+        classroomSchedules: asArray(source.classroomSchedules).length ? asArray(source.classroomSchedules) : asArray(topLevel.classroomSchedules),
+        courseSchedules: asArray(source.courseSchedules).length ? asArray(source.courseSchedules) : asArray(topLevel.courseSchedules)
       };
+    }
+    function readLegacyResourceArray(fileName) {
+      const value = readJsonFile(path2.join(STORAGE_DIR, fileName));
+      return Array.isArray(value) ? value : [];
+    }
+    function hydrateLegacySnapshotResources(snapshot) {
+      const resources = getResources(snapshot);
+      if (resources.teacherSchedules.length || resources.classroomSchedules.length || resources.courseSchedules.length) {
+        return Object.assign({}, snapshot, { resources });
+      }
+      return Object.assign({}, snapshot, {
+        resources: Object.assign({}, resources, {
+          teacherSchedules: readLegacyResourceArray("teacher-schedules.json"),
+          classroomSchedules: readLegacyResourceArray("classroom-schedules.json"),
+          courseSchedules: readLegacyResourceArray("course-schedules.json"),
+          teachers: readLegacyResourceArray("teachers.json"),
+          classrooms: readLegacyResourceArray("classrooms.json"),
+          courses: readLegacyResourceArray("courses.json")
+        })
+      });
     }
     function countRelease(snapshot) {
       const catalog = snapshot.catalog || {};
@@ -2002,13 +2023,31 @@ var require_releaseService = __commonJS({
         firstCourseName: getFirstText(courses[0], ["displayCourseName", "canonicalCourseName", "courseName", "name", "title"])
       };
     }
+    function stripDebugCourseFields(course) {
+      if (!course || typeof course !== "object") {
+        return course;
+      }
+      const copy = Object.assign({}, course);
+      delete copy.rawHtml;
+      delete copy.rawCellHtml;
+      delete copy.sourceHtml;
+      delete copy.debugHtml;
+      return copy;
+    }
+    function buildSchedulePayload(schedule, extra) {
+      const payload = Object.assign({}, schedule || {}, extra || {});
+      if (Array.isArray(payload.courses)) {
+        payload.courses = payload.courses.map(stripDebugCourseFields);
+      }
+      return payload;
+    }
     function buildClassDerivedFiles(snapshot, files) {
       ensureDir(files.classScheduleDir);
       const index = asArray(snapshot.classSchedules).map((item, position) => {
         const name = getFirstText(item, ["className", "title", "name"]) || `class-${position + 1}`;
         const id = safeScheduleId("class", item.classId || item.id, `${snapshot.semester}:${name}`, position);
         const summary = summarizeCourses(item);
-        const payload = Object.assign({}, item, { id });
+        const payload = buildSchedulePayload(item, { id });
         writeJsonAtomic(path2.join(files.classScheduleDir, `${id}.json`), payload);
         return {
           id,
@@ -2050,7 +2089,7 @@ var require_releaseService = __commonJS({
         const schedule = matched ? matched.schedule : Object.assign({}, source, { courses: [] });
         const id = safeScheduleId(kind, source.id || source[`${kind}Id`] || schedule.id, `${snapshot.semester}:${name}`, sourceIndex);
         const summary = summarizeCourses(schedule);
-        writeJsonAtomic(path2.join(dirPath, `${id}.json`), Object.assign({}, schedule, { id }));
+        writeJsonAtomic(path2.join(dirPath, `${id}.json`), buildSchedulePayload(schedule, { id }));
         index.push({
           id,
           name,
@@ -2417,6 +2456,30 @@ var require_releaseService = __commonJS({
       }).sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
       return entries.slice(0, limit);
     }
+    function deleteReleaseVersion(version) {
+      ensureStorageDirs();
+      const normalizedVersion = normalizeVersion(version);
+      const active = getActiveReleaseInfo();
+      if (active && active.version === normalizedVersion) {
+        const err = new Error("\u4E0D\u80FD\u5220\u9664\u5F53\u524D active release\uFF0C\u8BF7\u5148\u56DE\u6EDA\u6216\u6FC0\u6D3B\u5176\u4ED6\u7248\u672C");
+        err.statusCode = 400;
+        throw err;
+      }
+      const files = getReleaseFiles(normalizedVersion);
+      const relative = path2.relative(RELEASES_DIR, files.releaseDir);
+      if (!relative || relative.startsWith("..") || path2.isAbsolute(relative)) {
+        const err = new Error("Invalid release path");
+        err.statusCode = 400;
+        throw err;
+      }
+      if (!fs2.existsSync(files.releaseDir)) {
+        const err = new Error(`Release ${normalizedVersion} not found`);
+        err.statusCode = 404;
+        throw err;
+      }
+      fs2.rmSync(files.releaseDir, { recursive: true, force: true });
+      return { version: normalizedVersion, deleted: true };
+    }
     var derivedCache = /* @__PURE__ */ new Map();
     function getDerivedFileInfo(kind, files) {
       const map = {
@@ -2427,23 +2490,63 @@ var require_releaseService = __commonJS({
       };
       return map[kind] || null;
     }
-    function ensureDerivedIndexes(version) {
-      const files = getReleaseFiles(version);
-      if (fs2.existsSync(files.classesIndexPath) && fs2.existsSync(files.teachersIndexPath) && fs2.existsSync(files.classroomsIndexPath) && fs2.existsSync(files.coursesIndexPath)) {
-        return files;
+    function getReadableReleaseInfo() {
+      const active = getActiveReleaseInfo();
+      if (active && active.version) {
+        return {
+          source: "active-release",
+          version: active.version,
+          semester: active.semester,
+          updatedAt: active.updatedAt,
+          snapshot: null
+        };
       }
-      const snapshot = readReleaseSnapshot(version);
+      const snapshot = readCurrentSnapshotCompat();
+      if (!snapshot) {
+        return null;
+      }
+      const updatedAt = snapshot.updatedAt || snapshot.generatedAt || "";
+      const version = normalizeVersion(
+        snapshot.version || snapshot.releaseVersion || `legacy-current-${cryptoHash(`${snapshot.semester || ""}:${updatedAt}`).slice(0, 12)}`
+      );
+      return {
+        source: "legacy-current",
+        version,
+        semester: snapshot.semester || snapshot.term || "",
+        updatedAt,
+        snapshot: hydrateLegacySnapshotResources(Object.assign({}, snapshot, { version }))
+      };
+    }
+    function ensureDerivedIndexes(version, fallbackSnapshot) {
+      const files = getReleaseFiles(version);
+      const allExist = fs2.existsSync(files.classesIndexPath) && fs2.existsSync(files.teachersIndexPath) && fs2.existsSync(files.classroomsIndexPath) && fs2.existsSync(files.coursesIndexPath);
+      if (allExist) {
+        if (fallbackSnapshot) {
+          const resources = getResources(fallbackSnapshot);
+          const classIndex = readJsonFile(files.classesIndexPath, []);
+          const teacherIndex = readJsonFile(files.teachersIndexPath, []);
+          const classroomIndex = readJsonFile(files.classroomsIndexPath, []);
+          const courseIndex = readJsonFile(files.coursesIndexPath, []);
+          const shouldRefresh = asArray(fallbackSnapshot.classSchedules).length > 0 && asArray(classIndex).length === 0 || resources.teacherSchedules.length > 0 && asArray(teacherIndex).length === 0 || resources.classroomSchedules.length > 0 && asArray(classroomIndex).length === 0 || resources.courseSchedules.length > 0 && asArray(courseIndex).length === 0;
+          if (!shouldRefresh) {
+            return files;
+          }
+        } else {
+          return files;
+        }
+      }
+      const snapshot = fallbackSnapshot ? coerceSnapshot(Object.assign({}, fallbackSnapshot, { version })) : readReleaseSnapshot(version);
       if (snapshot) {
         writeDerivedIndexes(snapshot, files);
       }
       return files;
     }
     function readActiveIndex(kind) {
-      const active = getActiveReleaseInfo();
+      const active = getReadableReleaseInfo();
       if (!active || !active.version) {
-        return { success: false, reasonCode: "NO_ACTIVE_RELEASE", items: [] };
+        return { success: false, reasonCode: "NO_RELEASE_DATA", items: [] };
       }
-      const files = ensureDerivedIndexes(active.version);
+      const files = ensureDerivedIndexes(active.version, active.snapshot);
       const info = getDerivedFileInfo(kind, files);
       if (!info || !fs2.existsSync(info.indexPath)) {
         return { success: false, reasonCode: "NO_INDEX", items: [] };
@@ -2457,7 +2560,7 @@ var require_releaseService = __commonJS({
       const items2 = readJsonFile(info.indexPath) || [];
       const value = {
         success: true,
-        dataSource: "release-index",
+        dataSource: active.source === "legacy-current" ? "legacy-current-index" : "release-index",
         version: active.version,
         semester: active.semester,
         updatedAt: active.updatedAt,
@@ -2516,11 +2619,11 @@ var require_releaseService = __commonJS({
       });
     }
     function readActiveSchedule(kind, id) {
-      const active = getActiveReleaseInfo();
+      const active = getReadableReleaseInfo();
       if (!active || !active.version) {
-        return { success: false, reasonCode: "NO_ACTIVE_RELEASE" };
+        return { success: false, reasonCode: "NO_RELEASE_DATA" };
       }
-      const files = ensureDerivedIndexes(active.version);
+      const files = ensureDerivedIndexes(active.version, active.snapshot);
       const info = getDerivedFileInfo(kind, files);
       if (!info) {
         return { success: false, reasonCode: "INVALID_KIND" };
@@ -2543,7 +2646,7 @@ var require_releaseService = __commonJS({
       const schedule = readJsonFile(filePath);
       const value = {
         success: true,
-        dataSource: "release-index",
+        dataSource: active.source === "legacy-current" ? "legacy-current-index" : "release-index",
         version: active.version,
         semester: schedule?.semester || active.semester,
         updatedAt: schedule?.updatedAt || active.updatedAt,
@@ -2570,6 +2673,7 @@ var require_releaseService = __commonJS({
       countRelease,
       getActiveSnapshotData,
       getReleaseStatus,
+      deleteReleaseVersion,
       readActiveIndex,
       readActiveSchedule,
       listReleases,

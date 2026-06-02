@@ -3057,6 +3057,13 @@ function buildStagingSafety(data, activeSnapshot) {
   const blockers = validation.errors.slice();
   const warnings = validation.warnings.slice();
   const activeClassCount = (activeSnapshot?.classSchedules || []).length;
+  const currentTerm = appConfigService.getAdminConfig().currentSemester || "";
+  const stagingTerm = data.term || data.semester || "";
+  const releaseVersion = data.releaseVersion || data.version || "";
+  const releaseVersionExists = Boolean(
+    releaseVersion &&
+    releaseService.listReleases(200).some((item) => item.version === releaseVersion)
+  );
   const dropRate = activeClassCount > 0
     ? (activeClassCount - counts.classScheduleCount) / activeClassCount
     : 0;
@@ -3076,15 +3083,24 @@ function buildStagingSafety(data, activeSnapshot) {
   if (activeClassCount > 0 && counts.classScheduleCount < activeClassCount * 0.5) {
     warnings.push(`行政班课表数量从线上 ${activeClassCount} 降至 ${counts.classScheduleCount}，减少超过 50%，发布需要二次确认。`);
   }
+  if (currentTerm && stagingTerm && currentTerm !== stagingTerm) {
+    warnings.push(`Staging 学期 ${stagingTerm} 与当前后台配置学期 ${currentTerm} 不一致，请确认不是误传旧学期数据。`);
+  }
+  if (releaseVersionExists) {
+    warnings.push(`releaseVersion ${releaseVersion} 已存在，发布会覆盖同名版本快照，必须二次确认。`);
+  }
 
   return {
     allowPublish: blockers.length === 0,
-    requiresForceConfirm: activeClassCount > 0 && dropRate > 0.5,
+    requiresForceConfirm: (activeClassCount > 0 && dropRate > 0.5) || releaseVersionExists,
     blockers,
     warnings,
     counts,
     activeClassScheduleCount: activeClassCount,
     classScheduleDropRate: parseFloat(Math.max(0, dropRate * 100).toFixed(2)),
+    currentTerm,
+    stagingTerm,
+    releaseVersionExists,
   };
 }
 
@@ -3115,6 +3131,34 @@ router.get("/staging/upload", adminAuth.verifyAdminAccess, (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/staging/status", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const uploads = stagingUploadService.listUploads(req.query.limit || 50);
+    const pendingReview = uploads.filter((item) => item.status === "pending-review");
+    return res.json({
+      success: true,
+      uploads,
+      pendingReview,
+      latest: uploads[0] || null,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.delete("/staging/:uploadId", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const deleted = stagingUploadService.deleteUpload(req.params.uploadId, buildAdminStagingUploadActor(req));
+    if (deleted && deleted.status === "pending-review" && fs.existsSync(STAGING_LATEST_PATH)) {
+      fs.unlinkSync(STAGING_LATEST_PATH);
+    }
+    writeAuditLog(req, "delete", "staging-upload", req.params.uploadId, "删除 Staging 上传记录");
+    return res.json({ success: true, message: "Staging 上传记录已删除", deleted });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
 
@@ -3339,6 +3383,7 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
     }
 
     const relayUploads = relayService.listUploads();
+    const stagingUploads = stagingUploadService.listUploads(1);
     return res.json({
       success: true,
       data: {
@@ -3354,6 +3399,7 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
           ? "当前服务器 DNS 能解析教务域名，但主流程仍建议使用本机校园网采集。"
           : "公网服务器无法访问学校内网是预期情况；请使用本机校园网同步或接力代理端。",
         latestRelayUpload: relayUploads[0] || null,
+        latestStagingUpload: stagingUploads[0] || null,
         counts: {
           classScheduleCount: syncMeta["class-schedules"]?.itemCount || 0,
           adminClassCount: syncMeta["class-schedules"]?.adminClassCount || 0,
@@ -3740,6 +3786,20 @@ router.post("/sync/releases/rollback", adminAuth.verifyAdminAccess, async (req, 
   }
 });
 
+router.delete("/sync/releases/:version", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const result = releaseService.deleteReleaseVersion(req.params.version);
+    writeAuditLog(req, "delete", "sync-release", result.version, `删除历史 Release: ${result.version}`);
+    return res.json({
+      success: true,
+      message: `历史 Release ${result.version} 已删除`,
+      deleted: result,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
 /**
  * 5.6 GET /api/admin/sync/command-guide
  * 前端拉取动态生成一键同步脚本运维指南
@@ -3749,11 +3809,19 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
     const term = req.query.term || "2026-2027-1";
     const start = req.query.start || "2026-09-01";
     const note = req.query.note || `${term}新学期课表首版`;
+    const projectRoot = "C:\\Users\\Katelya\\Documents\\VScode\\FosuClass";
+    const includeAll = "classSchedules,teacherSchedules,classroomSchedules,courseSchedules,classrooms,teachers,courses";
     const commands = [
       {
         id: "local-campus",
         name: "项目内本机同步 (管理员使用，需要项目根目录)",
-        command: `npm run sync:local-campus -- --term=${term} --start=${start} --output=./staging/${term}-full.json`,
+        command: [
+          `cd ${projectRoot}`,
+          `$env:SYNC_CLASS_SCOPE="all"`,
+          `$env:SYNC_CLASS_GRADES="2025,2024,2023,2022,2021"`,
+          `$env:SYNC_INCLUDE_SCOPES="${includeAll}"`,
+          `npm run sync:local-campus -- --term=${term} --start=${start} --output=./staging/${term}-full.json --include=${includeAll} --class-scope=all --grades=2025,2024,2023,2022,2021`
+        ].join("\n"),
         scene: "管理员自己电脑已连校园网，直接抓取全校课表并生成本地 Staging JSON",
         precondition: "需要项目根目录、完整源码、Node.js 环境及 npm install 依赖；且处于校园网/学校 VPN 环境。生成的 Staging JSON 文件将统一输出到项目根目录的 staging 目录下。",
         duration: "8 ~ 20 分钟",
@@ -3765,7 +3833,10 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
       {
         id: "local-upload",
         name: "上传本地 Staging (管理员使用，需要项目根目录)",
-        command: `npm run sync:local-upload -- --file=./staging/${term}-full.json --server=https://class.katelya.eu.org`,
+        command: [
+          `cd ${projectRoot}`,
+          `npm run sync:local-upload -- --file=./staging/${term}-full.json --server=https://class.katelya.eu.org`
+        ].join("\n"),
         scene: "管理员将本地已生成的 Staging JSON 上传到 VPS 暂存区。优先使用绝对路径或明确提示以防相对路径在子进程 cwd 变化时出现错误。",
         precondition: `已生成合法 Staging JSON，并持有管理员上传令牌 (ADMIN_API_TOKEN)。\n` +
           `【PowerShell 推荐写法】建议通过绝对路径以防路径重复拼接错误：\n` +
@@ -3807,7 +3878,10 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
       {
         id: "normalizer",
         name: "课程格式校验",
-        command: "npm run test:course-normalizer",
+        command: [
+          `cd ${projectRoot}`,
+          "npm run test:course-normalizer"
+        ].join("\n"),
         scene: "每次同步前后或发布快照前运行，确保体育课多地点、教师地名正常化提取准确",
         precondition: "无，本地随时运行测试",
         duration: "1 ~ 3 秒",
