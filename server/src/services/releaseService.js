@@ -834,18 +834,46 @@ function readActiveIndex(kind, version) {
         updatedAt: snapshot.updatedAt || "",
         snapshot,
       };
+    } else {
+      const files = getReleaseFiles(normalized);
+      const info = getDerivedFileInfo(kind, files);
+      if (info && fs.existsSync(info.indexPath)) {
+        active = {
+          source: "release",
+          version: normalized,
+          semester: "",
+          updatedAt: "",
+          snapshot: null,
+        };
+      } else {
+        return {
+          success: false,
+          code: "RELEASE_NOT_FOUND",
+          reasonCode: "RELEASE_NOT_FOUND",
+          version: normalized,
+          releaseVersion: normalized,
+          items: [],
+        };
+      }
     }
   }
   if (!active) {
     active = getReadableReleaseInfo();
   }
   if (!active || !active.version) {
-    return { success: false, reasonCode: "NO_RELEASE_DATA", items: [] };
+    return { success: false, code: "NO_ACTIVE_RELEASE", reasonCode: "NO_ACTIVE_RELEASE", items: [] };
   }
   const files = ensureDerivedIndexes(active.version, active.snapshot);
   const info = getDerivedFileInfo(kind, files);
   if (!info || !fs.existsSync(info.indexPath)) {
-    return { success: false, reasonCode: "NO_INDEX", items: [] };
+    return {
+      success: false,
+      code: "INDEX_NOT_FOUND",
+      reasonCode: "INDEX_NOT_FOUND",
+      version: active.version,
+      releaseVersion: active.version,
+      items: [],
+    };
   }
   const stat = fs.statSync(info.indexPath);
   const cacheKey = `${active.version}:${kind}:index`;
@@ -932,13 +960,27 @@ function readActiveSchedule(kind, id, version) {
         updatedAt: snapshot.updatedAt || "",
         snapshot,
       };
+    } else {
+      const files = getReleaseFiles(normalized);
+      const info = getDerivedFileInfo(kind, files);
+      if (info && fs.existsSync(info.scheduleDir)) {
+        active = {
+          source: "release",
+          version: normalized,
+          semester: "",
+          updatedAt: "",
+          snapshot: null,
+        };
+      } else {
+        return { success: false, code: "RELEASE_NOT_FOUND", reasonCode: "RELEASE_NOT_FOUND" };
+      }
     }
   }
   if (!active) {
     active = getReadableReleaseInfo();
   }
   if (!active || !active.version) {
-    return { success: false, reasonCode: "NO_RELEASE_DATA" };
+    return { success: false, code: "NO_ACTIVE_RELEASE", reasonCode: "NO_ACTIVE_RELEASE" };
   }
   const files = ensureDerivedIndexes(active.version, active.snapshot);
   const info = getDerivedFileInfo(kind, files);

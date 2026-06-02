@@ -61,19 +61,19 @@ function translateErrorMessage(payload, defaultMsg) {
 function getDefaultTimeout(url) {
   const cleanUrl = url.split("?")[0];
   if (cleanUrl.endsWith("/app-config")) {
-    return 8000;
-  }
-  if (cleanUrl.endsWith("/bootstrap")) {
     return 12000;
   }
+  if (cleanUrl.endsWith("/bootstrap")) {
+    return 20000;
+  }
   if (cleanUrl.endsWith("/search-index")) {
-    return 30000;
+    return 45000;
   }
   if (cleanUrl.endsWith("/schedule-detail")) {
-    return 30000;
+    return 45000;
   }
   if (cleanUrl.endsWith("/catalog")) {
-    return 30000;
+    return 45000;
   }
   return 15000;
 }
@@ -118,7 +118,11 @@ function request(url, method = "GET", data = {}, options = {}) {
           if (!opt.silentError) {
             showError("暂时无法连接教务数据服务");
           }
-          reject(new Error(`HTTP status error: ${res.statusCode}`));
+          const httpErr = new Error(`HTTP status error: ${res.statusCode}`);
+          httpErr.code = "HTTP_STATUS_ERROR";
+          httpErr.statusCode = res.statusCode;
+          httpErr.payload = res.data;
+          reject(httpErr);
           return;
         }
 
@@ -131,6 +135,8 @@ function request(url, method = "GET", data = {}, options = {}) {
             showError(errMsg);
           }
           const err = new Error(errMsg);
+          err.code = payload.code || payload.reasonCode || "API_ERROR";
+          err.reasonCode = payload.reasonCode || payload.code || "";
           err.payload = payload;
           reject(err);
           return;

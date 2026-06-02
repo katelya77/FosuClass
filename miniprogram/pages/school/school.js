@@ -11,19 +11,27 @@ const TEACHER_SEARCH_PLACEHOLDER = "搜索教师姓名（例如：张三）";
 const CLASSROOM_SEARCH_PLACEHOLDER = "搜索教室（例如：C7-305）";
 const COURSE_SEARCH_PLACEHOLDER = "搜索课程（例如：有机化学）";
 const CLASS_SEARCH_PLACEHOLDER = "搜索班级（例如：25动物科学3班）";
-const SCHEDULE_DETAIL_CACHE_PREFIX = "FOSU_SCHEDULE_DETAIL";
-const SCHOOL_INDEX_CACHE_PREFIX = "FOSU_SCHOOL_INDEX";
+const DEFAULT_TERM = "2025-2026-2";
 const SCHEDULE_DETAIL_CACHE_TTL = 6 * 60 * 60 * 1000;
-const SCHOOL_INDEX_CACHE_TTL = 30 * 60 * 1000;
+const APP_CONFIG_TIMEOUT = 12000;
+const BOOTSTRAP_TIMEOUT = 20000;
+const SCHOOL_REQUEST_TIMEOUT = 45000;
 
 const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
 const {
-  SCHOOL_FILTER_CACHE_KEY,
+  SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY,
   getRecentSchedules,
   addRecentSchedule,
   removeRecentSchedule,
   clearRecentSchedules,
+  clearAllSchoolCaches,
+  getSchoolCatalogCacheKey,
+  getSchoolFilterCacheKey,
+  getSchoolIndexCacheKey,
+  getScheduleDetailCacheKey,
+  readSameVersionIndexCache,
+  writeSameVersionIndexCache,
 } = require("../../utils/storage");
 
 function formatUpdateTime(updatedAt) {
@@ -202,6 +210,7 @@ Page({
     catalogUpdatedAt: "",
     appConfig: { notices: [] },
     schoolNotice: null,
+    activeSnapshot: null,
     dataVersionText: "",
     runtimeDisclaimer: BRAND.disclaimer,
     recentSchedules: [],
@@ -209,6 +218,7 @@ Page({
     touchStartX: 0,
     touchStartY: 0,
     dataLoadState: "loading",
+    loadingState: "none",
   },
   
   // 缓存清理后自动重载标志
@@ -217,8 +227,11 @@ Page({
 
   onLoad(options) {
     this.sharedQuery = options || {};
-    this.isFirstLoad = true;
-    this.initPageData();
+    this.isFirstLoad = false;
+    this._schoolRequestSeq = 0;
+    this._activeInitSeq = 0;
+    this._lastInitAt = 0;
+    this.initPageData({ reason: "onLoad" });
   },
 
   onShow() {
@@ -236,7 +249,7 @@ Page({
         updatedAtText: "",
       });
       this.isFirstLoad = false;
-      this.initPageData();
+      this.initPageData({ reason: "autoReload", forceNetwork: true });
       return;
     }
 
@@ -250,10 +263,13 @@ Page({
     }
     this.loadRecentSchedules();
 
-    if (!this.isFirstLoad) {
-      this.initPageData();
-    } else {
-      this.isFirstLoad = false;
+    const now = Date.now();
+    if (!this._lastInitAt || now - this._lastInitAt >= 5000) {
+      if (this.data.activeSnapshot) {
+        this.checkActiveSnapshotFreshness();
+      } else {
+        this.initPageData({ reason: "onShow" });
+      }
     }
 
     // 检查是否是从强制选择课表的引导跳转过来的
@@ -269,7 +285,7 @@ Page({
   },
 
   // 统一页面初始化与 app-config / catalog 获取
-  initPageData() {
+  legacyInitPageData() {
     this.loadRecentSchedules();
     this.setData({
       dataLoadState: "loading",
@@ -361,7 +377,7 @@ Page({
   },
 
   // 异步及静默更新全校筛选项
-  loadCatalogData(term, releaseVersion) {
+  legacyLoadCatalogData(term, releaseVersion) {
     const catalogCacheKey = `school:catalog:${term}:${releaseVersion}`;
     let cachedCatalog = null;
     try {
@@ -477,44 +493,29 @@ Page({
     }
   },
 
-  getReleaseVersionForCache(fallbackVersion) {
+  legacyGetReleaseVersionForCache(fallbackVersion) {
     return fallbackVersion || this.data.catalogVersion || this.data.appConfig?.dataVersion?.releaseVersion || this.data.catalogUpdatedAt || "unknown";
   },
 
-  buildIndexCacheKey(type, params, version) {
+  legacyBuildIndexCacheKey(type, params, version) {
     const source = params || {};
     const term = source.semester || source.term || (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
     const releaseVersion = this.getReleaseVersionForCache(version);
-    const pieces = [
-      "school",
-      "index",
-      term,
-      releaseVersion,
-      type,
-      source.q || "",
-      source.collegeCode || "",
-      source.collegeName || "",
-      source.grade || "",
-      source.majorCode || "",
-      source.majorName || "",
-      source.campus || "",
-      source.limit || "",
-    ];
-    return pieces.map((item) => encodeURIComponent(String(item))).join(":");
+    return getSchoolIndexCacheKey(term, releaseVersion, type, source);
   },
 
-  readIndexCache(type, params) {
+  legacyReadIndexCache(type, params) {
     try {
       const cacheKey = this.buildIndexCacheKey(type, params);
       const cached = wx.getStorageSync(cacheKey);
-      if (!cached || Date.now() - cached.savedAt > SCHOOL_INDEX_CACHE_TTL) return null;
+      if (!cached || Date.now() - cached.savedAt > 30 * 60 * 1000) return null;
       return cached.data || null;
     } catch (error) {
       return null;
     }
   },
 
-  writeIndexCache(type, params, data) {
+  legacyWriteIndexCache(type, params, data) {
     try {
       const cacheKey = this.buildIndexCacheKey(type, params, data && data.version);
       wx.setStorageSync(cacheKey, {
@@ -526,7 +527,7 @@ Page({
     }
   },
 
-  fetchSearchIndex(type, params, options = {}) {
+  legacyFetchSearchIndex(type, params, options = {}) {
     const query = Object.assign({ type }, params || {});
     if (!query.term && !query.semester) {
       query.term = (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
@@ -538,18 +539,15 @@ Page({
     const cached = this.readIndexCache(type, query);
     if (cached) {
       const payload = Object.assign({}, cached, { fromStorage: true });
-      this.updateDebugRequestInfo(type, true, payload);
       return Promise.resolve(payload);
     }
 
     return request.get("/api/fosu/search-index", query, Object.assign({ showLoading: false, silentError: true }, options))
       .then((data) => {
         this.writeIndexCache(type, query, data);
-        this.updateDebugRequestInfo(type, false, data);
         return data;
       })
       .catch((err) => {
-        this.updateDebugRequestInfo(type, false, null, err);
         throw err;
       });
   },
@@ -705,6 +703,7 @@ Page({
       updatedAt: meta.updatedAtText || formatUpdateTime(meta.updatedAt || new Date()),
       courses: Array.isArray(meta.courses) ? meta.courses : [],
       schedule: meta,
+      releaseVersion: meta.releaseVersion || meta.scheduleVersion || this.getReleaseVersionForCache(),
     };
     
     // NOTE: 直接通过 storage 模块的 addRecentSchedule 写入，避免在此处零散操作 Storage
@@ -895,10 +894,10 @@ Page({
     }
   },
 
-  getFilterCacheKey() {
+  legacyGetFilterCacheKey() {
     const term = (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
     const releaseVersion = this.getReleaseVersionForCache();
-    return `school:filters:${term}:${releaseVersion}`;
+    return getSchoolFilterCacheKey(term, releaseVersion);
   },
 
   saveFilterCache() {
@@ -1364,6 +1363,9 @@ Page({
         return classesOptions;
       })
       .catch((err) => {
+        if (err && err.stale) {
+          return [];
+        }
         console.warn("fetch class index fail, fallback to /api/fosu/classes", err);
         return request.get("/api/fosu/classes", { semester, collegeCode, grade, majorCode }, { showLoading: false })
           .then((res) => {
@@ -1620,9 +1622,9 @@ Page({
     this.executeSearch("course", params, renderFn, catchFn);
   },
 
-  getScheduleDetailCache(type, id, version, term) {
+  legacyGetScheduleDetailCache(type, id, version, term) {
     const activeVersion = this.getReleaseVersionForCache(version);
-    const cacheKey = `school:detail:${term || "unknown"}:${activeVersion || "unknown"}:${type}:${id}`;
+    const cacheKey = getScheduleDetailCacheKey(term || "unknown", activeVersion || "unknown", type, id);
     try {
       const cached = wx.getStorageSync(cacheKey);
       if (Date.now() - cached.savedAt > SCHEDULE_DETAIL_CACHE_TTL) return null;
@@ -1632,9 +1634,9 @@ Page({
     }
   },
 
-  setScheduleDetailCache(type, id, version, term, schedule) {
+  legacySetScheduleDetailCache(type, id, version, term, schedule) {
     const activeVersion = this.getReleaseVersionForCache(version);
-    const cacheKey = `school:detail:${term || "unknown"}:${activeVersion || "unknown"}:${type}:${id}`;
+    const cacheKey = getScheduleDetailCacheKey(term || "unknown", activeVersion || "unknown", type, id);
     try {
       wx.setStorageSync(cacheKey, {
         savedAt: Date.now(),
@@ -1856,7 +1858,7 @@ Page({
 
   // ================== 查询内核执行器 (支持缓存兜底/版本隔离/静默刷新) ==================
 
-  executeSearch(type, params, renderFn, catchFn) {
+  legacyExecuteSearch(type, params, renderFn, catchFn) {
     const query = Object.assign({ type }, params || {});
     const term = query.semester || query.term || (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
     query.term = term;
@@ -1952,5 +1954,630 @@ Page({
       // 发起网络请求
       doNetworkRequest();
     }
+  },
+
+  normalizeAppConfigForData(payload) {
+    const data = payload && payload.data ? payload.data : payload;
+    const config = Object.assign({
+      currentSemester: DEFAULT_TERM,
+      dataVersion: {},
+      notices: [],
+      news: [],
+      disclaimer: BRAND.disclaimer,
+    }, data || {});
+    if (!Array.isArray(config.notices)) config.notices = [];
+    if (!Array.isArray(config.news)) config.news = [];
+    if (!config.dataVersion) config.dataVersion = {};
+    return config;
+  },
+
+  getSnapshotReleaseKey(snapshot) {
+    const active = snapshot || {};
+    return `${active.term || DEFAULT_TERM}:${active.releaseVersion || ""}`;
+  },
+
+  buildActiveSnapshotFromAppConfig(payload) {
+    const config = this.normalizeAppConfigForData(payload);
+    const version = config.dataVersion || {};
+    const scheduleUpdatedAt = config.scheduleUpdatedAt ||
+      config.dataUpdatedAt ||
+      config.publishedAt ||
+      appConfigService.getLatestDataUpdatedAt(config) ||
+      version.classScheduleUpdatedAt ||
+      version.teacherScheduleUpdatedAt ||
+      version.classroomScheduleUpdatedAt ||
+      version.courseScheduleUpdatedAt ||
+      "";
+    const catalogUpdatedAt = config.catalogUpdatedAt || config.updatedAt || scheduleUpdatedAt || "";
+    const releaseVersion = config.releaseVersion || config.activeReleaseVersion || version.releaseVersion || "";
+    if (!releaseVersion) return null;
+
+    return {
+      term: config.term || config.currentSemester || DEFAULT_TERM,
+      releaseVersion,
+      // scheduleUpdatedAt is display-only; releaseVersion is the API/cache key.
+      scheduleUpdatedAt,
+      catalogUpdatedAt,
+      cacheEpoch: config.cacheEpoch || version.cacheEpoch || catalogUpdatedAt || scheduleUpdatedAt || releaseVersion,
+    };
+  },
+
+  buildActiveSnapshotFromBootstrap(payload) {
+    const data = payload && payload.data ? payload.data : payload;
+    if (!data || data.success === false) return null;
+    const releaseVersion = data.releaseVersion || data.activeReleaseVersion || data.version || (data.versions && data.versions.snapshot) || "";
+    if (!releaseVersion) return null;
+    const scheduleUpdatedAt = data.dataUpdatedAt || data.publishedAt || data.updatedAt || "";
+    const catalogUpdatedAt = data.catalogUpdatedAt || (data.metaDetails && data.metaDetails.catalogUpdatedAt) || data.updatedAt || scheduleUpdatedAt || "";
+    return {
+      term: data.term || data.semester || DEFAULT_TERM,
+      releaseVersion,
+      scheduleUpdatedAt,
+      catalogUpdatedAt,
+      cacheEpoch: data.cacheEpoch || catalogUpdatedAt || scheduleUpdatedAt || releaseVersion,
+    };
+  },
+
+  readCachedActiveSnapshot() {
+    try {
+      const cached = wx.getStorageSync(SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY);
+      if (cached && cached.term && cached.releaseVersion) {
+        return {
+          term: cached.term,
+          releaseVersion: cached.releaseVersion,
+          scheduleUpdatedAt: cached.scheduleUpdatedAt || "",
+          catalogUpdatedAt: cached.catalogUpdatedAt || "",
+          cacheEpoch: cached.cacheEpoch || cached.releaseVersion,
+        };
+      }
+    } catch (error) {
+      console.warn("[school] read activeSnapshot cache failed", error);
+    }
+    return null;
+  },
+
+  writeCachedActiveSnapshot(snapshot) {
+    if (!snapshot || !snapshot.term || !snapshot.releaseVersion) return;
+    try {
+      wx.setStorageSync(SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY, Object.assign({
+        savedAt: Date.now(),
+      }, snapshot));
+    } catch (error) {
+      console.warn("[school] write activeSnapshot cache failed", error);
+    }
+  },
+
+  getStateFromError(error) {
+    const code = error && (error.code || error.reasonCode || (error.payload && (error.payload.code || error.payload.reasonCode)));
+    if (code === "NO_ACTIVE_RELEASE" || code === "NO_RELEASE_DATA") return "noRelease";
+    if (code === "REQUEST_TIMEOUT") return "timeout";
+    return "networkError";
+  },
+
+  async resolveActiveSnapshot(options = {}) {
+    const forceNetwork = Boolean(options.forceNetwork);
+    const cached = this.readCachedActiveSnapshot();
+    if (cached && !forceNetwork) {
+      this.refreshActiveSnapshotInBackground(cached);
+      return {
+        activeSnapshot: cached,
+        appConfig: appConfigService.getGlobalConfig(),
+        source: "active-snapshot-cache",
+        fromStorage: true,
+      };
+    }
+
+    let lastError = null;
+    let sawNoRelease = false;
+
+    try {
+      const payload = await request.get(`/api/fosu/app-config?ts=${Date.now()}`, {}, {
+        showLoading: false,
+        silentError: true,
+        timeout: APP_CONFIG_TIMEOUT,
+      });
+      const config = this.normalizeAppConfigForData(payload);
+      if (typeof appConfigService.cacheAppConfig === "function") {
+        appConfigService.cacheAppConfig(config);
+      }
+      const activeSnapshot = this.buildActiveSnapshotFromAppConfig(config);
+      if (activeSnapshot) {
+        this.writeCachedActiveSnapshot(activeSnapshot);
+        return { activeSnapshot, appConfig: config, source: "app-config" };
+      }
+      sawNoRelease = true;
+    } catch (error) {
+      lastError = error;
+      const code = error && (error.code || error.reasonCode);
+      if (code === "NO_ACTIVE_RELEASE" || code === "NO_RELEASE_DATA") {
+        sawNoRelease = true;
+      }
+      if (cached && code === "REQUEST_TIMEOUT") {
+        return {
+          activeSnapshot: cached,
+          appConfig: appConfigService.getGlobalConfig(),
+          source: "active-snapshot-cache",
+          fromStorage: true,
+          warning: error,
+        };
+      }
+      console.warn("[school] app-config unavailable, trying bootstrap", error);
+    }
+
+    try {
+      const payload = await request.get("/api/fosu/bootstrap", { semester: cached?.term || DEFAULT_TERM }, {
+        showLoading: false,
+        silentError: true,
+        timeout: BOOTSTRAP_TIMEOUT,
+      });
+      const activeSnapshot = this.buildActiveSnapshotFromBootstrap(payload);
+      if (activeSnapshot) {
+        this.writeCachedActiveSnapshot(activeSnapshot);
+        return {
+          activeSnapshot,
+          appConfig: appConfigService.getGlobalConfig(),
+          bootstrapData: payload,
+          source: "bootstrap",
+        };
+      }
+      sawNoRelease = true;
+    } catch (error) {
+      lastError = error;
+      const code = error && (error.code || error.reasonCode);
+      if (code === "NO_ACTIVE_RELEASE" || code === "NO_RELEASE_DATA") {
+        sawNoRelease = true;
+      }
+      console.warn("[school] bootstrap unavailable", error);
+    }
+
+    if (cached) {
+      return {
+        activeSnapshot: cached,
+        appConfig: appConfigService.getGlobalConfig(),
+        source: "active-snapshot-cache",
+        fromStorage: true,
+        warning: lastError,
+      };
+    }
+
+    return {
+      activeSnapshot: null,
+      state: sawNoRelease ? "noRelease" : this.getStateFromError(lastError),
+      error: lastError,
+    };
+  },
+
+  refreshActiveSnapshotInBackground(currentSnapshot) {
+    if (this._snapshotRefreshRunning) return;
+    this._snapshotRefreshRunning = true;
+    this.resolveActiveSnapshot({ forceNetwork: true })
+      .then((result) => {
+        const next = result && result.activeSnapshot;
+        if (!next || !currentSnapshot) return;
+        if (this.getSnapshotReleaseKey(next) !== this.getSnapshotReleaseKey(currentSnapshot)) {
+          wx.showToast({
+            title: "检测到新课表版本，已刷新",
+            icon: "none",
+            duration: 1800,
+          });
+          this.initPageData({ reason: "snapshotRefresh" });
+        }
+      })
+      .catch((error) => {
+        console.warn("[school] background activeSnapshot refresh failed", error);
+      })
+      .finally(() => {
+        this._snapshotRefreshRunning = false;
+      });
+  },
+
+  checkActiveSnapshotFreshness() {
+    const current = this.data.activeSnapshot || this.readCachedActiveSnapshot();
+    if (current) {
+      this.refreshActiveSnapshotInBackground(current);
+    }
+  },
+
+  async initPageData(options = {}) {
+    const seq = ++this._activeInitSeq;
+    this._lastInitAt = Date.now();
+    this.loadRecentSchedules();
+    this.setData({
+      dataLoadState: "loading",
+      loadingState: "none",
+      catalogEmpty: false,
+      restoreHint: "",
+    });
+
+    const retryFn = () => this.initPageData({ reason: "retry", forceNetwork: true });
+    this.startLoadingStateTimer(retryFn);
+
+    try {
+      const resolved = await this.resolveActiveSnapshot({ forceNetwork: Boolean(options.forceNetwork) });
+      if (seq !== this._activeInitSeq) return;
+
+      if (!resolved || !resolved.activeSnapshot) {
+        this.clearLoadingStateTimer();
+        const state = resolved && resolved.state ? resolved.state : "networkError";
+        this.setData({
+          dataLoadState: state,
+          catalogEmpty: state === "noRelease",
+          loadingState: "none",
+        });
+        return;
+      }
+
+      const activeSnapshot = resolved.activeSnapshot;
+      const releaseKey = this.getSnapshotReleaseKey(activeSnapshot);
+      const localReleaseKey = wx.getStorageSync("FOSU_LOCAL_RELEASE_KEY") || "";
+      let didRefresh = false;
+
+      if (localReleaseKey && localReleaseKey !== releaseKey) {
+        clearAllSchoolCaches();
+        this.writeCachedActiveSnapshot(activeSnapshot);
+        this.setData({
+          classesResult: [],
+          classAdminResults: [],
+          classAggregateResults: [],
+          teachersResult: [],
+          classroomsResult: [],
+          coursesResult: [],
+          updatedAtText: "",
+        });
+        didRefresh = true;
+        this.needAutoSearch = true;
+      }
+
+      wx.setStorageSync("FOSU_LOCAL_RELEASE_KEY", releaseKey);
+      this.writeCachedActiveSnapshot(activeSnapshot);
+
+      const appConfig = this.normalizeAppConfigForData(resolved.appConfig || appConfigService.getGlobalConfig());
+      const schoolNotice = appConfigService.getPrimaryNotice(appConfig, "school", ["banner", "card"]) || null;
+      const displayUpdatedAt = activeSnapshot.scheduleUpdatedAt || activeSnapshot.catalogUpdatedAt || "";
+      this.setData({
+        activeSnapshot,
+        appConfig,
+        schoolNotice,
+        dataVersionText: displayUpdatedAt ? `数据更新于 ${appConfigService.formatConfigTime(displayUpdatedAt)}` : "",
+        runtimeDisclaimer: appConfig.disclaimer || BRAND.disclaimer,
+        catalogVersion: activeSnapshot.releaseVersion,
+        catalogUpdatedAt: activeSnapshot.catalogUpdatedAt || "",
+      });
+
+      if (didRefresh) {
+        this.loadRecentSchedules();
+      }
+
+      this.loadCatalogData(activeSnapshot, { seq, bootstrapData: resolved.bootstrapData });
+    } catch (error) {
+      if (seq !== this._activeInitSeq) return;
+      this.clearLoadingStateTimer();
+      this.setData({
+        dataLoadState: this.getStateFromError(error),
+        loadingState: "none",
+      });
+    }
+  },
+
+  loadCatalogData(snapshotOrTerm, releaseVersionOrOptions, maybeOptions) {
+    const snapshot = typeof snapshotOrTerm === "object"
+      ? snapshotOrTerm
+      : {
+        term: snapshotOrTerm || DEFAULT_TERM,
+        releaseVersion: releaseVersionOrOptions || this.getReleaseVersionForCache(),
+      };
+    const options = typeof releaseVersionOrOptions === "object" ? releaseVersionOrOptions : (maybeOptions || {});
+    const seq = options.seq || this._activeInitSeq;
+    const term = snapshot.term || DEFAULT_TERM;
+    const releaseVersion = snapshot.releaseVersion || "";
+    const catalogCacheKey = getSchoolCatalogCacheKey(term, releaseVersion);
+    const legacyCatalogKey = `school:catalog:${term}:${releaseVersion}`;
+
+    let cachedCatalog = null;
+    try {
+      cachedCatalog = wx.getStorageSync(catalogCacheKey) || wx.getStorageSync(legacyCatalogKey);
+    } catch (error) {
+      console.warn("[school] read catalog cache failed", error);
+    }
+
+    const normalizeCatalog = (payload) => {
+      const data = payload && payload.catalog ? payload.catalog : payload;
+      if (!data || !Array.isArray(data.colleges) || data.colleges.length === 0) return null;
+      return Object.assign({}, data, {
+        dataSource: payload.dataSource || data.dataSource || "cache",
+        updatedAt: payload.updatedAt || data.updatedAt || snapshot.catalogUpdatedAt || snapshot.scheduleUpdatedAt || "",
+        version: payload.releaseVersion || payload.version || (payload.versions && payload.versions.snapshot) || data.version || releaseVersion,
+        success: true,
+      });
+    };
+
+    const writeCatalogCache = (catalogData) => {
+      try {
+        wx.setStorageSync(catalogCacheKey, catalogData);
+      } catch (error) {
+        console.warn("[school] write catalog cache failed", error);
+      }
+    };
+
+    const renderCatalog = (catalogData, fromCache) => {
+      if (seq !== this._activeInitSeq) return;
+      this.originalCatalogData = catalogData;
+      this.applyCatalogFilter();
+      this.clearLoadingStateTimer();
+      this.setData({
+        dataLoadState: "success",
+        catalogEmpty: false,
+        catalogVersion: releaseVersion,
+        catalogUpdatedAt: catalogData.updatedAt || snapshot.catalogUpdatedAt || "",
+        restoreHint: fromCache ? "已显示本地缓存，正在校验更新" : "",
+      });
+
+      if (this.hasSharedQuery()) {
+        this.applySharedQueryIfNeeded();
+      } else {
+        this.restoreFilterCache();
+      }
+
+      if (this.needAutoSearch) {
+        this.needAutoSearch = false;
+        this.triggerActiveTabSearch();
+      }
+    };
+
+    const handleCatalogError = (error) => {
+      if (seq !== this._activeInitSeq) return;
+      console.warn("[school] catalog refresh failed", error);
+      if (cachedCatalog) {
+        this.clearLoadingStateTimer();
+        this.setData({
+          dataLoadState: "success",
+          restoreHint: "已显示本地缓存，正在校验更新",
+        });
+        return;
+      }
+      this.clearLoadingStateTimer();
+      const state = this.getStateFromError(error);
+      this.setData({
+        dataLoadState: state === "noRelease" ? "noRelease" : state,
+        catalogEmpty: state === "noRelease",
+      });
+    };
+
+    const fetchCatalogFromNetwork = () => {
+      request.get("/api/fosu/bootstrap", { semester: term }, {
+        showLoading: false,
+        silentError: true,
+        timeout: BOOTSTRAP_TIMEOUT,
+      })
+        .then((payload) => {
+          const catalogData = normalizeCatalog(payload);
+          if (catalogData) {
+            writeCatalogCache(catalogData);
+            renderCatalog(catalogData, false);
+            return;
+          }
+          return request.get("/api/fosu/catalog", { semester: term }, {
+            showLoading: false,
+            silentError: true,
+            timeout: SCHOOL_REQUEST_TIMEOUT,
+          }).then((fallback) => {
+            const fallbackCatalog = normalizeCatalog(fallback);
+            if (!fallbackCatalog) {
+              const error = new Error("CATALOG_EMPTY");
+              error.code = "CATALOG_EMPTY";
+              throw error;
+            }
+            writeCatalogCache(fallbackCatalog);
+            renderCatalog(fallbackCatalog, false);
+          });
+        })
+        .catch(handleCatalogError);
+    };
+
+    if (cachedCatalog) {
+      renderCatalog(cachedCatalog, true);
+      fetchCatalogFromNetwork();
+      return;
+    }
+
+    const bootstrapCatalog = normalizeCatalog(options.bootstrapData);
+    if (bootstrapCatalog) {
+      writeCatalogCache(bootstrapCatalog);
+      renderCatalog(bootstrapCatalog, false);
+      return;
+    }
+
+    fetchCatalogFromNetwork();
+  },
+
+  getReleaseVersionForCache(fallbackVersion) {
+    return fallbackVersion ||
+      (this.data.activeSnapshot && this.data.activeSnapshot.releaseVersion) ||
+      this.data.catalogVersion ||
+      (this.data.appConfig && this.data.appConfig.dataVersion && this.data.appConfig.dataVersion.releaseVersion) ||
+      "";
+  },
+
+  getActiveTermForCache(fallbackTerm) {
+    return fallbackTerm ||
+      (this.data.activeSnapshot && this.data.activeSnapshot.term) ||
+      (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) ||
+      DEFAULT_TERM;
+  },
+
+  getFilterCacheKey() {
+    const term = this.getActiveTermForCache();
+    const releaseVersion = this.getReleaseVersionForCache();
+    return getSchoolFilterCacheKey(term, releaseVersion);
+  },
+
+  fetchSearchIndex(type, params, options = {}) {
+    const seq = ++this._schoolRequestSeq;
+    const query = Object.assign({ type }, params || {});
+    const term = query.term || query.semester || this.getActiveTermForCache();
+    const releaseVersion = query.releaseVersion || this.getReleaseVersionForCache();
+    query.term = term;
+    query.releaseVersion = releaseVersion;
+    delete query.semester;
+
+    if (!releaseVersion) {
+      const error = new Error("NO_ACTIVE_SNAPSHOT");
+      error.code = "NO_ACTIVE_SNAPSHOT";
+      return Promise.reject(error);
+    }
+
+    const cached = readSameVersionIndexCache(term, releaseVersion, type, query);
+    if (cached) {
+      return Promise.resolve(Object.assign({}, cached, { fromStorage: true }));
+    }
+
+    return request.get("/api/fosu/search-index", query, Object.assign({
+      showLoading: false,
+      silentError: true,
+      timeout: SCHOOL_REQUEST_TIMEOUT,
+    }, options))
+      .then((data) => {
+        if (seq !== this._schoolRequestSeq) {
+          const stale = new Error("STALE_REQUEST");
+          stale.stale = true;
+          throw stale;
+        }
+        writeSameVersionIndexCache(term, releaseVersion, type, data, query);
+        return data;
+      });
+  },
+
+  getScheduleDetailCache(type, id, version, term) {
+    const activeVersion = this.getReleaseVersionForCache(version);
+    const activeTerm = this.getActiveTermForCache(term);
+    const cacheKey = getScheduleDetailCacheKey(activeTerm, activeVersion, type, id);
+    try {
+      const cached = wx.getStorageSync(cacheKey);
+      if (!cached || Date.now() - cached.savedAt > SCHEDULE_DETAIL_CACHE_TTL) return null;
+      return cached.schedule || null;
+    } catch (error) {
+      return null;
+    }
+  },
+
+  setScheduleDetailCache(type, id, version, term, schedule) {
+    const activeVersion = this.getReleaseVersionForCache(version);
+    const activeTerm = this.getActiveTermForCache(term);
+    const cacheKey = getScheduleDetailCacheKey(activeTerm, activeVersion, type, id);
+    try {
+      wx.setStorageSync(cacheKey, {
+        savedAt: Date.now(),
+        schedule,
+      });
+    } catch (error) {
+      console.warn("[school] write detail cache failed", error);
+    }
+  },
+
+  executeSearch(type, params, renderFn, catchFn) {
+    const query = Object.assign({ type }, params || {});
+    const term = query.term || query.semester || this.getActiveTermForCache();
+    const releaseVersion = query.releaseVersion || this.getReleaseVersionForCache();
+    query.term = term;
+    query.releaseVersion = releaseVersion;
+    delete query.semester;
+
+    if (!releaseVersion) {
+      this.resolveActiveSnapshot()
+        .then((resolved) => {
+          if (resolved && resolved.activeSnapshot) {
+            this.setData({
+              activeSnapshot: resolved.activeSnapshot,
+              catalogVersion: resolved.activeSnapshot.releaseVersion,
+            });
+            this.executeSearch(type, query, renderFn, catchFn);
+            return;
+          }
+          this.setData({ loadingState: resolved && resolved.state === "timeout" ? "timeout" : "networkError" });
+        })
+        .catch((error) => {
+          this.setData({ loadingState: this.getStateFromError(error) === "timeout" ? "timeout" : "networkError" });
+        });
+      return;
+    }
+
+    const seq = ++this._schoolRequestSeq;
+    const cached = readSameVersionIndexCache(term, releaseVersion, type, query);
+
+    const doNetworkRequest = (hasCache) => {
+      if (!hasCache) {
+        this.startLoadingTimer(() => doNetworkRequest(false), false);
+      } else {
+        this.retryFn = () => doNetworkRequest(true);
+      }
+
+      request.get("/api/fosu/search-index", query, {
+        showLoading: false,
+        silentError: true,
+        timeout: SCHOOL_REQUEST_TIMEOUT,
+      })
+        .then((data) => {
+          if (seq !== this._schoolRequestSeq) return;
+          this.clearLoadingTimer();
+          this.setData({ loadingState: "none" });
+          writeSameVersionIndexCache(term, releaseVersion, type, data, query);
+
+          if (!data.items || data.items.length === 0) {
+            this.setData({ dataLoadState: "empty" });
+            if (type === "class") {
+              this.setData({
+                classEmptyTitle: "暂无匹配结果",
+                classEmptyDesc: "暂无匹配结果，请调整筛选条件",
+              });
+            }
+          } else {
+            this.setData({ dataLoadState: "success" });
+          }
+
+          renderFn(data, false);
+        })
+        .catch((error) => {
+          if (seq !== this._schoolRequestSeq) return;
+          this.clearLoadingTimer();
+          if (cached) {
+            this.setData({
+              loadingState: "none",
+              dataLoadState: "success",
+              restoreHint: "已显示本地缓存，正在校验更新",
+            });
+            console.warn("[school] search-index refresh failed; keeping cache", error);
+            return;
+          }
+
+          const state = this.getStateFromError(error);
+          if (state === "noRelease") {
+            this.setData({
+              dataLoadState: "noRelease",
+              loadingState: "none",
+              catalogEmpty: true,
+            });
+          } else {
+            this.setData({
+              loadingState: state === "timeout" ? "timeout" : "networkError",
+            });
+          }
+          if (typeof catchFn === "function") {
+            catchFn(error);
+          }
+        });
+    };
+
+    if (cached) {
+      renderFn(cached, true);
+      this.setData({
+        dataLoadState: "success",
+        loadingState: "none",
+        restoreHint: "已显示本地缓存，正在校验更新",
+      });
+      doNetworkRequest(true);
+      return;
+    }
+
+    doNetworkRequest(false);
   }
 });

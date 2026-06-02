@@ -1,5 +1,7 @@
 const STORAGE_KEY = "FOSU_CLASS_SETTINGS";
 const BOOTSTRAP_CACHE_KEY = "FOSU_BOOTSTRAP_CACHE";
+const SCHOOL_CACHE_SCHEMA_VERSION = 3;
+const SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY = "FOSU_ACTIVE_SNAPSHOT";
 const SCHOOL_FILTER_CACHE_KEY = "FOSU_SCHOOL_FILTER_CACHE";
 const CURRENT_SCHEDULE_TARGET_KEY = "FOSU_CURRENT_SCHEDULE_TARGET";
 const RECENT_SCHEDULES_KEY = "FOSU_RECENT_SCHEDULES";
@@ -244,27 +246,50 @@ function clearRecentSchedules() {
   return [];
 }
 
-function getSchoolIndexCacheKey(term, releaseVersion, type, params = {}) {
-  const base = `school:index:${term}:${releaseVersion}:${type}`;
-  const subPieces = [];
-  if (params.q) subPieces.push(`q=${encodeURIComponent(params.q)}`);
-  if (params.collegeCode) subPieces.push(`college=${params.collegeCode}`);
-  if (params.grade) subPieces.push(`grade=${params.grade}`);
-  if (params.majorCode) subPieces.push(`major=${params.majorCode}`);
-  if (params.campus) subPieces.push(`campus=${encodeURIComponent(params.campus)}`);
-  if (params.limit) subPieces.push(`limit=${params.limit}`);
-  if (subPieces.length > 0) {
-    return `${base}:${subPieces.join("&")}`;
+function stableParamHash(params = {}) {
+  const ignoredKeys = new Set(["term", "semester", "releaseVersion", "version", "type"]);
+  const normalized = {};
+  Object.keys(params || {})
+    .filter((key) => !ignoredKeys.has(key) && params[key] !== undefined && params[key] !== null && params[key] !== "")
+    .sort()
+    .forEach((key) => {
+      normalized[key] = String(params[key]);
+    });
+
+  const text = JSON.stringify(normalized);
+  let hash = 2166136261;
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
   }
-  return base;
+  return (hash >>> 0).toString(36);
+}
+
+function getSchoolIndexCacheKey(term, releaseVersion, type, params = {}) {
+  const safeTerm = encodeURIComponent(String(term || "unknown"));
+  const safeVersion = encodeURIComponent(String(releaseVersion || "unknown"));
+  const safeType = encodeURIComponent(String(type || "unknown"));
+  return `school:v${SCHOOL_CACHE_SCHEMA_VERSION}:index:${safeTerm}:${safeVersion}:${safeType}:${stableParamHash(params)}`;
 }
 
 function getSchoolFilterCacheKey(term, releaseVersion) {
-  return `school:filters:${term}:${releaseVersion}`;
+  const safeTerm = encodeURIComponent(String(term || "unknown"));
+  const safeVersion = encodeURIComponent(String(releaseVersion || "unknown"));
+  return `school:v${SCHOOL_CACHE_SCHEMA_VERSION}:filters:${safeTerm}:${safeVersion}`;
 }
 
 function getScheduleDetailCacheKey(term, releaseVersion, type, id) {
-  return `school:detail:${term}:${releaseVersion}:${type}:${id}`;
+  const safeTerm = encodeURIComponent(String(term || "unknown"));
+  const safeVersion = encodeURIComponent(String(releaseVersion || "unknown"));
+  const safeType = encodeURIComponent(String(type || "unknown"));
+  const safeId = encodeURIComponent(String(id || "unknown"));
+  return `school:v${SCHOOL_CACHE_SCHEMA_VERSION}:detail:${safeTerm}:${safeVersion}:${safeType}:${safeId}`;
+}
+
+function getSchoolCatalogCacheKey(term, releaseVersion) {
+  const safeTerm = encodeURIComponent(String(term || "unknown"));
+  const safeVersion = encodeURIComponent(String(releaseVersion || "unknown"));
+  return `school:v${SCHOOL_CACHE_SCHEMA_VERSION}:catalog:${safeTerm}:${safeVersion}`;
 }
 
 function readSameVersionIndexCache(term, releaseVersion, type, params = {}) {
@@ -299,7 +324,10 @@ function clearAllSchoolCaches() {
     keys.forEach((key) => {
       if (
         key.startsWith("school:") ||
+        key.startsWith("FOSU_SCHOOL_") ||
         key.startsWith("FOSU_SCHOOL_FILTER") ||
+        key === "FOSU_LOCAL_RELEASE_KEY" ||
+        key === SCHOOL_FILTER_CACHE_KEY ||
         key === "school_search_index" ||
         key === "school_filter_options" ||
         key === "school_class_list" ||
@@ -327,6 +355,8 @@ module.exports = {
   BOOTSTRAP_CACHE_KEY,
   CURRENT_SCHEDULE_TARGET_KEY,
   RECENT_SCHEDULES_KEY,
+  SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY,
+  SCHOOL_CACHE_SCHEMA_VERSION,
   SCHOOL_FILTER_CACHE_KEY,
   STORAGE_KEY,
   defaultSettings,
@@ -349,9 +379,9 @@ module.exports = {
   clearAllSchoolCaches,
   getSchoolIndexCacheKey,
   getSchoolFilterCacheKey,
+  getSchoolCatalogCacheKey,
   getScheduleDetailCacheKey,
   readSameVersionIndexCache,
   writeSameVersionIndexCache,
 };
-
 
