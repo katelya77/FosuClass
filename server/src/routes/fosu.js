@@ -144,6 +144,48 @@ router.get("/search/courses", scheduleLimiter, (req, res) => {
   }
 });
 
+router.get("/search-index", scheduleLimiter, (req, res) => {
+  try {
+    const type = String(req.query.type || "").trim();
+    const query = Object.assign({}, req.query);
+    if (query.term && !query.semester) {
+      query.semester = query.term;
+    }
+    if (!["teacher", "classroom", "course", "class"].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: "type must be teacher, classroom, course, or class",
+      });
+    }
+    const result = releaseService.searchActiveIndex(type, query.q, query);
+    const items = (result.items || []).map((item) => ({
+      id: item.id,
+      name: item.name || item.teacherName || item.roomName || item.classroomName || item.courseName || item.className || "",
+      teacherName: item.teacherName,
+      roomName: item.roomName || item.classroomName,
+      courseName: item.courseName,
+      className: item.className,
+      college: item.college || item.collegeName || "",
+      collegeCode: item.collegeCode || "",
+      collegeName: item.collegeName || "",
+      grade: item.grade || "",
+      majorCode: item.majorCode || "",
+      majorName: item.majorName || "",
+      campus: item.campus || "",
+      count: item.courseCount || 0,
+      courseCount: item.courseCount || 0,
+      firstCourseName: item.firstCourseName || "",
+      displayType: item.displayType || "",
+      isAggregated: Boolean(item.isAggregated),
+      updatedAt: item.updatedAt || "",
+      semester: item.semester || result.semester || "",
+    }));
+    return sendCacheableJson(req, res, Object.assign({}, result, { items }), 120);
+  } catch (error) {
+    handleRouteError(res, error, "get-search-index-failed");
+  }
+});
+
 /**
  * 1. 获取全校 Catalog
  * GET /api/fosu/catalog
@@ -260,6 +302,26 @@ router.get("/schedule/course/:id", scheduleLimiter, (req, res) => {
     return sendCacheableJson(req, res, result, 300);
   } catch (error) {
     handleRouteError(res, error, "get-indexed-course-schedule-failed");
+  }
+});
+
+router.get("/schedule-detail", scheduleLimiter, (req, res) => {
+  try {
+    const type = String(req.query.type || "").trim();
+    const id = String(req.query.id || "").trim();
+    if (!["teacher", "classroom", "course", "class"].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        message: "type must be teacher, classroom, course, or class",
+      });
+    }
+    if (!id) {
+      return res.status(400).json({ success: false, message: "id is required" });
+    }
+    const result = normalizeScheduleResponse(type, releaseService.readActiveSchedule(type, id));
+    return sendCacheableJson(req, res, result, 300);
+  } catch (error) {
+    handleRouteError(res, error, "get-schedule-detail-failed");
   }
 });
 

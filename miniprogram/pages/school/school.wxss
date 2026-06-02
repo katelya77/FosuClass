@@ -90,6 +90,37 @@
   margin-top: 14rpx;
 }
 
+.school-skeleton {
+  margin: 16rpx 0;
+  padding: 24rpx 20rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  box-shadow: 0 4rpx 16rpx rgba(162, 178, 201, 0.08);
+}
+
+.skeleton-line {
+  height: 24rpx;
+  margin-top: 18rpx;
+  border-radius: 12rpx;
+  background: #eef2f7;
+}
+
+.skeleton-line:first-child {
+  margin-top: 0;
+}
+
+.skeleton-line.wide {
+  width: 86%;
+}
+
+.skeleton-line {
+  width: 64%;
+}
+
+.skeleton-line.short {
+  width: 38%;
+}
+
 .school-notice {
   display: flex;
   align-items: center;

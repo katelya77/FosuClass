@@ -12,7 +12,9 @@ const CLASSROOM_SEARCH_PLACEHOLDER = "搜索教室（例如：C7-305）";
 const COURSE_SEARCH_PLACEHOLDER = "搜索课程（例如：有机化学）";
 const CLASS_SEARCH_PLACEHOLDER = "搜索班级（例如：25动物科学3班）";
 const SCHEDULE_DETAIL_CACHE_PREFIX = "FOSU_SCHEDULE_DETAIL";
+const SCHOOL_INDEX_CACHE_PREFIX = "FOSU_SCHOOL_INDEX";
 const SCHEDULE_DETAIL_CACHE_TTL = 6 * 60 * 60 * 1000;
+const SCHOOL_INDEX_CACHE_TTL = 30 * 60 * 1000;
 
 const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
@@ -56,10 +58,11 @@ function isValidClassName(name) {
 function formatClassResultItem(item) {
   const source = item || {};
   const isAggregated = Boolean(source.isAggregated || source.displayType === "major-schedule" || source.displayType === "major-shared-schedule");
-  const rawClassName = source.className || "";
+  const rawClassName = source.className || source.name || "";
   const className = safeDecodeURIComponent(rawClassName);
-  const courseCount = Array.isArray(source.courses) ? source.courses.length : 0;
+  const courseCount = Number(source.courseCount || source.count || (Array.isArray(source.courses) ? source.courses.length : 0)) || 0;
   return Object.assign({}, source, {
+    detailId: source.detailId || source.id || source.classId || className,
     scheduleKey: `${source.semester || ""}-${source.collegeCode || ""}-${source.grade || ""}-${source.majorCode || ""}-${className}`,
     displayTitle: className,
     displaySubtitle: `${source.majorName || "未知专业"} · ${source.grade || ""}级 · ${courseCount}门课`,
@@ -124,7 +127,7 @@ function normalizeIndexedScheduleItem(type, item, version) {
     detailId: source.id || name,
     scheduleVersion: version || source.version || "",
     courses: Array.isArray(source.courses) ? source.courses : [],
-    courseCount: Number(source.courseCount || (Array.isArray(source.courses) ? source.courses.length : 0)) || 0,
+    courseCount: Number(source.courseCount || source.count || (Array.isArray(source.courses) ? source.courses.length : 0)) || 0,
   });
   if (type === "teacher") {
     return Object.assign(common, {
@@ -250,6 +253,67 @@ Page({
       })
       .catch((err) => {
         console.warn("全校页公告配置加载失败", err);
+      });
+  },
+
+  getReleaseVersionForCache(fallbackVersion) {
+    return fallbackVersion || this.data.catalogVersion || this.data.appConfig?.dataVersion?.releaseVersion || this.data.catalogUpdatedAt || "unknown";
+  },
+
+  buildIndexCacheKey(type, params, version) {
+    const source = params || {};
+    const term = source.semester || source.term || this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
+    const releaseVersion = this.getReleaseVersionForCache(version);
+    const pieces = [
+      SCHOOL_INDEX_CACHE_PREFIX,
+      term,
+      releaseVersion,
+      type,
+      source.q || "",
+      source.collegeCode || "",
+      source.collegeName || "",
+      source.grade || "",
+      source.majorCode || "",
+      source.majorName || "",
+      source.campus || "",
+      source.limit || "",
+    ];
+    return pieces.map((item) => encodeURIComponent(String(item))).join(":");
+  },
+
+  readIndexCache(type, params) {
+    try {
+      const cacheKey = this.buildIndexCacheKey(type, params);
+      const cached = wx.getStorageSync(cacheKey);
+      if (!cached || Date.now() - cached.savedAt > SCHOOL_INDEX_CACHE_TTL) return null;
+      return cached.data || null;
+    } catch (error) {
+      return null;
+    }
+  },
+
+  writeIndexCache(type, params, data) {
+    try {
+      const cacheKey = this.buildIndexCacheKey(type, params, data && data.version);
+      wx.setStorageSync(cacheKey, {
+        savedAt: Date.now(),
+        data,
+      });
+    } catch (error) {
+      // 索引缓存失败不影响在线查询。
+    }
+  },
+
+  fetchSearchIndex(type, params, options = {}) {
+    const query = Object.assign({ type }, params || {});
+    const cached = this.readIndexCache(type, query);
+    if (cached) {
+      return Promise.resolve(Object.assign({}, cached, { fromStorage: true }));
+    }
+    return request.get("/api/fosu/search-index", query, Object.assign({ showLoading: false, silentError: true }, options))
+      .then((data) => {
+        this.writeIndexCache(type, query, data);
+        return data;
       });
   },
 
@@ -980,18 +1044,28 @@ Page({
     const majorCode = majors[selectedMajorIndex].code;
 
     this.setData({ loading: true });
-    return request.get("/api/fosu/classes", { semester, collegeCode, grade, majorCode }, { showLoading: false })
+    return this.fetchSearchIndex("class", { semester, collegeCode, grade, majorCode, limit: 100 })
       .then((res) => {
         const classesOptions = [];
         if (res && res.success) {
-          const adminClasses = res.adminClasses || [];
-          const majorAggregates = res.majorAggregates || [];
+          const items = (res.items || []).map(formatClassResultItem);
+          const adminClasses = items.filter((item) => !item.isAggregated);
+          const majorAggregates = items.filter((item) => item.isAggregated);
 
           adminClasses.forEach(c => {
             classesOptions.push({
-              classId: c.classId,
+              classId: c.detailId || c.classId || c.id,
               className: c.className,
               label: c.className,
+              detailId: c.detailId || c.id || c.classId || c.className,
+              scheduleVersion: res.version || c.scheduleVersion || "",
+              courseCount: c.courseCount || 0,
+              semester: c.semester || semester,
+              collegeCode: c.collegeCode || collegeCode,
+              grade: c.grade || grade,
+              majorCode: c.majorCode || majorCode,
+              majorName: c.majorName || "",
+              displayType: c.displayType || "",
               isAggregated: false,
               group: "admin"
             });
@@ -999,9 +1073,18 @@ Page({
 
           majorAggregates.forEach(c => {
             classesOptions.push({
-              classId: c.classId,
+              classId: c.detailId || c.classId || c.id,
               className: c.className,
               label: c.className.includes("共享") ? c.className : `${c.className} (共享课表)`,
+              detailId: c.detailId || c.id || c.classId || c.className,
+              scheduleVersion: res.version || c.scheduleVersion || "",
+              courseCount: c.courseCount || 0,
+              semester: c.semester || semester,
+              collegeCode: c.collegeCode || collegeCode,
+              grade: c.grade || grade,
+              majorCode: c.majorCode || majorCode,
+              majorName: c.majorName || "",
+              displayType: c.displayType || "major-shared-schedule",
               isAggregated: true,
               group: "aggregate"
             });
@@ -1014,9 +1097,38 @@ Page({
         return classesOptions;
       })
       .catch((err) => {
-        this.setData({ loading: false });
-        console.error("fetchClasses fail", err);
-        throw err;
+        console.warn("fetch class index fail, fallback to /api/fosu/classes", err);
+        return request.get("/api/fosu/classes", { semester, collegeCode, grade, majorCode }, { showLoading: false })
+          .then((res) => {
+            const classesOptions = [];
+            if (res && res.success) {
+              (res.adminClasses || []).forEach(c => {
+                classesOptions.push({
+                  classId: c.classId,
+                  className: c.className,
+                  label: c.className,
+                  isAggregated: false,
+                  group: "admin"
+                });
+              });
+              (res.majorAggregates || []).forEach(c => {
+                classesOptions.push({
+                  classId: c.classId,
+                  className: c.className,
+                  label: c.className.includes("共享") ? c.className : `${c.className} (共享课表)`,
+                  isAggregated: true,
+                  group: "aggregate"
+                });
+              });
+            }
+            this.setData({ classesOptions, loading: false });
+            return classesOptions;
+          })
+          .catch((fallbackErr) => {
+            this.setData({ loading: false });
+            console.error("fetchClasses fail", fallbackErr);
+            throw fallbackErr;
+          });
       });
   },
 
@@ -1065,51 +1177,32 @@ Page({
     // 如果选到了具体班级，直接精准查询并跳转
     if (selectedClassIndex >= 0 && classesOptions[selectedClassIndex]) {
       const selectedClass = classesOptions[selectedClassIndex];
-      request.post("/api/fosu/class-schedule", {
+      this.openIndexedSchedule("class", Object.assign({
         semester,
         collegeCode,
         grade,
         majorCode,
         majorName,
-        className: selectedClass.className,
-      }, { loadingTitle: "正在加载课表...", silentError: true })
-        .then((data) => {
-          if (data && data.success && data.classes && data.classes.length > 0) {
-            const matchedClass = data.classes[0];
-            const formatted = formatClassResultItem(matchedClass);
-            formatted.updatedAt = data.updatedAt;
-            this.saveRecentSchedule(formatted);
-            this.navigateToScheduleView("class", formatted.className, formatted.courses, formatted);
-          } else {
-            wx.showToast({
-              title: "未找到该班级课表数据",
-              icon: "none",
-            });
-          }
-        })
-        .catch((err) => {
-          wx.showToast({
-            title: err.message || "课表数据查询失败",
-            icon: "none",
-          });
-          console.error("fetch single class schedule fail", err);
-        });
+      }, selectedClass), selectedClass.className);
       return;
     }
 
-    // 未选择具体班级，获取该专业下所有班级并显示在下方
-    request.post("/api/fosu/class-schedule", {
+    // 未选择具体班级，仅获取轻量 class index，点击结果后再取详情。
+    this.setData({ loading: true });
+    this.fetchSearchIndex("class", {
       semester,
       collegeCode,
       grade,
       majorCode,
       majorName,
-    }, { loadingTitle: "正在获取数据...", silentError: true })
+      limit: 100,
+    })
       .then((data) => {
           const formatTime = formatUpdateTime(data.updatedAt);
-          const grouped = splitClassResultGroups(data.classes || []);
+          const grouped = splitClassResultGroups(data.items || []);
           grouped.list.forEach((item) => {
             item.updatedAt = data.updatedAt;
+            item.scheduleVersion = data.version || item.scheduleVersion || "";
           });
           const emptyState = getClassEmptyState("");
         
@@ -1121,6 +1214,7 @@ Page({
           classEmptyTitle: emptyState.title,
           classEmptyDesc: emptyState.desc,
           classNoticeText: grouped.noticeText,
+          loading: false,
         });
       })
       .catch((err) => {
@@ -1134,6 +1228,7 @@ Page({
           classEmptyTitle: emptyState.title,
           classEmptyDesc: emptyState.desc,
           classNoticeText: "",
+          loading: false,
         });
         console.error("searchClassSchedule fail", err);
       });
@@ -1156,14 +1251,14 @@ Page({
     const titleCode = selectedTitleIndex >= 0 ? titleOptions[selectedTitleIndex] : "";
 
     this.setData({ loading: true });
-    request.get("/api/fosu/search/teachers", {
+    this.fetchSearchIndex("teacher", {
       semester,
       collegeCode,
       collegeName,
       titleCode,
       q: keyword.trim(),
       limit: 50,
-    }, { loadingTitle: "正在获取数据..." })
+    })
       .then((data) => {
         const formatTime = formatUpdateTime(data.updatedAt);
         const teachers = (data.items || []).map(item => normalizeIndexedScheduleItem("teacher", item, data.version));
@@ -1194,12 +1289,12 @@ Page({
     const campus = selectedCampusIndex >= 0 ? campusOptions[selectedCampusIndex] : "";
 
     this.setData({ loading: true });
-    request.get("/api/fosu/search/classrooms", {
+    this.fetchSearchIndex("classroom", {
       semester,
       campus,
       q: keyword.trim(),
       limit: 50,
-    }, { loadingTitle: "正在获取数据..." })
+    })
       .then((data) => {
         const formatTime = formatUpdateTime(data.updatedAt);
         const classrooms = (data.items || []).map(item => normalizeIndexedScheduleItem("classroom", item, data.version));
@@ -1229,11 +1324,11 @@ Page({
     const semester = semesters[selectedSemesterIndex]?.value || "2025-2026-2";
 
     this.setData({ loading: true });
-    request.get("/api/fosu/search/courses", {
+    this.fetchSearchIndex("course", {
       semester,
       q: keyword.trim(),
       limit: 50,
-    }, { loadingTitle: "正在获取数据..." })
+    })
       .then((data) => {
         const formatTime = formatUpdateTime(data.updatedAt);
         const courses = (data.items || []).map(item => normalizeIndexedScheduleItem("course", item, data.version));
@@ -1249,11 +1344,10 @@ Page({
       });
   },
 
-  getScheduleDetailCache(type, id, version) {
-    const cacheKey = `${SCHEDULE_DETAIL_CACHE_PREFIX}:${type}:${id}`;
+  getScheduleDetailCache(type, id, version, term) {
+    const cacheKey = `${SCHEDULE_DETAIL_CACHE_PREFIX}:${term || "unknown"}:${version || "unknown"}:${type}:${id}`;
     try {
       const cached = wx.getStorageSync(cacheKey);
-      if (!cached || cached.version !== version) return null;
       if (Date.now() - cached.savedAt > SCHEDULE_DETAIL_CACHE_TTL) return null;
       return cached.schedule || null;
     } catch (error) {
@@ -1261,11 +1355,10 @@ Page({
     }
   },
 
-  setScheduleDetailCache(type, id, version, schedule) {
-    const cacheKey = `${SCHEDULE_DETAIL_CACHE_PREFIX}:${type}:${id}`;
+  setScheduleDetailCache(type, id, version, term, schedule) {
+    const cacheKey = `${SCHEDULE_DETAIL_CACHE_PREFIX}:${term || "unknown"}:${version || "unknown"}:${type}:${id}`;
     try {
       wx.setStorageSync(cacheKey, {
-        version,
         savedAt: Date.now(),
         schedule,
       });
@@ -1276,19 +1369,30 @@ Page({
 
   openIndexedSchedule(type, item, displayName) {
     const detailId = item.detailId || item.id || displayName;
-    const cached = this.getScheduleDetailCache(type, detailId, item.scheduleVersion);
+    const semester = item.semester || this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
+    const version = this.getReleaseVersionForCache(item.scheduleVersion);
+    const cached = this.getScheduleDetailCache(type, detailId, version, semester);
     if (cached) {
-      this.navigateToScheduleView(type, displayName, cached.courses || [], Object.assign({}, item, cached));
+      const cachedMeta = Object.assign({}, item, cached, { semester, scheduleVersion: version });
+      if (type === "class") this.saveRecentSchedule(cachedMeta);
+      this.navigateToScheduleView(type, displayName, cached.courses || [], cachedMeta);
       return;
     }
 
     wx.showLoading({ title: "正在打开课表...", mask: true });
-    request.get(`/api/fosu/schedule/${type}/${encodeURIComponent(detailId)}`, {}, { showLoading: false, silentError: true })
+    request.get("/api/fosu/schedule-detail", {
+      term: semester,
+      type,
+      id: detailId,
+    }, { showLoading: false, silentError: true })
       .then((data) => {
         wx.hideLoading();
         const schedule = data.schedule || {};
-        this.setScheduleDetailCache(type, detailId, data.version || item.scheduleVersion, schedule);
-        this.navigateToScheduleView(type, displayName, schedule.courses || [], Object.assign({}, item, schedule));
+        const nextVersion = data.version || version;
+        this.setScheduleDetailCache(type, detailId, nextVersion, semester, schedule);
+        const meta = Object.assign({}, item, schedule, { semester, scheduleVersion: nextVersion });
+        if (type === "class") this.saveRecentSchedule(meta);
+        this.navigateToScheduleView(type, displayName, schedule.courses || [], meta);
       })
       .catch((err) => {
         wx.hideLoading();
@@ -1306,8 +1410,12 @@ Page({
     const item = source[index];
     if (!item) return;
 
-    this.saveRecentSchedule(item);
-    this.navigateToScheduleView("class", item.className, item.courses, item);
+    if (Array.isArray(item.courses) && item.courses.length > 0) {
+      this.saveRecentSchedule(item);
+      this.navigateToScheduleView("class", item.className, item.courses, item);
+      return;
+    }
+    this.openIndexedSchedule("class", item, item.className);
   },
 
   viewTeacherSchedule(event) {

@@ -119,13 +119,27 @@ async function main() {
   const pending = stagingUploadService.markUploadPendingReview(upload.uploadId, {
     term: finalized.stagingData.term,
     releaseVersion: finalized.stagingData.releaseVersion,
-    classScheduleCount: finalized.stagingData.classSchedules.length,
+    counts: {
+      classScheduleCount: finalized.stagingData.classSchedules.length,
+      teacherScheduleCount: finalized.stagingData.resources.teacherSchedules.length,
+      classroomScheduleCount: finalized.stagingData.resources.classroomSchedules.length,
+      courseScheduleCount: finalized.stagingData.resources.courseSchedules.length,
+    },
   });
   assert.strictEqual(pending.status, "pending-review", "upload should move to pending-review");
+  assert.strictEqual(pending.sourceSize, snapshotBuffer.length, "public status should expose sourceSize");
+  assert.strictEqual(pending.gzipSize, uploadBuffer.length, "public status should expose gzipSize");
+  assert.strictEqual(pending.chunkCount, totalChunks, "public status should expose chunkCount");
+  assert.strictEqual(pending.uploadedChunks, totalChunks, "public status should expose uploadedChunks");
+  assert.strictEqual(pending.counts.classScheduleCount, 1, "public status should expose counts");
 
   const published = stagingUploadService.markUploadPublished(upload.uploadId, "test-2026-06-02");
   assert.strictEqual(published.status, "published", "upload should move to published");
   assert(stagingUploadService.listUploads(10).some((item) => item.uploadId === upload.uploadId), "upload should be listed");
+
+  const deleted = stagingUploadService.deleteUpload(upload.uploadId, actor);
+  assert.strictEqual(deleted.uploadId, upload.uploadId, "deleteUpload should return deleted upload id");
+  assert(!stagingUploadService.listUploads(10).some((item) => item.uploadId === upload.uploadId), "deleted upload should be removed from list");
 
   const resolvedRoot = path.resolve(tempRoot);
   const relativeRoot = path.relative(os.tmpdir(), resolvedRoot);
