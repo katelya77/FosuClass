@@ -21,6 +21,10 @@ function translateErrorMessage(payload, defaultMsg) {
     return "请选择学院、年级和专业后再查询课表。";
   }
   
+  if (msgLower.includes("timeout")) {
+    return "网络较慢，请稍后重试";
+  }
+  
   if (
     reasonCode === "FOSU_INTRANET_ONLY" ||
     msgLower.includes("enotfound") ||
@@ -28,7 +32,6 @@ function translateErrorMessage(payload, defaultMsg) {
     msgLower.includes("tls") ||
     msgLower.includes("handshake") ||
     msgLower.includes("disconnected") ||
-    msgLower.includes("timeout") ||
     msgLower.includes("fail")
   ) {
     return "该数据需要维护者在校园网/VPN环境下同步后才能查看。\n\n你也可以导入自己的课表，帮助完善班级课表数据。";
@@ -48,6 +51,31 @@ function translateErrorMessage(payload, defaultMsg) {
   }
   
   return msg;
+}
+
+/**
+ * 根据接口获取默认超时时长
+ * @param {string} url 请求接口
+ * @returns {number} 超时毫秒数
+ */
+function getDefaultTimeout(url) {
+  const cleanUrl = url.split("?")[0];
+  if (cleanUrl.endsWith("/app-config")) {
+    return 8000;
+  }
+  if (cleanUrl.endsWith("/bootstrap")) {
+    return 12000;
+  }
+  if (cleanUrl.endsWith("/search-index")) {
+    return 30000;
+  }
+  if (cleanUrl.endsWith("/schedule-detail")) {
+    return 30000;
+  }
+  if (cleanUrl.endsWith("/catalog")) {
+    return 30000;
+  }
+  return 15000;
 }
 
 /**
@@ -79,7 +107,7 @@ function request(url, method = "GET", data = {}, options = {}) {
       header: {
         "content-type": method.toUpperCase() === "POST" ? "application/json" : "application/x-www-form-urlencoded",
       },
-      timeout: options.timeout || 15000, // 默认超时时间 15 秒
+      timeout: options.timeout || getDefaultTimeout(url),
       success: (res) => {
         if (opt.showLoading) {
           wx.hideLoading();
@@ -114,12 +142,31 @@ function request(url, method = "GET", data = {}, options = {}) {
         if (opt.showLoading) {
           wx.hideLoading();
         }
-        const errMsg = translateErrorMessage(null, err.errMsg || "");
-        if (!opt.silentError) {
-          showError(errMsg);
+        
+        // NOTE: 保留原始错误信息，同时对超时进行标识
+        const isTimeout = err.errMsg && err.errMsg.toLowerCase().includes("timeout");
+        let finalErr = err;
+        let displayMsg = "";
+
+        if (isTimeout) {
+          const timeoutErr = new Error("网络较慢，请稍后重试");
+          timeoutErr.code = "REQUEST_TIMEOUT";
+          timeoutErr.errMsg = err.errMsg || "request:fail timeout";
+          timeoutErr.originalError = err;
+          finalErr = timeoutErr;
+          displayMsg = "网络较慢，请稍后重试";
+        } else {
+          displayMsg = translateErrorMessage(null, err.errMsg || "");
+          finalErr = new Error(displayMsg);
+          finalErr.errMsg = err.errMsg || "";
+          finalErr.originalError = err;
         }
-        console.error("wx.request failed", err);
-        reject(err);
+
+        if (!opt.silentError) {
+          showError(displayMsg);
+        }
+        console.error("wx.request failed", finalErr);
+        reject(finalErr);
       },
     });
   });

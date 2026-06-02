@@ -572,3 +572,12 @@ picker {
 .error-retry-btn:active {
   background: #b71c1c !important;
 }
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}

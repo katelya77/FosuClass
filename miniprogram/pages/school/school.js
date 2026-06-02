@@ -208,15 +208,17 @@ Page({
     openedRecentKey: "",
     touchStartX: 0,
     touchStartY: 0,
-    loadingState: "none", // "none" | "loading" | "skeleton" | "slow" | "timeout"
+    dataLoadState: "loading",
   },
   
   // 缓存清理后自动重载标志
   needAutoSearch: false,
+  isFirstLoad: true,
 
   onLoad(options) {
     this.sharedQuery = options || {};
-    this.fetchSchoolCatalog();
+    this.isFirstLoad = true;
+    this.initPageData();
   },
 
   onShow() {
@@ -233,7 +235,9 @@ Page({
         coursesResult: [],
         updatedAtText: "",
       });
-      this.fetchSchoolCatalog();
+      this.isFirstLoad = false;
+      this.initPageData();
+      return;
     }
 
     const { getSettings } = require("../../utils/storage");
@@ -245,7 +249,12 @@ Page({
       this.applyCatalogFilter();
     }
     this.loadRecentSchedules();
-    this.loadPageConfig();
+
+    if (!this.isFirstLoad) {
+      this.initPageData();
+    } else {
+      this.isFirstLoad = false;
+    }
 
     // 检查是否是从强制选择课表的引导跳转过来的
     const isInitSelect = wx.getStorageSync("initSelectMode");
@@ -259,8 +268,20 @@ Page({
     }
   },
 
-  loadPageConfig() {
-    // 每次进入 school 页面 onShow 时，强制请求网络最新 app-config 
+  // 统一页面初始化与 app-config / catalog 获取
+  initPageData() {
+    this.loadRecentSchedules();
+    this.setData({
+      dataLoadState: "loading",
+      catalogEmpty: false
+    });
+
+    const retryFn = () => {
+      this.initPageData();
+    };
+    this.startLoadingStateTimer(retryFn);
+
+    console.log("[school] app-config loading start");
     appConfigService.loadAppConfig({ force: true })
       .then((config) => {
         const schoolNotice = appConfigService.getPrimaryNotice(config, "school", ["banner", "card"]);
@@ -271,7 +292,18 @@ Page({
         const releaseVersion = activeRelease.releaseVersion || "";
         const cacheEpoch = config.cacheEpoch || activeRelease.cacheEpoch || config.updatedAt || activeRelease.classScheduleUpdatedAt || "";
 
-        // 统一 releaseKey 格式: term:releaseVersion:cacheEpoch
+        console.log("[school] app-config", { term, releaseVersion, scheduleUpdatedAt: cacheEpoch });
+
+        // 如果后端确实没有发布 release
+        if (!releaseVersion) {
+          this.clearLoadingStateTimer();
+          this.setData({
+            dataLoadState: "noRelease",
+            catalogEmpty: true
+          });
+          return;
+        }
+
         const remoteReleaseKey = `${term}:${releaseVersion}:${cacheEpoch}`;
         const localReleaseKey = wx.getStorageSync("FOSU_LOCAL_RELEASE_KEY");
 
@@ -281,7 +313,6 @@ Page({
           const { clearAllSchoolCaches } = require("../../utils/storage");
           clearAllSchoolCaches();
 
-          // 清空页面已有 school index 状态
           this.setData({
             classesResult: [],
             classAdminResults: [],
@@ -299,8 +330,7 @@ Page({
           });
 
           didRefresh = true;
-          this.needAutoSearch = true; // 标记需要在 fetchSchoolCatalog 成功后自动重新拉取当前 tab 索引
-          this.fetchSchoolCatalog();
+          this.needAutoSearch = true;
         }
 
         wx.setStorageSync("FOSU_LOCAL_RELEASE_KEY", remoteReleaseKey);
@@ -316,10 +346,135 @@ Page({
         if (didRefresh) {
           this.loadRecentSchedules();
         }
+
+        this.loadCatalogData(term, releaseVersion);
       })
       .catch((err) => {
-        console.warn("全校页公告配置加载失败", err);
+        this.clearLoadingStateTimer();
+        console.error("[school] app-config failed", err);
+        if (err.code === "REQUEST_TIMEOUT") {
+          this.setData({ dataLoadState: "timeout" });
+        } else {
+          this.setData({ dataLoadState: "networkError" });
+        }
       });
+  },
+
+  // 异步及静默更新全校筛选项
+  loadCatalogData(term, releaseVersion) {
+    const catalogCacheKey = `school:catalog:${term}:${releaseVersion}`;
+    let cachedCatalog = null;
+    try {
+      cachedCatalog = wx.getStorageSync(catalogCacheKey);
+    } catch (e) {
+      console.warn("读取 catalog 缓存失败", e);
+    }
+
+    const renderCatalog = (data) => {
+      this.originalCatalogData = data;
+      this.applyCatalogFilter();
+      this.setData({
+        catalogEmpty: false,
+        catalogVersion: data.version || releaseVersion,
+        catalogUpdatedAt: data.updatedAt || "",
+      });
+
+      if (this.hasSharedQuery()) {
+        this.applySharedQueryIfNeeded();
+      } else {
+        this.restoreFilterCache();
+      }
+
+      if (this.needAutoSearch) {
+        this.needAutoSearch = false;
+        this.triggerActiveTabSearch();
+      }
+    };
+
+    const fetchCatalogFromNetwork = () => {
+      console.log("[school] request catalog bootstrap");
+      request.get("/api/fosu/bootstrap", { semester: term }, { showLoading: false, silentError: true, timeout: 12000 })
+        .then((res) => {
+          if (res && res.success && res.catalog && Array.isArray(res.catalog.colleges) && res.catalog.colleges.length > 0) {
+            const catalogData = {
+              ...res.catalog,
+              dataSource: res.dataSource || "cache",
+              updatedAt: res.updatedAt || "",
+              version: res.version || res.versions?.snapshot || res.updatedAt || "",
+              success: true
+            };
+            this.clearLoadingStateTimer();
+            this.setData({ dataLoadState: "success" });
+
+            try {
+              wx.setStorageSync(catalogCacheKey, catalogData);
+            } catch (e) {}
+
+            renderCatalog(catalogData);
+          } else {
+            console.warn("Bootstrap missing catalog, fallback to catalog API");
+            fallbackToCatalogNetwork();
+          }
+        })
+        .catch((err) => {
+          console.warn("Bootstrap failed, fallback to catalog API", err);
+          fallbackToCatalogNetwork();
+        });
+    };
+
+    const fallbackToCatalogNetwork = () => {
+      console.log("[school] request catalog fallback");
+      request.get("/api/fosu/catalog", { semester: term }, { showLoading: false, silentError: true, timeout: 30000 })
+        .then((data) => {
+          if (data && data.success && Array.isArray(data.colleges) && data.colleges.length > 0) {
+            this.clearLoadingStateTimer();
+            this.setData({ dataLoadState: "success" });
+
+            try {
+              wx.setStorageSync(catalogCacheKey, data);
+            } catch (e) {}
+
+            renderCatalog(data);
+          } else {
+            handleCatalogError(new Error("Catalog empty"));
+          }
+        })
+        .catch((err) => {
+          handleCatalogError(err);
+        });
+    };
+
+    const handleCatalogError = (err) => {
+      this.clearLoadingStateTimer();
+      console.error("[school] catalog load failed", err);
+      if (cachedCatalog) {
+        // 有缓存时，静默刷新失败不清空页面，默默提示
+        wx.showToast({
+          title: "网络连接慢，已载入本地缓存",
+          icon: "none",
+          duration: 2000
+        });
+      } else {
+        if (err.code === "REQUEST_TIMEOUT") {
+          this.setData({ dataLoadState: "timeout" });
+        } else {
+          this.setData({ dataLoadState: "networkError" });
+        }
+      }
+    };
+
+    if (cachedCatalog) {
+      console.log("[school] catalog cache hit", { key: catalogCacheKey });
+      renderCatalog(cachedCatalog);
+      this.setData({
+        dataLoadState: "success",
+        restoreHint: "已加载缓存，正在校验更新"
+      });
+      // 启动后台校验刷新
+      fetchCatalogFromNetwork();
+    } else {
+      fetchCatalogFromNetwork();
+    }
   },
 
   getReleaseVersionForCache(fallbackVersion) {
@@ -479,54 +634,6 @@ Page({
     }, 350);
   },
 
-  // 1. 获取全校 Catalog 选项
-  fetchSchoolCatalog() {
-    this.loadRecentSchedules();
-    this.setData({ loading: true, catalogEmpty: false });
-    // NOTE: 优先请求 bootstrap 接口，以便统一载入并进行版本/数据状态控制
-    request.get("/api/fosu/bootstrap", {
-      semester: "2025-2026-2",
-    }, { showLoading: false, silentError: true, timeout: 8000 })
-      .then((res) => {
-        if (res && res.success && res.catalog && Array.isArray(res.catalog.colleges) && res.catalog.colleges.length > 0) {
-          const catalogData = {
-            ...res.catalog,
-            dataSource: res.dataSource || "cache",
-            updatedAt: res.updatedAt || "",
-            version: res.version || res.versions?.snapshot || res.updatedAt || "",
-            success: true
-          };
-          this.originalCatalogData = catalogData;
-          this.applyCatalogFilter();
-          this.setData({
-            loading: false,
-            catalogEmpty: false,
-            catalogVersion: catalogData.version,
-            catalogUpdatedAt: catalogData.updatedAt,
-            dataSourceText: res.dataSource === "snapshot" ? "同步数据" : "课程数据",
-          });
-          if (this.hasSharedQuery()) {
-            this.applySharedQueryIfNeeded();
-          } else {
-            this.restoreFilterCache();
-          }
-          
-          if (this.needAutoSearch) {
-            this.needAutoSearch = false;
-            this.triggerActiveTabSearch();
-          }
-        } else {
-          console.warn("Bootstrap not ready or missing catalog, fallback to catalog");
-          this.fallbackToCatalog();
-        }
-      })
-      .catch((err) => {
-        console.warn("Bootstrap request failed, fallback to catalog", err);
-        this.fallbackToCatalog();
-      });
-  },
-
-  // 降级使用旧的 catalog 接口，防止 bootstrap 异常导致完全白屏
   fallbackToCatalog() {
     request.get("/api/fosu/catalog", {
       semester: "2025-2026-2",
@@ -731,22 +838,60 @@ Page({
     if (!item) return;
 
     const activeVersion = this.getReleaseVersionForCache();
+    const type = item.type || "class";
+    const displayName = item.className || item.title || item.name || "";
+
     // 只有当版本号一致，且课程数据存在时才直接跳转
     if (item.releaseVersion && item.releaseVersion === activeVersion && Array.isArray(item.courses) && item.courses.length > 0) {
       const schedule = item.schedule || item;
-      this.navigateToScheduleView("class", item.className || item.title, item.courses || [], schedule);
+      this.navigateToScheduleView(type, displayName, item.courses || [], schedule);
     } else {
-      // 否则强制重新拉取最新版本详情
-      const detailId = item.id || item.scheduleId || item.className || item.title;
+      // 否则，如果是旧版本或者是没缓存的，需要在新版本中找到对应的 id
       const semester = item.semester || (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
+      
+      wx.showLoading({ title: "正在校验新版本...", mask: true });
 
-      const queryItem = Object.assign({}, item, {
-        detailId: detailId,
-        semester: semester,
-        scheduleVersion: activeVersion
-      });
-
-      this.openIndexedSchedule("class", queryItem, item.className || item.title);
+      // 发起 search-index 请求在新版中搜索该课表项
+      request.get("/api/fosu/search-index", {
+        type,
+        q: displayName,
+        term: semester,
+        releaseVersion: activeVersion,
+        limit: 10
+      }, { showLoading: false, silentError: true })
+        .then((res) => {
+          wx.hideLoading();
+          const items = res.items || [];
+          // 精确匹配
+          const matched = items.find(x => (x.className === displayName || x.name === displayName || x.teacherName === displayName || x.roomName === displayName || x.courseName === displayName));
+          
+          if (matched) {
+            const queryItem = Object.assign({}, matched, {
+              detailId: matched.id,
+              semester: semester,
+              scheduleVersion: activeVersion
+            });
+            this.openIndexedSchedule(type, queryItem, displayName);
+          } else {
+            wx.showModal({
+              title: "提示",
+              content: "该课表为旧版本数据，新版本中未找到对应班级/课表。",
+              showCancel: false,
+              confirmText: "知道了"
+            });
+          }
+        })
+        .catch((err) => {
+          wx.hideLoading();
+          // 如果请求超时或出错，降级尝试直接用原 detailId 打开新版
+          const detailId = item.id || item.scheduleId || displayName;
+          const queryItem = Object.assign({}, item, {
+            detailId,
+            semester,
+            scheduleVersion: activeVersion
+          });
+          this.openIndexedSchedule(type, queryItem, displayName);
+        });
     }
   },
 
@@ -1615,56 +1760,80 @@ Page({
 
   // ================== 多级加载计时器逻辑 ==================
 
-  startLoadingTimer(retryFn) {
-    this.clearLoadingTimer();
+  // 1. 初始化 app-config 与 catalog 专用加载计时器
+  startLoadingStateTimer(retryFn) {
+    this.clearLoadingStateTimer();
     this.retryFn = retryFn;
     this.setData({
-      loadingState: 'loading', // 0-300ms 保持当前内容
+      dataLoadState: "loading"
     });
-    
-    // 300ms 后显示轻量 skeleton 并将 loading 置为 true，但清空之前的内容
-    this.loadingTimer300 = setTimeout(() => {
+
+    // 300ms 后切换至 skeleton 骨架展示
+    this.loadingStateTimer300 = setTimeout(() => {
       this.setData({
-        loadingState: 'skeleton',
-        loading: true,
-        classesResult: [],
-        classAdminResults: [],
-        classAggregateResults: [],
-        teachersResult: [],
-        classroomsResult: [],
-        coursesResult: [],
-        updatedAtText: '',
+        dataLoadState: "loading"
       });
     }, 300);
 
-    // 3s 后显示 “网络较慢，正在继续加载”
-    this.loadingTimer3000 = setTimeout(() => {
+    // 3s 后如果还在加载中，说明网络慢，提示 “网络较慢，正在继续加载...”
+    this.loadingStateTimer3000 = setTimeout(() => {
       this.setData({
-        loadingState: 'slow'
+        dataLoadState: "slow"
       });
     }, 3000);
+  },
 
-    // 8s 后显示 “加载较慢，可重试”
-    this.loadingTimer8000 = setTimeout(() => {
+  clearLoadingStateTimer() {
+    if (this.loadingStateTimer300) clearTimeout(this.loadingStateTimer300);
+    if (this.loadingStateTimer3000) clearTimeout(this.loadingStateTimer3000);
+  },
+
+  // 2. 局部 search-index 专用加载计时器
+  startLoadingTimer(retryFn, hasCache) {
+    this.clearLoadingTimer();
+    this.retryFn = retryFn;
+    this.setData({
+      loadingState: "loading",
+      loading: true
+    });
+
+    // 300ms 后显示轻量 skeleton
+    this.loadingTimer300 = setTimeout(() => {
       this.setData({
-        loadingState: 'timeout',
-        loading: false
+        loadingState: "skeleton"
       });
-    }, 8000);
+      // 只有在没有缓存时，才执行清空操作，防止闪烁/清空页面已显示数据
+      if (!hasCache) {
+        this.setData({
+          classesResult: [],
+          classAdminResults: [],
+          classAggregateResults: [],
+          teachersResult: [],
+          classroomsResult: [],
+          coursesResult: [],
+          updatedAtText: ""
+        });
+      }
+    }, 300);
+
+    // 3s 后显示 “网络较慢，正在继续加载...”
+    this.loadingTimer3000 = setTimeout(() => {
+      this.setData({
+        loadingState: "slow"
+      });
+    }, 3000);
   },
 
   clearLoadingTimer() {
     if (this.loadingTimer300) clearTimeout(this.loadingTimer300);
     if (this.loadingTimer3000) clearTimeout(this.loadingTimer3000);
-    if (this.loadingTimer8000) clearTimeout(this.loadingTimer8000);
     this.setData({
-      loadingState: 'none',
       loading: false
     });
   },
 
   onRetryLoading() {
-    if (typeof this.retryFn === 'function') {
+    if (typeof this.retryFn === "function") {
       this.retryFn();
     }
   },
@@ -1689,57 +1858,98 @@ Page({
 
   executeSearch(type, params, renderFn, catchFn) {
     const query = Object.assign({ type }, params || {});
-    if (!query.term && !query.semester) {
-      query.term = (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
-    }
-    if (!query.releaseVersion) {
-      query.releaseVersion = this.getReleaseVersionForCache();
+    const term = query.semester || query.term || (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
+    query.term = term;
+    delete query.semester; // 统一为 term
+
+    const releaseVersion = query.releaseVersion || this.getReleaseVersionForCache();
+    query.releaseVersion = releaseVersion;
+
+    if (!releaseVersion) {
+      console.warn("[school] 缺少 releaseVersion，先 loadAppConfig");
+      appConfigService.loadAppConfig({ force: true }).then((config) => {
+        const nextVersion = config.dataVersion?.releaseVersion;
+        if (nextVersion) {
+          this.setData({ catalogVersion: nextVersion });
+          query.releaseVersion = nextVersion;
+          this.executeSearch(type, query, renderFn, catchFn);
+        } else {
+          wx.showToast({ title: "未同步课程数据", icon: "none" });
+        }
+      }).catch(err => {
+        console.error("[school] 缺少版本且重新 loadAppConfig 失败", err);
+      });
+      return;
     }
 
-    // 1. 尝试从本地缓存读取同版本的索引数据
-    const cached = this.readIndexCache(type, query);
+    const { readSameVersionIndexCache, writeSameVersionIndexCache } = require("../../utils/storage");
+
+    // 1. 读取同版本缓存
+    const cached = readSameVersionIndexCache(term, releaseVersion, type, query);
 
     const doNetworkRequest = () => {
-      if (!cached) {
-        this.startLoadingTimer(doNetworkRequest);
-      } else {
-        this.clearLoadingTimer();
-      }
+      this.startLoadingTimer(doNetworkRequest, Boolean(cached));
 
-      request.get("/api/fosu/search-index", query, { showLoading: false, silentError: true, timeout: 8000 })
+      console.log("[school] request search-index", { type, term, releaseVersion, timeout: 30000 });
+
+      request.get("/api/fosu/search-index", query, { showLoading: false, silentError: true, timeout: 30000 })
         .then((data) => {
           this.clearLoadingTimer();
-          this.writeIndexCache(type, query, data);
+          this.setData({ loadingState: "none" });
+          writeSameVersionIndexCache(term, releaseVersion, type, data, query);
+          
+          console.log("[school] search-index success", { type, count: data?.items?.length || 0, duration: "N/A" });
+          
+          // 如果是班级且为空
+          if (type === "class" && (!data.items || data.items.length === 0)) {
+            this.setData({
+              classEmptyTitle: "暂无匹配结果",
+              classEmptyDesc: "请调整上方筛选条件，例如选择其他专业。",
+            });
+          }
+          
           renderFn(data, false);
         })
         .catch((err) => {
           this.clearLoadingTimer();
+          
           if (cached) {
-            // 刷新失败但已有同版本缓存，不清空页面，默默 toast 提示
+            // 刷新失败但已有同版本缓存，不清空页面，默默提示
+            this.setData({ loadingState: "none" });
             wx.showToast({
               title: "刷新失败，正在使用本地缓存",
               icon: "none",
               duration: 2000
             });
+            console.warn("[school] search-index silent refresh failed", err);
           } else {
-            // 版本变化或无缓存时新索引加载失败，提示新版本加载失败并执行失败回调清理状态
-            wx.showToast({
-              title: "课表版本加载失败，请重试",
-              icon: "none",
-              duration: 2000
-            });
+            console.error("[school] search-index failed", err);
+            
+            // 区分超时和普通错误
+            if (err.code === "REQUEST_TIMEOUT") {
+              this.setData({
+                loadingState: "timeout"
+              });
+            } else {
+              this.setData({
+                loadingState: "networkError"
+              });
+            }
             catchFn(err);
           }
         });
     };
 
     if (cached) {
-      // 立即使用本地缓存渲染
+      console.log("[school] cache hit", { key: type, count: cached?.items?.length || 0 });
       renderFn(cached, true);
-      // 静默发起后台网络刷新
+      this.setData({
+        restoreHint: "已加载缓存，正在校验更新"
+      });
+      // 发起静默更新
       doNetworkRequest();
     } else {
-      // 无缓存，发起网络加载
+      // 发起网络请求
       doNetworkRequest();
     }
   }
