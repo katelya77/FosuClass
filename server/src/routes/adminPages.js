@@ -3911,17 +3911,121 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
     }
 
     function showBootFatal(error) {
-      const root = document.body;
+      var root = document.body;
+      if (!root) return;
+      
+      var errMsg = "";
+      var filename = "";
+      var lineno = "";
+      var colno = "";
+      var stack = "";
+      
+      if (error && typeof error === "object") {
+        errMsg = error.message || error.msg || String(error);
+        filename = error.filename || error.source || "";
+        lineno = error.lineno != null ? error.lineno : "";
+        colno = error.colno != null ? error.colno : "";
+        stack = error.stack || "";
+      } else {
+        errMsg = String(error || "未知致命错误");
+      }
+      
+      var errDetail = "错误信息: " + errMsg + "\\n";
+      if (filename) errDetail += "文件: " + filename + "\\n";
+      if (lineno) errDetail += "行号: " + lineno + "\\n";
+      if (colno) errDetail += "列号: " + colno + "\\n";
+      if (stack) errDetail += "堆栈信息:\\n" + stack;
+      
       root.innerHTML =
-        '<main style="max-width:520px;margin:12vh auto;padding:24px;font-family:system-ui">' +
-          '<h1>佛课小表后台启动失败</h1>' +
-          '<p>后台页面 JS 初始化异常，基础服务可能仍在运行。</p>' +
-          '<pre style="white-space:pre-wrap;background:#f1f5f9;padding:12px;border-radius:8px">' +
-            escapeHtml(error && (error.stack || error.message) || String(error)) +
-          '</pre>' +
-          '<button onclick="location.href=\\'/admin/login\\'">返回登录页</button>' +
-          '<button onclick="location.reload()">刷新重试</button>' +
-        '</main>';
+        "<div style='display:flex; align-items:center; justify-content:center; min-height:100vh; background:#f8fafc; font-family:system-ui,-apple-system,sans-serif; padding:20px; box-sizing:border-box;'>" +
+          "<div style='max-width:560px; width:100%; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 10px 15px -3px rgba(0,0,0,0.08); padding:32px; box-sizing:border-box;'>" +
+            "<div style='display:flex; align-items:center; gap:12px; margin-bottom:20px;'>" +
+              "<div style='background:#fee2e2; color:#ef4444; width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:bold;'>!</div>" +
+              "<h1 style='font-size:22px; font-weight:700; color:#0f172a; margin:0;'>后台启动失败</h1>" +
+            "</div>" +
+            "<p style='font-size:14px; color:#64748b; margin-bottom:16px; line-height:1.6;'>后台页面 JavaScript 初始化时发生致命异常。这通常是由于网络传输错误或脚本解析失败导致的。</p>" +
+            
+            "<div style='background:#f1f5f9; border-radius:8px; padding:16px; margin-bottom:24px; box-sizing:border-box;'>" +
+              "<div style='font-size:13px; font-weight:600; color:#475569; margin-bottom:8px;'>错误详情：</div>" +
+              "<div style='font-size:12px; color:#0f172a; margin-bottom:4px;'><strong>Message:</strong> " + escapeHtml(errMsg) + "</div>" +
+              (filename ? "<div style='font-size:12px; color:#0f172a; margin-bottom:4px;'><strong>File:</strong> " + escapeHtml(filename) + "</div>" : "") +
+              (lineno ? "<div style='font-size:12px; color:#0f172a; margin-bottom:4px;'><strong>Line:</strong> " + escapeHtml(lineno) + " (Col: " + escapeHtml(colno) + ")</div>" : "") +
+              (stack ? "<pre style='white-space:pre-wrap; word-break:break-all; font-family:monospace; font-size:11px; color:#64748b; margin-top:8px; border-top:1px solid #cbd5e1; padding-top:8px; max-height:180px; overflow-y:auto;'>" + escapeHtml(stack) + "</pre>" : "") +
+            "</div>" +
+            
+            "<div style='display:flex; gap:12px; flex-wrap:wrap;'>" +
+              "<button id='copyErrBtn' style='background:#eff6ff; color:#2563eb; border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:all 0.2s;'>复制错误信息</button>" +
+              "<button onclick='location.reload()' style='background:#3b82f6; color:#ffffff; border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:all 0.2s;'>刷新页面</button>" +
+              "<button id='logoutErrBtn' style='background:#fee2e2; color:#ef4444; border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:all 0.2s;'>退出登录</button>" +
+            "</div>" +
+          "</div>" +
+        "</div>";
+        
+      var copyBtn = document.getElementById("copyErrBtn");
+      if (copyBtn) {
+        copyBtn.addEventListener("click", function() {
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(errDetail)
+              .then(function() { alert("错误信息已复制到剪贴板！"); })
+              .catch(function() { fallbackCopy(errDetail); });
+          } else {
+            fallbackCopy(errDetail);
+          }
+        });
+      }
+      
+      var logoutBtn = document.getElementById("logoutErrBtn");
+      if (logoutBtn) {
+        logoutBtn.addEventListener("click", function() {
+          document.cookie = "admin_session=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+          location.href = "/admin/login";
+        });
+      }
+      
+      function fallbackCopy(text) {
+        var textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        textArea.style.top = "0";
+        textArea.style.left = "0";
+        textArea.style.width = "2em";
+        textArea.style.height = "2em";
+        textArea.style.padding = "0";
+        textArea.style.border = "none";
+        textArea.style.outline = "none";
+        textArea.style.boxShadow = "none";
+        textArea.style.background = "transparent";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          alert("错误信息已复制到剪贴板！");
+        } catch (err) {
+          alert("复制失败，请手动在控制台查看。");
+        }
+        document.body.removeChild(textArea);
+      }
+    }
+
+    function showModuleError(section, error) {
+      var containerId = "section-" + section;
+      var container = document.getElementById(containerId);
+      if (!container) {
+        if (section === "dashboard") container = document.getElementById("dashboardView");
+        else if (section === "sync") container = document.getElementById("syncView");
+        else if (section === "feedback") container = document.getElementById("feedbackView");
+        else if (section === "settings") container = document.getElementById("settingsView");
+      }
+      if (container) {
+        var errMsg = error && (error.message || String(error)) || "网络请求失败或数据解析异常";
+        container.innerHTML = 
+          "<div class='card' style='border: 1px solid var(--danger); background: var(--danger-soft); padding: 24px; margin: 16px 0; text-align: center; border-radius: var(--radius);'>" +
+            "<h3 style='color: var(--danger); font-size: 16px; margin-bottom: 8px;'>⚠️ 模块加载失败 (" + escapeHtml(section) + ")</h3>" +
+            "<p style='font-size: 13px; color: var(--text); margin-bottom: 12px;'>" + escapeHtml(errMsg) + "</p>" +
+            "<button class='btn secondary' onclick='location.reload()' style='font-size:12px; padding:4px 10px;'>重试刷新</button>" +
+          "</div>";
+      }
     }
 
     function bootFallback(error) {
@@ -3988,17 +4092,40 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
       errBar.appendChild(closeBtn);
     }
 
+    window.onerror = function(message, source, lineno, colno, error) {
+      console.error("[Admin Runtime Fatal]", message, source, lineno, colno, error);
+      
+      var errObj = {
+        message: message || "未知错误",
+        filename: source || "未知文件",
+        lineno: lineno || 0,
+        colno: colno || 0,
+        stack: error && error.stack ? error.stack : ""
+      };
+      
+      showAdminRuntimeError(error || errObj.message);
+      
+      if (!window.__adminConsoleBooted) {
+        showBootFatal(errObj);
+      }
+      return false;
+    };
+
     window.addEventListener("error", function(event) {
       console.error("[Admin Runtime Error]", event.error || event.message);
       showAdminRuntimeError(event.error || { name: "Error", message: event.message || "页面脚本运行失败" });
       if (!window.__adminConsoleBooted) {
-        bootFallback(event.error || { name: "Error", message: event.message || "页面脚本运行失败" });
+        showBootFatal(event.error || { name: "Error", message: event.message || "页面脚本运行失败", filename: event.filename, lineno: event.lineno, colno: event.colno });
       }
     });
 
     window.addEventListener("unhandledrejection", function(event) {
       console.error("[Admin Promise Rejection]", event.reason);
-      showAdminRuntimeError(event.reason || { name: "PromiseRejection", message: "后台接口请求失败" });
+      var err = event.reason || new Error("未处理的 Promise 拒绝");
+      showAdminRuntimeError(err);
+      if (!window.__adminConsoleBooted) {
+        showBootFatal(err);
+      }
     });
 
     (function () {
@@ -4366,6 +4493,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             console.error("[Admin Console] loadDashboard failed:", error);
             setStatus("数据概览加载失败：" + (error.message || "未知错误"));
             showToast(error.message || "数据概览加载失败", "error");
+            showModuleError("dashboard", error);
             throw error;
           });
       }
@@ -4380,6 +4508,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           .catch(function (error) {
             console.error("[Admin Console] loadConfig failed:", error);
             showToast(error.message || "系统配置加载失败", "error");
+            showModuleError("config", error);
             throw error;
           });
       }
@@ -4394,6 +4523,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           .catch(function (error) {
             console.error("[Admin Console] loadNotices failed:", error);
             showToast(error.message || "公告配置加载失败", "error");
+            showModuleError("notices", error);
             throw error;
           });
       }
@@ -4408,6 +4538,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           .catch(function (error) {
             console.error("[Admin Console] loadNews failed:", error);
             showToast(error.message || "最新动态加载失败", "error");
+            showModuleError("news", error);
             throw error;
           });
       }
@@ -5213,6 +5344,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           })
           .catch(function(err) {
             showToast(err.message, "error");
+            showModuleError("sync", err);
           });
       }
 
@@ -5902,23 +6034,23 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           .then(function(res) {
             restoreButton();
             var r = res.result;
-            var report = "Active Release 诊断结果：\n\n";
-            report += "活跃版本: " + (r.activeReleaseVersion || "无") + "\n";
-            report += "App 配置: " + r.appConfig.status + " (" + r.appConfig.message + ")\n\n";
+            var report = "Active Release 诊断结果：\\n\\n";
+            report += "活跃版本: " + (r.activeReleaseVersion || "无") + "\\n";
+            report += "App 配置: " + r.appConfig.status + " (" + r.appConfig.message + ")\\n\\n";
             
-            report += "索引文件状态:\n";
+            report += "索引文件状态:\\n";
             Object.keys(r.searchIndex.details || {}).forEach(function(k) {
               var d = r.searchIndex.details[k];
-              report += " - [" + k + "] " + d.status + (d.count != null ? " (" + d.count + "项)" : " (" + d.message + ")") + "\n";
+              report += " - [" + k + "] " + d.status + (d.count != null ? " (" + d.count + "项)" : " (" + d.message + ")") + "\\n";
             });
-            report += "索引总体: " + r.searchIndex.status + "\n\n";
+            report += "索引总体: " + r.searchIndex.status + "\\n\\n";
             
-            report += "详情加载状态:\n";
+            report += "详情加载状态:\\n";
             Object.keys(r.scheduleDetail.details || {}).forEach(function(k) {
               var d = r.scheduleDetail.details[k];
-              report += " - [" + k + "] " + d.status + (d.testId ? " (测试ID: " + d.testId + ", 名: " + d.testName + ")" : " (" + d.message + ")") + "\n";
+              report += " - [" + k + "] " + d.status + (d.testId ? " (测试ID: " + d.testId + ", 名: " + d.testName + ")" : " (" + d.message + ")") + "\\n";
             });
-            report += "详情总体: " + r.scheduleDetail.status + "\n";
+            report += "详情总体: " + r.scheduleDetail.status + "\\n";
             
             alert(report);
           })
@@ -5930,7 +6062,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
 
       // 执行回滚
       function rollbackToVersion(version, btn) {
-        if (!confirm("🚨 警告：确定要将线上全校课表一键回滚到快照 [" + version + "] 吗？\\n该操作会立即覆盖小程序端当前的可见数据，并自动创建当前版本的备份！")) {
+        if (!confirm("🚨 警告：确定要将线上全校课表一键回滚到快照 [" + version + "] 吗？\\\\n该操作会立即覆盖小程序端当前的可见数据，并自动创建当前版本的备份！")) {
           return;
         }
         
@@ -6660,6 +6792,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           })
           .catch(function(err) {
             showToast(err.message, "error");
+            showModuleError("feedback", err);
             throw err;
           });
       }
