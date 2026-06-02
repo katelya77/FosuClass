@@ -514,69 +514,61 @@ picker {
   box-shadow: none !important;
 }
 
-/* 诊断调试面板样式 */
-.debug-panel {
-  margin: 32rpx 12rpx calc(32rpx + env(safe-area-inset-bottom));
-  padding: 24rpx;
-  border-radius: 16rpx;
-  background-color: #1e293b;
-  color: #e2e8f0;
-  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.2);
-}
-
-.debug-title {
-  font-size: 26rpx;
-  font-weight: bold;
-  color: #38bdf8;
-  margin-bottom: 16rpx;
-  border-bottom: 1rpx solid #334155;
-  padding-bottom: 8rpx;
-}
-
-.debug-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12rpx 20rpx;
-  margin-bottom: 20rpx;
-}
-
-.debug-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 22rpx;
-}
-
-.debug-label {
-  color: #94a3b8;
-}
-
-.debug-val {
-  color: #f1f5f9;
-  font-family: monospace;
-}
-
-.debug-counts-title {
-  font-size: 22rpx;
-  font-weight: bold;
-  color: #38bdf8;
-  margin: 16rpx 0 8rpx;
-}
-
-.debug-clear-btn {
-  width: 100% !important;
-  height: 64rpx;
-  border-radius: 8rpx;
-  background: #ef4444;
-  color: #ffffff;
-  font-size: 24rpx;
-  font-weight: bold;
+/* 慢网络加载提示 */
+.slow-loading-hint {
   display: flex;
   align-items: center;
   justify-content: center;
-  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #7f8c8d;
+  margin-top: 24rpx;
+  gap: 8rpx;
 }
 
-.debug-clear-btn:active {
-  background: #dc2626;
+.slow-loading-icon {
+  display: inline-block;
+  font-size: 26rpx;
+}
+
+/* 超时重试卡片 */
+.error-retry-card {
+  margin: 24rpx;
+  padding: 48rpx 32rpx;
+  text-align: center;
+  border-radius: 16rpx;
+  background: #ffffff;
+  box-shadow: 0 4rpx 16rpx rgba(0, 0, 0, 0.05);
+}
+
+.error-retry-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #172033;
+  margin-bottom: 12rpx;
+}
+
+.error-retry-desc {
+  font-size: 24rpx;
+  color: #7f8c8d;
+  line-height: 1.5;
+  margin-bottom: 32rpx;
+}
+
+.error-retry-btn {
+  background: #c62828 !important;
+  color: #ffffff !important;
+  font-size: 26rpx;
+  font-weight: bold;
+  height: 76rpx;
+  border-radius: 38rpx;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 240rpx !important;
+  padding: 0 !important;
+  margin: 0 auto !important;
+}
+
+.error-retry-btn:active {
+  background: #b71c1c !important;
 }

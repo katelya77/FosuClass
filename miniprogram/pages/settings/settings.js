@@ -540,7 +540,7 @@ Page({
     });
 
     wx.showLoading({ title: "加载中..." });
-    request.get("/api/fosu/bootstrap", { semester: this.data.settings.semester || "2025-2026-2" }, { showLoading: false })
+    request.get("/api/fosu/bootstrap", { semester: this.data.settings.semester || "2025-2026-2" }, { showLoading: false, timeout: 8000 })
       .then((res) => {
         wx.hideLoading();
         if (res && res.success) {
@@ -558,6 +558,42 @@ Page({
           } else if (dataSource === "cache") {
             dataSource = "服务端本地缓存 (cache)";
           }
+
+          // 计算本地诊断数据
+          const localReleaseKey = wx.getStorageSync("FOSU_LOCAL_RELEASE_KEY") || "";
+          const parts = localReleaseKey.split(":");
+          const localTerm = parts[0] || "";
+          const localReleaseVersion = parts[1] || "";
+
+          const storageInfo = wx.getStorageInfoSync ? wx.getStorageInfoSync() : { keys: [] };
+          const keys = storageInfo.keys || [];
+          
+          let classIndexCount = 0;
+          let teacherIndexCount = 0;
+          let classroomIndexCount = 0;
+          let courseIndexCount = 0;
+
+          keys.forEach((key) => {
+            if (key.startsWith(`school:index:${localTerm}:${localReleaseVersion}:`)) {
+              const keyParts = key.split(":");
+              const type = keyParts[4]; // school:index:term:version:type:...
+              try {
+                const cached = wx.getStorageSync(key);
+                const list = cached && cached.data && (cached.data.items || cached.data.list || cached.data);
+                const count = Array.isArray(list) ? list.length : 0;
+                if (type === "class") classIndexCount += count;
+                else if (type === "teacher") teacherIndexCount += count;
+                else if (type === "classroom") classroomIndexCount += count;
+                else if (type === "course") courseIndexCount += count;
+              } catch (e) {}
+            }
+          });
+
+          // 远端诊断数据
+          const remoteReleaseVersion = res.version || (res.catalog && res.catalog.version) || "-";
+          const remoteTerm = res.semester || "-";
+          const remoteScheduleUpdatedAt = formatFullDateTime(metaDetails.classSchedulesUpdatedAt || res.updatedAt);
+          const remoteCatalogUpdatedAt = formatFullDateTime(metaDetails.catalogUpdatedAt);
 
           this.setData({
             versionData: {
@@ -582,6 +618,18 @@ Page({
               dataSource,
               selectedScheduleText,
               disclaimer: metaDetails.disclaimer || BRAND.disclaimer,
+
+              // 诊断字段数据绑定
+              remoteReleaseVersion,
+              remoteTerm,
+              remoteScheduleUpdatedAt,
+              remoteCatalogUpdatedAt,
+              localReleaseVersion,
+              localTerm,
+              classIndexCount,
+              teacherIndexCount,
+              classroomIndexCount,
+              courseIndexCount,
             }
           });
         }
@@ -590,6 +638,31 @@ Page({
         wx.hideLoading();
         console.error("fetch bootstrap in settings failed", err);
       });
+  },
+
+  diagnoseClearAllCaches() {
+    wx.showModal({
+      title: "数据诊断清理",
+      content: "确定要清理全校所有缓存吗？清理后返回全校页将自动重新拉取最新索引与课表数据。",
+      confirmColor: "#c62828",
+      success: (res) => {
+        if (res.confirm) {
+          const { clearAllSchoolCaches } = require("../../utils/storage");
+          clearAllSchoolCaches();
+          wx.removeStorageSync("FOSU_LOCAL_RELEASE_KEY");
+          wx.setStorageSync("FOSU_SCHOOL_NEED_AUTO_RELOAD", true);
+
+          wx.showToast({
+            title: "清理成功",
+            icon: "success",
+            duration: 1500
+          });
+
+          // 重新拉取 bootstrap 刷新弹窗内部 counts 和字段的显示
+          this.showDataVersionDetail();
+        }
+      }
+    });
   },
 
   showNoticeHistory() {

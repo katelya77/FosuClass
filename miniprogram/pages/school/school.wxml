@@ -150,11 +150,26 @@
           {{updatedAtText}}
         </view>
 
-        <view class="school-skeleton" wx:if="{{loading}}">
-          <view class="skeleton-line wide"></view>
-          <view class="skeleton-line"></view>
-          <view class="skeleton-line short"></view>
-        </view>
+        <!-- 骨架屏与慢网络提示 -->
+        <block wx:if="{{loadingState === 'skeleton' || loadingState === 'slow'}}">
+          <view class="school-skeleton">
+            <view class="skeleton-line wide"></view>
+            <view class="skeleton-line"></view>
+            <view class="skeleton-line short"></view>
+            <view class="slow-loading-hint" wx:if="{{loadingState === 'slow'}}">
+              <text class="slow-loading-icon">⏳</text>网络较慢，正在继续加载...
+            </view>
+          </view>
+        </block>
+
+        <!-- 超时重试卡片 -->
+        <block wx:if="{{loadingState === 'timeout'}}">
+          <view class="error-retry-card card">
+            <view class="error-retry-title">加载较慢</view>
+            <view class="error-retry-desc">可能由于服务器距离较远或网络波动，加载时间较长。</view>
+            <button class="error-retry-btn" bindtap="onRetryLoading">重新加载</button>
+          </view>
+        </block>
 
         <view class="class-result-notice" wx:if="{{classNoticeText}}">
           {{classNoticeText}}
@@ -252,11 +267,26 @@
           {{updatedAtText}}
         </view>
 
-        <view class="school-skeleton" wx:if="{{loading}}">
-          <view class="skeleton-line wide"></view>
-          <view class="skeleton-line"></view>
-          <view class="skeleton-line short"></view>
-        </view>
+        <!-- 骨架屏与慢网络提示 -->
+        <block wx:if="{{loadingState === 'skeleton' || loadingState === 'slow'}}">
+          <view class="school-skeleton">
+            <view class="skeleton-line wide"></view>
+            <view class="skeleton-line"></view>
+            <view class="skeleton-line short"></view>
+            <view class="slow-loading-hint" wx:if="{{loadingState === 'slow'}}">
+              <text class="slow-loading-icon">⏳</text>网络较慢，正在继续加载...
+            </view>
+          </view>
+        </block>
+
+        <!-- 超时重试卡片 -->
+        <block wx:if="{{loadingState === 'timeout'}}">
+          <view class="error-retry-card card">
+            <view class="error-retry-title">加载较慢</view>
+            <view class="error-retry-desc">可能由于服务器距离较远或网络波动，加载时间较长。</view>
+            <button class="error-retry-btn" bindtap="onRetryLoading">重新加载</button>
+          </view>
+        </block>
 
         <view class="result-list" wx:if="{{teachersResult.length}}">
           <view
@@ -312,11 +342,26 @@
           {{updatedAtText}}
         </view>
 
-        <view class="school-skeleton" wx:if="{{loading}}">
-          <view class="skeleton-line wide"></view>
-          <view class="skeleton-line"></view>
-          <view class="skeleton-line short"></view>
-        </view>
+        <!-- 骨架屏与慢网络提示 -->
+        <block wx:if="{{loadingState === 'skeleton' || loadingState === 'slow'}}">
+          <view class="school-skeleton">
+            <view class="skeleton-line wide"></view>
+            <view class="skeleton-line"></view>
+            <view class="skeleton-line short"></view>
+            <view class="slow-loading-hint" wx:if="{{loadingState === 'slow'}}">
+              <text class="slow-loading-icon">⏳</text>网络较慢，正在继续加载...
+            </view>
+          </view>
+        </block>
+
+        <!-- 超时重试卡片 -->
+        <block wx:if="{{loadingState === 'timeout'}}">
+          <view class="error-retry-card card">
+            <view class="error-retry-title">加载较慢</view>
+            <view class="error-retry-desc">可能由于服务器距离较远或网络波动，加载时间较长。</view>
+            <button class="error-retry-btn" bindtap="onRetryLoading">重新加载</button>
+          </view>
+        </block>
 
         <view class="result-list" wx:if="{{classroomsResult.length}}">
           <view
@@ -365,11 +410,26 @@
           {{updatedAtText}}
         </view>
 
-        <view class="school-skeleton" wx:if="{{loading}}">
-          <view class="skeleton-line wide"></view>
-          <view class="skeleton-line"></view>
-          <view class="skeleton-line short"></view>
-        </view>
+        <!-- 骨架屏与慢网络提示 -->
+        <block wx:if="{{loadingState === 'skeleton' || loadingState === 'slow'}}">
+          <view class="school-skeleton">
+            <view class="skeleton-line wide"></view>
+            <view class="skeleton-line"></view>
+            <view class="skeleton-line short"></view>
+            <view class="slow-loading-hint" wx:if="{{loadingState === 'slow'}}">
+              <text class="slow-loading-icon">⏳</text>网络较慢，正在继续加载...
+            </view>
+          </view>
+        </block>
+
+        <!-- 超时重试卡片 -->
+        <block wx:if="{{loadingState === 'timeout'}}">
+          <view class="error-retry-card card">
+            <view class="error-retry-title">加载较慢</view>
+            <view class="error-retry-desc">可能由于服务器距离较远或网络波动，加载时间较长。</view>
+            <button class="error-retry-btn" bindtap="onRetryLoading">重新加载</button>
+          </view>
+        </block>
 
         <view class="result-list" wx:if="{{coursesResult.length}}">
           <view
@@ -399,25 +459,6 @@
     </block>
     <view class="school-footer-disclaimer">{{runtimeDisclaimer}}</view>
 
-    <!-- 仅开发版/体验版展示的诊断调试面板 -->
-    <view class="debug-panel" wx:if="{{isDebugMode}}">
-      <view class="debug-title">🔍 全校页面版本调试面板</view>
-      <view class="debug-grid">
-        <view class="debug-row"><text class="debug-label">配置版本:</text><text class="debug-val">{{debugInfo.appConfigVersion}}</text></view>
-        <view class="debug-row"><text class="debug-label">页面版本:</text><text class="debug-val">{{debugInfo.pageConfigVersion}}</text></view>
-        <view class="debug-row"><text class="debug-label">缓存版本:</text><text class="debug-val">{{debugInfo.cachedConfigVersion}}</text></view>
-        <view class="debug-row"><text class="debug-label">当前学期:</text><text class="debug-val">{{debugInfo.term}}</text></view>
-        <view class="debug-row"><text class="debug-label">最后请求:</text><text class="debug-val">{{debugInfo.lastRequestTime || '无'}}</text></view>
-        <view class="debug-row"><text class="debug-label">命中缓存:</text><text class="debug-val">{{debugInfo.hitCache ? '是' : '否'}}</text></view>
-      </view>
-      <view class="debug-counts-title">当前版本索引项数：</view>
-      <view class="debug-grid">
-        <view class="debug-row"><text class="debug-label">班级数:</text><text class="debug-val">{{debugInfo.counts.classes || 0}}</text></view>
-        <view class="debug-row"><text class="debug-label">教师数:</text><text class="debug-val">{{debugInfo.counts.teachers || 0}}</text></view>
-        <view class="debug-row"><text class="debug-label">教室数:</text><text class="debug-val">{{debugInfo.counts.classrooms || 0}}</text></view>
-        <view class="debug-row"><text class="debug-label">课程数:</text><text class="debug-val">{{debugInfo.counts.courses || 0}}</text></view>
-      </view>
-      <button class="debug-clear-btn" bindtap="forceReloadAllCaches">清理全校课表缓存并重新加载</button>
-    </view>
+
   </block>
 </view>
