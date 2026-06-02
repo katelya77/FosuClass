@@ -26,6 +26,8 @@ npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=RELAY_
 
 当前代理端不会保存密码，不绕过验证码，不上传学号密码。Staging JSON 中出现 `password`、`cookie`、`ticket`、`session`、`token` 等敏感字段会被拒绝。
 
+如果接力同学没有项目源码，发送 `tools/fosu-relay-agent/dist/fosu-relay-agent-win-x64.zip`。Windows 上解压后运行 `start.bat`，按提示填入 server、token 和 term。源码模式和打包模式都走同一套 relay API 和 gzip 分片上传。
+
 ## 打包
 
 ```powershell
@@ -53,6 +55,23 @@ relay token 不能调用：
 - 修改公告或配置
 - 读取管理员 token
 
+过期、吊销和上传次数限制由服务端校验：
+
+- 超过 `expiresAt` 后，读取任务和上传都会返回拒绝。
+- 管理员点击吊销后，token 立即失效。
+- `uploadCount >= maxUploads` 后，继续上传会被拒绝。
+- relay 上传状态只会进入 `pending-review`，不能直接发布正式 release。
+
 ## 审核边界
 
 接力上传不会直接影响小程序线上数据。数据必须先进入 relay upload area，再由管理员提升为 Staging，最后由管理员发布正式 release。
+
+## 验证
+
+无法真实访问校园网时，至少运行 mock 链路：
+
+```powershell
+npm run test:relay-agent
+```
+
+该测试覆盖任务创建/删除、relay token 不能访问 `/api/admin/*`、mock 上传进入 `pending-review`、吊销、过期 token、上传次数限制和 relay agent 语法检查。

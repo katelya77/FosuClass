@@ -96,6 +96,8 @@ Page({
     overviewCourses: [],
     overviewExpanded: true,
     hasCurrentWeekCourses: false,
+    hasVisibleWeekCourses: false,
+    visibleWeekCourseCount: 0,
     currentWeekCourseCount: 0,
     scheduleMeta: null,
     
@@ -282,7 +284,8 @@ Page({
       sectionHeight: SECTION_HEIGHT,
       hideInactiveCourses: settings.hideInactiveCourses,
     });
-    const currentWeekCourseCount = dayColumns.reduce((total, day) => total + (day.courses || []).length, 0);
+    const currentWeekCourseCount = dayColumns.reduce((total, day) => total + (day.activeCourseCount || 0), 0);
+    const visibleWeekCourseCount = dayColumns.reduce((total, day) => total + (day.visibleCourseCount || 0), 0);
 
     const contentWidth = getContentWidthRpx();
     let dayColumnWidth = 128;
@@ -320,7 +323,9 @@ Page({
       weekendShowMode,
       overviewCourses: getCourseOverview(this.data.allCourses),
       hasCurrentWeekCourses: currentWeekCourseCount > 0,
+      hasVisibleWeekCourses: visibleWeekCourseCount > 0,
       currentWeekCourseCount,
+      visibleWeekCourseCount,
     });
   },
 

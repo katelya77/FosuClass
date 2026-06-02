@@ -206,6 +206,22 @@
   white-space: nowrap;
 }
 
+.course-conflict-hint {
+  overflow: hidden;
+  margin-top: auto;
+  padding-top: 3rpx;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 15rpx;
+  font-weight: 800;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.course-conflict-hint.active-conflict {
+  color: #fff8c5;
+}
+
 .classroom-highlight {
   color: #ffeb3b !important;
   font-weight: 800;
@@ -233,6 +249,10 @@
 .is-muted .course-meta,
 .is-muted .course-week {
   opacity: 0.86;
+}
+
+.is-muted .course-conflict-hint {
+  color: #7a8494;
 }
 
 /* ================== 七天概览模式专用样式 ================== */
