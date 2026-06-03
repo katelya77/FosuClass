@@ -1,6 +1,7 @@
 const request = require("./utils/request");
 const { BOOTSTRAP_CACHE_KEY } = require("./utils/storage");
 const appConfigService = require("./services/appConfigService");
+const platformDataService = require("./services/platformDataService");
 const BRAND = require("./config/brand");
 
 App({
@@ -10,6 +11,8 @@ App({
     env: "",
     bootstrapData: null,
     appConfig: null,
+    platformPrefetchData: null,
+    platformPeriodicData: null,
     shownModalNoticeIds: {},
   },
 
@@ -24,8 +27,31 @@ App({
       wx.cloud.init(cloudConfig);
     }
 
+    this.loadPlatformData();
     this.loadBootstrapData();
     this.loadAppConfigData();
+  },
+
+  loadPlatformData() {
+    platformDataService.loadPrefetchData()
+      .then((data) => {
+        if (data) {
+          this.globalData.platformPrefetchData = data;
+        }
+      })
+      .catch((error) => {
+        console.warn("平台预拉取数据读取失败，已降级", error);
+      });
+
+    platformDataService.loadPeriodicData()
+      .then((data) => {
+        if (data) {
+          this.globalData.platformPeriodicData = data;
+        }
+      })
+      .catch((error) => {
+        console.warn("平台周期数据读取失败，已降级", error);
+      });
   },
 
   loadAppConfigData(options) {

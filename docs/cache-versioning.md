@@ -23,6 +23,7 @@
 - `school:v4:index:${term}:${releaseVersion}:${type}:${hash(params)}`
 - `school:v4:detail:${term}:${releaseVersion}:${type}:${id}`
 - `school:v4:filters:${term}:${releaseVersion}`
+- `school:v4:empty-room:${term}:${releaseVersion}:${hash(params)}`
 
 读取规则：
 
@@ -37,7 +38,9 @@
 - `/api/fosu/app-config`、不带 `releaseVersion` 的 `/api/fosu/bootstrap` 和 `/api/fosu/search-index` 使用 `no-store`，确保 active 指针实时。
 - 带 `releaseVersion` 的 `/api/fosu/search-index` 可 `public, max-age=300`。
 - 带 `releaseVersion` 的 `/api/fosu/schedule-detail` 可 `public, max-age=3600`。
+- 带 `releaseVersion` 的 `/api/fosu/empty-classrooms` 可 `public, max-age=600`。
 - `/api/fosu/search-index` 只返回轻量索引；完整排课由 `/api/fosu/schedule-detail` 按需读取 derived schedule 文件。
+- `/api/fosu/empty-classrooms` 只读取 release 预生成的 `derived/empty-room-index.json`，不得运行时解析全量 Staging JSON。
 
 ## 发布后的版本一致性
 
@@ -45,7 +48,8 @@
 
 1. `releaseService.getActiveReleaseInfo().releaseVersion` 等于新版本。
 2. derived indexes 已存在，`class/teacher/classroom/course` 都能读取。
-3. 小程序端 activeSnapshot 中 `term` 和 `releaseVersion` 来自同一响应链路，不混用旧缓存的更新时间。
+3. empty-room index 已存在，至少能按 `week/weekday/sections/building` 查询。
+4. 小程序端 activeSnapshot 中 `term` 和 `releaseVersion` 来自同一响应链路，不混用旧缓存的更新时间。
 
 排查入口：
 

@@ -107,6 +107,12 @@ Page({
     });
   },
 
+  goEmptyRoom() {
+    wx.navigateTo({
+      url: "/pages/empty-room/empty-room",
+    });
+  },
+
   onCopyCourseToCustom(event) {
     try {
       customCourseService.saveCustomCourseDraft(event.detail.course || this.data.selectedCourse);

@@ -1,0 +1,159 @@
+<view class="page empty-room-page">
+  <view class="page-header">
+    <view class="title">空教室查询</view>
+    <view class="subtitle">{{updatedAtText || "按日期、节次和教学楼查找可用教室。"}} </view>
+  </view>
+
+  <view class="filter-card card">
+    <view class="filter-row">
+      <text class="filter-label">日期</text>
+      <picker mode="date" value="{{date}}" bindchange="onDateChange">
+        <view class="filter-pill">{{dateText}} · {{weekdayText}} · 第{{week}}周</view>
+      </picker>
+    </view>
+
+    <view class="filter-row">
+      <text class="filter-label">周次</text>
+      <input class="week-input" type="number" value="{{week}}" bindinput="onWeekInput" bindblur="applyWeekInput" />
+      <text class="filter-tail">周</text>
+    </view>
+
+    <view class="filter-row">
+      <text class="filter-label">节次</text>
+      <picker mode="selector" range="{{sectionPresets}}" range-key="label" value="{{selectedSectionPresetIndex}}" bindchange="onSectionPresetChange">
+        <view class="filter-pill">{{sectionPresets[selectedSectionPresetIndex].label || "当前节"}} · {{sections}}</view>
+      </picker>
+    </view>
+
+    <view class="filter-row" wx:if="{{sectionPresets[selectedSectionPresetIndex].key === 'custom'}}">
+      <text class="filter-label">自定义</text>
+      <input class="custom-input" value="{{customSections}}" placeholder="例如 3-4" confirm-type="search" bindinput="onCustomSectionsInput" bindconfirm="applyCustomSections" bindblur="applyCustomSections" />
+    </view>
+
+    <view class="filter-row">
+      <text class="filter-label">教学楼</text>
+      <picker mode="selector" range="{{buildingOptions}}" value="{{selectedBuildingIndex}}" bindchange="onBuildingChange">
+        <view class="filter-pill">{{buildingOptions[selectedBuildingIndex] || "全部"}}</view>
+      </picker>
+      <button
+        class="building-fav-btn {{selectedBuildingFavorite ? 'active' : ''}}"
+        bindtap="toggleFavoriteBuilding"
+      >{{selectedBuildingFavorite ? "已收藏" : "收藏"}}</button>
+    </view>
+
+    <view class="filter-row">
+      <text class="filter-label">连续空闲</text>
+      <picker mode="selector" range="{{minFreeOptions}}" value="{{selectedMinFreeIndex}}" bindchange="onMinFreeChange">
+        <view class="filter-pill">至少 {{minFreeOptions[selectedMinFreeIndex] || 1}} 节</view>
+      </picker>
+    </view>
+
+    <view class="switch-row">
+      <view class="switch-copy">
+        <view class="switch-title">只看常用教室</view>
+        <view class="switch-desc">过滤非常规地点名称</view>
+      </view>
+      <switch checked="{{commonOnly}}" color="#c62828" bindchange="onCommonOnlyChange" />
+    </view>
+
+    <view class="switch-row">
+      <view class="switch-copy">
+        <view class="switch-title">排除未知教室</view>
+        <view class="switch-desc">隐藏名称或楼栋不明确的记录</view>
+      </view>
+      <switch checked="{{excludeUnknown}}" color="#c62828" bindchange="onExcludeUnknownChange" />
+    </view>
+
+    <button class="primary-search-btn" loading="{{loading}}" bindtap="onRetry">刷新空教室</button>
+  </view>
+
+  <view class="restore-hint-bar" wx:if="{{restoreHint}}">
+    <text class="restore-hint-text">{{restoreHint}}</text>
+  </view>
+
+  <view class="summary-card card" wx:if="{{summaryText}}">
+    <view class="summary-title">{{summaryText}}</view>
+    <view class="summary-subtitle">结果来自当前 release 的预生成 empty-room index。</view>
+  </view>
+
+  <block wx:if="{{dataState === 'loading'}}">
+    <view class="skeleton-card card">
+      <view class="skeleton-line wide"></view>
+      <view class="skeleton-line"></view>
+      <view class="skeleton-line short"></view>
+    </view>
+  </block>
+
+  <view class="result-list" wx:elif="{{rooms.length}}">
+    <view
+      wx:for="{{rooms}}"
+      wx:key="roomId"
+      class="room-card card"
+      data-index="{{index}}"
+      bindtap="onRoomTap"
+    >
+      <view class="room-main">
+        <view class="room-title">{{item.roomName}}</view>
+        <view class="room-meta">{{item.building}} · {{item.capacityText}} · {{item.freeText}}</view>
+        <view class="room-next" wx:if="{{item.nextOccupiedCourse}}">下一次占用：{{item.nextOccupiedCourse.sectionText}} {{item.nextOccupiedCourse.courseName}}</view>
+      </view>
+      <view class="room-actions">
+        <button
+          class="mini-btn {{item.favorite ? 'active' : ''}}"
+          catchtap="toggleFavoriteRoom"
+          data-name="{{item.roomName}}"
+          data-building="{{item.building}}"
+        >{{item.favorite ? "已收藏" : "收藏"}}</button>
+        <button class="mini-btn" catchtap="copyRoomName" data-name="{{item.roomName}}">复制</button>
+        <button class="mini-btn strong" catchtap="openClassroomSchedule" data-index="{{index}}">课表</button>
+      </view>
+    </view>
+  </view>
+
+  <empty-state
+    wx:elif="{{dataState === 'empty'}}"
+    title="当前条件下暂无空教室"
+    desc="试试扩大节次范围，或切换到全部教学楼。"
+  />
+
+  <empty-state
+    wx:else
+    title="{{dataState === 'noRelease' ? '暂未发布课表数据' : '空教室加载失败'}}"
+    desc="{{dataState === 'timeout' ? '网络较慢，可稍后重试。' : '请检查网络后重试。'}}"
+  />
+
+  <view class="detail-mask" wx:if="{{detailVisible}}" catchtap="closeRoomDetail"></view>
+  <view class="room-detail card" wx:if="{{detailVisible}}">
+    <view class="detail-head">
+      <view>
+        <view class="detail-title">{{selectedRoom.roomName}}</view>
+        <view class="detail-subtitle">{{selectedRoom.building}} · {{selectedRoom.capacityText}}</view>
+      </view>
+      <view class="detail-close" bindtap="closeRoomDetail">关闭</view>
+    </view>
+    <view class="detail-section">
+      <view class="detail-label">当前查询</view>
+      <view class="detail-value">{{summaryText}}</view>
+    </view>
+    <view class="detail-section">
+      <view class="detail-label">今日占用</view>
+      <block wx:if="{{selectedRoom.todayCourses.length}}">
+        <view wx:for="{{selectedRoom.todayCourses}}" wx:key="sectionText" class="occupied-row">
+          <text class="occupied-time">{{item.sectionText}}</text>
+          <text class="occupied-name">{{item.courseName || "课程占用"}}</text>
+        </view>
+      </block>
+      <view class="detail-value muted" wx:else>今天未查询到占用记录</view>
+    </view>
+    <view class="detail-actions">
+      <button
+        class="secondary-btn"
+        bindtap="toggleFavoriteRoom"
+        data-name="{{selectedRoom.roomName}}"
+        data-building="{{selectedRoom.building}}"
+      >{{selectedRoom.favorite ? "取消收藏" : "收藏教室"}}</button>
+      <button class="secondary-btn" bindtap="copyRoomName" data-name="{{selectedRoom.roomName}}">复制教室名</button>
+      <button class="primary-search-btn compact" bindtap="openClassroomSchedule">查看教室课表</button>
+    </view>
+  </view>
+</view>

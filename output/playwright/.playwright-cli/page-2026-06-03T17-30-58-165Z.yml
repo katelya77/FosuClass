@@ -1,0 +1,488 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "佛课小表" [ref=e6]
+          - generic [ref=e7]:
+            - generic [ref=e8]: 佛课小表
+            - generic [ref=e9]: Admin Console v1.5
+        - navigation [ref=e10]:
+          - list [ref=e11]:
+            - listitem [ref=e12]:
+              - button "数据概览" [ref=e13] [cursor=pointer]
+            - listitem [ref=e14]:
+              - button "数据资源" [ref=e15] [cursor=pointer]
+            - listitem [ref=e16]:
+              - button "同步中心" [ref=e17] [cursor=pointer]
+            - listitem [ref=e18]:
+              - button "数据质量" [ref=e19] [cursor=pointer]
+            - listitem [ref=e20]:
+              - button "公告管理" [ref=e21] [cursor=pointer]
+            - listitem [ref=e22]:
+              - button "最新动态" [ref=e23] [cursor=pointer]
+            - listitem [ref=e24]:
+              - button "数据版本" [ref=e25] [cursor=pointer]
+            - listitem [ref=e26]:
+              - button "反馈管理" [ref=e27] [cursor=pointer]
+            - listitem [ref=e28]:
+              - button "系统设置" [ref=e29] [cursor=pointer]
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]: production
+          - generic [ref=e33]: 26.05.29.22
+        - button "退出登录" [ref=e34] [cursor=pointer]
+    - generic [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - heading "数据概览" [level=2] [ref=e38]
+          - paragraph [ref=e39]: 最近一键刷新时间：2026-06-04 01:30
+        - button "一键刷新" [ref=e41] [cursor=pointer]
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - generic [ref=e44]:
+            - generic [ref=e45]:
+              - text: 在线状态
+              - generic [ref=e46]: 🌐
+            - generic [ref=e47]: online
+            - generic [ref=e48]: 发布状态标签
+          - generic [ref=e49]:
+            - generic [ref=e50]:
+              - text: 当前学期
+              - generic [ref=e51]: 📅
+            - generic [ref=e52]: 2025-2026-2
+            - generic [ref=e53]: 全局配置学期
+          - generic [ref=e54]:
+            - generic [ref=e55]:
+              - text: 行政班级数
+              - generic [ref=e56]: 🏫
+            - generic [ref=e57]: "473"
+            - generic [ref=e58]: 更新于：2026-05-29 22:57
+          - generic [ref=e59]:
+            - generic [ref=e60]:
+              - text: 教师课表数
+              - generic [ref=e61]: 👨‍🏫
+            - generic [ref=e62]: "20"
+            - generic [ref=e63]: 更新于：2026-05-30 12:58
+          - generic [ref=e64]:
+            - generic [ref=e65]:
+              - text: 教室课表数
+              - generic [ref=e66]: 🚪
+            - generic [ref=e67]: "20"
+            - generic [ref=e68]: 更新于：2026-05-30 12:58
+          - generic [ref=e69]:
+            - generic [ref=e70]:
+              - text: 课程课表数
+              - generic [ref=e71]: 📚
+            - generic [ref=e72]: "20"
+            - generic [ref=e73]: 更新于：2026-05-30 12:58
+          - generic [ref=e74]:
+            - generic [ref=e75]:
+              - text: 启用公告数
+              - generic [ref=e76]: 📢
+            - generic [ref=e77]: "0"
+            - generic [ref=e78]: 公告总数：0 个
+          - generic [ref=e79]:
+            - generic [ref=e80]:
+              - text: 未处理反馈
+              - generic [ref=e81]: 💬
+            - generic [ref=e82]: "0"
+            - generic [ref=e83]: 反馈总数：2
+        - generic [ref=e84]:
+          - generic [ref=e85]:
+            - heading "课表资源分布" [level=3] [ref=e86]
+            - generic [ref=e87]:
+              - generic [ref=e88]:
+                - generic [ref=e89]: 管理学院
+                - generic [ref=e92]: "57"
+              - generic [ref=e93]:
+                - generic [ref=e94]: 机电工程与自动化学院
+                - generic [ref=e97]: "47"
+              - generic [ref=e98]:
+                - generic [ref=e99]: 动物科技学院
+                - generic [ref=e102]: "35"
+              - generic [ref=e103]:
+                - generic [ref=e104]: 医学部
+                - generic [ref=e107]: "34"
+              - generic [ref=e108]:
+                - generic [ref=e109]: 人文学院
+                - generic [ref=e112]: "30"
+              - generic [ref=e113]:
+                - generic [ref=e114]: 物理与光电工程学院
+                - generic [ref=e117]: "30"
+            - heading "教室占用率" [level=3] [ref=e118]
+            - generic [ref=e119]:
+              - generic [ref=e120]:
+                - generic [ref=e121]: 20-301室
+                - generic [ref=e124]: 53%
+              - generic [ref=e125]:
+                - generic [ref=e126]: 20-201室
+                - generic [ref=e129]: 45%
+              - generic [ref=e130]:
+                - generic [ref=e131]: 18-101室
+                - generic [ref=e134]: 42%
+              - generic [ref=e135]:
+                - generic [ref=e136]: 19-101室
+                - generic [ref=e139]: 40%
+              - generic [ref=e140]:
+                - generic [ref=e141]: 18-204室
+                - generic [ref=e144]: 39%
+              - generic [ref=e145]:
+                - generic [ref=e146]: 18-301室
+                - generic [ref=e149]: 36%
+              - generic [ref=e150]:
+                - generic [ref=e151]: 19-201室
+                - generic [ref=e154]: 34%
+              - generic [ref=e155]:
+                - generic [ref=e156]: 20-302室
+                - generic [ref=e159]: 30%
+              - generic [ref=e160]:
+                - generic [ref=e161]: 20-202室
+                - generic [ref=e164]: 27%
+              - generic [ref=e165]:
+                - generic [ref=e166]: 18-102室
+                - generic [ref=e169]: 26%
+          - generic [ref=e170]:
+            - heading "数据更新 Timeline" [level=3] [ref=e171]
+            - generic [ref=e172]:
+              - generic [ref=e173]:
+                - generic [ref=e174]: 2026-05-29 22:57
+                - generic [ref=e175]: 行政班课表
+              - generic [ref=e176]:
+                - generic [ref=e177]: 2026-05-30 12:58
+                - generic [ref=e178]: 教师课表
+              - generic [ref=e179]:
+                - generic [ref=e180]: 2026-05-30 12:58
+                - generic [ref=e181]: 教室课表
+              - generic [ref=e182]:
+                - generic [ref=e183]: 2026-05-30 12:58
+                - generic [ref=e184]: 课程课表
+            - heading "未处理用户反馈" [level=3] [ref=e185]
+            - generic [ref=e187]: 当前没有待处理反馈 ☕️
+        - generic [ref=e188]:
+          - generic [ref=e189]:
+            - generic [ref=e190]:
+              - heading "全校教室占用热力图" [level=3] [ref=e191]
+              - generic [ref=e192]: 按星期与节次统计真实教室排课占用情况。
+            - generic [ref=e193]:
+              - generic [ref=e194]: 数据源：storage.classroom-schedules
+              - generic [ref=e195]: 教室总数：20
+              - generic [ref=e196]: 已占用峰值：11
+              - generic [ref=e197]: 更新时间：2026-05-30 12:58
+          - generic [ref=e198]:
+            - generic [ref=e199]:
+              - generic [ref=e200]: 最繁忙时段
+              - generic [ref=e201]: 周二 第6节
+              - generic [ref=e202]: 55% 占用率
+            - generic [ref=e203]:
+              - generic [ref=e204]: 最空闲时段
+              - generic [ref=e205]: 周三 第6节
+              - generic [ref=e206]: 0% 占用率
+            - generic [ref=e207]:
+              - generic [ref=e208]: 工作日平均占用率
+              - generic [ref=e209]: 29%
+              - generic [ref=e210]: 周一至周五
+            - generic [ref=e211]:
+              - generic [ref=e212]: 周末平均占用率
+              - generic [ref=e213]: 2%
+              - generic [ref=e214]: 周六至周日
+          - generic [ref=e216]:
+            - button "全周" [ref=e217] [cursor=pointer]
+            - button "工作日" [ref=e218] [cursor=pointer]
+            - button "周末" [ref=e219] [cursor=pointer]
+          - generic [ref=e221]:
+            - generic [ref=e222]: 节次
+            - generic [ref=e223]: 周一
+            - generic [ref=e224]: 周二
+            - generic [ref=e225]: 周三
+            - generic [ref=e226]: 周四
+            - generic [ref=e227]: 周五
+            - generic [ref=e228]: 周六
+            - generic [ref=e229]: 周日
+            - generic [ref=e230]: 第1节
+            - generic "周一 第1节，占用率 40%" [ref=e231] [cursor=pointer]:
+              - generic [ref=e232]: 40%
+            - generic "周二 第1节，占用率 45%" [ref=e233] [cursor=pointer]:
+              - generic [ref=e234]: 45%
+            - generic "周三 第1节，占用率 40%" [ref=e235] [cursor=pointer]:
+              - generic [ref=e236]: 40%
+            - generic "周四 第1节，占用率 45%" [ref=e237] [cursor=pointer]:
+              - generic [ref=e238]: 45%
+            - generic "周五 第1节，占用率 30%" [ref=e239] [cursor=pointer]:
+              - generic [ref=e240]: 30%
+            - generic "周六 第1节，占用率 0%" [ref=e241] [cursor=pointer]:
+              - generic [ref=e242]: 0%
+            - generic "周日 第1节，占用率 5%" [ref=e243] [cursor=pointer]:
+              - generic [ref=e244]: 5%
+            - generic [ref=e245]: 第2节
+            - generic "周一 第2节，占用率 40%" [ref=e246] [cursor=pointer]:
+              - generic [ref=e247]: 40%
+            - generic "周二 第2节，占用率 45%" [ref=e248] [cursor=pointer]:
+              - generic [ref=e249]: 45%
+            - generic "周三 第2节，占用率 40%" [ref=e250] [cursor=pointer]:
+              - generic [ref=e251]: 40%
+            - generic "周四 第2节，占用率 45%" [ref=e252] [cursor=pointer]:
+              - generic [ref=e253]: 45%
+            - generic "周五 第2节，占用率 30%" [ref=e254] [cursor=pointer]:
+              - generic [ref=e255]: 30%
+            - generic "周六 第2节，占用率 0%" [ref=e256] [cursor=pointer]:
+              - generic [ref=e257]: 0%
+            - generic "周日 第2节，占用率 5%" [ref=e258] [cursor=pointer]:
+              - generic [ref=e259]: 5%
+            - generic [ref=e260]: 第3节
+            - generic "周一 第3节，占用率 50%" [ref=e261] [cursor=pointer]:
+              - generic [ref=e262]: 50%
+            - generic "周二 第3节，占用率 50%" [ref=e263] [cursor=pointer]:
+              - generic [ref=e264]: 50%
+            - generic "周三 第3节，占用率 50%" [ref=e265] [cursor=pointer]:
+              - generic [ref=e266]: 50%
+            - generic "周四 第3节，占用率 50%" [ref=e267] [cursor=pointer]:
+              - generic [ref=e268]: 50%
+            - generic "周五 第3节，占用率 25%" [ref=e269] [cursor=pointer]:
+              - generic [ref=e270]: 25%
+            - generic "周六 第3节，占用率 0%" [ref=e271] [cursor=pointer]:
+              - generic [ref=e272]: 0%
+            - generic "周日 第3节，占用率 5%" [ref=e273] [cursor=pointer]:
+              - generic [ref=e274]: 5%
+            - generic [ref=e275]: 第4节
+            - generic "周一 第4节，占用率 50%" [ref=e276] [cursor=pointer]:
+              - generic [ref=e277]: 50%
+            - generic "周二 第4节，占用率 50%" [ref=e278] [cursor=pointer]:
+              - generic [ref=e279]: 50%
+            - generic "周三 第4节，占用率 50%" [ref=e280] [cursor=pointer]:
+              - generic [ref=e281]: 50%
+            - generic "周四 第4节，占用率 50%" [ref=e282] [cursor=pointer]:
+              - generic [ref=e283]: 50%
+            - generic "周五 第4节，占用率 25%" [ref=e284] [cursor=pointer]:
+              - generic [ref=e285]: 25%
+            - generic "周六 第4节，占用率 0%" [ref=e286] [cursor=pointer]:
+              - generic [ref=e287]: 0%
+            - generic "周日 第4节，占用率 5%" [ref=e288] [cursor=pointer]:
+              - generic [ref=e289]: 5%
+            - generic [ref=e290]: 第5节
+            - generic "周一 第5节，占用率 50%" [ref=e291] [cursor=pointer]:
+              - generic [ref=e292]: 50%
+            - generic "周二 第5节，占用率 50%" [ref=e293] [cursor=pointer]:
+              - generic [ref=e294]: 50%
+            - generic "周三 第5节，占用率 50%" [ref=e295] [cursor=pointer]:
+              - generic [ref=e296]: 50%
+            - generic "周四 第5节，占用率 50%" [ref=e297] [cursor=pointer]:
+              - generic [ref=e298]: 50%
+            - generic "周五 第5节，占用率 25%" [ref=e299] [cursor=pointer]:
+              - generic [ref=e300]: 25%
+            - generic "周六 第5节，占用率 0%" [ref=e301] [cursor=pointer]:
+              - generic [ref=e302]: 0%
+            - generic "周日 第5节，占用率 5%" [ref=e303] [cursor=pointer]:
+              - generic [ref=e304]: 5%
+            - generic [ref=e305]: 第6节
+            - generic "周一 第6节，占用率 35%" [ref=e306] [cursor=pointer]:
+              - generic [ref=e307]: 35%
+            - generic "周二 第6节，占用率 55%" [ref=e308] [cursor=pointer]:
+              - generic [ref=e309]: 55%
+            - generic "周三 第6节，占用率 0%" [ref=e310] [cursor=pointer]:
+              - generic [ref=e311]: 0%
+            - generic "周四 第6节，占用率 50%" [ref=e312] [cursor=pointer]:
+              - generic [ref=e313]: 50%
+            - generic "周五 第6节，占用率 30%" [ref=e314] [cursor=pointer]:
+              - generic [ref=e315]: 30%
+            - generic "周六 第6节，占用率 0%" [ref=e316] [cursor=pointer]:
+              - generic [ref=e317]: 0%
+            - generic "周日 第6节，占用率 0%" [ref=e318] [cursor=pointer]:
+              - generic [ref=e319]: 0%
+            - generic [ref=e320]: 第7节
+            - generic "周一 第7节，占用率 35%" [ref=e321] [cursor=pointer]:
+              - generic [ref=e322]: 35%
+            - generic "周二 第7节，占用率 55%" [ref=e323] [cursor=pointer]:
+              - generic [ref=e324]: 55%
+            - generic "周三 第7节，占用率 0%" [ref=e325] [cursor=pointer]:
+              - generic [ref=e326]: 0%
+            - generic "周四 第7节，占用率 50%" [ref=e327] [cursor=pointer]:
+              - generic [ref=e328]: 50%
+            - generic "周五 第7节，占用率 30%" [ref=e329] [cursor=pointer]:
+              - generic [ref=e330]: 30%
+            - generic "周六 第7节，占用率 0%" [ref=e331] [cursor=pointer]:
+              - generic [ref=e332]: 0%
+            - generic "周日 第7节，占用率 0%" [ref=e333] [cursor=pointer]:
+              - generic [ref=e334]: 0%
+            - generic [ref=e335]: 第8节
+            - generic "周一 第8节，占用率 35%" [ref=e336] [cursor=pointer]:
+              - generic [ref=e337]: 35%
+            - generic "周二 第8节，占用率 45%" [ref=e338] [cursor=pointer]:
+              - generic [ref=e339]: 45%
+            - generic "周三 第8节，占用率 0%" [ref=e340] [cursor=pointer]:
+              - generic [ref=e341]: 0%
+            - generic "周四 第8节，占用率 45%" [ref=e342] [cursor=pointer]:
+              - generic [ref=e343]: 45%
+            - generic "周五 第8节，占用率 15%" [ref=e344] [cursor=pointer]:
+              - generic [ref=e345]: 15%
+            - generic "周六 第8节，占用率 0%" [ref=e346] [cursor=pointer]:
+              - generic [ref=e347]: 0%
+            - generic "周日 第8节，占用率 5%" [ref=e348] [cursor=pointer]:
+              - generic [ref=e349]: 5%
+            - generic [ref=e350]: 第9节
+            - generic "周一 第9节，占用率 35%" [ref=e351] [cursor=pointer]:
+              - generic [ref=e352]: 35%
+            - generic "周二 第9节，占用率 45%" [ref=e353] [cursor=pointer]:
+              - generic [ref=e354]: 45%
+            - generic "周三 第9节，占用率 0%" [ref=e355] [cursor=pointer]:
+              - generic [ref=e356]: 0%
+            - generic "周四 第9节，占用率 45%" [ref=e357] [cursor=pointer]:
+              - generic [ref=e358]: 45%
+            - generic "周五 第9节，占用率 15%" [ref=e359] [cursor=pointer]:
+              - generic [ref=e360]: 15%
+            - generic "周六 第9节，占用率 0%" [ref=e361] [cursor=pointer]:
+              - generic [ref=e362]: 0%
+            - generic "周日 第9节，占用率 5%" [ref=e363] [cursor=pointer]:
+              - generic [ref=e364]: 5%
+            - generic [ref=e365]: 第10节
+            - generic "周一 第10节，占用率 35%" [ref=e366] [cursor=pointer]:
+              - generic [ref=e367]: 35%
+            - generic "周二 第10节，占用率 45%" [ref=e368] [cursor=pointer]:
+              - generic [ref=e369]: 45%
+            - generic "周三 第10节，占用率 0%" [ref=e370] [cursor=pointer]:
+              - generic [ref=e371]: 0%
+            - generic "周四 第10节，占用率 45%" [ref=e372] [cursor=pointer]:
+              - generic [ref=e373]: 45%
+            - generic "周五 第10节，占用率 15%" [ref=e374] [cursor=pointer]:
+              - generic [ref=e375]: 15%
+            - generic "周六 第10节，占用率 0%" [ref=e376] [cursor=pointer]:
+              - generic [ref=e377]: 0%
+            - generic "周日 第10节，占用率 5%" [ref=e378] [cursor=pointer]:
+              - generic [ref=e379]: 5%
+            - generic [ref=e380]: 第11节
+            - generic "周一 第11节，占用率 20%" [ref=e381] [cursor=pointer]:
+              - generic [ref=e382]: 20%
+            - generic "周二 第11节，占用率 15%" [ref=e383] [cursor=pointer]:
+              - generic [ref=e384]: 15%
+            - generic "周三 第11节，占用率 0%" [ref=e385] [cursor=pointer]:
+              - generic [ref=e386]: 0%
+            - generic "周四 第11节，占用率 10%" [ref=e387] [cursor=pointer]:
+              - generic [ref=e388]: 10%
+            - generic "周五 第11节，占用率 5%" [ref=e389] [cursor=pointer]:
+              - generic [ref=e390]: 5%
+            - generic "周六 第11节，占用率 0%" [ref=e391] [cursor=pointer]:
+              - generic [ref=e392]: 0%
+            - generic "周日 第11节，占用率 5%" [ref=e393] [cursor=pointer]:
+              - generic [ref=e394]: 5%
+            - generic [ref=e395]: 第12节
+            - generic "周一 第12节，占用率 20%" [ref=e396] [cursor=pointer]:
+              - generic [ref=e397]: 20%
+            - generic "周二 第12节，占用率 15%" [ref=e398] [cursor=pointer]:
+              - generic [ref=e399]: 15%
+            - generic "周三 第12节，占用率 0%" [ref=e400] [cursor=pointer]:
+              - generic [ref=e401]: 0%
+            - generic "周四 第12节，占用率 10%" [ref=e402] [cursor=pointer]:
+              - generic [ref=e403]: 10%
+            - generic "周五 第12节，占用率 5%" [ref=e404] [cursor=pointer]:
+              - generic [ref=e405]: 5%
+            - generic "周六 第12节，占用率 0%" [ref=e406] [cursor=pointer]:
+              - generic [ref=e407]: 0%
+            - generic "周日 第12节，占用率 5%" [ref=e408] [cursor=pointer]:
+              - generic [ref=e409]: 5%
+            - generic [ref=e410]: 第13节
+            - generic "周一 第13节，占用率 15%" [ref=e411] [cursor=pointer]:
+              - generic [ref=e412]: 15%
+            - generic "周二 第13节，占用率 5%" [ref=e413] [cursor=pointer]:
+              - generic [ref=e414]: 5%
+            - generic "周三 第13节，占用率 0%" [ref=e415] [cursor=pointer]:
+              - generic [ref=e416]: 0%
+            - generic "周四 第13节，占用率 10%" [ref=e417] [cursor=pointer]:
+              - generic [ref=e418]: 10%
+            - generic "周五 第13节，占用率 5%" [ref=e419] [cursor=pointer]:
+              - generic [ref=e420]: 5%
+            - generic "周六 第13节，占用率 0%" [ref=e421] [cursor=pointer]:
+              - generic [ref=e422]: 0%
+            - generic "周日 第13节，占用率 5%" [ref=e423] [cursor=pointer]:
+              - generic [ref=e424]: 5%
+            - generic [ref=e425]: 第14节
+            - generic "周一 第14节，占用率 15%" [ref=e426] [cursor=pointer]:
+              - generic [ref=e427]: 15%
+            - generic "周二 第14节，占用率 5%" [ref=e428] [cursor=pointer]:
+              - generic [ref=e429]: 5%
+            - generic "周三 第14节，占用率 0%" [ref=e430] [cursor=pointer]:
+              - generic [ref=e431]: 0%
+            - generic "周四 第14节，占用率 10%" [ref=e432] [cursor=pointer]:
+              - generic [ref=e433]: 10%
+            - generic "周五 第14节，占用率 5%" [ref=e434] [cursor=pointer]:
+              - generic [ref=e435]: 5%
+            - generic "周六 第14节，占用率 0%" [ref=e436] [cursor=pointer]:
+              - generic [ref=e437]: 0%
+            - generic "周日 第14节，占用率 5%" [ref=e438] [cursor=pointer]:
+              - generic [ref=e439]: 5%
+          - generic [ref=e440]:
+            - generic [ref=e441]: 占用度
+            - generic [ref=e442]: 0%
+            - generic [ref=e444]: 1-25%
+            - generic [ref=e446]: 26-50%
+            - generic [ref=e448]: 51-75%
+            - generic [ref=e450]: 76-100%
+      - text: ▼ ▼ ▼ ▼ ▼ ▼
+  - generic [ref=e452]:
+    - generic [ref=e453]:
+      - heading "用户反馈详情与备注处理" [level=3] [ref=e454]
+      - button "×" [ref=e455] [cursor=pointer]
+    - generic [ref=e456]:
+      - generic [ref=e457]:
+        - generic [ref=e458]: 反馈类型
+        - generic [ref=e459]: "-"
+      - generic [ref=e460]:
+        - generic [ref=e461]: 内容描述
+        - generic [ref=e462]: "-"
+      - generic [ref=e463]:
+        - generic [ref=e464]: "提交页面: -"
+        - generic [ref=e465]: "联系方式: -"
+        - generic [ref=e466]: "当前学期: -"
+        - generic [ref=e467]: "数据版本: -"
+        - generic [ref=e468]: "应用版本: -"
+        - generic [ref=e469]: "系统环境: -"
+      - generic [ref=e470]:
+        - generic [ref=e471]: 修改处理状态
+        - combobox [ref=e472]:
+          - option "待处理 (open)" [selected]
+          - option "处理中 (processing)"
+          - option "已解决 (resolved)"
+          - option "已忽略 (ignored)"
+      - generic [ref=e473]:
+        - generic [ref=e474]: 管理员内部备注
+        - textbox "在此记录问题排查过程、处理方式，或备注待联络用户核对。" [ref=e475]
+    - generic [ref=e476]:
+      - button "取消" [ref=e477] [cursor=pointer]
+      - button "保存备注及状态" [ref=e478] [cursor=pointer]
+  - generic [ref=e479]:
+    - generic [ref=e480]:
+      - heading "资源详情" [level=3] [ref=e481]
+      - button "×" [ref=e482] [cursor=pointer]
+    - generic [ref=e483]:
+      - generic [ref=e484]:
+        - heading "管理员配置 (Alias & Meta)" [level=4] [ref=e485]
+        - generic [ref=e486]:
+          - generic [ref=e487]:
+            - generic [ref=e488]: 展示别名 / 覆盖名称 (displayName)
+            - textbox "为空时使用默认名称" [ref=e489]
+          - generic [ref=e490]:
+            - generic [ref=e491]: 后台管理员备注 (adminNote)
+            - textbox "输入关于该班级/教师排课的额外备注..." [ref=e492]
+          - generic [ref=e493]:
+            - generic [ref=e494]:
+              - generic [ref=e495]: 是否在小程序中隐藏 (hidden)
+              - combobox [ref=e496]:
+                - option "显示 (默认)" [selected]
+                - option "在全校课表中隐藏"
+            - generic [ref=e497]:
+              - generic [ref=e498]: 资源分类标签 (逗号分隔)
+              - textbox "例如：重点班, 实验班" [ref=e499]
+      - generic [ref=e500]:
+        - heading "周课表可视化预览" [level=4] [ref=e501]
+        - generic [ref=e502]:
+          - button "上周" [ref=e503] [cursor=pointer]
+          - generic [ref=e504]: 第 1 周
+          - button "下周" [ref=e505] [cursor=pointer]
+          - button "显示周末" [ref=e506] [cursor=pointer]
+      - generic [ref=e508] [cursor=pointer]:
+        - generic [ref=e509]: 展开查看原始数据 (Original JSON)
+        - generic [ref=e510]: ▼
+    - generic [ref=e511]:
+      - button "导出 JSON" [ref=e512] [cursor=pointer]
+      - button "导出 CSV" [ref=e513] [cursor=pointer]
+      - button "保存配置" [ref=e514] [cursor=pointer]
+  - generic [ref=e515]: 控制台面板状态已同步

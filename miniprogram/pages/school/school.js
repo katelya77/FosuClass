@@ -19,6 +19,7 @@ const SCHOOL_REQUEST_TIMEOUT = 45000;
 
 const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
+const platformDataService = require("../../services/platformDataService");
 const {
   SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY,
   getRecentSchedules,
@@ -1735,15 +1736,28 @@ Page({
     this.openIndexedSchedule("course", item, item.courseName);
   },
 
+  goEmptyRoom() {
+    const term = this.getActiveTermForCache();
+    const releaseVersion = this.getReleaseVersionForCache();
+    const query = [
+      `term=${encodeURIComponent(term)}`,
+      releaseVersion ? `releaseVersion=${encodeURIComponent(releaseVersion)}` : "",
+    ].filter(Boolean).join("&");
+    wx.navigateTo({
+      url: `/pages/empty-room/empty-room${query ? `?${query}` : ""}`,
+    });
+  },
 
   navigateToScheduleView(type, name, courses, scheduleMeta) {
     const semester = this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
     const meta = scheduleMeta || {};
     const displayType = meta.displayType || "";
     const isAggregated = meta.isAggregated ? "1" : "0";
+    const detailId = meta.detailId || meta.id || meta.scheduleId || meta.classId || name || "";
+    const releaseVersion = meta.scheduleVersion || meta.releaseVersion || this.getReleaseVersionForCache();
     
     wx.navigateTo({
-      url: `/pages/schedule-view/schedule-view?type=${type}&name=${encodeURIComponent(name)}&semester=${semester}&displayType=${encodeURIComponent(displayType)}&isAggregated=${isAggregated}`,
+      url: `/pages/schedule-view/schedule-view?type=${type}&id=${encodeURIComponent(detailId)}&name=${encodeURIComponent(name)}&semester=${encodeURIComponent(semester)}&term=${encodeURIComponent(semester)}&releaseVersion=${encodeURIComponent(releaseVersion)}&displayType=${encodeURIComponent(displayType)}&isAggregated=${isAggregated}`,
       success: (res) => {
         // 利用 EventChannel 传递大体积课程数据
         res.eventChannel.emit("acceptDataFromOpenerPage", {
@@ -2058,6 +2072,16 @@ Page({
     const forceNetwork = Boolean(options.forceNetwork);
     const cached = this.readCachedActiveSnapshot();
     if (cached && !forceNetwork) {
+      const platformSnapshot = platformDataService.getCachedPlatformSnapshot();
+      if (platformSnapshot && platformSnapshot.releaseVersion && this.getSnapshotReleaseKey(platformSnapshot) !== this.getSnapshotReleaseKey(cached)) {
+        this.writeCachedActiveSnapshot(platformSnapshot);
+        return {
+          activeSnapshot: platformSnapshot,
+          appConfig: appConfigService.getGlobalConfig(),
+          source: "platform-data-cache",
+          fromStorage: true,
+        };
+      }
       this.refreshActiveSnapshotInBackground(cached);
       return {
         activeSnapshot: cached,

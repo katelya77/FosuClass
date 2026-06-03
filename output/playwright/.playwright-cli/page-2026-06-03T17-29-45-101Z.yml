@@ -1,0 +1,80 @@
+- generic [ref=e1]:
+  - main [ref=e2]:
+    - generic [ref=e3]:
+      - img "佛课小表" [ref=e4]
+      - heading "佛课小表后台" [level=1] [ref=e5]
+      - paragraph [ref=e6]: 管理端控制台安全验证。请输入管理员密码进行登录。
+      - generic [ref=e7]:
+        - generic [ref=e8]:
+          - generic [ref=e9]: 安全凭据 (Password / Token)
+          - textbox "安全凭据 (Password / Token)" [active] [ref=e10]:
+            - /placeholder: 请输入密码
+        - button "验证登录" [ref=e11] [cursor=pointer]
+  - generic [ref=e13]:
+    - generic [ref=e14]:
+      - heading "用户反馈详情与备注处理" [level=3] [ref=e15]
+      - button "×" [ref=e16] [cursor=pointer]
+    - generic [ref=e17]:
+      - generic [ref=e18]:
+        - generic [ref=e19]: 反馈类型
+        - generic [ref=e20]: "-"
+      - generic [ref=e21]:
+        - generic [ref=e22]: 内容描述
+        - generic [ref=e23]: "-"
+      - generic [ref=e24]:
+        - generic [ref=e25]: "提交页面: -"
+        - generic [ref=e26]: "联系方式: -"
+        - generic [ref=e27]: "当前学期: -"
+        - generic [ref=e28]: "数据版本: -"
+        - generic [ref=e29]: "应用版本: -"
+        - generic [ref=e30]: "系统环境: -"
+      - generic [ref=e31]:
+        - generic [ref=e32]: 修改处理状态
+        - combobox [ref=e33]:
+          - option "待处理 (open)" [selected]
+          - option "处理中 (processing)"
+          - option "已解决 (resolved)"
+          - option "已忽略 (ignored)"
+      - generic [ref=e34]:
+        - generic [ref=e35]: 管理员内部备注
+        - textbox "在此记录问题排查过程、处理方式，或备注待联络用户核对。" [ref=e36]
+    - generic [ref=e37]:
+      - button "取消" [ref=e38] [cursor=pointer]
+      - button "保存备注及状态" [ref=e39] [cursor=pointer]
+  - generic [ref=e40]:
+    - generic [ref=e41]:
+      - heading "资源详情" [level=3] [ref=e42]
+      - button "×" [ref=e43] [cursor=pointer]
+    - generic [ref=e44]:
+      - generic [ref=e45]:
+        - heading "管理员配置 (Alias & Meta)" [level=4] [ref=e46]
+        - generic [ref=e47]:
+          - generic [ref=e48]:
+            - generic [ref=e49]: 展示别名 / 覆盖名称 (displayName)
+            - textbox "为空时使用默认名称" [ref=e50]
+          - generic [ref=e51]:
+            - generic [ref=e52]: 后台管理员备注 (adminNote)
+            - textbox "输入关于该班级/教师排课的额外备注..." [ref=e53]
+          - generic [ref=e54]:
+            - generic [ref=e55]:
+              - generic [ref=e56]: 是否在小程序中隐藏 (hidden)
+              - combobox [ref=e57]:
+                - option "显示 (默认)" [selected]
+                - option "在全校课表中隐藏"
+            - generic [ref=e58]:
+              - generic [ref=e59]: 资源分类标签 (逗号分隔)
+              - textbox "例如：重点班, 实验班" [ref=e60]
+      - generic [ref=e61]:
+        - heading "周课表可视化预览" [level=4] [ref=e62]
+        - generic [ref=e63]:
+          - button "上周" [ref=e64] [cursor=pointer]
+          - generic [ref=e65]: 第 1 周
+          - button "下周" [ref=e66] [cursor=pointer]
+          - button "显示周末" [ref=e67] [cursor=pointer]
+      - generic [ref=e69] [cursor=pointer]:
+        - generic [ref=e70]: 展开查看原始数据 (Original JSON)
+        - generic [ref=e71]: ▼
+    - generic [ref=e72]:
+      - button "导出 JSON" [ref=e73] [cursor=pointer]
+      - button "导出 CSV" [ref=e74] [cursor=pointer]
+      - button "保存配置" [ref=e75] [cursor=pointer]

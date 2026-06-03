@@ -69,6 +69,50 @@ function normalizeScheduleResponse(kind, result) {
   return Object.assign({}, result, { coursesList: schedule ? [schedule] : [] });
 }
 
+function getActivePlatformSnapshot(req) {
+  const active = releaseService.getActiveReleaseInfo() || {};
+  const publicConfig = appConfigService.getPublicAppConfig();
+  const data = publicConfig && publicConfig.data ? publicConfig.data : {};
+  const dataVersion = data.dataVersion || {};
+  const updatedAt = active.publishedAt ||
+    active.updatedAt ||
+    dataVersion.classScheduleUpdatedAt ||
+    data.updatedAt ||
+    "";
+  const releaseVersion = active.releaseVersion || active.version || dataVersion.releaseVersion || "";
+  const term = active.term || active.semester || data.currentSemester || data.term || "2025-2026-2";
+  return {
+    term,
+    releaseVersion,
+    activeReleaseVersion: releaseVersion,
+    updatedAt,
+    publishedAt: updatedAt,
+    cacheEpoch: new Date(updatedAt).getTime() || Date.now(),
+    counts: active.counts || {},
+    manifestUrl: releaseVersion
+      ? `/api/fosu/periodic-data?releaseVersion=${encodeURIComponent(releaseVersion)}`
+      : "/api/fosu/periodic-data",
+  };
+}
+
+function buildPlatformUrls(snapshot) {
+  const releaseVersion = snapshot.releaseVersion || "";
+  return {
+    appConfig: "/api/fosu/app-config",
+    bootstrap: "/api/fosu/bootstrap",
+    prefetch: "/api/fosu/prefetch",
+    periodicData: "/api/fosu/periodic-data",
+    searchIndex: releaseVersion
+      ? `/api/fosu/search-index?releaseVersion=${encodeURIComponent(releaseVersion)}`
+      : "/api/fosu/search-index",
+    scheduleDetail: "/api/fosu/schedule-detail",
+    emptyClassrooms: releaseVersion
+      ? `/api/fosu/empty-classrooms?releaseVersion=${encodeURIComponent(releaseVersion)}`
+      : "/api/fosu/empty-classrooms",
+    clientDiagnosis: "/api/fosu/client-diagnosis",
+  };
+}
+
 /**
  * 运行时配置：公告、最新动态和数据版本信息。
  * GET /api/fosu/app-config
@@ -90,10 +134,82 @@ router.get("/app-config", (req, res) => {
       rawConfig.data.dataUpdatedAt = dataUpdatedAt;
       rawConfig.data.cacheVersion = activeVer;
       rawConfig.data.cacheEpoch = new Date(dataUpdatedAt).getTime() || Date.now();
+      rawConfig.data.counts = releaseService.getActiveReleaseInfo()?.counts || {};
     }
     res.json(rawConfig);
   } catch (error) {
     handleRouteError(res, error, "get-app-config-failed");
+  }
+});
+
+router.get("/prefetch", (req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    const activeSnapshot = getActivePlatformSnapshot(req);
+    return res.json({
+      success: true,
+      activeSnapshot,
+      term: activeSnapshot.term,
+      releaseVersion: activeSnapshot.releaseVersion,
+      updatedAt: activeSnapshot.updatedAt,
+      cacheEpoch: activeSnapshot.cacheEpoch,
+      counts: activeSnapshot.counts,
+      manifestUrl: activeSnapshot.manifestUrl,
+      urls: buildPlatformUrls(activeSnapshot),
+    });
+  } catch (error) {
+    handleRouteError(res, error, "get-prefetch-failed");
+  }
+});
+
+router.get("/periodic-data", (req, res) => {
+  try {
+    const hasVersion = Boolean(req.query.releaseVersion || req.query.version);
+    if (hasVersion) {
+      res.setHeader("Cache-Control", "public, max-age=300");
+    } else {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+    }
+    const activeSnapshot = getActivePlatformSnapshot(req);
+    const releaseVersion = req.query.releaseVersion || req.query.version || activeSnapshot.releaseVersion;
+    const indexMeta = {};
+    ["class", "teacher", "classroom", "course"].forEach((kind) => {
+      const index = releaseService.readActiveIndex(kind, releaseVersion);
+      indexMeta[kind] = {
+        success: Boolean(index && index.success),
+        count: Array.isArray(index && index.items) ? index.items.length : 0,
+        code: index && (index.code || index.reasonCode || ""),
+      };
+    });
+    const emptyIndex = releaseService.readEmptyRoomIndex(releaseVersion);
+    indexMeta.emptyRoom = {
+      success: Boolean(emptyIndex && emptyIndex.success),
+      count: Array.isArray(emptyIndex && emptyIndex.rooms) ? emptyIndex.rooms.length : 0,
+      buildings: Array.isArray(emptyIndex && emptyIndex.buildings) ? emptyIndex.buildings : [],
+      code: emptyIndex && (emptyIndex.code || emptyIndex.reasonCode || ""),
+    };
+
+    return res.json({
+      success: true,
+      activeSnapshot,
+      manifest: {
+        term: activeSnapshot.term,
+        releaseVersion: releaseVersion || activeSnapshot.releaseVersion,
+        updatedAt: activeSnapshot.updatedAt,
+        cacheEpoch: activeSnapshot.cacheEpoch,
+        counts: activeSnapshot.counts,
+      },
+      releases: releaseService.listReleases(5),
+      indexes: indexMeta,
+      urls: buildPlatformUrls(activeSnapshot),
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    handleRouteError(res, error, "get-periodic-data-failed");
   }
 });
 
@@ -427,6 +543,31 @@ router.get("/schedule-detail", scheduleLimiter, (req, res) => {
     }
   } catch (error) {
     handleRouteError(res, error, "get-schedule-detail-failed");
+  }
+});
+
+router.get("/empty-classrooms", scheduleLimiter, (req, res) => {
+  try {
+    const releaseVersion = req.query.releaseVersion || req.query.version || "";
+    const result = releaseService.queryEmptyClassrooms(req.query || {});
+    if (!result.success) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      res.setHeader("Pragma", "no-cache");
+      res.setHeader("Expires", "0");
+      return res.json(Object.assign({
+        rooms: [],
+        total: 0,
+      }, result));
+    }
+    if (releaseVersion) {
+      return sendCacheableJson(req, res, result, 600);
+    }
+    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+    res.setHeader("Pragma", "no-cache");
+    res.setHeader("Expires", "0");
+    return res.json(result);
+  } catch (error) {
+    handleRouteError(res, error, "get-empty-classrooms-failed");
   }
 });
 

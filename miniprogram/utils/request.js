@@ -70,7 +70,10 @@ function getDefaultTimeout(url) {
     return 45000;
   }
   if (cleanUrl.endsWith("/schedule-detail")) {
-    return 45000;
+    return 30000;
+  }
+  if (cleanUrl.endsWith("/empty-classrooms")) {
+    return 30000;
   }
   if (cleanUrl.endsWith("/catalog")) {
     return 45000;

@@ -1,0 +1,131 @@
+- generic [active] [ref=e1]:
+  - main [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "佛课小表" [ref=e6]
+          - generic [ref=e7]:
+            - generic [ref=e8]: 佛课小表
+            - generic [ref=e9]: Admin Console v1.5
+        - navigation [ref=e10]:
+          - list [ref=e11]:
+            - listitem [ref=e12]:
+              - button "数据概览" [ref=e13] [cursor=pointer]
+            - listitem [ref=e14]:
+              - button "数据资源" [ref=e15] [cursor=pointer]
+            - listitem [ref=e16]:
+              - button "同步中心" [ref=e17] [cursor=pointer]
+            - listitem [ref=e18]:
+              - button "数据质量" [ref=e19] [cursor=pointer]
+            - listitem [ref=e20]:
+              - button "公告管理" [ref=e21] [cursor=pointer]
+            - listitem [ref=e22]:
+              - button "最新动态" [ref=e23] [cursor=pointer]
+            - listitem [ref=e24]:
+              - button "数据版本" [ref=e25] [cursor=pointer]
+            - listitem [ref=e26]:
+              - button "反馈管理" [ref=e27] [cursor=pointer]
+            - listitem [ref=e28]:
+              - button "系统设置" [ref=e29] [cursor=pointer]
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]: local
+          - generic [ref=e33]: "-"
+        - button "退出登录" [ref=e34] [cursor=pointer]
+    - generic [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - heading "数据概览" [level=2] [ref=e38]
+          - paragraph [ref=e39]: 正在获取反馈列表...
+        - button "一键刷新" [ref=e41] [cursor=pointer]
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - generic [ref=e44]:
+            - heading "课表资源分布" [level=3] [ref=e45]
+            - heading "教室占用率" [level=3] [ref=e46]
+          - generic [ref=e47]:
+            - heading "数据更新 Timeline" [level=3] [ref=e48]
+            - heading "未处理用户反馈" [level=3] [ref=e49]
+        - generic [ref=e50]:
+          - generic [ref=e52]:
+            - heading "全校教室占用热力图" [level=3] [ref=e53]
+            - generic [ref=e54]: 按星期与节次统计真实教室排课占用情况。
+          - generic [ref=e56]:
+            - button "全周" [ref=e57] [cursor=pointer]
+            - button "工作日" [ref=e58] [cursor=pointer]
+            - button "周末" [ref=e59] [cursor=pointer]
+          - generic [ref=e61]:
+            - generic [ref=e62]: 占用度
+            - generic [ref=e63]: 0%
+            - generic [ref=e65]: 1-25%
+            - generic [ref=e67]: 26-50%
+            - generic [ref=e69]: 51-75%
+            - generic [ref=e71]: 76-100%
+  - generic [ref=e73]:
+    - generic [ref=e74]:
+      - heading "用户反馈详情与备注处理" [level=3] [ref=e75]
+      - button "×" [ref=e76] [cursor=pointer]
+    - generic [ref=e77]:
+      - generic [ref=e78]:
+        - generic [ref=e79]: 反馈类型
+        - generic [ref=e80]: "-"
+      - generic [ref=e81]:
+        - generic [ref=e82]: 内容描述
+        - generic [ref=e83]: "-"
+      - generic [ref=e84]:
+        - generic [ref=e85]: "提交页面: -"
+        - generic [ref=e86]: "联系方式: -"
+        - generic [ref=e87]: "当前学期: -"
+        - generic [ref=e88]: "数据版本: -"
+        - generic [ref=e89]: "应用版本: -"
+        - generic [ref=e90]: "系统环境: -"
+      - generic [ref=e91]:
+        - generic [ref=e92]: 修改处理状态
+        - combobox [ref=e93]:
+          - option "待处理 (open)" [selected]
+          - option "处理中 (processing)"
+          - option "已解决 (resolved)"
+          - option "已忽略 (ignored)"
+      - generic [ref=e94]:
+        - generic [ref=e95]: 管理员内部备注
+        - textbox "在此记录问题排查过程、处理方式，或备注待联络用户核对。" [ref=e96]
+    - generic [ref=e97]:
+      - button "取消" [ref=e98] [cursor=pointer]
+      - button "保存备注及状态" [ref=e99] [cursor=pointer]
+  - generic [ref=e100]:
+    - generic [ref=e101]:
+      - heading "资源详情" [level=3] [ref=e102]
+      - button "×" [ref=e103] [cursor=pointer]
+    - generic [ref=e104]:
+      - generic [ref=e105]:
+        - heading "管理员配置 (Alias & Meta)" [level=4] [ref=e106]
+        - generic [ref=e107]:
+          - generic [ref=e108]:
+            - generic [ref=e109]: 展示别名 / 覆盖名称 (displayName)
+            - textbox "为空时使用默认名称" [ref=e110]
+          - generic [ref=e111]:
+            - generic [ref=e112]: 后台管理员备注 (adminNote)
+            - textbox "输入关于该班级/教师排课的额外备注..." [ref=e113]
+          - generic [ref=e114]:
+            - generic [ref=e115]:
+              - generic [ref=e116]: 是否在小程序中隐藏 (hidden)
+              - combobox [ref=e117]:
+                - option "显示 (默认)" [selected]
+                - option "在全校课表中隐藏"
+            - generic [ref=e118]:
+              - generic [ref=e119]: 资源分类标签 (逗号分隔)
+              - textbox "例如：重点班, 实验班" [ref=e120]
+      - generic [ref=e121]:
+        - heading "周课表可视化预览" [level=4] [ref=e122]
+        - generic [ref=e123]:
+          - button "上周" [ref=e124] [cursor=pointer]
+          - generic [ref=e125]: 第 1 周
+          - button "下周" [ref=e126] [cursor=pointer]
+          - button "显示周末" [ref=e127] [cursor=pointer]
+      - generic [ref=e129] [cursor=pointer]:
+        - generic [ref=e130]: 展开查看原始数据 (Original JSON)
+        - generic [ref=e131]: ▼
+    - generic [ref=e132]:
+      - button "导出 JSON" [ref=e133] [cursor=pointer]
+      - button "导出 CSV" [ref=e134] [cursor=pointer]
+      - button "保存配置" [ref=e135] [cursor=pointer]

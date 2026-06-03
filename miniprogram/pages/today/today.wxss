@@ -95,6 +95,47 @@
   line-height: 1.5;
 }
 
+.quick-empty-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  margin: 18rpx 0 4rpx;
+  padding: 22rpx 24rpx;
+  border-color: #f0e4e4;
+  background: #ffffff;
+}
+
+.quick-empty-main {
+  min-width: 0;
+}
+
+.quick-empty-title {
+  color: #172033;
+  font-size: 28rpx;
+  font-weight: 900;
+}
+
+.quick-empty-desc {
+  margin-top: 6rpx;
+  color: #778297;
+  font-size: 23rpx;
+}
+
+.quick-empty-action {
+  flex: 0 0 auto;
+  height: 52rpx;
+  padding: 0 22rpx;
+  border-radius: 26rpx;
+  background: #fff1f1;
+  color: #c62828;
+  font-size: 23rpx;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .disclaimer-line {
   margin-top: 16rpx;
   color: #8a94a6;

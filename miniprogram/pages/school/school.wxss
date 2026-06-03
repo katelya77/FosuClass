@@ -156,6 +156,53 @@
   white-space: nowrap;
 }
 
+.tool-entry-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  margin: 14rpx 0 0;
+  padding: 22rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  box-shadow: 0 4rpx 16rpx rgba(162, 178, 201, 0.08);
+}
+
+.tool-entry-card:active {
+  background: #f8fafc;
+}
+
+.tool-entry-main {
+  min-width: 0;
+}
+
+.tool-entry-title {
+  color: #172033;
+  font-size: 28rpx;
+  font-weight: 900;
+}
+
+.tool-entry-desc {
+  margin-top: 6rpx;
+  color: #778297;
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+
+.tool-entry-action {
+  flex: 0 0 auto;
+  height: 52rpx;
+  padding: 0 22rpx;
+  border-radius: 26rpx;
+  background: #fff1f1;
+  color: #c62828;
+  font-size: 23rpx;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 /* 过滤面板卡片 */
 .filter-card {
   padding: 24rpx 20rpx;
