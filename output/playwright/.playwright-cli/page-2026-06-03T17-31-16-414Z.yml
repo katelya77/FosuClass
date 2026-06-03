@@ -1,0 +1,498 @@
+- generic [ref=e1]:
+  - main [ref=e2]:
+    - complementary [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - img "佛课小表" [ref=e6]
+          - generic [ref=e7]:
+            - generic [ref=e8]: 佛课小表
+            - generic [ref=e9]: Admin Console v1.5
+        - navigation [ref=e10]:
+          - list [ref=e11]:
+            - listitem [ref=e12]:
+              - button "数据概览" [ref=e13] [cursor=pointer]
+            - listitem [ref=e14]:
+              - button "数据资源" [ref=e15] [cursor=pointer]
+            - listitem [ref=e16]:
+              - button "同步中心" [ref=e17] [cursor=pointer]
+            - listitem [ref=e18]:
+              - button "数据质量" [ref=e19] [cursor=pointer]
+            - listitem [ref=e20]:
+              - button "公告管理" [ref=e21] [cursor=pointer]
+            - listitem [ref=e22]:
+              - button "最新动态" [ref=e23] [cursor=pointer]
+            - listitem [ref=e24]:
+              - button "数据版本" [ref=e25] [cursor=pointer]
+            - listitem [ref=e26]:
+              - button "反馈管理" [ref=e27] [cursor=pointer]
+            - listitem [ref=e28]:
+              - button "系统设置" [ref=e29] [cursor=pointer]
+      - generic [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]: production
+          - generic [ref=e33]: 26.05.29.22
+        - button "退出登录" [ref=e34] [cursor=pointer]
+    - generic [ref=e35]:
+      - generic [ref=e36]:
+        - generic [ref=e37]:
+          - heading "数据同步中心" [level=2] [ref=e38]
+          - paragraph [ref=e39]: 最近一键刷新时间：2026-06-04 01:31
+        - button "一键刷新" [ref=e41] [cursor=pointer]
+      - generic [ref=e42]:
+        - generic [ref=e43]:
+          - generic [ref=e44]:
+            - generic [ref=e45]:
+              - generic [ref=e46]: 数据同步中心
+              - generic [ref=e47]: 推荐链路
+            - generic [ref=e48]: 本机校园网生成 Staging JSON → CLI gzip 分片上传 → 后台审核发布 → 小程序读取最新 release 索引
+          - generic [ref=e49]:
+            - generic [ref=e50]: 最近刷新：2026-06-04 01:31
+            - button "刷新状态" [ref=e51] [cursor=pointer]
+        - generic [ref=e52]:
+          - generic [ref=e53]:
+            - generic [ref=e54]:
+              - text: 当前正式版本
+              - generic [ref=e55]: 🏷️
+            - generic [ref=e56]: 26.05.29.22
+            - generic [ref=e57]: 小程序读取的 active release
+          - generic [ref=e58]:
+            - generic [ref=e59]:
+              - text: 当前学期
+              - generic [ref=e60]: 📅
+            - generic [ref=e61]: 2025-2026-2
+            - generic [ref=e62]: 后台配置学期
+          - generic [ref=e63]:
+            - generic [ref=e64]:
+              - text: Staging 状态
+              - generic [ref=e65]: 📦
+            - generic [ref=e66]: 等待上传
+            - generic [ref=e67]: 候选数据审核状态
+          - generic [ref=e68]:
+            - generic [ref=e69]:
+              - text: 最近上传
+              - generic [ref=e70]: ⬆️
+            - generic [ref=e71]: 暂无
+            - generic [ref=e72]: CLI gzip 分片上传
+          - generic [ref=e73]:
+            - generic [ref=e74]:
+              - text: 最后发布
+              - generic [ref=e75]: 🕒
+            - generic [ref=e76]: 2026-05-29 22:57
+            - generic [ref=e77]: 线上课表更新时间
+        - generic [ref=e78]:
+          - generic [ref=e79]:
+            - generic [ref=e80]:
+              - generic [ref=e81]:
+                - generic [ref=e82]: Step 1
+                - generic [ref=e83]: 本机校园网同步
+                - generic [ref=e84]:
+                  - generic [ref=e85]:
+                    - strong [ref=e86]: 适用场景：
+                    - text: 管理员在已连接校园网的本机抓取课表数据并生成 Staging JSON。
+                  - generic [ref=e87]:
+                    - strong [ref=e88]: 前置条件：
+                    - text: 本地电脑已接入佛大校园网（有线、无线或 VPN 拨号）。
+                  - generic [ref=e89]:
+                    - strong [ref=e90]: 预计耗时：
+                    - text: 3 ~ 15 分钟（视网络情况与教务系统响应而定）。
+                  - generic [ref=e91]:
+                    - strong [ref=e92]: 常见失败原因：
+                    - text: 未连校园网、学期填错、教务系统崩溃。
+                  - generic [ref=e93]:
+                    - strong [ref=e94]: 管理员运行命令：
+                    - generic [ref=e95]:
+                      - generic [ref=e96]:
+                        - generic [ref=e97]: PowerShell / 本机采集
+                        - button "复制全部命令" [active] [ref=e98] [cursor=pointer]
+                      - generic [ref=e100]:
+                        - generic [ref=e101]:
+                          - generic [ref=e102]: "1"
+                          - generic [ref=e103]: cd C:\Users\Katelya\Documents\VScode\FosuClass
+                        - generic [ref=e104]:
+                          - generic [ref=e105]: "2"
+                          - generic [ref=e106]: $env:SYNC_CLASS_SCOPE="all"
+                        - generic [ref=e107]:
+                          - generic [ref=e108]: "3"
+                          - generic [ref=e109]: $env:SYNC_CLASS_GRADES="2025,2024,2023,2022,2021"
+                        - generic [ref=e110]:
+                          - generic [ref=e111]: "4"
+                          - generic [ref=e112]: $env:SYNC_INCLUDE_SCOPES="classSchedules,teacherSchedules,classroomSchedules,courseSchedules,classrooms,teachers,courses"
+                        - generic [ref=e113]:
+                          - generic [ref=e114]: "5"
+                          - generic [ref=e115]: $env:SYNC_CLASS_MAX_CONCURRENCY="1"
+                        - generic [ref=e116]:
+                          - generic [ref=e117]: "6"
+                          - generic [ref=e118]: $env:SYNC_CLASS_REQUEST_DELAY_MS="900"
+                        - generic [ref=e119]:
+                          - generic [ref=e120]: "7"
+                          - generic [ref=e121]: npm run sync:local-campus -- --term=2025-2026-2 --start=2026-03-09 --output=./staging/2025-2026-2-full.json --include=classSchedules,teacherSchedules,classroomSchedules,courseSchedules,classrooms,teachers,courses --class-scope=all --grades=2025,2024,2023,2022,2021 --concurrency=1 --delay-ms=900
+                    - generic [ref=e122]: （管理员本机使用，需要进入项目根目录并拥有源码与 Node.js 环境）
+              - generic [ref=e123]:
+                - generic [ref=e124]: Step 2
+                - generic [ref=e125]: 上传 Staging / 接力同步
+                - generic [ref=e126]:
+                  - generic [ref=e127]:
+                    - strong [ref=e128]: 适用场景：
+                    - text: 将本机生成的 JSON 文件上传到后台进行校验，或由在校同学使用 Token 接力上传。
+                  - generic [ref=e129]:
+                    - strong [ref=e130]: 前置条件：
+                    - text: 已生成 Staging JSON，或已在下方创建并派发接力任务 Token。
+                  - generic [ref=e131]:
+                    - strong [ref=e132]: 预计耗时：
+                    - text: 上传及后台校验秒级完成。
+                  - generic [ref=e133]:
+                    - strong [ref=e134]: 常见失败原因：
+                    - text: JSON 字段缺失、Token 已过期或被吊销。
+                  - generic [ref=e135]:
+                    - strong [ref=e136]: 接力同学运行命令：
+                    - generic [ref=e137]:
+                      - generic [ref=e138]:
+                        - generic [ref=e139]: PowerShell / 接力同步
+                        - button "复制全部命令" [ref=e140] [cursor=pointer]
+                      - generic [ref=e143]:
+                        - generic [ref=e144]: "1"
+                        - generic [ref=e145]: npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=YOUR_TOKEN --term=2026-2027-1
+            - generic [ref=e146]:
+              - heading "Staging JSON 上传 / CLI 上传" [level=3] [ref=e147]
+              - paragraph [ref=e148]: 主流程使用 CLI gzip 分片上传。网页上传保留为小文件测试和应急入口；全量 100MB+ 文件建议使用 CLI 上传，网页上传仅用于小文件测试。
+              - generic [ref=e149]:
+                - generic [ref=e150]:
+                  - generic [ref=e151]:
+                    - generic [ref=e152]:
+                      - strong [ref=e153]: 上传中
+                      - text: CLI 显示 chunk 进度与速度
+                    - generic [ref=e154]:
+                      - strong [ref=e155]: 校验中
+                      - text: 服务端合并、解压、校验 hash/size/schema
+                    - generic [ref=e156]:
+                      - strong [ref=e157]: 等待发布
+                      - text: pending-review，只能管理员发布
+                    - generic [ref=e158]:
+                      - strong [ref=e159]: 发布成功
+                      - text: 生成 release 索引并切换小程序数据
+                  - generic [ref=e160]:
+                    - generic [ref=e161]:
+                      - generic [ref=e162]: PowerShell / CLI 上传
+                      - button "复制全部命令" [ref=e163] [cursor=pointer]
+                    - generic [ref=e165]:
+                      - generic [ref=e166]:
+                        - generic [ref=e167]: "1"
+                        - generic [ref=e168]: cd C:\Users\Katelya\Documents\VScode\FosuClass
+                      - generic [ref=e169]:
+                        - generic [ref=e170]: "2"
+                        - generic [ref=e171]: npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=https://class.katelya.eu.org
+                  - button "刷新上传列表" [ref=e173] [cursor=pointer]
+                  - table [ref=e175]:
+                    - rowgroup [ref=e176]:
+                      - row "stagingId 学期 / 版本 大小 分片 状态 counts 更新时间 操作" [ref=e177]:
+                        - columnheader "stagingId" [ref=e178]
+                        - columnheader "学期 / 版本" [ref=e179]
+                        - columnheader "大小" [ref=e180]
+                        - columnheader "分片" [ref=e181]
+                        - columnheader "状态" [ref=e182]
+                        - columnheader "counts" [ref=e183]
+                        - columnheader "更新时间" [ref=e184]
+                        - columnheader "操作" [ref=e185]
+                    - rowgroup [ref=e186]:
+                      - row "暂无 CLI 上传记录" [ref=e187]:
+                        - cell "暂无 CLI 上传记录" [ref=e188]
+                - generic [ref=e189]:
+                  - generic [ref=e190] [cursor=pointer]:
+                    - strong [ref=e191]: 小文件网页上传入口
+                    - paragraph [ref=e192]: 适合 debug JSON 或小文件应急测试；185MB 全量包主流程请使用左侧 CLI gzip 分片上传。若仍使用网页入口，浏览器只按 Blob 分片上传，不会一次性 JSON.parse 大文件。
+                    - button "选择 Staging JSON" [ref=e193]
+                  - generic [ref=e194]:
+                    - strong [ref=e195]: 网页上传失败时的处理
+                    - paragraph [ref=e196]: 常见原因是浏览器内存、反向代理 body 限制或网络中断。直接改用 CLI 分片上传，不需要调大单次 body 作为主方案。
+            - generic [ref=e198]:
+              - generic [ref=e199]:
+                - generic [ref=e201] [cursor=pointer]:
+                  - generic [ref=e202]: "1"
+                  - generic [ref=e203]: 学期/日期
+                - generic [ref=e204] [cursor=pointer]:
+                  - generic [ref=e205]: "2"
+                  - generic [ref=e206]: 选择模式
+                - generic [ref=e207] [cursor=pointer]:
+                  - generic [ref=e208]: "3"
+                  - generic [ref=e209]: 范围/年级
+                - generic [ref=e210] [cursor=pointer]:
+                  - generic [ref=e211]: "4"
+                  - generic [ref=e212]: 生成指令
+                - generic [ref=e213] [cursor=pointer]:
+                  - generic [ref=e214]: "5"
+                  - generic [ref=e215]: 上传Staging
+                - generic [ref=e216] [cursor=pointer]:
+                  - generic [ref=e217]: "6"
+                  - generic [ref=e218]: 校验发布
+              - generic [ref=e221]:
+                - 'heading "Step 1: 配置目标学期与开学日期" [level=4] [ref=e222]'
+                - generic [ref=e223]:
+                  - generic [ref=e224]:
+                    - generic [ref=e225]: 目标学期 (term)
+                    - combobox "目标学期 (term)" [ref=e227]:
+                      - option "2028-2029-2"
+                      - option "2028-2029-1"
+                      - option "2027-2028-2"
+                      - option "2027-2028-1"
+                      - option "2026-2027-2"
+                      - option "2026-2027-1"
+                      - option "2025-2026-2" [selected]
+                      - option "2025-2026-1"
+                      - option "2024-2025-2"
+                      - option "2024-2025-1"
+                      - option "自定义学期..."
+                  - generic [ref=e228]:
+                    - generic [ref=e229]: 学期开始日期 (StartDate)
+                    - textbox "学期开始日期 (StartDate)" [ref=e230]: 2026-03-09
+                - generic [ref=e231]:
+                  - generic [ref=e232]:
+                    - generic [ref=e233]: 发布版本 (releaseVersion)
+                    - textbox "发布版本 (releaseVersion)" [ref=e234]:
+                      - /placeholder: 自动生成或自定义
+                      - text: 202520262-20260604-013113
+                  - generic [ref=e235]:
+                    - generic [ref=e236]: 数据来源 (source)
+                    - combobox "数据来源 (source)" [ref=e237]:
+                      - option "本机校园网采集 (local-campus)" [selected]
+                      - option "接力代理端 (relay-agent)"
+                      - option "手动 Staging JSON 上传 (staging-upload)"
+                      - option "手动维护 (manual-maintain)"
+                      - option "服务器直连兼容模式 (server-direct)"
+                - generic [ref=e239]:
+                  - generic [ref=e240]: 发布说明 (releaseNote)
+                  - textbox "发布说明 (releaseNote)" [ref=e241]:
+                    - /placeholder: "例如: 2026-2027-1 新学期全校课表首版"
+              - generic [ref=e242]:
+                - button "上一步" [disabled] [ref=e243]
+                - button "下一步" [ref=e244] [cursor=pointer]
+            - generic [ref=e245]:
+              - heading "🔁 接力任务管理" [level=3] [ref=e246]
+              - paragraph [ref=e247]: 接力任务适合把采集任务临时交给在校同学。对方只获得一次性 relay token，只能读取任务并上传候选 Staging JSON，不能登录后台、不能发布课表、不能查看管理员配置。
+              - generic [ref=e248]:
+                - generic [ref=e249]:
+                  - generic [ref=e250]: 目标学期
+                  - combobox [ref=e252]:
+                    - option "2028-2029-2"
+                    - option "2028-2029-1"
+                    - option "2027-2028-2"
+                    - option "2027-2028-1"
+                    - option "2026-2027-2"
+                    - option "2026-2027-1"
+                    - option "2025-2026-2" [selected]
+                    - option "2025-2026-1"
+                    - option "2024-2025-2"
+                    - option "2024-2025-1"
+                    - option "自定义学期..."
+                - generic [ref=e253]:
+                  - generic [ref=e254]: 有效期
+                  - combobox [ref=e255]:
+                    - option "24 小时" [selected]
+                    - option "7 天"
+                - generic [ref=e256]:
+                  - generic [ref=e257]: 最大上传次数
+                  - spinbutton [ref=e258]: "1"
+                - generic [ref=e259]:
+                  - generic [ref=e260]: 任务说明
+                  - textbox "全校课表接力采集" [ref=e261]
+              - button "创建接力任务" [ref=e263] [cursor=pointer]
+              - table [ref=e265]:
+                - rowgroup [ref=e266]:
+                  - row "任务 Token / 命令 状态 操作" [ref=e267]:
+                    - columnheader "任务" [ref=e268]
+                    - columnheader "Token / 命令" [ref=e269]
+                    - columnheader "状态" [ref=e270]
+                    - columnheader "操作" [ref=e271]
+                - rowgroup [ref=e272]:
+                  - row "暂无接力任务" [ref=e273]:
+                    - cell "暂无接力任务" [ref=e274]
+              - table [ref=e276]:
+                - rowgroup [ref=e277]:
+                  - row "上传记录 摘要 状态 操作" [ref=e278]:
+                    - columnheader "上传记录" [ref=e279]
+                    - columnheader "摘要" [ref=e280]
+                    - columnheader "状态" [ref=e281]
+                    - columnheader "操作" [ref=e282]
+                - rowgroup [ref=e283]:
+                  - row "暂无接力上传" [ref=e284]:
+                    - cell "暂无接力上传" [ref=e285]
+          - generic [ref=e286]:
+            - generic [ref=e287]:
+              - heading "📖 同步运维命令手册" [level=3] [ref=e288]
+              - generic [ref=e289]:
+                - generic [ref=e291] [cursor=pointer]:
+                  - generic [ref=e292]: 🔧 项目内本机同步 (管理员使用，需要项目根目录)
+                  - generic [ref=e293]:
+                    - generic [ref=e294]: "风险: 中"
+                    - generic [ref=e295]: ⚠️ 需校园网
+                  - text: ▼
+                - generic [ref=e297] [cursor=pointer]:
+                  - generic [ref=e298]: 🔧 上传本地 Staging (管理员使用，需要项目根目录)
+                  - generic [ref=e299]:
+                    - generic [ref=e300]: "风险: 低"
+                    - generic [ref=e301]: 外网可用
+                  - text: ▼
+                - generic [ref=e303] [cursor=pointer]:
+                  - generic [ref=e304]: 🔧 分发命令 (同学使用，使用 relay-agent 工具包)
+                  - generic [ref=e305]:
+                    - generic [ref=e306]: "风险: 低"
+                    - generic [ref=e307]: ⚠️ 需校园网
+                  - text: ▼
+                - generic [ref=e309] [cursor=pointer]:
+                  - generic [ref=e310]: 🔧 发布当前 Staging
+                  - generic [ref=e311]:
+                    - generic [ref=e312]: "风险: 中 (影响小程序线上展示)"
+                    - generic [ref=e313]: 外网可用
+                  - text: ▼
+                - generic [ref=e315] [cursor=pointer]:
+                  - generic [ref=e316]: 🔧 课程格式校验
+                  - generic [ref=e317]:
+                    - generic [ref=e318]: "风险: 低"
+                    - generic [ref=e319]: 外网可用
+                  - text: ▼
+                - generic [ref=e321] [cursor=pointer]:
+                  - generic [ref=e322]: 🔧 服务器直连兼容模式
+                  - generic [ref=e323]:
+                    - generic [ref=e324]: "风险: 中高"
+                    - generic [ref=e325]: ⚠️ 需校园网
+                  - text: ▼
+            - generic [ref=e326]:
+              - generic [ref=e327]:
+                - heading "🌐 API 健康状态检测" [level=3] [ref=e328]
+                - button "一键测试" [ref=e329] [cursor=pointer]
+              - generic [ref=e330]:
+                - generic [ref=e331]:
+                  - generic [ref=e332]: /api/health
+                  - generic [ref=e333]: 200 · 3ms · 正常
+                - generic [ref=e334]:
+                  - generic [ref=e335]: /api/fosu/bootstrap
+                  - generic [ref=e336]: 200 · 3ms · 正常
+                - generic [ref=e337]:
+                  - generic [ref=e338]: /api/fosu/app-config
+                  - generic [ref=e339]: 200 · 3ms · 正常
+                - generic [ref=e340]:
+                  - generic [ref=e341]: /api/admin/dashboard
+                  - generic [ref=e342]: 200 · 258ms · 正常
+                - generic [ref=e343]:
+                  - generic [ref=e344]: /api/admin/catalog/stats
+                  - generic [ref=e345]: 200 · 927ms · 正常
+                - generic [ref=e346]:
+                  - generic [ref=e347]: /api/admin/feedbacks
+                  - generic [ref=e348]: 200 · 928ms · 正常
+        - generic [ref=e349]:
+          - generic [ref=e350]:
+            - generic [ref=e351]:
+              - generic [ref=e352]:
+                - heading "Release 历史" [level=3] [ref=e353]
+                - paragraph [ref=e354]: 最近 5 个发布快照，支持查看当前状态、回滚和下载摘要。
+              - generic [ref=e355]:
+                - generic [ref=e356]: 筛选学期：
+                - combobox "筛选学期：" [ref=e357]:
+                  - option "全部学期" [selected]
+                  - option "2028-2029-2"
+                  - option "2028-2029-1"
+                  - option "2027-2028-2"
+                  - option "2027-2028-1"
+                  - option "2026-2027-2"
+                  - option "2026-2027-1"
+                  - option "2025-2026-2"
+                  - option "2025-2026-1"
+                  - option "2024-2025-2"
+                  - option "2024-2025-1"
+            - generic [ref=e360]:
+              - generic [ref=e361]:
+                - generic [ref=e362]: 26.05.29.22
+                - generic [ref=e363]: active
+              - generic [ref=e364]:
+                - text: term -
+                - text: 发布 2026-06-02 00:44
+              - generic [ref=e365]: class 0 / teacher 0 / classroom 0 / course 0
+              - generic [ref=e366]:
+                - button "查看" [ref=e367] [cursor=pointer]
+                - button "当前活跃" [disabled] [ref=e368]
+                - button "重建索引" [ref=e369] [cursor=pointer]
+                - button "删除" [disabled] [ref=e370]
+          - generic [ref=e371]:
+            - heading "📜 最近同步历史日志" [level=3] [ref=e372]
+            - table [ref=e374]:
+              - rowgroup [ref=e375]:
+                - row "时间 类型 学期 来源 记录数 状态 报错信息" [ref=e376]:
+                  - columnheader "时间" [ref=e377]
+                  - columnheader "类型" [ref=e378]
+                  - columnheader "学期" [ref=e379]
+                  - columnheader "来源" [ref=e380]
+                  - columnheader "记录数" [ref=e381]
+                  - columnheader "状态" [ref=e382]
+                  - columnheader "报错信息" [ref=e383]
+              - rowgroup [ref=e384]:
+                - row "暂无历史同步记录。使用本地 sync-client 同步后将自动上报。" [ref=e385]:
+                  - cell "暂无历史同步记录。使用本地 sync-client 同步后将自动上报。" [ref=e386]
+  - generic [ref=e387]:
+    - generic [ref=e388]:
+      - heading "用户反馈详情与备注处理" [level=3] [ref=e389]
+      - button "×" [ref=e390] [cursor=pointer]
+    - generic [ref=e391]:
+      - generic [ref=e392]:
+        - generic [ref=e393]: 反馈类型
+        - generic [ref=e394]: "-"
+      - generic [ref=e395]:
+        - generic [ref=e396]: 内容描述
+        - generic [ref=e397]: "-"
+      - generic [ref=e398]:
+        - generic [ref=e399]: "提交页面: -"
+        - generic [ref=e400]: "联系方式: -"
+        - generic [ref=e401]: "当前学期: -"
+        - generic [ref=e402]: "数据版本: -"
+        - generic [ref=e403]: "应用版本: -"
+        - generic [ref=e404]: "系统环境: -"
+      - generic [ref=e405]:
+        - generic [ref=e406]: 修改处理状态
+        - combobox [ref=e407]:
+          - option "待处理 (open)" [selected]
+          - option "处理中 (processing)"
+          - option "已解决 (resolved)"
+          - option "已忽略 (ignored)"
+      - generic [ref=e408]:
+        - generic [ref=e409]: 管理员内部备注
+        - textbox "在此记录问题排查过程、处理方式，或备注待联络用户核对。" [ref=e410]
+    - generic [ref=e411]:
+      - button "取消" [ref=e412] [cursor=pointer]
+      - button "保存备注及状态" [ref=e413] [cursor=pointer]
+  - generic [ref=e414]:
+    - generic [ref=e415]:
+      - heading "资源详情" [level=3] [ref=e416]
+      - button "×" [ref=e417] [cursor=pointer]
+    - generic [ref=e418]:
+      - generic [ref=e419]:
+        - heading "管理员配置 (Alias & Meta)" [level=4] [ref=e420]
+        - generic [ref=e421]:
+          - generic [ref=e422]:
+            - generic [ref=e423]: 展示别名 / 覆盖名称 (displayName)
+            - textbox "为空时使用默认名称" [ref=e424]
+          - generic [ref=e425]:
+            - generic [ref=e426]: 后台管理员备注 (adminNote)
+            - textbox "输入关于该班级/教师排课的额外备注..." [ref=e427]
+          - generic [ref=e428]:
+            - generic [ref=e429]:
+              - generic [ref=e430]: 是否在小程序中隐藏 (hidden)
+              - combobox [ref=e431]:
+                - option "显示 (默认)" [selected]
+                - option "在全校课表中隐藏"
+            - generic [ref=e432]:
+              - generic [ref=e433]: 资源分类标签 (逗号分隔)
+              - textbox "例如：重点班, 实验班" [ref=e434]
+      - generic [ref=e435]:
+        - heading "周课表可视化预览" [level=4] [ref=e436]
+        - generic [ref=e437]:
+          - button "上周" [ref=e438] [cursor=pointer]
+          - generic [ref=e439]: 第 1 周
+          - button "下周" [ref=e440] [cursor=pointer]
+          - button "显示周末" [ref=e441] [cursor=pointer]
+      - generic [ref=e443] [cursor=pointer]:
+        - generic [ref=e444]: 展开查看原始数据 (Original JSON)
+        - generic [ref=e445]: ▼
+    - generic [ref=e446]:
+      - button "导出 JSON" [ref=e447] [cursor=pointer]
+      - button "导出 CSV" [ref=e448] [cursor=pointer]
+      - button "保存配置" [ref=e449] [cursor=pointer]
+  - generic [ref=e450]: 控制台面板状态已同步
+  - generic [ref=e451]: 命令已复制到剪贴板。

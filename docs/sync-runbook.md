@@ -59,6 +59,7 @@ npm run sync:local-upload -- --file=./staging/2026-2027-1-full.json --server=htt
 Invoke-RestMethod https://class.katelya.eu.org/api/fosu/app-config
 Invoke-RestMethod https://class.katelya.eu.org/api/fosu/bootstrap
 Invoke-RestMethod "https://class.katelya.eu.org/api/fosu/search-index?type=class"
+Invoke-RestMethod "https://class.katelya.eu.org/api/fosu/empty-classrooms?date=2026-06-02&week=13&weekday=2&sections=3-4&building=C7"
 Invoke-RestMethod "https://class.katelya.eu.org/api/fosu/client-diagnosis"
 ```
 

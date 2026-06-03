@@ -62,6 +62,21 @@ relay token 不能调用：
 - `uploadCount >= maxUploads` 后，继续上传会被拒绝。
 - relay 上传状态只会进入 `pending-review`，不能直接发布正式 release。
 
+## 生命周期检查清单
+
+每次开学季或交接给新同学前，至少确认以下状态都能被后台或测试覆盖：
+
+1. 管理员创建 relay task。
+2. 复制分发命令或 zip 包说明。
+3. agent 拉取任务详情。
+4. agent 在校园网电脑登录并采集。
+5. agent 使用 gzip chunk 上传。
+6. 上传进入 `pending-review`，等待管理员审核。
+7. 管理员可吊销任务。
+8. 管理员可删除任务。
+9. 过期任务拒绝继续上传。
+10. 上传次数超过 `maxUploads` 后拒绝继续上传。
+
 ## 审核边界
 
 接力上传不会直接影响小程序线上数据。数据必须先进入 relay upload area，再由管理员提升为 Staging，最后由管理员发布正式 release。

@@ -3757,6 +3757,12 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
           throw new Error(`Failed to build index for ${kind}: ${warmed ? warmed.reasonCode : 'unknown'}`);
         }
       });
+      const emptyRoomIndex = releaseService.readEmptyRoomIndex(status.activeReleaseVersion);
+      if (emptyRoomIndex && emptyRoomIndex.success) {
+        totalItems += (emptyRoomIndex.rooms || []).length;
+      } else {
+        throw new Error(`Failed to build empty-room index: ${emptyRoomIndex ? emptyRoomIndex.reasonCode : 'unknown'}`);
+      }
       indexBuildResult.count = totalItems;
     } catch (indexErr) {
       console.error("Failed to build index on publish:", indexErr);
@@ -3905,6 +3911,10 @@ router.post("/sync/releases/rebuild-index", adminAuth.verifyAdminAccess, async (
         totalItems += (warmed.items || []).length;
       }
     });
+    const emptyRoomIndex = releaseService.readEmptyRoomIndex(version);
+    if (emptyRoomIndex && emptyRoomIndex.success) {
+      totalItems += (emptyRoomIndex.rooms || []).length;
+    }
     
     writeAuditLog(req, "rebuild-index", "sync-release", version, `重建版本 ${version} 的轻量索引`);
     
@@ -3928,7 +3938,8 @@ router.get("/sync/releases/check-availability", adminAuth.verifyAdminAccess, asy
       activeReleaseVersion: active ? active.version : null,
       appConfig: { status: "unknown", message: "" },
       searchIndex: { status: "unknown", details: {} },
-      scheduleDetail: { status: "unknown", details: {} }
+      scheduleDetail: { status: "unknown", details: {} },
+      emptyRoom: { status: "unknown", details: {} }
     };
     
     // 1. Check App Config
@@ -4005,6 +4016,24 @@ router.get("/sync/releases/check-availability", adminAuth.verifyAdminAccess, asy
     } catch (e) {
       result.scheduleDetail.status = "Fail";
       result.scheduleDetail.message = e.message;
+    }
+
+    // 4. Check Empty Room Index
+    try {
+      const emptyRoomIndex = releaseService.readEmptyRoomIndex(active.version);
+      if (emptyRoomIndex && emptyRoomIndex.success) {
+        result.emptyRoom.status = "OK";
+        result.emptyRoom.details = {
+          count: (emptyRoomIndex.rooms || []).length,
+          buildings: emptyRoomIndex.buildings || [],
+        };
+      } else {
+        result.emptyRoom.status = "Fail";
+        result.emptyRoom.message = emptyRoomIndex ? (emptyRoomIndex.reasonCode || emptyRoomIndex.code) : "读取失败";
+      }
+    } catch (e) {
+      result.emptyRoom.status = "Fail";
+      result.emptyRoom.message = e.message;
     }
     
     return res.json({ success: true, result });

@@ -9,6 +9,7 @@
     "pages/timetable/timetable",
     "pages/login/login",
     "pages/schedule-view/schedule-view",
+    "pages/empty-room/empty-room",
     "pages/contribute/contribute",
     "pages/personal-sync/personal-sync"
   ],

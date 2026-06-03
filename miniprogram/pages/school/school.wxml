@@ -83,6 +83,14 @@
       <text class="school-notice-text">{{schoolNotice.title}}</text>
     </view>
 
+    <view class="tool-entry-card card" bindtap="goEmptyRoom">
+      <view class="tool-entry-main">
+        <view class="tool-entry-title">空教室查询</view>
+        <view class="tool-entry-desc">按日期、节次和教学楼查找当前 release 的可用教室</view>
+      </view>
+      <view class="tool-entry-action">去查询</view>
+    </view>
+
     <block wx:if="{{activeTab === 'class'}}">
       <!-- 1. 班级 Tab -->
       <view class="tab-panel">

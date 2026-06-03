@@ -121,18 +121,20 @@ Page({
   },
 
   onLoad(options) {
-    const { type = "class", name = "", semester = "2025-2026-2", displayType = "", isAggregated = "", shareScheduleId = "" } = options;
+    const { type = "class", name = "", id = "", semester = "2025-2026-2", term = "", releaseVersion = "", displayType = "", isAggregated = "", shareScheduleId = "" } = options;
     const decodedName = safeDecodeURIComponent(name);
-    const decodedSemester = safeDecodeURIComponent(semester);
+    const decodedId = safeDecodeURIComponent(id);
+    const decodedSemester = safeDecodeURIComponent(term || semester);
+    const decodedReleaseVersion = safeDecodeURIComponent(releaseVersion);
     const decodedDisplayType = safeDecodeURIComponent(displayType);
     const aggregated = isTruthyParam(isAggregated) || decodedDisplayType === "major-schedule" || decodedDisplayType === "major-shared-schedule";
-    const title = decodedName;
+    const title = decodedName || decodedId;
     const isFromShare = !!shareScheduleId;
     
     this.setData({
       type,
       typeText: getTypeText(type),
-      name: decodedName,
+      name: decodedName || decodedId,
       title,
       semester: decodedSemester,
       displayType: decodedDisplayType,
@@ -175,9 +177,47 @@ Page({
 
     // 降级与分享异步拉取处理
     setTimeout(() => {
-      if (!hasLoadedData && decodedName) {
+      if (!hasLoadedData && (decodedName || decodedId)) {
         wx.showLoading({ title: "正在拉取课表..." });
         const request = require("../../utils/request");
+        const loadByIndexedId = Boolean(decodedId);
+
+        if (loadByIndexedId) {
+          request.get("/api/fosu/schedule-detail", {
+            type,
+            id: decodedId,
+            term: decodedSemester,
+            releaseVersion: decodedReleaseVersion,
+          }, { showLoading: false, silentError: true, timeout: 30000 })
+            .then((res) => {
+              wx.hideLoading();
+              const schedule = res.schedule || {};
+              const courses = Array.isArray(schedule.courses) ? schedule.courses : [];
+              if (!res || res.success === false || !courses.length) {
+                this.showScheduleOpenError();
+                this.initScheduleLayout();
+                return;
+              }
+              this.setData({
+                name: decodedName || schedule.className || schedule.teacherName || schedule.roomName || schedule.courseName || decodedId,
+                title: decodedName || schedule.className || schedule.teacherName || schedule.roomName || schedule.courseName || decodedId,
+                allCourses: courses,
+                scheduleMeta: Object.assign({}, schedule, {
+                  scheduleVersion: res.releaseVersion || res.version || decodedReleaseVersion,
+                }),
+              }, () => {
+                this.initScheduleLayout();
+              });
+            })
+            .catch((err) => {
+              wx.hideLoading();
+              console.error("按索引拉取课表失败", err);
+              this.showScheduleOpenError();
+              this.initScheduleLayout();
+            });
+          return;
+        }
+
         let apiUrl = "/api/fosu/class-schedule";
         let requestParams = {
           semester: decodedSemester,
@@ -241,6 +281,22 @@ Page({
                       currentTarget.semester === this.data.semester;
     this.setData({
       isCurrentTarget: Boolean(isCurrent),
+    });
+  },
+
+  showScheduleOpenError() {
+    wx.showModal({
+      title: "未找到课表",
+      content: "该链接对应的课表不存在或已被新版本替换，可返回全校搜索重新查找。",
+      confirmText: "去全校",
+      cancelText: "留在此页",
+      success: (res) => {
+        if (res.confirm) {
+          wx.switchTab({
+            url: "/pages/school/school",
+          });
+        }
+      },
     });
   },
 
@@ -442,9 +498,11 @@ Page({
 
   onShareAppMessage() {
     const meta = this.data.scheduleMeta || {};
+    const detailId = meta.detailId || meta.id || meta.classId || this.data.name || "";
+    const releaseVersion = meta.scheduleVersion || meta.releaseVersion || "";
     return {
       title: `${this.data.name}的课程安排 · ${BRAND.appName}`,
-      path: `/pages/schedule-view/schedule-view?shareScheduleId=${encodeURIComponent(meta.classId || this.data.name)}&name=${encodeURIComponent(this.data.name)}&type=${this.data.type}&semester=${encodeURIComponent(this.data.semester)}&displayType=${encodeURIComponent(this.data.displayType || "")}&isAggregated=${this.data.isAggregated ? "1" : "0"}&preview=1`
+      path: `/pages/schedule-view/schedule-view?shareScheduleId=${encodeURIComponent(meta.classId || this.data.name)}&id=${encodeURIComponent(detailId)}&name=${encodeURIComponent(this.data.name)}&type=${this.data.type}&semester=${encodeURIComponent(this.data.semester)}&term=${encodeURIComponent(this.data.semester)}&releaseVersion=${encodeURIComponent(releaseVersion)}&displayType=${encodeURIComponent(this.data.displayType || "")}&isAggregated=${this.data.isAggregated ? "1" : "0"}&preview=1`
     };
   }
 });

@@ -23,6 +23,14 @@
     <view class="alert-content">{{releaseNote || dataVersionText}}</view>
   </view>
 
+  <view class="quick-empty-card card" bindtap="goEmptyRoom">
+    <view class="quick-empty-main">
+      <view class="quick-empty-title">找空教室</view>
+      <view class="quick-empty-desc">按当前时间查询附近可用教室</view>
+    </view>
+    <view class="quick-empty-action">查询</view>
+  </view>
+
   <view wx:if="{{courses.length}}" class="today-list">
     <course-card
       wx:for="{{courses}}"
