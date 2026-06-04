@@ -54,7 +54,9 @@ Page({
       .catch((err) => {
         console.warn("今日页公告配置加载失败", err);
         this.setData({
-          appConfig: Object.assign({ notices: [], banners: [], appConfig: {} }, this.data.appConfig || {}),
+          appConfig: appConfigService.normalizeConfig
+            ? appConfigService.normalizeConfig(this.data.appConfig)
+            : Object.assign({ notices: [], banners: [], appConfig: {} }, this.data.appConfig || {}),
           urgentNotice: null,
         });
       });

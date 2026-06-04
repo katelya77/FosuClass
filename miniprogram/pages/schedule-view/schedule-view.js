@@ -4,6 +4,7 @@ const { mockCalendar } = require("../../data/mockCalendar");
 const { buildScheduleColumns, normalizeCourse } = require("../../utils/course");
 const { getSettings, saveSettings } = require("../../utils/storage");
 const customCourseService = require("../../services/customCourseService");
+const releasePackService = require("../../services/releasePackService");
 const {
   TOTAL_WEEKS,
   clampWeek,
@@ -125,7 +126,10 @@ Page({
     const decodedName = safeDecodeURIComponent(name);
     const decodedId = safeDecodeURIComponent(id);
     const decodedSemester = safeDecodeURIComponent(term || semester);
-    const decodedReleaseVersion = safeDecodeURIComponent(releaseVersion);
+    const localActiveRelease = releasePackService.getLocalActiveRelease(decodedSemester);
+    const decodedReleaseVersion = safeDecodeURIComponent(releaseVersion) ||
+      (localActiveRelease && localActiveRelease.releaseVersion) ||
+      "";
     const decodedDisplayType = safeDecodeURIComponent(displayType);
     const aggregated = isTruthyParam(isAggregated) || decodedDisplayType === "major-schedule" || decodedDisplayType === "major-shared-schedule";
     const title = decodedName || decodedId;
@@ -179,19 +183,26 @@ Page({
     setTimeout(() => {
       if (!hasLoadedData && (decodedName || decodedId)) {
         wx.showLoading({ title: "正在拉取课表..." });
-        const request = require("../../utils/request");
         const loadByIndexedId = Boolean(decodedId);
 
         if (loadByIndexedId) {
-          request.get("/api/fosu/schedule-detail", {
-            type,
-            id: decodedId,
+          if (!type || !decodedId || !decodedReleaseVersion) {
+            wx.hideLoading();
+            this.showScheduleOpenError();
+            this.initScheduleLayout();
+            return;
+          }
+          releasePackService.loadDetail(type, decodedId, {
             term: decodedSemester,
             releaseVersion: decodedReleaseVersion,
-          }, { showLoading: false, silentError: true, timeout: 30000 })
+          }, {
+            forceNetwork: true,
+            timeout: 12000,
+            retries: 1,
+          })
             .then((res) => {
               wx.hideLoading();
-              const schedule = res.schedule || {};
+              const schedule = res.schedule || res.detail || {};
               const courses = Array.isArray(schedule.courses) ? schedule.courses : [];
               if (!res || res.success === false || !courses.length) {
                 this.showScheduleOpenError();
@@ -218,6 +229,7 @@ Page({
           return;
         }
 
+        const request = require("../../utils/request");
         let apiUrl = "/api/fosu/class-schedule";
         let requestParams = {
           semester: decodedSemester,

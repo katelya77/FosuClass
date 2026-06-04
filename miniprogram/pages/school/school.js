@@ -133,7 +133,7 @@ function getClassEmptyState(reasonCode) {
 
 function normalizeIndexedScheduleItem(type, item, version) {
   const source = item || {};
-  const name = source.name || source.teacherName || source.roomName || source.classroomName || source.courseName || "";
+  const name = source.name || source.teacherName || source.displayName || source.title || source.roomName || source.classroomName || source.courseName || "";
   const common = Object.assign({}, source, {
     detailId: source.id || name,
     scheduleVersion: version || source.version || "",
@@ -142,7 +142,9 @@ function normalizeIndexedScheduleItem(type, item, version) {
   });
   if (type === "teacher") {
     return Object.assign(common, {
-      teacherName: source.teacherName || name,
+      teacherName: source.teacherName || source.name || source.displayName || source.title || name,
+      displayName: source.displayName || source.teacherName || source.name || source.title || name,
+      title: source.title || source.teacherTitle || source.professionalTitle || "",
       college: source.college || source.collegeName || "教师课表",
     });
   }
@@ -1020,61 +1022,71 @@ Page({
     const cacheKey = this.getFilterCacheKey();
     const cache = wx.getStorageSync(cacheKey);
     if (!cache) {
-      this.printSchoolDebugLog(false, "", "无缓存数据");
+      this.printSchoolDebugLog(false, "", "no cached filter");
       this.applySharedQueryIfNeeded();
       return;
     }
 
-    // 1. 恢复学期
     let selectedSemesterIndex = 0;
     if (cache.semesterValue) {
       const semIdx = this.data.semesters.findIndex(s => s.value === cache.semesterValue);
       if (semIdx >= 0) selectedSemesterIndex = semIdx;
     }
 
-    // 2. 校验并恢复学院
+    const finishDowngrade = (level, reason) => {
+      this.printSchoolDebugLog(true, level, reason);
+      this.saveFilterCache();
+      this.showFilterChangedHint("部分筛选项已更新，已恢复到可用层级");
+      this.applySharedQueryIfNeeded();
+    };
+
     const collegeIdx = this.data.colleges.findIndex(c => c.code === cache.collegeCode);
     if (collegeIdx < 0) {
-      this.setData({ selectedSemesterIndex });
-      this.printSchoolDebugLog(true, "未恢复", `学院 ${cache.collegeName || cache.collegeCode} 在当前快照中已不存在`);
-      wx.removeStorageSync(cacheKey);
-      this.showFilterChangedHint("部分筛选项已更新，请重新选择");
+      this.setData({
+        selectedSemesterIndex,
+        selectedCollegeIndex: -1,
+        selectedGradeIndex: -1,
+        selectedMajorIndex: -1,
+        selectedClassIndex: -1,
+        majors: [],
+        classesOptions: [],
+      }, () => finishDowngrade("semester", `college missing: ${cache.collegeName || cache.collegeCode || "-"}`));
       return;
     }
 
-    // 3. 校验并恢复年级
     const gradeIdx = this.data.grades.indexOf(cache.grade);
     if (gradeIdx < 0) {
       this.setData({
         selectedSemesterIndex,
-        selectedCollegeIndex: collegeIdx
-      });
-      this.printSchoolDebugLog(true, "学院级", `年级 ${cache.grade} 在当前年级列表中已不存在`);
-      this.saveFilterCache();
-      this.showFilterChangedHint("部分筛选项已更新，请重新选择");
+        selectedCollegeIndex: collegeIdx,
+        selectedGradeIndex: -1,
+        selectedMajorIndex: -1,
+        selectedClassIndex: -1,
+        majors: [],
+        classesOptions: [],
+      }, () => finishDowngrade("college", `grade missing: ${cache.grade || "-"}`));
       return;
     }
 
-    // 4. 设置学期、学院、年级索引并异步拉取专业进行恢复
     this.setData({
       selectedSemesterIndex,
       selectedCollegeIndex: collegeIdx,
       selectedGradeIndex: gradeIdx
     }, () => {
       this.fetchMajors().then((majors) => {
-        // 校验并恢复专业
         const majorIdx = majors.findIndex(m => m.code === cache.majorCode);
         if (majorIdx < 0) {
-          this.printSchoolDebugLog(true, "学院+年级级", `专业 ${cache.majorName || cache.majorCode} 不存在于该学院或年级下`);
-          this.saveFilterCache();
-          this.showFilterChangedHint("部分筛选项已更新，请重新选择");
+          this.setData({
+            selectedMajorIndex: -1,
+            selectedClassIndex: -1,
+            classesOptions: [],
+          }, () => finishDowngrade("grade", `major missing: ${cache.majorName || cache.majorCode || "-"}`));
           return;
         }
 
         this.setData({
           selectedMajorIndex: majorIdx
         }, () => {
-          // 校验并恢复班级
           this.fetchClasses().then((classesOptions) => {
             let classIdx = -1;
             if (cache.classId) {
@@ -1085,26 +1097,28 @@ Page({
             }
 
             if (classIdx < 0) {
-              this.printSchoolDebugLog(true, "专业级", `班级 ${cache.className || cache.classId} 在该专业下已不存在`);
-              this.saveFilterCache();
-              this.showFilterChangedHint("部分筛选项已更新，请重新选择");
+              this.setData({ selectedClassIndex: -1 }, () => {
+                finishDowngrade("major", `class missing: ${cache.className || cache.classId || "-"}`);
+              });
               return;
             }
 
             this.setData({
               selectedClassIndex: classIdx
             });
-            this.printSchoolDebugLog(true, "班级级 (完全恢复)", "已完全恢复上次筛选状态");
+            this.printSchoolDebugLog(true, "class", "restored cached filter");
             this.showRestoreHint();
             this.applySharedQueryIfNeeded();
           }).catch(err => {
-            this.printSchoolDebugLog(true, "专业级", "拉取班级列表失败: " + err.message);
-            this.showFilterChangedHint("部分筛选项已更新，请重新选择");
+            this.setData({ selectedClassIndex: -1, classesOptions: [] }, () => {
+              finishDowngrade("major", "class list failed: " + (err && err.message || "unknown"));
+            });
           });
         });
       }).catch(err => {
-        this.printSchoolDebugLog(true, "学院+年级级", "拉取专业列表失败: " + err.message);
-        this.showFilterChangedHint("部分筛选项已更新，请重新选择");
+        this.setData({ selectedMajorIndex: -1, selectedClassIndex: -1, majors: [], classesOptions: [] }, () => {
+          finishDowngrade("grade", "major list failed: " + (err && err.message || "unknown"));
+        });
       });
     });
   },
@@ -1186,17 +1200,11 @@ Page({
 
   printSchoolDebugLog(hit, level, reason) {
     if (platformUtils.isDeveloperEnv()) {
-      console.log("========== [开发环境全校页面调试日志] ==========");
-      console.log("- 是否命中 FOSU_SCHOOL_FILTER_CACHE:", hit ? "是" : "否");
-      if (hit) {
-        console.log("- 恢复到了哪一级:", level);
-        if (reason) {
-          console.log("- 缓存失效原因 / 说明:", reason);
-        }
-      } else {
-        console.log("- 未命中原因:", reason);
-      }
-      console.log("=================================================");
+      console.log("[school] filter cache", {
+        hit: Boolean(hit),
+        restoredLevel: level || "",
+        reason: reason || "",
+      });
     }
   },
 
@@ -1552,12 +1560,14 @@ Page({
       this.setData({
         teachersResult: teachers,
         dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
-        updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
+        updatedAtText: teachers.length
+          ? (formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引")
+          : "未找到相关教师",
       });
     };
 
     const catchFn = () => {
-      this.setData({ teachersResult: [], updatedAtText: "", dataVersionText: "" });
+      this.setData({ teachersResult: [], updatedAtText: "未找到相关教师", dataVersionText: "" });
     };
 
     this.executeSearch("teacher", params, renderFn, catchFn);
@@ -1666,6 +1676,13 @@ Page({
     const detailId = item.detailId || item.id || displayName;
     const semester = item.semester || this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
     const version = this.getReleaseVersionForCache(item.scheduleVersion);
+    if (!type || !detailId || !version) {
+      wx.showToast({ title: "课表详情参数缺失", icon: "none" });
+      if (platformUtils.isDeveloperEnv()) {
+        console.warn("[school] skip invalid schedule detail request", { type, detailId, version });
+      }
+      return;
+    }
     const cachedDetail = releasePackService.readCachedDetail(type, detailId, {
       term: semester,
       releaseVersion: version,
@@ -1695,26 +1712,11 @@ Page({
         this.navigateToScheduleView(type, displayName, schedule.courses || [], meta);
       })
       .catch((err) => {
-        request.get("/api/fosu/schedule-detail", {
-          term: semester,
-          type,
-          id: detailId,
-          releaseVersion: version,
-        }, { showLoading: false, silentError: true })
-          .then((data) => {
-            wx.hideLoading();
-            const schedule = data.schedule || {};
-            const nextVersion = data.version || version;
-            this.setScheduleDetailCache(type, detailId, nextVersion, semester, schedule);
-            const meta = Object.assign({}, item, schedule, { semester, scheduleVersion: nextVersion });
-            if (type === "class") this.saveRecentSchedule(meta);
-            this.navigateToScheduleView(type, displayName, schedule.courses || [], meta);
-          })
-          .catch(() => {
-            wx.hideLoading();
-            wx.showToast({ title: "课表详情加载失败", icon: "none" });
-            console.error("openIndexedSchedule fail", err);
-          });
+        wx.hideLoading();
+        wx.showToast({ title: "课表详情加载失败", icon: "none" });
+        if (platformUtils.isDeveloperEnv()) {
+          console.warn("[school] openIndexedSchedule fail", err);
+        }
       });
   },
 
@@ -2660,6 +2662,9 @@ Page({
         return data;
       })
       .catch((error) => {
+        if (type === "teacher") {
+          throw error;
+        }
         return request.get("/api/fosu/search-index", query, Object.assign({
           showLoading: false,
           silentError: true,
@@ -2749,6 +2754,9 @@ Page({
         forceNetwork: true,
         timeout: SCHOOL_REQUEST_TIMEOUT,
       }).catch((packError) => {
+        if (type === "teacher") {
+          throw packError;
+        }
         return request.get("/api/fosu/search-index", query, {
           showLoading: false,
           silentError: true,

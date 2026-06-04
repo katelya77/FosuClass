@@ -1,6 +1,9 @@
 const request = require("../utils/request");
 const { API_BASE_URL, STATIC_RELEASE_BASE_URL } = require("../config/api");
 const { normalizeBuilding, UNKNOWN_BUILDING_NAME } = require("../utils/buildingNormalizer");
+const { BOOTSTRAP_CACHE_KEY } = require("../utils/storage");
+const appConfigService = require("./appConfigService");
+const platformDataService = require("./platformDataService");
 
 const DEFAULT_TERM = "2025-2026-2";
 const CACHE_PREFIX = "fosu:v5";
@@ -236,6 +239,51 @@ function getLastKnownGood(term) {
   };
 }
 
+function pickReleaseVersion(source) {
+  if (!source || typeof source !== "object") return "";
+  const data = source.data || source;
+  const version = data.dataVersion || data.versionData || {};
+  return data.releaseVersion ||
+    data.activeReleaseVersion ||
+    data.version ||
+    version.releaseVersion ||
+    version.activeReleaseVersion ||
+    (data.versions && (data.versions.snapshot || data.versions.releaseVersion)) ||
+    "";
+}
+
+function readCachedBootstrap() {
+  return readStorage(BOOTSTRAP_CACHE_KEY) || null;
+}
+
+function getKnownReleaseCandidate(options = {}) {
+  const term = options.term || DEFAULT_TERM;
+  const explicit = options.releaseVersion || options.version || pickReleaseVersion(options.manifest);
+  if (explicit) return String(explicit);
+
+  const cachedConfig = appConfigService.getCachedAppConfig && appConfigService.getCachedAppConfig();
+  const configVersion = pickReleaseVersion(cachedConfig);
+  if (configVersion) return String(configVersion);
+
+  const bootstrapVersion = pickReleaseVersion(readCachedBootstrap());
+  if (bootstrapVersion) return String(bootstrapVersion);
+
+  const platformSnapshot = platformDataService.getCachedPlatformSnapshot && platformDataService.getCachedPlatformSnapshot();
+  if (platformSnapshot && platformSnapshot.releaseVersion) return String(platformSnapshot.releaseVersion);
+
+  const localActive = getLocalActiveRelease(term);
+  if (localActive && localActive.releaseVersion) return String(localActive.releaseVersion);
+
+  const cachedManifest = readCachedManifest(term);
+  if (cachedManifest && cachedManifest.releaseVersion) return String(cachedManifest.releaseVersion);
+
+  return "";
+}
+
+function resolveStaticManifestUrl(releaseVersion) {
+  return releaseVersion ? joinUrl(STATIC_RELEASE_BASE_URL || joinUrl(API_BASE_URL, "static/releases"), releaseVersion, "manifest.json") : "";
+}
+
 function getLocalActiveRelease(term) {
   const active = readStorage(LOCAL_ACTIVE_RELEASE_KEY);
   const manifest = normalizeManifest(active && active.manifest);
@@ -298,16 +346,28 @@ function writeIndexCache(type, payload) {
 }
 
 function fetchManifest(options = {}) {
+  const releaseVersion = getKnownReleaseCandidate(options);
   const query = {};
-  if (options.releaseVersion || options.version) {
-    query.releaseVersion = options.releaseVersion || options.version;
+  if (releaseVersion) {
+    query.releaseVersion = releaseVersion;
   }
-  return request.get("/api/fosu/release-pack/manifest", query, {
+  const requestOptions = {
     showLoading: false,
     silentError: true,
     timeout: options.timeout || 8000,
     retries: options.retries === undefined ? 1 : options.retries,
-  }).then((payload) => assertManifest(normalizeManifest(payload)));
+  };
+  const staticUrl = resolveStaticManifestUrl(releaseVersion);
+  const loadDynamic = () => request.get("/api/fosu/release-pack/manifest", query, requestOptions)
+    .then((payload) => assertManifest(normalizeManifest(payload)));
+  if (!staticUrl) {
+    return loadDynamic();
+  }
+  return request.get(staticUrl, {}, requestOptions)
+    .then((payload) => assertManifest(normalizeManifest(payload)))
+    .catch((staticError) => loadDynamic().catch(() => {
+      throw staticError;
+    }));
 }
 
 function getActiveManifest(options = {}) {
@@ -506,13 +566,18 @@ function filterIndexPayload(type, payload, params = {}) {
   const limit = Math.min(Math.max(parseInt(params.limit || "30", 10) || 30, 1), 100);
   const offset = Math.max(parseInt(params.offset || "0", 10) || 0, 0);
   const scoped = (index.items || []).filter((item) => {
-    if (!matchesExact(item, params.semester || params.term, ["semester", "term"])) return false;
-    if (!matchesExact(item, params.collegeCode, ["collegeCode"])) return false;
-    if (!matchesExact(item, params.collegeName, ["collegeName", "college"])) return false;
-    if (!matchesExact(item, params.grade, ["grade"])) return false;
-    if (!matchesExact(item, params.majorCode, ["majorCode"])) return false;
-    if (!matchesExact(item, params.majorName, ["majorName"])) return false;
-    if (!matchesExact(item, params.campus, ["campus", "campusName"])) return false;
+    const comparable = Object.assign({
+      term: index.term,
+      semester: index.semester || index.term,
+    }, item || {});
+    if (!matchesExact(comparable, params.semester || params.term, ["semester", "term"])) return false;
+    if (!matchesExact(comparable, params.collegeCode, ["collegeCode"])) return false;
+    if (!matchesExact(comparable, params.collegeName, ["collegeName", "college"])) return false;
+    if (!matchesExact(comparable, params.grade, ["grade"])) return false;
+    if (!matchesExact(comparable, params.majorCode, ["majorCode"])) return false;
+    if (!matchesExact(comparable, params.majorName, ["majorName"])) return false;
+    if (!matchesExact(comparable, params.campus, ["campus", "campusName"])) return false;
+    if (!matchesExact(comparable, params.titleCode || params.title, ["titleCode", "title", "teacherTitle", "professionalTitle"])) return false;
     return true;
   });
   const filtered = q
@@ -520,11 +585,19 @@ function filterIndexPayload(type, payload, params = {}) {
         const haystack = [
           item.id,
           item.name,
+          item.displayName,
+          item.title,
+          item.teacherTitle,
+          item.professionalTitle,
           item.className,
           item.teacherName,
+          item.displayTeacherName,
+          item.canonicalTeacherName,
           item.roomName,
           item.classroomName,
           item.courseName,
+          item.displayCourseName,
+          item.canonicalCourseName,
           item.collegeName,
           item.majorName,
           item.grade,
@@ -614,6 +687,11 @@ function writeDetailCache(type, id, payload) {
 function loadDetail(type, id, params = {}, options = {}) {
   const term = params.term || params.semester || options.term || DEFAULT_TERM;
   const releaseVersion = params.releaseVersion || params.version || options.releaseVersion || "";
+  if (!type || !id) {
+    const error = new Error("INVALID_RELEASE_PACK_DETAIL_TARGET");
+    error.code = "INVALID_RELEASE_PACK_DETAIL_TARGET";
+    return Promise.reject(error);
+  }
   const cached = readCachedDetail(type, id, { term, releaseVersion });
   if (cached && !options.forceNetwork) {
     return Promise.resolve(cached);
@@ -639,10 +717,19 @@ function loadDetail(type, id, params = {}, options = {}) {
     ? request.get(staticUrl, {}, requestOptions)
     : Promise.reject(Object.assign(new Error("STATIC_RELEASE_URL_MISSING"), { code: "STATIC_RELEASE_URL_MISSING" }));
   return loadStatic
-    .catch((staticError) => request.get(`/api/fosu/release-pack/detail/${type}/${encodeURIComponent(id)}`, { term, releaseVersion }, requestOptions)
-      .catch(() => {
+    .catch((staticError) => {
+      if (!type || !id || !releaseVersion) {
         throw staticError;
-      }))
+      }
+      return request.get("/api/fosu/schedule-detail", {
+        term,
+        type,
+        id,
+        releaseVersion,
+      }, requestOptions).catch(() => {
+        throw staticError;
+      });
+    })
     .then((payload) => writeDetailCache(type, id, normalizeDetailPayload(type, id, payload, { term, releaseVersion })))
     .catch((error) => {
       if (cached) {

@@ -17,6 +17,7 @@ const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
 const relayService = require("../services/relayService");
 const stagingUploadService = require("../services/stagingUploadService");
+const staticReleaseSyncService = require("../services/staticReleaseSyncService");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const zlib = require("zlib");
@@ -25,7 +26,7 @@ const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
 const HISTORY_DIR = path.join(SNAPSHOTS_DIR, "history");
 const RESOURCE_UPLOAD_DIR = path.join(STORAGE_DIR, "resource-upload-staging");
 
-const DATA_DIR = path.join(__dirname, "../../data");
+const DATA_DIR = path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../data"));
 const BACKUPS_DIR = path.join(DATA_DIR, "backups");
 const AUDIT_LOG_PATH = path.join(DATA_DIR, "admin-audit-log.jsonl");
 const CATALOG_META_PATH = path.join(STORAGE_DIR, "catalog-meta.json");
@@ -1969,6 +1970,9 @@ router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
     activeReleaseActivatedAt: activeInfo?.activatedAt || null,
   };
   const releasePackStatus = activeInfo?.version ? releaseService.getReleasePackQuickHealth(activeInfo.version) : null;
+  const staticSync = staticReleaseSyncService.getSyncStatus({
+    version: activeInfo?.version || releaseStatus.activeReleaseVersion || "",
+  });
   const feedbackStats = feedbackService.getFeedbackStats();
   const resourcesUpdatedAt = getUpdatedAt("teacher-schedules") || getUpdatedAt("classroom-schedules") || getUpdatedAt("course-schedules") || (snapshotMeta ? snapshotMeta.updatedAt : null);
   const teacherScheduleCount = getItemCount("teacher-schedules") || (snapshotMeta ? snapshotMeta.teacherScheduleCount : 0);
@@ -2015,6 +2019,13 @@ router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
     latestJob: jobService.publicJob(latestJob),
     releasePackStatus,
     releasePackHealthy: Boolean(releasePackStatus && releasePackStatus.healthy),
+    staticSync,
+    staticManifestUrl: staticSync.staticManifestUrl,
+    staticClassIndexUrl: staticSync.staticClassIndexUrl,
+    staticEmptyRoomIndexUrl: staticSync.staticEmptyRoomIndexUrl,
+    openRestyStaticSyncStatus: staticSync.status,
+    lastStaticSyncTime: staticSync.lastSyncTime || staticSync.syncedAt || staticSync.updatedAt || null,
+    staticRetainedReleases: staticSync.keptReleases || [],
     storageMounted: isStorageMounted(),
     storagePath: STORAGE_DIR,
     metaDetails: meta,
@@ -3436,6 +3447,9 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
     const releasePackStatus = activeInfo && activeInfo.version
       ? releaseService.getReleasePackQuickHealth(activeInfo.version)
       : null;
+    const staticSync = staticReleaseSyncService.getSyncStatus({
+      version: activeInfo && activeInfo.version || meta.releaseVersion || "",
+    });
     const latestJob = jobService.latestJob();
     return res.json({
       success: true,
@@ -3444,6 +3458,13 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
         semester: appConfigService.getAdminConfig().currentSemester,
         releasePackStatus,
         releasePackHealthy: Boolean(releasePackStatus && releasePackStatus.healthy),
+        staticSync,
+        staticManifestUrl: staticSync.staticManifestUrl,
+        staticClassIndexUrl: staticSync.staticClassIndexUrl,
+        staticEmptyRoomIndexUrl: staticSync.staticEmptyRoomIndexUrl,
+        openRestyStaticSyncStatus: staticSync.status,
+        lastStaticSyncTime: staticSync.lastSyncTime || staticSync.syncedAt || staticSync.updatedAt || null,
+        staticRetainedReleases: staticSync.keptReleases || [],
         latestJob: jobService.publicJob(latestJob),
         classScheduleUpdatedAt: syncMeta["class-schedules"]?.updatedAt || null,
         teacherScheduleUpdatedAt: syncMeta["teacher-schedules"]?.updatedAt || null,
@@ -3498,7 +3519,23 @@ function throwPublishError(code, message, extra) {
   throw error;
 }
 
-function runStagingPublishCore(input, job) {
+async function writeReleasePackSyncAndActivate(stagingData, job) {
+  if (job) job.progress(45, "generate release pack");
+  const written = releaseService.writeReleaseSnapshot(stagingData);
+  const releaseVersion = written.version || written.releaseVersion;
+
+  if (job) job.progress(58, "sync OpenResty static directory", { releaseVersion });
+  const staticSync = await staticReleaseSyncService.syncIfEnabled(releaseVersion);
+
+  if (job) job.progress(70, "activate active pointer", {
+    releaseVersion,
+    staticSyncStatus: staticSync.status,
+  });
+  const activated = releaseService.activateReleaseVersion(releaseVersion);
+  return Object.assign({}, written, activated, { staticSync });
+}
+
+async function runStagingPublishCore(input, job) {
   const forcePublish = input && input.force === true;
   const releaseNote = input && input.releaseNote;
   const auditReq = {
@@ -3551,8 +3588,7 @@ function runStagingPublishCore(input, job) {
     }
   }
 
-  if (job) job.progress(45, "activate release and build static pack");
-  releaseService.activateReleaseFromSnapshot(stagingData);
+  const publishResult = await writeReleasePackSyncAndActivate(stagingData, job);
 
   const status = releaseService.getReleaseStatus();
   const counts = status.counts || {};
@@ -3627,6 +3663,7 @@ function runStagingPublishCore(input, job) {
     semester: status.semester,
     counts,
     quickHealth,
+    staticSync: publishResult.staticSync,
   };
 }
 
@@ -3705,15 +3742,19 @@ router.post("/release-pack/rebuild/start", adminAuth.verifyAdminAccess, (req, re
     job.progress(10, "开始重建 Release Pack", { version });
     releaseService.clearDerivedCache();
     const rebuilt = releaseService.rebuildReleasePack(version);
+    job.progress(70, "同步 OpenResty 静态目录", { version: rebuilt.version });
+    const staticSync = await staticReleaseSyncService.syncIfEnabled(rebuilt.version);
     job.progress(85, "Release Pack 已重建并写入静态目录", {
       version: rebuilt.version,
       staticBaseUrl: rebuilt.manifest && rebuilt.manifest.staticBaseUrl,
+      staticSyncStatus: staticSync.status,
     });
     return {
       version: rebuilt.version,
       releaseVersion: rebuilt.releaseVersion,
       releasePack: rebuilt.status,
       manifest: rebuilt.manifest,
+      staticSync,
     };
   });
   return res.status(202).json({ success: true, job });
@@ -3764,7 +3805,7 @@ router.post("/sync/staging/publish/start", adminAuth.verifyAdminAccess, (req, re
   };
   const job = jobService.createJob("staging-publish", input, async (job, input) => {
     job.progress(8, "start staging publish");
-    const result = runStagingPublishCore(input, job);
+    const result = await runStagingPublishCore(input, job);
     job.progress(92, "staging publish finished", {
       version: result.releaseVersion,
       healthy: result.quickHealth && result.quickHealth.healthy,
@@ -4006,7 +4047,7 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
     }
 
     // 正式激活发布
-    const result = releaseService.activateReleaseFromSnapshot(stagingData);
+    const result = await writeReleasePackSyncAndActivate(stagingData, null);
     
     // 更新元数据
     const status = releaseService.getReleaseStatus();
@@ -4083,7 +4124,8 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
       term: status.semester,
       semester: status.semester,
       counts,
-      quickHealth
+      quickHealth,
+      staticSync: result.staticSync
     });
   } catch (error) {
     console.error("Staging publish failed:", error);
@@ -4188,13 +4230,19 @@ router.post("/sync/releases/rebuild-index", adminAuth.verifyAdminAccess, async (
       jobContext.progress(10, "开始重建 Release Pack", { version });
       releaseService.clearDerivedCache();
       const rebuilt = releaseService.rebuildReleasePack(version);
-      jobContext.progress(90, "Release Pack 已重建", { version: rebuilt.version });
+      jobContext.progress(70, "同步 OpenResty 静态目录", { version: rebuilt.version });
+      const staticSync = await staticReleaseSyncService.syncIfEnabled(rebuilt.version);
+      jobContext.progress(90, "Release Pack 已重建", {
+        version: rebuilt.version,
+        staticSyncStatus: staticSync.status,
+      });
       writeAuditLog(req, "rebuild-index", "sync-release", version, `重建版本 ${version} 的轻量索引`);
       return {
         version: rebuilt.version,
         releaseVersion: rebuilt.releaseVersion,
         releasePack: rebuilt.status,
         manifest: rebuilt.manifest,
+        staticSync,
       };
     });
     return res.status(202).json({
