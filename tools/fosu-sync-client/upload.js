@@ -7,6 +7,11 @@ const os = require("os");
 const path = require("path");
 const { pipeline } = require("stream/promises");
 const zlib = require("zlib");
+const {
+  buildSidecarMeta,
+  calculateFingerprintFromFile,
+  readSidecarHash,
+} = require("../../server/src/utils/stagingFingerprint");
 
 function parseArgs(argv) {
   const args = {};
@@ -164,6 +169,17 @@ async function postJson(url, body, headers, timeoutMs) {
   return response.data;
 }
 
+async function getJson(url, headers, timeoutMs) {
+  const response = await axios.get(url, {
+    headers: Object.assign({ Accept: "application/json" }, headers),
+    timeout: timeoutMs,
+    proxy: false,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
+  });
+  return response.data;
+}
+
 async function uploadChunkWithRetry(url, buffer, headers, timeoutMs, attemptCount) {
   let lastError;
   for (let attempt = 1; attempt <= attemptCount; attempt += 1) {
@@ -207,6 +223,37 @@ function readChunk(filePath, start, endInclusive) {
 
 function normalizeServer(value) {
   return String(value || "https://class.katelya.eu.org").replace(/\/+$/, "");
+}
+
+function getSidecarMetaPath(filePath) {
+  return String(filePath || "").replace(/\.json$/i, ".meta.json");
+}
+
+function isForceUpload(params = {}) {
+  return params["force-upload"] === true ||
+    params.forceUpload === true ||
+    params.force === true ||
+    String(params["force-upload"] || params.forceUpload || params.force || "").toLowerCase() === "true";
+}
+
+async function calculateLocalFingerprint(filePath) {
+  const sidecarPath = getSidecarMetaPath(filePath);
+  const previousHash = readSidecarHash(sidecarPath);
+  const fingerprint = calculateFingerprintFromFile(filePath);
+  if (!previousHash || previousHash !== fingerprint.canonicalHash || !fs.existsSync(sidecarPath)) {
+    const sidecar = buildSidecarMeta(fingerprint.data, {
+      fingerprint,
+      previousHash,
+      rawSizeBytes: fingerprint.rawSizeBytes,
+    });
+    fs.writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2), "utf-8");
+  }
+  return Object.assign(fingerprint, { sidecarPath, previousHash });
+}
+
+async function checkServerFingerprint(server, headers, canonicalHash, timeoutMs) {
+  const url = `${server}/api/admin/staging/fingerprint?canonicalHash=${encodeURIComponent(canonicalHash)}`;
+  return getJson(url, headers, Math.min(timeoutMs, 30000));
 }
 
 async function prepareUploadFile(filePath, params) {
@@ -258,12 +305,51 @@ async function uploadStagingFile(options) {
   const retryCount = Number(params.retries || process.env.SYNC_UPLOAD_RETRIES || 3);
   const chunkSize = toBytesMb(params["chunk-mb"] || params.chunkMb || process.env.SYNC_LOCAL_UPLOAD_CHUNK_MB, 8);
   const metadata = Object.assign({}, extractJsonMetadata(filePath), options.metadata || {});
+  const headers = getAuthHeaders(mode, token);
+
+  let localFingerprint = null;
+  if (mode === "admin") {
+    localFingerprint = await calculateLocalFingerprint(filePath);
+    console.log(`canonicalHash: ${localFingerprint.canonicalHash}`);
+    console.log(`sidecar meta: ${localFingerprint.sidecarPath}`);
+    if (!isForceUpload(params)) {
+      try {
+        const serverFingerprint = await checkServerFingerprint(server, headers, localFingerprint.canonicalHash, timeoutMs);
+        if (serverFingerprint.sameAsActive) {
+          console.log("✅ 当前采集结果与线上 active release 完全一致，无需上传。");
+          console.log("如需强制上传，请追加 --force-upload。");
+          return {
+            success: true,
+            skipped: true,
+            reason: "active-release",
+            canonicalHash: localFingerprint.canonicalHash,
+            serverFingerprint,
+          };
+        }
+        if (serverFingerprint.sameAsStaging) {
+          console.log("✅ 服务器已存在相同 staging，无需重复上传。");
+          console.log("如需强制上传，请追加 --force-upload。");
+          return {
+            success: true,
+            skipped: true,
+            reason: "staging",
+            canonicalHash: localFingerprint.canonicalHash,
+            serverFingerprint,
+          };
+        }
+      } catch (error) {
+        const detail = error.response ? `${error.response.status} ${JSON.stringify(error.response.data || {})}` : error.message;
+        console.warn(`fingerprint precheck failed, continue upload: ${detail}`);
+      }
+    } else {
+      console.log("⚠️ --force-upload 已启用，将忽略 active/staging 指纹相同判断。");
+    }
+  }
 
   const prepared = await prepareUploadFile(filePath, params);
   const uploadStat = fs.statSync(prepared.uploadPath);
   const uploadSha256 = await hashFile(prepared.uploadPath);
   const totalChunks = Math.ceil(uploadStat.size / chunkSize);
-  const headers = getAuthHeaders(mode, token);
 
   console.log(`source file: ${filePath}`);
   console.log(`source size: ${formatMb(prepared.originalSize)} MB`);
@@ -286,6 +372,7 @@ async function uploadStagingFile(options) {
     uploadSha256,
     originalSize: prepared.originalSize,
     originalSha256: prepared.originalSha256,
+    canonicalHash: localFingerprint && localFingerprint.canonicalHash || "",
   };
   const init = await postJson(`${endpointBase}/init`, initBody, headers, timeoutMs);
   const uploadId = init.uploadId || init.upload?.uploadId;
@@ -314,6 +401,7 @@ async function uploadStagingFile(options) {
     uploadSha256,
     originalSize: prepared.originalSize,
     originalSha256: prepared.originalSha256,
+    canonicalHash: localFingerprint && localFingerprint.canonicalHash || "",
     totalChunks,
     note: options.note || params.note || "",
     uploaderNote: options.note || params.note || "",

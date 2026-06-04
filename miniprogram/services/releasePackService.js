@@ -554,6 +554,43 @@ function toComparableText(value) {
   return String(value == null ? "" : value).trim().toLowerCase();
 }
 
+function normalizeSearchText(value) {
+  return String(value == null ? "" : value)
+    .trim()
+    .replace(/[\u3000\s]+/g, "")
+    .replace(/[\uFF01-\uFF5E]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
+    .replace(/\u3002/g, ".")
+    .toLowerCase();
+}
+
+function collectSearchFields(item) {
+  const source = item || {};
+  return [
+    source.id,
+    source.name,
+    source.displayName,
+    source.title,
+    source.teacherTitle,
+    source.professionalTitle,
+    source.rawName,
+    source.searchableName,
+    Array.isArray(source.keywords) ? source.keywords.join(" ") : source.keywords,
+    source.className,
+    source.teacherName,
+    source.displayTeacherName,
+    source.canonicalTeacherName,
+    source.roomName,
+    source.classroomName,
+    source.courseName,
+    source.displayCourseName,
+    source.canonicalCourseName,
+    source.collegeName,
+    source.majorName,
+    source.grade,
+    source.firstCourseName,
+  ];
+}
+
 function matchesExact(item, expected, keys) {
   const value = String(expected || "").trim();
   if (!value) return true;
@@ -562,7 +599,7 @@ function matchesExact(item, expected, keys) {
 
 function filterIndexPayload(type, payload, params = {}) {
   const index = normalizeIndexPayload(type, payload);
-  const q = toComparableText(params.q || params.keyword);
+  const q = normalizeSearchText(params.q || params.keyword);
   const limit = Math.min(Math.max(parseInt(params.limit || "30", 10) || 30, 1), 100);
   const offset = Math.max(parseInt(params.offset || "0", 10) || 0, 0);
   const scoped = (index.items || []).filter((item) => {
@@ -582,27 +619,7 @@ function filterIndexPayload(type, payload, params = {}) {
   });
   const filtered = q
     ? scoped.filter((item) => {
-        const haystack = [
-          item.id,
-          item.name,
-          item.displayName,
-          item.title,
-          item.teacherTitle,
-          item.professionalTitle,
-          item.className,
-          item.teacherName,
-          item.displayTeacherName,
-          item.canonicalTeacherName,
-          item.roomName,
-          item.classroomName,
-          item.courseName,
-          item.displayCourseName,
-          item.canonicalCourseName,
-          item.collegeName,
-          item.majorName,
-          item.grade,
-          item.firstCourseName,
-        ].join(" ").toLowerCase();
+        const haystack = normalizeSearchText(collectSearchFields(item).join(" "));
         return haystack.includes(q);
       })
     : scoped;
@@ -897,6 +914,21 @@ function hasContiguousSections(sections, minCount) {
   return false;
 }
 
+function longestContiguousRun(sections) {
+  const set = new Set(sections || []);
+  let best = 0;
+  let run = 0;
+  for (const section of allSections()) {
+    if (set.has(section)) {
+      run += 1;
+      best = Math.max(best, run);
+    } else {
+      run = 0;
+    }
+  }
+  return best;
+}
+
 function inferBuilding(roomName) {
   const normalized = normalizeBuilding(roomName);
   return normalized.unknown ? UNKNOWN_BUILDING_NAME : normalized.buildingCode;
@@ -933,6 +965,7 @@ function filterEmptyRoomIndex(indexPayload, params = {}) {
   const excludeUnknown = params.excludeUnknown === true || params.excludeUnknown === "1" || params.excludeUnknown === "true";
   const commonOnly = params.commonOnly === true || params.commonOnly === "1" || params.commonOnly === "true";
   const normalizedBuilding = building && building !== "全部" ? building.toLowerCase() : "";
+  const buildingPriority = ["C7", "B8", "B5", "会通楼", "致用楼"];
   const requestedSet = requestedSections.length ? requestedSections : allSections();
   const maxRequestedSection = requestedSet[requestedSet.length - 1] || 0;
   const rooms = (index.rooms || []).filter((room) => {
@@ -955,8 +988,9 @@ function filterEmptyRoomIndex(indexPayload, params = {}) {
     );
     const freeSections = differenceSections(occupiedSections);
     const requestedIsFree = !sectionsOverlapValues(occupiedSections, requestedSet);
+    const continuousFreeSections = longestContiguousRun(freeSections);
     const enoughFree = requestedSections.length
-      ? requestedSet.length >= minFreeSections
+      ? continuousFreeSections >= minFreeSections
       : hasContiguousSections(freeSections, minFreeSections);
     return {
       roomName: room.roomName,
@@ -970,6 +1004,8 @@ function filterEmptyRoomIndex(indexPayload, params = {}) {
       capacity: room.capacity || null,
       capacityText: room.capacity ? `${room.capacity}座` : "容量未知",
       freeText: `${formatSectionRange(requestedSet)}空闲`,
+      continuousFreeSections,
+      continuousText: `连续 ${continuousFreeSections} 节空闲`,
       freeSections,
       occupiedSections,
       todayCourses: occupiedCourses.map((course) => ({
@@ -989,8 +1025,13 @@ function filterEmptyRoomIndex(indexPayload, params = {}) {
       return copy;
     })
     .sort((left, right) => {
-      const buildingDiff = String(left.building || "").localeCompare(String(right.building || ""), "zh-CN");
-      if (buildingDiff !== 0) return buildingDiff;
+      const continuousDiff = Number(right.continuousFreeSections || 0) - Number(left.continuousFreeSections || 0);
+      if (continuousDiff !== 0) return continuousDiff;
+      const leftPriority = buildingPriority.indexOf(left.building);
+      const rightPriority = buildingPriority.indexOf(right.building);
+      const normalizedLeftPriority = leftPriority >= 0 ? leftPriority : 999;
+      const normalizedRightPriority = rightPriority >= 0 ? rightPriority : 999;
+      if (normalizedLeftPriority !== normalizedRightPriority) return normalizedLeftPriority - normalizedRightPriority;
       return String(left.roomName || "").localeCompare(String(right.roomName || ""), "zh-CN", { numeric: true });
     });
 
@@ -1068,6 +1109,8 @@ module.exports = {
   getManifestReleaseKey,
   getLocalActiveRelease,
   getActiveManifest,
+  loadEmptyRoom,
+  filterEmptyRoomIndex,
   loadIndex,
   loadDetail,
   loadEmptyRoom,

@@ -20,6 +20,21 @@ const SECTION_PRESETS = [
   { key: "custom", label: "自定义" },
 ];
 
+const QUICK_FILTERS = [
+  { key: "now", label: "现在可用" },
+  { key: "morning", label: "上午" },
+  { key: "afternoon", label: "下午" },
+  { key: "evening", label: "晚上" },
+  { key: "continuous2", label: "连续 2 节+" },
+  { key: "continuous4", label: "连续 4 节+" },
+  { key: "favorites", label: "收藏楼栋" },
+];
+
+const SECTION_CHIPS = Array.from({ length: 14 }, (_, index) => ({
+  value: index + 1,
+  label: String(index + 1),
+}));
+
 const MIN_FREE_OPTIONS = ["1", "2", "3", "4"];
 
 function safeDecodeURIComponent(value) {
@@ -29,6 +44,75 @@ function safeDecodeURIComponent(value) {
   } catch (error) {
     return text;
   }
+}
+
+function toDateObject(value) {
+  if (value instanceof Date) return value;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? new Date() : date;
+}
+
+function addDays(date, days) {
+  const next = new Date(toDateObject(date).getTime());
+  next.setDate(next.getDate() + Number(days || 0));
+  return next;
+}
+
+function buildDateOptions(currentDate) {
+  const base = toDateObject(currentDate);
+  const today = new Date();
+  const options = [
+    { key: "today", label: "今天", date: formatDate(today) },
+    { key: "tomorrow", label: "明天", date: formatDate(addDays(today, 1)) },
+  ];
+  const monday = addDays(base, -((base.getDay() + 6) % 7));
+  for (let index = 0; index < 7; index += 1) {
+    const date = addDays(monday, index);
+    options.push({
+      key: `week-${index + 1}`,
+      label: getWeekdayLabel(index + 1),
+      date: formatDate(date),
+    });
+  }
+  const seen = new Set();
+  return options.filter((item) => {
+    const key = item.label + item.date;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function parseSectionValues(value) {
+  const text = String(value || "");
+  const rangeMatch = text.match(/(\d+)\s*[-~～至到]\s*(\d+)/);
+  if (rangeMatch) {
+    const start = Math.min(Number(rangeMatch[1]), Number(rangeMatch[2]));
+    const end = Math.max(Number(rangeMatch[1]), Number(rangeMatch[2]));
+    return Array.from({ length: end - start + 1 }, (_, index) => start + index);
+  }
+  return Array.from(new Set((text.match(/\d{1,2}/g) || []).map(Number).filter((num) => num >= 1 && num <= 14)))
+    .sort((left, right) => left - right);
+}
+
+function sectionValuesToText(values) {
+  const list = Array.from(new Set(values || [])).map(Number).filter((num) => num >= 1 && num <= 14).sort((left, right) => left - right);
+  if (!list.length) return "";
+  let contiguous = true;
+  for (let index = 1; index < list.length; index += 1) {
+    if (list[index] !== list[index - 1] + 1) {
+      contiguous = false;
+      break;
+    }
+  }
+  return contiguous && list.length > 1 ? `${list[0]}-${list[list.length - 1]}` : list.join(",");
+}
+
+function decorateSectionChips(values) {
+  const selected = new Set((values || []).map(Number));
+  return SECTION_CHIPS.map((item) => Object.assign({}, item, {
+    selected: selected.has(item.value),
+  }));
 }
 
 function normalizeActiveSnapshot(config) {
@@ -57,10 +141,16 @@ Page({
     activeSnapshot: null,
     date: "",
     dateText: "",
+    dateOptions: [],
+    selectedDateKey: "today",
     week: 1,
     weekday: 1,
     weekdayText: "周一",
     sectionPresets: SECTION_PRESETS,
+    quickFilters: QUICK_FILTERS,
+    activeQuickFilter: "now",
+    sectionChips: decorateSectionChips([]),
+    selectedSectionValues: [],
     selectedSectionPresetIndex: 0,
     sections: "1-1",
     customSections: "3-4",
@@ -69,7 +159,9 @@ Page({
     minFreeOptions: MIN_FREE_OPTIONS,
     selectedMinFreeIndex: 1,
     commonOnly: false,
+    favoriteBuildingsOnly: false,
     excludeUnknown: true,
+    showUnknownBuildings: false,
     loading: false,
     dataState: "loading",
     restoreHint: "",
@@ -115,11 +207,15 @@ Page({
     this.setData({
       date,
       dateText: date,
+      dateOptions: buildDateOptions(date),
+      selectedDateKey: formatDate(new Date()) === date ? "today" : "",
       week: Number(options.week || dateInfo.weekNo || 1),
       weekday: Number(options.weekday || dateInfo.weekday),
       weekdayText: getWeekdayLabel(Number(options.weekday || dateInfo.weekday)),
       selectedSectionPresetIndex: selectedSectionPresetIndex >= 0 ? selectedSectionPresetIndex : 0,
       sections,
+      selectedSectionValues: parseSectionValues(sections),
+      sectionChips: decorateSectionChips(parseSectionValues(sections)),
       customSections: sectionParam || "3-4",
       buildingOptions,
       selectedBuildingIndex,
@@ -146,8 +242,9 @@ Page({
           activeSnapshot: snapshot,
           updatedAtText: snapshot.updatedAt ? `数据更新于 ${appConfigService.formatConfigTime(snapshot.updatedAt)}` : "",
         });
-        return this.searchRooms({ forceNetwork: options.forceNetwork });
+        return this.loadEmptyRoomIndex({ forceNetwork: options.forceNetwork });
       })
+      .then(() => this.applyLocalSearch({ reason: options.reason || "loadAndSearch" }))
       .catch((error) => {
         const state = error && error.code === "NO_ACTIVE_RELEASE" ? "noRelease" : "networkError";
         this.setData({
@@ -157,6 +254,24 @@ Page({
           summaryText: hasRooms ? this.data.summaryText : (state === "noRelease" ? "暂未发布课表数据" : "空教室数据加载失败"),
         });
       });
+  },
+
+  loadEmptyRoomIndex(options = {}) {
+    const snapshot = this.data.activeSnapshot || {};
+    const indexKey = `${snapshot.term || DEFAULT_SEMESTER_ID}:${snapshot.releaseVersion || ""}`;
+    if (this.emptyRoomIndex && this.emptyRoomIndexKey === indexKey && !options.forceNetwork) {
+      return Promise.resolve(this.emptyRoomIndex);
+    }
+    return emptyRoomService.loadEmptyRoomIndex({
+      term: snapshot.term || DEFAULT_SEMESTER_ID,
+      releaseVersion: snapshot.releaseVersion || "",
+    }, {
+      forceNetwork: Boolean(options.forceNetwork),
+    }).then((index) => {
+      this.emptyRoomIndex = index;
+      this.emptyRoomIndexKey = indexKey;
+      return index;
+    });
   },
 
   resolveActiveSnapshot() {
@@ -214,14 +329,22 @@ Page({
     };
   },
 
-  searchRooms(options = {}) {
+  applyLocalSearch(options = {}) {
     const params = this.getQueryParams();
-    return emptyRoomService.queryEmptyRooms(params, {
-      forceNetwork: Boolean(options.forceNetwork),
-    }).then((data) => {
-      const rooms = this.decorateRoomsWithFavorites(data.rooms || []);
+    const index = this.emptyRoomIndex;
+    if (!index) {
+      return this.loadEmptyRoomIndex({ forceNetwork: Boolean(options.forceNetwork) })
+        .then(() => this.applyLocalSearch(Object.assign({}, options, { forceNetwork: false })));
+    }
+    try {
+      const data = emptyRoomService.filterEmptyRoomIndex(index, params);
+      let rooms = this.decorateRoomsWithFavorites(data.rooms || []);
+      if (this.data.favoriteBuildingsOnly) {
+        const favoriteBuildings = new Set((this.favoriteState && this.favoriteState.buildings) || []);
+        rooms = rooms.filter((room) => favoriteBuildings.has(room.building));
+      }
       const buildingOptions = emptyRoomService.buildBuildingOptions(
-        data.buildings || [],
+        index.buildings || data.buildings || [],
         (this.favoriteState && this.favoriteState.buildings) || []
       );
       const currentBuilding = params.building || "全部";
@@ -233,20 +356,28 @@ Page({
         buildingOptions,
         selectedBuildingIndex,
         selectedBuildingFavorite: emptyRoomService.isFavoriteBuilding(buildingOptions[selectedBuildingIndex], this.favoriteState),
-        restoreHint: data.fallback ? "已显示本地缓存，正在刷新" : (data.fromStorage ? "已显示本地缓存，正在校验更新" : ""),
+        restoreHint: data.fromStorage ? "已显示本地缓存，筛选在本地完成" : "",
         summaryText: `${params.date} ${getWeekdayLabel(Number(params.weekday))} 第${params.sections}节 · ${rooms.length}间可用`,
-        updatedAtText: data.updatedAt ? `数据更新于 ${appConfigService.formatConfigTime(data.updatedAt)}` : this.data.updatedAtText,
+        updatedAtText: data.updatedAt ? `数据更新于 ${appConfigService.formatConfigTime(data.updatedAt)} · 当前 Release Pack 静态索引` : this.data.updatedAtText,
       });
-      return data;
-    }).catch((error) => {
+      return Promise.resolve(data);
+    } catch (error) {
       this.setData({
         loading: false,
         dataState: error && (error.code === "REQUEST_TIMEOUT" || error.code === "TIMEOUT") ? "timeout" : "networkError",
         restoreHint: this.data.rooms.length ? "网络连接慢，已保留当前结果" : "",
         summaryText: this.data.rooms.length ? this.data.summaryText : "空教室数据加载失败",
       });
-      throw error;
-    });
+      return Promise.reject(error);
+    }
+  },
+
+  searchRooms(options = {}) {
+    if (options.forceNetwork) {
+      return this.loadEmptyRoomIndex({ forceNetwork: true })
+        .then(() => this.applyLocalSearch(options));
+    }
+    return this.applyLocalSearch(options);
   },
 
   decorateRoomsWithFavorites(rooms) {
@@ -254,13 +385,7 @@ Page({
     return (rooms || [])
       .map((room) => Object.assign({}, room, {
         favorite: emptyRoomService.isFavoriteRoom(room.roomName, favorites),
-      }))
-      .sort((left, right) => {
-        if (left.favorite !== right.favorite) {
-          return left.favorite ? -1 : 1;
-        }
-        return String(left.roomName || "").localeCompare(String(right.roomName || ""), "zh-Hans-CN");
-      });
+      }));
   },
 
   refreshFavoriteState() {
@@ -280,10 +405,108 @@ Page({
     this.setData({
       date,
       dateText: date,
+      dateOptions: buildDateOptions(date),
+      selectedDateKey: formatDate(new Date()) === date ? "today" : "",
       week: info.weekNo,
       weekday: info.weekday,
       weekdayText: info.weekdayLabel,
-    }, () => this.searchRooms({ forceNetwork: true }));
+    }, () => this.searchRooms());
+  },
+
+  onDateChipTap(event) {
+    const date = event.currentTarget.dataset.date;
+    const key = event.currentTarget.dataset.key || "";
+    if (!date) return;
+    const info = getTodayTeachingInfo(date, mockCalendar);
+    this.setData({
+      date,
+      dateText: date,
+      selectedDateKey: key,
+      week: info.weekNo,
+      weekday: info.weekday,
+      weekdayText: info.weekdayLabel,
+    }, () => this.searchRooms());
+  },
+
+  onQuickFilterTap(event) {
+    const key = event.currentTarget.dataset.key;
+    const patch = {
+      activeQuickFilter: key,
+      favoriteBuildingsOnly: false,
+    };
+    if (key === "now") {
+      patch.sections = emptyRoomService.getPresetSectionValue("current", new Date());
+      patch.selectedSectionPresetIndex = SECTION_PRESETS.findIndex((item) => item.key === "current");
+      patch.selectedMinFreeIndex = 0;
+    } else if (key === "morning" || key === "afternoon" || key === "evening") {
+      patch.sections = emptyRoomService.getPresetSectionValue(key, new Date());
+      patch.selectedSectionPresetIndex = SECTION_PRESETS.findIndex((item) => item.key === key);
+      patch.selectedMinFreeIndex = 0;
+    } else if (key === "continuous2") {
+      patch.selectedMinFreeIndex = 1;
+    } else if (key === "continuous4") {
+      patch.selectedMinFreeIndex = 3;
+    } else if (key === "favorites") {
+      patch.favoriteBuildingsOnly = true;
+    }
+    if (patch.sections) {
+      patch.selectedSectionValues = parseSectionValues(patch.sections);
+      patch.sectionChips = decorateSectionChips(patch.selectedSectionValues);
+      patch.customSections = patch.sections;
+    }
+    this.setData(patch, () => this.searchRooms());
+  },
+
+  onSectionChipTap(event) {
+    const value = Number(event.currentTarget.dataset.value);
+    if (!value) return;
+    const current = new Set(this.data.selectedSectionValues || []);
+    if (current.has(value)) {
+      current.delete(value);
+    } else {
+      current.add(value);
+    }
+    const selectedSectionValues = Array.from(current).sort((left, right) => left - right);
+    const sections = sectionValuesToText(selectedSectionValues);
+    this.setData({
+      selectedSectionValues,
+      sectionChips: decorateSectionChips(selectedSectionValues),
+      sections: sections || this.data.sections,
+      customSections: sections || this.data.customSections,
+      selectedSectionPresetIndex: SECTION_PRESETS.findIndex((item) => item.key === "custom"),
+      activeQuickFilter: "custom",
+    }, () => this.searchRooms());
+  },
+
+  onSectionGroupTap(event) {
+    const key = event.currentTarget.dataset.key;
+    const sections = emptyRoomService.getPresetSectionValue(key, new Date());
+    this.setData({
+      sections,
+      customSections: sections,
+      selectedSectionValues: parseSectionValues(sections),
+      sectionChips: decorateSectionChips(parseSectionValues(sections)),
+      selectedSectionPresetIndex: SECTION_PRESETS.findIndex((item) => item.key === key),
+      activeQuickFilter: key,
+    }, () => this.searchRooms());
+  },
+
+  onBuildingChipTap(event) {
+    const building = event.currentTarget.dataset.building || "全部";
+    const selectedBuildingIndex = Math.max(0, this.data.buildingOptions.indexOf(building));
+    this.setData({
+      selectedBuildingIndex,
+      selectedBuildingFavorite: emptyRoomService.isFavoriteBuilding(building, this.favoriteState),
+      favoriteBuildingsOnly: false,
+    }, () => this.searchRooms());
+  },
+
+  toggleUnknownBuildings() {
+    const showUnknownBuildings = !this.data.showUnknownBuildings;
+    this.setData({
+      showUnknownBuildings,
+      excludeUnknown: !showUnknownBuildings,
+    }, () => this.searchRooms());
   },
 
   onWeekInput(event) {
@@ -292,7 +515,7 @@ Page({
   },
 
   applyWeekInput() {
-    this.searchRooms({ forceNetwork: true });
+    this.searchRooms();
   },
 
   onSectionPresetChange(event) {
@@ -304,7 +527,9 @@ Page({
     this.setData({
       selectedSectionPresetIndex,
       sections,
-    }, () => this.searchRooms({ forceNetwork: true }));
+      selectedSectionValues: parseSectionValues(sections),
+      sectionChips: decorateSectionChips(parseSectionValues(sections)),
+    }, () => this.searchRooms());
   },
 
   onCustomSectionsInput(event) {
@@ -315,7 +540,10 @@ Page({
   },
 
   applyCustomSections() {
-    this.searchRooms({ forceNetwork: true });
+    this.setData({
+      selectedSectionValues: parseSectionValues(this.data.customSections),
+      sectionChips: decorateSectionChips(parseSectionValues(this.data.customSections)),
+    }, () => this.searchRooms());
   },
 
   onBuildingChange(event) {
@@ -324,21 +552,24 @@ Page({
     this.setData({
       selectedBuildingIndex,
       selectedBuildingFavorite: emptyRoomService.isFavoriteBuilding(building, this.favoriteState),
-    }, () => this.searchRooms({ forceNetwork: true }));
+    }, () => this.searchRooms());
   },
 
   onMinFreeChange(event) {
     this.setData({
       selectedMinFreeIndex: Number(event.detail.value),
-    }, () => this.searchRooms({ forceNetwork: true }));
+    }, () => this.searchRooms());
   },
 
   onCommonOnlyChange(event) {
-    this.setData({ commonOnly: Boolean(event.detail.value) }, () => this.searchRooms({ forceNetwork: true }));
+    this.setData({ commonOnly: Boolean(event.detail.value) }, () => this.searchRooms());
   },
 
   onExcludeUnknownChange(event) {
-    this.setData({ excludeUnknown: Boolean(event.detail.value) }, () => this.searchRooms({ forceNetwork: true }));
+    this.setData({
+      excludeUnknown: Boolean(event.detail.value),
+      showUnknownBuildings: !Boolean(event.detail.value),
+    }, () => this.searchRooms());
   },
 
   onRetry() {

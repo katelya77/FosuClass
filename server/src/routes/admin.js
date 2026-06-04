@@ -18,6 +18,7 @@ const releaseService = require("../services/releaseService");
 const relayService = require("../services/relayService");
 const stagingUploadService = require("../services/stagingUploadService");
 const staticReleaseSyncService = require("../services/staticReleaseSyncService");
+const stagingFingerprint = require("../utils/stagingFingerprint");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const zlib = require("zlib");
@@ -25,6 +26,7 @@ const zlib = require("zlib");
 const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
 const HISTORY_DIR = path.join(SNAPSHOTS_DIR, "history");
 const RESOURCE_UPLOAD_DIR = path.join(STORAGE_DIR, "resource-upload-staging");
+const DIRECT_STAGING_UPLOAD_DIR = path.join(STORAGE_DIR, "staging-direct-upload");
 
 const DATA_DIR = path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../data"));
 const BACKUPS_DIR = path.join(DATA_DIR, "backups");
@@ -45,6 +47,9 @@ if (!fs.existsSync(HISTORY_DIR)) {
 }
 if (!fs.existsSync(RESOURCE_UPLOAD_DIR)) {
   fs.mkdirSync(RESOURCE_UPLOAD_DIR, { recursive: true });
+}
+if (!fs.existsSync(DIRECT_STAGING_UPLOAD_DIR)) {
+  fs.mkdirSync(DIRECT_STAGING_UPLOAD_DIR, { recursive: true });
 }
 if (!fs.existsSync(DATA_DIR)) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -2965,6 +2970,73 @@ router.post("/catalog/meta", adminAuth.verifyAdminAccess, (req, res) => {
 
 const STAGING_LATEST_PATH = path.join(STORAGE_DIR, "staging-latest.json");
 
+function readJsonIfExists(filePath) {
+  try {
+    if (!filePath || !fs.existsSync(filePath)) return null;
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  } catch (error) {
+    return null;
+  }
+}
+
+function getSnapshotFingerprint(snapshot) {
+  if (!snapshot) return null;
+  try {
+    return stagingFingerprint.calculateFingerprint(snapshot);
+  } catch (error) {
+    return null;
+  }
+}
+
+function getActiveCanonicalHash() {
+  const active = releaseService.getActiveReleaseInfo();
+  if (active && active.canonicalHash) return active.canonicalHash;
+  const activeSnapshot = releaseService.readActiveReleaseSnapshot();
+  const fingerprint = getSnapshotFingerprint(activeSnapshot);
+  return fingerprint && fingerprint.canonicalHash || "";
+}
+
+function getLatestStagingCanonicalHash() {
+  const stagingData = readJsonIfExists(STAGING_LATEST_PATH);
+  const fingerprint = getSnapshotFingerprint(stagingData);
+  return {
+    stagingData,
+    canonicalHash: fingerprint && fingerprint.canonicalHash || "",
+    fingerprint,
+  };
+}
+
+function attachStagingFingerprint(stagingData, previousHash = "") {
+  const fingerprint = stagingFingerprint.calculateFingerprint(stagingData);
+  stagingData.meta = Object.assign({}, stagingData.meta || {}, {
+    canonicalHash: fingerprint.canonicalHash,
+    previousHash: previousHash || stagingData.meta?.previousHash || "",
+    changed: previousHash ? previousHash !== fingerprint.canonicalHash : true,
+    counts: Object.assign({}, stagingData.meta?.counts || {}, summarizeStagingData(stagingData).counts),
+  });
+  stagingData.canonicalHash = fingerprint.canonicalHash;
+  return fingerprint;
+}
+
+function buildFingerprintStatus(localHash = "") {
+  const activeHash = getActiveCanonicalHash();
+  const latest = getLatestStagingCanonicalHash();
+  const normalizedLocal = String(localHash || "").trim().toLowerCase();
+  return {
+    activeCanonicalHash: activeHash,
+    stagingCanonicalHash: latest.canonicalHash,
+    localCanonicalHash: normalizedLocal,
+    sameAsActive: Boolean(normalizedLocal && activeHash && normalizedLocal === activeHash),
+    sameAsStaging: Boolean(normalizedLocal && latest.canonicalHash && normalizedLocal === latest.canonicalHash),
+    activeRelease: releaseService.getActiveReleaseInfo(),
+    latestStaging: latest.stagingData ? {
+      term: latest.stagingData.term || latest.stagingData.semester || "",
+      releaseVersion: latest.stagingData.releaseVersion || latest.stagingData.version || "",
+      generatedAt: latest.stagingData.generatedAt || latest.stagingData.updatedAt || "",
+    } : null,
+  };
+}
+
 function getStagingIncludeScopes(data) {
   const scopes = data?.meta?.includeScopes;
   return Array.isArray(scopes) ? scopes : [];
@@ -3182,6 +3254,82 @@ function buildStagingUploadSummary(stagingData, safety, extra = {}) {
   }, extra);
 }
 
+function saveDirectStagingUploadBuffer(buffer) {
+  const uploadId = `direct_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const filePath = path.join(DIRECT_STAGING_UPLOAD_DIR, `${uploadId}.bin`);
+  const payloadBuffer = Buffer.isBuffer(buffer) ? buffer : Buffer.from(JSON.stringify(buffer || {}), "utf-8");
+  fs.writeFileSync(filePath, payloadBuffer);
+  return { uploadId, filePath, size: payloadBuffer.length };
+}
+
+function parseStagingUploadBuffer(buffer) {
+  const isGzip = buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
+  const jsonStr = isGzip ? zlib.gunzipSync(buffer).toString("utf-8") : buffer.toString("utf-8");
+  return JSON.parse(jsonStr);
+}
+
+async function processDirectStagingUpload(filePath, reqMeta, job) {
+  if (job) job.progress(15, "读取上传临时文件");
+  const buffer = fs.readFileSync(filePath);
+  if (job) job.progress(30, "解析 Staging JSON");
+  let stagingData = stagingUploadService.normalizeStagingData(parseStagingUploadBuffer(buffer));
+  const beforeLatest = getLatestStagingCanonicalHash();
+  const fingerprint = attachStagingFingerprint(stagingData, beforeLatest.canonicalHash);
+  const activeCanonicalHash = getActiveCanonicalHash();
+
+  if (activeCanonicalHash && activeCanonicalHash === fingerprint.canonicalHash) {
+    if (job) job.progress(95, "数据无变化，跳过暂存", { canonicalHash: fingerprint.canonicalHash });
+    return {
+      skipped: true,
+      unchanged: true,
+      reason: "active-release",
+      message: "数据无变化，不需要发布",
+      canonicalHash: fingerprint.canonicalHash,
+      activeCanonicalHash,
+    };
+  }
+  if (beforeLatest.canonicalHash && beforeLatest.canonicalHash === fingerprint.canonicalHash) {
+    if (job) job.progress(95, "服务器已存在相同 staging", { canonicalHash: fingerprint.canonicalHash });
+    return {
+      skipped: true,
+      unchanged: true,
+      reason: "staging",
+      message: "服务器已存在相同 staging，无需重复上传",
+      canonicalHash: fingerprint.canonicalHash,
+      stagingCanonicalHash: beforeLatest.canonicalHash,
+    };
+  }
+
+  const validation = validateStagingData(stagingData);
+  if (!validation.valid) {
+    const error = new Error(`Staging JSON 格式校验不通过: ${validation.errors.join("; ")}`);
+    error.statusCode = 400;
+    throw error;
+  }
+
+  if (job) job.progress(60, "写入当前 Staging");
+  writeJsonAtomic(STAGING_LATEST_PATH, stagingData);
+  const activeSnapshot = releaseService.readActiveReleaseSnapshot();
+  const safety = buildStagingSafety(stagingData, activeSnapshot);
+  if (job) job.progress(90, "Staging 校验完成", { canonicalHash: fingerprint.canonicalHash });
+  writeAuditLog(reqMeta, "upload", "staging-direct-upload", reqMeta.uploadId || "", `后台直传 Staging: ${stagingData.term || ""}`);
+  return {
+    success: true,
+    message: "Staging JSON 上传 job 已完成，已暂存",
+    canonicalHash: fingerprint.canonicalHash,
+    data: {
+      term: stagingData.term,
+      termStartDate: stagingData.termStartDate,
+      releaseVersion: stagingData.releaseVersion,
+      generatedAt: stagingData.generatedAt,
+      meta: stagingData.meta || null,
+      counts: safety.counts,
+      safety,
+    },
+    warnings: validation.warnings.concat(safety.warnings || []),
+  };
+}
+
 router.get("/staging/upload", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     return res.json({
@@ -3197,12 +3345,24 @@ router.get("/staging/status", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     const uploads = stagingUploadService.listUploads(req.query.limit || 50);
     const pendingReview = uploads.filter((item) => item.status === "pending-review");
+    const fingerprint = buildFingerprintStatus(req.query.canonicalHash || "");
     return res.json({
       success: true,
       uploads,
       pendingReview,
       latest: uploads[0] || null,
+      fingerprint,
     });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/staging/fingerprint", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json(Object.assign({
+      success: true,
+    }, buildFingerprintStatus(req.query.canonicalHash || req.query.hash || "")));
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -3262,6 +3422,57 @@ router.post("/staging/upload/finalize", adminAuth.verifyAdminAccess, async (req,
     const finalized = await stagingUploadService.finalizeUpload(uploadId, buildAdminStagingUploadActor(req), req.body || {});
     let stagingData = stagingUploadService.normalizeStagingData(finalized.stagingData);
     stagingData.stagingUploadId = finalized.manifest.uploadId;
+    const beforeLatest = getLatestStagingCanonicalHash();
+    const fingerprint = attachStagingFingerprint(stagingData, beforeLatest.canonicalHash);
+    const activeCanonicalHash = getActiveCanonicalHash();
+    if (activeCanonicalHash && activeCanonicalHash === fingerprint.canonicalHash) {
+      const summary = buildStagingUploadSummary(stagingData, { counts: summarizeStagingData(stagingData).counts }, {
+        canonicalHash: fingerprint.canonicalHash,
+        unchanged: true,
+        unchangedReason: "active-release",
+        message: "数据无变化，不需要发布",
+      });
+      const upload = stagingUploadService.markUploadUnchanged(uploadId, summary);
+      writeAuditLog(req, "upload-skip", "staging-upload", uploadId, "Staging 与 active release 完全一致，跳过暂存");
+      return res.json({
+        success: true,
+        skipped: true,
+        unchanged: true,
+        message: "数据无变化，不需要发布",
+        reason: "active-release",
+        stagingId: uploadId,
+        upload,
+        data: {
+          canonicalHash: fingerprint.canonicalHash,
+          activeCanonicalHash,
+          counts: summary.counts,
+        },
+      });
+    }
+    if (beforeLatest.canonicalHash && beforeLatest.canonicalHash === fingerprint.canonicalHash) {
+      const summary = buildStagingUploadSummary(stagingData, { counts: summarizeStagingData(stagingData).counts }, {
+        canonicalHash: fingerprint.canonicalHash,
+        unchanged: true,
+        unchangedReason: "staging",
+        message: "服务器已存在相同 staging，无需重复上传",
+      });
+      const upload = stagingUploadService.markUploadUnchanged(uploadId, summary);
+      writeAuditLog(req, "upload-skip", "staging-upload", uploadId, "Staging 与当前 staging 完全一致，跳过重复暂存");
+      return res.json({
+        success: true,
+        skipped: true,
+        unchanged: true,
+        message: "服务器已存在相同 staging，无需重复上传",
+        reason: "staging",
+        stagingId: uploadId,
+        upload,
+        data: {
+          canonicalHash: fingerprint.canonicalHash,
+          stagingCanonicalHash: beforeLatest.canonicalHash,
+          counts: summary.counts,
+        },
+      });
+    }
     stagingData.meta = Object.assign({}, stagingData.meta || {}, {
       stagingUploadId: finalized.manifest.uploadId,
       stagingUploadStatus: "pending-review",
@@ -3451,6 +3662,7 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
       version: activeInfo && activeInfo.version || meta.releaseVersion || "",
     });
     const latestJob = jobService.latestJob();
+    const fingerprint = buildFingerprintStatus();
     return res.json({
       success: true,
       data: {
@@ -3459,6 +3671,10 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
         releasePackStatus,
         releasePackHealthy: Boolean(releasePackStatus && releasePackStatus.healthy),
         staticSync,
+        activeCanonicalHash: fingerprint.activeCanonicalHash,
+        stagingCanonicalHash: fingerprint.stagingCanonicalHash,
+        stagingSameAsActive: Boolean(fingerprint.activeCanonicalHash && fingerprint.stagingCanonicalHash && fingerprint.activeCanonicalHash === fingerprint.stagingCanonicalHash),
+        stagingNeedsPublish: Boolean(fingerprint.stagingCanonicalHash && fingerprint.activeCanonicalHash !== fingerprint.stagingCanonicalHash),
         staticManifestUrl: staticSync.staticManifestUrl,
         staticClassIndexUrl: staticSync.staticClassIndexUrl,
         staticEmptyRoomIndexUrl: staticSync.staticEmptyRoomIndexUrl,
@@ -3550,6 +3766,21 @@ async function runStagingPublishCore(input, job) {
   if (job) job.progress(12, "read staging payload");
   const stagingData = JSON.parse(fs.readFileSync(STAGING_LATEST_PATH, "utf-8"));
   const activeSnapshot = releaseService.readActiveReleaseSnapshot();
+  const stagingFingerprintInfo = getSnapshotFingerprint(stagingData);
+  const activeCanonicalHash = getActiveCanonicalHash();
+  if (stagingFingerprintInfo?.canonicalHash && activeCanonicalHash && stagingFingerprintInfo.canonicalHash === activeCanonicalHash) {
+    if (job) job.progress(95, "staging unchanged; skip publish", { canonicalHash: stagingFingerprintInfo.canonicalHash });
+    return {
+      success: true,
+      skipped: true,
+      unchanged: true,
+      reason: "active-release",
+      message: "数据无变化，不需要发布",
+      canonicalHash: stagingFingerprintInfo.canonicalHash,
+      releaseVersion: releaseService.getActiveReleaseInfo()?.version || "",
+      quickHealth: activeCanonicalHash ? releaseService.getReleasePackQuickHealth(releaseService.getActiveReleaseInfo()?.version || "") : null,
+    };
+  }
   const safety = buildStagingSafety(stagingData, activeSnapshot);
 
   if (!safety.allowPublish) {
@@ -3737,27 +3968,35 @@ router.get("/release-pack/deep-health/status", adminAuth.verifyAdminAccess, (req
 });
 
 router.post("/release-pack/rebuild/start", adminAuth.verifyAdminAccess, (req, res) => {
-  const version = getRequestedReleaseVersion(req);
-  const job = jobService.createJob("release-pack-rebuild", { version }, async (job) => {
-    job.progress(10, "开始重建 Release Pack", { version });
-    releaseService.clearDerivedCache();
-    const rebuilt = releaseService.rebuildReleasePack(version);
-    job.progress(70, "同步 OpenResty 静态目录", { version: rebuilt.version });
-    const staticSync = await staticReleaseSyncService.syncIfEnabled(rebuilt.version);
-    job.progress(85, "Release Pack 已重建并写入静态目录", {
-      version: rebuilt.version,
-      staticBaseUrl: rebuilt.manifest && rebuilt.manifest.staticBaseUrl,
-      staticSyncStatus: staticSync.status,
+  try {
+    const version = getRequestedReleaseVersion(req);
+    const job = jobService.createSingletonJob("release-pack-rebuild", { version }, async (job) => {
+      job.progress(10, "开始重建 Release Pack", { version });
+      releaseService.clearDerivedCache();
+      const rebuilt = releaseService.rebuildReleasePack(version);
+      job.progress(70, "同步 OpenResty 静态目录", { version: rebuilt.version });
+      const staticSync = await staticReleaseSyncService.syncIfEnabled(rebuilt.version);
+      job.progress(85, "Release Pack 已重建并写入静态目录", {
+        version: rebuilt.version,
+        staticBaseUrl: rebuilt.manifest && rebuilt.manifest.staticBaseUrl,
+        staticSyncStatus: staticSync.status,
+      });
+      return {
+        version: rebuilt.version,
+        releaseVersion: rebuilt.releaseVersion,
+        releasePack: rebuilt.status,
+        manifest: rebuilt.manifest,
+        staticSync,
+      };
     });
-    return {
-      version: rebuilt.version,
-      releaseVersion: rebuilt.releaseVersion,
-      releasePack: rebuilt.status,
-      manifest: rebuilt.manifest,
-      staticSync,
-    };
-  });
-  return res.status(202).json({ success: true, job });
+    return res.status(202).json({ success: true, job });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.code === "JOB_ALREADY_RUNNING" ? "已有 Release Pack 重建任务正在运行" : error.message,
+      job: error.job || null,
+    });
+  }
 });
 
 router.get("/release-pack/rebuild/status", adminAuth.verifyAdminAccess, (req, res) => {
@@ -3795,24 +4034,32 @@ router.get("/release-pack/verify/status", adminAuth.verifyAdminAccess, (req, res
 });
 
 router.post("/sync/staging/publish/start", adminAuth.verifyAdminAccess, (req, res) => {
-  const input = {
-    force: req.body.force === true,
-    releaseNote: req.body.releaseNote || "",
-    ip: req.ip || "",
-    headers: {
-      "x-forwarded-for": req.headers["x-forwarded-for"] || "",
-    },
-  };
-  const job = jobService.createJob("staging-publish", input, async (job, input) => {
-    job.progress(8, "start staging publish");
-    const result = await runStagingPublishCore(input, job);
-    job.progress(92, "staging publish finished", {
-      version: result.releaseVersion,
-      healthy: result.quickHealth && result.quickHealth.healthy,
+  try {
+    const input = {
+      force: req.body.force === true,
+      releaseNote: req.body.releaseNote || "",
+      ip: req.ip || "",
+      headers: {
+        "x-forwarded-for": req.headers["x-forwarded-for"] || "",
+      },
+    };
+    const job = jobService.createSingletonJob("staging-publish", input, async (job, input) => {
+      job.progress(8, "start staging publish");
+      const result = await runStagingPublishCore(input, job);
+      job.progress(92, "staging publish finished", {
+        version: result.releaseVersion,
+        healthy: result.quickHealth && result.quickHealth.healthy,
+      });
+      return result;
     });
-    return result;
-  });
-  return res.status(202).json({ success: true, job });
+    return res.status(202).json({ success: true, job });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.code === "JOB_ALREADY_RUNNING" ? "已有发布任务正在运行" : error.message,
+      job: error.job || null,
+    });
+  }
 });
 
 router.get("/sync/staging/publish/status", adminAuth.verifyAdminAccess, (req, res) => {
@@ -3833,71 +4080,28 @@ router.post(
       if (!buffer || buffer.length === 0) {
         return res.status(400).json({ success: false, message: "上传内容不能为空" });
       }
-
-      const isGzip = buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b;
-      let jsonStr;
-      
-      if (isGzip) {
+      const saved = saveDirectStagingUploadBuffer(buffer);
+      const reqMeta = {
+        ip: req.ip || "",
+        headers: { "x-forwarded-for": req.headers["x-forwarded-for"] || "" },
+        uploadId: saved.uploadId,
+      };
+      const job = jobService.createJob("staging-upload", {
+        uploadId: saved.uploadId,
+        filePath: saved.filePath,
+        size: saved.size,
+      }, async (jobContext, input) => {
         try {
-          jsonStr = zlib.gunzipSync(buffer).toString("utf-8");
-        } catch (err) {
-          return res.status(400).json({ success: false, message: "无效的 Gzip 压缩数据: " + err.message });
+          return await processDirectStagingUpload(input.filePath, reqMeta, jobContext);
+        } finally {
+          try { fs.unlinkSync(input.filePath); } catch (cleanupError) {}
         }
-      } else {
-        jsonStr = buffer.toString("utf-8");
-      }
-
-      let stagingData;
-      try {
-        stagingData = JSON.parse(jsonStr);
-      } catch (err) {
-        return res.status(400).json({ success: false, message: "解析 JSON 失败，数据可能损坏: " + err.message });
-      }
-
-      // 规范化字段位置
-      if (!stagingData.classSchedules && stagingData.resources?.classSchedules) {
-        stagingData.classSchedules = stagingData.resources.classSchedules;
-      }
-      if (!stagingData.resources) {
-        stagingData.resources = {
-          teacherSchedules: stagingData.teacherSchedules || [],
-          classroomSchedules: stagingData.classroomSchedules || [],
-          courseSchedules: stagingData.courseSchedules || [],
-          classrooms: stagingData.classrooms || [],
-          teachers: stagingData.teachers || [],
-          courses: stagingData.courses || [],
-        };
-      }
-
-      const validation = validateStagingData(stagingData);
-      if (!validation.valid) {
-        return res.status(400).json({
-          success: false,
-          message: "Staging JSON 格式校验不通过",
-          errors: validation.errors,
-          warnings: validation.warnings
-        });
-      }
-
-      // 写入暂存区
-      fs.writeFileSync(STAGING_LATEST_PATH, JSON.stringify(stagingData, null, 2), "utf-8");
-      
-      const activeSnapshot = releaseService.readActiveReleaseSnapshot();
-      const safety = buildStagingSafety(stagingData, activeSnapshot);
-
-      return res.json({
+      });
+      return res.status(202).json({
         success: true,
-        message: "Staging JSON 上传并校验成功，已暂存",
-        warnings: safety.warnings,
-        data: {
-          term: stagingData.term,
-          termStartDate: stagingData.termStartDate,
-          releaseVersion: stagingData.releaseVersion,
-          generatedAt: stagingData.generatedAt,
-          meta: stagingData.meta || null,
-          counts: safety.counts,
-          safety,
-        }
+        message: "Staging 上传已进入后台 job，页面将轮询进度",
+        uploadId: saved.uploadId,
+        job,
       });
     } catch (error) {
       console.error("Staging upload failed:", error);
@@ -3905,6 +4109,10 @@ router.post(
     }
   }
 );
+
+router.get("/sync/staging/upload/status", adminAuth.verifyAdminAccess, (req, res) => {
+  return sendJobStatus(res, "staging-upload", req.query.id);
+});
 
 /**
  * 5.2 GET /api/admin/sync/staging/current
@@ -3947,6 +4155,9 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
 
     const { counts } = summarizeStagingData(stagingData);
     const safety = buildStagingSafety(stagingData, activeSnapshot);
+    const localFingerprint = getSnapshotFingerprint(stagingData);
+    const activeCanonicalHash = getActiveCanonicalHash();
+    const sameAsActive = Boolean(localFingerprint?.canonicalHash && activeCanonicalHash && localFingerprint.canonicalHash === activeCanonicalHash);
 
     return res.json({
       success: true,
@@ -3957,6 +4168,11 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
         generatedAt: stagingData.generatedAt,
         releaseNote: stagingData.releaseNote || "",
         meta: stagingData.meta || null,
+        canonicalHash: localFingerprint?.canonicalHash || stagingData.canonicalHash || "",
+        activeCanonicalHash,
+        stagingCanonicalHash: localFingerprint?.canonicalHash || stagingData.canonicalHash || "",
+        sameAsActive,
+        needsPublish: !sameAsActive,
         counts,
         safety,
         diff: {
@@ -3987,6 +4203,28 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
     if (!fs.existsSync(STAGING_LATEST_PATH)) {
       return res.status(400).json({ success: false, message: "暂存数据不存在，请先上传 Staging JSON" });
     }
+    const input = {
+      force: req.body.force === true,
+      releaseNote: req.body.releaseNote || "",
+      ip: req.ip || "",
+      headers: {
+        "x-forwarded-for": req.headers["x-forwarded-for"] || "",
+      },
+    };
+    const job = jobService.createSingletonJob("staging-publish", input, async (jobContext, jobInput) => {
+      jobContext.progress(8, "start staging publish");
+      const result = await runStagingPublishCore(jobInput, jobContext);
+      jobContext.progress(92, "staging publish finished", {
+        version: result.releaseVersion,
+        healthy: result.quickHealth && result.quickHealth.healthy,
+      });
+      return result;
+    });
+    return res.status(202).json({
+      success: true,
+      message: "发布已进入后台 job，请轮询 job 状态",
+      job,
+    });
 
     const stagingData = JSON.parse(fs.readFileSync(STAGING_LATEST_PATH, "utf-8"));
     const activeSnapshot = releaseService.readActiveReleaseSnapshot();
@@ -4129,7 +4367,11 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
     });
   } catch (error) {
     console.error("Staging publish failed:", error);
-    return res.status(500).json({ success: false, message: "发布失败: " + error.message });
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.code === "JOB_ALREADY_RUNNING" ? "已有发布任务正在运行" : "发布失败: " + error.message,
+      job: error.job || null,
+    });
   }
 });
 
@@ -4226,7 +4468,7 @@ router.post("/sync/releases/rebuild-index", adminAuth.verifyAdminAccess, async (
     if (!version) {
       return res.status(400).json({ success: false, message: "缺少必要参数 version" });
     }
-    const job = jobService.createJob("release-pack-rebuild", { version }, async (jobContext) => {
+    const job = jobService.createSingletonJob("release-pack-rebuild", { version }, async (jobContext) => {
       jobContext.progress(10, "开始重建 Release Pack", { version });
       releaseService.clearDerivedCache();
       const rebuilt = releaseService.rebuildReleasePack(version);
@@ -4252,7 +4494,11 @@ router.post("/sync/releases/rebuild-index", adminAuth.verifyAdminAccess, async (
     });
   } catch (error) {
     console.error("Rebuild index failed:", error);
-    return res.status(500).json({ success: false, message: "重建索引失败: " + error.message });
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.code === "JOB_ALREADY_RUNNING" ? "已有 Release Pack 重建任务正在运行" : "重建索引失败: " + error.message,
+      job: error.job || null,
+    });
   }
 });
 
@@ -4419,9 +4665,7 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
           `【PowerShell 推荐写法】建议通过绝对路径以防路径重复拼接错误：\n` +
           `$file = (Resolve-Path ".\\staging\\${term}-full.json").Path\n` +
           `npm run sync:local-upload -- --file="$file" --server=https://class.katelya.eu.org\n\n` +
-          `【兼容旧路径写法】若生成的文件位于 tools/fosu-sync-client/staging：\n` +
-          `$file = (Resolve-Path ".\\tools\\fosu-sync-client\\staging\\${term}-full.json").Path\n` +
-          `npm run sync:local-upload -- --file="$file" --server=https://class.katelya.eu.org`,
+          `【旧目录排查】tools/fosu-sync-client/staging 不再作为默认输出目录；若发现旧文件，请先移动到项目根 staging 再上传。`,
         duration: "15 ~ 60 秒",
         intranetRequired: false,
         risk: "低",

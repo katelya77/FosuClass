@@ -273,6 +273,17 @@ picker {
   display: inline-block;
 }
 
+.teacher-diagnosis {
+  margin: 0 0 12rpx;
+  padding: 14rpx 16rpx;
+  border-radius: 8rpx;
+  background: #f8fafc;
+  color: #536174;
+  font-size: 21rpx;
+  line-height: 1.45;
+  word-break: break-all;
+}
+
 /* 结果列表与卡片 */
 .result-list {
   margin-top: 10rpx;

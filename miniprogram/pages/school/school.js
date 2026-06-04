@@ -200,6 +200,9 @@ Page({
     classAdminResults: [],
     classAggregateResults: [],
     teachersResult: [],
+    teacherHitCount: 0,
+    teacherDataSourceText: "",
+    teacherDiagnosticText: "",
     classroomsResult: [],
     coursesResult: [],
     
@@ -610,6 +613,9 @@ Page({
       classAdminResults: [],
       classAggregateResults: [],
       teachersResult: [],
+      teacherHitCount: 0,
+      teacherDataSourceText: "",
+      teacherDiagnosticText: "",
       classroomsResult: [],
       coursesResult: [],
       updatedAtText: "",
@@ -626,7 +632,8 @@ Page({
       clearTimeout(this.keywordSearchTimer);
     }
     const activeTab = this.data.activeTab;
-    if (!["teacher", "classroom", "course"].includes(activeTab) || keyword.trim().length < 2) {
+    const minKeywordLength = activeTab === "teacher" ? 1 : 2;
+    if (!["teacher", "classroom", "course"].includes(activeTab) || keyword.trim().length < minKeywordLength) {
       return;
     }
     this.keywordSearchTimer = setTimeout(() => {
@@ -1559,15 +1566,23 @@ Page({
       const teachers = (data.items || []).map(item => normalizeIndexedScheduleItem("teacher", item, data.version));
       this.setData({
         teachersResult: teachers,
+        teacherHitCount: teachers.length,
+        teacherDataSourceText: "本地静态索引",
         dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
         updatedAtText: teachers.length
-          ? (formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引")
-          : "未找到相关教师",
+          ? `${teachers.length} 个命中 · 本地静态索引${formatTime ? " · 更新于 " + formatTime : ""}`
+          : "未找到相关教师，请检查姓名或切换关键词",
       });
     };
 
     const catchFn = () => {
-      this.setData({ teachersResult: [], updatedAtText: "未找到相关教师", dataVersionText: "" });
+      this.setData({
+        teachersResult: [],
+        teacherHitCount: 0,
+        teacherDataSourceText: "本地静态索引",
+        updatedAtText: "未找到相关教师，请检查姓名或切换关键词",
+        dataVersionText: "",
+      });
     };
 
     this.executeSearch("teacher", params, renderFn, catchFn);
@@ -1718,6 +1733,23 @@ Page({
           console.warn("[school] openIndexedSchedule fail", err);
         }
       });
+  },
+
+  showTeacherSearchDiagnostics() {
+    if (!platformUtils.isDeveloperEnv || !platformUtils.isDeveloperEnv()) {
+      return;
+    }
+    const keyword = (this.data.keyword || "").trim();
+    const normalize = (value) => String(value || "")
+      .trim()
+      .replace(/[\u3000\s]+/g, "")
+      .replace(/[\uFF01-\uFF5E]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
+      .replace(/\u3002/g, ".")
+      .toLowerCase();
+    const samples = (this.data.teachersResult || []).slice(0, 5).map((item) => Object.keys(item).slice(0, 8).join(",")).join(" / ");
+    this.setData({
+      teacherDiagnosticText: `teacher index hits=${this.data.teacherHitCount || 0}; keyword=${normalize(keyword)}; samples=${samples || "-"}`,
+    });
   },
 
   // ================== 卡片点击进入课表详情 ==================

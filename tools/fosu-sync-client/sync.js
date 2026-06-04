@@ -30,6 +30,11 @@ const normalizer = require("../../server/src/utils/scheduleNormalizer");
 const courseIdentity = require("../../server/src/utils/courseNormalizer");
 const releaseService = require("../../server/src/services/releaseService");
 const stagingUploader = require("./upload");
+const {
+  buildSidecarMeta,
+  calculateFingerprint,
+  readSidecarHash,
+} = require("../../server/src/utils/stagingFingerprint");
 
 const proxyEnvNames = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"];
 const detectedProxyEnv = proxyEnvNames
@@ -178,6 +183,18 @@ function resolveOutputFilePath(outputArg) {
     return path.resolve(projectRoot, outputArg);
   }
   return path.resolve(cwd, outputArg);
+}
+
+function getSidecarMetaPath(outputPath) {
+  return String(outputPath || "").replace(/\.json$/i, ".meta.json");
+}
+
+function printLocalCampusPathSummary(params, outputPath) {
+  console.log("📁 本机采集路径:");
+  console.log(`   项目根目录: ${resolveProjectPath()}`);
+  console.log(`   sync-client 目录: ${__dirname}`);
+  console.log(`   output 绝对路径: ${outputPath}`);
+  console.log(`   是否上传 VPS: ${params.upload || params["upload-vps"] ? "是" : "否，本命令仅生成本地 staging"}`);
 }
 
 // 延迟辅助函数
@@ -1601,9 +1618,30 @@ async function handleLocalCampusStaging(page, params) {
 
   const defaultOutput = path.join("staging", `${snapshot.semester || params.term || "term"}-full.json`);
   const output = resolveOutputFilePath(params.output || defaultOutput);
+  printLocalCampusPathSummary(params, output);
+  const sidecarPath = getSidecarMetaPath(output);
+  const previousHash = readSidecarHash(sidecarPath);
+  const fingerprint = calculateFingerprint(snapshot);
+  snapshot.canonicalHash = fingerprint.canonicalHash;
+  snapshot.meta = Object.assign({}, snapshot.meta || {}, {
+    canonicalHash: fingerprint.canonicalHash,
+    previousHash,
+    changed: previousHash ? previousHash !== fingerprint.canonicalHash : true,
+  });
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, JSON.stringify(snapshot, null, 2), "utf-8");
+  const rawSizeBytes = fs.statSync(output).size;
+  const sidecarMeta = buildSidecarMeta(snapshot, {
+    fingerprint,
+    previousHash,
+    rawSizeBytes,
+  });
+  fs.writeFileSync(sidecarPath, JSON.stringify(sidecarMeta, null, 2), "utf-8");
   console.log(`💾 Staging JSON 已生成: ${output}`);
+  console.log(`🧾 Staging meta 已生成: ${sidecarPath}`);
+  console.log(`📦 最终 staging 文件大小: ${(rawSizeBytes / 1024 / 1024).toFixed(2)} MB`);
+  console.log(`🔐 canonicalHash: ${fingerprint.canonicalHash}`);
+  console.log(sidecarMeta.changed ? "✅ 数据指纹已更新，可上传 staging。" : "✅ 数据没有变化，本地文件与上次 sidecar 指纹一致。");
   console.log(`📊 行政班课表: ${snapshot.coverage.classScheduleCount || 0}, 教师课表: ${snapshot.coverage.teacherScheduleCount || 0}, 教室课表: ${snapshot.coverage.classroomScheduleCount || 0}, 课程课表: ${snapshot.coverage.courseScheduleCount || 0}`);
   console.log("ℹ️ 当前命令不会上传、不会发布；下一步运行 sync:local-upload 上传到 VPS Staging。");
   return snapshot;
@@ -3755,6 +3793,9 @@ if (require.main === module) {
     saveMajorResponseSample,
     parseMajorOptionsFromResponse,
     cleanMajorsPayload,
-    normalizeMajorItem
+    normalizeMajorItem,
+    resolveInputFilePath,
+    resolveOutputFilePath,
+    resolveProjectPath,
   };
 }

@@ -38,6 +38,154 @@
   margin-bottom: 18rpx;
 }
 
+.status-panel {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18rpx;
+  padding-bottom: 20rpx;
+  border-bottom: 1rpx solid #f2f5f9;
+}
+
+.status-title {
+  color: #172033;
+  font-size: 30rpx;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.status-subtitle {
+  margin-top: 8rpx;
+  color: #778297;
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+
+.date-picker-btn {
+  flex: 0 0 auto;
+  height: 56rpx;
+  padding: 0 18rpx;
+  border-radius: 28rpx;
+  background: #fff1f1;
+  color: #c62828;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 56rpx;
+  white-space: nowrap;
+}
+
+.status-panel picker {
+  flex: 0 0 auto;
+}
+
+.chip-section {
+  padding: 20rpx 0 0;
+}
+
+.chip-title {
+  margin-bottom: 12rpx;
+  color: #3e4e68;
+  font-size: 24rpx;
+  font-weight: 900;
+}
+
+.chip-scroll {
+  width: 100%;
+  white-space: nowrap;
+}
+
+.chip-row {
+  display: flex;
+  gap: 12rpx;
+}
+
+.chip-row.nowrap {
+  display: inline-flex;
+}
+
+.filter-chip,
+.preset-chip,
+.building-chip {
+  flex: 0 0 auto;
+  min-height: 56rpx;
+  padding: 0 20rpx;
+  border-radius: 28rpx;
+  background: #f1f4f8;
+  color: #536174;
+  font-size: 24rpx;
+  font-weight: 800;
+  line-height: 56rpx;
+  white-space: nowrap;
+}
+
+.filter-chip.active,
+.building-chip.active {
+  background: #c62828;
+  color: #ffffff;
+}
+
+.date-chip {
+  flex: 0 0 auto;
+  min-width: 138rpx;
+  padding: 12rpx 16rpx;
+  border-radius: 16rpx;
+  background: #f6f8fb;
+  color: #172033;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.date-chip.active {
+  background: #fff1f1;
+  color: #c62828;
+}
+
+.date-chip-sub {
+  display: block;
+  margin-top: 6rpx;
+  color: #8a94a6;
+  font-size: 19rpx;
+  font-weight: 700;
+}
+
+.preset-row,
+.building-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.section-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10rpx;
+  margin-top: 14rpx;
+}
+
+.section-chip {
+  height: 56rpx;
+  border-radius: 16rpx;
+  background: #f1f4f8;
+  color: #536174;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 56rpx;
+  text-align: center;
+}
+
+.section-chip.active,
+.preset-chip:active {
+  background: #c62828;
+  color: #ffffff;
+}
+
+.building-chip.ghost {
+  border: 1rpx dashed #cbd5e1;
+  background: #ffffff;
+  color: #64748b;
+}
+
 .filter-row {
   display: flex;
   align-items: center;

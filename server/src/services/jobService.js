@@ -87,6 +87,18 @@ function latestJob(type) {
   return listJobs(100).find((job) => !type || job.type === type) || null;
 }
 
+function getRunningJob(type) {
+  const staleMs = Number(process.env.FOSU_JOB_LOCK_STALE_MS || 30 * 60 * 1000);
+  const now = Date.now();
+  const running = listJobs(100).find((job) => {
+    if (type && job.type !== type) return false;
+    if (job.status !== "queued" && job.status !== "running") return false;
+    const updatedAt = Date.parse(job.updatedAt || job.startedAt || job.createdAt || "");
+    return !updatedAt || now - updatedAt <= staleMs;
+  });
+  return running || null;
+}
+
 function publicJob(job) {
   if (!job) return null;
   return Object.assign({}, job, {
@@ -167,9 +179,23 @@ function createJob(type, input, runner) {
   return publicJob(job);
 }
 
+function createSingletonJob(type, input, runner) {
+  const running = getRunningJob(type);
+  if (running) {
+    const error = new Error(`${type} job is already running`);
+    error.code = "JOB_ALREADY_RUNNING";
+    error.statusCode = 409;
+    error.job = publicJob(running);
+    throw error;
+  }
+  return createJob(type, input, runner);
+}
+
 module.exports = {
   JOBS_DIR,
   createJob,
+  createSingletonJob,
+  getRunningJob,
   latestJob,
   listJobs,
   publicJob,
