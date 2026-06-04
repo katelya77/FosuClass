@@ -2,6 +2,7 @@ const BRAND = require("../../config/brand");
 const appConfigService = require("../../services/appConfigService");
 const emptyRoomService = require("../../services/emptyRoomService");
 const platformDataService = require("../../services/platformDataService");
+const releasePackService = require("../../services/releasePackService");
 const { mockCalendar } = require("../../data/mockCalendar");
 const {
   DEFAULT_SEMESTER_ID,
@@ -127,9 +128,10 @@ Page({
   },
 
   loadAndSearch(options = {}) {
+    const hasRooms = Array.isArray(this.data.rooms) && this.data.rooms.length > 0;
     this.setData({
       loading: true,
-      dataState: "loading",
+      dataState: hasRooms ? this.data.dataState : "loading",
       restoreHint: "",
     });
 
@@ -151,7 +153,8 @@ Page({
         this.setData({
           loading: false,
           dataState: state,
-          summaryText: state === "noRelease" ? "暂未发布课表数据" : "空教室数据加载失败",
+          restoreHint: hasRooms ? "网络连接慢，已保留当前结果" : "",
+          summaryText: hasRooms ? this.data.summaryText : (state === "noRelease" ? "暂未发布课表数据" : "空教室数据加载失败"),
         });
       });
   },
@@ -172,9 +175,26 @@ Page({
     if (platformSnapshot && platformSnapshot.releaseVersion) {
       return Promise.resolve(platformSnapshot);
     }
-    return appConfigService.loadAppConfig()
-      .then((config) => normalizeActiveSnapshot(config))
-      .catch(() => platformDataService.loadPrefetchData({ network: false }).then((data) => platformDataService.extractActiveSnapshot(data)));
+    const localActive = releasePackService.getLocalActiveRelease(DEFAULT_SEMESTER_ID);
+    if (localActive && localActive.releaseVersion) {
+      releasePackService.switchReleaseSafely({ term: localActive.term, dedupe: true })
+        .catch((error) => console.warn("[empty-room] background release refresh failed", {
+          code: error && (error.code || error.reasonCode),
+        }));
+      return Promise.resolve({
+        term: localActive.term,
+        releaseVersion: localActive.releaseVersion,
+        updatedAt: localActive.manifest && localActive.manifest.updatedAt || "",
+        cacheEpoch: localActive.cacheEpoch,
+        forceRefreshToken: localActive.forceRefreshToken,
+        counts: localActive.manifest && localActive.manifest.counts || {},
+      });
+    }
+    return releasePackService.switchReleaseSafely({ term: DEFAULT_SEMESTER_ID, dedupe: true })
+      .then((result) => normalizeActiveSnapshot(result && result.manifest))
+      .catch(() => appConfigService.loadAppConfig()
+        .then((config) => normalizeActiveSnapshot(config))
+        .catch(() => platformDataService.loadPrefetchData({ network: false }).then((data) => platformDataService.extractActiveSnapshot(data))));
   },
 
   getQueryParams() {
@@ -221,8 +241,9 @@ Page({
     }).catch((error) => {
       this.setData({
         loading: false,
-        dataState: error && error.code === "REQUEST_TIMEOUT" ? "timeout" : "networkError",
-        summaryText: "空教室数据加载失败",
+        dataState: error && (error.code === "REQUEST_TIMEOUT" || error.code === "TIMEOUT") ? "timeout" : "networkError",
+        restoreHint: this.data.rooms.length ? "网络连接慢，已保留当前结果" : "",
+        summaryText: this.data.rooms.length ? this.data.summaryText : "空教室数据加载失败",
       });
       throw error;
     });

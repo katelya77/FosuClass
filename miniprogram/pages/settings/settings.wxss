@@ -350,6 +350,17 @@
   padding: 0 !important;
 }
 
+.diagnose-btn.secondary {
+  margin-top: 16rpx !important;
+  border: 1rpx solid #dce4ef;
+  background: #ffffff !important;
+  color: #536174 !important;
+}
+
 .diagnose-btn:active {
   background: #b71c1c !important;
+}
+
+.diagnose-btn.secondary:active {
+  background: #f1f4f8 !important;
 }

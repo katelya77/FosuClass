@@ -2,8 +2,8 @@
   <view class="notice-ticker-icon">告</view>
   <view class="notice-ticker-track">
     <view class="notice-ticker-line {{currentNotice.shouldScroll ? 'is-scroll' : 'is-static'}}">
-      <text>{{currentNotice.tickerText}}</text>
-      <text wx:if="{{currentNotice.shouldScroll}}">{{currentNotice.tickerText}}</text>
+      <text class="notice-ticker-text">{{currentNotice.tickerText}}</text>
+      <text wx:if="{{currentNotice.shouldScroll}}" class="notice-ticker-text">{{currentNotice.tickerText}}</text>
     </view>
   </view>
   <button class="notice-ticker-view" catchtap="openNoticeDetail">查看</button>

@@ -371,7 +371,9 @@
           </view>
 
           <view class="detail-divider"></view>
-          <view class="detail-section-title">🔍 数据诊断</view>
+          <view class="detail-section-title">数据诊断</view>
+          <button class="diagnose-btn secondary" bindtap="toggleAdvancedDiagnosis">{{diagnosisExpanded ? "收起高级诊断" : "高级诊断"}}</button>
+          <view wx:if="{{diagnosisExpanded}}" class="diagnosis-block">
           
           <view class="detail-row">
             <view class="detail-label">当前正式版本</view>
@@ -414,8 +416,46 @@
             <view class="detail-label">课程索引缓存数</view>
             <view class="detail-value">{{versionData.courseIndexCount || 0}} 项</view>
           </view>
+          <view class="detail-row">
+            <view class="detail-label">appConfig releaseVersion</view>
+            <view class="detail-value">{{versionData.appConfigReleaseVersion || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">manifest releaseVersion</view>
+            <view class="detail-value">{{versionData.manifestReleaseVersion || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">last-good releaseVersion</view>
+            <view class="detail-value">{{versionData.lastGoodReleaseVersion || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">cacheEpoch</view>
+            <view class="detail-value">{{versionData.cacheEpoch || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">forceRefreshToken</view>
+            <view class="detail-value">{{versionData.forceRefreshToken || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">empty-room cache</view>
+            <view class="detail-value">{{versionData.emptyRoomCacheText || 'no'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">最近网络错误</view>
+            <view class="detail-value">{{versionData.lastNetworkErrorText || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">最近成功请求</view>
+            <view class="detail-value">{{versionData.lastSuccessElapsedText || '-'}}</view>
+          </view>
           
+          <button class="diagnose-btn" bindtap="safeRefreshReleaseData">安全刷新数据</button>
+          <button class="diagnose-btn secondary" bindtap="refreshReleaseManifestOnly">重新拉取 manifest</button>
+          <button class="diagnose-btn secondary" bindtap="warmupReleaseIndexes">重新预热 index</button>
+          <button class="diagnose-btn secondary" bindtap="cleanupOldReleaseCaches">清理旧版本缓存</button>
+          <button class="diagnose-btn secondary" bindtap="exportDiagnosisLog">导出诊断日志</button>
           <button class="diagnose-btn" bindtap="diagnoseClearAllCaches">清理全校缓存并重新加载</button>
+          </view>
         </view>
       </scroll-view>
 

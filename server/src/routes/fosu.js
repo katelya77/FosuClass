@@ -87,7 +87,10 @@ function getActivePlatformSnapshot(req) {
     activeReleaseVersion: releaseVersion,
     updatedAt,
     publishedAt: updatedAt,
-    cacheEpoch: new Date(updatedAt).getTime() || Date.now(),
+    cacheEpoch: active.cacheEpoch || new Date(updatedAt).getTime() || Date.now(),
+    forceRefreshToken: active.forceRefreshToken || "",
+    packStatus: active.releasePack || active.packStatus || {},
+    minClientCacheSchema: 5,
     counts: active.counts || {},
     manifestUrl: releaseVersion
       ? `/api/fosu/periodic-data?releaseVersion=${encodeURIComponent(releaseVersion)}`
@@ -141,8 +144,12 @@ router.get("/app-config", (req, res) => {
       rawConfig.data.publishedAt = dataUpdatedAt;
       rawConfig.data.dataUpdatedAt = dataUpdatedAt;
       rawConfig.data.cacheVersion = activeVer;
-      rawConfig.data.cacheEpoch = new Date(dataUpdatedAt).getTime() || Date.now();
-      rawConfig.data.counts = releaseService.getActiveReleaseInfo()?.counts || {};
+      const activeInfo = releaseService.getActiveReleaseInfo() || {};
+      rawConfig.data.cacheEpoch = activeInfo.cacheEpoch || new Date(dataUpdatedAt).getTime() || Date.now();
+      rawConfig.data.forceRefreshToken = activeInfo.forceRefreshToken || "";
+      rawConfig.data.packStatus = activeInfo.releasePack || activeInfo.packStatus || {};
+      rawConfig.data.minClientCacheSchema = 5;
+      rawConfig.data.counts = activeInfo.counts || {};
     }
     res.json(rawConfig);
   } catch (error) {
@@ -376,7 +383,11 @@ router.get("/bootstrap", async (req, res) => {
       data.publishedAt = dataUpdatedAt;
       data.dataUpdatedAt = dataUpdatedAt;
       data.cacheVersion = activeVer;
-      data.cacheEpoch = new Date(dataUpdatedAt).getTime() || Date.now();
+      const activeInfo = releaseService.getActiveReleaseInfo() || {};
+      data.cacheEpoch = activeInfo.cacheEpoch || new Date(dataUpdatedAt).getTime() || Date.now();
+      data.forceRefreshToken = activeInfo.forceRefreshToken || "";
+      data.packStatus = activeInfo.releasePack || activeInfo.packStatus || {};
+      data.minClientCacheSchema = 5;
     }
     res.json(data);
   } catch (error) {

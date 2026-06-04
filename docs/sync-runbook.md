@@ -79,6 +79,41 @@ relay token 只能读取接力任务和上传 Staging JSON，不能访问 `/api/
 
 接力代理会自动定位源码版或打包版的 `login.js`/`sync.js`，在校园网电脑本地生成 `./staging/{term}-full.json`，确认后同样走 gzip 分片上传。
 
+## 稳定版标准流程
+
+课程数据更新不靠提交小程序代码。小程序代码发布用于功能更新；全校课表数据更新主要靠后台 release 发布。
+
+推荐维护流程：
+
+1. 本地电脑连接校园网或 VPN。
+2. 在项目根目录运行：
+
+```powershell
+cd C:\Users\Katelya\Documents\VScode\FosuClass
+npm run sync:local-campus -- --term=2025-2026-2 --start=2026-03-09 --output=./staging/2025-2026-2-full.json --include=classSchedules,teacherSchedules,classroomSchedules,courseSchedules,classes,teachers,classrooms,courses --class-scope=all --grades=2025,2024,2023,2022,2021 --concurrency=1 --delay-ms=900
+```
+
+3. 上传 staging：
+
+```powershell
+npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=https://class.katelya.eu.org
+```
+
+4. 进入后台 `/admin/sync`。
+5. 查看 staging counts 和 diff。
+6. 构建或重建 Release Pack。
+7. 运行一键健康检查。
+8. 发布正式版。
+9. 发布后执行小程序读取验证：
+
+```powershell
+npm run verify:release-live -- --server=https://class.katelya.eu.org --term=2025-2026-2
+```
+
+10. 真机打开小程序，在设置页查看“数据版本详情”。开发版/体验版可进入“高级诊断”查看 active manifest、last-good、index 和 empty-room 缓存。
+
+发布新课程数据后，小程序通过 active manifest + `releaseVersion/cacheEpoch/forceRefreshToken` 检测新版。旧缓存不会立即暴力清空，只有新版本 index 校验成功后才安全切换。如果服务器网络慢，小程序先展示 last-good，再后台刷新。
+
 ## 开学季高频更新
 
 大一新生开学季建议每天至少两次刷新：

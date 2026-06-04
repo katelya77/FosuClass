@@ -964,6 +964,9 @@ function buildManifest(snapshot, version, counts, validation, files, derived) {
     semester: snapshot.semester || snapshot.term || "",
     updatedAt,
     cacheEpoch: new Date(updatedAt).getTime() || Date.now(),
+    dataEpoch: new Date(updatedAt).getTime() || Date.now(),
+    forceRefreshToken: `${version}:${new Date(updatedAt).getTime() || Date.now()}`,
+    minClientCacheSchema: 5,
     source: snapshot.source || "local-sync-client",
     counts,
     files: filesMeta,
@@ -1097,11 +1100,33 @@ function activateReleaseVersion(version) {
     throw err;
   }
 
+  try {
+    assertHealthyReleasePack(normalizedVersion);
+  } catch (error) {
+    if (error && error.code === "RELEASE_PACK_UNHEALTHY" && snapshot) {
+      rebuildReleasePack(normalizedVersion);
+    } else {
+      throw error;
+    }
+  }
+  const packStatus = assertHealthyReleasePack(normalizedVersion);
+  const cacheEpoch = Date.now();
+  const forceRefreshToken = `${normalizedVersion}:${cacheEpoch}`;
   const active = {
     version: normalizedVersion,
     releaseVersion: normalizedVersion,
     activatedAt: new Date().toISOString(),
     updatedAt: snapshot.updatedAt || new Date().toISOString(),
+    cacheEpoch,
+    forceRefreshToken,
+    packStatus: {
+      healthy: packStatus.healthy,
+      manifestExists: packStatus.manifestExists,
+      manifestValid: packStatus.manifestValid,
+      hashValid: packStatus.hashValid,
+      missing: packStatus.missing || [],
+      hashErrors: packStatus.hashErrors || [],
+    },
     term: snapshot.term || snapshot.semester || "",
     semester: snapshot.semester,
     counts: validation.counts,
@@ -1412,6 +1437,30 @@ function getReleasePackStatus(version) {
   };
 }
 
+function assertHealthyReleasePack(version) {
+  const status = getReleasePackStatus(version);
+  const errors = [];
+  if (!status.manifestExists) errors.push("manifest missing");
+  if (!status.manifestValid) errors.push("manifest invalid");
+  ["class", "teacher", "classroom", "course"].forEach((kind) => {
+    const indexInfo = status.index && status.index[kind] || {};
+    const detailInfo = status.detail && status.detail[kind] || {};
+    if (!indexInfo.exists) errors.push(`index/${kind}.json missing`);
+    if (Number(indexInfo.count || 0) <= 0) errors.push(`index/${kind}.json empty`);
+    if (!detailInfo.exists || Number(detailInfo.count || 0) <= 0) errors.push(`detail/${kind} missing`);
+  });
+  if (!status.emptyRoom || !status.emptyRoom.exists) errors.push("empty-room/index.json missing");
+  if (!status.hashValid) errors.push.apply(errors, status.hashErrors || []);
+  if (Array.isArray(status.missing) && status.missing.length) errors.push.apply(errors, status.missing);
+  if (errors.length) {
+    const err = new Error(`Release Pack health check failed: ${Array.from(new Set(errors)).join("; ")}`);
+    err.code = "RELEASE_PACK_UNHEALTHY";
+    err.status = status;
+    throw err;
+  }
+  return status;
+}
+
 function getReleasePackManifest(version) {
   const targetVersion = normalizeVersion(version || getActiveReleaseInfo()?.version || "");
   if (!targetVersion) {
@@ -1420,9 +1469,17 @@ function getReleasePackManifest(version) {
   const files = getReleaseFiles(targetVersion);
   const manifest = readJsonFile(files.manifestPath);
   if (manifest && manifest.releaseVersion) {
+    const active = getActiveReleaseInfo();
+    const isActive = active && active.version === targetVersion;
+    const status = getReleasePackStatus(targetVersion);
     return Object.assign({ success: true }, manifest, {
       releaseVersion: manifest.releaseVersion || targetVersion,
       version: manifest.version || targetVersion,
+      cacheEpoch: isActive ? (active.cacheEpoch || manifest.cacheEpoch) : manifest.cacheEpoch,
+      dataEpoch: isActive ? (active.cacheEpoch || manifest.cacheEpoch) : (manifest.dataEpoch || manifest.cacheEpoch),
+      forceRefreshToken: isActive ? (active.forceRefreshToken || manifest.forceRefreshToken || `${targetVersion}:${manifest.cacheEpoch || ""}`) : (manifest.forceRefreshToken || `${targetVersion}:${manifest.cacheEpoch || ""}`),
+      packStatus: status,
+      minClientCacheSchema: manifest.minClientCacheSchema || 5,
     });
   }
 
@@ -2106,6 +2163,7 @@ module.exports = {
   getReleaseFiles,
   getReleasePackManifest,
   getReleasePackStatus,
+  assertHealthyReleasePack,
   getReleaseStatus,
   deleteReleaseVersion,
   readActiveIndex,

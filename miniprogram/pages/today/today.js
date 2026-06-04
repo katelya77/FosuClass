@@ -30,20 +30,33 @@ Page({
   },
 
   loadPageConfig() {
-    appConfigService.loadAppConfig()
+    return appConfigService.loadAppConfig()
       .then((config) => {
-        const urgentNotice = appConfigService.getPageNotices(config, "today")
-          .find((notice) => notice.priority === "urgent" && notice.displayMode !== "ticker");
-        const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
+        const normalizedConfig = Object.assign({
+          notices: [],
+          urgentNotice: null,
+          banners: [],
+          appConfig: {},
+        }, config || {});
+        if (!Array.isArray(normalizedConfig.notices)) normalizedConfig.notices = [];
+        if (!Array.isArray(normalizedConfig.banners)) normalizedConfig.banners = [];
+        if (normalizedConfig.urgentNotice === undefined) normalizedConfig.urgentNotice = null;
+        const urgentNotice = appConfigService.getPageNotices(normalizedConfig, "today")
+          .find((notice) => notice.priority === "urgent" && notice.displayMode !== "ticker") || null;
+        const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(normalizedConfig);
         this.setData({
-          appConfig: config,
+          appConfig: normalizedConfig,
           urgentNotice,
           dataVersionText: latestUpdatedAt ? `数据更新于 ${appConfigService.formatConfigTime(latestUpdatedAt)}` : "",
-          releaseNote: (config.dataVersion && config.dataVersion.releaseNote) || "",
+          releaseNote: (normalizedConfig.dataVersion && normalizedConfig.dataVersion.releaseNote) || "",
         });
       })
       .catch((err) => {
         console.warn("今日页公告配置加载失败", err);
+        this.setData({
+          appConfig: Object.assign({ notices: [], banners: [], appConfig: {} }, this.data.appConfig || {}),
+          urgentNotice: null,
+        });
       });
   },
 

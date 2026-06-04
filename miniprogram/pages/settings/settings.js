@@ -17,6 +17,8 @@ const {
 } = require("../../utils/week");
 const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
+const releasePackService = require("../../services/releasePackService");
+const platformUtils = require("../../utils/platform");
 const { courseTimesMeta } = require("../../data/courseTimes");
 const { contactConfig } = require("../../config/contact");
 
@@ -150,6 +152,8 @@ Page({
     noticeHistory: [],
     newsList: [],
     versionDetailVisible: false,
+    diagnosisExpanded: false,
+    diagnosisCanShowFull: false,
     versionData: {
       appVersion: APP_VERSION,
       sdkVersion: "",
@@ -170,6 +174,15 @@ Page({
       dataSource: "-",
       selectedScheduleText: "未绑定课表",
       disclaimer: BRAND.disclaimer,
+      appConfigReleaseVersion: "-",
+      manifestReleaseVersion: "-",
+      localActiveReleaseVersion: "-",
+      lastGoodReleaseVersion: "-",
+      cacheEpoch: "-",
+      forceRefreshToken: "-",
+      emptyRoomCacheText: "no",
+      lastNetworkErrorText: "-",
+      lastSuccessElapsedText: "-",
     },
   },
 
@@ -319,7 +332,7 @@ Page({
   buildFeedbackPayload() {
     const selectedSchedule = getSelectedSchedule();
     const selectedScheduleSummary = summarizeSelectedSchedule(selectedSchedule);
-    const sysInfo = wx.getSystemInfoSync();
+    const sysInfo = platformUtils.getWxSystemInfo();
     const bootstrap = getApp().globalData.bootstrapData || wx.getStorageSync(BOOTSTRAP_CACHE_KEY) || {};
     const settings = this.data.settings || getSettings();
     return {
@@ -530,13 +543,41 @@ Page({
   },
 
   showDataVersionDetail() {
-    const sysInfo = wx.getSystemInfoSync();
+    const sysInfo = platformUtils.getWxSystemInfo();
+    const isDeveloperEnv = platformUtils.isDeveloperEnv();
+    const localActive = releasePackService.getLocalActiveRelease(this.data.settings.semesterId || this.data.settings.semester || "2025-2026-2");
+    const lastGood = releasePackService.getLastKnownGood(this.data.settings.semesterId || this.data.settings.semester || "2025-2026-2");
+    const requestDiag = typeof request.getRequestDiagnostics === "function" ? request.getRequestDiagnostics() : {};
+    const localManifest = localActive && localActive.manifest || null;
+    const localTerm = localActive && localActive.term || "";
+    const localReleaseVersion = localActive && localActive.releaseVersion || "";
+    const indexCounts = {};
+    ["class", "teacher", "classroom", "course"].forEach((type) => {
+      const cached = releasePackService.readCachedIndex(type, { term: localTerm, releaseVersion: localReleaseVersion });
+      indexCounts[type] = cached && Array.isArray(cached.items) ? cached.items.length : 0;
+    });
+    const emptyRoomCache = releasePackService.readCachedEmptyRoom({ term: localTerm, releaseVersion: localReleaseVersion });
+    const lastError = requestDiag.lastError || {};
+    const lastSuccess = requestDiag.lastSuccess || {};
     
     this.setData({
       versionDetailVisible: true,
+      diagnosisCanShowFull: isDeveloperEnv,
       "versionData.sdkVersion": sysInfo.SDKVersion || "未知",
       "versionData.courseTimesVersion": courseTimesMeta.version,
       "versionData.courseTimesUpdatedAt": courseTimesMeta.updatedAt,
+      "versionData.localActiveReleaseVersion": localReleaseVersion || "-",
+      "versionData.lastGoodReleaseVersion": lastGood && lastGood.releaseVersion || "-",
+      "versionData.manifestReleaseVersion": localManifest && localManifest.releaseVersion || "-",
+      "versionData.cacheEpoch": localActive && localActive.cacheEpoch || "-",
+      "versionData.forceRefreshToken": localActive && localActive.forceRefreshToken || "-",
+      "versionData.classIndexCount": indexCounts.class || 0,
+      "versionData.teacherIndexCount": indexCounts.teacher || 0,
+      "versionData.classroomIndexCount": indexCounts.classroom || 0,
+      "versionData.courseIndexCount": indexCounts.course || 0,
+      "versionData.emptyRoomCacheText": emptyRoomCache ? "yes" : "no",
+      "versionData.lastNetworkErrorText": lastError.code ? `${lastError.code} · ${lastError.url || "-"} · ${lastError.elapsedMs || 0}ms` : "-",
+      "versionData.lastSuccessElapsedText": lastSuccess.elapsedMs ? `${lastSuccess.elapsedMs}ms · ${lastSuccess.url || ""}` : "-",
     });
 
     wx.showLoading({ title: "加载中..." });
@@ -558,48 +599,6 @@ Page({
           } else if (dataSource === "cache") {
             dataSource = "服务端本地缓存 (cache)";
           }
-
-          // 计算本地诊断数据
-          const localReleaseKey = wx.getStorageSync("FOSU_LOCAL_RELEASE_KEY") || "";
-          const parts = localReleaseKey.split(":");
-          const localTerm = parts[0] || "";
-          const localReleaseVersion = parts[1] || "";
-
-          const storageInfo = wx.getStorageInfoSync ? wx.getStorageInfoSync() : { keys: [] };
-          const keys = storageInfo.keys || [];
-          
-          let classIndexCount = 0;
-          let teacherIndexCount = 0;
-          let classroomIndexCount = 0;
-          let courseIndexCount = 0;
-
-          keys.forEach((key) => {
-            if (key.startsWith(`school:v3:index:${localTerm}:${localReleaseVersion}:`)) {
-              const keyParts = key.split(":");
-              const type = keyParts[5]; // school:v3:index:term:version:type:...
-              try {
-                const cached = wx.getStorageSync(key);
-                const list = cached && cached.data && (cached.data.items || cached.data.list || cached.data);
-                const count = Array.isArray(list) ? list.length : 0;
-                if (type === "class") classIndexCount += count;
-                else if (type === "teacher") teacherIndexCount += count;
-                else if (type === "classroom") classroomIndexCount += count;
-                else if (type === "course") courseIndexCount += count;
-              } catch (e) {}
-            } else if (key.startsWith(`school:index:${localTerm}:${localReleaseVersion}:`)) {
-              const keyParts = key.split(":");
-              const type = keyParts[4];
-              try {
-                const cached = wx.getStorageSync(key);
-                const list = cached && cached.data && (cached.data.items || cached.data.list || cached.data);
-                const count = Array.isArray(list) ? list.length : 0;
-                if (type === "class") classIndexCount += count;
-                else if (type === "teacher") teacherIndexCount += count;
-                else if (type === "classroom") classroomIndexCount += count;
-                else if (type === "course") courseIndexCount += count;
-              } catch (e) {}
-            }
-          });
 
           // 远端诊断数据
           const remoteReleaseVersion = res.version || (res.catalog && res.catalog.version) || "-";
@@ -632,16 +631,25 @@ Page({
               disclaimer: metaDetails.disclaimer || BRAND.disclaimer,
 
               // 诊断字段数据绑定
+              appConfigReleaseVersion: (this.data.appConfig && this.data.appConfig.dataVersion && this.data.appConfig.dataVersion.releaseVersion) || "-",
               remoteReleaseVersion,
               remoteTerm,
               remoteScheduleUpdatedAt,
               remoteCatalogUpdatedAt,
               localReleaseVersion,
               localTerm,
-              classIndexCount,
-              teacherIndexCount,
-              classroomIndexCount,
-              courseIndexCount,
+              localActiveReleaseVersion: localReleaseVersion || "-",
+              lastGoodReleaseVersion: lastGood && lastGood.releaseVersion || "-",
+              manifestReleaseVersion: localManifest && localManifest.releaseVersion || "-",
+              cacheEpoch: localActive && localActive.cacheEpoch || "-",
+              forceRefreshToken: localActive && localActive.forceRefreshToken || "-",
+              classIndexCount: indexCounts.class || 0,
+              teacherIndexCount: indexCounts.teacher || 0,
+              classroomIndexCount: indexCounts.classroom || 0,
+              courseIndexCount: indexCounts.course || 0,
+              emptyRoomCacheText: emptyRoomCache ? "yes" : "no",
+              lastNetworkErrorText: lastError.code ? `${lastError.code} · ${lastError.url || "-"} · ${lastError.elapsedMs || 0}ms` : "-",
+              lastSuccessElapsedText: lastSuccess.elapsedMs ? `${lastSuccess.elapsedMs}ms · ${lastSuccess.url || ""}` : "-",
             }
           });
         }
@@ -650,6 +658,90 @@ Page({
         wx.hideLoading();
         console.error("fetch bootstrap in settings failed", err);
       });
+  },
+
+  toggleAdvancedDiagnosis() {
+    if (!this.data.diagnosisCanShowFull) {
+      wx.showToast({
+        title: "体验版/开发版可查看高级诊断",
+        icon: "none",
+      });
+      return;
+    }
+    this.setData({
+      diagnosisExpanded: !this.data.diagnosisExpanded,
+    });
+  },
+
+  safeRefreshReleaseData() {
+    wx.showLoading({ title: "检查中..." });
+    releasePackService.switchReleaseSafely({ forceNetwork: true, dedupe: true })
+      .then(() => {
+        wx.hideLoading();
+        this.showDataVersionDetail();
+        wx.showToast({ title: "已安全刷新", icon: "success" });
+      })
+      .catch((error) => {
+        wx.hideLoading();
+        wx.showToast({ title: "刷新失败，已保留缓存", icon: "none" });
+        console.warn("safeRefreshReleaseData failed", { code: error && (error.code || error.reasonCode) });
+      });
+  },
+
+  refreshReleaseManifestOnly() {
+    wx.showLoading({ title: "拉取中..." });
+    releasePackService.getActiveManifest({ forceNetwork: true, dedupe: true })
+      .then(() => {
+        wx.hideLoading();
+        this.showDataVersionDetail();
+      })
+      .catch((error) => {
+        wx.hideLoading();
+        wx.showToast({ title: "manifest 拉取失败", icon: "none" });
+        console.warn("refreshReleaseManifestOnly failed", { code: error && (error.code || error.reasonCode) });
+      });
+  },
+
+  warmupReleaseIndexes() {
+    const localActive = releasePackService.getLocalActiveRelease(this.data.settings.semesterId || this.data.settings.semester || "2025-2026-2");
+    if (!localActive) {
+      wx.showToast({ title: "暂无本地 release", icon: "none" });
+      return;
+    }
+    wx.showLoading({ title: "预热中..." });
+    releasePackService.warmupIndex(["class", "teacher", "classroom", "course"], {
+      term: localActive.term,
+      releaseVersion: localActive.releaseVersion,
+      manifest: localActive.manifest,
+      forceNetwork: true,
+      skipFallback: true,
+    })
+      .then(() => {
+        wx.hideLoading();
+        this.showDataVersionDetail();
+      })
+      .catch((error) => {
+        wx.hideLoading();
+        wx.showToast({ title: "预热失败，缓存未切换", icon: "none" });
+        console.warn("warmupReleaseIndexes failed", { code: error && (error.code || error.reasonCode) });
+      });
+  },
+
+  cleanupOldReleaseCaches() {
+    const result = releasePackService.clearOldReleaseCaches({ keepLatestN: 2 });
+    this.showDataVersionDetail();
+    wx.showToast({ title: `已清理 ${result.removed || 0} 项`, icon: "none" });
+  },
+
+  exportDiagnosisLog() {
+    const data = JSON.stringify({
+      versionData: this.data.versionData,
+      request: typeof request.getRequestDiagnostics === "function" ? request.getRequestDiagnostics() : {},
+    }, null, 2).replace(/(token|password|secret|cookie)["']?\s*:\s*["'][^"']+["']/gi, "$1: \"[redacted]\"");
+    wx.setClipboardData({
+      data,
+      success: () => wx.showToast({ title: "诊断日志已复制", icon: "success" }),
+    });
   },
 
   diagnoseClearAllCaches() {

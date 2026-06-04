@@ -9,14 +9,24 @@ function nowIso() {
 
 function normalizeConfig(payload) {
   const data = payload && payload.data ? payload.data : payload;
-  return Object.assign({
+  const config = Object.assign({
     appName: "佛课小表",
     currentSemester: "2025-2026-2",
     dataVersion: {},
     notices: [],
+    urgentNotice: null,
+    banners: [],
     news: [],
+    appConfig: {},
     disclaimer: "课表仅供参考，以任课教师及教务通知为准。",
   }, data || {});
+  if (!config.dataVersion || typeof config.dataVersion !== "object") config.dataVersion = {};
+  if (!Array.isArray(config.notices)) config.notices = [];
+  if (!Array.isArray(config.banners)) config.banners = [];
+  if (!Array.isArray(config.news)) config.news = [];
+  if (config.urgentNotice === undefined) config.urgentNotice = null;
+  if (!config.appConfig || typeof config.appConfig !== "object") config.appConfig = {};
+  return config;
 }
 
 function getCachedAppConfig() {
@@ -55,7 +65,7 @@ function loadAppConfig(options) {
 
   // 拼接时间戳 ts 避免 CDN/客户端 HTTP 缓存
   const url = `/api/fosu/app-config?ts=${Date.now()}`;
-  return request.get(url, {}, { showLoading: false, silentError: true, timeout: 8000 })
+  return request.get(url, {}, { showLoading: false, silentError: true, timeout: 8000, retries: 1 })
     .then((res) => {
       const config = normalizeConfig(res);
       cacheAppConfig(config);
