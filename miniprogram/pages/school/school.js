@@ -20,6 +20,7 @@ const SCHOOL_REQUEST_TIMEOUT = 45000;
 const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
 const platformDataService = require("../../services/platformDataService");
+const releasePackService = require("../../services/releasePackService");
 const {
   SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY,
   getRecentSchedules,
@@ -1652,7 +1653,11 @@ Page({
     const detailId = item.detailId || item.id || displayName;
     const semester = item.semester || this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
     const version = this.getReleaseVersionForCache(item.scheduleVersion);
-    const cached = this.getScheduleDetailCache(type, detailId, version, semester);
+    const cachedDetail = releasePackService.readCachedDetail(type, detailId, {
+      term: semester,
+      releaseVersion: version,
+    });
+    const cached = cachedDetail ? (cachedDetail.schedule || cachedDetail.detail) : this.getScheduleDetailCache(type, detailId, version, semester);
     if (cached) {
       const cachedMeta = Object.assign({}, item, cached, { semester, scheduleVersion: version });
       if (type === "class") this.saveRecentSchedule(cachedMeta);
@@ -1661,15 +1666,15 @@ Page({
     }
 
     wx.showLoading({ title: "正在打开课表...", mask: true });
-    request.get("/api/fosu/schedule-detail", {
+    releasePackService.loadDetail(type, detailId, {
       term: semester,
-      type,
-      id: detailId,
-      releaseVersion: version, // 显式带上 releaseVersion
-    }, { showLoading: false, silentError: true })
+      releaseVersion: version,
+    }, {
+      forceNetwork: true,
+    })
       .then((data) => {
         wx.hideLoading();
-        const schedule = data.schedule || {};
+        const schedule = data.schedule || data.detail || {};
         const nextVersion = data.version || version;
         this.setScheduleDetailCache(type, detailId, nextVersion, semester, schedule);
         const meta = Object.assign({}, item, schedule, { semester, scheduleVersion: nextVersion });
@@ -1677,9 +1682,26 @@ Page({
         this.navigateToScheduleView(type, displayName, schedule.courses || [], meta);
       })
       .catch((err) => {
-        wx.hideLoading();
-        wx.showToast({ title: "课表详情加载失败", icon: "none" });
-        console.error("openIndexedSchedule fail", err);
+        request.get("/api/fosu/schedule-detail", {
+          term: semester,
+          type,
+          id: detailId,
+          releaseVersion: version,
+        }, { showLoading: false, silentError: true })
+          .then((data) => {
+            wx.hideLoading();
+            const schedule = data.schedule || {};
+            const nextVersion = data.version || version;
+            this.setScheduleDetailCache(type, detailId, nextVersion, semester, schedule);
+            const meta = Object.assign({}, item, schedule, { semester, scheduleVersion: nextVersion });
+            if (type === "class") this.saveRecentSchedule(meta);
+            this.navigateToScheduleView(type, displayName, schedule.courses || [], meta);
+          })
+          .catch(() => {
+            wx.hideLoading();
+            wx.showToast({ title: "课表详情加载失败", icon: "none" });
+            console.error("openIndexedSchedule fail", err);
+          });
       });
   },
 
@@ -2032,6 +2054,21 @@ Page({
     };
   },
 
+  buildActiveSnapshotFromReleaseManifest(payload) {
+    const manifest = payload && payload.manifest ? payload.manifest : payload;
+    if (!manifest || manifest.success === false) return null;
+    const releaseVersion = manifest.releaseVersion || manifest.version || "";
+    if (!releaseVersion) return null;
+    const updatedAt = manifest.updatedAt || manifest.publishedAt || "";
+    return {
+      term: manifest.term || manifest.semester || DEFAULT_TERM,
+      releaseVersion,
+      scheduleUpdatedAt: updatedAt,
+      catalogUpdatedAt: manifest.catalogUpdatedAt || updatedAt,
+      cacheEpoch: manifest.cacheEpoch || updatedAt || releaseVersion,
+    };
+  },
+
   readCachedActiveSnapshot() {
     try {
       const cached = wx.getStorageSync(SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY);
@@ -2047,7 +2084,8 @@ Page({
     } catch (error) {
       console.warn("[school] read activeSnapshot cache failed", error);
     }
-    return null;
+    const lastGood = releasePackService.getLastKnownGood(DEFAULT_TERM);
+    return this.buildActiveSnapshotFromReleaseManifest(lastGood && lastGood.manifest);
   },
 
   writeCachedActiveSnapshot(snapshot) {
@@ -2093,6 +2131,39 @@ Page({
 
     let lastError = null;
     let sawNoRelease = false;
+
+    try {
+      const pack = await releasePackService.switchReleaseSafely({
+        term: cached && cached.term || DEFAULT_TERM,
+      });
+      const activeSnapshot = this.buildActiveSnapshotFromReleaseManifest(pack && pack.manifest);
+      if (activeSnapshot) {
+        this.writeCachedActiveSnapshot(activeSnapshot);
+        return {
+          activeSnapshot,
+          appConfig: appConfigService.getGlobalConfig(),
+          source: pack.fromStorage ? "release-pack-last-good" : "release-pack",
+          fromStorage: Boolean(pack.fromStorage),
+          warning: pack.fallback ? pack.fallbackReason : null,
+        };
+      }
+    } catch (error) {
+      lastError = error;
+      const code = error && (error.code || error.reasonCode);
+      if (code === "NO_ACTIVE_RELEASE" || code === "NO_RELEASE_DATA") {
+        sawNoRelease = true;
+      }
+      console.warn("[school] release-pack unavailable, trying app-config", error);
+      if (cached) {
+        return {
+          activeSnapshot: cached,
+          appConfig: appConfigService.getGlobalConfig(),
+          source: "active-snapshot-cache",
+          fromStorage: true,
+          warning: error,
+        };
+      }
+    }
 
     try {
       const payload = await request.get(`/api/fosu/app-config?ts=${Date.now()}`, {}, {
@@ -2237,7 +2308,10 @@ Page({
       let didRefresh = false;
 
       if (localReleaseKey && localReleaseKey !== releaseKey) {
-        clearAllSchoolCaches();
+        releasePackService.clearOldReleaseCaches({
+          keepLatestN: 2,
+          keepReleases: [activeSnapshot.releaseVersion],
+        });
         this.writeCachedActiveSnapshot(activeSnapshot);
         this.setData({
           classesResult: [],
@@ -2450,14 +2524,14 @@ Page({
       return Promise.reject(error);
     }
 
-    const cached = readSameVersionIndexCache(term, releaseVersion, type, query);
+    const cached = releasePackService.readCachedSearchIndex(type, query) ||
+      readSameVersionIndexCache(term, releaseVersion, type, query);
     if (cached) {
       return Promise.resolve(Object.assign({}, cached, { fromStorage: true }));
     }
 
-    return request.get("/api/fosu/search-index", query, Object.assign({
-      showLoading: false,
-      silentError: true,
+    return releasePackService.searchIndex(type, query, Object.assign({
+      forceNetwork: Boolean(options.forceNetwork),
       timeout: SCHOOL_REQUEST_TIMEOUT,
     }, options))
       .then((data) => {
@@ -2468,6 +2542,25 @@ Page({
         }
         writeSameVersionIndexCache(term, releaseVersion, type, data, query);
         return data;
+      })
+      .catch((error) => {
+        return request.get("/api/fosu/search-index", query, Object.assign({
+          showLoading: false,
+          silentError: true,
+          timeout: SCHOOL_REQUEST_TIMEOUT,
+        }, options))
+          .then((data) => {
+            if (seq !== this._schoolRequestSeq) {
+              const stale = new Error("STALE_REQUEST");
+              stale.stale = true;
+              throw stale;
+            }
+            writeSameVersionIndexCache(term, releaseVersion, type, data, query);
+            return data;
+          })
+          .catch(() => {
+            throw error;
+          });
       });
   },
 
@@ -2526,7 +2619,8 @@ Page({
     }
 
     const seq = ++this._schoolRequestSeq;
-    const cached = readSameVersionIndexCache(term, releaseVersion, type, query);
+    const cached = releasePackService.readCachedSearchIndex(type, query) ||
+      readSameVersionIndexCache(term, releaseVersion, type, query);
 
     const doNetworkRequest = (hasCache) => {
       if (!hasCache) {
@@ -2535,11 +2629,20 @@ Page({
         this.retryFn = () => doNetworkRequest(true);
       }
 
-      request.get("/api/fosu/search-index", query, {
-        showLoading: false,
-        silentError: true,
+      const requestIndex = () => releasePackService.searchIndex(type, query, {
+        forceNetwork: true,
         timeout: SCHOOL_REQUEST_TIMEOUT,
-      })
+      }).catch((packError) => {
+        return request.get("/api/fosu/search-index", query, {
+          showLoading: false,
+          silentError: true,
+          timeout: SCHOOL_REQUEST_TIMEOUT,
+        }).catch(() => {
+          throw packError;
+        });
+      });
+
+      requestIndex()
         .then((data) => {
           if (seq !== this._schoolRequestSeq) return;
           this.clearLoadingTimer();

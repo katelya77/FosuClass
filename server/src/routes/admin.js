@@ -3418,11 +3418,17 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
 
     const relayUploads = relayService.listUploads();
     const stagingUploads = stagingUploadService.listUploads(1);
+    const activeInfo = releaseService.getActiveReleaseInfo();
+    const releasePackStatus = activeInfo && activeInfo.version
+      ? releaseService.getReleasePackStatus(activeInfo.version)
+      : null;
     return res.json({
       success: true,
       data: {
         releaseVersion: meta.releaseVersion || "-",
         semester: appConfigService.getAdminConfig().currentSemester,
+        releasePackStatus,
+        releasePackHealthy: Boolean(releasePackStatus && releasePackStatus.healthy),
         classScheduleUpdatedAt: syncMeta["class-schedules"]?.updatedAt || null,
         teacherScheduleUpdatedAt: syncMeta["teacher-schedules"]?.updatedAt || null,
         classroomScheduleUpdatedAt: syncMeta["classroom-schedules"]?.updatedAt || null,
@@ -3893,14 +3899,8 @@ router.post("/sync/releases/rebuild-index", adminAuth.verifyAdminAccess, async (
     // Clear index memory cache first
     releaseService.clearDerivedCache();
     
-    const files = releaseService.getReleaseFiles(version);
-    const snapshot = releaseService.readReleaseSnapshot(version);
-    if (!snapshot) {
-      return res.status(404).json({ success: false, message: `找不到版本 ${version} 的数据快照` });
-    }
-    
-    // Re-write derived files and search indexes (only rebuild indexes to prevent I/O timeouts)
-    const derived = releaseService.writeDerivedIndexes(snapshot, files, true);
+    const rebuilt = releaseService.rebuildReleasePack(version);
+    const derived = rebuilt.derived;
     
     // Warm cache
     const kinds = ["class", "teacher", "classroom", "course"];
@@ -3920,10 +3920,13 @@ router.post("/sync/releases/rebuild-index", adminAuth.verifyAdminAccess, async (
     
     return res.json({
       success: true,
-      message: `已成功重建版本 ${version} 的轻量索引`,
-      version,
+      message: `已成功重建版本 ${version} 的 Release Pack`,
+      version: rebuilt.version,
+      releaseVersion: rebuilt.releaseVersion,
       totalItems,
-      derived
+      derived,
+      releasePack: rebuilt.status,
+      manifest: rebuilt.manifest
     });
   } catch (error) {
     console.error("Rebuild index failed:", error);
@@ -3939,7 +3942,8 @@ router.get("/sync/releases/check-availability", adminAuth.verifyAdminAccess, asy
       appConfig: { status: "unknown", message: "" },
       searchIndex: { status: "unknown", details: {} },
       scheduleDetail: { status: "unknown", details: {} },
-      emptyRoom: { status: "unknown", details: {} }
+      emptyRoom: { status: "unknown", details: {} },
+      releasePack: { status: "unknown", details: {} }
     };
     
     // 1. Check App Config
@@ -3963,8 +3967,17 @@ router.get("/sync/releases/check-availability", adminAuth.verifyAdminAccess, asy
       result.searchIndex.message = "无当前活跃 Release 版本";
       result.scheduleDetail.status = "Fail";
       result.scheduleDetail.message = "无当前活跃 Release 版本";
+      result.releasePack.status = "Fail";
+      result.releasePack.message = "无当前活跃 Release 版本";
       return res.json({ success: true, result });
     }
+
+    const packStatus = releaseService.getReleasePackStatus(active.version);
+    result.releasePack = {
+      status: packStatus.healthy ? "OK" : "Fail",
+      details: packStatus,
+      message: packStatus.healthy ? "Release Pack 完整" : packStatus.missing.concat(packStatus.hashErrors).join("; "),
+    };
     
     // 2. Check Search Index
     try {

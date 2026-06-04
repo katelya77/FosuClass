@@ -1,5 +1,6 @@
 const request = require("../utils/request");
 const { SCHOOL_CACHE_SCHEMA_VERSION } = require("../utils/storage");
+const releasePackService = require("./releasePackService");
 const { courseTimes } = require("../data/courseTimes");
 
 const EMPTY_ROOM_CACHE_TTL = 30 * 60 * 1000;
@@ -24,14 +25,20 @@ function stableParamHash(params = {}) {
 }
 
 function getEmptyRoomCacheKey(params = {}) {
+  const term = String(params.term || "unknown");
+  const releaseVersion = String(params.releaseVersion || params.version || "active");
+  return releasePackService.getEmptyRoomCacheKey(term, releaseVersion);
+}
+
+function getLegacyEmptyRoomQueryCacheKey(params = {}) {
   const term = encodeURIComponent(String(params.term || "unknown"));
   const releaseVersion = encodeURIComponent(String(params.releaseVersion || params.version || "active"));
-  return `school:v${SCHOOL_CACHE_SCHEMA_VERSION}:empty-room:${term}:${releaseVersion}:${stableParamHash(params)}`;
+  return `school:v${SCHOOL_CACHE_SCHEMA_VERSION}:empty-room-query:${term}:${releaseVersion}:${stableParamHash(params)}`;
 }
 
 function readEmptyRoomCache(params = {}) {
   try {
-    const cached = wx.getStorageSync(getEmptyRoomCacheKey(params));
+    const cached = wx.getStorageSync(getLegacyEmptyRoomQueryCacheKey(params));
     if (!cached || Date.now() - Number(cached.savedAt || 0) > EMPTY_ROOM_CACHE_TTL) {
       return null;
     }
@@ -44,7 +51,7 @@ function readEmptyRoomCache(params = {}) {
 function writeEmptyRoomCache(params = {}, data) {
   if (!data || data.success === false) return;
   try {
-    wx.setStorageSync(getEmptyRoomCacheKey(params), {
+    wx.setStorageSync(getLegacyEmptyRoomQueryCacheKey(params), {
       savedAt: Date.now(),
       data,
     });
@@ -192,26 +199,36 @@ function buildBuildingOptions(apiBuildings, favoriteBuildings) {
 function queryEmptyRooms(params = {}, options = {}) {
   const query = Object.assign({}, params);
   const cached = readEmptyRoomCache(query);
-  if (cached && !options.forceNetwork) {
-    return Promise.resolve(Object.assign({}, cached, { fromStorage: true }));
-  }
 
-  return request.get("/api/fosu/empty-classrooms", query, {
-    showLoading: false,
-    silentError: true,
+  return releasePackService.queryEmptyRooms(query, {
+    forceNetwork: Boolean(options.forceNetwork),
     timeout: options.timeout || 30000,
-  }).then((data) => {
-    writeEmptyRoomCache(query, data);
-    return data;
-  }).catch((error) => {
-    if (cached) {
+  }).catch((packError) => {
+    if (cached && !options.forceNetwork) {
       return Object.assign({}, cached, {
         fromStorage: true,
         fallback: true,
-        fallbackReason: error && (error.code || error.reasonCode || error.errMsg || error.message || "networkError"),
+        fallbackReason: packError && (packError.code || packError.reasonCode || packError.errMsg || packError.message || "releasePackError"),
       });
     }
-    throw error;
+
+    return request.get("/api/fosu/empty-classrooms", query, {
+      showLoading: false,
+      silentError: true,
+      timeout: options.timeout || 30000,
+    }).then((data) => {
+      writeEmptyRoomCache(query, data);
+      return data;
+    }).catch((error) => {
+      if (cached) {
+        return Object.assign({}, cached, {
+          fromStorage: true,
+          fallback: true,
+          fallbackReason: error && (error.code || error.reasonCode || error.errMsg || error.message || "networkError"),
+        });
+      }
+      throw error;
+    });
   });
 }
 

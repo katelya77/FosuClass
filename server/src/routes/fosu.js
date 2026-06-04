@@ -106,6 +106,14 @@ function buildPlatformUrls(snapshot) {
       ? `/api/fosu/search-index?releaseVersion=${encodeURIComponent(releaseVersion)}`
       : "/api/fosu/search-index",
     scheduleDetail: "/api/fosu/schedule-detail",
+    releasePackManifest: releaseVersion
+      ? `/api/fosu/release-pack/manifest?releaseVersion=${encodeURIComponent(releaseVersion)}`
+      : "/api/fosu/release-pack/manifest",
+    releasePackIndex: "/api/fosu/release-pack/index",
+    releasePackDetail: "/api/fosu/release-pack/detail",
+    releasePackEmptyRoom: releaseVersion
+      ? `/api/fosu/release-pack/empty-room?releaseVersion=${encodeURIComponent(releaseVersion)}`
+      : "/api/fosu/release-pack/empty-room",
     emptyClassrooms: releaseVersion
       ? `/api/fosu/empty-classrooms?releaseVersion=${encodeURIComponent(releaseVersion)}`
       : "/api/fosu/empty-classrooms",
@@ -217,6 +225,140 @@ router.get("/periodic-data", (req, res) => {
  * 0. 系统启动 Bootstrap，聚合 Catalog 和计数信息
  * GET /api/fosu/bootstrap
  */
+function sendReleasePackJson(req, res, payload, releaseVersion, maxAgeSeconds) {
+  if (releaseVersion) {
+    return sendCacheableJson(req, res, payload, maxAgeSeconds || 300);
+  }
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  return res.json(payload);
+}
+
+router.get("/release-pack/manifest", scheduleLimiter, (req, res) => {
+  try {
+    const releaseVersion = String(req.query.releaseVersion || req.query.version || "").trim();
+    const manifest = releaseService.getReleasePackManifest(releaseVersion);
+    if (!manifest.success) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      return res.status(200).json(manifest);
+    }
+    const payload = Object.assign({
+      success: true,
+      schemaVersion: manifest.schemaVersion || 1,
+    }, manifest, {
+      releaseVersion: manifest.releaseVersion || manifest.version || releaseVersion,
+      version: manifest.version || manifest.releaseVersion || releaseVersion,
+    });
+    return sendReleasePackJson(req, res, payload, releaseVersion, 300);
+  } catch (error) {
+    handleRouteError(res, error, "get-release-pack-manifest-failed");
+  }
+});
+
+router.get("/release-pack/index/:type", scheduleLimiter, (req, res) => {
+  try {
+    const type = String(req.params.type || "").trim();
+    const releaseVersion = String(req.query.releaseVersion || req.query.version || "").trim();
+    if (!["teacher", "classroom", "course", "class"].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_TYPE",
+        message: "type must be teacher, classroom, course, or class",
+      });
+    }
+    const result = releaseService.readActiveIndex(type, releaseVersion);
+    if (!result.success) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      const code = result.code || result.reasonCode || "INDEX_NOT_FOUND";
+      return res.status(code === "RELEASE_NOT_FOUND" ? 404 : 200).json(Object.assign({
+        success: false,
+        schemaVersion: 1,
+        type,
+        items: [],
+        total: 0,
+      }, result, { code, reasonCode: code }));
+    }
+    const payload = Object.assign({
+      schemaVersion: 1,
+      type,
+      term: result.term || result.semester || req.query.term || "",
+      releaseVersion: result.releaseVersion || result.version || releaseVersion,
+      total: Array.isArray(result.items) ? result.items.length : 0,
+    }, result);
+    return sendReleasePackJson(req, res, payload, releaseVersion, 300);
+  } catch (error) {
+    handleRouteError(res, error, "get-release-pack-index-failed");
+  }
+});
+
+router.get("/release-pack/detail/:type/:id", scheduleLimiter, (req, res) => {
+  try {
+    const type = String(req.params.type || "").trim();
+    const id = String(req.params.id || "").trim();
+    const releaseVersion = String(req.query.releaseVersion || req.query.version || "").trim();
+    if (!["teacher", "classroom", "course", "class"].includes(type)) {
+      return res.status(400).json({
+        success: false,
+        code: "INVALID_TYPE",
+        message: "type must be teacher, classroom, course, or class",
+      });
+    }
+    const result = releaseService.readActiveSchedule(type, id, releaseVersion);
+    if (!result.success) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      const code = result.code || result.reasonCode || "DETAIL_NOT_FOUND";
+      return res.status(code === "NOT_FOUND" || code === "DETAIL_NOT_FOUND" || code === "RELEASE_NOT_FOUND" ? 404 : 200).json({
+        success: false,
+        schemaVersion: 1,
+        code,
+        reasonCode: code,
+        type,
+        id,
+        releaseVersion: result.releaseVersion || result.version || releaseVersion,
+        message: code,
+      });
+    }
+    const normalized = normalizeScheduleResponse(type, result);
+    const payload = Object.assign({
+      schemaVersion: 1,
+      type,
+      id,
+      detail: result.schedule || null,
+      term: result.term || result.semester || req.query.term || "",
+      releaseVersion: result.releaseVersion || result.version || releaseVersion,
+    }, normalized);
+    return sendReleasePackJson(req, res, payload, releaseVersion, 3600);
+  } catch (error) {
+    handleRouteError(res, error, "get-release-pack-detail-failed");
+  }
+});
+
+router.get("/release-pack/empty-room", scheduleLimiter, (req, res) => {
+  try {
+    const releaseVersion = String(req.query.releaseVersion || req.query.version || "").trim();
+    const result = releaseService.readEmptyRoomIndex(releaseVersion);
+    if (!result.success) {
+      res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+      const code = result.code || result.reasonCode || "EMPTY_ROOM_INDEX_NOT_FOUND";
+      return res.status(code === "RELEASE_NOT_FOUND" ? 404 : 200).json(Object.assign({
+        success: false,
+        schemaVersion: 1,
+        rooms: [],
+        buildings: [],
+      }, result, { code, reasonCode: code }));
+    }
+    const payload = Object.assign({
+      schemaVersion: result.schemaVersion || 1,
+      releaseVersion: result.releaseVersion || result.version || releaseVersion,
+      term: result.term || result.semester || req.query.term || "",
+    }, result);
+    return sendReleasePackJson(req, res, payload, releaseVersion, 3600);
+  } catch (error) {
+    handleRouteError(res, error, "get-release-pack-empty-room-failed");
+  }
+});
+
 router.get("/bootstrap", async (req, res) => {
   const semester = req.query.semester;
   try {
@@ -598,6 +740,7 @@ router.get("/client-diagnosis", scheduleLimiter, (req, res) => {
     const fallbackIndex = indexResults.class || indexResults.teacher || indexResults.classroom || indexResults.course || {};
     const effectiveReleaseVersion = activeInfo.releaseVersion || activeInfo.version || fallbackIndex.releaseVersion || fallbackIndex.version || "";
     const effectiveTerm = term || activeInfo.term || activeInfo.semester || fallbackIndex.term || fallbackIndex.semester || "";
+    const releasePack = effectiveReleaseVersion ? releaseService.getReleasePackStatus(effectiveReleaseVersion) : null;
     return res.json({
       success: true,
       activeReleaseVersion: effectiveReleaseVersion,
@@ -613,6 +756,8 @@ router.get("/client-diagnosis", scheduleLimiter, (req, res) => {
       counts: Object.assign({}, releaseCounts, { indexes: indexCounts }),
       releaseCounts,
       indexCounts,
+      releasePack,
+      releasePackHealthy: Boolean(releasePack && releasePack.healthy),
       serverTime: new Date().toISOString(),
       cacheStatus,
     });
