@@ -5,7 +5,7 @@ const releaseService = require("./releaseService");
 const feedbackService = require("./feedbackService");
 const { safeLog } = require("../utils/safeLogger");
 
-const STORAGE_DIR = path.join(__dirname, "../../storage");
+const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const CONFIG_PATH = path.join(STORAGE_DIR, "admin-config.json");
 const NOTICES_PATH = path.join(STORAGE_DIR, "notices.json");
 const NEWS_PATH = path.join(STORAGE_DIR, "news.json");

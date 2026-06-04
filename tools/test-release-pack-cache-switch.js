@@ -6,7 +6,7 @@ mockEnv.clearStorage();
 
 const term = "2025-2026-2";
 let activeVersion = "release-pack-v1";
-let failTeacherIndex = false;
+let failClassIndex = false;
 
 function manifest(version) {
   return {
@@ -55,7 +55,7 @@ global.wx.mockRequest = (options) => {
   const match = pathname.match(/\/api\/fosu\/release-pack\/index\/([^/]+)$/);
   if (match) {
     const type = match[1];
-    if (failTeacherIndex && releaseVersion === "release-pack-v2" && type === "teacher") {
+    if (failClassIndex && releaseVersion === "release-pack-v2" && type === "class") {
       options.success({ statusCode: 200, data: { success: false, code: "BROKEN_INDEX" } });
       return;
     }
@@ -76,7 +76,7 @@ async function run() {
   }).items[0].className, "班级 release-pack-v1");
 
   activeVersion = "release-pack-v2";
-  failTeacherIndex = true;
+  failClassIndex = true;
   const second = await releasePackService.switchReleaseSafely({ term });
   assert.strictEqual(second.switched, false, "broken v2 should not switch active manifest");
   assert.strictEqual(second.fromStorage, true);

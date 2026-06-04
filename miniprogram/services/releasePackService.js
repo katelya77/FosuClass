@@ -1,4 +1,6 @@
 const request = require("../utils/request");
+const { API_BASE_URL, STATIC_RELEASE_BASE_URL } = require("../config/api");
+const { normalizeBuilding, UNKNOWN_BUILDING_NAME } = require("../utils/buildingNormalizer");
 
 const DEFAULT_TERM = "2025-2026-2";
 const CACHE_PREFIX = "fosu:v5";
@@ -91,6 +93,70 @@ function normalizeManifest(payload) {
     minClientCacheSchema: source.minClientCacheSchema || 5,
     packStatus: source.packStatus || source.pack || {},
   });
+}
+
+function trimSlashes(value) {
+  return String(value || "").replace(/^\/+|\/+$/g, "");
+}
+
+function joinUrl(base, ...parts) {
+  const root = String(base || "").replace(/\/+$/g, "");
+  const suffix = parts.map(trimSlashes).filter(Boolean).join("/");
+  return suffix ? `${root}/${suffix}` : root || "/";
+}
+
+function getManifestStaticBaseUrl(manifest, releaseVersion) {
+  const normalized = normalizeManifest(manifest);
+  const version = releaseVersion || (normalized && normalized.releaseVersion) || "";
+  const manifestBase = normalized && (normalized.staticReleaseUrl || normalized.staticBaseUrl);
+  if (manifestBase && normalized && normalized.staticReleaseUrl) return manifestBase;
+  if (manifestBase && version) return joinUrl(manifestBase, version);
+  if (STATIC_RELEASE_BASE_URL && version) return joinUrl(STATIC_RELEASE_BASE_URL, version);
+  return API_BASE_URL && version ? joinUrl(API_BASE_URL, "static/releases", version) : "";
+}
+
+function resolveIndexUrl(type, manifest, params = {}) {
+  const normalized = normalizeManifest(manifest);
+  const indexUrls = normalized && normalized.indexUrls || {};
+  if (type === "class") {
+    const majorKey = [params.collegeCode || params.collegeName, params.grade, params.majorCode || params.majorName]
+      .filter(Boolean)
+      .join("-");
+    const collegeKey = params.collegeCode || params.collegeName || "";
+    const classShards = normalized && normalized.shards && normalized.shards.class || {};
+    if (majorKey && classShards.byMajor && classShards.byMajor[majorKey]) {
+      return classShards.byMajor[majorKey];
+    }
+    if (collegeKey && classShards.byCollege && classShards.byCollege[collegeKey]) {
+      return classShards.byCollege[collegeKey];
+    }
+    if (classShards.all) return classShards.all;
+  }
+  if (indexUrls[type]) return indexUrls[type];
+  const base = getManifestStaticBaseUrl(normalized, params.releaseVersion || params.version);
+  if (!base) return "";
+  return type === "class"
+    ? joinUrl(base, "index/class/all.json")
+    : joinUrl(base, `index/${type}/all.json`);
+}
+
+function resolveDetailUrl(type, id, manifest, params = {}) {
+  const normalized = normalizeManifest(manifest);
+  const pattern = normalized && normalized.detailUrlPattern;
+  if (pattern) {
+    return pattern
+      .replace("{type}", encodeURIComponent(type))
+      .replace("{id}", encodeURIComponent(id));
+  }
+  const base = getManifestStaticBaseUrl(normalized, params.releaseVersion || params.version);
+  return base ? joinUrl(base, "detail", type, `${encodeURIComponent(id)}.json`) : "";
+}
+
+function resolveEmptyRoomUrl(manifest, params = {}) {
+  const normalized = normalizeManifest(manifest);
+  if (normalized && normalized.emptyRoomUrl) return normalized.emptyRoomUrl;
+  const base = getManifestStaticBaseUrl(normalized, params.releaseVersion || params.version);
+  return base ? joinUrl(base, "empty-room/index.json") : "";
 }
 
 function assertManifest(manifest) {
@@ -189,22 +255,23 @@ function getLocalActiveRelease(term) {
 
 function normalizeIndexPayload(type, payload, fallback = {}) {
   const source = payload && payload.data ? payload.data : payload;
-  if (!source || source.success === false || !Array.isArray(source.items)) {
+  const sourceItems = Array.isArray(source) ? source : source && source.items;
+  if (!source || source.success === false || !Array.isArray(sourceItems)) {
     const error = new Error("INVALID_RELEASE_PACK_INDEX");
     error.code = "INVALID_RELEASE_PACK_INDEX";
     throw error;
   }
   const releaseVersion = source.releaseVersion || source.version || fallback.releaseVersion || "";
   const term = source.term || source.semester || fallback.term || DEFAULT_TERM;
-  return Object.assign({}, source, {
+  return Object.assign({}, Array.isArray(source) ? {} : source, {
     success: true,
     type,
     term,
     semester: source.semester || term,
     releaseVersion,
     version: source.version || releaseVersion,
-    total: Number(source.total || source.items.length) || source.items.length,
-    items: source.items,
+    total: Number(source.total || sourceItems.length) || sourceItems.length,
+    items: sourceItems,
   });
 }
 
@@ -297,12 +364,29 @@ function loadIndex(type, params = {}, options = {}) {
     });
   }
 
-  return request.get(`/api/fosu/release-pack/index/${type}`, { term, releaseVersion }, {
+  const cachedManifest = manifest || readCachedManifest(term);
+  const manifestForUrl = cachedManifest && cachedManifest.releaseVersion === releaseVersion ? cachedManifest : { releaseVersion, term };
+  const staticUrl = resolveIndexUrl(type, manifestForUrl, Object.assign({}, params, { term, releaseVersion }));
+  const requestOptions = {
     showLoading: false,
     silentError: true,
     timeout: options.timeout || 25000,
     retries: options.retries === undefined ? 2 : options.retries,
-  }).then((payload) => writeIndexCache(type, normalizeIndexPayload(type, payload, { term, releaseVersion })))
+  };
+  const loadStatic = staticUrl
+    ? request.get(staticUrl, {}, requestOptions)
+    : Promise.reject(Object.assign(new Error("STATIC_RELEASE_URL_MISSING"), { code: "STATIC_RELEASE_URL_MISSING" }));
+
+  return loadStatic
+    .catch((staticError) => request.get(`/api/fosu/release-pack/index/${type}`, { term, releaseVersion }, requestOptions)
+      .catch(() => {
+        throw staticError;
+      }))
+    .then((payload) => {
+      const normalized = normalizeIndexPayload(type, payload, { term, releaseVersion });
+      const scopedStaticIndex = type === "class" && /\/index\/class\/by-(college|major)\//.test(staticUrl || "");
+      return scopedStaticIndex ? normalized : writeIndexCache(type, normalized);
+    })
     .catch((error) => {
       if (cached) {
         return markFromStorage(cached, {
@@ -360,7 +444,10 @@ function switchReleaseSafely(options = {}) {
     .then((manifest) => {
       const sameRelease = previous && previous.manifest &&
         getManifestReleaseKey(previous.manifest) === getManifestReleaseKey(manifest);
-      return warmupIndex(INDEX_TYPES, {
+      const warmupTypes = Array.isArray(options.warmupTypes) && options.warmupTypes.length
+        ? options.warmupTypes
+        : ["class"];
+      return warmupIndex(warmupTypes, {
         manifest,
         term: manifest.term,
         releaseVersion: manifest.releaseVersion,
@@ -480,6 +567,7 @@ function normalizeDetailPayload(type, id, payload, fallback = {}) {
     (type === "teacher" && Array.isArray(source.teachers) ? source.teachers[0] : null) ||
     (type === "classroom" && Array.isArray(source.classrooms) ? source.classrooms[0] : null) ||
     (type === "course" && Array.isArray(source.coursesList) ? source.coursesList[0] : null) ||
+    (Array.isArray(source.courses) ? source : null) ||
     null;
   if (!schedule) {
     const error = new Error("RELEASE_PACK_DETAIL_NOT_FOUND");
@@ -538,12 +626,24 @@ function loadDetail(type, id, params = {}, options = {}) {
       }), options);
     });
   }
-  return request.get(`/api/fosu/release-pack/detail/${type}/${encodeURIComponent(id)}`, { term, releaseVersion }, {
+  const cachedManifest = readCachedManifest(term);
+  const manifestForUrl = cachedManifest && cachedManifest.releaseVersion === releaseVersion ? cachedManifest : { releaseVersion, term };
+  const staticUrl = resolveDetailUrl(type, id, manifestForUrl, { term, releaseVersion });
+  const requestOptions = {
     showLoading: false,
     silentError: true,
     timeout: options.timeout || 20000,
     retries: options.retries === undefined ? 2 : options.retries,
-  }).then((payload) => writeDetailCache(type, id, normalizeDetailPayload(type, id, payload, { term, releaseVersion })))
+  };
+  const loadStatic = staticUrl
+    ? request.get(staticUrl, {}, requestOptions)
+    : Promise.reject(Object.assign(new Error("STATIC_RELEASE_URL_MISSING"), { code: "STATIC_RELEASE_URL_MISSING" }));
+  return loadStatic
+    .catch((staticError) => request.get(`/api/fosu/release-pack/detail/${type}/${encodeURIComponent(id)}`, { term, releaseVersion }, requestOptions)
+      .catch(() => {
+        throw staticError;
+      }))
+    .then((payload) => writeDetailCache(type, id, normalizeDetailPayload(type, id, payload, { term, releaseVersion })))
     .catch((error) => {
       if (cached) {
         return markFromStorage(cached, {
@@ -612,12 +712,24 @@ function loadEmptyRoom(params = {}, options = {}) {
       }), options);
     });
   }
-  return request.get("/api/fosu/release-pack/empty-room", { term, releaseVersion }, {
+  const cachedManifest = readCachedManifest(term);
+  const manifestForUrl = cachedManifest && cachedManifest.releaseVersion === releaseVersion ? cachedManifest : { releaseVersion, term };
+  const staticUrl = resolveEmptyRoomUrl(manifestForUrl, { term, releaseVersion });
+  const requestOptions = {
     showLoading: false,
     silentError: true,
     timeout: options.timeout || 25000,
     retries: options.retries === undefined ? 2 : options.retries,
-  }).then((payload) => writeEmptyRoomCache(normalizeEmptyRoomIndex(payload, { term, releaseVersion })))
+  };
+  const loadStatic = staticUrl
+    ? request.get(staticUrl, {}, requestOptions)
+    : Promise.reject(Object.assign(new Error("STATIC_RELEASE_URL_MISSING"), { code: "STATIC_RELEASE_URL_MISSING" }));
+  return loadStatic
+    .catch((staticError) => request.get("/api/fosu/release-pack/empty-room", { term, releaseVersion }, requestOptions)
+      .catch(() => {
+        throw staticError;
+      }))
+    .then((payload) => writeEmptyRoomCache(normalizeEmptyRoomIndex(payload, { term, releaseVersion })))
     .catch((error) => {
       if (cached) {
         return markFromStorage(cached, {
@@ -699,16 +811,8 @@ function hasContiguousSections(sections, minCount) {
 }
 
 function inferBuilding(roomName) {
-  const name = String(roomName || "").trim();
-  if (!name) return "未知";
-  const known = ["会通楼", "致用楼"];
-  const knownMatch = known.find((item) => name.includes(item));
-  if (knownMatch) return knownMatch;
-  const letterMatch = name.match(/^([A-Za-z]+\s*\d+)/);
-  if (letterMatch) return letterMatch[1].replace(/\s+/g, "").toUpperCase();
-  const prefixMatch = name.match(/^([^-\s]+)[-\s]/);
-  if (prefixMatch && prefixMatch[1]) return prefixMatch[1];
-  return "其他";
+  const normalized = normalizeBuilding(roomName);
+  return normalized.unknown ? UNKNOWN_BUILDING_NAME : normalized.buildingCode;
 }
 
 function formatSectionRange(sections) {
@@ -771,6 +875,11 @@ function filterEmptyRoomIndex(indexPayload, params = {}) {
       roomName: room.roomName,
       roomId: room.roomId,
       building: room.building || inferBuilding(room.roomName),
+      buildingCode: room.buildingCode || normalizeBuilding(room.roomName).buildingCode,
+      buildingName: room.buildingName || normalizeBuilding(room.roomName).buildingName,
+      campus: room.campus || normalizeBuilding(room.roomName).campus || "",
+      confidence: room.confidence == null ? normalizeBuilding(room.roomName).confidence : room.confidence,
+      source: room.source || "",
       capacity: room.capacity || null,
       capacityText: room.capacity ? `${room.capacity}座` : "容量未知",
       freeText: `${formatSectionRange(requestedSet)}空闲`,
@@ -887,4 +996,8 @@ module.exports = {
   clearOldReleaseCaches,
   filterIndexPayload,
   filterEmptyRoomIndex,
+  resolveIndexUrl,
+  resolveDetailUrl,
+  resolveEmptyRoomUrl,
+  getManifestStaticBaseUrl,
 };

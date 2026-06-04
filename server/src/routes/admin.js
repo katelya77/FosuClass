@@ -4,6 +4,7 @@
 
 const express = require("express");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const router = express.Router();
 const config = require("../config");
@@ -12,11 +13,12 @@ const scheduleNormalizer = require("../utils/scheduleNormalizer");
 const adminAuth = require("../services/adminAuth");
 const appConfigService = require("../services/appConfigService");
 const feedbackService = require("../services/feedbackService");
+const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
 const relayService = require("../services/relayService");
 const stagingUploadService = require("../services/stagingUploadService");
 
-const STORAGE_DIR = path.join(__dirname, "../../storage");
+const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const zlib = require("zlib");
 
 const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
@@ -1960,7 +1962,13 @@ router.post(
 router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
   const meta = getSyncMeta();
   const snapshotMeta = getActiveSnapshotMeta();
-  const releaseStatus = releaseService.getReleaseStatus();
+  const activeInfo = releaseService.getActiveReleaseInfo();
+  const releaseStatus = {
+    activeReleaseVersion: activeInfo?.version || null,
+    activeReleaseUpdatedAt: activeInfo?.updatedAt || null,
+    activeReleaseActivatedAt: activeInfo?.activatedAt || null,
+  };
+  const releasePackStatus = activeInfo?.version ? releaseService.getReleasePackQuickHealth(activeInfo.version) : null;
   const feedbackStats = feedbackService.getFeedbackStats();
   const resourcesUpdatedAt = getUpdatedAt("teacher-schedules") || getUpdatedAt("classroom-schedules") || getUpdatedAt("course-schedules") || (snapshotMeta ? snapshotMeta.updatedAt : null);
   const teacherScheduleCount = getItemCount("teacher-schedules") || (snapshotMeta ? snapshotMeta.teacherScheduleCount : 0);
@@ -1969,7 +1977,9 @@ router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
   const semester = snapshotMeta ? snapshotMeta.semester : (meta.snapshot ? meta.snapshot.semester : "2025-2026-2");
   const classSchedulesUpdatedAt = getUpdatedAt("class-schedules");
   const relayUploads = relayService.listUploads();
+  const stagingUploads = stagingUploadService.listUploads(1);
   const latestRelayUpload = relayUploads[0] || null;
+  const latestJob = jobService.latestJob();
   const payload = {
     dataSourceMode: config.DATA_SOURCE_MODE,
     activeReleaseVersion: releaseStatus.activeReleaseVersion,
@@ -2001,6 +2011,10 @@ router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
     intranetAccessible: false,
     intranetMessage: "公网服务器无法访问学校内网是预期情况；主流程请在校园网电脑或接力代理端采集。",
     latestRelayUpload,
+    latestStagingUpload: stagingUploads[0] || null,
+    latestJob: jobService.publicJob(latestJob),
+    releasePackStatus,
+    releasePackHealthy: Boolean(releasePackStatus && releasePackStatus.healthy),
     storageMounted: isStorageMounted(),
     storagePath: STORAGE_DIR,
     metaDetails: meta,
@@ -3420,8 +3434,9 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
     const stagingUploads = stagingUploadService.listUploads(1);
     const activeInfo = releaseService.getActiveReleaseInfo();
     const releasePackStatus = activeInfo && activeInfo.version
-      ? releaseService.getReleasePackStatus(activeInfo.version)
+      ? releaseService.getReleasePackQuickHealth(activeInfo.version)
       : null;
+    const latestJob = jobService.latestJob();
     return res.json({
       success: true,
       data: {
@@ -3429,6 +3444,7 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
         semester: appConfigService.getAdminConfig().currentSemester,
         releasePackStatus,
         releasePackHealthy: Boolean(releasePackStatus && releasePackStatus.healthy),
+        latestJob: jobService.publicJob(latestJob),
         classScheduleUpdatedAt: syncMeta["class-schedules"]?.updatedAt || null,
         teacherScheduleUpdatedAt: syncMeta["teacher-schedules"]?.updatedAt || null,
         classroomScheduleUpdatedAt: syncMeta["classroom-schedules"]?.updatedAt || null,
@@ -3453,6 +3469,313 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
+});
+
+function getRequestedReleaseVersion(req) {
+  const active = releaseService.getActiveReleaseInfo();
+  return String(
+    req.body?.version ||
+    req.body?.releaseVersion ||
+    req.query?.version ||
+    req.query?.releaseVersion ||
+    active?.version ||
+    ""
+  ).trim();
+}
+
+function sendJobStatus(res, type, id) {
+  const job = id ? jobService.readJob(id) : jobService.latestJob(type);
+  return res.json({
+    success: true,
+    job: jobService.publicJob(job),
+  });
+}
+
+function throwPublishError(code, message, extra) {
+  const error = new Error(message || code || "publish failed");
+  error.code = code || "";
+  if (extra) Object.assign(error, extra);
+  throw error;
+}
+
+function runStagingPublishCore(input, job) {
+  const forcePublish = input && input.force === true;
+  const releaseNote = input && input.releaseNote;
+  const auditReq = {
+    ip: input && input.ip || "",
+    headers: input && input.headers || {},
+  };
+
+  if (!fs.existsSync(STAGING_LATEST_PATH)) {
+    throwPublishError("STAGING_MISSING", "Staging data does not exist. Upload staging JSON first.");
+  }
+
+  if (job) job.progress(12, "read staging payload");
+  const stagingData = JSON.parse(fs.readFileSync(STAGING_LATEST_PATH, "utf-8"));
+  const activeSnapshot = releaseService.readActiveReleaseSnapshot();
+  const safety = buildStagingSafety(stagingData, activeSnapshot);
+
+  if (!safety.allowPublish) {
+    throwPublishError("STAGING_SAFETY_BLOCKED", "Staging data failed publish safety checks.", {
+      blockers: safety.blockers,
+      warnings: safety.warnings,
+    });
+  }
+
+  if (safety.requiresForceConfirm && !forcePublish) {
+    throwPublishError("CLASS_COUNT_DROP_BLOCKED", "Class/resource counts dropped too much. Force confirmation is required.", {
+      safety,
+    });
+  }
+
+  if (activeSnapshot) {
+    const activeClassNames = (activeSnapshot.classSchedules || []).map((item) => item.className).filter(Boolean);
+    const activeClassNamesSet = new Set(activeClassNames);
+    const stagingClassNamesSet = new Set((stagingData.classSchedules || []).map((item) => item.className).filter(Boolean));
+    const deletedClasses = activeClassNames.filter((name) => !stagingClassNamesSet.has(name));
+    const addedClasses = (stagingData.classSchedules || [])
+      .map((item) => item.className)
+      .filter((name) => name && !activeClassNamesSet.has(name));
+    const changeRate = (deletedClasses.length + addedClasses.length) / Math.max(activeClassNames.length, 1);
+    if (changeRate > 0.5 && !forcePublish) {
+      throwPublishError("BIG_CHANGE_BLOCKED", `Staging class change rate is ${(changeRate * 100).toFixed(2)}%. Force confirmation is required.`);
+    }
+  }
+
+  if (job) job.progress(30, "backup active release");
+  const activeInfo = releaseService.getActiveReleaseInfo();
+  if (activeInfo && activeInfo.version) {
+    const activeFiles = releaseService.getReleaseFiles(activeInfo.version);
+    if (fs.existsSync(activeFiles.snapshotPath)) {
+      createBackup("release-snapshot", activeFiles.snapshotPath);
+    }
+  }
+
+  if (job) job.progress(45, "activate release and build static pack");
+  releaseService.activateReleaseFromSnapshot(stagingData);
+
+  const status = releaseService.getReleaseStatus();
+  const counts = status.counts || {};
+  const updatedAt = new Date().toISOString();
+  const meta = getSyncMeta();
+  meta.snapshot = {
+    updatedAt,
+    version: status.activeReleaseVersion,
+    semester: status.semester,
+    itemCount: counts.classScheduleCount || 0,
+    syncSource: "local-sync-client",
+  };
+  meta.catalog = {
+    updatedAt,
+    itemCount: counts.collegeCount || counts.collegesCount || 0,
+    syncSource: "local-sync-client",
+  };
+  meta.majors = {
+    updatedAt,
+    itemCount: counts.majorCount || counts.majorsCount || 0,
+    syncSource: "local-sync-client",
+  };
+  meta["class-schedules"] = {
+    updatedAt,
+    itemCount: counts.classScheduleCount || 0,
+    adminClassCount: counts.adminClassCount || 0,
+    majorAggregateCount: counts.majorAggregateCount || 0,
+    syncSource: "local-sync-client",
+  };
+  meta["teacher-schedules"] = {
+    updatedAt,
+    itemCount: counts.teacherScheduleCount || 0,
+    syncSource: "local-sync-client",
+  };
+  meta["classroom-schedules"] = {
+    updatedAt,
+    itemCount: counts.classroomScheduleCount || 0,
+    syncSource: "local-sync-client",
+  };
+  meta["course-schedules"] = {
+    updatedAt,
+    itemCount: counts.courseScheduleCount || 0,
+    syncSource: "local-sync-client",
+  };
+  fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
+
+  appConfigService.touchDataVersionForSyncKey("release", {
+    updatedAt,
+    releaseVersion: status.activeReleaseVersion,
+    semester: status.semester,
+    releaseNote: releaseNote || stagingData.releaseNote || "Published from admin staging",
+  });
+
+  writeAuditLog(auditReq, "publish", "sync-release", status.activeReleaseVersion, `Published staging release ${status.activeReleaseVersion}`);
+  if (stagingData.stagingUploadId) {
+    stagingUploadService.markUploadPublished(stagingData.stagingUploadId, status.activeReleaseVersion);
+  }
+  if (stagingData.relayUploadId) {
+    relayService.markUploadPublished(stagingData.relayUploadId, status.activeReleaseVersion);
+  }
+
+  if (job) job.progress(78, "run quick static health");
+  releaseService.clearDerivedCache();
+  const quickHealth = releaseService.getReleasePackQuickHealth(status.activeReleaseVersion);
+
+  return {
+    success: true,
+    message: "Staging release published",
+    version: status.activeReleaseVersion,
+    releaseVersion: status.activeReleaseVersion,
+    term: status.semester,
+    semester: status.semester,
+    counts,
+    quickHealth,
+  };
+}
+
+router.get("/jobs", adminAuth.verifyAdminAccess, (req, res) => {
+  return res.json({
+    success: true,
+    jobs: jobService.listJobs(Number(req.query.limit || 30)).map(jobService.publicJob),
+  });
+});
+
+router.get("/jobs/:id", adminAuth.verifyAdminAccess, (req, res) => {
+  const job = jobService.readJob(req.params.id);
+  if (!job) {
+    return res.status(404).json({ success: false, message: "job not found" });
+  }
+  return res.json({ success: true, job: jobService.publicJob(job) });
+});
+
+router.get("/system/load", adminAuth.verifyAdminAccess, (req, res) => {
+  const memory = process.memoryUsage();
+  const totalMemory = os.totalmem();
+  const freeMemory = os.freemem();
+  const memoryUsedRatio = totalMemory > 0 ? (totalMemory - freeMemory) / totalMemory : 0;
+  const loadAvg = os.loadavg ? os.loadavg() : [0, 0, 0];
+  const cpuCount = Math.max(1, os.cpus().length);
+  const cpuLoadRatio = loadAvg[0] > 0 ? loadAvg[0] / cpuCount : 0;
+  const high = cpuLoadRatio >= 0.85 || memoryUsedRatio >= 0.88;
+  return res.json({
+    success: true,
+    high,
+    cpu: {
+      count: cpuCount,
+      loadAvg,
+      loadRatio: Number(cpuLoadRatio.toFixed(3)),
+    },
+    memory: {
+      total: totalMemory,
+      free: freeMemory,
+      usedRatio: Number(memoryUsedRatio.toFixed(3)),
+      rss: memory.rss,
+      heapUsed: memory.heapUsed,
+    },
+    serverTime: new Date().toISOString(),
+  });
+});
+
+router.get("/release-pack/quick-health", adminAuth.verifyAdminAccess, (req, res) => {
+  const version = getRequestedReleaseVersion(req);
+  return res.json({
+    success: true,
+    health: releaseService.getReleasePackQuickHealth(version),
+  });
+});
+
+router.post("/release-pack/deep-health/start", adminAuth.verifyAdminAccess, (req, res) => {
+  const version = getRequestedReleaseVersion(req);
+  const job = jobService.createJob("release-pack-deep-health", { version }, async (job) => {
+    job.progress(20, "读取 Release Pack 深度状态", { version });
+    const status = releaseService.getReleasePackStatus(version);
+    job.progress(80, "深度 health 完成", {
+      healthy: status.healthy,
+      totalBytes: status.totalBytes,
+    });
+    return { version, status };
+  });
+  return res.status(202).json({ success: true, job });
+});
+
+router.get("/release-pack/deep-health/status", adminAuth.verifyAdminAccess, (req, res) => {
+  return sendJobStatus(res, "release-pack-deep-health", req.query.id);
+});
+
+router.post("/release-pack/rebuild/start", adminAuth.verifyAdminAccess, (req, res) => {
+  const version = getRequestedReleaseVersion(req);
+  const job = jobService.createJob("release-pack-rebuild", { version }, async (job) => {
+    job.progress(10, "开始重建 Release Pack", { version });
+    releaseService.clearDerivedCache();
+    const rebuilt = releaseService.rebuildReleasePack(version);
+    job.progress(85, "Release Pack 已重建并写入静态目录", {
+      version: rebuilt.version,
+      staticBaseUrl: rebuilt.manifest && rebuilt.manifest.staticBaseUrl,
+    });
+    return {
+      version: rebuilt.version,
+      releaseVersion: rebuilt.releaseVersion,
+      releasePack: rebuilt.status,
+      manifest: rebuilt.manifest,
+    };
+  });
+  return res.status(202).json({ success: true, job });
+});
+
+router.get("/release-pack/rebuild/status", adminAuth.verifyAdminAccess, (req, res) => {
+  return sendJobStatus(res, "release-pack-rebuild", req.query.id);
+});
+
+router.post("/release-pack/verify/start", adminAuth.verifyAdminAccess, (req, res) => {
+  const version = getRequestedReleaseVersion(req);
+  const job = jobService.createJob("release-pack-verify", { version }, async (job) => {
+    job.progress(15, "读取 quick health", { version });
+    const quick = releaseService.getReleasePackQuickHealth(version);
+    job.progress(40, "读取 class index 静态文件");
+    const classIndex = releaseService.readReleasePackStaticIndex("class", version);
+    job.progress(65, "读取 empty-room 静态文件");
+    const emptyRoom = releaseService.readReleasePackStaticEmptyRoom(version);
+    const ok = Boolean(quick.healthy && classIndex && classIndex.success && emptyRoom && emptyRoom.success);
+    job.progress(90, "发布后验证完成", { ok });
+    if (!ok) {
+      const error = new Error("Release Pack verify failed");
+      error.code = "RELEASE_PACK_VERIFY_FAILED";
+      throw error;
+    }
+    return {
+      version,
+      quick,
+      classIndexCount: classIndex.items.length,
+      emptyRoomCount: emptyRoom.rooms.length,
+    };
+  });
+  return res.status(202).json({ success: true, job });
+});
+
+router.get("/release-pack/verify/status", adminAuth.verifyAdminAccess, (req, res) => {
+  return sendJobStatus(res, "release-pack-verify", req.query.id);
+});
+
+router.post("/sync/staging/publish/start", adminAuth.verifyAdminAccess, (req, res) => {
+  const input = {
+    force: req.body.force === true,
+    releaseNote: req.body.releaseNote || "",
+    ip: req.ip || "",
+    headers: {
+      "x-forwarded-for": req.headers["x-forwarded-for"] || "",
+    },
+  };
+  const job = jobService.createJob("staging-publish", input, async (job, input) => {
+    job.progress(8, "start staging publish");
+    const result = runStagingPublishCore(input, job);
+    job.progress(92, "staging publish finished", {
+      version: result.releaseVersion,
+      healthy: result.quickHealth && result.quickHealth.healthy,
+    });
+    return result;
+  });
+  return res.status(202).json({ success: true, job });
+});
+
+router.get("/sync/staging/publish/status", adminAuth.verifyAdminAccess, (req, res) => {
+  return sendJobStatus(res, "staging-publish", req.query.id);
 });
 
 /**
@@ -3750,41 +4073,7 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
     // Clear old memory cache
     releaseService.clearDerivedCache();
 
-    // Rebuild and pre-warm indices for the active release
-    let indexBuildResult = { success: true, count: 0 };
-    try {
-      const kinds = ["class", "teacher", "classroom", "course"];
-      let totalItems = 0;
-      kinds.forEach((kind) => {
-        const warmed = releaseService.readActiveIndex(kind, status.activeReleaseVersion);
-        if (warmed && warmed.success) {
-          totalItems += (warmed.items || []).length;
-        } else {
-          throw new Error(`Failed to build index for ${kind}: ${warmed ? warmed.reasonCode : 'unknown'}`);
-        }
-      });
-      const emptyRoomIndex = releaseService.readEmptyRoomIndex(status.activeReleaseVersion);
-      if (emptyRoomIndex && emptyRoomIndex.success) {
-        totalItems += (emptyRoomIndex.rooms || []).length;
-      } else {
-        throw new Error(`Failed to build empty-room index: ${emptyRoomIndex ? emptyRoomIndex.reasonCode : 'unknown'}`);
-      }
-      indexBuildResult.count = totalItems;
-    } catch (indexErr) {
-      console.error("Failed to build index on publish:", indexErr);
-      indexBuildResult = { success: false, error: indexErr.message };
-    }
-
-    if (!indexBuildResult.success) {
-      return res.status(500).json({
-        success: false,
-        message: "发布成功但索引构建失败：" + indexBuildResult.error,
-        version: status.activeReleaseVersion,
-        semester: status.semester,
-        counts,
-        indexBuildResult
-      });
-    }
+    const quickHealth = releaseService.getReleasePackQuickHealth(status.activeReleaseVersion);
 
     return res.json({
       success: true,
@@ -3794,7 +4083,7 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
       term: status.semester,
       semester: status.semester,
       counts,
-      indexBuildResult
+      quickHealth
     });
   } catch (error) {
     console.error("Staging publish failed:", error);
@@ -3895,38 +4184,23 @@ router.post("/sync/releases/rebuild-index", adminAuth.verifyAdminAccess, async (
     if (!version) {
       return res.status(400).json({ success: false, message: "缺少必要参数 version" });
     }
-    
-    // Clear index memory cache first
-    releaseService.clearDerivedCache();
-    
-    const rebuilt = releaseService.rebuildReleasePack(version);
-    const derived = rebuilt.derived;
-    
-    // Warm cache
-    const kinds = ["class", "teacher", "classroom", "course"];
-    let totalItems = 0;
-    kinds.forEach((kind) => {
-      const warmed = releaseService.readActiveIndex(kind, version);
-      if (warmed && warmed.success) {
-        totalItems += (warmed.items || []).length;
-      }
+    const job = jobService.createJob("release-pack-rebuild", { version }, async (jobContext) => {
+      jobContext.progress(10, "开始重建 Release Pack", { version });
+      releaseService.clearDerivedCache();
+      const rebuilt = releaseService.rebuildReleasePack(version);
+      jobContext.progress(90, "Release Pack 已重建", { version: rebuilt.version });
+      writeAuditLog(req, "rebuild-index", "sync-release", version, `重建版本 ${version} 的轻量索引`);
+      return {
+        version: rebuilt.version,
+        releaseVersion: rebuilt.releaseVersion,
+        releasePack: rebuilt.status,
+        manifest: rebuilt.manifest,
+      };
     });
-    const emptyRoomIndex = releaseService.readEmptyRoomIndex(version);
-    if (emptyRoomIndex && emptyRoomIndex.success) {
-      totalItems += (emptyRoomIndex.rooms || []).length;
-    }
-    
-    writeAuditLog(req, "rebuild-index", "sync-release", version, `重建版本 ${version} 的轻量索引`);
-    
-    return res.json({
+    return res.status(202).json({
       success: true,
-      message: `已成功重建版本 ${version} 的 Release Pack`,
-      version: rebuilt.version,
-      releaseVersion: rebuilt.releaseVersion,
-      totalItems,
-      derived,
-      releasePack: rebuilt.status,
-      manifest: rebuilt.manifest
+      message: `已启动版本 ${version} 的 Release Pack 重建任务`,
+      job,
     });
   } catch (error) {
     console.error("Rebuild index failed:", error);

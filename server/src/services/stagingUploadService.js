@@ -5,7 +5,7 @@ const { pipeline } = require("stream/promises");
 const zlib = require("zlib");
 const { safeLog } = require("../utils/safeLogger");
 
-const STORAGE_DIR = path.join(__dirname, "../../storage");
+const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const UPLOAD_ROOT = process.env.STAGING_DIR
   ? path.resolve(process.env.STAGING_DIR)
   : path.join(STORAGE_DIR, "staging-uploads");

@@ -22,6 +22,10 @@ const PROFILE_RULES = [
   { name: "schedule-detail", pattern: /\/api\/fosu\/schedule-detail$/, timeout: 20000, retries: 2 },
   { name: "empty-room", pattern: /\/api\/fosu\/release-pack\/empty-room$/, timeout: 25000, retries: 2 },
   { name: "empty-classrooms", pattern: /\/api\/fosu\/empty-classrooms$/, timeout: 25000, retries: 2 },
+  { name: "static-release-manifest", pattern: /\/static\/releases\/[^/]+\/manifest\.json$/, timeout: 8000, retries: 1 },
+  { name: "static-release-index", pattern: /\/static\/releases\/[^/]+\/index\/.+\.json$/, timeout: 25000, retries: 2 },
+  { name: "static-release-detail", pattern: /\/static\/releases\/[^/]+\/detail\/[^/]+\/[^/]+\.json$/, timeout: 20000, retries: 2 },
+  { name: "static-release-empty-room", pattern: /\/static\/releases\/[^/]+\/empty-room\/index\.json$/, timeout: 25000, retries: 2 },
 ];
 
 function translateErrorMessage(payload, defaultMsg) {
@@ -121,7 +125,7 @@ function redactUrl(url) {
   const text = String(url || "");
   try {
     const parsed = new URL(text, API_BASE_URL || "https://example.invalid");
-    ["token", "access_token", "adminToken", "ADMIN_API_TOKEN", "password", "cookie", "session"].forEach((key) => {
+    ["token", "access_token", "adminToken", "password", "cookie", "session"].forEach((key) => {
       if (parsed.searchParams.has(key)) {
         parsed.searchParams.set(key, "[redacted]");
       }
@@ -129,7 +133,7 @@ function redactUrl(url) {
     return (parsed.pathname + (parsed.search ? parsed.search : "")).replace(/%5Bredacted%5D/gi, "[redacted]");
   } catch (error) {
     return text
-      .replace(/([?&](?:token|access_token|adminToken|ADMIN_API_TOKEN|password|cookie|session)=)[^&]+/gi, "$1[redacted]");
+      .replace(/([?&](?:token|access_token|adminToken|password|cookie|session)=)[^&]+/gi, "$1[redacted]");
   }
 }
 

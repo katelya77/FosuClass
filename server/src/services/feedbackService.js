@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
-const STORAGE_DIR = path.join(__dirname, "../../storage");
+const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const FEEDBACK_JSONL_PATH = path.join(STORAGE_DIR, "feedback.jsonl");
 const FEEDBACK_JSON_PATH = path.join(STORAGE_DIR, "feedbacks.json");
 const STATUS_VALUES = ["open", "processing", "resolved", "ignored"];

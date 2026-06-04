@@ -101,18 +101,32 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
 
 4. 进入后台 `/admin/sync`。
 5. 查看 staging counts 和 diff。
-6. 构建或重建 Release Pack。
-7. 运行一键健康检查。
+6. 点击“构建 Release Pack job”，等待 job 状态变为 `success`。
+7. 点击 quick health；需要完整校验时点击 deep health job，不要等待同步长请求。
 8. 发布正式版。
-9. 发布后执行小程序读取验证：
+9. 发布后点击 verify job，确认静态 manifest、class index、empty-room index 可读。
+10. 发布后执行本地读取验证：
 
 ```powershell
 npm run verify:release-live -- --server=https://class.katelya.eu.org --term=2025-2026-2
 ```
 
-10. 真机打开小程序，在设置页查看“数据版本详情”。开发版/体验版可进入“高级诊断”查看 active manifest、last-good、index 和 empty-room 缓存。
+11. 真机打开小程序，在设置页查看“数据版本详情”。开发版/体验版可进入“高级诊断”查看 active manifest、last-good、index 和 empty-room 缓存。
 
-发布新课程数据后，小程序通过 active manifest + `releaseVersion/cacheEpoch/forceRefreshToken` 检测新版。旧缓存不会立即暴力清空，只有新版本 index 校验成功后才安全切换。如果服务器网络慢，小程序先展示 last-good，再后台刷新。
+发布新课程数据后，小程序通过 active manifest + `releaseVersion/cacheEpoch/forceRefreshToken` 检测新版。旧缓存不会立即暴力清空，只有新版本 class 轻量 index 校验成功后才安全切换。如果服务器网络慢，小程序先展示 last-good，再后台刷新。静态 Release Pack 是主路径，Node API 是兜底路径。
+
+## 静态 Release Pack 部署路线
+
+A. 当前 VPS + OpenResty：`/static/releases/` alias 到 `server/storage/public/releases/`，配置一年 immutable cache，优先 `.br/.gz`。
+
+B. Cloudflare：给 `/static/releases/*` 配 Cache Everything 和长 Edge TTL；`/api/fosu/app-config`、`/api/fosu/bootstrap`、`/api/fosu/release-pack/manifest` 必须保持 no-store。
+
+C. 国内 CDN：将 `static-class.katelya.top` 接入腾讯云 COS/CDN 或其他国内对象存储/CDN，只同步 `server/storage/public/releases/*`。API 可以继续留在 `https://class.katelya.eu.org`。
+
+```env
+FOSU_API_BASE_URL=https://class.katelya.eu.org
+FOSU_STATIC_RELEASE_BASE_URL=https://static-class.katelya.top/static/releases
+```
 
 ## 开学季高频更新
 

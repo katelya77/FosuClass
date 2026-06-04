@@ -18,6 +18,8 @@ const config = {
 
   // API 公网域名起源
   PUBLIC_API_ORIGIN: process.env.PUBLIC_API_ORIGIN || "http://localhost:3000",
+  FOSU_API_BASE_URL: process.env.FOSU_API_BASE_URL || process.env.PUBLIC_API_ORIGIN || "http://localhost:3000",
+  FOSU_STATIC_RELEASE_BASE_URL: process.env.FOSU_STATIC_RELEASE_BASE_URL || "/static/releases",
 
   // 数据源模式: cache-first | realtime | disabled
   DATA_SOURCE_MODE: process.env.DATA_SOURCE_MODE || "cache-first",

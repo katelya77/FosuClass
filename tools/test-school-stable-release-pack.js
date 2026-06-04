@@ -7,7 +7,7 @@ require("../miniprogram/pages/school/school.js");
 
 const term = "2025-2026-2";
 let activeVersion = "school-v1";
-let failTeacherV2 = false;
+let failClassV2 = false;
 
 function manifest(version) {
   return {
@@ -56,7 +56,7 @@ global.wx.mockRequest = (options) => {
   const match = pathname.match(/\/api\/fosu\/release-pack\/index\/([^/]+)$/);
   if (match) {
     const type = match[1];
-    if (failTeacherV2 && releaseVersion === "school-v2" && type === "teacher") {
+    if (failClassV2 && releaseVersion === "school-v2" && type === "class") {
       setTimeout(() => options.fail({ errMsg: "request:fail timeout" }), 1);
       return;
     }
@@ -76,7 +76,7 @@ async function run() {
   assert(releasePackService.readCachedSearchIndex("class", { term, releaseVersion: "school-v1" }));
 
   activeVersion = "school-v2";
-  failTeacherV2 = true;
+  failClassV2 = true;
   const second = await releasePackService.switchReleaseSafely({
     term,
     forceNetwork: true,
