@@ -5,7 +5,7 @@ const { courseTimes } = require("../data/courseTimes");
 
 const EMPTY_ROOM_CACHE_TTL = 30 * 60 * 1000;
 const EMPTY_ROOM_FAVORITES_KEY = "FOSU_EMPTY_ROOM_FAVORITES";
-const DEFAULT_BUILDINGS = ["全部", "C7", "B8", "会通楼", "致用楼"];
+const DEFAULT_BUILDINGS = ["全部", "C7", "B8", "B5", "会通楼", "致用楼"];
 
 function stableParamHash(params = {}) {
   const normalized = {};
@@ -232,6 +232,17 @@ function queryEmptyRooms(params = {}, options = {}) {
   });
 }
 
+function loadEmptyRoomIndex(params = {}, options = {}) {
+  return releasePackService.loadEmptyRoom(params, {
+    forceNetwork: Boolean(options.forceNetwork),
+    timeout: options.timeout || 30000,
+  });
+}
+
+function filterEmptyRoomIndex(index, params = {}) {
+  return releasePackService.filterEmptyRoomIndex(index, params);
+}
+
 module.exports = {
   DEFAULT_BUILDINGS,
   EMPTY_ROOM_CACHE_TTL,
@@ -244,6 +255,8 @@ module.exports = {
   getPresetSectionValue,
   isFavoriteBuilding,
   isFavoriteRoom,
+  filterEmptyRoomIndex,
+  loadEmptyRoomIndex,
   queryEmptyRooms,
   readEmptyRoomCache,
   readEmptyRoomFavorites,

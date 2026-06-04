@@ -2,6 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 const { safeLog } = require("../utils/safeLogger");
+const { calculateFingerprint } = require("../utils/stagingFingerprint");
 const {
   UNKNOWN_BUILDING_CODE,
   UNKNOWN_BUILDING_NAME,
@@ -515,6 +516,29 @@ function buildClassDerivedFiles(snapshot, files, onlyIndexes = false) {
   return index;
 }
 
+function normalizeSearchText(value) {
+  return String(value == null ? "" : value)
+    .trim()
+    .replace(/[\u3000\s]+/g, "")
+    .replace(/[\uFF01-\uFF5E]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
+    .replace(/\u3002/g, ".")
+    .toLowerCase();
+}
+
+function compactKeywordList(values) {
+  const seen = new Set();
+  return (values || [])
+    .flatMap((value) => Array.isArray(value) ? value : [value])
+    .map((value) => String(value == null ? "" : value).trim())
+    .filter((value) => {
+      if (!value) return false;
+      const key = normalizeSearchText(value);
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+}
+
 function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names, nameKeys, dirPath, indexPath, onlyIndexes = false) {
   ensureDir(dirPath);
   const scheduleByName = new Map();
@@ -536,6 +560,32 @@ function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names,
     const schedule = matched ? matched.schedule : Object.assign({}, source, { courses: [] });
     const id = safeScheduleId(kind, source.id || source[`${kind}Id`] || schedule.id, `${snapshot.semester}:${name}`, sourceIndex);
     const summary = summarizeCourses(schedule);
+    const keywords = compactKeywordList([
+      source.id,
+      schedule.id,
+      name,
+      source.name,
+      source.displayName,
+      source.title,
+      source.teacherTitle,
+      source.professionalTitle,
+      source.rawName,
+      schedule.name,
+      schedule.displayName,
+      schedule.title,
+      schedule.teacherTitle,
+      schedule.professionalTitle,
+      schedule.rawName,
+      summary.firstCourseName,
+      asArray(schedule.courses).slice(0, 20).map((course) => [
+        course.teacherName,
+        course.displayTeacherName,
+        course.canonicalTeacherName,
+        course.courseName,
+        course.displayCourseName,
+        course.canonicalCourseName,
+      ]),
+    ]);
     if (!onlyIndexes) {
       writeJsonAtomic(path.join(dirPath, `${id}.json`), buildSchedulePayload(schedule, { id }));
     }
@@ -543,6 +593,13 @@ function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names,
       id,
       name,
       [`${kind}Name`]: name,
+      displayName: source.displayName || schedule.displayName || name,
+      rawName: source.rawName || schedule.rawName || "",
+      title: source.title || schedule.title || "",
+      teacherTitle: source.teacherTitle || schedule.teacherTitle || "",
+      professionalTitle: source.professionalTitle || schedule.professionalTitle || "",
+      searchableName: normalizeSearchText(name),
+      keywords,
       semester: schedule.semester || snapshot.semester || "",
       collegeCode: source.collegeCode || schedule.collegeCode || "",
       collegeName: source.collegeName || schedule.collegeName || "",
@@ -1189,6 +1246,7 @@ function buildManifest(snapshot, version, counts, validation, files, derived) {
   const updatedAt = snapshot.updatedAt || new Date().toISOString();
   const filesMeta = files ? buildReleasePackFilesMeta(files) : {};
   const staticUrls = buildStaticReleaseUrls(version, derived);
+  const fingerprint = calculateFingerprint(snapshot);
   return {
     success: true,
     schemaVersion: 2,
@@ -1203,6 +1261,7 @@ function buildManifest(snapshot, version, counts, validation, files, derived) {
     forceRefreshToken: `${version}:${new Date(updatedAt).getTime() || Date.now()}`,
     minClientCacheSchema: 5,
     source: snapshot.source || "local-sync-client",
+    canonicalHash: fingerprint.canonicalHash,
     counts,
     files: filesMeta,
     staticBasePath: staticUrls.staticBasePath,
@@ -1366,6 +1425,7 @@ function activateReleaseVersion(version) {
     }
   }
   const packStatus = assertHealthyReleasePack(normalizedVersion);
+  const fingerprint = calculateFingerprint(snapshot);
   const cacheEpoch = Date.now();
   const forceRefreshToken = `${normalizedVersion}:${cacheEpoch}`;
   const active = {
@@ -1386,6 +1446,7 @@ function activateReleaseVersion(version) {
     term: snapshot.term || snapshot.semester || "",
     semester: snapshot.semester,
     counts: validation.counts,
+    canonicalHash: fingerprint.canonicalHash,
   };
   writeJsonAtomic(ACTIVE_RELEASE_PATH, active);
   writeCurrentSnapshotCompat(Object.assign({}, snapshot, {
@@ -1426,6 +1487,7 @@ function getActiveReleaseInfo() {
     semester,
     publishedAt: active.activatedAt || active.updatedAt || "",
     counts,
+    canonicalHash: active.canonicalHash || manifest?.canonicalHash || "",
     source: "release",
     status: "active",
     paths: {

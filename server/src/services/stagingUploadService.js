@@ -225,6 +225,7 @@ function initUpload(input, actor) {
     uploadSha256: normalizeHash(input.uploadSha256 || input.sha256),
     originalSize: toPositiveInteger(input.originalSize, 0),
     originalSha256: normalizeHash(input.originalSha256),
+    canonicalHash: normalizeHash(input.canonicalHash),
     receivedChunks: {},
     status: "initialized",
     createdAt: new Date().toISOString(),
@@ -434,6 +435,25 @@ function markUploadPublished(uploadId, version) {
   }
 }
 
+function markUploadUnchanged(uploadId, summary) {
+  try {
+    const manifest = readManifest(uploadId);
+    manifest.status = "unchanged";
+    manifest.summary = summary || {};
+    manifest.term = summary?.term || manifest.term;
+    manifest.releaseVersion = summary?.releaseVersion || manifest.releaseVersion;
+    manifest.canonicalHash = summary?.canonicalHash || manifest.canonicalHash || "";
+    manifest.unchangedReason = summary?.unchangedReason || "same-canonical-hash";
+    manifest.unchangedAt = new Date().toISOString();
+    manifest.updatedAt = manifest.unchangedAt;
+    writeManifest(manifest);
+    return publicManifest(manifest);
+  } catch (error) {
+    safeLog("staging-upload-mark-unchanged-failed", { uploadId, error: error.message });
+    return null;
+  }
+}
+
 function markUploadFailed(uploadId, reason) {
   try {
     const manifest = readManifest(uploadId);
@@ -540,6 +560,7 @@ module.exports = {
   deleteUpload,
   listUploads,
   markUploadFailed,
+  markUploadUnchanged,
   markUploadPendingReview,
   markUploadPublished,
   normalizeStagingData,

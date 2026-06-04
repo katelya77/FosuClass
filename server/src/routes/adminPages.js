@@ -2684,6 +2684,21 @@ const adminConsoleHtml = `<!doctype html>
           </div>
         </div>
 
+        <div class="card" id="recommended-sync-flow-card" style="margin-bottom:16px;">
+          <div class="section-title" style="margin-bottom:10px;">推荐操作流程</div>
+          <div class="mini-list">
+            <div class="mini-list-row"><span>1. 本机采集</span><strong>项目根 staging/ 输出</strong></div>
+            <div class="mini-list-row"><span>2. 上传 staging</span><strong>CLI gzip 分片</strong></div>
+            <div class="mini-list-row"><span>3. 数据差异检查</span><strong id="stagingHashCompareText">等待 hash</strong></div>
+            <div class="mini-list-row"><span>4. 发布 Release</span><strong id="stagingPublishNeedText">等待判断</strong></div>
+            <div class="mini-list-row"><span>5. 静态同步验证</span><strong>OpenResty URL quick verify</strong></div>
+          </div>
+          <div class="mini-list" style="margin-top:10px;">
+            <div class="mini-list-row"><span>当前 active hash</span><strong id="activeCanonicalHashText" style="word-break:break-all;text-align:right;">-</strong></div>
+            <div class="mini-list-row"><span>最新 staging hash</span><strong id="stagingCanonicalHashText" style="word-break:break-all;text-align:right;">-</strong></div>
+          </div>
+        </div>
+
         <div class="sync-dashboard-grid">
           <div class="sync-main-col">
         <!-- 3. sync-primary-flow -->
@@ -5388,6 +5403,14 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         wrap.innerHTML = "";
         var retainedReleases = Array.isArray(data.staticRetainedReleases) ? data.staticRetainedReleases : [];
         var staticSyncStatus = data.openRestyStaticSyncStatus || (data.staticSync && data.staticSync.status) || "-";
+        if ($("activeCanonicalHashText")) $("activeCanonicalHashText").textContent = data.activeCanonicalHash || "-";
+        if ($("stagingCanonicalHashText")) $("stagingCanonicalHashText").textContent = data.stagingCanonicalHash || "-";
+        if ($("stagingHashCompareText")) {
+          $("stagingHashCompareText").textContent = data.stagingSameAsActive ? "与线上一致" : (data.stagingCanonicalHash ? "有差异" : "暂无 staging");
+        }
+        if ($("stagingPublishNeedText")) {
+          $("stagingPublishNeedText").textContent = data.stagingSameAsActive ? "无需发布" : (data.stagingNeedsPublish ? "需要发布" : "等待上传");
+        }
         
         var list = [
           { label: "当前正式版本", val: data.releaseVersion || "-", icon: "🏷️", foot: "小程序读取的 active release" },
@@ -5398,6 +5421,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           { label: "静态保留版本", val: retainedReleases.length ? (retainedReleases.length + " 个") : "-", icon: "KEEP", foot: retainedReleases.slice(0, 3).join(" / ") || "至少保留最近 3 个 release" },
           { label: "最近任务", val: data.latestJob ? relayStatusText(data.latestJob.status) : "无任务", icon: "⏱️", foot: data.latestJob ? ((data.latestJob.type || "job") + " · " + (data.latestJob.progress || 0) + "%") : "后台重任务状态" },
           { label: "最近上传", val: data.latestStagingUpload ? formatDate(data.latestStagingUpload.updatedAt || data.latestStagingUpload.createdAt) : "暂无", icon: "⬆️", foot: "CLI gzip 分片上传" },
+          { label: "数据指纹", val: data.stagingSameAsActive ? "无变化" : (data.stagingNeedsPublish ? "有变化" : "等待 staging"), icon: "HASH", foot: data.activeCanonicalHash ? ("active " + String(data.activeCanonicalHash).slice(0, 12)) : "active hash 未生成" },
           { label: "最后发布", val: formatDate(data.classScheduleUpdatedAt || data.lastUploadTime), icon: "🕒", foot: "线上课表更新时间" },
         ];
         
@@ -5420,6 +5444,9 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             ["sync status", relayStatusText(staticSyncStatus)],
             ["last sync time", data.lastStaticSyncTime ? formatDate(data.lastStaticSyncTime) : "-"],
             ["retained releases", retainedReleases.length ? retainedReleases.slice(0, 3).join(" / ") : "-"],
+            ["active canonicalHash", data.activeCanonicalHash || "-"],
+            ["latest staging canonicalHash", data.stagingCanonicalHash || "-"],
+            ["needs publish", data.stagingSameAsActive ? "无需发布" : (data.stagingNeedsPublish ? "需要发布" : "-")],
           ];
           staticWrap.innerHTML = rows.map(function(row) {
             return "<div class='mini-list-row'>" +
@@ -5441,6 +5468,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           uploaded: "已上传",
           disabled: "未启用",
           skipped: "已跳过",
+          unchanged: "数据无变化",
           "pending-review": "待审核",
           staged: "已设为 Staging",
           published: "已发布",

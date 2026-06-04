@@ -190,6 +190,18 @@
           {{updatedAtText}}
         </view>
 
+        <view class="updated-hint" wx:if="{{teacherDataSourceText}}">
+          命中 {{teacherHitCount}} 位教师 · 数据来源：{{teacherDataSourceText}}
+        </view>
+
+        <view class="teacher-diagnosis" wx:if="{{teacherDiagnosticText}}">
+          {{teacherDiagnosticText}}
+        </view>
+
+        <button class="reset-filter-btn" wx:if="{{teacherDataSourceText}}" bindtap="showTeacherSearchDiagnostics">
+          搜索诊断
+        </button>
+
         <!-- 骨架屏与慢网络提示 -->
         <block wx:if="{{loadingState === 'skeleton' || loadingState === 'slow'}}">
           <view class="school-skeleton">
@@ -350,7 +362,7 @@
         <empty-state
           wx:elif="{{!loading}}"
           title="{{keyword ? '未找到相关教师' : '输入教师姓名，例如：张三'}}"
-          desc="可任选学院、职称作为辅佐筛选项，查询教师当前排课。"
+          desc="{{keyword ? '未找到相关教师，请检查姓名或切换关键词' : '可任选学院、职称作为辅佐筛选项，查询教师当前排课。'}}"
         />
       </view>
     </block>

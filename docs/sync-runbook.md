@@ -32,6 +32,13 @@ npm run sync:local-campus -- --term=2026-2027-1 --start=2026-09-01 --output=./st
 
 该命令访问 `100.fosu.edu.cn`，抓取全校课程表并生成 Staging JSON。它不会上传，也不会发布线上 release。
 
+输出路径统一规则：
+
+- 正式本地输出目录固定为项目根目录下的 `staging/`。
+- `tools/fosu-sync-client/staging/` 不再作为默认输出目录，只用于排查历史遗留文件。
+- `npm run sync:local-campus -- --output=./staging/2025-2026-2-full.json` 会解析到项目根目录 `staging/2025-2026-2-full.json`。
+- 采集完成会同时生成 `staging/{term}-full.meta.json`，其中包含 `canonicalHash`、`previousHash`、`changed` 和 counts。
+
 生成后运行：
 
 ```powershell
@@ -39,7 +46,9 @@ npm run test:course-normalizer
 npm run sync:local-upload -- --file=./staging/2026-2027-1-full.json --server=https://class.katelya.eu.org
 ```
 
-`sync:local-upload` 会先 gzip，再按默认 8MB 分片上传到 `/api/admin/staging/upload/*`，适合 100MB+ 或 185MB 级别全量 JSON。上传完成状态应为 `pending-review`，不会自动发布。上传失败时可以安全重跑同一命令；服务端会校验 gzip 大小、原始大小、hash、chunk 数、schema 和 counts。
+`sync:local-upload` 会先计算本地 canonicalHash 并询问服务器当前 active release / 最新 staging 的 hash。若完全一致，CLI 会提示“当前采集结果与线上 active release 完全一致，无需上传”或“服务器已存在相同 staging，无需重复上传”，并默认跳过。确需覆盖时追加 `--force-upload`。
+
+未跳过时，`sync:local-upload` 会先 gzip，再按默认 8MB 分片上传到 `/api/admin/staging/upload/*`，适合 100MB+ 或 185MB 级别全量 JSON。上传完成状态应为 `pending-review`，不会自动发布。上传失败时可以安全重跑同一命令；服务端会校验 gzip 大小、原始大小、hash、chunk 数、schema 和 counts。
 
 网页小文件上传只用于临时测试。全校全量 Staging JSON 一律使用 CLI 分片上传，避免浏览器、反向代理或 Node body limit 拦截。
 
@@ -93,17 +102,17 @@ cd C:\Users\Katelya\Documents\VScode\FosuClass
 npm run sync:local-campus -- --term=2025-2026-2 --start=2026-03-09 --output=./staging/2025-2026-2-full.json --include=classSchedules,teacherSchedules,classroomSchedules,courseSchedules,classes,teachers,classrooms,courses --class-scope=all --grades=2025,2024,2023,2022,2021 --concurrency=1 --delay-ms=900
 ```
 
-3. 上传 staging：
+3. 检查生成的 `./staging/2025-2026-2-full.meta.json`。若 `changed=false`，通常无需上传。
+4. 上传 staging：
 
 ```powershell
 npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=https://class.katelya.eu.org
 ```
 
-4. 进入后台 `/admin/sync`。
-5. 查看 staging counts 和 diff。
-6. 点击“构建 Release Pack job”，等待 job 状态变为 `success`。
-7. 点击 quick health；需要完整校验时点击 deep health job，不要等待同步长请求。
-8. 发布正式版。
+5. 进入后台 `/admin/sync`。
+6. 查看 active hash、latest staging hash、counts 和 diff。若显示“无需发布”，不要继续重建。
+7. 点击“发布 Release”启动后台 job，等待 job 状态变为 `success`。
+8. 发布 job 会生成 Release Pack、同步 OpenResty 静态目录并切换 active pointer。
 9. 发布后点击 verify job，确认静态 manifest、class index、empty-room index 可读。
 10. 发布后执行本地读取验证：
 
