@@ -1,6 +1,6 @@
 # Release Pack 架构说明
 
-Release Pack 是小程序读取全校课表的主路径。它按 releaseVersion 隔离缓存，避免旧数据污染新版本。
+Release Pack 是小程序读取全校课表的主路径。它按 releaseVersion 隔离缓存，避免旧数据污染新版本。当前版本采用“静态文件优先”：Node 发布成功后生成 `server/storage/public/releases/{releaseVersion}`，OpenResty/CDN 可直接服务 `/static/releases/*`。
 
 ## 目录结构
 
@@ -9,11 +9,19 @@ Release Pack 是小程序读取全校课表的主路径。它按 releaseVersion 
 - `index/teacher.json`
 - `index/classroom.json`
 - `index/course.json`
+- `index/class/all.json`
+- `index/class/by-college/{collegeCode}.json`
+- `index/class/by-major/{collegeCode}-{grade}-{majorCode}.json`
+- `index/teacher/all.json`
+- `index/classroom/all.json`
+- `index/course/all.json`
 - `detail/class/*.json`
 - `detail/teacher/*.json`
 - `detail/classroom/*.json`
 - `detail/course/*.json`
 - `empty-room/index.json`
+
+公开静态目录会同步生成 `.json.gz`，环境支持时还会生成 `.json.br`。
 
 ## 客户端读取规则
 
@@ -25,7 +33,14 @@ Release Pack 是小程序读取全校课表的主路径。它按 releaseVersion 
 - `cacheEpoch`
 - `forceRefreshToken`
 
-如果三者没有变化，不切换缓存。如果有变化，客户端先下载并校验新版本四类 index，成功后才写入本地 active/last-good，再清理多余旧版本缓存。
+如果三者没有变化，不切换缓存。如果有变化，客户端先下载并校验新版本 class 轻量 index，成功后才写入本地 active/last-good，再清理多余旧版本缓存。teacher/classroom/course index 在用户进入对应 tab 或搜索时懒加载。
+
+读取顺序：
+
+1. `/api/fosu/release-pack/manifest` 或 `/api/fosu/app-config` 发现 active release。
+2. 优先读取 manifest 下发的 `staticBaseUrl/indexUrls/emptyRoomUrl/detailUrlPattern`。
+3. 静态 URL 失败时 fallback 到 `/api/fosu/release-pack/*` 兼容 API。
+4. 兼容 API 也失败时显示 last-good，不先清空旧页面。
 
 ## 缓存键
 
@@ -57,8 +72,15 @@ active release 必须通过 Release Pack health check：
 
 - `/api/fosu/release-pack/manifest` 不带 `releaseVersion` 时必须 `no-store`。
 - `/api/fosu/app-config` 和 `/api/fosu/bootstrap` 必须 `no-store`。
-- 带 `releaseVersion` 的 index/detail/empty-room 可以 `public, max-age=...`。
+- `/static/releases/{releaseVersion}/*` 必须 `public, max-age=31536000, immutable`。
+- 带 `releaseVersion` 的兼容 API 可以短缓存，但不是主路径。
 - 小程序请求静态 pack 资源时必须携带 releaseVersion。
+
+## 后台健康检查
+
+`quickHealth` 只读 active pointer、manifest 和几个关键静态文件存在性，用于 `/admin/sync` 首屏。
+
+`deepHealth` 才做 detail 计数、hash/size 校验和抽样验证，必须通过后台 job 运行。
 
 ## 发布后验证
 

@@ -9,6 +9,7 @@ const path = require("path");
 const config = require("./config");
 const { globalLimiter } = require("./utils/rateLimit");
 const { safeLog } = require("./utils/safeLogger");
+const releaseService = require("./services/releaseService");
 
 // 路由引入
 const healthRouter = require("./routes/health");
@@ -54,6 +55,15 @@ app.use(express.urlencoded({ extended: true, limit: "150mb" }));
 
 app.use(express.static(path.join(__dirname, "../public"), {
   maxAge: config.NODE_ENV === "production" ? "1h" : 0,
+}));
+
+app.use("/static/releases", express.static(releaseService.PUBLIC_RELEASES_DIR, {
+  fallthrough: false,
+  immutable: true,
+  maxAge: "1y",
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+  },
 }));
 
 app.use((err, req, res, next) => {

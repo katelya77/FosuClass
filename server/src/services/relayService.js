@@ -3,7 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { safeLog } = require("../utils/safeLogger");
 
-const STORAGE_DIR = path.join(__dirname, "../../storage");
+const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const RELAY_DIR = process.env.RELAY_DIR
   ? path.resolve(process.env.RELAY_DIR)
   : path.join(STORAGE_DIR, "relay");

@@ -3126,6 +3126,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
 
                             <div style="display: flex; justify-content: flex-end; gap: 12px; align-items: center;">
                               <span id="publishStatusText" style="font-size:12px; color:var(--muted);"></span>
+                              <button type="button" class="secondary" id="postPublishVerifyBtn" style="padding: 10px 16px;">发布后验证 job</button>
                               <button type="button" class="primary" id="stagingPublishBtn" style="padding: 10px 20px;">🚀 发布为正式版本</button>
                             </div>
                           </div>
@@ -4319,6 +4320,28 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         };
       }
 
+      function sanitizeHttpErrorText(text, status) {
+        var raw = String(text || "");
+        var rayMatch = raw.match(/Ray ID\\s*:?\\s*<[^>]*>\\s*([a-zA-Z0-9-]+)/i) ||
+          raw.match(/Ray ID\\s*:?\\s*([a-zA-Z0-9-]+)/i) ||
+          raw.match(/cf-ray["']?\\s*[:=]\\s*["']?([a-zA-Z0-9-]+)/i);
+        var isCloudflareTimeout = status === 504 || /cloudflare|gateway time-out|cf-error|Ray ID/i.test(raw);
+        if (isCloudflareTimeout) {
+          var parts = ["源站响应超时，可能正在执行重任务或 CPU 过高，请稍后刷新或查看运维诊断。"];
+          parts.push("statusCode=" + (status || 0));
+          if (rayMatch && rayMatch[1]) parts.push("Ray ID=" + rayMatch[1]);
+          parts.push("time=" + new Date().toISOString());
+          return parts.join(" · ");
+        }
+        return raw
+          .replace(/<script[\\s\\S]*?<\\/script>/gi, "")
+          .replace(/<style[\\s\\S]*?<\\/style>/gi, "")
+          .replace(/<[^>]+>/g, " ")
+          .replace(/\\s+/g, " ")
+          .trim()
+          .slice(0, 240) || ("HTTP " + (status || 0));
+      }
+
       function api(path, options) {
         options = options || {};
         options.headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
@@ -4330,7 +4353,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             try {
               data = text ? JSON.parse(text) : {};
             } catch (e) {
-              data = { success: false, message: text || res.statusText };
+              data = { success: false, message: sanitizeHttpErrorText(text || res.statusText, res.status), statusCode: res.status };
             }
 
             if (res.status === 401) {
@@ -4362,7 +4385,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
               try {
                 data = text ? JSON.parse(text) : {};
               } catch (e) {
-                data = { success: false, message: text || res.statusText };
+                data = { success: false, message: sanitizeHttpErrorText(text || res.statusText, res.status), statusCode: res.status };
               }
               return {
                 ok: res.ok && data.success !== false,
@@ -5321,13 +5344,15 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             return Promise.allSettled([
               api("/api/admin/relay/tasks"),
               api("/api/admin/relay/uploads"),
-              api("/api/admin/staging/status")
+              api("/api/admin/staging/status"),
+              api("/api/admin/system/load")
             ]);
           })
           .then(function(results) {
             var taskResult = results[0];
             var uploadResult = results[1];
             var stagingUploadResult = results[2];
+            var systemLoadResult = results[3];
             if (taskResult && taskResult.status === "fulfilled") {
               state.relayTasks = taskResult.value.tasks || [];
             }
@@ -5337,10 +5362,12 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             if (stagingUploadResult && stagingUploadResult.status === "fulfilled") {
               state.stagingUploads = stagingUploadResult.value.uploads || [];
             }
+            if (systemLoadResult && systemLoadResult.status === "fulfilled") {
+              state.systemLoad = systemLoadResult.value || null;
+            }
             renderRelayTasks();
             renderRelayUploads();
             renderStagingUploads();
-            runHealthChecks();
           })
           .catch(function(err) {
             showToast(err.message, "error");
@@ -5357,7 +5384,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           { label: "当前正式版本", val: data.releaseVersion || "-", icon: "🏷️", foot: "小程序读取的 active release" },
           { label: "当前学期", val: data.semester || "-", icon: "📅", foot: "后台配置学期" },
           { label: "Staging 状态", val: data.latestStagingUpload ? relayStatusText(data.latestStagingUpload.status) : "等待上传", icon: "📦", foot: "候选数据审核状态" },
-          { label: "Release Pack", val: data.releasePackHealthy ? "健康" : "需检查", icon: "🧩", foot: data.releasePackStatus ? ("manifest " + (data.releasePackStatus.manifestExists ? "OK" : "缺失") + " / detail " + ((data.releasePackStatus.detailCounts && data.releasePackStatus.detailCounts.class) || 0)) : "静态离线包状态" },
+          { label: "Release Pack", val: data.releasePackHealthy ? "Quick OK" : "需检查", icon: "🧩", foot: data.releasePackStatus ? ("manifest " + (data.releasePackStatus.manifestExists ? "OK" : "缺失") + " / " + (data.releasePackStatus.durationMs || 0) + "ms") : "静态离线包状态" },
+          { label: "最近任务", val: data.latestJob ? relayStatusText(data.latestJob.status) : "无任务", icon: "⏱️", foot: data.latestJob ? ((data.latestJob.type || "job") + " · " + (data.latestJob.progress || 0) + "%") : "后台重任务状态" },
           { label: "最近上传", val: data.latestStagingUpload ? formatDate(data.latestStagingUpload.updatedAt || data.latestStagingUpload.createdAt) : "暂无", icon: "⬆️", foot: "CLI gzip 分片上传" },
           { label: "最后发布", val: formatDate(data.classScheduleUpdatedAt || data.lastUploadTime), icon: "🕒", foot: "线上课表更新时间" },
         ];
@@ -5376,6 +5404,10 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         var map = {
           pending: "未开始",
           running: "运行中",
+          queued: "排队中",
+          success: "成功",
+          failed: "失败",
+          canceled: "已取消",
           uploaded: "已上传",
           "pending-review": "待审核",
           staged: "已设为 Staging",
@@ -6000,6 +6032,10 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           rebuildBtn.className = "btn ghost";
           rebuildBtn.style = "padding: 3px 8px; font-size:11px; margin-right: 4px;";
           rebuildBtn.textContent = "重建 Release Pack";
+          if (state.systemLoad && state.systemLoad.high) {
+            rebuildBtn.disabled = true;
+            rebuildBtn.title = "服务器负载较高，请稍后执行重建任务";
+          }
           rebuildBtn.addEventListener("click", function() {
             rebuildReleaseIndex(r.version, rebuildBtn);
           });
@@ -6019,15 +6055,18 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
       }
 
       function rebuildReleaseIndex(version, btn) {
-        var restoreButton = setButtonLoading(btn, "重建中...");
-        api("/api/admin/sync/releases/rebuild-index", {
+        var restoreButton = setButtonLoading(btn, "已启动...");
+        api("/api/admin/release-pack/rebuild/start", {
           method: "POST",
           body: JSON.stringify({ version: version })
         })
           .then(function(res) {
-            var pack = res.releasePack || {};
-            showToast("重建 Release Pack 成功！共处理 " + res.totalItems + " 项，离线包 " + formatBytes(pack.totalBytes || 0) + "。", "success");
-            loadSyncStatus();
+            var job = res.job || {};
+            showToast("Release Pack 重建任务已启动", "success");
+            pollAdminJob(job.id, "Release Pack 重建", function() {
+              restoreButton();
+              loadSyncStatus();
+            });
           })
           .catch(function(err) {
             restoreButton();
@@ -6035,43 +6074,76 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           });
       }
 
-      window.checkActiveReleaseAvailability = function(btn) {
-        var restoreButton = setButtonLoading(btn, "检查中...");
-        api("/api/admin/sync/releases/check-availability")
+      function pollAdminJob(jobId, label, onDone) {
+        if (!jobId) return;
+        api("/api/admin/jobs/" + encodeURIComponent(jobId))
           .then(function(res) {
-            restoreButton();
-            var r = res.result;
-            var report = "Active Release 诊断结果：\\n\\n";
-            report += "活跃版本: " + (r.activeReleaseVersion || "无") + "\\n";
-            report += "App 配置: " + r.appConfig.status + " (" + r.appConfig.message + ")\\n\\n";
-            
-            report += "索引文件状态:\\n";
-            Object.keys(r.searchIndex.details || {}).forEach(function(k) {
-              var d = r.searchIndex.details[k];
-              report += " - [" + k + "] " + d.status + (d.count != null ? " (" + d.count + "项)" : " (" + d.message + ")") + "\\n";
-            });
-            report += "索引总体: " + r.searchIndex.status + "\\n\\n";
-            
-            report += "详情加载状态:\\n";
-            Object.keys(r.scheduleDetail.details || {}).forEach(function(k) {
-              var d = r.scheduleDetail.details[k];
-              report += " - [" + k + "] " + d.status + (d.testId ? " (测试ID: " + d.testId + ", 名: " + d.testName + ")" : " (" + d.message + ")") + "\\n";
-            });
-            report += "详情总体: " + r.scheduleDetail.status + "\\n";
-            var pack = r.releasePack || {};
-            report += "\\nRelease Pack: " + (pack.status || "-") + "\\n";
-            if (pack.details) {
-              report += "manifest: " + (pack.details.manifestExists ? "OK" : "missing") + "\\n";
-              report += "total: " + formatBytes(pack.details.totalBytes || 0) + "\\n";
-              if (pack.details.missing && pack.details.missing.length) {
-                report += "missing: " + pack.details.missing.join(", ") + "\\n";
-              }
-              if (pack.details.hashErrors && pack.details.hashErrors.length) {
-                report += "hash: " + pack.details.hashErrors.join(", ") + "\\n";
-              }
+            var job = res.job || {};
+            var logs = job.logs || [];
+            var lastLog = logs.length ? logs[logs.length - 1].message : "";
+            setStatus(label + "：" + (job.status || "queued") + " · " + (job.progress || 0) + "% " + lastLog);
+            if (job.status === "success") {
+              showToast(label + "完成", "success");
+              if (onDone) onDone(job);
+              return;
             }
-            
-            alert(report);
+            if (job.status === "failed") {
+              showToast((job.error && job.error.message) || (label + "失败"), "error");
+              if (onDone) onDone(job);
+              return;
+            }
+            window.setTimeout(function() { pollAdminJob(jobId, label, onDone); }, 1500);
+          })
+          .catch(function(err) {
+            showToast(err.message || (label + "状态读取失败"), "error");
+            if (onDone) onDone(null);
+          });
+      }
+
+      function startPostPublishVerify(btn, version) {
+        var restoreButton = setButtonLoading(btn, "Verifying...");
+        var payload = {};
+        if (version) payload.version = version;
+        api("/api/admin/release-pack/verify/start", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        })
+          .then(function(res) {
+            var job = res.job || {};
+            if (!job.id) {
+              restoreButton();
+              showToast("Verify job was not created", "error");
+              return;
+            }
+            showToast("Post-publish verify job started", "success");
+            pollAdminJob(job.id, "Post-publish verify", function(doneJob) {
+              restoreButton();
+              if (doneJob && doneJob.status === "success") {
+                var result = doneJob.result || {};
+                setStatus("Post-publish verify OK: classIndex=" + (result.classIndexCount || 0) + ", emptyRoom=" + (result.emptyRoomCount || 0));
+                loadSyncStatus();
+              }
+            });
+          })
+          .catch(function(err) {
+            restoreButton();
+            showToast(err.message || "Failed to start verify job", "error");
+          });
+      }
+
+      window.checkActiveReleaseAvailability = function(btn) {
+        var restoreButton = setButtonLoading(btn, "已启动...");
+        api("/api/admin/release-pack/deep-health/start", { method: "POST", body: JSON.stringify({}) })
+          .then(function(res) {
+            var job = res.job || {};
+            showToast("深度健康检查任务已启动", "success");
+            pollAdminJob(job.id, "深度健康检查", function(doneJob) {
+              restoreButton();
+              if (doneJob && doneJob.status === "success") {
+                var status = doneJob.result && doneJob.result.status || {};
+                alert("Release Pack 深度健康检查完成\\n\\n版本: " + (status.releaseVersion || "-") + "\\n健康: " + (status.healthy ? "OK" : "Fail") + "\\n总大小: " + formatBytes(status.totalBytes || 0) + "\\nmissing: " + ((status.missing || []).join(", ") || "-") + "\\nhash: " + ((status.hashErrors || []).join(", ") || "-"));
+              }
+            });
           })
           .catch(function(err) {
             restoreButton();
@@ -6182,10 +6254,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         var apis = [
           { name: "/api/health", path: "/api/health" },
           { name: "/api/fosu/app-config", path: "/api/fosu/app-config" },
-          { name: "/api/fosu/bootstrap", path: "/api/fosu/bootstrap" },
           { name: "/api/fosu/release-pack/manifest", path: "/api/fosu/release-pack/manifest" },
-          { name: "/api/fosu/release-pack/index/class", path: "/api/fosu/release-pack/index/class" },
-          { name: "/api/fosu/release-pack/empty-room", path: "/api/fosu/release-pack/empty-room" },
+          { name: "/api/admin/release-pack/quick-health", path: "/api/admin/release-pack/quick-health" },
           { name: "/api/admin/dashboard", path: "/api/admin/dashboard" },
           { name: "/api/admin/catalog/stats", path: "/api/admin/catalog/stats" },
           { name: "/api/admin/feedbacks", path: "/api/admin/feedbacks" },
@@ -6395,6 +6465,10 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
 
       safeBind("stagingPublishBtn", "click", function() {
         publishStaging();
+      });
+
+      safeBind("postPublishVerifyBtn", "click", function() {
+        startPostPublishVerify($("postPublishVerifyBtn"));
       });
 
       safeBind("refreshStagingUploadsBtn", "click", function() {
@@ -6668,11 +6742,35 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         var publishBtn = sourceButton || $("stagingPublishBtn");
         var restoreButton = setButtonLoading(publishBtn, "发布中...");
         
-        api("/api/admin/sync/staging/publish", {
+        api("/api/admin/sync/staging/publish/start", {
           method: "POST",
           body: JSON.stringify({ force: force })
         })
           .then(function(res) {
+            var publishJob = res.job || {};
+            if (publishJob.id) {
+              showToast("Publish job started", "success");
+              pollAdminJob(publishJob.id, "Staging publish", function(doneJob) {
+                restoreButton();
+                if (!doneJob || doneJob.status !== "success") return;
+                var result = doneJob.result || {};
+                showToast("Publish complete. Live release data updated.", "success");
+                var verifyCmdFromJob = "npm run verify:release-live -- --server=" + location.origin + (result.term || result.semester ? " --term=" + (result.term || result.semester) : "");
+                setStatus("Published. Static pack quick health=" + ((result.quickHealth && result.quickHealth.healthy) ? "OK" : "check required") + ". Verify command: " + verifyCmdFromJob);
+                if (typeof copyText === "function") {
+                  copyText(verifyCmdFromJob);
+                }
+                if ($("stagingPreviewBox")) $("stagingPreviewBox").style.display = "none";
+                if ($("uploadFileInfo")) $("uploadFileInfo").textContent = "";
+                if ($("syncFileInput")) $("syncFileInput").value = "";
+                if (forceConfirm) forceConfirm.checked = false;
+                if ($("forceConfirmContainer")) $("forceConfirmContainer").style.display = "none";
+                loadSyncStatus();
+                startPostPublishVerify($("postPublishVerifyBtn"), result.releaseVersion || result.version);
+              });
+              return;
+            }
+            restoreButton();
             showToast("发布成功！线上课表数据已更新。", "success");
             var verifyCmd = "npm run verify:release-live -- --server=" + location.origin + (res.term || res.semester ? " --term=" + (res.term || res.semester) : "");
             setStatus("已发布。小程序将在下次打开或进入全校页时检测 releaseVersion/cacheEpoch 并安全刷新。发布后验证命令：" + verifyCmd);

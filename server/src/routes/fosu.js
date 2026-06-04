@@ -150,6 +150,16 @@ router.get("/app-config", (req, res) => {
       rawConfig.data.packStatus = activeInfo.releasePack || activeInfo.packStatus || {};
       rawConfig.data.minClientCacheSchema = 5;
       rawConfig.data.counts = activeInfo.counts || {};
+      const manifest = activeVer ? releaseService.getReleasePackManifest(activeVer) : null;
+      if (manifest && manifest.success) {
+        rawConfig.data.staticBasePath = manifest.staticBasePath;
+        rawConfig.data.staticBaseUrl = manifest.staticBaseUrl;
+        rawConfig.data.staticReleaseUrl = manifest.staticReleaseUrl;
+        rawConfig.data.indexUrls = manifest.indexUrls;
+        rawConfig.data.emptyRoomUrl = manifest.emptyRoomUrl;
+        rawConfig.data.detailUrlPattern = manifest.detailUrlPattern;
+        rawConfig.data.shards = manifest.shards;
+      }
     }
     res.json(rawConfig);
   } catch (error) {
@@ -274,7 +284,9 @@ router.get("/release-pack/index/:type", scheduleLimiter, (req, res) => {
         message: "type must be teacher, classroom, course, or class",
       });
     }
-    const result = releaseService.readActiveIndex(type, releaseVersion);
+    const shard = String(req.query.shard || "").replace(/^\/+/, "");
+    const result = releaseService.readReleasePackStaticIndex(type, releaseVersion, shard) ||
+      releaseService.readActiveIndex(type, releaseVersion);
     if (!result.success) {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       const code = result.code || result.reasonCode || "INDEX_NOT_FOUND";
@@ -311,7 +323,8 @@ router.get("/release-pack/detail/:type/:id", scheduleLimiter, (req, res) => {
         message: "type must be teacher, classroom, course, or class",
       });
     }
-    const result = releaseService.readActiveSchedule(type, id, releaseVersion);
+    const result = releaseService.readReleasePackStaticDetail(type, id, releaseVersion) ||
+      releaseService.readActiveSchedule(type, id, releaseVersion);
     if (!result.success) {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       const code = result.code || result.reasonCode || "DETAIL_NOT_FOUND";
@@ -344,7 +357,8 @@ router.get("/release-pack/detail/:type/:id", scheduleLimiter, (req, res) => {
 router.get("/release-pack/empty-room", scheduleLimiter, (req, res) => {
   try {
     const releaseVersion = String(req.query.releaseVersion || req.query.version || "").trim();
-    const result = releaseService.readEmptyRoomIndex(releaseVersion);
+    const result = releaseService.readReleasePackStaticEmptyRoom(releaseVersion) ||
+      releaseService.readEmptyRoomIndex(releaseVersion);
     if (!result.success) {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       const code = result.code || result.reasonCode || "EMPTY_ROOM_INDEX_NOT_FOUND";

@@ -2,13 +2,22 @@ const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
 const { safeLog } = require("../utils/safeLogger");
+const {
+  UNKNOWN_BUILDING_CODE,
+  UNKNOWN_BUILDING_NAME,
+  normalizeBuilding,
+  isUnknownBuilding,
+} = require("../utils/buildingNormalizer");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const RELEASES_DIR = path.join(STORAGE_DIR, "releases");
+const PUBLIC_RELEASES_DIR = path.join(STORAGE_DIR, "public", "releases");
 const ACTIVE_RELEASE_PATH = path.join(RELEASES_DIR, "active.json");
 const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
 const CURRENT_SNAPSHOT_PATH = path.join(SNAPSHOTS_DIR, "current.json");
 const CURRENT_SNAPSHOT_GZ_PATH = path.join(SNAPSHOTS_DIR, "current.json.gz");
+const STATIC_RELEASE_BASE_PATH = "/static/releases";
+const STATIC_RELEASE_BASE_URL = process.env.FOSU_STATIC_RELEASE_BASE_URL || STATIC_RELEASE_BASE_PATH;
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -19,6 +28,7 @@ function ensureDir(dirPath) {
 function ensureStorageDirs() {
   ensureDir(STORAGE_DIR);
   ensureDir(RELEASES_DIR);
+  ensureDir(PUBLIC_RELEASES_DIR);
   ensureDir(SNAPSHOTS_DIR);
 }
 
@@ -70,6 +80,10 @@ function getReleaseDir(version) {
   return path.join(RELEASES_DIR, normalizeVersion(version));
 }
 
+function getPublicReleaseDir(version) {
+  return path.join(PUBLIC_RELEASES_DIR, normalizeVersion(version));
+}
+
 function getReleaseFiles(version) {
   const releaseDir = getReleaseDir(version);
   const indexDir = path.join(releaseDir, "index");
@@ -77,6 +91,7 @@ function getReleaseFiles(version) {
   const emptyRoomDir = path.join(releaseDir, "empty-room");
   return {
     releaseDir,
+    publicReleaseDir: getPublicReleaseDir(version),
     bootstrapPath: path.join(releaseDir, "bootstrap.json"),
     classSchedulesPath: path.join(releaseDir, "class-schedules.json"),
     resourcesPath: path.join(releaseDir, "resources.json"),
@@ -89,6 +104,12 @@ function getReleaseFiles(version) {
     teachersIndexPath: path.join(indexDir, "teacher.json"),
     classroomsIndexPath: path.join(indexDir, "classroom.json"),
     coursesIndexPath: path.join(indexDir, "course.json"),
+    classIndexAllPath: path.join(indexDir, "class", "all.json"),
+    classIndexByCollegeDir: path.join(indexDir, "class", "by-college"),
+    classIndexByMajorDir: path.join(indexDir, "class", "by-major"),
+    teacherIndexAllPath: path.join(indexDir, "teacher", "all.json"),
+    classroomIndexAllPath: path.join(indexDir, "classroom", "all.json"),
+    courseIndexAllPath: path.join(indexDir, "course", "all.json"),
     classScheduleDir: path.join(detailDir, "class"),
     teacherScheduleDir: path.join(detailDir, "teacher"),
     classroomScheduleDir: path.join(detailDir, "classroom"),
@@ -226,25 +247,13 @@ function collectJsonFiles(dirPath) {
 
 function buildReleasePackFilesMeta(files) {
   const meta = {};
-  const requiredPaths = [
-    files.classesIndexPath,
-    files.teachersIndexPath,
-    files.classroomsIndexPath,
-    files.coursesIndexPath,
-    files.emptyRoomIndexPath,
-  ];
-  requiredPaths.forEach((filePath) => {
-    const item = getFileMeta(filePath);
-    if (item) {
-      meta[toReleaseRelativePath(files, filePath)] = item;
-    }
-  });
-
   [
+    files.indexDir,
     files.classScheduleDir,
     files.teacherScheduleDir,
     files.classroomScheduleDir,
     files.courseScheduleDir,
+    files.emptyRoomDir,
   ].forEach((dirPath) => {
     collectJsonFiles(dirPath).forEach((filePath) => {
       const item = getFileMeta(filePath);
@@ -258,6 +267,95 @@ function buildReleasePackFilesMeta(files) {
 
 function sumMetaSize(filesMeta) {
   return Object.values(filesMeta || {}).reduce((sum, item) => sum + Number(item && item.size || 0), 0);
+}
+
+function trimSlashes(value) {
+  return String(value || "").replace(/^\/+|\/+$/g, "");
+}
+
+function joinUrl(base, ...parts) {
+  const root = String(base || "").replace(/\/+$/g, "");
+  const suffix = parts.map(trimSlashes).filter(Boolean).join("/");
+  return suffix ? `${root}/${suffix}` : root || "/";
+}
+
+function buildStaticReleaseUrls(version, derived) {
+  const releaseVersion = normalizeVersion(version);
+  const releaseBaseUrl = joinUrl(STATIC_RELEASE_BASE_URL, releaseVersion);
+  const toUrl = (relativePath) => joinUrl(releaseBaseUrl, relativePath);
+  const shards = derived && derived.shards ? derived.shards : {};
+  const classShards = shards.class || {};
+  const mapShardUrls = (items) => Object.fromEntries(Object.entries(items || {}).map(([key, relativePath]) => [key, toUrl(relativePath)]));
+  return {
+    staticBasePath: STATIC_RELEASE_BASE_PATH,
+    staticBaseUrl: STATIC_RELEASE_BASE_URL,
+    staticReleaseUrl: releaseBaseUrl,
+    indexUrls: {
+      class: toUrl("index/class/all.json"),
+      teacher: toUrl("index/teacher/all.json"),
+      classroom: toUrl("index/classroom/all.json"),
+      course: toUrl("index/course/all.json"),
+      legacy: {
+        class: toUrl("index/class.json"),
+        teacher: toUrl("index/teacher.json"),
+        classroom: toUrl("index/classroom.json"),
+        course: toUrl("index/course.json"),
+      },
+    },
+    emptyRoomUrl: toUrl("empty-room/index.json"),
+    detailUrlPattern: toUrl("detail/{type}/{id}.json"),
+    shards: {
+      class: {
+        all: toUrl(classShards.all || "index/class/all.json"),
+        byCollege: mapShardUrls(classShards.byCollege),
+        byMajor: mapShardUrls(classShards.byMajor),
+      },
+    },
+  };
+}
+
+function compressStaticJsonFile(filePath) {
+  const result = { gzip: false, br: false };
+  if (!filePath || !fs.existsSync(filePath) || !filePath.endsWith(".json")) {
+    return result;
+  }
+  const buffer = fs.readFileSync(filePath);
+  fs.writeFileSync(`${filePath}.gz`, zlib.gzipSync(buffer));
+  result.gzip = true;
+  if (typeof zlib.brotliCompressSync === "function") {
+    try {
+      fs.writeFileSync(`${filePath}.br`, zlib.brotliCompressSync(buffer));
+      result.br = true;
+    } catch (error) {
+      safeLog("release-brotli-compress-failed", { filePath, error: error.message });
+    }
+  }
+  return result;
+}
+
+function mirrorStaticReleaseFiles(version) {
+  const files = getReleaseFiles(version);
+  ensureDir(files.publicReleaseDir);
+  const sourceFiles = [];
+  if (fs.existsSync(files.manifestPath)) {
+    sourceFiles.push(files.manifestPath);
+  }
+  [files.indexDir, files.detailDir, files.emptyRoomDir].forEach((dirPath) => {
+    collectJsonFiles(dirPath).forEach((filePath) => sourceFiles.push(filePath));
+  });
+
+  const compression = { gzip: false, br: false, files: 0 };
+  sourceFiles.forEach((sourcePath) => {
+    const relativePath = toReleaseRelativePath(files, sourcePath);
+    const targetPath = path.join(files.publicReleaseDir, relativePath);
+    ensureDir(path.dirname(targetPath));
+    fs.copyFileSync(sourcePath, targetPath);
+    const item = compressStaticJsonFile(targetPath);
+    compression.gzip = compression.gzip || item.gzip;
+    compression.br = compression.br || item.br;
+    compression.files += 1;
+  });
+  return compression;
 }
 
 function safeScheduleId(kind, value, fallbackValue, index) {
@@ -705,7 +803,7 @@ function deriveClassroomSchedulesFromClassSchedules(classSchedules) {
       const roomName = getClassroomNameFromCourse(course);
       if (!roomName) return;
       if (!rooms.has(roomName)) {
-        rooms.set(roomName, { roomName, courses: [] });
+        rooms.set(roomName, { roomName, courses: [], source: "classSchedules-derived" });
       }
       rooms.get(roomName).courses.push(course);
     });
@@ -714,16 +812,8 @@ function deriveClassroomSchedulesFromClassSchedules(classSchedules) {
 }
 
 function inferBuilding(roomName) {
-  const name = String(roomName || "").trim();
-  if (!name) return "未知";
-  const known = ["会通楼", "致用楼"];
-  const knownMatch = known.find((item) => name.includes(item));
-  if (knownMatch) return knownMatch;
-  const letterMatch = name.match(/^([A-Za-z]+\s*\d+)/);
-  if (letterMatch) return letterMatch[1].replace(/\s+/g, "").toUpperCase();
-  const prefixMatch = name.match(/^([^-\s]+)[-\s]/);
-  if (prefixMatch && prefixMatch[1]) return prefixMatch[1];
-  return "其他";
+  const normalized = normalizeBuilding(roomName);
+  return isUnknownBuilding(normalized) ? UNKNOWN_BUILDING_NAME : normalized.buildingCode;
 }
 
 function getCourseDisplayName(course) {
@@ -746,12 +836,137 @@ function normalizeEmptyRoomCourse(course) {
   };
 }
 
+function sanitizeShardName(value) {
+  const safe = String(value || "unknown")
+    .trim()
+    .replace(/[\\/:*?"<>|\s]+/g, "-")
+    .replace(/[^a-zA-Z0-9._\-\u4e00-\u9fa5]/g, "-")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+  return safe || "unknown";
+}
+
+function buildIndexPayload(type, items, snapshot) {
+  const list = Array.isArray(items) ? items : [];
+  const version = normalizeVersion(snapshot.version || snapshot.releaseVersion || "");
+  return {
+    success: true,
+    schemaVersion: 1,
+    type,
+    term: snapshot.term || snapshot.semester || "",
+    semester: snapshot.semester || snapshot.term || "",
+    releaseVersion: version,
+    version,
+    updatedAt: snapshot.updatedAt || snapshot.generatedAt || new Date().toISOString(),
+    total: list.length,
+    items: list,
+  };
+}
+
+function toLightClassIndexItem(item) {
+  return {
+    id: item.id,
+    name: item.name || item.className || "",
+    className: item.className || item.name || "",
+    college: item.college || item.collegeName || "",
+    collegeCode: item.collegeCode || "",
+    collegeName: item.collegeName || item.college || "",
+    grade: item.grade || "",
+    major: item.major || item.majorName || "",
+    majorCode: item.majorCode || "",
+    majorName: item.majorName || item.major || "",
+    courseCount: Number(item.courseCount || item.count || 0) || 0,
+    displayType: item.displayType || "",
+    isAggregated: Boolean(item.isAggregated),
+    firstCourseName: item.firstCourseName || "",
+    semester: item.semester || "",
+    updatedAt: item.updatedAt || "",
+  };
+}
+
+function groupBy(items, getKey) {
+  const grouped = new Map();
+  (items || []).forEach((item) => {
+    const key = String(getKey(item) || "").trim();
+    if (!key) return;
+    if (!grouped.has(key)) grouped.set(key, []);
+    grouped.get(key).push(item);
+  });
+  return grouped;
+}
+
+function writeIndexShardFiles(snapshot, files, indexes) {
+  const classes = (indexes.classes || []).map(toLightClassIndexItem);
+  const shards = {
+    class: {
+      all: "index/class/all.json",
+      byCollege: {},
+      byMajor: {},
+    },
+    teacher: { all: "index/teacher/all.json" },
+    classroom: { all: "index/classroom/all.json" },
+    course: { all: "index/course/all.json" },
+  };
+
+  writeJsonAtomic(files.classIndexAllPath, buildIndexPayload("class", classes, snapshot));
+  writeJsonAtomic(files.teacherIndexAllPath, buildIndexPayload("teacher", indexes.teachers || [], snapshot));
+  writeJsonAtomic(files.classroomIndexAllPath, buildIndexPayload("classroom", indexes.classrooms || [], snapshot));
+  writeJsonAtomic(files.courseIndexAllPath, buildIndexPayload("course", indexes.courses || [], snapshot));
+
+  groupBy(classes, (item) => item.collegeCode || item.collegeName).forEach((items, key) => {
+    const fileName = `${sanitizeShardName(key)}.json`;
+    const relative = `index/class/by-college/${fileName}`;
+    writeJsonAtomic(path.join(files.classIndexByCollegeDir, fileName), buildIndexPayload("class", items, snapshot));
+    shards.class.byCollege[key] = relative;
+  });
+
+  groupBy(classes, (item) => [item.collegeCode || item.collegeName, item.grade, item.majorCode || item.majorName].filter(Boolean).join("-"))
+    .forEach((items, key) => {
+      const fileName = `${sanitizeShardName(key)}.json`;
+      const relative = `index/class/by-major/${fileName}`;
+      writeJsonAtomic(path.join(files.classIndexByMajorDir, fileName), buildIndexPayload("class", items, snapshot));
+      shards.class.byMajor[key] = relative;
+    });
+
+  return shards;
+}
+
+function mergeEmptyRoomSchedules(classroomSchedules, classSchedules) {
+  const rooms = new Map();
+  const addSchedule = (schedule, source, index) => {
+    const roomName = getClassroomNameFromSchedule(schedule, index);
+    if (!roomName || roomName === "未知") return;
+    const existing = rooms.get(roomName);
+    const courses = getScheduleCourses(schedule);
+    if (existing) {
+      if (existing.source !== "classroomSchedules" && source === "classroomSchedules") {
+        existing.source = "classroomSchedules";
+        existing.capacity = schedule.capacity || schedule.seatCount || existing.capacity || null;
+        existing.roomId = schedule.roomId || schedule.id || existing.roomId || "";
+      }
+      existing.courses = existing.courses.concat(courses);
+      return;
+    }
+    rooms.set(roomName, {
+      roomName,
+      roomId: schedule.roomId || schedule.id || "",
+      capacity: schedule.capacity || schedule.seatCount || null,
+      courses: courses.slice(),
+      source,
+    });
+  };
+
+  asArray(classroomSchedules).forEach((schedule, index) => addSchedule(schedule, "classroomSchedules", index));
+  deriveClassroomSchedulesFromClassSchedules(classSchedules).forEach((schedule, index) => {
+    addSchedule(schedule, "classSchedules-derived", index);
+  });
+  return Array.from(rooms.values());
+}
+
 function buildEmptyRoomDerivedFiles(snapshot, files) {
   ensureDir(path.dirname(files.emptyRoomIndexPath));
   const resources = getResources(snapshot);
-  const sourceSchedules = resources.classroomSchedules.length
-    ? resources.classroomSchedules
-    : deriveClassroomSchedulesFromClassSchedules(snapshot.classSchedules);
+  const sourceSchedules = mergeEmptyRoomSchedules(resources.classroomSchedules, snapshot.classSchedules);
 
   const rooms = asArray(sourceSchedules).map((schedule, index) => {
     const roomName = getClassroomNameFromSchedule(schedule, index);
@@ -759,10 +974,16 @@ function buildEmptyRoomDerivedFiles(snapshot, files) {
     const courses = getScheduleCourses(schedule)
       .map(normalizeEmptyRoomCourse)
       .filter(Boolean);
+    const building = normalizeBuilding(roomName);
     return {
       roomId,
       roomName,
-      building: inferBuilding(roomName),
+      building: isUnknownBuilding(building) ? UNKNOWN_BUILDING_NAME : building.buildingCode,
+      buildingCode: building.buildingCode || UNKNOWN_BUILDING_CODE,
+      buildingName: building.buildingName || UNKNOWN_BUILDING_NAME,
+      campus: schedule.campus || building.campus || "",
+      confidence: building.confidence,
+      source: schedule.source || "classroomSchedules",
       capacity: schedule.capacity || schedule.seatCount || null,
       courseCount: courses.length,
       courses,
@@ -771,6 +992,17 @@ function buildEmptyRoomDerivedFiles(snapshot, files) {
 
   const buildings = Array.from(new Set(rooms.map((room) => room.building).filter(Boolean)))
     .sort((left, right) => String(left).localeCompare(String(right), "zh-CN"));
+  const unknownRooms = rooms.filter((room) => room.buildingCode === UNKNOWN_BUILDING_CODE || room.building === UNKNOWN_BUILDING_NAME);
+  const health = {
+    classroomCount: rooms.length,
+    buildingCount: buildings.length,
+    unknownRoomCount: unknownRooms.length,
+    unknownRoomSamples: unknownRooms.slice(0, 20).map((room) => room.roomName),
+    sources: {
+      classroomSchedules: rooms.filter((room) => room.source === "classroomSchedules").length,
+      classSchedulesDerived: rooms.filter((room) => room.source === "classSchedules-derived").length,
+    },
+  };
   const index = {
     success: true,
     schemaVersion: 1,
@@ -782,6 +1014,7 @@ function buildEmptyRoomDerivedFiles(snapshot, files) {
     updatedAt: snapshot.updatedAt || snapshot.generatedAt || new Date().toISOString(),
     generatedAt: new Date().toISOString(),
     buildings,
+    health,
     rooms,
   };
   writeJsonAtomic(files.emptyRoomIndexPath, index);
@@ -825,7 +1058,8 @@ function writeDerivedIndexes(snapshot, files, onlyIndexes = false) {
     onlyIndexes
   );
   const emptyRooms = buildEmptyRoomDerivedFiles(snapshot, files);
-  return { classes, teachers, classrooms, courses, emptyRooms };
+  const shards = writeIndexShardFiles(snapshot, files, { classes, teachers, classrooms, courses });
+  return { classes, teachers, classrooms, courses, emptyRooms, shards };
 }
 
 function hasCourseTiming(course) {
@@ -954,6 +1188,7 @@ function buildBootstrap(snapshot, version, counts) {
 function buildManifest(snapshot, version, counts, validation, files, derived) {
   const updatedAt = snapshot.updatedAt || new Date().toISOString();
   const filesMeta = files ? buildReleasePackFilesMeta(files) : {};
+  const staticUrls = buildStaticReleaseUrls(version, derived);
   return {
     success: true,
     schemaVersion: 2,
@@ -970,6 +1205,17 @@ function buildManifest(snapshot, version, counts, validation, files, derived) {
     source: snapshot.source || "local-sync-client",
     counts,
     files: filesMeta,
+    staticBasePath: staticUrls.staticBasePath,
+    staticBaseUrl: staticUrls.staticBaseUrl,
+    staticReleaseUrl: staticUrls.staticReleaseUrl,
+    indexUrls: staticUrls.indexUrls,
+    emptyRoomUrl: staticUrls.emptyRoomUrl,
+    detailUrlPattern: staticUrls.detailUrlPattern,
+    shards: staticUrls.shards,
+    compression: {
+      gzip: true,
+      br: typeof zlib.brotliCompressSync === "function",
+    },
     size: {
       snapshotBytes: files && fs.existsSync(files.snapshotPath) ? fs.statSync(files.snapshotPath).size : 0,
       packBytes: sumMetaSize(filesMeta),
@@ -979,6 +1225,11 @@ function buildManifest(snapshot, version, counts, validation, files, derived) {
         .filter((key) => key.startsWith("detail/"))
         .reduce((sum, key) => sum + Number(filesMeta[key]?.size || 0), 0),
       emptyRoomBytes: Number(filesMeta["empty-room/index.json"]?.size || 0),
+    },
+    packHealth: {
+      valid: validation.valid,
+      errors: validation.errors,
+      emptyRoom: derived?.emptyRooms?.health || {},
     },
     pack: {
       index: {
@@ -1035,10 +1286,15 @@ function writeReleaseSnapshot(rawSnapshot) {
   const derived = writeDerivedIndexes(snapshot, files);
   const manifest = buildManifest(snapshot, version, validation.counts, validation, files, derived);
   writeJsonAtomic(files.manifestPath, manifest);
+  const compression = mirrorStaticReleaseFiles(version);
+  manifest.compression = Object.assign({}, manifest.compression || {}, compression);
+  writeJsonAtomic(files.manifestPath, manifest);
+  mirrorStaticReleaseFiles(version);
 
   return {
     version,
     releaseDir: files.releaseDir,
+    publicReleaseDir: files.publicReleaseDir,
     manifest,
     bootstrap,
     derived,
@@ -1158,10 +1414,10 @@ function getActiveReleaseInfo() {
   }
 
   const files = getReleaseFiles(active.version);
-  const snapshot = readReleaseSnapshot(active.version);
-  const validation = snapshot ? validateReleaseSnapshot(snapshot) : null;
-  const counts = validation?.counts || active.counts || {};
-  const semester = active.semester || snapshot?.semester || snapshot?.term || "";
+  const manifest = readJsonFile(files.manifestPath);
+  const quickHealth = getReleasePackQuickHealth(active.version);
+  const counts = manifest?.counts || active.counts || {};
+  const semester = active.semester || manifest?.semester || manifest?.term || "";
 
   return Object.assign({}, active, {
     version: active.version,
@@ -1182,18 +1438,19 @@ function getActiveReleaseInfo() {
       coursesIndexPath: files.coursesIndexPath,
       emptyRoomIndexPath: files.emptyRoomIndexPath,
     },
-    releasePack: getReleasePackStatus(active.version),
-    snapshot: snapshot ? {
-      version: snapshot.version || active.version,
-      releaseVersion: snapshot.releaseVersion || snapshot.version || active.version,
-      term: snapshot.term || snapshot.semester || semester,
+    releasePack: quickHealth,
+    packStatus: quickHealth,
+    snapshot: {
+      version: manifest?.version || active.version,
+      releaseVersion: manifest?.releaseVersion || manifest?.version || active.version,
+      term: manifest?.term || manifest?.semester || semester,
       semester,
-      updatedAt: snapshot.updatedAt || active.updatedAt || "",
-      generatedAt: snapshot.generatedAt || "",
-      source: snapshot.source || "",
-    } : null,
-    valid: validation ? validation.valid : false,
-    errors: validation ? validation.errors : [],
+      updatedAt: manifest?.updatedAt || active.updatedAt || "",
+      generatedAt: manifest?.generatedAt || "",
+      source: manifest?.source || "",
+    },
+    valid: quickHealth.healthy,
+    errors: quickHealth.healthy ? [] : ["Release Pack quick health failed"],
   });
 }
 
@@ -1342,6 +1599,63 @@ function buildReadableFilesMeta(files) {
   return meta;
 }
 
+function getReleasePackQuickHealth(version) {
+  const startedAt = Date.now();
+  const active = readJsonFile(ACTIVE_RELEASE_PATH);
+  const normalizedVersion = normalizeVersion(version || active?.version || "");
+  if (!normalizedVersion) {
+    return {
+      success: false,
+      healthy: false,
+      code: "NO_ACTIVE_RELEASE",
+      reasonCode: "NO_ACTIVE_RELEASE",
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  const files = getReleaseFiles(normalizedVersion);
+  const manifest = readJsonFile(files.manifestPath) || readJsonFile(path.join(files.publicReleaseDir, "manifest.json"));
+  const keyFiles = {
+    manifest: files.manifestPath,
+    staticManifest: path.join(files.publicReleaseDir, "manifest.json"),
+    classIndex: files.classIndexAllPath,
+    legacyClassIndex: files.classesIndexPath,
+    teacherIndex: files.teacherIndexAllPath,
+    classroomIndex: files.classroomIndexAllPath,
+    courseIndex: files.courseIndexAllPath,
+    emptyRoom: files.emptyRoomIndexPath,
+    staticEmptyRoom: path.join(files.publicReleaseDir, "empty-room", "index.json"),
+  };
+  const checks = Object.fromEntries(Object.entries(keyFiles).map(([key, filePath]) => [key, {
+    exists: Boolean(filePath && fs.existsSync(filePath)),
+    size: filePath && fs.existsSync(filePath) ? fs.statSync(filePath).size : 0,
+  }]));
+  const requiredOk =
+    Boolean(manifest && manifest.releaseVersion === normalizedVersion) &&
+    checks.manifest.exists &&
+    checks.staticManifest.exists &&
+    (checks.classIndex.exists || checks.legacyClassIndex.exists) &&
+    checks.teacherIndex.exists &&
+    checks.classroomIndex.exists &&
+    checks.courseIndex.exists &&
+    checks.emptyRoom.exists &&
+    checks.staticEmptyRoom.exists;
+
+  return {
+    success: true,
+    version: normalizedVersion,
+    releaseVersion: normalizedVersion,
+    active: active && active.version === normalizedVersion,
+    manifestExists: Boolean(manifest),
+    manifestValid: Boolean(manifest && manifest.releaseVersion === normalizedVersion),
+    healthy: requiredOk,
+    checks,
+    counts: manifest?.counts || active?.counts || {},
+    emptyRoomHealth: manifest?.packHealth?.emptyRoom || manifest?.emptyRoomHealth || {},
+    durationMs: Date.now() - startedAt,
+  };
+}
+
 function getReleasePackStatus(version) {
   const normalizedVersion = normalizeVersion(version);
   const files = getReleaseFiles(normalizedVersion);
@@ -1471,7 +1785,7 @@ function getReleasePackManifest(version) {
   if (manifest && manifest.releaseVersion) {
     const active = getActiveReleaseInfo();
     const isActive = active && active.version === targetVersion;
-    const status = getReleasePackStatus(targetVersion);
+    const status = getReleasePackQuickHealth(targetVersion);
     return Object.assign({ success: true }, manifest, {
       releaseVersion: manifest.releaseVersion || targetVersion,
       version: manifest.version || targetVersion,
@@ -1485,11 +1799,16 @@ function getReleasePackManifest(version) {
 
   const snapshot = readReleaseSnapshot(targetVersion);
   if (snapshot) {
-    const rebuilt = rebuildReleasePack(targetVersion);
-    return Object.assign({ success: true }, rebuilt.manifest);
+    return {
+      success: false,
+      code: "RELEASE_PACK_MANIFEST_MISSING",
+      reasonCode: "RELEASE_PACK_MANIFEST_MISSING",
+      releaseVersion: targetVersion,
+      message: "Release Pack manifest is missing; rebuild must run as an admin job.",
+    };
   }
 
-  const status = getReleasePackStatus(targetVersion);
+  const status = getReleasePackQuickHealth(targetVersion);
   if (!Object.keys(status.currentFiles || {}).length) {
     return {
       success: false,
@@ -1542,6 +1861,10 @@ function rebuildReleasePack(version) {
   const derived = writeDerivedIndexes(Object.assign({}, snapshot, { version: normalizedVersion }), files, false);
   const manifest = buildManifest(snapshot, normalizedVersion, validation.counts, validation, files, derived);
   writeJsonAtomic(files.manifestPath, manifest);
+  const compression = mirrorStaticReleaseFiles(normalizedVersion);
+  manifest.compression = Object.assign({}, manifest.compression || {}, compression);
+  writeJsonAtomic(files.manifestPath, manifest);
+  mirrorStaticReleaseFiles(normalizedVersion);
   clearDerivedCache();
   return {
     success: true,
@@ -1583,6 +1906,99 @@ function getDerivedFileInfo(kind, files) {
     },
   };
   return map[kind] || null;
+}
+
+function assertReleaseRelativePath(baseDir, filePath) {
+  const relative = path.relative(baseDir, filePath);
+  return Boolean(relative && !relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function readStaticReleaseJson(version, relativePath) {
+  const normalizedVersion = normalizeVersion(version);
+  if (!normalizedVersion || !relativePath) return null;
+  const publicDir = getPublicReleaseDir(normalizedVersion);
+  const targetPath = path.join(publicDir, relativePath);
+  if (!assertReleaseRelativePath(publicDir, targetPath) || !fs.existsSync(targetPath)) {
+    return null;
+  }
+  return readJsonFile(targetPath);
+}
+
+function readReleasePackStaticManifest(version) {
+  const normalizedVersion = normalizeVersion(version || getActiveReleaseInfo()?.version || "");
+  if (!normalizedVersion) return null;
+  return readStaticReleaseJson(normalizedVersion, "manifest.json") || readJsonFile(getReleaseFiles(normalizedVersion).manifestPath);
+}
+
+function normalizeStaticIndexPayload(kind, payload, version) {
+  const manifest = readReleasePackStaticManifest(version) || {};
+  const items = Array.isArray(payload) ? payload : (Array.isArray(payload?.items) ? payload.items : null);
+  if (!items) return null;
+  const releaseVersion = normalizeVersion(version || manifest.releaseVersion || payload?.releaseVersion || "");
+  return Object.assign({}, Array.isArray(payload) ? {} : payload, {
+    success: true,
+    schemaVersion: payload?.schemaVersion || 1,
+    type: kind,
+    term: payload?.term || manifest.term || manifest.semester || "",
+    semester: payload?.semester || payload?.term || manifest.semester || manifest.term || "",
+    releaseVersion,
+    version: payload?.version || releaseVersion,
+    total: Number(payload?.total || items.length) || items.length,
+    items,
+    dataSource: "static-release-pack",
+  });
+}
+
+function readReleasePackStaticIndex(kind, version, shard = "") {
+  const normalizedVersion = normalizeVersion(version || getActiveReleaseInfo()?.version || "");
+  if (!normalizedVersion || !["class", "teacher", "classroom", "course"].includes(kind)) return null;
+  const candidates = [];
+  if (kind === "class" && shard) {
+    candidates.push(`index/class/${shard}`);
+  }
+  candidates.push(`index/${kind}/all.json`, `index/${kind}.json`);
+  for (const relativePath of candidates) {
+    const payload = readStaticReleaseJson(normalizedVersion, relativePath);
+    const normalized = normalizeStaticIndexPayload(kind, payload, normalizedVersion);
+    if (normalized) return normalized;
+  }
+  return null;
+}
+
+function readReleasePackStaticDetail(kind, id, version) {
+  const normalizedVersion = normalizeVersion(version || getActiveReleaseInfo()?.version || "");
+  if (!normalizedVersion || !["class", "teacher", "classroom", "course"].includes(kind) || !id) return null;
+  const safeId = safeScheduleId(kind, id, id, 0);
+  const schedule = readStaticReleaseJson(normalizedVersion, `detail/${kind}/${safeId}.json`);
+  if (!schedule) return null;
+  const manifest = readReleasePackStaticManifest(normalizedVersion) || {};
+  return {
+    success: true,
+    schemaVersion: 1,
+    type: kind,
+    id: safeId,
+    term: schedule.term || schedule.semester || manifest.term || "",
+    semester: schedule.semester || schedule.term || manifest.semester || manifest.term || "",
+    releaseVersion: normalizedVersion,
+    version: normalizedVersion,
+    updatedAt: schedule.updatedAt || manifest.updatedAt || "",
+    dataSource: "static-release-pack",
+    schedule,
+    detail: schedule,
+  };
+}
+
+function readReleasePackStaticEmptyRoom(version) {
+  const normalizedVersion = normalizeVersion(version || getActiveReleaseInfo()?.version || "");
+  if (!normalizedVersion) return null;
+  const payload = readStaticReleaseJson(normalizedVersion, "empty-room/index.json");
+  if (!payload || !Array.isArray(payload.rooms)) return null;
+  return Object.assign({}, payload, {
+    success: true,
+    releaseVersion: payload.releaseVersion || normalizedVersion,
+    version: payload.version || payload.releaseVersion || normalizedVersion,
+    dataSource: "static-release-pack",
+  });
 }
 
 function getReadableReleaseInfo() {
@@ -2084,6 +2500,11 @@ function queryEmptyClassrooms(options = {}) {
       roomName: room.roomName,
       roomId: room.roomId,
       building: room.building || inferBuilding(room.roomName),
+      buildingCode: room.buildingCode || normalizeBuilding(room.roomName).buildingCode,
+      buildingName: room.buildingName || normalizeBuilding(room.roomName).buildingName,
+      campus: room.campus || normalizeBuilding(room.roomName).campus || "",
+      confidence: room.confidence == null ? normalizeBuilding(room.roomName).confidence : room.confidence,
+      source: room.source || "",
       capacity: room.capacity || null,
       capacityText: room.capacity ? `${room.capacity}座` : "容量未知",
       freeText: `${formatSectionRange(requestedSet)}空闲`,
@@ -2154,7 +2575,9 @@ function clearDerivedCache() {
 
 module.exports = {
   ACTIVE_RELEASE_PATH,
+  PUBLIC_RELEASES_DIR,
   RELEASES_DIR,
+  STATIC_RELEASE_BASE_URL,
   activateReleaseFromSnapshot,
   activateReleaseVersion,
   countRelease,
@@ -2162,10 +2585,15 @@ module.exports = {
   getActiveSnapshotData,
   getReleaseFiles,
   getReleasePackManifest,
+  getReleasePackQuickHealth,
   getReleasePackStatus,
   assertHealthyReleasePack,
   getReleaseStatus,
   deleteReleaseVersion,
+  readReleasePackStaticDetail,
+  readReleasePackStaticEmptyRoom,
+  readReleasePackStaticIndex,
+  readReleasePackStaticManifest,
   readActiveIndex,
   readActiveSchedule,
   readEmptyRoomIndex,
