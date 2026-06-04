@@ -11,13 +11,13 @@
     />
   </view>
   <view class="filter-row">
-    <picker mode="selector" range="{{colleges}}" bindchange="onCollegeChange">
+    <picker class="filter-picker" mode="selector" range="{{colleges}}" bindchange="onCollegeChange">
       <view class="filter-pill">{{selectedCollege || "全部学院"}}</view>
     </picker>
-    <picker mode="selector" range="{{grades}}" bindchange="onGradeChange">
+    <picker class="filter-picker" mode="selector" range="{{grades}}" bindchange="onGradeChange">
       <view class="filter-pill">{{selectedGrade || "全部年级"}}</view>
     </picker>
-    <picker mode="selector" range="{{majors}}" bindchange="onMajorChange">
+    <picker class="filter-picker" mode="selector" range="{{majors}}" bindchange="onMajorChange">
       <view class="filter-pill">{{selectedMajor || "全部专业"}}</view>
     </picker>
   </view>

@@ -4,11 +4,31 @@
 
 const { API_BASE_URL } = require("../config/api");
 
+const REQUEST_DIAG_KEY = "FOSU_REQUEST_DIAG";
+const inflightRequests = new Map();
+let lastDiagnostics = {
+  lastError: null,
+  lastSuccess: null,
+};
+
+const PROFILE_RULES = [
+  { name: "manifest", pattern: /\/api\/fosu\/release-pack\/manifest$/, timeout: 8000, retries: 1 },
+  { name: "app-config", pattern: /\/api\/fosu\/app-config$/, timeout: 8000, retries: 1 },
+  { name: "bootstrap", pattern: /\/api\/fosu\/bootstrap$/, timeout: 12000, retries: 1 },
+  { name: "index", pattern: /\/api\/fosu\/release-pack\/index\/[^/]+$/, timeout: 25000, retries: 2 },
+  { name: "catalog", pattern: /\/api\/fosu\/catalog$/, timeout: 25000, retries: 2 },
+  { name: "search-index", pattern: /\/api\/fosu\/search-index$/, timeout: 25000, retries: 2 },
+  { name: "detail", pattern: /\/api\/fosu\/release-pack\/detail\/[^/]+\/[^/]+$/, timeout: 20000, retries: 2 },
+  { name: "schedule-detail", pattern: /\/api\/fosu\/schedule-detail$/, timeout: 20000, retries: 2 },
+  { name: "empty-room", pattern: /\/api\/fosu\/release-pack\/empty-room$/, timeout: 25000, retries: 2 },
+  { name: "empty-classrooms", pattern: /\/api\/fosu\/empty-classrooms$/, timeout: 25000, retries: 2 },
+];
+
 function translateErrorMessage(payload, defaultMsg) {
   const reasonCode = payload ? payload.reasonCode : "";
   const msg = (payload ? payload.message : defaultMsg) || "请求服务发生网络异常";
   const msgLower = msg.toLowerCase();
-  
+
   if (reasonCode === "NO_SYNC_DATA" || reasonCode === "NO_SCHEDULE_SYNCED") {
     return "暂未同步该专业课表，可稍后再试或联系维护者补充同步。";
   }
@@ -20,11 +40,11 @@ function translateErrorMessage(payload, defaultMsg) {
   if (reasonCode === "INVALID_FILTER") {
     return "请选择学院、年级和专业后再查询课表。";
   }
-  
-  if (msgLower.includes("timeout")) {
+
+  if (msgLower.includes("timeout") || msg.includes("超时") || msg.includes("网络较慢")) {
     return "网络较慢，请稍后重试";
   }
-  
+
   if (
     reasonCode === "FOSU_INTRANET_ONLY" ||
     msgLower.includes("enotfound") ||
@@ -36,8 +56,8 @@ function translateErrorMessage(payload, defaultMsg) {
   ) {
     return "该数据需要维护者在校园网/VPN环境下同步后才能查看。\n\n你也可以导入自己的课表，帮助完善班级课表数据。";
   }
-  
-  const hasTechnicalKey = 
+
+  const hasTechnicalKey =
     msgLower.includes("captcha") ||
     msgLower.includes("login") ||
     msgLower.includes("fallback") ||
@@ -45,146 +65,150 @@ function translateErrorMessage(payload, defaultMsg) {
     msgLower.includes("har") ||
     msgLower.includes("bnsk") ||
     msgLower.includes("debug");
-    
+
   if (hasTechnicalKey) {
     return "该数据需要维护者在校园网/VPN环境下同步后才能查看。\n\n你也可以导入自己的课表，帮助完善班级课表数据。";
   }
-  
+
   return msg;
 }
 
-/**
- * 根据接口获取默认超时时长
- * @param {string} url 请求接口
- * @returns {number} 超时毫秒数
- */
+function stripQuery(url) {
+  return String(url || "").split("?")[0];
+}
+
+function getPathname(url) {
+  const text = String(url || "");
+  try {
+    return new URL(text, API_BASE_URL || "https://example.invalid").pathname;
+  } catch (error) {
+    return stripQuery(text);
+  }
+}
+
+function getRequestProfile(url) {
+  const pathname = getPathname(url);
+  const matched = PROFILE_RULES.find((rule) => rule.pattern.test(pathname));
+  if (matched) {
+    return {
+      name: matched.name,
+      timeout: matched.timeout,
+      retries: matched.retries,
+    };
+  }
+  return {
+    name: "default",
+    timeout: 15000,
+    retries: 0,
+  };
+}
+
 function getDefaultTimeout(url) {
-  const cleanUrl = url.split("?")[0];
-  if (cleanUrl.endsWith("/app-config")) {
-    return 12000;
-  }
-  if (cleanUrl.endsWith("/bootstrap")) {
-    return 20000;
-  }
-  if (cleanUrl.endsWith("/search-index")) {
-    return 45000;
-  }
-  if (cleanUrl.endsWith("/schedule-detail")) {
-    return 30000;
-  }
-  if (cleanUrl.endsWith("/empty-classrooms")) {
-    return 30000;
-  }
-  if (cleanUrl.endsWith("/catalog")) {
-    return 45000;
-  }
-  return 15000;
+  return getRequestProfile(url).timeout;
 }
 
-/**
- * 基础请求封装
- * @param {string} url 相对路径，例如 '/api/fosu/catalog'
- * @param {string} method 请求方法，GET 或 POST
- * @param {Object} data 请求数据
- * @param {Object} options 附加配置项 (如 showLoading, title)
- * @returns {Promise<Object>} 请求成功的响应数据 payload
- */
-function request(url, method = "GET", data = {}, options = {}) {
-  const opt = Object.assign({ showLoading: true, loadingTitle: "正在加载..." }, options);
-
-  if (opt.showLoading) {
-    wx.showLoading({
-      title: opt.loadingTitle,
-      mask: true,
-    });
+function stableStringify(value) {
+  if (!value || typeof value !== "object") {
+    return String(value == null ? "" : value);
   }
-
-  // 拼接完整 URL，如果在小程序端动态注释切换了本地 IP，可直接支持
-  const requestUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
-
-  return new Promise((resolve, reject) => {
-    wx.request({
-      url: requestUrl,
-      method: method.toUpperCase(),
-      data: data,
-      header: {
-        "content-type": method.toUpperCase() === "POST" ? "application/json" : "application/x-www-form-urlencoded",
-      },
-      timeout: options.timeout || getDefaultTimeout(url),
-      success: (res) => {
-        if (opt.showLoading) {
-          wx.hideLoading();
-        }
-
-        // 统一处理 HTTP 状态码非 200 的情况
-        if (res.statusCode !== 200) {
-          if (!opt.silentError) {
-            showError("暂时无法连接教务数据服务");
-          }
-          const httpErr = new Error(`HTTP status error: ${res.statusCode}`);
-          httpErr.code = "HTTP_STATUS_ERROR";
-          httpErr.statusCode = res.statusCode;
-          httpErr.payload = res.data;
-          reject(httpErr);
-          return;
-        }
-
-        const payload = res.data;
-        
-        // 统一处理接口内部的 success: false 逻辑
-        if (payload && payload.success === false) {
-          const errMsg = translateErrorMessage(payload, payload.message);
-          if (!opt.silentError) {
-            showError(errMsg);
-          }
-          const err = new Error(errMsg);
-          err.code = payload.code || payload.reasonCode || "API_ERROR";
-          err.reasonCode = payload.reasonCode || payload.code || "";
-          err.payload = payload;
-          reject(err);
-          return;
-        }
-
-        resolve(payload);
-      },
-      fail: (err) => {
-        if (opt.showLoading) {
-          wx.hideLoading();
-        }
-        
-        // NOTE: 保留原始错误信息，同时对超时进行标识
-        const isTimeout = err.errMsg && err.errMsg.toLowerCase().includes("timeout");
-        let finalErr = err;
-        let displayMsg = "";
-
-        if (isTimeout) {
-          const timeoutErr = new Error("网络较慢，请稍后重试");
-          timeoutErr.code = "REQUEST_TIMEOUT";
-          timeoutErr.errMsg = err.errMsg || "request:fail timeout";
-          timeoutErr.originalError = err;
-          finalErr = timeoutErr;
-          displayMsg = "网络较慢，请稍后重试";
-        } else {
-          displayMsg = translateErrorMessage(null, err.errMsg || "");
-          finalErr = new Error(displayMsg);
-          finalErr.errMsg = err.errMsg || "";
-          finalErr.originalError = err;
-        }
-
-        if (!opt.silentError) {
-          showError(displayMsg);
-        }
-        console.error("wx.request failed", finalErr);
-        reject(finalErr);
-      },
-    });
-  });
+  if (Array.isArray(value)) {
+    return `[${value.map(stableStringify).join(",")}]`;
+  }
+  return `{${Object.keys(value).sort().map((key) => `${key}:${stableStringify(value[key])}`).join(",")}}`;
 }
 
-/**
- * 弹出错误提示弹窗
- * @param {string} msg 错误信息
- */
+function redactUrl(url) {
+  const text = String(url || "");
+  try {
+    const parsed = new URL(text, API_BASE_URL || "https://example.invalid");
+    ["token", "access_token", "adminToken", "ADMIN_API_TOKEN", "password", "cookie", "session"].forEach((key) => {
+      if (parsed.searchParams.has(key)) {
+        parsed.searchParams.set(key, "[redacted]");
+      }
+    });
+    return (parsed.pathname + (parsed.search ? parsed.search : "")).replace(/%5Bredacted%5D/gi, "[redacted]");
+  } catch (error) {
+    return text
+      .replace(/([?&](?:token|access_token|adminToken|ADMIN_API_TOKEN|password|cookie|session)=)[^&]+/gi, "$1[redacted]");
+  }
+}
+
+function writeDiagnostics(patch) {
+  lastDiagnostics = Object.assign({}, lastDiagnostics, patch || {});
+  try {
+    wx.setStorageSync(REQUEST_DIAG_KEY, lastDiagnostics);
+  } catch (error) {
+    // Diagnostics are best-effort only.
+  }
+}
+
+function getRequestDiagnostics() {
+  try {
+    return wx.getStorageSync(REQUEST_DIAG_KEY) || lastDiagnostics;
+  } catch (error) {
+    return lastDiagnostics;
+  }
+}
+
+function normalizeRequestError(input, meta = {}) {
+  const rawMessage = input && (input.errMsg || input.message || input.statusText || "");
+  const messageText = String(rawMessage || "");
+  const lower = messageText.toLowerCase();
+  let code = meta.code || "";
+  let retriable = meta.retriable;
+
+  if (!code) {
+    if (meta.invalidPayload) {
+      code = "INVALID_PAYLOAD";
+    } else if (meta.statusCode >= 500) {
+      code = "HTTP_5XX";
+    } else if (meta.statusCode >= 400) {
+      code = "HTTP_4XX";
+    } else if (lower.includes("timeout") || messageText.includes("超时") || messageText.includes("网络较慢")) {
+      code = "TIMEOUT";
+    } else {
+      code = "NETWORK";
+    }
+  }
+
+  if (retriable === undefined) {
+    retriable = code === "TIMEOUT" || code === "NETWORK" || code === "HTTP_5XX";
+  }
+
+  const displayMessage = code === "TIMEOUT"
+    ? "网络较慢，请稍后重试"
+    : translateErrorMessage(meta.payload || null, messageText || meta.defaultMessage || "请求服务发生网络异常");
+
+  const error = new Error(displayMessage);
+  error.code = code;
+  error.reasonCode = code === "TIMEOUT" ? "REQUEST_TIMEOUT" : (meta.reasonCode || code);
+  error.legacyCode = code === "TIMEOUT" ? "REQUEST_TIMEOUT" : "";
+  error.message = displayMessage;
+  error.retriable = Boolean(retriable);
+  error.url = redactUrl(meta.url || "");
+  error.elapsedMs = Number(meta.elapsedMs || 0);
+  error.statusCode = meta.statusCode || 0;
+  error.payload = meta.payload;
+  error.originalError = input || null;
+  return error;
+}
+
+function shouldRetry(error, attempt, retries) {
+  return attempt <= retries && error && error.retriable;
+}
+
+function jitterDelay(attempt, options = {}) {
+  const base = Number(options.retryBaseDelayMs || 260);
+  const max = Number(options.retryMaxDelayMs || 1600);
+  const exponential = Math.min(max, base * Math.pow(2, Math.max(0, attempt - 1)));
+  const jitter = Math.floor(Math.random() * Math.min(240, exponential));
+  return exponential + jitter;
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function showError(msg) {
   wx.showModal({
     title: "提示",
@@ -194,7 +218,158 @@ function showError(msg) {
   });
 }
 
+function runWxRequest(requestUrl, method, data, headers, timeout, startedAt) {
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: requestUrl,
+      method: method.toUpperCase(),
+      data,
+      header: headers,
+      timeout,
+      success: (res) => {
+        const elapsedMs = Date.now() - startedAt;
+        if (res.statusCode !== 200) {
+          reject(normalizeRequestError(new Error(`HTTP status error: ${res.statusCode}`), {
+            url: requestUrl,
+            statusCode: res.statusCode,
+            payload: res.data,
+            elapsedMs,
+          }));
+          return;
+        }
+
+        const payload = res.data;
+        if (payload && payload.success === false) {
+          const errMsg = translateErrorMessage(payload, payload.message);
+          reject(normalizeRequestError(new Error(errMsg), {
+            url: requestUrl,
+            payload,
+            elapsedMs,
+            invalidPayload: false,
+            code: payload.code || payload.reasonCode || "INVALID_PAYLOAD",
+            reasonCode: payload.reasonCode || payload.code || "",
+            retriable: payload.retriable === true,
+          }));
+          return;
+        }
+
+        writeDiagnostics({
+          lastSuccess: {
+            url: redactUrl(requestUrl),
+            elapsedMs,
+            at: new Date().toISOString(),
+          },
+        });
+        resolve(payload);
+      },
+      fail: (err) => {
+        const elapsedMs = Date.now() - startedAt;
+        reject(normalizeRequestError(err, {
+          url: requestUrl,
+          elapsedMs,
+        }));
+      },
+    });
+  });
+}
+
+async function requestWithRetry(requestUrl, method, data, options, profile) {
+  const retries = options.retries !== undefined ? Number(options.retries) : profile.retries;
+  const timeout = options.timeout || profile.timeout;
+  const headers = Object.assign({
+    "content-type": method.toUpperCase() === "POST" ? "application/json" : "application/x-www-form-urlencoded",
+  }, options.header || options.headers || {});
+
+  let attempt = 0;
+  let lastError = null;
+  while (attempt <= retries) {
+    attempt += 1;
+    const startedAt = Date.now();
+    try {
+      return await runWxRequest(requestUrl, method, data, headers, timeout, startedAt);
+    } catch (error) {
+      lastError = error;
+      if (!shouldRetry(error, attempt, retries)) {
+        break;
+      }
+      await sleep(jitterDelay(attempt, options));
+    }
+  }
+
+  writeDiagnostics({
+    lastError: {
+      code: lastError && lastError.code || "NETWORK",
+      reasonCode: lastError && lastError.reasonCode || "",
+      message: lastError && lastError.message || "请求失败",
+      retriable: Boolean(lastError && lastError.retriable),
+      url: lastError && lastError.url || redactUrl(requestUrl),
+      elapsedMs: lastError && lastError.elapsedMs || 0,
+      at: new Date().toISOString(),
+    },
+  });
+  throw lastError;
+}
+
+function buildDedupeKey(method, requestUrl, data) {
+  return `${method.toUpperCase()} ${redactUrl(requestUrl)} ${stableStringify(data || {})}`;
+}
+
+function request(url, method = "GET", data = {}, options = {}) {
+  const profile = getRequestProfile(url);
+  const opt = Object.assign({
+    showLoading: true,
+    loadingTitle: "正在加载...",
+    dedupe: method.toUpperCase() === "GET",
+  }, options);
+  const requestUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
+  const dedupeKey = opt.dedupe ? buildDedupeKey(method, requestUrl, data) : "";
+
+  if (dedupeKey && inflightRequests.has(dedupeKey)) {
+    return inflightRequests.get(dedupeKey);
+  }
+
+  if (opt.showLoading) {
+    wx.showLoading({
+      title: opt.loadingTitle,
+      mask: true,
+    });
+  }
+
+  const task = requestWithRetry(requestUrl, method, data, opt, profile)
+    .catch((error) => {
+      if (!opt.silentError) {
+        showError(error && error.message ? error.message : "请求失败，请稍后重试");
+      }
+      const logPayload = {
+        code: error && error.code,
+        url: error && error.url,
+        elapsedMs: error && error.elapsedMs,
+        retriable: error && error.retriable,
+      };
+      console.warn("wx.request failed", logPayload);
+      throw error;
+    })
+    .finally(() => {
+      if (opt.showLoading) {
+        wx.hideLoading();
+      }
+      if (dedupeKey) {
+        inflightRequests.delete(dedupeKey);
+      }
+    });
+
+  if (dedupeKey) {
+    inflightRequests.set(dedupeKey, task);
+  }
+  return task;
+}
+
 module.exports = {
+  REQUEST_DIAG_KEY,
+  getDefaultTimeout,
+  getRequestDiagnostics,
+  getRequestProfile,
+  normalizeRequestError,
   request,
   get: (url, data = {}, options = {}) => request(url, "GET", data, options),
   post: (url, data = {}, options = {}) => request(url, "POST", data, options),

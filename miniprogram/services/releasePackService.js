@@ -8,6 +8,9 @@ const DETAIL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 const EMPTY_ROOM_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const MAX_EMPTY_ROOM_SECTION = 14;
 const MAX_EMPTY_ROOM_WEEK = 30;
+const LOCAL_ACTIVE_RELEASE_KEY = `${CACHE_PREFIX}:active-release`;
+let activeManifestInflight = null;
+let switchReleaseInflight = null;
 
 function cachePart(value, fallback = "unknown") {
   return encodeURIComponent(String(value || fallback));
@@ -73,13 +76,20 @@ function normalizeManifest(payload) {
   const releaseVersion = source.releaseVersion || source.version || "";
   if (!releaseVersion) return null;
   const term = source.term || source.semester || DEFAULT_TERM;
+  const updatedAt = source.updatedAt || source.publishedAt || "";
+  const cacheEpoch = source.cacheEpoch || source.dataEpoch || Date.parse(updatedAt || "") || Date.now();
+  const forceRefreshToken = source.forceRefreshToken || source.dataEpoch || `${releaseVersion}:${cacheEpoch}`;
   return Object.assign({}, source, {
     success: true,
     term,
     semester: source.semester || term,
     releaseVersion,
     version: source.version || releaseVersion,
-    cacheEpoch: source.cacheEpoch || Date.parse(source.updatedAt || "") || Date.now(),
+    cacheEpoch,
+    dataEpoch: source.dataEpoch || cacheEpoch,
+    forceRefreshToken,
+    minClientCacheSchema: source.minClientCacheSchema || 5,
+    packStatus: source.packStatus || source.pack || {},
   });
 }
 
@@ -94,6 +104,17 @@ function assertManifest(manifest) {
 
 function markFromStorage(value, extra = {}) {
   return Object.assign({}, value || {}, extra, { fromStorage: true });
+}
+
+function getManifestReleaseKey(manifest) {
+  const normalized = normalizeManifest(manifest);
+  if (!normalized) return "";
+  return [
+    normalized.term || DEFAULT_TERM,
+    normalized.releaseVersion || "",
+    normalized.cacheEpoch || "",
+    normalized.forceRefreshToken || "",
+  ].join(":");
 }
 
 function readCachedManifest(term) {
@@ -113,6 +134,15 @@ function writeManifestCache(manifest) {
   };
   writeStorage(getManifestCacheKey(normalized.term), entry);
   writeStorage(getLastGoodCacheKey(normalized.term), entry);
+  writeStorage(LOCAL_ACTIVE_RELEASE_KEY, {
+    savedAt: entry.savedAt,
+    term: normalized.term,
+    releaseVersion: normalized.releaseVersion,
+    cacheEpoch: normalized.cacheEpoch,
+    forceRefreshToken: normalized.forceRefreshToken,
+    releaseKey: getManifestReleaseKey(normalized),
+    manifest: normalized,
+  });
   return normalized;
 }
 
@@ -133,8 +163,28 @@ function getLastKnownGood(term) {
     savedAt: cached.savedAt || 0,
     term: manifest.term,
     releaseVersion: manifest.releaseVersion,
+    cacheEpoch: manifest.cacheEpoch,
+    forceRefreshToken: manifest.forceRefreshToken,
+    releaseKey: getManifestReleaseKey(manifest),
     manifest,
   };
+}
+
+function getLocalActiveRelease(term) {
+  const active = readStorage(LOCAL_ACTIVE_RELEASE_KEY);
+  const manifest = normalizeManifest(active && active.manifest);
+  if (manifest && (!term || manifest.term === term)) {
+    return {
+      savedAt: active.savedAt || 0,
+      term: manifest.term,
+      releaseVersion: manifest.releaseVersion,
+      cacheEpoch: manifest.cacheEpoch,
+      forceRefreshToken: manifest.forceRefreshToken,
+      releaseKey: active.releaseKey || getManifestReleaseKey(manifest),
+      manifest,
+    };
+  }
+  return getLastKnownGood(term || DEFAULT_TERM);
 }
 
 function normalizeIndexPayload(type, payload, fallback = {}) {
@@ -188,7 +238,8 @@ function fetchManifest(options = {}) {
   return request.get("/api/fosu/release-pack/manifest", query, {
     showLoading: false,
     silentError: true,
-    timeout: options.timeout || 15000,
+    timeout: options.timeout || 8000,
+    retries: options.retries === undefined ? 1 : options.retries,
   }).then((payload) => assertManifest(normalizeManifest(payload)));
 }
 
@@ -197,7 +248,10 @@ function getActiveManifest(options = {}) {
   if (cached && !options.forceNetwork) {
     return Promise.resolve(cached);
   }
-  return fetchManifest(options)
+  if (activeManifestInflight && options.dedupe !== false) {
+    return activeManifestInflight;
+  }
+  activeManifestInflight = fetchManifest(options)
     .then((manifest) => writeManifestCache(manifest))
     .catch((error) => {
       const fallback = cached || (getLastKnownGood(options.term || DEFAULT_TERM) || {}).manifest;
@@ -208,7 +262,11 @@ function getActiveManifest(options = {}) {
         });
       }
       throw error;
+    })
+    .finally(() => {
+      activeManifestInflight = null;
     });
+  return activeManifestInflight;
 }
 
 function resolveManifest(options = {}) {
@@ -242,7 +300,8 @@ function loadIndex(type, params = {}, options = {}) {
   return request.get(`/api/fosu/release-pack/index/${type}`, { term, releaseVersion }, {
     showLoading: false,
     silentError: true,
-    timeout: options.timeout || 30000,
+    timeout: options.timeout || 25000,
+    retries: options.retries === undefined ? 2 : options.retries,
   }).then((payload) => writeIndexCache(type, normalizeIndexPayload(type, payload, { term, releaseVersion })))
     .catch((error) => {
       if (cached) {
@@ -293,14 +352,19 @@ function warmupIndex(types, options = {}) {
 }
 
 function switchReleaseSafely(options = {}) {
-  const previous = getLastKnownGood(options.term || DEFAULT_TERM);
-  return fetchManifest(options)
+  if (switchReleaseInflight && options.dedupe !== false) {
+    return switchReleaseInflight;
+  }
+  const previous = getLocalActiveRelease(options.term || DEFAULT_TERM) || getLastKnownGood(options.term || DEFAULT_TERM);
+  switchReleaseInflight = fetchManifest(options)
     .then((manifest) => {
+      const sameRelease = previous && previous.manifest &&
+        getManifestReleaseKey(previous.manifest) === getManifestReleaseKey(manifest);
       return warmupIndex(INDEX_TYPES, {
         manifest,
         term: manifest.term,
         releaseVersion: manifest.releaseVersion,
-        forceNetwork: true,
+        forceNetwork: Boolean(options.forceNetwork && !sameRelease),
         skipFallback: true,
       }).then((indexes) => {
         const normalized = writeManifestCache(manifest);
@@ -332,7 +396,11 @@ function switchReleaseSafely(options = {}) {
         };
       }
       throw error;
+    })
+    .finally(() => {
+      switchReleaseInflight = null;
     });
+  return switchReleaseInflight;
 }
 
 function toComparableText(value) {
@@ -473,7 +541,8 @@ function loadDetail(type, id, params = {}, options = {}) {
   return request.get(`/api/fosu/release-pack/detail/${type}/${encodeURIComponent(id)}`, { term, releaseVersion }, {
     showLoading: false,
     silentError: true,
-    timeout: options.timeout || 30000,
+    timeout: options.timeout || 20000,
+    retries: options.retries === undefined ? 2 : options.retries,
   }).then((payload) => writeDetailCache(type, id, normalizeDetailPayload(type, id, payload, { term, releaseVersion })))
     .catch((error) => {
       if (cached) {
@@ -546,7 +615,8 @@ function loadEmptyRoom(params = {}, options = {}) {
   return request.get("/api/fosu/release-pack/empty-room", { term, releaseVersion }, {
     showLoading: false,
     silentError: true,
-    timeout: options.timeout || 30000,
+    timeout: options.timeout || 25000,
+    retries: options.retries === undefined ? 2 : options.retries,
   }).then((payload) => writeEmptyRoomCache(normalizeEmptyRoomIndex(payload, { term, releaseVersion })))
     .catch((error) => {
       if (cached) {
@@ -793,11 +863,14 @@ function clearOldReleaseCaches(options = {}) {
 module.exports = {
   CACHE_PREFIX,
   DEFAULT_TERM,
+  LOCAL_ACTIVE_RELEASE_KEY,
   getManifestCacheKey,
   getIndexCacheKey,
   getDetailCacheKey,
   getEmptyRoomCacheKey,
   getLastGoodCacheKey,
+  getManifestReleaseKey,
+  getLocalActiveRelease,
   getActiveManifest,
   loadIndex,
   loadDetail,

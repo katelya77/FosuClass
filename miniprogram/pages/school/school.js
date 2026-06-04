@@ -15,12 +15,13 @@ const DEFAULT_TERM = "2025-2026-2";
 const SCHEDULE_DETAIL_CACHE_TTL = 6 * 60 * 60 * 1000;
 const APP_CONFIG_TIMEOUT = 12000;
 const BOOTSTRAP_TIMEOUT = 20000;
-const SCHOOL_REQUEST_TIMEOUT = 45000;
+const SCHOOL_REQUEST_TIMEOUT = 25000;
 
 const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
 const platformDataService = require("../../services/platformDataService");
 const releasePackService = require("../../services/releasePackService");
+const platformUtils = require("../../utils/platform");
 const {
   SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY,
   getRecentSchedules,
@@ -370,7 +371,7 @@ Page({
       .catch((err) => {
         this.clearLoadingStateTimer();
         console.error("[school] app-config failed", err);
-        if (err.code === "REQUEST_TIMEOUT") {
+        if (err.code === "REQUEST_TIMEOUT" || err.code === "TIMEOUT") {
           this.setData({ dataLoadState: "timeout" });
         } else {
           this.setData({ dataLoadState: "networkError" });
@@ -473,7 +474,7 @@ Page({
           duration: 2000
         });
       } else {
-        if (err.code === "REQUEST_TIMEOUT") {
+        if (err.code === "REQUEST_TIMEOUT" || err.code === "TIMEOUT") {
           this.setData({ dataLoadState: "timeout" });
         } else {
           this.setData({ dataLoadState: "networkError" });
@@ -1184,8 +1185,7 @@ Page({
   },
 
   printSchoolDebugLog(hit, level, reason) {
-    const envVersion = wx.getSystemInfoSync().platform === 'devtools' || (wx.getAccountInfoSync && wx.getAccountInfoSync().miniProgram.envVersion === 'develop');
-    if (envVersion) {
+    if (platformUtils.isDeveloperEnv()) {
       console.log("========== [开发环境全校页面调试日志] ==========");
       console.log("- 是否命中 FOSU_SCHOOL_FILTER_CACHE:", hit ? "是" : "否");
       if (hit) {
@@ -1265,9 +1265,22 @@ Page({
 
     const collegeCode = colleges[selectedCollegeIndex].code;
     const grade = grades[selectedGradeIndex];
+    const localMajors = (this.originalCatalogData && Array.isArray(this.originalCatalogData.majors))
+      ? this.originalCatalogData.majors.filter((major) => {
+        return String(major.collegeCode || "") === String(collegeCode || "") &&
+          String(major.grade || "") === String(grade || "");
+      })
+      : [];
+    if (localMajors.length) {
+      this.setData({
+        majors: localMajors,
+        loading: false,
+      });
+      return Promise.resolve(localMajors);
+    }
 
     this.setData({ loading: true });
-    return request.get("/api/fosu/majors", { collegeCode, grade }, { showLoading: false })
+    return request.get("/api/fosu/majors", { collegeCode, grade }, { showLoading: false, timeout: SCHOOL_REQUEST_TIMEOUT })
       .then((data) => {
         const majors = data.majors || [];
         this.setData({
@@ -1964,7 +1977,7 @@ Page({
             console.error("[school] search-index failed", err);
             
             // 区分超时和普通错误
-            if (err.code === "REQUEST_TIMEOUT") {
+            if (err.code === "REQUEST_TIMEOUT" || err.code === "TIMEOUT") {
               this.setData({
                 loadingState: "timeout"
               });
@@ -2009,7 +2022,12 @@ Page({
 
   getSnapshotReleaseKey(snapshot) {
     const active = snapshot || {};
-    return `${active.term || DEFAULT_TERM}:${active.releaseVersion || ""}`;
+    return [
+      active.term || DEFAULT_TERM,
+      active.releaseVersion || "",
+      active.cacheEpoch || "",
+      active.forceRefreshToken || "",
+    ].join(":");
   },
 
   buildActiveSnapshotFromAppConfig(payload) {
@@ -2035,6 +2053,7 @@ Page({
       scheduleUpdatedAt,
       catalogUpdatedAt,
       cacheEpoch: config.cacheEpoch || version.cacheEpoch || catalogUpdatedAt || scheduleUpdatedAt || releaseVersion,
+      forceRefreshToken: config.forceRefreshToken || version.forceRefreshToken || config.dataEpoch || "",
     };
   },
 
@@ -2051,6 +2070,7 @@ Page({
       scheduleUpdatedAt,
       catalogUpdatedAt,
       cacheEpoch: data.cacheEpoch || catalogUpdatedAt || scheduleUpdatedAt || releaseVersion,
+      forceRefreshToken: data.forceRefreshToken || data.dataEpoch || "",
     };
   },
 
@@ -2066,6 +2086,7 @@ Page({
       scheduleUpdatedAt: updatedAt,
       catalogUpdatedAt: manifest.catalogUpdatedAt || updatedAt,
       cacheEpoch: manifest.cacheEpoch || updatedAt || releaseVersion,
+      forceRefreshToken: manifest.forceRefreshToken || manifest.dataEpoch || "",
     };
   },
 
@@ -2079,6 +2100,7 @@ Page({
           scheduleUpdatedAt: cached.scheduleUpdatedAt || "",
           catalogUpdatedAt: cached.catalogUpdatedAt || "",
           cacheEpoch: cached.cacheEpoch || cached.releaseVersion,
+          forceRefreshToken: cached.forceRefreshToken || "",
         };
       }
     } catch (error) {
@@ -2102,7 +2124,7 @@ Page({
   getStateFromError(error) {
     const code = error && (error.code || error.reasonCode || (error.payload && (error.payload.code || error.payload.reasonCode)));
     if (code === "NO_ACTIVE_RELEASE" || code === "NO_RELEASE_DATA") return "noRelease";
-    if (code === "REQUEST_TIMEOUT") return "timeout";
+    if (code === "REQUEST_TIMEOUT" || code === "TIMEOUT") return "timeout";
     return "networkError";
   },
 
@@ -2111,7 +2133,12 @@ Page({
     const cached = this.readCachedActiveSnapshot();
     if (cached && !forceNetwork) {
       const platformSnapshot = platformDataService.getCachedPlatformSnapshot();
-      if (platformSnapshot && platformSnapshot.releaseVersion && this.getSnapshotReleaseKey(platformSnapshot) !== this.getSnapshotReleaseKey(cached)) {
+      const platformLooksNewer = platformSnapshot && platformSnapshot.releaseVersion &&
+        (
+          platformSnapshot.releaseVersion !== cached.releaseVersion ||
+          (platformSnapshot.cacheEpoch && String(platformSnapshot.cacheEpoch) !== String(cached.cacheEpoch || ""))
+        );
+      if (platformLooksNewer) {
         this.writeCachedActiveSnapshot(platformSnapshot);
         return {
           activeSnapshot: platformSnapshot,
@@ -2129,12 +2156,25 @@ Page({
       };
     }
 
+    if (this._activeSnapshotInflight && options.dedupe !== false) {
+      return this._activeSnapshotInflight;
+    }
+
+    this._activeSnapshotInflight = this.resolveActiveSnapshotFromNetwork(cached, options)
+      .finally(() => {
+        this._activeSnapshotInflight = null;
+      });
+    return this._activeSnapshotInflight;
+  },
+
+  async resolveActiveSnapshotFromNetwork(cached, options = {}) {
     let lastError = null;
     let sawNoRelease = false;
 
     try {
       const pack = await releasePackService.switchReleaseSafely({
         term: cached && cached.term || DEFAULT_TERM,
+        forceNetwork: Boolean(options.forceNetwork),
       });
       const activeSnapshot = this.buildActiveSnapshotFromReleaseManifest(pack && pack.manifest);
       if (activeSnapshot) {
@@ -2187,7 +2227,7 @@ Page({
       if (code === "NO_ACTIVE_RELEASE" || code === "NO_RELEASE_DATA") {
         sawNoRelease = true;
       }
-      if (cached && code === "REQUEST_TIMEOUT") {
+      if (cached && (code === "REQUEST_TIMEOUT" || code === "TIMEOUT")) {
         return {
           activeSnapshot: cached,
           appConfig: appConfigService.getGlobalConfig(),
@@ -2273,6 +2313,61 @@ Page({
     }
   },
 
+  buildCatalogFromClassIndex(indexPayload, snapshot = {}) {
+    const items = Array.isArray(indexPayload && indexPayload.items) ? indexPayload.items : [];
+    if (!items.length) return null;
+    const term = snapshot.term || indexPayload.term || indexPayload.semester || DEFAULT_TERM;
+    const collegesMap = {};
+    const gradesSet = {};
+    const majorsMap = {};
+    items.forEach((item) => {
+      const collegeCode = String(item.collegeCode || "").trim();
+      const collegeName = String(item.collegeName || item.college || "").trim();
+      const grade = String(item.grade || "").trim();
+      const majorCode = String(item.majorCode || "").trim();
+      const majorName = String(item.majorName || "").trim();
+      if (collegeCode || collegeName) {
+        const key = collegeCode || collegeName;
+        collegesMap[key] = {
+          code: collegeCode || key,
+          name: collegeName || collegeCode || key,
+        };
+      }
+      if (grade) gradesSet[grade] = true;
+      if (majorCode || majorName) {
+        const key = [collegeCode, grade, majorCode || majorName].join(":");
+        majorsMap[key] = {
+          collegeCode,
+          code: majorCode || majorName,
+          name: majorName || majorCode,
+          grade,
+        };
+      }
+    });
+    const colleges = Object.keys(collegesMap)
+      .map((key) => collegesMap[key])
+      .sort((left, right) => String(left.name || "").localeCompare(String(right.name || ""), "zh-CN"));
+    const grades = Object.keys(gradesSet).sort((left, right) => String(right).localeCompare(String(left)));
+    const majors = Object.keys(majorsMap)
+      .map((key) => majorsMap[key])
+      .sort((left, right) => {
+        const gradeDiff = String(right.grade || "").localeCompare(String(left.grade || ""));
+        if (gradeDiff !== 0) return gradeDiff;
+        return String(left.name || "").localeCompare(String(right.name || ""), "zh-CN");
+      });
+    if (!colleges.length || !grades.length) return null;
+    return {
+      success: true,
+      dataSource: indexPayload.fromStorage ? "release-pack-index-cache" : "release-pack-index",
+      semesters: [{ value: term, label: term }],
+      colleges,
+      grades,
+      majors,
+      updatedAt: snapshot.catalogUpdatedAt || snapshot.scheduleUpdatedAt || indexPayload.updatedAt || "",
+      version: snapshot.releaseVersion || indexPayload.releaseVersion || indexPayload.version || "",
+    };
+  },
+
   async initPageData(options = {}) {
     const seq = ++this._activeInitSeq;
     this._lastInitAt = Date.now();
@@ -2308,20 +2403,12 @@ Page({
       let didRefresh = false;
 
       if (localReleaseKey && localReleaseKey !== releaseKey) {
-        releasePackService.clearOldReleaseCaches({
-          keepLatestN: 2,
-          keepReleases: [activeSnapshot.releaseVersion],
-        });
-        this.writeCachedActiveSnapshot(activeSnapshot);
-        this.setData({
-          classesResult: [],
-          classAdminResults: [],
-          classAggregateResults: [],
-          teachersResult: [],
-          classroomsResult: [],
-          coursesResult: [],
-          updatedAtText: "",
-        });
+        if (resolved.source === "release-pack" && !resolved.fromStorage) {
+          releasePackService.clearOldReleaseCaches({
+            keepLatestN: 2,
+            keepReleases: [activeSnapshot.releaseVersion],
+          });
+        }
         didRefresh = true;
         this.needAutoSearch = true;
       }
@@ -2472,20 +2559,49 @@ Page({
         .catch(handleCatalogError);
     };
 
-    if (cachedCatalog) {
-      renderCatalog(cachedCatalog, true);
-      fetchCatalogFromNetwork();
+    const renderFromReleasePackIndex = (indexPayload, fromCache) => {
+      const catalogData = this.buildCatalogFromClassIndex(indexPayload, snapshot);
+      if (!catalogData) return false;
+      writeCatalogCache(catalogData);
+      renderCatalog(catalogData, fromCache);
+      return true;
+    };
+
+    const cachedClassIndex = releasePackService.readCachedIndex("class", { term, releaseVersion });
+    if (cachedClassIndex && renderFromReleasePackIndex(cachedClassIndex, true)) {
+      releasePackService.loadIndex("class", { term, releaseVersion }, {
+        forceNetwork: true,
+        timeout: SCHOOL_REQUEST_TIMEOUT,
+      })
+        .then((indexPayload) => renderFromReleasePackIndex(indexPayload, false))
+        .catch(handleCatalogError);
       return;
     }
 
-    const bootstrapCatalog = normalizeCatalog(options.bootstrapData);
-    if (bootstrapCatalog) {
-      writeCatalogCache(bootstrapCatalog);
-      renderCatalog(bootstrapCatalog, false);
-      return;
-    }
+    releasePackService.loadIndex("class", { term, releaseVersion }, {
+      timeout: SCHOOL_REQUEST_TIMEOUT,
+    })
+      .then((indexPayload) => {
+        if (!renderFromReleasePackIndex(indexPayload, Boolean(indexPayload && indexPayload.fromStorage))) {
+          fetchCatalogFromNetwork();
+        }
+      })
+      .catch((error) => {
+        if (cachedCatalog) {
+          renderCatalog(cachedCatalog, true);
+          return;
+        }
+        const bootstrapCatalog = normalizeCatalog(options.bootstrapData);
+        if (bootstrapCatalog) {
+          writeCatalogCache(bootstrapCatalog);
+          renderCatalog(bootstrapCatalog, false);
+          return;
+        }
+        fetchCatalogFromNetwork();
+        console.warn("[school] class index catalog fallback", error);
+      });
 
-    fetchCatalogFromNetwork();
+    return;
   },
 
   getReleaseVersionForCache(fallbackVersion) {

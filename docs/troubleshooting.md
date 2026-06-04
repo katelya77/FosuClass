@@ -78,6 +78,59 @@ npm run test:relay-agent
 
 ## 诊断 API
 
+## 全校页第一次进入空白
+
+现象：
+
+- 微信开发者工具日志出现 `wx.request failed`。
+- 全校页提示网络较慢或课表索引加载失败。
+- 再次重试偶尔能加载。
+
+处理：
+
+1. 确认小程序请求层使用 release-pack index 的长 timeout 和 retry。
+2. 确认 `/api/fosu/release-pack/manifest` 不带 releaseVersion 时返回 `no-store`。
+3. 确认 active manifest 包含 `releaseVersion`、`cacheEpoch`、`forceRefreshToken`。
+4. 确认设置页“高级诊断”里 last-good releaseVersion 存在。
+5. 运行：
+
+```powershell
+npm run verify:release-live -- --server=https://class.katelya.eu.org --term=2025-2026-2
+```
+
+有 last-good 时，全校页应先显示本地缓存，不应空白。
+
+## Release Pack 不健康
+
+现象：后台发布失败，或 `/api/admin/sync/releases/check-availability` 显示 Release Pack Fail。
+
+处理：
+
+```powershell
+npm run test:release-publish-requires-healthy-pack
+npm run test:release-pack-build
+npm run test:release-pack-manifest
+npm run test:release-pack-index
+npm run test:release-pack-detail
+```
+
+健康检查必须通过 manifest、四类 index、四类 detail、empty-room、hash/size。pack 不健康禁止发布为 active。
+
+## 小程序没有识别新 release
+
+处理：
+
+1. 打开 `/api/fosu/release-pack/manifest`，确认 `releaseVersion/cacheEpoch/forceRefreshToken` 已变化。
+2. 打开 `/api/fosu/app-config`，确认同样包含 active release 信息。
+3. 设置页进入“数据版本详情”，开发版/体验版展开“高级诊断”。
+4. 点击“重新拉取 manifest”或“安全刷新数据”。
+
+客户端不能只比较 `updatedAt`。如果 `releaseVersion` 不变但 `cacheEpoch` 或 `forceRefreshToken` 变化，也会执行安全刷新流程。
+
+## 发布后验证失败
+
+`verify:release-live` 中 manifest 超过 2s、index/empty-room 超过 8s、detail 超过 5s 时会给 warning。warning 不一定代表数据错误，但需要在中国大陆网络和真机环境复测。
+
 `/api/fosu/client-diagnosis` 不默认显示在 UI，仅用于排查。重点看：
 
 - `activeReleaseVersion`

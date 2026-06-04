@@ -38,7 +38,7 @@
   margin-top: 16rpx;
 }
 
-picker {
+.filter-picker {
   flex: 1;
   min-width: 0;
 }

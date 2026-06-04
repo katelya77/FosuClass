@@ -53,7 +53,7 @@
   line-height: normal;
 }
 
-.notice-ticker-line text {
+.notice-ticker-text {
   padding-right: 64rpx;
 }
 

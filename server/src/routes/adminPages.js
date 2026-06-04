@@ -6181,8 +6181,11 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         
         var apis = [
           { name: "/api/health", path: "/api/health" },
-          { name: "/api/fosu/bootstrap", path: "/api/fosu/bootstrap" },
           { name: "/api/fosu/app-config", path: "/api/fosu/app-config" },
+          { name: "/api/fosu/bootstrap", path: "/api/fosu/bootstrap" },
+          { name: "/api/fosu/release-pack/manifest", path: "/api/fosu/release-pack/manifest" },
+          { name: "/api/fosu/release-pack/index/class", path: "/api/fosu/release-pack/index/class" },
+          { name: "/api/fosu/release-pack/empty-room", path: "/api/fosu/release-pack/empty-room" },
           { name: "/api/admin/dashboard", path: "/api/admin/dashboard" },
           { name: "/api/admin/catalog/stats", path: "/api/admin/catalog/stats" },
           { name: "/api/admin/feedbacks", path: "/api/admin/feedbacks" },
@@ -6671,6 +6674,11 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         })
           .then(function(res) {
             showToast("发布成功！线上课表数据已更新。", "success");
+            var verifyCmd = "npm run verify:release-live -- --server=" + location.origin + (res.term || res.semester ? " --term=" + (res.term || res.semester) : "");
+            setStatus("已发布。小程序将在下次打开或进入全校页时检测 releaseVersion/cacheEpoch 并安全刷新。发布后验证命令：" + verifyCmd);
+            if (typeof copyText === "function") {
+              copyText(verifyCmd);
+            }
             // 隐藏 Staging 预览，清空文件信息
             if ($("stagingPreviewBox")) $("stagingPreviewBox").style.display = "none";
             if ($("uploadFileInfo")) $("uploadFileInfo").textContent = "";

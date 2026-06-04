@@ -1,6 +1,7 @@
 const request = require("./utils/request");
 const { BOOTSTRAP_CACHE_KEY } = require("./utils/storage");
 const appConfigService = require("./services/appConfigService");
+const releasePackService = require("./services/releasePackService");
 const platformDataService = require("./services/platformDataService");
 const BRAND = require("./config/brand");
 
@@ -11,6 +12,7 @@ App({
     env: "",
     bootstrapData: null,
     appConfig: null,
+    activeRelease: null,
     platformPrefetchData: null,
     platformPeriodicData: null,
     shownModalNoticeIds: {},
@@ -27,9 +29,34 @@ App({
       wx.cloud.init(cloudConfig);
     }
 
+    this.loadReleasePackData();
     this.loadPlatformData();
     this.loadBootstrapData();
     this.loadAppConfigData();
+  },
+
+  loadReleasePackData() {
+    const localActive = releasePackService.getLocalActiveRelease();
+    if (localActive) {
+      this.globalData.activeRelease = localActive;
+    }
+    releasePackService.switchReleaseSafely({ dedupe: true })
+      .then((result) => {
+        if (result && result.manifest) {
+          this.globalData.activeRelease = {
+            term: result.term,
+            releaseVersion: result.releaseVersion,
+            cacheEpoch: result.manifest.cacheEpoch,
+            forceRefreshToken: result.manifest.forceRefreshToken,
+            manifest: result.manifest,
+          };
+        }
+      })
+      .catch((error) => {
+        console.warn("Release Pack 静默刷新失败，继续使用本地缓存", {
+          code: error && (error.code || error.reasonCode),
+        });
+      });
   },
 
   loadPlatformData() {
@@ -70,7 +97,7 @@ App({
   },
 
   loadBootstrapData() {
-    request.get(`/api/fosu/bootstrap?ts=${Date.now()}`, {}, { showLoading: false, silentError: true })
+    request.get(`/api/fosu/bootstrap?ts=${Date.now()}`, {}, { showLoading: false, silentError: true, timeout: 12000, retries: 1 })
       .then((res) => {
         if (res && res.success) {
           this.globalData.bootstrapData = res;
@@ -91,17 +118,7 @@ App({
             this.bootstrapCallback(cached);
           }
         } else {
-          wx.showModal({
-            title: "网络异常",
-            content: "首次打开应用需要联网加载学校信息，请检查网络设置。",
-            showCancel: false,
-            confirmText: "重试",
-            success: (modalRes) => {
-              if (modalRes.confirm) {
-                this.loadBootstrapData();
-              }
-            }
-          });
+          console.warn("Bootstrap 无本地缓存，页面将自行按需加载");
         }
       });
   }
