@@ -5357,6 +5357,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           { label: "当前正式版本", val: data.releaseVersion || "-", icon: "🏷️", foot: "小程序读取的 active release" },
           { label: "当前学期", val: data.semester || "-", icon: "📅", foot: "后台配置学期" },
           { label: "Staging 状态", val: data.latestStagingUpload ? relayStatusText(data.latestStagingUpload.status) : "等待上传", icon: "📦", foot: "候选数据审核状态" },
+          { label: "Release Pack", val: data.releasePackHealthy ? "健康" : "需检查", icon: "🧩", foot: data.releasePackStatus ? ("manifest " + (data.releasePackStatus.manifestExists ? "OK" : "缺失") + " / detail " + ((data.releasePackStatus.detailCounts && data.releasePackStatus.detailCounts.class) || 0)) : "静态离线包状态" },
           { label: "最近上传", val: data.latestStagingUpload ? formatDate(data.latestStagingUpload.updatedAt || data.latestStagingUpload.createdAt) : "暂无", icon: "⬆️", foot: "CLI gzip 分片上传" },
           { label: "最后发布", val: formatDate(data.classScheduleUpdatedAt || data.lastUploadTime), icon: "🕒", foot: "线上课表更新时间" },
         ];
@@ -5956,6 +5957,10 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             " / teacher " + (r.counts?.teacherScheduleCount || 0) +
             " / classroom " + (r.counts?.classroomScheduleCount || 0) +
             " / course " + (r.counts?.courseScheduleCount || 0);
+          var pack = r.releasePack || {};
+          var packText = pack.manifestExists
+            ? ("Release Pack " + (pack.healthy ? "OK" : "需检查") + " / detail " + ((pack.detailCounts && pack.detailCounts.class) || 0) + " / " + formatBytes(pack.totalBytes || 0))
+            : "Release Pack 未生成";
             
           card.innerHTML =
             "<div class='release-card-head'>" +
@@ -5964,6 +5969,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             "</div>" +
             "<div class='release-meta'>term " + escapeHtml(r.semester || "-") + "<br>发布 " + formatDate(r.updatedAt) + "</div>" +
             "<div class='release-counts'>" + escapeHtml(countText) + "</div>" +
+            "<div class='release-counts'>" + escapeHtml(packText) + "</div>" +
             "<div class='release-actions'></div>";
 
           var actions = card.querySelector(".release-actions");
@@ -5993,7 +5999,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           var rebuildBtn = document.createElement("button");
           rebuildBtn.className = "btn ghost";
           rebuildBtn.style = "padding: 3px 8px; font-size:11px; margin-right: 4px;";
-          rebuildBtn.textContent = "重建索引";
+          rebuildBtn.textContent = "重建 Release Pack";
           rebuildBtn.addEventListener("click", function() {
             rebuildReleaseIndex(r.version, rebuildBtn);
           });
@@ -6019,12 +6025,13 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           body: JSON.stringify({ version: version })
         })
           .then(function(res) {
-            showToast("重建索引成功！共处理 " + res.totalItems + " 项。", "success");
+            var pack = res.releasePack || {};
+            showToast("重建 Release Pack 成功！共处理 " + res.totalItems + " 项，离线包 " + formatBytes(pack.totalBytes || 0) + "。", "success");
             loadSyncStatus();
           })
           .catch(function(err) {
             restoreButton();
-            showToast(err.message || "重建索引失败", "error");
+            showToast(err.message || "重建 Release Pack 失败", "error");
           });
       }
 
@@ -6051,6 +6058,18 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
               report += " - [" + k + "] " + d.status + (d.testId ? " (测试ID: " + d.testId + ", 名: " + d.testName + ")" : " (" + d.message + ")") + "\\n";
             });
             report += "详情总体: " + r.scheduleDetail.status + "\\n";
+            var pack = r.releasePack || {};
+            report += "\\nRelease Pack: " + (pack.status || "-") + "\\n";
+            if (pack.details) {
+              report += "manifest: " + (pack.details.manifestExists ? "OK" : "missing") + "\\n";
+              report += "total: " + formatBytes(pack.details.totalBytes || 0) + "\\n";
+              if (pack.details.missing && pack.details.missing.length) {
+                report += "missing: " + pack.details.missing.join(", ") + "\\n";
+              }
+              if (pack.details.hashErrors && pack.details.hashErrors.length) {
+                report += "hash: " + pack.details.hashErrors.join(", ") + "\\n";
+              }
+            }
             
             alert(report);
           })

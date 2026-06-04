@@ -72,6 +72,9 @@ function getReleaseDir(version) {
 
 function getReleaseFiles(version) {
   const releaseDir = getReleaseDir(version);
+  const indexDir = path.join(releaseDir, "index");
+  const detailDir = path.join(releaseDir, "detail");
+  const emptyRoomDir = path.join(releaseDir, "empty-room");
   return {
     releaseDir,
     bootstrapPath: path.join(releaseDir, "bootstrap.json"),
@@ -79,15 +82,27 @@ function getReleaseFiles(version) {
     resourcesPath: path.join(releaseDir, "resources.json"),
     snapshotPath: path.join(releaseDir, "snapshot.json"),
     manifestPath: path.join(releaseDir, "manifest.json"),
-    classesIndexPath: path.join(releaseDir, "classes-index.json"),
-    teachersIndexPath: path.join(releaseDir, "teachers-index.json"),
-    classroomsIndexPath: path.join(releaseDir, "classrooms-index.json"),
-    coursesIndexPath: path.join(releaseDir, "courses-index.json"),
-    classScheduleDir: path.join(releaseDir, "schedules", "class"),
-    teacherScheduleDir: path.join(releaseDir, "schedules", "teacher"),
-    classroomScheduleDir: path.join(releaseDir, "schedules", "classroom"),
-    courseScheduleDir: path.join(releaseDir, "schedules", "course"),
-    emptyRoomIndexPath: path.join(releaseDir, "derived", "empty-room-index.json"),
+    indexDir,
+    detailDir,
+    emptyRoomDir,
+    classesIndexPath: path.join(indexDir, "class.json"),
+    teachersIndexPath: path.join(indexDir, "teacher.json"),
+    classroomsIndexPath: path.join(indexDir, "classroom.json"),
+    coursesIndexPath: path.join(indexDir, "course.json"),
+    classScheduleDir: path.join(detailDir, "class"),
+    teacherScheduleDir: path.join(detailDir, "teacher"),
+    classroomScheduleDir: path.join(detailDir, "classroom"),
+    courseScheduleDir: path.join(detailDir, "course"),
+    emptyRoomIndexPath: path.join(emptyRoomDir, "index.json"),
+    legacyClassesIndexPath: path.join(releaseDir, "classes-index.json"),
+    legacyTeachersIndexPath: path.join(releaseDir, "teachers-index.json"),
+    legacyClassroomsIndexPath: path.join(releaseDir, "classrooms-index.json"),
+    legacyCoursesIndexPath: path.join(releaseDir, "courses-index.json"),
+    legacyClassScheduleDir: path.join(releaseDir, "schedules", "class"),
+    legacyTeacherScheduleDir: path.join(releaseDir, "schedules", "teacher"),
+    legacyClassroomScheduleDir: path.join(releaseDir, "schedules", "classroom"),
+    legacyCourseScheduleDir: path.join(releaseDir, "schedules", "course"),
+    legacyEmptyRoomIndexPath: path.join(releaseDir, "derived", "empty-room-index.json"),
   };
 }
 
@@ -161,6 +176,90 @@ function cryptoHash(value) {
   return require("crypto").createHash("sha1").update(String(value || "")).digest("hex");
 }
 
+function cryptoHashBuffer(buffer) {
+  return require("crypto").createHash("sha1").update(buffer).digest("hex");
+}
+
+function getExistingPath(primaryPath, legacyPath) {
+  if (primaryPath && fs.existsSync(primaryPath)) return primaryPath;
+  if (legacyPath && fs.existsSync(legacyPath)) return legacyPath;
+  return primaryPath || legacyPath;
+}
+
+function getExistingDir(primaryDir, legacyDir) {
+  if (primaryDir && fs.existsSync(primaryDir)) return primaryDir;
+  if (legacyDir && fs.existsSync(legacyDir)) return legacyDir;
+  return primaryDir || legacyDir;
+}
+
+function toReleaseRelativePath(files, filePath) {
+  return path.relative(files.releaseDir, filePath).replace(/\\/g, "/");
+}
+
+function getFileMeta(filePath) {
+  if (!filePath || !fs.existsSync(filePath)) {
+    return null;
+  }
+  const buffer = fs.readFileSync(filePath);
+  return {
+    size: buffer.length,
+    hash: cryptoHashBuffer(buffer),
+  };
+}
+
+function collectJsonFiles(dirPath) {
+  if (!dirPath || !fs.existsSync(dirPath)) {
+    return [];
+  }
+  const result = [];
+  const entries = fs.readdirSync(dirPath, { withFileTypes: true });
+  entries.forEach((entry) => {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      result.push.apply(result, collectJsonFiles(fullPath));
+    } else if (entry.isFile() && entry.name.endsWith(".json")) {
+      result.push(fullPath);
+    }
+  });
+  return result;
+}
+
+function buildReleasePackFilesMeta(files) {
+  const meta = {};
+  const requiredPaths = [
+    files.classesIndexPath,
+    files.teachersIndexPath,
+    files.classroomsIndexPath,
+    files.coursesIndexPath,
+    files.emptyRoomIndexPath,
+  ];
+  requiredPaths.forEach((filePath) => {
+    const item = getFileMeta(filePath);
+    if (item) {
+      meta[toReleaseRelativePath(files, filePath)] = item;
+    }
+  });
+
+  [
+    files.classScheduleDir,
+    files.teacherScheduleDir,
+    files.classroomScheduleDir,
+    files.courseScheduleDir,
+  ].forEach((dirPath) => {
+    collectJsonFiles(dirPath).forEach((filePath) => {
+      const item = getFileMeta(filePath);
+      if (item) {
+        meta[toReleaseRelativePath(files, filePath)] = item;
+      }
+    });
+  });
+  return meta;
+}
+
+function sumMetaSize(filesMeta) {
+  return Object.values(filesMeta || {}).reduce((sum, item) => sum + Number(item && item.size || 0), 0);
+}
+
 function safeScheduleId(kind, value, fallbackValue, index) {
   const raw = String(value || "").trim();
   const fallback = stableScheduleId(kind, fallbackValue || raw, index);
@@ -204,10 +303,85 @@ function stripDebugCourseFields(course) {
   return copy;
 }
 
+function dictIndex(dict, value) {
+  const text = String(value || "").trim();
+  if (!text) return -1;
+  const existing = dict.indexOf(text);
+  if (existing >= 0) return existing;
+  dict.push(text);
+  return dict.length - 1;
+}
+
+function compactWeekValue(course) {
+  if (Array.isArray(course.weeks) && course.weeks.length) {
+    return course.weeks.join(",");
+  }
+  if (course.weekMask !== undefined && course.weekMask !== null) {
+    return String(course.weekMask);
+  }
+  if (course.weekText) {
+    return String(course.weekText);
+  }
+  if (course.startWeek || course.endWeek) {
+    return `${course.startWeek || ""}-${course.endWeek || ""}`;
+  }
+  return "";
+}
+
+function buildCompactSchedulePayload(payload) {
+  const sourceCourses = asArray(payload.courses);
+  if (!sourceCourses.length) {
+    return null;
+  }
+  const courseDict = [];
+  const teacherDict = [];
+  const roomDict = [];
+  const classDict = [];
+  const collegeDict = [];
+  const majorDict = [];
+  const scheduleClassIndex = dictIndex(classDict, payload.className || payload.name || "");
+  const scheduleCollegeIndex = dictIndex(collegeDict, payload.collegeName || payload.college || "");
+  const scheduleMajorIndex = dictIndex(majorDict, payload.majorName || "");
+  const courses = sourceCourses.map((course) => ({
+    n: dictIndex(courseDict, getFirstText(course, ["displayCourseName", "canonicalCourseName", "courseName", "name", "title"])),
+    t: dictIndex(teacherDict, getFirstText(course, ["displayTeacherName", "canonicalTeacherName", "teacherName", "teacher"])),
+    r: dictIndex(roomDict, getFirstText(course, ["displayClassroom", "canonicalClassroom", "classroom", "roomName", "location"])),
+    c: dictIndex(classDict, course.className || payload.className || payload.name || ""),
+    g: dictIndex(collegeDict, course.collegeName || payload.collegeName || payload.college || ""),
+    m: dictIndex(majorDict, course.majorName || payload.majorName || ""),
+    d: Number(course.weekday || 0) || 0,
+    s: Number(course.startSection || 0) || 0,
+    e: Number(course.endSection || 0) || 0,
+    w: compactWeekValue(course),
+  }));
+  return {
+    schemaVersion: 1,
+    fields: ["n", "t", "r", "c", "g", "m", "d", "s", "e", "w"],
+    dictionaries: {
+      courseDict,
+      teacherDict,
+      roomDict,
+      classDict,
+      collegeDict,
+      majorDict,
+    },
+    scheduleRefs: {
+      className: scheduleClassIndex,
+      collegeName: scheduleCollegeIndex,
+      majorName: scheduleMajorIndex,
+    },
+    courses,
+  };
+}
+
 function buildSchedulePayload(schedule, extra) {
   const payload = Object.assign({}, schedule || {}, extra || {});
   if (Array.isArray(payload.courses)) {
     payload.courses = payload.courses.map(stripDebugCourseFields);
+  }
+  const compact = buildCompactSchedulePayload(payload);
+  if (compact) {
+    payload.compact = compact;
   }
   return payload;
 }
@@ -777,14 +951,50 @@ function buildBootstrap(snapshot, version, counts) {
   };
 }
 
-function buildManifest(snapshot, version, counts, validation) {
+function buildManifest(snapshot, version, counts, validation, files, derived) {
   const updatedAt = snapshot.updatedAt || new Date().toISOString();
+  const filesMeta = files ? buildReleasePackFilesMeta(files) : {};
   return {
+    success: true,
+    schemaVersion: 2,
+    releasePackSchemaVersion: 1,
+    term: snapshot.term || snapshot.semester || "",
+    releaseVersion: version,
     version,
-    semester: snapshot.semester,
+    semester: snapshot.semester || snapshot.term || "",
     updatedAt,
+    cacheEpoch: new Date(updatedAt).getTime() || Date.now(),
     source: snapshot.source || "local-sync-client",
     counts,
+    files: filesMeta,
+    size: {
+      snapshotBytes: files && fs.existsSync(files.snapshotPath) ? fs.statSync(files.snapshotPath).size : 0,
+      packBytes: sumMetaSize(filesMeta),
+      indexBytes: ["index/class.json", "index/teacher.json", "index/classroom.json", "index/course.json"]
+        .reduce((sum, key) => sum + Number(filesMeta[key]?.size || 0), 0),
+      detailBytes: Object.keys(filesMeta)
+        .filter((key) => key.startsWith("detail/"))
+        .reduce((sum, key) => sum + Number(filesMeta[key]?.size || 0), 0),
+      emptyRoomBytes: Number(filesMeta["empty-room/index.json"]?.size || 0),
+    },
+    pack: {
+      index: {
+        class: Array.isArray(derived?.classes) ? derived.classes.length : 0,
+        teacher: Array.isArray(derived?.teachers) ? derived.teachers.length : 0,
+        classroom: Array.isArray(derived?.classrooms) ? derived.classrooms.length : 0,
+        course: Array.isArray(derived?.courses) ? derived.courses.length : 0,
+      },
+      detail: {
+        class: collectJsonFiles(files?.classScheduleDir).length,
+        teacher: collectJsonFiles(files?.teacherScheduleDir).length,
+        classroom: collectJsonFiles(files?.classroomScheduleDir).length,
+        course: collectJsonFiles(files?.courseScheduleDir).length,
+      },
+      emptyRoom: {
+        exists: Boolean(files && fs.existsSync(files.emptyRoomIndexPath)),
+        rooms: Array.isArray(derived?.emptyRooms?.rooms) ? derived.emptyRooms.rooms.length : 0,
+      },
+    },
     validation: {
       valid: validation.valid,
       errors: validation.errors,
@@ -815,13 +1025,13 @@ function writeReleaseSnapshot(rawSnapshot) {
 
   const files = getReleaseFiles(version);
   const bootstrap = buildBootstrap(snapshot, version, validation.counts);
-  const manifest = buildManifest(snapshot, version, validation.counts, validation);
   writeJsonAtomic(files.snapshotPath, snapshot);
   writeJsonAtomic(files.bootstrapPath, bootstrap);
   writeJsonAtomic(files.classSchedulesPath, snapshot.classSchedules || []);
   writeJsonAtomic(files.resourcesPath, snapshot.resources || {});
-  writeJsonAtomic(files.manifestPath, manifest);
   const derived = writeDerivedIndexes(snapshot, files);
+  const manifest = buildManifest(snapshot, version, validation.counts, validation, files, derived);
+  writeJsonAtomic(files.manifestPath, manifest);
 
   return {
     version,
@@ -889,8 +1099,10 @@ function activateReleaseVersion(version) {
 
   const active = {
     version: normalizedVersion,
+    releaseVersion: normalizedVersion,
     activatedAt: new Date().toISOString(),
     updatedAt: snapshot.updatedAt || new Date().toISOString(),
+    term: snapshot.term || snapshot.semester || "",
     semester: snapshot.semester,
     counts: validation.counts,
   };
@@ -943,7 +1155,9 @@ function getActiveReleaseInfo() {
       teachersIndexPath: files.teachersIndexPath,
       classroomsIndexPath: files.classroomsIndexPath,
       coursesIndexPath: files.coursesIndexPath,
+      emptyRoomIndexPath: files.emptyRoomIndexPath,
     },
+    releasePack: getReleasePackStatus(active.version),
     snapshot: snapshot ? {
       version: snapshot.version || active.version,
       releaseVersion: snapshot.releaseVersion || snapshot.version || active.version,
@@ -1037,12 +1251,16 @@ function listReleases(limit = 20) {
       const files = getReleaseFiles(version);
       const manifest = readJsonFile(files.manifestPath);
       const stat = fs.statSync(files.releaseDir);
+      const releasePack = getReleasePackStatus(version);
       return {
         version,
         updatedAt: manifest?.updatedAt || stat.mtime.toISOString(),
-        semester: manifest?.semester || "",
+        releaseVersion: manifest?.releaseVersion || version,
+        term: manifest?.term || manifest?.semester || "",
+        semester: manifest?.semester || manifest?.term || "",
         counts: manifest?.counts || {},
         valid: manifest?.validation?.valid !== false,
+        releasePack,
       };
     })
     .sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
@@ -1075,14 +1293,237 @@ function deleteReleaseVersion(version) {
   return { version: normalizedVersion, deleted: true };
 }
 
+function buildReadableFilesMeta(files) {
+  const meta = {};
+  ["class", "teacher", "classroom", "course"].forEach((kind) => {
+    const info = getDerivedFileInfo(kind, files);
+    const indexMeta = getFileMeta(info && info.indexPath);
+    if (indexMeta) {
+      const relativePath = toReleaseRelativePath(files, info.indexPath);
+      meta[relativePath] = indexMeta;
+    }
+    collectJsonFiles(info && info.scheduleDir).forEach((filePath) => {
+      const item = getFileMeta(filePath);
+      if (item) {
+        meta[toReleaseRelativePath(files, filePath)] = item;
+      }
+    });
+  });
+  const emptyPath = getExistingPath(files.emptyRoomIndexPath, files.legacyEmptyRoomIndexPath);
+  const emptyMeta = getFileMeta(emptyPath);
+  if (emptyMeta) {
+    meta[toReleaseRelativePath(files, emptyPath)] = emptyMeta;
+  }
+  return meta;
+}
+
+function getReleasePackStatus(version) {
+  const normalizedVersion = normalizeVersion(version);
+  const files = getReleaseFiles(normalizedVersion);
+  const manifest = readJsonFile(files.manifestPath);
+  const kinds = ["class", "teacher", "classroom", "course"];
+  const index = {};
+  const detail = {};
+  const sampleDetail = {};
+  const missing = [];
+  let totalBytes = 0;
+
+  kinds.forEach((kind) => {
+    const info = getDerivedFileInfo(kind, files);
+    const indexPath = info && info.indexPath;
+    const indexExists = Boolean(indexPath && fs.existsSync(indexPath));
+    const items = indexExists ? readJsonFile(indexPath) : [];
+    const detailFiles = collectJsonFiles(info && info.scheduleDir);
+    index[kind] = {
+      exists: indexExists,
+      path: indexPath ? toReleaseRelativePath(files, indexPath) : "",
+      count: Array.isArray(items) ? items.length : 0,
+      size: indexExists ? fs.statSync(indexPath).size : 0,
+    };
+    detail[kind] = {
+      exists: detailFiles.length > 0,
+      dir: info && info.scheduleDir ? toReleaseRelativePath(files, info.scheduleDir) : "",
+      count: detailFiles.length,
+    };
+    totalBytes += index[kind].size;
+    detailFiles.forEach((filePath) => {
+      totalBytes += fs.statSync(filePath).size;
+    });
+    if (!indexExists) missing.push(`index/${kind}.json`);
+    if (!detailFiles.length) missing.push(`detail/${kind}/*.json`);
+    if (Array.isArray(items) && items[0] && items[0].id) {
+      const detailPath = path.join(info.scheduleDir, `${safeScheduleId(kind, items[0].id, items[0].id, 0)}.json`);
+      sampleDetail[kind] = {
+        id: items[0].id,
+        readable: fs.existsSync(detailPath),
+      };
+      if (!sampleDetail[kind].readable) {
+        missing.push(`detail/${kind}/${items[0].id}.json`);
+      }
+    } else {
+      sampleDetail[kind] = { id: "", readable: false };
+    }
+  });
+
+  const emptyPath = getExistingPath(files.emptyRoomIndexPath, files.legacyEmptyRoomIndexPath);
+  const emptyMeta = getFileMeta(emptyPath);
+  if (emptyMeta) {
+    totalBytes += emptyMeta.size;
+  } else {
+    missing.push("empty-room/index.json");
+  }
+
+  const manifestFiles = manifest && manifest.files && typeof manifest.files === "object" ? manifest.files : {};
+  const currentFiles = buildReadableFilesMeta(files);
+  const hashErrors = [];
+  Object.keys(manifestFiles).forEach((relativePath) => {
+    const absolutePath = path.join(files.releaseDir, relativePath);
+    const currentMeta = getFileMeta(absolutePath);
+    const expected = manifestFiles[relativePath] || {};
+    if (!currentMeta) {
+      hashErrors.push(`${relativePath}:missing`);
+    } else if (expected.hash && currentMeta.hash !== expected.hash) {
+      hashErrors.push(`${relativePath}:hash`);
+    } else if (expected.size && Number(currentMeta.size) !== Number(expected.size)) {
+      hashErrors.push(`${relativePath}:size`);
+    }
+  });
+
+  return {
+    version: normalizedVersion,
+    releaseVersion: normalizedVersion,
+    manifestExists: Boolean(manifest),
+    manifestValid: Boolean(manifest && manifest.releaseVersion === normalizedVersion && manifest.files),
+    index,
+    detail,
+    detailCounts: Object.fromEntries(kinds.map((kind) => [kind, detail[kind].count])),
+    sampleDetail,
+    emptyRoom: {
+      exists: Boolean(emptyMeta),
+      path: emptyPath ? toReleaseRelativePath(files, emptyPath) : "empty-room/index.json",
+      size: emptyMeta ? emptyMeta.size : 0,
+    },
+    totalBytes,
+    hashValid: hashErrors.length === 0,
+    hashErrors,
+    missing,
+    currentFiles,
+    healthy: missing.length === 0 && hashErrors.length === 0,
+  };
+}
+
+function getReleasePackManifest(version) {
+  const targetVersion = normalizeVersion(version || getActiveReleaseInfo()?.version || "");
+  if (!targetVersion) {
+    return { success: false, code: "NO_ACTIVE_RELEASE", reasonCode: "NO_ACTIVE_RELEASE" };
+  }
+  const files = getReleaseFiles(targetVersion);
+  const manifest = readJsonFile(files.manifestPath);
+  if (manifest && manifest.releaseVersion) {
+    return Object.assign({ success: true }, manifest, {
+      releaseVersion: manifest.releaseVersion || targetVersion,
+      version: manifest.version || targetVersion,
+    });
+  }
+
+  const snapshot = readReleaseSnapshot(targetVersion);
+  if (snapshot) {
+    const rebuilt = rebuildReleasePack(targetVersion);
+    return Object.assign({ success: true }, rebuilt.manifest);
+  }
+
+  const status = getReleasePackStatus(targetVersion);
+  if (!Object.keys(status.currentFiles || {}).length) {
+    return {
+      success: false,
+      code: "RELEASE_PACK_NOT_FOUND",
+      reasonCode: "RELEASE_PACK_NOT_FOUND",
+      releaseVersion: targetVersion,
+    };
+  }
+  return {
+    success: true,
+    schemaVersion: 1,
+    releasePackSchemaVersion: 1,
+    term: "",
+    semester: "",
+    version: targetVersion,
+    releaseVersion: targetVersion,
+    updatedAt: "",
+    cacheEpoch: Date.now(),
+    counts: {},
+    files: status.currentFiles,
+    size: {
+      snapshotBytes: 0,
+      packBytes: sumMetaSize(status.currentFiles),
+    },
+    validation: {
+      valid: status.healthy,
+      errors: status.missing.concat(status.hashErrors),
+      validatedAt: new Date().toISOString(),
+    },
+    legacyCompat: true,
+  };
+}
+
+function rebuildReleasePack(version) {
+  ensureStorageDirs();
+  const normalizedVersion = normalizeVersion(version);
+  const snapshot = readReleaseSnapshot(normalizedVersion);
+  if (!snapshot) {
+    const err = new Error(`Release ${normalizedVersion} not found or has no rebuildable snapshot`);
+    err.statusCode = 404;
+    throw err;
+  }
+  const validation = validateReleaseSnapshot(snapshot);
+  if (!validation.valid) {
+    const err = new Error(`Release validation failed: ${validation.errors.join("; ")}`);
+    err.validation = validation;
+    throw err;
+  }
+  const files = getReleaseFiles(normalizedVersion);
+  const derived = writeDerivedIndexes(Object.assign({}, snapshot, { version: normalizedVersion }), files, false);
+  const manifest = buildManifest(snapshot, normalizedVersion, validation.counts, validation, files, derived);
+  writeJsonAtomic(files.manifestPath, manifest);
+  clearDerivedCache();
+  return {
+    success: true,
+    version: normalizedVersion,
+    releaseVersion: normalizedVersion,
+    manifest,
+    derived,
+    status: getReleasePackStatus(normalizedVersion),
+  };
+}
+
 const derivedCache = new Map();
 
 function getDerivedFileInfo(kind, files) {
   const map = {
-    class: { indexPath: files.classesIndexPath, scheduleDir: files.classScheduleDir },
-    teacher: { indexPath: files.teachersIndexPath, scheduleDir: files.teacherScheduleDir },
-    classroom: { indexPath: files.classroomsIndexPath, scheduleDir: files.classroomScheduleDir },
-    course: { indexPath: files.coursesIndexPath, scheduleDir: files.courseScheduleDir },
+    class: {
+      indexPath: getExistingPath(files.classesIndexPath, files.legacyClassesIndexPath),
+      writeIndexPath: files.classesIndexPath,
+      scheduleDir: getExistingDir(files.classScheduleDir, files.legacyClassScheduleDir),
+      writeScheduleDir: files.classScheduleDir,
+    },
+    teacher: {
+      indexPath: getExistingPath(files.teachersIndexPath, files.legacyTeachersIndexPath),
+      writeIndexPath: files.teachersIndexPath,
+      scheduleDir: getExistingDir(files.teacherScheduleDir, files.legacyTeacherScheduleDir),
+      writeScheduleDir: files.teacherScheduleDir,
+    },
+    classroom: {
+      indexPath: getExistingPath(files.classroomsIndexPath, files.legacyClassroomsIndexPath),
+      writeIndexPath: files.classroomsIndexPath,
+      scheduleDir: getExistingDir(files.classroomScheduleDir, files.legacyClassroomScheduleDir),
+      writeScheduleDir: files.classroomScheduleDir,
+    },
+    course: {
+      indexPath: getExistingPath(files.coursesIndexPath, files.legacyCoursesIndexPath),
+      writeIndexPath: files.coursesIndexPath,
+      scheduleDir: getExistingDir(files.courseScheduleDir, files.legacyCourseScheduleDir),
+      writeScheduleDir: files.courseScheduleDir,
+    },
   };
   return map[kind] || null;
 }
@@ -1120,17 +1561,17 @@ function getReadableReleaseInfo() {
 
 function ensureDerivedIndexes(version, fallbackSnapshot) {
   const files = getReleaseFiles(version);
-  const allExist = fs.existsSync(files.classesIndexPath) &&
-    fs.existsSync(files.teachersIndexPath) &&
-    fs.existsSync(files.classroomsIndexPath) &&
-    fs.existsSync(files.coursesIndexPath);
+  const allExist = ["class", "teacher", "classroom", "course"].every((kind) => {
+    const info = getDerivedFileInfo(kind, files);
+    return info && fs.existsSync(info.indexPath);
+  });
   if (allExist) {
     if (fallbackSnapshot) {
       const resources = getResources(fallbackSnapshot);
-      const classIndex = readJsonFile(files.classesIndexPath, []);
-      const teacherIndex = readJsonFile(files.teachersIndexPath, []);
-      const classroomIndex = readJsonFile(files.classroomsIndexPath, []);
-      const courseIndex = readJsonFile(files.coursesIndexPath, []);
+      const classIndex = readJsonFile(getDerivedFileInfo("class", files).indexPath, []);
+      const teacherIndex = readJsonFile(getDerivedFileInfo("teacher", files).indexPath, []);
+      const classroomIndex = readJsonFile(getDerivedFileInfo("classroom", files).indexPath, []);
+      const courseIndex = readJsonFile(getDerivedFileInfo("course", files).indexPath, []);
       const shouldRefresh =
         (asArray(fallbackSnapshot.classSchedules).length > 0 && asArray(classIndex).length === 0) ||
         (resources.teacherSchedules.length > 0 && asArray(teacherIndex).length === 0) ||
@@ -1216,6 +1657,7 @@ function readActiveIndex(kind, version) {
     dataSource: active.source === "legacy-current" ? "legacy-current-index" : (version ? "release-isolated-index" : "release-index"),
     version: active.version,
     releaseVersion: active.version,
+    term: active.semester,
     semester: active.semester,
     updatedAt: active.updatedAt,
     etag: `"${active.version}-${kind}-${Math.floor(stat.mtimeMs)}-${stat.size}"`,
@@ -1338,6 +1780,7 @@ function readActiveSchedule(kind, id, version) {
     dataSource: active.source === "legacy-current" ? "legacy-current-index" : (version ? "release-isolated-index" : "release-index"),
     version: active.version,
     releaseVersion: active.version,
+    term: schedule?.term || schedule?.semester || active.semester,
     semester: schedule?.semester || active.semester,
     updatedAt: schedule?.updatedAt || active.updatedAt,
     etag: `"${active.version}-${kind}-${safeId}-${Math.floor(stat.mtimeMs)}-${stat.size}"`,
@@ -1349,7 +1792,8 @@ function readActiveSchedule(kind, id, version) {
 
 function ensureEmptyRoomIndex(version, fallbackSnapshot) {
   const files = getReleaseFiles(version);
-  if (fs.existsSync(files.emptyRoomIndexPath)) {
+  const existingEmptyRoomPath = getExistingPath(files.emptyRoomIndexPath, files.legacyEmptyRoomIndexPath);
+  if (existingEmptyRoomPath && fs.existsSync(existingEmptyRoomPath)) {
     return files;
   }
   const snapshot = fallbackSnapshot ? coerceSnapshot(Object.assign({}, fallbackSnapshot, { version })) : readReleaseSnapshot(version);
@@ -1402,7 +1846,8 @@ function readEmptyRoomIndex(version) {
   }
 
   const files = ensureEmptyRoomIndex(active.version, active.snapshot);
-  if (!fs.existsSync(files.emptyRoomIndexPath)) {
+  const emptyRoomIndexPath = getExistingPath(files.emptyRoomIndexPath, files.legacyEmptyRoomIndexPath);
+  if (!emptyRoomIndexPath || !fs.existsSync(emptyRoomIndexPath)) {
     return {
       success: false,
       code: "EMPTY_ROOM_INDEX_NOT_FOUND",
@@ -1412,13 +1857,13 @@ function readEmptyRoomIndex(version) {
       rooms: [],
     };
   }
-  const stat = fs.statSync(files.emptyRoomIndexPath);
+  const stat = fs.statSync(emptyRoomIndexPath);
   const cacheKey = `${active.version}:empty-room:index`;
   const cached = derivedCache.get(cacheKey);
   if (cached && cached.mtimeMs === stat.mtimeMs) {
     return cached.value;
   }
-  const index = readJsonFile(files.emptyRoomIndexPath) || {};
+  const index = readJsonFile(emptyRoomIndexPath) || {};
   const value = Object.assign({}, index, {
     success: true,
     dataSource: active.source === "legacy-current" ? "legacy-current-empty-room-index" : (version ? "release-isolated-empty-room-index" : "release-empty-room-index"),
@@ -1659,6 +2104,8 @@ module.exports = {
   getActiveReleaseInfo,
   getActiveSnapshotData,
   getReleaseFiles,
+  getReleasePackManifest,
+  getReleasePackStatus,
   getReleaseStatus,
   deleteReleaseVersion,
   readActiveIndex,
@@ -1670,6 +2117,7 @@ module.exports = {
   parseSnapshotBuffer,
   readActiveReleaseSnapshot,
   readReleaseSnapshot,
+  rebuildReleasePack,
   searchActiveIndex,
   validateReleaseSnapshot,
   writeDerivedIndexes,

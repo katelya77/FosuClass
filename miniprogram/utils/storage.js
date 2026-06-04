@@ -1,6 +1,6 @@
 const STORAGE_KEY = "FOSU_CLASS_SETTINGS";
 const BOOTSTRAP_CACHE_KEY = "FOSU_BOOTSTRAP_CACHE";
-const SCHOOL_CACHE_SCHEMA_VERSION = 4;
+const SCHOOL_CACHE_SCHEMA_VERSION = 5;
 const SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY = "FOSU_ACTIVE_SNAPSHOT";
 const SCHOOL_FILTER_CACHE_KEY = "FOSU_SCHOOL_FILTER_CACHE";
 const CURRENT_SCHEDULE_TARGET_KEY = "FOSU_CURRENT_SCHEDULE_TARGET";
@@ -324,6 +324,7 @@ function clearAllSchoolCaches() {
     keys.forEach((key) => {
       if (
         key.startsWith("school:") ||
+        key.startsWith("fosu:v") ||
         key.startsWith("FOSU_SCHOOL_") ||
         key.startsWith("FOSU_SCHOOL_FILTER") ||
         key === "FOSU_LOCAL_RELEASE_KEY" ||

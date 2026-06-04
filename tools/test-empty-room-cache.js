@@ -4,6 +4,7 @@ const mockEnv = require("./mock-env");
 mockEnv.clearStorage();
 
 const service = require("../miniprogram/services/emptyRoomService");
+const releasePackService = require("../miniprogram/services/releasePackService");
 
 const params = {
   term: "2025-2026-2",
@@ -18,7 +19,8 @@ const params = {
 
 async function run() {
   const cacheKey = service.getEmptyRoomCacheKey(params);
-  assert(cacheKey.includes("school:v4:empty-room"), "empty-room cache should use v4 schema prefix");
+  assert(cacheKey.includes("fosu:v5:empty-room"), "empty-room cache should use release pack v5 prefix");
+  assert.strictEqual(cacheKey, releasePackService.getEmptyRoomCacheKey(params.term, params.releaseVersion));
 
   service.writeEmptyRoomCache(params, {
     success: true,
@@ -53,13 +55,32 @@ async function run() {
   assert(service.buildBuildingOptions(["新楼"], favorites.buildings).includes("实验楼"), "favorite buildings should be merged into building options");
 
   global.wx.mockRequest = (options) => {
-    options.fail({ errMsg: "request:fail timeout" });
+    options.success({
+      statusCode: 200,
+      data: { success: false, code: "OFFLINE", reasonCode: "OFFLINE" },
+    });
   };
 
   const fallback = await service.queryEmptyRooms(params, { forceNetwork: true });
   assert.strictEqual(fallback.fromStorage, true, "failed network should fall back to cache");
   assert.strictEqual(fallback.fallback, true, "fallback flag should be present");
   assert.strictEqual(fallback.rooms[0].roomName, "C7-302");
+
+  mockEnv.storage.set(cacheKey, {
+    savedAt: Date.now(),
+    data: {
+      success: true,
+      term: params.term,
+      releaseVersion: params.releaseVersion,
+      updatedAt: "2026-06-02T00:00:00.000Z",
+      buildings: ["C7"],
+      rooms: [{
+        roomName: "C7-302",
+        building: "C7",
+        courses: [],
+      }],
+    },
+  });
 
   let requested = false;
   global.wx.mockRequest = (options) => {
@@ -74,7 +95,7 @@ async function run() {
     });
   };
   const cacheFirst = await service.queryEmptyRooms(params);
-  assert.strictEqual(requested, false, "same query should use fresh cache first");
+  assert.strictEqual(requested, false, "release pack empty-room index should use fresh cache first");
   assert.strictEqual(cacheFirst.fromStorage, true);
   assert.strictEqual(cacheFirst.rooms[0].roomName, "C7-302");
 
