@@ -349,7 +349,7 @@
 
         <empty-state
           wx:elif="{{!loading}}"
-          title="输入教师姓名，例如：张三"
+          title="{{keyword ? '未找到相关教师' : '输入教师姓名，例如：张三'}}"
           desc="可任选学院、职称作为辅佐筛选项，查询教师当前排课。"
         />
       </view>

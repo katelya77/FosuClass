@@ -200,12 +200,15 @@ Page({
   loadAppConfig() {
     appConfigService.loadAppConfig()
       .then((config) => {
-        const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
+        const normalizedConfig = appConfigService.normalizeConfig
+          ? appConfigService.normalizeConfig(config)
+          : Object.assign({ dataVersion: {}, notices: [], news: [] }, config || {});
+        const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(normalizedConfig);
         this.setData({
-          appConfig: config,
+          appConfig: normalizedConfig,
           appConfigUpdatedText: latestUpdatedAt ? appConfigService.formatConfigTime(latestUpdatedAt) : "",
-          noticeHistory: config.notices || [],
-          newsList: config.news || [],
+          noticeHistory: Array.isArray(normalizedConfig.notices) ? normalizedConfig.notices : [],
+          newsList: Array.isArray(normalizedConfig.news) ? normalizedConfig.news : [],
         });
       })
       .catch((err) => {

@@ -29,12 +29,20 @@ function buildDisplayItem(notice) {
   });
 }
 
+function normalizeNotices(value) {
+  return Array.isArray(value) ? value : [];
+}
+
 Component({
   properties: {
     notices: {
-      type: Array,
+      type: null,
       value: [],
-      observer() {
+      observer(value) {
+        if (!Array.isArray(value)) {
+          this.setData({ notices: [] }, () => this.updateVisibleNotices());
+          return;
+        }
         this.updateVisibleNotices();
       },
     },
@@ -74,7 +82,7 @@ Component({
     updateVisibleNotices() {
       const pageKey = this.data.pageKey || "home";
       const maxCount = Math.max(1, this.data.maxCount || 1);
-      const visibleNotices = (this.data.notices || [])
+      const visibleNotices = normalizeNotices(this.data.notices)
         .filter((notice) => isTickerNotice(notice, pageKey))
         .sort((left, right) => {
           const priorityDiff = (PRIORITY_SCORE[right.priority] || 0) - (PRIORITY_SCORE[left.priority] || 0);

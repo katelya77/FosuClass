@@ -33,7 +33,7 @@ function getCachedAppConfig() {
   try {
     const cached = wx.getStorageSync(APP_CONFIG_CACHE_KEY);
     if (cached && cached.config) {
-      return cached.config;
+      return normalizeConfig(cached.config);
     }
   } catch (error) {
     console.warn("读取公告配置缓存失败", error);
@@ -43,20 +43,27 @@ function getCachedAppConfig() {
 
 function cacheAppConfig(config) {
   try {
+    const normalized = normalizeConfig(config);
     wx.setStorageSync(APP_CONFIG_CACHE_KEY, {
-      config,
+      config: normalized,
       updatedAt: nowIso(),
     });
+    return normalized;
   } catch (error) {
     console.warn("写入公告配置缓存失败", error);
+    return normalizeConfig(config);
   }
 }
 
 let freshConfigFetched = false;
 
 function loadAppConfig(options) {
-  const opt = Object.assign({ force: false }, options || {});
+  const opt = Object.assign({ force: false, network: true }, options || {});
   const cached = getCachedAppConfig();
+
+  if (opt.network === false) {
+    return Promise.resolve(cached || normalizeConfig({}));
+  }
 
   // 如果在当前 Session 中已经网络加载过，且不需要 force，则直接返回本地缓存
   if (cached && !opt.force && freshConfigFetched) {
@@ -65,7 +72,12 @@ function loadAppConfig(options) {
 
   // 拼接时间戳 ts 避免 CDN/客户端 HTTP 缓存
   const url = `/api/fosu/app-config?ts=${Date.now()}`;
-  return request.get(url, {}, { showLoading: false, silentError: true, timeout: 8000, retries: 1 })
+  return request.get(url, {}, {
+    showLoading: false,
+    silentError: true,
+    timeout: opt.timeout || 8000,
+    retries: opt.retries === undefined ? 1 : opt.retries,
+  })
     .then((res) => {
       const config = normalizeConfig(res);
       cacheAppConfig(config);
@@ -77,7 +89,9 @@ function loadAppConfig(options) {
       return config;
     })
     .catch((error) => {
-      console.warn("⚠️ [appConfigService] 网络请求 app-config 失败", error);
+      if (!opt.silent) {
+        console.warn("⚠️ [appConfigService] 网络请求 app-config 失败", error);
+      }
       if (cached) {
         return cached;
       }
@@ -87,12 +101,13 @@ function loadAppConfig(options) {
 
 function getGlobalConfig() {
   const app = getApp();
-  return (app && app.globalData && app.globalData.appConfig) || getCachedAppConfig() || normalizeConfig({});
+  return normalizeConfig((app && app.globalData && app.globalData.appConfig) || getCachedAppConfig() || {});
 }
 
 function getPageNotices(config, pageName) {
-  const data = config || getGlobalConfig();
-  return (data.notices || []).filter((notice) => {
+  const data = normalizeConfig(config || getGlobalConfig());
+  const notices = Array.isArray(data.notices) ? data.notices : [];
+  return notices.filter((notice) => {
     return notice && (notice.targetPage === "all" || notice.targetPage === pageName);
   });
 }
@@ -172,5 +187,6 @@ module.exports = {
   getPrimaryNotice,
   isNoticeDismissed,
   loadAppConfig,
+  normalizeConfig,
   shouldShowNotice,
 };

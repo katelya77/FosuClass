@@ -2664,7 +2664,7 @@ const adminConsoleHtml = `<!doctype html>
               <div class="sync-hero-title">数据同步中心</div>
               <div class="sync-hero-badge">推荐链路</div>
             </div>
-            <div class="sync-hero-subtitle">本机校园网生成 Staging JSON → CLI gzip 分片上传 → 后台审核发布 → 小程序读取最新 release 索引</div>
+            <div class="sync-hero-subtitle">上传 staging → 生成 release pack → 同步 OpenResty 静态目录 → 线上静态 URL 验证 → active pointer 生效</div>
           </div>
           <div class="sync-hero-actions">
             <span class="sync-last-refresh" id="syncLastRefreshAt">最近刷新：-</span>
@@ -2675,6 +2675,13 @@ const adminConsoleHtml = `<!doctype html>
         <!-- 2. sync-status-grid -->
         <div class="stats-grid" id="syncStatsGrid">
           <!-- 同步状态卡片 -->
+        </div>
+
+        <div class="card" id="static-release-sync-panel" style="margin-bottom:16px;">
+          <div class="section-title" style="margin-bottom:10px;">OpenResty 静态同步</div>
+          <div id="staticReleaseSyncSummary" class="mini-list">
+            <!-- 静态同步状态 -->
+          </div>
         </div>
 
         <div class="sync-dashboard-grid">
@@ -5379,12 +5386,16 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         var data = state.syncStatus || {};
         var wrap = $("syncStatsGrid");
         wrap.innerHTML = "";
+        var retainedReleases = Array.isArray(data.staticRetainedReleases) ? data.staticRetainedReleases : [];
+        var staticSyncStatus = data.openRestyStaticSyncStatus || (data.staticSync && data.staticSync.status) || "-";
         
         var list = [
           { label: "当前正式版本", val: data.releaseVersion || "-", icon: "🏷️", foot: "小程序读取的 active release" },
           { label: "当前学期", val: data.semester || "-", icon: "📅", foot: "后台配置学期" },
           { label: "Staging 状态", val: data.latestStagingUpload ? relayStatusText(data.latestStagingUpload.status) : "等待上传", icon: "📦", foot: "候选数据审核状态" },
           { label: "Release Pack", val: data.releasePackHealthy ? "Quick OK" : "需检查", icon: "🧩", foot: data.releasePackStatus ? ("manifest " + (data.releasePackStatus.manifestExists ? "OK" : "缺失") + " / " + (data.releasePackStatus.durationMs || 0) + "ms") : "静态离线包状态" },
+          { label: "OpenResty 静态同步", val: relayStatusText(staticSyncStatus), icon: "URL", foot: data.lastStaticSyncTime ? ("最后同步 " + formatDate(data.lastStaticSyncTime)) : "发布后自动同步状态" },
+          { label: "静态保留版本", val: retainedReleases.length ? (retainedReleases.length + " 个") : "-", icon: "KEEP", foot: retainedReleases.slice(0, 3).join(" / ") || "至少保留最近 3 个 release" },
           { label: "最近任务", val: data.latestJob ? relayStatusText(data.latestJob.status) : "无任务", icon: "⏱️", foot: data.latestJob ? ((data.latestJob.type || "job") + " · " + (data.latestJob.progress || 0) + "%") : "后台重任务状态" },
           { label: "最近上传", val: data.latestStagingUpload ? formatDate(data.latestStagingUpload.updatedAt || data.latestStagingUpload.createdAt) : "暂无", icon: "⬆️", foot: "CLI gzip 分片上传" },
           { label: "最后发布", val: formatDate(data.classScheduleUpdatedAt || data.lastUploadTime), icon: "🕒", foot: "线上课表更新时间" },
@@ -5398,6 +5409,25 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
                            "<div class='stat-foot'>" + item.foot + "</div>";
           wrap.appendChild(card);
         });
+
+        var staticWrap = $("staticReleaseSyncSummary");
+        if (staticWrap) {
+          var rows = [
+            ["active releaseVersion", data.releaseVersion || "-"],
+            ["static manifest URL", data.staticManifestUrl || "-"],
+            ["static class index URL", data.staticClassIndexUrl || "-"],
+            ["static empty-room index URL", data.staticEmptyRoomIndexUrl || "-"],
+            ["sync status", relayStatusText(staticSyncStatus)],
+            ["last sync time", data.lastStaticSyncTime ? formatDate(data.lastStaticSyncTime) : "-"],
+            ["retained releases", retainedReleases.length ? retainedReleases.slice(0, 3).join(" / ") : "-"],
+          ];
+          staticWrap.innerHTML = rows.map(function(row) {
+            return "<div class='mini-list-row'>" +
+              "<span>" + escapeHtml(row[0]) + "</span>" +
+              "<strong style='word-break:break-all;text-align:right;'>" + escapeHtml(row[1]) + "</strong>" +
+              "</div>";
+          }).join("");
+        }
       }
 
       function relayStatusText(status) {
@@ -5409,6 +5439,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           failed: "失败",
           canceled: "已取消",
           uploaded: "已上传",
+          disabled: "未启用",
+          skipped: "已跳过",
           "pending-review": "待审核",
           staged: "已设为 Staging",
           published: "已发布",

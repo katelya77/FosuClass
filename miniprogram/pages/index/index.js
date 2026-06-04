@@ -96,7 +96,7 @@ Page({
     hasBoundTarget: false,
     showDisclaimerPopup: false,
     showMoreMenu: false,
-    appConfig: null,
+    appConfig: { notices: [], banners: [], news: [], appConfig: {} },
     dataVersionText: "",
     homeNotice: null,
     tickerNotice: null,
@@ -142,10 +142,13 @@ Page({
   loadPageConfig() {
     appConfigService.loadAppConfig()
       .then((config) => {
-        const homeNotice = appConfigService.getPrimaryNotice(config, "home", ["banner", "card"]) || null;
-        const tickerNotice = appConfigService.getPrimaryNotice(config, "home", ["ticker"]) || null;
-        const modalNotice = appConfigService.getPrimaryNotice(config, "home", ["modal"]) || null;
-        const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
+        const normalizedConfig = appConfigService.normalizeConfig
+          ? appConfigService.normalizeConfig(config)
+          : Object.assign({ notices: [], banners: [], news: [], appConfig: {} }, config || {});
+        const homeNotice = appConfigService.getPrimaryNotice(normalizedConfig, "home", ["banner", "card"]) || null;
+        const tickerNotice = appConfigService.getPrimaryNotice(normalizedConfig, "home", ["ticker"]) || null;
+        const modalNotice = appConfigService.getPrimaryNotice(normalizedConfig, "home", ["modal"]) || null;
+        const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(normalizedConfig);
         const dataVersionText = latestUpdatedAt
           ? `数据更新于 ${appConfigService.formatConfigTime(latestUpdatedAt)}`
           : "";
@@ -160,7 +163,7 @@ Page({
           });
         }
         this.setData({
-          appConfig: config,
+          appConfig: normalizedConfig,
           dataVersionText,
           homeNotice,
           tickerNotice,
@@ -170,6 +173,11 @@ Page({
       })
       .catch((err) => {
         console.warn("首页公告配置加载失败", err);
+        this.setData({
+          appConfig: appConfigService.normalizeConfig
+            ? appConfigService.normalizeConfig(this.data.appConfig)
+            : Object.assign({ notices: [], banners: [], news: [], appConfig: {} }, this.data.appConfig || {}),
+        });
       });
   },
 

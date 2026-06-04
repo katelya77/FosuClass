@@ -5,6 +5,7 @@ const path = require("path");
 
 const tempRoot = path.join(os.tmpdir(), `fosu-admin-jobs-${process.pid}-${Date.now()}`);
 process.env.FOSU_STORAGE_DIR = path.join(tempRoot, "storage");
+process.env.FOSU_DATA_DIR = path.join(tempRoot, "data");
 process.env.NODE_ENV = "development";
 process.env.ADMIN_API_TOKEN = "test-admin-token";
 process.env.ADMIN_PASSWORD = "test-admin-password";
