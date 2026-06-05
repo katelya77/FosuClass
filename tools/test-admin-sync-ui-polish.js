@@ -7,6 +7,9 @@ const source = fs.readFileSync(path.join(__dirname, "..", "server", "src", "rout
 [
   "static-release-sync-panel",
   "openRestyEnabledBadge",
+  "openRestyConfiguredBadge",
+  "openRestyDirBadge",
+  "openRestyVersionBadge",
   "openRestySyncBadge",
   "openRestyVerifyBadge",
   "openresty-card-grid",
@@ -14,6 +17,7 @@ const source = fs.readFileSync(path.join(__dirname, "..", "server", "src", "rout
   "copyStaticManifestBtn",
   "verifyStaticUrlBtn",
   "manualStaticSyncBtn",
+  "reconcileLifecycleBtn",
   "syncRecommendedTimeline",
   "sync-flow-step",
   "sync-flow-step-num",
@@ -21,6 +25,12 @@ const source = fs.readFileSync(path.join(__dirname, "..", "server", "src", "rout
   "syncNextActionBtn",
   "stagingHashCompareText",
   "stagingPublishNeedText",
+  "runtime-storage-panel",
+  "runtimeStorageSummary",
+  "refreshStorageStatusBtn",
+  "scanStorageBtn",
+  "previewMaintenanceBtn",
+  "runMaintenanceBtn",
 ].forEach((needle) => {
   assert(source.includes(needle), `admin sync UI should include ${needle}`);
 });
@@ -28,8 +38,10 @@ const source = fs.readFileSync(path.join(__dirname, "..", "server", "src", "rout
 assert(source.includes("复制 manifest URL"), "OpenResty card should expose manifest copy action");
 assert(source.includes("验证静态 URL"), "OpenResty card should expose static URL verification action");
 assert(source.includes("手动同步当前 Release"), "OpenResty card should expose manual sync action");
+assert(source.includes("重新核对状态"), "OpenResty card should expose lifecycle reconcile action");
 assert(source.includes("开始发布"), "recommended flow should choose publish as next action");
-assert(source.includes("data.stagingSameAsActive ? \"验证静态 URL\""), "recommended flow should verify static URL when staging is unchanged");
+assert(source.includes("data.nextAction && data.nextAction.label"), "recommended flow should use lifecycle nextAction label");
+assert(source.includes("upload.status === \"pending-review\" && !isActiveUpload"), "published active upload should not render publish action");
 assert(source.includes("word-break:break-all"), "long hashes and URLs should not overflow admin cards");
 
 console.log("test-admin-sync-ui-polish passed");

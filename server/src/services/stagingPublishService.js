@@ -6,6 +6,7 @@ const releaseService = require("./releaseService");
 const relayService = require("./relayService");
 const stagingUploadService = require("./stagingUploadService");
 const staticReleaseSyncService = require("./staticReleaseSyncService");
+const releaseLifecycleService = require("./releaseLifecycleService");
 const stagingFingerprint = require("../utils/stagingFingerprint");
 const { safeLog } = require("../utils/safeLogger");
 
@@ -391,6 +392,11 @@ async function runStagingPublish(input = {}, job) {
   const stagingFingerprintInfo = getSnapshotFingerprint(stagingData);
   const activeCanonicalHash = getActiveCanonicalHash();
   if (stagingFingerprintInfo && stagingFingerprintInfo.canonicalHash && activeCanonicalHash && stagingFingerprintInfo.canonicalHash === activeCanonicalHash) {
+    const lifecycle = releaseLifecycleService.reconcileLifecycle({
+      reason: "publish-skip-active",
+      uploadId: stagingData.stagingUploadId || "",
+      sourceTaskId: stagingData.relayTaskId || "",
+    });
     if (job) job.progress(95, "staging unchanged; skip publish", { canonicalHash: stagingFingerprintInfo.canonicalHash });
     return {
       success: true,
@@ -401,6 +407,7 @@ async function runStagingPublish(input = {}, job) {
       canonicalHash: stagingFingerprintInfo.canonicalHash,
       releaseVersion: releaseService.getActiveReleaseInfo() && releaseService.getActiveReleaseInfo().version || "",
       quickHealth: activeCanonicalHash ? releaseService.getReleasePackQuickHealth(releaseService.getActiveReleaseInfo() && releaseService.getActiveReleaseInfo().version || "") : null,
+      lifecycle,
     };
   }
 
@@ -460,6 +467,11 @@ async function runStagingPublish(input = {}, job) {
   if (stagingData.relayUploadId) {
     relayService.markUploadPublished(stagingData.relayUploadId, status.activeReleaseVersion);
   }
+  const lifecycle = releaseLifecycleService.reconcileLifecycle({
+    reason: "publish-success",
+    uploadId: stagingData.stagingUploadId || "",
+    sourceTaskId: stagingData.relayTaskId || "",
+  });
 
   if (job) job.progress(90, "verifying static URLs", { releaseVersion: status.activeReleaseVersion });
   releaseService.clearDerivedCache();
@@ -476,6 +488,7 @@ async function runStagingPublish(input = {}, job) {
     quickHealth,
     deepStatus: publishResult.deepStatus,
     staticSync: publishResult.staticSync,
+    lifecycle,
   };
 }
 

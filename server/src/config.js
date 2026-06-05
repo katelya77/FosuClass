@@ -54,6 +54,14 @@ const config = {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
+  FOSU_ALLOWED_ADMIN_ORIGINS: (process.env.FOSU_ALLOWED_ADMIN_ORIGINS || process.env.CORS_ALLOWED_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
+  FOSU_ALLOWED_PUBLIC_ORIGINS: (process.env.FOSU_ALLOWED_PUBLIC_ORIGINS || "")
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean),
 
   // 校园代理 Agent 配置
   CAMPUS_AGENT_ENABLED: process.env.CAMPUS_AGENT_ENABLED === "true",
