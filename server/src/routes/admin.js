@@ -3818,7 +3818,10 @@ router.post("/static-release-sync/start", adminAuth.verifyAdminAccess, (req, res
   try {
     storageLifecycleService.assertReleaseCanStart();
     const version = getRequestedReleaseVersion(req);
-    const job = releaseWorkerManager.startReleaseJob("static-release-sync", { version });
+    const job = releaseWorkerManager.startReleaseJob("static-release-sync", {
+      version,
+      force: req.body && req.body.force === true,
+    });
     return res.status(202).json({ success: true, job });
   } catch (error) {
     return releaseWorkerManager.sendAlreadyRunning(res, error);
@@ -3849,17 +3852,19 @@ router.post("/storage/scan", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.post("/storage/maintenance/preview", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    return res.json({ success: true, report: storageLifecycleService.runMaintenance({ dryRun: true }) });
+    const job = releaseWorkerManager.startReleaseJob("storage-maintenance", { dryRun: true, reason: "manual-preview" });
+    return res.status(202).json({ success: true, job });
   } catch (error) {
-    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code || "" });
+    return releaseWorkerManager.sendAlreadyRunning(res, error);
   }
 });
 
 router.post("/storage/maintenance/run", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    return res.json({ success: true, report: storageLifecycleService.runMaintenance({ dryRun: false }) });
+    const job = releaseWorkerManager.startReleaseJob("storage-maintenance", { dryRun: false, reason: "manual-run" });
+    return res.status(202).json({ success: true, job });
   } catch (error) {
-    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code || "" });
+    return releaseWorkerManager.sendAlreadyRunning(res, error);
   }
 });
 

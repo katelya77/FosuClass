@@ -69,6 +69,8 @@ function getConfig(env = process.env) {
   const publicBaseUrl = env.PUBLIC_BASE_URL || env.FOSU_STATIC_RELEASE_BASE_URL || DEFAULT_PUBLIC_BASE_URL;
   const keepLatestN = Math.max(3, Number(env.STATIC_RELEASE_KEEP_LATEST || 3) || 3);
   const lockPath = path.resolve(env.STATIC_RELEASE_SYNC_LOCK || path.join(dst || src, ".static-release-sync.lock"));
+  const httpTimeoutMs = Math.max(1000, Number(env.STATIC_RELEASE_SYNC_HTTP_TIMEOUT_MS || 8000) || 8000);
+  const verifyConcurrency = Math.max(1, Math.min(2, Number(env.STATIC_RELEASE_VERIFY_CONCURRENCY || 2) || 2));
   return {
     enabled: truthy(env.STATIC_RELEASE_SYNC_ENABLED),
     src,
@@ -78,7 +80,24 @@ function getConfig(env = process.env) {
     lockPath,
     statusPath: path.resolve(env.STATIC_RELEASE_SYNC_STATUS_PATH || STATUS_PATH),
     verifyHttp: env.STATIC_RELEASE_SYNC_VERIFY_HTTP !== "false",
+    httpTimeoutMs,
+    verifyConcurrency,
   };
+}
+
+function progressJob(job, progress, phase, data) {
+  if (!job || typeof job.progress !== "function") return;
+  job.progress(progress, phase, Object.assign({ phase }, data || {}));
+}
+
+function isVerifiedHttpStatus(status) {
+  const code = Number(status);
+  return code === 200 || code === 206;
+}
+
+function isHeadUnsupportedStatus(status) {
+  const code = Number(status);
+  return code === 403 || code === 405 || code === 501;
 }
 
 function assertSafeDirectory(label, dirPath) {
@@ -145,7 +164,26 @@ function copyFileIfChanged(srcFile, dstFile) {
   return shouldCopy;
 }
 
-function mirrorDirectory(srcDir, dstDir) {
+function countFilesAndBytes(dirPath) {
+  const summary = { totalFiles: 0, totalBytes: 0 };
+  function walk(current) {
+    if (!fs.existsSync(current)) return;
+    const stat = fs.statSync(current);
+    if (stat.isFile()) {
+      summary.totalFiles += 1;
+      summary.totalBytes += stat.size;
+      return;
+    }
+    if (!stat.isDirectory()) return;
+    fs.readdirSync(current, { withFileTypes: true }).forEach((entry) => {
+      walk(path.join(current, entry.name));
+    });
+  }
+  walk(dirPath);
+  return summary;
+}
+
+function mirrorDirectory(srcDir, dstDir, options = {}) {
   assertSafeDirectory("source directory", srcDir);
   assertSafeDirectory("target directory", dstDir);
   if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory()) {
@@ -164,23 +202,31 @@ function mirrorDirectory(srcDir, dstDir) {
 
   let copiedFiles = 0;
   let copiedBytes = 0;
+  const stats = options.stats || { processedFiles: 0, copiedFiles: 0, copiedBytes: 0 };
   fs.readdirSync(srcDir, { withFileTypes: true }).forEach((entry) => {
     const srcPath = path.join(srcDir, entry.name);
     const dstPath = path.join(dstDir, entry.name);
     if (entry.isDirectory()) {
-      const child = mirrorDirectory(srcPath, dstPath);
+      const child = mirrorDirectory(srcPath, dstPath, Object.assign({}, options, { stats }));
       copiedFiles += child.copiedFiles;
       copiedBytes += child.copiedBytes || 0;
       return;
     }
     if (entry.isFile()) {
+      stats.processedFiles += 1;
       if (copyFileIfChanged(srcPath, dstPath)) {
         copiedFiles += 1;
-        copiedBytes += fs.statSync(srcPath).size;
+        const bytes = fs.statSync(srcPath).size;
+        copiedBytes += bytes;
+        stats.copiedFiles += 1;
+        stats.copiedBytes += bytes;
+      }
+      if (typeof options.onFile === "function" && (stats.processedFiles === 1 || stats.processedFiles % 100 === 0)) {
+        options.onFile(Object.assign({}, stats));
       }
     }
   });
-  return { copiedFiles, copiedBytes };
+  return { copiedFiles, copiedBytes, processedFiles: stats.processedFiles };
 }
 
 function listReleaseDirs(dirPath) {
@@ -226,27 +272,66 @@ function verifyLocalFiles(dstReleaseDir) {
   return REQUIRED_FILES.map((relativePath) => path.join(dstReleaseDir, relativePath));
 }
 
-async function verifyHttpUrl(url, timeoutMs) {
-  if (!/^https?:\/\//i.test(url)) {
-    return { url, ok: true, skipped: true, reason: "non-http-url" };
-  }
+async function fetchUrlMetadata(url, method, timeoutMs, headers = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const startedAt = Date.now();
   try {
-    const response = await fetch(url, { method: "GET", signal: controller.signal });
-    const ok = response.status >= 200 && response.status < 300;
-    return {
+    const response = await fetch(url, {
+      method,
+      headers,
+      signal: controller.signal,
+      redirect: "follow",
+    });
+    const result = {
       url,
-      ok,
+      method,
+      ok: isVerifiedHttpStatus(response.status),
       status: response.status,
       latencyMs: Date.now() - startedAt,
+      contentType: response.headers.get("content-type") || "",
       cacheControl: response.headers.get("cache-control") || "",
       contentEncoding: response.headers.get("content-encoding") || "",
+      etag: response.headers.get("etag") || "",
+      lastModified: response.headers.get("last-modified") || "",
+    };
+    if (response.body && typeof response.body.cancel === "function") {
+      try { await response.body.cancel(); } catch (error) {}
+    }
+    return result;
+  } catch (error) {
+    return {
+      url,
+      method,
+      ok: false,
+      status: "error",
+      latencyMs: Date.now() - startedAt,
+      code: error.name === "AbortError" ? "STATIC_SYNC_URL_TIMEOUT" : (error.code || "STATIC_SYNC_URL_FETCH_FAILED"),
+      message: error.message,
+      contentType: "",
+      cacheControl: "",
+      contentEncoding: "",
+      etag: "",
+      lastModified: "",
     };
   } finally {
     clearTimeout(timer);
   }
+}
+
+async function verifyHttpUrl(url, timeoutMs) {
+  if (!/^https?:\/\//i.test(url)) {
+    return { url, ok: true, skipped: true, reason: "non-http-url" };
+  }
+  const head = await fetchUrlMetadata(url, "HEAD", timeoutMs);
+  if (head.ok || !isHeadUnsupportedStatus(head.status)) {
+    return head;
+  }
+  const ranged = await fetchUrlMetadata(url, "GET", timeoutMs, { Range: "bytes=0-0" });
+  return Object.assign({}, ranged, {
+    fallbackFrom: "HEAD",
+    headStatus: head.status,
+  });
 }
 
 async function verifyPublicUrls(version, publicBaseUrl, options = {}) {
@@ -254,10 +339,17 @@ async function verifyPublicUrls(version, publicBaseUrl, options = {}) {
   if (options.verifyHttp === false) {
     return urls.map((url) => ({ url, ok: true, skipped: true, reason: "disabled" }));
   }
-  const results = [];
-  for (const url of urls) {
-    results.push(await verifyHttpUrl(url, Number(options.timeoutMs || 8000) || 8000));
-  }
+  const results = new Array(urls.length);
+  const timeoutMs = Number(options.timeoutMs || 8000) || 8000;
+  const concurrency = Math.max(1, Math.min(2, Number(options.concurrency || 2) || 2));
+  let cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(concurrency, urls.length) }, async () => {
+    while (cursor < urls.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await verifyHttpUrl(urls[index], timeoutMs);
+    }
+  }));
   const failed = results.filter((item) => !item.ok);
   if (failed.length) {
     const error = new Error(`Static release URL verification failed: ${failed.map((item) => item.url).join(", ")}`);
@@ -278,6 +370,7 @@ function recordStatus(patch, config = getConfig()) {
       dst: config.dst,
       publicBaseUrl: config.publicBaseUrl,
       keepLatestN: config.keepLatestN,
+      verifyHttp: config.verifyHttp,
     },
   });
   writeJsonAtomic(config.statusPath, next);
@@ -291,6 +384,8 @@ function getActiveVersion(fallbackVersion) {
 
 async function syncStaticRelease(version, options = {}) {
   const config = Object.assign({}, getConfig(options.env || process.env), options.config || {});
+  const job = options.job || null;
+  progressJob(job, 10, "checking-config", {});
   const releaseVersion = getActiveVersion(version || options.version);
   if (!releaseVersion) {
     const error = new Error("No release version available for static sync");
@@ -316,27 +411,69 @@ async function syncStaticRelease(version, options = {}) {
   let releaseLock = null;
   const startedAt = new Date().toISOString();
   const startedMs = Date.now();
+  const previousStatus = readJsonFile(config.statusPath, {});
   recordStatus({
     status: "running",
     success: false,
     releaseVersion,
     startedAt,
     lastAttemptAt: startedAt,
+    phase: "checking-config",
     message: "Static release sync running",
   }, config);
 
   try {
     releaseLock = acquireLock(config.lockPath, options);
-    const mirror = mirrorDirectory(srcReleaseDir, dstReleaseDir);
-    const activeVersion = releaseService.getActiveReleaseInfo()?.version || "";
-    const retention = pruneOldReleases(dstRoot, [releaseVersion, activeVersion], config.keepLatestN);
+    progressJob(job, 18, "checking-source", { releaseVersion, srcReleaseDir });
+    if (!fs.existsSync(srcReleaseDir) || !fs.statSync(srcReleaseDir).isDirectory()) {
+      const error = new Error(`Release pack source does not exist: ${srcReleaseDir}`);
+      error.code = "STATIC_SYNC_SOURCE_MISSING";
+      throw error;
+    }
+    const sourceSummary = countFilesAndBytes(srcReleaseDir);
+    progressJob(job, 25, "copying-files", {
+      releaseVersion,
+      totalFiles: sourceSummary.totalFiles,
+      totalBytes: sourceSummary.totalBytes,
+      processedFiles: 0,
+      copiedBytes: 0,
+    });
+    const mirror = mirrorDirectory(srcReleaseDir, dstReleaseDir, {
+      onFile: (stats) => {
+        const ratio = sourceSummary.totalFiles > 0 ? stats.processedFiles / sourceSummary.totalFiles : 1;
+        progressJob(job, Math.min(58, 25 + Math.floor(ratio * 33)), "copying-files", {
+          releaseVersion,
+          totalFiles: sourceSummary.totalFiles,
+          processedFiles: stats.processedFiles,
+          copiedFiles: stats.copiedFiles,
+          copiedBytes: stats.copiedBytes,
+        });
+      },
+    });
+    progressJob(job, 62, "verifying-local", {
+      releaseVersion,
+      totalFiles: sourceSummary.totalFiles,
+      processedFiles: mirror.processedFiles || sourceSummary.totalFiles,
+      copiedFiles: mirror.copiedFiles,
+      copiedBytes: mirror.copiedBytes || 0,
+    });
     const localFiles = verifyLocalFiles(dstReleaseDir);
+    progressJob(job, 74, "verifying-public-url", { releaseVersion });
     const verifiedUrls = await verifyPublicUrls(releaseVersion, config.publicBaseUrl, {
       verifyHttp: config.verifyHttp,
-      timeoutMs: options.timeoutMs || 8000,
+      timeoutMs: options.timeoutMs || config.httpTimeoutMs,
+      concurrency: config.verifyConcurrency,
     });
+    progressJob(job, 86, "pruning-old-releases", { releaseVersion });
+    const activeVersion = releaseService.getActiveReleaseInfo()?.version || "";
+    const retention = pruneOldReleases(dstRoot, [
+      releaseVersion,
+      activeVersion,
+      previousStatus.syncedReleaseVersion,
+      previousStatus.releaseVersion,
+    ], config.keepLatestN);
     const finishedAt = new Date().toISOString();
-    return recordStatus({
+    const result = recordStatus({
       status: "success",
       success: true,
       releaseVersion,
@@ -359,8 +496,18 @@ async function syncStaticRelease(version, options = {}) {
       staticEmptyRoomIndexUrl: joinUrl(config.publicBaseUrl, releaseVersion, "empty-room/index.json"),
       keptReleases: retention.keptReleases,
       prunedReleases: retention.prunedReleases,
+      phase: "completed",
+      totalFiles: sourceSummary.totalFiles,
+      processedFiles: mirror.processedFiles || sourceSummary.totalFiles,
       message: "Static release sync completed",
     }, config);
+    progressJob(job, 96, "completed", {
+      releaseVersion,
+      copiedFiles: mirror.copiedFiles,
+      copiedBytes: mirror.copiedBytes || 0,
+      retainedReleases: retention.keptReleases,
+    });
+    return result;
   } catch (error) {
     safeLog("static-release-sync-failed", {
       releaseVersion,
@@ -376,6 +523,7 @@ async function syncStaticRelease(version, options = {}) {
       lastDurationMs: Date.now() - startedMs,
       code: error.code || "STATIC_SYNC_FAILED",
       message: error.message,
+      phase: error.code === "STATIC_SYNC_URL_VERIFY_FAILED" ? "verifying-public-url" : "failed",
       verificationResults: error.results || [],
     }, config);
     throw error;
@@ -397,6 +545,100 @@ async function syncIfEnabled(version, options = {}) {
   return syncStaticRelease(version, Object.assign({}, options, { config }));
 }
 
+function isUrlVerificationComplete(status, config = getConfig()) {
+  if (!config.verifyHttp) return true;
+  const verified = Array.isArray(status?.verifiedUrls) ? status.verifiedUrls : Array.isArray(status?.verificationResults) ? status.verificationResults : [];
+  return REQUIRED_FILES.every((relativePath) => {
+    const found = verified.find((item) => String(item.url || "").includes(`/${trimSlashes(relativePath)}`));
+    return Boolean(found && found.ok && isVerifiedHttpStatus(found.status || 200));
+  });
+}
+
+async function reconcileStaticRelease(version, options = {}) {
+  const config = Object.assign({}, getConfig(options.env || process.env), options.config || {});
+  const job = options.job || null;
+  progressJob(job, 10, "checking-config", {});
+  const releaseVersion = getActiveVersion(version || options.version);
+  if (!config.enabled) {
+    return syncIfEnabled(releaseVersion, Object.assign({}, options, { config }));
+  }
+  if (!releaseVersion) {
+    const error = new Error("No active release available for static reconcile");
+    error.code = "STATIC_RECONCILE_NO_ACTIVE_RELEASE";
+    throw error;
+  }
+  if (!config.dst) {
+    const error = new Error("OPENRESTY_STATIC_RELEASE_DIR is required for static reconcile");
+    error.code = "STATIC_SYNC_TARGET_MISSING";
+    throw error;
+  }
+
+  const startedAt = new Date().toISOString();
+  const startedMs = Date.now();
+  const status = getSyncStatus({ version: releaseVersion, config });
+  const dstReleaseDir = path.join(config.dst, releaseVersion);
+  const localReady = Boolean(status.targetReleaseDirExists && status.localRequiredFilesPresent && status.versionMatched);
+  if (localReady && status.success !== false && status.status !== "failed") {
+    try {
+      progressJob(job, 72, "verifying-public-url", { releaseVersion });
+      const verifiedUrls = await verifyPublicUrls(releaseVersion, config.publicBaseUrl, {
+        verifyHttp: config.verifyHttp,
+        timeoutMs: options.timeoutMs || config.httpTimeoutMs,
+        concurrency: config.verifyConcurrency,
+      });
+      const finishedAt = new Date().toISOString();
+      const result = recordStatus({
+        status: "unchanged",
+        success: true,
+        releaseVersion,
+        syncedReleaseVersion: releaseVersion,
+        syncedAt: status.syncedAt || status.lastSuccessAt || finishedAt,
+        lastSyncTime: status.lastSyncTime || status.lastSuccessAt || finishedAt,
+        lastSuccessAt: finishedAt,
+        lastAttemptAt: startedAt,
+        lastDurationMs: Date.now() - startedMs,
+        srcReleaseDir: path.join(config.src, releaseVersion),
+        dstReleaseDir,
+        copiedFiles: 0,
+        filesCopied: 0,
+        copiedBytes: 0,
+        bytesCopied: 0,
+        localFiles: REQUIRED_FILES.map((relativePath) => path.join(dstReleaseDir, relativePath)),
+        verifiedUrls,
+        staticManifestUrl: joinUrl(config.publicBaseUrl, releaseVersion, "manifest.json"),
+        staticClassIndexUrl: joinUrl(config.publicBaseUrl, releaseVersion, "index/class/all.json"),
+        staticEmptyRoomIndexUrl: joinUrl(config.publicBaseUrl, releaseVersion, "empty-room/index.json"),
+        keptReleases: status.keptReleases || status.retainedReleaseVersions || [],
+        prunedReleases: [],
+        phase: "completed",
+        message: "Static release already synced; URL verification passed",
+      }, config);
+      progressJob(job, 96, "completed", { releaseVersion, copiedFiles: 0, copiedBytes: 0 });
+      return result;
+    } catch (error) {
+      recordStatus({
+        status: "failed",
+        success: false,
+        releaseVersion,
+        failedAt: new Date().toISOString(),
+        lastAttemptAt: startedAt,
+        lastDurationMs: Date.now() - startedMs,
+        code: error.code || "STATIC_RECONCILE_FAILED",
+        message: error.message,
+        phase: "verifying-public-url",
+        verificationResults: error.results || [],
+      }, config);
+      throw error;
+    }
+  }
+
+  progressJob(job, 18, "checking-source", {
+    releaseVersion,
+    reason: status.needsSyncReason || "needs-sync",
+  });
+  return syncStaticRelease(releaseVersion, Object.assign({}, options, { config }));
+}
+
 function getSyncStatus(options = {}) {
   const config = Object.assign({}, getConfig(options.env || process.env), options.config || {});
   const status = readJsonFile(config.statusPath, null);
@@ -416,6 +658,12 @@ function getSyncStatus(options = {}) {
   const releaseVersion = status?.releaseVersion || activeVersion || "";
   const syncedReleaseVersion = status?.syncedReleaseVersion || (status?.success ? status?.releaseVersion : "") || "";
   const versionMatched = Boolean(activeVersion && syncedReleaseVersion && activeVersion === syncedReleaseVersion);
+  const targetReleaseDir = activeVersion && config.dst ? path.join(config.dst, activeVersion) : "";
+  const targetReleaseDirExists = Boolean(targetReleaseDir && fs.existsSync(targetReleaseDir) && fs.statSync(targetReleaseDir).isDirectory());
+  const missingRequiredFiles = targetReleaseDirExists
+    ? REQUIRED_FILES.filter((relativePath) => !fs.existsSync(path.join(targetReleaseDir, relativePath)))
+    : REQUIRED_FILES.slice();
+  const localRequiredFilesPresent = Boolean(targetReleaseDirExists && missingRequiredFiles.length === 0);
   const releaseDirs = configured ? listReleaseDirs(config.dst).slice(0, config.keepLatestN) : [];
   const retainedReleases = releaseDirs.map((item) => ({
     version: item.version,
@@ -436,6 +684,21 @@ function getSyncStatus(options = {}) {
   const manifestUrlStatus = urlStatus("manifest.json");
   const classIndexUrlStatus = urlStatus("index/class/all.json");
   const emptyRoomUrlStatus = urlStatus("empty-room/index.json");
+  const urlVerificationComplete = isUrlVerificationComplete(status, config);
+  const urlVerificationFailed = [manifestUrlStatus, classIndexUrlStatus, emptyRoomUrlStatus]
+    .some((item) => item.status !== "not-collected" && !isVerifiedHttpStatus(item.status));
+  const fullySynced = Boolean(
+    config.enabled &&
+    configured &&
+    targetDirExists &&
+    targetDirWritable &&
+    activeVersion &&
+    versionMatched &&
+    localRequiredFilesPresent &&
+    status?.success !== false &&
+    status?.status !== "failed" &&
+    urlVerificationComplete
+  );
   let needsSync = false;
   let needsSyncReason = "";
   if (!config.enabled) {
@@ -451,14 +714,23 @@ function getSyncStatus(options = {}) {
     needsSyncReason = "target-dir-not-writable";
   } else if (!activeVersion) {
     needsSyncReason = "no-active-release";
+  } else if (!targetReleaseDirExists) {
+    needsSync = true;
+    needsSyncReason = "target-release-missing";
+  } else if (!localRequiredFilesPresent) {
+    needsSync = true;
+    needsSyncReason = "required-files-missing";
   } else if (!versionMatched) {
     needsSync = true;
     needsSyncReason = syncedReleaseVersion ? "version-mismatch" : "not-synced-yet";
   } else if (status?.status === "failed") {
     needsSync = true;
     needsSyncReason = "last-sync-failed";
+  } else if (!urlVerificationComplete) {
+    needsSync = true;
+    needsSyncReason = urlVerificationFailed ? "url-verification-failed" : "url-verification-pending";
   } else {
-    needsSyncReason = "version-matched";
+    needsSyncReason = "already-synced";
   }
   return Object.assign({
     status: config.enabled ? "not-run" : "disabled",
@@ -468,10 +740,16 @@ function getSyncStatus(options = {}) {
     targetDir: config.dst,
     targetDirExists,
     targetDirWritable,
+    targetReleaseDir,
+    targetReleaseDirExists,
+    localRequiredFilesPresent,
+    missingRequiredFiles,
     activeReleaseVersion: activeVersion,
     releaseVersion,
     syncedReleaseVersion,
     versionMatched,
+    fullySynced,
+    urlVerificationComplete,
     lastAttemptAt: status?.lastAttemptAt || status?.startedAt || null,
     lastSuccessAt: status?.lastSuccessAt || status?.lastSyncTime || status?.syncedAt || null,
     lastDurationMs: status?.lastDurationMs || null,
@@ -503,6 +781,9 @@ function getSyncStatus(options = {}) {
       dst: config.dst,
       publicBaseUrl: config.publicBaseUrl,
       keepLatestN: config.keepLatestN,
+      verifyHttp: config.verifyHttp,
+      httpTimeoutMs: config.httpTimeoutMs,
+      verifyConcurrency: config.verifyConcurrency,
     },
   }, status || {});
 }
@@ -510,13 +791,16 @@ function getSyncStatus(options = {}) {
 module.exports = {
   REQUIRED_FILES,
   acquireLock,
+  countFilesAndBytes,
   getConfig,
   getSyncStatus,
   joinUrl,
   mirrorDirectory,
   pruneOldReleases,
+  reconcileStaticRelease,
   syncIfEnabled,
   syncStaticRelease,
+  verifyHttpUrl,
   verifyLocalFiles,
   verifyPublicUrls,
 };

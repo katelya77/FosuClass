@@ -298,7 +298,7 @@ async function writeReleasePackAndActivate(stagingData, job) {
   }
 
   if (job) job.progress(72, "syncing OpenResty", { releaseVersion });
-  const staticSync = await staticReleaseSyncService.syncIfEnabled(releaseVersion);
+  const staticSync = await staticReleaseSyncService.syncIfEnabled(releaseVersion, { job });
 
   if (job) job.progress(82, "activating release", {
     releaseVersion,

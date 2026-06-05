@@ -5,6 +5,7 @@ const zlib = require("zlib");
 
 const jobService = require("./jobService");
 const releaseService = require("./releaseService");
+const releaseWorkerManager = require("./releaseWorkerManager");
 const { safeLog } = require("../utils/safeLogger");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
@@ -423,7 +424,10 @@ function scheduleMaintenance() {
   if (!config.enabled) return null;
   const run = () => {
     try {
-      runMaintenance({ dryRun: false });
+      releaseWorkerManager.startReleaseJob("storage-maintenance", {
+        dryRun: false,
+        reason: "scheduled",
+      });
     } catch (error) {
       safeLog("scheduled-maintenance-failed", { error: error.message });
     }

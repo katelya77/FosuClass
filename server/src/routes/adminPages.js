@@ -2111,6 +2111,80 @@ const adminConsoleHtml = `<!doctype html>
       margin-top: 12px;
       justify-content: flex-end;
     }
+    .static-sync-note {
+      margin-top: 10px;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--panel-2);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .job-progress-panel {
+      margin-top: 12px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--panel);
+      padding: 10px;
+      min-width: 0;
+    }
+    .job-progress-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .job-progress-track {
+      width: 100%;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--panel-2);
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .job-progress-fill {
+      height: 100%;
+      width: 0;
+      background: var(--primary);
+      transition: width 0.2s ease;
+    }
+    .job-progress-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .job-progress-grid div {
+      background: var(--panel-2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 6px 8px;
+      min-width: 0;
+    }
+    .job-progress-grid span,
+    .job-log-list span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 2px;
+    }
+    .job-progress-grid strong {
+      display: block;
+      color: var(--text);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .job-log-list {
+      display: grid;
+      gap: 4px;
+      color: var(--text);
+      font-size: 12px;
+      min-width: 0;
+    }
     .sync-timeline {
       display: grid;
       gap: 8px;
@@ -2847,13 +2921,16 @@ const adminConsoleHtml = `<!doctype html>
           <div id="staticReleaseSyncSummary" class="openresty-card-grid">
             <!-- 静态同步状态 -->
           </div>
+          <div id="staticSyncStateNote" class="static-sync-note">正在读取静态同步状态...</div>
           <div class="openresty-actions">
             <button type="button" class="secondary" id="copyStaticManifestBtn">复制 manifest URL</button>
             <button type="button" class="secondary" id="verifyStaticUrlBtn">验证静态 URL</button>
             <button type="button" class="primary" id="manualStaticSyncBtn">手动同步当前 Release</button>
+            <button type="button" class="ghost" id="forceStaticSyncBtn">强制重新同步</button>
             <button type="button" class="secondary" id="reconcileLifecycleBtn">重新核对状态</button>
             <button type="button" class="ghost" id="viewStaticSyncLogBtn">查看同步日志</button>
           </div>
+          <div id="syncJobLog" class="job-progress-panel" hidden></div>
         </div>
 
         <div class="card" id="recommended-sync-flow-card" style="margin-bottom:16px;">
@@ -5609,6 +5686,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         var staticConfigured = Boolean(staticSync.configured);
         var staticWritable = Boolean(staticSync.targetDirWritable);
         var staticVersionMatched = Boolean(staticSync.versionMatched);
+        var staticTargetExists = Boolean(staticSync.targetDirExists);
+        var staticLocalReady = Boolean(staticSync.localRequiredFilesPresent);
         var releaseHeavyBusy = Boolean(data.releaseHeavyBusy && data.runningReleaseJob);
         var isVerifiedStatus = function(value) {
           if (typeof value === "number") return value >= 200 && value < 300;
@@ -5619,6 +5698,41 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             return statusCode >= 200 && statusCode < 300;
           }
           return normalized === "ok" || normalized === "success";
+        };
+        var staticUrlVerified = isVerifiedStatus(staticSync.manifestStatus) && isVerifiedStatus(staticSync.classIndexStatus) && isVerifiedStatus(staticSync.emptyRoomStatus);
+        var staticRecentlySucceeded = staticSync.success !== false && staticSyncStatus !== "failed" && Boolean(staticSync.lastSuccessAt || staticSync.lastSyncTime || staticSync.syncedAt || staticSync.status === "success" || staticSync.status === "unchanged");
+        var staticFullySynced = Boolean(staticSync.fullySynced || (
+          staticEnabled &&
+          staticConfigured &&
+          staticTargetExists &&
+          staticWritable &&
+          data.releaseVersion &&
+          staticSync.syncedReleaseVersion &&
+          data.releaseVersion === staticSync.syncedReleaseVersion &&
+          staticLocalReady &&
+          staticRecentlySucceeded &&
+          staticUrlVerified
+        ));
+        var staticSyncReasonText = function() {
+          var reason = staticSync.needsSyncReason || "";
+          var map = {
+            "feature-disabled": "功能未启用。请配置 STATIC_RELEASE_SYNC_ENABLED=true。",
+            "target-dir-not-configured": "目录未配置。请配置 OPENRESTY_STATIC_RELEASE_DIR。",
+            "target-dir-missing": "目录不存在。请检查 OpenResty 静态目录挂载。",
+            "target-dir-not-writable": "目录不可写。请检查容器挂载权限。",
+            "target-release-missing": "OpenResty 中缺少当前 active Release 目录。",
+            "required-files-missing": "OpenResty 当前版本缺少 manifest、class index 或 empty-room index。",
+            "version-mismatch": "active Release 与已同步版本不一致。",
+            "not-synced-yet": "当前 active Release 尚未同步到 OpenResty。",
+            "last-sync-failed": "最近一次静态同步失败。",
+            "url-verification-failed": "公网静态 URL 验证失败。",
+            "url-verification-pending": "公网静态 URL 尚未完成验证。",
+            "no-active-release": "没有 active release。",
+            "already-synced": "当前 active Release 已同步且 URL 验证通过，无需重复复制。"
+          };
+          if (releaseHeavyBusy) return "Release 重任务锁占用，请等待当前任务完成。";
+          if (staticFullySynced) return map["already-synced"];
+          return map[reason] || reason || "当前状态需要重新核对。";
         };
         if ($("openRestyEnabledBadge")) {
           $("openRestyEnabledBadge").className = "badge " + (staticEnabled ? "success" : "warning");
@@ -5637,13 +5751,13 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           $("openRestyVersionBadge").textContent = staticVersionMatched ? "版本一致" : "待同步";
         }
         if ($("openRestySyncBadge")) {
-          $("openRestySyncBadge").className = "badge " + (staticSyncStatus === "success" ? "success" : (staticSyncStatus === "failed" ? "danger" : "info"));
-          $("openRestySyncBadge").textContent = staticSyncStatus === "success" ? "最近同步成功" : (staticSyncStatus === "failed" ? "最近同步失败" : relayStatusText(staticSyncStatus));
+          var syncHealthy = staticSyncStatus === "success" || staticSyncStatus === "unchanged";
+          $("openRestySyncBadge").className = "badge " + (syncHealthy ? "success" : (staticSyncStatus === "failed" ? "danger" : "info"));
+          $("openRestySyncBadge").textContent = syncHealthy ? "最近同步成功" : (staticSyncStatus === "failed" ? "最近同步失败" : relayStatusText(staticSyncStatus));
         }
         if ($("openRestyVerifyBadge")) {
-          var verifyOk = isVerifiedStatus(staticSync.manifestStatus) && isVerifiedStatus(staticSync.classIndexStatus) && isVerifiedStatus(staticSync.emptyRoomStatus);
-          $("openRestyVerifyBadge").className = "badge " + (verifyOk ? "success" : "warning");
-          $("openRestyVerifyBadge").textContent = verifyOk ? "URL 验证 OK" : "URL 待验证";
+          $("openRestyVerifyBadge").className = "badge " + (staticUrlVerified ? "success" : "warning");
+          $("openRestyVerifyBadge").textContent = staticUrlVerified ? "URL 验证 OK" : "URL 待验证";
         }
         if ($("activeCanonicalHashText")) $("activeCanonicalHashText").textContent = data.activeCanonicalHash || "当前版本未包含 canonical hash";
         if ($("stagingCanonicalHashText")) $("stagingCanonicalHashText").textContent = data.stagingCanonicalHash || "暂无 Staging";
@@ -5744,9 +5858,18 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           $("syncNextActionBtn").disabled = Boolean(releaseHeavyBusy && (data.stagingNeedsPublish || data.nextAction && data.nextAction.type === "static-sync"));
           $("syncNextActionBtn").title = releaseHeavyBusy && data.stagingNeedsPublish ? "已有 Release 重任务正在运行" : "";
         }
+        if ($("staticSyncStateNote")) {
+          $("staticSyncStateNote").textContent = staticSyncReasonText();
+        }
         if ($("manualStaticSyncBtn")) {
-          $("manualStaticSyncBtn").disabled = Boolean(!staticSync.configured || !staticSync.targetDirWritable || releaseHeavyBusy || !data.releaseVersion || (!staticSync.needsSync && staticSync.versionMatched));
-          $("manualStaticSyncBtn").title = $("manualStaticSyncBtn").disabled ? (staticSync.needsSyncReason || "当前无须同步或条件不满足") : "";
+          $("manualStaticSyncBtn").textContent = staticFullySynced ? "✓ 已同步，无需操作" : "手动同步当前 Release";
+          $("manualStaticSyncBtn").className = staticFullySynced ? "secondary" : "primary";
+          $("manualStaticSyncBtn").disabled = Boolean(!staticEnabled || !staticConfigured || !staticTargetExists || !staticWritable || releaseHeavyBusy || !data.releaseVersion || staticFullySynced);
+          $("manualStaticSyncBtn").title = staticSyncReasonText();
+        }
+        if ($("forceStaticSyncBtn")) {
+          $("forceStaticSyncBtn").disabled = Boolean(!staticEnabled || !staticConfigured || !staticTargetExists || !staticWritable || releaseHeavyBusy || !data.releaseVersion);
+          $("forceStaticSyncBtn").title = "重新核对并增量复制当前 Release 文件，不重新构建 Release，不删除 last-known-good，不改变 active pointer。";
         }
         if ($("stagingPublishBtn")) {
           $("stagingPublishBtn").disabled = Boolean(releaseHeavyBusy || !data.stagingNeedsPublish);
@@ -5810,7 +5933,14 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           archived: "已归档",
           deleted: "已删除",
           expired: "已过期",
-          revoked: "已吊销"
+          revoked: "已吊销",
+          "checking-config": "检查配置",
+          "checking-source": "检查源目录",
+          "copying-files": "复制文件",
+          "verifying-local": "本地验证",
+          "verifying-public-url": "公网 URL 验证",
+          "pruning-old-releases": "清理旧版本",
+          completed: "已完成"
         };
         return map[status] || status || "-";
       }
@@ -6512,6 +6642,46 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           });
       }
 
+      function renderJobProgress(job, label) {
+        var panel = $("syncJobLog");
+        if (!panel || !job) return;
+        var logs = Array.isArray(job.logs) ? job.logs : [];
+        var lastData = {};
+        for (var i = logs.length - 1; i >= 0; i--) {
+          if (logs[i] && logs[i].data) {
+            lastData = logs[i].data;
+            break;
+          }
+        }
+        var result = job.result || {};
+        var staticSync = result.staticSync || {};
+        var phase = lastData.phase || staticSync.phase || (logs.length ? logs[logs.length - 1].message : "") || job.status || "queued";
+        var totalFiles = lastData.totalFiles || staticSync.totalFiles || 0;
+        var processedFiles = lastData.processedFiles || staticSync.processedFiles || 0;
+        var copiedFiles = lastData.copiedFiles || staticSync.filesCopied || staticSync.copiedFiles || 0;
+        var copiedBytes = lastData.copiedBytes || staticSync.bytesCopied || staticSync.copiedBytes || 0;
+        var started = job.startedAt ? Date.parse(job.startedAt) : 0;
+        var elapsed = started ? Math.max(0, Math.round((Date.now() - started) / 1000)) + "s" : "-";
+        var recentLogs = logs.slice(-6).map(function(line) {
+          return "<div><span>" + escapeHtml(line.at ? formatDate(line.at) : "") + "</span>" + escapeHtml(line.message || "") + "</div>";
+        }).join("");
+        if (job.error && job.error.message) {
+          recentLogs += "<div><span>失败原因</span>" + escapeHtml(job.error.message) + "</div>";
+        }
+        panel.hidden = false;
+        panel.innerHTML =
+          "<div class='job-progress-head'><span>" + escapeHtml(label || job.type || "后台任务") + "</span><span class='badge " + (job.status === "failed" ? "danger" : (job.status === "success" ? "success" : "info")) + "'>" + escapeHtml(relayStatusText(job.status)) + " · " + (job.progress || 0) + "%</span></div>" +
+          "<div class='job-progress-track'><div class='job-progress-fill' style='width:" + Math.max(0, Math.min(100, Number(job.progress || 0))) + "%'></div></div>" +
+          "<div class='job-progress-grid'>" +
+            "<div><span>当前阶段</span><strong>" + escapeHtml(relayStatusText(phase)) + "</strong></div>" +
+            "<div><span>文件进度</span><strong>" + escapeHtml(totalFiles ? (processedFiles + " / " + totalFiles) : "-") + "</strong></div>" +
+            "<div><span>复制文件</span><strong>" + escapeHtml(String(copiedFiles)) + "</strong></div>" +
+            "<div><span>复制字节</span><strong>" + escapeHtml(formatBytes(copiedBytes || 0)) + "</strong></div>" +
+            "<div><span>已用时间</span><strong>" + escapeHtml(elapsed) + "</strong></div>" +
+          "</div>" +
+          "<div class='job-log-list'>" + (recentLogs || "<div><span>最近日志</span>暂无日志</div>") + "</div>";
+      }
+
       function pollAdminJob(jobId, label, onDone) {
         if (!jobId) return;
         api("/api/admin/jobs/" + encodeURIComponent(jobId))
@@ -6519,6 +6689,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             var job = res.job || {};
             var logs = job.logs || [];
             var lastLog = logs.length ? logs[logs.length - 1].message : "";
+            renderJobProgress(job, label);
             setStatus(label + "：" + (job.status || "queued") + " · " + (job.progress || 0) + "% " + lastLog);
             if (job.status === "success") {
               showToast(label + "完成", "success");
@@ -6569,10 +6740,12 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           });
       }
 
-      function startStaticSync(btn, version) {
-        var restoreButton = setButtonLoading(btn, "同步中...");
+      function startStaticSync(btn, version, options) {
+        options = options || {};
+        var restoreButton = setButtonLoading(btn, options.force ? "重同步中..." : "同步中...");
         var payload = {};
         if (version) payload.version = version;
+        if (options.force) payload.force = true;
         api("/api/admin/static-release-sync/start", {
           method: "POST",
           body: JSON.stringify(payload)
@@ -6584,8 +6757,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
               showToast("静态同步任务未创建", "error");
               return;
             }
-            showToast("OpenResty 静态同步任务已启动", "success");
-            pollAdminJob(job.id, "OpenResty 静态同步", function(doneJob) {
+            showToast(options.force ? "OpenResty 强制重同步任务已启动" : "OpenResty 静态同步任务已启动", "success");
+            pollAdminJob(job.id, options.force ? "OpenResty 强制重同步" : "OpenResty 静态同步", function(doneJob) {
               restoreButton();
               if (doneJob && doneJob.status === "success") {
                 loadSyncStatus();
@@ -6623,20 +6796,30 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
       }
 
       function runMaintenance(btn, dryRun) {
-        var restoreButton = setButtonLoading(btn, dryRun ? "预览中..." : "清理中...");
+        var restoreButton = setButtonLoading(btn, dryRun ? "已启动..." : "已启动...");
         api(dryRun ? "/api/admin/storage/maintenance/preview" : "/api/admin/storage/maintenance/run", {
           method: "POST",
           body: "{}"
         })
           .then(function(res) {
-            var report = res.report || {};
-            showToast((dryRun ? "清理预览完成" : "安全清理完成") + "，释放 " + formatBytes(report.reclaimedBytes || 0), "success");
-            return refreshStorageStatus(true);
-          })
-          .finally(function() {
-            restoreButton();
+            var job = res.job || {};
+            if (!job.id) {
+              restoreButton();
+              showToast("维护任务未创建", "error");
+              return;
+            }
+            showToast(dryRun ? "安全清理预览已进入后台任务" : "安全清理已进入后台任务", "success");
+            pollAdminJob(job.id, dryRun ? "存储维护预览" : "存储维护", function(doneJob) {
+              restoreButton();
+              if (doneJob && doneJob.status === "success") {
+                var report = doneJob.result && doneJob.result.report || {};
+                showToast((dryRun ? "清理预览完成" : "安全清理完成") + "，释放 " + formatBytes(report.reclaimedBytes || 0), "success");
+                refreshStorageStatus(true);
+              }
+            });
           })
           .catch(function(err) {
+            restoreButton();
             showToast(err.message || "维护任务失败", "error");
           });
       }
@@ -8365,6 +8548,18 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             return;
           }
           startStaticSync($("manualStaticSyncBtn"), version);
+        });
+        safeBind("forceStaticSyncBtn", "click", function() {
+          var data = state.syncStatus || {};
+          var version = data.releaseVersion || "";
+          if (!version) {
+            showToast("当前没有 active releaseVersion", "error");
+            return;
+          }
+          if (!confirm("确认强制重新同步当前 Release？该操作会重新核对并增量复制文件，但不会重新构建 Release，不会删除 last-known-good，也不会改变 active pointer。")) {
+            return;
+          }
+          startStaticSync($("forceStaticSyncBtn"), version, { force: true });
         });
         safeBind("reconcileLifecycleBtn", "click", function() {
           var btn = $("reconcileLifecycleBtn");
