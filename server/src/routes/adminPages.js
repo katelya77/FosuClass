@@ -2033,6 +2033,130 @@ const adminConsoleHtml = `<!doctype html>
       min-width: 0;
       width: 100%;
     }
+    .section-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .openresty-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      justify-content: flex-end;
+    }
+    .openresty-card-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(260px, 0.95fr);
+      gap: 12px;
+      min-width: 0;
+    }
+    .openresty-url-grid,
+    .openresty-meta-grid {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+    .static-url-pill {
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr);
+      gap: 8px;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 10px;
+      background: var(--panel-2);
+      color: var(--text);
+      text-decoration: none;
+      min-width: 0;
+    }
+    .static-url-pill span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+    .static-url-pill strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-size: 12px;
+      min-width: 0;
+    }
+    .openresty-meta-item {
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 8px 10px;
+      background: var(--panel);
+      min-width: 0;
+    }
+    .openresty-meta-item span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 3px;
+    }
+    .openresty-meta-item strong {
+      display: block;
+      color: var(--text);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .openresty-actions,
+    .sync-next-action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+      justify-content: flex-end;
+    }
+    .sync-timeline {
+      display: grid;
+      gap: 8px;
+    }
+    .sync-flow-step {
+      display: grid;
+      grid-template-columns: 30px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      padding: 9px 10px;
+      background: var(--panel);
+      min-width: 0;
+    }
+    .sync-flow-step-num {
+      width: 26px;
+      height: 26px;
+      border-radius: 999px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 900;
+      background: var(--panel-2);
+      color: var(--muted);
+      border: 1px solid var(--border);
+    }
+    .sync-flow-step-title {
+      font-weight: 800;
+      font-size: 13px;
+      color: var(--text);
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .sync-flow-step-caption {
+      color: var(--muted);
+      font-size: 11px;
+      margin-top: 2px;
+    }
+    .sync-flow-step.success .sync-flow-step-num { background: var(--success-soft); color: var(--success); border-color: rgba(22,163,107,.25); }
+    .sync-flow-step.running .sync-flow-step-num { background: var(--primary-soft); color: var(--primary); border-color: rgba(37,99,235,.25); }
+    .sync-flow-step.failed .sync-flow-step-num { background: var(--danger-soft); color: var(--danger); border-color: rgba(220,38,38,.25); }
+    .sync-flow-step.skipped .sync-flow-step-num { background: var(--warning-soft); color: #92400e; border-color: rgba(146,64,14,.25); }
     .sync-side-col {
       display: grid;
       grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
@@ -2104,6 +2228,9 @@ const adminConsoleHtml = `<!doctype html>
         grid-template-columns: 1fr;
       }
       .sync-side-col {
+        grid-template-columns: 1fr;
+      }
+      .openresty-card-grid {
         grid-template-columns: 1fr;
       }
       .sync-primary-flow {
@@ -2678,24 +2805,39 @@ const adminConsoleHtml = `<!doctype html>
         </div>
 
         <div class="card" id="static-release-sync-panel" style="margin-bottom:16px;">
-          <div class="section-title" style="margin-bottom:10px;">OpenResty 静态同步</div>
-          <div id="staticReleaseSyncSummary" class="mini-list">
+          <div class="section-title-row">
+            <div class="section-title">OpenResty 静态同步</div>
+            <div class="openresty-badges">
+              <span class="badge info" id="openRestyEnabledBadge">状态检测中</span>
+              <span class="badge info" id="openRestySyncBadge">同步状态</span>
+              <span class="badge info" id="openRestyVerifyBadge">URL 验证</span>
+            </div>
+          </div>
+          <div id="staticReleaseSyncSummary" class="openresty-card-grid">
             <!-- 静态同步状态 -->
+          </div>
+          <div class="openresty-actions">
+            <button type="button" class="secondary" id="copyStaticManifestBtn">复制 manifest URL</button>
+            <button type="button" class="secondary" id="verifyStaticUrlBtn">验证静态 URL</button>
+            <button type="button" class="primary" id="manualStaticSyncBtn">手动同步当前 Release</button>
+            <button type="button" class="ghost" id="viewStaticSyncLogBtn">查看同步日志</button>
           </div>
         </div>
 
         <div class="card" id="recommended-sync-flow-card" style="margin-bottom:16px;">
-          <div class="section-title" style="margin-bottom:10px;">推荐操作流程</div>
-          <div class="mini-list">
-            <div class="mini-list-row"><span>1. 本机采集</span><strong>项目根 staging/ 输出</strong></div>
-            <div class="mini-list-row"><span>2. 上传 staging</span><strong>CLI gzip 分片</strong></div>
-            <div class="mini-list-row"><span>3. 数据差异检查</span><strong id="stagingHashCompareText">等待 hash</strong></div>
-            <div class="mini-list-row"><span>4. 发布 Release</span><strong id="stagingPublishNeedText">等待判断</strong></div>
-            <div class="mini-list-row"><span>5. 静态同步验证</span><strong>OpenResty URL quick verify</strong></div>
+          <div class="section-title-row">
+            <div class="section-title">推荐操作流程</div>
+            <span class="badge info" id="syncNextActionBadge">等待状态</span>
           </div>
+          <div class="sync-timeline" id="syncRecommendedTimeline"></div>
           <div class="mini-list" style="margin-top:10px;">
             <div class="mini-list-row"><span>当前 active hash</span><strong id="activeCanonicalHashText" style="word-break:break-all;text-align:right;">-</strong></div>
             <div class="mini-list-row"><span>最新 staging hash</span><strong id="stagingCanonicalHashText" style="word-break:break-all;text-align:right;">-</strong></div>
+            <div class="mini-list-row"><span>数据差异</span><strong id="stagingHashCompareText">等待 hash</strong></div>
+            <div class="mini-list-row"><span>发布建议</span><strong id="stagingPublishNeedText">等待判断</strong></div>
+          </div>
+          <div class="sync-next-action-row">
+            <button type="button" class="primary" id="syncNextActionBtn">复制采集命令</button>
           </div>
         </div>
 
@@ -5403,6 +5545,20 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         wrap.innerHTML = "";
         var retainedReleases = Array.isArray(data.staticRetainedReleases) ? data.staticRetainedReleases : [];
         var staticSyncStatus = data.openRestyStaticSyncStatus || (data.staticSync && data.staticSync.status) || "-";
+        var staticEnabled = staticSyncStatus !== "disabled" && staticSyncStatus !== "-";
+        if ($("openRestyEnabledBadge")) {
+          $("openRestyEnabledBadge").className = "badge " + (staticEnabled ? "success" : "warning");
+          $("openRestyEnabledBadge").textContent = staticEnabled ? "已启用" : "未启用";
+        }
+        if ($("openRestySyncBadge")) {
+          $("openRestySyncBadge").className = "badge " + (staticSyncStatus === "success" ? "success" : (staticSyncStatus === "failed" ? "danger" : "info"));
+          $("openRestySyncBadge").textContent = staticSyncStatus === "success" ? "最近同步成功" : (staticSyncStatus === "failed" ? "最近同步失败" : relayStatusText(staticSyncStatus));
+        }
+        if ($("openRestyVerifyBadge")) {
+          var verifyOk = Boolean(data.staticManifestUrl && data.staticClassIndexUrl && data.staticEmptyRoomIndexUrl);
+          $("openRestyVerifyBadge").className = "badge " + (verifyOk ? "success" : "warning");
+          $("openRestyVerifyBadge").textContent = verifyOk ? "URL 验证 OK" : "URL 待验证";
+        }
         if ($("activeCanonicalHashText")) $("activeCanonicalHashText").textContent = data.activeCanonicalHash || "-";
         if ($("stagingCanonicalHashText")) $("stagingCanonicalHashText").textContent = data.stagingCanonicalHash || "-";
         if ($("stagingHashCompareText")) {
@@ -5436,24 +5592,57 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
 
         var staticWrap = $("staticReleaseSyncSummary");
         if (staticWrap) {
-          var rows = [
+          var urlItems = [
+            ["manifest", data.staticManifestUrl || "-"],
+            ["class index", data.staticClassIndexUrl || "-"],
+            ["empty-room", data.staticEmptyRoomIndexUrl || "-"],
+          ];
+          var metaRows = [
             ["active releaseVersion", data.releaseVersion || "-"],
-            ["static manifest URL", data.staticManifestUrl || "-"],
-            ["static class index URL", data.staticClassIndexUrl || "-"],
-            ["static empty-room index URL", data.staticEmptyRoomIndexUrl || "-"],
-            ["sync status", relayStatusText(staticSyncStatus)],
             ["last sync time", data.lastStaticSyncTime ? formatDate(data.lastStaticSyncTime) : "-"],
             ["retained releases", retainedReleases.length ? retainedReleases.slice(0, 3).join(" / ") : "-"],
-            ["active canonicalHash", data.activeCanonicalHash || "-"],
-            ["latest staging canonicalHash", data.stagingCanonicalHash || "-"],
+            ["active canonical hash", data.activeCanonicalHash || "-"],
+            ["latest staging hash", data.stagingCanonicalHash || "-"],
             ["needs publish", data.stagingSameAsActive ? "无需发布" : (data.stagingNeedsPublish ? "需要发布" : "-")],
           ];
-          staticWrap.innerHTML = rows.map(function(row) {
-            return "<div class='mini-list-row'>" +
-              "<span>" + escapeHtml(row[0]) + "</span>" +
-              "<strong style='word-break:break-all;text-align:right;'>" + escapeHtml(row[1]) + "</strong>" +
-              "</div>";
+          staticWrap.innerHTML =
+            "<div class='openresty-url-grid'>" + urlItems.map(function(row) {
+              return "<a class='static-url-pill' href='" + escapeHtml(row[1]) + "' target='_blank' rel='noreferrer'>" +
+                "<span>" + escapeHtml(row[0]) + "</span>" +
+                "<strong>" + escapeHtml(row[1]) + "</strong>" +
+              "</a>";
+            }).join("") + "</div>" +
+            "<div class='openresty-meta-grid'>" + metaRows.map(function(row) {
+              return "<div class='openresty-meta-item'><span>" + escapeHtml(row[0]) + "</span><strong>" + escapeHtml(row[1]) + "</strong></div>";
+            }).join("") + "</div>";
+        }
+
+        var timelineWrap = $("syncRecommendedTimeline");
+        if (timelineWrap) {
+          var hasStaging = Boolean(data.latestStagingUpload || data.stagingCanonicalHash);
+          var noChange = Boolean(data.stagingSameAsActive);
+          var needsPublish = Boolean(data.stagingNeedsPublish);
+          var steps = [
+            ["本机校园网采集", hasStaging ? "success" : "running", hasStaging ? "已生成 staging 候选" : "复制命令后在本机运行"],
+            ["数据指纹对比", data.stagingCanonicalHash ? (noChange ? "skipped" : "success") : "pending", data.stagingCanonicalHash ? (noChange ? "数据无变化" : "发现差异") : "等待 staging hash"],
+            ["上传 staging", hasStaging ? "success" : "pending", hasStaging ? "已收到候选包" : "CLI gzip 分片上传"],
+            ["发布 Release", noChange ? "skipped" : (needsPublish ? "running" : "pending"), noChange ? "无需发布" : (needsPublish ? "建议发布" : "等待差异判断")],
+            ["同步 OpenResty", staticSyncStatus === "success" ? "success" : (staticSyncStatus === "failed" ? "failed" : "pending"), relayStatusText(staticSyncStatus)],
+            ["微信开发者工具验证", data.releasePackHealthy ? "running" : "pending", data.releasePackHealthy ? "可执行静态 URL 验证" : "等待 Release Pack OK"],
+          ];
+          timelineWrap.innerHTML = steps.map(function(step, index) {
+            return "<div class='sync-flow-step " + step[1] + "'>" +
+              "<div class='sync-flow-step-num'>" + (index + 1) + "</div>" +
+              "<div><div class='sync-flow-step-title'>" + escapeHtml(step[0]) + "</div><div class='sync-flow-step-caption'>" + escapeHtml(step[2]) + "</div></div>" +
+              "<span class='badge " + (step[1] === "success" ? "success" : (step[1] === "failed" ? "danger" : (step[1] === "skipped" ? "warning" : "info"))) + "'>" + escapeHtml(relayStatusText(step[1])) + "</span>" +
+            "</div>";
           }).join("");
+        }
+        if ($("syncNextActionBadge")) {
+          $("syncNextActionBadge").textContent = data.stagingNeedsPublish ? "下一步：开始发布" : (data.stagingSameAsActive ? "下一步：验证静态 URL" : "下一步：复制采集命令");
+        }
+        if ($("syncNextActionBtn")) {
+          $("syncNextActionBtn").textContent = data.stagingNeedsPublish ? "开始发布" : (data.stagingSameAsActive ? "验证静态 URL" : "复制采集命令");
         }
       }
 
@@ -7886,6 +8075,51 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         });
         safeBind("flowCopyBtnRelay", "click", function() {
           var text = $("flowCmdTextRelay").textContent;
+          if (text) copyText(text);
+        });
+        safeBind("copyStaticManifestBtn", "click", function() {
+          var data = state.syncStatus || {};
+          if (data.staticManifestUrl) copyText(data.staticManifestUrl);
+        });
+        safeBind("verifyStaticUrlBtn", "click", function() {
+          startPostPublishVerify($("verifyStaticUrlBtn"), (state.syncStatus || {}).releaseVersion);
+        });
+        safeBind("manualStaticSyncBtn", "click", function() {
+          var data = state.syncStatus || {};
+          var version = data.releaseVersion || "";
+          if (!version) {
+            showToast("当前没有 active releaseVersion", "error");
+            return;
+          }
+          api("/api/admin/release-pack/rebuild/start", {
+            method: "POST",
+            body: JSON.stringify({ version: version })
+          }).then(function(res) {
+            showToast("Release Pack rebuild job started", "success");
+            if (res.job && res.job.id) {
+              pollAdminJob(res.job.id, "Release Pack rebuild", function() {
+                loadSyncStatus();
+              });
+            }
+          }).catch(function(err) {
+            showToast(err.message, "error");
+          });
+        });
+        safeBind("viewStaticSyncLogBtn", "click", function() {
+          var el = $("syncJobLog");
+          if (el && el.scrollIntoView) el.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+        safeBind("syncNextActionBtn", "click", function() {
+          var data = state.syncStatus || {};
+          if (data.stagingNeedsPublish) {
+            publishStaging($("syncNextActionBtn"));
+            return;
+          }
+          if (data.stagingSameAsActive) {
+            startPostPublishVerify($("syncNextActionBtn"), data.releaseVersion);
+            return;
+          }
+          var text = $("flowCmdTextLocal") ? $("flowCmdTextLocal").textContent : "";
           if (text) copyText(text);
         });
         safeBind("syncRefreshInlineBtn", "click", function() {

@@ -134,6 +134,15 @@ function buildSidecarMeta(data, options = {}) {
     canonicalHash: fingerprint.canonicalHash,
     previousHash,
     changed: previousHash ? previousHash !== fingerprint.canonicalHash : true,
+    crawlMode: meta.crawlMode || "",
+    usedProgressCache: Boolean(meta.usedProgressCache),
+    usedNoScheduleCache: Boolean(meta.usedNoScheduleCache),
+    usedClassScheduleCache: Boolean(meta.usedClassScheduleCache),
+    actualNetworkRequestCount: Number(meta.actualNetworkRequestCount || 0),
+    skippedByProgressCount: Number(meta.skippedByProgressCount || 0),
+    skippedByNoScheduleCount: Number(meta.skippedByNoScheduleCount || 0),
+    freshRunId: meta.freshRunId || "",
+    resourceSource: meta.resourceSource || "",
   };
 }
 

@@ -350,10 +350,10 @@
           >
             <view class="result-main">
               <view class="result-title">{{item.teacherName}} 老师</view>
-              <view class="result-meta">{{item.college}} · 课程数据</view>
+              <view class="result-meta">{{item.college}} · {{item.detailHint || '课程数据'}}</view>
             </view>
             <view class="result-side">
-              <view class="status ready">课程数据</view>
+              <view class="status ready">{{item.detailHint || '课程数据'}}</view>
               <view class="count" wx:if="{{item.courseCount || item.courses.length}}">{{item.courseCount || item.courses.length}}门课</view>
             </view>
           </view>

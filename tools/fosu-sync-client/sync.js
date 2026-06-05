@@ -707,15 +707,17 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
   }
 
   const includeScopes = global.CLI_PARAMS?.includeScopes || ALL_SCOPES;
-  const derivedResources = buildSnapshotResources(updatedSchedules, options.resources || {});
+  const resourceIncludeOptions = options.resources || {};
+  const derivedResources = buildSnapshotResources(updatedSchedules, resourceIncludeOptions);
+  const generatedResources = resourceSchedules || derivedResources;
   
-  const resources = normalizeSnapshotResources(resourceSchedules || {
-    teachers: options.resources?.includeTeachers ? derivedResources.teachers : (oldResources.teachers || []),
-    classrooms: options.resources?.includeClassrooms ? derivedResources.classrooms : (oldResources.classrooms || []),
-    courses: options.resources?.includeCourses ? derivedResources.courses : (oldResources.courses || []),
-    teacherSchedules: options.resources?.includeTeacherSchedules ? derivedResources.teacherSchedules : (oldResources.teacherSchedules || []),
-    classroomSchedules: options.resources?.includeClassroomSchedules ? derivedResources.classroomSchedules : (oldResources.classroomSchedules || []),
-    courseSchedules: options.resources?.includeCourseSchedules ? derivedResources.courseSchedules : (oldResources.courseSchedules || []),
+  const resources = normalizeSnapshotResources({
+    teachers: resourceIncludeOptions.includeTeachers ? (generatedResources.teachers || []) : (oldResources.teachers || []),
+    classrooms: resourceIncludeOptions.includeClassrooms ? (generatedResources.classrooms || []) : (oldResources.classrooms || []),
+    courses: resourceIncludeOptions.includeCourses ? (generatedResources.courses || []) : (oldResources.courses || []),
+    teacherSchedules: resourceIncludeOptions.includeTeacherSchedules ? (generatedResources.teacherSchedules || []) : (oldResources.teacherSchedules || []),
+    classroomSchedules: resourceIncludeOptions.includeClassroomSchedules ? (generatedResources.classroomSchedules || []) : (oldResources.classroomSchedules || []),
+    courseSchedules: resourceIncludeOptions.includeCourseSchedules ? (generatedResources.courseSchedules || []) : (oldResources.courseSchedules || []),
   });
   
   const collegeCount = (catalog.colleges || []).length;
@@ -751,6 +753,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
   const generatedCommand = global.GENERATED_COMMAND || `node sync.js local-campus ${process.argv.slice(2).join(" ")}`;
   const termStartDate = cliParams.start || getTermStartDate(activeSemester) || "2026-03-09";
   const cacheUsage = global.CLASS_SCHEDULE_CACHE_USAGE || {};
+  const crawlStats = global.SYNC_CRAWL_STATS || {};
   const metaWarnings = [];
   if (cacheUsage.warning) {
     metaWarnings.push(cacheUsage.warning);
@@ -805,6 +808,15 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       forceRefresh: Boolean(cliParams.forceRefresh || cliParams["force-refresh"]),
       ignoreProgress: Boolean(cliParams.ignoreProgress || cliParams["ignore-progress"]),
       ignoreNoScheduleCache: Boolean(cliParams.ignoreNoScheduleCache || cliParams["ignore-no-schedule-cache"]),
+      crawlMode: crawlStats.crawlMode || cliParams.crawlMode || "incremental",
+      usedProgressCache: Boolean(crawlStats.usedProgressCache),
+      usedNoScheduleCache: Boolean(crawlStats.usedNoScheduleCache),
+      usedClassScheduleCache: Boolean(crawlStats.usedClassScheduleCache || cacheUsage.usedClassScheduleCache || cacheUsage.used),
+      actualNetworkRequestCount: Number(crawlStats.actualNetworkRequestCount || 0),
+      skippedByProgressCount: Number(crawlStats.skippedByProgressCount || 0),
+      skippedByNoScheduleCount: Number(crawlStats.skippedByNoScheduleCount || 0),
+      freshRunId: crawlStats.freshRunId || "",
+      resourceSource: cliParams.resourceSource || cliParams["resource-source"] || "derived",
       scopeSummary,
       generatedCommand,
       generatedAt: new Date().toISOString(),
@@ -815,7 +827,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
         cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null,
       },
       warnings: metaWarnings,
-      usedClassScheduleCache: Boolean(cacheUsage.usedClassScheduleCache || cacheUsage.used),
+      usedClassScheduleCache: Boolean(crawlStats.usedClassScheduleCache || cacheUsage.usedClassScheduleCache || cacheUsage.used),
       cacheSource: cacheUsage.cacheSource || cacheUsage.source || null,
       cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null,
     },
@@ -1599,15 +1611,16 @@ async function handleLocalCampusStaging(page, params) {
     };
   }
 
-  const snapshot = buildSnapshot(catalog, majors, allClassSchedules, null, {
-    resources: {
-      includeTeachers: includeScopes.includes("teachers"),
-      includeClassrooms: includeScopes.includes("classrooms"),
-      includeCourses: includeScopes.includes("courses"),
-      includeTeacherSchedules: includeScopes.includes("teacherSchedules"),
-      includeClassroomSchedules: includeScopes.includes("classroomSchedules"),
-      includeCourseSchedules: includeScopes.includes("courseSchedules"),
-    },
+  const resourceIncludeOptions = buildResourceIncludeOptionsFromScopes(includeScopes);
+  const resourceTypesForScopes = getResourceTypesFromIncludeScopes(includeScopes);
+  const resourceSchedules = resourceTypesForScopes.length
+    ? await buildResourcesForClassSchedules(allClassSchedules, resourceTypesForScopes, {
+        page,
+        semester: process.env.PREFERRED_SEMESTER || params.term || catalog.semesters?.[0]?.value,
+      })
+    : null;
+  const snapshot = buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, {
+    resources: resourceIncludeOptions,
   });
   if (includeScopes.includes("classSchedules") && (!snapshot.classSchedules || snapshot.classSchedules.length === 0)) {
     const error = new Error("includeScopes 包含 classSchedules，但最终快照 classSchedules 为 0，已禁止生成正式 Staging。");
@@ -1641,7 +1654,18 @@ async function handleLocalCampusStaging(page, params) {
   console.log(`🧾 Staging meta 已生成: ${sidecarPath}`);
   console.log(`📦 最终 staging 文件大小: ${(rawSizeBytes / 1024 / 1024).toFixed(2)} MB`);
   console.log(`🔐 canonicalHash: ${fingerprint.canonicalHash}`);
-  console.log(sidecarMeta.changed ? "✅ 数据指纹已更新，可上传 staging。" : "✅ 数据没有变化，本地文件与上次 sidecar 指纹一致。");
+  if (sidecarMeta.changed) {
+    console.log("✅ 数据指纹已更新，可上传 staging。");
+  } else {
+    const meta = snapshot.meta || {};
+    const cacheUsed = Boolean(meta.usedProgressCache || meta.usedNoScheduleCache || meta.usedClassScheduleCache);
+    console.log("✅ 数据没有变化，本地文件与上次 sidecar 指纹一致。");
+    console.log(`ℹ️ 本次真实网络请求专业数: ${meta.actualNetworkRequestCount || 0}`);
+    console.log(`ℹ️ 本次缓存使用: progress=${meta.usedProgressCache ? "是" : "否"}, no-schedule=${meta.usedNoScheduleCache ? "是" : "否"}, classSchedules=${meta.usedClassScheduleCache ? "是" : "否"}`);
+    if (cacheUsed) {
+      console.log("⚠️ 本次结果可能受本地缓存影响；如需重新验证教务网实时数据，请执行 --fresh。");
+    }
+  }
   console.log(`📊 行政班课表: ${snapshot.coverage.classScheduleCount || 0}, 教师课表: ${snapshot.coverage.teacherScheduleCount || 0}, 教室课表: ${snapshot.coverage.classroomScheduleCount || 0}, 课程课表: ${snapshot.coverage.courseScheduleCount || 0}`);
   console.log("ℹ️ 当前命令不会上传、不会发布；下一步运行 sync:local-upload 上传到 VPS Staging。");
   return snapshot;
@@ -1693,6 +1717,433 @@ function getResourceUploadChunkSize() {
   return Number.isFinite(value) && value > 0 ? value : 20;
 }
 
+function getEffectiveResourceSourceMode() {
+  const raw = String(process.env.SYNC_RESOURCE_SOURCE || global.CLI_PARAMS?.resourceSource || "derived").trim().toLowerCase();
+  if (raw === "direct" || raw === "both" || raw === "derived") return raw;
+  return "derived";
+}
+
+function shouldUseDirectTeacherResources(resourceTypes) {
+  const types = normalizeResourceTypeList(resourceTypes);
+  if (!types.includes("teacher")) return false;
+  const mode = getEffectiveResourceSourceMode();
+  return mode === "direct" || mode === "both" || getEnvFlag("SYNC_FORCE_RESOURCE_CRAWL", false);
+}
+
+function teacherNameOf(item) {
+  return String(item && (item.teacherName || item.name || item.displayName || item.rawName) || "").trim();
+}
+
+function getCourseMergeKey(course) {
+  return [
+    course.courseName || course.canonicalCourseName || "",
+    course.weekday || course.dayOfWeek || "",
+    course.startSection || "",
+    course.endSection || "",
+    course.startWeek || "",
+    course.endWeek || "",
+    Array.isArray(course.weeks) ? course.weeks.join(",") : "",
+    course.classroom || course.canonicalClassroom || "",
+    course.className || "",
+  ].join("|");
+}
+
+function dedupeCourses(courses) {
+  const seen = new Set();
+  const result = [];
+  (courses || []).forEach((course) => {
+    const key = getCourseMergeKey(course || {});
+    if (seen.has(key)) return;
+    seen.add(key);
+    result.push(course);
+  });
+  return result;
+}
+
+function buildTeacherResourcesFromSchedules(schedules) {
+  const teacherSchedules = (schedules || [])
+    .map((schedule) => {
+      const teacherName = teacherNameOf(schedule);
+      if (!teacherName) return null;
+      const courses = dedupeCourses(schedule.courses || []);
+      return Object.assign({}, schedule, {
+        name: teacherName,
+        teacherName,
+        displayName: schedule.displayName || teacherName,
+        source: schedule.source || "direct",
+        courses,
+      });
+    })
+    .filter(Boolean)
+    .sort((left, right) => String(left.teacherName).localeCompare(String(right.teacherName), "zh-CN"));
+  return {
+    teachers: teacherSchedules.map((schedule) => ({
+      name: schedule.teacherName,
+      teacherName: schedule.teacherName,
+      displayName: schedule.displayName || schedule.teacherName,
+      collegeCode: schedule.collegeCode || "",
+      collegeName: schedule.collegeName || schedule.college || "",
+      title: schedule.title || schedule.teacherTitle || schedule.professionalTitle || "",
+      professionalTitle: schedule.professionalTitle || schedule.title || "",
+      source: schedule.source || "direct",
+      courseCount: (schedule.courses || []).length,
+      firstCourseName: (schedule.courses || [])[0]?.courseName || "",
+    })),
+    teacherSchedules,
+  };
+}
+
+function mergeTeacherResourceSets(directResources, derivedResources, mode) {
+  if (mode === "direct") {
+    return buildTeacherResourcesFromSchedules((directResources && directResources.teacherSchedules) || []);
+  }
+  if (mode !== "both") {
+    return buildTeacherResourcesFromSchedules((derivedResources && derivedResources.teacherSchedules) || []);
+  }
+  const merged = new Map();
+  const addSchedules = (schedules, source) => {
+    (schedules || []).forEach((schedule) => {
+      const teacherName = teacherNameOf(schedule);
+      if (!teacherName) return;
+      const existing = merged.get(teacherName) || {
+        name: teacherName,
+        teacherName,
+        displayName: schedule.displayName || teacherName,
+        collegeCode: "",
+        collegeName: "",
+        title: "",
+        professionalTitle: "",
+        source: "",
+        sources: [],
+        courses: [],
+      };
+      existing.collegeCode = existing.collegeCode || schedule.collegeCode || "";
+      existing.collegeName = existing.collegeName || schedule.collegeName || schedule.college || "";
+      existing.title = existing.title || schedule.title || schedule.teacherTitle || schedule.professionalTitle || "";
+      existing.professionalTitle = existing.professionalTitle || schedule.professionalTitle || schedule.title || "";
+      if (!existing.sources.includes(source)) existing.sources.push(source);
+      existing.courses = dedupeCourses(existing.courses.concat(schedule.courses || []));
+      existing.source = existing.sources.length > 1 ? "merged" : source;
+      merged.set(teacherName, existing);
+    });
+  };
+  addSchedules((directResources && directResources.teacherSchedules) || [], "direct");
+  addSchedules((derivedResources && derivedResources.teacherSchedules) || [], "derived");
+  return buildTeacherResourcesFromSchedules(Array.from(merged.values()));
+}
+
+function mergeResourcesBySource(derivedResources, directResources, mode) {
+  const teacherPart = mergeTeacherResourceSets(directResources, derivedResources, mode);
+  return Object.assign({}, derivedResources || emptySnapshotResources(), {
+    teachers: teacherPart.teachers,
+    teacherSchedules: teacherPart.teacherSchedules,
+  });
+}
+
+async function mapWithConcurrency(items, concurrency, iteratee) {
+  const list = items || [];
+  const workerCount = Math.max(1, Math.min(Number(concurrency || 1) || 1, list.length || 1));
+  const results = new Array(list.length);
+  let cursor = 0;
+  async function worker() {
+    while (cursor < list.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await iteratee(list[index], index);
+    }
+  }
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+  return results;
+}
+
+function getDirectTeacherLimit() {
+  return parsePositiveLimit(process.env.SYNC_DIRECT_TEACHER_LIMIT) || parsePositiveLimit(process.env.SYNC_RESOURCE_LIMIT);
+}
+
+function limitDirectTargets(targets) {
+  const limit = getDirectTeacherLimit();
+  return limit ? targets.slice(0, limit) : targets;
+}
+
+async function collectDirectTeacherTargets(page, derivedResources, semester) {
+  await gotoPage(page, "/kbcx/kbxx_teacher", { waitUntil: "networkidle", timeout: 20000 });
+  try {
+    await selectSemester(page, semester);
+  } catch (error) {
+    console.warn(`[resources:teacher:direct] semester select fallback: ${error.message}`);
+  }
+  const html = await page.content();
+  const debugDir = path.join(__dirname, ".debug");
+  fs.writeFileSync(path.join(debugDir, "direct-teacher-page.html"), html, "utf-8");
+  const dom = await page.evaluate(() => {
+    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const optionList = (select) => Array.from(select.options || [])
+      .map((option) => ({
+        code: clean(option.value),
+        name: clean(option.textContent),
+      }))
+      .filter((option) => option.name && option.code && !/^请选择|^全部|^--/.test(option.name));
+    const result = {
+      teachers: [],
+      colleges: [],
+      titles: [],
+      selects: [],
+    };
+    Array.from(document.querySelectorAll("select")).forEach((select) => {
+      const marker = `${select.getAttribute("name") || ""} ${select.getAttribute("id") || ""}`.toLowerCase();
+      const options = optionList(select);
+      result.selects.push({ marker, optionCount: options.length });
+      if (/skyx|college|yx/.test(marker)) {
+        result.colleges.push(...options);
+      } else if (/jszc|title|zc/.test(marker)) {
+        result.titles.push(...options);
+      } else if (/(^|[^a-z])(js|skjs|teacher|jzg|gh)([^a-z]|$)/.test(marker)) {
+        result.teachers.push(...options);
+      }
+    });
+    return result;
+  });
+
+  const teacherTargets = (dom.teachers || []).map((item) => ({
+    type: "teacher",
+    teacherCode: item.code,
+    teacherName: item.name,
+  }));
+  if (teacherTargets.length) {
+    return {
+      targets: limitDirectTargets(teacherTargets),
+      dom,
+      source: "teacher-select",
+    };
+  }
+
+  const collegeTargets = (dom.colleges || []).map((item) => ({
+    type: "college",
+    collegeCode: item.code,
+    collegeName: item.name,
+  }));
+  if (collegeTargets.length) {
+    return {
+      targets: limitDirectTargets(collegeTargets),
+      dom,
+      source: "college-select",
+    };
+  }
+
+  const derivedTargets = ((derivedResources && derivedResources.teacherSchedules) || [])
+    .map((item) => teacherNameOf(item))
+    .filter(Boolean)
+    .filter((name, index, list) => list.indexOf(name) === index)
+    .map((name) => ({
+      type: "teacher-name",
+      teacherName: name,
+    }));
+  if (derivedTargets.length) {
+    return {
+      targets: limitDirectTargets(derivedTargets),
+      dom,
+      source: "derived-teacher-names",
+    };
+  }
+
+  return {
+    targets: [{ type: "all" }],
+    dom,
+    source: "all-teachers",
+  };
+}
+
+async function fetchDirectTeacherScheduleHtml(page, target, semester) {
+  return page.evaluate(async (input) => {
+    const body = new URLSearchParams({
+      xnxqh: input.semester,
+      skyx: input.target.collegeCode || "",
+      jszc: input.target.titleCode || "",
+      js: input.target.teacherCode || "",
+      jsid: input.target.teacherCode || "",
+      jzgid: input.target.teacherCode || "",
+      gh: input.target.teacherCode || "",
+      skjs: input.target.teacherCode || "",
+      jsxm: input.target.teacherName || "",
+      jsmc: input.target.teacherName || "",
+      zc1: "",
+      zc2: "",
+      jc1: "",
+      jc2: "",
+    }).toString();
+    const response = await fetch("/kbcx/kbxx_teacher_ifr", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+      },
+      credentials: "include",
+      body,
+    });
+    return {
+      ok: response.ok,
+      status: response.status,
+      text: await response.text(),
+    };
+  }, { target, semester });
+}
+
+async function crawlDirectTeacherResources(page, derivedResources = {}, options = {}) {
+  const semester = options.semester || process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  const debugDir = path.join(__dirname, ".debug");
+  if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+  const delayConfig = getResourceDelayConfig();
+  const collected = await collectDirectTeacherTargets(page, derivedResources, semester);
+  const targets = collected.targets || [];
+  console.log(`[resources:teacher:direct] source=${collected.source}, targets=${targets.length}, concurrency=${delayConfig.concurrency}`);
+  const samples = [];
+  const errors = [];
+  const grouped = new Map();
+
+  await mapWithConcurrency(targets, delayConfig.concurrency, async (target, index) => {
+    if (index > 0) {
+      const delay = delayConfig.requestDelayMs !== null ? delayConfig.requestDelayMs : delayConfig.minDelayMs;
+      if (delay > 0) await sleep(delay);
+    }
+    try {
+      const response = await fetchDirectTeacherScheduleHtml(page, target, semester);
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+      if (samples.length < 5) {
+        samples.push({
+          target,
+          responseLength: response.text.length,
+          htmlPath: `direct-teacher-sample-${samples.length + 1}.html`,
+        });
+        fs.writeFileSync(path.join(debugDir, `direct-teacher-sample-${samples.length}.html`), response.text, "utf-8");
+      }
+      const parsed = parser.parseTeacherScheduleIfrHtml(response.text, {
+        semester,
+        teacherName: target.teacherName || "",
+        collegeCode: target.collegeCode || "",
+        collegeName: target.collegeName || "",
+      });
+      const courses = normalizer.normalizeCourseList(parsed.courses || [], {
+        semester,
+        sourceType: "teacher",
+        audienceType: "teacher",
+      });
+      courses.forEach((course) => {
+        const teacherName = teacherNameOf(course) || target.teacherName || "未知教师";
+        if (!isUsableResourceName(teacherName) || courseIdentity.isCourseLike(teacherName)) return;
+        const current = grouped.get(teacherName) || {
+          teacherName,
+          name: teacherName,
+          displayName: teacherName,
+          collegeCode: target.collegeCode || course.collegeCode || "",
+          collegeName: target.collegeName || course.collegeName || "",
+          title: target.title || "",
+          source: "direct",
+          courses: [],
+        };
+        current.courses.push(Object.assign({}, course, {
+          teacherName,
+          source: "direct",
+          sourceType: "teacher",
+          audienceType: "teacher",
+        }));
+        grouped.set(teacherName, current);
+      });
+    } catch (error) {
+      errors.push({
+        target,
+        message: error.message,
+      });
+      console.warn(`[resources:teacher:direct] target failed (${target.teacherName || target.collegeName || target.type}): ${error.message}`);
+    }
+  });
+
+  const teacherSchedules = Array.from(grouped.values()).map((item) => Object.assign({}, item, {
+    courses: dedupeCourses(item.courses),
+  }));
+  const resources = buildTeacherResourcesFromSchedules(teacherSchedules);
+  const report = {
+    success: errors.length < targets.length,
+    generatedAt: new Date().toISOString(),
+    semester,
+    source: collected.source,
+    targetCount: targets.length,
+    teacherScheduleCount: resources.teacherSchedules.length,
+    courseCount: resources.teacherSchedules.reduce((sum, item) => sum + (item.courses || []).length, 0),
+    dom: collected.dom,
+    errors: errors.slice(0, 50),
+    samples,
+  };
+  fs.writeFileSync(path.join(debugDir, "direct-teacher-report-latest.json"), JSON.stringify(report, null, 2), "utf-8");
+  fs.writeFileSync(path.join(debugDir, "direct-teacher-schedules-latest.json"), JSON.stringify(resources.teacherSchedules, null, 2), "utf-8");
+  console.log(`[resources:teacher:direct] schedules=${report.teacherScheduleCount}, courses=${report.courseCount}, errors=${errors.length}`);
+  return resources;
+}
+
+async function buildResourcesForClassSchedules(classSchedules, resourceTypes, options = {}) {
+  const types = normalizeResourceTypeList(resourceTypes);
+  const semester = options.semester || process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  const includeOptions = {
+    includeTeachers: types.includes("teacher"),
+    includeClassrooms: types.includes("classroom"),
+    includeCourses: types.includes("course"),
+  };
+  const normalizedClassSchedules = (classSchedules || []).map((item) => normalizeScheduleEntryCourses(item, {
+    semester: item.semester || semester,
+    sourceType: "class",
+    audienceType: "student",
+  }));
+  const derivedResources = buildSnapshotResources(normalizedClassSchedules, includeOptions);
+  const mode = getEffectiveResourceSourceMode();
+  const useDirect = shouldUseDirectTeacherResources(types);
+  if (!useDirect) {
+    return derivedResources;
+  }
+  if (!options.page) {
+    console.warn(`[resources:teacher] resource-source=${mode} requested but no browser page is available; falling back to derived resources.`);
+    return derivedResources;
+  }
+  const directResources = await crawlDirectTeacherResources(options.page, derivedResources, { semester });
+  return mergeResourcesBySource(derivedResources, directResources, getEnvFlag("SYNC_FORCE_RESOURCE_CRAWL", false) && mode === "derived" ? "both" : mode);
+}
+
+function buildResourceIncludeOptionsFromScopes(includeScopes) {
+  const scopes = Array.isArray(includeScopes) ? includeScopes : [];
+  return {
+    includeTeachers: scopes.includes("teachers"),
+    includeClassrooms: scopes.includes("classrooms"),
+    includeCourses: scopes.includes("courses"),
+    includeTeacherSchedules: scopes.includes("teacherSchedules"),
+    includeClassroomSchedules: scopes.includes("classroomSchedules"),
+    includeCourseSchedules: scopes.includes("courseSchedules"),
+  };
+}
+
+function getResourceTypesFromIncludeScopes(includeScopes) {
+  const scopes = Array.isArray(includeScopes) ? includeScopes : [];
+  const types = [];
+  if (scopes.includes("teachers") || scopes.includes("teacherSchedules")) {
+    types.push("teacher");
+  }
+  if (scopes.includes("classrooms") || scopes.includes("classroomSchedules")) {
+    types.push("classroom");
+  }
+  if (scopes.includes("courses") || scopes.includes("courseSchedules")) {
+    types.push("course");
+  }
+  return types;
+}
+
+function getResourceTypesForAction(action) {
+  if (action === "resources") return ["teacher", "classroom", "course"];
+  const typeMap = {
+    teachers: "teacher",
+    classrooms: "classroom",
+    courses: "course",
+  };
+  return typeMap[action] ? [typeMap[action]] : [];
+}
+
 function buildResourceUploadId(type) {
   return `${type}-${Date.now()}-${crypto.randomBytes(4).toString("hex")}`;
 }
@@ -1741,7 +2192,7 @@ async function uploadResourceSchedules(resources, resourceTypes, semester) {
   return results;
 }
 
-async function handleResourcesSync(resourceTypes) {
+async function handleResourcesSync(resourceTypes, options = {}) {
   const debugDir = path.join(__dirname, ".debug");
   if (!fs.existsSync(debugDir)) {
     fs.mkdirSync(debugDir, { recursive: true });
@@ -1805,7 +2256,10 @@ async function handleResourcesSync(resourceTypes) {
   console.log(`- 抓取清单学期 (manifest semester): ${manifest.semester}`);
   console.log(`- 抓取清单生成时间 (manifest crawledAt): ${manifest.crawledAt}`);
   console.log(`- 抓取清单班级课表数量 (classScheduleCount): ${manifest.classScheduleCount || items.length}`);
-  console.log("- 说明：此命令不会访问教务 100 网，只会基于刚才抓取的班级课表缓存派生教师/教室/课程维度。");
+  console.log(`- resourceSource: ${getEffectiveResourceSourceMode()}${shouldUseDirectTeacherResources(resourceTypes) ? " (teacher direct crawl enabled)" : " (derived from class schedules)"}`);
+  console.log(shouldUseDirectTeacherResources(resourceTypes)
+    ? "- 说明：教师资源会访问教务 100 网直抓 teacher endpoint，教室/课程仍基于班级课表缓存派生。"
+    : "- 说明：此命令不会访问教务 100 网，只会基于刚才抓取的班级课表缓存派生教师/教室/课程维度。");
   console.log("===================================================================\n");
   const types = normalizeResourceTypeList(resourceTypes);
   const includeOptions = {
@@ -1814,12 +2268,10 @@ async function handleResourcesSync(resourceTypes) {
     includeCourses: types.includes("course"),
   };
   const semester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
-  const normalizedClassSchedules = items.map((item) => normalizeScheduleEntryCourses(item, {
-    semester: item.semester || semester,
-    sourceType: "class",
-    audienceType: "student",
-  }));
-  const resources = buildSnapshotResources(normalizedClassSchedules, includeOptions);
+  const resources = await buildResourcesForClassSchedules(items, types, {
+    page: options.page,
+    semester,
+  });
   const resourcesPath = path.join(debugDir, "resources-latest.json");
   fs.writeFileSync(resourcesPath, JSON.stringify(resources, null, 2), "utf-8");
 
@@ -1848,6 +2300,8 @@ async function handleResourcesSync(resourceTypes) {
       SYNC_RESOURCES_CLASSROOMS: includeOptions.includeClassrooms,
       SYNC_RESOURCES_COURSES: includeOptions.includeCourses,
       SYNC_RESOURCE_LIMIT: parsePositiveLimit(process.env.SYNC_RESOURCE_LIMIT),
+      SYNC_RESOURCE_SOURCE: getEffectiveResourceSourceMode(),
+      SYNC_FORCE_RESOURCE_CRAWL: getEnvFlag("SYNC_FORCE_RESOURCE_CRAWL", false),
     },
     counts: {
       teachers: resources.teachers.length,
@@ -2882,11 +3336,19 @@ async function syncClassSchedules(page, catalog, majors) {
   console.log(`📅 抓取学期: ${activeSemester}`);
 
   const cliParams = global.CLI_PARAMS || {};
-  const forceRefresh = Boolean(cliParams.forceRefresh || cliParams["force-refresh"]);
+  const forceRefresh = Boolean(cliParams.forceRefresh || cliParams["force-refresh"] || cliParams.fresh);
   const ignoreProgress = forceRefresh || Boolean(cliParams.ignoreProgress || cliParams["ignore-progress"]);
   const ignoreNoScheduleCache = forceRefresh || Boolean(cliParams.ignoreNoScheduleCache || cliParams["ignore-no-schedule-cache"]);
   const clearProgress = Boolean(cliParams.clearProgress || cliParams["clear-progress"]);
   const clearNoScheduleCache = Boolean(cliParams.clearNoScheduleCache || cliParams["clear-no-schedule-cache"]);
+  const crawlMode = cliParams.crawlMode || (forceRefresh ? "full-fresh" : (cliParams.recheckNoSchedule || cliParams["recheck-no-schedule"] ? "revalidate" : "incremental"));
+  if (crawlMode === "full-fresh") {
+    console.log("🧭 本次为 full-fresh 模式：忽略 progress、no-schedule cache 和历史 classSchedules 缓存。");
+  } else if (crawlMode === "revalidate") {
+    console.log("🧭 本次为 revalidate 模式：重新校验无排课专业，不按 no-schedule cache 跳过。");
+  } else {
+    console.log("🧭 本次为 incremental 模式：允许使用本地进度与 no-schedule cache。");
+  }
 
   const PROGRESS_PATH = path.join(debugDir, "sync-progress.json");
   if ((clearProgress || forceRefresh) && fs.existsSync(PROGRESS_PATH)) {
@@ -3046,16 +3508,29 @@ async function syncClassSchedules(page, catalog, majors) {
   const completedProgressCount = effectiveTargetMajors.length - pendingMajors.length;
   const skipNoScheduleCount = targetMajors.length - effectiveTargetMajors.length;
   let cachedClassSchedules = [];
+  const crawlStats = {
+    crawlMode,
+    usedProgressCache: !ignoreProgress && completedProgressCount > 0,
+    usedNoScheduleCache: skipNoScheduleCache && !recheckNoSchedule && skipNoScheduleCount > 0,
+    usedClassScheduleCache: false,
+    actualNetworkRequestCount: 0,
+    skippedByProgressCount: completedProgressCount,
+    skippedByNoScheduleCount: skipNoScheduleCount,
+    freshRunId: cliParams.freshRunId || cliParams["fresh-run-id"] || (forceRefresh ? `fresh-${Date.now()}-${crypto.randomBytes(4).toString("hex")}` : ""),
+  };
+  global.SYNC_CRAWL_STATS = crawlStats;
   global.CLASS_SCHEDULE_CACHE_USAGE = {
     usedClassScheduleCache: false,
     cacheSource: null,
     cacheWarning: null,
   };
 
-  if (completedProgressCount > 0 || pendingMajors.length === 0) {
+  if (!forceRefresh && (completedProgressCount > 0 || pendingMajors.length === 0)) {
     const cache = readClassScheduleCacheForSemester(activeSemester);
     if (cache.items && cache.items.length > 0) {
       cachedClassSchedules = cache.items;
+      crawlStats.usedClassScheduleCache = true;
+      global.SYNC_CRAWL_STATS = crawlStats;
       global.CLASS_SCHEDULE_CACHE_USAGE = {
         usedClassScheduleCache: true,
         cacheSource: cache.filePath,
@@ -3099,6 +3574,8 @@ async function syncClassSchedules(page, catalog, majors) {
     console.log(`   [${count}/${pendingMajors.length}] 正在抓取: ${major.grade}级 - ${major.name} 专业课表 ...`);
 
     try {
+      crawlStats.actualNetworkRequestCount += 1;
+      global.SYNC_CRAWL_STATS = crawlStats;
       // 页面内 POST 请求课表 HTML
       const htmlText = await page.evaluate(async (params) => {
         const formBody = new URLSearchParams({
@@ -3345,6 +3822,8 @@ async function syncClassSchedules(page, catalog, majors) {
   console.log(`- 重复课程去重数量: ${totalDedupledCount} 门`);
   console.log(`- 分组课程数量: ${totalGroupedCount} 组`);
   console.log(`- 跳过无课表专业数量: ${finalTotalSkipCount} 个 (其中缓存跳过 ${skipNoScheduleCount}，本次新确认 ${newNoScheduleCount})`);
+  console.log(`- 真实请求教务网专业数: ${crawlStats.actualNetworkRequestCount}`);
+  console.log(`- 使用 progress: ${crawlStats.usedProgressCache ? "是" : "否"}，使用 no-schedule cache: ${crawlStats.usedNoScheduleCache ? "是" : "否"}，合并旧课表: ${crawlStats.usedClassScheduleCache ? "是" : "否"}`);
   console.log("==================================================\n");
 
   // 如果全部都已同步完成，重置进度文件
@@ -3454,7 +3933,7 @@ async function handleFreshSync(page) {
 
   // 4. 派生资源维度数据并上传 VPS
   console.log("\n[sync:fresh] 正在基于新抓取的班级课表派生资源维度...");
-  const resources = await handleResourcesSync(["teacher", "classroom", "course"]);
+  const resources = await handleResourcesSync(["teacher", "classroom", "course"], { page });
 
   // 5. 离线发布与激活
   console.log("\n[sync:fresh] 正在以离线发布模式 (SYNC_RELEASE_OFFLINE=true) 生成发布并激活线上快照...");
@@ -3498,7 +3977,7 @@ async function handleQuickSync(page) {
 
   // 3. 派生资源维度数据并上传 VPS
   console.log("\n[sync:quick] 正在基于新抓取的班级课表派生资源维度...");
-  const resources = await handleResourcesSync(["teacher", "classroom", "course"]);
+  const resources = await handleResourcesSync(["teacher", "classroom", "course"], { page });
 
   // 4. 离线发布与激活
   console.log("\n[sync:quick] 正在以离线发布模式 (SYNC_RELEASE_OFFLINE=true) 生成发布并激活线上快照...");
@@ -3543,12 +4022,23 @@ async function main() {
 
   // 还原真实执行指令
   global.GENERATED_COMMAND = `node sync.js ${action} ${args.join(" ")}`;
-  params.forceRefresh = Boolean(params["force-refresh"] || params.forceRefresh);
+  params.fresh = Boolean(params.fresh || params["fresh"]);
+  params.recheckNoSchedule = Boolean(params["recheck-no-schedule"] || params.recheckNoSchedule);
+  params.forceResourceCrawl = Boolean(params["force-resource-crawl"] || params.forceResourceCrawl);
+  params.resourceSource = params["resource-source"] || params.resourceSource || "derived";
+  params.forceRefresh = Boolean(params["force-refresh"] || params.forceRefresh || params.fresh);
   params.ignoreProgress = Boolean(params["ignore-progress"] || params.ignoreProgress || params.forceRefresh);
   params.ignoreNoScheduleCache = Boolean(params["ignore-no-schedule-cache"] || params.ignoreNoScheduleCache || params.forceRefresh);
   params.clearProgress = Boolean(params["clear-progress"] || params.clearProgress);
   params.clearNoScheduleCache = Boolean(params["clear-no-schedule-cache"] || params.clearNoScheduleCache);
   params.classScope = params["class-scope"] || params.classScope || "";
+  params.crawlMode = params["crawl-mode"] || params.crawlMode || (
+    params.fresh ? "full-fresh" : (params.forceResourceCrawl ? "resource-fresh" : (params.recheckNoSchedule ? "revalidate" : "incremental"))
+  );
+  params.freshRunId = params["fresh-run-id"] || params.freshRunId || (params.fresh ? `fresh-${Date.now()}-${crypto.randomBytes(4).toString("hex")}` : "");
+  if (params.crawlMode === "full-fresh") {
+    console.log("🧭 本次为 full-fresh 模式");
+  }
 
   // 将 CLI 参数映射到环境变量
   if (params.term) {
@@ -3583,6 +4073,15 @@ async function main() {
   }
   if (params.forceRefresh || params.ignoreNoScheduleCache) {
     process.env.SYNC_SKIP_NO_SCHEDULE_CACHE = "false";
+  }
+  if (params.recheckNoSchedule) {
+    process.env.SYNC_RECHECK_NO_SCHEDULE = "true";
+  }
+  if (params.forceResourceCrawl) {
+    process.env.SYNC_FORCE_RESOURCE_CRAWL = "true";
+  }
+  if (params.resourceSource) {
+    process.env.SYNC_RESOURCE_SOURCE = params.resourceSource;
   }
   if (params["crawl-only"]) {
     process.env.SYNC_CLASS_CRAWL_ONLY = "true";
@@ -3632,18 +4131,9 @@ async function main() {
     return;
   }
 
-  if (action === "resources") {
-    await handleResourcesSync(["teacher", "classroom", "course"]);
-    return;
-  }
-
-  if (action === "teachers" || action === "classrooms" || action === "courses") {
-    const typeMap = {
-      teachers: "teacher",
-      classrooms: "classroom",
-      courses: "course",
-    };
-    await handleResourcesSync([typeMap[action]]);
+  const resourceActionTypes = getResourceTypesForAction(action);
+  if (resourceActionTypes.length && !shouldUseDirectTeacherResources(resourceActionTypes)) {
+    await handleResourcesSync(resourceActionTypes);
     return;
   }
 
@@ -3686,6 +4176,8 @@ async function main() {
       await handleQuickSync(page);
     } else if (action === "local-campus") {
       await handleLocalCampusStaging(page, params);
+    } else if (resourceActionTypes.length) {
+      await handleResourcesSync(resourceActionTypes, { page });
     } else if (action === "release") {
       // 暴力快照发布默认环境变量配置
       if (!process.env.SYNC_CLASS_GRADES) {
@@ -3712,11 +4204,21 @@ async function main() {
         throw new Error("没有抓取到任何班级课表，快照发布中断");
       }
       const includeReleaseResources = getEnvFlag("SYNC_RELEASE_INCLUDE_RESOURCES", true);
-      const snapshot = buildSnapshot(catalog, majors, allClassSchedules, null, {
+      const releaseResourceTypes = includeReleaseResources ? ["teacher", "classroom", "course"] : [];
+      const releaseResources = includeReleaseResources
+        ? await buildResourcesForClassSchedules(allClassSchedules, releaseResourceTypes, {
+            page,
+            semester: process.env.PREFERRED_SEMESTER || inferPreferredSemester(),
+          })
+        : null;
+      const snapshot = buildSnapshot(catalog, majors, allClassSchedules, releaseResources, {
         resources: {
           includeTeachers: includeReleaseResources,
           includeClassrooms: includeReleaseResources,
           includeCourses: includeReleaseResources,
+          includeTeacherSchedules: includeReleaseResources,
+          includeClassroomSchedules: includeReleaseResources,
+          includeCourseSchedules: includeReleaseResources,
         },
       });
       const zlib = require("zlib");
@@ -3797,5 +4299,11 @@ if (require.main === module) {
     resolveInputFilePath,
     resolveOutputFilePath,
     resolveProjectPath,
+    getEffectiveResourceSourceMode,
+    shouldUseDirectTeacherResources,
+    buildResourcesForClassSchedules,
+    crawlDirectTeacherResources,
+    mergeResourcesBySource,
+    getResourceTypesFromIncludeScopes,
   };
 }

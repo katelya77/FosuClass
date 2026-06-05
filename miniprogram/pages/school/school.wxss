@@ -376,10 +376,15 @@ picker {
   align-items: center;
   justify-content: center;
   min-width: 120rpx;
-  height: 48rpx;
+  min-height: 48rpx;
+  max-width: 240rpx;
+  padding: 0 16rpx;
   border-radius: 999rpx;
   font-size: 22rpx;
   font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
+  white-space: normal;
 }
 
 .status.ready {

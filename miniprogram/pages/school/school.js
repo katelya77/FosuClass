@@ -134,11 +134,14 @@ function getClassEmptyState(reasonCode) {
 function normalizeIndexedScheduleItem(type, item, version) {
   const source = item || {};
   const name = source.name || source.teacherName || source.displayName || source.title || source.roomName || source.classroomName || source.courseName || "";
+  const courseCount = Number(source.courseCount || source.count || (Array.isArray(source.courses) ? source.courses.length : 0)) || 0;
   const common = Object.assign({}, source, {
     detailId: source.id || name,
     scheduleVersion: version || source.version || "",
     courses: Array.isArray(source.courses) ? source.courses : [],
-    courseCount: Number(source.courseCount || source.count || (Array.isArray(source.courses) ? source.courses.length : 0)) || 0,
+    courseCount,
+    hasDetail: source.hasDetail !== false,
+    detailHint: source.hasDetail === false && courseCount > 0 ? "课程数据可用，详情待补齐" : "",
   });
   if (type === "teacher") {
     return Object.assign(common, {
@@ -1564,10 +1567,12 @@ Page({
     const renderFn = (data, isFromCache) => {
       const formatTime = formatUpdateTime(data.updatedAt);
       const teachers = (data.items || []).map(item => normalizeIndexedScheduleItem("teacher", item, data.version));
+      this.lastTeacherSearchDebug = data.debug || null;
       this.setData({
         teachersResult: teachers,
         teacherHitCount: teachers.length,
         teacherDataSourceText: "本地静态索引",
+        teacherDiagnosticText: "",
         dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
         updatedAtText: teachers.length
           ? `${teachers.length} 个命中 · 本地静态索引${formatTime ? " · 更新于 " + formatTime : ""}`
@@ -1711,18 +1716,34 @@ Page({
     }
 
     wx.showLoading({ title: "正在打开课表...", mask: true });
-    releasePackService.loadDetail(type, detailId, {
-      term: semester,
-      releaseVersion: version,
-    }, {
-      forceNetwork: true,
-    })
+    const detailPromise = type === "classroom"
+      ? releasePackService.resolveClassroomDetail(displayName, {
+        term: semester,
+        releaseVersion: version,
+        detailId,
+      }, {
+        timeout: SCHOOL_REQUEST_TIMEOUT,
+        retries: 1,
+      })
+      : releasePackService.loadDetail(type, detailId, {
+        term: semester,
+        releaseVersion: version,
+      }, {
+        forceNetwork: true,
+      });
+
+    detailPromise
       .then((data) => {
         wx.hideLoading();
         const schedule = data.schedule || data.detail || {};
         const nextVersion = data.version || version;
-        this.setScheduleDetailCache(type, detailId, nextVersion, semester, schedule);
-        const meta = Object.assign({}, item, schedule, { semester, scheduleVersion: nextVersion });
+        const resolvedDetailId = data.detailId || data.resolvedId || schedule.id || detailId;
+        this.setScheduleDetailCache(type, resolvedDetailId, nextVersion, semester, schedule);
+        const meta = Object.assign({}, item, schedule, {
+          detailId: resolvedDetailId,
+          semester,
+          scheduleVersion: nextVersion,
+        });
         if (type === "class") this.saveRecentSchedule(meta);
         this.navigateToScheduleView(type, displayName, schedule.courses || [], meta);
       })
@@ -1746,9 +1767,21 @@ Page({
       .replace(/[\uFF01-\uFF5E]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
       .replace(/\u3002/g, ".")
       .toLowerCase();
-    const samples = (this.data.teachersResult || []).slice(0, 5).map((item) => Object.keys(item).slice(0, 8).join(",")).join(" / ");
+    const debug = this.lastTeacherSearchDebug || {};
+    const samples = Array.isArray(debug.sampleItems)
+      ? debug.sampleItems.map((item) => item.teacherName || item.name || item.id).filter(Boolean).join(" / ")
+      : (this.data.teachersResult || []).slice(0, 5).map((item) => item.teacherName || item.name || item.id).filter(Boolean).join(" / ");
     this.setData({
-      teacherDiagnosticText: `teacher index hits=${this.data.teacherHitCount || 0}; keyword=${normalize(keyword)}; samples=${samples || "-"}`,
+      teacherDiagnosticText: [
+        `release=${debug.releaseVersion || this.getReleaseVersionForCache() || "-"}`,
+        `indexTotal=${debug.teacherIndexTotal ?? "-"}`,
+        `keyword=${normalize(keyword)}`,
+        `normalized=${debug.normalizedKeyword || normalize(keyword)}`,
+        `before=${debug.beforeFilterCount ?? "-"}`,
+        `collegeAfter=${debug.collegeFilteredCount ?? "-"}`,
+        `keywordHits=${debug.keywordHitCount ?? this.data.teacherHitCount ?? 0}`,
+        `samples=${samples || "-"}`,
+      ].join("; "),
     });
   },
 

@@ -63,6 +63,8 @@ app.use("/static/releases", express.static(releaseService.PUBLIC_RELEASES_DIR, {
   maxAge: "1y",
   setHeaders: (res) => {
     res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Fosu-Static-Policy", "cacheable-public-release-pack");
   },
 }));
 

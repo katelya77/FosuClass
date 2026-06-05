@@ -9,6 +9,46 @@ const schoolCatalogService = require("../services/schoolCatalogService");
 const scheduleService = require("../services/scheduleService");
 const releaseService = require("../services/releaseService");
 const { scheduleLimiter } = require("../utils/rateLimit");
+const { safeLog } = require("../utils/safeLogger");
+const {
+  bootstrapFosuSession,
+  optionalSessionGuard,
+  publicFosuGuard,
+  validateJsonBody,
+} = require("../utils/apiSecurity");
+
+router.use(publicFosuGuard);
+
+const scheduleQueryFields = [
+  "semester",
+  "term",
+  "className",
+  "keyword",
+  "teacherName",
+  "classroomName",
+  "courseName",
+  "releaseVersion",
+  "version",
+  "weekStart",
+  "weekEnd",
+  "sectionStart",
+  "sectionEnd",
+];
+
+const guardedDynamicPaths = new Set([
+  "/search-index",
+  "/schedule-detail",
+  "/class-schedule",
+  "/teacher-schedule",
+  "/classroom-schedule",
+  "/course-schedule",
+  "/empty-classrooms",
+]);
+
+router.use((req, res, next) => {
+  if (!guardedDynamicPaths.has(req.path)) return next();
+  return optionalSessionGuard(req, res, next);
+});
 
 /**
  * 辅助错误处理函数：对教务系统的异常进行分类，并隐去任何敏感信息
@@ -164,6 +204,29 @@ router.get("/app-config", (req, res) => {
     res.json(rawConfig);
   } catch (error) {
     handleRouteError(res, error, "get-app-config-failed");
+  }
+});
+
+router.post("/session/bootstrap", scheduleLimiter, validateJsonBody(["code"]), async (req, res) => {
+  try {
+    const session = await bootstrapFosuSession(req.body && req.body.code);
+    return res.json({
+      success: true,
+      sessionToken: session.sessionToken,
+      expiresIn: session.expiresIn,
+      appid: session.appid,
+      openidHash: session.openidHash,
+    });
+  } catch (error) {
+    safeLog("fosu-session-bootstrap-failed", {
+      code: error.code || error.message,
+      statusCode: error.statusCode || 500,
+    });
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      code: error.message || "SESSION_BOOTSTRAP_FAILED",
+      message: "小程序会话初始化失败。",
+    });
   }
 });
 
@@ -595,13 +658,13 @@ async function handleClassScheduleRequest(req, res) {
 }
 
 router.get("/class-schedule", scheduleLimiter, handleClassScheduleRequest);
-router.post("/class-schedule", scheduleLimiter, handleClassScheduleRequest);
+router.post("/class-schedule", scheduleLimiter, validateJsonBody(scheduleQueryFields), handleClassScheduleRequest);
 
 /**
  * 4. 获取教师课表
  * POST /api/fosu/teacher-schedule
  */
-router.post("/teacher-schedule", scheduleLimiter, async (req, res) => {
+router.post("/teacher-schedule", scheduleLimiter, validateJsonBody(scheduleQueryFields), async (req, res) => {
   try {
     const data = await scheduleService.getTeacherSchedule(req.body);
     res.json(data);
@@ -614,7 +677,7 @@ router.post("/teacher-schedule", scheduleLimiter, async (req, res) => {
  * 5. 获取教室课表
  * POST /api/fosu/classroom-schedule
  */
-router.post("/classroom-schedule", scheduleLimiter, async (req, res) => {
+router.post("/classroom-schedule", scheduleLimiter, validateJsonBody(scheduleQueryFields), async (req, res) => {
   try {
     const data = await scheduleService.getClassroomSchedule(req.body);
     res.json(data);
@@ -627,7 +690,7 @@ router.post("/classroom-schedule", scheduleLimiter, async (req, res) => {
  * 6. 获取课程课表
  * POST /api/fosu/course-schedule
  */
-router.post("/course-schedule", scheduleLimiter, async (req, res) => {
+router.post("/course-schedule", scheduleLimiter, validateJsonBody(scheduleQueryFields), async (req, res) => {
   try {
     const data = await scheduleService.getCourseSchedule(req.body);
     res.json(data);

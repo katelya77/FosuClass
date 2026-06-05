@@ -406,11 +406,51 @@ picker {
   color: #9a6b16;
 }
 
+.room-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-top: 12rpx;
+}
+
+.room-section-chip {
+  height: 36rpx;
+  padding: 0 14rpx;
+  border-radius: 18rpx;
+  background: #eef5ff;
+  color: #2563a8;
+  font-size: 21rpx;
+  font-weight: 800;
+  line-height: 36rpx;
+}
+
 .room-actions {
   flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   gap: 10rpx;
+}
+
+.room-schedule-badge {
+  max-width: 136rpx;
+  min-height: 40rpx;
+  padding: 0 12rpx;
+  border-radius: 20rpx;
+  font-size: 20rpx;
+  font-weight: 900;
+  line-height: 40rpx;
+  text-align: center;
+  white-space: normal;
+}
+
+.room-schedule-badge.ready {
+  background: #e9f8f1;
+  color: #168957;
+}
+
+.room-schedule-badge.partial {
+  background: #fff7e6;
+  color: #9a6b16;
 }
 
 .mini-btn {

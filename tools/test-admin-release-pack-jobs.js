@@ -121,10 +121,17 @@ async function run() {
     assert(rebuildJob.result.manifest.staticBaseUrl, "rebuild job should return manifest with staticBaseUrl");
 
     const publishVersion = `${version}-published`;
+    const publishSnapshot = snapshot(publishVersion);
+    publishSnapshot.classSchedules[0].courses[0].courseName = "Job 课程 Published";
+    publishSnapshot.resources.teacherSchedules[0].courses[0].courseName = "Job 课程 Published";
+    publishSnapshot.resources.classroomSchedules[0].courses[0].courseName = "Job 课程 Published";
+    publishSnapshot.resources.courseSchedules[0].courseName = "Job 课程 Published";
+    publishSnapshot.resources.courseSchedules[0].courses[0].courseName = "Job 课程 Published";
+    publishSnapshot.resources.courses[0].courseName = "Job 课程 Published";
     fs.mkdirSync(process.env.FOSU_STORAGE_DIR, { recursive: true });
     fs.writeFileSync(
       path.join(process.env.FOSU_STORAGE_DIR, "staging-latest.json"),
-      JSON.stringify(snapshot(publishVersion), null, 2),
+      JSON.stringify(publishSnapshot, null, 2),
       "utf-8"
     );
 
