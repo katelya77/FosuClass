@@ -95,6 +95,9 @@ function publicManifest(manifest) {
   if (!manifest) return null;
   const copy = Object.assign({}, manifest);
   const chunkStatus = getChunkStatus(manifest);
+  const summary = manifest.summary || {};
+  const canonicalHash = manifest.canonicalHash || summary.canonicalHash || summary.stagingCanonicalHash || "";
+  const publishedReleaseVersion = manifest.publishedReleaseVersion || manifest.publishedVersion || "";
   copy.sourceSize = manifest.originalSize || 0;
   copy.gzipSize = manifest.contentEncoding === "gzip" ? manifest.uploadSize || 0 : 0;
   copy.chunkCount = manifest.totalChunks || 0;
@@ -102,7 +105,12 @@ function publicManifest(manifest) {
   copy.receivedCount = chunkStatus.receivedCount;
   copy.receivedBytes = chunkStatus.receivedBytes;
   copy.progress = chunkStatus.progress;
-  copy.counts = manifest.summary?.counts || manifest.summary || {};
+  copy.counts = summary.counts || summary || {};
+  copy.canonicalHash = canonicalHash;
+  copy.publishedReleaseVersion = publishedReleaseVersion;
+  copy.publishedVersion = publishedReleaseVersion;
+  copy.active = Boolean(manifest.active);
+  copy.sourceTaskId = manifest.sourceTaskId || manifest.relayTaskId || "";
   delete copy.uploadDir;
   delete copy.joinedPath;
   delete copy.jsonPath;
@@ -420,17 +428,45 @@ function markUploadPendingReview(uploadId, summary) {
   return publicManifest(manifest);
 }
 
-function markUploadPublished(uploadId, version) {
+function markUploadPublished(uploadId, version, extra = {}) {
   try {
     const manifest = readManifest(uploadId);
     manifest.status = "published";
-    manifest.publishedVersion = version || manifest.releaseVersion || "";
-    manifest.publishedAt = new Date().toISOString();
+    manifest.publishedReleaseVersion = version || manifest.publishedReleaseVersion || manifest.publishedVersion || manifest.releaseVersion || "";
+    manifest.publishedVersion = manifest.publishedReleaseVersion;
+    manifest.publishedAt = extra.publishedAt || manifest.publishedAt || new Date().toISOString();
+    manifest.active = extra.active === undefined ? Boolean(manifest.active) : Boolean(extra.active);
+    manifest.sourceTaskId = extra.sourceTaskId || manifest.sourceTaskId || "";
+    if (extra.canonicalHash) {
+      manifest.canonicalHash = extra.canonicalHash;
+    }
     manifest.updatedAt = manifest.publishedAt;
     writeManifest(manifest);
     return publicManifest(manifest);
   } catch (error) {
     safeLog("staging-upload-mark-published-failed", { uploadId, error: error.message });
+    return null;
+  }
+}
+
+function markUploadSuperseded(uploadId, version, extra = {}) {
+  try {
+    const manifest = readManifest(uploadId);
+    manifest.status = extra.status || "superseded";
+    manifest.publishedReleaseVersion = version || manifest.publishedReleaseVersion || manifest.publishedVersion || manifest.releaseVersion || "";
+    manifest.publishedVersion = manifest.publishedReleaseVersion;
+    manifest.supersededAt = extra.supersededAt || manifest.supersededAt || new Date().toISOString();
+    manifest.publishedAt = manifest.publishedAt || extra.publishedAt || "";
+    manifest.active = false;
+    manifest.sourceTaskId = extra.sourceTaskId || manifest.sourceTaskId || "";
+    if (extra.canonicalHash) {
+      manifest.canonicalHash = extra.canonicalHash;
+    }
+    manifest.updatedAt = manifest.supersededAt;
+    writeManifest(manifest);
+    return publicManifest(manifest);
+  } catch (error) {
+    safeLog("staging-upload-mark-superseded-failed", { uploadId, error: error.message });
     return null;
   }
 }
@@ -504,6 +540,111 @@ function listUploads(limit = 20) {
   });
 }
 
+function manifestTime(manifest) {
+  return Date.parse(
+    manifest.publishedAt ||
+    manifest.pendingReviewAt ||
+    manifest.finalizedAt ||
+    manifest.updatedAt ||
+    manifest.createdAt ||
+    ""
+  ) || 0;
+}
+
+function getManifestCanonicalHash(manifest) {
+  const summary = manifest && manifest.summary || {};
+  return String(
+    manifest && manifest.canonicalHash ||
+    summary.canonicalHash ||
+    summary.stagingCanonicalHash ||
+    summary.meta && summary.meta.canonicalHash ||
+    ""
+  ).trim().toLowerCase();
+}
+
+function getManifestReleaseVersion(manifest) {
+  const summary = manifest && manifest.summary || {};
+  return String(
+    manifest && (manifest.publishedReleaseVersion || manifest.publishedVersion || manifest.releaseVersion) ||
+    summary.publishedReleaseVersion ||
+    summary.releaseVersion ||
+    ""
+  ).trim();
+}
+
+function reconcileWithReleaseState(options = {}) {
+  const active = options.activeRelease || {};
+  const activeVersion = String(active.version || active.releaseVersion || options.activeReleaseVersion || "").trim();
+  const activeCanonicalHash = String(active.canonicalHash || options.activeCanonicalHash || "").trim().toLowerCase();
+  const publishedAt = active.publishedAt || active.activatedAt || active.updatedAt || new Date().toISOString();
+  const sourceTaskId = options.sourceTaskId || "";
+  const manifests = readIndex()
+    .map((item) => {
+      try {
+        return readManifest(item.uploadId);
+      } catch (error) {
+        return null;
+      }
+    })
+    .filter(Boolean);
+
+  const candidates = manifests.filter((manifest) => {
+    const canonicalHash = getManifestCanonicalHash(manifest);
+    const releaseVersion = getManifestReleaseVersion(manifest);
+    if (activeCanonicalHash && canonicalHash && canonicalHash === activeCanonicalHash) return true;
+    if (activeVersion && releaseVersion && releaseVersion === activeVersion) return true;
+    if (options.uploadId && manifest.uploadId === options.uploadId) return true;
+    return false;
+  }).sort((left, right) => {
+    if (options.uploadId) {
+      if (left.uploadId === options.uploadId && right.uploadId !== options.uploadId) return -1;
+      if (right.uploadId === options.uploadId && left.uploadId !== options.uploadId) return 1;
+    }
+    if (left.active === true && right.active !== true) return -1;
+    if (right.active === true && left.active !== true) return 1;
+    return manifestTime(right) - manifestTime(left);
+  });
+
+  let changed = 0;
+  const touched = [];
+  candidates.forEach((manifest, index) => {
+    const canonicalHash = getManifestCanonicalHash(manifest) || activeCanonicalHash;
+    if (index === 0) {
+      const updated = markUploadPublished(manifest.uploadId, activeVersion, {
+        active: true,
+        publishedAt,
+        sourceTaskId,
+        canonicalHash,
+      });
+      if (updated) {
+        changed += manifest.status !== "published" || manifest.active !== true ? 1 : 0;
+        touched.push(updated);
+      }
+      return;
+    }
+
+    const status = manifest.status === "published" ? "superseded" : "duplicate";
+    const updated = markUploadSuperseded(manifest.uploadId, activeVersion, {
+      status,
+      publishedAt,
+      sourceTaskId,
+      canonicalHash,
+    });
+    if (updated) {
+      changed += manifest.status !== status || manifest.active !== false ? 1 : 0;
+      touched.push(updated);
+    }
+  });
+
+  return {
+    changed,
+    matched: candidates.length,
+    activeReleaseVersion: activeVersion,
+    activeCanonicalHash,
+    uploads: touched,
+  };
+}
+
 function deleteUpload(uploadId, actor) {
   const safeId = String(uploadId || "").replace(/[^a-zA-Z0-9_-]/g, "");
   if (!safeId) {
@@ -563,7 +704,9 @@ module.exports = {
   markUploadUnchanged,
   markUploadPendingReview,
   markUploadPublished,
+  markUploadSuperseded,
   normalizeStagingData,
+  reconcileWithReleaseState,
   sanitizeFileName,
   writeChunk,
 };

@@ -163,18 +163,24 @@ function mirrorDirectory(srcDir, dstDir) {
   });
 
   let copiedFiles = 0;
+  let copiedBytes = 0;
   fs.readdirSync(srcDir, { withFileTypes: true }).forEach((entry) => {
     const srcPath = path.join(srcDir, entry.name);
     const dstPath = path.join(dstDir, entry.name);
     if (entry.isDirectory()) {
-      copiedFiles += mirrorDirectory(srcPath, dstPath).copiedFiles;
+      const child = mirrorDirectory(srcPath, dstPath);
+      copiedFiles += child.copiedFiles;
+      copiedBytes += child.copiedBytes || 0;
       return;
     }
     if (entry.isFile()) {
-      if (copyFileIfChanged(srcPath, dstPath)) copiedFiles += 1;
+      if (copyFileIfChanged(srcPath, dstPath)) {
+        copiedFiles += 1;
+        copiedBytes += fs.statSync(srcPath).size;
+      }
     }
   });
-  return { copiedFiles };
+  return { copiedFiles, copiedBytes };
 }
 
 function listReleaseDirs(dirPath) {
@@ -226,6 +232,7 @@ async function verifyHttpUrl(url, timeoutMs) {
   }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
+  const startedAt = Date.now();
   try {
     const response = await fetch(url, { method: "GET", signal: controller.signal });
     const ok = response.status >= 200 && response.status < 300;
@@ -233,7 +240,9 @@ async function verifyHttpUrl(url, timeoutMs) {
       url,
       ok,
       status: response.status,
+      latencyMs: Date.now() - startedAt,
       cacheControl: response.headers.get("cache-control") || "",
+      contentEncoding: response.headers.get("content-encoding") || "",
     };
   } finally {
     clearTimeout(timer);
@@ -305,11 +314,14 @@ async function syncStaticRelease(version, options = {}) {
   }
 
   let releaseLock = null;
+  const startedAt = new Date().toISOString();
+  const startedMs = Date.now();
   recordStatus({
     status: "running",
     success: false,
     releaseVersion,
-    startedAt: new Date().toISOString(),
+    startedAt,
+    lastAttemptAt: startedAt,
     message: "Static release sync running",
   }, config);
 
@@ -323,15 +335,23 @@ async function syncStaticRelease(version, options = {}) {
       verifyHttp: config.verifyHttp,
       timeoutMs: options.timeoutMs || 8000,
     });
+    const finishedAt = new Date().toISOString();
     return recordStatus({
       status: "success",
       success: true,
       releaseVersion,
-      syncedAt: new Date().toISOString(),
-      lastSyncTime: new Date().toISOString(),
+      syncedReleaseVersion: releaseVersion,
+      syncedAt: finishedAt,
+      lastSyncTime: finishedAt,
+      lastSuccessAt: finishedAt,
+      lastAttemptAt: startedAt,
+      lastDurationMs: Date.now() - startedMs,
       srcReleaseDir,
       dstReleaseDir,
       copiedFiles: mirror.copiedFiles,
+      filesCopied: mirror.copiedFiles,
+      copiedBytes: mirror.copiedBytes || 0,
+      bytesCopied: mirror.copiedBytes || 0,
       localFiles,
       verifiedUrls,
       staticManifestUrl: joinUrl(config.publicBaseUrl, releaseVersion, "manifest.json"),
@@ -352,6 +372,8 @@ async function syncStaticRelease(version, options = {}) {
       success: false,
       releaseVersion,
       failedAt: new Date().toISOString(),
+      lastAttemptAt: startedAt,
+      lastDurationMs: Date.now() - startedMs,
       code: error.code || "STATIC_SYNC_FAILED",
       message: error.message,
       verificationResults: error.results || [],
@@ -380,15 +402,101 @@ function getSyncStatus(options = {}) {
   const status = readJsonFile(config.statusPath, null);
   const activeVersion = getActiveVersion(options.version);
   const publicBaseUrl = config.publicBaseUrl;
+  const configured = Boolean(config.dst);
+  const targetDirExists = Boolean(config.dst && fs.existsSync(config.dst));
+  let targetDirWritable = false;
+  if (targetDirExists) {
+    try {
+      fs.accessSync(config.dst, fs.constants.W_OK);
+      targetDirWritable = true;
+    } catch (error) {
+      targetDirWritable = false;
+    }
+  }
+  const releaseVersion = status?.releaseVersion || activeVersion || "";
+  const syncedReleaseVersion = status?.syncedReleaseVersion || (status?.success ? status?.releaseVersion : "") || "";
+  const versionMatched = Boolean(activeVersion && syncedReleaseVersion && activeVersion === syncedReleaseVersion);
+  const releaseDirs = configured ? listReleaseDirs(config.dst).slice(0, config.keepLatestN) : [];
+  const retainedReleases = releaseDirs.map((item) => ({
+    version: item.version,
+    role: item.version === activeVersion ? "active" : "retained",
+    mtimeMs: item.mtimeMs,
+  }));
+  const verified = Array.isArray(status?.verifiedUrls) ? status.verifiedUrls : Array.isArray(status?.verificationResults) ? status.verificationResults : [];
+  const urlStatus = (relativePath) => {
+    const found = verified.find((item) => String(item.url || "").includes(`/${trimSlashes(relativePath)}`));
+    if (!found) return { status: "not-collected", latencyMs: null, cacheControl: "", contentEncoding: "" };
+    return {
+      status: found.ok ? (found.status || 200) : (found.status || "failed"),
+      latencyMs: found.latencyMs == null ? null : found.latencyMs,
+      cacheControl: found.cacheControl || "",
+      contentEncoding: found.contentEncoding || "",
+    };
+  };
+  const manifestUrlStatus = urlStatus("manifest.json");
+  const classIndexUrlStatus = urlStatus("index/class/all.json");
+  const emptyRoomUrlStatus = urlStatus("empty-room/index.json");
+  let needsSync = false;
+  let needsSyncReason = "";
+  if (!config.enabled) {
+    needsSyncReason = "feature-disabled";
+  } else if (!configured) {
+    needsSync = true;
+    needsSyncReason = "target-dir-not-configured";
+  } else if (!targetDirExists) {
+    needsSync = true;
+    needsSyncReason = "target-dir-missing";
+  } else if (!targetDirWritable) {
+    needsSync = true;
+    needsSyncReason = "target-dir-not-writable";
+  } else if (!activeVersion) {
+    needsSyncReason = "no-active-release";
+  } else if (!versionMatched) {
+    needsSync = true;
+    needsSyncReason = syncedReleaseVersion ? "version-mismatch" : "not-synced-yet";
+  } else if (status?.status === "failed") {
+    needsSync = true;
+    needsSyncReason = "last-sync-failed";
+  } else {
+    needsSyncReason = "version-matched";
+  }
   return Object.assign({
     status: config.enabled ? "not-run" : "disabled",
     success: !config.enabled,
     enabled: config.enabled,
-    releaseVersion: status?.releaseVersion || activeVersion || "",
+    configured,
+    targetDir: config.dst,
+    targetDirExists,
+    targetDirWritable,
+    activeReleaseVersion: activeVersion,
+    releaseVersion,
+    syncedReleaseVersion,
+    versionMatched,
+    lastAttemptAt: status?.lastAttemptAt || status?.startedAt || null,
+    lastSuccessAt: status?.lastSuccessAt || status?.lastSyncTime || status?.syncedAt || null,
+    lastDurationMs: status?.lastDurationMs || null,
+    lastError: status?.message && status?.status === "failed" ? status.message : "",
+    filesCopied: status?.filesCopied || status?.copiedFiles || 0,
+    bytesCopied: status?.bytesCopied || status?.copiedBytes || 0,
+    retainedReleases,
+    retainedReleaseVersions: retainedReleases.map((item) => item.version),
+    retentionLimit: config.keepLatestN,
+    manifestUrl: activeVersion ? joinUrl(publicBaseUrl, activeVersion, "manifest.json") : "",
+    manifestStatus: manifestUrlStatus.status,
+    manifestLatencyMs: manifestUrlStatus.latencyMs,
+    classIndexUrl: activeVersion ? joinUrl(publicBaseUrl, activeVersion, "index/class/all.json") : "",
+    classIndexStatus: classIndexUrlStatus.status,
+    emptyRoomUrl: activeVersion ? joinUrl(publicBaseUrl, activeVersion, "empty-room/index.json") : "",
+    emptyRoomStatus: emptyRoomUrlStatus.status,
+    cacheControl: manifestUrlStatus.cacheControl || classIndexUrlStatus.cacheControl || emptyRoomUrlStatus.cacheControl || "",
+    contentEncoding: manifestUrlStatus.contentEncoding || classIndexUrlStatus.contentEncoding || emptyRoomUrlStatus.contentEncoding || "",
+    syncJobId: status?.syncJobId || "",
+    needsSync,
+    needsSyncReason,
     staticManifestUrl: activeVersion ? joinUrl(publicBaseUrl, activeVersion, "manifest.json") : "",
     staticClassIndexUrl: activeVersion ? joinUrl(publicBaseUrl, activeVersion, "index/class/all.json") : "",
     staticEmptyRoomIndexUrl: activeVersion ? joinUrl(publicBaseUrl, activeVersion, "empty-room/index.json") : "",
-    keptReleases: config.dst ? listReleaseDirs(config.dst).slice(0, config.keepLatestN).map((item) => item.version) : [],
+    keptReleases: retainedReleases.map((item) => item.version),
     config: {
       enabled: config.enabled,
       src: config.src,

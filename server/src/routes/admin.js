@@ -20,7 +20,10 @@ const releaseWorkerManager = require("../services/releaseWorkerManager");
 const relayService = require("../services/relayService");
 const stagingUploadService = require("../services/stagingUploadService");
 const staticReleaseSyncService = require("../services/staticReleaseSyncService");
+const releaseLifecycleService = require("../services/releaseLifecycleService");
+const storageLifecycleService = require("../services/storageLifecycleService");
 const stagingFingerprint = require("../utils/stagingFingerprint");
+const staticAccessTicket = require("../utils/staticAccessTicket");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const zlib = require("zlib");
@@ -171,6 +174,14 @@ function verifyAdminWriteAccess(req, res, next) {
   }
 
   if (adminAuth.isAdminRequest(req)) {
+    if (!["GET", "HEAD", "OPTIONS"].includes(String(req.method || "GET").toUpperCase()) && !adminAuth.isAdminOriginAllowed(req)) {
+      safeLog("admin-write-origin-rejected", { origin: req.headers.origin || "", path: req.path });
+      return res.status(403).json({
+        success: false,
+        code: "ADMIN_ORIGIN_REJECTED",
+        message: "Admin request origin is not allowed.",
+      });
+    }
     return next();
   }
 
@@ -2011,6 +2022,24 @@ router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
     adminSessionAuthenticated: adminAuth.isAdminRequest(req),
     apiTokenConfigured: Boolean(config.ADMIN_API_TOKEN),
   };
+  const lifecycleStatus = releaseLifecycleService.buildLifecycleStatus({
+    reason: "sync-status",
+    uploadLimit: 50,
+  });
+  Object.assign(payload, lifecycleStatus, {
+    releaseVersion: lifecycleStatus.activeReleaseVersion || payload.releaseVersion,
+    activeReleaseVersion: lifecycleStatus.activeReleaseVersion || payload.activeReleaseVersion,
+    latestStagingUpload: lifecycleStatus.latestStagingUpload || payload.latestStagingUpload,
+    releasePackStatus: lifecycleStatus.releasePackStatus || payload.releasePackStatus,
+    releasePackHealthy: Boolean(lifecycleStatus.releasePackHealthy || payload.releasePackHealthy),
+    staticSync: lifecycleStatus.staticSync || payload.staticSync,
+    staticManifestUrl: lifecycleStatus.staticManifestUrl || payload.staticManifestUrl,
+    staticClassIndexUrl: lifecycleStatus.staticClassIndexUrl || payload.staticClassIndexUrl,
+    staticEmptyRoomIndexUrl: lifecycleStatus.staticEmptyRoomIndexUrl || payload.staticEmptyRoomIndexUrl,
+    openRestyStaticSyncStatus: lifecycleStatus.openRestyStaticSyncStatus || payload.openRestyStaticSyncStatus,
+    lastStaticSyncTime: lifecycleStatus.lastStaticSyncTime || payload.lastStaticSyncTime,
+    staticRetainedReleases: lifecycleStatus.staticRetainedReleases || payload.staticRetainedReleases,
+  });
   payload.counts = {
     collegeCount: payload.collegesCount || 0,
     majorCount: payload.majorsCount || 0,
@@ -3306,6 +3335,7 @@ async function processDirectStagingUpload(filePath, reqMeta, job) {
 
 router.get("/staging/upload", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    releaseLifecycleService.reconcileLifecycle({ reason: "staging-upload-list" });
     return res.json({
       success: true,
       uploads: stagingUploadService.listUploads(req.query.limit || 20),
@@ -3317,15 +3347,23 @@ router.get("/staging/upload", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.get("/staging/status", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    const lifecycle = releaseLifecycleService.buildLifecycleStatus({
+      reason: "staging-status",
+      uploadLimit: req.query.limit || 50,
+    });
     const uploads = stagingUploadService.listUploads(req.query.limit || 50);
     const pendingReview = uploads.filter((item) => item.status === "pending-review");
-    const fingerprint = buildFingerprintStatus(req.query.canonicalHash || "");
+    const fingerprint = Object.assign({}, buildFingerprintStatus(req.query.canonicalHash || ""), {
+      activeCanonicalHash: lifecycle.activeCanonicalHash,
+      stagingCanonicalHash: lifecycle.stagingCanonicalHash,
+    });
     return res.json({
       success: true,
       uploads,
       pendingReview,
       latest: uploads[0] || null,
       fingerprint,
+      lifecycle,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
@@ -3578,6 +3616,8 @@ router.post("/relay/uploads/:id/promote-to-staging", adminAuth.verifyAdminAccess
       uploadId: uploadResult.upload.id,
       uploaderNote: uploadResult.upload.uploaderNote,
     });
+    const beforeLatest = getLatestStagingCanonicalHash();
+    attachStagingFingerprint(stagingData, beforeLatest.canonicalHash);
     const validation = validateStagingData(stagingData);
     if (!validation.valid) {
       return res.status(400).json({
@@ -3638,10 +3678,15 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
     const latestJob = jobService.latestJob();
     const runningReleaseJob = jobService.getRunningJobByLockGroup(releaseWorkerManager.RELEASE_HEAVY_LOCK_GROUP);
     const fingerprint = buildFingerprintStatus();
+    const lifecycleStatus = releaseLifecycleService.buildLifecycleStatus({
+      reason: "sync-status",
+      uploadLimit: 50,
+    });
     return res.json({
       success: true,
       data: {
-        releaseVersion: meta.releaseVersion || "-",
+        ...lifecycleStatus,
+        releaseVersion: lifecycleStatus.activeReleaseVersion || meta.releaseVersion || "-",
         semester: appConfigService.getAdminConfig().currentSemester,
         releasePackStatus,
         releasePackHealthy: Boolean(releasePackStatus && releasePackStatus.healthy),
@@ -3748,6 +3793,96 @@ router.get("/system/load", adminAuth.verifyAdminAccess, (req, res) => {
   });
 });
 
+router.post("/sync/reconcile", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const result = releaseLifecycleService.reconcileLifecycle({
+      reason: "manual-admin",
+      uploadId: req.body && req.body.uploadId || "",
+      sourceTaskId: req.body && req.body.sourceTaskId || "",
+    });
+    return res.json({
+      success: true,
+      result,
+      lifecycle: releaseLifecycleService.buildLifecycleStatus({ reason: "manual-admin-result" }),
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+      code: error.code || "",
+    });
+  }
+});
+
+router.post("/static-release-sync/start", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    storageLifecycleService.assertReleaseCanStart();
+    const version = getRequestedReleaseVersion(req);
+    const job = releaseWorkerManager.startReleaseJob("static-release-sync", { version });
+    return res.status(202).json({ success: true, job });
+  } catch (error) {
+    return releaseWorkerManager.sendAlreadyRunning(res, error);
+  }
+});
+
+router.get("/static-release-sync/status", adminAuth.verifyAdminAccess, (req, res) => {
+  return sendJobStatus(res, "static-release-sync", req.query.id);
+});
+
+router.get("/storage/status", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json(storageLifecycleService.getStorageStatus({
+      force: req.query.force === "1" || req.query.force === "true",
+    }));
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/storage/scan", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({ success: true, summary: storageLifecycleService.scanStorageSizes() });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/storage/maintenance/preview", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({ success: true, report: storageLifecycleService.runMaintenance({ dryRun: true }) });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code || "" });
+  }
+});
+
+router.post("/storage/maintenance/run", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({ success: true, report: storageLifecycleService.runMaintenance({ dryRun: false }) });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code || "" });
+  }
+});
+
+router.post("/static-ticket/create", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const ticket = staticAccessTicket.createStaticAccessTicket(req.body || {});
+    return res.json({ success: true, ticket });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code || "" });
+  }
+});
+
+router.post("/static-ticket/verify", adminAuth.verifyAdminAccess, (req, res) => {
+  const body = req.body || {};
+  return res.json({
+    success: true,
+    result: staticAccessTicket.verifyStaticAccessTicket(body.ticket, {
+      releaseVersion: body.releaseVersion,
+      path: body.path,
+    }),
+  });
+});
+
 router.get("/release-pack/quick-health", adminAuth.verifyAdminAccess, (req, res) => {
   const version = getRequestedReleaseVersion(req);
   return res.json({
@@ -3758,6 +3893,7 @@ router.get("/release-pack/quick-health", adminAuth.verifyAdminAccess, (req, res)
 
 router.post("/release-pack/deep-health/start", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    storageLifecycleService.assertReleaseCanStart();
     const version = getRequestedReleaseVersion(req);
     const job = releaseWorkerManager.startReleaseJob("release-pack-deep-health", { version });
     return res.status(202).json({ success: true, job });
@@ -3772,6 +3908,7 @@ router.get("/release-pack/deep-health/status", adminAuth.verifyAdminAccess, (req
 
 router.post("/release-pack/rebuild/start", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    storageLifecycleService.assertReleaseCanStart();
     const version = getRequestedReleaseVersion(req);
     const job = releaseWorkerManager.startReleaseJob("release-pack-rebuild", { version });
     return res.status(202).json({ success: true, job });
@@ -3804,6 +3941,7 @@ router.get("/release-pack/verify/status", adminAuth.verifyAdminAccess, (req, res
 
 router.post("/sync/staging/publish/start", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    storageLifecycleService.assertReleaseCanStart();
     const input = {
       force: req.body.force === true,
       releaseNote: req.body.releaseNote || "",
@@ -3961,6 +4099,7 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
  */
 router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, res) => {
   try {
+    storageLifecycleService.assertReleaseCanStart();
     if (!fs.existsSync(STAGING_LATEST_PATH)) {
       return res.status(400).json({ success: false, message: "暂存数据不存在，请先上传 Staging JSON" });
     }

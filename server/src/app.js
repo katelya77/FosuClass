@@ -10,6 +10,8 @@ const config = require("./config");
 const { globalLimiter } = require("./utils/rateLimit");
 const { safeLog } = require("./utils/safeLogger");
 const releaseService = require("./services/releaseService");
+const releaseLifecycleService = require("./services/releaseLifecycleService");
+const storageLifecycleService = require("./services/storageLifecycleService");
 
 // 路由引入
 const healthRouter = require("./routes/health");
@@ -30,11 +32,15 @@ app.use(helmet());
 const corsOptions = {
   origin: (origin, callback) => {
     if (!origin) return callback(null, true);
-    
+    const allowedOrigins = [
+      ...config.CORS_ALLOWED_ORIGINS,
+      ...config.FOSU_ALLOWED_ADMIN_ORIGINS,
+      ...config.FOSU_ALLOWED_PUBLIC_ORIGINS,
+    ].filter((item) => item && item !== "*");
+    const developmentOpen = config.NODE_ENV === "development" && process.env.FOSU_STRICT_CORS !== "true";
     if (
-      config.CORS_ALLOWED_ORIGINS.includes("*") || 
-      config.CORS_ALLOWED_ORIGINS.includes(origin) ||
-      config.NODE_ENV === "development"
+      allowedOrigins.includes(origin) ||
+      developmentOpen
     ) {
       return callback(null, true);
     }
@@ -118,6 +124,16 @@ app.use((err, req, res, next) => {
 app.listen(config.PORT, () => {
   console.log(`[FosuClass Server] Server is running at http://localhost:${config.PORT}`);
   console.log(`[FosuClass Server] Environment: ${config.NODE_ENV}`);
+  try {
+    releaseLifecycleService.reconcileLifecycle({ reason: "startup" });
+  } catch (error) {
+    safeLog("startup-lifecycle-reconcile-failed", { error: error.message });
+  }
+  try {
+    storageLifecycleService.scheduleMaintenance();
+  } catch (error) {
+    safeLog("startup-maintenance-schedule-failed", { error: error.message });
+  }
 });
 
 module.exports = app;

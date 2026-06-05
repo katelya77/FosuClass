@@ -154,6 +154,23 @@ function isAdminRequest(req) {
   return isStaticAdminTokenValid(getBearerToken(req)) || isAdminCookieValid(req);
 }
 
+function isStateChangingMethod(method) {
+  return !["GET", "HEAD", "OPTIONS"].includes(String(method || "GET").toUpperCase());
+}
+
+function isAdminOriginAllowed(req) {
+  const origin = toText(req.headers.origin);
+  if (!origin || config.NODE_ENV === "development") {
+    return true;
+  }
+  const allowed = (config.FOSU_ALLOWED_ADMIN_ORIGINS || [])
+    .filter((item) => item && item !== "*");
+  if (allowed.length === 0) {
+    return true;
+  }
+  return allowed.includes(origin);
+}
+
 function setSessionCookie(res, token) {
   const parts = [
     `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(token)}`,
@@ -198,6 +215,15 @@ function verifyAdminAccess(req, res, next) {
     });
   }
 
+  if (isStateChangingMethod(req.method) && !isAdminOriginAllowed(req)) {
+    safeLog("admin-origin-rejected", { origin: req.headers.origin || "", path: req.path });
+    return res.status(403).json({
+      success: false,
+      code: "ADMIN_ORIGIN_REJECTED",
+      message: "Admin request origin is not allowed.",
+    });
+  }
+
   return next();
 }
 
@@ -209,6 +235,7 @@ module.exports = {
   hasAdminLoginSecret,
   isAdminConfiguredForCurrentEnv,
   isAdminCookieValid,
+  isAdminOriginAllowed,
   isAdminRequest,
   isLoginCredentialValid,
   setSessionCookie,

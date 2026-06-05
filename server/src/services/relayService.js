@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
 const { safeLog } = require("../utils/safeLogger");
+const stagingFingerprint = require("../utils/stagingFingerprint");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const RELAY_DIR = process.env.RELAY_DIR
@@ -273,6 +274,12 @@ function validateStagingData(data) {
 }
 
 function summarizeStagingData(data) {
+  let canonicalHash = "";
+  try {
+    canonicalHash = stagingFingerprint.calculateFingerprint(data).canonicalHash;
+  } catch (error) {
+    canonicalHash = data.canonicalHash || data.meta && data.meta.canonicalHash || "";
+  }
   const resources = data.resources || {};
   const classSchedules = Array.isArray(data.classSchedules) ? data.classSchedules : [];
   const adminClassCount = classSchedules.filter((item) => item.displayType === "class-schedule" && !item.isAggregated).length;
@@ -280,6 +287,7 @@ function summarizeStagingData(data) {
     term: data.term || data.semester || "",
     releaseVersion: data.releaseVersion || data.version || "",
     generatedAt: data.generatedAt || data.updatedAt || "",
+    canonicalHash,
     classScheduleCount: classSchedules.length,
     adminClassCount,
     majorAggregateCount: classSchedules.length - adminClassCount,

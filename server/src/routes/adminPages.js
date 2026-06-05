@@ -2337,13 +2337,41 @@ const adminConsoleHtml = `<!doctype html>
       background: var(--warning-soft);
       color: #92400e;
     }
+    .staging-state-badge.uploading,
+    .staging-state-badge.uploaded,
+    .staging-state-badge.validating {
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+    .staging-state-badge.publishing {
+      background: #eef2ff;
+      color: #4f46e5;
+    }
     .staging-state-badge.published {
       background: var(--success-soft);
       color: var(--success);
     }
+    .staging-state-badge.active {
+      background: #dcfce7;
+      color: #166534;
+    }
+    .staging-state-badge.unchanged {
+      background: #e0f2fe;
+      color: #0369a1;
+    }
+    .staging-state-badge.duplicate,
+    .staging-state-badge.superseded {
+      background: var(--panel-2);
+      color: var(--muted);
+    }
     .staging-state-badge.failed {
       background: var(--danger-soft);
       color: var(--danger);
+    }
+    .staging-state-badge.archived,
+    .staging-state-badge.deleted {
+      background: #f1f5f9;
+      color: #94a3b8;
     }
     .staging-size-stack,
     .staging-count-stack {
@@ -2809,6 +2837,9 @@ const adminConsoleHtml = `<!doctype html>
             <div class="section-title">OpenResty 静态同步</div>
             <div class="openresty-badges">
               <span class="badge info" id="openRestyEnabledBadge">状态检测中</span>
+              <span class="badge info" id="openRestyConfiguredBadge">配置检测中</span>
+              <span class="badge info" id="openRestyDirBadge">目录检测中</span>
+              <span class="badge info" id="openRestyVersionBadge">版本检测中</span>
               <span class="badge info" id="openRestySyncBadge">同步状态</span>
               <span class="badge info" id="openRestyVerifyBadge">URL 验证</span>
             </div>
@@ -2820,6 +2851,7 @@ const adminConsoleHtml = `<!doctype html>
             <button type="button" class="secondary" id="copyStaticManifestBtn">复制 manifest URL</button>
             <button type="button" class="secondary" id="verifyStaticUrlBtn">验证静态 URL</button>
             <button type="button" class="primary" id="manualStaticSyncBtn">手动同步当前 Release</button>
+            <button type="button" class="secondary" id="reconcileLifecycleBtn">重新核对状态</button>
             <button type="button" class="ghost" id="viewStaticSyncLogBtn">查看同步日志</button>
           </div>
         </div>
@@ -2838,6 +2870,22 @@ const adminConsoleHtml = `<!doctype html>
           </div>
           <div class="sync-next-action-row">
             <button type="button" class="primary" id="syncNextActionBtn">复制采集命令</button>
+          </div>
+        </div>
+
+        <div class="card" id="runtime-storage-panel" style="margin-bottom:16px;">
+          <div class="section-title-row">
+            <div class="section-title">运行与存储</div>
+            <span class="badge info" id="storageStatusBadge">状态检测中</span>
+          </div>
+          <div id="runtimeStorageSummary" class="openresty-meta-grid">
+            <!-- runtime and storage status -->
+          </div>
+          <div class="openresty-actions">
+            <button type="button" class="secondary" id="refreshStorageStatusBtn">刷新轻量状态</button>
+            <button type="button" class="secondary" id="scanStorageBtn">运行存储扫描</button>
+            <button type="button" class="secondary" id="previewMaintenanceBtn">预览安全清理</button>
+            <button type="button" class="danger" id="runMaintenanceBtn">执行安全清理</button>
           </div>
         </div>
 
@@ -4323,6 +4371,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         relayTasks: [],
         relayUploads: [],
         stagingUploads: [],
+        storageStatus: null,
         healthChecks: [],
         qualityReport: null,
         heatmapDayType: "all",
@@ -5509,7 +5558,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
               api("/api/admin/relay/tasks"),
               api("/api/admin/relay/uploads"),
               api("/api/admin/staging/status"),
-              api("/api/admin/system/load")
+              api("/api/admin/system/load"),
+              api("/api/admin/storage/status")
             ]);
           })
           .then(function(results) {
@@ -5517,6 +5567,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             var uploadResult = results[1];
             var stagingUploadResult = results[2];
             var systemLoadResult = results[3];
+            var storageStatusResult = results[4];
             if (taskResult && taskResult.status === "fulfilled") {
               state.relayTasks = taskResult.value.tasks || [];
             }
@@ -5529,9 +5580,13 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             if (systemLoadResult && systemLoadResult.status === "fulfilled") {
               state.systemLoad = systemLoadResult.value || null;
             }
+            if (storageStatusResult && storageStatusResult.status === "fulfilled") {
+              state.storageStatus = storageStatusResult.value || null;
+            }
             renderRelayTasks();
             renderRelayUploads();
             renderStagingUploads();
+            renderRuntimeStorage();
           })
           .catch(function(err) {
             showToast(err.message, "error");
@@ -5543,25 +5598,55 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         var data = state.syncStatus || {};
         var wrap = $("syncStatsGrid");
         wrap.innerHTML = "";
+        var staticSync = data.staticSync || {};
         var retainedReleases = Array.isArray(data.staticRetainedReleases) ? data.staticRetainedReleases : [];
+        var retainedLabels = retainedReleases.map(function(item) {
+          if (typeof item === "string") return item;
+          return (item.version || "未采集") + " · " + (item.role || "retained");
+        });
         var staticSyncStatus = data.openRestyStaticSyncStatus || (data.staticSync && data.staticSync.status) || "-";
-        var staticEnabled = staticSyncStatus !== "disabled" && staticSyncStatus !== "-";
+        var staticEnabled = Boolean(staticSync.enabled);
+        var staticConfigured = Boolean(staticSync.configured);
+        var staticWritable = Boolean(staticSync.targetDirWritable);
+        var staticVersionMatched = Boolean(staticSync.versionMatched);
         var releaseHeavyBusy = Boolean(data.releaseHeavyBusy && data.runningReleaseJob);
+        var isVerifiedStatus = function(value) {
+          if (typeof value === "number") return value >= 200 && value < 300;
+          if (typeof value !== "string") return false;
+          var normalized = value.toLowerCase();
+          if (/^\d+$/.test(normalized)) {
+            var statusCode = Number(normalized);
+            return statusCode >= 200 && statusCode < 300;
+          }
+          return normalized === "ok" || normalized === "success";
+        };
         if ($("openRestyEnabledBadge")) {
           $("openRestyEnabledBadge").className = "badge " + (staticEnabled ? "success" : "warning");
           $("openRestyEnabledBadge").textContent = staticEnabled ? "已启用" : "未启用";
+        }
+        if ($("openRestyConfiguredBadge")) {
+          $("openRestyConfiguredBadge").className = "badge " + (staticConfigured ? "success" : "warning");
+          $("openRestyConfiguredBadge").textContent = staticConfigured ? "已配置" : "未配置";
+        }
+        if ($("openRestyDirBadge")) {
+          $("openRestyDirBadge").className = "badge " + (staticWritable ? "success" : (staticConfigured ? "danger" : "warning"));
+          $("openRestyDirBadge").textContent = staticWritable ? "目录可写" : (staticConfigured ? "目录不可写" : "目录未配置");
+        }
+        if ($("openRestyVersionBadge")) {
+          $("openRestyVersionBadge").className = "badge " + (staticVersionMatched ? "success" : "warning");
+          $("openRestyVersionBadge").textContent = staticVersionMatched ? "版本一致" : "待同步";
         }
         if ($("openRestySyncBadge")) {
           $("openRestySyncBadge").className = "badge " + (staticSyncStatus === "success" ? "success" : (staticSyncStatus === "failed" ? "danger" : "info"));
           $("openRestySyncBadge").textContent = staticSyncStatus === "success" ? "最近同步成功" : (staticSyncStatus === "failed" ? "最近同步失败" : relayStatusText(staticSyncStatus));
         }
         if ($("openRestyVerifyBadge")) {
-          var verifyOk = Boolean(data.staticManifestUrl && data.staticClassIndexUrl && data.staticEmptyRoomIndexUrl);
+          var verifyOk = isVerifiedStatus(staticSync.manifestStatus) && isVerifiedStatus(staticSync.classIndexStatus) && isVerifiedStatus(staticSync.emptyRoomStatus);
           $("openRestyVerifyBadge").className = "badge " + (verifyOk ? "success" : "warning");
           $("openRestyVerifyBadge").textContent = verifyOk ? "URL 验证 OK" : "URL 待验证";
         }
-        if ($("activeCanonicalHashText")) $("activeCanonicalHashText").textContent = data.activeCanonicalHash || "-";
-        if ($("stagingCanonicalHashText")) $("stagingCanonicalHashText").textContent = data.stagingCanonicalHash || "-";
+        if ($("activeCanonicalHashText")) $("activeCanonicalHashText").textContent = data.activeCanonicalHash || "当前版本未包含 canonical hash";
+        if ($("stagingCanonicalHashText")) $("stagingCanonicalHashText").textContent = data.stagingCanonicalHash || "暂无 Staging";
         if ($("stagingHashCompareText")) {
           $("stagingHashCompareText").textContent = data.stagingSameAsActive ? "与线上一致" : (data.stagingCanonicalHash ? "有差异" : "暂无 staging");
         }
@@ -5574,8 +5659,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           { label: "当前学期", val: data.semester || "-", icon: "📅", foot: "后台配置学期" },
           { label: "Staging 状态", val: data.latestStagingUpload ? relayStatusText(data.latestStagingUpload.status) : "等待上传", icon: "📦", foot: "候选数据审核状态" },
           { label: "Release Pack", val: data.releasePackHealthy ? "Quick OK" : "需检查", icon: "🧩", foot: data.releasePackStatus ? ("manifest " + (data.releasePackStatus.manifestExists ? "OK" : "缺失") + " / " + (data.releasePackStatus.durationMs || 0) + "ms") : "静态离线包状态" },
-          { label: "OpenResty 静态同步", val: relayStatusText(staticSyncStatus), icon: "URL", foot: data.lastStaticSyncTime ? ("最后同步 " + formatDate(data.lastStaticSyncTime)) : "发布后自动同步状态" },
-          { label: "静态保留版本", val: retainedReleases.length ? (retainedReleases.length + " 个") : "-", icon: "KEEP", foot: retainedReleases.slice(0, 3).join(" / ") || "至少保留最近 3 个 release" },
+          { label: "OpenResty 静态同步", val: relayStatusText(staticSyncStatus), icon: "URL", foot: data.lastStaticSyncTime ? ("最后同步 " + formatDate(data.lastStaticSyncTime)) : (staticSync.needsSyncReason || "尚未执行静态同步") },
+          { label: "静态保留版本", val: retainedLabels.length ? (retainedLabels.length + " 个") : "未采集", icon: "KEEP", foot: retainedLabels.slice(0, 3).join(" / ") || "来自一级目录快速扫描" },
           { label: "最近任务", val: data.latestJob ? relayStatusText(data.latestJob.status) : "无任务", icon: "⏱️", foot: data.latestJob ? ((data.latestJob.type || "job") + " · " + (data.latestJob.progress || 0) + "%") : "后台重任务状态" },
           { label: "Release 重任务锁", val: releaseHeavyBusy ? "运行中" : "空闲", icon: "LOCK", foot: releaseHeavyBusy ? ((data.runningReleaseJob.type || "release-heavy") + " · " + (data.runningReleaseJob.progress || 0) + "%") : "publish / rebuild / deep health 共享锁" },
           { label: "最近上传", val: data.latestStagingUpload ? formatDate(data.latestStagingUpload.updatedAt || data.latestStagingUpload.createdAt) : "暂无", icon: "⬆️", foot: "CLI gzip 分片上传" },
@@ -5595,24 +5680,29 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         var staticWrap = $("staticReleaseSyncSummary");
         if (staticWrap) {
           var urlItems = [
-            ["manifest", data.staticManifestUrl || "-"],
-            ["class index", data.staticClassIndexUrl || "-"],
-            ["empty-room", data.staticEmptyRoomIndexUrl || "-"],
+            ["manifest", data.staticManifestUrl || "未配置"],
+            ["class index", data.staticClassIndexUrl || "未配置"],
+            ["empty-room", data.staticEmptyRoomIndexUrl || "未配置"],
           ];
           var metaRows = [
-            ["active releaseVersion", data.releaseVersion || "-"],
-            ["last sync time", data.lastStaticSyncTime ? formatDate(data.lastStaticSyncTime) : "-"],
-            ["retained releases", retainedReleases.length ? retainedReleases.slice(0, 3).join(" / ") : "-"],
-            ["active canonical hash", data.activeCanonicalHash || "-"],
-            ["latest staging hash", data.stagingCanonicalHash || "-"],
-            ["needs publish", data.stagingSameAsActive ? "无需发布" : (data.stagingNeedsPublish ? "需要发布" : "-")],
+            ["active releaseVersion", data.releaseVersion || "暂无 active Release"],
+            ["synced releaseVersion", staticSync.syncedReleaseVersion || "尚未执行静态同步"],
+            ["last sync time", data.lastStaticSyncTime ? formatDate(data.lastStaticSyncTime) : "尚未执行静态同步"],
+            ["target dir", staticSync.targetDir || "未配置"],
+            ["retained releases", retainedLabels.length ? retainedLabels.slice(0, 3).join(" / ") : "未采集"],
+            ["active canonical hash", data.activeCanonicalHash || "当前版本未包含 canonical hash"],
+            ["latest staging hash", data.stagingCanonicalHash || "暂无 Staging"],
+            ["needs publish", data.stagingSameAsActive ? "无需发布" : (data.stagingNeedsPublish ? "需要发布" : (staticSync.needsSyncReason || "等待判断"))],
           ];
           staticWrap.innerHTML =
             "<div class='openresty-url-grid'>" + urlItems.map(function(row) {
-              return "<a class='static-url-pill' href='" + escapeHtml(row[1]) + "' target='_blank' rel='noreferrer'>" +
+              var isUrl = /^https?:\/\//.test(row[1]) || row[1].charAt(0) === "/";
+              var tag = isUrl ? "a" : "div";
+              var href = isUrl ? " href='" + escapeHtml(row[1]) + "' target='_blank' rel='noreferrer'" : "";
+              return "<" + tag + " class='static-url-pill'" + href + ">" +
                 "<span>" + escapeHtml(row[0]) + "</span>" +
                 "<strong>" + escapeHtml(row[1]) + "</strong>" +
-              "</a>";
+              "</" + tag + ">";
             }).join("") + "</div>" +
             "<div class='openresty-meta-grid'>" + metaRows.map(function(row) {
               return "<div class='openresty-meta-item'><span>" + escapeHtml(row[0]) + "</span><strong>" + escapeHtml(row[1]) + "</strong></div>";
@@ -5624,14 +5714,20 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           var hasStaging = Boolean(data.latestStagingUpload || data.stagingCanonicalHash);
           var noChange = Boolean(data.stagingSameAsActive);
           var needsPublish = Boolean(data.stagingNeedsPublish);
-          var steps = [
-            ["本机校园网采集", hasStaging ? "success" : "running", hasStaging ? "已生成 staging 候选" : "复制命令后在本机运行"],
-            ["数据指纹对比", data.stagingCanonicalHash ? (noChange ? "skipped" : "success") : "pending", data.stagingCanonicalHash ? (noChange ? "数据无变化" : "发现差异") : "等待 staging hash"],
-            ["上传 staging", hasStaging ? "success" : "pending", hasStaging ? "已收到候选包" : "CLI gzip 分片上传"],
-            ["发布 Release", noChange ? "skipped" : (needsPublish ? "running" : "pending"), noChange ? "无需发布" : (needsPublish ? "建议发布" : "等待差异判断")],
-            ["同步 OpenResty", staticSyncStatus === "success" ? "success" : (staticSyncStatus === "failed" ? "failed" : "pending"), relayStatusText(staticSyncStatus)],
-            ["微信开发者工具验证", data.releasePackHealthy ? "running" : "pending", data.releasePackHealthy ? "可执行静态 URL 验证" : "等待 Release Pack OK"],
+          var stages = Array.isArray(data.stages) && data.stages.length ? data.stages : [
+            { label: "数据采集", status: hasStaging ? "success" : "running", next: hasStaging ? "已生成 staging 候选" : "复制命令后在本机运行" },
+            { label: "上传与校验", status: hasStaging ? "success" : "pending", next: hasStaging ? "已收到候选包" : "CLI gzip 分片上传" },
+            { label: "Release 发布", status: noChange ? "skipped" : (needsPublish ? "running" : "pending"), next: noChange ? "无需发布" : (needsPublish ? "建议发布" : "等待差异判断") },
+            { label: "OpenResty 同步", status: staticSyncStatus === "success" ? "success" : (staticSyncStatus === "failed" ? "failed" : "pending"), next: relayStatusText(staticSyncStatus) },
+            { label: "小程序生效", status: data.releasePackHealthy ? "success" : "pending", next: data.releasePackHealthy ? "静态资源可用" : "等待 Release Pack OK" },
           ];
+          var steps = stages.map(function(stage) {
+            return [
+              stage.label || stage.key || "阶段",
+              stage.status || "pending",
+              stage.next || stage.version || ""
+            ];
+          });
           timelineWrap.innerHTML = steps.map(function(step, index) {
             return "<div class='sync-flow-step " + step[1] + "'>" +
               "<div class='sync-flow-step-num'>" + (index + 1) + "</div>" +
@@ -5641,17 +5737,51 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           }).join("");
         }
         if ($("syncNextActionBadge")) {
-          $("syncNextActionBadge").textContent = data.stagingNeedsPublish ? "下一步：开始发布" : (data.stagingSameAsActive ? "下一步：验证静态 URL" : "下一步：复制采集命令");
+          $("syncNextActionBadge").textContent = data.nextAction && data.nextAction.message ? data.nextAction.message : (data.stagingNeedsPublish ? "下一步：开始发布" : (data.stagingSameAsActive ? "下一步：验证静态 URL" : "下一步：复制采集命令"));
         }
         if ($("syncNextActionBtn")) {
-          $("syncNextActionBtn").textContent = data.stagingNeedsPublish ? "开始发布" : (data.stagingSameAsActive ? "验证静态 URL" : "复制采集命令");
-          $("syncNextActionBtn").disabled = Boolean(releaseHeavyBusy && data.stagingNeedsPublish);
+          $("syncNextActionBtn").textContent = data.nextAction && data.nextAction.label ? data.nextAction.label : (data.stagingNeedsPublish ? "开始发布" : (data.stagingSameAsActive ? "验证静态 URL" : "复制采集命令"));
+          $("syncNextActionBtn").disabled = Boolean(releaseHeavyBusy && (data.stagingNeedsPublish || data.nextAction && data.nextAction.type === "static-sync"));
           $("syncNextActionBtn").title = releaseHeavyBusy && data.stagingNeedsPublish ? "已有 Release 重任务正在运行" : "";
+        }
+        if ($("manualStaticSyncBtn")) {
+          $("manualStaticSyncBtn").disabled = Boolean(!staticSync.configured || !staticSync.targetDirWritable || releaseHeavyBusy || !data.releaseVersion || (!staticSync.needsSync && staticSync.versionMatched));
+          $("manualStaticSyncBtn").title = $("manualStaticSyncBtn").disabled ? (staticSync.needsSyncReason || "当前无须同步或条件不满足") : "";
         }
         if ($("stagingPublishBtn")) {
           $("stagingPublishBtn").disabled = Boolean(releaseHeavyBusy || !data.stagingNeedsPublish);
           $("stagingPublishBtn").title = releaseHeavyBusy ? "已有 Release 重任务正在运行" : "";
         }
+      }
+
+      function renderRuntimeStorage() {
+        var wrap = $("runtimeStorageSummary");
+        if (!wrap) return;
+        var data = state.storageStatus || {};
+        var disk = data.disk || {};
+        var diskText = disk.usedPercent == null ? "未采集" : (disk.usedPercent + "%");
+        if ($("storageStatusBadge")) {
+          $("storageStatusBadge").className = "badge " + (data.diskCritical ? "danger" : (data.diskWarning ? "warning" : "success"));
+          $("storageStatusBadge").textContent = data.diskCritical ? "磁盘 critical" : (data.diskWarning ? "磁盘 warning" : "运行正常");
+        }
+        var rows = [
+          ["API uptime", data.apiUptimeSeconds != null ? (Math.floor(data.apiUptimeSeconds / 60) + " min") : "未采集"],
+          ["API RSS", data.apiRssBytes ? formatBytes(data.apiRssBytes) : "未采集"],
+          ["Worker 状态", data.workerStatus || "未采集"],
+          ["当前运行 Job", data.runningJob ? ((data.runningJob.type || "job") + " · " + (data.runningJob.progress || 0) + "%") : "空闲"],
+          ["load average", Array.isArray(data.loadAverage) ? data.loadAverage.map(function(n) { return Number(n || 0).toFixed(2); }).join(" / ") : "未采集"],
+          ["磁盘使用率", diskText],
+          ["可用空间", disk.freeBytes ? formatBytes(disk.freeBytes) : "未采集"],
+          ["Release 占用", data.releaseBytes == null ? "未扫描" : formatBytes(data.releaseBytes)],
+          ["Public Release 占用", data.publicReleaseBytes == null ? "未扫描" : formatBytes(data.publicReleaseBytes)],
+          ["Staging 占用", data.stagingBytes == null ? "未扫描" : formatBytes(data.stagingBytes)],
+          ["Job/日志占用", data.jobAndLogBytes == null ? "未扫描" : formatBytes(data.jobAndLogBytes)],
+          ["最后维护时间", data.lastMaintenanceAt ? formatDate(data.lastMaintenanceAt) : "尚未执行"],
+          ["下次维护时间", data.nextMaintenanceAt ? formatDate(data.nextMaintenanceAt) : "未启用定时维护"],
+        ];
+        wrap.innerHTML = rows.map(function(row) {
+          return "<div class='openresty-meta-item'><span>" + escapeHtml(row[0]) + "</span><strong>" + escapeHtml(row[1]) + "</strong></div>";
+        }).join("");
       }
 
       function relayStatusText(status) {
@@ -5663,12 +5793,22 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           failed: "失败",
           canceled: "已取消",
           uploaded: "已上传",
+          uploading: "上传中",
+          validating: "校验中",
           disabled: "未启用",
+          "not-run": "尚未执行",
+          "not-collected": "未采集",
           skipped: "已跳过",
           unchanged: "数据无变化",
           "pending-review": "待审核",
+          publishing: "发布中",
           staged: "已设为 Staging",
           published: "已发布",
+          active: "当前生效",
+          duplicate: "重复",
+          superseded: "已被取代",
+          archived: "已归档",
+          deleted: "已删除",
           expired: "已过期",
           revoked: "已吊销"
         };
@@ -5768,7 +5908,26 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
       function renderStagingUploads() {
         var tbody = $("stagingUploadListBody");
         if (!tbody) return;
-        var list = state.stagingUploads || [];
+        var rawList = state.stagingUploads || [];
+        var groupedByHash = {};
+        var list = [];
+        rawList.forEach(function(item) {
+          var hasHash = Boolean(item.canonicalHash || (item.summary && item.summary.canonicalHash));
+          var key = item.canonicalHash || (item.summary && item.summary.canonicalHash) || item.uploadId || "";
+          if (!key || !hasHash) {
+            list.push(item);
+            return;
+          }
+          if (!groupedByHash[key]) {
+            groupedByHash[key] = Object.assign({}, item, { historySources: [item] });
+            list.push(groupedByHash[key]);
+            return;
+          }
+          groupedByHash[key].historySources.push(item);
+          if (new Date(item.updatedAt || item.createdAt || 0).getTime() > new Date(groupedByHash[key].updatedAt || groupedByHash[key].createdAt || 0).getTime()) {
+            Object.assign(groupedByHash[key], item, { historySources: groupedByHash[key].historySources });
+          }
+        });
         tbody.innerHTML = "";
         if (list.length === 0) {
           tbody.innerHTML = "<tr><td colspan='8' style='text-align:center;color:var(--muted);padding:12px 0;'>暂无 CLI 上传记录</td></tr>";
@@ -5783,18 +5942,23 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           var chunkCount = upload.chunkCount || upload.totalChunks || 0;
           var progress = upload.progress != null ? upload.progress : (chunkCount > 0 ? Math.min(100, uploadedChunks / chunkCount * 100) : 0);
           var progressWidth = Math.max(0, Math.min(100, progress));
-          var statusLabel = relayStatusText(upload.status);
-          var statusClass = String(upload.status || "").replace(/[^a-z0-9_-]/gi, "-");
-          var duplicateBadge = upload.duplicateReleaseVersion
-            ? "<br><span class='badge warning'>" + (upload.duplicateKeepLatest ? "重复候选版本 · 最新" : "重复候选版本 · 可删旧") + "</span>"
-            : "";
+          var isActiveUpload = Boolean(upload.active || (state.syncStatus && state.syncStatus.activeCanonicalHash && upload.canonicalHash && state.syncStatus.activeCanonicalHash === upload.canonicalHash));
+          var statusLabel = isActiveUpload ? "当前生效" : relayStatusText(upload.status);
+          var statusClass = String(isActiveUpload ? "active" : (upload.status || "")).replace(/[^a-z0-9_-]/gi, "-");
+          var historyCount = Array.isArray(upload.historySources) ? upload.historySources.length : 1;
+          var duplicateBadge = historyCount > 1
+            ? "<br><span class='badge muted'>同 hash 来源 " + historyCount + " 条</span>"
+            : (upload.duplicateReleaseVersion ? "<br><span class='badge warning'>" + (upload.duplicateKeepLatest ? "重复候选版本 · 最新" : "重复候选版本 · 可归档") + "</span>" : "");
+          var canonicalShort = upload.canonicalHash ? String(upload.canonicalHash).slice(0, 12) : "未采集";
+          var sourceText = upload.source || upload.actorType || "CLI";
+          var publishedText = upload.publishedReleaseVersion || upload.publishedVersion || "";
           var tr = document.createElement("tr");
           tr.innerHTML =
-            "<td><code>" + escapeHtml(upload.uploadId || "-") + "</code><br><span style='color:var(--muted);'>" + escapeHtml(upload.fileName || "") + "</span></td>" +
-            "<td><strong>" + escapeHtml(upload.term || summary.term || "-") + "</strong><br><span style='color:var(--muted);'>" + escapeHtml(upload.releaseVersion || summary.releaseVersion || "-") + "</span>" + duplicateBadge + "</td>" +
+            "<td><code>" + escapeHtml(upload.uploadId || "-") + "</code><br><span style='color:var(--muted);'>" + escapeHtml(upload.fileName || "") + "</span><br><span class='badge muted'>" + escapeHtml(sourceText) + "</span></td>" +
+            "<td><strong>" + escapeHtml(upload.term || summary.term || "-") + "</strong><br><span style='color:var(--muted);'>" + escapeHtml(upload.releaseVersion || summary.releaseVersion || "-") + "</span><br><span style='color:var(--muted);'>hash " + escapeHtml(canonicalShort) + "</span>" + duplicateBadge + "</td>" +
             "<td><div class='staging-size-stack'><span>JSON " + formatBytes(sourceSize) + "</span><span>gzip " + (gzipSize ? formatBytes(gzipSize) : "-") + "</span></div></td>" +
             "<td><div class='staging-progress'><div class='staging-progress-track'><div class='staging-progress-fill' style='width:" + progressWidth.toFixed(1) + "%'></div></div><span>" + progress.toFixed(1) + "% · " + uploadedChunks + "/" + chunkCount + " chunks</span></div></td>" +
-            "<td><span class='staging-state-badge " + statusClass + "'>" + escapeHtml(statusLabel) + "</span>" + (upload.failureReason ? "<br><span style='color:var(--danger);font-size:11px;'>" + escapeHtml(upload.failureReason) + "</span>" : "") + "</td>" +
+            "<td><span class='staging-state-badge " + statusClass + "'>" + escapeHtml(statusLabel) + "</span>" + (publishedText ? "<br><span style='color:var(--muted);font-size:11px;'>Release " + escapeHtml(publishedText) + "</span>" : "") + (upload.failureReason ? "<br><span style='color:var(--danger);font-size:11px;'>" + escapeHtml(upload.failureReason) + "</span>" : "") + "</td>" +
             "<td><div class='staging-count-stack'><span>class " + (counts.classScheduleCount || 0) + "</span><span>teacher " + (counts.teacherScheduleCount || 0) + "</span><span>room " + (counts.classroomScheduleCount || 0) + "</span><span>course " + (counts.courseScheduleCount || 0) + "</span></div></td>" +
             "<td>" + formatDate(upload.updatedAt || upload.createdAt) + "</td>" +
             "<td class='action-cell'><div class='staging-action-row'></div></td>";
@@ -5811,25 +5975,42 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           });
           actions.appendChild(previewBtn);
 
-          var publishBtn = document.createElement("button");
-          publishBtn.className = "btn primary";
-          publishBtn.style = "padding: 3px 8px; font-size:11px;";
-          publishBtn.textContent = "发布";
-          publishBtn.disabled = upload.status !== "pending-review";
-          publishBtn.addEventListener("click", function() {
-            publishStaging(publishBtn);
+          var copySummaryBtn = document.createElement("button");
+          copySummaryBtn.className = "btn secondary";
+          copySummaryBtn.style = "padding: 3px 8px; font-size:11px;";
+          copySummaryBtn.textContent = "复制摘要";
+          copySummaryBtn.addEventListener("click", function() {
+            copyText([
+              "uploadId=" + (upload.uploadId || ""),
+              "status=" + (isActiveUpload ? "active" : (upload.status || "")),
+              "release=" + (publishedText || upload.releaseVersion || ""),
+              "canonicalHash=" + (upload.canonicalHash || ""),
+              "term=" + (upload.term || summary.term || "")
+            ].join("\\n"));
           });
-          actions.appendChild(publishBtn);
+          actions.appendChild(copySummaryBtn);
 
-          var deleteBtn = document.createElement("button");
-          deleteBtn.className = "btn danger";
-          deleteBtn.style = "padding: 3px 8px; font-size:11px;";
-          deleteBtn.textContent = "删除";
-          deleteBtn.disabled = upload.status === "published";
-          deleteBtn.addEventListener("click", function() {
-            deleteStagingUpload(upload.uploadId, deleteBtn);
-          });
-          actions.appendChild(deleteBtn);
+          if (upload.status === "pending-review" && !isActiveUpload) {
+            var publishBtn = document.createElement("button");
+            publishBtn.className = "btn primary";
+            publishBtn.style = "padding: 3px 8px; font-size:11px;";
+            publishBtn.textContent = "发布";
+            publishBtn.addEventListener("click", function() {
+              publishStaging(publishBtn);
+            });
+            actions.appendChild(publishBtn);
+          }
+
+          if (!isActiveUpload && upload.status !== "published") {
+            var deleteBtn = document.createElement("button");
+            deleteBtn.className = "btn danger";
+            deleteBtn.style = "padding: 3px 8px; font-size:11px;";
+            deleteBtn.textContent = upload.status === "duplicate" || upload.status === "unchanged" ? "归档" : "删除";
+            deleteBtn.addEventListener("click", function() {
+              deleteStagingUpload(upload.uploadId, deleteBtn);
+            });
+            actions.appendChild(deleteBtn);
+          }
           tbody.appendChild(tr);
         });
       }
@@ -6385,6 +6566,78 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           .catch(function(err) {
             restoreButton();
             showToast(err.message || "Failed to start verify job", "error");
+          });
+      }
+
+      function startStaticSync(btn, version) {
+        var restoreButton = setButtonLoading(btn, "同步中...");
+        var payload = {};
+        if (version) payload.version = version;
+        api("/api/admin/static-release-sync/start", {
+          method: "POST",
+          body: JSON.stringify(payload)
+        })
+          .then(function(res) {
+            var job = res.job || {};
+            if (!job.id) {
+              restoreButton();
+              showToast("静态同步任务未创建", "error");
+              return;
+            }
+            showToast("OpenResty 静态同步任务已启动", "success");
+            pollAdminJob(job.id, "OpenResty 静态同步", function(doneJob) {
+              restoreButton();
+              if (doneJob && doneJob.status === "success") {
+                loadSyncStatus();
+              }
+            });
+          })
+          .catch(function(err) {
+            restoreButton();
+            showToast(err.message || "静态同步启动失败", "error");
+          });
+      }
+
+      function refreshStorageStatus(force) {
+        return api("/api/admin/storage/status" + (force ? "?force=1" : ""))
+          .then(function(res) {
+            state.storageStatus = res || null;
+            renderRuntimeStorage();
+            return res;
+          });
+      }
+
+      function runStorageScan(btn) {
+        var restoreButton = setButtonLoading(btn, "扫描中...");
+        api("/api/admin/storage/scan", { method: "POST", body: "{}" })
+          .then(function() {
+            showToast("存储扫描完成", "success");
+            return refreshStorageStatus(true);
+          })
+          .finally(function() {
+            restoreButton();
+          })
+          .catch(function(err) {
+            showToast(err.message || "存储扫描失败", "error");
+          });
+      }
+
+      function runMaintenance(btn, dryRun) {
+        var restoreButton = setButtonLoading(btn, dryRun ? "预览中..." : "清理中...");
+        api(dryRun ? "/api/admin/storage/maintenance/preview" : "/api/admin/storage/maintenance/run", {
+          method: "POST",
+          body: "{}"
+        })
+          .then(function(res) {
+            var report = res.report || {};
+            showToast((dryRun ? "清理预览完成" : "安全清理完成") + "，释放 " + formatBytes(report.reclaimedBytes || 0), "success");
+            return refreshStorageStatus(true);
+          })
+          .finally(function() {
+            restoreButton();
+          })
+          .catch(function(err) {
+            showToast(err.message || "维护任务失败", "error");
           });
       }
 
@@ -8111,19 +8364,36 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             showToast("当前没有 active releaseVersion", "error");
             return;
           }
-          api("/api/admin/release-pack/rebuild/start", {
+          startStaticSync($("manualStaticSyncBtn"), version);
+        });
+        safeBind("reconcileLifecycleBtn", "click", function() {
+          var btn = $("reconcileLifecycleBtn");
+          var restoreButton = setButtonLoading(btn, "核对中...");
+          api("/api/admin/sync/reconcile", {
             method: "POST",
-            body: JSON.stringify({ version: version })
+            body: "{}"
           }).then(function(res) {
-            showToast("Release Pack rebuild job started", "success");
-            if (res.job && res.job.id) {
-              pollAdminJob(res.job.id, "Release Pack rebuild", function() {
-                loadSyncStatus();
-              });
-            }
+            showToast("状态核对完成", "success");
+            if (res.lifecycle) state.syncStatus = Object.assign({}, state.syncStatus || {}, res.lifecycle);
+            return loadSyncStatus();
           }).catch(function(err) {
             showToast(err.message, "error");
+          }).finally(function() {
+            restoreButton();
           });
+        });
+        safeBind("refreshStorageStatusBtn", "click", function() {
+          refreshStorageStatus(true).catch(function(err) { showToast(err.message, "error"); });
+        });
+        safeBind("scanStorageBtn", "click", function() {
+          runStorageScan($("scanStorageBtn"));
+        });
+        safeBind("previewMaintenanceBtn", "click", function() {
+          runMaintenance($("previewMaintenanceBtn"), true);
+        });
+        safeBind("runMaintenanceBtn", "click", function() {
+          if (!confirm("确认执行安全清理？该操作会跳过 active / last-known-good / running job，但仍会删除过期临时文件。")) return;
+          runMaintenance($("runMaintenanceBtn"), false);
         });
         safeBind("viewStaticSyncLogBtn", "click", function() {
           var el = $("syncJobLog");
@@ -8131,8 +8401,13 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         });
         safeBind("syncNextActionBtn", "click", function() {
           var data = state.syncStatus || {};
-          if (data.stagingNeedsPublish) {
+          var actionType = data.nextAction && data.nextAction.type || "";
+          if (actionType === "publish" || data.stagingNeedsPublish) {
             publishStaging($("syncNextActionBtn"));
+            return;
+          }
+          if (actionType === "static-sync") {
+            startStaticSync($("syncNextActionBtn"), data.releaseVersion);
             return;
           }
           if (data.stagingSameAsActive) {
