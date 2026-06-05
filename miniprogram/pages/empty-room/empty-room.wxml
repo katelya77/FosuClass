@@ -125,9 +125,13 @@
       <view class="room-main">
         <view class="room-title">{{item.roomName}}</view>
         <view class="room-meta">{{item.building}} · {{item.capacityText}} · {{item.freeText}} · {{item.continuousText}}</view>
+        <view class="room-chip-row" wx:if="{{item.sectionChips && item.sectionChips.length}}">
+          <text wx:for="{{item.sectionChips}}" wx:for-item="chip" wx:key="*this" class="room-section-chip">{{chip}}</text>
+        </view>
         <view class="room-next" wx:if="{{item.nextOccupiedCourse}}">下一次占用：{{item.nextOccupiedCourse.sectionText}} {{item.nextOccupiedCourse.courseName}}</view>
       </view>
       <view class="room-actions">
+        <view class="room-schedule-badge {{item.hasScheduleDetail ? 'ready' : 'partial'}}">{{item.scheduleBadgeText}}</view>
         <button
           class="mini-btn {{item.favorite ? 'active' : ''}}"
           catchtap="toggleFavoriteRoom"

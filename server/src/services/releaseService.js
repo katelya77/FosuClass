@@ -604,6 +604,8 @@ function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names,
       collegeCode: source.collegeCode || schedule.collegeCode || "",
       collegeName: source.collegeName || schedule.collegeName || "",
       campus: source.campus || schedule.campus || "",
+      source: source.source || schedule.source || "derived",
+      hasDetail: !onlyIndexes,
       courseCount: summary.courseCount,
       firstCourseName: summary.firstCourseName,
       updatedAt: schedule.updatedAt || snapshot.updatedAt || "",
@@ -1020,10 +1022,31 @@ function mergeEmptyRoomSchedules(classroomSchedules, classSchedules) {
   return Array.from(rooms.values());
 }
 
-function buildEmptyRoomDerivedFiles(snapshot, files) {
+function buildClassroomDetailLookup(classroomIndex) {
+  const lookup = new Map();
+  asArray(classroomIndex).forEach((item) => {
+    [
+      item.roomName,
+      item.classroomName,
+      item.displayName,
+      item.name,
+      item.title,
+    ].forEach((name) => {
+      const key = normalizeSearchText(name);
+      if (key && !lookup.has(key)) {
+        lookup.set(key, item);
+      }
+    });
+  });
+  return lookup;
+}
+
+function buildEmptyRoomDerivedFiles(snapshot, files, classroomIndex = []) {
   ensureDir(path.dirname(files.emptyRoomIndexPath));
   const resources = getResources(snapshot);
   const sourceSchedules = mergeEmptyRoomSchedules(resources.classroomSchedules, snapshot.classSchedules);
+  const classroomLookup = buildClassroomDetailLookup(classroomIndex);
+  const version = normalizeVersion(snapshot.version || snapshot.releaseVersion || "");
 
   const rooms = asArray(sourceSchedules).map((schedule, index) => {
     const roomName = getClassroomNameFromSchedule(schedule, index);
@@ -1032,9 +1055,17 @@ function buildEmptyRoomDerivedFiles(snapshot, files) {
       .map(normalizeEmptyRoomCourse)
       .filter(Boolean);
     const building = normalizeBuilding(roomName);
+    const normalizedRoomName = normalizeSearchText(roomName);
+    const classroomIndexItem = classroomLookup.get(normalizedRoomName) || null;
+    const detailId = classroomIndexItem && classroomIndexItem.id ? classroomIndexItem.id : "";
     return {
       roomId,
       roomName,
+      normalizedRoomName,
+      classroomId: detailId,
+      detailId,
+      releaseVersion: version,
+      hasScheduleDetail: Boolean(detailId),
       building: isUnknownBuilding(building) ? UNKNOWN_BUILDING_NAME : building.buildingCode,
       buildingCode: building.buildingCode || UNKNOWN_BUILDING_CODE,
       buildingName: building.buildingName || UNKNOWN_BUILDING_NAME,
@@ -1055,6 +1086,7 @@ function buildEmptyRoomDerivedFiles(snapshot, files) {
     buildingCount: buildings.length,
     unknownRoomCount: unknownRooms.length,
     unknownRoomSamples: unknownRooms.slice(0, 20).map((room) => room.roomName),
+    scheduleDetailCount: rooms.filter((room) => room.hasScheduleDetail).length,
     sources: {
       classroomSchedules: rooms.filter((room) => room.source === "classroomSchedules").length,
       classSchedulesDerived: rooms.filter((room) => room.source === "classSchedules-derived").length,
@@ -1063,8 +1095,8 @@ function buildEmptyRoomDerivedFiles(snapshot, files) {
   const index = {
     success: true,
     schemaVersion: 1,
-    version: normalizeVersion(snapshot.version || snapshot.releaseVersion || ""),
-    releaseVersion: normalizeVersion(snapshot.version || snapshot.releaseVersion || ""),
+    version,
+    releaseVersion: version,
     term: snapshot.term || snapshot.semester || "",
     semester: snapshot.semester || snapshot.term || "",
     termStartDate: snapshot.termStartDate || "",
@@ -1114,7 +1146,7 @@ function writeDerivedIndexes(snapshot, files, onlyIndexes = false) {
     files.coursesIndexPath,
     onlyIndexes
   );
-  const emptyRooms = buildEmptyRoomDerivedFiles(snapshot, files);
+  const emptyRooms = buildEmptyRoomDerivedFiles(snapshot, files, classrooms);
   const shards = writeIndexShardFiles(snapshot, files, { classes, teachers, classrooms, courses });
   return { classes, teachers, classrooms, courses, emptyRooms, shards };
 }
@@ -1289,6 +1321,15 @@ function buildManifest(snapshot, version, counts, validation, files, derived) {
       valid: validation.valid,
       errors: validation.errors,
       emptyRoom: derived?.emptyRooms?.health || {},
+      teacher: {
+        teacherIndexCount: Array.isArray(derived?.teachers) ? derived.teachers.length : 0,
+        teacherDetailCount: collectJsonFiles(files?.teacherScheduleDir).length,
+        directTeacherScheduleCount: Array.isArray(derived?.teachers) ? derived.teachers.filter((item) => item.source === "direct").length : 0,
+        derivedTeacherScheduleCount: Array.isArray(derived?.teachers) ? derived.teachers.filter((item) => !item.source || item.source === "derived" || item.source === "classSchedules-derived").length : 0,
+        teacherSourceMode: snapshot.meta?.resourceSource || "derived",
+        teacherUnknownNameCount: Array.isArray(derived?.teachers) ? derived.teachers.filter((item) => !item.teacherName && !item.name).length : 0,
+        teacherEmptyScheduleCount: Array.isArray(derived?.teachers) ? derived.teachers.filter((item) => Number(item.courseCount || 0) <= 0).length : 0,
+      },
     },
     pack: {
       index: {

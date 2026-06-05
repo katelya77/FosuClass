@@ -567,6 +567,9 @@ function collectSearchFields(item) {
   const source = item || {};
   return [
     source.id,
+    source.detailId,
+    source.classroomId,
+    source.roomId,
     source.name,
     source.displayName,
     source.title,
@@ -594,7 +597,55 @@ function collectSearchFields(item) {
 function matchesExact(item, expected, keys) {
   const value = String(expected || "").trim();
   if (!value) return true;
-  return keys.some((key) => String(item[key] || "").trim() === value);
+  return keys.some((key) => {
+    const current = String(item[key] || "").trim();
+    return current === value || normalizeSearchText(current) === normalizeSearchText(value);
+  });
+}
+
+function matchesScopedFilter(type, item, expected, keys, options = {}) {
+  const value = String(expected || "").trim();
+  if (!value) return true;
+  const values = keys
+    .map((key) => String(item[key] || "").trim())
+    .filter(Boolean);
+  if (!values.length && options.allowMissing) {
+    return true;
+  }
+  return matchesExact(item, value, keys);
+}
+
+function getTeacherFilterDebug(index, params, q, scopedItems, filteredItems) {
+  const baseItems = index.items || [];
+  const term = params.semester || params.term;
+  const collegeScoped = baseItems.filter((item) => {
+    const comparable = Object.assign({
+      term: index.term,
+      semester: index.semester || index.term,
+    }, item || {});
+    if (!matchesScopedFilter("teacher", comparable, term, ["semester", "term"])) return false;
+    if (!matchesScopedFilter("teacher", comparable, params.collegeCode, ["collegeCode"], { allowMissing: true })) return false;
+    if (!matchesScopedFilter("teacher", comparable, params.collegeName, ["collegeName", "college"], { allowMissing: true })) return false;
+    return true;
+  });
+  return {
+    releaseVersion: index.releaseVersion || index.version || "",
+    teacherIndexTotal: baseItems.length,
+    keyword: String(params.q || params.keyword || ""),
+    normalizedKeyword: q,
+    beforeFilterCount: baseItems.length,
+    collegeFilteredCount: collegeScoped.length,
+    scopedFilterCount: scopedItems.length,
+    keywordHitCount: filteredItems.length,
+    sampleItems: filteredItems.slice(0, 5).map((item) => ({
+      id: item.id || item.detailId || "",
+      name: item.name || item.teacherName || item.displayName || "",
+      teacherName: item.teacherName || item.name || "",
+      collegeName: item.collegeName || item.college || "",
+      title: item.title || item.teacherTitle || item.professionalTitle || "",
+      courseCount: Number(item.courseCount || 0) || 0,
+    })),
+  };
 }
 
 function filterIndexPayload(type, payload, params = {}) {
@@ -602,19 +653,20 @@ function filterIndexPayload(type, payload, params = {}) {
   const q = normalizeSearchText(params.q || params.keyword);
   const limit = Math.min(Math.max(parseInt(params.limit || "30", 10) || 30, 1), 100);
   const offset = Math.max(parseInt(params.offset || "0", 10) || 0, 0);
+  const teacherLooseFilter = type === "teacher";
   const scoped = (index.items || []).filter((item) => {
     const comparable = Object.assign({
       term: index.term,
       semester: index.semester || index.term,
     }, item || {});
-    if (!matchesExact(comparable, params.semester || params.term, ["semester", "term"])) return false;
-    if (!matchesExact(comparable, params.collegeCode, ["collegeCode"])) return false;
-    if (!matchesExact(comparable, params.collegeName, ["collegeName", "college"])) return false;
-    if (!matchesExact(comparable, params.grade, ["grade"])) return false;
-    if (!matchesExact(comparable, params.majorCode, ["majorCode"])) return false;
-    if (!matchesExact(comparable, params.majorName, ["majorName"])) return false;
-    if (!matchesExact(comparable, params.campus, ["campus", "campusName"])) return false;
-    if (!matchesExact(comparable, params.titleCode || params.title, ["titleCode", "title", "teacherTitle", "professionalTitle"])) return false;
+    if (!matchesScopedFilter(type, comparable, params.semester || params.term, ["semester", "term"])) return false;
+    if (!matchesScopedFilter(type, comparable, params.collegeCode, ["collegeCode"], { allowMissing: teacherLooseFilter })) return false;
+    if (!matchesScopedFilter(type, comparable, params.collegeName, ["collegeName", "college"], { allowMissing: teacherLooseFilter })) return false;
+    if (!matchesScopedFilter(type, comparable, params.grade, ["grade"])) return false;
+    if (!matchesScopedFilter(type, comparable, params.majorCode, ["majorCode"])) return false;
+    if (!matchesScopedFilter(type, comparable, params.majorName, ["majorName"])) return false;
+    if (!matchesScopedFilter(type, comparable, params.campus, ["campus", "campusName"])) return false;
+    if (!matchesScopedFilter(type, comparable, params.titleCode || params.title, ["titleCode", "title", "teacherTitle", "professionalTitle"], { allowMissing: teacherLooseFilter })) return false;
     return true;
   });
   const filtered = q
@@ -623,13 +675,16 @@ function filterIndexPayload(type, payload, params = {}) {
         return haystack.includes(q);
       })
     : scoped;
+  const debug = type === "teacher"
+    ? getTeacherFilterDebug(index, params, q, scoped, filtered)
+    : undefined;
   return Object.assign({}, index, {
     query: q,
     total: filtered.length,
     limit,
     offset,
     items: filtered.slice(offset, offset + limit),
-  });
+  }, debug ? { debug } : {});
 }
 
 function readCachedSearchIndex(type, params = {}) {
@@ -757,6 +812,80 @@ function loadDetail(type, id, params = {}, options = {}) {
       }
       throw error;
     });
+}
+
+function getClassroomCandidateNames(item) {
+  const source = item || {};
+  return [
+    source.roomName,
+    source.classroomName,
+    source.displayName,
+    source.name,
+    source.title,
+    source.rawName,
+    source.id,
+    source.detailId,
+    source.classroomId,
+    source.roomId,
+  ].filter((value) => String(value || "").trim());
+}
+
+function getClassroomDetailId(item) {
+  const source = item || {};
+  return String(source.detailId || source.id || source.classroomId || source.roomId || "").trim();
+}
+
+function findClassroomIndexItem(items, roomName) {
+  const q = normalizeSearchText(roomName);
+  if (!q) return null;
+  const list = Array.isArray(items) ? items : [];
+  return list.find((item) => getClassroomCandidateNames(item)
+    .some((name) => normalizeSearchText(name) === q)) ||
+    list.find((item) => getClassroomCandidateNames(item)
+      .some((name) => normalizeSearchText(name).includes(q) || q.includes(normalizeSearchText(name))));
+}
+
+function resolveClassroomDetail(roomName, params = {}, options = {}) {
+  const term = params.term || params.semester || options.term || DEFAULT_TERM;
+  const releaseVersion = params.releaseVersion || params.version || options.releaseVersion || "";
+  const requestedName = roomName || params.roomName || params.name || "";
+  const preferredId = String(params.detailId || params.id || params.classroomId || "").trim();
+  if (!requestedName && !preferredId) {
+    const error = new Error("CLASSROOM_RESOLVE_TARGET_MISSING");
+    error.code = "CLASSROOM_RESOLVE_TARGET_MISSING";
+    return Promise.reject(error);
+  }
+
+  const loadResolvedDetail = (detailId, item) => {
+    if (!detailId) {
+      const error = new Error("CLASSROOM_DETAIL_ID_MISSING");
+      error.code = "CLASSROOM_DETAIL_ID_MISSING";
+      throw error;
+    }
+    return loadDetail("classroom", detailId, { term, releaseVersion }, options)
+      .then((payload) => Object.assign({}, payload, {
+        detailId,
+        resolvedId: detailId,
+        resolvedName: requestedName || item?.roomName || item?.name || "",
+        indexItem: item || null,
+      }));
+  };
+
+  const resolveFromIndex = () => loadIndex("classroom", { term, releaseVersion }, options)
+    .then((index) => {
+      const item = findClassroomIndexItem(index.items || [], requestedName || preferredId);
+      if (!item) {
+        const error = new Error("CLASSROOM_DETAIL_NOT_FOUND");
+        error.code = "CLASSROOM_DETAIL_NOT_FOUND";
+        throw error;
+      }
+      return loadResolvedDetail(getClassroomDetailId(item), item);
+    });
+
+  if (preferredId && normalizeSearchText(preferredId) !== normalizeSearchText(requestedName)) {
+    return loadResolvedDetail(preferredId, null).catch(resolveFromIndex);
+  }
+  return resolveFromIndex();
 }
 
 function normalizeEmptyRoomIndex(payload, fallback = {}) {
@@ -992,9 +1121,15 @@ function filterEmptyRoomIndex(indexPayload, params = {}) {
     const enoughFree = requestedSections.length
       ? continuousFreeSections >= minFreeSections
       : hasContiguousSections(freeSections, minFreeSections);
+    const detailId = room.detailId || room.classroomId || room.roomId || "";
+    const courseCount = Number(room.courseCount || 0) || 0;
+    const hasScheduleDetail = room.hasScheduleDetail !== false && Boolean(detailId);
     return {
       roomName: room.roomName,
       roomId: room.roomId,
+      detailId,
+      classroomId: room.classroomId || detailId,
+      normalizedRoomName: room.normalizedRoomName || normalizeSearchText(room.roomName),
       building: room.building || inferBuilding(room.roomName),
       buildingCode: room.buildingCode || normalizeBuilding(room.roomName).buildingCode,
       buildingName: room.buildingName || normalizeBuilding(room.roomName).buildingName,
@@ -1004,6 +1139,7 @@ function filterEmptyRoomIndex(indexPayload, params = {}) {
       capacity: room.capacity || null,
       capacityText: room.capacity ? `${room.capacity}座` : "容量未知",
       freeText: `${formatSectionRange(requestedSet)}空闲`,
+      sectionChips: requestedSet.slice(0, 8).map((section) => `第${section}节`),
       continuousFreeSections,
       continuousText: `连续 ${continuousFreeSections} 节空闲`,
       freeSections,
@@ -1014,7 +1150,9 @@ function filterEmptyRoomIndex(indexPayload, params = {}) {
         sections: course.sections || [],
         sectionText: `第${course.startSection}-${course.endSection}节`,
       })),
-      courseCount: room.courseCount || 0,
+      courseCount,
+      hasScheduleDetail,
+      scheduleBadgeText: hasScheduleDetail ? "课表" : "仅空闲数据",
       nextOccupiedCourse: getNextOccupiedCourse(occupiedCourses, weekday, week, maxRequestedSection),
       _matched: requestedIsFree && enoughFree,
     };
@@ -1120,12 +1258,14 @@ module.exports = {
   readCachedDetail,
   readCachedEmptyRoom,
   searchIndex,
+  resolveClassroomDetail,
   warmupIndex,
   switchReleaseSafely,
   getLastKnownGood,
   clearOldReleaseCaches,
   filterIndexPayload,
   filterEmptyRoomIndex,
+  normalizeSearchText,
   resolveIndexUrl,
   resolveDetailUrl,
   resolveEmptyRoomUrl,

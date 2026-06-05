@@ -205,7 +205,7 @@ Page({
               const schedule = res.schedule || res.detail || {};
               const courses = Array.isArray(schedule.courses) ? schedule.courses : [];
               if (!res || res.success === false || !courses.length) {
-                this.showScheduleOpenError();
+                this.showScheduleOpenError({ type });
                 this.initScheduleLayout();
                 return;
               }
@@ -223,7 +223,11 @@ Page({
             .catch((err) => {
               wx.hideLoading();
               console.error("按索引拉取课表失败", err);
-              this.showScheduleOpenError();
+              if (type === "classroom" && decodedName) {
+                this.openResolvedClassroomSchedule(decodedName, decodedSemester, decodedReleaseVersion, err);
+                return;
+              }
+              this.showScheduleOpenError({ type });
               this.initScheduleLayout();
             });
           return;
@@ -296,10 +300,52 @@ Page({
     });
   },
 
-  showScheduleOpenError() {
+  openResolvedClassroomSchedule(roomName, term, releaseVersion, originalError) {
+    wx.showLoading({ title: "正在重新定位教室..." });
+    releasePackService.resolveClassroomDetail(roomName, {
+      term,
+      releaseVersion,
+    }, {
+      timeout: 12000,
+      retries: 1,
+    })
+      .then((res) => {
+        wx.hideLoading();
+        const schedule = res.schedule || res.detail || {};
+        const courses = Array.isArray(schedule.courses) ? schedule.courses : [];
+        if (!courses.length) {
+          this.showScheduleOpenError({ type: "classroom" });
+          this.initScheduleLayout();
+          return;
+        }
+        this.setData({
+          name: schedule.roomName || schedule.classroomName || roomName,
+          title: schedule.roomName || schedule.classroomName || roomName,
+          allCourses: courses,
+          scheduleMeta: Object.assign({}, schedule, {
+            id: res.detailId || res.resolvedId || schedule.id || "",
+            detailId: res.detailId || res.resolvedId || schedule.id || "",
+            scheduleVersion: res.releaseVersion || res.version || releaseVersion,
+          }),
+        }, () => {
+          this.initScheduleLayout();
+        });
+      })
+      .catch((error) => {
+        wx.hideLoading();
+        console.error("按教室名解析课表失败", error, originalError);
+        this.showScheduleOpenError({ type: "classroom" });
+        this.initScheduleLayout();
+      });
+  },
+
+  showScheduleOpenError(options = {}) {
+    const isClassroom = options.type === "classroom" || this.data.type === "classroom";
     wx.showModal({
       title: "未找到课表",
-      content: "该链接对应的课表不存在或已被新版本替换，可返回全校搜索重新查找。",
+      content: isClassroom
+        ? "该教室暂无课表详情，但空闲结果仍可参考。"
+        : "该链接对应的课表不存在或已被新版本替换，可返回全校搜索重新查找。",
       confirmText: "去全校",
       cancelText: "留在此页",
       success: (res) => {

@@ -20,6 +20,7 @@ const config = {
   PUBLIC_API_ORIGIN: process.env.PUBLIC_API_ORIGIN || "http://localhost:3000",
   FOSU_API_BASE_URL: process.env.FOSU_API_BASE_URL || process.env.PUBLIC_API_ORIGIN || "http://localhost:3000",
   FOSU_STATIC_RELEASE_BASE_URL: process.env.FOSU_STATIC_RELEASE_BASE_URL || "/static/releases",
+  STATIC_SIGNED_URL_ENABLED: process.env.STATIC_SIGNED_URL_ENABLED === "true",
 
   // 数据源模式: cache-first | realtime | disabled
   DATA_SOURCE_MODE: process.env.DATA_SOURCE_MODE || "cache-first",

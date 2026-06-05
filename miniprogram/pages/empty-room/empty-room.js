@@ -643,8 +643,56 @@ Page({
       : this.data.selectedRoom;
     if (!room) return;
     const snapshot = this.data.activeSnapshot || {};
-    wx.navigateTo({
-      url: `/pages/schedule-view/schedule-view?type=classroom&id=${encodeURIComponent(room.roomId || room.roomName)}&name=${encodeURIComponent(room.roomName)}&term=${encodeURIComponent(snapshot.term || DEFAULT_SEMESTER_ID)}&semester=${encodeURIComponent(snapshot.term || DEFAULT_SEMESTER_ID)}&releaseVersion=${encodeURIComponent(snapshot.releaseVersion || "")}`,
-    });
+    const term = snapshot.term || DEFAULT_SEMESTER_ID;
+    const releaseVersion = snapshot.releaseVersion || "";
+    wx.showLoading({ title: "正在打开课表...", mask: true });
+    releasePackService.resolveClassroomDetail(room.roomName, {
+      term,
+      releaseVersion,
+      detailId: room.detailId || room.classroomId || "",
+    }, {
+      timeout: 12000,
+      retries: 1,
+    })
+      .then((resolved) => {
+        wx.hideLoading();
+        const schedule = resolved.schedule || resolved.detail || {};
+        const detailId = resolved.detailId || resolved.resolvedId || schedule.id || room.detailId || room.classroomId || "";
+        if (!detailId) {
+          throw Object.assign(new Error("CLASSROOM_DETAIL_ID_MISSING"), { code: "CLASSROOM_DETAIL_ID_MISSING" });
+        }
+        wx.navigateTo({
+          url: `/pages/schedule-view/schedule-view?type=classroom&id=${encodeURIComponent(detailId)}&name=${encodeURIComponent(room.roomName)}&term=${encodeURIComponent(term)}&semester=${encodeURIComponent(term)}&releaseVersion=${encodeURIComponent(resolved.releaseVersion || releaseVersion)}`,
+          success: (res) => {
+            if (res.eventChannel && typeof res.eventChannel.emit === "function") {
+              res.eventChannel.emit("acceptDataFromOpenerPage", {
+                courses: Array.isArray(schedule.courses) ? schedule.courses : [],
+                schedule: Object.assign({}, schedule, {
+                  id: detailId,
+                  detailId,
+                  roomName: room.roomName,
+                  scheduleVersion: resolved.releaseVersion || releaseVersion,
+                  releaseVersion: resolved.releaseVersion || releaseVersion,
+                  semester: term,
+                }),
+              });
+            }
+          },
+        });
+      })
+      .catch((error) => {
+        wx.hideLoading();
+        wx.showToast({
+          title: "该教室暂无课表详情，但空闲结果仍可参考",
+          icon: "none",
+        });
+        if (platformUtils.isDeveloperEnv && platformUtils.isDeveloperEnv()) {
+          console.warn("[empty-room] open classroom schedule failed", {
+            roomName: room.roomName,
+            releaseVersion,
+            error,
+          });
+        }
+      });
   },
 });
