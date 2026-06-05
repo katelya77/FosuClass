@@ -828,7 +828,7 @@ router.get("/client-diagnosis", scheduleLimiter, (req, res) => {
     const fallbackIndex = indexResults.class || indexResults.teacher || indexResults.classroom || indexResults.course || {};
     const effectiveReleaseVersion = activeInfo.releaseVersion || activeInfo.version || fallbackIndex.releaseVersion || fallbackIndex.version || "";
     const effectiveTerm = term || activeInfo.term || activeInfo.semester || fallbackIndex.term || fallbackIndex.semester || "";
-    const releasePack = effectiveReleaseVersion ? releaseService.getReleasePackStatus(effectiveReleaseVersion) : null;
+    const releasePack = effectiveReleaseVersion ? releaseService.getReleasePackQuickHealth(effectiveReleaseVersion) : null;
     return res.json({
       success: true,
       activeReleaseVersion: effectiveReleaseVersion,

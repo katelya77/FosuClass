@@ -6,6 +6,7 @@ const express = require("express");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { promisify } = require("util");
 const router = express.Router();
 const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
@@ -15,6 +16,7 @@ const appConfigService = require("../services/appConfigService");
 const feedbackService = require("../services/feedbackService");
 const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
+const releaseWorkerManager = require("../services/releaseWorkerManager");
 const relayService = require("../services/relayService");
 const stagingUploadService = require("../services/stagingUploadService");
 const staticReleaseSyncService = require("../services/staticReleaseSyncService");
@@ -22,6 +24,7 @@ const stagingFingerprint = require("../utils/stagingFingerprint");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const zlib = require("zlib");
+const gzipAsync = promisify(zlib.gzip);
 
 const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
 const HISTORY_DIR = path.join(SNAPSHOTS_DIR, "history");
@@ -1632,26 +1635,43 @@ router.post(
   "/release/upload",
   verifyAdminWriteAccess,
   express.raw({ type: "*/*", limit: "150mb" }),
-  (req, res) => {
+  async (req, res) => {
+    let uploadPath = "";
     try {
-      const parsed = releaseService.parseSnapshotBuffer(req.body || Buffer.alloc(0));
-      const written = releaseService.writeReleaseSnapshot(parsed.snapshot);
-      return res.json({
+      const uploadBuffer = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || []);
+      if (!uploadBuffer.length) {
+        return res.status(400).json({
+          success: false,
+          message: "release upload body is empty",
+        });
+      }
+      const safeId = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+      uploadPath = path.join(SNAPSHOTS_DIR, `release-upload-${safeId}.bin`);
+      await fs.promises.writeFile(uploadPath, uploadBuffer);
+      const job = releaseWorkerManager.startReleaseJob("release-upload", {
+        uploadPath,
+        uploadSize: uploadBuffer.length,
+        uploadedAt: new Date().toISOString(),
+        cleanupUpload: true,
+      });
+      return res.status(202).json({
         success: true,
-        message: "release uploaded and validated",
-        version: written.version,
-        semester: written.manifest.semester,
-        counts: written.manifest.counts,
-        size: parsed.size,
-        isGzip: parsed.isGzip,
+        message: "release upload queued",
+        job,
+        size: uploadBuffer.length,
       });
     } catch (error) {
-      const validation = error.validation;
-      safeLog("release-upload-failed", { error: error.message, validation });
-      return res.status(validation ? 400 : 500).json({
+      if (uploadPath) {
+        try { await fs.promises.rm(uploadPath, { force: true }); } catch (cleanupError) {}
+      }
+      safeLog("release-upload-failed", { error: error.message, code: error.code || "" });
+      if (error.code === "JOB_ALREADY_RUNNING") {
+        return releaseWorkerManager.sendAlreadyRunning(res, error);
+      }
+      return res.status(error.statusCode || 500).json({
         success: false,
-        message: validation ? "release validation failed" : error.message,
-        errors: validation ? validation.errors : undefined,
+        code: error.code || "RELEASE_UPLOAD_FAILED",
+        message: error.message,
       });
     }
   }
@@ -1662,80 +1682,34 @@ router.post(
   verifyAdminWriteAccess,
   (req, res) => {
     try {
-      let result;
-      if (req.body && req.body.snapshot) {
-        result = releaseService.activateReleaseFromSnapshot(req.body.snapshot);
-      } else {
-        result = releaseService.activateReleaseVersion(req.body && req.body.version);
-      }
-      const status = releaseService.getReleaseStatus();
+      const input = {
+        version: req.body && req.body.version || "",
+        snapshot: req.body && req.body.snapshot || null,
+        releaseNote: "全校课表数据已更新",
+        auditAction: "activate",
+        auditReq: {
+          ip: req.ip || "",
+          headers: {
+            "x-forwarded-for": req.headers["x-forwarded-for"] || "",
+          },
+        },
+        auditSummary: `Activated release ${req.body && req.body.version || req.body && req.body.snapshot && (req.body.snapshot.version || req.body.snapshot.releaseVersion) || ""}`,
+      };
+      const job = releaseWorkerManager.startReleaseJob("release-activate", input);
       global.cachedSnapshotMeta = null;
       global.cachedSnapshotData = null;
-
-      const meta = getSyncMeta();
-      const counts = status.counts || {};
-      const updatedAt = status.activeReleaseUpdatedAt || new Date().toISOString();
-      meta.snapshot = {
-        updatedAt,
-        version: status.activeReleaseVersion,
-        semester: status.semester,
-        itemCount: counts.classScheduleCount || 0,
-        syncSource: "local-sync-client",
-      };
-      meta.catalog = {
-        updatedAt,
-        itemCount: counts.collegeCount || counts.collegesCount || 0,
-        syncSource: "local-sync-client",
-      };
-      meta.majors = {
-        updatedAt,
-        itemCount: counts.majorCount || counts.majorsCount || 0,
-        syncSource: "local-sync-client",
-      };
-      meta["class-schedules"] = {
-        updatedAt,
-        itemCount: counts.classScheduleCount || 0,
-        adminClassCount: counts.adminClassCount || 0,
-        majorAggregateCount: counts.majorAggregateCount || 0,
-        syncSource: "local-sync-client",
-      };
-      meta["teacher-schedules"] = {
-        updatedAt,
-        itemCount: counts.teacherScheduleCount || 0,
-        syncSource: "local-sync-client",
-      };
-      meta["classroom-schedules"] = {
-        updatedAt,
-        itemCount: counts.classroomScheduleCount || 0,
-        syncSource: "local-sync-client",
-      };
-      meta["course-schedules"] = {
-        updatedAt,
-        itemCount: counts.courseScheduleCount || 0,
-        syncSource: "local-sync-client",
-      };
-      fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
-      appConfigService.touchDataVersionForSyncKey("release", {
-        updatedAt,
-        releaseVersion: status.activeReleaseVersion,
-        semester: status.semester,
-        releaseNote: "全校课表数据已更新",
-      });
-
-      return res.json({
+      return res.status(202).json({
         success: true,
-        message: "release activated",
-        version: status.activeReleaseVersion,
-        semester: status.semester,
-        counts: status.counts,
-        validation: result.validation,
+        message: "release activation started",
+        job,
       });
     } catch (error) {
       const validation = error.validation;
       safeLog("release-activate-failed", { error: error.message, validation });
       return res.status(error.statusCode || (validation ? 400 : 500)).json({
         success: false,
-        message: validation ? "release validation failed" : error.message,
+        message: error.code === "JOB_ALREADY_RUNNING" ? "已有 Release 重任务正在运行" : (validation ? "release validation failed" : error.message),
+        job: error.job || null,
         errors: validation ? validation.errors : undefined,
       });
     }
@@ -1798,7 +1772,7 @@ router.post(
         fs.writeFileSync(tempJsonPath, jsonStr, "utf-8");
       } else {
         fs.writeFileSync(tempJsonPath, jsonStr, "utf-8");
-        const gzBuffer = zlib.gzipSync(Buffer.from(jsonStr, "utf-8"));
+        const gzBuffer = await gzipAsync(Buffer.from(jsonStr, "utf-8"));
         fs.writeFileSync(tempGzPath, gzBuffer);
       }
 
@@ -3662,6 +3636,7 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
       version: activeInfo && activeInfo.version || meta.releaseVersion || "",
     });
     const latestJob = jobService.latestJob();
+    const runningReleaseJob = jobService.getRunningJobByLockGroup(releaseWorkerManager.RELEASE_HEAVY_LOCK_GROUP);
     const fingerprint = buildFingerprintStatus();
     return res.json({
       success: true,
@@ -3682,6 +3657,8 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
         lastStaticSyncTime: staticSync.lastSyncTime || staticSync.syncedAt || staticSync.updatedAt || null,
         staticRetainedReleases: staticSync.keptReleases || [],
         latestJob: jobService.publicJob(latestJob),
+        runningReleaseJob: jobService.publicJob(runningReleaseJob),
+        releaseHeavyBusy: Boolean(runningReleaseJob),
         classScheduleUpdatedAt: syncMeta["class-schedules"]?.updatedAt || null,
         teacherScheduleUpdatedAt: syncMeta["teacher-schedules"]?.updatedAt || null,
         classroomScheduleUpdatedAt: syncMeta["classroom-schedules"]?.updatedAt || null,
@@ -3726,176 +3703,6 @@ function sendJobStatus(res, type, id) {
     success: true,
     job: jobService.publicJob(job),
   });
-}
-
-function throwPublishError(code, message, extra) {
-  const error = new Error(message || code || "publish failed");
-  error.code = code || "";
-  if (extra) Object.assign(error, extra);
-  throw error;
-}
-
-async function writeReleasePackSyncAndActivate(stagingData, job) {
-  if (job) job.progress(45, "generate release pack");
-  const written = releaseService.writeReleaseSnapshot(stagingData);
-  const releaseVersion = written.version || written.releaseVersion;
-
-  if (job) job.progress(58, "sync OpenResty static directory", { releaseVersion });
-  const staticSync = await staticReleaseSyncService.syncIfEnabled(releaseVersion);
-
-  if (job) job.progress(70, "activate active pointer", {
-    releaseVersion,
-    staticSyncStatus: staticSync.status,
-  });
-  const activated = releaseService.activateReleaseVersion(releaseVersion);
-  return Object.assign({}, written, activated, { staticSync });
-}
-
-async function runStagingPublishCore(input, job) {
-  const forcePublish = input && input.force === true;
-  const releaseNote = input && input.releaseNote;
-  const auditReq = {
-    ip: input && input.ip || "",
-    headers: input && input.headers || {},
-  };
-
-  if (!fs.existsSync(STAGING_LATEST_PATH)) {
-    throwPublishError("STAGING_MISSING", "Staging data does not exist. Upload staging JSON first.");
-  }
-
-  if (job) job.progress(12, "read staging payload");
-  const stagingData = JSON.parse(fs.readFileSync(STAGING_LATEST_PATH, "utf-8"));
-  const activeSnapshot = releaseService.readActiveReleaseSnapshot();
-  const stagingFingerprintInfo = getSnapshotFingerprint(stagingData);
-  const activeCanonicalHash = getActiveCanonicalHash();
-  if (stagingFingerprintInfo?.canonicalHash && activeCanonicalHash && stagingFingerprintInfo.canonicalHash === activeCanonicalHash) {
-    if (job) job.progress(95, "staging unchanged; skip publish", { canonicalHash: stagingFingerprintInfo.canonicalHash });
-    return {
-      success: true,
-      skipped: true,
-      unchanged: true,
-      reason: "active-release",
-      message: "数据无变化，不需要发布",
-      canonicalHash: stagingFingerprintInfo.canonicalHash,
-      releaseVersion: releaseService.getActiveReleaseInfo()?.version || "",
-      quickHealth: activeCanonicalHash ? releaseService.getReleasePackQuickHealth(releaseService.getActiveReleaseInfo()?.version || "") : null,
-    };
-  }
-  const safety = buildStagingSafety(stagingData, activeSnapshot);
-
-  if (!safety.allowPublish) {
-    throwPublishError("STAGING_SAFETY_BLOCKED", "Staging data failed publish safety checks.", {
-      blockers: safety.blockers,
-      warnings: safety.warnings,
-    });
-  }
-
-  if (safety.requiresForceConfirm && !forcePublish) {
-    throwPublishError("CLASS_COUNT_DROP_BLOCKED", "Class/resource counts dropped too much. Force confirmation is required.", {
-      safety,
-    });
-  }
-
-  if (activeSnapshot) {
-    const activeClassNames = (activeSnapshot.classSchedules || []).map((item) => item.className).filter(Boolean);
-    const activeClassNamesSet = new Set(activeClassNames);
-    const stagingClassNamesSet = new Set((stagingData.classSchedules || []).map((item) => item.className).filter(Boolean));
-    const deletedClasses = activeClassNames.filter((name) => !stagingClassNamesSet.has(name));
-    const addedClasses = (stagingData.classSchedules || [])
-      .map((item) => item.className)
-      .filter((name) => name && !activeClassNamesSet.has(name));
-    const changeRate = (deletedClasses.length + addedClasses.length) / Math.max(activeClassNames.length, 1);
-    if (changeRate > 0.5 && !forcePublish) {
-      throwPublishError("BIG_CHANGE_BLOCKED", `Staging class change rate is ${(changeRate * 100).toFixed(2)}%. Force confirmation is required.`);
-    }
-  }
-
-  if (job) job.progress(30, "backup active release");
-  const activeInfo = releaseService.getActiveReleaseInfo();
-  if (activeInfo && activeInfo.version) {
-    const activeFiles = releaseService.getReleaseFiles(activeInfo.version);
-    if (fs.existsSync(activeFiles.snapshotPath)) {
-      createBackup("release-snapshot", activeFiles.snapshotPath);
-    }
-  }
-
-  const publishResult = await writeReleasePackSyncAndActivate(stagingData, job);
-
-  const status = releaseService.getReleaseStatus();
-  const counts = status.counts || {};
-  const updatedAt = new Date().toISOString();
-  const meta = getSyncMeta();
-  meta.snapshot = {
-    updatedAt,
-    version: status.activeReleaseVersion,
-    semester: status.semester,
-    itemCount: counts.classScheduleCount || 0,
-    syncSource: "local-sync-client",
-  };
-  meta.catalog = {
-    updatedAt,
-    itemCount: counts.collegeCount || counts.collegesCount || 0,
-    syncSource: "local-sync-client",
-  };
-  meta.majors = {
-    updatedAt,
-    itemCount: counts.majorCount || counts.majorsCount || 0,
-    syncSource: "local-sync-client",
-  };
-  meta["class-schedules"] = {
-    updatedAt,
-    itemCount: counts.classScheduleCount || 0,
-    adminClassCount: counts.adminClassCount || 0,
-    majorAggregateCount: counts.majorAggregateCount || 0,
-    syncSource: "local-sync-client",
-  };
-  meta["teacher-schedules"] = {
-    updatedAt,
-    itemCount: counts.teacherScheduleCount || 0,
-    syncSource: "local-sync-client",
-  };
-  meta["classroom-schedules"] = {
-    updatedAt,
-    itemCount: counts.classroomScheduleCount || 0,
-    syncSource: "local-sync-client",
-  };
-  meta["course-schedules"] = {
-    updatedAt,
-    itemCount: counts.courseScheduleCount || 0,
-    syncSource: "local-sync-client",
-  };
-  fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
-
-  appConfigService.touchDataVersionForSyncKey("release", {
-    updatedAt,
-    releaseVersion: status.activeReleaseVersion,
-    semester: status.semester,
-    releaseNote: releaseNote || stagingData.releaseNote || "Published from admin staging",
-  });
-
-  writeAuditLog(auditReq, "publish", "sync-release", status.activeReleaseVersion, `Published staging release ${status.activeReleaseVersion}`);
-  if (stagingData.stagingUploadId) {
-    stagingUploadService.markUploadPublished(stagingData.stagingUploadId, status.activeReleaseVersion);
-  }
-  if (stagingData.relayUploadId) {
-    relayService.markUploadPublished(stagingData.relayUploadId, status.activeReleaseVersion);
-  }
-
-  if (job) job.progress(78, "run quick static health");
-  releaseService.clearDerivedCache();
-  const quickHealth = releaseService.getReleasePackQuickHealth(status.activeReleaseVersion);
-
-  return {
-    success: true,
-    message: "Staging release published",
-    version: status.activeReleaseVersion,
-    releaseVersion: status.activeReleaseVersion,
-    term: status.semester,
-    semester: status.semester,
-    counts,
-    quickHealth,
-    staticSync: publishResult.staticSync,
-  };
 }
 
 router.get("/jobs", adminAuth.verifyAdminAccess, (req, res) => {
@@ -3950,17 +3757,13 @@ router.get("/release-pack/quick-health", adminAuth.verifyAdminAccess, (req, res)
 });
 
 router.post("/release-pack/deep-health/start", adminAuth.verifyAdminAccess, (req, res) => {
-  const version = getRequestedReleaseVersion(req);
-  const job = jobService.createJob("release-pack-deep-health", { version }, async (job) => {
-    job.progress(20, "读取 Release Pack 深度状态", { version });
-    const status = releaseService.getReleasePackStatus(version);
-    job.progress(80, "深度 health 完成", {
-      healthy: status.healthy,
-      totalBytes: status.totalBytes,
-    });
-    return { version, status };
-  });
-  return res.status(202).json({ success: true, job });
+  try {
+    const version = getRequestedReleaseVersion(req);
+    const job = releaseWorkerManager.startReleaseJob("release-pack-deep-health", { version });
+    return res.status(202).json({ success: true, job });
+  } catch (error) {
+    return releaseWorkerManager.sendAlreadyRunning(res, error);
+  }
 });
 
 router.get("/release-pack/deep-health/status", adminAuth.verifyAdminAccess, (req, res) => {
@@ -3970,25 +3773,7 @@ router.get("/release-pack/deep-health/status", adminAuth.verifyAdminAccess, (req
 router.post("/release-pack/rebuild/start", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     const version = getRequestedReleaseVersion(req);
-    const job = jobService.createSingletonJob("release-pack-rebuild", { version }, async (job) => {
-      job.progress(10, "开始重建 Release Pack", { version });
-      releaseService.clearDerivedCache();
-      const rebuilt = releaseService.rebuildReleasePack(version);
-      job.progress(70, "同步 OpenResty 静态目录", { version: rebuilt.version });
-      const staticSync = await staticReleaseSyncService.syncIfEnabled(rebuilt.version);
-      job.progress(85, "Release Pack 已重建并写入静态目录", {
-        version: rebuilt.version,
-        staticBaseUrl: rebuilt.manifest && rebuilt.manifest.staticBaseUrl,
-        staticSyncStatus: staticSync.status,
-      });
-      return {
-        version: rebuilt.version,
-        releaseVersion: rebuilt.releaseVersion,
-        releasePack: rebuilt.status,
-        manifest: rebuilt.manifest,
-        staticSync,
-      };
-    });
+    const job = releaseWorkerManager.startReleaseJob("release-pack-rebuild", { version });
     return res.status(202).json({ success: true, job });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
@@ -4004,29 +3789,13 @@ router.get("/release-pack/rebuild/status", adminAuth.verifyAdminAccess, (req, re
 });
 
 router.post("/release-pack/verify/start", adminAuth.verifyAdminAccess, (req, res) => {
-  const version = getRequestedReleaseVersion(req);
-  const job = jobService.createJob("release-pack-verify", { version }, async (job) => {
-    job.progress(15, "读取 quick health", { version });
-    const quick = releaseService.getReleasePackQuickHealth(version);
-    job.progress(40, "读取 class index 静态文件");
-    const classIndex = releaseService.readReleasePackStaticIndex("class", version);
-    job.progress(65, "读取 empty-room 静态文件");
-    const emptyRoom = releaseService.readReleasePackStaticEmptyRoom(version);
-    const ok = Boolean(quick.healthy && classIndex && classIndex.success && emptyRoom && emptyRoom.success);
-    job.progress(90, "发布后验证完成", { ok });
-    if (!ok) {
-      const error = new Error("Release Pack verify failed");
-      error.code = "RELEASE_PACK_VERIFY_FAILED";
-      throw error;
-    }
-    return {
-      version,
-      quick,
-      classIndexCount: classIndex.items.length,
-      emptyRoomCount: emptyRoom.rooms.length,
-    };
-  });
-  return res.status(202).json({ success: true, job });
+  try {
+    const version = getRequestedReleaseVersion(req);
+    const job = releaseWorkerManager.startReleaseJob("release-pack-verify", { version }, { lockGroup: null });
+    return res.status(202).json({ success: true, job });
+  } catch (error) {
+    return releaseWorkerManager.sendAlreadyRunning(res, error);
+  }
 });
 
 router.get("/release-pack/verify/status", adminAuth.verifyAdminAccess, (req, res) => {
@@ -4043,15 +3812,7 @@ router.post("/sync/staging/publish/start", adminAuth.verifyAdminAccess, (req, re
         "x-forwarded-for": req.headers["x-forwarded-for"] || "",
       },
     };
-    const job = jobService.createSingletonJob("staging-publish", input, async (job, input) => {
-      job.progress(8, "start staging publish");
-      const result = await runStagingPublishCore(input, job);
-      job.progress(92, "staging publish finished", {
-        version: result.releaseVersion,
-        healthy: result.quickHealth && result.quickHealth.healthy,
-      });
-      return result;
-    });
+    const job = releaseWorkerManager.startReleaseJob("staging-publish", input);
     return res.status(202).json({ success: true, job });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
@@ -4211,159 +3972,11 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
         "x-forwarded-for": req.headers["x-forwarded-for"] || "",
       },
     };
-    const job = jobService.createSingletonJob("staging-publish", input, async (jobContext, jobInput) => {
-      jobContext.progress(8, "start staging publish");
-      const result = await runStagingPublishCore(jobInput, jobContext);
-      jobContext.progress(92, "staging publish finished", {
-        version: result.releaseVersion,
-        healthy: result.quickHealth && result.quickHealth.healthy,
-      });
-      return result;
-    });
+    const job = releaseWorkerManager.startReleaseJob("staging-publish", input);
     return res.status(202).json({
       success: true,
       message: "发布已进入后台 job，请轮询 job 状态",
       job,
-    });
-
-    const stagingData = JSON.parse(fs.readFileSync(STAGING_LATEST_PATH, "utf-8"));
-    const activeSnapshot = releaseService.readActiveReleaseSnapshot();
-    const safety = buildStagingSafety(stagingData, activeSnapshot);
-    const forcePublish = req.body.force === true;
-
-    if (!safety.allowPublish) {
-      return res.status(400).json({
-        success: false,
-        code: "STAGING_SAFETY_BLOCKED",
-        message: "Staging 数据未通过发布安全校验，禁止发布。",
-        blockers: safety.blockers,
-        warnings: safety.warnings,
-      });
-    }
-
-    if (safety.requiresForceConfirm && !forcePublish) {
-      const riskText = (safety.riskDrops || [])
-        .map((item) => `${item.label}下降 ${item.dropPercent}%（线上 ${item.activeCount}，Staging ${item.stagingCount}）`)
-        .join("；");
-      return res.status(400).json({
-        success: false,
-        code: "CLASS_COUNT_DROP_BLOCKED",
-        message: riskText
-          ? `${riskText}，必须二次确认后才能发布。`
-          : "候选 releaseVersion 已存在或数据风险较高，必须二次确认后才能发布。",
-        safety,
-      });
-    }
-
-    // 变动率限制校验
-    if (activeSnapshot) {
-      const activeClassNames = (activeSnapshot.classSchedules || []).map(c => c.className).filter(Boolean);
-      const stagingClassNamesSet = new Set((stagingData.classSchedules || []).map(c => c.className).filter(Boolean));
-      
-      const deletedClasses = activeClassNames.filter(name => !stagingClassNamesSet.has(name));
-      const addedClasses = (stagingData.classSchedules || []).map(c => c.className).filter(name => name && !new Set(activeClassNames).has(name));
-      
-      const baseCount = Math.max(activeClassNames.length, 1);
-      const changeRate = (deletedClasses.length + addedClasses.length) / baseCount;
-      
-      if (changeRate > 0.5 && !forcePublish) {
-        return res.status(400).json({
-          success: false,
-          code: "BIG_CHANGE_BLOCKED",
-          message: `Staging 数据变动率达 ${parseFloat((changeRate * 100).toFixed(2))}% (超过 50% 安全熔断值)。为避免新学期数据丢失或覆盖线上，必须勾选“确认强制发布”后方可提交发布。`,
-        });
-      }
-    }
-
-    // 备份当前线上版本
-    const activeInfo = releaseService.getActiveReleaseInfo();
-    if (activeInfo && activeInfo.version) {
-      const activeFiles = releaseService.getReleaseFiles(activeInfo.version);
-      if (fs.existsSync(activeFiles.snapshotPath)) {
-        createBackup("release-snapshot", activeFiles.snapshotPath);
-      }
-    }
-
-    // 正式激活发布
-    const result = await writeReleasePackSyncAndActivate(stagingData, null);
-    
-    // 更新元数据
-    const status = releaseService.getReleaseStatus();
-    const counts = status.counts || {};
-    const updatedAt = new Date().toISOString();
-    const meta = getSyncMeta();
-    meta.snapshot = {
-      updatedAt,
-      version: status.activeReleaseVersion,
-      semester: status.semester,
-      itemCount: counts.classScheduleCount || 0,
-      syncSource: "local-sync-client",
-    };
-    meta.catalog = {
-      updatedAt,
-      itemCount: counts.collegeCount || counts.collegesCount || 0,
-      syncSource: "local-sync-client",
-    };
-    meta.majors = {
-      updatedAt,
-      itemCount: counts.majorCount || counts.majorsCount || 0,
-      syncSource: "local-sync-client",
-    };
-    meta["class-schedules"] = {
-      updatedAt,
-      itemCount: counts.classScheduleCount || 0,
-      adminClassCount: counts.adminClassCount || 0,
-      majorAggregateCount: counts.majorAggregateCount || 0,
-      syncSource: "local-sync-client",
-    };
-    meta["teacher-schedules"] = {
-      updatedAt,
-      itemCount: counts.teacherScheduleCount || 0,
-      syncSource: "local-sync-client",
-    };
-    meta["classroom-schedules"] = {
-      updatedAt,
-      itemCount: counts.classroomScheduleCount || 0,
-      syncSource: "local-sync-client",
-    };
-    meta["course-schedules"] = {
-      updatedAt,
-      itemCount: counts.courseScheduleCount || 0,
-      syncSource: "local-sync-client",
-    };
-    fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
-
-    // 更新配置中发布版本号，使小程序端生效
-    appConfigService.touchDataVersionForSyncKey("release", {
-      updatedAt,
-      releaseVersion: status.activeReleaseVersion,
-      semester: status.semester,
-      releaseNote: req.body.releaseNote || stagingData.releaseNote || "通过管理端 Staging 校验发布新版本"
-    });
-
-    writeAuditLog(req, "publish", "sync-release", status.activeReleaseVersion, `将 Staging 数据正式发布为版本 ${status.activeReleaseVersion}`);
-    if (stagingData.stagingUploadId) {
-      stagingUploadService.markUploadPublished(stagingData.stagingUploadId, status.activeReleaseVersion);
-    }
-    if (stagingData.relayUploadId) {
-      relayService.markUploadPublished(stagingData.relayUploadId, status.activeReleaseVersion);
-    }
-
-    // Clear old memory cache
-    releaseService.clearDerivedCache();
-
-    const quickHealth = releaseService.getReleasePackQuickHealth(status.activeReleaseVersion);
-
-    return res.json({
-      success: true,
-      message: "Staging 新版本已成功发布上线！",
-      version: status.activeReleaseVersion,
-      releaseVersion: status.activeReleaseVersion,
-      term: status.semester,
-      semester: status.semester,
-      counts,
-      quickHealth,
-      staticSync: result.staticSync
     });
   } catch (error) {
     console.error("Staging publish failed:", error);
@@ -4401,49 +4014,32 @@ router.post("/sync/releases/rollback", adminAuth.verifyAdminAccess, async (req, 
     if (!version) {
       return res.status(400).json({ success: false, message: "缺少必要参数 version" });
     }
-
-    // 备份当前活跃快照 (在回滚前)
-    const activeInfo = releaseService.getActiveReleaseInfo();
-    if (activeInfo && activeInfo.version) {
-      const activeFiles = releaseService.getReleaseFiles(activeInfo.version);
-      if (fs.existsSync(activeFiles.snapshotPath)) {
-        createBackup("release-snapshot", activeFiles.snapshotPath);
-      }
-    }
-
-    const result = releaseService.activateReleaseVersion(version);
-
-    // 触碰版本，同步更新缓存
-    const status = releaseService.getReleaseStatus();
-    const counts = status.counts || {};
-    const updatedAt = new Date().toISOString();
-    const meta = getSyncMeta();
-    Object.keys(meta).forEach(key => {
-      if (meta[key] && typeof meta[key] === "object") {
-        meta[key].updatedAt = updatedAt;
-        meta[key].version = version;
-      }
-    });
-    fs.writeFileSync(FILE_MAP["sync-meta"], JSON.stringify(meta, null, 2), "utf-8");
-
-    appConfigService.touchDataVersionForSyncKey("release", {
-      updatedAt,
-      releaseVersion: version,
-      semester: status.semester,
-      releaseNote: `一键回滚数据至历史版本 ${version}`
-    });
-
-    writeAuditLog(req, "rollback", "sync-release", version, `一键回滚数据至版本 ${version}`);
-
-    return res.json({
-      success: true,
-      message: `已成功回滚至版本 ${version}`,
+    const job = releaseWorkerManager.startReleaseJob("release-activate", {
       version,
-      semester: status.semester,
+      backupActive: true,
+      releaseNote: `一键回滚数据至历史版本 ${version}`,
+      auditAction: "rollback",
+      auditReq: {
+        ip: req.ip || "",
+        headers: {
+          "x-forwarded-for": req.headers["x-forwarded-for"] || "",
+        },
+      },
+      auditSummary: `一键回滚数据至版本 ${version}`,
+    });
+    return res.status(202).json({
+      success: true,
+      message: `已启动回滚至版本 ${version} 的后台任务`,
+      version,
+      job,
     });
   } catch (error) {
     console.error("Rollback failed:", error);
-    return res.status(500).json({ success: false, message: "回滚失败: " + error.message });
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.code === "JOB_ALREADY_RUNNING" ? "已有 Release 重任务正在运行" : "回滚失败: " + error.message,
+      job: error.job || null,
+    });
   }
 });
 
@@ -4468,25 +4064,8 @@ router.post("/sync/releases/rebuild-index", adminAuth.verifyAdminAccess, async (
     if (!version) {
       return res.status(400).json({ success: false, message: "缺少必要参数 version" });
     }
-    const job = jobService.createSingletonJob("release-pack-rebuild", { version }, async (jobContext) => {
-      jobContext.progress(10, "开始重建 Release Pack", { version });
-      releaseService.clearDerivedCache();
-      const rebuilt = releaseService.rebuildReleasePack(version);
-      jobContext.progress(70, "同步 OpenResty 静态目录", { version: rebuilt.version });
-      const staticSync = await staticReleaseSyncService.syncIfEnabled(rebuilt.version);
-      jobContext.progress(90, "Release Pack 已重建", {
-        version: rebuilt.version,
-        staticSyncStatus: staticSync.status,
-      });
-      writeAuditLog(req, "rebuild-index", "sync-release", version, `重建版本 ${version} 的轻量索引`);
-      return {
-        version: rebuilt.version,
-        releaseVersion: rebuilt.releaseVersion,
-        releasePack: rebuilt.status,
-        manifest: rebuilt.manifest,
-        staticSync,
-      };
-    });
+    const job = releaseWorkerManager.startReleaseJob("release-pack-rebuild", { version });
+    writeAuditLog(req, "rebuild-index", "sync-release", version, `启动版本 ${version} 的 Release Pack 重建任务`);
     return res.status(202).json({
       success: true,
       message: `已启动版本 ${version} 的 Release Pack 重建任务`,

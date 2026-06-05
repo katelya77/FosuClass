@@ -9,6 +9,7 @@ const {
   normalizeCourseIdentity,
   toRenderableCourse,
 } = require("./courseNormalizer");
+const { resolveTeachingEvents } = require("./teachingEventResolver");
 
 
 
@@ -147,59 +148,24 @@ function withScheduleGeometry(course, sectionHeight) {
 }
 
 function assignOverlapLanes(courses) {
-  const sorted = (courses || []).slice().sort((a, b) => {
+  return (courses || []).slice().sort((a, b) => {
     if (a.startSection !== b.startSection) return a.startSection - b.startSection;
     if (a.endSection !== b.endSection) return a.endSection - b.endSection;
     if (a.active !== b.active) return a.active ? -1 : 1;
     return String(a.id || a.courseName || "").localeCompare(String(b.id || b.courseName || ""));
-  });
-  const groups = [];
-  let currentGroup = [];
-  let currentEnd = 0;
-
-  sorted.forEach((course) => {
-    if (!currentGroup.length || course.startSection <= currentEnd) {
-      currentGroup.push(course);
-      currentEnd = Math.max(currentEnd, course.endSection);
-      return;
-    }
-    groups.push(currentGroup);
-    currentGroup = [course];
-    currentEnd = course.endSection;
-  });
-  if (currentGroup.length) {
-    groups.push(currentGroup);
-  }
-
-  groups.forEach((group) => {
-    const laneEnds = [];
-    group.forEach((course) => {
-      let lane = laneEnds.findIndex((end) => end < course.startSection);
-      if (lane === -1) {
-        lane = laneEnds.length;
-      }
-      laneEnds[lane] = course.endSection;
-      course.lane = lane;
-    });
-    const laneCount = Math.max(1, laneEnds.length);
-    group.forEach((course) => {
-      course.laneCount = laneCount;
-      if (laneCount > 1) {
-        const activeConflicts = group.filter((item) => item !== course && item.active && sectionsOverlap(item, course));
-        if (course.active && activeConflicts.length) {
-          course.activeConflictCount = activeConflicts.length;
-          course.activeConflictLabel = buildConflictLabel(activeConflicts.length, "active");
-          course.activeConflicts = summarizeConflictCourses(activeConflicts);
-        }
-      }
-    });
-  });
-
-  return sorted;
+  }).map((course) => Object.assign({}, course, {
+    lane: 0,
+    laneCount: 1,
+    activeConflictCount: course.eventKind === "true-conflict" ? (course.conflictEvents || []).length : 0,
+    activeConflictLabel: "",
+  }));
 }
 
 function buildCardStyle(course) {
-  const background = course.active ? course.color : "#eef2f7";
+  const semanticBackground = course.eventKind === "true-conflict"
+    ? "#b42318"
+    : (course.eventKind === "parallel-group" ? "#2f6f73" : "");
+  const background = course.active ? (semanticBackground || course.color) : "#eef2f7";
   const zIndex = course.active ? 30 + (course.lane || 0) : 10 + (course.lane || 0);
   const base = [
     `top:${course.top}rpx`,
@@ -207,15 +173,8 @@ function buildCardStyle(course) {
     `background:${background}`,
     `z-index:${zIndex}`,
   ];
-  if (course.laneCount > 1) {
-    const width = 100 / course.laneCount;
-    base.push(`left:${(course.lane * width).toFixed(4)}%`);
-    base.push(`right:auto`);
-    base.push(`width:${width.toFixed(4)}%`);
-  } else {
-    base.push("left:4rpx");
-    base.push("right:4rpx");
-  }
+  base.push("left:4rpx");
+  base.push("right:4rpx");
   return `${base.join(";")};`;
 }
 
@@ -230,40 +189,48 @@ function buildVisibleScheduleCourses(courses, week, sectionHeight, hideInactiveC
   if (hideInactiveCourses) {
     return dayCourses.filter((course) => course.active);
   }
+  return dayCourses;
+}
 
-  const activeCourses = dayCourses.filter((course) => course.active);
-  const inactiveCourses = dayCourses.filter((course) => !course.active);
-  const visibleInactive = [];
+const resolverCache = new Map();
 
-  inactiveCourses.forEach((inactiveCourse) => {
-    const conflictingActive = activeCourses.filter((activeCourse) => sectionsOverlap(activeCourse, inactiveCourse));
-    if (!conflictingActive.length) {
-      visibleInactive.push(inactiveCourse);
-      return;
-    }
-    conflictingActive.forEach((activeCourse) => {
-      if (!activeCourse.inactiveConflicts) {
-        activeCourse.inactiveConflicts = [];
-      }
-      activeCourse.inactiveConflicts.push(inactiveCourse);
-    });
+function getResolverCacheKey(courses, week, options) {
+  const config = options || {};
+  return [
+    config.releaseVersion || "",
+    config.targetType || "class",
+    config.targetId || config.targetName || "",
+    week || "",
+    (courses || []).length,
+  ].join("|");
+}
+
+function getResolvedTeachingEvents(courses, week, options) {
+  const config = options || {};
+  const key = getResolverCacheKey(courses, week, config);
+  const cached = resolverCache.get(key);
+  if (cached) return cached;
+  const result = resolveTeachingEvents({
+    courses,
+    targetType: config.targetType || "class",
+    targetId: config.targetId || "",
+    targetName: config.targetName || "",
+    selectedWeek: week,
+    semester: config.semester || "",
   });
-
-  activeCourses.forEach((course) => {
-    const conflicts = course.inactiveConflicts || [];
-    course.inactiveConflictCount = conflicts.length;
-    course.inactiveConflictLabel = buildConflictLabel(conflicts.length, "inactive");
-    course.inactiveConflicts = summarizeConflictCourses(conflicts);
-  });
-
-  return activeCourses.concat(visibleInactive);
+  if (resolverCache.size > 30) resolverCache.clear();
+  resolverCache.set(key, result);
+  return result;
 }
 
 function buildScheduleColumns(courses, weekdays, week, options) {
   const sectionHeight = (options && options.sectionHeight) || 96;
   const hideInactiveCourses = Boolean(options && options.hideInactiveCourses);
+  const normalizedCourses = (courses || []).map(normalizeCourse);
+  const resolved = getResolvedTeachingEvents(normalizedCourses, week, options);
+  const events = resolved.events || normalizedCourses;
   return weekdays.map((day) => {
-    const rawDayCourses = (courses || []).filter((course) => Number(course.weekday) === Number(day.weekday));
+    const rawDayCourses = events.filter((course) => Number(course.weekday) === Number(day.weekday));
     const visibleCourses = buildVisibleScheduleCourses(rawDayCourses, week, sectionHeight, hideInactiveCourses);
     const dayCourses = assignOverlapLanes(visibleCourses).map((course) => Object.assign({}, course, {
       cardStyle: buildCardStyle(course),

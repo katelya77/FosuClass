@@ -22,12 +22,13 @@ function writeJsonAtomic(filePath, data) {
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
   fs.writeFileSync(tempPath, JSON.stringify(data, null, 2), "utf-8");
   try {
-    if (fs.existsSync(filePath) && process.platform === "win32") {
-      try { fs.unlinkSync(filePath); } catch (error) {}
-    }
     fs.renameSync(tempPath, filePath);
   } catch (error) {
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+    try {
+      fs.copyFileSync(tempPath, filePath);
+    } catch (copyError) {
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+    }
     try { fs.unlinkSync(tempPath); } catch (cleanupError) {}
   }
 }
@@ -87,16 +88,31 @@ function latestJob(type) {
   return listJobs(100).find((job) => !type || job.type === type) || null;
 }
 
-function getRunningJob(type) {
+function isActiveJobStatus(status) {
+  return status === "queued" || status === "running";
+}
+
+function getRunningJob(type, options = {}) {
+  const query = typeof type === "object" && type !== null ? type : Object.assign({ type }, options || {});
+  const targetType = query.type || "";
+  const targetLockGroup = query.lockGroup || "";
   const staleMs = Number(process.env.FOSU_JOB_LOCK_STALE_MS || 30 * 60 * 1000);
   const now = Date.now();
   const running = listJobs(100).find((job) => {
-    if (type && job.type !== type) return false;
-    if (job.status !== "queued" && job.status !== "running") return false;
+    if (targetLockGroup) {
+      if (job.lockGroup !== targetLockGroup) return false;
+    } else if (targetType && job.type !== targetType) {
+      return false;
+    }
+    if (!isActiveJobStatus(job.status)) return false;
     const updatedAt = Date.parse(job.updatedAt || job.startedAt || job.createdAt || "");
     return !updatedAt || now - updatedAt <= staleMs;
   });
   return running || null;
+}
+
+function getRunningJobByLockGroup(lockGroup) {
+  return getRunningJob({ lockGroup });
 }
 
 function publicJob(job) {
@@ -106,72 +122,108 @@ function publicJob(job) {
   });
 }
 
-function createJob(type, input, runner) {
+function createJobRecord(type, input, options = {}) {
   ensureStorage();
   const id = `${String(type || "job").replace(/[^a-zA-Z0-9_-]/g, "-")}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  let job = saveJob({
+  const job = saveJob({
     id,
     type,
+    lockGroup: options.lockGroup || null,
     status: "queued",
     progress: 0,
     input: input || {},
     result: null,
     error: null,
     logs: [],
+    worker: options.worker || null,
+    workerPid: null,
     createdAt: new Date().toISOString(),
     startedAt: null,
     finishedAt: null,
   });
+  return publicJob(job);
+}
+
+function createJobContext(id) {
+  let job = readJob(id);
+  if (!job) {
+    throw new Error(`job ${id} not found`);
+  }
+  return {
+    update: (patch) => {
+      job = saveJob(Object.assign({}, readJob(id) || job, patch || {}));
+      return job;
+    },
+    progress: (progress, message, data) => {
+      job = saveJob(Object.assign({}, readJob(id) || job, {
+        progress: Math.max(0, Math.min(100, Number(progress) || 0)),
+      }));
+      if (message) job = appendLog(job, message, data);
+      return job;
+    },
+    log: (message, data) => {
+      job = appendLog(readJob(id) || job, message, data);
+      return job;
+    },
+    getJob: () => readJob(id) || job,
+  };
+}
+
+function startJob(id, patch = {}) {
+  let job = readJob(id);
+  if (!job) {
+    const error = new Error(`job ${id} not found`);
+    error.code = "JOB_NOT_FOUND";
+    throw error;
+  }
+  job = Object.assign({}, job, patch || {}, {
+    status: "running",
+    progress: Number(patch.progress) || Number(job.progress) || 5,
+    startedAt: job.startedAt || new Date().toISOString(),
+  });
+  return appendLog(saveJob(job), "job started");
+}
+
+function finishJobSuccess(id, result, patch = {}) {
+  const job = saveJob(Object.assign({}, readJob(id) || { id }, patch || {}, {
+    status: "success",
+    progress: 100,
+    result: result || {},
+    finishedAt: new Date().toISOString(),
+  }));
+  appendLog(job, "job success");
+  return publicJob(readJob(id) || job);
+}
+
+function finishJobFailed(id, error, patch = {}) {
+  const job = saveJob(Object.assign({}, readJob(id) || { id }, patch || {}, {
+    status: "failed",
+    error: {
+      message: error && error.message || "job failed",
+      code: error && error.code || "",
+    },
+    finishedAt: new Date().toISOString(),
+  }));
+  appendLog(job, "job failed", { message: error && error.message });
+  return publicJob(readJob(id) || job);
+}
+
+function createJob(type, input, runner, options = {}) {
+  let job = createJobRecord(type, input, options);
 
   const run = async () => {
-    if (runningJobs.has(id)) return;
-    runningJobs.set(id, true);
-    job = Object.assign({}, readJob(id) || job, {
-      status: "running",
-      progress: 5,
-      startedAt: new Date().toISOString(),
-    });
-    job = appendLog(saveJob(job), "job started");
-    const context = {
-      update: (patch) => {
-        job = saveJob(Object.assign({}, readJob(id) || job, patch || {}));
-        return job;
-      },
-      progress: (progress, message, data) => {
-        job = saveJob(Object.assign({}, readJob(id) || job, {
-          progress: Math.max(0, Math.min(100, Number(progress) || 0)),
-        }));
-        if (message) job = appendLog(job, message, data);
-        return job;
-      },
-      log: (message, data) => {
-        job = appendLog(readJob(id) || job, message, data);
-        return job;
-      },
-      getJob: () => readJob(id) || job,
-    };
+    if (runningJobs.has(job.id)) return;
+    runningJobs.set(job.id, true);
+    startJob(job.id);
+    const context = createJobContext(job.id);
 
     try {
       const result = await runner(context, input || {});
-      job = saveJob(Object.assign({}, readJob(id) || job, {
-        status: "success",
-        progress: 100,
-        result: result || {},
-        finishedAt: new Date().toISOString(),
-      }));
-      appendLog(job, "job success");
+      finishJobSuccess(job.id, result);
     } catch (error) {
-      job = saveJob(Object.assign({}, readJob(id) || job, {
-        status: "failed",
-        error: {
-          message: error && error.message || "job failed",
-          code: error && error.code || "",
-        },
-        finishedAt: new Date().toISOString(),
-      }));
-      appendLog(job, "job failed", { message: error && error.message });
+      finishJobFailed(job.id, error);
     } finally {
-      runningJobs.delete(id);
+      runningJobs.delete(job.id);
     }
   };
 
@@ -179,25 +231,47 @@ function createJob(type, input, runner) {
   return publicJob(job);
 }
 
-function createSingletonJob(type, input, runner) {
-  const running = getRunningJob(type);
+function createSingletonJob(type, input, runner, options = {}) {
+  const running = options.lockGroup ? getRunningJobByLockGroup(options.lockGroup) : getRunningJob(type);
   if (running) {
-    const error = new Error(`${type} job is already running`);
+    const error = new Error(`${options.lockGroup || type} job is already running`);
     error.code = "JOB_ALREADY_RUNNING";
     error.statusCode = 409;
     error.job = publicJob(running);
     throw error;
   }
-  return createJob(type, input, runner);
+  return createJob(type, input, runner, options);
+}
+
+function createExternalJob(type, input, options = {}) {
+  const running = options.lockGroup
+    ? getRunningJobByLockGroup(options.lockGroup)
+    : (options.singleton ? getRunningJob(type) : null);
+  if (running) {
+    const error = new Error(`${options.lockGroup || type} job is already running`);
+    error.code = "JOB_ALREADY_RUNNING";
+    error.statusCode = 409;
+    error.job = publicJob(running);
+    throw error;
+  }
+  return createJobRecord(type, input, options);
 }
 
 module.exports = {
   JOBS_DIR,
+  createExternalJob,
   createJob,
+  createJobContext,
+  createJobRecord,
   createSingletonJob,
+  finishJobFailed,
+  finishJobSuccess,
   getRunningJob,
+  getRunningJobByLockGroup,
   latestJob,
   listJobs,
   publicJob,
   readJob,
+  saveJob,
+  startJob,
 };

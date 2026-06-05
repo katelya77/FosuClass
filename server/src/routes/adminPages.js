@@ -5546,6 +5546,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         var retainedReleases = Array.isArray(data.staticRetainedReleases) ? data.staticRetainedReleases : [];
         var staticSyncStatus = data.openRestyStaticSyncStatus || (data.staticSync && data.staticSync.status) || "-";
         var staticEnabled = staticSyncStatus !== "disabled" && staticSyncStatus !== "-";
+        var releaseHeavyBusy = Boolean(data.releaseHeavyBusy && data.runningReleaseJob);
         if ($("openRestyEnabledBadge")) {
           $("openRestyEnabledBadge").className = "badge " + (staticEnabled ? "success" : "warning");
           $("openRestyEnabledBadge").textContent = staticEnabled ? "已启用" : "未启用";
@@ -5576,6 +5577,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           { label: "OpenResty 静态同步", val: relayStatusText(staticSyncStatus), icon: "URL", foot: data.lastStaticSyncTime ? ("最后同步 " + formatDate(data.lastStaticSyncTime)) : "发布后自动同步状态" },
           { label: "静态保留版本", val: retainedReleases.length ? (retainedReleases.length + " 个") : "-", icon: "KEEP", foot: retainedReleases.slice(0, 3).join(" / ") || "至少保留最近 3 个 release" },
           { label: "最近任务", val: data.latestJob ? relayStatusText(data.latestJob.status) : "无任务", icon: "⏱️", foot: data.latestJob ? ((data.latestJob.type || "job") + " · " + (data.latestJob.progress || 0) + "%") : "后台重任务状态" },
+          { label: "Release 重任务锁", val: releaseHeavyBusy ? "运行中" : "空闲", icon: "LOCK", foot: releaseHeavyBusy ? ((data.runningReleaseJob.type || "release-heavy") + " · " + (data.runningReleaseJob.progress || 0) + "%") : "publish / rebuild / deep health 共享锁" },
           { label: "最近上传", val: data.latestStagingUpload ? formatDate(data.latestStagingUpload.updatedAt || data.latestStagingUpload.createdAt) : "暂无", icon: "⬆️", foot: "CLI gzip 分片上传" },
           { label: "数据指纹", val: data.stagingSameAsActive ? "无变化" : (data.stagingNeedsPublish ? "有变化" : "等待 staging"), icon: "HASH", foot: data.activeCanonicalHash ? ("active " + String(data.activeCanonicalHash).slice(0, 12)) : "active hash 未生成" },
           { label: "最后发布", val: formatDate(data.classScheduleUpdatedAt || data.lastUploadTime), icon: "🕒", foot: "线上课表更新时间" },
@@ -5643,6 +5645,12 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         }
         if ($("syncNextActionBtn")) {
           $("syncNextActionBtn").textContent = data.stagingNeedsPublish ? "开始发布" : (data.stagingSameAsActive ? "验证静态 URL" : "复制采集命令");
+          $("syncNextActionBtn").disabled = Boolean(releaseHeavyBusy && data.stagingNeedsPublish);
+          $("syncNextActionBtn").title = releaseHeavyBusy && data.stagingNeedsPublish ? "已有 Release 重任务正在运行" : "";
+        }
+        if ($("stagingPublishBtn")) {
+          $("stagingPublishBtn").disabled = Boolean(releaseHeavyBusy || !data.stagingNeedsPublish);
+          $("stagingPublishBtn").title = releaseHeavyBusy ? "已有 Release 重任务正在运行" : "";
         }
       }
 
@@ -6413,7 +6421,19 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           body: JSON.stringify({ version: version })
         })
           .then(function(res) {
-            showToast("回滚成功！系统已被重置为历史版本: " + version, "success");
+            var job = res.job || {};
+            if (job.id) {
+              pollAdminJob(job.id, "Release 回滚", function(doneJob) {
+                restoreButton();
+                if (doneJob && doneJob.status === "success") {
+                  showToast("回滚成功！系统已被重置为历史版本: " + version, "success");
+                }
+                loadSyncStatus();
+              });
+              return;
+            }
+            restoreButton();
+            showToast("回滚任务已启动", "success");
             loadSyncStatus();
           })
           .catch(function(err) {

@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const zlib = require("zlib");
+const { promisify } = require("util");
 const { safeLog } = require("../utils/safeLogger");
 const { calculateFingerprint } = require("../utils/stagingFingerprint");
 const {
@@ -19,6 +20,10 @@ const CURRENT_SNAPSHOT_PATH = path.join(SNAPSHOTS_DIR, "current.json");
 const CURRENT_SNAPSHOT_GZ_PATH = path.join(SNAPSHOTS_DIR, "current.json.gz");
 const STATIC_RELEASE_BASE_PATH = "/static/releases";
 const STATIC_RELEASE_BASE_URL = process.env.FOSU_STATIC_RELEASE_BASE_URL || STATIC_RELEASE_BASE_PATH;
+const gzipAsync = promisify(zlib.gzip);
+const brotliCompressAsync = typeof zlib.brotliCompress === "function"
+  ? promisify(zlib.brotliCompress)
+  : null;
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -85,14 +90,17 @@ function getPublicReleaseDir(version) {
   return path.join(PUBLIC_RELEASES_DIR, normalizeVersion(version));
 }
 
-function getReleaseFiles(version) {
-  const releaseDir = getReleaseDir(version);
+function getSafeBuildId(jobId) {
+  return String(jobId || `${process.pid}-${Date.now()}`).replace(/[^a-zA-Z0-9._-]/g, "-");
+}
+
+function buildReleaseFiles(version, releaseDir, publicReleaseDir) {
   const indexDir = path.join(releaseDir, "index");
   const detailDir = path.join(releaseDir, "detail");
   const emptyRoomDir = path.join(releaseDir, "empty-room");
   return {
     releaseDir,
-    publicReleaseDir: getPublicReleaseDir(version),
+    publicReleaseDir,
     bootstrapPath: path.join(releaseDir, "bootstrap.json"),
     classSchedulesPath: path.join(releaseDir, "class-schedules.json"),
     resourcesPath: path.join(releaseDir, "resources.json"),
@@ -126,6 +134,149 @@ function getReleaseFiles(version) {
     legacyCourseScheduleDir: path.join(releaseDir, "schedules", "course"),
     legacyEmptyRoomIndexPath: path.join(releaseDir, "derived", "empty-room-index.json"),
   };
+}
+
+function getReleaseFiles(version) {
+  return buildReleaseFiles(version, getReleaseDir(version), getPublicReleaseDir(version));
+}
+
+function getBuildingReleaseFiles(version, jobId) {
+  const normalizedVersion = normalizeVersion(version);
+  const safeJobId = getSafeBuildId(jobId);
+  const releaseDir = path.join(RELEASES_DIR, `${normalizedVersion}.building-${safeJobId}`);
+  const publicReleaseDir = path.join(PUBLIC_RELEASES_DIR, `${normalizedVersion}.building-${safeJobId}`);
+  return buildReleaseFiles(normalizedVersion, releaseDir, publicReleaseDir);
+}
+
+function assertManagedDir(dirPath, baseDir, label) {
+  const resolved = path.resolve(dirPath || "");
+  const base = path.resolve(baseDir);
+  const relative = path.relative(base, resolved);
+  if (!relative || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`Refusing to modify unmanaged ${label || "directory"}: ${resolved}`);
+  }
+  return resolved;
+}
+
+function assertManagedReleaseDir(dirPath) {
+  return assertManagedDir(dirPath, RELEASES_DIR, "release directory");
+}
+
+function assertManagedPublicReleaseDir(dirPath) {
+  return assertManagedDir(dirPath, PUBLIC_RELEASES_DIR, "public release directory");
+}
+
+function assertBuildingDir(dirPath, baseDir, label) {
+  const resolved = assertManagedDir(dirPath, baseDir, label);
+  if (!path.basename(resolved).includes(".building-")) {
+    throw new Error(`Refusing to clean non-building ${label || "directory"}: ${resolved}`);
+  }
+  return resolved;
+}
+
+function cleanupBuildingReleaseFiles(files) {
+  if (!files) return;
+  [
+    [files.releaseDir, RELEASES_DIR, "release directory"],
+    [files.publicReleaseDir, PUBLIC_RELEASES_DIR, "public release directory"],
+  ].forEach(([dirPath, baseDir, label]) => {
+    try {
+      const resolved = assertBuildingDir(dirPath, baseDir, label);
+      fs.rmSync(resolved, { recursive: true, force: true });
+    } catch (error) {
+      safeLog("release-building-cleanup-failed", { dirPath, error: error.message });
+    }
+  });
+}
+
+function promoteManagedDirs(pairs) {
+  const stamp = `${process.pid}-${Date.now()}`;
+  const prepared = pairs.map((pair, index) => {
+    const source = assertManagedDir(pair.source, pair.baseDir, pair.label);
+    const target = assertManagedDir(pair.target, pair.baseDir, pair.label);
+    if (!fs.existsSync(source)) {
+      throw new Error(`Build ${pair.label || "directory"} does not exist: ${source}`);
+    }
+    return Object.assign({}, pair, {
+      source,
+      target,
+      previous: `${target}.previous-${stamp}-${index}`,
+      targetExisted: fs.existsSync(target),
+      promoted: false,
+    });
+  });
+
+  try {
+    prepared.forEach((item) => {
+      if (item.targetExisted) {
+        fs.renameSync(item.target, item.previous);
+      }
+    });
+    prepared.forEach((item) => {
+      fs.renameSync(item.source, item.target);
+      item.promoted = true;
+    });
+    prepared.forEach((item) => {
+      if (fs.existsSync(item.previous)) {
+        fs.rmSync(item.previous, { recursive: true, force: true });
+      }
+    });
+  } catch (error) {
+    prepared.slice().reverse().forEach((item) => {
+      try {
+        if (item.promoted && fs.existsSync(item.target)) {
+          fs.rmSync(item.target, { recursive: true, force: true });
+        }
+        if (fs.existsSync(item.previous) && !fs.existsSync(item.target)) {
+          fs.renameSync(item.previous, item.target);
+        }
+      } catch (restoreError) {
+        safeLog("release-dir-restore-failed", {
+          target: item.target,
+          previous: item.previous,
+          error: restoreError.message,
+        });
+      }
+    });
+    throw error;
+  }
+}
+
+function replaceReleaseDirFromBuild(buildDir, finalDir) {
+  promoteManagedDirs([{
+    source: assertManagedReleaseDir(buildDir),
+    target: assertManagedReleaseDir(finalDir),
+    baseDir: RELEASES_DIR,
+    label: "release directory",
+  }]);
+}
+
+function replaceReleaseFilesFromBuild(buildFiles, finalFiles) {
+  promoteManagedDirs([
+    {
+      source: assertManagedReleaseDir(buildFiles.releaseDir),
+      target: assertManagedReleaseDir(finalFiles.releaseDir),
+      baseDir: RELEASES_DIR,
+      label: "release directory",
+    },
+    {
+      source: assertManagedPublicReleaseDir(buildFiles.publicReleaseDir),
+      target: assertManagedPublicReleaseDir(finalFiles.publicReleaseDir),
+      baseDir: PUBLIC_RELEASES_DIR,
+      label: "public release directory",
+    },
+  ]);
+}
+
+function getReleaseBuildJobId(options = {}) {
+  if (options.jobId) return options.jobId;
+  try {
+    const job = options.job && typeof options.job.getJob === "function" ? options.job.getJob() : null;
+    if (job && job.id) return job.id;
+  } catch (error) {
+    safeLog("release-build-job-id-read-failed", { error: error.message });
+  }
+  return `${process.pid}-${Date.now()}`;
 }
 
 function asArray(value) {
@@ -315,15 +466,69 @@ function buildStaticReleaseUrls(version, derived) {
   };
 }
 
-function compressStaticJsonFile(filePath) {
+function truthy(value) {
+  return ["1", "true", "yes", "on"].includes(String(value || "").trim().toLowerCase());
+}
+
+function getReleaseCompressionConfig(env = process.env) {
+  const precompress = String(env.FOSU_RELEASE_PRECOMPRESS || "gzip").trim().toLowerCase();
+  const tokens = new Set(precompress.split(/[,;\s]+/).filter(Boolean));
+  const gzip = precompress !== "none" && (tokens.size === 0 || tokens.has("gzip") || tokens.has("all"));
+  const brRequested = tokens.has("br") || tokens.has("brotli") || tokens.has("all");
+  const brotli = truthy(env.FOSU_RELEASE_BROTLI_ENABLED) && brRequested && Boolean(brotliCompressAsync);
+  const rawConcurrency = Number(env.FOSU_RELEASE_COMPRESSION_CONCURRENCY || 1);
+  const concurrency = Math.max(1, Math.min(8, Number.isFinite(rawConcurrency) ? Math.floor(rawConcurrency) : 1));
+  return { precompress, gzip, br: brotli, concurrency };
+}
+
+function collectStaticReleaseSourceFiles(version, filesOverride) {
+  const files = filesOverride || getReleaseFiles(version);
+  const sourceFiles = [];
+  if (fs.existsSync(files.manifestPath)) {
+    sourceFiles.push(files.manifestPath);
+  }
+  [files.indexDir, files.detailDir, files.emptyRoomDir].forEach((dirPath) => {
+    collectJsonFiles(dirPath).forEach((filePath) => sourceFiles.push(filePath));
+  });
+  const seen = new Set();
+  return sourceFiles.filter((filePath) => {
+    const key = path.resolve(filePath);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function estimateStaticReleaseCompression(version, options = {}) {
+  const config = Object.assign({}, getReleaseCompressionConfig(), options.compression || {});
+  const files = collectStaticReleaseSourceFiles(version, options.files);
+  if (options.includeManifest) {
+    const manifestPath = (options.files || getReleaseFiles(version)).manifestPath;
+    if (!files.some((filePath) => path.resolve(filePath) === path.resolve(manifestPath))) {
+      files.push(manifestPath);
+    }
+  }
+  return {
+    gzip: Boolean(config.gzip && files.length),
+    br: Boolean(config.br && files.length),
+    files: files.length,
+    concurrency: config.concurrency,
+    precompress: config.precompress,
+  };
+}
+
+function compressStaticJsonFile(filePath, options = {}) {
+  const config = Object.assign({}, getReleaseCompressionConfig(), options.compression || {});
   const result = { gzip: false, br: false };
   if (!filePath || !fs.existsSync(filePath) || !filePath.endsWith(".json")) {
     return result;
   }
   const buffer = fs.readFileSync(filePath);
-  fs.writeFileSync(`${filePath}.gz`, zlib.gzipSync(buffer));
-  result.gzip = true;
-  if (typeof zlib.brotliCompressSync === "function") {
+  if (config.gzip) {
+    fs.writeFileSync(`${filePath}.gz`, zlib.gzipSync(buffer));
+    result.gzip = true;
+  }
+  if (config.br && typeof zlib.brotliCompressSync === "function") {
     try {
       fs.writeFileSync(`${filePath}.br`, zlib.brotliCompressSync(buffer));
       result.br = true;
@@ -334,16 +539,44 @@ function compressStaticJsonFile(filePath) {
   return result;
 }
 
-function mirrorStaticReleaseFiles(version) {
-  const files = getReleaseFiles(version);
-  ensureDir(files.publicReleaseDir);
-  const sourceFiles = [];
-  if (fs.existsSync(files.manifestPath)) {
-    sourceFiles.push(files.manifestPath);
+async function compressStaticJsonFileAsync(filePath, options = {}) {
+  const config = Object.assign({}, getReleaseCompressionConfig(), options.compression || {});
+  const result = { gzip: false, br: false };
+  if (!filePath || !fs.existsSync(filePath) || !filePath.endsWith(".json")) {
+    return result;
   }
-  [files.indexDir, files.detailDir, files.emptyRoomDir].forEach((dirPath) => {
-    collectJsonFiles(dirPath).forEach((filePath) => sourceFiles.push(filePath));
+  const buffer = await fs.promises.readFile(filePath);
+  if (config.gzip) {
+    await fs.promises.writeFile(`${filePath}.gz`, await gzipAsync(buffer));
+    result.gzip = true;
+  }
+  if (config.br && brotliCompressAsync) {
+    try {
+      await fs.promises.writeFile(`${filePath}.br`, await brotliCompressAsync(buffer));
+      result.br = true;
+    } catch (error) {
+      safeLog("release-brotli-compress-failed", { filePath, error: error.message });
+    }
+  }
+  return result;
+}
+
+async function runWithConcurrency(items, concurrency, worker) {
+  let cursor = 0;
+  const runners = Array.from({ length: Math.max(1, concurrency) }, async () => {
+    while (cursor < items.length) {
+      const index = cursor;
+      cursor += 1;
+      await worker(items[index], index);
+    }
   });
+  await Promise.all(runners);
+}
+
+function mirrorStaticReleaseFiles(version, options = {}) {
+  const files = options.files || getReleaseFiles(version);
+  ensureDir(files.publicReleaseDir);
+  const sourceFiles = collectStaticReleaseSourceFiles(version, files);
 
   const compression = { gzip: false, br: false, files: 0 };
   sourceFiles.forEach((sourcePath) => {
@@ -351,10 +584,48 @@ function mirrorStaticReleaseFiles(version) {
     const targetPath = path.join(files.publicReleaseDir, relativePath);
     ensureDir(path.dirname(targetPath));
     fs.copyFileSync(sourcePath, targetPath);
-    const item = compressStaticJsonFile(targetPath);
+    const item = compressStaticJsonFile(targetPath, options);
     compression.gzip = compression.gzip || item.gzip;
     compression.br = compression.br || item.br;
     compression.files += 1;
+  });
+  compression.concurrency = 1;
+  compression.precompress = getReleaseCompressionConfig().precompress;
+  return compression;
+}
+
+async function mirrorStaticReleaseFilesAsync(version, options = {}) {
+  const files = options.files || getReleaseFiles(version);
+  ensureDir(files.publicReleaseDir);
+  const sourceFiles = collectStaticReleaseSourceFiles(version, files);
+  const config = Object.assign({}, getReleaseCompressionConfig(), options.compression || {});
+  const compression = {
+    gzip: false,
+    br: false,
+    files: 0,
+    concurrency: config.concurrency,
+    precompress: config.precompress,
+  };
+  let processed = 0;
+  await runWithConcurrency(sourceFiles, config.concurrency, async (sourcePath) => {
+    const relativePath = toReleaseRelativePath(files, sourcePath);
+    const targetPath = path.join(files.publicReleaseDir, relativePath);
+    ensureDir(path.dirname(targetPath));
+    await fs.promises.copyFile(sourcePath, targetPath);
+    const item = await compressStaticJsonFileAsync(targetPath, { compression: config });
+    compression.gzip = compression.gzip || item.gzip;
+    compression.br = compression.br || item.br;
+    compression.files += 1;
+    processed += 1;
+    if (typeof options.onProgress === "function") {
+      options.onProgress({
+        processed,
+        total: sourceFiles.length,
+        relativePath,
+        gzip: item.gzip,
+        br: item.br,
+      });
+    }
   });
   return compression;
 }
@@ -1385,16 +1656,95 @@ function writeReleaseSnapshot(rawSnapshot) {
   writeJsonAtomic(files.resourcesPath, snapshot.resources || {});
   const derived = writeDerivedIndexes(snapshot, files);
   const manifest = buildManifest(snapshot, version, validation.counts, validation, files, derived);
+  manifest.compression = Object.assign({}, manifest.compression || {}, estimateStaticReleaseCompression(version, { includeManifest: true }));
   writeJsonAtomic(files.manifestPath, manifest);
   const compression = mirrorStaticReleaseFiles(version);
   manifest.compression = Object.assign({}, manifest.compression || {}, compression);
-  writeJsonAtomic(files.manifestPath, manifest);
-  mirrorStaticReleaseFiles(version);
 
   return {
     version,
     releaseDir: files.releaseDir,
     publicReleaseDir: files.publicReleaseDir,
+    manifest,
+    bootstrap,
+    derived,
+    snapshot,
+  };
+}
+
+async function writeReleaseSnapshotAsync(rawSnapshot, options = {}) {
+  ensureStorageDirs();
+  if (options.job) options.job.progress(20, "normalizing data");
+  const snapshot = coerceSnapshot(rawSnapshot);
+  const version = snapshot.version;
+  const validation = validateReleaseSnapshot(snapshot);
+  if (!validation.valid) {
+    const err = new Error(`Release validation failed: ${validation.errors.join("; ")}`);
+    err.validation = validation;
+    throw err;
+  }
+
+  const atomic = options.atomic !== false;
+  const finalFiles = getReleaseFiles(version);
+  const files = atomic ? getBuildingReleaseFiles(version, getReleaseBuildJobId(options)) : finalFiles;
+  let derived = null;
+  let manifest = null;
+  const bootstrap = buildBootstrap(snapshot, version, validation.counts);
+
+  if (atomic) cleanupBuildingReleaseFiles(files);
+
+  try {
+    writeJsonAtomic(files.snapshotPath, snapshot);
+    writeJsonAtomic(files.bootstrapPath, bootstrap);
+    writeJsonAtomic(files.classSchedulesPath, snapshot.classSchedules || []);
+    writeJsonAtomic(files.resourcesPath, snapshot.resources || {});
+    if (options.job) options.job.progress(30, "building indexes", { releaseVersion: version });
+    derived = writeDerivedIndexes(snapshot, files);
+    if (options.job) options.job.progress(46, "writing manifest", { releaseVersion: version });
+    manifest = buildManifest(snapshot, version, validation.counts, validation, files, derived);
+    manifest.compression = Object.assign(
+      {},
+      manifest.compression || {},
+      estimateStaticReleaseCompression(version, { includeManifest: true, files })
+    );
+    writeJsonAtomic(files.manifestPath, manifest);
+    const compression = await mirrorStaticReleaseFilesAsync(version, {
+      files,
+      onProgress: (progress) => {
+        if (options.job) {
+          const ratio = progress.total ? progress.processed / progress.total : 1;
+          options.job.progress(48 + Math.floor(ratio * 14), "compressing gzip", {
+            processedFiles: progress.processed,
+            totalFiles: progress.total,
+            file: progress.relativePath,
+          });
+        }
+        if (typeof options.onProgress === "function") options.onProgress(progress);
+      },
+    });
+    manifest.compression = Object.assign({}, manifest.compression || {}, compression);
+
+    if (atomic) {
+      if (options.job) options.job.progress(64, "deep validating", { releaseVersion: version });
+      const deepStatus = getReleasePackStatus(version, { files });
+      if (!deepStatus.healthy) {
+        const err = new Error("Release Pack build validation failed");
+        err.code = "RELEASE_PACK_BUILD_UNHEALTHY";
+        err.status = deepStatus;
+        throw err;
+      }
+      if (options.job) options.job.progress(68, "promoting release files", { releaseVersion: version });
+      replaceReleaseFilesFromBuild(files, finalFiles);
+    }
+  } catch (error) {
+    if (atomic) cleanupBuildingReleaseFiles(files);
+    throw error;
+  }
+
+  return {
+    version,
+    releaseDir: finalFiles.releaseDir,
+    publicReleaseDir: finalFiles.publicReleaseDir,
     manifest,
     bootstrap,
     derived,
@@ -1759,9 +2109,9 @@ function getReleasePackQuickHealth(version) {
   };
 }
 
-function getReleasePackStatus(version) {
+function getReleasePackStatus(version, options = {}) {
   const normalizedVersion = normalizeVersion(version);
-  const files = getReleaseFiles(normalizedVersion);
+  const files = options.files || getReleaseFiles(normalizedVersion);
   const manifest = readJsonFile(files.manifestPath);
   const kinds = ["class", "teacher", "classroom", "course"];
   const index = {};
@@ -1963,11 +2313,95 @@ function rebuildReleasePack(version) {
   const files = getReleaseFiles(normalizedVersion);
   const derived = writeDerivedIndexes(Object.assign({}, snapshot, { version: normalizedVersion }), files, false);
   const manifest = buildManifest(snapshot, normalizedVersion, validation.counts, validation, files, derived);
+  manifest.compression = Object.assign({}, manifest.compression || {}, estimateStaticReleaseCompression(normalizedVersion, { includeManifest: true }));
   writeJsonAtomic(files.manifestPath, manifest);
   const compression = mirrorStaticReleaseFiles(normalizedVersion);
   manifest.compression = Object.assign({}, manifest.compression || {}, compression);
-  writeJsonAtomic(files.manifestPath, manifest);
-  mirrorStaticReleaseFiles(normalizedVersion);
+  clearDerivedCache();
+  return {
+    success: true,
+    version: normalizedVersion,
+    releaseVersion: normalizedVersion,
+    manifest,
+    derived,
+    status: getReleasePackStatus(normalizedVersion),
+  };
+}
+
+async function rebuildReleasePackAsync(version, options = {}) {
+  ensureStorageDirs();
+  const normalizedVersion = normalizeVersion(version);
+  const snapshot = readReleaseSnapshot(normalizedVersion);
+  if (!snapshot) {
+    const err = new Error(`Release ${normalizedVersion} not found or has no rebuildable snapshot`);
+    err.statusCode = 404;
+    throw err;
+  }
+  const validation = validateReleaseSnapshot(snapshot);
+  if (!validation.valid) {
+    const err = new Error(`Release validation failed: ${validation.errors.join("; ")}`);
+    err.validation = validation;
+    throw err;
+  }
+  const atomic = options.atomic !== false;
+  const finalFiles = getReleaseFiles(normalizedVersion);
+  const files = atomic ? getBuildingReleaseFiles(normalizedVersion, getReleaseBuildJobId(options)) : finalFiles;
+  const normalizedSnapshot = Object.assign({}, snapshot, { version: normalizedVersion });
+  const bootstrap = buildBootstrap(normalizedSnapshot, normalizedVersion, validation.counts);
+  let derived = null;
+  let manifest = null;
+
+  if (atomic) cleanupBuildingReleaseFiles(files);
+
+  try {
+    writeJsonAtomic(files.snapshotPath, normalizedSnapshot);
+    writeJsonAtomic(files.bootstrapPath, bootstrap);
+    writeJsonAtomic(files.classSchedulesPath, normalizedSnapshot.classSchedules || []);
+    writeJsonAtomic(files.resourcesPath, normalizedSnapshot.resources || {});
+    if (options.job) options.job.progress(22, "building indexes", { version: normalizedVersion });
+    derived = writeDerivedIndexes(normalizedSnapshot, files, false);
+    const manifestSnapshot = Object.assign({}, normalizedSnapshot, {
+      updatedAt: normalizedSnapshot.updatedAt || new Date().toISOString(),
+    });
+    manifest = buildManifest(manifestSnapshot, normalizedVersion, validation.counts, validation, files, derived);
+    manifest.compression = Object.assign(
+      {},
+      manifest.compression || {},
+      estimateStaticReleaseCompression(normalizedVersion, { includeManifest: true, files })
+    );
+    writeJsonAtomic(files.manifestPath, manifest);
+    const compression = await mirrorStaticReleaseFilesAsync(normalizedVersion, {
+      files,
+      onProgress: (progress) => {
+        if (options.job) {
+          const ratio = progress.total ? progress.processed / progress.total : 1;
+          options.job.progress(36 + Math.floor(ratio * 28), "compressing gzip", {
+            processedFiles: progress.processed,
+            totalFiles: progress.total,
+            file: progress.relativePath,
+          });
+        }
+        if (typeof options.onProgress === "function") options.onProgress(progress);
+      },
+    });
+    manifest.compression = Object.assign({}, manifest.compression || {}, compression);
+
+    if (atomic) {
+      if (options.job) options.job.progress(66, "deep validating", { version: normalizedVersion });
+      const deepStatus = getReleasePackStatus(normalizedVersion, { files });
+      if (!deepStatus.healthy) {
+        const err = new Error("Release Pack rebuild validation failed");
+        err.code = "RELEASE_PACK_REBUILD_UNHEALTHY";
+        err.status = deepStatus;
+        throw err;
+      }
+      if (options.job) options.job.progress(68, "promoting release files", { version: normalizedVersion });
+      replaceReleaseFilesFromBuild(files, finalFiles);
+    }
+  } catch (error) {
+    if (atomic) cleanupBuildingReleaseFiles(files);
+    throw error;
+  }
   clearDerivedCache();
   return {
     success: true,
@@ -2690,6 +3124,7 @@ module.exports = {
   getReleasePackManifest,
   getReleasePackQuickHealth,
   getReleasePackStatus,
+  getReleaseCompressionConfig,
   assertHealthyReleasePack,
   getReleaseStatus,
   deleteReleaseVersion,
@@ -2707,9 +3142,12 @@ module.exports = {
   readActiveReleaseSnapshot,
   readReleaseSnapshot,
   rebuildReleasePack,
+  rebuildReleasePackAsync,
   searchActiveIndex,
   validateReleaseSnapshot,
   writeDerivedIndexes,
   writeReleaseSnapshot,
+  writeReleaseSnapshotAsync,
+  mirrorStaticReleaseFilesAsync,
   clearDerivedCache,
 };

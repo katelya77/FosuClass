@@ -124,7 +124,7 @@
 
 .grouped-title-hint {
   font-size: 24rpx;
-  color: #c62828;
+  color: #0e7490;
   font-weight: bold;
 }
 
@@ -162,6 +162,15 @@
 .grouped-meta-value {
   color: #172033;
   font-weight: 600;
+}
+
+.conflict-list .grouped-title-hint {
+  color: #be123c;
+}
+
+.conflict-item-box {
+  border-color: #fecdd3;
+  background: #fff7f7;
 }
 
 .detail-actions {

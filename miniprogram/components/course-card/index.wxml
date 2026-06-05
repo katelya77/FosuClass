@@ -1,5 +1,5 @@
 <view
-  class="course-card {{layout === 'list' ? 'course-card-list' : (layout === 'overview' ? 'course-card-grid overview-card' : 'course-card-grid')}} {{isMuted ? 'is-muted' : ''}} {{course.isNext ? 'is-next' : ''}} {{course.status === 'ongoing' ? 'is-ongoing' : ''}}"
+  class="course-card {{layout === 'list' ? 'course-card-list' : (layout === 'overview' ? 'course-card-grid overview-card' : 'course-card-grid')}} {{isMuted ? 'is-muted' : ''}} {{course.isNext ? 'is-next' : ''}} {{course.status === 'ongoing' ? 'is-ongoing' : ''}} {{course.eventKind === 'parallel-group' ? 'is-parallel-group' : ''}} {{course.eventKind === 'shared-session' ? 'is-shared-session' : ''}} {{course.eventKind === 'true-conflict' ? 'is-true-conflict' : ''}}"
   style="{{layout === 'list' ? listStyle : cardStyle}}"
   bindtap="handleTap"
 >
@@ -9,6 +9,7 @@
       <view class="header-pills">
         <view wx:if="{{course.source === 'custom' || course.sourceType === 'custom'}}" class="status-pill custom-pill">自定义</view>
         <view wx:if="{{course.isMerged}}" class="status-pill merged-pill">{{course.tag || "多地点"}}</view>
+        <view wx:if="{{course.badgeText}}" class="status-pill event-pill">{{course.badgeText}}</view>
         <view wx:if="{{course.statusText}}" class="status-pill {{statusClass}}">{{course.statusText}}</view>
       </view>
     </view>
@@ -41,12 +42,15 @@
   <block wx:elif="{{layout === 'overview'}}">
     <view wx:if="{{course.source === 'custom' || course.sourceType === 'custom'}}" class="grid-custom-tag">自定义</view>
     <view class="course-name overview-name">{{course.displayCourseName || course.canonicalCourseName || course.courseName}}</view>
+    <view class="course-event-badge overview-badge" wx:if="{{course.badgeText}}">{{course.badgeText}}</view>
     <view class="course-meta overview-meta" wx:if="{{course.displayClassroom || course.canonicalClassroom || course.classroom}}">{{course.displayClassroom || course.canonicalClassroom || course.classroom}}</view>
   </block>
 
   <block wx:else>
     <view wx:if="{{course.source === 'custom' || course.sourceType === 'custom'}}" class="grid-custom-tag">自定义</view>
     <view class="course-name {{span === 1 ? 'span-1' : ''}}">{{course.displayCourseName || course.canonicalCourseName || course.courseName}}</view>
+    <view class="course-event-badge" wx:if="{{course.badgeText}}">{{course.badgeText}}</view>
+    <view class="course-event-subtext" wx:if="{{span > 1 && course.subText}}">{{course.subText}}</view>
     <view class="course-meta classroom-highlight" wx:if="{{course.displayClassroom || course.canonicalClassroom || course.classroom}}">{{course.displayClassroom || course.canonicalClassroom || course.classroom}}</view>
     <view class="course-meta" wx:if="{{span > 1 && (course.displayTeacherName || course.canonicalTeacherName || course.teacherName)}}">{{course.displayTeacherName || course.canonicalTeacherName || course.teacherName}}</view>
     <view class="course-week" wx:if="{{span > 2 && course.weekText}}">{{course.weekText}}</view>

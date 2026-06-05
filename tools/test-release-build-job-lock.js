@@ -45,6 +45,16 @@ async function run() {
   const second = jobService.createSingletonJob("release-pack-rebuild", {}, async () => ({ ok: true }));
   assert(second.id, "second job should be allowed after first finishes");
   await waitJob(second.id);
+
+  const heavy = jobService.createSingletonJob("release-pack-rebuild", {}, async () => {
+    await sleep(250);
+    return { ok: true };
+  }, { lockGroup: "release-heavy" });
+  assert(heavy.id, "release-heavy job should be created");
+  assert.throws(() => {
+    jobService.createSingletonJob("staging-publish", {}, async () => ({ ok: true }), { lockGroup: "release-heavy" });
+  }, (error) => error.code === "JOB_ALREADY_RUNNING" && error.statusCode === 409 && error.job && error.job.id === heavy.id);
+  await waitJob(heavy.id);
   cleanup();
   console.log("test-release-build-job-lock passed");
 }
