@@ -11,6 +11,7 @@ const { globalLimiter } = require("./utils/rateLimit");
 const { safeLog } = require("./utils/safeLogger");
 const releaseService = require("./services/releaseService");
 const releaseLifecycleService = require("./services/releaseLifecycleService");
+const releaseWorkerManager = require("./services/releaseWorkerManager");
 const storageLifecycleService = require("./services/storageLifecycleService");
 
 // 路由引入
@@ -133,6 +134,17 @@ app.listen(config.PORT, () => {
     storageLifecycleService.scheduleMaintenance();
   } catch (error) {
     safeLog("startup-maintenance-schedule-failed", { error: error.message });
+  }
+  if (process.env.STATIC_RELEASE_SYNC_ENABLED === "true") {
+    const delayMs = Math.max(1000, Number(process.env.STATIC_RELEASE_RECONCILE_START_DELAY_MS || 5000) || 5000);
+    const timer = setTimeout(() => {
+      try {
+        releaseWorkerManager.startReleaseJob("static-release-reconcile", { reason: "startup" });
+      } catch (error) {
+        safeLog("startup-static-reconcile-schedule-failed", { code: error.code || "", error: error.message });
+      }
+    }, delayMs);
+    if (timer.unref) timer.unref();
   }
 });
 

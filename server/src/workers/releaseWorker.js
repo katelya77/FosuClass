@@ -5,6 +5,7 @@ const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
 const stagingPublishService = require("../services/stagingPublishService");
 const staticReleaseSyncService = require("../services/staticReleaseSyncService");
+const storageLifecycleService = require("../services/storageLifecycleService");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
@@ -48,7 +49,7 @@ async function runRebuild(input, job) {
   releaseService.clearDerivedCache();
   const rebuilt = await releaseService.rebuildReleasePackAsync(version, { job });
   job.progress(70, "syncing OpenResty", { version: rebuilt.version });
-  const staticSync = await staticReleaseSyncService.syncIfEnabled(rebuilt.version);
+  const staticSync = await staticReleaseSyncService.syncIfEnabled(rebuilt.version, { job });
   job.progress(88, "release pack rebuilt", {
     version: rebuilt.version,
     staticSyncStatus: staticSync.status,
@@ -126,13 +127,42 @@ async function runVerify(input, job) {
 
 async function runStaticSync(input, job) {
   const version = input.version || "";
-  job.progress(20, "syncing OpenResty", { version });
-  const staticSync = await staticReleaseSyncService.syncIfEnabled(version);
+  job.progress(12, input.force ? "force static sync queued" : "static sync queued", { version, force: input.force === true });
+  const staticSync = await staticReleaseSyncService.syncIfEnabled(version, {
+    job,
+    force: input.force === true,
+  });
   job.progress(90, "static release sync complete", {
     version: staticSync.releaseVersion || version,
     status: staticSync.status,
   });
-  return { staticSync, workerPid: process.pid };
+  return { staticSync, force: input.force === true, workerPid: process.pid };
+}
+
+async function runStaticReconcile(input, job) {
+  const version = input.version || "";
+  job.progress(12, "static reconcile queued", { version, reason: input.reason || "" });
+  const staticSync = await staticReleaseSyncService.reconcileStaticRelease(version, {
+    job,
+  });
+  job.progress(90, "static reconcile complete", {
+    version: staticSync.releaseVersion || version,
+    status: staticSync.status,
+  });
+  return { staticSync, reason: input.reason || "", workerPid: process.pid };
+}
+
+async function runStorageMaintenance(input, job) {
+  const dryRun = input.dryRun !== false;
+  job.progress(15, dryRun ? "previewing storage maintenance" : "running storage maintenance", { dryRun });
+  const report = storageLifecycleService.runMaintenance({ dryRun });
+  job.progress(90, "storage maintenance complete", {
+    dryRun,
+    reclaimedBytes: report.reclaimedBytes || 0,
+    deletedFiles: report.deletedFiles || 0,
+    deletedDirs: report.deletedDirs || 0,
+  });
+  return { report, dryRun, workerPid: process.pid };
 }
 
 async function runActivate(input, job) {
@@ -173,7 +203,9 @@ async function runTask(type, input, job) {
   if (type === "release-pack-verify") return runVerify(input, job);
   if (type === "staging-publish") return stagingPublishService.runStagingPublish(input, job);
   if (type === "static-release-sync") return runStaticSync(input, job);
+  if (type === "static-release-reconcile") return runStaticReconcile(input, job);
   if (type === "release-activate") return runActivate(input, job);
+  if (type === "storage-maintenance") return runStorageMaintenance(input, job);
   const error = new Error(`Unknown release worker task: ${type}`);
   error.code = "UNKNOWN_RELEASE_WORKER_TASK";
   throw error;

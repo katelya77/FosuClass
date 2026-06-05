@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # 支持手动触发部署
+  workflow_dispatch:
 
 jobs:
   deploy:
@@ -14,36 +14,32 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Check GitHub Secrets
+        shell: bash
         run: |
-          declare -A required_secrets
-          required_secrets=(
+          set -euo pipefail
+          declare -A required_secrets=(
             ["VPS_HOST"]="${{ secrets.VPS_HOST }}"
             ["VPS_USER"]="${{ secrets.VPS_USER }}"
             ["VPS_SSH_KEY"]="${{ secrets.VPS_SSH_KEY }}"
             ["VPS_APP_DIR"]="${{ secrets.VPS_APP_DIR }}"
             ["ADMIN_PASSWORD"]="${{ secrets.ADMIN_PASSWORD }}"
           )
-          
+
           has_missing_required=false
           for key in "${!required_secrets[@]}"; do
             if [ -z "${required_secrets[$key]}" ]; then
-              if [ "$key" = "ADMIN_PASSWORD" ]; then
-                echo "::error::缺少 ADMIN_PASSWORD：后台登录密码未配置，请到 GitHub Settings → Secrets and variables → Actions 新增。"
-              else
-                echo "::error::缺少 GitHub Secret: $key，请在 Settings → Secrets and variables → Actions 中配置。"
-              fi
+              echo "::error::Missing GitHub Actions Secret: ${key}"
               has_missing_required=true
             fi
           done
-          
+
           if [ -z "${{ secrets.ADMIN_API_TOKEN }}" ]; then
-            echo "::warning::缺少 ADMIN_API_TOKEN：后台管理 API Token 未配置。系统将自动根据 ADMIN_PASSWORD 派生，用于强智同步脚本认证。"
+            echo "::warning::ADMIN_API_TOKEN is not configured. The server will derive one from ADMIN_PASSWORD."
           fi
-          
           if [ -z "${{ secrets.ADMIN_TOKEN }}" ]; then
-            echo "::warning::缺少 ADMIN_TOKEN::管理端静态 Token 未配置。系统将仅允许使用 ADMIN_PASSWORD 登录后台。"
+            echo "::warning::ADMIN_TOKEN is not configured. Admin login will rely on ADMIN_PASSWORD."
           fi
-          
+
           if [ "$has_missing_required" = true ]; then
             exit 1
           fi
@@ -51,6 +47,9 @@ jobs:
       - name: Predeploy server module checks
         working-directory: server
         run: |
+          node --check src/services/staticReleaseSyncService.js
+          node --check src/workers/releaseWorker.js
+          node --check scripts/reconcile-static-release.js
           node -e "require('./src/utils/courseNormalizer'); console.log('courseNormalizer ok')"
           node -e "require('./src/utils/scheduleNormalizer'); console.log('scheduleNormalizer ok')"
 
@@ -72,20 +71,47 @@ jobs:
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
           script: |
-            # 保证工作目录存在并进入
-            cd ${{ secrets.VPS_APP_DIR }}/server
-            
-            # 创建宿主机持久化 storage 目录并配置权限，不删除也不覆盖
-            mkdir -p storage
-            chmod 755 storage
-            
-            # 自动生成 .env 配置文件，直接写入
-            cat << 'EOF' > .env
+            set -Eeuo pipefail
+
+            APP_DIR='${{ secrets.VPS_APP_DIR }}'
+            COMMIT_SHA='${{ github.sha }}'
+            CONTAINER_NAME='fosuclass-api'
+            PUBLIC_BASE_URL='https://class.katelya.eu.org/static/releases'
+            OPENRESTY_HOST_RELEASE_DIR='/opt/1panel/www/sites/class.katelya.eu.org/index/static/releases'
+            STARTED_AT="$(date +%s)"
+
+            sanitize() {
+              sed -E \
+                -e 's/(ADMIN_PASSWORD|ADMIN_TOKEN|ADMIN_API_TOKEN|FOSU_PASSWORD|FOSU_STATIC_TICKET_SECRET)=([^[:space:]]*)/\1=***/g' \
+                -e 's/(Authorization: Bearer )[A-Za-z0-9._-]+/\1***/g' \
+                -e 's/(token|password|secret)["=: ]+[A-Za-z0-9._\/+=-]+/\1=***/gi'
+            }
+
+            on_error() {
+              echo "::error::Remote deploy failed. Last 200 sanitized container log lines follow."
+              sudo docker logs "$CONTAINER_NAME" --tail=200 2>&1 | sanitize || true
+            }
+            trap on_error ERR
+
+            cd "$APP_DIR/server"
+
+            mkdir -p "$APP_DIR/server/storage"
+            chmod 755 "$APP_DIR/server/storage"
+            sudo mkdir -p "$OPENRESTY_HOST_RELEASE_DIR"
+            sudo chmod 755 "$OPENRESTY_HOST_RELEASE_DIR"
+
+            restart_before="$(sudo docker inspect -f '{{.RestartCount}}' "$CONTAINER_NAME" 2>/dev/null || echo 0)"
+
+            umask 077
+            tmp_env=".env.$$.$(date +%s).tmp"
+            cat > "$tmp_env" <<EOF
             NODE_ENV=production
             PORT=3000
             HOST_BIND_IP=127.0.0.1
             HOST_API_PORT=18318
             PUBLIC_API_ORIGIN=https://class.katelya.eu.org
+            FOSU_API_BASE_URL=https://class.katelya.eu.org
+            FOSU_STATIC_RELEASE_BASE_URL=/static/releases
             DATA_SOURCE_MODE=cache-first
             ADMIN_API_TOKEN=${{ secrets.ADMIN_API_TOKEN }}
             ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
@@ -97,38 +123,160 @@ jobs:
             CACHE_TTL_SCHEDULE=600
             REQUEST_TIMEOUT_MS=15000
             CORS_ALLOWED_ORIGINS=https://class.katelya.eu.org,http://127.0.0.1:18318
+            FOSU_ALLOWED_ADMIN_ORIGINS=https://class.katelya.eu.org
+            FOSU_ALLOWED_PUBLIC_ORIGINS=
+
+            OPENRESTY_HOST_RELEASE_DIR=/opt/1panel/www/sites/class.katelya.eu.org/index/static/releases
+            STATIC_RELEASE_SYNC_ENABLED=true
+            RELEASE_PACK_SRC=/app/storage/public/releases
+            OPENRESTY_STATIC_RELEASE_DIR=/openresty-static/releases
+            PUBLIC_BASE_URL=https://class.katelya.eu.org/static/releases
+            STATIC_RELEASE_KEEP_LATEST=3
+            STATIC_RELEASE_SYNC_VERIFY_HTTP=true
+            STATIC_RELEASE_SYNC_HTTP_TIMEOUT_MS=8000
+            STATIC_RELEASE_VERIFY_CONCURRENCY=2
+            FOSU_STATIC_ACCESS_MODE=public
+            FOSU_STATIC_TICKET_SECRET=${{ secrets.FOSU_STATIC_TICKET_SECRET }}
+
+            FOSU_RELEASE_WORKER_ENABLED=true
+            FOSU_RELEASE_PRECOMPRESS=gzip
+            FOSU_RELEASE_BROTLI_ENABLED=false
+            FOSU_RELEASE_COMPRESSION_CONCURRENCY=1
+
+            FOSU_MAINTENANCE_ENABLED=true
+            FOSU_MAINTENANCE_INTERVAL_HOURS=24
+            FOSU_MAINTENANCE_START_DELAY_MS=60000
+            FOSU_RELEASE_RETENTION_COUNT=3
+            FOSU_RELEASE_RETENTION_DAYS=30
+            FOSU_JOB_SUCCESS_RETENTION_DAYS=14
+            FOSU_JOB_FAILED_RETENTION_DAYS=30
+            FOSU_STAGING_FILE_RETENTION_DAYS=14
+            FOSU_ARCHIVE_METADATA_RETENTION_DAYS=90
+            FOSU_TEMP_RETENTION_HOURS=24
+            FOSU_LOG_RETENTION_DAYS=30
+            FOSU_LOG_ROTATE_SIZE_MB=10
+            FOSU_DISK_WARNING_PERCENT=80
+            FOSU_DISK_CRITICAL_PERCENT=90
+            FOSU_MIN_FREE_DISK_GB=5
             EOF
-            
-            # 启动容器。直接使用 sudo，避免无权限时先失败一次造成误导日志。
-            sudo docker compose up -d --build
-            
-            # 最多等待 30 秒，循环检查容器内 API 是否真正启动成功。
-            healthy=false
-            for i in $(seq 1 30); do
-              if curl -fsS http://127.0.0.1:18318/api/health; then
-                healthy=true
-                break
+            chmod 600 "$tmp_env"
+
+            required_env_keys=(
+              NODE_ENV
+              PORT
+              ADMIN_PASSWORD
+              OPENRESTY_HOST_RELEASE_DIR
+              STATIC_RELEASE_SYNC_ENABLED
+              RELEASE_PACK_SRC
+              OPENRESTY_STATIC_RELEASE_DIR
+              PUBLIC_BASE_URL
+              STATIC_RELEASE_KEEP_LATEST
+              STATIC_RELEASE_SYNC_VERIFY_HTTP
+              FOSU_STATIC_ACCESS_MODE
+              FOSU_RELEASE_WORKER_ENABLED
+              FOSU_RELEASE_PRECOMPRESS
+              FOSU_RELEASE_BROTLI_ENABLED
+              FOSU_RELEASE_COMPRESSION_CONCURRENCY
+              FOSU_MAINTENANCE_ENABLED
+              FOSU_RELEASE_RETENTION_COUNT
+              FOSU_LOG_ROTATE_SIZE_MB
+              FOSU_DISK_WARNING_PERCENT
+              FOSU_DISK_CRITICAL_PERCENT
+              FOSU_MIN_FREE_DISK_GB
+            )
+            for key in "${required_env_keys[@]}"; do
+              if ! grep -q "^${key}=" "$tmp_env"; then
+                echo "::error::.env is missing required key: ${key}"
+                rm -f "$tmp_env"
+                exit 1
               fi
-              echo "Waiting for fosuclass-api health check... ($i/30)"
-              sleep 1
             done
-            
-            if [ "$healthy" != "true" ]; then
-              echo "::error::fosuclass-api health check failed after 30 seconds"
-              sudo docker ps -a
-              sudo docker logs fosuclass-api --tail=200 || true
+            mv "$tmp_env" .env
+
+            sudo docker compose config >/dev/null
+            sudo docker compose up -d --build
+
+            container_id="$(sudo docker ps -aqf "name=^/${CONTAINER_NAME}$")"
+            if [ -z "$container_id" ]; then
+              echo "::error::${CONTAINER_NAME} does not exist after docker compose up"
               exit 1
             fi
-            
-            sudo docker ps --filter "name=fosuclass-api"
+
+            container_health="unknown"
+            for i in $(seq 1 60); do
+              container_health="$(sudo docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER_NAME")"
+              if [ "$container_health" = "healthy" ] || [ "$container_health" = "running" ]; then
+                if curl -fsS http://127.0.0.1:18318/api/health >/dev/null; then
+                  break
+                fi
+              fi
+              echo "Waiting for ${CONTAINER_NAME} health... (${i}/60, status=${container_health})"
+              sleep 2
+            done
+
+            if ! curl -fsS http://127.0.0.1:18318/api/health >/dev/null; then
+              echo "::error::http://127.0.0.1:18318/api/health failed"
+              exit 1
+            fi
+
+            restart_after="$(sudo docker inspect -f '{{.RestartCount}}' "$CONTAINER_NAME")"
+            if [ "$restart_after" -gt $((restart_before + 1)) ]; then
+              echo "::error::Container restartCount increased unexpectedly: before=${restart_before}, after=${restart_after}"
+              exit 1
+            fi
+
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'test -d /app/storage && test -w /app/storage && test -d /openresty-static/releases && test -w /openresty-static/releases'
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'test "$STATIC_RELEASE_SYNC_ENABLED" = "true" && test "$RELEASE_PACK_SRC" = "/app/storage/public/releases" && test "$OPENRESTY_STATIC_RELEASE_DIR" = "/openresty-static/releases" && test "$PUBLIC_BASE_URL" = "https://class.katelya.eu.org/static/releases" && test "$FOSU_RELEASE_WORKER_ENABLED" = "true"'
+
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/reconcile-static-release.js > /tmp/fosu-static-reconcile.json'
+            active_release="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.releaseVersion||'')")"
+            synced_release="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.syncedReleaseVersion||'')")"
+            files_copied="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.filesCopied||0)")"
+            retained_releases="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log((d.staticSync.retainedReleases||[]).join(','))")"
+
+            if [ -z "$active_release" ]; then
+              echo "::error::No active release found during postdeploy static reconcile"
+              exit 1
+            fi
+
+            verify_url() {
+              local relative_path="$1"
+              local url="${PUBLIC_BASE_URL}/${active_release}/${relative_path}"
+              local status
+              status="$(curl -L -sS -o /dev/null -w '%{http_code}' -I --max-time 10 "$url" || true)"
+              if [ "$status" = "403" ] || [ "$status" = "405" ] || [ "$status" = "501" ] || [ "$status" = "000" ]; then
+                status="$(curl -L -sS -o /dev/null -w '%{http_code}' -H 'Range: bytes=0-0' --max-time 10 "$url" || true)"
+              fi
+              if [ "$status" != "200" ] && [ "$status" != "206" ]; then
+                echo "::error::Static URL verification failed: ${relative_path} HTTP ${status}"
+                exit 1
+              fi
+              printf '%s:%s ' "$relative_path" "$status"
+            }
+
+            url_status=""
+            url_status="${url_status}$(verify_url manifest.json)"
+            url_status="${url_status}$(verify_url index/class/all.json)"
+            url_status="${url_status}$(verify_url empty-room/index.json)"
+
+            elapsed="$(( $(date +%s) - STARTED_AT ))"
+            echo "=================================================="
+            echo "Deployment summary"
+            echo "=================================================="
+            echo "commit_sha=${COMMIT_SHA}"
+            echo "container_health=${container_health}"
+            echo "active_release=${active_release}"
+            echo "synced_release=${synced_release}"
+            echo "files_copied=${files_copied}"
+            echo "retained_releases=${retained_releases}"
+            echo "url_status=${url_status}"
+            echo "elapsed_seconds=${elapsed}"
+            echo "=================================================="
 
       - name: Show Deployment Info
         run: |
-          echo "=================================================="
-          echo "🎉 部署完成 / Deployment Completed!"
-          echo "=================================================="
-          echo "- 容器名：fosuclass-api"
-          echo "- 本机健康检查：http://127.0.0.1:18318/api/health"
-          echo "- 1Panel 反代目标：http://127.0.0.1:18318"
-          echo "- 小程序 API 域名：https://class.katelya.eu.org"
-          echo "=================================================="
+          echo "Deployment completed for commit ${{ github.sha }}"
+          echo "Container: fosuclass-api"
+          echo "Health: http://127.0.0.1:18318/api/health"
+          echo "Public API: https://class.katelya.eu.org"
+          echo "Static releases: https://class.katelya.eu.org/static/releases"

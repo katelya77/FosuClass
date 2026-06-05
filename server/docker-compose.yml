@@ -14,9 +14,9 @@ services:
       - "${HOST_BIND_IP:-127.0.0.1}:${HOST_API_PORT:-18318}:${PORT:-3000}"
     volumes:
       - ./storage:/app/storage
+      - ${OPENRESTY_HOST_RELEASE_DIR:-/opt/1panel/www/sites/class.katelya.eu.org/index/static/releases}:/openresty-static/releases
     healthcheck:
       test: ["CMD", "node", "scripts/test-health.js"]
       interval: 30s
       timeout: 10s
       retries: 3
-

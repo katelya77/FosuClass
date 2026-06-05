@@ -17,10 +17,14 @@ const source = fs.readFileSync(path.join(__dirname, "..", "server", "src", "rout
   "copyStaticManifestBtn",
   "verifyStaticUrlBtn",
   "manualStaticSyncBtn",
+  "forceStaticSyncBtn",
   "reconcileLifecycleBtn",
   "syncRecommendedTimeline",
   "sync-flow-step",
   "sync-flow-step-num",
+  "staticSyncStateNote",
+  "syncJobLog",
+  "job-progress-panel",
   "syncNextActionBadge",
   "syncNextActionBtn",
   "stagingHashCompareText",
@@ -38,7 +42,13 @@ const source = fs.readFileSync(path.join(__dirname, "..", "server", "src", "rout
 assert(source.includes("复制 manifest URL"), "OpenResty card should expose manifest copy action");
 assert(source.includes("验证静态 URL"), "OpenResty card should expose static URL verification action");
 assert(source.includes("手动同步当前 Release"), "OpenResty card should expose manual sync action");
+assert(source.includes("✓ 已同步，无需操作"), "manual sync action should show an explicit already-synced state");
+assert(source.includes("强制重新同步"), "OpenResty card should expose a secondary force resync action");
+assert(source.includes("不会重新构建 Release"), "force resync confirmation should explain it does not rebuild release");
+assert(source.includes("不会改变 active pointer"), "force resync confirmation should explain it preserves active pointer");
+assert(source.includes("不会删除 last-known-good"), "force resync confirmation should explain last-known-good is preserved");
 assert(source.includes("重新核对状态"), "OpenResty card should expose lifecycle reconcile action");
+assert(source.includes("当前 active Release 已同步且 URL 验证通过，无需重复复制。"), "already-synced note should explain why normal sync is disabled");
 assert(source.includes("开始发布"), "recommended flow should choose publish as next action");
 assert(source.includes("data.nextAction && data.nextAction.label"), "recommended flow should use lifecycle nextAction label");
 assert(source.includes("upload.status === \"pending-review\" && !isActiveUpload"), "published active upload should not render publish action");
