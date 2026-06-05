@@ -32,16 +32,20 @@ const courses = [
 const rendered = buildScheduleColumns(courses, weekdays, 10, {
   sectionHeight: 90,
   hideInactiveCourses: false,
+  targetType: "class",
+  targetId: "25-test",
+  targetName: "25测试班",
 })[0].courses;
 
-assert.strictEqual(rendered.length, 2, "two active conflicts should both remain visible");
-rendered.forEach((course) => {
-  assert.strictEqual(course.active, true);
-  assert.strictEqual(course.laneCount, 2, "active conflicts should use side-by-side lanes");
-  assert(course.cardStyle.includes("width:50.0000%"), "conflict lane should constrain card width");
-  assert.strictEqual(course.activeConflictCount, 1, "active conflict should be explicit in data");
-  assert.strictEqual(course.inactiveConflictCount, 1, "inactive conflict should fold into each active primary");
-});
-assert.notStrictEqual(rendered[0].lane, rendered[1].lane, "conflicting active cards must use different lanes");
+assert.strictEqual(rendered.length, 2, "active conflict should be one combined card and inactive course remains visible");
+const conflict = rendered.find((course) => course.eventKind === "true-conflict");
+assert(conflict, "different active courses in the same slot should render as a true-conflict event");
+assert.strictEqual(conflict.laneCount, 1, "conflict event should be full-width");
+assert(!conflict.cardStyle.includes("width:50.0000%"), "conflict event must not render as a narrow lane");
+assert.strictEqual(conflict.conflictEvents.length, 2, "conflict event should preserve both conflicting courses");
+assert.strictEqual(conflict.badgeText, "冲突 · 2门");
+const inactive = rendered.find((course) => course.id === "inactive-overlap");
+assert(inactive && inactive.active === false, "inactive overlap should remain visible without being counted as conflict");
+assert(!inactive.inactiveConflictLabel, "inactive course should not create current-week conflict labels");
 
 console.log("test-timetable-conflict-courses-layout passed");

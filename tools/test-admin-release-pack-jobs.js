@@ -74,10 +74,26 @@ async function requestJson(baseUrl, pathname, options = {}) {
   };
 }
 
+async function requestRaw(baseUrl, pathname, buffer) {
+  const response = await fetch(`${baseUrl}${pathname}`, {
+    method: "POST",
+    headers: { "x-admin-token": "test-admin-token", "Content-Type": "application/octet-stream" },
+    body: buffer,
+  });
+  return {
+    status: response.status,
+    data: await response.json(),
+  };
+}
+
 async function waitJob(baseUrl, id) {
   for (let index = 0; index < 50; index += 1) {
     const status = await requestJson(baseUrl, `/api/admin/jobs/${encodeURIComponent(id)}`);
     const job = status.data.job;
+    if (!job) {
+      const files = fs.existsSync(jobService.JOBS_DIR) ? fs.readdirSync(jobService.JOBS_DIR) : [];
+      throw new Error(`job ${id} status response missing job: ${JSON.stringify(status.data)} files=${files.join(",")}`);
+    }
     if (job.status === "success" || job.status === "failed") return job;
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
@@ -109,6 +125,7 @@ async function run() {
     const deepJob = await waitJob(baseUrl, deepStart.data.job.id);
     assert.strictEqual(deepJob.status, "success");
     assert(deepJob.result.status.healthy, "deep health job should compute healthy status");
+    assert(deepJob.result.workerPid && deepJob.result.workerPid !== process.pid, "deep health should run in a child process");
     assert(fs.existsSync(path.join(jobService.JOBS_DIR, `${deepJob.id}.json`)), "job status should persist to storage/jobs");
 
     const rebuildStart = await requestJson(baseUrl, "/api/admin/release-pack/rebuild/start", {
@@ -116,9 +133,31 @@ async function run() {
       body: JSON.stringify({ version }),
     });
     assert.strictEqual(rebuildStart.status, 202);
+    const responsiveDuringRebuild = await requestJson(baseUrl, "/api/admin/system/load");
+    assert.strictEqual(responsiveDuringRebuild.status, 200, "API should respond while rebuild worker is running");
     const rebuildJob = await waitJob(baseUrl, rebuildStart.data.job.id);
     assert.strictEqual(rebuildJob.status, "success");
+    assert(rebuildJob.result.workerPid && rebuildJob.result.workerPid !== process.pid, "rebuild should run in a child process");
     assert(rebuildJob.result.manifest.staticBaseUrl, "rebuild job should return manifest with staticBaseUrl");
+
+    const uploadVersion = `${version}-upload`;
+    const uploadStart = await requestRaw(
+      baseUrl,
+      "/api/admin/release/upload",
+      Buffer.from(JSON.stringify(snapshot(uploadVersion)), "utf-8")
+    );
+    assert.strictEqual(uploadStart.status, 202);
+    const uploadJob = await waitJob(baseUrl, uploadStart.data.job.id);
+    assert.strictEqual(uploadJob.status, "success", JSON.stringify(uploadJob, null, 2));
+    assert(uploadJob.result.workerPid && uploadJob.result.workerPid !== process.pid, "release upload should run in a child process");
+    assert.strictEqual(uploadJob.result.releaseVersion, uploadVersion);
+    assert(
+      fs.existsSync(path.join(process.env.FOSU_STORAGE_DIR, "public", "releases", uploadVersion, "manifest.json")),
+      "release upload job should mirror static release files"
+    );
+    const uploadTemps = fs.readdirSync(path.join(process.env.FOSU_STORAGE_DIR, "snapshots"))
+      .filter((name) => name.startsWith("release-upload-"));
+    assert.strictEqual(uploadTemps.length, 0, "release upload worker should clean temporary upload files");
 
     const publishVersion = `${version}-published`;
     const publishSnapshot = snapshot(publishVersion);
@@ -142,6 +181,7 @@ async function run() {
     assert.strictEqual(publishStart.status, 202);
     const publishJob = await waitJob(baseUrl, publishStart.data.job.id);
     assert.strictEqual(publishJob.status, "success", JSON.stringify(publishJob, null, 2));
+    assert(publishJob.result.workerPid && publishJob.result.workerPid !== process.pid, "publish should run in a child process");
     assert.strictEqual(publishJob.result.releaseVersion, publishVersion);
     assert(publishJob.result.quickHealth.healthy, "publish job should finish with quick static health");
     assert(
@@ -157,6 +197,35 @@ async function run() {
     const verifyJob = await waitJob(baseUrl, verifyStart.data.job.id);
     assert.strictEqual(verifyJob.status, "success");
     assert(verifyJob.result.classIndexCount > 0, "verify job should read static class index");
+
+    const activateStart = await requestJson(baseUrl, "/api/admin/release/activate", {
+      method: "POST",
+      body: JSON.stringify({ version }),
+    });
+    assert.strictEqual(activateStart.status, 202);
+    const activateJob = await waitJob(baseUrl, activateStart.data.job.id);
+    assert.strictEqual(activateJob.status, "success");
+    assert(activateJob.result.workerPid && activateJob.result.workerPid !== process.pid, "activate should run in a child process");
+    assert.strictEqual(releaseService.getActiveReleaseInfo().version, version, "activate worker should update active release");
+
+    const badVersion = `${version}-bad`;
+    const badSnapshot = snapshot(badVersion);
+    badSnapshot.classSchedules = [];
+    const badUploadStart = await requestRaw(
+      baseUrl,
+      "/api/admin/release/upload",
+      Buffer.from(JSON.stringify(badSnapshot), "utf-8")
+    );
+    assert.strictEqual(badUploadStart.status, 202);
+    const badUploadJob = await waitJob(baseUrl, badUploadStart.data.job.id);
+    assert.strictEqual(badUploadJob.status, "failed", "invalid release upload should fail in the worker");
+    assert.strictEqual(releaseService.getActiveReleaseInfo().version, version, "failed upload should preserve last good active release");
+    assert(!fs.existsSync(path.join(process.env.FOSU_STORAGE_DIR, "releases", badVersion)), "failed upload should not promote bad release dir");
+    assert(!fs.existsSync(path.join(process.env.FOSU_STORAGE_DIR, "public", "releases", badVersion)), "failed upload should not promote bad public release dir");
+    const leftoverBuildingDirs = []
+      .concat(fs.readdirSync(path.join(process.env.FOSU_STORAGE_DIR, "releases")).filter((name) => name.includes(".building-")))
+      .concat(fs.readdirSync(path.join(process.env.FOSU_STORAGE_DIR, "public", "releases")).filter((name) => name.includes(".building-")));
+    assert.deepStrictEqual(leftoverBuildingDirs, [], "failed upload should clean building directories");
 
     const load = await requestJson(baseUrl, "/api/admin/system/load");
     assert.strictEqual(load.status, 200);

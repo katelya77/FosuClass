@@ -32,14 +32,16 @@ const courses = [
 const visible = buildScheduleColumns(courses, weekdays, 5, {
   sectionHeight: 90,
   hideInactiveCourses: false,
+  targetType: "class",
 })[0].courses;
-assert.strictEqual(visible.length, 2, "inactive-only course should remain visible when not hidden");
+assert.strictEqual(visible.length, 3, "inactive courses should remain visible when not hidden");
 assert(visible.some((course) => course.id === "inactive-only" && course.active === false), "inactive-only course should be gray-visible");
-assert(!visible.some((course) => course.id === "inactive-overlap"), "overlapping inactive course should be folded");
+assert(visible.some((course) => course.id === "inactive-overlap" && course.active === false), "overlapping inactive course should not be folded into a conflict");
 
 const hidden = buildScheduleColumns(courses, weekdays, 5, {
   sectionHeight: 90,
   hideInactiveCourses: true,
+  targetType: "class",
 })[0].courses;
 assert.deepStrictEqual(hidden.map((course) => course.id), ["active-course"], "hide switch should remove all inactive courses");
 

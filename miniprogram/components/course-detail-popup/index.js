@@ -17,6 +17,7 @@ Component({
     sectionText: "",
     timeText: "",
     weekTypeText: "",
+    audienceClassesText: "",
   },
 
   observers: {
@@ -30,6 +31,7 @@ Component({
         sectionText: course && course.startSection ? `第${course.startSection}-${course.endSection}节` : "",
         timeText: course ? course.timeText || getCourseTimeRange(course, courseTimes) : "",
         weekTypeText: weekTypeMap[(course && course.weekType) || "all"],
+        audienceClassesText: course && Array.isArray(course.audienceClasses) ? course.audienceClasses.join("、") : "",
       });
     },
   },

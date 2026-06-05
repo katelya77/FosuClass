@@ -2,6 +2,7 @@ const assert = require("assert");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const zlib = require("zlib");
 
 const tempRoot = path.join(os.tmpdir(), `fosu-static-release-pack-${process.pid}-${Date.now()}`);
 process.env.FOSU_STORAGE_DIR = path.join(tempRoot, "storage");
@@ -10,6 +11,13 @@ process.env.FOSU_STATIC_RELEASE_BASE_URL = "https://static-class.katelya.top/sta
 const express = require("../server/node_modules/express");
 const fosuRouter = require("../server/src/routes/fosu");
 const releaseService = require("../server/src/services/releaseService");
+
+const originalGzipSync = zlib.gzipSync;
+let gzipSyncCalls = 0;
+zlib.gzipSync = function patchedGzipSync() {
+  gzipSyncCalls += 1;
+  return originalGzipSync.apply(this, arguments);
+};
 
 function snapshot(version) {
   const course = {
@@ -67,6 +75,15 @@ function listen(app) {
   });
 }
 
+function countJsonFiles(dirPath) {
+  if (!fs.existsSync(dirPath)) return 0;
+  return fs.readdirSync(dirPath, { withFileTypes: true }).reduce((count, entry) => {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) return count + countJsonFiles(fullPath);
+    return count + (entry.isFile() && entry.name.endsWith(".json") ? 1 : 0);
+  }, 0);
+}
+
 async function run() {
   const version = "static-release-pack-2026-06-04";
   releaseService.activateReleaseFromSnapshot(snapshot(version));
@@ -83,6 +100,11 @@ async function run() {
   assert(fs.existsSync(emptyPath), "public empty-room index should exist");
   assert(fs.existsSync(`${classAllPath}.gz`), "class all index gzip should exist");
   assert(fs.existsSync(`${emptyPath}.gz`), "empty-room gzip should exist");
+  assert.strictEqual(
+    gzipSyncCalls,
+    countJsonFiles(publicDir) + 1,
+    "each public JSON should be gzip-compressed once; +1 is current snapshot compatibility gzip"
+  );
 
   const manifest = JSON.parse(fs.readFileSync(publicManifestPath, "utf-8"));
   assert.strictEqual(manifest.staticBaseUrl, "https://static-class.katelya.top/static/releases");
@@ -120,11 +142,13 @@ async function run() {
   }
 
   cleanup();
+  zlib.gzipSync = originalGzipSync;
   console.log("test-static-release-pack passed");
 }
 
 run().catch((error) => {
   console.error(error);
+  zlib.gzipSync = originalGzipSync;
   try { cleanup(); } catch (cleanupError) {}
   process.exit(1);
 });

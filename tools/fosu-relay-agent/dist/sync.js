@@ -3762,6 +3762,9 @@ async function uploadSnapshot(buffer) {
         maxBodyLength: Infinity
       });
       console.log(`\u2705 \u5FEB\u7167\u4E0A\u4F20 VPS \u6210\u529F: ${JSON.stringify(response.data)}`);
+      if (response.data && response.data.job && response.data.job.id) {
+        return await waitAdminJob(response.data.job.id, "release upload");
+      }
       return response.data;
     } catch (error) {
       console.error(`\u274C \u5FEB\u7167\u4E0A\u4F20 VPS \u5931\u8D25 (${attempt}/${maxRetries}): ${error.message}`);
@@ -3790,6 +3793,9 @@ async function activateSnapshot(version) {
       proxy: false
       // 显式禁用代理
     });
+    if (response.data && response.data.job && response.data.job.id) {
+      return await waitAdminJob(response.data.job.id, "release activation");
+    }
     return response.data;
   } catch (error) {
     console.error(`\u274C \u5FEB\u7167\u6FC0\u6D3B\u5931\u8D25: ${error.message}`);
@@ -3799,6 +3805,27 @@ async function activateSnapshot(version) {
     }
     throw error;
   }
+}
+async function waitAdminJob(jobId, label) {
+  const url = `${FOSU_API_BASE}/api/admin/jobs/${encodeURIComponent(jobId)}`;
+  console.log(`\u23F3 ${label || "admin job"} \u5DF2\u8FDB\u5165\u540E\u53F0\u4EFB\u52A1: ${jobId}`);
+  for (let attempt = 1; attempt <= 240; attempt += 1) {
+    const response = await axios.get(url, {
+      headers: {
+        "x-admin-token": ADMIN_API_TOKEN
+      },
+      proxy: false
+    });
+    const job = response.data && response.data.job;
+    if (job && (job.status === "success" || job.status === "failed")) {
+      if (job.status === "failed") {
+        throw new Error(`${label || "admin job"} failed: ${job.error && job.error.message || "unknown error"}`);
+      }
+      return Object.assign({ success: true, job }, job.result || {});
+    }
+    await sleep(1e3);
+  }
+  throw new Error(`${label || "admin job"} timed out: ${jobId}`);
 }
 async function verifyEndpoints() {
   const bootstrapUrl = `${FOSU_API_BASE}/api/fosu/bootstrap`;

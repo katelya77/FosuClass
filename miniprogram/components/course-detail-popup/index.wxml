@@ -10,7 +10,49 @@
     </view>
 
     <scroll-view scroll-y class="popup-scroll-content">
-      <view class="detail-grid" wx:if="{{!course.isGrouped}}">
+      <view class="grouped-detail-list conflict-list" wx:if="{{course.eventKind === 'true-conflict'}}">
+        <view class="grouped-title-hint">真实冲突课程 · {{course.conflictEvents.length}} 门</view>
+        <view class="grouped-item-box conflict-item-box" wx:for="{{course.conflictEvents}}" wx:key="eventId">
+          <view class="grouped-item-title">{{item.displayCourseName || item.courseName}}</view>
+          <view class="grouped-meta-row">
+            <text class="grouped-meta-label">教师</text>
+            <text class="grouped-meta-value">{{item.teacherName || "待补充"}}</text>
+          </view>
+          <view class="grouped-meta-row">
+            <text class="grouped-meta-label">地点</text>
+            <text class="grouped-meta-value">{{item.classroom || "待补充"}}</text>
+          </view>
+          <view class="grouped-meta-row">
+            <text class="grouped-meta-label">节次</text>
+            <text class="grouped-meta-value">第{{item.startSection}}-{{item.endSection}}节</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="grouped-detail-list" wx:elif="{{course.eventKind === 'parallel-group'}}">
+        <view class="grouped-title-hint">共 {{course.groupedCount}} 个教学分组，按个人选课结果为准。</view>
+        <view class="grouped-item-box" wx:for="{{course.groupedItems}}" wx:key="id">
+          <view class="grouped-item-title">教学分组 #{{index + 1}}</view>
+          <view class="grouped-meta-row">
+            <text class="grouped-meta-label">教师</text>
+            <text class="grouped-meta-value">{{item.displayTeacherName || item.canonicalTeacherName || item.teacherName || "待补充"}}</text>
+          </view>
+          <view class="grouped-meta-row">
+            <text class="grouped-meta-label">地点</text>
+            <text class="grouped-meta-value">{{item.displayClassroom || item.canonicalClassroom || item.classroom || "待补充"}}</text>
+          </view>
+          <view class="grouped-meta-row" wx:if="{{item.className}}">
+            <text class="grouped-meta-label">班级</text>
+            <text class="grouped-meta-value">{{item.className}}</text>
+          </view>
+          <view class="grouped-meta-row">
+            <text class="grouped-meta-label">周次</text>
+            <text class="grouped-meta-value">{{item.weekText}}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="detail-grid" wx:else>
         <view class="detail-item">
           <text class="detail-label">教师</text>
           <text class="detail-value">{{course.displayTeacherName || course.canonicalTeacherName || course.teacherName || "待补充"}}</text>
@@ -35,28 +77,9 @@
           <text class="detail-label">班级/专业</text>
           <text class="detail-value">{{course.className || "当前班级/专业"}}</text>
         </view>
-      </view>
-
-      <view class="grouped-detail-list" wx:else>
-        <view class="grouped-title-hint">该课程包含 {{course.groupedCount}} 个教学班候选：</view>
-        <view class="grouped-item-box" wx:for="{{course.groupedItems}}" wx:key="id">
-          <view class="grouped-item-title">教学班 #{{index + 1}}</view>
-          <view class="grouped-meta-row">
-            <text class="grouped-meta-label">教师</text>
-            <text class="grouped-meta-value">{{item.displayTeacherName || item.canonicalTeacherName || item.teacherName || "待补充"}}</text>
-          </view>
-          <view class="grouped-meta-row">
-            <text class="grouped-meta-label">教室</text>
-            <text class="grouped-meta-value">{{item.displayClassroom || item.canonicalClassroom || item.classroom || "待补充"}}</text>
-          </view>
-          <view class="grouped-meta-row" wx:if="{{item.className}}">
-            <text class="grouped-meta-label">班级</text>
-            <text class="grouped-meta-value">{{item.className}}</text>
-          </view>
-          <view class="grouped-meta-row">
-            <text class="grouped-meta-label">周次</text>
-            <text class="grouped-meta-value">{{item.weekText}}</text>
-          </view>
+        <view class="detail-item full" wx:if="{{audienceClassesText}}">
+          <text class="detail-label">上课班级</text>
+          <text class="detail-value">{{audienceClassesText}}</text>
         </view>
       </view>
 

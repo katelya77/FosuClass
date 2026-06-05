@@ -394,9 +394,15 @@ Page({
     });
 
     const courses = this.data.allCourses.map(normalizeCourse);
+    const meta = this.data.scheduleMeta || {};
     const dayColumns = buildScheduleColumns(courses, weekdays, currentWeek, {
       sectionHeight: SECTION_HEIGHT,
       hideInactiveCourses: settings.hideInactiveCourses,
+      targetType: this.data.type,
+      targetId: meta.detailId || meta.id || meta.classId || this.data.name || "",
+      targetName: this.data.name,
+      semester: this.data.semester,
+      releaseVersion: meta.scheduleVersion || meta.releaseVersion || "",
     });
     const currentWeekCourseCount = dayColumns.reduce((total, day) => total + (day.activeCourseCount || 0), 0);
     const visibleWeekCourseCount = dayColumns.reduce((total, day) => total + (day.visibleCourseCount || 0), 0);
