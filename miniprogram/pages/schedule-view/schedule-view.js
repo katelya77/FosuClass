@@ -197,7 +197,7 @@ Page({
             releaseVersion: decodedReleaseVersion,
           }, {
             forceNetwork: true,
-            timeout: 12000,
+            timeout: 15000,
             retries: 1,
           })
             .then((res) => {
@@ -306,7 +306,7 @@ Page({
       term,
       releaseVersion,
     }, {
-      timeout: 12000,
+      timeout: 15000,
       retries: 1,
     })
       .then((res) => {

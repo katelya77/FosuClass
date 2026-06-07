@@ -6,6 +6,7 @@ const platformDataService = require("./services/platformDataService");
 const securitySessionService = require("./services/securitySessionService");
 const BRAND = require("./config/brand");
 
+const STARTUP_BACKGROUND_TIMEOUT_MS = 15000;
 let startupSessionWarmupPromise = null;
 
 function readStorageQuiet(key) {
@@ -77,11 +78,11 @@ App({
     this.loadBootstrapData({ network: false, silent: true });
     this.loadAppConfigData({ network: false, silent: true });
 
-    scheduleLowPriority(() => afterStartupSession(() => this.loadReleasePackData(withStartupSessionOptions({ forceNetwork: true, silent: true, timeout: 5000, retries: 0 }))), 1500);
+    scheduleLowPriority(() => afterStartupSession(() => this.loadReleasePackData(withStartupSessionOptions({ forceNetwork: true, silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 1 }))), 1500);
     scheduleLowPriority(() => getStartupSessionWarmupPromise(), 1800);
-    scheduleLowPriority(() => afterStartupSession(() => this.loadPlatformData(withStartupSessionOptions({ silent: true, timeout: 5000, retries: 0 }))), 2200);
-    scheduleLowPriority(() => afterStartupSession(() => this.loadBootstrapData(withStartupSessionOptions({ silent: true, timeout: 5000, retries: 0 }))), 2600);
-    scheduleLowPriority(() => afterStartupSession(() => this.loadAppConfigData(withStartupSessionOptions({ force: true, silent: true, timeout: 5000, retries: 0 }))), 3200);
+    scheduleLowPriority(() => afterStartupSession(() => this.loadPlatformData(withStartupSessionOptions({ silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 1 }))), 2200);
+    scheduleLowPriority(() => afterStartupSession(() => this.loadBootstrapData(withStartupSessionOptions({ silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 1 }))), 2600);
+    scheduleLowPriority(() => afterStartupSession(() => this.loadAppConfigData(withStartupSessionOptions({ force: true, silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 1 }))), 3200);
   },
 
   loadReleasePackData(options) {
@@ -194,7 +195,7 @@ App({
     return request.get(`/api/fosu/bootstrap?ts=${Date.now()}`, {}, {
       showLoading: false,
       silentError: true,
-      timeout: opt.timeout || 8000,
+      timeout: opt.timeout || STARTUP_BACKGROUND_TIMEOUT_MS,
       retries: opt.retries === undefined ? 1 : opt.retries,
       skipSession: opt.skipSession === true,
     })

@@ -420,7 +420,7 @@ Page({
 
     const fetchCatalogFromNetwork = () => {
       console.log("[school] request catalog bootstrap");
-      request.get("/api/fosu/bootstrap", { semester: term }, { showLoading: false, silentError: true, timeout: 12000 })
+      request.get("/api/fosu/bootstrap", { semester: term }, { showLoading: false, silentError: true, timeout: 15000 })
         .then((res) => {
           if (res && res.success && res.catalog && Array.isArray(res.catalog.colleges) && res.catalog.colleges.length > 0) {
             const catalogData = {
@@ -650,7 +650,7 @@ Page({
   fallbackToCatalog() {
     request.get("/api/fosu/catalog", {
       semester: "2025-2026-2",
-    }, { showLoading: false, silentError: true, timeout: 8000 })
+    }, { showLoading: false, silentError: true, timeout: 15000 })
       .then((data) => {
         if (data && data.success && Array.isArray(data.colleges) && data.colleges.length > 0) {
           this.originalCatalogData = data;

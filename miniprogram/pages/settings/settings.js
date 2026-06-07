@@ -584,7 +584,7 @@ Page({
     });
 
     wx.showLoading({ title: "加载中..." });
-    request.get("/api/fosu/bootstrap", { semester: this.data.settings.semester || "2025-2026-2" }, { showLoading: false, timeout: 8000 })
+    request.get("/api/fosu/bootstrap", { semester: this.data.settings.semester || "2025-2026-2" }, { showLoading: false, timeout: 15000 })
       .then((res) => {
         wx.hideLoading();
         if (res && res.success) {
