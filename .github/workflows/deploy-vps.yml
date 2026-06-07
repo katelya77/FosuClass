@@ -99,7 +99,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          source: "server/**,!server/node_modules/**,!server/.env"
+          source: "server/**,!server/node_modules/**,!server/.env,!server/storage/**"
           target: "${{ secrets.VPS_APP_DIR }}"
 
       - name: SSH Remote Deploy & Health Check

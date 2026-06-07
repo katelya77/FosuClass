@@ -60,6 +60,7 @@ const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
   "npm ci",
   "npm --prefix server ci",
   "npm run security:acceptance",
+  "!server/storage/**",
   "Range: bytes=0-0",
   "Deployment summary",
 ].forEach((needle) => {
