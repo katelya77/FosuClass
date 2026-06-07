@@ -271,15 +271,29 @@ router.get("/session", (req, res) => {
   });
 });
 
+const NON_CLIENT_BOOTSTRAP_FAILURE_REASONS = new Set([
+  "WX_CODE_REQUIRED",
+  "INVALID_JSON_BODY",
+  "INVALID_JSON_SCHEMA",
+]);
+
+function getEventReasonCount(events, eventName, reasonCode) {
+  const byEvent = events && events.eventReasonCounts && events.eventReasonCounts[eventName] || {};
+  return Number(byEvent[reasonCode] || 0) || 0;
+}
+
 function buildSecurityReadiness(security, events, rateLimit) {
   const counts = events.counts || {};
   const clientCheck = events.clientCheck || {};
   const bootstrapSuccess = counts["security-session-bootstrap-success"] || 0;
   const bootstrapFailed = counts["security-session-bootstrap-failed"] || 0;
+  const ignoredBootstrapFailed = Array.from(NON_CLIENT_BOOTSTRAP_FAILURE_REASONS)
+    .reduce((sum, reason) => sum + getEventReasonCount(events, "security-session-bootstrap-failed", reason), 0);
+  const clientBootstrapFailed = Math.max(0, bootstrapFailed - ignoredBootstrapFailed);
   const invalidSession = counts["security-session-invalid"] || 0;
   const totalSessionSignals = bootstrapSuccess + bootstrapFailed + invalidSession;
-  const bootstrapSuccessRate = bootstrapSuccess + bootstrapFailed > 0
-    ? bootstrapSuccess / (bootstrapSuccess + bootstrapFailed)
+  const bootstrapSuccessRate = bootstrapSuccess + clientBootstrapFailed > 0
+    ? bootstrapSuccess / (bootstrapSuccess + clientBootstrapFailed)
     : 0;
   const hasRecentClientCheck = Boolean(clientCheck.latest && clientCheck.latest.clientBuildId);
   const blocking = [];
@@ -288,7 +302,7 @@ function buildSecurityReadiness(security, events, rateLimit) {
   if (!security.sessionSecretConfigured) blocking.push("Session Secret 未配置");
   if (!security.wechatAppidConfigured || !security.wechatSecretConfigured) blocking.push("微信 AppID/AppSecret 未完整配置");
   if (!hasRecentClientCheck) warnings.push("尚未收到客户端端到端 client-check");
-  if (bootstrapSuccess + bootstrapFailed > 0 && bootstrapSuccessRate < 0.95) warnings.push("最近 Session Bootstrap 成功率低于 95%");
+  if (bootstrapSuccess + clientBootstrapFailed > 0 && bootstrapSuccessRate < 0.95) warnings.push("最近 Session Bootstrap 成功率低于 95%");
   if (totalSessionSignals > 0 && invalidSession / totalSessionSignals > 0.05) warnings.push("缺失或无效 Session 比例偏高");
   if ((rateLimit && rateLimit.keyCount || 0) >= (rateLimit && rateLimit.maxKeys || Number.MAX_SAFE_INTEGER)) warnings.push("限速状态键接近上限");
   if (security.warnings && security.warnings.length) warnings.push(...security.warnings);
@@ -299,6 +313,8 @@ function buildSecurityReadiness(security, events, rateLimit) {
     blocking,
     warnings,
     bootstrapSuccessRate,
+    bootstrapClientFailureCount: clientBootstrapFailed,
+    bootstrapIgnoredFailureCount: ignoredBootstrapFailed,
     sessionHeaderAttachedRate: hasRecentClientCheck ? 1 : 0,
   };
 }
@@ -4913,6 +4929,7 @@ router._test = {
   summarizeStagingData,
   validateStagingData,
   buildStagingSafety,
+  buildSecurityReadiness,
 };
 
 module.exports = router;

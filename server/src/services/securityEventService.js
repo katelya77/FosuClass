@@ -62,6 +62,13 @@ function getSecurityEventSummary() {
     acc[reason] = (acc[reason] || 0) + 1;
     return acc;
   }, {});
+  const eventReasonCounts = events.reduce((acc, item) => {
+    const event = item.event || "unknown";
+    const reason = item.reasonCode || "UNSPECIFIED";
+    if (!acc[event]) acc[event] = {};
+    acc[event][reason] = (acc[event][reason] || 0) + 1;
+    return acc;
+  }, {});
   const bootstrapLatencies = events
     .filter((item) => item.event === "security-session-bootstrap-success" && item.latencyMs > 0)
     .map((item) => item.latencyMs)
@@ -97,6 +104,7 @@ function getSecurityEventSummary() {
     totalEvents: events.length,
     counts,
     reasonCounts,
+    eventReasonCounts,
     bootstrapLatency: {
       count: bootstrapLatencies.length,
       p50: percentile(bootstrapLatencies, 0.5),

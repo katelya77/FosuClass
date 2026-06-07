@@ -7851,7 +7851,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             renderHealthItem("微信 AppID", security.wechatAppidConfigured ? "<code>" + escapeHtml(security.wechatAppidMasked || "configured") + "</code>" : badgeText(false)),
             renderHealthItem("AppSecret", badgeText(Boolean(security.wechatSecretConfigured))),
             renderHealthItem("Session Secret", badgeText(Boolean(security.sessionSecretConfigured))),
-            renderHealthItem("Previous Secret", badgeText(Boolean(security.sessionPreviousSecretConfigured))),
+            renderHealthItem("Previous Secret", security.sessionPreviousSecretConfigured ? badgeText(true) : "<span class='badge muted'>轮换时补齐</span>"),
             renderHealthItem("Static Ticket Secret", badgeText(Boolean(security.staticTicketSecretConfigured))),
             renderHealthItem("OpenResty 模式", "<code>" + escapeHtml(security.openRestySecurityMode || "public") + "</code>"),
             renderHealthItem("Session KID", "<code>" + escapeHtml(security.sessionSecretKid || "current") + "</code>"),
