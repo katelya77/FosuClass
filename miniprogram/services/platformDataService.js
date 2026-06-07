@@ -76,6 +76,7 @@ async function loadPrefetchData(options = {}) {
     silentError: true,
     timeout: options.timeout || 10000,
     retries: options.retries === undefined ? 0 : options.retries,
+    skipSession: options.skipSession === true,
   }).then((data) => {
     writeCache(PLATFORM_PREFETCH_CACHE_KEY, data);
     return Object.assign({ source: "api-prefetch" }, data);
@@ -96,6 +97,7 @@ async function loadPeriodicData(options = {}) {
     silentError: true,
     timeout: options.timeout || 12000,
     retries: options.retries === undefined ? 0 : options.retries,
+    skipSession: options.skipSession === true,
   }).then((data) => {
     writeCache(PLATFORM_PERIODIC_CACHE_KEY, data);
     return Object.assign({ source: "api-periodic" }, data);

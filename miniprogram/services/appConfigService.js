@@ -77,6 +77,7 @@ function loadAppConfig(options) {
     silentError: true,
     timeout: opt.timeout || 8000,
     retries: opt.retries === undefined ? 1 : opt.retries,
+    skipSession: opt.skipSession === true,
   })
     .then((res) => {
       const config = normalizeConfig(res);

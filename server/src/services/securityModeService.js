@@ -1,6 +1,27 @@
 const config = require("../config");
 
-const VALID_MODES = new Set(["observe", "session", "ticket"]);
+const VALID_MODES = new Set([
+  "observe",
+  "session",
+  "ticket",
+  "session-canary",
+  "session-enforce",
+  "ticket-canary",
+  "ticket-enforce",
+]);
+
+const MODE_ALIASES = {
+  session: "session-enforce",
+  ticket: "ticket-enforce",
+};
+
+const MODE_DESCRIPTIONS = {
+  observe: "观察模式：记录缺失或无效 Session，不拦截请求。",
+  "session-canary": "Session 金丝雀：仅用于小流量验证准备，默认不全量拦截。",
+  "session-enforce": "Session 强制：动态 API 全量要求有效 X-Fosu-Session。",
+  "ticket-canary": "Ticket 金丝雀：动态 API 强制 Session，静态 Release 仅观察票据准备度。",
+  "ticket-enforce": "Ticket 强制：动态 API 强制 Session，静态 Release 强制 Ticket。",
+};
 
 function boolEnv(name) {
   return String(process.env[name] || "").toLowerCase() === "true";
@@ -8,7 +29,8 @@ function boolEnv(name) {
 
 function normalizeMode(value) {
   const mode = String(value || "").trim().toLowerCase();
-  return VALID_MODES.has(mode) ? mode : "observe";
+  if (!VALID_MODES.has(mode)) return "observe";
+  return MODE_ALIASES[mode] || mode;
 }
 
 function hasValue(value) {
@@ -27,8 +49,8 @@ function hasStaticTicketSecret() {
 
 function getStaticAccessMode(mode) {
   const raw = String(process.env.FOSU_STATIC_ACCESS_MODE || "").trim().toLowerCase();
-  if (raw === "ticket" || mode === "ticket") return "ticket";
-  if (raw === "observe" || mode === "observe") return "observe";
+  if (raw === "ticket" || mode === "ticket-enforce") return "ticket";
+  if (raw === "observe" || mode === "observe" || mode === "ticket-canary") return "observe";
   return "public";
 }
 
@@ -44,8 +66,13 @@ function getSecurityMode() {
   const staticAccessMode = getStaticAccessMode(mode);
   const warnings = [];
 
-  const requireDynamicSession = mode === "session" || mode === "ticket" || boolEnv("FOSU_DYNAMIC_API_SESSION_REQUIRED");
-  const requireStaticTicket = mode === "ticket" || staticAccessMode === "ticket";
+  const requireDynamicSession = mode === "session-enforce" ||
+    mode === "ticket-canary" ||
+    mode === "ticket-enforce" ||
+    boolEnv("FOSU_DYNAMIC_API_SESSION_REQUIRED");
+  const requireStaticTicket = mode === "ticket-enforce" || staticAccessMode === "ticket";
+  const canarySession = mode === "session-canary";
+  const canaryTicket = mode === "ticket-canary";
   const observeOnly = mode === "observe";
 
   if (!process.env.FOSU_SECURITY_MODE) {
@@ -74,10 +101,17 @@ function getSecurityMode() {
 
   return {
     mode,
+    rolloutStage: mode,
+    legacyMode: mode.indexOf("ticket") === 0 ? "ticket" : (mode.indexOf("session") === 0 ? "session" : "observe"),
+    modeDescription: MODE_DESCRIPTIONS[mode] || MODE_DESCRIPTIONS.observe,
     staticAccessMode,
     observeOnly,
+    canarySession,
+    canaryTicket,
     requireDynamicSession,
     requireStaticTicket,
+    dynamicApiMode: requireDynamicSession ? "session" : (canarySession ? "session-canary" : "observe"),
+    staticReleaseMode: requireStaticTicket ? "ticket" : (canaryTicket ? "ticket-canary" : staticAccessMode),
     configurationValid: blockingWarnings.length === 0,
     warnings,
   };

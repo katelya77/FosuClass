@@ -50,7 +50,7 @@ jobs:
               has_missing_required=true
             fi
           fi
-          if [ "$security_mode" = "ticket" ] && [ -z "${{ secrets.FOSU_STATIC_TICKET_SECRET_CURRENT }}" ]; then
+          if { [ "$security_mode" = "ticket" ] || [ "$security_mode" = "ticket-enforce" ]; } && [ -z "${{ secrets.FOSU_STATIC_TICKET_SECRET_CURRENT }}" ]; then
             echo "::error::FOSU_STATIC_TICKET_SECRET_CURRENT is required for ticket security mode."
             has_missing_required=true
           fi
@@ -66,11 +66,16 @@ jobs:
           node --check src/services/securityModeService.js
           node --check src/services/rateLimitService.js
           node --check src/services/securityEventService.js
+          node --check src/services/clientCheckService.js
           node --check src/security/routeSecurityPolicy.js
           node --check src/workers/releaseWorker.js
+          node --check scripts/security-postdeploy-check.js
           node --check scripts/reconcile-static-release.js
           node -e "require('./src/utils/courseNormalizer'); console.log('courseNormalizer ok')"
           node -e "require('./src/utils/scheduleNormalizer'); console.log('scheduleNormalizer ok')"
+
+      - name: Security acceptance tests
+        run: npm run security:acceptance
 
       - name: Upload server/ directory via SCP
         uses: appleboy/scp-action@v0.1.7
@@ -131,6 +136,8 @@ jobs:
             PUBLIC_API_ORIGIN=https://class.katelya.eu.org
             FOSU_API_BASE_URL=https://class.katelya.eu.org
             FOSU_STATIC_RELEASE_BASE_URL=/static/releases
+            FOSU_DEPLOY_COMMIT_SHA=${COMMIT_SHA}
+            FOSU_CLIENT_BUILD_ID=${{ vars.FOSU_CLIENT_BUILD_ID || github.sha }}
             DATA_SOURCE_MODE=cache-first
             ADMIN_API_TOKEN=${{ secrets.ADMIN_API_TOKEN }}
             ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
@@ -240,7 +247,7 @@ jobs:
                 fi
               done
             fi
-            if [ "$effective_security_mode" = "ticket" ] && ! grep -q '^FOSU_STATIC_TICKET_SECRET_CURRENT=.\+' "$tmp_env"; then
+            if { [ "$effective_security_mode" = "ticket" ] || [ "$effective_security_mode" = "ticket-enforce" ]; } && ! grep -q '^FOSU_STATIC_TICKET_SECRET_CURRENT=.\+' "$tmp_env"; then
               echo "::error::.env missing FOSU_STATIC_TICKET_SECRET_CURRENT for ticket mode"
               rm -f "$tmp_env"
               exit 1
@@ -287,6 +294,7 @@ jobs:
             sudo docker exec "$CONTAINER_NAME" sh -lc 'test -d /app/storage && test -w /app/storage && test -d /openresty-static/releases && test -w /openresty-static/releases'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'test "$STATIC_RELEASE_SYNC_ENABLED" = "true" && test "$RELEASE_PACK_SRC" = "/app/storage/public/releases" && test "$OPENRESTY_STATIC_RELEASE_DIR" = "/openresty-static/releases" && test "$PUBLIC_BASE_URL" = "https://class.katelya.eu.org/static/releases" && test "$FOSU_RELEASE_WORKER_ENABLED" = "true"'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "const s=require(\"./src/services/securityModeService\").getSecurityStatus(); if(!s.mode) process.exit(1); console.log(\"security_mode=\"+s.mode)"'
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000'
 
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/reconcile-static-release.js > /tmp/fosu-static-reconcile.json'
             active_release="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.releaseVersion||'')")"

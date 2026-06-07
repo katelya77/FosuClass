@@ -12,6 +12,9 @@ assert.strictEqual(publicBootstrap.accessLevel, ACCESS_LEVELS.PUBLIC);
 const appConfig = getRouteSecurityPolicy({ method: "GET", path: "/app-config" });
 assert.strictEqual(appConfig.accessLevel, ACCESS_LEVELS.MINIPROGRAM_SESSION);
 
+const clientCheck = getRouteSecurityPolicy({ method: "POST", path: "/security/client-check" });
+assert.strictEqual(clientCheck.accessLevel, ACCESS_LEVELS.MINIPROGRAM_SESSION, "client-check should require miniprogram session");
+
 const headDetail = getRouteSecurityPolicy({ method: "HEAD", path: "/schedule-detail" });
 assert.strictEqual(headDetail.accessLevel, ACCESS_LEVELS.MINIPROGRAM_SESSION, "HEAD must use the GET auth policy");
 

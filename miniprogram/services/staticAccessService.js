@@ -1,5 +1,12 @@
 const { API_BASE_URL, STATIC_RELEASE_BASE_URL } = require("../config/api");
 const securitySessionService = require("./securitySessionService");
+const {
+  extractPathname,
+  isAbsoluteHttpUrl,
+  joinBaseAndPath,
+  normalizePathPrefix,
+  normalizeTrustedPath,
+} = require("../utils/trustedUrl");
 
 const STORAGE_KEY = "FOSU_STATIC_ACCESS_TICKETS";
 const REFRESH_SKEW_MS = 60 * 1000;
@@ -31,26 +38,35 @@ function persist() {
 
 readStorage();
 
+function getStaticReleaseBaseUrl() {
+  const configured = String(STATIC_RELEASE_BASE_URL || "").trim();
+  if (!configured) return joinBaseAndPath(API_BASE_URL, "/static/releases");
+  if (isAbsoluteHttpUrl(configured)) return configured;
+  if (configured[0] === "/") return joinBaseAndPath(API_BASE_URL, configured);
+  return joinBaseAndPath(API_BASE_URL, configured);
+}
+
+function getStaticReleasePathPrefix() {
+  return normalizePathPrefix(extractPathname(getStaticReleaseBaseUrl()) || "/static/releases");
+}
+
+function normalizeStaticReleasePath(url) {
+  return normalizeTrustedPath(url, getStaticReleaseBaseUrl(), getStaticReleasePathPrefix());
+}
+
 function isStaticReleaseUrl(url) {
-  const text = String(url || "");
-  if (!text) return false;
-  try {
-    const target = new URL(text, API_BASE_URL);
-    const staticBase = new URL(STATIC_RELEASE_BASE_URL || `${API_BASE_URL}/static/releases`, API_BASE_URL);
-    return target.protocol === staticBase.protocol && target.host === staticBase.host && target.pathname.startsWith(staticBase.pathname.replace(/\/+$/g, "") + "/");
-  } catch (error) {
-    return text.indexOf("/static/releases/") >= 0;
-  }
+  return Boolean(normalizeStaticReleasePath(url));
 }
 
 function getReleaseVersionFromUrl(url) {
+  const pathname = normalizeStaticReleasePath(url);
+  if (!pathname) return "";
+  const prefix = getStaticReleasePathPrefix();
+  const version = pathname.slice(prefix.length).split("/")[0] || "";
   try {
-    const target = new URL(String(url || ""), API_BASE_URL);
-    const match = target.pathname.match(/\/static\/releases\/([^/]+)/);
-    return match ? decodeURIComponent(match[1]) : "";
+    return decodeURIComponent(version);
   } catch (error) {
-    const match = String(url || "").match(/\/static\/releases\/([^/?#]+)/);
-    return match ? decodeURIComponent(match[1]) : "";
+    return version;
   }
 }
 
@@ -126,6 +142,7 @@ function ensureTicket(releaseVersion, options = {}) {
 }
 
 function buildStaticHeaders(url, options = {}) {
+  if (options.skipSession || options.skipStaticTicket) return Promise.resolve({});
   if (!isStaticReleaseUrl(url)) return Promise.resolve({});
   const releaseVersion = getReleaseVersionFromUrl(url);
   return ensureTicket(releaseVersion, options)
@@ -143,7 +160,11 @@ function clearTicket(releaseVersion) {
 }
 
 function shouldRefreshForError(error) {
-  const code = error && (error.reasonCode || error.code || error.payload && (error.payload.code || error.payload.reasonCode));
+  const code = error && (
+    error.payload && (error.payload.reasonCode || error.payload.code) ||
+    error.reasonCode ||
+    error.code
+  );
   return code === "STATIC_TICKET_REQUIRED" || code === "STATIC_TICKET_INVALID" || code === "STATIC_TICKET_EXPIRED";
 }
 
@@ -154,5 +175,6 @@ module.exports = {
   ensureTicket,
   getReleaseVersionFromUrl,
   isStaticReleaseUrl,
+  normalizeStaticReleasePath,
   shouldRefreshForError,
 };
