@@ -3,6 +3,7 @@ const { normalizeTrustedPath } = require("../utils/trustedUrl");
 
 const STORAGE_KEY = "FOSU_SECURITY_SESSION";
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
+const SESSION_BOOTSTRAP_TIMEOUT_MS = 15000;
 let inflightBootstrap = null;
 let lastSession = null;
 
@@ -66,7 +67,7 @@ function bootstrapWithCode(code) {
       method: "POST",
       data: { code },
       header: { "content-type": "application/json" },
-      timeout: 8000,
+      timeout: SESSION_BOOTSTRAP_TIMEOUT_MS,
       success: (res) => {
         const payload = res.data || {};
         if (res.statusCode !== 200 || payload.success === false || !payload.sessionToken) {

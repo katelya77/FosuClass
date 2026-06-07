@@ -75,7 +75,7 @@ function loadAppConfig(options) {
   return request.get(url, {}, {
     showLoading: false,
     silentError: true,
-    timeout: opt.timeout || 8000,
+    timeout: opt.timeout || 15000,
     retries: opt.retries === undefined ? 1 : opt.retries,
     skipSession: opt.skipSession === true,
   })

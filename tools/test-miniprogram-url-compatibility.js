@@ -186,6 +186,8 @@ async function runHeaderCompatibilityTests() {
   ]);
   assert.strictEqual(state.loginCalls - loginBeforeConcurrent, 1, "concurrent requests should share one wx.login");
   assert.strictEqual(state.sessionBootstrapCalls - bootstrapBeforeConcurrent, 1, "concurrent requests should share one bootstrap");
+  const sessionBootstrap = latestCall(state.calls, (call) => call.url.indexOf("/api/fosu/session/bootstrap") >= 0);
+  assert(sessionBootstrap.timeout >= 15000, "session bootstrap should tolerate slow production cold starts");
 
   assert.strictEqual(staticAccessService.isStaticReleaseUrl("/static/releases/url-compat-release/manifest.json"), true);
   assert.strictEqual(staticAccessService.isStaticReleaseUrl("https://class.katelya.eu.org/static/releases/url-compat-release/manifest.json?ts=1"), true);
@@ -215,6 +217,7 @@ async function runHeaderCompatibilityTests() {
   const clientCheckCall = latestCall(state.calls, (call) => call.url.indexOf("/api/fosu/security/client-check") >= 0);
   assert(clientCheckCall, "client-check should be reported after a protected session request");
   assert.strictEqual(clientCheckCall.method, "POST");
+  assert(clientCheckCall.timeout >= 12000, "client-check should not use an aggressive 5s timeout");
   assert(/^session-token-\d+$/.test(clientCheckCall.header["X-Fosu-Session"] || ""), "client-check must include a session header");
   assert.strictEqual(clientCheckCall.data.sessionHeaderAttached, true);
   assert.strictEqual(JSON.stringify(clientCheckCall.data).indexOf("session-token-"), -1, "client-check payload must not include session token");

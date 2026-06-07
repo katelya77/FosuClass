@@ -74,8 +74,8 @@ async function loadPrefetchData(options = {}) {
   return request.get("/api/fosu/prefetch", {}, {
     showLoading: false,
     silentError: true,
-    timeout: options.timeout || 10000,
-    retries: options.retries === undefined ? 0 : options.retries,
+    timeout: options.timeout || 15000,
+    retries: options.retries === undefined ? 1 : options.retries,
     skipSession: options.skipSession === true,
   }).then((data) => {
     writeCache(PLATFORM_PREFETCH_CACHE_KEY, data);
@@ -95,8 +95,8 @@ async function loadPeriodicData(options = {}) {
   return request.get("/api/fosu/periodic-data", {}, {
     showLoading: false,
     silentError: true,
-    timeout: options.timeout || 12000,
-    retries: options.retries === undefined ? 0 : options.retries,
+    timeout: options.timeout || 15000,
+    retries: options.retries === undefined ? 1 : options.retries,
     skipSession: options.skipSession === true,
   }).then((data) => {
     writeCache(PLATFORM_PERIODIC_CACHE_KEY, data);
