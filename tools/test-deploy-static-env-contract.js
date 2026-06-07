@@ -35,6 +35,8 @@ const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
   "FOSU_OPENRESTY_STATIC_SECURITY_MODE=public",
   "FOSU_SESSION_TTL_SECONDS=7200",
   "FOSU_STATIC_TICKET_TTL_SECONDS=600",
+  "FOSU_DEPLOY_COMMIT_SHA=",
+  "FOSU_CLIENT_BUILD_ID=",
 ].forEach((line) => {
   assert(envExample.includes(line), `.env.example should include ${line}`);
   const key = line.split("=")[0];
@@ -51,6 +53,8 @@ const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
   "test -d /app/storage && test -w /app/storage",
   "test -d /openresty-static/releases && test -w /openresty-static/releases",
   "node scripts/reconcile-static-release.js",
+  "node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000",
+  "npm run security:acceptance",
   "Range: bytes=0-0",
   "Deployment summary",
 ].forEach((needle) => {

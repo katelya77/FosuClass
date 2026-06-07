@@ -1,4 +1,5 @@
 const { API_BASE_URL } = require("../config/api");
+const { normalizeTrustedPath } = require("../utils/trustedUrl");
 
 const STORAGE_KEY = "FOSU_SECURITY_SESSION";
 const REFRESH_SKEW_MS = 5 * 60 * 1000;
@@ -32,24 +33,11 @@ function writeStorage(value) {
 }
 
 function isTrustedApiUrl(url) {
-  const text = String(url || "");
-  if (text.startsWith("/api/")) return true;
-  try {
-    const api = new URL(API_BASE_URL);
-    const target = new URL(text, API_BASE_URL);
-    return target.protocol === api.protocol && target.host === api.host && target.pathname.startsWith("/api/");
-  } catch (error) {
-    return false;
-  }
+  return Boolean(normalizeTrustedPath(url, API_BASE_URL, "/api/"));
 }
 
 function isBootstrapUrl(url) {
-  try {
-    const target = new URL(String(url || ""), API_BASE_URL);
-    return target.pathname === "/api/fosu/session/bootstrap";
-  } catch (error) {
-    return String(url || "").indexOf("/api/fosu/session/bootstrap") >= 0;
-  }
+  return normalizeTrustedPath(url, API_BASE_URL, "/api/") === "/api/fosu/session/bootstrap";
 }
 
 function isSessionUsable(session, options = {}) {
@@ -139,7 +127,11 @@ function clearSession() {
 }
 
 function shouldRefreshForError(error) {
-  const code = error && (error.reasonCode || error.code || error.payload && (error.payload.code || error.payload.reasonCode));
+  const code = error && (
+    error.payload && (error.payload.reasonCode || error.payload.code) ||
+    error.reasonCode ||
+    error.code
+  );
   return code === "FOSU_SESSION_REQUIRED" || code === "FOSU_SESSION_INVALID" || code === "FOSU_SESSION_EXPIRED";
 }
 
@@ -149,6 +141,10 @@ function getCachedSecurityMode() {
     securityMode: cached && cached.securityMode || "observe",
     staticAccessMode: cached && cached.staticAccessMode || "public",
   };
+}
+
+function isSessionAvailable(options = {}) {
+  return isSessionUsable(readStorage(), options);
 }
 
 function buildSessionHeaders(url, options = {}) {
@@ -166,7 +162,10 @@ module.exports = {
   clearSession,
   ensureSession,
   getCachedSecurityMode,
+  isBootstrapUrl,
+  isSessionAvailable,
   isTrustedApiUrl,
+  normalizeTrustedPath: (url) => normalizeTrustedPath(url, API_BASE_URL, "/api/"),
   shouldRefreshForError,
   warmupSession,
 };

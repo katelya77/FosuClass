@@ -7833,12 +7833,15 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         var security = payload.security || {};
         var rateLimit = payload.rateLimit || {};
         var events = payload.events || {};
+        var readiness = payload.readiness || {};
+        var staticReleaseSecurity = payload.staticReleaseSecurity || {};
         var counts = events.counts || {};
+        var clientCheck = events.clientCheck || {};
 
         if ($("securityModeValue")) $("securityModeValue").textContent = security.mode || "-";
-        if ($("securityModeFoot")) $("securityModeFoot").textContent = security.configurationValid === false ? "配置存在阻断项" : "配置可用";
-        if ($("securityDynamicValue")) $("securityDynamicValue").textContent = security.requireDynamicSession ? "session" : "observe";
-        if ($("securityStaticValue")) $("securityStaticValue").textContent = security.requireStaticTicket ? "ticket" : (security.staticAccessMode || "public");
+        if ($("securityModeFoot")) $("securityModeFoot").textContent = security.modeDescription || (security.configurationValid === false ? "配置存在阻断项" : "配置可用");
+        if ($("securityDynamicValue")) $("securityDynamicValue").textContent = security.dynamicApiMode || (security.requireDynamicSession ? "session" : "observe");
+        if ($("securityStaticValue")) $("securityStaticValue").textContent = security.staticReleaseMode || (security.requireStaticTicket ? "ticket" : (security.staticAccessMode || "public"));
         if ($("securityRateKeysValue")) $("securityRateKeysValue").textContent = String(rateLimit.keyCount || 0);
         if ($("securityRateKeysFoot")) $("securityRateKeysFoot").textContent = "上限 " + (rateLimit.maxKeys || 0);
 
@@ -7846,15 +7849,23 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         if (configGrid) {
           configGrid.innerHTML = [
             renderHealthItem("微信 AppID", security.wechatAppidConfigured ? "<code>" + escapeHtml(security.wechatAppidMasked || "configured") + "</code>" : badgeText(false)),
+            renderHealthItem("AppSecret", badgeText(Boolean(security.wechatSecretConfigured))),
             renderHealthItem("Session Secret", badgeText(Boolean(security.sessionSecretConfigured))),
+            renderHealthItem("Previous Secret", badgeText(Boolean(security.sessionPreviousSecretConfigured))),
             renderHealthItem("Static Ticket Secret", badgeText(Boolean(security.staticTicketSecretConfigured))),
             renderHealthItem("OpenResty 模式", "<code>" + escapeHtml(security.openRestySecurityMode || "public") + "</code>"),
             renderHealthItem("Session KID", "<code>" + escapeHtml(security.sessionSecretKid || "current") + "</code>"),
-            renderHealthItem("Static KID", "<code>" + escapeHtml(security.staticTicketSecretKid || "current") + "</code>")
+            renderHealthItem("Static KID", "<code>" + escapeHtml(security.staticTicketSecretKid || "current") + "</code>"),
+            renderHealthItem("部署 Commit", "<code>" + escapeHtml(security.deploymentCommitSha || "-") + "</code>"),
+            renderHealthItem("客户端 Build", "<code>" + escapeHtml(security.clientBuildId || "-") + "</code>"),
+            renderHealthItem("Release Version", "<code>" + escapeHtml(security.activeReleaseVersion || "-") + "</code>"),
+            renderHealthItem("进入 session-enforce", readiness.canEnterSessionEnforce ? badgeText(true) : "<strong>继续 observe</strong>"),
+            renderHealthItem("静态真实等级", "<strong>" + escapeHtml(staticReleaseSecurity.staticReleaseSecurityLevel || "public") + "</strong>"),
+            renderHealthItem("Cloudflare 边缘保护", "<strong>" + escapeHtml(staticReleaseSecurity.cloudflareEdgeProtection || "unknown") + "</strong>")
           ].join("");
         }
 
-        var warnings = security.warnings || [];
+        var warnings = (readiness.blocking || []).concat(readiness.warnings || [], security.warnings || []);
         var warningBox = $("securityWarnings");
         if (warningBox) {
           warningBox.innerHTML = warnings.length
@@ -7866,6 +7877,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         if (eventGrid) {
           eventGrid.innerHTML = [
             renderHealthItem("bootstrap", "<strong>" + (counts["security-session-bootstrap-success"] || 0) + "</strong>"),
+            renderHealthItem("client-check", "<strong>" + (clientCheck.successCount || 0) + "</strong>"),
+            renderHealthItem("最新握手", "<strong>" + escapeHtml(clientCheck.latest && formatDate(clientCheck.latest.time) || "-") + "</strong>"),
             renderHealthItem("无效 session", "<strong>" + (counts["security-session-invalid"] || 0) + "</strong>"),
             renderHealthItem("无效 ticket", "<strong>" + (counts["security-static-ticket-invalid"] || 0) + "</strong>"),
             renderHealthItem("429", "<strong>" + ((counts["security-rate-limit-observed"] || 0) + (counts["security-rate-limit-enforced"] || 0)) + "</strong>"),

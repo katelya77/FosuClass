@@ -271,50 +271,181 @@ router.get("/session", (req, res) => {
   });
 });
 
-router.get("/security/status", adminAuth.verifyAdminAccess, (req, res) => {
+function buildSecurityReadiness(security, events, rateLimit) {
+  const counts = events.counts || {};
+  const clientCheck = events.clientCheck || {};
+  const bootstrapSuccess = counts["security-session-bootstrap-success"] || 0;
+  const bootstrapFailed = counts["security-session-bootstrap-failed"] || 0;
+  const invalidSession = counts["security-session-invalid"] || 0;
+  const totalSessionSignals = bootstrapSuccess + bootstrapFailed + invalidSession;
+  const bootstrapSuccessRate = bootstrapSuccess + bootstrapFailed > 0
+    ? bootstrapSuccess / (bootstrapSuccess + bootstrapFailed)
+    : 0;
+  const hasRecentClientCheck = Boolean(clientCheck.latest && clientCheck.latest.clientBuildId);
+  const blocking = [];
+  const warnings = [];
+
+  if (!security.sessionSecretConfigured) blocking.push("Session Secret 未配置");
+  if (!security.wechatAppidConfigured || !security.wechatSecretConfigured) blocking.push("微信 AppID/AppSecret 未完整配置");
+  if (!hasRecentClientCheck) warnings.push("尚未收到客户端端到端 client-check");
+  if (bootstrapSuccess + bootstrapFailed > 0 && bootstrapSuccessRate < 0.95) warnings.push("最近 Session Bootstrap 成功率低于 95%");
+  if (totalSessionSignals > 0 && invalidSession / totalSessionSignals > 0.05) warnings.push("缺失或无效 Session 比例偏高");
+  if ((rateLimit && rateLimit.keyCount || 0) >= (rateLimit && rateLimit.maxKeys || Number.MAX_SAFE_INTEGER)) warnings.push("限速状态键接近上限");
+  if (security.warnings && security.warnings.length) warnings.push(...security.warnings);
+
+  return {
+    canEnterSessionEnforce: blocking.length === 0 && warnings.length === 0 && hasRecentClientCheck,
+    recommendedMode: blocking.length === 0 && hasRecentClientCheck ? "session-enforce-ready" : "observe",
+    blocking,
+    warnings,
+    bootstrapSuccessRate,
+    sessionHeaderAttachedRate: hasRecentClientCheck ? 1 : 0,
+  };
+}
+
+function buildStaticReleaseSecurity(security) {
+  const openRestyMode = String(security.openRestySecurityMode || "public").toLowerCase();
+  return {
+    dynamicApiSecurityLevel: security.requireDynamicSession ? "session-enforced" : "observe",
+    staticReleaseSecurityLevel: security.requireStaticTicket ? "ticket-enforced" : (security.staticAccessMode || "public"),
+    applicationTicketReady: Boolean(security.staticTicketSecretConfigured),
+    openRestyTicketReady: openRestyMode === "ticket",
+    cloudflareEdgeProtection: process.env.FOSU_CLOUDFLARE_EDGE_STATIC_SECURITY || "unknown",
+    anonymousStaticAccessExpected: !security.requireStaticTicket,
+    honestDescription: security.requireStaticTicket
+      ? "静态 Release 只有在应用层、OpenResty/边缘均执行 Ticket 校验时才算真正强制保护。"
+      : "当前静态 Release 仍按公开缓存处理，CORS/Referer 不构成真正防盗链。"
+  };
+}
+
+function buildSecurityStatusPayload() {
   const security = getSecurityStatus();
   const events = getSecurityEventSummary();
-  return res.json({
+  const rateLimit = getRateLimitStats();
+  const activeRelease = releaseService.getActiveReleaseInfo() || {};
+  const readiness = buildSecurityReadiness(security, events, rateLimit);
+  return {
     success: true,
-    security,
-    rateLimit: getRateLimitStats(),
+    security: Object.assign({}, security, {
+      deploymentCommitSha: process.env.FOSU_DEPLOY_COMMIT_SHA || process.env.GITHUB_SHA || "",
+      activeReleaseVersion: activeRelease.releaseVersion || activeRelease.version || "",
+      clientBuildId: events.clientCheck && events.clientCheck.latest && events.clientCheck.latest.clientBuildId || process.env.FOSU_CLIENT_BUILD_ID || "",
+    }),
+    rateLimit,
     events,
+    readiness,
+    staticReleaseSecurity: buildStaticReleaseSecurity(security),
+    deployment: {
+      commitSha: process.env.FOSU_DEPLOY_COMMIT_SHA || process.env.GITHUB_SHA || "",
+      activeReleaseVersion: activeRelease.releaseVersion || activeRelease.version || "",
+      activeTerm: activeRelease.term || activeRelease.semester || "",
+    },
     routePolicies: listRouteSecurityPolicies(),
-  });
+  };
+}
+
+router.get("/security/status", adminAuth.verifyAdminAccess, (req, res) => {
+  return res.json(buildSecurityStatusPayload());
 });
 
+function makeSecurityCheck(id, title, status, message) {
+  return { id, title, status, ok: status !== "block", message };
+}
+
+function runSecurityChecks(basePayload) {
+  const security = basePayload.security || {};
+  const events = basePayload.events || {};
+  const checks = [];
+  checks.push(makeSecurityCheck(
+    "configuration",
+    "配置完整性",
+    security.configurationValid === false ? "block" : "pass",
+    security.configurationValid === false ? "当前模式存在阻断配置项。" : "当前模式配置满足启动要求。"
+  ));
+  checks.push(makeSecurityCheck(
+    "secret-kid",
+    "Secret KID 一致性",
+    security.sessionSecretKid && security.staticTicketSecretKid ? "pass" : "warn",
+    "Session 与 Static Ticket KID 均以脱敏状态暴露。"
+  ));
+  try {
+    const apiSecurity = require("../utils/apiSecurity");
+    const created = apiSecurity.createSessionToken({ appid: process.env.WECHAT_APPID || "wx-self-check", openid: "self-check" }, { ttlSeconds: 120 });
+    const verified = apiSecurity.verifySessionTokenDetailed(created.token, { appid: process.env.WECHAT_APPID || "wx-self-check" });
+    checks.push(makeSecurityCheck(
+      "session-roundtrip",
+      "Session 签发与校验",
+      verified.valid ? "pass" : "block",
+      verified.valid ? "Session round-trip 正常。" : `Session 校验失败：${verified.code || "UNKNOWN"}`
+    ));
+  } catch (error) {
+    checks.push(makeSecurityCheck("session-roundtrip", "Session 签发与校验", security.requireDynamicSession ? "block" : "warn", error.code || error.message));
+  }
+  checks.push(makeSecurityCheck(
+    "previous-secret",
+    "Previous Secret 兼容",
+    security.sessionPreviousSecretConfigured ? "pass" : "warn",
+    security.sessionPreviousSecretConfigured ? "Previous Session Secret 已配置。" : "未配置 Previous Session Secret；轮换时需要先补齐。"
+  ));
+  checks.push(makeSecurityCheck(
+    "static-ticket",
+    "Static Ticket 准备度",
+    !security.requireStaticTicket || (security.staticTicketSecretConfigured && security.openRestySecurityMode === "ticket") ? "pass" : "block",
+    security.requireStaticTicket ? "ticket-enforce 需要应用层 Secret 和 OpenResty ticket 模式同时就绪。" : "当前未强制静态 Ticket。"
+  ));
+  checks.push(makeSecurityCheck(
+    "client-check",
+    "端到端 client-check",
+    events.clientCheck && events.clientCheck.latest ? "pass" : "warn",
+    events.clientCheck && events.clientCheck.latest ? `最近客户端 build：${events.clientCheck.latest.clientBuildId || "-"}` : "尚未收到客户端握手成功事件。"
+  ));
+  const reportText = JSON.stringify(basePayload).toLowerCase();
+  const leaked = /(session-token|static-ticket|appsecret|authorization":|"cookie":)/i.test(reportText);
+  checks.push(makeSecurityCheck(
+    "redaction",
+    "日志与报告脱敏",
+    leaked ? "block" : "pass",
+    leaked ? "报告中出现疑似敏感值。" : "报告字段未包含完整 Token、Ticket、Secret、Cookie 或 OpenID。"
+  ));
+  checks.push(makeSecurityCheck(
+    "rate-limit",
+    "Rate limit 状态",
+    basePayload.rateLimit && basePayload.rateLimit.keyCount <= basePayload.rateLimit.maxKeys ? "pass" : "warn",
+    `当前限速键数 ${basePayload.rateLimit && basePayload.rateLimit.keyCount || 0}/${basePayload.rateLimit && basePayload.rateLimit.maxKeys || 0}。`
+  ));
+  checks.push(makeSecurityCheck(
+    "static-honesty",
+    "静态 Release 安全等级",
+    basePayload.staticReleaseSecurity && basePayload.staticReleaseSecurity.anonymousStaticAccessExpected ? "warn" : "pass",
+    basePayload.staticReleaseSecurity && basePayload.staticReleaseSecurity.honestDescription || ""
+  ));
+  return checks;
+}
+
 router.post("/security/self-check", adminAuth.verifyAdminAccess, (req, res) => {
-  const security = getSecurityStatus();
-  const events = getSecurityEventSummary();
-  const checks = [
-    { id: "security-mode", ok: Boolean(security.mode), message: `Security mode: ${security.mode}` },
-    { id: "wechat-appid", ok: security.mode === "observe" || security.wechatAppidConfigured, message: "WECHAT_APPID configured for enforced sessions" },
-    { id: "wechat-secret", ok: security.mode === "observe" || security.wechatSecretConfigured, message: "WECHAT_APPSECRET configured for enforced sessions" },
-    { id: "session-secret", ok: security.mode === "observe" || security.sessionSecretConfigured, message: "Session secret configured" },
-    { id: "static-secret", ok: !security.requireStaticTicket || security.staticTicketSecretConfigured, message: "Static ticket secret configured when ticket mode is enabled" },
-    { id: "openresty-mode", ok: !security.requireStaticTicket || security.openRestySecurityMode === "ticket", message: "OpenResty ticket verification installed before static ticket enforcement" },
-  ];
-  const ok = checks.every((item) => item.ok);
+  const payload = buildSecurityStatusPayload();
+  const checks = runSecurityChecks(payload);
+  const summary = {
+    pass: checks.filter((item) => item.status === "pass").length,
+    warn: checks.filter((item) => item.status === "warn").length,
+    block: checks.filter((item) => item.status === "block").length,
+  };
+  const ok = summary.block === 0;
   recordSecurityEvent(ok ? "security-self-check-success" : "security-config-invalid", {
     route: req.path,
     method: req.method,
     anonymizedIp: getClientIpInfo(req).anonymizedIp,
-    mode: security.mode,
+    mode: payload.security.mode,
     reasonCode: ok ? "" : "SECURITY_SELF_CHECK_FAILED",
   });
-  return res.json({ success: true, ok, checks, security, events });
+  return res.json(Object.assign({}, payload, { ok, checks, summary }));
 });
 
 router.get("/security/report", adminAuth.verifyAdminAccess, (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  return res.json({
-    success: true,
+  return res.json(Object.assign(buildSecurityStatusPayload(), {
     generatedAt: new Date().toISOString(),
-    security: getSecurityStatus(),
-    rateLimit: getRateLimitStats(),
-    events: getSecurityEventSummary(),
-    routePolicies: listRouteSecurityPolicies(),
-  });
+  }));
 });
 
 router.post("/security/events/cleanup", adminAuth.verifyAdminAccess, (req, res) => {

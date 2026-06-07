@@ -11,6 +11,11 @@ const releaseService = require("../services/releaseService");
 const { scheduleLimiter } = require("../utils/rateLimit");
 const { safeLog } = require("../utils/safeLogger");
 const { createStaticAccessTicket } = require("../utils/staticAccessTicket");
+const {
+  ALLOWED_KEYS: CLIENT_CHECK_ALLOWED_KEYS,
+  normalizeClientCheckPayload,
+  recordClientCheckSuccess,
+} = require("../services/clientCheckService");
 const { recordSecurityEvent } = require("../services/securityEventService");
 const { getSecurityMode } = require("../services/securityModeService");
 const { routeSecurityPolicyMiddleware } = require("../security/routeSecurityPolicy");
@@ -155,6 +160,7 @@ function buildPlatformUrls(snapshot) {
       ? `/api/fosu/empty-classrooms?releaseVersion=${encodeURIComponent(releaseVersion)}`
       : "/api/fosu/empty-classrooms",
     clientDiagnosis: "/api/fosu/client-diagnosis",
+    clientCheck: "/api/fosu/security/client-check",
   };
 }
 
@@ -352,6 +358,73 @@ router.post("/static-access/bootstrap", validateJsonBody(["releaseVersion"]), (r
       message: "静态访问票据签发失败。",
     });
   }
+});
+
+router.post("/security/client-check", validateJsonBody(CLIENT_CHECK_ALLOWED_KEYS), (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+
+  if (!req.fosuSession) {
+    recordSecurityEvent("security-client-check-failed", {
+      route: req.path,
+      method: req.method,
+      mode: getSecurityMode().mode,
+      anonymizedIp: req.clientIpInfo && req.clientIpInfo.anonymizedIp,
+      reasonCode: req.fosuSessionWarning || "FOSU_SESSION_REQUIRED",
+    });
+    return res.status(401).json({
+      success: false,
+      code: "FOSU_SESSION_REQUIRED",
+      reasonCode: req.fosuSessionWarning || "FOSU_SESSION_REQUIRED",
+      message: "客户端安全握手需要有效 Session。",
+    });
+  }
+
+  let payload;
+  try {
+    payload = normalizeClientCheckPayload(req.body || {});
+  } catch (error) {
+    recordSecurityEvent("security-client-check-failed", {
+      route: req.path,
+      method: req.method,
+      mode: getSecurityMode().mode,
+      anonymizedIp: req.clientIpInfo && req.clientIpInfo.anonymizedIp,
+      reasonCode: error.code || "CLIENT_CHECK_INVALID_PAYLOAD",
+    });
+    return res.status(error.statusCode || 400).json({
+      success: false,
+      code: error.code || "CLIENT_CHECK_INVALID_PAYLOAD",
+      reasonCode: error.code || "CLIENT_CHECK_INVALID_PAYLOAD",
+      message: "客户端安全握手上报字段不合法。",
+      fields: error.fields || [],
+    });
+  }
+
+  if (payload.sessionHeaderAttached !== true) {
+    recordSecurityEvent("security-client-check-failed", {
+      route: req.path,
+      method: req.method,
+      mode: payload.securityMode,
+      anonymizedIp: req.clientIpInfo && req.clientIpInfo.anonymizedIp,
+      openidHashPrefix: req.fosuSession.openidHash,
+      sessionIdPrefix: req.fosuSession.sessionIdHash,
+      reasonCode: "CLIENT_SESSION_HEADER_NOT_ATTACHED",
+    });
+    return res.status(400).json({
+      success: false,
+      code: "CLIENT_SESSION_HEADER_NOT_ATTACHED",
+      reasonCode: "CLIENT_SESSION_HEADER_NOT_ATTACHED",
+      message: "客户端尚未证明受保护 API 已携带 Session Header。",
+    });
+  }
+
+  recordClientCheckSuccess(req, payload);
+  return res.json({
+    success: true,
+    accepted: true,
+    serverTime: new Date().toISOString(),
+  });
 });
 
 router.get("/prefetch", (req, res) => {

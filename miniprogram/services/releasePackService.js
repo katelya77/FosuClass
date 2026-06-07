@@ -356,6 +356,7 @@ function fetchManifest(options = {}) {
     silentError: true,
     timeout: options.timeout || 8000,
     retries: options.retries === undefined ? 1 : options.retries,
+    skipSession: options.skipSession === true,
   };
   const staticUrl = resolveStaticManifestUrl(releaseVersion);
   const loadDynamic = () => request.get("/api/fosu/release-pack/manifest", query, requestOptions)
@@ -432,6 +433,7 @@ function loadIndex(type, params = {}, options = {}) {
     silentError: true,
     timeout: options.timeout || 25000,
     retries: options.retries === undefined ? 2 : options.retries,
+    skipSession: options.skipSession === true,
   };
   const loadStatic = staticUrl
     ? request.get(staticUrl, {}, requestOptions)
@@ -513,6 +515,7 @@ function switchReleaseSafely(options = {}) {
         releaseVersion: manifest.releaseVersion,
         forceNetwork: Boolean(options.forceNetwork && !sameRelease),
         skipFallback: true,
+        skipSession: options.skipSession === true,
       }).then((indexes) => {
         const normalized = writeManifestCache(manifest);
         clearOldReleaseCaches({
@@ -784,6 +787,7 @@ function loadDetail(type, id, params = {}, options = {}) {
     silentError: true,
     timeout: options.timeout || 20000,
     retries: options.retries === undefined ? 2 : options.retries,
+    skipSession: options.skipSession === true,
   };
   const loadStatic = staticUrl
     ? request.get(staticUrl, {}, requestOptions)
@@ -953,6 +957,7 @@ function loadEmptyRoom(params = {}, options = {}) {
     silentError: true,
     timeout: options.timeout || 25000,
     retries: options.retries === undefined ? 2 : options.retries,
+    skipSession: options.skipSession === true,
   };
   const loadStatic = staticUrl
     ? request.get(staticUrl, {}, requestOptions)

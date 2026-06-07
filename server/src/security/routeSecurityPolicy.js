@@ -12,6 +12,7 @@ const ACCESS_LEVELS = {
 const policies = [
   { path: "/session/bootstrap", methods: ["POST"], accessLevel: ACCESS_LEVELS.PUBLIC, rateLimitProfile: "session-bootstrap", bodyLimit: 8 * 1024, cachePolicy: "no-store" },
   { path: "/client-diagnosis", methods: ["GET", "HEAD"], accessLevel: ACCESS_LEVELS.PUBLIC, rateLimitProfile: "dynamic-read", bodyLimit: 0, cachePolicy: "no-store" },
+  { path: "/security/client-check", methods: ["POST"], accessLevel: ACCESS_LEVELS.MINIPROGRAM_SESSION, rateLimitProfile: "dynamic-read", bodyLimit: 8 * 1024, cachePolicy: "no-store" },
 
   { path: "/app-config", methods: ["GET", "HEAD"], accessLevel: ACCESS_LEVELS.MINIPROGRAM_SESSION, rateLimitProfile: "dynamic-read", bodyLimit: 0, cachePolicy: "no-store" },
   { path: "/bootstrap", methods: ["GET", "HEAD"], accessLevel: ACCESS_LEVELS.MINIPROGRAM_SESSION, rateLimitProfile: "dynamic-read", bodyLimit: 0, cachePolicy: "no-store" },

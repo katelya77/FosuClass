@@ -3,8 +3,18 @@
  */
 
 const { API_BASE_URL } = require("../config/api");
+const buildInfo = require("../config/buildInfo");
+const clientSecurityCheckService = require("../services/clientSecurityCheckService");
 const securitySessionService = require("../services/securitySessionService");
 const staticAccessService = require("../services/staticAccessService");
+const platform = require("./platform");
+const {
+  extractPathWithQuery,
+  extractPathname,
+  isAbsoluteHttpUrl,
+  joinBaseAndPath,
+  parseAbsoluteUrl,
+} = require("./trustedUrl");
 
 const REQUEST_DIAG_KEY = "FOSU_REQUEST_DIAG";
 const inflightRequests = new Map();
@@ -12,6 +22,7 @@ let lastDiagnostics = {
   lastError: null,
   lastSuccess: null,
 };
+let transportBuildLogged = false;
 
 const PROFILE_RULES = [
   { name: "manifest", pattern: /\/api\/fosu\/release-pack\/manifest$/, timeout: 8000, retries: 1 },
@@ -80,16 +91,11 @@ function translateErrorMessage(payload, defaultMsg) {
 }
 
 function stripQuery(url) {
-  return String(url || "").split("?")[0];
+  return String(url || "").split("?")[0].split("#")[0];
 }
 
 function getPathname(url) {
-  const text = String(url || "");
-  try {
-    return new URL(text, API_BASE_URL || "https://example.invalid").pathname;
-  } catch (error) {
-    return stripQuery(text);
-  }
+  return extractPathname(url);
 }
 
 function getRequestProfile(url) {
@@ -123,20 +129,40 @@ function stableStringify(value) {
   return `{${Object.keys(value).sort().map((key) => `${key}:${stableStringify(value[key])}`).join(",")}}`;
 }
 
+function shouldRedactQueryKey(key) {
+  const normalized = String(key || "").toLowerCase();
+  return normalized === "token" ||
+    normalized === "access_token" ||
+    normalized === "admintoken" ||
+    normalized.indexOf("token") >= 0 ||
+    normalized.indexOf("ticket") >= 0 ||
+    normalized.indexOf("session") >= 0 ||
+    normalized.indexOf("secret") >= 0 ||
+    normalized === "openid" ||
+    normalized === "cookie" ||
+    normalized === "password";
+}
+
+function redactQuery(search) {
+  const value = String(search || "");
+  if (!value || value[0] !== "?") return value;
+  return `?${value.slice(1).split("&").map((part) => {
+    if (!part) return part;
+    const equalsIndex = part.indexOf("=");
+    const rawKey = equalsIndex >= 0 ? part.slice(0, equalsIndex) : part;
+    const key = rawKey.replace(/\+/g, " ");
+    return shouldRedactQueryKey(key)
+      ? `${rawKey}=[redacted]`
+      : part;
+  }).join("&")}`;
+}
+
 function redactUrl(url) {
-  const text = String(url || "");
-  try {
-    const parsed = new URL(text, API_BASE_URL || "https://example.invalid");
-    ["token", "access_token", "adminToken", "password", "cookie", "session"].forEach((key) => {
-      if (parsed.searchParams.has(key)) {
-        parsed.searchParams.set(key, "[redacted]");
-      }
-    });
-    return (parsed.pathname + (parsed.search ? parsed.search : "")).replace(/%5Bredacted%5D/gi, "[redacted]");
-  } catch (error) {
-    return text
-      .replace(/([?&](?:token|access_token|adminToken|password|cookie|session)=)[^&]+/gi, "$1[redacted]");
-  }
+  const pathWithQuery = extractPathWithQuery(url);
+  const hashless = stripQuery(pathWithQuery);
+  const queryIndex = pathWithQuery.indexOf("?");
+  if (queryIndex < 0) return hashless;
+  return `${hashless}${redactQuery(pathWithQuery.slice(queryIndex))}`;
 }
 
 function writeDiagnostics(patch) {
@@ -145,6 +171,30 @@ function writeDiagnostics(patch) {
     wx.setStorageSync(REQUEST_DIAG_KEY, lastDiagnostics);
   } catch (error) {
     // Diagnostics are best-effort only.
+  }
+}
+
+function logTransportBuildInfoOnce() {
+  if (transportBuildLogged || !platform.isDeveloperEnv()) return;
+  transportBuildLogged = true;
+  try {
+    console.info("[Fosu Security Transport]", {
+      buildId: buildInfo.CLIENT_BUILD_ID,
+      pipelineVersion: buildInfo.REQUEST_PIPELINE_VERSION,
+      gitCommit: buildInfo.GIT_COMMIT_SHORT_SHA,
+      apiBaseHost: getApiBaseHost(),
+    });
+  } catch (error) {
+    // Developer diagnostics only.
+  }
+}
+
+function getApiBaseHost() {
+  try {
+    const parsed = parseAbsoluteUrl(API_BASE_URL);
+    return parsed && parsed.host || "";
+  } catch (error) {
+    return "";
   }
 }
 
@@ -160,11 +210,14 @@ function normalizeRequestError(input, meta = {}) {
   const rawMessage = input && (input.errMsg || input.message || input.statusText || "");
   const messageText = String(rawMessage || "");
   const lower = messageText.toLowerCase();
+  const payloadCode = meta.payload && (meta.payload.reasonCode || meta.payload.code);
   let code = meta.code || "";
   let retriable = meta.retriable;
 
   if (!code) {
-    if (meta.invalidPayload) {
+    if (payloadCode) {
+      code = payloadCode;
+    } else if (meta.invalidPayload) {
       code = "INVALID_PAYLOAD";
     } else if (meta.statusCode >= 500) {
       code = "HTTP_5XX";
@@ -187,7 +240,7 @@ function normalizeRequestError(input, meta = {}) {
 
   const error = new Error(displayMessage);
   error.code = code;
-  error.reasonCode = code === "TIMEOUT" ? "REQUEST_TIMEOUT" : (meta.reasonCode || code);
+  error.reasonCode = code === "TIMEOUT" ? "REQUEST_TIMEOUT" : (meta.reasonCode || payloadCode || code);
   error.legacyCode = code === "TIMEOUT" ? "REQUEST_TIMEOUT" : "";
   error.message = displayMessage;
   error.retriable = Boolean(retriable);
@@ -282,7 +335,79 @@ function runWxRequest(requestUrl, method, data, headers, timeout, startedAt) {
 async function buildSecurityHeaders(requestUrl, headers, options) {
   const sessionHeaders = await securitySessionService.buildSessionHeaders(requestUrl, options);
   const staticHeaders = await staticAccessService.buildStaticHeaders(requestUrl, options);
+  if (platform.isDeveloperEnv()) {
+    const sessionHeaderAttached = Boolean(sessionHeaders["X-Fosu-Session"]);
+    const mode = securitySessionService.getCachedSecurityMode();
+    writeDiagnostics({
+      lastSecurity: {
+        trustedApiUrl: securitySessionService.isTrustedApiUrl(requestUrl),
+        sessionAvailable: sessionHeaderAttached || securitySessionService.isSessionAvailable({ refreshSkewMs: options.refreshSkewMs }),
+        sessionHeaderAttached,
+        requestPath: getPathname(requestUrl),
+        securityMode: mode.securityMode,
+      },
+    });
+  }
   return Object.assign({}, headers, sessionHeaders, staticHeaders);
+}
+
+function isClientCheckUrl(requestUrl) {
+  return securitySessionService.normalizeTrustedPath(requestUrl) === "/api/fosu/security/client-check";
+}
+
+function extractReleaseVersion(payload, data) {
+  const source = payload || {};
+  const activeSnapshot = source.activeSnapshot || {};
+  const manifest = source.manifest || {};
+  const meta = source.meta || {};
+  return source.releaseVersion ||
+    source.activeReleaseVersion ||
+    activeSnapshot.releaseVersion ||
+    manifest.releaseVersion ||
+    meta.releaseVersion ||
+    data && (data.releaseVersion || data.version) ||
+    "";
+}
+
+function maybeReportClientSecurityCheck(requestUrl, data, headers, payload, options) {
+  if (options.skipClientCheck || isClientCheckUrl(requestUrl)) return;
+  if (!securitySessionService.isTrustedApiUrl(requestUrl) || securitySessionService.isBootstrapUrl(requestUrl)) return;
+  const sessionHeaderAttached = Boolean(headers && headers["X-Fosu-Session"]);
+  if (!sessionHeaderAttached) return;
+
+  const staticTicketAttached = Boolean(headers && headers["X-Fosu-Static-Ticket"]);
+  const mode = securitySessionService.getCachedSecurityMode();
+  const releaseVersion = extractReleaseVersion(payload, data);
+  clientSecurityCheckService.markProtectedRequestSucceeded({
+    releaseVersion,
+    securityMode: mode.securityMode,
+    sessionHeaderAttached,
+    staticTicketAttached,
+  });
+  const reportPayload = clientSecurityCheckService.buildClientCheckPayload({
+    releaseVersion,
+    securityMode: mode.securityMode,
+    sessionHeaderAttached,
+    staticTicketAttached,
+  });
+  if (!clientSecurityCheckService.shouldReportClientCheck(reportPayload)) return;
+
+  setTimeout(() => {
+    request("/api/fosu/security/client-check", "POST", reportPayload, {
+      showLoading: false,
+      silentError: true,
+      timeout: 5000,
+      retries: 0,
+      dedupe: false,
+      skipClientCheck: true,
+    })
+      .then((response) => {
+        clientSecurityCheckService.markClientCheckReported(reportPayload, response || {});
+      })
+      .catch((error) => {
+        clientSecurityCheckService.markClientCheckFailed(reportPayload, error || {});
+      });
+  }, 0);
 }
 
 function isStaticTicketHttpError(error, requestUrl) {
@@ -297,15 +422,18 @@ async function requestWithRetry(requestUrl, method, data, options, profile) {
   }, options.header || options.headers || {});
 
   let attempt = 0;
+  let maxAttempts = retries + 1;
   let lastError = null;
   let sessionRefreshed = false;
   let staticTicketRefreshed = false;
-  while (attempt <= retries) {
+  while (attempt < maxAttempts) {
     attempt += 1;
     const startedAt = Date.now();
     try {
       const headers = await buildSecurityHeaders(requestUrl, baseHeaders, options);
-      return await runWxRequest(requestUrl, method, data, headers, timeout, startedAt);
+      const payload = await runWxRequest(requestUrl, method, data, headers, timeout, startedAt);
+      maybeReportClientSecurityCheck(requestUrl, data, headers, payload, options);
+      return payload;
     } catch (error) {
       lastError = error;
       if (!sessionRefreshed && securitySessionService.shouldRefreshForError(error)) {
@@ -313,6 +441,7 @@ async function requestWithRetry(requestUrl, method, data, options, profile) {
         securitySessionService.clearSession();
         try {
           await securitySessionService.ensureSession({ forceRefresh: true, refreshSkewMs: 0 });
+          maxAttempts += 1;
           continue;
         } catch (refreshError) {
           lastError = refreshError;
@@ -324,6 +453,7 @@ async function requestWithRetry(requestUrl, method, data, options, profile) {
         staticAccessService.clearTicket(staticAccessService.getReleaseVersionFromUrl(requestUrl));
         try {
           await staticAccessService.ensureTicket(staticAccessService.getReleaseVersionFromUrl(requestUrl), { force: true, forceRefresh: true });
+          maxAttempts += 1;
           continue;
         } catch (refreshError) {
           lastError = refreshError;
@@ -356,13 +486,14 @@ function buildDedupeKey(method, requestUrl, data) {
 }
 
 function request(url, method = "GET", data = {}, options = {}) {
+  logTransportBuildInfoOnce();
   const profile = getRequestProfile(url);
   const opt = Object.assign({
     showLoading: true,
     loadingTitle: "正在加载...",
     dedupe: method.toUpperCase() === "GET",
   }, options);
-  const requestUrl = url.startsWith("http") ? url : `${API_BASE_URL}${url}`;
+  const requestUrl = isAbsoluteHttpUrl(url) ? url : joinBaseAndPath(API_BASE_URL, url);
   const dedupeKey = opt.dedupe ? buildDedupeKey(method, requestUrl, data) : "";
 
   if (dedupeKey && inflightRequests.has(dedupeKey)) {

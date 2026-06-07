@@ -6,6 +6,8 @@ const platformDataService = require("./services/platformDataService");
 const securitySessionService = require("./services/securitySessionService");
 const BRAND = require("./config/brand");
 
+let startupSessionWarmupPromise = null;
+
 function readStorageQuiet(key) {
   try {
     return wx.getStorageSync(key);
@@ -17,11 +19,35 @@ function readStorageQuiet(key) {
 function scheduleLowPriority(task, delay) {
   setTimeout(() => {
     try {
-      task();
+      const result = task();
+      if (result && typeof result.catch === "function") {
+        result.catch(() => {});
+      }
     } catch (error) {
       // Background startup refresh must never block page rendering.
     }
   }, delay || 1200);
+}
+
+function getStartupSessionWarmupPromise() {
+  if (!startupSessionWarmupPromise) {
+    startupSessionWarmupPromise = securitySessionService.warmupSession().catch(() => null);
+  }
+  return startupSessionWarmupPromise;
+}
+
+function afterStartupSession(task) {
+  return getStartupSessionWarmupPromise()
+    .then(() => task())
+    .catch(() => task());
+}
+
+function withStartupSessionOptions(options) {
+  const next = Object.assign({}, options || {});
+  if (!securitySessionService.isSessionAvailable({ refreshSkewMs: 0 })) {
+    next.skipSession = true;
+  }
+  return next;
 }
 
 App({
@@ -51,11 +77,11 @@ App({
     this.loadBootstrapData({ network: false, silent: true });
     this.loadAppConfigData({ network: false, silent: true });
 
-    scheduleLowPriority(() => this.loadReleasePackData({ forceNetwork: true, silent: true, timeout: 5000, retries: 0 }), 1500);
-    scheduleLowPriority(() => securitySessionService.warmupSession(), 1800);
-    scheduleLowPriority(() => this.loadPlatformData({ silent: true, timeout: 5000, retries: 0 }), 2200);
-    scheduleLowPriority(() => this.loadBootstrapData({ silent: true, timeout: 5000, retries: 0 }), 2600);
-    scheduleLowPriority(() => this.loadAppConfigData({ force: true, silent: true, timeout: 5000, retries: 0 }), 3200);
+    scheduleLowPriority(() => afterStartupSession(() => this.loadReleasePackData(withStartupSessionOptions({ forceNetwork: true, silent: true, timeout: 5000, retries: 0 }))), 1500);
+    scheduleLowPriority(() => getStartupSessionWarmupPromise(), 1800);
+    scheduleLowPriority(() => afterStartupSession(() => this.loadPlatformData(withStartupSessionOptions({ silent: true, timeout: 5000, retries: 0 }))), 2200);
+    scheduleLowPriority(() => afterStartupSession(() => this.loadBootstrapData(withStartupSessionOptions({ silent: true, timeout: 5000, retries: 0 }))), 2600);
+    scheduleLowPriority(() => afterStartupSession(() => this.loadAppConfigData(withStartupSessionOptions({ force: true, silent: true, timeout: 5000, retries: 0 }))), 3200);
   },
 
   loadReleasePackData(options) {
@@ -72,6 +98,7 @@ App({
       forceNetwork: Boolean(opt.forceNetwork),
       timeout: opt.timeout || 5000,
       retries: opt.retries === undefined ? 0 : opt.retries,
+      skipSession: opt.skipSession === true,
     })
       .then((result) => {
         if (result && result.manifest) {
@@ -97,29 +124,35 @@ App({
 
   loadPlatformData(options) {
     const opt = options || {};
-    platformDataService.loadPrefetchData(opt)
+    const prefetchTask = platformDataService.loadPrefetchData(opt)
       .then((data) => {
         if (data) {
           this.globalData.platformPrefetchData = data;
         }
+        return data || null;
       })
       .catch((error) => {
         if (!opt.silent) {
           console.warn("平台预拉取数据读取失败，已降级", error);
         }
+        return null;
       });
 
-    platformDataService.loadPeriodicData(opt)
+    const periodicTask = platformDataService.loadPeriodicData(opt)
       .then((data) => {
         if (data) {
           this.globalData.platformPeriodicData = data;
         }
+        return data || null;
       })
       .catch((error) => {
         if (!opt.silent) {
           console.warn("平台周期数据读取失败，已降级", error);
         }
+        return null;
       });
+
+    return Promise.all([prefetchTask, periodicTask]);
   },
 
   loadAppConfigData(options) {
@@ -163,6 +196,7 @@ App({
       silentError: true,
       timeout: opt.timeout || 8000,
       retries: opt.retries === undefined ? 1 : opt.retries,
+      skipSession: opt.skipSession === true,
     })
       .then((res) => {
         if (res && res.success) {
