@@ -1,6 +1,6 @@
 const REQUEST_PIPELINE_VERSION = "security-transport-v2";
-const GIT_COMMIT_SHORT_SHA = "d016ff9";
-const BUILD_TIMESTAMP = "2026-06-07T11:29:02.451Z";
+const GIT_COMMIT_SHORT_SHA = "4ee02cf";
+const BUILD_TIMESTAMP = "2026-06-07T12:02:26.368Z";
 const CLIENT_BUILD_ID = `${REQUEST_PIPELINE_VERSION}-${GIT_COMMIT_SHORT_SHA}-${BUILD_TIMESTAMP.replace(/[-:.TZ]/g, "").slice(0, 14)}`;
 
 module.exports = {
