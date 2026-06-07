@@ -1,5 +1,16 @@
 const assert = require("assert");
-const express = require("../server/node_modules/express");
+const path = require("path");
+
+function requireServerDependency(name) {
+  try {
+    return require(require.resolve(name, { paths: [path.join(__dirname, "..", "server")] }));
+  } catch (error) {
+    error.message = `Unable to resolve server dependency "${name}". Run "npm --prefix server ci" before this test. ${error.message}`;
+    throw error;
+  }
+}
+
+const express = requireServerDependency("express");
 
 process.env.NODE_ENV = "development";
 process.env.ADMIN_API_TOKEN = "test-admin-token";
