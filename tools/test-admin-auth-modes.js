@@ -29,14 +29,27 @@ function runMiddleware(req) {
 }
 
 const sessionToken = adminAuth.createSessionToken();
+const csrfToken = adminAuth.createCsrfToken(sessionToken);
 const cookieResult = runMiddleware({
   headers: {
     cookie: `${adminAuth.ADMIN_SESSION_COOKIE}=${encodeURIComponent(sessionToken)}`,
+    "x-fosu-csrf": csrfToken,
   },
+  method: "POST",
 });
 assert.strictEqual(cookieResult.nextCalled, true, "Cookie session should access admin sync/status routes");
 
+const cookieMissingCsrf = runMiddleware({
+  headers: {
+    cookie: `${adminAuth.ADMIN_SESSION_COOKIE}=${encodeURIComponent(sessionToken)}`,
+  },
+  method: "POST",
+});
+assert.strictEqual(cookieMissingCsrf.nextCalled, false, "Cookie writes should require CSRF");
+assert.strictEqual(cookieMissingCsrf.statusCode, 403, "Missing CSRF should return 403");
+
 const bearerResult = runMiddleware({
+  method: "POST",
   headers: {
     authorization: "Bearer test-admin-token",
   },
@@ -44,6 +57,7 @@ const bearerResult = runMiddleware({
 assert.strictEqual(bearerResult.nextCalled, true, "Bearer ADMIN_API_TOKEN should access admin write routes");
 
 const headerResult = runMiddleware({
+  method: "POST",
   headers: {
     "x-admin-token": "test-admin-token",
   },
@@ -75,5 +89,7 @@ assert(adminPages.includes("function safeFetch("), "admin page should define saf
 assert(healthBody.includes("safeFetch(a.path)"), "health checks should use safeFetch");
 assert(!/\bapi\s*\(/.test(healthBody), "health checks must not call api()");
 assert(checkScript.includes("runHealthChecks() must use safeFetch()"), "inline-script checker should enforce health-check fetch mode");
+assert(adminPages.includes('id="section-security"'), "admin page should render security status section");
+assert(adminPages.includes("/api/admin/security/status"), "admin page should load security status endpoint");
 
 console.log("Admin auth mode tests passed.");

@@ -39,6 +39,21 @@ jobs:
           if [ -z "${{ secrets.ADMIN_TOKEN }}" ]; then
             echo "::warning::ADMIN_TOKEN is not configured. Admin login will rely on ADMIN_PASSWORD."
           fi
+          security_mode="${{ vars.FOSU_SECURITY_MODE || 'observe' }}"
+          if [ "$security_mode" != "observe" ]; then
+            if [ -z "${{ secrets.WECHAT_APPID }}" ] || [ -z "${{ secrets.WECHAT_APPSECRET }}" ]; then
+              echo "::error::WECHAT_APPID and WECHAT_APPSECRET are required for session/ticket security modes."
+              has_missing_required=true
+            fi
+            if [ -z "${{ secrets.FOSU_SESSION_SECRET_CURRENT }}" ]; then
+              echo "::error::FOSU_SESSION_SECRET_CURRENT is required for session/ticket security modes."
+              has_missing_required=true
+            fi
+          fi
+          if [ "$security_mode" = "ticket" ] && [ -z "${{ secrets.FOSU_STATIC_TICKET_SECRET_CURRENT }}" ]; then
+            echo "::error::FOSU_STATIC_TICKET_SECRET_CURRENT is required for ticket security mode."
+            has_missing_required=true
+          fi
 
           if [ "$has_missing_required" = true ]; then
             exit 1
@@ -48,6 +63,10 @@ jobs:
         working-directory: server
         run: |
           node --check src/services/staticReleaseSyncService.js
+          node --check src/services/securityModeService.js
+          node --check src/services/rateLimitService.js
+          node --check src/services/securityEventService.js
+          node --check src/security/routeSecurityPolicy.js
           node --check src/workers/releaseWorker.js
           node --check scripts/reconcile-static-release.js
           node -e "require('./src/utils/courseNormalizer'); console.log('courseNormalizer ok')"
@@ -82,7 +101,7 @@ jobs:
 
             sanitize() {
               sed -E \
-                -e 's/(ADMIN_PASSWORD|ADMIN_TOKEN|ADMIN_API_TOKEN|FOSU_PASSWORD|FOSU_STATIC_TICKET_SECRET)=([^[:space:]]*)/\1=***/g' \
+                -e 's/(ADMIN_PASSWORD|ADMIN_TOKEN|ADMIN_API_TOKEN|FOSU_PASSWORD|WECHAT_APPSECRET|FOSU_CSRF_SECRET|FOSU_SESSION_SECRET(_CURRENT|_PREVIOUS)?|FOSU_STATIC_TICKET_SECRET(_CURRENT|_PREVIOUS)?)=([^[:space:]]*)/\1=***/g' \
                 -e 's/(Authorization: Bearer )[A-Za-z0-9._-]+/\1***/g' \
                 -e 's/(token|password|secret)["=: ]+[A-Za-z0-9._\/+=-]+/\1=***/gi'
             }
@@ -125,6 +144,17 @@ jobs:
             CORS_ALLOWED_ORIGINS=https://class.katelya.eu.org,http://127.0.0.1:18318
             FOSU_ALLOWED_ADMIN_ORIGINS=https://class.katelya.eu.org
             FOSU_ALLOWED_PUBLIC_ORIGINS=
+            FOSU_TRUSTED_PROXY_IPS=
+
+            FOSU_SECURITY_MODE=${{ vars.FOSU_SECURITY_MODE || 'observe' }}
+            FOSU_DYNAMIC_API_SESSION_REQUIRED=${{ vars.FOSU_DYNAMIC_API_SESSION_REQUIRED || 'false' }}
+            WECHAT_APPID=${{ secrets.WECHAT_APPID }}
+            WECHAT_APPSECRET=${{ secrets.WECHAT_APPSECRET }}
+            FOSU_SESSION_SECRET_CURRENT=${{ secrets.FOSU_SESSION_SECRET_CURRENT }}
+            FOSU_SESSION_SECRET_PREVIOUS=${{ secrets.FOSU_SESSION_SECRET_PREVIOUS }}
+            FOSU_SESSION_SECRET_KID=${{ secrets.FOSU_SESSION_SECRET_KID }}
+            FOSU_SESSION_TTL_SECONDS=${{ vars.FOSU_SESSION_TTL_SECONDS || '7200' }}
+            FOSU_CSRF_SECRET=${{ secrets.FOSU_CSRF_SECRET }}
 
             OPENRESTY_HOST_RELEASE_DIR=/opt/1panel/www/sites/class.katelya.eu.org/index/static/releases
             STATIC_RELEASE_SYNC_ENABLED=true
@@ -135,7 +165,13 @@ jobs:
             STATIC_RELEASE_SYNC_VERIFY_HTTP=true
             STATIC_RELEASE_SYNC_HTTP_TIMEOUT_MS=8000
             STATIC_RELEASE_VERIFY_CONCURRENCY=2
-            FOSU_STATIC_ACCESS_MODE=public
+            FOSU_STATIC_ACCESS_MODE=${{ vars.FOSU_STATIC_ACCESS_MODE || 'public' }}
+            FOSU_OPENRESTY_STATIC_SECURITY_MODE=${{ vars.FOSU_OPENRESTY_STATIC_SECURITY_MODE || 'public' }}
+            FOSU_STATIC_TICKET_SECRET_CURRENT=${{ secrets.FOSU_STATIC_TICKET_SECRET_CURRENT }}
+            FOSU_STATIC_TICKET_SECRET_PREVIOUS=${{ secrets.FOSU_STATIC_TICKET_SECRET_PREVIOUS }}
+            FOSU_STATIC_TICKET_SECRET_KID=${{ secrets.FOSU_STATIC_TICKET_SECRET_KID }}
+            FOSU_STATIC_TICKET_TTL_SECONDS=${{ vars.FOSU_STATIC_TICKET_TTL_SECONDS || '600' }}
+            FOSU_STATIC_TICKET_CACHE_MAX=500
             FOSU_STATIC_TICKET_SECRET=${{ secrets.FOSU_STATIC_TICKET_SECRET }}
 
             FOSU_RELEASE_WORKER_ENABLED=true
@@ -173,6 +209,9 @@ jobs:
               STATIC_RELEASE_KEEP_LATEST
               STATIC_RELEASE_SYNC_VERIFY_HTTP
               FOSU_STATIC_ACCESS_MODE
+              FOSU_SECURITY_MODE
+              FOSU_DYNAMIC_API_SESSION_REQUIRED
+              FOSU_OPENRESTY_STATIC_SECURITY_MODE
               FOSU_RELEASE_WORKER_ENABLED
               FOSU_RELEASE_PRECOMPRESS
               FOSU_RELEASE_BROTLI_ENABLED
@@ -191,6 +230,21 @@ jobs:
                 exit 1
               fi
             done
+            effective_security_mode="$(grep '^FOSU_SECURITY_MODE=' "$tmp_env" | cut -d= -f2-)"
+            if [ "$effective_security_mode" != "observe" ]; then
+              for key in WECHAT_APPID WECHAT_APPSECRET FOSU_SESSION_SECRET_CURRENT; do
+                if ! grep -q "^${key}=.\+" "$tmp_env"; then
+                  echo "::error::.env missing ${key} for security mode ${effective_security_mode}"
+                  rm -f "$tmp_env"
+                  exit 1
+                fi
+              done
+            fi
+            if [ "$effective_security_mode" = "ticket" ] && ! grep -q '^FOSU_STATIC_TICKET_SECRET_CURRENT=.\+' "$tmp_env"; then
+              echo "::error::.env missing FOSU_STATIC_TICKET_SECRET_CURRENT for ticket mode"
+              rm -f "$tmp_env"
+              exit 1
+            fi
             mv "$tmp_env" .env
 
             sudo docker compose config >/dev/null
@@ -218,6 +272,11 @@ jobs:
               echo "::error::http://127.0.0.1:18318/api/health failed"
               exit 1
             fi
+            bootstrap_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' http://127.0.0.1:18318/api/fosu/session/bootstrap || true)"
+            if [ "$bootstrap_status" = "404" ] || [ "$bootstrap_status" = "000" ]; then
+              echo "::error::session bootstrap route is unavailable: HTTP ${bootstrap_status}"
+              exit 1
+            fi
 
             restart_after="$(sudo docker inspect -f '{{.RestartCount}}' "$CONTAINER_NAME")"
             if [ "$restart_after" -gt $((restart_before + 1)) ]; then
@@ -227,6 +286,7 @@ jobs:
 
             sudo docker exec "$CONTAINER_NAME" sh -lc 'test -d /app/storage && test -w /app/storage && test -d /openresty-static/releases && test -w /openresty-static/releases'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'test "$STATIC_RELEASE_SYNC_ENABLED" = "true" && test "$RELEASE_PACK_SRC" = "/app/storage/public/releases" && test "$OPENRESTY_STATIC_RELEASE_DIR" = "/openresty-static/releases" && test "$PUBLIC_BASE_URL" = "https://class.katelya.eu.org/static/releases" && test "$FOSU_RELEASE_WORKER_ENABLED" = "true"'
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "const s=require(\"./src/services/securityModeService\").getSecurityStatus(); if(!s.mode) process.exit(1); console.log(\"security_mode=\"+s.mode)"'
 
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/reconcile-static-release.js > /tmp/fosu-static-reconcile.json'
             active_release="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.releaseVersion||'')")"

@@ -10,6 +10,10 @@ const scheduleService = require("../services/scheduleService");
 const releaseService = require("../services/releaseService");
 const { scheduleLimiter } = require("../utils/rateLimit");
 const { safeLog } = require("../utils/safeLogger");
+const { createStaticAccessTicket } = require("../utils/staticAccessTicket");
+const { recordSecurityEvent } = require("../services/securityEventService");
+const { getSecurityMode } = require("../services/securityModeService");
+const { routeSecurityPolicyMiddleware } = require("../security/routeSecurityPolicy");
 const {
   bootstrapFosuSession,
   optionalSessionGuard,
@@ -18,6 +22,11 @@ const {
 } = require("../utils/apiSecurity");
 
 router.use(publicFosuGuard);
+router.use(routeSecurityPolicyMiddleware);
+
+const staticTicketCache = new Map();
+const STATIC_TICKET_CACHE_MAX = Math.max(20, Number(process.env.FOSU_STATIC_TICKET_CACHE_MAX || 500) || 500);
+const STATIC_TICKET_REUSE_SKEW_MS = 60 * 1000;
 
 const scheduleQueryFields = [
   "semester",
@@ -34,21 +43,6 @@ const scheduleQueryFields = [
   "sectionStart",
   "sectionEnd",
 ];
-
-const guardedDynamicPaths = new Set([
-  "/search-index",
-  "/schedule-detail",
-  "/class-schedule",
-  "/teacher-schedule",
-  "/classroom-schedule",
-  "/course-schedule",
-  "/empty-classrooms",
-]);
-
-router.use((req, res, next) => {
-  if (!guardedDynamicPaths.has(req.path)) return next();
-  return optionalSessionGuard(req, res, next);
-});
 
 /**
  * 辅助错误处理函数：对教务系统的异常进行分类，并隐去任何敏感信息
@@ -210,14 +204,31 @@ router.get("/app-config", (req, res) => {
 router.post("/session/bootstrap", scheduleLimiter, validateJsonBody(["code"]), async (req, res) => {
   try {
     const session = await bootstrapFosuSession(req.body && req.body.code);
+    recordSecurityEvent("security-session-bootstrap-success", {
+      route: req.path,
+      method: req.method,
+      mode: session.securityMode,
+      anonymizedIp: req.clientIpInfo && req.clientIpInfo.anonymizedIp,
+      openidHashPrefix: session.payload && session.payload.openidHash,
+      sessionIdPrefix: session.payload && session.payload.sessionIdHash,
+    });
     return res.json({
       success: true,
       sessionToken: session.sessionToken,
       expiresIn: session.expiresIn,
-      appid: session.appid,
-      openidHash: session.openidHash,
+      expiresAt: session.expiresAt,
+      securityMode: session.securityMode,
+      staticAccessMode: session.staticAccessMode,
+      serverTime: session.serverTime,
     });
   } catch (error) {
+    recordSecurityEvent("security-session-bootstrap-failed", {
+      route: req.path,
+      method: req.method,
+      mode: getSecurityMode().mode,
+      anonymizedIp: req.clientIpInfo && req.clientIpInfo.anonymizedIp,
+      reasonCode: error.code || error.message,
+    });
     safeLog("fosu-session-bootstrap-failed", {
       code: error.code || error.message,
       statusCode: error.statusCode || 500,
@@ -226,6 +237,119 @@ router.post("/session/bootstrap", scheduleLimiter, validateJsonBody(["code"]), a
       success: false,
       code: error.message || "SESSION_BOOTSTRAP_FAILED",
       message: "小程序会话初始化失败。",
+    });
+  }
+});
+
+function cleanupStaticTicketCache() {
+  const now = Date.now();
+  for (const [key, value] of staticTicketCache.entries()) {
+    if (!value || Number(value.expiresAtMs || 0) <= now + STATIC_TICKET_REUSE_SKEW_MS) {
+      staticTicketCache.delete(key);
+    }
+  }
+  if (staticTicketCache.size <= STATIC_TICKET_CACHE_MAX) return;
+  Array.from(staticTicketCache.entries())
+    .sort((left, right) => Number(left[1].expiresAtMs || 0) - Number(right[1].expiresAtMs || 0))
+    .slice(0, staticTicketCache.size - STATIC_TICKET_CACHE_MAX)
+    .forEach(([key]) => staticTicketCache.delete(key));
+}
+
+function getAllowedStaticTicketReleases() {
+  const active = releaseService.getActiveReleaseInfo() || {};
+  const allowed = new Set([active.releaseVersion, active.version].filter(Boolean));
+  releaseService.listReleases(3).forEach((item) => {
+    if (item && item.releaseVersion) allowed.add(item.releaseVersion);
+    if (item && item.version) allowed.add(item.version);
+  });
+  return allowed;
+}
+
+router.post("/static-access/bootstrap", validateJsonBody(["releaseVersion"]), (req, res) => {
+  const security = getSecurityMode();
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+
+  if (security.staticAccessMode !== "ticket" && !security.requireStaticTicket) {
+    return res.json({
+      success: true,
+      mode: security.staticAccessMode,
+      releaseVersion: String(req.body && req.body.releaseVersion || ""),
+      ticket: "",
+      expiresAt: "",
+      pathPrefix: "",
+      headerName: "X-Fosu-Static-Ticket",
+      serverTime: new Date().toISOString(),
+    });
+  }
+
+  if (!req.fosuSession) {
+    return res.status(401).json({
+      success: false,
+      code: "FOSU_SESSION_REQUIRED",
+      reasonCode: "FOSU_SESSION_REQUIRED",
+      message: "会话已过期，请重新进入小程序。",
+    });
+  }
+
+  const releaseVersion = String(req.body && req.body.releaseVersion || "").trim();
+  const allowedReleases = getAllowedStaticTicketReleases();
+  if (!releaseVersion || !allowedReleases.has(releaseVersion)) {
+    return res.status(403).json({
+      success: false,
+      code: "STATIC_TICKET_RELEASE_NOT_ALLOWED",
+      reasonCode: "STATIC_TICKET_RELEASE_NOT_ALLOWED",
+      message: "Release 版本不可签发访问票据。",
+    });
+  }
+
+  cleanupStaticTicketCache();
+  const sessionKey = req.fosuSession.sessionIdHash || req.fosuSession.openidHash || "anonymous";
+  const cacheKey = `${sessionKey}:${releaseVersion}`;
+  const cached = staticTicketCache.get(cacheKey);
+  if (cached && cached.expiresAtMs > Date.now() + STATIC_TICKET_REUSE_SKEW_MS) {
+    return res.json(cached.response);
+  }
+
+  try {
+    const ttlSeconds = Number(process.env.FOSU_STATIC_TICKET_TTL_SECONDS || 600) || 600;
+    const pathPrefix = `/static/releases/${releaseVersion}/`;
+    const ticket = createStaticAccessTicket({ releaseVersion, pathPrefix, ttlSeconds });
+    const expiresAtMs = Date.now() + Math.min(ttlSeconds, 900) * 1000;
+    const response = {
+      success: true,
+      mode: "ticket",
+      releaseVersion,
+      ticket,
+      expiresAt: new Date(expiresAtMs).toISOString(),
+      pathPrefix,
+      headerName: "X-Fosu-Static-Ticket",
+      serverTime: new Date().toISOString(),
+    };
+    staticTicketCache.set(cacheKey, { expiresAtMs, response });
+    recordSecurityEvent("security-static-ticket-issued", {
+      route: req.path,
+      method: req.method,
+      mode: security.mode,
+      anonymizedIp: req.clientIpInfo && req.clientIpInfo.anonymizedIp,
+      openidHashPrefix: req.fosuSession.openidHash,
+      sessionIdPrefix: req.fosuSession.sessionIdHash,
+    });
+    return res.json(response);
+  } catch (error) {
+    recordSecurityEvent("security-config-invalid", {
+      route: req.path,
+      method: req.method,
+      mode: security.mode,
+      anonymizedIp: req.clientIpInfo && req.clientIpInfo.anonymizedIp,
+      reasonCode: error.code || "STATIC_TICKET_ISSUE_FAILED",
+    });
+    return res.status(error.statusCode || 503).json({
+      success: false,
+      code: error.code || "STATIC_TICKET_ISSUE_FAILED",
+      reasonCode: error.code || "STATIC_TICKET_ISSUE_FAILED",
+      message: "静态访问票据签发失败。",
     });
   }
 });

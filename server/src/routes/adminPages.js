@@ -2745,6 +2745,7 @@ const adminConsoleHtml = `<!doctype html>
             <li class="nav-item" data-section="news"><button>最新动态</button></li>
             <li class="nav-item" data-section="config"><button>数据版本</button></li>
             <li class="nav-item" data-section="feedback"><button>反馈管理</button></li>
+            <li class="nav-item" data-section="security"><button>安全状态</button></li>
             <li class="nav-item" data-section="settings"><button>系统设置</button></li>
           </ul>
         </nav>
@@ -3989,6 +3990,62 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         </div>
       </section>
 
+      <section id="section-security" class="section">
+        <div class="stats-grid">
+          <div class="card stat-card">
+            <div class="stat-head">Security Mode<span>MODE</span></div>
+            <div class="stat-num" id="securityModeValue">-</div>
+            <div class="stat-foot" id="securityModeFoot">-</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-head">动态 API<span>API</span></div>
+            <div class="stat-num" id="securityDynamicValue">-</div>
+            <div class="stat-foot">X-Fosu-Session</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-head">静态 Release<span>STATIC</span></div>
+            <div class="stat-num" id="securityStaticValue">-</div>
+            <div class="stat-foot">X-Fosu-Static-Ticket</div>
+          </div>
+          <div class="card stat-card">
+            <div class="stat-head">限速键数<span>RATE</span></div>
+            <div class="stat-num" id="securityRateKeysValue">0</div>
+            <div class="stat-foot" id="securityRateKeysFoot">-</div>
+          </div>
+        </div>
+        <div class="dash-columns">
+          <div class="card" style="display: flex; flex-direction: column; gap: 12px;">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+              <h3 class="card-title" style="margin-bottom:0;">安全配置</h3>
+              <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
+                <button id="runSecuritySelfCheckBtn" class="secondary">运行安全自检</button>
+                <button id="exportSecurityReportBtn" class="ghost">导出脱敏报告</button>
+                <button id="cleanupSecurityStatsBtn" class="ghost">清理过期统计</button>
+              </div>
+            </div>
+            <div class="health-grid" id="securityConfigGrid"></div>
+            <div id="securityWarnings" class="health-item" style="align-items:flex-start; white-space:normal;"></div>
+          </div>
+          <div class="card" style="display: flex; flex-direction: column; gap: 12px;">
+            <h3 class="card-title">最近 24 小时</h3>
+            <div class="health-grid" id="securityEventGrid"></div>
+            <div class="table-container" style="max-height: 360px; overflow-y: auto;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>时间</th>
+                    <th>事件</th>
+                    <th>路由</th>
+                    <th>原因</th>
+                  </tr>
+                </thead>
+                <tbody id="securityEventsTable"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <!-- 面板九：系统设置 System Settings -->
       <section id="section-settings" class="section">
         <div class="stats-grid">
@@ -4459,6 +4516,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         backups: [],
         auditLogs: [],
         auditModuleFilter: "all",
+        csrfToken: "",
+        securityStatus: null,
         
         feedbackFilter: {
           status: "all",
@@ -4624,7 +4683,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           return parts.join(" · ");
         }
         return raw
-          .replace(/<script[\\s\\S]*?<\\/script>/gi, "")
+          .replace(new RegExp("<scr" + "ipt[\\\\s\\\\S]*?<\\\\/scr" + "ipt>", "gi"), "")
           .replace(/<style[\\s\\S]*?<\\/style>/gi, "")
           .replace(/<[^>]+>/g, " ")
           .replace(/\\s+/g, " ")
@@ -4635,6 +4694,10 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
       function api(path, options) {
         options = options || {};
         options.headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
+        var method = String(options.method || "GET").toUpperCase();
+        if (state.csrfToken && ["POST", "PUT", "PATCH", "DELETE"].indexOf(method) >= 0 && !options.headers["X-Fosu-CSRF"]) {
+          options.headers["X-Fosu-CSRF"] = state.csrfToken;
+        }
         options.credentials = "include";
 
         return fetch(path, options).then(function (res) {
@@ -4708,6 +4771,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             window.location.href = "/admin/login";
             throw new Error("后台登录已过期，请重新登录");
           }
+          state.csrfToken = res.csrfToken || state.csrfToken || "";
           return res;
         });
       }
@@ -4730,7 +4794,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         api("/api/admin/login", {
           method: "POST",
           body: JSON.stringify({ password: password })
-        }).then(function () {
+        }).then(function (res) {
+          state.csrfToken = res.csrfToken || "";
           if (loginError) loginError.textContent = "";
           window.location.href = "/admin/dashboard";
         }).catch(function (error) {
@@ -4768,6 +4833,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           news: "最新动态",
           config: "数据版本",
           feedback: "反馈管理",
+          security: "安全状态",
           settings: "系统设置与日志"
         };
         var nextTitle = titles[section] || "Admin Console";
@@ -4788,6 +4854,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           ignoreLoadError(loadQualityReport());
         } else if (section === "settings") {
           ignoreLoadError(loadSettingsLogs());
+        } else if (section === "security") {
+          ignoreLoadError(loadSecurityStatus());
         } else if (section === "feedback") {
           ignoreLoadError(loadFeedbacks());
         }
@@ -7728,17 +7796,21 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         setStatus("正在拉取操作日志与系统备份...");
         Promise.all([
           api("/api/admin/backups"),
-          api("/api/admin/audit-logs")
+          api("/api/admin/audit-logs"),
+          api("/api/admin/security/status")
         ])
           .then(function(results) {
             state.backups = results[0].items || [];
             state.auditLogs = results[1].items || [];
+            state.securityStatus = results[2] || null;
             
-            $("settingsSecurityStatus").textContent = "已加固";
-            $("settingsSecurityStatus").style.color = "var(--success)";
+            var security = state.securityStatus && state.securityStatus.security || {};
+            $("settingsSecurityStatus").textContent = security.mode || "observe";
+            $("settingsSecurityStatus").style.color = security.configurationValid === false ? "var(--danger)" : "var(--success)";
             $("settingsBackupCount").textContent = state.backups.length + " 个";
             $("settingsAuditLogCount").textContent = state.auditLogs.length + " 条";
             
+            renderSecurityStatus();
             renderBackupsTable();
             renderAuditLogsTable();
             setStatus("设置数据和审计日志载入完毕。");
@@ -7746,6 +7818,140 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           .catch(function(err) {
             showToast(err.message, "error");
           });
+      }
+
+      function badgeText(ok) {
+        return ok ? "<span class='badge success'>OK</span>" : "<span class='badge danger'>缺失</span>";
+      }
+
+      function renderHealthItem(label, value) {
+        return "<div class='health-item'><span>" + escapeHtml(label) + "</span><strong>" + value + "</strong></div>";
+      }
+
+      function renderSecurityStatus() {
+        var payload = state.securityStatus || {};
+        var security = payload.security || {};
+        var rateLimit = payload.rateLimit || {};
+        var events = payload.events || {};
+        var counts = events.counts || {};
+
+        if ($("securityModeValue")) $("securityModeValue").textContent = security.mode || "-";
+        if ($("securityModeFoot")) $("securityModeFoot").textContent = security.configurationValid === false ? "配置存在阻断项" : "配置可用";
+        if ($("securityDynamicValue")) $("securityDynamicValue").textContent = security.requireDynamicSession ? "session" : "observe";
+        if ($("securityStaticValue")) $("securityStaticValue").textContent = security.requireStaticTicket ? "ticket" : (security.staticAccessMode || "public");
+        if ($("securityRateKeysValue")) $("securityRateKeysValue").textContent = String(rateLimit.keyCount || 0);
+        if ($("securityRateKeysFoot")) $("securityRateKeysFoot").textContent = "上限 " + (rateLimit.maxKeys || 0);
+
+        var configGrid = $("securityConfigGrid");
+        if (configGrid) {
+          configGrid.innerHTML = [
+            renderHealthItem("微信 AppID", security.wechatAppidConfigured ? "<code>" + escapeHtml(security.wechatAppidMasked || "configured") + "</code>" : badgeText(false)),
+            renderHealthItem("Session Secret", badgeText(Boolean(security.sessionSecretConfigured))),
+            renderHealthItem("Static Ticket Secret", badgeText(Boolean(security.staticTicketSecretConfigured))),
+            renderHealthItem("OpenResty 模式", "<code>" + escapeHtml(security.openRestySecurityMode || "public") + "</code>"),
+            renderHealthItem("Session KID", "<code>" + escapeHtml(security.sessionSecretKid || "current") + "</code>"),
+            renderHealthItem("Static KID", "<code>" + escapeHtml(security.staticTicketSecretKid || "current") + "</code>")
+          ].join("");
+        }
+
+        var warnings = security.warnings || [];
+        var warningBox = $("securityWarnings");
+        if (warningBox) {
+          warningBox.innerHTML = warnings.length
+            ? "<span>配置告警</span><strong style='white-space:normal; text-align:right;'>" + warnings.map(escapeHtml).join("<br>") + "</strong>"
+            : "<span>配置告警</span><strong>无</strong>";
+        }
+
+        var eventGrid = $("securityEventGrid");
+        if (eventGrid) {
+          eventGrid.innerHTML = [
+            renderHealthItem("bootstrap", "<strong>" + (counts["security-session-bootstrap-success"] || 0) + "</strong>"),
+            renderHealthItem("无效 session", "<strong>" + (counts["security-session-invalid"] || 0) + "</strong>"),
+            renderHealthItem("无效 ticket", "<strong>" + (counts["security-static-ticket-invalid"] || 0) + "</strong>"),
+            renderHealthItem("429", "<strong>" + ((counts["security-rate-limit-observed"] || 0) + (counts["security-rate-limit-enforced"] || 0)) + "</strong>"),
+            renderHealthItem("Origin 拒绝", "<strong>" + (counts["security-origin-rejected"] || 0) + "</strong>"),
+            renderHealthItem("异常扫描", "<strong>" + (counts["security-suspicious-enumeration"] || 0) + "</strong>")
+          ].join("");
+        }
+
+        var tbody = $("securityEventsTable");
+        if (tbody) {
+          var list = events.recentEvents || [];
+          if (!list.length) {
+            tbody.innerHTML = "<tr><td colspan='4' style='text-align:center; color:var(--muted); padding:20px 0;'>暂无安全事件</td></tr>";
+          } else {
+            tbody.innerHTML = list.map(function(item) {
+              return "<tr>" +
+                "<td>" + formatDate(item.time) + "</td>" +
+                "<td><code>" + escapeHtml(item.event || "") + "</code></td>" +
+                "<td><code>" + escapeHtml(item.route || "") + "</code></td>" +
+                "<td>" + escapeHtml(item.reasonCode || "") + "</td>" +
+                "</tr>";
+            }).join("");
+          }
+        }
+      }
+
+      function loadSecurityStatus() {
+        setStatus("正在读取安全状态...");
+        return api("/api/admin/security/status")
+          .then(function(res) {
+            state.securityStatus = res;
+            renderSecurityStatus();
+            setStatus("安全状态已更新。");
+            return res;
+          })
+          .catch(function(err) {
+            showToast(err.message, "error");
+            throw err;
+          });
+      }
+
+      function runSecuritySelfCheck(btn) {
+        var restore = setButtonLoading(btn, "自检中...");
+        return api("/api/admin/security/self-check", { method: "POST", body: "{}" })
+          .then(function(res) {
+            state.securityStatus = res;
+            renderSecurityStatus();
+            showToast(res.ok ? "安全自检通过" : "安全自检存在告警", res.ok ? "success" : "error");
+          })
+          .catch(function(err) {
+            showToast(err.message, "error");
+          })
+          .finally(restore);
+      }
+
+      function exportSecurityReport(btn) {
+        var restore = setButtonLoading(btn, "导出中...");
+        return api("/api/admin/security/report")
+          .then(function(res) {
+            var content = JSON.stringify(res, null, 2);
+            var blob = new Blob([content], { type: "application/json;charset=utf-8" });
+            var link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "fosu-security-report.json";
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("脱敏安全报告已生成", "success");
+          })
+          .catch(function(err) {
+            showToast(err.message, "error");
+          })
+          .finally(restore);
+      }
+
+      function cleanupSecurityStats(btn) {
+        var restore = setButtonLoading(btn, "清理中...");
+        return api("/api/admin/security/events/cleanup", { method: "POST", body: "{}" })
+          .then(function() {
+            showToast("过期安全统计已清理", "success");
+            return loadSecurityStatus();
+          })
+          .catch(function(err) {
+            showToast(err.message, "error");
+          })
+          .finally(restore);
       }
 
       function renderBackupsTable() {
@@ -8190,6 +8396,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         if (location.pathname.indexOf("/news") >= 0) return "news";
         if (location.pathname.indexOf("/config") >= 0 || location.pathname.indexOf("/version") >= 0) return "config";
         if (location.pathname.indexOf("/feedback") >= 0) return "feedback";
+        if (location.pathname.indexOf("/security") >= 0) return "security";
         return "dashboard";
       }
 
@@ -8874,6 +9081,15 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
       }
 
       function initSettingsModule() {
+        safeBind("runSecuritySelfCheckBtn", "click", function() {
+          runSecuritySelfCheck($("runSecuritySelfCheckBtn"));
+        });
+        safeBind("exportSecurityReportBtn", "click", function() {
+          exportSecurityReport($("exportSecurityReportBtn"));
+        });
+        safeBind("cleanupSecurityStatsBtn", "click", function() {
+          cleanupSecurityStats($("cleanupSecurityStatsBtn"));
+        });
         return true;
       }
 
@@ -8932,9 +9148,10 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
 
 function sendAdminHtml(res) {
   res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Content-Type-Options", "nosniff");
   res.setHeader(
     "Content-Security-Policy",
-    "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data: https://pan.katelya.eu.org; base-uri 'self'; form-action 'self'"
+    "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data: https://pan.katelya.eu.org; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
   );
   res.type("html").send(adminConsoleHtml);
 }
@@ -8962,6 +9179,7 @@ router.get([
   "/news",
   "/config",
   "/version",
+  "/security",
 ], (req, res) => {
   if (!adminAuth.isAdminCookieValid(req)) {
     return res.redirect("/admin/login");

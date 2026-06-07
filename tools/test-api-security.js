@@ -66,7 +66,9 @@ async function run() {
     assert.strictEqual(bootstrap.status, 200);
     assert.strictEqual(bootstrap.data.success, true);
     assert(bootstrap.data.sessionToken, "session bootstrap should return token");
-    assert.strictEqual(typeof bootstrap.data.openidHash, "string");
+    assert.strictEqual(typeof bootstrap.data.expiresAt, "string");
+    assert.strictEqual(typeof bootstrap.data.securityMode, "string");
+    assert.strictEqual(bootstrap.data.openidHash, undefined, "session bootstrap must not return openidHash");
 
     const badUa = await fetch(`${baseUrl}/api/fosu/bootstrap`, {
       headers: { "User-Agent": "curl/8.0" },

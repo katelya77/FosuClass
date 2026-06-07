@@ -3,6 +3,7 @@ const { BOOTSTRAP_CACHE_KEY } = require("./utils/storage");
 const appConfigService = require("./services/appConfigService");
 const releasePackService = require("./services/releasePackService");
 const platformDataService = require("./services/platformDataService");
+const securitySessionService = require("./services/securitySessionService");
 const BRAND = require("./config/brand");
 
 function readStorageQuiet(key) {
@@ -51,6 +52,7 @@ App({
     this.loadAppConfigData({ network: false, silent: true });
 
     scheduleLowPriority(() => this.loadReleasePackData({ forceNetwork: true, silent: true, timeout: 5000, retries: 0 }), 1500);
+    scheduleLowPriority(() => securitySessionService.warmupSession(), 1800);
     scheduleLowPriority(() => this.loadPlatformData({ silent: true, timeout: 5000, retries: 0 }), 2200);
     scheduleLowPriority(() => this.loadBootstrapData({ silent: true, timeout: 5000, retries: 0 }), 2600);
     scheduleLowPriority(() => this.loadAppConfigData({ force: true, silent: true, timeout: 5000, retries: 0 }), 3200);

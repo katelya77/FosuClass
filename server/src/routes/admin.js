@@ -24,6 +24,11 @@ const releaseLifecycleService = require("../services/releaseLifecycleService");
 const storageLifecycleService = require("../services/storageLifecycleService");
 const stagingFingerprint = require("../utils/stagingFingerprint");
 const staticAccessTicket = require("../utils/staticAccessTicket");
+const { getClientIpInfo } = require("../utils/clientIp");
+const { getRateLimitStats } = require("../services/rateLimitService");
+const { clearExpiredSecurityEvents, getSecurityEventSummary, recordSecurityEvent } = require("../services/securityEventService");
+const { getSecurityStatus } = require("../services/securityModeService");
+const { listRouteSecurityPolicies } = require("../security/routeSecurityPolicy");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const zlib = require("zlib");
@@ -98,6 +103,7 @@ function createBackup(type, sourceFile) {
  */
 function writeAuditLog(req, action, moduleName, target, summary) {
   try {
+    const ipInfo = getClientIpInfo(req);
     const logItem = {
       time: new Date().toISOString(),
       action,
@@ -105,7 +111,9 @@ function writeAuditLog(req, action, moduleName, target, summary) {
       target: target || "",
       operator: "admin",
       summary: summary || "",
-      ip: req.ip || req.headers["x-forwarded-for"] || ""
+      ip: ipInfo.anonymizedIp,
+      authMethod: adminAuth.getAdminAuthMethod(req) || "unknown",
+      requestId: req.headers["x-request-id"] || ""
     };
     fs.appendFileSync(AUDIT_LOG_PATH, `${JSON.stringify(logItem)}\n`, "utf-8");
   } catch (error) {
@@ -176,10 +184,29 @@ function verifyAdminWriteAccess(req, res, next) {
   if (adminAuth.isAdminRequest(req)) {
     if (!["GET", "HEAD", "OPTIONS"].includes(String(req.method || "GET").toUpperCase()) && !adminAuth.isAdminOriginAllowed(req)) {
       safeLog("admin-write-origin-rejected", { origin: req.headers.origin || "", path: req.path });
+      recordSecurityEvent("security-origin-rejected", {
+        route: req.path,
+        method: req.method,
+        anonymizedIp: getClientIpInfo(req).anonymizedIp,
+        reasonCode: "ADMIN_ORIGIN_REJECTED",
+      });
       return res.status(403).json({
         success: false,
         code: "ADMIN_ORIGIN_REJECTED",
         message: "Admin request origin is not allowed.",
+      });
+    }
+    if (!adminAuth.verifyAdminCsrf(req)) {
+      recordSecurityEvent("security-csrf-rejected", {
+        route: req.path,
+        method: req.method,
+        anonymizedIp: getClientIpInfo(req).anonymizedIp,
+        reasonCode: "ADMIN_CSRF_REJECTED",
+      });
+      return res.status(403).json({
+        success: false,
+        code: "ADMIN_CSRF_REJECTED",
+        message: "Admin CSRF token is invalid.",
       });
     }
     return next();
@@ -202,7 +229,13 @@ router.post("/login", adminAuth.adminLoginLimiter, (req, res) => {
 
   const credential = (req.body && (req.body.password || req.body.token)) || "";
   if (!adminAuth.isLoginCredentialValid(credential)) {
-    safeLog("admin-login-failed", { reason: "invalid credential", ip: req.ip });
+    recordSecurityEvent("security-admin-login-failed", {
+      route: req.path,
+      method: req.method,
+      anonymizedIp: getClientIpInfo(req).anonymizedIp,
+      reasonCode: "INVALID_CREDENTIAL",
+    });
+    safeLog("admin-login-failed", { reason: "invalid credential", ip: getClientIpInfo(req).anonymizedIp });
     return res.status(401).json({
       success: false,
       message: "后台密码或令牌不正确",
@@ -214,6 +247,7 @@ router.post("/login", adminAuth.adminLoginLimiter, (req, res) => {
   return res.json({
     success: true,
     message: "登录成功",
+    csrfToken: adminAuth.createCsrfToken(sessionToken),
     expiresIn: 12 * 60 * 60,
   });
 });
@@ -227,11 +261,64 @@ router.post("/logout", (req, res) => {
 });
 
 router.get("/session", (req, res) => {
+  const cookieToken = adminAuth.getAdminCookieToken(req);
   return res.json({
     success: true,
     authenticated: adminAuth.isAdminRequest(req),
     configured: adminAuth.isAdminConfiguredForCurrentEnv(),
+    authMethod: adminAuth.getAdminAuthMethod(req),
+    csrfToken: cookieToken ? adminAuth.createCsrfToken(cookieToken) : "",
   });
+});
+
+router.get("/security/status", adminAuth.verifyAdminAccess, (req, res) => {
+  const security = getSecurityStatus();
+  const events = getSecurityEventSummary();
+  return res.json({
+    success: true,
+    security,
+    rateLimit: getRateLimitStats(),
+    events,
+    routePolicies: listRouteSecurityPolicies(),
+  });
+});
+
+router.post("/security/self-check", adminAuth.verifyAdminAccess, (req, res) => {
+  const security = getSecurityStatus();
+  const events = getSecurityEventSummary();
+  const checks = [
+    { id: "security-mode", ok: Boolean(security.mode), message: `Security mode: ${security.mode}` },
+    { id: "wechat-appid", ok: security.mode === "observe" || security.wechatAppidConfigured, message: "WECHAT_APPID configured for enforced sessions" },
+    { id: "wechat-secret", ok: security.mode === "observe" || security.wechatSecretConfigured, message: "WECHAT_APPSECRET configured for enforced sessions" },
+    { id: "session-secret", ok: security.mode === "observe" || security.sessionSecretConfigured, message: "Session secret configured" },
+    { id: "static-secret", ok: !security.requireStaticTicket || security.staticTicketSecretConfigured, message: "Static ticket secret configured when ticket mode is enabled" },
+    { id: "openresty-mode", ok: !security.requireStaticTicket || security.openRestySecurityMode === "ticket", message: "OpenResty ticket verification installed before static ticket enforcement" },
+  ];
+  const ok = checks.every((item) => item.ok);
+  recordSecurityEvent(ok ? "security-self-check-success" : "security-config-invalid", {
+    route: req.path,
+    method: req.method,
+    anonymizedIp: getClientIpInfo(req).anonymizedIp,
+    mode: security.mode,
+    reasonCode: ok ? "" : "SECURITY_SELF_CHECK_FAILED",
+  });
+  return res.json({ success: true, ok, checks, security, events });
+});
+
+router.get("/security/report", adminAuth.verifyAdminAccess, (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  return res.json({
+    success: true,
+    generatedAt: new Date().toISOString(),
+    security: getSecurityStatus(),
+    rateLimit: getRateLimitStats(),
+    events: getSecurityEventSummary(),
+    routePolicies: listRouteSecurityPolicies(),
+  });
+});
+
+router.post("/security/events/cleanup", adminAuth.verifyAdminAccess, (req, res) => {
+  return res.json(clearExpiredSecurityEvents());
 });
 
 /**
