@@ -36,7 +36,8 @@ function redactSecrets(value) {
   if (value && typeof value === "object") {
     const output = {};
     Object.keys(value).forEach((key) => {
-      output[key] = SECRET_KEY_PATTERN.test(key) ? "[REDACTED]" : redactSecrets(value[key]);
+      const safeMetadataKey = /(Prefix|Masked|Configured|Kid|Mode|Status)$/i.test(key);
+      output[key] = SECRET_KEY_PATTERN.test(key) && !safeMetadataKey ? "[REDACTED]" : redactSecrets(value[key]);
     });
     return output;
   }

@@ -13,7 +13,6 @@ const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
   "PUBLIC_BASE_URL=https://class.katelya.eu.org/static/releases",
   "STATIC_RELEASE_KEEP_LATEST=3",
   "STATIC_RELEASE_SYNC_VERIFY_HTTP=true",
-  "FOSU_STATIC_ACCESS_MODE=public",
   "FOSU_RELEASE_WORKER_ENABLED=true",
   "FOSU_RELEASE_PRECOMPRESS=gzip",
   "FOSU_RELEASE_BROTLI_ENABLED=false",
@@ -27,6 +26,19 @@ const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
 ].forEach((line) => {
   assert(workflow.includes(line), `deploy workflow should include ${line}`);
   assert(envExample.includes(line), `.env.example should include ${line}`);
+});
+
+[
+  "FOSU_SECURITY_MODE=observe",
+  "FOSU_DYNAMIC_API_SESSION_REQUIRED=false",
+  "FOSU_STATIC_ACCESS_MODE=public",
+  "FOSU_OPENRESTY_STATIC_SECURITY_MODE=public",
+  "FOSU_SESSION_TTL_SECONDS=7200",
+  "FOSU_STATIC_TICKET_TTL_SECONDS=600",
+].forEach((line) => {
+  assert(envExample.includes(line), `.env.example should include ${line}`);
+  const key = line.split("=")[0];
+  assert(workflow.includes(`${key}=`), `deploy workflow should include ${key}`);
 });
 
 [

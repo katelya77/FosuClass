@@ -9,6 +9,9 @@ const path = require("path");
 const config = require("./config");
 const { globalLimiter } = require("./utils/rateLimit");
 const { safeLog } = require("./utils/safeLogger");
+const { verifyStaticAccessTicket } = require("./utils/staticAccessTicket");
+const { recordSecurityEvent } = require("./services/securityEventService");
+const { getSecurityMode } = require("./services/securityModeService");
 const releaseService = require("./services/releaseService");
 const releaseLifecycleService = require("./services/releaseLifecycleService");
 const releaseWorkerManager = require("./services/releaseWorkerManager");
@@ -25,6 +28,11 @@ const personalRouter = require("./routes/personal");
 const relayRouter = require("./routes/relay");
 
 const app = express();
+
+app.set("trust proxy", (ip) => {
+  const { isTrustedProxyIp } = require("./utils/clientIp");
+  return isTrustedProxyIp(ip);
+});
 
 // 1. 安全加固 (Helmet)
 app.use(helmet());
@@ -64,6 +72,57 @@ app.use(express.static(path.join(__dirname, "../public"), {
   maxAge: config.NODE_ENV === "production" ? "1h" : 0,
 }));
 
+function staticReleaseAccessGuard(req, res, next) {
+  const method = String(req.method || "GET").toUpperCase();
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  res.setHeader("Content-Security-Policy", "default-src 'none'");
+  res.setHeader("X-Frame-Options", "DENY");
+
+  if (!["GET", "HEAD"].includes(method)) {
+    return res.status(405).json({ success: false, code: "STATIC_METHOD_NOT_ALLOWED" });
+  }
+
+  const security = getSecurityMode();
+  if (!security.requireStaticTicket) {
+    return next();
+  }
+
+  const requestPath = `${req.baseUrl || "/static/releases"}${req.path || ""}`;
+  const match = requestPath.match(/^\/static\/releases\/([^/]+)(?:\/|$)/);
+  const releaseVersion = match ? decodeURIComponent(match[1]) : "";
+  const ticket = req.headers["x-fosu-static-ticket"];
+  const result = verifyStaticAccessTicket(ticket, {
+    method,
+    releaseVersion,
+    path: requestPath,
+  });
+
+  if (result.valid) {
+    return next();
+  }
+
+  recordSecurityEvent(result.code === "STATIC_TICKET_EXPIRED" ? "security-static-ticket-expired" : "security-static-ticket-invalid", {
+    route: "/static/releases",
+    method,
+    mode: security.mode,
+    reasonCode: result.code || "STATIC_TICKET_INVALID",
+  });
+
+  if (security.observeOnly || security.staticAccessMode === "observe") {
+    res.setHeader("X-Fosu-Static-Ticket-Observed", result.code || "STATIC_TICKET_INVALID");
+    return next();
+  }
+
+  return res.status(ticket ? 403 : 401).json({
+    success: false,
+    code: ticket ? "STATIC_TICKET_INVALID" : "STATIC_TICKET_REQUIRED",
+    reasonCode: ticket ? "STATIC_TICKET_INVALID" : "STATIC_TICKET_REQUIRED",
+    message: "Static release access denied.",
+  });
+}
+
+app.use("/static/releases", staticReleaseAccessGuard);
 app.use("/static/releases", express.static(releaseService.PUBLIC_RELEASES_DIR, {
   fallthrough: false,
   immutable: true,

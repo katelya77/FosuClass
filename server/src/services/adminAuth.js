@@ -5,6 +5,7 @@ const { safeLog } = require("../utils/safeLogger");
 
 const ADMIN_SESSION_COOKIE = "fosu_admin_session";
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
+const CSRF_HEADER = "x-fosu-csrf";
 
 const adminLoginLimiter = rateLimit({
   windowMs: 10 * 60 * 1000,
@@ -46,10 +47,10 @@ function timingSafeEqualText(left, right) {
 }
 
 function getSessionSecret() {
-  return [
+  const explicit = process.env.FOSU_CSRF_SECRET || process.env.FOSU_ADMIN_SESSION_SECRET || "";
+  return explicit || [
     config.ADMIN_TOKEN,
     config.ADMIN_PASSWORD,
-    config.ADMIN_API_TOKEN,
     config.NODE_ENV,
   ].filter(Boolean).join("|");
 }
@@ -76,12 +77,32 @@ function signPayload(payloadText) {
 function createSessionToken() {
   const now = Math.floor(Date.now() / 1000);
   const payload = base64Url(JSON.stringify({
+    sid: crypto.randomBytes(16).toString("hex"),
     iat: now,
     exp: now + SESSION_TTL_SECONDS,
     scope: "admin",
   }));
   const signature = signPayload(payload);
   return `${payload}.${signature}`;
+}
+
+function createCsrfToken(sessionToken) {
+  const nonce = crypto.randomBytes(12).toString("hex");
+  const signature = crypto.createHmac("sha256", getSessionSecret())
+    .update(`${sessionToken}.${nonce}`)
+    .digest("base64url");
+  return `${nonce}.${signature}`;
+}
+
+function verifyCsrfToken(sessionToken, csrfToken) {
+  const parts = String(csrfToken || "").split(".");
+  if (parts.length !== 2 || !parts[0] || !parts[1]) {
+    return false;
+  }
+  const expected = crypto.createHmac("sha256", getSessionSecret())
+    .update(`${sessionToken}.${parts[0]}`)
+    .digest("base64url");
+  return timingSafeEqualText(parts[1], expected);
 }
 
 function verifySessionToken(token) {
@@ -150,8 +171,20 @@ function isAdminCookieValid(req) {
   return verifySessionToken(cookies[ADMIN_SESSION_COOKIE]);
 }
 
+function getAdminCookieToken(req) {
+  const cookies = parseCookies(req);
+  const token = cookies[ADMIN_SESSION_COOKIE] || "";
+  return verifySessionToken(token) ? token : "";
+}
+
+function getAdminAuthMethod(req) {
+  if (isStaticAdminTokenValid(getBearerToken(req))) return "admin-token";
+  if (getAdminCookieToken(req)) return "admin-cookie";
+  return "";
+}
+
 function isAdminRequest(req) {
-  return isStaticAdminTokenValid(getBearerToken(req)) || isAdminCookieValid(req);
+  return Boolean(getAdminAuthMethod(req));
 }
 
 function isStateChangingMethod(method) {
@@ -176,7 +209,7 @@ function setSessionCookie(res, token) {
     `${ADMIN_SESSION_COOKIE}=${encodeURIComponent(token)}`,
     "Path=/",
     "HttpOnly",
-    "SameSite=Lax",
+    "SameSite=Strict",
     `Max-Age=${SESSION_TTL_SECONDS}`,
   ];
   if (config.NODE_ENV === "production") {
@@ -190,13 +223,22 @@ function clearSessionCookie(res) {
     `${ADMIN_SESSION_COOKIE}=`,
     "Path=/",
     "HttpOnly",
-    "SameSite=Lax",
+    "SameSite=Strict",
     "Max-Age=0",
   ];
   if (config.NODE_ENV === "production") {
     parts.push("Secure");
   }
   res.setHeader("Set-Cookie", parts.join("; "));
+}
+
+function verifyAdminCsrf(req) {
+  if (!isStateChangingMethod(req.method)) return true;
+  const authMethod = getAdminAuthMethod(req);
+  if (authMethod === "admin-token") return true;
+  const sessionToken = getAdminCookieToken(req);
+  if (!sessionToken) return false;
+  return verifyCsrfToken(sessionToken, req.headers[CSRF_HEADER]);
 }
 
 function verifyAdminAccess(req, res, next) {
@@ -224,14 +266,27 @@ function verifyAdminAccess(req, res, next) {
     });
   }
 
+  if (!verifyAdminCsrf(req)) {
+    safeLog("admin-csrf-rejected", { path: req.path });
+    return res.status(403).json({
+      success: false,
+      code: "ADMIN_CSRF_REJECTED",
+      message: "Admin CSRF token is invalid.",
+    });
+  }
+
   return next();
 }
 
 module.exports = {
   ADMIN_SESSION_COOKIE,
+  CSRF_HEADER,
   adminLoginLimiter,
   clearSessionCookie,
+  createCsrfToken,
   createSessionToken,
+  getAdminAuthMethod,
+  getAdminCookieToken,
   hasAdminLoginSecret,
   isAdminConfiguredForCurrentEnv,
   isAdminCookieValid,
@@ -239,5 +294,6 @@ module.exports = {
   isAdminRequest,
   isLoginCredentialValid,
   setSessionCookie,
+  verifyAdminCsrf,
   verifyAdminAccess,
 };

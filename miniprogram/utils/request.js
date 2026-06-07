@@ -3,6 +3,8 @@
  */
 
 const { API_BASE_URL } = require("../config/api");
+const securitySessionService = require("../services/securitySessionService");
+const staticAccessService = require("../services/staticAccessService");
 
 const REQUEST_DIAG_KEY = "FOSU_REQUEST_DIAG";
 const inflightRequests = new Map();
@@ -277,22 +279,57 @@ function runWxRequest(requestUrl, method, data, headers, timeout, startedAt) {
   });
 }
 
+async function buildSecurityHeaders(requestUrl, headers, options) {
+  const sessionHeaders = await securitySessionService.buildSessionHeaders(requestUrl, options);
+  const staticHeaders = await staticAccessService.buildStaticHeaders(requestUrl, options);
+  return Object.assign({}, headers, sessionHeaders, staticHeaders);
+}
+
+function isStaticTicketHttpError(error, requestUrl) {
+  return staticAccessService.isStaticReleaseUrl(requestUrl) && (error.statusCode === 401 || error.statusCode === 403);
+}
+
 async function requestWithRetry(requestUrl, method, data, options, profile) {
   const retries = options.retries !== undefined ? Number(options.retries) : profile.retries;
   const timeout = options.timeout || profile.timeout;
-  const headers = Object.assign({
+  const baseHeaders = Object.assign({
     "content-type": method.toUpperCase() === "POST" ? "application/json" : "application/x-www-form-urlencoded",
   }, options.header || options.headers || {});
 
   let attempt = 0;
   let lastError = null;
+  let sessionRefreshed = false;
+  let staticTicketRefreshed = false;
   while (attempt <= retries) {
     attempt += 1;
     const startedAt = Date.now();
     try {
+      const headers = await buildSecurityHeaders(requestUrl, baseHeaders, options);
       return await runWxRequest(requestUrl, method, data, headers, timeout, startedAt);
     } catch (error) {
       lastError = error;
+      if (!sessionRefreshed && securitySessionService.shouldRefreshForError(error)) {
+        sessionRefreshed = true;
+        securitySessionService.clearSession();
+        try {
+          await securitySessionService.ensureSession({ forceRefresh: true, refreshSkewMs: 0 });
+          continue;
+        } catch (refreshError) {
+          lastError = refreshError;
+          break;
+        }
+      }
+      if (!staticTicketRefreshed && (staticAccessService.shouldRefreshForError(error) || isStaticTicketHttpError(error, requestUrl))) {
+        staticTicketRefreshed = true;
+        staticAccessService.clearTicket(staticAccessService.getReleaseVersionFromUrl(requestUrl));
+        try {
+          await staticAccessService.ensureTicket(staticAccessService.getReleaseVersionFromUrl(requestUrl), { force: true, forceRefresh: true });
+          continue;
+        } catch (refreshError) {
+          lastError = refreshError;
+          break;
+        }
+      }
       if (!shouldRetry(error, attempt, retries)) {
         break;
       }
