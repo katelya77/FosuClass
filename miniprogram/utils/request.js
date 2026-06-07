@@ -17,6 +17,8 @@ const {
 } = require("./trustedUrl");
 
 const REQUEST_DIAG_KEY = "FOSU_REQUEST_DIAG";
+const SECURITY_FAST_TIMEOUT_MS = 15000;
+const CLIENT_CHECK_TIMEOUT_MS = 12000;
 const inflightRequests = new Map();
 let lastDiagnostics = {
   lastError: null,
@@ -25,9 +27,9 @@ let lastDiagnostics = {
 let transportBuildLogged = false;
 
 const PROFILE_RULES = [
-  { name: "manifest", pattern: /\/api\/fosu\/release-pack\/manifest$/, timeout: 8000, retries: 1 },
-  { name: "app-config", pattern: /\/api\/fosu\/app-config$/, timeout: 8000, retries: 1 },
-  { name: "bootstrap", pattern: /\/api\/fosu\/bootstrap$/, timeout: 12000, retries: 1 },
+  { name: "manifest", pattern: /\/api\/fosu\/release-pack\/manifest$/, timeout: SECURITY_FAST_TIMEOUT_MS, retries: 1 },
+  { name: "app-config", pattern: /\/api\/fosu\/app-config$/, timeout: SECURITY_FAST_TIMEOUT_MS, retries: 1 },
+  { name: "bootstrap", pattern: /\/api\/fosu\/bootstrap$/, timeout: SECURITY_FAST_TIMEOUT_MS, retries: 1 },
   { name: "index", pattern: /\/api\/fosu\/release-pack\/index\/[^/]+$/, timeout: 25000, retries: 2 },
   { name: "catalog", pattern: /\/api\/fosu\/catalog$/, timeout: 25000, retries: 2 },
   { name: "search-index", pattern: /\/api\/fosu\/search-index$/, timeout: 25000, retries: 2 },
@@ -35,7 +37,7 @@ const PROFILE_RULES = [
   { name: "schedule-detail", pattern: /\/api\/fosu\/schedule-detail$/, timeout: 20000, retries: 2 },
   { name: "empty-room", pattern: /\/api\/fosu\/release-pack\/empty-room$/, timeout: 25000, retries: 2 },
   { name: "empty-classrooms", pattern: /\/api\/fosu\/empty-classrooms$/, timeout: 25000, retries: 2 },
-  { name: "static-release-manifest", pattern: /\/static\/releases\/[^/]+\/manifest\.json$/, timeout: 8000, retries: 1 },
+  { name: "static-release-manifest", pattern: /\/static\/releases\/[^/]+\/manifest\.json$/, timeout: SECURITY_FAST_TIMEOUT_MS, retries: 1 },
   { name: "static-release-index", pattern: /\/static\/releases\/[^/]+\/index\/.+\.json$/, timeout: 25000, retries: 2 },
   { name: "static-release-detail", pattern: /\/static\/releases\/[^/]+\/detail\/[^/]+\/[^/]+\.json$/, timeout: 20000, retries: 2 },
   { name: "static-release-empty-room", pattern: /\/static\/releases\/[^/]+\/empty-room\/index\.json$/, timeout: 25000, retries: 2 },
@@ -396,8 +398,8 @@ function maybeReportClientSecurityCheck(requestUrl, data, headers, payload, opti
     request("/api/fosu/security/client-check", "POST", reportPayload, {
       showLoading: false,
       silentError: true,
-      timeout: 5000,
-      retries: 0,
+      timeout: CLIENT_CHECK_TIMEOUT_MS,
+      retries: 1,
       dedupe: false,
       skipClientCheck: true,
     })
