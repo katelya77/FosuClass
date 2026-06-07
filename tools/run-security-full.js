@@ -17,6 +17,7 @@ const commands = [
   ["node", ["tools/test-miniprogram-session-security.js"]],
   ["node", ["tools/test-raw-wx-request-whitelist.js"]],
   ["node", ["tools/test-miniprogram-build-entry.js"]],
+  ["node", ["tools/test-generate-miniprogram-build-info.js"]],
   ["node", ["tools/test-security-client-check.js"]],
   ["node", ["tools/test-api-security.js"]],
   ["node", ["tools/test-route-security-policy.js"]],

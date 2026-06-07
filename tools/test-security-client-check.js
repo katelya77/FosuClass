@@ -5,11 +5,12 @@ process.env.NODE_ENV = "development";
 const clientCheckService = require("../server/src/services/clientCheckService");
 const securityEvents = require("../server/src/services/securityEventService");
 const adminRouter = require("../server/src/routes/admin");
+const buildInfo = require("../miniprogram/config/buildInfo");
 
 const payload = clientCheckService.normalizeClientCheckPayload({
-  clientBuildId: "security-transport-v2-0aea96c-20260607092253",
-  gitCommitShortSha: "0aea96c",
-  buildTimestamp: "2026-06-07T09:22:53.653Z",
+  clientBuildId: buildInfo.CLIENT_BUILD_ID,
+  gitCommitShortSha: buildInfo.GIT_COMMIT_SHORT_SHA,
+  buildTimestamp: buildInfo.BUILD_TIMESTAMP,
   miniprogramVersion: "develop",
   releaseVersion: "release-20260607",
   securityMode: "observe",
