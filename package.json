@@ -10,6 +10,7 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:security-full": "node tools/run-security-full.js",
     "security:acceptance": "npm run test:security-full",
+    "build:miniprogram-info": "node tools/generate-miniprogram-build-info.js",
     "security:postdeploy": "node server/scripts/security-postdeploy-check.js",
     "security:report": "node tools/security-report.js",
     "analyze:har": "node tools/analyze-third-party-har.js",

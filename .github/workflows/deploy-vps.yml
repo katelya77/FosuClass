@@ -74,6 +74,10 @@ jobs:
       - name: Install server dependencies
         run: npm --prefix server ci
 
+      - name: Generate miniprogram build metadata
+        id: build_info
+        run: npm run build:miniprogram-info
+
       - name: Predeploy server module checks
         working-directory: server
         run: |
@@ -152,7 +156,7 @@ jobs:
             FOSU_API_BASE_URL=https://class.katelya.eu.org
             FOSU_STATIC_RELEASE_BASE_URL=/static/releases
             FOSU_DEPLOY_COMMIT_SHA=${COMMIT_SHA}
-            FOSU_CLIENT_BUILD_ID=${{ vars.FOSU_CLIENT_BUILD_ID || github.sha }}
+            FOSU_CLIENT_BUILD_ID=${{ steps.build_info.outputs.client_build_id || github.sha }}
             DATA_SOURCE_MODE=cache-first
             ADMIN_API_TOKEN=${{ secrets.ADMIN_API_TOKEN }}
             ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
