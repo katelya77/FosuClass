@@ -87,7 +87,7 @@ function requestTicket(releaseVersion) {
           "content-type": "application/json",
           "X-Fosu-Session": session.sessionToken,
         },
-        timeout: 8000,
+        timeout: 15000,
         success: (res) => {
           const payload = res.data || {};
           if (res.statusCode !== 200 || payload.success === false) {

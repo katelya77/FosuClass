@@ -651,7 +651,7 @@ Page({
       releaseVersion,
       detailId: room.detailId || room.classroomId || "",
     }, {
-      timeout: 12000,
+      timeout: 15000,
       retries: 1,
     })
       .then((resolved) => {
