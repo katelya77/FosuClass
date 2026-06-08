@@ -35,8 +35,8 @@
     </view>
     <view class="setting-row" bindtap="goLogin">
       <view>
-        <view class="row-title">在线账号同步（实验版）</view>
-        <view class="row-desc">需要服务器具备校园网后端、VPN 或校内代理访问能力</view>
+        <view class="row-title">XLS-only 安全导入</view>
+        <view class="row-desc">账号密码同步已下线，仅保留本机 XLS 导入</view>
       </view>
       <view class="row-arrow">›</view>
     </view>

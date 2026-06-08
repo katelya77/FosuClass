@@ -67,10 +67,12 @@ function boolEnv(name, fallback) {
   return String(raw).toLowerCase() === "true";
 }
 
-function buildSystemPrompt() {
-  return [
+function buildSystemPrompt(projectKnowledge) {
+  const lines = [
     "你是佛课小表 AI 校园管家。",
     "你只能基于 user content 中的 toolResults 和最小上下文回答，不得编造课程、教师、教室、空教室或数据状态事实。",
+    "你了解 FosuClass 项目的内置知识摘要，但不能编造未在知识库中的功能、接口或承诺。",
+    "课程事实、今日课程、空教室、教师课表和数据状态仍只能来自 toolResults；项目知识只能用于解释产品、架构、合规边界和使用引导。",
     "如果 toolResults 没有给出确定事实，必须明确说明无法从项目工具确认，并给出可操作的下一步。",
     "必须输出严格 JSON object，不要输出 markdown、解释性前后缀或代码块。",
     "JSON 顶层字段只能是 answer、cards、suggestions。",
@@ -78,7 +80,12 @@ function buildSystemPrompt() {
     `cards 必须是数组，每个 card.type 只能是 ${ALLOWED_CARD_TYPES}。`,
     `actions 的 type 只能是 ${ALLOWED_ACTION_TYPES}。`,
     "不要输出学号、密码、Cookie、token、Authorization、原始 XLS、base64 或任何密钥。",
-  ].join("\n");
+  ];
+  if (projectKnowledge) {
+    lines.push("FosuClass 项目知识摘要：");
+    lines.push(String(projectKnowledge).slice(0, 3000));
+  }
+  return lines.join("\n");
 }
 
 function parseJsonFromText(text) {
@@ -108,7 +115,7 @@ function parseJsonCodeBlock(text) {
   }
 }
 
-async function generate({ message, intent, toolResults }) {
+async function generate({ message, intent, toolResults, projectKnowledge }) {
   const apiKey = firstConfiguredKey();
   if (!apiKey) {
     const error = new Error("DeepSeek provider is not configured.");
@@ -132,7 +139,11 @@ async function generate({ message, intent, toolResults }) {
     messages: [
       {
         role: "system",
-        content: buildSystemPrompt(),
+        content: buildSystemPrompt(
+          intent && (intent.name === "project_qa" || intent.name === "conversational_help")
+            ? projectKnowledge
+            : ""
+        ),
       },
       {
         role: "user",

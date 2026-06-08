@@ -12,6 +12,7 @@ function normalizeConfig(payload) {
   const config = Object.assign({
     appName: "佛课小表",
     currentSemester: "2025-2026-2",
+    termConfig: null,
     dataVersion: {},
     notices: [],
     urgentNotice: null,
@@ -21,6 +22,7 @@ function normalizeConfig(payload) {
     disclaimer: "课表仅供参考，以任课教师及教务通知为准。",
   }, data || {});
   if (!config.dataVersion || typeof config.dataVersion !== "object") config.dataVersion = {};
+  if (config.termConfig && typeof config.termConfig !== "object") config.termConfig = null;
   if (!Array.isArray(config.notices)) config.notices = [];
   if (!Array.isArray(config.banners)) config.banners = [];
   if (!Array.isArray(config.news)) config.news = [];

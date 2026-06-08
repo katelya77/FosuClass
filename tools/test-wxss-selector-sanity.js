@@ -4,7 +4,6 @@ const path = require("path");
 
 const files = [
   path.join(__dirname, "..", "miniprogram", "components", "notice-ticker", "notice-ticker.wxss"),
-  path.join(__dirname, "..", "miniprogram", "components", "search-filter", "index.wxss"),
 ];
 
 const forbidden = [];

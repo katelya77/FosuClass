@@ -5,6 +5,30 @@ require("../src/config");
 const agentService = require("../src/services/ai/agentService");
 const aiProviderConfigService = require("../src/services/ai/providerConfigService");
 
+async function runProbe(message, contextPatch = {}) {
+  const startedAt = Date.now();
+  const response = await agentService.chat({
+    message,
+    context: Object.assign({
+      currentPage: "verify-ai-provider",
+      timezone: "Asia/Shanghai",
+      currentScheduleSummary: { enabled: false, targetType: "", targetName: "", courses: [] },
+    }, contextPatch),
+  });
+  return {
+    provider: response.safety && response.safety.provider || "mock",
+    desiredProvider: response.safety && response.safety.desiredProvider || "",
+    resolvedProvider: response.safety && response.safety.resolvedProvider || "",
+    externalProviderUsed: response.safety && response.safety.externalProviderUsed === true,
+    providerPolicy: response.safety && response.safety.providerPolicy || "",
+    providerDecisionReason: response.safety && response.safety.providerDecisionReason || "",
+    mode: response.safety && response.safety.mode || "tool-grounded",
+    elapsedMs: Date.now() - startedAt,
+    toolCalls: response.toolCalls || [],
+    answerPreview: String(response.answer || "").slice(0, 100),
+  };
+}
+
 async function run() {
   const status = aiProviderConfigService.getStatus();
   console.log(JSON.stringify({
@@ -16,23 +40,29 @@ async function run() {
     envPath: path.relative(process.cwd(), status.envPath),
   }, null, 2));
 
-  const startedAt = Date.now();
-  const response = await agentService.chat({
-    message: "C7 附近现在有空教室吗？",
-    context: {
-      currentPage: "verify-ai-provider",
-      timezone: "Asia/Shanghai",
-      currentScheduleSummary: { enabled: false, targetType: "", targetName: "", courses: [] },
-    },
-  });
+  const deterministicToolTest = await runProbe("今天还有课吗？");
+  const projectQaProviderTest = await runProbe("FosuClass 是什么？小佛你了解当前项目吗？");
+  const previousPolicy = process.env.AI_PROVIDER_POLICY;
+  let forceProviderTest;
+  try {
+    process.env.AI_PROVIDER_POLICY = "always";
+    forceProviderTest = await runProbe("请用项目知识解释 AI 管家架构。");
+  } finally {
+    if (previousPolicy === undefined) {
+      delete process.env.AI_PROVIDER_POLICY;
+    } else {
+      process.env.AI_PROVIDER_POLICY = previousPolicy;
+    }
+  }
 
   console.log(JSON.stringify({
     success: true,
-    provider: response.safety && response.safety.provider || "mock",
-    fallbackMock: (response.safety && response.safety.provider) !== "deepseek" && status.provider === "deepseek",
-    mode: response.safety && response.safety.mode || "tool-grounded",
-    elapsedMs: Date.now() - startedAt,
-    answerPreview: String(response.answer || "").slice(0, 100),
+    provider: deterministicToolTest.provider,
+    fallbackMock: deterministicToolTest.provider !== "deepseek" && status.provider === "deepseek",
+    mode: deterministicToolTest.mode,
+    deterministicToolTest,
+    projectQaProviderTest,
+    forceProviderTest,
   }, null, 2));
 }
 

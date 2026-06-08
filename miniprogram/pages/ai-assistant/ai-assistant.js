@@ -3,6 +3,7 @@ const demoData = require("./demo-data");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const PRIVACY_SUMMARY_TEXT = "仅发送课程名、教师、教室、星期、节次、教学周；不发送学号、姓名、密码或原始文件。";
+const MAX_MESSAGE_COUNT = 20;
 const QUICK_QUESTIONS = [
   "现在有空教室吗？",
   "今天还有课吗？",
@@ -133,19 +134,28 @@ function typeClass(type) {
 
 function normalizeSafety(safety) {
   const source = safety || {};
-  const provider = source.provider || source.lastProvider || source.providerName || "unknown";
+  const provider = source.resolvedProvider || source.provider || source.lastProvider || source.providerName || "unknown";
+  const desiredProvider = source.desiredProvider || source.provider || provider;
   const mode = source.mode || source.safetyMode || "tool-grounded";
-  let providerLabel = mapProviderLabel(provider);
-  if (source.externalProviderUsed === false && /provider fallback|NOT_CONFIGURED|INVALID_PROVIDER|fallback to mock/i.test(source.fallbackReason || "")) {
-    providerLabel = "已降级";
+  const reason = String(source.providerDecisionReason || source.fallbackReason || "");
+  const externalUsed = source.externalProviderUsed === true;
+  let text = "本地规则：简单工具结果";
+  if (externalUsed) {
+    text = `${mapProviderLabel(provider)} 已参与`;
+  } else if (/timeout|超时/i.test(reason)) {
+    text = "已降级：Provider 超时";
+  } else if (/fallback|NOT_CONFIGURED|INVALID_PROVIDER|provider|降级/i.test(reason)) {
+    text = "已降级：Provider 不可用";
   }
+  const providerLabel = externalUsed ? mapProviderLabel(provider) : (text.indexOf("已降级") === 0 ? "已降级" : "本地规则");
   const modeLabel = mapSafetyModeLabel(mode);
   return {
     provider,
+    desiredProvider,
     mode,
     providerLabel,
     modeLabel,
-    text: `${providerLabel} · ${modeLabel}`,
+    text,
   };
 }
 
@@ -167,7 +177,7 @@ function normalizeToolCall(tool, index) {
     key: `${label}-${stateText}-${index}`,
     displayName: label,
     displayStatus: stateText,
-    displayText: `${label} · ${stateText}`,
+    displayText: `已核验：${label}`,
     statusClass: statusClass(source.status),
   };
 }
@@ -233,7 +243,7 @@ function normalizeMessageForDisplay(message, expandedCards) {
   const displaySafety = source.safety ? normalizeSafety(source.safety) : null;
   const metrics = normalizeMetrics(source.metrics);
   const displayToolCalls = Array.isArray(source.toolCalls)
-    ? source.toolCalls.slice(0, 6).map(normalizeToolCall)
+    ? source.toolCalls.slice(0, 1).map(normalizeToolCall)
     : [];
   return Object.assign({}, source, {
     id,
@@ -256,6 +266,10 @@ function normalizeMessageForDisplay(message, expandedCards) {
 
 function normalizeMessagesForDisplay(messages, expandedCards) {
   return Array.isArray(messages) ? messages.map((item) => normalizeMessageForDisplay(item, expandedCards)) : [];
+}
+
+function trimMessages(messages) {
+  return Array.isArray(messages) ? messages.slice(-MAX_MESSAGE_COUNT) : [];
 }
 
 function makeMessage(role, content, patch) {
@@ -293,10 +307,10 @@ function buildPrivacyState(allowed, expanded, firstTipVisible) {
   const enabled = allowed === true;
   return {
     allowPersonalContext: enabled,
-    privacyStatusText: enabled ? "课表摘要已开启" : "课表摘要默认关闭",
+    privacyStatusText: enabled ? "仅发送脱敏课表摘要" : "默认不发送课表摘要",
     privacyCompactClass: enabled ? "enabled" : "disabled",
-    privacyActionText: enabled ? "摘要开启" : "摘要关闭",
-    composerNote: enabled ? "仅发送脱敏课表摘要" : "默认不发送个人课表摘要",
+    privacyActionText: enabled ? "已允许" : "已关闭",
+    composerNote: enabled ? "摘要开启：仅发送脱敏课表摘要" : "摘要关闭：默认不发送个人课表摘要",
     privacyActionLabel: firstTipVisible ? "知道了" : (expanded ? "收起" : "说明"),
   };
 }
@@ -322,13 +336,11 @@ function resolveProviderState(messages) {
 }
 
 function buildHeroChips(state) {
-  const chips = [];
-  if (state.demoMode) chips.push({ id: "demo", label: "演示模式", className: "demo-chip" });
-  chips.push({ id: "provider", label: state.providerLabel || "AI", className: "provider-status-chip" });
-  chips.push({ id: "mode", label: state.providerModeLabel || "工具验证", className: "grounded-chip" });
-  chips.push({ id: "privacy", label: state.privacyActionText || "摘要关闭", className: "data-source-chip" });
-  chips.push({ id: "ability", label: "查课 / 空教室 / 今日安排 / 数据诊断", className: "ability-chip" });
-  return chips;
+  return [
+    { id: "schedule", label: "课表", className: "ability-chip" },
+    { id: "room", label: "空教室", className: "ability-chip" },
+    { id: "diagnosis", label: "数据诊断", className: "ability-chip" },
+  ];
 }
 
 Page({
@@ -369,7 +381,7 @@ Page({
     const allowPersonalContext = aiAssistantService.isPersonalContextAllowed();
     const demoMode = demoData.normalizeDemoMode(options && options.demo);
     const sourceMessages = demoMode ? demoData.getDemoMessages(demoMode) : aiAssistantService.getAiHistory();
-    const messages = normalizeMessagesForDisplay(sourceMessages, this.data.expandedCards);
+    const messages = normalizeMessagesForDisplay(trimMessages(sourceMessages), this.data.expandedCards);
     const providerState = resolveProviderState(messages);
     const privacyState = buildPrivacyState(allowPersonalContext, showPrivacyTip, showPrivacyTip);
     const nextState = Object.assign({
@@ -439,7 +451,8 @@ Page({
   },
 
   setMessages(nextMessages, patch, options) {
-    const messages = normalizeMessagesForDisplay(nextMessages, this.data.expandedCards);
+    const sourceMessages = trimMessages(nextMessages);
+    const messages = normalizeMessagesForDisplay(sourceMessages, this.data.expandedCards);
     const providerState = resolveProviderState(messages);
     const nextState = Object.assign({
       messages,

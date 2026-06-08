@@ -499,22 +499,58 @@ router.post("/ai-provider/config", verifyAdminWriteAccess, (req, res) => {
 router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res) => {
   try {
     const startedAt = Date.now();
-    const payload = await agentService.chat({
-      message: "C7 附近现在有空教室吗？",
-      context: {
+    const runProbe = async (message, contextPatch = {}) => agentService.chat({
+      message,
+      context: Object.assign({
         currentPage: "admin-ai-provider",
         timezone: "Asia/Shanghai",
         currentScheduleSummary: { enabled: false, targetType: "", targetName: "", courses: [] },
-      },
+      }, contextPatch),
     });
+    const summarizeProbe = (payload) => ({
+      provider: payload.safety && payload.safety.provider || "mock",
+      desiredProvider: payload.safety && payload.safety.desiredProvider || "",
+      resolvedProvider: payload.safety && payload.safety.resolvedProvider || "",
+      externalProviderUsed: payload.safety && payload.safety.externalProviderUsed === true,
+      providerPolicy: payload.safety && payload.safety.providerPolicy || "",
+      providerDecisionReason: payload.safety && payload.safety.providerDecisionReason || "",
+      mode: payload.safety && payload.safety.mode || "tool-grounded",
+      toolCalls: payload.toolCalls || [],
+      answerPreview: String(payload.answer || "").slice(0, 120),
+    });
+    const deterministicPayload = await runProbe("今天还有课吗？");
+    const projectPayload = await runProbe("FosuClass 是什么？小佛你了解当前项目吗？");
+    const previousPolicy = process.env.AI_PROVIDER_POLICY;
+    let forcePayload;
+    try {
+      process.env.AI_PROVIDER_POLICY = "always";
+      forcePayload = await runProbe("请用项目知识解释 AI 管家架构。");
+    } finally {
+      if (previousPolicy === undefined) {
+        delete process.env.AI_PROVIDER_POLICY;
+      } else {
+        process.env.AI_PROVIDER_POLICY = previousPolicy;
+      }
+    }
+    const payload = (req.body && req.body.mode === "project_qa")
+      ? projectPayload
+      : deterministicPayload;
     return res.json({
       success: true,
       data: {
         provider: payload.safety && payload.safety.provider || "mock",
+        desiredProvider: payload.safety && payload.safety.desiredProvider || "",
+        resolvedProvider: payload.safety && payload.safety.resolvedProvider || "",
+        externalProviderUsed: payload.safety && payload.safety.externalProviderUsed === true,
+        providerPolicy: payload.safety && payload.safety.providerPolicy || "",
+        providerDecisionReason: payload.safety && payload.safety.providerDecisionReason || "",
         mode: payload.safety && payload.safety.mode || "tool-grounded",
         elapsedMs: Date.now() - startedAt,
         toolCalls: payload.toolCalls || [],
         answerPreview: String(payload.answer || "").slice(0, 120),
+        deterministicToolTest: summarizeProbe(deterministicPayload),
+        projectQaProviderTest: summarizeProbe(projectPayload),
+        forceProviderTest: summarizeProbe(forcePayload),
       },
     });
   } catch (error) {
@@ -523,10 +559,18 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
       success: true,
       data: {
         provider: "mock",
+        desiredProvider: "mock",
+        resolvedProvider: "mock",
+        externalProviderUsed: false,
+        providerPolicy: process.env.AI_PROVIDER_POLICY || "auto",
+        providerDecisionReason: error.code || error.message || "verify fallback mock",
         mode: "fallback",
         elapsedMs: 0,
         toolCalls: [{ name: "ai-provider", status: "skipped", summary: error.code || "verify fallback mock" }],
         answerPreview: "当前 Provider 验证失败，请检查配置或回退 mock。",
+        deterministicToolTest: null,
+        projectQaProviderTest: null,
+        forceProviderTest: null,
       },
     });
   }

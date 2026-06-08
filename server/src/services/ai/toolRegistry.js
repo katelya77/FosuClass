@@ -1,5 +1,12 @@
 const releaseService = require("../releaseService");
 const { sanitizeToolResult } = require("./safetyGuard");
+const {
+  getCourseTimeRange,
+  getCourseTimeStatus,
+  getCourseWeekStatus,
+  getCurrentSection: getCurrentSectionByTime,
+  resolveCurrentTeachingWeek,
+} = require("../../../../shared/courseWeekRules");
 
 const MAX_SECTION = 14;
 const DEFAULT_TERM = "2025-2026-2";
@@ -69,14 +76,7 @@ function getWeekday(date) {
 }
 
 function getCurrentSection(date) {
-  const target = parseDate(date);
-  const minutes = target.getHours() * 60 + target.getMinutes();
-  const starts = [500, 550, 615, 665, 840, 890, 955, 1005, 1140, 1190, 1240, 1290, 1340, 1390];
-  let section = 1;
-  starts.forEach((start, index) => {
-    if (minutes >= start) section = index + 1;
-  });
-  return Math.max(1, Math.min(MAX_SECTION, section));
+  return getCurrentSectionByTime(date);
 }
 
 function toNumber(value, fallback) {
@@ -183,8 +183,26 @@ function needsClarification(type, q) {
   return false;
 }
 
+function isProjectQaMessage(text) {
+  const value = normalizeText(text);
+  if (!value) return false;
+  return /你是谁|你能做什么|这个小程序怎么用|怎么使用|怎么同步新学期课表|新学期.*同步|为什么要\s*XLS\s*导入|FosuClass|佛课小表|小佛.*项目|了解当前项目|解释.*功能|比赛.*展示|AI\s*管家架构|AI管家架构|项目知识|Release Pack|XLS-only/i.test(value);
+}
+
+function isConversationalHelp(text) {
+  const value = normalizeText(text).replace(/\s+/g, "");
+  if (!value) return false;
+  if (/今天|今日|明天|还有课|下一节|空教室|老师|教师|教室|课室|课程|班级|查课|课表|诊断|缓存|加载失败|数据失败/.test(value)) {
+    return false;
+  }
+  return /你好|您好|嗨|hello|hi|谢谢|感谢|帮我解释|怎么做|如何做|为什么|介绍一下/.test(value);
+}
+
 function resolveIntent(message, context = {}) {
   const text = normalizeText(message);
+  if (isProjectQaMessage(text)) {
+    return { name: "project_qa", slots: {} };
+  }
   if (/导入|XLS|excel|个人课表|账号|登录|密码/.test(text)) {
     return { name: "explain_personal_import", slots: { mode: /XLS|excel/i.test(text) ? "xls" : "unknown" } };
   }
@@ -224,13 +242,14 @@ function resolveIntent(message, context = {}) {
     }
     return { name: "search_school_index", slots: { type, q } };
   }
-  return { name: "generic", slots: {} };
+  if (isConversationalHelp(text)) {
+    return { name: "conversational_help", slots: {} };
+  }
+  return { name: "conversational_help", slots: {} };
 }
 
 function courseAppliesToWeek(course, week) {
-  if (!week) return true;
-  if (Array.isArray(course.weeks) && course.weeks.length) return course.weeks.includes(Number(week));
-  return true;
+  return getCourseWeekStatus(course || {}, week).active === true;
 }
 
 function sectionText(course) {
@@ -250,23 +269,47 @@ function buildActionUrl(pathname, query = {}) {
 function getTodayCourses(input = {}, context = {}) {
   const summary = context.currentScheduleSummary || {};
   if (!summary.enabled || !Array.isArray(summary.courses) || !summary.courses.length) {
+    const resolvedWeek = resolveCurrentTeachingWeek(context, input);
     return {
       success: true,
       needContext: true,
+      currentWeek: resolvedWeek.currentWeek,
+      weekUncertain: resolvedWeek.weekUncertain,
+      inactiveFilteredCount: 0,
+      uncertainWeekCoursesCount: 0,
+      activeCourseCount: 0,
       courseCount: 0,
       courses: [],
+      activeCourses: [],
       nextCourse: null,
+      allFinished: false,
+      currentSection: getCurrentSection(context.clientLocalTime || context.clientTime || new Date()),
       summary: "未收到当前课表摘要，需要先绑定班级课表或导入 XLS 个人课表。",
       actionUrl: "/pages/personal-sync/personal-sync?tab=xls",
     };
   }
   const date = input.date || inferTargetDate(input.message || "", context);
   const weekday = toNumber(input.weekday, getWeekday(date));
-  const week = toNumber(input.week, 0);
+  const resolvedWeek = resolveCurrentTeachingWeek(context, Object.assign({}, input, { date }));
+  const week = resolvedWeek.currentWeek;
+  const now = parseClientDate(context, date);
   const currentSection = getCurrentSection(context.clientLocalTime || context.clientTime || date);
-  const courses = summary.courses
+  let inactiveFilteredCount = 0;
+  let uncertainWeekCoursesCount = 0;
+  const activeCourses = summary.courses
     .filter((course) => Number(course.weekday) === weekday)
-    .filter((course) => courseAppliesToWeek(course, week))
+    .filter((course) => {
+      const weekStatus = getCourseWeekStatus(course, week);
+      if (weekStatus.uncertain || !weekStatus.hasWeekInfo) {
+        uncertainWeekCoursesCount += 1;
+        return false;
+      }
+      if (!weekStatus.active) {
+        inactiveFilteredCount += 1;
+        return false;
+      }
+      return true;
+    })
     .sort((left, right) => Number(left.startSection || 0) - Number(right.startSection || 0))
     .map((course) => ({
       courseName: course.courseName || "未命名课程",
@@ -276,20 +319,35 @@ function getTodayCourses(input = {}, context = {}) {
       startSection: course.startSection,
       endSection: course.endSection,
       sectionText: sectionText(course),
+      timeText: getCourseTimeRange(course),
+      status: getCourseTimeStatus(course, now),
+      weekText: course.weekText || course.rawWeek || "",
+      weeks: Array.isArray(course.weeks) ? course.weeks.slice(0, 40) : [],
       campus: course.campus || "",
     }));
-  const nextCourse = courses.find((course) => Number(course.startSection || 0) >= currentSection) || courses[0] || null;
+  const nextCourse = activeCourses.find((course) => course.status === "ongoing" || course.status === "upcoming") || null;
+  const allFinished = activeCourses.length > 0 && activeCourses.every((course) => course.status === "finished");
   return {
     success: true,
     needContext: false,
     date,
     weekday,
+    currentWeek: week,
     week,
-    courseCount: courses.length,
-    courses,
+    weekUncertain: resolvedWeek.weekUncertain,
+    inactiveFilteredCount,
+    uncertainWeekCoursesCount,
+    activeCourseCount: activeCourses.length,
+    courseCount: activeCourses.length,
+    courses: activeCourses,
+    activeCourses,
     nextCourse,
-    reminder: courses.length
-      ? `今天有 ${courses.length} 门课，下一项是 ${nextCourse ? nextCourse.courseName : "课程安排"}。`
+    allFinished,
+    currentSection,
+    reminder: activeCourses.length
+      ? (allFinished
+        ? "今天课程已结束。"
+        : `今天有 ${activeCourses.length} 门课，下一项是 ${nextCourse ? nextCourse.courseName : "课程安排"}。`)
       : "今天没有匹配到课程安排。",
     actionUrl: "/pages/today/today",
   };
@@ -567,7 +625,7 @@ function isHighConfidenceIndexHit(result = {}) {
 }
 
 function runToolsForIntent(intent, message, context) {
-  if (!intent || intent.name === "generic") return [];
+  if (!intent || intent.name === "generic" || intent.name === "project_qa" || intent.name === "conversational_help") return [];
   const input = Object.assign({}, intent.slots || {}, {
     message,
     term: context.term,
@@ -582,7 +640,7 @@ function runToolsForIntent(intent, message, context) {
 }
 
 function runToolChainForIntent(intent, message, context) {
-  if (!intent || intent.name === "generic") return [];
+  if (!intent || intent.name === "generic" || intent.name === "project_qa" || intent.name === "conversational_help") return [];
   if (intent.name === "clarify_missing_slot") return runToolsForIntent(intent, message, context);
 
   const input = Object.assign({}, intent.slots || {}, {
@@ -624,7 +682,9 @@ function runToolChainForIntent(intent, message, context) {
 
 module.exports = {
   executeTool,
+  courseAppliesToWeek,
   getCurrentSection,
+  getCourseTimeStatus,
   inferSections,
   inferTargetDate,
   parseClientDate,

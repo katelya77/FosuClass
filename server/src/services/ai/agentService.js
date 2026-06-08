@@ -1,5 +1,6 @@
 const providerFactory = require("./providerFactory");
 const mockProvider = require("./providers/mockProvider");
+const projectKnowledgeService = require("./projectKnowledgeService");
 const safetyGuard = require("./safetyGuard");
 const toolRegistry = require("./toolRegistry");
 
@@ -106,6 +107,9 @@ function evaluateProviderPolicy(intent, toolCalls, policy, providerName) {
   if (!agentEnabled) return { useExternal: false, reason: "AI_AGENT_ENABLED=false" };
   if (provider === "mock") return { useExternal: false, reason: "AI_PROVIDER=mock" };
   if (normalizedPolicy === "tool-only") return { useExternal: false, reason: "AI_PROVIDER_POLICY=tool-only" };
+  if (intentName === "project_qa" || intentName === "conversational_help") {
+    return { useExternal: true, reason: "项目知识问答/自然聊天调用外部 Provider" };
+  }
   if (intentName === "clarify_missing_slot") return { useExternal: false, reason: "缺少必要关键词，使用固定追问模板" };
   if (intentName === "explain_personal_import") return { useExternal: false, reason: "导入指引用固定安全模板" };
   if (intentName === "diagnose_data_status") return { useExternal: false, reason: "数据诊断使用本地模板" };
@@ -161,9 +165,12 @@ function buildResponse(payload) {
       redacted: true,
       usedPersonalContext: Boolean(payload.usedPersonalContext),
       provider: payload.provider || "mock",
+      desiredProvider: payload.desiredProvider || payload.provider || "mock",
+      resolvedProvider: payload.resolvedProvider || payload.provider || "mock",
       mode: "tool-grounded",
       providerPolicy: payload.providerPolicy || getProviderPolicy(),
       externalProviderUsed: payload.externalProviderUsed === true,
+      providerDecisionReason: payload.providerDecisionReason || "",
       fallbackReason: payload.fallbackReason || "",
     },
     metrics: payload.metrics || buildMetrics(),
@@ -253,11 +260,14 @@ async function chat(input = {}) {
   let externalProviderUsed = false;
   let fallback = !policyDecision.useExternal;
   let fallbackReason = policyDecision.reason || "";
+  const providerDecisionReason = policyDecision.reason || (policyDecision.useExternal ? "external provider selected" : "local provider selected");
   try {
+    const isProjectKnowledgeIntent = intent && (intent.name === "project_qa" || intent.name === "conversational_help");
     const providerInput = {
       message: safeMessage,
       context,
       intent,
+      projectKnowledge: isProjectKnowledgeIntent ? projectKnowledgeService.getProjectKnowledgePrompt() : "",
       toolResults: toolCalls.map((item) => ({
         name: item.name,
         status: item.status,
@@ -271,8 +281,11 @@ async function chat(input = {}) {
     providerName = generated.provider || providerName;
     externalProviderUsed = policyDecision.useExternal && providerName !== "mock";
     fallback = !externalProviderUsed;
+    if (externalProviderUsed) fallbackReason = "";
   } catch (error) {
-    generated = mockProvider.generate({ message: safeMessage, context, intent, toolResults: toolCalls });
+    generated = intent && (intent.name === "project_qa" || intent.name === "conversational_help")
+      ? projectKnowledgeService.generateFallbackResponse(intent.name)
+      : mockProvider.generate({ message: safeMessage, context, intent, toolResults: toolCalls });
     providerName = "mock";
     externalProviderUsed = false;
     fallback = true;
@@ -293,9 +306,12 @@ async function chat(input = {}) {
   return buildResponse(Object.assign({}, stable, {
     toolCalls: publicToolCalls,
     provider: providerName,
+    desiredProvider: desiredProviderName,
+    resolvedProvider: providerName,
     usedPersonalContext,
     providerPolicy,
     externalProviderUsed,
+    providerDecisionReason,
     fallbackReason,
     metrics: buildMetrics({
       startTime,

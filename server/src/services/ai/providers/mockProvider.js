@@ -1,3 +1,5 @@
+const projectKnowledgeService = require("../projectKnowledgeService");
+
 function makeAction(label, type, url, payload) {
   return {
     label,
@@ -76,10 +78,13 @@ function buildTodayCourses(result) {
     };
   }
   const courses = Array.isArray(result.courses) ? result.courses : [];
+  const todayAnswer = courses.length
+    ? (result.allFinished
+      ? "今天课程已结束。"
+      : `今天有 ${courses.length} 门课。${result.nextCourse ? `下一项是「${result.nextCourse.courseName}」，${result.nextCourse.sectionText}。` : ""}`)
+    : "今天没有匹配到课程安排，仍建议以教务系统和任课教师通知为准。";
   return {
-    answer: courses.length
-      ? `今天有 ${courses.length} 门课。${result.nextCourse ? `下一项是「${result.nextCourse.courseName}」，${result.nextCourse.sectionText}。` : ""}`
-      : "今天没有匹配到课程安排，仍建议以教务系统和任课教师通知为准。",
+    answer: todayAnswer,
     cards: [makeCard("schedule", "今日课程分析", result.reminder || "", {
       badges: ["课表摘要", "仅供参考"],
       items: courses.slice(0, 6).map((course) => ({
@@ -253,6 +258,7 @@ function generate({ intent, toolResults }) {
     name === "explain_personal_import" ? buildGuide(first || {}) :
     name === "clarify_missing_slot" ? buildClarification(first || {}) :
     name === "recommend_meeting_time" ? buildMeeting(first || {}) :
+    (name === "project_qa" || name === "conversational_help") ? projectKnowledgeService.generateFallbackResponse(name) :
     buildGeneric();
   return Object.assign({ provider: "mock" }, payload);
 }
