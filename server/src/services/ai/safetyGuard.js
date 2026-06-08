@@ -15,6 +15,8 @@ const TEXT_REDACTION_PATTERNS = [
 ];
 
 const SENSITIVE_KEY_PATTERN = /(password|passwd|pwd|studentId|student_id|studentName|cookie|jsessionid|ticket|authorization|token|secret|apiKey|api_key|base64|fileContent|rawFile|credential|openid|session)/i;
+const PERSONAL_TARGET_TYPES = new Set(["personal", "personal-xls", "account", "xls", "self", "mine", "local-personal"]);
+const PUBLIC_TARGET_TYPES = new Set(["class", "teacher", "classroom", "course", "school", "public"]);
 const DETECTION_PATTERNS = [
   /(?:password|passwd|pwd|密码|口令)\s*[:：=是为]?\s*(?!\[已脱敏\]|\[REDACTED\])[^\s，。；;,&]{2,}/i,
   /(?:authorization)\s*[:：=]\s*(?:bearer\s+)?(?!\[已脱敏\]|\[REDACTED\])[A-Za-z0-9._~+/=-]{8,}/i,
@@ -70,15 +72,51 @@ function sanitizeCourse(course) {
   };
 }
 
+function allowPersonalContext() {
+  return String(process.env.AI_ALLOW_PERSONAL_CONTEXT || "false").toLowerCase() === "true";
+}
+
+function normalizeTargetType(type) {
+  return sanitizeString(type || "", 30).toLowerCase();
+}
+
+function looksPersonalTargetName(name, targetType) {
+  const clean = sanitizeString(name || "", 80).trim();
+  const type = normalizeTargetType(targetType);
+  if (!clean || PUBLIC_TARGET_TYPES.has(type)) return false;
+  if (/个人|本人|我的|本机|导入|xls/i.test(clean)) return true;
+  if (/的课表$/.test(clean) && !/班|教室|课程|学院|专业/.test(clean)) return true;
+  if (/^[\u4e00-\u9fa5·]{2,4}$/.test(clean) && !/班|楼|室/.test(clean)) return true;
+  return false;
+}
+
+function redactedPersonalScheduleSummary() {
+  return {
+    enabled: false,
+    targetType: "personal-redacted",
+    targetName: "个人课表",
+    courses: [],
+  };
+}
+
 function sanitizeScheduleSummary(summary) {
   const source = summary || {};
+  const targetType = normalizeTargetType(source.targetType || source.type || "");
+  const rawTargetName = source.targetName || source.name || "";
+  const personalName = looksPersonalTargetName(rawTargetName, targetType);
+  if (!allowPersonalContext() && (PERSONAL_TARGET_TYPES.has(targetType) || personalName)) {
+    return redactedPersonalScheduleSummary();
+  }
   const courses = Array.isArray(source.courses)
     ? source.courses.slice(0, MAX_CONTEXT_COURSES).map(sanitizeCourse)
     : [];
+  const targetName = personalName
+    ? "个人课表"
+    : sanitizeString(rawTargetName, 80);
   return {
     enabled: Boolean(source.enabled),
-    targetType: sanitizeString(source.targetType || "", 30),
-    targetName: sanitizeString(source.targetName || "", 80),
+    targetType,
+    targetName,
     courses,
   };
 }

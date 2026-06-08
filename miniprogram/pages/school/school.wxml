@@ -84,6 +84,7 @@
     </view>
 
     <view class="tool-entry-card ai-tool-entry card" bindtap="goAiAssistant">
+      <image class="tool-entry-icon" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" />
       <view class="tool-entry-main">
         <view class="tool-entry-title">问 AI 帮我查课/找教室</view>
         <view class="tool-entry-desc">用自然语言查教师、课程、教室或让 AI 推荐下一步操作</view>

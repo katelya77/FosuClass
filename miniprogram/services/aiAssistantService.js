@@ -2,6 +2,7 @@ const request = require("../utils/request");
 const { getCurrentScheduleTarget } = require("../utils/storage");
 
 const HISTORY_KEY = "FOSU_AI_ASSISTANT_HISTORY";
+const ALLOW_PERSONAL_CONTEXT_KEY = "FOSU_AI_ALLOW_PERSONAL_CONTEXT";
 const MAX_HISTORY = 20;
 const MAX_CONTEXT_COURSES = 80;
 const REDACTED = "[已脱敏]";
@@ -77,15 +78,37 @@ function sanitizeCourse(course) {
   };
 }
 
+function isPersonalScheduleType(type) {
+  return ["personal", "personal-xls", "personal-login", "account", "xls", "file"].indexOf(String(type || "").toLowerCase()) >= 0;
+}
+
+function isPersonalContextAllowed() {
+  return readStorage(ALLOW_PERSONAL_CONTEXT_KEY, false) === true;
+}
+
+function setPersonalContextAllowed(allowed) {
+  writeStorage(ALLOW_PERSONAL_CONTEXT_KEY, allowed === true);
+  return allowed === true;
+}
+
 function sanitizeLocalScheduleForAI(target) {
   const source = target || getCurrentScheduleTarget() || {};
+  const targetType = redactSensitiveText(source.type || "").slice(0, 30);
+  if (isPersonalScheduleType(targetType) && !isPersonalContextAllowed()) {
+    return {
+      enabled: false,
+      targetType: "personal-redacted",
+      targetName: "个人课表",
+      courses: [],
+    };
+  }
   const courses = Array.isArray(source.courses)
     ? source.courses.slice(0, MAX_CONTEXT_COURSES).map(sanitizeCourse)
     : [];
   return {
     enabled: Boolean(source && source.type && courses.length),
-    targetType: redactSensitiveText(source.type || "").slice(0, 30),
-    targetName: redactSensitiveText(source.name || source.title || source.className || "").slice(0, 80),
+    targetType,
+    targetName: isPersonalScheduleType(targetType) ? "个人课表" : redactSensitiveText(source.name || source.title || source.className || "").slice(0, 80),
     courses,
   };
 }
@@ -160,12 +183,15 @@ function chat(message, context) {
 }
 
 module.exports = {
+  ALLOW_PERSONAL_CONTEXT_KEY,
   HISTORY_KEY,
   buildClientContext,
   chat,
   clearAiHistory,
   getAiHistory,
+  isPersonalContextAllowed,
   redactSensitiveText,
   sanitizeLocalScheduleForAI,
+  setPersonalContextAllowed,
   saveAiHistory,
 };

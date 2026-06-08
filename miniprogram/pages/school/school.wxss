@@ -173,7 +173,16 @@
 }
 
 .tool-entry-main {
+  flex: 1;
   min-width: 0;
+}
+
+.tool-entry-icon {
+  flex: 0 0 auto;
+  width: 58rpx;
+  height: 58rpx;
+  border-radius: 14rpx;
+  background: #fff4f4;
 }
 
 .tool-entry-title {

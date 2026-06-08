@@ -1,19 +1,42 @@
 <view class="page ai-page">
   <view class="assistant-hero card">
     <view class="hero-main">
-      <view class="hero-mark">AI</view>
+      <image
+        wx:if="{{hasHeroLogo}}"
+        class="hero-logo"
+        src="/assets/icons/ai-campus-butler.png"
+        mode="aspectFit"
+        binderror="onHeroLogoError"
+      />
+      <view wx:else class="hero-mark">AI</view>
       <view class="hero-copy">
         <view class="hero-title">{{welcome.title}}</view>
         <view class="hero-desc">{{welcome.desc}}</view>
       </view>
     </view>
-    <button class="history-clear" bindtap="clearHistory">清空</button>
+    <view class="hero-actions">
+      <view class="provider-pill">tool-grounded</view>
+      <button class="history-clear" bindtap="clearHistory">清空</button>
+    </view>
   </view>
 
-  <view class="privacy-tip card" wx:if="{{showPrivacyTip}}">
-    <view class="privacy-title">隐私提示</view>
-    <view class="privacy-desc">AI 仅处理最小必要信息，请不要输入密码、学号、身份证、Cookie 或 token。个人课表建议使用 XLS 导入。</view>
-    <button class="privacy-btn" bindtap="dismissPrivacyTip">知道了</button>
+  <view class="privacy-tip card">
+    <view class="privacy-head">
+      <view>
+        <view class="privacy-title">隐私与课表摘要</view>
+        <view class="privacy-desc">仅发送课程名、教师、教室、星期、节次、教学周，不发送学号、姓名、密码或原始文件。</view>
+      </view>
+      <switch
+        class="privacy-switch"
+        checked="{{allowPersonalContext}}"
+        color="#c62828"
+        bindchange="onPersonalContextToggle"
+      />
+    </view>
+    <view class="privacy-footer">
+      <text>{{allowPersonalContext ? "已允许 AI 分析本机课表摘要" : "默认不发送个人课表摘要"}}</text>
+      <button wx:if="{{showPrivacyTip}}" class="privacy-btn" bindtap="dismissPrivacyTip">知道了</button>
+    </view>
   </view>
 
   <scroll-view class="quick-scroll" scroll-x enhanced show-scrollbar="{{false}}">
@@ -30,8 +53,12 @@
 
   <scroll-view class="message-scroll" scroll-y scroll-top="{{scrollTop}}" enhanced show-scrollbar="{{false}}">
     <view class="empty-welcome" wx:if="{{!messages.length}}">
-      <view class="empty-title">可以直接问一个校园任务</view>
-      <view class="empty-desc">例如找 C7 附近空教室、分析今天课程、查老师课表或排查数据加载失败。</view>
+      <view class="empty-orbit">
+        <image wx:if="{{hasHeroLogo}}" class="empty-logo" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" />
+        <view wx:else class="empty-logo-text">AI</view>
+      </view>
+      <view class="empty-title">直接说一个校园任务</view>
+      <view class="empty-desc">找 C7 附近空教室、分析今天课程、查老师课表，或排查数据加载失败。</view>
     </view>
 
     <view
@@ -41,86 +68,93 @@
       wx:key="id"
       class="message-row {{message.role}}"
     >
-      <view class="message-bubble">
-        <view class="message-content">{{message.content}}</view>
-        <view class="message-meta">
-          <text>{{message.timeText}}</text>
-          <text wx:if="{{message.safety && message.safety.provider}}"> · {{message.safety.provider}} · {{message.safety.mode}}</text>
+      <view wx:if="{{message.role == 'assistant'}}" class="assistant-avatar">
+        <image wx:if="{{hasHeroLogo}}" class="avatar-logo" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" />
+        <text wx:else>AI</text>
+      </view>
+
+      <view class="message-body">
+        <view class="message-bubble">
+          <view class="message-content">{{message.content}}</view>
+          <view class="message-meta">
+            <text>{{message.timeText}}</text>
+            <text wx:if="{{message.safety && message.safety.provider}}"> · {{message.safety.provider}} · {{message.safety.mode}}</text>
+          </view>
         </view>
-      </view>
 
-      <view class="tool-strip" wx:if="{{message.toolCalls.length}}">
-        <view
-          wx:for="{{message.toolCalls}}"
-          wx:for-item="tool"
-          wx:key="name"
-          class="tool-chip {{tool.status}}"
-        >{{tool.name}} · {{tool.status}}</view>
-      </view>
+        <view class="tool-strip" wx:if="{{message.toolCalls.length}}">
+          <view
+            wx:for="{{message.toolCalls}}"
+            wx:for-item="tool"
+            wx:key="name"
+            class="tool-chip {{tool.status}}"
+          >{{tool.name}} · {{tool.status}}</view>
+        </view>
 
-      <view class="ai-card-list" wx:if="{{message.cards.length}}">
-        <view
-          wx:for="{{message.cards}}"
-          wx:for-item="card"
-          wx:for-index="cardIndex"
-          wx:key="title"
-          class="ai-result-card card card-type-{{card.type}}"
-        >
-          <view class="card-header-row">
-            <view class="card-title-block">
-              <view class="card-title">{{card.title}}</view>
-              <view class="card-subtitle">{{card.subtitle}}</view>
-            </view>
-            <view class="card-type">{{card.type}}</view>
-          </view>
-
-          <view class="badge-row" wx:if="{{card.badges.length}}">
-            <text
-              wx:for="{{card.badges}}"
-              wx:key="*this"
-              class="badge"
-            >{{item}}</text>
-          </view>
-
-          <view class="card-items" wx:if="{{card.items.length}}">
-            <view
-              wx:for="{{card.items}}"
-              wx:for-item="cardItem"
-              wx:key="title"
-              class="card-item"
-            >
-              <view class="item-main">
-                <view class="item-title">{{cardItem.title}}</view>
-                <view class="item-subtitle">{{cardItem.subtitle}}</view>
+        <view class="ai-card-list" wx:if="{{message.cards.length}}">
+          <view
+            wx:for="{{message.cards}}"
+            wx:for-item="card"
+            wx:for-index="cardIndex"
+            wx:key="title"
+            class="ai-result-card card card-type-{{card.type}}"
+          >
+            <view class="card-header-row">
+              <view class="card-title-block">
+                <view class="card-title">{{card.title}}</view>
+                <view class="card-subtitle">{{card.subtitle}}</view>
               </view>
-              <view class="item-value">{{cardItem.value}}</view>
+              <view class="card-type">{{card.type}}</view>
+            </view>
+
+            <view class="badge-row" wx:if="{{card.badges.length}}">
+              <text
+                wx:for="{{card.badges}}"
+                wx:key="*this"
+                class="badge"
+              >{{item}}</text>
+            </view>
+
+            <view class="card-items" wx:if="{{card.items.length}}">
+              <view
+                wx:for="{{card.items}}"
+                wx:for-item="cardItem"
+                wx:key="title"
+                class="card-item"
+              >
+                <view class="item-main">
+                  <view class="item-title">{{cardItem.title}}</view>
+                  <view class="item-subtitle">{{cardItem.subtitle}}</view>
+                </view>
+                <view class="item-value">{{cardItem.value}}</view>
+              </view>
+            </view>
+
+            <view class="card-actions" wx:if="{{card.actions.length}}">
+              <button
+                wx:for="{{card.actions}}"
+                wx:for-item="action"
+                wx:for-index="actionIndex"
+                wx:key="label"
+                class="card-action"
+                data-message-index="{{messageIndex}}"
+                data-card-index="{{cardIndex}}"
+                data-action-index="{{actionIndex}}"
+                bindtap="onCardAction"
+              >{{action.label}}</button>
             </view>
           </view>
-
-          <view class="card-actions" wx:if="{{card.actions.length}}">
-            <button
-              wx:for="{{card.actions}}"
-              wx:for-item="action"
-              wx:for-index="actionIndex"
-              wx:key="label"
-              class="card-action"
-              data-message-index="{{messageIndex}}"
-              data-card-index="{{cardIndex}}"
-              data-action-index="{{actionIndex}}"
-              bindtap="onCardAction"
-            >{{action.label}}</button>
-          </view>
         </view>
-      </view>
 
-      <view class="suggestion-row" wx:if="{{message.suggestions.length}}">
-        <button
-          wx:for="{{message.suggestions}}"
-          wx:key="*this"
-          class="suggestion-chip"
-          data-suggestion="{{item}}"
-          bindtap="onSuggestionTap"
-        >{{item}}</button>
+        <view class="suggestion-row" wx:if="{{message.suggestions.length}}">
+          <button
+            wx:for="{{message.suggestions}}"
+            wx:key="*this"
+            class="suggestion-chip"
+            data-suggestion="{{item}}"
+            bindtap="onSuggestionTap"
+          >{{item}}</button>
+        </view>
       </view>
     </view>
 
@@ -132,18 +166,21 @@
   </scroll-view>
 
   <view class="composer">
-    <input
-      class="composer-input"
-      value="{{inputValue}}"
-      placeholder="输入校园任务，不要输入密码或学号"
-      placeholder-class="composer-placeholder"
-      confirm-type="send"
-      bindinput="onInput"
-      bindconfirm="onSubmit"
-      disabled="{{sending}}"
-    />
-    <button class="send-btn {{sending || !inputValue ? 'disabled' : ''}}" bindtap="onSubmit" disabled="{{sending || !inputValue}}">
-      {{sending ? "发送中" : "发送"}}
-    </button>
+    <view class="composer-inner">
+      <input
+        class="composer-input"
+        value="{{inputValue}}"
+        placeholder="输入校园任务，不要输入密码或学号"
+        placeholder-class="composer-placeholder"
+        confirm-type="send"
+        bindinput="onInput"
+        bindconfirm="onSubmit"
+        disabled="{{sending}}"
+      />
+      <button class="send-btn {{sending || !inputValue ? 'disabled' : ''}}" bindtap="onSubmit" disabled="{{sending || !inputValue}}">
+        {{sending ? "发送中" : "发送"}}
+      </button>
+    </view>
+    <view class="composer-note">{{allowPersonalContext ? "本轮可带最小课表摘要" : "个人课表摘要关闭"}}</view>
   </view>
 </view>

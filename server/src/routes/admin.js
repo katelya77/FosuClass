@@ -22,6 +22,8 @@ const stagingUploadService = require("../services/stagingUploadService");
 const staticReleaseSyncService = require("../services/staticReleaseSyncService");
 const releaseLifecycleService = require("../services/releaseLifecycleService");
 const storageLifecycleService = require("../services/storageLifecycleService");
+const agentService = require("../services/ai/agentService");
+const aiProviderConfigService = require("../services/ai/providerConfigService");
 const stagingFingerprint = require("../utils/stagingFingerprint");
 const staticAccessTicket = require("../utils/staticAccessTicket");
 const { getClientIpInfo } = require("../utils/clientIp");
@@ -466,6 +468,68 @@ router.get("/security/report", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.post("/security/events/cleanup", adminAuth.verifyAdminAccess, (req, res) => {
   return res.json(clearExpiredSecurityEvents());
+});
+
+router.get("/ai-provider/config", adminAuth.verifyAdminAccess, (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  return res.json({
+    success: true,
+    data: aiProviderConfigService.getStatus(),
+  });
+});
+
+router.post("/ai-provider/config", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const status = aiProviderConfigService.saveConfig(req.body || {});
+    writeAuditLog(req, "save", "ai-provider", status.provider, `AI provider config saved: ${status.provider}`);
+    return res.json({
+      success: true,
+      data: status,
+    });
+  } catch (error) {
+    safeLog("ai-provider-config-save-failed", { error: error.message, code: error.code || "" });
+    return res.status(500).json({
+      success: false,
+      code: error.code || "AI_PROVIDER_CONFIG_SAVE_FAILED",
+      message: "AI Provider 配置保存失败。",
+    });
+  }
+});
+
+router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res) => {
+  try {
+    const startedAt = Date.now();
+    const payload = await agentService.chat({
+      message: "C7 附近现在有空教室吗？",
+      context: {
+        currentPage: "admin-ai-provider",
+        timezone: "Asia/Shanghai",
+        currentScheduleSummary: { enabled: false, targetType: "", targetName: "", courses: [] },
+      },
+    });
+    return res.json({
+      success: true,
+      data: {
+        provider: payload.safety && payload.safety.provider || "mock",
+        mode: payload.safety && payload.safety.mode || "tool-grounded",
+        elapsedMs: Date.now() - startedAt,
+        toolCalls: payload.toolCalls || [],
+        answerPreview: String(payload.answer || "").slice(0, 120),
+      },
+    });
+  } catch (error) {
+    safeLog("ai-provider-config-verify-failed", { error: error.message, code: error.code || "" });
+    return res.status(200).json({
+      success: true,
+      data: {
+        provider: "mock",
+        mode: "fallback",
+        elapsedMs: 0,
+        toolCalls: [{ name: "ai-provider", status: "skipped", summary: error.code || "verify fallback mock" }],
+        answerPreview: "当前 Provider 验证失败，请检查配置或回退 mock。",
+      },
+    });
+  }
 });
 
 /**

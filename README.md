@@ -28,9 +28,38 @@
 
 ### 参赛演示版本合规说明
 
-参赛演示版本建议使用境内服务器或校内可控网络部署，不调用境外 API，不把学号、密码、Cookie、JSESSIONID、ticket、Authorization、token、文件 base64 或完整原始文件内容发送给 AI Provider。个人课表只传递最小化课程摘要字段，日志只记录脱敏后的摘要、工具名和状态。
+AI 校园管家支持三种运行模式：
 
-原有文档中关于海外 VPS、Oracle VPS、1Panel 和 GitHub Actions 的说明保留为历史部署方案和长期运维方案；比赛演示时应明确切换为境内部署或本地演示，并保持 `AI_PROVIDER=mock` 或配置合规的国产 Provider。
+- 本地/评审机 mock 演示模式：`AI_AGENT_ENABLED=false` 或 `AI_PROVIDER=mock`，不调用外部模型，适合断网、无 key 或安全演示。
+- 国产模型脱敏调用模式：`AI_PROVIDER=deepseek` 或 `AI_PROVIDER=coze`，只发送脱敏后的消息、工具结果和最小上下文；DeepSeek 默认使用 `deepseek-v4-flash`，复杂说明书或离线分析可切换 `deepseek-v4-pro`。
+- 境内部署生产模式：未来迁移到境内云、校内服务器或微信云托管并完成备案；是否满足“数据不出境”以服务器 region、模型服务 region 和实际数据链路为准。
+
+参赛演示不把学号、密码、Cookie、JSESSIONID、ticket、Authorization、token、文件 base64 或完整原始文件内容发送给 AI Provider。个人课表摘要默认关闭，用户开启后也只传递课程名、教师、教室、星期、节次、教学周等最小字段，日志只记录脱敏后的摘要、工具名和状态。
+
+Oracle ARM、海外 VPS、1Panel 和 GitHub Actions 说明保留为开发/运维方案，不等同于境内合规部署。比赛现场建议使用 mock/local 演示，或配置合规的国产 Provider。
+
+### AI Provider 配置
+
+本机一键配置 DeepSeek：
+
+```powershell
+powershell -ExecutionPolicy Bypass -File tools/configure-ai-provider-local.ps1
+```
+
+Oracle ARM / Linux 开发运维环境：
+
+```bash
+FOSUCLASS_DEEPSEEK_API_KEY=your_local_key sh tools/configure-ai-provider-linux.sh
+```
+
+验证当前 Provider：
+
+```bash
+npm run verify:ai-provider
+npm run test:ai-competition
+```
+
+密钥管理要求：不要提交 key，不在日志打印 key，只通过环境变量或未跟踪的 `server/.env` 本地文件注入；发现泄露应立即轮换。
 
 更多说明见：
 
@@ -38,6 +67,7 @@
 - [AI Agent 合规说明](docs/ai-agent-compliance.md)
 - [5 分钟演示脚本](docs/demo-script-5min.md)
 - [模型 Provider 配置](docs/model-provider-config.md)
+- [Oracle ARM / Docker AI 部署说明](docs/oracle-arm-deploy-ai.md)
 
 ## 长期数据演进与去中心化方案
 
