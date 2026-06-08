@@ -31,6 +31,14 @@
     <view class="quick-empty-action">查询</view>
   </view>
 
+  <view class="quick-empty-card ai-today-card card" bindtap="goAiAssistant">
+    <view class="quick-empty-main">
+      <view class="quick-empty-title">问 AI 分析今天安排</view>
+      <view class="quick-empty-desc">结合当前课表给出下一节课、空档和后续建议</view>
+    </view>
+    <view class="quick-empty-action">分析</view>
+  </view>
+
   <view wx:if="{{courses.length}}" class="today-list">
     <course-card
       wx:for="{{courses}}"

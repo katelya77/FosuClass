@@ -1,0 +1,466 @@
+const releaseService = require("../releaseService");
+const { sanitizeToolResult } = require("./safetyGuard");
+
+const MAX_SECTION = 14;
+const DEFAULT_TERM = "2025-2026-2";
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function pad(value) {
+  return String(value).padStart(2, "0");
+}
+
+function parseDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+  const text = String(value || "").trim();
+  const date = text ? new Date(text) : new Date();
+  if (Number.isNaN(date.getTime())) return new Date();
+  return date;
+}
+
+function formatDate(date) {
+  const target = parseDate(date);
+  return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}`;
+}
+
+function getWeekday(date) {
+  const day = parseDate(date).getDay();
+  return day === 0 ? 7 : day;
+}
+
+function getCurrentSection(date) {
+  const target = parseDate(date);
+  const minutes = target.getHours() * 60 + target.getMinutes();
+  const starts = [500, 550, 615, 665, 840, 890, 955, 1005, 1140, 1190, 1240, 1290, 1340, 1390];
+  let section = 1;
+  starts.forEach((start, index) => {
+    if (minutes >= start) section = index + 1;
+  });
+  return Math.max(1, Math.min(MAX_SECTION, section));
+}
+
+function toNumber(value, fallback) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
+}
+
+function normalizeText(value) {
+  return String(value || "").trim();
+}
+
+function extractBuilding(message) {
+  const text = normalizeText(message);
+  const match = text.match(/\b([ABC]\d{1,2})\b/i);
+  if (match) return match[1].toUpperCase();
+  const known = ["会通楼", "致用楼", "基础楼", "图书馆", "C7", "B8", "B5"];
+  return known.find((item) => text.includes(item)) || "";
+}
+
+function parseChineseNumber(text, fallback) {
+  const value = normalizeText(text);
+  const map = { 一: 1, 两: 2, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6 };
+  const digit = value.match(/\d+/);
+  if (digit) return Number(digit[0]);
+  const chinese = value.match(/[一两二三四五六]/);
+  return chinese ? map[chinese[0]] : fallback;
+}
+
+function inferSections(message, clientTime) {
+  const text = normalizeText(message);
+  const range = text.match(/(\d{1,2})\s*[-~～至到]\s*(\d{1,2})\s*节?/);
+  if (range) return `${range[1]}-${range[2]}`;
+  const single = text.match(/第?\s*(\d{1,2})\s*节/);
+  if (single) return single[1];
+  const minFreeSections = text.includes("连续") ? parseChineseNumber(text, 2) : 1;
+  if (/现在|当前|马上/.test(text)) {
+    const start = getCurrentSection(clientTime);
+    const end = Math.min(MAX_SECTION, start + Math.max(1, minFreeSections) - 1);
+    return `${start}-${end}`;
+  }
+  if (/下午/.test(text)) return "5-8";
+  if (/晚上|夜间/.test(text)) return "9-12";
+  if (/上午|早上/.test(text)) return "1-4";
+  if (/中午/.test(text)) return "4-5";
+  return minFreeSections > 1 ? `1-${Math.min(MAX_SECTION, minFreeSections)}` : "1-2";
+}
+
+function inferTargetDate(message, context) {
+  const sourceDate = context.clientTime || new Date();
+  const date = parseDate(sourceDate);
+  if (/明天|翌日/.test(message || "")) {
+    date.setDate(date.getDate() + 1);
+  }
+  return formatDate(date);
+}
+
+function inferSearchType(message) {
+  const text = normalizeText(message);
+  if (/老师|教师|任课/.test(text)) return "teacher";
+  if (/教室|课室|自习室/.test(text)) return "classroom";
+  if (/课程|科目|查课/.test(text)) return "course";
+  if (/班级|行政班|专业/.test(text)) return "class";
+  return "teacher";
+}
+
+function stripIntentWords(message) {
+  return normalizeText(message)
+    .replace(/帮我|请问|查询|查找|查一下|查|课表|课程表|老师|教师|教室|课程|安排|佛山大学|佛大|的/g, " ")
+    .replace(/[？?，,。.!！]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function resolveIntent(message, context = {}) {
+  const text = normalizeText(message);
+  if (/导入|XLS|excel|个人课表|账号|登录|密码/.test(text)) {
+    return { name: "explain_personal_import", slots: { mode: /XLS|excel/i.test(text) ? "xls" : "unknown" } };
+  }
+  if (/加载失败|数据失败|为什么.*数据|诊断|缓存|release|同步失败|打不开/.test(text)) {
+    return { name: "diagnose_data_status", slots: {} };
+  }
+  if (/组会|会议|共同空闲|一起自习|自习时间|推荐时间/.test(text)) {
+    return {
+      name: "recommend_meeting_time",
+      slots: {
+        durationSections: /连续/.test(text) ? parseChineseNumber(text, 2) : 2,
+        building: extractBuilding(text),
+      },
+    };
+  }
+  if (/空教室|自习|空课室|找教室|可用教室|附近/.test(text)) {
+    return {
+      name: "search_empty_rooms",
+      slots: {
+        building: extractBuilding(text),
+        minFreeSections: /连续/.test(text) ? parseChineseNumber(text, 2) : 1,
+      },
+    };
+  }
+  if (/今天|今日|明天|还有课|下一节|上什么课|安排/.test(text)) {
+    return { name: "get_today_courses", slots: {} };
+  }
+  if (/老师|教师|教室|课程|班级|查课|课表/.test(text)) {
+    const type = inferSearchType(text);
+    return { name: "search_school_index", slots: { type, q: stripIntentWords(text) } };
+  }
+  return { name: "generic", slots: {} };
+}
+
+function courseAppliesToWeek(course, week) {
+  if (!week) return true;
+  if (Array.isArray(course.weeks) && course.weeks.length) return course.weeks.includes(Number(week));
+  return true;
+}
+
+function sectionText(course) {
+  const start = Number(course.startSection || 0);
+  const end = Number(course.endSection || start || 0);
+  return start && end ? `第${start}-${end}节` : "节次待定";
+}
+
+function buildActionUrl(pathname, query = {}) {
+  const params = Object.keys(query)
+    .filter((key) => query[key] !== undefined && query[key] !== null && query[key] !== "")
+    .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(String(query[key]))}`)
+    .join("&");
+  return `${pathname}${params ? `?${params}` : ""}`;
+}
+
+function getTodayCourses(input = {}, context = {}) {
+  const summary = context.currentScheduleSummary || {};
+  if (!summary.enabled || !Array.isArray(summary.courses) || !summary.courses.length) {
+    return {
+      success: true,
+      needContext: true,
+      courseCount: 0,
+      courses: [],
+      nextCourse: null,
+      summary: "未收到当前课表摘要，需要先绑定班级课表或导入 XLS 个人课表。",
+      actionUrl: "/pages/personal-sync/personal-sync?tab=xls",
+    };
+  }
+  const date = input.date || inferTargetDate(input.message || "", context);
+  const weekday = toNumber(input.weekday, getWeekday(date));
+  const week = toNumber(input.week, 0);
+  const currentSection = getCurrentSection(context.clientTime || date);
+  const courses = summary.courses
+    .filter((course) => Number(course.weekday) === weekday)
+    .filter((course) => courseAppliesToWeek(course, week))
+    .sort((left, right) => Number(left.startSection || 0) - Number(right.startSection || 0))
+    .map((course) => ({
+      courseName: course.courseName || "未命名课程",
+      teacherName: course.teacherName || "",
+      classroom: course.classroom || course.roomName || "",
+      weekday: course.weekday,
+      startSection: course.startSection,
+      endSection: course.endSection,
+      sectionText: sectionText(course),
+      campus: course.campus || "",
+    }));
+  const nextCourse = courses.find((course) => Number(course.startSection || 0) >= currentSection) || courses[0] || null;
+  return {
+    success: true,
+    needContext: false,
+    date,
+    weekday,
+    week,
+    courseCount: courses.length,
+    courses,
+    nextCourse,
+    reminder: courses.length
+      ? `今天有 ${courses.length} 门课，下一项是 ${nextCourse ? nextCourse.courseName : "课程安排"}。`
+      : "今天没有匹配到课程安排。",
+    actionUrl: "/pages/today/today",
+  };
+}
+
+function searchEmptyRooms(input = {}, context = {}) {
+  const message = input.message || "";
+  const date = input.date || inferTargetDate(message, context);
+  const sections = input.sections || inferSections(message, context.clientTime);
+  const building = input.building || extractBuilding(message);
+  const minFreeSections = Math.max(1, Number(input.minFreeSections || (/连续/.test(message) ? parseChineseNumber(message, 2) : 1)) || 1);
+  const query = {
+    term: input.term || context.term || DEFAULT_TERM,
+    releaseVersion: input.releaseVersion || context.releaseVersion || "",
+    date,
+    week: input.week || "",
+    weekday: input.weekday || getWeekday(date),
+    sections,
+    building,
+    minFreeSections,
+    commonOnly: input.commonOnly === undefined ? "true" : input.commonOnly,
+    excludeUnknown: input.excludeUnknown === undefined ? "true" : input.excludeUnknown,
+  };
+  const result = releaseService.queryEmptyClassrooms(query);
+  const rooms = asArray(result.rooms).slice(0, 8);
+  return Object.assign({}, result, {
+    rooms,
+    summary: result.success
+      ? `${query.building || "全部楼栋"} ${query.sections} 共找到 ${result.total || rooms.length} 间可用教室`
+      : "当前没有可用的空教室索引，请先检查 Release Pack。",
+    updatedAt: result.updatedAt || "",
+    actionUrl: buildActionUrl("/pages/empty-room/empty-room", query),
+  });
+}
+
+function searchSchoolIndex(input = {}, context = {}) {
+  const type = ["class", "teacher", "classroom", "course"].includes(input.type) ? input.type : "teacher";
+  const query = normalizeText(input.q || input.message || "");
+  const result = releaseService.searchActiveIndex(type, query, {
+    term: input.term || context.term || DEFAULT_TERM,
+    semester: input.term || context.term || DEFAULT_TERM,
+    releaseVersion: input.releaseVersion || context.releaseVersion || "",
+    limit: input.limit || 8,
+  });
+  return {
+    success: Boolean(result.success),
+    type,
+    q: query,
+    items: asArray(result.items).slice(0, Number(input.limit || 8) || 8),
+    total: Number(result.total || asArray(result.items).length) || 0,
+    updatedAt: result.updatedAt || "",
+    releaseVersion: result.releaseVersion || result.version || context.releaseVersion || "",
+    actionUrl: buildActionUrl("/pages/school/school", { type, q: query }),
+    code: result.code || result.reasonCode || "",
+  };
+}
+
+function getScheduleDetail(input = {}, context = {}) {
+  const type = ["class", "teacher", "classroom", "course"].includes(input.type) ? input.type : "";
+  const id = normalizeText(input.id || "");
+  if (!type || !id) {
+    return { success: false, code: "DETAIL_TARGET_MISSING", courses: [], schedule: null };
+  }
+  const result = releaseService.readActiveSchedule(type, id, input.releaseVersion || context.releaseVersion || "");
+  const courses = asArray(result.schedule && result.schedule.courses);
+  return {
+    success: Boolean(result.success),
+    type,
+    id,
+    schedule: result.schedule || null,
+    courses,
+    updatedAt: result.updatedAt || "",
+    releaseVersion: result.releaseVersion || result.version || context.releaseVersion || "",
+    actionUrl: buildActionUrl("/pages/schedule-view/schedule-view", { type, id, releaseVersion: result.releaseVersion || context.releaseVersion || "" }),
+    code: result.code || result.reasonCode || "",
+  };
+}
+
+function diagnoseDataStatus(input = {}, context = {}) {
+  const active = releaseService.getActiveReleaseInfo() || {};
+  const releaseVersion = input.releaseVersion || context.releaseVersion || active.releaseVersion || active.version || "";
+  const indexCounts = {};
+  const cacheStatus = {};
+  ["class", "teacher", "classroom", "course"].forEach((kind) => {
+    const result = releaseService.readActiveIndex(kind, releaseVersion);
+    indexCounts[kind] = Array.isArray(result.items) ? result.items.length : 0;
+    cacheStatus[kind] = result.success ? (result.dataSource || "index") : (result.code || result.reasonCode || "INDEX_NOT_FOUND");
+  });
+  const releasePack = releaseVersion ? releaseService.getReleasePackQuickHealth(releaseVersion) : null;
+  const emptyRoom = releaseService.readEmptyRoomIndex(releaseVersion);
+  return {
+    success: true,
+    activeReleaseVersion: releaseVersion,
+    term: active.term || active.semester || context.term || DEFAULT_TERM,
+    indexCounts,
+    releasePackHealthy: Boolean(releasePack && releasePack.healthy),
+    releasePack,
+    cacheStatus: Object.assign({}, cacheStatus, {
+      emptyRoom: emptyRoom.success ? (emptyRoom.dataSource || "empty-room-index") : (emptyRoom.code || emptyRoom.reasonCode || "EMPTY_ROOM_INDEX_NOT_FOUND"),
+    }),
+    suggestions: [
+      releaseVersion ? "确认小程序端已切换到当前 Release Version。" : "当前没有 active release，请先在后台发布一版 Release Pack。",
+      emptyRoom.success ? "空教室索引可用，可直接进入空教室页验证。" : "空教室索引缺失时，请重新构建 Release Pack。",
+      "若网络慢，优先展示本地缓存，并在后台静默校验更新。",
+    ],
+  };
+}
+
+function explainPersonalImport(input = {}) {
+  const mode = input.mode || "unknown";
+  return {
+    success: true,
+    mode,
+    title: "个人课表安全导入说明",
+    steps: [
+      "优先使用 100 网导出的 XLS 文件导入，AI 不需要也不会接收学号密码。",
+      "导入时仅解析课程名、教师、教室、星期、节次和教学周等最小必要字段。",
+      "如果必须账号同步，请在个人同步页完成，不要把密码输入到 AI 聊天框。",
+    ],
+    actionUrl: "/pages/personal-sync/personal-sync?tab=xls",
+  };
+}
+
+function buildBusyMatrix(courses, week) {
+  const busy = {};
+  for (let weekday = 1; weekday <= 7; weekday += 1) busy[weekday] = new Set();
+  asArray(courses).forEach((course) => {
+    if (!courseAppliesToWeek(course, week)) return;
+    const weekday = Number(course.weekday || 0);
+    if (!busy[weekday]) return;
+    const start = Number(course.startSection || 0);
+    const end = Number(course.endSection || start);
+    for (let section = start; section <= end; section += 1) {
+      if (section >= 1 && section <= MAX_SECTION) busy[weekday].add(section);
+    }
+  });
+  return busy;
+}
+
+function recommendMeetingTime(input = {}, context = {}) {
+  const summary = context.currentScheduleSummary || {};
+  const courses = asArray(input.participantsSchedules).flatMap((item) => asArray(item && item.courses))
+    .concat(asArray(summary.courses));
+  if (!courses.length) {
+    return {
+      success: true,
+      needContext: true,
+      candidates: [],
+      summary: "需要参与者主动提供本地课表摘要后，才能计算共同空闲时间。",
+      actionUrl: "/pages/personal-sync/personal-sync?tab=xls",
+    };
+  }
+  const duration = Math.max(1, Math.min(4, Number(input.durationSections || 2) || 2));
+  const week = Number(input.week || 0) || 0;
+  const busy = buildBusyMatrix(courses, week);
+  const candidates = [];
+  for (let weekday = 1; weekday <= 7; weekday += 1) {
+    let runStart = 0;
+    let run = 0;
+    for (let section = 1; section <= MAX_SECTION; section += 1) {
+      if (!busy[weekday].has(section)) {
+        if (!runStart) runStart = section;
+        run += 1;
+        if (run >= duration) {
+          candidates.push({
+            weekday,
+            startSection: runStart,
+            endSection: runStart + duration - 1,
+            reason: `第${runStart}-${runStart + duration - 1}节共同空闲`,
+          });
+          break;
+        }
+      } else {
+        runStart = 0;
+        run = 0;
+      }
+    }
+  }
+  const first = candidates[0] || null;
+  const emptyRoom = first ? searchEmptyRooms({
+    message: input.message || "",
+    weekday: first.weekday,
+    sections: `${first.startSection}-${first.endSection}`,
+    minFreeSections: duration,
+    building: input.building || "",
+  }, context) : null;
+  return {
+    success: true,
+    needContext: false,
+    durationSections: duration,
+    candidates: candidates.slice(0, 5),
+    emptyRoomActionUrl: emptyRoom && emptyRoom.actionUrl || "/pages/empty-room/empty-room",
+    summary: candidates.length ? `找到 ${candidates.length} 个候选共同空闲时段。` : "本周没有找到满足条件的共同空闲时段。",
+  };
+}
+
+function executeTool(name, input = {}, context = {}) {
+  const tools = {
+    get_today_courses: getTodayCourses,
+    search_empty_rooms: searchEmptyRooms,
+    search_school_index: searchSchoolIndex,
+    get_schedule_detail: getScheduleDetail,
+    diagnose_data_status: diagnoseDataStatus,
+    explain_personal_import: explainPersonalImport,
+    recommend_meeting_time: recommendMeetingTime,
+  };
+  const tool = tools[name];
+  if (!tool) {
+    return { success: false, code: "TOOL_NOT_FOUND" };
+  }
+  try {
+    return sanitizeToolResult(tool(Object.assign({}, input, { message: input.message || "" }), context));
+  } catch (error) {
+    return {
+      success: false,
+      code: error.code || "TOOL_FAILED",
+      message: error.message || "工具调用失败",
+    };
+  }
+}
+
+function getToolSummary(name, result) {
+  if (!result || result.success === false) return result && (result.code || result.message) || "工具调用失败";
+  if (name === "search_empty_rooms") return result.summary || `找到 ${result.total || 0} 间空教室`;
+  if (name === "get_today_courses") return result.needContext ? "需要当前课表上下文" : `今日课程 ${result.courseCount || 0} 门`;
+  if (name === "search_school_index") return `${result.type || "index"} 命中 ${result.total || 0} 项`;
+  if (name === "diagnose_data_status") return `Release ${result.activeReleaseVersion || "未发布"}`;
+  if (name === "recommend_meeting_time") return result.summary || "已计算候选时间";
+  if (name === "explain_personal_import") return "已返回导入指引";
+  return "工具调用完成";
+}
+
+function runToolsForIntent(intent, message, context) {
+  if (!intent || intent.name === "generic") return [];
+  const input = Object.assign({}, intent.slots || {}, {
+    message,
+    term: context.term,
+    releaseVersion: context.releaseVersion,
+  });
+  const result = executeTool(intent.name, input, context);
+  return [{
+    name: intent.name,
+    status: result && result.success === false ? "failed" : "success",
+    summary: getToolSummary(intent.name, result),
+    result,
+  }];
+}
+
+module.exports = {
+  executeTool,
+  resolveIntent,
+  runToolsForIntent,
+};

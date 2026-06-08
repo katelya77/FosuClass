@@ -39,6 +39,7 @@
     <view class="action-grid">
       <button class="action-btn" bindtap="goTimetable">作息时间</button>
       <button class="action-btn" bindtap="goCustomCourses">个性化</button>
+      <button class="action-btn ai-btn" bindtap="goAiAssistant">AI管家</button>
       <button class="action-btn sync-btn" bindtap="goLogin">{{syncActionText}}</button>
       <button class="action-btn" bindtap="toggleMoreMenu">更多</button>
     </view>
@@ -285,6 +286,9 @@
       </view>
       <view class="menu-item" bindtap="goCustomCourses">
         <text class="menu-icon">+</text>个性化课程
+      </view>
+      <view class="menu-item" bindtap="goAiAssistant">
+        <text class="menu-icon">AI</text>AI校园管家
       </view>
       <view class="menu-item danger-item" bindtap="clearLocalCache">
         <text class="menu-icon">🗑</text>清除本地缓存

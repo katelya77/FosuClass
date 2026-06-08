@@ -26,6 +26,7 @@ const contributeRouter = require("./routes/contribute");
 const feedbackRouter = require("./routes/feedback");
 const personalRouter = require("./routes/personal");
 const relayRouter = require("./routes/relay");
+const aiRouter = require("./routes/ai");
 
 const app = express();
 
@@ -156,6 +157,7 @@ app.use((err, req, res, next) => {
 app.use("/api/health", healthRouter);
 app.use("/api/fosu", fosuRouter);
 app.use("/api/fosu/personal", personalRouter);
+app.use("/api/ai", aiRouter);
 app.use("/api/admin", adminRouter);
 app.use("/admin", adminPageRouter);
 app.use("/api/relay", relayRouter);

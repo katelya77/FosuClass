@@ -3,6 +3,7 @@
     "pages/index/index",
     "pages/school/school",
     "pages/today/today",
+    "pages/ai-assistant/ai-assistant",
     "pages/calendar/calendar",
     "pages/settings/settings",
     "pages/custom-courses/custom-courses",
