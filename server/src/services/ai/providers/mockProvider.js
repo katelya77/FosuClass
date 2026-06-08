@@ -85,7 +85,7 @@ function buildTodayCourses(result) {
     : "今天没有匹配到课程安排，仍建议以教务系统和任课教师通知为准。";
   return {
     answer: todayAnswer,
-    cards: [makeCard("schedule", "今日课程分析", result.reminder || "", {
+    cards: [Object.assign(makeCard("schedule", result.allFinished ? "今日课程已结束" : "今日课程分析", result.reminder || "", {
       badges: ["课表摘要", "仅供参考"],
       items: courses.slice(0, 6).map((course) => ({
         title: course.courseName,
@@ -93,7 +93,7 @@ function buildTodayCourses(result) {
         value: course.sectionText,
       })),
       actions: [makeAction("查看今日安排", "navigate", result.actionUrl || "/pages/today/today")],
-    })],
+    }), { allFinished: result.allFinished === true })],
     suggestions: ["现在有空教室吗？", "帮我推荐自习时间"],
   };
 }

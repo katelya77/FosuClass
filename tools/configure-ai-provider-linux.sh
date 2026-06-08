@@ -67,6 +67,7 @@ set_env_value "AI_TEMPERATURE" "0.1"
 set_env_value "AI_THINKING_ENABLED" "false"
 set_env_value "AI_REASONING_EFFORT" "medium"
 set_env_value "AI_PROVIDER_JSON_REPAIR" "true"
+set_env_value "DEEPSEEK_STRICT_JSON_MODE" "false"
 
 cd "$ROOT_DIR/server"
 docker compose up -d --build

@@ -4,6 +4,7 @@ require("../src/config");
 
 const agentService = require("../src/services/ai/agentService");
 const aiProviderConfigService = require("../src/services/ai/providerConfigService");
+const deepseekProvider = require("../src/services/ai/providers/deepseekProvider");
 
 function args() {
   const result = {};
@@ -21,6 +22,9 @@ function summarizeStatus(status) {
     model: status.model,
     baseUrl: status.baseUrl,
     enabled: status.enabled,
+    thinkingEnabled: Boolean(status.thinkingEnabled),
+    jsonRepair: Boolean(status.jsonRepair),
+    strictJsonMode: Boolean(status.strictJsonMode),
     keyConfigured: Boolean(status.deepseekKeyConfigured || status.cozeKeyConfigured),
     deepseekKeyConfigured: Boolean(status.deepseekKeyConfigured),
     cozeKeyConfigured: Boolean(status.cozeKeyConfigured),
@@ -29,6 +33,23 @@ function summarizeStatus(status) {
     runtimeConfigPath: status.runtimeConfigPath ? path.relative(process.cwd(), status.runtimeConfigPath) : "",
     envPath: status.envPath ? path.relative(process.cwd(), status.envPath) : "",
   };
+}
+
+function buildJsonModeTest(status) {
+  if (status.provider !== "deepseek") {
+    return { status: "skip", reason: "AI_PROVIDER is not deepseek" };
+  }
+  try {
+    const prompt = deepseekProvider.buildSystemPrompt("", { useJsonMode: true });
+    const pass = deepseekProvider.shouldUseJsonMode({ name: "search_empty_rooms" }) === true &&
+      /json/.test(prompt) &&
+      /\{"answer":/.test(prompt);
+    return pass
+      ? { status: "pass", reason: "" }
+      : { status: "fail", reason: "json prompt or mode contract missing" };
+  } catch (error) {
+    return { status: "fail", reason: error.code || error.message };
+  }
 }
 
 async function runProbe(message, contextPatch = {}) {
@@ -66,6 +87,8 @@ async function run() {
 
   const deterministicToolTest = await runProbe("今天还有课吗？");
   const projectQaTest = await runProbe("FosuClass 是什么？小佛你了解当前项目吗？");
+  const projectQaMode = status.provider === "deepseek" && status.strictJsonMode ? "json" : "text";
+  const jsonModeTest = buildJsonModeTest(status);
   const previousPolicy = process.env.AI_PROVIDER_POLICY;
   let forceProviderTest;
   try {
@@ -84,7 +107,10 @@ async function run() {
     statusOnly: false,
     deterministicToolTest,
     projectQaTest,
+    projectQaMode,
+    jsonModeTest,
     forceProviderTest,
+    forceProviderFallbackReason: forceProviderTest && forceProviderTest.fallbackReason || "",
     fallbackMock: deterministicToolTest.provider !== "deepseek" && status.provider === "deepseek",
   }, statusPayload), null, 2));
 }

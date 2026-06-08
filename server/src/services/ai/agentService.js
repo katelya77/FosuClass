@@ -40,7 +40,7 @@ function stableAction(action) {
 function stableCard(card) {
   const source = card || {};
   const type = ALLOWED_CARD_TYPES.has(source.type) ? source.type : "generic";
-  return {
+  const stable = {
     type,
     title: safetyGuard.redactSensitiveText(source.title || "结果卡片").slice(0, 80),
     subtitle: safetyGuard.redactSensitiveText(source.subtitle || "").slice(0, 160),
@@ -55,6 +55,9 @@ function stableCard(card) {
     }) : [],
     actions: Array.isArray(source.actions) ? source.actions.slice(0, 4).map(stableAction) : [],
   };
+  if (source.allFinished === true) stable.allFinished = true;
+  if (source.variant === "error") stable.variant = "error";
+  return stable;
 }
 
 function stableGeneratedPayload(payload) {

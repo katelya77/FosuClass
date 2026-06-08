@@ -67,20 +67,27 @@ function boolEnv(name, fallback) {
   return String(raw).toLowerCase() === "true";
 }
 
-function buildSystemPrompt(projectKnowledge) {
+function buildSystemPrompt(projectKnowledge, options = {}) {
+  const useJsonMode = options.useJsonMode !== false;
   const lines = [
     "你是佛课小表 AI 校园管家。",
     "你只能基于 user content 中的 toolResults 和最小上下文回答，不得编造课程、教师、教室、空教室或数据状态事实。",
     "你了解 FosuClass 项目的内置知识摘要，但不能编造未在知识库中的功能、接口或承诺。",
     "课程事实、今日课程、空教室、教师课表和数据状态仍只能来自 toolResults；项目知识只能用于解释产品、架构、合规边界和使用引导。",
     "如果 toolResults 没有给出确定事实，必须明确说明无法从项目工具确认，并给出可操作的下一步。",
-    "必须输出严格 JSON object，不要输出 markdown、解释性前后缀或代码块。",
-    "JSON 顶层字段只能是 answer、cards、suggestions。",
-    "answer 必须是字符串。",
-    `cards 必须是数组，每个 card.type 只能是 ${ALLOWED_CARD_TYPES}。`,
-    `actions 的 type 只能是 ${ALLOWED_ACTION_TYPES}。`,
     "不要输出学号、密码、Cookie、token、Authorization、原始 XLS、base64 或任何密钥。",
   ];
+  if (useJsonMode) {
+    lines.push("必须输出严格 json object，不要输出 markdown、解释性前后缀或代码块。");
+    lines.push("json 顶层字段只能是 answer、cards、suggestions。");
+    lines.push("answer 必须是字符串。");
+    lines.push(`cards 必须是数组，每个 card.type 只能是 ${ALLOWED_CARD_TYPES}。`);
+    lines.push(`actions 的 type 只能是 ${ALLOWED_ACTION_TYPES}。`);
+    lines.push('json 示例：{"answer":"已根据工具整理结果。","cards":[],"suggestions":[]}');
+  } else {
+    lines.push("请用简洁中文直接回答，不要输出 JSON、markdown 表格或代码块。");
+    lines.push("如果问题涉及课程、教室、教师或空教室事实，必须说明这些事实需要项目工具核验。");
+  }
   if (projectKnowledge) {
     lines.push("FosuClass 项目知识摘要：");
     lines.push(String(projectKnowledge).slice(0, 3000));
@@ -115,6 +122,57 @@ function parseJsonCodeBlock(text) {
   }
 }
 
+function isProjectQaIntent(intent) {
+  const name = intent && intent.name;
+  return name === "project_qa" || name === "conversational_help";
+}
+
+function shouldUseJsonMode(intent) {
+  const strictJsonMode = boolEnv("DEEPSEEK_STRICT_JSON_MODE", false);
+  if (isProjectQaIntent(intent) && !strictJsonMode) return false;
+  return true;
+}
+
+function safeHostFromUrl(value) {
+  try {
+    return new URL(String(value || DEFAULT_BASE_URL)).host;
+  } catch (error) {
+    return "invalid-url";
+  }
+}
+
+function buildProviderDiagnostics(options = {}) {
+  return {
+    model: options.model || "",
+    baseUrlHost: safeHostFromUrl(options.baseUrl),
+    useJsonMode: options.useJsonMode === true,
+    thinkingEnabled: options.thinkingEnabled === true,
+    responseStatus: Number(options.responseStatus || 0) || 0,
+  };
+}
+
+function wrapTextResponse(content) {
+  const answer = String(content || "").trim().slice(0, 1200);
+  if (!answer) {
+    const error = new Error("DeepSeek provider returned empty text.");
+    error.code = "INVALID_PROVIDER_TEXT";
+    throw error;
+  }
+  return {
+    provider: "deepseek",
+    answer,
+    cards: [{
+      type: "generic",
+      title: "项目问答",
+      subtitle: "来自项目知识摘要，课程事实仍需工具核验",
+      badges: ["项目说明"],
+      items: [],
+      actions: [],
+    }],
+    suggestions: ["这个小程序怎么用？", "怎么导入个人课表？"],
+  };
+}
+
 function classifyHttpError(error) {
   const code = String(error && error.code || "");
   if (/timeout|ECONNABORTED|ETIMEDOUT/i.test(code) || /timeout|超时/i.test(String(error && error.message || ""))) {
@@ -146,19 +204,20 @@ async function generate({ message, intent, toolResults, projectKnowledge }) {
   const timeout = numberEnv("AI_TIMEOUT_MS", 15000, 1000, 60000);
   const maxTokens = numberEnv("AI_MAX_TOKENS", 1200, 128, 4096);
   const temperature = numberEnv("AI_TEMPERATURE", 0.1, 0, 2);
+  const useJsonMode = shouldUseJsonMode(intent);
   const body = {
     model,
     stream: false,
     max_tokens: maxTokens,
     temperature,
-    response_format: { type: "json_object" },
     messages: [
       {
         role: "system",
         content: buildSystemPrompt(
           intent && (intent.name === "project_qa" || intent.name === "conversational_help")
             ? projectKnowledge
-            : ""
+            : "",
+          { useJsonMode }
         ),
       },
       {
@@ -171,6 +230,9 @@ async function generate({ message, intent, toolResults, projectKnowledge }) {
       },
     ],
   };
+  if (useJsonMode) {
+    body.response_format = { type: "json_object" };
+  }
   if (thinkingEnabled && /pro/i.test(model)) {
     body.thinking = { type: "enabled" };
     body.reasoning_effort = configuredEnv("AI_REASONING_EFFORT", "medium");
@@ -189,6 +251,16 @@ async function generate({ message, intent, toolResults, projectKnowledge }) {
     const wrapped = new Error("DeepSeek provider request failed.");
     wrapped.code = classifyHttpError(error);
     wrapped.status = error && error.response && error.response.status;
+    wrapped.diagnostics = buildProviderDiagnostics({
+      model,
+      baseUrl,
+      useJsonMode,
+      thinkingEnabled: thinkingEnabled && /pro/i.test(model),
+      responseStatus: wrapped.status,
+    });
+    if (wrapped.code === "provider_bad_request" || wrapped.code === "invalid_payload" || wrapped.code === "invalid_model") {
+      console.warn("[ai-provider] deepseek_request_rejected", JSON.stringify(wrapped.diagnostics));
+    }
     throw wrapped;
   }
   const content = response.data &&
@@ -196,6 +268,13 @@ async function generate({ message, intent, toolResults, projectKnowledge }) {
     response.data.choices[0] &&
     response.data.choices[0].message &&
     response.data.choices[0].message.content;
+  if (!useJsonMode) {
+    const parsedTextMode = boolEnv("AI_PROVIDER_JSON_REPAIR", true) ? parseJsonFromText(content) : null;
+    if (parsedTextMode && typeof parsedTextMode === "object") {
+      return Object.assign({ provider: "deepseek" }, parsedTextMode);
+    }
+    return wrapTextResponse(content);
+  }
   const parsed = parseJsonFromText(content) ||
     (boolEnv("AI_PROVIDER_JSON_REPAIR", true) ? parseJsonCodeBlock(content) : null);
   if (!parsed || typeof parsed !== "object") {
@@ -207,6 +286,7 @@ async function generate({ message, intent, toolResults, projectKnowledge }) {
 }
 
 module.exports = {
+  buildProviderDiagnostics,
   buildSystemPrompt,
   classifyHttpError,
   firstConfiguredKey,
@@ -214,4 +294,6 @@ module.exports = {
   name: "deepseek",
   parseJsonCodeBlock,
   parseJsonFromText,
+  shouldUseJsonMode,
+  wrapTextResponse,
 };

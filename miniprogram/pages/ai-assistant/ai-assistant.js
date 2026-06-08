@@ -4,21 +4,46 @@ const demoData = require("./demo-data");
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const PRIVACY_SUMMARY_TEXT = "仅发送课程名、教师、教室、星期、节次、教学周；不发送学号、姓名、密码或原始文件。";
 const MAX_MESSAGE_COUNT = 20;
-const QUICK_QUESTIONS = [
-  "现在有空教室吗？",
-  "今天还有课吗？",
-  "更多",
+const PERSONAL_SYNC_XLS_URL = "/pages/personal-sync/personal-sync?tab=xls";
+const QUICK_ACTIONS = [
+  { id: "today", icon: "今", label: "今日课表", message: "今天还有课吗？", className: "today" },
+  { id: "emptyRoom", icon: "室", label: "空教室", message: "现在有空教室吗？", className: "room" },
+  { id: "teacher", icon: "师", label: "查老师", draft: "查某某老师课表", className: "teacher" },
+  { id: "xls", icon: "XLS", label: "导入 XLS", url: PERSONAL_SYNC_XLS_URL, className: "xls" },
 ];
 
-const TASK_PANEL_ITEMS = [
-  { label: "查老师课表", desc: "输入老师姓名后查询", draft: "查某某老师课表", requiresKeyword: true },
-  { label: "查教室占用", desc: "输入教室或楼栋", draft: "查 C7-203 教室", requiresKeyword: true },
-  { label: "查课程安排", desc: "输入课程关键词", draft: "查高等数学课程", requiresKeyword: true },
-  { label: "找连续空教室", desc: "按节次和楼栋筛选", message: "找连续 2 节空教室", requiresKeyword: false },
-  { label: "分析今日课程", desc: "基于当前课表摘要", message: "分析今日课程", requiresKeyword: false },
-  { label: "数据诊断", desc: "检查索引和缓存状态", message: "为什么数据加载失败？", requiresKeyword: false },
-  { label: "XLS 导入指引", desc: "安全导入个人课表", message: "怎么导入个人课表？", requiresKeyword: false },
-  { label: "自习时间推荐", desc: "需要课表摘要", message: "帮我推荐连续 2 节自习时间", requiresKeyword: false },
+const WELCOME_EXAMPLES = [
+  "C7 附近现在有空教室吗？",
+  "今天还有课吗？",
+  "这个小程序怎么用？",
+];
+
+const TASK_PANEL_GROUPS = [
+  {
+    title: "常用校园任务",
+    items: [
+      { icon: "室", label: "找空教室", desc: "按当前时间找可用教室", message: "现在有空教室吗？" },
+      { icon: "师", label: "查老师课表", desc: "输入老师姓名后查询", draft: "查某某老师课表", requiresKeyword: true },
+      { icon: "楼", label: "查教室占用", desc: "输入教室或楼栋", draft: "查 C7-203 教室", requiresKeyword: true },
+      { icon: "课", label: "查课程安排", desc: "输入课程关键词", draft: "查高等数学课程", requiresKeyword: true },
+    ],
+  },
+  {
+    title: "个人课表",
+    items: [
+      { icon: "今", label: "今日安排", desc: "基于当前课表摘要", message: "今天还有课吗？" },
+      { icon: "习", label: "自习时间推荐", desc: "需要开启课表摘要", message: "帮我推荐连续 2 节自习时间" },
+      { icon: "表", label: "XLS 导入指引", desc: "安全导入个人课表", url: PERSONAL_SYNC_XLS_URL, fallbackMessage: "怎么导入个人课表？" },
+    ],
+  },
+  {
+    title: "项目与诊断",
+    items: [
+      { icon: "诊", label: "数据诊断", desc: "检查索引和缓存状态", message: "为什么数据加载失败？" },
+      { icon: "佛", label: "这个小程序怎么用", desc: "了解 FosuClass 功能入口", message: "这个小程序怎么用？" },
+      { icon: "新", label: "新学期同步说明", desc: "了解 XLS-only 同步方式", message: "新学期怎么同步个人课表？" },
+    ],
+  },
 ];
 
 const TABBAR_PENDING_QUERY = {
@@ -134,21 +159,24 @@ function normalizeSafety(safety) {
   const desiredProvider = source.desiredProvider || source.provider || provider;
   const mode = source.mode || source.safetyMode || "tool-grounded";
   const reason = String(source.providerDecisionReason || source.fallbackReason || "");
-  const externalUsed = source.externalProviderUsed === true;
+  const externalUsed = source.externalProviderUsed === true ||
+    (/deepseek|coze/i.test(provider) && !source.fallbackReason);
   let text = "工具核验";
   if (externalUsed) {
     text = `${mapProviderLabel(provider)} 已参与`;
   } else if (/timeout|超时/i.test(reason)) {
-    text = "已降级：Provider 超时";
+    text = "模型暂不可用，已用本地规则";
   } else if (/fallback|NOT_CONFIGURED|INVALID_PROVIDER|provider|降级/i.test(reason)) {
-    text = "已降级：Provider 不可用";
+    text = "模型暂不可用，已用本地规则";
   }
-  const providerLabel = externalUsed ? mapProviderLabel(provider) : (text.indexOf("已降级") === 0 ? "已降级" : "工具核验");
+  const providerLabel = externalUsed ? mapProviderLabel(provider) : (text.indexOf("模型暂不可用") === 0 ? "已降级" : "工具核验");
   const modeLabel = mapSafetyModeLabel(mode);
   return {
     provider,
     desiredProvider,
     mode,
+    externalProviderUsed: externalUsed,
+    fallbackReason: source.fallbackReason || "",
     providerLabel,
     modeLabel,
     text,
@@ -178,12 +206,16 @@ function normalizeToolCall(tool, index) {
   };
 }
 
-function normalizeCardItem(item, index) {
+function normalizeCardItem(item, index, cardType) {
   const source = item || {};
+  const subtitle = String(source.subtitle || source.desc || source.detail || "");
+  const displaySubtitle = String(cardType || "") === "empty_room"
+    ? subtitle.replace(/(?:\s*·\s*)?容量未知/g, "").replace(/^\s*·\s*|\s*·\s*$/g, "")
+    : subtitle;
   return {
     key: `${safeText(source.title || source.name || "item", 60)}-${index}`,
     title: safeText(source.title || source.name || "", 80),
-    subtitle: safeText(source.subtitle || source.desc || source.detail || "", 140),
+    subtitle: safeText(displaySubtitle, 140),
     value: safeText(source.value || source.time || source.status || "", 60),
   };
 }
@@ -234,7 +266,7 @@ function normalizeCard(card, messageId, index, expandedCards) {
   const scheduleLike = type === "schedule" || /今日|课程|课表|today|schedule/i.test(String(source.title || ""));
   const rawItems = Array.isArray(source.items) ? source.items : [];
   const filteredRawItems = scheduleLike ? rawItems.filter((item) => !isInactiveScheduleItem(item)) : rawItems;
-  const items = filteredRawItems.map(normalizeCardItem);
+  const items = filteredRawItems.map((item, itemIndex) => normalizeCardItem(item, itemIndex, type));
   const actions = Array.isArray(source.actions) ? source.actions.map(normalizeCardAction) : [];
   const key = cardKey(messageId, source, index);
   const expanded = Boolean(expandedCards && expandedCards[key]);
@@ -244,9 +276,11 @@ function normalizeCard(card, messageId, index, expandedCards) {
   const inactiveFilteredCount = Math.max(extractInactiveFilteredCount(source), rawItems.length - filteredRawItems.length);
   const filteredHint = inactiveFilteredCount > 0 ? `已过滤 ${inactiveFilteredCount} 门非本周课程` : "";
   const primaryActions = actions.slice(0, 2);
+  const title = scheduleLike && source.allFinished === true ? "今日课程已结束" : (source.title || "结果");
+  const errorClass = source.variant === "error" || /服务暂时不可用|服务暂不可用/.test(String(source.title || "")) ? "card-error" : "";
   return Object.assign({}, source, {
     key,
-    title: safeText(source.title || "结果", 80),
+    title: safeText(title, 80),
     subtitle: safeText(source.subtitle || "", 140),
     badges: Array.isArray(source.badges) ? source.badges.slice(0, 2).map((item) => safeText(item, 36)) : [],
     items,
@@ -260,21 +294,23 @@ function normalizeCard(card, messageId, index, expandedCards) {
     primaryActions,
     secondaryActions: actions.slice(2),
     actionLayoutClass: primaryActions.length === 1 ? "one-action" : "two-actions",
+    errorClass,
     filteredHint,
   });
 }
 
-function normalizeMessageForDisplay(message, expandedCards) {
+function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
   const source = message || {};
   const id = source.id || `m-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
   const displaySafety = source.safety ? normalizeSafety(source.safety) : null;
   const metrics = normalizeMetrics(source.metrics);
+  const role = source.role === "user" ? "user" : "assistant";
   const displayToolCalls = Array.isArray(source.toolCalls)
     ? source.toolCalls.slice(0, 1).map(normalizeToolCall)
     : [];
   return Object.assign({}, source, {
     id,
-    role: source.role === "user" ? "user" : "assistant",
+    role,
     content: safeText(source.content || "", 1200),
     cards: Array.isArray(source.cards) ? source.cards : [],
     displayCards: Array.isArray(source.cards)
@@ -287,12 +323,14 @@ function normalizeMessageForDisplay(message, expandedCards) {
     displaySafety,
     metrics,
     metricsText: metrics ? `耗时 ${metrics.latencyMs} ms` : "",
+    showAvatar: role === "assistant" && (!previousMessage || previousMessage.role === "user"),
     timeText: source.timeText || timeText(),
   });
 }
 
 function normalizeMessagesForDisplay(messages, expandedCards) {
-  return Array.isArray(messages) ? messages.map((item) => normalizeMessageForDisplay(item, expandedCards)) : [];
+  if (!Array.isArray(messages)) return [];
+  return messages.map((item, index) => normalizeMessageForDisplay(item, expandedCards, messages[index - 1]));
 }
 
 function trimMessages(messages) {
@@ -352,6 +390,8 @@ function resolveProviderState(messages) {
         providerLabel: safety.providerLabel,
         providerModeLabel: safety.modeLabel,
         lastProvider: safety.provider,
+        lastExternalProviderUsed: safety.externalProviderUsed === true,
+        lastFallbackReason: safety.fallbackReason || "",
       };
     }
   }
@@ -359,20 +399,30 @@ function resolveProviderState(messages) {
     providerLabel: "AI",
     providerModeLabel: "工具验证",
     lastProvider: "unknown",
+    lastExternalProviderUsed: false,
+    lastFallbackReason: "",
   };
 }
 
-function buildHeroChips(state) {
-  return [
-    { id: "schedule", label: "课表", className: "ability-chip" },
-    { id: "room", label: "空教室", className: "ability-chip" },
-  ];
+function buildHeaderSubtitle(state) {
+  const source = state || {};
+  if (source.providerLabel === "已降级" || source.lastFallbackReason) {
+    return "模型暂不可用，已用本地规则";
+  }
+  if (source.lastExternalProviderUsed && String(source.lastProvider || "").toLowerCase().indexOf("deepseek") >= 0) {
+    return "DeepSeek 已参与";
+  }
+  if (source.allowPersonalContext === true) {
+    return "已开启课表摘要";
+  }
+  return "课表事实由工具核验";
 }
 
 Page({
   data: {
-    quickQuestions: QUICK_QUESTIONS,
-    taskPanelItems: TASK_PANEL_ITEMS,
+    quickActions: QUICK_ACTIONS,
+    welcomeExamples: WELCOME_EXAMPLES,
+    taskPanelGroups: TASK_PANEL_GROUPS,
     messages: [],
     expandedCards: {},
     inputValue: "",
@@ -391,16 +441,15 @@ Page({
     allowPersonalContext: false,
     providerLabel: "AI",
     providerModeLabel: "工具验证",
+    lastExternalProviderUsed: false,
+    lastFallbackReason: "",
     lastProvider: "unknown",
-    heroChips: [],
+    headerSubtitle: "课表事实由工具核验",
+    historyTrimNotice: false,
     hasHeroLogo: true,
     demoMode: "",
     scrollTop: 0,
     composerNote: "默认不发送个人课表摘要",
-    welcome: {
-      title: "小佛",
-      desc: "课表事实由工具核验",
-    },
   },
 
   onLoad(options) {
@@ -418,7 +467,7 @@ Page({
       showPrivacySheet: false,
       demoMode,
     }, privacyState, providerState);
-    nextState.heroChips = buildHeroChips(nextState);
+    nextState.headerSubtitle = buildHeaderSubtitle(nextState);
 
     this.setData(Object.assign(nextState, { scrollTop: Date.now() }));
 
@@ -435,7 +484,7 @@ Page({
       this.data.showPrivacyTip
     );
     const nextState = Object.assign({}, privacyState, resolveProviderState(this.data.messages));
-    nextState.heroChips = buildHeroChips(Object.assign({}, this.data, nextState));
+    nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
     this.setData(nextState);
   },
 
@@ -443,18 +492,34 @@ Page({
     this.setData({ inputValue: event.detail.value });
   },
 
-  onQuickQuestion(event) {
-    const question = event.currentTarget.dataset.question;
-    if (!question) return;
-    if (question === "更多") {
-      this.openTaskPanel();
+  onQuickAction(event) {
+    const actionId = event.currentTarget.dataset.actionId;
+    const action = QUICK_ACTIONS.find((item) => item.id === actionId);
+    if (!action) return;
+    if (action.id === "teacher") {
+      this.setData({
+        inputValue: action.draft,
+        inputFocus: true,
+      });
       return;
     }
-    this.sendMessage(question);
+    if (action.url) {
+      this.navigateByUrl(action.url);
+      return;
+    }
+    this.sendMessage(action.message || action.label);
+  },
+
+  onWelcomeExampleTap(event) {
+    const question = event.currentTarget.dataset.question;
+    if (question) this.sendMessage(question);
   },
 
   onTaskPanelItemTap(event) {
-    const task = this.data.taskPanelItems[Number(event.currentTarget.dataset.index)];
+    const groupIndex = Number(event.currentTarget.dataset.groupIndex);
+    const taskIndex = Number(event.currentTarget.dataset.taskIndex);
+    const group = this.data.taskPanelGroups[groupIndex] || {};
+    const task = Array.isArray(group.items) ? group.items[taskIndex] : null;
     if (!task) return;
     if (task.requiresKeyword) {
       this.setData({
@@ -465,8 +530,13 @@ Page({
       wx.showToast({ title: "请替换关键词后发送", icon: "none" });
       return;
     }
+    if (task.url) {
+      this.setData({ showTaskPanel: false });
+      this.navigateByUrl(task.url);
+      return;
+    }
     this.setData({ showTaskPanel: false });
-    this.sendMessage(task.message || task.label);
+    this.sendMessage(task.message || task.fallbackMessage || task.label);
   },
 
   onSuggestionTap(event) {
@@ -479,26 +549,58 @@ Page({
   },
 
   setMessages(nextMessages, patch, options) {
+    const trimmed = Array.isArray(nextMessages) && nextMessages.length > MAX_MESSAGE_COUNT;
     const sourceMessages = trimMessages(nextMessages);
     const messages = normalizeMessagesForDisplay(sourceMessages, this.data.expandedCards);
     const providerState = resolveProviderState(messages);
     const nextState = Object.assign({
       messages,
       scrollTop: Date.now(),
+      historyTrimNotice: this.data.historyTrimNotice || trimmed,
     }, providerState, patch || {});
-    nextState.heroChips = buildHeroChips(Object.assign({}, this.data, nextState));
+    nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
     this.setData(nextState);
     if (options && options.save) {
       aiAssistantService.saveAiHistory(messages);
     }
   },
 
-  sendMessage(rawText) {
+  sendMessage(rawText, options) {
     const message = String(rawText || "").trim();
     if (!message || this.data.sending) return;
 
-    const userMessage = makeMessage("user", message);
-    const nextMessages = this.data.messages.concat(userMessage);
+    const sendOptions = options || {};
+    let baseMessages = (this.data.messages || []).slice();
+    let appendUserMessage = true;
+    if (Number.isFinite(Number(sendOptions.retryAssistantIndex))) {
+      const retryIndex = Number(sendOptions.retryAssistantIndex);
+      const retryMessage = baseMessages[retryIndex];
+      if (retryMessage && retryMessage.role === "assistant") {
+        const previous = baseMessages[retryIndex - 1];
+        baseMessages.splice(retryIndex, 1);
+        appendUserMessage = !(previous && previous.role === "user" && previous.content === message);
+      }
+    } else {
+      const lastIndex = baseMessages.length - 1;
+      const lastMessage = baseMessages[lastIndex];
+      const previous = baseMessages[lastIndex - 1];
+      const lastCard = lastMessage && Array.isArray(lastMessage.cards) ? lastMessage.cards[0] : null;
+      if (
+        lastMessage &&
+        lastMessage.role === "assistant" &&
+        lastCard &&
+        lastCard.variant === "error" &&
+        previous &&
+        previous.role === "user" &&
+        previous.content === message
+      ) {
+        baseMessages.pop();
+        appendUserMessage = false;
+      }
+    }
+
+    const userMessage = appendUserMessage ? makeMessage("user", message) : null;
+    const nextMessages = appendUserMessage ? baseMessages.concat(userMessage) : baseMessages;
     this.setMessages(nextMessages, {
       inputValue: "",
       inputFocus: false,
@@ -543,16 +645,18 @@ Page({
         }, { save: true });
       })
       .catch((error) => {
-        const assistantMessage = makeMessage("assistant", "服务暂不可用。你可以稍后重试，或先打开全校查询继续操作。", {
+        const assistantMessage = makeMessage("assistant", "", {
           cards: [{
             type: "generic",
-            title: "服务暂不可用",
-            subtitle: "请求没有完成，已保留你的问题。",
+            variant: "error",
+            title: "服务暂时不可用，已保留你的问题。",
+            subtitle: "可以重试，或先使用全校查询/空教室页面。",
             badges: [],
             items: [],
             actions: [
               { label: "重试", type: "retry", url: "", payload: { message } },
               { label: "打开全校查询", type: "navigate", url: "/pages/school/school", payload: {} },
+              { label: "打开空教室", type: "navigate", url: "/pages/empty-room/empty-room", payload: {} },
             ],
           }],
           suggestions: [],
@@ -576,7 +680,7 @@ Page({
       privacyExpanded: false,
       showPrivacySheet: false,
     }, privacyState);
-    nextState.heroChips = buildHeroChips(Object.assign({}, this.data, nextState));
+    nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
     this.setData(nextState);
   },
 
@@ -632,7 +736,7 @@ Page({
     aiAssistantService.setPersonalContextAllowed(allowed);
     const privacyState = buildPrivacyState(allowed, this.data.privacyExpanded, this.data.showPrivacyTip);
     const nextState = Object.assign({}, privacyState);
-    nextState.heroChips = buildHeroChips(Object.assign({}, this.data, nextState));
+    nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
     this.setData(nextState);
     wx.showToast({ title: allowed ? "已开启摘要" : "已关闭摘要", icon: "none" });
   },
@@ -671,7 +775,7 @@ Page({
       success: (res) => {
         if (!res.confirm) return;
         aiAssistantService.clearAiHistory();
-        this.setMessages([], {}, { save: false });
+        this.setMessages([], { historyTrimNotice: false }, { save: false });
       },
     });
   },
@@ -699,7 +803,9 @@ Page({
     const type = action.type || "noop";
 
     if (type === "retry") {
-      this.sendMessage(action.payload && action.payload.message || this.findLastUserMessage());
+      this.sendMessage(action.payload && action.payload.message || this.findLastUserMessage(), {
+        retryAssistantIndex: messageIndex,
+      });
       return;
     }
     if (type === "copy") {

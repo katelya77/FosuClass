@@ -58,12 +58,12 @@ function run() {
 
   const aiWxml = fs.readFileSync(path.join(miniprogramRoot, "pages", "ai-assistant", "ai-assistant.wxml"), "utf8");
   const nodeCount = (aiWxml.match(/<view\b|<button\b|<scroll-view\b|<textarea\b|<image\b|<switch\b/g) || []).length;
-  assert(nodeCount <= 130, `AI page WXML is too complex: ${nodeCount}`);
+  assert(nodeCount <= 150, `AI page WXML is too complex: ${nodeCount}`);
 
   const aiWxss = fs.readFileSync(path.join(miniprogramRoot, "pages", "ai-assistant", "ai-assistant.wxss"), "utf8");
-  assert(/\.assistant-hero\s*\{[\s\S]*?padding:\s*10rpx 12rpx;/.test(aiWxss), "AI hero should stay compact");
-  assert(/\.privacy-compact\s*\{[\s\S]*?min-height:\s*50rpx;/.test(aiWxss), "privacy compact bar should remain within 56rpx");
-  assert(/\.quick-chip\s*\{[\s\S]*?height:\s*44rpx;/.test(aiWxss), "quick chips should remain compact");
+  assert(/\.xiaofu-header\s*\{[\s\S]*?height:\s*84rpx;/.test(aiWxss), "Xiaofu header should stay compact");
+  assert(/\.quick-action-pill\s*\{[\s\S]*?height:\s*58rpx;/.test(aiWxss), "quick action pills should remain compact");
+  assert(!aiWxss.includes(".assistant-hero"), "legacy AI hero styles should be removed");
 
   console.log("test-miniprogram-package-hygiene passed");
 }
