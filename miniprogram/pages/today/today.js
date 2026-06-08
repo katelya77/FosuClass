@@ -4,6 +4,8 @@ const appConfigService = require("../../services/appConfigService");
 const customCourseService = require("../../services/customCourseService");
 const BRAND = require("../../config/brand");
 
+const AI_PENDING_TODAY_QUERY_KEY = "FOSU_AI_PENDING_TODAY_QUERY";
+
 Page({
   data: {
     brand: BRAND,
@@ -25,8 +27,38 @@ Page({
   },
 
   onShow() {
+    const pending = this.consumeAiPendingTodayQuery();
     this.loadToday();
     this.loadPageConfig();
+    if (pending) {
+      this.applyAiPendingTodayQuery(pending);
+    }
+  },
+
+  consumeAiPendingTodayQuery() {
+    let query = null;
+    try {
+      query = wx.getStorageSync(AI_PENDING_TODAY_QUERY_KEY);
+      if (query) {
+        wx.removeStorageSync(AI_PENDING_TODAY_QUERY_KEY);
+      }
+    } catch (error) {
+      query = null;
+    }
+    if (!query || typeof query !== "object" || Array.isArray(query)) return null;
+    return query;
+  },
+
+  applyAiPendingTodayQuery(query = {}) {
+    const action = String(query.action || "focus").toLowerCase();
+    if (action === "refresh") {
+      this.loadToday();
+      this.loadPageConfig();
+    }
+    wx.showToast({
+      title: "已根据 AI 建议打开今日安排",
+      icon: "none",
+    });
   },
 
   loadPageConfig() {

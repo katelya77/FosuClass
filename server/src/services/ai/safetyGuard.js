@@ -128,6 +128,9 @@ function sanitizeAgentContext(context) {
     releaseVersion: sanitizeString(source.releaseVersion || source.version || "", 80),
     currentPage: sanitizeString(source.currentPage || "", 40),
     clientTime: sanitizeString(source.clientTime || "", 60),
+    clientLocalTime: sanitizeString(source.clientLocalTime || "", 60),
+    timezoneOffsetMinutes: Number.isFinite(Number(source.timezoneOffsetMinutes)) ? Number(source.timezoneOffsetMinutes) : undefined,
+    clientTimestampMs: Number.isFinite(Number(source.clientTimestampMs)) ? Number(source.clientTimestampMs) : undefined,
     timezone: sanitizeString(source.timezone || "Asia/Shanghai", 40),
     currentScheduleSummary: sanitizeScheduleSummary(source.currentScheduleSummary),
   };

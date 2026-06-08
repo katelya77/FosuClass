@@ -142,6 +142,11 @@
   background: #f3eff8;
 }
 
+.demo-chip {
+  color: #8f2d22;
+  background: #fff0ea;
+}
+
 .privacy-tip {
   flex: 0 0 auto;
   margin-top: 10rpx;
@@ -321,6 +326,82 @@
   line-height: 52rpx;
   white-space: nowrap;
   box-shadow: 0 7rpx 18rpx rgba(90, 27, 31, 0.04);
+}
+
+.task-panel {
+  flex: 0 0 auto;
+  margin-top: 8rpx;
+  padding: 14rpx;
+  border: 1rpx solid #e7edf5;
+  border-radius: 14rpx;
+  background: #ffffff;
+  box-shadow: 0 10rpx 28rpx rgba(18, 27, 43, 0.05);
+}
+
+.task-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12rpx;
+  min-width: 0;
+}
+
+.task-panel-title {
+  flex: 0 0 auto;
+  color: #142033;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.task-panel-subtitle {
+  flex: 1;
+  overflow: hidden;
+  color: #778297;
+  font-size: 19rpx;
+  font-weight: 700;
+  text-align: right;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8rpx;
+  margin-top: 12rpx;
+}
+
+.task-item {
+  box-sizing: border-box;
+  min-width: 0;
+  height: 84rpx;
+  padding: 10rpx 12rpx;
+  border: 1rpx solid #edf0f5;
+  border-radius: 12rpx;
+  background: #f8fafc;
+  text-align: left;
+}
+
+.task-label {
+  overflow: hidden;
+  color: #9f1f25;
+  font-size: 21rpx;
+  font-weight: 900;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-desc {
+  overflow: hidden;
+  margin-top: 5rpx;
+  color: #667085;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .message-scroll {

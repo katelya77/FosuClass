@@ -13,6 +13,22 @@ const QUICK_QUESTIONS = [
   "更多任务",
 ];
 
+const TASK_PANEL_ITEMS = [
+  { label: "查老师课表", desc: "输入老师姓名后查询", draft: "查某某老师课表", requiresKeyword: true },
+  { label: "查教室占用", desc: "输入教室或楼栋", draft: "查 C7-203 教室", requiresKeyword: true },
+  { label: "查课程安排", desc: "输入课程关键词", draft: "查高等数学课程", requiresKeyword: true },
+  { label: "找连续空教室", desc: "按节次和楼栋筛选", message: "找连续 2 节空教室", requiresKeyword: false },
+  { label: "分析今日课程", desc: "基于当前课表摘要", message: "分析今日课程", requiresKeyword: false },
+  { label: "数据诊断", desc: "检查索引和缓存状态", message: "为什么数据加载失败？", requiresKeyword: false },
+  { label: "XLS 导入指引", desc: "安全导入个人课表", message: "怎么导入个人课表？", requiresKeyword: false },
+  { label: "组会/自习推荐", desc: "需要课表摘要", message: "帮我推荐连续 2 节自习时间", requiresKeyword: false },
+];
+
+const TABBAR_PENDING_QUERY = {
+  "/pages/school/school": "FOSU_AI_PENDING_SCHOOL_QUERY",
+  "/pages/today/today": "FOSU_AI_PENDING_TODAY_QUERY",
+};
+
 const PROVIDER_LABELS = {
   mock: "本地规则",
   deepseek: "DeepSeek",
@@ -30,9 +46,11 @@ const TOOL_LABELS = {
   search_empty_rooms: "空教室",
   get_today_courses: "今日课表",
   search_school_index: "全校索引",
+  get_schedule_detail: "课表详情",
   diagnose_data_status: "数据诊断",
   explain_personal_import: "导入指引",
   recommend_meeting_time: "时间推荐",
+  clarify_missing_slot: "缺槽追问",
   safety_guard: "安全拦截",
 };
 
@@ -134,6 +152,24 @@ function normalizeCardAction(action, index) {
   };
 }
 
+function parseActionUrl(url) {
+  const target = String(url || "");
+  const parts = target.split("?");
+  const path = parts[0] || "";
+  const queryText = parts.slice(1).join("?");
+  const query = {};
+  if (queryText) {
+    queryText.split("&").forEach((pair) => {
+      if (!pair) return;
+      const kv = pair.split("=");
+      const key = decodeQuery(kv[0] || "");
+      if (!key) return;
+      query[key] = decodeQuery(kv.slice(1).join("=") || "");
+    });
+  }
+  return { path, query, raw: target };
+}
+
 function normalizeCard(card) {
   const source = card || {};
   const items = Array.isArray(source.items) ? source.items.map(normalizeCardItem) : [];
@@ -162,7 +198,12 @@ function normalizeSafety(safety) {
   const source = safety || {};
   const provider = source.provider || source.lastProvider || source.providerName || "unknown";
   const mode = source.mode || source.safetyMode || "tool-grounded";
-  const providerLabel = mapProviderLabel(provider);
+  let providerLabel = mapProviderLabel(provider);
+  if (source.externalProviderUsed === false &&
+    source.fallbackReason &&
+    /provider fallback|NOT_CONFIGURED|INVALID_PROVIDER|fallback to mock/i.test(source.fallbackReason)) {
+    providerLabel = "已降级";
+  }
   const modeLabel = mapSafetyModeLabel(mode);
   return {
     provider,
@@ -173,12 +214,24 @@ function normalizeSafety(safety) {
   };
 }
 
+function normalizeMetrics(metrics) {
+  const source = metrics && typeof metrics === "object" && !Array.isArray(metrics) ? metrics : null;
+  if (!source) return null;
+  const latencyMs = Number(source.latencyMs);
+  return {
+    latencyMs: Number.isFinite(latencyMs) ? Math.max(0, Math.round(latencyMs)) : 0,
+    intentName: source.intentName || "",
+    externalProviderUsed: source.externalProviderUsed === true,
+  };
+}
+
 function normalizeMessageForDisplay(message) {
   const source = message || {};
   const toolCalls = Array.isArray(source.toolCalls) ? source.toolCalls.slice(0, 8) : [];
   const displayToolCalls = toolCalls.map(normalizeToolCall);
   const displayCards = Array.isArray(source.cards) ? source.cards.map(normalizeCard) : [];
   const displaySafety = source.safety ? normalizeSafety(source.safety) : null;
+  const metrics = normalizeMetrics(source.metrics);
   return Object.assign({}, source, {
     id: source.id || `m-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
     role: source.role === "user" ? "user" : "assistant",
@@ -191,6 +244,8 @@ function normalizeMessageForDisplay(message) {
     toolSummaryText: displayToolCalls.map((item) => item.displayText).join("；"),
     safety: source.safety || null,
     displaySafety,
+    metrics,
+    metricsText: metrics ? `耗时 ${metrics.latencyMs} ms` : "",
     timeText: source.timeText || timeText(),
   });
 }
@@ -260,9 +315,12 @@ function resolveProviderState(messages) {
 Page({
   data: {
     quickQuestions: QUICK_QUESTIONS,
+    taskPanelItems: TASK_PANEL_ITEMS,
     messages: [],
     inputValue: "",
+    inputFocus: false,
     sending: false,
+    showTaskPanel: false,
     slowRequest: false,
     showPrivacyTip: false,
     privacyExpanded: false,
@@ -312,13 +370,42 @@ Page({
   onInput(event) {
     this.setData({
       inputValue: event.detail.value,
+      inputFocus: false,
     });
   },
 
   onQuickQuestion(event) {
     const question = event.currentTarget.dataset.question;
     if (!question) return;
+    if (question === "更多任务") {
+      this.setData({
+        showTaskPanel: !this.data.showTaskPanel,
+      });
+      return;
+    }
     this.sendMessage(question);
+  },
+
+  onTaskPanelItemTap(event) {
+    const index = Number(event.currentTarget.dataset.index);
+    const task = this.data.taskPanelItems[index];
+    if (!task) return;
+    if (task.requiresKeyword) {
+      this.setData({
+        inputValue: task.draft || task.label,
+        inputFocus: true,
+        showTaskPanel: false,
+      });
+      wx.showToast({
+        title: "请替换关键词后发送",
+        icon: "none",
+      });
+      return;
+    }
+    this.setData({
+      showTaskPanel: false,
+    });
+    this.sendMessage(task.message || task.label);
   },
 
   onSuggestionTap(event) {
@@ -350,6 +437,7 @@ Page({
     const nextMessages = this.data.messages.concat(userMessage);
     this.setMessages(nextMessages, {
       inputValue: "",
+      inputFocus: false,
       sending: true,
       slowRequest: false,
     }, { save: !this.data.demoMode });
@@ -362,6 +450,7 @@ Page({
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
           toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
           safety: response.safety || null,
+          metrics: response.metrics || null,
         });
         this.setMessages(nextMessages.concat(assistantMessage), {
           sending: false,
@@ -382,6 +471,7 @@ Page({
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
           toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
           safety: response.safety || null,
+          metrics: response.metrics || null,
         });
         this.setMessages(this.data.messages.concat(assistantMessage), {
           sending: false,
@@ -533,9 +623,17 @@ Page({
   navigateByUrl(url) {
     const target = String(url || "");
     if (!target) return;
-    const pathOnly = target.split("?")[0];
-    if (pathOnly === "/pages/school/school" || pathOnly === "/pages/today/today") {
-      wx.switchTab({ url: pathOnly });
+    const parsed = parseActionUrl(target);
+    const storageKey = TABBAR_PENDING_QUERY[parsed.path];
+    if (storageKey) {
+      if (parsed.query && Object.keys(parsed.query).length) {
+        try {
+          wx.setStorageSync(storageKey, parsed.query);
+        } catch (error) {
+          // ignore storage failure; switchTab still opens the target page.
+        }
+      }
+      wx.switchTab({ url: parsed.path });
       return;
     }
     wx.navigateTo({

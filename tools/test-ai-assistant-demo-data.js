@@ -2,7 +2,7 @@ const assert = require("assert");
 
 const demoData = require("../miniprogram/pages/ai-assistant/demo-data");
 
-const MODES = ["empty-room", "today", "diagnosis", "guide"];
+const MODES = ["empty-room", "today", "diagnosis", "guide", "teacher", "meeting"];
 const SENSITIVE_PATTERNS = [
   /学号/,
   /密码/,
