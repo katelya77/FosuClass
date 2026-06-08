@@ -3996,6 +3996,9 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         <div class="ai-provider-grid">
           <div class="card form-box">
             <h3 class="card-title">AI 校园管家 Provider</h3>
+            <div class="ai-secret-note">
+              auto 模式下，确定性课表查询默认走本地工具；项目问答、自然聊天和复杂解释会调用 DeepSeek/Coze。课程事实仍以工具结果为准。
+            </div>
 
             <div class="form-row">
               <div>
@@ -4094,6 +4097,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             <div class="ai-provider-actions">
               <button id="saveAiProviderBtn" class="primary">保存 AI 配置</button>
               <button id="verifyAiProviderBtn" class="secondary">验证当前 Provider</button>
+              <button id="forceAiProviderChatBtn" class="secondary">强制测试 DeepSeek 聊天</button>
               <button id="reloadAiProviderBtn" class="ghost">刷新状态</button>
             </div>
           </div>
@@ -4147,7 +4151,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
                 <input id="cozePollMaxAttempts" inputmode="numeric" placeholder="8">
               </div>
             </div>
-            <div id="aiVerifyResult" class="ai-verify-box">还没有验证。点击“验证当前 Provider”会用固定问题测试一次，不会打印 prompt 或密钥。</div>
+            <div id="aiVerifyResult" class="ai-verify-box">还没有验证。点击“验证当前 Provider”会同时测试确定性工具、项目问答和强制模型链路，不会打印 prompt 或密钥。</div>
           </div>
         </div>
       </section>
@@ -8647,10 +8651,23 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             var data = res.data || {};
             var lines = [
               "Provider: " + (data.provider || "-"),
+              "Desired: " + (data.desiredProvider || "-"),
+              "Resolved: " + (data.resolvedProvider || "-"),
+              "External: " + (data.externalProviderUsed ? "yes" : "no"),
+              "Policy: " + (data.providerPolicy || "-"),
+              "Reason: " + (data.providerDecisionReason || "-"),
               "Mode: " + (data.mode || "-"),
               "Elapsed: " + (data.elapsedMs || 0) + "ms",
               "Answer: " + (data.answerPreview || "-")
             ];
+            ["deterministicToolTest", "projectQaProviderTest", "forceProviderTest"].forEach(function(key) {
+              var item = data[key];
+              if (!item) return;
+              lines.push("");
+              lines.push(key + ": " + (item.externalProviderUsed ? "external" : "local") + " / " + (item.providerDecisionReason || "-"));
+              lines.push("  provider: " + (item.resolvedProvider || item.provider || "-"));
+              lines.push("  answer: " + (item.answerPreview || "-"));
+            });
             if (Array.isArray(data.toolCalls) && data.toolCalls.length) {
               lines.push("Tools: " + data.toolCalls.map(function(item) {
                 return (item.name || "-") + "/" + (item.status || "-");
@@ -8661,6 +8678,30 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           })
           .catch(function(error) {
             if (box) box.textContent = "验证失败：" + error.message;
+            showToast(error.message, "error");
+          });
+      }
+
+      function forceAiProviderChatTest() {
+        var box = $("aiVerifyResult");
+        if (box) box.textContent = "正在强制测试项目知识聊天...";
+        api("/api/admin/ai-provider/verify", { method: "POST", body: JSON.stringify({ mode: "project_qa" }) })
+          .then(function(res) {
+            var data = res.data || {};
+            var project = data.projectQaProviderTest || data;
+            var lines = [
+              "强制项目问答测试",
+              "Provider: " + (project.resolvedProvider || project.provider || "-"),
+              "External: " + (project.externalProviderUsed ? "yes" : "no"),
+              "Policy: " + (project.providerPolicy || data.providerPolicy || "-"),
+              "Reason: " + (project.providerDecisionReason || data.providerDecisionReason || "-"),
+              "Answer: " + (project.answerPreview || data.answerPreview || "-")
+            ];
+            if (box) box.textContent = lines.join("\\n");
+            showToast("DeepSeek 聊天测试完成。", "success");
+          })
+          .catch(function(error) {
+            if (box) box.textContent = "强制聊天测试失败：" + error.message;
             showToast(error.message, "error");
           });
       }
@@ -8814,6 +8855,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
       safeBind("saveConfigButton", "click", saveConfig);
       safeBind("saveAiProviderBtn", "click", saveAiProviderConfig);
       safeBind("verifyAiProviderBtn", "click", verifyAiProviderConfig);
+      safeBind("forceAiProviderChatBtn", "click", forceAiProviderChatTest);
       safeBind("reloadAiProviderBtn", "click", loadAiProviderConfig);
       safeBind("saveNoticeButton", "click", saveNotice);
       safeBind("clearNoticeButton", "click", clearNoticeForm);

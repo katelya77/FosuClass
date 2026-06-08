@@ -10,10 +10,9 @@ const {
 } = require("../../utils/storage");
 const { mockCalendar } = require("../../data/mockCalendar");
 const {
-  TERM_START_DATE,
-  TOTAL_WEEKS,
   clampWeek,
   getTodayTeachingInfo,
+  getRuntimeTermConfig,
 } = require("../../utils/week");
 const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
@@ -25,9 +24,10 @@ const { contactConfig } = require("../../config/contact");
 const APP_VERSION = "1.0.0";
 const FEEDBACK_TYPES = ["课表错误", "数据过期", "页面问题", "功能建议", "其他"];
 
-function buildWeekOptions() {
+function buildWeekOptions(totalWeeks) {
   const options = [];
-  for (let week = 1; week <= TOTAL_WEEKS; week += 1) {
+  const count = Number(totalWeeks || getRuntimeTermConfig().totalWeeks || 20) || 20;
+  for (let week = 1; week <= count; week += 1) {
     options.push(`第${week}周`);
   }
   return options;
@@ -131,7 +131,7 @@ Page({
     brand: BRAND,
     settings: {},
     teachingInfo: {},
-    termStartDate: TERM_START_DATE,
+    termStartDate: getRuntimeTermConfig().termStartDate,
     weekOptions: buildWeekOptions(),
     feedbackTypes: FEEDBACK_TYPES,
     feedbackVisible: false,
@@ -218,8 +218,9 @@ Page({
 
   loadSettings() {
     const settings = getSettings();
-    const teachingInfo = getTodayTeachingInfo(new Date(), mockCalendar);
-    const effectiveWeek = settings.manualWeekOverride ? clampWeek(settings.currentWeek) : teachingInfo.weekNo;
+    const termConfig = getRuntimeTermConfig();
+    const teachingInfo = getTodayTeachingInfo(new Date(), mockCalendar, termConfig);
+    const effectiveWeek = settings.manualWeekOverride ? clampWeek(settings.currentWeek, termConfig) : teachingInfo.weekNo;
     const selectedSchedule = getSelectedSchedule();
     const selectedMeta = buildSelectedScheduleMeta(selectedSchedule);
     this.setData({
@@ -227,6 +228,8 @@ Page({
         currentWeek: effectiveWeek,
       }),
       teachingInfo,
+      termStartDate: termConfig.termStartDate,
+      weekOptions: buildWeekOptions(termConfig.totalWeeks),
       selectedScheduleText: buildSelectedScheduleText(selectedSchedule),
       selectedScheduleSourceText: selectedMeta.sourceText,
       selectedScheduleImportText: selectedMeta.importText,
@@ -243,7 +246,7 @@ Page({
   },
 
   restoreAutoWeek() {
-    const teachingInfo = getTodayTeachingInfo(new Date(), mockCalendar);
+    const teachingInfo = getTodayTeachingInfo(new Date(), mockCalendar, getRuntimeTermConfig());
     saveSettings({
       currentWeek: teachingInfo.weekNo,
       manualWeekOverride: false,
@@ -283,7 +286,7 @@ Page({
 
   goLogin() {
     wx.navigateTo({
-      url: "/pages/personal-sync/personal-sync?tab=account",
+      url: "/pages/personal-sync/personal-sync?tab=xls",
     });
   },
 

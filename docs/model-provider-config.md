@@ -46,6 +46,10 @@ DeepSeek key 读取优先级：
 
 `AI_PROVIDER=deepseek` 使用 Chat Completions 兼容接口。默认模型是 `deepseek-v4-flash`，面向小程序快速响应；复杂说明书或离线分析可用 `deepseek-v4-pro` 并开启 `AI_THINKING_ENABLED=true`。
 
+`AI_PROVIDER_POLICY=auto` 时，确定性的课表查询、今日课程、空教室单结果、导入指引和数据诊断默认走本地工具和规则模板，避免模型改写事实。`project_qa` / `conversational_help` 这类项目知识问答、自然聊天、使用引导和复杂解释会调用 DeepSeek/Coze；如果 Provider 超时或不可用，会降级到内置项目知识摘要。
+
+课程事实只能来自 `toolResults`，Provider 不允许凭空补课表、教室占用或个人安排。
+
 请求默认包含：
 
 - `stream=false`
@@ -64,6 +68,8 @@ Provider 返回非 JSON 时会尝试修复 JSON 或提取 JSON code block，仍�
 后台管理台新增“AI 模型”面板，可在线设置 Provider、模型、超时、tokens、思考模式、个人课表摘要开关和 Coze 参数。面板只读写 `server/.env` 和当前进程环境变量，不参与小程序每次聊天请求，因此不会因后台多 provider 配置拖慢聊天调用。
 
 密钥输入框留空时保留原密钥；页面和接口只显示“是否已配置”，不会回显 key。
+
+后台验证会返回 `deterministicToolTest`、`projectQaProviderTest` 和 `forceProviderTest`，并展示 `desiredProvider`、`resolvedProvider`、`externalProviderUsed`、`providerPolicy`、`providerDecisionReason`，用于解释“为什么保存了 DeepSeek key，但简单课表查询仍显示本地规则”。
 
 ## 本机一键配置
 

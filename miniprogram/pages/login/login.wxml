@@ -1,13 +1,13 @@
 <view class="page login-page">
   <view class="login-card card" style="padding: 48rpx 32rpx; text-align: center;">
-    <view class="login-title" style="font-size: 36rpx; font-weight: 800; color: #172033; margin-bottom: 24rpx;">个人课表同步（内测中）</view>
+    <view class="login-title" style="font-size: 36rpx; font-weight: 800; color: #172033; margin-bottom: 24rpx;">账号同步已下线</view>
     <view class="login-desc" style="font-size: 26rpx; color: #536174; line-height: 1.6; text-align: left; margin-bottom: 32rpx;">
-      为了保障您的账号与密码安全，并遵循小程序的隐私安全规范，**当前版本已关闭手动输入学号密码的同步入口**。
+      为了保障账号与密码安全，当前版本不再提供手动输入学号密码的同步入口。个人课表请使用 XLS/XLSX 文件导入。
     </view>
     <view class="security-text" style="font-size: 24rpx; color: #778297; line-height: 1.6; text-align: left; background: #f8fafc; padding: 24rpx; border-radius: 12rpx; border: 1rpx solid #edf0f5; margin-bottom: 40rpx;">
-      💡 **温馨提示**：全校课表已同步了学校绝大多数班级的排课数据。您可以直接通过首页的“选择课表”引导或“全校”页面，查找您的班级并绑定，这已经能完美展示您的一周课表。
+      XLS 导入只解析课程名、教师、教室、星期、节次和教学周；原始文件内容不会发送给 AI Provider。
     </view>
     
-    <button class="primary-button" style="width: 100%; border-radius: 999rpx; background: #c62828; color: #ffffff;" bindtap="goBack">返回首页</button>
+    <button class="primary-button" style="width: 100%; border-radius: 999rpx; background: #c62828; color: #ffffff;" bindtap="goImportXls">打开 XLS 导入</button>
   </view>
 </view>

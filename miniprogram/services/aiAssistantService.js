@@ -1,5 +1,12 @@
 const request = require("../utils/request");
 const { getCurrentScheduleTarget } = require("../utils/storage");
+const { mockCalendar } = require("../data/mockCalendar");
+const {
+  getCurrentTeachingWeek,
+  getRuntimeTermConfig,
+  getTodayTeachingInfo,
+  getTodayWeekday,
+} = require("../utils/week");
 
 const HISTORY_KEY = "FOSU_AI_ASSISTANT_HISTORY";
 const ALLOW_PERSONAL_CONTEXT_KEY = "FOSU_AI_ALLOW_PERSONAL_CONTEXT";
@@ -89,8 +96,18 @@ function sanitizeCourse(course) {
       : [],
     weeks: Array.isArray(source.weeks)
       ? source.weeks.slice(0, 40).map((item) => Number(item)).filter((item) => Number.isFinite(item))
-      : [],
+      : (typeof source.weeks === "string" ? redactSensitiveText(source.weeks).slice(0, 120) : []),
     weekText: redactSensitiveText(source.weekText || "").slice(0, 80),
+    rawWeek: redactSensitiveText(source.rawWeek || source.rawWeeks || source.weeksText || "").slice(0, 120),
+    weekRange: Array.isArray(source.weekRange)
+      ? source.weekRange.slice(0, 2).map((item) => Number(item)).filter((item) => Number.isFinite(item))
+      : redactSensitiveText(source.weekRange || "").slice(0, 120),
+    startWeek: Number.isFinite(Number(source.startWeek)) ? Number(source.startWeek) : undefined,
+    endWeek: Number.isFinite(Number(source.endWeek)) ? Number(source.endWeek) : undefined,
+    weekType: redactSensitiveText(source.weekType || "").slice(0, 20),
+    oddEven: redactSensitiveText(source.oddEven || "").slice(0, 20),
+    isCustom: source.isCustom === true,
+    source: redactSensitiveText(source.source || source.sourceType || "").slice(0, 40),
     campus: redactSensitiveText(source.campus || "").slice(0, 40),
   };
 }
@@ -214,17 +231,32 @@ function buildClientContext(extra = {}) {
   const app = getApp();
   const activeRelease = (app.globalData && app.globalData.activeRelease) || {};
   const manifest = activeRelease.manifest || {};
+  const termConfig = getRuntimeTermConfig();
+  const todayTeachingInfo = getTodayTeachingInfo(now, mockCalendar, termConfig);
   const scheduleSummary = sanitizeLocalScheduleForAI(target);
   const latestImport = getLatestScheduleImport();
   const term = extra.term ||
     scheduleSummary.term ||
     target && (target.semester || target.term) ||
+    termConfig.term ||
     activeRelease.term ||
     manifest.term ||
     "2025-2026-2";
 
   return {
     term,
+    semesterText: termConfig.semesterText || "",
+    termStartDate: termConfig.termStartDate || "",
+    totalWeeks: termConfig.totalWeeks || 20,
+    currentTeachingWeek: extra.currentTeachingWeek || todayTeachingInfo.weekNo || getCurrentTeachingWeek(now, mockCalendar, termConfig),
+    todayWeekday: getTodayWeekday(now),
+    todayDate: todayTeachingInfo.date,
+    todayTeachingInfo: {
+      weekNo: todayTeachingInfo.weekNo,
+      weekday: todayTeachingInfo.weekday,
+      date: todayTeachingInfo.date,
+      termStartDate: termConfig.termStartDate || "",
+    },
     releaseVersion: extra.releaseVersion || (target && target.releaseVersion) || activeRelease.releaseVersion || manifest.releaseVersion || "",
     currentPage: extra.currentPage || getCurrentRoute(),
     clientTime: now.toISOString(),
@@ -302,6 +334,7 @@ module.exports = {
   isPersonalContextAllowed,
   redactSensitiveText,
   rememberLatestScheduleImport,
+  sanitizeCourse,
   sanitizeLocalScheduleForAI,
   setPersonalContextAllowed,
   saveAiHistory,

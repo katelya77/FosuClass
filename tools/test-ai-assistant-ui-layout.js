@@ -51,9 +51,18 @@ function run() {
     "在 .hero-title 中设置 white-space: nowrap; overflow: hidden; text-overflow: ellipsis;");
 
   const heroDesc = getRule(wxss, ".hero-desc");
-  check(/-webkit-line-clamp\s*:\s*2/.test(heroDesc) || /line-clamp\s*:\s*2/.test(heroDesc),
-    ".hero-desc must clamp to two lines.",
-    "在 .hero-desc 中加入 -webkit-line-clamp: 2 和 -webkit-box-orient: vertical;");
+  check(/-webkit-line-clamp\s*:\s*1/.test(heroDesc) || /line-clamp\s*:\s*1/.test(heroDesc),
+    ".hero-desc must clamp to one line in the compact AI page.",
+    "在 .hero-desc 中保留 -webkit-line-clamp: 1 和 -webkit-box-orient: vertical;");
+
+  const hero = getRule(wxss, ".assistant-hero");
+  const privacyCompact = getRule(wxss, ".privacy-compact");
+  const quickChip = getRule(wxss, ".quick-chip");
+  check(/padding\s*:\s*10rpx\s+12rpx/.test(hero) &&
+    /min-height\s*:\s*50rpx/.test(privacyCompact) &&
+    /height\s*:\s*44rpx/.test(quickChip),
+    "hero + privacy + quick controls must stay within the compact height budget.",
+    "保持 hero padding 10rpx 12rpx、privacy compact 50rpx、quick chip 44rpx。");
 
   check(/privacy-tip[^>]*wx:if="\{\{privacyExpanded\}\}"/.test(wxml) && wxml.includes("privacy-compact"),
     "privacy full card must be conditional and have a compact state.",

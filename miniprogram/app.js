@@ -4,6 +4,7 @@ const appConfigService = require("./services/appConfigService");
 const releasePackService = require("./services/releasePackService");
 const platformDataService = require("./services/platformDataService");
 const securitySessionService = require("./services/securitySessionService");
+const termConfigService = require("./services/termConfigService");
 const BRAND = require("./config/brand");
 
 const STARTUP_BACKGROUND_TIMEOUT_MS = 15000;
@@ -77,10 +78,11 @@ App({
     this.loadPlatformData({ network: false, silent: true });
     this.loadBootstrapData({ network: false, silent: true });
     this.loadAppConfigData({ network: false, silent: true });
+    termConfigService.applyRuntimeTermConfigFromApp(this);
 
     scheduleLowPriority(() => afterStartupSession(() => this.loadReleasePackData(withStartupSessionOptions({ forceNetwork: true, silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 1 }))), 1500);
     scheduleLowPriority(() => getStartupSessionWarmupPromise(), 1800);
-    scheduleLowPriority(() => afterStartupSession(() => this.loadPlatformData(withStartupSessionOptions({ silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 1 }))), 2200);
+    scheduleLowPriority(() => afterStartupSession(() => this.loadPlatformData(withStartupSessionOptions({ silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 0 }))), 2200);
     scheduleLowPriority(() => afterStartupSession(() => this.loadBootstrapData(withStartupSessionOptions({ silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 1 }))), 2600);
     scheduleLowPriority(() => afterStartupSession(() => this.loadAppConfigData(withStartupSessionOptions({ force: true, silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 1 }))), 3200);
   },
@@ -90,6 +92,7 @@ App({
     const localActive = releasePackService.getLocalActiveRelease();
     if (localActive) {
       this.globalData.activeRelease = localActive;
+      termConfigService.applyRuntimeTermConfigFromApp(this);
     }
     if (opt.network === false) {
       return Promise.resolve(localActive || null);
@@ -110,6 +113,7 @@ App({
             forceRefreshToken: result.manifest.forceRefreshToken,
             manifest: result.manifest,
           };
+          termConfigService.applyRuntimeTermConfigFromApp(this);
         }
         return result;
       })
@@ -166,6 +170,7 @@ App({
         if (this.appConfigCallback) {
           this.appConfigCallback(this.globalData.appConfig);
         }
+        termConfigService.applyRuntimeTermConfigFromApp(this);
         return this.globalData.appConfig;
       })
       .catch((err) => {
@@ -175,6 +180,7 @@ App({
         const cached = appConfigService.getCachedAppConfig && appConfigService.getCachedAppConfig();
         if (cached) {
           this.globalData.appConfig = cached;
+          termConfigService.applyRuntimeTermConfigFromApp(this);
         }
         return cached || null;
       });

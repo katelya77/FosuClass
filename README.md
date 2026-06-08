@@ -11,7 +11,7 @@
 - 小程序新增 `pages/ai-assistant/ai-assistant` 页面，支持快捷问题、聊天输入、结构化结果卡片和一键跳转操作。
 - 后端新增 `POST /api/ai/agent/chat`，响应稳定包含 `answer`、`cards`、`toolCalls`、`suggestions`、`safety` 和 `serverTime`。
 - 智能体采用“工具优先”架构：先识别意图和槽位，再调用 Release Pack、全校索引、空教室、今日课表摘要、数据诊断等确定性工具，最后生成中文卡片。
-- 默认 `mockProvider` 可在无模型 key 的情况下演示“现在有空教室吗”“今天还有课吗”“查老师课表”“怎么导入个人课表”“为什么数据加载失败”等核心场景。
+- 默认 `mockProvider` 可在无模型 key 的情况下演示“现在有空教室吗”“今天还有课吗”“查老师课表”“怎么导入个人课表”“为什么数据加载失败”等核心场景；配置 DeepSeek/Coze 后，项目知识问答、自然聊天和复杂解释会调用外部 Provider，课程事实仍只来自工具结果。
 
 ### 架构图文字版
 
@@ -112,18 +112,11 @@ CAMPUS_AGENT_BASE_URL=http://your-agent-host:port
 CAMPUS_AGENT_TOKEN=your_secure_agent_token_here
 ```
 
-#### 代理协议说明
-当 `CAMPUS_AGENT_ENABLED=true` 时，个人同步将跳过滑块校验和主服务直连，自动以 `Authorization: Bearer ${CAMPUS_AGENT_TOKEN}` 鉴权头向 Agent 节点发起一次性请求：
-```json
-POST /api/fosu/personal-sync
-Body:
-{
-  "studentId": "...",
-  "password": "...",
-  "semester": "..."
-}
-```
-主服务只负责透传与对返回的数据结果进行格式遮蔽脱敏，绝不保存学生密码，确保安全。
+#### 个人课表导入说明
+
+v0.5 起个人课表后端仅保留 `POST /api/fosu/personal/import-xls`。学号密码同步、滑块验证和登录抓取接口已下线；旧客户端访问 `/diagnose`、`/session/start`、`/session/verify-slider`、`/session/login-and-sync` 会收到 `410 XLS_ONLY`，提示改用 XLS 导入。
+
+XLS 导入只解析课程名、教师、教室、星期、节次、教学周和学期元数据，不接收教务密码，也不会把原始 XLS/base64 发给 AI Provider。
 
 ---
 

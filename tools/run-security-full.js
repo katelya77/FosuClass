@@ -14,6 +14,7 @@ const commands = [
   ["node", ["--check", "server/src/security/routeSecurityPolicy.js"]],
   ["node", ["--check", "server/scripts/security-postdeploy-check.js"]],
   ["node", ["tools/test-miniprogram-url-compatibility.js"]],
+  ["node", ["tools/test-personal-routes-xls-only-server.js"]],
   ["node", ["tools/test-miniprogram-session-security.js"]],
   ["node", ["tools/test-raw-wx-request-whitelist.js"]],
   ["node", ["tools/test-miniprogram-build-entry.js"]],

@@ -1,7 +1,6 @@
 {
   "navigationBarTitleText": "查找课表",
   "usingComponents": {
-    "search-filter": "/components/search-filter/index",
     "empty-state": "/components/empty-state/index",
     "notice-ticker": "/components/notice-ticker/notice-ticker"
   }

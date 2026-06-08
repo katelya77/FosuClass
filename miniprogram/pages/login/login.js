@@ -1,9 +1,9 @@
 Page({
   data: {},
 
-  goBack() {
-    wx.switchTab({
-      url: "/pages/index/index",
+  goImportXls() {
+    wx.redirectTo({
+      url: "/pages/personal-sync/personal-sync?tab=xls",
     });
   },
 });

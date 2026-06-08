@@ -7,6 +7,7 @@ function getProviderName() {
     return "mock";
   }
   const configured = String(process.env.AI_PROVIDER || "").trim().toLowerCase();
+  if (configured === "mock") return "mock";
   if (configured === "coze") return "coze";
   if (configured === "deepseek") return "deepseek";
   if (deepseekProvider.firstConfiguredKey()) return "deepseek";

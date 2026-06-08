@@ -330,12 +330,8 @@ Page({
   },
 
   goLogin() {
-    const { getCurrentScheduleTarget } = require("../../utils/storage");
-    const target = getCurrentScheduleTarget();
     wx.navigateTo({
-      url: target && target.type === "personal-xls"
-        ? "/pages/personal-sync/personal-sync?tab=xls"
-        : "/pages/personal-sync/personal-sync"
+      url: "/pages/personal-sync/personal-sync?tab=xls"
     });
   },
 

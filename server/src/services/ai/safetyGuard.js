@@ -68,6 +68,16 @@ function sanitizeCourse(course) {
       : [],
     weeks,
     weekText: sanitizeString(source.weekText || "", 80),
+    rawWeek: sanitizeString(source.rawWeek || source.rawWeeks || source.weeksText || "", 120),
+    weekRange: Array.isArray(source.weekRange)
+      ? source.weekRange.slice(0, 2).map((item) => Number(item)).filter((item) => Number.isFinite(item))
+      : sanitizeString(source.weekRange || "", 120),
+    startWeek: Number.isFinite(Number(source.startWeek)) ? Number(source.startWeek) : undefined,
+    endWeek: Number.isFinite(Number(source.endWeek)) ? Number(source.endWeek) : undefined,
+    weekType: sanitizeString(source.weekType || "", 20),
+    oddEven: sanitizeString(source.oddEven || "", 20),
+    isCustom: source.isCustom === true,
+    source: sanitizeString(source.source || source.sourceType || "", 40),
     campus: sanitizeString(source.campus || "", 40),
   };
 }
@@ -150,6 +160,20 @@ function sanitizeAgentContext(context) {
     timezoneOffsetMinutes: Number.isFinite(Number(source.timezoneOffsetMinutes)) ? Number(source.timezoneOffsetMinutes) : undefined,
     clientTimestampMs: Number.isFinite(Number(source.clientTimestampMs)) ? Number(source.clientTimestampMs) : undefined,
     timezone: sanitizeString(source.timezone || "Asia/Shanghai", 40),
+    currentTeachingWeek: Number.isFinite(Number(source.currentTeachingWeek)) ? Number(source.currentTeachingWeek) : undefined,
+    todayWeekday: Number.isFinite(Number(source.todayWeekday)) ? Number(source.todayWeekday) : undefined,
+    todayDate: sanitizeString(source.todayDate || "", 40),
+    termStartDate: sanitizeString(source.termStartDate || "", 40),
+    totalWeeks: Number.isFinite(Number(source.totalWeeks)) ? Number(source.totalWeeks) : undefined,
+    semesterText: sanitizeString(source.semesterText || "", 80),
+    todayTeachingInfo: source.todayTeachingInfo && typeof source.todayTeachingInfo === "object" && !Array.isArray(source.todayTeachingInfo)
+      ? {
+        weekNo: Number.isFinite(Number(source.todayTeachingInfo.weekNo)) ? Number(source.todayTeachingInfo.weekNo) : undefined,
+        weekday: Number.isFinite(Number(source.todayTeachingInfo.weekday)) ? Number(source.todayTeachingInfo.weekday) : undefined,
+        date: sanitizeString(source.todayTeachingInfo.date || "", 40),
+        termStartDate: sanitizeString(source.todayTeachingInfo.termStartDate || "", 40),
+      }
+      : undefined,
     currentScheduleSummary: sanitizeScheduleSummary(source.currentScheduleSummary),
     latestScheduleImport: sanitizeLatestScheduleImport(source.latestScheduleImport),
   };

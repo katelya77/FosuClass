@@ -278,6 +278,7 @@ Page({
     const aiPendingQuery = this.consumeAiPendingSchoolQuery();
     if (aiPendingQuery) {
       this.applyAiPendingSchoolQuery(aiPendingQuery);
+      return;
     }
 
     const now = Date.now();
