@@ -1,26 +1,68 @@
 const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 
 const DEFAULT_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_MODEL = "deepseek-v4-flash";
 const DEFAULT_REASONING_MODEL = "deepseek-v4-pro";
 const ALLOWED_CARD_TYPES = "empty_room/schedule/teacher/course/diagnosis/guide/reminder/generic";
 const ALLOWED_ACTION_TYPES = "navigate/copy/retry/bind/noop";
+const ENV_PATH = path.resolve(__dirname, "../../../../.env");
+
+let cachedEnvFileValues = null;
+
+function parseEnvLineValue(value) {
+  let text = String(value || "").trim();
+  const hashIndex = text.search(/\s+#/);
+  if (hashIndex >= 0) text = text.slice(0, hashIndex).trim();
+  if ((text.startsWith("\"") && text.endsWith("\"")) || (text.startsWith("'") && text.endsWith("'"))) {
+    text = text.slice(1, -1);
+  }
+  return text;
+}
+
+function readEnvFileValues() {
+  if (String(process.env.AI_PROVIDER_IGNORE_ENV_FILE || "").toLowerCase() === "true") return {};
+  if (cachedEnvFileValues) return cachedEnvFileValues;
+  cachedEnvFileValues = {};
+  try {
+    if (!fs.existsSync(ENV_PATH)) return cachedEnvFileValues;
+    const text = fs.readFileSync(ENV_PATH, "utf8");
+    text.split(/\r?\n/).forEach((line) => {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith("#")) return;
+      const index = trimmed.indexOf("=");
+      if (index <= 0) return;
+      const key = trimmed.slice(0, index).trim();
+      cachedEnvFileValues[key] = parseEnvLineValue(trimmed.slice(index + 1));
+    });
+  } catch (error) {
+    cachedEnvFileValues = {};
+  }
+  return cachedEnvFileValues;
+}
+
+function configuredEnv(name, fallback = "") {
+  const envFileValues = readEnvFileValues();
+  const value = process.env[name] || envFileValues[name];
+  return value === undefined || value === null || value === "" ? fallback : value;
+}
 
 function firstConfiguredKey() {
-  return process.env.AI_API_KEY ||
-    process.env.DEEPSEEK_API_KEY ||
-    process.env.FOSUCLASS_DEEPSEEK_API_KEY ||
+  return configuredEnv("AI_API_KEY") ||
+    configuredEnv("DEEPSEEK_API_KEY") ||
+    configuredEnv("FOSUCLASS_DEEPSEEK_API_KEY") ||
     "";
 }
 
 function numberEnv(name, fallback, min, max) {
-  const value = Number(process.env[name]);
+  const value = Number(configuredEnv(name));
   if (!Number.isFinite(value)) return fallback;
   return Math.max(min, Math.min(max, value));
 }
 
 function boolEnv(name, fallback) {
-  const raw = process.env[name];
+  const raw = configuredEnv(name);
   if (raw === undefined || raw === null || raw === "") return fallback;
   return String(raw).toLowerCase() === "true";
 }
@@ -73,9 +115,9 @@ async function generate({ message, intent, toolResults }) {
     error.code = "NOT_CONFIGURED";
     throw error;
   }
-  const baseUrl = String(process.env.AI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
-  const requestedModel = process.env.AI_MODEL || DEFAULT_MODEL;
-  const reasoningModel = process.env.AI_REASONING_MODEL || DEFAULT_REASONING_MODEL;
+  const baseUrl = String(configuredEnv("AI_BASE_URL", DEFAULT_BASE_URL)).replace(/\/+$/, "");
+  const requestedModel = configuredEnv("AI_MODEL", DEFAULT_MODEL);
+  const reasoningModel = configuredEnv("AI_REASONING_MODEL", DEFAULT_REASONING_MODEL);
   const thinkingEnabled = boolEnv("AI_THINKING_ENABLED", false);
   const model = thinkingEnabled && /pro/i.test(requestedModel) ? requestedModel : requestedModel || reasoningModel;
   const timeout = numberEnv("AI_TIMEOUT_MS", 15000, 1000, 60000);
@@ -104,7 +146,7 @@ async function generate({ message, intent, toolResults }) {
   };
   if (thinkingEnabled && /pro/i.test(model)) {
     body.thinking = { type: "enabled" };
-    body.reasoning_effort = process.env.AI_REASONING_EFFORT || "medium";
+    body.reasoning_effort = configuredEnv("AI_REASONING_EFFORT", "medium");
   }
 
   const response = await axios.post(`${baseUrl}/chat/completions`, body, {
@@ -131,6 +173,7 @@ async function generate({ message, intent, toolResults }) {
 
 module.exports = {
   buildSystemPrompt,
+  firstConfiguredKey,
   generate,
   name: "deepseek",
   parseJsonCodeBlock,

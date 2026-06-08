@@ -8,6 +8,7 @@ const ENV_EXAMPLE_PATH = path.join(SERVER_ROOT, ".env.example");
 const AI_ENV_KEYS = [
   "AI_AGENT_ENABLED",
   "AI_PROVIDER",
+  "AI_PROVIDER_POLICY",
   "AI_MODEL",
   "AI_REASONING_MODEL",
   "AI_BASE_URL",
@@ -31,7 +32,8 @@ const AI_ENV_KEYS = [
 
 const DEFAULTS = {
   AI_AGENT_ENABLED: "false",
-  AI_PROVIDER: "mock",
+  AI_PROVIDER: "deepseek",
+  AI_PROVIDER_POLICY: "auto",
   AI_MODEL: "deepseek-v4-flash",
   AI_REASONING_MODEL: "deepseek-v4-pro",
   AI_BASE_URL: "https://api.deepseek.com",
@@ -122,6 +124,7 @@ function getStatus() {
     envExists: fs.existsSync(ENV_PATH),
     enabled: getEffectiveValue(envFileValues, "AI_AGENT_ENABLED") === "true",
     provider: getEffectiveValue(envFileValues, "AI_PROVIDER"),
+    providerPolicy: getEffectiveValue(envFileValues, "AI_PROVIDER_POLICY"),
     model: getEffectiveValue(envFileValues, "AI_MODEL"),
     reasoningModel: getEffectiveValue(envFileValues, "AI_REASONING_MODEL"),
     baseUrl: getEffectiveValue(envFileValues, "AI_BASE_URL"),
@@ -149,6 +152,11 @@ function normalizeProvider(value) {
   return ["mock", "deepseek", "coze"].includes(provider) ? provider : "mock";
 }
 
+function normalizeProviderPolicy(value) {
+  const policy = String(value || "auto").trim().toLowerCase();
+  return ["auto", "always", "tool-only"].includes(policy) ? policy : "auto";
+}
+
 function normalizeBoolean(value) {
   return value === true || String(value).toLowerCase() === "true" ? "true" : "false";
 }
@@ -157,6 +165,7 @@ function buildUpdates(payload = {}) {
   const updates = {};
   const simpleFields = {
     provider: "AI_PROVIDER",
+    providerPolicy: "AI_PROVIDER_POLICY",
     model: "AI_MODEL",
     reasoningModel: "AI_REASONING_MODEL",
     baseUrl: "AI_BASE_URL",
@@ -175,6 +184,8 @@ function buildUpdates(payload = {}) {
     if (Object.prototype.hasOwnProperty.call(payload, field)) {
       updates[simpleFields[field]] = field === "provider"
         ? normalizeProvider(payload[field])
+        : field === "providerPolicy"
+          ? normalizeProviderPolicy(payload[field])
         : String(payload[field] == null ? "" : payload[field]).trim();
     }
   });

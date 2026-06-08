@@ -15,7 +15,7 @@ const TEXT_REDACTION_PATTERNS = [
 ];
 
 const SENSITIVE_KEY_PATTERN = /(password|passwd|pwd|studentId|student_id|studentName|cookie|jsessionid|ticket|authorization|token|secret|apiKey|api_key|base64|fileContent|rawFile|credential|openid|session)/i;
-const PERSONAL_TARGET_TYPES = new Set(["personal", "personal-xls", "account", "xls", "self", "mine", "local-personal"]);
+const PERSONAL_TARGET_TYPES = new Set(["personal", "personal-xls", "personal-login", "account", "student-login", "xls", "self", "mine", "local-personal"]);
 const PUBLIC_TARGET_TYPES = new Set(["class", "teacher", "classroom", "course", "school", "public"]);
 const DETECTION_PATTERNS = [
   /(?:password|passwd|pwd|密码|口令)\s*[:：=是为]?\s*(?!\[已脱敏\]|\[REDACTED\])[^\s，。；;,&]{2,}/i,
@@ -117,7 +117,25 @@ function sanitizeScheduleSummary(summary) {
     enabled: Boolean(source.enabled),
     targetType,
     targetName,
+    term: sanitizeString(source.term || source.semester || "", 40),
+    source: sanitizeString(source.source || source.sourceText || "", 60),
+    importedAt: sanitizeString(source.importedAt || source.updateTime || "", 60),
+    courseCount: Number.isFinite(Number(source.courseCount)) ? Number(source.courseCount) : courses.length,
+    fingerprint: sanitizeString(source.fingerprint || source.scheduleFingerprint || "", 80),
     courses,
+  };
+}
+
+function sanitizeLatestScheduleImport(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return {
+    at: sanitizeString(source.at || "", 60),
+    targetType: sanitizeString(source.targetType || "", 30),
+    targetName: looksPersonalTargetName(source.targetName || "", source.targetType) ? "个人课表" : sanitizeString(source.targetName || "", 80),
+    term: sanitizeString(source.term || "", 40),
+    courseCount: Number.isFinite(Number(source.courseCount)) ? Number(source.courseCount) : 0,
+    fingerprint: sanitizeString(source.fingerprint || "", 80),
+    source: sanitizeString(source.source || "", 60),
   };
 }
 
@@ -133,6 +151,7 @@ function sanitizeAgentContext(context) {
     clientTimestampMs: Number.isFinite(Number(source.clientTimestampMs)) ? Number(source.clientTimestampMs) : undefined,
     timezone: sanitizeString(source.timezone || "Asia/Shanghai", 40),
     currentScheduleSummary: sanitizeScheduleSummary(source.currentScheduleSummary),
+    latestScheduleImport: sanitizeLatestScheduleImport(source.latestScheduleImport),
   };
 }
 

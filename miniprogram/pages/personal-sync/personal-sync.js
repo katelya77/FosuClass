@@ -1,700 +1,331 @@
-/**
- * 个人课表同步页面 JS
- * NOTE: 支持教务网账号在线同步与 XLS 本地文件聊天记录上传解析两大导入途径，包含导入预览和实时课程搜索。
- */
-
 const request = require("../../utils/request");
 const { getSettings, setCurrentScheduleTarget } = require("../../utils/storage");
+const aiAssistantService = require("../../services/aiAssistantService");
 
-const MAX_SLIDE_RANGE = 247; // 340px (背景) - 93px (滑块) = 247px 有效拖拽区间
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
+const WEEKDAY_TABS = [
+  { label: "全部", value: "all" },
+  { label: "周一", value: 1 },
+  { label: "周二", value: 2 },
+  { label: "周三", value: 3 },
+  { label: "周四", value: 4 },
+  { label: "周五", value: 5 },
+  { label: "周六", value: 6 },
+  { label: "周日", value: 7 },
+];
+
+function formatFileSize(size) {
+  const bytes = Number(size || 0);
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(0.1, bytes / 1024).toFixed(1)} KB`;
+}
+
+function getCourseWeekday(course) {
+  return Number(course.weekDay || course.weekday || 0) || 0;
+}
+
+function decorateCourses(courses) {
+  const weekText = ["", "周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+  return (Array.isArray(courses) ? courses : []).map((course, index) => {
+    const weekday = getCourseWeekday(course);
+    const start = Number(course.startSection || 0) || 0;
+    const end = Number(course.endSection || start || 0) || 0;
+    return Object.assign({}, course, {
+      previewKey: [
+        course.courseName || "course",
+        weekday,
+        start,
+        end,
+        course.classroom || course.roomName || "",
+        index,
+      ].join("-"),
+      displayTime: `${weekText[weekday] || "周次"} ${start && end ? `第${start}-${end}节` : "节次待定"}`,
+    });
+  });
+}
+
+function buildFingerprint(result = {}) {
+  const courses = Array.isArray(result.courses) ? result.courses : [];
+  const text = JSON.stringify({
+    term: result.term,
+    courseCount: courses.length,
+    sample: courses.slice(0, 20).map((course) => [
+      course.courseName,
+      course.teacherName,
+      course.classroom,
+      getCourseWeekday(course),
+      course.startSection,
+      course.endSection,
+      course.weekText,
+    ]),
+  });
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
 
 function buildXlsScheduleDisplay(result) {
   const metadata = (result && result.metadata) || {};
   const term = metadata.term || (result && result.term) || "";
-  let title = "个人课表";
-  if (metadata.className) {
-    title = `${metadata.className}课表`;
-  } else if (metadata.studentName) {
-    title = `${metadata.studentName}的课表`;
-  }
-  const subtitleParts = [metadata.studentName, term, "XLS导入"].filter(Boolean);
-  const summaryParts = [metadata.className, metadata.studentName, term].filter(Boolean);
+  const title = metadata.className ? `${metadata.className}课表` : "个人课表";
+  const subtitle = [metadata.className, term, "XLS导入"].filter(Boolean).join(" · ") || "XLS导入";
   return {
     title,
-    subtitle: subtitleParts.join(" · ") || "XLS导入",
-    summary: summaryParts.join(" · ") || title,
+    subtitle,
     sourceText: "100网 XLS 手动导入",
+  };
+}
+
+function sanitizeMetadata(metadata = {}) {
+  return {
+    studentName: metadata.studentName || "",
+    term: metadata.term || "",
+    className: metadata.className || "",
+    majorName: metadata.majorName || "",
+    collegeName: metadata.collegeName || "",
+    printDate: metadata.printDate || "",
+    source: metadata.source || "fosu-100-print-xls",
+    sourceFileName: metadata.sourceFileName || "",
   };
 }
 
 Page({
   data: {
-    // 双通道模式控制
-    currentTab: "xls", // "xls" | "account"
-    importMode: "xls",  // "xls" | "account"
-    
-    // 账号同步字段
-    studentId: "",
-    password: "",
-    studentIdMasked: "",
-    startingSession: false,
-    showCaptchaModal: false,
-    sessionId: "",
-    captchaData: null,
-    envChecked: false,
-    envAvailable: false,
-    checkingEnv: false,
-    diagnoseMsg: "",
-    diagnoseSubMsg: "该检测基于服务器环境，不代表你的手机网络状态。",
-    mainBtnText: "检测服务器环境",
-
-    // XLS 导入字段
-    selectedFile: null,  // { name, path, size, sizeStr }
+    selectedFile: null,
     loadingXls: false,
-    previewSearchKey: "",
-    previewDayFilter: "all", // "all" | 1-7
-    filteredCourses: [],
-
-    // 公用字段
+    syncSuccess: false,
+    syncResult: null,
     semesterOptions: ["2025-2026-2", "2025-2026-1", "2024-2025-2", "2024-2025-1"],
     semesterIndex: 0,
-    
-    // 滑块验证字段
-    sliderX: 0,
-    isDragging: false,
-    startX: 0,
-    startSliderX: 0,
-    verifyStatus: "", // 'verifying' | 'success' | 'fail' | ''
-    
-    // 同步成功返回
-    syncSuccess: false,
-    syncResult: null, // XLS 模式下含 filename, term, courses; 账号模式下含 student, schedule
+    previewSearchKey: "",
+    previewDayFilter: "all",
+    weekdayTabs: WEEKDAY_TABS,
+    filteredCourses: [],
   },
 
-  onLoad(options) {
-    // 默认使用当前全局设置的学期
+  onLoad() {
     const settings = getSettings();
     const currentSemesterId = settings.semesterId || settings.semester || "2025-2026-2";
-    
-    // 匹配下拉框索引
     const index = this.data.semesterOptions.indexOf(currentSemesterId);
     this.setData({
       semesterIndex: index >= 0 ? index : 0,
     });
-
-    // 支持从外部传参直接定位 Tab
-    if (options && options.tab) {
-      this.setData({
-        currentTab: options.tab
-      });
-    }
   },
 
-  /**
-   * 切换同步导航 Tab
-   */
-  switchTab(e) {
-    const tab = e.currentTarget.dataset.tab;
+  onSemesterChange(event) {
     this.setData({
-      currentTab: tab,
-      selectedFile: null,
-      loadingXls: false,
-      syncSuccess: false,
-      syncResult: null
+      semesterIndex: Number(event.detail.value),
     });
   },
 
-  /* ========================================================
-   * 100 网手动作业：XLS 文件导入解析逻辑
-   * ======================================================== */
-
-  /**
-   * XLS 按钮触发入口：分流选择文件与上传解析
-   */
   onXlsBtnTap() {
-    if (!this.data.selectedFile) {
-      this.chooseAndImportXls();
-    } else {
+    if (this.data.selectedFile) {
       this.parseUploadedXls();
+      return;
     }
+    this.chooseXlsFile();
   },
 
-  /**
-   * 调用微信 API 在聊天记录里选择课表 xls 文件
-   */
-  chooseAndImportXls() {
+  chooseXlsFile() {
     wx.chooseMessageFile({
       count: 1,
       type: "file",
       extension: ["xls", "xlsx"],
       success: (res) => {
-        const file = res.tempFiles[0];
+        const file = res.tempFiles && res.tempFiles[0];
         if (!file) return;
-
-        // 限制文件大小不能超过 5MB
-        if (file.size > 5 * 1024 * 1024) {
+        if (file.size > MAX_FILE_SIZE) {
           wx.showModal({
             title: "文件过大",
-            content: "上传的课表表格文件大小不能超过 5MB，请重新选择。",
-            showCancel: false
+            content: "课表文件大小不能超过 5MB，请重新选择。",
+            showCancel: false,
           });
           return;
         }
-
-        const sizeStr = file.size > 1024 * 1024 
-          ? (file.size / (1024 * 1024)).toFixed(1) + " MB" 
-          : (file.size / 1024).toFixed(1) + " KB";
-
         this.setData({
           selectedFile: {
             name: file.name,
             path: file.path,
             size: file.size,
-            sizeStr: sizeStr
-          }
+            sizeStr: formatFileSize(file.size),
+          },
         });
       },
-      fail: (err) => {
-        if (err.errMsg.indexOf("cancel") === -1) {
-          wx.showToast({
-            title: "文件选择失败",
-            icon: "none"
-          });
+      fail: (error) => {
+        if (String(error && error.errMsg || "").indexOf("cancel") < 0) {
+          wx.showToast({ title: "文件选择失败", icon: "none" });
         }
-      }
+      },
     });
   },
 
-  /**
-   * 清除当前已经选择的文件
-   */
   clearSelectedFile() {
     this.setData({
-      selectedFile: null,
-      loadingXls: false
-    });
-  },
-
-  /**
-   * 将选定的 xls 读取为 base64，并调用后端解析 API 接口
-   */
-  parseUploadedXls() {
-    const file = this.data.selectedFile;
-    if (!file || this.data.loadingXls) return;
-
-    this.setData({
-      loadingXls: true
-    });
-
-    wx.showLoading({
-      title: "读取并上传中..."
-    });
-
-    const fsManager = wx.getFileSystemManager();
-    fsManager.readFile({
-      filePath: file.path,
-      encoding: "base64",
-      success: (readRes) => {
-        const base64Str = readRes.data;
-        const targetTerm = this.data.semesterOptions[this.data.semesterIndex];
-
-        request.post(
-          "/api/fosu/personal/import-xls",
-          {
-            filename: file.name,
-            fileBase64: base64Str,
-            source: "fosu-100-print-xls",
-            targetTerm: targetTerm
-          },
-          { silentError: true }
-        )
-          .then((res) => {
-            wx.hideLoading();
-            if (res.success) {
-              const displayInfo = buildXlsScheduleDisplay(res);
-              wx.showToast({
-                title: "解析成功",
-                icon: "success"
-              });
-
-              this.setData({
-                syncSuccess: true,
-                importMode: "xls",
-                loadingXls: false,
-                syncResult: Object.assign({}, res, { displayInfo }),
-                previewSearchKey: "",
-                previewDayFilter: "all",
-                filteredCourses: res.courses || []
-              });
-            } else {
-              this.setData({ loadingXls: false });
-              this.showFriendlyError(res.code, res.message || "课表解析失败");
-            }
-          })
-          .catch((err) => {
-            wx.hideLoading();
-            this.setData({ loadingXls: false });
-            const payload = err.payload || {};
-            this.showFriendlyError(payload.code, payload.message || err.message || "网络请求失败");
-          });
-      },
-      fail: (readErr) => {
-        wx.hideLoading();
-        this.setData({ loadingXls: false });
-        wx.showModal({
-          title: "文件读取失败",
-          content: "无法读取微信文件，可能该文件已被系统微信缓存清理，请重新在微信聊天框接收后重试。",
-          showCancel: false
-        });
-      }
-    });
-  },
-
-  /**
-   * 预览页：输入框进行搜索过滤
-   */
-  onPreviewSearch(e) {
-    const key = e.detail.value.trim().toLowerCase();
-    this.setData({
-      previewSearchKey: key
-    });
-    this.applyPreviewFilters();
-  },
-
-  /**
-   * 预览页：星期 Tab 点击切换
-   */
-  onPreviewDayFilterTap(e) {
-    const day = e.currentTarget.dataset.day;
-    this.setData({
-      previewDayFilter: day
-    });
-    this.applyPreviewFilters();
-  },
-
-  /**
-   * 预览页：根据过滤项重新计算展示的数据集
-   */
-  applyPreviewFilters() {
-    const courses = (this.data.syncResult && this.data.syncResult.courses) || [];
-    const searchKey = this.data.previewSearchKey;
-    const dayFilter = this.data.previewDayFilter;
-
-    let filtered = courses;
-
-    // 1. 过滤星期
-    if (dayFilter !== "all") {
-      const targetDay = Number(dayFilter);
-      filtered = filtered.filter(c => c.weekDay === targetDay);
-    }
-
-    // 2. 搜索课程名
-    if (searchKey) {
-      filtered = filtered.filter(c => 
-        String(c.courseName).toLowerCase().includes(searchKey) ||
-        String(c.teacherName).toLowerCase().includes(searchKey) ||
-        String(c.classroom).toLowerCase().includes(searchKey)
-      );
-    }
-
-    this.setData({
-      filteredCourses: filtered
-    });
-  },
-
-  /**
-   * 放弃当前导入的课表预览，回到文件选择状态
-   */
-  cancelImport() {
-    this.setData({
-      syncSuccess: false,
-      syncResult: null,
-      selectedFile: null,
-      loadingXls: false
-    });
-  },
-
-  /* ========================================================
-   * 原有教务账号统一同步逻辑
-   * ======================================================== */
-
-  /**
-   * 账号同步的主按钮点击
-   */
-  onMainBtnTap() {
-    if (this.data.envChecked && !this.data.envAvailable) {
-      this.goToXlsImport();
-    } else {
-      this.diagnoseEnvironment();
-    }
-  },
-
-  /**
-   * 同步环境诊断
-   */
-  diagnoseEnvironment() {
-    if (this.data.checkingEnv) return;
-
-    this.setData({
-      checkingEnv: true,
-      diagnoseMsg: ""
-    });
-
-    request.get(
-      "/api/fosu/personal/diagnose",
-      {},
-      { silentError: true, showLoading: true, loadingTitle: "正在检测网络..." }
-    )
-      .then((res) => {
-        let available = false;
-        let msg = "";
-        let subMsg = "该检测基于服务器环境，不代表你的手机网络状态。";
-
-        if (res.agentMode) {
-          available = res.agent && res.agent.reachable;
-          msg = res.userMessage || res.recommendation || (available ? "校园网后端代理可用。" : "校园网后端代理不可用。");
-        } else {
-          const authOk = typeof res.authserverReachable === "boolean"
-            ? res.authserverReachable
-            : (res.authserver && res.authserver.reachable);
-          const eduOk = typeof res.jwReachable === "boolean"
-            ? res.jwReachable
-            : (res.edu100 && res.edu100.reachable);
-          available = authOk && eduOk;
-          msg = res.userMessage || res.recommendation || (available ? "服务器可访问学校认证与教务网络。" : "公网服务器无法访问学校内网 100.fosu.edu.cn。");
-          if (res.clientHint && res.clientHint.message) {
-            subMsg = res.clientHint.message;
-          }
-        }
-
-        this.setData({
-          checkingEnv: false,
-          envChecked: true,
-          envAvailable: available,
-          diagnoseMsg: msg,
-          diagnoseSubMsg: subMsg,
-          mainBtnText: available ? "开始登录校验" : "服务器暂不可用"
-        });
-
-        if (!available) {
-          this.showFriendlyError("CAMPUS_NETWORK_REQUIRED", msg);
-        }
-      })
-      .catch((err) => {
-        const payload = err.payload || {};
-        let errMsg = payload.message || err.message || "请求诊断接口失败";
-        this.setData({
-          checkingEnv: false,
-          envChecked: true,
-          envAvailable: false,
-          diagnoseMsg: "服务器连接失败: " + errMsg,
-          diagnoseSubMsg: "该检测基于服务器环境，不代表你的手机网络状态。",
-          mainBtnText: "服务器暂不可用"
-        });
-        this.showFriendlyError(payload.code, errMsg);
-      });
-  },
-
-  goToSchoolPage() {
-    wx.setStorageSync("initSelectMode", true);
-    wx.switchTab({
-      url: "/pages/school/school",
-      success: () => {
-        this.resetEnvCheck();
-      }
-    });
-  },
-
-  goToXlsImport() {
-    this.setData({
-      currentTab: "xls",
-      syncSuccess: false,
-      syncResult: null,
       selectedFile: null,
       loadingXls: false,
     });
   },
 
-  resetEnvCheck() {
-    this.setData({
-      envChecked: false,
-      envAvailable: false,
-      diagnoseMsg: "",
-      diagnoseSubMsg: "该检测基于服务器环境，不代表你的手机网络状态。",
-      mainBtnText: "检测服务器环境"
-    });
-  },
+  parseUploadedXls() {
+    const file = this.data.selectedFile;
+    if (!file || this.data.loadingXls) return;
 
-  onStudentIdInput(e) {
-    this.setData({
-      studentId: e.detail.value.trim(),
-    });
-  },
+    this.setData({ loadingXls: true });
+    wx.showLoading({ title: "解析课表中..." });
 
-  onPasswordInput(e) {
-    this.setData({
-      password: e.detail.value,
-    });
-  },
-
-  onSemesterChange(e) {
-    this.setData({
-      semesterIndex: Number(e.detail.value),
-    });
-  },
-
-  startLoginFlow() {
-    if (this.data.startingSession) return;
-    if (this.data.envChecked && !this.data.envAvailable) {
-      this.showFriendlyError("CAMPUS_NETWORK_REQUIRED");
-      return;
-    }
-    this.setData({ startingSession: true });
-
-    request.post(
-      "/api/fosu/personal/session/start",
-      { studentId: this.data.studentId },
-      { silentError: true, loadingTitle: "正在初始化同步..." }
-    )
-      .then((res) => {
-        this.setData({
-          startingSession: false,
-          sessionId: res.sessionId,
-        });
-
-        if (res.useAgent) {
-          this.loginAndSyncSchedule();
-        } else {
-          this.setData({
-            showCaptchaModal: true,
-            captchaData: res.captcha,
-            sliderX: 0,
-            verifyStatus: "",
+    wx.getFileSystemManager().readFile({
+      filePath: file.path,
+      encoding: "base64",
+      success: (readRes) => {
+        request.post("/api/fosu/personal/import-xls", {
+          filename: file.name,
+          fileBase64: readRes.data,
+          source: "fosu-100-print-xls",
+          targetTerm: this.data.semesterOptions[this.data.semesterIndex],
+        }, {
+          silentError: true,
+          timeout: 30000,
+          retries: 1,
+        })
+          .then((res) => {
+            wx.hideLoading();
+            if (!res || res.success === false) {
+              this.setData({ loadingXls: false });
+              this.showFriendlyError(res && res.code, res && res.message || "课表解析失败");
+              return;
+            }
+            const displayInfo = buildXlsScheduleDisplay(res);
+            const fingerprint = buildFingerprint(res);
+            const nextResult = Object.assign({}, res, {
+              displayInfo,
+              fingerprint,
+              metadata: sanitizeMetadata(res.metadata || {}),
+            });
+            this.setData({
+              syncSuccess: true,
+              loadingXls: false,
+              syncResult: nextResult,
+              previewSearchKey: "",
+              previewDayFilter: "all",
+              filteredCourses: decorateCourses(res.courses),
+            });
+            wx.showToast({ title: "解析成功", icon: "success" });
+          })
+          .catch((error) => {
+            wx.hideLoading();
+            this.setData({ loadingXls: false });
+            const payload = error && error.payload || {};
+            this.showFriendlyError(payload.code, payload.message || error.message || "网络请求失败");
           });
-        }
-      })
-      .catch((err) => {
-        this.setData({ startingSession: false });
-        const payload = err.payload || {};
-        this.showFriendlyError(payload.code, payload.message || err.message);
-      });
+      },
+      fail: () => {
+        wx.hideLoading();
+        this.setData({ loadingXls: false });
+        wx.showModal({
+          title: "文件读取失败",
+          content: "无法读取微信文件，请重新从聊天记录选择课表 XLS。",
+          showCancel: false,
+        });
+      },
+    });
   },
 
-  onTouchStart(e) {
-    if (this.data.verifyStatus === "verifying" || this.data.verifyStatus === "success") {
+  onPreviewSearch(event) {
+    this.setData({ previewSearchKey: String(event.detail.value || "").trim().toLowerCase() });
+    this.applyPreviewFilters();
+  },
+
+  onPreviewDayFilterTap(event) {
+    this.setData({ previewDayFilter: event.currentTarget.dataset.day });
+    this.applyPreviewFilters();
+  },
+
+  applyPreviewFilters() {
+    const result = this.data.syncResult || {};
+    const searchKey = this.data.previewSearchKey;
+    const dayFilter = this.data.previewDayFilter;
+    let filtered = Array.isArray(result.courses) ? result.courses : [];
+
+    if (dayFilter !== "all") {
+      const targetDay = Number(dayFilter);
+      filtered = filtered.filter((course) => getCourseWeekday(course) === targetDay);
+    }
+    if (searchKey) {
+      filtered = filtered.filter((course) => {
+        return String(course.courseName || "").toLowerCase().indexOf(searchKey) >= 0 ||
+          String(course.teacherName || "").toLowerCase().indexOf(searchKey) >= 0 ||
+          String(course.classroom || course.roomName || "").toLowerCase().indexOf(searchKey) >= 0;
+      });
+    }
+    this.setData({ filteredCourses: decorateCourses(filtered) });
+  },
+
+  cancelImport() {
+    this.setData({
+      syncSuccess: false,
+      syncResult: null,
+      selectedFile: null,
+      loadingXls: false,
+      previewSearchKey: "",
+      previewDayFilter: "all",
+      filteredCourses: [],
+    });
+  },
+
+  bindToLocal() {
+    const result = this.data.syncResult;
+    if (!result) return;
+    const metadata = sanitizeMetadata(result.metadata || {});
+    const displayInfo = result.displayInfo || buildXlsScheduleDisplay(result);
+    const importedAt = new Date().toISOString();
+    const target = {
+      type: "personal-xls",
+      name: displayInfo.title,
+      title: displayInfo.title,
+      subtitle: displayInfo.subtitle,
+      classId: `personal-xls-${result.fingerprint || buildFingerprint(result)}`,
+      semester: metadata.term || result.term,
+      term: metadata.term || result.term,
+      courses: Array.isArray(result.courses) ? result.courses : [],
+      updateTime: importedAt.slice(0, 10),
+      importedAt,
+      sourceText: displayInfo.sourceText,
+      metadata,
+      scheduleFingerprint: result.fingerprint || buildFingerprint(result),
+    };
+
+    if (setCurrentScheduleTarget(target)) {
+      aiAssistantService.rememberLatestScheduleImport(target);
+      wx.showToast({ title: "已设为当前课表", icon: "success" });
+      setTimeout(() => wx.navigateBack(), 900);
       return;
     }
-    const touch = e.touches[0];
-    this.setData({
-      isDragging: true,
-      startX: touch.clientX,
-      startSliderX: this.data.sliderX,
-      verifyStatus: "",
+
+    wx.showModal({
+      title: "设置失败",
+      content: "无法保存个人课表，缓存可能已满，请清理后重试。",
+      showCancel: false,
     });
-  },
-
-  onTouchMove(e) {
-    if (!this.data.isDragging) return;
-    const touch = e.touches[0];
-    const deltaX = touch.clientX - this.data.startX;
-    let newSliderX = this.data.startSliderX + deltaX;
-    newSliderX = Math.max(0, Math.min(newSliderX, MAX_SLIDE_RANGE));
-    this.setData({
-      sliderX: newSliderX,
-    });
-  },
-
-  onTouchEnd() {
-    if (!this.data.isDragging) return;
-    this.setData({ isDragging: false });
-    this.verifySliderCaptcha();
-  },
-
-  verifySliderCaptcha() {
-    this.setData({ verifyStatus: "verifying" });
-
-    request.post(
-      "/api/fosu/personal/session/verify-slider",
-      {
-        sessionId: this.data.sessionId,
-        canvasLength: 340,
-        moveLength: parseFloat(this.data.sliderX.toFixed(1)),
-      },
-      { silentError: true, showLoading: false }
-    )
-      .then(() => {
-        this.setData({ verifyStatus: "success" });
-        setTimeout(() => {
-          this.loginAndSyncSchedule();
-        }, 400);
-      })
-      .catch((err) => {
-        this.setData({
-          verifyStatus: "fail",
-          sliderX: 0,
-        });
-        const payload = err.payload || {};
-        wx.showToast({
-          title: payload.message || "拼图未对齐，请重试",
-          icon: "none",
-        });
-      });
-  },
-
-  loginAndSyncSchedule() {
-    this.setData({
-      showCaptchaModal: false,
-    });
-
-    const targetSemester = this.data.semesterOptions[this.data.semesterIndex];
-
-    request.post(
-      "/api/fosu/personal/session/login-and-sync",
-      {
-        sessionId: this.data.sessionId,
-        studentId: this.data.studentId,
-        password: this.data.password,
-        semester: targetSemester,
-      },
-      { silentError: true, loadingTitle: "正在同步个人课表..." }
-    )
-      .then((res) => {
-        const id = this.data.studentId;
-        const idMasked = id.length > 8 ? `${id.slice(0, 4)}****${id.slice(-4)}` : `${id.slice(0, 2)}****${id.slice(-2)}`;
-
-        this.setData({
-          syncSuccess: true,
-          importMode: "account",
-          syncResult: res,
-          studentIdMasked: idMasked,
-          password: "",
-        });
-      })
-      .catch((err) => {
-        this.setData({ password: "" });
-        const payload = err.payload || {};
-        this.showFriendlyError(payload.code, payload.message || err.message);
-      });
-  },
-
-  /* ========================================================
-   * 绑定课表及返回操作
-   * ======================================================== */
-
-  /**
-   * 将同步或 XLS 导入的结果写入本地个人课表缓存中并设为首页课表
-   */
-  bindToLocal() {
-    if (!this.data.syncResult) return;
-
-    const result = this.data.syncResult;
-    const mode = this.data.importMode;
-    let target = null;
-
-    if (mode === "xls") {
-      const metadata = result.metadata || {};
-      const displayInfo = buildXlsScheduleDisplay(result);
-      const importedAt = new Date().toISOString();
-      // XLS 导入生成的本地绑定结构
-      target = {
-        type: "personal-xls",
-        name: displayInfo.title,
-        title: displayInfo.title,
-        subtitle: displayInfo.subtitle,
-        classId: metadata.studentId ? `personal-xls-${metadata.studentId}` : "personal-xskb-xls",
-        semester: metadata.term || result.term,
-        courses: result.courses,
-        updateTime: importedAt.slice(0, 10),
-        importedAt,
-        sourceText: displayInfo.sourceText,
-        metadata,
-        student: {
-          studentName: metadata.studentName || "XLS导入课表",
-          studentId: metadata.studentId || "100网理论课表"
-        }
-      };
-    } else {
-      // 账号同步的原绑定结构
-      target = {
-        type: "personal",
-        name: "个人课表",
-        classId: "personal-xskb",
-        semester: result.semester,
-        courses: result.schedule.courses,
-        updateTime: result.updatedAt ? result.updatedAt.slice(0, 10) : "",
-        student: result.student,
-      };
-    }
-
-    const success = setCurrentScheduleTarget(target);
-    if (success) {
-      wx.showToast({
-        title: "已设为当前课表",
-        icon: "success",
-      });
-      setTimeout(() => {
-        wx.navigateBack();
-      }, 1000);
-    } else {
-      wx.showModal({
-        title: "设置失败",
-        content: "无法保存个人课表，缓存可能已满，请清理后重试。",
-        showCancel: false,
-      });
-    }
   },
 
   goBack() {
     wx.navigateBack();
   },
 
-  closeCaptchaModal() {
-    this.setData({
-      showCaptchaModal: false,
-      sliderX: 0,
-      verifyStatus: "",
-    });
-  },
-
-  noop() {},
-
-  /**
-   * 针对不同业务错误码展示更友好直观的中文提示
-   */
   showFriendlyError(code, defaultMsg) {
-    let title = "提示";
-    let content = defaultMsg || "系统网络繁忙，请稍后再试";
-
-    if (code === "EDU100_DNS_FAILED" || code === "UPSTREAM_DNS_FAILED") {
-      content = "公网服务器当前无法解析学校内网 100.fosu.edu.cn。该状态不代表你的手机网络，推荐使用 XLS 手动导入。";
-    } else if (code === "EDU100_UNREACHABLE" || code === "CAMPUS_NETWORK_REQUIRED") {
-      content = "公网服务器无法访问学校内网 100.fosu.edu.cn，账号密码同步不可用。你的手机连接校园网不会改变服务器网络，请使用 XLS 手动导入。";
-    } else if (code === "AUTHSERVER_UNREACHABLE") {
-      content = "暂时无法连接统一身份认证服务，请稍后再试。";
-    } else if (code === "LOGIN_PAGE_CHANGED") {
-      content = "统一身份认证页面结构可能已更新，在线同步暂时不可用。请使用 XLS 导入。";
-    } else if (code === "SLIDER_ENDPOINT_FAILED" || code === "SLIDER_TOKEN_NOT_FOUND") {
-      content = "滑块验证码资源加载失败，请重试或使用 XLS 导入。";
-    } else if (code === "SLIDER_VERIFY_FAILED") {
-      content = "滑块验证失败，请重新拖动验证。";
-    } else if (code === "CAS_LOGIN_FAILED" || code === "INVALID_CREDENTIALS") {
-      content = "登录失败，请核对学号与统一认证密码。";
-    } else if (code === "SCHEDULE_PAGE_UNREACHABLE") {
-      content = "教务认证成功，但拉取理论课表页面失败，请稍后重试。";
+    let content = defaultMsg || "课表解析失败，请检查文件后重试。";
+    if (code === "FILE_TOO_LARGE") {
+      content = "课表文件过大，请重新下载或压缩后再导入。";
+    } else if (code === "INVALID_PARAMS") {
+      content = "文件内容为空，请重新选择 XLS/XLSX 文件。";
     } else if (code === "SCHEDULE_PARSE_FAILED" || code === "PERSONAL_SCHEDULE_PARSE_FAILED") {
-      content = "打开课表成功，但解析课程数据失败。请联系客服或尝试 XLS 手动导入。";
-    } else if (code === "PERSONAL_SCHEDULE_EMPTY") {
-      content = "同步成功，但是在该学期中似乎没有您的排课记录。";
-    } else if (code === "VPN_GATEWAY_UNAVAILABLE") {
-      content = "校园代理网关连通受限，请尝试使用 XLS 手动导入。";
-    } else if (code === "UPSTREAM_TIMEOUT") {
-      content = "公网服务器连接教务网超时。该检测基于服务器环境，不代表你的手机网络，推荐使用 XLS 手动导入。";
-    } else if (code === "UPSTREAM_404") {
-      content = "教务接口未找到(404)，个人课表在线同步暂时受限。";
+      content = "无法识别课表结构，请确认文件来自 100 网“打印”导出的个人理论课表。";
     }
-
     wx.showModal({
-      title,
+      title: "提示",
       content,
       showCancel: false,
       confirmText: "知道了",

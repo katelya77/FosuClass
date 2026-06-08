@@ -124,7 +124,7 @@ const DEMO_RESPONSES = {
     toolCalls: [
       { name: "explain_personal_import", status: "success" },
     ],
-    safety: { provider: "coze", mode: "tool-grounded" },
+    safety: { provider: "deepseek", mode: "tool-grounded" },
     suggestions: ["怎么导入个人课表？", "看今天课程"],
     cards: [{
       type: "guide",

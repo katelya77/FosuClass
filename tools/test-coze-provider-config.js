@@ -15,13 +15,22 @@ async function run() {
     (error) => error && error.code === "NOT_CONFIGURED"
   );
 
-  const response = await agentService.chat({
+  const localGuide = await agentService.chat({
     message: "怎么导入个人课表？",
     context: { timezone: "Asia/Shanghai" },
   });
-  assert.strictEqual(response.success, true);
-  assert.strictEqual(response.safety.provider, "mock");
-  assert(response.toolCalls.some((item) => item.status === "skipped"), "fallback tool call should be reported");
+  assert.strictEqual(localGuide.success, true);
+  assert.strictEqual(localGuide.safety.provider, "mock");
+  assert.strictEqual(localGuide.safety.externalProviderUsed, false);
+  assert(!localGuide.toolCalls.some((item) => item.status === "skipped"), "import guide should stay on local template");
+
+  const fallback = await agentService.chat({
+    message: "现在有空教室吗？",
+    context: { timezone: "Asia/Shanghai" },
+  });
+  assert.strictEqual(fallback.success, true);
+  assert.strictEqual(fallback.safety.provider, "mock");
+  assert(fallback.toolCalls.some((item) => item.status === "skipped"), "fallback tool call should be reported for non-template tasks");
 
   console.log("test-coze-provider-config passed");
 }

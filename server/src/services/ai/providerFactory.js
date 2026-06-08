@@ -6,7 +6,11 @@ function getProviderName() {
   if (String(process.env.AI_AGENT_ENABLED || "false").toLowerCase() === "false") {
     return "mock";
   }
-  return String(process.env.AI_PROVIDER || "mock").trim().toLowerCase() || "mock";
+  const configured = String(process.env.AI_PROVIDER || "").trim().toLowerCase();
+  if (configured === "coze") return "coze";
+  if (configured === "deepseek") return "deepseek";
+  if (deepseekProvider.firstConfiguredKey()) return "deepseek";
+  return "mock";
 }
 
 function createProvider() {

@@ -3,6 +3,7 @@ const { getCurrentScheduleTarget } = require("../utils/storage");
 
 const HISTORY_KEY = "FOSU_AI_ASSISTANT_HISTORY";
 const ALLOW_PERSONAL_CONTEXT_KEY = "FOSU_AI_ALLOW_PERSONAL_CONTEXT";
+const LAST_IMPORT_CONTEXT_KEY = "FOSU_AI_LAST_IMPORT_CONTEXT";
 const MAX_HISTORY = 20;
 const MAX_CONTEXT_COURSES = 80;
 const REDACTED = "[已脱敏]";
@@ -56,17 +57,33 @@ function getCurrentRoute() {
   }
 }
 
+function stableHash(text) {
+  let hash = 2166136261;
+  const value = String(text || "");
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function normalizeWeekday(course) {
+  return Number(course.weekday || course.weekDay || 0) || 0;
+}
+
 function sanitizeCourse(course) {
   const source = course || {};
   const classroom = source.classroom || source.roomName || source.classroomName || "";
+  const startSection = Number(source.startSection || source.sectionStart || 0) || 0;
+  const endSection = Number(source.endSection || source.sectionEnd || startSection || 0) || 0;
   return {
     courseName: redactSensitiveText(source.courseName || source.name || "").slice(0, 80),
     teacherName: redactSensitiveText(source.teacherName || source.teacher || "").slice(0, 60),
     classroom: redactSensitiveText(classroom).slice(0, 80),
     roomName: redactSensitiveText(source.roomName || classroom).slice(0, 80),
-    weekday: Number(source.weekday || 0) || 0,
-    startSection: Number(source.startSection || source.sectionStart || 0) || 0,
-    endSection: Number(source.endSection || source.sectionEnd || source.startSection || 0) || 0,
+    weekday: normalizeWeekday(source),
+    startSection,
+    endSection,
     sections: Array.isArray(source.sections)
       ? source.sections.slice(0, 14).map((item) => Number(item)).filter((item) => Number.isFinite(item))
       : [],
@@ -78,12 +95,21 @@ function sanitizeCourse(course) {
   };
 }
 
-function isPersonalScheduleType(type) {
-  return ["personal", "personal-xls", "personal-login", "account", "xls", "file"].indexOf(String(type || "").toLowerCase()) >= 0;
+function isXlsPersonalType(type) {
+  return ["personal-xls", "xls", "file", "local-personal"].indexOf(String(type || "").toLowerCase()) >= 0;
+}
+
+function isDeprecatedCredentialType(type) {
+  return ["personal-login", "account", "student-login"].indexOf(String(type || "").toLowerCase()) >= 0;
 }
 
 function isPersonalContextAllowed() {
   return readStorage(ALLOW_PERSONAL_CONTEXT_KEY, false) === true;
+}
+
+function setPersonalContextAllowed(allowed) {
+  writeStorage(ALLOW_PERSONAL_CONTEXT_KEY, allowed === true);
+  return allowed === true;
 }
 
 function formatLocalIsoWithOffset(date) {
@@ -92,41 +118,94 @@ function formatLocalIsoWithOffset(date) {
   const offsetMinutes = -target.getTimezoneOffset();
   const sign = offsetMinutes >= 0 ? "+" : "-";
   const absOffset = Math.abs(offsetMinutes);
-  const offsetHour = Math.floor(absOffset / 60);
-  const offsetMinute = absOffset % 60;
   return [
     `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}`,
     "T",
     `${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`,
-    `${sign}${pad(offsetHour)}:${pad(offsetMinute)}`,
+    `${sign}${pad(Math.floor(absOffset / 60))}:${pad(absOffset % 60)}`,
   ].join("");
 }
 
-function setPersonalContextAllowed(allowed) {
-  writeStorage(ALLOW_PERSONAL_CONTEXT_KEY, allowed === true);
-  return allowed === true;
+function buildScheduleFingerprint(target, courses) {
+  const base = {
+    type: target && target.type,
+    term: target && (target.semester || target.term),
+    importedAt: target && target.importedAt,
+    courseCount: Array.isArray(courses) ? courses.length : 0,
+    sample: Array.isArray(courses)
+      ? courses.slice(0, 20).map((course) => [
+          course.courseName,
+          course.teacherName,
+          course.classroom || course.roomName,
+          normalizeWeekday(course),
+          course.startSection,
+          course.endSection,
+          course.weekText,
+        ].join("|"))
+      : [],
+  };
+  return stableHash(JSON.stringify(base));
+}
+
+function redactedPersonalSummary(reason) {
+  return {
+    enabled: false,
+    targetType: reason || "personal-redacted",
+    targetName: "个人课表",
+    courses: [],
+    courseCount: 0,
+  };
 }
 
 function sanitizeLocalScheduleForAI(target) {
   const source = target || getCurrentScheduleTarget() || {};
-  const targetType = redactSensitiveText(source.type || "").slice(0, 30);
-  if (isPersonalScheduleType(targetType) && !isPersonalContextAllowed()) {
-    return {
-      enabled: false,
-      targetType: "personal-redacted",
-      targetName: "个人课表",
-      courses: [],
-    };
+  const rawType = String(source.type || "").toLowerCase();
+  const courses = Array.isArray(source.courses) ? source.courses : [];
+
+  if (isDeprecatedCredentialType(rawType)) {
+    return redactedPersonalSummary("personal-xls-required");
   }
-  const courses = Array.isArray(source.courses)
-    ? source.courses.slice(0, MAX_CONTEXT_COURSES).map(sanitizeCourse)
-    : [];
+
+  if (isXlsPersonalType(rawType) && !isPersonalContextAllowed()) {
+    return redactedPersonalSummary("personal-redacted");
+  }
+
+  const sanitizedCourses = courses.slice(0, MAX_CONTEXT_COURSES).map(sanitizeCourse);
+  const personal = isXlsPersonalType(rawType) || rawType === "personal";
+  const term = source.semester || source.term || source.metadata && source.metadata.term || "";
+  const importedAt = source.importedAt || source.updateTime || "";
+  const fingerprint = buildScheduleFingerprint(source, courses);
   return {
-    enabled: Boolean(source && source.type && courses.length),
-    targetType,
-    targetName: isPersonalScheduleType(targetType) ? "个人课表" : redactSensitiveText(source.name || source.title || source.className || "").slice(0, 80),
-    courses,
+    enabled: Boolean(source && rawType && sanitizedCourses.length),
+    targetType: rawType,
+    targetName: personal ? "个人课表" : redactSensitiveText(source.name || source.title || source.className || "").slice(0, 80),
+    term,
+    source: personal ? "xls-import" : redactSensitiveText(source.sourceText || source.source || "").slice(0, 60),
+    importedAt,
+    courseCount: courses.length,
+    fingerprint,
+    courses: sanitizedCourses,
   };
+}
+
+function rememberLatestScheduleImport(target) {
+  const summary = sanitizeLocalScheduleForAI(target);
+  const value = {
+    at: new Date().toISOString(),
+    targetType: summary.targetType,
+    targetName: summary.targetName,
+    term: summary.term || "",
+    courseCount: summary.courseCount || 0,
+    fingerprint: summary.fingerprint || "",
+    source: summary.source || "xls-import",
+  };
+  writeStorage(LAST_IMPORT_CONTEXT_KEY, value);
+  return value;
+}
+
+function getLatestScheduleImport() {
+  const value = readStorage(LAST_IMPORT_CONTEXT_KEY, null);
+  return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 }
 
 function buildClientContext(extra = {}) {
@@ -135,11 +214,15 @@ function buildClientContext(extra = {}) {
   const app = getApp();
   const activeRelease = (app.globalData && app.globalData.activeRelease) || {};
   const manifest = activeRelease.manifest || {};
+  const scheduleSummary = sanitizeLocalScheduleForAI(target);
+  const latestImport = getLatestScheduleImport();
   const term = extra.term ||
-    (target && (target.semester || target.term)) ||
+    scheduleSummary.term ||
+    target && (target.semester || target.term) ||
     activeRelease.term ||
     manifest.term ||
     "2025-2026-2";
+
   return {
     term,
     releaseVersion: extra.releaseVersion || (target && target.releaseVersion) || activeRelease.releaseVersion || manifest.releaseVersion || "",
@@ -149,7 +232,8 @@ function buildClientContext(extra = {}) {
     timezoneOffsetMinutes: now.getTimezoneOffset(),
     clientTimestampMs: now.getTime(),
     timezone: "Asia/Shanghai",
-    currentScheduleSummary: sanitizeLocalScheduleForAI(target),
+    currentScheduleSummary: scheduleSummary,
+    latestScheduleImport: latestImport,
   };
 }
 
@@ -170,7 +254,7 @@ function normalizeHistoryItem(item) {
 
 function getAiHistory() {
   const list = readStorage(HISTORY_KEY, []);
-  return Array.isArray(list) ? list.slice(0, MAX_HISTORY).map(normalizeHistoryItem) : [];
+  return Array.isArray(list) ? list.slice(-MAX_HISTORY).map(normalizeHistoryItem) : [];
 }
 
 function saveAiHistory(messages) {
@@ -185,20 +269,22 @@ function clearAiHistory() {
   try {
     wx.removeStorageSync(HISTORY_KEY);
   } catch (error) {
-    // ignore
+    // best effort
   }
   return [];
 }
 
 function chat(message, context) {
   return request.post("/api/ai/agent/chat", {
-    message: String(message || "").slice(0, 2000),
+    message: redactSensitiveText(message).slice(0, 2000),
     context: context || buildClientContext(),
   }, {
     showLoading: false,
     silentError: true,
-    timeout: 22000,
-    retries: 1,
+    timeout: 28000,
+    retries: 2,
+    retryBaseDelayMs: 420,
+    retryMaxDelayMs: 1800,
     dedupe: false,
   });
 }
@@ -206,13 +292,16 @@ function chat(message, context) {
 module.exports = {
   ALLOW_PERSONAL_CONTEXT_KEY,
   HISTORY_KEY,
+  LAST_IMPORT_CONTEXT_KEY,
   buildClientContext,
   chat,
   clearAiHistory,
   formatLocalIsoWithOffset,
   getAiHistory,
+  getLatestScheduleImport,
   isPersonalContextAllowed,
   redactSensitiveText,
+  rememberLatestScheduleImport,
   sanitizeLocalScheduleForAI,
   setPersonalContextAllowed,
   saveAiHistory,
