@@ -5,6 +5,14 @@ const toolRegistry = require("./toolRegistry");
 
 const ALLOWED_CARD_TYPES = new Set(["empty_room", "schedule", "teacher", "course", "diagnosis", "guide", "reminder", "generic"]);
 const ALLOWED_ACTION_TYPES = new Set(["navigate", "copy", "retry", "bind", "noop"]);
+const ALLOWED_NAVIGATION_URLS = new Set([
+  "/pages/school/school",
+  "/pages/today/today",
+  "/pages/empty-room/empty-room",
+  "/pages/schedule-view/schedule-view",
+  "/pages/personal-sync/personal-sync",
+  "/pages/ai-assistant/ai-assistant",
+]);
 
 function nowIso() {
   return new Date().toISOString();
@@ -12,12 +20,19 @@ function nowIso() {
 
 function stableAction(action) {
   const source = action || {};
-  const type = ALLOWED_ACTION_TYPES.has(source.type) ? source.type : "noop";
+  let type = ALLOWED_ACTION_TYPES.has(source.type) ? source.type : "noop";
+  const rawUrl = String(source.url || "");
+  const pathOnly = rawUrl.split("?")[0];
+  if (rawUrl && (!pathOnly || !ALLOWED_NAVIGATION_URLS.has(pathOnly))) {
+    type = "noop";
+  }
   return {
-    label: String(source.label || "查看").slice(0, 30),
+    label: safetyGuard.redactSensitiveText(source.label || "查看").slice(0, 30),
     type,
-    url: String(source.url || ""),
-    payload: source.payload && typeof source.payload === "object" ? source.payload : {},
+    url: type === "noop" ? "" : rawUrl,
+    payload: source.payload && typeof source.payload === "object"
+      ? safetyGuard.sanitizeToolResult(source.payload)
+      : {},
   };
 }
 
@@ -26,15 +41,15 @@ function stableCard(card) {
   const type = ALLOWED_CARD_TYPES.has(source.type) ? source.type : "generic";
   return {
     type,
-    title: String(source.title || "结果卡片").slice(0, 80),
-    subtitle: String(source.subtitle || "").slice(0, 160),
-    badges: Array.isArray(source.badges) ? source.badges.slice(0, 8).map((item) => String(item).slice(0, 40)) : [],
+    title: safetyGuard.redactSensitiveText(source.title || "结果卡片").slice(0, 80),
+    subtitle: safetyGuard.redactSensitiveText(source.subtitle || "").slice(0, 160),
+    badges: Array.isArray(source.badges) ? source.badges.slice(0, 8).map((item) => safetyGuard.redactSensitiveText(item).slice(0, 40)) : [],
     items: Array.isArray(source.items) ? source.items.slice(0, 12).map((item) => {
-      const sourceItem = item || {};
+      const sourceItem = safetyGuard.sanitizeToolResult(item || {});
       return {
-        title: String(sourceItem.title || "").slice(0, 80),
-        subtitle: String(sourceItem.subtitle || "").slice(0, 160),
-        value: String(sourceItem.value || "").slice(0, 80),
+        title: safetyGuard.redactSensitiveText(sourceItem.title || "").slice(0, 80),
+        subtitle: safetyGuard.redactSensitiveText(sourceItem.subtitle || "").slice(0, 160),
+        value: safetyGuard.redactSensitiveText(sourceItem.value || "").slice(0, 80),
       };
     }) : [],
     actions: Array.isArray(source.actions) ? source.actions.slice(0, 4).map(stableAction) : [],
@@ -44,9 +59,9 @@ function stableCard(card) {
 function stableGeneratedPayload(payload) {
   const source = payload && typeof payload === "object" ? payload : {};
   return {
-    answer: String(source.answer || "我已经根据项目内工具整理了结果。").slice(0, 1200),
+    answer: safetyGuard.redactSensitiveText(source.answer || "我已经根据项目内工具整理了结果。").slice(0, 1200),
     cards: Array.isArray(source.cards) ? source.cards.slice(0, 6).map(stableCard) : [],
-    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6).map((item) => String(item).slice(0, 60)) : [],
+    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6).map((item) => safetyGuard.redactSensitiveText(item).slice(0, 60)) : [],
   };
 }
 
@@ -108,9 +123,9 @@ async function chat(input = {}) {
   const intent = toolRegistry.resolveIntent(safeMessage, context);
   const toolCalls = toolRegistry.runToolsForIntent(intent, safeMessage, context);
   const publicToolCalls = toolCalls.map((item) => ({
-    name: item.name,
-    status: item.status,
-    summary: item.summary,
+    name: safetyGuard.redactSensitiveText(item.name || "").slice(0, 60),
+    status: safetyGuard.redactSensitiveText(item.status || "").slice(0, 20),
+    summary: safetyGuard.redactSensitiveText(item.summary || "").slice(0, 160),
   }));
 
   const provider = providerFactory.createProvider();
@@ -124,8 +139,8 @@ async function chat(input = {}) {
       toolResults: toolCalls.map((item) => ({
         name: item.name,
         status: item.status,
-        summary: item.summary,
-        result: item.result,
+        summary: safetyGuard.redactSensitiveText(item.summary || ""),
+        result: safetyGuard.sanitizeToolResult(item.result),
       })),
     });
     providerName = generated.provider || providerName;
@@ -154,6 +169,7 @@ async function chat(input = {}) {
 
 module.exports = {
   chat,
+  stableAction,
   stableCard,
   stableGeneratedPayload,
 };

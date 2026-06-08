@@ -538,6 +538,44 @@ const adminConsoleHtml = `<!doctype html>
     .form-row.full {
       grid-template-columns: 1fr;
     }
+    .ai-provider-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(280px, 0.85fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .ai-provider-status {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .ai-provider-status .health-item {
+      min-height: 72px;
+    }
+    .ai-secret-note {
+      margin-top: 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .ai-provider-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .ai-verify-box {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+    }
 
     /* 可视化组件：横向条形图 */
     .bar-chart-row {
@@ -1348,6 +1386,10 @@ const adminConsoleHtml = `<!doctype html>
         grid-template-columns: repeat(2, 1fr);
       }
       .split-layout {
+        grid-template-columns: 1fr;
+      }
+      .ai-provider-grid,
+      .ai-provider-status {
         grid-template-columns: 1fr;
       }
       .table-container {
@@ -2744,6 +2786,7 @@ const adminConsoleHtml = `<!doctype html>
             <li class="nav-item" data-section="notices"><button>公告管理</button></li>
             <li class="nav-item" data-section="news"><button>最新动态</button></li>
             <li class="nav-item" data-section="config"><button>数据版本</button></li>
+            <li class="nav-item" data-section="ai-provider"><button>AI 模型</button></li>
             <li class="nav-item" data-section="feedback"><button>反馈管理</button></li>
             <li class="nav-item" data-section="security"><button>安全状态</button></li>
             <li class="nav-item" data-section="settings"><button>系统设置</button></li>
@@ -3948,6 +3991,167 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         </div>
       </section>
 
+      <!-- 面板八：AI 模型配置 -->
+      <section id="section-ai-provider" class="section">
+        <div class="ai-provider-grid">
+          <div class="card form-box">
+            <h3 class="card-title">AI 校园管家 Provider</h3>
+
+            <div class="form-row">
+              <div>
+                <label>调用模式</label>
+                <select id="aiEnabled">
+                  <option value="false">mock 演示模式（不调用外部模型）</option>
+                  <option value="true">启用外部模型</option>
+                </select>
+              </div>
+              <div>
+                <label>Provider</label>
+                <select id="aiProvider">
+                  <option value="mock">mock</option>
+                  <option value="deepseek">DeepSeek</option>
+                  <option value="coze">Coze</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div>
+                <label>DeepSeek 快速模型</label>
+                <input id="aiModel" placeholder="deepseek-v4-flash">
+              </div>
+              <div>
+                <label>DeepSeek 推理模型</label>
+                <input id="aiReasoningModel" placeholder="deepseek-v4-pro">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div>
+                <label>Base URL</label>
+                <input id="aiBaseUrl" placeholder="https://api.deepseek.com">
+              </div>
+              <div>
+                <label>DeepSeek API Key</label>
+                <input id="aiApiKey" type="password" autocomplete="off" placeholder="留空则保留现有密钥">
+                <div class="ai-secret-note">密钥只写入本机 server/.env，保存响应和日志不会回显。</div>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div>
+                <label>超时 / ms</label>
+                <input id="aiTimeoutMs" inputmode="numeric" placeholder="15000">
+              </div>
+              <div>
+                <label>最大输出 tokens</label>
+                <input id="aiMaxTokens" inputmode="numeric" placeholder="1200">
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div>
+                <label>Temperature</label>
+                <input id="aiTemperature" inputmode="decimal" placeholder="0.1">
+              </div>
+              <div>
+                <label>思考模式</label>
+                <select id="aiThinkingEnabled">
+                  <option value="false">关闭（小程序快速响应）</option>
+                  <option value="true">开启（仅 pro 模型）</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div>
+                <label>推理强度</label>
+                <select id="aiReasoningEffort">
+                  <option value="medium">medium</option>
+                  <option value="low">low</option>
+                  <option value="high">high</option>
+                </select>
+              </div>
+              <div>
+                <label>个人课表摘要</label>
+                <select id="aiAllowPersonalContext">
+                  <option value="false">默认关闭</option>
+                  <option value="true">允许最小字段摘要</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row full">
+              <div>
+                <label>JSON 修复</label>
+                <select id="aiJsonRepair">
+                  <option value="true">开启</option>
+                  <option value="false">关闭</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="ai-provider-actions">
+              <button id="saveAiProviderBtn" class="primary">保存 AI 配置</button>
+              <button id="verifyAiProviderBtn" class="secondary">验证当前 Provider</button>
+              <button id="reloadAiProviderBtn" class="ghost">刷新状态</button>
+            </div>
+          </div>
+
+          <div class="card form-box">
+            <h3 class="card-title">运行状态与 Coze 适配</h3>
+            <div class="ai-provider-status" id="aiProviderStatusGrid"></div>
+
+            <div class="form-row full" style="margin-top: 14px;">
+              <div>
+                <label>Coze Base URL</label>
+                <input id="cozeBaseUrl" placeholder="https://api.coze.cn">
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label>Coze Bot ID</label>
+                <input id="cozeBotId" autocomplete="off" placeholder="未配置则 fallback mock">
+              </div>
+              <div>
+                <label>Coze API Key</label>
+                <input id="cozeApiKey" type="password" autocomplete="off" placeholder="留空则保留现有密钥">
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label>Coze User ID</label>
+                <input id="cozeUserId" placeholder="fosuclass-user">
+              </div>
+              <div>
+                <label>Chat Endpoint</label>
+                <input id="cozeChatEndpoint" placeholder="/v3/chat">
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label>轮询开关</label>
+                <select id="cozePollEnabled">
+                  <option value="true">开启</option>
+                  <option value="false">关闭</option>
+                </select>
+              </div>
+              <div>
+                <label>轮询间隔 / ms</label>
+                <input id="cozePollIntervalMs" inputmode="numeric" placeholder="1000">
+              </div>
+            </div>
+            <div class="form-row full">
+              <div>
+                <label>最大轮询次数</label>
+                <input id="cozePollMaxAttempts" inputmode="numeric" placeholder="8">
+              </div>
+            </div>
+            <div id="aiVerifyResult" class="ai-verify-box">还没有验证。点击“验证当前 Provider”会用固定问题测试一次，不会打印 prompt 或密钥。</div>
+          </div>
+        </div>
+      </section>
+
       <!-- 面板八：用户反馈管理 -->
       <section id="section-feedback" class="section">
         <div class="card">
@@ -4518,6 +4722,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         auditModuleFilter: "all",
         csrfToken: "",
         securityStatus: null,
+        aiProviderConfig: null,
         
         feedbackFilter: {
           status: "all",
@@ -4832,6 +5037,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           notices: "公告管理",
           news: "最新动态",
           config: "数据版本",
+          "ai-provider": "AI 模型",
           feedback: "反馈管理",
           security: "安全状态",
           settings: "系统设置与日志"
@@ -4856,6 +5062,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           ignoreLoadError(loadSettingsLogs());
         } else if (section === "security") {
           ignoreLoadError(loadSecurityStatus());
+        } else if (section === "ai-provider") {
+          ignoreLoadError(loadAiProviderConfig());
         } else if (section === "feedback") {
           ignoreLoadError(loadFeedbacks());
         }
@@ -8334,6 +8542,129 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         });
       }
 
+      function loadAiProviderConfig() {
+        return api("/api/admin/ai-provider/config")
+          .then(function(res) {
+            state.aiProviderConfig = res.data || {};
+            renderAiProviderConfig();
+            return state.aiProviderConfig;
+          })
+          .catch(function(error) {
+            showModuleError("ai-provider", error);
+            throw error;
+          });
+      }
+
+      function setSelectValue(id, val) {
+        var el = $(id);
+        if (el) el.value = val == null ? "" : String(val);
+      }
+
+      function renderAiProviderConfig() {
+        var cfg = state.aiProviderConfig || {};
+        setSelectValue("aiEnabled", cfg.enabled ? "true" : "false");
+        setSelectValue("aiProvider", cfg.provider || "mock");
+        setValue("aiModel", cfg.model || "deepseek-v4-flash");
+        setValue("aiReasoningModel", cfg.reasoningModel || "deepseek-v4-pro");
+        setValue("aiBaseUrl", cfg.baseUrl || "https://api.deepseek.com");
+        setValue("aiTimeoutMs", cfg.timeoutMs || "15000");
+        setValue("aiMaxTokens", cfg.maxTokens || "1200");
+        setValue("aiTemperature", cfg.temperature || "0.1");
+        setSelectValue("aiThinkingEnabled", cfg.thinkingEnabled ? "true" : "false");
+        setSelectValue("aiReasoningEffort", cfg.reasoningEffort || "medium");
+        setSelectValue("aiJsonRepair", cfg.jsonRepair === false ? "false" : "true");
+        setSelectValue("aiAllowPersonalContext", cfg.allowPersonalContext ? "true" : "false");
+        setValue("cozeBaseUrl", cfg.cozeBaseUrl || "https://api.coze.cn");
+        setValue("cozeBotId", cfg.cozeBotIdConfigured ? "已配置" : "");
+        setValue("cozeUserId", cfg.cozeUserId || "fosuclass-user");
+        setValue("cozeChatEndpoint", cfg.cozeChatEndpoint || "/v3/chat");
+        setSelectValue("cozePollEnabled", cfg.cozePollEnabled === false ? "false" : "true");
+        setValue("cozePollIntervalMs", cfg.cozePollIntervalMs || "1000");
+        setValue("cozePollMaxAttempts", cfg.cozePollMaxAttempts || "8");
+        setValue("aiApiKey", "");
+        setValue("cozeApiKey", "");
+
+        var grid = $("aiProviderStatusGrid");
+        if (grid) {
+          grid.innerHTML = [
+            renderHealthItem("外部模型", cfg.enabled ? "<span class='badge success'>启用</span>" : "<span class='badge muted'>mock</span>"),
+            renderHealthItem("Provider", "<code>" + escapeHtml(cfg.provider || "mock") + "</code>"),
+            renderHealthItem("DeepSeek Key", badgeText(Boolean(cfg.deepseekKeyConfigured))),
+            renderHealthItem("Coze", cfg.cozeKeyConfigured && cfg.cozeBotIdConfigured ? "<span class='badge success'>OK</span>" : "<span class='badge muted'>可选</span>"),
+            renderHealthItem("个人摘要", cfg.allowPersonalContext ? "<span class='badge warning'>允许</span>" : "<span class='badge success'>默认关闭</span>"),
+            renderHealthItem("配置文件", cfg.envExists ? "<span class='badge success'>server/.env</span>" : "<span class='badge muted'>未生成</span>"),
+          ].join("");
+        }
+      }
+
+      function aiProviderPayload() {
+        var payload = {
+          enabled: boolValue("aiEnabled"),
+          provider: value("aiProvider"),
+          model: value("aiModel"),
+          reasoningModel: value("aiReasoningModel"),
+          baseUrl: value("aiBaseUrl"),
+          timeoutMs: value("aiTimeoutMs"),
+          maxTokens: value("aiMaxTokens"),
+          temperature: value("aiTemperature"),
+          thinkingEnabled: boolValue("aiThinkingEnabled"),
+          reasoningEffort: value("aiReasoningEffort"),
+          jsonRepair: boolValue("aiJsonRepair"),
+          allowPersonalContext: boolValue("aiAllowPersonalContext"),
+          cozeBaseUrl: value("cozeBaseUrl"),
+          cozeUserId: value("cozeUserId"),
+          cozeChatEndpoint: value("cozeChatEndpoint"),
+          cozePollEnabled: boolValue("cozePollEnabled"),
+          cozePollIntervalMs: value("cozePollIntervalMs"),
+          cozePollMaxAttempts: value("cozePollMaxAttempts")
+        };
+        var apiKey = value("aiApiKey");
+        var cozeApiKey = value("cozeApiKey");
+        var cozeBotId = value("cozeBotId");
+        if (apiKey) payload.apiKey = apiKey;
+        if (cozeApiKey) payload.cozeApiKey = cozeApiKey;
+        if (cozeBotId && cozeBotId !== "已配置") payload.cozeBotId = cozeBotId;
+        return payload;
+      }
+
+      function saveAiProviderConfig() {
+        var payload = aiProviderPayload();
+        api("/api/admin/ai-provider/config", { method: "POST", body: JSON.stringify(payload) })
+          .then(function(res) {
+            state.aiProviderConfig = res.data || {};
+            renderAiProviderConfig();
+            showToast("AI Provider 配置已保存。", "success");
+            setStatus("AI Provider 配置已保存：" + (state.aiProviderConfig.provider || "mock"));
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function verifyAiProviderConfig() {
+        var box = $("aiVerifyResult");
+        if (box) box.textContent = "正在验证当前 Provider...";
+        api("/api/admin/ai-provider/verify", { method: "POST", body: "{}" })
+          .then(function(res) {
+            var data = res.data || {};
+            var lines = [
+              "Provider: " + (data.provider || "-"),
+              "Mode: " + (data.mode || "-"),
+              "Elapsed: " + (data.elapsedMs || 0) + "ms",
+              "Answer: " + (data.answerPreview || "-")
+            ];
+            if (Array.isArray(data.toolCalls) && data.toolCalls.length) {
+              lines.push("Tools: " + data.toolCalls.map(function(item) {
+                return (item.name || "-") + "/" + (item.status || "-");
+              }).join(", "));
+            }
+            if (box) box.textContent = lines.join("\\n");
+            showToast("AI Provider 验证完成。", "success");
+          })
+          .catch(function(error) {
+            if (box) box.textContent = "验证失败：" + error.message;
+            showToast(error.message, "error");
+          });
+      }
+
       // 系统配置数据保存
       function renderConfigForm() {
         var config = state.config || {};
@@ -8408,6 +8739,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         if (location.pathname.indexOf("/notices") >= 0) return "notices";
         if (location.pathname.indexOf("/news") >= 0) return "news";
         if (location.pathname.indexOf("/config") >= 0 || location.pathname.indexOf("/version") >= 0) return "config";
+        if (location.pathname.indexOf("/ai-provider") >= 0 || location.pathname.indexOf("/ai") >= 0) return "ai-provider";
         if (location.pathname.indexOf("/feedback") >= 0) return "feedback";
         if (location.pathname.indexOf("/security") >= 0) return "security";
         return "dashboard";
@@ -8422,6 +8754,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           return Promise.allSettled([
             loadDashboard(),
             loadConfig(),
+            loadAiProviderConfig(),
             loadNotices(),
             loadNews(),
             loadFeedbacks()
@@ -8479,6 +8812,9 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
       safeBind("logoutButton", "click", logout);
       safeBind("refreshButton", "click", loadAll);
       safeBind("saveConfigButton", "click", saveConfig);
+      safeBind("saveAiProviderBtn", "click", saveAiProviderConfig);
+      safeBind("verifyAiProviderBtn", "click", verifyAiProviderConfig);
+      safeBind("reloadAiProviderBtn", "click", loadAiProviderConfig);
       safeBind("saveNoticeButton", "click", saveNotice);
       safeBind("clearNoticeButton", "click", clearNoticeForm);
       safeBind("saveNewsButton", "click", saveNews);
@@ -9188,6 +9524,7 @@ router.get([
   "/catalog",
   "/resources",
   "/quality",
+  "/ai-provider",
   "/notices",
   "/news",
   "/config",

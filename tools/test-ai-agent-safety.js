@@ -24,8 +24,8 @@ const context = safetyGuard.sanitizeAgentContext({
   password: "abc123",
   currentScheduleSummary: {
     enabled: true,
-    targetType: "personal-xls",
-    targetName: "张三 2024012345",
+    targetType: "class",
+    targetName: "软件工程 1 班",
     courses: [{
       courseName: "数据结构",
       teacherName: "李老师",
@@ -45,6 +45,19 @@ assert(!contextText.includes("2024012345"), "sanitized context must remove stude
 assert(!contextText.includes("fileContent"), "sanitized context must not include raw file content");
 assert(contextText.includes("数据结构"), "sanitized context should preserve course name");
 assert(contextText.includes("C7-305"), "sanitized context should preserve classroom");
+
+process.env.AI_ALLOW_PERSONAL_CONTEXT = "false";
+const personalContext = safetyGuard.sanitizeAgentContext({
+  currentScheduleSummary: {
+    enabled: true,
+    targetType: "personal-xls",
+    targetName: "张三的课表",
+    courses: [{ courseName: "数据结构", classroom: "C7-305" }],
+  },
+});
+assert.strictEqual(personalContext.currentScheduleSummary.enabled, false, "personal summary should be disabled by default");
+assert.strictEqual(personalContext.currentScheduleSummary.targetType, "personal-redacted", "personal summary should be redacted");
+assert.deepStrictEqual(personalContext.currentScheduleSummary.courses, [], "personal courses should be removed by default");
 
 const logPayload = safetyGuard.buildSafeLogPayload({
   message: raw,

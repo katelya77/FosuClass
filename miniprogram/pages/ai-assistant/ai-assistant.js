@@ -45,6 +45,8 @@ Page({
     sending: false,
     slowRequest: false,
     showPrivacyTip: false,
+    allowPersonalContext: false,
+    hasHeroLogo: true,
     scrollTop: 0,
     welcome: {
       title: "小佛 AI 校园管家",
@@ -58,12 +60,19 @@ Page({
     this.setData({
       messages: history,
       showPrivacyTip,
+      allowPersonalContext: aiAssistantService.isPersonalContextAllowed(),
     }, () => this.scrollToBottom());
 
     const question = decodeQuery(options && (options.q || options.question || ""));
     if (question) {
       setTimeout(() => this.sendMessage(question), 300);
     }
+  },
+
+  onShow() {
+    this.setData({
+      allowPersonalContext: aiAssistantService.isPersonalContextAllowed(),
+    });
   },
 
   onInput(event) {
@@ -160,6 +169,24 @@ Page({
     wx.setStorageSync(PRIVACY_TIP_KEY, true);
     this.setData({
       showPrivacyTip: false,
+    });
+  },
+
+  onPersonalContextToggle(event) {
+    const allowed = event.detail.value === true;
+    aiAssistantService.setPersonalContextAllowed(allowed);
+    this.setData({
+      allowPersonalContext: allowed,
+    });
+    wx.showToast({
+      title: allowed ? "已允许摘要分析" : "已关闭摘要分析",
+      icon: "none",
+    });
+  },
+
+  onHeroLogoError() {
+    this.setData({
+      hasHeroLogo: false,
     });
   },
 

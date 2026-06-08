@@ -425,6 +425,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 6rpx;
   height: 56rpx;
   min-width: 0;
   padding: 0 8rpx;
@@ -530,6 +531,19 @@
   border-color: #ffd7d7;
   background: #fff7f7;
   color: #b4232a;
+}
+
+.ai-entry-icon {
+  flex: 0 0 auto;
+  width: 28rpx;
+  height: 28rpx;
+}
+
+.menu-icon-img {
+  flex: 0 0 auto;
+  width: 34rpx;
+  height: 34rpx;
+  margin-right: 12rpx;
 }
 
 /* 空状态卡片 */
