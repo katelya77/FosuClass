@@ -6,7 +6,7 @@ const {
   getCourseWeekStatus,
   getCurrentSection: getCurrentSectionByTime,
   resolveCurrentTeachingWeek,
-} = require("../../../../shared/courseWeekRules");
+} = require("../../shared/courseWeekRules");
 
 const MAX_SECTION = 14;
 const DEFAULT_TERM = "2025-2026-2";

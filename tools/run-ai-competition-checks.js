@@ -2,9 +2,13 @@ const { spawnSync } = require("child_process");
 
 const scripts = [
   "test:no-ai-secret-committed",
+  "test:server-ai-module-require",
+  "test:server-no-root-shared-require",
+  "test:deploy-workflow-preserves-ai-env",
   "test:ai-local-time-section",
   "test:ai-today-active-week",
   "test-ai-today-consistency-with-page",
+  "test:ai-today-card-no-inactive-render",
   "test:ai-context-week-fields",
   "test:ai-clarify-missing-slot",
   "test:ai-tabbar-deeplink",
@@ -12,6 +16,8 @@ const scripts = [
   "test:ai-provider-policy",
   "test:ai-project-qa-provider",
   "test:ai-provider-status-explain",
+  "test:ai-provider-runtime-config-store",
+  "test:ai-provider-bad-request-diagnosis",
   "test:ai-empty-result-copywriting",
   "test:ai-more-tasks-panel",
   "test:ai-agent-metrics",
@@ -28,6 +34,7 @@ const scripts = [
   "test:coze-provider-config",
   "test:ai-logo-entry",
   "test:ai-assistant-ui-layout",
+  "test:ai-assistant-minimal-ui",
   "test:ai-assistant-demo-data",
 ];
 

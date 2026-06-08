@@ -8596,7 +8596,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             renderHealthItem("DeepSeek Key", badgeText(Boolean(cfg.deepseekKeyConfigured))),
             renderHealthItem("Coze", cfg.cozeKeyConfigured && cfg.cozeBotIdConfigured ? "<span class='badge success'>OK</span>" : "<span class='badge muted'>可选</span>"),
             renderHealthItem("个人摘要", cfg.allowPersonalContext ? "<span class='badge warning'>允许</span>" : "<span class='badge success'>默认关闭</span>"),
-            renderHealthItem("配置文件", cfg.envExists ? "<span class='badge success'>server/.env</span>" : "<span class='badge muted'>未生成</span>"),
+            renderHealthItem("Runtime Store", cfg.runtimeConfigExists ? "<span class='badge success'>storage</span>" : "<span class='badge muted'>未生成</span>"),
           ].join("");
         }
       }
@@ -8649,23 +8649,33 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         api("/api/admin/ai-provider/verify", { method: "POST", body: "{}" })
           .then(function(res) {
             var data = res.data || {};
+            var badRequestHint = /provider_bad_request|invalid_model|invalid_payload/.test(data.fallbackReason || "")
+              ? "Provider 已配置但请求被拒绝，请检查 model、baseUrl、response_format、thinking 参数。"
+              : "";
             var lines = [
+              "Key configured: " + (data.keyConfigured ? "true" : "false"),
               "Provider: " + (data.provider || "-"),
+              "Configured: " + (data.configuredProvider || "-"),
               "Desired: " + (data.desiredProvider || "-"),
               "Resolved: " + (data.resolvedProvider || "-"),
               "External: " + (data.externalProviderUsed ? "yes" : "no"),
               "Policy: " + (data.providerPolicy || "-"),
               "Reason: " + (data.providerDecisionReason || "-"),
+              "Fallback: " + (data.fallbackReason || "-"),
+              "Deterministic tool: " + (data.deterministicToolLocal ? "local" : "external"),
+              "Project QA DeepSeek: " + (data.projectQaUsesDeepSeek ? "yes" : "no"),
               "Mode: " + (data.mode || "-"),
               "Elapsed: " + (data.elapsedMs || 0) + "ms",
               "Answer: " + (data.answerPreview || "-")
             ];
+            if (badRequestHint) lines.push(badRequestHint);
             ["deterministicToolTest", "projectQaProviderTest", "forceProviderTest"].forEach(function(key) {
               var item = data[key];
               if (!item) return;
               lines.push("");
               lines.push(key + ": " + (item.externalProviderUsed ? "external" : "local") + " / " + (item.providerDecisionReason || "-"));
               lines.push("  provider: " + (item.resolvedProvider || item.provider || "-"));
+              lines.push("  fallback: " + (item.fallbackReason || "-"));
               lines.push("  answer: " + (item.answerPreview || "-"));
             });
             if (Array.isArray(data.toolCalls) && data.toolCalls.length) {
@@ -8691,12 +8701,17 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             var project = data.projectQaProviderTest || data;
             var lines = [
               "强制项目问答测试",
+              "Key configured: " + (data.keyConfigured ? "true" : "false"),
               "Provider: " + (project.resolvedProvider || project.provider || "-"),
               "External: " + (project.externalProviderUsed ? "yes" : "no"),
               "Policy: " + (project.providerPolicy || data.providerPolicy || "-"),
               "Reason: " + (project.providerDecisionReason || data.providerDecisionReason || "-"),
+              "Fallback: " + (project.fallbackReason || data.fallbackReason || "-"),
               "Answer: " + (project.answerPreview || data.answerPreview || "-")
             ];
+            if (/provider_bad_request|invalid_model|invalid_payload/.test(project.fallbackReason || data.fallbackReason || "")) {
+              lines.push("Provider 已配置但请求被拒绝，请检查 model、baseUrl、response_format、thinking 参数。");
+            }
             if (box) box.textContent = lines.join("\\n");
             showToast("DeepSeek 聊天测试完成。", "success");
           })

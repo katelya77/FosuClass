@@ -10,6 +10,13 @@ const crypto = require("crypto");
 // NOTE: 载入当前 server 目录下的 .env 文件
 dotenv.config({ path: path.join(__dirname, "../.env") });
 
+try {
+  const { loadRuntimeConfigIntoProcessEnv } = require("./services/ai/providerRuntimeConfigStore");
+  loadRuntimeConfigIntoProcessEnv();
+} catch (error) {
+  // Runtime AI provider config must never prevent the API from booting.
+}
+
 const config = {
   // 运行环境: development | production
   NODE_ENV: process.env.NODE_ENV || "development",

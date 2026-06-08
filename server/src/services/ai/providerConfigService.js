@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const runtimeStore = require("./providerRuntimeConfigStore");
 
 const SERVER_ROOT = path.resolve(__dirname, "../../..");
 const ENV_PATH = path.join(SERVER_ROOT, ".env");
@@ -20,6 +21,7 @@ const AI_ENV_KEYS = [
   "AI_PROVIDER_JSON_REPAIR",
   "AI_ALLOW_PERSONAL_CONTEXT",
   "AI_API_KEY",
+  "DEEPSEEK_API_KEY",
   "COZE_API_BASE_URL",
   "COZE_API_KEY",
   "COZE_BOT_ID",
@@ -103,47 +105,63 @@ function setEnvLines(text, updates) {
   return nextLines.join("\n").replace(/\n{3,}/g, "\n\n").replace(/\s*$/, "\n");
 }
 
-function getEffectiveValue(envFileValues, key) {
-  return process.env[key] || envFileValues[key] || DEFAULTS[key] || "";
+function readRuntimeValues() {
+  try {
+    return runtimeStore.readRuntimeConfig();
+  } catch (error) {
+    return {};
+  }
 }
 
-function hasAnyDeepSeekKey(envFileValues) {
+function getEffectiveValue(envFileValues, runtimeValues, key) {
+  return process.env[key] || runtimeValues[key] || envFileValues[key] || DEFAULTS[key] || "";
+}
+
+function hasAnyDeepSeekKey(envFileValues, runtimeValues) {
   return Boolean(
     process.env.AI_API_KEY ||
     process.env.DEEPSEEK_API_KEY ||
     process.env.FOSUCLASS_DEEPSEEK_API_KEY ||
-    envFileValues.AI_API_KEY
+    runtimeValues.AI_API_KEY ||
+    runtimeValues.DEEPSEEK_API_KEY ||
+    envFileValues.AI_API_KEY ||
+    envFileValues.DEEPSEEK_API_KEY
   );
 }
 
 function getStatus() {
   const envText = readEnvFile();
   const envFileValues = parseEnv(envText);
+  const runtimeValues = readRuntimeValues();
+  const runtimePath = runtimeStore.getConfigPath();
+  const value = (key) => getEffectiveValue(envFileValues, runtimeValues, key);
   return {
     envPath: ENV_PATH,
     envExists: fs.existsSync(ENV_PATH),
-    enabled: getEffectiveValue(envFileValues, "AI_AGENT_ENABLED") === "true",
-    provider: getEffectiveValue(envFileValues, "AI_PROVIDER"),
-    providerPolicy: getEffectiveValue(envFileValues, "AI_PROVIDER_POLICY"),
-    model: getEffectiveValue(envFileValues, "AI_MODEL"),
-    reasoningModel: getEffectiveValue(envFileValues, "AI_REASONING_MODEL"),
-    baseUrl: getEffectiveValue(envFileValues, "AI_BASE_URL"),
-    timeoutMs: getEffectiveValue(envFileValues, "AI_TIMEOUT_MS"),
-    maxTokens: getEffectiveValue(envFileValues, "AI_MAX_TOKENS"),
-    temperature: getEffectiveValue(envFileValues, "AI_TEMPERATURE"),
-    thinkingEnabled: getEffectiveValue(envFileValues, "AI_THINKING_ENABLED") === "true",
-    reasoningEffort: getEffectiveValue(envFileValues, "AI_REASONING_EFFORT"),
-    jsonRepair: getEffectiveValue(envFileValues, "AI_PROVIDER_JSON_REPAIR") !== "false",
-    allowPersonalContext: getEffectiveValue(envFileValues, "AI_ALLOW_PERSONAL_CONTEXT") === "true",
-    deepseekKeyConfigured: hasAnyDeepSeekKey(envFileValues),
-    cozeBaseUrl: getEffectiveValue(envFileValues, "COZE_API_BASE_URL"),
-    cozeBotIdConfigured: Boolean(getEffectiveValue(envFileValues, "COZE_BOT_ID")),
-    cozeKeyConfigured: Boolean(process.env.COZE_API_KEY || envFileValues.COZE_API_KEY),
-    cozeUserId: getEffectiveValue(envFileValues, "COZE_USER_ID"),
-    cozeChatEndpoint: getEffectiveValue(envFileValues, "COZE_CHAT_ENDPOINT"),
-    cozePollEnabled: getEffectiveValue(envFileValues, "COZE_POLL_ENABLED") !== "false",
-    cozePollIntervalMs: getEffectiveValue(envFileValues, "COZE_POLL_INTERVAL_MS"),
-    cozePollMaxAttempts: getEffectiveValue(envFileValues, "COZE_POLL_MAX_ATTEMPTS"),
+    runtimeConfigPath: runtimePath,
+    runtimeConfigExists: fs.existsSync(runtimePath),
+    enabled: value("AI_AGENT_ENABLED") === "true",
+    provider: value("AI_PROVIDER"),
+    providerPolicy: value("AI_PROVIDER_POLICY"),
+    model: value("AI_MODEL"),
+    reasoningModel: value("AI_REASONING_MODEL"),
+    baseUrl: value("AI_BASE_URL"),
+    timeoutMs: value("AI_TIMEOUT_MS"),
+    maxTokens: value("AI_MAX_TOKENS"),
+    temperature: value("AI_TEMPERATURE"),
+    thinkingEnabled: value("AI_THINKING_ENABLED") === "true",
+    reasoningEffort: value("AI_REASONING_EFFORT"),
+    jsonRepair: value("AI_PROVIDER_JSON_REPAIR") !== "false",
+    allowPersonalContext: value("AI_ALLOW_PERSONAL_CONTEXT") === "true",
+    deepseekKeyConfigured: hasAnyDeepSeekKey(envFileValues, runtimeValues),
+    cozeBaseUrl: value("COZE_API_BASE_URL"),
+    cozeBotIdConfigured: Boolean(value("COZE_BOT_ID")),
+    cozeKeyConfigured: Boolean(process.env.COZE_API_KEY || runtimeValues.COZE_API_KEY || envFileValues.COZE_API_KEY),
+    cozeUserId: value("COZE_USER_ID"),
+    cozeChatEndpoint: value("COZE_CHAT_ENDPOINT"),
+    cozePollEnabled: value("COZE_POLL_ENABLED") !== "false",
+    cozePollIntervalMs: value("COZE_POLL_INTERVAL_MS"),
+    cozePollMaxAttempts: value("COZE_POLL_MAX_ATTEMPTS"),
   };
 }
 
@@ -181,13 +199,12 @@ function buildUpdates(payload = {}) {
     cozePollMaxAttempts: "COZE_POLL_MAX_ATTEMPTS",
   };
   Object.keys(simpleFields).forEach((field) => {
-    if (Object.prototype.hasOwnProperty.call(payload, field)) {
-      updates[simpleFields[field]] = field === "provider"
-        ? normalizeProvider(payload[field])
-        : field === "providerPolicy"
-          ? normalizeProviderPolicy(payload[field])
+    if (!Object.prototype.hasOwnProperty.call(payload, field)) return;
+    updates[simpleFields[field]] = field === "provider"
+      ? normalizeProvider(payload[field])
+      : field === "providerPolicy"
+        ? normalizeProviderPolicy(payload[field])
         : String(payload[field] == null ? "" : payload[field]).trim();
-    }
   });
   [
     ["enabled", "AI_AGENT_ENABLED"],
@@ -199,6 +216,7 @@ function buildUpdates(payload = {}) {
     if (Object.prototype.hasOwnProperty.call(payload, field)) updates[key] = normalizeBoolean(payload[field]);
   });
   if (payload.apiKey) updates.AI_API_KEY = String(payload.apiKey).trim();
+  if (payload.deepseekApiKey) updates.DEEPSEEK_API_KEY = String(payload.deepseekApiKey).trim();
   if (payload.cozeApiKey) updates.COZE_API_KEY = String(payload.cozeApiKey).trim();
   return updates;
 }
@@ -210,18 +228,29 @@ function ensureEnvFile() {
   return seed;
 }
 
+function applyUpdatesToProcessEnv(updates = {}) {
+  Object.keys(updates).forEach((key) => {
+    if (AI_ENV_KEYS.includes(key)) process.env[key] = String(updates[key]);
+  });
+}
+
 function saveConfig(payload = {}) {
   const updates = buildUpdates(payload);
-  const currentText = ensureEnvFile();
-  const nextText = setEnvLines(currentText, updates);
-  fs.writeFileSync(ENV_PATH, nextText, { encoding: "utf8", mode: 0o600 });
-  Object.keys(updates).forEach((key) => {
-    if (AI_ENV_KEYS.includes(key)) process.env[key] = updates[key];
-  });
+  runtimeStore.writeRuntimeConfig(updates);
+  applyUpdatesToProcessEnv(updates);
+
+  if (String(process.env.FOSU_AI_PROVIDER_WRITE_ENV || "").toLowerCase() === "true") {
+    const currentText = ensureEnvFile();
+    const nextText = setEnvLines(currentText, updates);
+    fs.writeFileSync(ENV_PATH, nextText, { encoding: "utf8", mode: 0o600 });
+  }
+
   return getStatus();
 }
 
 module.exports = {
+  AI_ENV_KEYS,
+  DEFAULTS,
   buildUpdates,
   ENV_PATH,
   getStatus,

@@ -78,11 +78,40 @@ function normalizeWeekday(course) {
   return Number(course.weekday || course.weekDay || 0) || 0;
 }
 
+function sanitizeNumberArray(value, limit) {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, limit).map((item) => Number(item)).filter((item) => Number.isFinite(item));
+}
+
+function sanitizeWeekRange(value) {
+  if (Array.isArray(value)) {
+    return sanitizeNumberArray(value, 2);
+  }
+  if (value && typeof value === "object") {
+    const output = {};
+    ["start", "end", "from", "to", "startWeek", "endWeek"].forEach((key) => {
+      if (Number.isFinite(Number(value[key]))) {
+        output[key] = Number(value[key]);
+      }
+    });
+    ["type", "weekType", "parity", "oddEven"].forEach((key) => {
+      if (value[key] != null && value[key] !== "") {
+        output[key] = redactSensitiveText(value[key]).slice(0, 20);
+      }
+    });
+    return output;
+  }
+  return redactSensitiveText(value || "").slice(0, 120);
+}
+
 function sanitizeCourse(course) {
   const source = course || {};
   const classroom = source.classroom || source.roomName || source.classroomName || "";
   const startSection = Number(source.startSection || source.sectionStart || 0) || 0;
   const endSection = Number(source.endSection || source.sectionEnd || startSection || 0) || 0;
+  const weekText = source.weekText || source.weeksText || source.rawWeek || source.rawWeeks || "";
+  const rawWeek = source.rawWeek || source.rawWeeks || source.weeksText || source.weekText || "";
+  const parity = source.weekParity || source.parity || source.oddEven || source.weekType || "";
   return {
     courseName: redactSensitiveText(source.courseName || source.name || "").slice(0, 80),
     teacherName: redactSensitiveText(source.teacherName || source.teacher || "").slice(0, 60),
@@ -91,21 +120,21 @@ function sanitizeCourse(course) {
     weekday: normalizeWeekday(source),
     startSection,
     endSection,
-    sections: Array.isArray(source.sections)
-      ? source.sections.slice(0, 14).map((item) => Number(item)).filter((item) => Number.isFinite(item))
-      : [],
+    sections: sanitizeNumberArray(source.sections, 14),
     weeks: Array.isArray(source.weeks)
-      ? source.weeks.slice(0, 40).map((item) => Number(item)).filter((item) => Number.isFinite(item))
+      ? sanitizeNumberArray(source.weeks, 40)
       : (typeof source.weeks === "string" ? redactSensitiveText(source.weeks).slice(0, 120) : []),
-    weekText: redactSensitiveText(source.weekText || "").slice(0, 80),
-    rawWeek: redactSensitiveText(source.rawWeek || source.rawWeeks || source.weeksText || "").slice(0, 120),
-    weekRange: Array.isArray(source.weekRange)
-      ? source.weekRange.slice(0, 2).map((item) => Number(item)).filter((item) => Number.isFinite(item))
-      : redactSensitiveText(source.weekRange || "").slice(0, 120),
+    weekText: redactSensitiveText(weekText).slice(0, 80),
+    weeksText: redactSensitiveText(source.weeksText || weekText).slice(0, 120),
+    rawWeek: redactSensitiveText(rawWeek).slice(0, 120),
+    rawWeeks: redactSensitiveText(source.rawWeeks || rawWeek).slice(0, 120),
+    weekRange: sanitizeWeekRange(source.weekRange),
     startWeek: Number.isFinite(Number(source.startWeek)) ? Number(source.startWeek) : undefined,
     endWeek: Number.isFinite(Number(source.endWeek)) ? Number(source.endWeek) : undefined,
     weekType: redactSensitiveText(source.weekType || "").slice(0, 20),
-    oddEven: redactSensitiveText(source.oddEven || "").slice(0, 20),
+    oddEven: redactSensitiveText(source.oddEven || parity).slice(0, 20),
+    weekParity: redactSensitiveText(source.weekParity || parity).slice(0, 20),
+    parity: redactSensitiveText(source.parity || parity).slice(0, 20),
     isCustom: source.isCustom === true,
     source: redactSensitiveText(source.source || source.sourceType || "").slice(0, 40),
     campus: redactSensitiveText(source.campus || "").slice(0, 40),

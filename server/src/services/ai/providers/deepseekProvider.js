@@ -115,6 +115,22 @@ function parseJsonCodeBlock(text) {
   }
 }
 
+function classifyHttpError(error) {
+  const code = String(error && error.code || "");
+  if (/timeout|ECONNABORTED|ETIMEDOUT/i.test(code) || /timeout|超时/i.test(String(error && error.message || ""))) {
+    return "provider_timeout";
+  }
+  const status = Number(error && error.response && error.response.status);
+  const body = error && error.response && error.response.data;
+  const text = JSON.stringify(body || {}).toLowerCase();
+  if (status === 400 || code === "ERR_BAD_REQUEST") {
+    if (/model/.test(text)) return "invalid_model";
+    if (/response_format|payload|json|schema|thinking|reasoning/.test(text)) return "invalid_payload";
+    return "provider_bad_request";
+  }
+  return code || "PROVIDER_REQUEST_FAILED";
+}
+
 async function generate({ message, intent, toolResults, projectKnowledge }) {
   const apiKey = firstConfiguredKey();
   if (!apiKey) {
@@ -160,13 +176,21 @@ async function generate({ message, intent, toolResults, projectKnowledge }) {
     body.reasoning_effort = configuredEnv("AI_REASONING_EFFORT", "medium");
   }
 
-  const response = await axios.post(`${baseUrl}/chat/completions`, body, {
-    timeout,
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json",
-    },
-  });
+  let response;
+  try {
+    response = await axios.post(`${baseUrl}/chat/completions`, body, {
+      timeout,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
+      },
+    });
+  } catch (error) {
+    const wrapped = new Error("DeepSeek provider request failed.");
+    wrapped.code = classifyHttpError(error);
+    wrapped.status = error && error.response && error.response.status;
+    throw wrapped;
+  }
   const content = response.data &&
     response.data.choices &&
     response.data.choices[0] &&
@@ -184,6 +208,7 @@ async function generate({ message, intent, toolResults, projectKnowledge }) {
 
 module.exports = {
   buildSystemPrompt,
+  classifyHttpError,
   firstConfiguredKey,
   generate,
   name: "deepseek",
