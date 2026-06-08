@@ -2,6 +2,14 @@ const { spawnSync } = require("child_process");
 
 const scripts = [
   "test:no-ai-secret-committed",
+  "test:ai-local-time-section",
+  "test:ai-clarify-missing-slot",
+  "test:ai-tabbar-deeplink",
+  "test:ai-tool-chain",
+  "test:ai-provider-policy",
+  "test:ai-empty-result-copywriting",
+  "test:ai-more-tasks-panel",
+  "test:ai-agent-metrics",
   "test:ai-agent-safety",
   "test:ai-agent-tool-routing",
   "test:ai-agent-mock-fallback",
@@ -12,9 +20,6 @@ const scripts = [
   "test:ai-logo-entry",
   "test:ai-assistant-ui-layout",
   "test:ai-assistant-demo-data",
-  "test:miniprogram-ai-page-entry",
-  "test:miniprogram-build-entry",
-  "test:wxss-selector-sanity",
 ];
 
 function runScript(name) {

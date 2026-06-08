@@ -12,12 +12,50 @@ function pad(value) {
   return String(value).padStart(2, "0");
 }
 
-function parseDate(value) {
-  if (value instanceof Date && !Number.isNaN(value.getTime())) return value;
+function parseLocalDateString(value) {
   const text = String(value || "").trim();
-  const date = text ? new Date(text) : new Date();
-  if (Number.isNaN(date.getTime())) return new Date();
-  return date;
+  const match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s](\d{1,2}):(\d{1,2})(?::(\d{1,2}))?)?/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const hour = Number(match[4] || 0);
+  const minute = Number(match[5] || 0);
+  const second = Number(match[6] || 0);
+  const date = new Date(year, month - 1, day, hour, minute, second);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseNativeDate(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) return new Date(value.getTime());
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+  const text = String(value || "").trim();
+  if (!text) return null;
+  const date = new Date(text);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function parseDate(value) {
+  if (value && typeof value === "object" && !Array.isArray(value) && !(value instanceof Date)) {
+    return parseClientDate(value);
+  }
+  return parseLocalDateString(value) || parseNativeDate(value) || new Date();
+}
+
+function parseClientDate(context = {}, fallback) {
+  const source = context && typeof context === "object" && !Array.isArray(context)
+    ? context
+    : { clientLocalTime: context };
+  const localDate = parseLocalDateString(source.clientLocalTime);
+  if (localDate) return localDate;
+  const legacyDate = parseNativeDate(source.clientTime);
+  if (legacyDate) return legacyDate;
+  const timestampDate = parseNativeDate(source.clientTimestampMs);
+  if (timestampDate) return timestampDate;
+  return parseLocalDateString(fallback) || parseNativeDate(fallback) || new Date();
 }
 
 function formatDate(date) {
@@ -69,26 +107,33 @@ function parseChineseNumber(text, fallback) {
 
 function inferSections(message, clientTime) {
   const text = normalizeText(message);
+  const currentDate = parseClientDate(
+    clientTime && typeof clientTime === "object" ? clientTime : { clientLocalTime: clientTime },
+    clientTime
+  );
   const range = text.match(/(\d{1,2})\s*[-~～至到]\s*(\d{1,2})\s*节?/);
   if (range) return `${range[1]}-${range[2]}`;
   const single = text.match(/第?\s*(\d{1,2})\s*节/);
   if (single) return single[1];
   const minFreeSections = text.includes("连续") ? parseChineseNumber(text, 2) : 1;
   if (/现在|当前|马上/.test(text)) {
-    const start = getCurrentSection(clientTime);
+    const start = getCurrentSection(currentDate);
     const end = Math.min(MAX_SECTION, start + Math.max(1, minFreeSections) - 1);
     return `${start}-${end}`;
   }
   if (/下午/.test(text)) return "5-8";
-  if (/晚上|夜间/.test(text)) return "9-12";
+  if (/今晚|晚上|夜间/.test(text)) {
+    const start = /今晚|现在|当前/.test(text) ? Math.max(9, getCurrentSection(currentDate)) : 9;
+    const end = Math.min(14, start + Math.max(1, minFreeSections) - 1);
+    return `${start}-${Math.max(start, end)}`;
+  }
   if (/上午|早上/.test(text)) return "1-4";
   if (/中午/.test(text)) return "4-5";
   return minFreeSections > 1 ? `1-${Math.min(MAX_SECTION, minFreeSections)}` : "1-2";
 }
 
 function inferTargetDate(message, context) {
-  const sourceDate = context.clientTime || new Date();
-  const date = parseDate(sourceDate);
+  const date = parseClientDate(context, new Date());
   if (/明天|翌日/.test(message || "")) {
     date.setDate(date.getDate() + 1);
   }
@@ -106,10 +151,36 @@ function inferSearchType(message) {
 
 function stripIntentWords(message) {
   return normalizeText(message)
-    .replace(/帮我|请问|查询|查找|查一下|查|课表|课程表|老师|教师|教室|课程|安排|佛山大学|佛大|的/g, " ")
+    .replace(/帮我|帮|我|请问|查询|查找|查一下|查|看看|看|找|占用|使用情况|课表|课程表|老师|教师|教室|课室|自习室|课程|安排|班级|行政班|专业|佛山大学|佛大|的/g, " ")
     .replace(/[？?，,。.!！]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function hasScheduleContext(context = {}) {
+  const summary = context.currentScheduleSummary || {};
+  return Boolean(summary.enabled && Array.isArray(summary.courses) && summary.courses.length);
+}
+
+function getMissingSlot(type) {
+  const map = {
+    teacher: { missing: "teacherName", type: "teacher", prompt: "你想查哪位老师？" },
+    classroom: { missing: "classroomName", type: "classroom", prompt: "你想查哪间教室或哪栋楼？" },
+    course: { missing: "courseName", type: "course", prompt: "你想查哪门课程？" },
+    class: { missing: "className", type: "class", prompt: "你想查哪个班级或专业？" },
+    scheduleContext: { missing: "scheduleContext", type: "schedule", prompt: "需要先提供课表摘要，才能推荐共同空闲时间。" },
+  };
+  return map[type] || map.teacher;
+}
+
+function needsClarification(type, q) {
+  const keyword = normalizeText(q).replace(/\s+/g, "");
+  if (!keyword) return true;
+  if (type === "teacher") return keyword.length < 2;
+  if (type === "classroom") return keyword.length < 2;
+  if (type === "course") return keyword.length < 2;
+  if (type === "class") return keyword.length < 2;
+  return false;
 }
 
 function resolveIntent(message, context = {}) {
@@ -121,6 +192,9 @@ function resolveIntent(message, context = {}) {
     return { name: "diagnose_data_status", slots: {} };
   }
   if (/组会|会议|共同空闲|一起自习|自习时间|推荐时间/.test(text)) {
+    if (!hasScheduleContext(context)) {
+      return { name: "clarify_missing_slot", slots: { slot: getMissingSlot("scheduleContext") } };
+    }
     return {
       name: "recommend_meeting_time",
       slots: {
@@ -138,12 +212,17 @@ function resolveIntent(message, context = {}) {
       },
     };
   }
-  if (/今天|今日|明天|还有课|下一节|上什么课|安排/.test(text)) {
+  if (/今天|今日|明天|还有课|下一节|上什么课/.test(text) ||
+    (/安排/.test(text) && !/老师|教师|教室|课室|课程|班级|行政班|专业/.test(text))) {
     return { name: "get_today_courses", slots: {} };
   }
   if (/老师|教师|教室|课程|班级|查课|课表/.test(text)) {
     const type = inferSearchType(text);
-    return { name: "search_school_index", slots: { type, q: stripIntentWords(text) } };
+    const q = stripIntentWords(text);
+    if (needsClarification(type, q)) {
+      return { name: "clarify_missing_slot", slots: { slot: getMissingSlot(type), type, q } };
+    }
+    return { name: "search_school_index", slots: { type, q } };
   }
   return { name: "generic", slots: {} };
 }
@@ -184,7 +263,7 @@ function getTodayCourses(input = {}, context = {}) {
   const date = input.date || inferTargetDate(input.message || "", context);
   const weekday = toNumber(input.weekday, getWeekday(date));
   const week = toNumber(input.week, 0);
-  const currentSection = getCurrentSection(context.clientTime || date);
+  const currentSection = getCurrentSection(context.clientLocalTime || context.clientTime || date);
   const courses = summary.courses
     .filter((course) => Number(course.weekday) === weekday)
     .filter((course) => courseAppliesToWeek(course, week))
@@ -219,7 +298,7 @@ function getTodayCourses(input = {}, context = {}) {
 function searchEmptyRooms(input = {}, context = {}) {
   const message = input.message || "";
   const date = input.date || inferTargetDate(message, context);
-  const sections = input.sections || inferSections(message, context.clientTime);
+  const sections = input.sections || inferSections(message, context);
   const building = input.building || extractBuilding(message);
   const minFreeSections = Math.max(1, Number(input.minFreeSections || (/连续/.test(message) ? parseChineseNumber(message, 2) : 1)) || 1);
   const query = {
@@ -334,6 +413,16 @@ function explainPersonalImport(input = {}) {
   };
 }
 
+function clarifyMissingSlot(input = {}) {
+  const slot = input.slot || getMissingSlot(input.type || "teacher");
+  return {
+    success: true,
+    needClarification: true,
+    slot,
+    actionUrl: buildActionUrl("/pages/school/school", slot.type && slot.type !== "schedule" ? { type: slot.type } : {}),
+  };
+}
+
 function buildBusyMatrix(courses, week) {
   const busy = {};
   for (let weekday = 1; weekday <= 7; weekday += 1) busy[weekday] = new Set();
@@ -402,6 +491,8 @@ function recommendMeetingTime(input = {}, context = {}) {
     needContext: false,
     durationSections: duration,
     candidates: candidates.slice(0, 5),
+    firstCandidate: first,
+    emptyRoomResult: emptyRoom,
     emptyRoomActionUrl: emptyRoom && emptyRoom.actionUrl || "/pages/empty-room/empty-room",
     summary: candidates.length ? `找到 ${candidates.length} 个候选共同空闲时段。` : "本周没有找到满足条件的共同空闲时段。",
   };
@@ -416,6 +507,7 @@ function executeTool(name, input = {}, context = {}) {
     diagnose_data_status: diagnoseDataStatus,
     explain_personal_import: explainPersonalImport,
     recommend_meeting_time: recommendMeetingTime,
+    clarify_missing_slot: clarifyMissingSlot,
   };
   const tool = tools[name];
   if (!tool) {
@@ -440,7 +532,37 @@ function getToolSummary(name, result) {
   if (name === "diagnose_data_status") return `Release ${result.activeReleaseVersion || "未发布"}`;
   if (name === "recommend_meeting_time") return result.summary || "已计算候选时间";
   if (name === "explain_personal_import") return "已返回导入指引";
+  if (name === "clarify_missing_slot") return "缺少必要关键词";
   return "工具调用完成";
+}
+
+function makeToolCall(name, result, forcedStatus) {
+  return {
+    name,
+    status: forcedStatus || (result && result.success === false ? "failed" : "success"),
+    summary: getToolSummary(name, result),
+    result,
+  };
+}
+
+function getItemComparableName(item = {}, type) {
+  if (type === "teacher") return item.teacherName || item.name || item.displayName || "";
+  if (type === "classroom") return item.roomName || item.classroomName || item.name || item.displayName || "";
+  if (type === "course") return item.courseName || item.name || item.displayName || "";
+  if (type === "class") return item.className || item.name || item.displayName || "";
+  return item.name || item.displayName || "";
+}
+
+function normalizeComparable(value) {
+  return normalizeText(value).replace(/\s+/g, "").toLowerCase();
+}
+
+function isHighConfidenceIndexHit(result = {}) {
+  const items = asArray(result.items);
+  const q = normalizeComparable(result.q);
+  if (!q || items.length !== 1) return false;
+  const itemName = normalizeComparable(getItemComparableName(items[0], result.type));
+  return itemName === q || q.length >= 2;
 }
 
 function runToolsForIntent(intent, message, context) {
@@ -450,17 +572,61 @@ function runToolsForIntent(intent, message, context) {
     term: context.term,
     releaseVersion: context.releaseVersion,
   });
+  if (intent.name === "clarify_missing_slot") {
+    const result = executeTool(intent.name, input, context);
+    return [makeToolCall(intent.name, result, "skipped")];
+  }
   const result = executeTool(intent.name, input, context);
-  return [{
-    name: intent.name,
-    status: result && result.success === false ? "failed" : "success",
-    summary: getToolSummary(intent.name, result),
-    result,
-  }];
+  return [makeToolCall(intent.name, result)];
+}
+
+function runToolChainForIntent(intent, message, context) {
+  if (!intent || intent.name === "generic") return [];
+  if (intent.name === "clarify_missing_slot") return runToolsForIntent(intent, message, context);
+
+  const input = Object.assign({}, intent.slots || {}, {
+    message,
+    term: context.term,
+    releaseVersion: context.releaseVersion,
+  });
+  const calls = [];
+  const firstResult = executeTool(intent.name, input, context);
+  calls.push(makeToolCall(intent.name, firstResult));
+
+  if (intent.name === "search_school_index" && firstResult && firstResult.success !== false && isHighConfidenceIndexHit(firstResult)) {
+    const item = firstResult.items[0] || {};
+    const detailResult = executeTool("get_schedule_detail", {
+      type: firstResult.type,
+      id: item.id,
+      releaseVersion: firstResult.releaseVersion,
+      term: firstResult.term || context.term,
+      message,
+    }, context);
+    calls.push(makeToolCall("get_schedule_detail", detailResult));
+  }
+
+  if (intent.name === "search_empty_rooms") {
+    const rooms = asArray(firstResult && firstResult.rooms);
+    if (!firstResult || firstResult.success === false || rooms.length === 0 || Number(firstResult.total || rooms.length) === 0) {
+      const diagnosis = executeTool("diagnose_data_status", input, context);
+      calls.push(makeToolCall("diagnose_data_status", diagnosis));
+    }
+  }
+
+  if (intent.name === "recommend_meeting_time" && firstResult && firstResult.emptyRoomResult) {
+    calls.push(makeToolCall("search_empty_rooms", firstResult.emptyRoomResult));
+  }
+
+  return calls;
 }
 
 module.exports = {
   executeTool,
+  getCurrentSection,
+  inferSections,
+  inferTargetDate,
+  parseClientDate,
   resolveIntent,
+  runToolChainForIntent,
   runToolsForIntent,
 };

@@ -12,6 +12,12 @@
 
 进入 AI 校园管家，点击“现在有空教室吗？”或输入“我现在想找 C7 附近能自习两节的空教室”。展示 AI 调用 `search_empty_rooms` 工具，返回空教室卡片和“可点击查看详情”按钮，再跳转到空教室页核对。
 
+演示路径可直接使用：
+- `/pages/ai-assistant/ai-assistant?demo=empty-room`
+- `/pages/ai-assistant/ai-assistant?demo=teacher`
+- `/pages/ai-assistant/ai-assistant?demo=meeting`
+- `/pages/ai-assistant/ai-assistant?demo=diagnosis`
+
 ## 2:15 AI 查老师/课程
 
 输入“帮我查老师课表”或带教师姓名的查询。展示 AI 使用全校索引工具返回教师/课程卡片，再跳转到全校查询页或课表详情页。说明事实来自 Release Pack 索引，不由模型编造。

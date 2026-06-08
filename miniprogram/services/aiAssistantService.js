@@ -86,6 +86,22 @@ function isPersonalContextAllowed() {
   return readStorage(ALLOW_PERSONAL_CONTEXT_KEY, false) === true;
 }
 
+function formatLocalIsoWithOffset(date) {
+  const target = date instanceof Date && !Number.isNaN(date.getTime()) ? date : new Date();
+  const pad = (value) => String(value).padStart(2, "0");
+  const offsetMinutes = -target.getTimezoneOffset();
+  const sign = offsetMinutes >= 0 ? "+" : "-";
+  const absOffset = Math.abs(offsetMinutes);
+  const offsetHour = Math.floor(absOffset / 60);
+  const offsetMinute = absOffset % 60;
+  return [
+    `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}`,
+    "T",
+    `${pad(target.getHours())}:${pad(target.getMinutes())}:${pad(target.getSeconds())}`,
+    `${sign}${pad(offsetHour)}:${pad(offsetMinute)}`,
+  ].join("");
+}
+
 function setPersonalContextAllowed(allowed) {
   writeStorage(ALLOW_PERSONAL_CONTEXT_KEY, allowed === true);
   return allowed === true;
@@ -114,6 +130,7 @@ function sanitizeLocalScheduleForAI(target) {
 }
 
 function buildClientContext(extra = {}) {
+  const now = new Date();
   const target = getCurrentScheduleTarget();
   const app = getApp();
   const activeRelease = (app.globalData && app.globalData.activeRelease) || {};
@@ -127,7 +144,10 @@ function buildClientContext(extra = {}) {
     term,
     releaseVersion: extra.releaseVersion || (target && target.releaseVersion) || activeRelease.releaseVersion || manifest.releaseVersion || "",
     currentPage: extra.currentPage || getCurrentRoute(),
-    clientTime: new Date().toISOString(),
+    clientTime: now.toISOString(),
+    clientLocalTime: formatLocalIsoWithOffset(now),
+    timezoneOffsetMinutes: now.getTimezoneOffset(),
+    clientTimestampMs: now.getTime(),
     timezone: "Asia/Shanghai",
     currentScheduleSummary: sanitizeLocalScheduleForAI(target),
   };
@@ -143,6 +163,7 @@ function normalizeHistoryItem(item) {
     suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6) : [],
     toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls.slice(0, 8) : [],
     safety: source.safety || null,
+    metrics: source.metrics && typeof source.metrics === "object" && !Array.isArray(source.metrics) ? source.metrics : null,
     timeText: source.timeText || "",
   };
 }
@@ -188,6 +209,7 @@ module.exports = {
   buildClientContext,
   chat,
   clearAiHistory,
+  formatLocalIsoWithOffset,
   getAiHistory,
   isPersonalContextAllowed,
   redactSensitiveText,

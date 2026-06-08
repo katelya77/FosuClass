@@ -50,7 +50,7 @@ function buildEmptyRoom(result) {
   return {
     answer: rooms.length
       ? `按当前条件找到 ${result.total || rooms.length} 间可用教室，建议先看前几间，再进入空教室页核对详情。`
-      : "当前条件下没有匹配的空教室，可以放宽楼栋或节次再试。",
+      : "当前条件下没有匹配的空教室。建议换楼栋、换节次，或取消连续节数后再试。",
     cards: [makeCard("empty_room", "空教室推荐", result.summary || "基于 Release Pack 空教室索引", {
       badges: metaBadges(result),
       items: rooms.slice(0, 5).map((room) => ({
@@ -58,7 +58,7 @@ function buildEmptyRoom(result) {
         subtitle: [room.buildingName || room.building, room.campus, room.capacityText].filter(Boolean).join(" · "),
         value: room.freeText || room.continuousText || "空闲",
       })),
-      actions: [makeAction("可点击查看详情", "navigate", result.actionUrl || "/pages/empty-room/empty-room")],
+      actions: [makeAction("查看空教室", "navigate", result.actionUrl || "/pages/empty-room/empty-room")],
     })],
     suggestions: ["找连续 2 节空教室", "C7 附近现在有空教室吗？"],
   };
@@ -70,7 +70,7 @@ function buildTodayCourses(result) {
       answer: "我还没有拿到当前课表摘要。先绑定班级课表或导入 XLS 后，就能分析今天和明天的安排。",
       cards: [makeCard("guide", "需要当前课表", result.summary, {
         badges: ["最小必要信息", "不需要密码"],
-        actions: [makeAction("导入 XLS 课表", "bind", result.actionUrl || "/pages/personal-sync/personal-sync?tab=xls")],
+        actions: [makeAction("去 XLS 导入", "bind", result.actionUrl || "/pages/personal-sync/personal-sync?tab=xls")],
       })],
       suggestions: ["怎么导入个人课表？", "问 AI 分析今天安排"],
     };
@@ -87,28 +87,47 @@ function buildTodayCourses(result) {
         subtitle: [course.teacherName, course.classroom].filter(Boolean).join(" · "),
         value: course.sectionText,
       })),
-      actions: [makeAction("查看今日页", "navigate", result.actionUrl || "/pages/today/today")],
+      actions: [makeAction("查看今日安排", "navigate", result.actionUrl || "/pages/today/today")],
     })],
     suggestions: ["现在有空教室吗？", "帮我推荐自习时间"],
   };
 }
 
-function buildSchoolIndex(result) {
+function emptySchoolCopy(type, q) {
+  if (!q && type === "teacher") return "你想查哪位老师？请输入老师姓名，例如：查张三老师课表。";
+  if (type === "teacher") return "没有找到匹配的教师结果。建议换短关键词、检查姓名，或打开全校查询继续筛选。";
+  if (type === "classroom") return "没有找到匹配的教室结果。建议输入 C7-203、C7、B8 等格式再试。";
+  if (type === "course") return "没有找到匹配的课程结果。建议输入课程名中的 2-4 个关键字。";
+  if (type === "class") return "没有找到匹配的班级结果。建议输入班级、年级或专业关键词。";
+  return "没有找到匹配结果，可以换一个更短的关键词再试。";
+}
+
+function buildSchoolIndex(result, detailResult) {
   const type = result.type || "teacher";
   const typeText = { teacher: "教师", classroom: "教室", course: "课程", class: "班级" }[type] || "课表";
   const items = Array.isArray(result.items) ? result.items : [];
+  const detailCourses = detailResult && Array.isArray(detailResult.courses) ? detailResult.courses : [];
+  const primaryActionUrl = detailResult && detailResult.success && detailResult.actionUrl
+    ? detailResult.actionUrl
+    : (result.actionUrl || "/pages/school/school");
   return {
     answer: items.length
-      ? `在全校索引里找到 ${result.total || items.length} 条${typeText}相关结果。事实来自 Release Pack 索引。`
-      : `没有找到匹配的${typeText}结果，可以换一个更短的关键词再试。`,
+      ? (detailCourses.length
+        ? `在全校索引里命中 1 条${typeText}结果，并读取到课表详情。事实来自 Release Pack 索引和详情缓存。`
+        : `在全校索引里找到 ${result.total || items.length} 条${typeText}相关结果。事实来自 Release Pack 索引。`)
+      : emptySchoolCopy(type, result.q),
     cards: [makeCard(type === "teacher" ? "teacher" : (type === "course" ? "course" : "generic"), `${typeText}查询结果`, result.q ? `关键词：${result.q}` : "可继续补充关键词", {
       badges: metaBadges(result),
-      items: items.slice(0, 6).map((item) => ({
+      items: (detailCourses.length ? detailCourses.slice(0, 6).map((course) => ({
+        title: course.courseName || "未命名课程",
+        subtitle: [course.teacherName, course.classroom || course.roomName, course.weekday ? `星期${course.weekday}` : ""].filter(Boolean).join(" · "),
+        value: course.startSection && course.endSection ? `第${course.startSection}-${course.endSection}节` : "课表详情",
+      })) : items.slice(0, 6).map((item) => ({
         title: itemName(item, type) || "未命名",
         subtitle: [item.college || item.collegeName, item.campus, item.majorName].filter(Boolean).join(" · "),
         value: item.courseCount || item.count ? `${item.courseCount || item.count} 条课程数据` : "课程数据",
-      })),
-      actions: [makeAction("打开全校查询", "navigate", result.actionUrl || "/pages/school/school")],
+      }))),
+      actions: [makeAction(detailCourses.length ? "查看课表详情" : "打开全校查询", "navigate", primaryActionUrl)],
     })],
     suggestions: ["查老师课表", "查教室占用", "查课程安排"],
   };
@@ -150,6 +169,31 @@ function buildGuide(result) {
   };
 }
 
+function buildClarification(result = {}) {
+  const slot = result.slot || {};
+  const type = slot.type || "teacher";
+  const copy = {
+    teacher: "你想查哪位老师？请输入老师姓名，例如：查张三老师课表。",
+    classroom: "你想查哪间教室？请输入教室名或楼栋，例如：查 C7-203 教室。",
+    course: "你想查哪门课程？请输入课程关键词，例如：查高等数学课程。",
+    class: "你想查哪个班级？请输入班级、年级或专业关键词。",
+    schedule: "推荐组会或自习时间前，需要先开启课表摘要或导入 XLS 课表。",
+  }[type] || "还需要一个关键词，请补充后我再查。";
+  const actionUrl = type === "schedule" ? "/pages/personal-sync/personal-sync?tab=xls" : (result.actionUrl || "/pages/school/school");
+  return {
+    answer: copy,
+    cards: [makeCard("guide", "还需要一个关键词", slot.prompt || "请补充必要信息后继续。", {
+      badges: ["追问", "不编造事实"],
+      actions: [makeAction(type === "schedule" ? "去 XLS 导入" : "打开全校查询", type === "schedule" ? "bind" : "navigate", actionUrl)],
+    })],
+    suggestions: [
+      "查某某老师课表",
+      "查 C7-203 教室",
+      "查高等数学课程",
+    ],
+  };
+}
+
 function buildMeeting(result) {
   if (result.needContext) {
     return buildGuide({
@@ -159,6 +203,9 @@ function buildMeeting(result) {
     });
   }
   const candidates = Array.isArray(result.candidates) ? result.candidates : [];
+  const emptyRooms = result.emptyRoomResult && Array.isArray(result.emptyRoomResult.rooms)
+    ? result.emptyRoomResult.rooms
+    : [];
   return {
     answer: candidates.length
       ? `找到 ${candidates.length} 个候选共同空闲时段，可继续点进空教室页核对教室。`
@@ -167,7 +214,7 @@ function buildMeeting(result) {
       badges: ["忙闲矩阵", "仅供参考"],
       items: candidates.slice(0, 5).map((item) => ({
         title: `星期${item.weekday}`,
-        subtitle: item.reason,
+        subtitle: [item.reason, emptyRooms[0] && emptyRooms[0].roomName ? `可优先看 ${emptyRooms[0].roomName}` : ""].filter(Boolean).join(" · "),
         value: `第${item.startSection}-${item.endSection}节`,
       })),
       actions: [makeAction("查看空教室", "navigate", result.emptyRoomActionUrl || "/pages/empty-room/empty-room")],
@@ -194,12 +241,17 @@ function buildGeneric() {
 
 function generate({ intent, toolResults }) {
   const first = toolResults && toolResults[0] && toolResults[0].result;
+  const findResult = (name) => {
+    const match = Array.isArray(toolResults) ? toolResults.find((item) => item && item.name === name) : null;
+    return match && match.result;
+  };
   const name = intent && intent.name;
   const payload = name === "search_empty_rooms" ? buildEmptyRoom(first || {}) :
     name === "get_today_courses" ? buildTodayCourses(first || {}) :
-    name === "search_school_index" ? buildSchoolIndex(first || {}) :
+    name === "search_school_index" ? buildSchoolIndex(first || {}, findResult("get_schedule_detail")) :
     name === "diagnose_data_status" ? buildDiagnosis(first || {}) :
     name === "explain_personal_import" ? buildGuide(first || {}) :
+    name === "clarify_missing_slot" ? buildClarification(first || {}) :
     name === "recommend_meeting_time" ? buildMeeting(first || {}) :
     buildGeneric();
   return Object.assign({ provider: "mock" }, payload);

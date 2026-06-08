@@ -16,6 +16,7 @@ const SCHEDULE_DETAIL_CACHE_TTL = 6 * 60 * 60 * 1000;
 const APP_CONFIG_TIMEOUT = 12000;
 const BOOTSTRAP_TIMEOUT = 20000;
 const SCHOOL_REQUEST_TIMEOUT = 25000;
+const AI_PENDING_SCHOOL_QUERY_KEY = "FOSU_AI_PENDING_SCHOOL_QUERY";
 
 const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
@@ -274,6 +275,11 @@ Page({
     }
     this.loadRecentSchedules();
 
+    const aiPendingQuery = this.consumeAiPendingSchoolQuery();
+    if (aiPendingQuery) {
+      this.applyAiPendingSchoolQuery(aiPendingQuery);
+    }
+
     const now = Date.now();
     if (!this._lastInitAt || now - this._lastInitAt >= 5000) {
       if (this.data.activeSnapshot) {
@@ -293,6 +299,76 @@ Page({
         duration: 3500
       });
     }
+  },
+
+  consumeAiPendingSchoolQuery() {
+    let query = null;
+    try {
+      query = wx.getStorageSync(AI_PENDING_SCHOOL_QUERY_KEY);
+      if (query) {
+        wx.removeStorageSync(AI_PENDING_SCHOOL_QUERY_KEY);
+      }
+    } catch (error) {
+      query = null;
+    }
+    if (!query || typeof query !== "object" || Array.isArray(query)) return null;
+    return query;
+  },
+
+  applyAiPendingSchoolQuery(query, attempt = 0) {
+    const type = ["teacher", "classroom", "course", "class"].includes(query.type) ? query.type : "teacher";
+    const keyword = safeDecodeURIComponent(query.q || query.keyword || "").trim();
+    const term = safeDecodeURIComponent(query.term || query.semester || "");
+    const releaseVersion = safeDecodeURIComponent(query.releaseVersion || "");
+    const selectedSemesterIndex = term
+      ? this.data.semesters.findIndex((item) => item && item.value === term)
+      : -1;
+    const patch = {
+      activeTab: type,
+      keyword,
+      teachersResult: [],
+      teacherHitCount: 0,
+      classroomsResult: [],
+      coursesResult: [],
+      updatedAtText: "",
+      restoreHint: "已根据 AI 建议打开查询",
+    };
+    if (selectedSemesterIndex >= 0) patch.selectedSemesterIndex = selectedSemesterIndex;
+    if (releaseVersion) patch.catalogVersion = releaseVersion;
+
+    const runSearch = () => {
+      if (!keyword) return;
+      if (type === "teacher") {
+        this.searchTeacherSchedule();
+        return;
+      }
+      if (type === "classroom") {
+        this.searchClassroomSchedule();
+        return;
+      }
+      if (type === "course") {
+        this.searchCourseSchedule();
+        return;
+      }
+      this.setData({
+        classEmptyTitle: "已填入 AI 推荐关键词",
+        classEmptyDesc: keyword ? `请按「${keyword}」继续选择学院、年级或专业。` : "请继续选择班级筛选条件。",
+      });
+    };
+
+    this.setData(patch, () => {
+      const ready = Boolean(this.data.activeSnapshot || this.data.catalogVersion || (this.data.semesters && this.data.semesters.length));
+      if (ready) {
+        runSearch();
+        return;
+      }
+      if (attempt === 0) {
+        this.initPageData({ reason: "aiPendingQuery" });
+      }
+      if (attempt < 4) {
+        setTimeout(() => this.applyAiPendingSchoolQuery(query, attempt + 1), 200);
+      }
+    });
   },
 
   // 统一页面初始化与 app-config / catalog 获取

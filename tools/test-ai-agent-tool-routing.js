@@ -33,7 +33,7 @@ async function assertRoutes(message, expectedTool) {
 
 async function run() {
   await assertRoutes("现在空教室", "search_empty_rooms");
-  await assertRoutes("查老师课表", "search_school_index");
+  await assertRoutes("查张三老师课表", "search_school_index");
   await assertRoutes("今天有课吗", "get_today_courses");
   await assertRoutes("怎么导入 XLS", "explain_personal_import");
   await assertRoutes("为什么数据加载失败", "diagnose_data_status");

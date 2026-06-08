@@ -27,20 +27,26 @@ router.post("/agent/chat", scheduleLimiter, validateJsonBody(["message", "contex
       message,
       context: req.body.context || {},
     });
-    safeLog("ai-agent-chat", buildSafeLogPayload({
-      message,
-      context: req.body.context || {},
+    safeLog("ai-agent-chat", {
+      metrics: payload.metrics || {},
       provider: payload.safety && payload.safety.provider,
       toolCalls: payload.toolCalls,
-    }));
+    });
     return res.json(payload);
   } catch (error) {
     safeLog("ai-agent-chat-failed", buildSafeLogPayload({
-      message,
-      context: req.body.context || {},
       provider: "mock",
       toolCalls: [{ name: "agentService", status: "failed", summary: error.message }],
     }));
+    const fallbackMetrics = {
+      latencyMs: 0,
+      intentName: "agentServiceFallback",
+      toolCallCount: 1,
+      externalProviderUsed: false,
+      fallback: true,
+      itemCount: 0,
+      usedPersonalContext: false,
+    };
     return res.status(200).json({
       success: true,
       answer: "AI 校园管家暂时不可用，已进入规则降级模式。你可以先使用全校查询、空教室或个人课表导入页面完成操作。",
@@ -62,7 +68,11 @@ router.post("/agent/chat", scheduleLimiter, validateJsonBody(["message", "contex
         usedPersonalContext: false,
         provider: "mock",
         mode: "tool-grounded",
+        providerPolicy: process.env.AI_PROVIDER_POLICY || "auto",
+        externalProviderUsed: false,
+        fallbackReason: "agentService fallback",
       },
+      metrics: fallbackMetrics,
       serverTime: new Date().toISOString(),
     });
   }

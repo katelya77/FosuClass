@@ -65,6 +65,90 @@ function stableGeneratedPayload(payload) {
   };
 }
 
+function getProviderPolicy() {
+  const value = String(process.env.AI_PROVIDER_POLICY || "auto").trim().toLowerCase();
+  return ["auto", "always", "tool-only"].includes(value) ? value : "auto";
+}
+
+function getToolResult(toolCalls, name) {
+  const match = Array.isArray(toolCalls) ? toolCalls.find((item) => item && item.name === name) : null;
+  return match && match.result;
+}
+
+function getPrimaryToolResult(toolCalls) {
+  return Array.isArray(toolCalls) && toolCalls.length ? toolCalls[0].result : null;
+}
+
+function countResultItems(result) {
+  if (!result || typeof result !== "object") return 0;
+  if (Array.isArray(result.items)) return result.items.length;
+  if (Array.isArray(result.rooms)) return result.rooms.length;
+  if (Array.isArray(result.courses)) return result.courses.length;
+  if (Array.isArray(result.candidates)) return result.candidates.length;
+  return Number(result.total || result.courseCount || 0) || 0;
+}
+
+function getItemCount(toolCalls) {
+  return (Array.isArray(toolCalls) ? toolCalls : []).reduce((sum, item) => {
+    return sum + countResultItems(item && item.result);
+  }, 0);
+}
+
+function evaluateProviderPolicy(intent, toolCalls, policy, providerName) {
+  const normalizedPolicy = ["auto", "always", "tool-only"].includes(String(policy || "").toLowerCase())
+    ? String(policy).toLowerCase()
+    : "auto";
+  const provider = String(providerName || providerFactory.getProviderName() || "mock").toLowerCase();
+  const intentName = intent && intent.name || "generic";
+  const primary = getPrimaryToolResult(toolCalls);
+  const agentEnabled = String(process.env.AI_AGENT_ENABLED || "false").toLowerCase() !== "false";
+
+  if (!agentEnabled) return { useExternal: false, reason: "AI_AGENT_ENABLED=false" };
+  if (provider === "mock") return { useExternal: false, reason: "AI_PROVIDER=mock" };
+  if (normalizedPolicy === "tool-only") return { useExternal: false, reason: "AI_PROVIDER_POLICY=tool-only" };
+  if (intentName === "clarify_missing_slot") return { useExternal: false, reason: "缺少必要关键词，使用固定追问模板" };
+  if (normalizedPolicy === "always") return { useExternal: true, reason: "" };
+  if (intentName === "explain_personal_import") return { useExternal: false, reason: "导入指引用固定安全模板" };
+  if (intentName === "diagnose_data_status" && (!toolCalls || toolCalls.length <= 1)) {
+    return { useExternal: false, reason: "固定诊断结果使用本地规则" };
+  }
+  if (intentName === "search_school_index") {
+    const q = primary && primary.q || intent && intent.slots && intent.slots.q || "";
+    const items = primary && Array.isArray(primary.items) ? primary.items : [];
+    if (!q || items.length === 0) {
+      return { useExternal: false, reason: "索引为空结果使用本地规则" };
+    }
+  }
+  if (intentName === "recommend_meeting_time") {
+    const candidates = primary && Array.isArray(primary.candidates) ? primary.candidates : [];
+    if (candidates.length) return { useExternal: true, reason: "" };
+  }
+  if (intentName === "search_empty_rooms") {
+    const rooms = primary && Array.isArray(primary.rooms) ? primary.rooms : [];
+    if (rooms.length > 1) return { useExternal: true, reason: "" };
+  }
+  if (Array.isArray(toolCalls) && toolCalls.filter((item) => item && item.status !== "skipped").length > 1) {
+    return { useExternal: true, reason: "" };
+  }
+  return { useExternal: false, reason: "简单工具结果使用本地规则" };
+}
+
+function shouldUseExternalProvider(intent, toolCalls, policy) {
+  return evaluateProviderPolicy(intent, toolCalls, policy, providerFactory.getProviderName()).useExternal;
+}
+
+function buildMetrics(options = {}) {
+  return {
+    latencyMs: Math.max(0, Date.now() - (options.startTime || Date.now())),
+    intentName: options.intentName || (options.intent && options.intent.name) || "generic",
+    toolCallCount: Array.isArray(options.toolCalls) ? options.toolCalls.length : 0,
+    externalProviderUsed: options.externalProviderUsed === true,
+    fallback: options.fallback === true,
+    itemCount: getItemCount(options.toolCalls),
+    usedPersonalContext: options.usedPersonalContext === true,
+  };
+}
+
 function buildResponse(payload) {
   return {
     success: true,
@@ -77,12 +161,16 @@ function buildResponse(payload) {
       usedPersonalContext: Boolean(payload.usedPersonalContext),
       provider: payload.provider || "mock",
       mode: "tool-grounded",
+      providerPolicy: payload.providerPolicy || getProviderPolicy(),
+      externalProviderUsed: payload.externalProviderUsed === true,
+      fallbackReason: payload.fallbackReason || "",
     },
+    metrics: payload.metrics || buildMetrics(),
     serverTime: nowIso(),
   };
 }
 
-function sensitiveCredentialResponse(message, context) {
+function sensitiveCredentialResponse(message, context, startTime) {
   const guide = toolRegistry.executeTool("explain_personal_import", { mode: "xls", message }, context);
   const generated = mockProvider.generate({
     intent: { name: "explain_personal_import" },
@@ -94,10 +182,22 @@ function sensitiveCredentialResponse(message, context) {
     toolCalls: [{ name: "safety_guard", status: "skipped", summary: "检测到敏感凭证，已拦截并脱敏" }],
     provider: "mock",
     usedPersonalContext: false,
+    providerPolicy: getProviderPolicy(),
+    externalProviderUsed: false,
+    fallbackReason: "检测到敏感凭证",
+    metrics: buildMetrics({
+      startTime,
+      intentName: "sensitive_credential_response",
+      toolCalls: [{ name: "safety_guard", status: "skipped", result: {} }],
+      externalProviderUsed: false,
+      fallback: true,
+      usedPersonalContext: false,
+    }),
   }));
 }
 
 async function chat(input = {}) {
+  const startTime = Date.now();
   const rawMessage = String(input.message || "").trim();
   const safeMessage = safetyGuard.redactSensitiveText(rawMessage).slice(0, 2000);
   const context = safetyGuard.sanitizeAgentContext(input.context || {});
@@ -113,26 +213,47 @@ async function chat(input = {}) {
       toolCalls: [],
       provider: "mock",
       usedPersonalContext,
+      providerPolicy: getProviderPolicy(),
+      externalProviderUsed: false,
+      fallbackReason: "空消息",
+      metrics: buildMetrics({
+        startTime,
+        intentName: "generic",
+        toolCalls: [],
+        externalProviderUsed: false,
+        fallback: true,
+        usedPersonalContext,
+      }),
     }));
   }
 
   if (safetyGuard.hasSensitiveCredential(rawMessage)) {
-    return sensitiveCredentialResponse(safeMessage, context);
+    return sensitiveCredentialResponse(safeMessage, context, startTime);
   }
 
   const intent = toolRegistry.resolveIntent(safeMessage, context);
-  const toolCalls = toolRegistry.runToolsForIntent(intent, safeMessage, context);
+  const toolCalls = typeof toolRegistry.runToolChainForIntent === "function"
+    ? toolRegistry.runToolChainForIntent(intent, safeMessage, context)
+    : toolRegistry.runToolsForIntent(intent, safeMessage, context);
   const publicToolCalls = toolCalls.map((item) => ({
     name: safetyGuard.redactSensitiveText(item.name || "").slice(0, 60),
     status: safetyGuard.redactSensitiveText(item.status || "").slice(0, 20),
     summary: safetyGuard.redactSensitiveText(item.summary || "").slice(0, 160),
   }));
 
-  const provider = providerFactory.createProvider();
-  let providerName = provider.name || providerFactory.getProviderName();
+  const providerPolicy = getProviderPolicy();
+  const desiredProviderName = providerFactory.getProviderName();
+  const policyDecision = evaluateProviderPolicy(intent, toolCalls, providerPolicy, desiredProviderName);
+  const provider = policyDecision.useExternal ? providerFactory.createProvider() : mockProvider;
+  let providerName = policyDecision.useExternal
+    ? (provider.name || desiredProviderName)
+    : (intent.name === "clarify_missing_slot" ? "mock/template" : "mock");
   let generated;
+  let externalProviderUsed = false;
+  let fallback = !policyDecision.useExternal;
+  let fallbackReason = policyDecision.reason || "";
   try {
-    generated = await provider.generate({
+    const providerInput = {
       message: safeMessage,
       context,
       intent,
@@ -142,15 +263,23 @@ async function chat(input = {}) {
         summary: safetyGuard.redactSensitiveText(item.summary || ""),
         result: safetyGuard.sanitizeToolResult(item.result),
       })),
-    });
+    };
+    generated = policyDecision.useExternal
+      ? await provider.generate(providerInput)
+      : mockProvider.generate(providerInput);
     providerName = generated.provider || providerName;
+    externalProviderUsed = policyDecision.useExternal && providerName !== "mock";
+    fallback = !externalProviderUsed;
   } catch (error) {
     generated = mockProvider.generate({ message: safeMessage, context, intent, toolResults: toolCalls });
     providerName = "mock";
+    externalProviderUsed = false;
+    fallback = true;
+    fallbackReason = error.code || "provider fallback to mock";
     publicToolCalls.push({
       name: provider.name || providerFactory.getProviderName(),
       status: "skipped",
-      summary: error.code || "provider fallback to mock",
+      summary: fallbackReason,
     });
   }
 
@@ -164,11 +293,23 @@ async function chat(input = {}) {
     toolCalls: publicToolCalls,
     provider: providerName,
     usedPersonalContext,
+    providerPolicy,
+    externalProviderUsed,
+    fallbackReason,
+    metrics: buildMetrics({
+      startTime,
+      intent,
+      toolCalls,
+      externalProviderUsed,
+      fallback,
+      usedPersonalContext,
+    }),
   }));
 }
 
 module.exports = {
   chat,
+  shouldUseExternalProvider,
   stableAction,
   stableCard,
   stableGeneratedPayload,

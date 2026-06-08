@@ -4,6 +4,7 @@ delete process.env.COZE_API_KEY;
 delete process.env.COZE_BOT_ID;
 process.env.AI_AGENT_ENABLED = "true";
 process.env.AI_PROVIDER = "coze";
+process.env.AI_PROVIDER_POLICY = "always";
 
 const cozeProvider = require("../server/src/services/ai/providers/cozeProvider");
 const agentService = require("../server/src/services/ai/agentService");
