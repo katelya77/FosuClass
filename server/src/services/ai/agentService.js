@@ -107,16 +107,17 @@ function evaluateProviderPolicy(intent, toolCalls, policy, providerName) {
   if (provider === "mock") return { useExternal: false, reason: "AI_PROVIDER=mock" };
   if (normalizedPolicy === "tool-only") return { useExternal: false, reason: "AI_PROVIDER_POLICY=tool-only" };
   if (intentName === "clarify_missing_slot") return { useExternal: false, reason: "缺少必要关键词，使用固定追问模板" };
-  if (normalizedPolicy === "always") return { useExternal: true, reason: "" };
   if (intentName === "explain_personal_import") return { useExternal: false, reason: "导入指引用固定安全模板" };
-  if (intentName === "diagnose_data_status" && (!toolCalls || toolCalls.length <= 1)) {
-    return { useExternal: false, reason: "固定诊断结果使用本地规则" };
-  }
+  if (intentName === "diagnose_data_status") return { useExternal: false, reason: "数据诊断使用本地模板" };
+  if (normalizedPolicy === "always") return { useExternal: true, reason: "" };
   if (intentName === "search_school_index") {
     const q = primary && primary.q || intent && intent.slots && intent.slots.q || "";
     const items = primary && Array.isArray(primary.items) ? primary.items : [];
-    if (!q || items.length === 0) {
-      return { useExternal: false, reason: "索引为空结果使用本地规则" };
+    if (q && items.length === 0) {
+      return { useExternal: true, reason: "" };
+    }
+    if (!q) {
+      return { useExternal: false, reason: "缺少索引关键词，使用本地规则" };
     }
   }
   if (intentName === "recommend_meeting_time") {

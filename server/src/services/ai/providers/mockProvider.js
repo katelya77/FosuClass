@@ -155,9 +155,9 @@ function buildDiagnosis(result) {
 
 function buildGuide(result) {
   return {
-    answer: "建议优先使用 XLS 导入个人课表。AI 不接收学号密码，只使用脱敏后的课程摘要来做提醒和建议。",
-    cards: [makeCard("guide", result.title || "个人课表导入", "安全优先推荐 XLS 文件导入", {
-      badges: ["不保存密码", "最小化字段", "本地优先"],
+    answer: "个人课表只推荐使用 XLS 导入。AI 不接收学号密码，只在你开启摘要后读取最小课程字段来做提醒和建议。",
+    cards: [makeCard("guide", result.title || "个人课表 XLS 导入", "新学期重新导入即可刷新本机课表和 AI 摘要", {
+      badges: ["无需密码", "最小化字段", "本地优先"],
       items: (result.steps || []).map((step, index) => ({
         title: `步骤 ${index + 1}`,
         subtitle: step,

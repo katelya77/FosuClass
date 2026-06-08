@@ -4,6 +4,7 @@ const axios = require("../server/node_modules/axios");
 delete process.env.AI_API_KEY;
 delete process.env.DEEPSEEK_API_KEY;
 delete process.env.FOSUCLASS_DEEPSEEK_API_KEY;
+process.env.AI_PROVIDER_IGNORE_ENV_FILE = "true";
 
 const deepseekProvider = require("../server/src/services/ai/providers/deepseekProvider");
 
@@ -14,6 +15,7 @@ async function run() {
   );
 
   process.env["AI_" + "API_KEY"] = "unit-test-value";
+  process.env.AI_PROVIDER_IGNORE_ENV_FILE = "false";
   process.env.AI_MODEL = "deepseek-v4-flash";
   process.env.AI_TIMEOUT_MS = "12345";
   process.env.AI_MAX_TOKENS = "999";
@@ -54,6 +56,7 @@ async function run() {
   } finally {
     axios.post = originalPost;
     delete process.env.AI_API_KEY;
+    delete process.env.AI_PROVIDER_IGNORE_ENV_FILE;
   }
 
   console.log("test-deepseek-provider-config passed");

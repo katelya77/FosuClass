@@ -21,7 +21,7 @@ const TASK_PANEL_ITEMS = [
   { label: "分析今日课程", desc: "基于当前课表摘要", message: "分析今日课程", requiresKeyword: false },
   { label: "数据诊断", desc: "检查索引和缓存状态", message: "为什么数据加载失败？", requiresKeyword: false },
   { label: "XLS 导入指引", desc: "安全导入个人课表", message: "怎么导入个人课表？", requiresKeyword: false },
-  { label: "组会/自习推荐", desc: "需要课表摘要", message: "帮我推荐连续 2 节自习时间", requiresKeyword: false },
+  { label: "自习时间推荐", desc: "需要课表摘要", message: "帮我推荐连续 2 节自习时间", requiresKeyword: false },
 ];
 
 const TABBAR_PENDING_QUERY = {
@@ -50,7 +50,7 @@ const TOOL_LABELS = {
   diagnose_data_status: "数据诊断",
   explain_personal_import: "导入指引",
   recommend_meeting_time: "时间推荐",
-  clarify_missing_slot: "缺槽追问",
+  clarify_missing_slot: "追问",
   safety_guard: "安全拦截",
 };
 
@@ -71,6 +71,20 @@ function timeText() {
   return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
+function decodeQuery(value) {
+  try {
+    return decodeURIComponent(String(value || ""));
+  } catch (error) {
+    return String(value || "");
+  }
+}
+
+function safeText(value, maxLength) {
+  const text = aiAssistantService.redactSensitiveText(value || "");
+  const limit = Number(maxLength || 0);
+  return limit > 0 ? text.slice(0, limit) : text;
+}
+
 function mapProviderLabel(provider) {
   const normalized = String(provider || "unknown").toLowerCase();
   if (PROVIDER_LABELS[normalized]) return PROVIDER_LABELS[normalized];
@@ -89,67 +103,172 @@ function mapSafetyModeLabel(mode) {
 }
 
 function mapToolName(name) {
-  const normalized = String(name || "").toLowerCase();
-  return TOOL_LABELS[normalized] || "校园工具";
+  return TOOL_LABELS[String(name || "").toLowerCase()] || "校园工具";
 }
 
 function mapCardTypeLabel(type) {
-  const normalized = String(type || "generic").toLowerCase();
-  return CARD_TYPE_LABELS[normalized] || "结果";
+  return CARD_TYPE_LABELS[String(type || "generic").toLowerCase()] || "结果";
 }
 
-function mapToolStatusLabel(status) {
+function statusText(status) {
   const normalized = String(status || "").toLowerCase();
-  if (normalized === "success" || normalized === "ok" || normalized === "done") return "已完成";
-  if (normalized === "failed" || normalized === "error") return "失败";
-  if (normalized === "skipped") return "已跳过";
+  if (["success", "ok", "done"].includes(normalized)) return "完成";
+  if (["failed", "error"].includes(normalized)) return "失败";
+  if (normalized === "skipped") return "跳过";
   if (normalized === "running") return "调用中";
   return "已调用";
 }
 
-function normalizeStatusClass(status) {
+function statusClass(status) {
   const normalized = String(status || "").toLowerCase();
-  if (normalized === "failed" || normalized === "error") return "failed";
+  if (["failed", "error"].includes(normalized)) return "failed";
   if (normalized === "skipped") return "skipped";
   if (normalized === "running") return "running";
   return "success";
 }
 
-function normalizeTypeClass(type) {
+function typeClass(type) {
   return String(type || "generic").toLowerCase().replace(/_/g, "-").replace(/[^a-z0-9-]/g, "") || "generic";
 }
 
-function normalizeToolCall(tool) {
-  const source = tool || {};
-  const rawName = source.name || source.tool || source.type || "";
-  const label = mapToolName(rawName);
-  const toolText = label === "校园工具" || label.indexOf("工具") >= 0 ? label : `${label}工具`;
-  return Object.assign({}, source, {
-    displayName: label,
-    displayStatus: mapToolStatusLabel(source.status),
-    displayText: `已调用：${toolText}`,
-    statusClass: normalizeStatusClass(source.status),
-  });
+function normalizeSafety(safety) {
+  const source = safety || {};
+  const provider = source.provider || source.lastProvider || source.providerName || "unknown";
+  const mode = source.mode || source.safetyMode || "tool-grounded";
+  let providerLabel = mapProviderLabel(provider);
+  if (source.externalProviderUsed === false && /provider fallback|NOT_CONFIGURED|INVALID_PROVIDER|fallback to mock/i.test(source.fallbackReason || "")) {
+    providerLabel = "已降级";
+  }
+  const modeLabel = mapSafetyModeLabel(mode);
+  return {
+    provider,
+    mode,
+    providerLabel,
+    modeLabel,
+    text: `${providerLabel} · ${modeLabel}`,
+  };
 }
 
-function normalizeCardItem(item) {
+function normalizeMetrics(metrics) {
+  if (!metrics || typeof metrics !== "object" || Array.isArray(metrics)) return null;
+  const latencyMs = Number(metrics.latencyMs);
+  return {
+    latencyMs: Number.isFinite(latencyMs) ? Math.max(0, Math.round(latencyMs)) : 0,
+    intentName: metrics.intentName || "",
+    externalProviderUsed: metrics.externalProviderUsed === true,
+  };
+}
+
+function normalizeToolCall(tool, index) {
+  const source = tool || {};
+  const label = mapToolName(source.name || source.tool || source.type || "");
+  const stateText = statusText(source.status);
+  return {
+    key: `${label}-${stateText}-${index}`,
+    displayName: label,
+    displayStatus: stateText,
+    displayText: `${label} · ${stateText}`,
+    statusClass: statusClass(source.status),
+  };
+}
+
+function normalizeCardItem(item, index) {
   const source = item || {};
   return {
-    title: aiAssistantService.redactSensitiveText(source.title || source.name || ""),
-    subtitle: aiAssistantService.redactSensitiveText(source.subtitle || source.desc || source.detail || ""),
-    value: aiAssistantService.redactSensitiveText(source.value || source.time || source.status || ""),
+    key: `${safeText(source.title || source.name || "item", 60)}-${index}`,
+    title: safeText(source.title || source.name || "", 80),
+    subtitle: safeText(source.subtitle || source.desc || source.detail || "", 140),
+    value: safeText(source.value || source.time || source.status || "", 60),
   };
 }
 
 function normalizeCardAction(action, index) {
   const source = action || {};
   return {
-    label: aiAssistantService.redactSensitiveText(source.label || "查看"),
+    label: safeText(source.label || "查看", 30),
     type: source.type || "noop",
     url: source.url || "",
     payload: source.payload && typeof source.payload === "object" && !Array.isArray(source.payload) ? source.payload : {},
     originalIndex: index,
   };
+}
+
+function cardKey(messageId, card, index) {
+  return `${messageId}:${index}:${safeText(card && (card.title || card.type) || "card", 40)}`;
+}
+
+function normalizeCard(card, messageId, index, expandedCards) {
+  const source = card || {};
+  const items = Array.isArray(source.items) ? source.items.map(normalizeCardItem) : [];
+  const actions = Array.isArray(source.actions) ? source.actions.map(normalizeCardAction) : [];
+  const key = cardKey(messageId, source, index);
+  const expanded = Boolean(expandedCards && expandedCards[key]);
+  const visibleLimit = expanded ? 12 : 5;
+  const visibleItems = items.slice(0, visibleLimit);
+  const hiddenItemCount = Math.max(0, items.length - visibleItems.length);
+  const type = String(source.type || "generic");
+  const primaryActions = actions.slice(0, 2);
+  return Object.assign({}, source, {
+    key,
+    title: safeText(source.title || "结果", 80),
+    subtitle: safeText(source.subtitle || "", 140),
+    badges: Array.isArray(source.badges) ? source.badges.slice(0, 5).map((item) => safeText(item, 36)) : [],
+    items,
+    actions,
+    typeLabel: mapCardTypeLabel(type),
+    typeClass: typeClass(type),
+    visibleItems,
+    hiddenItemCount,
+    overflowText: expanded ? "收起" : `展开 ${items.length - visibleItems.length} 条`,
+    overflowExpanded: expanded,
+    primaryActions,
+    secondaryActions: actions.slice(2),
+    actionLayoutClass: primaryActions.length === 1 ? "one-action" : "two-actions",
+  });
+}
+
+function normalizeMessageForDisplay(message, expandedCards) {
+  const source = message || {};
+  const id = source.id || `m-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const displaySafety = source.safety ? normalizeSafety(source.safety) : null;
+  const metrics = normalizeMetrics(source.metrics);
+  const displayToolCalls = Array.isArray(source.toolCalls)
+    ? source.toolCalls.slice(0, 6).map(normalizeToolCall)
+    : [];
+  return Object.assign({}, source, {
+    id,
+    role: source.role === "user" ? "user" : "assistant",
+    content: safeText(source.content || "", 1200),
+    cards: Array.isArray(source.cards) ? source.cards : [],
+    displayCards: Array.isArray(source.cards)
+      ? source.cards.slice(0, 5).map((card, index) => normalizeCard(card, id, index, expandedCards))
+      : [],
+    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6).map((item) => safeText(item, 60)) : [],
+    toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls : [],
+    displayToolCalls,
+    safety: source.safety || null,
+    displaySafety,
+    metrics,
+    metricsText: metrics ? `耗时 ${metrics.latencyMs} ms` : "",
+    timeText: source.timeText || timeText(),
+  });
+}
+
+function normalizeMessagesForDisplay(messages, expandedCards) {
+  return Array.isArray(messages) ? messages.map((item) => normalizeMessageForDisplay(item, expandedCards)) : [];
+}
+
+function makeMessage(role, content, patch) {
+  return Object.assign({
+    id: `${role}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+    role,
+    content,
+    cards: [],
+    suggestions: [],
+    toolCalls: [],
+    safety: null,
+    timeText: timeText(),
+  }, patch || {});
 }
 
 function parseActionUrl(url) {
@@ -170,118 +289,15 @@ function parseActionUrl(url) {
   return { path, query, raw: target };
 }
 
-function normalizeCard(card) {
-  const source = card || {};
-  const items = Array.isArray(source.items) ? source.items.map(normalizeCardItem) : [];
-  const actions = Array.isArray(source.actions) ? source.actions.map(normalizeCardAction) : [];
-  const type = String(source.type || "generic");
-  const visibleItems = items.slice(0, 5);
-  const primaryActions = actions.slice(0, 2);
-  const secondaryActions = actions.slice(2);
-  return Object.assign({}, source, {
-    title: aiAssistantService.redactSensitiveText(source.title || "结果"),
-    subtitle: aiAssistantService.redactSensitiveText(source.subtitle || ""),
-    badges: Array.isArray(source.badges) ? source.badges.slice(0, 6).map((item) => aiAssistantService.redactSensitiveText(item)) : [],
-    items,
-    actions,
-    typeLabel: mapCardTypeLabel(type),
-    typeClass: normalizeTypeClass(type),
-    visibleItems,
-    hiddenItemCount: Math.max(0, items.length - visibleItems.length),
-    primaryActions,
-    secondaryActions,
-    actionLayoutClass: primaryActions.length === 1 ? "one-action" : "two-actions",
-  });
-}
-
-function normalizeSafety(safety) {
-  const source = safety || {};
-  const provider = source.provider || source.lastProvider || source.providerName || "unknown";
-  const mode = source.mode || source.safetyMode || "tool-grounded";
-  let providerLabel = mapProviderLabel(provider);
-  if (source.externalProviderUsed === false &&
-    source.fallbackReason &&
-    /provider fallback|NOT_CONFIGURED|INVALID_PROVIDER|fallback to mock/i.test(source.fallbackReason)) {
-    providerLabel = "已降级";
-  }
-  const modeLabel = mapSafetyModeLabel(mode);
+function buildPrivacyState(allowed, expanded, firstTipVisible) {
+  const enabled = allowed === true;
   return {
-    provider,
-    mode,
-    providerLabel,
-    modeLabel,
-    text: `${providerLabel} · ${modeLabel}`,
-  };
-}
-
-function normalizeMetrics(metrics) {
-  const source = metrics && typeof metrics === "object" && !Array.isArray(metrics) ? metrics : null;
-  if (!source) return null;
-  const latencyMs = Number(source.latencyMs);
-  return {
-    latencyMs: Number.isFinite(latencyMs) ? Math.max(0, Math.round(latencyMs)) : 0,
-    intentName: source.intentName || "",
-    externalProviderUsed: source.externalProviderUsed === true,
-  };
-}
-
-function normalizeMessageForDisplay(message) {
-  const source = message || {};
-  const toolCalls = Array.isArray(source.toolCalls) ? source.toolCalls.slice(0, 8) : [];
-  const displayToolCalls = toolCalls.map(normalizeToolCall);
-  const displayCards = Array.isArray(source.cards) ? source.cards.map(normalizeCard) : [];
-  const displaySafety = source.safety ? normalizeSafety(source.safety) : null;
-  const metrics = normalizeMetrics(source.metrics);
-  return Object.assign({}, source, {
-    id: source.id || `m-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    role: source.role === "user" ? "user" : "assistant",
-    content: aiAssistantService.redactSensitiveText(source.content || ""),
-    cards: Array.isArray(source.cards) ? source.cards : [],
-    displayCards,
-    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6) : [],
-    toolCalls,
-    displayToolCalls,
-    toolSummaryText: displayToolCalls.map((item) => item.displayText).join("；"),
-    safety: source.safety || null,
-    displaySafety,
-    metrics,
-    metricsText: metrics ? `耗时 ${metrics.latencyMs} ms` : "",
-    timeText: source.timeText || timeText(),
-  });
-}
-
-function normalizeMessagesForDisplay(messages) {
-  return Array.isArray(messages) ? messages.map(normalizeMessageForDisplay) : [];
-}
-
-function makeMessage(role, content, patch) {
-  return normalizeMessageForDisplay(Object.assign({
-    id: `${role}-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
-    role,
-    content,
-    cards: [],
-    suggestions: [],
-    toolCalls: [],
-    safety: null,
-    timeText: timeText(),
-  }, patch || {}));
-}
-
-function decodeQuery(value) {
-  try {
-    return decodeURIComponent(String(value || ""));
-  } catch (error) {
-    return String(value || "");
-  }
-}
-
-function buildPrivacyState(allowed) {
-  return {
-    allowPersonalContext: allowed === true,
-    privacyStatusText: allowed ? "个人课表摘要：开启" : "个人课表摘要：关闭",
-    privacyCompactClass: allowed ? "enabled" : "disabled",
-    privacyActionText: allowed ? "摘要已开启" : "默认关闭",
-    composerNote: allowed ? "摘要已开启" : "摘要关闭",
+    allowPersonalContext: enabled,
+    privacyStatusText: enabled ? "课表摘要已开启" : "课表摘要默认关闭",
+    privacyCompactClass: enabled ? "enabled" : "disabled",
+    privacyActionText: enabled ? "摘要开启" : "摘要关闭",
+    composerNote: enabled ? "仅发送脱敏课表摘要" : "默认不发送个人课表摘要",
+    privacyActionLabel: firstTipVisible ? "知道了" : (expanded ? "收起" : "说明"),
   };
 }
 
@@ -289,15 +305,8 @@ function resolveProviderState(messages) {
   const list = Array.isArray(messages) ? messages : [];
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const message = list[index];
-    if (message && message.displaySafety) {
-      return {
-        providerLabel: message.displaySafety.providerLabel,
-        providerModeLabel: message.displaySafety.modeLabel,
-        lastProvider: message.displaySafety.provider,
-      };
-    }
-    if (message && message.safety) {
-      const safety = normalizeSafety(message.safety);
+    const safety = message && (message.displaySafety || (message.safety && normalizeSafety(message.safety)));
+    if (safety) {
       return {
         providerLabel: safety.providerLabel,
         providerModeLabel: safety.modeLabel,
@@ -312,11 +321,22 @@ function resolveProviderState(messages) {
   };
 }
 
+function buildHeroChips(state) {
+  const chips = [];
+  if (state.demoMode) chips.push({ id: "demo", label: "演示模式", className: "demo-chip" });
+  chips.push({ id: "provider", label: state.providerLabel || "AI", className: "provider-status-chip" });
+  chips.push({ id: "mode", label: state.providerModeLabel || "工具验证", className: "grounded-chip" });
+  chips.push({ id: "privacy", label: state.privacyActionText || "摘要关闭", className: "data-source-chip" });
+  chips.push({ id: "ability", label: "查课 / 空教室 / 今日安排 / 数据诊断", className: "ability-chip" });
+  return chips;
+}
+
 Page({
   data: {
     quickQuestions: QUICK_QUESTIONS,
     taskPanelItems: TASK_PANEL_ITEMS,
     messages: [],
+    expandedCards: {},
     inputValue: "",
     inputFocus: false,
     sending: false,
@@ -325,17 +345,19 @@ Page({
     showPrivacyTip: false,
     privacyExpanded: false,
     privacyText: PRIVACY_SUMMARY_TEXT,
-    privacyStatusText: "个人课表摘要：关闭",
+    privacyStatusText: "课表摘要默认关闭",
     privacyCompactClass: "disabled",
-    privacyActionText: "默认关闭",
+    privacyActionText: "摘要关闭",
+    privacyActionLabel: "说明",
     allowPersonalContext: false,
     providerLabel: "AI",
     providerModeLabel: "工具验证",
     lastProvider: "unknown",
+    heroChips: [],
     hasHeroLogo: true,
     demoMode: "",
     scrollTop: 0,
-    composerNote: "摘要关闭",
+    composerNote: "默认不发送个人课表摘要",
     welcome: {
       title: "小佛 AI 校园管家",
       desc: "基于课表、空教室和全校索引处理校园任务，结果以教务数据为准。",
@@ -347,48 +369,52 @@ Page({
     const allowPersonalContext = aiAssistantService.isPersonalContextAllowed();
     const demoMode = demoData.normalizeDemoMode(options && options.demo);
     const sourceMessages = demoMode ? demoData.getDemoMessages(demoMode) : aiAssistantService.getAiHistory();
-    const messages = normalizeMessagesForDisplay(sourceMessages);
-    const question = decodeQuery(options && (options.q || options.question || ""));
+    const messages = normalizeMessagesForDisplay(sourceMessages, this.data.expandedCards);
+    const providerState = resolveProviderState(messages);
+    const privacyState = buildPrivacyState(allowPersonalContext, showPrivacyTip, showPrivacyTip);
     const nextState = Object.assign({
       messages,
       showPrivacyTip,
       privacyExpanded: showPrivacyTip,
       demoMode,
-    }, buildPrivacyState(allowPersonalContext), resolveProviderState(messages));
+    }, privacyState, providerState);
+    nextState.heroChips = buildHeroChips(nextState);
 
-    this.setData(nextState, () => this.scrollToBottom());
+    this.setData(Object.assign(nextState, { scrollTop: Date.now() }));
 
+    const question = decodeQuery(options && (options.q || options.question || ""));
     if (!demoMode && question) {
-      setTimeout(() => this.sendMessage(question), 300);
+      setTimeout(() => this.sendMessage(question), 260);
     }
   },
 
   onShow() {
-    this.setData(buildPrivacyState(aiAssistantService.isPersonalContextAllowed()));
+    const privacyState = buildPrivacyState(
+      aiAssistantService.isPersonalContextAllowed(),
+      this.data.privacyExpanded,
+      this.data.showPrivacyTip
+    );
+    const nextState = Object.assign({}, privacyState, resolveProviderState(this.data.messages));
+    nextState.heroChips = buildHeroChips(Object.assign({}, this.data, nextState));
+    this.setData(nextState);
   },
 
   onInput(event) {
-    this.setData({
-      inputValue: event.detail.value,
-      inputFocus: false,
-    });
+    this.setData({ inputValue: event.detail.value });
   },
 
   onQuickQuestion(event) {
     const question = event.currentTarget.dataset.question;
     if (!question) return;
     if (question === "更多任务") {
-      this.setData({
-        showTaskPanel: !this.data.showTaskPanel,
-      });
+      this.setData({ showTaskPanel: !this.data.showTaskPanel });
       return;
     }
     this.sendMessage(question);
   },
 
   onTaskPanelItemTap(event) {
-    const index = Number(event.currentTarget.dataset.index);
-    const task = this.data.taskPanelItems[index];
+    const task = this.data.taskPanelItems[Number(event.currentTarget.dataset.index)];
     if (!task) return;
     if (task.requiresKeyword) {
       this.setData({
@@ -396,22 +422,16 @@ Page({
         inputFocus: true,
         showTaskPanel: false,
       });
-      wx.showToast({
-        title: "请替换关键词后发送",
-        icon: "none",
-      });
+      wx.showToast({ title: "请替换关键词后发送", icon: "none" });
       return;
     }
-    this.setData({
-      showTaskPanel: false,
-    });
+    this.setData({ showTaskPanel: false });
     this.sendMessage(task.message || task.label);
   },
 
   onSuggestionTap(event) {
     const suggestion = event.currentTarget.dataset.suggestion;
-    if (!suggestion) return;
-    this.sendMessage(suggestion);
+    if (suggestion) this.sendMessage(suggestion);
   },
 
   onSubmit() {
@@ -419,11 +439,14 @@ Page({
   },
 
   setMessages(nextMessages, patch, options) {
-    const messages = normalizeMessagesForDisplay(nextMessages);
+    const messages = normalizeMessagesForDisplay(nextMessages, this.data.expandedCards);
+    const providerState = resolveProviderState(messages);
     const nextState = Object.assign({
       messages,
-    }, resolveProviderState(messages), patch || {});
-    this.setData(nextState, () => this.scrollToBottom());
+      scrollTop: Date.now(),
+    }, providerState, patch || {});
+    nextState.heroChips = buildHeroChips(Object.assign({}, this.data, nextState));
+    this.setData(nextState);
     if (options && options.save) {
       aiAssistantService.saveAiHistory(messages);
     }
@@ -456,7 +479,7 @@ Page({
           sending: false,
           slowRequest: false,
         }, { save: false });
-      }, 180);
+      }, 160);
       return;
     }
 
@@ -504,33 +527,32 @@ Page({
       });
   },
 
-  scrollToBottom() {
-    this.setData({
-      scrollTop: Date.now(),
-    });
-  },
-
   dismissPrivacyTip() {
     wx.setStorageSync(PRIVACY_TIP_KEY, true);
-    this.setData({
+    const privacyState = buildPrivacyState(this.data.allowPersonalContext, false, false);
+    const nextState = Object.assign({
       showPrivacyTip: false,
       privacyExpanded: false,
-    });
+    }, privacyState);
+    nextState.heroChips = buildHeroChips(Object.assign({}, this.data, nextState));
+    this.setData(nextState);
   },
 
-  expandPrivacyTip() {
-    this.setData({
-      privacyExpanded: true,
-    });
+  togglePrivacyTip() {
+    const expanded = !this.data.privacyExpanded;
+    const privacyState = buildPrivacyState(this.data.allowPersonalContext, expanded, this.data.showPrivacyTip);
+    this.setData(Object.assign({
+      privacyExpanded: expanded,
+    }, privacyState));
   },
 
   applyPersonalContextAllowed(allowed) {
     aiAssistantService.setPersonalContextAllowed(allowed);
-    this.setData(buildPrivacyState(allowed));
-    wx.showToast({
-      title: allowed ? "已允许摘要分析" : "已关闭摘要分析",
-      icon: "none",
-    });
+    const privacyState = buildPrivacyState(allowed, this.data.privacyExpanded, this.data.showPrivacyTip);
+    const nextState = Object.assign({}, privacyState);
+    nextState.heroChips = buildHeroChips(Object.assign({}, this.data, nextState));
+    this.setData(nextState);
+    wx.showToast({ title: allowed ? "已允许摘要分析" : "已关闭摘要分析", icon: "none" });
   },
 
   onPersonalContextToggle(event) {
@@ -539,10 +561,9 @@ Page({
       this.applyPersonalContextAllowed(false);
       return;
     }
-
     wx.showModal({
       title: "允许分析本机课表摘要？",
-      content: "仅发送课程名、教师、教室、星期、节次、教学周，不发送学号、姓名、密码或原始文件。",
+      content: PRIVACY_SUMMARY_TEXT,
       confirmText: "允许",
       cancelText: "取消",
       success: (res) => {
@@ -550,25 +571,20 @@ Page({
           this.applyPersonalContextAllowed(true);
           return;
         }
-        this.setData(buildPrivacyState(false));
+        this.applyPersonalContextAllowed(false);
       },
-      fail: () => {
-        this.setData(buildPrivacyState(false));
-      },
+      fail: () => this.applyPersonalContextAllowed(false),
     });
   },
 
   onHeroLogoError() {
-    if (!this.data.hasHeroLogo) return;
-    this.setData({
-      hasHeroLogo: false,
-    });
+    if (this.data.hasHeroLogo) this.setData({ hasHeroLogo: false });
   },
 
   clearHistory() {
     wx.showModal({
       title: "清空对话",
-      content: "仅会清空本机保存的最近 AI 对话，不影响课表数据。",
+      content: "仅清空本机保存的最近 AI 对话，不影响课表数据。",
       confirmText: "清空",
       success: (res) => {
         if (!res.confirm) return;
@@ -578,10 +594,16 @@ Page({
     });
   },
 
-  onCardOverflow() {
-    wx.showToast({
-      title: "可用卡片按钮查看详情",
-      icon: "none",
+  onCardOverflow(event) {
+    const key = event.currentTarget.dataset.cardKey;
+    if (!key) return;
+    const expandedCards = Object.assign({}, this.data.expandedCards);
+    expandedCards[key] = !expandedCards[key];
+    const messages = normalizeMessagesForDisplay(this.data.messages, expandedCards);
+    this.setData({
+      expandedCards,
+      messages,
+      scrollTop: Date.now(),
     });
   },
 
@@ -590,23 +612,18 @@ Page({
     const cardIndex = Number(event.currentTarget.dataset.cardIndex);
     const actionIndex = Number(event.currentTarget.dataset.actionIndex);
     const message = this.data.messages[messageIndex] || {};
-    const card = ((message.displayCards || message.cards || []))[cardIndex] || {};
+    const card = (message.displayCards || [])[cardIndex] || {};
     const action = (card.actions || [])[actionIndex] || {};
     const type = action.type || "noop";
 
     if (type === "retry") {
-      const retryMessage = action.payload && action.payload.message || this.findLastUserMessage();
-      this.sendMessage(retryMessage);
+      this.sendMessage(action.payload && action.payload.message || this.findLastUserMessage());
       return;
     }
-
     if (type === "copy") {
-      wx.setClipboardData({
-        data: action.payload && action.payload.text || action.url || card.title || "",
-      });
+      wx.setClipboardData({ data: action.payload && action.payload.text || action.url || card.title || "" });
       return;
     }
-
     if ((type === "navigate" || type === "bind") && action.url) {
       this.navigateByUrl(action.url);
     }
@@ -621,29 +638,23 @@ Page({
   },
 
   navigateByUrl(url) {
-    const target = String(url || "");
-    if (!target) return;
-    const parsed = parseActionUrl(target);
+    const parsed = parseActionUrl(url);
+    if (!parsed.path) return;
     const storageKey = TABBAR_PENDING_QUERY[parsed.path];
     if (storageKey) {
       if (parsed.query && Object.keys(parsed.query).length) {
         try {
-          wx.setStorageSync(storageKey, parsed.query);
+          wx.setStorageSync(storageKey, Object.assign({}, parsed.query, { fromAiAssistant: true, ts: Date.now() }));
         } catch (error) {
-          // ignore storage failure; switchTab still opens the target page.
+          // switchTab still opens the target page.
         }
       }
       wx.switchTab({ url: parsed.path });
       return;
     }
     wx.navigateTo({
-      url: target,
-      fail: () => {
-        wx.showToast({
-          title: "暂时无法打开该页面",
-          icon: "none",
-        });
-      },
+      url: parsed.raw,
+      fail: () => wx.showToast({ title: "暂时无法打开该页面", icon: "none" }),
     });
   },
 });

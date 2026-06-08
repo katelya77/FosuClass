@@ -403,11 +403,12 @@ function explainPersonalImport(input = {}) {
   return {
     success: true,
     mode,
-    title: "个人课表安全导入说明",
+    title: "个人课表 XLS 导入说明",
     steps: [
-      "优先使用 100 网导出的 XLS 文件导入，AI 不需要也不会接收学号密码。",
-      "导入时仅解析课程名、教师、教室、星期、节次和教学周等最小必要字段。",
-      "如果必须账号同步，请在个人同步页完成，不要把密码输入到 AI 聊天框。",
+      "只保留 XLS 文件导入方案，AI 和小程序聊天框都不接收学号、密码、Cookie 或 token。",
+      "从 100 网打印/导出的 XLS 课表会自动解析表头中的学期、班级、学院、打印日期和课程列。",
+      "导入后写入本机当前课表缓存，AI 仅在你开启摘要时读取课程名、教师、教室、星期、节次和教学周。",
+      "新学期或新版课表重新导入即可刷新本地课程索引，今日安排、空闲时间推荐和后端工具链会自动使用最新课表摘要。",
     ],
     actionUrl: "/pages/personal-sync/personal-sync?tab=xls",
   };
@@ -595,9 +596,10 @@ function runToolChainForIntent(intent, message, context) {
 
   if (intent.name === "search_school_index" && firstResult && firstResult.success !== false && isHighConfidenceIndexHit(firstResult)) {
     const item = firstResult.items[0] || {};
+    const detailId = item.id || item.scheduleId || item.teacherId || item.classroomId || item.courseId || item.classId || item.name || item.displayName || "";
     const detailResult = executeTool("get_schedule_detail", {
       type: firstResult.type,
-      id: item.id,
+      id: detailId,
       releaseVersion: firstResult.releaseVersion,
       term: firstResult.term || context.term,
       message,

@@ -19,11 +19,11 @@
     </view>
 
     <view class="hero-meta-row">
-      <view wx:if="{{demoMode}}" class="hero-status-chip demo-chip">演示模式</view>
-      <view class="hero-status-chip provider-status-chip">{{providerLabel}}</view>
-      <view class="hero-status-chip grounded-chip">{{providerModeLabel}}</view>
-      <view class="hero-status-chip data-source-chip">{{privacyActionText}}</view>
-      <view class="hero-status-chip ability-chip">可查课 / 找空教室 / 今日安排 / 数据诊断</view>
+      <view
+        wx:for="{{heroChips}}"
+        wx:key="id"
+        class="hero-status-chip {{item.className}}"
+      >{{item.label}}</view>
     </view>
   </view>
 
@@ -42,8 +42,8 @@
     </view>
     <view class="privacy-footer">
       <text>{{privacyStatusText}}</text>
-      <button wx:if="{{showPrivacyTip}}" class="privacy-btn" bindtap="dismissPrivacyTip">知道了</button>
-      <button wx:else class="privacy-btn secondary" bindtap="dismissPrivacyTip">收起</button>
+      <button wx:if="{{showPrivacyTip}}" class="privacy-btn" bindtap="dismissPrivacyTip">{{privacyActionLabel}}</button>
+      <button wx:else class="privacy-btn secondary" bindtap="togglePrivacyTip">{{privacyActionLabel}}</button>
     </view>
   </view>
 
@@ -53,7 +53,7 @@
       <text class="privacy-compact-text">{{privacyStatusText}}</text>
     </view>
     <view class="privacy-compact-actions">
-      <button class="privacy-link" bindtap="expandPrivacyTip">说明</button>
+      <button class="privacy-link" bindtap="togglePrivacyTip">说明</button>
       <switch
         class="privacy-switch compact"
         checked="{{allowPersonalContext}}"
@@ -130,7 +130,7 @@
           <view
             wx:for="{{message.displayToolCalls}}"
             wx:for-item="tool"
-            wx:key="displayText"
+            wx:key="key"
             class="tool-chip {{tool.statusClass}}"
           >{{tool.displayText}}</view>
         </view>
@@ -140,7 +140,7 @@
             wx:for="{{message.displayCards}}"
             wx:for-item="card"
             wx:for-index="cardIndex"
-            wx:key="title"
+            wx:key="key"
             class="ai-result-card card card-type-{{card.typeClass}}"
           >
             <view class="card-header-row">
@@ -152,18 +152,14 @@
             </view>
 
             <view class="badge-row" wx:if="{{card.badges.length}}">
-              <text
-                wx:for="{{card.badges}}"
-                wx:key="*this"
-                class="badge"
-              >{{item}}</text>
+              <text wx:for="{{card.badges}}" wx:key="*this" class="badge">{{item}}</text>
             </view>
 
             <view class="card-items" wx:if="{{card.visibleItems.length}}">
               <view
                 wx:for="{{card.visibleItems}}"
                 wx:for-item="cardItem"
-                wx:key="title"
+                wx:key="key"
                 class="card-item"
               >
                 <view class="item-main">
@@ -172,11 +168,12 @@
                 </view>
                 <view class="item-value" wx:if="{{cardItem.value}}">{{cardItem.value}}</view>
               </view>
-              <view
-                class="card-overflow"
-                wx:if="{{card.hiddenItemCount}}"
+              <button
+                class="card-overflow {{card.overflowExpanded ? 'expanded' : ''}}"
+                wx:if="{{card.hiddenItemCount || card.overflowExpanded}}"
+                data-card-key="{{card.key}}"
                 bindtap="onCardOverflow"
-              >还有 {{card.hiddenItemCount}} 条，点击查看详情</view>
+              >{{card.overflowText}}</button>
             </view>
 
             <view class="card-actions {{card.actionLayoutClass}}" wx:if="{{card.primaryActions.length}}">
@@ -221,7 +218,7 @@
       </view>
     </view>
 
-    <view class="slow-tip" wx:if="{{slowRequest}}">网络较慢，正在继续等待 AI 校园管家返回结果...</view>
+    <view class="slow-tip" wx:if="{{slowRequest}}">网络较慢，正在继续等待小佛返回结果...</view>
     <view class="sending-row" wx:if="{{sending}}">
       <view class="sending-dot"></view>
       <view class="sending-text">正在调用校园工具并生成卡片</view>
@@ -230,15 +227,17 @@
 
   <view class="composer">
     <view class="composer-inner">
-      <input
+      <textarea
         class="composer-input"
         value="{{inputValue}}"
         placeholder="输入校园任务，不填密码学号"
         placeholder-class="composer-placeholder"
-        confirm-type="send"
+        auto-height="{{true}}"
+        maxlength="600"
+        fixed="{{true}}"
+        cursor-spacing="16"
         focus="{{inputFocus}}"
         bindinput="onInput"
-        bindconfirm="onSubmit"
         disabled="{{sending}}"
       />
       <button class="send-btn {{sending || !inputValue ? 'disabled' : ''}}" bindtap="onSubmit" disabled="{{sending || !inputValue}}">

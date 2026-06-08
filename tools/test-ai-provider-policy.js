@@ -15,7 +15,17 @@ function run() {
   assert.strictEqual(
     agentService.shouldUseExternalProvider({ name: "search_school_index", slots: { q: "" } }, [{ name: "search_school_index", result: { q: "", items: [] } }], "auto"),
     false,
-    "empty search should not call external provider"
+    "missing keyword should not call external provider"
+  );
+  assert.strictEqual(
+    agentService.shouldUseExternalProvider({ name: "search_school_index", slots: { q: "不存在老师" } }, [{ name: "search_school_index", result: { q: "不存在老师", items: [] } }], "auto"),
+    true,
+    "empty index result with a keyword should try external provider in auto policy"
+  );
+  assert.strictEqual(
+    agentService.shouldUseExternalProvider({ name: "diagnose_data_status" }, [{ name: "diagnose_data_status", result: { success: true } }], "always"),
+    false,
+    "local diagnosis should use local template even in always policy"
   );
   assert.strictEqual(
     agentService.shouldUseExternalProvider({ name: "recommend_meeting_time" }, [{ name: "recommend_meeting_time", result: { candidates: [{ weekday: 1 }] } }], "auto"),
