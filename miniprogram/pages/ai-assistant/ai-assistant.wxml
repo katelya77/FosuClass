@@ -1,41 +1,64 @@
 <view class="page ai-page">
   <view class="assistant-hero card">
-    <view class="hero-main">
-      <image
-        wx:if="{{hasHeroLogo}}"
-        class="hero-logo"
-        src="/assets/icons/ai-campus-butler.png"
-        mode="aspectFit"
-        binderror="onHeroLogoError"
-      />
-      <view wx:else class="hero-mark">AI</view>
+    <view class="hero-top">
+      <view class="hero-logo-wrap">
+        <image
+          wx:if="{{hasHeroLogo}}"
+          class="hero-logo"
+          src="/assets/icons/ai-campus-butler.png"
+          mode="aspectFit"
+          binderror="onHeroLogoError"
+        />
+        <view wx:else class="hero-mark">AI</view>
+      </view>
       <view class="hero-copy">
         <view class="hero-title">{{welcome.title}}</view>
         <view class="hero-desc">{{welcome.desc}}</view>
       </view>
+      <button class="hero-clear-mini" bindtap="clearHistory">清空</button>
     </view>
-    <view class="hero-actions">
-      <view class="provider-pill">tool-grounded</view>
-      <button class="history-clear" bindtap="clearHistory">清空</button>
+
+    <view class="hero-meta-row">
+      <view class="hero-status-chip provider-status-chip">{{providerLabel}}</view>
+      <view class="hero-status-chip grounded-chip">{{providerModeLabel}}</view>
+      <view class="hero-status-chip data-source-chip">{{privacyActionText}}</view>
+      <view class="hero-status-chip ability-chip">可查课 / 找空教室 / 今日安排 / 数据诊断</view>
     </view>
   </view>
 
-  <view class="privacy-tip card">
+  <view class="privacy-tip privacy-tip-full card" wx:if="{{privacyExpanded}}">
     <view class="privacy-head">
-      <view>
+      <view class="privacy-copy">
         <view class="privacy-title">隐私与课表摘要</view>
-        <view class="privacy-desc">仅发送课程名、教师、教室、星期、节次、教学周，不发送学号、姓名、密码或原始文件。</view>
+        <view class="privacy-desc">{{privacyText}}</view>
       </view>
       <switch
         class="privacy-switch"
         checked="{{allowPersonalContext}}"
-        color="#c62828"
+        color="#2f855a"
         bindchange="onPersonalContextToggle"
       />
     </view>
     <view class="privacy-footer">
-      <text>{{allowPersonalContext ? "已允许 AI 分析本机课表摘要" : "默认不发送个人课表摘要"}}</text>
+      <text>{{privacyStatusText}}</text>
       <button wx:if="{{showPrivacyTip}}" class="privacy-btn" bindtap="dismissPrivacyTip">知道了</button>
+      <button wx:else class="privacy-btn secondary" bindtap="dismissPrivacyTip">收起</button>
+    </view>
+  </view>
+
+  <view class="privacy-compact {{privacyCompactClass}}" wx:else>
+    <view class="privacy-compact-main">
+      <text class="privacy-dot"></text>
+      <text class="privacy-compact-text">{{privacyStatusText}}</text>
+    </view>
+    <view class="privacy-compact-actions">
+      <button class="privacy-link" bindtap="expandPrivacyTip">说明</button>
+      <switch
+        class="privacy-switch compact"
+        checked="{{allowPersonalContext}}"
+        color="#2f855a"
+        bindchange="onPersonalContextToggle"
+      />
     </view>
   </view>
 
@@ -78,33 +101,33 @@
           <view class="message-content">{{message.content}}</view>
           <view class="message-meta">
             <text>{{message.timeText}}</text>
-            <text wx:if="{{message.safety && message.safety.provider}}"> · {{message.safety.provider}} · {{message.safety.mode}}</text>
+            <text wx:if="{{message.displaySafety && message.displaySafety.text}}"> · {{message.displaySafety.text}}</text>
           </view>
         </view>
 
-        <view class="tool-strip" wx:if="{{message.toolCalls.length}}">
+        <view class="tool-strip" wx:if="{{message.displayToolCalls.length}}">
           <view
-            wx:for="{{message.toolCalls}}"
+            wx:for="{{message.displayToolCalls}}"
             wx:for-item="tool"
-            wx:key="name"
-            class="tool-chip {{tool.status}}"
-          >{{tool.name}} · {{tool.status}}</view>
+            wx:key="displayText"
+            class="tool-chip {{tool.statusClass}}"
+          >{{tool.displayText}}</view>
         </view>
 
-        <view class="ai-card-list" wx:if="{{message.cards.length}}">
+        <view class="ai-card-list" wx:if="{{message.displayCards.length}}">
           <view
-            wx:for="{{message.cards}}"
+            wx:for="{{message.displayCards}}"
             wx:for-item="card"
             wx:for-index="cardIndex"
             wx:key="title"
-            class="ai-result-card card card-type-{{card.type}}"
+            class="ai-result-card card card-type-{{card.typeClass}}"
           >
             <view class="card-header-row">
               <view class="card-title-block">
                 <view class="card-title">{{card.title}}</view>
-                <view class="card-subtitle">{{card.subtitle}}</view>
+                <view class="card-subtitle" wx:if="{{card.subtitle}}">{{card.subtitle}}</view>
               </view>
-              <view class="card-type">{{card.type}}</view>
+              <view class="card-type">{{card.typeLabel}}</view>
             </view>
 
             <view class="badge-row" wx:if="{{card.badges.length}}">
@@ -115,34 +138,53 @@
               >{{item}}</text>
             </view>
 
-            <view class="card-items" wx:if="{{card.items.length}}">
+            <view class="card-items" wx:if="{{card.visibleItems.length}}">
               <view
-                wx:for="{{card.items}}"
+                wx:for="{{card.visibleItems}}"
                 wx:for-item="cardItem"
                 wx:key="title"
                 class="card-item"
               >
                 <view class="item-main">
                   <view class="item-title">{{cardItem.title}}</view>
-                  <view class="item-subtitle">{{cardItem.subtitle}}</view>
+                  <view class="item-subtitle" wx:if="{{cardItem.subtitle}}">{{cardItem.subtitle}}</view>
                 </view>
-                <view class="item-value">{{cardItem.value}}</view>
+                <view class="item-value" wx:if="{{cardItem.value}}">{{cardItem.value}}</view>
               </view>
+              <view
+                class="card-overflow"
+                wx:if="{{card.hiddenItemCount}}"
+                bindtap="onCardOverflow"
+              >还有 {{card.hiddenItemCount}} 条，点击查看详情</view>
             </view>
 
-            <view class="card-actions" wx:if="{{card.actions.length}}">
+            <view class="card-actions {{card.actionLayoutClass}}" wx:if="{{card.primaryActions.length}}">
               <button
-                wx:for="{{card.actions}}"
+                wx:for="{{card.primaryActions}}"
                 wx:for-item="action"
-                wx:for-index="actionIndex"
                 wx:key="label"
-                class="card-action"
+                class="card-action primary"
                 data-message-index="{{messageIndex}}"
                 data-card-index="{{cardIndex}}"
-                data-action-index="{{actionIndex}}"
+                data-action-index="{{action.originalIndex}}"
                 bindtap="onCardAction"
               >{{action.label}}</button>
             </view>
+
+            <view class="secondary-action-row" wx:if="{{card.secondaryActions.length}}">
+              <button
+                wx:for="{{card.secondaryActions}}"
+                wx:for-item="action"
+                wx:key="label"
+                class="secondary-action"
+                data-message-index="{{messageIndex}}"
+                data-card-index="{{cardIndex}}"
+                data-action-index="{{action.originalIndex}}"
+                bindtap="onCardAction"
+              >{{action.label}}</button>
+            </view>
+
+            <view class="card-disclaimer">仅供参考，以教务数据为准</view>
           </view>
         </view>
 
@@ -170,7 +212,7 @@
       <input
         class="composer-input"
         value="{{inputValue}}"
-        placeholder="输入校园任务，不要输入密码或学号"
+        placeholder="输入校园任务，不填密码学号"
         placeholder-class="composer-placeholder"
         confirm-type="send"
         bindinput="onInput"
@@ -181,6 +223,6 @@
         {{sending ? "发送中" : "发送"}}
       </button>
     </view>
-    <view class="composer-note">{{allowPersonalContext ? "本轮可带最小课表摘要" : "个人课表摘要关闭"}}</view>
+    <view class="composer-note">{{composerNote}}</view>
   </view>
 </view>

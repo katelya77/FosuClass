@@ -10,6 +10,8 @@ const scripts = [
   "test:ai-action-safety",
   "test:coze-provider-config",
   "test:ai-logo-entry",
+  "test:ai-assistant-ui-layout",
+  "test:ai-assistant-demo-data",
   "test:miniprogram-ai-page-entry",
   "test:miniprogram-build-entry",
   "test:wxss-selector-sanity",

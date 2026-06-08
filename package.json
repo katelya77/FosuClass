@@ -282,6 +282,8 @@
     "test:ai-action-safety": "node tools/test-ai-action-safety.js",
     "test:coze-provider-config": "node tools/test-coze-provider-config.js",
     "test:ai-logo-entry": "node tools/test-ai-logo-entry.js",
+    "test:ai-assistant-ui-layout": "node tools/test-ai-assistant-ui-layout.js",
+    "test:ai-assistant-demo-data": "node tools/test-ai-assistant-demo-data.js",
     "test:ai-competition": "node tools/run-ai-competition-checks.js",
     "verify:ai-provider": "node server/scripts/verify-ai-provider.js",
     "verify:deploy-ai": "node server/scripts/verify-ai-provider.js",
