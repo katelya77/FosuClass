@@ -23,6 +23,7 @@ AI_TEMPERATURE=0.1
 AI_THINKING_ENABLED=false
 AI_REASONING_EFFORT=medium
 AI_PROVIDER_JSON_REPAIR=true
+DEEPSEEK_STRICT_JSON_MODE=false
 AI_MAX_CONTEXT_COURSES=80
 AI_LOG_PROMPTS=false
 AI_ALLOW_PERSONAL_CONTEXT=false
@@ -50,14 +51,24 @@ DeepSeek key 读取优先级：
 
 课程事实只能来自 `toolResults`，Provider 不允许凭空补课表、教室占用或个人安排。
 
-请求默认包含：
+`project_qa` / `conversational_help` 默认使用普通 text 模式，更适合项目说明、使用引导和话术解释，避免部分模型在 `response_format=json_object` 下返回 `provider_bad_request`。后端会把 text 结果包装成 `generic` 卡片；课程事实仍只来自工具结果，不允许模型补写。
+
+工具卡片生成仍使用 JSON 模式，请求包含：
 
 - `stream=false`
 - `response_format={"type":"json_object"}`
 - `max_tokens`
 - `temperature`
 
-Provider 返回非 JSON 时会尝试修复 JSON 或提取 JSON code block，仍失败则抛出 `INVALID_PROVIDER_JSON`，由 `agentService` fallback 到 mock。
+JSON 模式的 system prompt 必须明确包含 `json` 字样，并包含一个短 JSON 示例，例如 `{"answer":"...","cards":[],"suggestions":[]}`。Provider 返回非 JSON 时会尝试修复 JSON 或提取 JSON code block，仍失败则抛出 `INVALID_PROVIDER_JSON`，由 `agentService` fallback 到 mock。
+
+如果确实需要项目问答也强制 JSON，可设置：
+
+```bash
+DEEPSEEK_STRICT_JSON_MODE=true
+```
+
+不建议默认开启。`AI_THINKING_ENABLED=true` 只会在模型名包含 `pro` 时发送 thinking / reasoning 参数；flash 模型默认不带这些参数。
 
 ## Coze
 

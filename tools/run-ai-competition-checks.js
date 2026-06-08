@@ -35,6 +35,12 @@ const scripts = [
   "test:ai-logo-entry",
   "test:ai-assistant-ui-layout",
   "test:ai-assistant-minimal-ui",
+  "test:ai-quick-actions-behavior",
+  "test:ai-task-sheet-groups",
+  "test:ai-card-polish-contract",
+  "test:ai-assistant-unused-selector",
+  "test:deepseek-provider-json-text-modes",
+  "test:ai-message-retry-replace",
   "test:ai-assistant-demo-data",
 ];
 

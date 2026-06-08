@@ -169,7 +169,7 @@ jobs:
             read_runtime_env_value() {
               local key="$1"
               if [ -f "$runtime_ai_config" ]; then
-                grep -E "\"${key}\"[[:space:]]*:" "$runtime_ai_config" | tail -n 1 | sed -E 's/^[^:]*:[[:space:]]*"([^"]*)",?/\1/' || true
+                node -e 'const fs=require("fs");const key=process.argv[1];const file=process.argv[2];try{const data=JSON.parse(fs.readFileSync(file,"utf8"));const value=data&&Object.prototype.hasOwnProperty.call(data,key)?data[key]:"";process.stdout.write(value==null?"":String(value));}catch(error){}' "$key" "$runtime_ai_config" || true
               fi
             }
             append_ai_env() {
@@ -279,6 +279,7 @@ jobs:
             append_ai_env "AI_THINKING_ENABLED" "${{ vars.AI_THINKING_ENABLED }}" "false"
             append_ai_env "AI_REASONING_EFFORT" "${{ vars.AI_REASONING_EFFORT }}" "medium"
             append_ai_env "AI_PROVIDER_JSON_REPAIR" "${{ vars.AI_PROVIDER_JSON_REPAIR }}" "true"
+            append_ai_env "DEEPSEEK_STRICT_JSON_MODE" "${{ vars.DEEPSEEK_STRICT_JSON_MODE }}" "false"
             append_ai_env "AI_ALLOW_PERSONAL_CONTEXT" "${{ vars.AI_ALLOW_PERSONAL_CONTEXT }}" "false"
             append_ai_env "AI_API_KEY" "${{ secrets.AI_API_KEY }}" ""
             append_ai_env "DEEPSEEK_API_KEY" "${{ secrets.DEEPSEEK_API_KEY }}" ""
@@ -342,6 +343,7 @@ jobs:
             fi
             mv "$tmp_env" .env
 
+            node -e "require('./src/services/ai/providerRuntimeConfigStore'); console.log('ai runtime config store ok')"
             sudo docker compose config >/dev/null
             sudo docker compose up -d --build
 
@@ -350,6 +352,17 @@ jobs:
               echo "::error::${CONTAINER_NAME} does not exist after docker compose up"
               exit 1
             fi
+
+            for i in $(seq 1 30); do
+              container_state="$(sudo docker inspect -f '{{.State.Status}}' "$CONTAINER_NAME")"
+              if [ "$container_state" = "running" ]; then
+                break
+              fi
+              echo "Waiting for ${CONTAINER_NAME} to run... (${i}/30, status=${container_state})"
+              sleep 1
+            done
+
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "require(\"./src/services/ai/providerRuntimeConfigStore\"); require(\"./src/services/ai/agentService\"); console.log(\"ai runtime ok\")"'
 
             container_health="unknown"
             unhealthy_count=0

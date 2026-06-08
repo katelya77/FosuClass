@@ -88,6 +88,7 @@ Set-EnvValue -Path $envPath -Key "AI_TEMPERATURE" -Value "0.1"
 Set-EnvValue -Path $envPath -Key "AI_THINKING_ENABLED" -Value "false"
 Set-EnvValue -Path $envPath -Key "AI_REASONING_EFFORT" -Value "medium"
 Set-EnvValue -Path $envPath -Key "AI_PROVIDER_JSON_REPAIR" -Value "true"
+Set-EnvValue -Path $envPath -Key "DEEPSEEK_STRICT_JSON_MODE" -Value "false"
 
 if ($provider -eq "deepseek") {
   $key = $env:FOSUCLASS_DEEPSEEK_API_KEY

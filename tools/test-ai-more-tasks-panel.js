@@ -14,20 +14,19 @@ function run() {
   const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
 
   assert(js.includes("showTaskPanel"), "AI assistant should define showTaskPanel state");
-  assert(js.includes("TASK_PANEL_ITEMS"), "AI assistant should define task panel items");
+  assert(js.includes("TASK_PANEL_GROUPS"), "AI assistant should define grouped task panel items");
   assert(wxml.includes("task-sheet") && wxml.includes("bottom-sheet"), "task panel should render as a bottom sheet");
-  assert(wxss.includes(".bottom-sheet") && wxss.includes(".task-grid"), "task panel should have sheet/grid WXSS");
+  assert(wxss.includes(".bottom-sheet") && wxss.includes(".task-section-scroll"), "task panel should have sheet/scroll WXSS");
 
   const taskMatches = js.match(/label:\s*"[^"]+"/g) || [];
-  assert(taskMatches.length >= 8, `expected at least 8 task items, got ${taskMatches.length}`);
+  assert(taskMatches.length >= 10, `expected at least 10 task items, got ${taskMatches.length}`);
 
-  const quickHandler = js.match(/onQuickQuestion\(event\)\s*\{([\s\S]*?)\n  \},/);
-  assert(quickHandler, "onQuickQuestion handler should exist");
+  const quickHandler = js.match(/onQuickAction\(event\)\s*\{([\s\S]*?)\n  \},/);
+  assert(quickHandler, "onQuickAction handler should exist");
   const body = quickHandler[1];
-  assert(body.includes('question === "更多"'), "更多 should have a dedicated branch");
-  const beforeDedicatedBranch = body.split('question === "更多"')[0];
-  assert(!beforeDedicatedBranch.includes("sendMessage(question)"), "更多 must not be sent before the panel branch");
-  assert(body.includes("openTaskPanel"), "更多 should open the task panel sheet");
+  assert(body.includes('action.id === "teacher"'), "teacher quick action should have a dedicated branch");
+  assert(body.includes("navigateByUrl"), "XLS quick action should navigate");
+  assert(wxml.includes('class="quick-more-button"') && wxml.includes('bindtap="openTaskPanel"'), "更多 should open the task panel sheet");
   assert(js.includes("onTaskPanelItemTap"), "task panel items should have a tap handler");
 
   console.log("test-ai-more-tasks-panel passed");

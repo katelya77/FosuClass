@@ -13,6 +13,7 @@ const workflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "deploy
   "append_ai_env",
   "read_existing_env_value",
   "read_runtime_env_value",
+  "node -e 'const fs=require(\"fs\")",
   "storage/secure/ai-provider-config.json",
   "AI_AGENT_ENABLED",
   "AI_PROVIDER",
@@ -21,10 +22,19 @@ const workflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "deploy
   "DEEPSEEK_API_KEY",
   "COZE_API_KEY",
   "COZE_BOT_ID",
+  "DEEPSEEK_STRICT_JSON_MODE",
+  "require('./src/services/ai/providerRuntimeConfigStore')",
+  "require(\\\"./src/services/ai/agentService\\\")",
+  "ai runtime ok",
   "node scripts/verify-ai-provider.js --mode=status",
 ].forEach((needle) => {
   assert(workflow.includes(needle), `deploy workflow should include ${needle}`);
 });
+
+const runtimeReader = workflow.match(/read_runtime_env_value\(\)\s*\{[\s\S]*?\n            \}/);
+assert(runtimeReader, "read_runtime_env_value function should exist");
+assert(runtimeReader[0].includes("node -e"), "read_runtime_env_value should parse JSON with Node");
+assert(!/grep\s+-E\s+"\\"/.test(runtimeReader[0]), "read_runtime_env_value must not grep JSON");
 
 [
   "AI_API_KEY",

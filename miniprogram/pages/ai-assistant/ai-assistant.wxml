@@ -1,45 +1,50 @@
 <view class="page ai-page">
-  <view class="top-status-bar">
-    <view class="status-left">
-      <view class="status-logo-wrap">
-        <image wx:if="{{hasHeroLogo}}" class="status-logo" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" binderror="onHeroLogoError" />
-        <view wx:else class="status-mark">AI</view>
+  <view class="xiaofu-header">
+    <view class="xiaofu-avatar-wrap">
+      <image wx:if="{{hasHeroLogo}}" class="xiaofu-avatar" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" binderror="onHeroLogoError" />
+      <view wx:else class="xiaofu-avatar-text">佛</view>
+    </view>
+    <view class="xiaofu-title-block">
+      <view class="xiaofu-title">小佛</view>
+      <view class="xiaofu-subtitle">{{headerSubtitle}}</view>
+    </view>
+    <button class="xiaofu-clear" bindtap="clearHistory">清空</button>
+  </view>
+
+  <view class="quick-task-row">
+    <scroll-view class="quick-action-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+      <view class="quick-action-list">
+        <button
+          wx:for="{{quickActions}}"
+          wx:key="id"
+          class="quick-action-pill {{item.className}}"
+          data-action-id="{{item.id}}"
+          bindtap="onQuickAction"
+        >
+          <text class="quick-action-icon">{{item.icon}}</text>
+          <text class="quick-action-label">{{item.label}}</text>
+        </button>
       </view>
-      <text class="status-name">{{welcome.title}}</text>
-    </view>
-    <view class="status-copy">{{welcome.desc}}</view>
-    <button class="status-clear" bindtap="clearHistory">清空</button>
+    </scroll-view>
+    <button class="quick-more-button" bindtap="openTaskPanel">更多</button>
   </view>
 
-  <view class="ability-row">
-    <button
-      wx:for="{{heroChips}}"
-      wx:key="id"
-      class="ability-chip-button {{item.className}}"
-      bindtap="openTaskPanel"
-    >{{item.label}}</button>
-  </view>
-
-  <scroll-view class="quick-scroll" scroll-x enhanced show-scrollbar="{{false}}">
-    <view class="quick-list">
-      <button
-        wx:for="{{quickQuestions}}"
-        wx:key="*this"
-        class="quick-chip"
-        data-question="{{item}}"
-        bindtap="onQuickQuestion"
-      >{{item}}</button>
-    </view>
-  </scroll-view>
+  <view class="history-trim-tip" wx:if="{{historyTrimNotice}}">已仅保留最近 20 条</view>
 
   <scroll-view class="message-scroll" scroll-y scroll-top="{{scrollTop}}" enhanced show-scrollbar="{{false}}">
     <view class="empty-welcome" wx:if="{{!messages.length}}">
-      <view class="empty-orbit">
-        <image wx:if="{{hasHeroLogo}}" class="empty-logo" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" />
-        <view wx:else class="empty-logo-text">AI</view>
+      <view class="empty-title">今天想做什么？</view>
+      <view class="empty-desc">我可以查课、找空教室、看今日安排，也能解释 FosuClass 的功能。</view>
+      <view class="empty-example-list">
+        <button
+          wx:for="{{welcomeExamples}}"
+          wx:key="*this"
+          class="empty-example"
+          data-question="{{item}}"
+          bindtap="onWelcomeExampleTap"
+        >{{item}}</button>
       </view>
-      <view class="empty-title">直接说一个校园任务</view>
-      <view class="empty-desc">找 C7 附近空教室、分析今天课程、查老师课表，或排查数据加载失败。</view>
+      <view class="empty-safe-note">不要输入学号、密码或 Cookie。</view>
     </view>
 
     <view
@@ -47,20 +52,20 @@
       wx:for-item="message"
       wx:for-index="messageIndex"
       wx:key="id"
-      class="message-row {{message.role}}"
+      class="message-row {{message.role}} {{message.showAvatar ? '' : 'no-avatar'}}"
     >
-      <view wx:if="{{message.role == 'assistant'}}" class="assistant-avatar">
+      <view wx:if="{{message.role == 'assistant' && message.showAvatar}}" class="assistant-avatar">
         <image wx:if="{{hasHeroLogo}}" class="avatar-logo" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" />
-        <text wx:else>AI</text>
+        <text wx:else>佛</text>
       </view>
+      <view wx:elif="{{message.role == 'assistant'}}" class="assistant-avatar-spacer"></view>
 
       <view class="message-body">
-        <view class="message-bubble">
+        <view class="message-bubble" wx:if="{{message.content}}">
           <view class="message-content">{{message.content}}</view>
           <view class="message-meta">
             <text>{{message.timeText}}</text>
             <text wx:if="{{message.displaySafety && message.displaySafety.text}}"> · {{message.displaySafety.text}}</text>
-            <text wx:if="{{message.metricsText}}"> · {{message.metricsText}}</text>
           </view>
         </view>
 
@@ -79,7 +84,7 @@
             wx:for-item="card"
             wx:for-index="cardIndex"
             wx:key="key"
-            class="ai-result-card card card-type-{{card.typeClass}}"
+            class="ai-result-card card card-type-{{card.typeClass}} {{card.errorClass}}"
           >
             <view class="card-header-row">
               <view class="card-title-block">
@@ -119,7 +124,7 @@
                 wx:for="{{card.primaryActions}}"
                 wx:for-item="action"
                 wx:key="label"
-                class="card-action primary"
+                class="card-action card-action-primary"
                 data-message-index="{{messageIndex}}"
                 data-card-index="{{cardIndex}}"
                 data-action-index="{{action.originalIndex}}"
@@ -132,7 +137,7 @@
                 wx:for="{{card.secondaryActions}}"
                 wx:for-item="action"
                 wx:key="label"
-                class="secondary-action"
+                class="card-action-secondary"
                 data-message-index="{{messageIndex}}"
                 data-card-index="{{cardIndex}}"
                 data-action-index="{{action.originalIndex}}"
@@ -169,21 +174,39 @@
   <view class="bottom-sheet task-sheet" wx:if="{{showTaskPanel}}">
     <view class="sheet-handle"></view>
     <view class="task-panel-head">
-      <view class="task-panel-title">更多任务</view>
+      <view class="panel-title-wrap">
+        <view class="task-panel-title">更多任务</view>
+        <view class="task-panel-subtitle">按场景选择，小佛会先调用工具核验</view>
+      </view>
       <button class="sheet-close" bindtap="closeTaskPanel">关闭</button>
     </view>
-    <view class="task-grid">
-      <button
-        wx:for="{{taskPanelItems}}"
-        wx:key="label"
-        class="task-item"
-        data-index="{{index}}"
-        bindtap="onTaskPanelItemTap"
+    <scroll-view class="task-section-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <view
+        wx:for="{{taskPanelGroups}}"
+        wx:for-item="group"
+        wx:for-index="groupIndex"
+        wx:key="title"
+        class="task-section"
       >
-        <view class="task-label">{{item.label}}</view>
-        <view class="task-desc">{{item.desc}}</view>
-      </button>
-    </view>
+        <view class="task-section-title">{{group.title}}</view>
+        <button
+          wx:for="{{group.items}}"
+          wx:for-item="task"
+          wx:for-index="taskIndex"
+          wx:key="label"
+          class="task-item"
+          data-group-index="{{groupIndex}}"
+          data-task-index="{{taskIndex}}"
+          bindtap="onTaskPanelItemTap"
+        >
+          <view class="task-icon">{{task.icon}}</view>
+          <view class="task-copy">
+            <view class="task-label">{{task.label}}</view>
+            <view class="task-desc">{{task.desc}}</view>
+          </view>
+        </button>
+      </view>
+    </scroll-view>
   </view>
 
   <view class="bottom-sheet privacy-sheet" wx:if="{{showPrivacySheet}}">
