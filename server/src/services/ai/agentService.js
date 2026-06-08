@@ -154,6 +154,25 @@ function buildMetrics(options = {}) {
   };
 }
 
+function classifyProviderFailure(error) {
+  const code = String(error && error.code || "");
+  if (["provider_bad_request", "invalid_model", "invalid_payload", "provider_timeout"].includes(code)) {
+    return code;
+  }
+  if (/timeout|ECONNABORTED|ETIMEDOUT/i.test(code) || /timeout|超时/i.test(String(error && error.message || ""))) {
+    return "provider_timeout";
+  }
+  const status = Number(error && error.response && error.response.status);
+  const body = error && error.response && error.response.data;
+  const text = JSON.stringify(body || {}).toLowerCase();
+  if (status === 400 || code === "ERR_BAD_REQUEST") {
+    if (/model/.test(text)) return "invalid_model";
+    if (/response_format|payload|json|schema|thinking|reasoning/.test(text)) return "invalid_payload";
+    return "provider_bad_request";
+  }
+  return code || "provider_fallback";
+}
+
 function buildResponse(payload) {
   return {
     success: true,
@@ -289,7 +308,7 @@ async function chat(input = {}) {
     providerName = "mock";
     externalProviderUsed = false;
     fallback = true;
-    fallbackReason = error.code || "provider fallback to mock";
+    fallbackReason = classifyProviderFailure(error);
     publicToolCalls.push({
       name: provider.name || providerFactory.getProviderName(),
       status: "skipped",
@@ -330,4 +349,5 @@ module.exports = {
   stableAction,
   stableCard,
   stableGeneratedPayload,
+  classifyProviderFailure,
 };

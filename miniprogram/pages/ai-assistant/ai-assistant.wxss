@@ -17,6 +17,115 @@
   background: #ffffff;
 }
 
+.top-status-bar {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 12rpx;
+  height: 64rpx;
+  min-height: 64rpx;
+  padding: 0 10rpx;
+  border: 1rpx solid #e7edf5;
+  border-radius: 8rpx;
+  background: #ffffff;
+}
+
+.status-left {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.status-logo-wrap {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 42rpx;
+  height: 42rpx;
+  overflow: hidden;
+  border: 1rpx solid #edf0f5;
+  border-radius: 8rpx;
+  background: #ffffff;
+}
+
+.status-logo,
+.status-mark {
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 6rpx;
+}
+
+.status-mark {
+  background: #c62828;
+  color: #ffffff;
+  font-size: 16rpx;
+  font-weight: 900;
+  line-height: 36rpx;
+  text-align: center;
+}
+
+.status-name {
+  max-width: 72rpx;
+  overflow: hidden;
+  color: #142033;
+  font-size: 23rpx;
+  font-weight: 900;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-copy {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #667085;
+  font-size: 20rpx;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-clear {
+  flex: 0 0 auto;
+  width: 66rpx;
+  height: 40rpx;
+  padding: 0;
+  border: 1rpx solid #dfe6f0;
+  border-radius: 8rpx;
+  background: #ffffff;
+  color: #596579;
+  font-size: 19rpx;
+  font-weight: 800;
+  line-height: 40rpx;
+}
+
+.ability-row {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 8rpx;
+  margin-top: 8rpx;
+}
+
+.ability-chip-button {
+  width: auto;
+  height: 40rpx;
+  padding: 0 14rpx;
+  border: 1rpx solid #dfe6f0;
+  border-radius: 8rpx;
+  background: #ffffff;
+  color: #4b5563;
+  font-size: 19rpx;
+  font-weight: 900;
+  line-height: 40rpx;
+}
+
 .assistant-hero {
   flex: 0 0 auto;
   padding: 10rpx 12rpx;
@@ -132,8 +241,7 @@
 
 .privacy-tip,
 .privacy-compact,
-.quick-scroll,
-.task-panel {
+.quick-scroll {
   flex: 0 0 auto;
 }
 
@@ -319,18 +427,9 @@
   white-space: nowrap;
 }
 
-.task-panel {
-  margin-top: 8rpx;
-  padding: 14rpx;
-  border: 1rpx solid #e7edf5;
-  border-radius: 8rpx;
-  background: #ffffff;
-  box-shadow: 0 10rpx 26rpx rgba(18, 27, 43, 0.05);
-}
-
 .task-panel-head {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: 12rpx;
   min-width: 0;
@@ -801,6 +900,14 @@
   white-space: nowrap;
 }
 
+.filtered-hint {
+  margin-top: 10rpx;
+  color: #98a2b3;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
 .card-disclaimer {
   margin-top: 11rpx;
   padding-top: 10rpx;
@@ -885,6 +992,56 @@
   box-shadow: 0 -14rpx 40rpx rgba(18, 27, 43, 0.08);
 }
 
+.sheet-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 38;
+  background: rgba(20, 32, 51, 0.18);
+}
+
+.bottom-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  box-sizing: border-box;
+  max-height: 64vh;
+  padding: 12rpx 16rpx calc(18rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #e1e7ef;
+  border-radius: 8rpx 8rpx 0 0;
+  background: #ffffff;
+  box-shadow: 0 -18rpx 42rpx rgba(18, 27, 43, 0.14);
+}
+
+.sheet-handle {
+  width: 54rpx;
+  height: 6rpx;
+  margin: 0 auto 12rpx;
+  border-radius: 999rpx;
+  background: #d8dee8;
+}
+
+.sheet-close {
+  width: 76rpx;
+  height: 42rpx;
+  padding: 0;
+  border: 1rpx solid #dfe6f0;
+  border-radius: 8rpx;
+  background: #ffffff;
+  color: #596579;
+  font-size: 19rpx;
+  font-weight: 800;
+  line-height: 42rpx;
+}
+
+.privacy-sheet {
+  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
+}
+
 .composer-inner {
   display: flex;
   align-items: flex-end;
@@ -929,6 +1086,12 @@
 }
 
 .composer-note {
+  display: block;
+  width: 100%;
+  height: 32rpx;
+  padding: 0;
+  border: 0;
+  background: transparent;
   overflow: hidden;
   margin-top: 6rpx;
   color: #7a8494;
@@ -937,6 +1100,7 @@
   text-align: center;
   text-overflow: ellipsis;
   white-space: nowrap;
+  line-height: 32rpx;
 }
 
 @media (max-width: 360px) {
@@ -945,23 +1109,23 @@
     padding-right: 12rpx;
   }
 
-  .hero-logo-wrap {
+  .status-logo-wrap {
     width: 60rpx;
     height: 60rpx;
     flex-basis: 60rpx;
   }
 
-  .hero-logo,
-  .hero-mark {
+  .status-logo,
+  .status-mark {
     width: 56rpx;
     height: 56rpx;
   }
 
-  .hero-mark {
+  .status-mark {
     line-height: 56rpx;
   }
 
-  .hero-clear-mini {
+  .status-clear {
     width: 78rpx;
   }
 

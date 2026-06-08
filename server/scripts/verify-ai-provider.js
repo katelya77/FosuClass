@@ -5,6 +5,32 @@ require("../src/config");
 const agentService = require("../src/services/ai/agentService");
 const aiProviderConfigService = require("../src/services/ai/providerConfigService");
 
+function args() {
+  const result = {};
+  process.argv.slice(2).forEach((item) => {
+    const match = String(item).match(/^--([^=]+)(?:=(.*))?$/);
+    if (match) result[match[1]] = match[2] === undefined ? true : match[2];
+  });
+  return result;
+}
+
+function summarizeStatus(status) {
+  return {
+    provider: status.provider,
+    policy: status.providerPolicy,
+    model: status.model,
+    baseUrl: status.baseUrl,
+    enabled: status.enabled,
+    keyConfigured: Boolean(status.deepseekKeyConfigured || status.cozeKeyConfigured),
+    deepseekKeyConfigured: Boolean(status.deepseekKeyConfigured),
+    cozeKeyConfigured: Boolean(status.cozeKeyConfigured),
+    cozeBotIdConfigured: Boolean(status.cozeBotIdConfigured),
+    runtimeConfigExists: Boolean(status.runtimeConfigExists),
+    runtimeConfigPath: status.runtimeConfigPath ? path.relative(process.cwd(), status.runtimeConfigPath) : "",
+    envPath: status.envPath ? path.relative(process.cwd(), status.envPath) : "",
+  };
+}
+
 async function runProbe(message, contextPatch = {}) {
   const startedAt = Date.now();
   const response = await agentService.chat({
@@ -22,26 +48,24 @@ async function runProbe(message, contextPatch = {}) {
     externalProviderUsed: response.safety && response.safety.externalProviderUsed === true,
     providerPolicy: response.safety && response.safety.providerPolicy || "",
     providerDecisionReason: response.safety && response.safety.providerDecisionReason || "",
+    fallbackReason: response.safety && response.safety.fallbackReason || "",
     mode: response.safety && response.safety.mode || "tool-grounded",
     elapsedMs: Date.now() - startedAt,
     toolCalls: response.toolCalls || [],
-    answerPreview: String(response.answer || "").slice(0, 100),
   };
 }
 
 async function run() {
+  const options = args();
   const status = aiProviderConfigService.getStatus();
-  console.log(JSON.stringify({
-    provider: status.provider,
-    model: status.model,
-    baseUrl: status.baseUrl,
-    enabled: status.enabled,
-    keyConfigured: Boolean(status.deepseekKeyConfigured || status.cozeKeyConfigured),
-    envPath: path.relative(process.cwd(), status.envPath),
-  }, null, 2));
+  const statusPayload = summarizeStatus(status);
+  if (options.mode === "status" || options.statusOnly) {
+    console.log(JSON.stringify(Object.assign({ success: true, statusOnly: true }, statusPayload), null, 2));
+    return;
+  }
 
   const deterministicToolTest = await runProbe("今天还有课吗？");
-  const projectQaProviderTest = await runProbe("FosuClass 是什么？小佛你了解当前项目吗？");
+  const projectQaTest = await runProbe("FosuClass 是什么？小佛你了解当前项目吗？");
   const previousPolicy = process.env.AI_PROVIDER_POLICY;
   let forceProviderTest;
   try {
@@ -55,15 +79,14 @@ async function run() {
     }
   }
 
-  console.log(JSON.stringify({
+  console.log(JSON.stringify(Object.assign({
     success: true,
-    provider: deterministicToolTest.provider,
-    fallbackMock: deterministicToolTest.provider !== "deepseek" && status.provider === "deepseek",
-    mode: deterministicToolTest.mode,
+    statusOnly: false,
     deterministicToolTest,
-    projectQaProviderTest,
+    projectQaTest,
     forceProviderTest,
-  }, null, 2));
+    fallbackMock: deterministicToolTest.provider !== "deepseek" && status.provider === "deepseek",
+  }, statusPayload), null, 2));
 }
 
 run().catch((error) => {

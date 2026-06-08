@@ -1,66 +1,23 @@
 <view class="page ai-page">
-  <view class="assistant-hero card">
-    <view class="hero-top">
-      <view class="hero-logo-wrap">
-        <image
-          wx:if="{{hasHeroLogo}}"
-          class="hero-logo"
-          src="/assets/icons/ai-campus-butler.png"
-          mode="aspectFit"
-          binderror="onHeroLogoError"
-        />
-        <view wx:else class="hero-mark">AI</view>
+  <view class="top-status-bar">
+    <view class="status-left">
+      <view class="status-logo-wrap">
+        <image wx:if="{{hasHeroLogo}}" class="status-logo" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" binderror="onHeroLogoError" />
+        <view wx:else class="status-mark">AI</view>
       </view>
-      <view class="hero-copy">
-        <view class="hero-title">{{welcome.title}}</view>
-        <view class="hero-desc">{{welcome.desc}}</view>
-      </view>
-      <button class="hero-clear-mini" bindtap="clearHistory">清空</button>
+      <text class="status-name">{{welcome.title}}</text>
     </view>
-
-    <view class="hero-meta-row">
-      <view
-        wx:for="{{heroChips}}"
-        wx:key="id"
-        class="hero-status-chip {{item.className}}"
-      >{{item.label}}</view>
-    </view>
+    <view class="status-copy">{{welcome.desc}}</view>
+    <button class="status-clear" bindtap="clearHistory">清空</button>
   </view>
 
-  <view class="privacy-tip privacy-tip-full card" wx:if="{{privacyExpanded}}">
-    <view class="privacy-head">
-      <view class="privacy-copy">
-        <view class="privacy-title">隐私与课表摘要</view>
-        <view class="privacy-desc">{{privacyText}}</view>
-      </view>
-      <switch
-        class="privacy-switch"
-        checked="{{allowPersonalContext}}"
-        color="#2f855a"
-        bindchange="onPersonalContextToggle"
-      />
-    </view>
-    <view class="privacy-footer">
-      <text>{{privacyStatusText}}</text>
-      <button wx:if="{{showPrivacyTip}}" class="privacy-btn" bindtap="dismissPrivacyTip">{{privacyActionLabel}}</button>
-      <button wx:else class="privacy-btn secondary" bindtap="togglePrivacyTip">{{privacyActionLabel}}</button>
-    </view>
-  </view>
-
-  <view class="privacy-compact {{privacyCompactClass}}" wx:else>
-    <view class="privacy-compact-main">
-      <text class="privacy-dot"></text>
-      <text class="privacy-compact-text">{{privacyStatusText}}</text>
-    </view>
-    <view class="privacy-compact-actions">
-      <button class="privacy-link" bindtap="togglePrivacyTip">说明</button>
-      <switch
-        class="privacy-switch compact"
-        checked="{{allowPersonalContext}}"
-        color="#2f855a"
-        bindchange="onPersonalContextToggle"
-      />
-    </view>
+  <view class="ability-row">
+    <button
+      wx:for="{{heroChips}}"
+      wx:key="id"
+      class="ability-chip-button {{item.className}}"
+      bindtap="openTaskPanel"
+    >{{item.label}}</button>
   </view>
 
   <scroll-view class="quick-scroll" scroll-x enhanced show-scrollbar="{{false}}">
@@ -74,25 +31,6 @@
       >{{item}}</button>
     </view>
   </scroll-view>
-
-  <view class="task-panel" wx:if="{{showTaskPanel}}">
-    <view class="task-panel-head">
-      <view class="task-panel-title">选择任务</view>
-      <view class="task-panel-subtitle">需要关键词的任务会先填入输入框</view>
-    </view>
-    <view class="task-grid">
-      <button
-        wx:for="{{taskPanelItems}}"
-        wx:key="label"
-        class="task-item"
-        data-index="{{index}}"
-        bindtap="onTaskPanelItemTap"
-      >
-        <view class="task-label">{{item.label}}</view>
-        <view class="task-desc">{{item.desc}}</view>
-      </button>
-    </view>
-  </view>
 
   <scroll-view class="message-scroll" scroll-y scroll-top="{{scrollTop}}" enhanced show-scrollbar="{{false}}">
     <view class="empty-welcome" wx:if="{{!messages.length}}">
@@ -202,6 +140,7 @@
               >{{action.label}}</button>
             </view>
 
+            <view class="filtered-hint" wx:if="{{card.filteredHint}}">{{card.filteredHint}}</view>
             <view class="card-disclaimer">仅供参考，以教务数据为准</view>
           </view>
         </view>
@@ -225,6 +164,49 @@
     </view>
   </scroll-view>
 
+  <view class="sheet-mask" wx:if="{{showTaskPanel || showPrivacySheet}}" bindtap="closeSheets"></view>
+
+  <view class="bottom-sheet task-sheet" wx:if="{{showTaskPanel}}">
+    <view class="sheet-handle"></view>
+    <view class="task-panel-head">
+      <view class="task-panel-title">更多任务</view>
+      <button class="sheet-close" bindtap="closeTaskPanel">关闭</button>
+    </view>
+    <view class="task-grid">
+      <button
+        wx:for="{{taskPanelItems}}"
+        wx:key="label"
+        class="task-item"
+        data-index="{{index}}"
+        bindtap="onTaskPanelItemTap"
+      >
+        <view class="task-label">{{item.label}}</view>
+        <view class="task-desc">{{item.desc}}</view>
+      </button>
+    </view>
+  </view>
+
+  <view class="bottom-sheet privacy-sheet" wx:if="{{showPrivacySheet}}">
+    <view class="sheet-handle"></view>
+    <view class="privacy-head">
+      <view class="privacy-copy">
+        <view class="privacy-title">课表摘要</view>
+        <view class="privacy-desc">{{privacyText}}</view>
+      </view>
+      <switch
+        class="privacy-switch"
+        checked="{{allowPersonalContext}}"
+        color="#2f855a"
+        bindchange="onPersonalContextToggle"
+      />
+    </view>
+    <view class="privacy-footer">
+      <text>{{privacyStatusText}}</text>
+      <button wx:if="{{showPrivacyTip}}" class="privacy-btn" bindtap="dismissPrivacyTip">{{privacyActionLabel}}</button>
+      <button wx:else class="privacy-btn secondary" bindtap="closePrivacySheet">关闭</button>
+    </view>
+  </view>
+
   <view class="composer">
     <view class="composer-inner">
       <textarea
@@ -244,6 +226,6 @@
         {{sending ? "发送中" : "发送"}}
       </button>
     </view>
-    <view class="composer-note">{{composerNote}}</view>
+    <button class="composer-note" bindtap="openPrivacySheet">{{composerNote}}</button>
   </view>
 </view>

@@ -93,6 +93,12 @@ jobs:
           node -e "require('./src/utils/courseNormalizer'); console.log('courseNormalizer ok')"
           node -e "require('./src/utils/scheduleNormalizer'); console.log('scheduleNormalizer ok')"
 
+      - name: AI deploy smoke checks
+        run: |
+          npm run test:server-ai-module-require
+          npm run test:server-no-root-shared-require
+          npm run test:server-docker-smoke
+
       - name: Security acceptance tests
         run: npm run security:acceptance
 
@@ -125,14 +131,19 @@ jobs:
 
             sanitize() {
               sed -E \
-                -e 's/(ADMIN_PASSWORD|ADMIN_TOKEN|ADMIN_API_TOKEN|FOSU_PASSWORD|WECHAT_APPSECRET|FOSU_CSRF_SECRET|FOSU_SESSION_SECRET(_CURRENT|_PREVIOUS)?|FOSU_STATIC_TICKET_SECRET(_CURRENT|_PREVIOUS)?)=([^[:space:]]*)/\1=***/g' \
-                -e 's/(Authorization: Bearer )[A-Za-z0-9._-]+/\1***/g' \
-                -e 's/(token|password|secret)["=: ]+[A-Za-z0-9._\/+=-]+/\1=***/gi'
+                -e 's/(ADMIN_PASSWORD|ADMIN_TOKEN|ADMIN_API_TOKEN|FOSU_PASSWORD|WECHAT_APPSECRET|FOSU_CSRF_SECRET|FOSU_SESSION_SECRET(_CURRENT|_PREVIOUS)?|FOSU_STATIC_TICKET_SECRET(_CURRENT|_PREVIOUS)?|AI_API_KEY|DEEPSEEK_API_KEY|COZE_API_KEY)=([^[:space:]]*)/\1=***/g' \
+                -e 's/(Authorization: Bearer )[A-Za-z0-9._~+\/=-]+/\1***/gi' \
+                -e 's/(token|password|secret|key)["=: ]+[A-Za-z0-9._\/+=-]+/\1=***/gi'
             }
 
             on_error() {
-              echo "::error::Remote deploy failed. Last 200 sanitized container log lines follow."
+              echo "::error::Remote deploy failed. Sanitized diagnostics follow."
+              sudo docker compose ps 2>&1 | sanitize || true
+              sudo docker inspect "$CONTAINER_NAME" --format '{{json .State}}' 2>&1 | sanitize || true
+              sudo docker inspect "$CONTAINER_NAME" --format '{{range .State.Health.Log}}{{println .Output}}{{end}}' 2>&1 | tail -n 10 | sanitize || true
               sudo docker logs "$CONTAINER_NAME" --tail=200 2>&1 | sanitize || true
+              sudo docker compose logs --tail=200 2>&1 | sanitize || true
+              ss -lntp 2>/dev/null | grep 18318 || true
             }
             trap on_error ERR
 
@@ -147,6 +158,38 @@ jobs:
 
             umask 077
             tmp_env=".env.$$.$(date +%s).tmp"
+            existing_env=".env"
+            runtime_ai_config="storage/secure/ai-provider-config.json"
+            read_existing_env_value() {
+              local key="$1"
+              if [ -f "$existing_env" ]; then
+                grep -E "^${key}=" "$existing_env" | tail -n 1 | cut -d= -f2- || true
+              fi
+            }
+            read_runtime_env_value() {
+              local key="$1"
+              if [ -f "$runtime_ai_config" ]; then
+                grep -E "\"${key}\"[[:space:]]*:" "$runtime_ai_config" | tail -n 1 | sed -E 's/^[^:]*:[[:space:]]*"([^"]*)",?/\1/' || true
+              fi
+            }
+            append_ai_env() {
+              local key="$1"
+              local incoming="$2"
+              local default_value="${3:-}"
+              local value=""
+              if [ -n "$incoming" ]; then
+                value="$incoming"
+              else
+                value="$(read_runtime_env_value "$key")"
+                if [ -z "$value" ]; then
+                  value="$(read_existing_env_value "$key")"
+                fi
+                if [ -z "$value" ]; then
+                  value="$default_value"
+                fi
+              fi
+              printf '%s=%s\n' "$key" "$value" >> "$tmp_env"
+            }
             cat > "$tmp_env" <<EOF
             NODE_ENV=production
             PORT=3000
@@ -221,6 +264,32 @@ jobs:
             FOSU_DISK_CRITICAL_PERCENT=90
             FOSU_MIN_FREE_DISK_GB=5
             EOF
+            {
+              printf '\n# AI Provider\n'
+            } >> "$tmp_env"
+            append_ai_env "AI_AGENT_ENABLED" "${{ vars.AI_AGENT_ENABLED }}" "false"
+            append_ai_env "AI_PROVIDER" "${{ vars.AI_PROVIDER }}" "mock"
+            append_ai_env "AI_PROVIDER_POLICY" "${{ vars.AI_PROVIDER_POLICY }}" "auto"
+            append_ai_env "AI_MODEL" "${{ vars.AI_MODEL }}" "deepseek-v4-flash"
+            append_ai_env "AI_REASONING_MODEL" "${{ vars.AI_REASONING_MODEL }}" "deepseek-v4-pro"
+            append_ai_env "AI_BASE_URL" "${{ vars.AI_BASE_URL }}" "https://api.deepseek.com"
+            append_ai_env "AI_TIMEOUT_MS" "${{ vars.AI_TIMEOUT_MS }}" "15000"
+            append_ai_env "AI_MAX_TOKENS" "${{ vars.AI_MAX_TOKENS }}" "1200"
+            append_ai_env "AI_TEMPERATURE" "${{ vars.AI_TEMPERATURE }}" "0.1"
+            append_ai_env "AI_THINKING_ENABLED" "${{ vars.AI_THINKING_ENABLED }}" "false"
+            append_ai_env "AI_REASONING_EFFORT" "${{ vars.AI_REASONING_EFFORT }}" "medium"
+            append_ai_env "AI_PROVIDER_JSON_REPAIR" "${{ vars.AI_PROVIDER_JSON_REPAIR }}" "true"
+            append_ai_env "AI_ALLOW_PERSONAL_CONTEXT" "${{ vars.AI_ALLOW_PERSONAL_CONTEXT }}" "false"
+            append_ai_env "AI_API_KEY" "${{ secrets.AI_API_KEY }}" ""
+            append_ai_env "DEEPSEEK_API_KEY" "${{ secrets.DEEPSEEK_API_KEY }}" ""
+            append_ai_env "COZE_API_BASE_URL" "${{ vars.COZE_API_BASE_URL }}" "https://api.coze.cn"
+            append_ai_env "COZE_API_KEY" "${{ secrets.COZE_API_KEY }}" ""
+            append_ai_env "COZE_BOT_ID" "${{ vars.COZE_BOT_ID }}" ""
+            append_ai_env "COZE_USER_ID" "${{ vars.COZE_USER_ID }}" "fosuclass-user"
+            append_ai_env "COZE_CHAT_ENDPOINT" "${{ vars.COZE_CHAT_ENDPOINT }}" "/v3/chat"
+            append_ai_env "COZE_POLL_ENABLED" "" "true"
+            append_ai_env "COZE_POLL_INTERVAL_MS" "" "1000"
+            append_ai_env "COZE_POLL_MAX_ATTEMPTS" "" "8"
             chmod 600 "$tmp_env"
 
             required_env_keys=(
@@ -283,12 +352,23 @@ jobs:
             fi
 
             container_health="unknown"
+            unhealthy_count=0
             for i in $(seq 1 60); do
               container_health="$(sudo docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER_NAME")"
               if [ "$container_health" = "healthy" ] || [ "$container_health" = "running" ]; then
                 if curl -fsS http://127.0.0.1:18318/api/health >/dev/null; then
                   break
                 fi
+              fi
+              if [ "$container_health" = "unhealthy" ]; then
+                unhealthy_count=$((unhealthy_count + 1))
+                if [ "$unhealthy_count" -ge 5 ]; then
+                  echo "Recent healthcheck log after ${unhealthy_count} unhealthy checks:"
+                  sudo docker inspect "$CONTAINER_NAME" --format '{{range .State.Health.Log}}{{println .Output}}{{end}}' 2>&1 | tail -n 10 | sanitize || true
+                  unhealthy_count=0
+                fi
+              else
+                unhealthy_count=0
               fi
               echo "Waiting for ${CONTAINER_NAME} health... (${i}/60, status=${container_health})"
               sleep 2
@@ -314,6 +394,7 @@ jobs:
             sudo docker exec "$CONTAINER_NAME" sh -lc 'test "$STATIC_RELEASE_SYNC_ENABLED" = "true" && test "$RELEASE_PACK_SRC" = "/app/storage/public/releases" && test "$OPENRESTY_STATIC_RELEASE_DIR" = "/openresty-static/releases" && test "$PUBLIC_BASE_URL" = "https://class.katelya.eu.org/static/releases" && test "$FOSU_RELEASE_WORKER_ENABLED" = "true"'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "const s=require(\"./src/services/securityModeService\").getSecurityStatus(); if(!s.mode) process.exit(1); console.log(\"security_mode=\"+s.mode)"'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000'
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/verify-ai-provider.js --mode=status' 2>&1 | sanitize
 
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/reconcile-static-release.js > /tmp/fosu-static-reconcile.json'
             active_release="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.releaseVersion||'')")"

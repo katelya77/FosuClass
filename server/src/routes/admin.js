@@ -514,6 +514,7 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
       externalProviderUsed: payload.safety && payload.safety.externalProviderUsed === true,
       providerPolicy: payload.safety && payload.safety.providerPolicy || "",
       providerDecisionReason: payload.safety && payload.safety.providerDecisionReason || "",
+      fallbackReason: payload.safety && payload.safety.fallbackReason || "",
       mode: payload.safety && payload.safety.mode || "tool-grounded",
       toolCalls: payload.toolCalls || [],
       answerPreview: String(payload.answer || "").slice(0, 120),
@@ -535,6 +536,10 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
     const payload = (req.body && req.body.mode === "project_qa")
       ? projectPayload
       : deterministicPayload;
+    const providerStatus = aiProviderConfigService.getStatus();
+    const deterministicSummary = summarizeProbe(deterministicPayload);
+    const projectSummary = summarizeProbe(projectPayload);
+    const forceSummary = summarizeProbe(forcePayload);
     return res.json({
       success: true,
       data: {
@@ -544,13 +549,19 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
         externalProviderUsed: payload.safety && payload.safety.externalProviderUsed === true,
         providerPolicy: payload.safety && payload.safety.providerPolicy || "",
         providerDecisionReason: payload.safety && payload.safety.providerDecisionReason || "",
+        fallbackReason: payload.safety && payload.safety.fallbackReason || "",
+        keyConfigured: Boolean(providerStatus.deepseekKeyConfigured || providerStatus.cozeKeyConfigured),
+        configuredProvider: providerStatus.provider || "mock",
+        deterministicToolLocal: deterministicSummary.externalProviderUsed !== true,
+        projectQaUsesDeepSeek: projectSummary.resolvedProvider === "deepseek" && projectSummary.externalProviderUsed === true,
+        projectQaExternalProviderUsed: projectSummary.externalProviderUsed === true,
         mode: payload.safety && payload.safety.mode || "tool-grounded",
         elapsedMs: Date.now() - startedAt,
         toolCalls: payload.toolCalls || [],
         answerPreview: String(payload.answer || "").slice(0, 120),
-        deterministicToolTest: summarizeProbe(deterministicPayload),
-        projectQaProviderTest: summarizeProbe(projectPayload),
-        forceProviderTest: summarizeProbe(forcePayload),
+        deterministicToolTest: deterministicSummary,
+        projectQaProviderTest: projectSummary,
+        forceProviderTest: forceSummary,
       },
     });
   } catch (error) {
@@ -564,6 +575,12 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
         externalProviderUsed: false,
         providerPolicy: process.env.AI_PROVIDER_POLICY || "auto",
         providerDecisionReason: error.code || error.message || "verify fallback mock",
+        fallbackReason: error.code || "verify fallback mock",
+        keyConfigured: Boolean(process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.COZE_API_KEY),
+        configuredProvider: process.env.AI_PROVIDER || "mock",
+        deterministicToolLocal: true,
+        projectQaUsesDeepSeek: false,
+        projectQaExternalProviderUsed: false,
         mode: "fallback",
         elapsedMs: 0,
         toolCalls: [{ name: "ai-provider", status: "skipped", summary: error.code || "verify fallback mock" }],

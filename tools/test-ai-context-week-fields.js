@@ -56,6 +56,11 @@ function run() {
     startWeek: 1,
     endWeek: 16,
     weekType: "even",
+    rawWeeks: "raw-weeks-fixture",
+    weeksText: "weeks-text-fixture",
+    weekRange: { startWeek: 1, endWeek: 16, oddEven: "even" },
+    weekParity: "even",
+    parity: "even",
     studentId: "2024012345",
     password: "secret",
     fileBase64: "data:application/vnd.ms-excel;base64," + "A".repeat(120),
@@ -66,6 +71,11 @@ function run() {
   assert.strictEqual(sanitized.startWeek, 1);
   assert.strictEqual(sanitized.endWeek, 16);
   assert.strictEqual(sanitized.weekType, "even");
+  assert.strictEqual(sanitized.rawWeeks, "raw-weeks-fixture");
+  assert.strictEqual(sanitized.weeksText, "weeks-text-fixture");
+  assert.deepStrictEqual(sanitized.weekRange, { startWeek: 1, endWeek: 16, oddEven: "even" });
+  assert.strictEqual(sanitized.weekParity, "even");
+  assert.strictEqual(sanitized.parity, "even");
   assert(!Object.prototype.hasOwnProperty.call(sanitized, "studentId"), "studentId must not be preserved");
   assert(!Object.prototype.hasOwnProperty.call(sanitized, "password"), "password must not be preserved");
 
@@ -84,7 +94,7 @@ function run() {
 
   const text = JSON.stringify(context);
   assert(!/studentId|password|fileBase64|base64,A{20}/i.test(text), "context must not contain sensitive fields or raw file content");
-  assert(/weeks|weekText|startWeek|endWeek|weekType/.test(text), "context should retain week fields");
+  assert(/weeks|weekText|weeksText|rawWeeks|weekRange|weekParity|startWeek|endWeek|weekType/.test(text), "context should retain week fields");
 
   console.log("test-ai-context-week-fields passed");
 }

@@ -1,1 +1,1 @@
-module.exports = require("../../../../shared/courseWeekRules");
+module.exports = require("../../shared/courseWeekRules");

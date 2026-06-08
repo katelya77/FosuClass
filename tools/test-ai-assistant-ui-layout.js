@@ -8,83 +8,35 @@ function read(file) {
   return fs.readFileSync(path.join(ROOT, file), "utf8");
 }
 
-function escapeRegex(text) {
-  return text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
 function getRule(css, selector) {
-  const match = new RegExp(`${escapeRegex(selector)}\\s*\\{([\\s\\S]*?)\\}`, "m").exec(css);
+  const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const match = new RegExp(`${escaped}\\s*\\{([\\s\\S]*?)\\}`, "m").exec(css);
   return match ? match[1] : "";
-}
-
-function hasDecl(rule, prop, valuePattern) {
-  return new RegExp(`${escapeRegex(prop)}\\s*:\\s*${valuePattern}`, "i").test(rule);
-}
-
-function check(condition, message, suggestion) {
-  assert(condition, `${message}\n修复建议：${suggestion}`);
 }
 
 function run() {
   const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
   const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
 
-  check(wxml.includes("hero-top") && wxml.includes("hero-meta-row"),
-    "AI hero must use a two-row layout.",
-    "保留 hero-top 放 logo/标题/清空，provider 与工具状态放入 hero-meta-row。");
-  check(!wxml.includes("provider-pill") && !wxml.includes("history-clear"),
-    "provider-pill/history-clear should not compete with hero-title in the old hero row.",
-    "移除旧 hero-actions/provider-pill/history-clear 结构，使用 hero-status-chip 与 hero-clear-mini。");
+  assert(wxml.includes("top-status-bar"), "AI page should use a compact top status bar");
+  assert(!wxml.includes("assistant-hero card"), "AI page should not render the old hero card");
+  assert(!wxml.includes("privacy-tip-full"), "full privacy card should not stay in the first viewport");
+  assert(wxml.includes("bottom-sheet task-sheet"), "task panel should be a bottom sheet");
+  assert(wxml.includes("bottom-sheet privacy-sheet"), "privacy details should be a bottom sheet");
+  assert(wxml.includes("message-scroll"), "message area should remain the main content");
+  assert(!/\{\{\s*card\.type\s*\}\}/.test(wxml), "WXML must not render raw card.type");
 
-  const heroCopy = getRule(wxss, ".hero-copy");
-  check(hasDecl(heroCopy, "flex", "1") &&
-    hasDecl(heroCopy, "min-width", "0") &&
-    hasDecl(heroCopy, "overflow", "hidden"),
-    ".hero-copy must allow the title to shrink safely.",
-    "在 .hero-copy 中设置 flex: 1; min-width: 0; overflow: hidden;");
-
-  const heroTitle = getRule(wxss, ".hero-title");
-  check(hasDecl(heroTitle, "white-space", "nowrap") &&
-    hasDecl(heroTitle, "text-overflow", "ellipsis") &&
-    hasDecl(heroTitle, "overflow", "hidden"),
-    ".hero-title must be single-line ellipsis.",
-    "在 .hero-title 中设置 white-space: nowrap; overflow: hidden; text-overflow: ellipsis;");
-
-  const heroDesc = getRule(wxss, ".hero-desc");
-  check(/-webkit-line-clamp\s*:\s*1/.test(heroDesc) || /line-clamp\s*:\s*1/.test(heroDesc),
-    ".hero-desc must clamp to one line in the compact AI page.",
-    "在 .hero-desc 中保留 -webkit-line-clamp: 1 和 -webkit-box-orient: vertical;");
-
-  const hero = getRule(wxss, ".assistant-hero");
-  const privacyCompact = getRule(wxss, ".privacy-compact");
-  const quickChip = getRule(wxss, ".quick-chip");
-  check(/padding\s*:\s*10rpx\s+12rpx/.test(hero) &&
-    /min-height\s*:\s*50rpx/.test(privacyCompact) &&
-    /height\s*:\s*44rpx/.test(quickChip),
-    "hero + privacy + quick controls must stay within the compact height budget.",
-    "保持 hero padding 10rpx 12rpx、privacy compact 50rpx、quick chip 44rpx。");
-
-  check(/privacy-tip[^>]*wx:if="\{\{privacyExpanded\}\}"/.test(wxml) && wxml.includes("privacy-compact"),
-    "privacy full card must be conditional and have a compact state.",
-    "完整隐私卡使用 wx:if 绑定 privacyExpanded，折叠状态使用 privacy-compact。");
-
-  const assistantBody = getRule(wxss, ".message-row.assistant .message-body");
-  check(/(?:width|max-width)\s*:\s*calc\(100%\s*-\s*64rpx\)/.test(assistantBody),
-    "assistant message body must have its own width/max-width rule.",
-    "为 .message-row.assistant .message-body 设置 width/max-width: calc(100% - 64rpx);");
-
-  check(!/\{\{\s*card\.type\s*\}\}/.test(wxml),
-    "WXML must not render raw card.type.",
-    "在 JS 中生成 card.typeLabel，WXML 只渲染中文 label。");
+  const statusBar = getRule(wxss, ".top-status-bar");
+  assert(/height\s*:\s*6[0-9]rpx/.test(statusBar), "top status bar should stay under 72rpx");
 
   const composer = getRule(wxss, ".composer");
-  const aiPage = getRule(wxss, ".ai-page");
-  check(hasDecl(composer, "position", "fixed"),
-    "composer must stay fixed at the bottom.",
-    "保留 .composer { position: fixed; bottom: 0; }。");
-  check(/padding\s*:[^;]*210rpx/.test(aiPage) || /padding-bottom\s*:\s*(2[0-9]{2}|[3-9][0-9]{2})rpx/.test(aiPage),
-    "ai-page must reserve enough bottom padding for fixed composer.",
-    "为 .ai-page 预留约 210rpx 底部 padding，避免最后一条消息被遮挡。");
+  assert(/position\s*:\s*fixed/.test(composer), "composer must stay fixed");
+
+  const sheet = getRule(wxss, ".bottom-sheet");
+  assert(/position\s*:\s*fixed/.test(sheet) && /z-index\s*:\s*40/.test(sheet), "bottom sheet should overlay content");
+
+  const page = getRule(wxss, ".ai-page");
+  assert(/padding-bottom\s*:\s*(2[0-9]{2}|[3-9][0-9]{2})rpx/.test(page), "page should reserve room for fixed composer");
 
   console.log("test-ai-assistant-ui-layout passed");
 }
