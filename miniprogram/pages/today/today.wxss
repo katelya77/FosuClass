@@ -136,6 +136,11 @@
   justify-content: center;
 }
 
+.ai-today-card {
+  border-color: #ffd7d7;
+  background: #fffafa;
+}
+
 .disclaimer-line {
   margin-top: 16rpx;
   color: #8a94a6;

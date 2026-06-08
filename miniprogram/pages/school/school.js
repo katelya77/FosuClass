@@ -1850,6 +1850,16 @@ Page({
     });
   },
 
+  goAiAssistant() {
+    const keyword = String(this.data.keyword || "").trim();
+    const question = keyword
+      ? `帮我查${this.data.activeTab === "teacher" ? "老师" : (this.data.activeTab === "classroom" ? "教室" : "课程")} ${keyword}`
+      : "帮我查老师课表";
+    wx.navigateTo({
+      url: `/pages/ai-assistant/ai-assistant?q=${encodeURIComponent(question)}`,
+    });
+  },
+
   navigateToScheduleView(type, name, courses, scheduleMeta) {
     const semester = this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
     const meta = scheduleMeta || {};

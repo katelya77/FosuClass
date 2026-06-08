@@ -526,6 +526,12 @@
   color: #dc2626;
 }
 
+.action-btn.ai-btn {
+  border-color: #ffd7d7;
+  background: #fff7f7;
+  color: #b4232a;
+}
+
 /* 空状态卡片 */
 .empty-schedule-card {
   margin-top: 16rpx;

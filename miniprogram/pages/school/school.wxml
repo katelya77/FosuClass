@@ -83,6 +83,14 @@
       <text class="school-notice-text">{{schoolNotice.title}}</text>
     </view>
 
+    <view class="tool-entry-card ai-tool-entry card" bindtap="goAiAssistant">
+      <view class="tool-entry-main">
+        <view class="tool-entry-title">问 AI 帮我查课/找教室</view>
+        <view class="tool-entry-desc">用自然语言查教师、课程、教室或让 AI 推荐下一步操作</view>
+      </view>
+      <view class="tool-entry-action">去提问</view>
+    </view>
+
     <view class="tool-entry-card card" bindtap="goEmptyRoom">
       <view class="tool-entry-main">
         <view class="tool-entry-title">空教室查询</view>

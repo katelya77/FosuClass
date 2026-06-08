@@ -2,6 +2,43 @@
 
 用于课程表查看与今日上课提醒的原生微信小程序。
 
+## 2026 智能体应用创新大赛版本
+
+本仓库已新增“AI校园管家”能力，作品定位为《佛课小表·AI校园管家：面向佛山大学的课程与空间服务智能体》，参赛赛道为“2-E 数智生活—综合服务智能体开发 / 校园服务”。
+
+### AI 校园管家功能
+
+- 小程序新增 `pages/ai-assistant/ai-assistant` 页面，支持快捷问题、聊天输入、结构化结果卡片和一键跳转操作。
+- 后端新增 `POST /api/ai/agent/chat`，响应稳定包含 `answer`、`cards`、`toolCalls`、`suggestions`、`safety` 和 `serverTime`。
+- 智能体采用“工具优先”架构：先识别意图和槽位，再调用 Release Pack、全校索引、空教室、今日课表摘要、数据诊断等确定性工具，最后生成中文卡片。
+- 默认 `mockProvider` 可在无模型 key 的情况下演示“现在有空教室吗”“今天还有课吗”“查老师课表”“怎么导入个人课表”“为什么数据加载失败”等核心场景。
+
+### 架构图文字版
+
+```
+微信小程序 AI 助手页
+  -> /api/ai/agent/chat
+  -> safetyGuard 脱敏与上下文白名单
+  -> 意图识别与槽位抽取
+  -> toolRegistry 确定性工具
+  -> Release Pack / 空教室索引 / 全校查询 / 今日课表摘要 / 数据诊断
+  -> mock / deepseek / coze Provider
+  -> 结构化卡片 + 后续操作
+```
+
+### 参赛演示版本合规说明
+
+参赛演示版本建议使用境内服务器或校内可控网络部署，不调用境外 API，不把学号、密码、Cookie、JSESSIONID、ticket、Authorization、token、文件 base64 或完整原始文件内容发送给 AI Provider。个人课表只传递最小化课程摘要字段，日志只记录脱敏后的摘要、工具名和状态。
+
+原有文档中关于海外 VPS、Oracle VPS、1Panel 和 GitHub Actions 的说明保留为历史部署方案和长期运维方案；比赛演示时应明确切换为境内部署或本地演示，并保持 `AI_PROVIDER=mock` 或配置合规的国产 Provider。
+
+更多说明见：
+
+- [AI Agent 参赛设计](docs/competition-2026-agent-design.md)
+- [AI Agent 合规说明](docs/ai-agent-compliance.md)
+- [5 分钟演示脚本](docs/demo-script-5min.md)
+- [模型 Provider 配置](docs/model-provider-config.md)
+
 ## 长期数据演进与去中心化方案
 
 由于佛山大学强智教务网 `100.fosu.edu.cn` 仅限校园网内网（VPN）访问，且海外 Oracle VPS 服务器不建议也不应安装 EasyConnect（可能导致学校账号风控拦截、安全合规问题与异常登录），因此本项目采用**去中心化的“多维护者本地同步 + 用户贡献课表 + 管理员审核 + 后端缓存”的长期演进架构**。

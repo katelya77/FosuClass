@@ -351,6 +351,13 @@ Page({
     });
   },
 
+  goAiAssistant() {
+    this.hideMoreMenu();
+    wx.navigateTo({
+      url: "/pages/ai-assistant/ai-assistant",
+    });
+  },
+
   // 引导弹窗方法
   goToSelectClass() {
     this.setData({ showInitModal: false });

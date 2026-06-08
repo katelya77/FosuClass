@@ -203,6 +203,11 @@
   justify-content: center;
 }
 
+.ai-tool-entry {
+  border-color: #ffd7d7;
+  background: #fffafa;
+}
+
 /* 过滤面板卡片 */
 .filter-card {
   padding: 24rpx 20rpx;
