@@ -5,69 +5,8 @@ const projectKnowledgeService = require("./projectKnowledgeService");
 const safetyGuard = require("./safetyGuard");
 const toolRegistry = require("./toolRegistry");
 
-const ALLOWED_CARD_TYPES = new Set(["empty_room", "schedule", "teacher", "course", "diagnosis", "guide", "reminder", "generic"]);
-const ALLOWED_ACTION_TYPES = new Set(["navigate", "copy", "retry", "bind", "noop"]);
-const ALLOWED_NAVIGATION_URLS = new Set([
-  "/pages/school/school",
-  "/pages/today/today",
-  "/pages/empty-room/empty-room",
-  "/pages/schedule-view/schedule-view",
-  "/pages/personal-sync/personal-sync",
-  "/pages/ai-assistant/ai-assistant",
-]);
-
 function nowIso() {
   return new Date().toISOString();
-}
-
-function stableAction(action) {
-  const source = action || {};
-  let type = ALLOWED_ACTION_TYPES.has(source.type) ? source.type : "noop";
-  const rawUrl = String(source.url || "");
-  const pathOnly = rawUrl.split("?")[0];
-  if (rawUrl && (!pathOnly || !ALLOWED_NAVIGATION_URLS.has(pathOnly))) {
-    type = "noop";
-  }
-  return {
-    label: safetyGuard.redactSensitiveText(source.label || "查看").slice(0, 30),
-    type,
-    url: type === "noop" ? "" : rawUrl,
-    payload: source.payload && typeof source.payload === "object"
-      ? safetyGuard.sanitizeToolResult(source.payload)
-      : {},
-  };
-}
-
-function stableCard(card) {
-  const source = card || {};
-  const type = ALLOWED_CARD_TYPES.has(source.type) ? source.type : "generic";
-  const stable = {
-    type,
-    title: safetyGuard.redactSensitiveText(source.title || "结果卡片").slice(0, 80),
-    subtitle: safetyGuard.redactSensitiveText(source.subtitle || "").slice(0, 160),
-    badges: Array.isArray(source.badges) ? source.badges.slice(0, 8).map((item) => safetyGuard.redactSensitiveText(item).slice(0, 40)) : [],
-    items: Array.isArray(source.items) ? source.items.slice(0, 12).map((item) => {
-      const sourceItem = safetyGuard.sanitizeToolResult(item || {});
-      return {
-        title: safetyGuard.redactSensitiveText(sourceItem.title || "").slice(0, 80),
-        subtitle: safetyGuard.redactSensitiveText(sourceItem.subtitle || "").slice(0, 160),
-        value: safetyGuard.redactSensitiveText(sourceItem.value || "").slice(0, 80),
-      };
-    }) : [],
-    actions: Array.isArray(source.actions) ? source.actions.slice(0, 4).map(stableAction) : [],
-  };
-  if (source.allFinished === true) stable.allFinished = true;
-  if (source.variant === "error") stable.variant = "error";
-  return stable;
-}
-
-function stableGeneratedPayload(payload) {
-  const source = payload && typeof payload === "object" ? payload : {};
-  return {
-    answer: safetyGuard.redactSensitiveText(source.answer || "我已经根据项目内工具整理了结果。").slice(0, 1200),
-    cards: Array.isArray(source.cards) ? source.cards.slice(0, 6).map(stableCard) : [],
-    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6).map((item) => safetyGuard.redactSensitiveText(item).slice(0, 60)) : [],
-  };
 }
 
 function stableAction(action) {
@@ -109,49 +48,6 @@ function getItemCount(toolCalls) {
   return (Array.isArray(toolCalls) ? toolCalls : []).reduce((sum, item) => {
     return sum + countResultItems(item && item.result);
   }, 0);
-}
-
-function evaluateProviderPolicy(intent, toolCalls, policy, providerName) {
-  const normalizedPolicy = ["auto", "always", "tool-only"].includes(String(policy || "").toLowerCase())
-    ? String(policy).toLowerCase()
-    : "auto";
-  const provider = String(providerName || providerFactory.getProviderName() || "mock").toLowerCase();
-  const intentName = intent && intent.name || "generic";
-  const primary = getPrimaryToolResult(toolCalls);
-  const agentEnabled = String(process.env.AI_AGENT_ENABLED || "false").toLowerCase() !== "false";
-
-  if (!agentEnabled) return { useExternal: false, reason: "AI_AGENT_ENABLED=false" };
-  if (provider === "mock") return { useExternal: false, reason: "AI_PROVIDER=mock" };
-  if (normalizedPolicy === "tool-only") return { useExternal: false, reason: "AI_PROVIDER_POLICY=tool-only" };
-  if (intentName === "project_qa" || intentName === "conversational_help") {
-    return { useExternal: true, reason: "项目知识问答/自然聊天调用外部 Provider" };
-  }
-  if (intentName === "clarify_missing_slot") return { useExternal: false, reason: "缺少必要关键词，使用固定追问模板" };
-  if (intentName === "explain_personal_import") return { useExternal: false, reason: "导入指引用固定安全模板" };
-  if (intentName === "diagnose_data_status") return { useExternal: false, reason: "数据诊断使用本地模板" };
-  if (normalizedPolicy === "always") return { useExternal: true, reason: "" };
-  if (intentName === "search_school_index") {
-    const q = primary && primary.q || intent && intent.slots && intent.slots.q || "";
-    const items = primary && Array.isArray(primary.items) ? primary.items : [];
-    if (q && items.length === 0) {
-      return { useExternal: true, reason: "" };
-    }
-    if (!q) {
-      return { useExternal: false, reason: "缺少索引关键词，使用本地规则" };
-    }
-  }
-  if (intentName === "recommend_meeting_time") {
-    const candidates = primary && Array.isArray(primary.candidates) ? primary.candidates : [];
-    if (candidates.length) return { useExternal: true, reason: "" };
-  }
-  if (intentName === "search_empty_rooms") {
-    const rooms = primary && Array.isArray(primary.rooms) ? primary.rooms : [];
-    if (rooms.length > 1) return { useExternal: true, reason: "" };
-  }
-  if (Array.isArray(toolCalls) && toolCalls.filter((item) => item && item.status !== "skipped").length > 1) {
-    return { useExternal: true, reason: "" };
-  }
-  return { useExternal: false, reason: "简单工具结果使用本地规则" };
 }
 
 const FACT_TOOL_INTENTS = new Set([
