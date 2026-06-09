@@ -17,7 +17,8 @@ async function assertClarifies(message) {
   const names = response.toolCalls.map((item) => item.name);
   assert(names.includes("clarify_missing_slot"), `${message} should clarify, got ${names.join(",")}`);
   assert(!names.includes("search_school_index"), `${message} should not search index before required slot`);
-  assert(response.cards.some((card) => card.type === "guide"), `${message} should return guide card`);
+  assert.deepStrictEqual(response.cards, [], `${message} should not return duplicate guide card`);
+  assert(response.safety.pendingClarification || /XLS|课表摘要/.test(response.answer), `${message} should return pending slot or schedule-context guidance`);
   assert(/哪位|哪间|哪门|哪个|课表摘要|关键词/.test(response.answer), `${message} should ask a follow-up question`);
   assert.strictEqual(response.safety.externalProviderUsed, false);
 }

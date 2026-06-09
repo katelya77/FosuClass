@@ -11,6 +11,7 @@ const {
 const HISTORY_KEY = "FOSU_AI_ASSISTANT_HISTORY";
 const ALLOW_PERSONAL_CONTEXT_KEY = "FOSU_AI_ALLOW_PERSONAL_CONTEXT";
 const LAST_IMPORT_CONTEXT_KEY = "FOSU_AI_LAST_IMPORT_CONTEXT";
+const PENDING_CLARIFICATION_KEY = "FOSU_AI_PENDING_CLARIFICATION";
 const MAX_HISTORY = 20;
 const MAX_CONTEXT_COURSES = 80;
 const REDACTED = "[已脱敏]";
@@ -254,6 +255,49 @@ function getLatestScheduleImport() {
   return value && typeof value === "object" && !Array.isArray(value) ? value : null;
 }
 
+function normalizePendingClarification(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const type = ["teacher", "classroom", "course", "class"].indexOf(source.type) >= 0 ? source.type : "";
+  if (source.intentName !== "search_school_index" || !type) return null;
+  const expiresAt = Number(source.expiresAt || 0);
+  if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
+  return {
+    intentName: "search_school_index",
+    type,
+    missing: redactSensitiveText(source.missing || "").slice(0, 40),
+    createdAt: Number(source.createdAt || Date.now()) || Date.now(),
+    expiresAt,
+  };
+}
+
+function getPendingClarification() {
+  const pending = normalizePendingClarification(readStorage(PENDING_CLARIFICATION_KEY, null));
+  if (!pending) {
+    try {
+      wx.removeStorageSync(PENDING_CLARIFICATION_KEY);
+    } catch (error) {
+      // best effort
+    }
+  }
+  return pending;
+}
+
+function setPendingClarification(value) {
+  const pending = normalizePendingClarification(value);
+  if (!pending) return clearPendingClarification();
+  writeStorage(PENDING_CLARIFICATION_KEY, pending);
+  return pending;
+}
+
+function clearPendingClarification() {
+  try {
+    wx.removeStorageSync(PENDING_CLARIFICATION_KEY);
+  } catch (error) {
+    // best effort
+  }
+  return null;
+}
+
 function buildClientContext(extra = {}) {
   const now = new Date();
   const target = getCurrentScheduleTarget();
@@ -295,6 +339,7 @@ function buildClientContext(extra = {}) {
     timezone: "Asia/Shanghai",
     currentScheduleSummary: scheduleSummary,
     latestScheduleImport: latestImport,
+    pendingClarification: getPendingClarification(),
   };
 }
 
@@ -329,6 +374,7 @@ function saveAiHistory(messages) {
 function clearAiHistory() {
   try {
     wx.removeStorageSync(HISTORY_KEY);
+    wx.removeStorageSync(PENDING_CLARIFICATION_KEY);
   } catch (error) {
     // best effort
   }
@@ -354,17 +400,21 @@ module.exports = {
   ALLOW_PERSONAL_CONTEXT_KEY,
   HISTORY_KEY,
   LAST_IMPORT_CONTEXT_KEY,
+  PENDING_CLARIFICATION_KEY,
   buildClientContext,
   chat,
+  clearPendingClarification,
   clearAiHistory,
   formatLocalIsoWithOffset,
   getAiHistory,
   getLatestScheduleImport,
+  getPendingClarification,
   isPersonalContextAllowed,
   redactSensitiveText,
   rememberLatestScheduleImport,
   sanitizeCourse,
   sanitizeLocalScheduleForAI,
+  setPendingClarification,
   setPersonalContextAllowed,
   saveAiHistory,
 };

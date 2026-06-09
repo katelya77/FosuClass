@@ -2,6 +2,10 @@ const request = require("../utils/request");
 
 const PLATFORM_PREFETCH_CACHE_KEY = "FOSU_PLATFORM_PREFETCH_DATA";
 const PLATFORM_PERIODIC_CACHE_KEY = "FOSU_PLATFORM_PERIODIC_DATA";
+const PERIODIC_CACHE_TTL_MS = 10 * 60 * 1000;
+const PERIODIC_BACKGROUND_TIMEOUT_MS = 6000;
+
+let periodicInflight = null;
 
 function parseFetchedData(raw) {
   if (!raw) return null;
@@ -35,6 +39,12 @@ function readCache(key) {
   } catch (error) {
     return null;
   }
+}
+
+function isFreshCache(data, ttlMs) {
+  if (!data || typeof data !== "object") return false;
+  const savedAt = Number(data.savedAt || 0);
+  return Boolean(savedAt && Date.now() - savedAt < ttlMs);
 }
 
 function writeCache(key, data) {
@@ -84,24 +94,43 @@ async function loadPrefetchData(options = {}) {
 }
 
 async function loadPeriodicData(options = {}) {
+  const cached = readCache(PLATFORM_PERIODIC_CACHE_KEY);
+  if (!options.forceNetwork && isFreshCache(cached, options.cacheTtlMs || PERIODIC_CACHE_TTL_MS)) {
+    return Object.assign({ source: "cache-periodic" }, cached);
+  }
   const platformData = await readBackgroundFetchData("periodic");
   if (platformData) {
     writeCache(PLATFORM_PERIODIC_CACHE_KEY, platformData);
     return Object.assign({ source: "wechat-periodic" }, platformData);
   }
   if (options.network === false) {
-    return readCache(PLATFORM_PERIODIC_CACHE_KEY);
+    return cached;
   }
-  return request.get("/api/fosu/periodic-data", {}, {
+  if (periodicInflight) {
+    return periodicInflight;
+  }
+  periodicInflight = request.get("/api/fosu/periodic-data", {}, {
     showLoading: false,
     silentError: true,
-    timeout: options.timeout || 15000,
-    retries: options.retries === undefined ? 1 : options.retries,
+    suppressWarn: true,
+    timeout: options.periodicTimeout || Math.min(options.timeout || PERIODIC_BACKGROUND_TIMEOUT_MS, PERIODIC_BACKGROUND_TIMEOUT_MS),
+    retries: options.retries === undefined ? 0 : options.retries,
     skipSession: options.skipSession === true,
   }).then((data) => {
     writeCache(PLATFORM_PERIODIC_CACHE_KEY, data);
     return Object.assign({ source: "api-periodic" }, data);
-  }).catch(() => readCache(PLATFORM_PERIODIC_CACHE_KEY));
+  }).catch((error) => {
+    if (!options.silent) {
+      console.warn("[platform-data] periodic-data background refresh failed", {
+        code: error && (error.code || error.reasonCode),
+        elapsedMs: error && error.elapsedMs,
+      });
+    }
+    return cached || readCache(PLATFORM_PERIODIC_CACHE_KEY);
+  }).finally(() => {
+    periodicInflight = null;
+  });
+  return periodicInflight;
 }
 
 function getCachedPlatformSnapshot() {
@@ -117,4 +146,5 @@ module.exports = {
   loadPeriodicData,
   loadPrefetchData,
   readBackgroundFetchData,
+  readCache,
 };

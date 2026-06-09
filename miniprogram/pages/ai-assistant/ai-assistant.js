@@ -87,6 +87,28 @@ const CARD_TYPE_LABELS = {
   generic: "结果",
 };
 
+const CARD_TITLE_FALLBACKS = {
+  empty_room: "空教室推荐",
+  schedule: "今日课程",
+  teacher: "教师查询",
+  course: "课程查询",
+  diagnosis: "数据诊断",
+  guide: "使用指引",
+  reminder: "时间推荐",
+  generic: "结果",
+};
+
+const ACTION_LABEL_FALLBACKS = {
+  navigate: "查看详情",
+  retry: "重新尝试",
+  copy: "复制",
+  bind: "前往设置",
+  noop: "查看",
+};
+
+const ALLOWED_ACTION_TYPES = ["navigate", "copy", "retry", "bind", "noop"];
+const INVALID_DISPLAY_TEXT = new Set(["[object Object]", "undefined", "null", "NaN"]);
+
 function timeText() {
   const date = new Date();
   const pad = (value) => String(value).padStart(2, "0");
@@ -101,8 +123,29 @@ function decodeQuery(value) {
   }
 }
 
-function safeText(value, maxLength) {
-  const text = aiAssistantService.redactSensitiveText(value || "");
+function primitiveDisplayText(value) {
+  if (typeof value === "string") return value;
+  if (typeof value === "number") return Number.isFinite(value) ? String(value) : "";
+  if (typeof value === "boolean") return value ? "true" : "false";
+  return "";
+}
+
+function safeText(value, maxLength, fallback) {
+  let text = primitiveDisplayText(value);
+  if (!text && value && typeof value === "object" && !Array.isArray(value)) {
+    ["text", "label", "title", "value"].some((key) => {
+      const candidate = primitiveDisplayText(value[key]);
+      if (!candidate) return false;
+      text = candidate;
+      return true;
+    });
+  }
+  if (!text) text = primitiveDisplayText(fallback);
+  text = aiAssistantService.redactSensitiveText(text).trim();
+  if (!text || INVALID_DISPLAY_TEXT.has(text)) {
+    text = aiAssistantService.redactSensitiveText(primitiveDisplayText(fallback)).trim();
+  }
+  if (!text || INVALID_DISPLAY_TEXT.has(text)) return "";
   const limit = Number(maxLength || 0);
   return limit > 0 ? text.slice(0, limit) : text;
 }
@@ -153,6 +196,21 @@ function typeClass(type) {
   return String(type || "generic").toLowerCase().replace(/_/g, "-").replace(/[^a-z0-9-]/g, "") || "generic";
 }
 
+function mapProviderLabel(provider) {
+  const normalized = String(provider || "unknown").toLowerCase();
+  if (normalized.indexOf("deepseek") >= 0) return "DeepSeek";
+  if (normalized.indexOf("coze") >= 0) return "Coze";
+  if (normalized.indexOf("mock") >= 0) return "本地规则";
+  return "AI";
+}
+
+function mapSafetyModeLabel(mode) {
+  const normalized = String(mode || "tool-grounded").toLowerCase();
+  if (normalized.indexOf("fallback") >= 0) return "降级模式";
+  if (normalized.indexOf("tool") >= 0 || normalized.indexOf("grounded") >= 0) return "工具核验";
+  return "安全模式";
+}
+
 function normalizeSafety(safety) {
   const source = safety || {};
   const provider = source.resolvedProvider || source.provider || source.lastProvider || source.providerName || "unknown";
@@ -180,6 +238,33 @@ function normalizeSafety(safety) {
     providerLabel,
     modeLabel,
     text,
+  };
+}
+
+function normalizeSafety(safety) {
+  const source = safety || {};
+  const provider = source.resolvedProvider || source.provider || source.lastProvider || source.providerName || "unknown";
+  const desiredProvider = source.desiredProvider || source.provider || provider;
+  const mode = source.mode || source.safetyMode || "tool-grounded";
+  const fallbackReason = safeText(source.fallbackReason || "", 80);
+  const externalUsed = source.externalProviderUsed === true;
+  let text = "课表事实由工具核验";
+  if (fallbackReason) {
+    text = "模型暂不可用，已用本地规则";
+  } else if (externalUsed) {
+    text = `${mapProviderLabel(provider)} 已参与`;
+  }
+  return {
+    provider,
+    desiredProvider,
+    mode,
+    externalProviderUsed: externalUsed,
+    fallbackReason,
+    providerLabel: fallbackReason ? "已降级" : (externalUsed ? mapProviderLabel(provider) : "工具核验"),
+    modeLabel: mapSafetyModeLabel(mode),
+    text,
+    pendingClarification: source.pendingClarification || null,
+    clearPendingClarification: source.clearPendingClarification === true,
   };
 }
 
@@ -226,6 +311,37 @@ function normalizeCardAction(action, index) {
     label: safeText(source.label || "查看", 30),
     type: source.type || "noop",
     url: source.url || "",
+    payload: source.payload && typeof source.payload === "object" && !Array.isArray(source.payload) ? source.payload : {},
+    originalIndex: index,
+  };
+}
+
+function normalizeCardItem(item, index, cardType) {
+  const source = item && typeof item === "object" && !Array.isArray(item) ? item : {};
+  const subtitle = safeText(source.subtitle || source.desc || source.detail || "", 140);
+  const displaySubtitle = String(cardType || "") === "empty_room"
+    ? subtitle.replace(/(?:\s*·\s*)?容量未知/g, "").replace(/^\s*·\s*|\s*·\s*$/g, "")
+    : subtitle;
+  const normalized = {
+    key: `${safeText(source.title || source.name || "item", 60, "item")}-${index}`,
+    title: safeText(source.title || source.name || "", 80),
+    subtitle: safeText(displaySubtitle, 140),
+    value: safeText(source.value || source.time || source.status || "", 60),
+  };
+  return normalized.title || normalized.subtitle || normalized.value ? normalized : null;
+}
+
+function normalizeCardAction(action, index) {
+  const source = action && typeof action === "object" && !Array.isArray(action) ? action : {};
+  const rawType = safeText(source.type || "noop", 20, "noop").toLowerCase();
+  const type = ALLOWED_ACTION_TYPES.indexOf(rawType) >= 0 ? rawType : "noop";
+  const label = safeText(source.label, 30, ACTION_LABEL_FALLBACKS[type] || ACTION_LABEL_FALLBACKS.noop) ||
+    ACTION_LABEL_FALLBACKS[type] ||
+    ACTION_LABEL_FALLBACKS.noop;
+  return {
+    label,
+    type,
+    url: safeText(source.url || "", 240),
     payload: source.payload && typeof source.payload === "object" && !Array.isArray(source.payload) ? source.payload : {},
     originalIndex: index,
   };
@@ -299,6 +415,68 @@ function normalizeCard(card, messageId, index, expandedCards) {
   });
 }
 
+function normalizeCard(card, messageId, index, expandedCards) {
+  const source = card && typeof card === "object" && !Array.isArray(card) ? card : {};
+  const type = safeText(source.type || "generic", 30, "generic").toLowerCase() || "generic";
+  const rawTitle = safeText(source.title || "", 80);
+  const subtitle = safeText(source.subtitle || "", 140);
+  const scheduleLike = type === "schedule" || /今日|课程|课表|today|schedule/i.test(rawTitle);
+  const rawItems = Array.isArray(source.items) ? source.items : [];
+  const filteredRawItems = scheduleLike ? rawItems.filter((item) => !isInactiveScheduleItem(item)) : rawItems;
+  const items = filteredRawItems
+    .map((item, itemIndex) => normalizeCardItem(item, itemIndex, type))
+    .filter(Boolean);
+  const rawActions = Array.isArray(source.actions) ? source.actions : [];
+  const seenActions = {};
+  const actions = rawActions.map(normalizeCardAction)
+    .filter((action) => action && action.label && action.type !== "noop")
+    .filter((action) => {
+      const key = `${action.type}|${action.url}|${action.label}`;
+      if (seenActions[key]) return false;
+      seenActions[key] = true;
+      return true;
+    })
+    .slice(0, 3)
+    .map((action, actionIndex) => Object.assign({}, action, { originalIndex: actionIndex }));
+  const badges = Array.isArray(source.badges)
+    ? source.badges.map((item) => safeText(item, 36)).filter(Boolean).slice(0, 2)
+    : [];
+  const hasDisplayContent = rawTitle || subtitle || badges.length || items.length || actions.length;
+  if (!hasDisplayContent) return null;
+
+  const key = cardKey(messageId, source, index);
+  const expanded = Boolean(expandedCards && expandedCards[key]);
+  const visibleLimit = expanded ? 12 : 5;
+  const visibleItems = items.slice(0, visibleLimit);
+  const inactiveFilteredCount = Math.max(extractInactiveFilteredCount(source), rawItems.length - filteredRawItems.length);
+  const filteredHint = inactiveFilteredCount > 0 ? `已过滤 ${inactiveFilteredCount} 门非本周课程` : "";
+  const title = scheduleLike && source.allFinished === true
+    ? "今日课程已结束"
+    : (rawTitle || CARD_TITLE_FALLBACKS[type] || CARD_TITLE_FALLBACKS.generic);
+  const primaryActions = actions.slice(0, 1);
+  const secondaryActions = actions.slice(1, 3);
+  const errorClass = source.variant === "error" || /服务暂时不可用/.test(title) ? "card-error" : "";
+  return Object.assign({}, source, {
+    key,
+    title: safeText(title, 80, CARD_TITLE_FALLBACKS[type] || CARD_TITLE_FALLBACKS.generic),
+    subtitle,
+    badges,
+    items,
+    actions,
+    typeLabel: mapCardTypeLabel(type),
+    typeClass: typeClass(type),
+    visibleItems,
+    hiddenItemCount: Math.max(0, items.length - visibleItems.length),
+    overflowText: expanded ? "收起" : `展开 ${items.length - visibleItems.length} 条`,
+    overflowExpanded: expanded,
+    primaryActions,
+    secondaryActions,
+    actionLayoutClass: primaryActions.length === 1 ? "one-action" : "",
+    errorClass,
+    filteredHint,
+  });
+}
+
 function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
   const source = message || {};
   const id = source.id || `m-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -314,9 +492,9 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
     content: safeText(source.content || "", 1200),
     cards: Array.isArray(source.cards) ? source.cards : [],
     displayCards: Array.isArray(source.cards)
-      ? source.cards.slice(0, 5).map((card, index) => normalizeCard(card, id, index, expandedCards))
+      ? source.cards.slice(0, 5).map((card, index) => normalizeCard(card, id, index, expandedCards)).filter(Boolean)
       : [],
-    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6).map((item) => safeText(item, 60)) : [],
+    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6).map((item) => safeText(item, 60)).filter(Boolean) : [],
     toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls : [],
     displayToolCalls,
     safety: source.safety || null,
@@ -411,6 +589,27 @@ function buildHeaderSubtitle(state) {
   }
   if (source.lastExternalProviderUsed && String(source.lastProvider || "").toLowerCase().indexOf("deepseek") >= 0) {
     return "DeepSeek 已参与";
+  }
+  if (source.allowPersonalContext === true) {
+    return "已开启课表摘要";
+  }
+  return "课表事实由工具核验";
+}
+
+function buildHeaderSubtitle(state) {
+  const source = state || {};
+  if (source.lastFallbackReason) {
+    return "模型暂不可用，已用本地规则";
+  }
+  const provider = String(source.lastProvider || "").toLowerCase();
+  if (source.lastExternalProviderUsed && provider.indexOf("deepseek") >= 0) {
+    return "DeepSeek 已参与";
+  }
+  if (source.lastExternalProviderUsed && provider.indexOf("coze") >= 0) {
+    return "Coze 已参与";
+  }
+  if (source.lastProvider && source.lastProvider !== "unknown") {
+    return "课表事实由工具核验";
   }
   if (source.allowPersonalContext === true) {
     return "已开启课表摘要";
@@ -632,11 +831,17 @@ Page({
 
     aiAssistantService.chat(message, aiAssistantService.buildClientContext())
       .then((response) => {
+        const safety = response && response.safety || {};
+        if (safety.pendingClarification) {
+          aiAssistantService.setPendingClarification(safety.pendingClarification);
+        } else if (safety.clearPendingClarification || response && response.metrics && response.metrics.intentName !== "clarify_missing_slot") {
+          aiAssistantService.clearPendingClarification();
+        }
         const assistantMessage = makeMessage("assistant", response.answer || "我已经整理好结果。", {
           cards: Array.isArray(response.cards) ? response.cards : [],
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
           toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
-          safety: response.safety || null,
+          safety,
           metrics: response.metrics || null,
         });
         this.setMessages(this.data.messages.concat(assistantMessage), {
@@ -775,6 +980,7 @@ Page({
       success: (res) => {
         if (!res.confirm) return;
         aiAssistantService.clearAiHistory();
+        aiAssistantService.clearPendingClarification();
         this.setMessages([], { historyTrimNotice: false }, { save: false });
       },
     });

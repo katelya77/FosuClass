@@ -799,11 +799,18 @@ button::after {
 }
 
 .task-section-scroll {
-  max-height: calc(72vh - 124rpx);
+  box-sizing: border-box;
+  max-height: calc(72vh - 124rpx - env(safe-area-inset-bottom));
+  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
 }
 
 .task-section {
   margin-bottom: 16rpx;
+}
+
+.task-section:last-child {
+  margin-bottom: 0;
+  padding-bottom: calc(18rpx + env(safe-area-inset-bottom));
 }
 
 .task-section-title {
