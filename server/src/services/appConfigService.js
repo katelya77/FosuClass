@@ -3,6 +3,7 @@ const path = require("path");
 const crypto = require("crypto");
 const releaseService = require("./releaseService");
 const feedbackService = require("./feedbackService");
+const termRegistryService = require("./termRegistryService");
 const { safeLog } = require("../utils/safeLogger");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
@@ -25,7 +26,7 @@ const DEFAULT_DISCLAIMER = "课表仅供参考，以任课教师及教务通知�
 
 const DEFAULT_CONFIG = {
   appName: "佛课小表",
-  currentSemester: "2025-2026-2",
+  currentSemester: termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term,
   publishStatus: "online",
   dataVersion: {
     releaseVersion: "",
@@ -339,16 +340,32 @@ function resolveDataVersion(config) {
   };
 }
 
+function getActiveTermConfig(config) {
+  const activeTerm = termRegistryService.getActiveTerm();
+  if (activeTerm) return activeTerm;
+  return termRegistryService.normalizeTermRecord(Object.assign({}, termRegistryService.LEGACY_CURRENT_TERM_CONFIG, {
+    status: "current",
+    releaseVersion: config && config.dataVersion && config.dataVersion.releaseVersion || "",
+    dataAvailable: true,
+    updatedAt: config && config.updatedAt || new Date().toISOString(),
+    source: "legacy-compatibility-fallback",
+  }));
+}
+
 function getPublicAppConfig() {
   const config = getAdminConfig();
   const dataVersion = resolveDataVersion(config);
   const now = new Date();
+  const registry = termRegistryService.readRegistry();
+  const activeTerm = getActiveTermConfig(config);
+  const availableTerms = termRegistryService.getPublicTerms();
+  const registryUpdatedAt = registry && registry.updatedAt || activeTerm.updatedAt || config.updatedAt || "";
   
   let notices = listNotices().filter((notice) => isInDisplayWindow(notice, now));
   
   // 检查当前学期是否已发布数据
   const snapshot = releaseService.readActiveReleaseSnapshot();
-  if (!snapshot || snapshot.semester !== config.currentSemester) {
+  if (!snapshot || (snapshot.term || snapshot.semester) !== activeTerm.term) {
     notices.unshift({
       id: "temp_new_semester_syncing",
       title: "温馨提示",
@@ -369,12 +386,25 @@ function getPublicAppConfig() {
     success: true,
     data: {
       appName: config.appName,
-      currentSemester: config.currentSemester,
+      currentSemester: activeTerm.term,
+      termConfig: {
+        term: activeTerm.term,
+        semesterText: activeTerm.semesterText,
+        termStartDate: activeTerm.termStartDate,
+        totalWeeks: activeTerm.totalWeeks,
+        weekStart: activeTerm.weekStart,
+        source: activeTerm.source,
+        releaseVersion: activeTerm.releaseVersion || dataVersion.releaseVersion || "",
+      },
+      availableTerms,
       dataVersion,
       notices,
       news: listNews().filter((item) => item.enabled === true),
       disclaimer: config.disclaimer || DEFAULT_DISCLAIMER,
       updatedAt: config.updatedAt || "",
+      registryUpdatedAt,
+      cacheEpoch: registryUpdatedAt ? new Date(registryUpdatedAt).getTime() || Date.now() : Date.now(),
+      etag: termRegistryService.getRegistryEtag(registry),
     },
   };
 }
@@ -397,11 +427,16 @@ function getAdminDashboard() {
   const counts = getCounts();
   const feedbackStats = feedbackService.getFeedbackStats();
   const notices = listNotices();
+  const registry = termRegistryService.readRegistry();
+  const activeTerm = getActiveTermConfig(config);
   return {
     success: true,
     data: {
       appName: config.appName,
-      currentSemester: config.currentSemester,
+      currentSemester: activeTerm.term,
+      termConfig: activeTerm,
+      availableTerms: termRegistryService.getPublicTerms(),
+      termRegistryUpdatedAt: registry && registry.updatedAt || "",
       publishStatus: config.publishStatus,
       dataVersion,
       counts: {

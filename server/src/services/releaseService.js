@@ -4,6 +4,8 @@ const zlib = require("zlib");
 const { promisify } = require("util");
 const { safeLog } = require("../utils/safeLogger");
 const { calculateFingerprint } = require("../utils/stagingFingerprint");
+const termRegistryService = require("./termRegistryService");
+const termReleaseIndexService = require("./termReleaseIndexService");
 const {
   UNKNOWN_BUILDING_CODE,
   UNKNOWN_BUILDING_NAME,
@@ -1503,6 +1505,27 @@ function validateReleaseSnapshot(snapshot) {
     errors.push("classScheduleCount must be greater than 0");
   }
 
+  const term = snapshot.term || snapshot.semester || snapshot.termConfig && snapshot.termConfig.term || "";
+  try {
+    const termConfig = termRegistryService.normalizeTermRecord(Object.assign({}, snapshot.termConfig || {}, {
+      term,
+      termStartDate: snapshot.termConfig && snapshot.termConfig.termStartDate || snapshot.termStartDate || "",
+      totalWeeks: snapshot.termConfig && snapshot.termConfig.totalWeeks || snapshot.totalWeeks || 20,
+      weekStart: snapshot.termConfig && snapshot.termConfig.weekStart || snapshot.weekStart || "monday",
+      status: "ready",
+      releaseVersion: snapshot.version || snapshot.releaseVersion || "",
+      dataAvailable: true,
+      updatedAt: snapshot.updatedAt || new Date().toISOString(),
+      source: snapshot.source || "release-snapshot",
+    }));
+    const termValidation = termRegistryService.validateTermRecord(termConfig);
+    if (!termValidation.valid) {
+      termValidation.errors.forEach((error) => errors.push(`termConfig.${error}`));
+    }
+  } catch (error) {
+    errors.push(`termConfig.${error.code || error.message}`);
+  }
+
   errors.push.apply(errors, validateScheduleList(snapshot.classSchedules, "classSchedules", true));
 
   const resources = getResources(snapshot);
@@ -1524,7 +1547,9 @@ function buildBootstrap(snapshot, version, counts) {
     dataSource: "snapshot",
     updatedAt,
     version,
+    term: snapshot.term || snapshot.semester,
     semester: snapshot.semester,
+    termConfig: snapshot.termConfig || null,
     catalog: snapshot.catalog || {},
     counts,
     versions: {
@@ -1550,14 +1575,37 @@ function buildManifest(snapshot, version, counts, validation, files, derived) {
   const filesMeta = files ? buildReleasePackFilesMeta(files) : {};
   const staticUrls = buildStaticReleaseUrls(version, derived);
   const fingerprint = calculateFingerprint(snapshot);
+  const rawTermConfig = snapshot.termConfig && typeof snapshot.termConfig === "object" ? snapshot.termConfig : {};
+  const term = snapshot.term || snapshot.semester || rawTermConfig.term || "";
+  const legacyTermConfig = term === termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term
+    ? termRegistryService.LEGACY_CURRENT_TERM_CONFIG
+    : {};
+  const termConfig = termRegistryService.normalizeTermRecord({
+    term,
+    semesterText: rawTermConfig.semesterText || snapshot.semesterText || legacyTermConfig.semesterText || "",
+    termStartDate: rawTermConfig.termStartDate || snapshot.termStartDate || legacyTermConfig.termStartDate || "",
+    totalWeeks: rawTermConfig.totalWeeks || snapshot.totalWeeks || legacyTermConfig.totalWeeks || 20,
+    weekStart: rawTermConfig.weekStart || snapshot.weekStart || legacyTermConfig.weekStart || "monday",
+    status: "ready",
+    releaseVersion: version,
+    dataAvailable: true,
+    publishedAt: snapshot.publishedAt || updatedAt,
+    updatedAt,
+    source: rawTermConfig.source || snapshot.source || "release-snapshot",
+  });
   return {
     success: true,
     schemaVersion: 2,
     releasePackSchemaVersion: 1,
-    term: snapshot.term || snapshot.semester || "",
+    term: termConfig.term,
     releaseVersion: version,
     version,
-    semester: snapshot.semester || snapshot.term || "",
+    semester: snapshot.semester || snapshot.term || termConfig.term,
+    semesterText: termConfig.semesterText,
+    termStartDate: termConfig.termStartDate,
+    totalWeeks: termConfig.totalWeeks,
+    weekStart: termConfig.weekStart,
+    termConfig,
     updatedAt,
     cacheEpoch: new Date(updatedAt).getTime() || Date.now(),
     dataEpoch: new Date(updatedAt).getTime() || Date.now(),
@@ -1632,6 +1680,32 @@ function coerceSnapshot(rawSnapshot) {
   const snapshot = Object.assign({}, rawSnapshot || {});
   snapshot.version = normalizeVersion(snapshot.version || generateReleaseVersion());
   snapshot.updatedAt = snapshot.updatedAt || new Date().toISOString();
+  const rawTermConfig = snapshot.termConfig && typeof snapshot.termConfig === "object" ? snapshot.termConfig : {};
+  const term = snapshot.term || snapshot.semester || rawTermConfig.term || "";
+  if (term) {
+    const legacyTermConfig = term === termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term
+      ? termRegistryService.LEGACY_CURRENT_TERM_CONFIG
+      : {};
+    const termConfig = termRegistryService.normalizeTermRecord({
+      term,
+      semesterText: rawTermConfig.semesterText || snapshot.semesterText || legacyTermConfig.semesterText || "",
+      termStartDate: rawTermConfig.termStartDate || snapshot.termStartDate || legacyTermConfig.termStartDate || "",
+      totalWeeks: rawTermConfig.totalWeeks || snapshot.totalWeeks || legacyTermConfig.totalWeeks || 20,
+      weekStart: rawTermConfig.weekStart || snapshot.weekStart || legacyTermConfig.weekStart || "monday",
+      status: "ready",
+      releaseVersion: snapshot.version,
+      dataAvailable: true,
+      publishedAt: snapshot.publishedAt || snapshot.updatedAt,
+      updatedAt: snapshot.updatedAt,
+      source: rawTermConfig.source || snapshot.source || "release-snapshot",
+    });
+    snapshot.term = termConfig.term;
+    snapshot.semester = snapshot.semester || termConfig.term;
+    snapshot.termConfig = termConfig;
+    snapshot.termStartDate = snapshot.termStartDate || termConfig.termStartDate;
+    snapshot.totalWeeks = snapshot.totalWeeks || termConfig.totalWeeks;
+    snapshot.weekStart = snapshot.weekStart || termConfig.weekStart;
+  }
   snapshot.resources = getResources(snapshot);
   snapshot.coverage = Object.assign({}, snapshot.coverage || {}, countRelease(snapshot));
   return snapshot;
@@ -1771,7 +1845,12 @@ function readReleaseSnapshot(version) {
   }
   return {
     version: normalizeVersion(version),
-    semester: bootstrap.semester || manifest?.semester,
+    term: bootstrap.term || manifest?.term || manifest?.semester || bootstrap.semester,
+    semester: bootstrap.semester || manifest?.semester || manifest?.term,
+    termConfig: bootstrap.termConfig || manifest?.termConfig || null,
+    termStartDate: manifest?.termStartDate || manifest?.termConfig?.termStartDate || "",
+    totalWeeks: manifest?.totalWeeks || manifest?.termConfig?.totalWeeks || 20,
+    weekStart: manifest?.weekStart || manifest?.termConfig?.weekStart || "monday",
     updatedAt: bootstrap.updatedAt || manifest?.updatedAt,
     source: bootstrap.metaDetails?.source || manifest?.source || "local-sync-client",
     disclaimer: bootstrap.metaDetails?.disclaimer,
@@ -1787,6 +1866,37 @@ function writeCurrentSnapshotCompat(snapshot) {
   ensureStorageDirs();
   writeJsonAtomic(CURRENT_SNAPSHOT_PATH, snapshot);
   fs.writeFileSync(CURRENT_SNAPSHOT_GZ_PATH, zlib.gzipSync(Buffer.from(JSON.stringify(snapshot), "utf-8")));
+}
+
+function readFileBufferIfExists(filePath) {
+  try {
+    return fs.existsSync(filePath) ? fs.readFileSync(filePath) : null;
+  } catch (error) {
+    safeLog("release-activation-backup-read-failed", { filePath, error: error.message });
+    return null;
+  }
+}
+
+function restoreFileBuffer(filePath, buffer) {
+  try {
+    if (buffer == null) {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+      return;
+    }
+    ensureDir(path.dirname(filePath));
+    fs.writeFileSync(filePath, buffer);
+  } catch (error) {
+    safeLog("release-activation-rollback-file-failed", { filePath, error: error.message });
+  }
+}
+
+function restoreActivationState(previousState) {
+  if (!previousState) return;
+  restoreFileBuffer(ACTIVE_RELEASE_PATH, previousState.active);
+  restoreFileBuffer(CURRENT_SNAPSHOT_PATH, previousState.currentSnapshot);
+  restoreFileBuffer(CURRENT_SNAPSHOT_GZ_PATH, previousState.currentSnapshotGz);
+  restoreFileBuffer(termReleaseIndexService.TERM_INDEX_PATH, previousState.termIndex);
+  clearDerivedCache();
 }
 
 function activateReleaseVersion(version) {
@@ -1819,6 +1929,12 @@ function activateReleaseVersion(version) {
   const fingerprint = calculateFingerprint(snapshot);
   const cacheEpoch = Date.now();
   const forceRefreshToken = `${normalizedVersion}:${cacheEpoch}`;
+  const previousState = {
+    active: readFileBufferIfExists(ACTIVE_RELEASE_PATH),
+    currentSnapshot: readFileBufferIfExists(CURRENT_SNAPSHOT_PATH),
+    currentSnapshotGz: readFileBufferIfExists(CURRENT_SNAPSHOT_GZ_PATH),
+    termIndex: readFileBufferIfExists(termReleaseIndexService.TERM_INDEX_PATH),
+  };
   const active = {
     version: normalizedVersion,
     releaseVersion: normalizedVersion,
@@ -1836,14 +1952,33 @@ function activateReleaseVersion(version) {
     },
     term: snapshot.term || snapshot.semester || "",
     semester: snapshot.semester,
+    termConfig: snapshot.termConfig || null,
     counts: validation.counts,
     canonicalHash: fingerprint.canonicalHash,
   };
-  writeJsonAtomic(ACTIVE_RELEASE_PATH, active);
-  writeCurrentSnapshotCompat(Object.assign({}, snapshot, {
-    version: normalizedVersion,
-    coverage: Object.assign({}, snapshot.coverage || {}, validation.counts),
-  }));
+  try {
+    writeJsonAtomic(ACTIVE_RELEASE_PATH, active);
+    writeCurrentSnapshotCompat(Object.assign({}, snapshot, {
+      version: normalizedVersion,
+      releaseVersion: normalizedVersion,
+      coverage: Object.assign({}, snapshot.coverage || {}, validation.counts),
+    }));
+    const activeTerm = active.term || active.semester || "";
+    if (activeTerm) {
+      termReleaseIndexService.activateTerm(activeTerm, normalizedVersion);
+      const registryTerm = termRegistryService.getTerm(activeTerm);
+      if (registryTerm) {
+        if (registryTerm.releaseVersion !== normalizedVersion || registryTerm.status !== "ready") {
+          termRegistryService.bindReleaseToTerm(activeTerm, normalizedVersion, { status: "ready" });
+        }
+        termRegistryService.activateTerm(activeTerm, { source: "release-activate" });
+      }
+    }
+  } catch (error) {
+    restoreActivationState(previousState);
+    error.rollbackApplied = true;
+    throw error;
+  }
 
   return {
     active,
@@ -1876,6 +2011,7 @@ function getActiveReleaseInfo() {
     releaseVersion: active.version,
     term: semester,
     semester,
+    termConfig: active.termConfig || manifest?.termConfig || null,
     publishedAt: active.activatedAt || active.updatedAt || "",
     counts,
     canonicalHash: active.canonicalHash || manifest?.canonicalHash || "",
@@ -1898,6 +2034,7 @@ function getActiveReleaseInfo() {
       releaseVersion: manifest?.releaseVersion || manifest?.version || active.version,
       term: manifest?.term || manifest?.semester || semester,
       semester,
+      termConfig: manifest?.termConfig || active.termConfig || null,
       updatedAt: manifest?.updatedAt || active.updatedAt || "",
       generatedAt: manifest?.generatedAt || "",
       source: manifest?.source || "",
@@ -1970,6 +2107,8 @@ function getReleaseStatus() {
     activeReleaseUpdatedAt: active?.updatedAt || null,
     activeReleaseActivatedAt: active?.activatedAt || null,
     semester: active?.semester || snapshot?.semester || null,
+    term: active?.term || snapshot?.term || active?.semester || snapshot?.semester || null,
+    termConfig: active?.termConfig || snapshot?.termConfig || null,
     counts: validation?.counts || active?.counts || {},
     valid: validation ? validation.valid : false,
     errors: validation ? validation.errors : [],
@@ -2228,8 +2367,12 @@ function assertHealthyReleasePack(version) {
   return status;
 }
 
-function getReleasePackManifest(version) {
-  const targetVersion = normalizeVersion(version || getActiveReleaseInfo()?.version || "");
+function getReleasePackManifest(version, options = {}) {
+  const resolved = resolveTermAwareReleaseVersion(Object.assign({}, options, { releaseVersion: version || options.releaseVersion || options.version || "" }));
+  if (!resolved.success) {
+    return termMismatchPayload({}, resolved, { releaseVersion: version });
+  }
+  const targetVersion = normalizeVersion(resolved.releaseVersion || version || getActiveReleaseInfo()?.version || "");
   if (!targetVersion) {
     return { success: false, code: "NO_ACTIVE_RELEASE", reasonCode: "NO_ACTIVE_RELEASE" };
   }
@@ -2276,6 +2419,7 @@ function getReleasePackManifest(version) {
     releasePackSchemaVersion: 1,
     term: "",
     semester: "",
+    termConfig: null,
     version: targetVersion,
     releaseVersion: targetVersion,
     updatedAt: "",
@@ -2467,6 +2611,163 @@ function readReleasePackStaticManifest(version) {
   return readStaticReleaseJson(normalizedVersion, "manifest.json") || readJsonFile(getReleaseFiles(normalizedVersion).manifestPath);
 }
 
+function resolveTermAwareReleaseVersion(options = {}) {
+  const requestedTerm = String(options.term || options.semester || "").trim();
+  const requestedVersion = normalizeVersion(options.releaseVersion || options.version || "");
+  if (requestedTerm) {
+    const termValidation = termRegistryService.validateTermId(requestedTerm);
+    if (!termValidation.valid) {
+      return {
+        success: false,
+        code: "TERM_NOT_FOUND",
+        reasonCode: "TERM_NOT_FOUND",
+        term: requestedTerm,
+        releaseVersion: requestedVersion,
+      };
+    }
+    const term = termRegistryService.getTerm(termValidation.term);
+    if (!term) {
+      if (termValidation.term === termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term) {
+        const active = getActiveReleaseInfo() || {};
+        const targetVersion = requestedVersion || normalizeVersion(active.releaseVersion || active.version || "");
+        const manifest = targetVersion ? readReleasePackStaticManifest(targetVersion) : null;
+        const manifestTerm = manifest && (manifest.term || manifest.semester || manifest.termConfig && manifest.termConfig.term) || active.term || active.semester || "";
+        if (targetVersion && (!manifestTerm || manifestTerm === termValidation.term)) {
+          return {
+            success: true,
+            term: termValidation.term,
+            releaseVersion: targetVersion,
+            termRecord: null,
+            legacyCompatibility: true,
+          };
+        }
+        const legacySnapshot = readCurrentSnapshotCompat();
+        const legacySnapshotTerm = legacySnapshot && (legacySnapshot.term || legacySnapshot.semester) || "";
+        if (!requestedVersion && legacySnapshotTerm === termValidation.term) {
+          return {
+            success: true,
+            term: termValidation.term,
+            releaseVersion: "",
+            termRecord: null,
+            legacyCompatibility: true,
+          };
+        }
+      }
+      return {
+        success: false,
+        code: "TERM_NOT_FOUND",
+        reasonCode: "TERM_NOT_FOUND",
+        term: termValidation.term,
+        releaseVersion: requestedVersion,
+      };
+    }
+    if (term.status === "disabled") {
+      return {
+        success: false,
+        code: "TERM_DISABLED",
+        reasonCode: "TERM_DISABLED",
+        term: termValidation.term,
+        releaseVersion: requestedVersion,
+      };
+    }
+    if (!term.dataAvailable || !term.releaseVersion) {
+      if (termValidation.term === termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term) {
+        const active = getActiveReleaseInfo() || {};
+        const targetVersion = requestedVersion || normalizeVersion(active.releaseVersion || active.version || "");
+        const manifest = targetVersion ? readReleasePackStaticManifest(targetVersion) : null;
+        const manifestTerm = manifest && (manifest.term || manifest.semester || manifest.termConfig && manifest.termConfig.term) || active.term || active.semester || "";
+        if (targetVersion && (!manifestTerm || manifestTerm === termValidation.term)) {
+          return {
+            success: true,
+            term: termValidation.term,
+            releaseVersion: targetVersion,
+            termRecord: term,
+            legacyCompatibility: true,
+          };
+        }
+        const legacySnapshot = readCurrentSnapshotCompat();
+        const legacySnapshotTerm = legacySnapshot && (legacySnapshot.term || legacySnapshot.semester) || "";
+        if (!requestedVersion && legacySnapshotTerm === termValidation.term) {
+          return {
+            success: true,
+            term: termValidation.term,
+            releaseVersion: "",
+            termRecord: term,
+            legacyCompatibility: true,
+          };
+        }
+      }
+      return {
+        success: false,
+        code: "TERM_NOT_PUBLISHED",
+        reasonCode: "TERM_NOT_PUBLISHED",
+        term: termValidation.term,
+        releaseVersion: requestedVersion,
+        dataAvailable: false,
+      };
+    }
+    const mappedVersion = termReleaseIndexService.getActiveReleaseVersionForTerm(termValidation.term) || term.releaseVersion || "";
+    const targetVersion = requestedVersion || mappedVersion;
+    if (!targetVersion) {
+      return {
+        success: false,
+        code: "TERM_DATA_MISSING",
+        reasonCode: "TERM_DATA_MISSING",
+        term: termValidation.term,
+        releaseVersion: "",
+      };
+    }
+    const manifest = readReleasePackStaticManifest(targetVersion);
+    const manifestTerm = manifest && (manifest.term || manifest.semester || manifest.termConfig && manifest.termConfig.term) || "";
+    if (manifestTerm && manifestTerm !== termValidation.term) {
+      return {
+        success: false,
+        code: "TERM_DATA_MISMATCH",
+        reasonCode: "TERM_DATA_MISMATCH",
+        term: termValidation.term,
+        manifestTerm,
+        releaseVersion: targetVersion,
+      };
+    }
+    if (requestedVersion && mappedVersion && requestedVersion !== mappedVersion) {
+      const requestedManifest = readReleasePackStaticManifest(requestedVersion);
+      const requestedManifestTerm = requestedManifest && (requestedManifest.term || requestedManifest.semester || requestedManifest.termConfig && requestedManifest.termConfig.term) || "";
+      if (requestedManifestTerm && requestedManifestTerm !== termValidation.term) {
+        return {
+          success: false,
+          code: "TERM_DATA_MISMATCH",
+          reasonCode: "TERM_DATA_MISMATCH",
+          term: termValidation.term,
+          manifestTerm: requestedManifestTerm,
+          releaseVersion: requestedVersion,
+        };
+      }
+    }
+    return {
+      success: true,
+      term: termValidation.term,
+      releaseVersion: targetVersion,
+      termRecord: term,
+    };
+  }
+  return {
+    success: true,
+    term: "",
+    releaseVersion: requestedVersion,
+    termRecord: null,
+  };
+}
+
+function termMismatchPayload(base, resolved, fallback = {}) {
+  return Object.assign({
+    success: false,
+    code: resolved.code || "TERM_DATA_MISMATCH",
+    reasonCode: resolved.reasonCode || resolved.code || "TERM_DATA_MISMATCH",
+    term: resolved.term || fallback.term || "",
+    releaseVersion: resolved.releaseVersion || fallback.releaseVersion || "",
+  }, base || {}, resolved);
+}
+
 function normalizeStaticIndexPayload(kind, payload, version) {
   const manifest = readReleasePackStaticManifest(version) || {};
   const items = Array.isArray(payload) ? payload : (Array.isArray(payload?.items) ? payload.items : null);
@@ -2486,8 +2787,10 @@ function normalizeStaticIndexPayload(kind, payload, version) {
   });
 }
 
-function readReleasePackStaticIndex(kind, version, shard = "") {
-  const normalizedVersion = normalizeVersion(version || getActiveReleaseInfo()?.version || "");
+function readReleasePackStaticIndex(kind, version, shard = "", options = {}) {
+  const resolved = resolveTermAwareReleaseVersion(Object.assign({}, options, { releaseVersion: version || options.releaseVersion || options.version || "" }));
+  if (!resolved.success) return null;
+  const normalizedVersion = normalizeVersion(resolved.releaseVersion || version || getActiveReleaseInfo()?.version || "");
   if (!normalizedVersion || !["class", "teacher", "classroom", "course"].includes(kind)) return null;
   const candidates = [];
   if (kind === "class" && shard) {
@@ -2497,24 +2800,28 @@ function readReleasePackStaticIndex(kind, version, shard = "") {
   for (const relativePath of candidates) {
     const payload = readStaticReleaseJson(normalizedVersion, relativePath);
     const normalized = normalizeStaticIndexPayload(kind, payload, normalizedVersion);
-    if (normalized) return normalized;
+    if (normalized && (!resolved.term || normalized.term === resolved.term || normalized.semester === resolved.term)) return normalized;
   }
   return null;
 }
 
-function readReleasePackStaticDetail(kind, id, version) {
-  const normalizedVersion = normalizeVersion(version || getActiveReleaseInfo()?.version || "");
+function readReleasePackStaticDetail(kind, id, version, options = {}) {
+  const resolved = resolveTermAwareReleaseVersion(Object.assign({}, options, { releaseVersion: version || options.releaseVersion || options.version || "" }));
+  if (!resolved.success) return null;
+  const normalizedVersion = normalizeVersion(resolved.releaseVersion || version || getActiveReleaseInfo()?.version || "");
   if (!normalizedVersion || !["class", "teacher", "classroom", "course"].includes(kind) || !id) return null;
   const safeId = safeScheduleId(kind, id, id, 0);
   const schedule = readStaticReleaseJson(normalizedVersion, `detail/${kind}/${safeId}.json`);
   if (!schedule) return null;
   const manifest = readReleasePackStaticManifest(normalizedVersion) || {};
+  const term = schedule.term || schedule.semester || manifest.term || "";
+  if (resolved.term && term && term !== resolved.term) return null;
   return {
     success: true,
     schemaVersion: 1,
     type: kind,
     id: safeId,
-    term: schedule.term || schedule.semester || manifest.term || "",
+    term,
     semester: schedule.semester || schedule.term || manifest.semester || manifest.term || "",
     releaseVersion: normalizedVersion,
     version: normalizedVersion,
@@ -2525,11 +2832,15 @@ function readReleasePackStaticDetail(kind, id, version) {
   };
 }
 
-function readReleasePackStaticEmptyRoom(version) {
-  const normalizedVersion = normalizeVersion(version || getActiveReleaseInfo()?.version || "");
+function readReleasePackStaticEmptyRoom(version, options = {}) {
+  const resolved = resolveTermAwareReleaseVersion(Object.assign({}, options, { releaseVersion: version || options.releaseVersion || options.version || "" }));
+  if (!resolved.success) return null;
+  const normalizedVersion = normalizeVersion(resolved.releaseVersion || version || getActiveReleaseInfo()?.version || "");
   if (!normalizedVersion) return null;
   const payload = readStaticReleaseJson(normalizedVersion, "empty-room/index.json");
   if (!payload || !Array.isArray(payload.rooms)) return null;
+  const term = payload.term || payload.semester || "";
+  if (resolved.term && term && term !== resolved.term) return null;
   return Object.assign({}, payload, {
     success: true,
     releaseVersion: payload.releaseVersion || normalizedVersion,
@@ -2601,7 +2912,12 @@ function ensureDerivedIndexes(version, fallbackSnapshot) {
   return files;
 }
 
-function readActiveIndex(kind, version) {
+function readActiveIndex(kind, version, options = {}) {
+  const resolved = resolveTermAwareReleaseVersion(Object.assign({}, options, { releaseVersion: version || options.releaseVersion || options.version || "" }));
+  if (!resolved.success) {
+    return termMismatchPayload({ items: [] }, resolved, { releaseVersion: version });
+  }
+  version = resolved.releaseVersion || version;
   let active;
   if (version) {
     const normalized = normalizeVersion(version);
@@ -2643,6 +2959,14 @@ function readActiveIndex(kind, version) {
   if (!active || !active.version) {
     return { success: false, code: "NO_ACTIVE_RELEASE", reasonCode: "NO_ACTIVE_RELEASE", items: [] };
   }
+  if (resolved.term && active.semester && active.semester !== resolved.term) {
+    return termMismatchPayload({ items: [] }, Object.assign({}, resolved, {
+      code: "TERM_DATA_MISMATCH",
+      reasonCode: "TERM_DATA_MISMATCH",
+      manifestTerm: active.semester,
+      releaseVersion: active.version,
+    }));
+  }
   const files = ensureDerivedIndexes(active.version, active.snapshot);
   const info = getDerivedFileInfo(kind, files);
   if (!info || !fs.existsSync(info.indexPath)) {
@@ -2679,7 +3003,7 @@ function readActiveIndex(kind, version) {
 
 function searchActiveIndex(kind, query, options = {}) {
   const version = options.releaseVersion || options.version;
-  const index = readActiveIndex(kind, version);
+  const index = readActiveIndex(kind, version, options);
   if (!index.success) {
     return index;
   }
@@ -2729,7 +3053,12 @@ function searchActiveIndex(kind, query, options = {}) {
   });
 }
 
-function readActiveSchedule(kind, id, version) {
+function readActiveSchedule(kind, id, version, options = {}) {
+  const resolved = resolveTermAwareReleaseVersion(Object.assign({}, options, { releaseVersion: version || options.releaseVersion || options.version || "" }));
+  if (!resolved.success) {
+    return termMismatchPayload({}, resolved, { releaseVersion: version });
+  }
+  version = resolved.releaseVersion || version;
   let active;
   if (version) {
     const normalized = normalizeVersion(version);
@@ -2763,6 +3092,14 @@ function readActiveSchedule(kind, id, version) {
   }
   if (!active || !active.version) {
     return { success: false, code: "NO_ACTIVE_RELEASE", reasonCode: "NO_ACTIVE_RELEASE" };
+  }
+  if (resolved.term && active.semester && active.semester !== resolved.term) {
+    return termMismatchPayload({}, Object.assign({}, resolved, {
+      code: "TERM_DATA_MISMATCH",
+      reasonCode: "TERM_DATA_MISMATCH",
+      manifestTerm: active.semester,
+      releaseVersion: active.version,
+    }));
   }
   const files = ensureDerivedIndexes(active.version, active.snapshot);
   const info = getDerivedFileInfo(kind, files);
@@ -2813,7 +3150,12 @@ function ensureEmptyRoomIndex(version, fallbackSnapshot) {
   return files;
 }
 
-function readEmptyRoomIndex(version) {
+function readEmptyRoomIndex(version, options = {}) {
+  const resolved = resolveTermAwareReleaseVersion(Object.assign({}, options, { releaseVersion: version || options.releaseVersion || options.version || "" }));
+  if (!resolved.success) {
+    return termMismatchPayload({ rooms: [], buildings: [] }, resolved, { releaseVersion: version });
+  }
+  version = resolved.releaseVersion || version;
   let active;
   if (version) {
     const normalized = normalizeVersion(version);
@@ -2853,6 +3195,14 @@ function readEmptyRoomIndex(version) {
   }
   if (!active || !active.version) {
     return { success: false, code: "NO_ACTIVE_RELEASE", reasonCode: "NO_ACTIVE_RELEASE", rooms: [] };
+  }
+  if (resolved.term && active.semester && active.semester !== resolved.term) {
+    return termMismatchPayload({ rooms: [], buildings: [] }, Object.assign({}, resolved, {
+      code: "TERM_DATA_MISMATCH",
+      reasonCode: "TERM_DATA_MISMATCH",
+      manifestTerm: active.semester,
+      releaseVersion: active.version,
+    }));
   }
 
   const files = ensureEmptyRoomIndex(active.version, active.snapshot);
@@ -2983,7 +3333,7 @@ function formatSectionRange(sections) {
 
 function queryEmptyClassrooms(options = {}) {
   const requestedVersion = options.releaseVersion || options.version || "";
-  const index = readEmptyRoomIndex(requestedVersion);
+  const index = readEmptyRoomIndex(requestedVersion, options);
   if (!index.success) {
     return Object.assign({}, index, {
       query: {},

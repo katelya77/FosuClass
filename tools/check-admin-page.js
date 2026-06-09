@@ -47,8 +47,11 @@ function assertStaticHtml(html) {
   assertIncludes(html, 'id="staging-cli-upload-panel"', "always-visible staging upload panel");
   assertIncludes(html, 'id="quickUploadCommand"', "quick staging CLI command");
   assertIncludes(html, 'id="release-history-panel"', "bottom release history panel");
-  assertIncludes(html, '"2025-2026-2": "2026-03-09"', "2025-2026-2 startDate mapping");
   assertIncludes(html, "syncWizardStartDateWithTerm", "term startDate auto-sync helper");
+  assertIncludes(html, "state.terms", "term registry-backed startDate mapping");
+  if (html.includes('"2025-2026-2": "2026-03-09"')) {
+    fail("sync wizard must not hardcode the legacy term start date");
+  }
   ["#eef3f8", "#cfe0ff", "#8fbaff", "#4f86e8", "#1d4ed8"].forEach((color) => {
     assertIncludes(html, color, `heatmap color ${color}`);
   });

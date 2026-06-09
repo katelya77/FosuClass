@@ -52,6 +52,24 @@ function withStartupSessionOptions(options) {
   return next;
 }
 
+function getStartupCachedTerm() {
+  const config = appConfigService.getCachedAppConfig && appConfigService.getCachedAppConfig();
+  const configData = config && config.data ? config.data : config;
+  if (configData) {
+    const term = configData.currentSemester ||
+      configData.term ||
+      configData.termConfig && configData.termConfig.term ||
+      configData.availableTerms && configData.availableTerms[0] && configData.availableTerms[0].term;
+    if (term) return term;
+  }
+  const bootstrap = readStorageQuiet(BOOTSTRAP_CACHE_KEY);
+  if (bootstrap && (bootstrap.term || bootstrap.semester || bootstrap.currentSemester)) {
+    return bootstrap.term || bootstrap.semester || bootstrap.currentSemester;
+  }
+  const platformSnapshot = platformDataService.getCachedPlatformSnapshot && platformDataService.getCachedPlatformSnapshot();
+  return platformSnapshot && platformSnapshot.term || "";
+}
+
 App({
   globalData: {
     appName: BRAND.appName,
@@ -89,7 +107,8 @@ App({
 
   loadReleasePackData(options) {
     const opt = options || {};
-    const localActive = releasePackService.getLocalActiveRelease();
+    const cachedTerm = getStartupCachedTerm();
+    const localActive = releasePackService.getLocalActiveRelease(cachedTerm);
     if (localActive) {
       this.globalData.activeRelease = localActive;
       termConfigService.applyRuntimeTermConfigFromApp(this);
@@ -98,6 +117,7 @@ App({
       return Promise.resolve(localActive || null);
     }
     return releasePackService.switchReleaseSafely({
+      term: cachedTerm,
       dedupe: true,
       forceNetwork: Boolean(opt.forceNetwork),
       timeout: opt.timeout || 5000,

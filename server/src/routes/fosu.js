@@ -8,6 +8,7 @@ const appConfigService = require("../services/appConfigService");
 const schoolCatalogService = require("../services/schoolCatalogService");
 const scheduleService = require("../services/scheduleService");
 const releaseService = require("../services/releaseService");
+const termRegistryService = require("../services/termRegistryService");
 const { scheduleLimiter } = require("../utils/rateLimit");
 const { safeLog } = require("../utils/safeLogger");
 const { createStaticAccessTicket } = require("../utils/staticAccessTicket");
@@ -119,7 +120,8 @@ function getActivePlatformSnapshot(req) {
     data.updatedAt ||
     "";
   const releaseVersion = active.releaseVersion || active.version || dataVersion.releaseVersion || "";
-  const term = active.term || active.semester || data.currentSemester || data.term || "2025-2026-2";
+  const fallbackActiveTerm = termRegistryService.getActiveTerm();
+  const term = active.term || active.semester || data.currentSemester || data.term || fallbackActiveTerm && fallbackActiveTerm.term || "";
   return {
     term,
     releaseVersion,
@@ -176,7 +178,8 @@ router.get("/app-config", (req, res) => {
     const rawConfig = appConfigService.getPublicAppConfig();
     if (rawConfig && rawConfig.success && rawConfig.data) {
       const activeVer = rawConfig.data.dataVersion?.releaseVersion || "";
-      const term = rawConfig.data.currentSemester || "2025-2026-2";
+      const fallbackActiveTerm = termRegistryService.getActiveTerm();
+      const term = rawConfig.data.currentSemester || fallbackActiveTerm && fallbackActiveTerm.term || "";
       const dataUpdatedAt = rawConfig.data.dataVersion?.classScheduleUpdatedAt || rawConfig.data.updatedAt || "";
       rawConfig.data.term = term;
       rawConfig.data.releaseVersion = activeVer;
@@ -185,7 +188,7 @@ router.get("/app-config", (req, res) => {
       rawConfig.data.dataUpdatedAt = dataUpdatedAt;
       rawConfig.data.cacheVersion = activeVer;
       const activeInfo = releaseService.getActiveReleaseInfo() || {};
-      rawConfig.data.cacheEpoch = activeInfo.cacheEpoch || new Date(dataUpdatedAt).getTime() || Date.now();
+      rawConfig.data.cacheEpoch = rawConfig.data.cacheEpoch || activeInfo.cacheEpoch || new Date(dataUpdatedAt).getTime() || Date.now();
       rawConfig.data.forceRefreshToken = activeInfo.forceRefreshToken || "";
       rawConfig.data.packStatus = activeInfo.releasePack || activeInfo.packStatus || {};
       rawConfig.data.minClientCacheSchema = 5;
@@ -201,9 +204,32 @@ router.get("/app-config", (req, res) => {
         rawConfig.data.shards = manifest.shards;
       }
     }
+    if (rawConfig && rawConfig.data && rawConfig.data.etag) {
+      res.setHeader("ETag", rawConfig.data.etag);
+      if (req.headers["if-none-match"] === rawConfig.data.etag) {
+        return res.status(304).end();
+      }
+    }
     res.json(rawConfig);
   } catch (error) {
     handleRouteError(res, error, "get-app-config-failed");
+  }
+});
+
+router.get("/terms", (req, res) => {
+  try {
+    const registry = termRegistryService.readRegistry();
+    const payload = {
+      success: true,
+      activeTerm: registry && registry.activeTerm || "",
+      availableTerms: termRegistryService.getPublicTerms(),
+      updatedAt: registry && registry.updatedAt || "",
+      cacheEpoch: registry && registry.updatedAt ? new Date(registry.updatedAt).getTime() : Date.now(),
+      etag: termRegistryService.getRegistryEtag(registry),
+    };
+    return sendCacheableJson(req, res, payload, 60);
+  } catch (error) {
+    handleRouteError(res, error, "get-terms-failed");
   }
 });
 
@@ -515,7 +541,7 @@ function sendReleasePackJson(req, res, payload, releaseVersion, maxAgeSeconds) {
 router.get("/release-pack/manifest", scheduleLimiter, (req, res) => {
   try {
     const releaseVersion = String(req.query.releaseVersion || req.query.version || "").trim();
-    const manifest = releaseService.getReleasePackManifest(releaseVersion);
+    const manifest = releaseService.getReleasePackManifest(releaseVersion, req.query);
     if (!manifest.success) {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       return res.status(200).json(manifest);
@@ -545,8 +571,8 @@ router.get("/release-pack/index/:type", scheduleLimiter, (req, res) => {
       });
     }
     const shard = String(req.query.shard || "").replace(/^\/+/, "");
-    const result = releaseService.readReleasePackStaticIndex(type, releaseVersion, shard) ||
-      releaseService.readActiveIndex(type, releaseVersion);
+    const result = releaseService.readReleasePackStaticIndex(type, releaseVersion, shard, req.query) ||
+      releaseService.readActiveIndex(type, releaseVersion, req.query);
     if (!result.success) {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       const code = result.code || result.reasonCode || "INDEX_NOT_FOUND";
@@ -583,8 +609,8 @@ router.get("/release-pack/detail/:type/:id", scheduleLimiter, (req, res) => {
         message: "type must be teacher, classroom, course, or class",
       });
     }
-    const result = releaseService.readReleasePackStaticDetail(type, id, releaseVersion) ||
-      releaseService.readActiveSchedule(type, id, releaseVersion);
+    const result = releaseService.readReleasePackStaticDetail(type, id, releaseVersion, req.query) ||
+      releaseService.readActiveSchedule(type, id, releaseVersion, req.query);
     if (!result.success) {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       const code = result.code || result.reasonCode || "DETAIL_NOT_FOUND";
@@ -617,8 +643,8 @@ router.get("/release-pack/detail/:type/:id", scheduleLimiter, (req, res) => {
 router.get("/release-pack/empty-room", scheduleLimiter, (req, res) => {
   try {
     const releaseVersion = String(req.query.releaseVersion || req.query.version || "").trim();
-    const result = releaseService.readReleasePackStaticEmptyRoom(releaseVersion) ||
-      releaseService.readEmptyRoomIndex(releaseVersion);
+    const result = releaseService.readReleasePackStaticEmptyRoom(releaseVersion, req.query) ||
+      releaseService.readEmptyRoomIndex(releaseVersion, req.query);
     if (!result.success) {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       const code = result.code || result.reasonCode || "EMPTY_ROOM_INDEX_NOT_FOUND";
@@ -641,7 +667,7 @@ router.get("/release-pack/empty-room", scheduleLimiter, (req, res) => {
 });
 
 router.get("/bootstrap", async (req, res) => {
-  const semester = req.query.semester;
+  const semester = req.query.term || req.query.semester;
   try {
     res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
     res.setHeader("Pragma", "no-cache");
@@ -649,7 +675,7 @@ router.get("/bootstrap", async (req, res) => {
     const data = await schoolCatalogService.getBootstrap(semester);
     if (data && data.success) {
       const activeVer = data.version || data.versions?.snapshot || "";
-      const term = data.semester || "2025-2026-2";
+      const term = data.term || data.semester || "";
       const dataUpdatedAt = data.updatedAt || (data.metaDetails && data.metaDetails.catalogUpdatedAt) || "";
       data.term = term;
       data.releaseVersion = activeVer;
@@ -818,7 +844,7 @@ router.get("/search-index", scheduleLimiter, (req, res) => {
  * GET /api/fosu/catalog
  */
 router.get("/catalog", async (req, res) => {
-  const semester = req.query.semester;
+  const semester = req.query.term || req.query.semester;
   try {
     const data = await schoolCatalogService.getCatalog(semester);
     res.json(data);
@@ -834,7 +860,7 @@ router.get("/catalog", async (req, res) => {
 router.get("/majors", async (req, res) => {
   const { collegeCode, grade } = req.query;
   try {
-    const data = await schoolCatalogService.getMajors(collegeCode, grade);
+    const data = await schoolCatalogService.getMajors(collegeCode, grade, req.query.term || req.query.semester);
     res.json(data);
   } catch (error) {
     handleRouteError(res, error, "get-majors-failed");
@@ -898,7 +924,7 @@ router.post("/course-schedule", scheduleLimiter, validateJsonBody(scheduleQueryF
 
 router.get("/schedule/class/:id", scheduleLimiter, (req, res) => {
   try {
-    const result = normalizeScheduleResponse("class", releaseService.readActiveSchedule("class", req.params.id));
+    const result = normalizeScheduleResponse("class", releaseService.readActiveSchedule("class", req.params.id, req.query.releaseVersion || req.query.version || "", req.query));
     return sendCacheableJson(req, res, result, 300);
   } catch (error) {
     handleRouteError(res, error, "get-indexed-class-schedule-failed");
@@ -907,7 +933,7 @@ router.get("/schedule/class/:id", scheduleLimiter, (req, res) => {
 
 router.get("/schedule/teacher/:id", scheduleLimiter, (req, res) => {
   try {
-    const result = normalizeScheduleResponse("teacher", releaseService.readActiveSchedule("teacher", req.params.id));
+    const result = normalizeScheduleResponse("teacher", releaseService.readActiveSchedule("teacher", req.params.id, req.query.releaseVersion || req.query.version || "", req.query));
     return sendCacheableJson(req, res, result, 300);
   } catch (error) {
     handleRouteError(res, error, "get-indexed-teacher-schedule-failed");
@@ -916,7 +942,7 @@ router.get("/schedule/teacher/:id", scheduleLimiter, (req, res) => {
 
 router.get("/schedule/classroom/:id", scheduleLimiter, (req, res) => {
   try {
-    const result = normalizeScheduleResponse("classroom", releaseService.readActiveSchedule("classroom", req.params.id));
+    const result = normalizeScheduleResponse("classroom", releaseService.readActiveSchedule("classroom", req.params.id, req.query.releaseVersion || req.query.version || "", req.query));
     return sendCacheableJson(req, res, result, 300);
   } catch (error) {
     handleRouteError(res, error, "get-indexed-classroom-schedule-failed");
@@ -925,7 +951,7 @@ router.get("/schedule/classroom/:id", scheduleLimiter, (req, res) => {
 
 router.get("/schedule/course/:id", scheduleLimiter, (req, res) => {
   try {
-    const result = normalizeScheduleResponse("course", releaseService.readActiveSchedule("course", req.params.id));
+    const result = normalizeScheduleResponse("course", releaseService.readActiveSchedule("course", req.params.id, req.query.releaseVersion || req.query.version || "", req.query));
     return sendCacheableJson(req, res, result, 300);
   } catch (error) {
     handleRouteError(res, error, "get-indexed-course-schedule-failed");
@@ -946,7 +972,7 @@ router.get("/schedule-detail", scheduleLimiter, (req, res) => {
     if (!id) {
       return res.status(400).json({ success: false, message: "id is required" });
     }
-    const result = normalizeScheduleResponse(type, releaseService.readActiveSchedule(type, id, releaseVersion));
+    const result = normalizeScheduleResponse(type, releaseService.readActiveSchedule(type, id, releaseVersion, req.query));
     
     // Standardized meta block
     const activeInfo = releaseService.getActiveReleaseInfo() || {};

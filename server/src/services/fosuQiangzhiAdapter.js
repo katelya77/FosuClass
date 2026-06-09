@@ -6,6 +6,7 @@ const { URLSearchParams } = require("url");
 const { requestWithRetry } = require("./casSession");
 const { safeLog } = require("../utils/safeLogger");
 const config = require("../config");
+const termRegistryService = require("./termRegistryService");
 
 const paths = {
   personalSchedule: "/xskb/xskb_list.do",
@@ -31,6 +32,13 @@ function compactParams(params) {
     output[key] = value === undefined || value === null ? "" : value;
   });
   return output;
+}
+
+function resolveRequestTerm(params) {
+  const requested = params && (params.term || params.semester);
+  if (requested) return requested;
+  const active = termRegistryService.getActiveTerm();
+  return active && active.term || termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term;
 }
 
 /**
@@ -137,7 +145,7 @@ class FosuQiangzhiAdapter {
    */
   async fetchClassSchedule(params) {
     return this.post(paths.classScheduleIfr, {
-      xnxqh: (params && params.semester) || "2025-2026-2",
+      xnxqh: resolveRequestTerm(params),
       skyx: params && params.collegeCode,
       sknj: params && params.grade,
       skzy: params && params.majorCode,
@@ -153,7 +161,7 @@ class FosuQiangzhiAdapter {
    */
   async fetchTeacherSchedule(params) {
     return this.post(paths.teacherScheduleIfr, {
-      xnxqh: (params && params.semester) || "2025-2026-2",
+      xnxqh: resolveRequestTerm(params),
       skyx: params && params.collegeCode,
       jszc: params && params.teacherTitleCode,
       zc1: params && params.weekStart,
@@ -168,7 +176,7 @@ class FosuQiangzhiAdapter {
    */
   async fetchClassroomSchedule(params) {
     return this.post(paths.classroomScheduleIfr, {
-      xnxqh: (params && params.semester) || "2025-2026-2",
+      xnxqh: resolveRequestTerm(params),
       skyx: params && params.collegeCode,
       xqid: params && params.campusId,
       jzwid: params && params.buildingId,
@@ -184,7 +192,7 @@ class FosuQiangzhiAdapter {
    */
   async fetchCourseSchedule(params) {
     return this.post(paths.courseScheduleIfr, {
-      xnxqh: (params && params.semester) || "2025-2026-2",
+      xnxqh: resolveRequestTerm(params),
       skyx: params && params.collegeCode,
       kkyx: params && params.openCollegeCode,
       zzdKcSX: params && params.courseAttr,

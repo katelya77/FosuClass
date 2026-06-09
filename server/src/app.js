@@ -16,6 +16,7 @@ const releaseService = require("./services/releaseService");
 const releaseLifecycleService = require("./services/releaseLifecycleService");
 const releaseWorkerManager = require("./services/releaseWorkerManager");
 const storageLifecycleService = require("./services/storageLifecycleService");
+const termRegistryService = require("./services/termRegistryService");
 
 // 路由引入
 const healthRouter = require("./routes/health");
@@ -186,6 +187,11 @@ app.use((err, req, res, next) => {
 app.listen(config.PORT, () => {
   console.log(`[FosuClass Server] Server is running at http://localhost:${config.PORT}`);
   console.log(`[FosuClass Server] Environment: ${config.NODE_ENV}`);
+  try {
+    termRegistryService.migrateLegacyTermState();
+  } catch (error) {
+    safeLog("startup-term-registry-migration-failed", { error: error.message });
+  }
   try {
     releaseLifecycleService.reconcileLifecycle({ reason: "startup" });
   } catch (error) {

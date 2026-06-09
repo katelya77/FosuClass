@@ -6,7 +6,8 @@ const termConfigService = require("../miniprogram/services/termConfigService");
 function run() {
   week.resetRuntimeTermConfig();
   const fallback = week.getRuntimeTermConfig();
-  assert.strictEqual(fallback.termStartDate, "2026-03-09");
+  assert.strictEqual(fallback.termStartDate, "");
+  assert.strictEqual(week.getTodayTeachingInfo(new Date("2026-06-08T12:00:00+08:00")).termPhase, "unknown");
 
   week.setRuntimeTermConfig({
     term: "runtime-a",
@@ -75,7 +76,7 @@ function run() {
   assert.strictEqual(fromSemester.source, "appConfig.data.currentSemester");
 
   week.resetRuntimeTermConfig();
-  assert.strictEqual(week.getRuntimeTermConfig().termStartDate, "2026-03-09", "fallback constants should remain available");
+  assert.strictEqual(week.getRuntimeTermConfig().termStartDate, "", "fallback should not guess a term start date");
   console.log("test-term-config-runtime passed");
 }
 

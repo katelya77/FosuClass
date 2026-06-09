@@ -3,6 +3,8 @@ const path = require("path");
 
 const appConfigService = require("./appConfigService");
 const releaseService = require("./releaseService");
+const termRegistryService = require("./termRegistryService");
+const termReleaseIndexService = require("./termReleaseIndexService");
 const relayService = require("./relayService");
 const stagingUploadService = require("./stagingUploadService");
 const staticReleaseSyncService = require("./staticReleaseSyncService");
@@ -171,6 +173,29 @@ function validateStagingData(data) {
   ["schemaVersion", "releaseVersion", "term", "termStartDate", "generatedAt"].forEach((field) => {
     if (!data[field]) errors.push(`Missing required field: ${field}`);
   });
+  const termConfig = data.termConfig && typeof data.termConfig === "object" ? data.termConfig : null;
+  if (!termConfig) {
+    errors.push("Missing required field: termConfig");
+  } else {
+    try {
+      const normalizedTermConfig = termRegistryService.normalizeTermRecord(Object.assign({}, termConfig, {
+        term: data.term || termConfig.term,
+        status: "ready",
+        releaseVersion: data.releaseVersion || data.version || termConfig.releaseVersion || "",
+        dataAvailable: true,
+        updatedAt: data.generatedAt || data.updatedAt || new Date().toISOString(),
+      }));
+      const termValidation = termRegistryService.validateTermRecord(normalizedTermConfig);
+      if (!termValidation.valid) {
+        termValidation.errors.forEach((error) => errors.push(`termConfig.${error}`));
+      }
+      if (normalizedTermConfig.term !== data.term) {
+        errors.push(`termConfig.term mismatch: ${normalizedTermConfig.term} != ${data.term}`);
+      }
+    } catch (error) {
+      errors.push(`termConfig.${error.code || error.message}`);
+    }
+  }
 
   const includeScopes = getStagingIncludeScopes(data);
   const hasClassSchedules = includeScopes.length === 0 || includeScopes.includes("classSchedules");
@@ -306,6 +331,44 @@ async function writeReleasePackAndActivate(stagingData, job) {
   });
   const activated = releaseService.activateReleaseVersion(releaseVersion);
   return Object.assign({}, written, activated, { staticSync, deepStatus });
+}
+
+async function writeReleasePackAndBindReady(stagingData, job) {
+  if (job) job.progress(18, "loading snapshot");
+  const written = await releaseService.writeReleaseSnapshotAsync(stagingData, { job });
+  const releaseVersion = written.version || written.releaseVersion;
+  const term = stagingData.term || stagingData.semester || written.manifest && written.manifest.term || "";
+
+  if (job) job.progress(66, "deep validating", { releaseVersion, term });
+  const deepStatus = releaseService.getReleasePackStatus(releaseVersion);
+  if (!deepStatus.healthy) {
+    const error = new Error("Release Pack deep validation failed");
+    error.code = "RELEASE_PACK_UNHEALTHY";
+    error.status = deepStatus;
+    throw error;
+  }
+
+  if (job) job.progress(72, "syncing OpenResty", { releaseVersion, term });
+  const staticSync = await staticReleaseSyncService.syncIfEnabled(releaseVersion, { job });
+
+  if (!termRegistryService.getTerm(term)) {
+    termRegistryService.createPlannedTerm(Object.assign({}, stagingData.termConfig || {}, {
+      term,
+      source: "staging-publish",
+    }));
+  }
+  termRegistryService.bindReleaseToTerm(term, releaseVersion, {
+    status: "ready",
+    source: "staging-publish-ready",
+  });
+  termReleaseIndexService.bindRelease(term, releaseVersion, { activeTerm: false });
+  return Object.assign({}, written, {
+    staticSync,
+    deepStatus,
+    readyOnly: true,
+    term,
+    releaseVersion,
+  });
 }
 
 function updateSyncMetaFromStatus(status) {
@@ -449,7 +512,45 @@ async function runStagingPublish(input = {}, job) {
     }
   }
 
-  const publishResult = await writeReleasePackAndActivate(stagingData, job);
+  const activeTerm = termRegistryService.getActiveTerm();
+  const stagingTerm = stagingData.term || stagingData.semester || "";
+  const shouldActivate = Boolean(activeTerm && activeTerm.term === stagingTerm);
+  const publishResult = shouldActivate
+    ? await writeReleasePackAndActivate(stagingData, job)
+    : await writeReleasePackAndBindReady(stagingData, job);
+  if (!shouldActivate) {
+    const status = releaseService.getReleaseStatus();
+    writeAuditLog(auditReq, "prepare-ready", "sync-release", publishResult.releaseVersion, `Prepared ready release ${publishResult.releaseVersion} for term ${stagingTerm}`);
+    if (stagingData.stagingUploadId) {
+      stagingUploadService.markUploadPublished(stagingData.stagingUploadId, publishResult.releaseVersion);
+    }
+    if (stagingData.relayUploadId) {
+      relayService.markUploadPublished(stagingData.relayUploadId, publishResult.releaseVersion);
+    }
+    const lifecycle = releaseLifecycleService.reconcileLifecycle({
+      reason: "publish-ready",
+      uploadId: stagingData.stagingUploadId || "",
+      sourceTaskId: stagingData.relayTaskId || "",
+    });
+    releaseService.clearDerivedCache();
+    const quickHealth = releaseService.getReleasePackQuickHealth(publishResult.releaseVersion);
+    if (job) job.progress(90, "ready release prepared", { releaseVersion: publishResult.releaseVersion, term: stagingTerm });
+    return {
+      success: true,
+      message: "Staging release prepared for term; not activated",
+      readyOnly: true,
+      version: publishResult.releaseVersion,
+      releaseVersion: publishResult.releaseVersion,
+      term: stagingTerm,
+      semester: stagingTerm,
+      activeTerm: status.term || status.semester || "",
+      counts: publishResult.manifest && publishResult.manifest.counts || {},
+      quickHealth,
+      deepStatus: publishResult.deepStatus,
+      staticSync: publishResult.staticSync,
+      lifecycle,
+    };
+  }
   const status = releaseService.getReleaseStatus();
   const syncMeta = updateSyncMetaFromStatus(status);
 

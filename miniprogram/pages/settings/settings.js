@@ -24,6 +24,12 @@ const { contactConfig } = require("../../config/contact");
 const APP_VERSION = "1.0.0";
 const FEEDBACK_TYPES = ["课表错误", "数据过期", "页面问题", "功能建议", "其他"];
 
+function getSelectedTerm(settings) {
+  const runtime = getRuntimeTermConfig();
+  const source = settings || {};
+  return source.semesterId || source.semester || runtime.term;
+}
+
 function buildWeekOptions(totalWeeks) {
   const options = [];
   const count = Number(totalWeeks || getRuntimeTermConfig().totalWeeks || 20) || 20;
@@ -551,8 +557,9 @@ Page({
   showDataVersionDetail() {
     const sysInfo = platformUtils.getWxSystemInfo();
     const isDeveloperEnv = platformUtils.isDeveloperEnv();
-    const localActive = releasePackService.getLocalActiveRelease(this.data.settings.semesterId || this.data.settings.semester || "2025-2026-2");
-    const lastGood = releasePackService.getLastKnownGood(this.data.settings.semesterId || this.data.settings.semester || "2025-2026-2");
+    const selectedTerm = getSelectedTerm(this.data.settings);
+    const localActive = releasePackService.getLocalActiveRelease(selectedTerm);
+    const lastGood = releasePackService.getLastKnownGood(selectedTerm);
     const requestDiag = typeof request.getRequestDiagnostics === "function" ? request.getRequestDiagnostics() : {};
     const localManifest = localActive && localActive.manifest || null;
     const localTerm = localActive && localActive.term || "";
@@ -587,7 +594,7 @@ Page({
     });
 
     wx.showLoading({ title: "加载中..." });
-    request.get("/api/fosu/bootstrap", { semester: this.data.settings.semester || "2025-2026-2" }, { showLoading: false, timeout: 15000 })
+    request.get("/api/fosu/bootstrap", { term: getSelectedTerm(this.data.settings) }, { showLoading: false, timeout: 15000 })
       .then((res) => {
         wx.hideLoading();
         if (res && res.success) {
@@ -709,7 +716,7 @@ Page({
   },
 
   warmupReleaseIndexes() {
-    const localActive = releasePackService.getLocalActiveRelease(this.data.settings.semesterId || this.data.settings.semester || "2025-2026-2");
+    const localActive = releasePackService.getLocalActiveRelease(getSelectedTerm(this.data.settings));
     if (!localActive) {
       wx.showToast({ title: "暂无本地 release", icon: "none" });
       return;

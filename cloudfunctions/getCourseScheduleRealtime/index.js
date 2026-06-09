@@ -4,6 +4,7 @@ const { parseCourseScheduleIfrHtml } = require("../common/parser");
 const { getCachedSchedule, saveGenericSchedule } = require("../common/cache");
 const { groupCoursesBy } = require("../common/scheduleNormalizer");
 const { safeLog } = require("../common/safeLogger");
+const { normalizeTerm } = require("../common/term");
 
 cloud.init({
   env: cloud.DYNAMIC_CURRENT_ENV,
@@ -20,8 +21,17 @@ exports.main = async (event) => {
     weekEnd = "",
   } = event;
 
+  const selectedSemester = normalizeTerm(semester);
+  if (!selectedSemester) {
+    return {
+      success: false,
+      code: "TERM_REQUIRED",
+      message: "semester is required.",
+    };
+  }
+
   const queryParams = {
-    semester: semester || "2025-2026-2",
+    semester: selectedSemester,
     collegeCode,
     openCollegeCode,
     courseAttr,

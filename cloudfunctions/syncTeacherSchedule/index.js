@@ -13,7 +13,7 @@ function buildTeachersFromCourses(courses, event) {
   return Object.keys(grouped).map((teacherName) => ({
     teacherName,
     college: event.college || event.collegeName || "",
-    semester: event.semester || "2025-2026-2",
+    semester: event.semester || "",
     courses: grouped[teacherName],
   }));
 }

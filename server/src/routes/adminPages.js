@@ -2782,6 +2782,7 @@ const adminConsoleHtml = `<!doctype html>
             <li class="nav-item active" data-section="dashboard"><button>数据概览</button></li>
             <li class="nav-item" data-section="catalog"><button>数据资源</button></li>
             <li class="nav-item" data-section="sync"><button>同步中心</button></li>
+            <li class="nav-item" data-section="terms"><button>学期管理</button></li>
             <li class="nav-item" data-section="quality"><button>数据质量</button></li>
             <li class="nav-item" data-section="notices"><button>公告管理</button></li>
             <li class="nav-item" data-section="news"><button>最新动态</button></li>
@@ -3080,8 +3081,7 @@ const adminConsoleHtml = `<!doctype html>
                   <span>PowerShell / CLI 上传</span>
                   <button type="button" id="quickCopyUploadCmdBtn">复制全部命令</button>
                 </div>
-                <pre class="code-raw"><code id="quickUploadCommand">cd C:\Users\Katelya\Documents\VScode\FosuClass
-npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=https://class.katelya.eu.org</code></pre>
+                <pre class="code-raw"><code id="quickUploadCommand">请选择学期后自动生成上传命令</code></pre>
                 <div class="code-preview-scroller"><div class="code-preview-lines"></div></div>
               </div>
               <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
@@ -3176,7 +3176,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
                         </div>
                         <div>
                           <label for="wizardStartDate">学期开始日期 (StartDate)</label>
-                          <input type="date" id="wizardStartDate" value="2026-03-09">
+                          <input type="date" id="wizardStartDate">
                         </div>
                       </div>
                       <div class="form-row">
@@ -3638,6 +3638,91 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
       </section>
 
       <!-- 面板四：数据质量 Data Quality -->
+      <section id="section-terms" class="section">
+        <div class="card form-box">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+            <div>
+              <h3 class="card-title" style="margin-bottom:4px;">学期管理</h3>
+              <div style="color:var(--muted);font-size:12px;">创建、绑定、检查、激活和归档学期。激活前必须通过 readiness 检查。</div>
+            </div>
+            <button id="refreshTermsBtn" class="ghost" type="button">刷新</button>
+          </div>
+          <div class="form-row">
+            <div>
+              <label>term</label>
+              <input id="termCreateId" placeholder="2026-2027-1">
+            </div>
+            <div>
+              <label>semesterText</label>
+              <input id="termCreateText" placeholder="留空自动生成">
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label>termStartDate</label>
+              <input id="termCreateStart" placeholder="YYYY-MM-DD">
+            </div>
+            <div>
+              <label>totalWeeks</label>
+              <input id="termCreateWeeks" type="number" min="1" max="30" value="20">
+            </div>
+          </div>
+          <div class="form-row">
+            <div>
+              <label>weekStart</label>
+              <select id="termCreateWeekStart">
+                <option value="monday">monday</option>
+                <option value="sunday">sunday</option>
+              </select>
+            </div>
+            <div style="display:flex;align-items:flex-end;">
+              <button id="createTermBtn" class="primary" type="button">创建 planned 学期</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr>
+                  <th>学期</th>
+                  <th>名称</th>
+                  <th>状态</th>
+                  <th>开学日期</th>
+                  <th>周数</th>
+                  <th>数据</th>
+                  <th>Release</th>
+                  <th>更新时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="termsTableBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top:16px;">
+          <h3 class="card-title">发布前检查</h3>
+          <div class="form-row">
+            <div>
+              <label>目标学期</label>
+              <input id="termReadinessId" placeholder="2026-2027-1">
+            </div>
+            <div>
+              <label>Release Version</label>
+              <input id="termReadinessRelease" placeholder="已有健康 releaseVersion">
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+            <button id="checkTermReadinessBtn" class="secondary" type="button">运行检查</button>
+            <button id="bindTermReleaseBtn" class="ghost" type="button">绑定 Release</button>
+            <button id="activateTermBtn" class="danger" type="button">激活为当前学期</button>
+          </div>
+          <pre id="termReadinessOutput" style="margin-top:12px;background:#0f172a;color:#d1e7ff;border-radius:8px;padding:12px;white-space:pre-wrap;max-height:320px;overflow:auto;">等待检查</pre>
+        </div>
+      </section>
+
       <section id="section-quality" class="section">
         <div class="stats-grid" id="qualityStatsGrid">
           <!-- 质量概览指标 -->
@@ -3905,7 +3990,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
               <input id="configAppName">
             </div>
             <div>
-              <label>当前学期 (如 2025-2026-2)</label>
+              <label>当前学期 (YYYY-YYYY-1/2)</label>
               <input id="configSemester">
             </div>
           </div>
@@ -4713,6 +4798,9 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
         relayTasks: [],
         relayUploads: [],
         stagingUploads: [],
+        terms: [],
+        termRegistry: null,
+        termReleaseIndex: null,
         storageStatus: null,
         healthChecks: [],
         qualityReport: null,
@@ -5037,6 +5125,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           dashboard: "数据概览",
           catalog: "数据资源中心",
           sync: "数据同步中心",
+          terms: "学期管理",
           quality: "数据质量中心",
           notices: "公告管理",
           news: "最新动态",
@@ -5060,6 +5149,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
           ignoreLoadError(loadCatalog());
         } else if (section === "sync") {
           ignoreLoadError(loadSyncStatus());
+        } else if (section === "terms") {
+          ignoreLoadError(loadTerms());
         } else if (section === "quality") {
           ignoreLoadError(loadQualityReport());
         } else if (section === "settings") {
@@ -5089,6 +5180,183 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             showModuleError("dashboard", error);
             throw error;
           });
+      }
+
+      function termStatusText(status, dataAvailable) {
+        if (status === "current") return "当前使用";
+        if (status === "ready") return "可切换";
+        if (status === "archived") return "已归档";
+        if (status === "disabled") return "数据异常";
+        if (status === "planned" && dataAvailable) return "待审核";
+        return "待发布";
+      }
+
+      function renderTerms() {
+        var tbody = $("termsTableBody");
+        if (!tbody) return;
+        tbody.textContent = "";
+        var terms = state.terms || [];
+        if (!terms.length) {
+          tbody.innerHTML = "<tr><td colspan='9' style='text-align:center;color:var(--muted);padding:20px;'>暂无学期记录</td></tr>";
+          return;
+        }
+        terms.forEach(function(term) {
+          var tr = document.createElement("tr");
+          var release = term.releaseVersion || "";
+          tr.innerHTML =
+            "<td><strong>" + escapeHtml(term.term || "-") + "</strong></td>" +
+            "<td>" + escapeHtml(term.semesterText || "-") + "</td>" +
+            "<td><span class='badge " + (term.status === "current" ? "success" : (term.status === "disabled" ? "danger" : "info")) + "'>" + escapeHtml(termStatusText(term.status, term.dataAvailable)) + "</span></td>" +
+            "<td>" + escapeHtml(term.termStartDate || "-") + "</td>" +
+            "<td>" + escapeHtml(term.totalWeeks || "-") + "</td>" +
+            "<td>" + (term.dataAvailable ? "可用" : "不可用") + "</td>" +
+            "<td>" + escapeHtml(release || "-") + "</td>" +
+            "<td>" + escapeHtml(formatDate(term.updatedAt)) + "</td>" +
+            "<td><div style='display:flex;gap:6px;flex-wrap:wrap;'></div></td>";
+          var actions = tr.querySelector("div");
+          function addAction(label, className, handler) {
+            var btn = document.createElement("button");
+            btn.className = className || "ghost";
+            btn.type = "button";
+            btn.style = "padding:4px 8px;font-size:12px;";
+            btn.textContent = label;
+            btn.addEventListener("click", handler);
+            actions.appendChild(btn);
+          }
+          addAction("检查", "secondary", function() {
+            setValue("termReadinessId", term.term);
+            setValue("termReadinessRelease", release);
+            checkTermReadiness();
+            switchSection("terms");
+          });
+          if (term.status !== "current" && term.status !== "disabled") {
+            addAction("归档", "ghost", function() { archiveTerm(term.term); });
+            addAction("禁用", "danger", function() { disableTerm(term.term); });
+          }
+          tbody.appendChild(tr);
+        });
+      }
+
+      function loadTerms() {
+        return api("/api/admin/terms")
+          .then(function(res) {
+            state.terms = res.terms || [];
+            state.termRegistry = res.registry || null;
+            state.termReleaseIndex = res.releaseIndex || null;
+            renderTerms();
+            return res;
+          })
+          .catch(function(error) {
+            showToast(error.message || "学期列表加载失败", "error");
+            throw error;
+          });
+      }
+
+      function createTerm() {
+        var payload = {
+          term: value("termCreateId"),
+          semesterText: value("termCreateText"),
+          termStartDate: value("termCreateStart"),
+          totalWeeks: Number(value("termCreateWeeks") || 20),
+          weekStart: value("termCreateWeekStart") || "monday"
+        };
+        return api("/api/admin/terms", { method: "POST", body: JSON.stringify(payload) })
+          .then(function(res) {
+            showToast("planned 学期已创建", "success");
+            return loadTerms().then(function() { return res; });
+          })
+          .catch(function(error) { showToast(error.message || "创建失败", "error"); });
+      }
+
+      function checkTermReadiness() {
+        var term = value("termReadinessId");
+        var releaseVersion = value("termReadinessRelease");
+        if (!term) {
+          showToast("请填写目标学期", "error");
+          return Promise.resolve(null);
+        }
+        return api("/api/admin/terms/" + encodeURIComponent(term) + "/readiness?releaseVersion=" + encodeURIComponent(releaseVersion || ""))
+          .then(function(res) {
+            var readiness = res.readiness || {};
+            $("termReadinessOutput").textContent = JSON.stringify(readiness, null, 2);
+            showToast(readiness.ready ? "检查通过" : "检查未通过", readiness.ready ? "success" : "warning");
+            return readiness;
+          })
+          .catch(function(error) {
+            $("termReadinessOutput").textContent = error.message || "检查失败";
+            showToast(error.message || "检查失败", "error");
+          });
+      }
+
+      function bindTermRelease() {
+        var term = value("termReadinessId");
+        var releaseVersion = value("termReadinessRelease");
+        if (!term || !releaseVersion) {
+          showToast("请填写 term 和 releaseVersion", "error");
+          return;
+        }
+        api("/api/admin/terms/" + encodeURIComponent(term) + "/bind-release", {
+          method: "POST",
+          body: JSON.stringify({ releaseVersion: releaseVersion })
+        }).then(function(res) {
+          showToast("Release 已绑定", "success");
+          $("termReadinessOutput").textContent = JSON.stringify(res, null, 2);
+          loadTerms();
+        }).catch(function(error) {
+          showToast(error.message || "绑定失败", "error");
+        });
+      }
+
+      function activateTermFromPanel() {
+        var term = value("termReadinessId");
+        var releaseVersion = value("termReadinessRelease");
+        if (!term || !releaseVersion) {
+          showToast("请填写 term 和 releaseVersion", "error");
+          return;
+        }
+        checkTermReadiness().then(function(readiness) {
+          if (!readiness || !readiness.ready) return;
+          var currentTerm = state.termRegistry && state.termRegistry.activeTerm || state.dashboard && state.dashboard.currentSemester || "-";
+          var message = [
+            "高风险操作：激活当前学期",
+            "旧学期: " + currentTerm,
+            "新学期: " + term,
+            "Release: " + releaseVersion,
+            "开学日期: " + ((readiness.record && readiness.record.termStartDate) || "-"),
+            "总周数: " + ((readiness.record && readiness.record.totalWeeks) || "-"),
+            "索引 counts: " + JSON.stringify(readiness.counts || {}),
+            "OpenResty: " + (readiness.openResty && readiness.openResty.manifestExists ? "manifest exists" : "missing"),
+            "回滚目标: " + ((readiness.rollbackTarget && readiness.rollbackTarget.releaseVersion) || "-"),
+            "",
+            "确认激活？"
+          ].join("\\n");
+          if (!window.confirm(message)) return;
+          api("/api/admin/terms/" + encodeURIComponent(term) + "/activate", {
+            method: "POST",
+            body: JSON.stringify({ releaseVersion: releaseVersion })
+          }).then(function(res) {
+            showToast("学期已激活", "success");
+            $("termReadinessOutput").textContent = JSON.stringify(res, null, 2);
+            loadTerms();
+            loadDashboard();
+          }).catch(function(error) {
+            showToast(error.message || "激活失败", "error");
+          });
+        });
+      }
+
+      function archiveTerm(term) {
+        if (!window.confirm("确认归档 " + term + "？历史查询仍可使用已发布 Release。")) return;
+        api("/api/admin/terms/" + encodeURIComponent(term) + "/archive", { method: "POST", body: "{}" })
+          .then(function() { showToast("已归档", "success"); loadTerms(); })
+          .catch(function(error) { showToast(error.message || "归档失败", "error"); });
+      }
+
+      function disableTerm(term) {
+        if (!window.confirm("确认禁用 " + term + "？普通客户端将不能查询该学期。")) return;
+        api("/api/admin/terms/" + encodeURIComponent(term) + "/disable", { method: "POST", body: "{}" })
+          .then(function() { showToast("已禁用", "success"); loadTerms(); })
+          .catch(function(error) { showToast(error.message || "禁用失败", "error"); });
       }
 
       function loadConfig() {
@@ -5777,21 +6045,15 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
       }
 
       function getTermStartDate(term) {
-        var map = {
-          "2025-2026-1": "2025-09-01",
-          "2025-2026-2": "2026-03-09",
-          "2026-2027-1": "2026-09-01",
-          "2026-2027-2": "2027-03-01",
-          "2027-2028-1": "2027-09-01",
-          "2027-2028-2": "2028-03-01"
-        };
-        return map[term] || "";
+        var terms = state.terms || [];
+        var matched = terms.find(function(item) { return item && item.term === term; });
+        return matched && matched.termStartDate || "";
       }
 
       function syncWizardStartDateWithTerm(force) {
         var input = $("wizardStartDate");
         if (!input) return;
-        var term = getTermValue("wizardTerm", "wizardTermCustom") || "2025-2026-2";
+        var term = getTermValue("wizardTerm", "wizardTermCustom") || (state.dashboard && state.dashboard.currentSemester) || "";
         var mappedStartDate = getTermStartDate(term);
         if (!mappedStartDate) return;
         if (force || !state.wizardStartDateTouched || !input.value) {
@@ -5886,7 +6148,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
             }
             
             // 初始化所有学期下拉选择器
-            var defaultTerm = state.syncStatus ? state.syncStatus.semester : "2025-2026-2";
+            var defaultTerm = state.syncStatus ? state.syncStatus.semester : (state.dashboard && state.dashboard.currentSemester) || "";
             if (!state.termSelectsInitialized) {
               initTermSelect("wizardTerm", "wizardTermCustom", defaultTerm);
               initTermSelect("relayTaskTerm", "relayTaskTermCustom", defaultTerm);
@@ -6582,8 +6844,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
 
       // 更新向导命令预览与运维卡片列表
       function updateWizardCommand() {
-        var term = getTermValue("wizardTerm", "wizardTermCustom") || "2025-2026-2";
-        var startDate = value("wizardStartDate") || getTermStartDate(term) || "2026-03-09";
+        var term = getTermValue("wizardTerm", "wizardTermCustom") || (state.dashboard && state.dashboard.currentSemester) || "";
+        var startDate = value("wizardStartDate") || getTermStartDate(term) || "";
         var source = value("wizardSource") || "local-campus";
         var note = value("wizardNote") || (term + " 新学期全校课表首版");
         var forceRefresh = Boolean($("wizardForceRefresh") && $("wizardForceRefresh").checked);
@@ -6659,8 +6921,8 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
 
         // 生成 CLI 参数
         var cliArgs = [
-          "--term=" + term,
-          "--start=" + startDate,
+          "--term=" + (term || "请先选择学期"),
+          "--term-start-date=" + (startDate || "请管理员填写YYYY-MM-DD"),
           "--output=" + output,
           "--include=" + scopesStr
         ];
@@ -8867,6 +9129,11 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
       safeBind("loginPassword", "keydown", function (event) { if (event.key === "Enter") login(); });
       safeBind("logoutButton", "click", logout);
       safeBind("refreshButton", "click", loadAll);
+      safeBind("refreshTermsBtn", "click", loadTerms);
+      safeBind("createTermBtn", "click", createTerm);
+      safeBind("checkTermReadinessBtn", "click", checkTermReadiness);
+      safeBind("bindTermReleaseBtn", "click", bindTermRelease);
+      safeBind("activateTermBtn", "click", activateTermFromPanel);
       safeBind("saveConfigButton", "click", saveConfig);
       safeBind("saveAiProviderBtn", "click", saveAiProviderConfig);
       safeBind("verifyAiProviderBtn", "click", verifyAiProviderConfig);
@@ -9045,7 +9312,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
               body: JSON.stringify({
                 filename: file.name,
                 fileBase64: base64,
-                targetTerm: (state.dashboard && state.dashboard.currentSemester) || "2025-2026-2"
+                targetTerm: (state.dashboard && state.dashboard.currentSemester) || ""
               })
             })
             .then(function(res) {

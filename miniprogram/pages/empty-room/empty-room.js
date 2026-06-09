@@ -5,11 +5,11 @@ const platformDataService = require("../../services/platformDataService");
 const releasePackService = require("../../services/releasePackService");
 const { mockCalendar } = require("../../data/mockCalendar");
 const {
-  DEFAULT_SEMESTER_ID,
   formatDate,
   getTodayTeachingInfo,
   getWeekdayLabel,
 } = require("../../utils/week");
+const DEFAULT_SEMESTER_ID = "";
 
 const SECTION_PRESETS = [
   { key: "current", label: "当前节" },
@@ -135,6 +135,14 @@ function normalizeActiveSnapshot(config) {
   };
 }
 
+function getDefaultSelectedTerm() {
+  const config = appConfigService.getGlobalConfig ? appConfigService.getGlobalConfig() : {};
+  return config.currentSemester ||
+    config.termConfig && config.termConfig.term ||
+    config.availableTerms && config.availableTerms[0] && config.availableTerms[0].term ||
+    DEFAULT_SEMESTER_ID;
+}
+
 Page({
   data: {
     brand: BRAND,
@@ -168,6 +176,9 @@ Page({
     rooms: [],
     summaryText: "",
     updatedAtText: "",
+    termPhase: "unknown",
+    isInTerm: false,
+    termStatusText: "",
     selectedRoom: null,
     detailVisible: false,
     favoriteBuildings: [],
@@ -212,6 +223,9 @@ Page({
       week: Number(options.week || dateInfo.weekNo || 1),
       weekday: Number(options.weekday || dateInfo.weekday),
       weekdayText: getWeekdayLabel(Number(options.weekday || dateInfo.weekday)),
+      termPhase: dateInfo.termPhase || "unknown",
+      isInTerm: Boolean(dateInfo.isInTerm),
+      termStatusText: dateInfo.isInTerm ? "" : this.getTermPhaseText(dateInfo.termPhase),
       selectedSectionPresetIndex: selectedSectionPresetIndex >= 0 ? selectedSectionPresetIndex : 0,
       sections,
       selectedSectionValues: parseSectionValues(sections),
@@ -256,6 +270,13 @@ Page({
       });
   },
 
+  getTermPhaseText(termPhase) {
+    if (termPhase === "before-term") return "尚未开学";
+    if (termPhase === "after-term") return "本学期已结束";
+    if (termPhase === "unknown") return "当前不在教学周内";
+    return "";
+  },
+
   loadEmptyRoomIndex(options = {}) {
     const snapshot = this.data.activeSnapshot || {};
     const indexKey = `${snapshot.term || DEFAULT_SEMESTER_ID}:${snapshot.releaseVersion || ""}`;
@@ -290,7 +311,8 @@ Page({
     if (platformSnapshot && platformSnapshot.releaseVersion) {
       return Promise.resolve(platformSnapshot);
     }
-    const localActive = releasePackService.getLocalActiveRelease(DEFAULT_SEMESTER_ID);
+    const selectedTerm = safeDecodeURIComponent(options.term || options.semester) || getDefaultSelectedTerm();
+    const localActive = releasePackService.getLocalActiveRelease(selectedTerm);
     if (localActive && localActive.releaseVersion) {
       releasePackService.switchReleaseSafely({ term: localActive.term, dedupe: true })
         .catch((error) => console.warn("[empty-room] background release refresh failed", {
@@ -305,7 +327,7 @@ Page({
         counts: localActive.manifest && localActive.manifest.counts || {},
       });
     }
-    return releasePackService.switchReleaseSafely({ term: DEFAULT_SEMESTER_ID, dedupe: true })
+    return releasePackService.switchReleaseSafely({ term: selectedTerm, dedupe: true })
       .then((result) => normalizeActiveSnapshot(result && result.manifest))
       .catch(() => appConfigService.loadAppConfig()
         .then((config) => normalizeActiveSnapshot(config))
@@ -331,6 +353,21 @@ Page({
 
   applyLocalSearch(options = {}) {
     const params = this.getQueryParams();
+    if (this.data.isInTerm === false && this.data.activeQuickFilter === "now" && !options.allowOutOfTermNow) {
+      this.setData({
+        loading: false,
+        dataState: "empty",
+        rooms: [],
+        summaryText: this.data.termStatusText || "当前不在教学周内",
+        restoreHint: "可手动选择历史日期和节次后查询",
+      });
+      return Promise.resolve({
+        success: false,
+        code: "TERM_PHASE_OUT_OF_TERM",
+        termPhase: this.data.termPhase,
+        rooms: [],
+      });
+    }
     const index = this.emptyRoomIndex;
     if (!index) {
       return this.loadEmptyRoomIndex({ forceNetwork: Boolean(options.forceNetwork) })
@@ -410,6 +447,10 @@ Page({
       week: info.weekNo,
       weekday: info.weekday,
       weekdayText: info.weekdayLabel,
+      termPhase: info.termPhase || "unknown",
+      isInTerm: Boolean(info.isInTerm),
+      termStatusText: info.isInTerm ? "" : this.getTermPhaseText(info.termPhase),
+      activeQuickFilter: "custom",
     }, () => this.searchRooms());
   },
 
@@ -425,6 +466,10 @@ Page({
       week: info.weekNo,
       weekday: info.weekday,
       weekdayText: info.weekdayLabel,
+      termPhase: info.termPhase || "unknown",
+      isInTerm: Boolean(info.isInTerm),
+      termStatusText: info.isInTerm ? "" : this.getTermPhaseText(info.termPhase),
+      activeQuickFilter: key === "today" ? this.data.activeQuickFilter : "custom",
     }, () => this.searchRooms());
   },
 

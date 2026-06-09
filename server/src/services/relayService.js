@@ -3,6 +3,7 @@ const fs = require("fs");
 const path = require("path");
 const { safeLog } = require("../utils/safeLogger");
 const stagingFingerprint = require("../utils/stagingFingerprint");
+const termRegistryService = require("./termRegistryService");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const RELAY_DIR = process.env.RELAY_DIR
@@ -93,6 +94,7 @@ function safeTaskForAgent(task) {
   return {
     id: task.id,
     term: task.term,
+    termConfig: task.termConfig || null,
     description: task.description,
     expiresAt: task.expiresAt,
     maxUploads: task.maxUploads,
@@ -118,10 +120,33 @@ function createTask(input) {
   ensureRelayStorage();
   const now = new Date().toISOString();
   const expiresInHours = toPositiveInteger(input.expiresInHours, 24, 24 * 30);
+  const requestedTerm = normalizeString(input.term);
+  const registryRecord = requestedTerm ? termRegistryService.getTerm(requestedTerm) : null;
+  const inputTermConfig = input.termConfig && typeof input.termConfig === "object" ? input.termConfig : {};
+  const termConfig = registryRecord
+    ? {
+        term: registryRecord.term,
+        semesterText: registryRecord.semesterText,
+        termStartDate: registryRecord.termStartDate,
+        totalWeeks: registryRecord.totalWeeks,
+        weekStart: registryRecord.weekStart,
+        source: "term-registry",
+        releaseVersion: registryRecord.releaseVersion || "",
+      }
+    : Object.assign({}, inputTermConfig, {
+        term: inputTermConfig.term || requestedTerm,
+      });
+  if (!termConfig.term || !termRegistryService.validateTermId(termConfig.term).valid) {
+    const error = new Error("TERM_REQUIRED");
+    error.code = "TERM_REQUIRED";
+    error.statusCode = 400;
+    throw error;
+  }
   const task = {
     id: `relay_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`,
     relayToken: crypto.randomBytes(32).toString("hex"),
-    term: normalizeString(input.term, "2026-2027-1"),
+    term: normalizeString(requestedTerm || termConfig.term),
+    termConfig,
     description: normalizeString(input.description, "全校课表接力采集"),
     expiresAt: normalizeString(input.expiresAt) || addHours(expiresInHours),
     maxUploads: toPositiveInteger(input.maxUploads, 1, 20),

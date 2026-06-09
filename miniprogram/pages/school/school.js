@@ -11,7 +11,7 @@ const TEACHER_SEARCH_PLACEHOLDER = "搜索教师姓名（例如：张三）";
 const CLASSROOM_SEARCH_PLACEHOLDER = "搜索教室（例如：C7-305）";
 const COURSE_SEARCH_PLACEHOLDER = "搜索课程（例如：有机化学）";
 const CLASS_SEARCH_PLACEHOLDER = "搜索班级（例如：25动物科学3班）";
-const DEFAULT_TERM = "2025-2026-2";
+const DEFAULT_TERM = "";
 const SCHEDULE_DETAIL_CACHE_TTL = 6 * 60 * 60 * 1000;
 const APP_CONFIG_TIMEOUT = 12000;
 const BOOTSTRAP_TIMEOUT = 20000;
@@ -54,6 +54,14 @@ function safeDecodeURIComponent(value) {
   } catch (error) {
     return text;
   }
+}
+
+function getFallbackTerm() {
+  const config = appConfigService.getGlobalConfig && appConfigService.getGlobalConfig() || {};
+  return config.currentSemester ||
+    config.term ||
+    config.termConfig && config.termConfig.term ||
+    DEFAULT_TERM;
 }
 
 function isValidClassName(name) {
@@ -392,7 +400,7 @@ Page({
         const latestUpdatedAt = appConfigService.getLatestDataUpdatedAt(config);
 
         const activeRelease = config.dataVersion || {};
-        const term = config.currentSemester || "2025-2026-2";
+        const term = config.currentSemester || getFallbackTerm();
         const releaseVersion = activeRelease.releaseVersion || "";
         const cacheEpoch = config.cacheEpoch || activeRelease.cacheEpoch || config.updatedAt || activeRelease.classScheduleUpdatedAt || "";
 
@@ -587,7 +595,7 @@ Page({
 
   legacyBuildIndexCacheKey(type, params, version) {
     const source = params || {};
-    const term = source.semester || source.term || (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
+    const term = source.semester || source.term || (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || getFallbackTerm();
     const releaseVersion = this.getReleaseVersionForCache(version);
     return getSchoolIndexCacheKey(term, releaseVersion, type, source);
   },
@@ -618,7 +626,7 @@ Page({
   legacyFetchSearchIndex(type, params, options = {}) {
     const query = Object.assign({ type }, params || {});
     if (!query.term && !query.semester) {
-      query.term = (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
+      query.term = (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || getFallbackTerm();
     }
     if (!query.releaseVersion) {
       query.releaseVersion = this.getReleaseVersionForCache();
@@ -651,7 +659,7 @@ Page({
     let grades = data.grades || [];
     if (!showHistorical) {
       // 默认只显示最近 4 个有效本科年级
-      const activeSemester = (data.semesters && data.semesters[0]?.value) || "2025-2026-2";
+      const activeSemester = (data.semesters && data.semesters[0]?.value) || getFallbackTerm();
       const match = activeSemester.match(/^(\d{4})/);
       if (match) {
         const startYear = parseInt(match[1], 10);
@@ -726,7 +734,7 @@ Page({
 
   fallbackToCatalog() {
     request.get("/api/fosu/catalog", {
-      semester: "2025-2026-2",
+      semester: getFallbackTerm(),
     }, { showLoading: false, silentError: true, timeout: 15000 })
       .then((data) => {
         if (data && data.success && Array.isArray(data.colleges) && data.colleges.length > 0) {
@@ -778,7 +786,7 @@ Page({
 
   saveRecentSchedule(item) {
     const meta = item || {};
-    const semester = meta.semester || this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
+    const semester = meta.semester || this.data.semesters[this.data.selectedSemesterIndex]?.value || getFallbackTerm();
     const courseCount = Array.isArray(meta.courses) ? meta.courses.length : 0;
     const record = {
       scheduleKey: meta.scheduleKey || `${semester}-${meta.classId || meta.className || meta.displayTitle}`,
@@ -938,7 +946,7 @@ Page({
       this.navigateToScheduleView(type, displayName, item.courses || [], schedule);
     } else {
       // 否则，如果是旧版本或者是没缓存的，需要在新版本中找到对应的 id
-      const semester = item.semester || (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
+      const semester = item.semester || (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || getFallbackTerm();
       
       wx.showLoading({ title: "正在校验新版本...", mask: true });
 
@@ -987,7 +995,7 @@ Page({
   },
 
   legacyGetFilterCacheKey() {
-    const term = (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
+    const term = (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || getFallbackTerm();
     const releaseVersion = this.getReleaseVersionForCache();
     return getSchoolFilterCacheKey(term, releaseVersion);
   },
@@ -1089,7 +1097,7 @@ Page({
 
   openSharedClassByName(query) {
     request.post("/api/fosu/class-schedule", {
-      semester: query.semester || "2025-2026-2",
+      semester: query.semester || getFallbackTerm(),
       className: query.className,
     }, { loadingTitle: "正在加载课表...", silentError: true })
       .then((data) => {
@@ -1627,7 +1635,7 @@ Page({
       return;
     }
 
-    const semester = semesters[selectedSemesterIndex]?.value || "2025-2026-2";
+    const semester = semesters[selectedSemesterIndex]?.value || getFallbackTerm();
     const collegeCode = selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex].code : "";
     const collegeName = selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex].name : "";
     const titleCode = selectedTitleIndex >= 0 ? titleOptions[selectedTitleIndex] : "";
@@ -1681,7 +1689,7 @@ Page({
       return;
     }
 
-    const semester = semesters[selectedSemesterIndex]?.value || "2025-2026-2";
+    const semester = semesters[selectedSemesterIndex]?.value || getFallbackTerm();
     const campus = selectedCampusIndex >= 0 ? campusOptions[selectedCampusIndex] : "";
 
     const params = {
@@ -1719,7 +1727,7 @@ Page({
       return;
     }
 
-    const semester = semesters[selectedSemesterIndex]?.value || "2025-2026-2";
+    const semester = semesters[selectedSemesterIndex]?.value || getFallbackTerm();
 
     const params = {
       semester,
@@ -1771,7 +1779,7 @@ Page({
 
   openIndexedSchedule(type, item, displayName) {
     const detailId = item.detailId || item.id || displayName;
-    const semester = item.semester || this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
+    const semester = item.semester || this.data.semesters[this.data.selectedSemesterIndex]?.value || getFallbackTerm();
     const version = this.getReleaseVersionForCache(item.scheduleVersion);
     if (!type || !detailId || !version) {
       wx.showToast({ title: "课表详情参数缺失", icon: "none" });
@@ -1938,7 +1946,7 @@ Page({
   },
 
   navigateToScheduleView(type, name, courses, scheduleMeta) {
-    const semester = this.data.semesters[this.data.selectedSemesterIndex]?.value || "2025-2026-2";
+    const semester = this.data.semesters[this.data.selectedSemesterIndex]?.value || getFallbackTerm();
     const meta = scheduleMeta || {};
     const displayType = meta.displayType || "";
     const isAggregated = meta.isAggregated ? "1" : "0";
@@ -2063,7 +2071,7 @@ Page({
 
   legacyExecuteSearch(type, params, renderFn, catchFn) {
     const query = Object.assign({ type }, params || {});
-    const term = query.semester || query.term || (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || "2025-2026-2";
+    const term = query.semester || query.term || (this.data.semesters[this.data.selectedSemesterIndex] && this.data.semesters[this.data.selectedSemesterIndex].value) || getFallbackTerm();
     query.term = term;
     delete query.semester; // 统一为 term
 
@@ -2260,7 +2268,8 @@ Page({
     } catch (error) {
       console.warn("[school] read activeSnapshot cache failed", error);
     }
-    const lastGood = releasePackService.getLastKnownGood(DEFAULT_TERM);
+    const term = getFallbackTerm();
+    const lastGood = term ? releasePackService.getLastKnownGood(term) : null;
     return this.buildActiveSnapshotFromReleaseManifest(lastGood && lastGood.manifest);
   },
 
@@ -2327,7 +2336,7 @@ Page({
 
     try {
       const pack = await releasePackService.switchReleaseSafely({
-        term: cached && cached.term || DEFAULT_TERM,
+        term: cached && cached.term || getFallbackTerm(),
         forceNetwork: Boolean(options.forceNetwork),
       });
       const activeSnapshot = this.buildActiveSnapshotFromReleaseManifest(pack && pack.manifest);
@@ -2394,7 +2403,8 @@ Page({
     }
 
     try {
-      const payload = await request.get("/api/fosu/bootstrap", { semester: cached?.term || DEFAULT_TERM }, {
+      const bootstrapQuery = cached && cached.term ? { semester: cached.term } : {};
+      const payload = await request.get("/api/fosu/bootstrap", bootstrapQuery, {
         showLoading: false,
         silentError: true,
         timeout: BOOTSTRAP_TIMEOUT,
@@ -2602,12 +2612,12 @@ Page({
     const snapshot = typeof snapshotOrTerm === "object"
       ? snapshotOrTerm
       : {
-        term: snapshotOrTerm || DEFAULT_TERM,
+        term: snapshotOrTerm || getFallbackTerm(),
         releaseVersion: releaseVersionOrOptions || this.getReleaseVersionForCache(),
       };
     const options = typeof releaseVersionOrOptions === "object" ? releaseVersionOrOptions : (maybeOptions || {});
     const seq = options.seq || this._activeInitSeq;
-    const term = snapshot.term || DEFAULT_TERM;
+    const term = snapshot.term || getFallbackTerm();
     const releaseVersion = snapshot.releaseVersion || "";
     const catalogCacheKey = getSchoolCatalogCacheKey(term, releaseVersion);
     const legacyCatalogKey = `school:catalog:${term}:${releaseVersion}`;

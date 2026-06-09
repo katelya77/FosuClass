@@ -1,6 +1,7 @@
 const { URLSearchParams } = require("url");
 const { requestWithRetry } = require("./casSession");
 const { safeLog } = require("./safeLogger");
+const { resolveTerm } = require("./term");
 
 const baseUrl = "https://100.fosu.edu.cn";
 
@@ -103,11 +104,12 @@ class FosuQiangzhiAdapter {
 
   // 兼容老代码的 session 占位入参，忽略 session 并走内建安全 CAS 会话
   async fetchPersonalSchedule(session, params) {
+    const semester = resolveTerm(params);
     const form = compactParams({
       cj0701id: "",
       zc: params && params.week ? params.week : "",
       demo: "",
-      xnxq01id: (params && params.semester) || "2025-2026-2",
+      xnxq01id: semester,
       sfFD: "1",
       sfBZ: "1",
     });
@@ -126,8 +128,9 @@ class FosuQiangzhiAdapter {
   }
 
   async fetchClassSchedule(session, params) {
+    const semester = resolveTerm(params);
     return this.post(paths.classScheduleIfr, {
-      xnxqh: (params && params.semester) || "2025-2026-2",
+      xnxqh: semester,
       skyx: params && params.collegeCode,
       sknj: params && params.grade,
       skzy: params && params.majorCode,
@@ -139,8 +142,9 @@ class FosuQiangzhiAdapter {
   }
 
   async fetchTeacherSchedule(session, params) {
+    const semester = resolveTerm(params);
     return this.post(paths.teacherScheduleIfr, {
-      xnxqh: (params && params.semester) || "2025-2026-2",
+      xnxqh: semester,
       skyx: params && params.collegeCode,
       jszc: params && params.teacherTitleCode,
       zc1: params && params.weekStart,
@@ -151,8 +155,9 @@ class FosuQiangzhiAdapter {
   }
 
   async fetchClassroomSchedule(session, params) {
+    const semester = resolveTerm(params);
     return this.post(paths.classroomScheduleIfr, {
-      xnxqh: (params && params.semester) || "2025-2026-2",
+      xnxqh: semester,
       skyx: params && params.collegeCode,
       xqid: params && params.campusId,
       jzwid: params && params.buildingId,
@@ -164,8 +169,9 @@ class FosuQiangzhiAdapter {
   }
 
   async fetchCourseSchedule(session, params) {
+    const semester = resolveTerm(params);
     return this.post(paths.courseScheduleIfr, {
-      xnxqh: (params && params.semester) || "2025-2026-2",
+      xnxqh: semester,
       skyx: params && params.collegeCode,
       kkyx: params && params.openCollegeCode,
       zzdKcSX: params && params.courseAttr,
@@ -178,8 +184,9 @@ class FosuQiangzhiAdapter {
   }
 
   async fetchInitJc(session, params) {
+    const semester = resolveTerm(params);
     return this.get(paths.initJc, {
-      xnxq: (params && params.semester) || "2025-2026-2",
+      xnxq: semester,
     });
   }
 }

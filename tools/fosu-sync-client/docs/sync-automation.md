@@ -60,7 +60,9 @@ FosuClass 的数据采集与发布采用“校园网/EasyConnect 采集 + VPS �
 # VPS 管理员访问认证 Token
 $env:ADMIN_API_TOKEN="your_admin_token_here"
 # 目标拉取的学期标识
-$env:PREFERRED_SEMESTER="2025-2026-2"
+$env:PREFERRED_SEMESTER="2026-2027-1"
+# 采集前必须由管理员按校历确认开学日期
+$env:PREFERRED_TERM_START_DATE="2026-09-07"
 # 上传 VPS 时单分块大小（默认 10）
 $env:SYNC_UPLOAD_CHUNK_SIZE="10"
 # 是否强制在上传 VPS 和进行 Playwright 操作时彻底删除代理，防污染

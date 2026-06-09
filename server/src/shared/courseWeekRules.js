@@ -340,6 +340,38 @@ function getTeachingWeekFromTermStart(date, termStartDate, totalWeeks) {
   return clampWeek(Math.floor(diffDays / 7) + 1, totalWeeks);
 }
 
+function getTeachingWeekPhase(date, termStartDate, totalWeeks) {
+  const target = parseDateOnly(date);
+  const start = parseDateOnly(termStartDate);
+  const maxWeeks = Math.max(1, Number(totalWeeks || DEFAULT_TOTAL_WEEKS) || DEFAULT_TOTAL_WEEKS);
+  if (!target || !start) {
+    return {
+      termPhase: "unknown",
+      isInTerm: false,
+      rawWeekNo: 0,
+      weekNo: 1,
+      startDate: termStartDate || "",
+      endDate: "",
+    };
+  }
+  const diffDays = Math.floor((target.getTime() - start.getTime()) / 86400000);
+  const rawWeekNo = Math.floor(diffDays / 7) + 1;
+  const weekNo = clampWeek(rawWeekNo, maxWeeks);
+  const end = new Date(start.getTime());
+  end.setDate(start.getDate() + maxWeeks * 7 - 1);
+  let termPhase = "in-term";
+  if (rawWeekNo <= 0) termPhase = "before-term";
+  if (rawWeekNo > maxWeeks) termPhase = "after-term";
+  return {
+    termPhase,
+    isInTerm: termPhase === "in-term",
+    rawWeekNo,
+    weekNo,
+    startDate: formatDate(start),
+    endDate: formatDate(end),
+  };
+}
+
 function resolveCurrentTeachingWeek(context = {}, input = {}) {
   const totalWeeks = Number(context.totalWeeks || input.totalWeeks || DEFAULT_TOTAL_WEEKS) || DEFAULT_TOTAL_WEEKS;
   const candidates = [
@@ -361,17 +393,24 @@ function resolveCurrentTeachingWeek(context = {}, input = {}) {
   const date = parseLocalDateTime(input.date || context.clientLocalTime || context.clientTime || context.todayDate || new Date());
   const termStartDate = context.termStartDate || input.termStartDate || "";
   const calculated = getTeachingWeekFromTermStart(date || new Date(), termStartDate, totalWeeks);
-  if (calculated >= 1) {
+  const phase = getTeachingWeekPhase(date || new Date(), termStartDate, totalWeeks);
+  if (phase.isInTerm && calculated >= 1) {
     return {
       currentWeek: calculated,
       weekUncertain: false,
       source: "termStartDate",
+      termPhase: phase.termPhase,
+      isInTerm: phase.isInTerm,
+      rawWeekNo: phase.rawWeekNo,
     };
   }
   return {
-    currentWeek: 1,
+    currentWeek: phase.weekNo || 1,
     weekUncertain: true,
     source: "fallback",
+    termPhase: phase.termPhase,
+    isInTerm: false,
+    rawWeekNo: phase.rawWeekNo,
   };
 }
 
@@ -387,6 +426,7 @@ module.exports = {
   getCourseWeekStatus,
   getCurrentSection,
   getTeachingWeekFromTermStart,
+  getTeachingWeekPhase,
   getWeekday,
   isCourseActiveInWeek,
   normalizeWeekText,

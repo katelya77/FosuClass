@@ -1,4 +1,5 @@
 const { colorForCourse } = require("../utils/color");
+const { getRuntimeTermConfig } = require("../utils/week");
 
 const CUSTOM_COURSE_DRAFT_KEY = "FOSU_CUSTOM_COURSE_DRAFT";
 const CUSTOM_COURSE_KEY_PREFIX = "customCourses:";
@@ -32,7 +33,7 @@ function getScheduleTargetId(target) {
   const item = target || getCurrentTarget() || {};
   const parts = [
     item.type || "class",
-    item.semester || "2025-2026-2",
+    item.term || item.semester || getRuntimeTermConfig().term,
     item.classId || item.scheduleKey || item.name || item.className || "default",
   ];
   return parts.map((part) => encodeURIComponent(String(part || ""))).join(":");

@@ -4,6 +4,7 @@ const { parseTeacherScheduleIfrHtml } = require("../common/parser");
 const { getCachedSchedule, saveTeacherSchedules } = require("../common/cache");
 const { groupCoursesBy } = require("../common/scheduleNormalizer");
 const { safeLog } = require("../common/safeLogger");
+const { normalizeTerm } = require("../common/term");
 
 cloud.init({
   env: cloud.DYNAMIC_CURRENT_ENV,
@@ -19,8 +20,17 @@ exports.main = async (event) => {
     weekEnd = "",
   } = event;
 
+  const selectedSemester = normalizeTerm(semester);
+  if (!selectedSemester) {
+    return {
+      success: false,
+      code: "TERM_REQUIRED",
+      message: "semester is required.",
+    };
+  }
+
   const queryParams = {
-    semester: semester || "2025-2026-2",
+    semester: selectedSemester,
     collegeCode: collegeCode || "02", // 默认测试物理与光电工程学院，或由前台传入
     teacherTitleCode: titleCode,
     weekStart,

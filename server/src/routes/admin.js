@@ -16,6 +16,8 @@ const appConfigService = require("../services/appConfigService");
 const feedbackService = require("../services/feedbackService");
 const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
+const termRegistryService = require("../services/termRegistryService");
+const termReleaseIndexService = require("../services/termReleaseIndexService");
 const releaseWorkerManager = require("../services/releaseWorkerManager");
 const relayService = require("../services/relayService");
 const stagingUploadService = require("../services/stagingUploadService");
@@ -35,6 +37,11 @@ const { listRouteSecurityPolicies } = require("../security/routeSecurityPolicy")
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const zlib = require("zlib");
 const gzipAsync = promisify(zlib.gzip);
+
+function getDefaultTerm() {
+  const active = termRegistryService.getActiveTerm();
+  return active && active.term || termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term;
+}
 
 const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
 const HISTORY_DIR = path.join(SNAPSHOTS_DIR, "history");
@@ -1019,7 +1026,7 @@ function buildClassroomHeatmap(options) {
   }
 
   // 1. 获取并应用动态筛选维度
-  const targetSemester = opt.semester; // 比如 "2025-2026-2"
+  const targetSemester = opt.semester;
   const targetWeek = opt.week && opt.week !== "all" ? parseInt(opt.week, 10) : null;
   const targetBuilding = opt.building; // 模糊匹配，如 "C7" 或 "B8"
 
@@ -1387,7 +1394,7 @@ function getFallbackSemester() {
     safeLog("read-fallback-semester-failed", { error: error.message });
   }
 
-  return "2025-2026-2";
+  return getDefaultTerm();
 }
 
 function parseClassSchedulesPayload(body) {
@@ -1618,7 +1625,7 @@ router.post(
         });
       }
 
-      const semester = catalog.semesters?.[0]?.value || "2025-2026-2";
+      const semester = catalog.semesters?.[0]?.value || getDefaultTerm();
       const startYear = parseInt(semester.match(/^(\d{4})/)?.[1] || "2025", 10);
 
       // 3. 清洗与过滤
@@ -2327,7 +2334,7 @@ router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
   const teacherScheduleCount = getItemCount("teacher-schedules") || (snapshotMeta ? snapshotMeta.teacherScheduleCount : 0);
   const classroomScheduleCount = getItemCount("classroom-schedules") || (snapshotMeta ? snapshotMeta.classroomScheduleCount : 0);
   const courseScheduleCount = getItemCount("course-schedules") || (snapshotMeta ? snapshotMeta.courseScheduleCount : 0);
-  const semester = snapshotMeta ? snapshotMeta.semester : (meta.snapshot ? meta.snapshot.semester : "2025-2026-2");
+  const semester = snapshotMeta ? snapshotMeta.semester : (meta.snapshot ? meta.snapshot.semester : getDefaultTerm());
   const classSchedulesUpdatedAt = getUpdatedAt("class-schedules");
   const relayUploads = relayService.listUploads();
   const stagingUploads = stagingUploadService.listUploads(1);
@@ -3036,7 +3043,7 @@ router.get("/catalog/stats", adminAuth.verifyAdminAccess, (req, res) => {
         collegeCount: (catalog.colleges || []).length,
         semesterCount: (catalog.semesters || []).length,
         gradeCount: (catalog.grades || []).length,
-        currentSemester: catalog.semesters?.[0]?.value || "2025-2026-2",
+        currentSemester: catalog.semesters?.[0]?.value || getDefaultTerm(),
         updatedAt: meta.classScheduleUpdatedAt || new Date().toISOString()
       }
     });
@@ -3726,6 +3733,138 @@ router.get("/staging/status", adminAuth.verifyAdminAccess, (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/terms", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      registry: termRegistryService.readRegistry(),
+      terms: termRegistryService.listTerms({ includeDisabled: true }),
+      releaseIndex: termReleaseIndexService.readIndex(),
+      termReleases: termReleaseIndexService.getTermReleaseSummary(),
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, code: error.code || "TERM_LIST_FAILED", message: error.message });
+  }
+});
+
+router.post("/terms", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const term = termRegistryService.createPlannedTerm(req.body || {});
+    writeAuditLog(req, "create", "term", term.term, `Created planned term ${term.term}`);
+    return res.json({ success: true, term });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ success: false, code: error.code || "TERM_CREATE_FAILED", errors: error.errors || [], message: error.message });
+  }
+});
+
+router.patch("/terms/:term", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const term = termRegistryService.updateTerm(req.params.term, req.body || {});
+    writeAuditLog(req, "update", "term", term.term, `Updated term ${term.term}`);
+    return res.json({ success: true, term });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ success: false, code: error.code || "TERM_UPDATE_FAILED", errors: error.errors || [], message: error.message });
+  }
+});
+
+router.post("/terms/:term/bind-release", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const releaseVersion = req.body && (req.body.releaseVersion || req.body.version);
+    const term = termRegistryService.bindReleaseToTerm(req.params.term, releaseVersion, { status: "ready", source: "admin-bind" });
+    termReleaseIndexService.bindRelease(term.term, releaseVersion, { activeTerm: false });
+    writeAuditLog(req, "bind-release", "term", term.term, `Bound release ${releaseVersion} to term ${term.term}`);
+    return res.json({ success: true, term, releaseIndex: termReleaseIndexService.getTermRelease(term.term) });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ success: false, code: error.code || "TERM_BIND_RELEASE_FAILED", errors: error.errors || [], message: error.message });
+  }
+});
+
+function buildTermReadiness(term, releaseVersion) {
+  const record = termRegistryService.getTerm(term);
+  const version = String(releaseVersion || record && record.releaseVersion || "").trim();
+  const manifestCheck = version ? termRegistryService.validateManifestForTerm(term, version) : { valid: false, errors: ["RELEASE_VERSION_REQUIRED"] };
+  const quickHealth = version ? releaseService.getReleasePackQuickHealth(version) : null;
+  const staticManifest = version ? releaseService.readReleasePackStaticManifest(version, { term }) : null;
+  const counts = manifestCheck.manifest && manifestCheck.manifest.counts || {};
+  const blockers = [];
+  if (!record) blockers.push("TERM_NOT_FOUND");
+  if (record && record.status === "planned" && !record.dataAvailable) blockers.push("TERM_NOT_PUBLISHED");
+  if (record && (!record.termStartDate || !record.totalWeeks)) blockers.push("TERM_CONFIG_INCOMPLETE");
+  if (!manifestCheck.valid) blockers.push.apply(blockers, manifestCheck.errors);
+  if (!quickHealth || !quickHealth.healthy) blockers.push("RELEASE_PACK_UNHEALTHY");
+  if (!staticManifest) blockers.push("OPENRESTY_STATIC_MANIFEST_MISSING");
+  return {
+    term,
+    releaseVersion: version,
+    record,
+    ready: blockers.length === 0,
+    blockers: Array.from(new Set(blockers)),
+    manifest: manifestCheck.manifest ? {
+      term: manifestCheck.manifest.term,
+      releaseVersion: manifestCheck.manifest.releaseVersion,
+      termConfig: manifestCheck.manifest.termConfig || null,
+      counts,
+    } : null,
+    releasePack: quickHealth,
+    openResty: {
+      manifestExists: Boolean(staticManifest),
+      staticReleaseUrl: staticManifest && staticManifest.staticReleaseUrl || "",
+    },
+    rollbackTarget: releaseService.getActiveReleaseInfo(),
+    counts,
+  };
+}
+
+router.get("/terms/:term/readiness", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const releaseVersion = req.query.releaseVersion || req.query.version || "";
+    return res.json({ success: true, readiness: buildTermReadiness(req.params.term, releaseVersion) });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ success: false, code: error.code || "TERM_READINESS_FAILED", message: error.message });
+  }
+});
+
+router.post("/terms/:term/activate", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const target = termRegistryService.getTerm(req.params.term);
+    const releaseVersion = req.body && (req.body.releaseVersion || req.body.version) || target && target.releaseVersion || "";
+    const readiness = buildTermReadiness(req.params.term, releaseVersion);
+    if (!readiness.ready) {
+      return res.status(400).json({ success: false, code: "TERM_ACTIVATE_BLOCKED", readiness });
+    }
+    const activatedRelease = releaseService.activateReleaseVersion(releaseVersion);
+    appConfigService.touchDataVersionForSyncKey("release", {
+      releaseVersion,
+      semester: req.params.term,
+      releaseNote: `Activated term ${req.params.term}`,
+    });
+    writeAuditLog(req, "activate", "term", req.params.term, `Activated term ${req.params.term} with release ${releaseVersion}`);
+    return res.json({ success: true, term: termRegistryService.getTerm(req.params.term), activatedRelease, readiness });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ success: false, code: error.code || "TERM_ACTIVATE_FAILED", errors: error.errors || [], message: error.message });
+  }
+});
+
+router.post("/terms/:term/archive", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const term = termRegistryService.archiveTerm(req.params.term);
+    writeAuditLog(req, "archive", "term", term.term, `Archived term ${term.term}`);
+    return res.json({ success: true, term });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ success: false, code: error.code || "TERM_ARCHIVE_FAILED", message: error.message });
+  }
+});
+
+router.post("/terms/:term/disable", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const term = termRegistryService.disableTerm(req.params.term);
+    writeAuditLog(req, "disable", "term", term.term, `Disabled term ${term.term}`);
+    return res.json({ success: true, term });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({ success: false, code: error.code || "TERM_DISABLE_FAILED", message: error.message });
   }
 });
 
@@ -4845,7 +4984,7 @@ router.post("/sync/record", adminAuth.verifyAdminAccess, (req, res) => {
       id: `sync_${Date.now()}`,
       time: new Date().toISOString(),
       type: type || "manual",
-      semester: semester || "2025-2026-2",
+      semester: semester || getDefaultTerm(),
       source: source || "web-admin",
       count: parseInt(count, 10) || 0,
       success: success !== false,

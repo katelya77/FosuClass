@@ -6,6 +6,8 @@ const zlib = require("zlib");
 const jobService = require("./jobService");
 const releaseService = require("./releaseService");
 const releaseWorkerManager = require("./releaseWorkerManager");
+const termRegistryService = require("./termRegistryService");
+const termReleaseIndexService = require("./termReleaseIndexService");
 const { safeLog } = require("../utils/safeLogger");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
@@ -165,6 +167,10 @@ function getReleaseKeepSet(config) {
   const keep = new Set();
   const active = releaseService.getActiveReleaseInfo();
   if (active && active.version) keep.add(active.version);
+  termReleaseIndexService.listPinnedReleases().forEach((version) => keep.add(version));
+  termRegistryService.listTerms({ includeDisabled: true }).forEach((term) => {
+    if (term.releaseVersion) keep.add(term.releaseVersion);
+  });
   releaseService.listReleases(Math.max(10, config.releaseRetentionCount + 2))
     .slice(0, config.releaseRetentionCount + 1)
     .forEach((item) => keep.add(item.version));
