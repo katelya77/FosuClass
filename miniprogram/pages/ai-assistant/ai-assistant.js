@@ -196,71 +196,31 @@ function typeClass(type) {
   return String(type || "generic").toLowerCase().replace(/_/g, "-").replace(/[^a-z0-9-]/g, "") || "generic";
 }
 
-function mapProviderLabel(provider) {
-  const normalized = String(provider || "unknown").toLowerCase();
-  if (normalized.indexOf("deepseek") >= 0) return "DeepSeek";
-  if (normalized.indexOf("coze") >= 0) return "Coze";
-  if (normalized.indexOf("mock") >= 0) return "本地规则";
-  return "AI";
-}
-
-function mapSafetyModeLabel(mode) {
-  const normalized = String(mode || "tool-grounded").toLowerCase();
-  if (normalized.indexOf("fallback") >= 0) return "降级模式";
-  if (normalized.indexOf("tool") >= 0 || normalized.indexOf("grounded") >= 0) return "工具核验";
-  return "安全模式";
-}
-
-function normalizeSafety(safety) {
-  const source = safety || {};
-  const provider = source.resolvedProvider || source.provider || source.lastProvider || source.providerName || "unknown";
-  const desiredProvider = source.desiredProvider || source.provider || provider;
-  const mode = source.mode || source.safetyMode || "tool-grounded";
-  const reason = String(source.providerDecisionReason || source.fallbackReason || "");
-  const externalUsed = source.externalProviderUsed === true ||
-    (/deepseek|coze/i.test(provider) && !source.fallbackReason);
-  let text = "工具核验";
-  if (externalUsed) {
-    text = `${mapProviderLabel(provider)} 已参与`;
-  } else if (/timeout|超时/i.test(reason)) {
-    text = "模型暂不可用，已用本地规则";
-  } else if (/fallback|NOT_CONFIGURED|INVALID_PROVIDER|provider|降级/i.test(reason)) {
-    text = "模型暂不可用，已用本地规则";
-  }
-  const providerLabel = externalUsed ? mapProviderLabel(provider) : (text.indexOf("模型暂不可用") === 0 ? "已降级" : "工具核验");
-  const modeLabel = mapSafetyModeLabel(mode);
-  return {
-    provider,
-    desiredProvider,
-    mode,
-    externalProviderUsed: externalUsed,
-    fallbackReason: source.fallbackReason || "",
-    providerLabel,
-    modeLabel,
-    text,
-  };
-}
-
 function normalizeSafety(safety) {
   const source = safety || {};
   const provider = source.resolvedProvider || source.provider || source.lastProvider || source.providerName || "unknown";
   const desiredProvider = source.desiredProvider || source.provider || provider;
   const mode = source.mode || source.safetyMode || "tool-grounded";
   const fallbackReason = safeText(source.fallbackReason || "", 80);
+  const providerDecisionReason = safeText(source.providerDecisionReason || "", 120);
   const externalUsed = source.externalProviderUsed === true;
+  const providerLabel = fallbackReason ? "已降级" : (externalUsed ? mapProviderLabel(provider) : "工具验证");
   let text = "课表事实由工具核验";
   if (fallbackReason) {
     text = "模型暂不可用，已用本地规则";
   } else if (externalUsed) {
-    text = `${mapProviderLabel(provider)} 已参与`;
+    const label = mapProviderLabel(provider);
+    text = label === "扣子" ? "扣子已参与" : `${label} 已参与`;
   }
   return {
     provider,
+    resolvedProvider: provider,
     desiredProvider,
     mode,
     externalProviderUsed: externalUsed,
     fallbackReason,
-    providerLabel: fallbackReason ? "已降级" : (externalUsed ? mapProviderLabel(provider) : "工具核验"),
+    providerDecisionReason,
+    providerLabel,
     modeLabel: mapSafetyModeLabel(mode),
     text,
     pendingClarification: source.pendingClarification || null,
@@ -288,31 +248,6 @@ function normalizeToolCall(tool, index) {
     displayStatus: stateText,
     displayText: `已核验：${label}`,
     statusClass: statusClass(source.status),
-  };
-}
-
-function normalizeCardItem(item, index, cardType) {
-  const source = item || {};
-  const subtitle = String(source.subtitle || source.desc || source.detail || "");
-  const displaySubtitle = String(cardType || "") === "empty_room"
-    ? subtitle.replace(/(?:\s*·\s*)?容量未知/g, "").replace(/^\s*·\s*|\s*·\s*$/g, "")
-    : subtitle;
-  return {
-    key: `${safeText(source.title || source.name || "item", 60)}-${index}`,
-    title: safeText(source.title || source.name || "", 80),
-    subtitle: safeText(displaySubtitle, 140),
-    value: safeText(source.value || source.time || source.status || "", 60),
-  };
-}
-
-function normalizeCardAction(action, index) {
-  const source = action || {};
-  return {
-    label: safeText(source.label || "查看", 30),
-    type: source.type || "noop",
-    url: source.url || "",
-    payload: source.payload && typeof source.payload === "object" && !Array.isArray(source.payload) ? source.payload : {},
-    originalIndex: index,
   };
 }
 
@@ -377,45 +312,6 @@ function cardKey(messageId, card, index) {
 }
 
 function normalizeCard(card, messageId, index, expandedCards) {
-  const source = card || {};
-  const type = String(source.type || "generic");
-  const scheduleLike = type === "schedule" || /今日|课程|课表|today|schedule/i.test(String(source.title || ""));
-  const rawItems = Array.isArray(source.items) ? source.items : [];
-  const filteredRawItems = scheduleLike ? rawItems.filter((item) => !isInactiveScheduleItem(item)) : rawItems;
-  const items = filteredRawItems.map((item, itemIndex) => normalizeCardItem(item, itemIndex, type));
-  const actions = Array.isArray(source.actions) ? source.actions.map(normalizeCardAction) : [];
-  const key = cardKey(messageId, source, index);
-  const expanded = Boolean(expandedCards && expandedCards[key]);
-  const visibleLimit = expanded ? 12 : 5;
-  const visibleItems = items.slice(0, visibleLimit);
-  const hiddenItemCount = Math.max(0, items.length - visibleItems.length);
-  const inactiveFilteredCount = Math.max(extractInactiveFilteredCount(source), rawItems.length - filteredRawItems.length);
-  const filteredHint = inactiveFilteredCount > 0 ? `已过滤 ${inactiveFilteredCount} 门非本周课程` : "";
-  const primaryActions = actions.slice(0, 2);
-  const title = scheduleLike && source.allFinished === true ? "今日课程已结束" : (source.title || "结果");
-  const errorClass = source.variant === "error" || /服务暂时不可用|服务暂不可用/.test(String(source.title || "")) ? "card-error" : "";
-  return Object.assign({}, source, {
-    key,
-    title: safeText(title, 80),
-    subtitle: safeText(source.subtitle || "", 140),
-    badges: Array.isArray(source.badges) ? source.badges.slice(0, 2).map((item) => safeText(item, 36)) : [],
-    items,
-    actions,
-    typeLabel: mapCardTypeLabel(type),
-    typeClass: typeClass(type),
-    visibleItems,
-    hiddenItemCount,
-    overflowText: expanded ? "收起" : `展开 ${items.length - visibleItems.length} 条`,
-    overflowExpanded: expanded,
-    primaryActions,
-    secondaryActions: actions.slice(2),
-    actionLayoutClass: primaryActions.length === 1 ? "one-action" : "two-actions",
-    errorClass,
-    filteredHint,
-  });
-}
-
-function normalizeCard(card, messageId, index, expandedCards) {
   const source = card && typeof card === "object" && !Array.isArray(card) ? card : {};
   const type = safeText(source.type || "generic", 30, "generic").toLowerCase() || "generic";
   const rawTitle = safeText(source.title || "", 80);
@@ -455,7 +351,7 @@ function normalizeCard(card, messageId, index, expandedCards) {
     : (rawTitle || CARD_TITLE_FALLBACKS[type] || CARD_TITLE_FALLBACKS.generic);
   const primaryActions = actions.slice(0, 1);
   const secondaryActions = actions.slice(1, 3);
-  const errorClass = source.variant === "error" || /服务暂时不可用/.test(title) ? "card-error" : "";
+  const errorClass = source.variant === "error" || /服务暂时不可用|服务暂不可用/.test(title) ? "card-error" : "";
   return Object.assign({}, source, {
     key,
     title: safeText(title, 80, CARD_TITLE_FALLBACKS[type] || CARD_TITLE_FALLBACKS.generic),
@@ -587,32 +483,15 @@ function buildHeaderSubtitle(state) {
   if (source.providerLabel === "已降级" || source.lastFallbackReason) {
     return "模型暂不可用，已用本地规则";
   }
-  if (source.lastExternalProviderUsed && String(source.lastProvider || "").toLowerCase().indexOf("deepseek") >= 0) {
-    return "DeepSeek 已参与";
-  }
-  if (source.allowPersonalContext === true) {
-    return "已开启课表摘要";
-  }
-  return "课表事实由工具核验";
-}
-
-function buildHeaderSubtitle(state) {
-  const source = state || {};
-  if (source.lastFallbackReason) {
-    return "模型暂不可用，已用本地规则";
-  }
   const provider = String(source.lastProvider || "").toLowerCase();
-  if (source.lastExternalProviderUsed && provider.indexOf("deepseek") >= 0) {
-    return "DeepSeek 已参与";
-  }
-  if (source.lastExternalProviderUsed && provider.indexOf("coze") >= 0) {
-    return "Coze 已参与";
-  }
-  if (source.lastProvider && source.lastProvider !== "unknown") {
-    return "课表事实由工具核验";
+  if (source.lastExternalProviderUsed) {
+    const label = mapProviderLabel(provider);
+    return label === "扣子" ? "扣子已参与" : `${label} 已参与`;
   }
   if (source.allowPersonalContext === true) {
-    return "已开启课表摘要";
+    return source.lastProvider && source.lastProvider !== "unknown"
+      ? "课表事实由工具核验 · 已开启课表摘要"
+      : "已开启课表摘要";
   }
   return "课表事实由工具核验";
 }

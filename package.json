@@ -265,6 +265,8 @@
     "test:miniprogram-request-final-header": "node tools/test-miniprogram-url-compatibility.js",
     "test:raw-wx-request-whitelist": "node tools/test-raw-wx-request-whitelist.js",
     "test:miniprogram-build-entry": "node tools/test-miniprogram-build-entry.js",
+    "test:miniprogram-duplicate-symbols": "node tools/test-miniprogram-top-level-duplicate-symbols.js",
+    "test:miniprogram-compile-preflight": "node tools/test-miniprogram-compile-preflight.js",
     "test:security-client-check": "node tools/test-security-client-check.js",
     "test:no-secret-in-miniprogram": "node tools/test-no-secret-in-miniprogram.js",
     "verify:release-live": "node tools/verify-release-live.js",
@@ -405,5 +407,8 @@
     "axios-cookiejar-support": "^7.0.0",
     "iconv-lite": "^0.7.2",
     "tough-cookie": "^6.0.1"
+  },
+  "devDependencies": {
+    "acorn": "^8.16.0"
   }
 }

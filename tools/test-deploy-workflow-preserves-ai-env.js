@@ -4,6 +4,7 @@ const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
 const workflow = fs.readFileSync(path.join(ROOT, ".github", "workflows", "deploy-vps.yml"), "utf8");
+const envContract = fs.readFileSync(path.join(ROOT, "docs", "github-actions-env-contract.md"), "utf8");
 
 [
   "npm run test:server-ai-module-require",
@@ -61,5 +62,19 @@ assert(!/grep\s+-E\s+"\\"/.test(runtimeReader[0]), "read_runtime_env_value must 
 assert(!/echo\s+["']?\$\{\{\s*secrets\.(AI_API_KEY|DEEPSEEK_API_KEY|COZE_API_KEY)\s*\}\}/.test(workflow),
   "workflow must not echo provider API keys");
 assert(!/set\s+-x/.test(workflow), "workflow must not enable shell xtrace");
+assert(!workflow.includes("FOSU_STATIC_TICKET_SECRET=${{ secrets.FOSU_STATIC_TICKET_SECRET }}"),
+  "workflow must not write deprecated FOSU_STATIC_TICKET_SECRET");
+
+[
+  "必需 Secrets",
+  "可选 Secrets",
+  "Repository Variables",
+  "Deprecated",
+  "FOSU_STATIC_TICKET_SECRET_CURRENT",
+  "AI_API_KEY",
+  "COZE_BOT_ID",
+].forEach((needle) => {
+  assert(envContract.includes(needle), `env contract should document ${needle}`);
+});
 
 console.log("test-deploy-workflow-preserves-ai-env passed");

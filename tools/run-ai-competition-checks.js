@@ -21,6 +21,8 @@ const scripts = [
   "test:ai-auto-policy-tool-local",
   "test:ai-clarification-followup",
   "test:ai-periodic-data-isolation",
+  "test:miniprogram-duplicate-symbols",
+  "test:miniprogram-compile-preflight",
   "test:ai-no-object-object-render",
   "test:ai-recommendation-copy",
   "test:ai-project-qa-provider",
