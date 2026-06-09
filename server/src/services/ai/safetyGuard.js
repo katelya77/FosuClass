@@ -149,6 +149,19 @@ function sanitizeLatestScheduleImport(value) {
   };
 }
 
+function sanitizePendingClarification(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const type = ["teacher", "classroom", "course", "class"].includes(source.type) ? source.type : "";
+  if (source.intentName !== "search_school_index" || !type) return null;
+  return {
+    intentName: "search_school_index",
+    type,
+    missing: sanitizeString(source.missing || "", 40),
+    createdAt: Number.isFinite(Number(source.createdAt)) ? Number(source.createdAt) : 0,
+    expiresAt: Number.isFinite(Number(source.expiresAt)) ? Number(source.expiresAt) : 0,
+  };
+}
+
 function sanitizeAgentContext(context) {
   const source = context && typeof context === "object" && !Array.isArray(context) ? context : {};
   return {
@@ -176,6 +189,7 @@ function sanitizeAgentContext(context) {
       : undefined,
     currentScheduleSummary: sanitizeScheduleSummary(source.currentScheduleSummary),
     latestScheduleImport: sanitizeLatestScheduleImport(source.latestScheduleImport),
+    pendingClarification: sanitizePendingClarification(source.pendingClarification),
   };
 }
 

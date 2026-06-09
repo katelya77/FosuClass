@@ -228,6 +228,78 @@ function buildMeeting(result) {
   };
 }
 
+function buildClarificationV2(result = {}) {
+  const slot = result.slot || {};
+  const type = slot.type || "teacher";
+  const answerMap = {
+    teacher: "你想查哪位老师？直接输入姓名就可以。",
+    classroom: "你想查哪间教室？直接输入教室号就可以。",
+    course: "你想查哪门课程？直接输入课程名就可以。",
+    class: "你想查哪个班级？直接输入班级或专业关键词就可以。",
+    schedule: "需要先开启课表摘要或导入 XLS 个人课表，才能推荐自习时间。",
+  };
+  const suggestionsMap = {
+    teacher: ["查张三老师课表", "查李老师课表"],
+    classroom: ["查C7-203教室", "查B8教室"],
+    course: ["查高等数学课程", "查大学英语课程"],
+    class: ["查25动物科学3班", "查计算机专业课表"],
+    schedule: ["去XLS导入", "今天还有课吗"],
+  };
+  return {
+    answer: answerMap[type] || "还需要一个关键词，直接输入就可以。",
+    cards: [],
+    suggestions: suggestionsMap[type] || [],
+  };
+}
+
+function buildMeetingV2(result) {
+  if (result.needContext) {
+    return {
+      answer: result.summary || "需要先开启课表摘要或导入 XLS 个人课表，我才能推荐自习时间。",
+      cards: [makeCard("guide", "需要课表摘要", "只会使用脱敏后的课程名、教师、教室、星期、节次和教学周。", {
+        badges: ["XLS-only", "本地优先"],
+        actions: [makeAction("前往设置", "bind", result.actionUrl || "/pages/personal-sync/personal-sync?tab=xls")],
+      })],
+      suggestions: ["怎么导入个人课表？", "今天还有课吗？"],
+    };
+  }
+  const candidates = Array.isArray(result.candidates) ? result.candidates : [];
+  const first = candidates[0] || null;
+  const bestActionUrl = first && first.emptyRoomActionUrl || result.emptyRoomActionUrl || "/pages/empty-room/empty-room";
+  return {
+    answer: result.summary || (candidates.length
+      ? "已根据当前课表和空教室索引整理出未来可用时段。"
+      : "没有找到满足条件的未来自习时段，可以缩短连续节数或换一周再试。"),
+    cards: candidates.length ? [makeCard("reminder", "连续自习时间推荐", result.scope === "next_week" ? "本周剩余时间无合适候选，已尝试下周。" : "从当前时刻开始，在本周剩余时间内推荐。", {
+      badges: [
+        `连续${result.durationSections || (first && first.durationSections) || 2}节`,
+        first && first.teachingWeek ? `第${first.teachingWeek}教学周` : "",
+        result.weekUncertain ? "教学周待确认" : "",
+      ].filter(Boolean),
+      items: candidates.slice(0, 3).map((item) => ({
+        title: item.dateText || item.date || "日期待确认",
+        subtitle: [
+          `${item.sectionText || `第${item.startSection}-${item.endSection}节`} ${item.timeText || ""}`.trim(),
+          item.emptyRoomVerified
+            ? (item.roomCount > 0
+              ? `已核验 ${item.roomCount} 间候选${item.recommendedRooms && item.recommendedRooms[0] && item.recommendedRooms[0].roomName ? `，优先 ${item.recommendedRooms[0].roomName}` : ""}`
+              : "已核验，暂未找到匹配教室")
+            : "尚未核验教室",
+        ].filter(Boolean).join(" · "),
+        value: item.weekUncertain ? "周次待确认" : `第${item.teachingWeek}周`,
+      })),
+      actions: [
+        makeAction("查看最佳时段空教室", "navigate", bestActionUrl),
+        makeAction("重新选择条件", "retry", "", { message: "帮我推荐连续 2 节自习时间" }),
+      ],
+    })] : [makeCard("reminder", "连续自习时间推荐", result.summary || "暂时没有合适候选。", {
+      badges: ["未来时段", "课表核验"],
+      actions: [makeAction("重新选择条件", "retry", "", { message: "帮我推荐连续 2 节自习时间" })],
+    })],
+    suggestions: ["推荐明天连续2节自习时间", "推荐晚上自习时间"],
+  };
+}
+
 function buildGeneric() {
   return {
     answer: "你可以直接问我查课、找空教室、分析今日课程、导入个人课表或排查数据加载问题。我会先调用项目内工具，再把结果整理成卡片。",
@@ -256,8 +328,8 @@ function generate({ intent, toolResults }) {
     name === "search_school_index" ? buildSchoolIndex(first || {}, findResult("get_schedule_detail")) :
     name === "diagnose_data_status" ? buildDiagnosis(first || {}) :
     name === "explain_personal_import" ? buildGuide(first || {}) :
-    name === "clarify_missing_slot" ? buildClarification(first || {}) :
-    name === "recommend_meeting_time" ? buildMeeting(first || {}) :
+    name === "clarify_missing_slot" ? buildClarificationV2(first || {}) :
+    name === "recommend_meeting_time" ? buildMeetingV2(first || {}) :
     (name === "project_qa" || name === "conversational_help") ? projectKnowledgeService.generateFallbackResponse(name) :
     buildGeneric();
   return Object.assign({ provider: "mock" }, payload);

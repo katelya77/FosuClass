@@ -19,18 +19,18 @@ function run() {
   );
   assert.strictEqual(
     agentService.shouldUseExternalProvider({ name: "search_school_index", slots: { q: "不存在老师" } }, [{ name: "search_school_index", result: { q: "不存在老师", items: [] } }], "auto"),
-    true,
-    "empty index result with a keyword should try external provider in auto policy"
+    false,
+    "school index should stay deterministic in auto policy"
   );
   assert.strictEqual(
     agentService.shouldUseExternalProvider({ name: "diagnose_data_status" }, [{ name: "diagnose_data_status", result: { success: true } }], "always"),
-    false,
-    "local diagnosis should use local template even in always policy"
+    true,
+    "always policy may ask the external provider for wording while keeping deterministic cards"
   );
   assert.strictEqual(
     agentService.shouldUseExternalProvider({ name: "recommend_meeting_time" }, [{ name: "recommend_meeting_time", result: { candidates: [{ weekday: 1 }] } }], "auto"),
-    true,
-    "meeting candidates should allow external summary in auto policy"
+    false,
+    "meeting recommendation should stay local in auto policy"
   );
 
   process.env.AI_PROVIDER_POLICY = "tool-only";

@@ -138,7 +138,9 @@ App({
       })
       .catch((error) => {
         if (!opt.silent) {
-          console.warn("平台预拉取数据读取失败，已降级", error);
+          console.warn("平台预拉取数据读取失败，已降级", {
+            code: error && (error.code || error.reasonCode),
+          });
         }
         return null;
       });
@@ -152,7 +154,9 @@ App({
       })
       .catch((error) => {
         if (!opt.silent) {
-          console.warn("平台周期数据读取失败，已降级", error);
+          console.warn("平台周期数据读取失败，已降级", {
+            code: error && (error.code || error.reasonCode),
+          });
         }
         return null;
       });

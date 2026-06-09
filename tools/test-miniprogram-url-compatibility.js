@@ -344,7 +344,11 @@ async function runStartupTests() {
     const call = latestCall(startupCalls, (item) => item.url.indexOf(path) >= 0);
     assert(call, `${path} should run after warmup`);
     assert.strictEqual(call.header["X-Fosu-Session"], "startup-session-token", `${path} should include session header`);
-    assert(call.timeout >= 15000, `${path} startup refresh should not use a 5s timeout`);
+    if (path === "/api/fosu/periodic-data") {
+      assert(call.timeout >= 5000 && call.timeout <= 8000, `${path} startup refresh should use a short background timeout`);
+    } else {
+      assert(call.timeout >= 15000, `${path} startup refresh should not use a 5s timeout`);
+    }
   });
 
   clearModule("../miniprogram/app");

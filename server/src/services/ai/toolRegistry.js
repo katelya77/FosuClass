@@ -7,6 +7,7 @@ const {
   getCurrentSection: getCurrentSectionByTime,
   resolveCurrentTeachingWeek,
 } = require("../../shared/courseWeekRules");
+const recommendationService = require("./recommendationService");
 
 const MAX_SECTION = 14;
 const DEFAULT_TERM = "2025-2026-2";
@@ -183,6 +184,134 @@ function needsClarification(type, q) {
   return false;
 }
 
+function getPendingClarification(context = {}) {
+  const pending = context.pendingClarification || {};
+  if (!pending || typeof pending !== "object" || Array.isArray(pending)) return null;
+  if (pending.intentName !== "search_school_index") return null;
+  const type = ["teacher", "classroom", "course", "class"].includes(pending.type) ? pending.type : "";
+  const missing = normalizeText(pending.missing);
+  if (!type || !missing) return null;
+  const expiresAt = Number(pending.expiresAt || 0);
+  if (expiresAt && expiresAt < Date.now()) return null;
+  return {
+    intentName: "search_school_index",
+    type,
+    missing,
+    createdAt: Number(pending.createdAt || 0) || 0,
+    expiresAt: expiresAt || 0,
+  };
+}
+
+function isCompleteNewTask(text) {
+  const value = normalizeText(text);
+  if (!value) return false;
+  return /空教室|自习时间|推荐时间|今天|今日|明天|下一节|还有课|导入|XLS|excel|数据|诊断|缓存|这个小程序|怎么用|FosuClass|佛课小表|AI\s*管家/i.test(value);
+}
+
+function extractPendingQuery(message, type) {
+  const text = normalizeText(message);
+  if (!text) return "";
+  const stripped = stripIntentWords(text);
+  if (stripped) return stripped;
+  const cleanupPatterns = {
+    teacher: /老师|教师|任课|课表|查询|查|帮我|请|一下|的/g,
+    classroom: /教室|课室|占用|使用情况|查询|查|帮我|请|一下|的/g,
+    course: /课程|安排|查课|查询|查|帮我|请|一下|的/g,
+    class: /班级|行政班|专业|课表|查询|查|帮我|请|一下|的/g,
+  };
+  return text.replace(cleanupPatterns[type] || /查询|查|帮我|请|一下|的/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function resolvePendingClarificationIntent(message, context = {}) {
+  const pending = getPendingClarification(context);
+  if (!pending || isCompleteNewTask(message)) return null;
+  const q = extractPendingQuery(message, pending.type);
+  if (needsClarification(pending.type, q)) return null;
+  return {
+    name: "search_school_index",
+    slots: {
+      type: pending.type,
+      q,
+      filledFromPendingClarification: true,
+      missing: pending.missing,
+    },
+  };
+}
+
+function parseChineseDuration(text, fallback) {
+  const value = normalizeText(text);
+  const digit = value.match(/\d+/);
+  if (digit) return Number(digit[0]);
+  const map = { 一: 1, 二: 2, 两: 2, 三: 3, 四: 4, 五: 5, 六: 6 };
+  const match = value.match(/[一二两三四五六]/);
+  return match ? map[match[0]] : fallback;
+}
+
+function inferSearchTypeChinese(message) {
+  const text = normalizeText(message);
+  if (/老师|教师|任课/.test(text)) return "teacher";
+  if (/教室|课室|自习室|楼栋|占用|使用情况/.test(text)) return "classroom";
+  if (/课程|科目|查课|安排/.test(text)) return "course";
+  if (/班级|行政班|专业/.test(text)) return "class";
+  return "teacher";
+}
+
+function stripChineseIntentWords(message) {
+  return normalizeText(message)
+    .replace(/帮我|请|麻烦|查询|查找|查一下|查一查|查|找|看看|看|一下|佛山大学|佛大|的/g, " ")
+    .replace(/老师|教师|任课|教室|课室|自习室|课程|科目|班级|行政班|专业|课表|课程表|安排|占用|使用情况/g, " ")
+    .replace(/[，。！？、,.!?]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function resolveIntentChinese(message, context = {}) {
+  const text = normalizeText(message);
+  if (!text) return null;
+  if (/这个小程序怎么用|怎么使用|如何使用|你是谁|你能做什么|FosuClass|佛课小表|AI\s*管家|项目知识|比赛|Release Pack|XLS-only/i.test(text)) {
+    return { name: "project_qa", slots: {} };
+  }
+  if (/导入|XLS|excel|个人课表|账号|登录|密码/i.test(text)) {
+    return { name: "explain_personal_import", slots: { mode: /XLS|excel/i.test(text) ? "xls" : "unknown" } };
+  }
+  if (/加载失败|数据失败|为什么.*数据|诊断|缓存|release|同步失败|打不开/.test(text)) {
+    return { name: "diagnose_data_status", slots: {} };
+  }
+  if (/自习时间|推荐.*时间|共同空闲|组会|会议|一起自习/.test(text)) {
+    if (!hasScheduleContext(context)) {
+      return { name: "clarify_missing_slot", slots: { slot: getMissingSlot("scheduleContext") } };
+    }
+    return {
+      name: "recommend_meeting_time",
+      slots: {
+        durationSections: /连续/.test(text) ? parseChineseDuration(text, 2) : 2,
+        building: extractBuilding(text),
+      },
+    };
+  }
+  if (/空教室|空课室|找教室|可用教室|附近/.test(text)) {
+    return {
+      name: "search_empty_rooms",
+      slots: {
+        building: extractBuilding(text),
+        minFreeSections: /连续/.test(text) ? parseChineseDuration(text, 2) : 1,
+      },
+    };
+  }
+  if (/今天|今日|明天|下一节|还有课|上什么课/.test(text)) {
+    return { name: "get_today_courses", slots: {} };
+  }
+  if (/老师|教师|任课|教室|课室|课程|科目|查课|班级|行政班|专业|课表|课程表|占用|安排/.test(text)) {
+    const type = inferSearchTypeChinese(text);
+    const q = stripChineseIntentWords(text);
+    if (needsClarification(type, q)) {
+      return { name: "clarify_missing_slot", slots: { slot: getMissingSlot(type), type, q } };
+    }
+    return { name: "search_school_index", slots: { type, q } };
+  }
+  return null;
+}
+
 function isProjectQaMessage(text) {
   const value = normalizeText(text);
   if (!value) return false;
@@ -200,6 +329,10 @@ function isConversationalHelp(text) {
 
 function resolveIntent(message, context = {}) {
   const text = normalizeText(message);
+  const pendingIntent = resolvePendingClarificationIntent(text, context);
+  if (pendingIntent) return pendingIntent;
+  const chineseIntent = resolveIntentChinese(text, context);
+  if (chineseIntent) return chineseIntent;
   if (isProjectQaMessage(text)) {
     return { name: "project_qa", slots: {} };
   }
@@ -557,6 +690,12 @@ function recommendMeetingTime(input = {}, context = {}) {
   };
 }
 
+function recommendMeetingTimeV2(input = {}, context = {}) {
+  return recommendationService.buildRecommendations(input, context, {
+    queryEmptyRooms: searchEmptyRooms,
+  });
+}
+
 function executeTool(name, input = {}, context = {}) {
   const tools = {
     get_today_courses: getTodayCourses,
@@ -565,7 +704,7 @@ function executeTool(name, input = {}, context = {}) {
     get_schedule_detail: getScheduleDetail,
     diagnose_data_status: diagnoseDataStatus,
     explain_personal_import: explainPersonalImport,
-    recommend_meeting_time: recommendMeetingTime,
+    recommend_meeting_time: recommendMeetingTimeV2,
     clarify_missing_slot: clarifyMissingSlot,
   };
   const tool = tools[name];

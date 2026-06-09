@@ -1,4 +1,5 @@
 const providerFactory = require("./providerFactory");
+const generatedPayloadContract = require("./generatedPayloadContract");
 const mockProvider = require("./providers/mockProvider");
 const projectKnowledgeService = require("./projectKnowledgeService");
 const safetyGuard = require("./safetyGuard");
@@ -67,6 +68,18 @@ function stableGeneratedPayload(payload) {
     cards: Array.isArray(source.cards) ? source.cards.slice(0, 6).map(stableCard) : [],
     suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6).map((item) => safetyGuard.redactSensitiveText(item).slice(0, 60)) : [],
   };
+}
+
+function stableAction(action) {
+  return generatedPayloadContract.stableAction(action);
+}
+
+function stableCard(card) {
+  return generatedPayloadContract.stableCard(card);
+}
+
+function stableGeneratedPayload(payload, options = {}) {
+  return generatedPayloadContract.stableGeneratedPayload(payload, options);
 }
 
 function getProviderPolicy() {
@@ -141,6 +154,56 @@ function evaluateProviderPolicy(intent, toolCalls, policy, providerName) {
   return { useExternal: false, reason: "简单工具结果使用本地规则" };
 }
 
+const FACT_TOOL_INTENTS = new Set([
+  "clarify_missing_slot",
+  "get_today_courses",
+  "search_empty_rooms",
+  "search_school_index",
+  "get_schedule_detail",
+  "recommend_meeting_time",
+  "diagnose_data_status",
+  "explain_personal_import",
+]);
+
+function isProjectKnowledgeIntent(intent) {
+  const name = intent && intent.name;
+  return name === "project_qa" || name === "conversational_help";
+}
+
+function isFactToolIntent(intent) {
+  const name = intent && intent.name;
+  return FACT_TOOL_INTENTS.has(name);
+}
+
+function evaluateProviderPolicy(intent, toolCalls, policy, providerName) {
+  const normalizedPolicy = ["auto", "always", "tool-only"].includes(String(policy || "").toLowerCase())
+    ? String(policy).toLowerCase()
+    : "auto";
+  const provider = String(providerName || providerFactory.getProviderName() || "mock").toLowerCase();
+  const intentName = intent && intent.name || "generic";
+  const agentEnabled = String(process.env.AI_AGENT_ENABLED || "false").toLowerCase() !== "false";
+
+  if (!agentEnabled) return { useExternal: false, reason: "AI_AGENT_ENABLED=false" };
+  if (provider === "mock") return { useExternal: false, reason: "AI_PROVIDER=mock" };
+  if (normalizedPolicy === "tool-only") return { useExternal: false, reason: "AI_PROVIDER_POLICY=tool-only" };
+  if (intentName === "clarify_missing_slot") {
+    return { useExternal: false, reason: "缺槽追问使用本地模板" };
+  }
+  if (intentName === "explain_personal_import") {
+    return { useExternal: false, reason: "XLS 导入安全说明使用本地模板" };
+  }
+  if (normalizedPolicy === "always") {
+    return { useExternal: true, reason: "AI_PROVIDER_POLICY=always" };
+  }
+  if (isProjectKnowledgeIntent(intent)) {
+    return { useExternal: true, reason: "项目问答或自然语言帮助调用外部 Provider" };
+  }
+  if (isFactToolIntent(intent)) {
+    return { useExternal: false, reason: "事实类任务使用确定性工具渲染" };
+  }
+  return { useExternal: true, reason: "未命中本地确定性规则，交给外部 Provider" };
+}
+
 function shouldUseExternalProvider(intent, toolCalls, policy) {
   return evaluateProviderPolicy(intent, toolCalls, policy, providerFactory.getProviderName()).useExternal;
 }
@@ -194,6 +257,8 @@ function buildResponse(payload) {
       externalProviderUsed: payload.externalProviderUsed === true,
       providerDecisionReason: payload.providerDecisionReason || "",
       fallbackReason: payload.fallbackReason || "",
+      pendingClarification: payload.pendingClarification || null,
+      clearPendingClarification: payload.clearPendingClarification === true,
     },
     metrics: payload.metrics || buildMetrics(),
     serverTime: nowIso(),
@@ -224,6 +289,48 @@ function sensitiveCredentialResponse(message, context, startTime) {
       usedPersonalContext: false,
     }),
   }));
+}
+
+function mergeGeneratedPayloads(options = {}) {
+  const intent = options.intent || {};
+  const deterministic = options.deterministicPayload || { answer: "", cards: [], suggestions: [] };
+  const provider = options.providerPayload || { answer: "", cards: [], suggestions: [] };
+  if (isProjectKnowledgeIntent(intent) && options.externalProviderUsed === true) {
+    return {
+      answer: provider.answer || deterministic.answer,
+      cards: provider.cards && provider.cards.length ? provider.cards : deterministic.cards,
+      suggestions: provider.suggestions && provider.suggestions.length ? provider.suggestions : deterministic.suggestions,
+    };
+  }
+  return {
+    answer: deterministic.answer || provider.answer || "我已根据项目工具整理出结果。",
+    cards: deterministic.cards || [],
+    suggestions: deterministic.suggestions && deterministic.suggestions.length
+      ? deterministic.suggestions
+      : (provider.suggestions || []),
+  };
+}
+
+function buildClarificationPatch(intent = {}) {
+  if (!intent || intent.name !== "clarify_missing_slot") {
+    return { pendingClarification: null, clearPendingClarification: false };
+  }
+  const slot = intent.slots && intent.slots.slot || {};
+  const type = ["teacher", "classroom", "course", "class"].includes(slot.type) ? slot.type : "";
+  if (!type) {
+    return { pendingClarification: null, clearPendingClarification: false };
+  }
+  const createdAt = Date.now();
+  return {
+    pendingClarification: {
+      intentName: "search_school_index",
+      type,
+      missing: slot.missing || `${type}Name`,
+      createdAt,
+      expiresAt: createdAt + 5 * 60 * 1000,
+    },
+    clearPendingClarification: false,
+  };
 }
 
 async function chat(input = {}) {
@@ -278,40 +385,44 @@ async function chat(input = {}) {
   let providerName = policyDecision.useExternal
     ? (provider.name || desiredProviderName)
     : (intent.name === "clarify_missing_slot" ? "mock/template" : "mock");
-  let generated;
+  const providerInput = {
+    message: safeMessage,
+    context,
+    intent,
+    projectKnowledge: isProjectKnowledgeIntent(intent) ? projectKnowledgeService.getProjectKnowledgePrompt() : "",
+    toolResults: toolCalls.map((item) => ({
+      name: item.name,
+      status: item.status,
+      summary: safetyGuard.redactSensitiveText(item.summary || ""),
+      result: safetyGuard.sanitizeToolResult(item.result),
+    })),
+  };
+  const deterministicGenerated = mockProvider.generate(providerInput);
+  const deterministicPayload = stableGeneratedPayload(deterministicGenerated, {
+    fallbackAnswer: "我已根据项目工具整理出结果。",
+  });
+  let providerPayload = null;
   let externalProviderUsed = false;
   let fallback = !policyDecision.useExternal;
-  let fallbackReason = policyDecision.reason || "";
+  let fallbackReason = "";
   const providerDecisionReason = policyDecision.reason || (policyDecision.useExternal ? "external provider selected" : "local provider selected");
   try {
-    const isProjectKnowledgeIntent = intent && (intent.name === "project_qa" || intent.name === "conversational_help");
-    const providerInput = {
-      message: safeMessage,
-      context,
-      intent,
-      projectKnowledge: isProjectKnowledgeIntent ? projectKnowledgeService.getProjectKnowledgePrompt() : "",
-      toolResults: toolCalls.map((item) => ({
-        name: item.name,
-        status: item.status,
-        summary: safetyGuard.redactSensitiveText(item.summary || ""),
-        result: safetyGuard.sanitizeToolResult(item.result),
-      })),
-    };
-    generated = policyDecision.useExternal
+    const generated = policyDecision.useExternal
       ? await provider.generate(providerInput)
-      : mockProvider.generate(providerInput);
+      : deterministicGenerated;
     providerName = generated.provider || providerName;
+    providerPayload = stableGeneratedPayload(generated);
     externalProviderUsed = policyDecision.useExternal && providerName !== "mock";
     fallback = !externalProviderUsed;
     if (externalProviderUsed) fallbackReason = "";
   } catch (error) {
-    generated = intent && (intent.name === "project_qa" || intent.name === "conversational_help")
-      ? projectKnowledgeService.generateFallbackResponse(intent.name)
-      : mockProvider.generate({ message: safeMessage, context, intent, toolResults: toolCalls });
     providerName = "mock";
     externalProviderUsed = false;
     fallback = true;
     fallbackReason = classifyProviderFailure(error);
+    providerPayload = isProjectKnowledgeIntent(intent)
+      ? stableGeneratedPayload(projectKnowledgeService.generateFallbackResponse(intent.name))
+      : null;
     publicToolCalls.push({
       name: provider.name || providerFactory.getProviderName(),
       status: "skipped",
@@ -319,11 +430,18 @@ async function chat(input = {}) {
     });
   }
 
-  const stable = stableGeneratedPayload(generated);
-  if (!stable.cards.length) {
-    const fallback = stableGeneratedPayload(mockProvider.generate({ message: safeMessage, context, intent, toolResults: toolCalls }));
-    stable.cards = fallback.cards;
-    stable.suggestions = stable.suggestions.length ? stable.suggestions : fallback.suggestions;
+  const stable = mergeGeneratedPayloads({
+    intent,
+    providerPolicy,
+    deterministicPayload,
+    providerPayload,
+    externalProviderUsed,
+  });
+  const pendingPatch = buildClarificationPatch(intent);
+  if (intent.name !== "clarify_missing_slot" && intent.slots && intent.slots.filledFromPendingClarification) {
+    pendingPatch.clearPendingClarification = true;
+  } else if (intent.name !== "clarify_missing_slot" && context.pendingClarification) {
+    pendingPatch.clearPendingClarification = true;
   }
   return buildResponse(Object.assign({}, stable, {
     toolCalls: publicToolCalls,
@@ -335,6 +453,8 @@ async function chat(input = {}) {
     externalProviderUsed,
     providerDecisionReason,
     fallbackReason,
+    pendingClarification: pendingPatch.pendingClarification,
+    clearPendingClarification: pendingPatch.clearPendingClarification,
     metrics: buildMetrics({
       startTime,
       intent,

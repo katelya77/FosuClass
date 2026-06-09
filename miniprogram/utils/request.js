@@ -520,7 +520,9 @@ function request(url, method = "GET", data = {}, options = {}) {
         elapsedMs: error && error.elapsedMs,
         retriable: error && error.retriable,
       };
-      console.warn("wx.request failed", logPayload);
+      if (!opt.suppressWarn) {
+        console.warn("wx.request failed", logPayload);
+      }
       throw error;
     })
     .finally(() => {
