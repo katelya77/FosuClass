@@ -320,8 +320,22 @@ async function main() {
   console.log(`开始抓取全校课程数据（学期：${task.term}），此过程约需要 10 分钟。期间请不要关闭浏览器窗口。`);
   try {
     const syncScript = resolveToolScript("sync.js");
-    child_process.execFileSync(process.execPath, [syncScript, "local-campus", `--term=${task.term}`], {
+    const syncArgs = [syncScript, "local-campus", `--term=${task.term}`];
+    if (task.termConfig && task.termConfig.termStartDate) {
+      syncArgs.push(`--term-start-date=${task.termConfig.termStartDate}`);
+    }
+    if (task.termConfig && task.termConfig.totalWeeks) {
+      syncArgs.push(`--total-weeks=${task.termConfig.totalWeeks}`);
+    }
+    if (task.termConfig && task.termConfig.weekStart) {
+      syncArgs.push(`--week-start=${task.termConfig.weekStart}`);
+    }
+    const childEnv = Object.assign({}, process.env, {
+      FOSU_RELAY_TERM_CONFIG: JSON.stringify(task.termConfig || {}),
+    });
+    child_process.execFileSync(process.execPath, syncArgs, {
       cwd: path.dirname(syncScript),
+      env: childEnv,
       stdio: "inherit",
     });
     console.log("✓ 全校课表数据抓取完毕，已生成本地 Staging JSON。");

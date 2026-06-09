@@ -63,7 +63,7 @@ function run() {
   assert(Number(context.currentTeachingWeek) >= 1, "currentTeachingWeek should be present");
 
   week.resetRuntimeTermConfig();
-  assert.strictEqual(week.getRuntimeTermConfig().termStartDate, "2026-03-09");
+  assert.strictEqual(week.getRuntimeTermConfig().termStartDate, "");
   console.log("test-ai-term-config-context passed");
 }
 

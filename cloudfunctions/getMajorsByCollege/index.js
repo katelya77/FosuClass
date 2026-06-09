@@ -3,6 +3,7 @@ const { FosuQiangzhiAdapter } = require("../common/fosuQiangzhiAdapter");
 const { parseMajorAjaxResponse } = require("../common/parser");
 const { getMajorsByCollegeCache, saveMajorsByCollegeCache } = require("../common/cache");
 const { safeLog } = require("../common/safeLogger");
+const { normalizeTerm } = require("../common/term");
 
 cloud.init({
   env: cloud.DYNAMIC_CURRENT_ENV,
@@ -10,6 +11,7 @@ cloud.init({
 
 exports.main = async (event) => {
   const { collegeCode, grade } = event;
+  const semester = normalizeTerm(event && (event.term || event.semester));
   
   if (!collegeCode) {
     return {
@@ -20,7 +22,7 @@ exports.main = async (event) => {
 
   try {
     // 1. 尝试从 30分钟 缓存中获取
-    const cached = getMajorsByCollegeCache(collegeCode, grade);
+    const cached = getMajorsByCollegeCache(collegeCode, grade, semester);
     if (cached) {
       safeLog("majors-hit-cache", { collegeCode, grade });
       return {
@@ -55,7 +57,7 @@ exports.main = async (event) => {
       .filter((item) => item.code && item.name && !item.name.includes("请选择"));
 
     // 5. 存入 30分钟 短期缓存
-    saveMajorsByCollegeCache(collegeCode, grade, majors);
+    saveMajorsByCollegeCache(collegeCode, grade, majors, semester);
 
     return {
       success: true,

@@ -5,11 +5,12 @@ const SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY = "FOSU_ACTIVE_SNAPSHOT";
 const SCHOOL_FILTER_CACHE_KEY = "FOSU_SCHOOL_FILTER_CACHE";
 const CURRENT_SCHEDULE_TARGET_KEY = "FOSU_CURRENT_SCHEDULE_TARGET";
 const RECENT_SCHEDULES_KEY = "FOSU_RECENT_SCHEDULES";
+const DEFAULT_TERM = "";
 
 const defaultSettings = {
   className: "",
-  semesterId: "2025-2026-2",
-  semester: "2025-2026学年第二学期",
+  semesterId: DEFAULT_TERM,
+  semester: "",
   currentWeek: 12,
   manualWeekOverride: false,
   hideInactiveCourses: false,
@@ -69,14 +70,21 @@ function getCurrentScheduleTarget() {
 
 function setCurrentScheduleTarget(target) {
   if (target && target.name) {
-    wx.setStorageSync(CURRENT_SCHEDULE_TARGET_KEY, target);
+    const term = target.term || target.semester || DEFAULT_TERM;
+    const normalizedTarget = Object.assign({}, target, {
+      term,
+      semester: term,
+      releaseVersion: target.releaseVersion || target.version || "",
+    });
+    wx.setStorageSync(CURRENT_SCHEDULE_TARGET_KEY, normalizedTarget);
     wx.setStorageSync("hasInitializedSchedule", true);
     wx.setStorageSync("currentScheduleId", target.classId || target.name || "");
     wx.setStorageSync("currentScheduleName", target.name || "");
     wx.setStorageSync("currentScheduleSource", target.type || "class");
     saveSettings({
       className: target.name,
-      semester: target.semester || "2025-2026-2",
+      semester: term,
+      semesterId: term,
       classId: target.classId || "",
     });
     return true;

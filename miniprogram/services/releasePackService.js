@@ -5,8 +5,9 @@ const { BOOTSTRAP_CACHE_KEY } = require("../utils/storage");
 const appConfigService = require("./appConfigService");
 const platformDataService = require("./platformDataService");
 
-const DEFAULT_TERM = "2025-2026-2";
-const CACHE_PREFIX = "fosu:v5";
+const DEFAULT_TERM = "";
+const CACHE_PREFIX = "fosu:v6";
+const LEGACY_CACHE_PREFIX = "fosu:v5";
 const INDEX_TYPES = ["class", "teacher", "classroom", "course"];
 const INDEX_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const DETAIL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -14,11 +15,18 @@ const EMPTY_ROOM_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const MAX_EMPTY_ROOM_SECTION = 14;
 const MAX_EMPTY_ROOM_WEEK = 30;
 const LOCAL_ACTIVE_RELEASE_KEY = `${CACHE_PREFIX}:active-release`;
-let activeManifestInflight = null;
-let switchReleaseInflight = null;
+const activeManifestInflight = new Map();
+const switchReleaseInflight = new Map();
 
 function cachePart(value, fallback = "unknown") {
   return encodeURIComponent(String(value || fallback));
+}
+
+function inflightKey(options = {}) {
+  return [
+    options.term || "",
+    options.releaseVersion || options.version || "",
+  ].join(":");
 }
 
 function getManifestCacheKey(term) {
@@ -39,6 +47,18 @@ function getEmptyRoomCacheKey(term, releaseVersion) {
 
 function getLastGoodCacheKey(term) {
   return `${CACHE_PREFIX}:last-good:${cachePart(term || DEFAULT_TERM)}`;
+}
+
+function getLegacyLastGoodCacheKey(term) {
+  return `${LEGACY_CACHE_PREFIX}:last-good:${cachePart(term || DEFAULT_TERM)}`;
+}
+
+function getLocalActiveReleaseKey(term) {
+  return term ? `${CACHE_PREFIX}:active-release:${cachePart(term)}` : LOCAL_ACTIVE_RELEASE_KEY;
+}
+
+function getLegacyLocalActiveReleaseKey() {
+  return `${LEGACY_CACHE_PREFIX}:active-release`;
 }
 
 function readStorage(key) {
@@ -171,6 +191,16 @@ function assertManifest(manifest) {
   return manifest;
 }
 
+function assertTermMatch(actualTerm, expectedTerm, code) {
+  if (expectedTerm && actualTerm && actualTerm !== expectedTerm) {
+    const error = new Error(code || "TERM_DATA_MISMATCH");
+    error.code = code || "TERM_DATA_MISMATCH";
+    error.expectedTerm = expectedTerm;
+    error.actualTerm = actualTerm;
+    throw error;
+  }
+}
+
 function markFromStorage(value, extra = {}) {
   return Object.assign({}, value || {}, extra, { fromStorage: true });
 }
@@ -187,6 +217,7 @@ function getManifestReleaseKey(manifest) {
 }
 
 function readCachedManifest(term) {
+  if (!term) return null;
   const cached = readStorage(getManifestCacheKey(term || DEFAULT_TERM));
   const manifest = normalizeManifest(cached && (cached.manifest || cached));
   if (!manifest) return null;
@@ -203,7 +234,7 @@ function writeManifestCache(manifest) {
   };
   writeStorage(getManifestCacheKey(normalized.term), entry);
   writeStorage(getLastGoodCacheKey(normalized.term), entry);
-  writeStorage(LOCAL_ACTIVE_RELEASE_KEY, {
+  const activeEntry = {
     savedAt: entry.savedAt,
     term: normalized.term,
     releaseVersion: normalized.releaseVersion,
@@ -211,23 +242,41 @@ function writeManifestCache(manifest) {
     forceRefreshToken: normalized.forceRefreshToken,
     releaseKey: getManifestReleaseKey(normalized),
     manifest: normalized,
-  });
+  };
+  writeStorage(getLocalActiveReleaseKey(normalized.term), activeEntry);
+  writeStorage(LOCAL_ACTIVE_RELEASE_KEY, activeEntry);
   return normalized;
 }
 
-function scanLastGood() {
+function scanLastGood(options = {}) {
+  const term = options.term || "";
   return getStorageKeys()
     .filter((key) => key.startsWith(`${CACHE_PREFIX}:last-good:`))
     .map((key) => readStorage(key))
     .filter(Boolean)
+    .filter((item) => {
+      if (!term) return true;
+      const manifest = normalizeManifest(item.manifest || item);
+      return manifest && manifest.term === term;
+    })
     .sort((left, right) => Number(right.savedAt || 0) - Number(left.savedAt || 0))[0] || null;
 }
 
 function getLastKnownGood(term) {
-  const cached = readStorage(getLastGoodCacheKey(term || DEFAULT_TERM)) || scanLastGood();
+  const requestedTerm = term || DEFAULT_TERM;
+  if (!requestedTerm) return null;
+  let cached = readStorage(getLastGoodCacheKey(requestedTerm));
+  if (!cached) {
+    const legacy = readStorage(getLegacyLastGoodCacheKey(requestedTerm));
+    const legacyManifest = normalizeManifest(legacy && (legacy.manifest || legacy));
+    if (legacyManifest && legacyManifest.term === requestedTerm) {
+      cached = Object.assign({}, legacy, { manifest: legacyManifest });
+      writeStorage(getLastGoodCacheKey(requestedTerm), cached);
+    }
+  }
   if (!cached) return null;
   const manifest = normalizeManifest(cached.manifest || cached);
-  if (!manifest) return null;
+  if (!manifest || manifest.term !== requestedTerm) return null;
   return {
     savedAt: cached.savedAt || 0,
     term: manifest.term,
@@ -259,17 +308,22 @@ function readCachedBootstrap() {
 function getKnownReleaseCandidate(options = {}) {
   const term = options.term || DEFAULT_TERM;
   const explicit = options.releaseVersion || options.version || pickReleaseVersion(options.manifest);
-  if (explicit) return String(explicit);
+  const explicitManifest = normalizeManifest(options.manifest);
+  if (explicit && (!explicitManifest || explicitManifest.term === term)) return String(explicit);
 
   const cachedConfig = appConfigService.getCachedAppConfig && appConfigService.getCachedAppConfig();
-  const configVersion = pickReleaseVersion(cachedConfig);
+  const configData = cachedConfig && cachedConfig.data ? cachedConfig.data : cachedConfig;
+  const configTerm = configData && (configData.term || configData.currentSemester || configData.termConfig && configData.termConfig.term);
+  const configVersion = configTerm === term ? pickReleaseVersion(cachedConfig) : "";
   if (configVersion) return String(configVersion);
 
-  const bootstrapVersion = pickReleaseVersion(readCachedBootstrap());
-  if (bootstrapVersion) return String(bootstrapVersion);
+  const cachedBootstrap = readCachedBootstrap();
+  const bootstrapVersion = pickReleaseVersion(cachedBootstrap);
+  const bootstrapTerm = cachedBootstrap && (cachedBootstrap.term || cachedBootstrap.semester);
+  if (bootstrapVersion && bootstrapTerm === term) return String(bootstrapVersion);
 
   const platformSnapshot = platformDataService.getCachedPlatformSnapshot && platformDataService.getCachedPlatformSnapshot();
-  if (platformSnapshot && platformSnapshot.releaseVersion) return String(platformSnapshot.releaseVersion);
+  if (platformSnapshot && platformSnapshot.term === term && platformSnapshot.releaseVersion) return String(platformSnapshot.releaseVersion);
 
   const localActive = getLocalActiveRelease(term);
   if (localActive && localActive.releaseVersion) return String(localActive.releaseVersion);
@@ -285,9 +339,18 @@ function resolveStaticManifestUrl(releaseVersion) {
 }
 
 function getLocalActiveRelease(term) {
-  const active = readStorage(LOCAL_ACTIVE_RELEASE_KEY);
+  const requestedTerm = term || DEFAULT_TERM;
+  if (!requestedTerm) return null;
+  let active = readStorage(getLocalActiveReleaseKey(requestedTerm));
+  if (!active) {
+    active = readStorage(getLegacyLocalActiveReleaseKey()) || readStorage(LOCAL_ACTIVE_RELEASE_KEY);
+    const legacyManifest = normalizeManifest(active && active.manifest);
+    if (legacyManifest && legacyManifest.term === requestedTerm) {
+      writeStorage(getLocalActiveReleaseKey(requestedTerm), active);
+    }
+  }
   const manifest = normalizeManifest(active && active.manifest);
-  if (manifest && (!term || manifest.term === term)) {
+  if (manifest && manifest.term === requestedTerm) {
     return {
       savedAt: active.savedAt || 0,
       term: manifest.term,
@@ -298,7 +361,7 @@ function getLocalActiveRelease(term) {
       manifest,
     };
   }
-  return getLastKnownGood(term || DEFAULT_TERM);
+  return getLastKnownGood(requestedTerm);
 }
 
 function normalizeIndexPayload(type, payload, fallback = {}) {
@@ -311,6 +374,7 @@ function normalizeIndexPayload(type, payload, fallback = {}) {
   }
   const releaseVersion = source.releaseVersion || source.version || fallback.releaseVersion || "";
   const term = source.term || source.semester || fallback.term || DEFAULT_TERM;
+  assertTermMatch(term, fallback.term || "", "INDEX_TERM_MISMATCH");
   return Object.assign({}, Array.isArray(source) ? {} : source, {
     success: true,
     type,
@@ -346,6 +410,7 @@ function writeIndexCache(type, payload) {
 }
 
 function fetchManifest(options = {}) {
+  const expectedTerm = options.term || DEFAULT_TERM;
   const releaseVersion = getKnownReleaseCandidate(options);
   const query = {};
   if (releaseVersion) {
@@ -359,13 +424,22 @@ function fetchManifest(options = {}) {
     skipSession: options.skipSession === true,
   };
   const staticUrl = resolveStaticManifestUrl(releaseVersion);
+  if (expectedTerm) query.term = expectedTerm;
   const loadDynamic = () => request.get("/api/fosu/release-pack/manifest", query, requestOptions)
-    .then((payload) => assertManifest(normalizeManifest(payload)));
+    .then((payload) => {
+      const manifest = assertManifest(normalizeManifest(payload));
+      assertTermMatch(manifest.term, expectedTerm, "MANIFEST_TERM_MISMATCH");
+      return manifest;
+    });
   if (!staticUrl) {
     return loadDynamic();
   }
   return request.get(staticUrl, {}, requestOptions)
-    .then((payload) => assertManifest(normalizeManifest(payload)))
+    .then((payload) => {
+      const manifest = assertManifest(normalizeManifest(payload));
+      assertTermMatch(manifest.term, expectedTerm, "MANIFEST_TERM_MISMATCH");
+      return manifest;
+    })
     .catch((staticError) => loadDynamic().catch(() => {
       throw staticError;
     }));
@@ -376,10 +450,11 @@ function getActiveManifest(options = {}) {
   if (cached && !options.forceNetwork) {
     return Promise.resolve(cached);
   }
-  if (activeManifestInflight && options.dedupe !== false) {
-    return activeManifestInflight;
+  const key = inflightKey(options);
+  if (options.dedupe !== false && activeManifestInflight.has(key)) {
+    return activeManifestInflight.get(key);
   }
-  activeManifestInflight = fetchManifest(options)
+  const promise = fetchManifest(options)
     .then((manifest) => writeManifestCache(manifest))
     .catch((error) => {
       const fallback = cached || (getLastKnownGood(options.term || DEFAULT_TERM) || {}).manifest;
@@ -392,9 +467,10 @@ function getActiveManifest(options = {}) {
       throw error;
     })
     .finally(() => {
-      activeManifestInflight = null;
+      activeManifestInflight.delete(key);
     });
-  return activeManifestInflight;
+  activeManifestInflight.set(key, promise);
+  return promise;
 }
 
 function resolveManifest(options = {}) {
@@ -460,7 +536,7 @@ function loadIndex(type, params = {}, options = {}) {
         const lastGood = getLastKnownGood(term);
         if (lastGood && lastGood.releaseVersion && lastGood.releaseVersion !== releaseVersion) {
           return loadIndex(type, {
-            term: lastGood.term,
+            term,
             releaseVersion: lastGood.releaseVersion,
           }, {
             allowLastKnownGood: false,
@@ -498,11 +574,12 @@ function warmupIndex(types, options = {}) {
 }
 
 function switchReleaseSafely(options = {}) {
-  if (switchReleaseInflight && options.dedupe !== false) {
-    return switchReleaseInflight;
+  const key = inflightKey(options);
+  if (options.dedupe !== false && switchReleaseInflight.has(key)) {
+    return switchReleaseInflight.get(key);
   }
   const previous = getLocalActiveRelease(options.term || DEFAULT_TERM) || getLastKnownGood(options.term || DEFAULT_TERM);
-  switchReleaseInflight = fetchManifest(options)
+  const promise = fetchManifest(options)
     .then((manifest) => {
       const sameRelease = previous && previous.manifest &&
         getManifestReleaseKey(previous.manifest) === getManifestReleaseKey(manifest);
@@ -548,9 +625,10 @@ function switchReleaseSafely(options = {}) {
       throw error;
     })
     .finally(() => {
-      switchReleaseInflight = null;
+      switchReleaseInflight.delete(key);
     });
-  return switchReleaseInflight;
+  switchReleaseInflight.set(key, promise);
+  return promise;
 }
 
 function toComparableText(value) {
@@ -724,6 +802,7 @@ function normalizeDetailPayload(type, id, payload, fallback = {}) {
   }
   const releaseVersion = source.releaseVersion || source.version || fallback.releaseVersion || "";
   const term = source.term || source.semester || schedule.term || schedule.semester || fallback.term || DEFAULT_TERM;
+  assertTermMatch(term, fallback.term || "", "DETAIL_TERM_MISMATCH");
   return Object.assign({}, source, {
     success: true,
     type,
@@ -901,6 +980,7 @@ function normalizeEmptyRoomIndex(payload, fallback = {}) {
   }
   const releaseVersion = source.releaseVersion || source.version || fallback.releaseVersion || "";
   const term = source.term || source.semester || fallback.term || DEFAULT_TERM;
+  assertTermMatch(term, fallback.term || "", "EMPTY_ROOM_TERM_MISMATCH");
   return Object.assign({}, source, {
     success: true,
     term,
@@ -1202,7 +1282,7 @@ function queryEmptyRooms(params = {}, options = {}) {
 
 function getVersionFromCacheKey(key) {
   const parts = String(key || "").split(":");
-  if (parts[0] !== "fosu" || parts[1] !== "v5") return "";
+  if (parts[0] !== "fosu" || (parts[1] !== "v6" && parts[1] !== "v5")) return "";
   if (parts[2] === "index" || parts[2] === "detail" || parts[2] === "empty-room") {
     return decodeURIComponent(parts[4] || "");
   }
@@ -1221,7 +1301,7 @@ function clearOldReleaseCaches(options = {}) {
     const current = versionStats.get(version) || 0;
     versionStats.set(version, Math.max(current, Number(cached.savedAt || 0)));
   });
-  const lastGood = getLastKnownGood(options.term || DEFAULT_TERM);
+  const lastGood = getLastKnownGood(options.term || "");
   if (lastGood && lastGood.releaseVersion) keep.add(lastGood.releaseVersion);
   Array.from(versionStats.entries())
     .sort((left, right) => Number(right[1] || 0) - Number(left[1] || 0))
@@ -1244,6 +1324,7 @@ module.exports = {
   CACHE_PREFIX,
   DEFAULT_TERM,
   LOCAL_ACTIVE_RELEASE_KEY,
+  getLocalActiveReleaseKey,
   getManifestCacheKey,
   getIndexCacheKey,
   getDetailCacheKey,

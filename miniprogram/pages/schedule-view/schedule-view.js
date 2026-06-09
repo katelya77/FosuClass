@@ -12,6 +12,7 @@ const {
   formatWeekRange,
   getCurrentTeachingWeek,
   getTodayTeachingInfo,
+  getRuntimeTermConfig,
   getVisibleWeekdays,
   getWeekRangeByWeekNo,
 } = require("../../utils/week");
@@ -88,7 +89,7 @@ Page({
     typeText: "班级课表",
     name: "",
     title: "",
-    semester: "2025-2026-2",
+    semester: "",
     displayType: "",
     isAggregated: false,
     scheduleKindText: "行政班级课表",
@@ -122,10 +123,11 @@ Page({
   },
 
   onLoad(options) {
-    const { type = "class", name = "", id = "", semester = "2025-2026-2", term = "", releaseVersion = "", displayType = "", isAggregated = "", shareScheduleId = "" } = options;
+    const { type = "class", name = "", id = "", semester = "", term = "", releaseVersion = "", displayType = "", isAggregated = "", shareScheduleId = "" } = options;
     const decodedName = safeDecodeURIComponent(name);
     const decodedId = safeDecodeURIComponent(id);
-    const decodedSemester = safeDecodeURIComponent(term || semester);
+    const runtimeTerm = getRuntimeTermConfig().term;
+    const decodedSemester = safeDecodeURIComponent(term || semester || runtimeTerm);
     const localActiveRelease = releasePackService.getLocalActiveRelease(decodedSemester);
     const decodedReleaseVersion = safeDecodeURIComponent(releaseVersion) ||
       (localActiveRelease && localActiveRelease.releaseVersion) ||

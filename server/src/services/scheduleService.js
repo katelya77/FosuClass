@@ -13,6 +13,7 @@ const cache = require("../utils/cache");
 const { safeLog } = require("../utils/safeLogger");
 const config = require("../config");
 const { getSnapshot } = require("./schoolCatalogService");
+const termRegistryService = require("./termRegistryService");
 
 const STORAGE_DIR = path.join(__dirname, "../../storage");
 const FILE_MAP = {
@@ -50,6 +51,11 @@ function getMeta(key) {
 
 function normalizeFilterValue(value) {
   return String(value || "").trim();
+}
+
+function getDefaultTerm() {
+  const active = termRegistryService.getActiveTerm();
+  return active && active.term || termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term;
 }
 
 function matchesFilter(actual, expected) {
@@ -130,7 +136,7 @@ function getDemoClassSchedule(params) {
     success: true,
     dataSource: "demo",
     updatedAt: new Date().toISOString(),
-    semester: params.semester || "2025-2026-2",
+    semester: params.semester || getDefaultTerm(),
     classes: [
       {
         className: "动物科学2023级1班 (Demo)",
@@ -257,7 +263,7 @@ async function getClassSchedule(params) {
   // 允许通过 className 或 classId 精准查找行政班课表
   if (!collegeCode || !grade || !majorCode) {
     if (className) {
-      const semesterParam = semester || "2025-2026-2";
+      const semesterParam = semester || getDefaultTerm();
       let allSchedules = [];
       const snapshot = getSnapshot();
       if (snapshot && Array.isArray(snapshot.classSchedules)) {
@@ -285,7 +291,7 @@ async function getClassSchedule(params) {
     }
 
     return buildNoClassScheduleResponse({
-      semester: semester || "2025-2026-2",
+      semester: semester || getDefaultTerm(),
       collegeCode,
       grade,
       majorCode,
@@ -294,7 +300,7 @@ async function getClassSchedule(params) {
   }
 
   const queryParams = {
-    semester: semester || "2025-2026-2",
+    semester: semester || getDefaultTerm(),
     collegeCode,
     grade,
     majorCode,
@@ -436,7 +442,7 @@ async function getTeacherSchedule(params) {
   } = params;
 
   const queryParams = {
-    semester: semester || "2025-2026-2",
+    semester: semester || getDefaultTerm(),
     collegeCode,
     collegeName,
     teacherTitleCode: titleCode,
@@ -572,7 +578,7 @@ async function getClassroomSchedule(params) {
   } = params;
 
   const queryParams = {
-    semester: semester || "2025-2026-2",
+    semester: semester || getDefaultTerm(),
     collegeCode,
     campusId,
     buildingId,
@@ -707,7 +713,7 @@ async function getCourseSchedule(params) {
   } = params;
 
   const queryParams = {
-    semester: semester || "2025-2026-2",
+    semester: semester || getDefaultTerm(),
     collegeCode,
     openCollegeCode,
     courseAttr,

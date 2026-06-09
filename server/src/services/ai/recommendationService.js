@@ -4,6 +4,7 @@ const {
   clampWeek,
   getCourseWeekStatus,
   getTeachingWeekFromTermStart,
+  getTeachingWeekPhase,
   getWeekday,
   parseDateOnly,
   parseLocalDateTime,
@@ -128,6 +129,26 @@ function resolveWeekForDate(date, input = {}, context = {}, baseDate) {
     input.termStartDate ||
     context.todayTeachingInfo && context.todayTeachingInfo.termStartDate ||
     "";
+  const contextPhase = context.termPhase || context.todayTeachingInfo && context.todayTeachingInfo.termPhase || "";
+  if (context.isInTerm === false || contextPhase === "before-term" || contextPhase === "after-term") {
+    return {
+      teachingWeek: 1,
+      weekUncertain: true,
+      weekSource: "termPhase",
+      termPhase: contextPhase || "unknown",
+      isInTerm: false,
+    };
+  }
+  const phaseInfo = getTeachingWeekPhase(date, termStartDate, totalWeeks);
+  if (!phaseInfo.isInTerm) {
+    return {
+      teachingWeek: phaseInfo.weekNo,
+      weekUncertain: true,
+      weekSource: "termStartDate",
+      termPhase: phaseInfo.termPhase,
+      isInTerm: false,
+    };
+  }
   const calculated = getTeachingWeekFromTermStart(date, termStartDate, totalWeeks);
   if (calculated >= 1) {
     return {

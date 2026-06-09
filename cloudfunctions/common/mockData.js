@@ -14,7 +14,7 @@ const fallbackCourses = [
   {
     id: "fallback-organic-chemistry",
     source: "school",
-    semester: "2025-2026学年第二学期",
+    semester: "",
     className: "25动物医学6",
     courseName: "有机化学",
     teacherName: "张三",
@@ -41,14 +41,14 @@ const fallbackClasses = [
     college: "动物科技学院",
     grade: "2025级",
     major: "动物医学",
-    semester: "2025-2026学年第二学期",
+    semester: "",
     scheduleReady: true,
   },
 ];
 
 const fallbackCalendar = [
   {
-    semester: "2025-2026-2",
+    semester: "",
     weekNo: 12,
     startDate: "2026-05-25",
     endDate: "2026-05-31",

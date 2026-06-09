@@ -10,7 +10,14 @@ const {
 const recommendationService = require("./recommendationService");
 
 const MAX_SECTION = 14;
-const DEFAULT_TERM = "2025-2026-2";
+const termRegistryService = require("../termRegistryService");
+
+function getDefaultTerm() {
+  const active = termRegistryService.getActiveTerm();
+  if (active && active.term) return active.term;
+  const activeRelease = releaseService.getActiveReleaseInfo && releaseService.getActiveReleaseInfo() || {};
+  return activeRelease.term || activeRelease.semester || termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term;
+}
 
 function asArray(value) {
   return Array.isArray(value) ? value : [];
@@ -493,7 +500,7 @@ function searchEmptyRooms(input = {}, context = {}) {
   const building = input.building || extractBuilding(message);
   const minFreeSections = Math.max(1, Number(input.minFreeSections || (/连续/.test(message) ? parseChineseNumber(message, 2) : 1)) || 1);
   const query = {
-    term: input.term || context.term || DEFAULT_TERM,
+    term: input.term || context.term || getDefaultTerm(),
     releaseVersion: input.releaseVersion || context.releaseVersion || "",
     date,
     week: input.week || "",
@@ -520,8 +527,8 @@ function searchSchoolIndex(input = {}, context = {}) {
   const type = ["class", "teacher", "classroom", "course"].includes(input.type) ? input.type : "teacher";
   const query = normalizeText(input.q || input.message || "");
   const result = releaseService.searchActiveIndex(type, query, {
-    term: input.term || context.term || DEFAULT_TERM,
-    semester: input.term || context.term || DEFAULT_TERM,
+    term: input.term || context.term || getDefaultTerm(),
+    semester: input.term || context.term || getDefaultTerm(),
     releaseVersion: input.releaseVersion || context.releaseVersion || "",
     limit: input.limit || 8,
   });
@@ -529,6 +536,7 @@ function searchSchoolIndex(input = {}, context = {}) {
     success: Boolean(result.success),
     type,
     q: query,
+    term: result.term || result.semester || input.term || context.term || getDefaultTerm(),
     items: asArray(result.items).slice(0, Number(input.limit || 8) || 8),
     total: Number(result.total || asArray(result.items).length) || 0,
     updatedAt: result.updatedAt || "",
@@ -574,7 +582,7 @@ function diagnoseDataStatus(input = {}, context = {}) {
   return {
     success: true,
     activeReleaseVersion: releaseVersion,
-    term: active.term || active.semester || context.term || DEFAULT_TERM,
+    term: active.term || active.semester || context.term || getDefaultTerm(),
     indexCounts,
     releasePackHealthy: Boolean(releasePack && releasePack.healthy),
     releasePack,

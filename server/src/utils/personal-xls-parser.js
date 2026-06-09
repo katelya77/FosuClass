@@ -7,6 +7,7 @@ const XLSX = require("xlsx");
 const { toRenderableCourse } = require("./courseNormalizer");
 const { stripTeacherTitle, parseWeeks, parseSections } = require("./personal-schedule-parser");
 const { safeLog } = require("./safeLogger");
+const termRegistryService = require("../services/termRegistryService");
 
 /**
  * 扩散合并单元格的值
@@ -34,6 +35,11 @@ function normalizeHeaderCell(value) {
     .replace(/\u00a0/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function getDefaultTerm() {
+  const active = termRegistryService.getActiveTerm();
+  return active && active.term || termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term;
 }
 
 function normalizeDateText(value) {
@@ -203,7 +209,7 @@ function parsePersonalXlsBuffer(buffer, targetTermFromUser, sourceFileName) {
       break;
     }
   }
-  const finalTerm = detectedTerm || targetTermFromUser || "2025-2026-2";
+  const finalTerm = detectedTerm || targetTermFromUser || getDefaultTerm();
   const metadata = extractPersonalXlsMetadata(rows, sourceFileName, finalTerm);
 
   // 4. 定位星期表头行

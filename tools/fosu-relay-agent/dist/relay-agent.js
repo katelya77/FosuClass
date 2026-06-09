@@ -4,6 +4,167 @@ var __commonJS = (cb, mod) => function __require() {
   return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
 };
 
+// ../../server/src/utils/stagingFingerprint.js
+var require_stagingFingerprint = __commonJS({
+  "../../server/src/utils/stagingFingerprint.js"(exports2, module2) {
+    var crypto = require("crypto");
+    var fs2 = require("fs");
+    var VOLATILE_KEYS = /* @__PURE__ */ new Set([
+      "activatedAt",
+      "cacheEpoch",
+      "canonicalHash",
+      "changed",
+      "dataEpoch",
+      "forceRefreshToken",
+      "generatedAt",
+      "hash",
+      "id",
+      "joinedPath",
+      "jsonPath",
+      "meta",
+      "pack",
+      "packHealth",
+      "publishedAt",
+      "releasePack",
+      "releaseVersion",
+      "size",
+      "stagingUploadId",
+      "updatedAt",
+      "version"
+    ]);
+    function asArray(value) {
+      return Array.isArray(value) ? value : [];
+    }
+    function getResources(data) {
+      const source = data && data.resources && typeof data.resources === "object" ? data.resources : {};
+      return {
+        teacherSchedules: asArray(source.teacherSchedules).length ? asArray(source.teacherSchedules) : asArray(data && data.teacherSchedules),
+        classroomSchedules: asArray(source.classroomSchedules).length ? asArray(source.classroomSchedules) : asArray(data && data.classroomSchedules),
+        courseSchedules: asArray(source.courseSchedules).length ? asArray(source.courseSchedules) : asArray(data && data.courseSchedules),
+        classrooms: asArray(source.classrooms).length ? asArray(source.classrooms) : asArray(data && data.classrooms),
+        teachers: asArray(source.teachers).length ? asArray(source.teachers) : asArray(data && data.teachers),
+        courses: asArray(source.courses).length ? asArray(source.courses) : asArray(data && data.courses)
+      };
+    }
+    function summarizeStagingData(data) {
+      const catalog = data && data.catalog && typeof data.catalog === "object" ? data.catalog : {};
+      const resources = getResources(data || {});
+      const classSchedules = asArray(data && (data.classSchedules || data.resources && data.resources.classSchedules));
+      return {
+        colleges: asArray(catalog.colleges || data && data.colleges).length,
+        majors: asArray(data && data.majors).length,
+        classSchedules: classSchedules.length,
+        teacherSchedules: resources.teacherSchedules.length,
+        classroomSchedules: resources.classroomSchedules.length,
+        courseSchedules: resources.courseSchedules.length,
+        classrooms: resources.classrooms.length,
+        teachers: resources.teachers.length,
+        courses: resources.courses.length
+      };
+    }
+    function stableClone(value) {
+      if (Array.isArray(value)) {
+        return value.map(stableClone);
+      }
+      if (!value || typeof value !== "object") {
+        return value;
+      }
+      const output = {};
+      Object.keys(value).filter((key) => !VOLATILE_KEYS.has(key)).sort().forEach((key) => {
+        const next = stableClone(value[key]);
+        if (next !== void 0) output[key] = next;
+      });
+      return output;
+    }
+    function canonicalPayload(data) {
+      const source = data && typeof data === "object" ? data : {};
+      return stableClone({
+        schemaVersion: source.schemaVersion || "",
+        term: source.term || source.semester || "",
+        semester: source.semester || source.term || "",
+        termStartDate: source.termStartDate || source.sourceStartDate || source.meta && source.meta.startDate || "",
+        catalog: source.catalog || {},
+        majors: source.majors || [],
+        classSchedules: source.classSchedules || source.resources && source.resources.classSchedules || [],
+        resources: getResources(source),
+        timeTable: source.timeTable || {}
+      });
+    }
+    function stableStringify(value) {
+      return JSON.stringify(stableClone(value));
+    }
+    function sha256(text) {
+      return crypto.createHash("sha256").update(String(text || ""), "utf8").digest("hex");
+    }
+    function calculateFingerprint(data) {
+      const canonical = canonicalPayload(data);
+      const canonicalJson = JSON.stringify(canonical);
+      return {
+        canonicalHash: sha256(canonicalJson),
+        canonicalJson,
+        counts: summarizeStagingData(data)
+      };
+    }
+    function calculateFingerprintFromFile(filePath) {
+      const raw = fs2.readFileSync(filePath, "utf-8");
+      const data = JSON.parse(raw);
+      const fingerprint = calculateFingerprint(data);
+      return Object.assign(fingerprint, {
+        data,
+        rawSizeBytes: Buffer.byteLength(raw, "utf8")
+      });
+    }
+    function buildSidecarMeta(data, options = {}) {
+      const fingerprint = options.fingerprint || calculateFingerprint(data);
+      const previousHash = String(options.previousHash || "").trim();
+      const meta = data && data.meta && typeof data.meta === "object" ? data.meta : {};
+      const termConfig = data && data.termConfig && typeof data.termConfig === "object" ? data.termConfig : meta.termConfig || null;
+      const termConfigHash = termConfig ? sha256(JSON.stringify(termConfig)) : "";
+      return {
+        term: data && (data.term || data.semester) || "",
+        termConfig,
+        termConfigHash,
+        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        sourceStartDate: data && (data.termStartDate || data.sourceStartDate) || meta.startDate || "",
+        includeScopes: Array.isArray(meta.includeScopes) ? meta.includeScopes : [],
+        grades: meta.grades || data && data.grades || "",
+        counts: fingerprint.counts || summarizeStagingData(data),
+        rawSizeBytes: Number(options.rawSizeBytes || 0) || 0,
+        canonicalHash: fingerprint.canonicalHash,
+        previousHash,
+        changed: previousHash ? previousHash !== fingerprint.canonicalHash : true,
+        crawlMode: meta.crawlMode || "",
+        usedProgressCache: Boolean(meta.usedProgressCache),
+        usedNoScheduleCache: Boolean(meta.usedNoScheduleCache),
+        usedClassScheduleCache: Boolean(meta.usedClassScheduleCache),
+        actualNetworkRequestCount: Number(meta.actualNetworkRequestCount || 0),
+        skippedByProgressCount: Number(meta.skippedByProgressCount || 0),
+        skippedByNoScheduleCount: Number(meta.skippedByNoScheduleCount || 0),
+        freshRunId: meta.freshRunId || "",
+        resourceSource: meta.resourceSource || ""
+      };
+    }
+    function readSidecarHash(filePath) {
+      try {
+        if (!filePath || !fs2.existsSync(filePath)) return "";
+        const parsed = JSON.parse(fs2.readFileSync(filePath, "utf-8"));
+        return String(parsed && parsed.canonicalHash || "").trim();
+      } catch (error) {
+        return "";
+      }
+    }
+    module2.exports = {
+      buildSidecarMeta,
+      calculateFingerprint,
+      calculateFingerprintFromFile,
+      canonicalPayload,
+      readSidecarHash,
+      stableStringify,
+      summarizeStagingData
+    };
+  }
+});
+
 // ../fosu-sync-client/upload.js
 var require_upload = __commonJS({
   "../fosu-sync-client/upload.js"(exports2, module2) {
@@ -14,6 +175,11 @@ var require_upload = __commonJS({
     var path2 = require("path");
     var { pipeline } = require("stream/promises");
     var zlib = require("zlib");
+    var {
+      buildSidecarMeta,
+      calculateFingerprintFromFile,
+      readSidecarHash
+    } = require_stagingFingerprint();
     function parseArgs2(argv) {
       const args = {};
       for (const arg of argv) {
@@ -154,6 +320,16 @@ var require_upload = __commonJS({
       });
       return response.data;
     }
+    async function getJson(url, headers, timeoutMs) {
+      const response = await axios.get(url, {
+        headers: Object.assign({ Accept: "application/json" }, headers),
+        timeout: timeoutMs,
+        proxy: false,
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity
+      });
+      return response.data;
+    }
     async function uploadChunkWithRetry(url, buffer, headers, timeoutMs, attemptCount) {
       let lastError;
       for (let attempt = 1; attempt <= attemptCount; attempt += 1) {
@@ -195,6 +371,30 @@ var require_upload = __commonJS({
     }
     function normalizeServer2(value) {
       return String(value || "https://class.katelya.eu.org").replace(/\/+$/, "");
+    }
+    function getSidecarMetaPath(filePath) {
+      return String(filePath || "").replace(/\.json$/i, ".meta.json");
+    }
+    function isForceUpload(params = {}) {
+      return params["force-upload"] === true || params.forceUpload === true || params.force === true || String(params["force-upload"] || params.forceUpload || params.force || "").toLowerCase() === "true";
+    }
+    async function calculateLocalFingerprint(filePath) {
+      const sidecarPath = getSidecarMetaPath(filePath);
+      const previousHash = readSidecarHash(sidecarPath);
+      const fingerprint = calculateFingerprintFromFile(filePath);
+      if (!previousHash || previousHash !== fingerprint.canonicalHash || !fs2.existsSync(sidecarPath)) {
+        const sidecar = buildSidecarMeta(fingerprint.data, {
+          fingerprint,
+          previousHash,
+          rawSizeBytes: fingerprint.rawSizeBytes
+        });
+        fs2.writeFileSync(sidecarPath, JSON.stringify(sidecar, null, 2), "utf-8");
+      }
+      return Object.assign(fingerprint, { sidecarPath, previousHash });
+    }
+    async function checkServerFingerprint(server, headers, canonicalHash, timeoutMs) {
+      const url = `${server}/api/admin/staging/fingerprint?canonicalHash=${encodeURIComponent(canonicalHash)}`;
+      return getJson(url, headers, Math.min(timeoutMs, 3e4));
     }
     async function prepareUploadFile(filePath, params) {
       const stat = fs2.statSync(filePath);
@@ -239,11 +439,49 @@ var require_upload = __commonJS({
       const retryCount = Number(params.retries || process.env.SYNC_UPLOAD_RETRIES || 3);
       const chunkSize = toBytesMb(params["chunk-mb"] || params.chunkMb || process.env.SYNC_LOCAL_UPLOAD_CHUNK_MB, 8);
       const metadata = Object.assign({}, extractJsonMetadata(filePath), options.metadata || {});
+      const headers = getAuthHeaders(mode, token);
+      let localFingerprint = null;
+      if (mode === "admin") {
+        localFingerprint = await calculateLocalFingerprint(filePath);
+        console.log(`canonicalHash: ${localFingerprint.canonicalHash}`);
+        console.log(`sidecar meta: ${localFingerprint.sidecarPath}`);
+        if (!isForceUpload(params)) {
+          try {
+            const serverFingerprint = await checkServerFingerprint(server, headers, localFingerprint.canonicalHash, timeoutMs);
+            if (serverFingerprint.sameAsActive) {
+              console.log("\u2705 \u5F53\u524D\u91C7\u96C6\u7ED3\u679C\u4E0E\u7EBF\u4E0A active release \u5B8C\u5168\u4E00\u81F4\uFF0C\u65E0\u9700\u4E0A\u4F20\u3002");
+              console.log("\u5982\u9700\u5F3A\u5236\u4E0A\u4F20\uFF0C\u8BF7\u8FFD\u52A0 --force-upload\u3002");
+              return {
+                success: true,
+                skipped: true,
+                reason: "active-release",
+                canonicalHash: localFingerprint.canonicalHash,
+                serverFingerprint
+              };
+            }
+            if (serverFingerprint.sameAsStaging) {
+              console.log("\u2705 \u670D\u52A1\u5668\u5DF2\u5B58\u5728\u76F8\u540C staging\uFF0C\u65E0\u9700\u91CD\u590D\u4E0A\u4F20\u3002");
+              console.log("\u5982\u9700\u5F3A\u5236\u4E0A\u4F20\uFF0C\u8BF7\u8FFD\u52A0 --force-upload\u3002");
+              return {
+                success: true,
+                skipped: true,
+                reason: "staging",
+                canonicalHash: localFingerprint.canonicalHash,
+                serverFingerprint
+              };
+            }
+          } catch (error) {
+            const detail = error.response ? `${error.response.status} ${JSON.stringify(error.response.data || {})}` : error.message;
+            console.warn(`fingerprint precheck failed, continue upload: ${detail}`);
+          }
+        } else {
+          console.log("\u26A0\uFE0F --force-upload \u5DF2\u542F\u7528\uFF0C\u5C06\u5FFD\u7565 active/staging \u6307\u7EB9\u76F8\u540C\u5224\u65AD\u3002");
+        }
+      }
       const prepared = await prepareUploadFile(filePath, params);
       const uploadStat = fs2.statSync(prepared.uploadPath);
       const uploadSha256 = await hashFile(prepared.uploadPath);
       const totalChunks = Math.ceil(uploadStat.size / chunkSize);
-      const headers = getAuthHeaders(mode, token);
       console.log(`source file: ${filePath}`);
       console.log(`source size: ${formatMb(prepared.originalSize)} MB`);
       console.log(`upload file: ${prepared.uploadPath}`);
@@ -263,7 +501,8 @@ var require_upload = __commonJS({
         uploadSize: uploadStat.size,
         uploadSha256,
         originalSize: prepared.originalSize,
-        originalSha256: prepared.originalSha256
+        originalSha256: prepared.originalSha256,
+        canonicalHash: localFingerprint && localFingerprint.canonicalHash || ""
       };
       const init = await postJson(`${endpointBase}/init`, initBody, headers, timeoutMs);
       const uploadId = init.uploadId || init.upload?.uploadId;
@@ -290,6 +529,7 @@ var require_upload = __commonJS({
         uploadSha256,
         originalSize: prepared.originalSize,
         originalSha256: prepared.originalSha256,
+        canonicalHash: localFingerprint && localFingerprint.canonicalHash || "",
         totalChunks,
         note: options.note || params.note || "",
         uploaderNote: options.note || params.note || "",
@@ -630,8 +870,22 @@ async function main() {
   console.log(`\u5F00\u59CB\u6293\u53D6\u5168\u6821\u8BFE\u7A0B\u6570\u636E\uFF08\u5B66\u671F\uFF1A${task.term}\uFF09\uFF0C\u6B64\u8FC7\u7A0B\u7EA6\u9700\u8981 10 \u5206\u949F\u3002\u671F\u95F4\u8BF7\u4E0D\u8981\u5173\u95ED\u6D4F\u89C8\u5668\u7A97\u53E3\u3002`);
   try {
     const syncScript = resolveToolScript("sync.js");
-    child_process.execFileSync(process.execPath, [syncScript, "local-campus", `--term=${task.term}`], {
+    const syncArgs = [syncScript, "local-campus", `--term=${task.term}`];
+    if (task.termConfig && task.termConfig.termStartDate) {
+      syncArgs.push(`--term-start-date=${task.termConfig.termStartDate}`);
+    }
+    if (task.termConfig && task.termConfig.totalWeeks) {
+      syncArgs.push(`--total-weeks=${task.termConfig.totalWeeks}`);
+    }
+    if (task.termConfig && task.termConfig.weekStart) {
+      syncArgs.push(`--week-start=${task.termConfig.weekStart}`);
+    }
+    const childEnv = Object.assign({}, process.env, {
+      FOSU_RELAY_TERM_CONFIG: JSON.stringify(task.termConfig || {})
+    });
+    child_process.execFileSync(process.execPath, syncArgs, {
       cwd: path.dirname(syncScript),
+      env: childEnv,
       stdio: "inherit"
     });
     console.log("\u2713 \u5168\u6821\u8BFE\u8868\u6570\u636E\u6293\u53D6\u5B8C\u6BD5\uFF0C\u5DF2\u751F\u6210\u672C\u5730 Staging JSON\u3002");

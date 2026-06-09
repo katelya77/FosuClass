@@ -1,6 +1,8 @@
 const request = require("../../utils/request");
 const { getSettings, setCurrentScheduleTarget } = require("../../utils/storage");
 const aiAssistantService = require("../../services/aiAssistantService");
+const appConfigService = require("../../services/appConfigService");
+const { getRuntimeTermConfig } = require("../../utils/week");
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const WEEKDAY_TABS = [
@@ -98,7 +100,7 @@ Page({
     loadingXls: false,
     syncSuccess: false,
     syncResult: null,
-    semesterOptions: ["2025-2026-2", "2025-2026-1", "2024-2025-2", "2024-2025-1"],
+    semesterOptions: [],
     semesterIndex: 0,
     previewSearchKey: "",
     previewDayFilter: "all",
@@ -108,11 +110,21 @@ Page({
 
   onLoad() {
     const settings = getSettings();
-    const currentSemesterId = settings.semesterId || settings.semester || "2025-2026-2";
-    const index = this.data.semesterOptions.indexOf(currentSemesterId);
-    this.setData({
-      semesterIndex: index >= 0 ? index : 0,
-    });
+    const currentSemesterId = settings.semesterId || settings.semester || getRuntimeTermConfig().term;
+    const applyTerms = (config) => {
+      const terms = (config.availableTerms || [])
+        .filter((item) => item && item.term && item.status !== "planned" && item.status !== "disabled")
+        .map((item) => item.term);
+      if (!terms.includes(currentSemesterId) && currentSemesterId) terms.unshift(currentSemesterId);
+      const semesterOptions = terms.length ? terms : [getRuntimeTermConfig().term].filter(Boolean);
+      const index = semesterOptions.indexOf(currentSemesterId);
+      this.setData({
+        semesterOptions,
+        semesterIndex: index >= 0 ? index : 0,
+      });
+    };
+    applyTerms(appConfigService.getGlobalConfig());
+    appConfigService.loadAppConfig({ silent: true }).then(applyTerms).catch(() => {});
   },
 
   onSemesterChange(event) {

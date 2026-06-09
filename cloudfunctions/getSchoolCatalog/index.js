@@ -3,13 +3,14 @@ const { FosuQiangzhiAdapter } = require("../common/fosuQiangzhiAdapter");
 const { parseSchoolOptionsHtml } = require("../common/parser");
 const { getSchoolOptions, saveSchoolOptions } = require("../common/cache");
 const { safeLog } = require("../common/safeLogger");
+const { normalizeTerm } = require("../common/term");
 
 cloud.init({
   env: cloud.DYNAMIC_CURRENT_ENV,
 });
 
 exports.main = async (event) => {
-  const semesterParam = event.semester || "2025-2026-2";
+  const semesterParam = normalizeTerm(event && (event.term || event.semester));
   
   try {
     // 1. 尝试从短期内存缓存中获取选项
@@ -50,7 +51,7 @@ exports.main = async (event) => {
       })
       .filter((item) => item.code && item.name && !item.name.includes("请选择"));
 
-    // 学期 xnxqh options 格式通常为: [{ code: "2025-2026-2", name: "2025-2026-2" }]
+    // 学期 xnxqh options 格式通常为: [{ code: "YYYY-YYYY-1/2", name: "YYYY-YYYY-1/2" }]
     const semesters = (parsed.semesters || [])
       .map((item) => ({
         value: item.code,
@@ -58,8 +59,8 @@ exports.main = async (event) => {
       }))
       .filter((item) => item.value);
 
-    // 如果接口解析不到学期，补充当前所选学期作为默认值
-    if (!semesters.some((s) => s.value === semesterParam)) {
+    // 如果接口解析不到学期，补充调用方明确选择的学期。
+    if (semesterParam && !semesters.some((s) => s.value === semesterParam)) {
       semesters.unshift({ value: semesterParam, label: semesterParam });
     }
 

@@ -1,11 +1,11 @@
 const request = require("../../utils/request");
 const { getSettings } = require("../../utils/storage");
-
-const semesterOptions = ["2025-2026-2", "2025-2026-1", "2024-2025-2"];
+const appConfigService = require("../../services/appConfigService");
+const { getRuntimeTermConfig } = require("../../utils/week");
 
 Page({
   data: {
-    semesterOptions,
+    semesterOptions: [],
     selectedSemesterIndex: 0,
     collegeName: "",
     majorName: "",
@@ -17,6 +17,23 @@ Page({
 
   onLoad() {
     this.prefillInfo();
+    this.loadTermOptions();
+  },
+
+  loadTermOptions() {
+    const settings = getSettings();
+    const selected = settings.semesterId || settings.semester || getRuntimeTermConfig().term;
+    const applyTerms = (config) => {
+      const terms = (config.availableTerms || [])
+        .filter((item) => item && item.term && item.status !== "planned" && item.status !== "disabled")
+        .map((item) => item.term);
+      if (selected && terms.indexOf(selected) < 0) terms.unshift(selected);
+      const semesterOptions = terms.length ? terms : [selected || getRuntimeTermConfig().term].filter(Boolean);
+      const selectedSemesterIndex = Math.max(0, semesterOptions.indexOf(selected));
+      this.setData({ semesterOptions, selectedSemesterIndex });
+    };
+    applyTerms(appConfigService.getGlobalConfig());
+    appConfigService.loadAppConfig({ silent: true }).then(applyTerms).catch(() => {});
   },
 
   prefillInfo() {

@@ -123,8 +123,12 @@ function buildSidecarMeta(data, options = {}) {
   const fingerprint = options.fingerprint || calculateFingerprint(data);
   const previousHash = String(options.previousHash || "").trim();
   const meta = data && data.meta && typeof data.meta === "object" ? data.meta : {};
+  const termConfig = data && data.termConfig && typeof data.termConfig === "object" ? data.termConfig : meta.termConfig || null;
+  const termConfigHash = termConfig ? sha256(JSON.stringify(termConfig)) : "";
   return {
     term: data && (data.term || data.semester) || "",
+    termConfig,
+    termConfigHash,
     generatedAt: new Date().toISOString(),
     sourceStartDate: data && (data.termStartDate || data.sourceStartDate) || meta.startDate || "",
     includeScopes: Array.isArray(meta.includeScopes) ? meta.includeScopes : [],

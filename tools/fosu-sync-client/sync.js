@@ -212,15 +212,148 @@ function getEnvFlag(name, defaultValue) {
 }
 
 function getTermStartDate(term) {
-  const map = {
-    "2025-2026-1": "2025-09-01",
-    "2025-2026-2": "2026-03-09",
-    "2026-2027-1": "2026-09-01",
-    "2026-2027-2": "2027-03-01",
-    "2027-2028-1": "2027-09-01",
-    "2027-2028-2": "2028-03-01",
+  if (process.env.PREFERRED_TERM_START_DATE) return process.env.PREFERRED_TERM_START_DATE;
+  return "";
+}
+
+function validateTermId(term) {
+  const value = String(term || "").trim();
+  const match = value.match(/^(\d{4})-(\d{4})-([12])$/);
+  return Boolean(match && Number(match[2]) === Number(match[1]) + 1);
+}
+
+function generateSemesterText(term) {
+  const parts = String(term || "").split("-");
+  if (parts.length !== 3) return term || "";
+  return `${parts[0]}-${parts[1]}学年${parts[2] === "1" ? "第一" : "第二"}学期`;
+}
+
+function normalizeTermConfigRecord(record, source) {
+  const item = record && typeof record === "object" ? record : {};
+  const term = String(item.term || item.semester || "").trim();
+  if (!validateTermId(term)) return null;
+  const totalWeeks = Number(item.totalWeeks || item.weeks || item.weekCount || 20);
+  return {
+    term,
+    semesterText: item.semesterText || item.termText || generateSemesterText(term),
+    termStartDate: String(item.termStartDate || item.startDate || item.termStart || "").trim(),
+    totalWeeks: Number.isInteger(totalWeeks) && totalWeeks >= 1 && totalWeeks <= 30 ? totalWeeks : 20,
+    weekStart: item.weekStart || "monday",
+    source: source || item.source || "unknown",
+    releaseVersion: item.releaseVersion || item.version || "",
   };
-  return map[term] || "";
+}
+
+function readJsonSafe(filePath) {
+  try {
+    if (!fs.existsSync(filePath)) return null;
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  } catch (error) {
+    return null;
+  }
+}
+
+function getRelayTermConfigFromEnv() {
+  const raw = process.env.FOSU_RELAY_TERM_CONFIG || "";
+  if (!raw) return null;
+  try {
+    return normalizeTermConfigRecord(JSON.parse(raw), "relay-term-config");
+  } catch (error) {
+    return null;
+  }
+}
+
+function getLocalRegistryTermConfig(term) {
+  const projectRoot = resolveProjectPath();
+  const candidates = [
+    path.join(projectRoot, "server", "storage", "term-registry.json"),
+    process.env.FOSU_STORAGE_DIR ? path.join(process.env.FOSU_STORAGE_DIR, "term-registry.json") : "",
+  ].filter(Boolean);
+  for (const filePath of candidates) {
+    const registry = readJsonSafe(filePath);
+    const terms = registry && Array.isArray(registry.terms) ? registry.terms : [];
+    const matched = terms.find((item) => item && item.term === term);
+    const config = normalizeTermConfigRecord(matched, "local-term-registry");
+    if (config && config.termStartDate) return config;
+  }
+  return null;
+}
+
+async function getRemoteRegistryTermConfig(term) {
+  try {
+    const response = await axios.get(`${FOSU_API_BASE}/api/fosu/terms`, {
+      timeout: 8000,
+      validateStatus: (status) => status >= 200 && status < 500,
+    });
+    const data = response.data || {};
+    const terms = data.terms || data.availableTerms || data.data && data.data.availableTerms || [];
+    const matched = Array.isArray(terms) ? terms.find((item) => item && item.term === term) : null;
+    return normalizeTermConfigRecord(matched, "remote-term-registry");
+  } catch (error) {
+    return null;
+  }
+}
+
+async function resolveTermConfig(activeSemester, cliParams = {}) {
+  const explicit = cliParams["term-start-date"] || cliParams.termStartDate || cliParams.start || cliParams.startDate || "";
+  const totalWeeks = Number(cliParams["total-weeks"] || cliParams.totalWeeks || process.env.TOTAL_WEEKS || 20);
+  const weekStart = cliParams.weekStart || cliParams["week-start"] || "monday";
+  if (explicit) {
+    return normalizeTermConfigRecord({
+      term: activeSemester,
+      semesterText: cliParams.semesterText,
+      termStartDate: explicit,
+      totalWeeks,
+      weekStart,
+    }, "cli");
+  }
+  const relayTermConfig = normalizeTermConfigRecord(global.RELAY_TERM_CONFIG, "relay-term-config") || getRelayTermConfigFromEnv();
+  if (relayTermConfig && relayTermConfig.term === activeSemester && relayTermConfig.termStartDate) {
+    return relayTermConfig;
+  }
+  const localRegistryConfig = getLocalRegistryTermConfig(activeSemester);
+  if (localRegistryConfig && localRegistryConfig.termStartDate) {
+    return localRegistryConfig;
+  }
+  const remoteRegistryConfig = await getRemoteRegistryTermConfig(activeSemester);
+  if (remoteRegistryConfig && remoteRegistryConfig.termStartDate) {
+    return remoteRegistryConfig;
+  }
+  const fallback = getTermStartDate(activeSemester);
+  if (fallback) {
+    return normalizeTermConfigRecord({
+      term: activeSemester,
+      termStartDate: fallback,
+      totalWeeks,
+      weekStart,
+    }, "env");
+  }
+  return normalizeTermConfigRecord({
+    term: activeSemester,
+    termStartDate: "",
+    totalWeeks,
+    weekStart,
+  }, "");
+}
+
+async function assertTermConfigBeforeCrawl(activeSemester, cliParams = {}) {
+  if (!validateTermId(activeSemester)) {
+    throw new Error(`Invalid term id: ${activeSemester}. Expected YYYY-YYYY-1 or YYYY-YYYY-2.`);
+  }
+  const config = await resolveTermConfig(activeSemester, cliParams);
+  if (!config.termStartDate) {
+    throw new Error([
+      `Missing termStartDate for ${activeSemester}.`,
+      "Pass it explicitly before crawling, for example:",
+      `npm run sync:local-campus -- --term=${activeSemester} --term-start-date=2026-09-07 --total-weeks=20 --fresh`,
+    ].join("\n"));
+  }
+  if (!Number.isInteger(config.totalWeeks) || config.totalWeeks < 1 || config.totalWeeks > 30) {
+    throw new Error("totalWeeks must be an integer between 1 and 30.");
+  }
+  return Object.assign({}, config, {
+    semesterText: cliParams.semesterText || config.semesterText || generateSemesterText(activeSemester),
+  });
 }
 
 function readJsonArray(filePath) {
@@ -751,7 +884,11 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
 
   const cliParams = global.CLI_PARAMS || {};
   const generatedCommand = global.GENERATED_COMMAND || `node sync.js local-campus ${process.argv.slice(2).join(" ")}`;
-  const termStartDate = cliParams.start || getTermStartDate(activeSemester) || "2026-03-09";
+  const termConfig = global.TERM_CONFIG;
+  if (!termConfig || !termConfig.termStartDate) {
+    throw new Error("TERM_CONFIG_NOT_RESOLVED");
+  }
+  const termStartDate = termConfig.termStartDate;
   const cacheUsage = global.CLASS_SCHEDULE_CACHE_USAGE || {};
   const crawlStats = global.SYNC_CRAWL_STATS || {};
   const metaWarnings = [];
@@ -789,6 +926,9 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     schemaVersion: "1.0",
     releaseVersion: cliParams.version || version,
     term: activeSemester,
+    termConfig: Object.assign({}, termConfig, {
+      releaseVersion: cliParams.version || version,
+    }),
     termStartDate,
     generatedAt: new Date().toISOString(),
     version,
@@ -801,6 +941,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     // 注入 meta
     meta: {
       term: activeSemester,
+      termConfig,
       startDate: termStartDate,
       includeScopes,
       classScope: cliParams.classScope || cliParams["class-scope"] || process.env.SYNC_CLASS_SCOPE || "",
@@ -827,7 +968,6 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
         cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null,
       },
       warnings: metaWarnings,
-      usedClassScheduleCache: Boolean(crawlStats.usedClassScheduleCache || cacheUsage.usedClassScheduleCache || cacheUsage.used),
       cacheSource: cacheUsage.cacheSource || cacheUsage.source || null,
       cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null,
     },
@@ -3360,7 +3500,12 @@ async function syncClassSchedules(page, catalog, majors) {
   }
 
   // 默认使用最新学期
-  const activeSemester = catalog.semesters[0]?.value || "2025-2026-2";
+  const relayTermConfig = global.RELAY_TERM_CONFIG || {};
+  const activeSemester = String((global.CLI_PARAMS || {}).term || (global.CLI_PARAMS || {}).semester || process.env.PREFERRED_SEMESTER || relayTermConfig.term || "").trim();
+  if (!activeSemester) {
+    throw new Error("Missing target term. Pass --term=YYYY-YYYY-1 or set PREFERRED_SEMESTER before crawling class schedules.");
+  }
+  global.TERM_CONFIG = global.TERM_CONFIG || await assertTermConfigBeforeCrawl(activeSemester, global.CLI_PARAMS || {});
   console.log(`📅 抓取学期: ${activeSemester}`);
 
   const cliParams = global.CLI_PARAMS || {};
@@ -4075,6 +4220,9 @@ async function main() {
   if (params.start) {
     process.env.SYNC_TERM_START_DATE = params.start;
   }
+  if (params["term-start-date"]) {
+    process.env.SYNC_TERM_START_DATE = params["term-start-date"];
+  }
   if (params.include) {
     process.env.SYNC_INCLUDE_SCOPES = params.include;
   }
@@ -4126,6 +4274,17 @@ async function main() {
   params.includeScopes = includeScopes;
   
   global.CLI_PARAMS = params;
+  const requiresTermConfigBeforeCrawl = ["fresh", "quick", "local-campus", "class", "release", "all"].includes(action);
+  if (requiresTermConfigBeforeCrawl) {
+    const activeSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+    global.TERM_CONFIG = await assertTermConfigBeforeCrawl(activeSemester, params);
+    console.log("[term-config] resolved");
+    console.log(`- term: ${global.TERM_CONFIG.term}`);
+    console.log(`- semesterText: ${global.TERM_CONFIG.semesterText}`);
+    console.log(`- termStartDate: ${global.TERM_CONFIG.termStartDate}`);
+    console.log(`- totalWeeks: ${global.TERM_CONFIG.totalWeeks}`);
+    console.log(`- source: ${global.TERM_CONFIG.source}`);
+  }
 
   if (params["dry-run"] || params["dry_run"]) {
     process.env.SYNC_RELEASE_DRY_RUN = "true";
@@ -4135,7 +4294,7 @@ async function main() {
   }
 
   // 如果是一键同步任务，则强制执行环境预检
-  if (action === "fresh" || action === "quick" || action === "local-campus") {
+  if (requiresTermConfigBeforeCrawl) {
     runPreflight();
   }
 

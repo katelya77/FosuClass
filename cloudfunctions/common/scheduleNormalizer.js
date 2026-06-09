@@ -20,7 +20,7 @@ function normalizeCourseItem(course, context) {
   const config = context || {};
   const normalized = Object.assign({}, course);
   normalized.id = normalized.id || `${normalized.sourceType || "course"}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  normalized.semester = normalized.semester || config.semester || "2025-2026学年第二学期";
+  normalized.semester = normalized.semester || config.semester || "";
   normalized.className = normalized.className || config.className || "";
   normalized.teacherName = normalized.teacherName || config.teacherName || "";
   normalized.classroom = normalized.classroom || config.classroom || "";

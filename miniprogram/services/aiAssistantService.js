@@ -1,5 +1,6 @@
 const request = require("../utils/request");
 const { getCurrentScheduleTarget } = require("../utils/storage");
+const { DEFAULT_TERM } = require("./releasePackService");
 const { mockCalendar } = require("../data/mockCalendar");
 const {
   getCurrentTeachingWeek,
@@ -304,6 +305,7 @@ function buildClientContext(extra = {}) {
   const app = getApp();
   const activeRelease = (app.globalData && app.globalData.activeRelease) || {};
   const manifest = activeRelease.manifest || {};
+  const appConfig = (app.globalData && app.globalData.appConfig) || {};
   const termConfig = getRuntimeTermConfig();
   const todayTeachingInfo = getTodayTeachingInfo(now, mockCalendar, termConfig);
   const scheduleSummary = sanitizeLocalScheduleForAI(target);
@@ -314,18 +316,36 @@ function buildClientContext(extra = {}) {
     termConfig.term ||
     activeRelease.term ||
     manifest.term ||
-    "2025-2026-2";
+    DEFAULT_TERM;
 
   return {
     term,
+    selectedTerm: term,
+    activeTerm: appConfig.currentSemester || activeRelease.term || manifest.term || termConfig.term || term,
+    availableTerms: Array.isArray(appConfig.availableTerms)
+      ? appConfig.availableTerms.slice(0, 8).map((item) => ({
+          term: item.term,
+          status: item.status,
+          dataAvailable: item.dataAvailable,
+          releaseVersion: item.releaseVersion,
+        }))
+      : [],
+    selectedTermDataAvailable: Array.isArray(appConfig.availableTerms)
+      ? Boolean((appConfig.availableTerms.find((item) => item.term === term) || {}).dataAvailable)
+      : true,
     semesterText: termConfig.semesterText || "",
     termStartDate: termConfig.termStartDate || "",
     totalWeeks: termConfig.totalWeeks || 20,
+    termPhase: todayTeachingInfo.termPhase || "unknown",
+    isInTerm: todayTeachingInfo.isInTerm !== false,
     currentTeachingWeek: extra.currentTeachingWeek || todayTeachingInfo.weekNo || getCurrentTeachingWeek(now, mockCalendar, termConfig),
     todayWeekday: getTodayWeekday(now),
     todayDate: todayTeachingInfo.date,
     todayTeachingInfo: {
       weekNo: todayTeachingInfo.weekNo,
+      rawWeekNo: todayTeachingInfo.rawWeekNo,
+      termPhase: todayTeachingInfo.termPhase || "unknown",
+      isInTerm: todayTeachingInfo.isInTerm !== false,
       weekday: todayTeachingInfo.weekday,
       date: todayTeachingInfo.date,
       termStartDate: termConfig.termStartDate || "",

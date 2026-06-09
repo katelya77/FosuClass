@@ -11,8 +11,9 @@ function normalizeConfig(payload) {
   const data = payload && payload.data ? payload.data : payload;
   const config = Object.assign({
     appName: "佛课小表",
-    currentSemester: "2025-2026-2",
+    currentSemester: "",
     termConfig: null,
+    availableTerms: [],
     dataVersion: {},
     notices: [],
     urgentNotice: null,
@@ -23,6 +24,9 @@ function normalizeConfig(payload) {
   }, data || {});
   if (!config.dataVersion || typeof config.dataVersion !== "object") config.dataVersion = {};
   if (config.termConfig && typeof config.termConfig !== "object") config.termConfig = null;
+  if (!Array.isArray(config.availableTerms)) config.availableTerms = [];
+  if (!config.currentSemester && config.termConfig && config.termConfig.term) config.currentSemester = config.termConfig.term;
+  if (!config.currentSemester && config.availableTerms[0] && config.availableTerms[0].term) config.currentSemester = config.availableTerms[0].term;
   if (!Array.isArray(config.notices)) config.notices = [];
   if (!Array.isArray(config.banners)) config.banners = [];
   if (!Array.isArray(config.news)) config.news = [];

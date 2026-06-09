@@ -16,6 +16,7 @@ server/storage/*.json
 server/storage/*.jsonl
 server/storage/secure/
 server/storage/releases/
+server/storage/terms/
 !server/storage/.gitkeep
 tools/fosu-sync-client/.env
 tools/fosu-sync-client/.session/

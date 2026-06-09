@@ -22,7 +22,7 @@ function getCurrentBoundSchedule() {
 
   const classId = settings.classId || target?.classId || "";
   const className = settings.className || target?.name || target?.className || "";
-  const semester = target?.semester || settings.semester || getRuntimeTermConfig().term || "2025-2026-2";
+  const semester = target?.term || target?.semester || settings.semesterId || settings.semester || getRuntimeTermConfig().term;
   let schedule = null;
   let source = "";
 

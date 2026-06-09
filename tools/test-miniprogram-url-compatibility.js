@@ -246,6 +246,18 @@ async function runStartupTests() {
 
   const term = "2025-2026-2";
   const releaseVersion = "startup-url-compat";
+  mockEnv.storage.set(releasePackService.getLocalActiveReleaseKey(term), {
+    savedAt: Date.now(),
+    term,
+    releaseVersion,
+    manifest: {
+      term,
+      semester: term,
+      releaseVersion,
+      version: releaseVersion,
+      updatedAt: "2026-06-05T00:00:00.000Z",
+    },
+  });
   mockEnv.storage.set(releasePackService.LOCAL_ACTIVE_RELEASE_KEY, {
     savedAt: Date.now(),
     term,

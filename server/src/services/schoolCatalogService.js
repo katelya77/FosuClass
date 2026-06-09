@@ -1,87 +1,141 @@
-/**
- * 全校目录服务：管理全校学院、年级、学期选项及专业联动列表的读取与缓存逻辑。
- * 支持 cache-first 本地缓存静态化模式、realtime 直连调试模式和 disabled 禁用模式。
- */
-
 const fs = require("fs");
 const path = require("path");
 const dns = require("dns").promises;
-const { FosuQiangzhiAdapter } = require("./fosuQiangzhiAdapter");
-const { parseSchoolOptionsHtml, parseMajorAjaxResponse } = require("../utils/parser");
-const cache = require("../utils/cache");
-const { safeLog } = require("../utils/safeLogger");
-const config = require("../config");
-const releaseService = require("./releaseService");
 
-const STORAGE_DIR = path.join(__dirname, "../../storage");
+const { FosuQiangzhiAdapter } = require("./fosuQiangzhiAdapter");
+const releaseService = require("./releaseService");
+const termRegistryService = require("./termRegistryService");
+const config = require("../config");
+const { parseSchoolOptionsHtml, parseMajorAjaxResponse } = require("../utils/parser");
+const { safeLog } = require("../utils/safeLogger");
+
+const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const FILE_MAP = {
   catalog: path.join(STORAGE_DIR, "catalog.json"),
   majors: path.join(STORAGE_DIR, "majors-index.json"),
   "sync-meta": path.join(STORAGE_DIR, "sync-meta.json"),
 };
+const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
+const CURRENT_SNAPSHOT_PATH = path.join(SNAPSHOTS_DIR, "current.json");
 
-/**
- * 安全读取 JSON 文件
- */
+let snapshotCache = null;
+let snapshotCacheTime = 0;
+
 function readJsonFile(filePath) {
-  if (fs.existsSync(filePath)) {
-    try {
-      const content = fs.readFileSync(filePath, "utf-8");
-      return JSON.parse(content);
-    } catch (error) {
-      safeLog("read-json-file-error", { filePath, error: error.message });
-      return null;
-    }
+  if (!fs.existsSync(filePath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf-8"));
+  } catch (error) {
+    safeLog("read-json-file-error", { filePath, error: error.message });
+    return null;
   }
-  return null;
 }
 
-/**
- * 获取元数据
- */
-function getMeta(key) {
-  const metaPath = FILE_MAP["sync-meta"];
-  const meta = readJsonFile(metaPath);
+function getMeta(key, term) {
+  const requestedTerm = String(term || "").trim();
+  if (requestedTerm) {
+    const termMeta = readTermJson(requestedTerm, "sync-meta", { allowLegacyFallback: true }).data || {};
+    if (termMeta && termMeta[key]) return termMeta[key];
+    if (requestedTerm !== termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term) return {};
+  }
+  const meta = readJsonFile(FILE_MAP["sync-meta"]);
   return meta && meta[key] ? meta[key] : {};
 }
 
-/**
- * 默认开发环境的 Demo 数据
- */
-function getDemoCatalog(semesterParam) {
+function normalizeTermOrActive(term) {
+  const requested = String(term || "").trim();
+  if (requested) {
+    const validation = termRegistryService.validateTermId(requested);
+    if (!validation.valid) {
+      const error = new Error("TERM_NOT_FOUND");
+      error.code = "TERM_NOT_FOUND";
+      error.statusCode = 404;
+      throw error;
+    }
+    return validation.term;
+  }
+  const active = termRegistryService.getActiveTerm();
+  return active && active.term || termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term;
+}
+
+function getTermRecordOrError(term) {
+  const id = normalizeTermOrActive(term);
+  const record = termRegistryService.getTerm(id);
+  if (!record) {
+    const error = new Error("TERM_NOT_FOUND");
+    error.code = "TERM_NOT_FOUND";
+    error.statusCode = 404;
+    throw error;
+  }
+  if (record.status === "disabled") {
+    const error = new Error("TERM_DISABLED");
+    error.code = "TERM_DISABLED";
+    error.statusCode = 403;
+    throw error;
+  }
+  return record;
+}
+
+function termFilePath(term, key) {
+  const fileNameMap = {
+    catalog: "catalog.json",
+    majors: "majors-index.json",
+    "sync-meta": "sync-meta.json",
+  };
+  return termRegistryService.termDataPath(term, fileNameMap[key]);
+}
+
+function readTermJson(term, key, options = {}) {
+  const termPath = termFilePath(term, key);
+  const data = readJsonFile(termPath);
+  if (data) return { data, source: "term-storage", path: termPath };
+  if (options.allowLegacyFallback && term === termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term) {
+    const legacy = readJsonFile(FILE_MAP[key]);
+    if (legacy) return { data: legacy, source: "legacy-current", path: FILE_MAP[key] };
+  }
+  return { data: null, source: "", path: termPath };
+}
+
+function buildTermError(record, code) {
+  return {
+    success: false,
+    code,
+    reasonCode: code,
+    term: record && record.term || "",
+    semester: record && record.term || "",
+    releaseVersion: record && record.releaseVersion || "",
+    dataAvailable: Boolean(record && record.dataAvailable),
+    updatedAt: record && record.updatedAt || "",
+    message: code,
+  };
+}
+
+function getDemoCatalog(term, totalWeeks) {
   return {
     success: true,
     dataSource: "demo",
     updatedAt: new Date().toISOString(),
-    semesters: [
-      { value: semesterParam, label: `${semesterParam}学年学期 (Demo)` }
-    ],
+    semesters: [{ value: term, label: `${term} (Demo)` }],
     colleges: [
-      { code: "02", name: "物理与光电工程学院 (Demo)", rawLabel: "物理与光电工程学院" },
-      { code: "04", name: "动物科技学院 (Demo)", rawLabel: "动物科技学院" }
+      { code: "02", name: "Demo College A", rawLabel: "Demo College A" },
+      { code: "04", name: "Demo College B", rawLabel: "Demo College B" },
     ],
     grades: ["2022", "2023", "2024", "2025"],
-    weeks: Array.from({ length: 20 }, (_, i) => ({
-      value: String(i + 1),
-      label: `第${i + 1}周`
+    weeks: Array.from({ length: totalWeeks || 20 }, (_, index) => ({
+      value: String(index + 1),
+      label: `Week ${index + 1}`,
     })),
-    sections: []
+    sections: [],
   };
 }
 
-/**
- * 默认开发环境的 Demo 专业数据
- */
-function getDemoMajors(collegeCode, grade) {
+function getDemoMajors() {
   return [
-    { code: "0401", name: "动物科学 (Demo)" },
-    { code: "0402", name: "动物医学 (Demo)" }
+    { code: "0401", name: "Demo Major A" },
+    { code: "0402", name: "Demo Major B" },
   ];
 }
 
-/**
- * 辅助检查域名是否能解析
- */
 async function checkDns(hostname) {
   try {
     await dns.lookup(hostname);
@@ -91,268 +145,216 @@ async function checkDns(hostname) {
   }
 }
 
-/**
- * 获取全校目录
- * @param {string} semester 学期，如 "2025-2026-2"
- * @returns {Promise<Object>} 目录数据
- */
 async function getCatalog(semester) {
-  const semesterParam = semester || "2025-2026-2";
-  const mode = config.DATA_SOURCE_MODE;
-
-  // 1. disabled 模式
-  if (mode === "disabled") {
-    return {
-      success: false,
-      message: "教务数据查询服务暂时关闭维护中。",
-    };
+  let record;
+  try {
+    record = getTermRecordOrError(semester);
+  } catch (error) {
+    return buildTermError({ term: semester }, error.code || "TERM_NOT_FOUND");
   }
 
-  // 2. realtime 模式（直连强智调试）
-  if (mode === "realtime") {
-    // 检查能否解析 100.fosu.edu.cn
-    const host = new URL(config.FOSU_BASE_URL).hostname;
-    const canResolve = await checkDns(host);
-    if (!canResolve) {
-      return {
-        success: false,
-        reasonCode: "FOSU_INTRANET_ONLY",
-        message: "100.fosu.edu.cn 仅校园网或 EasyConnect VPN 可访问，当前服务器无法直连。",
-      };
-    }
+  if (config.DATA_SOURCE_MODE === "disabled") {
+    return buildTermError(record, "TERM_DISABLED");
+  }
 
+  if (config.DATA_SOURCE_MODE === "realtime") {
+    const host = new URL(config.FOSU_BASE_URL).hostname;
+    if (!await checkDns(host)) {
+      return buildTermError(record, "FOSU_INTRANET_ONLY");
+    }
     try {
-      safeLog("catalog-fetch-realtime-debug", { semester: semesterParam });
       const adapter = new FosuQiangzhiAdapter();
       const res = await adapter.fetchClassOptionsPage();
-      if (res.statusCode !== 200) {
-        throw new Error(`教务网入口页面请求失败，HTTP 状态码: ${res.statusCode}`);
-      }
-
+      if (res.statusCode !== 200) throw new Error(`catalog page failed: ${res.statusCode}`);
       const parsed = parseSchoolOptionsHtml(res.text);
       const colleges = (parsed.colleges || [])
         .map((item) => {
           const rawLabel = item.name || "";
-          const cleanName = rawLabel.replace(/^\[[a-zA-Z0-9_-]+\]/, "").trim();
-          return { code: item.code, name: cleanName, rawLabel };
+          return {
+            code: item.code,
+            name: rawLabel.replace(/^\[[a-zA-Z0-9_-]+\]/, "").trim(),
+            rawLabel,
+          };
         })
-        .filter((item) => item.code && item.name && !item.name.includes("请选择"));
-
+        .filter((item) => item.code && item.name);
       const semesters = (parsed.semesters || [])
         .map((item) => ({ value: item.code, label: item.name }))
         .filter((item) => item.value);
-
-      if (!semesters.some((s) => s.value === semesterParam)) {
-        semesters.unshift({ value: semesterParam, label: semesterParam });
+      if (!semesters.some((item) => item.value === record.term)) {
+        semesters.unshift({ value: record.term, label: record.semesterText || record.term });
       }
-
-      const grades = (parsed.grades || [])
-        .map((item) => String(item).trim())
-        .filter((item) => item && /^\d{4}$/.test(item) && !item.includes("选择"));
-
-      const weeks = Array.from({ length: 20 }, (_, i) => ({
-        value: String(i + 1),
-        label: `第${i + 1}周`
-      }));
-
       return {
         success: true,
+        term: record.term,
+        semester: record.term,
+        releaseVersion: record.releaseVersion || "",
+        dataAvailable: record.dataAvailable,
         dataSource: "fosu-realtime",
         updatedAt: new Date().toISOString(),
         semesters,
         colleges,
-        grades,
-        weeks,
+        grades: (parsed.grades || []).map((item) => String(item).trim()).filter((item) => /^\d{4}$/.test(item)),
+        weeks: Array.from({ length: record.totalWeeks || 20 }, (_, index) => ({ value: String(index + 1), label: `Week ${index + 1}` })),
         sections: [],
       };
     } catch (error) {
-      safeLog("catalog-realtime-failed", { error: error.message });
-      return {
-        success: false,
-        reasonCode: "FOSU_INTRANET_ONLY",
-        message: `无法实时连接教务系统: ${error.message}，100.fosu.edu.cn 仅校园网或 EasyConnect VPN 可访问。`,
-      };
+      safeLog("catalog-realtime-failed", { term: record.term, error: error.message });
+      return buildTermError(record, "FOSU_INTRANET_ONLY");
     }
   }
 
-  // 3. cache-first 默认模式
-  const catalogData = readJsonFile(FILE_MAP["catalog"]);
-  if (catalogData) {
-    const meta = getMeta("catalog");
+  if (!record.dataAvailable && record.status === "planned") {
+    return buildTermError(record, "TERM_NOT_PUBLISHED");
+  }
+
+  const termCatalog = readTermJson(record.term, "catalog", { allowLegacyFallback: true });
+  if (termCatalog.data) {
+    const meta = getMeta("catalog", record.term);
     return {
       success: true,
-      dataSource: "cache",
-      updatedAt: meta.updatedAt || new Date().toISOString(),
+      term: record.term,
+      semester: record.term,
+      releaseVersion: record.releaseVersion || "",
+      dataAvailable: record.dataAvailable,
+      dataSource: termCatalog.source === "legacy-current" ? "legacy-current-cache" : "term-cache",
+      updatedAt: meta.updatedAt || record.updatedAt || new Date().toISOString(),
       syncSource: meta.syncSource || "local-sync-client",
-      itemCount: meta.itemCount || (catalogData.colleges || []).length,
-      semesters: catalogData.semesters || [],
-      colleges: catalogData.colleges || [],
-      grades: catalogData.grades || [],
-      weeks: catalogData.weeks || [],
-      sections: catalogData.sections || [],
+      itemCount: meta.itemCount || (termCatalog.data.colleges || []).length,
+      semesters: termCatalog.data.semesters || [{ value: record.term, label: record.semesterText }],
+      colleges: termCatalog.data.colleges || [],
+      grades: termCatalog.data.grades || [],
+      weeks: termCatalog.data.weeks || [],
+      sections: termCatalog.data.sections || [],
     };
   }
 
-  // 开发环境降级 Demo
   if (config.NODE_ENV !== "production") {
-    return getDemoCatalog(semesterParam);
+    return Object.assign(getDemoCatalog(record.term, record.totalWeeks), {
+      term: record.term,
+      semester: record.term,
+      releaseVersion: record.releaseVersion || "",
+      dataAvailable: false,
+    });
   }
 
-  // 无同步数据提示
-  return {
-    success: true,
-    dataSource: "empty",
-    reasonCode: "NO_SYNC_DATA",
-    message: "暂未同步教务数据，请稍后再试。",
-  };
+  return buildTermError(record, record.dataAvailable ? "TERM_DATA_MISSING" : "TERM_NOT_PUBLISHED");
 }
 
-/**
- * 根据学院和年级获取联动专业列表
- * @param {string} collegeCode 学院代码
- * @param {string} grade 年级
- * @returns {Promise<Object>} 专业列表数据
- */
-async function getMajors(collegeCode, grade) {
+async function getMajors(collegeCode, grade, semester) {
   if (!collegeCode || !grade) {
-    return {
-      success: false,
-      message: "collegeCode and grade are required",
-      majors: []
-    };
+    return { success: false, message: "collegeCode and grade are required", majors: [] };
   }
 
-  const mode = config.DATA_SOURCE_MODE;
-
-  // 1. disabled 模式
-  if (mode === "disabled") {
-    return {
-      success: false,
-      message: "教务数据查询服务暂时关闭维护中。",
-    };
+  let record;
+  try {
+    record = getTermRecordOrError(semester);
+  } catch (error) {
+    return Object.assign(buildTermError({ term: semester }, error.code || "TERM_NOT_FOUND"), {
+      collegeCode,
+      grade,
+      majors: [],
+    });
   }
 
-  // 2. realtime 模式
-  if (mode === "realtime") {
+  if (config.DATA_SOURCE_MODE === "disabled") {
+    return Object.assign(buildTermError(record, "TERM_DISABLED"), { collegeCode, grade, majors: [] });
+  }
+
+  if (config.DATA_SOURCE_MODE === "realtime") {
     const host = new URL(config.FOSU_BASE_URL).hostname;
-    const canResolve = await checkDns(host);
-    if (!canResolve) {
-      return {
-        success: false,
-        reasonCode: "FOSU_INTRANET_ONLY",
-        message: "100.fosu.edu.cn 仅校园网或 EasyConnect VPN 可访问，当前服务器无法直连。",
-      };
+    if (!await checkDns(host)) {
+      return Object.assign(buildTermError(record, "FOSU_INTRANET_ONLY"), { collegeCode, grade, majors: [] });
     }
-
     try {
-      safeLog("majors-fetch-realtime-debug", { collegeCode, grade });
       const adapter = new FosuQiangzhiAdapter();
       const res = await adapter.fetchMajorOptions({ collegeCode, grade });
-      if (res.statusCode !== 200) {
-        throw new Error(`教务专业联动接口返回异常，HTTP 状态码: ${res.statusCode}`);
-      }
-
+      if (res.statusCode !== 200) throw new Error(`majors ajax failed: ${res.statusCode}`);
       const parsed = parseMajorAjaxResponse(res.text, { collegeCode, grade });
-      const majors = (parsed.majors || [])
-        .map((item) => ({ code: item.code, name: item.name }))
-        .filter((item) => item.code && item.name && !item.name.includes("请选择"));
-
       return {
         success: true,
+        term: record.term,
+        semester: record.term,
+        releaseVersion: record.releaseVersion || "",
+        dataAvailable: record.dataAvailable,
         collegeCode,
         grade,
-        majors,
+        majors: (parsed.majors || []).map((item) => ({ code: item.code, name: item.name })).filter((item) => item.code && item.name),
         updatedAt: new Date().toISOString(),
         dataSource: "fosu-realtime",
       };
     } catch (error) {
-      safeLog("majors-realtime-failed", { error: error.message });
-      return {
-        success: false,
-        reasonCode: "FOSU_INTRANET_ONLY",
-        message: `无法实时连接教务系统专业联动接口: ${error.message}`,
-      };
+      safeLog("majors-realtime-failed", { term: record.term, error: error.message });
+      return Object.assign(buildTermError(record, "FOSU_INTRANET_ONLY"), { collegeCode, grade, majors: [] });
     }
   }
 
-  // 3. cache-first 模式
-  const majorsIndex = readJsonFile(FILE_MAP["majors"]);
+  if (!record.dataAvailable && record.status === "planned") {
+    return Object.assign(buildTermError(record, "TERM_NOT_PUBLISHED"), { collegeCode, grade, majors: [] });
+  }
+
+  const termMajors = readTermJson(record.term, "majors", { allowLegacyFallback: true });
+  const majorsIndex = termMajors.data;
   if (majorsIndex && Array.isArray(majorsIndex.colleges)) {
-    const college = majorsIndex.colleges.find((c) => String(c.collegeCode) === String(collegeCode));
+    const college = majorsIndex.colleges.find((item) => String(item.collegeCode) === String(collegeCode));
     let filtered = [];
     if (college && Array.isArray(college.grades)) {
-      const gradeObj = college.grades.find((g) => String(g.grade) === String(grade));
+      const gradeObj = college.grades.find((item) => String(item.grade) === String(grade));
       if (gradeObj && Array.isArray(gradeObj.majors)) {
-        filtered = gradeObj.majors.map((m) => ({
-          code: m.majorCode,
-          name: m.majorName,
+        filtered = gradeObj.majors.map((item) => ({
+          code: item.majorCode,
+          name: item.majorName,
         }));
       }
     }
-
-    const meta = getMeta("majors");
+    const meta = getMeta("majors", record.term);
     return {
       success: true,
+      term: record.term,
+      semester: record.term,
+      releaseVersion: record.releaseVersion || "",
+      dataAvailable: record.dataAvailable,
       collegeCode,
       grade,
       majors: filtered,
-      updatedAt: majorsIndex.updatedAt || meta.updatedAt || new Date().toISOString(),
-      dataSource: "cache",
+      updatedAt: majorsIndex.updatedAt || meta.updatedAt || record.updatedAt || new Date().toISOString(),
+      dataSource: termMajors.source === "legacy-current" ? "legacy-current-cache" : "term-cache",
       syncSource: meta.syncSource || "local-sync-client",
       itemCount: filtered.length,
     };
   }
 
-  // 开发环境降级 Demo
   if (config.NODE_ENV !== "production") {
     return {
       success: true,
+      term: record.term,
+      semester: record.term,
+      releaseVersion: record.releaseVersion || "",
+      dataAvailable: false,
       collegeCode,
       grade,
-      majors: getDemoMajors(collegeCode, grade),
+      majors: getDemoMajors(),
       updatedAt: new Date().toISOString(),
       dataSource: "demo",
     };
   }
 
-  return {
-    success: true,
+  return Object.assign(buildTermError(record, record.dataAvailable ? "TERM_DATA_MISSING" : "TERM_NOT_PUBLISHED"), {
     collegeCode,
     grade,
     majors: [],
-    dataSource: "empty",
-    reasonCode: "NO_SYNC_DATA",
-    message: "暂未同步教务专业数据，请稍后再试。",
-  };
+  });
 }
 
-const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
-const CURRENT_SNAPSHOT_PATH = path.join(SNAPSHOTS_DIR, "current.json");
-
-let snapshotCache = null;
-let snapshotCacheTime = 0;
-
-/**
- * 安全获取当前最新的快照数据，支持内存缓存
- * @returns {Object|null}
- */
 function getSnapshot() {
   const activeReleaseSnapshot = releaseService.readActiveReleaseSnapshot();
-  if (activeReleaseSnapshot) {
-    return activeReleaseSnapshot;
-  }
+  if (activeReleaseSnapshot) return activeReleaseSnapshot;
 
   if (fs.existsSync(CURRENT_SNAPSHOT_PATH)) {
     try {
       const stat = fs.statSync(CURRENT_SNAPSHOT_PATH);
-      const mtime = stat.mtimeMs;
-      // 如果文件修改时间未变，则使用缓存
-      if (snapshotCache && snapshotCacheTime === mtime) {
-        return snapshotCache;
-      }
-      const content = fs.readFileSync(CURRENT_SNAPSHOT_PATH, "utf-8");
-      snapshotCache = JSON.parse(content);
-      snapshotCacheTime = mtime;
+      if (snapshotCache && snapshotCacheTime === stat.mtimeMs) return snapshotCache;
+      snapshotCache = JSON.parse(fs.readFileSync(CURRENT_SNAPSHOT_PATH, "utf-8"));
+      snapshotCacheTime = stat.mtimeMs;
       return snapshotCache;
     } catch (error) {
       safeLog("read-snapshot-error", { error: error.message });
@@ -362,83 +364,78 @@ function getSnapshot() {
   return null;
 }
 
-/**
- * 安全解码 URI 组件，防乱码
- */
-function safeDecode(str) {
+function safeDecode(value) {
   try {
-    return decodeURIComponent(str);
-  } catch (e) {
-    return str;
+    return decodeURIComponent(value);
+  } catch (error) {
+    return value;
   }
 }
 
-/**
- * 系统启动引导数据，优先从快照加载
- */
 async function getBootstrap(semester) {
-  const snapshot = getSnapshot();
-  if (snapshot) {
-    const meta = readJsonFile(FILE_MAP["sync-meta"]) || {};
+  let record;
+  try {
+    record = getTermRecordOrError(semester);
+  } catch (error) {
+    return buildTermError({ term: semester }, error.code || "TERM_NOT_FOUND");
+  }
+  if (!record.dataAvailable && record.status === "planned") {
+    return buildTermError(record, "TERM_NOT_PUBLISHED");
+  }
+
+  const requestedVersion = record.releaseVersion || "";
+  const snapshot = requestedVersion ? releaseService.readReleaseSnapshot(requestedVersion) : getSnapshot();
+  if (snapshot && (snapshot.term || snapshot.semester) === record.term) {
+    const meta = getMeta("snapshot", record.term);
     const derivedCounts = releaseService.countRelease(snapshot);
     const counts = Object.assign({}, derivedCounts, snapshot.coverage || {});
-    ["teacherScheduleCount", "classroomScheduleCount", "courseScheduleCount", "classScheduleCount", "majorCount", "majorsCount", "collegeCount", "collegesCount"].forEach((key) => {
-      if (counts[key] === null || counts[key] === undefined) {
-        counts[key] = derivedCounts[key] || 0;
-      }
-    });
-    const resourceMeta = {
-      teacherScheduleCount: meta["teacher-schedules"]?.itemCount || 0,
-      classroomScheduleCount: meta["classroom-schedules"]?.itemCount || 0,
-      courseScheduleCount: meta["course-schedules"]?.itemCount || 0,
-    };
-    Object.keys(resourceMeta).forEach((key) => {
-      if (resourceMeta[key] > 0) {
-        counts[key] = resourceMeta[key];
-      }
-    });
-    const updatedAt = snapshot.updatedAt || new Date().toISOString();
-    const resourcesUpdatedAt = meta["teacher-schedules"]?.updatedAt || meta["classroom-schedules"]?.updatedAt || meta["course-schedules"]?.updatedAt || updatedAt;
+    const updatedAt = snapshot.updatedAt || record.updatedAt || new Date().toISOString();
     return {
       success: true,
       dataSource: "snapshot",
+      term: record.term,
+      semester: record.term,
+      releaseVersion: requestedVersion || snapshot.version || "",
+      dataAvailable: record.dataAvailable,
       updatedAt,
-      version: snapshot.version,
-      semester: snapshot.semester,
+      version: requestedVersion || snapshot.version,
       catalog: snapshot.catalog,
       counts,
       versions: {
-        snapshot: snapshot.version,
-        catalog: snapshot.version,
-        majors: snapshot.version,
-        classSchedules: snapshot.version,
-        resources: meta.snapshot?.version || snapshot.version,
+        snapshot: requestedVersion || snapshot.version,
+        catalog: requestedVersion || snapshot.version,
+        majors: requestedVersion || snapshot.version,
+        classSchedules: requestedVersion || snapshot.version,
+        resources: requestedVersion || snapshot.version,
       },
       metaDetails: {
-        source: snapshot.source,
-        disclaimer: snapshot.disclaimer || "本工具为个人开发，非学校官方服务。课程数据由开发者整理维护及用户反馈修正，仅供参考，具体安排请以任课教师通知及正式通知为准。",
+        source: snapshot.source || "release",
+        disclaimer: snapshot.disclaimer || "",
         catalogUpdatedAt: updatedAt,
         majorsUpdatedAt: updatedAt,
         classSchedulesUpdatedAt: updatedAt,
-        resourcesUpdatedAt,
-      }
+        resourcesUpdatedAt: meta.updatedAt || updatedAt,
+      },
     };
   }
 
-  // 降级使用旧版文件
-  const catalog = await getCatalog(semester);
-  const meta = readJsonFile(FILE_MAP["sync-meta"]) || {};
+  const catalog = await getCatalog(record.term);
+  if (!catalog.success) return catalog;
+  const meta = getMeta("snapshot", record.term);
   return {
     success: catalog.success,
     dataSource: catalog.dataSource === "empty" ? "empty" : "legacy",
+    term: record.term,
+    semester: record.term,
+    releaseVersion: record.releaseVersion || "",
+    dataAvailable: record.dataAvailable,
     updatedAt: catalog.updatedAt,
-    semester: semester || "2025-2026-2",
     catalog: {
       semesters: catalog.semesters || [],
       colleges: catalog.colleges || [],
       grades: catalog.grades || [],
       weeks: catalog.weeks || [],
-      sections: catalog.sections || []
+      sections: catalog.sections || [],
     },
     counts: {
       collegeCount: (catalog.colleges || []).length,
@@ -455,66 +452,64 @@ async function getBootstrap(semester) {
       resources: meta.snapshot?.version || meta.version || "1.0.0",
     },
     metaDetails: {
-      disclaimer: "本工具为个人开发，非学校官方服务。课程数据由开发者整理维护及用户反馈修正，仅供参考，具体安排请以任课教师通知及正式通知为准。",
+      disclaimer: "",
       catalogUpdatedAt: meta.catalog?.updatedAt || catalog.updatedAt || null,
       majorsUpdatedAt: meta.majors?.updatedAt || null,
       classSchedulesUpdatedAt: meta["class-schedules"]?.updatedAt || null,
       resourcesUpdatedAt: meta["teacher-schedules"]?.updatedAt || meta["classroom-schedules"]?.updatedAt || meta["course-schedules"]?.updatedAt || null,
-    }
+    },
   };
 }
 
-/**
- * 根据筛选获取班级列表，按 adminClass 和 majorAggregate 分组
- */
 async function getClasses(query = {}) {
-  const semester = query.semester || "2025-2026-2";
+  const semester = normalizeTermOrActive(query.semester || query.term);
   const collegeCode = query.collegeCode;
   const grade = query.grade;
   const majorCode = query.majorCode;
-
   if (!collegeCode || !grade || !majorCode) {
     return {
       success: false,
-      message: "缺少必要筛选参数 (collegeCode, grade, majorCode)",
+      code: "INVALID_FILTER",
+      message: "collegeCode, grade and majorCode are required",
+      term: semester,
       adminClasses: [],
-      majorAggregates: []
+      majorAggregates: [],
     };
   }
 
-  let schedules = [];
-  const snapshot = getSnapshot();
-
-  if (snapshot && Array.isArray(snapshot.classSchedules)) {
-    schedules = snapshot.classSchedules;
-  } else {
-    // 降级使用 class-schedules.json
-    const legacyPath = path.join(STORAGE_DIR, "class-schedules.json");
-    schedules = readJsonFile(legacyPath) || [];
+  const record = getTermRecordOrError(semester);
+  if (!record.dataAvailable && record.status === "planned") {
+    return Object.assign(buildTermError(record, "TERM_NOT_PUBLISHED"), {
+      adminClasses: [],
+      majorAggregates: [],
+    });
   }
 
-  // 过滤出符合条件的课表项
-  const filtered = schedules.filter(
-    (item) =>
-      String(item.semester || "") === String(semester) &&
-      String(item.collegeCode || "") === String(collegeCode) &&
-      String(item.grade || "") === String(grade) &&
-      String(item.majorCode || "") === String(majorCode)
+  const snapshot = record.releaseVersion ? releaseService.readReleaseSnapshot(record.releaseVersion) : getSnapshot();
+  let schedules = [];
+  if (snapshot && (snapshot.term || snapshot.semester) === record.term && Array.isArray(snapshot.classSchedules)) {
+    schedules = snapshot.classSchedules;
+  } else if (record.term === termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term) {
+    schedules = readJsonFile(path.join(STORAGE_DIR, "class-schedules.json")) || [];
+  }
+
+  const filtered = schedules.filter((item) =>
+    String(item.semester || item.term || "") === String(semester) &&
+    String(item.collegeCode || "") === String(collegeCode) &&
+    String(item.grade || "") === String(grade) &&
+    String(item.majorCode || "") === String(majorCode)
   );
 
   const adminClasses = [];
   const majorAggregates = [];
-
   filtered.forEach((item) => {
-    // 对班级名进行解码，防止乱码
     const decodedName = safeDecode(item.className || "");
     const classObj = {
-      classId: item.classId || item.className, // 优先使用 classId，如无则使用 className 兜底
+      classId: item.classId || item.className,
       className: decodedName,
       displayType: item.displayType,
-      isAggregated: !!item.isAggregated
+      isAggregated: Boolean(item.isAggregated),
     };
-
     if (item.displayType === "class-schedule" && !item.isAggregated) {
       adminClasses.push(classObj);
     } else {
@@ -524,15 +519,18 @@ async function getClasses(query = {}) {
 
   return {
     success: true,
+    term: record.term,
+    releaseVersion: record.releaseVersion || "",
+    dataAvailable: record.dataAvailable,
     adminClasses,
-    majorAggregates
+    majorAggregates,
   };
 }
 
 module.exports = {
-  getCatalog,
-  getMajors,
   getBootstrap,
+  getCatalog,
   getClasses,
-  getSnapshot
+  getMajors,
+  getSnapshot,
 };

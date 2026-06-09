@@ -1,4 +1,5 @@
 const { mockClasses, mockCourses } = require("./mockData");
+const { termCachePart } = require("./term");
 
 // 内存级缓存容器
 const CACHE_STORE = {};
@@ -43,22 +44,22 @@ function getCache(key) {
  * 统一的缓存 Key 生成器
  */
 function getCatalogKey(semester) {
-  return `catalog:${semester || "current"}`;
+  return `catalog:${termCachePart(semester)}`;
 }
 
-function getMajorsKey(collegeCode, grade) {
-  return `majors:${collegeCode || ""}:${grade || ""}`;
+function getMajorsKey(collegeCode, grade, semester) {
+  return `majors:${termCachePart(semester)}:${collegeCode || ""}:${grade || ""}`;
 }
 
 function classKey(params) {
   if (params && params.className) {
-    return `class:${params.className}`;
+    return `class:${termCachePart(params.semester)}:${params.className}`;
   }
-  return `class:${(params && params.semester) || "2025-2026-2"}:${(params && params.collegeCode) || ""}:${(params && params.grade) || ""}:${(params && params.majorCode) || ""}`;
+  return `class:${termCachePart(params && params.semester)}:${(params && params.collegeCode) || ""}:${(params && params.grade) || ""}:${(params && params.majorCode) || ""}`;
 }
 
 function teacherKey(params) {
-  return `teacher:${(params && (params.teacherName || params.teacherCode)) || ""}:${(params && params.semester) || "2025-2026-2"}`;
+  return `teacher:${termCachePart(params && params.semester)}:${(params && (params.teacherName || params.teacherCode)) || ""}`;
 }
 
 function genericKey(type, params) {
@@ -103,7 +104,7 @@ function buildDefaultSchoolOptions() {
   });
 
   return {
-    semesters: [{ code: "2025-2026-2", name: "2025-2026学年第二学期" }],
+    semesters: [],
     colleges,
     grades,
     majors,
@@ -137,13 +138,13 @@ function saveSchoolOptions(options, semester) {
 
 // ================== Majors 缓存读写 ==================
 
-function getMajorsByCollegeCache(collegeCode, grade) {
-  const key = getMajorsKey(collegeCode, grade);
+function getMajorsByCollegeCache(collegeCode, grade, semester) {
+  const key = getMajorsKey(collegeCode, grade, semester);
   return getCache(key);
 }
 
-function saveMajorsByCollegeCache(collegeCode, grade, majors) {
-  const key = getMajorsKey(collegeCode, grade);
+function saveMajorsByCollegeCache(collegeCode, grade, majors, semester) {
+  const key = getMajorsKey(collegeCode, grade, semester);
   // 缓存 30 分钟
   setCache(key, majors, 30);
 }
@@ -152,7 +153,7 @@ function saveMajorsByCollegeCache(collegeCode, grade, majors) {
 
 function saveClassSchedules(classes, params) {
   (classes || []).forEach((item) => {
-    const key = classKey({ className: item.className });
+    const key = classKey({ className: item.className, semester: params && params.semester });
     const payload = Object.assign({}, item, {
       params: params || {},
       updatedAt: nowIso(),

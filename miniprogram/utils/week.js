@@ -1,6 +1,6 @@
-const DEFAULT_SEMESTER_ID = "2025-2026-2";
-const DEFAULT_SEMESTER_TEXT = "2025-2026学年第二学期";
-const TERM_START_DATE = "2026-03-09";
+const DEFAULT_SEMESTER_ID = "";
+const DEFAULT_SEMESTER_TEXT = "";
+const TERM_START_DATE = "";
 const TOTAL_WEEKS = 20;
 const WEEK_START = "monday";
 const WEEKDAY_LABELS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
@@ -68,7 +68,11 @@ function parseDate(dateText) {
   if (dateText instanceof Date) {
     return new Date(dateText.getFullYear(), dateText.getMonth(), dateText.getDate());
   }
-  const parts = String(dateText || TERM_START_DATE).split("-").map(Number);
+  const parts = String(dateText || "").split("-").map(Number);
+  if (parts.length < 3 || parts.some((part) => !Number.isFinite(part))) {
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  }
   return new Date(parts[0], parts[1] - 1, parts[2]);
 }
 
@@ -108,17 +112,48 @@ function getTeachingWeekByDate(date, calendarWeeks, termConfig) {
     return target >= parseDate(item.startDate) && target <= parseDate(item.endDate);
   });
   if (matched) {
+    const matchedWeekNo = Number(matched.weekNo || matched.week);
     return Object.assign({}, matched, {
-      weekNo: Number(matched.weekNo || matched.week),
+      weekNo: matchedWeekNo,
+      rawWeekNo: matched.rawWeekNo == null ? matchedWeekNo : Number(matched.rawWeekNo),
+      termPhase: matched.termPhase || "in-term",
+      isInTerm: matched.isInTerm !== false && (matched.termPhase || "in-term") === "in-term",
       semester: matched.semester || config.term,
+      term: matched.term || matched.semester || config.term,
       notes: matched.notes || matched.note || "",
     });
   }
 
+  if (!config.termStartDate) {
+    return {
+      term: config.term,
+      semester: config.term,
+      termPhase: "unknown",
+      isInTerm: false,
+      rawWeekNo: null,
+      weekNo: 1,
+      startDate: "",
+      endDate: "",
+      notes: "",
+      rangeText: "",
+    };
+  }
+
   const start = parseDate(config.termStartDate);
   const diffDays = Math.floor((target.getTime() - start.getTime()) / 86400000);
-  const weekNo = clampWeek(Math.floor(diffDays / 7) + 1, config);
-  return getWeekRangeByWeekNo(weekNo, [], config);
+  const rawWeekNo = Math.floor(diffDays / 7) + 1;
+  const weekNo = clampWeek(rawWeekNo, config);
+  const range = getWeekRangeByWeekNo(weekNo, [], config);
+  let termPhase = "in-term";
+  if (rawWeekNo <= 0) termPhase = "before-term";
+  if (rawWeekNo > (config.totalWeeks || TOTAL_WEEKS)) termPhase = "after-term";
+  return Object.assign({}, range, {
+    term: config.term,
+    termPhase,
+    isInTerm: termPhase === "in-term",
+    rawWeekNo,
+    weekNo,
+  });
 }
 
 function getWeekRangeByWeekNo(weekNo, calendarWeeks, termConfig) {
@@ -133,6 +168,17 @@ function getWeekRangeByWeekNo(weekNo, calendarWeeks, termConfig) {
       notes: matched.notes || matched.note || "",
       rangeText: formatWeekRange(matched.startDate, matched.endDate),
     });
+  }
+
+  if (!config.termStartDate) {
+    return {
+      semester: config.term,
+      weekNo: targetWeek,
+      startDate: "",
+      endDate: "",
+      notes: "",
+      rangeText: "",
+    };
   }
 
   const start = parseDate(config.termStartDate);
@@ -199,7 +245,7 @@ function getTodayTeachingInfo(date, calendarWeeks, termConfig) {
     fullDateLabel: formatFullDateLabel(target),
     weekday: getTodayWeekday(target),
     weekdayLabel: getWeekdayLabel(target),
-    rangeText: formatWeekRange(weekInfo.startDate, weekInfo.endDate),
+    rangeText: weekInfo.startDate && weekInfo.endDate ? formatWeekRange(weekInfo.startDate, weekInfo.endDate) : "",
     weekLabel: `第${weekInfo.weekNo}周`,
     term: config.term,
     semesterText: config.semesterText,
@@ -217,8 +263,9 @@ function getTermCalendarWeeks(termConfig) {
   return weeks;
 }
 
-function isCourseInWeek(course, week) {
-  const currentWeek = clampWeek(week);
+function isCourseInWeek(course, week, termInfo) {
+  if (termInfo && termInfo.isInTerm === false) return false;
+  const currentWeek = clampWeek(week, termInfo);
   return isCourseActiveInWeek(course || {}, currentWeek);
 }
 
