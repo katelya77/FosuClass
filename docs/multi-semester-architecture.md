@@ -1,6 +1,6 @@
-# Multi-Semester Architecture
+# 多学期架构
 
-FosuClass now treats the semester as a first-class lifecycle object instead of a frontend dropdown value.
+FosuClass 现在把“学期”作为一等生命周期对象管理，而不是只把它当作前端下拉框里的一个值。
 
 ```mermaid
 flowchart LR
@@ -15,9 +15,9 @@ flowchart LR
   Registry --> AI[AI deterministic context]
 ```
 
-## Authoritative Model
+## 权威模型
 
-`server/storage/term-registry.json` is the authoritative registry. In production it is stored under `FOSU_STORAGE_DIR`.
+`server/storage/term-registry.json` 是学期权威注册表。生产环境中，它位于 `FOSU_STORAGE_DIR` 下。
 
 ```json
 {
@@ -42,13 +42,25 @@ flowchart LR
 }
 ```
 
-Allowed statuses: `planned`, `ready`, `current`, `archived`, `disabled`.
+允许的状态：
 
-Only one term may be `current`. `planned` terms may omit `termStartDate`, but cannot be activated. The only fixed production fallback is the explicitly labelled legacy compatibility fallback for the already published `2025-2026-2` term.
+- `planned`：已创建但未准备好，不对普通查询开放。
+- `ready`：已有健康 Release，可等待切换。
+- `current`：当前线上学期。
+- `archived`：历史学期。
+- `disabled`：禁用学期。
 
-## Release Mapping
+同一时间只能有一个学期处于 `current`。`planned` 学期可以暂缺 `termStartDate`，但不能被激活。唯一固定的生产回退，是为已发布的 `2025-2026-2` 学期保留的、明确标注的旧版兼容回退。
 
-`server/storage/releases/term-index.json` maps terms to active and rollback releases. `releases/active.json` remains the compatibility pointer for the current default term.
+## Release 映射
 
-Term-aware APIs validate that requested term, registry record, term-index release, release manifest, catalog storage, and static pack all agree before returning data.
+`server/storage/releases/term-index.json` 将学期映射到 active 和 rollback Release。`releases/active.json` 仍作为当前默认学期的兼容指针保留。
 
+所有支持学期的 API 在返回数据前，都要验证以下信息一致：
+
+- 请求的 term。
+- registry 记录。
+- term-index 中的 Release。
+- Release manifest。
+- catalog 存储。
+- 静态 Release Pack。

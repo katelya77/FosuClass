@@ -1,19 +1,31 @@
-# Cold Start Runtime
+# 冷启动运行时
 
-The cold-start path now resolves a lightweight active runtime pointer before loading large release indexes.
+冷启动流程现在会先解析一个轻量的 active runtime 指针，再加载体积较大的 Release 索引，避免小程序启动阶段被大 JSON 阻塞。
 
-Flow:
+## 启动流程
 
-1. Read local active release cache if present.
-2. Fetch `/static/runtime/active.json` with no session dependency.
-3. Fall back to `/api/fosu/runtime/active`, then dynamic `app-config` if needed.
-4. Apply `termConfig` immediately so pages can render dates and labels.
-5. Load `bootstrap`, notices, session warmup, and release indexes in background singleflight tasks.
-6. Delay `periodic-data` until at least 10 seconds after app startup.
+1. 如果本地存在 active release 缓存，优先读取本地缓存。
+2. 无 session 依赖地请求 `/static/runtime/active.json`。
+3. 必要时回退到 `/api/fosu/runtime/active`，再回退到动态 `app-config`。
+4. 立即应用 `termConfig`，让页面可以先渲染日期和学期标签。
+5. 后台通过 singleflight 任务加载 `bootstrap`、公告、session 预热和 Release 索引。
+6. `periodic-data` 至少延后到应用启动 10 秒后再加载。
 
-The runtime pointer is generated after successful release activation and contains only term, release version, cache epoch, term config, and static URLs. It is intentionally small and safe to serve as public static JSON.
+## Runtime 指针内容
 
-Diagnostics are available in development/test through `X-Fosu-Request-Stats`:
+Runtime 指针在 Release 成功激活后生成，只包含以下轻量信息：
+
+- term
+- release version
+- cache epoch
+- term config
+- static URLs
+
+它不包含敏感用户信息，因此可以作为公开静态 JSON 提供访问。
+
+## 开发诊断
+
+开发和测试环境可通过 `X-Fosu-Request-Stats` 查看诊断信息：
 
 ```json
 {
@@ -30,4 +42,4 @@ Diagnostics are available in development/test through `X-Fosu-Request-Stats`:
 }
 ```
 
-Sensitive values such as sessions, tickets, cookies, OpenID and tokens are not recorded.
+诊断信息不会记录 session、ticket、cookie、OpenID、token 等敏感值。

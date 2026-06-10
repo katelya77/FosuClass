@@ -68,7 +68,7 @@ active release 必须通过 Release Pack health check：
 
 健康检查失败时禁止成为 active release。
 
-## Cache-Control
+## 缓存响应头 `Cache-Control`
 
 - `/api/fosu/release-pack/manifest` 不带 `releaseVersion` 时必须 `no-store`。
 - `/api/fosu/app-config` 和 `/api/fosu/bootstrap` 必须 `no-store`。
@@ -78,9 +78,9 @@ active release 必须通过 Release Pack health check：
 
 ## 后台健康检查
 
-`quickHealth` 只读 active pointer、manifest 和几个关键静态文件存在性，用于 `/admin/sync` 首屏。
+`quickHealth` 只读取 active pointer、manifest 和几个关键静态文件的存在性，用于 `/admin/sync` 首屏。
 
-`deepHealth` 才做 detail 计数、hash/size 校验和抽样验证，必须通过后台 job 运行。
+`deepHealth` 才执行 detail 计数、hash/size 校验和抽样验证，必须通过后台 job 运行。
 
 ## 发布后验证
 

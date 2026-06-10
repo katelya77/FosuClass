@@ -1,4 +1,4 @@
-# Staging JSON Schema
+# Staging JSON 数据结构
 
 Staging JSON 是本机校园网同步和接力上传的唯一数据交付格式。上传到 VPS 后只进入暂存区，不直接发布线上 release。
 
@@ -34,7 +34,7 @@ Staging JSON 是本机校园网同步和接力上传的唯一数据交付格式�
 
 `classSchedules` 必须是非空数组。`resources` 内的数组允许为空，但会在后台显示校验警告。
 
-## classSchedules
+## 班级课表 `classSchedules`
 
 每个班级课表建议包含：
 
@@ -47,7 +47,7 @@ Staging JSON 是本机校园网同步和接力上传的唯一数据交付格式�
 
 课程项至少应包含课程名称、周次、星期、起止节次、教师和教室。字段名可由同步客户端归一化，但发布前必须通过 `npm run test:course-normalizer`。
 
-## resources
+## 资源数据 `resources`
 
 `resources` 用于教师课表、教室课表、课程维度查询和教室占用热力图：
 

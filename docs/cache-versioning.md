@@ -1,6 +1,6 @@
 # FosuClass 缓存与版本规则
 
-## activeSnapshot
+## 活跃快照 `activeSnapshot`
 
 小程序所有全校页、搜索页和详情页都应以同一个 activeSnapshot 为准：
 
@@ -16,7 +16,7 @@
 
 `releaseVersion` 是缓存和 API 的唯一版本主键。`scheduleUpdatedAt` 和 `catalogUpdatedAt` 只用于 UI 展示，不得拼进请求版本，也不得覆盖 `releaseVersion`。
 
-## 小程序缓存 key
+## 小程序缓存 Key
 
 当前 schema 使用 `school:v4` 前缀。升级结构时递增 schema 版本，旧缓存自动失效。
 
@@ -33,7 +33,7 @@
 4. timeout、noRelease、empty 必须区分；timeout 不代表暂无同步数据。
 5. 最近查看旧版本只能标记为旧版本，不能决定当前 activeSnapshot。
 
-## API 缓存
+## API 缓存规则
 
 - `/api/fosu/app-config`、不带 `releaseVersion` 的 `/api/fosu/bootstrap` 和 `/api/fosu/search-index` 使用 `no-store`，确保 active 指针实时。
 - 带 `releaseVersion` 的 `/api/fosu/search-index` 可 `public, max-age=300`。

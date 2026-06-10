@@ -4,34 +4,49 @@
 
 product
 
-## Users
+## 用户
 
-FosuClass serves Foshan University students who need a reliable timetable and today-class reminder in WeChat, plus administrators who collect, review, publish, and operate release data from a VPS admin console. Administrators work in a production operations context, where clarity, fast feedback, and safe defaults matter more than decorative expression.
+FosuClass 面向两类核心用户：
 
-## Product Purpose
+- 佛山大学学生：需要在微信小程序里稳定查看课表、今日课程和上课提醒。
+- 项目管理员：需要在 VPS 管理后台完成数据采集、Staging 审核、Release 发布、静态资源同步、回滚和日常运维。
 
-FosuClass publishes cache-first course timetable data when the official campus system is only reachable from campus networks. Success means students can read current schedules from stable static release packs, and administrators can move data from local campus collection to staging, release publishing, OpenResty static sync, and rollback without guessing operational state.
+管理员处在真实生产运维场景中，界面和文案应优先保证状态清楚、反馈及时、默认操作安全，而不是追求装饰性表达。
 
-## Brand Personality
+## 产品目标
 
-Calm, exact, dependable. The product voice should be plain and operational, with labels that explain the current state and the next safe action.
+佛课小表在官方教务系统只能通过校园网访问的前提下，以“缓存优先”的方式发布课程表数据。理想结果是：
 
-## Anti-references
+- 学生可以从稳定的静态 Release Pack 中读取当前课表。
+- 管理员可以清楚地完成“本地校园网采集 -> Staging 上传 -> 审核发布 -> OpenResty 静态同步 -> 必要时回滚”的完整链路。
+- 每一步都能看到当前状态、失败原因和下一步安全操作，避免靠经验猜测线上状态。
 
-Avoid marketing-style admin pages, decorative dashboard chrome, ambiguous disabled controls, hidden destructive actions, and any UI that requires operators to infer state from color alone.
+## 品牌气质
 
-## Design Principles
+沉稳、准确、可靠。
 
-Use explicit state labels for production operations.
+产品语言应直接说明当前状态和下一步动作，避免夸张营销话术。尤其在管理后台中，文案应偏操作型、确认型和风险提示型。
 
-Keep primary actions narrow and reversible where possible.
+## 不推荐的方向
 
-Separate normal operation from force or recovery actions.
+- 管理后台做成营销页或展示型大屏。
+- 使用过度装饰的卡片、渐变和图表外壳。
+- 禁用态按钮没有原因说明。
+- 危险操作隐藏过深或缺少确认。
+- 只依赖颜色表达状态，让管理员无法快速判断问题。
 
-Show job progress and failure reasons near the control that started the work.
+## 设计原则
 
-Prefer stable, familiar product UI components over novelty.
+- 生产运维状态必须有明确文字标签。
+- 主操作尽量保持单一、清晰，并尽可能可撤销。
+- 普通操作、强制操作和恢复操作要分区展示。
+- 任务进度和失败原因应靠近触发任务的控件。
+- 优先使用稳定熟悉的产品 UI 组件，不为新奇牺牲可理解性。
 
-## Accessibility & Inclusion
+## 可访问性与包容性
 
-Use readable Chinese labels, state text in addition to color, keyboard-focusable controls, reduced-motion-friendly transitions, and layouts that avoid horizontal overflow on mobile admin screens.
+- 使用清晰、自然的中文标签。
+- 状态表达同时使用文字和颜色。
+- 交互控件应支持键盘聚焦。
+- 动效应对“减少动态效果”友好。
+- 移动端管理页面避免横向溢出。

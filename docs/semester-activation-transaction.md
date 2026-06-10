@@ -1,8 +1,10 @@
-# Semester Activation Transaction
+# 学期激活事务
 
-Semester activation is managed by `server/src/services/semesterActivationTransactionService.js`.
+学期激活由 `server/src/services/semesterActivationTransactionService.js` 管理。
 
-Before activation it backs up:
+## 激活前备份
+
+激活前会备份以下文件：
 
 - `releases/active.json`
 - `snapshots/current.json`
@@ -12,13 +14,17 @@ Before activation it backs up:
 - `admin-config.json`
 - `public/runtime/active.json`
 
-The transaction blocks activation when:
+## 阻断条件
 
-- the target term is missing
-- the term is not `ready` or `current`
-- the registry release version does not match the requested release
-- the release manifest term does not match the target term
-- release pack quick health is not healthy
-- required static release files are missing
+以下任一条件成立时，事务会阻止激活：
 
-If any write fails, all backed-up files are restored and caches are cleared. Activation is serialized through an in-process queue to avoid lost updates between concurrent activation requests.
+- 目标学期不存在。
+- 目标学期不是 `ready` 或 `current`。
+- registry 中的 release version 与请求的 release 不一致。
+- release manifest 中的 term 与目标学期不一致。
+- Release Pack 快速健康检查未通过。
+- 必需的静态 Release 文件缺失。
+
+## 失败恢复
+
+如果任意写入失败，系统会恢复所有已备份文件并清理缓存。激活请求通过进程内队列串行执行，避免并发激活导致状态覆盖或丢失更新。

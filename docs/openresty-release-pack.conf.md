@@ -45,7 +45,7 @@ server {
 }
 ```
 
-## Cloudflare
+## Cloudflare 缓存策略
 
 给 `/static/releases/*` 配 Cache Rule：Cache Everything，Edge TTL 使用长缓存。Release Pack URL 带 `releaseVersion`，可安全使用 immutable。
 

@@ -1,10 +1,10 @@
-# OpenResty Static Ticket Mode
+# OpenResty 静态 Ticket 模式
 
-`FOSU_STATIC_ACCESS_MODE=public` is the default. Use `ticket` only when OpenResty or the CDN can verify tickets reliably.
+`FOSU_STATIC_ACCESS_MODE=public` 是默认值。只有在 OpenResty 或 CDN 能可靠校验 ticket 时，才启用 `ticket` 模式。
 
-## Ticket Contract
+## Ticket 契约
 
-The ticket is an HMAC token with:
+Ticket 是一个 HMAC token，包含：
 
 - `releaseVersion`
 - `pathPrefix`
@@ -12,9 +12,9 @@ The ticket is an HMAC token with:
 - `iat`
 - `nonce`
 
-It contains no sensitive user information.
+Ticket 不包含敏感用户信息。
 
-## Node Helpers
+## Node 辅助函数
 
 ```js
 const {
@@ -29,16 +29,16 @@ const ticket = createStaticAccessTicket({
 });
 ```
 
-## OpenResty Pattern
+## OpenResty / CDN 安全模式
 
-Use one of these safe patterns:
+推荐使用以下安全模式之一：
 
-- Verify HMAC at the CDN edge before cache lookup.
-- Disable public edge cache for protected paths.
-- Use a CDN feature that validates authorization and uses a safe shared cache key.
+- 在 CDN 边缘层完成 HMAC 校验，再进入缓存查找。
+- 对受保护路径关闭公开边缘缓存。
+- 使用支持鉴权校验的 CDN 功能，并确保共享缓存键不会绕过授权状态。
 
-Do not only authenticate at the origin while allowing the CDN to publicly cache authorized responses.
+不要只在源站鉴权，同时又允许 CDN 将已授权响应公开缓存给匿名请求。
 
-## Referer Guard
+## Referer 防护
 
-Referer blocking can reduce hotlinking from third-party websites, but it is not the primary security mechanism. Mini-program requests may not carry a useful Referer.
+Referer 拦截可以降低第三方网页盗链，但它不是主要安全机制。微信小程序请求可能没有可用的 Referer，因此不能依赖 Referer 做核心鉴权。

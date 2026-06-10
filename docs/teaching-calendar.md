@@ -1,12 +1,12 @@
-# Teaching Calendar
+# 教学校历
 
-Teaching calendar data is term-scoped and stored at:
+教学校历按学期隔离存储，文件位置为：
 
 ```text
 server/storage/terms/<term>/teaching-calendar.json
 ```
 
-Schema:
+## 数据结构
 
 ```json
 {
@@ -29,12 +29,18 @@ Schema:
 }
 ```
 
-Release builds publish a versioned copy to:
+## Release 发布
+
+Release 构建时，会将校历发布为带版本的副本：
 
 ```text
 server/storage/public/releases/<releaseVersion>/calendar.json
 ```
 
-The release manifest includes `calendarUrl`, `calendarHash`, `calendarCount`, and `calendarUpdatedAt`. Calendar cache keys include both `term` and `releaseVersion`, so historical browsing cannot reuse the active term notes.
+Release manifest 会包含 `calendarUrl`、`calendarHash`、`calendarCount` 和 `calendarUpdatedAt`。
 
-If a planned term has no maintained calendar, the client shows `教学安排待维护`. It does not infer holidays or exam weeks for future terms.
+校历缓存键同时包含 `term` 和 `releaseVersion`，因此浏览历史学期时不会误用当前学期备注。
+
+## 缺省展示
+
+如果 planned 学期还没有维护校历，客户端显示 `教学安排待维护`。系统不会为未来学期自动推断节假日或考试周。

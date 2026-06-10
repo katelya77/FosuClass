@@ -1,37 +1,37 @@
-# Security and Access Control
+# 安全与访问控制
 
-## Boundary
+## 边界说明
 
-Static JSON read by a mini program client cannot be absolutely secret. CORS, Referer, User-Agent, rate limiting, and short-lived tickets raise abuse cost, but they do not stop server-side proxies, packet capture, or forged clients.
+小程序客户端能够读取的静态 JSON，不能被描述为“绝对保密”。CORS、Referer、User-Agent、限流和短期票据可以提高滥用成本，但无法阻止服务端代理、抓包或伪造客户端。
 
-Do not describe the system as "impossible to steal" or "absolutely protected".
+因此，不要在文档、演示或宣传中使用“无法被盗取”“绝对防护”这类说法。更准确的表达是：系统通过分层鉴权、短期凭证、限流和日志脱敏降低批量滥用风险。
 
-## Dynamic API Controls
+## 动态 API 控制
 
-- Production dynamic API CORS must not use `Access-Control-Allow-Origin: *`.
-- Admin origins are configured through `FOSU_ALLOWED_ADMIN_ORIGINS`.
-- Public browser origins are configured through `FOSU_ALLOWED_PUBLIC_ORIGINS`.
-- Admin write requests validate session/token and Origin when Origin is present.
-- Dynamic public APIs use body-size limits, rate limiting, and optional mini-program session checks.
-- Session mode can be off, monitor/optional, or required through environment policy.
-- Do not put HMAC secrets, AppSecret, or fixed API keys into mini-program code.
+- 生产环境动态 API 的 CORS 不应使用 `Access-Control-Allow-Origin: *`。
+- 管理后台来源通过 `FOSU_ALLOWED_ADMIN_ORIGINS` 配置。
+- 公共浏览器来源通过 `FOSU_ALLOWED_PUBLIC_ORIGINS` 配置。
+- 管理写请求需要校验 session/token；如果请求带 Origin，还要校验 Origin。
+- 动态公共 API 使用 body 大小限制、速率限制和可选的小程序 session 校验。
+- session 模式可通过环境策略关闭、监控/可选启用或强制启用。
+- 不要把 HMAC secret、AppSecret 或固定 API key 写入小程序代码。
 
-## Static Resource Controls
+## 静态资源控制
 
-- Default mode is public static Release Pack for speed.
-- Optional ticket mode uses short-lived HMAC tickets scoped to release and path prefix.
-- OpenResty or CDN must verify the ticket before serving protected paths.
-- If CDN publicly caches a protected response without validating each request or using a safe cache key, protection fails.
+- 默认模式是公开静态 Release Pack，以保证访问速度。
+- 可选 ticket 模式使用短生命周期 HMAC ticket，并绑定 Release 与路径前缀。
+- OpenResty 或 CDN 必须在返回受保护路径前完成 ticket 校验。
+- 如果 CDN 在没有逐请求校验或安全缓存键的情况下公开缓存受保护响应，ticket 保护会失效。
 
-## Logging
+## 日志脱敏
 
-Logs must redact:
+日志必须脱敏以下内容：
 
 - `ADMIN_API_TOKEN`
-- Relay tokens
-- Session cookies
+- Relay token
+- Session cookie
 - `Authorization`
-- WeChat AppSecret
-- Cookie headers
-- Local sensitive paths
-- Passwords and database credentials
+- 微信 AppSecret
+- Cookie 请求头
+- 本地敏感路径
+- 密码和数据库凭据
