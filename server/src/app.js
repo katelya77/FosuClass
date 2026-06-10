@@ -17,6 +17,7 @@ const releaseLifecycleService = require("./services/releaseLifecycleService");
 const releaseWorkerManager = require("./services/releaseWorkerManager");
 const storageLifecycleService = require("./services/storageLifecycleService");
 const termRegistryService = require("./services/termRegistryService");
+const runtimePointerService = require("./services/runtimePointerService");
 
 // 路由引入
 const healthRouter = require("./routes/health");
@@ -136,6 +137,19 @@ app.use("/static/releases", express.static(releaseService.PUBLIC_RELEASES_DIR, {
   },
 }));
 
+app.use("/static/runtime", (req, res, next) => {
+  const method = String(req.method || "GET").toUpperCase();
+  const requestPath = String(req.path || "").replace(/\\/g, "/");
+  if ((method === "GET" || method === "HEAD") && requestPath === "/active.json") {
+    try {
+      runtimePointerService.ensureActivePointer();
+    } catch (error) {
+      safeLog("static-runtime-pointer-self-heal-failed", { code: error.code || "", error: error.message });
+    }
+  }
+  return next();
+});
+
 app.use("/static/runtime", express.static(path.join(releaseService.PUBLIC_RELEASES_DIR, "..", "runtime"), {
   fallthrough: false,
   maxAge: "60s",
@@ -208,6 +222,11 @@ app.listen(config.PORT, () => {
     releaseLifecycleService.reconcileLifecycle({ reason: "startup" });
   } catch (error) {
     safeLog("startup-lifecycle-reconcile-failed", { error: error.message });
+  }
+  try {
+    runtimePointerService.ensureActivePointer();
+  } catch (error) {
+    safeLog("startup-runtime-pointer-ensure-failed", { code: error.code || "", error: error.message });
   }
   try {
     storageLifecycleService.scheduleMaintenance();

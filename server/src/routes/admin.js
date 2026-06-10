@@ -18,6 +18,7 @@ const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
 const termRegistryService = require("../services/termRegistryService");
 const termReleaseIndexService = require("../services/termReleaseIndexService");
+const termReadinessService = require("../services/termReadinessService");
 const semesterActivationTransactionService = require("../services/semesterActivationTransactionService");
 const releaseWorkerManager = require("../services/releaseWorkerManager");
 const relayService = require("../services/relayService");
@@ -3784,39 +3785,7 @@ router.post("/terms/:term/bind-release", adminAuth.verifyAdminAccess, (req, res)
 });
 
 function buildTermReadiness(term, releaseVersion) {
-  const record = termRegistryService.getTerm(term);
-  const version = String(releaseVersion || record && record.releaseVersion || "").trim();
-  const manifestCheck = version ? termRegistryService.validateManifestForTerm(term, version) : { valid: false, errors: ["RELEASE_VERSION_REQUIRED"] };
-  const quickHealth = version ? releaseService.getReleasePackQuickHealth(version) : null;
-  const staticManifest = version ? releaseService.readReleasePackStaticManifest(version, { term }) : null;
-  const counts = manifestCheck.manifest && manifestCheck.manifest.counts || {};
-  const blockers = [];
-  if (!record) blockers.push("TERM_NOT_FOUND");
-  if (record && record.status === "planned" && !record.dataAvailable) blockers.push("TERM_NOT_PUBLISHED");
-  if (record && (!record.termStartDate || !record.totalWeeks)) blockers.push("TERM_CONFIG_INCOMPLETE");
-  if (!manifestCheck.valid) blockers.push.apply(blockers, manifestCheck.errors);
-  if (!quickHealth || !quickHealth.healthy) blockers.push("RELEASE_PACK_UNHEALTHY");
-  if (!staticManifest) blockers.push("OPENRESTY_STATIC_MANIFEST_MISSING");
-  return {
-    term,
-    releaseVersion: version,
-    record,
-    ready: blockers.length === 0,
-    blockers: Array.from(new Set(blockers)),
-    manifest: manifestCheck.manifest ? {
-      term: manifestCheck.manifest.term,
-      releaseVersion: manifestCheck.manifest.releaseVersion,
-      termConfig: manifestCheck.manifest.termConfig || null,
-      counts,
-    } : null,
-    releasePack: quickHealth,
-    openResty: {
-      manifestExists: Boolean(staticManifest),
-      staticReleaseUrl: staticManifest && staticManifest.staticReleaseUrl || "",
-    },
-    rollbackTarget: releaseService.getActiveReleaseInfo(),
-    counts,
-  };
+  return termReadinessService.buildTermReadiness(term, releaseVersion);
 }
 
 router.get("/terms/:term/readiness", adminAuth.verifyAdminAccess, (req, res) => {
@@ -3825,6 +3794,25 @@ router.get("/terms/:term/readiness", adminAuth.verifyAdminAccess, (req, res) => 
     return res.json({ success: true, readiness: buildTermReadiness(req.params.term, releaseVersion) });
   } catch (error) {
     return res.status(error.statusCode || 400).json({ success: false, code: error.code || "TERM_READINESS_FAILED", message: error.message });
+  }
+});
+
+router.post("/terms/:term/rebuild-runtime-pointer", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const target = termRegistryService.getTerm(req.params.term);
+    const releaseVersion = req.body && (req.body.releaseVersion || req.body.version) ||
+      req.query.releaseVersion || req.query.version ||
+      target && target.releaseVersion ||
+      "";
+    const result = termReadinessService.rebuildRuntimePointer(req.params.term, releaseVersion);
+    writeAuditLog(req, "rebuild-runtime-pointer", "term", req.params.term, `Rebuilt runtime pointer for ${req.params.term} ${releaseVersion}`);
+    return res.json(result);
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({
+      success: false,
+      code: error.code || "RUNTIME_POINTER_REBUILD_FAILED",
+      message: error.message,
+    });
   }
 });
 

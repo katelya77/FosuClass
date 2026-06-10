@@ -284,14 +284,15 @@ function resolveRuntimePointer(options = {}) {
   const requestOptions = {
     showLoading: false,
     silentError: true,
-    timeout: options.timeout || 5000,
+    timeout: options.timeout || 2000,
     retries: options.retries === undefined ? 0 : options.retries,
     skipSession: true,
+    suppressWarn: options.suppressWarn === undefined ? true : options.suppressWarn,
   };
   const staticUrl = joinUrl(API_BASE_URL, "static/runtime/active.json");
   const task = request.get(staticUrl, {}, requestOptions)
     .catch(() => request.get("/api/fosu/runtime/active", {}, Object.assign({}, requestOptions, {
-      skipSession: options.skipSession === true,
+      skipSession: true,
     })))
     .then((payload) => {
       const pointer = normalizeRuntimePointer(payload);
@@ -496,6 +497,7 @@ function fetchManifest(options = {}) {
     timeout: options.timeout || 8000,
     retries: options.retries === undefined ? 1 : options.retries,
     skipSession: options.skipSession === true,
+    suppressWarn: options.suppressWarn === true,
   };
   const staticUrl = resolveStaticManifestUrl(releaseVersion);
   if (expectedTerm) query.term = expectedTerm;

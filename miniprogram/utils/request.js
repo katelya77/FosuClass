@@ -32,6 +32,8 @@ let lastDiagnostics = {
 let transportBuildLogged = false;
 
 const PROFILE_RULES = [
+  { name: "runtime-pointer-static", pattern: /\/static\/runtime\/active\.json$/, timeout: 2000, retries: 0 },
+  { name: "runtime-pointer-api", pattern: /\/api\/fosu\/runtime\/active$/, timeout: 2000, retries: 0 },
   { name: "manifest", pattern: /\/api\/fosu\/release-pack\/manifest$/, timeout: SECURITY_FAST_TIMEOUT_MS, retries: 1 },
   { name: "app-config", pattern: /\/api\/fosu\/app-config$/, timeout: SECURITY_FAST_TIMEOUT_MS, retries: 1 },
   { name: "bootstrap", pattern: /\/api\/fosu\/bootstrap$/, timeout: SECURITY_FAST_TIMEOUT_MS, retries: 1 },

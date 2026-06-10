@@ -2,7 +2,7 @@
 
 `deploy/openresty/fosu-static-security.conf` 是给 1Panel 站点 `server {}` 块使用的 include 模板。只应作为片段引入，不要覆盖 1Panel 生成的完整站点配置。
 
-## 能力检查
+## 能力检查 / Capability check
 
 启用 ticket 模式前，先在服务器上确认 OpenResty 能力：
 

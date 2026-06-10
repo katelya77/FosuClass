@@ -9,7 +9,19 @@ const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dir
 const TERMS_DIR = path.join(STORAGE_DIR, "terms");
 const PUBLIC_RELEASES_DIR = path.join(STORAGE_DIR, "public", "releases");
 const RELEASES_DIR = path.join(STORAGE_DIR, "releases");
-const ALLOWED_TYPES = new Set(["opening", "teaching", "holiday", "adjustment", "midterm", "closing", "review", "exam", "flexible", "pending"]);
+const TYPE_TEXT = Object.freeze({
+  opening: "开学教学周",
+  teaching: "正常教学周",
+  holiday: "节假日/调休周",
+  adjustment: "调整教学周",
+  midterm: "期中教学检查",
+  closing: "结课周",
+  review: "复习周",
+  exam: "考试周",
+  flexible: "机动周",
+  pending: "教学安排待维护",
+});
+const ALLOWED_TYPES = new Set(Object.keys(TYPE_TEXT));
 
 const cache = new SmallJsonCache({ maxEntries: 80 });
 
@@ -39,12 +51,14 @@ function normalizeWeek(week, termConfig, fallbackTitle) {
   const weekNo = Number(week && (week.weekNo || week.week));
   if (!Number.isInteger(weekNo) || weekNo < 1 || weekNo > Number(termConfig.totalWeeks || 30)) return null;
   const type = ALLOWED_TYPES.has(week.type) ? week.type : "teaching";
+  const typeText = String(week.typeText || TYPE_TEXT[type] || fallbackTitle || "正常教学周").trim();
   return {
     weekNo,
     startDate: String(week.startDate || "").trim(),
     endDate: String(week.endDate || "").trim(),
     type,
-    title: String(week.title || fallbackTitle || "正常教学周").trim(),
+    typeText,
+    title: String(week.title || fallbackTitle || typeText || "正常教学周").trim(),
     note: String(week.note || week.notes || "").trim(),
   };
 }
@@ -69,6 +83,7 @@ function generateWeeks(termConfig, options = {}) {
       startDate,
       endDate,
       type: options.type || "pending",
+      typeText: TYPE_TEXT[options.type || "pending"] || "教学安排待维护",
       title: options.title || "教学安排待维护",
       note: "",
     });
@@ -163,6 +178,7 @@ function writeReleaseCalendar(manifest, options = {}) {
   [getReleaseCalendarPath(releaseVersion, false, options), getReleaseCalendarPath(releaseVersion, true, options)].forEach((target) => {
     ensureDir(path.dirname(target));
     writeJsonAtomic(target, releaseCalendar);
+    cache.invalidate(target);
   });
   return releaseCalendar;
 }
@@ -183,6 +199,7 @@ function clearCache() {
 
 module.exports = {
   ALLOWED_TYPES,
+  TYPE_TEXT,
   clearCache,
   generateWeeks,
   getCalendarHash,
