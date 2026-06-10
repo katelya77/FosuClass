@@ -448,6 +448,58 @@ const adminConsoleHtml = `<!doctype html>
     .badge.danger { background: var(--danger-soft); color: var(--danger); }
     .badge.muted { background: var(--panel-2); color: var(--muted); }
 
+    .readiness-summary {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .readiness-groups {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .readiness-group {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+    .readiness-group-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 10px;
+      background: var(--panel-2);
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .readiness-item {
+      padding: 10px;
+      border-top: 1px solid var(--border);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .readiness-item-key {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      color: var(--text);
+      font-weight: 800;
+      margin-bottom: 4px;
+      word-break: break-word;
+    }
+    .readiness-item-meta {
+      margin-top: 6px;
+      color: var(--muted);
+      word-break: break-word;
+    }
+    .readiness-fix {
+      margin-top: 6px;
+      color: #92400e;
+    }
+
     /* 分页组件 */
     .pagination {
       display: flex;
@@ -3716,9 +3768,12 @@ const adminConsoleHtml = `<!doctype html>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
             <button id="checkTermReadinessBtn" class="secondary" type="button">运行检查</button>
+            <button id="rebuildRuntimePointerBtn" class="ghost" type="button">重建 Runtime Pointer</button>
             <button id="bindTermReleaseBtn" class="ghost" type="button">绑定 Release</button>
             <button id="activateTermBtn" class="danger" type="button">激活为当前学期</button>
           </div>
+          <div id="termReadinessSummary" class="readiness-summary"></div>
+          <div id="termReadinessChecks" class="readiness-groups"></div>
           <pre id="termReadinessOutput" style="margin-top:12px;background:#0f172a;color:#d1e7ff;border-radius:8px;padding:12px;white-space:pre-wrap;max-height:320px;overflow:auto;">等待检查</pre>
         </div>
       </section>
@@ -5278,14 +5333,92 @@ const adminConsoleHtml = `<!doctype html>
         return api("/api/admin/terms/" + encodeURIComponent(term) + "/readiness?releaseVersion=" + encodeURIComponent(releaseVersion || ""))
           .then(function(res) {
             var readiness = res.readiness || {};
+            renderTermReadiness(readiness);
             $("termReadinessOutput").textContent = JSON.stringify(readiness, null, 2);
-            showToast(readiness.ready ? "检查通过" : "检查未通过", readiness.ready ? "success" : "warning");
+            var firstFail = (readiness.checks || []).filter(function(item) { return item.status === "fail"; })[0];
+            showToast(readiness.ready ? "检查通过" : ("检查未通过：" + (firstFail ? firstFail.key : "查看失败项")), readiness.ready ? "success" : "warning");
             return readiness;
           })
           .catch(function(error) {
+            renderTermReadiness(null);
             $("termReadinessOutput").textContent = error.message || "检查失败";
             showToast(error.message || "检查失败", "error");
           });
+      }
+
+      function formatReadinessValue(value) {
+        if (value === undefined || value === null || value === "") return "-";
+        if (typeof value === "object") return JSON.stringify(value);
+        return String(value);
+      }
+
+      function readinessBadge(status) {
+        if (status === "pass") return "<span class='badge success'>pass</span>";
+        if (status === "warn") return "<span class='badge warning'>warn</span>";
+        return "<span class='badge danger'>fail</span>";
+      }
+
+      function renderTermReadiness(readiness) {
+        var summaryEl = $("termReadinessSummary");
+        var checksEl = $("termReadinessChecks");
+        if (!summaryEl || !checksEl) return;
+        if (!readiness || !Array.isArray(readiness.checks)) {
+          summaryEl.innerHTML = "<span class='badge muted'>等待检查</span>";
+          checksEl.innerHTML = "";
+          return;
+        }
+        var summary = readiness.summary || {};
+        summaryEl.innerHTML = [
+          readiness.ready ? "<span class='badge success'>可激活</span>" : "<span class='badge danger'>未通过</span>",
+          "<span>term: <strong>" + escapeHtml(readiness.term || "-") + "</strong></span>",
+          "<span>release: <strong>" + escapeHtml(readiness.releaseVersion || "-") + "</strong></span>",
+          "<span>fail " + escapeHtml(summary.fail || 0) + "</span>",
+          "<span>warn " + escapeHtml(summary.warn || 0) + "</span>",
+          "<span>pass " + escapeHtml(summary.pass || 0) + "</span>"
+        ].join("");
+        var groups = [
+          { status: "fail", title: "失败项" },
+          { status: "warn", title: "警告项" },
+          { status: "pass", title: "通过项" }
+        ];
+        checksEl.innerHTML = groups.map(function(group) {
+          var items = readiness.checks.filter(function(item) { return item.status === group.status; });
+          if (!items.length) return "";
+          return "<div class='readiness-group'>" +
+            "<div class='readiness-group-head'><span>" + escapeHtml(group.title) + "</span><span>" + items.length + "</span></div>" +
+            items.map(function(item) {
+              return "<div class='readiness-item'>" +
+                "<div style='display:flex;justify-content:space-between;gap:8px;align-items:flex-start;'>" +
+                  "<div class='readiness-item-key'>" + escapeHtml(item.key || "-") + "</div>" +
+                  readinessBadge(item.status) +
+                "</div>" +
+                "<div>" + escapeHtml(item.message || "-") + "</div>" +
+                "<div class='readiness-item-meta'><strong>expected:</strong> " + escapeHtml(formatReadinessValue(item.expected)) + "</div>" +
+                "<div class='readiness-item-meta'><strong>actual:</strong> " + escapeHtml(formatReadinessValue(item.actual)) + "</div>" +
+                "<div class='readiness-fix'><strong>修复建议:</strong> " + escapeHtml(item.fixHint || "-") + "</div>" +
+              "</div>";
+            }).join("") +
+          "</div>";
+        }).join("");
+      }
+
+      function rebuildRuntimePointerFromPanel() {
+        var term = value("termReadinessId");
+        var releaseVersion = value("termReadinessRelease");
+        if (!term) {
+          showToast("请填写目标学期", "error");
+          return;
+        }
+        api("/api/admin/terms/" + encodeURIComponent(term) + "/rebuild-runtime-pointer", {
+          method: "POST",
+          body: JSON.stringify({ releaseVersion: releaseVersion })
+        }).then(function(res) {
+          showToast("Runtime Pointer 已重建", "success");
+          $("termReadinessOutput").textContent = JSON.stringify(res, null, 2);
+          return checkTermReadiness();
+        }).catch(function(error) {
+          showToast(error.message || "重建失败", "error");
+        });
       }
 
       function bindTermRelease() {
@@ -9132,6 +9265,7 @@ const adminConsoleHtml = `<!doctype html>
       safeBind("refreshTermsBtn", "click", loadTerms);
       safeBind("createTermBtn", "click", createTerm);
       safeBind("checkTermReadinessBtn", "click", checkTermReadiness);
+      safeBind("rebuildRuntimePointerBtn", "click", rebuildRuntimePointerFromPanel);
       safeBind("bindTermReleaseBtn", "click", bindTermRelease);
       safeBind("activateTermBtn", "click", activateTermFromPanel);
       safeBind("saveConfigButton", "click", saveConfig);

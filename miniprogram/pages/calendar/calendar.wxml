@@ -10,6 +10,12 @@
     <view class="skeleton-line"></view>
   </view>
 
+  <view wx:elif="{{!weeks.length}}" class="calendar-skeleton card">
+    <view class="skeleton-line"></view>
+    <view class="skeleton-line short"></view>
+    <view>教学安排待维护，请稍后刷新。</view>
+  </view>
+
   <view wx:else class="week-list">
     <view
       wx:for="{{weeks}}"

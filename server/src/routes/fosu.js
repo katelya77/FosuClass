@@ -516,7 +516,12 @@ router.get("/periodic-data", (req, res) => {
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Expires", "0");
     }
-    const pointer = runtimePointerService.readActivePointer();
+    let pointer = null;
+    try {
+      pointer = runtimePointerService.ensureActivePointer();
+    } catch (error) {
+      pointer = runtimePointerService.readActivePointer();
+    }
     if (pointer) {
       stats.fileReadCount += 1;
       stats.jsonParseCount += 1;
@@ -576,10 +581,10 @@ router.get("/periodic-data", (req, res) => {
 router.get("/runtime/active", (req, res) => {
   const stats = createRequestStats("/api/fosu/runtime/active");
   try {
-    const pointer = runtimePointerService.readActivePointer();
+    const pointer = runtimePointerService.ensureActivePointer();
     if (!pointer) {
       res.setHeader("Cache-Control", "no-store");
-      return res.status(404).json({ success: false, code: "ACTIVE_RUNTIME_POINTER_MISSING" });
+      return res.json({ success: false, code: "ACTIVE_RUNTIME_POINTER_MISSING" });
     }
     const fileStats = runtimePointerService.getActivePointerStats();
     if (fileStats) {
@@ -597,7 +602,13 @@ router.get("/runtime/active", (req, res) => {
     finishRequestStats(req, res, stats, pointer);
     return res.json(pointer);
   } catch (error) {
-    handleRouteError(res, error, "get-runtime-active-failed");
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({
+      success: false,
+      code: error.code || "ACTIVE_RUNTIME_POINTER_UNAVAILABLE",
+      reasonCode: error.code || "ACTIVE_RUNTIME_POINTER_UNAVAILABLE",
+      message: "runtime pointer 暂不可用，请检查 active release 与 term registry。",
+    });
   }
 });
 

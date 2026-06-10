@@ -390,7 +390,11 @@
     "test:session-bootstrap-contract": "node tools/test-api-security.js",
     "test:dynamic-api-session-optional": "node tools/test-api-security.js",
     "test:static-signed-url-disabled-by-default": "node tools/test-static-signed-url-default.js",
-    "test:logs-mask-sensitive-values": "node tools/test-logs-mask-sensitive-values.js"
+    "test:logs-mask-sensitive-values": "node tools/test-logs-mask-sensitive-values.js",
+    "test:runtime-pointer": "node tools/test-runtime-pointer.js",
+    "test:teaching-calendar": "node tools/test-teaching-calendar.js",
+    "test:semester-readiness-explain": "node tools/test-semester-readiness-explain.js",
+    "test:miniprogram-calendar-fallback": "node tools/test-miniprogram-calendar-fallback.js"
   },
   "repository": {
     "type": "git",
