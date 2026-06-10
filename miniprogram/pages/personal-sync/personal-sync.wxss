@@ -111,6 +111,13 @@
   font-weight: 800;
 }
 
+.term-status-text {
+  margin-top: 10rpx;
+  color: #778297;
+  font-size: 24rpx;
+  line-height: 1.4;
+}
+
 .picker-arrow {
   color: #98a2b3;
   font-size: 24rpx;

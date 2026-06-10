@@ -23,6 +23,11 @@ const inflightRequests = new Map();
 let lastDiagnostics = {
   lastError: null,
   lastSuccess: null,
+  criticalLastError: null,
+  backgroundLastError: null,
+  lastCriticalSuccess: null,
+  lastStaticSuccess: null,
+  currentHealth: "unknown",
 };
 let transportBuildLogged = false;
 
@@ -176,6 +181,22 @@ function writeDiagnostics(patch) {
   }
 }
 
+function classifyRequest(url, options = {}) {
+  if (options.diagnosisClass) return options.diagnosisClass;
+  const pathname = getPathname(url);
+  if (
+    pathname.indexOf("/periodic-data") >= 0 ||
+    pathname.indexOf("/prefetch") >= 0 ||
+    pathname.indexOf("/security/client-check") >= 0 ||
+    pathname.indexOf("/telemetry") >= 0 ||
+    pathname.indexOf("/warmup") >= 0
+  ) {
+    return "background";
+  }
+  if (pathname.indexOf("/static/") >= 0) return "static";
+  return "critical";
+}
+
 function logTransportBuildInfoOnce() {
   if (transportBuildLogged || !platform.isDeveloperEnv()) return;
   transportBuildLogged = true;
@@ -279,7 +300,7 @@ function showError(msg) {
   });
 }
 
-function runWxRequest(requestUrl, method, data, headers, timeout, startedAt) {
+function runWxRequest(requestUrl, method, data, headers, timeout, startedAt, options = {}) {
   return new Promise((resolve, reject) => {
     wx.request({
       url: requestUrl,
@@ -314,13 +335,21 @@ function runWxRequest(requestUrl, method, data, headers, timeout, startedAt) {
           return;
         }
 
-        writeDiagnostics({
-          lastSuccess: {
-            url: redactUrl(requestUrl),
-            elapsedMs,
-            at: new Date().toISOString(),
-          },
-        });
+        const successDiag = {
+          url: redactUrl(requestUrl),
+          elapsedMs,
+          at: new Date().toISOString(),
+        };
+        const classification = classifyRequest(requestUrl, options);
+        const patch = { lastSuccess: successDiag };
+        if (classification === "critical") {
+          patch.lastCriticalSuccess = successDiag;
+          patch.currentHealth = "online";
+        } else if (classification === "static") {
+          patch.lastStaticSuccess = successDiag;
+          if (!lastDiagnostics.lastCriticalSuccess) patch.currentHealth = "degraded";
+        }
+        writeDiagnostics(patch);
         resolve(payload);
       },
       fail: (err) => {
@@ -433,7 +462,7 @@ async function requestWithRetry(requestUrl, method, data, options, profile) {
     const startedAt = Date.now();
     try {
       const headers = await buildSecurityHeaders(requestUrl, baseHeaders, options);
-      const payload = await runWxRequest(requestUrl, method, data, headers, timeout, startedAt);
+      const payload = await runWxRequest(requestUrl, method, data, headers, timeout, startedAt, options);
       maybeReportClientSecurityCheck(requestUrl, data, headers, payload, options);
       return payload;
     } catch (error) {
@@ -469,17 +498,25 @@ async function requestWithRetry(requestUrl, method, data, options, profile) {
     }
   }
 
-  writeDiagnostics({
-    lastError: {
-      code: lastError && lastError.code || "NETWORK",
-      reasonCode: lastError && lastError.reasonCode || "",
-      message: lastError && lastError.message || "请求失败",
-      retriable: Boolean(lastError && lastError.retriable),
-      url: lastError && lastError.url || redactUrl(requestUrl),
-      elapsedMs: lastError && lastError.elapsedMs || 0,
-      at: new Date().toISOString(),
-    },
-  });
+  const errorDiag = {
+    code: lastError && lastError.code || "NETWORK",
+    reasonCode: lastError && lastError.reasonCode || "",
+    message: lastError && lastError.message || "请求失败",
+    retriable: Boolean(lastError && lastError.retriable),
+    url: lastError && lastError.url || redactUrl(requestUrl),
+    elapsedMs: lastError && lastError.elapsedMs || 0,
+    at: new Date().toISOString(),
+  };
+  const classification = classifyRequest(requestUrl, options);
+  const patch = { lastError: errorDiag };
+  if (classification === "background") {
+    patch.backgroundLastError = errorDiag;
+    patch.currentHealth = lastDiagnostics.lastCriticalSuccess || lastDiagnostics.lastStaticSuccess ? "degraded" : (lastDiagnostics.currentHealth || "unknown");
+  } else {
+    patch.criticalLastError = errorDiag;
+    patch.currentHealth = lastDiagnostics.lastCriticalSuccess || lastDiagnostics.lastStaticSuccess ? "degraded" : "offline";
+  }
+  writeDiagnostics(patch);
   throw lastError;
 }
 

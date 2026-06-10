@@ -9,6 +9,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "test:semester-lifecycle": "node tools/test-semester-lifecycle.js",
+    "test:runtime-readiness": "node tools/test-cold-start-request-budget.js && node tools/test-startup-singleflight.js && node tools/test-periodic-data-lightweight.js && node tools/test-bootstrap-lightweight.js && node tools/test-teaching-calendar-contract.js && node tools/test-calendar-term-isolation.js && node tools/test-calendar-term-phases.js && node tools/test-background-error-classification.js && node tools/test-active-cache-scope.js && node tools/test-semester-activation-transaction.js && node tools/test-semester-activation-fault-injection.js && node tools/test-term-registry-concurrent-writes.js && node tools/test-personal-sync-term-options.js",
     "test:security-full": "node tools/run-security-full.js",
     "security:acceptance": "npm run test:security-full",
     "build:miniprogram-info": "node tools/generate-miniprogram-build-info.js",

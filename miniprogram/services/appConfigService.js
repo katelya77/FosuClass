@@ -62,6 +62,7 @@ function cacheAppConfig(config) {
 }
 
 let freshConfigFetched = false;
+let appConfigInflight = null;
 
 function loadAppConfig(options) {
   const opt = Object.assign({ force: false, network: true }, options || {});
@@ -77,8 +78,12 @@ function loadAppConfig(options) {
   }
 
   // 拼接时间戳 ts 避免 CDN/客户端 HTTP 缓存
-  const url = `/api/fosu/app-config?ts=${Date.now()}`;
-  return request.get(url, {}, {
+  if (appConfigInflight && opt.dedupe !== false && !opt.force) {
+    return appConfigInflight;
+  }
+
+  const url = "/api/fosu/app-config";
+  appConfigInflight = request.get(url, {}, {
     showLoading: false,
     silentError: true,
     timeout: opt.timeout || 15000,
@@ -103,7 +108,11 @@ function loadAppConfig(options) {
         return cached;
       }
       throw error;
+    })
+    .finally(() => {
+      appConfigInflight = null;
     });
+  return appConfigInflight;
 }
 
 function getGlobalConfig() {
