@@ -1,10 +1,16 @@
 <view class="page calendar-page">
   <view class="calendar-header card">
     <view class="calendar-title">{{title}}</view>
-    <view class="calendar-subtitle">当前高亮：{{currentWeekText}}</view>
+    <view class="calendar-subtitle">{{loading ? '正在获取当前学期' : currentWeekText}}</view>
   </view>
 
-  <view class="week-list">
+  <view wx:if="{{loading}}" class="calendar-skeleton card">
+    <view class="skeleton-line"></view>
+    <view class="skeleton-line short"></view>
+    <view class="skeleton-line"></view>
+  </view>
+
+  <view wx:else class="week-list">
     <view
       wx:for="{{weeks}}"
       wx:key="weekNo"
@@ -12,8 +18,12 @@
     >
       <view class="week-index">第{{item.weekNo}}周</view>
       <view class="week-info">
-        <view class="week-date">{{item.rangeText}}</view>
-        <view class="week-note">{{item.notes}}</view>
+        <view class="week-topline">
+          <view class="week-date">{{item.rangeText || '日期待配置'}}</view>
+          <view class="week-type">{{item.typeText}}</view>
+        </view>
+        <view class="week-title">{{item.title}}</view>
+        <view wx:if="{{item.note}}" class="week-note">{{item.note}}</view>
       </view>
     </view>
   </view>

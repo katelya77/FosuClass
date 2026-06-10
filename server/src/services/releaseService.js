@@ -6,6 +6,8 @@ const { safeLog } = require("../utils/safeLogger");
 const { calculateFingerprint } = require("../utils/stagingFingerprint");
 const termRegistryService = require("./termRegistryService");
 const termReleaseIndexService = require("./termReleaseIndexService");
+const teachingCalendarService = require("./teachingCalendarService");
+const runtimePointerService = require("./runtimePointerService");
 const {
   UNKNOWN_BUILDING_CODE,
   UNKNOWN_BUILDING_NAME,
@@ -488,6 +490,13 @@ function collectStaticReleaseSourceFiles(version, filesOverride) {
   const sourceFiles = [];
   if (fs.existsSync(files.manifestPath)) {
     sourceFiles.push(files.manifestPath);
+  }
+  if (fs.existsSync(files.bootstrapPath)) {
+    sourceFiles.push(files.bootstrapPath);
+  }
+  const calendarPath = path.join(files.releaseDir, "calendar.json");
+  if (fs.existsSync(calendarPath)) {
+    sourceFiles.push(calendarPath);
   }
   [files.indexDir, files.detailDir, files.emptyRoomDir].forEach((dirPath) => {
     collectJsonFiles(dirPath).forEach((filePath) => sourceFiles.push(filePath));
@@ -1570,7 +1579,7 @@ function buildBootstrap(snapshot, version, counts) {
   };
 }
 
-function buildManifest(snapshot, version, counts, validation, files, derived) {
+function buildManifest(snapshot, version, counts, validation, files, derived, calendar) {
   const updatedAt = snapshot.updatedAt || new Date().toISOString();
   const filesMeta = files ? buildReleasePackFilesMeta(files) : {};
   const staticUrls = buildStaticReleaseUrls(version, derived);
@@ -1593,6 +1602,10 @@ function buildManifest(snapshot, version, counts, validation, files, derived) {
     updatedAt,
     source: rawTermConfig.source || snapshot.source || "release-snapshot",
   });
+  const releaseCalendarForHash = calendar ? Object.assign({}, calendar, {
+    releaseVersion: version,
+    manifestTerm: termConfig.term,
+  }) : null;
   return {
     success: true,
     schemaVersion: 2,
@@ -1620,6 +1633,10 @@ function buildManifest(snapshot, version, counts, validation, files, derived) {
     staticReleaseUrl: staticUrls.staticReleaseUrl,
     indexUrls: staticUrls.indexUrls,
     emptyRoomUrl: staticUrls.emptyRoomUrl,
+    calendarUrl: joinUrl(staticUrls.staticReleaseUrl, "calendar.json"),
+    calendarHash: releaseCalendarForHash ? teachingCalendarService.getCalendarHash(releaseCalendarForHash) : "",
+    calendarCount: calendar && Array.isArray(calendar.weeks) ? calendar.weeks.length : 0,
+    calendarUpdatedAt: calendar && calendar.updatedAt || "",
     detailUrlPattern: staticUrls.detailUrlPattern,
     shards: staticUrls.shards,
     compression: {
@@ -1729,9 +1746,14 @@ function writeReleaseSnapshot(rawSnapshot) {
   writeJsonAtomic(files.classSchedulesPath, snapshot.classSchedules || []);
   writeJsonAtomic(files.resourcesPath, snapshot.resources || {});
   const derived = writeDerivedIndexes(snapshot, files);
-  const manifest = buildManifest(snapshot, version, validation.counts, validation, files, derived);
+  const calendar = teachingCalendarService.readTermCalendar(snapshot.term || snapshot.semester);
+  const manifest = buildManifest(snapshot, version, validation.counts, validation, files, derived, calendar);
   manifest.compression = Object.assign({}, manifest.compression || {}, estimateStaticReleaseCompression(version, { includeManifest: true }));
   writeJsonAtomic(files.manifestPath, manifest);
+  teachingCalendarService.writeReleaseCalendar(manifest, {
+    releaseDir: files.releaseDir,
+    publicReleaseDir: files.publicReleaseDir,
+  });
   const compression = mirrorStaticReleaseFiles(version);
   manifest.compression = Object.assign({}, manifest.compression || {}, compression);
 
@@ -1775,13 +1797,18 @@ async function writeReleaseSnapshotAsync(rawSnapshot, options = {}) {
     if (options.job) options.job.progress(30, "building indexes", { releaseVersion: version });
     derived = writeDerivedIndexes(snapshot, files);
     if (options.job) options.job.progress(46, "writing manifest", { releaseVersion: version });
-    manifest = buildManifest(snapshot, version, validation.counts, validation, files, derived);
+    const calendar = teachingCalendarService.readTermCalendar(snapshot.term || snapshot.semester);
+    manifest = buildManifest(snapshot, version, validation.counts, validation, files, derived, calendar);
     manifest.compression = Object.assign(
       {},
       manifest.compression || {},
       estimateStaticReleaseCompression(version, { includeManifest: true, files })
     );
     writeJsonAtomic(files.manifestPath, manifest);
+    teachingCalendarService.writeReleaseCalendar(manifest, {
+      releaseDir: files.releaseDir,
+      publicReleaseDir: files.publicReleaseDir,
+    });
     const compression = await mirrorStaticReleaseFilesAsync(version, {
       files,
       onProgress: (progress) => {
@@ -1973,6 +2000,10 @@ function activateReleaseVersion(version) {
         }
         termRegistryService.activateTerm(activeTerm, { source: "release-activate" });
       }
+    }
+    const manifest = getReleasePackManifest(normalizedVersion);
+    if (manifest && manifest.success) {
+      runtimePointerService.writeActivePointerForManifest(manifest);
     }
   } catch (error) {
     restoreActivationState(previousState);

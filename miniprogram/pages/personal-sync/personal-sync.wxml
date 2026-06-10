@@ -15,12 +15,13 @@
   <view class="card upload-card" wx:if="{{!syncSuccess}}">
     <view class="form-group">
       <text class="form-label">目标学期</text>
-      <picker mode="selector" range="{{semesterOptions}}" value="{{semesterIndex}}" bindchange="onSemesterChange">
+      <picker mode="selector" range="{{semesterOptionLabels}}" value="{{semesterIndex}}" disabled="{{!semesterPickerEnabled}}" bindchange="onSemesterChange">
         <view class="picker-selector">
-          <text>{{semesterOptions[semesterIndex]}}</text>
-          <text class="picker-arrow">⌄</text>
+          <text>{{semesterOptionLabels[semesterIndex] || semesterOptions[semesterIndex]}}</text>
+          <text class="picker-arrow" wx:if="{{semesterPickerEnabled}}">⌄</text>
         </view>
       </picker>
+      <view class="term-status-text" wx:if="{{selectedTermStatusText}}">{{selectedTermStatusText}}</view>
     </view>
 
     <view class="selected-file-box" wx:if="{{selectedFile}}">

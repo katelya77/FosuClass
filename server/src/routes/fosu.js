@@ -9,6 +9,9 @@ const schoolCatalogService = require("../services/schoolCatalogService");
 const scheduleService = require("../services/scheduleService");
 const releaseService = require("../services/releaseService");
 const termRegistryService = require("../services/termRegistryService");
+const runtimePointerService = require("../services/runtimePointerService");
+const teachingCalendarService = require("../services/teachingCalendarService");
+const { statJsonFile } = require("../utils/jsonFileStore");
 const { scheduleLimiter } = require("../utils/rateLimit");
 const { safeLog } = require("../utils/safeLogger");
 const { createStaticAccessTicket } = require("../utils/staticAccessTicket");
@@ -90,6 +93,33 @@ function sendCacheableJson(req, res, payload, maxAgeSeconds) {
   }
   res.setHeader("Cache-Control", `public, max-age=${maxAgeSeconds || 60}`);
   return res.json(payload);
+}
+
+function shouldExposeRuntimeStats() {
+  return process.env.NODE_ENV === "development" || process.env.NODE_ENV === "test" || process.env.FOSU_RUNTIME_STATS === "1";
+}
+
+function createRequestStats(route) {
+  return {
+    requestId: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    route,
+    startedAt: Date.now(),
+    fileReadCount: 0,
+    jsonParseCount: 0,
+    payloadBytes: 0,
+    cacheHit: false,
+    source: "",
+    releaseVersion: "",
+    term: "",
+  };
+}
+
+function finishRequestStats(req, res, stats, payload) {
+  if (!stats || !shouldExposeRuntimeStats()) return;
+  stats.totalMs = Date.now() - stats.startedAt;
+  stats.payloadBytes = Buffer.byteLength(JSON.stringify(payload || {}), "utf-8");
+  delete stats.startedAt;
+  res.setHeader("X-Fosu-Request-Stats", JSON.stringify(stats));
 }
 
 function normalizeScheduleResponse(kind, result) {
@@ -476,6 +506,7 @@ router.get("/prefetch", (req, res) => {
 });
 
 router.get("/periodic-data", (req, res) => {
+  const stats = createRequestStats("/api/fosu/periodic-data");
   try {
     const hasVersion = Boolean(req.query.releaseVersion || req.query.version);
     if (hasVersion) {
@@ -485,42 +516,129 @@ router.get("/periodic-data", (req, res) => {
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Expires", "0");
     }
+    const pointer = runtimePointerService.readActivePointer();
+    if (pointer) {
+      stats.fileReadCount += 1;
+      stats.jsonParseCount += 1;
+      stats.cacheHit = true;
+    }
     const activeSnapshot = getActivePlatformSnapshot(req);
-    const releaseVersion = req.query.releaseVersion || req.query.version || activeSnapshot.releaseVersion;
-    const indexMeta = {};
-    ["class", "teacher", "classroom", "course"].forEach((kind) => {
-      const index = releaseService.readActiveIndex(kind, releaseVersion);
-      indexMeta[kind] = {
-        success: Boolean(index && index.success),
-        count: Array.isArray(index && index.items) ? index.items.length : 0,
-        code: index && (index.code || index.reasonCode || ""),
-      };
-    });
-    const emptyIndex = releaseService.readEmptyRoomIndex(releaseVersion);
-    indexMeta.emptyRoom = {
-      success: Boolean(emptyIndex && emptyIndex.success),
-      count: Array.isArray(emptyIndex && emptyIndex.rooms) ? emptyIndex.rooms.length : 0,
-      buildings: Array.isArray(emptyIndex && emptyIndex.buildings) ? emptyIndex.buildings : [],
-      code: emptyIndex && (emptyIndex.code || emptyIndex.reasonCode || ""),
+    const releaseVersion = req.query.releaseVersion || req.query.version || (pointer && pointer.releaseVersion) || activeSnapshot.releaseVersion;
+    const manifest = releaseVersion ? releaseService.getReleasePackManifest(releaseVersion, req.query) : null;
+    stats.fileReadCount += releaseVersion ? 1 : 0;
+    stats.jsonParseCount += releaseVersion ? 1 : 0;
+    const counts = Object.assign({}, manifest && manifest.counts || {}, activeSnapshot.counts || {});
+    const indexCounts = manifest && manifest.pack && manifest.pack.index || {};
+    const emptyRoomHealth = manifest && manifest.packHealth && manifest.packHealth.emptyRoom || {};
+    const indexMeta = {
+      class: { success: Boolean(indexCounts.class || counts.classScheduleCount), count: Number(indexCounts.class || counts.classScheduleCount || counts.classSchedulesCount || 0) || 0, code: "" },
+      teacher: { success: Boolean(indexCounts.teacher || counts.teacherScheduleCount), count: Number(indexCounts.teacher || counts.teacherScheduleCount || 0) || 0, code: "" },
+      classroom: { success: Boolean(indexCounts.classroom || counts.classroomScheduleCount), count: Number(indexCounts.classroom || counts.classroomScheduleCount || 0) || 0, code: "" },
+      course: { success: Boolean(indexCounts.course || counts.courseScheduleCount), count: Number(indexCounts.course || counts.courseScheduleCount || 0) || 0, code: "" },
+      emptyRoom: {
+        success: Boolean(emptyRoomHealth.classroomCount || manifest && manifest.emptyRoomUrl),
+        count: Number(emptyRoomHealth.classroomCount || 0) || 0,
+        buildings: [],
+        buildingCount: Number(emptyRoomHealth.buildingCount || 0) || 0,
+        code: "",
+      },
     };
-
-    return res.json({
+    const etag = manifest && manifest.etag || `"periodic-${releaseVersion || "none"}-${activeSnapshot.cacheEpoch || 0}"`;
+    res.setHeader("ETag", etag);
+    if (req.headers["if-none-match"] === etag) {
+      return res.status(304).end();
+    }
+    const payload = {
       success: true,
       activeSnapshot,
       manifest: {
-        term: activeSnapshot.term,
+        term: pointer && pointer.activeTerm || activeSnapshot.term,
         releaseVersion: releaseVersion || activeSnapshot.releaseVersion,
-        updatedAt: activeSnapshot.updatedAt,
-        cacheEpoch: activeSnapshot.cacheEpoch,
-        counts: activeSnapshot.counts,
+        updatedAt: manifest && manifest.updatedAt || activeSnapshot.updatedAt,
+        cacheEpoch: pointer && pointer.cacheEpoch || activeSnapshot.cacheEpoch,
+        counts,
       },
       releases: releaseService.listReleases(5),
       indexes: indexMeta,
       urls: buildPlatformUrls(activeSnapshot),
       serverTime: new Date().toISOString(),
-    });
+    };
+    stats.source = pointer ? "runtime-pointer+manifest" : "manifest";
+    stats.releaseVersion = payload.manifest.releaseVersion;
+    stats.term = payload.manifest.term;
+    finishRequestStats(req, res, stats, payload);
+    return res.json(payload);
   } catch (error) {
     handleRouteError(res, error, "get-periodic-data-failed");
+  }
+});
+
+router.get("/runtime/active", (req, res) => {
+  const stats = createRequestStats("/api/fosu/runtime/active");
+  try {
+    const pointer = runtimePointerService.readActivePointer();
+    if (!pointer) {
+      res.setHeader("Cache-Control", "no-store");
+      return res.status(404).json({ success: false, code: "ACTIVE_RUNTIME_POINTER_MISSING" });
+    }
+    const fileStats = runtimePointerService.getActivePointerStats();
+    if (fileStats) {
+      res.setHeader("ETag", fileStats.etag);
+      res.setHeader("Last-Modified", fileStats.lastModified);
+      if (req.headers["if-none-match"] === fileStats.etag) return res.status(304).end();
+    }
+    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    stats.fileReadCount = 1;
+    stats.jsonParseCount = 1;
+    stats.cacheHit = true;
+    stats.source = pointer.source || "runtime-pointer";
+    stats.releaseVersion = pointer.releaseVersion;
+    stats.term = pointer.activeTerm;
+    finishRequestStats(req, res, stats, pointer);
+    return res.json(pointer);
+  } catch (error) {
+    handleRouteError(res, error, "get-runtime-active-failed");
+  }
+});
+
+router.get("/teaching-calendar", (req, res) => {
+  const stats = createRequestStats("/api/fosu/teaching-calendar");
+  try {
+    const active = releaseService.getActiveReleaseInfo() || {};
+    const term = String(req.query.term || req.query.semester || active.term || active.semester || "").trim();
+    const releaseVersion = String(req.query.releaseVersion || req.query.version || active.releaseVersion || active.version || "").trim();
+    let calendar = releaseVersion ? teachingCalendarService.readReleaseCalendar(releaseVersion) : null;
+    if (calendar && term && calendar.term !== term) {
+      return res.status(409).json({
+        success: false,
+        code: "CALENDAR_TERM_MISMATCH",
+        term,
+        calendarTerm: calendar.term,
+      });
+    }
+    if (!calendar && term) {
+      calendar = teachingCalendarService.readTermCalendar(term);
+    }
+    if (!calendar) {
+      return res.status(404).json({ success: false, code: "CALENDAR_NOT_FOUND" });
+    }
+    const payload = Object.assign({}, calendar, {
+      releaseVersion: calendar.releaseVersion || releaseVersion,
+    });
+    const etag = `"calendar-${payload.term}-${payload.releaseVersion || "none"}-${new Date(payload.updatedAt || 0).getTime() || 0}"`;
+    res.setHeader("ETag", etag);
+    res.setHeader("Cache-Control", payload.releaseVersion ? "public, max-age=300" : "public, max-age=60");
+    if (req.headers["if-none-match"] === etag) return res.status(304).end();
+    stats.fileReadCount = 1;
+    stats.jsonParseCount = 1;
+    stats.cacheHit = true;
+    stats.source = calendar.source || "";
+    stats.releaseVersion = payload.releaseVersion || "";
+    stats.term = payload.term || "";
+    finishRequestStats(req, res, stats, payload);
+    return res.json(payload);
+  } catch (error) {
+    handleRouteError(res, error, "get-teaching-calendar-failed");
   }
 });
 
@@ -668,10 +786,9 @@ router.get("/release-pack/empty-room", scheduleLimiter, (req, res) => {
 
 router.get("/bootstrap", async (req, res) => {
   const semester = req.query.term || req.query.semester;
+  const stats = createRequestStats("/api/fosu/bootstrap");
   try {
-    res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
-    res.setHeader("Pragma", "no-cache");
-    res.setHeader("Expires", "0");
+    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
     const data = await schoolCatalogService.getBootstrap(semester);
     if (data && data.success) {
       const activeVer = data.version || data.versions?.snapshot || "";
@@ -688,7 +805,17 @@ router.get("/bootstrap", async (req, res) => {
       data.forceRefreshToken = activeInfo.forceRefreshToken || "";
       data.packStatus = activeInfo.releasePack || activeInfo.packStatus || {};
       data.minClientCacheSchema = 5;
+      const etag = `"bootstrap-${data.term || ""}-${data.releaseVersion || data.version || ""}-${new Date(data.updatedAt || 0).getTime() || 0}"`;
+      res.setHeader("ETag", etag);
+      if (req.headers["if-none-match"] === etag) return res.status(304).end();
+      stats.fileReadCount = data.dataSource === "snapshot-fallback" ? 1 : 2;
+      stats.jsonParseCount = stats.fileReadCount;
+      stats.cacheHit = data.dataSource !== "snapshot-fallback";
+      stats.source = data.dataSource || "";
+      stats.releaseVersion = data.releaseVersion || data.version || "";
+      stats.term = data.term || data.semester || "";
     }
+    finishRequestStats(req, res, stats, data);
     res.json(data);
   } catch (error) {
     handleRouteError(res, error, "get-bootstrap-failed");

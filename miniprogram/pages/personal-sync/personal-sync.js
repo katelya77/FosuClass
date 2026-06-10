@@ -2,6 +2,7 @@ const request = require("../../utils/request");
 const { getSettings, setCurrentScheduleTarget } = require("../../utils/storage");
 const aiAssistantService = require("../../services/aiAssistantService");
 const appConfigService = require("../../services/appConfigService");
+const personalTermOptionsService = require("../../services/personalTermOptionsService");
 const { getRuntimeTermConfig } = require("../../utils/week");
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -101,7 +102,11 @@ Page({
     syncSuccess: false,
     syncResult: null,
     semesterOptions: [],
+    semesterOptionLabels: [],
+    termRecords: [],
     semesterIndex: 0,
+    semesterPickerEnabled: false,
+    selectedTermStatusText: "",
     previewSearchKey: "",
     previewDayFilter: "all",
     weekdayTabs: WEEKDAY_TABS,
@@ -112,15 +117,20 @@ Page({
     const settings = getSettings();
     const currentSemesterId = settings.semesterId || settings.semester || getRuntimeTermConfig().term;
     const applyTerms = (config) => {
-      const terms = (config.availableTerms || [])
-        .filter((item) => item && item.term && item.status !== "planned" && item.status !== "disabled")
-        .map((item) => item.term);
-      if (!terms.includes(currentSemesterId) && currentSemesterId) terms.unshift(currentSemesterId);
-      const semesterOptions = terms.length ? terms : [getRuntimeTermConfig().term].filter(Boolean);
-      const index = semesterOptions.indexOf(currentSemesterId);
+      const built = personalTermOptionsService.buildImportTermOptions(
+        config.availableTerms || [],
+        currentSemesterId,
+        getRuntimeTermConfig().term
+      );
+      const records = built.records;
+      const index = built.selectedIndex;
       this.setData({
-        semesterOptions,
+        termRecords: records,
+        semesterOptions: built.semesterOptions,
+        semesterOptionLabels: built.semesterOptionLabels,
         semesterIndex: index >= 0 ? index : 0,
+        semesterPickerEnabled: built.pickerEnabled,
+        selectedTermStatusText: this.getTermStatusText(records[index >= 0 ? index : 0]),
       });
     };
     applyTerms(appConfigService.getGlobalConfig());
@@ -128,9 +138,25 @@ Page({
   },
 
   onSemesterChange(event) {
+    if (!this.data.semesterPickerEnabled) return;
+    const nextIndex = Number(event.detail.value);
+    const record = this.data.termRecords[nextIndex];
+    if (record && !record.importable) {
+      wx.showToast({ title: "该学期尚未发布，暂不能导入", icon: "none" });
+      return;
+    }
     this.setData({
-      semesterIndex: Number(event.detail.value),
+      semesterIndex: nextIndex,
+      selectedTermStatusText: this.getTermStatusText(record),
     });
+  },
+
+  getTermStatusText(record) {
+    if (!record) return "";
+    if (!record.importable) return "该学期尚未发布，暂不能导入";
+    if (record.archived) return "历史学期，导入后仅作为本地课表使用";
+    if (!this.data.semesterPickerEnabled) return "当前仅有一个可导入学期";
+    return "";
   },
 
   onXlsBtnTap() {
@@ -184,6 +210,11 @@ Page({
   parseUploadedXls() {
     const file = this.data.selectedFile;
     if (!file || this.data.loadingXls) return;
+    const selectedRecord = this.data.termRecords[this.data.semesterIndex];
+    if (!selectedRecord || !selectedRecord.importable) {
+      wx.showToast({ title: "目标学期暂不能导入", icon: "none" });
+      return;
+    }
 
     this.setData({ loadingXls: true });
     wx.showLoading({ title: "解析课表中..." });

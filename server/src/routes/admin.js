@@ -18,6 +18,7 @@ const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
 const termRegistryService = require("../services/termRegistryService");
 const termReleaseIndexService = require("../services/termReleaseIndexService");
+const semesterActivationTransactionService = require("../services/semesterActivationTransactionService");
 const releaseWorkerManager = require("../services/releaseWorkerManager");
 const relayService = require("../services/relayService");
 const stagingUploadService = require("../services/stagingUploadService");
@@ -3827,7 +3828,7 @@ router.get("/terms/:term/readiness", adminAuth.verifyAdminAccess, (req, res) => 
   }
 });
 
-router.post("/terms/:term/activate", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/terms/:term/activate", adminAuth.verifyAdminAccess, async (req, res) => {
   try {
     const target = termRegistryService.getTerm(req.params.term);
     const releaseVersion = req.body && (req.body.releaseVersion || req.body.version) || target && target.releaseVersion || "";
@@ -3835,10 +3836,7 @@ router.post("/terms/:term/activate", adminAuth.verifyAdminAccess, (req, res) => 
     if (!readiness.ready) {
       return res.status(400).json({ success: false, code: "TERM_ACTIVATE_BLOCKED", readiness });
     }
-    const activatedRelease = releaseService.activateReleaseVersion(releaseVersion);
-    appConfigService.touchDataVersionForSyncKey("release", {
-      releaseVersion,
-      semester: req.params.term,
+    const activatedRelease = await semesterActivationTransactionService.activateTerm(req.params.term, releaseVersion, {
       releaseNote: `Activated term ${req.params.term}`,
     });
     writeAuditLog(req, "activate", "term", req.params.term, `Activated term ${req.params.term} with release ${releaseVersion}`);

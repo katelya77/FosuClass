@@ -17,6 +17,7 @@ const MAX_EMPTY_ROOM_WEEK = 30;
 const LOCAL_ACTIVE_RELEASE_KEY = `${CACHE_PREFIX}:active-release`;
 const activeManifestInflight = new Map();
 const switchReleaseInflight = new Map();
+let runtimePointerInflight = null;
 
 function cachePart(value, fallback = "unknown") {
   return encodeURIComponent(String(value || fallback));
@@ -244,8 +245,81 @@ function writeManifestCache(manifest) {
     manifest: normalized,
   };
   writeStorage(getLocalActiveReleaseKey(normalized.term), activeEntry);
-  writeStorage(LOCAL_ACTIVE_RELEASE_KEY, activeEntry);
+  const activeTerm = normalized.activeTerm || normalized.currentTerm || normalized.activeTermConfig && normalized.activeTermConfig.term || "";
+  if (!activeTerm || activeTerm === normalized.term || normalized.isActive === true || normalized.active === true) {
+    writeStorage(LOCAL_ACTIVE_RELEASE_KEY, activeEntry);
+  }
   return normalized;
+}
+
+function normalizeRuntimePointer(payload) {
+  const source = payload && payload.data ? payload.data : payload;
+  if (!source || source.success === false) return null;
+  const term = source.activeTerm || source.term || source.termConfig && source.termConfig.term || "";
+  const releaseVersion = source.releaseVersion || source.version || "";
+  if (!term || !releaseVersion) return null;
+  const termConfig = source.termConfig || {};
+  return {
+    success: true,
+    schemaVersion: source.schemaVersion || 1,
+    activeTerm: term,
+    term,
+    releaseVersion,
+    updatedAt: source.updatedAt || "",
+    cacheEpoch: source.cacheEpoch || Date.parse(source.updatedAt || "") || Date.now(),
+    forceRefreshToken: source.forceRefreshToken || "",
+    termConfig: Object.assign({}, termConfig, {
+      term: termConfig.term || term,
+      releaseVersion: termConfig.releaseVersion || releaseVersion,
+    }),
+    urls: source.urls || {},
+    source: source.source || "runtime-pointer",
+  };
+}
+
+function resolveRuntimePointer(options = {}) {
+  if (runtimePointerInflight && options.dedupe !== false && !options.forceNetwork) {
+    return runtimePointerInflight;
+  }
+  const requestOptions = {
+    showLoading: false,
+    silentError: true,
+    timeout: options.timeout || 5000,
+    retries: options.retries === undefined ? 0 : options.retries,
+    skipSession: true,
+  };
+  const staticUrl = joinUrl(API_BASE_URL, "static/runtime/active.json");
+  const task = request.get(staticUrl, {}, requestOptions)
+    .catch(() => request.get("/api/fosu/runtime/active", {}, Object.assign({}, requestOptions, {
+      skipSession: options.skipSession === true,
+    })))
+    .then((payload) => {
+      const pointer = normalizeRuntimePointer(payload);
+      if (!pointer) {
+        const error = new Error("INVALID_RUNTIME_POINTER");
+        error.code = "INVALID_RUNTIME_POINTER";
+        throw error;
+      }
+      const manifest = normalizeManifest(Object.assign({}, pointer, {
+        term: pointer.activeTerm,
+        semester: pointer.activeTerm,
+        releaseVersion: pointer.releaseVersion,
+        termConfig: pointer.termConfig,
+        cacheEpoch: pointer.cacheEpoch,
+        forceRefreshToken: pointer.forceRefreshToken,
+        activeTerm: pointer.activeTerm,
+        isActive: true,
+        calendarUrl: pointer.urls && pointer.urls.calendar,
+        indexUrls: { class: pointer.urls && pointer.urls.classIndex },
+      }));
+      if (manifest) writeManifestCache(manifest);
+      return pointer;
+    })
+    .finally(() => {
+      runtimePointerInflight = null;
+    });
+  runtimePointerInflight = task;
+  return task;
 }
 
 function scanLastGood(options = {}) {
@@ -429,6 +503,8 @@ function fetchManifest(options = {}) {
     .then((payload) => {
       const manifest = assertManifest(normalizeManifest(payload));
       assertTermMatch(manifest.term, expectedTerm, "MANIFEST_TERM_MISMATCH");
+      manifest.activeTerm = payload && (payload.activeTerm || payload.term);
+      if (!expectedTerm || manifest.activeTerm === manifest.term) manifest.isActive = true;
       return manifest;
     });
   if (!staticUrl) {
@@ -438,6 +514,8 @@ function fetchManifest(options = {}) {
     .then((payload) => {
       const manifest = assertManifest(normalizeManifest(payload));
       assertTermMatch(manifest.term, expectedTerm, "MANIFEST_TERM_MISMATCH");
+      manifest.activeTerm = payload && (payload.activeTerm || payload.term);
+      if (!expectedTerm || manifest.activeTerm === manifest.term) manifest.isActive = true;
       return manifest;
     })
     .catch((staticError) => loadDynamic().catch(() => {
@@ -585,15 +663,8 @@ function switchReleaseSafely(options = {}) {
         getManifestReleaseKey(previous.manifest) === getManifestReleaseKey(manifest);
       const warmupTypes = Array.isArray(options.warmupTypes) && options.warmupTypes.length
         ? options.warmupTypes
-        : ["class"];
-      return warmupIndex(warmupTypes, {
-        manifest,
-        term: manifest.term,
-        releaseVersion: manifest.releaseVersion,
-        forceNetwork: Boolean(options.forceNetwork && !sameRelease),
-        skipFallback: true,
-        skipSession: options.skipSession === true,
-      }).then((indexes) => {
+        : [];
+      const finishSwitch = (indexes) => {
         const normalized = writeManifestCache(manifest);
         clearOldReleaseCaches({
           keepLatestN: options.keepLatestN || 2,
@@ -605,9 +676,20 @@ function switchReleaseSafely(options = {}) {
           term: normalized.term,
           releaseVersion: normalized.releaseVersion,
           manifest: normalized,
-          indexes,
+          indexes: indexes || [],
         };
-      });
+      };
+      if (!warmupTypes.length || options.skipWarmup === true) {
+        return finishSwitch([]);
+      }
+      return warmupIndex(warmupTypes, {
+        manifest,
+        term: manifest.term,
+        releaseVersion: manifest.releaseVersion,
+        forceNetwork: Boolean(options.forceNetwork && !sameRelease),
+        skipFallback: true,
+        skipSession: options.skipSession === true,
+      }).then(finishSwitch);
     })
     .catch((error) => {
       if (previous && previous.manifest) {
@@ -1332,6 +1414,7 @@ module.exports = {
   getLastGoodCacheKey,
   getManifestReleaseKey,
   getLocalActiveRelease,
+  resolveRuntimePointer,
   getActiveManifest,
   loadEmptyRoom,
   filterEmptyRoomIndex,

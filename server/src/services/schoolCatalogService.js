@@ -5,6 +5,7 @@ const dns = require("dns").promises;
 const { FosuQiangzhiAdapter } = require("./fosuQiangzhiAdapter");
 const releaseService = require("./releaseService");
 const termRegistryService = require("./termRegistryService");
+const { SmallJsonCache } = require("../utils/jsonFileStore");
 const config = require("../config");
 const { parseSchoolOptionsHtml, parseMajorAjaxResponse } = require("../utils/parser");
 const { safeLog } = require("../utils/safeLogger");
@@ -20,6 +21,7 @@ const CURRENT_SNAPSHOT_PATH = path.join(SNAPSHOTS_DIR, "current.json");
 
 let snapshotCache = null;
 let snapshotCacheTime = 0;
+const smallJsonCache = new SmallJsonCache({ maxEntries: 120 });
 
 function readJsonFile(filePath) {
   if (!fs.existsSync(filePath)) return null;
@@ -384,15 +386,71 @@ async function getBootstrap(semester) {
   }
 
   const requestedVersion = record.releaseVersion || "";
+  if (requestedVersion) {
+    const files = releaseService.getReleaseFiles(requestedVersion);
+    const bootstrap = smallJsonCache.read(files.bootstrapPath, null);
+    const manifest = smallJsonCache.read(files.manifestPath, null);
+    const catalogFile = smallJsonCache.read(termRegistryService.termDataPath(record.term, "catalog.json"), null);
+    const sourceTerm = (bootstrap && (bootstrap.term || bootstrap.semester)) ||
+      (manifest && (manifest.term || manifest.semester)) ||
+      record.term;
+    if (sourceTerm === record.term && (bootstrap || manifest || catalogFile)) {
+      const updatedAt = (bootstrap && bootstrap.updatedAt) || (manifest && manifest.updatedAt) || record.updatedAt || new Date().toISOString();
+      const catalog = bootstrap && bootstrap.catalog || catalogFile || {};
+      const counts = Object.assign({}, manifest && manifest.counts || {}, bootstrap && bootstrap.counts || {});
+      const warning = bootstrap ? "" : "BOOTSTRAP_FILE_MISSING_USED_LIGHT_FALLBACK";
+      return {
+        success: true,
+        dataSource: bootstrap ? "release-bootstrap" : "release-light-fallback",
+        warning,
+        term: record.term,
+        semester: record.term,
+        releaseVersion: requestedVersion,
+        dataAvailable: record.dataAvailable,
+        updatedAt,
+        version: requestedVersion,
+        termConfig: (bootstrap && bootstrap.termConfig) || (manifest && manifest.termConfig) || null,
+        catalog: {
+          semesters: catalog.semesters || [],
+          colleges: catalog.colleges || [],
+          grades: catalog.grades || [],
+          weeks: catalog.weeks || [],
+          sections: catalog.sections || [],
+        },
+        counts,
+        versions: {
+          snapshot: requestedVersion,
+          catalog: requestedVersion,
+          majors: requestedVersion,
+          classSchedules: requestedVersion,
+          resources: requestedVersion,
+        },
+        metaDetails: Object.assign({
+          source: manifest && manifest.source || "release-light",
+          disclaimer: bootstrap && bootstrap.metaDetails && bootstrap.metaDetails.disclaimer || "",
+          catalogUpdatedAt: updatedAt,
+          majorsUpdatedAt: updatedAt,
+          classSchedulesUpdatedAt: updatedAt,
+          resourcesUpdatedAt: updatedAt,
+        }, bootstrap && bootstrap.metaDetails || {}),
+      };
+    }
+    safeLog("bootstrap-lightweight-fallback", {
+      term: record.term,
+      releaseVersion: requestedVersion,
+      reason: "light-files-missing-or-term-mismatch",
+    });
+  }
+
   const snapshot = requestedVersion ? releaseService.readReleaseSnapshot(requestedVersion) : getSnapshot();
   if (snapshot && (snapshot.term || snapshot.semester) === record.term) {
     const meta = getMeta("snapshot", record.term);
-    const derivedCounts = releaseService.countRelease(snapshot);
-    const counts = Object.assign({}, derivedCounts, snapshot.coverage || {});
+    const counts = Object.assign({}, snapshot.coverage || releaseService.countRelease(snapshot));
     const updatedAt = snapshot.updatedAt || record.updatedAt || new Date().toISOString();
     return {
       success: true,
-      dataSource: "snapshot",
+      dataSource: "snapshot-fallback",
+      warning: "BOOTSTRAP_LIGHTWEIGHT_FALLBACK_TO_SNAPSHOT",
       term: record.term,
       semester: record.term,
       releaseVersion: requestedVersion || snapshot.version || "",

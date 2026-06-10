@@ -17,6 +17,11 @@ server/storage/*.jsonl
 server/storage/secure/
 server/storage/releases/
 server/storage/terms/
+!server/storage/terms/
+server/storage/terms/*
+!server/storage/terms/2025-2026-2/
+server/storage/terms/2025-2026-2/*
+!server/storage/terms/2025-2026-2/teaching-calendar.json
 !server/storage/.gitkeep
 tools/fosu-sync-client/.env
 tools/fosu-sync-client/.session/

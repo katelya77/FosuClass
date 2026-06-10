@@ -5,6 +5,7 @@ const releasePackService = require("./services/releasePackService");
 const platformDataService = require("./services/platformDataService");
 const securitySessionService = require("./services/securitySessionService");
 const termConfigService = require("./services/termConfigService");
+const startupCoordinator = require("./services/startupCoordinator");
 const BRAND = require("./config/brand");
 
 const STARTUP_BACKGROUND_TIMEOUT_MS = 15000;
@@ -98,11 +99,12 @@ App({
     this.loadAppConfigData({ network: false, silent: true });
     termConfigService.applyRuntimeTermConfigFromApp(this);
 
-    scheduleLowPriority(() => afterStartupSession(() => this.loadReleasePackData(withStartupSessionOptions({ forceNetwork: true, silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 1 }))), 1500);
-    scheduleLowPriority(() => getStartupSessionWarmupPromise(), 1800);
-    scheduleLowPriority(() => afterStartupSession(() => this.loadPlatformData(withStartupSessionOptions({ silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 0 }))), 2200);
-    scheduleLowPriority(() => afterStartupSession(() => this.loadBootstrapData(withStartupSessionOptions({ silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 1 }))), 2600);
-    scheduleLowPriority(() => afterStartupSession(() => this.loadAppConfigData(withStartupSessionOptions({ force: true, silent: true, timeout: STARTUP_BACKGROUND_TIMEOUT_MS, retries: 1 }))), 3200);
+    startupCoordinator.resolveRuntimePointer({ timeout: 5000, retries: 0 })
+      .catch(() => null);
+    startupCoordinator.startBackgroundRefresh({
+      timeout: STARTUP_BACKGROUND_TIMEOUT_MS,
+      retries: 0,
+    });
   },
 
   loadReleasePackData(options) {
@@ -120,6 +122,7 @@ App({
       term: cachedTerm,
       dedupe: true,
       forceNetwork: Boolean(opt.forceNetwork),
+      skipWarmup: true,
       timeout: opt.timeout || 5000,
       retries: opt.retries === undefined ? 0 : opt.retries,
       skipSession: opt.skipSession === true,

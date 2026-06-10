@@ -107,7 +107,7 @@ function clampWeek(week, termConfig) {
 function getTeachingWeekByDate(date, calendarWeeks, termConfig) {
   const target = parseDate(date || new Date());
   const config = resolveTermConfig(termConfig);
-  const weeks = Array.isArray(calendarWeeks) && !shouldUseRuntimeTermConfig(config) ? calendarWeeks : [];
+  const weeks = Array.isArray(calendarWeeks) ? calendarWeeks : [];
   const matched = weeks.find((item) => {
     return target >= parseDate(item.startDate) && target <= parseDate(item.endDate);
   });
@@ -159,7 +159,7 @@ function getTeachingWeekByDate(date, calendarWeeks, termConfig) {
 function getWeekRangeByWeekNo(weekNo, calendarWeeks, termConfig) {
   const config = resolveTermConfig(termConfig);
   const targetWeek = clampWeek(weekNo, config);
-  const weeks = Array.isArray(calendarWeeks) && !shouldUseRuntimeTermConfig(config) ? calendarWeeks : [];
+  const weeks = Array.isArray(calendarWeeks) ? calendarWeeks : [];
   const matched = weeks.find((item) => Number(item.weekNo || item.week) === targetWeek);
   if (matched) {
     return Object.assign({}, matched, {

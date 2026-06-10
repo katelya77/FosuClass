@@ -22,6 +22,7 @@ const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
 const platformDataService = require("../../services/platformDataService");
 const releasePackService = require("../../services/releasePackService");
+const startupCoordinator = require("../../services/startupCoordinator");
 const platformUtils = require("../../utils/platform");
 const {
   SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY,
@@ -2335,9 +2336,39 @@ Page({
     let sawNoRelease = false;
 
     try {
+      const pointer = await startupCoordinator.resolveRuntimePointer({
+        timeout: 5000,
+        retries: 0,
+        forceNetwork: Boolean(options.forceNetwork),
+      });
+      const activeSnapshot = pointer && {
+        term: pointer.activeTerm || pointer.term,
+        releaseVersion: pointer.releaseVersion,
+        scheduleUpdatedAt: pointer.updatedAt || "",
+        catalogUpdatedAt: pointer.updatedAt || "",
+        cacheEpoch: pointer.cacheEpoch,
+        forceRefreshToken: pointer.forceRefreshToken,
+        counts: {},
+        termConfig: pointer.termConfig || null,
+      };
+      if (activeSnapshot && activeSnapshot.releaseVersion) {
+        this.writeCachedActiveSnapshot(activeSnapshot);
+        return {
+          activeSnapshot,
+          appConfig: appConfigService.getGlobalConfig(),
+          source: "runtime-pointer",
+        };
+      }
+    } catch (error) {
+      lastError = error;
+      console.warn("[school] runtime pointer unavailable, trying release manifest", error);
+    }
+
+    try {
       const pack = await releasePackService.switchReleaseSafely({
         term: cached && cached.term || getFallbackTerm(),
         forceNetwork: Boolean(options.forceNetwork),
+        skipWarmup: true,
       });
       const activeSnapshot = this.buildActiveSnapshotFromReleaseManifest(pack && pack.manifest);
       if (activeSnapshot) {
@@ -2369,7 +2400,7 @@ Page({
     }
 
     try {
-      const payload = await request.get(`/api/fosu/app-config?ts=${Date.now()}`, {}, {
+      const payload = await request.get("/api/fosu/app-config", {}, {
         showLoading: false,
         silentError: true,
         timeout: APP_CONFIG_TIMEOUT,
@@ -2732,38 +2763,31 @@ Page({
     };
 
     const cachedClassIndex = releasePackService.readCachedIndex("class", { term, releaseVersion });
-    if (cachedClassIndex && renderFromReleasePackIndex(cachedClassIndex, true)) {
+    if (cachedCatalog) {
+      renderCatalog(cachedCatalog, true);
+      fetchCatalogFromNetwork();
+      return;
+    }
+
+    const bootstrapCatalog = normalizeCatalog(options.bootstrapData);
+    if (bootstrapCatalog) {
+      writeCatalogCache(bootstrapCatalog);
+      renderCatalog(bootstrapCatalog, false);
+      releasePackService.warmupIndex(["class"], { term, releaseVersion, skipFallback: true })
+        .catch(() => {});
+      return;
+    }
+
+    fetchCatalogFromNetwork();
+    if (cachedClassIndex) {
       releasePackService.loadIndex("class", { term, releaseVersion }, {
         forceNetwork: true,
         timeout: SCHOOL_REQUEST_TIMEOUT,
       })
         .then((indexPayload) => renderFromReleasePackIndex(indexPayload, false))
-        .catch(handleCatalogError);
+        .catch(() => {});
       return;
     }
-
-    releasePackService.loadIndex("class", { term, releaseVersion }, {
-      timeout: SCHOOL_REQUEST_TIMEOUT,
-    })
-      .then((indexPayload) => {
-        if (!renderFromReleasePackIndex(indexPayload, Boolean(indexPayload && indexPayload.fromStorage))) {
-          fetchCatalogFromNetwork();
-        }
-      })
-      .catch((error) => {
-        if (cachedCatalog) {
-          renderCatalog(cachedCatalog, true);
-          return;
-        }
-        const bootstrapCatalog = normalizeCatalog(options.bootstrapData);
-        if (bootstrapCatalog) {
-          writeCatalogCache(bootstrapCatalog);
-          renderCatalog(bootstrapCatalog, false);
-          return;
-        }
-        fetchCatalogFromNetwork();
-        console.warn("[school] class index catalog fallback", error);
-      });
 
     return;
   },

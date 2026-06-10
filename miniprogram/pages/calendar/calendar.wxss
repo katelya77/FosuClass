@@ -15,6 +15,22 @@
   font-size: 25rpx;
 }
 
+.calendar-skeleton {
+  margin-top: 22rpx;
+  padding: 24rpx;
+}
+
+.skeleton-line {
+  height: 28rpx;
+  margin-bottom: 20rpx;
+  border-radius: 8rpx;
+  background: #eef3fb;
+}
+
+.skeleton-line.short {
+  width: 62%;
+}
+
 .week-list {
   margin-top: 22rpx;
 }
@@ -50,13 +66,38 @@
 }
 
 .week-info {
+  flex: 1;
   min-width: 0;
+}
+
+.week-topline {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
 }
 
 .week-date {
   color: #172033;
   font-size: 28rpx;
   font-weight: 800;
+}
+
+.week-type {
+  flex: 0 0 auto;
+  border-radius: 999rpx;
+  background: #eef3fb;
+  color: #536174;
+  font-size: 22rpx;
+  font-weight: 700;
+  padding: 4rpx 12rpx;
+}
+
+.week-title {
+  margin-top: 8rpx;
+  color: #172033;
+  font-size: 26rpx;
+  font-weight: 700;
+  line-height: 1.4;
 }
 
 .week-note {

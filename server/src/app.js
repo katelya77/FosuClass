@@ -136,6 +136,18 @@ app.use("/static/releases", express.static(releaseService.PUBLIC_RELEASES_DIR, {
   },
 }));
 
+app.use("/static/runtime", express.static(path.join(releaseService.PUBLIC_RELEASES_DIR, "..", "runtime"), {
+  fallthrough: false,
+  maxAge: "60s",
+  etag: true,
+  lastModified: true,
+  setHeaders: (res) => {
+    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Fosu-Static-Policy", "cacheable-public-runtime-pointer");
+  },
+}));
+
 app.use((err, req, res, next) => {
   if (err && (err.type === "entity.too.large" || err.status === 413)) {
     safeLog("payload-too-large", {
