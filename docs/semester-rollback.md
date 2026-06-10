@@ -1,32 +1,31 @@
-# Semester Rollback
+# 学期回滚
 
-Rollback uses the previous release recorded in the term release index and the current active pointer backup.
+学期回滚依赖 `term-index` 中记录的上一版 Release，以及当前 active 指针的备份文件。
 
-## Automatic Rollback
+## 自动回滚
 
-Activation writes are protected:
+激活流程会在写入前备份以下文件：
 
 - previous `releases/active.json`
 - previous `snapshots/current.json`
 - previous `snapshots/current.json.gz`
 - previous `releases/term-index.json`
 
-If registry, term-index, snapshot, or active pointer update fails during activation, the previous state is restored.
+如果激活过程中 registry、term-index、snapshot 或 active pointer 任一步更新失败，系统会恢复到之前状态。
 
-## Manual Rollback
+## 手动回滚
 
-1. Open Admin Console.
-2. Inspect `学期管理` readiness for the previous term and rollback release.
-3. Bind the rollback release if needed.
-4. Activate the previous term only after readiness passes.
-5. Verify app-config, active release manifest, term-index, and OpenResty static manifest agree.
+1. 打开 Admin Console。
+2. 在 `学期管理` 中检查上一学期和回滚 Release 的 readiness。
+3. 如有需要，先绑定回滚 Release。
+4. readiness 通过后，再激活上一学期。
+5. 验证 app-config、active release manifest、term-index 和 OpenResty static manifest 是否一致。
 
-## Retention
+## 保留规则
 
-Registry and term-index references are pinned:
+Registry 和 term-index 引用会被 pin 住：
 
-- current term keeps active release and at least two rollback candidates when available
-- each archived term keeps at least one healthy release
-- ready/planned terms keep their bound candidate releases
-- unbound, unpinned, expired releases may be removed by maintenance dry-run
-
+- 当前学期保留 active release，并在可用时至少保留两个回滚候选。
+- 每个已归档学期至少保留一个健康 Release。
+- ready/planned 学期保留已绑定的候选 Release。
+- 未绑定、未 pin 且已过期的 Release，可在维护 dry-run 确认后清理。

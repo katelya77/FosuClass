@@ -1,38 +1,38 @@
-# Disaster Recovery
+# 灾备与故障恢复
 
-## Publish Job Failed
+## 发布任务失败
 
-1. Open the job details.
-2. Check the sanitized error summary.
-3. Run status reconcile.
-4. Retry publish only if staging safety still passes.
+1. 打开任务详情。
+2. 查看已脱敏的错误摘要。
+3. 执行状态核对。
+4. 只有在 Staging 安全检查仍通过时，才重试发布。
 
-## Worker Hung
+## Worker 挂起
 
-1. Check release-heavy running job.
-2. If stale, let stale-job recovery mark it failed.
-3. Do not start a second release-heavy task manually.
+1. 检查当前运行中的 `release-heavy` 任务。
+2. 如果任务已经过期，等待 stale-job recovery 将其标记为失败。
+3. 不要手动再启动第二个 release-heavy 任务。
 
-## OpenResty Directory Not Writable
+## OpenResty 目录不可写
 
-1. Fix ownership or mount permissions.
-2. Run static sync again.
-3. Verify `manifest.json`, `index/class/all.json`, and `empty-room/index.json`.
+1. 修复目录所有者或挂载权限。
+2. 重新执行静态同步。
+3. 验证 `manifest.json`、`index/class/all.json` 和 `empty-room/index.json`。
 
-## Disk Critical
+## 磁盘进入 Critical 状态
 
-1. Run storage scan.
-2. Preview safe cleanup.
-3. Execute safe cleanup.
-4. Retry release-heavy tasks after disk leaves critical state.
+1. 运行存储扫描。
+2. 预览安全清理。
+3. 执行安全清理。
+4. 等磁盘退出 critical 状态后，再重试 release-heavy 任务。
 
-## Active Release Damaged
+## Active Release 损坏
 
-1. Roll back from Release history to last-known-good.
-2. Run OpenResty static sync.
-3. Verify static URLs.
-4. Reconcile staging/upload status.
+1. 从 Release 历史回滚到 last-known-good。
+2. 执行 OpenResty 静态同步。
+3. 验证静态 URL。
+4. 重新核对 Staging / upload 状态。
 
-## Staging Status Inconsistent
+## Staging 状态不一致
 
-Use "重新核对状态". The reconcile process compares active Release canonical hash, latest staging canonical hash, upload IDs, Relay IDs, and release versions. It is idempotent.
+点击“重新核对状态”。核对流程会比较 active Release canonical hash、最新 Staging canonical hash、upload ID、Relay ID 和 release version。该操作是幂等的，可以安全重复执行。

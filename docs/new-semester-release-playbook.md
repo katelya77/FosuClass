@@ -1,22 +1,22 @@
-# New Semester Release Playbook
+# 新学期发布手册
 
-Do not activate a future semester until the administrator has entered the confirmed start date and a healthy release exists.
+在管理员填写确认过的开学日期，并且健康 Release 已存在之前，不要激活未来学期。
 
-## 1. Create The Term
+## 1. 创建学期
 
-In Admin Console, open `学期管理` and create a planned term:
+在 Admin Console 打开 `学期管理`，创建 planned 学期：
 
-- `term`: `2026-2027-1`
-- `semesterText`: leave empty to auto-generate
-- `termStartDate`: administrator-confirmed date
-- `totalWeeks`: administrator-confirmed total weeks
-- `weekStart`: `monday`
+- `term`：`2026-2027-1`
+- `semesterText`：可留空，由系统自动生成
+- `termStartDate`：管理员确认过的日期
+- `totalWeeks`：管理员确认过的总周数
+- `weekStart`：`monday`
 
-The new term remains `planned` and unavailable to normal queries until data is published.
+新学期会保持 `planned` 状态。数据发布前，普通查询不可访问该学期。
 
-## 2. Collect Data
+## 2. 采集数据
 
-Run the sync CLI with explicit term config:
+运行同步 CLI，并显式传入学期配置：
 
 ```bash
 npm run sync:local-campus -- \
@@ -26,19 +26,19 @@ npm run sync:local-campus -- \
   --fresh
 ```
 
-The date above is an example only. The CLI must not guess future semester dates.
+上面的日期只是示例。CLI 不应猜测未来学期日期，必须由管理员按校历确认。
 
-## 3. Upload And Review
+## 3. 上传与审核
 
-Upload staging JSON through the existing staging upload flow. The staging JSON must include top-level `termConfig`; sidecar metadata includes `term` and a `termConfigHash`.
+通过现有 Staging 上传流程上传 JSON。Staging JSON 必须包含顶层 `termConfig`，旁路元数据包含 `term` 和 `termConfigHash`。
 
-Review counts, hashes, warnings, and term consistency in Admin Console. New semester staging must not overwrite current-term catalog files.
+在 Admin Console 中检查条目数量、hash、warning 和学期一致性。新学期 Staging 不应覆盖当前学期 catalog 文件。
 
-## 4. Build And Bind Release
+## 4. 构建并绑定 Release
 
-Publishing a non-current term builds a term-aware release and marks the target term `ready`. It does not update `releases/active.json`.
+发布非当前学期时，系统会构建一个带学期信息的 Release，并将目标学期标记为 `ready`。此时不会更新 `releases/active.json`。
 
-The pre-switch check verifies:
+切换前检查会验证：
 
 - staging term
 - snapshot term
@@ -46,11 +46,11 @@ The pre-switch check verifies:
 - resources term
 - manifest `termConfig`
 - registry term
-- release pack health
+- Release Pack health
 - OpenResty static manifest
 
-## 5. Activate
+## 5. 激活
 
-Use `学期管理` to run readiness, then activate. The confirmation dialog shows old term, new term, releaseVersion, term start date, total weeks, counts, OpenResty status, and rollback target.
+在 `学期管理` 中运行 readiness 检查，通过后再激活。确认弹窗应展示旧学期、新学期、releaseVersion、开学日期、总周数、数据数量、OpenResty 状态和回滚目标。
 
-Activation updates registry, term-index, active.json, current snapshot, app-config, and static release pointers. On failure, the previous active state is restored.
+激活会更新 registry、term-index、active.json、current snapshot、app-config 和静态 Release 指针。如果失败，系统会恢复之前的 active 状态。
