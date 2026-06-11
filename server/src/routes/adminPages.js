@@ -3768,11 +3768,13 @@ const adminConsoleHtml = `<!doctype html>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
             <button id="checkTermReadinessBtn" class="secondary" type="button">运行检查</button>
+            <button id="repairCurrentTermReleaseBtn" class="primary" type="button" hidden>修复并重建当前学期 Release</button>
             <button id="rebuildRuntimePointerBtn" class="ghost" type="button">重建 Runtime Pointer</button>
             <button id="bindTermReleaseBtn" class="ghost" type="button">绑定 Release</button>
             <button id="activateTermBtn" class="danger" type="button">激活为当前学期</button>
           </div>
           <div id="termReadinessSummary" class="readiness-summary"></div>
+          <div id="termRepairJobLog" class="job-progress-panel" hidden></div>
           <div id="termReadinessChecks" class="readiness-groups"></div>
           <pre id="termReadinessOutput" style="margin-top:12px;background:#0f172a;color:#d1e7ff;border-radius:8px;padding:12px;white-space:pre-wrap;max-height:320px;overflow:auto;">等待检查</pre>
         </div>
@@ -5362,9 +5364,15 @@ const adminConsoleHtml = `<!doctype html>
         var summaryEl = $("termReadinessSummary");
         var checksEl = $("termReadinessChecks");
         if (!summaryEl || !checksEl) return;
+        var repairBtn = $("repairCurrentTermReleaseBtn");
+        state.termRepairAction = readiness && readiness.repairAction || null;
+        if (repairBtn) {
+          repairBtn.hidden = !(state.termRepairAction && state.termRepairAction.type === "current-term-release-repair");
+        }
         if (!readiness || !Array.isArray(readiness.checks)) {
           summaryEl.innerHTML = "<span class='badge muted'>等待检查</span>";
           checksEl.innerHTML = "";
+          if (repairBtn) repairBtn.hidden = true;
           return;
         }
         var summary = readiness.summary || {};
@@ -5425,6 +5433,75 @@ const adminConsoleHtml = `<!doctype html>
           return checkTermReadiness();
         }).catch(function(error) {
           showToast(error.message || "重建失败", "error");
+        });
+      }
+
+      function repairCurrentTermReleaseFromPanel() {
+        var term = value("termReadinessId");
+        var releaseVersion = value("termReadinessRelease");
+        var btn = $("repairCurrentTermReleaseBtn");
+        if (!term || !releaseVersion) {
+          showToast("请先运行当前学期旧 Release 检查", "error");
+          return;
+        }
+        var restoreButton = setButtonLoading(btn, "dry-run...");
+        api("/api/admin/terms/" + encodeURIComponent(term) + "/repair-release/dry-run", {
+          method: "POST",
+          body: JSON.stringify({
+            sourceReleaseVersion: releaseVersion,
+            activateAfterBuild: true,
+            syncOpenResty: true
+          })
+        }).then(function(res) {
+          var result = res.result || {};
+          if (result.alreadyHealthy) {
+            showToast("当前学期 Release 已健康，无需修复", "success");
+            $("termReadinessOutput").textContent = JSON.stringify(result, null, 2);
+            return Promise.resolve(null);
+          }
+          var plan = result.plan || {};
+          var changes = plan.changes || {};
+          var registry = changes.registry || {};
+          var lines = plan.confirmLines || [
+            "当前学期: " + (result.term || term),
+            "旧 Release Version: " + (plan.oldReleaseVersion || releaseVersion),
+            "新 Release Version: " + (result.newReleaseVersion || plan.newReleaseVersion || "-"),
+            "registry 当前 " + (registry.currentTotalWeeks || "-") + " 周，将修正为 " + (registry.nextTotalWeeks || 19) + " 周",
+            "将生成 calendar.json",
+            "将更新 manifest calendar 元数据",
+            "将保留旧 Release 用于回滚",
+            "不重新采集课表",
+            "不影响用户本地课表和 XLS 导入"
+          ];
+          $("termReadinessOutput").textContent = JSON.stringify(result, null, 2);
+          if (!window.confirm(lines.concat(["", "确认执行正式修复？"]).join("\\n"))) {
+            return Promise.resolve(null);
+          }
+          restoreButton();
+          restoreButton = setButtonLoading(btn, "已启动...");
+          return api("/api/admin/terms/" + encodeURIComponent(term) + "/repair-release/start", {
+            method: "POST",
+            body: JSON.stringify({
+              sourceReleaseVersion: releaseVersion,
+              newReleaseVersion: result.newReleaseVersion || plan.newReleaseVersion || "",
+              activateAfterBuild: true,
+              syncOpenResty: true
+            })
+          }).then(function(startRes) {
+            var job = startRes.job || {};
+            showToast("学期 Release 修复任务已启动", "success");
+            pollAdminJob(job.id, "学期 Release 修复", function(doneJob) {
+              restoreButton();
+              $("termReadinessOutput").textContent = JSON.stringify(doneJob || {}, null, 2);
+              loadTerms();
+              loadDashboard();
+              checkTermReadiness();
+            }, { panelId: "termRepairJobLog" });
+          });
+        }).catch(function(error) {
+          showToast(error.message || "修复启动失败", "error");
+        }).finally(function() {
+          restoreButton();
         });
       }
 
@@ -7324,8 +7401,8 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
-      function renderJobProgress(job, label) {
-        var panel = $("syncJobLog");
+      function renderJobProgress(job, label, panelId) {
+        var panel = $(panelId || "syncJobLog");
         if (!panel || !job) return;
         var logs = Array.isArray(job.logs) ? job.logs : [];
         var lastData = {};
@@ -7364,14 +7441,15 @@ const adminConsoleHtml = `<!doctype html>
           "<div class='job-log-list'>" + (recentLogs || "<div><span>最近日志</span>暂无日志</div>") + "</div>";
       }
 
-      function pollAdminJob(jobId, label, onDone) {
+      function pollAdminJob(jobId, label, onDone, options) {
         if (!jobId) return;
+        options = options || {};
         api("/api/admin/jobs/" + encodeURIComponent(jobId))
           .then(function(res) {
             var job = res.job || {};
             var logs = job.logs || [];
             var lastLog = logs.length ? logs[logs.length - 1].message : "";
-            renderJobProgress(job, label);
+            renderJobProgress(job, label, options.panelId);
             setStatus(label + "：" + (job.status || "queued") + " · " + (job.progress || 0) + "% " + lastLog);
             if (job.status === "success") {
               showToast(label + "完成", "success");
@@ -7383,7 +7461,7 @@ const adminConsoleHtml = `<!doctype html>
               if (onDone) onDone(job);
               return;
             }
-            window.setTimeout(function() { pollAdminJob(jobId, label, onDone); }, 1500);
+            window.setTimeout(function() { pollAdminJob(jobId, label, onDone, options); }, 1500);
           })
           .catch(function(err) {
             showToast(err.message || (label + "状态读取失败"), "error");
@@ -9272,6 +9350,7 @@ const adminConsoleHtml = `<!doctype html>
       safeBind("refreshTermsBtn", "click", loadTerms);
       safeBind("createTermBtn", "click", createTerm);
       safeBind("checkTermReadinessBtn", "click", checkTermReadiness);
+      safeBind("repairCurrentTermReleaseBtn", "click", repairCurrentTermReleaseFromPanel);
       safeBind("rebuildRuntimePointerBtn", "click", rebuildRuntimePointerFromPanel);
       safeBind("bindTermReleaseBtn", "click", bindTermRelease);
       safeBind("activateTermBtn", "click", activateTermFromPanel);

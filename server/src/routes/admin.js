@@ -20,6 +20,7 @@ const termRegistryService = require("../services/termRegistryService");
 const termReleaseIndexService = require("../services/termReleaseIndexService");
 const termReadinessService = require("../services/termReadinessService");
 const semesterActivationTransactionService = require("../services/semesterActivationTransactionService");
+const semesterRepairService = require("../services/semesterRepairService");
 const releaseWorkerManager = require("../services/releaseWorkerManager");
 const relayService = require("../services/relayService");
 const stagingUploadService = require("../services/stagingUploadService");
@@ -3795,6 +3796,48 @@ router.get("/terms/:term/readiness", adminAuth.verifyAdminAccess, (req, res) => 
   } catch (error) {
     return res.status(error.statusCode || 400).json({ success: false, code: error.code || "TERM_READINESS_FAILED", message: error.message });
   }
+});
+
+router.post("/terms/:term/repair-release/dry-run", adminAuth.verifyAdminAccess, async (req, res) => {
+  try {
+    const result = await semesterRepairService.repairCurrentTermRelease({
+      term: req.params.term,
+      sourceReleaseVersion: req.body && (req.body.sourceReleaseVersion || req.body.releaseVersion || req.body.version) || "",
+      dryRun: true,
+      activateAfterBuild: req.body && req.body.activateAfterBuild !== false,
+      syncOpenResty: req.body && req.body.syncOpenResty !== false,
+    });
+    return res.json({ success: true, result });
+  } catch (error) {
+    return res.status(error.statusCode || 400).json({
+      success: false,
+      code: error.code || "SEMESTER_REPAIR_DRY_RUN_FAILED",
+      errors: error.errors || [],
+      message: error.message,
+    });
+  }
+});
+
+router.post("/terms/:term/repair-release/start", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    storageLifecycleService.assertReleaseCanStart();
+    const input = {
+      term: req.params.term,
+      sourceReleaseVersion: req.body && (req.body.sourceReleaseVersion || req.body.releaseVersion || req.body.version) || "",
+      releaseVersion: req.body && (req.body.newReleaseVersion || req.body.targetReleaseVersion || req.body.repairReleaseVersion) || "",
+      activateAfterBuild: req.body && req.body.activateAfterBuild !== false,
+      syncOpenResty: req.body && req.body.syncOpenResty !== false,
+    };
+    const job = releaseWorkerManager.startReleaseJob("semester-repair", input);
+    writeAuditLog(req, "repair-release", "term", req.params.term, `Started semester release repair for ${req.params.term}`);
+    return res.status(202).json({ success: true, job, jobId: job.id });
+  } catch (error) {
+    return releaseWorkerManager.sendAlreadyRunning(res, error);
+  }
+});
+
+router.get("/terms/:term/repair-release/status", adminAuth.verifyAdminAccess, (req, res) => {
+  return sendJobStatus(res, "semester-repair", req.query.id);
 });
 
 router.post("/terms/:term/rebuild-runtime-pointer", adminAuth.verifyAdminAccess, (req, res) => {

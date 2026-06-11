@@ -1751,6 +1751,7 @@ function writeReleaseSnapshot(rawSnapshot) {
   manifest.compression = Object.assign({}, manifest.compression || {}, estimateStaticReleaseCompression(version, { includeManifest: true }));
   writeJsonAtomic(files.manifestPath, manifest);
   teachingCalendarService.writeReleaseCalendar(manifest, {
+    calendar,
     releaseDir: files.releaseDir,
     publicReleaseDir: files.publicReleaseDir,
   });
@@ -1806,6 +1807,7 @@ async function writeReleaseSnapshotAsync(rawSnapshot, options = {}) {
     );
     writeJsonAtomic(files.manifestPath, manifest);
     teachingCalendarService.writeReleaseCalendar(manifest, {
+      calendar,
       releaseDir: files.releaseDir,
       publicReleaseDir: files.publicReleaseDir,
     });
@@ -1833,6 +1835,19 @@ async function writeReleaseSnapshotAsync(rawSnapshot, options = {}) {
         err.code = "RELEASE_PACK_BUILD_UNHEALTHY";
         err.status = deepStatus;
         throw err;
+      }
+      if (typeof options.beforePromote === "function") {
+        await options.beforePromote({
+          version,
+          files,
+          finalFiles,
+          snapshot,
+          manifest,
+          bootstrap,
+          derived,
+          validation,
+          status: deepStatus,
+        });
       }
       if (options.job) options.job.progress(68, "promoting release files", { releaseVersion: version });
       replaceReleaseFilesFromBuild(files, finalFiles);
@@ -2487,9 +2502,15 @@ function rebuildReleasePack(version) {
   }
   const files = getReleaseFiles(normalizedVersion);
   const derived = writeDerivedIndexes(Object.assign({}, snapshot, { version: normalizedVersion }), files, false);
-  const manifest = buildManifest(snapshot, normalizedVersion, validation.counts, validation, files, derived);
+  const calendar = teachingCalendarService.readTermCalendar(snapshot.term || snapshot.semester);
+  const manifest = buildManifest(snapshot, normalizedVersion, validation.counts, validation, files, derived, calendar);
   manifest.compression = Object.assign({}, manifest.compression || {}, estimateStaticReleaseCompression(normalizedVersion, { includeManifest: true }));
   writeJsonAtomic(files.manifestPath, manifest);
+  teachingCalendarService.writeReleaseCalendar(manifest, {
+    calendar,
+    releaseDir: files.releaseDir,
+    publicReleaseDir: files.publicReleaseDir,
+  });
   const compression = mirrorStaticReleaseFiles(normalizedVersion);
   manifest.compression = Object.assign({}, manifest.compression || {}, compression);
   clearDerivedCache();
@@ -2538,13 +2559,19 @@ async function rebuildReleasePackAsync(version, options = {}) {
     const manifestSnapshot = Object.assign({}, normalizedSnapshot, {
       updatedAt: normalizedSnapshot.updatedAt || new Date().toISOString(),
     });
-    manifest = buildManifest(manifestSnapshot, normalizedVersion, validation.counts, validation, files, derived);
+    const calendar = teachingCalendarService.readTermCalendar(normalizedSnapshot.term || normalizedSnapshot.semester);
+    manifest = buildManifest(manifestSnapshot, normalizedVersion, validation.counts, validation, files, derived, calendar);
     manifest.compression = Object.assign(
       {},
       manifest.compression || {},
       estimateStaticReleaseCompression(normalizedVersion, { includeManifest: true, files })
     );
     writeJsonAtomic(files.manifestPath, manifest);
+    teachingCalendarService.writeReleaseCalendar(manifest, {
+      calendar,
+      releaseDir: files.releaseDir,
+      publicReleaseDir: files.publicReleaseDir,
+    });
     const compression = await mirrorStaticReleaseFilesAsync(normalizedVersion, {
       files,
       onProgress: (progress) => {

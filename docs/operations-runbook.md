@@ -51,3 +51,16 @@ NODE_ENV=production npm --prefix server start
 ## 回滚
 
 使用管理后台的 Release 历史模块回滚。不要手动删除 active Release 目录。回滚后要重新执行静态同步和 URL 验证，确保 OpenResty 与小程序指向同一个 Release。
+
+## Production runtime data
+
+`server/storage/term-registry.json` is persistent production runtime data, not a source-controlled default. Code deployment must not assume it will overwrite production registry state.
+
+Operational rules:
+
+- Deploy scripts deploy code only.
+- Do not delete the whole `server/storage` directory during deploy.
+- Do not clear `server/storage/snapshots/current.json` or `.gz`.
+- Do not overwrite XLS or user-local schedule data.
+- Do not use `git reset` or source checkout commands to force-remove production runtime files.
+- Term registry fixes must run through an explicit admin migration/repair Job, such as `管理后台 -> 学期管理 -> 修复并重建当前学期 Release`.

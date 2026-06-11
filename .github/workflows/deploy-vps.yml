@@ -127,6 +127,7 @@ jobs:
             CONTAINER_NAME='fosuclass-api'
             PUBLIC_BASE_URL='https://class.katelya.eu.org/static/releases'
             OPENRESTY_HOST_RELEASE_DIR='/opt/1panel/www/sites/class.katelya.eu.org/index/static/releases'
+            OPENRESTY_HOST_RUNTIME_DIR='/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime'
             STARTED_AT="$(date +%s)"
 
             sanitize() {
@@ -152,7 +153,9 @@ jobs:
             mkdir -p "$APP_DIR/server/storage"
             chmod 755 "$APP_DIR/server/storage"
             sudo mkdir -p "$OPENRESTY_HOST_RELEASE_DIR"
+            sudo mkdir -p "$OPENRESTY_HOST_RUNTIME_DIR"
             sudo chmod 755 "$OPENRESTY_HOST_RELEASE_DIR"
+            sudo chmod 755 "$OPENRESTY_HOST_RUNTIME_DIR"
 
             restart_before="$(sudo docker inspect -f '{{.RestartCount}}' "$CONTAINER_NAME" 2>/dev/null || echo 0)"
 
@@ -226,9 +229,11 @@ jobs:
             FOSU_CSRF_SECRET=${{ secrets.FOSU_CSRF_SECRET }}
 
             OPENRESTY_HOST_RELEASE_DIR=/opt/1panel/www/sites/class.katelya.eu.org/index/static/releases
+            OPENRESTY_HOST_RUNTIME_DIR=/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime
             STATIC_RELEASE_SYNC_ENABLED=true
             RELEASE_PACK_SRC=/app/storage/public/releases
             OPENRESTY_STATIC_RELEASE_DIR=/openresty-static/releases
+            OPENRESTY_STATIC_RUNTIME_DIR=/openresty-static/runtime
             PUBLIC_BASE_URL=https://class.katelya.eu.org/static/releases
             STATIC_RELEASE_KEEP_LATEST=3
             STATIC_RELEASE_SYNC_VERIFY_HTTP=true
@@ -297,9 +302,11 @@ jobs:
               PORT
               ADMIN_PASSWORD
               OPENRESTY_HOST_RELEASE_DIR
+              OPENRESTY_HOST_RUNTIME_DIR
               STATIC_RELEASE_SYNC_ENABLED
               RELEASE_PACK_SRC
               OPENRESTY_STATIC_RELEASE_DIR
+              OPENRESTY_STATIC_RUNTIME_DIR
               PUBLIC_BASE_URL
               STATIC_RELEASE_KEEP_LATEST
               STATIC_RELEASE_SYNC_VERIFY_HTTP
@@ -402,8 +409,8 @@ jobs:
               exit 1
             fi
 
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'test -d /app/storage && test -w /app/storage && test -d /openresty-static/releases && test -w /openresty-static/releases'
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'test "$STATIC_RELEASE_SYNC_ENABLED" = "true" && test "$RELEASE_PACK_SRC" = "/app/storage/public/releases" && test "$OPENRESTY_STATIC_RELEASE_DIR" = "/openresty-static/releases" && test "$PUBLIC_BASE_URL" = "https://class.katelya.eu.org/static/releases" && test "$FOSU_RELEASE_WORKER_ENABLED" = "true"'
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'test -d /app/storage && test -w /app/storage && test -d /openresty-static/releases && test -w /openresty-static/releases && test -d /openresty-static/runtime && test -w /openresty-static/runtime'
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'test "$STATIC_RELEASE_SYNC_ENABLED" = "true" && test "$RELEASE_PACK_SRC" = "/app/storage/public/releases" && test "$OPENRESTY_STATIC_RELEASE_DIR" = "/openresty-static/releases" && test "$OPENRESTY_STATIC_RUNTIME_DIR" = "/openresty-static/runtime" && test "$PUBLIC_BASE_URL" = "https://class.katelya.eu.org/static/releases" && test "$FOSU_RELEASE_WORKER_ENABLED" = "true"'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "const s=require(\"./src/services/securityModeService\").getSecurityStatus(); if(!s.mode) process.exit(1); console.log(\"security_mode=\"+s.mode)"'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/verify-ai-provider.js --mode=status' 2>&1 | sanitize

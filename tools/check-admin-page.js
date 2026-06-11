@@ -43,6 +43,14 @@ function assertStaticHtml(html) {
   assertIncludes(html, 'id="appSidebar"', "sidebar");
   assertIncludes(html, 'id="mobileMenuBtn"', "mobile menu");
   assertIncludes(html, 'id="section-sync"', "sync section");
+  assertIncludes(html, 'id="section-terms"', "terms section");
+  assertIncludes(html, 'id="repairCurrentTermReleaseBtn"', "semester repair button");
+  assertIncludes(html, 'id="termRepairJobLog"', "semester repair job log");
+  assertIncludes(html, "/repair-release/dry-run", "semester repair dry-run API");
+  assertIncludes(html, "/repair-release/start", "semester repair start API");
+  assertIncludes(html, "repairCurrentTermReleaseFromPanel", "semester repair click handler");
+  assertIncludes(html, "不重新采集课表", "semester repair confirmation no recrawl");
+  assertIncludes(html, "不影响用户本地课表和 XLS 导入", "semester repair confirmation local data safety");
   assertIncludes(html, 'class="sync-dashboard-grid"', "compact sync two-column layout");
   assertIncludes(html, 'id="staging-cli-upload-panel"', "always-visible staging upload panel");
   assertIncludes(html, 'id="quickUploadCommand"', "quick staging CLI command");

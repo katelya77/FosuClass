@@ -5,7 +5,8 @@ const BUILTIN_TERM_CONFIG = {
   totalWeeks: 19,
   weekStart: "monday",
   source: "builtin-2025-2026-2",
-  releaseVersion: "2026-06-11-calendar-v2",
+  calendarRevision: "2026-06-11-calendar-v2",
+  releaseVersion: "",
 };
 
 const LABOR_DAY_NOTE = "劳动节：5月1日至5日放假调休，共5天。5月9日（星期六）补上5月5日（星期二）的课。";
@@ -45,6 +46,7 @@ function getBuiltinTeachingCalendar() {
     term: BUILTIN_TERM_CONFIG.term,
     semester: BUILTIN_TERM_CONFIG.term,
     releaseVersion: BUILTIN_TERM_CONFIG.releaseVersion,
+    calendarRevision: BUILTIN_TERM_CONFIG.calendarRevision,
     semesterText: BUILTIN_TERM_CONFIG.semesterText,
     source: "builtin-fallback",
     updatedAt: "2026-06-11T00:00:00.000Z",

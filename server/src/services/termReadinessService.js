@@ -27,9 +27,6 @@ function getOpenRestyRuntimePath() {
   if (process.env.OPENRESTY_STATIC_RUNTIME_DIR) {
     return path.resolve(process.env.OPENRESTY_STATIC_RUNTIME_DIR, "active.json");
   }
-  if (process.env.OPENRESTY_STATIC_RELEASE_DIR) {
-    return path.resolve(process.env.OPENRESTY_STATIC_RELEASE_DIR, "..", "runtime", "active.json");
-  }
   return "";
 }
 
@@ -106,6 +103,36 @@ function buildTermReadiness(term, releaseVersion, options = {}) {
   const calendar = version ? teachingCalendarService.readReleaseCalendar(version) : (record ? teachingCalendarService.readTermCalendar(record.term) : null);
   const localCalendarPath = files ? teachingCalendarService.getReleaseCalendarPath(version, false) : "";
   const publicCalendarPath = files ? teachingCalendarService.getReleaseCalendarPath(version, true) : "";
+  const manifestTerm = manifest && (manifest.term || manifest.semester || manifest.termConfig && manifest.termConfig.term) || "";
+  const manifestTermMatches = Boolean(manifest && manifestTerm === term);
+  const manifestTermConfig = manifest && manifest.termConfig && typeof manifest.termConfig === "object" ? manifest.termConfig : null;
+  const manifestTermConfigErrors = [];
+  if (!manifest) {
+    manifestTermConfigErrors.push("RELEASE_MANIFEST_MISSING");
+  } else if (!manifestTermConfig) {
+    manifestTermConfigErrors.push("TERM_CONFIG_INCOMPLETE");
+  } else {
+    ["term", "semesterText", "termStartDate", "totalWeeks", "weekStart", "releaseVersion"].forEach((key) => {
+      if (manifestTermConfig[key] === undefined || manifestTermConfig[key] === null || manifestTermConfig[key] === "") {
+        manifestTermConfigErrors.push(`${key.toUpperCase()}_REQUIRED`);
+      }
+    });
+    if (manifestTermConfig.term && manifestTermConfig.term !== term) {
+      manifestTermConfigErrors.push("TERM_MISMATCH");
+    }
+    if (manifestTermConfig.releaseVersion && manifestTermConfig.releaseVersion !== version) {
+      manifestTermConfigErrors.push("RELEASE_VERSION_MISMATCH");
+    }
+  }
+  const manifestCalendarMetadataErrors = [];
+  if (!manifest) {
+    manifestCalendarMetadataErrors.push("RELEASE_MANIFEST_MISSING");
+  } else {
+    if (!manifest.calendarUrl) manifestCalendarMetadataErrors.push("CALENDAR_URL_REQUIRED");
+    if (!manifest.calendarHash) manifestCalendarMetadataErrors.push("CALENDAR_HASH_REQUIRED");
+    if (!manifest.calendarCount) manifestCalendarMetadataErrors.push("CALENDAR_COUNT_REQUIRED");
+    if (!manifest.calendarUpdatedAt) manifestCalendarMetadataErrors.push("CALENDAR_UPDATED_AT_REQUIRED");
+  }
   const runtimePointerBefore = runtimePointerService.readActivePointer();
   let runtimePointer = runtimePointerBefore;
   let runtimeRepair = null;
@@ -173,11 +200,22 @@ function buildTermReadiness(term, releaseVersion, options = {}) {
 
   checks.push(check(
     "manifest-term-match",
-    manifestCheck.valid ? "pass" : "fail",
-    manifestCheck.valid ? "manifest.term 与目标学期一致。" : `manifest 校验失败：${manifestCheck.errors.join("; ")}`,
+    manifestTermMatches ? "pass" : "fail",
+    manifestTermMatches ? "manifest.term 与目标学期一致。" : "manifest.term 与目标学期不一致。",
     term,
-    manifest ? (manifest.term || manifest.semester || "") : "",
+    manifestTerm,
     "不要用其他学期的 release 激活当前学期；重新绑定正确 releaseVersion。"
+  ));
+
+  checks.push(check(
+    "manifest-term-config",
+    manifestTermConfigErrors.length === 0 && manifestCheck.valid ? "pass" : "fail",
+    manifestTermConfigErrors.length === 0 && manifestCheck.valid
+      ? "manifest.termConfig 完整，并与目标 release 一致。"
+      : `manifest.termConfig 缺失或不完整：${manifestTermConfigErrors.concat(manifestCheck.errors || []).join("; ")}`,
+    { termStartDate: "YYYY-MM-DD", totalWeeks: "number", weekStart: "monday|sunday", releaseVersion: version || "releaseVersion" },
+    manifestTermConfig || null,
+    "该 Release 创建于教学周历元数据功能上线前，请使用“修复并重建当前学期 Release”，不要仅重新绑定旧 Release。"
   ));
 
   checks.push(check(
@@ -239,12 +277,22 @@ function buildTermReadiness(term, releaseVersion, options = {}) {
   ));
 
   checks.push(check(
-    "manifest-calendar-url",
-    manifest && manifest.calendarUrl ? "pass" : "fail",
-    manifest && manifest.calendarUrl ? "manifest.calendarUrl 已配置。" : "manifest.calendarUrl 缺失。",
-    `/static/releases/${version}/calendar.json`,
-    manifest && manifest.calendarUrl || "",
-    "重新构建 release manifest，确保包含 calendarUrl/calendarHash/calendarCount/calendarUpdatedAt。"
+    "manifest-calendar-metadata",
+    manifestCalendarMetadataErrors.length === 0 ? "pass" : "fail",
+    manifestCalendarMetadataErrors.length === 0 ? "manifest calendar 元数据完整。" : `manifest calendar 元数据缺失：${manifestCalendarMetadataErrors.join("; ")}`,
+    {
+      calendarUrl: `/static/releases/${version}/calendar.json`,
+      calendarHash: "sha256(calendar.json)",
+      calendarCount: record && record.totalWeeks || 0,
+      calendarUpdatedAt: "ISO timestamp",
+    },
+    manifest ? {
+      calendarUrl: manifest.calendarUrl || "",
+      calendarHash: manifest.calendarHash || "",
+      calendarCount: manifest.calendarCount || 0,
+      calendarUpdatedAt: manifest.calendarUpdatedAt || "",
+    } : null,
+    "该 Release 创建于教学周历元数据功能上线前，请使用“修复并重建当前学期 Release”，不要仅重新绑定旧 Release。"
   ));
 
   const actualCalendarHash = calendar ? hashCalendar(calendar) : "";
@@ -260,7 +308,7 @@ function buildTermReadiness(term, releaseVersion, options = {}) {
   const calendarCount = calendar && Array.isArray(calendar.weeks) ? calendar.weeks.length : 0;
   checks.push(check(
     "calendar-count",
-    record && calendarCount === Number(record.totalWeeks) && (!manifest || !manifest.calendarCount || Number(manifest.calendarCount || 0) === Number(record.totalWeeks)) ? "pass" : "fail",
+    record && manifest && calendarCount === Number(record.totalWeeks) && Number(manifest.calendarCount || 0) === Number(record.totalWeeks) ? "pass" : "fail",
     record && calendarCount === Number(record.totalWeeks) ? "教学周历周数与 term registry 一致。" : "教学周历周数与 term registry 不一致。",
     record ? `calendarCount == ${record.totalWeeks}` : "term registry totalWeeks",
     { manifestCalendarCount: manifest && manifest.calendarCount || 0, calendarCount },
@@ -269,7 +317,7 @@ function buildTermReadiness(term, releaseVersion, options = {}) {
 
   checks.push(check(
     "term-date-config",
-    record && record.termStartDate && record.weekStart === "monday" && !(record.term === "2025-2026-2" && Number(record.totalWeeks) === 20) ? "pass" : (record && record.term === "2025-2026-2" && Number(record.totalWeeks) === 20 ? "warn" : "fail"),
+    record && record.termStartDate && record.weekStart === "monday" && !(record.term === "2025-2026-2" && Number(record.totalWeeks) === 20) ? "pass" : "fail",
     record && record.term === "2025-2026-2" && Number(record.totalWeeks) === 20
       ? "检测到旧 totalWeeks=20 口径，请确认是否为旧配置。"
       : "当前学期日期配置检查。",
@@ -306,6 +354,17 @@ function buildTermReadiness(term, releaseVersion, options = {}) {
 
   const summary = summarizeChecks(checks);
   const blockers = checks.filter((item) => item.status === "fail").map((item) => item.key);
+  const legacyCalendarRepairEligible = Boolean(
+    term === "2025-2026-2" &&
+    (
+      !manifest ||
+      !manifest.calendarUrl ||
+      !manifest.calendarHash ||
+      !manifest.calendarCount ||
+      !calendar ||
+      Number(record && record.totalWeeks || 0) === 20
+    )
+  );
   return {
     term,
     releaseVersion: version,
@@ -314,6 +373,13 @@ function buildTermReadiness(term, releaseVersion, options = {}) {
     blockers,
     checks,
     summary,
+    repairAction: legacyCalendarRepairEligible ? {
+      type: "current-term-release-repair",
+      label: "修复并重建当前学期 Release",
+      term,
+      sourceReleaseVersion: version,
+      reason: "该 Release 创建于教学周历元数据功能上线前，请使用“修复并重建当前学期 Release”，不要仅重新绑定旧 Release。",
+    } : null,
     manifest: manifest ? {
       term: manifest.term,
       releaseVersion: manifest.releaseVersion,

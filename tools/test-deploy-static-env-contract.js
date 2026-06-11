@@ -7,9 +7,11 @@ const workflow = fs.readFileSync(path.join(root, ".github", "workflows", "deploy
 const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
 
 [
+  "OPENRESTY_HOST_RUNTIME_DIR=/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime",
   "STATIC_RELEASE_SYNC_ENABLED=true",
   "RELEASE_PACK_SRC=/app/storage/public/releases",
   "OPENRESTY_STATIC_RELEASE_DIR=/openresty-static/releases",
+  "OPENRESTY_STATIC_RUNTIME_DIR=/openresty-static/runtime",
   "PUBLIC_BASE_URL=https://class.katelya.eu.org/static/releases",
   "STATIC_RELEASE_KEEP_LATEST=3",
   "STATIC_RELEASE_SYNC_VERIFY_HTTP=true",
@@ -52,6 +54,7 @@ const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
   "sudo docker compose up -d --build",
   "test -d /app/storage && test -w /app/storage",
   "test -d /openresty-static/releases && test -w /openresty-static/releases",
+  "test -d /openresty-static/runtime && test -w /openresty-static/runtime",
   "node scripts/reconcile-static-release.js",
   "node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000",
   "actions/setup-node@v4",
