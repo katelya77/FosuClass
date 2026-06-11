@@ -77,6 +77,39 @@ async function loadTask(server, token) {
   return data.task;
 }
 
+async function postRelayStatus(server, token, endpoint, body) {
+  try {
+    const res = await fetchWithTimeout(`${server}/api/relay/tasks/${encodeURIComponent(token)}/${endpoint}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-relay-token": token,
+      },
+      body: JSON.stringify(body || {}),
+      timeoutMs: 8000,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (data.task && data.task.cancelRequested) {
+      throw new Error("RELAY_TASK_CANCELLED");
+    }
+    return data;
+  } catch (error) {
+    if (error.message === "RELAY_TASK_CANCELLED") throw error;
+    console.warn(`relay status report failed: ${error.message}`);
+    return null;
+  }
+}
+
+function resolveTaskInclude(task) {
+  const plan = task && task.syncPlan || {};
+  if (Array.isArray(plan.scopes) && plan.scopes.length) return plan.scopes.join(",");
+  const type = String(task && task.taskType || "daily").toLowerCase();
+  if (type.includes("teachers")) return "teacherSchedules,teachers";
+  if (type.includes("classrooms")) return "classroomSchedules,classrooms";
+  if (type.includes("courses")) return "courseSchedules,courses";
+  return "classSchedules,teacherSchedules,classroomSchedules,courseSchedules,classrooms,teachers,courses";
+}
+
 function containsSensitiveData(value) {
   if (value === undefined || value === null) return false;
   if (Array.isArray(value)) {
@@ -283,6 +316,12 @@ async function main() {
   console.log(`服务器：${server}`);
 
   const task = await loadTask(server, token);
+  await postRelayStatus(server, token, "heartbeat", {
+    version: "1.1.0",
+    platform: process.platform,
+    loginState: "not-checked",
+  });
+  await postRelayStatus(server, token, "progress", { phase: "network-diagnosis", progress: 5, status: "running" });
   console.log(`当前任务：${task.term} ${task.description || "全校课表采集"}`);
   console.log(`任务有效期：${task.expiresAt}`);
 
@@ -296,12 +335,20 @@ async function main() {
     console.log(`- ${item.label}: ${item.ok ? "可访问" : "不可访问"} (${item.status || item.error || "no response"}, ${item.duration}ms)`);
   });
   
+  await postRelayStatus(server, token, "heartbeat", {
+    version: "1.1.0",
+    platform: process.platform,
+    network: checks,
+    loginState: "not-checked",
+  });
+
   if (!checks[0].ok || !checks[1].ok) {
     console.log("\n⚠️ 警告：无法正常访问学校教务网，请确保您当前已连接佛大校园网或已启动学校 VPN 拨号。");
   }
 
   console.log("\n================ [步骤 1：登录教务系统] ================");
   console.log("即将为您启动系统浏览器登录教务系统，请在弹出的浏览器中手动登录。");
+  await postRelayStatus(server, token, "progress", { phase: "login", progress: 15, status: "running" });
   const child_process = require("child_process");
   try {
     const loginScript = resolveToolScript("login.js");
@@ -319,8 +366,9 @@ async function main() {
   console.log("\n================ [步骤 2：抓取全校课表数据] ================");
   console.log(`开始抓取全校课程数据（学期：${task.term}），此过程约需要 10 分钟。期间请不要关闭浏览器窗口。`);
   try {
+    await postRelayStatus(server, token, "progress", { phase: "crawl", progress: 30, status: "running" });
     const syncScript = resolveToolScript("sync.js");
-    const syncArgs = [syncScript, "local-campus", `--term=${task.term}`];
+    const syncArgs = [syncScript, "local-campus", `--term=${task.term}`, `--include=${resolveTaskInclude(task)}`, "--class-scope=all"];
     if (task.termConfig && task.termConfig.termStartDate) {
       syncArgs.push(`--term-start-date=${task.termConfig.termStartDate}`);
     }
@@ -355,10 +403,12 @@ async function main() {
     return;
   }
 
+  await postRelayStatus(server, token, "progress", { phase: "upload", progress: 82, status: "running" });
   const result = await upload(server, token, args, filePath, task);
   console.log("\n已成功上传接力 Staging JSON，等待管理员审核发布。");
   console.log(`上传编号：${result.upload && result.upload.id ? result.upload.id : "-"}`);
   
+  await postRelayStatus(server, token, "progress", { phase: "uploaded", progress: 100, status: "pending-review" });
   cleanupSession();
 }
 

@@ -3083,7 +3083,7 @@ const adminConsoleHtml = `<!doctype html>
                     <span>PowerShell / 本机采集</span>
                     <button type="button" class="copy-flow-btn" id="flowCopyBtnLocal">复制全部命令</button>
                   </div>
-                  <pre class="code-raw"><code id="flowCmdTextLocal">npm run sync:local-campus -- --term=2026-2027-1</code></pre>
+                  <pre class="code-raw"><code id="flowCmdTextLocal">npm run sync:daily -- --term=2025-2026-2</code></pre>
                   <div class="code-preview-scroller"><div class="code-preview-lines"></div></div>
                 </div>
                 <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">（管理员本机使用，需要进入项目根目录并拥有源码与 Node.js 环境）</div>
@@ -5391,13 +5391,19 @@ const adminConsoleHtml = `<!doctype html>
           "<span>warn " + escapeHtml(summary.warn || 0) + "</span>",
           "<span>pass " + escapeHtml(summary.pass || 0) + "</span>"
         ].join("");
+        var categorized = readiness.categorizedChecks || {};
         var groups = [
-          { status: "fail", title: "失败项" },
-          { status: "warn", title: "警告项" },
-          { status: "pass", title: "通过项" }
+          { category: "blocker", status: "fail", title: "阻断项" },
+          { category: "auto-repairable", status: "fail", title: "可自动修复项" },
+          { category: "warning", status: "warn", title: "警告项" },
+          { category: "info", status: "pass", title: "信息项" }
         ];
         checksEl.innerHTML = groups.map(function(group) {
-          var items = readiness.checks.filter(function(item) { return item.status === group.status; });
+          var items = Array.isArray(categorized[group.category])
+            ? categorized[group.category]
+            : readiness.checks.filter(function(item) {
+                return item.category === group.category || (!item.category && item.status === group.status);
+              });
           if (!items.length) return "";
           return "<div class='readiness-group'>" +
             "<div class='readiness-group-head'><span>" + escapeHtml(group.title) + "</span><span>" + items.length + "</span></div>" +
@@ -5410,6 +5416,7 @@ const adminConsoleHtml = `<!doctype html>
                 "<div>" + escapeHtml(item.message || "-") + "</div>" +
                 "<div class='readiness-item-meta'><strong>expected:</strong> " + escapeHtml(formatReadinessValue(item.expected)) + "</div>" +
                 "<div class='readiness-item-meta'><strong>actual:</strong> " + escapeHtml(formatReadinessValue(item.actual)) + "</div>" +
+                (item.autoRepairable ? "<div class='readiness-item-meta'><strong>auto repair:</strong> safe</div>" : "") +
                 "<div class='readiness-fix'><strong>修复建议:</strong> " + escapeHtml(item.fixHint || "-") + "</div>" +
               "</div>";
             }).join("") +
@@ -6699,6 +6706,7 @@ const adminConsoleHtml = `<!doctype html>
           "verifying-local": "本地验证",
           "verifying-public-url": "公网 URL 验证",
           "pruning-old-releases": "清理旧版本",
+          "cancel-requested": "请求取消",
           completed: "已完成"
         };
         return map[status] || status || "-";
@@ -6726,10 +6734,13 @@ const adminConsoleHtml = `<!doctype html>
         list.slice(0, 20).forEach(function(task) {
           var tr = document.createElement("tr");
           var command = buildRelayRunCommand(task);
+          var progressText = (task.phase || task.status || "-") + " · " + (task.progress || 0) + "%";
+          var agentText = task.agent && task.agent.version ? ("Agent " + task.agent.version) : "Agent 未在线";
+          var heartbeatText = task.lastHeartbeatAt ? ("心跳 " + formatDate(task.lastHeartbeatAt)) : "等待心跳";
           tr.innerHTML =
-            "<td><strong>" + escapeHtml(task.term) + "</strong><br><span style='color:var(--muted);'>" + escapeHtml(task.description || "") + "</span><br><span style='color:var(--muted);'>有效期：" + formatDate(task.expiresAt) + "</span></td>" +
+            "<td><strong>" + escapeHtml(task.term) + "</strong><br><span style='color:var(--muted);'>" + escapeHtml(task.taskType || "sync:daily") + " · " + escapeHtml(task.description || "") + "</span><br><span style='color:var(--muted);'>有效期：" + formatDate(task.expiresAt) + "</span></td>" +
             "<td><code class='relay-token'>" + escapeHtml(task.relayToken) + "</code><code class='relay-token relay-command'>" + escapeHtml(command) + "</code></td>" +
-            "<td><span class='badge info'>" + relayStatusText(task.status) + "</span><br><span style='color:var(--muted);'>上传 " + (task.uploadCount || 0) + "/" + (task.maxUploads || 1) + "</span></td>" +
+            "<td><span class='badge info'>" + relayStatusText(task.status) + "</span><br><span style='color:var(--muted);'>" + escapeHtml(progressText) + "</span><br><span style='color:var(--muted);'>" + escapeHtml(agentText) + "</span><br><span style='color:var(--muted);'>" + escapeHtml(heartbeatText) + "</span><br><span style='color:var(--muted);'>上传 " + (task.uploadCount || 0) + "/" + (task.maxUploads || 1) + "</span></td>" +
             "<td class='action-cell'></td>";
           var copyBtn = document.createElement("button");
           copyBtn.className = "btn secondary";
@@ -6739,6 +6750,16 @@ const adminConsoleHtml = `<!doctype html>
             window.copyText(command);
           });
           tr.querySelector(".action-cell").appendChild(copyBtn);
+          tr.querySelector(".action-cell").appendChild(document.createTextNode(" "));
+          var cancelBtn = document.createElement("button");
+          cancelBtn.className = "btn ghost";
+          cancelBtn.style = "padding: 3px 8px; font-size:11px;";
+          cancelBtn.textContent = "取消";
+          cancelBtn.disabled = task.cancelRequested === true || task.status === "revoked" || task.status === "published" || task.status === "expired";
+          cancelBtn.addEventListener("click", function() {
+            cancelRelayTask(task.id, cancelBtn);
+          });
+          tr.querySelector(".action-cell").appendChild(cancelBtn);
           tr.querySelector(".action-cell").appendChild(document.createTextNode(" "));
           var revokeBtn = document.createElement("button");
           revokeBtn.className = "btn danger";
@@ -6912,12 +6933,33 @@ const adminConsoleHtml = `<!doctype html>
         return (value / 1024).toFixed(1) + " KB";
       }
 
+      function getWizardScopeList() {
+        var scopes = [];
+        if ($("rangeClass") && $("rangeClass").checked) scopes.push("classSchedules");
+        if ($("rangeTeacher") && $("rangeTeacher").checked) scopes.push("teacherSchedules");
+        if ($("rangeClassroom") && $("rangeClassroom").checked) scopes.push("classroomSchedules");
+        if ($("rangeCourse") && $("rangeCourse").checked) scopes.push("courseSchedules");
+        return scopes;
+      }
+
       function createRelayTask() {
+        var relayScopes = getWizardScopeList();
+        var taskType = resolveSyncScriptName("local-campus", relayScopes);
         var payload = {
           term: getTermValue("relayTaskTerm", "relayTaskTermCustom") || getTermValue("wizardTerm", "wizardTermCustom") || "2026-2027-1",
           description: value("relayTaskDescription") || "全校课表接力采集",
           expiresInHours: parseInt(value("relayTaskExpiresIn") || "24", 10),
-          maxUploads: parseInt(value("relayTaskMaxUploads") || "1", 10)
+          maxUploads: parseInt(value("relayTaskMaxUploads") || "1", 10),
+          taskType: taskType,
+          syncPlan: {
+            taskType: taskType,
+            scopes: relayScopes,
+            catalogPolicy: "reuse-validated",
+            schedulePolicy: "network-only",
+            progressPolicy: "ignore",
+            negativeCachePolicy: "ignore",
+            mergeOldData: false
+          }
         };
         api("/api/admin/relay/tasks", {
           method: "POST",
@@ -6944,6 +6986,23 @@ const adminConsoleHtml = `<!doctype html>
         })
           .then(function() {
             showToast("接力任务已吊销", "success");
+            return loadSyncStatus();
+          })
+          .catch(function(error) {
+            restoreButton();
+            showToast(error.message, "error");
+          });
+      }
+
+      function cancelRelayTask(id, btn) {
+        if (!confirm("确定取消这个接力任务吗？Agent 会在下一次心跳或阶段切换时停止。")) return;
+        var restoreButton = setButtonLoading(btn, "取消中...");
+        api("/api/admin/relay/tasks/" + encodeURIComponent(id) + "/cancel", {
+          method: "POST",
+          body: "{}"
+        })
+          .then(function() {
+            showToast("已请求取消接力任务", "success");
             return loadSyncStatus();
           })
           .catch(function(error) {
@@ -7059,6 +7118,23 @@ const adminConsoleHtml = `<!doctype html>
         return match ? match[1] : "2026";
       }
 
+      function resolveSyncScriptName(source, scopes) {
+        var selected = Array.isArray(scopes) ? scopes : [];
+        if (source === "staging-upload") return "sync:upload-staging";
+        if (source === "relay-agent") return "sync:relay-agent";
+        var hasClass = selected.indexOf("classSchedules") >= 0;
+        var hasTeacher = selected.indexOf("teacherSchedules") >= 0;
+        var hasClassroom = selected.indexOf("classroomSchedules") >= 0;
+        var hasCourse = selected.indexOf("courseSchedules") >= 0;
+        var dynamicCount = [hasClass, hasTeacher, hasClassroom, hasCourse].filter(Boolean).length;
+        if (dynamicCount === 4) return "sync:daily";
+        if (dynamicCount === 1 && hasClass) return "sync:daily:classes";
+        if (dynamicCount === 1 && hasTeacher) return "sync:daily:teachers";
+        if (dynamicCount === 1 && hasClassroom) return "sync:daily:classrooms";
+        if (dynamicCount === 1 && hasCourse) return "sync:daily:courses";
+        return "sync:scopes";
+      }
+
       // 更新向导命令预览与运维卡片列表
       function updateWizardCommand() {
         var term = getTermValue("wizardTerm", "wizardTermCustom") || (state.dashboard && state.dashboard.currentSemester) || "";
@@ -7165,7 +7241,10 @@ const adminConsoleHtml = `<!doctype html>
           cliArgs.push("--force-refresh");
         }
 
-        var cliArgsStr = cliArgs.join(" ");
+        var scriptName = resolveSyncScriptName(source, scopes);
+        var cliArgsStr = scriptName === "sync:upload-staging"
+          ? "--file=" + output + " --term=" + (term || "请先选择学期")
+          : cliArgs.join(" ");
 
         // 构造命令文本。换行和 bash 续行符用运行时字符生成，避免服务端模板字符串提前展开成浏览器脚本中的非法换行。
         var commandText = "";
@@ -7181,20 +7260,20 @@ const adminConsoleHtml = `<!doctype html>
           envVars.forEach(function(ev) {
             commandText += "set " + ev.name + "=" + ev.val + lineBreak;
           });
-          commandText += "npm run sync:" + source + " -- " + cliArgsStr;
+          commandText += "npm run " + scriptName + " -- " + cliArgsStr;
         } else if (shell === "powershell") {
           commandText += "cd " + projectDirWin + lineBreak;
           envVars.forEach(function(ev) {
             commandText += '$env:' + ev.name + '="' + ev.val + '"' + lineBreak;
           });
-          commandText += "npm run sync:" + source + " -- " + cliArgsStr;
+          commandText += "npm run " + scriptName + " -- " + cliArgsStr;
         } else {
           // bash
           commandText += "cd " + projectDirBash + lineBreak;
           envVars.forEach(function(ev) {
             commandText += ev.name + "=" + ev.val + bashContinuation;
           });
-          commandText += "npm run sync:" + source + " -- " + cliArgsStr;
+          commandText += "npm run " + scriptName + " -- " + cliArgsStr;
         }
 
         // 显示到界面
@@ -7205,7 +7284,7 @@ const adminConsoleHtml = `<!doctype html>
           $("flowCmdTextLocal").textContent = commandText;
         }
         if ($("quickUploadCommand")) {
-          $("quickUploadCommand").textContent = "cd " + projectDirWin + lineBreak + "npm run sync:local-upload -- --file=" + output + " --server=https://class.katelya.eu.org";
+          $("quickUploadCommand").textContent = "cd " + projectDirWin + lineBreak + "npm run sync:upload-staging -- --file=" + output + " --term=" + (term || "请先选择学期");
         }
         renderAllCodePreviews();
 
@@ -7217,9 +7296,9 @@ const adminConsoleHtml = `<!doctype html>
               var syncCommandsWrap = $("syncCommands");
               if (syncCommandsWrap) {
                 syncCommandsWrap.innerHTML = "";
-                var normalCmds = cmds.filter(function(c) { return c.id !== "new-term"; });
+                var normalCmds = cmds;
                 normalCmds.forEach(function(c) {
-                  var riskClass = c.risk.indexOf("低") >= 0 ? "low" : (c.risk.indexOf("中高") >= 0 ? "high" : "medium");
+                  var riskClass = c.risk === "low" || c.risk.indexOf("低") >= 0 ? "low" : (c.risk === "high" || c.risk.indexOf("中高") >= 0 ? "high" : "medium");
                   var riskBadge = "<span class='command-tag " + riskClass + "'>风险: " + c.risk + "</span>";
                   var intranetBadge = c.intranetRequired ? "<span class='command-tag high'>⚠️ 需校园网</span>" : "<span class='command-tag low'>外网可用</span>";
                   var isDefaultExpanded = false;

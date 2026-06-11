@@ -42,6 +42,23 @@ function summarizeChecks(checks) {
   };
 }
 
+function classifyReadinessCheck(item) {
+  const key = item && item.key || "";
+  const autoRepairKeys = new Set([
+    "runtime-active-pointer",
+    "static-runtime-file",
+    "api-runtime-active-generatable",
+    "manifest-calendar-metadata",
+    "calendar-hash-match",
+    "calendar-count",
+    "openresty-static-root",
+  ]);
+  if (autoRepairKeys.has(key)) return "auto-repair";
+  if (item && item.status === "fail") return "blocking";
+  if (item && item.status === "warn") return "warning";
+  return "info";
+}
+
 function parseDateOnly(value) {
   const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (!match) return null;
@@ -354,6 +371,16 @@ function buildTermReadiness(term, releaseVersion, options = {}) {
 
   const summary = summarizeChecks(checks);
   const blockers = checks.filter((item) => item.status === "fail").map((item) => item.key);
+  const classifiedChecks = checks.map((item) => Object.assign({}, item, {
+    category: classifyReadinessCheck(item),
+    autoRepairable: classifyReadinessCheck(item) === "auto-repair",
+  }));
+  const categorized = {
+    blocking: classifiedChecks.filter((item) => item.category === "blocking"),
+    autoRepair: classifiedChecks.filter((item) => item.category === "auto-repair"),
+    warning: classifiedChecks.filter((item) => item.category === "warning"),
+    info: classifiedChecks.filter((item) => item.category === "info"),
+  };
   const legacyCalendarRepairEligible = Boolean(
     term === "2025-2026-2" &&
     (
@@ -371,7 +398,8 @@ function buildTermReadiness(term, releaseVersion, options = {}) {
     record,
     ready: blockers.length === 0,
     blockers,
-    checks,
+    checks: classifiedChecks,
+    categorizedChecks: categorized,
     summary,
     repairAction: legacyCalendarRepairEligible ? {
       type: "current-term-release-repair",

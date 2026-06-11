@@ -77,6 +77,7 @@
             class="tool-chip {{tool.statusClass}}"
           >{{tool.displayText}}</view>
         </view>
+        <view class="evidence-strip" wx:if="{{message.evidenceText}}">{{message.evidenceText}}</view>
 
         <view class="ai-card-list" wx:if="{{message.displayCards.length}}">
           <view

@@ -385,6 +385,8 @@ function normalizeHistoryItem(item) {
     cards: Array.isArray(source.cards) ? source.cards : [],
     suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6) : [],
     toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls.slice(0, 8) : [],
+    taskSteps: Array.isArray(source.taskSteps) ? source.taskSteps.slice(0, 8) : [],
+    evidence: source.evidence && typeof source.evidence === "object" && !Array.isArray(source.evidence) ? source.evidence : null,
     safety: source.safety || null,
     metrics: source.metrics && typeof source.metrics === "object" && !Array.isArray(source.metrics) ? source.metrics : null,
     timeText: source.timeText || "",
@@ -414,6 +416,31 @@ function clearAiHistory() {
   return [];
 }
 
+function getRememberedPersonalization() {
+  return {
+    personalContextAllowed: isPersonalContextAllowed(),
+    latestScheduleImport: getLatestScheduleImport(),
+    pendingClarification: getPendingClarification(),
+    localOnly: true,
+  };
+}
+
+function pausePersonalization() {
+  setPersonalContextAllowed(false);
+  return getRememberedPersonalization();
+}
+
+function clearPersonalization() {
+  try {
+    wx.removeStorageSync(ALLOW_PERSONAL_CONTEXT_KEY);
+    wx.removeStorageSync(LAST_IMPORT_CONTEXT_KEY);
+    wx.removeStorageSync(PENDING_CLARIFICATION_KEY);
+  } catch (error) {
+    // best effort
+  }
+  return getRememberedPersonalization();
+}
+
 function chat(message, context) {
   return request.post("/api/ai/agent/chat", {
     message: redactSensitiveText(message).slice(0, 2000),
@@ -438,11 +465,14 @@ module.exports = {
   chat,
   clearPendingClarification,
   clearAiHistory,
+  clearPersonalization,
   formatLocalIsoWithOffset,
   getAiHistory,
   getLatestScheduleImport,
   getPendingClarification,
+  getRememberedPersonalization,
   isPersonalContextAllowed,
+  pausePersonalization,
   redactSensitiveText,
   rememberLatestScheduleImport,
   sanitizeCourse,

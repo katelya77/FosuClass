@@ -64,3 +64,28 @@ flowchart LR
 - Release manifest。
 - catalog 存储。
 - 静态 Release Pack。
+# 2026 sync operations update
+
+Local sync caches are now isolated by `tools/fosu-sync-client/.cache/{term}`.
+Dynamic schedules are written under run-scoped directories and only promote to
+`latest.json` after validation. Daily and new-term commands default to
+`network-only`, `ignore` progress, `ignore` negative cache, and
+`mergeOldData=false`.
+
+Release manifests may include `scopeSources` without breaking older clients:
+
+```json
+{
+  "scopeSources": {
+    "classSchedules": { "mode": "network-direct" },
+    "teacherSchedules": { "mode": "network-direct" },
+    "classroomSchedules": { "mode": "network-direct" },
+    "courseSchedules": { "mode": "network-direct" }
+  }
+}
+```
+
+Future terms stay `planned` or `ready` until an administrator explicitly
+activates them. Runtime pointer updates, term-index writes, OpenResty sync, and
+mini program probes are treated as one publish lifecycle; any failure preserves
+the previous active release.

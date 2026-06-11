@@ -164,9 +164,42 @@ function clone(value) {
   return JSON.parse(JSON.stringify(value));
 }
 
+function buildDemoTaskSteps(response) {
+  const names = (Array.isArray(response.toolCalls) ? response.toolCalls : []).map((item) => String(item && item.name || ""));
+  const steps = [{ key: "understand", label: "已理解演示需求", status: "done" }];
+  if (names.some((name) => /today|schedule|meeting|recommend/.test(name))) {
+    steps.push({ key: "schedule", label: "已读取演示课表", status: "done" });
+  }
+  if (names.some((name) => /empty|room/.test(name))) {
+    steps.push({ key: "empty-room", label: "已核验演示空教室", status: "done" });
+  }
+  if (names.some((name) => /school|detail|search/.test(name))) {
+    steps.push({ key: "search", label: "已查询演示索引", status: "done" });
+  }
+  if (names.some((name) => /diagnose|status/.test(name))) {
+    steps.push({ key: "diagnose", label: "已检查演示数据", status: "done" });
+  }
+  steps.push({ key: "complete", label: "已完成", status: "done" });
+  return steps.slice(0, 6);
+}
+
+function enrichDemoResponse(response) {
+  const next = response || {};
+  next.taskSteps = Array.isArray(next.taskSteps) ? next.taskSteps : buildDemoTaskSteps(next);
+  next.evidence = next.evidence || {
+    term: "demo",
+    releaseVersion: "demo-data",
+    currentWeek: "demo",
+    sources: ["demo-data"],
+    toolCount: Array.isArray(next.toolCalls) ? next.toolCalls.length : 0,
+  };
+  next.safety = Object.assign({ provider: "mock", mode: "tool-grounded", demoData: true }, next.safety || {});
+  return next;
+}
+
 function getDemoResponse(mode) {
   const normalized = normalizeDemoMode(mode) || "empty-room";
-  return clone(DEMO_RESPONSES[normalized] || DEMO_RESPONSES["empty-room"]);
+  return enrichDemoResponse(clone(DEMO_RESPONSES[normalized] || DEMO_RESPONSES["empty-room"]));
 }
 
 function getDemoMessages(mode) {
@@ -178,6 +211,8 @@ function getDemoMessages(mode) {
     cards: response.cards,
     suggestions: response.suggestions,
     toolCalls: response.toolCalls,
+    taskSteps: response.taskSteps,
+    evidence: response.evidence,
     safety: response.safety,
     metrics: response.metrics || null,
     timeText: "演示",

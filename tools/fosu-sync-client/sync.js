@@ -11,7 +11,15 @@ const crypto = require("crypto");
 const diagnose = require("./diagnose");
 const envPath = path.resolve(__dirname, ".env");
 require("dotenv").config({ path: envPath });
-const ALL_SCOPES = ["classSchedules", "teacherSchedules", "classroomSchedules", "courseSchedules", "classrooms", "teachers", "courses"];
+const {
+  ALL_SCOPES,
+  applyPlanToParams,
+  buildSyncPlan,
+  getRecommendedOperations,
+  parseCliArgs,
+  printablePlan,
+} = require("../../shared/syncPlan");
+const syncCacheStore = require("../../shared/syncCacheStore");
 
 console.log(`[env] .env path: ${envPath}`);
 console.log(`[env] FOSU_API_BASE: ${process.env.FOSU_API_BASE || "https://class.katelya.eu.org"}`);
@@ -209,6 +217,81 @@ function getEnvFlag(name, defaultValue) {
     return defaultValue;
   }
   return String(value).toLowerCase() === "true";
+}
+
+function getActiveSyncPlan() {
+  return global.SYNC_PLAN || null;
+}
+
+function printSyncPlan(plan) {
+  if (!plan) return;
+  console.log("\n================ [Resolved Sync Plan] ================");
+  console.log(JSON.stringify(printablePlan(plan), null, 2));
+  if (plan.deprecated) {
+    console.warn(`[deprecated] ${plan.action} is mapped to ${plan.deprecatedTarget}. Use the new command name in runbooks.`);
+  }
+  if (plan.schedulePolicy === "network-only" && plan.dynamicScopes.length) {
+    console.log("[policy] Dynamic schedules are network-only. Progress, negative cache, and old schedule merge are disabled.");
+  }
+  console.log("======================================================\n");
+}
+
+function isPlanNetworkOnly() {
+  const plan = getActiveSyncPlan();
+  return Boolean(plan && plan.schedulePolicy === "network-only" && plan.dynamicScopes.length > 0);
+}
+
+function findTermByRunId(runId) {
+  const id = String(runId || "").trim();
+  if (!id) return "";
+  const root = path.join(__dirname, ".cache");
+  if (!fs.existsSync(root)) return "";
+  const terms = fs.readdirSync(root).filter((name) => fs.statSync(path.join(root, name)).isDirectory());
+  for (const term of terms) {
+    const progressDir = path.join(root, term, "progress");
+    if (!fs.existsSync(progressDir)) continue;
+    const files = fs.readdirSync(progressDir);
+    if (files.some((file) => file.includes(id))) return term;
+  }
+  return "";
+}
+
+function buildScopeSourceReport(scope, overrides = {}) {
+  const plan = getActiveSyncPlan();
+  const source = plan && plan.sourceRequirements && plan.sourceRequirements[scope] || {};
+  return Object.assign({
+    scope,
+    sourceMode: source.mode || "derived-current-run",
+    endpointFamily: source.endpointFamily || "",
+    requested: 0,
+    succeeded: 0,
+    failed: 0,
+    derived: 0,
+    cacheHits: 0,
+    startedAt: "",
+    finishedAt: "",
+    hash: "",
+  }, overrides);
+}
+
+function recordScopeSource(scope, report) {
+  global.SCOPE_SOURCE_REPORTS = Object.assign({}, global.SCOPE_SOURCE_REPORTS || {}, {
+    [scope]: buildScopeSourceReport(scope, report),
+  });
+}
+
+async function postAdminJson(pathname, body, label) {
+  const url = `${FOSU_API_BASE}${pathname}`;
+  const response = await axios.post(url, body || {}, {
+    headers: ADMIN_API_TOKEN ? { "x-admin-token": ADMIN_API_TOKEN } : {},
+    proxy: false,
+    timeout: parseInt(process.env.SYNC_ADMIN_POST_TIMEOUT_MS || "30000", 10),
+  });
+  const data = response.data || {};
+  if (data.job && data.job.id) {
+    return waitAdminJob(data.job.id, label || pathname);
+  }
+  return data;
 }
 
 function getTermStartDate(term) {
@@ -831,9 +914,11 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
   });
 
   // 读取本地已有的 resources 缓存用于合并
+  const syncPlan = getActiveSyncPlan();
+  const allowOldResourceFallback = Boolean(syncPlan && syncPlan.mergeOldData);
   let oldResources = { teachers: [], classrooms: [], courses: [], teacherSchedules: [], classroomSchedules: [], courseSchedules: [] };
   const oldResourcesPath = path.join(__dirname, ".debug", "resources-latest.json");
-  if (fs.existsSync(oldResourcesPath)) {
+  if (allowOldResourceFallback && fs.existsSync(oldResourcesPath)) {
     try {
       oldResources = JSON.parse(fs.readFileSync(oldResourcesPath, "utf-8"));
     } catch (e) {}
@@ -891,6 +976,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
   const termStartDate = termConfig.termStartDate;
   const cacheUsage = global.CLASS_SCHEDULE_CACHE_USAGE || {};
   const crawlStats = global.SYNC_CRAWL_STATS || {};
+  const scopeSources = Object.assign({}, global.SCOPE_SOURCE_REPORTS || {});
   const metaWarnings = [];
   if (cacheUsage.warning) {
     metaWarnings.push(cacheUsage.warning);
@@ -956,8 +1042,13 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       actualNetworkRequestCount: Number(crawlStats.actualNetworkRequestCount || 0),
       skippedByProgressCount: Number(crawlStats.skippedByProgressCount || 0),
       skippedByNoScheduleCount: Number(crawlStats.skippedByNoScheduleCount || 0),
+      partial: Number(crawlStats.failedTargetCount || 0) > 0,
+      failedTargetCount: Number(crawlStats.failedTargetCount || 0),
+      failedTargets: crawlStats.failedTargets || [],
       freshRunId: crawlStats.freshRunId || "",
       resourceSource: cliParams.resourceSource || cliParams["resource-source"] || "derived",
+      syncPlan: syncPlan ? printablePlan(syncPlan) : null,
+      scopeSources,
       scopeSummary,
       generatedCommand,
       generatedAt: new Date().toISOString(),
@@ -982,6 +1073,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     majors: majors || [],
     classSchedules: updatedSchedules,
     resources,
+    scopeSources,
     timeTable: {
       sections: timeTableSections
     },
@@ -1331,6 +1423,36 @@ function saveFullClassSchedules(allClassSchedules, semester) {
   fs.writeFileSync(latestPath, JSON.stringify(payload, null, 2), "utf-8");
   fs.writeFileSync(timestampPath, JSON.stringify(payload, null, 2), "utf-8");
 
+  try {
+    const plan = getActiveSyncPlan();
+    const runId = plan && plan.runId || `class-${Date.now()}`;
+    const cacheResult = syncCacheStore.writeScheduleLatest(__dirname, semester, "classSchedules", allClassSchedules, {
+      runId,
+      command: global.GENERATED_COMMAND || process.argv.join(" "),
+      sourceMode: "network-direct",
+      endpointFamily: "class-schedule",
+      acquisition: "network",
+      fresh: Boolean(plan ? plan.schedulePolicy === "network-only" : true),
+      requested: global.SYNC_CRAWL_STATS && global.SYNC_CRAWL_STATS.requestedTargetCount || allClassSchedules.length,
+      succeeded: global.SYNC_CRAWL_STATS && global.SYNC_CRAWL_STATS.succeededTargetCount || allClassSchedules.length,
+      failed: global.SYNC_CRAWL_STATS && global.SYNC_CRAWL_STATS.failedTargetCount || 0,
+    });
+    recordScopeSource("classSchedules", {
+      sourceMode: "network-direct",
+      endpointFamily: "class-schedule",
+      requested: cacheResult.metadata.requested,
+      succeeded: cacheResult.metadata.succeeded,
+      failed: cacheResult.metadata.failed,
+      cacheHits: 0,
+      startedAt: cacheResult.metadata.crawledAt,
+      finishedAt: cacheResult.metadata.crawledAt,
+      hash: cacheResult.metadata.hash,
+    });
+    console.log(`Cache saved: ${cacheResult.latestPath}`);
+  } catch (error) {
+    console.warn(`Failed to write term cache for classSchedules: ${error.message}`);
+  }
+
   console.log(`💾 完整课表数据已保存至:\n  - ${latestPath}\n  - ${timestampPath}`);
   return { latestPath, timestampPath };
 }
@@ -1417,6 +1539,10 @@ function readClassSchedulesFromFile() {
   }
 
   // 2. 依次读取可能存在的文件
+  const preferredTerm = String((global.CLI_PARAMS || {}).term || process.env.PREFERRED_SEMESTER || "").trim();
+  if (preferredTerm) {
+    candidates.push(syncCacheStore.scheduleLatestPath(__dirname, preferredTerm, "classSchedules"));
+  }
   candidates.push(path.join(debugDir, "class-schedules-latest.json"));
   candidates.push(path.join(debugDir, "last-class-schedules.json"));
   candidates.push(path.join(debugDir, "last-class-schedules-upload.json"));
@@ -1683,7 +1809,31 @@ async function handleLocalStagingUpload(params) {
   }
 
   console.log(`Staging JSON resolved path: ${filePath}`);
-  console.log("local-upload uses gzip + chunk upload and only writes pending-review Staging; it does not publish release.");
+  console.log("sync:upload-staging/local-upload will not access 100.fosu.edu.cn. It only uploads the explicit file.");
+  const sidecarPath = getSidecarMetaPath(filePath);
+  const sidecar = fs.existsSync(sidecarPath) ? JSON.parse(fs.readFileSync(sidecarPath, "utf-8")) : null;
+  if (sidecar) {
+    console.log(JSON.stringify({
+      term: sidecar.term || params.term || "",
+      generatedAt: sidecar.generatedAt || sidecar.updatedAt || "",
+      canonicalHash: sidecar.canonicalHash || "",
+      itemCount: sidecar.counts && sidecar.counts.classScheduleCount || sidecar.itemCount || 0,
+      crawlMode: sidecar.crawlMode || "",
+      actualNetworkRequestCount: sidecar.actualNetworkRequestCount || 0,
+      usedClassScheduleCache: Boolean(sidecar.usedClassScheduleCache),
+    }, null, 2));
+    const freshNetwork = sidecar.crawlMode === "full-fresh" &&
+      !sidecar.usedClassScheduleCache &&
+      !sidecar.usedProgressCache &&
+      !sidecar.usedNoScheduleCache &&
+      Number(sidecar.actualNetworkRequestCount || 0) > 0;
+    if (!freshNetwork && !(params["allow-cache-source"] || params.allowCacheSource)) {
+      throw new Error("UPLOAD_STAGING_REQUIRES_FRESH_NETWORK_META: pass --allow-cache-source only when intentionally uploading cache/imported data.");
+    }
+  } else if (!(params["allow-cache-source"] || params.allowCacheSource)) {
+    throw new Error(`Missing staging sidecar metadata: ${sidecarPath}. Pass --allow-cache-source only for explicit cache/import workflows.`);
+  }
+  console.log("local-upload uses gzip + chunk upload and only writes pending-review Staging; publishing is a separate step unless the selected Sync Plan asks for it.");
   return stagingUploader.uploadStagingFile({
     filePath,
     server: params.server || FOSU_API_BASE,
@@ -1729,6 +1879,41 @@ function writeLocalStagingDebugFailure(params, catalog, majors, error) {
   return output;
 }
 
+function readTermCatalogCache(term) {
+  const root = syncCacheStore.ensureTermCache(__dirname, term);
+  const catalog = syncCacheStore.readJson(path.join(root, "catalog", "catalog.json"), null);
+  const majors = syncCacheStore.readJson(path.join(root, "catalog", "majors.json"), null);
+  const catalogMeta = syncCacheStore.readJson(path.join(root, "catalog", "metadata.json"), null);
+  const majorsMeta = syncCacheStore.readJson(path.join(root, "catalog", "majors.metadata.json"), null);
+  if (!catalog || !Array.isArray(catalog.colleges) || !Array.isArray(catalog.grades) || !Array.isArray(catalog.semesters)) {
+    return null;
+  }
+  if (!Array.isArray(majors) || majors.length === 0) {
+    return null;
+  }
+  if (catalogMeta && catalogMeta.term && catalogMeta.term !== term) return null;
+  if (majorsMeta && majorsMeta.term && majorsMeta.term !== term) return null;
+  return { catalog, majors, catalogMeta, majorsMeta };
+}
+
+async function resolveCatalogForPlan(page, params) {
+  const plan = getActiveSyncPlan();
+  const term = params.term || process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  if (plan && (plan.catalogPolicy === "reuse-validated" || plan.catalogPolicy === "cache-only")) {
+    const cached = readTermCatalogCache(term);
+    if (cached) {
+      console.log(`[catalog] Reusing validated term cache: ${term}`);
+      return cached;
+    }
+    if (plan.catalogPolicy === "cache-only") {
+      throw new Error(`CATALOG_CACHE_MISSING: ${term}`);
+    }
+  }
+  const catalog = await syncCatalog(page);
+  const majors = await syncMajors(page, catalog);
+  return { catalog, majors };
+}
+
 async function handleLocalCampusStaging(page, params) {
   console.log("\n================ [本机校园网采集 Staging] ================");
   process.env.SYNC_LOCAL_STAGING_ONLY = "true";
@@ -1747,8 +1932,7 @@ async function handleLocalCampusStaging(page, params) {
     }
   }
 
-  const catalog = await syncCatalog(page);
-  const majors = await syncMajors(page, catalog);
+  const { catalog, majors } = await resolveCatalogForPlan(page, params);
   
   let allClassSchedules = [];
   if (includeScopes.includes("classSchedules")) {
@@ -1839,6 +2023,118 @@ async function handleLocalCampusStaging(page, params) {
   return snapshot;
 }
 
+async function ensurePlannedTermIfNeeded(plan) {
+  if (!plan || plan.profile !== "new-term") return null;
+  if (!plan.termValid) throw new Error(`INVALID_TERM_FORMAT: ${plan.term}`);
+  if (!plan.termConfig.termStartDate || !plan.termConfig.totalWeeks) {
+    throw new Error("NEW_TERM_REQUIRES_EXPLICIT_CONFIG: pass --term-start-date=YYYY-MM-DD and --total-weeks=N.");
+  }
+  if (!ADMIN_API_TOKEN) {
+    console.warn("[new-term] ADMIN_API_TOKEN missing; planned term creation skipped.");
+    return null;
+  }
+  try {
+    return await postAdminJson("/api/admin/terms", {
+      term: plan.term,
+      semesterText: plan.term,
+      termStartDate: plan.termConfig.termStartDate,
+      totalWeeks: plan.termConfig.totalWeeks,
+      weekStart: plan.termConfig.weekStart || "monday",
+      status: "planned",
+      source: "sync-new-term",
+    }, "create planned term");
+  } catch (error) {
+    const status = error.response && error.response.status;
+    const code = error.response && error.response.data && error.response.data.code;
+    if (status === 409 || code === "TERM_ALREADY_EXISTS") {
+      console.log(`[new-term] Planned term already exists: ${plan.term}`);
+      return null;
+    }
+    throw error;
+  }
+}
+
+async function runClientProbeForRelease(result) {
+  const version = result && (result.releaseVersion || result.version) || "";
+  const term = result && (result.term || result.semester) || "";
+  const probe = { term, releaseVersion: version, checkedAt: new Date().toISOString(), checks: [] };
+  const urls = [
+    ["/static/runtime/active.json", "runtime pointer"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/manifest.json` : "", "manifest"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/index/class.json` : "", "class index"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/index/teacher.json` : "", "teacher index"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/index/classroom.json` : "", "classroom index"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/index/course.json` : "", "course index"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/calendar.json` : "", "calendar"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/empty-room/index.json` : "", "empty-room"],
+  ].filter(([url]) => Boolean(url));
+  for (const [pathname, label] of urls) {
+    try {
+      const response = await axios.get(`${FOSU_API_BASE}${pathname}`, { proxy: false, timeout: 15000 });
+      probe.checks.push({ label, url: pathname, ok: response.status >= 200 && response.status < 300, status: response.status });
+    } catch (error) {
+      probe.checks.push({ label, url: pathname, ok: false, status: error.response && error.response.status || 0, message: error.message });
+    }
+  }
+  console.log("[client-probe]");
+  console.log(JSON.stringify(probe, null, 2));
+  if (!probe.checks.every((item) => item.ok)) throw new Error("CLIENT_PROBE_FAILED");
+  return probe;
+}
+
+async function publishCurrentStaging(plan, snapshot) {
+  if (!plan.buildRelease) return null;
+  if (!ADMIN_API_TOKEN) throw new Error("ADMIN_API_TOKEN_REQUIRED_FOR_PUBLISH");
+  const result = await postAdminJson("/api/admin/sync/staging/publish", {
+    force: Boolean(plan.allowPartial || (global.CLI_PARAMS || {}).force),
+    readyOnly: plan.profile === "new-term" && !plan.activate,
+    releaseNote: (global.CLI_PARAMS || {}).note || snapshot.releaseNote || "",
+  }, "staging publish");
+  if (plan.verifyClient && !result.readyOnly) await runClientProbeForRelease(result);
+  return result;
+}
+
+async function handlePlannedSync(page, params) {
+  const plan = getActiveSyncPlan();
+  if (!plan) throw new Error("SYNC_PLAN_NOT_RESOLVED");
+  if (!plan.termValid) throw new Error(`INVALID_TERM_FORMAT: ${plan.term}`);
+  await ensurePlannedTermIfNeeded(plan);
+  if (!params.output) params.output = path.join("staging", `${plan.term}-full.json`);
+  if (["daily", "new-term", "crawl-daily"].includes(plan.profile)) {
+    process.env.SYNC_CLASS_SCOPE = process.env.SYNC_CLASS_SCOPE || "all";
+  }
+  const snapshot = await handleLocalCampusStaging(page, params);
+  if (!plan.upload) {
+    syncCacheStore.writeJsonAtomic(syncCacheStore.reportPath(__dirname, plan.term, "crawl-report"), {
+      success: true,
+      profile: plan.profile,
+      runId: plan.runId,
+      term: plan.term,
+      output: resolveOutputFilePath(params.output),
+      uploaded: false,
+      published: false,
+      generatedAt: new Date().toISOString(),
+    });
+    return snapshot;
+  }
+  const uploadResult = await handleLocalStagingUpload(Object.assign({}, params, { file: params.output }));
+  const publishResult = await publishCurrentStaging(plan, snapshot);
+  const report = {
+    success: true,
+    profile: plan.profile,
+    runId: plan.runId,
+    term: plan.term,
+    output: resolveOutputFilePath(params.output),
+    uploaded: true,
+    uploadResult,
+    published: Boolean(publishResult),
+    publishResult,
+    generatedAt: new Date().toISOString(),
+  };
+  syncCacheStore.writeJsonAtomic(syncCacheStore.reportPath(__dirname, plan.term, "publish-report"), report);
+  return report;
+}
+
 const RESOURCE_SYNC_CONFIGS = {
   teacher: {
     flag: "SYNC_RESOURCES_TEACHERS",
@@ -1894,6 +2190,13 @@ function getEffectiveResourceSourceMode() {
 function shouldUseDirectTeacherResources(resourceTypes) {
   const types = normalizeResourceTypeList(resourceTypes);
   if (!types.includes("teacher")) return false;
+  const mode = getEffectiveResourceSourceMode();
+  return mode === "direct" || mode === "both" || getEnvFlag("SYNC_FORCE_RESOURCE_CRAWL", false);
+}
+
+function shouldUseDirectResource(type, resourceTypes) {
+  const types = normalizeResourceTypeList(resourceTypes);
+  if (!types.includes(type)) return false;
   const mode = getEffectiveResourceSourceMode();
   return mode === "direct" || mode === "both" || getEnvFlag("SYNC_FORCE_RESOURCE_CRAWL", false);
 }
@@ -2248,6 +2551,247 @@ async function crawlDirectTeacherResources(page, derivedResources = {}, options 
   return resources;
 }
 
+function getDirectResourceLimit() {
+  return parsePositiveLimit(process.env.SYNC_DIRECT_RESOURCE_LIMIT) || parsePositiveLimit(process.env.SYNC_RESOURCE_LIMIT);
+}
+
+function limitDirectResourceTargets(targets) {
+  const limit = getDirectResourceLimit();
+  return limit ? targets.slice(0, limit) : targets;
+}
+
+function getGenericDirectResourceConfig(type) {
+  if (type === "classroom") {
+    return {
+      pagePath: "/kbcx/kbxx_classroom",
+      ifrPath: "/kbcx/kbxx_classroom_ifr",
+      parse: parser.parseClassroomScheduleIfrHtml,
+      targetKey: "roomName",
+      schedulesKey: "classroomSchedules",
+      indexKey: "classrooms",
+      endpointFamily: "classroom-schedule",
+      audienceType: "classroom",
+      targetFromCourse: (course) => course.canonicalClassroom || course.displayClassroom || course.classroom || course.roomName || "",
+    };
+  }
+  if (type === "course") {
+    return {
+      pagePath: "/kbcx/kbxx_kc",
+      ifrPath: "/kbcx/kbxx_kc_ifr",
+      parse: parser.parseCourseScheduleIfrHtml,
+      targetKey: "courseName",
+      schedulesKey: "courseSchedules",
+      indexKey: "courses",
+      endpointFamily: "course-schedule",
+      audienceType: "course",
+      targetFromCourse: (course) => course.canonicalCourseName || course.displayCourseName || course.courseName || "",
+    };
+  }
+  return null;
+}
+
+async function collectGenericDirectResourceTargets(page, type, derivedResources, semester) {
+  const config = getGenericDirectResourceConfig(type);
+  await gotoPage(page, config.pagePath, { waitUntil: "networkidle", timeout: 20000 });
+  try {
+    await selectSemester(page, semester);
+  } catch (error) {
+    console.warn(`[resources:${type}:direct] semester select fallback: ${error.message}`);
+  }
+  const html = await page.content();
+  const debugDir = path.join(__dirname, ".debug");
+  fs.writeFileSync(path.join(debugDir, `direct-${type}-page.html`), html, "utf-8");
+  const dom = await page.evaluate((resourceType) => {
+    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const optionList = (select) => Array.from(select.options || [])
+      .map((option) => ({ code: clean(option.value), name: clean(option.textContent) }))
+      .filter((option) => option.name && option.code && !/^请选择|^全部|^--/.test(option.name));
+    const result = { colleges: [], campuses: [], buildings: [], courses: [], selects: [] };
+    Array.from(document.querySelectorAll("select")).forEach((select) => {
+      const marker = `${select.getAttribute("name") || ""} ${select.getAttribute("id") || ""}`.toLowerCase();
+      const options = optionList(select);
+      result.selects.push({ marker, optionCount: options.length });
+      if (/skyx|college|yx|kkyx/.test(marker)) result.colleges.push(...options);
+      if (/xqid|campus|xq/.test(marker)) result.campuses.push(...options);
+      if (/jzwid|building|jxl|jzw/.test(marker)) result.buildings.push(...options);
+      if (resourceType === "course" && /kc|course|zzdkcsx/.test(marker)) result.courses.push(...options);
+    });
+    return result;
+  }, type);
+
+  if (type === "classroom") {
+    const buildingTargets = (dom.buildings || []).map((item) => ({
+      type: "building",
+      buildingId: item.code,
+      buildingName: item.name,
+    }));
+    if (buildingTargets.length) return { targets: limitDirectResourceTargets(buildingTargets), dom, source: "building-select" };
+    const campusTargets = (dom.campuses || []).map((item) => ({
+      type: "campus",
+      campusId: item.code,
+      campusName: item.name,
+    }));
+    if (campusTargets.length) return { targets: limitDirectResourceTargets(campusTargets), dom, source: "campus-select" };
+  }
+
+  if (type === "course") {
+    const courseTargets = (dom.courses || []).map((item) => ({
+      type: "course",
+      courseCode: item.code,
+      courseName: item.name,
+    }));
+    if (courseTargets.length) return { targets: limitDirectResourceTargets(courseTargets), dom, source: "course-select" };
+  }
+
+  const derivedTargets = ((derivedResources && derivedResources[config.schedulesKey]) || [])
+    .map((schedule) => String(schedule && schedule[config.targetKey] || "").trim())
+    .filter(Boolean)
+    .filter((name, index, list) => list.indexOf(name) === index)
+    .map((name) => ({
+      type: `${type}-name`,
+      name,
+      roomName: type === "classroom" ? name : "",
+      courseName: type === "course" ? name : "",
+    }));
+  if (derivedTargets.length) return { targets: limitDirectResourceTargets(derivedTargets), dom, source: "derived-names" };
+
+  const collegeTargets = (dom.colleges || []).map((item) => ({
+    type: "college",
+    collegeCode: item.code,
+    collegeName: item.name,
+  }));
+  if (collegeTargets.length) return { targets: limitDirectResourceTargets(collegeTargets), dom, source: "college-select" };
+
+  return { targets: [{ type: "all" }], dom, source: "all" };
+}
+
+async function fetchGenericDirectScheduleHtml(page, type, target, semester) {
+  const config = getGenericDirectResourceConfig(type);
+  return page.evaluate(async (input) => {
+    const bodyData = input.type === "classroom" ? {
+      xnxqh: input.semester,
+      skyx: input.target.collegeCode || "",
+      xqid: input.target.campusId || "",
+      jzwid: input.target.buildingId || "",
+      jsid: input.target.roomId || "",
+      jsmc: input.target.roomName || input.target.name || "",
+      zc1: "",
+      zc2: "",
+      jc1: "",
+      jc2: "",
+    } : {
+      xnxqh: input.semester,
+      skyx: input.target.collegeCode || "",
+      kkyx: input.target.openCollegeCode || input.target.collegeCode || "",
+      zzdKcSX: input.target.courseAttr || "",
+      kc: input.target.courseCode || input.target.courseName || input.target.name || "",
+      kcmc: input.target.courseName || input.target.name || "",
+      zc1: "",
+      zc2: "",
+      jc1: "",
+      jc2: "",
+    };
+    const response = await fetch(input.ifrPath, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+      credentials: "include",
+      body: new URLSearchParams(bodyData).toString(),
+    });
+    return { ok: response.ok, status: response.status, text: await response.text() };
+  }, { type, target, semester, ifrPath: config.ifrPath });
+}
+
+function buildGenericResourcesFromSchedules(type, schedules) {
+  const config = getGenericDirectResourceConfig(type);
+  const key = config.targetKey;
+  const scheduleList = (schedules || []).map((item) => Object.assign({}, item, {
+    courses: dedupeCourses(item.courses || []),
+    source: "direct",
+  })).filter((item) => isUsableResourceName(item[key]));
+  return Object.assign(emptySnapshotResources(), {
+    [config.schedulesKey]: scheduleList,
+    [config.indexKey]: scheduleList.map((item) => ({
+      [key]: item[key],
+      name: item[key],
+      courseCount: (item.courses || []).length,
+      source: "direct",
+    })),
+  });
+}
+
+async function crawlGenericDirectResources(type, page, derivedResources = {}, options = {}) {
+  const config = getGenericDirectResourceConfig(type);
+  if (!config) throw new Error(`Unsupported direct resource type: ${type}`);
+  const semester = options.semester || process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  const debugDir = path.join(__dirname, ".debug");
+  if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+  const delayConfig = getResourceDelayConfig();
+  const collected = await collectGenericDirectResourceTargets(page, type, derivedResources, semester);
+  const targets = collected.targets || [];
+  console.log(`[resources:${type}:direct] source=${collected.source}, targets=${targets.length}, concurrency=${delayConfig.concurrency}`);
+  const grouped = new Map();
+  const errors = [];
+  const samples = [];
+
+  await mapWithConcurrency(targets, delayConfig.concurrency, async (target, index) => {
+    if (index > 0) {
+      const delay = delayConfig.requestDelayMs !== null ? delayConfig.requestDelayMs : delayConfig.minDelayMs;
+      if (delay > 0) await sleep(delay);
+    }
+    try {
+      const response = await fetchGenericDirectScheduleHtml(page, type, target, semester);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (samples.length < 5) {
+        const sampleName = `direct-${type}-sample-${samples.length + 1}.html`;
+        samples.push({ target, responseLength: response.text.length, htmlPath: sampleName });
+        fs.writeFileSync(path.join(debugDir, sampleName), response.text, "utf-8");
+      }
+      const parsed = config.parse(response.text, {
+        semester,
+        collegeCode: target.collegeCode || "",
+        collegeName: target.collegeName || "",
+      });
+      const courses = normalizer.normalizeCourseList(parsed.courses || [], {
+        semester,
+        sourceType: type,
+        audienceType: config.audienceType,
+      });
+      courses.forEach((course) => {
+        const name = config.targetFromCourse(course) || target.roomName || target.courseName || target.name || "";
+        if (!isUsableResourceName(name)) return;
+        const current = grouped.get(name) || { [config.targetKey]: name, name, source: "direct", courses: [] };
+        current.courses.push(Object.assign({}, course, {
+          source: "direct",
+          sourceType: type,
+          audienceType: config.audienceType,
+        }));
+        grouped.set(name, current);
+      });
+    } catch (error) {
+      errors.push({ target, message: error.message });
+      console.warn(`[resources:${type}:direct] target failed (${target.name || target.courseName || target.roomName || target.collegeName || target.type}): ${error.message}`);
+    }
+  });
+
+  const resources = buildGenericResourcesFromSchedules(type, Array.from(grouped.values()));
+  const report = {
+    success: errors.length < targets.length,
+    generatedAt: new Date().toISOString(),
+    semester,
+    source: collected.source,
+    targetCount: targets.length,
+    scheduleCount: resources[config.schedulesKey].length,
+    courseCount: resources[config.schedulesKey].reduce((sum, item) => sum + (item.courses || []).length, 0),
+    dom: collected.dom,
+    errors: errors.slice(0, 50),
+    samples,
+  };
+  fs.writeFileSync(path.join(debugDir, `direct-${type}-report-latest.json`), JSON.stringify(report, null, 2), "utf-8");
+  fs.writeFileSync(path.join(debugDir, `direct-${type}-schedules-latest.json`), JSON.stringify(resources[config.schedulesKey], null, 2), "utf-8");
+  console.log(`[resources:${type}:direct] schedules=${report.scheduleCount}, courses=${report.courseCount}, errors=${errors.length}`);
+  return resources;
+}
+
 async function buildResourcesForClassSchedules(classSchedules, resourceTypes, options = {}) {
   const types = normalizeResourceTypeList(resourceTypes);
   const semester = options.semester || process.env.PREFERRED_SEMESTER || inferPreferredSemester();
@@ -2263,16 +2807,87 @@ async function buildResourcesForClassSchedules(classSchedules, resourceTypes, op
   }));
   const derivedResources = buildSnapshotResources(normalizedClassSchedules, includeOptions);
   const mode = getEffectiveResourceSourceMode();
-  const useDirect = shouldUseDirectTeacherResources(types);
-  if (!useDirect) {
+  const directTypes = types.filter((type) => shouldUseDirectResource(type, types));
+  if (directTypes.length === 0) {
+    types.forEach((type) => {
+      const config = RESOURCE_SYNC_CONFIGS[type];
+      if (config) {
+        recordScopeSource(config.schedulesKey, {
+          sourceMode: "derived-current-run",
+          endpointFamily: "class-schedule",
+          requested: (derivedResources[config.schedulesKey] || []).length,
+          succeeded: (derivedResources[config.schedulesKey] || []).length,
+          derived: (derivedResources[config.schedulesKey] || []).length,
+          hash: crypto.createHash("sha256").update(JSON.stringify(derivedResources[config.schedulesKey] || [])).digest("hex"),
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+        });
+      }
+    });
     return derivedResources;
   }
   if (!options.page) {
-    console.warn(`[resources:teacher] resource-source=${mode} requested but no browser page is available; falling back to derived resources.`);
-    return derivedResources;
+    if (global.CLI_PARAMS && global.CLI_PARAMS.allowDerived) {
+      console.warn(`[resources] resource-source=${mode} requested but no browser page is available; falling back to derived resources because --allow-derived is set.`);
+      return derivedResources;
+    }
+    throw new Error(`RESOURCE_DIRECT_CRAWL_REQUIRED: ${directTypes.join(",")} requested but no browser page is available.`);
   }
-  const directResources = await crawlDirectTeacherResources(options.page, derivedResources, { semester });
-  return mergeResourcesBySource(derivedResources, directResources, getEnvFlag("SYNC_FORCE_RESOURCE_CRAWL", false) && mode === "derived" ? "both" : mode);
+  let result = Object.assign({}, derivedResources);
+  for (const type of directTypes) {
+    const config = RESOURCE_SYNC_CONFIGS[type];
+    try {
+      const directResources = type === "teacher"
+        ? await crawlDirectTeacherResources(options.page, derivedResources, { semester })
+        : await crawlGenericDirectResources(type, options.page, derivedResources, { semester });
+      if (type === "teacher") {
+        result = mergeResourcesBySource(result, directResources, getEnvFlag("SYNC_FORCE_RESOURCE_CRAWL", false) && mode === "derived" ? "both" : mode);
+      } else {
+        result = Object.assign({}, result, {
+          [config.indexKey]: directResources[config.indexKey] || [],
+          [config.schedulesKey]: directResources[config.schedulesKey] || [],
+        });
+      }
+      syncCacheStore.writeScheduleLatest(__dirname, semester, config.schedulesKey, result[config.schedulesKey] || [], {
+        runId: getActiveSyncPlan() && getActiveSyncPlan().runId || `resource-${Date.now()}`,
+        command: global.GENERATED_COMMAND || process.argv.join(" "),
+        sourceMode: "network-direct",
+        endpointFamily: `${type}-schedule`,
+        acquisition: "network",
+        fresh: true,
+      });
+      recordScopeSource(config.schedulesKey, {
+        sourceMode: "network-direct",
+        endpointFamily: `${type}-schedule`,
+        requested: (result[config.schedulesKey] || []).length,
+        succeeded: (result[config.schedulesKey] || []).length,
+        failed: 0,
+        cacheHits: 0,
+        hash: crypto.createHash("sha256").update(JSON.stringify(result[config.schedulesKey] || [])).digest("hex"),
+        startedAt: new Date().toISOString(),
+        finishedAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      if (global.CLI_PARAMS && global.CLI_PARAMS.allowDerived) {
+        console.warn(`[resources:${type}] direct crawl failed; using derived-current-run because --allow-derived is set: ${error.message}`);
+        recordScopeSource(config.schedulesKey, {
+          sourceMode: "derived-current-run",
+          endpointFamily: "class-schedule",
+          requested: (derivedResources[config.schedulesKey] || []).length,
+          succeeded: (derivedResources[config.schedulesKey] || []).length,
+          derived: (derivedResources[config.schedulesKey] || []).length,
+          hash: crypto.createHash("sha256").update(JSON.stringify(derivedResources[config.schedulesKey] || [])).digest("hex"),
+          startedAt: new Date().toISOString(),
+          finishedAt: new Date().toISOString(),
+        });
+        result[config.indexKey] = derivedResources[config.indexKey] || [];
+        result[config.schedulesKey] = derivedResources[config.schedulesKey] || [];
+      } else {
+        throw error;
+      }
+    }
+  }
+  return result;
 }
 
 function buildResourceIncludeOptionsFromScopes(includeScopes) {
@@ -3117,6 +3732,20 @@ async function syncCatalog(page) {
   
   // 本地保存一份
   fs.writeFileSync(path.join(__dirname, "last-catalog.json"), JSON.stringify(catalogPayload, null, 2), "utf-8");
+  const catalogTerm = process.env.PREFERRED_SEMESTER || (catalogPayload.semesters && catalogPayload.semesters[0] && catalogPayload.semesters[0].value) || inferPreferredSemester();
+  const catalogCacheDir = path.join(syncCacheStore.ensureTermCache(__dirname, catalogTerm), "catalog");
+  syncCacheStore.writeJsonAtomic(path.join(catalogCacheDir, "catalog.json"), catalogPayload);
+  syncCacheStore.writeJsonAtomic(path.join(catalogCacheDir, "metadata.json"), syncCacheStore.buildMetadata({
+    term: catalogTerm,
+    scope: "catalog",
+    sourceMode: "network-direct",
+    endpointFamily: "catalog",
+    acquisition: "network",
+    command: global.GENERATED_COMMAND || process.argv.join(" "),
+    runId: getActiveSyncPlan() && getActiveSyncPlan().runId || "",
+    itemCount: (catalogPayload.colleges || []).length,
+    items: catalogPayload,
+  }));
   console.log("💾 Catalog 临时数据已保存至本地 last-catalog.json");
   return catalogPayload;
 }
@@ -3418,6 +4047,20 @@ async function syncMajors(page, catalog) {
   }
   
   fs.writeFileSync(path.join(__dirname, "last-majors.json"), JSON.stringify(cleaned, null, 2), "utf-8");
+  const majorsTerm = process.env.PREFERRED_SEMESTER || (catalog && catalog.semesters && catalog.semesters[0] && catalog.semesters[0].value) || inferPreferredSemester();
+  const majorsCacheDir = path.join(syncCacheStore.ensureTermCache(__dirname, majorsTerm), "catalog");
+  syncCacheStore.writeJsonAtomic(path.join(majorsCacheDir, "majors.json"), cleaned);
+  syncCacheStore.writeJsonAtomic(path.join(majorsCacheDir, "majors.metadata.json"), syncCacheStore.buildMetadata({
+    term: majorsTerm,
+    scope: "majors",
+    sourceMode: "network-direct",
+    endpointFamily: "major-catalog",
+    acquisition: "network",
+    command: global.GENERATED_COMMAND || process.argv.join(" "),
+    runId: getActiveSyncPlan() && getActiveSyncPlan().runId || "",
+    itemCount: cleaned.length,
+    items: cleaned,
+  }));
   console.log("💾 Majors 临时数据已保存至本地 last-majors.json");
   return cleaned;
 }
@@ -3523,7 +4166,11 @@ async function syncClassSchedules(page, catalog, majors) {
     console.log("🧭 本次为 incremental 模式：允许使用本地进度与 no-schedule cache。");
   }
 
-  const PROGRESS_PATH = path.join(debugDir, "sync-progress.json");
+  const syncPlan = getActiveSyncPlan();
+  const runId = syncPlan && syncPlan.runId || cliParams.freshRunId || cliParams["fresh-run-id"] || `class-${Date.now()}`;
+  const PROGRESS_PATH = isPlanNetworkOnly()
+    ? syncCacheStore.progressPath(__dirname, activeSemester, "class", runId)
+    : path.join(debugDir, "sync-progress.json");
   if ((clearProgress || forceRefresh) && fs.existsSync(PROGRESS_PATH)) {
     fs.unlinkSync(PROGRESS_PATH);
     console.log(`🧹 已清理本地同步进度文件: ${PROGRESS_PATH}`);
@@ -3548,7 +4195,9 @@ async function syncClassSchedules(page, catalog, majors) {
   }
 
   const collegeNameByCode = new Map((catalog.colleges || []).map((college) => [String(college.code), college.name]));
-  const noScheduleCachePath = path.join(debugDir, "no-schedule-majors.json");
+  const noScheduleCachePath = isPlanNetworkOnly()
+    ? syncCacheStore.negativePath(__dirname, activeSemester, "class-schedule", runId)
+    : path.join(debugDir, "no-schedule-majors.json");
   const classNameCandidatesPath = path.join(debugDir, "class-name-candidates.json");
   let noScheduleMajors = readJsonArray(noScheduleCachePath);
   if ((clearNoScheduleCache || forceRefresh) && noScheduleMajors.length > 0) {
@@ -3690,6 +4339,10 @@ async function syncClassSchedules(page, catalog, majors) {
     skippedByProgressCount: completedProgressCount,
     skippedByNoScheduleCount: skipNoScheduleCount,
     freshRunId: cliParams.freshRunId || cliParams["fresh-run-id"] || (forceRefresh ? `fresh-${Date.now()}-${crypto.randomBytes(4).toString("hex")}` : ""),
+    requestedTargetCount: pendingMajors.length,
+    succeededTargetCount: 0,
+    failedTargetCount: 0,
+    failedTargets: [],
   };
   global.SYNC_CRAWL_STATS = crawlStats;
   global.CLASS_SCHEDULE_CACHE_USAGE = {
@@ -3879,6 +4532,8 @@ async function syncClassSchedules(page, catalog, majors) {
         // 将该专业标记为已完成
         markCompletedMajor(progress, major, activeSemester);
         writeJsonFile(PROGRESS_PATH, progress);
+        crawlStats.succeededTargetCount += 1;
+        global.SYNC_CRAWL_STATS = crawlStats;
         await waitBetweenClassSyncRequests(isFiltered);
         continue;
       }
@@ -3910,6 +4565,8 @@ async function syncClassSchedules(page, catalog, majors) {
       // 将该专业标记为已完成
       markCompletedMajor(progress, major, activeSemester);
       writeJsonFile(PROGRESS_PATH, progress);
+      crawlStats.succeededTargetCount += 1;
+      global.SYNC_CRAWL_STATS = crawlStats;
 
     } catch (err) {
       console.error(`      ⚠️  抓取失败: ${err.message}`);
@@ -3920,6 +4577,21 @@ async function syncClassSchedules(page, catalog, majors) {
   }
 
   console.log(`📊 班级课表抓取完毕，共整理出 ${allClassSchedules.length} 个行政班级的课表。`);
+
+  const unfinishedTargets = effectiveTargetMajors.filter((major) => !hasCompletedMajor(progress, major, activeSemester));
+  if (unfinishedTargets.length > 0) {
+    crawlStats.failedTargetCount = Math.max(crawlStats.failedTargetCount || 0, unfinishedTargets.length);
+    crawlStats.failedTargets = unfinishedTargets.map((major) => ({
+      collegeCode: major.collegeCode,
+      grade: major.grade,
+      majorCode: major.code,
+      majorName: major.name,
+    }));
+    global.SYNC_CRAWL_STATS = crawlStats;
+    if (!((global.CLI_PARAMS || {}).allowPartial || (global.CLI_PARAMS || {})["allow-partial"])) {
+      throw new Error(`CLASS_SCHEDULE_PARTIAL_FAILURE: ${unfinishedTargets.length} target(s) did not finish. Use --allow-partial only for diagnostic snapshots.`);
+    }
+  }
 
   if (allClassSchedules.length > 0) {
     // 无论后续上传成功与否，强制在上传前保存完整全量文件
@@ -4194,6 +4866,21 @@ async function main() {
   }
 
   // 还原真实执行指令
+  const parsed = parseCliArgs(args);
+  const syncPlan = buildSyncPlan(parsed.action || action, Object.assign({}, params, parsed.params || {}), process.env);
+  Object.assign(params, applyPlanToParams(syncPlan, Object.assign({}, params, parsed.params || {})));
+  action = parsed.action || action;
+  if (action === "resume" && !params.term) {
+    const resumeTerm = findTermByRunId(params["run-id"] || params.runId);
+    if (resumeTerm) {
+      params.term = resumeTerm;
+      syncPlan.term = resumeTerm;
+      syncPlan.termValid = true;
+    }
+  }
+  global.SYNC_PLAN = syncPlan;
+  printSyncPlan(syncPlan);
+
   global.GENERATED_COMMAND = `node sync.js ${action} ${args.join(" ")}`;
   params.fresh = Boolean(params.fresh || params["fresh"]);
   params.recheckNoSchedule = Boolean(params["recheck-no-schedule"] || params.recheckNoSchedule);
@@ -4274,7 +4961,11 @@ async function main() {
   params.includeScopes = includeScopes;
   
   global.CLI_PARAMS = params;
-  const requiresTermConfigBeforeCrawl = ["fresh", "quick", "local-campus", "class", "release", "all"].includes(action);
+  const requiresTermConfigBeforeCrawl = [
+    "fresh", "quick", "local-campus", "class", "release", "all",
+    "daily", "daily:classes", "daily:teachers", "daily:classrooms", "daily:courses",
+    "scopes", "new-term", "crawl:daily", "crawl:scopes", "resume",
+  ].includes(action);
   if (requiresTermConfigBeforeCrawl) {
     const activeSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
     global.TERM_CONFIG = await assertTermConfigBeforeCrawl(activeSemester, params);
@@ -4306,9 +4997,13 @@ async function main() {
     return;
   }
 
-  if (action === "local-upload") {
+  if (action === "local-upload" || action === "upload-staging") {
     await handleLocalStagingUpload(params);
     return;
+  }
+
+  if (action === "resume" && !params["run-id"] && !params.runId) {
+    throw new Error("SYNC_RESUME_REQUIRES_RUN_ID");
   }
 
   // 1.5. 拦截并处理离线 release 模式
@@ -4363,6 +5058,19 @@ async function main() {
       await handleQuickSync(page);
     } else if (action === "local-campus") {
       await handleLocalCampusStaging(page, params);
+    } else if ([
+      "daily",
+      "daily:classes",
+      "daily:teachers",
+      "daily:classrooms",
+      "daily:courses",
+      "scopes",
+      "new-term",
+      "crawl:daily",
+      "crawl:scopes",
+      "resume",
+    ].includes(action)) {
+      await handlePlannedSync(page, params);
     } else if (resourceActionTypes.length) {
       await handleResourcesSync(resourceActionTypes, { page });
     } else if (action === "release") {

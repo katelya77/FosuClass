@@ -1625,6 +1625,8 @@ function buildManifest(snapshot, version, counts, validation, files, derived, ca
     forceRefreshToken: `${version}:${new Date(updatedAt).getTime() || Date.now()}`,
     minClientCacheSchema: 5,
     source: snapshot.source || "local-sync-client",
+    scopeSources: snapshot.scopeSources || snapshot.meta?.scopeSources || {},
+    partial: Boolean(snapshot.partial || snapshot.meta?.partial),
     canonicalHash: fingerprint.canonicalHash,
     counts,
     files: filesMeta,

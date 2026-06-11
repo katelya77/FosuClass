@@ -36,6 +36,7 @@ const scripts = [
   "test:ai-empty-result-copywriting",
   "test:ai-more-tasks-panel",
   "test:ai-agent-metrics",
+  "test:ai-agent-operations",
   "test:ai-agent-safety",
   "test:ai-agent-tool-routing",
   "test:ai-agent-mock-fallback",

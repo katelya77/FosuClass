@@ -147,6 +147,9 @@ function buildSidecarMeta(data, options = {}) {
     skippedByNoScheduleCount: Number(meta.skippedByNoScheduleCount || 0),
     freshRunId: meta.freshRunId || "",
     resourceSource: meta.resourceSource || "",
+    partial: Boolean(meta.partial || data && data.partial),
+    failedTargetCount: Number(meta.failedTargetCount || 0),
+    scopeSources: meta.scopeSources || data && data.scopeSources || {},
   };
 }
 
