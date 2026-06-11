@@ -135,12 +135,95 @@ function classifyProviderFailure(error) {
   return code || "provider_fallback";
 }
 
+function addUniqueText(target, value, limit) {
+  const text = safetyGuard.redactSensitiveText(String(value || "").trim()).slice(0, limit || 80);
+  if (text && target.indexOf(text) < 0) target.push(text);
+}
+
+function collectEvidenceValue(result, keyNames, target, limit) {
+  if (!result || typeof result !== "object") return;
+  keyNames.forEach((key) => {
+    if (result[key] != null) addUniqueText(target, result[key], limit);
+  });
+  ["meta", "metadata", "release", "releaseInfo", "termConfig", "calendar"].forEach((nestedKey) => {
+    const nested = result[nestedKey];
+    if (nested && typeof nested === "object") {
+      keyNames.forEach((key) => {
+        if (nested[key] != null) addUniqueText(target, nested[key], limit);
+      });
+    }
+  });
+}
+
+function buildEvidence(toolCalls = [], context = {}) {
+  const terms = [];
+  const releaseVersions = [];
+  const weeks = [];
+  const sources = [];
+  const checkedAt = nowIso();
+  collectEvidenceValue(context, ["term", "semester"], terms, 32);
+  collectEvidenceValue(context, ["releaseVersion", "version"], releaseVersions, 64);
+  if (context && context.releaseInfo) {
+    collectEvidenceValue(context.releaseInfo, ["term", "semester"], terms, 32);
+    collectEvidenceValue(context.releaseInfo, ["releaseVersion", "version"], releaseVersions, 64);
+  }
+  if (context && context.currentScheduleSummary) {
+    collectEvidenceValue(context.currentScheduleSummary, ["term", "semester"], terms, 32);
+    collectEvidenceValue(context.currentScheduleSummary, ["source"], sources, 80);
+  }
+  (Array.isArray(toolCalls) ? toolCalls : []).forEach((call) => {
+    const result = call && call.result;
+    collectEvidenceValue(result, ["term", "semester"], terms, 32);
+    collectEvidenceValue(result, ["releaseVersion", "version"], releaseVersions, 64);
+    collectEvidenceValue(result, ["currentWeek", "teachingWeek", "week"], weeks, 16);
+    collectEvidenceValue(result, ["source", "sourceMode", "scopeSource", "dataSource"], sources, 80);
+  });
+  return {
+    checkedAt,
+    term: terms[0] || "",
+    releaseVersion: releaseVersions[0] || "",
+    currentWeek: weeks[0] || "",
+    sources: sources.slice(0, 6),
+    toolCount: Array.isArray(toolCalls) ? toolCalls.length : 0,
+  };
+}
+
+function buildTaskSteps(intent = {}, toolCalls = []) {
+  const steps = [{ key: "understand", label: "已理解需求", status: "done" }];
+  const names = (Array.isArray(toolCalls) ? toolCalls : []).map((item) => String(item && item.name || "").toLowerCase());
+  const addStep = (key, label) => {
+    if (!steps.some((item) => item.key === key)) {
+      steps.push({ key, label, status: "done" });
+    }
+  };
+  if (names.some((name) => /today|schedule|meeting|personal/.test(name))) {
+    addStep("schedule", "已读取课表");
+  }
+  if (names.some((name) => /empty|room/.test(name))) {
+    addStep("empty-room", "已核验空教室");
+  }
+  if (names.some((name) => /school|detail|search/.test(name))) {
+    addStep("search", "已查询校园索引");
+  }
+  if (names.some((name) => /recommend|plan|meeting/.test(name)) || /recommend|plan|meeting/.test(String(intent && intent.name || ""))) {
+    addStep("decision", "已生成建议");
+  }
+  if (names.some((name) => /diagnose|status/.test(name))) {
+    addStep("diagnose", "已检查数据状态");
+  }
+  addStep("complete", "已完成");
+  return steps.slice(0, 6);
+}
+
 function buildResponse(payload) {
+  const rawToolCalls = payload.rawToolCalls || payload.toolCalls || [];
   return {
     success: true,
     answer: payload.answer,
     cards: payload.cards,
     toolCalls: payload.toolCalls || [],
+    taskSteps: payload.taskSteps || buildTaskSteps(payload.intent, rawToolCalls),
+    evidence: payload.evidence || buildEvidence(rawToolCalls, payload.context),
     suggestions: payload.suggestions,
     safety: {
       redacted: true,
@@ -341,6 +424,9 @@ async function chat(input = {}) {
   }
   return buildResponse(Object.assign({}, stable, {
     toolCalls: publicToolCalls,
+    rawToolCalls: toolCalls,
+    intent,
+    context,
     provider: providerName,
     desiredProvider: desiredProviderName,
     resolvedProvider: providerName,

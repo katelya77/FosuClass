@@ -413,6 +413,17 @@ button::after {
   color: #9a5b08;
 }
 
+.evidence-strip {
+  margin: 8rpx 2rpx 0;
+  max-width: 92%;
+  overflow: hidden;
+  color: #6b7280;
+  font-size: 21rpx;
+  line-height: 1.45;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ai-card-list {
   width: 100%;
   margin-top: 10rpx;

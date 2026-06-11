@@ -36,6 +36,7 @@ const { getRateLimitStats } = require("../services/rateLimitService");
 const { clearExpiredSecurityEvents, getSecurityEventSummary, recordSecurityEvent } = require("../services/securityEventService");
 const { getSecurityStatus } = require("../services/securityModeService");
 const { listRouteSecurityPolicies } = require("../security/routeSecurityPolicy");
+const syncPlan = require("../shared/syncPlan");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const zlib = require("zlib");
@@ -4098,10 +4099,23 @@ router.post("/relay/tasks/:id/revoke", adminAuth.verifyAdminAccess, (req, res) =
   try {
     const task = relayService.revokeTask(req.params.id);
     if (!task) {
-      return res.status(404).json({ success: false, message: "接力任务不存在" });
+      return res.status(404).json({ success: false, message: "Relay task not found" });
     }
-    writeAuditLog(req, "revoke", "relay-task", req.params.id, "吊销接力任务 token");
-    return res.json({ success: true, message: "接力任务已吊销", task });
+    writeAuditLog(req, "revoke", "relay-task", req.params.id, "Revoke relay task token");
+    return res.json({ success: true, message: "Relay task token revoked", task });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/relay/tasks/:id/cancel", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const task = relayService.cancelTask(req.params.id);
+    if (!task) {
+      return res.status(404).json({ success: false, message: "Relay task not found" });
+    }
+    writeAuditLog(req, "cancel", "relay-task", req.params.id, "Request relay task cancellation");
+    return res.json({ success: true, message: "Relay task cancellation requested", task });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -4111,14 +4125,15 @@ router.delete("/relay/tasks/:id", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     const deleted = relayService.deleteTask(req.params.id);
     if (!deleted) {
-      return res.status(404).json({ success: false, message: "接力任务不存在" });
+      return res.status(404).json({ success: false, message: "Relay task not found" });
     }
-    writeAuditLog(req, "delete", "relay-task", req.params.id, "删除接力任务记录");
-    return res.json({ success: true, message: "接力任务已删除", deleted: true });
+    writeAuditLog(req, "delete", "relay-task", req.params.id, "Delete relay task record");
+    return res.json({ success: true, message: "Relay task deleted", deleted: true });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
 });
+
 
 router.get("/relay/uploads", adminAuth.verifyAdminAccess, (req, res) => {
   try {
@@ -4476,6 +4491,7 @@ router.post("/sync/staging/publish/start", adminAuth.verifyAdminAccess, (req, re
     storageLifecycleService.assertReleaseCanStart();
     const input = {
       force: req.body.force === true,
+      readyOnly: req.body.readyOnly === true,
       releaseNote: req.body.releaseNote || "",
       ip: req.ip || "",
       headers: {
@@ -4637,6 +4653,7 @@ router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, re
     }
     const input = {
       force: req.body.force === true,
+      readyOnly: req.body.readyOnly === true,
       releaseNote: req.body.releaseNote || "",
       ip: req.ip || "",
       headers: {
@@ -4879,105 +4896,46 @@ router.get("/sync/releases/check-availability", adminAuth.verifyAdminAccess, asy
  */
 router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const term = req.query.term || "2026-2027-1";
-    const start = req.query.start || "2026-09-01";
-    const note = req.query.note || `${term}新学期课表首版`;
-    const projectRoot = "C:\\Users\\Katelya\\Documents\\VScode\\FosuClass";
-    const includeAll = "classSchedules,teacherSchedules,classroomSchedules,courseSchedules,classrooms,teachers,courses";
-    const commands = [
-      {
-        id: "local-campus",
-        name: "项目内本机同步 (管理员使用，需要项目根目录)",
-        command: [
-          `cd ${projectRoot}`,
-          `$env:SYNC_CLASS_SCOPE="all"`,
-          `$env:SYNC_CLASS_GRADES="2025,2024,2023,2022,2021"`,
-          `$env:SYNC_INCLUDE_SCOPES="${includeAll}"`,
-          `npm run sync:local-campus -- --term=${term} --start=${start} --output=./staging/${term}-full.json --include=${includeAll} --class-scope=all --grades=2025,2024,2023,2022,2021`
-        ].join("\n"),
-        scene: "管理员自己电脑已连校园网，直接抓取全校课表并生成本地 Staging JSON",
-        precondition: "需要项目根目录、完整源码、Node.js 环境及 npm install 依赖；且处于校园网/学校 VPN 环境。生成的 Staging JSON 文件将统一输出到项目根目录的 staging 目录下。",
-        duration: "8 ~ 20 分钟",
-        intranetRequired: true,
-        risk: "中",
-        failureReason: "未连校园网、学期填错、教务系统崩溃",
-        solution: "重新登录教务系统，确认能访问 100.fosu.edu.cn 后重跑；只生成 Staging，不自动发布线上"
-      },
-      {
-        id: "local-upload",
-        name: "上传本地 Staging (管理员使用，需要项目根目录)",
-        command: [
-          `cd ${projectRoot}`,
-          `npm run sync:local-upload -- --file=./staging/${term}-full.json --server=https://class.katelya.eu.org`
-        ].join("\n"),
-        scene: "管理员将本地已生成的 Staging JSON 上传到 VPS 暂存区。优先使用绝对路径或明确提示以防相对路径在子进程 cwd 变化时出现错误。",
-        precondition: `已生成合法 Staging JSON，并持有管理员上传令牌 (ADMIN_API_TOKEN)。\n` +
-          `【PowerShell 推荐写法】建议通过绝对路径以防路径重复拼接错误：\n` +
-          `$file = (Resolve-Path ".\\staging\\${term}-full.json").Path\n` +
-          `npm run sync:local-upload -- --file="$file" --server=https://class.katelya.eu.org\n\n` +
-          `【旧目录排查】tools/fosu-sync-client/staging 不再作为默认输出目录；若发现旧文件，请先移动到项目根 staging 再上传。`,
-        duration: "15 ~ 60 秒",
-        intranetRequired: false,
-        risk: "低",
-        failureReason: "JSON 校验不通过、ADMIN_API_TOKEN 无效、VPS 连通超时",
-        solution: "运行 npm run test:course-normalizer 检查 JSON 数据合法性，或检查 .env 中的 ADMIN_API_TOKEN 配置"
-      },
-      {
-        id: "relay-agent",
-        name: "分发命令 (同学使用，使用 relay-agent 工具包)",
-        command: `【接力端一键运行】解压 fosu-relay-agent-win-x64.zip，双击 start.bat 输入 token 即可`,
-        scene: "将轻量级接力采集包分发给校园网内的同学，委托其采集数据并上传到 Staging 审核区",
-        precondition: "已在后台创建接力任务（未吊销、未过期）；接力同学处于校园网环境，且本地有 Node 运行环境",
-        duration: "8 ~ 20 分钟",
-        intranetRequired: true,
-        risk: "低",
-        failureReason: "relay token 过期、上传次数用尽、同学未连校园网",
-        solution: "在后台重新创建接力任务；接力上传后需要管理员在后台提升为 Staging 并发布"
-      },
-      {
-        id: "release",
-        name: "发布当前 Staging",
-        command: "在后台 Staging 预览中点击「发布为正式版本」",
-        scene: "VPS 将当前 Staging 校验通过的数据发布为正式 release，发布前会备份旧版本",
-        precondition: "Staging 已上传、diff 已核对；大幅变动需要管理员强确认",
-        duration: "15 ~ 30 秒",
-        intranetRequired: false,
-        risk: "中 (影响小程序线上展示)",
-        failureReason: "Staging 数据校验失败、变动率超过熔断阈值、release 写入失败",
-        solution: "查看 Staging diff 与校验警告，确认是新学期更替后再强制发布"
-      },
-      {
-        id: "normalizer",
-        name: "课程格式校验",
-        command: [
-          `cd ${projectRoot}`,
-          "npm run test:course-normalizer"
-        ].join("\n"),
-        scene: "每次同步前后或发布快照前运行，确保体育课多地点、教师地名正常化提取准确",
-        precondition: "无，本地随时运行测试",
-        duration: "1 ~ 3 秒",
-        intranetRequired: false,
-        risk: "低",
-        failureReason: "测试硬编码断言异常 (通常因为别名合并算法更新改变了提取特征)",
-        solution: "检查 miniprogram/utils/courseNormalizer.js 中对体育课等合并机制的适配"
-      },
-      {
-        id: "server-direct",
-        name: "服务器直连兼容模式",
-        command: `npm run sync:fresh -- --term=${term} --start=${start}`,
-        scene: "仅保留给未来具备校园网出口的服务器环境；当前 VPS 不能访问 100.fosu.edu.cn 是预期情况",
-        precondition: "服务器必须真实处于可访问学校内网的网络环境",
-        duration: "8 ~ 20 分钟",
-        intranetRequired: true,
-        risk: "中高",
-        failureReason: "公网 VPS 无法访问学校内网或校园 VPN，不是用户本机网络异常",
-        solution: "切回本机校园网同步或接力代理端同步"
-      }
-    ];
-
+    const activeTerm = appConfigService.getAdminConfig().currentSemester || getDefaultTerm();
+    const term = req.query.term || activeTerm || "2025-2026-2";
+    const start = req.query.start || req.query.termStartDate || "YYYY-MM-DD";
+    const totalWeeks = Number(req.query.totalWeeks || 20);
+    const operations = syncPlan.getRecommendedOperations({
+      term,
+      termStartDate: start,
+      totalWeeks,
+      scopes: String(req.query.include || "").split(",").filter(Boolean),
+    });
     return res.json({
       success: true,
-      commands
+      shell: "powershell",
+      cachePolicy: {
+        catalog: "reuse-validated",
+        dynamicSchedules: "network-only",
+        progress: "ignore",
+        negativeCache: "ignore",
+        oldScheduleMerge: false,
+      },
+      commands: operations.map((item) => ({
+        id: item.id,
+        name: item.name,
+        command: item.command,
+        scene: item.scene,
+        precondition: item.intranetRequired
+          ? "Run on a campus-network/VPN Windows machine. VPS does not crawl 100.fosu.edu.cn."
+          : "Does not access 100.fosu.edu.cn.",
+        duration: item.estimatedDuration,
+        intranetRequired: item.intranetRequired,
+        usesCatalogCache: item.usesCatalogCache,
+        usesDynamicCache: item.usesDynamicCache,
+        upload: item.upload,
+        publish: item.publish,
+        activate: item.activate,
+        estimatedRequests: item.estimatedRequests,
+        risk: item.risk,
+        failureReason: item.intranetRequired ? "Campus network/VPN, login session, or 100-site throttling." : "File/token/server validation.",
+        solution: item.intranetRequired ? "Reconnect campus VPN, rerun login, then retry or resume." : "Check file sidecar metadata and admin token.",
+      })),
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

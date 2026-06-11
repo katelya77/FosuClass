@@ -107,6 +107,60 @@ App({
     });
   },
 
+  onShow() {
+    const now = Date.now();
+    if (this._lastForegroundReleaseCheckAt && now - this._lastForegroundReleaseCheckAt < 30000) {
+      return;
+    }
+    this._lastForegroundReleaseCheckAt = now;
+    scheduleLowPriority(() => this.checkReleasePackForeground(), 800);
+  },
+
+  checkReleasePackForeground() {
+    return startupCoordinator.resolveRuntimePointer({
+      timeout: 5000,
+      retries: 0,
+      forceNetwork: true,
+    }).then((pointer) => {
+      if (!pointer || !pointer.releaseVersion) return null;
+      const current = this.globalData.activeRelease || {};
+      const currentKey = [
+        current.term || "",
+        current.releaseVersion || "",
+        current.cacheEpoch || "",
+        current.forceRefreshToken || "",
+      ].join(":");
+      const nextKey = [
+        pointer.term || pointer.activeTerm || "",
+        pointer.releaseVersion || "",
+        pointer.cacheEpoch || "",
+        pointer.forceRefreshToken || "",
+      ].join(":");
+      if (currentKey === nextKey) return pointer;
+      return releasePackService.switchReleaseSafely({
+        term: pointer.term || pointer.activeTerm,
+        dedupe: true,
+        forceNetwork: true,
+        warmupTypes: ["class", "teacher", "classroom", "course"],
+        timeout: 6000,
+        retries: 0,
+        skipSession: true,
+      }).then((result) => {
+        if (result && result.manifest) {
+          this.globalData.activeRelease = {
+            term: result.term,
+            releaseVersion: result.releaseVersion,
+            cacheEpoch: result.manifest.cacheEpoch,
+            forceRefreshToken: result.manifest.forceRefreshToken,
+            manifest: result.manifest,
+          };
+          termConfigService.applyRuntimeTermConfigFromApp(this);
+        }
+        return result;
+      });
+    }).catch(() => null);
+  },
+
   loadReleasePackData(options) {
     const opt = options || {};
     const cachedTerm = getStartupCachedTerm();

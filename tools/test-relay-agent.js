@@ -108,6 +108,28 @@ async function main() {
     assert.strictEqual(validated.id, task.id, "relay token should validate for its task");
     assertThrowsStatus(() => relayService.validateTokenForUpload("invalid-token"), 404, "invalid relay token should be rejected");
 
+    const heartbeat = relayService.heartbeatTaskByToken(task.relayToken, {
+      agentVersion: "test-agent",
+      network: { campusReachable: true },
+      login: { valid: true },
+    });
+    assert.strictEqual(heartbeat.agent.version, "test-agent", "relay heartbeat should record agent version");
+    assert.strictEqual(heartbeat.agent.network.campusReachable, true, "relay heartbeat should record network diagnosis");
+
+    const progressed = relayService.updateTaskProgressByToken(task.relayToken, {
+      phase: "crawl",
+      progress: 42,
+      currentTask: "classSchedules",
+      failedTargets: [{ type: "class", id: "demo" }],
+    });
+    assert.strictEqual(progressed.phase, "crawl", "relay progress should update phase");
+    assert.strictEqual(progressed.progress, 42, "relay progress should update numeric progress");
+    assert.strictEqual(progressed.failedTargets.length, 1, "relay progress should preserve failed targets");
+
+    const cancelled = relayService.cancelTask(task.id);
+    assert.strictEqual(cancelled.cancelRequested, true, "relay task should support cancellation request");
+    assert.strictEqual(cancelled.phase, "cancel-requested", "relay cancellation should expose phase");
+
     const revoked = relayService.revokeTask(task.id);
     assert.strictEqual(revoked.status, "revoked", "relay task should be revoked");
     assertThrowsStatus(() => relayService.validateTokenForUpload(task.relayToken), 403, "revoked relay token should be rejected");

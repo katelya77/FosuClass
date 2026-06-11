@@ -251,6 +251,31 @@ function normalizeToolCall(tool, index) {
   };
 }
 
+function normalizeTaskStep(step, index) {
+  const source = step || {};
+  const label = safeText(source.label || source.name || "", 48, `步骤 ${index + 1}`);
+  const status = safeText(source.status || "done", 16);
+  return {
+    key: safeText(source.key || source.name || `task-${index}`, 48, `task-${index}`),
+    displayName: label,
+    displayStatus: status,
+    displayText: label,
+    statusClass: status === "failed" ? "failed" : (status === "running" ? "running" : "success"),
+  };
+}
+
+function buildEvidenceText(evidence) {
+  if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return "";
+  const parts = [];
+  if (evidence.term) parts.push(`学期 ${safeText(evidence.term, 32)}`);
+  if (evidence.releaseVersion) parts.push(`版本 ${safeText(evidence.releaseVersion, 48)}`);
+  if (evidence.currentWeek) parts.push(`教学周 ${safeText(evidence.currentWeek, 16)}`);
+  if (Array.isArray(evidence.sources) && evidence.sources.length) {
+    parts.push(`来源 ${safeText(evidence.sources.slice(0, 2).join("/"), 80)}`);
+  }
+  return parts.length ? `依据：${parts.join(" · ")}` : "";
+}
+
 function normalizeCardItem(item, index, cardType) {
   const source = item && typeof item === "object" && !Array.isArray(item) ? item : {};
   const subtitle = safeText(source.subtitle || source.desc || source.detail || "", 140);
@@ -379,9 +404,12 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
   const displaySafety = source.safety ? normalizeSafety(source.safety) : null;
   const metrics = normalizeMetrics(source.metrics);
   const role = source.role === "user" ? "user" : "assistant";
-  const displayToolCalls = Array.isArray(source.toolCalls)
-    ? source.toolCalls.slice(0, 1).map(normalizeToolCall)
+  const displayTaskSteps = Array.isArray(source.taskSteps)
+    ? source.taskSteps.slice(0, 6).map(normalizeTaskStep)
     : [];
+  const displayToolCalls = displayTaskSteps.length
+    ? displayTaskSteps
+    : (Array.isArray(source.toolCalls) ? source.toolCalls.slice(0, 4).map(normalizeToolCall) : []);
   return Object.assign({}, source, {
     id,
     role,
@@ -392,6 +420,9 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
       : [],
     suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6).map((item) => safeText(item, 60)).filter(Boolean) : [],
     toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls : [],
+    taskSteps: Array.isArray(source.taskSteps) ? source.taskSteps : [],
+    evidence: source.evidence || null,
+    evidenceText: buildEvidenceText(source.evidence),
     displayToolCalls,
     safety: source.safety || null,
     displaySafety,
@@ -693,6 +724,8 @@ Page({
           cards: Array.isArray(response.cards) ? response.cards : [],
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
           toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
+          taskSteps: Array.isArray(response.taskSteps) ? response.taskSteps : [],
+          evidence: response.evidence || null,
           safety: response.safety || null,
           metrics: response.metrics || null,
         });
@@ -720,6 +753,8 @@ Page({
           cards: Array.isArray(response.cards) ? response.cards : [],
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
           toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
+          taskSteps: Array.isArray(response.taskSteps) ? response.taskSteps : [],
+          evidence: response.evidence || null,
           safety,
           metrics: response.metrics || null,
         });

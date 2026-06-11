@@ -68,6 +68,28 @@ router.get("/tasks/:token", (req, res) => {
   }
 });
 
+router.post("/tasks/:token/heartbeat", (req, res) => {
+  try {
+    const token = req.params.token || getRelayToken(req);
+    const task = relayService.heartbeatTaskByToken(token, req.body || {});
+    return res.json({ success: true, task: relayService.safeTaskForAgent(task) });
+  } catch (error) {
+    safeLog("relay-heartbeat-failed", { error: error.message, statusCode: error.statusCode });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/tasks/:token/progress", (req, res) => {
+  try {
+    const token = req.params.token || getRelayToken(req);
+    const task = relayService.updateTaskProgressByToken(token, req.body || {});
+    return res.json({ success: true, task: relayService.safeTaskForAgent(task) });
+  } catch (error) {
+    safeLog("relay-progress-failed", { error: error.message, statusCode: error.statusCode });
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
 router.post("/staging/upload/init", (req, res) => {
   try {
     const { task } = assertRelayTask(req);

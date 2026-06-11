@@ -278,6 +278,9 @@ function buildStagingSafety(data, activeSnapshot) {
   if (!data.term) blockers.push("term is empty");
   if (!data.releaseVersion) blockers.push("releaseVersion is empty");
   if (areStagingCountsAllZero(counts)) blockers.push("counts are all zero");
+  if (data.partial || data.meta && data.meta.partial) {
+    blockers.push("partial staging snapshots cannot be published by default");
+  }
   if (currentTerm && stagingTerm && currentTerm !== stagingTerm) {
     warnings.push(`Staging term ${stagingTerm} differs from configured term ${currentTerm}`);
   }
@@ -439,6 +442,7 @@ function finalizeReleaseActivation(options = {}) {
 
 async function runStagingPublish(input = {}, job) {
   const forcePublish = input.force === true;
+  const readyOnly = input.readyOnly === true;
   const releaseNote = input.releaseNote || "";
   const auditReq = {
     ip: input.ip || "",
@@ -514,7 +518,7 @@ async function runStagingPublish(input = {}, job) {
 
   const activeTerm = termRegistryService.getActiveTerm();
   const stagingTerm = stagingData.term || stagingData.semester || "";
-  const shouldActivate = Boolean(activeTerm && activeTerm.term === stagingTerm);
+  const shouldActivate = Boolean(!readyOnly && activeTerm && activeTerm.term === stagingTerm);
   const publishResult = shouldActivate
     ? await writeReleasePackAndActivate(stagingData, job)
     : await writeReleasePackAndBindReady(stagingData, job);

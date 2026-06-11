@@ -93,13 +93,20 @@ function addHours(hours) {
 function safeTaskForAgent(task) {
   return {
     id: task.id,
+    taskType: task.taskType || "daily",
     term: task.term,
     termConfig: task.termConfig || null,
+    syncPlan: task.syncPlan || null,
     description: task.description,
     expiresAt: task.expiresAt,
     maxUploads: task.maxUploads,
     uploadCount: task.uploadCount || 0,
     status: getTaskStatus(task),
+    phase: task.phase || "",
+    progress: Number(task.progress || 0),
+    cancelRequested: Boolean(task.cancelRequested),
+    lastHeartbeatAt: task.lastHeartbeatAt || null,
+    agent: task.agent || null,
     createdAt: task.createdAt,
     revokedAt: task.revokedAt || null,
   };
@@ -145,13 +152,18 @@ function createTask(input) {
   const task = {
     id: `relay_${Date.now()}_${crypto.randomBytes(4).toString("hex")}`,
     relayToken: crypto.randomBytes(32).toString("hex"),
+    taskType: normalizeString(input.taskType || input.type, "daily"),
     term: normalizeString(requestedTerm || termConfig.term),
     termConfig,
+    syncPlan: input.syncPlan && typeof input.syncPlan === "object" ? input.syncPlan : null,
     description: normalizeString(input.description, "全校课表接力采集"),
     expiresAt: normalizeString(input.expiresAt) || addHours(expiresInHours),
     maxUploads: toPositiveInteger(input.maxUploads, 1, 20),
     uploadCount: 0,
     status: "pending",
+    phase: "created",
+    progress: 0,
+    cancelRequested: false,
     createdAt: now,
     updatedAt: now,
   };
@@ -193,6 +205,40 @@ function revokeTask(id) {
   return updateTask(id, (task) => {
     task.revokedAt = new Date().toISOString();
     task.status = "revoked";
+  });
+}
+
+function cancelTask(id) {
+  return updateTask(id, (task) => {
+    task.cancelRequested = true;
+    task.status = task.status === "pending" ? "cancelled" : task.status;
+    task.phase = "cancel-requested";
+  });
+}
+
+function updateTaskProgressByToken(token, input = {}) {
+  const task = validateTokenForUpload(token);
+  return updateTask(task.id, (next) => {
+    next.startedAt = next.startedAt || new Date().toISOString();
+    next.status = input.status || next.status || "running";
+    next.phase = normalizeString(input.phase, next.phase || "running");
+    next.progress = Math.max(0, Math.min(100, Number(input.progress || next.progress || 0)));
+    next.failedTargets = Array.isArray(input.failedTargets) ? input.failedTargets.slice(0, 100) : (next.failedTargets || []);
+    next.message = normalizeString(input.message, next.message || "");
+  });
+}
+
+function heartbeatTaskByToken(token, input = {}) {
+  const task = validateTokenForUpload(token);
+  return updateTask(task.id, (next) => {
+    next.lastHeartbeatAt = new Date().toISOString();
+    next.status = next.cancelRequested ? "cancelling" : (next.status === "pending" ? "running" : next.status);
+    next.agent = {
+      version: normalizeString(input.version || input.agentVersion, next.agent && next.agent.version || ""),
+      platform: normalizeString(input.platform, process.platform),
+      network: input.network && typeof input.network === "object" ? input.network : next.agent && next.agent.network || null,
+      loginState: normalizeString(input.loginState || input.login && input.login.valid, next.agent && next.agent.loginState || ""),
+    };
   });
 }
 
@@ -434,6 +480,7 @@ function markUploadPublished(id, version) {
 }
 
 module.exports = {
+  cancelTask,
   createTask,
   deleteTask,
   findTaskById,
@@ -448,7 +495,9 @@ module.exports = {
   recordUpload,
   revokeTask,
   safeTaskForAgent,
+  heartbeatTaskByToken,
   summarizeStagingData,
+  updateTaskProgressByToken,
   validateTokenForUpload,
   validateStagingData,
 };
