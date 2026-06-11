@@ -3,11 +3,13 @@ const appConfigService = require("../../services/appConfigService");
 const emptyRoomService = require("../../services/emptyRoomService");
 const platformDataService = require("../../services/platformDataService");
 const releasePackService = require("../../services/releasePackService");
-const { mockCalendar } = require("../../data/mockCalendar");
+const teachingCalendarService = require("../../services/teachingCalendarService");
 const {
+  addLocalDays,
   formatDate,
   getTodayTeachingInfo,
   getWeekdayLabel,
+  parseLocalDate,
 } = require("../../utils/week");
 const DEFAULT_SEMESTER_ID = "";
 
@@ -46,28 +48,16 @@ function safeDecodeURIComponent(value) {
   }
 }
 
-function toDateObject(value) {
-  if (value instanceof Date) return value;
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? new Date() : date;
-}
-
-function addDays(date, days) {
-  const next = new Date(toDateObject(date).getTime());
-  next.setDate(next.getDate() + Number(days || 0));
-  return next;
-}
-
 function buildDateOptions(currentDate) {
-  const base = toDateObject(currentDate);
+  const base = parseLocalDate(currentDate) || new Date();
   const today = new Date();
   const options = [
     { key: "today", label: "今天", date: formatDate(today) },
-    { key: "tomorrow", label: "明天", date: formatDate(addDays(today, 1)) },
+    { key: "tomorrow", label: "明天", date: formatDate(addLocalDays(today, 1)) },
   ];
-  const monday = addDays(base, -((base.getDay() + 6) % 7));
+  const monday = addLocalDays(base, -((base.getDay() + 6) % 7));
   for (let index = 0; index < 7; index += 1) {
-    const date = addDays(monday, index);
+    const date = addLocalDays(monday, index);
     options.push({
       key: `week-${index + 1}`,
       label: getWeekdayLabel(index + 1),
@@ -136,6 +126,8 @@ function normalizeActiveSnapshot(config) {
 }
 
 function getDefaultSelectedTerm() {
+  const calendar = teachingCalendarService.getImmediateActiveCalendar();
+  if (calendar.termConfig && calendar.termConfig.term) return calendar.termConfig.term;
   const config = appConfigService.getGlobalConfig ? appConfigService.getGlobalConfig() : {};
   return config.currentSemester ||
     config.termConfig && config.termConfig.term ||
@@ -199,9 +191,12 @@ Page({
 
   initDefaults(options) {
     const now = new Date();
-    const todayInfo = getTodayTeachingInfo(now, mockCalendar);
+    const calendar = teachingCalendarService.getImmediateActiveCalendar();
+    const termConfig = calendar.termConfig || {};
+    const weeks = calendar.weeks || [];
+    const todayInfo = getTodayTeachingInfo(now, weeks, termConfig);
     const date = safeDecodeURIComponent(options.date) || todayInfo.date || formatDate(now);
-    const dateInfo = getTodayTeachingInfo(date, mockCalendar);
+    const dateInfo = getTodayTeachingInfo(date, weeks, termConfig);
     const sectionParam = safeDecodeURIComponent(options.section || options.sections);
     const buildingParam = safeDecodeURIComponent(options.building);
     const selectedSectionPresetIndex = sectionParam
@@ -438,7 +433,8 @@ Page({
 
   onDateChange(event) {
     const date = event.detail.value;
-    const info = getTodayTeachingInfo(date, mockCalendar);
+    const calendar = teachingCalendarService.getImmediateActiveCalendar();
+    const info = getTodayTeachingInfo(date, calendar.weeks || [], calendar.termConfig || {});
     this.setData({
       date,
       dateText: date,
@@ -458,7 +454,8 @@ Page({
     const date = event.currentTarget.dataset.date;
     const key = event.currentTarget.dataset.key || "";
     if (!date) return;
-    const info = getTodayTeachingInfo(date, mockCalendar);
+    const calendar = teachingCalendarService.getImmediateActiveCalendar();
+    const info = getTodayTeachingInfo(date, calendar.weeks || [], calendar.termConfig || {});
     this.setData({
       date,
       dateText: date,

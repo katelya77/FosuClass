@@ -8,11 +8,12 @@ const {
   getSettings,
   saveSettings,
 } = require("../../utils/storage");
-const { mockCalendar } = require("../../data/mockCalendar");
+const teachingCalendarService = require("../../services/teachingCalendarService");
 const {
   clampWeek,
+  formatFullDateLabel,
   getTodayTeachingInfo,
-  getRuntimeTermConfig,
+  getWeekdayLabel,
 } = require("../../utils/week");
 const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
@@ -25,14 +26,16 @@ const APP_VERSION = "1.0.0";
 const FEEDBACK_TYPES = ["课表错误", "数据过期", "页面问题", "功能建议", "其他"];
 
 function getSelectedTerm(settings) {
-  const runtime = getRuntimeTermConfig();
+  const calendar = teachingCalendarService.getImmediateActiveCalendar();
+  const runtime = calendar.termConfig || {};
   const source = settings || {};
   return source.semesterId || source.semester || runtime.term;
 }
 
 function buildWeekOptions(totalWeeks) {
   const options = [];
-  const count = Number(totalWeeks || getRuntimeTermConfig().totalWeeks || 20) || 20;
+  const calendar = teachingCalendarService.getImmediateActiveCalendar();
+  const count = Number(totalWeeks || calendar.termConfig && calendar.termConfig.totalWeeks || 19) || 19;
   for (let week = 1; week <= count; week += 1) {
     options.push(`第${week}周`);
   }
@@ -137,7 +140,9 @@ Page({
     brand: BRAND,
     settings: {},
     teachingInfo: {},
-    termStartDate: getRuntimeTermConfig().termStartDate,
+    termStartDate: "",
+    termStartWeekdayText: "",
+    totalTeachingWeeks: "",
     weekOptions: buildWeekOptions(),
     feedbackTypes: FEEDBACK_TYPES,
     feedbackVisible: false,
@@ -224,22 +229,53 @@ Page({
 
   loadSettings() {
     const settings = getSettings();
-    const termConfig = getRuntimeTermConfig();
-    const teachingInfo = getTodayTeachingInfo(new Date(), mockCalendar, termConfig);
+    const calendar = teachingCalendarService.getImmediateActiveCalendar();
+    const termConfig = calendar.termConfig || {};
+    const teachingInfo = getTodayTeachingInfo(new Date(), calendar.weeks || [], termConfig);
     const effectiveWeek = settings.manualWeekOverride ? clampWeek(settings.currentWeek, termConfig) : teachingInfo.weekNo;
     const selectedSchedule = getSelectedSchedule();
     const selectedMeta = buildSelectedScheduleMeta(selectedSchedule);
+    const startWeekdayText = getWeekdayLabel(termConfig.termStartDate) || "周一";
     this.setData({
       settings: Object.assign({}, settings, {
         currentWeek: effectiveWeek,
+        semester: settings.semester || settings.semesterId || termConfig.term || "",
+        semesterId: settings.semesterId || termConfig.term || "",
       }),
       teachingInfo,
-      termStartDate: termConfig.termStartDate,
+      termStartDate: formatFullDateLabel(termConfig.termStartDate) || "日期待同步",
+      termStartWeekdayText: startWeekdayText,
+      totalTeachingWeeks: termConfig.totalWeeks ? `${termConfig.totalWeeks}周` : "日期待同步",
       weekOptions: buildWeekOptions(termConfig.totalWeeks),
       selectedScheduleText: buildSelectedScheduleText(selectedSchedule),
       selectedScheduleSourceText: selectedMeta.sourceText,
       selectedScheduleImportText: selectedMeta.importText,
     });
+    teachingCalendarService.loadActiveTeachingCalendar()
+      .then((latest) => {
+        const latestConfig = latest.termConfig || {};
+        if (
+          latest.releaseVersion !== calendar.releaseVersion ||
+          latestConfig.termStartDate !== termConfig.termStartDate ||
+          Number(latestConfig.totalWeeks || 0) !== Number(termConfig.totalWeeks || 0)
+        ) {
+          const latestInfo = getTodayTeachingInfo(new Date(), latest.weeks || [], latestConfig);
+          const nextWeek = settings.manualWeekOverride ? clampWeek(settings.currentWeek, latestConfig) : latestInfo.weekNo;
+          this.setData({
+            settings: Object.assign({}, this.data.settings, {
+              currentWeek: nextWeek,
+              semester: this.data.settings.semester || latestConfig.term || "",
+              semesterId: this.data.settings.semesterId || latestConfig.term || "",
+            }),
+            teachingInfo: latestInfo,
+            termStartDate: formatFullDateLabel(latestConfig.termStartDate) || "日期待同步",
+            termStartWeekdayText: getWeekdayLabel(latestConfig.termStartDate) || "周一",
+            totalTeachingWeeks: latestConfig.totalWeeks ? `${latestConfig.totalWeeks}周` : "日期待同步",
+            weekOptions: buildWeekOptions(latestConfig.totalWeeks),
+          });
+        }
+      })
+      .catch(() => {});
   },
 
   onWeekChange(event) {
@@ -252,7 +288,8 @@ Page({
   },
 
   restoreAutoWeek() {
-    const teachingInfo = getTodayTeachingInfo(new Date(), mockCalendar, getRuntimeTermConfig());
+    const calendar = teachingCalendarService.getImmediateActiveCalendar();
+    const teachingInfo = getTodayTeachingInfo(new Date(), calendar.weeks || [], calendar.termConfig || {});
     saveSettings({
       currentWeek: teachingInfo.weekNo,
       manualWeekOverride: false,

@@ -1,7 +1,7 @@
 const DEFAULT_SEMESTER_ID = "";
 const DEFAULT_SEMESTER_TEXT = "";
 const TERM_START_DATE = "";
-const TOTAL_WEEKS = 20;
+const TOTAL_WEEKS = 19;
 const WEEK_START = "monday";
 const WEEKDAY_LABELS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const { isCourseActiveInWeek } = require("./courseWeekRules");
@@ -64,38 +64,76 @@ function pad(number) {
   return number < 10 ? `0${number}` : `${number}`;
 }
 
-function parseDate(dateText) {
-  if (dateText instanceof Date) {
-    return new Date(dateText.getFullYear(), dateText.getMonth(), dateText.getDate());
+function parseLocalDate(value) {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return null;
+    return new Date(value.getFullYear(), value.getMonth(), value.getDate());
   }
-  const parts = String(dateText || "").split("-").map(Number);
-  if (parts.length < 3 || parts.some((part) => !Number.isFinite(part))) {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (typeof value === "number" && Number.isFinite(value)) {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : new Date(date.getFullYear(), date.getMonth(), date.getDate());
   }
-  return new Date(parts[0], parts[1] - 1, parts[2]);
+  const text = String(value || "").trim();
+  const match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})(?:[T\s].*)?$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) return null;
+  const date = new Date(year, month - 1, day);
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function parseDate(value) {
+  return parseLocalDate(value);
+}
+
+function isValidDate(value) {
+  return parseLocalDate(value) !== null;
+}
+
+function addLocalDays(value, offset) {
+  const date = parseLocalDate(value);
+  if (!date) return null;
+  date.setDate(date.getDate() + Number(offset || 0));
+  return date;
 }
 
 function formatDate(date) {
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const target = parseLocalDate(date);
+  if (!target) return "";
+  return `${target.getFullYear()}-${pad(target.getMonth() + 1)}-${pad(target.getDate())}`;
 }
 
 function formatMonthDay(date) {
-  return `${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
+  const target = parseLocalDate(date);
+  if (!target) return "";
+  return `${pad(target.getMonth() + 1)}/${pad(target.getDate())}`;
 }
 
 function formatDateLabel(date) {
-  const target = parseDate(date);
+  const target = parseLocalDate(date);
+  if (!target) return "";
   return `${target.getMonth() + 1}月${target.getDate()}日`;
 }
 
 function formatFullDateLabel(date) {
-  const target = parseDate(date);
+  const target = parseLocalDate(date);
+  if (!target) return "";
   return `${target.getFullYear()}年${target.getMonth() + 1}月${target.getDate()}日`;
 }
 
 function formatWeekRange(startDate, endDate) {
-  return `${formatDateLabel(startDate)}-${formatDateLabel(endDate)}`;
+  const start = formatDateLabel(startDate);
+  const end = formatDateLabel(endDate);
+  return start && end ? `${start}-${end}` : "";
 }
 
 function clampWeek(week, termConfig) {
@@ -105,11 +143,27 @@ function clampWeek(week, termConfig) {
 }
 
 function getTeachingWeekByDate(date, calendarWeeks, termConfig) {
-  const target = parseDate(date || new Date());
+  const target = parseLocalDate(date || new Date());
   const config = resolveTermConfig(termConfig);
+  if (!target) {
+    return {
+      term: config.term,
+      semester: config.term,
+      termPhase: "unknown",
+      isInTerm: false,
+      rawWeekNo: null,
+      weekNo: 1,
+      startDate: "",
+      endDate: "",
+      notes: "",
+      rangeText: "",
+    };
+  }
   const weeks = Array.isArray(calendarWeeks) ? calendarWeeks : [];
   const matched = weeks.find((item) => {
-    return target >= parseDate(item.startDate) && target <= parseDate(item.endDate);
+    const startDate = parseLocalDate(item.startDate);
+    const endDate = parseLocalDate(item.endDate);
+    return startDate && endDate && target >= startDate && target <= endDate;
   });
   if (matched) {
     const matchedWeekNo = Number(matched.weekNo || matched.week);
@@ -139,7 +193,21 @@ function getTeachingWeekByDate(date, calendarWeeks, termConfig) {
     };
   }
 
-  const start = parseDate(config.termStartDate);
+  const start = parseLocalDate(config.termStartDate);
+  if (!start) {
+    return {
+      term: config.term,
+      semester: config.term,
+      termPhase: "unknown",
+      isInTerm: false,
+      rawWeekNo: null,
+      weekNo: 1,
+      startDate: "",
+      endDate: "",
+      notes: "",
+      rangeText: "",
+    };
+  }
   const diffDays = Math.floor((target.getTime() - start.getTime()) / 86400000);
   const rawWeekNo = Math.floor(diffDays / 7) + 1;
   const weekNo = clampWeek(rawWeekNo, config);
@@ -181,10 +249,18 @@ function getWeekRangeByWeekNo(weekNo, calendarWeeks, termConfig) {
     };
   }
 
-  const start = parseDate(config.termStartDate);
-  start.setDate(start.getDate() + (targetWeek - 1) * 7);
-  const end = new Date(start.getTime());
-  end.setDate(start.getDate() + 6);
+  const start = addLocalDays(config.termStartDate, (targetWeek - 1) * 7);
+  const end = addLocalDays(start, 6);
+  if (!start || !end) {
+    return {
+      semester: config.term,
+      weekNo: targetWeek,
+      startDate: "",
+      endDate: "",
+      notes: "",
+      rangeText: "",
+    };
+  }
   return {
     semester: config.term,
     weekNo: targetWeek,
@@ -200,12 +276,14 @@ function getCurrentTeachingWeek(date, calendarWeeks, termConfig) {
 }
 
 function getTodayWeekday(date) {
-  const day = (date || new Date()).getDay();
+  const target = parseLocalDate(date || new Date());
+  if (!target) return 0;
+  const day = target.getDay();
   return day === 0 ? 7 : day;
 }
 
 function getWeekdayLabel(value) {
-  const weekday = value instanceof Date || typeof value === "string" ? getTodayWeekday(parseDate(value)) : value;
+  const weekday = value instanceof Date || typeof value === "string" ? getTodayWeekday(value) : value;
   return WEEKDAY_LABELS[weekday - 1] || "";
 }
 
@@ -225,19 +303,40 @@ function getVisibleWeekdays(showWeekend, date) {
 
 function getWeekDateRange(week, termConfig) {
   const rangeInfo = getWeekRangeByWeekNo(week, [], termConfig);
-  const start = parseDate(rangeInfo.startDate);
-  const end = parseDate(rangeInfo.endDate);
+  const start = parseLocalDate(rangeInfo.startDate);
+  const end = parseLocalDate(rangeInfo.endDate);
   return {
-    startDate: formatDate(start),
-    endDate: formatDate(end),
-    shortText: `${formatMonthDay(start)}-${formatMonthDay(end)}`,
+    startDate: start ? formatDate(start) : "",
+    endDate: end ? formatDate(end) : "",
+    shortText: start && end ? `${formatMonthDay(start)}-${formatMonthDay(end)}` : "",
     rangeText: formatWeekRange(start, end),
   };
 }
 
 function getTodayTeachingInfo(date, calendarWeeks, termConfig) {
-  const target = parseDate(date || new Date());
+  const target = parseLocalDate(date || new Date());
   const config = resolveTermConfig(termConfig);
+  if (!target) {
+    return {
+      term: config.term,
+      semesterText: config.semesterText,
+      termStartDate: config.termStartDate,
+      totalWeeks: config.totalWeeks,
+      termPhase: "unknown",
+      isInTerm: false,
+      rawWeekNo: null,
+      weekNo: 1,
+      date: "",
+      dateLabel: "",
+      fullDateLabel: "",
+      weekday: 0,
+      weekdayLabel: "",
+      rangeText: "",
+      weekLabel: "第1周",
+      startDate: "",
+      endDate: "",
+    };
+  }
   const weekInfo = getTeachingWeekByDate(target, calendarWeeks, config);
   return Object.assign({}, weekInfo, {
     date: formatDate(target),
@@ -277,6 +376,7 @@ module.exports = {
   WEEK_START,
   WEEKDAY_LABELS,
   FALLBACK_TERM_CONFIG,
+  addLocalDays,
   clampWeek,
   formatDate,
   formatDateLabel,
@@ -293,6 +393,8 @@ module.exports = {
   getWeekdayLabel,
   getVisibleWeekdays,
   isCourseInWeek,
+  isValidDate,
+  parseLocalDate,
   resetRuntimeTermConfig,
   resolveTermConfig,
   setRuntimeTermConfig,

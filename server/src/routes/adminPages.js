@@ -5368,10 +5368,17 @@ const adminConsoleHtml = `<!doctype html>
           return;
         }
         var summary = readiness.summary || {};
+        var calendarSummary = readiness.calendarSummary || {};
         summaryEl.innerHTML = [
           readiness.ready ? "<span class='badge success'>可激活</span>" : "<span class='badge danger'>未通过</span>",
           "<span>term: <strong>" + escapeHtml(readiness.term || "-") + "</strong></span>",
           "<span>release: <strong>" + escapeHtml(readiness.releaseVersion || "-") + "</strong></span>",
+          "<span>开学: <strong>" + escapeHtml(calendarSummary.termStartDate || "-") + "</strong></span>",
+          "<span>周起始: <strong>" + escapeHtml(calendarSummary.weekStart || "-") + "</strong></span>",
+          "<span>总周数: <strong>" + escapeHtml(calendarSummary.totalWeeks || "-") + "</strong></span>",
+          "<span>当前周: <strong>" + escapeHtml(calendarSummary.currentWeek || "-") + "</strong></span>",
+          "<span>calendar weeks: <strong>" + escapeHtml(calendarSummary.calendarWeeks || "-") + "</strong></span>",
+          "<span>release/registry: <strong>" + escapeHtml(calendarSummary.releaseRegistryMatch ? "一致" : "不一致") + "</strong></span>",
           "<span>fail " + escapeHtml(summary.fail || 0) + "</span>",
           "<span>warn " + escapeHtml(summary.warn || 0) + "</span>",
           "<span>pass " + escapeHtml(summary.pass || 0) + "</span>"

@@ -1,13 +1,14 @@
 const { courseTimes } = require("../../data/courseTimes");
-const { mockCalendar } = require("../../data/mockCalendar");
 const { buildScheduleColumns, getCourseDataSource, getCoursesByClass } = require("../../utils/course");
 const { getSettings, saveSettings } = require("../../utils/storage");
 const { getTodayCoursesData } = require("../../utils/todayReminder");
 const appConfigService = require("../../services/appConfigService");
 const customCourseService = require("../../services/customCourseService");
+const teachingCalendarService = require("../../services/teachingCalendarService");
 const BRAND = require("../../config/brand");
 const {
   TOTAL_WEEKS,
+  addLocalDays,
   clampWeek,
   formatDateLabel,
   formatWeekRange,
@@ -15,33 +16,30 @@ const {
   getTodayTeachingInfo,
   getVisibleWeekdays,
   getWeekRangeByWeekNo,
-  mockCalendar: _mc, // 避开未用提示
 } = require("../../utils/week");
 
 const PAGE_PADDING_RPX = 32;
 const TIME_AXIS_WIDTH = 76;
 const WEEKEND_DAY_WIDTH = 142;
 
-function parseDate(dateText) {
-  const parts = String(dateText || "").split("-").map(Number);
-  return new Date(parts[0], parts[1] - 1, parts[2]);
-}
-
-function addDays(dateText, offset) {
-  const date = parseDate(dateText);
-  date.setDate(date.getDate() + offset);
-  return date;
-}
-
 function getContentWidthRpx() {
   return 750 - PAGE_PADDING_RPX;
 }
 
-function resolveDisplayWeek(settings, now) {
+function resolveDisplayWeek(settings, todayInfo, termConfig) {
   if (settings.manualWeekOverride) {
-    return clampWeek(settings.currentWeek);
+    return clampWeek(settings.currentWeek, termConfig);
   }
-  return getCurrentTeachingWeek(now, mockCalendar);
+  return todayInfo.weekNo;
+}
+
+function calendarChanged(left, right) {
+  if (!left || !right) return Boolean(left || right);
+  return left.term !== right.term ||
+    left.releaseVersion !== right.releaseVersion ||
+    JSON.stringify(left.termConfig || {}) !== JSON.stringify(right.termConfig || {}) ||
+    JSON.stringify((left.weeks || []).map((week) => [week.weekNo, week.startDate, week.endDate, week.note || week.notes || ""])) !==
+      JSON.stringify((right.weeks || []).map((week) => [week.weekNo, week.startDate, week.endDate, week.note || week.notes || ""]));
 }
 
 function buildPersonalXlsHeader(target) {
@@ -182,21 +180,35 @@ Page({
   },
 
   loadSchedule() {
+    const calendar = teachingCalendarService.getImmediateActiveCalendar();
+    this.renderScheduleWithCalendar(calendar);
+    teachingCalendarService.loadActiveTeachingCalendar()
+      .then((latest) => {
+        if (calendarChanged(calendar, latest)) {
+          this.renderScheduleWithCalendar(latest);
+        }
+      })
+      .catch(() => {});
+  },
+
+  renderScheduleWithCalendar(calendar) {
     const settings = getSettings();
     const { getCurrentScheduleTarget } = require("../../utils/storage");
     const target = getCurrentScheduleTarget();
     const hasBoundTarget = !!target;
+    const termConfig = calendar.termConfig || {};
+    const calendarWeeks = calendar.weeks || [];
     
     const now = new Date();
-    const todayInfo = getTodayTeachingInfo(now, mockCalendar);
-    const currentWeek = resolveDisplayWeek(settings, now);
-    const weekInfo = getWeekRangeByWeekNo(currentWeek, mockCalendar);
+    const todayInfo = getTodayTeachingInfo(now, calendarWeeks, termConfig);
+    const currentWeek = resolveDisplayWeek(settings, todayInfo, termConfig);
+    const weekInfo = getWeekRangeByWeekNo(currentWeek, calendarWeeks, termConfig);
     const showWeekend = settings.showWeekend || false;
     const weekendShowMode = settings.weekendShowMode || "overview";
     
     const baseWeekdays = getVisibleWeekdays(showWeekend, now);
     const weekdays = baseWeekdays.map((day, index) => {
-      const date = addDays(weekInfo.startDate, index);
+      const date = addLocalDays(weekInfo.startDate, index);
       return Object.assign({}, day, {
         dateLabel: formatDateLabel(date),
         isToday: currentWeek === todayInfo.weekNo && day.weekday === todayInfo.weekday,
@@ -232,6 +244,7 @@ Page({
     const dayTrackWidth = dayColumnWidth * weekdays.length;
     const gridWidth = TIME_AXIS_WIDTH + dayTrackWidth;
     const weekRangeText = formatWeekRange(weekInfo.startDate, weekInfo.endDate);
+    const weekSwitcherLabel = weekRangeText ? `${weekRangeText} · 第${currentWeek}周` : `日期待同步 · 第${currentWeek}周`;
 
     let displayClassName = settings.className || "未选择课表";
     let scheduleSubtitle = "";
@@ -261,10 +274,11 @@ Page({
       lastSyncText,
       syncActionText,
       currentWeek,
+      totalWeeks: termConfig.totalWeeks || TOTAL_WEEKS,
       weekRangeText,
       weekScopeText: showWeekend ? "周一至周日" : "周一至周五",
       todayText: `${todayInfo.dateLabel} ${todayInfo.weekdayLabel}`,
-      weekSwitcherLabel: `${weekRangeText} · 第${currentWeek}周`,
+      weekSwitcherLabel,
       gridWidth,
       dayTrackWidth,
       dayColumnWidth,
@@ -280,7 +294,11 @@ Page({
 
   onWeekChange(event) {
     const type = event.detail.type;
-    const nextWeek = type === "current" ? getCurrentTeachingWeek(new Date(), mockCalendar) : clampWeek(event.detail.week);
+    const calendar = teachingCalendarService.getImmediateActiveCalendar();
+    const termConfig = calendar.termConfig || {};
+    const nextWeek = type === "current"
+      ? getCurrentTeachingWeek(new Date(), calendar.weeks || [], termConfig)
+      : clampWeek(event.detail.week, termConfig);
     saveSettings({
       currentWeek: nextWeek,
       manualWeekOverride: type !== "current",

@@ -25,13 +25,15 @@ async function run() {
   const builtin = getBuiltinTeachingCalendar();
   const lastGood = Object.assign({}, builtin, {
     releaseVersion: "last-good-v1",
+    schemaVersion: teachingCalendarService.TERM_CALENDAR_CACHE_SCHEMA,
     source: "unit-test-last-good",
-    weeks: builtin.weeks.slice(0, 20).map((week) => Object.assign({}, week, {
+    weeks: builtin.weeks.slice(0, 19).map((week) => Object.assign({}, week, {
       title: week.weekNo === 1 ? "缓存开学教学周" : week.title,
     })),
   });
   wx.setStorageSync(`fosu:v6:teaching-calendar:last-good:${encodeURIComponent(lastGood.term)}`, {
     savedAt: Date.now(),
+    schemaVersion: teachingCalendarService.TERM_CALENDAR_CACHE_SCHEMA,
     calendar: lastGood,
   });
 
@@ -41,7 +43,7 @@ async function run() {
     calendarTimeout: 1,
   });
   assert.strictEqual(withLastGood.term, "2025-2026-2");
-  assert(withLastGood.weeks.length >= 20, "last-good fallback should keep weeks");
+  assert.strictEqual(withLastGood.weeks.length, 19, "last-good fallback should keep weeks");
   assert(withLastGood.fromStorage || withLastGood.fallback, "last-good fallback should mark degraded result");
 
   Object.keys(storage).forEach((key) => delete storage[key]);
@@ -51,7 +53,7 @@ async function run() {
     calendarTimeout: 1,
   });
   assert.strictEqual(builtinFallback.term, "2025-2026-2");
-  assert.strictEqual(builtinFallback.weeks.length, 20);
+  assert.strictEqual(builtinFallback.weeks.length, 19);
   assert.strictEqual(builtinFallback.builtin, true);
   assert(builtinFallback.weeks.every((week) => week.startDate && week.endDate && week.title && week.typeText));
 
@@ -66,7 +68,7 @@ async function run() {
   page.onShow();
   await new Promise((resolve) => setTimeout(resolve, 80));
   assert(Array.isArray(page.data.weeks), "page should set weeks");
-  assert(page.data.weeks.length >= 20, "calendar page should never leave weeks empty after network failure");
+  assert.strictEqual(page.data.weeks.length, 19, "calendar page should never leave weeks empty after network failure");
   assert(page.data.title.includes("2025-2026学年第二学期"), "page should show current semester title");
   console.log("test-miniprogram-calendar-fallback passed");
 }

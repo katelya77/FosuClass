@@ -12,7 +12,10 @@ sourceCalendar.weeks.forEach((week, index) => {
   assert(week.type, `week ${week.weekNo} should include type`);
   assert(week.title && /[\u4e00-\u9fa5]/.test(week.title), `week ${week.weekNo} should include Chinese title`);
 });
-assert(sourceCalendar.weeks.length >= 20, "2025-2026-2 calendar should include at least 20 weeks");
+assert.strictEqual(sourceCalendar.termStartDate, "2026-03-09");
+assert.strictEqual(sourceCalendar.totalWeeks, 19);
+assert.strictEqual(sourceCalendar.weekStart, "monday");
+assert.strictEqual(sourceCalendar.weeks.length, 19, "2025-2026-2 calendar should include 19 weeks");
 
 const tempRoot = path.join(os.tmpdir(), `fosu-teaching-calendar-${process.pid}-${Date.now()}`);
 process.env.FOSU_STORAGE_DIR = path.join(tempRoot, "storage");
@@ -71,7 +74,7 @@ try {
       term: "2025-2026-2",
       semesterText: "2025-2026学年第二学期",
       termStartDate: "2026-03-09",
-      totalWeeks: 20,
+      totalWeeks: 19,
       weekStart: "monday",
       status: "current",
       releaseVersion: version,
@@ -81,7 +84,7 @@ try {
   }, { backup: false });
   teachingCalendarService.writeTermCalendar("2025-2026-2", sourceCalendar);
   const normalized = teachingCalendarService.readTermCalendar("2025-2026-2");
-  assert.strictEqual(normalized.weeks.length, 20);
+  assert.strictEqual(normalized.weeks.length, 19);
   normalized.weeks.forEach((week) => {
     assert(week.startDate && week.endDate && week.type && week.title, `week ${week.weekNo} should be complete`);
     assert(week.typeText && /[\u4e00-\u9fa5]/.test(week.typeText), `week ${week.weekNo} should include Chinese typeText`);
@@ -93,7 +96,7 @@ try {
   const publicCalendarPath = teachingCalendarService.getReleaseCalendarPath(version, true);
   assert(fs.existsSync(publicCalendarPath), "public release calendar.json should be generated");
   assert.strictEqual(manifest.calendarUrl, `/static/releases/${version}/calendar.json`);
-  assert.strictEqual(manifest.calendarCount, 20);
+  assert.strictEqual(manifest.calendarCount, 19);
   assert.strictEqual(manifest.calendarHash, teachingCalendarService.getCalendarHash(calendar));
   assert(manifest.calendarUpdatedAt, "manifest should include calendarUpdatedAt");
   console.log("test-teaching-calendar passed");

@@ -21,7 +21,7 @@ global.getApp = () => ({
           term: "2025-2026-2",
           semesterText: "2025-2026学年第二学期",
           termStartDate: "2026-03-09",
-          totalWeeks: 20,
+          totalWeeks: 19,
           source: "test",
         },
       },
@@ -39,7 +39,7 @@ function run() {
     term: "2025-2026-2",
     semesterText: "2025-2026学年第二学期",
     termStartDate: "2026-03-09",
-    totalWeeks: 20,
+    totalWeeks: 19,
     source: "test",
   });
 
@@ -90,7 +90,7 @@ function run() {
   assert(Number(context.currentTeachingWeek) >= 1, "currentTeachingWeek should exist");
   assert(Number(context.todayWeekday) >= 1, "todayWeekday should exist");
   assert.strictEqual(context.termStartDate, "2026-03-09");
-  assert.strictEqual(context.totalWeeks, 20);
+  assert.strictEqual(context.totalWeeks, 19);
 
   const text = JSON.stringify(context);
   assert(!/studentId|password|fileBase64|base64,A{20}/i.test(text), "context must not contain sensitive fields or raw file content");

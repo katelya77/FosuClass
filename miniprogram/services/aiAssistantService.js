@@ -1,10 +1,8 @@
 const request = require("../utils/request");
 const { getCurrentScheduleTarget } = require("../utils/storage");
 const { DEFAULT_TERM } = require("./releasePackService");
-const { mockCalendar } = require("../data/mockCalendar");
+const teachingCalendarService = require("./teachingCalendarService");
 const {
-  getCurrentTeachingWeek,
-  getRuntimeTermConfig,
   getTodayTeachingInfo,
   getTodayWeekday,
 } = require("../utils/week");
@@ -306,17 +304,32 @@ function buildClientContext(extra = {}) {
   const activeRelease = (app.globalData && app.globalData.activeRelease) || {};
   const manifest = activeRelease.manifest || {};
   const appConfig = (app.globalData && app.globalData.appConfig) || {};
-  const termConfig = getRuntimeTermConfig();
-  const todayTeachingInfo = getTodayTeachingInfo(now, mockCalendar, termConfig);
   const scheduleSummary = sanitizeLocalScheduleForAI(target);
   const latestImport = getLatestScheduleImport();
+  const manifestTermConfig = manifest.termConfig && typeof manifest.termConfig === "object" ? manifest.termConfig : null;
+  const appTermConfig = appConfig.termConfig && typeof appConfig.termConfig === "object" ? appConfig.termConfig : null;
+  const preferredTermConfig = manifestTermConfig || appTermConfig || null;
   const term = extra.term ||
     scheduleSummary.term ||
     target && (target.semester || target.term) ||
-    termConfig.term ||
+    preferredTermConfig && preferredTermConfig.term ||
     activeRelease.term ||
     manifest.term ||
     DEFAULT_TERM;
+  const calendar = teachingCalendarService.getImmediateActiveCalendar({
+    term,
+    releaseVersion: activeRelease.releaseVersion || manifest.releaseVersion || "",
+  });
+  const calendarConfig = calendar.termConfig || {};
+  const calendarMatchesTerm = !term || calendar.term === term || calendarConfig.term === term;
+  const termConfig = preferredTermConfig && (preferredTermConfig.term || term) === term
+    ? Object.assign({}, preferredTermConfig, {
+      term: preferredTermConfig.term || term,
+      releaseVersion: preferredTermConfig.releaseVersion || activeRelease.releaseVersion || manifest.releaseVersion || "",
+    })
+    : calendarConfig;
+  const calendarWeeks = calendarMatchesTerm ? (calendar.weeks || []) : [];
+  const todayTeachingInfo = getTodayTeachingInfo(now, calendarWeeks, termConfig);
 
   return {
     term,
@@ -335,11 +348,11 @@ function buildClientContext(extra = {}) {
       : true,
     semesterText: termConfig.semesterText || "",
     termStartDate: termConfig.termStartDate || "",
-    totalWeeks: termConfig.totalWeeks || 20,
+    totalWeeks: termConfig.totalWeeks || 19,
     termPhase: todayTeachingInfo.termPhase || "unknown",
     isInTerm: todayTeachingInfo.isInTerm !== false,
-    currentTeachingWeek: extra.currentTeachingWeek || todayTeachingInfo.weekNo || getCurrentTeachingWeek(now, mockCalendar, termConfig),
-    todayWeekday: getTodayWeekday(now),
+    currentTeachingWeek: extra.currentTeachingWeek || todayTeachingInfo.weekNo,
+    todayWeekday: todayTeachingInfo.weekday || getTodayWeekday(now),
     todayDate: todayTeachingInfo.date,
     todayTeachingInfo: {
       weekNo: todayTeachingInfo.weekNo,

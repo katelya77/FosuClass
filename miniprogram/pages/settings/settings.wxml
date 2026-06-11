@@ -62,7 +62,13 @@
     <view class="setting-row">
       <view>
         <view class="row-title">开学日期</view>
-        <view class="row-desc">{{termStartDate}} · 周一</view>
+        <view class="row-desc">{{termStartDate}} · {{termStartWeekdayText}}</view>
+      </view>
+    </view>
+    <view class="setting-row">
+      <view>
+        <view class="row-title">总教学周</view>
+        <view class="row-desc">{{totalTeachingWeeks}}</view>
       </view>
     </view>
   </view>
