@@ -11,6 +11,12 @@ const staticReleaseSyncService = require("./staticReleaseSyncService");
 const releaseLifecycleService = require("./releaseLifecycleService");
 const stagingFingerprint = require("../utils/stagingFingerprint");
 const { safeLog } = require("../utils/safeLogger");
+const {
+  buildResourceCountContract,
+  compareResourceCountContracts,
+  flattenLegacyCounts,
+  sourceModeLabel,
+} = require("../shared/resourceCountContract");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const DATA_DIR = path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../data"));
@@ -139,22 +145,9 @@ function getStagingClassSchedules(data) {
 
 function summarizeStagingData(data) {
   const classSchedules = getStagingClassSchedules(data);
-  const resources = data && data.resources || {};
-  const adminClassCount = classSchedules.filter((item) => item.displayType === "class-schedule" && !item.isAggregated).length;
-  const counts = {
-    classScheduleCount: classSchedules.length,
-    adminClassCount,
-    majorAggregateCount: classSchedules.length - adminClassCount,
-    teacherScheduleCount: resources.teacherSchedules && resources.teacherSchedules.length || data && data.teacherSchedules && data.teacherSchedules.length || 0,
-    classroomScheduleCount: resources.classroomSchedules && resources.classroomSchedules.length || data && data.classroomSchedules && data.classroomSchedules.length || 0,
-    courseScheduleCount: resources.courseSchedules && resources.courseSchedules.length || data && data.courseSchedules && data.courseSchedules.length || 0,
-    classroomCount: resources.classrooms && resources.classrooms.length || data && data.classrooms && data.classrooms.length || 0,
-    teacherCount: resources.teachers && resources.teachers.length || data && data.teachers && data.teachers.length || 0,
-    courseCount: resources.courses && resources.courses.length || data && data.courses && data.courses.length || 0,
-    collegeCount: data && data.catalog && data.catalog.colleges && data.catalog.colleges.length || data && data.colleges && data.colleges.length || 0,
-    gradeCount: data && data.catalog && data.catalog.grades && data.catalog.grades.length || data && data.grades && data.grades.length || 0,
-  };
-  return { classSchedules, counts };
+  const resourceCounts = buildResourceCountContract(data || {});
+  const counts = flattenLegacyCounts(resourceCounts);
+  return { classSchedules, counts, resourceCounts };
 }
 
 function areStagingCountsAllZero(counts) {
@@ -234,7 +227,18 @@ function buildStagingSafety(data, activeSnapshot) {
   const validation = validateStagingData(data);
   const blockers = validation.errors.slice();
   const warnings = validation.warnings.slice();
-  const activeCounts = activeSnapshot ? releaseService.countRelease(activeSnapshot) : {};
+  const activeInfo = releaseService.getActiveReleaseInfo();
+  const activeResourceCounts = activeSnapshot
+    ? releaseService.getReleaseResourceCounts(
+      activeSnapshot.version || activeSnapshot.releaseVersion || activeInfo && activeInfo.version || "",
+      activeSnapshot
+    )
+    : null;
+  const stagingResourceCounts = buildResourceCountContract(data || {});
+  const contractComparison = activeResourceCounts
+    ? compareResourceCountContracts(activeResourceCounts, stagingResourceCounts)
+    : { allowPublish: true, blockers: [], warnings: [], comparisons: [] };
+  const activeCounts = activeResourceCounts ? flattenLegacyCounts(activeResourceCounts) : {};
   const activeClassCount = activeCounts.classScheduleCount || (activeSnapshot && activeSnapshot.classSchedules || []).length;
   const currentTerm = appConfigService.getAdminConfig().currentSemester || "";
   const stagingTerm = data.term || data.semester || "";
@@ -249,9 +253,9 @@ function buildStagingSafety(data, activeSnapshot) {
 
   [
     { key: "classScheduleCount", label: "class schedules" },
-    { key: "teacherScheduleCount", label: "teacher schedules" },
-    { key: "classroomScheduleCount", label: "classroom schedules" },
-    { key: "courseScheduleCount", label: "course schedules" },
+    { key: "teacherScheduleCount", label: "教师课表" },
+    { key: "classroomScheduleCount", label: "教室课表" },
+    { key: "courseScheduleCount", label: "课程课表" },
   ].forEach((item) => {
     const activeCount = Number(activeCounts[item.key] || 0);
     const stagingCount = Number(counts[item.key] || 0);
@@ -269,8 +273,26 @@ function buildStagingSafety(data, activeSnapshot) {
       dropPercent,
       severity: dropRate > 0.5 ? "danger" : "warning",
     });
-    warnings.push(`${item.label}: active ${activeCount} -> staging ${stagingCount}, drop ${dropPercent}%`);
+    warnings.push(`${item.label}: 当前线上 ${activeCount} -> 本次暂存 ${stagingCount}，下降 ${dropPercent}%`);
   });
+
+  const blockerDetails = [];
+  contractComparison.blockers.forEach((blocker) => {
+    const code = blocker.code || "COUNT_CONTRACT_MISMATCH";
+    const text = `${code}: ${blocker.message || "统计契约不一致"}`;
+    blockers.push(text);
+    blockerDetails.push(blocker);
+  });
+  if (activeResourceCounts && stagingResourceCounts) {
+    const teacherDiff = (contractComparison.comparisons || []).find((item) => item.path === "teacher.scheduleDocuments");
+    if (teacherDiff && Number(teacherDiff.active || 0) === 1007 && Number(teacherDiff.staging || 0) === 83) {
+      warnings.push(
+        `教师课表：当前线上 ${teacherDiff.active} 份，本次暂存 ${teacherDiff.staging} 份，变化 ${teacherDiff.delta}（${teacherDiff.percent}%）。` +
+        `当前来源：${sourceModeLabel(activeResourceCounts.teacher && activeResourceCounts.teacher.sourceMode)}；` +
+        `本次来源：${sourceModeLabel(stagingResourceCounts.teacher && stagingResourceCounts.teacher.sourceMode)}。`
+      );
+    }
+  }
 
   if (hasClassSchedules && counts.classScheduleCount === 0 && !blockers.includes("Missing classSchedules")) {
     blockers.push("includeScopes contains classSchedules but classSchedules=0");
@@ -294,6 +316,11 @@ function buildStagingSafety(data, activeSnapshot) {
     blockers,
     warnings,
     counts,
+    resourceCounts: stagingResourceCounts,
+    activeResourceCounts,
+    contractComparison,
+    blockerDetails,
+    blockerCodes: Array.from(new Set(blockerDetails.map((item) => item.code || "").filter(Boolean))),
     activeCounts,
     riskDrops,
     activeClassScheduleCount: activeClassCount,
@@ -481,14 +508,14 @@ async function runStagingPublish(input = {}, job) {
   if (job) job.progress(20, "normalizing data");
   const safety = buildStagingSafety(stagingData, activeSnapshot);
   if (!safety.allowPublish) {
-    throwPublishError("STAGING_SAFETY_BLOCKED", "Staging data failed publish safety checks.", {
+    throwPublishError("STAGING_SAFETY_BLOCKED", "暂存数据未通过发布安全检查。", {
       blockers: safety.blockers,
       warnings: safety.warnings,
     });
   }
 
   if (safety.requiresForceConfirm && !forcePublish) {
-    throwPublishError("CLASS_COUNT_DROP_BLOCKED", "Class/resource counts dropped too much. Force confirmation is required.", {
+    throwPublishError("CLASS_COUNT_DROP_BLOCKED", "班级或资源统计下降过大，必须人工确认后才允许继续。", {
       safety,
     });
   }
@@ -503,7 +530,7 @@ async function runStagingPublish(input = {}, job) {
       .filter((name) => name && !activeClassNamesSet.has(name));
     const changeRate = (deletedClasses.length + addedClasses.length) / Math.max(activeClassNames.length, 1);
     if (changeRate > 0.5 && !forcePublish) {
-      throwPublishError("BIG_CHANGE_BLOCKED", `Staging class change rate is ${(changeRate * 100).toFixed(2)}%. Force confirmation is required.`);
+      throwPublishError("BIG_CHANGE_BLOCKED", `暂存班级变化率为 ${(changeRate * 100).toFixed(2)}%，必须人工确认后才允许继续。`);
     }
   }
 

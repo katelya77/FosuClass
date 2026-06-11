@@ -37,6 +37,12 @@ const { clearExpiredSecurityEvents, getSecurityEventSummary, recordSecurityEvent
 const { getSecurityStatus } = require("../services/securityModeService");
 const { listRouteSecurityPolicies } = require("../security/routeSecurityPolicy");
 const syncPlan = require("../shared/syncPlan");
+const {
+  buildResourceCountContract,
+  compareResourceCountContracts,
+  flattenLegacyCounts,
+  sourceModeLabel,
+} = require("../shared/resourceCountContract");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const zlib = require("zlib");
@@ -3421,22 +3427,9 @@ function getStagingClassSchedules(data) {
 
 function summarizeStagingData(data) {
   const classSchedules = getStagingClassSchedules(data);
-  const resources = data?.resources || {};
-  const adminClassCount = classSchedules.filter((item) => item.displayType === "class-schedule" && !item.isAggregated).length;
-  const counts = {
-    classScheduleCount: classSchedules.length,
-    adminClassCount,
-    majorAggregateCount: classSchedules.length - adminClassCount,
-    teacherScheduleCount: resources.teacherSchedules?.length || data?.teacherSchedules?.length || 0,
-    classroomScheduleCount: resources.classroomSchedules?.length || data?.classroomSchedules?.length || 0,
-    courseScheduleCount: resources.courseSchedules?.length || data?.courseSchedules?.length || 0,
-    classroomCount: resources.classrooms?.length || data?.classrooms?.length || 0,
-    teacherCount: resources.teachers?.length || data?.teachers?.length || 0,
-    courseCount: resources.courses?.length || data?.courses?.length || 0,
-    collegeCount: data?.catalog?.colleges?.length || data?.colleges?.length || 0,
-    gradeCount: data?.catalog?.grades?.length || data?.grades?.length || 0,
-  };
-  return { classSchedules, counts };
+  const resourceCounts = buildResourceCountContract(data || {});
+  const counts = flattenLegacyCounts(resourceCounts);
+  return { classSchedules, counts, resourceCounts };
 }
 
 function areStagingCountsAllZero(counts) {
@@ -3522,11 +3515,23 @@ function validateStagingData(data) {
 function buildStagingSafety(data, activeSnapshot) {
   const includeScopes = getStagingIncludeScopes(data);
   const hasClassSchedules = includeScopes.length === 0 || includeScopes.includes("classSchedules");
-  const { counts } = summarizeStagingData(data);
+  const stagingSummary = summarizeStagingData(data);
+  const { counts } = stagingSummary;
   const validation = validateStagingData(data);
   const blockers = validation.errors.slice();
   const warnings = validation.warnings.slice();
-  const activeCounts = activeSnapshot ? releaseService.countRelease(activeSnapshot) : {};
+  const activeInfo = releaseService.getActiveReleaseInfo();
+  const activeResourceCounts = activeSnapshot
+    ? releaseService.getReleaseResourceCounts(
+      activeSnapshot.version || activeSnapshot.releaseVersion || activeInfo?.version || "",
+      activeSnapshot
+    )
+    : null;
+  const stagingResourceCounts = stagingSummary.resourceCounts;
+  const contractComparison = activeResourceCounts
+    ? compareResourceCountContracts(activeResourceCounts, stagingResourceCounts)
+    : { allowPublish: true, blockers: [], warnings: [], comparisons: [] };
+  const activeCounts = activeResourceCounts ? flattenLegacyCounts(activeResourceCounts) : {};
   const activeClassCount = activeCounts.classScheduleCount || (activeSnapshot?.classSchedules || []).length;
   const currentTerm = appConfigService.getAdminConfig().currentSemester || "";
   const stagingTerm = data.term || data.semester || "";
@@ -3540,10 +3545,10 @@ function buildStagingSafety(data, activeSnapshot) {
   let severeDrop = false;
 
   [
-    { key: "classScheduleCount", label: "行政班课表变化" },
-    { key: "teacherScheduleCount", label: "教师课表变化" },
-    { key: "classroomScheduleCount", label: "教室课表变化" },
-    { key: "courseScheduleCount", label: "课程课表变化" },
+    { key: "classScheduleCount", label: "班级课表" },
+    { key: "teacherScheduleCount", label: "教师课表" },
+    { key: "classroomScheduleCount", label: "教室课表" },
+    { key: "courseScheduleCount", label: "课程课表" },
   ].forEach((item) => {
     const activeCount = Number(activeCounts[item.key] || 0);
     const stagingCount = Number(counts[item.key] || 0);
@@ -3568,10 +3573,25 @@ function buildStagingSafety(data, activeSnapshot) {
       severity: dropRate > 0.5 ? "danger" : "warning",
     });
     warnings.push(
-      `${item.label}: 线上 ${activeCount} -> Staging ${stagingCount}，下降 ${dropPercent}%` +
-      (dropRate > 0.5 ? "，默认禁止发布，必须勾选强制确认。" : "，请核对是否为正常新学期变化。")
+      `${item.label}: 当前线上 ${activeCount} -> 本次暂存 ${stagingCount}，下降 ${dropPercent}%` +
+      (dropRate > 0.5 ? "，普通发布被阻止。" : "，请核对是否为正常学期变化。")
     );
   });
+
+  const blockerDetails = [];
+  contractComparison.blockers.forEach((blocker) => {
+    const code = blocker.code || "COUNT_CONTRACT_MISMATCH";
+    blockers.push(`${code}: ${blocker.message || "统计契约不一致"}`);
+    blockerDetails.push(blocker);
+  });
+  const teacherDiff = (contractComparison.comparisons || []).find((item) => item.path === "teacher.scheduleDocuments");
+  if (teacherDiff && Number(teacherDiff.active || 0) && Number(teacherDiff.staging || 0) < Number(teacherDiff.active || 0)) {
+    warnings.push(
+      `教师课表：当前线上 ${teacherDiff.active} 份，本次暂存 ${teacherDiff.staging} 份，变化 ${teacherDiff.delta}（${teacherDiff.percent}%）。` +
+      `当前来源：${sourceModeLabel(activeResourceCounts && activeResourceCounts.teacher && activeResourceCounts.teacher.sourceMode)}；` +
+      `本次来源：${sourceModeLabel(stagingResourceCounts && stagingResourceCounts.teacher && stagingResourceCounts.teacher.sourceMode)}。`
+    );
+  }
 
   if (hasClassSchedules && counts.classScheduleCount === 0 && !blockers.includes("缺少班级课程表数据 (classSchedules)")) {
     blockers.push("includeScopes 包含 classSchedules，但 classSchedules=0");
@@ -3598,6 +3618,11 @@ function buildStagingSafety(data, activeSnapshot) {
     blockers,
     warnings,
     counts,
+    resourceCounts: stagingResourceCounts,
+    activeResourceCounts,
+    contractComparison,
+    blockerDetails,
+    blockerCodes: Array.from(new Set(blockerDetails.map((item) => item.code || "").filter(Boolean))),
     activeCounts,
     riskDrops,
     activeClassScheduleCount: activeClassCount,
@@ -3624,6 +3649,16 @@ function buildStagingUploadSummary(stagingData, safety, extra = {}) {
     releaseVersion: stagingData.releaseVersion || stagingData.version || "",
     generatedAt: stagingData.generatedAt || stagingData.updatedAt || "",
     counts: safety?.counts || summarizeStagingData(stagingData).counts,
+    resourceCounts: safety?.resourceCounts || summarizeStagingData(stagingData).resourceCounts,
+    totalScheduleDocuments: (
+      Number(safety?.resourceCounts?.class?.scheduleDocuments || 0) +
+      Number(safety?.resourceCounts?.teacher?.scheduleDocuments || 0) +
+      Number(safety?.resourceCounts?.classroom?.scheduleDocuments || 0) +
+      Number(safety?.resourceCounts?.course?.scheduleDocuments || 0)
+    ),
+    stagingState: safety && safety.allowPublish ? "pending-review" : "publish-blocked",
+    releaseState: "not-built",
+    runtimeState: "inactive",
   }, extra);
 }
 
@@ -3656,6 +3691,9 @@ async function processDirectStagingUpload(filePath, reqMeta, job) {
       skipped: true,
       unchanged: true,
       reason: "active-release",
+      stagingState: "duplicate",
+      releaseState: "published",
+      runtimeState: "active",
       message: "数据无变化，不需要发布",
       canonicalHash: fingerprint.canonicalHash,
       activeCanonicalHash,
@@ -3667,6 +3705,9 @@ async function processDirectStagingUpload(filePath, reqMeta, job) {
       skipped: true,
       unchanged: true,
       reason: "staging",
+      stagingState: "duplicate",
+      releaseState: "not-built",
+      runtimeState: "inactive",
       message: "服务器已存在相同 staging，无需重复上传",
       canonicalHash: fingerprint.canonicalHash,
       stagingCanonicalHash: beforeLatest.canonicalHash,
@@ -3697,6 +3738,8 @@ async function processDirectStagingUpload(filePath, reqMeta, job) {
       generatedAt: stagingData.generatedAt,
       meta: stagingData.meta || null,
       counts: safety.counts,
+      resourceCounts: safety.resourceCounts,
+      contractComparison: safety.contractComparison,
       safety,
     },
     warnings: validation.warnings.concat(safety.warnings || []),
@@ -3966,10 +4009,18 @@ router.post("/staging/upload/finalize", adminAuth.verifyAdminAccess, async (req,
     const fingerprint = attachStagingFingerprint(stagingData, beforeLatest.canonicalHash);
     const activeCanonicalHash = getActiveCanonicalHash();
     if (activeCanonicalHash && activeCanonicalHash === fingerprint.canonicalHash) {
-      const summary = buildStagingUploadSummary(stagingData, { counts: summarizeStagingData(stagingData).counts }, {
+      const localSummary = summarizeStagingData(stagingData);
+      const summary = buildStagingUploadSummary(stagingData, {
+        counts: localSummary.counts,
+        resourceCounts: localSummary.resourceCounts,
+        allowPublish: false,
+      }, {
         canonicalHash: fingerprint.canonicalHash,
         unchanged: true,
         unchangedReason: "active-release",
+        stagingState: "duplicate",
+        releaseState: "published",
+        runtimeState: "active",
         message: "数据无变化，不需要发布",
       });
       const upload = stagingUploadService.markUploadUnchanged(uploadId, summary);
@@ -3986,14 +4037,23 @@ router.post("/staging/upload/finalize", adminAuth.verifyAdminAccess, async (req,
           canonicalHash: fingerprint.canonicalHash,
           activeCanonicalHash,
           counts: summary.counts,
+          resourceCounts: summary.resourceCounts,
         },
       });
     }
     if (beforeLatest.canonicalHash && beforeLatest.canonicalHash === fingerprint.canonicalHash) {
-      const summary = buildStagingUploadSummary(stagingData, { counts: summarizeStagingData(stagingData).counts }, {
+      const localSummary = summarizeStagingData(stagingData);
+      const summary = buildStagingUploadSummary(stagingData, {
+        counts: localSummary.counts,
+        resourceCounts: localSummary.resourceCounts,
+        allowPublish: false,
+      }, {
         canonicalHash: fingerprint.canonicalHash,
         unchanged: true,
         unchangedReason: "staging",
+        stagingState: "duplicate",
+        releaseState: "not-built",
+        runtimeState: "inactive",
         message: "服务器已存在相同 staging，无需重复上传",
       });
       const upload = stagingUploadService.markUploadUnchanged(uploadId, summary);
@@ -4010,6 +4070,7 @@ router.post("/staging/upload/finalize", adminAuth.verifyAdminAccess, async (req,
           canonicalHash: fingerprint.canonicalHash,
           stagingCanonicalHash: beforeLatest.canonicalHash,
           counts: summary.counts,
+          resourceCounts: summary.resourceCounts,
         },
       });
     }
@@ -4035,6 +4096,8 @@ router.post("/staging/upload/finalize", adminAuth.verifyAdminAccess, async (req,
     const summary = buildStagingUploadSummary(stagingData, safety, {
       warnings: safety.warnings,
       blockers: safety.blockers,
+      blockerCodes: safety.blockerCodes,
+      contractComparison: safety.contractComparison,
     });
     const upload = stagingUploadService.markUploadPendingReview(uploadId, summary);
     writeAuditLog(req, "upload", "staging-upload", uploadId, `CLI chunk upload finalized: ${stagingData.term || ""}`);
@@ -4050,6 +4113,8 @@ router.post("/staging/upload/finalize", adminAuth.verifyAdminAccess, async (req,
         releaseVersion: stagingData.releaseVersion,
         generatedAt: stagingData.generatedAt,
         counts: safety.counts,
+        resourceCounts: safety.resourceCounts,
+        contractComparison: safety.contractComparison,
         safety,
       },
       warnings: validation.warnings.concat(safety.warnings || []),
@@ -4257,6 +4322,7 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
           : "公网服务器无法访问学校内网是预期情况；请使用本机校园网同步或接力代理端。",
         latestRelayUpload: relayUploads[0] || null,
         latestStagingUpload: stagingUploads[0] || null,
+        resourceCounts: activeInfo && activeInfo.resourceCounts || releasePackStatus && releasePackStatus.resourceCounts || null,
         counts: {
           classScheduleCount: syncMeta["class-schedules"]?.itemCount || 0,
           adminClassCount: syncMeta["class-schedules"]?.adminClassCount || 0,
@@ -4575,14 +4641,18 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
     const activeSnapshot = releaseService.readActiveReleaseSnapshot();
 
     const getStats = (snapshot) => {
-      if (!snapshot) return { classCount: 0, courseCount: 0, teacherCount: 0, classroomCount: 0, classNames: [] };
+      if (!snapshot) return { classCount: 0, courseCount: 0, teacherCount: 0, classroomCount: 0, classNames: [], resourceCounts: null };
       const classSchedules = snapshot.classSchedules || [];
       const classNames = classSchedules.map(c => c.className).filter(Boolean);
+      const resourceCounts = snapshot.resourceCounts && Number(snapshot.resourceCounts.countSchemaVersion) === 2
+        ? snapshot.resourceCounts
+        : buildResourceCountContract(snapshot);
       return {
-        classCount: classSchedules.length,
-        courseCount: snapshot.resources?.courses?.length || snapshot.resources?.courseSchedules?.length || 0,
-        teacherCount: snapshot.resources?.teachers?.length || snapshot.resources?.teacherSchedules?.length || 0,
-        classroomCount: snapshot.resources?.classrooms?.length || snapshot.resources?.classroomSchedules?.length || 0,
+        classCount: resourceCounts.class.scheduleDocuments,
+        courseCount: resourceCounts.course.scheduleDocuments,
+        teacherCount: resourceCounts.teacher.scheduleDocuments,
+        classroomCount: resourceCounts.classroom.scheduleDocuments,
+        resourceCounts,
         classNames
       };
     };
@@ -4621,6 +4691,7 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
         sameAsActive,
         needsPublish: !sameAsActive,
         counts,
+        resourceCounts: safety.resourceCounts,
         safety,
         diff: {
           classDelta: stagingStats.classCount - activeStats.classCount,
@@ -4633,6 +4704,7 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
           addedCount: addedClasses.length,
           changeRate: parseFloat((changeRate * 100).toFixed(2)),
           isBigChange,
+          contractComparison: safety.contractComparison,
         }
       }
     });
@@ -4918,12 +4990,13 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
       },
       commands: operations.map((item) => ({
         id: item.id,
-        name: item.name,
+        name: item.displayName || item.name,
         command: item.command,
-        scene: item.scene,
+        scene: item.displayScene || item.scene,
+        sceneCode: item.sceneCode || item.scene || "",
         precondition: item.intranetRequired
-          ? "Run on a campus-network/VPN Windows machine. VPS does not crawl 100.fosu.edu.cn."
-          : "Does not access 100.fosu.edu.cn.",
+          ? "请在已连接校园网或 VPN 的 Windows 电脑上运行；公网服务器不会直接抓取 100 网。"
+          : "不访问 100 网，只处理本地文件或服务端校验。",
         duration: item.estimatedDuration,
         intranetRequired: item.intranetRequired,
         usesCatalogCache: item.usesCatalogCache,
@@ -4932,9 +5005,11 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
         publish: item.publish,
         activate: item.activate,
         estimatedRequests: item.estimatedRequests,
+        estimatedRequestsCode: item.estimatedRequestsCode,
         risk: item.risk,
-        failureReason: item.intranetRequired ? "Campus network/VPN, login session, or 100-site throttling." : "File/token/server validation.",
-        solution: item.intranetRequired ? "Reconnect campus VPN, rerun login, then retry or resume." : "Check file sidecar metadata and admin token.",
+        riskDisplay: item.riskDisplay || item.risk,
+        failureReason: item.intranetRequired ? "校园网或 VPN 未连接、登录会话失效，或 100 网限流。" : "文件、Token 或服务端校验不通过。",
+        solution: item.intranetRequired ? "重新连接校园网/VPN，重新登录后重试；已有 runId 时优先恢复中断任务。" : "检查文件旁路元数据、上传 Token 和管理员权限。",
       })),
     });
   } catch (error) {

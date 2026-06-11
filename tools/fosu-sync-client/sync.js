@@ -37,7 +37,11 @@ const parser = require("../../server/src/utils/parser");
 const normalizer = require("../../server/src/utils/scheduleNormalizer");
 const courseIdentity = require("../../server/src/utils/courseNormalizer");
 const releaseService = require("../../server/src/services/releaseService");
+const termRegistryService = require("../../server/src/services/termRegistryService");
 const stagingUploader = require("./upload");
+const {
+  isInvalidTeacherName,
+} = require("../../server/src/shared/resourceCountContract");
 const {
   buildSidecarMeta,
   calculateFingerprint,
@@ -315,12 +319,13 @@ function normalizeTermConfigRecord(record, source) {
   const item = record && typeof record === "object" ? record : {};
   const term = String(item.term || item.semester || "").trim();
   if (!validateTermId(term)) return null;
-  const totalWeeks = Number(item.totalWeeks || item.weeks || item.weekCount || 20);
+  const rawTotalWeeks = item.totalWeeks || item.weeks || item.weekCount;
+  const totalWeeks = rawTotalWeeks == null || rawTotalWeeks === "" ? null : Number(rawTotalWeeks);
   return {
     term,
     semesterText: item.semesterText || item.termText || generateSemesterText(term),
     termStartDate: String(item.termStartDate || item.startDate || item.termStart || "").trim(),
-    totalWeeks: Number.isInteger(totalWeeks) && totalWeeks >= 1 && totalWeeks <= 30 ? totalWeeks : 20,
+    totalWeeks: Number.isInteger(totalWeeks) && totalWeeks >= 1 && totalWeeks <= 30 ? totalWeeks : null,
     weekStart: item.weekStart || "monday",
     source: source || item.source || "unknown",
     releaseVersion: item.releaseVersion || item.version || "",
@@ -362,6 +367,15 @@ function getLocalRegistryTermConfig(term) {
   return null;
 }
 
+function getBundledTermRegistryConfig(term) {
+  try {
+    const config = termRegistryService.getTerm(term);
+    return normalizeTermConfigRecord(config, "term-registry");
+  } catch (error) {
+    return null;
+  }
+}
+
 async function getRemoteRegistryTermConfig(term) {
   try {
     const response = await axios.get(`${FOSU_API_BASE}/api/fosu/terms`, {
@@ -379,43 +393,70 @@ async function getRemoteRegistryTermConfig(term) {
 
 async function resolveTermConfig(activeSemester, cliParams = {}) {
   const explicit = cliParams["term-start-date"] || cliParams.termStartDate || cliParams.start || cliParams.startDate || "";
-  const totalWeeks = Number(cliParams["total-weeks"] || cliParams.totalWeeks || process.env.TOTAL_WEEKS || 20);
-  const weekStart = cliParams.weekStart || cliParams["week-start"] || "monday";
-  if (explicit) {
-    return normalizeTermConfigRecord({
-      term: activeSemester,
-      semesterText: cliParams.semesterText,
-      termStartDate: explicit,
-      totalWeeks,
-      weekStart,
-    }, "cli");
-  }
+  const explicitTotalWeeksRaw = cliParams["total-weeks"] || cliParams.totalWeeks || process.env.TOTAL_WEEKS || "";
+  const explicitTotalWeeks = explicitTotalWeeksRaw === "" ? null : Number(explicitTotalWeeksRaw);
+  const explicitWeekStart = cliParams.weekStart || cliParams["week-start"] || "";
+  const overrideTermConfig = Boolean(cliParams["override-term-config"] || cliParams.overrideTermConfig);
+  const cliConfig = normalizeTermConfigRecord({
+    term: activeSemester,
+    semesterText: cliParams.semesterText,
+    termStartDate: explicit,
+    totalWeeks: explicitTotalWeeks,
+    weekStart: explicitWeekStart || "monday",
+  }, "cli");
+
+  const registryConfigs = [];
+  const bundledRegistryConfig = getBundledTermRegistryConfig(activeSemester);
+  if (bundledRegistryConfig && bundledRegistryConfig.termStartDate) registryConfigs.push(bundledRegistryConfig);
   const relayTermConfig = normalizeTermConfigRecord(global.RELAY_TERM_CONFIG, "relay-term-config") || getRelayTermConfigFromEnv();
   if (relayTermConfig && relayTermConfig.term === activeSemester && relayTermConfig.termStartDate) {
-    return relayTermConfig;
+    registryConfigs.push(relayTermConfig);
   }
   const localRegistryConfig = getLocalRegistryTermConfig(activeSemester);
   if (localRegistryConfig && localRegistryConfig.termStartDate) {
-    return localRegistryConfig;
+    registryConfigs.push(localRegistryConfig);
   }
   const remoteRegistryConfig = await getRemoteRegistryTermConfig(activeSemester);
   if (remoteRegistryConfig && remoteRegistryConfig.termStartDate) {
-    return remoteRegistryConfig;
+    registryConfigs.push(remoteRegistryConfig);
+  }
+
+  const registryConfig = registryConfigs.find((item) => item && item.term === activeSemester && item.termStartDate);
+  if (registryConfig) {
+    if (cliConfig && explicit && overrideTermConfig) {
+      if (!cliConfig.totalWeeks && registryConfig.totalWeeks) cliConfig.totalWeeks = registryConfig.totalWeeks;
+      cliConfig.overrideTermConfig = true;
+      cliConfig.overriddenRegistryConfig = registryConfig;
+      cliConfig.source = "cli-override-term-config";
+      return cliConfig;
+    }
+    if (cliConfig && explicit && (
+      cliConfig.termStartDate !== registryConfig.termStartDate ||
+      (cliConfig.totalWeeks && cliConfig.totalWeeks !== registryConfig.totalWeeks) ||
+      (explicitWeekStart && cliConfig.weekStart !== registryConfig.weekStart)
+    )) {
+      console.warn(`[term-config] 警告：CLI 学期配置与 Term Registry 不一致，默认采用 Registry。若确认覆盖，请显式传入 --override-term-config。CLI start=${cliConfig.termStartDate || "-"}, weeks=${cliConfig.totalWeeks || "-"}；Registry start=${registryConfig.termStartDate}, weeks=${registryConfig.totalWeeks || "-"}`);
+    }
+    return registryConfig;
+  }
+
+  if (cliConfig && explicit) {
+    return cliConfig;
   }
   const fallback = getTermStartDate(activeSemester);
   if (fallback) {
     return normalizeTermConfigRecord({
       term: activeSemester,
       termStartDate: fallback,
-      totalWeeks,
-      weekStart,
+      totalWeeks: explicitTotalWeeks,
+      weekStart: explicitWeekStart || "monday",
     }, "env");
   }
   return normalizeTermConfigRecord({
     term: activeSemester,
     termStartDate: "",
-    totalWeeks,
-    weekStart,
+    totalWeeks: explicitTotalWeeks,
+    weekStart: explicitWeekStart || "monday",
   }, "");
 }
 
@@ -432,7 +473,7 @@ async function assertTermConfigBeforeCrawl(activeSemester, cliParams = {}) {
     ].join("\n"));
   }
   if (!Number.isInteger(config.totalWeeks) || config.totalWeeks < 1 || config.totalWeeks > 30) {
-    throw new Error("totalWeeks must be an integer between 1 and 30.");
+    throw new Error(`Missing totalWeeks for ${activeSemester}. Use Term Registry or pass --total-weeks=N for new terms; silent default 20 is disabled.`);
   }
   return Object.assign({}, config, {
     semesterText: cliParams.semesterText || config.semesterText || generateSemesterText(activeSemester),
@@ -700,6 +741,37 @@ function pushGroupedCourse(map, key, course) {
     map.set(key, []);
   }
   map.get(key).push(course);
+}
+
+function buildDirectTeacherQualityReport(collected, targets, resources) {
+  const teacherSchedules = resources && resources.teacherSchedules || [];
+  const invalidNames = teacherSchedules
+    .map((item) => teacherNameOf(item))
+    .filter((name) => isInvalidTeacherName(name));
+  const invalidSamples = Array.from(new Set(invalidNames)).slice(0, 12);
+  const usedCollegeDiscovery = collected && collected.source === "college-select";
+  const invalid = usedCollegeDiscovery && invalidNames.length > 0;
+  return {
+    sourceMode: "network-direct",
+    endpointFamily: "teacher-schedule",
+    requested: targets.length,
+    succeeded: teacherSchedules.length,
+    failed: 0,
+    targetDiscoveryMode: collected && collected.source || "unknown",
+    discoveredTeacherTargets: collected && collected.source === "teacher-select" ? targets.length : null,
+    requestGroupCount: targets.length,
+    scheduleDocumentCount: teacherSchedules.length,
+    invalidTeacherNameCount: invalidNames.length,
+    invalidTeacherNameSamples: invalidSamples,
+    coverageStatus: invalid ? "invalid" : "unknown",
+    publishable: !invalid,
+    pageHasTeacherSelect: Boolean(collected && collected.dom && collected.dom.teachers && collected.dom.teachers.length),
+    pageTeacherOptionCount: collected && collected.dom && collected.dom.teachers ? collected.dom.teachers.length : 0,
+    pageCollegeOptionCount: collected && collected.dom && collected.dom.colleges ? collected.dom.colleges.length : 0,
+    note: invalid
+      ? "100网教师页未发现教师下拉目标，当前按学院请求得到的教师名称疑似被班级名或课程名污染。"
+      : "",
+  };
 }
 
 function buildSnapshotResources(classSchedules, options = {}) {
@@ -977,6 +1049,35 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
   const cacheUsage = global.CLASS_SCHEDULE_CACHE_USAGE || {};
   const crawlStats = global.SYNC_CRAWL_STATS || {};
   const scopeSources = Object.assign({}, global.SCOPE_SOURCE_REPORTS || {});
+  const diagnostics = [];
+  const coverageQuality = {};
+  if (scopeSources.teacherSchedules && scopeSources.teacherSchedules.coverageStatus === "invalid") {
+    const teacherQuality = {
+      code: "ENTITY_NAME_CONTAMINATED",
+      severity: "error",
+      resource: "teacher",
+      message: "教师名称疑似被班级名或课程名污染，当前 direct teacher crawler 暂不具备全校覆盖能力。",
+      targetDiscoveryMode: scopeSources.teacherSchedules.targetDiscoveryMode || "unknown",
+      discoveredTeacherTargets: scopeSources.teacherSchedules.discoveredTeacherTargets == null ? null : scopeSources.teacherSchedules.discoveredTeacherTargets,
+      requestGroupCount: Number(scopeSources.teacherSchedules.requestGroupCount || 0),
+      scheduleDocumentCount: Number(scopeSources.teacherSchedules.scheduleDocumentCount || teacherScheduleCount || 0),
+      invalidTeacherNameCount: Number(scopeSources.teacherSchedules.invalidTeacherNameCount || 0),
+      invalidTeacherNameSamples: scopeSources.teacherSchedules.invalidTeacherNameSamples || [],
+      coverageStatus: "invalid",
+      publishable: false,
+    };
+    diagnostics.push(teacherQuality);
+    coverageQuality.teacher = {
+      coverageStatus: "invalid",
+      publishable: false,
+      targetDiscoveryMode: teacherQuality.targetDiscoveryMode,
+      discoveredTeacherTargets: null,
+      requestGroupCount: teacherQuality.requestGroupCount,
+      scheduleDocumentCount: teacherQuality.scheduleDocumentCount,
+      invalidTeacherNameCount: teacherQuality.invalidTeacherNameCount,
+      invalidTeacherNameSamples: teacherQuality.invalidTeacherNameSamples,
+    };
+  }
   const metaWarnings = [];
   if (cacheUsage.warning) {
     metaWarnings.push(cacheUsage.warning);
@@ -1049,6 +1150,8 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       resourceSource: cliParams.resourceSource || cliParams["resource-source"] || "derived",
       syncPlan: syncPlan ? printablePlan(syncPlan) : null,
       scopeSources,
+      diagnostics,
+      coverage: coverageQuality,
       scopeSummary,
       generatedCommand,
       generatedAt: new Date().toISOString(),
@@ -1074,10 +1177,11 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     classSchedules: updatedSchedules,
     resources,
     scopeSources,
+    diagnostics,
     timeTable: {
       sections: timeTableSections
     },
-    coverage: {
+    coverage: Object.assign({
       collegeCount,
       majorCount,
       classScheduleCount,
@@ -1087,7 +1191,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       teacherScheduleCount,
       classroomScheduleCount,
       courseScheduleCount,
-    }
+    }, coverageQuality)
   };
 }
 
@@ -2533,6 +2637,7 @@ async function crawlDirectTeacherResources(page, derivedResources = {}, options 
     courses: dedupeCourses(item.courses),
   }));
   const resources = buildTeacherResourcesFromSchedules(teacherSchedules);
+  const quality = buildDirectTeacherQualityReport(collected, targets, resources);
   const report = {
     success: errors.length < targets.length,
     generatedAt: new Date().toISOString(),
@@ -2544,11 +2649,19 @@ async function crawlDirectTeacherResources(page, derivedResources = {}, options 
     dom: collected.dom,
     errors: errors.slice(0, 50),
     samples,
+    quality,
   };
+  if (quality.coverageStatus === "invalid") {
+    console.warn(`[resources:teacher:direct] 数据质量不通过：targetDiscoveryMode=${quality.targetDiscoveryMode}, requestGroupCount=${quality.requestGroupCount}, scheduleDocumentCount=${quality.scheduleDocumentCount}, invalidTeacherNameCount=${quality.invalidTeacherNameCount}`);
+  }
   fs.writeFileSync(path.join(debugDir, "direct-teacher-report-latest.json"), JSON.stringify(report, null, 2), "utf-8");
   fs.writeFileSync(path.join(debugDir, "direct-teacher-schedules-latest.json"), JSON.stringify(resources.teacherSchedules, null, 2), "utf-8");
   console.log(`[resources:teacher:direct] schedules=${report.teacherScheduleCount}, courses=${report.courseCount}, errors=${errors.length}`);
-  return resources;
+  return Object.assign({}, resources, {
+    _diagnostics: {
+      teacherSchedules: quality,
+    },
+  });
 }
 
 function getDirectResourceLimit() {
@@ -2867,6 +2980,10 @@ async function buildResourcesForClassSchedules(classSchedules, resourceTypes, op
         startedAt: new Date().toISOString(),
         finishedAt: new Date().toISOString(),
       });
+      const diagnostic = directResources && directResources._diagnostics && directResources._diagnostics[config.schedulesKey];
+      if (diagnostic) {
+        recordScopeSource(config.schedulesKey, diagnostic);
+      }
     } catch (error) {
       if (global.CLI_PARAMS && global.CLI_PARAMS.allowDerived) {
         console.warn(`[resources:${type}] direct crawl failed; using derived-current-run because --allow-derived is set: ${error.message}`);
@@ -5200,5 +5317,7 @@ if (require.main === module) {
     crawlDirectTeacherResources,
     mergeResourcesBySource,
     getResourceTypesFromIncludeScopes,
+    resolveTermConfig,
+    assertTermConfigBeforeCrawl,
   };
 }

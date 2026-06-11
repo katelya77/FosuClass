@@ -150,6 +150,636 @@ var require_diagnose = __commonJS({
   }
 });
 
+// ../../server/src/shared/syncPlan.js
+var require_syncPlan = __commonJS({
+  "../../server/src/shared/syncPlan.js"(exports2, module2) {
+    "use strict";
+    var ALL_SCOPES2 = Object.freeze([
+      "classSchedules",
+      "teacherSchedules",
+      "classroomSchedules",
+      "courseSchedules",
+      "classrooms",
+      "teachers",
+      "courses"
+    ]);
+    var DYNAMIC_SCOPES = Object.freeze([
+      "classSchedules",
+      "teacherSchedules",
+      "classroomSchedules",
+      "courseSchedules"
+    ]);
+    var SOURCE_MODES = Object.freeze([
+      "network-direct",
+      "derived-current-run",
+      "cache-explicit",
+      "imported",
+      "contributed"
+    ]);
+    var CATALOG_POLICIES = Object.freeze(["network-only", "reuse-validated", "cache-only"]);
+    var SCHEDULE_POLICIES = Object.freeze(["network-only", "cache-only"]);
+    var PROGRESS_POLICIES = Object.freeze(["ignore", "resume"]);
+    var NEGATIVE_CACHE_POLICIES = Object.freeze(["ignore", "use", "revalidate"]);
+    var LEGACY_ACTIONS = Object.freeze({
+      fresh: "sync:daily",
+      quick: "sync:daily",
+      all: "sync:daily",
+      release: "sync:daily",
+      resources: "sync:scopes",
+      "upload-cache": "sync:upload-staging",
+      "local-upload": "sync:upload-staging"
+    });
+    function parseCliArgs2(argv) {
+      const args = Array.isArray(argv) ? argv : [];
+      let action = "all";
+      const params = {};
+      args.forEach((arg) => {
+        if (typeof arg !== "string") return;
+        if (arg.startsWith("--")) {
+          const match2 = arg.match(/^--([^=]+)=(.*)$/);
+          if (match2) {
+            params[match2[1]] = match2[2];
+          } else {
+            params[arg.slice(2)] = true;
+          }
+        } else if (!arg.startsWith("-")) {
+          action = arg;
+        }
+      });
+      return { action, params };
+    }
+    function validateTermId2(term) {
+      const value = String(term || "").trim();
+      const match2 = value.match(/^(\d{4})-(\d{4})-([12])$/);
+      return {
+        valid: Boolean(match2 && Number(match2[2]) === Number(match2[1]) + 1),
+        term: value
+      };
+    }
+    function parseList(value) {
+      if (Array.isArray(value)) return value.map(String).map((item) => item.trim()).filter(Boolean);
+      return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
+    }
+    function normalizeScope(scope) {
+      const aliases = {
+        classes: "classSchedules",
+        class: "classSchedules",
+        teachers: "teacherSchedules",
+        teacher: "teacherSchedules",
+        classrooms: "classroomSchedules",
+        classroom: "classroomSchedules",
+        courses: "courseSchedules",
+        course: "courseSchedules"
+      };
+      const value = String(scope || "").trim();
+      return aliases[value] || value;
+    }
+    function expandScopeCompanions(scopes) {
+      const result = new Set(scopes || []);
+      if (result.has("teacherSchedules")) result.add("teachers");
+      if (result.has("classroomSchedules")) result.add("classrooms");
+      if (result.has("courseSchedules")) result.add("courses");
+      return Array.from(result);
+    }
+    function getDynamicScopes(scopes) {
+      const set = new Set(scopes || []);
+      return DYNAMIC_SCOPES.filter((scope) => set.has(scope));
+    }
+    function getResourceTypesFromScopes(scopes) {
+      const set = new Set(scopes || []);
+      const types = [];
+      if (set.has("teacherSchedules") || set.has("teachers")) types.push("teacher");
+      if (set.has("classroomSchedules") || set.has("classrooms")) types.push("classroom");
+      if (set.has("courseSchedules") || set.has("courses")) types.push("course");
+      return types;
+    }
+    function includeClassSeedForResourceScopes(scopes, profile) {
+      if (profile === "upload-staging" || profile === "resume") return scopes;
+      const next = new Set(scopes || []);
+      const needsCurrentRunSeed = next.has("teacherSchedules") || next.has("classroomSchedules") || next.has("courseSchedules");
+      if (needsCurrentRunSeed) next.add("classSchedules");
+      return Array.from(next);
+    }
+    function boolParam(params, names, fallback) {
+      const list = Array.isArray(names) ? names : [names];
+      for (const name of list) {
+        if (params[name] === true || params[name] === "true" || params[name] === "1") return true;
+        if (params[name] === false || params[name] === "false" || params[name] === "0") return false;
+      }
+      return Boolean(fallback);
+    }
+    function normalizePolicy(value, allowed, fallback) {
+      const raw2 = String(value || "").trim();
+      return allowed.includes(raw2) ? raw2 : fallback;
+    }
+    function profileForAction(action) {
+      const normalized = String(action || "").trim();
+      const map = {
+        daily: "daily",
+        "daily:classes": "daily-classes",
+        "daily:teachers": "daily-teachers",
+        "daily:classrooms": "daily-classrooms",
+        "daily:courses": "daily-courses",
+        scopes: "scopes",
+        "new-term": "new-term",
+        "crawl:daily": "crawl-daily",
+        "crawl:scopes": "crawl-scopes",
+        "upload-staging": "upload-staging",
+        resume: "resume"
+      };
+      return map[normalized] || normalized;
+    }
+    function defaultScopesForProfile(profile, params) {
+      if (profile === "daily") return ALL_SCOPES2.slice();
+      if (profile === "daily-classes") return ALL_SCOPES2.slice();
+      if (profile === "daily-teachers") return ["teacherSchedules", "teachers"];
+      if (profile === "daily-classrooms") return ["classroomSchedules", "classrooms"];
+      if (profile === "daily-courses") return ["courseSchedules", "courses"];
+      if (profile === "new-term") return ALL_SCOPES2.slice();
+      if (profile === "crawl-daily") return ALL_SCOPES2.slice();
+      if (profile === "scopes" || profile === "crawl-scopes") {
+        const include = parseList(params.include).map(normalizeScope);
+        return expandScopeCompanions(include.length ? include : DYNAMIC_SCOPES);
+      }
+      if (profile === "upload-staging") return [];
+      if (profile === "resume") return [];
+      return ALL_SCOPES2.slice();
+    }
+    function defaultScopeSources(scopes, params, profile) {
+      const allowDerived = boolParam(params, "allow-derived", false);
+      const sourceModeParam = String(params["resource-source"] || params.resourceSource || "").trim().toLowerCase();
+      const directRequested = sourceModeParam === "direct" || sourceModeParam === "network-direct";
+      const sources = {};
+      (scopes || []).forEach((scope) => {
+        if (scope === "classSchedules") {
+          sources[scope] = {
+            mode: "network-direct",
+            endpointFamily: "class-schedule"
+          };
+        } else if (profile === "daily-classes" && DYNAMIC_SCOPES.includes(scope)) {
+          sources[scope] = {
+            mode: "derived-current-run",
+            endpointFamily: "class-schedule"
+          };
+        } else if (scope === "teacherSchedules") {
+          sources[scope] = {
+            mode: directRequested || !allowDerived ? "network-direct" : "derived-current-run",
+            endpointFamily: directRequested || !allowDerived ? "teacher-schedule" : "class-schedule"
+          };
+        } else if (scope === "classroomSchedules") {
+          sources[scope] = {
+            mode: directRequested || !allowDerived ? "network-direct" : "derived-current-run",
+            endpointFamily: directRequested || !allowDerived ? "classroom-schedule" : "class-schedule"
+          };
+        } else if (scope === "courseSchedules") {
+          sources[scope] = {
+            mode: directRequested || !allowDerived ? "network-direct" : "derived-current-run",
+            endpointFamily: directRequested || !allowDerived ? "course-schedule" : "class-schedule"
+          };
+        }
+      });
+      return sources;
+    }
+    function buildSyncPlan2(action, params = {}, env = process.env) {
+      const rawAction = String(action || "all");
+      const deprecatedTarget = LEGACY_ACTIONS[rawAction] || "";
+      const effectiveAction = deprecatedTarget ? deprecatedTarget.replace(/^sync:/, "") : rawAction;
+      const profile = profileForAction(effectiveAction);
+      const isUploadOnly = profile === "upload-staging";
+      const isResume = profile === "resume";
+      const isCrawlOnly = profile === "crawl-daily" || profile === "crawl-scopes";
+      const isNewTerm = profile === "new-term";
+      const term = String(params.term || params.semester || env.PREFERRED_SEMESTER || "").trim();
+      const scopes = includeClassSeedForResourceScopes(
+        expandScopeCompanions(defaultScopesForProfile(profile, params)),
+        profile
+      );
+      const dynamicScopes = getDynamicScopes(scopes);
+      const catalogPolicy = normalizePolicy(
+        params["catalog-policy"] || params.catalogPolicy,
+        CATALOG_POLICIES,
+        isNewTerm ? "network-only" : isUploadOnly || isResume ? "cache-only" : "reuse-validated"
+      );
+      const schedulePolicy = normalizePolicy(
+        params["schedule-policy"] || params.schedulePolicy,
+        SCHEDULE_POLICIES,
+        isUploadOnly ? "cache-only" : "network-only"
+      );
+      const progressPolicy = normalizePolicy(
+        params["progress-policy"] || params.progressPolicy,
+        PROGRESS_POLICIES,
+        isResume ? "resume" : "ignore"
+      );
+      const negativeCachePolicy = normalizePolicy(
+        params["negative-cache-policy"] || params.negativeCachePolicy,
+        NEGATIVE_CACHE_POLICIES,
+        "ignore"
+      );
+      const upload = !isCrawlOnly && !boolParam(params, ["no-upload"], false) && !isResume;
+      const buildRelease = upload && !isUploadOnly && !boolParam(params, ["no-publish", "crawl-only"], false);
+      const activate = isNewTerm ? boolParam(params, "activate", false) : buildRelease && !boolParam(params, ["no-activate"], false);
+      const plan = {
+        schemaVersion: 1,
+        action: rawAction,
+        mappedAction: effectiveAction,
+        profile,
+        term,
+        termValid: validateTermId2(term).valid,
+        runId: String(params["run-id"] || params.runId || `${profile}-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`),
+        deprecated: Boolean(deprecatedTarget),
+        deprecatedTarget,
+        scopes,
+        dynamicScopes,
+        resourceTypes: getResourceTypesFromScopes(scopes),
+        catalogPolicy,
+        schedulePolicy,
+        progressPolicy,
+        negativeCachePolicy,
+        mergeOldData: boolParam(params, "merge-old-data", false),
+        crawl: !isUploadOnly,
+        upload,
+        buildRelease,
+        activate,
+        verifyClient: buildRelease && !boolParam(params, ["no-verify-client"], false),
+        allowPartial: boolParam(params, "allow-partial", false),
+        allowDerived: boolParam(params, "allow-derived", false),
+        forceRefresh: schedulePolicy === "network-only" && !isUploadOnly,
+        ignoreProgress: progressPolicy === "ignore",
+        ignoreNoScheduleCache: negativeCachePolicy === "ignore",
+        cacheOnlyExplicit: schedulePolicy === "cache-only" || catalogPolicy === "cache-only",
+        filters: {
+          grades: parseList(params.grades || env.SYNC_CLASS_GRADES || env.SYNC_GRADES),
+          collegeCodes: parseList(params["college-codes"] || env.SYNC_CLASS_COLLEGE_CODES),
+          majorCodes: parseList(params["major-codes"] || env.SYNC_CLASS_MAJOR_CODES)
+        },
+        termConfig: {
+          term,
+          termStartDate: String(params["term-start-date"] || params.start || env.SYNC_TERM_START_DATE || "").trim(),
+          totalWeeks: params["total-weeks"] ? Number(params["total-weeks"]) : env.SYNC_TOTAL_WEEKS ? Number(env.SYNC_TOTAL_WEEKS) : 0,
+          weekStart: String(params["week-start"] || env.SYNC_WEEK_START || "monday").trim().toLowerCase()
+        },
+        sourceRequirements: defaultScopeSources(scopes, params, profile),
+        warnings: []
+      };
+      if (plan.deprecated) {
+        plan.warnings.push(`Deprecated command '${rawAction}' mapped to '${deprecatedTarget}'.`);
+      }
+      if (/\b(fresh|daily|crawl|sync)\b/.test(rawAction) && schedulePolicy === "cache-only" && !isUploadOnly) {
+        plan.warnings.push("Cache-only is explicit and should not be used for fresh/daily/crawl actions.");
+      }
+      if (isNewTerm) {
+        if (!plan.termConfig.termStartDate) plan.warnings.push("new-term requires --term-start-date.");
+        if (!plan.termConfig.totalWeeks) plan.warnings.push("new-term requires --total-weeks.");
+      }
+      return plan;
+    }
+    function applyPlanToParams2(plan, params = {}) {
+      const next = Object.assign({}, params);
+      next.term = plan.term || next.term;
+      next.includeScopes = plan.scopes.slice();
+      next.forceRefresh = Boolean(plan.forceRefresh);
+      next.fresh = Boolean(plan.forceRefresh);
+      next.ignoreProgress = Boolean(plan.ignoreProgress);
+      next.ignoreNoScheduleCache = Boolean(plan.ignoreNoScheduleCache);
+      next.mergeOldData = Boolean(plan.mergeOldData);
+      next.crawlMode = plan.schedulePolicy === "network-only" ? "full-fresh" : "cache-only";
+      next.freshRunId = plan.runId;
+      next.catalogPolicy = plan.catalogPolicy;
+      next.schedulePolicy = plan.schedulePolicy;
+      next.progressPolicy = plan.progressPolicy;
+      next.negativeCachePolicy = plan.negativeCachePolicy;
+      next.resourceSource = plan.profile === "daily-classes" || plan.allowDerived ? "derived" : "direct";
+      next.allowDerived = plan.allowDerived;
+      next.allowPartial = plan.allowPartial;
+      next["term-start-date"] = next["term-start-date"] || plan.termConfig.termStartDate;
+      next["total-weeks"] = next["total-weeks"] || (plan.termConfig.totalWeeks || "");
+      next["week-start"] = next["week-start"] || plan.termConfig.weekStart;
+      return next;
+    }
+    function printablePlan2(plan) {
+      return {
+        term: plan.term,
+        profile: plan.profile,
+        scopes: plan.scopes,
+        catalogPolicy: plan.catalogPolicy,
+        schedulePolicy: plan.schedulePolicy,
+        progressPolicy: plan.progressPolicy,
+        negativeCachePolicy: plan.negativeCachePolicy,
+        mergeOldData: plan.mergeOldData,
+        crawl: plan.crawl,
+        upload: plan.upload,
+        buildRelease: plan.buildRelease,
+        activate: plan.activate,
+        verifyClient: plan.verifyClient,
+        allowPartial: plan.allowPartial,
+        allowDerived: plan.allowDerived,
+        runId: plan.runId,
+        sourceRequirements: plan.sourceRequirements,
+        filters: plan.filters,
+        warnings: plan.warnings
+      };
+    }
+    function renderPowerShellCommand(task, options = {}) {
+      const term = options.term || "2025-2026-2";
+      const start = options.termStartDate || options.start || "YYYY-MM-DD";
+      const weeks = options.totalWeeks || 20;
+      const scopes = Array.isArray(options.scopes) && options.scopes.length ? options.scopes.join(",") : "classSchedules,teacherSchedules,classroomSchedules,courseSchedules";
+      const base = `npm run ${task}`;
+      if (task === "sync:new-term") {
+        return `${base} -- --term=${term} --term-start-date=${start} --total-weeks=${weeks} --week-start=${options.weekStart || "monday"}`;
+      }
+      if (task === "sync:scopes" || task === "crawl:scopes") {
+        return `${base} -- --term=${term} --include=${scopes}`;
+      }
+      if (task === "sync:upload-staging") {
+        return `$file = (Resolve-Path ".\\staging\\${term}-full.json").Path
+${base} -- --file="$file" --term=${term}`;
+      }
+      if (task === "sync:resume") {
+        return `${base} -- --run-id=${options.runId || "RUN_ID"}`;
+      }
+      return `${base} -- --term=${term}`;
+    }
+    var OPERATION_ZH = Object.freeze({
+      "sync:daily": ["\u65E5\u5E38\u540C\u6B65\uFF1A\u5168\u90E8\u52A8\u6001\u8BFE\u8868", "\u65E5\u5E38\u5168\u6821\u52A8\u6001\u8BFE\u8868\u66F4\u65B0"],
+      "sync:daily:classes": ["\u65E5\u5E38\u540C\u6B65\uFF1A\u73ED\u7EA7\u8BFE\u8868", "\u73ED\u7EA7\u8BFE\u8868\u53D8\u5316\u540C\u6B65"],
+      "sync:daily:teachers": ["\u65E5\u5E38\u540C\u6B65\uFF1A\u6559\u5E08\u8BFE\u8868", "\u6559\u5E08\u7EF4\u5EA6\u8BFE\u8868\u5237\u65B0"],
+      "sync:daily:classrooms": ["\u65E5\u5E38\u540C\u6B65\uFF1A\u6559\u5BA4\u8BFE\u8868", "\u6559\u5BA4\u7EF4\u5EA6\u8BFE\u8868\u5237\u65B0"],
+      "sync:daily:courses": ["\u65E5\u5E38\u540C\u6B65\uFF1A\u8BFE\u7A0B\u8BFE\u8868", "\u8BFE\u7A0B\u7EF4\u5EA6\u8BFE\u8868\u5237\u65B0"],
+      "sync:scopes": ["\u81EA\u5B9A\u4E49\u540C\u6B65\u8303\u56F4", "\u6309\u52FE\u9009\u8303\u56F4\u6267\u884C\u53D7\u63A7\u5237\u65B0"],
+      "sync:new-term": ["\u65B0\u5B66\u671F\u5168\u91CF\u91C7\u96C6", "\u65B0\u5B66\u671F\u9996\u8F6E\u5168\u91CF\u5EFA\u6863"],
+      "sync:upload-staging": ["\u4E0A\u4F20\u672C\u5730\u6682\u5B58\u6587\u4EF6", "\u4E0A\u4F20\u5DF2\u751F\u6210\u7684 Staging JSON"],
+      "sync:resume": ["\u6062\u590D\u4E2D\u65AD\u4EFB\u52A1", "\u7EE7\u7EED\u6307\u5B9A runId \u7684\u4E2D\u65AD\u4EFB\u52A1"]
+    });
+    function riskDisplay(risk) {
+      return {
+        low: "\u4F4E",
+        medium: "\u4E2D",
+        high: "\u9AD8"
+      }[risk] || risk || "\u4E2D";
+    }
+    function requestScaleDisplay(code) {
+      return {
+        "full-campus": "\u5168\u6821\u8303\u56F4",
+        "scope-dependent": "\u6309\u540C\u6B65\u8303\u56F4"
+      }[code] || code || "\u6309\u540C\u6B65\u8303\u56F4";
+    }
+    function getRecommendedOperations2(options = {}) {
+      const term = options.term || "2025-2026-2";
+      const termStartDate = options.termStartDate || "YYYY-MM-DD";
+      const totalWeeks = options.totalWeeks || 20;
+      const operations = [
+        ["sync:daily", "daily_all_dynamic", true, true, false, true, true, true, "medium", "daily_all"],
+        ["sync:daily:classes", "daily_classes", true, true, false, true, true, true, "medium", "class_changes"],
+        ["sync:daily:teachers", "daily_teachers", true, true, false, true, true, true, "medium", "teacher_refresh"],
+        ["sync:daily:classrooms", "daily_classrooms", true, true, false, true, true, true, "medium", "classroom_refresh"],
+        ["sync:daily:courses", "daily_courses", true, true, false, true, true, true, "medium", "course_refresh"],
+        ["sync:scopes", "selected_scopes", true, true, false, true, true, true, "medium", "controlled_partial"],
+        ["sync:new-term", "new_term_full", true, false, false, true, true, false, "high", "new_semester"],
+        ["sync:upload-staging", "upload_staging", false, false, true, true, false, false, "low", "upload_file"],
+        ["sync:resume", "resume_run", true, true, false, true, true, true, "medium", "resume_run"]
+      ];
+      return operations.map(([id, name, intranetRequired, catalogCache, dynamicCache, upload, publish, activate, risk, scene]) => {
+        const zh = OPERATION_ZH[id] || [name, scene];
+        const estimatedRequestsCode = id === "sync:new-term" || id === "sync:daily" ? "full-campus" : "scope-dependent";
+        return {
+          id,
+          name: zh[0],
+          nameEn: name,
+          displayName: zh[0],
+          displayScene: zh[1],
+          intranetRequired,
+          usesCatalogCache: catalogCache,
+          usesDynamicCache: dynamicCache,
+          upload,
+          publish,
+          activate,
+          risk,
+          riskDisplay: riskDisplay(risk),
+          estimatedRequests: requestScaleDisplay(estimatedRequestsCode),
+          estimatedRequestsCode,
+          estimatedDuration: intranetRequired ? "8-30 min" : "15-60 sec",
+          scene,
+          sceneCode: scene,
+          command: renderPowerShellCommand(id, { term, termStartDate, totalWeeks })
+        };
+      });
+    }
+    module2.exports = {
+      ALL_SCOPES: ALL_SCOPES2,
+      CATALOG_POLICIES,
+      DYNAMIC_SCOPES,
+      LEGACY_ACTIONS,
+      NEGATIVE_CACHE_POLICIES,
+      PROGRESS_POLICIES,
+      SCHEDULE_POLICIES,
+      SOURCE_MODES,
+      applyPlanToParams: applyPlanToParams2,
+      buildSyncPlan: buildSyncPlan2,
+      expandScopeCompanions,
+      getDynamicScopes,
+      getRecommendedOperations: getRecommendedOperations2,
+      getResourceTypesFromScopes,
+      parseCliArgs: parseCliArgs2,
+      printablePlan: printablePlan2,
+      renderPowerShellCommand,
+      validateTermId: validateTermId2
+    };
+  }
+});
+
+// ../../shared/syncPlan.js
+var require_syncPlan2 = __commonJS({
+  "../../shared/syncPlan.js"(exports2, module2) {
+    "use strict";
+    module2.exports = require_syncPlan();
+  }
+});
+
+// ../../shared/syncCacheStore.js
+var require_syncCacheStore = __commonJS({
+  "../../shared/syncCacheStore.js"(exports2, module2) {
+    "use strict";
+    var crypto2 = require("crypto");
+    var fs2 = require("fs");
+    var path2 = require("path");
+    var SCHEDULE_DIR_BY_SCOPE = Object.freeze({
+      classSchedules: "class",
+      teacherSchedules: "teacher",
+      classroomSchedules: "classroom",
+      courseSchedules: "course"
+    });
+    function safeTerm(term) {
+      return String(term || "").trim().replace(/[^0-9A-Za-z._-]/g, "_") || "unknown-term";
+    }
+    function ensureDir(dirPath) {
+      if (!fs2.existsSync(dirPath)) {
+        fs2.mkdirSync(dirPath, { recursive: true });
+      }
+    }
+    function cacheRoot(baseDir, term) {
+      return path2.join(baseDir, ".cache", safeTerm(term));
+    }
+    function ensureTermCache(baseDir, term) {
+      const root = cacheRoot(baseDir, term);
+      [
+        "catalog",
+        "progress",
+        "negative",
+        "staging",
+        "reports",
+        path2.join("schedules", "class"),
+        path2.join("schedules", "teacher"),
+        path2.join("schedules", "classroom"),
+        path2.join("schedules", "course")
+      ].forEach((segment) => ensureDir(path2.join(root, segment)));
+      return root;
+    }
+    function hashJson(value) {
+      return crypto2.createHash("sha256").update(JSON.stringify(value || null)).digest("hex");
+    }
+    function writeJsonAtomic(filePath, data) {
+      ensureDir(path2.dirname(filePath));
+      const tmp = `${filePath}.${process.pid}.${Date.now()}.tmp`;
+      fs2.writeFileSync(tmp, JSON.stringify(data, null, 2), "utf-8");
+      try {
+        if (process.platform === "win32" && fs2.existsSync(filePath)) {
+          try {
+            fs2.unlinkSync(filePath);
+          } catch (error) {
+          }
+        }
+        fs2.renameSync(tmp, filePath);
+      } catch (error) {
+        fs2.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
+        try {
+          fs2.unlinkSync(tmp);
+        } catch (cleanupError) {
+        }
+      }
+    }
+    function readJson(filePath, fallback) {
+      if (!filePath || !fs2.existsSync(filePath)) return fallback;
+      try {
+        return JSON.parse(fs2.readFileSync(filePath, "utf-8"));
+      } catch (error) {
+        return fallback;
+      }
+    }
+    function scheduleDir(baseDir, term, scope) {
+      const kind = SCHEDULE_DIR_BY_SCOPE[scope] || scope;
+      return path2.join(ensureTermCache(baseDir, term), "schedules", kind);
+    }
+    function scheduleLatestPath(baseDir, term, scope) {
+      return path2.join(scheduleDir(baseDir, term, scope), "latest.json");
+    }
+    function scheduleMetadataPath(baseDir, term, scope) {
+      return path2.join(scheduleDir(baseDir, term, scope), "metadata.json");
+    }
+    function buildMetadata(input = {}) {
+      const itemCount = Number(input.itemCount || (Array.isArray(input.items) ? input.items.length : 0));
+      const items2 = input.items === void 0 ? null : input.items;
+      return {
+        schemaVersion: 1,
+        term: String(input.term || ""),
+        scope: String(input.scope || ""),
+        source: input.source || "100.fosu.edu.cn",
+        acquisition: input.acquisition || "network",
+        sourceMode: input.sourceMode || "network-direct",
+        endpointFamily: input.endpointFamily || "",
+        crawledAt: input.crawledAt || (/* @__PURE__ */ new Date()).toISOString(),
+        command: input.command || "",
+        runId: input.runId || "",
+        itemCount,
+        hash: input.hash || hashJson(items2),
+        sessionFingerprint: input.sessionFingerprint || "",
+        fresh: input.fresh !== false,
+        partial: Boolean(input.partial),
+        cacheHits: Number(input.cacheHits || 0),
+        requested: Number(input.requested || itemCount),
+        succeeded: Number(input.succeeded || itemCount),
+        failed: Number(input.failed || 0),
+        derived: Number(input.derived || 0)
+      };
+    }
+    function writeScheduleLatest(baseDir, term, scope, items2, metadataInput = {}) {
+      const dir = scheduleDir(baseDir, term, scope);
+      const runId = metadataInput.runId || `run-${Date.now()}`;
+      const payload = {
+        success: true,
+        type: scope,
+        semester: term,
+        term,
+        generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        itemCount: Array.isArray(items2) ? items2.length : 0,
+        items: Array.isArray(items2) ? items2 : []
+      };
+      const metadata = buildMetadata(Object.assign({}, metadataInput, {
+        term,
+        scope,
+        items: payload.items,
+        itemCount: payload.itemCount
+      }));
+      const runDir = path2.join(dir, "runs");
+      ensureDir(runDir);
+      writeJsonAtomic(path2.join(runDir, `${runId}.json`), payload);
+      writeJsonAtomic(path2.join(runDir, `${runId}.meta.json`), metadata);
+      writeJsonAtomic(path2.join(dir, "latest.json"), payload);
+      writeJsonAtomic(path2.join(dir, "metadata.json"), metadata);
+      return {
+        latestPath: path2.join(dir, "latest.json"),
+        metadataPath: path2.join(dir, "metadata.json"),
+        runPath: path2.join(runDir, `${runId}.json`),
+        metadata
+      };
+    }
+    function readScheduleLatest(baseDir, term, scope) {
+      const payload = readJson(scheduleLatestPath(baseDir, term, scope), null);
+      const metadata = readJson(scheduleMetadataPath(baseDir, term, scope), null);
+      const items2 = Array.isArray(payload) ? payload : payload && Array.isArray(payload.items) ? payload.items : [];
+      return {
+        payload,
+        metadata,
+        items: items2,
+        filePath: scheduleLatestPath(baseDir, term, scope)
+      };
+    }
+    function progressPath(baseDir, term, scope, runId) {
+      const name = runId ? `${scope}-${runId}.json` : `${scope}.json`;
+      return path2.join(ensureTermCache(baseDir, term), "progress", name);
+    }
+    function negativePath(baseDir, term, scope, runId) {
+      const name = runId ? `no-${scope}-${runId}.json` : `no-${scope}.json`;
+      return path2.join(ensureTermCache(baseDir, term), "negative", name);
+    }
+    function stagingPath(baseDir, term, name) {
+      return path2.join(ensureTermCache(baseDir, term), "staging", name || "latest.json");
+    }
+    function reportPath(baseDir, term, prefix) {
+      const stamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+      return path2.join(ensureTermCache(baseDir, term), "reports", `${prefix || "sync-report"}-${stamp}.json`);
+    }
+    module2.exports = {
+      SCHEDULE_DIR_BY_SCOPE,
+      buildMetadata,
+      cacheRoot,
+      ensureTermCache,
+      hashJson,
+      negativePath,
+      progressPath,
+      readJson,
+      readScheduleLatest,
+      reportPath,
+      safeTerm,
+      scheduleLatestPath,
+      scheduleMetadataPath,
+      stagingPath,
+      writeJsonAtomic,
+      writeScheduleLatest
+    };
+  }
+});
+
 // ../../server/src/utils/parser.js
 var require_parser = __commonJS({
   "../../server/src/utils/parser.js"(exports2, module2) {
@@ -1988,7 +2618,10 @@ var require_stagingFingerprint = __commonJS({
         skippedByProgressCount: Number(meta2.skippedByProgressCount || 0),
         skippedByNoScheduleCount: Number(meta2.skippedByNoScheduleCount || 0),
         freshRunId: meta2.freshRunId || "",
-        resourceSource: meta2.resourceSource || ""
+        resourceSource: meta2.resourceSource || "",
+        partial: Boolean(meta2.partial || data && data.partial),
+        failedTargetCount: Number(meta2.failedTargetCount || 0),
+        scopeSources: meta2.scopeSources || data && data.scopeSources || {}
       };
     }
     function readSidecarHash2(filePath) {
@@ -2028,7 +2661,7 @@ var require_termRegistryService = __commonJS({
       term: "2025-2026-2",
       semesterText: "2025-2026\u5B66\u5E74\u7B2C\u4E8C\u5B66\u671F",
       termStartDate: "2026-03-09",
-      totalWeeks: 20,
+      totalWeeks: 19,
       weekStart: "monday",
       source: "legacy-compatibility-fallback"
     });
@@ -2729,6 +3362,10 @@ var require_termRegistryService = __commonJS({
       })).digest("hex");
       return `"term-registry-${hash}"`;
     }
+    function clearCache() {
+      registryCache = null;
+      registryCacheMtimeMs = 0;
+    }
     module2.exports = {
       BACKUP_DIR,
       LEGACY_CURRENT_TERM_CONFIG,
@@ -2740,6 +3377,7 @@ var require_termRegistryService = __commonJS({
       activateTerm,
       archiveTerm,
       bindReleaseToTerm,
+      clearCache,
       copyLegacyTermData,
       createPlannedTerm,
       disableTerm,
@@ -2769,7 +3407,7 @@ var require_termReleaseIndexService = __commonJS({
   "../../server/src/services/termReleaseIndexService.js"(exports2, module2) {
     var fs2 = require("fs");
     var path2 = require("path");
-    var termRegistryService = require_termRegistryService();
+    var termRegistryService2 = require_termRegistryService();
     var { safeLog } = require_safeLogger();
     var STORAGE_DIR = path2.resolve(process.env.FOSU_STORAGE_DIR || path2.join(__dirname, "../../storage"));
     var RELEASES_DIR = path2.join(STORAGE_DIR, "releases");
@@ -2819,7 +3457,7 @@ var require_termReleaseIndexService = __commonJS({
       const terms = source.terms && typeof source.terms === "object" ? source.terms : {};
       const normalizedTerms = {};
       Object.keys(terms).forEach((term) => {
-        const validation = termRegistryService.validateTermId(term);
+        const validation = termRegistryService2.validateTermId(term);
         if (!validation.valid) return;
         const item = terms[term] || {};
         normalizedTerms[term] = {
@@ -2828,7 +3466,7 @@ var require_termReleaseIndexService = __commonJS({
           updatedAt: String(item.updatedAt || nowIso())
         };
       });
-      const activeTerm = source.activeTerm && termRegistryService.validateTermId(source.activeTerm).valid ? source.activeTerm : "";
+      const activeTerm = source.activeTerm && termRegistryService2.validateTermId(source.activeTerm).valid ? source.activeTerm : "";
       return {
         schemaVersion: 1,
         activeTerm,
@@ -2849,7 +3487,7 @@ var require_termReleaseIndexService = __commonJS({
       } catch (error) {
         safeLog("term-release-index-read-failed", { error: error.message });
       }
-      const registry = termRegistryService.readRegistry();
+      const registry = termRegistryService2.readRegistry();
       const active = registry && registry.terms.find((item) => item.status === "current");
       const initial = normalizeIndex({
         activeTerm: active && active.term || "",
@@ -2870,7 +3508,7 @@ var require_termReleaseIndexService = __commonJS({
       return normalized;
     }
     function getTermRelease(term) {
-      const id = termRegistryService.validateTermId(term).valid ? term : "";
+      const id = termRegistryService2.validateTermId(term).valid ? term : "";
       if (!id) return null;
       const index = readIndex();
       return index.terms[id] || null;
@@ -2880,7 +3518,7 @@ var require_termReleaseIndexService = __commonJS({
       return item && item.activeReleaseVersion || "";
     }
     function bindRelease(term, releaseVersion, options = {}) {
-      const validation = termRegistryService.validateTermId(term);
+      const validation = termRegistryService2.validateTermId(term);
       if (!validation.valid) {
         const error = new Error(validation.error);
         error.code = validation.error;
@@ -2926,16 +3564,981 @@ var require_termReleaseIndexService = __commonJS({
         active: index.activeTerm === term
       })).sort((left, right) => String(right.term).localeCompare(String(left.term)));
     }
+    function clearCache() {
+      cache = null;
+      cacheMtimeMs = 0;
+    }
     module2.exports = {
       TERM_INDEX_PATH,
       activateTerm,
       bindRelease,
+      clearCache,
       getActiveReleaseVersionForTerm,
       getTermRelease,
       getTermReleaseSummary,
       listPinnedReleases,
       readIndex,
       writeIndex
+    };
+  }
+});
+
+// ../../server/src/utils/jsonFileStore.js
+var require_jsonFileStore = __commonJS({
+  "../../server/src/utils/jsonFileStore.js"(exports2, module2) {
+    var fs2 = require("fs");
+    var path2 = require("path");
+    var crypto2 = require("crypto");
+    function ensureDir(dirPath) {
+      if (!fs2.existsSync(dirPath)) {
+        fs2.mkdirSync(dirPath, { recursive: true });
+      }
+    }
+    function writeJsonAtomic(filePath, data) {
+      ensureDir(path2.dirname(filePath));
+      const tempPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+      const buffer = Buffer.from(JSON.stringify(data, null, 2), "utf-8");
+      fs2.writeFileSync(tempPath, buffer);
+      try {
+        if (process.platform === "win32" && fs2.existsSync(filePath)) {
+          try {
+            fs2.unlinkSync(filePath);
+          } catch (error) {
+          }
+        }
+        fs2.renameSync(tempPath, filePath);
+      } catch (error) {
+        fs2.writeFileSync(filePath, buffer);
+        try {
+          fs2.unlinkSync(tempPath);
+        } catch (cleanupError) {
+        }
+      }
+    }
+    function readJsonFile(filePath, fallback = null) {
+      try {
+        if (!fs2.existsSync(filePath)) return fallback;
+        const parsed2 = JSON.parse(fs2.readFileSync(filePath, "utf-8"));
+        return parsed2 == null ? fallback : parsed2;
+      } catch (error) {
+        return fallback;
+      }
+    }
+    function readFileBufferIfExists(filePath) {
+      try {
+        return fs2.existsSync(filePath) ? fs2.readFileSync(filePath) : null;
+      } catch (error) {
+        return null;
+      }
+    }
+    function restoreFileBuffer(filePath, buffer) {
+      ensureDir(path2.dirname(filePath));
+      if (buffer == null) {
+        if (fs2.existsSync(filePath)) fs2.unlinkSync(filePath);
+        return;
+      }
+      const tempPath = `${filePath}.${process.pid}.${Date.now()}.restore.tmp`;
+      fs2.writeFileSync(tempPath, buffer);
+      if (process.platform === "win32" && fs2.existsSync(filePath)) {
+        try {
+          fs2.unlinkSync(filePath);
+        } catch (error) {
+        }
+      }
+      fs2.renameSync(tempPath, filePath);
+    }
+    function statJsonFile(filePath) {
+      if (!fs2.existsSync(filePath)) return null;
+      const stat = fs2.statSync(filePath);
+      return {
+        mtimeMs: stat.mtimeMs,
+        size: stat.size,
+        lastModified: stat.mtime.toUTCString(),
+        etag: `"${crypto2.createHash("sha1").update(`${filePath}:${stat.mtimeMs}:${stat.size}`).digest("hex")}"`
+      };
+    }
+    var SmallJsonCache = class {
+      constructor(options = {}) {
+        this.maxEntries = Math.max(10, Number(options.maxEntries || 100) || 100);
+        this.cache = /* @__PURE__ */ new Map();
+      }
+      read(filePath, fallback = null) {
+        const stat = statJsonFile(filePath);
+        if (!stat) return fallback;
+        const key = path2.resolve(filePath);
+        const cached = this.cache.get(key);
+        if (cached && cached.mtimeMs === stat.mtimeMs && cached.size === stat.size) {
+          cached.usedAt = Date.now();
+          return cached.value;
+        }
+        const value = readJsonFile(filePath, fallback);
+        this.cache.set(key, {
+          value,
+          mtimeMs: stat.mtimeMs,
+          size: stat.size,
+          usedAt: Date.now()
+        });
+        this.prune();
+        return value;
+      }
+      invalidate(filePath) {
+        if (filePath) {
+          this.cache.delete(path2.resolve(filePath));
+          return;
+        }
+        this.clear();
+      }
+      clear() {
+        this.cache.clear();
+      }
+      prune() {
+        if (this.cache.size <= this.maxEntries) return;
+        Array.from(this.cache.entries()).sort((left, right) => Number(left[1].usedAt || 0) - Number(right[1].usedAt || 0)).slice(0, this.cache.size - this.maxEntries).forEach(([key]) => this.cache.delete(key));
+      }
+    };
+    module2.exports = {
+      SmallJsonCache,
+      ensureDir,
+      readFileBufferIfExists,
+      readJsonFile,
+      restoreFileBuffer,
+      statJsonFile,
+      writeJsonAtomic
+    };
+  }
+});
+
+// ../../server/src/services/teachingCalendarService.js
+var require_teachingCalendarService = __commonJS({
+  "../../server/src/services/teachingCalendarService.js"(exports2, module2) {
+    var fs2 = require("fs");
+    var path2 = require("path");
+    var crypto2 = require("crypto");
+    var termRegistryService2 = require_termRegistryService();
+    var { SmallJsonCache, ensureDir, readJsonFile, statJsonFile, writeJsonAtomic } = require_jsonFileStore();
+    var STORAGE_DIR = path2.resolve(process.env.FOSU_STORAGE_DIR || path2.join(__dirname, "../../storage"));
+    var TERMS_DIR = path2.join(STORAGE_DIR, "terms");
+    var PUBLIC_RELEASES_DIR = path2.join(STORAGE_DIR, "public", "releases");
+    var RELEASES_DIR = path2.join(STORAGE_DIR, "releases");
+    var TYPE_TEXT = Object.freeze({
+      opening: "\u5F00\u5B66\u6559\u5B66\u5468",
+      teaching: "\u6B63\u5E38\u6559\u5B66\u5468",
+      holiday: "\u8282\u5047\u65E5/\u8C03\u4F11\u5468",
+      adjustment: "\u8C03\u6574\u6559\u5B66\u5468",
+      midterm: "\u671F\u4E2D\u6559\u5B66\u68C0\u67E5",
+      closing: "\u7ED3\u8BFE\u5468",
+      review: "\u590D\u4E60\u5468",
+      exam: "\u8003\u8BD5\u5468",
+      flexible: "\u673A\u52A8\u5468",
+      pending: "\u6559\u5B66\u5B89\u6392\u5F85\u7EF4\u62A4"
+    });
+    var ALLOWED_TYPES = new Set(Object.keys(TYPE_TEXT));
+    var cache = new SmallJsonCache({ maxEntries: 80 });
+    function nowIso() {
+      return (/* @__PURE__ */ new Date()).toISOString();
+    }
+    function pad(number) {
+      return String(number).padStart(2, "0");
+    }
+    function parseDate(value) {
+      const parts = String(value || "").split("-").map(Number);
+      if (parts.length < 3 || parts.some((part) => !Number.isFinite(part))) return null;
+      return new Date(parts[0], parts[1] - 1, parts[2]);
+    }
+    function formatDate(date) {
+      return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+    }
+    function getTermCalendarPath(term) {
+      return path2.join(termRegistryService2.getSafeTermDir(term), "teaching-calendar.json");
+    }
+    function normalizeWeek(week, termConfig, fallbackTitle) {
+      const weekNo = Number(week && (week.weekNo || week.week));
+      if (!Number.isInteger(weekNo) || weekNo < 1 || weekNo > Number(termConfig.totalWeeks || 30)) return null;
+      const type = ALLOWED_TYPES.has(week.type) ? week.type : "teaching";
+      const typeText = String(week.typeText || TYPE_TEXT[type] || fallbackTitle || "\u6B63\u5E38\u6559\u5B66\u5468").trim();
+      return {
+        weekNo,
+        startDate: String(week.startDate || "").trim(),
+        endDate: String(week.endDate || "").trim(),
+        type,
+        typeText,
+        title: String(week.title || fallbackTitle || typeText || "\u6B63\u5E38\u6559\u5B66\u5468").trim(),
+        note: String(week.note || week.notes || "").trim()
+      };
+    }
+    function generateWeeks(termConfig, options = {}) {
+      const totalWeeks = Number(termConfig.totalWeeks || 20) || 20;
+      const start = parseDate(termConfig.termStartDate);
+      const weeks = [];
+      for (let weekNo = 1; weekNo <= totalWeeks; weekNo += 1) {
+        let startDate = "";
+        let endDate = "";
+        if (start) {
+          const weekStart = new Date(start.getTime());
+          weekStart.setDate(start.getDate() + (weekNo - 1) * 7);
+          const weekEnd = new Date(weekStart.getTime());
+          weekEnd.setDate(weekStart.getDate() + 6);
+          startDate = formatDate(weekStart);
+          endDate = formatDate(weekEnd);
+        }
+        weeks.push({
+          weekNo,
+          startDate,
+          endDate,
+          type: options.type || "pending",
+          typeText: TYPE_TEXT[options.type || "pending"] || "\u6559\u5B66\u5B89\u6392\u5F85\u7EF4\u62A4",
+          title: options.title || "\u6559\u5B66\u5B89\u6392\u5F85\u7EF4\u62A4",
+          note: ""
+        });
+      }
+      return weeks;
+    }
+    function normalizeCalendar(raw2, termRecord) {
+      const source = raw2 && typeof raw2 === "object" ? raw2 : {};
+      const term = String(source.term || termRecord && termRecord.term || "").trim();
+      if (!term) return null;
+      const record = termRecord || termRegistryService2.getTerm(term) || {};
+      const termConfig = {
+        term,
+        semesterText: source.semesterText || record.semesterText || "",
+        termStartDate: source.termStartDate || record.termStartDate || "",
+        totalWeeks: source.totalWeeks || record.totalWeeks || 20,
+        weekStart: source.weekStart || record.weekStart || "monday"
+      };
+      const defaultWeekTitle = source.defaultWeekTitle || "\u6B63\u5E38\u6559\u5B66\u5468";
+      const explicitWeeks = Array.isArray(source.weeks) ? source.weeks : [];
+      const generated = generateWeeks(termConfig, { type: record.status === "planned" ? "pending" : "teaching", title: record.status === "planned" ? "\u6559\u5B66\u5B89\u6392\u5F85\u7EF4\u62A4" : defaultWeekTitle });
+      const byWeek = new Map(generated.map((item) => [item.weekNo, item]));
+      explicitWeeks.forEach((item) => {
+        const normalized = normalizeWeek(item, termConfig, defaultWeekTitle);
+        if (normalized) byWeek.set(normalized.weekNo, Object.assign({}, byWeek.get(normalized.weekNo), normalized));
+      });
+      const weeks = Array.from(byWeek.values()).sort((left, right) => left.weekNo - right.weekNo);
+      return {
+        success: true,
+        schemaVersion: 1,
+        term,
+        semesterText: termConfig.semesterText,
+        termStartDate: termConfig.termStartDate,
+        totalWeeks: termConfig.totalWeeks,
+        weekStart: termConfig.weekStart,
+        source: source.source || "admin-maintained",
+        updatedAt: source.updatedAt || nowIso(),
+        defaultWeekTitle,
+        termConfig,
+        weeks,
+        count: weeks.length
+      };
+    }
+    function readTermCalendar(term) {
+      const record = termRegistryService2.getTerm(term);
+      if (!record) return null;
+      const filePath = getTermCalendarPath(record.term);
+      const parsed2 = cache.read(filePath, null);
+      if (parsed2) return normalizeCalendar(parsed2, record);
+      if (record.status === "planned") {
+        return normalizeCalendar({ term: record.term, source: "generated-planned" }, record);
+      }
+      return normalizeCalendar({ term: record.term, source: "generated-date-range", defaultWeekTitle: "\u6B63\u5E38\u6559\u5B66\u5468" }, record);
+    }
+    function writeTermCalendar(term, calendar) {
+      const record = termRegistryService2.getTerm(term);
+      if (!record) {
+        const error = new Error("TERM_NOT_FOUND");
+        error.code = "TERM_NOT_FOUND";
+        throw error;
+      }
+      const normalized = normalizeCalendar(Object.assign({}, calendar, { term: record.term }), record);
+      writeJsonAtomic(getTermCalendarPath(record.term), normalized);
+      cache.invalidate(getTermCalendarPath(record.term));
+      return normalized;
+    }
+    function getReleaseCalendarPath(releaseVersion, publicFile = false, options = {}) {
+      if (options.releaseDir && !publicFile) return path2.join(options.releaseDir, "calendar.json");
+      if (options.publicReleaseDir && publicFile) return path2.join(options.publicReleaseDir, "calendar.json");
+      return path2.join(publicFile ? PUBLIC_RELEASES_DIR : RELEASES_DIR, releaseVersion, "calendar.json");
+    }
+    function writeReleaseCalendar(manifest, options = {}) {
+      const term = manifest && (manifest.term || manifest.semester);
+      const releaseVersion = manifest && (manifest.releaseVersion || manifest.version);
+      if (!term || !releaseVersion) {
+        const error = new Error("CALENDAR_RELEASE_CONTEXT_MISSING");
+        error.code = "CALENDAR_RELEASE_CONTEXT_MISSING";
+        throw error;
+      }
+      const calendar = options.calendar || readTermCalendar(term);
+      if (!calendar || calendar.term !== term) {
+        const error = new Error("CALENDAR_TERM_MISMATCH");
+        error.code = "CALENDAR_TERM_MISMATCH";
+        throw error;
+      }
+      const releaseCalendar = Object.assign({}, calendar, {
+        releaseVersion,
+        manifestTerm: term
+      });
+      [getReleaseCalendarPath(releaseVersion, false, options), getReleaseCalendarPath(releaseVersion, true, options)].forEach((target) => {
+        ensureDir(path2.dirname(target));
+        writeJsonAtomic(target, releaseCalendar);
+        cache.invalidate(target);
+      });
+      return releaseCalendar;
+    }
+    function getCalendarHash(calendar) {
+      return crypto2.createHash("sha256").update(JSON.stringify(calendar || {}, null, 2)).digest("hex");
+    }
+    function readReleaseCalendar(releaseVersion) {
+      const publicPath = getReleaseCalendarPath(releaseVersion, true);
+      const localPath = getReleaseCalendarPath(releaseVersion, false);
+      return cache.read(publicPath, null) || cache.read(localPath, null);
+    }
+    function clearCache() {
+      cache.clear();
+    }
+    module2.exports = {
+      ALLOWED_TYPES,
+      TYPE_TEXT,
+      clearCache,
+      generateWeeks,
+      getCalendarHash,
+      getReleaseCalendarPath,
+      getTermCalendarPath,
+      normalizeCalendar,
+      readReleaseCalendar,
+      readTermCalendar,
+      statJsonFile,
+      writeReleaseCalendar,
+      writeTermCalendar
+    };
+  }
+});
+
+// ../../server/src/services/runtimePointerService.js
+var require_runtimePointerService = __commonJS({
+  "../../server/src/services/runtimePointerService.js"(exports2, module2) {
+    var fs2 = require("fs");
+    var path2 = require("path");
+    var termRegistryService2 = require_termRegistryService();
+    var { SmallJsonCache, ensureDir, statJsonFile, writeJsonAtomic } = require_jsonFileStore();
+    var STORAGE_DIR = path2.resolve(process.env.FOSU_STORAGE_DIR || path2.join(__dirname, "../../storage"));
+    var PUBLIC_DIR = path2.join(STORAGE_DIR, "public");
+    var RUNTIME_DIR = path2.join(PUBLIC_DIR, "runtime");
+    var ACTIVE_RUNTIME_PATH = path2.join(RUNTIME_DIR, "active.json");
+    var cache = new SmallJsonCache({ maxEntries: 20 });
+    function nowIso() {
+      return (/* @__PURE__ */ new Date()).toISOString();
+    }
+    function getReleaseService() {
+      return require_releaseService();
+    }
+    function getTermReleaseIndexService() {
+      return require_termReleaseIndexService();
+    }
+    function pickUrl(value, fallback) {
+      return String(value || fallback || "").trim();
+    }
+    function buildUrls(manifest) {
+      const releaseVersion = manifest && (manifest.releaseVersion || manifest.version) || "";
+      const staticReleaseUrl = manifest && manifest.staticReleaseUrl || (releaseVersion ? `/static/releases/${releaseVersion}` : "");
+      const indexUrls = manifest && manifest.indexUrls || {};
+      return {
+        staticRelease: staticReleaseUrl,
+        manifest: pickUrl(manifest && manifest.manifestUrl, staticReleaseUrl ? `${staticReleaseUrl}/manifest.json` : ""),
+        bootstrap: pickUrl(manifest && (manifest.bootstrapUrl || manifest.catalogUrl), staticReleaseUrl ? `${staticReleaseUrl}/bootstrap.json` : ""),
+        catalog: pickUrl(manifest && (manifest.catalogUrl || manifest.bootstrapUrl), staticReleaseUrl ? `${staticReleaseUrl}/bootstrap.json` : ""),
+        schoolCatalog: pickUrl(manifest && (manifest.schoolCatalogUrl || manifest.catalogUrl || manifest.bootstrapUrl), staticReleaseUrl ? `${staticReleaseUrl}/bootstrap.json` : ""),
+        calendar: pickUrl(manifest && manifest.calendarUrl, staticReleaseUrl ? `${staticReleaseUrl}/calendar.json` : ""),
+        classIndex: pickUrl(indexUrls.class, staticReleaseUrl ? `${staticReleaseUrl}/index/class/all.json` : ""),
+        teacherIndex: pickUrl(indexUrls.teacher, staticReleaseUrl ? `${staticReleaseUrl}/index/teacher/all.json` : ""),
+        classroomIndex: pickUrl(indexUrls.classroom, staticReleaseUrl ? `${staticReleaseUrl}/index/classroom/all.json` : ""),
+        courseIndex: pickUrl(indexUrls.course, staticReleaseUrl ? `${staticReleaseUrl}/index/course/all.json` : ""),
+        emptyRoom: pickUrl(manifest && manifest.emptyRoomUrl, staticReleaseUrl ? `${staticReleaseUrl}/empty-room/index.json` : ""),
+        detailPattern: pickUrl(manifest && manifest.detailUrlPattern, staticReleaseUrl ? `${staticReleaseUrl}/detail/{type}/{id}.json` : "")
+      };
+    }
+    function normalizePointer(source) {
+      const pointer = source && typeof source === "object" ? source : {};
+      const activeTerm = String(pointer.activeTerm || pointer.term || pointer.termConfig && pointer.termConfig.term || "").trim();
+      const releaseVersion = String(pointer.releaseVersion || pointer.version || pointer.termConfig && pointer.termConfig.releaseVersion || "").trim();
+      if (!activeTerm || !releaseVersion) return null;
+      const urls = pointer.urls || pointer.staticUrls || {};
+      const termConfig = pointer.termConfig || null;
+      const semesterText = pointer.semesterText || termConfig && termConfig.semesterText || "";
+      return {
+        success: pointer.success !== false,
+        schemaVersion: 1,
+        activeTerm,
+        term: activeTerm,
+        semester: pointer.semester || activeTerm,
+        semesterText,
+        releaseVersion,
+        updatedAt: pointer.updatedAt || nowIso(),
+        cacheEpoch: Number(pointer.cacheEpoch || 0) || 0,
+        forceRefreshToken: pointer.forceRefreshToken || "",
+        termConfig,
+        urls,
+        staticUrls: pointer.staticUrls || urls,
+        manifestUrl: pointer.manifestUrl || urls.manifest || "",
+        calendarUrl: pointer.calendarUrl || urls.calendar || "",
+        bootstrapUrl: pointer.bootstrapUrl || urls.bootstrap || urls.catalog || "",
+        catalogUrl: pointer.catalogUrl || urls.catalog || urls.bootstrap || "",
+        classCatalogUrl: pointer.classCatalogUrl || urls.classIndex || "",
+        schoolCatalogUrl: pointer.schoolCatalogUrl || urls.schoolCatalog || urls.catalog || "",
+        source: pointer.source || "static-runtime-active"
+      };
+    }
+    function hasCompletePointerPayload(pointer) {
+      if (!pointer) return false;
+      const termConfig = pointer.termConfig || {};
+      const urls = pointer.urls || pointer.staticUrls || {};
+      return Boolean(
+        pointer.cacheEpoch && termConfig.termStartDate && (termConfig.semesterText || pointer.semesterText) && (pointer.calendarUrl || urls.calendar) && (pointer.bootstrapUrl || pointer.catalogUrl || urls.bootstrap || urls.catalog) && (pointer.classCatalogUrl || urls.classIndex) && (pointer.schoolCatalogUrl || urls.schoolCatalog || urls.catalog)
+      );
+    }
+    function buildPointerFromManifest(manifest) {
+      if (!manifest || manifest.success === false) return null;
+      const term = manifest.term || manifest.semester || manifest.termConfig && manifest.termConfig.term || "";
+      const releaseVersion = manifest.releaseVersion || manifest.version || "";
+      if (!term || !releaseVersion) return null;
+      const termConfig = manifest.termConfig || {
+        term,
+        semesterText: manifest.semesterText || "",
+        termStartDate: manifest.termStartDate || "",
+        totalWeeks: manifest.totalWeeks || 20,
+        weekStart: manifest.weekStart || "monday"
+      };
+      return normalizePointer({
+        activeTerm: term,
+        semester: manifest.semester || term,
+        semesterText: termConfig.semesterText || manifest.semesterText || "",
+        releaseVersion,
+        updatedAt: manifest.updatedAt || manifest.publishedAt || nowIso(),
+        cacheEpoch: manifest.cacheEpoch || manifest.dataEpoch || Date.parse(manifest.updatedAt || "") || Date.now(),
+        forceRefreshToken: manifest.forceRefreshToken || "",
+        termConfig,
+        urls: buildUrls(manifest),
+        staticUrls: buildUrls(manifest),
+        source: "release-manifest"
+      });
+    }
+    function readActivePointer() {
+      return normalizePointer(cache.read(ACTIVE_RUNTIME_PATH, null));
+    }
+    function getActivePointerStats() {
+      return statJsonFile(ACTIVE_RUNTIME_PATH);
+    }
+    function shouldRebuildExistingPointer(pointer, options = {}) {
+      if (!pointer || options.force) return true;
+      if (!hasCompletePointerPayload(pointer)) return true;
+      const activeTerm = termRegistryService2.getActiveTerm();
+      if (activeTerm && activeTerm.term) {
+        if (pointer.activeTerm !== activeTerm.term) return true;
+        if (activeTerm.releaseVersion && pointer.releaseVersion !== activeTerm.releaseVersion) return true;
+      }
+      if (options.term && pointer.activeTerm !== options.term) return true;
+      if (options.releaseVersion && pointer.releaseVersion !== options.releaseVersion) return true;
+      return false;
+    }
+    function resolveActiveRuntimeManifest(options = {}) {
+      const releaseService2 = getReleaseService();
+      const termReleaseIndexService = getTermReleaseIndexService();
+      const activeTerm = termRegistryService2.getActiveTerm();
+      const activeRelease = releaseService2.getActiveReleaseInfo && releaseService2.getActiveReleaseInfo() || null;
+      const term = String(
+        options.term || activeTerm && activeTerm.term || activeRelease && (activeRelease.term || activeRelease.semester) || ""
+      ).trim();
+      const releaseVersion = String(
+        options.releaseVersion || activeTerm && activeTerm.releaseVersion || term && termReleaseIndexService.getActiveReleaseVersionForTerm(term) || activeRelease && (activeRelease.releaseVersion || activeRelease.version) || ""
+      ).trim();
+      if (!releaseVersion) {
+        const error = new Error("ACTIVE_RELEASE_VERSION_MISSING");
+        error.code = "ACTIVE_RELEASE_VERSION_MISSING";
+        error.term = term;
+        throw error;
+      }
+      const manifest = releaseService2.getReleasePackManifest(releaseVersion, term ? { term } : {});
+      if (!manifest || manifest.success === false) {
+        const error = new Error(manifest && (manifest.code || manifest.reasonCode) || "ACTIVE_RELEASE_MANIFEST_MISSING");
+        error.code = manifest && (manifest.code || manifest.reasonCode) || "ACTIVE_RELEASE_MANIFEST_MISSING";
+        error.term = term;
+        error.releaseVersion = releaseVersion;
+        throw error;
+      }
+      const manifestTerm = manifest.term || manifest.semester || manifest.termConfig && manifest.termConfig.term || "";
+      if (term && manifestTerm && manifestTerm !== term) {
+        const error = new Error("RUNTIME_POINTER_TERM_MISMATCH");
+        error.code = "RUNTIME_POINTER_TERM_MISMATCH";
+        error.expectedTerm = term;
+        error.actualTerm = manifestTerm;
+        error.releaseVersion = releaseVersion;
+        throw error;
+      }
+      return manifest;
+    }
+    function ensureActivePointer(options = {}) {
+      const existing = readActivePointer();
+      if (!shouldRebuildExistingPointer(existing, options)) {
+        return existing;
+      }
+      const manifest = resolveActiveRuntimeManifest(options);
+      return writeActivePointerForManifest(manifest, {
+        allowInactiveTerm: options.allowInactiveTerm
+      });
+    }
+    function writeActivePointerForManifest(manifest, options = {}) {
+      if (!manifest || manifest.success === false) {
+        const error = new Error("RUNTIME_POINTER_MANIFEST_MISSING");
+        error.code = "RUNTIME_POINTER_MANIFEST_MISSING";
+        throw error;
+      }
+      const pointer = buildPointerFromManifest(manifest);
+      if (!pointer) {
+        const error = new Error("RUNTIME_POINTER_INVALID_MANIFEST");
+        error.code = "RUNTIME_POINTER_INVALID_MANIFEST";
+        throw error;
+      }
+      const activeTerm = termRegistryService2.getActiveTerm();
+      if (activeTerm && activeTerm.term && activeTerm.term !== pointer.activeTerm && !options.allowInactiveTerm) {
+        const error = new Error("RUNTIME_POINTER_TERM_NOT_ACTIVE");
+        error.code = "RUNTIME_POINTER_TERM_NOT_ACTIVE";
+        error.activeTerm = activeTerm.term;
+        error.pointerTerm = pointer.activeTerm;
+        throw error;
+      }
+      ensureDir(RUNTIME_DIR);
+      writeJsonAtomic(ACTIVE_RUNTIME_PATH, pointer);
+      cache.invalidate(ACTIVE_RUNTIME_PATH);
+      return pointer;
+    }
+    function clearCache() {
+      cache.clear();
+    }
+    module2.exports = {
+      ACTIVE_RUNTIME_PATH,
+      RUNTIME_DIR,
+      buildPointerFromManifest,
+      clearCache,
+      ensureActivePointer,
+      getActivePointerStats,
+      readActivePointer,
+      resolveActiveRuntimeManifest,
+      writeActivePointerForManifest
+    };
+  }
+});
+
+// ../../server/src/shared/resourceCountContract.js
+var require_resourceCountContract = __commonJS({
+  "../../server/src/shared/resourceCountContract.js"(exports2, module2) {
+    var RESOURCE_DIMENSIONS = ["teacher", "classroom", "course"];
+    function asArray(value) {
+      return Array.isArray(value) ? value : [];
+    }
+    function getResources(snapshot) {
+      const source = snapshot && snapshot.resources && typeof snapshot.resources === "object" ? snapshot.resources : {};
+      const top = snapshot && typeof snapshot === "object" ? snapshot : {};
+      const directoryArray = (key) => {
+        if (Array.isArray(source[key])) return source[key];
+        if (Array.isArray(top[key])) return top[key];
+        return null;
+      };
+      const scheduleArray = (key) => {
+        if (Array.isArray(source[key])) return source[key];
+        if (Array.isArray(top[key])) return top[key];
+        return [];
+      };
+      return {
+        teachers: directoryArray("teachers"),
+        classrooms: directoryArray("classrooms"),
+        courses: directoryArray("courses"),
+        teacherSchedules: scheduleArray("teacherSchedules"),
+        classroomSchedules: scheduleArray("classroomSchedules"),
+        courseSchedules: scheduleArray("courseSchedules")
+      };
+    }
+    function firstText(item, keys) {
+      for (const key of keys) {
+        const value = String(item && item[key] || "").trim();
+        if (value) return value;
+      }
+      return "";
+    }
+    function countUnique(items2, keys) {
+      const values = /* @__PURE__ */ new Set();
+      asArray(items2).forEach((item) => {
+        const text = firstText(item, keys);
+        if (text) values.add(text);
+      });
+      return values.size;
+    }
+    function countCourseEvents(items2) {
+      return asArray(items2).reduce((sum, item) => {
+        if (Array.isArray(item && item.courses)) return sum + item.courses.length;
+        const count = Number(item && item.courseCount || 0);
+        return sum + (Number.isFinite(count) && count > 0 ? count : 0);
+      }, 0);
+    }
+    function countDirectory(items2, keys) {
+      if (!Array.isArray(items2)) {
+        return { value: null, status: "not-counted" };
+      }
+      return { value: countUnique(items2, keys), status: "counted" };
+    }
+    function scheduleSourceMode(snapshot, scopeName, fallback) {
+      const sources = snapshot && (snapshot.scopeSources || snapshot.meta && snapshot.meta.scopeSources) || {};
+      const source = sources && sources[scopeName] || {};
+      return source.sourceMode || fallback || "unknown";
+    }
+    function normalizeScopeFilters(snapshot, options = {}) {
+      return Object.assign(
+        {},
+        snapshot && snapshot.scopeFilters || {},
+        snapshot && snapshot.meta && snapshot.meta.scopeFilters || {},
+        options.scopeFilters || {}
+      );
+    }
+    function normalizeScopeSources(snapshot) {
+      return Object.assign(
+        {},
+        snapshot && snapshot.scopeSources || {},
+        snapshot && snapshot.meta && snapshot.meta.scopeSources || {}
+      );
+    }
+    function isInvalidTeacherName2(value) {
+      const text = String(value || "").trim();
+      if (!text) return true;
+      if (/^\d+$/.test(text)) return true;
+      const rules = [
+        /\u4e34\u73ed/,
+        /\u4e13\u4e1a\u8bfe\u8868/,
+        /\d{2,}.*\u73ed/,
+        /\u73ed$/,
+        /\u5927\u5b66/,
+        /\u4f53\u80b2/,
+        /\u5b9e\u9a8c/,
+        /\u5b9e\u8df5/,
+        /\u8bfe\u7a0b/,
+        /\u6982\u8bba/,
+        /\u7406\u8bba/,
+        /\u57fa\u7840/,
+        /\u8bbe\u8ba1/,
+        /\u6784\u6210/,
+        /\u62a4\u7406\u5b66/,
+        /\u513f\u79d1\u5b66/,
+        /\u5149\u5b66/,
+        /\u79cd\u690d\u5b66/,
+        /\u6210\u578b/,
+        /\u6559\u5ba4/,
+        /\u5ba4$/,
+        /\u697c$/
+      ];
+      return rules.some((rule) => rule.test(text));
+    }
+    function buildTeacherQualityDiagnostics(snapshot, teacherSchedules, scopeSources) {
+      const names = asArray(teacherSchedules).map((item) => firstText(item, ["teacherName", "name", "displayName", "title"]));
+      const invalidNames = names.filter(isInvalidTeacherName2);
+      const teacherScope = scopeSources.teacherSchedules || {};
+      const diagnostics = [];
+      const targetDiscoveryMode = teacherScope.targetDiscoveryMode || teacherScope.source || "";
+      const usedCollegeTargets = targetDiscoveryMode === "college-select" || Number(teacherScope.requested || 0) > 0 && Number(teacherScope.requested || 0) <= 30 && !Number.isFinite(Number(teacherScope.discoveredTeacherTargets));
+      if (usedCollegeTargets || invalidNames.length > 0 || teacherScope.coverageStatus === "invalid") {
+        diagnostics.push({
+          code: "ENTITY_NAME_CONTAMINATED",
+          severity: "error",
+          resource: "teacher",
+          message: "\u6559\u5E08\u540D\u79F0\u7591\u4F3C\u88AB\u73ED\u7EA7\u540D\u6216\u8BFE\u7A0B\u540D\u6C61\u67D3\uFF0C\u5F53\u524D\u76F4\u6293\u7ED3\u679C\u4E0D\u53EF\u53D1\u5E03\u3002",
+          targetDiscoveryMode: targetDiscoveryMode || (usedCollegeTargets ? "college-select" : "unknown"),
+          discoveredTeacherTargets: teacherScope.discoveredTeacherTargets == null ? null : teacherScope.discoveredTeacherTargets,
+          requestGroupCount: Number(teacherScope.requestGroupCount || teacherScope.requested || 0) || 0,
+          scheduleDocumentCount: asArray(teacherSchedules).length,
+          invalidTeacherNameCount: invalidNames.length,
+          invalidTeacherNameSamples: invalidNames.slice(0, 12),
+          coverageStatus: "invalid",
+          publishable: false
+        });
+      }
+      return diagnostics;
+    }
+    function buildClassCounts(snapshot) {
+      const classSchedules = asArray(snapshot && (snapshot.classSchedules || snapshot.resources && snapshot.resources.classSchedules));
+      const administrativeClasses = classSchedules.filter((item) => item.displayType === "class-schedule" && !item.isAggregated).length;
+      const aggregateSchedules = classSchedules.filter((item) => item.displayType === "major-aggregate" || item.isAggregated).length;
+      return {
+        scheduleDocuments: classSchedules.length,
+        administrativeClasses,
+        aggregateSchedules: aggregateSchedules || Math.max(0, classSchedules.length - administrativeClasses),
+        courseEvents: countCourseEvents(classSchedules)
+      };
+    }
+    function buildResourceCounts(snapshot, options = {}) {
+      const resources = getResources(snapshot);
+      const teacherDirectory = countDirectory(
+        Array.isArray(resources.teachers) ? resources.teachers : null,
+        ["teacherName", "name", "displayName", "id"]
+      );
+      const classroomDirectory = countDirectory(
+        Array.isArray(resources.classrooms) ? resources.classrooms : null,
+        ["classroomName", "roomName", "name", "id"]
+      );
+      const courseDirectory = countDirectory(
+        Array.isArray(resources.courses) ? resources.courses : null,
+        ["courseName", "name", "title", "id"]
+      );
+      return {
+        teacher: {
+          directoryEntities: teacherDirectory.value,
+          directoryEntitiesStatus: teacherDirectory.status,
+          scheduleDocuments: resources.teacherSchedules.length,
+          courseEvents: countCourseEvents(resources.teacherSchedules),
+          sourceMode: scheduleSourceMode(snapshot, "teacherSchedules", options.teacherSourceMode)
+        },
+        classroom: {
+          directoryEntities: classroomDirectory.value,
+          directoryEntitiesStatus: classroomDirectory.status,
+          scheduleDocuments: resources.classroomSchedules.length,
+          courseEvents: countCourseEvents(resources.classroomSchedules),
+          sourceMode: scheduleSourceMode(snapshot, "classroomSchedules", options.classroomSourceMode)
+        },
+        course: {
+          directoryEntities: courseDirectory.value,
+          directoryEntitiesStatus: courseDirectory.status,
+          scheduleDocuments: resources.courseSchedules.length,
+          courseEvents: countCourseEvents(resources.courseSchedules),
+          sourceMode: scheduleSourceMode(snapshot, "courseSchedules", options.courseSourceMode)
+        }
+      };
+    }
+    function buildCatalogCounts(snapshot) {
+      const catalog = snapshot && snapshot.catalog || {};
+      return {
+        colleges: asArray(catalog.colleges || snapshot && snapshot.colleges).length,
+        grades: asArray(catalog.grades || snapshot && snapshot.grades).length,
+        majors: asArray(catalog.majors || snapshot && snapshot.majors).length
+      };
+    }
+    function buildResourceCountContract(snapshot, options = {}) {
+      const sourceSnapshot = snapshot || {};
+      const scopeSources = normalizeScopeSources(sourceSnapshot);
+      const resourceCounts = buildResourceCounts(sourceSnapshot, options);
+      const diagnostics = [].concat(asArray(sourceSnapshot.diagnostics)).concat(asArray(sourceSnapshot.meta && sourceSnapshot.meta.diagnostics)).concat(buildTeacherQualityDiagnostics(sourceSnapshot, getResources(sourceSnapshot).teacherSchedules, scopeSources));
+      const coverage = Object.assign(
+        {},
+        sourceSnapshot.coverage || {},
+        sourceSnapshot.meta && sourceSnapshot.meta.coverage || {}
+      );
+      if (diagnostics.some((item) => item.resource === "teacher" && item.coverageStatus === "invalid")) {
+        coverage.teacher = Object.assign({}, coverage.teacher || {}, {
+          coverageStatus: "invalid",
+          publishable: false
+        });
+      }
+      return {
+        countSchemaVersion: 2,
+        term: sourceSnapshot.term || sourceSnapshot.semester || sourceSnapshot.termConfig && sourceSnapshot.termConfig.term || options.term || "",
+        class: buildClassCounts(sourceSnapshot),
+        teacher: resourceCounts.teacher,
+        classroom: resourceCounts.classroom,
+        course: resourceCounts.course,
+        catalog: buildCatalogCounts(sourceSnapshot),
+        scopeFilters: normalizeScopeFilters(sourceSnapshot, options),
+        scopeSources,
+        coverage,
+        diagnostics,
+        derivedFromLegacy: Boolean(options.derivedFromLegacy || sourceSnapshot.derivedFromLegacy)
+      };
+    }
+    function deriveLegacyResourceCountContract(snapshot, manifest = {}) {
+      const counts = Object.assign({}, snapshot && snapshot.coverage || {}, manifest && manifest.counts || {});
+      const base = buildResourceCountContract(snapshot || {}, {
+        derivedFromLegacy: true,
+        teacherSourceMode: "legacy-derived",
+        classroomSourceMode: "legacy-derived",
+        courseSourceMode: "legacy-derived"
+      });
+      const indexCounts = manifest && manifest.pack && manifest.pack.index || {};
+      const teacherCount = Number(counts.teacherScheduleCount || indexCounts.teacher || 0) || base.teacher.scheduleDocuments;
+      const classroomCount = Number(counts.classroomScheduleCount || indexCounts.classroom || 0) || base.classroom.scheduleDocuments;
+      const courseCount = Number(counts.courseScheduleCount || indexCounts.course || 0) || base.course.scheduleDocuments;
+      return Object.assign({}, base, {
+        class: Object.assign({}, base.class, {
+          scheduleDocuments: Number(counts.classScheduleCount || 0) || base.class.scheduleDocuments,
+          administrativeClasses: Number(counts.adminClassCount || 0) || base.class.administrativeClasses,
+          aggregateSchedules: Number(counts.majorAggregateCount || 0) || base.class.aggregateSchedules
+        }),
+        teacher: Object.assign({}, base.teacher, {
+          directoryEntities: base.teacher.directoryEntitiesStatus === "counted" ? base.teacher.directoryEntities : teacherCount || null,
+          directoryEntitiesStatus: base.teacher.directoryEntitiesStatus === "counted" ? "counted" : teacherCount ? "derived-from-legacy-index" : "not-counted",
+          scheduleDocuments: teacherCount,
+          sourceMode: "legacy-derived"
+        }),
+        classroom: Object.assign({}, base.classroom, {
+          directoryEntities: base.classroom.directoryEntitiesStatus === "counted" ? base.classroom.directoryEntities : classroomCount || null,
+          directoryEntitiesStatus: base.classroom.directoryEntitiesStatus === "counted" ? "counted" : classroomCount ? "derived-from-legacy-index" : "not-counted",
+          scheduleDocuments: classroomCount,
+          sourceMode: "legacy-derived"
+        }),
+        course: Object.assign({}, base.course, {
+          directoryEntities: base.course.directoryEntitiesStatus === "counted" ? base.course.directoryEntities : courseCount || null,
+          directoryEntitiesStatus: base.course.directoryEntitiesStatus === "counted" ? "counted" : courseCount ? "derived-from-legacy-index" : "not-counted",
+          scheduleDocuments: courseCount,
+          sourceMode: "legacy-derived"
+        }),
+        catalog: {
+          colleges: Number(counts.collegeCount || counts.collegesCount || 0) || base.catalog.colleges,
+          grades: base.catalog.grades,
+          majors: Number(counts.majorCount || counts.majorsCount || 0) || base.catalog.majors
+        },
+        derivedFromLegacy: true
+      });
+    }
+    function flattenLegacyCounts(contract) {
+      const value = contract || {};
+      return {
+        collegeCount: value.catalog && value.catalog.colleges || 0,
+        collegesCount: value.catalog && value.catalog.colleges || 0,
+        majorCount: value.catalog && value.catalog.majors || 0,
+        majorsCount: value.catalog && value.catalog.majors || 0,
+        gradeCount: value.catalog && value.catalog.grades || 0,
+        classScheduleCount: value.class && value.class.scheduleDocuments || 0,
+        adminClassCount: value.class && value.class.administrativeClasses || 0,
+        majorAggregateCount: value.class && value.class.aggregateSchedules || 0,
+        teacherScheduleCount: value.teacher && value.teacher.scheduleDocuments || 0,
+        classroomScheduleCount: value.classroom && value.classroom.scheduleDocuments || 0,
+        courseScheduleCount: value.course && value.course.scheduleDocuments || 0,
+        teacherCount: value.teacher && value.teacher.directoryEntitiesStatus === "counted" ? value.teacher.directoryEntities : 0,
+        classroomCount: value.classroom && value.classroom.directoryEntitiesStatus === "counted" ? value.classroom.directoryEntities : 0,
+        courseCount: value.course && value.course.directoryEntitiesStatus === "counted" ? value.course.directoryEntities : 0
+      };
+    }
+    function sameJson(left, right) {
+      return JSON.stringify(left || {}) === JSON.stringify(right || {});
+    }
+    function metricDiff(activeValue, stagingValue) {
+      const activeNum = Number(activeValue || 0);
+      const stagingNum = Number(stagingValue || 0);
+      const delta = stagingNum - activeNum;
+      return {
+        active: activeNum,
+        staging: stagingNum,
+        delta,
+        percent: activeNum ? Number((delta / activeNum * 100).toFixed(2)) : null
+      };
+    }
+    var METRIC_LABELS = {
+      "teacher.scheduleDocuments": "\u6559\u5E08\u8BFE\u8868",
+      "teacher.directoryEntities": "\u6559\u5E08\u76EE\u5F55",
+      "teacher.courseEvents": "\u6559\u5E08\u8BFE\u7A0B\u4E8B\u4EF6",
+      "classroom.scheduleDocuments": "\u6559\u5BA4\u8BFE\u8868",
+      "classroom.directoryEntities": "\u6559\u5BA4\u76EE\u5F55",
+      "classroom.courseEvents": "\u6559\u5BA4\u8BFE\u7A0B\u4E8B\u4EF6",
+      "course.scheduleDocuments": "\u8BFE\u7A0B\u8BFE\u8868",
+      "course.directoryEntities": "\u8BFE\u7A0B\u76EE\u5F55",
+      "course.courseEvents": "\u8BFE\u7A0B\u6392\u8BFE\u4E8B\u4EF6",
+      "class.scheduleDocuments": "\u73ED\u7EA7\u8BFE\u8868",
+      "class.administrativeClasses": "\u884C\u653F\u73ED",
+      "class.aggregateSchedules": "\u4E13\u4E1A\u805A\u5408"
+    };
+    function compareMetric(active, staging, resource, field) {
+      const path2 = `${resource}.${field}`;
+      const activeResource = active && active[resource] || {};
+      const stagingResource = staging && staging[resource] || {};
+      const diff = metricDiff(activeResource[field], stagingResource[field]);
+      return Object.assign({
+        path: path2,
+        resource,
+        field,
+        label: METRIC_LABELS[path2] || path2
+      }, diff);
+    }
+    function compareResourceCountContracts(active, staging) {
+      const blockers = [];
+      const warnings = [];
+      const comparisons = [];
+      const activeVersion = Number(active && active.countSchemaVersion || 0);
+      const stagingVersion = Number(staging && staging.countSchemaVersion || 0);
+      if (activeVersion !== stagingVersion) {
+        blockers.push({
+          code: "COUNT_CONTRACT_MISMATCH",
+          message: `\u7EDF\u8BA1\u5951\u7EA6\u7248\u672C\u4E0D\u4E00\u81F4\uFF0C\u5F53\u524D\u7EBF\u4E0A v${activeVersion || "\u672A\u77E5"}\uFF0C\u672C\u6B21\u6682\u5B58 v${stagingVersion || "\u672A\u77E5"}\u3002`
+        });
+      }
+      if (active && active.term && (staging && staging.term) && active.term !== staging.term) {
+        blockers.push({
+          code: "SCOPE_FILTER_MISMATCH",
+          message: `\u5B66\u671F\u4E0D\u4E00\u81F4\uFF0C\u5F53\u524D\u7EBF\u4E0A ${active.term}\uFF0C\u672C\u6B21\u6682\u5B58 ${staging.term}\u3002`
+        });
+      }
+      if (!sameJson(active && active.scopeFilters, staging && staging.scopeFilters)) {
+        blockers.push({
+          code: "SCOPE_FILTER_MISMATCH",
+          message: "\u7EDF\u8BA1\u8FC7\u6EE4\u8303\u56F4\u4E0D\u4E00\u81F4\uFF0C\u4E0D\u80FD\u76F4\u63A5\u6BD4\u8F83\u3002"
+        });
+      }
+      RESOURCE_DIMENSIONS.forEach((resource) => {
+        const activeMode = active && active[resource] && active[resource].sourceMode || "unknown";
+        const stagingMode = staging && staging[resource] && staging[resource].sourceMode || "unknown";
+        if (activeMode !== stagingMode) {
+          blockers.push({
+            code: "SOURCE_MODE_MISMATCH",
+            resource,
+            message: `${METRIC_LABELS[`${resource}.scheduleDocuments`] || resource} \u6765\u6E90\u53E3\u5F84\u4E0D\u4E00\u81F4\uFF0C\u5F53\u524D\u7EBF\u4E0A ${sourceModeLabel(activeMode)}\uFF0C\u672C\u6B21\u6682\u5B58 ${sourceModeLabel(stagingMode)}\u3002`
+          });
+        }
+        ["directoryEntities", "scheduleDocuments", "courseEvents"].forEach((field) => {
+          comparisons.push(compareMetric(active, staging, resource, field));
+        });
+      });
+      ["scheduleDocuments", "administrativeClasses", "aggregateSchedules", "courseEvents"].forEach((field) => {
+        comparisons.push(compareMetric(active, staging, "class", field));
+      });
+      asArray(staging && staging.diagnostics).forEach((diagnostic) => {
+        if (diagnostic && diagnostic.publishable === false) {
+          blockers.push({
+            code: diagnostic.code || "COVERAGE_INVALID",
+            resource: diagnostic.resource || "",
+            message: diagnostic.message || "\u6570\u636E\u8986\u76D6\u8D28\u91CF\u4E0D\u901A\u8FC7\uFF0C\u7981\u6B62\u53D1\u5E03\u3002",
+            diagnostic
+          });
+        }
+      });
+      if (staging && staging.coverage && staging.coverage.teacher && staging.coverage.teacher.publishable === false) {
+        blockers.push({
+          code: "COVERAGE_INVALID",
+          resource: "teacher",
+          message: "\u6559\u5E08\u6570\u636E\u8986\u76D6\u72B6\u6001\u65E0\u6548\uFF0C\u7981\u6B62\u53D1\u5E03\u3002"
+        });
+      }
+      return {
+        allowPublish: blockers.length === 0,
+        blockers,
+        warnings,
+        comparisons
+      };
+    }
+    function sourceModeLabel(value) {
+      const key = String(value || "unknown");
+      const labels = {
+        "legacy-derived": "\u5386\u53F2\u6D3E\u751F\u53E3\u5F84",
+        "derived": "\u5386\u53F2\u6D3E\u751F\u53E3\u5F84",
+        "derived-current-run": "\u672C\u6B21\u73ED\u7EA7\u8BFE\u8868\u6D3E\u751F",
+        "network-direct": "100\u7F51\u76F4\u63A5\u6293\u53D6",
+        unknown: "\u672A\u6807\u660E"
+      };
+      return labels[key] || key;
+    }
+    function formatResourceMetricValue(metric) {
+      if (metric == null || metric === "") return "\u672A\u7EDF\u8BA1";
+      const value = typeof metric === "object" && Object.prototype.hasOwnProperty.call(metric, "value") ? metric.value : metric;
+      if (value == null) return "\u672A\u7EDF\u8BA1";
+      return String(value);
+    }
+    module2.exports = {
+      buildResourceCountContract,
+      compareResourceCountContracts,
+      deriveLegacyResourceCountContract,
+      flattenLegacyCounts,
+      formatResourceMetricValue,
+      isInvalidTeacherName: isInvalidTeacherName2,
+      sourceModeLabel
     };
   }
 });
@@ -3047,8 +4650,15 @@ var require_releaseService = __commonJS({
     var { promisify } = require("util");
     var { safeLog } = require_safeLogger();
     var { calculateFingerprint: calculateFingerprint2 } = require_stagingFingerprint();
-    var termRegistryService = require_termRegistryService();
+    var termRegistryService2 = require_termRegistryService();
     var termReleaseIndexService = require_termReleaseIndexService();
+    var teachingCalendarService = require_teachingCalendarService();
+    var runtimePointerService = require_runtimePointerService();
+    var {
+      buildResourceCountContract,
+      deriveLegacyResourceCountContract,
+      flattenLegacyCounts
+    } = require_resourceCountContract();
     var {
       UNKNOWN_BUILDING_CODE,
       UNKNOWN_BUILDING_NAME,
@@ -3329,23 +4939,73 @@ var require_releaseService = __commonJS({
       });
     }
     function countRelease(snapshot) {
-      const catalog = snapshot.catalog || {};
-      const resources = getResources(snapshot);
-      const classSchedules = asArray(snapshot.classSchedules);
-      const adminClassCount = classSchedules.filter((item) => item.displayType === "class-schedule" && !item.isAggregated).length;
-      return {
-        collegeCount: asArray(catalog.colleges).length,
-        collegesCount: asArray(catalog.colleges).length,
-        majorCount: asArray(snapshot.majors).length,
-        majorsCount: asArray(snapshot.majors).length,
-        classScheduleCount: classSchedules.length,
-        adminClassCount,
-        majorAggregateCount: classSchedules.length - adminClassCount,
-        noScheduleMajorCount: snapshot.coverage?.noScheduleMajorCount || 0,
-        teacherScheduleCount: resources.teacherSchedules.length,
-        classroomScheduleCount: resources.classroomSchedules.length,
-        courseScheduleCount: resources.courseSchedules.length
-      };
+      return Object.assign(
+        flattenLegacyCounts(buildResourceCountContract(snapshot || {})),
+        { noScheduleMajorCount: snapshot && snapshot.coverage && snapshot.coverage.noScheduleMajorCount || 0 }
+      );
+    }
+    function readReleaseIndexItems(version, kind) {
+      const files = getReleaseFiles(version);
+      const paths = {
+        teacher: [files.teacherIndexAllPath, files.legacyTeachersIndexPath],
+        classroom: [files.classroomIndexAllPath, files.legacyClassroomsIndexPath],
+        course: [files.courseIndexAllPath, files.legacyCoursesIndexPath],
+        class: [files.classIndexAllPath, files.legacyClassesIndexPath]
+      }[kind] || [];
+      for (const filePath of paths) {
+        const parsed2 = readJsonFile(filePath);
+        if (Array.isArray(parsed2)) return parsed2;
+        if (Array.isArray(parsed2 && parsed2.items)) return parsed2.items;
+        if (Array.isArray(parsed2 && parsed2.data)) return parsed2.data;
+      }
+      return [];
+    }
+    function sumIndexCourseCounts(items2) {
+      return asArray(items2).reduce((sum, item) => {
+        if (Array.isArray(item && item.courses)) return sum + item.courses.length;
+        const count = Number(item && item.courseCount || 0);
+        return sum + (Number.isFinite(count) && count > 0 ? count : 0);
+      }, 0);
+    }
+    function augmentLegacyContractFromIndexes(contract, version) {
+      if (!contract || !version) return contract;
+      const next = Object.assign({}, contract, {
+        teacher: Object.assign({}, contract.teacher || {}),
+        classroom: Object.assign({}, contract.classroom || {}),
+        course: Object.assign({}, contract.course || {})
+      });
+      [
+        ["teacher", "\u6559\u5E08"],
+        ["classroom", "\u6559\u5BA4"],
+        ["course", "\u8BFE\u7A0B"]
+      ].forEach(([kind]) => {
+        const items2 = readReleaseIndexItems(version, kind);
+        if (!items2.length) return;
+        next[kind].scheduleDocuments = items2.length;
+        next[kind].courseEvents = sumIndexCourseCounts(items2);
+        if (next[kind].directoryEntities == null || next[kind].directoryEntitiesStatus === "not-counted") {
+          next[kind].directoryEntities = items2.length;
+          next[kind].directoryEntitiesStatus = "derived-from-legacy-index";
+        }
+        if (!next[kind].sourceMode || next[kind].sourceMode === "unknown") {
+          next[kind].sourceMode = "legacy-derived";
+        }
+      });
+      return next;
+    }
+    function getReleaseResourceCounts(version, snapshot) {
+      const normalizedVersion = normalizeVersion(version || snapshot && (snapshot.version || snapshot.releaseVersion) || "");
+      const files = normalizedVersion ? getReleaseFiles(normalizedVersion) : null;
+      const manifest = files ? readJsonFile(files.manifestPath) || readJsonFile(path2.join(files.publicReleaseDir, "manifest.json")) : null;
+      if (manifest && manifest.resourceCounts && Number(manifest.resourceCounts.countSchemaVersion) === 2) {
+        return manifest.resourceCounts;
+      }
+      const sourceSnapshot = snapshot || (normalizedVersion ? readReleaseSnapshot(normalizedVersion) : null);
+      if (sourceSnapshot && sourceSnapshot.resourceCounts && Number(sourceSnapshot.resourceCounts.countSchemaVersion) === 2) {
+        return sourceSnapshot.resourceCounts;
+      }
+      const derived = sourceSnapshot ? deriveLegacyResourceCountContract(sourceSnapshot, manifest || {}) : deriveLegacyResourceCountContract({}, manifest || {});
+      return augmentLegacyContractFromIndexes(derived, normalizedVersion);
     }
     function stableScheduleId(kind, value, index) {
       const key = `${kind}:${String(value || "")}:${index}`;
@@ -3478,6 +5138,13 @@ var require_releaseService = __commonJS({
       const sourceFiles = [];
       if (fs2.existsSync(files.manifestPath)) {
         sourceFiles.push(files.manifestPath);
+      }
+      if (fs2.existsSync(files.bootstrapPath)) {
+        sourceFiles.push(files.bootstrapPath);
+      }
+      const calendarPath = path2.join(files.releaseDir, "calendar.json");
+      if (fs2.existsSync(calendarPath)) {
+        sourceFiles.push(calendarPath);
       }
       [files.indexDir, files.detailDir, files.emptyRoomDir].forEach((dirPath) => {
         collectJsonFiles(dirPath).forEach((filePath) => sourceFiles.push(filePath));
@@ -4400,7 +6067,7 @@ var require_releaseService = __commonJS({
       }
       const term = snapshot.term || snapshot.semester || snapshot.termConfig && snapshot.termConfig.term || "";
       try {
-        const termConfig = termRegistryService.normalizeTermRecord(Object.assign({}, snapshot.termConfig || {}, {
+        const termConfig = termRegistryService2.normalizeTermRecord(Object.assign({}, snapshot.termConfig || {}, {
           term,
           termStartDate: snapshot.termConfig && snapshot.termConfig.termStartDate || snapshot.termStartDate || "",
           totalWeeks: snapshot.termConfig && snapshot.termConfig.totalWeeks || snapshot.totalWeeks || 20,
@@ -4411,7 +6078,7 @@ var require_releaseService = __commonJS({
           updatedAt: snapshot.updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
           source: snapshot.source || "release-snapshot"
         }));
-        const termValidation = termRegistryService.validateTermRecord(termConfig);
+        const termValidation = termRegistryService2.validateTermRecord(termConfig);
         if (!termValidation.valid) {
           termValidation.errors.forEach((error) => errors.push(`termConfig.${error}`));
         }
@@ -4429,7 +6096,7 @@ var require_releaseService = __commonJS({
         counts: countRelease(snapshot)
       };
     }
-    function buildBootstrap(snapshot, version, counts) {
+    function buildBootstrap(snapshot, version, counts, resourceCounts) {
       const updatedAt = snapshot.updatedAt || (/* @__PURE__ */ new Date()).toISOString();
       return {
         success: true,
@@ -4441,6 +6108,7 @@ var require_releaseService = __commonJS({
         termConfig: snapshot.termConfig || null,
         catalog: snapshot.catalog || {},
         counts,
+        resourceCounts,
         versions: {
           snapshot: version,
           catalog: version,
@@ -4458,15 +6126,15 @@ var require_releaseService = __commonJS({
         }
       };
     }
-    function buildManifest(snapshot, version, counts, validation, files, derived) {
+    function buildManifest(snapshot, version, counts, validation, files, derived, calendar) {
       const updatedAt = snapshot.updatedAt || (/* @__PURE__ */ new Date()).toISOString();
       const filesMeta = files ? buildReleasePackFilesMeta(files) : {};
       const staticUrls = buildStaticReleaseUrls(version, derived);
       const fingerprint = calculateFingerprint2(snapshot);
       const rawTermConfig = snapshot.termConfig && typeof snapshot.termConfig === "object" ? snapshot.termConfig : {};
       const term = snapshot.term || snapshot.semester || rawTermConfig.term || "";
-      const legacyTermConfig = term === termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService.LEGACY_CURRENT_TERM_CONFIG : {};
-      const termConfig = termRegistryService.normalizeTermRecord({
+      const legacyTermConfig = term === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService2.LEGACY_CURRENT_TERM_CONFIG : {};
+      const termConfig = termRegistryService2.normalizeTermRecord({
         term,
         semesterText: rawTermConfig.semesterText || snapshot.semesterText || legacyTermConfig.semesterText || "",
         termStartDate: rawTermConfig.termStartDate || snapshot.termStartDate || legacyTermConfig.termStartDate || "",
@@ -4479,6 +6147,11 @@ var require_releaseService = __commonJS({
         updatedAt,
         source: rawTermConfig.source || snapshot.source || "release-snapshot"
       });
+      const resourceCounts = buildResourceCountContract(snapshot);
+      const releaseCalendarForHash = calendar ? Object.assign({}, calendar, {
+        releaseVersion: version,
+        manifestTerm: termConfig.term
+      }) : null;
       return {
         success: true,
         schemaVersion: 2,
@@ -4498,6 +6171,9 @@ var require_releaseService = __commonJS({
         forceRefreshToken: `${version}:${new Date(updatedAt).getTime() || Date.now()}`,
         minClientCacheSchema: 5,
         source: snapshot.source || "local-sync-client",
+        scopeSources: snapshot.scopeSources || snapshot.meta?.scopeSources || {},
+        resourceCounts,
+        partial: Boolean(snapshot.partial || snapshot.meta?.partial),
         canonicalHash: fingerprint.canonicalHash,
         counts,
         files: filesMeta,
@@ -4506,6 +6182,10 @@ var require_releaseService = __commonJS({
         staticReleaseUrl: staticUrls.staticReleaseUrl,
         indexUrls: staticUrls.indexUrls,
         emptyRoomUrl: staticUrls.emptyRoomUrl,
+        calendarUrl: joinUrl(staticUrls.staticReleaseUrl, "calendar.json"),
+        calendarHash: releaseCalendarForHash ? teachingCalendarService.getCalendarHash(releaseCalendarForHash) : "",
+        calendarCount: calendar && Array.isArray(calendar.weeks) ? calendar.weeks.length : 0,
+        calendarUpdatedAt: calendar && calendar.updatedAt || "",
         detailUrlPattern: staticUrls.detailUrlPattern,
         shards: staticUrls.shards,
         compression: {
@@ -4565,8 +6245,8 @@ var require_releaseService = __commonJS({
       const rawTermConfig = snapshot.termConfig && typeof snapshot.termConfig === "object" ? snapshot.termConfig : {};
       const term = snapshot.term || snapshot.semester || rawTermConfig.term || "";
       if (term) {
-        const legacyTermConfig = term === termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService.LEGACY_CURRENT_TERM_CONFIG : {};
-        const termConfig = termRegistryService.normalizeTermRecord({
+        const legacyTermConfig = term === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService2.LEGACY_CURRENT_TERM_CONFIG : {};
+        const termConfig = termRegistryService2.normalizeTermRecord({
           term,
           semesterText: rawTermConfig.semesterText || snapshot.semesterText || legacyTermConfig.semesterText || "",
           termStartDate: rawTermConfig.termStartDate || snapshot.termStartDate || legacyTermConfig.termStartDate || "",
@@ -4601,15 +6281,22 @@ var require_releaseService = __commonJS({
         throw err;
       }
       const files = getReleaseFiles(version);
-      const bootstrap = buildBootstrap(snapshot, version, validation.counts);
+      const resourceCounts = buildResourceCountContract(snapshot);
+      const bootstrap = buildBootstrap(snapshot, version, validation.counts, resourceCounts);
       writeJsonAtomic(files.snapshotPath, snapshot);
       writeJsonAtomic(files.bootstrapPath, bootstrap);
       writeJsonAtomic(files.classSchedulesPath, snapshot.classSchedules || []);
       writeJsonAtomic(files.resourcesPath, snapshot.resources || {});
       const derived = writeDerivedIndexes(snapshot, files);
-      const manifest = buildManifest(snapshot, version, validation.counts, validation, files, derived);
+      const calendar = teachingCalendarService.readTermCalendar(snapshot.term || snapshot.semester);
+      const manifest = buildManifest(snapshot, version, validation.counts, validation, files, derived, calendar);
       manifest.compression = Object.assign({}, manifest.compression || {}, estimateStaticReleaseCompression(version, { includeManifest: true }));
       writeJsonAtomic(files.manifestPath, manifest);
+      teachingCalendarService.writeReleaseCalendar(manifest, {
+        calendar,
+        releaseDir: files.releaseDir,
+        publicReleaseDir: files.publicReleaseDir
+      });
       const compression = mirrorStaticReleaseFiles(version);
       manifest.compression = Object.assign({}, manifest.compression || {}, compression);
       return {
@@ -4638,7 +6325,8 @@ var require_releaseService = __commonJS({
       const files = atomic ? getBuildingReleaseFiles(version, getReleaseBuildJobId(options)) : finalFiles;
       let derived = null;
       let manifest = null;
-      const bootstrap = buildBootstrap(snapshot, version, validation.counts);
+      const resourceCounts = buildResourceCountContract(snapshot);
+      const bootstrap = buildBootstrap(snapshot, version, validation.counts, resourceCounts);
       if (atomic) cleanupBuildingReleaseFiles(files);
       try {
         writeJsonAtomic(files.snapshotPath, snapshot);
@@ -4648,13 +6336,19 @@ var require_releaseService = __commonJS({
         if (options.job) options.job.progress(30, "building indexes", { releaseVersion: version });
         derived = writeDerivedIndexes(snapshot, files);
         if (options.job) options.job.progress(46, "writing manifest", { releaseVersion: version });
-        manifest = buildManifest(snapshot, version, validation.counts, validation, files, derived);
+        const calendar = teachingCalendarService.readTermCalendar(snapshot.term || snapshot.semester);
+        manifest = buildManifest(snapshot, version, validation.counts, validation, files, derived, calendar);
         manifest.compression = Object.assign(
           {},
           manifest.compression || {},
           estimateStaticReleaseCompression(version, { includeManifest: true, files })
         );
         writeJsonAtomic(files.manifestPath, manifest);
+        teachingCalendarService.writeReleaseCalendar(manifest, {
+          calendar,
+          releaseDir: files.releaseDir,
+          publicReleaseDir: files.publicReleaseDir
+        });
         const compression = await mirrorStaticReleaseFilesAsync(version, {
           files,
           onProgress: (progress) => {
@@ -4678,6 +6372,19 @@ var require_releaseService = __commonJS({
             err.code = "RELEASE_PACK_BUILD_UNHEALTHY";
             err.status = deepStatus;
             throw err;
+          }
+          if (typeof options.beforePromote === "function") {
+            await options.beforePromote({
+              version,
+              files,
+              finalFiles,
+              snapshot,
+              manifest,
+              bootstrap,
+              derived,
+              validation,
+              status: deepStatus
+            });
           }
           if (options.job) options.job.progress(68, "promoting release files", { releaseVersion: version });
           replaceReleaseFilesFromBuild(files, finalFiles);
@@ -4727,7 +6434,8 @@ var require_releaseService = __commonJS({
         majors: [],
         classSchedules,
         resources: getResources({ resources }),
-        coverage: bootstrap.counts || manifest?.counts || {}
+        coverage: bootstrap.counts || manifest?.counts || {},
+        resourceCounts: bootstrap.resourceCounts || manifest?.resourceCounts || null
       };
     }
     function writeCurrentSnapshotCompat(snapshot) {
@@ -4828,13 +6536,17 @@ var require_releaseService = __commonJS({
         const activeTerm = active.term || active.semester || "";
         if (activeTerm) {
           termReleaseIndexService.activateTerm(activeTerm, normalizedVersion);
-          const registryTerm = termRegistryService.getTerm(activeTerm);
+          const registryTerm = termRegistryService2.getTerm(activeTerm);
           if (registryTerm) {
             if (registryTerm.releaseVersion !== normalizedVersion || registryTerm.status !== "ready") {
-              termRegistryService.bindReleaseToTerm(activeTerm, normalizedVersion, { status: "ready" });
+              termRegistryService2.bindReleaseToTerm(activeTerm, normalizedVersion, { status: "ready" });
             }
-            termRegistryService.activateTerm(activeTerm, { source: "release-activate" });
+            termRegistryService2.activateTerm(activeTerm, { source: "release-activate" });
           }
+        }
+        const manifest = getReleasePackManifest(normalizedVersion);
+        if (manifest && manifest.success) {
+          runtimePointerService.writeActivePointerForManifest(manifest);
         }
       } catch (error) {
         restoreActivationState(previousState);
@@ -4862,6 +6574,7 @@ var require_releaseService = __commonJS({
       const manifest = readJsonFile(files.manifestPath);
       const quickHealth = getReleasePackQuickHealth(active.version);
       const counts = manifest?.counts || active.counts || {};
+      const resourceCounts = getReleaseResourceCounts(active.version);
       const semester2 = active.semester || manifest?.semester || manifest?.term || "";
       return Object.assign({}, active, {
         version: active.version,
@@ -4871,6 +6584,7 @@ var require_releaseService = __commonJS({
         termConfig: active.termConfig || manifest?.termConfig || null,
         publishedAt: active.activatedAt || active.updatedAt || "",
         counts,
+        resourceCounts,
         canonicalHash: active.canonicalHash || manifest?.canonicalHash || "",
         source: "release",
         status: "active",
@@ -4953,6 +6667,7 @@ var require_releaseService = __commonJS({
       const active = getActiveReleaseInfo();
       const snapshot = active ? readReleaseSnapshot(active.version) : null;
       const validation = snapshot ? validateReleaseSnapshot(snapshot) : null;
+      const resourceCounts = active ? getReleaseResourceCounts(active.version, snapshot) : null;
       return {
         activeReleaseVersion: active?.version || null,
         activeReleaseUpdatedAt: active?.updatedAt || null,
@@ -4961,6 +6676,7 @@ var require_releaseService = __commonJS({
         term: active?.term || snapshot?.term || active?.semester || snapshot?.semester || null,
         termConfig: active?.termConfig || snapshot?.termConfig || null,
         counts: validation?.counts || active?.counts || {},
+        resourceCounts,
         valid: validation ? validation.valid : false,
         errors: validation ? validation.errors : [],
         storagePath: RELEASES_DIR
@@ -4974,6 +6690,7 @@ var require_releaseService = __commonJS({
         const manifest = readJsonFile(files.manifestPath);
         const stat = fs2.statSync(files.releaseDir);
         const releasePack = getReleasePackStatus(version);
+        const resourceCounts = getReleaseResourceCounts(version);
         return {
           version,
           updatedAt: manifest?.updatedAt || stat.mtime.toISOString(),
@@ -4981,6 +6698,7 @@ var require_releaseService = __commonJS({
           term: manifest?.term || manifest?.semester || "",
           semester: manifest?.semester || manifest?.term || "",
           counts: manifest?.counts || {},
+          resourceCounts,
           valid: manifest?.validation?.valid !== false,
           releasePack
         };
@@ -5075,6 +6793,7 @@ var require_releaseService = __commonJS({
         healthy: requiredOk,
         checks,
         counts: manifest?.counts || active?.counts || {},
+        resourceCounts: getReleaseResourceCounts(normalizedVersion),
         emptyRoomHealth: manifest?.packHealth?.emptyRoom || manifest?.emptyRoomHealth || {},
         durationMs: Date.now() - startedAt
       };
@@ -5166,6 +6885,7 @@ var require_releaseService = __commonJS({
         hashErrors,
         missing,
         currentFiles,
+        resourceCounts: getReleaseResourceCounts(normalizedVersion),
         healthy: missing.length === 0 && hashErrors.length === 0
       };
     }
@@ -5207,6 +6927,7 @@ var require_releaseService = __commonJS({
         const active = getActiveReleaseInfo();
         const isActive = active && active.version === targetVersion;
         const status2 = getReleasePackQuickHealth(targetVersion);
+        const resourceCounts = manifest.resourceCounts || getReleaseResourceCounts(targetVersion);
         return Object.assign({ success: true }, manifest, {
           releaseVersion: manifest.releaseVersion || targetVersion,
           version: manifest.version || targetVersion,
@@ -5214,6 +6935,7 @@ var require_releaseService = __commonJS({
           dataEpoch: isActive ? active.cacheEpoch || manifest.cacheEpoch : manifest.dataEpoch || manifest.cacheEpoch,
           forceRefreshToken: isActive ? active.forceRefreshToken || manifest.forceRefreshToken || `${targetVersion}:${manifest.cacheEpoch || ""}` : manifest.forceRefreshToken || `${targetVersion}:${manifest.cacheEpoch || ""}`,
           packStatus: status2,
+          resourceCounts,
           minClientCacheSchema: manifest.minClientCacheSchema || 5
         });
       }
@@ -5278,9 +7000,15 @@ var require_releaseService = __commonJS({
       }
       const files = getReleaseFiles(normalizedVersion);
       const derived = writeDerivedIndexes(Object.assign({}, snapshot, { version: normalizedVersion }), files, false);
-      const manifest = buildManifest(snapshot, normalizedVersion, validation.counts, validation, files, derived);
+      const calendar = teachingCalendarService.readTermCalendar(snapshot.term || snapshot.semester);
+      const manifest = buildManifest(snapshot, normalizedVersion, validation.counts, validation, files, derived, calendar);
       manifest.compression = Object.assign({}, manifest.compression || {}, estimateStaticReleaseCompression(normalizedVersion, { includeManifest: true }));
       writeJsonAtomic(files.manifestPath, manifest);
+      teachingCalendarService.writeReleaseCalendar(manifest, {
+        calendar,
+        releaseDir: files.releaseDir,
+        publicReleaseDir: files.publicReleaseDir
+      });
       const compression = mirrorStaticReleaseFiles(normalizedVersion);
       manifest.compression = Object.assign({}, manifest.compression || {}, compression);
       clearDerivedCache();
@@ -5312,7 +7040,8 @@ var require_releaseService = __commonJS({
       const finalFiles = getReleaseFiles(normalizedVersion);
       const files = atomic ? getBuildingReleaseFiles(normalizedVersion, getReleaseBuildJobId(options)) : finalFiles;
       const normalizedSnapshot = Object.assign({}, snapshot, { version: normalizedVersion });
-      const bootstrap = buildBootstrap(normalizedSnapshot, normalizedVersion, validation.counts);
+      const resourceCounts = buildResourceCountContract(normalizedSnapshot);
+      const bootstrap = buildBootstrap(normalizedSnapshot, normalizedVersion, validation.counts, resourceCounts);
       let derived = null;
       let manifest = null;
       if (atomic) cleanupBuildingReleaseFiles(files);
@@ -5326,13 +7055,19 @@ var require_releaseService = __commonJS({
         const manifestSnapshot = Object.assign({}, normalizedSnapshot, {
           updatedAt: normalizedSnapshot.updatedAt || (/* @__PURE__ */ new Date()).toISOString()
         });
-        manifest = buildManifest(manifestSnapshot, normalizedVersion, validation.counts, validation, files, derived);
+        const calendar = teachingCalendarService.readTermCalendar(normalizedSnapshot.term || normalizedSnapshot.semester);
+        manifest = buildManifest(manifestSnapshot, normalizedVersion, validation.counts, validation, files, derived, calendar);
         manifest.compression = Object.assign(
           {},
           manifest.compression || {},
           estimateStaticReleaseCompression(normalizedVersion, { includeManifest: true, files })
         );
         writeJsonAtomic(files.manifestPath, manifest);
+        teachingCalendarService.writeReleaseCalendar(manifest, {
+          calendar,
+          releaseDir: files.releaseDir,
+          publicReleaseDir: files.publicReleaseDir
+        });
         const compression = await mirrorStaticReleaseFilesAsync(normalizedVersion, {
           files,
           onProgress: (progress) => {
@@ -5427,7 +7162,7 @@ var require_releaseService = __commonJS({
       const requestedTerm = String(options.term || options.semester || "").trim();
       const requestedVersion = normalizeVersion(options.releaseVersion || options.version || "");
       if (requestedTerm) {
-        const termValidation = termRegistryService.validateTermId(requestedTerm);
+        const termValidation = termRegistryService2.validateTermId(requestedTerm);
         if (!termValidation.valid) {
           return {
             success: false,
@@ -5437,9 +7172,9 @@ var require_releaseService = __commonJS({
             releaseVersion: requestedVersion
           };
         }
-        const term = termRegistryService.getTerm(termValidation.term);
+        const term = termRegistryService2.getTerm(termValidation.term);
         if (!term) {
-          if (termValidation.term === termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term) {
+          if (termValidation.term === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term) {
             const active = getActiveReleaseInfo() || {};
             const targetVersion2 = requestedVersion || normalizeVersion(active.releaseVersion || active.version || "");
             const manifest2 = targetVersion2 ? readReleasePackStaticManifest(targetVersion2) : null;
@@ -5483,7 +7218,7 @@ var require_releaseService = __commonJS({
           };
         }
         if (!term.dataAvailable || !term.releaseVersion) {
-          if (termValidation.term === termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term) {
+          if (termValidation.term === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term) {
             const active = getActiveReleaseInfo() || {};
             const targetVersion2 = requestedVersion || normalizeVersion(active.releaseVersion || active.version || "");
             const manifest2 = targetVersion2 ? readReleasePackStaticManifest(targetVersion2) : null;
@@ -6237,6 +7972,7 @@ var require_releaseService = __commonJS({
       getReleasePackManifest,
       getReleasePackQuickHealth,
       getReleasePackStatus,
+      getReleaseResourceCounts,
       getReleaseCompressionConfig,
       assertHealthyReleasePack,
       getReleaseStatus,
@@ -6282,6 +8018,10 @@ var require_upload = __commonJS({
       calculateFingerprintFromFile,
       readSidecarHash: readSidecarHash2
     } = require_stagingFingerprint();
+    var {
+      buildResourceCountContract,
+      flattenLegacyCounts
+    } = require_resourceCountContract();
     function parseArgs(argv) {
       const args = {};
       for (const arg of argv) {
@@ -6387,6 +8127,31 @@ var require_upload = __commonJS({
         releaseVersion: pick("releaseVersion") || pick("version"),
         generatedAt: pick("generatedAt") || pick("updatedAt")
       };
+    }
+    function summarizeLocalSnapshot(filePath) {
+      try {
+        const data = JSON.parse(fs2.readFileSync(filePath, "utf-8"));
+        const resourceCounts = buildResourceCountContract(data);
+        const counts = flattenLegacyCounts(resourceCounts);
+        return {
+          resourceCounts,
+          counts,
+          totalScheduleDocuments: Number(resourceCounts.class.scheduleDocuments || 0) + Number(resourceCounts.teacher.scheduleDocuments || 0) + Number(resourceCounts.classroom.scheduleDocuments || 0) + Number(resourceCounts.course.scheduleDocuments || 0),
+          actualNetworkRequestCount: data.meta && data.meta.actualNetworkRequestCount || data.actualNetworkRequestCount || 0,
+          usedClassScheduleCache: Boolean(data.meta && (data.meta.usedClassScheduleCache || data.meta.cacheUsage && data.meta.cacheUsage.usedClassScheduleCache)),
+          teacherQualityPass: !(resourceCounts.diagnostics || []).some((item) => item.resource === "teacher" && item.publishable === false)
+        };
+      } catch (error) {
+        return {
+          resourceCounts: null,
+          counts: {},
+          totalScheduleDocuments: 0,
+          actualNetworkRequestCount: 0,
+          usedClassScheduleCache: false,
+          teacherQualityPass: null,
+          error: error.message
+        };
+      }
     }
     function formatMb(bytes) {
       return (Number(bytes || 0) / 1024 / 1024).toFixed(2);
@@ -6541,6 +8306,7 @@ var require_upload = __commonJS({
       const retryCount = Number(params.retries || process.env.SYNC_UPLOAD_RETRIES || 3);
       const chunkSize = toBytesMb(params["chunk-mb"] || params.chunkMb || process.env.SYNC_LOCAL_UPLOAD_CHUNK_MB, 8);
       const metadata = Object.assign({}, extractJsonMetadata(filePath), options.metadata || {});
+      const localSummary = summarizeLocalSnapshot(filePath);
       const headers = getAuthHeaders(mode, token);
       let localFingerprint = null;
       if (mode === "admin") {
@@ -6638,6 +8404,9 @@ var require_upload = __commonJS({
         environment: options.environment || metadata.environment || ""
       }, headers, timeoutMs);
       const payload = finalize.data || finalize.upload || finalize;
+      const serverResourceCounts = payload.resourceCounts || payload.summary && payload.summary.resourceCounts || finalize.resourceCounts || null;
+      const serverCounts = payload.counts || payload.summary && payload.summary.counts || finalize.counts || localSummary.counts || {};
+      const displayResourceCounts = serverResourceCounts || localSummary.resourceCounts;
       console.log("upload finalized:");
       console.log(JSON.stringify({
         uploadId,
@@ -6645,9 +8414,28 @@ var require_upload = __commonJS({
         relayUploadId: payload.relayUploadId || finalize.relayUploadId,
         term: payload.term || finalize.term || metadata.term || "",
         releaseVersion: payload.releaseVersion || finalize.releaseVersion || metadata.releaseVersion || "",
-        counts: payload.counts || payload.summary || finalize.counts || {},
+        totalScheduleDocuments: payload.totalScheduleDocuments || payload.summary && payload.summary.totalScheduleDocuments || localSummary.totalScheduleDocuments,
+        counts: serverCounts,
+        resourceCounts: displayResourceCounts,
         status: payload.status || finalize.status || "pending-review"
       }, null, 2));
+      if (displayResourceCounts) {
+        const teacherDirectory = displayResourceCounts.teacher.directoryEntities == null ? "\u672A\u786E\u8BA4" : `${displayResourceCounts.teacher.directoryEntities}\u4EBA`;
+        console.log("\u4E0A\u4F20\u6458\u8981\uFF1A");
+        console.log(`- \u73ED\u7EA7\u8BFE\u8868\uFF1A${displayResourceCounts.class.scheduleDocuments || 0}\u4EFD`);
+        console.log(`- \u884C\u653F\u73ED\uFF1A${displayResourceCounts.class.administrativeClasses || 0}\u4E2A`);
+        console.log(`- \u4E13\u4E1A\u805A\u5408\uFF1A${displayResourceCounts.class.aggregateSchedules || 0}\u4EFD`);
+        console.log(`- \u6559\u5E08\u76EE\u5F55\uFF1A${teacherDirectory}`);
+        console.log(`- \u6559\u5E08\u8BFE\u8868\uFF1A${displayResourceCounts.teacher.scheduleDocuments || 0}\u4EFD`);
+        console.log(`- \u6559\u5E08\u8BFE\u7A0B\u4E8B\u4EF6\uFF1A${displayResourceCounts.teacher.courseEvents || 0}\u6761`);
+        console.log(`- \u6559\u5BA4\u76EE\u5F55\uFF1A${displayResourceCounts.classroom.directoryEntities == null ? "\u672A\u7EDF\u8BA1" : `${displayResourceCounts.classroom.directoryEntities}\u95F4`}`);
+        console.log(`- \u6559\u5BA4\u8BFE\u8868\uFF1A${displayResourceCounts.classroom.scheduleDocuments || 0}\u4EFD`);
+        console.log(`- \u8BFE\u7A0B\u76EE\u5F55\uFF1A${displayResourceCounts.course.directoryEntities == null ? "\u672A\u7EDF\u8BA1" : `${displayResourceCounts.course.directoryEntities}\u95E8`}`);
+        console.log(`- \u8BFE\u7A0B\u8BFE\u8868\uFF1A${displayResourceCounts.course.scheduleDocuments || 0}\u4EFD`);
+        console.log(`- \u5B9E\u9645100\u7F51\u8BF7\u6C42\u6570\uFF1A${localSummary.actualNetworkRequestCount || "\u672A\u7EDF\u8BA1"}`);
+        console.log(`- \u662F\u5426\u8BFB\u53D6\u65E7\u52A8\u6001\u7F13\u5B58\uFF1A${localSummary.usedClassScheduleCache ? "\u662F" : "\u5426"}`);
+        console.log(`- \u6559\u5E08\u6570\u636E\u8D28\u91CF\uFF1A${localSummary.teacherQualityPass === false ? "\u4E0D\u901A\u8FC7" : "\u901A\u8FC7"}`);
+      }
       return finalize;
     }
     async function runFromCli(argv = process.argv.slice(2)) {
@@ -6708,7 +8496,15 @@ var crypto = require("crypto");
 var diagnose = require_diagnose();
 var envPath = path.resolve(__dirname, ".env");
 require("dotenv").config({ path: envPath });
-var ALL_SCOPES = ["classSchedules", "teacherSchedules", "classroomSchedules", "courseSchedules", "classrooms", "teachers", "courses"];
+var {
+  ALL_SCOPES,
+  applyPlanToParams,
+  buildSyncPlan,
+  getRecommendedOperations,
+  parseCliArgs,
+  printablePlan
+} = require_syncPlan2();
+var syncCacheStore = require_syncCacheStore();
 console.log(`[env] .env path: ${envPath}`);
 console.log(`[env] FOSU_API_BASE: ${process.env.FOSU_API_BASE || "https://class.katelya.eu.org"}`);
 console.log(`[env] PREFERRED_SEMESTER: ${process.env.PREFERRED_SEMESTER || "\u672A\u914D\u7F6E"}`);
@@ -6723,7 +8519,11 @@ var parser = require_parser();
 var normalizer = require_scheduleNormalizer();
 var courseIdentity = require_courseNormalizer();
 var releaseService = require_releaseService();
+var termRegistryService = require_termRegistryService();
 var stagingUploader = require_upload();
+var {
+  isInvalidTeacherName
+} = require_resourceCountContract();
 var {
   buildSidecarMeta,
   calculateFingerprint,
@@ -6860,6 +8660,74 @@ function getEnvFlag(name, defaultValue) {
   }
   return String(value).toLowerCase() === "true";
 }
+function getActiveSyncPlan() {
+  return global.SYNC_PLAN || null;
+}
+function printSyncPlan(plan) {
+  if (!plan) return;
+  console.log("\n================ [Resolved Sync Plan] ================");
+  console.log(JSON.stringify(printablePlan(plan), null, 2));
+  if (plan.deprecated) {
+    console.warn(`[deprecated] ${plan.action} is mapped to ${plan.deprecatedTarget}. Use the new command name in runbooks.`);
+  }
+  if (plan.schedulePolicy === "network-only" && plan.dynamicScopes.length) {
+    console.log("[policy] Dynamic schedules are network-only. Progress, negative cache, and old schedule merge are disabled.");
+  }
+  console.log("======================================================\n");
+}
+function isPlanNetworkOnly() {
+  const plan = getActiveSyncPlan();
+  return Boolean(plan && plan.schedulePolicy === "network-only" && plan.dynamicScopes.length > 0);
+}
+function findTermByRunId(runId) {
+  const id = String(runId || "").trim();
+  if (!id) return "";
+  const root = path.join(__dirname, ".cache");
+  if (!fs.existsSync(root)) return "";
+  const terms = fs.readdirSync(root).filter((name) => fs.statSync(path.join(root, name)).isDirectory());
+  for (const term of terms) {
+    const progressDir = path.join(root, term, "progress");
+    if (!fs.existsSync(progressDir)) continue;
+    const files = fs.readdirSync(progressDir);
+    if (files.some((file) => file.includes(id))) return term;
+  }
+  return "";
+}
+function buildScopeSourceReport(scope, overrides = {}) {
+  const plan = getActiveSyncPlan();
+  const source = plan && plan.sourceRequirements && plan.sourceRequirements[scope] || {};
+  return Object.assign({
+    scope,
+    sourceMode: source.mode || "derived-current-run",
+    endpointFamily: source.endpointFamily || "",
+    requested: 0,
+    succeeded: 0,
+    failed: 0,
+    derived: 0,
+    cacheHits: 0,
+    startedAt: "",
+    finishedAt: "",
+    hash: ""
+  }, overrides);
+}
+function recordScopeSource(scope, report) {
+  global.SCOPE_SOURCE_REPORTS = Object.assign({}, global.SCOPE_SOURCE_REPORTS || {}, {
+    [scope]: buildScopeSourceReport(scope, report)
+  });
+}
+async function postAdminJson(pathname, body, label) {
+  const url = `${FOSU_API_BASE}${pathname}`;
+  const response = await axios.post(url, body || {}, {
+    headers: ADMIN_API_TOKEN ? { "x-admin-token": ADMIN_API_TOKEN } : {},
+    proxy: false,
+    timeout: parseInt(process.env.SYNC_ADMIN_POST_TIMEOUT_MS || "30000", 10)
+  });
+  const data = response.data || {};
+  if (data.job && data.job.id) {
+    return waitAdminJob(data.job.id, label || pathname);
+  }
+  return data;
+}
 function getTermStartDate(term) {
   if (process.env.PREFERRED_TERM_START_DATE) return process.env.PREFERRED_TERM_START_DATE;
   return "";
@@ -6878,12 +8746,13 @@ function normalizeTermConfigRecord(record, source) {
   const item = record && typeof record === "object" ? record : {};
   const term = String(item.term || item.semester || "").trim();
   if (!validateTermId(term)) return null;
-  const totalWeeks = Number(item.totalWeeks || item.weeks || item.weekCount || 20);
+  const rawTotalWeeks = item.totalWeeks || item.weeks || item.weekCount;
+  const totalWeeks = rawTotalWeeks == null || rawTotalWeeks === "" ? null : Number(rawTotalWeeks);
   return {
     term,
     semesterText: item.semesterText || item.termText || generateSemesterText(term),
     termStartDate: String(item.termStartDate || item.startDate || item.termStart || "").trim(),
-    totalWeeks: Number.isInteger(totalWeeks) && totalWeeks >= 1 && totalWeeks <= 30 ? totalWeeks : 20,
+    totalWeeks: Number.isInteger(totalWeeks) && totalWeeks >= 1 && totalWeeks <= 30 ? totalWeeks : null,
     weekStart: item.weekStart || "monday",
     source: source || item.source || "unknown",
     releaseVersion: item.releaseVersion || item.version || ""
@@ -6921,6 +8790,14 @@ function getLocalRegistryTermConfig(term) {
   }
   return null;
 }
+function getBundledTermRegistryConfig(term) {
+  try {
+    const config = termRegistryService.getTerm(term);
+    return normalizeTermConfigRecord(config, "term-registry");
+  } catch (error) {
+    return null;
+  }
+}
 async function getRemoteRegistryTermConfig(term) {
   try {
     const response = await axios.get(`${FOSU_API_BASE}/api/fosu/terms`, {
@@ -6937,43 +8814,63 @@ async function getRemoteRegistryTermConfig(term) {
 }
 async function resolveTermConfig(activeSemester, cliParams = {}) {
   const explicit = cliParams["term-start-date"] || cliParams.termStartDate || cliParams.start || cliParams.startDate || "";
-  const totalWeeks = Number(cliParams["total-weeks"] || cliParams.totalWeeks || process.env.TOTAL_WEEKS || 20);
-  const weekStart = cliParams.weekStart || cliParams["week-start"] || "monday";
-  if (explicit) {
-    return normalizeTermConfigRecord({
-      term: activeSemester,
-      semesterText: cliParams.semesterText,
-      termStartDate: explicit,
-      totalWeeks,
-      weekStart
-    }, "cli");
-  }
+  const explicitTotalWeeksRaw = cliParams["total-weeks"] || cliParams.totalWeeks || process.env.TOTAL_WEEKS || "";
+  const explicitTotalWeeks = explicitTotalWeeksRaw === "" ? null : Number(explicitTotalWeeksRaw);
+  const explicitWeekStart = cliParams.weekStart || cliParams["week-start"] || "";
+  const overrideTermConfig = Boolean(cliParams["override-term-config"] || cliParams.overrideTermConfig);
+  const cliConfig = normalizeTermConfigRecord({
+    term: activeSemester,
+    semesterText: cliParams.semesterText,
+    termStartDate: explicit,
+    totalWeeks: explicitTotalWeeks,
+    weekStart: explicitWeekStart || "monday"
+  }, "cli");
+  const registryConfigs = [];
+  const bundledRegistryConfig = getBundledTermRegistryConfig(activeSemester);
+  if (bundledRegistryConfig && bundledRegistryConfig.termStartDate) registryConfigs.push(bundledRegistryConfig);
   const relayTermConfig = normalizeTermConfigRecord(global.RELAY_TERM_CONFIG, "relay-term-config") || getRelayTermConfigFromEnv();
   if (relayTermConfig && relayTermConfig.term === activeSemester && relayTermConfig.termStartDate) {
-    return relayTermConfig;
+    registryConfigs.push(relayTermConfig);
   }
   const localRegistryConfig = getLocalRegistryTermConfig(activeSemester);
   if (localRegistryConfig && localRegistryConfig.termStartDate) {
-    return localRegistryConfig;
+    registryConfigs.push(localRegistryConfig);
   }
   const remoteRegistryConfig = await getRemoteRegistryTermConfig(activeSemester);
   if (remoteRegistryConfig && remoteRegistryConfig.termStartDate) {
-    return remoteRegistryConfig;
+    registryConfigs.push(remoteRegistryConfig);
+  }
+  const registryConfig = registryConfigs.find((item) => item && item.term === activeSemester && item.termStartDate);
+  if (registryConfig) {
+    if (cliConfig && explicit && overrideTermConfig) {
+      if (!cliConfig.totalWeeks && registryConfig.totalWeeks) cliConfig.totalWeeks = registryConfig.totalWeeks;
+      cliConfig.overrideTermConfig = true;
+      cliConfig.overriddenRegistryConfig = registryConfig;
+      cliConfig.source = "cli-override-term-config";
+      return cliConfig;
+    }
+    if (cliConfig && explicit && (cliConfig.termStartDate !== registryConfig.termStartDate || cliConfig.totalWeeks && cliConfig.totalWeeks !== registryConfig.totalWeeks || explicitWeekStart && cliConfig.weekStart !== registryConfig.weekStart)) {
+      console.warn(`[term-config] \u8B66\u544A\uFF1ACLI \u5B66\u671F\u914D\u7F6E\u4E0E Term Registry \u4E0D\u4E00\u81F4\uFF0C\u9ED8\u8BA4\u91C7\u7528 Registry\u3002\u82E5\u786E\u8BA4\u8986\u76D6\uFF0C\u8BF7\u663E\u5F0F\u4F20\u5165 --override-term-config\u3002CLI start=${cliConfig.termStartDate || "-"}, weeks=${cliConfig.totalWeeks || "-"}\uFF1BRegistry start=${registryConfig.termStartDate}, weeks=${registryConfig.totalWeeks || "-"}`);
+    }
+    return registryConfig;
+  }
+  if (cliConfig && explicit) {
+    return cliConfig;
   }
   const fallback = getTermStartDate(activeSemester);
   if (fallback) {
     return normalizeTermConfigRecord({
       term: activeSemester,
       termStartDate: fallback,
-      totalWeeks,
-      weekStart
+      totalWeeks: explicitTotalWeeks,
+      weekStart: explicitWeekStart || "monday"
     }, "env");
   }
   return normalizeTermConfigRecord({
     term: activeSemester,
     termStartDate: "",
-    totalWeeks,
-    weekStart
+    totalWeeks: explicitTotalWeeks,
+    weekStart: explicitWeekStart || "monday"
   }, "");
 }
 async function assertTermConfigBeforeCrawl(activeSemester, cliParams = {}) {
@@ -6989,7 +8886,7 @@ async function assertTermConfigBeforeCrawl(activeSemester, cliParams = {}) {
     ].join("\n"));
   }
   if (!Number.isInteger(config.totalWeeks) || config.totalWeeks < 1 || config.totalWeeks > 30) {
-    throw new Error("totalWeeks must be an integer between 1 and 30.");
+    throw new Error(`Missing totalWeeks for ${activeSemester}. Use Term Registry or pass --total-weeks=N for new terms; silent default 20 is disabled.`);
   }
   return Object.assign({}, config, {
     semesterText: cliParams.semesterText || config.semesterText || generateSemesterText(activeSemester)
@@ -7218,6 +9115,32 @@ function pushGroupedCourse(map, key, course) {
   }
   map.get(key).push(course);
 }
+function buildDirectTeacherQualityReport(collected, targets, resources) {
+  const teacherSchedules = resources && resources.teacherSchedules || [];
+  const invalidNames = teacherSchedules.map((item) => teacherNameOf(item)).filter((name) => isInvalidTeacherName(name));
+  const invalidSamples = Array.from(new Set(invalidNames)).slice(0, 12);
+  const usedCollegeDiscovery = collected && collected.source === "college-select";
+  const invalid = usedCollegeDiscovery && invalidNames.length > 0;
+  return {
+    sourceMode: "network-direct",
+    endpointFamily: "teacher-schedule",
+    requested: targets.length,
+    succeeded: teacherSchedules.length,
+    failed: 0,
+    targetDiscoveryMode: collected && collected.source || "unknown",
+    discoveredTeacherTargets: collected && collected.source === "teacher-select" ? targets.length : null,
+    requestGroupCount: targets.length,
+    scheduleDocumentCount: teacherSchedules.length,
+    invalidTeacherNameCount: invalidNames.length,
+    invalidTeacherNameSamples: invalidSamples,
+    coverageStatus: invalid ? "invalid" : "unknown",
+    publishable: !invalid,
+    pageHasTeacherSelect: Boolean(collected && collected.dom && collected.dom.teachers && collected.dom.teachers.length),
+    pageTeacherOptionCount: collected && collected.dom && collected.dom.teachers ? collected.dom.teachers.length : 0,
+    pageCollegeOptionCount: collected && collected.dom && collected.dom.colleges ? collected.dom.colleges.length : 0,
+    note: invalid ? "100\u7F51\u6559\u5E08\u9875\u672A\u53D1\u73B0\u6559\u5E08\u4E0B\u62C9\u76EE\u6807\uFF0C\u5F53\u524D\u6309\u5B66\u9662\u8BF7\u6C42\u5F97\u5230\u7684\u6559\u5E08\u540D\u79F0\u7591\u4F3C\u88AB\u73ED\u7EA7\u540D\u6216\u8BFE\u7A0B\u540D\u6C61\u67D3\u3002" : ""
+  };
+}
 function buildSnapshotResources(classSchedules, options = {}) {
   const includeTeachers = options.includeTeachers !== void 0 ? options.includeTeachers : getEnvFlag("SYNC_RESOURCES_TEACHERS", false);
   const includeClassrooms = options.includeClassrooms !== void 0 ? options.includeClassrooms : getEnvFlag("SYNC_RESOURCES_CLASSROOMS", false);
@@ -7403,9 +9326,11 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       audienceType: "student"
     });
   });
+  const syncPlan = getActiveSyncPlan();
+  const allowOldResourceFallback = Boolean(syncPlan && syncPlan.mergeOldData);
   let oldResources = { teachers: [], classrooms: [], courses: [], teacherSchedules: [], classroomSchedules: [], courseSchedules: [] };
   const oldResourcesPath = path.join(__dirname, ".debug", "resources-latest.json");
-  if (fs.existsSync(oldResourcesPath)) {
+  if (allowOldResourceFallback && fs.existsSync(oldResourcesPath)) {
     try {
       oldResources = JSON.parse(fs.readFileSync(oldResourcesPath, "utf-8"));
     } catch (e2) {
@@ -7459,6 +9384,36 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
   const termStartDate = termConfig.termStartDate;
   const cacheUsage = global.CLASS_SCHEDULE_CACHE_USAGE || {};
   const crawlStats = global.SYNC_CRAWL_STATS || {};
+  const scopeSources = Object.assign({}, global.SCOPE_SOURCE_REPORTS || {});
+  const diagnostics = [];
+  const coverageQuality = {};
+  if (scopeSources.teacherSchedules && scopeSources.teacherSchedules.coverageStatus === "invalid") {
+    const teacherQuality = {
+      code: "ENTITY_NAME_CONTAMINATED",
+      severity: "error",
+      resource: "teacher",
+      message: "\u6559\u5E08\u540D\u79F0\u7591\u4F3C\u88AB\u73ED\u7EA7\u540D\u6216\u8BFE\u7A0B\u540D\u6C61\u67D3\uFF0C\u5F53\u524D direct teacher crawler \u6682\u4E0D\u5177\u5907\u5168\u6821\u8986\u76D6\u80FD\u529B\u3002",
+      targetDiscoveryMode: scopeSources.teacherSchedules.targetDiscoveryMode || "unknown",
+      discoveredTeacherTargets: scopeSources.teacherSchedules.discoveredTeacherTargets == null ? null : scopeSources.teacherSchedules.discoveredTeacherTargets,
+      requestGroupCount: Number(scopeSources.teacherSchedules.requestGroupCount || 0),
+      scheduleDocumentCount: Number(scopeSources.teacherSchedules.scheduleDocumentCount || teacherScheduleCount || 0),
+      invalidTeacherNameCount: Number(scopeSources.teacherSchedules.invalidTeacherNameCount || 0),
+      invalidTeacherNameSamples: scopeSources.teacherSchedules.invalidTeacherNameSamples || [],
+      coverageStatus: "invalid",
+      publishable: false
+    };
+    diagnostics.push(teacherQuality);
+    coverageQuality.teacher = {
+      coverageStatus: "invalid",
+      publishable: false,
+      targetDiscoveryMode: teacherQuality.targetDiscoveryMode,
+      discoveredTeacherTargets: null,
+      requestGroupCount: teacherQuality.requestGroupCount,
+      scheduleDocumentCount: teacherQuality.scheduleDocumentCount,
+      invalidTeacherNameCount: teacherQuality.invalidTeacherNameCount,
+      invalidTeacherNameSamples: teacherQuality.invalidTeacherNameSamples
+    };
+  }
   const metaWarnings = [];
   if (cacheUsage.warning) {
     metaWarnings.push(cacheUsage.warning);
@@ -7520,8 +9475,15 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       actualNetworkRequestCount: Number(crawlStats.actualNetworkRequestCount || 0),
       skippedByProgressCount: Number(crawlStats.skippedByProgressCount || 0),
       skippedByNoScheduleCount: Number(crawlStats.skippedByNoScheduleCount || 0),
+      partial: Number(crawlStats.failedTargetCount || 0) > 0,
+      failedTargetCount: Number(crawlStats.failedTargetCount || 0),
+      failedTargets: crawlStats.failedTargets || [],
       freshRunId: crawlStats.freshRunId || "",
       resourceSource: cliParams.resourceSource || cliParams["resource-source"] || "derived",
+      syncPlan: syncPlan ? printablePlan(syncPlan) : null,
+      scopeSources,
+      diagnostics,
+      coverage: coverageQuality,
       scopeSummary,
       generatedCommand,
       generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -7545,10 +9507,12 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
     majors: majors || [],
     classSchedules: updatedSchedules,
     resources,
+    scopeSources,
+    diagnostics,
     timeTable: {
       sections: timeTableSections
     },
-    coverage: {
+    coverage: Object.assign({
       collegeCount,
       majorCount,
       classScheduleCount,
@@ -7558,7 +9522,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
       teacherScheduleCount,
       classroomScheduleCount,
       courseScheduleCount
-    }
+    }, coverageQuality)
   };
 }
 async function uploadSnapshot(buffer) {
@@ -7822,6 +9786,35 @@ function saveFullClassSchedules(allClassSchedules, semester2) {
   const timestampPath = path.join(debugDir, `class-schedules-${getFormattedTimestamp()}.json`);
   fs.writeFileSync(latestPath, JSON.stringify(payload, null, 2), "utf-8");
   fs.writeFileSync(timestampPath, JSON.stringify(payload, null, 2), "utf-8");
+  try {
+    const plan = getActiveSyncPlan();
+    const runId = plan && plan.runId || `class-${Date.now()}`;
+    const cacheResult = syncCacheStore.writeScheduleLatest(__dirname, semester2, "classSchedules", allClassSchedules, {
+      runId,
+      command: global.GENERATED_COMMAND || process.argv.join(" "),
+      sourceMode: "network-direct",
+      endpointFamily: "class-schedule",
+      acquisition: "network",
+      fresh: Boolean(plan ? plan.schedulePolicy === "network-only" : true),
+      requested: global.SYNC_CRAWL_STATS && global.SYNC_CRAWL_STATS.requestedTargetCount || allClassSchedules.length,
+      succeeded: global.SYNC_CRAWL_STATS && global.SYNC_CRAWL_STATS.succeededTargetCount || allClassSchedules.length,
+      failed: global.SYNC_CRAWL_STATS && global.SYNC_CRAWL_STATS.failedTargetCount || 0
+    });
+    recordScopeSource("classSchedules", {
+      sourceMode: "network-direct",
+      endpointFamily: "class-schedule",
+      requested: cacheResult.metadata.requested,
+      succeeded: cacheResult.metadata.succeeded,
+      failed: cacheResult.metadata.failed,
+      cacheHits: 0,
+      startedAt: cacheResult.metadata.crawledAt,
+      finishedAt: cacheResult.metadata.crawledAt,
+      hash: cacheResult.metadata.hash
+    });
+    console.log(`Cache saved: ${cacheResult.latestPath}`);
+  } catch (error) {
+    console.warn(`Failed to write term cache for classSchedules: ${error.message}`);
+  }
   console.log(`\u{1F4BE} \u5B8C\u6574\u8BFE\u8868\u6570\u636E\u5DF2\u4FDD\u5B58\u81F3:
   - ${latestPath}
   - ${timestampPath}`);
@@ -7878,6 +9871,10 @@ function readClassSchedulesFromFile() {
   const candidates = [];
   if (process.env.SYNC_CLASS_UPLOAD_FILE) {
     candidates.push(path.resolve(process.env.SYNC_CLASS_UPLOAD_FILE));
+  }
+  const preferredTerm = String((global.CLI_PARAMS || {}).term || process.env.PREFERRED_SEMESTER || "").trim();
+  if (preferredTerm) {
+    candidates.push(syncCacheStore.scheduleLatestPath(__dirname, preferredTerm, "classSchedules"));
   }
   candidates.push(path.join(debugDir, "class-schedules-latest.json"));
   candidates.push(path.join(debugDir, "last-class-schedules.json"));
@@ -8105,7 +10102,27 @@ async function handleLocalStagingUpload(params) {
     throw new Error("\u7F3A\u5C11 ADMIN_API_TOKEN\uFF0C\u65E0\u6CD5\u4E0A\u4F20\u5230\u540E\u53F0 Staging \u533A");
   }
   console.log(`Staging JSON resolved path: ${filePath}`);
-  console.log("local-upload uses gzip + chunk upload and only writes pending-review Staging; it does not publish release.");
+  console.log("sync:upload-staging/local-upload will not access 100.fosu.edu.cn. It only uploads the explicit file.");
+  const sidecarPath = getSidecarMetaPath(filePath);
+  const sidecar = fs.existsSync(sidecarPath) ? JSON.parse(fs.readFileSync(sidecarPath, "utf-8")) : null;
+  if (sidecar) {
+    console.log(JSON.stringify({
+      term: sidecar.term || params.term || "",
+      generatedAt: sidecar.generatedAt || sidecar.updatedAt || "",
+      canonicalHash: sidecar.canonicalHash || "",
+      itemCount: sidecar.counts && sidecar.counts.classScheduleCount || sidecar.itemCount || 0,
+      crawlMode: sidecar.crawlMode || "",
+      actualNetworkRequestCount: sidecar.actualNetworkRequestCount || 0,
+      usedClassScheduleCache: Boolean(sidecar.usedClassScheduleCache)
+    }, null, 2));
+    const freshNetwork = sidecar.crawlMode === "full-fresh" && !sidecar.usedClassScheduleCache && !sidecar.usedProgressCache && !sidecar.usedNoScheduleCache && Number(sidecar.actualNetworkRequestCount || 0) > 0;
+    if (!freshNetwork && !(params["allow-cache-source"] || params.allowCacheSource)) {
+      throw new Error("UPLOAD_STAGING_REQUIRES_FRESH_NETWORK_META: pass --allow-cache-source only when intentionally uploading cache/imported data.");
+    }
+  } else if (!(params["allow-cache-source"] || params.allowCacheSource)) {
+    throw new Error(`Missing staging sidecar metadata: ${sidecarPath}. Pass --allow-cache-source only for explicit cache/import workflows.`);
+  }
+  console.log("local-upload uses gzip + chunk upload and only writes pending-review Staging; publishing is a separate step unless the selected Sync Plan asks for it.");
   return stagingUploader.uploadStagingFile({
     filePath,
     server: params.server || FOSU_API_BASE,
@@ -8149,6 +10166,39 @@ function writeLocalStagingDebugFailure(params, catalog, majors, error) {
   console.error(`\u{1F9EA} \u5DF2\u751F\u6210 debug JSON\uFF0C\u4E0D\u4F1A\u4F5C\u4E3A\u6B63\u5F0F Staging \u53D1\u5E03: ${output}`);
   return output;
 }
+function readTermCatalogCache(term) {
+  const root = syncCacheStore.ensureTermCache(__dirname, term);
+  const catalog = syncCacheStore.readJson(path.join(root, "catalog", "catalog.json"), null);
+  const majors = syncCacheStore.readJson(path.join(root, "catalog", "majors.json"), null);
+  const catalogMeta = syncCacheStore.readJson(path.join(root, "catalog", "metadata.json"), null);
+  const majorsMeta = syncCacheStore.readJson(path.join(root, "catalog", "majors.metadata.json"), null);
+  if (!catalog || !Array.isArray(catalog.colleges) || !Array.isArray(catalog.grades) || !Array.isArray(catalog.semesters)) {
+    return null;
+  }
+  if (!Array.isArray(majors) || majors.length === 0) {
+    return null;
+  }
+  if (catalogMeta && catalogMeta.term && catalogMeta.term !== term) return null;
+  if (majorsMeta && majorsMeta.term && majorsMeta.term !== term) return null;
+  return { catalog, majors, catalogMeta, majorsMeta };
+}
+async function resolveCatalogForPlan(page, params) {
+  const plan = getActiveSyncPlan();
+  const term = params.term || process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  if (plan && (plan.catalogPolicy === "reuse-validated" || plan.catalogPolicy === "cache-only")) {
+    const cached = readTermCatalogCache(term);
+    if (cached) {
+      console.log(`[catalog] Reusing validated term cache: ${term}`);
+      return cached;
+    }
+    if (plan.catalogPolicy === "cache-only") {
+      throw new Error(`CATALOG_CACHE_MISSING: ${term}`);
+    }
+  }
+  const catalog = await syncCatalog(page);
+  const majors = await syncMajors(page, catalog);
+  return { catalog, majors };
+}
 async function handleLocalCampusStaging(page, params) {
   console.log("\n================ [\u672C\u673A\u6821\u56ED\u7F51\u91C7\u96C6 Staging] ================");
   process.env.SYNC_LOCAL_STAGING_ONLY = "true";
@@ -8163,8 +10213,7 @@ async function handleLocalCampusStaging(page, params) {
       process.env.SYNC_CLASS_SCOPE = "all";
     }
   }
-  const catalog = await syncCatalog(page);
-  const majors = await syncMajors(page, catalog);
+  const { catalog, majors } = await resolveCatalogForPlan(page, params);
   let allClassSchedules = [];
   if (includeScopes.includes("classSchedules")) {
     try {
@@ -8249,6 +10298,114 @@ async function handleLocalCampusStaging(page, params) {
   console.log("\u2139\uFE0F \u5F53\u524D\u547D\u4EE4\u4E0D\u4F1A\u4E0A\u4F20\u3001\u4E0D\u4F1A\u53D1\u5E03\uFF1B\u4E0B\u4E00\u6B65\u8FD0\u884C sync:local-upload \u4E0A\u4F20\u5230 VPS Staging\u3002");
   return snapshot;
 }
+async function ensurePlannedTermIfNeeded(plan) {
+  if (!plan || plan.profile !== "new-term") return null;
+  if (!plan.termValid) throw new Error(`INVALID_TERM_FORMAT: ${plan.term}`);
+  if (!plan.termConfig.termStartDate || !plan.termConfig.totalWeeks) {
+    throw new Error("NEW_TERM_REQUIRES_EXPLICIT_CONFIG: pass --term-start-date=YYYY-MM-DD and --total-weeks=N.");
+  }
+  if (!ADMIN_API_TOKEN) {
+    console.warn("[new-term] ADMIN_API_TOKEN missing; planned term creation skipped.");
+    return null;
+  }
+  try {
+    return await postAdminJson("/api/admin/terms", {
+      term: plan.term,
+      semesterText: plan.term,
+      termStartDate: plan.termConfig.termStartDate,
+      totalWeeks: plan.termConfig.totalWeeks,
+      weekStart: plan.termConfig.weekStart || "monday",
+      status: "planned",
+      source: "sync-new-term"
+    }, "create planned term");
+  } catch (error) {
+    const status = error.response && error.response.status;
+    const code = error.response && error.response.data && error.response.data.code;
+    if (status === 409 || code === "TERM_ALREADY_EXISTS") {
+      console.log(`[new-term] Planned term already exists: ${plan.term}`);
+      return null;
+    }
+    throw error;
+  }
+}
+async function runClientProbeForRelease(result) {
+  const version = result && (result.releaseVersion || result.version) || "";
+  const term = result && (result.term || result.semester) || "";
+  const probe = { term, releaseVersion: version, checkedAt: (/* @__PURE__ */ new Date()).toISOString(), checks: [] };
+  const urls = [
+    ["/static/runtime/active.json", "runtime pointer"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/manifest.json` : "", "manifest"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/index/class.json` : "", "class index"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/index/teacher.json` : "", "teacher index"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/index/classroom.json` : "", "classroom index"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/index/course.json` : "", "course index"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/calendar.json` : "", "calendar"],
+    [version ? `/static/releases/${encodeURIComponent(version)}/empty-room/index.json` : "", "empty-room"]
+  ].filter(([url]) => Boolean(url));
+  for (const [pathname, label] of urls) {
+    try {
+      const response = await axios.get(`${FOSU_API_BASE}${pathname}`, { proxy: false, timeout: 15e3 });
+      probe.checks.push({ label, url: pathname, ok: response.status >= 200 && response.status < 300, status: response.status });
+    } catch (error) {
+      probe.checks.push({ label, url: pathname, ok: false, status: error.response && error.response.status || 0, message: error.message });
+    }
+  }
+  console.log("[client-probe]");
+  console.log(JSON.stringify(probe, null, 2));
+  if (!probe.checks.every((item) => item.ok)) throw new Error("CLIENT_PROBE_FAILED");
+  return probe;
+}
+async function publishCurrentStaging(plan, snapshot) {
+  if (!plan.buildRelease) return null;
+  if (!ADMIN_API_TOKEN) throw new Error("ADMIN_API_TOKEN_REQUIRED_FOR_PUBLISH");
+  const result = await postAdminJson("/api/admin/sync/staging/publish", {
+    force: Boolean(plan.allowPartial || (global.CLI_PARAMS || {}).force),
+    readyOnly: plan.profile === "new-term" && !plan.activate,
+    releaseNote: (global.CLI_PARAMS || {}).note || snapshot.releaseNote || ""
+  }, "staging publish");
+  if (plan.verifyClient && !result.readyOnly) await runClientProbeForRelease(result);
+  return result;
+}
+async function handlePlannedSync(page, params) {
+  const plan = getActiveSyncPlan();
+  if (!plan) throw new Error("SYNC_PLAN_NOT_RESOLVED");
+  if (!plan.termValid) throw new Error(`INVALID_TERM_FORMAT: ${plan.term}`);
+  await ensurePlannedTermIfNeeded(plan);
+  if (!params.output) params.output = path.join("staging", `${plan.term}-full.json`);
+  if (["daily", "new-term", "crawl-daily"].includes(plan.profile)) {
+    process.env.SYNC_CLASS_SCOPE = process.env.SYNC_CLASS_SCOPE || "all";
+  }
+  const snapshot = await handleLocalCampusStaging(page, params);
+  if (!plan.upload) {
+    syncCacheStore.writeJsonAtomic(syncCacheStore.reportPath(__dirname, plan.term, "crawl-report"), {
+      success: true,
+      profile: plan.profile,
+      runId: plan.runId,
+      term: plan.term,
+      output: resolveOutputFilePath(params.output),
+      uploaded: false,
+      published: false,
+      generatedAt: (/* @__PURE__ */ new Date()).toISOString()
+    });
+    return snapshot;
+  }
+  const uploadResult = await handleLocalStagingUpload(Object.assign({}, params, { file: params.output }));
+  const publishResult = await publishCurrentStaging(plan, snapshot);
+  const report = {
+    success: true,
+    profile: plan.profile,
+    runId: plan.runId,
+    term: plan.term,
+    output: resolveOutputFilePath(params.output),
+    uploaded: true,
+    uploadResult,
+    published: Boolean(publishResult),
+    publishResult,
+    generatedAt: (/* @__PURE__ */ new Date()).toISOString()
+  };
+  syncCacheStore.writeJsonAtomic(syncCacheStore.reportPath(__dirname, plan.term, "publish-report"), report);
+  return report;
+}
 var RESOURCE_SYNC_CONFIGS = {
   teacher: {
     flag: "SYNC_RESOURCES_TEACHERS",
@@ -8299,6 +10456,12 @@ function getEffectiveResourceSourceMode() {
 function shouldUseDirectTeacherResources(resourceTypes) {
   const types = normalizeResourceTypeList(resourceTypes);
   if (!types.includes("teacher")) return false;
+  const mode = getEffectiveResourceSourceMode();
+  return mode === "direct" || mode === "both" || getEnvFlag("SYNC_FORCE_RESOURCE_CRAWL", false);
+}
+function shouldUseDirectResource(type, resourceTypes) {
+  const types = normalizeResourceTypeList(resourceTypes);
+  if (!types.includes(type)) return false;
   const mode = getEffectiveResourceSourceMode();
   return mode === "direct" || mode === "both" || getEnvFlag("SYNC_FORCE_RESOURCE_CRAWL", false);
 }
@@ -8608,6 +10771,7 @@ async function crawlDirectTeacherResources(page, derivedResources = {}, options 
     courses: dedupeCourses(item.courses)
   }));
   const resources = buildTeacherResourcesFromSchedules(teacherSchedules);
+  const quality = buildDirectTeacherQualityReport(collected, targets, resources);
   const report = {
     success: errors.length < targets.length,
     generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
@@ -8618,11 +10782,240 @@ async function crawlDirectTeacherResources(page, derivedResources = {}, options 
     courseCount: resources.teacherSchedules.reduce((sum, item) => sum + (item.courses || []).length, 0),
     dom: collected.dom,
     errors: errors.slice(0, 50),
-    samples
+    samples,
+    quality
   };
+  if (quality.coverageStatus === "invalid") {
+    console.warn(`[resources:teacher:direct] \u6570\u636E\u8D28\u91CF\u4E0D\u901A\u8FC7\uFF1AtargetDiscoveryMode=${quality.targetDiscoveryMode}, requestGroupCount=${quality.requestGroupCount}, scheduleDocumentCount=${quality.scheduleDocumentCount}, invalidTeacherNameCount=${quality.invalidTeacherNameCount}`);
+  }
   fs.writeFileSync(path.join(debugDir, "direct-teacher-report-latest.json"), JSON.stringify(report, null, 2), "utf-8");
   fs.writeFileSync(path.join(debugDir, "direct-teacher-schedules-latest.json"), JSON.stringify(resources.teacherSchedules, null, 2), "utf-8");
   console.log(`[resources:teacher:direct] schedules=${report.teacherScheduleCount}, courses=${report.courseCount}, errors=${errors.length}`);
+  return Object.assign({}, resources, {
+    _diagnostics: {
+      teacherSchedules: quality
+    }
+  });
+}
+function getDirectResourceLimit() {
+  return parsePositiveLimit(process.env.SYNC_DIRECT_RESOURCE_LIMIT) || parsePositiveLimit(process.env.SYNC_RESOURCE_LIMIT);
+}
+function limitDirectResourceTargets(targets) {
+  const limit = getDirectResourceLimit();
+  return limit ? targets.slice(0, limit) : targets;
+}
+function getGenericDirectResourceConfig(type) {
+  if (type === "classroom") {
+    return {
+      pagePath: "/kbcx/kbxx_classroom",
+      ifrPath: "/kbcx/kbxx_classroom_ifr",
+      parse: parser.parseClassroomScheduleIfrHtml,
+      targetKey: "roomName",
+      schedulesKey: "classroomSchedules",
+      indexKey: "classrooms",
+      endpointFamily: "classroom-schedule",
+      audienceType: "classroom",
+      targetFromCourse: (course) => course.canonicalClassroom || course.displayClassroom || course.classroom || course.roomName || ""
+    };
+  }
+  if (type === "course") {
+    return {
+      pagePath: "/kbcx/kbxx_kc",
+      ifrPath: "/kbcx/kbxx_kc_ifr",
+      parse: parser.parseCourseScheduleIfrHtml,
+      targetKey: "courseName",
+      schedulesKey: "courseSchedules",
+      indexKey: "courses",
+      endpointFamily: "course-schedule",
+      audienceType: "course",
+      targetFromCourse: (course) => course.canonicalCourseName || course.displayCourseName || course.courseName || ""
+    };
+  }
+  return null;
+}
+async function collectGenericDirectResourceTargets(page, type, derivedResources, semester2) {
+  const config = getGenericDirectResourceConfig(type);
+  await gotoPage(page, config.pagePath, { waitUntil: "networkidle", timeout: 2e4 });
+  try {
+    await selectSemester(page, semester2);
+  } catch (error) {
+    console.warn(`[resources:${type}:direct] semester select fallback: ${error.message}`);
+  }
+  const html = await page.content();
+  const debugDir = path.join(__dirname, ".debug");
+  fs.writeFileSync(path.join(debugDir, `direct-${type}-page.html`), html, "utf-8");
+  const dom = await page.evaluate((resourceType) => {
+    const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
+    const optionList = (select) => Array.from(select.options || []).map((option) => ({ code: clean(option.value), name: clean(option.textContent) })).filter((option) => option.name && option.code && !/^请选择|^全部|^--/.test(option.name));
+    const result = { colleges: [], campuses: [], buildings: [], courses: [], selects: [] };
+    Array.from(document.querySelectorAll("select")).forEach((select) => {
+      const marker = `${select.getAttribute("name") || ""} ${select.getAttribute("id") || ""}`.toLowerCase();
+      const options = optionList(select);
+      result.selects.push({ marker, optionCount: options.length });
+      if (/skyx|college|yx|kkyx/.test(marker)) result.colleges.push(...options);
+      if (/xqid|campus|xq/.test(marker)) result.campuses.push(...options);
+      if (/jzwid|building|jxl|jzw/.test(marker)) result.buildings.push(...options);
+      if (resourceType === "course" && /kc|course|zzdkcsx/.test(marker)) result.courses.push(...options);
+    });
+    return result;
+  }, type);
+  if (type === "classroom") {
+    const buildingTargets = (dom.buildings || []).map((item) => ({
+      type: "building",
+      buildingId: item.code,
+      buildingName: item.name
+    }));
+    if (buildingTargets.length) return { targets: limitDirectResourceTargets(buildingTargets), dom, source: "building-select" };
+    const campusTargets = (dom.campuses || []).map((item) => ({
+      type: "campus",
+      campusId: item.code,
+      campusName: item.name
+    }));
+    if (campusTargets.length) return { targets: limitDirectResourceTargets(campusTargets), dom, source: "campus-select" };
+  }
+  if (type === "course") {
+    const courseTargets = (dom.courses || []).map((item) => ({
+      type: "course",
+      courseCode: item.code,
+      courseName: item.name
+    }));
+    if (courseTargets.length) return { targets: limitDirectResourceTargets(courseTargets), dom, source: "course-select" };
+  }
+  const derivedTargets = (derivedResources && derivedResources[config.schedulesKey] || []).map((schedule) => String(schedule && schedule[config.targetKey] || "").trim()).filter(Boolean).filter((name, index, list) => list.indexOf(name) === index).map((name) => ({
+    type: `${type}-name`,
+    name,
+    roomName: type === "classroom" ? name : "",
+    courseName: type === "course" ? name : ""
+  }));
+  if (derivedTargets.length) return { targets: limitDirectResourceTargets(derivedTargets), dom, source: "derived-names" };
+  const collegeTargets = (dom.colleges || []).map((item) => ({
+    type: "college",
+    collegeCode: item.code,
+    collegeName: item.name
+  }));
+  if (collegeTargets.length) return { targets: limitDirectResourceTargets(collegeTargets), dom, source: "college-select" };
+  return { targets: [{ type: "all" }], dom, source: "all" };
+}
+async function fetchGenericDirectScheduleHtml(page, type, target, semester2) {
+  const config = getGenericDirectResourceConfig(type);
+  return page.evaluate(async (input) => {
+    const bodyData = input.type === "classroom" ? {
+      xnxqh: input.semester,
+      skyx: input.target.collegeCode || "",
+      xqid: input.target.campusId || "",
+      jzwid: input.target.buildingId || "",
+      jsid: input.target.roomId || "",
+      jsmc: input.target.roomName || input.target.name || "",
+      zc1: "",
+      zc2: "",
+      jc1: "",
+      jc2: ""
+    } : {
+      xnxqh: input.semester,
+      skyx: input.target.collegeCode || "",
+      kkyx: input.target.openCollegeCode || input.target.collegeCode || "",
+      zzdKcSX: input.target.courseAttr || "",
+      kc: input.target.courseCode || input.target.courseName || input.target.name || "",
+      kcmc: input.target.courseName || input.target.name || "",
+      zc1: "",
+      zc2: "",
+      jc1: "",
+      jc2: ""
+    };
+    const response = await fetch(input.ifrPath, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8" },
+      credentials: "include",
+      body: new URLSearchParams(bodyData).toString()
+    });
+    return { ok: response.ok, status: response.status, text: await response.text() };
+  }, { type, target, semester: semester2, ifrPath: config.ifrPath });
+}
+function buildGenericResourcesFromSchedules(type, schedules) {
+  const config = getGenericDirectResourceConfig(type);
+  const key = config.targetKey;
+  const scheduleList = (schedules || []).map((item) => Object.assign({}, item, {
+    courses: dedupeCourses(item.courses || []),
+    source: "direct"
+  })).filter((item) => isUsableResourceName(item[key]));
+  return Object.assign(emptySnapshotResources(), {
+    [config.schedulesKey]: scheduleList,
+    [config.indexKey]: scheduleList.map((item) => ({
+      [key]: item[key],
+      name: item[key],
+      courseCount: (item.courses || []).length,
+      source: "direct"
+    }))
+  });
+}
+async function crawlGenericDirectResources(type, page, derivedResources = {}, options = {}) {
+  const config = getGenericDirectResourceConfig(type);
+  if (!config) throw new Error(`Unsupported direct resource type: ${type}`);
+  const semester2 = options.semester || process.env.PREFERRED_SEMESTER || inferPreferredSemester();
+  const debugDir = path.join(__dirname, ".debug");
+  if (!fs.existsSync(debugDir)) fs.mkdirSync(debugDir, { recursive: true });
+  const delayConfig = getResourceDelayConfig();
+  const collected = await collectGenericDirectResourceTargets(page, type, derivedResources, semester2);
+  const targets = collected.targets || [];
+  console.log(`[resources:${type}:direct] source=${collected.source}, targets=${targets.length}, concurrency=${delayConfig.concurrency}`);
+  const grouped = /* @__PURE__ */ new Map();
+  const errors = [];
+  const samples = [];
+  await mapWithConcurrency(targets, delayConfig.concurrency, async (target, index) => {
+    if (index > 0) {
+      const delay = delayConfig.requestDelayMs !== null ? delayConfig.requestDelayMs : delayConfig.minDelayMs;
+      if (delay > 0) await sleep(delay);
+    }
+    try {
+      const response = await fetchGenericDirectScheduleHtml(page, type, target, semester2);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (samples.length < 5) {
+        const sampleName = `direct-${type}-sample-${samples.length + 1}.html`;
+        samples.push({ target, responseLength: response.text.length, htmlPath: sampleName });
+        fs.writeFileSync(path.join(debugDir, sampleName), response.text, "utf-8");
+      }
+      const parsed2 = config.parse(response.text, {
+        semester: semester2,
+        collegeCode: target.collegeCode || "",
+        collegeName: target.collegeName || ""
+      });
+      const courses = normalizer.normalizeCourseList(parsed2.courses || [], {
+        semester: semester2,
+        sourceType: type,
+        audienceType: config.audienceType
+      });
+      courses.forEach((course) => {
+        const name = config.targetFromCourse(course) || target.roomName || target.courseName || target.name || "";
+        if (!isUsableResourceName(name)) return;
+        const current = grouped.get(name) || { [config.targetKey]: name, name, source: "direct", courses: [] };
+        current.courses.push(Object.assign({}, course, {
+          source: "direct",
+          sourceType: type,
+          audienceType: config.audienceType
+        }));
+        grouped.set(name, current);
+      });
+    } catch (error) {
+      errors.push({ target, message: error.message });
+      console.warn(`[resources:${type}:direct] target failed (${target.name || target.courseName || target.roomName || target.collegeName || target.type}): ${error.message}`);
+    }
+  });
+  const resources = buildGenericResourcesFromSchedules(type, Array.from(grouped.values()));
+  const report = {
+    success: errors.length < targets.length,
+    generatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+    semester: semester2,
+    source: collected.source,
+    targetCount: targets.length,
+    scheduleCount: resources[config.schedulesKey].length,
+    courseCount: resources[config.schedulesKey].reduce((sum, item) => sum + (item.courses || []).length, 0),
+    dom: collected.dom,
+    errors: errors.slice(0, 50),
+    samples
+  };
+  fs.writeFileSync(path.join(debugDir, `direct-${type}-report-latest.json`), JSON.stringify(report, null, 2), "utf-8");
+  fs.writeFileSync(path.join(debugDir, `direct-${type}-schedules-latest.json`), JSON.stringify(resources[config.schedulesKey], null, 2), "utf-8");
+  console.log(`[resources:${type}:direct] schedules=${report.scheduleCount}, courses=${report.courseCount}, errors=${errors.length}`);
   return resources;
 }
 async function buildResourcesForClassSchedules(classSchedules, resourceTypes, options = {}) {
@@ -8640,16 +11033,89 @@ async function buildResourcesForClassSchedules(classSchedules, resourceTypes, op
   }));
   const derivedResources = buildSnapshotResources(normalizedClassSchedules, includeOptions);
   const mode = getEffectiveResourceSourceMode();
-  const useDirect = shouldUseDirectTeacherResources(types);
-  if (!useDirect) {
+  const directTypes = types.filter((type) => shouldUseDirectResource(type, types));
+  if (directTypes.length === 0) {
+    types.forEach((type) => {
+      const config = RESOURCE_SYNC_CONFIGS[type];
+      if (config) {
+        recordScopeSource(config.schedulesKey, {
+          sourceMode: "derived-current-run",
+          endpointFamily: "class-schedule",
+          requested: (derivedResources[config.schedulesKey] || []).length,
+          succeeded: (derivedResources[config.schedulesKey] || []).length,
+          derived: (derivedResources[config.schedulesKey] || []).length,
+          hash: crypto.createHash("sha256").update(JSON.stringify(derivedResources[config.schedulesKey] || [])).digest("hex"),
+          startedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          finishedAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+      }
+    });
     return derivedResources;
   }
   if (!options.page) {
-    console.warn(`[resources:teacher] resource-source=${mode} requested but no browser page is available; falling back to derived resources.`);
-    return derivedResources;
+    if (global.CLI_PARAMS && global.CLI_PARAMS.allowDerived) {
+      console.warn(`[resources] resource-source=${mode} requested but no browser page is available; falling back to derived resources because --allow-derived is set.`);
+      return derivedResources;
+    }
+    throw new Error(`RESOURCE_DIRECT_CRAWL_REQUIRED: ${directTypes.join(",")} requested but no browser page is available.`);
   }
-  const directResources = await crawlDirectTeacherResources(options.page, derivedResources, { semester: semester2 });
-  return mergeResourcesBySource(derivedResources, directResources, getEnvFlag("SYNC_FORCE_RESOURCE_CRAWL", false) && mode === "derived" ? "both" : mode);
+  let result = Object.assign({}, derivedResources);
+  for (const type of directTypes) {
+    const config = RESOURCE_SYNC_CONFIGS[type];
+    try {
+      const directResources = type === "teacher" ? await crawlDirectTeacherResources(options.page, derivedResources, { semester: semester2 }) : await crawlGenericDirectResources(type, options.page, derivedResources, { semester: semester2 });
+      if (type === "teacher") {
+        result = mergeResourcesBySource(result, directResources, getEnvFlag("SYNC_FORCE_RESOURCE_CRAWL", false) && mode === "derived" ? "both" : mode);
+      } else {
+        result = Object.assign({}, result, {
+          [config.indexKey]: directResources[config.indexKey] || [],
+          [config.schedulesKey]: directResources[config.schedulesKey] || []
+        });
+      }
+      syncCacheStore.writeScheduleLatest(__dirname, semester2, config.schedulesKey, result[config.schedulesKey] || [], {
+        runId: getActiveSyncPlan() && getActiveSyncPlan().runId || `resource-${Date.now()}`,
+        command: global.GENERATED_COMMAND || process.argv.join(" "),
+        sourceMode: "network-direct",
+        endpointFamily: `${type}-schedule`,
+        acquisition: "network",
+        fresh: true
+      });
+      recordScopeSource(config.schedulesKey, {
+        sourceMode: "network-direct",
+        endpointFamily: `${type}-schedule`,
+        requested: (result[config.schedulesKey] || []).length,
+        succeeded: (result[config.schedulesKey] || []).length,
+        failed: 0,
+        cacheHits: 0,
+        hash: crypto.createHash("sha256").update(JSON.stringify(result[config.schedulesKey] || [])).digest("hex"),
+        startedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        finishedAt: (/* @__PURE__ */ new Date()).toISOString()
+      });
+      const diagnostic = directResources && directResources._diagnostics && directResources._diagnostics[config.schedulesKey];
+      if (diagnostic) {
+        recordScopeSource(config.schedulesKey, diagnostic);
+      }
+    } catch (error) {
+      if (global.CLI_PARAMS && global.CLI_PARAMS.allowDerived) {
+        console.warn(`[resources:${type}] direct crawl failed; using derived-current-run because --allow-derived is set: ${error.message}`);
+        recordScopeSource(config.schedulesKey, {
+          sourceMode: "derived-current-run",
+          endpointFamily: "class-schedule",
+          requested: (derivedResources[config.schedulesKey] || []).length,
+          succeeded: (derivedResources[config.schedulesKey] || []).length,
+          derived: (derivedResources[config.schedulesKey] || []).length,
+          hash: crypto.createHash("sha256").update(JSON.stringify(derivedResources[config.schedulesKey] || [])).digest("hex"),
+          startedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          finishedAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+        result[config.indexKey] = derivedResources[config.indexKey] || [];
+        result[config.schedulesKey] = derivedResources[config.schedulesKey] || [];
+      } else {
+        throw error;
+      }
+    }
+  }
+  return result;
 }
 function buildResourceIncludeOptionsFromScopes(includeScopes) {
   const scopes = Array.isArray(includeScopes) ? includeScopes : [];
@@ -9335,6 +11801,20 @@ async function syncCatalog(page) {
   console.log(`\u{1F4CA} \u6293\u53D6\u5B8C\u6BD5: \u5B66\u9662 ${colleges.length} \u4E2A, \u5B66\u671F ${reorderedSemesters.length} \u4E2A, \u5E74\u7EA7 ${grades.length} \u4E2A`);
   await uploadToVps("/api/admin/sync/catalog", catalogPayload);
   fs.writeFileSync(path.join(__dirname, "last-catalog.json"), JSON.stringify(catalogPayload, null, 2), "utf-8");
+  const catalogTerm = process.env.PREFERRED_SEMESTER || catalogPayload.semesters && catalogPayload.semesters[0] && catalogPayload.semesters[0].value || inferPreferredSemester();
+  const catalogCacheDir = path.join(syncCacheStore.ensureTermCache(__dirname, catalogTerm), "catalog");
+  syncCacheStore.writeJsonAtomic(path.join(catalogCacheDir, "catalog.json"), catalogPayload);
+  syncCacheStore.writeJsonAtomic(path.join(catalogCacheDir, "metadata.json"), syncCacheStore.buildMetadata({
+    term: catalogTerm,
+    scope: "catalog",
+    sourceMode: "network-direct",
+    endpointFamily: "catalog",
+    acquisition: "network",
+    command: global.GENERATED_COMMAND || process.argv.join(" "),
+    runId: getActiveSyncPlan() && getActiveSyncPlan().runId || "",
+    itemCount: (catalogPayload.colleges || []).length,
+    items: catalogPayload
+  }));
   console.log("\u{1F4BE} Catalog \u4E34\u65F6\u6570\u636E\u5DF2\u4FDD\u5B58\u81F3\u672C\u5730 last-catalog.json");
   return catalogPayload;
 }
@@ -9569,6 +12049,20 @@ async function syncMajors(page, catalog) {
     throw err;
   }
   fs.writeFileSync(path.join(__dirname, "last-majors.json"), JSON.stringify(cleaned, null, 2), "utf-8");
+  const majorsTerm = process.env.PREFERRED_SEMESTER || catalog && catalog.semesters && catalog.semesters[0] && catalog.semesters[0].value || inferPreferredSemester();
+  const majorsCacheDir = path.join(syncCacheStore.ensureTermCache(__dirname, majorsTerm), "catalog");
+  syncCacheStore.writeJsonAtomic(path.join(majorsCacheDir, "majors.json"), cleaned);
+  syncCacheStore.writeJsonAtomic(path.join(majorsCacheDir, "majors.metadata.json"), syncCacheStore.buildMetadata({
+    term: majorsTerm,
+    scope: "majors",
+    sourceMode: "network-direct",
+    endpointFamily: "major-catalog",
+    acquisition: "network",
+    command: global.GENERATED_COMMAND || process.argv.join(" "),
+    runId: getActiveSyncPlan() && getActiveSyncPlan().runId || "",
+    itemCount: cleaned.length,
+    items: cleaned
+  }));
   console.log("\u{1F4BE} Majors \u4E34\u65F6\u6570\u636E\u5DF2\u4FDD\u5B58\u81F3\u672C\u5730 last-majors.json");
   return cleaned;
 }
@@ -9650,7 +12144,9 @@ async function syncClassSchedules(page, catalog, majors) {
   } else {
     console.log("\u{1F9ED} \u672C\u6B21\u4E3A incremental \u6A21\u5F0F\uFF1A\u5141\u8BB8\u4F7F\u7528\u672C\u5730\u8FDB\u5EA6\u4E0E no-schedule cache\u3002");
   }
-  const PROGRESS_PATH = path.join(debugDir, "sync-progress.json");
+  const syncPlan = getActiveSyncPlan();
+  const runId = syncPlan && syncPlan.runId || cliParams.freshRunId || cliParams["fresh-run-id"] || `class-${Date.now()}`;
+  const PROGRESS_PATH = isPlanNetworkOnly() ? syncCacheStore.progressPath(__dirname, activeSemester, "class", runId) : path.join(debugDir, "sync-progress.json");
   if ((clearProgress || forceRefresh) && fs.existsSync(PROGRESS_PATH)) {
     fs.unlinkSync(PROGRESS_PATH);
     console.log(`\u{1F9F9} \u5DF2\u6E05\u7406\u672C\u5730\u540C\u6B65\u8FDB\u5EA6\u6587\u4EF6: ${PROGRESS_PATH}`);
@@ -9671,7 +12167,7 @@ async function syncClassSchedules(page, catalog, majors) {
     console.log(`\u2139\uFE0F \u5F53\u524D\u767B\u5F55\u5B66\u751F\u73ED\u7EA7\u4EC5\u7528\u4E8E\u8BCA\u65AD\u53C2\u8003: ${currentStudentClass}`);
   }
   const collegeNameByCode = new Map((catalog.colleges || []).map((college) => [String(college.code), college.name]));
-  const noScheduleCachePath = path.join(debugDir, "no-schedule-majors.json");
+  const noScheduleCachePath = isPlanNetworkOnly() ? syncCacheStore.negativePath(__dirname, activeSemester, "class-schedule", runId) : path.join(debugDir, "no-schedule-majors.json");
   const classNameCandidatesPath = path.join(debugDir, "class-name-candidates.json");
   let noScheduleMajors = readJsonArray(noScheduleCachePath);
   if ((clearNoScheduleCache || forceRefresh) && noScheduleMajors.length > 0) {
@@ -9784,7 +12280,11 @@ async function syncClassSchedules(page, catalog, majors) {
     actualNetworkRequestCount: 0,
     skippedByProgressCount: completedProgressCount,
     skippedByNoScheduleCount: skipNoScheduleCount,
-    freshRunId: cliParams.freshRunId || cliParams["fresh-run-id"] || (forceRefresh ? `fresh-${Date.now()}-${crypto.randomBytes(4).toString("hex")}` : "")
+    freshRunId: cliParams.freshRunId || cliParams["fresh-run-id"] || (forceRefresh ? `fresh-${Date.now()}-${crypto.randomBytes(4).toString("hex")}` : ""),
+    requestedTargetCount: pendingMajors.length,
+    succeededTargetCount: 0,
+    failedTargetCount: 0,
+    failedTargets: []
   };
   global.SYNC_CRAWL_STATS = crawlStats;
   global.CLASS_SCHEDULE_CACHE_USAGE = {
@@ -9949,6 +12449,8 @@ async function syncClassSchedules(page, catalog, majors) {
         console.log(`      \u6CA1\u6709\u6392\u8BFE\u6570\u636E\uFF0C\u5DF2\u8BB0\u5F55\u5230 ${noScheduleCachePath}`);
         markCompletedMajor(progress, major, activeSemester);
         writeJsonFile(PROGRESS_PATH, progress);
+        crawlStats.succeededTargetCount += 1;
+        global.SYNC_CRAWL_STATS = crawlStats;
         await waitBetweenClassSyncRequests(isFiltered);
         continue;
       }
@@ -9974,12 +12476,28 @@ async function syncClassSchedules(page, catalog, majors) {
       }
       markCompletedMajor(progress, major, activeSemester);
       writeJsonFile(PROGRESS_PATH, progress);
+      crawlStats.succeededTargetCount += 1;
+      global.SYNC_CRAWL_STATS = crawlStats;
     } catch (err) {
       console.error(`      \u26A0\uFE0F  \u6293\u53D6\u5931\u8D25: ${err.message}`);
     }
     await waitBetweenClassSyncRequests(isFiltered);
   }
   console.log(`\u{1F4CA} \u73ED\u7EA7\u8BFE\u8868\u6293\u53D6\u5B8C\u6BD5\uFF0C\u5171\u6574\u7406\u51FA ${allClassSchedules.length} \u4E2A\u884C\u653F\u73ED\u7EA7\u7684\u8BFE\u8868\u3002`);
+  const unfinishedTargets = effectiveTargetMajors.filter((major) => !hasCompletedMajor(progress, major, activeSemester));
+  if (unfinishedTargets.length > 0) {
+    crawlStats.failedTargetCount = Math.max(crawlStats.failedTargetCount || 0, unfinishedTargets.length);
+    crawlStats.failedTargets = unfinishedTargets.map((major) => ({
+      collegeCode: major.collegeCode,
+      grade: major.grade,
+      majorCode: major.code,
+      majorName: major.name
+    }));
+    global.SYNC_CRAWL_STATS = crawlStats;
+    if (!((global.CLI_PARAMS || {}).allowPartial || (global.CLI_PARAMS || {})["allow-partial"])) {
+      throw new Error(`CLASS_SCHEDULE_PARTIAL_FAILURE: ${unfinishedTargets.length} target(s) did not finish. Use --allow-partial only for diagnostic snapshots.`);
+    }
+  }
   if (allClassSchedules.length > 0) {
     const { latestPath } = saveFullClassSchedules(allClassSchedules, activeSemester);
     const manifestPath = path.join(debugDir, "class-schedules-manifest.json");
@@ -10185,6 +12703,20 @@ async function main() {
       action = arg;
     }
   }
+  const parsed2 = parseCliArgs(args);
+  const syncPlan = buildSyncPlan(parsed2.action || action, Object.assign({}, params, parsed2.params || {}), process.env);
+  Object.assign(params, applyPlanToParams(syncPlan, Object.assign({}, params, parsed2.params || {})));
+  action = parsed2.action || action;
+  if (action === "resume" && !params.term) {
+    const resumeTerm = findTermByRunId(params["run-id"] || params.runId);
+    if (resumeTerm) {
+      params.term = resumeTerm;
+      syncPlan.term = resumeTerm;
+      syncPlan.termValid = true;
+    }
+  }
+  global.SYNC_PLAN = syncPlan;
+  printSyncPlan(syncPlan);
   global.GENERATED_COMMAND = `node sync.js ${action} ${args.join(" ")}`;
   params.fresh = Boolean(params.fresh || params["fresh"]);
   params.recheckNoSchedule = Boolean(params["recheck-no-schedule"] || params.recheckNoSchedule);
@@ -10259,7 +12791,24 @@ async function main() {
   const includeScopes = includeStr ? includeStr.split(",").map((x) => x.trim()).filter(Boolean) : ALL_SCOPES;
   params.includeScopes = includeScopes;
   global.CLI_PARAMS = params;
-  const requiresTermConfigBeforeCrawl = ["fresh", "quick", "local-campus", "class", "release", "all"].includes(action);
+  const requiresTermConfigBeforeCrawl = [
+    "fresh",
+    "quick",
+    "local-campus",
+    "class",
+    "release",
+    "all",
+    "daily",
+    "daily:classes",
+    "daily:teachers",
+    "daily:classrooms",
+    "daily:courses",
+    "scopes",
+    "new-term",
+    "crawl:daily",
+    "crawl:scopes",
+    "resume"
+  ].includes(action);
   if (requiresTermConfigBeforeCrawl) {
     const activeSemester = process.env.PREFERRED_SEMESTER || inferPreferredSemester();
     global.TERM_CONFIG = await assertTermConfigBeforeCrawl(activeSemester, params);
@@ -10285,9 +12834,12 @@ async function main() {
     await handleUploadOnly();
     return;
   }
-  if (action === "local-upload") {
+  if (action === "local-upload" || action === "upload-staging") {
     await handleLocalStagingUpload(params);
     return;
+  }
+  if (action === "resume" && !params["run-id"] && !params.runId) {
+    throw new Error("SYNC_RESUME_REQUIRES_RUN_ID");
   }
   const offlineMode = getEnvFlag("SYNC_RELEASE_OFFLINE", false);
   if (action === "release" && offlineMode) {
@@ -10331,6 +12883,19 @@ async function main() {
       await handleQuickSync(page);
     } else if (action === "local-campus") {
       await handleLocalCampusStaging(page, params);
+    } else if ([
+      "daily",
+      "daily:classes",
+      "daily:teachers",
+      "daily:classrooms",
+      "daily:courses",
+      "scopes",
+      "new-term",
+      "crawl:daily",
+      "crawl:scopes",
+      "resume"
+    ].includes(action)) {
+      await handlePlannedSync(page, params);
     } else if (resourceActionTypes.length) {
       await handleResourcesSync(resourceActionTypes, { page });
     } else if (action === "release") {
@@ -10454,6 +13019,8 @@ if (require.main === module) {
     buildResourcesForClassSchedules,
     crawlDirectTeacherResources,
     mergeResourcesBySource,
-    getResourceTypesFromIncludeScopes
+    getResourceTypesFromIncludeScopes,
+    resolveTermConfig,
+    assertTermConfigBeforeCrawl
   };
 }

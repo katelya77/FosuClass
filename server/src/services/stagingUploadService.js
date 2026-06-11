@@ -106,10 +106,22 @@ function publicManifest(manifest) {
   copy.receivedBytes = chunkStatus.receivedBytes;
   copy.progress = chunkStatus.progress;
   copy.counts = summary.counts || summary || {};
+  copy.resourceCounts = summary.resourceCounts || manifest.resourceCounts || null;
+  copy.totalScheduleDocuments = Number(summary.totalScheduleDocuments || 0) || 0;
+  copy.active = Boolean(manifest.active);
+  copy.stagingState = summary.stagingState || manifest.stagingState || (
+    manifest.status === "initialized" || manifest.status === "uploading" || manifest.status === "merging" ? "uploading" :
+      manifest.status === "validating" ? "validating" :
+      manifest.status === "failed" ? "validation-failed" :
+      manifest.status === "unchanged" || manifest.status === "duplicate" ? "duplicate" :
+      manifest.status === "published" || manifest.status === "pending-review" ? "pending-review" :
+      manifest.status || "pending-review"
+  );
+  copy.releaseState = summary.releaseState || manifest.releaseState || (publishedReleaseVersion ? "published" : "not-built");
+  copy.runtimeState = summary.runtimeState || manifest.runtimeState || (copy.active ? "active" : "inactive");
   copy.canonicalHash = canonicalHash;
   copy.publishedReleaseVersion = publishedReleaseVersion;
   copy.publishedVersion = publishedReleaseVersion;
-  copy.active = Boolean(manifest.active);
   copy.sourceTaskId = manifest.sourceTaskId || manifest.relayTaskId || "";
   delete copy.uploadDir;
   delete copy.joinedPath;
@@ -420,6 +432,10 @@ function markUploadPendingReview(uploadId, summary) {
   const manifest = readManifest(uploadId);
   manifest.status = "pending-review";
   manifest.summary = summary || {};
+  manifest.resourceCounts = summary?.resourceCounts || manifest.resourceCounts || null;
+  manifest.stagingState = summary?.stagingState || "pending-review";
+  manifest.releaseState = summary?.releaseState || "not-built";
+  manifest.runtimeState = summary?.runtimeState || "inactive";
   manifest.term = summary?.term || manifest.term;
   manifest.releaseVersion = summary?.releaseVersion || manifest.releaseVersion;
   manifest.pendingReviewAt = new Date().toISOString();
@@ -432,6 +448,9 @@ function markUploadPublished(uploadId, version, extra = {}) {
   try {
     const manifest = readManifest(uploadId);
     manifest.status = "published";
+    manifest.stagingState = "pending-review";
+    manifest.releaseState = "published";
+    manifest.runtimeState = extra.active === false ? "inactive" : "active";
     manifest.publishedReleaseVersion = version || manifest.publishedReleaseVersion || manifest.publishedVersion || manifest.releaseVersion || "";
     manifest.publishedVersion = manifest.publishedReleaseVersion;
     manifest.publishedAt = extra.publishedAt || manifest.publishedAt || new Date().toISOString();
@@ -455,6 +474,9 @@ function markUploadSuperseded(uploadId, version, extra = {}) {
     manifest.status = extra.status || "superseded";
     manifest.publishedReleaseVersion = version || manifest.publishedReleaseVersion || manifest.publishedVersion || manifest.releaseVersion || "";
     manifest.publishedVersion = manifest.publishedReleaseVersion;
+    manifest.stagingState = manifest.status === "duplicate" ? "duplicate" : "archived";
+    manifest.releaseState = manifest.publishedReleaseVersion ? "published" : "not-built";
+    manifest.runtimeState = "inactive";
     manifest.supersededAt = extra.supersededAt || manifest.supersededAt || new Date().toISOString();
     manifest.publishedAt = manifest.publishedAt || extra.publishedAt || "";
     manifest.active = false;
@@ -476,6 +498,10 @@ function markUploadUnchanged(uploadId, summary) {
     const manifest = readManifest(uploadId);
     manifest.status = "unchanged";
     manifest.summary = summary || {};
+    manifest.resourceCounts = summary?.resourceCounts || manifest.resourceCounts || null;
+    manifest.stagingState = summary?.stagingState || "duplicate";
+    manifest.releaseState = summary?.releaseState || "not-built";
+    manifest.runtimeState = summary?.runtimeState || "inactive";
     manifest.term = summary?.term || manifest.term;
     manifest.releaseVersion = summary?.releaseVersion || manifest.releaseVersion;
     manifest.canonicalHash = summary?.canonicalHash || manifest.canonicalHash || "";
@@ -494,6 +520,9 @@ function markUploadFailed(uploadId, reason) {
   try {
     const manifest = readManifest(uploadId);
     manifest.status = "failed";
+    manifest.stagingState = "validation-failed";
+    manifest.releaseState = manifest.releaseState || "not-built";
+    manifest.runtimeState = manifest.runtimeState || "inactive";
     manifest.failureReason = String(reason || "unknown error");
     manifest.failedAt = new Date().toISOString();
     manifest.updatedAt = manifest.failedAt;
@@ -521,21 +550,27 @@ function listUploads(limit = 20) {
     }
   });
 
-  const versions = new Map();
+  const groups = new Map();
   hydrated.forEach((item) => {
-    const version = String(item.releaseVersion || item.summary?.releaseVersion || "").trim();
-    if (!version) return;
-    if (!versions.has(version)) versions.set(version, []);
-    versions.get(version).push(item.uploadId);
+    const term = String(item.term || item.summary?.term || "").trim();
+    const hash = getManifestCanonicalHash(item);
+    const key = term && hash ? `${term}:${hash}` : "";
+    if (!key) return;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push(item.uploadId);
   });
 
   return hydrated.map((item) => {
-    const version = String(item.releaseVersion || item.summary?.releaseVersion || "").trim();
-    const duplicates = version ? versions.get(version) || [] : [];
+    const term = String(item.term || item.summary?.term || "").trim();
+    const hash = getManifestCanonicalHash(item);
+    const key = term && hash ? `${term}:${hash}` : "";
+    const duplicates = key ? groups.get(key) || [] : [];
     return Object.assign({}, item, {
       duplicateReleaseVersion: duplicates.length > 1,
       duplicateKeepLatest: duplicates.length > 1 ? duplicates[0] === item.uploadId : true,
       duplicateUploadIds: duplicates,
+      duplicateGroupKey: key,
+      duplicateCount: Math.max(0, duplicates.length - 1),
     });
   });
 }

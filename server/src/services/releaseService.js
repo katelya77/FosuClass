@@ -9,6 +9,11 @@ const termReleaseIndexService = require("./termReleaseIndexService");
 const teachingCalendarService = require("./teachingCalendarService");
 const runtimePointerService = require("./runtimePointerService");
 const {
+  buildResourceCountContract,
+  deriveLegacyResourceCountContract,
+  flattenLegacyCounts,
+} = require("../shared/resourceCountContract");
+const {
   UNKNOWN_BUILDING_CODE,
   UNKNOWN_BUILDING_NAME,
   normalizeBuilding,
@@ -325,23 +330,79 @@ function hydrateLegacySnapshotResources(snapshot) {
 }
 
 function countRelease(snapshot) {
-  const catalog = snapshot.catalog || {};
-  const resources = getResources(snapshot);
-  const classSchedules = asArray(snapshot.classSchedules);
-  const adminClassCount = classSchedules.filter((item) => item.displayType === "class-schedule" && !item.isAggregated).length;
-  return {
-    collegeCount: asArray(catalog.colleges).length,
-    collegesCount: asArray(catalog.colleges).length,
-    majorCount: asArray(snapshot.majors).length,
-    majorsCount: asArray(snapshot.majors).length,
-    classScheduleCount: classSchedules.length,
-    adminClassCount,
-    majorAggregateCount: classSchedules.length - adminClassCount,
-    noScheduleMajorCount: snapshot.coverage?.noScheduleMajorCount || 0,
-    teacherScheduleCount: resources.teacherSchedules.length,
-    classroomScheduleCount: resources.classroomSchedules.length,
-    courseScheduleCount: resources.courseSchedules.length,
-  };
+  return Object.assign(
+    flattenLegacyCounts(buildResourceCountContract(snapshot || {})),
+    { noScheduleMajorCount: snapshot && snapshot.coverage && snapshot.coverage.noScheduleMajorCount || 0 }
+  );
+}
+
+function readReleaseIndexItems(version, kind) {
+  const files = getReleaseFiles(version);
+  const paths = {
+    teacher: [files.teacherIndexAllPath, files.legacyTeachersIndexPath],
+    classroom: [files.classroomIndexAllPath, files.legacyClassroomsIndexPath],
+    course: [files.courseIndexAllPath, files.legacyCoursesIndexPath],
+    class: [files.classIndexAllPath, files.legacyClassesIndexPath],
+  }[kind] || [];
+  for (const filePath of paths) {
+    const parsed = readJsonFile(filePath);
+    if (Array.isArray(parsed)) return parsed;
+    if (Array.isArray(parsed && parsed.items)) return parsed.items;
+    if (Array.isArray(parsed && parsed.data)) return parsed.data;
+  }
+  return [];
+}
+
+function sumIndexCourseCounts(items) {
+  return asArray(items).reduce((sum, item) => {
+    if (Array.isArray(item && item.courses)) return sum + item.courses.length;
+    const count = Number(item && item.courseCount || 0);
+    return sum + (Number.isFinite(count) && count > 0 ? count : 0);
+  }, 0);
+}
+
+function augmentLegacyContractFromIndexes(contract, version) {
+  if (!contract || !version) return contract;
+  const next = Object.assign({}, contract, {
+    teacher: Object.assign({}, contract.teacher || {}),
+    classroom: Object.assign({}, contract.classroom || {}),
+    course: Object.assign({}, contract.course || {}),
+  });
+  [
+    ["teacher", "教师"],
+    ["classroom", "教室"],
+    ["course", "课程"],
+  ].forEach(([kind]) => {
+    const items = readReleaseIndexItems(version, kind);
+    if (!items.length) return;
+    next[kind].scheduleDocuments = items.length;
+    next[kind].courseEvents = sumIndexCourseCounts(items);
+    if (next[kind].directoryEntities == null || next[kind].directoryEntitiesStatus === "not-counted") {
+      next[kind].directoryEntities = items.length;
+      next[kind].directoryEntitiesStatus = "derived-from-legacy-index";
+    }
+    if (!next[kind].sourceMode || next[kind].sourceMode === "unknown") {
+      next[kind].sourceMode = "legacy-derived";
+    }
+  });
+  return next;
+}
+
+function getReleaseResourceCounts(version, snapshot) {
+  const normalizedVersion = normalizeVersion(version || snapshot && (snapshot.version || snapshot.releaseVersion) || "");
+  const files = normalizedVersion ? getReleaseFiles(normalizedVersion) : null;
+  const manifest = files ? readJsonFile(files.manifestPath) || readJsonFile(path.join(files.publicReleaseDir, "manifest.json")) : null;
+  if (manifest && manifest.resourceCounts && Number(manifest.resourceCounts.countSchemaVersion) === 2) {
+    return manifest.resourceCounts;
+  }
+  const sourceSnapshot = snapshot || (normalizedVersion ? readReleaseSnapshot(normalizedVersion) : null);
+  if (sourceSnapshot && sourceSnapshot.resourceCounts && Number(sourceSnapshot.resourceCounts.countSchemaVersion) === 2) {
+    return sourceSnapshot.resourceCounts;
+  }
+  const derived = sourceSnapshot
+    ? deriveLegacyResourceCountContract(sourceSnapshot, manifest || {})
+    : deriveLegacyResourceCountContract({}, manifest || {});
+  return augmentLegacyContractFromIndexes(derived, normalizedVersion);
 }
 
 function stableScheduleId(kind, value, index) {
@@ -1549,7 +1610,7 @@ function validateReleaseSnapshot(snapshot) {
   };
 }
 
-function buildBootstrap(snapshot, version, counts) {
+function buildBootstrap(snapshot, version, counts, resourceCounts) {
   const updatedAt = snapshot.updatedAt || new Date().toISOString();
   return {
     success: true,
@@ -1561,6 +1622,7 @@ function buildBootstrap(snapshot, version, counts) {
     termConfig: snapshot.termConfig || null,
     catalog: snapshot.catalog || {},
     counts,
+    resourceCounts,
     versions: {
       snapshot: version,
       catalog: version,
@@ -1602,6 +1664,7 @@ function buildManifest(snapshot, version, counts, validation, files, derived, ca
     updatedAt,
     source: rawTermConfig.source || snapshot.source || "release-snapshot",
   });
+  const resourceCounts = buildResourceCountContract(snapshot);
   const releaseCalendarForHash = calendar ? Object.assign({}, calendar, {
     releaseVersion: version,
     manifestTerm: termConfig.term,
@@ -1626,6 +1689,7 @@ function buildManifest(snapshot, version, counts, validation, files, derived, ca
     minClientCacheSchema: 5,
     source: snapshot.source || "local-sync-client",
     scopeSources: snapshot.scopeSources || snapshot.meta?.scopeSources || {},
+    resourceCounts,
     partial: Boolean(snapshot.partial || snapshot.meta?.partial),
     canonicalHash: fingerprint.canonicalHash,
     counts,
@@ -1742,7 +1806,8 @@ function writeReleaseSnapshot(rawSnapshot) {
   }
 
   const files = getReleaseFiles(version);
-  const bootstrap = buildBootstrap(snapshot, version, validation.counts);
+  const resourceCounts = buildResourceCountContract(snapshot);
+  const bootstrap = buildBootstrap(snapshot, version, validation.counts, resourceCounts);
   writeJsonAtomic(files.snapshotPath, snapshot);
   writeJsonAtomic(files.bootstrapPath, bootstrap);
   writeJsonAtomic(files.classSchedulesPath, snapshot.classSchedules || []);
@@ -1788,7 +1853,8 @@ async function writeReleaseSnapshotAsync(rawSnapshot, options = {}) {
   const files = atomic ? getBuildingReleaseFiles(version, getReleaseBuildJobId(options)) : finalFiles;
   let derived = null;
   let manifest = null;
-  const bootstrap = buildBootstrap(snapshot, version, validation.counts);
+  const resourceCounts = buildResourceCountContract(snapshot);
+  const bootstrap = buildBootstrap(snapshot, version, validation.counts, resourceCounts);
 
   if (atomic) cleanupBuildingReleaseFiles(files);
 
@@ -1903,6 +1969,7 @@ function readReleaseSnapshot(version) {
     classSchedules,
     resources: getResources({ resources }),
     coverage: bootstrap.counts || manifest?.counts || {},
+    resourceCounts: bootstrap.resourceCounts || manifest?.resourceCounts || null,
   };
 }
 
@@ -2052,6 +2119,7 @@ function getActiveReleaseInfo() {
   const manifest = readJsonFile(files.manifestPath);
   const quickHealth = getReleasePackQuickHealth(active.version);
   const counts = manifest?.counts || active.counts || {};
+  const resourceCounts = getReleaseResourceCounts(active.version);
   const semester = active.semester || manifest?.semester || manifest?.term || "";
 
   return Object.assign({}, active, {
@@ -2062,6 +2130,7 @@ function getActiveReleaseInfo() {
     termConfig: active.termConfig || manifest?.termConfig || null,
     publishedAt: active.activatedAt || active.updatedAt || "",
     counts,
+    resourceCounts,
     canonicalHash: active.canonicalHash || manifest?.canonicalHash || "",
     source: "release",
     status: "active",
@@ -2150,6 +2219,7 @@ function getReleaseStatus() {
   const active = getActiveReleaseInfo();
   const snapshot = active ? readReleaseSnapshot(active.version) : null;
   const validation = snapshot ? validateReleaseSnapshot(snapshot) : null;
+  const resourceCounts = active ? getReleaseResourceCounts(active.version, snapshot) : null;
   return {
     activeReleaseVersion: active?.version || null,
     activeReleaseUpdatedAt: active?.updatedAt || null,
@@ -2158,6 +2228,7 @@ function getReleaseStatus() {
     term: active?.term || snapshot?.term || active?.semester || snapshot?.semester || null,
     termConfig: active?.termConfig || snapshot?.termConfig || null,
     counts: validation?.counts || active?.counts || {},
+    resourceCounts,
     valid: validation ? validation.valid : false,
     errors: validation ? validation.errors : [],
     storagePath: RELEASES_DIR,
@@ -2174,6 +2245,7 @@ function listReleases(limit = 20) {
       const manifest = readJsonFile(files.manifestPath);
       const stat = fs.statSync(files.releaseDir);
       const releasePack = getReleasePackStatus(version);
+      const resourceCounts = getReleaseResourceCounts(version);
       return {
         version,
         updatedAt: manifest?.updatedAt || stat.mtime.toISOString(),
@@ -2181,6 +2253,7 @@ function listReleases(limit = 20) {
         term: manifest?.term || manifest?.semester || "",
         semester: manifest?.semester || manifest?.term || "",
         counts: manifest?.counts || {},
+        resourceCounts,
         valid: manifest?.validation?.valid !== false,
         releasePack,
       };
@@ -2291,6 +2364,7 @@ function getReleasePackQuickHealth(version) {
     healthy: requiredOk,
     checks,
     counts: manifest?.counts || active?.counts || {},
+    resourceCounts: getReleaseResourceCounts(normalizedVersion),
     emptyRoomHealth: manifest?.packHealth?.emptyRoom || manifest?.emptyRoomHealth || {},
     durationMs: Date.now() - startedAt,
   };
@@ -2387,6 +2461,7 @@ function getReleasePackStatus(version, options = {}) {
     hashErrors,
     missing,
     currentFiles,
+    resourceCounts: getReleaseResourceCounts(normalizedVersion),
     healthy: missing.length === 0 && hashErrors.length === 0,
   };
 }
@@ -2430,6 +2505,7 @@ function getReleasePackManifest(version, options = {}) {
     const active = getActiveReleaseInfo();
     const isActive = active && active.version === targetVersion;
     const status = getReleasePackQuickHealth(targetVersion);
+    const resourceCounts = manifest.resourceCounts || getReleaseResourceCounts(targetVersion);
     return Object.assign({ success: true }, manifest, {
       releaseVersion: manifest.releaseVersion || targetVersion,
       version: manifest.version || targetVersion,
@@ -2437,6 +2513,7 @@ function getReleasePackManifest(version, options = {}) {
       dataEpoch: isActive ? (active.cacheEpoch || manifest.cacheEpoch) : (manifest.dataEpoch || manifest.cacheEpoch),
       forceRefreshToken: isActive ? (active.forceRefreshToken || manifest.forceRefreshToken || `${targetVersion}:${manifest.cacheEpoch || ""}`) : (manifest.forceRefreshToken || `${targetVersion}:${manifest.cacheEpoch || ""}`),
       packStatus: status,
+      resourceCounts,
       minClientCacheSchema: manifest.minClientCacheSchema || 5,
     });
   }
@@ -2545,7 +2622,8 @@ async function rebuildReleasePackAsync(version, options = {}) {
   const finalFiles = getReleaseFiles(normalizedVersion);
   const files = atomic ? getBuildingReleaseFiles(normalizedVersion, getReleaseBuildJobId(options)) : finalFiles;
   const normalizedSnapshot = Object.assign({}, snapshot, { version: normalizedVersion });
-  const bootstrap = buildBootstrap(normalizedSnapshot, normalizedVersion, validation.counts);
+  const resourceCounts = buildResourceCountContract(normalizedSnapshot);
+  const bootstrap = buildBootstrap(normalizedSnapshot, normalizedVersion, validation.counts, resourceCounts);
   let derived = null;
   let manifest = null;
 
@@ -3534,6 +3612,7 @@ module.exports = {
   getReleasePackManifest,
   getReleasePackQuickHealth,
   getReleasePackStatus,
+  getReleaseResourceCounts,
   getReleaseCompressionConfig,
   assertHealthyReleasePack,
   getReleaseStatus,

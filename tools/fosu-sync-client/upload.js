@@ -12,6 +12,10 @@ const {
   calculateFingerprintFromFile,
   readSidecarHash,
 } = require("../../server/src/utils/stagingFingerprint");
+const {
+  buildResourceCountContract,
+  flattenLegacyCounts,
+} = require("../../server/src/shared/resourceCountContract");
 
 function parseArgs(argv) {
   const args = {};
@@ -128,6 +132,36 @@ function extractJsonMetadata(filePath) {
     releaseVersion: pick("releaseVersion") || pick("version"),
     generatedAt: pick("generatedAt") || pick("updatedAt"),
   };
+}
+
+function summarizeLocalSnapshot(filePath) {
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const resourceCounts = buildResourceCountContract(data);
+    const counts = flattenLegacyCounts(resourceCounts);
+    return {
+      resourceCounts,
+      counts,
+      totalScheduleDocuments:
+        Number(resourceCounts.class.scheduleDocuments || 0) +
+        Number(resourceCounts.teacher.scheduleDocuments || 0) +
+        Number(resourceCounts.classroom.scheduleDocuments || 0) +
+        Number(resourceCounts.course.scheduleDocuments || 0),
+      actualNetworkRequestCount: data.meta && data.meta.actualNetworkRequestCount || data.actualNetworkRequestCount || 0,
+      usedClassScheduleCache: Boolean(data.meta && (data.meta.usedClassScheduleCache || data.meta.cacheUsage && data.meta.cacheUsage.usedClassScheduleCache)),
+      teacherQualityPass: !((resourceCounts.diagnostics || []).some((item) => item.resource === "teacher" && item.publishable === false)),
+    };
+  } catch (error) {
+    return {
+      resourceCounts: null,
+      counts: {},
+      totalScheduleDocuments: 0,
+      actualNetworkRequestCount: 0,
+      usedClassScheduleCache: false,
+      teacherQualityPass: null,
+      error: error.message,
+    };
+  }
 }
 
 function formatMb(bytes) {
@@ -305,6 +339,7 @@ async function uploadStagingFile(options) {
   const retryCount = Number(params.retries || process.env.SYNC_UPLOAD_RETRIES || 3);
   const chunkSize = toBytesMb(params["chunk-mb"] || params.chunkMb || process.env.SYNC_LOCAL_UPLOAD_CHUNK_MB, 8);
   const metadata = Object.assign({}, extractJsonMetadata(filePath), options.metadata || {});
+  const localSummary = summarizeLocalSnapshot(filePath);
   const headers = getAuthHeaders(mode, token);
 
   let localFingerprint = null;
@@ -409,6 +444,9 @@ async function uploadStagingFile(options) {
   }, headers, timeoutMs);
 
   const payload = finalize.data || finalize.upload || finalize;
+  const serverResourceCounts = payload.resourceCounts || payload.summary && payload.summary.resourceCounts || finalize.resourceCounts || null;
+  const serverCounts = payload.counts || payload.summary && payload.summary.counts || finalize.counts || localSummary.counts || {};
+  const displayResourceCounts = serverResourceCounts || localSummary.resourceCounts;
   console.log("upload finalized:");
   console.log(JSON.stringify({
     uploadId,
@@ -416,9 +454,28 @@ async function uploadStagingFile(options) {
     relayUploadId: payload.relayUploadId || finalize.relayUploadId,
     term: payload.term || finalize.term || metadata.term || "",
     releaseVersion: payload.releaseVersion || finalize.releaseVersion || metadata.releaseVersion || "",
-    counts: payload.counts || payload.summary || finalize.counts || {},
+    totalScheduleDocuments: payload.totalScheduleDocuments || payload.summary && payload.summary.totalScheduleDocuments || localSummary.totalScheduleDocuments,
+    counts: serverCounts,
+    resourceCounts: displayResourceCounts,
     status: payload.status || finalize.status || "pending-review",
   }, null, 2));
+  if (displayResourceCounts) {
+    const teacherDirectory = displayResourceCounts.teacher.directoryEntities == null ? "未确认" : `${displayResourceCounts.teacher.directoryEntities}人`;
+    console.log("上传摘要：");
+    console.log(`- 班级课表：${displayResourceCounts.class.scheduleDocuments || 0}份`);
+    console.log(`- 行政班：${displayResourceCounts.class.administrativeClasses || 0}个`);
+    console.log(`- 专业聚合：${displayResourceCounts.class.aggregateSchedules || 0}份`);
+    console.log(`- 教师目录：${teacherDirectory}`);
+    console.log(`- 教师课表：${displayResourceCounts.teacher.scheduleDocuments || 0}份`);
+    console.log(`- 教师课程事件：${displayResourceCounts.teacher.courseEvents || 0}条`);
+    console.log(`- 教室目录：${displayResourceCounts.classroom.directoryEntities == null ? "未统计" : `${displayResourceCounts.classroom.directoryEntities}间`}`);
+    console.log(`- 教室课表：${displayResourceCounts.classroom.scheduleDocuments || 0}份`);
+    console.log(`- 课程目录：${displayResourceCounts.course.directoryEntities == null ? "未统计" : `${displayResourceCounts.course.directoryEntities}门`}`);
+    console.log(`- 课程课表：${displayResourceCounts.course.scheduleDocuments || 0}份`);
+    console.log(`- 实际100网请求数：${localSummary.actualNetworkRequestCount || "未统计"}`);
+    console.log(`- 是否读取旧动态缓存：${localSummary.usedClassScheduleCache ? "是" : "否"}`);
+    console.log(`- 教师数据质量：${localSummary.teacherQualityPass === false ? "不通过" : "通过"}`);
+  }
   return finalize;
 }
 

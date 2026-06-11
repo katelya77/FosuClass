@@ -1,159 +1,117 @@
-# FosuClass local sync client
+# FosuClass 本地同步客户端
 
-`fosu-sync-client` is the only component that may crawl `100.fosu.edu.cn`.
-Run it on a campus-network/VPN Windows machine. The VPS only receives staging
-snapshots, validates them, builds immutable releases, switches runtime pointers,
-and serves static files.
+`fosu-sync-client` 是唯一允许抓取 `100.fosu.edu.cn` 的组件。请在已连接校园网或 VPN 的 Windows 本机运行。服务器只接收 Staging、校验、构建 Release、同步静态文件和切换 runtime pointer。
 
-Do not store or commit cookies, passwords, JSESSIONID, CAS tickets, or raw
-identity tokens. `.debug/` is for redacted diagnostics only.
+不要提交 Cookie、密码、JSESSIONID、CAS ticket、Session、Token、原始 HTML 或真实课表缓存。
 
-## Recommended commands
+## 常用命令
 
-Daily update:
+日常同步：全部动态课表
 
 ```powershell
 npm run sync:daily -- --term=2025-2026-2
 ```
 
-New term:
+日常同步：班级课表
 
 ```powershell
-npm run sync:new-term -- --term=2026-2027-1 --term-start-date=2026-09-07 --total-weeks=20 --week-start=monday
+npm run sync:daily:classes -- --term=2025-2026-2
 ```
 
-Upload an explicit staging file:
+日常同步：教师课表
+
+```powershell
+npm run sync:daily:teachers -- --term=2025-2026-2
+```
+
+日常同步：教室课表
+
+```powershell
+npm run sync:daily:classrooms -- --term=2025-2026-2
+```
+
+日常同步：课程课表
+
+```powershell
+npm run sync:daily:courses -- --term=2025-2026-2
+```
+
+上传本地暂存文件
 
 ```powershell
 npm run sync:upload-staging -- --file=.\staging\2025-2026-2-full.json --term=2025-2026-2
 ```
 
-Resume an interrupted run:
+恢复中断任务
 
 ```powershell
 npm run sync:resume -- --run-id=RUN_ID
 ```
 
-## Command matrix
+## 上传摘要
 
-| Command | Accesses 100 net | Catalog cache | Dynamic cache | Upload | Publish | Activate |
-|---|---:|---:|---:|---:|---:|---:|
-| `sync:daily` | yes | reuse validated | no | yes | yes | yes |
-| `sync:daily:classes` | yes | reuse validated | no | yes | yes | yes |
-| `sync:daily:teachers` | yes | reuse validated | no | yes | yes | yes |
-| `sync:daily:classrooms` | yes | reuse validated | no | yes | yes | yes |
-| `sync:daily:courses` | yes | reuse validated | no | yes | yes | yes |
-| `sync:scopes -- --include=...` | yes | plan controlled | no by default | yes | yes | yes by default |
-| `sync:new-term` | yes | no | no | yes | yes | no by default |
-| `crawl:daily` / `crawl:scopes` | yes | plan controlled | no | no | no | no |
-| `sync:upload-staging` | no | file metadata | explicit only | yes | optional server flow | optional server flow |
-| `sync:resume` | yes, per original task | per original task | only run progress | per original task | per original task | per original task |
-| `sync:upload-cache` | no | explicit cache/file | yes, explicit | yes | no | no |
+完整 Snapshot 上传时不再显示无意义的 `itemCount: 0`。CLI 会输出：
 
-Legacy commands such as `sync:fresh`, `sync:quick`, `sync:all`, `sync:release`,
-and `sync:resources` are preserved as deprecated wrappers. They print the
-resolved `SyncPlan` and map to explicit new semantics. `upload-cache` never
-accesses `100.fosu.edu.cn`.
+- 班级课表
+- 行政班
+- 专业聚合
+- 教师目录
+- 教师课表
+- 教师课程事件
+- 教室目录
+- 教室课表
+- 课程目录
+- 课程课表
+- 实际 100 网请求数
+- 是否读取旧动态缓存
+- 教师数据质量
 
-## SyncPlan guarantees
+## 教师直抓诊断
 
-Production crawl profiles (`daily`, `crawl`, `sync`, `fresh`) default to:
+如果 100 网教师页没有教师下拉框，客户端可能只能发现学院下拉框。此时按学院请求 `/kbcx/kbxx_teacher_ifr` 得到的 `teacherName` 可能被班级名、课程名或“临班”污染。客户端会保留 Staging 诊断数据，但写入：
 
 ```json
 {
-  "schedulePolicy": "network-only",
-  "progressPolicy": "ignore",
-  "negativeCachePolicy": "ignore",
-  "mergeOldData": false
+  "targetDiscoveryMode": "college-select",
+  "discoveredTeacherTargets": null,
+  "coverageStatus": "invalid",
+  "publishable": false
 }
 ```
 
-That means a daily run does not use `latest.json`, old progress, no-schedule
-negative cache, or old merged schedules to fake a fresh crawl. If a target scope
-fails, the run fails by default and does not upload or activate a partial
-snapshot. `--allow-partial` is diagnostic only; partial releases are blocked by
-the server publish gate unless explicitly handled by an administrator.
+不要把学院请求数当成教师人数，也不要把旧线上 1007 当成本次实时发现候选数。
 
-## Cache layout
+## 学期配置
 
-New cache files are isolated by term:
+解析优先级：
+
+1. 显式 `--total-weeks`
+2. 同学期 Term Registry
+3. 已验证本地 Term Config
+4. 新学期无配置时报错
+
+当前 `2025-2026-2`：
+
+```json
+{
+  "termStartDate": "2026-03-09",
+  "weekStart": "monday",
+  "totalWeeks": 19
+}
+```
+
+CLI 与 Registry 冲突时默认采用 Registry。只有 `--override-term-config` 才允许覆盖。
+
+## 缓存与运行产物
+
+本机运行目录不会提交：
 
 ```text
 tools/fosu-sync-client/.cache/
-  2025-2026-2/
-    catalog/
-      catalog.json
-      majors.json
-      classes.json
-      metadata.json
-    schedules/
-      class/latest.json
-      teacher/latest.json
-      classroom/latest.json
-      course/latest.json
-    progress/
-      class/{runId}.json
-      teacher/{runId}.json
-      classroom/{runId}.json
-      course/{runId}.json
-    negative/
-      no-class-schedule/{runId}.json
-      no-teacher-schedule/{runId}.json
-      no-classroom-schedule/{runId}.json
-      no-course-schedule/{runId}.json
-    staging/
-      latest.json
-      latest.meta.json
-    reports/
-      crawl-report-*.json
-      upload-report-*.json
-      publish-report-*.json
+tools/fosu-sync-client/.debug/
+tools/fosu-sync-client/.session/
+tools/fosu-sync-client/staging/
+staging/
 ```
 
-`.debug/` only stores redacted samples, raw diagnostic HTML, and troubleshooting
-logs. Production reads should converge on `.cache/{term}`. Legacy debug files
-may be imported once as last-known-good, but they are not a long-term read path.
-
-Each cache metadata file records term, scope, source, acquisition mode, command,
-runId, count, hash, session fingerprint, and freshness. It must not contain
-cookie, password, session id, CAS ticket, student id, or token values.
-
-## Source provenance
-
-Every dynamic scope writes one of:
-
-| Scope | Default source |
-|---|---|
-| `classSchedules` | `network-direct` from class schedule pages |
-| `teacherSchedules` | `network-direct`; `daily:classes --allow-derived` records `derived-current-run` |
-| `classroomSchedules` | `network-direct`; `daily:classes --allow-derived` records `derived-current-run` |
-| `courseSchedules` | `network-direct`; `daily:classes --allow-derived` records `derived-current-run` |
-
-When a resource-only command needs class data as a current-run target seed, the
-plan adds `classSchedules` to the crawl. It must not silently read old dynamic
-class cache.
-
-## Daily flow
-
-1. Build and print `SyncPlan`.
-2. Reuse validated catalog/majors for the same term.
-3. Crawl dynamic scopes from `100.fosu.edu.cn` with fresh runId isolation.
-4. Ignore old progress and negative cache.
-5. Validate counts, term, fields, source provenance, and partial state.
-6. Write `.cache/{term}/schedules/*/latest.json` only after successful validation.
-7. Generate staging snapshot and sidecar metadata.
-8. Upload staging chunks.
-9. Server finalizes, validates hash/count/source, builds immutable release.
-10. Server builds static mirror, runs readiness, switches active pointer atomically.
-11. OpenResty static sync and client probe verify manifest/index/calendar/empty-room.
-
-If any stage fails, the old active release and last-known-good remain usable.
-
-## New-term flow
-
-`sync:new-term` requires explicit `--term-start-date` and `--total-weeks`. It
-does not guess the first teaching day, does not reuse old-term catalog, majors,
-schedules, progress, or negative cache, and does not activate by default.
-
-Use `--activate` only after readiness passes and the administrator confirms the
-future term should become current.
+测试需要样本时只能新增小型脱敏 fixture，不得复制真实 `.cache` 文件。

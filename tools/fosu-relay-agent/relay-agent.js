@@ -8,6 +8,10 @@ const {
   resolveInputFilePath,
   uploadStagingFile,
 } = require("../fosu-sync-client/upload");
+const {
+  buildResourceCountContract,
+  flattenLegacyCounts,
+} = require("../../server/src/shared/resourceCountContract");
 
 const SECRET_KEY_PATTERN = /(studentId|student_id|password|passwd|pwd|cookie|ticket|execution|session|token|authorization|jsessionid|captcha)/i;
 
@@ -152,10 +156,28 @@ function pickJsonNumber(head, key) {
 
 function extractSummary(filePath) {
   const head = readLeadingText(filePath);
-  return {
+  const summary = {
     term: pickJsonString(head, "term") || pickJsonString(head, "semester"),
     releaseVersion: pickJsonString(head, "releaseVersion") || pickJsonString(head, "version"),
     generatedAt: pickJsonString(head, "generatedAt") || pickJsonString(head, "updatedAt"),
+  };
+  try {
+    const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
+    const resourceCounts = buildResourceCountContract(data);
+    const counts = flattenLegacyCounts(resourceCounts);
+    return Object.assign(summary, counts, {
+      resourceCounts,
+      totalScheduleDocuments:
+        Number(resourceCounts.class.scheduleDocuments || 0) +
+        Number(resourceCounts.teacher.scheduleDocuments || 0) +
+        Number(resourceCounts.classroom.scheduleDocuments || 0) +
+        Number(resourceCounts.course.scheduleDocuments || 0),
+      actualNetworkRequestCount: data.meta && data.meta.actualNetworkRequestCount || data.actualNetworkRequestCount || 0,
+      usedClassScheduleCache: Boolean(data.meta && (data.meta.usedClassScheduleCache || data.meta.cacheUsage && data.meta.cacheUsage.usedClassScheduleCache)),
+      teacherQualityPass: !((resourceCounts.diagnostics || []).some((item) => item.resource === "teacher" && item.publishable === false)),
+    });
+  } catch (error) {
+    return Object.assign(summary, {
     classScheduleCount: pickJsonNumber(head, "classScheduleCount"),
     teacherScheduleCount: pickJsonNumber(head, "teacherScheduleCount"),
     classroomScheduleCount: pickJsonNumber(head, "classroomScheduleCount"),
@@ -163,7 +185,8 @@ function extractSummary(filePath) {
     teacherCount: pickJsonNumber(head, "teacherCount"),
     classroomCount: pickJsonNumber(head, "classroomCount"),
     courseCount: pickJsonNumber(head, "courseCount"),
-  };
+    });
+  }
 }
 
 function scanFileForSensitiveData(filePath) {
@@ -220,13 +243,25 @@ async function confirmUpload(args, summary) {
   try {
     console.log("\n将要上传的数据摘要：");
     console.log(`- 学期: ${summary.term || "-"}`);
-    console.log(`- 行政班课表: ${summary.classScheduleCount}`);
-    console.log(`- 教师课表: ${summary.teacherScheduleCount}`);
-    console.log(`- 教室课表: ${summary.classroomScheduleCount}`);
-    console.log(`- 课程课表: ${summary.courseScheduleCount}`);
-    console.log(`- 教师数: ${summary.teacherCount}`);
-    console.log(`- 教室数: ${summary.classroomCount}`);
-    console.log(`- 课程数: ${summary.courseCount}`);
+    console.log(`- 班级课表: ${summary.classScheduleCount || 0}份`);
+    if (summary.resourceCounts) {
+      console.log(`- 行政班: ${summary.resourceCounts.class.administrativeClasses || 0}个`);
+      console.log(`- 专业聚合: ${summary.resourceCounts.class.aggregateSchedules || 0}份`);
+      console.log(`- 教师目录: ${summary.resourceCounts.teacher.directoryEntities == null ? "未确认" : summary.resourceCounts.teacher.directoryEntities + "人"}`);
+      console.log(`- 教师课表: ${summary.resourceCounts.teacher.scheduleDocuments || 0}份`);
+      console.log(`- 教师课程事件: ${summary.resourceCounts.teacher.courseEvents || 0}条`);
+      console.log(`- 教室目录: ${summary.resourceCounts.classroom.directoryEntities == null ? "未统计" : summary.resourceCounts.classroom.directoryEntities + "间"}`);
+      console.log(`- 教室课表: ${summary.resourceCounts.classroom.scheduleDocuments || 0}份`);
+      console.log(`- 课程目录: ${summary.resourceCounts.course.directoryEntities == null ? "未统计" : summary.resourceCounts.course.directoryEntities + "门"}`);
+      console.log(`- 课程课表: ${summary.resourceCounts.course.scheduleDocuments || 0}份`);
+      console.log(`- 实际100网请求数: ${summary.actualNetworkRequestCount || "未统计"}`);
+      console.log(`- 是否读取旧动态缓存: ${summary.usedClassScheduleCache ? "是" : "否"}`);
+      console.log(`- 教师数据质量: ${summary.teacherQualityPass === false ? "不通过" : "通过"}`);
+    } else {
+      console.log(`- 教师课表: ${summary.teacherScheduleCount || 0}份`);
+      console.log(`- 教室课表: ${summary.classroomScheduleCount || 0}份`);
+      console.log(`- 课程课表: ${summary.courseScheduleCount || 0}份`);
+    }
     console.log(`- 生成时间: ${summary.generatedAt || "-"}`);
     const answer = await rl.question("\n确认上传课程表公开数据且不包含个人密码？输入 yes 继续: ");
     return answer.trim().toLowerCase() === "yes";
