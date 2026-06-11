@@ -24,6 +24,7 @@ server/storage/terms/2025-2026-2/*
 !server/storage/terms/2025-2026-2/teaching-calendar.json
 !server/storage/.gitkeep
 tools/fosu-sync-client/.env
+tools/fosu-sync-client/.cache/
 tools/fosu-sync-client/.session/
 tools/fosu-sync-client/.debug/
 
@@ -32,3 +33,5 @@ staging/test-term.json
 staging/
 
 /staging/
+server/storage/public/
+server/storage/snapshots/
