@@ -9,6 +9,7 @@ const RELEASE_HEAVY_TASKS = new Set([
   "staging-publish",
   "release-pack-rebuild",
   "release-pack-deep-health",
+  "staging-upload-finalize",
   "static-release-sync",
   "static-release-reconcile",
   "semester-repair",

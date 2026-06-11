@@ -516,12 +516,7 @@ router.get("/periodic-data", (req, res) => {
       res.setHeader("Pragma", "no-cache");
       res.setHeader("Expires", "0");
     }
-    let pointer = null;
-    try {
-      pointer = runtimePointerService.ensureActivePointer();
-    } catch (error) {
-      pointer = runtimePointerService.readActivePointer();
-    }
+    const pointer = runtimePointerService.readActivePointer();
     if (pointer) {
       stats.fileReadCount += 1;
       stats.jsonParseCount += 1;
@@ -578,25 +573,41 @@ router.get("/periodic-data", (req, res) => {
   }
 });
 
+function readRuntimePointerFast() {
+  const pointer = runtimePointerService.readActivePointer();
+  if (pointer) return { pointer, source: pointer.source || "runtime-pointer", fromFile: true };
+  const active = typeof releaseService.getActiveReleaseInfoFast === "function"
+    ? releaseService.getActiveReleaseInfoFast()
+    : releaseService.getActiveReleaseInfo();
+  const releaseVersion = active && (active.releaseVersion || active.version);
+  if (!releaseVersion) return { pointer: null, source: "missing", fromFile: false };
+  const manifest = releaseService.getReleasePackManifest(releaseVersion, active && active.term ? { term: active.term } : {});
+  const fallback = runtimePointerService.buildPointerFromManifest(manifest);
+  if (!fallback) return { pointer: null, source: "manifest-fallback", fromFile: false };
+  fallback.source = "manifest-fallback";
+  return { pointer: fallback, source: "manifest-fallback", fromFile: false };
+}
+
 router.get("/runtime/active", (req, res) => {
   const stats = createRequestStats("/api/fosu/runtime/active");
   try {
-    const pointer = runtimePointerService.ensureActivePointer();
+    const fast = readRuntimePointerFast();
+    const pointer = fast.pointer;
     if (!pointer) {
       res.setHeader("Cache-Control", "no-store");
       return res.json({ success: false, code: "ACTIVE_RUNTIME_POINTER_MISSING" });
     }
-    const fileStats = runtimePointerService.getActivePointerStats();
+    const fileStats = fast.fromFile ? runtimePointerService.getActivePointerStats() : null;
     if (fileStats) {
       res.setHeader("ETag", fileStats.etag);
       res.setHeader("Last-Modified", fileStats.lastModified);
       if (req.headers["if-none-match"] === fileStats.etag) return res.status(304).end();
     }
-    res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
-    stats.fileReadCount = 1;
-    stats.jsonParseCount = 1;
-    stats.cacheHit = true;
-    stats.source = pointer.source || "runtime-pointer";
+    res.setHeader("Cache-Control", fast.fromFile ? "public, max-age=60, stale-while-revalidate=300" : "public, max-age=15, stale-while-revalidate=120");
+    stats.fileReadCount = fast.fromFile ? 1 : 2;
+    stats.jsonParseCount = fast.fromFile ? 1 : 2;
+    stats.cacheHit = fast.fromFile;
+    stats.source = fast.source;
     stats.releaseVersion = pointer.releaseVersion;
     stats.term = pointer.activeTerm;
     finishRequestStats(req, res, stats, pointer);

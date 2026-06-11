@@ -104,8 +104,12 @@ function generateSemesterText(term) {
   return `${startYear}-${endYear}学年${half === "1" ? "第一" : "第二"}学期`;
 }
 
+function hasExplicitValue(value) {
+  return value !== undefined && value !== null && value !== "";
+}
+
 function normalizeTotalWeeks(value, fallback) {
-  const number = Number(value == null || value === "" ? fallback : value);
+  const number = Number(hasExplicitValue(value) ? value : fallback);
   return Number.isFinite(number) ? Math.floor(number) : NaN;
 }
 
@@ -113,7 +117,10 @@ function normalizeTermRecord(record = {}, options = {}) {
   const source = record && typeof record === "object" ? record : {};
   const term = assertTermId(source.term || options.term);
   const now = options.now || nowIso();
-  const totalWeeks = normalizeTotalWeeks(source.totalWeeks, options.defaultTotalWeeks || 20);
+  let totalWeeks = normalizeTotalWeeks(source.totalWeeks, options.defaultTotalWeeks);
+  if (!Number.isFinite(totalWeeks) && options.allowLegacyCurrentTermFallback && term === LEGACY_CURRENT_TERM_CONFIG.term) {
+    totalWeeks = LEGACY_CURRENT_TERM_CONFIG.totalWeeks;
+  }
   return {
     term,
     semesterText: String(source.semesterText || generateSemesterText(term)).trim(),
@@ -171,7 +178,10 @@ function normalizeRegistry(raw) {
   const normalizedTerms = [];
   terms.forEach((item) => {
     try {
-      const normalized = normalizeTermRecord(item, { now: source.updatedAt || nowIso() });
+      const normalized = normalizeTermRecord(item, {
+        now: source.updatedAt || nowIso(),
+        allowLegacyCurrentTermFallback: true,
+      });
       if (!seen.has(normalized.term)) {
         seen.add(normalized.term);
         normalizedTerms.push(normalized);
@@ -331,7 +341,7 @@ function migrateLegacyTermState(options = {}) {
       term,
       semesterText: termConfig && termConfig.semesterText || generateSemesterText(term),
       termStartDate: termConfig && termConfig.termStartDate || "",
-      totalWeeks: termConfig && termConfig.totalWeeks || 20,
+      totalWeeks: termConfig && termConfig.totalWeeks,
       weekStart: termConfig && termConfig.weekStart || "monday",
       status: releaseVersion && termConfig ? "current" : "planned",
       releaseVersion,
@@ -496,7 +506,7 @@ function getTermConfigFromManifest(manifest) {
     term: config.term || source.term || source.semester,
     semesterText: config.semesterText || source.semesterText || "",
     termStartDate: config.termStartDate || source.termStartDate || "",
-    totalWeeks: config.totalWeeks || source.totalWeeks || 20,
+    totalWeeks: config.totalWeeks || source.totalWeeks,
     weekStart: config.weekStart || source.weekStart || "monday",
     status: "ready",
     releaseVersion: config.releaseVersion || source.releaseVersion || source.version || "",
@@ -504,7 +514,7 @@ function getTermConfigFromManifest(manifest) {
     publishedAt: source.publishedAt || source.updatedAt || "",
     updatedAt: source.updatedAt || nowIso(),
     source: config.source || source.source || "release-manifest",
-  });
+  }, { allowLegacyCurrentTermFallback: true });
 }
 
 function validateManifestForTerm(term, releaseVersion) {

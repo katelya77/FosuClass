@@ -2,13 +2,16 @@ const fs = require("fs");
 const path = require("path");
 
 const releaseService = require("./releaseService");
+const runtimePointerService = require("./runtimePointerService");
 const { safeLog } = require("../utils/safeLogger");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const DEFAULT_RELEASE_SRC = path.join(STORAGE_DIR, "public", "releases");
+const DEFAULT_RUNTIME_SRC = path.join(STORAGE_DIR, "public", "runtime");
 const DEFAULT_PUBLIC_BASE_URL = process.env.PUBLIC_BASE_URL ||
   process.env.FOSU_STATIC_RELEASE_BASE_URL ||
   "https://class.katelya.eu.org/static/releases";
+const DEFAULT_RUNTIME_PUBLIC_URL = "https://class.katelya.eu.org/static/runtime";
 const STATUS_PATH = path.join(STORAGE_DIR, "static-release-sync-status.json");
 const DEFAULT_LOCK_STALE_MS = 15 * 60 * 1000;
 const REQUIRED_FILES = [
@@ -63,10 +66,18 @@ function truthy(value) {
 
 function getConfig(env = process.env) {
   const src = path.resolve(env.RELEASE_PACK_SRC || DEFAULT_RELEASE_SRC);
+  const runtimeSrc = path.resolve(env.RUNTIME_POINTER_SRC || DEFAULT_RUNTIME_SRC);
   const dst = env.OPENRESTY_STATIC_RELEASE_DIR
     ? path.resolve(env.OPENRESTY_STATIC_RELEASE_DIR)
     : "";
+  const runtimeDst = env.OPENRESTY_STATIC_RUNTIME_DIR
+    ? path.resolve(env.OPENRESTY_STATIC_RUNTIME_DIR)
+    : "";
   const publicBaseUrl = env.PUBLIC_BASE_URL || env.FOSU_STATIC_RELEASE_BASE_URL || DEFAULT_PUBLIC_BASE_URL;
+  const runtimePublicBaseUrl = env.FOSU_STATIC_RUNTIME_BASE_URL ||
+    env.PUBLIC_RUNTIME_BASE_URL ||
+    publicBaseUrl.replace(/\/releases\/?$/i, "/runtime") ||
+    DEFAULT_RUNTIME_PUBLIC_URL;
   const keepLatestN = Math.max(3, Number(env.STATIC_RELEASE_KEEP_LATEST || 3) || 3);
   const lockPath = path.resolve(env.STATIC_RELEASE_SYNC_LOCK || path.join(dst || src, ".static-release-sync.lock"));
   const httpTimeoutMs = Math.max(1000, Number(env.STATIC_RELEASE_SYNC_HTTP_TIMEOUT_MS || 8000) || 8000);
@@ -74,8 +85,11 @@ function getConfig(env = process.env) {
   return {
     enabled: truthy(env.STATIC_RELEASE_SYNC_ENABLED),
     src,
+    runtimeSrc,
     dst,
+    runtimeDst,
     publicBaseUrl,
+    runtimePublicBaseUrl,
     keepLatestN,
     lockPath,
     statusPath: path.resolve(env.STATIC_RELEASE_SYNC_STATUS_PATH || STATUS_PATH),
@@ -272,6 +286,49 @@ function verifyLocalFiles(dstReleaseDir) {
   return REQUIRED_FILES.map((relativePath) => path.join(dstReleaseDir, relativePath));
 }
 
+function syncRuntimePointerFile(config, releaseVersion) {
+  if (!config.runtimeDst) {
+    const error = new Error("OPENRESTY_STATIC_RUNTIME_DIR is required for static runtime sync");
+    error.code = "STATIC_RUNTIME_TARGET_MISSING";
+    throw error;
+  }
+  const runtimeSrcRoot = assertSafeDirectory("RUNTIME_POINTER_SRC", config.runtimeSrc);
+  const runtimeDstRoot = assertSafeDirectory("OPENRESTY_STATIC_RUNTIME_DIR", config.runtimeDst);
+  let pointer = runtimePointerService.readActivePointer();
+  if (!pointer || pointer.releaseVersion !== releaseVersion) {
+    try {
+      pointer = runtimePointerService.ensureActivePointer({ releaseVersion, allowInactiveTerm: true });
+    } catch (error) {
+      safeLog("static-runtime-pointer-ensure-failed", {
+        releaseVersion,
+        code: error.code || "",
+        message: error.message,
+      });
+    }
+  }
+  const srcFile = path.join(runtimeSrcRoot, "active.json");
+  const dstFile = path.join(runtimeDstRoot, "active.json");
+  if (!assertInside(runtimeSrcRoot, srcFile) || !assertInside(runtimeDstRoot, dstFile)) {
+    const error = new Error("Invalid runtime pointer sync path");
+    error.code = "STATIC_RUNTIME_INVALID_PATH";
+    throw error;
+  }
+  if (!fs.existsSync(srcFile)) {
+    const error = new Error(`Runtime active pointer source does not exist: ${srcFile}`);
+    error.code = "STATIC_RUNTIME_SOURCE_MISSING";
+    throw error;
+  }
+  const copied = copyFileIfChanged(srcFile, dstFile);
+  const stat = fs.statSync(dstFile);
+  return {
+    runtimeSrcFile: srcFile,
+    runtimeDstFile: dstFile,
+    runtimeCopied: copied,
+    runtimeBytes: stat.size,
+    runtimeReleaseVersion: pointer && pointer.releaseVersion || releaseVersion,
+  };
+}
+
 async function fetchUrlMetadata(url, method, timeoutMs, headers = {}) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
@@ -360,6 +417,21 @@ async function verifyPublicUrls(version, publicBaseUrl, options = {}) {
   return results;
 }
 
+async function verifyPublicRuntimeUrl(publicBaseUrl, options = {}) {
+  const url = joinUrl(publicBaseUrl, "active.json");
+  if (options.verifyHttp === false) {
+    return { url, ok: true, skipped: true, reason: "disabled" };
+  }
+  const result = await verifyHttpUrl(url, Number(options.timeoutMs || 8000) || 8000);
+  if (!result.ok) {
+    const error = new Error(`Static runtime URL verification failed: ${url}`);
+    error.code = "STATIC_RUNTIME_URL_VERIFY_FAILED";
+    error.results = [result];
+    throw error;
+  }
+  return result;
+}
+
 function recordStatus(patch, config = getConfig()) {
   const previous = readJsonFile(config.statusPath, {});
   const next = Object.assign({}, previous, patch || {}, {
@@ -368,7 +440,10 @@ function recordStatus(patch, config = getConfig()) {
       enabled: config.enabled,
       src: config.src,
       dst: config.dst,
+      runtimeSrc: config.runtimeSrc,
+      runtimeDst: config.runtimeDst,
       publicBaseUrl: config.publicBaseUrl,
+      runtimePublicBaseUrl: config.runtimePublicBaseUrl,
       keepLatestN: config.keepLatestN,
       verifyHttp: config.verifyHttp,
     },
@@ -464,6 +539,12 @@ async function syncStaticRelease(version, options = {}) {
       timeoutMs: options.timeoutMs || config.httpTimeoutMs,
       concurrency: config.verifyConcurrency,
     });
+    progressJob(job, 82, "syncing-runtime-pointer", { releaseVersion });
+    const runtimeSync = syncRuntimePointerFile(config, releaseVersion);
+    const verifiedRuntimeUrl = await verifyPublicRuntimeUrl(config.runtimePublicBaseUrl, {
+      verifyHttp: config.verifyHttp,
+      timeoutMs: options.timeoutMs || config.httpTimeoutMs,
+    });
     progressJob(job, 86, "pruning-old-releases", { releaseVersion });
     const activeVersion = releaseService.getActiveReleaseInfo()?.version || "";
     const retention = pruneOldReleases(dstRoot, [
@@ -491,7 +572,14 @@ async function syncStaticRelease(version, options = {}) {
       bytesCopied: mirror.copiedBytes || 0,
       localFiles,
       verifiedUrls,
+      verifiedRuntimeUrl,
+      runtimeSrcFile: runtimeSync.runtimeSrcFile,
+      runtimeDstFile: runtimeSync.runtimeDstFile,
+      runtimeCopied: runtimeSync.runtimeCopied,
+      runtimeBytes: runtimeSync.runtimeBytes,
+      runtimeReleaseVersion: runtimeSync.runtimeReleaseVersion,
       staticManifestUrl: joinUrl(config.publicBaseUrl, releaseVersion, "manifest.json"),
+      staticRuntimeActiveUrl: joinUrl(config.runtimePublicBaseUrl, "active.json"),
       staticClassIndexUrl: joinUrl(config.publicBaseUrl, releaseVersion, "index/class/all.json"),
       staticEmptyRoomIndexUrl: joinUrl(config.publicBaseUrl, releaseVersion, "empty-room/index.json"),
       keptReleases: retention.keptReleases,
@@ -586,6 +674,11 @@ async function reconcileStaticRelease(version, options = {}) {
         timeoutMs: options.timeoutMs || config.httpTimeoutMs,
         concurrency: config.verifyConcurrency,
       });
+      const runtimeSync = syncRuntimePointerFile(config, releaseVersion);
+      const verifiedRuntimeUrl = await verifyPublicRuntimeUrl(config.runtimePublicBaseUrl, {
+        verifyHttp: config.verifyHttp,
+        timeoutMs: options.timeoutMs || config.httpTimeoutMs,
+      });
       const finishedAt = new Date().toISOString();
       const result = recordStatus({
         status: "unchanged",
@@ -605,7 +698,14 @@ async function reconcileStaticRelease(version, options = {}) {
         bytesCopied: 0,
         localFiles: REQUIRED_FILES.map((relativePath) => path.join(dstReleaseDir, relativePath)),
         verifiedUrls,
+        verifiedRuntimeUrl,
+        runtimeSrcFile: runtimeSync.runtimeSrcFile,
+        runtimeDstFile: runtimeSync.runtimeDstFile,
+        runtimeCopied: runtimeSync.runtimeCopied,
+        runtimeBytes: runtimeSync.runtimeBytes,
+        runtimeReleaseVersion: runtimeSync.runtimeReleaseVersion,
         staticManifestUrl: joinUrl(config.publicBaseUrl, releaseVersion, "manifest.json"),
+        staticRuntimeActiveUrl: joinUrl(config.runtimePublicBaseUrl, "active.json"),
         staticClassIndexUrl: joinUrl(config.publicBaseUrl, releaseVersion, "index/class/all.json"),
         staticEmptyRoomIndexUrl: joinUrl(config.publicBaseUrl, releaseVersion, "empty-room/index.json"),
         keptReleases: status.keptReleases || status.retainedReleaseVersions || [],
@@ -646,6 +746,8 @@ function getSyncStatus(options = {}) {
   const publicBaseUrl = config.publicBaseUrl;
   const configured = Boolean(config.dst);
   const targetDirExists = Boolean(config.dst && fs.existsSync(config.dst));
+  const runtimeConfigured = Boolean(config.runtimeDst);
+  const runtimeDirExists = Boolean(config.runtimeDst && fs.existsSync(config.runtimeDst));
   let targetDirWritable = false;
   if (targetDirExists) {
     try {
@@ -655,11 +757,22 @@ function getSyncStatus(options = {}) {
       targetDirWritable = false;
     }
   }
+  let runtimeDirWritable = false;
+  if (runtimeDirExists) {
+    try {
+      fs.accessSync(config.runtimeDst, fs.constants.W_OK);
+      runtimeDirWritable = true;
+    } catch (error) {
+      runtimeDirWritable = false;
+    }
+  }
   const releaseVersion = status?.releaseVersion || activeVersion || "";
   const syncedReleaseVersion = status?.syncedReleaseVersion || (status?.success ? status?.releaseVersion : "") || "";
   const versionMatched = Boolean(activeVersion && syncedReleaseVersion && activeVersion === syncedReleaseVersion);
   const targetReleaseDir = activeVersion && config.dst ? path.join(config.dst, activeVersion) : "";
   const targetReleaseDirExists = Boolean(targetReleaseDir && fs.existsSync(targetReleaseDir) && fs.statSync(targetReleaseDir).isDirectory());
+  const runtimeActivePath = config.runtimeDst ? path.join(config.runtimeDst, "active.json") : "";
+  const runtimeActiveExists = Boolean(runtimeActivePath && fs.existsSync(runtimeActivePath));
   const missingRequiredFiles = targetReleaseDirExists
     ? REQUIRED_FILES.filter((relativePath) => !fs.existsSync(path.join(targetReleaseDir, relativePath)))
     : REQUIRED_FILES.slice();
@@ -684,14 +797,25 @@ function getSyncStatus(options = {}) {
   const manifestUrlStatus = urlStatus("manifest.json");
   const classIndexUrlStatus = urlStatus("index/class/all.json");
   const emptyRoomUrlStatus = urlStatus("empty-room/index.json");
+  const runtimeVerified = status?.verifiedRuntimeUrl || {};
+  const runtimeUrlStatus = runtimeVerified.url ? {
+    status: runtimeVerified.ok ? (runtimeVerified.status || 200) : (runtimeVerified.status || "failed"),
+    latencyMs: runtimeVerified.latencyMs == null ? null : runtimeVerified.latencyMs,
+    cacheControl: runtimeVerified.cacheControl || "",
+    contentEncoding: runtimeVerified.contentEncoding || "",
+  } : { status: "not-collected", latencyMs: null, cacheControl: "", contentEncoding: "" };
   const urlVerificationComplete = isUrlVerificationComplete(status, config);
   const urlVerificationFailed = [manifestUrlStatus, classIndexUrlStatus, emptyRoomUrlStatus]
     .some((item) => item.status !== "not-collected" && !isVerifiedHttpStatus(item.status));
   const fullySynced = Boolean(
     config.enabled &&
     configured &&
+    runtimeConfigured &&
     targetDirExists &&
     targetDirWritable &&
+    runtimeDirExists &&
+    runtimeDirWritable &&
+    runtimeActiveExists &&
     activeVersion &&
     versionMatched &&
     localRequiredFilesPresent &&
@@ -706,14 +830,26 @@ function getSyncStatus(options = {}) {
   } else if (!configured) {
     needsSync = true;
     needsSyncReason = "target-dir-not-configured";
+  } else if (!runtimeConfigured) {
+    needsSync = true;
+    needsSyncReason = "runtime-dir-not-configured";
   } else if (!targetDirExists) {
     needsSync = true;
     needsSyncReason = "target-dir-missing";
+  } else if (!runtimeDirExists) {
+    needsSync = true;
+    needsSyncReason = "runtime-dir-missing";
   } else if (!targetDirWritable) {
     needsSync = true;
     needsSyncReason = "target-dir-not-writable";
+  } else if (!runtimeDirWritable) {
+    needsSync = true;
+    needsSyncReason = "runtime-dir-not-writable";
   } else if (!activeVersion) {
     needsSyncReason = "no-active-release";
+  } else if (!runtimeActiveExists) {
+    needsSync = true;
+    needsSyncReason = "runtime-active-missing";
   } else if (!targetReleaseDirExists) {
     needsSync = true;
     needsSyncReason = "target-release-missing";
@@ -737,11 +873,17 @@ function getSyncStatus(options = {}) {
     success: !config.enabled,
     enabled: config.enabled,
     configured,
+    runtimeConfigured,
     targetDir: config.dst,
+    runtimeTargetDir: config.runtimeDst,
     targetDirExists,
+    runtimeDirExists,
     targetDirWritable,
+    runtimeDirWritable,
     targetReleaseDir,
     targetReleaseDirExists,
+    runtimeActivePath,
+    runtimeActiveExists,
     localRequiredFilesPresent,
     missingRequiredFiles,
     activeReleaseVersion: activeVersion,
@@ -766,12 +908,17 @@ function getSyncStatus(options = {}) {
     classIndexStatus: classIndexUrlStatus.status,
     emptyRoomUrl: activeVersion ? joinUrl(publicBaseUrl, activeVersion, "empty-room/index.json") : "",
     emptyRoomStatus: emptyRoomUrlStatus.status,
+    runtimeActiveUrl: joinUrl(config.runtimePublicBaseUrl, "active.json"),
+    runtimeActiveStatus: runtimeUrlStatus.status,
+    runtimeActiveLatencyMs: runtimeUrlStatus.latencyMs,
+    runtimeCacheControl: runtimeUrlStatus.cacheControl,
     cacheControl: manifestUrlStatus.cacheControl || classIndexUrlStatus.cacheControl || emptyRoomUrlStatus.cacheControl || "",
     contentEncoding: manifestUrlStatus.contentEncoding || classIndexUrlStatus.contentEncoding || emptyRoomUrlStatus.contentEncoding || "",
     syncJobId: status?.syncJobId || "",
     needsSync,
     needsSyncReason,
     staticManifestUrl: activeVersion ? joinUrl(publicBaseUrl, activeVersion, "manifest.json") : "",
+    staticRuntimeActiveUrl: joinUrl(config.runtimePublicBaseUrl, "active.json"),
     staticClassIndexUrl: activeVersion ? joinUrl(publicBaseUrl, activeVersion, "index/class/all.json") : "",
     staticEmptyRoomIndexUrl: activeVersion ? joinUrl(publicBaseUrl, activeVersion, "empty-room/index.json") : "",
     keptReleases: retainedReleases.map((item) => item.version),
@@ -779,7 +926,10 @@ function getSyncStatus(options = {}) {
       enabled: config.enabled,
       src: config.src,
       dst: config.dst,
+      runtimeSrc: config.runtimeSrc,
+      runtimeDst: config.runtimeDst,
       publicBaseUrl: config.publicBaseUrl,
+      runtimePublicBaseUrl: config.runtimePublicBaseUrl,
       keepLatestN: config.keepLatestN,
       verifyHttp: config.verifyHttp,
       httpTimeoutMs: config.httpTimeoutMs,
@@ -802,5 +952,6 @@ module.exports = {
   syncStaticRelease,
   verifyHttpUrl,
   verifyLocalFiles,
+  verifyPublicRuntimeUrl,
   verifyPublicUrls,
 };

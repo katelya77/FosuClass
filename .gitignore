@@ -35,3 +35,6 @@ staging/
 /staging/
 server/storage/public/
 server/storage/snapshots/
+output/playwright/
+test-results/
+playwright-report/

@@ -358,7 +358,8 @@ function printablePlan(plan) {
 function renderPowerShellCommand(task, options = {}) {
   const term = options.term || "2025-2026-2";
   const start = options.termStartDate || options.start || "YYYY-MM-DD";
-  const weeks = options.totalWeeks || 20;
+  const weekCount = Number(options.totalWeeks);
+  const weeks = Number.isInteger(weekCount) && weekCount > 0 ? weekCount : "TOTAL_WEEKS";
   const scopes = Array.isArray(options.scopes) && options.scopes.length
     ? options.scopes.join(",")
     : "classSchedules,teacherSchedules,classroomSchedules,courseSchedules";
@@ -408,7 +409,8 @@ function requestScaleDisplay(code) {
 function getRecommendedOperations(options = {}) {
   const term = options.term || "2025-2026-2";
   const termStartDate = options.termStartDate || "YYYY-MM-DD";
-  const totalWeeks = options.totalWeeks || 20;
+  const weekCount = Number(options.totalWeeks);
+  const totalWeeks = Number.isInteger(weekCount) && weekCount > 0 ? weekCount : "";
   const operations = [
     ["sync:daily", "daily_all_dynamic", true, true, false, true, true, true, "medium", "daily_all"],
     ["sync:daily:classes", "daily_classes", true, true, false, true, true, true, "medium", "class_changes"],

@@ -3368,11 +3368,9 @@ function getSnapshotFingerprint(snapshot) {
 }
 
 function getActiveCanonicalHash() {
-  const active = releaseService.getActiveReleaseInfo();
+  const active = releaseService.getActiveReleaseInfoFast();
   if (active && active.canonicalHash) return active.canonicalHash;
-  const activeSnapshot = releaseService.readActiveReleaseSnapshot();
-  const fingerprint = getSnapshotFingerprint(activeSnapshot);
-  return fingerprint && fingerprint.canonicalHash || "";
+  return "";
 }
 
 function getLatestStagingCanonicalHash() {
@@ -3749,10 +3747,25 @@ async function processDirectStagingUpload(filePath, reqMeta, job) {
 router.get("/staging/upload", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     releaseLifecycleService.reconcileLifecycle({ reason: "staging-upload-list" });
+    const result = stagingUploadService.listUploadRecords(req.query || {});
     return res.json({
       success: true,
-      uploads: stagingUploadService.listUploads(req.query.limit || 20),
+      uploads: result.records,
+      records: result.records,
+      total: result.total,
+      limit: result.limit,
+      cursor: result.cursor,
+      nextCursor: result.nextCursor,
+      indexPath: result.indexPath,
     });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/staging/upload/rebuild-index", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json(stagingUploadService.rebuildUploadRecordIndex({ reason: "admin-rebuild" }));
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -3764,7 +3777,7 @@ router.get("/staging/status", adminAuth.verifyAdminAccess, (req, res) => {
       reason: "staging-status",
       uploadLimit: req.query.limit || 50,
     });
-    const uploads = stagingUploadService.listUploads(req.query.limit || 50);
+    const uploads = stagingUploadService.listUploads(req.query || { limit: 50 });
     const pendingReview = uploads.filter((item) => item.status === "pending-review");
     const fingerprint = Object.assign({}, buildFingerprintStatus(req.query.canonicalHash || ""), {
       activeCanonicalHash: lifecycle.activeCanonicalHash,
@@ -4002,6 +4015,27 @@ router.post(
 router.post("/staging/upload/finalize", adminAuth.verifyAdminAccess, async (req, res) => {
   const uploadId = req.body && req.body.uploadId;
   try {
+    if (!uploadId) {
+      return res.status(400).json({ success: false, message: "uploadId is required" });
+    }
+    const job = releaseWorkerManager.startReleaseJob("staging-upload-finalize", {
+      uploadId,
+      expected: req.body || {},
+      actor: buildAdminStagingUploadActor(req),
+      reqMeta: {
+        ip: req.ip || "",
+        headers: {
+          "x-forwarded-for": req.headers["x-forwarded-for"] || "",
+        },
+      },
+    });
+    return res.status(202).json({
+      success: true,
+      accepted: true,
+      message: "Staging upload finalize queued",
+      uploadId,
+      job,
+    });
     const finalized = await stagingUploadService.finalizeUpload(uploadId, buildAdminStagingUploadActor(req), req.body || {});
     let stagingData = stagingUploadService.normalizeStagingData(finalized.stagingData);
     stagingData.stagingUploadId = finalized.manifest.uploadId;
@@ -4120,7 +4154,12 @@ router.post("/staging/upload/finalize", adminAuth.verifyAdminAccess, async (req,
       warnings: validation.warnings.concat(safety.warnings || []),
     });
   } catch (error) {
-    stagingUploadService.markUploadFailed(uploadId, error.message);
+    if (error && error.code !== "JOB_ALREADY_RUNNING") {
+      stagingUploadService.markUploadFailed(uploadId, error.message);
+    }
+    if (error && error.code === "JOB_ALREADY_RUNNING") {
+      return releaseWorkerManager.sendAlreadyRunning(res, error);
+    }
     return res.status(error.statusCode || 500).json({ success: false, message: error.message });
   }
 });
@@ -4255,23 +4294,48 @@ router.post("/relay/uploads/:id/promote-to-staging", adminAuth.verifyAdminAccess
  * 5. GET /api/admin/sync/status
  * 获取同步中心状态及健康度检查 (带教务网DNS解析测试)
  */
+let syncStatusDnsCache = {
+  checkedAt: 0,
+  intranetAccessible: null,
+  status: "not-collected",
+};
+
+async function getCachedIntranetDiagnostic(force = false) {
+  const now = Date.now();
+  if (!force) {
+    if (syncStatusDnsCache.checkedAt && now - syncStatusDnsCache.checkedAt < 60 * 1000) {
+      return syncStatusDnsCache;
+    }
+    return syncStatusDnsCache;
+  }
+  const dns = require("dns").promises;
+  let intranetAccessible = false;
+  try {
+    const hostname = new URL(config.FOSU_BASE_URL || "https://100.fosu.edu.cn").hostname;
+    const lookupPromise = dns.lookup(hostname);
+    const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 500));
+    await Promise.race([lookupPromise, timeoutPromise]);
+    intranetAccessible = true;
+  } catch (e) {
+    intranetAccessible = false;
+  }
+  syncStatusDnsCache = {
+    checkedAt: now,
+    checkedAtIso: new Date(now).toISOString(),
+    intranetAccessible,
+    status: "collected",
+  };
+  return syncStatusDnsCache;
+}
+
 router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
   try {
     const meta = getAdminDataVersion();
     const syncMeta = getSyncMeta();
     
     // 快速进行 EasyConnect / 教务网 DNS 解析诊断 (1秒超时)
-    const dns = require("dns").promises;
-    let intranetAccessible = false;
-    try {
-      const hostname = new URL(config.FOSU_BASE_URL || "https://100.fosu.edu.cn").hostname;
-      const lookupPromise = dns.lookup(hostname);
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 1000));
-      await Promise.race([lookupPromise, timeoutPromise]);
-      intranetAccessible = true;
-    } catch (e) {
-      intranetAccessible = false;
-    }
+    const intranetDiagnostic = await getCachedIntranetDiagnostic(req.query.diagnoseNetwork === "true");
+    const intranetAccessible = intranetDiagnostic.intranetAccessible === true;
 
     const relayUploads = relayService.listUploads();
     const stagingUploads = stagingUploadService.listUploads(1);
@@ -4287,7 +4351,8 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
     const fingerprint = buildFingerprintStatus();
     const lifecycleStatus = releaseLifecycleService.buildLifecycleStatus({
       reason: "sync-status",
-      uploadLimit: 50,
+      reconcile: false,
+      uploadLimit: 1,
     });
     return res.json({
       success: true,
@@ -4317,6 +4382,8 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
         courseScheduleUpdatedAt: syncMeta["course-schedules"]?.updatedAt || null,
         lastUploadTime: syncMeta["class-schedules"]?.updatedAt || syncMeta["sync-meta"]?.updatedAt || null,
         intranetAccessible,
+        intranetDiagnosticStatus: intranetDiagnostic.status,
+        intranetDiagnosticCheckedAt: intranetDiagnostic.checkedAtIso || null,
         intranetMessage: intranetAccessible
           ? "当前服务器 DNS 能解析教务域名，但主流程仍建议使用本机校园网采集。"
           : "公网服务器无法访问学校内网是预期情况；请使用本机校园网同步或接力代理端。",
@@ -4633,9 +4700,57 @@ router.get("/sync/staging/upload/status", adminAuth.verifyAdminAccess, (req, res
  */
 router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    const latestUpload = stagingUploadService.listUploads({ limit: 1 })[0] || null;
+    if (latestUpload && (latestUpload.summary || latestUpload.canonicalHash)) {
+      const summary = latestUpload.summary || {};
+      const activeInfo = releaseService.getActiveReleaseInfoFast();
+      const activeCanonicalHash = getActiveCanonicalHash();
+      const stagingCanonicalHash = latestUpload.canonicalHash || summary.canonicalHash || "";
+      const sameAsActive = Boolean(activeCanonicalHash && stagingCanonicalHash && activeCanonicalHash === stagingCanonicalHash);
+      return res.json({
+        success: true,
+        lightweight: true,
+        data: {
+          term: latestUpload.term || summary.term || "",
+          releaseVersion: latestUpload.releaseVersion || summary.releaseVersion || "",
+          generatedAt: summary.generatedAt || latestUpload.updatedAt || latestUpload.createdAt || "",
+          meta: { stagingUploadId: latestUpload.uploadId || "" },
+          canonicalHash: stagingCanonicalHash,
+          activeCanonicalHash,
+          stagingCanonicalHash,
+          sameAsActive,
+          needsPublish: Boolean(stagingCanonicalHash && !sameAsActive),
+          counts: latestUpload.counts || summary.counts || {},
+          resourceCounts: latestUpload.resourceCounts || summary.resourceCounts || null,
+          activeRelease: activeInfo ? {
+            releaseVersion: activeInfo.releaseVersion || activeInfo.version || "",
+            term: activeInfo.term || activeInfo.semester || "",
+            status: "active",
+          } : null,
+          safety: {
+            allowPublish: summary.stagingState !== "publish-blocked",
+            blockers: summary.blockers || [],
+            warnings: summary.warnings || [],
+            contractComparison: summary.contractComparison || null,
+          },
+          diff: {
+            lightweight: true,
+            message: "Full staging diff is generated by background validation jobs.",
+          },
+        },
+      });
+    }
     if (!fs.existsSync(STAGING_LATEST_PATH)) {
       return res.json({ success: false, message: "暂无暂存的 Staging 数据，请先上传" });
     }
+
+    return res.json({
+      success: true,
+      lightweight: true,
+      data: null,
+      message: "Staging summary is pending; rebuild the upload index or wait for the background validation job.",
+      code: "STAGING_SUMMARY_PENDING",
+    });
 
     const stagingData = JSON.parse(fs.readFileSync(STAGING_LATEST_PATH, "utf-8"));
     const activeSnapshot = releaseService.readActiveReleaseSnapshot();
@@ -4879,7 +4994,7 @@ router.get("/sync/releases/check-availability", adminAuth.verifyAdminAccess, asy
       return res.json({ success: true, result });
     }
 
-    const packStatus = releaseService.getReleasePackStatus(active.version);
+    const packStatus = releaseService.getReleasePackQuickHealth(active.version);
     result.releasePack = {
       status: packStatus.healthy ? "OK" : "Fail",
       details: packStatus,
@@ -4969,9 +5084,18 @@ router.get("/sync/releases/check-availability", adminAuth.verifyAdminAccess, asy
 router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     const activeTerm = appConfigService.getAdminConfig().currentSemester || getDefaultTerm();
-    const term = req.query.term || activeTerm || "2025-2026-2";
+    const term = req.query.term || activeTerm || termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term;
+    const termRecord = termRegistryService.getTerm(term) || termRegistryService.LEGACY_CURRENT_TERM_CONFIG;
     const start = req.query.start || req.query.termStartDate || "YYYY-MM-DD";
-    const totalWeeks = Number(req.query.totalWeeks || 20);
+    const totalWeeks = req.query.totalWeeks ? Number(req.query.totalWeeks) : Number(termRecord.totalWeeks);
+    if (!Number.isInteger(totalWeeks) || totalWeeks < 1 || totalWeeks > 30) {
+      return res.status(400).json({
+        success: false,
+        message: "totalWeeks is required in Term Registry before generating sync commands",
+        code: "TOTAL_WEEKS_REQUIRED",
+        term,
+      });
+    }
     const operations = syncPlan.getRecommendedOperations({
       term,
       termStartDate: start,

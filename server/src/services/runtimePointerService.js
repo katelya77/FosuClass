@@ -100,13 +100,20 @@ function buildPointerFromManifest(manifest) {
   const term = manifest.term || manifest.semester || manifest.termConfig && manifest.termConfig.term || "";
   const releaseVersion = manifest.releaseVersion || manifest.version || "";
   if (!term || !releaseVersion) return null;
-  const termConfig = manifest.termConfig || {
+  const registryRecord = termRegistryService.getTerm(term);
+  const rawTermConfig = manifest.termConfig && typeof manifest.termConfig === "object" ? manifest.termConfig : {};
+  const termConfig = termRegistryService.normalizeTermRecord({
     term,
-    semesterText: manifest.semesterText || "",
-    termStartDate: manifest.termStartDate || "",
-    totalWeeks: manifest.totalWeeks || 20,
-    weekStart: manifest.weekStart || "monday",
-  };
+    semesterText: rawTermConfig.semesterText || manifest.semesterText || registryRecord && registryRecord.semesterText || "",
+    termStartDate: rawTermConfig.termStartDate || manifest.termStartDate || registryRecord && registryRecord.termStartDate || "",
+    totalWeeks: rawTermConfig.totalWeeks || manifest.totalWeeks || registryRecord && registryRecord.totalWeeks,
+    weekStart: rawTermConfig.weekStart || manifest.weekStart || registryRecord && registryRecord.weekStart || "monday",
+    status: "ready",
+    releaseVersion,
+    dataAvailable: true,
+    updatedAt: manifest.updatedAt || manifest.publishedAt || nowIso(),
+    source: rawTermConfig.source || manifest.source || "release-manifest",
+  }, { allowLegacyCurrentTermFallback: true });
   return normalizePointer({
     activeTerm: term,
     semester: manifest.semester || term,
@@ -224,6 +231,12 @@ function writeActivePointerForManifest(manifest, options = {}) {
   }
   ensureDir(RUNTIME_DIR);
   writeJsonAtomic(ACTIVE_RUNTIME_PATH, pointer);
+  const openrestyRuntimeDir = process.env.OPENRESTY_STATIC_RUNTIME_DIR
+    ? path.resolve(process.env.OPENRESTY_STATIC_RUNTIME_DIR)
+    : "";
+  if (openrestyRuntimeDir) {
+    writeJsonAtomic(path.join(openrestyRuntimeDir, "active.json"), pointer);
+  }
   cache.invalidate(ACTIVE_RUNTIME_PATH);
   return pointer;
 }

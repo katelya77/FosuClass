@@ -8,6 +8,7 @@ const termRegistryService = require("./termRegistryService");
 const termReleaseIndexService = require("./termReleaseIndexService");
 const teachingCalendarService = require("./teachingCalendarService");
 const runtimePointerService = require("./runtimePointerService");
+const releaseSummaryStore = require("./releaseSummaryStore");
 const {
   buildResourceCountContract,
   deriveLegacyResourceCountContract,
@@ -377,9 +378,9 @@ function augmentLegacyContractFromIndexes(contract, version) {
     if (!items.length) return;
     next[kind].scheduleDocuments = items.length;
     next[kind].courseEvents = sumIndexCourseCounts(items);
-    if (next[kind].directoryEntities == null || next[kind].directoryEntitiesStatus === "not-counted") {
-      next[kind].directoryEntities = items.length;
-      next[kind].directoryEntitiesStatus = "derived-from-legacy-index";
+    if (next[kind].directoryEntitiesStatus !== "counted") {
+      next[kind].directoryEntities = null;
+      next[kind].directoryEntitiesStatus = "not-counted";
     }
     if (!next[kind].sourceMode || next[kind].sourceMode === "unknown") {
       next[kind].sourceMode = "legacy-derived";
@@ -391,6 +392,10 @@ function augmentLegacyContractFromIndexes(contract, version) {
 function getReleaseResourceCounts(version, snapshot) {
   const normalizedVersion = normalizeVersion(version || snapshot && (snapshot.version || snapshot.releaseVersion) || "");
   const files = normalizedVersion ? getReleaseFiles(normalizedVersion) : null;
+  const summary = files ? releaseSummaryStore.readReleaseSummary(normalizedVersion, files) : null;
+  if (summary && summary.resourceCounts && Number(summary.resourceCounts.countSchemaVersion) === 2) {
+    return summary.resourceCounts;
+  }
   const manifest = files ? readJsonFile(files.manifestPath) || readJsonFile(path.join(files.publicReleaseDir, "manifest.json")) : null;
   if (manifest && manifest.resourceCounts && Number(manifest.resourceCounts.countSchemaVersion) === 2) {
     return manifest.resourceCounts;
@@ -1576,18 +1581,21 @@ function validateReleaseSnapshot(snapshot) {
   }
 
   const term = snapshot.term || snapshot.semester || snapshot.termConfig && snapshot.termConfig.term || "";
+  const legacyTermConfig = term === termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term
+    ? termRegistryService.LEGACY_CURRENT_TERM_CONFIG
+    : {};
   try {
     const termConfig = termRegistryService.normalizeTermRecord(Object.assign({}, snapshot.termConfig || {}, {
       term,
       termStartDate: snapshot.termConfig && snapshot.termConfig.termStartDate || snapshot.termStartDate || "",
-      totalWeeks: snapshot.termConfig && snapshot.termConfig.totalWeeks || snapshot.totalWeeks || 20,
+      totalWeeks: snapshot.termConfig && snapshot.termConfig.totalWeeks || snapshot.totalWeeks || legacyTermConfig.totalWeeks,
       weekStart: snapshot.termConfig && snapshot.termConfig.weekStart || snapshot.weekStart || "monday",
       status: "ready",
       releaseVersion: snapshot.version || snapshot.releaseVersion || "",
       dataAvailable: true,
       updatedAt: snapshot.updatedAt || new Date().toISOString(),
       source: snapshot.source || "release-snapshot",
-    }));
+    }), { allowLegacyCurrentTermFallback: true });
     const termValidation = termRegistryService.validateTermRecord(termConfig);
     if (!termValidation.valid) {
       termValidation.errors.forEach((error) => errors.push(`termConfig.${error}`));
@@ -1655,7 +1663,7 @@ function buildManifest(snapshot, version, counts, validation, files, derived, ca
     term,
     semesterText: rawTermConfig.semesterText || snapshot.semesterText || legacyTermConfig.semesterText || "",
     termStartDate: rawTermConfig.termStartDate || snapshot.termStartDate || legacyTermConfig.termStartDate || "",
-    totalWeeks: rawTermConfig.totalWeeks || snapshot.totalWeeks || legacyTermConfig.totalWeeks || 20,
+    totalWeeks: rawTermConfig.totalWeeks || snapshot.totalWeeks || legacyTermConfig.totalWeeks,
     weekStart: rawTermConfig.weekStart || snapshot.weekStart || legacyTermConfig.weekStart || "monday",
     status: "ready",
     releaseVersion: version,
@@ -1663,7 +1671,7 @@ function buildManifest(snapshot, version, counts, validation, files, derived, ca
     publishedAt: snapshot.publishedAt || updatedAt,
     updatedAt,
     source: rawTermConfig.source || snapshot.source || "release-snapshot",
-  });
+  }, { allowLegacyCurrentTermFallback: true });
   const resourceCounts = buildResourceCountContract(snapshot);
   const releaseCalendarForHash = calendar ? Object.assign({}, calendar, {
     releaseVersion: version,
@@ -1773,7 +1781,7 @@ function coerceSnapshot(rawSnapshot) {
       term,
       semesterText: rawTermConfig.semesterText || snapshot.semesterText || legacyTermConfig.semesterText || "",
       termStartDate: rawTermConfig.termStartDate || snapshot.termStartDate || legacyTermConfig.termStartDate || "",
-      totalWeeks: rawTermConfig.totalWeeks || snapshot.totalWeeks || legacyTermConfig.totalWeeks || 20,
+      totalWeeks: rawTermConfig.totalWeeks || snapshot.totalWeeks || legacyTermConfig.totalWeeks,
       weekStart: rawTermConfig.weekStart || snapshot.weekStart || legacyTermConfig.weekStart || "monday",
       status: "ready",
       releaseVersion: snapshot.version,
@@ -1781,7 +1789,7 @@ function coerceSnapshot(rawSnapshot) {
       publishedAt: snapshot.publishedAt || snapshot.updatedAt,
       updatedAt: snapshot.updatedAt,
       source: rawTermConfig.source || snapshot.source || "release-snapshot",
-    });
+    }, { allowLegacyCurrentTermFallback: true });
     snapshot.term = termConfig.term;
     snapshot.semester = snapshot.semester || termConfig.term;
     snapshot.termConfig = termConfig;
@@ -1824,6 +1832,9 @@ function writeReleaseSnapshot(rawSnapshot) {
   });
   const compression = mirrorStaticReleaseFiles(version);
   manifest.compression = Object.assign({}, manifest.compression || {}, compression);
+  releaseSummaryStore.writeReleaseSummary(version, manifest, files, {
+    quickHealth: releaseSummaryStore.buildQuickHealthFromManifest(manifest),
+  });
 
   return {
     version,
@@ -1894,6 +1905,9 @@ async function writeReleaseSnapshotAsync(rawSnapshot, options = {}) {
       },
     });
     manifest.compression = Object.assign({}, manifest.compression || {}, compression);
+    releaseSummaryStore.writeReleaseSummary(version, manifest, files, {
+      quickHealth: releaseSummaryStore.buildQuickHealthFromManifest(manifest),
+    });
 
     if (atomic) {
       if (options.job) options.job.progress(64, "deep validating", { releaseVersion: version });
@@ -1959,7 +1973,7 @@ function readReleaseSnapshot(version) {
     semester: bootstrap.semester || manifest?.semester || manifest?.term,
     termConfig: bootstrap.termConfig || manifest?.termConfig || null,
     termStartDate: manifest?.termStartDate || manifest?.termConfig?.termStartDate || "",
-    totalWeeks: manifest?.totalWeeks || manifest?.termConfig?.totalWeeks || 20,
+    totalWeeks: manifest?.totalWeeks || manifest?.termConfig?.totalWeeks,
     weekStart: manifest?.weekStart || manifest?.termConfig?.weekStart || "monday",
     updatedAt: bootstrap.updatedAt || manifest?.updatedAt,
     source: bootstrap.metaDetails?.source || manifest?.source || "local-sync-client",
@@ -2108,7 +2122,7 @@ function activateReleaseFromSnapshot(rawSnapshot) {
   return Object.assign({}, written, activated);
 }
 
-function getActiveReleaseInfo() {
+function getActiveReleaseInfoFast() {
   ensureStorageDirs();
   const active = readJsonFile(ACTIVE_RELEASE_PATH);
   if (!active || !active.version) {
@@ -2118,15 +2132,20 @@ function getActiveReleaseInfo() {
   const files = getReleaseFiles(active.version);
   const manifest = readJsonFile(files.manifestPath);
   const quickHealth = getReleasePackQuickHealth(active.version);
+  const summary = releaseSummaryStore.readReleaseSummary(active.version, files, {
+    active,
+    quickHealth,
+  });
   const counts = manifest?.counts || active.counts || {};
-  const resourceCounts = getReleaseResourceCounts(active.version);
+  const resourceCounts = manifest?.resourceCounts || active.resourceCounts || summary?.resourceCounts || null;
   const semester = active.semester || manifest?.semester || manifest?.term || "";
+  const pointer = runtimePointerService.readActivePointer();
 
   return Object.assign({}, active, {
     version: active.version,
     releaseVersion: active.version,
-    term: semester,
-    semester,
+    term: pointer?.activeTerm || pointer?.term || summary?.term || semester,
+    semester: pointer?.activeTerm || pointer?.term || summary?.semester || semester,
     termConfig: active.termConfig || manifest?.termConfig || null,
     publishedAt: active.activatedAt || active.updatedAt || "",
     counts,
@@ -2144,6 +2163,7 @@ function getActiveReleaseInfo() {
       coursesIndexPath: files.coursesIndexPath,
       emptyRoomIndexPath: files.emptyRoomIndexPath,
     },
+    summary,
     releasePack: quickHealth,
     packStatus: quickHealth,
     snapshot: {
@@ -2159,6 +2179,10 @@ function getActiveReleaseInfo() {
     valid: quickHealth.healthy,
     errors: quickHealth.healthy ? [] : ["Release Pack quick health failed"],
   });
+}
+
+function getActiveReleaseInfo() {
+  return getActiveReleaseInfoFast();
 }
 
 function readActiveReleaseSnapshot() {
@@ -2237,26 +2261,19 @@ function getReleaseStatus() {
 
 function listReleases(limit = 20) {
   ensureStorageDirs();
+  const active = readJsonFile(ACTIVE_RELEASE_PATH) || {};
   const entries = fs.readdirSync(RELEASES_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => {
       const version = entry.name;
       const files = getReleaseFiles(version);
-      const manifest = readJsonFile(files.manifestPath);
-      const stat = fs.statSync(files.releaseDir);
-      const releasePack = getReleasePackStatus(version);
-      const resourceCounts = getReleaseResourceCounts(version);
-      return {
+      const summary = releaseSummaryStore.readReleaseSummary(version, files, { active });
+      return Object.assign({}, summary, {
         version,
-        updatedAt: manifest?.updatedAt || stat.mtime.toISOString(),
-        releaseVersion: manifest?.releaseVersion || version,
-        term: manifest?.term || manifest?.semester || "",
-        semester: manifest?.semester || manifest?.term || "",
-        counts: manifest?.counts || {},
-        resourceCounts,
-        valid: manifest?.validation?.valid !== false,
-        releasePack,
-      };
+        releaseVersion: summary.releaseVersion || version,
+        valid: summary.quickHealth ? summary.quickHealth.healthy !== false : true,
+        releasePack: summary.quickHealth || summary.releasePack || null,
+      });
     })
     .sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
   return entries.slice(0, limit);
@@ -2329,6 +2346,7 @@ function getReleasePackQuickHealth(version) {
   const files = getReleaseFiles(normalizedVersion);
   const manifest = readJsonFile(files.manifestPath) || readJsonFile(path.join(files.publicReleaseDir, "manifest.json"));
   const keyFiles = {
+    activePointer: ACTIVE_RELEASE_PATH,
     manifest: files.manifestPath,
     staticManifest: path.join(files.publicReleaseDir, "manifest.json"),
     classIndex: files.classIndexAllPath,
@@ -2338,6 +2356,8 @@ function getReleasePackQuickHealth(version) {
     courseIndex: files.courseIndexAllPath,
     emptyRoom: files.emptyRoomIndexPath,
     staticEmptyRoom: path.join(files.publicReleaseDir, "empty-room", "index.json"),
+    calendar: path.join(files.releaseDir, "calendar.json"),
+    staticCalendar: path.join(files.publicReleaseDir, "calendar.json"),
   };
   const checks = Object.fromEntries(Object.entries(keyFiles).map(([key, filePath]) => [key, {
     exists: Boolean(filePath && fs.existsSync(filePath)),
@@ -2352,7 +2372,8 @@ function getReleasePackQuickHealth(version) {
     checks.classroomIndex.exists &&
     checks.courseIndex.exists &&
     checks.emptyRoom.exists &&
-    checks.staticEmptyRoom.exists;
+    checks.staticEmptyRoom.exists &&
+    (checks.calendar.exists || checks.staticCalendar.exists);
 
   return {
     success: true,
@@ -2364,8 +2385,10 @@ function getReleasePackQuickHealth(version) {
     healthy: requiredOk,
     checks,
     counts: manifest?.counts || active?.counts || {},
-    resourceCounts: getReleaseResourceCounts(normalizedVersion),
+    resourceCounts: manifest?.resourceCounts || active?.resourceCounts || null,
     emptyRoomHealth: manifest?.packHealth?.emptyRoom || manifest?.emptyRoomHealth || {},
+    packBytes: Number(manifest?.size?.packBytes || 0) || 0,
+    source: "quick-fixed-files",
     durationMs: Date.now() - startedAt,
   };
 }
@@ -2442,7 +2465,7 @@ function getReleasePackStatus(version, options = {}) {
     }
   });
 
-  return {
+  const status = {
     version: normalizedVersion,
     releaseVersion: normalizedVersion,
     manifestExists: Boolean(manifest),
@@ -2464,6 +2487,16 @@ function getReleasePackStatus(version, options = {}) {
     resourceCounts: getReleaseResourceCounts(normalizedVersion),
     healthy: missing.length === 0 && hashErrors.length === 0,
   };
+  try {
+    releaseSummaryStore.writeDeepHealthSummary(files, status, {
+      version: normalizedVersion,
+      jobId: options.jobId || "",
+      startedAt: options.startedAt || "",
+    });
+  } catch (error) {
+    safeLog("release-deep-health-summary-write-failed", { version: normalizedVersion, error: error.message });
+  }
+  return status;
 }
 
 function assertHealthyReleasePack(version) {
@@ -2505,7 +2538,8 @@ function getReleasePackManifest(version, options = {}) {
     const active = getActiveReleaseInfo();
     const isActive = active && active.version === targetVersion;
     const status = getReleasePackQuickHealth(targetVersion);
-    const resourceCounts = manifest.resourceCounts || getReleaseResourceCounts(targetVersion);
+    const summary = releaseSummaryStore.readReleaseSummary(targetVersion, files, { active, quickHealth: status });
+    const resourceCounts = manifest.resourceCounts || summary.resourceCounts || null;
     return Object.assign({ success: true }, manifest, {
       releaseVersion: manifest.releaseVersion || targetVersion,
       version: manifest.version || targetVersion,
@@ -2530,7 +2564,8 @@ function getReleasePackManifest(version, options = {}) {
   }
 
   const status = getReleasePackQuickHealth(targetVersion);
-  if (!Object.keys(status.currentFiles || {}).length) {
+  const hasAnyPackFile = Object.values(status.checks || {}).some((item) => item && item.exists);
+  if (!hasAnyPackFile) {
     return {
       success: false,
       code: "RELEASE_PACK_NOT_FOUND",
@@ -2550,14 +2585,14 @@ function getReleasePackManifest(version, options = {}) {
     updatedAt: "",
     cacheEpoch: Date.now(),
     counts: {},
-    files: status.currentFiles,
+    files: {},
     size: {
       snapshotBytes: 0,
-      packBytes: sumMetaSize(status.currentFiles),
+      packBytes: status.packBytes || 0,
     },
     validation: {
       valid: status.healthy,
-      errors: status.missing.concat(status.hashErrors),
+      errors: status.healthy ? [] : ["Release Pack quick health failed"],
       validatedAt: new Date().toISOString(),
     },
     legacyCompat: true,
@@ -2592,6 +2627,9 @@ function rebuildReleasePack(version) {
   });
   const compression = mirrorStaticReleaseFiles(normalizedVersion);
   manifest.compression = Object.assign({}, manifest.compression || {}, compression);
+  releaseSummaryStore.writeReleaseSummary(normalizedVersion, manifest, files, {
+    quickHealth: releaseSummaryStore.buildQuickHealthFromManifest(manifest),
+  });
   clearDerivedCache();
   return {
     success: true,
@@ -2667,6 +2705,9 @@ async function rebuildReleasePackAsync(version, options = {}) {
       },
     });
     manifest.compression = Object.assign({}, manifest.compression || {}, compression);
+    releaseSummaryStore.writeReleaseSummary(normalizedVersion, manifest, files, {
+      quickHealth: releaseSummaryStore.buildQuickHealthFromManifest(manifest),
+    });
 
     if (atomic) {
       if (options.job) options.job.progress(66, "deep validating", { version: normalizedVersion });
@@ -3059,36 +3100,26 @@ function readActiveIndex(kind, version, options = {}) {
   let active;
   if (version) {
     const normalized = normalizeVersion(version);
-    const snapshot = readReleaseSnapshot(normalized);
-    if (snapshot) {
+    const files = getReleaseFiles(normalized);
+    const info = getDerivedFileInfo(kind, files);
+    if (info && fs.existsSync(info.indexPath)) {
+      const manifest = readReleasePackStaticManifest(normalized);
       active = {
         source: "release",
         version: normalized,
-        semester: snapshot.semester || snapshot.term || "",
-        updatedAt: snapshot.updatedAt || "",
-        snapshot,
+        semester: manifest && (manifest.term || manifest.semester) || "",
+        updatedAt: manifest && manifest.updatedAt || "",
+        snapshot: null,
       };
     } else {
-      const files = getReleaseFiles(normalized);
-      const info = getDerivedFileInfo(kind, files);
-      if (info && fs.existsSync(info.indexPath)) {
-        active = {
-          source: "release",
-          version: normalized,
-          semester: "",
-          updatedAt: "",
-          snapshot: null,
-        };
-      } else {
-        return {
-          success: false,
-          code: "RELEASE_NOT_FOUND",
-          reasonCode: "RELEASE_NOT_FOUND",
-          version: normalized,
-          releaseVersion: normalized,
-          items: [],
-        };
-      }
+      return {
+        success: false,
+        code: "INDEX_NOT_FOUND",
+        reasonCode: "INDEX_NOT_FOUND",
+        version: normalized,
+        releaseVersion: normalized,
+        items: [],
+      };
     }
   }
   if (!active) {
@@ -3105,7 +3136,7 @@ function readActiveIndex(kind, version, options = {}) {
       releaseVersion: active.version,
     }));
   }
-  const files = ensureDerivedIndexes(active.version, active.snapshot);
+  const files = active.snapshot ? ensureDerivedIndexes(active.version, active.snapshot) : getReleaseFiles(active.version);
   const info = getDerivedFileInfo(kind, files);
   if (!info || !fs.existsSync(info.indexPath)) {
     return {
@@ -3639,4 +3670,5 @@ module.exports = {
   writeReleaseSnapshotAsync,
   mirrorStaticReleaseFilesAsync,
   clearDerivedCache,
+  getActiveReleaseInfoFast,
 };

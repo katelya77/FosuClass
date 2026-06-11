@@ -19,6 +19,12 @@ server {
         try_files $uri =404;
     }
 
+    location /static/runtime/ {
+        alias /opt/FosuClass/server/storage/public/runtime/;
+        add_header Cache-Control "public, max-age=30, stale-while-revalidate=300" always;
+        try_files $uri =404;
+    }
+
     location /api/ {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;

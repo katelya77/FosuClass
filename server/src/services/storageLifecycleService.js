@@ -8,6 +8,7 @@ const releaseService = require("./releaseService");
 const releaseWorkerManager = require("./releaseWorkerManager");
 const termRegistryService = require("./termRegistryService");
 const termReleaseIndexService = require("./termReleaseIndexService");
+const performanceMonitorService = require("./performanceMonitorService");
 const { safeLog } = require("../utils/safeLogger");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
@@ -353,6 +354,7 @@ function getStorageStatus(options = {}) {
   const disk = getDiskStatus();
   const memory = process.memoryUsage();
   const runningJob = jobService.getRunningJobByLockGroup("release-heavy");
+  const performance = performanceMonitorService.getSnapshot();
   const releaseDir = path.join(STORAGE_DIR, "releases");
   const publicReleaseDir = path.join(STORAGE_DIR, "public", "releases");
   const stagingDir = path.join(STORAGE_DIR, "staging-uploads");
@@ -368,6 +370,10 @@ function getStorageStatus(options = {}) {
     serverTime: new Date().toISOString(),
     apiUptimeSeconds: Math.floor(process.uptime()),
     apiRssBytes: memory.rss,
+    eventLoopDelay: performance.eventLoopDelay,
+    eventLoopUtilization: performance.eventLoopUtilization,
+    heapUsedBytes: memory.heapUsed,
+    externalMemoryBytes: memory.external,
     workerStatus: runningJob ? "running" : "idle",
     runningJob: jobService.publicJob(runningJob),
     loadAverage: os.loadavg ? os.loadavg() : [0, 0, 0],

@@ -98,7 +98,7 @@ function getSnapshotFingerprint(snapshot) {
 }
 
 function getActiveInfo() {
-  const active = releaseService.getActiveReleaseInfo() || null;
+  const active = releaseService.getActiveReleaseInfoFast() || null;
   if (!active) {
     return {
       active: null,
@@ -107,11 +107,6 @@ function getActiveInfo() {
     };
   }
   let activeCanonicalHash = normalizeHash(active.canonicalHash);
-  if (!activeCanonicalHash) {
-    const activeSnapshot = releaseService.readActiveReleaseSnapshot();
-    const fingerprint = getSnapshotFingerprint(activeSnapshot);
-    activeCanonicalHash = normalizeHash(fingerprint && fingerprint.canonicalHash);
-  }
   return {
     active,
     activeReleaseVersion: active.version || active.releaseVersion || "",
@@ -120,22 +115,34 @@ function getActiveInfo() {
 }
 
 function getLatestStaging() {
-  const stagingData = readJsonFile(STAGING_LATEST_PATH, null);
-  const fingerprint = getSnapshotFingerprint(stagingData);
+  const latestUpload = stagingUploadService.listUploads({ limit: 1 })[0] || null;
+  const summary = latestUpload && latestUpload.summary || {};
   const canonicalHash = normalizeHash(
-    stagingData && (stagingData.canonicalHash || stagingData.meta && stagingData.meta.canonicalHash) ||
-    fingerprint && fingerprint.canonicalHash
+    latestUpload && (latestUpload.canonicalHash || summary.canonicalHash)
   );
   return {
-    stagingData,
+    stagingData: latestUpload ? {
+      stagingUploadId: latestUpload.uploadId || "",
+      uploadId: latestUpload.uploadId || "",
+      term: latestUpload.term || summary.term || "",
+      semester: latestUpload.term || summary.term || "",
+      releaseVersion: latestUpload.releaseVersion || summary.releaseVersion || "",
+      version: latestUpload.releaseVersion || summary.releaseVersion || "",
+      generatedAt: summary.generatedAt || latestUpload.updatedAt || latestUpload.createdAt || "",
+      canonicalHash,
+      meta: {
+        canonicalHash,
+        stagingUploadStatus: latestUpload.status || latestUpload.stagingState || "",
+      },
+    } : null,
     stagingCanonicalHash: canonicalHash,
-    fingerprint,
-    uploadId: stagingData && (stagingData.stagingUploadId || stagingData.uploadId) || "",
-    relayUploadId: stagingData && stagingData.relayUploadId || "",
-    relayTaskId: stagingData && stagingData.relayTaskId || "",
-    term: stagingData && (stagingData.term || stagingData.semester) || "",
-    releaseVersion: stagingData && (stagingData.releaseVersion || stagingData.version) || "",
-    generatedAt: stagingData && (stagingData.generatedAt || stagingData.updatedAt) || "",
+    fingerprint: null,
+    uploadId: latestUpload && latestUpload.uploadId || "",
+    relayUploadId: latestUpload && latestUpload.relayUploadId || "",
+    relayTaskId: latestUpload && (latestUpload.sourceTaskId || latestUpload.relayTaskId) || "",
+    term: latestUpload && (latestUpload.term || summary.term) || "",
+    releaseVersion: latestUpload && (latestUpload.releaseVersion || summary.releaseVersion) || "",
+    generatedAt: latestUpload && (summary.generatedAt || latestUpload.updatedAt || latestUpload.createdAt) || "",
   };
 }
 

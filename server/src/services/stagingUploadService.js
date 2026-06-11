@@ -10,6 +10,11 @@ const UPLOAD_ROOT = process.env.STAGING_DIR
   ? path.resolve(process.env.STAGING_DIR)
   : path.join(STORAGE_DIR, "staging-uploads");
 const INDEX_PATH = path.join(UPLOAD_ROOT, "uploads.json");
+const RECORD_INDEX_PATH = path.join(STORAGE_DIR, "upload-record-index.json");
+const DIRECT_STAGING_UPLOAD_DIR = path.join(STORAGE_DIR, "staging-direct-upload");
+const RESOURCE_UPLOAD_STAGING_DIR = path.join(STORAGE_DIR, "resource-upload-staging");
+const SYNC_HISTORY_PATH = path.join(path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../data")), "sync-history.json");
+const RELAY_UPLOADS_PATH = path.join(STORAGE_DIR, "relay", "uploads.json");
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -91,6 +96,79 @@ function writeIndex(list) {
   writeJsonAtomic(INDEX_PATH, list.slice(0, 200));
 }
 
+function normalizeRecordTime(record) {
+  return Date.parse(
+    record.updatedAt ||
+    record.pendingReviewAt ||
+    record.finalizedAt ||
+    record.createdAt ||
+    ""
+  ) || 0;
+}
+
+function toUploadRecord(manifest, extra = {}) {
+  const item = publicManifest(manifest || {});
+  if (!item) return null;
+  const summary = item.summary || {};
+  return Object.assign({
+    schemaVersion: 1,
+    uploadId: item.uploadId || extra.uploadId || "",
+    source: item.source || item.actorType || extra.source || "cli",
+    fileName: item.fileName || item.originalFileName || "",
+    term: item.term || summary.term || "",
+    releaseVersion: item.releaseVersion || summary.releaseVersion || "",
+    canonicalHash: item.canonicalHash || summary.canonicalHash || "",
+    canonicalHashPrefix: String(item.canonicalHash || summary.canonicalHash || "").slice(0, 12),
+    fileSize: Number(item.originalSize || item.sourceSize || item.uploadSize || 0) || 0,
+    uploadSize: Number(item.uploadSize || 0) || 0,
+    chunkCount: Number(item.totalChunks || item.chunkCount || 0) || 0,
+    uploadedChunks: Number(item.uploadedChunks || item.receivedCount || 0) || 0,
+    stagingState: item.stagingState || item.status || "unknown",
+    releaseState: item.releaseState || (item.publishedReleaseVersion ? "published" : "not-built"),
+    runtimeState: item.runtimeState || (item.active ? "active" : "inactive"),
+    failureReason: item.failureReason || item.error || "",
+    publishedReleaseVersion: item.publishedReleaseVersion || item.publishedVersion || "",
+    active: Boolean(item.active),
+    status: item.status || item.stagingState || "unknown",
+    createdAt: item.createdAt || "",
+    updatedAt: item.updatedAt || item.createdAt || "",
+    missingManifest: Boolean(extra.missingManifest),
+    note: extra.missingManifest ? "历史索引记录，原始详情不可用" : "",
+  }, item, extra);
+}
+
+function readRecordIndex() {
+  ensureStorage();
+  const payload = readJsonFile(RECORD_INDEX_PATH, null);
+  const records = Array.isArray(payload) ? payload : Array.isArray(payload && payload.records) ? payload.records : null;
+  if (records) return records;
+  return rebuildUploadRecordIndex({ reason: "missing-index" }).records;
+}
+
+function writeRecordIndex(records, extra = {}) {
+  const next = (records || [])
+    .filter(Boolean)
+    .sort((left, right) => normalizeRecordTime(right) - normalizeRecordTime(left))
+    .slice(0, 5000);
+  writeJsonAtomic(RECORD_INDEX_PATH, {
+    schemaVersion: 1,
+    rebuiltAt: extra.rebuiltAt || new Date().toISOString(),
+    reason: extra.reason || "update",
+    total: next.length,
+    records: next,
+  });
+  return next;
+}
+
+function updateRecordIndex(manifest) {
+  const record = toUploadRecord(manifest);
+  if (!record || !record.uploadId) return null;
+  const current = readRecordIndex().filter((item) => item.uploadId !== record.uploadId);
+  current.unshift(record);
+  writeRecordIndex(current, { reason: "manifest-update" });
+  return record;
+}
+
 function publicManifest(manifest) {
   if (!manifest) return null;
   const copy = Object.assign({}, manifest);
@@ -135,6 +213,7 @@ function updateIndex(manifest) {
   const next = current.filter((item) => item.uploadId !== manifest.uploadId);
   next.unshift(publicCopy);
   writeIndex(next);
+  updateRecordIndex(manifest);
 }
 
 function writeManifest(manifest) {
@@ -352,7 +431,7 @@ function concatChunks(manifest) {
   };
 }
 
-async function finalizeUpload(uploadId, actor, expected = {}) {
+async function finalizeUploadFiles(uploadId, actor, expected = {}) {
   const manifest = readManifest(uploadId);
   checkActor(manifest, actor);
   const received = getChunkStatus(manifest);
@@ -412,9 +491,18 @@ async function finalizeUpload(uploadId, actor, expected = {}) {
   manifest.updatedAt = manifest.finalizedAt;
   writeManifest(manifest);
 
+  return {
+    manifest: publicManifest(readManifest(uploadId)),
+    jsonPath,
+    joinedPath: merged.joinedPath,
+  };
+}
+
+async function finalizeUpload(uploadId, actor, expected = {}) {
+  const finalized = await finalizeUploadFiles(uploadId, actor, expected);
   let stagingData;
   try {
-    stagingData = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+    stagingData = JSON.parse(fs.readFileSync(finalized.jsonPath, "utf-8"));
   } catch (error) {
     markUploadFailed(uploadId, `JSON parse failed: ${error.message}`);
     error.statusCode = 400;
@@ -424,7 +512,7 @@ async function finalizeUpload(uploadId, actor, expected = {}) {
   return {
     manifest: publicManifest(readManifest(uploadId)),
     stagingData,
-    jsonPath,
+    jsonPath: finalized.jsonPath,
   };
 }
 
@@ -534,19 +622,50 @@ function markUploadFailed(uploadId, reason) {
   }
 }
 
+function markUploadStage(uploadId, status, patch = {}) {
+  const manifest = readManifest(uploadId);
+  manifest.status = String(status || manifest.status || "uploading");
+  manifest.stagingState = patch.stagingState || manifest.stagingState || manifest.status;
+  manifest.releaseState = patch.releaseState || manifest.releaseState || "not-built";
+  manifest.runtimeState = patch.runtimeState || manifest.runtimeState || "inactive";
+  manifest.workerPid = patch.workerPid || manifest.workerPid || null;
+  manifest.jobId = patch.jobId || manifest.jobId || "";
+  manifest.phase = patch.phase || manifest.status;
+  manifest.progress = patch.progress == null ? manifest.progress : patch.progress;
+  manifest.updatedAt = new Date().toISOString();
+  writeManifest(Object.assign(manifest, patch || {}));
+  return publicManifest(readManifest(uploadId));
+}
+
 function getUploadStatus(uploadId, actor) {
   const manifest = readManifest(uploadId);
   checkActor(manifest, actor);
   return Object.assign(publicManifest(manifest), getChunkStatus(manifest));
 }
 
-function listUploads(limit = 20) {
-  const raw = readIndex().slice(0, toPositiveInteger(limit, 20, 100));
+function normalizeListOptions(input) {
+  if (input && typeof input === "object") {
+    return {
+      limit: toPositiveInteger(input.limit, 50, 200),
+      cursor: Math.max(0, Number(input.cursor || input.offset || 0) || 0),
+      term: String(input.term || "").trim(),
+      status: String(input.status || input.stagingState || "").trim(),
+    };
+  }
+  return { limit: toPositiveInteger(input, 20, 200), cursor: 0, term: "", status: "" };
+}
+
+function listUploads(input = 20) {
+  const options = normalizeListOptions(input);
+  const raw = readRecordIndex()
+    .filter((item) => !options.term || String(item.term || "") === options.term)
+    .filter((item) => !options.status || String(item.status || item.stagingState || "") === options.status)
+    .slice(options.cursor, options.cursor + options.limit);
   const hydrated = raw.map((item) => {
     try {
       return publicManifest(readManifest(item.uploadId));
     } catch (error) {
-      return publicManifest(item);
+      return toUploadRecord(item, { missingManifest: true });
     }
   });
 
@@ -573,6 +692,148 @@ function listUploads(limit = 20) {
       duplicateCount: Math.max(0, duplicates.length - 1),
     });
   });
+}
+
+function listUploadRecords(options = {}) {
+  const normalized = normalizeListOptions(options);
+  const all = readRecordIndex()
+    .filter((item) => !normalized.term || String(item.term || "") === normalized.term)
+    .filter((item) => !normalized.status || String(item.status || item.stagingState || "") === normalized.status);
+  return {
+    success: true,
+    records: listUploads(normalized),
+    total: all.length,
+    limit: normalized.limit,
+    cursor: normalized.cursor,
+    nextCursor: normalized.cursor + normalized.limit < all.length ? normalized.cursor + normalized.limit : null,
+    indexPath: RECORD_INDEX_PATH,
+  };
+}
+
+function pushUploadRecord(records, manifest, extra = {}) {
+  const record = toUploadRecord(manifest, extra);
+  if (record && record.uploadId) records.push(record);
+}
+
+function scanManifestDirectory(records, dirPath, source) {
+  if (!fs.existsSync(dirPath)) return;
+  fs.readdirSync(dirPath, { withFileTypes: true }).forEach((entry) => {
+    const fullPath = path.join(dirPath, entry.name);
+    if (entry.isDirectory()) {
+      const manifestPath = path.join(fullPath, "manifest.json");
+      const manifest = readJsonFile(manifestPath, null);
+      if (manifest && manifest.uploadId) {
+        pushUploadRecord(records, manifest, { source: manifest.source || source });
+      } else {
+        pushUploadRecord(records, {
+          uploadId: entry.name,
+          source,
+          status: "unknown",
+          createdAt: "",
+          updatedAt: "",
+        }, { missingManifest: true });
+      }
+      return;
+    }
+    if (!entry.isFile() || !/\.json$/i.test(entry.name)) return;
+    const stat = fs.statSync(fullPath);
+    if (stat.size > 2 * 1024 * 1024) {
+      pushUploadRecord(records, {
+        uploadId: path.basename(entry.name, path.extname(entry.name)),
+        source,
+        status: "unknown",
+        fileName: entry.name,
+        originalSize: stat.size,
+        createdAt: new Date(stat.mtimeMs).toISOString(),
+        updatedAt: new Date(stat.mtimeMs).toISOString(),
+      }, { missingManifest: true });
+      return;
+    }
+    const manifest = readJsonFile(fullPath, null);
+    if (manifest && (manifest.uploadId || manifest.id || manifest.taskId)) {
+      pushUploadRecord(records, Object.assign({}, manifest, {
+        uploadId: manifest.uploadId || manifest.id || manifest.taskId,
+        source: manifest.source || source,
+      }));
+    }
+  });
+}
+
+function importSyncHistoryRecords(records) {
+  const payload = readJsonFile(SYNC_HISTORY_PATH, null);
+  const items = Array.isArray(payload) ? payload : Array.isArray(payload && payload.items) ? payload.items : Array.isArray(payload && payload.history) ? payload.history : [];
+  items.forEach((item, index) => {
+    if (!item || typeof item !== "object") return;
+    const uploadId = item.uploadId || item.stagingUploadId || item.taskId || item.id || `sync-history-${index}`;
+    pushUploadRecord(records, {
+      uploadId,
+      source: item.source || item.syncSource || "sync-history",
+      status: item.status || item.stagingState || "history",
+      term: item.term || item.semester || "",
+      releaseVersion: item.releaseVersion || item.version || "",
+      canonicalHash: item.canonicalHash || item.hash || "",
+      originalSize: item.fileSize || item.size || 0,
+      createdAt: item.createdAt || item.startedAt || item.time || item.updatedAt || "",
+      updatedAt: item.updatedAt || item.completedAt || item.time || item.createdAt || "",
+      failureReason: item.failureReason || item.error || "",
+      publishedReleaseVersion: item.publishedReleaseVersion || item.publishedVersion || "",
+      summary: item.summary || null,
+    }, { missingManifest: true });
+  });
+}
+
+function importRelayUploadRecords(records) {
+  const payload = readJsonFile(RELAY_UPLOADS_PATH, null);
+  const items = Array.isArray(payload) ? payload : Array.isArray(payload && payload.uploads) ? payload.uploads : Array.isArray(payload && payload.items) ? payload.items : [];
+  items.forEach((item, index) => {
+    if (!item || typeof item !== "object") return;
+    pushUploadRecord(records, Object.assign({}, item, {
+      uploadId: item.uploadId || item.id || item.taskId || `relay-upload-${index}`,
+      source: item.source || "relay",
+      status: item.status || "history",
+    }), { missingManifest: !item.uploadId });
+  });
+}
+
+function rebuildUploadRecordIndex(options = {}) {
+  ensureStorage();
+  const records = [];
+  readIndex().forEach((item) => {
+    if (item && item.uploadId) pushUploadRecord(records, item);
+  });
+  if (fs.existsSync(UPLOAD_ROOT)) {
+    fs.readdirSync(UPLOAD_ROOT, { withFileTypes: true }).forEach((entry) => {
+      if (!entry.isDirectory()) return;
+      const manifestPath = path.join(UPLOAD_ROOT, entry.name, "manifest.json");
+      const manifest = readJsonFile(manifestPath, null);
+      if (manifest && manifest.uploadId) {
+        pushUploadRecord(records, manifest);
+      } else {
+        pushUploadRecord(records, {
+          uploadId: entry.name,
+          source: "cli",
+          status: "unknown",
+          createdAt: "",
+          updatedAt: "",
+        }, { missingManifest: true });
+      }
+    });
+  }
+  scanManifestDirectory(records, DIRECT_STAGING_UPLOAD_DIR, "staging-direct-upload");
+  scanManifestDirectory(records, RESOURCE_UPLOAD_STAGING_DIR, "resource-upload-staging");
+  importSyncHistoryRecords(records);
+  importRelayUploadRecords(records);
+  const byId = new Map();
+  records.filter(Boolean).forEach((record) => {
+    const id = record.uploadId;
+    const existing = byId.get(id);
+    if (!existing || normalizeRecordTime(record) >= normalizeRecordTime(existing)) byId.set(id, record);
+  });
+  const written = writeRecordIndex(Array.from(byId.values()), {
+    reason: options.reason || "manual-rebuild",
+    rebuiltAt: new Date().toISOString(),
+  });
+  return { success: true, rebuilt: true, total: written.length, records: written, indexPath: RECORD_INDEX_PATH };
 }
 
 function manifestTime(manifest) {
@@ -730,12 +991,17 @@ function normalizeStagingData(data) {
 
 module.exports = {
   UPLOAD_ROOT,
+  RECORD_INDEX_PATH,
+  finalizeUploadFiles,
   finalizeUpload,
   getUploadStatus,
   initUpload,
   deleteUpload,
   listUploads,
+  listUploadRecords,
+  rebuildUploadRecordIndex,
   markUploadFailed,
+  markUploadStage,
   markUploadUnchanged,
   markUploadPendingReview,
   markUploadPublished,

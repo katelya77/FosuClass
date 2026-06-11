@@ -2479,6 +2479,7 @@ Page({
 
   refreshActiveSnapshotInBackground(currentSnapshot) {
     if (this._snapshotRefreshRunning) return;
+    if (releasePackService.readRuntimeCircuit && releasePackService.readRuntimeCircuit()) return;
     this._snapshotRefreshRunning = true;
     this.resolveActiveSnapshot({ forceNetwork: true })
       .then((result) => {
@@ -2724,6 +2725,12 @@ Page({
     };
 
     const fetchCatalogFromNetwork = () => {
+      if (releasePackService.readRuntimeCircuit && releasePackService.readRuntimeCircuit()) {
+        const error = new Error("RUNTIME_POINTER_CIRCUIT_OPEN");
+        error.code = "RUNTIME_POINTER_CIRCUIT_OPEN";
+        handleCatalogError(error);
+        return;
+      }
       request.get("/api/fosu/bootstrap", { semester: term }, {
         showLoading: false,
         silentError: true,
@@ -2765,6 +2772,13 @@ Page({
     const cachedClassIndex = releasePackService.readCachedIndex("class", { term, releaseVersion });
     if (cachedCatalog) {
       renderCatalog(cachedCatalog, true);
+      if (releasePackService.readRuntimeCircuit && releasePackService.readRuntimeCircuit()) return;
+      fetchCatalogFromNetwork();
+      return;
+    }
+
+    if (cachedClassIndex && renderFromReleasePackIndex(cachedClassIndex, true)) {
+      if (releasePackService.readRuntimeCircuit && releasePackService.readRuntimeCircuit()) return;
       fetchCatalogFromNetwork();
       return;
     }
@@ -2781,7 +2795,7 @@ Page({
     fetchCatalogFromNetwork();
     if (cachedClassIndex) {
       releasePackService.loadIndex("class", { term, releaseVersion }, {
-        forceNetwork: true,
+        forceNetwork: false,
         timeout: SCHOOL_REQUEST_TIMEOUT,
       })
         .then((indexPayload) => renderFromReleasePackIndex(indexPayload, false))

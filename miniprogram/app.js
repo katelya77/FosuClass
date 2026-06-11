@@ -120,7 +120,7 @@ App({
     return startupCoordinator.resolveRuntimePointer({
       timeout: 5000,
       retries: 0,
-      forceNetwork: true,
+      forceNetwork: false,
     }).then((pointer) => {
       if (!pointer || !pointer.releaseVersion) return null;
       const current = this.globalData.activeRelease || {};
@@ -140,7 +140,7 @@ App({
       return releasePackService.switchReleaseSafely({
         term: pointer.term || pointer.activeTerm,
         dedupe: true,
-        forceNetwork: true,
+        forceNetwork: !pointer.fromStorage && !pointer.circuitOpen,
         warmupTypes: ["class", "teacher", "classroom", "course"],
         timeout: 6000,
         retries: 0,

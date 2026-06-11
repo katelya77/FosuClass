@@ -5024,6 +5024,10 @@ const adminConsoleHtml = `<!doctype html>
         relayTasks: [],
         relayUploads: [],
         stagingUploads: [],
+        apiInflight: {},
+        apiAbortControllers: {},
+        lastCloudflareToastAt: 0,
+        lastSyncLoadAt: 0,
         terms: [],
         termRegistry: null,
         termReleaseIndex: null,
@@ -5167,6 +5171,11 @@ const adminConsoleHtml = `<!doctype html>
 
       function showToast(message, type) {
         type = type || "success";
+        if (type === "error" && /statusCode=504|Cloudflare|Ray ID/i.test(String(message || ""))) {
+          var now = Date.now();
+          if (state.lastCloudflareToastAt && now - state.lastCloudflareToastAt < 10000) return;
+          state.lastCloudflareToastAt = now;
+        }
         var toast = document.createElement("div");
         toast.className = "toast " + type;
         toast.textContent = message;
@@ -5218,12 +5227,23 @@ const adminConsoleHtml = `<!doctype html>
         options = options || {};
         options.headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
         var method = String(options.method || "GET").toUpperCase();
+        var requestKey = method + " " + path;
+        if (method === "GET" && options.dedupe !== false && state.apiInflight[requestKey]) {
+          return state.apiInflight[requestKey];
+        }
         if (state.csrfToken && ["POST", "PUT", "PATCH", "DELETE"].indexOf(method) >= 0 && !options.headers["X-Fosu-CSRF"]) {
           options.headers["X-Fosu-CSRF"] = state.csrfToken;
         }
         options.credentials = "include";
+        var fetchOptions = Object.assign({}, options);
+        delete fetchOptions.dedupe;
+        if (!fetchOptions.signal && typeof AbortController !== "undefined") {
+          var controller = new AbortController();
+          fetchOptions.signal = controller.signal;
+          state.apiAbortControllers[requestKey] = controller;
+        }
 
-        return fetch(path, options).then(function (res) {
+        var requestPromise = fetch(path, fetchOptions).then(function (res) {
           return res.text().then(function (text) {
             var data = {};
             try {
@@ -5248,8 +5268,28 @@ const adminConsoleHtml = `<!doctype html>
 
             return data;
           });
+        }).finally(function() {
+          delete state.apiInflight[requestKey];
+          delete state.apiAbortControllers[requestKey];
         });
+        if (method === "GET" && options.dedupe !== false) {
+          state.apiInflight[requestKey] = requestPromise;
+        }
+        return requestPromise;
       }
+
+      function abortAdminRequests() {
+        Object.keys(state.apiAbortControllers || {}).forEach(function(key) {
+          var controller = state.apiAbortControllers[key];
+          if (controller && typeof controller.abort === "function") {
+            try { controller.abort(); } catch (err) {}
+          }
+        });
+        state.apiAbortControllers = {};
+        state.apiInflight = {};
+      }
+
+      window.addEventListener("beforeunload", abortAdminRequests);
 
       function safeFetch(path, options) {
         options = options || {};
@@ -5483,7 +5523,7 @@ const adminConsoleHtml = `<!doctype html>
           term: value("termCreateId"),
           semesterText: value("termCreateText"),
           termStartDate: value("termCreateStart"),
-          totalWeeks: Number(value("termCreateWeeks") || 20),
+          totalWeeks: Number(value("termCreateWeeks")),
           weekStart: value("termCreateWeekStart") || "monday"
         };
         return api("/api/admin/terms", { method: "POST", body: JSON.stringify(payload) })
@@ -6530,7 +6570,7 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       // Panel 3: 同步中心 Sync Center
-      function loadSyncStatus() {
+      function loadSyncStatusLegacy() {
         setStatus("正在获取系统同步状态与运维指南...");
         return api("/api/admin/sync/status")
           .then(function(res) {
@@ -6603,6 +6643,114 @@ const adminConsoleHtml = `<!doctype html>
           .catch(function(err) {
             showToast(err.message, "error");
             showModuleError("sync", err);
+          });
+      }
+
+      function loadSyncHistoryPanel() {
+        return api("/api/admin/sync/history?limit=50")
+          .then(function(res) {
+            state.syncHistory = res.items || [];
+            renderSyncHistoryTable();
+            return res;
+          })
+          .catch(function(err) {
+            showModuleError("sync-history", err);
+            throw err;
+          });
+      }
+
+      function loadReleaseHistoryPanel() {
+        return api("/api/admin/sync/releases?limit=50")
+          .then(function(res) {
+            state.releasesHistory = res.releases || [];
+            renderReleaseHistoryTable();
+            return res;
+          })
+          .catch(function(err) {
+            showModuleError("sync-releases", err);
+            throw err;
+          });
+      }
+
+      function loadRelayPanels() {
+        api("/api/admin/relay/tasks")
+          .then(function(res) {
+            state.relayTasks = res.tasks || [];
+            renderRelayTasks();
+          })
+          .catch(function(err) { showModuleError("relay-tasks", err); });
+        api("/api/admin/relay/uploads?limit=50")
+          .then(function(res) {
+            state.relayUploads = res.uploads || [];
+            renderRelayUploads();
+          })
+          .catch(function(err) { showModuleError("relay-uploads", err); });
+      }
+
+      function loadStagingUploadsPanel() {
+        return api("/api/admin/staging/status?limit=50")
+          .then(function(res) {
+            state.stagingUploads = res.uploads || [];
+            renderStagingUploads();
+            return res;
+          })
+          .catch(function(err) {
+            showModuleError("staging-uploads", err);
+            renderStagingUploads();
+            throw err;
+          });
+      }
+
+      function loadRuntimeStatusPanel() {
+        api("/api/admin/system/load")
+          .then(function(res) {
+            state.systemLoad = res || null;
+          })
+          .catch(function(err) { showModuleError("system-load", err); });
+        refreshStorageStatus(false).catch(function(err) {
+          showModuleError("storage-status", err);
+        });
+      }
+
+      function loadSyncLazyPanels() {
+        ignoreLoadError(loadSyncHistoryPanel());
+        ignoreLoadError(loadReleaseHistoryPanel());
+        loadRelayPanels();
+        ignoreLoadError(loadStagingUploadsPanel());
+        loadRuntimeStatusPanel();
+      }
+
+      function loadSyncStatus(options) {
+        options = options || {};
+        var now = Date.now();
+        if (!options.force && state.lastSyncLoadAt && now - state.lastSyncLoadAt < 800 && state.apiInflight["GET /api/admin/sync/status"]) {
+          return state.apiInflight["GET /api/admin/sync/status"];
+        }
+        state.lastSyncLoadAt = now;
+        setStatus("姝ｅ湪鑾峰彇绯荤粺鍚屾鐘舵€佷笌杩愮淮鎸囧崡...");
+        return api("/api/admin/sync/status")
+          .then(function(res) {
+            state.syncStatus = res.data;
+            renderSyncStatusGrid();
+            if ($("syncLastRefreshAt")) {
+              $("syncLastRefreshAt").textContent = "鏈€杩戝埛鏂帮細" + formatDate(new Date().toISOString());
+            }
+            var defaultTerm = state.syncStatus ? state.syncStatus.semester : (state.dashboard && state.dashboard.currentSemester) || "";
+            if (!state.termSelectsInitialized) {
+              initTermSelect("wizardTerm", "wizardTermCustom", defaultTerm);
+              initTermSelect("relayTaskTerm", "relayTaskTermCustom", defaultTerm);
+              initTermSelect("releaseTermFilter", null, defaultTerm, true);
+              syncWizardStartDateWithTerm(true);
+              state.termSelectsInitialized = true;
+            }
+            updateWizardCommand();
+            loadSyncLazyPanels();
+            return state.syncStatus;
+          })
+          .catch(function(err) {
+            showToast(err.message, "error");
+            showModuleError("sync", err);
+            throw err;
           });
       }
 

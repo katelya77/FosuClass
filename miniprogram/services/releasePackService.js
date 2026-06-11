@@ -15,9 +15,12 @@ const EMPTY_ROOM_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const MAX_EMPTY_ROOM_SECTION = 14;
 const MAX_EMPTY_ROOM_WEEK = 30;
 const LOCAL_ACTIVE_RELEASE_KEY = `${CACHE_PREFIX}:active-release`;
+const RUNTIME_POINTER_CIRCUIT_KEY = `${CACHE_PREFIX}:runtime-pointer-circuit`;
+const RUNTIME_POINTER_CIRCUIT_MS = 45 * 1000;
 const activeManifestInflight = new Map();
 const switchReleaseInflight = new Map();
 let runtimePointerInflight = null;
+let runtimePointerCircuit = null;
 
 function cachePart(value, fallback = "unknown") {
   return encodeURIComponent(String(value || fallback));
@@ -277,9 +280,87 @@ function normalizeRuntimePointer(payload) {
   };
 }
 
+function isNetworkTimeout(error) {
+  const code = String(error && (error.code || error.errMsg || error.message || "") || "").toUpperCase();
+  return code.indexOf("TIMEOUT") >= 0 ||
+    code.indexOf("REQUEST_TIMEOUT") >= 0 ||
+    code.indexOf("NETWORK") >= 0 ||
+    code.indexOf("FAIL") >= 0;
+}
+
+function readRuntimeCircuit() {
+  if (runtimePointerCircuit && runtimePointerCircuit.openUntil > Date.now()) return runtimePointerCircuit;
+  const stored = readStorage(RUNTIME_POINTER_CIRCUIT_KEY);
+  if (stored && Number(stored.openUntil || 0) > Date.now()) {
+    runtimePointerCircuit = stored;
+    return stored;
+  }
+  return null;
+}
+
+function openRuntimeCircuit(error) {
+  if (!isNetworkTimeout(error)) return null;
+  const circuit = {
+    openUntil: Date.now() + RUNTIME_POINTER_CIRCUIT_MS,
+    openedAt: Date.now(),
+    reason: error && (error.code || error.errMsg || error.message || "networkError") || "networkError",
+  };
+  runtimePointerCircuit = circuit;
+  writeStorage(RUNTIME_POINTER_CIRCUIT_KEY, circuit);
+  return circuit;
+}
+
+function clearRuntimeCircuit() {
+  runtimePointerCircuit = null;
+  removeStorage(RUNTIME_POINTER_CIRCUIT_KEY);
+}
+
+function pointerFromCachedManifest(entry, extra = {}) {
+  const manifest = normalizeManifest(entry && (entry.manifest || entry));
+  if (!manifest) return null;
+  return Object.assign({
+    success: true,
+    schemaVersion: 1,
+    activeTerm: manifest.term,
+    term: manifest.term,
+    releaseVersion: manifest.releaseVersion,
+    updatedAt: manifest.updatedAt || "",
+    cacheEpoch: manifest.cacheEpoch,
+    forceRefreshToken: manifest.forceRefreshToken,
+    termConfig: manifest.termConfig || { term: manifest.term, releaseVersion: manifest.releaseVersion },
+    urls: {
+      manifest: resolveStaticManifestUrl(manifest.releaseVersion),
+      classIndex: resolveIndexUrl("class", manifest, { term: manifest.term, releaseVersion: manifest.releaseVersion }),
+      calendar: manifest.calendarUrl || "",
+      bootstrap: manifest.bootstrapUrl || manifest.catalogUrl || "",
+      catalog: manifest.catalogUrl || manifest.bootstrapUrl || "",
+    },
+    source: "last-known-good-runtime-pointer",
+    fromStorage: true,
+  }, extra);
+}
+
+function getCachedRuntimePointer(options = {}) {
+  const term = options.term || "";
+  const entry = term
+    ? getLocalActiveRelease(term)
+    : (readStorage(LOCAL_ACTIVE_RELEASE_KEY) || scanLastGood({}));
+  return pointerFromCachedManifest(entry);
+}
+
 function resolveRuntimePointer(options = {}) {
   if (runtimePointerInflight && options.dedupe !== false && !options.forceNetwork) {
     return runtimePointerInflight;
+  }
+  const openCircuit = !options.forceNetwork && readRuntimeCircuit();
+  if (openCircuit) {
+    const fallbackPointer = getCachedRuntimePointer(options);
+    if (fallbackPointer) {
+      return Promise.resolve(Object.assign({}, fallbackPointer, {
+        circuitOpen: true,
+        circuitReason: openCircuit.reason,
+      }));
+    }
   }
   const requestOptions = {
     showLoading: false,
@@ -314,7 +395,20 @@ function resolveRuntimePointer(options = {}) {
         indexUrls: { class: pointer.urls && pointer.urls.classIndex },
       }));
       if (manifest) writeManifestCache(manifest);
+      clearRuntimeCircuit();
       return pointer;
+    })
+    .catch((error) => {
+      const circuit = openRuntimeCircuit(error);
+      const fallbackPointer = getCachedRuntimePointer(options);
+      if (fallbackPointer) {
+        return Object.assign({}, fallbackPointer, {
+          fallback: true,
+          fallbackReason: error && (error.code || error.reasonCode || error.errMsg || error.message || "networkError"),
+          circuitOpen: Boolean(circuit),
+        });
+      }
+      throw error;
     })
     .finally(() => {
       runtimePointerInflight = null;
@@ -1408,6 +1502,7 @@ module.exports = {
   CACHE_PREFIX,
   DEFAULT_TERM,
   LOCAL_ACTIVE_RELEASE_KEY,
+  RUNTIME_POINTER_CIRCUIT_KEY,
   getLocalActiveReleaseKey,
   getManifestCacheKey,
   getIndexCacheKey,
@@ -1433,6 +1528,10 @@ module.exports = {
   warmupIndex,
   switchReleaseSafely,
   getLastKnownGood,
+  getCachedRuntimePointer,
+  readRuntimeCircuit,
+  openRuntimeCircuit,
+  clearRuntimeCircuit,
   clearOldReleaseCaches,
   filterIndexPayload,
   filterEmptyRoomIndex,

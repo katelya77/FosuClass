@@ -87,11 +87,13 @@ async function run() {
     assert.strictEqual(body.success, true);
     assert.strictEqual(body.term, "2025-2026-2");
     assert.strictEqual(body.releaseVersion, version);
-    assert(fs.existsSync(runtimePointerService.ACTIVE_RUNTIME_PATH), "API should rebuild missing pointer");
+    assert.strictEqual(body.source, "manifest-fallback");
+    assert.strictEqual(fs.existsSync(runtimePointerService.ACTIVE_RUNTIME_PATH), false, "API fallback must not rebuild pointer in request path");
   } finally {
     server.close();
   }
 
+  runtimePointerService.ensureActivePointer();
   const persisted = JSON.parse(fs.readFileSync(runtimePointerService.ACTIVE_RUNTIME_PATH, "utf-8"));
   assert.strictEqual(persisted.term, "2025-2026-2");
   assert.strictEqual(termRegistryService.getActiveTerm().term, "2025-2026-2");
