@@ -1,18 +1,18 @@
 const BRAND = require("../../config/brand");
 const { courseTimes } = require("../../data/courseTimes");
-const { mockCalendar } = require("../../data/mockCalendar");
 const { buildScheduleColumns, normalizeCourse } = require("../../utils/course");
 const { getSettings, saveSettings } = require("../../utils/storage");
 const customCourseService = require("../../services/customCourseService");
 const releasePackService = require("../../services/releasePackService");
+const teachingCalendarService = require("../../services/teachingCalendarService");
 const {
   TOTAL_WEEKS,
+  addLocalDays,
   clampWeek,
   formatDateLabel,
   formatWeekRange,
   getCurrentTeachingWeek,
   getTodayTeachingInfo,
-  getRuntimeTermConfig,
   getVisibleWeekdays,
   getWeekRangeByWeekNo,
 } = require("../../utils/week");
@@ -21,19 +21,17 @@ const SECTION_HEIGHT = 90;
 const WEEKEND_DAY_WIDTH = 142;
 const TIME_AXIS_WIDTH = 76;
 
-function parseDate(dateText) {
-  const parts = String(dateText || "").split("-").map(Number);
-  return new Date(parts[0], parts[1] - 1, parts[2]);
-}
-
-function addDays(dateText, offset) {
-  const date = parseDate(dateText);
-  date.setDate(date.getDate() + offset);
-  return date;
-}
-
 function getContentWidthRpx() {
   return 750 - 32; // padding 左右各 16
+}
+
+function calendarChanged(left, right) {
+  if (!left || !right) return Boolean(left || right);
+  return left.term !== right.term ||
+    left.releaseVersion !== right.releaseVersion ||
+    JSON.stringify(left.termConfig || {}) !== JSON.stringify(right.termConfig || {}) ||
+    JSON.stringify((left.weeks || []).map((week) => [week.weekNo, week.startDate, week.endDate])) !==
+      JSON.stringify((right.weeks || []).map((week) => [week.weekNo, week.startDate, week.endDate]));
 }
 
 function getTypeText(type) {
@@ -126,7 +124,8 @@ Page({
     const { type = "class", name = "", id = "", semester = "", term = "", releaseVersion = "", displayType = "", isAggregated = "", shareScheduleId = "" } = options;
     const decodedName = safeDecodeURIComponent(name);
     const decodedId = safeDecodeURIComponent(id);
-    const runtimeTerm = getRuntimeTermConfig().term;
+    const immediateCalendar = teachingCalendarService.getImmediateActiveCalendar();
+    const runtimeTerm = immediateCalendar.termConfig && immediateCalendar.termConfig.term || immediateCalendar.term || "";
     const decodedSemester = safeDecodeURIComponent(term || semester || runtimeTerm);
     const localActiveRelease = releasePackService.getLocalActiveRelease(decodedSemester);
     const decodedReleaseVersion = safeDecodeURIComponent(releaseVersion) ||
@@ -362,33 +361,53 @@ Page({
 
   initScheduleLayout() {
     const settings = getSettings();
+    const calendar = teachingCalendarService.getImmediateActiveCalendar({ term: this.data.semester });
+    const termConfig = calendar.termConfig || {};
     const now = new Date();
     const currentWeek = settings.manualWeekOverride
-      ? clampWeek(settings.currentWeek)
-      : getCurrentTeachingWeek(now, mockCalendar);
+      ? clampWeek(settings.currentWeek, termConfig)
+      : getCurrentTeachingWeek(now, calendar.weeks || [], termConfig);
+    this.activeTeachingCalendar = calendar;
       
     this.setData({
       currentWeek,
+      totalWeeks: termConfig.totalWeeks || TOTAL_WEEKS,
       showWeekend: settings.showWeekend || false,
       weekendShowMode: settings.weekendShowMode || "overview",
     }, () => {
       this.renderSchedule();
     });
+    teachingCalendarService.loadActiveTeachingCalendar({ term: this.data.semester })
+      .then((latest) => {
+        if (!calendarChanged(this.activeTeachingCalendar, latest)) return;
+        this.activeTeachingCalendar = latest;
+        const latestConfig = latest.termConfig || {};
+        const nextWeek = getSettings().manualWeekOverride
+          ? clampWeek(getSettings().currentWeek, latestConfig)
+          : getCurrentTeachingWeek(new Date(), latest.weeks || [], latestConfig);
+        this.setData({
+          currentWeek: nextWeek,
+          totalWeeks: latestConfig.totalWeeks || TOTAL_WEEKS,
+        }, () => this.renderSchedule());
+      })
+      .catch(() => {});
   },
 
   renderSchedule() {
     const settings = getSettings();
+    const calendar = this.activeTeachingCalendar || teachingCalendarService.getImmediateActiveCalendar({ term: this.data.semester });
+    const termConfig = calendar.termConfig || {};
     const now = new Date();
-    const todayInfo = getTodayTeachingInfo(now, mockCalendar);
+    const todayInfo = getTodayTeachingInfo(now, calendar.weeks || [], termConfig);
     const currentWeek = this.data.currentWeek;
-    const weekInfo = getWeekRangeByWeekNo(currentWeek, mockCalendar);
+    const weekInfo = getWeekRangeByWeekNo(currentWeek, calendar.weeks || [], termConfig);
     
     const showWeekend = this.data.showWeekend;
     const weekendShowMode = this.data.weekendShowMode || "overview";
     const baseWeekdays = getVisibleWeekdays(showWeekend, now);
     
     const weekdays = baseWeekdays.map((day, index) => {
-      const date = addDays(weekInfo.startDate, index);
+      const date = addLocalDays(weekInfo.startDate, index);
       return Object.assign({}, day, {
         dateLabel: formatDateLabel(date),
         isToday: currentWeek === todayInfo.weekNo && day.weekday === todayInfo.weekday,
@@ -431,11 +450,12 @@ Page({
     const dayTrackWidth = dayColumnWidth * weekdays.length;
     const gridWidth = TIME_AXIS_WIDTH + dayTrackWidth;
     const weekRangeText = formatWeekRange(weekInfo.startDate, weekInfo.endDate);
+    const weekSwitcherLabel = weekRangeText ? `${weekRangeText} · 第${currentWeek}周` : `日期待同步 · 第${currentWeek}周`;
 
     this.setData({
       weekRangeText,
       weekScopeText: showWeekend ? "周一至周日" : "周一至周五",
-      weekSwitcherLabel: `${weekRangeText} · 第${currentWeek}周`,
+      weekSwitcherLabel,
       gridWidth,
       dayTrackWidth,
       dayColumnWidth,
@@ -453,9 +473,11 @@ Page({
 
   onWeekChange(event) {
     const type = event.detail.type;
+    const calendar = this.activeTeachingCalendar || teachingCalendarService.getImmediateActiveCalendar({ term: this.data.semester });
+    const termConfig = calendar.termConfig || {};
     const nextWeek = type === "current"
-      ? getCurrentTeachingWeek(new Date(), mockCalendar)
-      : clampWeek(event.detail.week);
+      ? getCurrentTeachingWeek(new Date(), calendar.weeks || [], termConfig)
+      : clampWeek(event.detail.week, termConfig);
     
     this.setData({
       currentWeek: nextWeek,

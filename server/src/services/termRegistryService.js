@@ -16,7 +16,7 @@ const LEGACY_CURRENT_TERM_CONFIG = Object.freeze({
   term: "2025-2026-2",
   semesterText: "2025-2026学年第二学期",
   termStartDate: "2026-03-09",
-  totalWeeks: 20,
+  totalWeeks: 19,
   weekStart: "monday",
   source: "legacy-compatibility-fallback",
 });

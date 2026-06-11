@@ -392,7 +392,7 @@
     "test:static-signed-url-disabled-by-default": "node tools/test-static-signed-url-default.js",
     "test:logs-mask-sensitive-values": "node tools/test-logs-mask-sensitive-values.js",
     "test:runtime-pointer": "node tools/test-runtime-pointer.js",
-    "test:teaching-calendar": "node tools/test-teaching-calendar.js",
+    "test:teaching-calendar": "node tools/test-teaching-calendar.js && node tools/test-miniprogram-calendar-date-fix.js",
     "test:semester-readiness-explain": "node tools/test-semester-readiness-explain.js",
     "test:miniprogram-calendar-fallback": "node tools/test-miniprogram-calendar-fallback.js"
   },

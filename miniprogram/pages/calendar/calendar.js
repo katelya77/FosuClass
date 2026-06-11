@@ -1,10 +1,8 @@
 const {
   formatWeekRange,
-  getRuntimeTermConfig,
   getTodayTeachingInfo,
 } = require("../../utils/week");
 const teachingCalendarService = require("../../services/teachingCalendarService");
-const { getBuiltinTeachingCalendar } = require("../../data/builtinTeachingCalendar");
 
 Page({
   data: {
@@ -19,16 +17,20 @@ Page({
   onShow() {
     this._calendarSeq = (this._calendarSeq || 0) + 1;
     const seq = this._calendarSeq;
-    const termConfig = getRuntimeTermConfig();
-    const builtinSource = getBuiltinTeachingCalendar();
-    const builtin = teachingCalendarService.normalizeCalendar(builtinSource, {
-      termConfig: builtinSource.termConfig,
-    });
+    const immediate = teachingCalendarService.getImmediateActiveCalendar();
+    const termConfig = immediate.termConfig || {};
+    const decorated = this.decorateWeeks(immediate, termConfig);
+    const todayInfo = getTodayTeachingInfo(new Date(), decorated, termConfig);
+    const phaseText = this.getPhaseText(todayInfo.termPhase);
     this.setData({
       loading: false,
-      title: `${termConfig.semesterText || builtin.semesterText || termConfig.term || builtin.term || "当前学期"}教学周历`,
-      currentWeekText: "正在获取当前学期",
-      weeks: this.decorateWeeks(builtin, termConfig),
+      title: `${immediate.semesterText || termConfig.semesterText || immediate.term || "当前学期"}教学周历`,
+      currentWeek: todayInfo.isInTerm ? todayInfo.weekNo : 0,
+      currentWeekText: todayInfo.isInTerm
+        ? `${todayInfo.dateLabel} ${todayInfo.weekdayLabel} 第${todayInfo.weekNo}周`
+        : (phaseText || "教学安排待维护"),
+      phaseText,
+      weeks: decorated,
     });
 
     teachingCalendarService.loadActiveTeachingCalendar({ pointerTimeout: 1800, calendarTimeout: 2200 })

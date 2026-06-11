@@ -5,10 +5,10 @@ const {
   mergeCanonicalCoursesForDisplay,
   normalizeCourse,
 } = require("./course");
-const { mockCalendar } = require("../data/mockCalendar");
 const { getSettings } = require("./storage");
 const customCourseService = require("../services/customCourseService");
-const { clampWeek, getCurrentTeachingWeek, getTodayTeachingInfo, getTodayWeekday, getRuntimeTermConfig } = require("./week");
+const teachingCalendarService = require("../services/teachingCalendarService");
+const { clampWeek, getTodayTeachingInfo, getTodayWeekday } = require("./week");
 const { getCourseWeekStatus } = require("./courseWeekRules");
 
 function isCourseActiveInCurrentWeek(course, currentWeek) {
@@ -19,10 +19,12 @@ function getCurrentBoundSchedule() {
   const settings = getSettings();
   const { getCurrentScheduleTarget } = require("./storage");
   const target = getCurrentScheduleTarget();
+  const calendar = teachingCalendarService.getImmediateActiveCalendar();
+  const termConfig = calendar.termConfig || {};
 
   const classId = settings.classId || target?.classId || "";
   const className = settings.className || target?.name || target?.className || "";
-  const semester = target?.term || target?.semester || settings.semesterId || settings.semester || getRuntimeTermConfig().term;
+  const semester = target?.term || target?.semester || settings.semesterId || settings.semester || termConfig.term;
   let schedule = null;
   let source = "";
 
@@ -53,16 +55,17 @@ function getCurrentBoundSchedule() {
   };
 }
 
-function getNextCoursePreview(allCourses, currentWeek, todayWeekday) {
+function getNextCoursePreview(allCourses, currentWeek, todayWeekday, termConfig) {
   if (!allCourses || !allCourses.length) return null;
   const { courseTimes } = require("../data/courseTimes");
   const days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+  const totalWeeks = Number(termConfig && termConfig.totalWeeks || 19) || 19;
 
   for (let i = 1; i <= 7; i += 1) {
     const nextDay = ((todayWeekday + i - 1) % 7) + 1;
     const isNextWeek = todayWeekday + i > 7;
     const targetWeek = isNextWeek ? currentWeek + 1 : currentWeek;
-    if (targetWeek > getRuntimeTermConfig().totalWeeks) continue;
+    if (targetWeek > totalWeeks) continue;
 
     const activeCourses = allCourses.map(normalizeCourse).filter((course) => {
       return Number(course.weekday) === nextDay && isCourseActiveInCurrentWeek(course, targetWeek);
@@ -114,11 +117,14 @@ function decorateTodayCourses(courses, now) {
 function getTodayCoursesData() {
   const settings = getSettings();
   const now = new Date();
-  const todayInfo = getTodayTeachingInfo(now, mockCalendar);
-  const weekday = getTodayWeekday(now);
+  const calendar = teachingCalendarService.getImmediateActiveCalendar();
+  const termConfig = calendar.termConfig || {};
+  const weeks = calendar.weeks || [];
+  const todayInfo = getTodayTeachingInfo(now, weeks, termConfig);
+  const weekday = todayInfo.weekday || getTodayWeekday(now);
   const currentWeek = settings.manualWeekOverride
-    ? clampWeek(settings.currentWeek)
-    : getCurrentTeachingWeek(now, mockCalendar);
+    ? clampWeek(settings.currentWeek, termConfig)
+    : todayInfo.weekNo;
 
   const boundInfo = getCurrentBoundSchedule();
   const { classId, className, semester, schedule, source } = boundInfo;
@@ -199,7 +205,7 @@ function getTodayCoursesData() {
     state,
     source,
     nextCoursePreview: finalCourses.length === 0
-      ? getNextCoursePreview(sourceCourses, currentWeek, Number(weekday))
+      ? getNextCoursePreview(sourceCourses, currentWeek, Number(weekday), termConfig)
       : null,
   };
 }

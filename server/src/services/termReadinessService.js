@@ -45,6 +45,52 @@ function summarizeChecks(checks) {
   };
 }
 
+function parseDateOnly(value) {
+  const match = String(value || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return date;
+}
+
+function formatDateOnly(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return "";
+  const pad = (num) => String(num).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+}
+
+function calculateWeekInfo(now, record) {
+  const start = parseDateOnly(record && record.termStartDate);
+  const target = now instanceof Date && !Number.isNaN(now.getTime()) ? now : new Date();
+  const targetDate = new Date(target.getFullYear(), target.getMonth(), target.getDate());
+  const totalWeeks = Number(record && record.totalWeeks || 0) || 0;
+  if (!start || !totalWeeks) {
+    return { weekNo: null, rawWeekNo: null, weekday: null, startDate: "", endDate: "", termPhase: "unknown" };
+  }
+  const diffDays = Math.floor((targetDate.getTime() - start.getTime()) / 86400000);
+  const rawWeekNo = Math.floor(diffDays / 7) + 1;
+  const weekNo = Math.max(1, Math.min(totalWeeks, rawWeekNo));
+  const weekStart = new Date(start.getTime());
+  weekStart.setDate(start.getDate() + (weekNo - 1) * 7);
+  const weekEnd = new Date(weekStart.getTime());
+  weekEnd.setDate(weekStart.getDate() + 6);
+  let termPhase = "in-term";
+  if (rawWeekNo <= 0) termPhase = "before-term";
+  if (rawWeekNo > totalWeeks) termPhase = "after-term";
+  const jsDay = targetDate.getDay();
+  return {
+    weekNo,
+    rawWeekNo,
+    weekday: jsDay === 0 ? 7 : jsDay,
+    startDate: formatDateOnly(weekStart),
+    endDate: formatDateOnly(weekEnd),
+    termPhase,
+  };
+}
+
 function buildTermReadiness(term, releaseVersion, options = {}) {
   const registry = termRegistryService.readRegistry();
   const record = termRegistryService.getTerm(term);
@@ -214,11 +260,36 @@ function buildTermReadiness(term, releaseVersion, options = {}) {
   const calendarCount = calendar && Array.isArray(calendar.weeks) ? calendar.weeks.length : 0;
   checks.push(check(
     "calendar-count",
-    calendarCount >= 20 && (!manifest || Number(manifest.calendarCount || 0) >= 20) ? "pass" : "fail",
-    calendarCount >= 20 ? "教学周历周数满足当前学期要求。" : "教学周历少于 20 周。",
-    "calendarCount >= 20",
+    record && calendarCount === Number(record.totalWeeks) && (!manifest || !manifest.calendarCount || Number(manifest.calendarCount || 0) === Number(record.totalWeeks)) ? "pass" : "fail",
+    record && calendarCount === Number(record.totalWeeks) ? "教学周历周数与 term registry 一致。" : "教学周历周数与 term registry 不一致。",
+    record ? `calendarCount == ${record.totalWeeks}` : "term registry totalWeeks",
     { manifestCalendarCount: manifest && manifest.calendarCount || 0, calendarCount },
-    "维护 server/storage/terms/2025-2026-2/teaching-calendar.json，至少包含 20 周 start/end/type/title/note。"
+    "维护 server/storage/terms/<term>/teaching-calendar.json，使 weeks 数量与 term registry.totalWeeks 一致；2025-2026-2 应为 19 周。"
+  ));
+
+  checks.push(check(
+    "term-date-config",
+    record && record.termStartDate && record.weekStart === "monday" && !(record.term === "2025-2026-2" && Number(record.totalWeeks) === 20) ? "pass" : (record && record.term === "2025-2026-2" && Number(record.totalWeeks) === 20 ? "warn" : "fail"),
+    record && record.term === "2025-2026-2" && Number(record.totalWeeks) === 20
+      ? "检测到旧 totalWeeks=20 口径，请确认是否为旧配置。"
+      : "当前学期日期配置检查。",
+    record && record.term === "2025-2026-2"
+      ? { termStartDate: "2026-03-09", weekStart: "monday", totalWeeks: 19 }
+      : { termStartDate: "YYYY-MM-DD", weekStart: "monday", totalWeeks: "按学期配置" },
+    record ? { termStartDate: record.termStartDate, weekStart: record.weekStart, totalWeeks: record.totalWeeks } : null,
+    "幂等修复：更新 term registry 的 termStartDate/weekStart/totalWeeks，并同步维护 teaching-calendar.json 后重跑 readiness。"
+  ));
+
+  const currentWeekInfo = calculateWeekInfo(options.now || new Date(), record);
+  checks.push(check(
+    "current-week-calculation",
+    currentWeekInfo.weekNo ? "pass" : "warn",
+    currentWeekInfo.weekNo
+      ? `按 ${record && record.weekStart || "monday"} 起算，当前计算为第 ${currentWeekInfo.weekNo} 周。`
+      : "无法计算当前周次。",
+    "可计算 currentWeek",
+    currentWeekInfo,
+    "确认 termStartDate 是正式课程周起点；不要把返校报到日作为 weekStart。"
   ));
 
   const openRestyRuntimePath = getOpenRestyRuntimePath();
@@ -254,6 +325,16 @@ function buildTermReadiness(term, releaseVersion, options = {}) {
       calendarUpdatedAt: manifest.calendarUpdatedAt || "",
     } : null,
     releasePack: quickHealth,
+    calendarSummary: {
+      term: record && record.term || term,
+      termStartDate: record && record.termStartDate || "",
+      weekStart: record && record.weekStart || "",
+      totalWeeks: record && record.totalWeeks || 0,
+      currentWeek: currentWeekInfo.weekNo,
+      currentWeekRange: currentWeekInfo.startDate && currentWeekInfo.endDate ? `${currentWeekInfo.startDate}~${currentWeekInfo.endDate}` : "",
+      calendarWeeks: calendarCount,
+      releaseRegistryMatch: Boolean(record && version && record.releaseVersion === version),
+    },
     openResty: {
       manifestExists: Boolean(staticManifest),
       staticReleaseUrl: staticManifest && staticManifest.staticReleaseUrl || "",
@@ -267,6 +348,7 @@ function buildTermReadiness(term, releaseVersion, options = {}) {
     } : null,
     rollbackTarget: activeRelease,
     counts: manifest && manifest.counts || {},
+    currentWeekInfo,
     releaseIndex,
     paths: {
       manifest: files && files.manifestPath || "",
