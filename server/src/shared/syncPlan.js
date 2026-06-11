@@ -378,24 +378,57 @@ function renderPowerShellCommand(task, options = {}) {
   return `${base} -- --term=${term}`;
 }
 
+const OPERATION_ZH = Object.freeze({
+  "sync:daily": ["日常同步：全部动态课表", "日常全校动态课表更新"],
+  "sync:daily:classes": ["日常同步：班级课表", "班级课表变化同步"],
+  "sync:daily:teachers": ["日常同步：教师课表", "教师维度课表刷新"],
+  "sync:daily:classrooms": ["日常同步：教室课表", "教室维度课表刷新"],
+  "sync:daily:courses": ["日常同步：课程课表", "课程维度课表刷新"],
+  "sync:scopes": ["自定义同步范围", "按勾选范围执行受控刷新"],
+  "sync:new-term": ["新学期全量采集", "新学期首轮全量建档"],
+  "sync:upload-staging": ["上传本地暂存文件", "上传已生成的 Staging JSON"],
+  "sync:resume": ["恢复中断任务", "继续指定 runId 的中断任务"],
+});
+
+function riskDisplay(risk) {
+  return {
+    low: "低",
+    medium: "中",
+    high: "高",
+  }[risk] || risk || "中";
+}
+
+function requestScaleDisplay(code) {
+  return {
+    "full-campus": "全校范围",
+    "scope-dependent": "按同步范围",
+  }[code] || code || "按同步范围";
+}
+
 function getRecommendedOperations(options = {}) {
   const term = options.term || "2025-2026-2";
   const termStartDate = options.termStartDate || "YYYY-MM-DD";
   const totalWeeks = options.totalWeeks || 20;
   const operations = [
-    ["sync:daily", "Daily all dynamic schedules", true, true, false, true, true, true, "medium", "Daily full-campus update"],
-    ["sync:daily:classes", "Daily class schedules", true, true, false, true, true, true, "medium", "Class schedule changes"],
-    ["sync:daily:teachers", "Daily teacher schedules", true, true, false, true, true, true, "medium", "Teacher dimension refresh"],
-    ["sync:daily:classrooms", "Daily classroom schedules", true, true, false, true, true, true, "medium", "Classroom dimension refresh"],
-    ["sync:daily:courses", "Daily course schedules", true, true, false, true, true, true, "medium", "Course dimension refresh"],
-    ["sync:scopes", "Selected dynamic scopes", true, true, false, true, true, true, "medium", "Controlled partial refresh"],
-    ["sync:new-term", "New term full collection", true, false, false, true, true, false, "high", "New semester onboarding"],
-    ["sync:upload-staging", "Upload local staging", false, false, true, true, false, false, "low", "Upload an explicit file"],
-    ["sync:resume", "Resume interrupted run", true, true, false, true, true, true, "medium", "Continue a known run id"],
+    ["sync:daily", "daily_all_dynamic", true, true, false, true, true, true, "medium", "daily_all"],
+    ["sync:daily:classes", "daily_classes", true, true, false, true, true, true, "medium", "class_changes"],
+    ["sync:daily:teachers", "daily_teachers", true, true, false, true, true, true, "medium", "teacher_refresh"],
+    ["sync:daily:classrooms", "daily_classrooms", true, true, false, true, true, true, "medium", "classroom_refresh"],
+    ["sync:daily:courses", "daily_courses", true, true, false, true, true, true, "medium", "course_refresh"],
+    ["sync:scopes", "selected_scopes", true, true, false, true, true, true, "medium", "controlled_partial"],
+    ["sync:new-term", "new_term_full", true, false, false, true, true, false, "high", "new_semester"],
+    ["sync:upload-staging", "upload_staging", false, false, true, true, false, false, "low", "upload_file"],
+    ["sync:resume", "resume_run", true, true, false, true, true, true, "medium", "resume_run"],
   ];
-  return operations.map(([id, name, intranetRequired, catalogCache, dynamicCache, upload, publish, activate, risk, scene]) => ({
+  return operations.map(([id, name, intranetRequired, catalogCache, dynamicCache, upload, publish, activate, risk, scene]) => {
+    const zh = OPERATION_ZH[id] || [name, scene];
+    const estimatedRequestsCode = id === "sync:new-term" || id === "sync:daily" ? "full-campus" : "scope-dependent";
+    return {
     id,
-    name,
+    name: zh[0],
+    nameEn: name,
+    displayName: zh[0],
+    displayScene: zh[1],
     intranetRequired,
     usesCatalogCache: catalogCache,
     usesDynamicCache: dynamicCache,
@@ -403,11 +436,15 @@ function getRecommendedOperations(options = {}) {
     publish,
     activate,
     risk,
-    estimatedRequests: id === "sync:new-term" || id === "sync:daily" ? "full-campus" : "scope-dependent",
+    riskDisplay: riskDisplay(risk),
+    estimatedRequests: requestScaleDisplay(estimatedRequestsCode),
+    estimatedRequestsCode,
     estimatedDuration: intranetRequired ? "8-30 min" : "15-60 sec",
     scene,
+    sceneCode: scene,
     command: renderPowerShellCommand(id, { term, termStartDate, totalWeeks }),
-  }));
+    };
+  });
 }
 
 module.exports = {

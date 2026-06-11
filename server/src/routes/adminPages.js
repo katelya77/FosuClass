@@ -2120,6 +2120,129 @@ const adminConsoleHtml = `<!doctype html>
       gap: 12px;
       align-items: stretch;
     }
+    .sync-section-nav {
+      position: sticky;
+      top: 0;
+      z-index: 4;
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding: 8px 0 12px;
+      margin-bottom: 4px;
+      background: linear-gradient(180deg, var(--bg) 70%, rgba(248, 250, 252, 0));
+      scrollbar-width: thin;
+    }
+    .sync-section-nav a {
+      flex: 0 0 auto;
+      min-height: 32px;
+      padding: 7px 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+    .sync-section-nav a:hover {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-soft);
+    }
+    .sync-ops-section {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      min-width: 0;
+      margin-bottom: 16px;
+      scroll-margin-top: 72px;
+    }
+    .sync-section-heading {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 12px;
+      min-width: 0;
+    }
+    .sync-section-heading h3 {
+      margin: 0;
+      font-size: 15px;
+      color: var(--text);
+    }
+    .sync-section-heading p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .sync-ops-card-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+      min-width: 0;
+    }
+    .sync-compact-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      background: var(--panel);
+      min-width: 0;
+    }
+    .sync-compact-card strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 5px;
+    }
+    .sync-compact-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+    .sync-resource-contract {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+      gap: 8px;
+      min-width: 0;
+    }
+    .sync-resource-contract .metric {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      background: var(--panel-2);
+      min-width: 0;
+    }
+    .sync-resource-contract .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .sync-resource-contract .metric strong {
+      display: block;
+      margin-top: 3px;
+      font-size: 15px;
+      overflow-wrap: anywhere;
+    }
+    .sync-technical-details {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .sync-technical-details summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--muted);
+    }
+    .sync-technical-details code {
+      display: block;
+      margin-top: 4px;
+      padding: 6px;
+      border-radius: 6px;
+      background: var(--panel-2);
+      color: var(--text);
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
     .sync-main-col {
       display: flex;
       flex-direction: column;
@@ -2999,8 +3122,54 @@ const adminConsoleHtml = `<!doctype html>
         </div>
 
         <!-- 2. sync-status-grid -->
-        <div class="stats-grid" id="syncStatsGrid">
+        <nav class="sync-section-nav" aria-label="同步中心分段导航">
+          <a href="#sync-ops-console">操作台</a>
+          <a href="#sync-pending-panel">待处理</a>
+          <a href="#sync-active-panel">当前线上</a>
+          <a href="#release-history-panel">版本管理</a>
+          <a href="#staging-cli-upload-panel">上传记录</a>
+          <a href="#sync-command-accordion">命令手册</a>
+        </nav>
+
+        <div class="sync-ops-section" id="sync-ops-console">
+          <div class="sync-section-heading">
+            <div>
+              <h3>操作台</h3>
+              <p>当前线上版本、最近一次同步、待处理任务与系统状态集中查看。</p>
+            </div>
+            <button type="button" class="secondary" id="syncRefreshInlineBtnMirror" style="padding:6px 12px;font-size:12px;">刷新状态</button>
+          </div>
+          <div class="stats-grid" id="syncStatsGrid">
           <!-- 同步状态卡片 -->
+        </div>
+
+        </div>
+
+        <div class="sync-ops-section" id="sync-pending-panel">
+          <div class="sync-section-heading">
+            <div>
+              <h3>待处理</h3>
+              <p>只展示待审核、失败、发布受阻、重复上传和等待确认的项目。</p>
+            </div>
+            <span class="badge info" id="syncPendingBadge">等待读取</span>
+          </div>
+          <div class="sync-ops-card-grid" id="syncPendingCards">
+            <div class="sync-compact-card"><strong>正在读取</strong><span>同步状态加载后显示待处理项。</span></div>
+          </div>
+        </div>
+
+        <div class="sync-ops-section" id="sync-active-panel">
+          <div class="sync-section-heading">
+            <div>
+              <h3>当前线上</h3>
+              <p>仅显示 runtime pointer 指向的 active Release；Published 不等于 Active。</p>
+            </div>
+            <span class="badge info" id="syncRuntimeStateBadge">未生效</span>
+          </div>
+          <div id="syncActiveReleaseCards" class="sync-ops-card-grid">
+            <div class="sync-compact-card"><strong>当前线上版本</strong><span>等待读取 active pointer。</span></div>
+          </div>
+          <div id="syncActiveResourceContract" class="sync-resource-contract"></div>
         </div>
 
         <div class="card" id="static-release-sync-panel" style="margin-bottom:16px;">
@@ -6627,6 +6796,7 @@ const adminConsoleHtml = `<!doctype html>
         if ($("staticSyncStateNote")) {
           $("staticSyncStateNote").textContent = staticSyncReasonText();
         }
+        renderSyncOperationsPanels(data);
         if ($("manualStaticSyncBtn")) {
           $("manualStaticSyncBtn").textContent = staticFullySynced ? "✓ 已同步，无需操作" : "手动同步当前 Release";
           $("manualStaticSyncBtn").className = staticFullySynced ? "secondary" : "primary";
@@ -6680,6 +6850,8 @@ const adminConsoleHtml = `<!doctype html>
           queued: "排队中",
           success: "成功",
           failed: "失败",
+          "validation-failed": "校验失败",
+          "publish-blocked": "发布受阻",
           canceled: "已取消",
           uploaded: "已上传",
           uploading: "上传中",
@@ -6692,6 +6864,11 @@ const adminConsoleHtml = `<!doctype html>
           "pending-review": "待审核",
           publishing: "发布中",
           staged: "已设为 Staging",
+          "not-built": "未生成版本",
+          building: "版本构建中",
+          unhealthy: "版本不健康",
+          inactive: "未生效",
+          "rollback-target": "回滚候选",
           published: "已发布",
           active: "当前生效",
           duplicate: "重复",
@@ -6710,6 +6887,126 @@ const adminConsoleHtml = `<!doctype html>
           completed: "已完成"
         };
         return map[status] || status || "-";
+      }
+
+      function sourceModeText(mode) {
+        var map = {
+          "legacy-derived": "历史派生口径",
+          derived: "历史派生口径",
+          "derived-current-run": "本次班级课表派生",
+          "network-direct": "100网直接抓取",
+          unknown: "未标明"
+        };
+        return map[mode] || mode || "未标明";
+      }
+
+      function metricText(value, unit, status) {
+        if (value == null || status === "not-counted") return "未统计";
+        return String(value) + (unit || "");
+      }
+
+      function resourceMetricCard(label, value, unit, source, status) {
+        return "<div class='metric'><span>" + escapeHtml(label) + "</span><strong>" + escapeHtml(metricText(value, unit, status)) + "</strong>" +
+          (source ? "<span>" + escapeHtml(sourceModeText(source)) + "</span>" : "") + "</div>";
+      }
+
+      function renderSyncOperationsPanels(data) {
+        data = data || {};
+        var active = data.resourceCounts || data.activeResourceCounts || data.releasePackStatus && data.releasePackStatus.resourceCounts || null;
+        var activeCards = $("syncActiveReleaseCards");
+        if (activeCards) {
+          var runtimeState = data.releaseVersion ? "active" : "inactive";
+          if ($("syncRuntimeStateBadge")) {
+            $("syncRuntimeStateBadge").className = "badge " + (runtimeState === "active" ? "success" : "warning");
+            $("syncRuntimeStateBadge").textContent = runtimeState === "active" ? "当前生效" : "未生效";
+          }
+          activeCards.innerHTML = [
+            ["当前线上版本", data.releaseVersion || "暂无 active Release"],
+            ["当前学期", data.semester || "-"],
+            ["Release Pack", data.releasePackHealthy ? "版本健康" : "需要检查"],
+            ["静态同步", relayStatusText(data.openRestyStaticSyncStatus || data.staticSync && data.staticSync.status || "not-run")],
+          ].map(function(row) {
+            return "<div class='sync-compact-card'><strong>" + escapeHtml(row[0]) + "</strong><span>" + escapeHtml(row[1]) + "</span></div>";
+          }).join("") +
+          "<details class='sync-technical-details'><summary>技术详情</summary><code>" +
+          escapeHtml(JSON.stringify({
+            releaseVersion: data.releaseVersion || "",
+            activeCanonicalHash: data.activeCanonicalHash || "",
+            staticReleaseVersion: data.staticSync && data.staticSync.syncedReleaseVersion || "",
+          }, null, 2)) + "</code></details>";
+        }
+        var contractWrap = $("syncActiveResourceContract");
+        if (contractWrap) {
+          contractWrap.innerHTML = active ? [
+            resourceMetricCard("班级课表", active.class && active.class.scheduleDocuments, "份"),
+            resourceMetricCard("行政班", active.class && active.class.administrativeClasses, "个"),
+            resourceMetricCard("专业聚合", active.class && active.class.aggregateSchedules, "份"),
+            resourceMetricCard("教师目录", active.teacher && active.teacher.directoryEntities, "人", active.teacher && active.teacher.sourceMode, active.teacher && active.teacher.directoryEntitiesStatus),
+            resourceMetricCard("教师课表", active.teacher && active.teacher.scheduleDocuments, "份", active.teacher && active.teacher.sourceMode),
+            resourceMetricCard("教师课程事件", active.teacher && active.teacher.courseEvents, "条", active.teacher && active.teacher.sourceMode),
+            resourceMetricCard("教室目录", active.classroom && active.classroom.directoryEntities, "间", active.classroom && active.classroom.sourceMode, active.classroom && active.classroom.directoryEntitiesStatus),
+            resourceMetricCard("教室课表", active.classroom && active.classroom.scheduleDocuments, "份", active.classroom && active.classroom.sourceMode),
+            resourceMetricCard("课程目录", active.course && active.course.directoryEntities, "门", active.course && active.course.sourceMode, active.course && active.course.directoryEntitiesStatus),
+            resourceMetricCard("课程课表", active.course && active.course.scheduleDocuments, "份", active.course && active.course.sourceMode),
+          ].join("") : "";
+        }
+
+        var pendingWrap = $("syncPendingCards");
+        if (!pendingWrap) return;
+        var uploads = state.stagingUploads || [];
+        var pendingStatuses = {
+          "pending-review": true,
+          failed: true,
+          "validation-failed": true,
+          duplicate: true,
+          unchanged: true,
+          uploading: true,
+          validating: true,
+          "publish-blocked": true
+        };
+        var pending = uploads.filter(function(upload) {
+          var stateValue = upload.stagingState || upload.status || "";
+          return pendingStatuses[stateValue] || upload.failureReason || upload.blockers && upload.blockers.length;
+        }).slice(0, 6);
+        if (data.releaseHeavyBusy && data.runningReleaseJob) {
+          pending.unshift({
+            status: "running",
+            stagingState: "running",
+            term: data.semester || "",
+            summary: { releaseVersion: data.runningReleaseJob.type || "release-job" },
+            failureReason: "Release 重任务锁占用，等待当前任务完成。"
+          });
+        }
+        if ($("syncPendingBadge")) {
+          $("syncPendingBadge").className = "badge " + (pending.length ? "warning" : "success");
+          $("syncPendingBadge").textContent = pending.length ? ("待处理 " + pending.length + " 项") : "无待处理";
+        }
+        if (!pending.length) {
+          pendingWrap.innerHTML = "<div class='sync-compact-card'><strong>无待处理</strong><span>当前没有待审核、失败、发布受阻或重复上传项目。</span></div>";
+          return;
+        }
+        pendingWrap.innerHTML = pending.map(function(upload) {
+          var summary = upload.summary || {};
+          var counts = upload.counts || summary.counts || summary || {};
+          var stateValue = upload.stagingState || upload.status || "pending";
+          var activeSame = data.activeCanonicalHash && upload.canonicalHash && data.activeCanonicalHash === upload.canonicalHash;
+          var duplicateText = activeSame
+            ? "与当前线上数据一致"
+            : (upload.duplicateCount ? ("重复上传 " + upload.duplicateCount + " 次") : relayStatusText(stateValue));
+          var detail = {
+            uploadId: upload.uploadId || "",
+            canonicalHash: upload.canonicalHash || summary.canonicalHash || "",
+            stagingState: upload.stagingState || "",
+            releaseState: upload.releaseState || "",
+            runtimeState: upload.runtimeState || "",
+          };
+          return "<div class='sync-compact-card'><strong>" + escapeHtml(duplicateText) + "</strong>" +
+            "<span>" + escapeHtml(upload.term || summary.term || "-") + " · " + escapeHtml(relayStatusText(stateValue)) + "</span>" +
+            "<span>班级 " + (counts.classScheduleCount || 0) + " / 教师课表 " + (counts.teacherScheduleCount || 0) + " / 教室 " + (counts.classroomScheduleCount || 0) + " / 课程 " + (counts.courseScheduleCount || 0) + "</span>" +
+            (upload.failureReason ? "<span style='color:var(--danger);'>" + escapeHtml(upload.failureReason) + "</span>" : "") +
+            "<details class='sync-technical-details'><summary>技术详情</summary><code>" + escapeHtml(JSON.stringify(detail, null, 2)) + "</code></details>" +
+          "</div>";
+        }).join("");
       }
 
       function buildRelayRunCommand(task) {
@@ -6815,7 +7112,7 @@ const adminConsoleHtml = `<!doctype html>
         });
       }
 
-      function renderStagingUploads() {
+      function renderStagingUploadsLegacy() {
         var tbody = $("stagingUploadListBody");
         if (!tbody) return;
         var rawList = state.stagingUploads || [];
@@ -6895,6 +7192,133 @@ const adminConsoleHtml = `<!doctype html>
               "status=" + (isActiveUpload ? "active" : (upload.status || "")),
               "release=" + (publishedText || upload.releaseVersion || ""),
               "canonicalHash=" + (upload.canonicalHash || ""),
+              "term=" + (upload.term || summary.term || "")
+            ].join("\\n"));
+          });
+          actions.appendChild(copySummaryBtn);
+
+          if (upload.status === "pending-review" && !isActiveUpload) {
+            var publishBtn = document.createElement("button");
+            publishBtn.className = "btn primary";
+            publishBtn.style = "padding: 3px 8px; font-size:11px;";
+            publishBtn.textContent = "发布";
+            publishBtn.addEventListener("click", function() {
+              publishStaging(publishBtn);
+            });
+            actions.appendChild(publishBtn);
+          }
+
+          if (!isActiveUpload && upload.status !== "published") {
+            var deleteBtn = document.createElement("button");
+            deleteBtn.className = "btn danger";
+            deleteBtn.style = "padding: 3px 8px; font-size:11px;";
+            deleteBtn.textContent = upload.status === "duplicate" || upload.status === "unchanged" ? "归档" : "删除";
+            deleteBtn.addEventListener("click", function() {
+              deleteStagingUpload(upload.uploadId, deleteBtn);
+            });
+            actions.appendChild(deleteBtn);
+          }
+          tbody.appendChild(tr);
+        });
+      }
+
+      function renderStagingUploads() {
+        var tbody = $("stagingUploadListBody");
+        if (!tbody) return;
+        var rawList = state.stagingUploads || [];
+        var grouped = {};
+        var list = [];
+        rawList.forEach(function(item) {
+          var summary = item.summary || {};
+          var hash = item.canonicalHash || summary.canonicalHash || "";
+          var term = item.term || summary.term || "";
+          var key = item.duplicateGroupKey || (term && hash ? term + ":" + hash : "") || item.uploadId || "";
+          if (!key || !hash) {
+            list.push(item);
+            return;
+          }
+          if (!grouped[key]) {
+            grouped[key] = Object.assign({}, item, { historySources: [item] });
+            list.push(grouped[key]);
+            return;
+          }
+          grouped[key].historySources.push(item);
+          var currentTime = new Date(grouped[key].updatedAt || grouped[key].createdAt || 0).getTime();
+          var nextTime = new Date(item.updatedAt || item.createdAt || 0).getTime();
+          if (nextTime > currentTime) {
+            Object.assign(grouped[key], item, { historySources: grouped[key].historySources });
+          }
+        });
+        tbody.innerHTML = "";
+        if (!list.length) {
+          tbody.innerHTML = "<tr><td colspan='8' style='text-align:center;color:var(--muted);padding:12px 0;'>暂无 CLI 上传记录</td></tr>";
+          return;
+        }
+        list.slice(0, 12).forEach(function(upload) {
+          var summary = upload.summary || {};
+          var counts = upload.counts || summary.counts || summary || {};
+          var hash = upload.canonicalHash || summary.canonicalHash || "";
+          var historyCount = Array.isArray(upload.historySources) ? upload.historySources.length : 1;
+          var duplicateCount = Math.max(Number(upload.duplicateCount || 0), historyCount > 1 ? historyCount - 1 : 0);
+          var sourceSize = upload.sourceSize || upload.originalSize || 0;
+          var gzipSize = upload.gzipSize || (upload.contentEncoding === "gzip" ? upload.uploadSize : 0);
+          var uploadedChunks = upload.uploadedChunks || upload.receivedCount || 0;
+          var chunkCount = upload.chunkCount || upload.totalChunks || 0;
+          var progress = upload.progress != null ? upload.progress : (chunkCount > 0 ? Math.min(100, uploadedChunks / chunkCount * 100) : 0);
+          var progressWidth = Math.max(0, Math.min(100, progress));
+          var isActiveUpload = Boolean(upload.active || (state.syncStatus && state.syncStatus.activeCanonicalHash && hash && state.syncStatus.activeCanonicalHash === hash));
+          var stagingState = upload.stagingState || (upload.status === "failed" ? "validation-failed" : (upload.status === "unchanged" ? "duplicate" : upload.status || "pending-review"));
+          var releaseState = upload.releaseState || (upload.publishedReleaseVersion || upload.publishedVersion ? "published" : "not-built");
+          var runtimeState = upload.runtimeState || (isActiveUpload ? "active" : "inactive");
+          var statusClass = String(isActiveUpload ? "active" : stagingState).replace(/[^a-z0-9_-]/gi, "-");
+          var publishedText = upload.publishedReleaseVersion || upload.publishedVersion || "";
+          var sourceText = upload.source || upload.actorType || "CLI";
+          var duplicateText = isActiveUpload
+            ? "与当前线上数据一致"
+            : (duplicateCount > 0 ? "重复上传 " + duplicateCount + " 次" : relayStatusText(stagingState));
+          var technical = {
+            uploadId: upload.uploadId || "",
+            canonicalHash: hash,
+            stagingState: stagingState,
+            releaseState: releaseState,
+            runtimeState: runtimeState,
+            duplicateGroupKey: upload.duplicateGroupKey || "",
+          };
+          var tr = document.createElement("tr");
+          tr.innerHTML =
+            "<td><strong>" + escapeHtml(upload.term || summary.term || "-") + "</strong><br><span class='badge muted'>" + escapeHtml(sourceText) + "</span><br><span style='color:var(--muted);'>" + escapeHtml(upload.fileName || "") + "</span><br><span class='badge " + (isActiveUpload ? "success" : (duplicateCount > 0 ? "warning" : "info")) + "'>" + escapeHtml(duplicateText) + "</span><details class='sync-technical-details'><summary>技术详情</summary><code>" + escapeHtml(JSON.stringify(technical, null, 2)) + "</code></details></td>" +
+            "<td><strong>" + escapeHtml(upload.releaseVersion || summary.releaseVersion || publishedText || "-") + "</strong><br><span style='color:var(--muted);'>Published 不等于 Active</span></td>" +
+            "<td><div class='staging-size-stack'><span>JSON " + formatBytes(sourceSize) + "</span><span>gzip " + (gzipSize ? formatBytes(gzipSize) : "-") + "</span></div></td>" +
+            "<td><div class='staging-progress'><div class='staging-progress-track'><div class='staging-progress-fill' style='width:" + progressWidth.toFixed(1) + "%'></div></div><span>" + progress.toFixed(1) + "% · " + uploadedChunks + "/" + chunkCount + " chunks</span></div></td>" +
+            "<td><span class='staging-state-badge " + statusClass + "'>" + escapeHtml(relayStatusText(stagingState)) + "</span><br><span style='color:var(--muted);font-size:11px;'>版本：" + escapeHtml(relayStatusText(releaseState)) + "</span><br><span style='color:var(--muted);font-size:11px;'>生效：" + escapeHtml(relayStatusText(runtimeState)) + "</span>" + (upload.failureReason ? "<br><span style='color:var(--danger);font-size:11px;'>" + escapeHtml(upload.failureReason) + "</span>" : "") + "</td>" +
+            "<td><div class='staging-count-stack'><span>班级 " + (counts.classScheduleCount || 0) + "</span><span>教师课表 " + (counts.teacherScheduleCount || 0) + "</span><span>教室课表 " + (counts.classroomScheduleCount || 0) + "</span><span>课程课表 " + (counts.courseScheduleCount || 0) + "</span></div></td>" +
+            "<td>" + formatDate(upload.updatedAt || upload.createdAt) + "</td>" +
+            "<td class='action-cell'><div class='staging-action-row'></div></td>";
+          var actions = tr.querySelector(".staging-action-row");
+          var previewBtn = document.createElement("button");
+          previewBtn.className = "btn ghost";
+          previewBtn.style = "padding: 3px 8px; font-size:11px;";
+          previewBtn.textContent = "预览";
+          previewBtn.disabled = upload.status !== "pending-review" && upload.status !== "published";
+          previewBtn.addEventListener("click", function() {
+            loadStagingPreview();
+            state.activeStep = 6;
+            updateStepperUI();
+          });
+          actions.appendChild(previewBtn);
+
+          var copySummaryBtn = document.createElement("button");
+          copySummaryBtn.className = "btn secondary";
+          copySummaryBtn.style = "padding: 3px 8px; font-size:11px;";
+          copySummaryBtn.textContent = "复制摘要";
+          copySummaryBtn.addEventListener("click", function() {
+            copyText([
+              "uploadId=" + (upload.uploadId || ""),
+              "stagingState=" + stagingState,
+              "releaseState=" + releaseState,
+              "runtimeState=" + runtimeState,
+              "release=" + (publishedText || upload.releaseVersion || ""),
+              "canonicalHash=" + hash,
               "term=" + (upload.term || summary.term || "")
             ].join("\\n"));
           });
