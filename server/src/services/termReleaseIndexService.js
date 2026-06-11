@@ -173,10 +173,16 @@ function getTermReleaseSummary() {
   })).sort((left, right) => String(right.term).localeCompare(String(left.term)));
 }
 
+function clearCache() {
+  cache = null;
+  cacheMtimeMs = 0;
+}
+
 module.exports = {
   TERM_INDEX_PATH,
   activateTerm,
   bindRelease,
+  clearCache,
   getActiveReleaseVersionForTerm,
   getTermRelease,
   getTermReleaseSummary,

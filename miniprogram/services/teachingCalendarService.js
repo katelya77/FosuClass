@@ -234,6 +234,7 @@ function normalizeCalendar(payload, fallback = {}) {
     schemaVersion: TERM_CALENDAR_CACHE_SCHEMA,
     term,
     releaseVersion,
+    calendarRevision: source.calendarRevision || fallback.calendarRevision || "",
     semesterText: source.semesterText || fallback.semesterText || "",
     source: source.source || fallback.source || "calendar",
     updatedAt: source.updatedAt || "",
@@ -252,7 +253,8 @@ function isUsableCalendar(calendar) {
 function getBuiltinCalendar(reason, extra = {}) {
   return Object.assign({}, normalizeCalendar(getBuiltinTeachingCalendar(), {
     term: BUILTIN_TERM_CONFIG.term,
-    releaseVersion: BUILTIN_TERM_CONFIG.releaseVersion,
+    releaseVersion: "",
+    calendarRevision: BUILTIN_TERM_CONFIG.calendarRevision,
     semesterText: BUILTIN_TERM_CONFIG.semesterText,
     termConfig: BUILTIN_TERM_CONFIG,
   }), {
@@ -305,7 +307,7 @@ function getImmediateActiveCalendar(options = {}) {
   const local = releasePackService.getLocalActiveRelease(optionTerm || BUILTIN_TERM_CONFIG.term) ||
     (!optionTerm ? releasePackService.getLocalActiveRelease(BUILTIN_TERM_CONFIG.term) : null);
   const term = optionTerm || local && local.term || BUILTIN_TERM_CONFIG.term;
-  const releaseVersion = options.releaseVersion || local && local.releaseVersion || BUILTIN_TERM_CONFIG.releaseVersion;
+  const releaseVersion = options.releaseVersion || local && local.releaseVersion || "";
   const cached = readCache(term, releaseVersion);
   if (cached && isUsableCalendar(cached.calendar)) {
     return Object.assign({}, cached.calendar, {

@@ -3,6 +3,7 @@ const path = require("path");
 
 const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
+const semesterRepairService = require("../services/semesterRepairService");
 const stagingPublishService = require("../services/stagingPublishService");
 const staticReleaseSyncService = require("../services/staticReleaseSyncService");
 const storageLifecycleService = require("../services/storageLifecycleService");
@@ -152,6 +153,22 @@ async function runStaticReconcile(input, job) {
   return { staticSync, reason: input.reason || "", workerPid: process.pid };
 }
 
+async function runSemesterRepair(input, job) {
+  job.progress(10, "校验当前状态", {
+    term: input.term || semesterRepairService.REPAIR_TERM,
+    sourceReleaseVersion: input.sourceReleaseVersion || semesterRepairService.REPAIR_SOURCE_RELEASE,
+  });
+  const result = await semesterRepairService.repairCurrentTermRelease(Object.assign({}, input || {}, {
+    dryRun: false,
+    job,
+  }));
+  job.progress(96, result.alreadyHealthy ? "already healthy" : "repair complete", {
+    term: result.term,
+    releaseVersion: result.releaseVersion || result.newReleaseVersion,
+  });
+  return Object.assign({}, result, { workerPid: process.pid });
+}
+
 async function runStorageMaintenance(input, job) {
   const dryRun = input.dryRun !== false;
   job.progress(15, dryRun ? "previewing storage maintenance" : "running storage maintenance", { dryRun });
@@ -204,6 +221,7 @@ async function runTask(type, input, job) {
   if (type === "staging-publish") return stagingPublishService.runStagingPublish(input, job);
   if (type === "static-release-sync") return runStaticSync(input, job);
   if (type === "static-release-reconcile") return runStaticReconcile(input, job);
+  if (type === "semester-repair") return runSemesterRepair(input, job);
   if (type === "release-activate") return runActivate(input, job);
   if (type === "storage-maintenance") return runStorageMaintenance(input, job);
   const error = new Error(`Unknown release worker task: ${type}`);

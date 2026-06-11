@@ -769,6 +769,11 @@ function getRegistryEtag(registry) {
   return `"term-registry-${hash}"`;
 }
 
+function clearCache() {
+  registryCache = null;
+  registryCacheMtimeMs = 0;
+}
+
 module.exports = {
   BACKUP_DIR,
   LEGACY_CURRENT_TERM_CONFIG,
@@ -780,6 +785,7 @@ module.exports = {
   activateTerm,
   archiveTerm,
   bindReleaseToTerm,
+  clearCache,
   copyLegacyTermData,
   createPlannedTerm,
   disableTerm,

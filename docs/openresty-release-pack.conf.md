@@ -69,3 +69,22 @@ FOSU_STATIC_RELEASE_BASE_URL=https://static-class.katelya.top/static/releases
 后台发布新 release 后，把对应版本目录上传到国内 CDN，再确认 manifest 的 `staticBaseUrl/indexUrls/emptyRoomUrl/detailUrlPattern` 指向静态域名。
 
 长任务不要通过同步 HTTP 等待结果；后台使用 job polling。
+
+## Runtime active pointer
+
+`/static/runtime/active.json` is not a release artifact. It is the mutable runtime pointer for the current active term/release, so it must live outside `/static/releases/<releaseVersion>/`.
+
+Docker compose now mounts:
+
+```text
+/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime -> /openresty-static/runtime
+```
+
+and sets:
+
+```env
+OPENRESTY_HOST_RUNTIME_DIR=/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime
+OPENRESTY_STATIC_RUNTIME_DIR=/openresty-static/runtime
+```
+
+If 1Panel manages container volumes outside this compose file, add the same writable mount once in the 1Panel container UI. Keep the existing releases mount unchanged. The repair job copies `/app/storage/public/runtime/active.json` atomically to `/openresty-static/runtime/active.json` after activation. If this mount is missing, readiness should show only a warning and must not block release construction or miniprogram runtime.

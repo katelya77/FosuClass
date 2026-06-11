@@ -150,6 +150,7 @@ const requiredFunctions = [
   "switchSection",
   "safeBind",
   "api",
+  "repairCurrentTermReleaseFromPanel",
 ];
 
 const missingRequired = requiredFunctions.filter((name) => !functionNames.has(name));

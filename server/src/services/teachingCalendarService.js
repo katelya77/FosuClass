@@ -117,6 +117,9 @@ function normalizeCalendar(raw, termRecord) {
     schemaVersion: 1,
     term,
     semesterText: termConfig.semesterText,
+    termStartDate: termConfig.termStartDate,
+    totalWeeks: termConfig.totalWeeks,
+    weekStart: termConfig.weekStart,
     source: source.source || "admin-maintained",
     updatedAt: source.updatedAt || nowIso(),
     defaultWeekTitle,
@@ -165,7 +168,7 @@ function writeReleaseCalendar(manifest, options = {}) {
     error.code = "CALENDAR_RELEASE_CONTEXT_MISSING";
     throw error;
   }
-  const calendar = readTermCalendar(term);
+  const calendar = options.calendar || readTermCalendar(term);
   if (!calendar || calendar.term !== term) {
     const error = new Error("CALENDAR_TERM_MISMATCH");
     error.code = "CALENDAR_TERM_MISMATCH";
@@ -184,7 +187,7 @@ function writeReleaseCalendar(manifest, options = {}) {
 }
 
 function getCalendarHash(calendar) {
-  return crypto.createHash("sha256").update(JSON.stringify(calendar || {})).digest("hex");
+  return crypto.createHash("sha256").update(JSON.stringify(calendar || {}, null, 2)).digest("hex");
 }
 
 function readReleaseCalendar(releaseVersion) {

@@ -55,6 +55,10 @@ async function run() {
   assert.strictEqual(builtinFallback.term, "2025-2026-2");
   assert.strictEqual(builtinFallback.weeks.length, 19);
   assert.strictEqual(builtinFallback.builtin, true);
+  assert.strictEqual(builtinFallback.releaseVersion, "", "builtin fallback must not pretend to be a server release");
+  assert.strictEqual(builtinFallback.calendarRevision, "2026-06-11-calendar-v2");
+  assert.strictEqual(builtinFallback.termConfig.releaseVersion, "", "builtin termConfig must not pretend to be a server release");
+  assert.strictEqual(builtinFallback.termConfig.calendarRevision, "2026-06-11-calendar-v2");
   assert(builtinFallback.weeks.every((week) => week.startDate && week.endDate && week.title && week.typeText));
 
   require("../miniprogram/pages/calendar/calendar.js");

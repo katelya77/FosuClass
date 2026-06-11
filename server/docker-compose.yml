@@ -13,6 +13,7 @@ services:
     volumes:
       - ./storage:/app/storage
       - ${OPENRESTY_HOST_RELEASE_DIR:-/opt/1panel/www/sites/class.katelya.eu.org/index/static/releases}:/openresty-static/releases
+      - ${OPENRESTY_HOST_RUNTIME_DIR:-/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime}:/openresty-static/runtime
     healthcheck:
       test: ["CMD", "node", "scripts/test-health.js"]
       start_period: 20s

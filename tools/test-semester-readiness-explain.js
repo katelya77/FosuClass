@@ -85,6 +85,26 @@ try {
   });
   assertStructuredFailure(missingCalendar, "calendar-json-exists");
 
+  const legacyManifest = Object.assign({}, missingCalendar.manifest || {});
+  const legacyFiles = releaseService.getReleaseFiles(version);
+  const legacyRaw = JSON.parse(fs.readFileSync(legacyFiles.manifestPath, "utf-8"));
+  delete legacyRaw.termConfig;
+  delete legacyRaw.calendarUrl;
+  delete legacyRaw.calendarHash;
+  delete legacyRaw.calendarCount;
+  delete legacyRaw.calendarUpdatedAt;
+  writeJsonAtomic(legacyFiles.manifestPath, legacyRaw);
+  writeJsonAtomic(path.join(legacyFiles.publicReleaseDir, "manifest.json"), legacyRaw);
+  const legacyReadiness = termReadinessService.buildTermReadiness("2025-2026-2", version, {
+    autoRepairRuntimePointer: false,
+  });
+  const termMatch = byKey(legacyReadiness, "manifest-term-match");
+  assert(termMatch, "manifest-term-match should be present");
+  assert.strictEqual(termMatch.status, "pass", "term match should not fail because termConfig is incomplete");
+  assertStructuredFailure(legacyReadiness, "manifest-term-config");
+  assertStructuredFailure(legacyReadiness, "manifest-calendar-metadata");
+  assert(legacyReadiness.repairAction && legacyReadiness.repairAction.type === "current-term-release-repair", "legacy release should advertise repair action");
+
   const mismatchVersion = "readiness-mismatch-2026-06-05";
   const mismatchFiles = releaseService.getReleaseFiles(mismatchVersion);
   writeJsonAtomic(mismatchFiles.manifestPath, {

@@ -99,6 +99,22 @@ try {
   assert.strictEqual(manifest.calendarCount, 19);
   assert.strictEqual(manifest.calendarHash, teachingCalendarService.getCalendarHash(calendar));
   assert(manifest.calendarUpdatedAt, "manifest should include calendarUpdatedAt");
+
+  fs.rmSync(teachingCalendarService.getReleaseCalendarPath(version, false), { force: true });
+  fs.rmSync(teachingCalendarService.getReleaseCalendarPath(version, true), { force: true });
+  const manifestPath = releaseService.getReleaseFiles(version).manifestPath;
+  const legacyManifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+  delete legacyManifest.calendarUrl;
+  delete legacyManifest.calendarHash;
+  delete legacyManifest.calendarCount;
+  delete legacyManifest.calendarUpdatedAt;
+  fs.writeFileSync(manifestPath, JSON.stringify(legacyManifest, null, 2), "utf-8");
+  const rebuilt = releaseService.rebuildReleasePack(version);
+  const rebuiltCalendar = teachingCalendarService.readReleaseCalendar(version);
+  assert(fs.existsSync(publicCalendarPath), "rebuildReleasePack should regenerate public calendar.json");
+  assert.strictEqual(rebuilt.manifest.calendarUrl, `/static/releases/${version}/calendar.json`);
+  assert.strictEqual(rebuilt.manifest.calendarCount, 19);
+  assert.strictEqual(rebuilt.manifest.calendarHash, teachingCalendarService.getCalendarHash(rebuiltCalendar));
   console.log("test-teaching-calendar passed");
 } catch (error) {
   console.error(error);

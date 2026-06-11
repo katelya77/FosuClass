@@ -11,6 +11,7 @@ const RELEASE_HEAVY_TASKS = new Set([
   "release-pack-deep-health",
   "static-release-sync",
   "static-release-reconcile",
+  "semester-repair",
   "release-activate",
   "storage-maintenance",
 ]);
@@ -30,6 +31,7 @@ function buildAlreadyRunningMessage(type) {
   if (type === "staging-publish") return "已有发布任务正在运行";
   if (type === "release-pack-rebuild") return "已有 Release Pack 重建任务正在运行";
   if (type === "static-release-sync" || type === "static-release-reconcile") return "已有静态 Release 同步任务正在运行";
+  if (type === "semester-repair") return "已有学期 Release 修复任务正在运行";
   if (type === "storage-maintenance") return "已有存储维护任务正在运行";
   if (type === "release-pack-deep-health") return "已有 Release 重任务正在运行";
   return "已有 Release 重任务正在运行";
