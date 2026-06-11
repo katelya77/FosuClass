@@ -18,6 +18,7 @@ const releaseWorkerManager = require("./services/releaseWorkerManager");
 const storageLifecycleService = require("./services/storageLifecycleService");
 const termRegistryService = require("./services/termRegistryService");
 const runtimePointerService = require("./services/runtimePointerService");
+const performanceMonitorService = require("./services/performanceMonitorService");
 
 // 路由引入
 const healthRouter = require("./routes/health");
@@ -66,6 +67,7 @@ app.use(cors(corsOptions));
 
 // 3. 全局 API 访问频率限制
 app.use(globalLimiter);
+app.use(performanceMonitorService.middleware);
 
 // 4. 解析请求体
 app.use(express.json({ limit: "150mb" }));
@@ -137,19 +139,6 @@ app.use("/static/releases", express.static(releaseService.PUBLIC_RELEASES_DIR, {
   },
 }));
 
-app.use("/static/runtime", (req, res, next) => {
-  const method = String(req.method || "GET").toUpperCase();
-  const requestPath = String(req.path || "").replace(/\\/g, "/");
-  if ((method === "GET" || method === "HEAD") && requestPath === "/active.json") {
-    try {
-      runtimePointerService.ensureActivePointer();
-    } catch (error) {
-      safeLog("static-runtime-pointer-self-heal-failed", { code: error.code || "", error: error.message });
-    }
-  }
-  return next();
-});
-
 app.use("/static/runtime", express.static(path.join(releaseService.PUBLIC_RELEASES_DIR, "..", "runtime"), {
   fallthrough: false,
   maxAge: "60s",
@@ -182,6 +171,7 @@ app.use((err, req, res, next) => {
 
 // 5. 挂载路由
 app.use("/api/health", healthRouter);
+app.use("/health", healthRouter);
 app.use("/api/fosu", fosuRouter);
 app.use("/api/fosu/personal", personalRouter);
 app.use("/api/ai", aiRouter);

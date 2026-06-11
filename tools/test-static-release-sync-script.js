@@ -8,6 +8,8 @@ const path = require("path");
 const tempRoot = path.join(os.tmpdir(), `fosu-static-sync-script-${process.pid}-${Date.now()}`);
 const srcRoot = path.join(tempRoot, "src-releases");
 const dstRoot = path.join(tempRoot, "openresty-releases");
+const runtimeSrcRoot = path.join(tempRoot, "storage", "public", "runtime");
+const runtimeDstRoot = path.join(tempRoot, "openresty-runtime");
 const storageDir = path.join(tempRoot, "storage");
 
 function writeJson(filePath, data) {
@@ -32,10 +34,26 @@ function cleanup() {
   fs.rmSync(resolvedRoot, { recursive: true, force: true });
 }
 
-function listenStatic(root) {
+function listenStatic(root, runtimeRoot) {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
     const prefix = "/static/releases/";
+    const runtimePrefix = "/static/runtime/";
+    if (url.pathname.startsWith(runtimePrefix)) {
+      const relative = decodeURIComponent(url.pathname.slice(runtimePrefix.length));
+      const filePath = path.resolve(runtimeRoot, relative);
+      if (!filePath.startsWith(path.resolve(runtimeRoot)) || !fs.existsSync(filePath)) {
+        res.writeHead(404);
+        res.end("not found");
+        return;
+      }
+      res.writeHead(200, {
+        "content-type": "application/json",
+        "cache-control": "public, max-age=30",
+      });
+      res.end(fs.readFileSync(filePath));
+      return;
+    }
     if (!url.pathname.startsWith(prefix)) {
       res.writeHead(404);
       res.end("not found");
@@ -77,21 +95,36 @@ function runScript(env) {
 async function run() {
   fs.mkdirSync(srcRoot, { recursive: true });
   fs.mkdirSync(dstRoot, { recursive: true });
+  fs.mkdirSync(runtimeSrcRoot, { recursive: true });
+  fs.mkdirSync(runtimeDstRoot, { recursive: true });
   ["v1", "v2", "v3"].forEach((version, index) => {
     const dir = makeRequiredFiles(dstRoot, version);
     const time = new Date(Date.now() - (4 - index) * 60 * 1000);
     fs.utimesSync(dir, time, time);
   });
   makeRequiredFiles(srcRoot, "v4");
+  writeJson(path.join(runtimeSrcRoot, "active.json"), {
+    success: true,
+    activeTerm: "2025-2026-2",
+    term: "2025-2026-2",
+    releaseVersion: "v4",
+    updatedAt: "2026-06-11T00:00:00.000Z",
+    termConfig: { term: "2025-2026-2", totalWeeks: 19, termStartDate: "2026-03-09", weekStart: "monday" },
+    urls: {},
+  });
 
-  const server = await listenStatic(dstRoot);
+  const server = await listenStatic(dstRoot, runtimeDstRoot);
   const publicBaseUrl = `http://127.0.0.1:${server.address().port}/static/releases`;
+  const runtimeBaseUrl = `http://127.0.0.1:${server.address().port}/static/runtime`;
   try {
     const result = await runScript(Object.assign({}, process.env, {
         FOSU_STORAGE_DIR: storageDir,
         RELEASE_PACK_SRC: srcRoot,
+        RUNTIME_POINTER_SRC: runtimeSrcRoot,
         OPENRESTY_STATIC_RELEASE_DIR: dstRoot,
+        OPENRESTY_STATIC_RUNTIME_DIR: runtimeDstRoot,
         PUBLIC_BASE_URL: publicBaseUrl,
+        FOSU_STATIC_RUNTIME_BASE_URL: runtimeBaseUrl,
         STATIC_RELEASE_SYNC_ENABLED: "true",
         STATIC_RELEASE_KEEP_LATEST: "3",
       }));

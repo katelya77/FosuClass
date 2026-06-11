@@ -63,8 +63,18 @@ function normalizeWeek(week, termConfig, fallbackTitle) {
   };
 }
 
+function requireTotalWeeks(value, code = "CALENDAR_TOTAL_WEEKS_MISSING") {
+  const number = Number(value);
+  if (!Number.isInteger(number) || number < 1 || number > 30) {
+    const error = new Error(code);
+    error.code = code;
+    throw error;
+  }
+  return number;
+}
+
 function generateWeeks(termConfig, options = {}) {
-  const totalWeeks = Number(termConfig.totalWeeks || 20) || 20;
+  const totalWeeks = requireTotalWeeks(termConfig && termConfig.totalWeeks);
   const start = parseDate(termConfig.termStartDate);
   const weeks = [];
   for (let weekNo = 1; weekNo <= totalWeeks; weekNo += 1) {
@@ -100,9 +110,10 @@ function normalizeCalendar(raw, termRecord) {
     term,
     semesterText: source.semesterText || record.semesterText || "",
     termStartDate: source.termStartDate || record.termStartDate || "",
-    totalWeeks: source.totalWeeks || record.totalWeeks || 20,
+    totalWeeks: source.totalWeeks || record.totalWeeks,
     weekStart: source.weekStart || record.weekStart || "monday",
   };
+  requireTotalWeeks(termConfig.totalWeeks);
   const defaultWeekTitle = source.defaultWeekTitle || "正常教学周";
   const explicitWeeks = Array.isArray(source.weeks) ? source.weeks : [];
   const generated = generateWeeks(termConfig, { type: record.status === "planned" ? "pending" : "teaching", title: record.status === "planned" ? "教学安排待维护" : defaultWeekTitle });

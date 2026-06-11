@@ -73,12 +73,16 @@ function cleanup() {
 
     process.env.STATIC_RELEASE_SYNC_ENABLED = "true";
     process.env.OPENRESTY_STATIC_RELEASE_DIR = path.join(tempRoot, "openresty", "releases");
+    process.env.OPENRESTY_STATIC_RUNTIME_DIR = path.join(tempRoot, "openresty", "runtime");
     fs.mkdirSync(process.env.OPENRESTY_STATIC_RELEASE_DIR, { recursive: true });
+    fs.mkdirSync(process.env.OPENRESTY_STATIC_RUNTIME_DIR, { recursive: true });
     status = staticReleaseSyncService.getSyncStatus({ version });
     assert.strictEqual(status.enabled, true);
     assert.strictEqual(status.configured, true);
     assert.strictEqual(status.targetDirExists, true);
     assert.strictEqual(status.targetDirWritable, true);
+    assert.strictEqual(status.runtimeDirExists, true);
+    assert.strictEqual(status.runtimeDirWritable, true);
     assert.strictEqual(status.versionMatched, false);
     assert.strictEqual(status.needsSync, true);
 

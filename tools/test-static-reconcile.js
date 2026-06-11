@@ -8,11 +8,14 @@ const path = require("path");
 const tempRoot = path.join(os.tmpdir(), `fosu-static-reconcile-${process.pid}-${Date.now()}`);
 const storageDir = path.join(tempRoot, "storage");
 const openrestyDir = path.join(tempRoot, "openresty-releases");
+const openrestyRuntimeDir = path.join(tempRoot, "openresty-runtime");
 
 process.env.FOSU_STORAGE_DIR = storageDir;
 process.env.FOSU_DATA_DIR = path.join(tempRoot, "data");
 process.env.RELEASE_PACK_SRC = path.join(storageDir, "public", "releases");
+process.env.RUNTIME_POINTER_SRC = path.join(storageDir, "public", "runtime");
 process.env.OPENRESTY_STATIC_RELEASE_DIR = openrestyDir;
+process.env.OPENRESTY_STATIC_RUNTIME_DIR = openrestyRuntimeDir;
 process.env.STATIC_RELEASE_SYNC_ENABLED = "true";
 process.env.STATIC_RELEASE_KEEP_LATEST = "3";
 process.env.NODE_ENV = "test";
@@ -38,6 +41,14 @@ function snapshot(version) {
     term: "2025-2026-2",
     semester: "2025-2026-2",
     termStartDate: "2026-03-09",
+    totalWeeks: 19,
+    termConfig: {
+      term: "2025-2026-2",
+      semesterText: "2025-2026 学年第二学期",
+      termStartDate: "2026-03-09",
+      weekStart: "monday",
+      totalWeeks: 19,
+    },
     generatedAt: "2026-06-05T00:00:00.000Z",
     updatedAt: "2026-06-05T00:00:00.000Z",
     catalog: { colleges: [{ code: "04", name: "Test College" }], grades: ["2025"] },
@@ -63,18 +74,22 @@ function cleanup() {
   fs.rmSync(resolvedRoot, { recursive: true, force: true });
 }
 
-function listenStatic(root) {
+function listenStatic(root, runtimeRoot) {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
-    const prefix = "/static/releases/";
-    if (!url.pathname.startsWith(prefix)) {
+    const releasePrefix = "/static/releases/";
+    const runtimePrefix = "/static/runtime/";
+    const isRelease = url.pathname.startsWith(releasePrefix);
+    const isRuntime = url.pathname.startsWith(runtimePrefix);
+    if (!isRelease && !isRuntime) {
       res.writeHead(404);
       res.end("not found");
       return;
     }
-    const relative = decodeURIComponent(url.pathname.slice(prefix.length));
-    const filePath = path.resolve(root, relative);
-    if (!filePath.startsWith(path.resolve(root)) || !fs.existsSync(filePath)) {
+    const baseRoot = isRuntime ? runtimeRoot : root;
+    const relative = decodeURIComponent(url.pathname.slice(isRuntime ? runtimePrefix.length : releasePrefix.length));
+    const filePath = path.resolve(baseRoot, relative);
+    if (!filePath.startsWith(path.resolve(baseRoot)) || !fs.existsSync(filePath)) {
       res.writeHead(404);
       res.end("not found");
       return;
@@ -123,7 +138,8 @@ function runReconcileScript(version) {
 (async () => {
   const version = "static-reconcile-2026-06-05";
   fs.mkdirSync(openrestyDir, { recursive: true });
-  const server = await listenStatic(openrestyDir);
+  fs.mkdirSync(openrestyRuntimeDir, { recursive: true });
+  const server = await listenStatic(openrestyDir, openrestyRuntimeDir);
   process.env.PUBLIC_BASE_URL = `http://127.0.0.1:${server.address().port}/static/releases`;
 
   try {

@@ -5,6 +5,7 @@ const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
 const semesterRepairService = require("../services/semesterRepairService");
 const stagingPublishService = require("../services/stagingPublishService");
+const stagingFinalizeService = require("../services/stagingFinalizeService");
 const staticReleaseSyncService = require("../services/staticReleaseSyncService");
 const storageLifecycleService = require("../services/storageLifecycleService");
 
@@ -36,7 +37,10 @@ function safeWorkerLog(message, data) {
 async function runDeepHealth(input, job) {
   const version = input.version || "";
   job.progress(18, "deep validating", { version });
-  const status = releaseService.getReleasePackStatus(version);
+  const status = releaseService.getReleasePackStatus(version, {
+    jobId: job.getJob && job.getJob().id || "",
+    startedAt: new Date().toISOString(),
+  });
   job.progress(82, "deep health complete", {
     healthy: status.healthy,
     totalBytes: status.totalBytes,
@@ -182,6 +186,10 @@ async function runStorageMaintenance(input, job) {
   return { report, dryRun, workerPid: process.pid };
 }
 
+async function runStagingUploadFinalize(input, job) {
+  return stagingFinalizeService.finalizeChunkedUpload(input, job);
+}
+
 async function runActivate(input, job) {
   let version = input.version || "";
   let written = null;
@@ -215,6 +223,7 @@ async function runActivate(input, job) {
 
 async function runTask(type, input, job) {
   if (type === "release-pack-deep-health") return runDeepHealth(input, job);
+  if (type === "staging-upload-finalize") return runStagingUploadFinalize(input, job);
   if (type === "release-pack-rebuild") return runRebuild(input, job);
   if (type === "release-upload") return runUpload(input, job);
   if (type === "release-pack-verify") return runVerify(input, job);

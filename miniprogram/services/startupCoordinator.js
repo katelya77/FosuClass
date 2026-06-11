@@ -132,8 +132,14 @@ function resolveCriticalRuntime(options = {}) {
 }
 
 function startBackgroundRefresh(options = {}) {
+  if (!options.forceNetwork && releasePackService.readRuntimeCircuit && releasePackService.readRuntimeCircuit()) {
+    return null;
+  }
   const sessionReady = warmupSession({ throwOnError: true }).catch(() => null);
   const afterSession = (task, taskOptions) => {
+    if (!options.forceNetwork && releasePackService.readRuntimeCircuit && releasePackService.readRuntimeCircuit()) {
+      return;
+    }
     sessionReady
       .then((session) => task(Object.assign({}, taskOptions, { skipSession: !session })))
       .catch(() => task(Object.assign({}, taskOptions, { skipSession: true })));

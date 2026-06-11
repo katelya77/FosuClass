@@ -123,7 +123,7 @@ function getDemoCatalog(term, totalWeeks) {
       { code: "04", name: "Demo College B", rawLabel: "Demo College B" },
     ],
     grades: ["2022", "2023", "2024", "2025"],
-    weeks: Array.from({ length: totalWeeks || 20 }, (_, index) => ({
+    weeks: Array.from({ length: Number(totalWeeks) || 0 }, (_, index) => ({
       value: String(index + 1),
       label: `Week ${index + 1}`,
     })),
@@ -196,7 +196,7 @@ async function getCatalog(semester) {
         semesters,
         colleges,
         grades: (parsed.grades || []).map((item) => String(item).trim()).filter((item) => /^\d{4}$/.test(item)),
-        weeks: Array.from({ length: record.totalWeeks || 20 }, (_, index) => ({ value: String(index + 1), label: `Week ${index + 1}` })),
+        weeks: Array.from({ length: Number(record.totalWeeks) || 0 }, (_, index) => ({ value: String(index + 1), label: `Week ${index + 1}` })),
         sections: [],
       };
     } catch (error) {
@@ -442,41 +442,6 @@ async function getBootstrap(semester) {
     });
   }
 
-  const snapshot = requestedVersion ? releaseService.readReleaseSnapshot(requestedVersion) : getSnapshot();
-  if (snapshot && (snapshot.term || snapshot.semester) === record.term) {
-    const meta = getMeta("snapshot", record.term);
-    const counts = Object.assign({}, snapshot.coverage || releaseService.countRelease(snapshot));
-    const updatedAt = snapshot.updatedAt || record.updatedAt || new Date().toISOString();
-    return {
-      success: true,
-      dataSource: "snapshot-fallback",
-      warning: "BOOTSTRAP_LIGHTWEIGHT_FALLBACK_TO_SNAPSHOT",
-      term: record.term,
-      semester: record.term,
-      releaseVersion: requestedVersion || snapshot.version || "",
-      dataAvailable: record.dataAvailable,
-      updatedAt,
-      version: requestedVersion || snapshot.version,
-      catalog: snapshot.catalog,
-      counts,
-      versions: {
-        snapshot: requestedVersion || snapshot.version,
-        catalog: requestedVersion || snapshot.version,
-        majors: requestedVersion || snapshot.version,
-        classSchedules: requestedVersion || snapshot.version,
-        resources: requestedVersion || snapshot.version,
-      },
-      metaDetails: {
-        source: snapshot.source || "release",
-        disclaimer: snapshot.disclaimer || "",
-        catalogUpdatedAt: updatedAt,
-        majorsUpdatedAt: updatedAt,
-        classSchedulesUpdatedAt: updatedAt,
-        resourcesUpdatedAt: meta.updatedAt || updatedAt,
-      },
-    };
-  }
-
   const catalog = await getCatalog(record.term);
   if (!catalog.success) return catalog;
   const meta = getMeta("snapshot", record.term);
@@ -543,10 +508,12 @@ async function getClasses(query = {}) {
     });
   }
 
-  const snapshot = record.releaseVersion ? releaseService.readReleaseSnapshot(record.releaseVersion) : getSnapshot();
   let schedules = [];
-  if (snapshot && (snapshot.term || snapshot.semester) === record.term && Array.isArray(snapshot.classSchedules)) {
-    schedules = snapshot.classSchedules;
+  if (record.releaseVersion) {
+    const index = releaseService.readActiveIndex("class", record.releaseVersion, { term: record.term });
+    if (index && index.success && Array.isArray(index.items)) {
+      schedules = index.items;
+    }
   } else if (record.term === termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term) {
     schedules = readJsonFile(path.join(STORAGE_DIR, "class-schedules.json")) || [];
   }

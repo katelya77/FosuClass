@@ -7,11 +7,14 @@ const path = require("path");
 const tempRoot = path.join(os.tmpdir(), `fosu-publish-static-sync-${process.pid}-${Date.now()}`);
 const storageDir = path.join(tempRoot, "storage");
 const openrestyDir = path.join(tempRoot, "openresty-releases");
+const openrestyRuntimeDir = path.join(tempRoot, "openresty-runtime");
 
 process.env.FOSU_STORAGE_DIR = storageDir;
 process.env.FOSU_DATA_DIR = path.join(tempRoot, "data");
 process.env.OPENRESTY_STATIC_RELEASE_DIR = openrestyDir;
+process.env.OPENRESTY_STATIC_RUNTIME_DIR = openrestyRuntimeDir;
 process.env.RELEASE_PACK_SRC = path.join(storageDir, "public", "releases");
+process.env.RUNTIME_POINTER_SRC = path.join(storageDir, "public", "runtime");
 process.env.STATIC_RELEASE_SYNC_ENABLED = "true";
 process.env.STATIC_RELEASE_KEEP_LATEST = "3";
 process.env.NODE_ENV = "development";
@@ -35,7 +38,15 @@ function snapshot(version) {
     releaseVersion: version,
     term: "2025-2026-2",
     semester: "2025-2026-2",
-    termStartDate: "2026-03-02",
+    termStartDate: "2026-03-09",
+    totalWeeks: 19,
+    termConfig: {
+      term: "2025-2026-2",
+      semesterText: "2025-2026 学年第二学期",
+      termStartDate: "2026-03-09",
+      weekStart: "monday",
+      totalWeeks: 19,
+    },
     generatedAt: "2026-06-04T00:00:00.000Z",
     updatedAt: "2026-06-04T00:00:00.000Z",
     catalog: { colleges: [{ code: "04", name: "测试学院" }], grades: ["2025"] },
@@ -70,18 +81,22 @@ function cleanup() {
   fs.rmSync(resolvedRoot, { recursive: true, force: true });
 }
 
-function listenStatic(root) {
+function listenStatic(root, runtimeRoot) {
   const server = http.createServer((req, res) => {
     const url = new URL(req.url, "http://127.0.0.1");
-    const prefix = "/static/releases/";
-    if (!url.pathname.startsWith(prefix)) {
+    const releasePrefix = "/static/releases/";
+    const runtimePrefix = "/static/runtime/";
+    const isRelease = url.pathname.startsWith(releasePrefix);
+    const isRuntime = url.pathname.startsWith(runtimePrefix);
+    if (!isRelease && !isRuntime) {
       res.writeHead(404);
       res.end("not found");
       return;
     }
-    const relative = decodeURIComponent(url.pathname.slice(prefix.length));
-    const filePath = path.resolve(root, relative);
-    if (!filePath.startsWith(path.resolve(root)) || !fs.existsSync(filePath)) {
+    const baseRoot = isRuntime ? runtimeRoot : root;
+    const relative = decodeURIComponent(url.pathname.slice(isRuntime ? runtimePrefix.length : releasePrefix.length));
+    const filePath = path.resolve(baseRoot, relative);
+    if (!filePath.startsWith(path.resolve(baseRoot)) || !fs.existsSync(filePath)) {
       res.writeHead(404);
       res.end("not found");
       return;
@@ -126,13 +141,15 @@ async function waitJob(baseUrl, id) {
 async function run() {
   fs.mkdirSync(storageDir, { recursive: true });
   fs.mkdirSync(openrestyDir, { recursive: true });
+  fs.mkdirSync(openrestyRuntimeDir, { recursive: true });
 
-  const staticServer = await listenStatic(openrestyDir);
+  const staticServer = await listenStatic(openrestyDir, openrestyRuntimeDir);
   process.env.PUBLIC_BASE_URL = `http://127.0.0.1:${staticServer.address().port}/static/releases`;
 
   const express = require("../server/node_modules/express");
   const adminRouter = require("../server/src/routes/admin");
   const releaseService = require("../server/src/services/releaseService");
+  const termRegistryService = require("../server/src/services/termRegistryService");
 
   const app = express();
   app.use(express.json({ limit: "2mb" }));
@@ -142,6 +159,25 @@ async function run() {
 
   try {
     const version = "publish-static-sync-2026-06-04";
+    fs.mkdirSync(storageDir, { recursive: true });
+    termRegistryService.writeRegistry({
+      schemaVersion: 1,
+      activeTerm: "2025-2026-2",
+      updatedAt: "2026-06-04T00:00:00.000Z",
+      terms: [{
+        term: "2025-2026-2",
+        semesterText: "2025-2026 学年第二学期",
+        termStartDate: "2026-03-09",
+        weekStart: "monday",
+        totalWeeks: 19,
+        status: "current",
+        releaseVersion: "legacy-active",
+        dataAvailable: true,
+        publishedAt: "2026-06-04T00:00:00.000Z",
+        updatedAt: "2026-06-04T00:00:00.000Z",
+        source: "test-fixture",
+      }],
+    }, { backup: false });
     fs.writeFileSync(path.join(storageDir, "staging-latest.json"), JSON.stringify(snapshot(version), null, 2), "utf-8");
 
     const publishStart = await requestJson(baseUrl, "/api/admin/sync/staging/publish/start", {
@@ -154,6 +190,7 @@ async function run() {
     assert.strictEqual(job.result.releaseVersion, version);
     assert(job.result.staticSync && job.result.staticSync.success, "publish job should sync OpenResty static directory");
     assert(fs.existsSync(path.join(openrestyDir, version, "manifest.json")), "OpenResty manifest should exist after publish");
+    assert(fs.existsSync(path.join(openrestyRuntimeDir, "active.json")), "OpenResty runtime pointer should exist after publish");
     assert.strictEqual(releaseService.getActiveReleaseInfo().releaseVersion, version, "active pointer should update after static sync");
 
     const status = await requestJson(baseUrl, "/api/admin/sync/status");

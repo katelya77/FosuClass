@@ -482,7 +482,7 @@ var require_syncPlan = __commonJS({
     function renderPowerShellCommand(task, options = {}) {
       const term = options.term || "2025-2026-2";
       const start = options.termStartDate || options.start || "YYYY-MM-DD";
-      const weeks = options.totalWeeks || 20;
+      const weeks = options.totalWeeks || "TOTAL_WEEKS";
       const scopes = Array.isArray(options.scopes) && options.scopes.length ? options.scopes.join(",") : "classSchedules,teacherSchedules,classroomSchedules,courseSchedules";
       const base = `npm run ${task}`;
       if (task === "sync:new-term") {
@@ -527,7 +527,7 @@ ${base} -- --file="$file" --term=${term}`;
     function getRecommendedOperations2(options = {}) {
       const term = options.term || "2025-2026-2";
       const termStartDate = options.termStartDate || "YYYY-MM-DD";
-      const totalWeeks = options.totalWeeks || 20;
+      const totalWeeks = options.totalWeeks || "TOTAL_WEEKS";
       const operations = [
         ["sync:daily", "daily_all_dynamic", true, true, false, true, true, true, "medium", "daily_all"],
         ["sync:daily:classes", "daily_classes", true, true, false, true, true, true, "medium", "class_changes"],
@@ -2748,11 +2748,14 @@ var require_termRegistryService = __commonJS({
       const number = Number(value == null || value === "" ? fallback : value);
       return Number.isFinite(number) ? Math.floor(number) : NaN;
     }
+    function legacyTotalWeeksForTerm(term) {
+      return term === LEGACY_CURRENT_TERM_CONFIG.term ? LEGACY_CURRENT_TERM_CONFIG.totalWeeks : undefined;
+    }
     function normalizeTermRecord(record = {}, options = {}) {
       const source = record && typeof record === "object" ? record : {};
       const term = assertTermId(source.term || options.term);
       const now = options.now || nowIso();
-      const totalWeeks = normalizeTotalWeeks(source.totalWeeks, options.defaultTotalWeeks || 20);
+      const totalWeeks = normalizeTotalWeeks(source.totalWeeks, options.defaultTotalWeeks);
       return {
         term,
         semesterText: String(source.semesterText || generateSemesterText2(term)).trim(),
@@ -2951,7 +2954,7 @@ var require_termRegistryService = __commonJS({
           term,
           semesterText: termConfig && termConfig.semesterText || generateSemesterText2(term),
           termStartDate: termConfig && termConfig.termStartDate || "",
-          totalWeeks: termConfig && termConfig.totalWeeks || 20,
+          totalWeeks: termConfig && termConfig.totalWeeks || legacyTotalWeeksForTerm(term),
           weekStart: termConfig && termConfig.weekStart || "monday",
           status: releaseVersion && termConfig ? "current" : "planned",
           releaseVersion,
@@ -3106,7 +3109,7 @@ var require_termRegistryService = __commonJS({
         term: config.term || source.term || source.semester,
         semesterText: config.semesterText || source.semesterText || "",
         termStartDate: config.termStartDate || source.termStartDate || "",
-        totalWeeks: config.totalWeeks || source.totalWeeks || 20,
+        totalWeeks: config.totalWeeks || source.totalWeeks || legacyTotalWeeksForTerm(config.term || source.term || source.semester),
         weekStart: config.weekStart || source.weekStart || "monday",
         status: "ready",
         releaseVersion: config.releaseVersion || source.releaseVersion || source.version || "",
@@ -3767,7 +3770,12 @@ var require_teachingCalendarService = __commonJS({
       };
     }
     function generateWeeks(termConfig, options = {}) {
-      const totalWeeks = Number(termConfig.totalWeeks || 20) || 20;
+      const totalWeeks = Number(termConfig.totalWeeks);
+      if (!Number.isInteger(totalWeeks) || totalWeeks < 1 || totalWeeks > 30) {
+        const error = new Error("TOTAL_WEEKS_REQUIRED");
+        error.code = "TOTAL_WEEKS_REQUIRED";
+        throw error;
+      }
       const start = parseDate(termConfig.termStartDate);
       const weeks = [];
       for (let weekNo = 1; weekNo <= totalWeeks; weekNo += 1) {
@@ -3802,7 +3810,7 @@ var require_teachingCalendarService = __commonJS({
         term,
         semesterText: source.semesterText || record.semesterText || "",
         termStartDate: source.termStartDate || record.termStartDate || "",
-        totalWeeks: source.totalWeeks || record.totalWeeks || 20,
+        totalWeeks: source.totalWeeks || record.totalWeeks || (term === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.totalWeeks : undefined),
         weekStart: source.weekStart || record.weekStart || "monday"
       };
       const defaultWeekTitle = source.defaultWeekTitle || "\u6B63\u5E38\u6559\u5B66\u5468";
@@ -4003,7 +4011,7 @@ var require_runtimePointerService = __commonJS({
         term,
         semesterText: manifest.semesterText || "",
         termStartDate: manifest.termStartDate || "",
-        totalWeeks: manifest.totalWeeks || 20,
+        totalWeeks: manifest.totalWeeks || (term === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.totalWeeks : undefined),
         weekStart: manifest.weekStart || "monday"
       };
       return normalizePointer({
@@ -6070,7 +6078,7 @@ var require_releaseService = __commonJS({
         const termConfig = termRegistryService2.normalizeTermRecord(Object.assign({}, snapshot.termConfig || {}, {
           term,
           termStartDate: snapshot.termConfig && snapshot.termConfig.termStartDate || snapshot.termStartDate || "",
-          totalWeeks: snapshot.termConfig && snapshot.termConfig.totalWeeks || snapshot.totalWeeks || 20,
+          totalWeeks: snapshot.termConfig && snapshot.termConfig.totalWeeks || snapshot.totalWeeks || (term === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.totalWeeks : undefined),
           weekStart: snapshot.termConfig && snapshot.termConfig.weekStart || snapshot.weekStart || "monday",
           status: "ready",
           releaseVersion: snapshot.version || snapshot.releaseVersion || "",
@@ -6138,7 +6146,7 @@ var require_releaseService = __commonJS({
         term,
         semesterText: rawTermConfig.semesterText || snapshot.semesterText || legacyTermConfig.semesterText || "",
         termStartDate: rawTermConfig.termStartDate || snapshot.termStartDate || legacyTermConfig.termStartDate || "",
-        totalWeeks: rawTermConfig.totalWeeks || snapshot.totalWeeks || legacyTermConfig.totalWeeks || 20,
+        totalWeeks: rawTermConfig.totalWeeks || snapshot.totalWeeks || legacyTermConfig.totalWeeks,
         weekStart: rawTermConfig.weekStart || snapshot.weekStart || legacyTermConfig.weekStart || "monday",
         status: "ready",
         releaseVersion: version,
@@ -6250,7 +6258,7 @@ var require_releaseService = __commonJS({
           term,
           semesterText: rawTermConfig.semesterText || snapshot.semesterText || legacyTermConfig.semesterText || "",
           termStartDate: rawTermConfig.termStartDate || snapshot.termStartDate || legacyTermConfig.termStartDate || "",
-          totalWeeks: rawTermConfig.totalWeeks || snapshot.totalWeeks || legacyTermConfig.totalWeeks || 20,
+          totalWeeks: rawTermConfig.totalWeeks || snapshot.totalWeeks || legacyTermConfig.totalWeeks,
           weekStart: rawTermConfig.weekStart || snapshot.weekStart || legacyTermConfig.weekStart || "monday",
           status: "ready",
           releaseVersion: snapshot.version,
@@ -6425,7 +6433,7 @@ var require_releaseService = __commonJS({
         semester: bootstrap.semester || manifest?.semester || manifest?.term,
         termConfig: bootstrap.termConfig || manifest?.termConfig || null,
         termStartDate: manifest?.termStartDate || manifest?.termConfig?.termStartDate || "",
-        totalWeeks: manifest?.totalWeeks || manifest?.termConfig?.totalWeeks || 20,
+        totalWeeks: manifest?.totalWeeks || manifest?.termConfig?.totalWeeks || (manifest && (manifest.term || manifest.semester) === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.totalWeeks : undefined),
         weekStart: manifest?.weekStart || manifest?.termConfig?.weekStart || "monday",
         updatedAt: bootstrap.updatedAt || manifest?.updatedAt,
         source: bootstrap.metaDetails?.source || manifest?.source || "local-sync-client",

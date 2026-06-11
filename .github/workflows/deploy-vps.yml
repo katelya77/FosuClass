@@ -420,11 +420,13 @@ jobs:
             synced_release="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.syncedReleaseVersion||'')")"
             files_copied="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.filesCopied||0)")"
             retained_releases="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log((d.staticSync.retainedReleases||[]).join(','))")"
+            runtime_status_from_reconcile="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.runtimeActiveStatus||d.staticSync.verifiedRuntimeUrl&&d.staticSync.verifiedRuntimeUrl.status||'')")"
 
             if [ -z "$active_release" ]; then
               echo "::error::No active release found during postdeploy static reconcile"
               exit 1
             fi
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'test -f /app/storage/public/runtime/active.json && test -f /openresty-static/runtime/active.json'
 
             verify_url() {
               local relative_path="$1"
@@ -442,6 +444,14 @@ jobs:
             }
 
             url_status=""
+            runtime_status="$(curl -L -sS -o /dev/null -w '%{http_code}' -I --max-time 10 "https://class.katelya.eu.org/static/runtime/active.json" || true)"
+            if [ "$runtime_status" = "403" ] || [ "$runtime_status" = "405" ] || [ "$runtime_status" = "501" ] || [ "$runtime_status" = "000" ]; then
+              runtime_status="$(curl -L -sS -o /dev/null -w '%{http_code}' -H 'Range: bytes=0-0' --max-time 10 "https://class.katelya.eu.org/static/runtime/active.json" || true)"
+            fi
+            if [ "$runtime_status" != "200" ] && [ "$runtime_status" != "206" ]; then
+              echo "::error::Static runtime verification failed: active.json HTTP ${runtime_status}"
+              exit 1
+            fi
             url_status="${url_status}$(verify_url manifest.json)"
             url_status="${url_status}$(verify_url index/class/all.json)"
             url_status="${url_status}$(verify_url empty-room/index.json)"
@@ -456,6 +466,7 @@ jobs:
             echo "synced_release=${synced_release}"
             echo "files_copied=${files_copied}"
             echo "retained_releases=${retained_releases}"
+            echo "runtime_status=${runtime_status} reconcile=${runtime_status_from_reconcile}"
             echo "url_status=${url_status}"
             echo "elapsed_seconds=${elapsed}"
             echo "=================================================="

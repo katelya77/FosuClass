@@ -364,8 +364,10 @@ function getPublicAppConfig() {
   let notices = listNotices().filter((notice) => isInDisplayWindow(notice, now));
   
   // 检查当前学期是否已发布数据
-  const snapshot = releaseService.readActiveReleaseSnapshot();
-  if (!snapshot || (snapshot.term || snapshot.semester) !== activeTerm.term) {
+  const activeRelease = releaseService.getActiveReleaseInfoFast
+    ? releaseService.getActiveReleaseInfoFast()
+    : releaseService.getActiveReleaseInfo();
+  if (!activeRelease || (activeRelease.term || activeRelease.semester) !== activeTerm.term) {
     notices.unshift({
       id: "temp_new_semester_syncing",
       title: "温馨提示",
