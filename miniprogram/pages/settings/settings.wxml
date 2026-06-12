@@ -1,77 +1,48 @@
 <view class="page settings-page">
-  <!-- 顶部 Logo 与基本信息 -->
-  <view class="profile card settings-profile">
-    <image class="settings-logo" src="/assets/logo/favicon.png" mode="aspectFill" />
-    <view class="settings-brand-info">
-      <view class="settings-app-title">{{brand.appName}}</view>
-      <view class="settings-app-version">Version 1.0.0</view>
-      <view class="settings-app-current" wx:if="{{selectedScheduleText !== '未绑定课表'}}">当前课表：{{selectedScheduleText}}</view>
-      <view class="settings-app-current" wx:else>尚未绑定课表</view>
-      <view class="settings-app-current-meta" wx:if="{{selectedScheduleSourceText}}">{{selectedScheduleSourceText}}</view>
-      <view class="settings-app-current-meta" wx:if="{{selectedScheduleImportText}}">{{selectedScheduleImportText}}</view>
+  <view class="settings-overview card">
+    <view class="overview-head">
+      <image class="settings-logo" src="/assets/logo/favicon.png" mode="aspectFill" />
+      <view class="settings-brand-info">
+        <view class="settings-app-title">{{brand.appName}}</view>
+        <view class="settings-app-version">设置 · Version 1.0.0</view>
+      </view>
+    </view>
+
+    <view class="overview-schedule" bindtap="goSchool">
+      <view class="overview-label">当前课表</view>
+      <view class="overview-title" wx:if="{{selectedScheduleText !== '未绑定课表'}}">{{selectedScheduleText}}</view>
+      <view class="overview-title muted" wx:else>尚未绑定课表</view>
+      <view class="overview-meta" wx:if="{{selectedScheduleSourceText}}">{{selectedScheduleSourceText}}</view>
+      <view class="overview-meta" wx:if="{{selectedScheduleImportText}}">{{selectedScheduleImportText}}</view>
+    </view>
+
+    <view class="term-summary">
+      <view class="term-summary-item">
+        <view class="term-summary-label">学期</view>
+        <view class="term-summary-value">{{settings.semester || "待同步"}}</view>
+      </view>
+      <view class="term-summary-item">
+        <view class="term-summary-label">本周</view>
+        <view class="term-summary-value">第{{settings.currentWeek}}周</view>
+      </view>
+      <view class="term-summary-item">
+        <view class="term-summary-label">开学</view>
+        <view class="term-summary-value">{{termStartDate}}</view>
+      </view>
+      <view class="term-summary-item">
+        <view class="term-summary-label">总周数</view>
+        <view class="term-summary-value">{{totalTeachingWeeks}}</view>
+      </view>
+    </view>
+
+    <view class="overview-actions">
+      <button class="overview-action primary" bindtap="goSchool">选择课表</button>
+      <button class="overview-action" bindtap="goImportXls">导入 XLS</button>
+      <button class="overview-action" bindtap="goCustomCourses">个性化</button>
     </view>
   </view>
 
   <notice-ticker notices="{{appConfig.notices}}" page-key="settings" max-count="1" />
-
-  <!-- 1. 我的课表 -->
-  <view class="settings-card card">
-    <view class="group-title">我的课表</view>
-    <view class="setting-row" bindtap="goSchool">
-      <view>
-        <view class="row-title">当前课表</view>
-        <view class="row-desc">{{selectedScheduleText || "点击选择班级"}}</view>
-        <view class="row-desc subtle" wx:if="{{selectedScheduleSourceText}}">{{selectedScheduleSourceText}}</view>
-        <view class="row-desc subtle" wx:if="{{selectedScheduleImportText}}">{{selectedScheduleImportText}}</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row" bindtap="goImportXls">
-      <view>
-        <view class="row-title">手动导入 100 网课表 (推荐)</view>
-        <view class="row-desc">免教务密码，直接上传下载的 xls 文件生成课表</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row" bindtap="goLogin">
-      <view>
-        <view class="row-title">XLS-only 安全导入</view>
-        <view class="row-desc">账号密码同步已下线，仅保留本机 XLS 导入</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row" bindtap="goCustomCourses">
-      <view>
-        <view class="row-title">个性化课程</view>
-        <view class="row-desc">添加、编辑或隐藏本地自定义课程</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-    <view class="setting-row">
-      <view>
-        <view class="row-title">当前学期</view>
-        <view class="row-desc">{{settings.semester}}</view>
-      </view>
-    </view>
-    <view class="setting-row">
-      <view>
-        <view class="row-title">当前日期对应周次</view>
-        <view class="row-desc">{{teachingInfo.dateLabel}} {{teachingInfo.weekdayLabel}} · 第{{settings.currentWeek}}周</view>
-      </view>
-    </view>
-    <view class="setting-row">
-      <view>
-        <view class="row-title">开学日期</view>
-        <view class="row-desc">{{termStartDate}} · {{termStartWeekdayText}}</view>
-      </view>
-    </view>
-    <view class="setting-row">
-      <view>
-        <view class="row-title">总教学周</view>
-        <view class="row-desc">{{totalTeachingWeeks}}</view>
-      </view>
-    </view>
-  </view>
 
   <!-- 2. 课表设置 -->
   <view class="settings-card card">
@@ -157,12 +128,6 @@
         bindchange="onSwitchChange"
       />
     </view>
-    <view class="setting-row">
-      <view>
-        <view class="row-title">课前智能提醒</view>
-        <view class="row-desc">即将支持</view>
-      </view>
-    </view>
   </view>
 
   <!-- 4. 数据与公告 -->
@@ -192,18 +157,6 @@
       <view>
         <view class="row-title">查看公告历史</view>
         <view class="row-desc">{{noticeHistory.length ? noticeHistory.length + " 条公告" : "暂无公告"}}</view>
-      </view>
-      <view class="row-arrow">›</view>
-    </view>
-  </view>
-
-  <!-- 5. 数据状态 -->
-  <view class="settings-card card">
-    <view class="group-title">数据状态</view>
-    <view class="setting-row" bindtap="showDataVersionDetail">
-      <view>
-        <view class="row-title">数据版本详情</view>
-        <view class="row-desc">{{selectedScheduleText}}</view>
       </view>
       <view class="row-arrow">›</view>
     </view>
