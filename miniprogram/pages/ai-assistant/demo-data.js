@@ -39,8 +39,8 @@ const DEMO_RESPONSES = {
       subtitle: "根据本机课表摘要生成，不含个人身份字段。",
       badges: ["演示数据", "今日课程", "仅供参考"],
       items: [
-        { title: "高等数学", subtitle: "第 3-4 节 · C7-305", value: "10:10" },
-        { title: "大学英语", subtitle: "第 7-8 节 · B1-204", value: "15:00" },
+        { title: "高等数学", subtitle: "第 3-4 节 · C7-305", value: "09:40-11:05" },
+        { title: "大学英语", subtitle: "第 7-8 节 · B1-204", value: "14:15-15:50" },
       ],
       actions: [
         { label: "打开今日页", type: "navigate", url: "/pages/today/today", payload: {} },
@@ -86,9 +86,9 @@ const DEMO_RESPONSES = {
       subtitle: "关键词：陈老师 · 已读取课表详情",
       badges: ["演示数据", "全校索引", "课表详情"],
       items: [
-        { title: "数据结构", subtitle: "第 1-2 节 · C7-203", value: "星期一" },
-        { title: "程序设计基础", subtitle: "第 5-6 节 · B8-102", value: "星期二" },
-        { title: "实验课", subtitle: "第 7-8 节 · C6-301", value: "星期四" },
+        { title: "数据结构", subtitle: "星期一 · 第 1-2 节 · C7-203", value: "08:00-09:25" },
+        { title: "程序设计基础", subtitle: "星期二 · 第 5-6 节 · B8-102", value: "11:10-14:10" },
+        { title: "实验课", subtitle: "星期四 · 第 7-8 节 · C6-301", value: "14:15-15:50" },
       ],
       actions: [
         { label: "查看课表详情", type: "navigate", url: "/pages/schedule-view/schedule-view?type=teacher&id=demo-teacher", payload: {} },
@@ -111,8 +111,8 @@ const DEMO_RESPONSES = {
       subtitle: "忙闲矩阵只使用课程名、星期和节次摘要。",
       badges: ["演示数据", "忙闲矩阵", "空教室联动"],
       items: [
-        { title: "星期三", subtitle: "第 9-10 节共同空闲 · 可优先看 C7-305", value: "2 节" },
-        { title: "星期五", subtitle: "第 5-6 节共同空闲 · 可选 B8-204", value: "2 节" },
+        { title: "星期三", subtitle: "第 9-10 节共同空闲 · 可优先看 C7-305", value: "15:55-17:20" },
+        { title: "星期五", subtitle: "第 5-6 节共同空闲 · 可选 B8-204", value: "11:10-14:10" },
       ],
       actions: [
         { label: "查看空教室", type: "navigate", url: "/pages/empty-room/empty-room?weekday=3&sections=9-10&building=C7", payload: {} },

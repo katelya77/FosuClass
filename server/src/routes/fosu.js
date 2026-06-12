@@ -968,7 +968,7 @@ router.get("/search-index", scheduleLimiter, (req, res) => {
     });
 
     if (releaseVersion) {
-      return sendCacheableJson(req, res, payload, 300); // 5 mins cache
+      return sendCacheableJson(req, res, payload, 7 * 24 * 60 * 60);
     } else {
       res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
       res.setHeader("Pragma", "no-cache");

@@ -17,6 +17,5 @@
     </view>
     <view class="notice-ticker-panel-title">{{currentNotice.title}}</view>
     <view class="notice-ticker-panel-content">{{currentNotice.content}}</view>
-    <button class="notice-ticker-panel-button" bindtap="closeNoticeDetail">我知道了</button>
   </view>
 </view>

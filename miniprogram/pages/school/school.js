@@ -638,7 +638,7 @@ Page({
     try {
       const cacheKey = this.buildIndexCacheKey(type, params);
       const cached = wx.getStorageSync(cacheKey);
-      if (!cached || Date.now() - cached.savedAt > 30 * 60 * 1000) return null;
+      if (!cached || Date.now() - cached.savedAt > 7 * 24 * 60 * 60 * 1000) return null;
       return cached.data || null;
     } catch (error) {
       return null;
@@ -2387,10 +2387,9 @@ Page({
       console.log("[school] cache hit", { key: type, count: cached?.items?.length || 0 });
       renderFn(cached, true);
       this.setData({
-        restoreHint: "已加载缓存，正在校验更新"
+        loadingState: "none",
+        restoreHint: "已加载同版本缓存"
       });
-      // 发起静默更新
-      doNetworkRequest();
     } else {
       // 发起网络请求
       doNetworkRequest();
@@ -3263,13 +3262,12 @@ Page({
       this.setData({
         dataLoadState: "success",
         loadingState: "none",
-        restoreHint: "已显示本地缓存，正在校验更新",
+        restoreHint: "已显示同版本缓存",
       });
       if (isRuntimeCircuitOpen()) {
         this.setData({ restoreHint: "已显示本地缓存，网络熔断中" });
         return;
       }
-      doNetworkRequest(true);
       return;
     }
 

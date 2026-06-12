@@ -1,5 +1,6 @@
 .profile,
-.settings-card {
+.settings-card,
+.settings-overview {
   padding: 26rpx;
 }
 
@@ -17,6 +18,119 @@
 
 .settings-card {
   margin-top: 22rpx;
+}
+
+.settings-overview {
+  border: 1rpx solid rgba(231, 237, 245, 0.92);
+  background: linear-gradient(180deg, #ffffff 0%, #fbfcfe 100%);
+  box-shadow: 0 14rpx 38rpx rgba(16, 31, 55, 0.07);
+}
+
+.overview-head {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+  min-width: 0;
+}
+
+.overview-schedule {
+  margin-top: 24rpx;
+  padding: 20rpx 22rpx;
+  border: 1rpx solid #edf1f6;
+  border-radius: 16rpx;
+  background: #ffffff;
+}
+
+.overview-label {
+  color: #8a94a6;
+  font-size: 21rpx;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.overview-title {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 8rpx;
+  color: #172033;
+  font-size: 30rpx;
+  font-weight: 900;
+  line-height: 1.28;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.overview-title.muted {
+  color: #7a8494;
+}
+
+.overview-meta {
+  overflow: hidden;
+  margin-top: 6rpx;
+  color: #8a94a6;
+  font-size: 22rpx;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.term-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12rpx;
+  margin-top: 16rpx;
+}
+
+.term-summary-item {
+  min-width: 0;
+  padding: 16rpx 18rpx;
+  border-radius: 14rpx;
+  background: #f7f9fc;
+}
+
+.term-summary-label {
+  color: #8a94a6;
+  font-size: 20rpx;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.term-summary-value {
+  overflow: hidden;
+  margin-top: 6rpx;
+  color: #172033;
+  font-size: 23rpx;
+  font-weight: 900;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.overview-actions {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 18rpx;
+}
+
+.overview-action {
+  flex: 1;
+  min-width: 0;
+  height: 64rpx;
+  border: 1rpx solid #dfe6ef;
+  border-radius: 14rpx;
+  background: #ffffff;
+  color: #3f4c5f;
+  font-size: 23rpx;
+  font-weight: 900;
+  line-height: 64rpx;
+  text-align: center;
+}
+
+.overview-action.primary {
+  border-color: #c62828;
+  background: #c62828;
+  color: #ffffff;
+  box-shadow: 0 10rpx 24rpx rgba(198, 40, 40, 0.16);
 }
 
 .group-title {

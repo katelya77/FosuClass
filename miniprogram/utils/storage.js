@@ -1,11 +1,15 @@
 const STORAGE_KEY = "FOSU_CLASS_SETTINGS";
 const BOOTSTRAP_CACHE_KEY = "FOSU_BOOTSTRAP_CACHE";
 const SCHOOL_CACHE_SCHEMA_VERSION = 5;
+const SCHOOL_INDEX_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
+const PERSONAL_SCHEDULE_CACHE_KEY = "FOSU_PERSONAL_SCHEDULE_CACHE";
+const PERSONAL_SCHEDULE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
 const SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY = "FOSU_ACTIVE_SNAPSHOT";
 const SCHOOL_FILTER_CACHE_KEY = "FOSU_SCHOOL_FILTER_CACHE";
 const CURRENT_SCHEDULE_TARGET_KEY = "FOSU_CURRENT_SCHEDULE_TARGET";
 const RECENT_SCHEDULES_KEY = "FOSU_RECENT_SCHEDULES";
 const DEFAULT_TERM = "";
+let currentScheduleTargetMemory = null;
 
 const defaultSettings = {
   className: "",
@@ -54,13 +58,59 @@ function clearDataCaches() {
 function clearLocalSelection() {
   wx.removeStorageSync(CURRENT_SCHEDULE_TARGET_KEY);
   wx.removeStorageSync(SCHOOL_FILTER_CACHE_KEY);
+  wx.removeStorageSync(PERSONAL_SCHEDULE_CACHE_KEY);
+  currentScheduleTargetMemory = null;
+}
+
+function normalizeStoredScheduleTarget(target) {
+  if (!target || !target.name || !target.type) return null;
+  const term = target.term || target.semester || DEFAULT_TERM;
+  return Object.assign({}, target, {
+    term,
+    semester: term,
+    releaseVersion: target.releaseVersion || target.version || "",
+  });
+}
+
+function writePersonalScheduleCache(target) {
+  const normalized = normalizeStoredScheduleTarget(target);
+  if (!normalized || normalized.type !== "personal-xls") return false;
+  try {
+    wx.setStorageSync(PERSONAL_SCHEDULE_CACHE_KEY, {
+      savedAt: Date.now(),
+      target: normalized,
+    });
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+function readPersonalScheduleCache() {
+  try {
+    const cached = wx.getStorageSync(PERSONAL_SCHEDULE_CACHE_KEY);
+    if (!cached || Date.now() - Number(cached.savedAt || 0) > PERSONAL_SCHEDULE_CACHE_TTL) return null;
+    return normalizeStoredScheduleTarget(cached.target);
+  } catch (error) {
+    return null;
+  }
 }
 
 function getCurrentScheduleTarget() {
   try {
-    const target = wx.getStorageSync(CURRENT_SCHEDULE_TARGET_KEY);
-    if (target && target.name && target.type) {
+    if (currentScheduleTargetMemory && currentScheduleTargetMemory.name && currentScheduleTargetMemory.type) {
+      return currentScheduleTargetMemory;
+    }
+    const target = normalizeStoredScheduleTarget(wx.getStorageSync(CURRENT_SCHEDULE_TARGET_KEY));
+    if (target) {
+      currentScheduleTargetMemory = target;
       return target;
+    }
+    const personalCache = readPersonalScheduleCache();
+    if (personalCache) {
+      currentScheduleTargetMemory = personalCache;
+      wx.setStorageSync(CURRENT_SCHEDULE_TARGET_KEY, personalCache);
+      return personalCache;
     }
   } catch (error) {
     console.error("getCurrentScheduleTarget error", error);
@@ -69,14 +119,11 @@ function getCurrentScheduleTarget() {
 }
 
 function setCurrentScheduleTarget(target) {
-  if (target && target.name) {
-    const term = target.term || target.semester || DEFAULT_TERM;
-    const normalizedTarget = Object.assign({}, target, {
-      term,
-      semester: term,
-      releaseVersion: target.releaseVersion || target.version || "",
-    });
+  const normalizedTarget = normalizeStoredScheduleTarget(target);
+  if (normalizedTarget) {
     wx.setStorageSync(CURRENT_SCHEDULE_TARGET_KEY, normalizedTarget);
+    currentScheduleTargetMemory = normalizedTarget;
+    writePersonalScheduleCache(normalizedTarget);
     wx.setStorageSync("hasInitializedSchedule", true);
     wx.setStorageSync("currentScheduleId", target.classId || target.name || "");
     wx.setStorageSync("currentScheduleName", target.name || "");
@@ -94,10 +141,12 @@ function setCurrentScheduleTarget(target) {
 
 function clearCurrentScheduleTarget() {
   wx.removeStorageSync(CURRENT_SCHEDULE_TARGET_KEY);
+  wx.removeStorageSync(PERSONAL_SCHEDULE_CACHE_KEY);
   wx.removeStorageSync("hasInitializedSchedule");
   wx.removeStorageSync("currentScheduleId");
   wx.removeStorageSync("currentScheduleName");
   wx.removeStorageSync("currentScheduleSource");
+  currentScheduleTargetMemory = null;
   saveSettings({
     className: "",
     classId: "",
@@ -305,9 +354,13 @@ function readSameVersionIndexCache(term, releaseVersion, type, params = {}) {
     const key = getSchoolIndexCacheKey(term, releaseVersion, type, params);
     const cached = wx.getStorageSync(key);
     if (!cached) return null;
-    const ttl = 30 * 60 * 1000; // 30 mins ttl
-    if (Date.now() - cached.savedAt > ttl) return null;
-    return cached.data || null;
+    if (Date.now() - cached.savedAt > SCHOOL_INDEX_CACHE_TTL) return null;
+    const data = cached.data || null;
+    if (!data) return null;
+    return Object.assign({}, data, {
+      fromStorage: true,
+      cacheFastPath: true,
+    });
   } catch (error) {
     return null;
   }
@@ -363,9 +416,11 @@ function clearAllSchoolCaches() {
 module.exports = {
   BOOTSTRAP_CACHE_KEY,
   CURRENT_SCHEDULE_TARGET_KEY,
+  PERSONAL_SCHEDULE_CACHE_KEY,
   RECENT_SCHEDULES_KEY,
   SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY,
   SCHOOL_CACHE_SCHEMA_VERSION,
+  SCHOOL_INDEX_CACHE_TTL,
   SCHOOL_FILTER_CACHE_KEY,
   STORAGE_KEY,
   defaultSettings,
@@ -392,4 +447,6 @@ module.exports = {
   getScheduleDetailCacheKey,
   readSameVersionIndexCache,
   writeSameVersionIndexCache,
+  readPersonalScheduleCache,
+  writePersonalScheduleCache,
 };

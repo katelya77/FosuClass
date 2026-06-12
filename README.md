@@ -7,7 +7,9 @@
 - 小程序优先读取静态 Release Pack、runtime pointer 和 last-known-good 缓存；网络超时、403、504 或 Cloudflare 异常会进入 runtime circuit breaker，先保留可用课表和教师目录。
 - 公共 API 的 `/app-config`、`/runtime/active`、`/sync/status`、`/sync/releases` 只走 manifest、summary、upload-record-index 等小 JSON fast-path；`getActiveReleaseInfoFast()` 只暴露压缩版 manifest 与 summary 兼容字段，不读取大 snapshot。
 - CLI 分片上传的 `/api/admin/staging/upload/finalize` 只返回 `202 Accepted` 和后台 job，JSON parse、canonical hash、深度安全检查全部在 Release Worker 中执行。
-- 全校页搜索结果采用 cache-first 与分页渲染，首屏只渲染第一批结果，触底或点击“加载更多”再追加，避免教师、课程、教室索引命中较多时卡住小程序视图层。
+- 全校页搜索结果采用 cache-first、同 `releaseVersion` 快速路径与分页渲染；命中同版本索引缓存后不再立即重复请求 API，触底或点击“加载更多”再追加，避免教师、课程、教室索引命中较多时卡住小程序视图层。
+- 个人 XLS 课表绑定后会写入 `FOSU_PERSONAL_SCHEDULE_CACHE`，页面内优先走内存快速路径，减少大课表对象反复从小程序 storage 反序列化。
+- AI 校园管家的常用任务图标使用小程序本地 SVG 静态资源，更多任务分组打开时按需渲染，并写入 runtime 缓存，降低首屏节点数和连续点击瞬时请求。
 - staging 发布保留 active/staging/legacy 安全边界，教师目录缺失时显式标记 `not-counted`，不会把教师课表数量冒充教师目录数量。
 
 ## 2026 智能体应用创新大赛版本
@@ -19,6 +21,7 @@
 - 小程序新增 `pages/ai-assistant/ai-assistant` 页面，支持快捷问题、聊天输入、结构化结果卡片和一键跳转操作。
 - 后端新增 `POST /api/ai/agent/chat`，响应稳定包含 `answer`、`cards`、`toolCalls`、`suggestions`、`safety` 和 `serverTime`。
 - 智能体采用“工具优先”架构：先识别意图和槽位，再调用 Release Pack、全校索引、空教室、今日课表摘要、数据诊断等确定性工具，最后生成中文卡片。
+- 课程类卡片会优先展示具体上课时间段，例如 `08:00-09:25`，节次信息保留在副标题中，避免只显示“第几节”。
 - 默认 `mockProvider` 可在无模型 key 的情况下演示“现在有空教室吗”“今天还有课吗”“查老师课表”“怎么导入个人课表”“为什么数据加载失败”等核心场景；配置 DeepSeek/Coze 后，项目知识问答、自然聊天和复杂解释会调用外部 Provider，课程事实仍只来自工具结果。
 
 ### 架构图文字版

@@ -163,19 +163,9 @@ button::after {
 }
 
 .quick-action-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 34rpx;
+  flex: 0 0 auto;
+  width: 34rpx;
   height: 34rpx;
-  padding: 0 6rpx;
-  border-radius: 999rpx;
-  background: #f5f7fa;
-  color: inherit;
-  font-size: 17rpx;
-  font-weight: 900;
-  line-height: 34rpx;
-  text-align: center;
 }
 
 .quick-action-label {
@@ -816,7 +806,10 @@ button::after {
 }
 
 .task-section {
-  margin-bottom: 16rpx;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10rpx;
+  margin-bottom: 18rpx;
 }
 
 .task-section:last-child {
@@ -825,7 +818,8 @@ button::after {
 }
 
 .task-section-title {
-  margin: 4rpx 2rpx 8rpx;
+  grid-column: 1 / -1;
+  margin: 6rpx 2rpx 0;
   color: #8a4b4b;
   font-size: 20rpx;
   font-weight: 900;
@@ -834,12 +828,12 @@ button::after {
 
 .task-item {
   display: flex;
-  align-items: center;
-  gap: 14rpx;
+  align-items: flex-start;
+  gap: 12rpx;
   width: 100%;
-  min-height: 82rpx;
-  margin-top: 8rpx;
-  padding: 12rpx;
+  min-height: 108rpx;
+  margin-top: 0;
+  padding: 14rpx 12rpx;
   border-radius: 16rpx;
   background: #f8fafc;
   text-align: left;
@@ -849,13 +843,6 @@ button::after {
   flex: 0 0 auto;
   width: 44rpx;
   height: 44rpx;
-  border-radius: 14rpx;
-  background: #fff1ef;
-  color: #c62828;
-  font-size: 19rpx;
-  font-weight: 900;
-  line-height: 44rpx;
-  text-align: center;
 }
 
 .task-copy {
@@ -883,6 +870,15 @@ button::after {
   font-size: 19rpx;
   font-weight: 700;
   line-height: 1.25;
+}
+
+.task-section-loading {
+  height: 220rpx;
+  color: #8a94a6;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 220rpx;
+  text-align: center;
 }
 
 .privacy-sheet {

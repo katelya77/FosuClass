@@ -1,15 +1,33 @@
 const aiAssistantService = require("../../services/aiAssistantService");
 const demoData = require("./demo-data");
+const { courseTimes } = require("../../data/courseTimes");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
+const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
+const TASK_PANEL_CACHE_VERSION = "2026-06-ui-svg-v1";
+const TASK_PANEL_DEBOUNCE_MS = 180;
+const TASK_ACTION_DEBOUNCE_MS = 180;
 const PRIVACY_SUMMARY_TEXT = "仅发送课程名、教师、教室、星期、节次、教学周；不发送学号、姓名、密码或原始文件。";
 const MAX_MESSAGE_COUNT = 20;
 const PERSONAL_SYNC_XLS_URL = "/pages/personal-sync/personal-sync?tab=xls";
+const ICON_BASE = "/assets/icons/ai-tasks";
+const ICONS = {
+  today: `${ICON_BASE}/today.svg`,
+  room: `${ICON_BASE}/room.svg`,
+  teacher: `${ICON_BASE}/teacher.svg`,
+  xls: `${ICON_BASE}/xls.svg`,
+  classroom: `${ICON_BASE}/classroom.svg`,
+  course: `${ICON_BASE}/course.svg`,
+  study: `${ICON_BASE}/study.svg`,
+  diagnosis: `${ICON_BASE}/diagnosis.svg`,
+  app: `${ICON_BASE}/app.svg`,
+  term: `${ICON_BASE}/term.svg`,
+};
 const QUICK_ACTIONS = [
-  { id: "today", icon: "今", label: "今日课表", message: "今天还有课吗？", className: "today" },
-  { id: "emptyRoom", icon: "室", label: "空教室", message: "现在有空教室吗？", className: "room" },
-  { id: "teacher", icon: "师", label: "查老师", draft: "查某某老师课表", className: "teacher" },
-  { id: "xls", icon: "XLS", label: "导入 XLS", url: PERSONAL_SYNC_XLS_URL, className: "xls" },
+  { id: "today", iconPath: ICONS.today, label: "今日课表", message: "今天还有课吗？", className: "today" },
+  { id: "emptyRoom", iconPath: ICONS.room, label: "空教室", message: "现在有空教室吗？", className: "room" },
+  { id: "teacher", iconPath: ICONS.teacher, label: "查老师", draft: "查某某老师课表", className: "teacher" },
+  { id: "xls", iconPath: ICONS.xls, label: "导入 XLS", url: PERSONAL_SYNC_XLS_URL, className: "xls" },
 ];
 
 const WELCOME_EXAMPLES = [
@@ -22,26 +40,26 @@ const TASK_PANEL_GROUPS = [
   {
     title: "常用校园任务",
     items: [
-      { icon: "室", label: "找空教室", desc: "按当前时间找可用教室", message: "现在有空教室吗？" },
-      { icon: "师", label: "查老师课表", desc: "输入老师姓名后查询", draft: "查某某老师课表", requiresKeyword: true },
-      { icon: "楼", label: "查教室占用", desc: "输入教室或楼栋", draft: "查 C7-203 教室", requiresKeyword: true },
-      { icon: "课", label: "查课程安排", desc: "输入课程关键词", draft: "查高等数学课程", requiresKeyword: true },
+      { iconPath: ICONS.room, label: "找空教室", desc: "按当前时间找可用教室", message: "现在有空教室吗？" },
+      { iconPath: ICONS.teacher, label: "查老师课表", desc: "输入老师姓名后查询", draft: "查某某老师课表", requiresKeyword: true },
+      { iconPath: ICONS.classroom, label: "查教室占用", desc: "输入教室或楼栋", draft: "查 C7-203 教室", requiresKeyword: true },
+      { iconPath: ICONS.course, label: "查课程安排", desc: "输入课程关键词", draft: "查高等数学课程", requiresKeyword: true },
     ],
   },
   {
     title: "个人课表",
     items: [
-      { icon: "今", label: "今日安排", desc: "基于当前课表摘要", message: "今天还有课吗？" },
-      { icon: "习", label: "自习时间推荐", desc: "需要开启课表摘要", message: "帮我推荐连续 2 节自习时间" },
-      { icon: "表", label: "XLS 导入指引", desc: "安全导入个人课表", url: PERSONAL_SYNC_XLS_URL, fallbackMessage: "怎么导入个人课表？" },
+      { iconPath: ICONS.today, label: "今日安排", desc: "基于当前课表摘要", message: "今天还有课吗？" },
+      { iconPath: ICONS.study, label: "自习时间推荐", desc: "需要开启课表摘要", message: "帮我推荐连续 2 节自习时间" },
+      { iconPath: ICONS.xls, label: "XLS 导入指引", desc: "安全导入个人课表", url: PERSONAL_SYNC_XLS_URL, fallbackMessage: "怎么导入个人课表？" },
     ],
   },
   {
     title: "项目与诊断",
     items: [
-      { icon: "诊", label: "数据诊断", desc: "检查索引和缓存状态", message: "为什么数据加载失败？" },
-      { icon: "佛", label: "这个小程序怎么用", desc: "了解 FosuClass 功能入口", message: "这个小程序怎么用？" },
-      { icon: "新", label: "新学期同步说明", desc: "了解 XLS-only 同步方式", message: "新学期怎么同步个人课表？" },
+      { iconPath: ICONS.diagnosis, label: "数据诊断", desc: "检查索引和缓存状态", message: "为什么数据加载失败？" },
+      { iconPath: ICONS.app, label: "这个小程序怎么用", desc: "了解 FosuClass 功能入口", message: "这个小程序怎么用？" },
+      { iconPath: ICONS.term, label: "新学期同步说明", desc: "了解 XLS-only 同步方式", message: "新学期怎么同步个人课表？" },
     ],
   },
 ];
@@ -109,6 +127,43 @@ const ACTION_LABEL_FALLBACKS = {
 const ALLOWED_ACTION_TYPES = ["navigate", "copy", "retry", "bind", "noop"];
 const INVALID_DISPLAY_TEXT = new Set(["[object Object]", "undefined", "null", "NaN"]);
 
+function cloneTaskPanelGroups() {
+  return JSON.parse(JSON.stringify(TASK_PANEL_GROUPS));
+}
+
+function readTaskPanelGroupsCache() {
+  try {
+    const cached = wx.getStorageSync(TASK_PANEL_CACHE_KEY);
+    if (!cached || cached.version !== TASK_PANEL_CACHE_VERSION || !Array.isArray(cached.groups)) return null;
+    return cached.groups;
+  } catch (error) {
+    return null;
+  }
+}
+
+function writeTaskPanelGroupsCache(groups) {
+  try {
+    wx.setStorageSync(TASK_PANEL_CACHE_KEY, {
+      version: TASK_PANEL_CACHE_VERSION,
+      savedAt: Date.now(),
+      groups,
+    });
+  } catch (error) {
+    // 静态任务缓存失败不影响页面使用。
+  }
+}
+
+function createDebounced(fn, wait) {
+  let timer = null;
+  return function debounced(...args) {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      fn.apply(this, args);
+    }, wait);
+  };
+}
+
 function timeText() {
   const date = new Date();
   const pad = (value) => String(value).padStart(2, "0");
@@ -148,6 +203,48 @@ function safeText(value, maxLength, fallback) {
   if (!text || INVALID_DISPLAY_TEXT.has(text)) return "";
   const limit = Number(maxLength || 0);
   return limit > 0 ? text.slice(0, limit) : text;
+}
+
+function getSectionTime(section) {
+  const target = Number(section);
+  return courseTimes.find((item) => Number(item.section) === target) || null;
+}
+
+function inferSectionPair(source) {
+  const item = source || {};
+  let start = Number(item.startSection || item.sectionStart || 0) || 0;
+  let end = Number(item.endSection || item.sectionEnd || start || 0) || 0;
+  if ((!start || !end) && Array.isArray(item.sections) && item.sections.length) {
+    const sections = item.sections.map((value) => Number(value)).filter((value) => Number.isFinite(value));
+    start = sections[0] || start;
+    end = sections[sections.length - 1] || end || start;
+  }
+  if ((!start || !end) && (item.sectionText || item.value || item.subtitle)) {
+    const match = String(item.sectionText || item.value || item.subtitle || "").match(/第?\s*(\d{1,2})\s*(?:[-~～至到]\s*(\d{1,2}))?\s*节/);
+    if (match) {
+      start = Number(match[1]);
+      end = Number(match[2] || match[1]);
+    }
+  }
+  return start && end ? { start, end } : null;
+}
+
+function inferSectionText(source) {
+  const direct = safeText(source && source.sectionText, 40);
+  if (direct) return direct;
+  const pair = inferSectionPair(source);
+  if (!pair) return "";
+  return pair.start === pair.end ? `第${pair.start}节` : `第${pair.start}-${pair.end}节`;
+}
+
+function inferCourseTimeRange(source) {
+  const direct = safeText(source && (source.timeRange || source.timeText), 40);
+  if (/\d{1,2}:\d{2}\s*-\s*\d{1,2}:\d{2}/.test(direct)) return direct;
+  const pair = inferSectionPair(source);
+  if (!pair) return "";
+  const start = getSectionTime(pair.start);
+  const end = getSectionTime(pair.end);
+  return start && end ? `${start.start}-${end.end}` : "";
 }
 
 function mapProviderLabel(provider) {
@@ -279,14 +376,25 @@ function buildEvidenceText(evidence) {
 function normalizeCardItem(item, index, cardType) {
   const source = item && typeof item === "object" && !Array.isArray(item) ? item : {};
   const subtitle = safeText(source.subtitle || source.desc || source.detail || "", 140);
-  const displaySubtitle = String(cardType || "") === "empty_room"
+  let displaySubtitle = String(cardType || "") === "empty_room"
     ? subtitle.replace(/(?:\s*·\s*)?容量未知/g, "").replace(/^\s*·\s*|\s*·\s*$/g, "")
     : subtitle;
+  const courseLike = ["schedule", "teacher", "course", "reminder", "generic"].indexOf(String(cardType || "")) >= 0;
+  const section = courseLike ? inferSectionText(source) : "";
+  const timeRange = courseLike ? inferCourseTimeRange(source) : "";
+  let value = safeText(source.value || source.time || source.status || "", 60);
+  const valueLooksLikeSection = /第?\s*\d{1,2}\s*(?:[-~～至到]\s*\d{1,2})?\s*节/.test(value);
+  if (timeRange && (!value || valueLooksLikeSection)) {
+    value = timeRange;
+  }
+  if (timeRange && section && displaySubtitle.indexOf(section) < 0) {
+    displaySubtitle = [section, displaySubtitle].filter(Boolean).join(" · ");
+  }
   const normalized = {
     key: `${safeText(source.title || source.name || "item", 60, "item")}-${index}`,
     title: safeText(source.title || source.name || "", 80),
     subtitle: safeText(displaySubtitle, 140),
-    value: safeText(source.value || source.time || source.status || "", 60),
+    value,
   };
   return normalized.title || normalized.subtitle || normalized.value ? normalized : null;
 }
@@ -531,7 +639,9 @@ Page({
   data: {
     quickActions: QUICK_ACTIONS,
     welcomeExamples: WELCOME_EXAMPLES,
-    taskPanelGroups: TASK_PANEL_GROUPS,
+    taskPanelGroups: [],
+    taskPanelReady: false,
+    taskPanelLoading: false,
     messages: [],
     expandedCards: {},
     inputValue: "",
@@ -562,6 +672,10 @@ Page({
   },
 
   onLoad(options) {
+    this.debouncedOpenTaskPanel = createDebounced(() => this.openTaskPanelNow(), TASK_PANEL_DEBOUNCE_MS);
+    this.debouncedSendTaskMessage = createDebounced((message, sendOptions) => {
+      this.sendMessage(message, sendOptions);
+    }, TASK_ACTION_DEBOUNCE_MS);
     const showPrivacyTip = wx.getStorageSync(PRIVACY_TIP_KEY) !== true;
     const allowPersonalContext = aiAssistantService.isPersonalContextAllowed();
     const demoMode = demoData.normalizeDemoMode(options && options.demo);
@@ -601,6 +715,15 @@ Page({
     this.setData({ inputValue: event.detail.value });
   },
 
+  queueTaskMessage(message, options) {
+    if (!message) return;
+    if (this.debouncedSendTaskMessage) {
+      this.debouncedSendTaskMessage(message, options || {});
+      return;
+    }
+    this.sendMessage(message, options);
+  },
+
   onQuickAction(event) {
     const actionId = event.currentTarget.dataset.actionId;
     const action = QUICK_ACTIONS.find((item) => item.id === actionId);
@@ -616,12 +739,12 @@ Page({
       this.navigateByUrl(action.url);
       return;
     }
-    this.sendMessage(action.message || action.label);
+    this.queueTaskMessage(action.message || action.label);
   },
 
   onWelcomeExampleTap(event) {
     const question = event.currentTarget.dataset.question;
-    if (question) this.sendMessage(question);
+    if (question) this.queueTaskMessage(question);
   },
 
   onTaskPanelItemTap(event) {
@@ -645,12 +768,12 @@ Page({
       return;
     }
     this.setData({ showTaskPanel: false });
-    this.sendMessage(task.message || task.fallbackMessage || task.label);
+    this.queueTaskMessage(task.message || task.fallbackMessage || task.label);
   },
 
   onSuggestionTap(event) {
     const suggestion = event.currentTarget.dataset.suggestion;
-    if (suggestion) this.sendMessage(suggestion);
+    if (suggestion) this.queueTaskMessage(suggestion);
   },
 
   onSubmit() {
@@ -832,11 +955,35 @@ Page({
   },
 
   openTaskPanel() {
+    if (this.debouncedOpenTaskPanel) {
+      this.debouncedOpenTaskPanel();
+      return;
+    }
+    this.openTaskPanelNow();
+  },
+
+  openTaskPanelNow() {
+    const cachedGroups = readTaskPanelGroupsCache();
     this.setData({
       showTaskPanel: true,
       showPrivacySheet: false,
       privacyExpanded: false,
+      taskPanelReady: Boolean(cachedGroups),
+      taskPanelLoading: !cachedGroups,
+      taskPanelGroups: cachedGroups || this.data.taskPanelGroups,
     });
+    if (cachedGroups) return;
+
+    setTimeout(() => {
+      if (!this.data.showTaskPanel) return;
+      const groups = cloneTaskPanelGroups();
+      writeTaskPanelGroupsCache(groups);
+      this.setData({
+        taskPanelGroups: groups,
+        taskPanelReady: true,
+        taskPanelLoading: false,
+      });
+    }, 32);
   },
 
   closeTaskPanel() {

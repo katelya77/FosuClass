@@ -18,25 +18,27 @@
 
 ## 小程序缓存 Key
 
-当前 schema 使用 `school:v4` 前缀。升级结构时递增 schema 版本，旧缓存自动失效。
+当前 schema 使用 `school:v5` 前缀。升级结构时递增 schema 版本，旧缓存自动失效。
 
-- `school:v4:index:${term}:${releaseVersion}:${type}:${hash(params)}`
-- `school:v4:detail:${term}:${releaseVersion}:${type}:${id}`
-- `school:v4:filters:${term}:${releaseVersion}`
-- `school:v4:empty-room:${term}:${releaseVersion}:${hash(params)}`
+- `school:v5:index:${term}:${releaseVersion}:${type}:${hash(params)}`
+- `school:v5:detail:${term}:${releaseVersion}:${type}:${id}`
+- `school:v5:filters:${term}:${releaseVersion}`
+- `school:v5:empty-room:${term}:${releaseVersion}:${hash(params)}`
+- `FOSU_PERSONAL_SCHEDULE_CACHE`：个人 XLS 课表的本机缓存，绑定当前课表时写入。
 
 读取规则：
 
 1. 有同版本缓存时先显示缓存。
-2. 后台静默刷新同一个 `releaseVersion`。
+2. 全校索引命中同一个 `releaseVersion` 时走快速路径，不再立即重复请求 API；显式刷新或缓存缺失时才请求网络。
 3. 刷新失败时保留已有数据。
 4. timeout、noRelease、empty 必须区分；timeout 不代表暂无同步数据。
 5. 最近查看旧版本只能标记为旧版本，不能决定当前 activeSnapshot。
+6. 个人 XLS 课表优先读取页面内存中的当前绑定对象；内存缺失时读 `FOSU_CURRENT_SCHEDULE_TARGET`，必要时再恢复 `FOSU_PERSONAL_SCHEDULE_CACHE`。
 
 ## API 缓存规则
 
 - `/api/fosu/app-config`、不带 `releaseVersion` 的 `/api/fosu/bootstrap` 和 `/api/fosu/search-index` 使用 `no-store`，确保 active 指针实时。
-- 带 `releaseVersion` 的 `/api/fosu/search-index` 可 `public, max-age=300`。
+- 带 `releaseVersion` 的 `/api/fosu/search-index` 可 `public, max-age=604800`；客户端同版本缓存 TTL 为 7 天。
 - 带 `releaseVersion` 的 `/api/fosu/schedule-detail` 可 `public, max-age=3600`。
 - 带 `releaseVersion` 的 `/api/fosu/empty-classrooms` 可 `public, max-age=600`。
 - `/api/fosu/search-index` 只返回轻量索引；完整排课由 `/api/fosu/schedule-detail` 按需读取 derived schedule 文件。

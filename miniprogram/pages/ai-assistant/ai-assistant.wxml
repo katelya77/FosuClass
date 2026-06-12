@@ -21,7 +21,7 @@
           data-action-id="{{item.id}}"
           bindtap="onQuickAction"
         >
-          <text class="quick-action-icon">{{item.icon}}</text>
+          <image class="quick-action-icon" src="{{item.iconPath}}" mode="aspectFit" />
           <text class="quick-action-label">{{item.label}}</text>
         </button>
       </view>
@@ -181,7 +181,7 @@
       </view>
       <button class="sheet-close" bindtap="closeTaskPanel">关闭</button>
     </view>
-    <scroll-view class="task-section-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <scroll-view wx:if="{{taskPanelReady}}" class="task-section-scroll" scroll-y enhanced show-scrollbar="{{false}}">
       <view
         wx:for="{{taskPanelGroups}}"
         wx:for-item="group"
@@ -200,7 +200,7 @@
           data-task-index="{{taskIndex}}"
           bindtap="onTaskPanelItemTap"
         >
-          <view class="task-icon">{{task.icon}}</view>
+          <image class="task-icon" src="{{task.iconPath}}" mode="aspectFit" />
           <view class="task-copy">
             <view class="task-label">{{task.label}}</view>
             <view class="task-desc">{{task.desc}}</view>
@@ -208,6 +208,7 @@
         </button>
       </view>
     </scroll-view>
+    <view wx:else class="task-section-loading">加载中</view>
   </view>
 
   <view class="bottom-sheet privacy-sheet" wx:if="{{showPrivacySheet}}">
