@@ -37,6 +37,15 @@ function itemName(item, type) {
   return item.name || item.title || "";
 }
 
+function courseSectionText(course = {}) {
+  if (course.sectionText) return course.sectionText;
+  return course.startSection && course.endSection ? `第${course.startSection}-${course.endSection}节` : "";
+}
+
+function courseTimeValue(course = {}) {
+  return course.timeText || course.timeRange || courseSectionText(course) || "时间待定";
+}
+
 function buildEmptyRoom(result) {
   const rooms = Array.isArray(result.rooms) ? result.rooms : [];
   if (!result.success) {
@@ -81,7 +90,7 @@ function buildTodayCourses(result) {
   const todayAnswer = courses.length
     ? (result.allFinished
       ? "今天课程已结束。"
-      : `今天有 ${courses.length} 门课。${result.nextCourse ? `下一项是「${result.nextCourse.courseName}」，${result.nextCourse.sectionText}。` : ""}`)
+      : `今天有 ${courses.length} 门课。${result.nextCourse ? `下一项是「${result.nextCourse.courseName}」，${courseTimeValue(result.nextCourse)}。` : ""}`)
     : "今天没有匹配到课程安排，仍建议以教务系统和任课教师通知为准。";
   return {
     answer: todayAnswer,
@@ -89,8 +98,8 @@ function buildTodayCourses(result) {
       badges: ["课表摘要", "仅供参考"],
       items: courses.slice(0, 6).map((course) => ({
         title: course.courseName,
-        subtitle: [course.teacherName, course.classroom].filter(Boolean).join(" · "),
-        value: course.sectionText,
+        subtitle: [courseSectionText(course), course.teacherName, course.classroom].filter(Boolean).join(" · "),
+        value: courseTimeValue(course),
       })),
       actions: [makeAction("查看今日安排", "navigate", result.actionUrl || "/pages/today/today")],
     }), { allFinished: result.allFinished === true })],
@@ -125,8 +134,8 @@ function buildSchoolIndex(result, detailResult) {
       badges: metaBadges(result),
       items: (detailCourses.length ? detailCourses.slice(0, 6).map((course) => ({
         title: course.courseName || "未命名课程",
-        subtitle: [course.teacherName, course.classroom || course.roomName, course.weekday ? `星期${course.weekday}` : ""].filter(Boolean).join(" · "),
-        value: course.startSection && course.endSection ? `第${course.startSection}-${course.endSection}节` : "课表详情",
+        subtitle: [course.teacherName, course.classroom || course.roomName, course.weekday ? `星期${course.weekday}` : "", courseSectionText(course)].filter(Boolean).join(" · "),
+        value: courseTimeValue(course),
       })) : items.slice(0, 6).map((item) => ({
         title: itemName(item, type) || "未命名",
         subtitle: [item.college || item.collegeName, item.campus, item.majorName].filter(Boolean).join(" · "),
@@ -219,8 +228,8 @@ function buildMeeting(result) {
       badges: ["忙闲矩阵", "仅供参考"],
       items: candidates.slice(0, 5).map((item) => ({
         title: `星期${item.weekday}`,
-        subtitle: [item.reason, emptyRooms[0] && emptyRooms[0].roomName ? `可优先看 ${emptyRooms[0].roomName}` : ""].filter(Boolean).join(" · "),
-        value: `第${item.startSection}-${item.endSection}节`,
+        subtitle: [item.reason, item.timeText, emptyRooms[0] && emptyRooms[0].roomName ? `可优先看 ${emptyRooms[0].roomName}` : ""].filter(Boolean).join(" · "),
+        value: item.timeText || `第${item.startSection}-${item.endSection}节`,
       })),
       actions: [makeAction("查看空教室", "navigate", result.emptyRoomActionUrl || "/pages/empty-room/empty-room")],
     })],

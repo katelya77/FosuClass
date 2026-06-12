@@ -7,6 +7,8 @@ FosuClass Node.js API 服务。将对强智教务系统的页面请求、解析�
 - 生产运行时保留 `runtime alias`、静态 URL 和 last-known-good 快照，前端优先读取 `/static/runtime/active.json` 与 Release Pack 静态文件。
 - 公共 API 读取 manifest、summary、catalog、upload-record-index 等小 JSON，不在请求路径执行 `getReleasePackStatus()`、snapshot parse 或深层 detail 扫描。
 - `getActiveReleaseInfoFast()` 返回压缩版 manifest、summary 和旧兼容字段，不返回完整 Release Pack 文件哈希清单。
+- 带 `releaseVersion` 的 `/api/fosu/search-index` 视为不可变版本数据，返回一周公共缓存；小程序命中同版本缓存后走快速路径，不再重复请求同一索引。
+- AI 工具读取课表详情时会为课程补充 `sectionText` 和 `timeText`，Provider 卡片优先展示具体时间段，节次作为辅助信息保留。
 - deep health、staging finalize、Release Pack 重建等 CPU 密集任务由 worker 执行；主线程只负责小 JSON fetch、轻量状态聚合和响应。
 - CLI 分片上传 finalize 路由只返回 `202 Accepted` 和 job 信息，worker 负责 JSON parse、canonical hash 和 safety summary。
 - `server/storage/upload-record-index.json` 是上传记录统一索引，支持分页、`term` 过滤和 `status` 过滤，管理页列表不再逐个 hydrate manifest。
