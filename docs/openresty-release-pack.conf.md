@@ -76,7 +76,7 @@ FOSU_STATIC_RELEASE_BASE_URL=https://static-class.katelya.top/static/releases
 
 长任务不要通过同步 HTTP 等待结果；后台使用 job polling。
 
-## Runtime active pointer
+## 运行时 active 指针
 
 `/static/runtime/active.json` is not a release artifact. It is the mutable runtime pointer for the current active term/release, so it must live outside `/static/releases/<releaseVersion>/`.
 

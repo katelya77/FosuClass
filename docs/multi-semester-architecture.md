@@ -64,15 +64,12 @@ flowchart LR
 - Release manifest。
 - catalog 存储。
 - 静态 Release Pack。
-# 2026 sync operations update
 
-Local sync caches are now isolated by `tools/fosu-sync-client/.cache/{term}`.
-Dynamic schedules are written under run-scoped directories and only promote to
-`latest.json` after validation. Daily and new-term commands default to
-`network-only`, `ignore` progress, `ignore` negative cache, and
-`mergeOldData=false`.
+## 2026 同步流程更新
 
-Release manifests may include `scopeSources` without breaking older clients:
+本地同步缓存现在按 `tools/fosu-sync-client/.cache/{term}` 隔离。动态课表写入本次运行专属目录，只有通过校验后才提升为 `latest.json`。日常同步和新学期命令默认使用 `network-only`、忽略旧进度、忽略负缓存，并设置 `mergeOldData=false`。
+
+Release manifest 可以包含 `scopeSources`，不会破坏旧客户端：
 
 ```json
 {
@@ -85,7 +82,4 @@ Release manifests may include `scopeSources` without breaking older clients:
 }
 ```
 
-Future terms stay `planned` or `ready` until an administrator explicitly
-activates them. Runtime pointer updates, term-index writes, OpenResty sync, and
-mini program probes are treated as one publish lifecycle; any failure preserves
-the previous active release.
+未来学期在管理员明确激活前只能保持 `planned` 或 `ready`。runtime pointer 更新、term-index 写入、OpenResty 同步和小程序探测被视为同一个发布生命周期；任一步失败都必须保留上一版 active release。

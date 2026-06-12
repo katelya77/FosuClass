@@ -12,8 +12,10 @@ assert(routeIndex >= 0, "staging finalize route should exist");
 const routeBody = adminRoutes.slice(routeIndex, routeIndex + 1800);
 assert(routeBody.includes('startReleaseJob("staging-upload-finalize"'), "staging finalize should start worker job");
 assert(/res\.status\(202\)/.test(routeBody), "staging finalize should return 202");
+assert(!routeBody.includes("finalizeUpload("), "HTTP finalize route must not call synchronous finalizeUpload");
 assert(worker.includes('type === "staging-upload-finalize"'), "worker should handle staging upload finalize");
 assert(finalizeService.includes("JSON.parse(fs.readFileSync"), "large JSON parse may exist only inside worker service");
+assert(finalizeService.includes('progress(job, uploadId, 52, "hashing")'), "worker finalize should hash/fingerprint after JSON parse");
 assert(!/finalizeUpload\(uploadId[\s\S]{0,400}JSON\.parse\(fs\.readFileSync/.test(routeBody), "HTTP finalize route must not parse JSON payload");
 
 console.log("test-large-staging-finalize-worker passed");

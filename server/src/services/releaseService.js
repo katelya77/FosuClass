@@ -2129,6 +2129,47 @@ function activateReleaseFromSnapshot(rawSnapshot) {
   return Object.assign({}, written, activated);
 }
 
+function compactReleaseManifest(manifest, fallback = {}) {
+  if (!manifest || typeof manifest !== "object") {
+    return null;
+  }
+  const releaseVersion = manifest.releaseVersion || manifest.version || fallback.version || fallback.releaseVersion || "";
+  const term = manifest.term || manifest.semester || fallback.term || fallback.semester || "";
+  return {
+    success: manifest.success !== false,
+    schemaVersion: manifest.schemaVersion || 1,
+    version: manifest.version || releaseVersion,
+    releaseVersion,
+    term,
+    semester: manifest.semester || term,
+    semesterText: manifest.semesterText || "",
+    termConfig: manifest.termConfig || fallback.termConfig || null,
+    generatedAt: manifest.generatedAt || "",
+    updatedAt: manifest.updatedAt || fallback.updatedAt || "",
+    publishedAt: manifest.publishedAt || fallback.publishedAt || fallback.activatedAt || "",
+    cacheEpoch: manifest.cacheEpoch || manifest.dataEpoch || fallback.cacheEpoch || "",
+    dataEpoch: manifest.dataEpoch || manifest.cacheEpoch || fallback.cacheEpoch || "",
+    forceRefreshToken: manifest.forceRefreshToken || fallback.forceRefreshToken || "",
+    counts: manifest.counts || fallback.counts || {},
+    resourceCounts: manifest.resourceCounts || fallback.resourceCounts || null,
+    canonicalHash: manifest.canonicalHash || fallback.canonicalHash || "",
+    staticBasePath: manifest.staticBasePath || STATIC_RELEASE_BASE_PATH,
+    staticBaseUrl: manifest.staticBaseUrl || STATIC_RELEASE_BASE_URL,
+    staticReleaseUrl: manifest.staticReleaseUrl || (releaseVersion ? `${STATIC_RELEASE_BASE_URL}/${releaseVersion}` : ""),
+    manifestUrl: manifest.manifestUrl || "",
+    bootstrapUrl: manifest.bootstrapUrl || manifest.catalogUrl || "",
+    catalogUrl: manifest.catalogUrl || manifest.bootstrapUrl || "",
+    calendarUrl: manifest.calendarUrl || "",
+    indexUrls: manifest.indexUrls || {},
+    emptyRoomUrl: manifest.emptyRoomUrl || "",
+    detailUrlPattern: manifest.detailUrlPattern || "",
+    shards: manifest.shards || {},
+    pack: manifest.pack || {},
+    packHealth: manifest.packHealth || {},
+    validation: manifest.validation || null,
+  };
+}
+
 function getActiveReleaseInfoFast() {
   ensureStorageDirs();
   const active = readSmallJsonFile(ACTIVE_RELEASE_PATH);
@@ -2137,10 +2178,11 @@ function getActiveReleaseInfoFast() {
   }
 
   const files = getReleaseFiles(active.version);
-  const manifest = readSmallJsonFile(files.manifestPath) || readSmallJsonFile(path.join(files.publicReleaseDir, "manifest.json"));
-  const quickHealth = releaseSummaryStore.buildQuickHealthFromManifest(manifest, {
-    counts: manifest?.counts || active.counts || {},
-    resourceCounts: manifest?.resourceCounts || active.resourceCounts || null,
+  const fullManifest = readSmallJsonFile(files.manifestPath) || readSmallJsonFile(path.join(files.publicReleaseDir, "manifest.json"));
+  const manifest = compactReleaseManifest(fullManifest, active);
+  const quickHealth = releaseSummaryStore.buildQuickHealthFromManifest(manifest || fullManifest, {
+    counts: manifest?.counts || fullManifest?.counts || active.counts || {},
+    resourceCounts: manifest?.resourceCounts || fullManifest?.resourceCounts || active.resourceCounts || null,
   });
   const summary = releaseSummaryStore.readReleaseSummary(active.version, files, {
     active,
@@ -2164,6 +2206,7 @@ function getActiveReleaseInfoFast() {
     canonicalHash: active.canonicalHash || manifest?.canonicalHash || "",
     source: "release",
     status: "active",
+    manifest,
     paths: {
       releaseDir: files.releaseDir,
       snapshotPath: files.snapshotPath,
@@ -2194,6 +2237,25 @@ function getActiveReleaseInfoFast() {
 
 function getActiveReleaseInfo() {
   return getActiveReleaseInfoFast();
+}
+
+function getReleaseStatusFast() {
+  const active = getActiveReleaseInfoFast();
+  return {
+    activeReleaseVersion: active?.version || null,
+    activeReleaseUpdatedAt: active?.updatedAt || active?.publishedAt || null,
+    activeReleaseActivatedAt: active?.activatedAt || null,
+    semester: active?.semester || null,
+    term: active?.term || active?.semester || null,
+    termConfig: active?.termConfig || null,
+    counts: active?.counts || {},
+    resourceCounts: active?.resourceCounts || null,
+    valid: active ? active.valid !== false : false,
+    errors: active?.errors || [],
+    storagePath: RELEASES_DIR,
+    summary: active?.summary || null,
+    manifest: active?.manifest || null,
+  };
 }
 
 function readActiveReleaseSnapshot() {
@@ -3694,6 +3756,7 @@ module.exports = {
   getReleaseCompressionConfig,
   assertHealthyReleasePack,
   getReleaseStatus,
+  getReleaseStatusFast,
   deleteReleaseVersion,
   readReleasePackStaticDetail,
   readReleasePackStaticEmptyRoom,

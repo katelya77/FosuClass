@@ -323,9 +323,29 @@ function readSyncMeta() {
   return meta && typeof meta === "object" ? meta : {};
 }
 
+function getFastReleaseStatus() {
+  if (typeof releaseService.getReleaseStatusFast === "function") {
+    return releaseService.getReleaseStatusFast();
+  }
+  const active = releaseService.getActiveReleaseInfoFast
+    ? releaseService.getActiveReleaseInfoFast()
+    : releaseService.getActiveReleaseInfo();
+  return {
+    activeReleaseVersion: active?.releaseVersion || active?.version || "",
+    activeReleaseUpdatedAt: active?.updatedAt || active?.publishedAt || "",
+    activeReleaseActivatedAt: active?.activatedAt || "",
+    term: active?.term || active?.semester || "",
+    semester: active?.semester || active?.term || "",
+    termConfig: active?.termConfig || null,
+    counts: active?.counts || {},
+    resourceCounts: active?.resourceCounts || null,
+    manifest: active?.manifest || null,
+  };
+}
+
 function resolveDataVersion(config) {
   const meta = readSyncMeta();
-  const releaseStatus = releaseService.getReleaseStatus();
+  const releaseStatus = getFastReleaseStatus();
   const dataVersion = Object.assign({}, config.dataVersion || {});
   const snapshot = meta.snapshot || {};
   const fallbackUpdatedAt = releaseStatus.activeReleaseUpdatedAt || snapshot.updatedAt || "";
@@ -413,7 +433,7 @@ function getPublicAppConfig() {
 
 function getCounts() {
   const meta = readSyncMeta();
-  const releaseStatus = releaseService.getReleaseStatus();
+  const releaseStatus = getFastReleaseStatus();
   const counts = releaseStatus.counts || {};
   return {
     classScheduleCount: counts.classScheduleCount || meta["class-schedules"]?.itemCount || 0,

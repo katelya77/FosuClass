@@ -7,7 +7,7 @@
 3. 执行状态核对。
 4. 只有在 Staging 安全检查仍通过时，才重试发布。
 
-## Worker 挂起
+## 后台 Worker 挂起
 
 1. 检查当前运行中的 `release-heavy` 任务。
 2. 如果任务已经过期，等待 stale-job recovery 将其标记为失败。
@@ -19,14 +19,14 @@
 2. 重新执行静态同步。
 3. 验证 `manifest.json`、`index/class/all.json` 和 `empty-room/index.json`。
 
-## 磁盘进入 Critical 状态
+## 磁盘进入严重状态
 
 1. 运行存储扫描。
 2. 预览安全清理。
 3. 执行安全清理。
 4. 等磁盘退出 critical 状态后，再重试 release-heavy 任务。
 
-## Active Release 损坏
+## 当前正式 Release 损坏
 
 1. 从 Release 历史回滚到 last-known-good。
 2. 执行 OpenResty 静态同步。
