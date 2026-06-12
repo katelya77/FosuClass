@@ -1,6 +1,6 @@
 # 安全密钥轮换
 
-## Session token secret
+## Session token 密钥
 
 1. 将旧的当前值写入 `FOSU_SESSION_SECRET_PREVIOUS`。
 2. 将新值写入 `FOSU_SESSION_SECRET_CURRENT`。
@@ -10,7 +10,7 @@
 6. 移除 `FOSU_SESSION_SECRET_PREVIOUS`。
 7. 再次部署。
 
-## Static ticket secret
+## 静态 ticket 密钥
 
 1. 将旧的当前值写入 `FOSU_STATIC_TICKET_SECRET_PREVIOUS`。
 2. 将新值写入 `FOSU_STATIC_TICKET_SECRET_CURRENT`。

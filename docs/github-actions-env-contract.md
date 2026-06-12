@@ -1,8 +1,8 @@
 # GitHub Actions 环境契约
 
-本文档描述 `.github/workflows/deploy-vps.yml` 在部署 VPS 时读取的 GitHub Secrets 和 Repository Variables。不要把 Secret 值写入仓库、Variables、日志或文档。
+本文档描述 `.github/workflows/deploy-vps.yml` 在部署 VPS 时读取的 GitHub Secrets 和仓库变量。不要把 Secret 值写入仓库、变量、日志或文档。
 
-## 必需 Secrets
+## 必需密钥
 
 | 名称 | 默认值 | 作用 | 缺失时行为 |
 | --- | --- | --- | --- |
@@ -12,7 +12,7 @@
 | `VPS_APP_DIR` | 无 | 远端应用目录 | 部署前置检查失败，只输出变量名 |
 | `ADMIN_PASSWORD` | 无 | Web 后台登录密码，也用于派生默认 `ADMIN_API_TOKEN` | 部署前置检查失败，只输出变量名 |
 
-## 条件必需 Secrets
+## 条件必需密钥
 
 | 名称 | 默认值 | 作用 | 缺失时行为 |
 | --- | --- | --- | --- |
@@ -21,7 +21,7 @@
 | `FOSU_SESSION_SECRET_CURRENT` | 空 | 动态 API session token 当前签名密钥 | `FOSU_SECURITY_MODE` 非 `observe` 时部署前置检查失败 |
 | `FOSU_STATIC_TICKET_SECRET_CURRENT` | 空 | 静态资源 ticket 当前签名密钥 | `FOSU_SECURITY_MODE=ticket` 或 `ticket-enforce` 时部署前置检查失败 |
 
-## 可选 Secrets
+## 可选密钥
 
 | 名称 | 默认值 | 作用 | 缺失时行为 |
 | --- | --- | --- | --- |
@@ -36,13 +36,13 @@
 | `DEEPSEEK_API_KEY` | 空 | DeepSeek provider 专用 key，优先级低于 `AI_API_KEY` | 允许为空，AI 状态显示 DeepSeek key 未配置 |
 | `COZE_API_KEY` | 空 | Coze provider key | 允许为空，AI 状态显示 Coze key 未配置 |
 
-## Deprecated
+## 已弃用项
 
 | 名称 | 替代项 | 作用 | 当前部署行为 |
 | --- | --- | --- | --- |
 | `FOSU_STATIC_TICKET_SECRET` | `FOSU_STATIC_TICKET_SECRET_CURRENT` | 旧版静态 ticket 兼容密钥名 | GitHub Actions 不再写入生产 `.env`；代码仍保留运行时兼容读取 |
 
-## Repository Variables
+## 仓库变量
 
 | 名称 | 默认值 | 作用 | 缺失时行为 |
 | --- | --- | --- | --- |
@@ -73,7 +73,7 @@
 
 ## 固定部署默认值
 
-这些值由 workflow 固定写入远端 `.env`，不是 GitHub Secret 或 Variable：`NODE_ENV=production`、`PORT=3000`、`HOST_BIND_IP=127.0.0.1`、`HOST_API_PORT=18318`、`PUBLIC_API_ORIGIN=https://class.katelya.eu.org`、`FOSU_API_BASE_URL=https://class.katelya.eu.org`、`FOSU_STATIC_RELEASE_BASE_URL=/static/releases`、OpenResty 静态同步路径、release worker、维护任务和磁盘水位参数。
+这些值由 workflow 固定写入远端 `.env`，不是 GitHub Secret 或仓库变量：`NODE_ENV=production`、`PORT=3000`、`HOST_BIND_IP=127.0.0.1`、`HOST_API_PORT=18318`、`PUBLIC_API_ORIGIN=https://class.katelya.eu.org`、`FOSU_API_BASE_URL=https://class.katelya.eu.org`、`FOSU_STATIC_RELEASE_BASE_URL=/static/releases`、OpenResty 静态同步路径、release worker、维护任务和磁盘水位参数。
 
 ## 缺失值诊断
 

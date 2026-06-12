@@ -11,7 +11,7 @@
 5. 后台通过 singleflight 任务加载 `bootstrap`、公告、session 预热和 Release 索引。
 6. `periodic-data` 至少延后到应用启动 10 秒后再加载。
 
-## Runtime 指针内容
+## 运行时指针内容
 
 Runtime 指针在 Release 成功激活后生成，只包含以下轻量信息：
 

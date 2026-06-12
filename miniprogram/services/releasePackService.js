@@ -759,7 +759,7 @@ function switchReleaseSafely(options = {}) {
         getManifestReleaseKey(previous.manifest) === getManifestReleaseKey(manifest);
       const warmupTypes = Array.isArray(options.warmupTypes) && options.warmupTypes.length
         ? options.warmupTypes
-        : [];
+        : ["class"];
       const finishSwitch = (indexes) => {
         const normalized = writeManifestCache(manifest);
         clearOldReleaseCaches({

@@ -189,7 +189,7 @@ async function finalizeChunkedUpload(input, job) {
   }
   stagingData.stagingUploadId = finalized.manifest.uploadId;
 
-  progress(job, uploadId, 52, "summarizing");
+  progress(job, uploadId, 52, "hashing");
   const beforeLatest = getLatestStagingCanonicalHash();
   const fingerprint = attachStagingFingerprint(stagingData, beforeLatest.canonicalHash);
   const activeCanonicalHash = getActiveCanonicalHash();
