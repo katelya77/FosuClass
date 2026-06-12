@@ -16,6 +16,8 @@ const SCHEDULE_DETAIL_CACHE_TTL = 6 * 60 * 60 * 1000;
 const APP_CONFIG_TIMEOUT = 12000;
 const BOOTSTRAP_TIMEOUT = 20000;
 const SCHOOL_REQUEST_TIMEOUT = 25000;
+const SCHOOL_RESULT_PAGE_SIZE = 30;
+const SCHOOL_RESULT_PAGE_STEP = 30;
 const AI_PENDING_SCHOOL_QUERY_KEY = "FOSU_AI_PENDING_SCHOOL_QUERY";
 
 const request = require("../../utils/request");
@@ -218,6 +220,15 @@ Page({
     teacherDiagnosticText: "",
     classroomsResult: [],
     coursesResult: [],
+    classAdminTotal: 0,
+    classAggregateTotal: 0,
+    classroomsTotal: 0,
+    coursesTotal: 0,
+    hasMoreClassAdmin: false,
+    hasMoreClassAggregate: false,
+    hasMoreTeachers: false,
+    hasMoreClassrooms: false,
+    hasMoreCourses: false,
     
     loading: false,
     updatedAtText: "",
@@ -252,6 +263,7 @@ Page({
     this._schoolRequestSeq = 0;
     this._activeInitSeq = 0;
     this._lastInitAt = 0;
+    this.resetPagedResultStore();
     this.initPageData({ reason: "onLoad" });
   },
 
@@ -260,13 +272,24 @@ Page({
     const needAutoReload = wx.getStorageSync("FOSU_SCHOOL_NEED_AUTO_RELOAD");
     if (needAutoReload) {
       wx.removeStorageSync("FOSU_SCHOOL_NEED_AUTO_RELOAD");
+      this.resetPagedResultStore();
       this.setData({
         classesResult: [],
         classAdminResults: [],
         classAggregateResults: [],
         teachersResult: [],
+        teacherHitCount: 0,
         classroomsResult: [],
         coursesResult: [],
+        classAdminTotal: 0,
+        classAggregateTotal: 0,
+        classroomsTotal: 0,
+        coursesTotal: 0,
+        hasMoreClassAdmin: false,
+        hasMoreClassAggregate: false,
+        hasMoreTeachers: false,
+        hasMoreClassrooms: false,
+        hasMoreCourses: false,
         updatedAtText: "",
       });
       this.isFirstLoad = false;
@@ -340,6 +363,15 @@ Page({
       teacherHitCount: 0,
       classroomsResult: [],
       coursesResult: [],
+      classAdminTotal: 0,
+      classAggregateTotal: 0,
+      classroomsTotal: 0,
+      coursesTotal: 0,
+      hasMoreClassAdmin: false,
+      hasMoreClassAggregate: false,
+      hasMoreTeachers: false,
+      hasMoreClassrooms: false,
+      hasMoreCourses: false,
       updatedAtText: "",
       restoreHint: "已根据 AI 建议打开查询",
     };
@@ -366,6 +398,7 @@ Page({
       });
     };
 
+    this.resetPagedResultStore();
     this.setData(patch, () => {
       const ready = Boolean(this.data.activeSnapshot || this.data.catalogVersion || (this.data.semesters && this.data.semesters.length));
       if (ready) {
@@ -694,6 +727,7 @@ Page({
 
   onTabChange(event) {
     const tabKey = event.currentTarget.dataset.key;
+    this.resetPagedResultStore();
     this.setData({
       activeTab: tabKey,
       keyword: "",
@@ -703,6 +737,15 @@ Page({
       classAggregateResults: [],
       teachersResult: [],
       teacherHitCount: 0,
+      classAdminTotal: 0,
+      classAggregateTotal: 0,
+      classroomsTotal: 0,
+      coursesTotal: 0,
+      hasMoreClassAdmin: false,
+      hasMoreClassAggregate: false,
+      hasMoreTeachers: false,
+      hasMoreClassrooms: false,
+      hasMoreCourses: false,
       teacherDataSourceText: "",
       teacherDiagnosticText: "",
       classroomsResult: [],
@@ -1273,6 +1316,7 @@ Page({
 
   resetFilters() {
     wx.removeStorageSync(this.getFilterCacheKey());
+    this.clearPagedResults(["classAdmin", "classAggregate"]);
     this.setData({
       selectedSemesterIndex: 0,
       selectedCollegeIndex: -1,
@@ -1306,6 +1350,7 @@ Page({
 
   // 2. 学期选择改变
   onSemesterChange(event) {
+    this.clearPagedResults(["classAdmin", "classAggregate"]);
     this.setData({
       selectedSemesterIndex: Number(event.detail.value),
       selectedClassIndex: -1,
@@ -1325,6 +1370,7 @@ Page({
   // 3. 学院选择改变
   onCollegeChange(event) {
     const index = Number(event.detail.value);
+    this.clearPagedResults(["classAdmin", "classAggregate"]);
     this.setData({
       selectedCollegeIndex: index,
       selectedGradeIndex: -1,
@@ -1344,6 +1390,7 @@ Page({
   // 4. 年级选择改变
   onGradeChange(event) {
     const index = Number(event.detail.value);
+    this.clearPagedResults(["classAdmin", "classAggregate"]);
     this.setData({
       selectedGradeIndex: index,
       selectedMajorIndex: -1,
@@ -1402,6 +1449,7 @@ Page({
 
   // 6. 专业选择改变
   onMajorChange(event) {
+    this.clearPagedResults(["classAdmin", "classAggregate"]);
     this.setData({
       selectedMajorIndex: Number(event.detail.value),
       selectedClassIndex: -1,
@@ -1594,11 +1642,8 @@ Page({
         item.scheduleVersion = data.version || item.scheduleVersion || "";
       });
       const emptyState = getClassEmptyState("");
-    
+      this.setClassPagedResults(grouped);
       this.setData({
-        classesResult: grouped.list,
-        classAdminResults: grouped.admin,
-        classAggregateResults: grouped.aggregate,
         dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
         updatedAtText: formatTime ? `课程数据 · 更新于 ${formatTime}` : "课程数据",
         classEmptyTitle: emptyState.title,
@@ -1610,10 +1655,8 @@ Page({
     const catchFn = (err) => {
       const payload = err && err.payload ? err.payload : {};
       const emptyState = getClassEmptyState(payload.reasonCode);
+      this.clearPagedResults(["classAdmin", "classAggregate"]);
       this.setData({
-        classesResult: [],
-        classAdminResults: [],
-        classAggregateResults: [],
         updatedAtText: "",
         dataVersionText: "",
         classEmptyTitle: emptyState.title,
@@ -1647,16 +1690,15 @@ Page({
       collegeName,
       titleCode,
       q: keyword.trim(),
-      limit: 50,
+      limit: 100,
     };
 
     const renderFn = (data, isFromCache) => {
       const formatTime = formatUpdateTime(data.updatedAt);
       const teachers = (data.items || []).map(item => normalizeIndexedScheduleItem("teacher", item, data.version));
       this.lastTeacherSearchDebug = data.debug || null;
+      this.setSimplePagedResults("teacher", "teachersResult", teachers, "teacherHitCount", "hasMoreTeachers");
       this.setData({
-        teachersResult: teachers,
-        teacherHitCount: teachers.length,
         teacherDataSourceText: "本地静态索引",
         teacherDiagnosticText: "",
         dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
@@ -1667,9 +1709,8 @@ Page({
     };
 
     const catchFn = () => {
+      this.clearPagedResults("teacher");
       this.setData({
-        teachersResult: [],
-        teacherHitCount: 0,
         teacherDataSourceText: "本地静态索引",
         updatedAtText: "未找到相关教师，请检查姓名或切换关键词",
         dataVersionText: "",
@@ -1697,21 +1738,22 @@ Page({
       semester,
       campus,
       q: keyword.trim(),
-      limit: 50,
+      limit: 100,
     };
 
     const renderFn = (data, isFromCache) => {
       const formatTime = formatUpdateTime(data.updatedAt);
       const classrooms = (data.items || []).map(item => normalizeIndexedScheduleItem("classroom", item, data.version));
+      this.setSimplePagedResults("classroom", "classroomsResult", classrooms, "classroomsTotal", "hasMoreClassrooms");
       this.setData({
-        classroomsResult: classrooms,
         dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
         updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
       });
     };
 
     const catchFn = () => {
-      this.setData({ classroomsResult: [], updatedAtText: "", dataVersionText: "" });
+      this.clearPagedResults("classroom");
+      this.setData({ updatedAtText: "", dataVersionText: "" });
     };
 
     this.executeSearch("classroom", params, renderFn, catchFn);
@@ -1733,21 +1775,22 @@ Page({
     const params = {
       semester,
       q: keyword.trim(),
-      limit: 50,
+      limit: 100,
     };
 
     const renderFn = (data, isFromCache) => {
       const formatTime = formatUpdateTime(data.updatedAt);
       const courses = (data.items || []).map(item => normalizeIndexedScheduleItem("course", item, data.version));
+      this.setSimplePagedResults("course", "coursesResult", courses, "coursesTotal", "hasMoreCourses");
       this.setData({
-        coursesResult: courses,
         dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
         updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
       });
     };
 
     const catchFn = () => {
-      this.setData({ coursesResult: [], updatedAtText: "", dataVersionText: "" });
+      this.clearPagedResults("course");
+      this.setData({ updatedAtText: "", dataVersionText: "" });
     };
 
     this.executeSearch("course", params, renderFn, catchFn);
@@ -1969,6 +2012,16 @@ Page({
   toggleAggregate() {
     this.setData({
       showAggregate: !this.data.showAggregate
+    }, () => {
+      const classAdminResults = this.getPagedItems("classAdmin");
+      const classAggregateResults = this.getPagedItems("classAggregate");
+      this.setData({
+        classesResult: classAdminResults.concat(this.data.showAggregate ? classAggregateResults : []),
+        classAdminResults,
+        classAggregateResults,
+        hasMoreClassAdmin: this.hasMorePagedItems("classAdmin"),
+        hasMoreClassAggregate: this.hasMorePagedItems("classAggregate"),
+      });
     });
   },
 
@@ -2018,13 +2071,24 @@ Page({
       });
       // 只有在没有缓存时，才执行清空操作，防止闪烁/清空页面已显示数据
       if (!hasCache) {
+        this.resetPagedResultStore();
         this.setData({
           classesResult: [],
           classAdminResults: [],
           classAggregateResults: [],
           teachersResult: [],
+          teacherHitCount: 0,
           classroomsResult: [],
           coursesResult: [],
+          classAdminTotal: 0,
+          classAggregateTotal: 0,
+          classroomsTotal: 0,
+          coursesTotal: 0,
+          hasMoreClassAdmin: false,
+          hasMoreClassAggregate: false,
+          hasMoreTeachers: false,
+          hasMoreClassrooms: false,
+          hasMoreCourses: false,
           updatedAtText: ""
         });
       }
@@ -2066,6 +2130,171 @@ Page({
     } else if (activeTab === "course" && this.data.keyword.trim()) {
       this.searchCourseSchedule();
     }
+  },
+
+  resetPagedResultStore() {
+    this._schoolResultStore = {
+      classAdmin: [],
+      classAggregate: [],
+      teacher: [],
+      classroom: [],
+      course: [],
+    };
+    this._schoolResultVisible = {
+      classAdmin: SCHOOL_RESULT_PAGE_SIZE,
+      classAggregate: SCHOOL_RESULT_PAGE_SIZE,
+      teacher: SCHOOL_RESULT_PAGE_SIZE,
+      classroom: SCHOOL_RESULT_PAGE_SIZE,
+      course: SCHOOL_RESULT_PAGE_SIZE,
+    };
+  },
+
+  ensurePagedResultStore() {
+    if (!this._schoolResultStore || !this._schoolResultVisible) {
+      this.resetPagedResultStore();
+    }
+  },
+
+  getPagedItems(key) {
+    this.ensurePagedResultStore();
+    const items = this._schoolResultStore[key] || [];
+    const limit = this._schoolResultVisible[key] || SCHOOL_RESULT_PAGE_SIZE;
+    return items.slice(0, limit);
+  },
+
+  hasMorePagedItems(key) {
+    this.ensurePagedResultStore();
+    const items = this._schoolResultStore[key] || [];
+    const limit = this._schoolResultVisible[key] || SCHOOL_RESULT_PAGE_SIZE;
+    return items.length > limit;
+  },
+
+  setClassPagedResults(grouped) {
+    this.ensurePagedResultStore();
+    this._schoolResultStore.classAdmin = grouped.admin || [];
+    this._schoolResultStore.classAggregate = grouped.aggregate || [];
+    this._schoolResultVisible.classAdmin = SCHOOL_RESULT_PAGE_SIZE;
+    this._schoolResultVisible.classAggregate = SCHOOL_RESULT_PAGE_SIZE;
+    const classAdminResults = this.getPagedItems("classAdmin");
+    const classAggregateResults = this.getPagedItems("classAggregate");
+    this.setData({
+      classesResult: classAdminResults.concat(this.data.showAggregate ? classAggregateResults : []),
+      classAdminResults,
+      classAggregateResults,
+      classAdminTotal: this._schoolResultStore.classAdmin.length,
+      classAggregateTotal: this._schoolResultStore.classAggregate.length,
+      hasMoreClassAdmin: this.hasMorePagedItems("classAdmin"),
+      hasMoreClassAggregate: this.hasMorePagedItems("classAggregate"),
+    });
+  },
+
+  setSimplePagedResults(key, dataKey, items, totalKey, hasMoreKey) {
+    this.ensurePagedResultStore();
+    this._schoolResultStore[key] = items || [];
+    this._schoolResultVisible[key] = SCHOOL_RESULT_PAGE_SIZE;
+    this.setData({
+      [dataKey]: this.getPagedItems(key),
+      [totalKey]: this._schoolResultStore[key].length,
+      [hasMoreKey]: this.hasMorePagedItems(key),
+    });
+  },
+
+  clearPagedResults(keys) {
+    this.ensurePagedResultStore();
+    const list = Array.isArray(keys) ? keys : [keys];
+    const patch = {};
+    list.forEach((key) => {
+      this._schoolResultStore[key] = [];
+      this._schoolResultVisible[key] = SCHOOL_RESULT_PAGE_SIZE;
+      if (key === "classAdmin" || key === "classAggregate") {
+        patch.classesResult = [];
+        patch.classAdminResults = [];
+        patch.classAggregateResults = [];
+        patch.classAdminTotal = 0;
+        patch.classAggregateTotal = 0;
+        patch.hasMoreClassAdmin = false;
+        patch.hasMoreClassAggregate = false;
+      } else if (key === "teacher") {
+        patch.teachersResult = [];
+        patch.teacherHitCount = 0;
+        patch.hasMoreTeachers = false;
+      } else if (key === "classroom") {
+        patch.classroomsResult = [];
+        patch.classroomsTotal = 0;
+        patch.hasMoreClassrooms = false;
+      } else if (key === "course") {
+        patch.coursesResult = [];
+        patch.coursesTotal = 0;
+        patch.hasMoreCourses = false;
+      }
+    });
+    this.setData(patch);
+  },
+
+  appendPagedResult(key) {
+    this.ensurePagedResultStore();
+    this._schoolResultVisible[key] = (this._schoolResultVisible[key] || SCHOOL_RESULT_PAGE_SIZE) + SCHOOL_RESULT_PAGE_STEP;
+    if (key === "classAdmin" || key === "classAggregate") {
+      const classAdminResults = this.getPagedItems("classAdmin");
+      const classAggregateResults = this.getPagedItems("classAggregate");
+      this.setData({
+        classesResult: classAdminResults.concat(this.data.showAggregate ? classAggregateResults : []),
+        classAdminResults,
+        classAggregateResults,
+        hasMoreClassAdmin: this.hasMorePagedItems("classAdmin"),
+        hasMoreClassAggregate: this.hasMorePagedItems("classAggregate"),
+      });
+      return;
+    }
+    if (key === "teacher") {
+      this.setData({
+        teachersResult: this.getPagedItems("teacher"),
+        hasMoreTeachers: this.hasMorePagedItems("teacher"),
+      });
+      return;
+    }
+    if (key === "classroom") {
+      this.setData({
+        classroomsResult: this.getPagedItems("classroom"),
+        hasMoreClassrooms: this.hasMorePagedItems("classroom"),
+      });
+      return;
+    }
+    if (key === "course") {
+      this.setData({
+        coursesResult: this.getPagedItems("course"),
+        hasMoreCourses: this.hasMorePagedItems("course"),
+      });
+    }
+  },
+
+  loadMoreActiveResults() {
+    const activeTab = this.data.activeTab;
+    if (activeTab === "class") {
+      if (this.data.hasMoreClassAdmin) {
+        this.appendPagedResult("classAdmin");
+        return;
+      }
+      if (this.data.showAggregate && this.data.hasMoreClassAggregate) {
+        this.appendPagedResult("classAggregate");
+      }
+      return;
+    }
+    if (activeTab === "teacher" && this.data.hasMoreTeachers) {
+      this.appendPagedResult("teacher");
+      return;
+    }
+    if (activeTab === "classroom" && this.data.hasMoreClassrooms) {
+      this.appendPagedResult("classroom");
+      return;
+    }
+    if (activeTab === "course" && this.data.hasMoreCourses) {
+      this.appendPagedResult("course");
+    }
+  },
+
+  onReachBottom() {
+    this.loadMoreActiveResults();
   },
 
   // ================== 查询内核执行器 (支持缓存兜底/版本隔离/静默刷新) ==================

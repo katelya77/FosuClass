@@ -31,7 +31,7 @@
 npm run sync:daily -- --term=2025-2026-2
 ```
 
-## Resource Count Contract
+## 资源计数契约
 
 后台和上传摘要统一读取 v2 计数契约：
 

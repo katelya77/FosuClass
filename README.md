@@ -5,7 +5,9 @@
 ## 性能与缓存策略
 
 - 小程序优先读取静态 Release Pack、runtime pointer 和 last-known-good 缓存；网络超时、403、504 或 Cloudflare 异常会进入 runtime circuit breaker，先保留可用课表和教师目录。
-- 公共 API 的 `/app-config`、`/runtime/active`、`/sync/status`、`/sync/releases` 只走 manifest、summary、upload-record-index 等小 JSON fast-path，CPU 密集校验交给 worker。
+- 公共 API 的 `/app-config`、`/runtime/active`、`/sync/status`、`/sync/releases` 只走 manifest、summary、upload-record-index 等小 JSON fast-path；`getActiveReleaseInfoFast()` 只暴露压缩版 manifest 与 summary 兼容字段，不读取大 snapshot。
+- CLI 分片上传的 `/api/admin/staging/upload/finalize` 只返回 `202 Accepted` 和后台 job，JSON parse、canonical hash、深度安全检查全部在 Release Worker 中执行。
+- 全校页搜索结果采用 cache-first 与分页渲染，首屏只渲染第一批结果，触底或点击“加载更多”再追加，避免教师、课程、教室索引命中较多时卡住小程序视图层。
 - staging 发布保留 active/staging/legacy 安全边界，教师目录缺失时显式标记 `not-counted`，不会把教师课表数量冒充教师目录数量。
 
 ## 2026 智能体应用创新大赛版本

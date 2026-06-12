@@ -1,4 +1,4 @@
-# Relay Agent 接力采集说明
+# 接力 Agent 采集说明
 
 ## 目的
 
@@ -36,7 +36,7 @@ npm run build:relay-agent
 
 输出目录：`tools/fosu-relay-agent/dist/`。Windows 用户解压 `fosu-relay-agent-win-x64.zip` 后运行 `start.bat`。该打包产物只包含 relay agent 脚本，不包含后台管理页面源码、VPS SSH 信息、GitHub Secret、`ADMIN_PASSWORD`、`ADMIN_TOKEN` 或 `ADMIN_API_TOKEN`。
 
-## relay token 权限
+## 接力 token 权限
 
 relay token 只能调用：
 
