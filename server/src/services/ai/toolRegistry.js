@@ -553,7 +553,10 @@ function getScheduleDetail(input = {}, context = {}) {
     return { success: false, code: "DETAIL_TARGET_MISSING", courses: [], schedule: null };
   }
   const result = releaseService.readActiveSchedule(type, id, input.releaseVersion || context.releaseVersion || "");
-  const courses = asArray(result.schedule && result.schedule.courses);
+  const courses = asArray(result.schedule && result.schedule.courses).map((course) => Object.assign({}, course, {
+    sectionText: sectionText(course),
+    timeText: getCourseTimeRange(course),
+  }));
   return {
     success: Boolean(result.success),
     type,
