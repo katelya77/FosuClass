@@ -136,10 +136,8 @@ function writeReleaseSummary(version, manifest, files, options = {}) {
   return summary;
 }
 
-function writeDeepHealthSummary(files, status, options = {}) {
-  if (!files || !files.releaseDir) return null;
-  const target = healthSummaryPathForFiles(files);
-  const summary = {
+function buildDeepHealthSummary(status, options = {}) {
+  return {
     schemaVersion: 1,
     status: status && status.healthy ? "healthy" : "failed",
     healthy: Boolean(status && status.healthy),
@@ -154,8 +152,39 @@ function writeDeepHealthSummary(files, status, options = {}) {
     hashErrors: status && status.hashErrors || [],
     workerPid: options.workerPid || process.pid,
   };
+}
+
+async function writeJsonAtomicAsync(filePath, data) {
+  await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+  const tempPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+  const buffer = Buffer.from(JSON.stringify(data, null, 2), "utf-8");
+  await fs.promises.writeFile(tempPath, buffer);
+  try {
+    if (process.platform === "win32" && fs.existsSync(filePath)) {
+      try { await fs.promises.unlink(filePath); } catch (error) {}
+    }
+    await fs.promises.rename(tempPath, filePath);
+  } catch (error) {
+    await fs.promises.writeFile(filePath, buffer);
+    try { await fs.promises.unlink(tempPath); } catch (cleanupError) {}
+  }
+}
+
+function writeDeepHealthSummary(files, status, options = {}) {
+  if (!files || !files.releaseDir) return null;
+  const target = healthSummaryPathForFiles(files);
+  const summary = buildDeepHealthSummary(status, options);
   ensureDir(path.dirname(target));
   writeJsonAtomic(target, summary);
+  cache.invalidate(target);
+  return summary;
+}
+
+async function writeDeepHealthSummaryAsync(files, status, options = {}) {
+  if (!files || !files.releaseDir) return null;
+  const target = healthSummaryPathForFiles(files);
+  const summary = buildDeepHealthSummary(status, options);
+  await writeJsonAtomicAsync(target, summary);
   cache.invalidate(target);
   return summary;
 }
@@ -172,6 +201,7 @@ function clearCache() {
 module.exports = {
   HEALTH_SUMMARY_FILE_NAME,
   SUMMARY_FILE_NAME,
+  buildDeepHealthSummary,
   buildQuickHealthFromManifest,
   buildSummaryFromManifest,
   clearCache,
@@ -181,5 +211,6 @@ module.exports = {
   readSmallJson,
   summaryPathForFiles,
   writeDeepHealthSummary,
+  writeDeepHealthSummaryAsync,
   writeReleaseSummary,
 };

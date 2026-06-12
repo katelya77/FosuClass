@@ -655,20 +655,33 @@ function normalizeListOptions(input) {
   return { limit: toPositiveInteger(input, 20, 200), cursor: 0, term: "", status: "" };
 }
 
-function listUploads(input = 20) {
-  const options = normalizeListOptions(input);
-  const raw = readRecordIndex()
-    .filter((item) => !options.term || String(item.term || "") === options.term)
-    .filter((item) => !options.status || String(item.status || item.stagingState || "") === options.status)
-    .slice(options.cursor, options.cursor + options.limit);
-  const hydrated = raw.map((item) => {
-    try {
-      return publicManifest(readManifest(item.uploadId));
-    } catch (error) {
-      return toUploadRecord(item, { missingManifest: true });
-    }
-  });
+function matchesUploadRecordOptions(item, options) {
+  if (!item) return false;
+  if (options.term && String(item.term || item.semester || "").trim() !== options.term) return false;
+  if (options.status) {
+    const fields = [
+      item.status,
+      item.stagingState,
+      item.uploadStatus,
+      item.validationStatus,
+      item.releaseState,
+      item.runtimeState,
+    ];
+    if (!fields.some((value) => String(value || "").trim() === options.status)) return false;
+  }
+  return true;
+}
 
+function hydrateUploadRecord(item) {
+  try {
+    return publicManifest(readManifest(item.uploadId));
+  } catch (error) {
+    return toUploadRecord(item, { missingManifest: true });
+  }
+}
+
+function decorateDuplicateUploadRecords(records) {
+  const hydrated = (records || []).filter(Boolean);
   const groups = new Map();
   hydrated.forEach((item) => {
     const term = String(item.term || item.summary?.term || "").trim();
@@ -694,14 +707,25 @@ function listUploads(input = 20) {
   });
 }
 
+function listUploads(input = 20) {
+  const options = normalizeListOptions(input);
+  const raw = readRecordIndex()
+    .filter((item) => matchesUploadRecordOptions(item, options))
+    .slice(options.cursor, options.cursor + options.limit);
+  return decorateDuplicateUploadRecords(raw.map(hydrateUploadRecord));
+}
+
 function listUploadRecords(options = {}) {
   const normalized = normalizeListOptions(options);
   const all = readRecordIndex()
-    .filter((item) => !normalized.term || String(item.term || "") === normalized.term)
-    .filter((item) => !normalized.status || String(item.status || item.stagingState || "") === normalized.status);
+    .filter((item) => matchesUploadRecordOptions(item, normalized));
+  const records = all
+    .slice(normalized.cursor, normalized.cursor + normalized.limit)
+    .map((item) => toUploadRecord(item, { missingManifest: Boolean(item.missingManifest) }))
+    .filter(Boolean);
   return {
     success: true,
-    records: listUploads(normalized),
+    records: decorateDuplicateUploadRecords(records),
     total: all.length,
     limit: normalized.limit,
     cursor: normalized.cursor,
@@ -967,6 +991,7 @@ function deleteUpload(uploadId, actor) {
 
   const next = readIndex().filter((item) => item.uploadId !== safeId);
   writeIndex(next);
+  writeRecordIndex(readRecordIndex().filter((item) => item.uploadId !== safeId), { reason: "delete-upload" });
   return publicManifest(manifest || { uploadId: safeId, status: "deleted" });
 }
 

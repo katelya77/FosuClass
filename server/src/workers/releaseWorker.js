@@ -40,6 +40,7 @@ async function runDeepHealth(input, job) {
   const status = releaseService.getReleasePackStatus(version, {
     jobId: job.getJob && job.getJob().id || "",
     startedAt: new Date().toISOString(),
+    workerPid: process.pid,
   });
   job.progress(82, "deep health complete", {
     healthy: status.healthy,

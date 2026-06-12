@@ -10,6 +10,7 @@
   color: #1d4ed8;
   box-sizing: border-box;
   overflow: hidden;
+  cursor: pointer;
 }
 
 .notice-ticker-important {
@@ -66,7 +67,6 @@
   max-width: 100%;
 }
 
-.notice-ticker-view,
 .notice-ticker-close,
 .notice-ticker-panel-close,
 .notice-ticker-panel-button {
@@ -76,18 +76,6 @@
   line-height: normal;
   padding: 0;
   margin: 0;
-}
-
-.notice-ticker-view {
-  height: 44rpx;
-  min-width: 64rpx;
-  padding: 0 12rpx;
-  border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.82);
-  color: inherit;
-  font-size: 22rpx;
-  font-weight: 800;
-  flex: 0 0 auto;
 }
 
 .notice-ticker-close {
