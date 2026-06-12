@@ -2942,8 +2942,19 @@ Page({
     const seq = ++this._schoolRequestSeq;
     const cached = releasePackService.readCachedSearchIndex(type, query) ||
       readSameVersionIndexCache(term, releaseVersion, type, query);
+    const isRuntimeCircuitOpen = () => Boolean(
+      releasePackService.readRuntimeCircuit && releasePackService.readRuntimeCircuit()
+    );
 
     const doNetworkRequest = (hasCache) => {
+      if (hasCache && isRuntimeCircuitOpen()) {
+        this.setData({
+          loadingState: "none",
+          dataLoadState: "success",
+          restoreHint: "已显示本地缓存，网络熔断中",
+        });
+        return;
+      }
       if (!hasCache) {
         this.startLoadingTimer(() => doNetworkRequest(false), false);
       } else {
@@ -3025,6 +3036,10 @@ Page({
         loadingState: "none",
         restoreHint: "已显示本地缓存，正在校验更新",
       });
+      if (isRuntimeCircuitOpen()) {
+        this.setData({ restoreHint: "已显示本地缓存，网络熔断中" });
+        return;
+      }
       doNetworkRequest(true);
       return;
     }

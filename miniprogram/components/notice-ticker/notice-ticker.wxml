@@ -6,7 +6,6 @@
       <text wx:if="{{currentNotice.shouldScroll}}" class="notice-ticker-text">{{currentNotice.tickerText}}</text>
     </view>
   </view>
-  <button class="notice-ticker-view" catchtap="openNoticeDetail">查看</button>
   <button wx:if="{{currentNotice.closable}}" class="notice-ticker-close" catchtap="dismissNotice">×</button>
 </view>
 

@@ -115,34 +115,50 @@ function getActiveInfo() {
 }
 
 function getLatestStaging() {
-  const latestUpload = stagingUploadService.listUploads({ limit: 1 })[0] || null;
+  const latestState = readJsonFile(STAGING_LATEST_PATH, null);
+  const latestStateMeta = latestState && latestState.meta || {};
+  const preferredUploadId = String(
+    latestState && (latestState.stagingUploadId || latestState.uploadId) ||
+    latestStateMeta.stagingUploadId ||
+    ""
+  ).trim();
+  const uploadRecords = stagingUploadService.listUploadRecords({ limit: preferredUploadId ? 200 : 1 }).records || [];
+  const latestUpload = preferredUploadId
+    ? (uploadRecords.find((item) => item.uploadId === preferredUploadId) || uploadRecords[0] || null)
+    : (uploadRecords[0] || null);
   const summary = latestUpload && latestUpload.summary || {};
   const canonicalHash = normalizeHash(
+    latestState && (latestState.canonicalHash || latestStateMeta.canonicalHash) ||
     latestUpload && (latestUpload.canonicalHash || summary.canonicalHash)
   );
+  const term = latestState && (latestState.term || latestState.semester) || latestUpload && (latestUpload.term || summary.term) || "";
+  const releaseVersion = latestState && (latestState.releaseVersion || latestState.version) || latestUpload && (latestUpload.releaseVersion || summary.releaseVersion) || "";
+  const generatedAt = latestState && (latestState.generatedAt || latestState.updatedAt) || latestUpload && (summary.generatedAt || latestUpload.updatedAt || latestUpload.createdAt) || "";
+  const uploadId = preferredUploadId || latestUpload && latestUpload.uploadId || "";
   return {
-    stagingData: latestUpload ? {
-      stagingUploadId: latestUpload.uploadId || "",
-      uploadId: latestUpload.uploadId || "",
-      term: latestUpload.term || summary.term || "",
-      semester: latestUpload.term || summary.term || "",
-      releaseVersion: latestUpload.releaseVersion || summary.releaseVersion || "",
-      version: latestUpload.releaseVersion || summary.releaseVersion || "",
-      generatedAt: summary.generatedAt || latestUpload.updatedAt || latestUpload.createdAt || "",
+    stagingData: latestState || latestUpload ? {
+      stagingUploadId: uploadId,
+      uploadId,
+      term,
+      semester: term,
+      releaseVersion,
+      version: releaseVersion,
+      generatedAt,
       canonicalHash,
       meta: {
+        stagingUploadId: uploadId,
         canonicalHash,
-        stagingUploadStatus: latestUpload.status || latestUpload.stagingState || "",
+        stagingUploadStatus: latestUpload && (latestUpload.status || latestUpload.stagingState) || "",
       },
     } : null,
     stagingCanonicalHash: canonicalHash,
     fingerprint: null,
-    uploadId: latestUpload && latestUpload.uploadId || "",
+    uploadId,
     relayUploadId: latestUpload && latestUpload.relayUploadId || "",
     relayTaskId: latestUpload && (latestUpload.sourceTaskId || latestUpload.relayTaskId) || "",
-    term: latestUpload && (latestUpload.term || summary.term) || "",
-    releaseVersion: latestUpload && (latestUpload.releaseVersion || summary.releaseVersion) || "",
-    generatedAt: latestUpload && (summary.generatedAt || latestUpload.updatedAt || latestUpload.createdAt) || "",
+    term,
+    releaseVersion,
+    generatedAt,
   };
 }
 
@@ -258,7 +274,7 @@ function buildLifecycleStatus(options = {}) {
 
   const activeInfo = getActiveInfo();
   const stagingInfo = getLatestStaging();
-  const latestUploads = stagingUploadService.listUploads(options.uploadLimit || 50);
+  const latestUploads = stagingUploadService.listUploadRecords({ limit: options.uploadLimit || 50 }).records || [];
   const latestUpload = latestUploads[0] || null;
   const latestLifecycle = latestUpload ? inferUploadLifecycle(latestUpload, activeInfo, stagingInfo) : null;
   const staticSync = staticReleaseSyncService.getSyncStatus({
