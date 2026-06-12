@@ -9,6 +9,7 @@ const termReleaseIndexService = require("./termReleaseIndexService");
 const teachingCalendarService = require("./teachingCalendarService");
 const runtimePointerService = require("./runtimePointerService");
 const releaseSummaryStore = require("./releaseSummaryStore");
+const { SmallJsonCache } = require("../utils/jsonFileStore");
 const {
   buildResourceCountContract,
   deriveLegacyResourceCountContract,
@@ -34,6 +35,7 @@ const gzipAsync = promisify(zlib.gzip);
 const brotliCompressAsync = typeof zlib.brotliCompress === "function"
   ? promisify(zlib.brotliCompress)
   : null;
+const smallJsonCache = new SmallJsonCache({ maxEntries: 300 });
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -60,6 +62,10 @@ function readJsonFile(filePath) {
   }
 }
 
+function readSmallJsonFile(filePath, fallback = null) {
+  return smallJsonCache.read(filePath, fallback);
+}
+
 function writeJsonAtomic(filePath, data) {
   ensureDir(path.dirname(filePath));
   const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
@@ -73,6 +79,7 @@ function writeJsonAtomic(filePath, data) {
     fs.writeFileSync(filePath, JSON.stringify(data, null, 2), "utf-8");
     try { fs.unlinkSync(tempPath); } catch (e) {}
   }
+  smallJsonCache.invalidate(filePath);
 }
 
 function normalizeVersion(version) {
@@ -2124,18 +2131,22 @@ function activateReleaseFromSnapshot(rawSnapshot) {
 
 function getActiveReleaseInfoFast() {
   ensureStorageDirs();
-  const active = readJsonFile(ACTIVE_RELEASE_PATH);
+  const active = readSmallJsonFile(ACTIVE_RELEASE_PATH);
   if (!active || !active.version) {
     return null;
   }
 
   const files = getReleaseFiles(active.version);
-  const manifest = readJsonFile(files.manifestPath);
-  const quickHealth = getReleasePackQuickHealth(active.version);
+  const manifest = readSmallJsonFile(files.manifestPath) || readSmallJsonFile(path.join(files.publicReleaseDir, "manifest.json"));
+  const quickHealth = releaseSummaryStore.buildQuickHealthFromManifest(manifest, {
+    counts: manifest?.counts || active.counts || {},
+    resourceCounts: manifest?.resourceCounts || active.resourceCounts || null,
+  });
   const summary = releaseSummaryStore.readReleaseSummary(active.version, files, {
     active,
     quickHealth,
   });
+  const packHealth = summary?.quickHealth || summary?.releasePack || quickHealth;
   const counts = manifest?.counts || active.counts || {};
   const resourceCounts = manifest?.resourceCounts || active.resourceCounts || summary?.resourceCounts || null;
   const semester = active.semester || manifest?.semester || manifest?.term || "";
@@ -2164,8 +2175,8 @@ function getActiveReleaseInfoFast() {
       emptyRoomIndexPath: files.emptyRoomIndexPath,
     },
     summary,
-    releasePack: quickHealth,
-    packStatus: quickHealth,
+    releasePack: packHealth,
+    packStatus: packHealth,
     snapshot: {
       version: manifest?.version || active.version,
       releaseVersion: manifest?.releaseVersion || manifest?.version || active.version,
@@ -2176,8 +2187,8 @@ function getActiveReleaseInfoFast() {
       generatedAt: manifest?.generatedAt || "",
       source: manifest?.source || "",
     },
-    valid: quickHealth.healthy,
-    errors: quickHealth.healthy ? [] : ["Release Pack quick health failed"],
+    valid: packHealth.healthy,
+    errors: packHealth.healthy ? [] : ["Release Pack quick health failed"],
   });
 }
 
@@ -2261,9 +2272,26 @@ function getReleaseStatus() {
 
 function listReleases(limit = 20) {
   ensureStorageDirs();
-  const active = readJsonFile(ACTIVE_RELEASE_PATH) || {};
-  const entries = fs.readdirSync(RELEASES_DIR, { withFileTypes: true })
+  const requestedLimit = Math.max(1, Number(limit || 20) || 20);
+  const candidateLimit = Math.max(requestedLimit * 4, 40);
+  const active = readSmallJsonFile(ACTIVE_RELEASE_PATH, {}) || {};
+  const dirs = fs.readdirSync(RELEASES_DIR, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const dirPath = path.join(RELEASES_DIR, entry.name);
+      let mtimeMs = 0;
+      try {
+        mtimeMs = fs.statSync(dirPath).mtimeMs;
+      } catch (error) {}
+      return { name: entry.name, mtimeMs };
+    })
+    .sort((left, right) => right.mtimeMs - left.mtimeMs);
+  const candidates = dirs.slice(0, candidateLimit);
+  if (active.version && !candidates.some((entry) => entry.name === active.version)) {
+    const activeDir = dirs.find((entry) => entry.name === active.version);
+    if (activeDir) candidates.push(activeDir);
+  }
+  const entries = candidates
     .map((entry) => {
       const version = entry.name;
       const files = getReleaseFiles(version);
@@ -2276,7 +2304,7 @@ function listReleases(limit = 20) {
       });
     })
     .sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
-  return entries.slice(0, limit);
+  return entries.slice(0, requestedLimit);
 }
 
 function deleteReleaseVersion(version) {
@@ -2331,7 +2359,7 @@ function buildReadableFilesMeta(files) {
 
 function getReleasePackQuickHealth(version) {
   const startedAt = Date.now();
-  const active = readJsonFile(ACTIVE_RELEASE_PATH);
+  const active = readSmallJsonFile(ACTIVE_RELEASE_PATH);
   const normalizedVersion = normalizeVersion(version || active?.version || "");
   if (!normalizedVersion) {
     return {
@@ -2344,7 +2372,7 @@ function getReleasePackQuickHealth(version) {
   }
 
   const files = getReleaseFiles(normalizedVersion);
-  const manifest = readJsonFile(files.manifestPath) || readJsonFile(path.join(files.publicReleaseDir, "manifest.json"));
+  const manifest = readSmallJsonFile(files.manifestPath) || readSmallJsonFile(path.join(files.publicReleaseDir, "manifest.json"));
   const keyFiles = {
     activePointer: ACTIVE_RELEASE_PATH,
     manifest: files.manifestPath,
@@ -2396,7 +2424,7 @@ function getReleasePackQuickHealth(version) {
 function getReleasePackStatus(version, options = {}) {
   const normalizedVersion = normalizeVersion(version);
   const files = options.files || getReleaseFiles(normalizedVersion);
-  const manifest = readJsonFile(files.manifestPath);
+  const manifest = readSmallJsonFile(files.manifestPath);
   const kinds = ["class", "teacher", "classroom", "course"];
   const index = {};
   const detail = {};
@@ -2408,7 +2436,7 @@ function getReleasePackStatus(version, options = {}) {
     const info = getDerivedFileInfo(kind, files);
     const indexPath = info && info.indexPath;
     const indexExists = Boolean(indexPath && fs.existsSync(indexPath));
-    const items = indexExists ? readJsonFile(indexPath) : [];
+    const items = indexExists ? readSmallJsonFile(indexPath, []) : [];
     const detailFiles = collectJsonFiles(info && info.scheduleDir);
     index[kind] = {
       exists: indexExists,
@@ -2487,14 +2515,26 @@ function getReleasePackStatus(version, options = {}) {
     resourceCounts: getReleaseResourceCounts(normalizedVersion),
     healthy: missing.length === 0 && hashErrors.length === 0,
   };
-  try {
-    releaseSummaryStore.writeDeepHealthSummary(files, status, {
+  if (options.writeSummary !== false) {
+    const summaryOptions = {
       version: normalizedVersion,
       jobId: options.jobId || "",
       startedAt: options.startedAt || "",
-    });
-  } catch (error) {
-    safeLog("release-deep-health-summary-write-failed", { version: normalizedVersion, error: error.message });
+      workerPid: options.workerPid || process.pid,
+    };
+    try {
+      if (options.writeSummaryAsync === false) {
+        releaseSummaryStore.writeDeepHealthSummary(files, status, summaryOptions);
+      } else {
+        Promise.resolve(releaseSummaryStore.writeDeepHealthSummaryAsync(files, status, summaryOptions))
+          .catch((error) => {
+            if (error && error.code === "ENOENT" && !fs.existsSync(files.releaseDir)) return;
+            safeLog("release-deep-health-summary-write-failed", { version: normalizedVersion, error: error.message });
+          });
+      }
+    } catch (error) {
+      safeLog("release-deep-health-summary-write-failed", { version: normalizedVersion, error: error.message });
+    }
   }
   return status;
 }
@@ -2528,17 +2568,21 @@ function getReleasePackManifest(version, options = {}) {
   if (!resolved.success) {
     return termMismatchPayload({}, resolved, { releaseVersion: version });
   }
-  const targetVersion = normalizeVersion(resolved.releaseVersion || version || getActiveReleaseInfo()?.version || "");
+  const active = readSmallJsonFile(ACTIVE_RELEASE_PATH, {}) || {};
+  const targetVersion = normalizeVersion(resolved.releaseVersion || version || active.version || "");
   if (!targetVersion) {
     return { success: false, code: "NO_ACTIVE_RELEASE", reasonCode: "NO_ACTIVE_RELEASE" };
   }
   const files = getReleaseFiles(targetVersion);
-  const manifest = readJsonFile(files.manifestPath);
+  const manifest = readSmallJsonFile(files.manifestPath) || readSmallJsonFile(path.join(files.publicReleaseDir, "manifest.json"));
   if (manifest && manifest.releaseVersion) {
-    const active = getActiveReleaseInfo();
     const isActive = active && active.version === targetVersion;
-    const status = getReleasePackQuickHealth(targetVersion);
+    const status = releaseSummaryStore.buildQuickHealthFromManifest(manifest, {
+      counts: manifest.counts || active.counts || {},
+      resourceCounts: manifest.resourceCounts || active.resourceCounts || null,
+    });
     const summary = releaseSummaryStore.readReleaseSummary(targetVersion, files, { active, quickHealth: status });
+    const packStatus = summary?.quickHealth || summary?.releasePack || status;
     const resourceCounts = manifest.resourceCounts || summary.resourceCounts || null;
     return Object.assign({ success: true }, manifest, {
       releaseVersion: manifest.releaseVersion || targetVersion,
@@ -2546,7 +2590,7 @@ function getReleasePackManifest(version, options = {}) {
       cacheEpoch: isActive ? (active.cacheEpoch || manifest.cacheEpoch) : manifest.cacheEpoch,
       dataEpoch: isActive ? (active.cacheEpoch || manifest.cacheEpoch) : (manifest.dataEpoch || manifest.cacheEpoch),
       forceRefreshToken: isActive ? (active.forceRefreshToken || manifest.forceRefreshToken || `${targetVersion}:${manifest.cacheEpoch || ""}`) : (manifest.forceRefreshToken || `${targetVersion}:${manifest.cacheEpoch || ""}`),
-      packStatus: status,
+      packStatus,
       resourceCounts,
       minClientCacheSchema: manifest.minClientCacheSchema || 5,
     });
@@ -2711,7 +2755,7 @@ async function rebuildReleasePackAsync(version, options = {}) {
 
     if (atomic) {
       if (options.job) options.job.progress(66, "deep validating", { version: normalizedVersion });
-      const deepStatus = getReleasePackStatus(normalizedVersion, { files });
+      const deepStatus = getReleasePackStatus(normalizedVersion, { files, writeSummary: false });
       if (!deepStatus.healthy) {
         const err = new Error("Release Pack rebuild validation failed");
         err.code = "RELEASE_PACK_REBUILD_UNHEALTHY";
@@ -2781,13 +2825,14 @@ function readStaticReleaseJson(version, relativePath) {
   if (!assertReleaseRelativePath(publicDir, targetPath) || !fs.existsSync(targetPath)) {
     return null;
   }
-  return readJsonFile(targetPath);
+  return readSmallJsonFile(targetPath);
 }
 
 function readReleasePackStaticManifest(version) {
-  const normalizedVersion = normalizeVersion(version || getActiveReleaseInfo()?.version || "");
+  const active = readSmallJsonFile(ACTIVE_RELEASE_PATH, {}) || {};
+  const normalizedVersion = normalizeVersion(version || active.version || "");
   if (!normalizedVersion) return null;
-  return readStaticReleaseJson(normalizedVersion, "manifest.json") || readJsonFile(getReleaseFiles(normalizedVersion).manifestPath);
+  return readStaticReleaseJson(normalizedVersion, "manifest.json") || readSmallJsonFile(getReleaseFiles(normalizedVersion).manifestPath);
 }
 
 function resolveTermAwareReleaseVersion(options = {}) {
@@ -3154,7 +3199,7 @@ function readActiveIndex(kind, version, options = {}) {
   if (cached && cached.mtimeMs === stat.mtimeMs) {
     return cached.value;
   }
-  const items = readJsonFile(info.indexPath) || [];
+  const items = readSmallJsonFile(info.indexPath, []) || [];
   const value = {
     success: true,
     dataSource: active.source === "legacy-current" ? "legacy-current-index" : (version ? "release-isolated-index" : "release-index"),
@@ -3231,25 +3276,26 @@ function readActiveSchedule(kind, id, version, options = {}) {
   let active;
   if (version) {
     const normalized = normalizeVersion(version);
-    const snapshot = readReleaseSnapshot(normalized);
-    if (snapshot) {
+    const files = getReleaseFiles(normalized);
+    const info = getDerivedFileInfo(kind, files);
+    const manifest = readReleasePackStaticManifest(normalized) || {};
+    if (info && fs.existsSync(info.scheduleDir)) {
       active = {
         source: "release",
         version: normalized,
-        semester: snapshot.semester || snapshot.term || "",
-        updatedAt: snapshot.updatedAt || "",
-        snapshot,
+        semester: manifest.semester || manifest.term || "",
+        updatedAt: manifest.updatedAt || manifest.generatedAt || "",
+        snapshot: null,
       };
     } else {
-      const files = getReleaseFiles(normalized);
-      const info = getDerivedFileInfo(kind, files);
-      if (info && fs.existsSync(info.scheduleDir)) {
+      const snapshot = readReleaseSnapshot(normalized);
+      if (snapshot) {
         active = {
           source: "release",
           version: normalized,
-          semester: "",
-          updatedAt: "",
-          snapshot: null,
+          semester: snapshot.semester || snapshot.term || "",
+          updatedAt: snapshot.updatedAt || "",
+          snapshot,
         };
       } else {
         return { success: false, code: "RELEASE_NOT_FOUND", reasonCode: "RELEASE_NOT_FOUND" };
@@ -3290,7 +3336,7 @@ function readActiveSchedule(kind, id, version, options = {}) {
   if (cached && cached.mtimeMs === stat.mtimeMs) {
     return cached.value;
   }
-  const schedule = readJsonFile(filePath);
+  const schedule = readSmallJsonFile(filePath);
   const value = {
     success: true,
     dataSource: active.source === "legacy-current" ? "legacy-current-index" : (version ? "release-isolated-index" : "release-index"),
@@ -3627,6 +3673,7 @@ function parseSnapshotBuffer(buffer) {
 
 function clearDerivedCache() {
   derivedCache.clear();
+  smallJsonCache.clear();
 }
 
 module.exports = {

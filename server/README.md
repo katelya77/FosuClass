@@ -2,6 +2,13 @@
 
 FosuClass Node.js API 服务。将对强智教务系统的页面请求、解析与规范化处理上提至 VPS 后端，为微信小程序提供实时、安全的教务 API 服务。
 
+## 快路径与发布缓存
+
+- 生产运行时保留 `runtime alias`、静态 URL 和 last-known-good 快照，前端优先读取 `/static/runtime/active.json` 与 Release Pack 静态文件。
+- 公共 API 读取 manifest、summary、catalog、upload-record-index 等小 JSON，不在请求路径执行 `getReleasePackStatus()` 或深层 detail 扫描。
+- deep health、staging finalize、Release Pack 重建等 CPU 密集任务由 worker 执行；主线程只负责小 JSON fetch、轻量状态聚合和响应。
+- `server/storage/upload-record-index.json` 是上传记录统一索引，支持分页、`term` 过滤和 `status` 过滤，管理页列表不再逐个 hydrate manifest。
+
 ## 技术栈
 
 - 核心框架：Node.js 18 + Express
