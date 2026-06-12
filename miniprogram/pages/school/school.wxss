@@ -303,6 +303,23 @@ picker {
   margin-top: 10rpx;
 }
 
+.load-more-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 68rpx;
+  margin: 4rpx 0 18rpx;
+  border-radius: 10rpx;
+  background: #f1f4f8;
+  color: #5c687e;
+  font-size: 24rpx;
+  font-weight: 700;
+}
+
+.load-more-row:active {
+  background: #e2e8f0;
+}
+
 .class-result-notice {
   margin: 8rpx 0 16rpx;
   padding: 18rpx 22rpx;

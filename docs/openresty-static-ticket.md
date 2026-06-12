@@ -2,7 +2,7 @@
 
 `FOSU_STATIC_ACCESS_MODE=public` 是默认值。只有在 OpenResty 或 CDN 能可靠校验 ticket 时，才启用 `ticket` 模式。
 
-## Ticket 契约
+## 票据契约
 
 Ticket 是一个 HMAC token，包含：
 
@@ -14,7 +14,7 @@ Ticket 是一个 HMAC token，包含：
 
 Ticket 不包含敏感用户信息。
 
-## Node 辅助函数
+## Node.js 辅助函数
 
 ```js
 const {
@@ -39,6 +39,6 @@ const ticket = createStaticAccessTicket({
 
 不要只在源站鉴权，同时又允许 CDN 将已授权响应公开缓存给匿名请求。
 
-## Referer 防护
+## 来源页防护
 
 Referer 拦截可以降低第三方网页盗链，但它不是主要安全机制。微信小程序请求可能没有可用的 Referer，因此不能依赖 Referer 做核心鉴权。

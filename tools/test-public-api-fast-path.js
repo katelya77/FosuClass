@@ -16,8 +16,11 @@ function functionBody(source, name) {
 
 const fastBody = functionBody(releaseService, "getActiveReleaseInfoFast");
 assert(!/getReleasePackStatus|collectJsonFiles|readReleaseSnapshot|readActiveReleaseSnapshot/.test(fastBody), "fast active release info must not deep scan or read snapshots");
+assert(/compactReleaseManifest/.test(fastBody), "fast active release info should expose compact manifest metadata");
 assert(/getActiveReleaseInfo\(\)[\s\S]*getActiveReleaseInfoFast\(\)/.test(releaseService), "getActiveReleaseInfo should delegate to fast path");
+assert(/function getReleaseStatusFast/.test(releaseService), "releaseService should expose fast release status for public API");
 assert(!/readActiveReleaseSnapshot\(\)/.test(appConfig), "app-config must not parse active snapshot");
+assert(!/getReleaseStatus\(\)/.test(appConfig), "app-config must not call deep release status");
 ["/runtime/active", "/app-config", "/bootstrap", "/prefetch", "/periodic-data", "/terms"].forEach((route) => {
   assert(fosuRoutes.includes(route), `${route} route should exist`);
 });

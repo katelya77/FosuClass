@@ -223,7 +223,7 @@ router.get("/app-config", (req, res) => {
       rawConfig.data.packStatus = activeInfo.releasePack || activeInfo.packStatus || {};
       rawConfig.data.minClientCacheSchema = 5;
       rawConfig.data.counts = activeInfo.counts || {};
-      const manifest = activeVer ? releaseService.getReleasePackManifest(activeVer) : null;
+      const manifest = activeInfo.manifest || null;
       if (manifest && manifest.success) {
         rawConfig.data.staticBasePath = manifest.staticBasePath;
         rawConfig.data.staticBaseUrl = manifest.staticBaseUrl;

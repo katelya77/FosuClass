@@ -240,7 +240,7 @@
           <view class="result-group" wx:if="{{classAdminResults.length}}">
             <view class="result-group-head">
               <view class="result-group-title">行政班级</view>
-              <view class="result-group-count">{{classAdminResults.length}}个班</view>
+              <view class="result-group-count">{{classAdminTotal || classAdminResults.length}}个班</view>
             </view>
             <view
               wx:for="{{classAdminResults}}"
@@ -258,12 +258,15 @@
                 <view class="status ready">{{item.statusText || "行政班"}}</view>
               </view>
             </view>
+            <view class="load-more-row" wx:if="{{hasMoreClassAdmin}}" bindtap="loadMoreActiveResults">
+              加载更多行政班
+            </view>
           </view>
 
           <view class="result-group" wx:if="{{classAggregateResults.length}}">
             <view class="result-group-head" bindtap="toggleAggregate" style="cursor: pointer;">
               <view class="result-group-title">专业共享课表</view>
-              <view class="result-group-count">{{classAggregateResults.length}}项 {{showAggregate ? '▼' : '▶'}}</view>
+              <view class="result-group-count">{{classAggregateTotal || classAggregateResults.length}}项 {{showAggregate ? '▼' : '▶'}}</view>
             </view>
             <view wx:if="{{showAggregate}}">
               <view
@@ -281,6 +284,9 @@
                 <view class="result-side">
                   <view class="status ready aggregate">{{item.statusText || "专业聚合"}}</view>
                 </view>
+              </view>
+              <view class="load-more-row" wx:if="{{hasMoreClassAggregate}}" bindtap="loadMoreActiveResults">
+                加载更多专业课表
               </view>
             </view>
           </view>
@@ -366,6 +372,9 @@
               <view class="count" wx:if="{{item.courseCount || item.courses.length}}">{{item.courseCount || item.courses.length}}门课</view>
             </view>
           </view>
+          <view class="load-more-row" wx:if="{{hasMoreTeachers}}" bindtap="loadMoreActiveResults">
+            加载更多教师
+          </view>
         </view>
 
         <empty-state
@@ -441,6 +450,9 @@
               <view class="count" wx:if="{{item.courseCount || item.courses.length}}">{{item.courseCount || item.courses.length}}课次</view>
             </view>
           </view>
+          <view class="load-more-row" wx:if="{{hasMoreClassrooms}}" bindtap="loadMoreActiveResults">
+            加载更多教室
+          </view>
         </view>
 
         <empty-state
@@ -508,6 +520,9 @@
               <view class="status ready">课程数据</view>
               <view class="count" wx:if="{{item.courseCount || item.courses.length}}">{{item.courseCount || item.courses.length}}次排课</view>
             </view>
+          </view>
+          <view class="load-more-row" wx:if="{{hasMoreCourses}}" bindtap="loadMoreActiveResults">
+            加载更多课程
           </view>
         </view>
 

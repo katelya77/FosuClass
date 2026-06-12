@@ -1,16 +1,15 @@
-# AI campus agent demo guide
+# AI 校园管家演示指南
 
-The campus agent is a tool-grounded assistant for the competition direction
-`2-E digital life: integrated service agent`.
+校园管家是面向竞赛方向 `2-E 数智生活：综合服务智能体` 的工具驱动助手。演示时应突出“事实来自确定性工具，大模型只负责理解意图和组织表达”。
 
-## Stable demo scenarios
+## 稳定演示场景
 
-1. continuous self-study time and empty-room recommendation;
-2. natural-language teacher/class/classroom/course query;
-3. personalized weekly study plan;
-4. meeting/conflict planning and decision assistance.
+1. 推荐连续自习时间和空教室。
+2. 用自然语言查询教师、班级、教室或课程。
+3. 生成个性化周学习计划。
+4. 辅助安排会议、识别冲突并给出决策建议。
 
-Demo mode responses are marked with:
+演示模式返回会带有明确标记：
 
 ```json
 {
@@ -19,35 +18,27 @@ Demo mode responses are marked with:
 }
 ```
 
-Demo data must not be mixed into production release files.
+演示数据不得混入生产 Release 文件。
 
-## Tool-grounded policy
+## 工具优先原则
 
-Deterministic campus tools provide facts: schedules, empty rooms, indexes,
-calendar, current week, and data diagnosis. Domestic providers such as DeepSeek,
-Coze, or existing configured providers may help with intent understanding and
-language organization, but provider text must not override tool facts.
+课程、空教室、索引、校历、当前教学周和数据诊断等事实，必须由确定性校园工具提供。DeepSeek、Coze 或其他已配置的国内 Provider 可用于意图理解和语言润色，但 Provider 文本不能覆盖工具事实。
 
-If the provider is unavailable, deterministic tools continue to work and the UI
-shows that intelligent wording is temporarily unavailable.
+当 Provider 不可用时，确定性工具仍应继续工作；界面只提示智能化表述暂时不可用。
 
-## Personalization
+## 个性化边界
 
-Personal schedule context is local and opt-in. The mini program exposes helpers
-to view remembered personalization, pause personalization, delete
-personalization, and clear the conversation. Sensitive identity fields are
-redacted before any provider request.
+个人课表上下文保存在本地，并且必须由用户主动开启。小程序需要提供查看记忆、暂停个性化、删除个性化和清空对话的入口。任何 Provider 请求前都要先脱敏身份字段。
 
-## Evidence card
+## 证据卡片
 
-Agent responses include lightweight `taskSteps` and `evidence`:
+智能体回复包含轻量 `taskSteps` 和 `evidence`：
 
-- understood requirement;
-- read schedule;
-- checked empty rooms;
-- queried index;
-- generated recommendation;
-- term, release version, current teaching week, source modes, checked time.
+- 已理解需求。
+- 已读取课表。
+- 已检查空教室。
+- 已查询索引。
+- 已生成建议。
+- 记录学期、Release 版本、当前教学周、来源模式和检查时间。
 
-No result should contain `[object Object]`, fabricated rooms, fabricated teacher
-schedules, raw token/session values, or stale release data described as live.
+结果中不得出现 `[object Object]`、编造教室、编造教师课表、原始 token/session 值，或把旧 Release 数据描述成实时数据。

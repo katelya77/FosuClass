@@ -1,18 +1,18 @@
 # FosuClass 故障排查
 
-## app-config timeout
+## app-config 超时
 
 现象：全校页打开慢，公告或数据版本没有刷新。
 
 处理：app-config timeout 不能阻塞全校页。页面应继续使用 bootstrap 或本地 activeSnapshot，状态标记为 `timeout`，不要标记为 `noRelease`。
 
-## bootstrap timeout
+## bootstrap 超时
 
 现象：学院/专业筛选迟迟不出现。
 
 处理：优先显示同版本 `school:v4:filters:${term}:${releaseVersion}` 缓存，并提示“网络较慢，正在继续加载”。刷新失败时保留缓存，不清空筛选项。
 
-## search-index timeout
+## search-index 超时
 
 现象：搜索结果误显示“暂无同步数据”。
 
@@ -50,7 +50,7 @@ npm run sync:local-upload -- --file=./staging/2025-2026-2-full.json --server=htt
 
 失败后可安全重跑。若出现本机代理错误，清理代理环境变量或设置 `SYNC_DISABLE_PROXY=true`。
 
-## release 发布失败
+## Release 发布失败
 
 现象：后台提示发布失败或要求二次确认。
 
@@ -61,7 +61,7 @@ npm run test:release-publish-safety
 npm run test:release-index-rebuild
 ```
 
-## relay agent 失败
+## 接力 agent 失败
 
 现象：接力同学 token 无效、上传被拒绝或无法访问校园网。
 
@@ -116,7 +116,7 @@ npm run test:release-pack-detail
 
 健康检查必须通过 manifest、四类 index、四类 detail、empty-room、hash/size。pack 不健康禁止发布为 active。
 
-## 小程序没有识别新 release
+## 小程序没有识别新 Release
 
 处理：
 
