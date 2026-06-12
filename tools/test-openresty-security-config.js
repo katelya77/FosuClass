@@ -16,7 +16,7 @@ assert(conf.includes("autoindex off"), "include should disable directory listing
 assert(conf.includes("\\.git"), "include should deny .git");
 assert(conf.includes("bak") && conf.includes("sql") && conf.includes("map"), "include should deny backup/source-map style files");
 assert(conf.includes("%2e%2e") && conf.includes("%252e"), "include should reject traversal and double encoding");
-assert(docs.includes("Capability check"), "docs should include capability check guidance");
+assert(/(\u80fd\u529b\u68c0\u67e5|Capability check)/.test(docs), "docs should include capability check guidance");
 assert(docs.includes("FOSU_SECURITY_MODE=observe"), "docs should include rollback mode");
 
 console.log("test-openresty-security-config passed");
