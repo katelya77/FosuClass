@@ -70,6 +70,15 @@ try {
   const listed = stagingUploadService.listUploadRecords({ limit: 50 });
   assert.strictEqual(listed.success, true);
   assert(listed.records.length >= 6, "list should return rebuilt records");
+  const paged = stagingUploadService.listUploadRecords({ term: "2025-2026-2", limit: 2 });
+  assert.strictEqual(paged.total, 6, "term filter should count matching records from unified index");
+  assert.strictEqual(paged.records.length, 2, "term filter should page records");
+  assert.strictEqual(paged.nextCursor, 2, "term filter should expose the next cursor");
+  const success = stagingUploadService.listUploadRecords({ status: "success", limit: 50 });
+  assert(success.records.some((item) => item.uploadId === "sync-history-1"), "status filter should include sync history success records");
+  assert(success.records.every((item) => item.status === "success" || item.stagingState === "success"), "status filter should not leak other statuses");
+  const empty = stagingUploadService.listUploadRecords({ term: "2099-2099-1", limit: 50 });
+  assert.strictEqual(empty.total, 0, "term filter should return an empty page for unrelated terms");
   assert(fs.existsSync(stagingUploadService.RECORD_INDEX_PATH), "unified record index should be written");
   console.log("test-upload-record-index-migration passed");
 } finally {

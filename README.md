@@ -2,6 +2,12 @@
 
 用于课程表查看与今日上课提醒的原生微信小程序。
 
+## 性能与缓存策略
+
+- 小程序优先读取静态 Release Pack、runtime pointer 和 last-known-good 缓存；网络超时、403、504 或 Cloudflare 异常会进入 runtime circuit breaker，先保留可用课表和教师目录。
+- 公共 API 的 `/app-config`、`/runtime/active`、`/sync/status`、`/sync/releases` 只走 manifest、summary、upload-record-index 等小 JSON fast-path，CPU 密集校验交给 worker。
+- staging 发布保留 active/staging/legacy 安全边界，教师目录缺失时显式标记 `not-counted`，不会把教师课表数量冒充教师目录数量。
+
 ## 2026 智能体应用创新大赛版本
 
 本仓库已新增“AI校园管家”能力，作品定位为《佛课小表·AI校园管家：面向佛山大学的课程与空间服务智能体》，参赛赛道为“2-E 数智生活—综合服务智能体开发 / 校园服务”。

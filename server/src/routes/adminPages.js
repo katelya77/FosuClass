@@ -915,6 +915,7 @@ const adminConsoleHtml = `<!doctype html>
       border-radius: 999px;
       border: 1px solid #bfdbfe;
       min-height: 28px;
+      cursor: pointer;
     }
     .mini-ticker.important {
       background: #fff7ed;
@@ -948,10 +949,6 @@ const adminConsoleHtml = `<!doctype html>
       gap: 24px;
       min-width: 100%;
       animation: miniTickerScroll 12s linear infinite;
-    }
-    .mini-ticker-action {
-      flex: 0 0 auto;
-      font-weight: 800;
     }
     @keyframes miniTickerScroll {
       from { transform: translateX(0); }
@@ -9447,8 +9444,7 @@ const adminConsoleHtml = `<!doctype html>
           ticker.innerHTML = "<span class='mini-ticker-icon'>告</span>" +
             "<span class='mini-ticker-track'><span class='mini-ticker-text'><span>" +
             escapeHtml(title + " · " + content) + "</span><span>" +
-            escapeHtml(title + " · " + content) + "</span></span></span>" +
-            "<span class='mini-ticker-action'>查看</span>";
+            escapeHtml(title + " · " + content) + "</span></span></span>";
           screen.appendChild(ticker);
         }
       }

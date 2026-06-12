@@ -2347,7 +2347,7 @@ router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
   const semester = snapshotMeta ? snapshotMeta.semester : (meta.snapshot ? meta.snapshot.semester : getDefaultTerm());
   const classSchedulesUpdatedAt = getUpdatedAt("class-schedules");
   const relayUploads = relayService.listUploads();
-  const stagingUploads = stagingUploadService.listUploads(1);
+  const stagingUploads = stagingUploadService.listUploadRecords({ limit: 1 }).records || [];
   const latestRelayUpload = relayUploads[0] || null;
   const latestJob = jobService.latestJob();
   const payload = {
@@ -2401,6 +2401,7 @@ router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
   const lifecycleStatus = releaseLifecycleService.buildLifecycleStatus({
     reason: "sync-status",
     uploadLimit: 50,
+    reconcile: false,
   });
   Object.assign(payload, lifecycleStatus, {
     releaseVersion: lifecycleStatus.activeReleaseVersion || payload.releaseVersion,
@@ -3746,7 +3747,9 @@ async function processDirectStagingUpload(filePath, reqMeta, job) {
 
 router.get("/staging/upload", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    releaseLifecycleService.reconcileLifecycle({ reason: "staging-upload-list" });
+    if (req.query && req.query.reconcile === "true") {
+      releaseLifecycleService.reconcileLifecycle({ reason: "staging-upload-list" });
+    }
     const result = stagingUploadService.listUploadRecords(req.query || {});
     return res.json({
       success: true,
@@ -3776,8 +3779,10 @@ router.get("/staging/status", adminAuth.verifyAdminAccess, (req, res) => {
     const lifecycle = releaseLifecycleService.buildLifecycleStatus({
       reason: "staging-status",
       uploadLimit: req.query.limit || 50,
+      reconcile: false,
     });
-    const uploads = stagingUploadService.listUploads(req.query || { limit: 50 });
+    const uploadResult = stagingUploadService.listUploadRecords(req.query || { limit: 50 });
+    const uploads = uploadResult.records || [];
     const pendingReview = uploads.filter((item) => item.status === "pending-review");
     const fingerprint = Object.assign({}, buildFingerprintStatus(req.query.canonicalHash || ""), {
       activeCanonicalHash: lifecycle.activeCanonicalHash,
@@ -4338,7 +4343,7 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
     const intranetAccessible = intranetDiagnostic.intranetAccessible === true;
 
     const relayUploads = relayService.listUploads();
-    const stagingUploads = stagingUploadService.listUploads(1);
+    const stagingUploads = stagingUploadService.listUploadRecords({ limit: 1 }).records || [];
     const activeInfo = releaseService.getActiveReleaseInfo();
     const releasePackStatus = activeInfo && activeInfo.version
       ? releaseService.getReleasePackQuickHealth(activeInfo.version)
@@ -4700,7 +4705,7 @@ router.get("/sync/staging/upload/status", adminAuth.verifyAdminAccess, (req, res
  */
 router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const latestUpload = stagingUploadService.listUploads({ limit: 1 })[0] || null;
+    const latestUpload = (stagingUploadService.listUploadRecords({ limit: 1 }).records || [])[0] || null;
     if (latestUpload && (latestUpload.summary || latestUpload.canonicalHash)) {
       const summary = latestUpload.summary || {};
       const activeInfo = releaseService.getActiveReleaseInfoFast();

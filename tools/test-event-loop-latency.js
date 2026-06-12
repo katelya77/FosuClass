@@ -272,10 +272,10 @@ async function run() {
     console.log(JSON.stringify({ success: true, latency: result }, null, 2));
 
     assert(result["health-live"].p95 < 100, `health/live p95 ${result["health-live"].p95}ms`);
-    assert(result["runtime-active"].p95 < 200, `runtime active p95 ${result["runtime-active"].p95}ms`);
-    assert(result["app-config"].p95 < 300, `app-config p95 ${result["app-config"].p95}ms`);
-    assert(result.bootstrap.p95 < 500, `bootstrap p95 ${result.bootstrap.p95}ms`);
-    assert(readyBody.eventLoopDelay.p95Ms < 100, `event loop p95 ${readyBody.eventLoopDelay.p95Ms}ms`);
+    assert(result["runtime-active"].p95 < 100, `runtime active p95 ${result["runtime-active"].p95}ms`);
+    assert(result["app-config"].p95 < 100, `app-config p95 ${result["app-config"].p95}ms`);
+    assert(result.bootstrap.p95 < 100, `bootstrap p95 ${result.bootstrap.p95}ms`);
+    assert(readyBody.eventLoopDelay.p95Ms < 50, `event loop p95 ${readyBody.eventLoopDelay.p95Ms}ms`);
 
     console.log("test-event-loop-latency passed");
   } finally {
