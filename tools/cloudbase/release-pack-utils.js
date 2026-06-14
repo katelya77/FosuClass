@@ -363,6 +363,116 @@ async function verifyRemoteReleasePack(options = {}) {
   return { success: true, releaseVersion, releaseUrl, samples: remoteSamples };
 }
 
+function addDeployTask(tasks, seen, localPath, cloudPath) {
+  const normalizedCloudPath = toPosixPath(cloudPath).replace(/^\/+|\/+$/g, "");
+  if (!normalizedCloudPath || seen.has(normalizedCloudPath)) return;
+  if (!fs.existsSync(localPath)) {
+    const error = new Error(`release deploy source missing: ${localPath}`);
+    error.code = "CLOUDBASE_DEPLOY_SOURCE_MISSING";
+    throw error;
+  }
+  seen.add(normalizedCloudPath);
+  tasks.push({ action: "deploy", localPath, cloudPath: normalizedCloudPath });
+}
+
+function buildCloudbaseDeployPlan(verification) {
+  const releaseDir = verification.releaseDir;
+  const releaseCloudRoot = `releases/${verification.releaseVersion}`;
+  const manifestPaths = Object.keys(verification.manifest.files || {}).sort();
+  const tasks = [];
+  const seen = new Set();
+
+  addDeployTask(
+    tasks,
+    seen,
+    path.join(releaseDir, "manifest.json"),
+    `${releaseCloudRoot}/manifest.json`
+  );
+
+  manifestPaths.forEach((relativePath) => {
+    const normalized = toPosixPath(relativePath).replace(/^\/+|\/+$/g, "");
+    const parts = normalized.split("/").filter(Boolean);
+    if (!parts.length) return;
+    if (parts.length === 1) {
+      addDeployTask(
+        tasks,
+        seen,
+        path.join(releaseDir, normalized),
+        `${releaseCloudRoot}/${normalized}`
+      );
+      return;
+    }
+
+    let groupParts = [parts[0]];
+    if ((parts[0] === "index" || parts[0] === "detail") && parts[1]) {
+      groupParts = [parts[0], parts[1]];
+    }
+    addDeployTask(
+      tasks,
+      seen,
+      path.join(releaseDir, ...groupParts),
+      `${releaseCloudRoot}/${groupParts.join("/")}`
+    );
+  });
+
+  return tasks;
+}
+
+async function runDeployTaskWithRetry(commandRunner, task, index, total, options = {}) {
+  const attempts = Math.max(1, Number(options.deployRetries || process.env.CLOUDBASE_DEPLOY_RETRIES || 3) || 3);
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      if (options.quiet !== true) {
+        console.error(`[cloudbase] deploying ${index + 1}/${total}: ${task.cloudPath} (attempt ${attempt}/${attempts})`);
+      }
+      const result = await Promise.resolve(commandRunner(task.localPath, task.cloudPath, options));
+      return Object.assign({ localPath: task.localPath, cloudPath: task.cloudPath, attempt }, result || {});
+    } catch (error) {
+      if (attempt >= attempts) throw error;
+      if (options.quiet !== true) {
+        console.error(`[cloudbase] deploy retry ${attempt}/${attempts - 1} after ${error.code || error.message || "failure"}`);
+      }
+    }
+  }
+  return null;
+}
+
+async function verifyCloudbaseRuntimePointer(options = {}) {
+  const releaseVersion = String(options.releaseVersion || "").trim();
+  const baseUrl = String(options.hostingBaseUrl || options.remoteBaseUrl || "").trim().replace(/\/+$/g, "");
+  if (!releaseVersion || !baseUrl) {
+    const error = new Error("releaseVersion and hostingBaseUrl are required for runtime pointer verification");
+    error.code = "CLOUDBASE_POINTER_VERIFY_CONFIG_REQUIRED";
+    throw error;
+  }
+  const url = joinUrl(baseUrl, "runtime", `active.json?bucket=${Date.now()}`);
+  const response = await fetchJsonWithText(url);
+  const actualVersion = response.json.releaseVersion || response.json.version || "";
+  if (actualVersion !== releaseVersion) {
+    const error = new Error(`CloudBase runtime pointer mismatch: expected ${releaseVersion}, got ${actualVersion}`);
+    error.code = "CLOUDBASE_POINTER_VERIFY_VERSION_MISMATCH";
+    throw error;
+  }
+  return { success: true, releaseVersion, url, meta: response.meta, pointer: response.json };
+}
+
+function quoteWinArg(value) {
+  const text = String(value || "");
+  if (/^[a-zA-Z0-9_./\\:=@+-]+$/.test(text)) return text;
+  return `"${text.replace(/"/g, '\\"')}"`;
+}
+
+function spawnTcb(args, options = {}) {
+  const command = process.platform === "win32" ? "tcb.cmd" : "tcb";
+  const useCmd = process.platform === "win32";
+  const result = spawnSync(
+    useCmd ? "cmd.exe" : command,
+    useCmd ? ["/d", "/s", "/c", [command].concat(args).map(quoteWinArg).join(" ")] : args,
+    { stdio: options.stdio || "inherit" }
+  );
+  return { command, result };
+}
+
 function runTcbHostingDeploy(localPath, cloudPath, options = {}) {
   const envId = options.envId || ENV_ID;
   const args = [
@@ -372,13 +482,10 @@ function runTcbHostingDeploy(localPath, cloudPath, options = {}) {
     cloudPath,
     "-e",
     envId,
-    "--concurrency",
-    String(options.concurrency || 5),
-    "--retry-count",
-    String(options.retryCount || 3),
   ];
-  const command = process.platform === "win32" ? "tcb.cmd" : "tcb";
-  const result = spawnSync(command, args, { stdio: options.stdio || "inherit" });
+  const spawned = spawnTcb(args, options);
+  const command = spawned.command;
+  const result = spawned.result;
   if (result.error || result.status !== 0) {
     const error = new Error(`tcb hosting deploy failed for ${cloudPath}`);
     error.code = "CLOUDBASE_TCB_DEPLOY_FAILED";
@@ -393,8 +500,9 @@ function runTcbHostingDelete(cloudPath, options = {}) {
   const envId = options.envId || ENV_ID;
   const args = ["hosting", "delete", cloudPath, "-e", envId];
   if (options.dryRun !== false) args.push("--dry-run");
-  const command = process.platform === "win32" ? "tcb.cmd" : "tcb";
-  const result = spawnSync(command, args, { stdio: options.stdio || "inherit" });
+  const spawned = spawnTcb(args, options);
+  const command = spawned.command;
+  const result = spawned.result;
   if (result.error || result.status !== 0) {
     const error = new Error(`tcb hosting delete failed for ${cloudPath}`);
     error.code = "CLOUDBASE_TCB_DELETE_FAILED";
@@ -411,41 +519,94 @@ async function deployReleasePack(options = {}) {
   const dryRun = options.execute === true ? false : options.dryRun !== false;
   const verification = verifyLocalReleasePack(Object.assign({}, options, { releaseVersion }));
   const privacy = scanPrivacy(verification.releaseDir);
-  const releaseCloudPath = `releases/${releaseVersion}`;
   const pointer = buildCloudbasePointer(verification.manifest, {
     releaseVersion,
     hostingBaseUrl: options.hostingBaseUrl || options.remoteBaseUrl || "",
   });
-  const planned = [
-    { action: "deploy", localPath: verification.releaseDir, cloudPath: releaseCloudPath },
-    { action: "deploy", localPath: "runtime/active.json", cloudPath: "runtime/active.json" },
-  ];
+  const planned = buildCloudbaseDeployPlan(verification);
   if (dryRun) {
     return { success: true, dryRun: true, releaseVersion, verification, privacy, pointer, planned };
   }
   const remoteBaseUrl = String(options.hostingBaseUrl || options.remoteBaseUrl || "").trim();
   if (!remoteBaseUrl && options.skipRemoteVerify !== true) {
-    const error = new Error("hostingBaseUrl is required before executing CloudBase active pointer update");
+    const error = new Error("hostingBaseUrl is required before executing CloudBase release upload with remote verification");
     error.code = "CLOUDBASE_HOSTING_BASE_URL_REQUIRED";
     throw error;
   }
 
   const commandRunner = options.commandRunner || runTcbHostingDeploy;
   const commands = [];
-  commands.push(commandRunner(verification.releaseDir, releaseCloudPath, options));
+  for (let index = 0; index < planned.length; index += 1) {
+    commands.push(await runDeployTaskWithRetry(commandRunner, planned[index], index, planned.length, options));
+  }
+  let remote = null;
   if (options.verifyRemote !== false) {
     const verifier = options.remoteVerifier || verifyRemoteReleasePack;
-    await verifier(Object.assign({}, options, { releaseVersion, hostingBaseUrl: remoteBaseUrl }));
+    remote = await verifier(Object.assign({}, options, { releaseVersion, hostingBaseUrl: remoteBaseUrl }));
   }
+  return { success: true, dryRun: false, releaseVersion, verification, privacy, pointer, commands, remote };
+}
+
+async function cutoverReleasePack(options = {}) {
+  const confirmation = String(options.confirmation || options.confirm || "").trim();
+  if (confirmation !== "CONFIRM_CLOUDBASE_CUTOVER") {
+    const error = new Error("Exact confirmation text CONFIRM_CLOUDBASE_CUTOVER is required");
+    error.code = "CLOUDBASE_CUTOVER_CONFIRMATION_REQUIRED";
+    throw error;
+  }
+
+  const activeInfo = releaseService.getActiveReleaseInfo && releaseService.getActiveReleaseInfo() || {};
+  const releaseVersion = String(options.releaseVersion || activeInfo.releaseVersion || activeInfo.version || "").trim();
+  const remoteBaseUrl = String(options.hostingBaseUrl || options.remoteBaseUrl || "").trim();
+  if (!releaseVersion || !remoteBaseUrl) {
+    const error = new Error("releaseVersion and hostingBaseUrl are required for cutover");
+    error.code = "CLOUDBASE_CUTOVER_CONFIG_REQUIRED";
+    throw error;
+  }
+  if (options.oracleActiveReleaseVersion && String(options.oracleActiveReleaseVersion) !== releaseVersion) {
+    const error = new Error(`Oracle active release mismatch: ${options.oracleActiveReleaseVersion}`);
+    error.code = "CLOUDBASE_CUTOVER_ORACLE_MISMATCH";
+    throw error;
+  }
+  if (options.gitStatusRecorded !== true && !options.gitStatusText) {
+    const error = new Error("Git working tree status must be recorded before cutover");
+    error.code = "CLOUDBASE_CUTOVER_GIT_STATUS_REQUIRED";
+    throw error;
+  }
+
+  const verification = verifyLocalReleasePack(Object.assign({}, options, { releaseVersion }));
+  const privacy = scanPrivacy(verification.releaseDir);
+  const remoteVerifier = options.remoteVerifier || verifyRemoteReleasePack;
+  const remoteBefore = await remoteVerifier(Object.assign({}, options, { releaseVersion, hostingBaseUrl: remoteBaseUrl }));
+  const pointer = buildCloudbasePointer(verification.manifest, {
+    releaseVersion,
+    hostingBaseUrl: remoteBaseUrl,
+  });
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `fosu-cloudbase-pointer-${process.pid}-`));
   const pointerPath = path.join(tmpDir, "active.json");
   writeJson(pointerPath, pointer);
+  const commandRunner = options.commandRunner || runTcbHostingDeploy;
+  const commands = [];
   try {
     commands.push(commandRunner(pointerPath, "runtime/active.json", options));
   } finally {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   }
-  return { success: true, dryRun: false, releaseVersion, verification, privacy, pointer, commands };
+  const pointerVerifier = options.runtimePointerVerifier || verifyCloudbaseRuntimePointer;
+  const pointerVerification = await pointerVerifier(Object.assign({}, options, { releaseVersion, hostingBaseUrl: remoteBaseUrl }));
+  const remoteAfter = await remoteVerifier(Object.assign({}, options, { releaseVersion, hostingBaseUrl: remoteBaseUrl }));
+  return {
+    success: true,
+    releaseVersion,
+    verification,
+    privacy,
+    remoteBefore,
+    pointer,
+    pointerVerification,
+    remoteAfter,
+    commands,
+    readyRecommendation: "CloudBase release, remote verification, and runtime pointer verification passed. CLOUDBASE_HOSTING_READY may now be set to true after production confirmation.",
+  };
 }
 
 function listLocalReleaseVersions(options = {}) {
@@ -518,8 +679,10 @@ function pruneReleasePack(options = {}) {
 module.exports = {
   DEFAULT_KEEP_LATEST,
   ENV_ID,
+  buildCloudbaseDeployPlan,
   buildCloudbasePointer,
   collectPrivacyFindings,
+  cutoverReleasePack,
   deployReleasePack,
   fileMeta,
   getPublicReleaseRoot,
@@ -533,6 +696,7 @@ module.exports = {
   runTcbHostingDelete,
   runTcbHostingDeploy,
   scanPrivacy,
+  verifyCloudbaseRuntimePointer,
   verifyLocalReleasePack,
   verifyRemoteReleasePack,
   writeJson,

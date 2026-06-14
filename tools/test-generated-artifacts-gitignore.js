@@ -23,6 +23,7 @@ assert(ignored("tools/fosu-sync-client/.debug/test.json"), ".debug files must be
 assert(ignored("tools/fosu-sync-client/.session/session.json"), ".session files must be ignored");
 assert(ignored("tools/fosu-sync-client/staging/test.json"), "sync-client staging files must be ignored");
 assert(ignored("staging/test.json"), "root staging files must be ignored");
+assert(ignored(".local/cloudbase-releases/test-release/manifest.json"), "CloudBase downloaded Release Packs must be ignored");
 assert(ignored("sample.har"), "HAR files must be ignored");
 assert(ignored("sample.log"), "log files must be ignored");
 assert(!ignored("tools/fixtures/sanitized-sync-sample.json"), "sanitized fixture path should remain trackable");

@@ -155,7 +155,8 @@ function getOrigins() {
   const config = mergeCloudbaseConfig();
   const origins = [];
   const cloudbaseBase = String(config.CLOUDBASE_HOSTING_BASE_URL || "").trim().replace(/\/+$/g, "");
-  if (config.CLOUDBASE_ENABLED !== false && config.CLOUDBASE_HOSTING_ENABLED !== false && isUsableUrl(cloudbaseBase)) {
+  const cloudbaseReady = config.CLOUDBASE_HOSTING_READY === true;
+  if (config.CLOUDBASE_ENABLED !== false && config.CLOUDBASE_HOSTING_ENABLED !== false && cloudbaseReady && isUsableUrl(cloudbaseBase)) {
     origins.push({
       name: "cloudbase",
       label: "CloudBase Hosting",

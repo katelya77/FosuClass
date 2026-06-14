@@ -120,8 +120,11 @@ async function run() {
 
   const dryRun = await utils.deployReleasePack({ publicRoot: good.root, releaseVersion: version, dryRun: true });
   assert.strictEqual(dryRun.dryRun, true);
-  assert.strictEqual(dryRun.planned[0].cloudPath, `releases/${version}`);
-  assert.strictEqual(dryRun.planned[1].cloudPath, "runtime/active.json");
+  assert(dryRun.planned.some((item) => item.cloudPath === `releases/${version}/manifest.json`));
+  assert(dryRun.planned.some((item) => item.cloudPath === `releases/${version}/index/class`));
+  assert(dryRun.planned.some((item) => item.cloudPath === `releases/${version}/detail/course`));
+  assert(dryRun.planned.every((item) => item.cloudPath.startsWith(`releases/${version}/`)));
+  assert(!dryRun.planned.some((item) => item.cloudPath === "runtime/active.json"), "release:auto must not plan runtime/active.json cutover");
 
   const secretVersion = "cloudbase-release-secret-2026-06-14";
   const secret = buildRelease(secretVersion, { secretFile: true });
@@ -151,7 +154,42 @@ async function run() {
     (error) => error && error.code === "CLOUDBASE_REMOTE_VERIFY_HTTP",
     "remote verification failure should stop before active pointer update"
   );
-  assert.deepStrictEqual(interruptedCalls, [`releases/${version}`], "active pointer must be deployed only after release verification");
+  assert.deepStrictEqual(interruptedCalls, dryRun.planned.map((item) => item.cloudPath));
+  assert(!interruptedCalls.includes("runtime/active.json"), "active pointer must be deployed only by cutover");
+
+  const cutoverCalls = [];
+  const cutover = await utils.cutoverReleasePack({
+    publicRoot: good.root,
+    releaseVersion: version,
+    hostingBaseUrl: "https://cloud.example.com",
+    confirmation: "CONFIRM_CLOUDBASE_CUTOVER",
+    oracleActiveReleaseVersion: version,
+    gitStatusRecorded: true,
+    commandRunner: (localPath, cloudPath) => {
+      cutoverCalls.push({ localPath, cloudPath });
+      return { localPath, cloudPath };
+    },
+    remoteVerifier: async () => ({ success: true, releaseVersion: version, samples: ["manifest.json"] }),
+    runtimePointerVerifier: async () => ({ success: true, releaseVersion: version }),
+  });
+  assert.strictEqual(cutover.success, true);
+  assert.deepStrictEqual(cutoverCalls.map((item) => item.cloudPath), ["runtime/active.json"], "cutover should upload only active pointer after prior release verification");
+  assert(cutover.readyRecommendation.includes("CLOUDBASE_HOSTING_READY"), "READY=true recommendation is allowed only after pointer verification");
+
+  await assert.rejects(
+    () => utils.cutoverReleasePack({
+      publicRoot: good.root,
+      releaseVersion: version,
+      hostingBaseUrl: "https://cloud.example.com",
+      confirmation: "WRONG",
+      oracleActiveReleaseVersion: version,
+      gitStatusRecorded: true,
+      remoteVerifier: async () => ({ success: true }),
+      runtimePointerVerifier: async () => ({ success: true }),
+    }),
+    (error) => error && error.code === "CLOUDBASE_CUTOVER_CONFIRMATION_REQUIRED",
+    "cutover must require exact confirmation text"
+  );
 
   const invalidVersion = "cloudbase-release-invalid-2026-06-14";
   const invalid = buildRelease(invalidVersion);
@@ -173,6 +211,33 @@ async function run() {
     "invalid new release should fail before upload"
   );
   assert.deepStrictEqual(invalidCalls, [], "invalid release must not upload files or active pointer");
+
+  const mismatchVersion = "cloudbase-release-hash-mismatch-2026-06-14";
+  const mismatch = buildRelease(mismatchVersion);
+  writeJson(path.join(mismatch.releaseDir, "index", "course", "all.json"), {
+    success: true,
+    type: "course",
+    term: "2025-2026-2",
+    releaseVersion: mismatchVersion,
+    items: [{ id: "course-1", name: "tampered course" }],
+  });
+  const mismatchCalls = [];
+  await assert.rejects(
+    () => utils.deployReleasePack({
+      publicRoot: mismatch.root,
+      releaseVersion: mismatchVersion,
+      execute: true,
+      hostingBaseUrl: "https://cloud.example.com",
+      commandRunner: (localPath, cloudPath) => {
+        mismatchCalls.push(cloudPath);
+        return { localPath, cloudPath };
+      },
+      remoteVerifier: async () => ({ success: true }),
+    }),
+    (error) => error && error.code === "CLOUDBASE_RELEASE_HASH_MISMATCH",
+    "hash mismatch should stop before CloudBase upload"
+  );
+  assert.deepStrictEqual(mismatchCalls, [], "hash mismatch must not upload release files");
 
   const prune = utils.planPruneReleasePack({
     releases: [

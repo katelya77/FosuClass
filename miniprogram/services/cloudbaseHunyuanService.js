@@ -78,6 +78,17 @@ function getMiniProgramEnvVersion() {
   }
 }
 
+function isCompetitionEnv(envVersion) {
+  return envVersion === "develop" || envVersion === "trial";
+}
+
+function isGenerativeAllowedForEnv(config, envVersion) {
+  if (config.AI_GENERATIVE_PUBLIC_ENABLED === true) return true;
+  if (envVersion === "release") return false;
+  if (config.AI_COMPETITION_MODE === true) return isCompetitionEnv(envVersion);
+  return envVersion !== "release";
+}
+
 function isPromoExpired(config) {
   const expiresAt = Date.parse(config.CLOUDBASE_AI_PROMO_EXPIRES_AT || "");
   return Number.isFinite(expiresAt) && expiresAt > 0 && now() > expiresAt;
@@ -101,7 +112,7 @@ function assertAvailable() {
     throw makeUnavailable("CLOUDBASE_AI_PROMO_EXPIRED", "CloudBase AI promo expired");
   }
   const envVersion = getMiniProgramEnvVersion();
-  if (envVersion === "release" && config.AI_GENERATIVE_PUBLIC_ENABLED !== true && config.AI_COMPETITION_MODE !== true) {
+  if (!isGenerativeAllowedForEnv(config, envVersion)) {
     throw makeUnavailable("AI_GENERATIVE_PUBLIC_DISABLED", "生成式问答暂未开放");
   }
   const sdkVersion = getSdkVersion();
@@ -338,5 +349,6 @@ module.exports = {
   buildSystemPrompt,
   generate,
   getAvailability,
+  isGenerativeAllowedForEnv,
   isConcurrentLimitError,
 };
