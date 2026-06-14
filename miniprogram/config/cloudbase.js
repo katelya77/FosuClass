@@ -2,7 +2,7 @@ const ENV_ID = "cloud1-d3g17rpe7566d3d5c";
 
 const CLOUDBASE_ENABLED = true;
 const CLOUDBASE_HOSTING_ENABLED = true;
-const CLOUDBASE_HOSTING_READY = false;
+const CLOUDBASE_HOSTING_READY = true;
 const CLOUDBASE_HOSTING_BASE_URL = "https://cloud1-d3g17rpe7566d3d5c-1442900641.tcloudbaseapp.com";
 const CLOUDBASE_AI_ENABLED = true;
 const CLOUDBASE_AI_MODEL = "hy3-preview";
