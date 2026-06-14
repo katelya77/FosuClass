@@ -16,12 +16,17 @@ const EMPTY_ROOM_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const MAX_EMPTY_ROOM_SECTION = 14;
 const MAX_EMPTY_ROOM_WEEK = 30;
 const LOCAL_ACTIVE_RELEASE_KEY = `${CACHE_PREFIX}:active-release`;
+const RUNTIME_POINTER_CACHE_KEY = "FOSU_RUNTIME_POINTER";
 const RUNTIME_POINTER_CIRCUIT_KEY = `${CACHE_PREFIX}:runtime-pointer-circuit`;
 const RUNTIME_POINTER_CIRCUIT_MS = 45 * 1000;
+const FRESHNESS_STATUS_KEY = "FOSU_STATIC_FRESHNESS";
+const FRESHNESS_MIN_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const FRESHNESS_TIMEOUT_MS = 2000;
 const activeManifestInflight = new Map();
 const switchReleaseInflight = new Map();
 let runtimePointerInflight = null;
 let runtimePointerCircuit = null;
+let freshnessCheckStarted = false;
 
 function cachePart(value, fallback = "unknown") {
   return encodeURIComponent(String(value || fallback));
@@ -119,8 +124,17 @@ function normalizeManifest(payload) {
     dataEpoch: source.dataEpoch || cacheEpoch,
     forceRefreshToken,
     minClientCacheSchema: source.minClientCacheSchema || 5,
+    manifestStatus: source.manifestStatus || "complete",
     packStatus: source.packStatus || source.pack || {},
   });
+}
+
+function isPointerOnlyManifest(manifest) {
+  const source = manifest && manifest.data ? manifest.data : manifest;
+  if (!source || typeof source !== "object") return false;
+  if (source.manifestStatus === "pointer-only" || source.pointerOnly === true) return true;
+  if (/runtime-pointer/i.test(String(source.source || ""))) return true;
+  return false;
 }
 
 function trimSlashes(value) {
@@ -206,6 +220,27 @@ function assertTermMatch(actualTerm, expectedTerm, code) {
   }
 }
 
+function assertManifestMatchesPointer(manifest, pointer) {
+  if (!pointer) return manifest;
+  const normalized = assertManifest(normalizeManifest(manifest));
+  assertTermMatch(normalized.term, pointer.term || pointer.activeTerm || "", "POINTER_MANIFEST_TERM_MISMATCH");
+  if (pointer.releaseVersion && normalized.releaseVersion !== pointer.releaseVersion) {
+    const error = new Error("POINTER_MANIFEST_RELEASE_MISMATCH");
+    error.code = "POINTER_MANIFEST_RELEASE_MISMATCH";
+    error.expectedReleaseVersion = pointer.releaseVersion;
+    error.actualReleaseVersion = normalized.releaseVersion;
+    throw error;
+  }
+  if (pointer.cacheEpoch && normalized.cacheEpoch && Number(pointer.cacheEpoch) !== Number(normalized.cacheEpoch)) {
+    const error = new Error("POINTER_MANIFEST_CACHE_EPOCH_MISMATCH");
+    error.code = "POINTER_MANIFEST_CACHE_EPOCH_MISMATCH";
+    error.expectedCacheEpoch = pointer.cacheEpoch;
+    error.actualCacheEpoch = normalized.cacheEpoch;
+    throw error;
+  }
+  return normalized;
+}
+
 function markFromStorage(value, extra = {}) {
   return Object.assign({}, value || {}, extra, { fromStorage: true });
 }
@@ -226,11 +261,17 @@ function readCachedManifest(term) {
   const cached = readStorage(getManifestCacheKey(term || DEFAULT_TERM));
   const manifest = normalizeManifest(cached && (cached.manifest || cached));
   if (!manifest) return null;
+  if (isPointerOnlyManifest(manifest)) return null;
   return markFromStorage(manifest, { savedAt: cached.savedAt || 0 });
 }
 
 function writeManifestCache(manifest) {
   const normalized = assertManifest(normalizeManifest(manifest));
+  if (isPointerOnlyManifest(normalized)) {
+    const error = new Error("POINTER_ONLY_MANIFEST_NOT_CACHEABLE");
+    error.code = "POINTER_ONLY_MANIFEST_NOT_CACHEABLE";
+    throw error;
+  }
   const entry = {
     savedAt: Date.now(),
     term: normalized.term,
@@ -278,7 +319,104 @@ function normalizeRuntimePointer(payload) {
     }),
     urls: source.urls || {},
     source: source.source || "runtime-pointer",
+    pointerSource: source.pointerSource || source.staticOrigin || source.source || "runtime-pointer",
+    staticOrigin: source.staticOrigin || "",
+    staticOriginLabel: source.staticOriginLabel || "",
+    staticOriginUrl: source.staticOriginUrl || "",
+    manifestStatus: "pointer-only",
   };
+}
+
+function readRuntimePointerStore() {
+  const stored = readStorage(RUNTIME_POINTER_CACHE_KEY);
+  if (!stored || typeof stored !== "object" || Array.isArray(stored)) {
+    return { savedAt: 0, lastTerm: "", terms: {} };
+  }
+  const terms = stored.terms && typeof stored.terms === "object" && !Array.isArray(stored.terms) ? stored.terms : {};
+  return Object.assign({ savedAt: 0, lastTerm: "", terms }, stored, { terms });
+}
+
+function writeRuntimePointerCache(pointer) {
+  const normalized = normalizeRuntimePointer(pointer);
+  if (!normalized) return null;
+  const store = readRuntimePointerStore();
+  const entry = {
+    savedAt: Date.now(),
+    term: normalized.term,
+    releaseVersion: normalized.releaseVersion,
+    pointer: normalized,
+  };
+  store.savedAt = entry.savedAt;
+  store.lastTerm = normalized.term;
+  store.terms[normalized.term] = entry;
+  writeStorage(RUNTIME_POINTER_CACHE_KEY, store);
+  return normalized;
+}
+
+function readRuntimePointerCache(term) {
+  const store = readRuntimePointerStore();
+  const requestedTerm = term || store.lastTerm || "";
+  const entry = requestedTerm ? store.terms[requestedTerm] : null;
+  const pointer = normalizeRuntimePointer(entry && (entry.pointer || entry));
+  if (!pointer) return null;
+  return Object.assign({}, pointer, {
+    fromStorage: true,
+    savedAt: entry.savedAt || store.savedAt || 0,
+  });
+}
+
+function getRuntimePointerReleaseKey(pointer) {
+  return [
+    pointer && (pointer.term || pointer.activeTerm) || "",
+    pointer && pointer.releaseVersion || "",
+    pointer && pointer.cacheEpoch || "",
+    pointer && pointer.forceRefreshToken || "",
+  ].join(":");
+}
+
+function readCompleteManifestForPointer(pointer) {
+  const term = pointer && (pointer.term || pointer.activeTerm) || DEFAULT_TERM;
+  const localActive = getLocalActiveRelease(term);
+  const localManifest = localActive && localActive.manifest;
+  if (!localManifest || isPointerOnlyManifest(localManifest)) return null;
+  return getManifestReleaseKey(localManifest) === getRuntimePointerReleaseKey(pointer) ? localManifest : null;
+}
+
+function getRuntimePointerOrigin(pointer) {
+  return pointer && (pointer.staticOrigin === "cloudbase" || pointer.staticOrigin === "oracle")
+    ? pointer.staticOrigin
+    : "";
+}
+
+function ensureRuntimePointerManifest(pointer, options = {}) {
+  const normalizedPointer = normalizeRuntimePointer(pointer);
+  if (!normalizedPointer) {
+    const error = new Error("INVALID_RUNTIME_POINTER");
+    error.code = "INVALID_RUNTIME_POINTER";
+    return Promise.reject(error);
+  }
+  const localManifest = readCompleteManifestForPointer(normalizedPointer);
+  if (localManifest) {
+    return Promise.resolve({
+      success: true,
+      switched: false,
+      fromCache: true,
+      term: localManifest.term,
+      releaseVersion: localManifest.releaseVersion,
+      manifest: localManifest,
+    });
+  }
+  return switchReleaseSafely({
+    term: normalizedPointer.term || normalizedPointer.activeTerm,
+    releaseVersion: normalizedPointer.releaseVersion,
+    pointer: normalizedPointer,
+    forceNetwork: true,
+    forceOrigin: options.forceOrigin || getRuntimePointerOrigin(normalizedPointer),
+    warmupTypes: options.warmupTypes || ["class"],
+    timeout: options.manifestTimeout || options.timeout || 6000,
+    retries: options.retries === undefined ? 0 : options.retries,
+    skipSession: true,
+  });
 }
 
 function isNetworkTimeout(error) {
@@ -316,6 +454,130 @@ function clearRuntimeCircuit() {
   removeStorage(RUNTIME_POINTER_CIRCUIT_KEY);
 }
 
+function comparablePointerTime(pointer) {
+  const cacheEpoch = Number(pointer && pointer.cacheEpoch || 0) || 0;
+  const updatedAt = Date.parse(pointer && pointer.updatedAt || "") || 0;
+  return Math.max(cacheEpoch, updatedAt);
+}
+
+function comparePointerOrder(left, right) {
+  const leftEpoch = Number(left && left.cacheEpoch || 0) || 0;
+  const rightEpoch = Number(right && right.cacheEpoch || 0) || 0;
+  if (leftEpoch && rightEpoch && leftEpoch !== rightEpoch) return leftEpoch - rightEpoch;
+  const leftUpdatedAt = Date.parse(left && left.updatedAt || "") || 0;
+  const rightUpdatedAt = Date.parse(right && right.updatedAt || "") || 0;
+  if (leftUpdatedAt && rightUpdatedAt && leftUpdatedAt !== rightUpdatedAt) return leftUpdatedAt - rightUpdatedAt;
+  return 0;
+}
+
+function compareFreshness(cloudbasePointer, oraclePointer) {
+  const cloudbaseVersion = cloudbasePointer && cloudbasePointer.releaseVersion || "";
+  const oracleVersion = oraclePointer && oraclePointer.releaseVersion || "";
+  const cloudbaseTime = comparablePointerTime(cloudbasePointer);
+  const oracleTime = comparablePointerTime(oraclePointer);
+  const order = comparePointerOrder(oraclePointer, cloudbasePointer);
+  const sameVersion = cloudbaseVersion === oracleVersion;
+  const sameEpoch = Number(cloudbasePointer && cloudbasePointer.cacheEpoch || 0) === Number(oraclePointer && oraclePointer.cacheEpoch || 0);
+  const sameToken = String(cloudbasePointer && cloudbasePointer.forceRefreshToken || "") === String(oraclePointer && oraclePointer.forceRefreshToken || "");
+  const sameUpdatedAt = !cloudbaseTime || !oracleTime || cloudbaseTime === oracleTime;
+  if (sameVersion && sameEpoch && sameToken && sameUpdatedAt) {
+    return "healthy";
+  }
+  if (order > 0 || (oracleVersion && !sameVersion && order >= 0) || (sameVersion && sameEpoch && !sameToken && order >= 0)) {
+    return "cloudbase-stale";
+  }
+  if (order < 0 || (cloudbaseVersion && !sameVersion)) {
+    return "cloudbase-newer";
+  }
+  return "healthy";
+}
+
+function readFreshnessDiagnostics() {
+  const stored = readStorage(FRESHNESS_STATUS_KEY);
+  return stored && typeof stored === "object" && !Array.isArray(stored) ? stored : null;
+}
+
+function writeFreshnessDiagnostics(status) {
+  const payload = Object.assign({
+    checkedAt: new Date().toISOString(),
+  }, status || {});
+  writeStorage(FRESHNESS_STATUS_KEY, payload);
+  return payload;
+}
+
+function shouldRunFreshnessCheck(options = {}) {
+  if (options.force === true) return true;
+  if (freshnessCheckStarted) return false;
+  const last = readFreshnessDiagnostics();
+  const checkedAt = Date.parse(last && last.checkedAt || "") || 0;
+  return !checkedAt || Date.now() - checkedAt >= FRESHNESS_MIN_INTERVAL_MS;
+}
+
+function checkStaticOriginFreshness(options = {}) {
+  if (!shouldRunFreshnessCheck(options)) {
+    return Promise.resolve(readFreshnessDiagnostics() || { freshnessStatus: "skipped" });
+  }
+  freshnessCheckStarted = true;
+  const cloudbasePointer = normalizeRuntimePointer(options.cloudbasePointer || options.pointer || readRuntimePointerCache(options.term));
+  if (!cloudbasePointer || cloudbasePointer.staticOrigin !== "cloudbase") {
+    return Promise.resolve(writeFreshnessDiagnostics({
+      freshnessStatus: "cloudbase-unavailable",
+      cloudbaseReleaseVersion: cloudbasePointer && cloudbasePointer.releaseVersion || "",
+      oracleReleaseVersion: "",
+      checkedAt: new Date().toISOString(),
+    }));
+  }
+  return staticOriginService.fetchRuntimePointer({
+    forceOrigin: "oracle",
+    ignoreCircuit: true,
+    skipSession: true,
+    timeout: options.timeout || FRESHNESS_TIMEOUT_MS,
+    retries: 0,
+    dedupe: false,
+    suppressWarn: true,
+  })
+    .then((payload) => {
+      const oraclePointer = normalizeRuntimePointer(payload);
+      if (!oraclePointer) {
+        const error = new Error("INVALID_ORACLE_RUNTIME_POINTER");
+        error.code = "INVALID_ORACLE_RUNTIME_POINTER";
+        throw error;
+      }
+      const freshnessStatus = compareFreshness(cloudbasePointer, oraclePointer);
+      const diagnosis = writeFreshnessDiagnostics({
+        freshnessStatus,
+        cloudbaseReleaseVersion: cloudbasePointer.releaseVersion || "",
+        oracleReleaseVersion: oraclePointer.releaseVersion || "",
+        cloudbaseCacheEpoch: cloudbasePointer.cacheEpoch || "",
+        oracleCacheEpoch: oraclePointer.cacheEpoch || "",
+        cloudbaseUpdatedAt: cloudbasePointer.updatedAt || "",
+        oracleUpdatedAt: oraclePointer.updatedAt || "",
+      });
+      if (freshnessStatus !== "cloudbase-stale") return diagnosis;
+      return switchReleaseSafely({
+        term: oraclePointer.term || oraclePointer.activeTerm,
+        releaseVersion: oraclePointer.releaseVersion,
+        pointer: oraclePointer,
+        forceNetwork: true,
+        forceOrigin: "oracle",
+        warmupTypes: ["class"],
+        timeout: options.manifestTimeout || 6000,
+        retries: 0,
+        skipSession: true,
+      }).then((switchResult) => writeFreshnessDiagnostics(Object.assign({}, diagnosis, {
+        freshnessStatus: switchResult && switchResult.switched ? "cloudbase-stale-switched-oracle" : "cloudbase-stale",
+        oracleSwitchReleaseVersion: switchResult && switchResult.releaseVersion || "",
+        oracleSwitchFallbackReason: switchResult && switchResult.fallbackReason || "",
+      })));
+    })
+    .catch((error) => writeFreshnessDiagnostics({
+      freshnessStatus: "oracle-unavailable",
+      cloudbaseReleaseVersion: cloudbasePointer.releaseVersion || "",
+      oracleReleaseVersion: "",
+      errorCode: error && (error.code || error.reasonCode || error.errMsg || error.message || "networkError"),
+    }));
+}
+
 function pointerFromCachedManifest(entry, extra = {}) {
   const manifest = normalizeManifest(entry && (entry.manifest || entry));
   if (!manifest) return null;
@@ -343,6 +605,8 @@ function pointerFromCachedManifest(entry, extra = {}) {
 
 function getCachedRuntimePointer(options = {}) {
   const term = options.term || "";
+  const cachedPointer = readRuntimePointerCache(term);
+  if (cachedPointer) return cachedPointer;
   const entry = term
     ? getLocalActiveRelease(term)
     : (readStorage(LOCAL_ACTIVE_RELEASE_KEY) || scanLastGood({}));
@@ -382,21 +646,21 @@ function resolveRuntimePointer(options = {}) {
         error.code = "INVALID_RUNTIME_POINTER";
         throw error;
       }
-      const manifest = normalizeManifest(Object.assign({}, pointer, {
-        term: pointer.activeTerm,
-        semester: pointer.activeTerm,
-        releaseVersion: pointer.releaseVersion,
-        termConfig: pointer.termConfig,
-        cacheEpoch: pointer.cacheEpoch,
-        forceRefreshToken: pointer.forceRefreshToken,
-        activeTerm: pointer.activeTerm,
-        isActive: true,
-        calendarUrl: pointer.urls && pointer.urls.calendar,
-        indexUrls: { class: pointer.urls && pointer.urls.classIndex },
-      }));
-      if (manifest) writeManifestCache(manifest);
+      writeRuntimePointerCache(pointer);
       clearRuntimeCircuit();
-      return pointer;
+      const localManifest = readCompleteManifestForPointer(pointer);
+      if (!localManifest) return pointer;
+      return Object.assign({}, pointer, {
+        manifestStatus: "complete",
+        activation: {
+          success: true,
+          switched: false,
+          fromCache: true,
+          term: localManifest.term,
+          releaseVersion: localManifest.releaseVersion,
+          manifest: localManifest,
+        },
+      });
     })
     .catch((error) => {
       const circuit = openRuntimeCircuit(error);
@@ -445,7 +709,7 @@ function getLastKnownGood(term) {
   }
   if (!cached) return null;
   const manifest = normalizeManifest(cached.manifest || cached);
-  if (!manifest || manifest.term !== requestedTerm) return null;
+  if (!manifest || manifest.term !== requestedTerm || isPointerOnlyManifest(manifest)) return null;
   return {
     savedAt: cached.savedAt || 0,
     term: manifest.term,
@@ -519,7 +783,7 @@ function getLocalActiveRelease(term) {
     }
   }
   const manifest = normalizeManifest(active && active.manifest);
-  if (manifest && manifest.term === requestedTerm) {
+  if (manifest && manifest.term === requestedTerm && !isPointerOnlyManifest(manifest)) {
     return {
       savedAt: active.savedAt || 0,
       term: manifest.term,
@@ -592,6 +856,7 @@ function fetchManifest(options = {}) {
     retries: options.retries === undefined ? 1 : options.retries,
     skipSession: options.skipSession === true,
     suppressWarn: options.suppressWarn === true,
+    forceOrigin: options.forceOrigin || "",
   };
   if (expectedTerm) query.term = expectedTerm;
   const loadDynamic = () => request.get("/api/fosu/release-pack/manifest", query, requestOptions)
@@ -682,6 +947,7 @@ function loadIndex(type, params = {}, options = {}) {
     timeout: options.timeout || 7500,
     retries: options.retries === undefined ? 1 : options.retries,
     skipSession: options.skipSession === true,
+    forceOrigin: options.forceOrigin || "",
   };
   const loadStatic = staticOriginService.fetchIndex(type, Object.assign({}, params, {
     term,
@@ -731,12 +997,13 @@ function warmupIndex(types, options = {}) {
   const manifest = normalizeManifest(options.manifest) || null;
   return Promise.all(list.map((type) => loadIndex(type, {
     term: options.term || (manifest && manifest.term) || DEFAULT_TERM,
-    releaseVersion: options.releaseVersion || (manifest && manifest.releaseVersion) || "",
-  }, Object.assign({}, options, {
-    manifest,
-    forceNetwork: Boolean(options.forceNetwork),
-    skipFallback: Boolean(options.skipFallback),
-  })))).then((indexes) => {
+        releaseVersion: options.releaseVersion || (manifest && manifest.releaseVersion) || "",
+      }, Object.assign({}, options, {
+        manifest,
+        forceNetwork: Boolean(options.forceNetwork),
+        forceOrigin: options.forceOrigin || "",
+        skipFallback: Boolean(options.skipFallback),
+      })))).then((indexes) => {
     indexes.forEach((item, index) => {
       if (!item || item.success === false || !Array.isArray(item.items)) {
         const error = new Error(`INVALID_RELEASE_PACK_INDEX:${list[index]}`);
@@ -756,13 +1023,14 @@ function switchReleaseSafely(options = {}) {
   const previous = getLocalActiveRelease(options.term || DEFAULT_TERM) || getLastKnownGood(options.term || DEFAULT_TERM);
   const promise = fetchManifest(options)
     .then((manifest) => {
+      const verifiedManifest = assertManifestMatchesPointer(manifest, options.pointer);
       const sameRelease = previous && previous.manifest &&
-        getManifestReleaseKey(previous.manifest) === getManifestReleaseKey(manifest);
+        getManifestReleaseKey(previous.manifest) === getManifestReleaseKey(verifiedManifest);
       const warmupTypes = Array.isArray(options.warmupTypes) && options.warmupTypes.length
         ? options.warmupTypes
         : ["class"];
       const finishSwitch = (indexes) => {
-        const normalized = writeManifestCache(manifest);
+        const normalized = writeManifestCache(verifiedManifest);
         clearOldReleaseCaches({
           keepLatestN: options.keepLatestN || 2,
           keepReleases: [normalized.releaseVersion, previous && previous.releaseVersion].filter(Boolean),
@@ -780,10 +1048,11 @@ function switchReleaseSafely(options = {}) {
         return finishSwitch([]);
       }
       return warmupIndex(warmupTypes, {
-        manifest,
-        term: manifest.term,
-        releaseVersion: manifest.releaseVersion,
+        manifest: verifiedManifest,
+        term: verifiedManifest.term,
+        releaseVersion: verifiedManifest.releaseVersion,
         forceNetwork: Boolean(options.forceNetwork && !sameRelease),
+        forceOrigin: options.forceOrigin || "",
         skipFallback: true,
         skipSession: options.skipSession === true,
       }).then(finishSwitch);
@@ -1045,6 +1314,7 @@ function loadDetail(type, id, params = {}, options = {}) {
     timeout: options.timeout || 7500,
     retries: options.retries === undefined ? 1 : options.retries,
     skipSession: options.skipSession === true,
+    forceOrigin: options.forceOrigin || "",
   };
   const loadStatic = staticOriginService.fetchDetail(type, id, {
     term,
@@ -1217,6 +1487,7 @@ function loadEmptyRoom(params = {}, options = {}) {
     timeout: options.timeout || 7500,
     retries: options.retries === undefined ? 1 : options.retries,
     skipSession: options.skipSession === true,
+    forceOrigin: options.forceOrigin || "",
   };
   const loadStatic = staticOriginService.fetchEmptyRoom({
     term,
@@ -1501,11 +1772,21 @@ function clearOldReleaseCaches(options = {}) {
   return { removed, keepReleases: Array.from(keep) };
 }
 
+function __resetForTest() {
+  activeManifestInflight.clear();
+  switchReleaseInflight.clear();
+  runtimePointerInflight = null;
+  runtimePointerCircuit = null;
+  freshnessCheckStarted = false;
+}
+
 module.exports = {
   CACHE_PREFIX,
   DEFAULT_TERM,
   LOCAL_ACTIVE_RELEASE_KEY,
+  RUNTIME_POINTER_CACHE_KEY,
   RUNTIME_POINTER_CIRCUIT_KEY,
+  FRESHNESS_STATUS_KEY,
   getLocalActiveReleaseKey,
   getManifestCacheKey,
   getIndexCacheKey,
@@ -1515,6 +1796,9 @@ module.exports = {
   getManifestReleaseKey,
   getLocalActiveRelease,
   resolveRuntimePointer,
+  ensureRuntimePointerManifest,
+  readRuntimePointerCache,
+  writeRuntimePointerCache,
   getActiveManifest,
   loadEmptyRoom,
   filterEmptyRoomIndex,
@@ -1532,6 +1816,8 @@ module.exports = {
   switchReleaseSafely,
   getLastKnownGood,
   getCachedRuntimePointer,
+  checkStaticOriginFreshness,
+  readFreshnessDiagnostics,
   readRuntimeCircuit,
   openRuntimeCircuit,
   clearRuntimeCircuit,
@@ -1543,4 +1829,5 @@ module.exports = {
   resolveDetailUrl,
   resolveEmptyRoomUrl,
   getManifestStaticBaseUrl,
+  __resetForTest,
 };

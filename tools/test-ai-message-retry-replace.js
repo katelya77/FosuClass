@@ -81,6 +81,27 @@ async function run() {
     return Array.isArray(message.cards) && message.cards.some((card) => card.variant === "error");
   }), "successful retry should remove the old error card");
 
+  const unloadPage = makePage();
+  aiAssistantService.chat = async (message, context, options) => {
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    if (options && options.callbacks && options.callbacks.onDelta) {
+      options.callbacks.onDelta("stream", "stream");
+    }
+    return {
+      answer: "should be ignored",
+      cards: [],
+      suggestions: [],
+      toolCalls: [],
+      safety: { provider: "mock", mode: "tool-grounded" },
+      metrics: { latencyMs: 5 },
+    };
+  };
+  unloadPage.sendMessage("卸载测试");
+  unloadPage.onUnload();
+  await new Promise((resolve) => setTimeout(resolve, 15));
+  assert.strictEqual(unloadPage.data.messages.length, 1, "unloaded page should ignore stream and final assistant updates");
+  assert.strictEqual(unloadPage.data.messages[0].role, "user");
+
   console.log("test-ai-message-retry-replace passed");
 }
 

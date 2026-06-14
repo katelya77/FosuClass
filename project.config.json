@@ -46,7 +46,7 @@
   },
   "appid": "wx450dc86653f5907b",
   "projectname": "FosuClass",
-  "libVersion": "2.20.1",
+  "libVersion": "3.16.1",
   "cloudfunctionTemplateRoot": "cloudfunctionTemplate/",
   "condition": {
     "search": {

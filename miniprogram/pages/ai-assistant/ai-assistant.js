@@ -681,6 +681,8 @@ Page({
   },
 
   onLoad(options) {
+    this._aiPageUnloaded = false;
+    this._activeAiRequestId = "";
     this.debouncedOpenTaskPanel = createDebounced(() => this.openTaskPanelNow(), TASK_PANEL_DEBOUNCE_MS);
     this.debouncedSendTaskMessage = createDebounced((message, sendOptions) => {
       this.sendMessage(message, sendOptions);
@@ -710,6 +712,7 @@ Page({
   },
 
   onShow() {
+    this._aiPageUnloaded = false;
     const privacyState = buildPrivacyState(
       aiAssistantService.isPersonalContextAllowed(),
       this.data.privacyExpanded,
@@ -718,6 +721,11 @@ Page({
     const nextState = Object.assign({}, privacyState, resolveProviderState(this.data.messages));
     nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
     this.setData(nextState);
+  },
+
+  onUnload() {
+    this._aiPageUnloaded = true;
+    this._activeAiRequestId = "";
   },
 
   onInput(event) {
@@ -810,6 +818,8 @@ Page({
     const message = String(rawText || "").trim();
     if (!message || this.data.sending) return;
 
+    const requestId = `ai-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+    this._activeAiRequestId = requestId;
     const sendOptions = options || {};
     let baseMessages = (this.data.messages || []).slice();
     let appendUserMessage = true;
@@ -870,7 +880,9 @@ Page({
       return;
     }
 
+    const isRequestActive = () => !this._aiPageUnloaded && this._activeAiRequestId === requestId;
     const slowTimer = setTimeout(() => {
+      if (!isRequestActive()) return;
       this.setData({ slowRequest: true });
     }, 7000);
 
@@ -885,6 +897,7 @@ Page({
       }
     };
     const flushStream = (force) => {
+      if (!isRequestActive()) return;
       if (!streamContent) return;
       const elapsed = Date.now() - lastStreamFlushAt;
       if (!force && elapsed < 80) {
@@ -924,10 +937,12 @@ Page({
     };
     const callbacks = {
       onStatus: (status) => {
+        if (!isRequestActive()) return;
         const text = status && status.text || "";
         if (text) this.setData({ sendingStatusText: text });
       },
       onDelta: (delta, fullText) => {
+        if (!isRequestActive()) return;
         streamContent = fullText || `${streamContent}${delta || ""}`;
         flushStream(false);
       },
@@ -935,6 +950,7 @@ Page({
 
     aiAssistantService.chat(message, aiAssistantService.buildClientContext(), { callbacks })
       .then((response) => {
+        if (!isRequestActive()) return;
         flushStream(true);
         const safety = response && response.safety || {};
         if (safety.pendingClarification) {
@@ -969,6 +985,7 @@ Page({
         }, { save: true });
       })
       .catch((error) => {
+        if (!isRequestActive()) return;
         flushStream(true);
         const assistantMessage = makeMessage("assistant", "", {
           cards: [{
@@ -1007,6 +1024,9 @@ Page({
       .finally(() => {
         clearTimeout(slowTimer);
         clearStreamTimer();
+        if (this._activeAiRequestId === requestId) {
+          this._activeAiRequestId = "";
+        }
       });
   },
 

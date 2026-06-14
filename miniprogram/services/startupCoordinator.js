@@ -43,31 +43,95 @@ function applyPointerToApp(pointer) {
   if (!pointer) return null;
   const app = getApp && getApp();
   if (app && app.globalData) {
-    app.globalData.activeRelease = {
+    const pointerRelease = {
       term: pointer.activeTerm || pointer.term,
       releaseVersion: pointer.releaseVersion,
       cacheEpoch: pointer.cacheEpoch,
       forceRefreshToken: pointer.forceRefreshToken,
-      manifest: {
-        term: pointer.activeTerm || pointer.term,
-        semester: pointer.activeTerm || pointer.term,
-        releaseVersion: pointer.releaseVersion,
-        version: pointer.releaseVersion,
-        cacheEpoch: pointer.cacheEpoch,
-        forceRefreshToken: pointer.forceRefreshToken,
-        termConfig: pointer.termConfig,
-        calendarUrl: pointer.urls && pointer.urls.calendar,
-        indexUrls: { class: pointer.urls && pointer.urls.classIndex },
-      },
+      termConfig: pointer.termConfig,
+      manifestStatus: "pointer-only",
+      pointerSource: pointer.pointerSource || pointer.staticOrigin || pointer.source || "runtime-pointer",
+      staticOrigin: pointer.staticOrigin || "",
+      staticOriginLabel: pointer.staticOriginLabel || "",
+      staticOriginUrl: pointer.staticOriginUrl || "",
     };
+    app.globalData.runtimePointer = pointer;
+    app.globalData.activeReleasePointer = pointerRelease;
+    if (pointer.activation && pointer.activation.manifest) {
+      app.globalData.activeRelease = {
+        term: pointer.activation.term,
+        releaseVersion: pointer.activation.releaseVersion,
+        cacheEpoch: pointer.activation.manifest.cacheEpoch,
+        forceRefreshToken: pointer.activation.manifest.forceRefreshToken,
+        manifestStatus: "complete",
+        pointerSource: pointerRelease.pointerSource,
+        manifest: pointer.activation.manifest,
+      };
+    } else if (!app.globalData.activeRelease) {
+      app.globalData.activeRelease = Object.assign({}, pointerRelease);
+    }
     termConfigService.applyRuntimeTermConfigFromApp(app);
   }
   return pointer;
 }
 
+function applyManifestActivation(result, pointer) {
+  if (!result || !result.manifest) return result;
+  const app = getApp && getApp();
+  if (app && app.globalData) {
+    const sourcePointer = pointer || app.globalData.runtimePointer || {};
+    app.globalData.activeRelease = {
+      term: result.term,
+      releaseVersion: result.releaseVersion,
+      cacheEpoch: result.manifest.cacheEpoch,
+      forceRefreshToken: result.manifest.forceRefreshToken,
+      manifestStatus: "complete",
+      pointerSource: sourcePointer.pointerSource || sourcePointer.staticOrigin || sourcePointer.source || "runtime-pointer",
+      manifest: result.manifest,
+    };
+    termConfigService.applyRuntimeTermConfigFromApp(app);
+  }
+  return result;
+}
+
+function scheduleManifestActivation(pointer, options = {}) {
+  if (options.skipManifestActivation === true) return null;
+  if (!pointer) return null;
+  if (pointer.activation && pointer.activation.manifest) {
+    applyManifestActivation(pointer.activation, pointer);
+    return Promise.resolve(pointer.activation);
+  }
+  setTimeout(() => {
+    releasePackService.ensureRuntimePointerManifest(pointer, {
+      manifestTimeout: options.manifestTimeout || 6000,
+      retries: 0,
+    }).then((result) => applyManifestActivation(result, pointer))
+      .catch(() => null);
+  }, options.activationDelayMs || 600);
+  return true;
+}
+
+function scheduleFreshnessCheck(pointer, options = {}) {
+  if (options.skipFreshnessCheck === true) return null;
+  if (!pointer || pointer.staticOrigin !== "cloudbase") return null;
+  setTimeout(() => {
+    releasePackService.checkStaticOriginFreshness({
+      cloudbasePointer: pointer,
+      timeout: 2000,
+      manifestTimeout: options.manifestTimeout || 6000,
+    }).catch(() => null);
+  }, options.freshnessDelayMs || 1800);
+  return true;
+}
+
 function resolveRuntimePointer(options = {}) {
   return singleflight("runtime-pointer", () => releasePackService.resolveRuntimePointer(options)
-    .then(applyPointerToApp), options);
+    .then((pointer) => {
+      const applied = applyPointerToApp(pointer);
+      scheduleManifestActivation(applied, options);
+      scheduleFreshnessCheck(applied, options);
+      return applied;
+    }), options);
 }
 
 function loadAppConfig(options = {}) {

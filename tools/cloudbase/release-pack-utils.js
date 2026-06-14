@@ -468,7 +468,11 @@ function spawnTcb(args, options = {}) {
   const result = spawnSync(
     useCmd ? "cmd.exe" : command,
     useCmd ? ["/d", "/s", "/c", [command].concat(args).map(quoteWinArg).join(" ")] : args,
-    { stdio: options.stdio || "inherit" }
+    {
+      stdio: options.stdio || "inherit",
+      encoding: options.encoding,
+      maxBuffer: options.maxBuffer || 64 * 1024 * 1024,
+    }
   );
   return { command, result };
 }
@@ -499,6 +503,7 @@ function runTcbHostingDeploy(localPath, cloudPath, options = {}) {
 function runTcbHostingDelete(cloudPath, options = {}) {
   const envId = options.envId || ENV_ID;
   const args = ["hosting", "delete", cloudPath, "-e", envId];
+  if (options.dir === true) args.push("--dir");
   if (options.dryRun !== false) args.push("--dry-run");
   const spawned = spawnTcb(args, options);
   const command = spawned.command;
@@ -511,6 +516,31 @@ function runTcbHostingDelete(cloudPath, options = {}) {
     throw error;
   }
   return { command, args, status: result.status };
+}
+
+function runTcbHostingList(options = {}) {
+  const envId = options.envId || ENV_ID;
+  const args = ["hosting", "list", "-e", envId, "--json"];
+  const spawned = spawnTcb(args, Object.assign({}, options, {
+    stdio: "pipe",
+    encoding: "utf8",
+  }));
+  const result = spawned.result;
+  if (result.error || result.status !== 0) {
+    const error = new Error("tcb hosting list failed");
+    error.code = "CLOUDBASE_TCB_LIST_FAILED";
+    error.status = result.status;
+    error.stdout = result.stdout || "";
+    error.stderr = result.stderr || "";
+    throw error;
+  }
+  return {
+    command: spawned.command,
+    args,
+    status: result.status,
+    stdout: result.stdout || "",
+    stderr: result.stderr || "",
+  };
 }
 
 async function deployReleasePack(options = {}) {
@@ -635,6 +665,126 @@ function listLocalReleaseVersions(options = {}) {
     });
 }
 
+function collectPathsFromJson(value, output = []) {
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectPathsFromJson(item, output));
+    return output;
+  }
+  if (!value || typeof value !== "object") return output;
+  ["path", "Path", "key", "Key", "filePath", "FilePath", "name", "Name", "fullPath", "FullPath"].forEach((key) => {
+    if (typeof value[key] === "string") output.push(value[key]);
+  });
+  Object.keys(value).forEach((key) => collectPathsFromJson(value[key], output));
+  return output;
+}
+
+function parseRemoteReleaseVersionsFromHostingList(output) {
+  const text = String(output || "");
+  const paths = [];
+  try {
+    collectPathsFromJson(JSON.parse(text), paths);
+  } catch (error) {
+    // Fall back to text parsing below.
+  }
+  const releasePattern = /(?:^|[\s"'`])\/?(releases\/([^/\s"'`]+))(?:\/|[\s"'`]|$)/g;
+  let match;
+  while ((match = releasePattern.exec(text))) {
+    paths.push(match[1]);
+  }
+  const versions = new Map();
+  paths.forEach((item) => {
+    const normalized = toPosixPath(item).replace(/^\/+/, "");
+    const versionMatch = normalized.match(/^releases\/([^/]+)(?:\/|$)/);
+    if (!versionMatch || versionMatch[1] === "runtime" || versionMatch[1] === "active.json") return;
+    const version = versionMatch[1];
+    if (!versions.has(version)) {
+      versions.set(version, {
+        releaseVersion: version,
+        path: `releases/${version}`,
+      });
+    }
+  });
+  return Array.from(versions.values()).sort((left, right) => {
+    const leftTime = Date.parse(left.releaseVersion.replace(/T(\d{2})-(\d{2})-(\d{2})$/, "T$1:$2:$3")) || 0;
+    const rightTime = Date.parse(right.releaseVersion.replace(/T(\d{2})-(\d{2})-(\d{2})$/, "T$1:$2:$3")) || 0;
+    if (leftTime || rightTime) return rightTime - leftTime;
+    return String(right.releaseVersion).localeCompare(String(left.releaseVersion));
+  });
+}
+
+async function fetchCloudbaseRuntimePointer(options = {}) {
+  if (options.activePointer) return options.activePointer;
+  const baseUrl = String(options.hostingBaseUrl || cloudbaseConfig.CLOUDBASE_HOSTING_BASE_URL || "").trim().replace(/\/+$/g, "");
+  if (!baseUrl) return null;
+  const response = await fetch(joinUrl(baseUrl, "runtime", `active.json?bucket=${Date.now()}`));
+  if (!response.ok) return null;
+  return response.json();
+}
+
+function planRemotePruneReleasePack(options = {}) {
+  const keepLatest = Number(options.keepLatest || DEFAULT_KEEP_LATEST) || DEFAULT_KEEP_LATEST;
+  const releases = (options.remoteReleases || []).slice();
+  const activePointer = options.activePointer || {};
+  const protectedVersions = new Set((options.keep || []).filter(Boolean));
+  [
+    activePointer.releaseVersion,
+    activePointer.version,
+    activePointer.lastGoodReleaseVersion,
+    activePointer.lastKnownGoodReleaseVersion,
+    options.activeReleaseVersion,
+    options.lastGoodReleaseVersion,
+  ].forEach((item) => {
+    if (item) protectedVersions.add(String(item));
+  });
+  releases.slice(0, keepLatest).forEach((item) => protectedVersions.add(item.releaseVersion));
+  const deletions = releases
+    .filter((item) => !protectedVersions.has(item.releaseVersion))
+    .map((item) => ({
+      releaseVersion: item.releaseVersion,
+      path: `releases/${item.releaseVersion}`,
+    }))
+    .filter((item) => item.path !== "runtime/active.json" && item.path.startsWith("releases/"));
+  return {
+    success: true,
+    scope: "remote-hosting",
+    dryRun: options.dryRun !== false,
+    keepLatest,
+    protectedVersions: Array.from(protectedVersions),
+    remoteReleases: releases,
+    deletions,
+  };
+}
+
+async function pruneRemoteReleasePack(options = {}) {
+  const listResult = options.hostingListOutput
+    ? { stdout: options.hostingListOutput, command: "mock", args: [] }
+    : runTcbHostingList(options);
+  const remoteReleases = parseRemoteReleaseVersionsFromHostingList(listResult.stdout);
+  const activePointer = options.activePointer || await fetchCloudbaseRuntimePointer(options);
+  const dryRun = options.execute === true ? false : options.dryRun !== false;
+  const plan = planRemotePruneReleasePack(Object.assign({}, options, {
+    remoteReleases,
+    activePointer,
+    dryRun,
+  }));
+  plan.listCommand = {
+    command: listResult.command,
+    args: listResult.args,
+    status: listResult.status,
+  };
+  plan.activeReleaseVersion = activePointer && (activePointer.releaseVersion || activePointer.version) || "";
+  if (plan.dryRun) return plan;
+  if (String(options.confirm || options.confirmation || "").trim() !== "CONFIRM_DELETE_CLOUDBASE_OLD_RELEASES") {
+    const error = new Error("Exact confirmation text CONFIRM_DELETE_CLOUDBASE_OLD_RELEASES is required");
+    error.code = "CLOUDBASE_PRUNE_CONFIRMATION_REQUIRED";
+    error.plan = plan;
+    throw error;
+  }
+  const commandRunner = options.deleteRunner || runTcbHostingDelete;
+  const commands = plan.deletions.map((item) => commandRunner(item.path, Object.assign({}, options, { dryRun: false, dir: true })));
+  return Object.assign({}, plan, { commands });
+}
+
 function getProtectedReleaseVersions(options = {}) {
   const keep = new Set((options.keep || []).filter(Boolean));
   const activePointer = runtimePointerService.readActivePointer && runtimePointerService.readActivePointer();
@@ -689,10 +839,14 @@ module.exports = {
   getReleaseDir,
   joinUrl,
   listLocalReleaseVersions,
+  parseRemoteReleaseVersionsFromHostingList,
   parseArgs,
   planPruneReleasePack,
+  planRemotePruneReleasePack,
   pruneReleasePack,
+  pruneRemoteReleasePack,
   readJson,
+  runTcbHostingList,
   runTcbHostingDelete,
   runTcbHostingDeploy,
   scanPrivacy,

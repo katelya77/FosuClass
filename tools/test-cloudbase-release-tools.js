@@ -8,6 +8,7 @@ const tempRoot = path.join(os.tmpdir(), `fosu-cloudbase-release-tools-${process.
 process.env.FOSU_STORAGE_DIR = path.join(tempRoot, "storage");
 
 const utils = require("./cloudbase/release-pack-utils");
+const syncActive = require("./cloudbase/sync-active-release");
 
 function sha1(filePath) {
   return crypto.createHash("sha1").update(fs.readFileSync(filePath)).digest("hex");
@@ -256,6 +257,79 @@ async function run() {
   assert(!prune.deletions.includes("v2"), "active release should not be pruned");
   assert(!prune.deletions.includes("v1"), "last-good release should not be pruned");
   assert.deepStrictEqual(prune.deletions, [], "latest 3 plus active and last-good should leave no deletion");
+
+  const remoteList = JSON.stringify({
+    data: [
+      { Path: "releases/r5/manifest.json" },
+      { Path: "releases/r4/index/class/all.json" },
+      { Path: "releases/r3/manifest.json" },
+      { Path: "releases/r2/manifest.json" },
+      { Path: "releases/r1/manifest.json" },
+      { Path: "runtime/active.json" },
+    ],
+  });
+  const remoteReleases = utils.parseRemoteReleaseVersionsFromHostingList(remoteList);
+  assert.deepStrictEqual(remoteReleases.map((item) => item.releaseVersion), ["r5", "r4", "r3", "r2", "r1"]);
+  const remotePrune = utils.planRemotePruneReleasePack({
+    remoteReleases,
+    activePointer: { releaseVersion: "r2", lastGoodReleaseVersion: "r1" },
+    keepLatest: 3,
+    keep: ["r4"],
+    dryRun: true,
+  });
+  assert.strictEqual(remotePrune.dryRun, true);
+  assert(remotePrune.protectedVersions.includes("r2"), "remote active release should be protected");
+  assert(remotePrune.protectedVersions.includes("r1"), "remote last-good release should be protected");
+  assert(remotePrune.protectedVersions.includes("r4"), "pinned release should be protected");
+  assert.deepStrictEqual(remotePrune.deletions, [], "protected active/last-good/latest/pinned should leave no remote deletion");
+
+  const deleteCalls = [];
+  const executablePrune = await utils.pruneRemoteReleasePack({
+    hostingListOutput: remoteList,
+    activePointer: { releaseVersion: "r5" },
+    keepLatest: 1,
+    keep: ["r2"],
+    execute: true,
+    confirm: "CONFIRM_DELETE_CLOUDBASE_OLD_RELEASES",
+    deleteRunner: (cloudPath, options) => {
+      deleteCalls.push({ cloudPath, dir: options.dir, dryRun: options.dryRun });
+      return { cloudPath, status: 0 };
+    },
+  });
+  assert(executablePrune.deletions.every((item) => item.path.startsWith("releases/")));
+  assert(!executablePrune.deletions.some((item) => item.path === "runtime/active.json"));
+  assert(deleteCalls.every((item) => item.dir === true && item.dryRun === false));
+  await assert.rejects(
+    () => utils.pruneRemoteReleasePack({
+      hostingListOutput: remoteList,
+      activePointer: { releaseVersion: "r5" },
+      keepLatest: 1,
+      execute: true,
+      confirm: "WRONG",
+      deleteRunner: () => ({ status: 0 }),
+    }),
+    (error) => error && error.code === "CLOUDBASE_PRUNE_CONFIRMATION_REQUIRED",
+    "remote prune must require exact confirmation text"
+  );
+
+  assert.strictEqual(syncActive.classifyVersions(
+    { releaseVersion: "v2", cacheEpoch: 2, pointer: { updatedAt: "2026-06-14T00:00:00.000Z" } },
+    { available: true, releaseVersion: "v1", cacheEpoch: 1, pointer: { updatedAt: "2026-06-13T00:00:00.000Z" } }
+  ), "oracle-newer");
+  assert.strictEqual(syncActive.classifyVersions(
+    { releaseVersion: "v1", cacheEpoch: 1, pointer: { updatedAt: "2026-06-13T00:00:00.000Z" } },
+    { available: true, releaseVersion: "v2", cacheEpoch: 2, pointer: { updatedAt: "2026-06-14T00:00:00.000Z" } }
+  ), "cloudbase-newer");
+  assert.strictEqual(syncActive.classifyVersions(
+    { releaseVersion: "v2", cacheEpoch: 2 },
+    { available: true, releaseVersion: "v2", cacheEpoch: 2 }
+  ), "same");
+  const sanitizedReceipt = syncActive.sanitizeForReceipt({
+    url: "https://example.com/runtime/active.json?ticket=secret-token",
+    headers: { cookie: "abc", Authorization: "Bearer secret" },
+  });
+  assert(!JSON.stringify(sanitizedReceipt).includes("secret-token"));
+  assert.strictEqual(sanitizedReceipt.headers.cookie, "[redacted]");
 
   cleanup();
   console.log("test-cloudbase-release-tools passed");

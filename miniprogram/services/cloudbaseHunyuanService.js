@@ -2,6 +2,9 @@ const cloudbaseConfig = require("../config/cloudbase");
 
 const DAILY_LIMIT_KEY = "FOSU_AI_HUNYUAN_DAILY_LIMIT";
 const REQUEST_TIMEOUT_MS = 22000;
+const STREAM_INIT_TIMEOUT_MS = 8000;
+const FIRST_TOKEN_TIMEOUT_MS = 9000;
+const CHUNK_IDLE_TIMEOUT_MS = 6000;
 const MIN_SDK_VERSION = "3.15.1";
 const inflightByKey = new Map();
 let activeTask = null;
@@ -180,6 +183,33 @@ function withTimeout(promise, ms, code) {
   return Promise.race([promise, timeoutPromise(ms, code)]);
 }
 
+function remainingTimeout(deadline) {
+  return deadline - now();
+}
+
+async function closeIterator(iterator) {
+  if (iterator && typeof iterator.return === "function") {
+    try {
+      await iterator.return();
+    } catch (error) {
+      // best effort cancellation for runtimes that support async iterator return().
+    }
+  }
+}
+
+async function nextChunkWithTimeout(iterator, timeoutMs, code, deadline) {
+  const boundedMs = Math.min(timeoutMs, remainingTimeout(deadline));
+  if (boundedMs <= 0) {
+    throw makeUnavailable("CLOUDBASE_AI_TOTAL_TIMEOUT", "CloudBase AI total timeout");
+  }
+  try {
+    return await withTimeout(iterator.next(), boundedMs, code);
+  } catch (error) {
+    await closeIterator(iterator);
+    throw error;
+  }
+}
+
 function buildSystemPrompt() {
   return [
     "你是“佛课小表·小佛 AI 校园管家”。",
@@ -237,6 +267,7 @@ function isConcurrentLimitError(error) {
 }
 
 async function callStreamText(messages, config, callbacks = {}) {
+  const deadline = now() + Number(config.AI_HUNYUAN_TOTAL_TIMEOUT_MS || REQUEST_TIMEOUT_MS);
   const model = wx.cloud.extend.AI.createModel("cloudbase");
   if (!model || typeof model.streamText !== "function") {
     throw makeUnavailable("CLOUDBASE_AI_STREAM_UNAVAILABLE", "CloudBase streamText unavailable");
@@ -246,12 +277,23 @@ async function callStreamText(messages, config, callbacks = {}) {
       model: config.CLOUDBASE_AI_MODEL || "hy3-preview",
       messages,
     },
-  }), REQUEST_TIMEOUT_MS, "CLOUDBASE_AI_TIMEOUT");
+  }), Math.min(STREAM_INIT_TIMEOUT_MS, Math.max(1, remainingTimeout(deadline))), "CLOUDBASE_AI_INIT_TIMEOUT");
   if (!result || !result.textStream || typeof result.textStream[Symbol.asyncIterator] !== "function") {
     throw makeUnavailable("CLOUDBASE_AI_STREAM_INVALID", "CloudBase streamText returned invalid stream");
   }
+  const iterator = result.textStream[Symbol.asyncIterator]();
   let text = "";
-  for await (const chunk of result.textStream) {
+  let receivedFirstToken = false;
+  while (true) {
+    const next = await nextChunkWithTimeout(
+      iterator,
+      receivedFirstToken ? CHUNK_IDLE_TIMEOUT_MS : FIRST_TOKEN_TIMEOUT_MS,
+      receivedFirstToken ? "CLOUDBASE_AI_CHUNK_IDLE_TIMEOUT" : "CLOUDBASE_AI_FIRST_TOKEN_TIMEOUT",
+      deadline
+    );
+    if (!next || next.done) break;
+    receivedFirstToken = true;
+    const chunk = next.value;
     const delta = String(chunk || "");
     if (!delta) continue;
     text += delta;
@@ -342,6 +384,9 @@ function __resetForTest() {
 
 module.exports = {
   DAILY_LIMIT_KEY,
+  FIRST_TOKEN_TIMEOUT_MS,
+  CHUNK_IDLE_TIMEOUT_MS,
+  REQUEST_TIMEOUT_MS,
   MIN_SDK_VERSION,
   __resetForTest,
   __setTestOverrides,

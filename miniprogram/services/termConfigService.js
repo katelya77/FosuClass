@@ -34,6 +34,14 @@ function resolveTermConfigFromSources(sources = {}) {
       updatedAt: manifest.updatedAt || activeRelease.updatedAt,
     });
   }
+  if (activeRelease.manifestStatus === "pointer-only" && activeRelease.termConfig && typeof activeRelease.termConfig === "object") {
+    return normalizeTermConfig(activeRelease.termConfig, {
+      source: "runtimePointer.termConfig",
+      term: activeRelease.term,
+      releaseVersion: activeRelease.releaseVersion,
+      updatedAt: activeRelease.updatedAt,
+    });
+  }
 
   const config = unwrapAppConfig(sources.appConfig);
   if (config.termConfig && typeof config.termConfig === "object") {

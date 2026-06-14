@@ -260,8 +260,11 @@ function annotatePayload(payload, origin, url) {
 
 async function requestAcrossOrigins(kind, buildUrl, options = {}) {
   const origins = getOrigins();
-  const usable = origins.filter((origin) => !isCircuitOpen(origin, options));
-  const ordered = usable.length ? usable : origins;
+  const scopedOrigins = options.forceOrigin
+    ? origins.filter((origin) => origin.name === options.forceOrigin)
+    : origins;
+  const usable = scopedOrigins.filter((origin) => !isCircuitOpen(origin, options));
+  const ordered = usable.length ? usable : scopedOrigins;
   const profile = getProfile(kind, options);
   const key = `${kind}:${ordered.map((origin) => `${origin.name}:${buildUrl(origin)}`).join("|")}`;
   if (options.dedupe !== false && inflight.has(key)) return inflight.get(key);
