@@ -1,4 +1,4 @@
-const { API_BASE_URL, STATIC_RELEASE_BASE_URL } = require("../config/api");
+const { API_BASE_URL, ORACLE_STATIC_RELEASE_BASE_URL } = require("../config/api");
 const securitySessionService = require("./securitySessionService");
 const {
   extractPathname,
@@ -39,7 +39,7 @@ function persist() {
 readStorage();
 
 function getStaticReleaseBaseUrl() {
-  const configured = String(STATIC_RELEASE_BASE_URL || "").trim();
+  const configured = String(ORACLE_STATIC_RELEASE_BASE_URL || "").trim();
   if (!configured) return joinBaseAndPath(API_BASE_URL, "/static/releases");
   if (isAbsoluteHttpUrl(configured)) return configured;
   if (configured[0] === "/") return joinBaseAndPath(API_BASE_URL, configured);

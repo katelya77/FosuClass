@@ -79,6 +79,28 @@ npm run test:ai-competition
 - [5 分钟演示脚本](docs/demo-script-5min.md)
 - [模型 Provider 配置](docs/model-provider-config.md)
 - [Oracle ARM / Docker AI 部署说明](docs/oracle-arm-deploy-ai.md)
+- [CloudBase 混合架构](docs/cloudbase-hybrid-architecture.md)
+- [CloudBase Release Pack 发布手册](docs/cloudbase-release-deploy.md)
+- [CloudBase 混元 AI 接入说明](docs/cloudbase-ai-hunyuan.md)
+- [CloudBase 故障演练](docs/cloudbase-failure-drill.md)
+
+### CloudBase 国内数据面
+
+本仓库已预留 CloudBase 环境 `cloud1-d3g17rpe7566d3d5c`。小程序端通过 `miniprogram/config/cloudbase.js` 集中管理 CloudBase Hosting、混元模型、比赛模式和公开发布开关。当前已通过 `tcb hosting detail -e cloud1-d3g17rpe7566d3d5c` 查询到 Hosting 域名 `https://cloud1-d3g17rpe7566d3d5c-1442900641.tcloudbaseapp.com`；代码不会猜测域名，也不会提交任何 SecretId、SecretKey、Token 或 API Key。
+
+Release Pack 读取顺序为本地缓存、last-known-good、CloudBase Hosting、Oracle 静态目录、Oracle 兼容 API。CloudBase 只承载已验证的公开静态 JSON，不承载原始 XLS、staging 大 JSON、上传分片或管理员文件。
+
+常用命令：
+
+```bash
+npm install -g @cloudbase/cli
+tcb login
+npm run cloudbase:hosting:detail
+npm run cloudbase:release:dry-run -- --release-version <releaseVersion>
+npm run cloudbase:release:verify -- --release-version <releaseVersion> --hosting-base-url https://your-cloudbase-hosting-domain
+```
+
+混元只处理项目问答、使用帮助和自然对话；今日课程、教师课表、教室课表、空教室、教学周等事实仍只来自确定性工具。公开正式版资质未确认时，保持 `AI_GENERATIVE_PUBLIC_ENABLED=false` 或 `AI_TOOL_ONLY_MODE=true`，校园工具仍可正常使用。
 
 ## 长期数据演进与去中心化方案
 

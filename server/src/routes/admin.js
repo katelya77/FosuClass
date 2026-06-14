@@ -57,6 +57,8 @@ const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
 const HISTORY_DIR = path.join(SNAPSHOTS_DIR, "history");
 const RESOURCE_UPLOAD_DIR = path.join(STORAGE_DIR, "resource-upload-staging");
 const DIRECT_STAGING_UPLOAD_DIR = path.join(STORAGE_DIR, "staging-direct-upload");
+const RAW_UPLOAD_BODY_LIMIT = process.env.FOSU_RAW_UPLOAD_BODY_LIMIT || "150mb";
+const STAGING_CHUNK_BODY_LIMIT = process.env.FOSU_STAGING_CHUNK_BODY_LIMIT || "12mb";
 
 const DATA_DIR = path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../data"));
 const BACKUPS_DIR = path.join(DATA_DIR, "backups");
@@ -2021,7 +2023,7 @@ function getActiveSnapshotMeta() {
 router.post(
   "/release/upload",
   verifyAdminWriteAccess,
-  express.raw({ type: "*/*", limit: "150mb" }),
+  express.raw({ type: "*/*", limit: RAW_UPLOAD_BODY_LIMIT }),
   async (req, res) => {
     let uploadPath = "";
     try {
@@ -2121,7 +2123,7 @@ router.get("/release/list", verifyAdminWriteAccess, (req, res) => {
 router.post(
   "/snapshot/upload",
   verifyAdminWriteAccess,
-  express.raw({ type: "*/*", limit: "150mb" }),
+  express.raw({ type: "*/*", limit: RAW_UPLOAD_BODY_LIMIT }),
   async (req, res) => {
     try {
       const buffer = req.body;
@@ -3998,7 +4000,7 @@ router.post("/staging/upload/init", adminAuth.verifyAdminAccess, (req, res) => {
 router.post(
   "/staging/upload/chunk",
   adminAuth.verifyAdminAccess,
-  express.raw({ type: "*/*", limit: "12mb" }),
+  express.raw({ type: "*/*", limit: STAGING_CHUNK_BODY_LIMIT }),
   (req, res) => {
     try {
       const uploadId = req.query.uploadId || req.headers["x-upload-id"];
@@ -4541,7 +4543,7 @@ router.get("/sync/staging/publish/status", adminAuth.verifyAdminAccess, (req, re
 router.post(
   "/sync/staging/upload",
   adminAuth.verifyAdminAccess,
-  express.raw({ type: "*/*", limit: "150mb" }),
+  express.raw({ type: "*/*", limit: RAW_UPLOAD_BODY_LIMIT }),
   async (req, res) => {
     try {
       const buffer = req.body;

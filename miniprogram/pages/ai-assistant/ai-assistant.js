@@ -70,6 +70,9 @@ const TABBAR_PENDING_QUERY = {
 };
 
 const PROVIDER_LABELS = {
+  "cloudbase-hunyuan": "腾讯混元",
+  hunyuan: "腾讯混元",
+  "tencent-hunyuan": "腾讯混元",
   mock: "本地规则",
   deepseek: "DeepSeek",
   coze: "扣子",
@@ -250,6 +253,7 @@ function inferCourseTimeRange(source) {
 function mapProviderLabel(provider) {
   const normalized = String(provider || "unknown").toLowerCase();
   if (PROVIDER_LABELS[normalized]) return PROVIDER_LABELS[normalized];
+  if (normalized.indexOf("hunyuan") >= 0 || normalized.indexOf("cloudbase") >= 0) return "腾讯混元";
   if (normalized.indexOf("deepseek") >= 0) return "DeepSeek";
   if (normalized.indexOf("coze") >= 0) return "扣子";
   if (normalized.indexOf("mock") >= 0) return "本地规则";
@@ -369,6 +373,10 @@ function buildEvidenceText(evidence) {
   if (evidence.currentWeek) parts.push(`教学周 ${safeText(evidence.currentWeek, 16)}`);
   if (Array.isArray(evidence.sources) && evidence.sources.length) {
     parts.push(`来源 ${safeText(evidence.sources.slice(0, 2).join("/"), 80)}`);
+  }
+  if (evidence.checkedAt) {
+    const checkedTime = safeText(String(evidence.checkedAt).slice(11, 16), 8);
+    if (checkedTime) parts.push(`检查 ${checkedTime}`);
   }
   return parts.length ? `依据：${parts.join(" · ")}` : "";
 }
@@ -647,6 +655,7 @@ Page({
     inputValue: "",
     inputFocus: false,
     sending: false,
+    sendingStatusText: "正在调用校园工具并生成卡片",
     showTaskPanel: false,
     showPrivacySheet: false,
     slowRequest: false,
@@ -838,6 +847,7 @@ Page({
       inputFocus: false,
       sending: true,
       slowRequest: false,
+      sendingStatusText: "正在理解问题",
     }, { save: !this.data.demoMode });
 
     if (this.data.demoMode) {
@@ -864,8 +874,68 @@ Page({
       this.setData({ slowRequest: true });
     }, 7000);
 
-    aiAssistantService.chat(message, aiAssistantService.buildClientContext())
+    let streamAssistantId = "";
+    let streamContent = "";
+    let streamTimer = null;
+    let lastStreamFlushAt = 0;
+    const clearStreamTimer = () => {
+      if (streamTimer) {
+        clearTimeout(streamTimer);
+        streamTimer = null;
+      }
+    };
+    const flushStream = (force) => {
+      if (!streamContent) return;
+      const elapsed = Date.now() - lastStreamFlushAt;
+      if (!force && elapsed < 80) {
+        if (!streamTimer) {
+          streamTimer = setTimeout(() => {
+            streamTimer = null;
+            flushStream(true);
+          }, 80 - elapsed);
+        }
+        return;
+      }
+      clearStreamTimer();
+      lastStreamFlushAt = Date.now();
+      if (!streamAssistantId) streamAssistantId = `assistant-stream-${lastStreamFlushAt}`;
+      const current = (this.data.messages || []).slice();
+      const existingIndex = current.findIndex((item) => item.id === streamAssistantId);
+      const streamingMessage = makeMessage("assistant", streamContent, {
+        id: streamAssistantId,
+        cards: [],
+        suggestions: [],
+        toolCalls: [],
+        safety: {
+          provider: "cloudbase-hunyuan",
+          resolvedProvider: "cloudbase-hunyuan",
+          externalProviderUsed: true,
+          mode: "tool-grounded",
+        },
+      });
+      if (existingIndex >= 0) {
+        current[existingIndex] = Object.assign({}, current[existingIndex], streamingMessage, {
+          timeText: current[existingIndex].timeText || streamingMessage.timeText,
+        });
+      } else {
+        current.push(streamingMessage);
+      }
+      this.setMessages(current, {}, { save: false });
+    };
+    const callbacks = {
+      onStatus: (status) => {
+        const text = status && status.text || "";
+        if (text) this.setData({ sendingStatusText: text });
+      },
+      onDelta: (delta, fullText) => {
+        streamContent = fullText || `${streamContent}${delta || ""}`;
+        flushStream(false);
+      },
+    };
+
+    aiAssistantService.chat(message, aiAssistantService.buildClientContext(), { callbacks })
       .then((response) => {
+        flushStream(true);
         const safety = response && response.safety || {};
         if (safety.pendingClarification) {
           aiAssistantService.setPendingClarification(safety.pendingClarification);
@@ -881,12 +951,25 @@ Page({
           safety,
           metrics: response.metrics || null,
         });
-        this.setMessages(this.data.messages.concat(assistantMessage), {
+        let finalMessages = (this.data.messages || []).slice();
+        if (streamAssistantId) {
+          const existingIndex = finalMessages.findIndex((item) => item.id === streamAssistantId);
+          if (existingIndex >= 0) {
+            finalMessages.splice(existingIndex, 1, assistantMessage);
+          } else {
+            finalMessages.push(assistantMessage);
+          }
+        } else {
+          finalMessages.push(assistantMessage);
+        }
+        this.setMessages(finalMessages, {
           sending: false,
           slowRequest: false,
+          sendingStatusText: "正在调用校园工具并生成卡片",
         }, { save: true });
       })
       .catch((error) => {
+        flushStream(true);
         const assistantMessage = makeMessage("assistant", "", {
           cards: [{
             type: "generic",
@@ -904,13 +987,26 @@ Page({
           suggestions: [],
           safety: { provider: "mock", mode: "fallback" },
         });
-        this.setMessages(this.data.messages.concat(assistantMessage), {
+        let finalMessages = (this.data.messages || []).slice();
+        if (streamAssistantId) {
+          const existingIndex = finalMessages.findIndex((item) => item.id === streamAssistantId);
+          if (existingIndex >= 0) {
+            finalMessages.splice(existingIndex, 1, assistantMessage);
+          } else {
+            finalMessages.push(assistantMessage);
+          }
+        } else {
+          finalMessages.push(assistantMessage);
+        }
+        this.setMessages(finalMessages, {
           sending: false,
           slowRequest: false,
+          sendingStatusText: "正在调用校园工具并生成卡片",
         }, { save: true });
       })
       .finally(() => {
         clearTimeout(slowTimer);
+        clearStreamTimer();
       });
   },
 

@@ -9717,11 +9717,21 @@ const adminConsoleHtml = `<!doctype html>
 
         var grid = $("aiProviderStatusGrid");
         if (grid) {
+          var hunyuan = cfg.cloudbaseHunyuan || {};
+          var hunyuanStatus = "<span class='badge muted'>未配置</span>";
+          if (hunyuan.warningLevel === "expired") {
+            hunyuanStatus = "<span class='badge danger'>已到期</span>";
+          } else if (hunyuan.warningLevel === "7d" || hunyuan.warningLevel === "30d") {
+            hunyuanStatus = "<span class='badge warning'>剩余 " + escapeHtml(String(hunyuan.daysUntilPromoExpires)) + " 天</span>";
+          } else if (hunyuan.warningLevel === "ok") {
+            hunyuanStatus = "<span class='badge success'>剩余 " + escapeHtml(String(hunyuan.daysUntilPromoExpires)) + " 天</span>";
+          }
           grid.innerHTML = [
             renderHealthItem("外部模型", cfg.enabled ? "<span class='badge success'>启用</span>" : "<span class='badge muted'>mock</span>"),
             renderHealthItem("Provider", "<code>" + escapeHtml(cfg.provider || "mock") + "</code>"),
             renderHealthItem("DeepSeek Key", badgeText(Boolean(cfg.deepseekKeyConfigured))),
             renderHealthItem("Coze", cfg.cozeKeyConfigured && cfg.cozeBotIdConfigured ? "<span class='badge success'>OK</span>" : "<span class='badge muted'>可选</span>"),
+            renderHealthItem("混元权益", hunyuanStatus),
             renderHealthItem("个人摘要", cfg.allowPersonalContext ? "<span class='badge warning'>允许</span>" : "<span class='badge success'>默认关闭</span>"),
             renderHealthItem("Runtime Store", cfg.runtimeConfigExists ? "<span class='badge success'>storage</span>" : "<span class='badge muted'>未生成</span>"),
           ].join("");

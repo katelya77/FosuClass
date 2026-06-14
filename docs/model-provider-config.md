@@ -8,6 +8,8 @@
 
 Oracle ARM 可作为开发/运维服务器，但不等同于境内合规部署。
 
+CloudBase 混元接入已经加入小程序端生成式路由，但它不是课程事实来源。`project_qa`、`conversational_help` 和普通自然对话优先尝试 CloudBase `hy3-preview`；今日课程、下一节课、教师课表、教室课表、空教室、教学周、XLS 导入、数据诊断等确定性问题仍走 Oracle `/api/ai/agent/chat` 和现有工具链。
+
 ## 环境变量
 
 ```bash
@@ -36,6 +38,43 @@ COZE_POLL_ENABLED=true
 COZE_POLL_INTERVAL_MS=1000
 COZE_POLL_MAX_ATTEMPTS=8
 ```
+
+## CloudBase Hunyuan
+
+小程序端配置集中在 `miniprogram/config/cloudbase.js`：
+
+```js
+ENV_ID = "cloud1-d3g17rpe7566d3d5c"
+CLOUDBASE_AI_ENABLED = true
+CLOUDBASE_AI_MODEL = "hy3-preview"
+CLOUDBASE_AI_PROMO_EXPIRES_AT = "2026-12-14T23:59:59+08:00"
+AI_GENERATIVE_PUBLIC_ENABLED = false
+AI_COMPETITION_MODE = true
+AI_TOOL_ONLY_MODE = false
+AI_MAX_HISTORY_MESSAGES = 6
+AI_MAX_USER_MESSAGE_LENGTH = 1200
+AI_MAX_DAILY_GENERATIVE_REQUESTS = 20
+```
+
+调用链为：
+
+```text
+CloudBase Hunyuan -> Oracle DeepSeek/Coze -> 内置项目知识摘要 -> mock
+```
+
+到期保护：
+
+- 到期前 30 天、7 天，管理后台显示提醒。
+- 到期后小程序不再盲目请求 `hy3-preview`。
+- 只切换生成式 Provider，不影响课表静态读取和工具查询。
+
+公开发布开关：
+
+- 开发版、体验版、比赛演示：可开启 `AI_COMPETITION_MODE=true`。
+- 正式公开版且主体资质未确认：保持 `AI_GENERATIVE_PUBLIC_ENABLED=false`，必要时开启 `AI_TOOL_ONLY_MODE=true`。
+- 关闭混元只需设置 `CLOUDBASE_AI_ENABLED=false`，Oracle DeepSeek/Coze 和 mock 仍保留。
+
+CloudBase 官方小程序 AI 接入要求基础库版本不低于 `3.15.1`，并使用 `wx.cloud.extend.AI.createModel("cloudbase")` 后在 `streamText` 的 `data.model` 中传入具体模型名。不要把 `hy3-preview` 写进 `createModel(...)`。
 
 DeepSeek key 读取优先级：
 

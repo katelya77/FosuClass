@@ -4,6 +4,7 @@ const { normalizeBuilding, UNKNOWN_BUILDING_NAME } = require("../utils/buildingN
 const { BOOTSTRAP_CACHE_KEY } = require("../utils/storage");
 const appConfigService = require("./appConfigService");
 const platformDataService = require("./platformDataService");
+const staticOriginService = require("./staticOriginService");
 
 const DEFAULT_TERM = "";
 const CACHE_PREFIX = "fosu:v6";
@@ -370,8 +371,7 @@ function resolveRuntimePointer(options = {}) {
     skipSession: true,
     suppressWarn: options.suppressWarn === undefined ? true : options.suppressWarn,
   };
-  const staticUrl = joinUrl(API_BASE_URL, "static/runtime/active.json");
-  const task = request.get(staticUrl, {}, requestOptions)
+  const task = staticOriginService.fetchRuntimePointer(requestOptions)
     .catch(() => request.get("/api/fosu/runtime/active", {}, Object.assign({}, requestOptions, {
       skipSession: true,
     })))
@@ -593,7 +593,6 @@ function fetchManifest(options = {}) {
     skipSession: options.skipSession === true,
     suppressWarn: options.suppressWarn === true,
   };
-  const staticUrl = resolveStaticManifestUrl(releaseVersion);
   if (expectedTerm) query.term = expectedTerm;
   const loadDynamic = () => request.get("/api/fosu/release-pack/manifest", query, requestOptions)
     .then((payload) => {
@@ -603,10 +602,10 @@ function fetchManifest(options = {}) {
       if (!expectedTerm || manifest.activeTerm === manifest.term) manifest.isActive = true;
       return manifest;
     });
-  if (!staticUrl) {
+  if (!releaseVersion) {
     return loadDynamic();
   }
-  return request.get(staticUrl, {}, requestOptions)
+  return staticOriginService.fetchManifest(releaseVersion, requestOptions)
     .then((payload) => {
       const manifest = assertManifest(normalizeManifest(payload));
       assertTermMatch(manifest.term, expectedTerm, "MANIFEST_TERM_MISMATCH");
@@ -677,17 +676,18 @@ function loadIndex(type, params = {}, options = {}) {
 
   const cachedManifest = manifest || readCachedManifest(term);
   const manifestForUrl = cachedManifest && cachedManifest.releaseVersion === releaseVersion ? cachedManifest : { releaseVersion, term };
-  const staticUrl = resolveIndexUrl(type, manifestForUrl, Object.assign({}, params, { term, releaseVersion }));
   const requestOptions = {
     showLoading: false,
     silentError: true,
-    timeout: options.timeout || 25000,
-    retries: options.retries === undefined ? 2 : options.retries,
+    timeout: options.timeout || 7500,
+    retries: options.retries === undefined ? 1 : options.retries,
     skipSession: options.skipSession === true,
   };
-  const loadStatic = staticUrl
-    ? request.get(staticUrl, {}, requestOptions)
-    : Promise.reject(Object.assign(new Error("STATIC_RELEASE_URL_MISSING"), { code: "STATIC_RELEASE_URL_MISSING" }));
+  const loadStatic = staticOriginService.fetchIndex(type, Object.assign({}, params, {
+    term,
+    releaseVersion,
+    manifest: manifestForUrl,
+  }), Object.assign({}, requestOptions, { manifest: manifestForUrl }));
 
   return loadStatic
     .catch((staticError) => request.get(`/api/fosu/release-pack/index/${type}`, { term, releaseVersion }, requestOptions)
@@ -696,7 +696,8 @@ function loadIndex(type, params = {}, options = {}) {
       }))
     .then((payload) => {
       const normalized = normalizeIndexPayload(type, payload, { term, releaseVersion });
-      const scopedStaticIndex = type === "class" && /\/index\/class\/by-(college|major)\//.test(staticUrl || "");
+      const relativePath = staticOriginService.resolveIndexRelativePath(type, manifestForUrl, Object.assign({}, params, { term, releaseVersion }));
+      const scopedStaticIndex = type === "class" && /(^|\/)index\/class\/by-(college|major)\//.test(relativePath || "");
       return scopedStaticIndex ? normalized : writeIndexCache(type, normalized);
     })
     .catch((error) => {
@@ -1038,17 +1039,18 @@ function loadDetail(type, id, params = {}, options = {}) {
   }
   const cachedManifest = readCachedManifest(term);
   const manifestForUrl = cachedManifest && cachedManifest.releaseVersion === releaseVersion ? cachedManifest : { releaseVersion, term };
-  const staticUrl = resolveDetailUrl(type, id, manifestForUrl, { term, releaseVersion });
   const requestOptions = {
     showLoading: false,
     silentError: true,
-    timeout: options.timeout || 20000,
-    retries: options.retries === undefined ? 2 : options.retries,
+    timeout: options.timeout || 7500,
+    retries: options.retries === undefined ? 1 : options.retries,
     skipSession: options.skipSession === true,
   };
-  const loadStatic = staticUrl
-    ? request.get(staticUrl, {}, requestOptions)
-    : Promise.reject(Object.assign(new Error("STATIC_RELEASE_URL_MISSING"), { code: "STATIC_RELEASE_URL_MISSING" }));
+  const loadStatic = staticOriginService.fetchDetail(type, id, {
+    term,
+    releaseVersion,
+    manifest: manifestForUrl,
+  }, Object.assign({}, requestOptions, { manifest: manifestForUrl }));
   return loadStatic
     .catch((staticError) => {
       if (!type || !id || !releaseVersion) {
@@ -1209,17 +1211,18 @@ function loadEmptyRoom(params = {}, options = {}) {
   }
   const cachedManifest = readCachedManifest(term);
   const manifestForUrl = cachedManifest && cachedManifest.releaseVersion === releaseVersion ? cachedManifest : { releaseVersion, term };
-  const staticUrl = resolveEmptyRoomUrl(manifestForUrl, { term, releaseVersion });
   const requestOptions = {
     showLoading: false,
     silentError: true,
-    timeout: options.timeout || 25000,
-    retries: options.retries === undefined ? 2 : options.retries,
+    timeout: options.timeout || 7500,
+    retries: options.retries === undefined ? 1 : options.retries,
     skipSession: options.skipSession === true,
   };
-  const loadStatic = staticUrl
-    ? request.get(staticUrl, {}, requestOptions)
-    : Promise.reject(Object.assign(new Error("STATIC_RELEASE_URL_MISSING"), { code: "STATIC_RELEASE_URL_MISSING" }));
+  const loadStatic = staticOriginService.fetchEmptyRoom({
+    term,
+    releaseVersion,
+    manifest: manifestForUrl,
+  }, Object.assign({}, requestOptions, { manifest: manifestForUrl }));
   return loadStatic
     .catch((staticError) => request.get("/api/fosu/release-pack/empty-room", { term, releaseVersion }, requestOptions)
       .catch(() => {

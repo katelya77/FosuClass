@@ -10,6 +10,8 @@ docs/captures/*.har
 node_modules/
 miniprogram_npm/
 cloudfunctions/*/node_modules/
+.agents/
+skills-lock.json
 server/.env
 server/node_modules/
 server/storage/*.json
