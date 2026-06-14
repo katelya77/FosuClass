@@ -7,7 +7,10 @@ mockEnv.clearStorage();
 
 const aiTransportRouter = require("../miniprogram/services/aiTransportRouter");
 const cloudbaseHunyuanService = require("../miniprogram/services/cloudbaseHunyuanService");
+const cloudbaseConfig = require("../miniprogram/config/cloudbase");
 const { classifyAiRoute } = require("../miniprogram/shared/aiRouteClassifier");
+
+const originalCloudbaseConfig = Object.assign({}, cloudbaseConfig);
 
 function futureConfig(extra = {}) {
   return Object.assign({
@@ -48,12 +51,19 @@ function streamFromChunks(chunks, delayMs = 0) {
   };
 }
 
-function reset(config) {
+function setEnvVersion(envVersion) {
+  global.wx.getAccountInfoSync = () => ({ miniProgram: { envVersion: envVersion || "develop" } });
+}
+
+function reset(config, envVersion) {
   mockEnv.clearStorage();
+  const nextConfig = config || futureConfig();
+  Object.assign(cloudbaseConfig, originalCloudbaseConfig, nextConfig);
+  setEnvVersion(envVersion || "develop");
   cloudbaseHunyuanService.__setTestOverrides({
-    config: config || futureConfig(),
+    config: nextConfig,
     sdkVersion: "3.15.1",
-    envVersion: "develop",
+    envVersion: envVersion || "develop",
   });
   delete global.wx.cloud;
 }
@@ -89,6 +99,120 @@ async function testDeterministicDoesNotCallHunyuan() {
   assert.strictEqual(oracleCalled, 1);
   assert.strictEqual(hunyuanCalled, 0);
   assert.strictEqual(response.answer, "工具计算：今天没有课。");
+}
+
+async function testReleaseGateBlocksCompetitionMode() {
+  reset(futureConfig({
+    AI_GENERATIVE_PUBLIC_ENABLED: false,
+    AI_COMPETITION_MODE: true,
+  }), "release");
+  let hunyuanCalled = 0;
+  let oracleCalled = 0;
+  installHunyuanStream(async () => {
+    hunyuanCalled += 1;
+    return streamFromChunks(["release should not call Hunyuan"]);
+  });
+  assert.strictEqual(cloudbaseHunyuanService.getAvailability().available, false);
+  assert.strictEqual(cloudbaseHunyuanService.getAvailability().code, "AI_GENERATIVE_PUBLIC_DISABLED");
+  assert.strictEqual(aiTransportRouter.shouldDisableGenerativeInClient(), true);
+
+  const response = await aiTransportRouter.chat({
+    message: "FosuClass 是什么？",
+    context: { term: "2025-2026-2" },
+    redactSensitiveText: redact,
+    oracleChat: async () => {
+      oracleCalled += 1;
+      return { answer: "oracle should not be needed for local gate", safety: {}, metrics: {} };
+    },
+  });
+  assert.strictEqual(hunyuanCalled, 0, "release + public=false + competition=true must not call Hunyuan");
+  assert.strictEqual(oracleCalled, 0, "client release gate should stop before provider fallback");
+  assert.strictEqual(response.safety.fallbackReason, "AI_GENERATIVE_PUBLIC_DISABLED");
+}
+
+async function testReleaseGateKeepsToolOnlyQueriesAvailable() {
+  reset(futureConfig({
+    AI_GENERATIVE_PUBLIC_ENABLED: false,
+    AI_COMPETITION_MODE: true,
+  }), "release");
+  let hunyuanCalled = 0;
+  let oracleCalled = 0;
+  installHunyuanStream(async () => {
+    hunyuanCalled += 1;
+    return streamFromChunks(["should not run"]);
+  });
+  const response = await aiTransportRouter.chat({
+    message: "今天还有课吗？",
+    context: { term: "2025-2026-2" },
+    redactSensitiveText: redact,
+    oracleChat: async () => {
+      oracleCalled += 1;
+      return {
+        answer: "工具查询仍然可用",
+        safety: { provider: "mock", resolvedProvider: "mock", externalProviderUsed: false },
+        metrics: { intentName: "get_today_courses" },
+      };
+    },
+  });
+  assert.strictEqual(hunyuanCalled, 0);
+  assert.strictEqual(oracleCalled, 1);
+  assert.strictEqual(response.answer, "工具查询仍然可用");
+}
+
+async function assertCompetitionModeAllowed(envVersion) {
+  reset(futureConfig({
+    AI_GENERATIVE_PUBLIC_ENABLED: false,
+    AI_COMPETITION_MODE: true,
+  }), envVersion);
+  let hunyuanCalled = 0;
+  installHunyuanStream(async () => {
+    hunyuanCalled += 1;
+    return streamFromChunks([`${envVersion} competition Hunyuan ok`]);
+  });
+  assert.strictEqual(cloudbaseHunyuanService.getAvailability().available, true);
+  assert.strictEqual(aiTransportRouter.shouldDisableGenerativeInClient(), false);
+  const response = await aiTransportRouter.chat({
+    message: "FosuClass 是什么？",
+    context: { term: "2025-2026-2" },
+    redactSensitiveText: redact,
+    oracleChat: async () => {
+      throw new Error("oracle should not be called when Hunyuan is allowed");
+    },
+  });
+  assert.strictEqual(hunyuanCalled, 1, `${envVersion} + competition=true should call Hunyuan`);
+  assert.strictEqual(response.safety.resolvedProvider, "cloudbase-hunyuan");
+}
+
+async function testTrialCompetitionAllowsHunyuan() {
+  await assertCompetitionModeAllowed("trial");
+}
+
+async function testDevelopCompetitionAllowsHunyuan() {
+  await assertCompetitionModeAllowed("develop");
+}
+
+async function testReleasePublicEnabledAllowsHunyuan() {
+  reset(futureConfig({
+    AI_GENERATIVE_PUBLIC_ENABLED: true,
+    AI_COMPETITION_MODE: true,
+  }), "release");
+  let hunyuanCalled = 0;
+  installHunyuanStream(async () => {
+    hunyuanCalled += 1;
+    return streamFromChunks(["release public Hunyuan ok"]);
+  });
+  assert.strictEqual(cloudbaseHunyuanService.getAvailability().available, true);
+  assert.strictEqual(aiTransportRouter.shouldDisableGenerativeInClient(), false);
+  const response = await aiTransportRouter.chat({
+    message: "FosuClass 是什么？",
+    context: {},
+    redactSensitiveText: redact,
+    oracleChat: async () => {
+      throw new Error("oracle should not be called when public release Hunyuan is enabled");
+    },
+  });
+  assert.strictEqual(hunyuanCalled, 1);
+  assert.strictEqual(response.safety.resolvedProvider, "cloudbase-hunyuan");
 }
 
 async function testProjectQaCallsHunyuan() {
@@ -284,6 +408,11 @@ function testConfigHasNoSecrets() {
 
 async function run() {
   await testDeterministicDoesNotCallHunyuan();
+  await testReleaseGateBlocksCompetitionMode();
+  await testReleaseGateKeepsToolOnlyQueriesAvailable();
+  await testTrialCompetitionAllowsHunyuan();
+  await testDevelopCompetitionAllowsHunyuan();
+  await testReleasePublicEnabledAllowsHunyuan();
   await testProjectQaCallsHunyuan();
   await testHunyuanUnavailableFallsBackOracle();
   await testOracleUnavailableFriendlyFallback();
@@ -293,6 +422,7 @@ async function run() {
   await testSensitiveCredentialNotSentToModel();
   await testSingleflightAvoidsDuplicateTokenCost();
   testConfigHasNoSecrets();
+  Object.assign(cloudbaseConfig, originalCloudbaseConfig);
   cloudbaseHunyuanService.__resetForTest();
   console.log("test-cloudbase-ai-router passed");
 }

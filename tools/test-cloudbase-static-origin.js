@@ -86,7 +86,7 @@ function installMock(handler) {
 async function testCloudbasePreferred() {
   mockEnv.clearStorage();
   staticOriginService.__setTestConfig({
-    cloudbase: { CLOUDBASE_HOSTING_BASE_URL: "https://cloud.example.com" },
+    cloudbase: { CLOUDBASE_HOSTING_BASE_URL: "https://cloud.example.com", CLOUDBASE_HOSTING_READY: true },
   });
   const calls = [];
   installMock((options) => {
@@ -108,10 +108,39 @@ async function testCloudbasePreferred() {
   assert.strictEqual(calls.length, 1, "CloudBase success should not call Oracle");
 }
 
+async function testHostingReadyFalseSkipsCloudbase() {
+  mockEnv.clearStorage();
+  staticOriginService.__setTestConfig({
+    cloudbase: {
+      CLOUDBASE_HOSTING_ENABLED: true,
+      CLOUDBASE_HOSTING_READY: false,
+      CLOUDBASE_HOSTING_BASE_URL: "https://cloud.example.com",
+    },
+  });
+  const calls = [];
+  installMock((options) => {
+    calls.push(options.url);
+    const url = new URL(options.url);
+    if (url.hostname === "cloud.example.com") {
+      throw new Error("CloudBase should not be touched while CLOUDBASE_HOSTING_READY=false");
+    }
+    if (url.hostname === "class.katelya.eu.org" && url.pathname.endsWith("/manifest.json")) {
+      return manifest(previousVersion, "oracle");
+    }
+    return { fail: true };
+  });
+
+  const snapshot = staticOriginService.getOriginSnapshot();
+  assert.strictEqual(snapshot.some((origin) => origin.name === "cloudbase"), false, "READY=false should remove CloudBase from readable origins");
+  const payload = await staticOriginService.fetchManifest(previousVersion, { skipSession: true, timeout: 50, retries: 0 });
+  assert.strictEqual(payload.staticOrigin, "oracle");
+  assert.strictEqual(new URL(calls[0]).hostname, "class.katelya.eu.org", "READY=false should read Oracle directly");
+}
+
 async function testCloudbaseFailureFallsBackToOracle() {
   mockEnv.clearStorage();
   staticOriginService.__setTestConfig({
-    cloudbase: { CLOUDBASE_HOSTING_BASE_URL: "https://cloud.example.com" },
+    cloudbase: { CLOUDBASE_HOSTING_BASE_URL: "https://cloud.example.com", CLOUDBASE_HOSTING_READY: true },
   });
   const calls = [];
   installMock((options) => {
@@ -133,7 +162,7 @@ async function testCloudbaseFailureFallsBackToOracle() {
 async function testRuntimePointerUsesBucket() {
   mockEnv.clearStorage();
   staticOriginService.__setTestConfig({
-    cloudbase: { CLOUDBASE_HOSTING_BASE_URL: "https://cloud.example.com" },
+    cloudbase: { CLOUDBASE_HOSTING_BASE_URL: "https://cloud.example.com", CLOUDBASE_HOSTING_READY: true },
   });
   const calls = [];
   installMock((options) => {
@@ -148,7 +177,7 @@ async function testRuntimePointerUsesBucket() {
 async function testLastKnownGoodSurvivesAllNetworkFailures() {
   mockEnv.clearStorage();
   staticOriginService.__setTestConfig({
-    cloudbase: { CLOUDBASE_HOSTING_BASE_URL: "https://cloud.example.com" },
+    cloudbase: { CLOUDBASE_HOSTING_BASE_URL: "https://cloud.example.com", CLOUDBASE_HOSTING_READY: true },
   });
   let failAll = false;
   const calls = [];
@@ -195,6 +224,7 @@ async function testLastKnownGoodSurvivesAllNetworkFailures() {
 
 async function run() {
   await testCloudbasePreferred();
+  await testHostingReadyFalseSkipsCloudbase();
   await testCloudbaseFailureFallsBackToOracle();
   await testRuntimePointerUsesBucket();
   await testLastKnownGoodSurvivesAllNetworkFailures();

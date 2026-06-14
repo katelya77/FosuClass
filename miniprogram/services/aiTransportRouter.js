@@ -184,9 +184,7 @@ function shouldDisableGenerativeInClient() {
       return "";
     }
   })();
-  return envVersion === "release" &&
-    cloudbaseConfig.AI_GENERATIVE_PUBLIC_ENABLED !== true &&
-    cloudbaseConfig.AI_COMPETITION_MODE !== true;
+  return !cloudbaseHunyuanService.isGenerativeAllowedForEnv(cloudbaseConfig, envVersion);
 }
 
 async function callOracle(oracleChat, safeMessage, context, callbacks = {}) {
@@ -311,4 +309,5 @@ module.exports = {
   chat,
   recordMetric,
   safeText,
+  shouldDisableGenerativeInClient,
 };

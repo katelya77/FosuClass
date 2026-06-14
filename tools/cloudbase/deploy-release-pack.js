@@ -17,7 +17,7 @@ function help() {
     "  --public-root=<path>          local public Release Pack root",
     "  --release-version=<version>   releaseVersion to deploy; defaults to current active release",
     "  --hosting-base-url=<url>      real CloudBase Hosting base URL for remote verification",
-    "  --execute                     actually call tcb hosting deploy",
+    "  --execute                     upload only releases/{releaseVersion}",
     "  --dry-run                     validate and print planned commands only (default)",
     "  --skip-remote-verify          allow execute without remote HTTP verification",
   ].join("\n"));

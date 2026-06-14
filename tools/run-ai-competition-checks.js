@@ -5,6 +5,7 @@ const scripts = [
   "test:server-ai-module-require",
   "test:server-no-root-shared-require",
   "test:deploy-workflow-preserves-ai-env",
+  "test:cloudbase-ai-router",
   "test:ai-local-time-section",
   "test:ai-today-active-week",
   "test-ai-today-consistency-with-page",
