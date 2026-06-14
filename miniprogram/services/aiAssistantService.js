@@ -1,6 +1,7 @@
 const request = require("../utils/request");
 const { getCurrentScheduleTarget } = require("../utils/storage");
 const { DEFAULT_TERM } = require("./releasePackService");
+const aiTransportRouter = require("./aiTransportRouter");
 const teachingCalendarService = require("./teachingCalendarService");
 const {
   getTodayTeachingInfo,
@@ -441,7 +442,7 @@ function clearPersonalization() {
   return getRememberedPersonalization();
 }
 
-function chat(message, context) {
+function oracleAgentChat(message, context) {
   return request.post("/api/ai/agent/chat", {
     message: redactSensitiveText(message).slice(0, 2000),
     context: context || buildClientContext(),
@@ -453,6 +454,18 @@ function chat(message, context) {
     retryBaseDelayMs: 420,
     retryMaxDelayMs: 1800,
     dedupe: false,
+  });
+}
+
+function chat(message, context, options = {}) {
+  const resolvedContext = context || buildClientContext();
+  return aiTransportRouter.chat({
+    message,
+    context: resolvedContext,
+    history: getAiHistory(),
+    oracleChat: oracleAgentChat,
+    redactSensitiveText,
+    options,
   });
 }
 

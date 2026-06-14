@@ -69,9 +69,31 @@ app.use(cors(corsOptions));
 app.use(globalLimiter);
 app.use(performanceMonitorService.middleware);
 
-// 4. 解析请求体
-app.use(express.json({ limit: "150mb" }));
-app.use(express.urlencoded({ extended: true, limit: "150mb" }));
+// 4. 解析请求体。普通 API 保持轻量，大上传/导入路径单独放宽，避免 2C12G
+// 环境下任意 JSON 请求占用过多内存。
+const DEFAULT_JSON_BODY_LIMIT = process.env.FOSU_JSON_BODY_LIMIT || "2mb";
+const LARGE_JSON_BODY_LIMIT = process.env.FOSU_LARGE_JSON_BODY_LIMIT || "30mb";
+const PERSONAL_XLS_BODY_LIMIT = process.env.FOSU_PERSONAL_XLS_BODY_LIMIT || "20mb";
+const DEFAULT_URLENCODED_BODY_LIMIT = process.env.FOSU_URLENCODED_BODY_LIMIT || "1mb";
+const defaultJsonParser = express.json({ limit: DEFAULT_JSON_BODY_LIMIT });
+const largeJsonParser = express.json({ limit: LARGE_JSON_BODY_LIMIT });
+const personalXlsJsonParser = express.json({ limit: PERSONAL_XLS_BODY_LIMIT });
+
+function selectJsonParser(req) {
+  const routePath = String(req.path || "");
+  if (routePath === "/api/fosu/personal/import-xls") return personalXlsJsonParser;
+  if (
+    routePath.indexOf("/api/admin/sync/") === 0 ||
+    routePath.indexOf("/api/admin/release/activate") === 0 ||
+    routePath.indexOf("/api/relay/staging/upload") === 0
+  ) {
+    return largeJsonParser;
+  }
+  return defaultJsonParser;
+}
+
+app.use((req, res, next) => selectJsonParser(req)(req, res, next));
+app.use(express.urlencoded({ extended: true, limit: DEFAULT_URLENCODED_BODY_LIMIT }));
 
 app.use(express.static(path.join(__dirname, "../public"), {
   maxAge: config.NODE_ENV === "production" ? "1h" : 0,

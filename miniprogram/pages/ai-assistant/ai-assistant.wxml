@@ -166,7 +166,7 @@
     <view class="slow-tip" wx:if="{{slowRequest}}">网络较慢，正在继续等待小佛返回结果...</view>
     <view class="sending-row" wx:if="{{sending}}">
       <view class="sending-dot"></view>
-      <view class="sending-text">正在调用校园工具并生成卡片</view>
+      <view class="sending-text">{{sendingStatusText}}</view>
     </view>
   </scroll-view>
 

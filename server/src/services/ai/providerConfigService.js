@@ -5,6 +5,7 @@ const runtimeStore = require("./providerRuntimeConfigStore");
 const SERVER_ROOT = path.resolve(__dirname, "../../..");
 const ENV_PATH = path.join(SERVER_ROOT, ".env");
 const ENV_EXAMPLE_PATH = path.join(SERVER_ROOT, ".env.example");
+const CLOUDBASE_CLIENT_CONFIG_PATH = path.resolve(SERVER_ROOT, "..", "miniprogram", "config", "cloudbase.js");
 
 const AI_ENV_KEYS = [
   "AI_AGENT_ENABLED",
@@ -131,6 +132,56 @@ function hasAnyDeepSeekKey(envFileValues, runtimeValues) {
   );
 }
 
+function readCloudbaseClientConfig() {
+  try {
+    const text = fs.readFileSync(CLOUDBASE_CLIENT_CONFIG_PATH, "utf8");
+    const parsed = {};
+    const pattern = /const\s+([A-Z0-9_]+)\s*=\s*([^;\n]+)\s*;/g;
+    let match;
+    while ((match = pattern.exec(text)) !== null) {
+      const key = match[1];
+      const raw = match[2].trim();
+      if (/^["'].*["']$/.test(raw)) {
+        parsed[key] = raw.slice(1, -1);
+      } else if (raw === "true" || raw === "false") {
+        parsed[key] = raw === "true";
+      } else if (/^-?\d+(?:\.\d+)?$/.test(raw)) {
+        parsed[key] = Number(raw);
+      }
+    }
+    return parsed;
+  } catch (error) {
+    return {};
+  }
+}
+
+function getCloudbaseHunyuanStatus() {
+  const config = readCloudbaseClientConfig();
+  const expiresAt = config.CLOUDBASE_AI_PROMO_EXPIRES_AT || "2026-12-14T23:59:59+08:00";
+  const expiresMs = Date.parse(expiresAt);
+  const daysUntilPromoExpires = Number.isFinite(expiresMs)
+    ? Math.ceil((expiresMs - Date.now()) / (24 * 60 * 60 * 1000))
+    : null;
+  let warningLevel = "unknown";
+  if (Number.isFinite(daysUntilPromoExpires)) {
+    if (daysUntilPromoExpires < 0) warningLevel = "expired";
+    else if (daysUntilPromoExpires <= 7) warningLevel = "7d";
+    else if (daysUntilPromoExpires <= 30) warningLevel = "30d";
+    else warningLevel = "ok";
+  }
+  return {
+    envId: config.ENV_ID || "cloud1-d3g17rpe7566d3d5c",
+    enabled: config.CLOUDBASE_AI_ENABLED !== false,
+    model: config.CLOUDBASE_AI_MODEL || "hy3-preview",
+    promoExpiresAt: expiresAt,
+    daysUntilPromoExpires,
+    warningLevel,
+    publicGenerativeEnabled: config.AI_GENERATIVE_PUBLIC_ENABLED === true,
+    competitionMode: config.AI_COMPETITION_MODE === true,
+    toolOnlyMode: config.AI_TOOL_ONLY_MODE === true,
+  };
+}
+
 function getStatus() {
   const envText = readEnvFile();
   const envFileValues = parseEnv(envText);
@@ -165,6 +216,7 @@ function getStatus() {
     cozePollEnabled: value("COZE_POLL_ENABLED") !== "false",
     cozePollIntervalMs: value("COZE_POLL_INTERVAL_MS"),
     cozePollMaxAttempts: value("COZE_POLL_MAX_ATTEMPTS"),
+    cloudbaseHunyuan: getCloudbaseHunyuanStatus(),
   };
 }
 

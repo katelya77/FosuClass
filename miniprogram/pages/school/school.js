@@ -2584,7 +2584,8 @@ Page({
         return {
           activeSnapshot,
           appConfig: appConfigService.getGlobalConfig(),
-          source: "runtime-pointer",
+          source: pointer.fromStorage ? "runtime-pointer-cache" : "runtime-pointer",
+          fromStorage: Boolean(pointer.fromStorage),
         };
       }
     } catch (error) {

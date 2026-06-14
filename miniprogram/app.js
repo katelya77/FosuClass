@@ -7,6 +7,7 @@ const securitySessionService = require("./services/securitySessionService");
 const termConfigService = require("./services/termConfigService");
 const startupCoordinator = require("./services/startupCoordinator");
 const BRAND = require("./config/brand");
+const cloudbaseConfig = require("./config/cloudbase");
 
 const STARTUP_BACKGROUND_TIMEOUT_MS = 15000;
 let startupSessionWarmupPromise = null;
@@ -85,12 +86,16 @@ App({
   },
 
   onLaunch() {
-    if (wx.cloud) {
-      const cloudConfig = { traceUser: true };
-      if (this.globalData.env) {
-        cloudConfig.env = this.globalData.env;
+    if (wx.cloud && typeof wx.cloud.init === "function" && cloudbaseConfig.CLOUDBASE_ENABLED !== false) {
+      try {
+        wx.cloud.init({
+          env: cloudbaseConfig.ENV_ID,
+          traceUser: true,
+        });
+        this.globalData.env = cloudbaseConfig.ENV_ID;
+      } catch (error) {
+        // CloudBase is an optional data/AI plane; startup must continue without it.
       }
-      wx.cloud.init(cloudConfig);
     }
 
     this.loadReleasePackData({ network: false });

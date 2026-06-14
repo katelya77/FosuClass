@@ -4,6 +4,8 @@ const relayService = require("../services/relayService");
 const stagingUploadService = require("../services/stagingUploadService");
 const { safeLog } = require("../utils/safeLogger");
 
+const STAGING_CHUNK_BODY_LIMIT = process.env.FOSU_STAGING_CHUNK_BODY_LIMIT || "12mb";
+
 function getRelayToken(req) {
   const authHeader = String(req.headers.authorization || "");
   const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
@@ -109,7 +111,7 @@ router.post("/staging/upload/init", (req, res) => {
 
 router.post(
   "/staging/upload/chunk",
-  express.raw({ type: "*/*", limit: "12mb" }),
+  express.raw({ type: "*/*", limit: STAGING_CHUNK_BODY_LIMIT }),
   (req, res) => {
     try {
       const { task } = assertRelayTask(req);
