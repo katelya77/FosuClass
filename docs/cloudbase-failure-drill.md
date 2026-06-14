@@ -1,8 +1,14 @@
-# CloudBase 故障演练
+# CloudBase Mock 故障测试与真实 Smoke
 
-## 演练目标
+## Mock 测试目标
 
 验证 Oracle、CloudBase、AI Provider 任一方故障时，小程序核心课表仍可用，页面不清空、不无限 loading。
+
+`npm run cloudbase:failure-drill` 使用 `mockEnv` 和 `wx.mockRequest`，只验证客户端降级逻辑，不代表真实云端故障演练。真实网络、DNS、HTTP、content-type、latency、hash/size 和 Oracle/CloudBase pointer 一致性必须运行：
+
+```bash
+npm run cloudbase:live-smoke
+```
 
 ## 场景 1：Oracle 正常，CloudBase 正常
 

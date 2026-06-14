@@ -144,6 +144,8 @@ App({
       if (currentKey === nextKey) return pointer;
       return releasePackService.switchReleaseSafely({
         term: pointer.term || pointer.activeTerm,
+        releaseVersion: pointer.releaseVersion,
+        pointer,
         dedupe: true,
         forceNetwork: !pointer.fromStorage && !pointer.circuitOpen,
         warmupTypes: ["class", "teacher", "classroom", "course"],

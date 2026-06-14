@@ -55,11 +55,20 @@ async function run() {
   try {
     const response = await fetch(`http://127.0.0.1:${server.address().port}/api/fosu/release-pack/manifest`);
     const manifest = await response.json();
+    const staticManifest = JSON.parse(fs.readFileSync(releaseService.getReleaseFiles(version).manifestPath, "utf8"));
     assert.strictEqual(manifest.releaseVersion, version);
-    assert.strictEqual(manifest.cacheEpoch, active.cacheEpoch);
-    assert.strictEqual(manifest.forceRefreshToken, active.forceRefreshToken);
+    assert.strictEqual(manifest.cacheEpoch, staticManifest.cacheEpoch);
+    assert.strictEqual(manifest.forceRefreshToken, staticManifest.forceRefreshToken);
+    assert.strictEqual(manifest.activeCacheEpoch, active.cacheEpoch);
+    assert.strictEqual(manifest.activeForceRefreshToken, active.forceRefreshToken);
     assert.strictEqual(manifest.minClientCacheSchema, 5);
     assert(manifest.packStatus && manifest.packStatus.healthy, "manifest should expose packStatus");
+
+    const pointerResponse = await fetch(`http://127.0.0.1:${server.address().port}/api/fosu/runtime/active`);
+    const pointer = await pointerResponse.json();
+    assert.strictEqual(pointer.releaseVersion, version);
+    assert.strictEqual(pointer.cacheEpoch, staticManifest.cacheEpoch);
+    assert.strictEqual(pointer.forceRefreshToken, staticManifest.forceRefreshToken);
   } finally {
     server.close();
     cleanup();

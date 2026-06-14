@@ -384,6 +384,50 @@
             <view class="detail-value">{{versionData.manifestReleaseVersion || '-'}}</view>
           </view>
           <view class="detail-row">
+            <view class="detail-label">staticOrigin</view>
+            <view class="detail-value">{{versionData.staticOrigin || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">staticOriginLabel</view>
+            <view class="detail-value">{{versionData.staticOriginLabel || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">staticOriginUrl</view>
+            <view class="detail-value">{{versionData.staticOriginUrl || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">manifestStatus</view>
+            <view class="detail-value">{{versionData.manifestStatus || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">pointer source</view>
+            <view class="detail-value">{{versionData.pointerSource || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">CloudBase last success</view>
+            <view class="detail-value">{{versionData.recentCloudbaseSuccessAt || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">Oracle fallback</view>
+            <view class="detail-value">{{versionData.recentOracleFallbackAt || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">freshnessStatus</view>
+            <view class="detail-value">{{versionData.freshnessStatus || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">freshness checkedAt</view>
+            <view class="detail-value">{{versionData.freshnessCheckedAt || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">CloudBase release</view>
+            <view class="detail-value">{{versionData.cloudbaseReleaseVersion || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">Oracle release</view>
+            <view class="detail-value">{{versionData.oracleReleaseVersion || '-'}}</view>
+          </view>
+          <view class="detail-row">
             <view class="detail-label">last-good releaseVersion</view>
             <view class="detail-value">{{versionData.lastGoodReleaseVersion || '-'}}</view>
           </view>

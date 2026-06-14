@@ -137,7 +137,15 @@ async function runFailureDrill() {
   };
   const success = Object.values(assertions).every(Boolean);
   staticOriginService.__resetForTest();
-  return { success, term, releaseVersion, assertions, results };
+  return {
+    success,
+    kind: "mock-failure-drill",
+    note: "Uses mockEnv and wx.mockRequest; real network validation is npm run cloudbase:live-smoke.",
+    term,
+    releaseVersion,
+    assertions,
+    results,
+  };
 }
 
 if (require.main === module) {

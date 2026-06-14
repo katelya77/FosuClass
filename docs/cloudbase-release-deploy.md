@@ -144,6 +144,24 @@ CLOUDBASE_HOSTING_ENABLED: false
 
 或清空 `CLOUDBASE_HOSTING_BASE_URL`。小程序会回到 Oracle 静态源。
 
+## Oracle active 后的 CloudBase 自动镜像
+
+每次 Oracle Release 激活完成后，必须运行：
+
+```bash
+npm run cloudbase:release:sync-active -- --dry-run
+```
+
+dry-run 只比较 Oracle 与 CloudBase active pointer，不写云端。确认 Oracle 更新且校验计划正确后，再执行：
+
+```bash
+npm run cloudbase:release:sync-active -- --execute --env-id=cloud1-d3g17rpe7566d3d5c --hosting-base-url=https://cloud1-d3g17rpe7566d3d5c-1442900641.tcloudbaseapp.com
+```
+
+该命令会获取 Oracle active pointer、获取 CloudBase active pointer、自动 pull Oracle Release、本地完整校验、隐私扫描、上传版本目录、远端 hash/size 校验，并最后原子更新 `runtime/active.json`。CloudBase 比 Oracle 更新时会停止并报告版本冲突，不覆盖 CloudBase。所有分支都会在 `.local/cloudbase-receipts/` 写 receipt；旧 Release 不会被删除。
+
+后续可选方案：在 Oracle 侧 cron 或 GitHub Actions 中，在 Oracle active pointer 更新后触发 `npm run cloudbase:release:sync-active -- --execute`。CI 只注入运行时环境变量或平台 Secret，不把 CloudBase 登录凭证、SecretId、SecretKey、临时 token 写入仓库。本轮不写入任何 Secret。
+
 ## 小程序合法域名
 
 正式版发布前，需在微信公众平台配置：

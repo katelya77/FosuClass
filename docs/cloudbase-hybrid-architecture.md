@@ -70,6 +70,25 @@ https://cloud1-d3g17rpe7566d3d5c-1442900641.tcloudbaseapp.com
 
 CloudBase 源失败后快速切 Oracle；Oracle 再失败时保留本地 last-known-good。
 
+## Runtime pointer 与完整 manifest 边界
+
+`runtime/active.json` 只是一份 pointer，客户端按 term 写入独立缓存 `FOSU_RUNTIME_POINTER`。它只能用于 activeTerm、releaseVersion、cacheEpoch、forceRefreshToken 和 termConfig 候选信息，状态标记为 `manifestStatus: "pointer-only"`。
+
+客户端不得把 pointer 写入 manifest cache，也不得写入 last-known-good。只有成功下载 `releases/{releaseVersion}/manifest.json`，并校验 term、releaseVersion、cacheEpoch，再预热必要 class index/shard 后，才允许写入 manifest cache、last-known-good 和 active release。真实 manifest 获取或 warmup 失败时，旧 last-known-good 保持不变。
+
+## CloudBase/Oracle freshness 保护
+
+首屏仍优先 CloudBase，不等待 Oracle。冷启动后后台低优先级执行 freshness check：每次冷启动最多一次，且距离上次检查至少 6 小时，Oracle runtime pointer 请求 2 秒超时。
+
+比较规则：
+
+- Oracle 与 CloudBase releaseVersion/cacheEpoch/forceRefreshToken 一致：`healthy`。
+- Oracle 更新：记录 `cloudbase-stale`，当前会话优先切到 Oracle 新版本，不删除 CloudBase 缓存。
+- Oracle 不可用：记录 `oracle-unavailable`，不影响 CloudBase 首屏。
+- CloudBase 不可用：继续现有 Oracle fallback。
+
+设置页高级诊断会显示 `cloudbaseReleaseVersion`、`oracleReleaseVersion`、`freshnessStatus`、`checkedAt`、实际命中的 `staticOrigin`、`staticOriginLabel`、去 query 后的 `staticOriginUrl`、pointer source 和最近请求耗时。
+
 ## AI 路由边界
 
 事实型请求仍走 Oracle `/api/ai/agent/chat`，继续使用现有 `toolRegistry`、`cards`、`actions`、`evidence` 和安全结构。包括：

@@ -90,6 +90,33 @@ function readJsonSafe(filePath) {
   }
 }
 
+function isPlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
+}
+
+function deepMerge(base, overrides) {
+  const result = Object.assign({}, base || {});
+  Object.keys(overrides || {}).forEach((key) => {
+    if (isPlainObject(result[key]) && isPlainObject(overrides[key])) {
+      result[key] = deepMerge(result[key], overrides[key]);
+    } else {
+      result[key] = overrides[key];
+    }
+  });
+  return result;
+}
+
+function compareVersion(left, right) {
+  const a = String(left || "0").split(".").map((item) => Number(item) || 0);
+  const b = String(right || "0").split(".").map((item) => Number(item) || 0);
+  const length = Math.max(a.length, b.length);
+  for (let index = 0; index < length; index += 1) {
+    const diff = (a[index] || 0) - (b[index] || 0);
+    if (diff !== 0) return diff;
+  }
+  return 0;
+}
+
 function getDiskInfo(targetDir) {
   try {
     if (typeof fs.statfsSync === "function") {
@@ -107,15 +134,20 @@ function getDiskInfo(targetDir) {
 }
 
 function getMiniProgramBuildConfig() {
-  const projectConfig = readJsonSafe(path.resolve("project.config.json")) || {};
+  const baseConfig = readJsonSafe(path.resolve("project.config.json")) || {};
+  const privateOverrides = readJsonSafe(path.resolve("project.private.config.json")) || {};
+  const effectiveConfig = deepMerge(baseConfig, privateOverrides);
   return {
-    appid: projectConfig.appid || "",
-    miniprogramRoot: projectConfig.miniprogramRoot || "",
-    cloudfunctionRoot: projectConfig.cloudfunctionRoot || "",
-    compileType: projectConfig.compileType || "",
-    libVersion: projectConfig.libVersion || "",
-    urlCheck: projectConfig.setting && projectConfig.setting.urlCheck,
-    uploadWithSourceMap: projectConfig.setting && projectConfig.setting.uploadWithSourceMap,
+    baseConfig,
+    privateOverrides,
+    effectiveConfig,
+    appid: effectiveConfig.appid || "",
+    miniprogramRoot: effectiveConfig.miniprogramRoot || "",
+    cloudfunctionRoot: effectiveConfig.cloudfunctionRoot || "",
+    compileType: effectiveConfig.compileType || "",
+    libVersion: effectiveConfig.libVersion || "",
+    urlCheck: effectiveConfig.setting && effectiveConfig.setting.urlCheck,
+    uploadWithSourceMap: effectiveConfig.setting && effectiveConfig.setting.uploadWithSourceMap,
     buildInfo,
   };
 }
@@ -133,7 +165,7 @@ async function runPreflight(options = {}) {
 
   commands.tcbLogin = runCommand("tcb", ["login"], { timeoutMs: options.loginTimeoutMs || 10 * 60 * 1000 });
   commands.envList = runCommand("tcb", ["env", "list"], { timeoutMs: 120000 });
-  commands.envUse = runCommand("tcb", ["env", "use"], { timeoutMs: 120000 });
+  commands.envUse = runCommand("tcb", ["env", "use", envId], { timeoutMs: 120000 });
   commands.envUsage = runCommand("tcb", ["env", "usage", "-e", envId], { timeoutMs: 120000 });
   commands.hostingDetail = runCommand("tcb", ["hosting", "detail", "-e", envId], { timeoutMs: 120000 });
   commands.hostingList = runCommand("tcb", ["hosting", "list", "-e", envId], { timeoutMs: 120000 });
@@ -172,8 +204,18 @@ async function runPreflight(options = {}) {
     matchesConfig: hostingDomain ? hostingDomain === cloudbaseConfig.CLOUDBASE_HOSTING_BASE_URL : false,
   };
 
+  const miniprogramBuild = getMiniProgramBuildConfig();
+  const warnings = [];
+  const errors = [];
+  if (compareVersion(miniprogramBuild.libVersion, "3.15.1") < 0) {
+    errors.push(`effective libVersion ${miniprogramBuild.libVersion || "(empty)"} is lower than 3.15.1`);
+  }
+  if (miniprogramBuild.urlCheck === false) {
+    warnings.push("本地开发不会检查合法域名，必须使用体验版真机验证");
+  }
+
   return {
-    success: true,
+    success: errors.length === 0,
     envId,
     cwd: root,
     tcbLoggedIn: commands.tcbLogin.ok,
@@ -186,7 +228,9 @@ async function runPreflight(options = {}) {
       statusRecorded: commands.gitStatus.ok,
     },
     cloudbaseAi,
-    miniprogramBuild: getMiniProgramBuildConfig(),
+    miniprogramBuild,
+    warnings,
+    errors,
   };
 }
 
@@ -197,6 +241,7 @@ async function main() {
     oracleBaseUrl: args["oracle-base-url"] || args.oracleBaseUrl,
   });
   console.log(JSON.stringify(result, null, 2));
+  if (!result.success) process.exit(1);
 }
 
 if (require.main === module) {
@@ -212,6 +257,9 @@ if (require.main === module) {
 
 module.exports = {
   parseHostingDomain,
+  compareVersion,
+  deepMerge,
+  getMiniProgramBuildConfig,
   runCommand,
   runPreflight,
 };

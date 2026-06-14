@@ -18,6 +18,7 @@ const {
 const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
 const releasePackService = require("../../services/releasePackService");
+const staticOriginService = require("../../services/staticOriginService");
 const platformUtils = require("../../utils/platform");
 const { courseTimesMeta } = require("../../data/courseTimes");
 const { contactConfig } = require("../../config/contact");
@@ -52,6 +53,22 @@ function formatFullDateTime(value) {
   }
   const pad = (num) => String(num).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+}
+
+function sanitizeOriginUrl(value) {
+  const text = String(value || "").trim();
+  if (!text) return "-";
+  try {
+    const url = new URL(text);
+    return `${url.host}${url.pathname}`;
+  } catch (error) {
+    return text.split("?")[0].replace(/^https?:\/\//i, "") || "-";
+  }
+}
+
+function formatOriginSuccessTime(origin) {
+  const at = origin && origin.health && origin.health.lastSuccessAt;
+  return at ? formatFullDateTime(Number(at)) : "-";
 }
 
 function getSelectedSchedule() {
@@ -189,6 +206,17 @@ Page({
       manifestReleaseVersion: "-",
       localActiveReleaseVersion: "-",
       lastGoodReleaseVersion: "-",
+      staticOrigin: "-",
+      staticOriginLabel: "-",
+      staticOriginUrl: "-",
+      manifestStatus: "-",
+      pointerSource: "-",
+      recentCloudbaseSuccessAt: "-",
+      recentOracleFallbackAt: "-",
+      freshnessStatus: "-",
+      freshnessCheckedAt: "-",
+      cloudbaseReleaseVersion: "-",
+      oracleReleaseVersion: "-",
       cacheEpoch: "-",
       forceRefreshToken: "-",
       emptyRoomCacheText: "no",
@@ -609,6 +637,22 @@ Page({
     const emptyRoomCache = releasePackService.readCachedEmptyRoom({ term: localTerm, releaseVersion: localReleaseVersion });
     const lastError = requestDiag.lastError || {};
     const lastSuccess = requestDiag.lastSuccess || {};
+    const staticLastHit = staticOriginService.getLastHit ? staticOriginService.getLastHit() : null;
+    const originSnapshot = staticOriginService.getOriginSnapshot ? staticOriginService.getOriginSnapshot() : [];
+    const cloudbaseOrigin = originSnapshot.find((item) => item.name === "cloudbase") || null;
+    const oracleOrigin = originSnapshot.find((item) => item.name === "oracle") || null;
+    const app = getApp && getApp();
+    const runtimePointer = app && app.globalData && app.globalData.runtimePointer || null;
+    const activeRelease = app && app.globalData && app.globalData.activeRelease || {};
+    const freshness = releasePackService.readFreshnessDiagnostics ? releasePackService.readFreshnessDiagnostics() : null;
+    const staticOrigin = staticLastHit && staticLastHit.name || localManifest && localManifest.staticOrigin || activeRelease.staticOrigin || "-";
+    const staticOriginLabel = staticLastHit && staticLastHit.label || localManifest && localManifest.staticOriginLabel || activeRelease.staticOriginLabel || "-";
+    const staticOriginUrl = sanitizeOriginUrl(staticLastHit && staticLastHit.url || localManifest && localManifest.staticOriginUrl || activeRelease.staticOriginUrl || "");
+    const manifestStatus = activeRelease.manifestStatus || localManifest && localManifest.manifestStatus || (localManifest ? "complete" : runtimePointer ? "pointer-only" : "-");
+    const pointerSource = runtimePointer && (runtimePointer.pointerSource || runtimePointer.staticOrigin || runtimePointer.source) || activeRelease.pointerSource || "-";
+    const oracleFallbackAt = staticLastHit && staticLastHit.name === "oracle"
+      ? formatFullDateTime(staticLastHit.at)
+      : formatOriginSuccessTime(oracleOrigin);
     
     this.setData({
       versionDetailVisible: true,
@@ -619,6 +663,17 @@ Page({
       "versionData.localActiveReleaseVersion": localReleaseVersion || "-",
       "versionData.lastGoodReleaseVersion": lastGood && lastGood.releaseVersion || "-",
       "versionData.manifestReleaseVersion": localManifest && localManifest.releaseVersion || "-",
+      "versionData.staticOrigin": staticOrigin,
+      "versionData.staticOriginLabel": staticOriginLabel,
+      "versionData.staticOriginUrl": staticOriginUrl,
+      "versionData.manifestStatus": manifestStatus,
+      "versionData.pointerSource": pointerSource,
+      "versionData.recentCloudbaseSuccessAt": formatOriginSuccessTime(cloudbaseOrigin),
+      "versionData.recentOracleFallbackAt": oracleFallbackAt,
+      "versionData.freshnessStatus": freshness && freshness.freshnessStatus || "-",
+      "versionData.freshnessCheckedAt": freshness && freshness.checkedAt ? formatFullDateTime(freshness.checkedAt) : "-",
+      "versionData.cloudbaseReleaseVersion": freshness && freshness.cloudbaseReleaseVersion || "-",
+      "versionData.oracleReleaseVersion": freshness && freshness.oracleReleaseVersion || "-",
       "versionData.cacheEpoch": localActive && localActive.cacheEpoch || "-",
       "versionData.forceRefreshToken": localActive && localActive.forceRefreshToken || "-",
       "versionData.classIndexCount": indexCounts.class || 0,
@@ -691,6 +746,17 @@ Page({
               localActiveReleaseVersion: localReleaseVersion || "-",
               lastGoodReleaseVersion: lastGood && lastGood.releaseVersion || "-",
               manifestReleaseVersion: localManifest && localManifest.releaseVersion || "-",
+              staticOrigin,
+              staticOriginLabel,
+              staticOriginUrl,
+              manifestStatus,
+              pointerSource,
+              recentCloudbaseSuccessAt: formatOriginSuccessTime(cloudbaseOrigin),
+              recentOracleFallbackAt: oracleFallbackAt,
+              freshnessStatus: freshness && freshness.freshnessStatus || "-",
+              freshnessCheckedAt: freshness && freshness.checkedAt ? formatFullDateTime(freshness.checkedAt) : "-",
+              cloudbaseReleaseVersion: freshness && freshness.cloudbaseReleaseVersion || "-",
+              oracleReleaseVersion: freshness && freshness.oracleReleaseVersion || "-",
               cacheEpoch: localActive && localActive.cacheEpoch || "-",
               forceRefreshToken: localActive && localActive.forceRefreshToken || "-",
               classIndexCount: indexCounts.class || 0,

@@ -401,6 +401,38 @@ async function testSingleflightAvoidsDuplicateTokenCost() {
   assert.strictEqual(left.text, right.text);
 }
 
+async function testStreamTimeoutFallsBackAndCountsOnce() {
+  reset(futureConfig({
+    AI_HUNYUAN_TOTAL_TIMEOUT_MS: 25,
+    AI_MAX_DAILY_GENERATIVE_REQUESTS: 20,
+  }));
+  let oracleCalled = 0;
+  installHunyuanStream(async () => ({
+    textStream: (async function* generator() {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+      yield "late";
+    })(),
+    usage: { totalTokens: 99 },
+  }));
+  const response = await aiTransportRouter.chat({
+    message: "FosuClass 鏄粈涔堬紵",
+    context: { term: "2025-2026-2" },
+    redactSensitiveText: redact,
+    oracleChat: async () => {
+      oracleCalled += 1;
+      return {
+        answer: "Oracle fallback after timeout",
+        safety: { provider: "deepseek", resolvedProvider: "deepseek", externalProviderUsed: true },
+        metrics: { totalTokens: 3, intentName: "project_qa" },
+      };
+    },
+  });
+  const counter = mockEnv.storage.get(cloudbaseHunyuanService.DAILY_LIMIT_KEY);
+  assert.strictEqual(oracleCalled, 1);
+  assert.strictEqual(response.safety.hunyuanFallbackReason, "CLOUDBASE_AI_FIRST_TOKEN_TIMEOUT");
+  assert.strictEqual(counter.count, 1, "timed-out Hunyuan request should count daily quota once");
+}
+
 function testConfigHasNoSecrets() {
   const configText = fs.readFileSync(path.join(__dirname, "..", "miniprogram", "config", "cloudbase.js"), "utf8");
   assert(!/SecretId|SecretKey|API[_-]?KEY\s*=|Token\s*=\s*["'][A-Za-z0-9._~+/=-]{8,}/i.test(configText), "cloudbase config must not contain secrets");
@@ -421,6 +453,7 @@ async function run() {
   await testModelOutputCannotInjectAction();
   await testSensitiveCredentialNotSentToModel();
   await testSingleflightAvoidsDuplicateTokenCost();
+  await testStreamTimeoutFallsBackAndCountsOnce();
   testConfigHasNoSecrets();
   Object.assign(cloudbaseConfig, originalCloudbaseConfig);
   cloudbaseHunyuanService.__resetForTest();
