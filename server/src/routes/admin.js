@@ -53,6 +53,10 @@ function getDefaultTerm() {
   return active && active.term || termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term;
 }
 
+function setJsonUtf8(res) {
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+}
+
 const SNAPSHOTS_DIR = path.join(STORAGE_DIR, "snapshots");
 const HISTORY_DIR = path.join(SNAPSHOTS_DIR, "history");
 const RESOURCE_UPLOAD_DIR = path.join(STORAGE_DIR, "resource-upload-staging");
@@ -2333,6 +2337,7 @@ router.post(
 
 // 7. 获取当前缓存状态
 router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
+  setJsonUtf8(res);
   const meta = getSyncMeta();
   const snapshotMeta = getActiveSnapshotMeta();
   const activeInfo = releaseService.getActiveReleaseInfo();
@@ -3781,6 +3786,7 @@ router.post("/staging/upload/rebuild-index", adminAuth.verifyAdminAccess, (req, 
 });
 
 router.get("/publisher/receipt", adminAuth.verifyAdminAccess, (req, res) => {
+  setJsonUtf8(res);
   try {
     const latest = publisherReceiptService.getLatestReceipt();
     return res.json({ success: true, runsDir: latest.receiptsDir, receiptsDir: latest.receiptsDir, latest: latest.run });
@@ -3790,6 +3796,7 @@ router.get("/publisher/receipt", adminAuth.verifyAdminAccess, (req, res) => {
 });
 
 router.post("/publisher/receipt", adminAuth.verifyAdminAccess, (req, res) => {
+  setJsonUtf8(res);
   try {
     const saved = publisherReceiptService.saveReceipt(req.body || {});
     return res.json({ success: true, runId: saved.runId, savedAt: saved.savedAt, summary: saved.summary });
@@ -4245,6 +4252,7 @@ async function getCachedIntranetDiagnostic(force = false) {
 }
 
 router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
+  setJsonUtf8(res);
   try {
     const meta = getAdminDataVersion();
     const syncMeta = getSyncMeta();

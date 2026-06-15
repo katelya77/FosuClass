@@ -31,6 +31,7 @@ const {
 } = require("../cloudbase/release-pack-utils");
 const { syncActiveRelease } = require("../cloudbase/sync-active-release");
 const cloudbaseConfig = require("../../miniprogram/config/cloudbase");
+const { runCommand: runProcessCommand } = require("../shared/processRunner");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 const RUNS_ROOT = path.join(PROJECT_ROOT, ".local", "publisher-runs");
@@ -139,34 +140,19 @@ function processIsAlive(pid) {
   }
 }
 
-function commandName(name) {
-  if (process.platform !== "win32") return name;
-  if (name === "npm") return "npm.cmd";
-  if (name === "node") return "node.exe";
-  return name;
-}
-
 function runCommand(command, args, options = {}) {
   if (process.env.FOSU_PUBLISHER_MOCK === "1") {
     return { status: 0, stdout: "", stderr: "", mocked: true };
   }
-  const result = spawnSync(commandName(command), args || [], {
+  const result = runProcessCommand(command, args || [], {
     cwd: options.cwd || PROJECT_ROOT,
     env: Object.assign({}, process.env, options.env || {}),
     encoding: options.encoding || "utf8",
-    stdio: options.inherit === false ? "pipe" : "inherit",
-    timeout: options.timeoutMs || 0,
+    inherit: options.inherit !== false,
+    timeoutMs: options.timeoutMs || 0,
     maxBuffer: options.maxBuffer || 64 * 1024 * 1024,
+    code: options.code || "COMMAND_FAILED",
   });
-  if (result.error || result.status !== 0) {
-    const error = new Error(`${command} ${(args || []).join(" ")} failed with status ${result.status}`);
-    error.code = options.code || "COMMAND_FAILED";
-    error.status = result.status;
-    error.stdout = result.stdout || "";
-    error.stderr = result.stderr || "";
-    error.originalError = result.error || null;
-    throw error;
-  }
   return result;
 }
 

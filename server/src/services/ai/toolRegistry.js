@@ -334,8 +334,46 @@ function isConversationalHelp(text) {
   return /你好|您好|嗨|hello|hi|谢谢|感谢|帮我解释|怎么做|如何做|为什么|介绍一下/.test(value);
 }
 
+function resolveModernChineseIntent(message, context = {}) {
+  const text = normalizeText(message);
+  if (!text) return null;
+  if (/连续.*空教室|连着.*空教室|连堂.*空教室/.test(text)) {
+    return {
+      name: "search_continuous_empty_rooms",
+      slots: {
+        building: extractBuilding(text),
+        minFreeSections: parseChineseDuration(text, 2),
+      },
+    };
+  }
+  if (/明天|明日/.test(text) && /课|课程|安排|课表/.test(text)) {
+    return { name: "get_tomorrow_courses", slots: {} };
+  }
+  if (/下一节|下节课|马上.*课|接下来.*课/.test(text)) {
+    return { name: "get_next_course", slots: {} };
+  }
+  if (/本周|这一周|整周|周课表/.test(text) && /课|课程|安排|课表/.test(text)) {
+    return { name: "get_week_schedule", slots: {} };
+  }
+  if (/教学周|第几周|当前周|现在.*周/.test(text)) {
+    return { name: "get_teaching_week", slots: {} };
+  }
+  if (/校历|学期日历|开学|放假|学期.*周/.test(text)) {
+    return { name: "get_term_calendar", slots: {} };
+  }
+  if (/数据.*最新|数据状态|加载失败|暂时加载失败/.test(text)) {
+    return { name: "diagnose_data_status", slots: {} };
+  }
+  if (/个人课表.*导入|怎么导入.*课表|XLS|Excel/i.test(text)) {
+    return { name: "explain_personal_import", slots: { mode: /XLS|Excel/i.test(text) ? "xls" : "unknown" } };
+  }
+  return null;
+}
+
 function resolveIntent(message, context = {}) {
   const text = normalizeText(message);
+  const modernIntent = resolveModernChineseIntent(text, context);
+  if (modernIntent) return modernIntent;
   const pendingIntent = resolvePendingClarificationIntent(text, context);
   if (pendingIntent) return pendingIntent;
   const chineseIntent = resolveIntentChinese(text, context);
@@ -491,6 +529,128 @@ function getTodayCourses(input = {}, context = {}) {
       : "今天没有匹配到课程安排。",
     actionUrl: "/pages/today/today",
   };
+}
+
+function getTomorrowCourses(input = {}, context = {}) {
+  const target = parseClientDate(context, new Date());
+  target.setDate(target.getDate() + 1);
+  const result = getTodayCourses(Object.assign({}, input, {
+    date: formatDate(target),
+    message: input.message || "明天课程",
+  }), context);
+  return Object.assign({}, result, {
+    date: formatDate(target),
+    label: "明天课程",
+    reminder: result.needContext
+      ? result.summary
+      : (result.courseCount ? `明天有 ${result.courseCount} 门课。` : "明天没有匹配到课程安排。"),
+  });
+}
+
+function getNextCourse(input = {}, context = {}) {
+  const result = getTodayCourses(input, context);
+  return Object.assign({}, result, {
+    nextCourse: result.nextCourse || null,
+    courses: result.nextCourse ? [result.nextCourse] : [],
+    courseCount: result.nextCourse ? 1 : 0,
+    activeCourseCount: result.nextCourse ? 1 : 0,
+    summary: result.needContext
+      ? result.summary
+      : (result.nextCourse ? `下一节课是 ${result.nextCourse.courseName}。` : "今天没有后续课程。"),
+  });
+}
+
+function getWeekSchedule(input = {}, context = {}) {
+  const summary = context.currentScheduleSummary || {};
+  const resolvedWeek = resolveCurrentTeachingWeek(context, input);
+  const week = Number(input.week || resolvedWeek.currentWeek || 0) || 0;
+  if (!summary.enabled || !Array.isArray(summary.courses) || !summary.courses.length) {
+    return {
+      success: true,
+      needContext: true,
+      currentWeek: week,
+      weekUncertain: resolvedWeek.weekUncertain,
+      days: [],
+      courseCount: 0,
+      summary: "未收到当前课表摘要，需要先导入或授权个人课表摘要。",
+      actionUrl: "/pages/personal-sync/personal-sync?tab=xls",
+    };
+  }
+  const days = [];
+  for (let weekday = 1; weekday <= 7; weekday += 1) {
+    const courses = summary.courses
+      .filter((course) => Number(course.weekday) === weekday)
+      .filter((course) => courseAppliesToWeek(course, week))
+      .sort((left, right) => Number(left.startSection || 0) - Number(right.startSection || 0))
+      .map((course) => ({
+        courseName: course.courseName || "未命名课程",
+        teacherName: course.teacherName || "",
+        classroom: course.classroom || course.roomName || "",
+        weekday,
+        startSection: course.startSection,
+        endSection: course.endSection,
+        sectionText: sectionText(course),
+        timeText: getCourseTimeRange(course),
+        weekText: course.weekText || course.rawWeek || "",
+      }));
+    if (courses.length) days.push({ weekday, courses });
+  }
+  const courseCount = days.reduce((sum, day) => sum + day.courses.length, 0);
+  return {
+    success: true,
+    needContext: false,
+    currentWeek: week,
+    week,
+    weekUncertain: resolvedWeek.weekUncertain,
+    days,
+    courseCount,
+    summary: courseCount ? `本周共有 ${courseCount} 节课程安排。` : "本周没有匹配到课程安排。",
+    actionUrl: "/pages/today/today",
+  };
+}
+
+function getTeachingWeek(input = {}, context = {}) {
+  const resolved = resolveCurrentTeachingWeek(context, input);
+  const active = termRegistryService.getActiveTerm && termRegistryService.getActiveTerm() || {};
+  return {
+    success: true,
+    term: context.term || input.term || active.term || getDefaultTerm(),
+    currentWeek: resolved.currentWeek,
+    week: resolved.currentWeek,
+    weekUncertain: resolved.weekUncertain,
+    todayDate: formatDate(parseClientDate(context, input.date || new Date())),
+    termStartDate: active.termStartDate || active.startDate || "",
+    totalWeeks: active.totalWeeks || termRegistryService.LEGACY_CURRENT_TERM_CONFIG.totalWeeks,
+    summary: resolved.weekUncertain ? "当前教学周暂不确定。" : `当前是第 ${resolved.currentWeek} 教学周。`,
+  };
+}
+
+function getTermCalendar(input = {}, context = {}) {
+  const active = termRegistryService.getActiveTerm && termRegistryService.getActiveTerm() || {};
+  const term = input.term || context.term || active.term || getDefaultTerm();
+  return {
+    success: true,
+    term,
+    currentWeek: resolveCurrentTeachingWeek(context, input).currentWeek,
+    termStartDate: active.termStartDate || active.startDate || "",
+    totalWeeks: active.totalWeeks || termRegistryService.LEGACY_CURRENT_TERM_CONFIG.totalWeeks,
+    summary: "已读取当前学期和教学周配置。",
+  };
+}
+
+function searchContinuousEmptyRooms(input = {}, context = {}) {
+  const message = input.message || "";
+  const minFreeSections = Math.max(2, Number(input.minFreeSections || parseChineseDuration(message, 2)) || 2);
+  const result = searchEmptyRooms(Object.assign({}, input, {
+    minFreeSections,
+    message: message || "连续空教室",
+  }), context);
+  return Object.assign({}, result, {
+    minFreeSections,
+    summary: result.success
+      ? `连续 ${minFreeSections} 节可用教室共 ${result.total || (result.rooms || []).length || 0} 间。`
+      : result.summary,
+  });
 }
 
 function searchEmptyRooms(input = {}, context = {}) {
@@ -710,7 +870,13 @@ function recommendMeetingTimeV2(input = {}, context = {}) {
 function executeTool(name, input = {}, context = {}) {
   const tools = {
     get_today_courses: getTodayCourses,
+    get_tomorrow_courses: getTomorrowCourses,
+    get_next_course: getNextCourse,
+    get_week_schedule: getWeekSchedule,
+    get_teaching_week: getTeachingWeek,
+    get_term_calendar: getTermCalendar,
     search_empty_rooms: searchEmptyRooms,
+    search_continuous_empty_rooms: searchContinuousEmptyRooms,
     search_school_index: searchSchoolIndex,
     get_schedule_detail: getScheduleDetail,
     diagnose_data_status: diagnoseDataStatus,
@@ -736,7 +902,13 @@ function executeTool(name, input = {}, context = {}) {
 function getToolSummary(name, result) {
   if (!result || result.success === false) return result && (result.code || result.message) || "工具调用失败";
   if (name === "search_empty_rooms") return result.summary || `找到 ${result.total || 0} 间空教室`;
+  if (name === "search_continuous_empty_rooms") return result.summary || `连续空教室 ${result.total || 0} 间`;
   if (name === "get_today_courses") return result.needContext ? "需要当前课表上下文" : `今日课程 ${result.courseCount || 0} 门`;
+  if (name === "get_tomorrow_courses") return result.needContext ? "需要当前课表上下文" : `明日课程 ${result.courseCount || 0} 门`;
+  if (name === "get_next_course") return result.nextCourse ? "已找到下一节课" : "没有后续课程";
+  if (name === "get_week_schedule") return result.needContext ? "需要当前课表上下文" : `本周课程 ${result.courseCount || 0} 节`;
+  if (name === "get_teaching_week") return result.summary || "已查询教学周";
+  if (name === "get_term_calendar") return result.summary || "已查询校历";
   if (name === "search_school_index") return `${result.type || "index"} 命中 ${result.total || 0} 项`;
   if (name === "diagnose_data_status") return `Release ${result.activeReleaseVersion || "未发布"}`;
   if (name === "recommend_meeting_time") return result.summary || "已计算候选时间";
@@ -815,7 +987,7 @@ function runToolChainForIntent(intent, message, context) {
     calls.push(makeToolCall("get_schedule_detail", detailResult));
   }
 
-  if (intent.name === "search_empty_rooms") {
+  if (intent.name === "search_empty_rooms" || intent.name === "search_continuous_empty_rooms") {
     const rooms = asArray(firstResult && firstResult.rooms);
     if (!firstResult || firstResult.success === false || rooms.length === 0 || Number(firstResult.total || rooms.length) === 0) {
       const diagnosis = executeTool("diagnose_data_status", input, context);

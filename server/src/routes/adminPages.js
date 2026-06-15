@@ -6958,7 +6958,7 @@ const adminConsoleHtml = `<!doctype html>
           return state.apiInflight["GET /api/admin/sync/status"];
         }
         state.lastSyncLoadAt = now;
-        setStatus("姝ｅ湪鑾峰彇绯荤粺鍚屾鐘舵€佷笌杩愮淮鎸囧崡...");
+        setStatus("正在获取系统同步状态与运维指南...");
         return api("/api/admin/sync/status")
           .then(function(res) {
             state.syncStatus = res.data;
@@ -11270,7 +11270,8 @@ function sendAdminHtml(res) {
     "Content-Security-Policy",
     "default-src 'self'; script-src 'self' 'unsafe-inline' https://static.cloudflareinsights.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; connect-src 'self' https://cloudflareinsights.com; img-src 'self' data: https://pan.katelya.eu.org; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
   );
-  res.type("html").send(adminConsoleHtml);
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(adminConsoleHtml);
 }
 
 router.get("/", (req, res) => {

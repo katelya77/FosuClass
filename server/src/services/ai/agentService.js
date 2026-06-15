@@ -21,6 +21,71 @@ function stableGeneratedPayload(payload, options = {}) {
   return generatedPayloadContract.stableGeneratedPayload(payload, options);
 }
 
+function isPublicRuntime() {
+  return !providerFactory.getRuntimeMode || providerFactory.getRuntimeMode() === "public";
+}
+
+const PUBLIC_BLOCK_PATTERNS = [
+  /Oracle/gi,
+  /CloudBase/gi,
+  /Provider/gi,
+  /DeepSeek/gi,
+  /Coze/gi,
+  /Hunyuan/gi,
+  /腾讯混元/g,
+  /扣子/g,
+  /比赛模式|比赛|竞赛/g,
+  /OPENID|openid/gi,
+  /白名单/g,
+  /API\s*Base\s*URL/gi,
+  /https?:\/\/[^\s"'<>）)]+/gi,
+  /Bearer\s+[A-Za-z0-9._~+/=-]+/gi,
+  /[A-Z][A-Z0-9_]{5,}/g,
+  /系统\s*Prompt|system\s*prompt/gi,
+  /环境变量/g,
+  /管理员|管理后台|后台操作/g,
+  /发布流程|Release\s*Pack|Docker|GitHub\s*Actions/gi,
+  /模型额度|免费权益/g,
+];
+
+const PUBLIC_DENY_RESPONSE = "我不能提供内部部署、密钥、名单策略、非公开活动、系统提示或后台信息。可以继续帮你查询课表、空教室、教学周，或说明佛课小表的使用方法。";
+
+function containsPublicBlockedText(text) {
+  return PUBLIC_BLOCK_PATTERNS.some((pattern) => {
+    pattern.lastIndex = 0;
+    return pattern.test(String(text || ""));
+  });
+}
+
+function sanitizePublicText(value, fallback = "") {
+  const text = safetyGuard.redactSensitiveText(String(value || fallback || ""));
+  if (!text) return "";
+  if (!containsPublicBlockedText(text)) return text;
+  return PUBLIC_DENY_RESPONSE;
+}
+
+const PUBLIC_TOOL_NAMES = {
+  search_empty_rooms: "查询空教室",
+  get_today_courses: "查询今日课程",
+  get_tomorrow_courses: "查询明日课程",
+  get_next_course: "查询下一节课",
+  get_week_schedule: "查询本周课表",
+  get_teaching_week: "查询教学周",
+  get_term_calendar: "查询校历",
+  search_continuous_empty_rooms: "查询连续空教室",
+  search_school_index: "查询全校课程",
+  get_schedule_detail: "查询课表详情",
+  diagnose_data_status: "检查数据状态",
+  explain_personal_import: "说明个人课表导入",
+  recommend_meeting_time: "推荐空闲时间",
+  clarify_missing_slot: "补充查询条件",
+  safety_guard: "安全检查",
+};
+
+function publicToolName(name) {
+  return PUBLIC_TOOL_NAMES[String(name || "").toLowerCase()] || "校园工具";
+}
+
 function getProviderPolicy() {
   const value = String(process.env.AI_PROVIDER_POLICY || "auto").trim().toLowerCase();
   return ["auto", "always", "tool-only"].includes(value) ? value : "auto";
@@ -53,7 +118,13 @@ function getItemCount(toolCalls) {
 const FACT_TOOL_INTENTS = new Set([
   "clarify_missing_slot",
   "get_today_courses",
+  "get_tomorrow_courses",
+  "get_next_course",
+  "get_week_schedule",
+  "get_teaching_week",
+  "get_term_calendar",
   "search_empty_rooms",
+  "search_continuous_empty_rooms",
   "search_school_index",
   "get_schedule_detail",
   "recommend_meeting_time",
@@ -188,6 +259,80 @@ function buildEvidence(toolCalls = [], context = {}) {
   };
 }
 
+function buildPublicEvidence(evidence) {
+  const source = evidence || {};
+  return {
+    checkedAt: source.checkedAt || nowIso(),
+    term: source.term || "",
+    currentWeek: source.currentWeek || "",
+    toolCount: Number(source.toolCount || 0) || 0,
+    verified: Number(source.toolCount || 0) > 0,
+  };
+}
+
+function sanitizePublicAction(action) {
+  const source = stableAction(action || {});
+  const url = String(source.url || "");
+  const safeUrl = url.startsWith("/pages/") && !/admin|debug|provider|token|oracle|cloudbase/i.test(url) ? url : "";
+  return Object.assign({}, source, {
+    label: sanitizePublicText(source.label, "查看"),
+    url: safeUrl,
+    payload: {},
+  });
+}
+
+function sanitizePublicCard(card) {
+  const source = stableCard(card || {});
+  return Object.assign({}, source, {
+    title: sanitizePublicText(source.title, "结果"),
+    subtitle: sanitizePublicText(source.subtitle, ""),
+    badges: (source.badges || []).map((item) => sanitizePublicText(item, "")).filter(Boolean).slice(0, 4),
+    items: (source.items || []).map((item) => ({
+      title: sanitizePublicText(item.title, ""),
+      subtitle: sanitizePublicText(item.subtitle, ""),
+      value: sanitizePublicText(item.value, ""),
+    })).filter((item) => item.title || item.subtitle || item.value).slice(0, 8),
+    actions: (source.actions || []).map(sanitizePublicAction).filter((item) => item.type === "noop" || item.url || item.type === "copy").slice(0, 3),
+  });
+}
+
+function sanitizePublicToolCall(toolCall) {
+  const source = toolCall || {};
+  return {
+    name: publicToolName(source.name),
+    status: safetyGuard.redactSensitiveText(String(source.status || "")).slice(0, 20),
+    summary: sanitizePublicText(source.summary, "").slice(0, 160),
+  };
+}
+
+function sanitizePublicResponse(response) {
+  const evidence = buildPublicEvidence(response.evidence);
+  const sourceSafety = response.safety || {};
+  const sourceMetrics = response.metrics || {};
+  return Object.assign({}, response, {
+    answer: sanitizePublicText(response.answer, ""),
+    cards: (Array.isArray(response.cards) ? response.cards : []).map(sanitizePublicCard),
+    suggestions: (Array.isArray(response.suggestions) ? response.suggestions : []).map((item) => sanitizePublicText(item, "")).filter(Boolean).slice(0, 6),
+    toolCalls: (Array.isArray(response.toolCalls) ? response.toolCalls : []).map(sanitizePublicToolCall),
+    evidence,
+    safety: {
+      redacted: true,
+      usedPersonalContext: Boolean(sourceSafety.usedPersonalContext),
+      mode: sourceSafety.mode || "tool-grounded",
+      fallbackReason: sourceSafety.fallbackReason ? "已使用本地规则" : "",
+      pendingClarification: sourceSafety.pendingClarification || null,
+      clearPendingClarification: sourceSafety.clearPendingClarification === true,
+    },
+    metrics: {
+      latencyMs: sourceMetrics.latencyMs,
+      intentName: sourceMetrics.intentName,
+      toolCallCount: sourceMetrics.toolCallCount,
+      itemCount: sourceMetrics.itemCount,
+      usedPersonalContext: Boolean(sourceMetrics.usedPersonalContext),
+    },
+  });
+}
+
 function buildTaskSteps(intent = {}, toolCalls = []) {
   const steps = [{ key: "understand", label: "已理解需求", status: "done" }];
   const names = (Array.isArray(toolCalls) ? toolCalls : []).map((item) => String(item && item.name || "").toLowerCase());
@@ -217,7 +362,7 @@ function buildTaskSteps(intent = {}, toolCalls = []) {
 
 function buildResponse(payload) {
   const rawToolCalls = payload.rawToolCalls || payload.toolCalls || [];
-  return {
+  const response = {
     success: true,
     answer: payload.answer,
     cards: payload.cards,
@@ -242,6 +387,7 @@ function buildResponse(payload) {
     metrics: payload.metrics || buildMetrics(),
     serverTime: nowIso(),
   };
+  return isPublicRuntime() ? sanitizePublicResponse(response) : response;
 }
 
 function sensitiveCredentialResponse(message, context, startTime) {

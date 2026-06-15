@@ -978,6 +978,33 @@ button::after {
   gap: 10rpx;
 }
 
+.voice-btn,
+.newline-btn {
+  flex: 0 0 72rpx;
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 18rpx;
+  background: #ffffff;
+  border: 1rpx solid #dbe3ee;
+  color: #334155;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 72rpx;
+  text-align: center;
+}
+
+.voice-btn.recording {
+  background: #fee2e2;
+  border-color: #ef4444;
+  color: #b91c1c;
+}
+
+.voice-btn.disabled,
+.newline-btn[disabled] {
+  background: #eef2f7;
+  color: #94a3b8;
+}
+
 .composer-input {
   box-sizing: border-box;
   flex: 1;
@@ -995,6 +1022,16 @@ button::after {
 
 .composer-placeholder {
   color: #a5adba;
+}
+
+.voice-status {
+  height: 30rpx;
+  margin-top: 6rpx;
+  color: #64748b;
+  font-size: 18rpx;
+  font-weight: 700;
+  line-height: 30rpx;
+  text-align: center;
 }
 
 .send-btn {

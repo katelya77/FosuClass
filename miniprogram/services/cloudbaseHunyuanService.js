@@ -225,10 +225,10 @@ function buildSystemPrompt() {
 
 function buildProjectKnowledgeSummary() {
   return [
-    "项目摘要：FosuClass/佛课小表是面向佛山大学课程查询和个人课表导入的微信小程序。",
-    "架构摘要：Oracle 服务器作为控制面和兼容 API；Release Pack 课表 JSON 通过静态源读取；CloudBase Hosting 可作为国内主静态源。",
-    "AI 摘要：确定性课表事实由工具产生；生成式问答只做项目说明、帮助和自然解释。",
-    "隐私摘要：不要在聊天中输入学号、密码、Cookie、Token 或 API Key；个人 XLS 只在本机授权后发送最小脱敏摘要。",
+    "佛课小表是一款校园课表工具，面向佛山大学课表查询、教师课表、教室占用、空教室和教学周查询。",
+    "课程事实必须只根据校园工具返回结果或用户提供的课表摘要回答，不编造课程、教师、教室、周次和时间。",
+    "可以提供使用帮助、隐私说明、数据是否最新的友好解释，但不要讨论内部部署、服务器、供应商、密钥、名单策略、非公开活动、后台或对外不可见事项。",
+    "回答使用中文，先给结论，再给必要说明。",
   ].join("\n");
 }
 
@@ -247,7 +247,7 @@ function buildMessages(input = {}) {
   const context = input.context || {};
   const factSummary = {
     term: context.term || context.selectedTerm || "",
-    releaseVersion: context.releaseVersion || "",
+    releaseFreshness: context.releaseVersion ? "已加载课表数据" : "未确认",
     currentTeachingWeek: context.currentTeachingWeek || "",
     todayDate: context.todayDate || "",
     termPhase: context.termPhase || "",

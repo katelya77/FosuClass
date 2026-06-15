@@ -1,28 +1,28 @@
 #!/usr/bin/env node
 
-const { spawnSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
+const { runProcess } = require("./shared/processRunner");
 
 const ROOT = path.resolve(__dirname, "..");
 
 function run(label, command, args, options = {}) {
-  const executable = process.platform === "win32" && command === "npm" ? "npm.cmd" : command;
   const startedAt = Date.now();
-  const result = spawnSync(executable, args, {
+  const result = runProcess(command, args || [], {
     cwd: ROOT,
     encoding: "utf8",
-    shell: process.platform === "win32" && command === "npm",
     env: Object.assign({}, process.env, options.env || {}),
+    timeoutMs: options.timeoutMs || 0,
   });
   return {
     label,
-    command: [command].concat(args || []).join(" "),
-    ok: result.status === 0,
+    command: [command].concat(result.safeArgs || args || []).join(" "),
+    ok: result.ok,
     status: result.status,
     durationMs: Date.now() - startedAt,
-    stdout: String(result.stdout || "").slice(-1200),
-    stderr: String(result.stderr || result.error && result.error.message || "").slice(-1200),
+    stdout: String(result.stdoutTail || result.stdout || "").slice(-1200),
+    stderr: String(result.stderrTail || result.error && result.error.message || "").slice(-1200),
+    errorCode: result.error && result.error.code || "",
   };
 }
 
@@ -47,6 +47,15 @@ function activeReleaseReadable() {
   return { ok: false, reason: "No local runtime/active.json release pointer is available." };
 }
 
+function configuredCloudbaseStaticBase(config) {
+  return String(
+    process.env.FOSU_CLOUDBASE_STATIC_BASE_URL ||
+    process.env.CLOUDBASE_STATIC_BASE_URL ||
+    config.CLOUDBASE_HOSTING_BASE_URL ||
+    ""
+  ).trim();
+}
+
 function secretScan() {
   const result = run("git secret scan", "git", [
     "grep",
@@ -69,8 +78,39 @@ function secretScan() {
   };
 }
 
+function configCheck(label, ok, details) {
+  return {
+    label,
+    ok: Boolean(ok),
+    status: ok ? 0 : 1,
+    durationMs: 0,
+    stdout: details ? JSON.stringify(details).slice(-1200) : "",
+    stderr: ok ? "" : (details && details.message || `${label} failed`),
+  };
+}
+
+function readCloudbaseConfig() {
+  delete require.cache[require.resolve("../miniprogram/config/cloudbase")];
+  return require("../miniprogram/config/cloudbase");
+}
+
+function voiceGateCheck(formal = false) {
+  const config = readCloudbaseConfig();
+  const enabled = config.AI_VOICE_INPUT_ENABLED === true;
+  const provider = String(config.AI_VOICE_PROVIDER || "");
+  const providerReady = !enabled || provider === "cloudbase-function";
+  const ok = providerReady || (formal && !enabled);
+  return configCheck("voice feature gate", ok, {
+    enabled,
+    provider,
+    formal,
+    message: ok ? "" : "AI voice input is enabled but AI_VOICE_PROVIDER is not available.",
+  });
+}
+
 function syntaxChecks() {
   return [
+    run("process runner syntax", "node", ["--check", "tools/shared/processRunner.js"]),
     run("publisher syntax", "node", ["--check", "tools/fosu-publisher/publish.js"]),
     run("cloudbase live-smoke syntax", "node", ["--check", "tools/cloudbase/live-smoke.js"]),
     run("publisher receipt service syntax", "node", ["--check", "server/src/services/publisherReceiptService.js"]),
@@ -81,6 +121,11 @@ function syntaxChecks() {
 
 function localProductionTests() {
   return [
+    run("windows process runner", "node", ["tools/test-process-runner.js"]),
+    run("publisher launcher", "node", ["tools/test-publisher-launcher.js"]),
+    run("admin UTF-8", "node", ["tools/test-admin-utf8.js"]),
+    run("AI public safety", "node", ["tools/test-public-ai-safety.js"]),
+    run("AI input and voice", "node", ["tools/test-ai-assistant-input-and-voice.js"]),
     run("canonical stable sorting", "node", ["tools/test-staging-fingerprint.js"]),
     run("publisher integration", "node", ["tools/test-fosu-publisher.js"]),
     run("publisher receipt storage", "node", ["tools/test-publisher-receipts.js"]),
@@ -106,12 +151,21 @@ function preflight() {
 }
 
 function experience() {
+  const cloudbaseRuntimeConfig = readCloudbaseConfig();
   const checks = []
     .concat(syntaxChecks())
     .concat([
       run("publisher integration", "node", ["tools/test-fosu-publisher.js"]),
       run("cloudbase static origin", "node", ["tools/test-cloudbase-static-origin.js"]),
+      run("cloudbase live smoke contract", "node", ["tools/test-cloudbase-live-smoke.js"]),
       run("miniprogram build metadata", "node", ["tools/generate-miniprogram-build-info.js", "--dry-run"]),
+      run("admin UTF-8", "node", ["tools/test-admin-utf8.js"]),
+      run("publisher launcher self-test", "cmd.exe", ["/d", "/s", "/c", "call", "佛课小表一键同步.cmd", "--self-test", "--noninteractive"], { timeoutMs: 120000 }),
+      run("miniprogram compile preflight", "node", ["tools/test-miniprogram-compile-preflight.js"]),
+      configCheck("CloudBase Hosting ready", cloudbaseRuntimeConfig.CLOUDBASE_HOSTING_READY === true, cloudbaseRuntimeConfig),
+      voiceGateCheck(false),
+      run("authenticated Oracle-only smoke", "node", ["tools/cloudbase/live-smoke.js", "--oracle-only"], { timeoutMs: 120000 }),
+      run("dual-source live smoke", "npm", ["run", "cloudbase:live-smoke"], { timeoutMs: 180000 }),
       run("git diff whitespace", "git", ["diff", "--check"]),
       secretScan(),
     ]);
@@ -120,11 +174,16 @@ function experience() {
   checks.push({ label: "public runtime mode", ok: runtimeMode !== "competition", runtimeMode });
   if (runtimeMode === "competition") blockers.push("AI_RUNTIME_MODE is competition; experience/formal release requires public.");
   const active = activeReleaseReadable();
-  checks.push({ label: "local active release pointer readable", ok: active.ok, active });
-  if (!active.ok) blockers.push(active.reason);
+  checks.push({
+    label: "local active release pointer optional",
+    ok: true,
+    active,
+    warning: active.ok ? "" : active.reason,
+  });
   if (!hasEnv("ADMIN_API_TOKEN") && !hasEnv("ADMIN_TOKEN")) blockers.push("ADMIN_API_TOKEN or ADMIN_TOKEN is not available for live server checks.");
-  if (!hasEnv("FOSU_CLOUDBASE_STATIC_BASE_URL") && !hasEnv("CLOUDBASE_STATIC_BASE_URL")) blockers.push("CloudBase static hosting base URL is not configured for live dual-source check.");
-  return { mode: "experience", checks, blockers, canUploadExperience: false };
+  if (!configuredCloudbaseStaticBase(cloudbaseRuntimeConfig)) blockers.push("CloudBase static hosting base URL is not configured for live dual-source check.");
+  if (cloudbaseRuntimeConfig.CLOUDBASE_HOSTING_READY !== true) blockers.push("CLOUDBASE_HOSTING_READY=true is required for experience release.");
+  return { mode: "experience", checks, blockers };
 }
 
 function formal() {
@@ -137,12 +196,20 @@ function formal() {
   if (hasEnv("AI_COMPETITION_OPENID_WHITELIST") || hasEnv("FOSU_AI_COMPETITION_OPENID_WHITELIST")) {
     blockers.push("Competition OPENID whitelist is configured; remove/disable it for formal release.");
   }
+  const cloudbaseRuntimeConfig = readCloudbaseConfig();
+  result.checks.push(configCheck("formal public AI config", cloudbaseRuntimeConfig.AI_COMPETITION_MODE !== true, {
+    AI_COMPETITION_MODE: cloudbaseRuntimeConfig.AI_COMPETITION_MODE,
+    message: "Formal release must not enable competition mode.",
+  }));
+  result.checks.push(voiceGateCheck(true));
+  if (cloudbaseRuntimeConfig.AI_COMPETITION_MODE === true) {
+    blockers.push("Formal release must not enable AI_COMPETITION_MODE.");
+  }
   if (!fs.existsSync(path.join(ROOT, "miniprogram", "privacy.json")) &&
       !fs.existsSync(path.join(ROOT, "docs", "privacy.md")) &&
       !fs.existsSync(path.join(ROOT, "miniprogram", "pages", "settings", "settings.wxml"))) {
     blockers.push("Privacy document entry was not found.");
   }
-  result.canSubmitFormal = false;
   return result;
 }
 

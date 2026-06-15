@@ -159,7 +159,8 @@ function getOrigins() {
   if (config.CLOUDBASE_ENABLED !== false && config.CLOUDBASE_HOSTING_ENABLED !== false && cloudbaseReady && isUsableUrl(cloudbaseBase)) {
     origins.push({
       name: "cloudbase",
-      label: "CloudBase Hosting",
+      label: "高速静态源",
+      internalLabel: "CloudBase Hosting",
       releaseRoot: joinUrl(cloudbaseBase, "releases"),
       runtimeRoot: joinUrl(cloudbaseBase, "runtime"),
       staticTicket: false,
@@ -171,7 +172,8 @@ function getOrigins() {
   if (!(testConfig && testConfig.disableOracle === true)) {
     origins.push({
       name: "oracle",
-      label: "Oracle Static",
+      label: "备用静态源",
+      internalLabel: "Oracle Static",
       releaseRoot: ORACLE_STATIC_RELEASE_BASE_URL,
       runtimeRoot: ORACLE_RUNTIME_BASE_URL,
       staticTicket: true,
