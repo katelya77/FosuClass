@@ -122,10 +122,14 @@ function setEnvLines(text, updates) {
 }
 
 function readRuntimeValues() {
+  return readRuntimeValuesResult().values;
+}
+
+function readRuntimeValuesResult() {
   try {
-    return runtimeStore.readRuntimeConfig();
+    return { values: runtimeStore.readRuntimeConfig(), error: null };
   } catch (error) {
-    return {};
+    return { values: {}, error };
   }
 }
 
@@ -211,7 +215,8 @@ function getCloudbaseHunyuanStatus() {
 function getStatus() {
   const envText = readEnvFile();
   const envFileValues = parseEnv(envText);
-  const runtimeValues = readRuntimeValues();
+  const runtimeRead = readRuntimeValuesResult();
+  const runtimeValues = runtimeRead.values;
   const runtimePath = runtimeStore.getConfigPath();
   const value = (key) => getEffectiveValue(envFileValues, runtimeValues, key);
   return {
@@ -252,7 +257,10 @@ function getStatus() {
     cloudbaseOpenaiMaxTokens: value("CLOUDBASE_OPENAI_MAX_TOKENS"),
     cloudbaseOpenaiKeyConfigured: hasCloudbaseOpenAiKey(envFileValues, runtimeValues),
     cloudbaseOpenaiKeyLast4: keyLast4(process.env.CLOUDBASE_OPENAI_API_KEY || runtimeValues.CLOUDBASE_OPENAI_API_KEY || envFileValues.CLOUDBASE_OPENAI_API_KEY),
-    encryptionConfigured: Boolean(process.env.FOSU_AI_CONFIG_ENCRYPTION_KEY),
+    encryptionConfigured: runtimeStore.hasEncryptionKey(),
+    encryptionReady: runtimeStore.hasEncryptionKey() && !runtimeRead.error,
+    encryptionBlocker: runtimeRead.error && (runtimeRead.error.code || "AI_PROVIDER_RUNTIME_CONFIG_READ_FAILED") || "",
+    encryptionBlockerMessage: runtimeRead.error ? "FOSU_AI_CONFIG_ENCRYPTION_KEY must be configured before AI provider keys can be saved or migrated." : "",
     cloudbaseHunyuan: getCloudbaseHunyuanStatus(),
   };
 }

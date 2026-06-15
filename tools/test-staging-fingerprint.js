@@ -50,6 +50,53 @@ function run() {
   }));
   assert.strictEqual(first.canonicalHash, second.canonicalHash, "volatile metadata must not change canonical hash");
 
+  const reordered = snapshot({
+    catalog: { colleges: [{ code: "05", name: "B" }, { code: "04", name: "A" }], grades: ["2025"] },
+    majors: [
+      { collegeCode: "04", code: "0402", name: "B", grade: "2025" },
+      { collegeCode: "04", code: "0401", name: "A", grade: "2025" },
+    ],
+    classSchedules: [
+      { classId: "class-b", className: "B", courses: [Object.assign({}, snapshot().classSchedules[0].courses[0], { weekday: 2 })] },
+      { classId: "class-a", className: "A", courses: [snapshot().classSchedules[0].courses[0]] },
+    ],
+    resources: {
+      teachers: [{ teacherId: "t2", teacherName: "B" }, { teacherId: "t1", teacherName: "A" }],
+      classrooms: [{ roomId: "r2", roomName: "B" }, { roomId: "r1", roomName: "A" }],
+      courses: [{ courseId: "c2", courseName: "B" }, { courseId: "c1", courseName: "A" }],
+      teacherSchedules: [
+        { teacherId: "t2", teacherName: "B", courses: [Object.assign({}, snapshot().resources.teacherSchedules[0].courses[0], { weekday: 2 })] },
+        { teacherId: "t1", teacherName: "A", courses: [snapshot().resources.teacherSchedules[0].courses[0]] },
+      ],
+      classroomSchedules: [
+        { roomId: "r2", roomName: "B", courses: [Object.assign({}, snapshot().resources.classroomSchedules[0].courses[0], { weekday: 2 })] },
+        { roomId: "r1", roomName: "A", courses: [snapshot().resources.classroomSchedules[0].courses[0]] },
+      ],
+      courseSchedules: [
+        { courseId: "c2", courseName: "B", courses: [Object.assign({}, snapshot().resources.courseSchedules[0].courses[0], { weekday: 2 })] },
+        { courseId: "c1", courseName: "A", courses: [snapshot().resources.courseSchedules[0].courses[0]] },
+      ],
+    },
+  });
+  const reorderedAgain = snapshot({
+    catalog: { colleges: [{ code: "04", name: "A" }, { code: "05", name: "B" }], grades: ["2025"] },
+    majors: reordered.majors.slice().reverse(),
+    classSchedules: reordered.classSchedules.slice().reverse().map((item) => Object.assign({}, item, { courses: item.courses.slice().reverse() })),
+    resources: {
+      teachers: reordered.resources.teachers.slice().reverse(),
+      classrooms: reordered.resources.classrooms.slice().reverse(),
+      courses: reordered.resources.courses.slice().reverse(),
+      teacherSchedules: reordered.resources.teacherSchedules.slice().reverse(),
+      classroomSchedules: reordered.resources.classroomSchedules.slice().reverse(),
+      courseSchedules: reordered.resources.courseSchedules.slice().reverse(),
+    },
+  });
+  assert.strictEqual(
+    calculateFingerprint(reordered).canonicalHash,
+    calculateFingerprint(reorderedAgain).canonicalHash,
+    "entity and event order must not change canonical hash"
+  );
+
   const sidecar = buildSidecarMeta(snapshot(), {
     fingerprint: first,
     previousHash: first.canonicalHash,

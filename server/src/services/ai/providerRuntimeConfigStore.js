@@ -47,6 +47,12 @@ const SECRET_CONFIG_KEYS = new Set([
 ]);
 const ENCRYPTED_PREFIX = "enc:v1:";
 
+function createConfigError(message, code) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
 function getConfigPath() {
   return path.resolve(process.env.FOSU_AI_PROVIDER_CONFIG_PATH || DEFAULT_CONFIG_PATH);
 }
@@ -60,6 +66,22 @@ function ensureSecureDirectory(configPath = getConfigPath()) {
     if (process.platform !== "win32") throw error;
   }
   return dir;
+}
+
+function isEncryptedSecret(value) {
+  return String(value || "").startsWith(ENCRYPTED_PREFIX);
+}
+
+function hasEncryptionKey() {
+  return Boolean(getEncryptionKey());
+}
+
+function hasPlaintextSecrets(input = {}) {
+  return Object.keys(input || {}).some((key) => {
+    if (!SECRET_CONFIG_KEYS.has(key)) return false;
+    const value = input[key];
+    return value !== undefined && value !== null && value !== "" && !isEncryptedSecret(value);
+  });
 }
 
 function sanitizeRuntimeConfig(input = {}) {
@@ -84,7 +106,12 @@ function encryptSecretValue(value) {
   const text = String(value || "");
   if (!text || text.startsWith(ENCRYPTED_PREFIX)) return text;
   const key = getEncryptionKey();
-  if (!key) return text;
+  if (!key) {
+    throw createConfigError(
+      "FOSU_AI_CONFIG_ENCRYPTION_KEY is required before saving AI provider secrets.",
+      "AI_CONFIG_ENCRYPTION_KEY_REQUIRED"
+    );
+  }
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
   const ciphertext = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
@@ -102,15 +129,14 @@ function decryptSecretValue(value) {
   if (!text.startsWith(ENCRYPTED_PREFIX)) return text;
   const key = getEncryptionKey();
   if (!key) {
-    const error = new Error("FOSU_AI_CONFIG_ENCRYPTION_KEY is required to decrypt AI provider secret.");
-    error.code = "AI_CONFIG_ENCRYPTION_KEY_REQUIRED";
-    throw error;
+    throw createConfigError(
+      "FOSU_AI_CONFIG_ENCRYPTION_KEY is required to decrypt AI provider secret.",
+      "AI_CONFIG_ENCRYPTION_KEY_REQUIRED"
+    );
   }
   const parts = text.split(":");
   if (parts.length !== 6) {
-    const error = new Error("Invalid encrypted AI provider secret format.");
-    error.code = "AI_CONFIG_SECRET_INVALID";
-    throw error;
+    throw createConfigError("Invalid encrypted AI provider secret format.", "AI_CONFIG_SECRET_INVALID");
   }
   const iv = Buffer.from(parts[3], "base64url");
   const tag = Buffer.from(parts[4], "base64url");
@@ -131,23 +157,16 @@ function serializeRuntimeConfig(values = {}) {
   return output;
 }
 
-function readRuntimeConfig(configPath = getConfigPath()) {
-  try {
-    if (!fs.existsSync(configPath)) return {};
-    const parsed = JSON.parse(fs.readFileSync(configPath, "utf8"));
-    return sanitizeRuntimeConfig(parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {});
-  } catch (error) {
-    error.code = error.code || "AI_PROVIDER_RUNTIME_CONFIG_READ_FAILED";
-    throw error;
-  }
+function readRawRuntimeConfig(configPath = getConfigPath()) {
+  if (!fs.existsSync(configPath)) return {};
+  const parsed = JSON.parse(fs.readFileSync(configPath, "utf8"));
+  return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed : {};
 }
 
-function writeRuntimeConfig(updates = {}, configPath = getConfigPath()) {
+function writeRawRuntimeConfig(configPath, values) {
   ensureSecureDirectory(configPath);
-  const current = fs.existsSync(configPath) ? readRuntimeConfig(configPath) : {};
-  const next = Object.assign({}, current, sanitizeRuntimeConfig(updates));
   const tmpPath = `${configPath}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmpPath, `${JSON.stringify(serializeRuntimeConfig(next), null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  fs.writeFileSync(tmpPath, `${JSON.stringify(values, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
   try {
     fs.chmodSync(tmpPath, 0o600);
   } catch (error) {
@@ -159,6 +178,68 @@ function writeRuntimeConfig(updates = {}, configPath = getConfigPath()) {
   } catch (error) {
     if (process.platform !== "win32") throw error;
   }
+}
+
+function backupPlaintextConfig(configPath) {
+  const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+  const backupPath = `${configPath}.plaintext-backup-${timestamp}`;
+  fs.copyFileSync(configPath, backupPath);
+  try {
+    fs.chmodSync(backupPath, 0o600);
+  } catch (error) {
+    if (process.platform !== "win32") throw error;
+  }
+  return backupPath;
+}
+
+function migratePlaintextSecrets(configPath = getConfigPath(), rawValues = readRawRuntimeConfig(configPath)) {
+  if (!hasPlaintextSecrets(rawValues)) {
+    return { migrated: false, configPath, backupPath: "" };
+  }
+  if (!hasEncryptionKey()) {
+    throw createConfigError(
+      "Plaintext AI provider secrets exist, but FOSU_AI_CONFIG_ENCRYPTION_KEY is not configured.",
+      "AI_CONFIG_PLAINTEXT_SECRET_REQUIRES_MIGRATION"
+    );
+  }
+  const backupPath = backupPlaintextConfig(configPath);
+  const encrypted = {};
+  Object.keys(rawValues).forEach((key) => {
+    if (!RUNTIME_CONFIG_KEY_SET.has(key)) return;
+    const value = rawValues[key];
+    if (value === undefined || value === null) return;
+    encrypted[key] = SECRET_CONFIG_KEYS.has(key) ? encryptSecretValue(value) : String(value);
+  });
+  writeRawRuntimeConfig(configPath, encrypted);
+  return { migrated: true, configPath, backupPath };
+}
+
+function readRuntimeConfig(configPath = getConfigPath()) {
+  try {
+    if (!fs.existsSync(configPath)) return {};
+    let parsed = readRawRuntimeConfig(configPath);
+    if (hasPlaintextSecrets(parsed)) {
+      migratePlaintextSecrets(configPath, parsed);
+      parsed = readRawRuntimeConfig(configPath);
+    }
+    return sanitizeRuntimeConfig(parsed);
+  } catch (error) {
+    error.code = error.code || "AI_PROVIDER_RUNTIME_CONFIG_READ_FAILED";
+    throw error;
+  }
+}
+
+function writeRuntimeConfig(updates = {}, configPath = getConfigPath()) {
+  ensureSecureDirectory(configPath);
+  if (hasPlaintextSecrets(updates) && !hasEncryptionKey()) {
+    throw createConfigError(
+      "FOSU_AI_CONFIG_ENCRYPTION_KEY is required before saving AI provider secrets.",
+      "AI_CONFIG_ENCRYPTION_KEY_REQUIRED"
+    );
+  }
+  const current = fs.existsSync(configPath) ? readRuntimeConfig(configPath) : {};
+  const next = Object.assign({}, current, sanitizeRuntimeConfig(updates));
+  writeRawRuntimeConfig(configPath, serializeRuntimeConfig(next));
   return next;
 }
 
@@ -203,8 +284,11 @@ module.exports = {
   applyToProcessEnv,
   ensureSecureDirectory,
   getConfigPath,
+  hasEncryptionKey,
+  hasPlaintextSecrets,
   isRuntimeConfigKey,
   loadRuntimeConfigIntoProcessEnv,
+  migratePlaintextSecrets,
   readRuntimeConfig,
   sanitizeRuntimeConfig,
   writeRuntimeConfig,

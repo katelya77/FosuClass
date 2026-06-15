@@ -5161,6 +5161,11 @@ async function main() {
       process.exit(1);
     }
 
+    if (action === "check-session") {
+      console.log("SESSION_VALID");
+      return;
+    }
+
     let catalog, majors;
 
     if (action === "catalog") {

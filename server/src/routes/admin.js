@@ -27,6 +27,7 @@ const stagingUploadService = require("../services/stagingUploadService");
 const staticReleaseSyncService = require("../services/staticReleaseSyncService");
 const releaseLifecycleService = require("../services/releaseLifecycleService");
 const storageLifecycleService = require("../services/storageLifecycleService");
+const publisherReceiptService = require("../services/publisherReceiptService");
 const agentService = require("../services/ai/agentService");
 const aiProviderConfigService = require("../services/ai/providerConfigService");
 const stagingFingerprint = require("../utils/stagingFingerprint");
@@ -44,7 +45,6 @@ const {
 } = require("../shared/resourceCountContract");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
-const PROJECT_ROOT = path.resolve(__dirname, "../../..");
 const zlib = require("zlib");
 const gzipAsync = promisify(zlib.gzip);
 
@@ -507,7 +507,11 @@ router.post("/ai-provider/config", verifyAdminWriteAccess, (req, res) => {
     });
   } catch (error) {
     safeLog("ai-provider-config-save-failed", { error: error.message, code: error.code || "" });
-    return res.status(500).json({
+    const statusCode = error.code === "AI_CONFIG_ENCRYPTION_KEY_REQUIRED" ||
+      error.code === "AI_CONFIG_PLAINTEXT_SECRET_REQUIRES_MIGRATION"
+      ? 400
+      : 500;
+    return res.status(statusCode).json({
       success: false,
       code: error.code || "AI_PROVIDER_CONFIG_SAVE_FAILED",
       message: "AI Provider 配置保存失败。",
@@ -3776,39 +3780,19 @@ router.post("/staging/upload/rebuild-index", adminAuth.verifyAdminAccess, (req, 
   }
 });
 
-function readLatestPublisherReceipt() {
-  const runsDir = path.join(PROJECT_ROOT, ".local", "publisher-runs");
-  if (!fs.existsSync(runsDir)) {
-    return { runsDir, run: null };
-  }
-  const runs = fs.readdirSync(runsDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => {
-      const dir = path.join(runsDir, entry.name);
-      const state = readJsonIfExists(path.join(dir, "state.json"));
-      const receipt = readJsonIfExists(path.join(dir, "receipt.json"));
-      const error = readJsonIfExists(path.join(dir, "error.json"));
-      const stat = fs.statSync(dir);
-      const updatedAt = (receipt && (receipt.completedAt || receipt.updatedAt)) ||
-        (state && (state.updatedAt || state.startedAt)) ||
-        new Date(stat.mtimeMs).toISOString();
-      return {
-        runId: entry.name,
-        dir,
-        updatedAt,
-        state,
-        receipt,
-        error,
-      };
-    })
-    .sort((left, right) => Date.parse(right.updatedAt || "") - Date.parse(left.updatedAt || ""));
-  return { runsDir, run: runs[0] || null };
-}
-
 router.get("/publisher/receipt", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const latest = readLatestPublisherReceipt();
-    return res.json({ success: true, runsDir: latest.runsDir, latest: latest.run });
+    const latest = publisherReceiptService.getLatestReceipt();
+    return res.json({ success: true, runsDir: latest.receiptsDir, receiptsDir: latest.receiptsDir, latest: latest.run });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/publisher/receipt", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const saved = publisherReceiptService.saveReceipt(req.body || {});
+    return res.json({ success: true, runId: saved.runId, savedAt: saved.savedAt, summary: saved.summary });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
