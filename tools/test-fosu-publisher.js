@@ -104,12 +104,18 @@ async function run() {
   assert.strictEqual(changed.oracleStatus, "published");
   assert.strictEqual(changed.cloudbaseStatus, "mirrored");
   assert(changed.canonicalHash, "changed run should record canonicalHash");
+  assert(changed.oracleVerification && changed.oracleVerification.mode === "oracle-only", "changed run should verify Oracle before CloudBase");
+  assert(fs.existsSync(changed.receiptPaths.diffReport), "changed run should write diff-report.json");
+  const changedState = JSON.parse(fs.readFileSync(changed.receiptPaths.state, "utf8"));
+  assert(changedState.completedStages.indexOf("verifying-oracle-only") < changedState.completedStages.indexOf("cloudbase-preflight-and-mirror"), "Oracle-only smoke should run before CloudBase mirror");
+  assert(changedState.completedStages.indexOf("cloudbase-preflight-and-mirror") < changedState.completedStages.indexOf("verifying-cloudbase-and-dual-source"), "dual-source smoke should run after CloudBase mirror");
 
   restoreEnv();
   process.env.FOSU_PUBLISHER_MOCK_NO_CHANGE = "1";
   const noChange = await publisher.main(["--mode=routine", "--term=2025-2026-2", `--run-id=${runId("no-change")}`]);
   assert.strictEqual(noChange.status, "no-change");
-  assert.strictEqual(noChange.cloudbaseStatus, "not-run");
+  assert.strictEqual(noChange.cloudbaseStatus, "same-and-healthy");
+  assert(noChange.liveSmoke && noChange.liveSmoke.mode === "dual-source-full", "no-change should still run lightweight dual-source health");
 
   restoreEnv();
   const resumeId = runId("resume");
@@ -119,9 +125,11 @@ async function run() {
     schemaVersion: 1,
     runId: resumeId,
     mode: "resume",
+    originalMode: "full",
+    originalArgs: { mode: "full", term: "2025-2026-2", termStartDate: "2026-03-09", totalWeeks: "20" },
     status: "running",
-    completedStages: ["preflight"],
-    summary: { preflight: { success: true, preloaded: true } },
+    completedStages: ["local-preflight"],
+    summary: { "local-preflight": { success: true, preloaded: true } },
     startedAt: new Date().toISOString(),
   });
   const resumed = await publisher.main(["--mode=resume", "--term=2025-2026-2", `--run-id=${resumeId}`]);
@@ -175,7 +183,7 @@ async function run() {
   ]);
   assert.strictEqual(exported.success, true);
   assert(fs.existsSync(path.join(exported.manualPackage.manualRoot, "runtime", "active.json")), "manual package should include runtime pointer");
-  assert(fs.existsSync(path.join(exported.manualPackage.manualRoot, "人工上传说明.txt")), "manual package should include upload instructions");
+  assert(fs.existsSync(path.join(exported.manualPackage.manualRoot, "README-CLOUDBASE-MANUAL-UPLOAD.txt")), "manual package should include upload instructions");
 
   console.log("test-fosu-publisher passed");
 }

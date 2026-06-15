@@ -9,6 +9,7 @@ const configPath = path.join(tempRoot, "secure", "ai-provider-config.json");
 
 process.env.FOSU_AI_PROVIDER_CONFIG_PATH = configPath;
 process.env.AI_PROVIDER_IGNORE_ENV_FILE = "true";
+delete process.env.FOSU_AI_CONFIG_ENCRYPTION_KEY;
 
 [
   "AI_AGENT_ENABLED",
@@ -30,6 +31,13 @@ function modeOf(file) {
 }
 
 function run() {
+  assert.throws(() => providerConfigService.saveConfig({
+    provider: "deepseek",
+    apiKey: secret,
+  }), /FOSU_AI_CONFIG_ENCRYPTION_KEY/, "saving a provider key without master key should fail closed");
+  assert.strictEqual(providerConfigService.getStatus().encryptionConfigured, false);
+
+  process.env.FOSU_AI_CONFIG_ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
   const saved = providerConfigService.saveConfig({
     enabled: true,
     provider: "deepseek",
@@ -40,8 +48,13 @@ function run() {
   });
   assert.strictEqual(saved.deepseekKeyConfigured, true);
   assert.strictEqual(saved.provider, "deepseek");
+  assert.strictEqual(saved.encryptionConfigured, true);
+  assert.strictEqual(saved.encryptionReady, true);
   assert(!JSON.stringify(saved).includes(secret), "getStatus must not expose the API key");
   assert(fs.existsSync(configPath), "runtime config file should exist");
+  const rawSaved = fs.readFileSync(configPath, "utf8");
+  assert(rawSaved.includes("enc:v1:"), "runtime config should store encrypted API key");
+  assert(!rawSaved.includes(secret), "runtime config should not store plaintext API key");
 
   if (process.platform !== "win32") {
     assert.strictEqual(modeOf(path.dirname(configPath)), 0o700, "secure dir should be 0700");
@@ -57,6 +70,15 @@ function run() {
   assert.strictEqual(process.env.AI_AGENT_ENABLED, "true");
   assert.strictEqual(providerConfigService.getStatus().deepseekKeyConfigured, true);
   assert(!JSON.stringify(providerConfigService.getStatus()).includes(secret), "reloaded status must not expose key");
+
+  const plaintextSecret = "legacy-plaintext-secret";
+  fs.writeFileSync(configPath, `${JSON.stringify({ AI_PROVIDER: "deepseek", AI_API_KEY: plaintextSecret }, null, 2)}\n`, "utf8");
+  const migrated = runtimeStore.readRuntimeConfig();
+  assert.strictEqual(migrated.AI_API_KEY, plaintextSecret);
+  const migratedRaw = fs.readFileSync(configPath, "utf8");
+  assert(migratedRaw.includes("enc:v1:"), "plaintext config should be migrated to encrypted storage");
+  assert(!migratedRaw.includes(plaintextSecret), "migrated config should not contain plaintext secret");
+  assert(fs.readdirSync(path.dirname(configPath)).some((name) => name.includes("plaintext-backup")), "migration should leave a protected backup");
 
   console.log("test-ai-provider-runtime-config-store passed");
 }

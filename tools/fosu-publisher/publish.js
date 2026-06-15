@@ -42,26 +42,25 @@ const DEFAULT_ENV_ID = cloudbaseConfig.ENV_ID || "cloud1-d3g17rpe7566d3d5c";
 const STALE_LOCK_MS = Number(process.env.FOSU_PUBLISHER_STALE_LOCK_MS || 6 * 60 * 60 * 1000);
 
 const STAGES = [
-  ["acquiring-lock", "正在检查运行锁"],
-  ["preflight", "正在执行发布预检"],
-  ["resolving-term", "正在解析学期"],
-  ["checking-campus-network", "正在检查校园网"],
-  ["checking-session", "正在检查教务登录状态"],
-  ["crawling", "正在抓取全校课表"],
-  ["building-staging", "正在生成单一 Staging"],
-  ["validating-local", "正在校验本地 Staging"],
-  ["checking-fingerprint", "正在检查 canonicalHash"],
-  ["uploading-oracle", "正在上传 Oracle Staging"],
-  ["waiting-staging-finalize", "正在等待 Oracle 合并校验"],
-  ["publishing-release", "正在触发 Oracle Release"],
-  ["waiting-release-job", "正在等待 Release 后台任务"],
-  ["verifying-oracle", "正在验证 Oracle 静态发布"],
-  ["mirroring-cloudbase", "正在镜像 CloudBase Hosting"],
-  ["verifying-cloudbase", "正在验证 CloudBase 远端 hash/size"],
-  ["live-smoke", "正在执行双源 live smoke"],
-  ["completed", "发布完成"],
+  ["acquiring-lock", "acquiring publisher lock"],
+  ["local-preflight", "running local publisher preflight"],
+  ["resolving-term", "resolving term"],
+  ["checking-campus-network", "checking campus network"],
+  ["checking-session", "checking education session"],
+  ["crawling", "crawling school schedules"],
+  ["building-staging", "building staging snapshot"],
+  ["validating-local", "validating local staging"],
+  ["calculating-diff", "writing diff report"],
+  ["checking-fingerprint", "checking canonicalHash"],
+  ["uploading-oracle", "uploading Oracle staging"],
+  ["waiting-staging-finalize", "waiting Oracle staging finalize"],
+  ["publishing-release", "publishing Oracle release"],
+  ["waiting-release-job", "waiting Oracle release job"],
+  ["verifying-oracle-only", "running Oracle-only smoke"],
+  ["cloudbase-preflight-and-mirror", "running CloudBase preflight and mirror"],
+  ["verifying-cloudbase-and-dual-source", "running CloudBase and dual-source smoke"],
+  ["completed", "completed"],
 ];
-
 const STAGE_INDEX = new Map(STAGES.map(([name], index) => [name, index]));
 
 function parseArgs(argv) {
@@ -194,6 +193,44 @@ async function postJson(url, body, options = {}) {
   return response.data;
 }
 
+function safeRelativePath(value) {
+  const text = String(value || "");
+  if (!text) return "";
+  const normalized = path.resolve(text);
+  const rel = path.relative(PROJECT_ROOT, normalized);
+  if (rel && !rel.startsWith("..") && !path.isAbsolute(rel)) return rel.replace(/\\/g, "/");
+  return path.basename(text);
+}
+
+function sanitizeReceiptForUpload(receipt) {
+  const clean = redact(JSON.parse(JSON.stringify(receipt || {})));
+  function scrubPaths(value) {
+    if (Array.isArray(value)) return value.map(scrubPaths);
+    if (value && typeof value === "object") {
+      Object.keys(value).forEach((key) => {
+        if (/path|dir|root/i.test(key) && typeof value[key] === "string") {
+          value[key] = safeRelativePath(value[key]);
+        } else {
+          value[key] = scrubPaths(value[key]);
+        }
+      });
+    }
+    return value;
+  }
+  return scrubPaths(clean);
+}
+
+async function uploadPublisherReceipt(args, receipt) {
+  if (process.env.FOSU_PUBLISHER_MOCK === "1") {
+    return { success: true, skipped: true, reason: "mock" };
+  }
+  const baseUrl = String(args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL).replace(/\/+$/g, "");
+  return postJson(`${baseUrl}/api/admin/publisher/receipt`, sanitizeReceiptForUpload(receipt), {
+    headers: axiosHeaders(),
+    timeoutMs: 30000,
+  });
+}
+
 async function waitAdminJob(baseUrl, jobId, label, run) {
   const url = `${baseUrl.replace(/\/+$/g, "")}/api/admin/jobs/${encodeURIComponent(jobId)}`;
   for (let attempt = 1; attempt <= 240; attempt += 1) {
@@ -227,19 +264,58 @@ class PublisherRun {
     this.receiptPath = path.join(this.runDir, "receipt.json");
     this.errorPath = path.join(this.runDir, "error.json");
     this.stagingMetaPath = path.join(this.runDir, "staging-meta.json");
+    this.diffReportPath = path.join(this.runDir, "diff-report.json");
     this.cloudbaseReceiptPath = path.join(this.runDir, "cloudbase-receipt.json");
     this.state = readJsonSafe(this.statePath, {
       schemaVersion: 1,
       runId: this.runId,
       mode: this.mode,
+      originalMode: this.mode === "resume" ? "" : this.mode,
+      originalArgs: redact(this.args),
       status: "running",
       currentStage: "",
       completedStages: [],
+      retryCount: 0,
       startedAt: nowIso(),
       updatedAt: nowIso(),
-      paths: {},
+      term: "",
+      termConfig: null,
+      stagingPath: "",
+      stagingMetaPath: this.stagingMetaPath,
+      diffReportPath: this.diffReportPath,
+      canonicalHash: "",
+      previousCanonicalHash: "",
+      uploadId: "",
+      uploadResult: null,
+      publishJobId: "",
+      publishResult: null,
+      oracleReleaseVersion: "",
+      oracleVerification: null,
+      cloudbaseRelation: null,
+      cloudbaseReceipt: null,
+      manualPackage: null,
+      paths: {
+        state: this.statePath,
+        events: this.eventsPath,
+        receipt: this.receiptPath,
+        error: this.errorPath,
+        stagingMeta: this.stagingMetaPath,
+        diffReport: this.diffReportPath,
+        cloudbaseReceipt: this.cloudbaseReceiptPath,
+      },
       summary: {},
     });
+    if (this.mode === "resume") {
+      this.originalMode = this.state.originalMode && this.state.originalMode !== "resume"
+        ? this.state.originalMode
+        : "routine";
+      this.originalArgs = Object.assign({}, this.state.originalArgs || {}, this.args || {});
+    } else {
+      this.originalMode = this.mode;
+      this.originalArgs = Object.assign({}, this.args || {});
+      this.state.originalMode = this.originalMode;
+      this.state.originalArgs = redact(this.originalArgs);
+    }
     ensureDir(this.runDir);
   }
 
@@ -321,6 +397,7 @@ class PublisherRun {
         receipt: this.receiptPath,
         error: this.errorPath,
         stagingMeta: this.stagingMetaPath,
+        diffReport: this.diffReportPath,
         cloudbaseReceipt: this.cloudbaseReceiptPath,
       },
     }, payload || {}));
@@ -336,19 +413,39 @@ function acquireLock(run) {
   if (existing) {
     const age = Date.now() - (Date.parse(existing.createdAt || "") || 0);
     const alive = processIsAlive(existing.pid);
+    const existingState = existing.runId
+      ? readJsonSafe(path.join(RUNS_ROOT, existing.runId, "state.json"), null)
+      : null;
+    const stateRunning = existingState && !["completed", "failed", "partial-success", "no-change"].includes(String(existingState.status || ""));
     if (alive && age < STALE_LOCK_MS) {
       const error = new Error(`publisher is already running: ${existing.runId || existing.pid}`);
       error.code = "PUBLISHER_LOCKED";
       throw error;
     }
-    run.event("stale-lock-removed", { existing, age, alive });
+    if (alive || (age < STALE_LOCK_MS && stateRunning)) {
+      const error = new Error(`publisher lock is not stale yet: ${existing.runId || existing.pid}`);
+      error.code = "PUBLISHER_LOCKED";
+      throw error;
+    }
+    run.event("stale-lock-removed", { existing, age, alive, stateStatus: existingState && existingState.status || "" });
+    try { fs.unlinkSync(LOCK_PATH); } catch (error) {}
   }
-  writeJsonAtomic(LOCK_PATH, {
+  const payload = {
     runId: run.runId,
     pid: process.pid,
     createdAt: nowIso(),
     cwd: PROJECT_ROOT,
-  });
+  };
+  try {
+    const fd = fs.openSync(LOCK_PATH, "wx");
+    fs.writeFileSync(fd, JSON.stringify(payload, null, 2), "utf8");
+    fs.closeSync(fd);
+  } catch (error) {
+    const locked = new Error(`publisher is already running: ${LOCK_PATH}`);
+    locked.code = "PUBLISHER_LOCKED";
+    locked.originalError = error;
+    throw locked;
+  }
 }
 
 function releaseLock(run) {
@@ -373,11 +470,69 @@ function requireSession() {
   const sessionPath = path.join(PROJECT_ROOT, "tools", "fosu-sync-client", ".session", "session.json");
   const stat = fs.existsSync(sessionPath) ? fs.statSync(sessionPath) : null;
   if (!stat || stat.size < 20) {
-    const error = new Error("教务登录状态不存在或已损坏，请先运行 npm run login。");
+    const error = new Error("Education session is missing or invalid. Run npm run login.");
     error.code = "SESSION_REQUIRED_RUN_NPM_LOGIN";
     throw error;
   }
   return { sessionPath, size: stat.size, mtime: stat.mtime.toISOString() };
+}
+
+function verifyEducationSession() {
+  const local = requireSession();
+  if (process.env.FOSU_PUBLISHER_MOCK === "1") return local;
+  runCommand("node", ["tools/fosu-sync-client/sync.js", "check-session"], {
+    code: "SESSION_REQUIRED_RUN_NPM_LOGIN",
+    timeoutMs: 180000,
+  });
+  return Object.assign({}, local, { verified: true });
+}
+
+async function runLocalPreflight(args) {
+  if (process.env.FOSU_PUBLISHER_MOCK === "1") {
+    return { success: true, mocked: true, cloudbaseChecked: false };
+  }
+  const checks = [];
+  const nodeVersion = runCommand("node", ["--version"], { inherit: false, code: "NODE_CHECK_FAILED" }).stdout.trim();
+  checks.push({ name: "node", ok: true, version: nodeVersion });
+  const npmVersion = runCommand("npm", ["--version"], { inherit: false, code: "NPM_CHECK_FAILED" }).stdout.trim();
+  checks.push({ name: "npm", ok: true, version: npmVersion });
+  const packageLock = path.join(PROJECT_ROOT, "package-lock.json");
+  const nodeModules = path.join(PROJECT_ROOT, "node_modules");
+  checks.push({ name: "dependencies", ok: fs.existsSync(nodeModules) || fs.existsSync(packageLock), nodeModules: fs.existsSync(nodeModules), packageLock: fs.existsSync(packageLock) });
+  if (!process.env.ADMIN_API_TOKEN && !process.env.ORACLE_ADMIN_TOKEN) {
+    const error = new Error("ADMIN_API_TOKEN is required for Oracle staging upload and receipt sync.");
+    error.code = "ADMIN_API_TOKEN_REQUIRED";
+    throw error;
+  }
+  const gitStatus = runCommand("git", ["status", "--porcelain"], { inherit: false, code: "GIT_STATUS_FAILED" }).stdout;
+  if (args["require-clean-git"] && gitStatus.trim()) {
+    const error = new Error("Git working tree is not clean.");
+    error.code = "GIT_WORKTREE_DIRTY";
+    throw error;
+  }
+  checks.push({ name: "git", ok: true, clean: !gitStatus.trim() });
+  const stat = fs.statSync(PROJECT_ROOT);
+  checks.push({ name: "project-root", ok: stat.isDirectory() });
+  ensureDir(RUNS_ROOT);
+  const probePath = path.join(RUNS_ROOT, `.preflight-${process.pid}-${Date.now()}.tmp`);
+  fs.writeFileSync(probePath, "ok", "utf8");
+  fs.unlinkSync(probePath);
+  checks.push({ name: "runs-root-writable", ok: true });
+  const oracleBaseUrl = args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL;
+  const health = await getJson(`${oracleBaseUrl.replace(/\/+$/g, "")}/api/health`, { timeoutMs: 15000 })
+    .catch((error) => ({ success: false, code: error.code || "ORACLE_HEALTH_FAILED", message: error.message }));
+  if (health && health.success === false) {
+    const error = new Error(`Oracle API health check failed: ${health.code || health.message || "unknown"}`);
+    error.code = "ORACLE_API_UNAVAILABLE";
+    error.health = health;
+    throw error;
+  }
+  checks.push({ name: "oracle-api", ok: true });
+  return {
+    success: true,
+    cloudbaseChecked: false,
+    checks,
+  };
 }
 
 function buildCrawlArgs(mode, args, run, term) {
@@ -409,11 +564,11 @@ function buildCrawlArgs(mode, args, run, term) {
 function privacyScanText(text) {
   const findings = [];
   [
-    ["password", /password|passwd|pwd|密码/i],
+    ["password", /password|passwd|pwd/i],
     ["authorization", /authorization|bearer\s+[a-z0-9._~+/=-]{8,}/i],
     ["cookie", /cookie|set-cookie|JSESSIONID/i],
     ["api-key", /api[-_]?key|secret(?:id|key)?|access[-_]?token/i],
-    ["student-id", /学号|student(?:id|number)|\b\d{10,16}\b/i],
+    ["student-id", /student(?:id|number)|\b\d{10,16}\b/i],
     ["id-card", /\b\d{17}[\dXx]\b/],
   ].forEach(([rule, pattern]) => {
     if (pattern.test(text)) findings.push({ rule });
@@ -428,6 +583,18 @@ function validateStaging(stagingPath, expectedTerm) {
   const summary = summarizeStagingData(data);
   const contract = buildResourceCountContract(data);
   const counts = flattenLegacyCounts(contract);
+  const classSchedules = Array.isArray(data.classSchedules) ? data.classSchedules : [];
+  const courseEvents = classSchedules.reduce((total, item) => {
+    const events = Array.isArray(item && item.courses) ? item.courses : [];
+    return total + events.length;
+  }, 0);
+  const normalizedCounts = Object.assign({}, counts, {
+    classSchedules: counts.classScheduleCount,
+    teacherSchedules: counts.teacherScheduleCount,
+    classroomSchedules: counts.classroomScheduleCount,
+    courseSchedules: counts.courseScheduleCount,
+    courseEvents,
+  });
   const includeScopes = data.meta && data.meta.includeScopes || [];
   const sourceModes = {
     teacher: contract.teacher.sourceMode,
@@ -464,7 +631,7 @@ function validateStaging(stagingPath, expectedTerm) {
     canonicalHash: fingerprint.canonicalHash,
     rawSizeBytes: fingerprint.rawSizeBytes,
     summary,
-    counts,
+    counts: normalizedCounts,
     sourceModes,
     includeScopes,
     actualNetworkRequestCount: Number(data.meta && data.meta.actualNetworkRequestCount || 0),
@@ -483,10 +650,86 @@ async function checkFingerprint(baseUrl, canonicalHash) {
       sameAsActive: process.env.FOSU_PUBLISHER_MOCK_NO_CHANGE === "1",
       sameAsStaging: false,
       canonicalHash,
+      activeCanonicalHash: process.env.FOSU_PUBLISHER_MOCK_NO_CHANGE === "1" ? canonicalHash : "mock-active-hash",
+      activeRelease: {
+        version: "mock-active-release",
+        releaseVersion: "mock-active-release",
+        canonicalHash: process.env.FOSU_PUBLISHER_MOCK_NO_CHANGE === "1" ? canonicalHash : "mock-active-hash",
+        counts: { classSchedules: 3, teacherSchedules: 600, classroomSchedules: 3, courseSchedules: 3 },
+      },
     };
   }
   const url = `${baseUrl.replace(/\/+$/g, "")}/api/admin/staging/fingerprint?canonicalHash=${encodeURIComponent(canonicalHash)}`;
   return getJson(url, { headers: axiosHeaders(), timeoutMs: 30000 });
+}
+
+function countDelta(oldValue, newValue) {
+  const oldCount = Number(oldValue || 0);
+  const newCount = Number(newValue || 0);
+  const delta = newCount - oldCount;
+  const rate = oldCount > 0 ? delta / oldCount : (newCount > 0 ? 1 : 0);
+  return {
+    oldCount,
+    newCount,
+    added: delta > 0 ? delta : 0,
+    deleted: delta < 0 ? Math.abs(delta) : 0,
+    changed: oldCount && newCount && oldCount !== newCount ? Math.abs(delta) : 0,
+    delta,
+    changeRate: Number((Math.abs(rate) * 100).toFixed(2)),
+  };
+}
+
+function buildDiffReport(stagingMeta, fingerprintStatus, run) {
+  const active = fingerprintStatus && fingerprintStatus.activeRelease || {};
+  const oldCounts = active.counts || active.summary && active.summary.counts || {};
+  const newCounts = stagingMeta.counts || {};
+  const dimensions = {
+    class: countDelta(oldCounts.classSchedules || oldCounts.classScheduleCount, newCounts.classSchedules),
+    teacher: countDelta(oldCounts.teacherSchedules || oldCounts.teacherScheduleCount, newCounts.teacherSchedules),
+    classroom: countDelta(oldCounts.classroomSchedules || oldCounts.classroomScheduleCount, newCounts.classroomSchedules),
+    course: countDelta(oldCounts.courseSchedules || oldCounts.courseScheduleCount, newCounts.courseSchedules),
+  };
+  const eventDelta = countDelta(
+    oldCounts.courseEvents || oldCounts.courseEventCount || oldCounts.classCourseEvents,
+    newCounts.courseEvents || newCounts.classCourseEvents || newCounts.classSchedules
+  );
+  const riskReasons = [];
+  if (!newCounts.classSchedules) riskReasons.push("classSchedules=0");
+  if (stagingMeta.sourceModes && Object.values(stagingMeta.sourceModes).some((value) => value !== "derived-current-run")) riskReasons.push("sourceMode mismatch");
+  if (Number(stagingMeta.actualNetworkRequestCount || 0) <= 0) riskReasons.push("actual network request count is zero");
+  if (newCounts.teacherSchedules > 0 && newCounts.teacherSchedules < 500) riskReasons.push("teacher schedules unexpectedly low");
+  Object.keys(dimensions).forEach((key) => {
+    const item = dimensions[key];
+    if (item.oldCount > 0 && item.newCount === 0) riskReasons.push(`${key} dimension dropped to zero`);
+    if (item.delta < 0 && item.changeRate > 50) riskReasons.push(`${key} dimension dropped ${item.changeRate}%`);
+  });
+  const samples = Object.keys(dimensions)
+    .filter((key) => dimensions[key].delta !== 0)
+    .slice(0, 20)
+    .map((key) => ({
+      type: key,
+      summary: `${key}: ${dimensions[key].oldCount} -> ${dimensions[key].newCount}`,
+    }));
+  return {
+    schemaVersion: 1,
+    generatedAt: nowIso(),
+    runId: run.runId,
+    oldCanonicalHash: fingerprintStatus && (fingerprintStatus.activeCanonicalHash || fingerprintStatus.activeRelease && fingerprintStatus.activeRelease.canonicalHash) || "",
+    newCanonicalHash: stagingMeta.canonicalHash,
+    oldRelease: active.releaseVersion || active.version || "",
+    newStaging: path.basename(stagingMeta.stagingPath || ""),
+    term: stagingMeta.term || "",
+    dimensions,
+    courseEvents: {
+      added: eventDelta.added,
+      deleted: eventDelta.deleted,
+      modified: eventDelta.changed,
+      changeRate: eventDelta.changeRate,
+    },
+    samples,
+    riskReasons,
+    requiresConfirmation: riskReasons.length > 0,
+  };
 }
 
 async function publishStaging(baseUrl, run, args) {
@@ -509,13 +752,21 @@ async function publishStaging(baseUrl, run, args) {
   return data;
 }
 
-function runLiveSmoke(args) {
-  if (process.env.FOSU_PUBLISHER_MOCK === "1") return { success: true, mocked: true };
+function runOracleOnlySmoke(args) {
+  if (process.env.FOSU_PUBLISHER_MOCK === "1") return { success: true, mode: "oracle-only", mocked: true };
+  const cmdArgs = ["tools/cloudbase/live-smoke.js", "--oracle-only"];
+  if (args["oracle-base-url"]) cmdArgs.push(`--oracle-base-url=${args["oracle-base-url"]}`);
+  runCommand("node", cmdArgs, { code: "ORACLE_ONLY_SMOKE_FAILED" });
+  return { success: true, mode: "oracle-only" };
+}
+
+function runDualSourceSmoke(args) {
+  if (process.env.FOSU_PUBLISHER_MOCK === "1") return { success: true, mode: "dual-source-full", mocked: true };
   const cmdArgs = ["tools/cloudbase/live-smoke.js"];
   if (args["cloudbase-base-url"]) cmdArgs.push(`--cloudbase-base-url=${args["cloudbase-base-url"]}`);
   if (args["oracle-base-url"]) cmdArgs.push(`--oracle-base-url=${args["oracle-base-url"]}`);
   runCommand("node", cmdArgs, { code: "LIVE_SMOKE_FAILED" });
-  return { success: true };
+  return { success: true, mode: "dual-source-full" };
 }
 
 async function mirrorCloudbase(args) {
@@ -535,6 +786,18 @@ async function mirrorCloudbase(args) {
     oracleBaseUrl: args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL,
     outputRoot: args["output-root"] || DEFAULT_OUTPUT_ROOT,
   });
+}
+
+async function cloudbasePreflightAndMirror(args) {
+  if (process.env.FOSU_PUBLISHER_MOCK !== "1") {
+    runCommand("npm", ["run", "cloudbase:preflight"], { code: "CLOUDBASE_PREFLIGHT_FAILED", timeoutMs: 360000 });
+  }
+  const mirror = await mirrorCloudbase(args);
+  return {
+    success: true,
+    preflight: { success: true },
+    mirror,
+  };
 }
 
 function copyRecursive(src, dest) {
@@ -626,15 +889,15 @@ async function exportCloudbaseManualPackage(args, releaseVersion) {
     `pointerHash=${receipt.pointer.hash}`,
     `pointerSize=${receipt.pointer.size}`,
   ].join(os.EOL), "utf8");
-  fs.writeFileSync(path.join(manualRoot, "人工上传说明.txt"), [
-    "CloudBase Hosting 人工上传步骤",
+  fs.writeFileSync(path.join(manualRoot, "README-CLOUDBASE-MANUAL-UPLOAD.txt"), [
+    "CloudBase Hosting manual upload package",
     "",
-    "1. 进入 CloudBase 控制台 -> 静态网站托管 -> 文件管理。",
-    `2. 先上传目录：releases/${version}/`,
-    `3. 验证文件可访问：releases/${version}/manifest.json`,
-    "4. 最后覆盖：runtime/active.json",
-    "5. 禁止先上传 pointer。",
-    "6. 不需要在云存储或数据库中上传。",
+    "1. Upload the releases/<releaseVersion>/ directory first.",
+    `2. Remote release prefix: releases/${version}/`,
+    `3. Verify releases/${version}/manifest.json hash and size after upload.`,
+    "4. Upload runtime/active.json only after every release file is verified.",
+    "5. Run CloudBase live smoke after the pointer is uploaded.",
+    "6. If smoke fails, keep the old pointer and retry mirror-only after fixing CloudBase.",
   ].join(os.EOL), "utf8");
   const zipPath = path.join(PROJECT_ROOT, "dist", `FosuClass-CloudBase-${version}.zip`);
   try {
@@ -670,6 +933,7 @@ function showToast(title, message) {
 }
 
 async function runMainPipeline(run, args) {
+  args = run.mode === "resume" ? Object.assign({}, run.originalArgs || {}, args || {}) : (args || {});
   let lockAcquired = false;
   let termInfo = null;
   let stagingMeta = null;
@@ -685,9 +949,9 @@ async function runMainPipeline(run, args) {
     });
 
     if (run.mode === "export-cloudbase") {
-      const exportReceipt = await run.stage("mirroring-cloudbase", async () => exportCloudbaseManualPackage(args, args.release));
+      const exportReceipt = await run.stage("cloudbase-preflight-and-mirror", async () => exportCloudbaseManualPackage(args, args.release));
       await run.stage("completed", async () => ({ success: true, status: "manual-package-exported" }));
-      receipt = run.receipt({
+      const receipt = run.receipt({
         success: true,
         status: "success",
         mode: run.mode,
@@ -699,22 +963,20 @@ async function runMainPipeline(run, args) {
       return receipt;
     }
 
-    await run.stage("preflight", async () => {
-      runCommand("npm", ["run", "cloudbase:preflight"], { code: "CLOUDBASE_PREFLIGHT_FAILED", timeoutMs: 360000 });
-      return { success: true };
-    });
+    await run.stage("local-preflight", async () => runLocalPreflight(args));
 
     termInfo = await run.stage("resolving-term", async () => resolveTerm(args));
     const term = termInfo.term || (run.state.summary["resolving-term"] && run.state.summary["resolving-term"].term);
+    run.save({ term, termConfig: termInfo.termConfig || null });
 
     if (run.mode === "mirror-only") {
-      await run.stage("mirroring-cloudbase", async () => {
-        cloudbaseReceipt = await mirrorCloudbase(args);
+      await run.stage("cloudbase-preflight-and-mirror", async () => {
+        cloudbaseReceipt = await cloudbasePreflightAndMirror(args);
         writeJsonAtomic(run.cloudbaseReceiptPath, cloudbaseReceipt);
+        run.save({ cloudbaseReceipt, cloudbaseRelation: cloudbaseReceipt.mirror && cloudbaseReceipt.mirror.relation || null });
         return cloudbaseReceipt;
       });
-      await run.stage("verifying-cloudbase", async () => ({ success: true, mirrored: true }));
-      liveSmoke = await run.stage("live-smoke", async () => runLiveSmoke(args));
+      liveSmoke = await run.stage("verifying-cloudbase-and-dual-source", async () => runDualSourceSmoke(args));
       await run.stage("completed", async () => ({ success: true }));
       return run.receipt({
         success: true,
@@ -742,9 +1004,10 @@ async function runMainPipeline(run, args) {
       return { success: true };
     });
 
-    await run.stage("checking-session", async () => requireSession());
+    await run.stage("checking-session", async () => verifyEducationSession());
 
-    const crawlPlan = buildCrawlArgs(run.mode === "full" ? "full" : "routine", args, run, term);
+    const effectiveMode = run.mode === "resume" ? run.originalMode : run.mode;
+    const crawlPlan = buildCrawlArgs(effectiveMode === "full" ? "full" : "routine", args, run, term);
     await run.stage("crawling", async () => {
       runCommand("node", crawlPlan.args, {
         code: "LOCAL_CRAWL_FAILED",
@@ -761,31 +1024,87 @@ async function runMainPipeline(run, args) {
       if (process.env.FOSU_PUBLISHER_MOCK === "1") {
         writeJsonAtomic(crawlPlan.output, buildMockStaging(term));
       }
+      run.save({ stagingPath: crawlPlan.output });
       return { success: true, stagingPath: crawlPlan.output };
     });
 
     stagingMeta = await run.stage("validating-local", async () => {
       const meta = validateStaging(crawlPlan.output, term);
       writeJsonAtomic(run.stagingMetaPath, meta);
+      run.save({
+        stagingPath: crawlPlan.output,
+        stagingMetaPath: run.stagingMetaPath,
+        canonicalHash: meta.canonicalHash,
+        termConfig: meta.termConfig || null,
+      });
       return meta;
     });
 
-    const fingerprint = await run.stage("checking-fingerprint", async () => {
-      const check = await checkFingerprint(args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL, stagingMeta.canonicalHash);
+    let fingerprint = null;
+    const diffReport = await run.stage("calculating-diff", async () => {
+      fingerprint = await checkFingerprint(args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL, stagingMeta.canonicalHash);
+      const report = buildDiffReport(stagingMeta, fingerprint, run);
+      writeJsonAtomic(run.diffReportPath, report);
+      run.save({
+        diffReportPath: run.diffReportPath,
+        previousCanonicalHash: report.oldCanonicalHash,
+      });
+      return report;
+    });
+    if (diffReport.requiresConfirmation) {
+      const error = new Error(`Publisher requires confirmation: ${diffReport.riskReasons.join("; ")}`);
+      error.code = "PUBLISHER_REQUIRES_CONFIRMATION";
+      error.diffReportPath = run.diffReportPath;
+      throw error;
+    }
+
+    fingerprint = await run.stage("checking-fingerprint", async () => {
+      const check = fingerprint || await checkFingerprint(args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL, stagingMeta.canonicalHash);
+      run.save({
+        previousCanonicalHash: check.activeCanonicalHash || "",
+        canonicalHash: stagingMeta.canonicalHash,
+      });
       return Object.assign({ canonicalHash: stagingMeta.canonicalHash }, check);
     });
     if (fingerprint.sameAsActive) {
-      await run.stage("completed", async () => ({ success: true, status: "no-change" }));
-      showToast("佛课小表同步", "数据无变化，已跳过上传和 CloudBase 镜像。");
+      let noChangeSmoke = null;
+      let noChangeStatus = "no-change";
+      let noChangeCloudbaseStatus = "same-and-healthy";
+      try {
+        noChangeSmoke = await run.stage("verifying-cloudbase-and-dual-source", async () => runDualSourceSmoke(args));
+      } catch (smokeError) {
+        run.event("no-change-dual-smoke-failed", { code: smokeError.code, message: smokeError.message });
+        try {
+          cloudbaseReceipt = await run.stage("cloudbase-preflight-and-mirror", async () => {
+            const repaired = await cloudbasePreflightAndMirror(args);
+            writeJsonAtomic(run.cloudbaseReceiptPath, repaired);
+            run.save({ cloudbaseReceipt: repaired });
+            return repaired;
+          });
+          noChangeSmoke = await run.stage("verifying-cloudbase-and-dual-source", async () => runDualSourceSmoke(args));
+          noChangeStatus = "no-data-change-cloudbase-repaired";
+          noChangeCloudbaseStatus = "repaired";
+        } catch (repairError) {
+          run.event("no-change-cloudbase-repair-failed", { code: repairError.code, message: repairError.message });
+          noChangeStatus = "partial-success";
+          noChangeCloudbaseStatus = "cloudbase-mirror-pending";
+        }
+      }
+      await run.stage("completed", async () => ({ success: true, status: noChangeStatus }));
+      showToast("Publisher", "No data change; dual-source health check completed.");
       return run.receipt({
-        success: true,
-        status: "no-change",
+        success: noChangeStatus !== "partial-success",
+        status: noChangeStatus,
+        overallStatus: noChangeStatus,
         skipped: true,
         term,
         canonicalHash: stagingMeta.canonicalHash,
         counts: stagingMeta.counts,
         oracleStatus: "no-change",
-        cloudbaseStatus: "not-run",
+        cloudbaseStatus: noChangeCloudbaseStatus,
+        cloudbaseReceipt,
+        liveSmoke: noChangeSmoke,
+        diffReportPath: run.diffReportPath,
       });
     }
 
@@ -803,6 +1122,7 @@ async function runMainPipeline(run, args) {
           canonicalHash: stagingMeta.canonicalHash,
           skipped: false,
         };
+        run.save({ uploadId: uploadResult.uploadId, uploadResult });
         return uploadResult;
       }
       uploadResult = await uploadStagingFile({
@@ -815,6 +1135,7 @@ async function runMainPipeline(run, args) {
         note: args.note || `publisher ${run.runId}`,
         source: "fosu-publisher",
       });
+      run.save({ uploadId: uploadResult.uploadId || uploadResult.stagingId || "", uploadResult });
       return uploadResult;
     });
 
@@ -822,30 +1143,39 @@ async function runMainPipeline(run, args) {
 
     await run.stage("publishing-release", async () => {
       publishResult = await publishStaging(args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL, run, args);
+      run.save({
+        publishJobId: publishResult.jobId || publishResult.job && publishResult.job.id || "",
+        publishResult,
+        oracleReleaseVersion: publishResult.releaseVersion || publishResult.activeReleaseVersion || publishResult.version || "",
+      });
       return publishResult;
     });
 
     await run.stage("waiting-release-job", async () => ({ success: true, publishResult }));
 
-    await run.stage("verifying-oracle", async () => runLiveSmoke(args));
+    const oracleVerification = await run.stage("verifying-oracle-only", async () => runOracleOnlySmoke(args));
+    run.save({ oracleVerification });
 
     try {
-      await run.stage("mirroring-cloudbase", async () => {
-        cloudbaseReceipt = await mirrorCloudbase(args);
+      await run.stage("cloudbase-preflight-and-mirror", async () => {
+        cloudbaseReceipt = await cloudbasePreflightAndMirror(args);
         writeJsonAtomic(run.cloudbaseReceiptPath, cloudbaseReceipt);
+        run.save({ cloudbaseReceipt, cloudbaseRelation: cloudbaseReceipt.mirror && cloudbaseReceipt.mirror.relation || null });
         return cloudbaseReceipt;
       });
-      await run.stage("verifying-cloudbase", async () => ({ success: true, cloudbaseReceipt }));
-      liveSmoke = await run.stage("live-smoke", async () => runLiveSmoke(args));
+      liveSmoke = await run.stage("verifying-cloudbase-and-dual-source", async () => runDualSourceSmoke(args));
       await run.stage("completed", async () => ({ success: true }));
-      showToast("佛课小表同步", "Oracle 和 CloudBase 双源发布完成。");
+      showToast("Publisher", "Oracle and CloudBase are both published and verified.");
       return run.receipt({
         success: true,
+        overallStatus: "success",
         term,
         canonicalHash: stagingMeta.canonicalHash,
         counts: stagingMeta.counts,
+        diffReportPath: run.diffReportPath,
         uploadResult,
         publishResult,
+        oracleVerification,
         cloudbaseReceipt,
         liveSmoke,
         oracleStatus: "published",
@@ -858,19 +1188,23 @@ async function runMainPipeline(run, args) {
       if (releaseVersion) {
         try {
           manualPackage = await exportCloudbaseManualPackage(args, releaseVersion);
+          run.save({ manualPackage });
         } catch (exportError) {
           run.event("manual-export-failed", { code: exportError.code, message: exportError.message });
         }
       }
-      showToast("佛课小表同步", "Oracle 已发布，CloudBase 镜像待重试。");
+      showToast("Publisher", "Oracle published; CloudBase mirror is pending.");
       return run.receipt({
         success: false,
         status: "partial-success",
+        overallStatus: "partial-success",
         term,
         canonicalHash: stagingMeta.canonicalHash,
         counts: stagingMeta.counts,
+        diffReportPath: run.diffReportPath,
         uploadResult,
         publishResult,
+        oracleVerification,
         oracleStatus: "published",
         cloudbaseStatus: "cloudbase-mirror-pending",
         cloudbaseError: { code: cloudbaseError.code || "CLOUDBASE_MIRROR_FAILED", message: cloudbaseError.message },
@@ -950,7 +1284,7 @@ async function main(argv = process.argv.slice(2)) {
   const requestedMode = String(args.mode || "routine").trim();
   const mode = requestedMode === "export-cloudbase" ? "export-cloudbase" : requestedMode;
   if (args.deprecated) {
-    console.warn(`[deprecated] ${args.deprecated} 已收敛到 npm run sync:publish；请后续只使用 sync:publish。`);
+    console.warn(`[deprecated] ${args.deprecated} is deprecated. Use npm run sync:publish instead.`);
   }
   if (mode === "full") {
     const missing = ["term", "term-start-date", "total-weeks"].filter((key) => !args[key] && !(key === "term" && args.semester));
@@ -971,7 +1305,42 @@ async function main(argv = process.argv.slice(2)) {
     }
   }
   const run = new PublisherRun({ mode, args, runId });
-  const receipt = await runMainPipeline(run, args);
+  let receipt = null;
+  try {
+    receipt = await runMainPipeline(run, args);
+  } catch (error) {
+    const failureReceipt = run.receipt({
+      success: false,
+      status: "failed",
+      overallStatus: "failed",
+      code: error.code || "PUBLISHER_FAILED",
+      message: error.message,
+      currentStage: run.state.currentStage,
+      term: run.state.term || args.term || "",
+      canonicalHash: run.state.canonicalHash || "",
+      diffReportPath: run.diffReportPath,
+      oracleStatus: run.state.oracleReleaseVersion ? "published" : "not-published",
+      cloudbaseStatus: run.state.oracleReleaseVersion ? "cloudbase-mirror-pending" : "not-run",
+    });
+    try {
+      await uploadPublisherReceipt(args, failureReceipt);
+    } catch (receiptError) {
+      run.event("publisher-receipt-upload-failed", { code: receiptError.code, message: receiptError.message });
+    }
+    throw error;
+  }
+  try {
+    const uploadedReceipt = await uploadPublisherReceipt(args, receipt);
+    receipt.publisherReceiptUpload = uploadedReceipt;
+    writeJsonAtomic(run.receiptPath, redact(receipt));
+  } catch (receiptError) {
+    receipt.publisherReceiptWarning = {
+      code: receiptError.code || "PUBLISHER_RECEIPT_UPLOAD_FAILED",
+      message: receiptError.message,
+    };
+    run.event("publisher-receipt-upload-failed", receipt.publisherReceiptWarning);
+    writeJsonAtomic(run.receiptPath, redact(receipt));
+  }
   console.log(JSON.stringify(redact({
     runId: receipt.runId,
     status: receipt.status || (receipt.success ? "success" : "failed"),
@@ -1006,5 +1375,9 @@ module.exports = {
   parseArgs,
   processIsAlive,
   redact,
+  runDualSourceSmoke,
+  runLocalPreflight,
+  runOracleOnlySmoke,
+  sanitizeReceiptForUpload,
   validateStaging,
 };

@@ -7,20 +7,27 @@ const VOLATILE_KEYS = new Set([
   "canonicalHash",
   "changed",
   "dataEpoch",
+  "duration",
+  "durationMs",
+  "elapsedMs",
   "forceRefreshToken",
   "generatedAt",
   "hash",
-  "id",
   "joinedPath",
   "jsonPath",
+  "log",
+  "logs",
   "meta",
   "pack",
   "packHealth",
   "publishedAt",
+  "requestDuration",
+  "requestDurationMs",
   "releasePack",
   "releaseVersion",
   "size",
   "stagingUploadId",
+  "uploadId",
   "updatedAt",
   "version",
 ]);
@@ -58,9 +65,54 @@ function summarizeStagingData(data) {
   };
 }
 
-function stableClone(value) {
+function cmpText(left, right) {
+  return String(left || "").localeCompare(String(right || ""), "zh-CN", { numeric: true });
+}
+
+function firstOf(value, keys) {
+  for (const key of keys) {
+    if (value && value[key] !== undefined && value[key] !== null && value[key] !== "") {
+      return value[key];
+    }
+  }
+  return "";
+}
+
+function eventSortKey(item) {
+  const source = item && typeof item === "object" ? item : {};
+  return [
+    Number(firstOf(source, ["weekday", "weekDay", "dayOfWeek"]) || 0),
+    Number(firstOf(source, ["startSection", "sectionStart"]) || 0),
+    Number(firstOf(source, ["endSection", "sectionEnd"]) || 0),
+    Number(firstOf(source, ["startWeek"]) || 0),
+    Number(firstOf(source, ["endWeek"]) || 0),
+    firstOf(source, ["weekPattern", "weekType", "oddEven", "weekParity", "parity"]),
+    firstOf(source, ["courseName", "name"]),
+    firstOf(source, ["teacherName", "teacher"]),
+    firstOf(source, ["classroom", "roomName", "classroomName"]),
+  ].join("\u0001");
+}
+
+function entitySortKey(item, path) {
+  const source = item && typeof item === "object" ? item : {};
+  const key = path[path.length - 1] || "";
+  if (key === "colleges") return [firstOf(source, ["code", "collegeCode"]), firstOf(source, ["name", "collegeName"])].join("\u0001");
+  if (key === "majors") return [firstOf(source, ["code", "majorCode"]), firstOf(source, ["name", "majorName"]), firstOf(source, ["collegeCode", "collegeName"]), firstOf(source, ["grade"])].join("\u0001");
+  if (key === "classSchedules" || key === "classes") return [firstOf(source, ["classId", "id"]), firstOf(source, ["className", "name"])].join("\u0001");
+  if (key === "teacherSchedules" || key === "teachers") return [firstOf(source, ["teacherId", "id"]), firstOf(source, ["teacherName", "name"])].join("\u0001");
+  if (key === "classroomSchedules" || key === "classrooms") return [firstOf(source, ["roomId", "classroomId", "id"]), firstOf(source, ["roomName", "classroomName", "name"])].join("\u0001");
+  if (key === "courseSchedules") return [firstOf(source, ["courseId", "id"]), firstOf(source, ["courseName", "name"])].join("\u0001");
+  if (key === "courses" && (source.weekday || source.startSection || source.endSection || source.teacherName || source.classroom)) return eventSortKey(source);
+  if (key === "courses") return [firstOf(source, ["courseId", "id"]), firstOf(source, ["courseName", "name"])].join("\u0001");
+  if (source.weekday || source.startSection || source.endSection || source.courseName) return eventSortKey(source);
+  return stableStringify(source);
+}
+
+function stableClone(value, path = []) {
   if (Array.isArray(value)) {
-    return value.map(stableClone);
+    return value
+      .map((item) => stableClone(item, path))
+      .sort((left, right) => cmpText(entitySortKey(left, path), entitySortKey(right, path)));
   }
   if (!value || typeof value !== "object") {
     return value;
@@ -70,7 +122,7 @@ function stableClone(value) {
     .filter((key) => !VOLATILE_KEYS.has(key))
     .sort()
     .forEach((key) => {
-      const next = stableClone(value[key]);
+      const next = stableClone(value[key], path.concat(key));
       if (next !== undefined) output[key] = next;
     });
   return output;
