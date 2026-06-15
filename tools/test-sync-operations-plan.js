@@ -21,6 +21,13 @@ assert(daily.dynamicScopes.includes("teacherSchedules"));
 assert.strictEqual(daily.sourceRequirements.classSchedules.mode, "network-direct");
 assert.strictEqual(daily.sourceRequirements.teacherSchedules.mode, "network-direct");
 
+const publisher = syncPlan.buildSyncPlan("sync:publish", { term: "2025-2026-2" }, {});
+assert.strictEqual(publisher.profile, "daily");
+assert.strictEqual(publisher.schedulePolicy, "network-only");
+assert.strictEqual(publisher.progressPolicy, "ignore");
+assert.strictEqual(publisher.upload, true);
+assert.strictEqual(publisher.buildRelease, true);
+
 const classes = plan("daily:classes");
 assert(classes.scopes.includes("classSchedules"), "class-only daily should crawl class schedules");
 assert.strictEqual(classes.sourceRequirements.classSchedules.mode, "network-direct");

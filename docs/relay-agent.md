@@ -4,6 +4,14 @@
 
 Relay Agent 用于把轻量采集/上传能力交给在校同学使用。接力同学只需要在校园网环境运行代理端并上传 Staging JSON，不需要后台管理员密码，也不会拿到项目 server 源码。
 
+主运维入口仍然是：
+
+```powershell
+npm run sync:publish
+```
+
+Relay Agent 只用于其他校园网电脑协助采集。它必须使用同一个 `syncPlan`、同一个本地 Staging builder 和同一套 Oracle publish pipeline，不允许产生另一种 Release 格式。
+
 ## 管理员操作
 
 1. 登录后台，进入“同步中心”。
@@ -11,8 +19,8 @@ Relay Agent 用于把轻量采集/上传能力交给在校同学使用。接力�
 3. 创建任务后复制运行命令。
 4. 把 `tools/fosu-relay-agent` 目录或打包产物发给接力同学，同时发送 relay token 命令。
 5. 接力上传完成后，在后台查看上传记录。
-6. 点击“设为 Staging”，再检查 Staging diff。
-7. 确认后发布正式 release。
+6. 上传后进入同一 Staging 上传记录分组。
+7. 后续发布仍走统一 Oracle 发布链和 CloudBase 镜像；不要把 relay 当作另一套主发布入口。
 
 ## 接力同学操作
 

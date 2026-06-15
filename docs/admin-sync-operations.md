@@ -10,25 +10,23 @@
 - 待处理：只显示待审核、失败、发布受阻、重复上传、等待确认。
 - 当前线上：只显示 runtime pointer 指向的 active Release；Published 不等于 Active。
 - 版本管理：Release 与 Staging 分开查看，可对比、健康检查、激活、回滚、归档。
-- 上传记录：按 `term + canonicalHash` 分组，重复上传折叠展示。
-- 命令手册：中文说明，命令代码保留英文。
+- 发布链状态：显示最近一次本机 Publisher receipt，按钮只生成本机命令，不伪装服务器能抓校园网。
+- 上传记录：按 `term + canonicalHash` 分组，重复上传折叠展示，支持筛选、分页、单条删除、批量清理和重建索引。
+- 命令手册：中文说明，命令代码保留英文，只推荐 `sync:publish`。
 
 ## 命令手册名称
 
-- 日常同步：全部动态课表
-- 日常同步：班级课表
-- 日常同步：教师课表
-- 日常同步：教室课表
-- 日常同步：课程课表
-- 自定义同步范围
+- 生成本机一键同步命令
+- 查看本机 Publisher 状态
+- 重试 CloudBase 镜像
+- 导出人工上传包
 - 新学期全量采集
-- 上传本地暂存文件
 - 恢复中断任务
 
 示例命令：
 
 ```powershell
-npm run sync:daily -- --term=2025-2026-2
+npm run sync:publish
 ```
 
 ## 资源计数契约
@@ -69,5 +67,8 @@ Staging 与线上 active 只在相同契约版本、相同学期、相同过滤�
 - `stagingState` 描述上传和校验状态。
 - `releaseState` 描述版本包状态。
 - `runtimeState` 描述是否当前生效。
+- 删除上传记录、删除 Staging 文件、删除 Release 是三类不同操作，后台按钮会明确区分。
+- Active、正在上传、正在验证、正在发布、当前 staging-latest 唯一来源禁止删除。
+- 自动清理策略：duplicate > 7 天、failed > 7 天、incomplete > 24 小时、superseded 原始大文件 > 30 天；Active 与每学期最新 Published 永久保留。
 
 技术字段如 uploadId、hash、stagingId 放入技术详情，不作为主视觉。

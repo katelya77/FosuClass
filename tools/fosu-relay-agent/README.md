@@ -24,13 +24,11 @@ npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=RELAY_
 
 ## 任务类型
 
-管理后台可下发以下任务：
+管理后台主语义是 `sync:publish`。旧任务名仍可作为兼容别名解析到同一个 `syncPlan`，不要让 relay 形成另一套数据契约或 Release 格式：
 
-- `sync:daily`
-- `sync:daily:classes`
-- `sync:daily:teachers`
-- `sync:daily:classrooms`
-- `sync:daily:courses`
+- `sync:publish`
+- `sync:publish:full`
+- `sync:daily`（兼容）
 - `sync:new-term`
 
 同一台机器同一时间只应运行一个重任务。管理员取消任务后，Agent 会在下一个阶段边界或 heartbeat 检查点停止。
@@ -41,4 +39,4 @@ npm run sync:relay-agent -- --server=https://class.katelya.eu.org --token=RELAY_
 
 ## 缓存与上传记录
 
-采集结果上传到 VPS 后只进入 Staging 区。服务端统一维护 `server/storage/upload-record-index.json`，管理后台分页、`term` 过滤和 `status` 过滤都从这个索引读取，避免打开列表时重新扫描每个上传目录。发布仍由管理员在后台审核后执行，安全校验会阻止教师目录异常降级。
+采集结果上传到 VPS 后只进入 Staging 区。服务端统一维护 `server/storage/upload-record-index.json`，管理后台分页、`term` 过滤和 `status` 过滤都从这个索引读取，避免打开列表时重新扫描每个上传目录。后续发布仍走统一 Oracle publish pipeline、OpenResty 同步和 CloudBase 镜像；安全校验会阻止教师目录异常降级。

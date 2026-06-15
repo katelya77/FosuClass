@@ -357,6 +357,33 @@ async function chat(input = {}) {
     summary: safetyGuard.redactSensitiveText(item.summary || "").slice(0, 160),
   }));
 
+  if (providerFactory.getRuntimeMode && providerFactory.getRuntimeMode() === "public" &&
+    !isFactToolIntent(intent) &&
+    !isProjectKnowledgeIntent(intent) &&
+    intent.name !== "explain_personal_import" &&
+    intent.name !== "clarify_missing_slot") {
+    return buildResponse({
+      answer: "小佛目前只提供佛课小表、课表、课程查询和使用帮助。",
+      cards: [],
+      suggestions: ["查今日课程", "查空教室", "佛课小表怎么用？"],
+      toolCalls: publicToolCalls,
+      provider: "mock",
+      desiredProvider: "mock",
+      resolvedProvider: "mock",
+      providerPolicy: "tool-only",
+      externalProviderUsed: false,
+      fallbackReason: "AI_RUNTIME_MODE=public",
+      metrics: buildMetrics({
+        startTime,
+        intentName: intent.name,
+        toolCalls,
+        externalProviderUsed: false,
+        fallback: true,
+        usedPersonalContext,
+      }),
+    });
+  }
+
   const providerPolicy = getProviderPolicy();
   const desiredProviderName = providerFactory.getProviderName();
   const policyDecision = evaluateProviderPolicy(intent, toolCalls, providerPolicy, desiredProviderName);

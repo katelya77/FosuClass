@@ -177,6 +177,25 @@ async function run() {
   assert.deepStrictEqual(cutoverCalls.map((item) => item.cloudPath), ["runtime/active.json"], "cutover should upload only active pointer after prior release verification");
   assert(cutover.readyRecommendation.includes("CLOUDBASE_HOSTING_READY"), "READY=true recommendation is allowed only after pointer verification");
 
+  const driftPointer = utils.buildCloudbasePointer(verified.manifest, {
+    releaseVersion: version,
+    hostingBaseUrl: "https://cloud.example.com",
+    activePointer: {
+      releaseVersion: version,
+      term: "2025-2026-2",
+      updatedAt: "2026-06-14T01:02:03.000Z",
+      cacheEpoch: 12345,
+      forceRefreshToken: `${version}:12345`,
+      urls: {
+        manifest: "/static/releases/wrong/manifest.json",
+      },
+    },
+  });
+  assert.strictEqual(driftPointer.cacheEpoch, 12345);
+  assert.strictEqual(driftPointer.forceRefreshToken, `${version}:12345`);
+  assert.strictEqual(driftPointer.urls.manifest, `https://cloud.example.com/releases/${version}/manifest.json`);
+  assert(!JSON.stringify(driftPointer).includes("/static/releases/wrong"), "CloudBase pointer should not keep Oracle/static URLs");
+
   await assert.rejects(
     () => utils.cutoverReleasePack({
       publicRoot: good.root,
@@ -323,7 +342,15 @@ async function run() {
   assert.strictEqual(syncActive.classifyVersions(
     { releaseVersion: "v2", cacheEpoch: 2 },
     { available: true, releaseVersion: "v2", cacheEpoch: 2 }
-  ), "same");
+  ), "same-and-healthy");
+  assert.strictEqual(syncActive.classifyVersions(
+    { releaseVersion: "v2", term: "2025-2026-2", cacheEpoch: 3, forceRefreshToken: "v2:3", pointer: { updatedAt: "2026-06-14T00:00:00.000Z" } },
+    { available: true, releaseVersion: "v2", term: "2025-2026-2", cacheEpoch: 2, forceRefreshToken: "v2:2", pointer: { updatedAt: "2026-06-14T00:00:00.000Z" } }
+  ), "same-release-metadata-drift");
+  assert.strictEqual(syncActive.classifyVersions(
+    { releaseVersion: "v2", cacheEpoch: 2, manifestHash: "aaa", manifestSize: 100 },
+    { available: true, releaseVersion: "v2", cacheEpoch: 2, manifestHash: "bbb", manifestSize: 100 }
+  ), "manifest-conflict");
   const sanitizedReceipt = syncActive.sanitizeForReceipt({
     url: "https://example.com/runtime/active.json?ticket=secret-token",
     headers: { cookie: "abc", Authorization: "Bearer secret" },

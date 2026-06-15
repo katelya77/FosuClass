@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const DEFAULT_CONFIG_PATH = "/app/storage/secure/ai-provider-config.json";
 
@@ -28,9 +29,23 @@ const RUNTIME_CONFIG_KEYS = [
   "COZE_POLL_ENABLED",
   "COZE_POLL_INTERVAL_MS",
   "COZE_POLL_MAX_ATTEMPTS",
+  "AI_RUNTIME_MODE",
+  "CLOUDBASE_OPENAI_ENABLED",
+  "CLOUDBASE_OPENAI_BASE_URL",
+  "CLOUDBASE_OPENAI_API_KEY",
+  "CLOUDBASE_OPENAI_TEXT_MODEL",
+  "CLOUDBASE_OPENAI_TIMEOUT_MS",
+  "CLOUDBASE_OPENAI_MAX_TOKENS",
 ];
 
 const RUNTIME_CONFIG_KEY_SET = new Set(RUNTIME_CONFIG_KEYS);
+const SECRET_CONFIG_KEYS = new Set([
+  "AI_API_KEY",
+  "DEEPSEEK_API_KEY",
+  "COZE_API_KEY",
+  "CLOUDBASE_OPENAI_API_KEY",
+]);
+const ENCRYPTED_PREFIX = "enc:v1:";
 
 function getConfigPath() {
   return path.resolve(process.env.FOSU_AI_PROVIDER_CONFIG_PATH || DEFAULT_CONFIG_PATH);
@@ -53,7 +68,65 @@ function sanitizeRuntimeConfig(input = {}) {
     if (!Object.prototype.hasOwnProperty.call(input, key)) return;
     const value = input[key];
     if (value === undefined || value === null) return;
-    output[key] = String(value);
+    output[key] = SECRET_CONFIG_KEYS.has(key) ? decryptSecretValue(String(value)) : String(value);
+  });
+  return output;
+}
+
+function getEncryptionKey() {
+  const raw = String(process.env.FOSU_AI_CONFIG_ENCRYPTION_KEY || "").trim();
+  if (!raw) return null;
+  if (/^[a-f0-9]{64}$/i.test(raw)) return Buffer.from(raw, "hex");
+  return crypto.createHash("sha256").update(raw).digest();
+}
+
+function encryptSecretValue(value) {
+  const text = String(value || "");
+  if (!text || text.startsWith(ENCRYPTED_PREFIX)) return text;
+  const key = getEncryptionKey();
+  if (!key) return text;
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+  const ciphertext = Buffer.concat([cipher.update(text, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [
+    ENCRYPTED_PREFIX,
+    iv.toString("base64url"),
+    tag.toString("base64url"),
+    ciphertext.toString("base64url"),
+  ].join(":");
+}
+
+function decryptSecretValue(value) {
+  const text = String(value || "");
+  if (!text.startsWith(ENCRYPTED_PREFIX)) return text;
+  const key = getEncryptionKey();
+  if (!key) {
+    const error = new Error("FOSU_AI_CONFIG_ENCRYPTION_KEY is required to decrypt AI provider secret.");
+    error.code = "AI_CONFIG_ENCRYPTION_KEY_REQUIRED";
+    throw error;
+  }
+  const parts = text.split(":");
+  if (parts.length !== 6) {
+    const error = new Error("Invalid encrypted AI provider secret format.");
+    error.code = "AI_CONFIG_SECRET_INVALID";
+    throw error;
+  }
+  const iv = Buffer.from(parts[3], "base64url");
+  const tag = Buffer.from(parts[4], "base64url");
+  const ciphertext = Buffer.from(parts[5], "base64url");
+  const decipher = crypto.createDecipheriv("aes-256-gcm", key, iv);
+  decipher.setAuthTag(tag);
+  return Buffer.concat([decipher.update(ciphertext), decipher.final()]).toString("utf8");
+}
+
+function serializeRuntimeConfig(values = {}) {
+  const output = {};
+  Object.keys(values).forEach((key) => {
+    if (!RUNTIME_CONFIG_KEY_SET.has(key)) return;
+    const value = values[key];
+    if (value === undefined || value === null) return;
+    output[key] = SECRET_CONFIG_KEYS.has(key) ? encryptSecretValue(value) : String(value);
   });
   return output;
 }
@@ -74,7 +147,7 @@ function writeRuntimeConfig(updates = {}, configPath = getConfigPath()) {
   const current = fs.existsSync(configPath) ? readRuntimeConfig(configPath) : {};
   const next = Object.assign({}, current, sanitizeRuntimeConfig(updates));
   const tmpPath = `${configPath}.${process.pid}.${Date.now()}.tmp`;
-  fs.writeFileSync(tmpPath, `${JSON.stringify(next, null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
+  fs.writeFileSync(tmpPath, `${JSON.stringify(serializeRuntimeConfig(next), null, 2)}\n`, { encoding: "utf8", mode: 0o600 });
   try {
     fs.chmodSync(tmpPath, 0o600);
   } catch (error) {

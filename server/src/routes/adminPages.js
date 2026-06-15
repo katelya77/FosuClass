@@ -2583,9 +2583,68 @@ const adminConsoleHtml = `<!doctype html>
       vertical-align: top;
       white-space: normal;
     }
+    .staging-upload-table {
+      min-width: 1120px;
+      table-layout: auto;
+    }
     .staging-upload-table th,
     .staging-upload-table td {
       padding: 8px 10px;
+    }
+    .staging-upload-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      margin: 10px 0;
+    }
+    .staging-upload-filters,
+    .staging-upload-bulk-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+    .staging-upload-filters input,
+    .staging-upload-filters select {
+      height: 30px;
+      min-width: 128px;
+      font-size: 12px;
+      padding: 4px 8px;
+    }
+    .staging-group-row {
+      background: var(--panel);
+    }
+    .staging-group-row td {
+      border-top: 1px solid var(--border);
+    }
+    .staging-detail-row {
+      background: var(--panel-2);
+    }
+    .staging-detail-wrap {
+      padding: 8px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--panel);
+    }
+    .staging-detail-table {
+      width: 100%;
+      min-width: 980px;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    .staging-detail-table th,
+    .staging-detail-table td {
+      padding: 7px 8px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: top;
+    }
+    .staging-delete-protection {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.4;
+      max-width: 240px;
     }
     .staging-progress {
       min-width: 116px;
@@ -3196,6 +3255,28 @@ const adminConsoleHtml = `<!doctype html>
           <div id="syncJobLog" class="job-progress-panel" hidden></div>
         </div>
 
+        <div class="card" id="publisher-status-card" style="margin-bottom:16px;">
+          <div class="section-title-row">
+            <div class="section-title">发布链状态</div>
+            <span class="badge info" id="publisherStatusBadge">等待本机回执</span>
+          </div>
+          <div id="publisherStatusGrid" class="openresty-meta-grid">
+            <div class="openresty-meta-item"><span>本地采集</span><strong>等待运行 sync:publish</strong></div>
+            <div class="openresty-meta-item"><span>Staging 上传</span><strong>-</strong></div>
+            <div class="openresty-meta-item"><span>Oracle 发布</span><strong>-</strong></div>
+            <div class="openresty-meta-item"><span>OpenResty</span><strong>-</strong></div>
+            <div class="openresty-meta-item"><span>CloudBase</span><strong>-</strong></div>
+            <div class="openresty-meta-item"><span>双源一致性</span><strong>-</strong></div>
+          </div>
+          <div class="openresty-actions">
+            <button type="button" class="primary" id="copyPublisherCommandBtn">生成本机一键同步命令</button>
+            <button type="button" class="secondary" id="refreshPublisherStatusBtn">查看本机 Publisher 状态</button>
+            <button type="button" class="secondary" id="copyCloudbaseRetryBtn">重试 CloudBase 镜像</button>
+            <button type="button" class="ghost" id="copyCloudbaseExportBtn">导出人工上传包</button>
+          </div>
+          <div id="publisherReceiptNote" class="static-sync-note">后台只显示本机 Publisher 回执，不会直接访问 100 网；全校课表采集必须在校园网/VPN 本机执行。</div>
+        </div>
+
         <div class="card" id="recommended-sync-flow-card" style="margin-bottom:16px;">
           <div class="section-title-row">
             <div class="section-title">推荐操作流程</div>
@@ -3249,7 +3330,7 @@ const adminConsoleHtml = `<!doctype html>
                     <span>PowerShell / 本机采集</span>
                     <button type="button" class="copy-flow-btn" id="flowCopyBtnLocal">复制全部命令</button>
                   </div>
-                  <pre class="code-raw"><code id="flowCmdTextLocal">npm run sync:daily -- --term=2025-2026-2</code></pre>
+                  <pre class="code-raw"><code id="flowCmdTextLocal">npm run sync:publish</code></pre>
                   <div class="code-preview-scroller"><div class="code-preview-lines"></div></div>
                 </div>
                 <div style="font-size: 11px; color: var(--muted); margin-top: 4px;">（管理员本机使用，需要进入项目根目录并拥有源码与 Node.js 环境）</div>
@@ -3302,20 +3383,51 @@ const adminConsoleHtml = `<!doctype html>
                 <pre class="code-raw"><code id="quickUploadCommand">请选择学期后自动生成上传命令</code></pre>
                 <div class="code-preview-scroller"><div class="code-preview-lines"></div></div>
               </div>
-              <div style="display:flex; gap:8px; flex-wrap:wrap; justify-content:flex-end;">
-                <button type="button" class="secondary" id="refreshStagingUploadsBtn" style="padding: 6px 12px; font-size:12px;">刷新上传列表</button>
+              <div class="staging-upload-toolbar">
+                <div class="staging-upload-filters">
+                  <input type="text" id="stagingUploadTermFilter" placeholder="筛选学期">
+                  <select id="stagingUploadStateFilter">
+                    <option value="">全部状态</option>
+                    <option value="pending-review">等待发布</option>
+                    <option value="published">已发布</option>
+                    <option value="active">Active</option>
+                    <option value="failed">失败</option>
+                    <option value="duplicate">重复</option>
+                    <option value="incomplete">未完成</option>
+                  </select>
+                  <select id="stagingUploadPageSize">
+                    <option value="25">25 条</option>
+                    <option value="50" selected>50 条</option>
+                    <option value="100">100 条</option>
+                  </select>
+                  <button type="button" class="secondary" id="refreshStagingUploadsBtn" style="padding: 6px 12px; font-size:12px;">刷新上传列表</button>
+                  <button type="button" class="ghost" id="stagingUploadPrevPageBtn" style="padding: 6px 10px; font-size:12px;">上一页</button>
+                  <button type="button" class="ghost" id="stagingUploadNextPageBtn" style="padding: 6px 10px; font-size:12px;">下一页</button>
+                  <span id="stagingUploadPageInfo" style="font-size:12px;color:var(--muted);">第 1 页</span>
+                </div>
+                <div class="staging-upload-bulk-actions">
+                  <button type="button" class="secondary" id="deleteSelectedStagingUploadsBtn" style="padding:6px 10px;font-size:12px;">删除所选</button>
+                  <button type="button" class="secondary" id="purgeDuplicateStagingUploadsBtn" style="padding:6px 10px;font-size:12px;">清理重复项，只保留最新</button>
+                  <button type="button" class="secondary" id="purgeFailedStagingUploadsBtn" style="padding:6px 10px;font-size:12px;">清理失败项</button>
+                  <button type="button" class="secondary" id="purgeIncompleteStagingUploadsBtn" style="padding:6px 10px;font-size:12px;">清理未完成项</button>
+                  <button type="button" class="ghost" id="previewExpiredStagingUploadsBtn" style="padding:6px 10px;font-size:12px;">清理过期项</button>
+                  <button type="button" class="ghost" id="rebuildStagingUploadIndexBtn" style="padding:6px 10px;font-size:12px;">重建索引</button>
+                </div>
+              </div>
+              <div class="static-sync-note">
+                删除上传记录、删除 Staging 文件、删除 Release 是三类不同操作。Active、正在上传、正在校验、正在发布、当前 staging-latest 唯一来源会被保护。自动清理策略：duplicate &gt; 7 天、failed &gt; 7 天、incomplete &gt; 24 小时、superseded 原始大文件 &gt; 30 天；Active 和每学期最新 Published 永久保留。
               </div>
               <div class="table-container">
                 <table class="staging-upload-table">
                   <thead>
                     <tr>
-                      <th>stagingId</th>
-                      <th>学期 / 版本</th>
-                      <th>大小</th>
-                      <th>分片</th>
+                      <th><input type="checkbox" id="stagingUploadSelectAll" aria-label="选择本页全部可删记录"></th>
+                      <th>学期 / canonicalHash</th>
+                      <th>最新 Release</th>
                       <th>状态</th>
-                      <th>counts</th>
-                      <th>更新时间</th>
+                      <th>数据计数</th>
+                      <th>记录数量</th>
+                      <th>最新上传时间</th>
                       <th>操作</th>
                     </tr>
                   </thead>
@@ -4317,11 +4429,30 @@ const adminConsoleHtml = `<!doctype html>
                 </select>
               </div>
               <div>
+                <label>运行版本</label>
+                <select id="aiRuntimeMode">
+                  <option value="public">公众版（强制工具 / mock）</option>
+                  <option value="competition">比赛版（白名单 + Provider 链）</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div>
                 <label>Provider</label>
                 <select id="aiProvider">
                   <option value="mock">mock</option>
+                  <option value="cloudbase-openai">CloudBase OpenAI</option>
                   <option value="deepseek">DeepSeek</option>
                   <option value="coze">Coze</option>
+                </select>
+              </div>
+              <div>
+                <label>Provider Policy</label>
+                <select id="aiProviderPolicy">
+                  <option value="auto">auto</option>
+                  <option value="tool-only">tool-only</option>
+                  <option value="always">always</option>
                 </select>
               </div>
             </div>
@@ -4402,10 +4533,45 @@ const adminConsoleHtml = `<!doctype html>
               </div>
             </div>
 
+            <div class="form-row">
+              <div>
+                <label>CloudBase OpenAI Base URL</label>
+                <input id="cloudbaseOpenaiBaseUrl" placeholder="https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase">
+              </div>
+              <div>
+                <label>CloudBase OpenAI API Key</label>
+                <input id="cloudbaseOpenaiApiKey" type="password" autocomplete="off" placeholder="留空则保留现有密钥">
+                <div class="ai-secret-note">不要把 Key 发到聊天；后台保存时不回显完整密钥。</div>
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label>CloudBase 文本模型</label>
+                <input id="cloudbaseOpenaiTextModel" placeholder="hy3-preview">
+              </div>
+              <div>
+                <label>CloudBase Provider 开关</label>
+                <select id="cloudbaseOpenaiEnabled">
+                  <option value="false">关闭</option>
+                  <option value="true">开启</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label>CloudBase 超时 / ms</label>
+                <input id="cloudbaseOpenaiTimeoutMs" inputmode="numeric" placeholder="15000">
+              </div>
+              <div>
+                <label>CloudBase 最大 tokens</label>
+                <input id="cloudbaseOpenaiMaxTokens" inputmode="numeric" placeholder="1200">
+              </div>
+            </div>
+
             <div class="ai-provider-actions">
               <button id="saveAiProviderBtn" class="primary">保存 AI 配置</button>
               <button id="verifyAiProviderBtn" class="secondary">验证当前 Provider</button>
-              <button id="forceAiProviderChatBtn" class="secondary">强制测试 DeepSeek 聊天</button>
+              <button id="forceAiProviderChatBtn" class="secondary">强制测试外部 Provider</button>
               <button id="reloadAiProviderBtn" class="ghost">刷新状态</button>
             </div>
           </div>
@@ -5021,6 +5187,16 @@ const adminConsoleHtml = `<!doctype html>
         relayTasks: [],
         relayUploads: [],
         stagingUploads: [],
+        stagingUploadTotal: 0,
+        stagingUploadCursor: 0,
+        stagingUploadNextCursor: null,
+        stagingUploadPageSize: 50,
+        stagingUploadFilters: {
+          term: "",
+          status: "",
+        },
+        stagingUploadExpandedGroups: {},
+        stagingUploadSelected: {},
         apiInflight: {},
         apiAbortControllers: {},
         lastCloudflareToastAt: 0,
@@ -6685,9 +6861,19 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function loadStagingUploadsPanel() {
-        return api("/api/admin/staging/status?limit=50")
+        var pageSize = Number(state.stagingUploadPageSize || 50) || 50;
+        var params = ["limit=" + encodeURIComponent(pageSize), "cursor=" + encodeURIComponent(state.stagingUploadCursor || 0)];
+        if (state.stagingUploadFilters && state.stagingUploadFilters.term) {
+          params.push("term=" + encodeURIComponent(state.stagingUploadFilters.term));
+        }
+        if (state.stagingUploadFilters && state.stagingUploadFilters.status && state.stagingUploadFilters.status !== "incomplete") {
+          params.push("status=" + encodeURIComponent(state.stagingUploadFilters.status));
+        }
+        return api("/api/admin/staging/status?" + params.join("&"))
           .then(function(res) {
             state.stagingUploads = res.uploads || [];
+            state.stagingUploadTotal = Number(res.total || (res.uploads || []).length || 0);
+            state.stagingUploadNextCursor = res.nextCursor == null ? null : Number(res.nextCursor);
             renderStagingUploads();
             return res;
           })
@@ -6709,11 +6895,59 @@ const adminConsoleHtml = `<!doctype html>
         });
       }
 
+      function renderPublisherStatus(payload) {
+        var latest = payload && payload.latest || null;
+        var receipt = latest && latest.receipt || {};
+        var runState = latest && latest.state || {};
+        var error = latest && latest.error || {};
+        var oracle = receipt.oracle || receipt.oracleResult || {};
+        var cloudbase = receipt.cloudbase || receipt.cloudbaseResult || {};
+        var overall = receipt.overallStatus || receipt.status || runState.status || (error.message ? "failed" : "waiting");
+        var rows = [
+          ["本地采集", receipt.crawlDurationMs ? ("完成 · " + Math.round(receipt.crawlDurationMs / 1000) + "s") : (runState.stage || "等待运行")],
+          ["Staging 上传", receipt.stagingUploadId || receipt.stagingStatus || "-"],
+          ["Oracle 发布", oracle.status || receipt.oracleStatus || receipt.oracleReleaseVersion || "-"],
+          ["OpenResty", receipt.openRestyStatus || oracle.openRestyStatus || "-"],
+          ["CloudBase", cloudbase.status || receipt.cloudbaseStatus || receipt.cloudbaseReleaseVersion || "-"],
+          ["双源一致性", receipt.dualSourceConsistent === true ? "一致" : (receipt.dualSourceConsistent === false ? "不一致" : "-")],
+        ];
+        var grid = $("publisherStatusGrid");
+        if (grid) {
+          grid.innerHTML = rows.map(function(row) {
+            return "<div class='openresty-meta-item'><span>" + escapeHtml(row[0]) + "</span><strong>" + escapeHtml(row[1] || "-") + "</strong></div>";
+          }).join("");
+        }
+        if ($("publisherStatusBadge")) {
+          var ok = overall === "success" || overall === "completed" || overall === "no-change";
+          $("publisherStatusBadge").className = "badge " + (ok ? "success" : (overall === "failed" || overall === "partial-success" ? "warning" : "info"));
+          $("publisherStatusBadge").textContent = latest ? relayStatusText(overall) : "等待本机回执";
+        }
+        if ($("publisherReceiptNote")) {
+          $("publisherReceiptNote").textContent = latest
+            ? ("最近 runId: " + latest.runId + " · 更新时间: " + formatDate(latest.updatedAt) + (error.message ? " · 错误: " + error.message : ""))
+            : "后台只显示本机 Publisher 回执，不会直接访问 100 网；全校课表采集必须在校园网/VPN 本机执行。";
+        }
+      }
+
+      function loadPublisherStatusPanel() {
+        return api("/api/admin/publisher/receipt")
+          .then(function(res) {
+            renderPublisherStatus(res);
+            return res;
+          })
+          .catch(function(err) {
+            showModuleError("publisher-status", err);
+            renderPublisherStatus(null);
+            throw err;
+          });
+      }
+
       function loadSyncLazyPanels() {
         ignoreLoadError(loadSyncHistoryPanel());
         ignoreLoadError(loadReleaseHistoryPanel());
         loadRelayPanels();
         ignoreLoadError(loadStagingUploadsPanel());
+        ignoreLoadError(loadPublisherStatusPanel());
         loadRuntimeStatusPanel();
       }
 
@@ -7180,7 +7414,7 @@ const adminConsoleHtml = `<!doctype html>
           var agentText = task.agent && task.agent.version ? ("Agent " + task.agent.version) : "Agent 未在线";
           var heartbeatText = task.lastHeartbeatAt ? ("心跳 " + formatDate(task.lastHeartbeatAt)) : "等待心跳";
           tr.innerHTML =
-            "<td><strong>" + escapeHtml(task.term) + "</strong><br><span style='color:var(--muted);'>" + escapeHtml(task.taskType || "sync:daily") + " · " + escapeHtml(task.description || "") + "</span><br><span style='color:var(--muted);'>有效期：" + formatDate(task.expiresAt) + "</span></td>" +
+            "<td><strong>" + escapeHtml(task.term) + "</strong><br><span style='color:var(--muted);'>" + escapeHtml(task.taskType || "sync:publish") + " · " + escapeHtml(task.description || "") + "</span><br><span style='color:var(--muted);'>有效期：" + formatDate(task.expiresAt) + "</span></td>" +
             "<td><code class='relay-token'>" + escapeHtml(task.relayToken) + "</code><code class='relay-token relay-command'>" + escapeHtml(command) + "</code></td>" +
             "<td><span class='badge info'>" + relayStatusText(task.status) + "</span><br><span style='color:var(--muted);'>" + escapeHtml(progressText) + "</span><br><span style='color:var(--muted);'>" + escapeHtml(agentText) + "</span><br><span style='color:var(--muted);'>" + escapeHtml(heartbeatText) + "</span><br><span style='color:var(--muted);'>上传 " + (task.uploadCount || 0) + "/" + (task.maxUploads || 1) + "</span></td>" +
             "<td class='action-cell'></td>";
@@ -7367,130 +7601,284 @@ const adminConsoleHtml = `<!doctype html>
         });
       }
 
-      function renderStagingUploads() {
-        var tbody = $("stagingUploadListBody");
-        if (!tbody) return;
+      function getStagingUploadHash(upload) {
+        var summary = upload && upload.summary || {};
+        return String(upload && (upload.canonicalHash || summary.canonicalHash || summary.stagingCanonicalHash) || "");
+      }
+
+      function getStagingUploadTerm(upload) {
+        var summary = upload && upload.summary || {};
+        return String(upload && (upload.term || upload.semester || summary.term || summary.semester) || "");
+      }
+
+      function getStagingUploadCounts(upload) {
+        var summary = upload && upload.summary || {};
+        return upload && (upload.counts || summary.counts || summary) || {};
+      }
+
+      function getStagingUploadState(upload) {
+        if (!upload) return "unknown";
+        if (upload.stagingState) return upload.stagingState;
+        if (upload.status === "failed") return "validation-failed";
+        if (upload.status === "unchanged") return "duplicate";
+        return upload.status || "pending-review";
+      }
+
+      function getStagingReleaseState(upload) {
+        return upload && (upload.releaseState || (upload.publishedReleaseVersion || upload.publishedVersion ? "published" : "not-built")) || "not-built";
+      }
+
+      function getStagingRuntimeState(upload, active) {
+        return upload && (upload.runtimeState || (active ? "active" : "inactive")) || (active ? "active" : "inactive");
+      }
+
+      function getStagingReleaseVersion(upload) {
+        var summary = upload && upload.summary || {};
+        return String(upload && (upload.publishedReleaseVersion || upload.publishedVersion || upload.releaseVersion || summary.releaseVersion) || "");
+      }
+
+      function isActiveStagingUpload(upload) {
+        var hash = getStagingUploadHash(upload);
+        var releaseVersion = getStagingReleaseVersion(upload);
+        var syncStatus = state.syncStatus || {};
+        return Boolean(upload && upload.active || syncStatus.activeCanonicalHash && hash && syncStatus.activeCanonicalHash === hash || syncStatus.releaseVersion && releaseVersion && syncStatus.releaseVersion === releaseVersion);
+      }
+
+      function isIncompleteStagingUpload(upload) {
+        var status = String(upload && (upload.status || upload.stagingState) || "").toLowerCase();
+        return ["initialized", "uploading", "uploaded", "merging", "validating", "unknown"].indexOf(status) >= 0;
+      }
+
+      function getUploadAgeHours(upload) {
+        var time = Date.parse(upload && (upload.updatedAt || upload.createdAt || upload.uploadedAt) || "");
+        if (!time) return 0;
+        return (Date.now() - time) / 3600000;
+      }
+
+      function getStagingDeleteProtectionReason(upload, group) {
+        if (!upload || !upload.uploadId) return "缺少 uploadId";
+        if (isActiveStagingUpload(upload)) return "Active 对应记录禁止删除";
+        var status = String(upload.status || upload.stagingState || "").toLowerCase();
+        var ageHours = getUploadAgeHours(upload);
+        if (["uploading", "merging"].indexOf(status) >= 0 && ageHours < 24) return "正在上传或合并";
+        if (["validating", "publishing"].indexOf(status) >= 0) return "正在校验或发布";
+        if ((status === "initialized" || status === "uploaded") && getUploadAgeHours(upload) < 24) return "未完成不足 24 小时";
+        if (upload.isStagingLatestUnique || upload.stagingLatestUnique) return "当前 staging-latest 唯一来源";
+        if (group && group.isActive) return "本组包含 Active 记录，请展开只清理非 Active 明细";
+        return "";
+      }
+
+      function buildStagingUploadGroups() {
         var rawList = state.stagingUploads || [];
+        var selectedFilter = state.stagingUploadFilters && state.stagingUploadFilters.status || "";
+        if (selectedFilter === "incomplete") {
+          rawList = rawList.filter(isIncompleteStagingUpload);
+        }
         var grouped = {};
         var list = [];
         rawList.forEach(function(item) {
-          var summary = item.summary || {};
-          var hash = item.canonicalHash || summary.canonicalHash || "";
-          var term = item.term || summary.term || "";
+          var hash = getStagingUploadHash(item);
+          var term = getStagingUploadTerm(item);
           var key = item.duplicateGroupKey || (term && hash ? term + ":" + hash : "") || item.uploadId || "";
-          if (!key || !hash) {
-            list.push(item);
-            return;
-          }
           if (!grouped[key]) {
-            grouped[key] = Object.assign({}, item, { historySources: [item] });
+            grouped[key] = {
+              key: key,
+              term: term,
+              hash: hash,
+              uploads: [],
+              latest: item,
+              latestTime: 0,
+              isActive: false,
+            };
             list.push(grouped[key]);
-            return;
           }
-          grouped[key].historySources.push(item);
-          var currentTime = new Date(grouped[key].updatedAt || grouped[key].createdAt || 0).getTime();
-          var nextTime = new Date(item.updatedAt || item.createdAt || 0).getTime();
-          if (nextTime > currentTime) {
-            Object.assign(grouped[key], item, { historySources: grouped[key].historySources });
+          grouped[key].uploads.push(item);
+          if (isActiveStagingUpload(item)) grouped[key].isActive = true;
+          var nextTime = Date.parse(item.updatedAt || item.createdAt || item.uploadedAt || "") || 0;
+          if (!grouped[key].latestTime || nextTime >= grouped[key].latestTime) {
+            grouped[key].latest = item;
+            grouped[key].latestTime = nextTime;
           }
         });
+        list.sort(function(left, right) { return (right.latestTime || 0) - (left.latestTime || 0); });
+        return list;
+      }
+
+      function appendStagingUploadActions(actions, upload, group) {
+        var hash = getStagingUploadHash(upload);
+        var releaseVersion = getStagingReleaseVersion(upload);
+        var detailBtn = document.createElement("button");
+        detailBtn.className = "btn ghost";
+        detailBtn.style = "padding: 3px 8px; font-size:11px;";
+        detailBtn.textContent = "查看详情";
+        detailBtn.addEventListener("click", function() {
+          alert(JSON.stringify({
+            uploadId: upload.uploadId || "",
+            term: getStagingUploadTerm(upload),
+            canonicalHash: hash,
+            stagingState: getStagingUploadState(upload),
+            releaseState: getStagingReleaseState(upload),
+            runtimeState: getStagingRuntimeState(upload, isActiveStagingUpload(upload)),
+            releaseVersion: releaseVersion,
+            counts: getStagingUploadCounts(upload),
+            failureReason: upload.failureReason || upload.error || ""
+          }, null, 2));
+        });
+        actions.appendChild(detailBtn);
+
+        var failureBtn = document.createElement("button");
+        failureBtn.className = "btn ghost";
+        failureBtn.style = "padding: 3px 8px; font-size:11px;";
+        failureBtn.textContent = "查看失败原因";
+        failureBtn.disabled = !(upload.failureReason || upload.error);
+        failureBtn.addEventListener("click", function() {
+          alert(upload.failureReason || upload.error || "当前记录没有失败原因");
+        });
+        actions.appendChild(failureBtn);
+
+        var releaseBtn = document.createElement("button");
+        releaseBtn.className = "btn secondary";
+        releaseBtn.style = "padding: 3px 8px; font-size:11px;";
+        releaseBtn.textContent = "查看对应 Release";
+        releaseBtn.disabled = !releaseVersion;
+        releaseBtn.addEventListener("click", function() {
+          copyText(releaseVersion);
+          showToast("已复制 releaseVersion", "success");
+        });
+        actions.appendChild(releaseBtn);
+
+        var copyHashBtn = document.createElement("button");
+        copyHashBtn.className = "btn secondary";
+        copyHashBtn.style = "padding: 3px 8px; font-size:11px;";
+        copyHashBtn.textContent = "复制 canonicalHash";
+        copyHashBtn.disabled = !hash;
+        copyHashBtn.addEventListener("click", function() {
+          copyText(hash);
+        });
+        actions.appendChild(copyHashBtn);
+
+        var protection = getStagingDeleteProtectionReason(upload, null);
+        var deleteBtn = document.createElement("button");
+        deleteBtn.className = "btn danger";
+        deleteBtn.style = "padding: 3px 8px; font-size:11px;";
+        deleteBtn.textContent = "删除记录";
+        deleteBtn.disabled = Boolean(protection);
+        deleteBtn.title = protection || "只删除上传记录和可安全移除的 Staging 文件，不删除 Release";
+        deleteBtn.addEventListener("click", function() {
+          deleteStagingUpload(upload.uploadId, deleteBtn);
+        });
+        actions.appendChild(deleteBtn);
+      }
+
+      function renderStagingDetailRows(group) {
+        var rows = group.uploads.map(function(upload) {
+          var counts = getStagingUploadCounts(upload);
+          var hash = getStagingUploadHash(upload);
+          var active = isActiveStagingUpload(upload);
+          var stagingState = getStagingUploadState(upload);
+          var releaseState = getStagingReleaseState(upload);
+          var runtimeState = getStagingRuntimeState(upload, active);
+          var protection = getStagingDeleteProtectionReason(upload, null);
+          var uploadId = upload.uploadId || "";
+          var disabledText = protection ? " disabled title='" + escapeHtml(protection) + "'" : "";
+          return "<tr data-upload-id='" + escapeHtml(uploadId) + "'>" +
+            "<td><input type='checkbox' class='staging-upload-row-select' data-upload-id='" + escapeHtml(uploadId) + "'" + disabledText + "></td>" +
+            "<td><code>" + escapeHtml(uploadId || "-") + "</code><br><span style='color:var(--muted);'>" + escapeHtml(upload.fileName || upload.source || upload.actorType || "") + "</span></td>" +
+            "<td><strong>" + escapeHtml(getStagingUploadTerm(upload) || "-") + "</strong><br><span style='color:var(--muted);'>hash " + escapeHtml(hash ? hash.slice(0, 12) : "-") + "</span></td>" +
+            "<td><span class='staging-state-badge " + String(active ? "active" : stagingState).replace(/[^a-z0-9_-]/gi, "-") + "'>" + escapeHtml(active ? "Active" : relayStatusText(stagingState)) + "</span><br><span style='color:var(--muted);font-size:11px;'>Release " + escapeHtml(relayStatusText(releaseState)) + "</span><br><span style='color:var(--muted);font-size:11px;'>Runtime " + escapeHtml(relayStatusText(runtimeState)) + "</span></td>" +
+            "<td><div class='staging-count-stack'><span>班级 " + (counts.classScheduleCount || 0) + "</span><span>教师 " + (counts.teacherScheduleCount || 0) + "</span><span>教室 " + (counts.classroomScheduleCount || 0) + "</span><span>课程 " + (counts.courseScheduleCount || 0) + "</span></div></td>" +
+            "<td>" + formatDate(upload.updatedAt || upload.createdAt) + "</td>" +
+            "<td><div class='staging-delete-protection'>" + escapeHtml(protection || "可删除：不删除 Release；Active、发布中、staging-latest 唯一来源会被保护。") + "</div></td>" +
+            "<td class='action-cell'><div class='staging-action-row' data-actions-for='" + escapeHtml(uploadId) + "'></div></td>" +
+          "</tr>";
+        }).join("");
+        return "<div class='staging-detail-wrap'><table class='staging-detail-table'><thead><tr><th>选择</th><th>上传记录</th><th>学期 / hash</th><th>状态</th><th>数据计数</th><th>更新时间</th><th>删除保护</th><th>操作</th></tr></thead><tbody>" + rows + "</tbody></table></div>";
+      }
+
+      function hydrateStagingDetailActions(row, upload, group) {
+        var actions = row.querySelector(".staging-action-row");
+        if (actions) appendStagingUploadActions(actions, upload, group);
+      }
+
+      function renderStagingUploads() {
+        var tbody = $("stagingUploadListBody");
+        if (!tbody) return;
+        var groups = buildStagingUploadGroups();
+        var pageInfo = $("stagingUploadPageInfo");
+        if (pageInfo) {
+          var pageSize = Number(state.stagingUploadPageSize || 50) || 50;
+          var page = Math.floor((state.stagingUploadCursor || 0) / pageSize) + 1;
+          pageInfo.textContent = "第 " + page + " 页 · " + (state.stagingUploadTotal || groups.length) + " 条记录";
+        }
+        if ($("stagingUploadPrevPageBtn")) $("stagingUploadPrevPageBtn").disabled = (state.stagingUploadCursor || 0) <= 0;
+        if ($("stagingUploadNextPageBtn")) $("stagingUploadNextPageBtn").disabled = state.stagingUploadNextCursor == null;
+        if ($("stagingUploadSelectAll")) $("stagingUploadSelectAll").checked = false;
         tbody.innerHTML = "";
-        if (!list.length) {
+        if (!groups.length) {
           tbody.innerHTML = "<tr><td colspan='8' style='text-align:center;color:var(--muted);padding:12px 0;'>暂无 CLI 上传记录</td></tr>";
           return;
         }
-        list.slice(0, 12).forEach(function(upload) {
-          var summary = upload.summary || {};
-          var counts = upload.counts || summary.counts || summary || {};
-          var hash = upload.canonicalHash || summary.canonicalHash || "";
-          var historyCount = Array.isArray(upload.historySources) ? upload.historySources.length : 1;
-          var duplicateCount = Math.max(Number(upload.duplicateCount || 0), historyCount > 1 ? historyCount - 1 : 0);
-          var sourceSize = upload.sourceSize || upload.originalSize || 0;
-          var gzipSize = upload.gzipSize || (upload.contentEncoding === "gzip" ? upload.uploadSize : 0);
-          var uploadedChunks = upload.uploadedChunks || upload.receivedCount || 0;
-          var chunkCount = upload.chunkCount || upload.totalChunks || 0;
-          var progress = upload.progress != null ? upload.progress : (chunkCount > 0 ? Math.min(100, uploadedChunks / chunkCount * 100) : 0);
-          var progressWidth = Math.max(0, Math.min(100, progress));
-          var isActiveUpload = Boolean(upload.active || (state.syncStatus && state.syncStatus.activeCanonicalHash && hash && state.syncStatus.activeCanonicalHash === hash));
-          var stagingState = upload.stagingState || (upload.status === "failed" ? "validation-failed" : (upload.status === "unchanged" ? "duplicate" : upload.status || "pending-review"));
-          var releaseState = upload.releaseState || (upload.publishedReleaseVersion || upload.publishedVersion ? "published" : "not-built");
-          var runtimeState = upload.runtimeState || (isActiveUpload ? "active" : "inactive");
-          var statusClass = String(isActiveUpload ? "active" : stagingState).replace(/[^a-z0-9_-]/gi, "-");
-          var publishedText = upload.publishedReleaseVersion || upload.publishedVersion || "";
-          var sourceText = upload.source || upload.actorType || "CLI";
-          var duplicateText = isActiveUpload
-            ? "与当前线上数据一致"
-            : (duplicateCount > 0 ? "重复上传 " + duplicateCount + " 次" : relayStatusText(stagingState));
-          var technical = {
-            uploadId: upload.uploadId || "",
-            canonicalHash: hash,
-            stagingState: stagingState,
-            releaseState: releaseState,
-            runtimeState: runtimeState,
-            duplicateGroupKey: upload.duplicateGroupKey || "",
-          };
+        groups.forEach(function(group, index) {
+          var upload = group.latest || {};
+          var counts = getStagingUploadCounts(upload);
+          var hash = group.hash || getStagingUploadHash(upload);
+          var releaseVersion = getStagingReleaseVersion(upload) || "-";
+          var stagingState = getStagingUploadState(upload);
+          var releaseState = getStagingReleaseState(upload);
+          var runtimeState = getStagingRuntimeState(upload, group.isActive);
+          var statusClass = String(group.isActive ? "active" : stagingState).replace(/[^a-z0-9_-]/gi, "-");
+          var groupKey = group.key || ("group-" + index);
+          var expanded = Boolean(state.stagingUploadExpandedGroups[groupKey]);
+          var canDeleteCount = group.uploads.filter(function(item) { return !getStagingDeleteProtectionReason(item, null); }).length;
+          var groupProtection = canDeleteCount ? "" : getStagingDeleteProtectionReason(upload, group) || "本组暂无可删除记录";
           var tr = document.createElement("tr");
+          tr.className = "staging-group-row";
           tr.innerHTML =
-            "<td><strong>" + escapeHtml(upload.term || summary.term || "-") + "</strong><br><span class='badge muted'>" + escapeHtml(sourceText) + "</span><br><span style='color:var(--muted);'>" + escapeHtml(upload.fileName || "") + "</span><br><span class='badge " + (isActiveUpload ? "success" : (duplicateCount > 0 ? "warning" : "info")) + "'>" + escapeHtml(duplicateText) + "</span><details class='sync-technical-details'><summary>技术详情</summary><code>" + escapeHtml(JSON.stringify(technical, null, 2)) + "</code></details></td>" +
-            "<td><strong>" + escapeHtml(upload.releaseVersion || summary.releaseVersion || publishedText || "-") + "</strong><br><span style='color:var(--muted);'>Published 不等于 Active</span></td>" +
-            "<td><div class='staging-size-stack'><span>JSON " + formatBytes(sourceSize) + "</span><span>gzip " + (gzipSize ? formatBytes(gzipSize) : "-") + "</span></div></td>" +
-            "<td><div class='staging-progress'><div class='staging-progress-track'><div class='staging-progress-fill' style='width:" + progressWidth.toFixed(1) + "%'></div></div><span>" + progress.toFixed(1) + "% · " + uploadedChunks + "/" + chunkCount + " chunks</span></div></td>" +
-            "<td><span class='staging-state-badge " + statusClass + "'>" + escapeHtml(relayStatusText(stagingState)) + "</span><br><span style='color:var(--muted);font-size:11px;'>版本：" + escapeHtml(relayStatusText(releaseState)) + "</span><br><span style='color:var(--muted);font-size:11px;'>生效：" + escapeHtml(relayStatusText(runtimeState)) + "</span>" + (upload.failureReason ? "<br><span style='color:var(--danger);font-size:11px;'>" + escapeHtml(upload.failureReason) + "</span>" : "") + "</td>" +
-            "<td><div class='staging-count-stack'><span>班级 " + (counts.classScheduleCount || 0) + "</span><span>教师课表 " + (counts.teacherScheduleCount || 0) + "</span><span>教室课表 " + (counts.classroomScheduleCount || 0) + "</span><span>课程课表 " + (counts.courseScheduleCount || 0) + "</span></div></td>" +
+            "<td><input type='checkbox' class='staging-upload-group-select' data-group-key='" + escapeHtml(groupKey) + "'" + (canDeleteCount ? "" : " disabled title='" + escapeHtml(groupProtection) + "'") + "></td>" +
+            "<td><strong>" + escapeHtml(group.term || "-") + "</strong><br><code>" + escapeHtml(hash ? hash.slice(0, 12) : "-") + "</code><br><span style='color:var(--muted);word-break:break-all;'>" + escapeHtml(hash || "未采集 canonicalHash") + "</span></td>" +
+            "<td><strong>" + escapeHtml(releaseVersion) + "</strong><br><span style='color:var(--muted);'>最新上传 " + formatDate(upload.updatedAt || upload.createdAt) + "</span></td>" +
+            "<td><span class='staging-state-badge " + statusClass + "'>" + escapeHtml(group.isActive ? "Active" : relayStatusText(stagingState)) + "</span><br><span style='color:var(--muted);font-size:11px;'>staging " + escapeHtml(relayStatusText(stagingState)) + "</span><br><span style='color:var(--muted);font-size:11px;'>release " + escapeHtml(relayStatusText(releaseState)) + "</span><br><span style='color:var(--muted);font-size:11px;'>runtime " + escapeHtml(relayStatusText(runtimeState)) + "</span></td>" +
+            "<td><div class='staging-count-stack'><span>班级 " + (counts.classScheduleCount || 0) + "</span><span>教师 " + (counts.teacherScheduleCount || 0) + "</span><span>教室 " + (counts.classroomScheduleCount || 0) + "</span><span>课程 " + (counts.courseScheduleCount || 0) + "</span></div></td>" +
+            "<td><strong>" + group.uploads.length + "</strong><br><span style='color:var(--muted);'>可删 " + canDeleteCount + "</span></td>" +
             "<td>" + formatDate(upload.updatedAt || upload.createdAt) + "</td>" +
             "<td class='action-cell'><div class='staging-action-row'></div></td>";
           var actions = tr.querySelector(".staging-action-row");
-          var previewBtn = document.createElement("button");
-          previewBtn.className = "btn ghost";
-          previewBtn.style = "padding: 3px 8px; font-size:11px;";
-          previewBtn.textContent = "预览";
-          previewBtn.disabled = upload.status !== "pending-review" && upload.status !== "published";
-          previewBtn.addEventListener("click", function() {
-            loadStagingPreview();
-            state.activeStep = 6;
-            updateStepperUI();
+          var expandBtn = document.createElement("button");
+          expandBtn.className = "btn secondary";
+          expandBtn.style = "padding: 3px 8px; font-size:11px;";
+          expandBtn.textContent = expanded ? "收起组" : "展开组";
+          expandBtn.addEventListener("click", function() {
+            state.stagingUploadExpandedGroups[groupKey] = !state.stagingUploadExpandedGroups[groupKey];
+            renderStagingUploads();
           });
-          actions.appendChild(previewBtn);
-
-          var copySummaryBtn = document.createElement("button");
-          copySummaryBtn.className = "btn secondary";
-          copySummaryBtn.style = "padding: 3px 8px; font-size:11px;";
-          copySummaryBtn.textContent = "复制摘要";
-          copySummaryBtn.addEventListener("click", function() {
-            copyText([
-              "uploadId=" + (upload.uploadId || ""),
-              "stagingState=" + stagingState,
-              "releaseState=" + releaseState,
-              "runtimeState=" + runtimeState,
-              "release=" + (publishedText || upload.releaseVersion || ""),
-              "canonicalHash=" + hash,
-              "term=" + (upload.term || summary.term || "")
-            ].join("\\n"));
-          });
-          actions.appendChild(copySummaryBtn);
-
-          if (upload.status === "pending-review" && !isActiveUpload) {
+          actions.appendChild(expandBtn);
+          var copyHashBtn = document.createElement("button");
+          copyHashBtn.className = "btn secondary";
+          copyHashBtn.style = "padding: 3px 8px; font-size:11px;";
+          copyHashBtn.textContent = "复制 canonicalHash";
+          copyHashBtn.disabled = !hash;
+          copyHashBtn.addEventListener("click", function() { copyText(hash); });
+          actions.appendChild(copyHashBtn);
+          if (upload.status === "pending-review" && !group.isActive) {
             var publishBtn = document.createElement("button");
             publishBtn.className = "btn primary";
             publishBtn.style = "padding: 3px 8px; font-size:11px;";
             publishBtn.textContent = "发布";
-            publishBtn.addEventListener("click", function() {
-              publishStaging(publishBtn);
-            });
+            publishBtn.addEventListener("click", function() { publishStaging(publishBtn); });
             actions.appendChild(publishBtn);
           }
-
-          if (!isActiveUpload && upload.status !== "published") {
-            var deleteBtn = document.createElement("button");
-            deleteBtn.className = "btn danger";
-            deleteBtn.style = "padding: 3px 8px; font-size:11px;";
-            deleteBtn.textContent = upload.status === "duplicate" || upload.status === "unchanged" ? "归档" : "删除";
-            deleteBtn.addEventListener("click", function() {
-              deleteStagingUpload(upload.uploadId, deleteBtn);
-            });
-            actions.appendChild(deleteBtn);
-          }
           tbody.appendChild(tr);
+          if (expanded) {
+            var detailRow = document.createElement("tr");
+            detailRow.className = "staging-detail-row";
+            detailRow.innerHTML = "<td colspan='8'>" + renderStagingDetailRows(group) + "</td>";
+            tbody.appendChild(detailRow);
+            group.uploads.forEach(function(item) {
+              detailRow.querySelectorAll("tr[data-upload-id]").forEach(function(row) {
+                if (row.getAttribute("data-upload-id") === String(item.uploadId || "")) hydrateStagingDetailActions(row, item, group);
+              });
+            });
+          }
         });
       }
 
@@ -7599,21 +7987,110 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
+      function findStagingUploadById(id) {
+        return (state.stagingUploads || []).find(function(item) { return item.uploadId === id; }) || null;
+      }
+
+      function collectSelectedStagingUploadIds() {
+        var ids = [];
+        document.querySelectorAll(".staging-upload-row-select:checked").forEach(function(input) {
+          if (!input.disabled && input.dataset.uploadId) ids.push(input.dataset.uploadId);
+        });
+        document.querySelectorAll(".staging-upload-group-select:checked").forEach(function(input) {
+          if (input.disabled) return;
+          var groupKey = input.dataset.groupKey;
+          buildStagingUploadGroups().forEach(function(group) {
+            if (group.key !== groupKey) return;
+            group.uploads.forEach(function(upload) {
+              if (!getStagingDeleteProtectionReason(upload, null) && upload.uploadId) ids.push(upload.uploadId);
+            });
+          });
+        });
+        return ids.filter(function(id, index) { return ids.indexOf(id) === index; });
+      }
+
+      function deleteStagingUploadIds(ids, btn, label) {
+        ids = (ids || []).filter(Boolean).filter(function(id, index, arr) { return arr.indexOf(id) === index; });
+        if (!ids.length) {
+          showToast("没有可删除的上传记录", "warning");
+          return Promise.resolve();
+        }
+        if (!confirm("确认" + (label || "删除") + " " + ids.length + " 条上传记录吗？该操作只删除上传记录 / Staging 文件，不会删除 Release；Active、发布中、校验中和 staging-latest 唯一来源会被保护。")) {
+          return Promise.resolve();
+        }
+        var restoreButton = setButtonLoading(btn, "删除中...");
+        var deleted = 0;
+        var failed = [];
+        return ids.reduce(function(promise, id) {
+          return promise.then(function() {
+            return api("/api/admin/staging/" + encodeURIComponent(id), { method: "DELETE" })
+              .then(function() { deleted += 1; })
+              .catch(function(error) { failed.push(id + ": " + (error.message || "删除失败")); });
+          });
+        }, Promise.resolve()).then(function() {
+          state.stagingUploads = (state.stagingUploads || []).filter(function(item) { return ids.indexOf(item.uploadId) < 0 || failed.some(function(text) { return text.indexOf(item.uploadId + ":") === 0; }); });
+          renderStagingUploads();
+          showToast("已删除 " + deleted + " 条，失败 " + failed.length + " 条", failed.length ? "warning" : "success");
+          if (failed.length) console.warn("[staging-delete] failed", failed);
+          return loadSyncStatus();
+        }).finally(function() {
+          restoreButton();
+        });
+      }
+
       function deleteStagingUpload(id, btn) {
         if (!id) return;
-        if (!confirm("确认删除这条 Staging 上传记录吗？删除后该候选包不会进入发布流程。")) return;
-        var restoreButton = setButtonLoading(btn, "删除中...");
-        api("/api/admin/staging/" + encodeURIComponent(id), { method: "DELETE" })
-          .then(function() {
-            state.stagingUploads = (state.stagingUploads || []).filter(function(item) { return item.uploadId !== id; });
-            renderStagingUploads();
-            showToast("Staging 上传记录已删除", "success");
-            return loadSyncStatus();
-          })
-          .catch(function(error) {
-            restoreButton();
-            showToast(error.message || "删除失败", "error");
+        var upload = findStagingUploadById(id);
+        var protection = upload ? getStagingDeleteProtectionReason(upload, null) : "";
+        if (protection) {
+          showToast(protection, "error");
+          return;
+        }
+        return deleteStagingUploadIds([id], btn, "删除");
+      }
+
+      function purgeDuplicateStagingUploads(btn) {
+        var ids = [];
+        buildStagingUploadGroups().forEach(function(group) {
+          if (group.uploads.length <= 1) return;
+          var sorted = group.uploads.slice().sort(function(left, right) {
+            return (Date.parse(right.updatedAt || right.createdAt || "") || 0) - (Date.parse(left.updatedAt || left.createdAt || "") || 0);
           });
+          sorted.slice(1).forEach(function(upload) {
+            if (!getStagingDeleteProtectionReason(upload, null) && upload.uploadId) ids.push(upload.uploadId);
+          });
+        });
+        return deleteStagingUploadIds(ids, btn, "清理重复项");
+      }
+
+      function purgeFailedStagingUploads(btn) {
+        var ids = (state.stagingUploads || []).filter(function(upload) {
+          var stateValue = String(getStagingUploadState(upload)).toLowerCase();
+          return ["failed", "validation-failed"].indexOf(stateValue) >= 0 && !getStagingDeleteProtectionReason(upload, null);
+        }).map(function(upload) { return upload.uploadId; });
+        return deleteStagingUploadIds(ids, btn, "清理失败项");
+      }
+
+      function purgeIncompleteStagingUploads(btn) {
+        var ids = (state.stagingUploads || []).filter(function(upload) {
+          return isIncompleteStagingUpload(upload) && getUploadAgeHours(upload) >= 24 && !getStagingDeleteProtectionReason(upload, null);
+        }).map(function(upload) { return upload.uploadId; });
+        return deleteStagingUploadIds(ids, btn, "清理 24 小时以上未完成项");
+      }
+
+      function rebuildStagingUploadIndex(btn) {
+        var restoreButton = setButtonLoading(btn, "重建中...");
+        return api("/api/admin/staging/upload/rebuild-index", {
+          method: "POST",
+          body: "{}"
+        }).then(function(res) {
+          showToast("上传记录索引已重建，共 " + (res.total || (res.records && res.records.length) || 0) + " 条", "success");
+          return loadStagingUploadsPanel();
+        }).catch(function(error) {
+          showToast(error.message || "重建失败", "error");
+        }).finally(function() {
+          restoreButton();
+        });
       }
 
       function promoteRelayUpload(id, btn) {
@@ -7691,17 +8168,8 @@ const adminConsoleHtml = `<!doctype html>
         var selected = Array.isArray(scopes) ? scopes : [];
         if (source === "staging-upload") return "sync:upload-staging";
         if (source === "relay-agent") return "sync:relay-agent";
-        var hasClass = selected.indexOf("classSchedules") >= 0;
-        var hasTeacher = selected.indexOf("teacherSchedules") >= 0;
-        var hasClassroom = selected.indexOf("classroomSchedules") >= 0;
-        var hasCourse = selected.indexOf("courseSchedules") >= 0;
-        var dynamicCount = [hasClass, hasTeacher, hasClassroom, hasCourse].filter(Boolean).length;
-        if (dynamicCount === 4) return "sync:daily";
-        if (dynamicCount === 1 && hasClass) return "sync:daily:classes";
-        if (dynamicCount === 1 && hasTeacher) return "sync:daily:teachers";
-        if (dynamicCount === 1 && hasClassroom) return "sync:daily:classrooms";
-        if (dynamicCount === 1 && hasCourse) return "sync:daily:courses";
-        return "sync:scopes";
+        if ($("wizardForceRefresh") && $("wizardForceRefresh").checked) return "sync:publish:full";
+        return "sync:publish";
       }
 
       // 更新向导命令预览与运维卡片列表
@@ -7811,9 +8279,18 @@ const adminConsoleHtml = `<!doctype html>
         }
 
         var scriptName = resolveSyncScriptName(source, scopes);
+        var publisherArgs = [];
+        if (scriptName === "sync:publish:full") {
+          publisherArgs = [
+            "--term=" + (term || "请先选择学期"),
+            "--term-start-date=" + (startDate || "请管理员填写YYYY-MM-DD"),
+            "--total-weeks=20"
+          ];
+        }
         var cliArgsStr = scriptName === "sync:upload-staging"
           ? "--file=" + output + " --term=" + (term || "请先选择学期")
-          : cliArgs.join(" ");
+          : (scriptName.indexOf("sync:publish") === 0 ? publisherArgs.join(" ") : cliArgs.join(" "));
+        var commandEnvVars = scriptName.indexOf("sync:publish") === 0 ? [] : envVars;
 
         // 构造命令文本。换行和 bash 续行符用运行时字符生成，避免服务端模板字符串提前展开成浏览器脚本中的非法换行。
         var commandText = "";
@@ -7826,23 +8303,23 @@ const adminConsoleHtml = `<!doctype html>
 
         if (shell === "cmd") {
           commandText += "cd /d " + projectDirWin + lineBreak;
-          envVars.forEach(function(ev) {
+          commandEnvVars.forEach(function(ev) {
             commandText += "set " + ev.name + "=" + ev.val + lineBreak;
           });
-          commandText += "npm run " + scriptName + " -- " + cliArgsStr;
+          commandText += "npm run " + scriptName + (cliArgsStr ? " -- " + cliArgsStr : "");
         } else if (shell === "powershell") {
           commandText += "cd " + projectDirWin + lineBreak;
-          envVars.forEach(function(ev) {
+          commandEnvVars.forEach(function(ev) {
             commandText += '$env:' + ev.name + '="' + ev.val + '"' + lineBreak;
           });
-          commandText += "npm run " + scriptName + " -- " + cliArgsStr;
+          commandText += "npm run " + scriptName + (cliArgsStr ? " -- " + cliArgsStr : "");
         } else {
           // bash
           commandText += "cd " + projectDirBash + lineBreak;
-          envVars.forEach(function(ev) {
+          commandEnvVars.forEach(function(ev) {
             commandText += ev.name + "=" + ev.val + bashContinuation;
           });
-          commandText += "npm run " + scriptName + " -- " + cliArgsStr;
+          commandText += "npm run " + scriptName + (cliArgsStr ? " -- " + cliArgsStr : "");
         }
 
         // 显示到界面
@@ -8587,10 +9064,8 @@ const adminConsoleHtml = `<!doctype html>
       safeBind("refreshStagingUploadsBtn", "click", function() {
         var btn = $("refreshStagingUploadsBtn");
         var restoreButton = setButtonLoading(btn, "刷新中...");
-        api("/api/admin/staging/status")
+        loadStagingUploadsPanel()
           .then(function(res) {
-            state.stagingUploads = res.uploads || [];
-            renderStagingUploads();
             showToast("上传列表已刷新", "success");
             restoreButton();
           })
@@ -8598,6 +9073,54 @@ const adminConsoleHtml = `<!doctype html>
             restoreButton();
             showToast(err.message, "error");
           });
+      });
+      safeBind("stagingUploadTermFilter", "input", function() {
+        state.stagingUploadFilters.term = ($("stagingUploadTermFilter").value || "").trim();
+        state.stagingUploadCursor = 0;
+        loadStagingUploadsPanel().catch(function(err) { showToast(err.message, "error"); });
+      });
+      safeBind("stagingUploadStateFilter", "change", function() {
+        state.stagingUploadFilters.status = $("stagingUploadStateFilter").value || "";
+        state.stagingUploadCursor = 0;
+        loadStagingUploadsPanel().catch(function(err) { showToast(err.message, "error"); });
+      });
+      safeBind("stagingUploadPageSize", "change", function() {
+        state.stagingUploadPageSize = Number($("stagingUploadPageSize").value || 50) || 50;
+        state.stagingUploadCursor = 0;
+        loadStagingUploadsPanel().catch(function(err) { showToast(err.message, "error"); });
+      });
+      safeBind("stagingUploadPrevPageBtn", "click", function() {
+        state.stagingUploadCursor = Math.max(0, (state.stagingUploadCursor || 0) - (state.stagingUploadPageSize || 50));
+        loadStagingUploadsPanel().catch(function(err) { showToast(err.message, "error"); });
+      });
+      safeBind("stagingUploadNextPageBtn", "click", function() {
+        if (state.stagingUploadNextCursor == null) return;
+        state.stagingUploadCursor = state.stagingUploadNextCursor;
+        loadStagingUploadsPanel().catch(function(err) { showToast(err.message, "error"); });
+      });
+      safeBind("stagingUploadSelectAll", "change", function() {
+        var checked = Boolean($("stagingUploadSelectAll").checked);
+        document.querySelectorAll(".staging-upload-row-select,.staging-upload-group-select").forEach(function(input) {
+          if (!input.disabled) input.checked = checked;
+        });
+      });
+      safeBind("deleteSelectedStagingUploadsBtn", "click", function() {
+        deleteStagingUploadIds(collectSelectedStagingUploadIds(), $("deleteSelectedStagingUploadsBtn"), "删除所选");
+      });
+      safeBind("purgeDuplicateStagingUploadsBtn", "click", function() {
+        purgeDuplicateStagingUploads($("purgeDuplicateStagingUploadsBtn"));
+      });
+      safeBind("purgeFailedStagingUploadsBtn", "click", function() {
+        purgeFailedStagingUploads($("purgeFailedStagingUploadsBtn"));
+      });
+      safeBind("purgeIncompleteStagingUploadsBtn", "click", function() {
+        purgeIncompleteStagingUploads($("purgeIncompleteStagingUploadsBtn"));
+      });
+      safeBind("previewExpiredStagingUploadsBtn", "click", function() {
+        runMaintenance($("previewExpiredStagingUploadsBtn"), true);
+      });
+      safeBind("rebuildStagingUploadIndexBtn", "click", function() {
+        rebuildStagingUploadIndex($("rebuildStagingUploadIndexBtn"));
       });
 
       // 拖拽上传支持
@@ -9694,7 +10217,9 @@ const adminConsoleHtml = `<!doctype html>
       function renderAiProviderConfig() {
         var cfg = state.aiProviderConfig || {};
         setSelectValue("aiEnabled", cfg.enabled ? "true" : "false");
+        setSelectValue("aiRuntimeMode", cfg.runtimeMode || "public");
         setSelectValue("aiProvider", cfg.provider || "mock");
+        setSelectValue("aiProviderPolicy", cfg.providerPolicy || "auto");
         setValue("aiModel", cfg.model || "deepseek-v4-flash");
         setValue("aiReasoningModel", cfg.reasoningModel || "deepseek-v4-pro");
         setValue("aiBaseUrl", cfg.baseUrl || "https://api.deepseek.com");
@@ -9712,8 +10237,14 @@ const adminConsoleHtml = `<!doctype html>
         setSelectValue("cozePollEnabled", cfg.cozePollEnabled === false ? "false" : "true");
         setValue("cozePollIntervalMs", cfg.cozePollIntervalMs || "1000");
         setValue("cozePollMaxAttempts", cfg.cozePollMaxAttempts || "8");
+        setSelectValue("cloudbaseOpenaiEnabled", cfg.cloudbaseOpenaiEnabled ? "true" : "false");
+        setValue("cloudbaseOpenaiBaseUrl", cfg.cloudbaseOpenaiBaseUrl || "https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase");
+        setValue("cloudbaseOpenaiTextModel", cfg.cloudbaseOpenaiTextModel || "hy3-preview");
+        setValue("cloudbaseOpenaiTimeoutMs", cfg.cloudbaseOpenaiTimeoutMs || "15000");
+        setValue("cloudbaseOpenaiMaxTokens", cfg.cloudbaseOpenaiMaxTokens || "1200");
         setValue("aiApiKey", "");
         setValue("cozeApiKey", "");
+        setValue("cloudbaseOpenaiApiKey", "");
 
         var grid = $("aiProviderStatusGrid");
         if (grid) {
@@ -9728,11 +10259,14 @@ const adminConsoleHtml = `<!doctype html>
           }
           grid.innerHTML = [
             renderHealthItem("外部模型", cfg.enabled ? "<span class='badge success'>启用</span>" : "<span class='badge muted'>mock</span>"),
+            renderHealthItem("运行版本", cfg.runtimeMode === "competition" ? "<span class='badge warning'>competition</span>" : "<span class='badge success'>public</span>"),
             renderHealthItem("Provider", "<code>" + escapeHtml(cfg.provider || "mock") + "</code>"),
-            renderHealthItem("DeepSeek Key", badgeText(Boolean(cfg.deepseekKeyConfigured))),
-            renderHealthItem("Coze", cfg.cozeKeyConfigured && cfg.cozeBotIdConfigured ? "<span class='badge success'>OK</span>" : "<span class='badge muted'>可选</span>"),
+            renderHealthItem("DeepSeek Key", badgeText(Boolean(cfg.deepseekKeyConfigured)) + (cfg.deepseekKeyLast4 ? " ****" + escapeHtml(cfg.deepseekKeyLast4) : "")),
+            renderHealthItem("CloudBase OpenAI", cfg.cloudbaseOpenaiEnabled && cfg.cloudbaseOpenaiKeyConfigured ? "<span class='badge success'>OK</span> ****" + escapeHtml(cfg.cloudbaseOpenaiKeyLast4 || "") : "<span class='badge muted'>可选</span>"),
+            renderHealthItem("Coze", cfg.cozeKeyConfigured && cfg.cozeBotIdConfigured ? "<span class='badge success'>OK</span> ****" + escapeHtml(cfg.cozeKeyLast4 || "") : "<span class='badge muted'>可选</span>"),
             renderHealthItem("混元权益", hunyuanStatus),
             renderHealthItem("个人摘要", cfg.allowPersonalContext ? "<span class='badge warning'>允许</span>" : "<span class='badge success'>默认关闭</span>"),
+            renderHealthItem("密钥加密", cfg.encryptionConfigured ? "<span class='badge success'>AES-256-GCM</span>" : "<span class='badge warning'>需设置 FOSU_AI_CONFIG_ENCRYPTION_KEY</span>"),
             renderHealthItem("Runtime Store", cfg.runtimeConfigExists ? "<span class='badge success'>storage</span>" : "<span class='badge muted'>未生成</span>"),
           ].join("");
         }
@@ -9741,7 +10275,9 @@ const adminConsoleHtml = `<!doctype html>
       function aiProviderPayload() {
         var payload = {
           enabled: boolValue("aiEnabled"),
+          runtimeMode: value("aiRuntimeMode"),
           provider: value("aiProvider"),
+          providerPolicy: value("aiProviderPolicy"),
           model: value("aiModel"),
           reasoningModel: value("aiReasoningModel"),
           baseUrl: value("aiBaseUrl"),
@@ -9757,14 +10293,21 @@ const adminConsoleHtml = `<!doctype html>
           cozeChatEndpoint: value("cozeChatEndpoint"),
           cozePollEnabled: boolValue("cozePollEnabled"),
           cozePollIntervalMs: value("cozePollIntervalMs"),
-          cozePollMaxAttempts: value("cozePollMaxAttempts")
+          cozePollMaxAttempts: value("cozePollMaxAttempts"),
+          cloudbaseOpenaiEnabled: boolValue("cloudbaseOpenaiEnabled"),
+          cloudbaseOpenaiBaseUrl: value("cloudbaseOpenaiBaseUrl"),
+          cloudbaseOpenaiTextModel: value("cloudbaseOpenaiTextModel"),
+          cloudbaseOpenaiTimeoutMs: value("cloudbaseOpenaiTimeoutMs"),
+          cloudbaseOpenaiMaxTokens: value("cloudbaseOpenaiMaxTokens")
         };
         var apiKey = value("aiApiKey");
         var cozeApiKey = value("cozeApiKey");
         var cozeBotId = value("cozeBotId");
+        var cloudbaseOpenaiApiKey = value("cloudbaseOpenaiApiKey");
         if (apiKey) payload.apiKey = apiKey;
         if (cozeApiKey) payload.cozeApiKey = cozeApiKey;
         if (cozeBotId && cozeBotId !== "已配置") payload.cozeBotId = cozeBotId;
+        if (cloudbaseOpenaiApiKey) payload.cloudbaseOpenaiApiKey = cloudbaseOpenaiApiKey;
         return payload;
       }
 
@@ -10289,6 +10832,30 @@ const adminConsoleHtml = `<!doctype html>
         safeBind("flowCopyBtnRelay", "click", function() {
           var text = $("flowCmdTextRelay").textContent;
           if (text) copyText(text);
+        });
+        safeBind("copyPublisherCommandBtn", "click", function() {
+          var winSlash = String.fromCharCode(92);
+          var projectDirWin = ["C:", "Users", "Katelya", "Documents", "VScode", "FosuClass"].join(winSlash);
+          copyText("cd " + projectDirWin + String.fromCharCode(10) + "npm run sync:publish");
+        });
+        safeBind("refreshPublisherStatusBtn", "click", function() {
+          var btn = $("refreshPublisherStatusBtn");
+          var restoreButton = setButtonLoading(btn, "读取中...");
+          loadPublisherStatusPanel().then(function() {
+            showToast("Publisher 状态已刷新", "success");
+          }).catch(function(err) {
+            showToast(err.message, "error");
+          }).finally(function() {
+            restoreButton();
+          });
+        });
+        safeBind("copyCloudbaseRetryBtn", "click", function() {
+          copyText("npm run sync:publish -- --mode=mirror-only");
+        });
+        safeBind("copyCloudbaseExportBtn", "click", function() {
+          var data = state.syncStatus || {};
+          var version = data.releaseVersion || data.activeReleaseVersion || "<releaseVersion>";
+          copyText("npm run sync:export-cloudbase -- --release=" + version);
         });
         safeBind("copyStaticManifestBtn", "click", function() {
           var data = state.syncStatus || {};

@@ -36,7 +36,6 @@ const { getRateLimitStats } = require("../services/rateLimitService");
 const { clearExpiredSecurityEvents, getSecurityEventSummary, recordSecurityEvent } = require("../services/securityEventService");
 const { getSecurityStatus } = require("../services/securityModeService");
 const { listRouteSecurityPolicies } = require("../security/routeSecurityPolicy");
-const syncPlan = require("../shared/syncPlan");
 const {
   buildResourceCountContract,
   compareResourceCountContracts,
@@ -45,6 +44,7 @@ const {
 } = require("../shared/resourceCountContract");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
+const PROJECT_ROOT = path.resolve(__dirname, "../../..");
 const zlib = require("zlib");
 const gzipAsync = promisify(zlib.gzip);
 
@@ -569,7 +569,7 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
         providerPolicy: payload.safety && payload.safety.providerPolicy || "",
         providerDecisionReason: payload.safety && payload.safety.providerDecisionReason || "",
         fallbackReason: payload.safety && payload.safety.fallbackReason || "",
-        keyConfigured: Boolean(providerStatus.deepseekKeyConfigured || providerStatus.cozeKeyConfigured),
+        keyConfigured: Boolean(providerStatus.deepseekKeyConfigured || providerStatus.cozeKeyConfigured || providerStatus.cloudbaseOpenaiKeyConfigured),
         configuredProvider: providerStatus.provider || "mock",
         deterministicToolLocal: deterministicSummary.externalProviderUsed !== true,
         projectQaUsesDeepSeek: projectSummary.resolvedProvider === "deepseek" && projectSummary.externalProviderUsed === true,
@@ -595,7 +595,7 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
         providerPolicy: process.env.AI_PROVIDER_POLICY || "auto",
         providerDecisionReason: error.code || error.message || "verify fallback mock",
         fallbackReason: error.code || "verify fallback mock",
-        keyConfigured: Boolean(process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.COZE_API_KEY),
+        keyConfigured: Boolean(process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY || process.env.COZE_API_KEY || process.env.CLOUDBASE_OPENAI_API_KEY),
         configuredProvider: process.env.AI_PROVIDER || "mock",
         deterministicToolLocal: true,
         projectQaUsesDeepSeek: false,
@@ -3776,6 +3776,44 @@ router.post("/staging/upload/rebuild-index", adminAuth.verifyAdminAccess, (req, 
   }
 });
 
+function readLatestPublisherReceipt() {
+  const runsDir = path.join(PROJECT_ROOT, ".local", "publisher-runs");
+  if (!fs.existsSync(runsDir)) {
+    return { runsDir, run: null };
+  }
+  const runs = fs.readdirSync(runsDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const dir = path.join(runsDir, entry.name);
+      const state = readJsonIfExists(path.join(dir, "state.json"));
+      const receipt = readJsonIfExists(path.join(dir, "receipt.json"));
+      const error = readJsonIfExists(path.join(dir, "error.json"));
+      const stat = fs.statSync(dir);
+      const updatedAt = (receipt && (receipt.completedAt || receipt.updatedAt)) ||
+        (state && (state.updatedAt || state.startedAt)) ||
+        new Date(stat.mtimeMs).toISOString();
+      return {
+        runId: entry.name,
+        dir,
+        updatedAt,
+        state,
+        receipt,
+        error,
+      };
+    })
+    .sort((left, right) => Date.parse(right.updatedAt || "") - Date.parse(left.updatedAt || ""));
+  return { runsDir, run: runs[0] || null };
+}
+
+router.get("/publisher/receipt", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const latest = readLatestPublisherReceipt();
+    return res.json({ success: true, runsDir: latest.runsDir, latest: latest.run });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
 router.get("/staging/status", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     const lifecycle = releaseLifecycleService.buildLifecycleStatus({
@@ -3795,6 +3833,10 @@ router.get("/staging/status", adminAuth.verifyAdminAccess, (req, res) => {
       uploads,
       pendingReview,
       latest: uploads[0] || null,
+      total: uploadResult.total,
+      limit: uploadResult.limit,
+      cursor: uploadResult.cursor,
+      nextCursor: uploadResult.nextCursor,
       fingerprint,
       lifecycle,
     });
@@ -4986,12 +5028,98 @@ router.get("/sync/command-guide", adminAuth.verifyAdminAccess, (req, res) => {
         term,
       });
     }
-    const operations = syncPlan.getRecommendedOperations({
-      term,
-      termStartDate: start,
-      totalWeeks,
-      scopes: String(req.query.include || "").split(",").filter(Boolean),
-    });
+    const operations = [
+      {
+        id: "sync:publish",
+        displayName: "生成本机一键同步命令",
+        command: "npm run sync:publish",
+        displayScene: "日常全校课表同步与发布",
+        sceneCode: "publisher-routine",
+        intranetRequired: true,
+        usesCatalogCache: true,
+        usesDynamicCache: false,
+        upload: true,
+        publish: true,
+        activate: true,
+        estimatedDuration: "3 ~ 15 分钟",
+        estimatedRequests: "full-campus",
+        estimatedRequestsCode: "full-campus",
+        risk: "medium",
+        riskDisplay: "中",
+      },
+      {
+        id: "sync:publish:full",
+        displayName: "新学期 / 深度全量采集",
+        command: `npm run sync:publish -- --mode=full --term=${term} --term-start-date=${start} --total-weeks=${totalWeeks}`,
+        displayScene: "新学期、目录变化或异常修复",
+        sceneCode: "publisher-full",
+        intranetRequired: true,
+        usesCatalogCache: false,
+        usesDynamicCache: false,
+        upload: true,
+        publish: true,
+        activate: true,
+        estimatedDuration: "10 ~ 30 分钟",
+        estimatedRequests: "full-campus",
+        estimatedRequestsCode: "full-campus",
+        risk: "high",
+        riskDisplay: "高",
+      },
+      {
+        id: "sync:publish:resume",
+        displayName: "恢复本机 Publisher 中断任务",
+        command: "npm run sync:publish -- --mode=resume --run-id=<runId>",
+        displayScene: "电脑断电、终端关闭或网络中断后续跑",
+        sceneCode: "publisher-resume",
+        intranetRequired: false,
+        usesCatalogCache: true,
+        usesDynamicCache: false,
+        upload: true,
+        publish: true,
+        activate: true,
+        estimatedDuration: "取决于中断阶段",
+        estimatedRequests: "resume-dependent",
+        estimatedRequestsCode: "resume-dependent",
+        risk: "low",
+        riskDisplay: "低",
+      },
+      {
+        id: "sync:publish:mirror",
+        displayName: "重试 CloudBase 镜像",
+        command: "npm run sync:publish -- --mode=mirror-only",
+        displayScene: "Oracle 已发布但 CloudBase 镜像待重试",
+        sceneCode: "publisher-mirror-only",
+        intranetRequired: false,
+        usesCatalogCache: false,
+        usesDynamicCache: false,
+        upload: false,
+        publish: false,
+        activate: true,
+        estimatedDuration: "1 ~ 5 分钟",
+        estimatedRequests: "cloudbase-only",
+        estimatedRequestsCode: "cloudbase-only",
+        risk: "low",
+        riskDisplay: "低",
+      },
+      {
+        id: "sync:export-cloudbase",
+        displayName: "导出人工上传包",
+        command: "npm run sync:export-cloudbase -- --release=<releaseVersion>",
+        displayScene: "CloudBase 自动上传失败时人工补救",
+        sceneCode: "cloudbase-manual-export",
+        intranetRequired: false,
+        usesCatalogCache: false,
+        usesDynamicCache: false,
+        upload: false,
+        publish: false,
+        activate: false,
+        estimatedDuration: "1 ~ 3 分钟",
+        estimatedRequests: "local-only",
+        estimatedRequestsCode: "local-only",
+        risk: "low",
+        riskDisplay: "低",
+      },
+    ];
     return res.json({
       success: true,
       shell: "powershell",
