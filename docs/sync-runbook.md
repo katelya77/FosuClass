@@ -9,49 +9,68 @@
 日常同步：
 
 ```powershell
-npm run sync:daily -- --term=2025-2026-2
+npm run sync:publish
 ```
 
-单维度同步：
+深度全量模式：
 
 ```powershell
-npm run sync:daily:classes -- --term=2025-2026-2
-npm run sync:daily:teachers -- --term=2025-2026-2
-npm run sync:daily:classrooms -- --term=2025-2026-2
-npm run sync:daily:courses -- --term=2025-2026-2
-```
-
-自定义同步范围：
-
-```powershell
-npm run sync:scopes -- --term=2025-2026-2 --include=classSchedules,teacherSchedules
-```
-
-上传本地暂存文件：
-
-```powershell
-npm run sync:upload-staging -- --file=.\staging\2025-2026-2-full.json --term=2025-2026-2
+npm run sync:publish -- --mode=full --term=2026-2027-1 --term-start-date=YYYY-MM-DD --total-weeks=20
 ```
 
 恢复中断任务：
 
 ```powershell
-npm run sync:resume -- --run-id=RUN_ID
+npm run sync:publish -- --mode=resume --run-id=RUN_ID
 ```
+
+只重试 CloudBase 镜像：
+
+```powershell
+npm run sync:publish -- --mode=mirror-only
+```
+
+导出 CloudBase 人工上传包：
+
+```powershell
+npm run sync:export-cloudbase -- --release=<releaseVersion>
+```
+
+旧的 `sync:fresh`、`sync:quick`、`sync:release`、`sync:daily` 仍保留兼容，但控制台会显示 deprecated。后台命令手册和正常运维只推荐 `sync:publish`。
 
 ## 日常生产流程
 
 1. 本机校园网采集 100 网数据。
-2. 按学期和 runId 写入隔离缓存。
-3. 生成 Staging JSON 与旁路元数据。
-4. CLI gzip 分片上传。
-5. 服务端校验 hash、契约计数、来源口径和数据质量。
-6. 构建不可变 Release。
-7. 构建并同步 OpenResty 静态目录。
-8. readiness 检查通过后切换 active pointer。
-9. 小程序探针验证 manifest、索引、教学周历和空教室数据。
+2. 生成单一 Staging JSON 与 sidecar meta。
+3. canonicalHash 与 active 一致时直接 no-change 结束。
+4. CLI gzip 分片上传 Oracle。
+5. Oracle 后台校验 hash、契约计数、来源口径和数据质量。
+6. 构建不可变 Release Pack 并执行 Deep Health。
+7. 同步 OpenResty 并激活 runtime pointer。
+8. 自动镜像 CloudBase Hosting，先上传 release 目录，远端校验后最后覆盖 `runtime/active.json`。
+9. 自动运行 Oracle/CloudBase live smoke，双源一致才显示发布成功。
 
 任何阶段失败都不得切换 active，旧线上版本继续可用。
+
+## CloudBase 人工包
+
+CloudBase 镜像失败时，Oracle 已发布的 Release 不回滚，Publisher 会把状态标记为 `cloudbase-mirror-pending`，并生成：
+
+- `dist/cloudbase-manual/<releaseVersion>/`
+- `dist/FosuClass-CloudBase-<releaseVersion>.zip`
+
+人工上传只进入 CloudBase 静态网站托管的文件管理：先上传 `releases/<releaseVersion>/`，验证 `manifest.json`，最后覆盖 `runtime/active.json`。禁止先上传 pointer，也不需要在云存储或数据库上传。
+
+## 微信体验版验证
+
+GitHub Actions 部署服务端不等于微信小程序代码已经上传。体验版验证步骤：
+
+1. 在微信开发者工具打开项目。
+2. 确认合法域名包含 `https://class.katelya.eu.org` 和 CloudBase Hosting 域名。
+3. 上传体验版或预览，进入“设置 / 诊断”查看 `staticOrigin`、`staticOriginLabel`、`staticOriginUrl`、`cloudbaseReleaseVersion`、`oracleReleaseVersion`、`freshnessStatus`、`pointerSource`。
+4. 确认 CloudBase first、Oracle fallback、双源 releaseVersion 一致。
+
+不要自动提交正式版审核。
 
 ## 计数契约
 

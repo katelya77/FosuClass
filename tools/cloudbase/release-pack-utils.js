@@ -268,42 +268,62 @@ function verifyLocalReleasePack(options = {}) {
   };
 }
 
-function buildCloudbasePointer(manifest, options = {}) {
-  const releaseVersion = manifest.releaseVersion || manifest.version || options.releaseVersion || "";
-  const term = manifest.term || manifest.semester || manifest.termConfig && manifest.termConfig.term || "";
-  const baseUrl = String(options.hostingBaseUrl || "").trim().replace(/\/+$/g, "");
+function normalizeCloudbaseUrls(pointer, releaseVersion, baseUrl) {
   const releaseUrl = baseUrl ? joinUrl(baseUrl, "releases", releaseVersion) : "";
   const urlFor = (relativePath) => releaseUrl ? joinUrl(releaseUrl, relativePath) : "";
-  return {
+  const urls = Object.assign({}, pointer.urls || {}, {
+    manifest: urlFor("manifest.json"),
+    classIndex: urlFor("index/class/all.json"),
+    teacherIndex: urlFor("index/teacher/all.json"),
+    classroomIndex: urlFor("index/classroom/all.json"),
+    courseIndex: urlFor("index/course/all.json"),
+    emptyRoom: urlFor("empty-room/index.json"),
+    calendar: urlFor("calendar.json"),
+    bootstrap: urlFor("bootstrap.json"),
+    catalog: urlFor("bootstrap.json"),
+    schoolCatalog: urlFor("bootstrap.json"),
+    detailPattern: releaseUrl ? joinUrl(releaseUrl, "detail/{type}/{id}.json") : "",
+  });
+  delete urls.staticRelease;
+  return urls;
+}
+
+function buildCloudbasePointer(manifest, options = {}) {
+  const activePointer = options.activePointer && typeof options.activePointer === "object"
+    ? options.activePointer
+    : null;
+  const releaseVersion = manifest.releaseVersion || manifest.version || options.releaseVersion || "";
+  const term = activePointer && (activePointer.activeTerm || activePointer.term || activePointer.semester) ||
+    manifest.term || manifest.semester || manifest.termConfig && manifest.termConfig.term || "";
+  const baseUrl = String(options.hostingBaseUrl || "").trim().replace(/\/+$/g, "");
+  const basePointer = activePointer ? Object.assign({}, activePointer) : {};
+  const pointer = Object.assign({}, basePointer, {
     success: true,
-    schemaVersion: 1,
+    schemaVersion: basePointer.schemaVersion || 1,
     activeTerm: term,
     term,
-    semester: manifest.semester || term,
-    semesterText: manifest.semesterText || manifest.termConfig && manifest.termConfig.semesterText || "",
+    semester: basePointer.semester || manifest.semester || term,
+    semesterText: basePointer.semesterText || manifest.semesterText || manifest.termConfig && manifest.termConfig.semesterText || "",
     releaseVersion,
     version: releaseVersion,
-    updatedAt: manifest.updatedAt || new Date().toISOString(),
-    cacheEpoch: manifest.cacheEpoch || Date.parse(manifest.updatedAt || "") || Date.now(),
-    forceRefreshToken: manifest.forceRefreshToken || `${releaseVersion}:${manifest.cacheEpoch || ""}`,
-    termConfig: Object.assign({}, manifest.termConfig || {}, {
+    updatedAt: basePointer.updatedAt || manifest.updatedAt || new Date().toISOString(),
+    cacheEpoch: basePointer.cacheEpoch || manifest.cacheEpoch || Date.parse(manifest.updatedAt || "") || Date.now(),
+    forceRefreshToken: basePointer.forceRefreshToken || manifest.forceRefreshToken || `${releaseVersion}:${manifest.cacheEpoch || ""}`,
+    termConfig: Object.assign({}, manifest.termConfig || {}, basePointer.termConfig || {}, {
       term,
       releaseVersion,
     }),
-    urls: {
-      manifest: urlFor("manifest.json"),
-      classIndex: urlFor("index/class/all.json"),
-      teacherIndex: urlFor("index/teacher/all.json"),
-      classroomIndex: urlFor("index/classroom/all.json"),
-      courseIndex: urlFor("index/course/all.json"),
-      emptyRoom: urlFor("empty-room/index.json"),
-      calendar: urlFor("calendar.json"),
-      bootstrap: urlFor("bootstrap.json"),
-      catalog: urlFor("bootstrap.json"),
-      schoolCatalog: urlFor("bootstrap.json"),
-    },
+    urls: normalizeCloudbaseUrls(basePointer, releaseVersion, baseUrl),
     source: "cloudbase-hosting-runtime-active",
-  };
+  });
+  delete pointer.staticUrls;
+  pointer.manifestUrl = pointer.urls.manifest;
+  pointer.calendarUrl = pointer.urls.calendar;
+  pointer.bootstrapUrl = pointer.urls.bootstrap;
+  pointer.catalogUrl = pointer.urls.catalog;
+  pointer.classCatalogUrl = pointer.urls.classIndex;
+  pointer.schoolCatalogUrl = pointer.urls.schoolCatalog;
+  return pointer;
 }
 
 async function fetchJsonWithText(url) {
@@ -611,6 +631,7 @@ async function cutoverReleasePack(options = {}) {
   const pointer = buildCloudbasePointer(verification.manifest, {
     releaseVersion,
     hostingBaseUrl: remoteBaseUrl,
+    activePointer: options.activePointerOverride || options.activePointer,
   });
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `fosu-cloudbase-pointer-${process.pid}-`));
   const pointerPath = path.join(tmpDir, "active.json");

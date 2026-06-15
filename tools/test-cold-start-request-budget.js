@@ -6,7 +6,7 @@ global.wx = {
   setStorageSync() {},
   request(options) {
     calls.push(String(options.url));
-    if (String(options.url).includes("/static/runtime/active.json")) {
+    if (String(options.url).includes("/runtime/active.json")) {
       return options.success({ statusCode: 200, data: {
         success: true,
         activeTerm: "2025-2026-2",

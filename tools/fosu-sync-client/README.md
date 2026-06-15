@@ -6,46 +6,48 @@
 
 ## 常用命令
 
-日常同步：全部动态课表
+主运维入口在仓库根目录运行：
 
 ```powershell
-npm run sync:daily -- --term=2025-2026-2
+npm run sync:publish
 ```
 
-日常同步：班级课表
+深度全量：
 
 ```powershell
-npm run sync:daily:classes -- --term=2025-2026-2
+npm run sync:publish -- --mode=full --term=2026-2027-1 --term-start-date=YYYY-MM-DD --total-weeks=20
 ```
 
-日常同步：教师课表
+恢复：
 
 ```powershell
-npm run sync:daily:teachers -- --term=2025-2026-2
+npm run sync:publish -- --mode=resume --run-id=RUN_ID
 ```
 
-日常同步：教室课表
+只重试 CloudBase：
 
 ```powershell
-npm run sync:daily:classrooms -- --term=2025-2026-2
+npm run sync:publish -- --mode=mirror-only
 ```
 
-日常同步：课程课表
+`fosu-sync-client` 内部的 `sync:daily:*` 和 `sync:upload-staging` 是 Publisher 复用的底层能力，日常运维不要直接拼接这些命令。
 
-```powershell
-npm run sync:daily:courses -- --term=2025-2026-2
-```
-
-上传本地暂存文件
+上传本地暂存文件（诊断/应急底层入口）
 
 ```powershell
 npm run sync:upload-staging -- --file=.\staging\2025-2026-2-full.json --term=2025-2026-2
 ```
 
-恢复中断任务
+恢复中断任务请使用 Publisher：
 
 ```powershell
-npm run sync:resume -- --run-id=RUN_ID
+npm run sync:publish -- --mode=resume --run-id=RUN_ID
+```
+
+导出 CloudBase 人工上传包：
+
+```powershell
+npm run sync:export-cloudbase -- --release=<releaseVersion>
 ```
 
 ## 上传摘要

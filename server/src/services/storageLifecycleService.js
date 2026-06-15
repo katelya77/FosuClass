@@ -5,6 +5,7 @@ const zlib = require("zlib");
 
 const jobService = require("./jobService");
 const releaseService = require("./releaseService");
+const stagingUploadService = require("./stagingUploadService");
 const releaseWorkerManager = require("./releaseWorkerManager");
 const termRegistryService = require("./termRegistryService");
 const termReleaseIndexService = require("./termReleaseIndexService");
@@ -85,6 +86,10 @@ function getConfig() {
     jobSuccessRetentionDays: numEnv("FOSU_JOB_SUCCESS_RETENTION_DAYS", 14, 1),
     jobFailedRetentionDays: numEnv("FOSU_JOB_FAILED_RETENTION_DAYS", 30, 1),
     stagingFileRetentionDays: numEnv("FOSU_STAGING_FILE_RETENTION_DAYS", 14, 1),
+    duplicateUploadRetentionDays: numEnv("FOSU_DUPLICATE_UPLOAD_RETENTION_DAYS", 7, 1),
+    failedUploadRetentionDays: numEnv("FOSU_FAILED_UPLOAD_RETENTION_DAYS", 7, 1),
+    incompleteUploadRetentionHours: numEnv("FOSU_INCOMPLETE_UPLOAD_RETENTION_HOURS", 24, 1),
+    supersededUploadFileRetentionDays: numEnv("FOSU_SUPERSEDED_UPLOAD_FILE_RETENTION_DAYS", 30, 1),
     archiveMetadataRetentionDays: numEnv("FOSU_ARCHIVE_METADATA_RETENTION_DAYS", 90, 1),
     tempRetentionHours: numEnv("FOSU_TEMP_RETENTION_HOURS", 24, 1),
     logRetentionDays: numEnv("FOSU_LOG_RETENTION_DAYS", 30, 1),
@@ -186,6 +191,92 @@ function listDirEntries(dirPath) {
   });
 }
 
+function getUploadCleanupContext() {
+  let active = null;
+  try {
+    active = releaseService.getActiveReleaseInfoFast && releaseService.getActiveReleaseInfoFast();
+  } catch (error) {
+    active = null;
+  }
+  const activeHash = String(active && active.canonicalHash || "").trim().toLowerCase();
+  const activeVersion = String(active && (active.version || active.releaseVersion) || "").trim();
+  let records = [];
+  try {
+    records = stagingUploadService.listUploadRecords({ limit: 5000 }).records || [];
+  } catch (error) {
+    records = [];
+  }
+  const byId = new Map();
+  const latestPublishedByTerm = new Map();
+  records.forEach((record) => {
+    if (!record || !record.uploadId) return;
+    byId.set(record.uploadId, record);
+    const term = String(record.term || record.summary?.term || "").trim();
+    const published = record.status === "published" || record.releaseState === "published" || record.publishedReleaseVersion;
+    if (!term || !published) return;
+    const current = latestPublishedByTerm.get(term);
+    const currentTime = Date.parse(current && (current.updatedAt || current.createdAt) || "") || 0;
+    const nextTime = Date.parse(record.updatedAt || record.createdAt || "") || 0;
+    if (!current || nextTime >= currentTime) latestPublishedByTerm.set(term, record);
+  });
+  return { activeHash, activeVersion, byId, latestPublishedByTerm };
+}
+
+function isActiveUploadRecord(record, context) {
+  if (!record) return false;
+  const hash = String(record.canonicalHash || record.summary?.canonicalHash || "").trim().toLowerCase();
+  const version = String(record.publishedReleaseVersion || record.publishedVersion || record.releaseVersion || record.summary?.releaseVersion || "").trim();
+  return Boolean(record.active || context.activeHash && hash && context.activeHash === hash || context.activeVersion && version && context.activeVersion === version);
+}
+
+function collectUploadMaintenanceCandidates(config) {
+  const candidates = [];
+  const context = getUploadCleanupContext();
+  const duplicateMs = config.duplicateUploadRetentionDays * 86400000;
+  const failedMs = config.failedUploadRetentionDays * 86400000;
+  const incompleteMs = config.incompleteUploadRetentionHours * 3600000;
+  const supersededMs = config.supersededUploadFileRetentionDays * 86400000;
+  const managedDirs = [
+    { dir: path.join(STORAGE_DIR, "staging-uploads"), source: "cli" },
+    { dir: path.join(STORAGE_DIR, "staging-direct-upload"), source: "direct" },
+    { dir: path.join(STORAGE_DIR, "resource-upload-staging"), source: "resource" },
+    { dir: path.join(STORAGE_DIR, "relay", "uploads"), source: "relay" },
+  ];
+
+  managedDirs.forEach(({ dir, source }) => {
+    listDirEntries(dir).forEach((item) => {
+      const record = context.byId.get(item.name);
+      const status = String(record && (record.status || record.stagingState) || "").toLowerCase();
+      const term = String(record && (record.term || record.summary?.term) || "").trim();
+      const latestPublished = term ? context.latestPublishedByTerm.get(term) : null;
+      if (record && isActiveUploadRecord(record, context)) {
+        candidates.push({ type: "staging-upload-record", path: item.path, preserveReason: "active-upload", bytes: 0, uploadId: item.name });
+        return;
+      }
+      if (latestPublished && latestPublished.uploadId === item.name) {
+        candidates.push({ type: "staging-upload-record", path: item.path, preserveReason: "term-latest-published", bytes: 0, uploadId: item.name });
+        return;
+      }
+      if (["duplicate", "unchanged"].includes(status) && olderThan(item.stat, duplicateMs)) {
+        candidates.push({ type: "duplicate-upload", path: item.path, preserveReason: "", bytes: 0, uploadId: item.name, source });
+        return;
+      }
+      if (status === "failed" || status === "validation-failed") {
+        if (olderThan(item.stat, failedMs)) candidates.push({ type: "failed-upload", path: item.path, preserveReason: "", bytes: 0, uploadId: item.name, source });
+        return;
+      }
+      if (["initialized", "uploading", "uploaded", "merging", "validating", "unknown"].includes(status || "unknown")) {
+        if (olderThan(item.stat, incompleteMs)) candidates.push({ type: "incomplete-upload", path: item.path, preserveReason: "", bytes: 0, uploadId: item.name, source });
+        return;
+      }
+      if (status === "superseded" && olderThan(item.stat, supersededMs)) {
+        candidates.push({ type: "superseded-upload-original-file", path: item.path, preserveReason: "", bytes: 0, uploadId: item.name, source });
+      }
+    });
+  });
+  return candidates;
+}
+
 function collectMaintenanceCandidates(config) {
   const candidates = [];
   const keepReleases = getReleaseKeepSet(config);
@@ -222,18 +313,7 @@ function collectMaintenanceCandidates(config) {
     }
   });
 
-  [
-    path.join(STORAGE_DIR, "staging-uploads"),
-    path.join(STORAGE_DIR, "staging-direct-upload"),
-    path.join(STORAGE_DIR, "resource-upload-staging"),
-    path.join(STORAGE_DIR, "relay", "uploads"),
-  ].forEach((dirPath) => {
-    listDirEntries(dirPath).forEach((item) => {
-      if (olderThan(item.stat, item.entry.isDirectory() ? tempMs : stagingMs)) {
-        candidates.push({ type: "stale-upload-file", path: item.path, preserveReason: "", bytes: 0 });
-      }
-    });
-  });
+  candidates.push(...collectUploadMaintenanceCandidates(config));
 
   listDirEntries(jobService.JOBS_DIR).forEach((item) => {
     if (!item.entry.isFile() || !item.name.endsWith(".json")) return;

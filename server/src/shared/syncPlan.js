@@ -31,6 +31,7 @@ const PROGRESS_POLICIES = Object.freeze(["ignore", "resume"]);
 const NEGATIVE_CACHE_POLICIES = Object.freeze(["ignore", "use", "revalidate"]);
 
 const LEGACY_ACTIONS = Object.freeze({
+  publish: "sync:publish",
   fresh: "sync:daily",
   quick: "sync:daily",
   all: "sync:daily",
@@ -144,6 +145,10 @@ function profileForAction(action) {
   const normalized = String(action || "").trim();
   const map = {
     daily: "daily",
+    publish: "daily",
+    "sync:publish": "daily",
+    "sync:publish:routine": "daily",
+    "sync:publish:full": "new-term",
     "daily:classes": "daily-classes",
     "daily:teachers": "daily-teachers",
     "daily:classrooms": "daily-classrooms",

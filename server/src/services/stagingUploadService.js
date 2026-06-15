@@ -4,6 +4,7 @@ const path = require("path");
 const { pipeline } = require("stream/promises");
 const zlib = require("zlib");
 const { safeLog } = require("../utils/safeLogger");
+const releaseService = require("./releaseService");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const UPLOAD_ROOT = process.env.STAGING_DIR
@@ -15,6 +16,7 @@ const DIRECT_STAGING_UPLOAD_DIR = path.join(STORAGE_DIR, "staging-direct-upload"
 const RESOURCE_UPLOAD_STAGING_DIR = path.join(STORAGE_DIR, "resource-upload-staging");
 const SYNC_HISTORY_PATH = path.join(path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../data")), "sync-history.json");
 const RELAY_UPLOADS_PATH = path.join(STORAGE_DIR, "relay", "uploads.json");
+const STAGING_LATEST_PATH = path.join(STORAGE_DIR, "staging-latest.json");
 
 function ensureDir(dirPath) {
   if (!fs.existsSync(dirPath)) {
@@ -892,6 +894,56 @@ function getManifestReleaseVersion(manifest) {
   ).trim();
 }
 
+function getLatestStagingUploadId() {
+  const latest = readJsonFile(STAGING_LATEST_PATH, null);
+  const meta = latest && latest.meta || {};
+  return String(
+    latest && (latest.stagingUploadId || latest.uploadId) ||
+    meta.stagingUploadId ||
+    meta.uploadId ||
+    ""
+  ).trim();
+}
+
+function assertUploadCanDelete(uploadId, manifest) {
+  const item = manifest || {};
+  const status = String(item.status || item.stagingState || "").toLowerCase();
+  const busyStates = new Set(["initialized", "uploading", "uploaded", "merging", "validating", "publishing"]);
+  const time = Date.parse(item.updatedAt || item.createdAt || item.uploadedAt || "") || Date.now();
+  const staleIncomplete = ["initialized", "uploading", "uploaded", "merging"].includes(status) && Date.now() - time > 24 * 3600000;
+  if (busyStates.has(status) && !staleIncomplete) {
+    const error = new Error("当前上传记录正在上传、校验或发布，禁止删除");
+    error.statusCode = 409;
+    error.code = "STAGING_UPLOAD_BUSY";
+    throw error;
+  }
+
+  const latestUploadId = getLatestStagingUploadId();
+  if (latestUploadId && latestUploadId === uploadId) {
+    const error = new Error("当前 staging-latest 的唯一来源禁止删除，请先发布、替换或解除引用");
+    error.statusCode = 409;
+    error.code = "STAGING_UPLOAD_LATEST_REFERENCE";
+    throw error;
+  }
+
+  let active = null;
+  try {
+    active = releaseService.getActiveReleaseInfoFast && releaseService.getActiveReleaseInfoFast();
+  } catch (error) {
+    active = null;
+  }
+  const activeHash = String(active && active.canonicalHash || "").trim().toLowerCase();
+  const activeVersion = String(active && (active.version || active.releaseVersion) || "").trim();
+  const uploadHash = getManifestCanonicalHash(item);
+  const uploadVersion = getManifestReleaseVersion(item);
+  if (item.active === true || (activeHash && uploadHash && activeHash === uploadHash) || (activeVersion && uploadVersion && activeVersion === uploadVersion)) {
+    const error = new Error("Active 对应上传记录禁止删除");
+    error.statusCode = 409;
+    error.code = "STAGING_UPLOAD_ACTIVE_REFERENCE";
+    throw error;
+  }
+}
+
 function reconcileWithReleaseState(options = {}) {
   const active = options.activeRelease || {};
   const activeVersion = String(active.version || active.releaseVersion || options.activeReleaseVersion || "").trim();
@@ -977,6 +1029,7 @@ function deleteUpload(uploadId, actor) {
   try {
     manifest = readManifest(safeId);
     checkActor(manifest, actor);
+    assertUploadCanDelete(safeId, manifest);
   } catch (error) {
     if (error.statusCode !== 404) {
       throw error;

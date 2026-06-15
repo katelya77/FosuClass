@@ -32,6 +32,13 @@ const AI_ENV_KEYS = [
   "COZE_POLL_ENABLED",
   "COZE_POLL_INTERVAL_MS",
   "COZE_POLL_MAX_ATTEMPTS",
+  "AI_RUNTIME_MODE",
+  "CLOUDBASE_OPENAI_ENABLED",
+  "CLOUDBASE_OPENAI_BASE_URL",
+  "CLOUDBASE_OPENAI_API_KEY",
+  "CLOUDBASE_OPENAI_TEXT_MODEL",
+  "CLOUDBASE_OPENAI_TIMEOUT_MS",
+  "CLOUDBASE_OPENAI_MAX_TOKENS",
 ];
 
 const DEFAULTS = {
@@ -55,6 +62,12 @@ const DEFAULTS = {
   COZE_POLL_ENABLED: "true",
   COZE_POLL_INTERVAL_MS: "1000",
   COZE_POLL_MAX_ATTEMPTS: "8",
+  AI_RUNTIME_MODE: "public",
+  CLOUDBASE_OPENAI_ENABLED: "false",
+  CLOUDBASE_OPENAI_BASE_URL: "https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase",
+  CLOUDBASE_OPENAI_TEXT_MODEL: "hy3-preview",
+  CLOUDBASE_OPENAI_TIMEOUT_MS: "15000",
+  CLOUDBASE_OPENAI_MAX_TOKENS: "1200",
 };
 
 function parseEnv(text) {
@@ -129,6 +142,19 @@ function hasAnyDeepSeekKey(envFileValues, runtimeValues) {
     runtimeValues.DEEPSEEK_API_KEY ||
     envFileValues.AI_API_KEY ||
     envFileValues.DEEPSEEK_API_KEY
+  );
+}
+
+function keyLast4(value) {
+  const text = String(value || "");
+  return text ? text.slice(-4) : "";
+}
+
+function hasCloudbaseOpenAiKey(envFileValues, runtimeValues) {
+  return Boolean(
+    process.env.CLOUDBASE_OPENAI_API_KEY ||
+    runtimeValues.CLOUDBASE_OPENAI_API_KEY ||
+    envFileValues.CLOUDBASE_OPENAI_API_KEY
   );
 }
 
@@ -207,22 +233,33 @@ function getStatus() {
     jsonRepair: value("AI_PROVIDER_JSON_REPAIR") !== "false",
     strictJsonMode: value("DEEPSEEK_STRICT_JSON_MODE") === "true",
     allowPersonalContext: value("AI_ALLOW_PERSONAL_CONTEXT") === "true",
+    runtimeMode: value("AI_RUNTIME_MODE") === "competition" ? "competition" : "public",
     deepseekKeyConfigured: hasAnyDeepSeekKey(envFileValues, runtimeValues),
+    deepseekKeyLast4: keyLast4(process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY || runtimeValues.AI_API_KEY || runtimeValues.DEEPSEEK_API_KEY || envFileValues.AI_API_KEY || envFileValues.DEEPSEEK_API_KEY),
     cozeBaseUrl: value("COZE_API_BASE_URL"),
     cozeBotIdConfigured: Boolean(value("COZE_BOT_ID")),
     cozeKeyConfigured: Boolean(process.env.COZE_API_KEY || runtimeValues.COZE_API_KEY || envFileValues.COZE_API_KEY),
+    cozeKeyLast4: keyLast4(process.env.COZE_API_KEY || runtimeValues.COZE_API_KEY || envFileValues.COZE_API_KEY),
     cozeUserId: value("COZE_USER_ID"),
     cozeChatEndpoint: value("COZE_CHAT_ENDPOINT"),
     cozePollEnabled: value("COZE_POLL_ENABLED") !== "false",
     cozePollIntervalMs: value("COZE_POLL_INTERVAL_MS"),
     cozePollMaxAttempts: value("COZE_POLL_MAX_ATTEMPTS"),
+    cloudbaseOpenaiEnabled: value("CLOUDBASE_OPENAI_ENABLED") === "true",
+    cloudbaseOpenaiBaseUrl: value("CLOUDBASE_OPENAI_BASE_URL"),
+    cloudbaseOpenaiTextModel: value("CLOUDBASE_OPENAI_TEXT_MODEL"),
+    cloudbaseOpenaiTimeoutMs: value("CLOUDBASE_OPENAI_TIMEOUT_MS"),
+    cloudbaseOpenaiMaxTokens: value("CLOUDBASE_OPENAI_MAX_TOKENS"),
+    cloudbaseOpenaiKeyConfigured: hasCloudbaseOpenAiKey(envFileValues, runtimeValues),
+    cloudbaseOpenaiKeyLast4: keyLast4(process.env.CLOUDBASE_OPENAI_API_KEY || runtimeValues.CLOUDBASE_OPENAI_API_KEY || envFileValues.CLOUDBASE_OPENAI_API_KEY),
+    encryptionConfigured: Boolean(process.env.FOSU_AI_CONFIG_ENCRYPTION_KEY),
     cloudbaseHunyuan: getCloudbaseHunyuanStatus(),
   };
 }
 
 function normalizeProvider(value) {
   const provider = String(value || "mock").trim().toLowerCase();
-  return ["mock", "deepseek", "coze"].includes(provider) ? provider : "mock";
+  return ["mock", "deepseek", "coze", "cloudbase-openai"].includes(provider) ? provider : "mock";
 }
 
 function normalizeProviderPolicy(value) {
@@ -246,12 +283,17 @@ function buildUpdates(payload = {}) {
     maxTokens: "AI_MAX_TOKENS",
     temperature: "AI_TEMPERATURE",
     reasoningEffort: "AI_REASONING_EFFORT",
+    runtimeMode: "AI_RUNTIME_MODE",
     cozeBaseUrl: "COZE_API_BASE_URL",
     cozeBotId: "COZE_BOT_ID",
     cozeUserId: "COZE_USER_ID",
     cozeChatEndpoint: "COZE_CHAT_ENDPOINT",
     cozePollIntervalMs: "COZE_POLL_INTERVAL_MS",
     cozePollMaxAttempts: "COZE_POLL_MAX_ATTEMPTS",
+    cloudbaseOpenaiBaseUrl: "CLOUDBASE_OPENAI_BASE_URL",
+    cloudbaseOpenaiTextModel: "CLOUDBASE_OPENAI_TEXT_MODEL",
+    cloudbaseOpenaiTimeoutMs: "CLOUDBASE_OPENAI_TIMEOUT_MS",
+    cloudbaseOpenaiMaxTokens: "CLOUDBASE_OPENAI_MAX_TOKENS",
   };
   Object.keys(simpleFields).forEach((field) => {
     if (!Object.prototype.hasOwnProperty.call(payload, field)) return;
@@ -259,7 +301,9 @@ function buildUpdates(payload = {}) {
       ? normalizeProvider(payload[field])
       : field === "providerPolicy"
         ? normalizeProviderPolicy(payload[field])
-        : String(payload[field] == null ? "" : payload[field]).trim();
+        : field === "runtimeMode"
+          ? (String(payload[field]).trim().toLowerCase() === "competition" ? "competition" : "public")
+          : String(payload[field] == null ? "" : payload[field]).trim();
   });
   [
     ["enabled", "AI_AGENT_ENABLED"],
@@ -268,12 +312,14 @@ function buildUpdates(payload = {}) {
     ["strictJsonMode", "DEEPSEEK_STRICT_JSON_MODE"],
     ["allowPersonalContext", "AI_ALLOW_PERSONAL_CONTEXT"],
     ["cozePollEnabled", "COZE_POLL_ENABLED"],
+    ["cloudbaseOpenaiEnabled", "CLOUDBASE_OPENAI_ENABLED"],
   ].forEach(([field, key]) => {
     if (Object.prototype.hasOwnProperty.call(payload, field)) updates[key] = normalizeBoolean(payload[field]);
   });
   if (payload.apiKey) updates.AI_API_KEY = String(payload.apiKey).trim();
   if (payload.deepseekApiKey) updates.DEEPSEEK_API_KEY = String(payload.deepseekApiKey).trim();
   if (payload.cozeApiKey) updates.COZE_API_KEY = String(payload.cozeApiKey).trim();
+  if (payload.cloudbaseOpenaiApiKey) updates.CLOUDBASE_OPENAI_API_KEY = String(payload.cloudbaseOpenaiApiKey).trim();
   return updates;
 }
 

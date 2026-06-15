@@ -43,6 +43,45 @@ function pointerOrder(left, right) {
   return pointerTime(left) - pointerTime(right);
 }
 
+function activeTerm(active) {
+  return String(active && (active.term || active.activeTerm || active.semester || active.pointer && (active.pointer.term || active.pointer.activeTerm || active.pointer.semester)) || "").trim();
+}
+
+function activeUpdatedAt(active) {
+  return String(active && (active.updatedAt || active.pointer && active.pointer.updatedAt || "") || "").trim();
+}
+
+function activeManifestHash(active) {
+  return String(active && (active.manifestHash || active.manifest && active.manifest.hash || active.pointer && (active.pointer.manifestHash || active.pointer.manifest && active.pointer.manifest.hash) || "") || "").trim();
+}
+
+function activeManifestSize(active) {
+  const size = active && (active.manifestSize || active.manifest && active.manifest.size || active.pointer && (active.pointer.manifestSize || active.pointer.manifest && active.pointer.manifest.size));
+  return Number(size || 0) || 0;
+}
+
+function sameValue(left, right) {
+  return String(left || "") === String(right || "");
+}
+
+function getMetadataDiffs(oracleActive, cloudbaseActive) {
+  return [
+    { field: "term", oracle: activeTerm(oracleActive), cloudbase: activeTerm(cloudbaseActive) },
+    { field: "cacheEpoch", oracle: oracleActive && oracleActive.cacheEpoch || 0, cloudbase: cloudbaseActive && cloudbaseActive.cacheEpoch || 0 },
+    { field: "forceRefreshToken", oracle: oracleActive && oracleActive.forceRefreshToken || "", cloudbase: cloudbaseActive && cloudbaseActive.forceRefreshToken || "" },
+    { field: "updatedAt", oracle: activeUpdatedAt(oracleActive), cloudbase: activeUpdatedAt(cloudbaseActive) },
+  ].filter((item) => !sameValue(item.oracle, item.cloudbase));
+}
+
+function hasManifestConflict(oracleActive, cloudbaseActive) {
+  const oracleHash = activeManifestHash(oracleActive);
+  const cloudbaseHash = activeManifestHash(cloudbaseActive);
+  if (oracleHash && cloudbaseHash && oracleHash !== cloudbaseHash) return true;
+  const oracleSize = activeManifestSize(oracleActive);
+  const cloudbaseSize = activeManifestSize(cloudbaseActive);
+  return Boolean(oracleSize && cloudbaseSize && oracleSize !== cloudbaseSize);
+}
+
 function sanitizeForReceipt(value) {
   const blocked = /token|ticket|cookie|secret|authorization|password|api[-_]?key/i;
   if (Array.isArray(value)) return value.map(sanitizeForReceipt);
@@ -110,7 +149,12 @@ async function resolveCloudbaseActive(options = {}) {
 
 function classifyVersions(oracleActive, cloudbaseActive) {
   if (!cloudbaseActive.available || !cloudbaseActive.releaseVersion) return "oracle-newer";
-  if (oracleActive.releaseVersion === cloudbaseActive.releaseVersion) return "same";
+  if (oracleActive.releaseVersion === cloudbaseActive.releaseVersion) {
+    if (hasManifestConflict(oracleActive, cloudbaseActive)) return "manifest-conflict";
+    return getMetadataDiffs(oracleActive, cloudbaseActive).length
+      ? "same-release-metadata-drift"
+      : "same-and-healthy";
+  }
   if (pointerOrder(oracleActive, cloudbaseActive) > 0) return "oracle-newer";
   return "cloudbase-newer";
 }
@@ -171,12 +215,19 @@ async function syncActiveRelease(options = {}) {
     relation,
   };
 
-  if (relation === "cloudbase-newer") {
+  if (relation === "cloudbase-newer" || relation === "manifest-conflict") {
+    const code = relation === "manifest-conflict"
+      ? "CLOUDBASE_MANIFEST_CONFLICT"
+      : "CLOUDBASE_NEWER_THAN_ORACLE";
+    const message = relation === "manifest-conflict"
+      ? "CloudBase and Oracle point to the same releaseVersion but manifest metadata conflicts; refusing to overwrite automatically."
+      : "CloudBase active pointer is newer than Oracle; refusing to overwrite.";
     const receipt = writeReceipt(Object.assign({}, baseReceipt, {
       success: false,
       action: "conflict",
-      code: "CLOUDBASE_NEWER_THAN_ORACLE",
-      message: "CloudBase active pointer is newer than Oracle; refusing to overwrite.",
+      code,
+      metadataDiffs: getMetadataDiffs(oracleActive, cloudbaseActive),
+      message,
     }));
     const error = new Error(receipt.message);
     error.code = receipt.code;
@@ -184,7 +235,7 @@ async function syncActiveRelease(options = {}) {
     throw error;
   }
 
-  if (relation === "same") {
+  if (relation === "same-and-healthy") {
     const remote = await verifyCloudbaseMatchesOracle(oracleActive, Object.assign({}, options, {
       hostingBaseUrl,
       oracleActiveSource,
@@ -194,6 +245,40 @@ async function syncActiveRelease(options = {}) {
       action: "no-op",
       remote,
       message: "Oracle and CloudBase active release match; remote hash/size verification passed.",
+    }));
+  }
+
+  if (relation === "same-release-metadata-drift") {
+    const remote = await verifyCloudbaseMatchesOracle(oracleActive, Object.assign({}, options, {
+      hostingBaseUrl,
+      oracleActiveSource,
+    }));
+    if (dryRun) {
+      return writeReceipt(Object.assign({}, baseReceipt, {
+        success: true,
+        action: "dry-run-pointer-update-required",
+        metadataDiffs: getMetadataDiffs(oracleActive, cloudbaseActive),
+        remote,
+        message: "Oracle and CloudBase release files match, but runtime pointer metadata differs; dry-run did not update CloudBase pointer.",
+      }));
+    }
+    const cutover = await cutoverReleasePack({
+      envId,
+      publicRoot: options.outputRoot || DEFAULT_OUTPUT_ROOT,
+      releaseVersion: oracleActive.releaseVersion,
+      hostingBaseUrl,
+      confirmation: "CONFIRM_CLOUDBASE_CUTOVER",
+      oracleActiveReleaseVersion: oracleActive.releaseVersion,
+      gitStatusRecorded: true,
+      activePointerOverride: oracleActive.pointer,
+    });
+    return writeReceipt(Object.assign({}, baseReceipt, {
+      success: true,
+      action: "pointer-updated",
+      metadataDiffs: getMetadataDiffs(oracleActive, cloudbaseActive),
+      remote,
+      cutover,
+      message: "Oracle and CloudBase release files already matched; only CloudBase runtime/active.json was updated.",
     }));
   }
 
