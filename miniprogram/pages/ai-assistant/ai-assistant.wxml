@@ -234,6 +234,15 @@
 
   <view class="composer">
     <view class="composer-inner">
+      <button
+        wx:if="{{voiceInputVisible}}"
+        class="voice-btn {{voiceRecording ? 'recording' : ''}} {{voiceRecognizing || sending ? 'disabled' : ''}}"
+        bindtap="onVoiceTap"
+        disabled="{{voiceRecognizing || sending}}"
+        aria-label="语音输入"
+      >
+        {{voiceRecording ? "停" : "麦"}}
+      </button>
       <textarea
         class="composer-input"
         value="{{inputValue}}"
@@ -244,13 +253,21 @@
         fixed="{{true}}"
         cursor-spacing="16"
         focus="{{inputFocus}}"
+        confirm-type="send"
+        confirm-hold="{{false}}"
+        show-confirm-bar="{{false}}"
         bindinput="onInput"
+        bindconfirm="onComposerConfirm"
+        bindcompositionstart="onCompositionStart"
+        bindcompositionend="onCompositionEnd"
         disabled="{{sending}}"
       />
+      <button class="newline-btn" bindtap="onInsertNewline" disabled="{{sending}}" aria-label="换行">↵</button>
       <button class="send-btn {{sending || !inputValue ? 'disabled' : ''}}" bindtap="onSubmit" disabled="{{sending || !inputValue}}">
         {{sending ? "发送中" : "发送"}}
       </button>
     </view>
+    <view wx:if="{{voiceStatusText}}" class="voice-status">{{voiceStatusText}}</view>
     <button class="composer-note" bindtap="openPrivacySheet">{{composerNote}}</button>
   </view>
 </view>

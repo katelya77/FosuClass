@@ -3,6 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const { spawnSync } = require("child_process");
+const { runProcess } = require("../shared/processRunner");
 
 const cloudbaseConfig = require("../../miniprogram/config/cloudbase");
 const buildInfo = require("../../miniprogram/config/buildInfo");
@@ -45,6 +46,29 @@ function quoteWinArg(value) {
 }
 
 function runCommand(command, args = [], options = {}) {
+  if (command === "npm" || command === "node") {
+    const result = runProcess(command, args, {
+      cwd: options.cwd || process.cwd(),
+      timeoutMs: options.timeoutMs || 120000,
+      maxBuffer: options.maxBuffer || 64 * 1024 * 1024,
+      tailChars: options.maxOutputChars || 12000,
+    });
+    const stdout = truncateText(stripAnsi(result.stdout || result.stdoutTail || ""), options.maxOutputChars);
+    const stderr = truncateText(stripAnsi(result.stderr || result.stderrTail || ""), options.maxOutputChars);
+    return {
+      command: [command].concat(result.safeArgs || args).join(" "),
+      status: result.status,
+      ok: result.ok,
+      stdout: stdout.text,
+      stderr: stderr.text,
+      stdoutTruncated: stdout.truncated,
+      stderrTruncated: stderr.truncated,
+      stdoutOriginalLength: stdout.originalLength,
+      stderrOriginalLength: stderr.originalLength,
+      elapsedMs: result.elapsedMs,
+      error: result.error ? result.error.message : "",
+    };
+  }
   const startedAt = Date.now();
   const resolvedCommand = commandName(command);
   const isWindowsCmd = process.platform === "win32" && /\.(cmd|bat)$/i.test(resolvedCommand);

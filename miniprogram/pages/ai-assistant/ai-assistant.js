@@ -1,4 +1,6 @@
 const aiAssistantService = require("../../services/aiAssistantService");
+const aiVoiceInputService = require("../../services/aiVoiceInputService");
+const cloudbaseConfig = require("../../config/cloudbase");
 const demoData = require("./demo-data");
 const { courseTimes } = require("../../data/courseTimes");
 
@@ -7,6 +9,7 @@ const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
 const TASK_PANEL_CACHE_VERSION = "2026-06-ui-svg-v1";
 const TASK_PANEL_DEBOUNCE_MS = 180;
 const TASK_ACTION_DEBOUNCE_MS = 180;
+const SEND_DEDUPE_MS = 420;
 const PRIVACY_SUMMARY_TEXT = "仅发送课程名、教师、教室、星期、节次、教学周；不发送学号、姓名、密码或原始文件。";
 const MAX_MESSAGE_COUNT = 20;
 const PERSONAL_SYNC_XLS_URL = "/pages/personal-sync/personal-sync?tab=xls";
@@ -70,13 +73,13 @@ const TABBAR_PENDING_QUERY = {
 };
 
 const PROVIDER_LABELS = {
-  "cloudbase-hunyuan": "腾讯混元",
-  hunyuan: "腾讯混元",
-  "tencent-hunyuan": "腾讯混元",
-  mock: "本地规则",
-  deepseek: "DeepSeek",
-  coze: "扣子",
-  unknown: "AI",
+  "cloudbase-hunyuan": "已核验课表数据",
+  hunyuan: "已核验课表数据",
+  "tencent-hunyuan": "已核验课表数据",
+  mock: "已使用本地规则",
+  deepseek: "已核验课表数据",
+  coze: "已核验课表数据",
+  unknown: "正在整理结果",
 };
 
 const SAFETY_MODE_LABELS = {
@@ -131,7 +134,37 @@ const ALLOWED_ACTION_TYPES = ["navigate", "copy", "retry", "bind", "noop"];
 const INVALID_DISPLAY_TEXT = new Set(["[object Object]", "undefined", "null", "NaN"]);
 
 function cloneTaskPanelGroups() {
-  return JSON.parse(JSON.stringify(TASK_PANEL_GROUPS));
+  const groups = JSON.parse(JSON.stringify(TASK_PANEL_GROUPS));
+  if (groups[2]) {
+    groups[2].title = "使用与数据";
+    if (Array.isArray(groups[2].items)) {
+      groups[2].items = groups[2].items.map((item) => {
+        if (item.iconPath === ICONS.diagnosis) {
+          return Object.assign({}, item, {
+            label: "数据是否最新",
+            desc: "查看课表数据是否可用",
+            message: "课表数据是否最新？",
+          });
+        }
+        if (item.iconPath === ICONS.app) {
+          return Object.assign({}, item, {
+            label: "怎么使用",
+            desc: "查看查课、空教室和导入方法",
+            message: "这个小程序怎么用？",
+          });
+        }
+        if (item.iconPath === ICONS.term) {
+          return Object.assign({}, item, {
+            label: "个人课表导入",
+            desc: "了解 XLS 导入方式",
+            message: "怎么导入个人课表？",
+          });
+        }
+        return item;
+      });
+    }
+  }
+  return groups;
 }
 
 function readTaskPanelGroupsCache() {
@@ -252,12 +285,9 @@ function inferCourseTimeRange(source) {
 
 function mapProviderLabel(provider) {
   const normalized = String(provider || "unknown").toLowerCase();
-  if (PROVIDER_LABELS[normalized]) return PROVIDER_LABELS[normalized];
-  if (normalized.indexOf("hunyuan") >= 0 || normalized.indexOf("cloudbase") >= 0) return "腾讯混元";
-  if (normalized.indexOf("deepseek") >= 0) return "DeepSeek";
-  if (normalized.indexOf("coze") >= 0) return "扣子";
-  if (normalized.indexOf("mock") >= 0) return "本地规则";
-  return "AI";
+  if (normalized.indexOf("mock") >= 0 || normalized.indexOf("local") >= 0) return "已使用本地规则";
+  if (normalized && normalized !== "unknown") return "已核验课表数据";
+  return "正在整理结果";
 }
 
 function mapSafetyModeLabel(mode) {
@@ -269,7 +299,11 @@ function mapSafetyModeLabel(mode) {
 }
 
 function mapToolName(name) {
-  return TOOL_LABELS[String(name || "").toLowerCase()] || "校园工具";
+  const normalized = String(name || "").toLowerCase();
+  if (normalized === "search_school_index") return "正在查询全校课程";
+  if (TOOL_LABELS[normalized]) return TOOL_LABELS[normalized];
+  if (/查询|课程|教室|课表|教学周|导入|数据/.test(String(name || ""))) return String(name || "");
+  return "校园工具";
 }
 
 function mapCardTypeLabel(type) {
@@ -303,15 +337,14 @@ function normalizeSafety(safety) {
   const desiredProvider = source.desiredProvider || source.provider || provider;
   const mode = source.mode || source.safetyMode || "tool-grounded";
   const fallbackReason = safeText(source.fallbackReason || "", 80);
-  const providerDecisionReason = safeText(source.providerDecisionReason || "", 120);
+  const providerDecisionReason = "";
   const externalUsed = source.externalProviderUsed === true;
-  const providerLabel = fallbackReason ? "已降级" : (externalUsed ? mapProviderLabel(provider) : "工具验证");
-  let text = "课表事实由工具核验";
+  const providerLabel = fallbackReason ? "已使用本地规则" : (externalUsed ? "已核验课表数据" : "已核验课表数据");
+  let text = "已核验课表数据";
   if (fallbackReason) {
-    text = "模型暂不可用，已用本地规则";
+    text = "已使用本地规则";
   } else if (externalUsed) {
-    const label = mapProviderLabel(provider);
-    text = label === "扣子" ? "扣子已参与" : `${label} 已参与`;
+    text = "正在整理结果";
   }
   return {
     provider,
@@ -369,15 +402,12 @@ function buildEvidenceText(evidence) {
   if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return "";
   const parts = [];
   if (evidence.term) parts.push(`学期 ${safeText(evidence.term, 32)}`);
-  if (evidence.releaseVersion) parts.push(`版本 ${safeText(evidence.releaseVersion, 48)}`);
   if (evidence.currentWeek) parts.push(`教学周 ${safeText(evidence.currentWeek, 16)}`);
-  if (Array.isArray(evidence.sources) && evidence.sources.length) {
-    parts.push(`来源 ${safeText(evidence.sources.slice(0, 2).join("/"), 80)}`);
-  }
   if (evidence.checkedAt) {
     const checkedTime = safeText(String(evidence.checkedAt).slice(11, 16), 8);
     if (checkedTime) parts.push(`检查 ${checkedTime}`);
   }
+  if (evidence.verified || evidence.toolCount) parts.push("已核验");
   return parts.length ? `依据：${parts.join(" · ")}` : "";
 }
 
@@ -617,7 +647,7 @@ function resolveProviderState(messages) {
     }
   }
   return {
-    providerLabel: "AI",
+    providerLabel: "已核验课表数据",
     providerModeLabel: "工具验证",
     lastProvider: "unknown",
     lastExternalProviderUsed: false,
@@ -627,20 +657,16 @@ function resolveProviderState(messages) {
 
 function buildHeaderSubtitle(state) {
   const source = state || {};
-  if (source.providerLabel === "已降级" || source.lastFallbackReason) {
-    return "模型暂不可用，已用本地规则";
+  if (source.lastFallbackReason) {
+    return "已使用本地规则";
   }
-  const provider = String(source.lastProvider || "").toLowerCase();
   if (source.lastExternalProviderUsed) {
-    const label = mapProviderLabel(provider);
-    return label === "扣子" ? "扣子已参与" : `${label} 已参与`;
+    return "正在整理结果";
   }
   if (source.allowPersonalContext === true) {
-    return source.lastProvider && source.lastProvider !== "unknown"
-      ? "课表事实由工具核验 · 已开启课表摘要"
-      : "已开启课表摘要";
+    return "已核验课表数据 · 已开启课表摘要";
   }
-  return "课表事实由工具核验";
+  return "已核验课表数据";
 }
 
 Page({
@@ -672,17 +698,25 @@ Page({
     lastExternalProviderUsed: false,
     lastFallbackReason: "",
     lastProvider: "unknown",
-    headerSubtitle: "课表事实由工具核验",
+    headerSubtitle: "已核验课表数据",
     historyTrimNotice: false,
     hasHeroLogo: true,
     demoMode: "",
     scrollTop: 0,
     composerNote: "默认不发送个人课表摘要",
+    voiceInputVisible: false,
+    voiceRecording: false,
+    voiceRecognizing: false,
+    voiceStatusText: "",
   },
 
   onLoad(options) {
     this._aiPageUnloaded = false;
     this._activeAiRequestId = "";
+    this._lastSubmitAt = 0;
+    this._lastSubmitText = "";
+    this._isComposing = false;
+    this._recorderManager = null;
     this.debouncedOpenTaskPanel = createDebounced(() => this.openTaskPanelNow(), TASK_PANEL_DEBOUNCE_MS);
     this.debouncedSendTaskMessage = createDebounced((message, sendOptions) => {
       this.sendMessage(message, sendOptions);
@@ -704,6 +738,7 @@ Page({
     nextState.headerSubtitle = buildHeaderSubtitle(nextState);
 
     this.setData(Object.assign(nextState, { scrollTop: Date.now() }));
+    this.initVoiceInput();
 
     const question = decodeQuery(options && (options.q || options.question || ""));
     if (!demoMode && question) {
@@ -730,6 +765,148 @@ Page({
 
   onInput(event) {
     this.setData({ inputValue: event.detail.value });
+  },
+
+  onCompositionStart() {
+    this._isComposing = true;
+  },
+
+  onCompositionEnd() {
+    this._isComposing = false;
+  },
+
+  onComposerConfirm(event) {
+    if (this._isComposing) return;
+    const value = event && event.detail && event.detail.value;
+    this.sendMessage(value == null ? this.data.inputValue : value, { source: "confirm" });
+  },
+
+  onInsertNewline() {
+    if (this.data.sending) return;
+    const current = String(this.data.inputValue || "");
+    this.setData({
+      inputValue: `${current}\n`,
+      inputFocus: true,
+    });
+  },
+
+  initVoiceInput() {
+    const visible = aiVoiceInputService.isVoiceInputAvailable(cloudbaseConfig, typeof wx !== "undefined" ? wx : null);
+    this.setData({
+      voiceInputVisible: visible,
+      voiceStatusText: visible ? "" : "",
+    });
+    if (!visible || typeof wx === "undefined" || typeof wx.getRecorderManager !== "function") return;
+    const recorder = wx.getRecorderManager();
+    this._recorderManager = recorder;
+    recorder.onStart && recorder.onStart(() => {
+      this.setData({ voiceRecording: true, voiceRecognizing: false, voiceStatusText: "正在录音" });
+    });
+    recorder.onStop && recorder.onStop((res) => this.handleVoiceRecordStop(res));
+    recorder.onError && recorder.onError(() => {
+      this.setData({ voiceRecording: false, voiceRecognizing: false, voiceStatusText: "识别失败" });
+      wx.showToast({ title: "录音失败", icon: "none" });
+    });
+  },
+
+  ensureRecordPermission() {
+    return new Promise((resolve) => {
+      wx.authorize({
+        scope: "scope.record",
+        success: () => resolve(true),
+        fail: () => {
+          wx.showModal({
+            title: "需要录音权限",
+            content: "语音只用于本次转文字，识别完成后会删除临时文件。",
+            confirmText: "打开设置",
+            cancelText: "取消",
+            success: (res) => {
+              if (!res.confirm) return resolve(false);
+              wx.openSetting({
+                success: (setting) => resolve(Boolean(setting.authSetting && setting.authSetting["scope.record"])),
+                fail: () => resolve(false),
+              });
+            },
+            fail: () => resolve(false),
+          });
+        },
+      });
+    });
+  },
+
+  onVoiceTap() {
+    if (!this.data.voiceInputVisible) {
+      wx.showToast({ title: "当前环境暂不支持语音识别", icon: "none" });
+      return;
+    }
+    if (this.data.sending || this.data.voiceRecognizing) return;
+    if (this.data.voiceRecording) {
+      this.stopVoiceRecording();
+      return;
+    }
+    this.startVoiceRecording();
+  },
+
+  startVoiceRecording() {
+    if (this.data.voiceRecording || this.data.sending) return;
+    this.ensureRecordPermission().then((allowed) => {
+      if (!allowed || !this._recorderManager) return;
+      this.setData({ voiceStatusText: "正在录音" });
+      this._voiceRecordStartedAt = Date.now();
+      this._recorderManager.start({
+        duration: Number(cloudbaseConfig.AI_VOICE_MAX_DURATION_MS || 15000) || 15000,
+        sampleRate: 16000,
+        numberOfChannels: 1,
+        encodeBitRate: 48000,
+        format: "mp3",
+      });
+    });
+  },
+
+  stopVoiceRecording() {
+    if (!this._recorderManager || !this.data.voiceRecording) return;
+    this._recorderManager.stop();
+  },
+
+  cancelVoiceRecording() {
+    if (this._recorderManager && this.data.voiceRecording) {
+      this._voiceCancelled = true;
+      this._recorderManager.stop();
+    }
+    this.setData({ voiceRecording: false, voiceRecognizing: false, voiceStatusText: "" });
+  },
+
+  handleVoiceRecordStop(res) {
+    if (this._voiceCancelled) {
+      this._voiceCancelled = false;
+      return;
+    }
+    const durationMs = Number(res && res.duration || 0) || Math.max(0, Date.now() - Number(this._voiceRecordStartedAt || Date.now()));
+    this.setData({ voiceRecording: false });
+    if (durationMs < aiVoiceInputService.MIN_DURATION_MS) {
+      this.setData({ voiceRecognizing: false, voiceStatusText: "录音时间太短" });
+      wx.showToast({ title: "录音时间太短", icon: "none" });
+      return;
+    }
+    this.setData({ voiceRecognizing: true, voiceStatusText: "正在识别" });
+    aiVoiceInputService.transcribeRecording({
+      tempFilePath: res && res.tempFilePath,
+      durationMs,
+      fileSize: res && res.fileSize,
+      format: "mp3",
+    }).then((result) => {
+      const text = String(result && result.text || "").trim();
+      if (!text) throw new Error("EMPTY_VOICE_TEXT");
+      this.setData({
+        inputValue: text,
+        inputFocus: true,
+        voiceRecognizing: false,
+        voiceStatusText: "识别完成",
+      });
+    }).catch(() => {
+      this.setData({ voiceRecognizing: false, voiceStatusText: "识别失败" });
+      wx.showToast({ title: "识别失败，可继续文字输入", icon: "none" });
+    });
   },
 
   queueTaskMessage(message, options) {
@@ -817,6 +994,10 @@ Page({
   sendMessage(rawText, options) {
     const message = String(rawText || "").trim();
     if (!message || this.data.sending) return;
+    const now = Date.now();
+    if (this._lastSubmitText === message && now - Number(this._lastSubmitAt || 0) < SEND_DEDUPE_MS) return;
+    this._lastSubmitText = message;
+    this._lastSubmitAt = now;
 
     const requestId = `ai-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
     this._activeAiRequestId = requestId;
@@ -920,9 +1101,9 @@ Page({
         suggestions: [],
         toolCalls: [],
         safety: {
-          provider: "cloudbase-hunyuan",
-          resolvedProvider: "cloudbase-hunyuan",
-          externalProviderUsed: true,
+          provider: "public",
+          resolvedProvider: "public",
+          externalProviderUsed: false,
           mode: "tool-grounded",
         },
       });

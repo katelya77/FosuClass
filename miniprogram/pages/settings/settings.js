@@ -71,6 +71,25 @@ function formatOriginSuccessTime(origin) {
   return at ? formatFullDateTime(Number(at)) : "-";
 }
 
+function friendlyStaticSourceName(name, label) {
+  const normalized = String(name || "").toLowerCase();
+  if (normalized === "cloudbase" || String(label || "").includes("高速")) return "高速静态源";
+  if (normalized === "oracle" || String(label || "").includes("备用")) return "备用静态源";
+  return "本地缓存";
+}
+
+function buildPublicStaticStatus(staticOrigin, staticOriginLabel, cloudbaseOrigin, oracleOrigin, oracleFallbackAt) {
+  const cloudbaseSuccess = formatOriginSuccessTime(cloudbaseOrigin);
+  const oracleSuccess = formatOriginSuccessTime(oracleOrigin);
+  return {
+    publicStaticSourceLabel: friendlyStaticSourceName(staticOrigin, staticOriginLabel),
+    publicCloudbaseStatus: cloudbaseSuccess !== "-" ? `可用，最近成功 ${cloudbaseSuccess}` : "待验证",
+    publicOracleStatus: oracleFallbackAt && oracleFallbackAt !== "-"
+      ? `已启用备用，最近 ${oracleFallbackAt}`
+      : (oracleSuccess !== "-" ? `备用可用，最近成功 ${oracleSuccess}` : "待命"),
+  };
+}
+
 function getSelectedSchedule() {
   const target = wx.getStorageSync(CURRENT_SCHEDULE_TARGET_KEY) || null;
   const filter = wx.getStorageSync("FOSU_SCHOOL_FILTER_CACHE") || null;
@@ -653,6 +672,7 @@ Page({
     const oracleFallbackAt = staticLastHit && staticLastHit.name === "oracle"
       ? formatFullDateTime(staticLastHit.at)
       : formatOriginSuccessTime(oracleOrigin);
+    const publicStaticStatus = buildPublicStaticStatus(staticOrigin, staticOriginLabel, cloudbaseOrigin, oracleOrigin, oracleFallbackAt);
     
     this.setData({
       versionDetailVisible: true,
@@ -666,6 +686,9 @@ Page({
       "versionData.staticOrigin": staticOrigin,
       "versionData.staticOriginLabel": staticOriginLabel,
       "versionData.staticOriginUrl": staticOriginUrl,
+      "versionData.publicStaticSourceLabel": publicStaticStatus.publicStaticSourceLabel,
+      "versionData.publicCloudbaseStatus": publicStaticStatus.publicCloudbaseStatus,
+      "versionData.publicOracleStatus": publicStaticStatus.publicOracleStatus,
       "versionData.manifestStatus": manifestStatus,
       "versionData.pointerSource": pointerSource,
       "versionData.recentCloudbaseSuccessAt": formatOriginSuccessTime(cloudbaseOrigin),
@@ -749,6 +772,9 @@ Page({
               staticOrigin,
               staticOriginLabel,
               staticOriginUrl,
+              publicStaticSourceLabel: publicStaticStatus.publicStaticSourceLabel,
+              publicCloudbaseStatus: publicStaticStatus.publicCloudbaseStatus,
+              publicOracleStatus: publicStaticStatus.publicOracleStatus,
               manifestStatus,
               pointerSource,
               recentCloudbaseSuccessAt: formatOriginSuccessTime(cloudbaseOrigin),

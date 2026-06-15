@@ -328,6 +328,18 @@
             <view class="detail-label">说明</view>
             <view class="detail-value" style="font-size: 24rpx; color: #757575;">{{versionData.disclaimer}}</view>
           </view>
+          <view class="detail-row">
+            <view class="detail-label">当前课表静态源</view>
+            <view class="detail-value">{{versionData.publicStaticSourceLabel || '本地缓存'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">高速静态源</view>
+            <view class="detail-value">{{versionData.publicCloudbaseStatus || '-'}}</view>
+          </view>
+          <view class="detail-row">
+            <view class="detail-label">备用静态源</view>
+            <view class="detail-value">{{versionData.publicOracleStatus || '-'}}</view>
+          </view>
 
           <view class="detail-divider"></view>
           <view class="detail-section-title">数据诊断</view>

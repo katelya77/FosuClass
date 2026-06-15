@@ -103,6 +103,7 @@ async function testCloudbasePreferred() {
 
   const payload = await staticOriginService.fetchManifest(previousVersion, { skipSession: true, timeout: 50, retries: 0 });
   assert.strictEqual(payload.staticOrigin, "cloudbase");
+  assert.strictEqual(payload.staticOriginLabel, "高速静态源");
   assert.strictEqual(payload.releaseVersion, previousVersion);
   assert.strictEqual(new URL(calls[0].url).hostname, "cloud.example.com");
   assert.strictEqual(calls.length, 1, "CloudBase success should not call Oracle");
@@ -134,6 +135,7 @@ async function testHostingReadyFalseSkipsCloudbase() {
   assert.strictEqual(snapshot.some((origin) => origin.name === "cloudbase"), false, "READY=false should remove CloudBase from readable origins");
   const payload = await staticOriginService.fetchManifest(previousVersion, { skipSession: true, timeout: 50, retries: 0 });
   assert.strictEqual(payload.staticOrigin, "oracle");
+  assert.strictEqual(payload.staticOriginLabel, "备用静态源");
   assert.strictEqual(new URL(calls[0]).hostname, "class.katelya.eu.org", "READY=false should read Oracle directly");
 }
 
@@ -172,6 +174,19 @@ async function testRuntimePointerUsesBucket() {
   const pointer = await staticOriginService.fetchRuntimePointer({ skipSession: true, timeout: 50, retries: 0 });
   assert.strictEqual(pointer.staticOrigin, "cloudbase");
   assert(/\/runtime\/active\.json\?bucket=\d+/.test(calls[0]), "runtime pointer should use minute bucket cache buster");
+  assert(!calls.some((url) => /\/api\/fosu\/bootstrap/.test(url)), "runtime pointer must not be confused with Oracle bootstrap API");
+}
+
+async function testSourceRelationshipContract() {
+  mockEnv.clearStorage();
+  staticOriginService.__setTestConfig({
+    cloudbase: { CLOUDBASE_HOSTING_BASE_URL: "https://cloud.example.com", CLOUDBASE_HOSTING_READY: true },
+  });
+  const snapshot = staticOriginService.getOriginSnapshot();
+  assert.strictEqual(snapshot[0].name, "cloudbase", "CloudBase must be the primary static source when ready");
+  assert.strictEqual(snapshot[0].label, "高速静态源");
+  assert.strictEqual(snapshot[0].staticTicket, false, "CloudBase static source must not require Oracle ticket");
+  assert(snapshot.some((origin) => origin.name === "oracle" && origin.label === "备用静态源" && origin.staticTicket === true), "Oracle must remain static fallback with ticket");
 }
 
 async function testLastKnownGoodSurvivesAllNetworkFailures() {
@@ -227,6 +242,7 @@ async function run() {
   await testHostingReadyFalseSkipsCloudbase();
   await testCloudbaseFailureFallsBackToOracle();
   await testRuntimePointerUsesBucket();
+  await testSourceRelationshipContract();
   await testLastKnownGoodSurvivesAllNetworkFailures();
   staticOriginService.__resetForTest();
   console.log("test-cloudbase-static-origin passed");
