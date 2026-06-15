@@ -37,6 +37,7 @@ staging/test-term.json
 staging/
 
 /staging/
+dist/
 server/storage/public/
 server/storage/snapshots/
 output/playwright/
