@@ -534,11 +534,65 @@ function markUploadPendingReview(uploadId, summary) {
   return publicManifest(manifest);
 }
 
+function normalizePublishedSummary(summary, manifest, version, extra = {}) {
+  const next = Object.assign({}, summary || {});
+  const publishedVersion = version || manifest.publishedReleaseVersion || manifest.publishedVersion || manifest.releaseVersion || next.releaseVersion || "";
+  const publishedAt = extra.publishedAt || manifest.publishedAt || new Date().toISOString();
+  const active = extra.active === undefined ? true : Boolean(extra.active);
+  const previousBlockers = []
+    .concat(Array.isArray(next.blockers) ? next.blockers : [])
+    .concat(Array.isArray(next.blockerDetails) ? next.blockerDetails : []);
+  const previousCodes = []
+    .concat(Array.isArray(next.blockerCodes) ? next.blockerCodes : [])
+    .concat(Array.isArray(next.contractComparison && next.contractComparison.blockers)
+      ? next.contractComparison.blockers.map((item) => item && item.code).filter(Boolean)
+      : []);
+
+  next.releaseVersion = publishedVersion || next.releaseVersion || "";
+  next.publishedReleaseVersion = publishedVersion;
+  next.publishedVersion = publishedVersion;
+  next.publishedAt = publishedAt;
+  next.stagingState = "published";
+  next.releaseState = "published";
+  next.runtimeState = active ? "active" : "inactive";
+  next.active = active;
+
+  if (previousBlockers.length || previousCodes.length) {
+    next.resolvedBlockers = next.resolvedBlockers || previousBlockers;
+    next.resolvedBlockerCodes = next.resolvedBlockerCodes || Array.from(new Set(previousCodes));
+    next.resolvedAt = next.resolvedAt || publishedAt;
+    next.resolvedBy = next.resolvedBy || "publish-success";
+  }
+  next.blockers = [];
+  next.blockerDetails = [];
+  next.blockerCodes = [];
+  if (next.safetyReport && typeof next.safetyReport === "object") {
+    next.safetyReport = Object.assign({}, next.safetyReport, {
+      allowPublish: true,
+      blockers: [],
+      blockerDetails: [],
+      blockerCodes: [],
+      resolvedAt: next.safetyReport.resolvedAt || publishedAt,
+      resolvedBy: next.safetyReport.resolvedBy || "publish-success",
+    });
+  }
+  if (next.contractComparison && typeof next.contractComparison === "object") {
+    next.previousContractComparison = next.previousContractComparison || next.contractComparison;
+    next.contractComparison = Object.assign({}, next.contractComparison, {
+      allowPublish: true,
+      blockers: [],
+      resolvedAt: next.contractComparison.resolvedAt || publishedAt,
+      resolvedBy: next.contractComparison.resolvedBy || "publish-success",
+    });
+  }
+  return next;
+}
+
 function markUploadPublished(uploadId, version, extra = {}) {
   try {
     const manifest = readManifest(uploadId);
     manifest.status = "published";
-    manifest.stagingState = "pending-review";
+    manifest.stagingState = "published";
     manifest.releaseState = "published";
     manifest.runtimeState = extra.active === false ? "inactive" : "active";
     manifest.publishedReleaseVersion = version || manifest.publishedReleaseVersion || manifest.publishedVersion || manifest.releaseVersion || "";
@@ -549,6 +603,8 @@ function markUploadPublished(uploadId, version, extra = {}) {
     if (extra.canonicalHash) {
       manifest.canonicalHash = extra.canonicalHash;
     }
+    manifest.summary = normalizePublishedSummary(manifest.summary, manifest, manifest.publishedReleaseVersion, extra);
+    manifest.resourceCounts = manifest.summary.resourceCounts || manifest.resourceCounts || null;
     manifest.updatedAt = manifest.publishedAt;
     writeManifest(manifest);
     return publicManifest(manifest);
