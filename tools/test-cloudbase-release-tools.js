@@ -127,6 +127,28 @@ async function run() {
   assert(dryRun.planned.every((item) => item.cloudPath.startsWith(`releases/${version}/`)));
   assert(!dryRun.planned.some((item) => item.cloudPath === "runtime/active.json"), "release:auto must not plan runtime/active.json cutover");
 
+  const fallbackCalls = [];
+  const fallback = await utils.deployReleasePack({
+    publicRoot: good.root,
+    releaseVersion: version,
+    execute: true,
+    hostingBaseUrl: "https://cloud.example.com",
+    fileFallbackChunkSize: 2,
+    commandRunner: (localPath, cloudPath) => {
+      fallbackCalls.push({ localPath, cloudPath });
+      if (localPath === path.join(good.releaseDir, "detail", "course")) {
+        const error = new Error("mock directory deploy failure");
+        error.code = "CLOUDBASE_TCB_DEPLOY_FAILED";
+        throw error;
+      }
+      return { localPath, cloudPath };
+    },
+    remoteVerifier: async () => ({ success: true, releaseVersion: version, samples: ["manifest.json"] }),
+  });
+  assert.strictEqual(fallback.success, true);
+  assert(fallback.commands.some((item) => item.cloudPath === `releases/${version}/detail/course` && item.fallback === "files"), "directory deploy should fall back to chunked file upload");
+  assert(!fallbackCalls.some((item) => item.cloudPath === "runtime/active.json"), "fallback deploy must not update active pointer");
+
   const secretVersion = "cloudbase-release-secret-2026-06-14";
   const secret = buildRelease(secretVersion, { secretFile: true });
   assert.throws(

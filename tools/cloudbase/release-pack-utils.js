@@ -438,8 +438,105 @@ function buildCloudbaseDeployPlan(verification) {
   return tasks;
 }
 
+function collectDeployFiles(localDir) {
+  const root = path.resolve(localDir);
+  const output = [];
+  function walk(current) {
+    fs.readdirSync(current, { withFileTypes: true }).forEach((entry) => {
+      const fullPath = path.join(current, entry.name);
+      if (entry.isDirectory()) {
+        walk(fullPath);
+        return;
+      }
+      if (entry.isFile()) output.push(fullPath);
+    });
+  }
+  walk(root);
+  return output.sort((left, right) => toPosixPath(path.relative(root, left)).localeCompare(toPosixPath(path.relative(root, right))));
+}
+
+function copyDeployChunk(rootDir, files) {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), `fosu-cloudbase-deploy-${process.pid}-`));
+  files.forEach((filePath) => {
+    const relativePath = path.relative(rootDir, filePath);
+    const targetPath = path.join(tmpDir, relativePath);
+    fs.mkdirSync(path.dirname(targetPath), { recursive: true });
+    fs.copyFileSync(filePath, targetPath);
+  });
+  return tmpDir;
+}
+
+async function runDeployFilesFallback(commandRunner, task, options = {}, cause) {
+  const stat = fs.existsSync(task.localPath) ? fs.statSync(task.localPath) : null;
+  if (!stat || !stat.isDirectory()) throw cause;
+  const files = collectDeployFiles(task.localPath);
+  if (!files.length) throw cause;
+  const chunkSize = Math.max(1, Number(options.fileFallbackChunkSize || process.env.CLOUDBASE_DEPLOY_FILE_FALLBACK_CHUNK_SIZE || 80) || 80);
+  const commands = [];
+  if (options.quiet !== true) {
+    console.error(`[cloudbase] directory deploy failed for ${task.cloudPath}; falling back to ${files.length} files in chunks of ${chunkSize}`);
+  }
+  for (let offset = 0; offset < files.length; offset += chunkSize) {
+    const chunk = files.slice(offset, offset + chunkSize);
+    const chunkIndex = Math.floor(offset / chunkSize) + 1;
+    const chunkTotal = Math.ceil(files.length / chunkSize);
+    const tmpDir = copyDeployChunk(task.localPath, chunk);
+    try {
+      if (options.quiet !== true) {
+        console.error(`[cloudbase] deploying fallback chunk ${chunkIndex}/${chunkTotal}: ${task.cloudPath} (${chunk.length} files)`);
+      }
+      const result = await runDeployTaskWithRetry(commandRunner, {
+        action: "deploy-chunk",
+        localPath: tmpDir,
+        cloudPath: task.cloudPath,
+      }, chunkIndex - 1, chunkTotal, Object.assign({}, options, {
+        allowFileFallback: false,
+        quiet: true,
+      }));
+      commands.push(Object.assign({}, result, {
+        fallback: "chunk",
+        originalCloudPath: task.cloudPath,
+        fileCount: chunk.length,
+      }));
+    } catch (chunkError) {
+      if (options.quiet !== true) {
+        console.error(`[cloudbase] fallback chunk ${chunkIndex}/${chunkTotal} failed; retrying ${chunk.length} files individually`);
+      }
+      for (let fileIndex = 0; fileIndex < chunk.length; fileIndex += 1) {
+        const filePath = chunk[fileIndex];
+        const relativePath = toPosixPath(path.relative(task.localPath, filePath));
+        const fileTask = {
+          action: "deploy-file",
+          localPath: filePath,
+          cloudPath: `${task.cloudPath}/${relativePath}`,
+        };
+        const result = await runDeployTaskWithRetry(commandRunner, fileTask, fileIndex, chunk.length, Object.assign({}, options, {
+          allowFileFallback: false,
+          quiet: true,
+        }));
+        commands.push(Object.assign({}, result, {
+          fallback: "file",
+          originalCloudPath: task.cloudPath,
+          fileCount: 1,
+        }));
+      }
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  }
+  return {
+    localPath: task.localPath,
+    cloudPath: task.cloudPath,
+    fallback: "files",
+    fileCount: files.length,
+    commands,
+    failedWith: cause && (cause.code || cause.message) || "",
+  };
+}
+
 async function runDeployTaskWithRetry(commandRunner, task, index, total, options = {}) {
   const attempts = Math.max(1, Number(options.deployRetries || process.env.CLOUDBASE_DEPLOY_RETRIES || 3) || 3);
+  let lastError = null;
   for (let attempt = 1; attempt <= attempts; attempt += 1) {
     try {
       if (options.quiet !== true) {
@@ -448,13 +545,17 @@ async function runDeployTaskWithRetry(commandRunner, task, index, total, options
       const result = await Promise.resolve(commandRunner(task.localPath, task.cloudPath, options));
       return Object.assign({ localPath: task.localPath, cloudPath: task.cloudPath, attempt }, result || {});
     } catch (error) {
-      if (attempt >= attempts) throw error;
+      lastError = error;
+      if (attempt >= attempts) break;
       if (options.quiet !== true) {
         console.error(`[cloudbase] deploy retry ${attempt}/${attempts - 1} after ${error.code || error.message || "failure"}`);
       }
     }
   }
-  return null;
+  if (options.allowFileFallback !== false) {
+    return runDeployFilesFallback(commandRunner, task, options, lastError);
+  }
+  throw lastError;
 }
 
 async function verifyCloudbaseRuntimePointer(options = {}) {
