@@ -164,6 +164,13 @@ async function main() {
   const pending = stagingUploadService.markUploadPendingReview(upload.uploadId, {
     term: finalized.stagingData.term,
     releaseVersion: finalized.stagingData.releaseVersion,
+    stagingState: "publish-blocked",
+    blockers: ["legacy blocker"],
+    blockerCodes: ["SOURCE_MODE_MISMATCH"],
+    contractComparison: {
+      allowPublish: false,
+      blockers: [{ code: "SOURCE_MODE_MISMATCH", field: "sourceMode" }],
+    },
     counts: {
       classScheduleCount: finalized.stagingData.classSchedules.length,
       teacherScheduleCount: finalized.stagingData.resources.teacherSchedules.length,
@@ -180,6 +187,12 @@ async function main() {
 
   const published = stagingUploadService.markUploadPublished(upload.uploadId, "test-2026-06-02");
   assert.strictEqual(published.status, "published", "upload should move to published");
+  assert.strictEqual(published.stagingState, "published", "published upload should not keep blocked staging state");
+  assert.deepStrictEqual(published.summary.blockers, [], "published summary should not expose stale blockers");
+  assert.deepStrictEqual(published.summary.blockerCodes, [], "published summary should not expose stale blocker codes");
+  assert.deepStrictEqual(published.summary.resolvedBlockerCodes, ["SOURCE_MODE_MISMATCH"], "resolved blocker codes should be retained for audit");
+  assert.strictEqual(published.summary.contractComparison.allowPublish, true, "published contract comparison should be resolved");
+  assert.deepStrictEqual(published.summary.contractComparison.blockers, [], "published contract comparison should not expose blockers");
   assert(stagingUploadService.listUploads(10).some((item) => item.uploadId === upload.uploadId), "upload should be listed");
 
   const deleted = stagingUploadService.deleteUpload(upload.uploadId, actor);
