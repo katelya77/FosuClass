@@ -29,7 +29,7 @@ function getTaskLockGroup(type, options = {}) {
 }
 
 function getReleaseWorkerExecArgv() {
-  const maxOldSpaceMb = Number(process.env.FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB || 1536);
+  const maxOldSpaceMb = Number(process.env.FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB || 3072);
   if (!Number.isFinite(maxOldSpaceMb) || maxOldSpaceMb <= 0) return [];
   return [`--max-old-space-size=${Math.floor(maxOldSpaceMb)}`];
 }
