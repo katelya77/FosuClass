@@ -1,6 +1,9 @@
 const assert = require("assert");
 
 process.env.AI_AGENT_ENABLED = "false";
+process.env.AI_RUNTIME_MODE = "competition";
+process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
+process.env.NODE_ENV = "development";
 
 const agentService = require("../server/src/services/ai/agentService");
 
@@ -8,6 +11,7 @@ const context = {
   term: "2025-2026-2",
   releaseVersion: "",
   timezone: "Asia/Shanghai",
+  envVersion: "develop",
   currentScheduleSummary: {
     enabled: true,
     targetType: "class",
@@ -25,7 +29,12 @@ const context = {
 };
 
 async function assertRoutes(message, expectedTool) {
-  const response = await agentService.chat({ message, context });
+  const response = await agentService.chat({
+    message,
+    context,
+    runtimeMode: "competition",
+    serverSession: { openidHash: "unit-test-openid" },
+  });
   assert.strictEqual(response.success, true, `${message} should return success`);
   const names = response.toolCalls.map((item) => item.name);
   assert(names.includes(expectedTool), `${message} should route to ${expectedTool}, got ${names.join(",")}`);

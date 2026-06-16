@@ -15,29 +15,97 @@ const adminConsoleHtml = `<!doctype html>
   <title>佛课小表 Admin Console</title>
   <link rel="icon" type="image/jpeg" href="${ADMIN_LOGO_URL}">
   <link rel="apple-touch-icon" href="${ADMIN_LOGO_URL}">
+  <script>
+    (function () {
+      var key = "fosu-admin-theme";
+      var allowed = { light: true, dark: true, system: true };
+      var preference = "system";
+      try {
+        preference = localStorage.getItem(key) || "system";
+      } catch (error) {
+        preference = "system";
+      }
+      if (!allowed[preference]) preference = "system";
+      var isDark = false;
+      try {
+        isDark = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches;
+      } catch (error) {
+        isDark = false;
+      }
+      var resolved = preference === "system" ? (isDark ? "dark" : "light") : preference;
+      document.documentElement.dataset.theme = preference;
+      document.documentElement.dataset.resolvedTheme = resolved;
+      document.documentElement.style.colorScheme = resolved;
+    })();
+  </script>
   <style>
     :root {
-      --bg: #f8fafc;
-      --panel: #ffffff;
-      --panel-2: #f1f5f9;
-      --border: #e2e8f0;
-      --border-hover: #cbd5e1;
-      --text: #0f172a;
-      --muted: #64748b;
-      --primary: #3b82f6;
-      --primary-soft: #eff6ff;
-      --primary-hover: #2563eb;
-      --success: #10b981;
-      --success-soft: #ecfdf5;
-      --warning: #f59e0b;
-      --warning-soft: #fef3c7;
-      --danger: #ef4444;
-      --danger-soft: #fee2e2;
+      color-scheme: light dark;
+      --page-bg: #f7f9fc;
+      --surface: #ffffff;
+      --surface-raised: #ffffff;
+      --surface-muted: #f1f5f9;
+      --border: #d7dee8;
+      --border-strong: #b8c3d1;
+      --border-hover: #b8c3d1;
+      --text-primary: #111827;
+      --text-secondary: #4b5563;
+      --text-muted: #6b7280;
+      --primary: #2563eb;
+      --primary-hover: #1d4ed8;
+      --primary-soft: #eaf2ff;
+      --success: #0f8f5f;
+      --success-soft: #e8f7ef;
+      --warning: #b7791f;
+      --warning-soft: #fff3d8;
+      --danger: #b42318;
+      --danger-soft: #fde7e7;
+      --overlay: rgba(17, 24, 39, 0.46);
+      --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
+      --shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.14);
+      --code-bg: #eef2f7;
+      --table-hover: #eef5ff;
+      --focus-ring: rgba(37, 99, 235, 0.28);
+      --scrollbar-track: #eef2f7;
+      --scrollbar-thumb: #bac6d5;
+      --bg: var(--page-bg);
+      --panel: var(--surface);
+      --panel-2: var(--surface-muted);
+      --text: var(--text-primary);
+      --muted: var(--text-muted);
       --radius: 10px;
-      --shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.02);
-      --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.04), 0 4px 6px -4px rgba(0, 0, 0, 0.04);
       --font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-      --transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      --transition: color 180ms cubic-bezier(0.4, 0, 0.2, 1), background-color 180ms cubic-bezier(0.4, 0, 0.2, 1), border-color 180ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    html[data-resolved-theme="dark"] {
+      --page-bg: #111827;
+      --surface: #17202c;
+      --surface-raised: #1f2937;
+      --surface-muted: #202a36;
+      --border: #273344;
+      --border-strong: #3a4758;
+      --border-hover: #46566b;
+      --text-primary: #e5e7eb;
+      --text-secondary: #c6d0dc;
+      --text-muted: #9ca8b7;
+      --primary: #60a5fa;
+      --primary-hover: #93c5fd;
+      --primary-soft: rgba(96, 165, 250, 0.16);
+      --success: #34d399;
+      --success-soft: rgba(52, 211, 153, 0.14);
+      --warning: #fbbf24;
+      --warning-soft: rgba(251, 191, 36, 0.16);
+      --danger: #f87171;
+      --danger-soft: rgba(248, 113, 113, 0.14);
+      --overlay: rgba(3, 7, 18, 0.68);
+      --shadow: 0 1px 3px rgba(0, 0, 0, 0.34), 0 1px 2px rgba(0, 0, 0, 0.22);
+      --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.38);
+      --code-bg: #0f172a;
+      --table-hover: #1f2f44;
+      --focus-ring: rgba(96, 165, 250, 0.34);
+      --scrollbar-track: #141c27;
+      --scrollbar-thumb: #435266;
     }
 
     * {
@@ -52,6 +120,148 @@ const adminConsoleHtml = `<!doctype html>
       color: var(--text);
       min-height: 100vh;
       line-height: 1.5;
+    }
+
+    body, .card, .sidebar, .topbar, input, textarea, select, table, .drawer, .modal, .toast {
+      transition: var(--transition);
+    }
+
+    ::selection {
+      background: var(--primary-soft);
+      color: var(--text-primary);
+    }
+
+    ::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: var(--scrollbar-track);
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: var(--scrollbar-thumb);
+      border: 2px solid var(--scrollbar-track);
+      border-radius: 999px;
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 2px;
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        scroll-behavior: auto !important;
+        transition-duration: 0.01ms !important;
+      }
+    }
+
+    .theme-switcher {
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 3px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-muted);
+    }
+
+    .theme-switcher button {
+      min-width: 42px;
+      padding: 6px 8px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--text-secondary);
+      font-size: 12px;
+    }
+
+    .theme-switcher button[aria-pressed="true"] {
+      background: var(--surface-raised);
+      color: var(--text-primary);
+      box-shadow: var(--shadow);
+    }
+
+    .theme-current-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    code, pre, .code-block {
+      background: var(--code-bg);
+      color: var(--text-primary);
+      border-color: var(--border);
+    }
+
+    table {
+      background: var(--surface);
+      color: var(--text-primary);
+      border-color: var(--border);
+    }
+
+    th {
+      background: var(--surface-muted) !important;
+      color: var(--text-secondary) !important;
+      border-color: var(--border) !important;
+    }
+
+    td {
+      border-color: var(--border) !important;
+    }
+
+    tbody tr:hover, tbody tr:hover td {
+      background: var(--table-hover) !important;
+    }
+
+    .drawer, .catalog-drawer, .feedback-drawer, .modal, .dialog, .phone-preview, .preview-phone {
+      background: var(--surface-raised) !important;
+      color: var(--text-primary) !important;
+      border-color: var(--border) !important;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .drawer-mask, .catalog-drawer-mask, .feedback-drawer-mask, .sidebar-overlay, .modal-mask {
+      background: var(--overlay) !important;
+    }
+
+    .toast {
+      background: var(--surface-raised) !important;
+      color: var(--text-primary) !important;
+      border: 1px solid var(--border) !important;
+      box-shadow: var(--shadow-lg) !important;
+    }
+
+    .empty-state, .upload-list, .preview-list, .mini-schedule, .week-preview, .heatmap-card, .phone-screen {
+      background: var(--surface) !important;
+      color: var(--text-primary) !important;
+      border-color: var(--border) !important;
+    }
+
+    .badge.muted, .tag.muted {
+      background: var(--surface-muted) !important;
+      color: var(--text-secondary) !important;
+      border-color: var(--border) !important;
+    }
+
+    .badge.success, .tag.success {
+      background: var(--success-soft) !important;
+      color: var(--success) !important;
+    }
+
+    .badge.warning, .tag.warning {
+      background: var(--warning-soft) !important;
+      color: var(--warning) !important;
+    }
+
+    .badge.danger, .tag.danger {
+      background: var(--danger-soft) !important;
+      color: var(--danger) !important;
     }
 
     [hidden] {
@@ -138,14 +348,16 @@ const adminConsoleHtml = `<!doctype html>
       color: var(--primary);
     }
     button.secondary:hover, .btn.secondary:hover {
-      background: #dbeafe;
+      background: var(--primary-soft);
+      border-color: var(--primary);
     }
     button.danger, .btn.danger {
       background: var(--danger-soft);
       color: var(--danger);
     }
     button.danger:hover, .btn.danger:hover {
-      background: #fecaca;
+      background: var(--danger-soft);
+      border-color: var(--danger);
     }
     button.ghost, .btn.ghost {
       background: transparent;
@@ -199,7 +411,7 @@ const adminConsoleHtml = `<!doctype html>
       border-radius: 12px;
       object-fit: cover;
       object-position: center;
-      background: #fff;
+      background: var(--surface-raised);
       box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
     }
     .brand-logo {
@@ -423,14 +635,14 @@ const adminConsoleHtml = `<!doctype html>
     }
     th {
       font-weight: 700;
-      background: #f8fafc;
+      background: var(--surface-muted);
       color: var(--muted);
     }
     tr:last-child td {
       border-bottom: none;
     }
     tr:hover td {
-      background: #f8fafc;
+      background: var(--table-hover);
     }
 
     /* 状态徽章 */
@@ -758,13 +970,13 @@ const adminConsoleHtml = `<!doctype html>
       font-size: 10px;
     }
     .mini-sched-head {
-      background: #f8fafc;
+      background: var(--surface-muted);
       font-weight: 700;
       padding: 6px 2px;
       text-align: center;
     }
     .mini-sched-row-label {
-      background: #f8fafc;
+      background: var(--surface-muted);
       font-weight: 600;
       display: flex;
       align-items: center;
@@ -838,7 +1050,7 @@ const adminConsoleHtml = `<!doctype html>
     .preview-phone {
       border: 8px solid #0f172a;
       border-radius: 24px;
-      background: #f8fafc;
+      background: var(--surface-muted);
       width: 290px;
       height: 480px;
       padding: 12px;
@@ -852,7 +1064,7 @@ const adminConsoleHtml = `<!doctype html>
       justify-content: space-between;
       font-size: 9px;
       font-weight: 700;
-      color: #0f172a;
+      color: var(--text-primary);
       padding: 0 4px;
       margin-bottom: 8px;
     }
@@ -866,18 +1078,18 @@ const adminConsoleHtml = `<!doctype html>
     .phone-title {
       font-size: 12px;
       font-weight: 800;
-      color: #0f172a;
+      color: var(--text-primary);
       margin-bottom: 2px;
     }
 
     /* 模拟小程序公告 */
     .mini-banner {
-      background: #eff6ff;
+      background: var(--primary-soft);
       border-left: 3px solid var(--primary);
       padding: 8px 10px;
       border-radius: 4px;
       font-size: 10px;
-      color: #1e40af;
+      color: var(--primary);
     }
     .mini-banner.urgent { background: var(--danger-soft); border-left-color: var(--danger); color: #991b1b; }
     .mini-banner.warning { background: var(--warning-soft); border-left-color: var(--warning); color: #92400e; }
@@ -892,7 +1104,8 @@ const adminConsoleHtml = `<!doctype html>
       z-index: 10;
     }
     .mini-modal {
-      background: #ffffff;
+      background: var(--surface-raised);
+      color: var(--text-primary);
       border-radius: 8px;
       width: 100%;
       padding: 12px;
@@ -907,25 +1120,25 @@ const adminConsoleHtml = `<!doctype html>
       display: flex;
       align-items: center;
       gap: 6px;
-      background: #eff6ff;
-      color: #1d4ed8;
+      background: var(--primary-soft);
+      color: var(--primary);
       padding: 6px 8px;
       font-size: 9px;
       overflow: hidden;
       border-radius: 999px;
-      border: 1px solid #bfdbfe;
+      border: 1px solid var(--border);
       min-height: 28px;
       cursor: pointer;
     }
     .mini-ticker.important {
-      background: #fff7ed;
-      color: #c2410c;
-      border-color: #fed7aa;
+      background: var(--warning-soft);
+      color: var(--warning);
+      border-color: var(--border-strong);
     }
     .mini-ticker.urgent {
-      background: #fef2f2;
-      color: #b91c1c;
-      border-color: #fecaca;
+      background: var(--danger-soft);
+      color: var(--danger);
+      border-color: var(--border-strong);
     }
     .mini-ticker-icon {
       width: 16px;
@@ -934,7 +1147,7 @@ const adminConsoleHtml = `<!doctype html>
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      background: rgba(255, 255, 255, 0.75);
+      background: var(--surface-raised);
       font-size: 8px;
       font-weight: 800;
       flex: 0 0 auto;
@@ -956,7 +1169,7 @@ const adminConsoleHtml = `<!doctype html>
     }
 
     .mini-card {
-      background: #ffffff;
+      background: var(--surface-raised);
       border-radius: 6px;
       padding: 8px;
       border: 1px solid var(--border);
@@ -964,7 +1177,7 @@ const adminConsoleHtml = `<!doctype html>
     }
 
     .mini-news-card {
-      background: #ffffff;
+      background: var(--surface-raised);
       border-radius: 8px;
       padding: 10px;
       border: 1px solid var(--border);
@@ -1065,8 +1278,8 @@ const adminConsoleHtml = `<!doctype html>
       box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3);
     }
     .admin-runtime-error-bar button {
-      background: rgba(255, 255, 255, 0.2);
-      border: 1px solid rgba(255, 255, 255, 0.4);
+      background: var(--danger-soft);
+      border: 1px solid var(--border-strong);
       color: #ffffff;
       padding: 4px 8px;
       font-size: 11px;
@@ -1074,7 +1287,8 @@ const adminConsoleHtml = `<!doctype html>
       cursor: pointer;
     }
     .admin-runtime-error-bar button:hover {
-      background: rgba(255, 255, 255, 0.3);
+      background: var(--surface-raised);
+      color: var(--danger);
     }
 
     /* ========================================================
@@ -1588,9 +1802,9 @@ const adminConsoleHtml = `<!doctype html>
       overflow-x: auto;
     }
     .command-code-box button {
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.15);
-      color: #fff;
+      background: var(--surface-muted);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
       padding: 3px 8px;
       font-size: 11px;
       border-radius: 4px;
@@ -1600,7 +1814,8 @@ const adminConsoleHtml = `<!doctype html>
       flex: 0 0 auto;
     }
     .command-code-box button:hover {
-      background: rgba(255,255,255,0.25);
+      background: var(--primary-soft);
+      color: var(--primary);
     }
     
     .command-meta-grid {
@@ -1980,9 +2195,9 @@ const adminConsoleHtml = `<!doctype html>
       white-space: pre-wrap;
     }
     .copy-flow-btn, .flow-go-btn {
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.15);
-      color: #fff;
+      background: var(--surface-muted);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
       padding: 3px 8px;
       font-size: 11px;
       border-radius: 4px;
@@ -1997,7 +2212,8 @@ const adminConsoleHtml = `<!doctype html>
       white-space: nowrap;
     }
     .copy-flow-btn:hover, .flow-go-btn:hover {
-      background: rgba(255,255,255,0.25);
+      background: var(--primary-soft);
+      color: var(--primary);
     }
     .flow-action-box {
       display: flex;
@@ -2717,8 +2933,8 @@ const adminConsoleHtml = `<!doctype html>
     }
     .staging-state-badge.archived,
     .staging-state-badge.deleted {
-      background: #f1f5f9;
-      color: #94a3b8;
+      background: var(--surface-muted);
+      color: var(--text-muted);
     }
     .staging-size-stack,
     .staging-count-stack {
@@ -2914,7 +3130,7 @@ const adminConsoleHtml = `<!doctype html>
       color: var(--muted);
     }
     .preset-card.active .preset-tag {
-      background: white;
+      background: var(--surface-raised);
       color: var(--primary);
     }
 
@@ -2982,6 +3198,12 @@ const adminConsoleHtml = `<!doctype html>
         </div>
         <button id="loginButton" class="primary" style="width: 100%;">验证登录</button>
         <div id="loginError" style="color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 20px;"></div>
+        <div class="theme-switcher" role="group" aria-label="后台主题" style="width: 100%; margin-top: 18px;">
+          <button type="button" data-theme-choice="system" aria-label="跟随系统主题">系统</button>
+          <button type="button" data-theme-choice="light" aria-label="切换浅色主题">浅色</button>
+          <button type="button" data-theme-choice="dark" aria-label="切换深色主题">深色</button>
+        </div>
+        <div class="theme-current-label" data-theme-current>当前：跟随系统</div>
       </div>
     </div>
   </main>
@@ -3026,6 +3248,12 @@ const adminConsoleHtml = `<!doctype html>
         </nav>
       </div>
       <div class="sidebar-footer">
+        <div class="theme-switcher" role="group" aria-label="后台主题">
+          <button type="button" data-theme-choice="system" aria-label="跟随系统主题">系统</button>
+          <button type="button" data-theme-choice="light" aria-label="切换浅色主题">浅色</button>
+          <button type="button" data-theme-choice="dark" aria-label="切换深色主题">深色</button>
+        </div>
+        <div class="theme-current-label" data-theme-current>当前：跟随系统</div>
         <div class="env-info">
           <span id="envTag" class="env-tag local">local</span>
           <span style="font-size: 11px; color: var(--muted);" id="versionLabel">-</span>
@@ -3042,6 +3270,11 @@ const adminConsoleHtml = `<!doctype html>
           <p id="statusLine">加载中...</p>
         </div>
         <div class="topbar-actions">
+          <div class="theme-switcher" role="group" aria-label="后台主题">
+            <button type="button" data-theme-choice="system" aria-label="跟随系统主题">系统</button>
+            <button type="button" data-theme-choice="light" aria-label="切换浅色主题">浅色</button>
+            <button type="button" data-theme-choice="dark" aria-label="切换深色主题">深色</button>
+          </div>
           <button id="refreshButton" class="ghost" style="padding: 6px 12px; font-size: 12px;">一键刷新</button>
         </div>
       </div>
@@ -4626,6 +4859,15 @@ const adminConsoleHtml = `<!doctype html>
               </div>
             </div>
             <div id="aiVerifyResult" class="ai-verify-box">还没有验证。点击“验证当前 Provider”会同时测试确定性工具、项目问答和强制模型链路，不会打印 prompt 或密钥。</div>
+            <div class="ai-provider-actions">
+              <button id="runAiGoldenEvalBtn" class="secondary">运行 Agent 黄金测试</button>
+              <button id="exportAiEvalReportBtn" class="ghost">导出脱敏报告</button>
+              <button id="clearAiLocalMetricsBtn" class="ghost">清除本地匿名指标</button>
+            </div>
+            <div class="ai-secret-note">公众界面不会显示 Provider、模型、Token、Oracle、CloudBase、比赛模式或内部 Prompt；这里仅管理员可见，密钥只展示脱敏状态。</div>
+            <h4 class="card-title" style="margin-top: 8px;">AI Agent 状态</h4>
+            <div class="ai-provider-status" id="aiAgentStatusGrid"></div>
+            <div id="aiAgentEvalResult" class="ai-verify-box">Agent 黄金测试尚未运行。</div>
           </div>
         </div>
       </section>
@@ -4966,26 +5208,26 @@ const adminConsoleHtml = `<!doctype html>
       if (stack) errDetail += "堆栈信息:\\n" + stack;
       
       root.innerHTML =
-        "<div style='display:flex; align-items:center; justify-content:center; min-height:100vh; background:#f8fafc; font-family:system-ui,-apple-system,sans-serif; padding:20px; box-sizing:border-box;'>" +
-          "<div style='max-width:560px; width:100%; background:#ffffff; border:1px solid #e2e8f0; border-radius:12px; box-shadow:0 10px 15px -3px rgba(0,0,0,0.08); padding:32px; box-sizing:border-box;'>" +
+        "<div style='display:flex; align-items:center; justify-content:center; min-height:100vh; background:var(--page-bg); font-family:system-ui,-apple-system,sans-serif; padding:20px; box-sizing:border-box; color:var(--text-primary);'>" +
+          "<div style='max-width:560px; width:100%; background:var(--surface-raised); border:1px solid var(--border); border-radius:12px; box-shadow:var(--shadow-lg); padding:32px; box-sizing:border-box;'>" +
             "<div style='display:flex; align-items:center; gap:12px; margin-bottom:20px;'>" +
-              "<div style='background:#fee2e2; color:#ef4444; width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:bold;'>!</div>" +
-              "<h1 style='font-size:22px; font-weight:700; color:#0f172a; margin:0;'>后台启动失败</h1>" +
+              "<div style='background:var(--danger-soft); color:var(--danger); width:48px; height:48px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:bold;'>!</div>" +
+              "<h1 style='font-size:22px; font-weight:700; color:var(--text-primary); margin:0;'>后台启动失败</h1>" +
             "</div>" +
-            "<p style='font-size:14px; color:#64748b; margin-bottom:16px; line-height:1.6;'>后台页面 JavaScript 初始化时发生致命异常。这通常是由于网络传输错误或脚本解析失败导致的。</p>" +
+            "<p style='font-size:14px; color:var(--text-muted); margin-bottom:16px; line-height:1.6;'>后台页面 JavaScript 初始化时发生致命异常。这通常是由于网络传输错误或脚本解析失败导致的。</p>" +
             
-            "<div style='background:#f1f5f9; border-radius:8px; padding:16px; margin-bottom:24px; box-sizing:border-box;'>" +
-              "<div style='font-size:13px; font-weight:600; color:#475569; margin-bottom:8px;'>错误详情：</div>" +
-              "<div style='font-size:12px; color:#0f172a; margin-bottom:4px;'><strong>Message:</strong> " + escapeHtml(errMsg) + "</div>" +
-              (filename ? "<div style='font-size:12px; color:#0f172a; margin-bottom:4px;'><strong>File:</strong> " + escapeHtml(filename) + "</div>" : "") +
-              (lineno ? "<div style='font-size:12px; color:#0f172a; margin-bottom:4px;'><strong>Line:</strong> " + escapeHtml(lineno) + " (Col: " + escapeHtml(colno) + ")</div>" : "") +
-              (stack ? "<pre style='white-space:pre-wrap; word-break:break-all; font-family:monospace; font-size:11px; color:#64748b; margin-top:8px; border-top:1px solid #cbd5e1; padding-top:8px; max-height:180px; overflow-y:auto;'>" + escapeHtml(stack) + "</pre>" : "") +
+            "<div style='background:var(--surface-muted); border-radius:8px; padding:16px; margin-bottom:24px; box-sizing:border-box;'>" +
+              "<div style='font-size:13px; font-weight:600; color:var(--text-secondary); margin-bottom:8px;'>错误详情：</div>" +
+              "<div style='font-size:12px; color:var(--text-primary); margin-bottom:4px;'><strong>Message:</strong> " + escapeHtml(errMsg) + "</div>" +
+              (filename ? "<div style='font-size:12px; color:var(--text-primary); margin-bottom:4px;'><strong>File:</strong> " + escapeHtml(filename) + "</div>" : "") +
+              (lineno ? "<div style='font-size:12px; color:var(--text-primary); margin-bottom:4px;'><strong>Line:</strong> " + escapeHtml(lineno) + " (Col: " + escapeHtml(colno) + ")</div>" : "") +
+              (stack ? "<pre style='white-space:pre-wrap; word-break:break-all; font-family:monospace; font-size:11px; color:var(--text-muted); margin-top:8px; border-top:1px solid var(--border); padding-top:8px; max-height:180px; overflow-y:auto;'>" + escapeHtml(stack) + "</pre>" : "") +
             "</div>" +
             
             "<div style='display:flex; gap:12px; flex-wrap:wrap;'>" +
-              "<button id='copyErrBtn' style='background:#eff6ff; color:#2563eb; border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:all 0.2s;'>复制错误信息</button>" +
-              "<button onclick='location.reload()' style='background:#3b82f6; color:#ffffff; border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:all 0.2s;'>刷新页面</button>" +
-              "<button id='logoutErrBtn' style='background:#fee2e2; color:#ef4444; border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:all 0.2s;'>退出登录</button>" +
+              "<button id='copyErrBtn' style='background:var(--primary-soft); color:var(--primary); border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:var(--transition);'>复制错误信息</button>" +
+              "<button onclick='location.reload()' style='background:var(--primary); color:#ffffff; border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:var(--transition);'>刷新页面</button>" +
+              "<button id='logoutErrBtn' style='background:var(--danger-soft); color:var(--danger); border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:var(--transition);'>退出登录</button>" +
             "</div>" +
           "</div>" +
         "</div>";
@@ -5218,6 +5460,8 @@ const adminConsoleHtml = `<!doctype html>
         csrfToken: "",
         securityStatus: null,
         aiProviderConfig: null,
+        aiAgentStatus: null,
+        aiAgentEvalReport: null,
         
         feedbackFilter: {
           status: "all",
@@ -5249,6 +5493,75 @@ const adminConsoleHtml = `<!doctype html>
       function boolValue(id) {
         var el = $(id);
         return el ? el.value === "true" : false;
+      }
+
+      var THEME_STORAGE_KEY = "fosu-admin-theme";
+      var THEME_LABELS = {
+        system: "跟随系统",
+        light: "浅色",
+        dark: "深色"
+      };
+      var themeMediaQuery = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+
+      function normalizeThemePreference(value) {
+        return value === "light" || value === "dark" || value === "system" ? value : "system";
+      }
+
+      function getStoredThemePreference() {
+        try {
+          return normalizeThemePreference(localStorage.getItem(THEME_STORAGE_KEY) || "system");
+        } catch (error) {
+          return "system";
+        }
+      }
+
+      function resolveThemePreference(preference) {
+        var normalized = normalizeThemePreference(preference);
+        if (normalized !== "system") return normalized;
+        return themeMediaQuery && themeMediaQuery.matches ? "dark" : "light";
+      }
+
+      function applyThemePreference(preference, options) {
+        var normalized = normalizeThemePreference(preference);
+        var resolved = resolveThemePreference(normalized);
+        document.documentElement.dataset.theme = normalized;
+        document.documentElement.dataset.resolvedTheme = resolved;
+        document.documentElement.style.colorScheme = resolved;
+        if (!options || options.persist !== false) {
+          try {
+            localStorage.setItem(THEME_STORAGE_KEY, normalized);
+          } catch (error) {
+            // Local preference is best effort only.
+          }
+        }
+        document.querySelectorAll("[data-theme-choice]").forEach(function(button) {
+          var active = button.getAttribute("data-theme-choice") === normalized;
+          button.setAttribute("aria-pressed", active ? "true" : "false");
+        });
+        document.querySelectorAll("[data-theme-current]").forEach(function(node) {
+          node.textContent = "当前：" + (THEME_LABELS[normalized] || THEME_LABELS.system);
+        });
+      }
+
+      function initThemeControls() {
+        applyThemePreference(getStoredThemePreference(), { persist: false });
+        document.querySelectorAll("[data-theme-choice]").forEach(function(button) {
+          button.addEventListener("click", function() {
+            applyThemePreference(button.getAttribute("data-theme-choice") || "system");
+          });
+        });
+        if (themeMediaQuery) {
+          var handler = function() {
+            if (getStoredThemePreference() === "system") {
+              applyThemePreference("system", { persist: false });
+            }
+          };
+          if (themeMediaQuery.addEventListener) {
+            themeMediaQuery.addEventListener("change", handler);
+          } else if (themeMediaQuery.addListener) {
+            themeMediaQuery.addListener(handler);
+          }
+        }
       }
 
       function safeBind(id, eventName, handler) {
@@ -10213,6 +10526,7 @@ const adminConsoleHtml = `<!doctype html>
           .then(function(res) {
             state.aiProviderConfig = res.data || {};
             renderAiProviderConfig();
+            ignoreLoadError(loadAiAgentStatus());
             return state.aiProviderConfig;
           })
           .catch(function(error) {
@@ -10284,6 +10598,129 @@ const adminConsoleHtml = `<!doctype html>
         }
       }
 
+      function loadAiAgentStatus() {
+        return api("/api/admin/ai-agent/status")
+          .then(function(res) {
+            state.aiAgentStatus = res.data || {};
+            renderAiAgentStatus();
+            return state.aiAgentStatus;
+          })
+          .catch(function(error) {
+            var grid = $("aiAgentStatusGrid");
+            if (grid) grid.innerHTML = renderHealthItem("Agent 状态", "<span class='badge danger'>" + escapeHtml(error.message || "加载失败") + "</span>");
+            throw error;
+          });
+      }
+
+      function renderProviderChain(chain) {
+        if (!Array.isArray(chain) || !chain.length) return "<span class='badge muted'>未配置</span>";
+        return chain.map(function(item, index) {
+          var stateClass = item.circuitBreaker && item.circuitBreaker.state === "open" ? "danger" : (item.enabled ? "success" : "muted");
+          return "<div style='margin-bottom:6px;'>" +
+            "<span class='badge " + stateClass + "'>" + escapeHtml(String(index + 1)) + "</span> " +
+            "<code>" + escapeHtml(item.name || "-") + "</code> " +
+            "<span class='badge muted'>" + escapeHtml(item.health || "unknown") + "</span>" +
+            (item.circuitBreaker ? " <span class='badge muted'>CB " + escapeHtml(item.circuitBreaker.state || "closed") + "</span>" : "") +
+            "</div>";
+        }).join("");
+      }
+
+      function renderAiAgentStatus() {
+        var grid = $("aiAgentStatusGrid");
+        if (!grid) return;
+        var status = state.aiAgentStatus || {};
+        var chain = Array.isArray(status.providerChain) ? status.providerChain : [];
+        var metrics = status.metrics || {};
+        var knowledge = status.knowledgeIndex || {};
+        var map = status.campusMap || {};
+        var image = status.imageGeneration || {};
+        var tools = Array.isArray(status.enabledTools) ? status.enabledTools : [];
+        var lastSuccess = chain.map(function(item) { return item.lastSuccessAt; }).filter(Boolean).sort().pop() || "-";
+        var lastFailure = chain.map(function(item) { return item.lastFailureAt; }).filter(Boolean).sort().pop() || "-";
+        var p50 = chain.reduce(function(max, item) { return Math.max(max, Number(item.p50LatencyMs || 0)); }, 0);
+        var p95 = chain.reduce(function(max, item) { return Math.max(max, Number(item.p95LatencyMs || 0)); }, 0);
+        grid.innerHTML = [
+          renderHealthItem("Agent Protocol", "<code>" + escapeHtml(status.protocolVersion || "agent.v1") + "</code>"),
+          renderHealthItem("Runtime Mode", status.runtimeMode === "competition" ? "<span class='badge warning'>competition</span>" : "<span class='badge success'>public</span>"),
+          renderHealthItem("已启用工具", "<strong>" + tools.length + "</strong>"),
+          renderHealthItem("Provider Chain", renderProviderChain(chain)),
+          renderHealthItem("最近成功", "<span>" + escapeHtml(lastSuccess) + "</span>"),
+          renderHealthItem("最近失败", "<span>" + escapeHtml(lastFailure) + "</span>"),
+          renderHealthItem("P50 / P95", "<span>" + escapeHtml(String(p50)) + "ms / " + escapeHtml(String(p95)) + "ms</span>"),
+          renderHealthItem("fallback 次数", "<strong>" + escapeHtml(String(metrics.fallbackCount || 0)) + "</strong>"),
+          renderHealthItem("工具调用量", "<strong>" + escapeHtml(String(metrics.toolCallCount || 0)) + "</strong>"),
+          renderHealthItem("事实类 / 生成式", "<span>" + escapeHtml(String(metrics.factualQuestionCount || 0)) + " / " + escapeHtml(String(metrics.generativeQuestionCount || 0)) + "</span>"),
+          renderHealthItem("安全拦截", "<strong>" + escapeHtml(String(metrics.safetyInterceptCount || 0)) + "</strong>"),
+          renderHealthItem("知识库", "<span>" + escapeHtml(String(knowledge.documentCount || 0)) + " docs / " + escapeHtml(String(knowledge.chunkCount || 0)) + " chunks</span>"),
+          renderHealthItem("校园地图", "<span>" + escapeHtml(String(map.placeCount || 0)) + " places</span>"),
+          renderHealthItem("比赛生图", image.enabled ? "<span class='badge warning'>enabled</span>" : "<span class='badge muted'>disabled</span>"),
+          renderHealthItem("混元权益", "<span class='badge muted'>见 Provider 状态</span>"),
+          renderHealthItem("比赛授权", status.runtimeMode === "competition" ? "<span class='badge warning'>需服务端会话授权</span>" : "<span class='badge success'>public fail-closed</span>")
+        ].join("");
+      }
+
+      function runAiGoldenEvaluation() {
+        var box = $("aiAgentEvalResult");
+        if (box) box.textContent = "正在运行 Agent 黄金测试...";
+        api("/api/admin/ai-agent/evaluate", { method: "POST", body: "{}" })
+          .then(function(res) {
+            var report = res.data || {};
+            state.aiAgentEvalReport = report;
+            var metrics = report.metrics || {};
+            var lines = [
+              "总通过率: " + Math.round(Number(metrics.passRate || 0) * 100) + "%",
+              "工具调用正确率: " + Math.round(Number(metrics.toolCallAccuracy || 0) * 100) + "%",
+              "事实一致率: " + Math.round(Number(metrics.factConsistencyRate || 0) * 100) + "%",
+              "课程事实幻觉率: " + Math.round(Number(metrics.courseHallucinationRate || 0) * 100) + "%",
+              "平均延迟: " + Math.round(Number(metrics.averageLatencyMs || 0)) + "ms",
+              "P95 延迟: " + Math.round(Number(metrics.p95LatencyMs || 0)) + "ms",
+              "fallback 率: " + Math.round(Number(metrics.fallbackRate || 0) * 100) + "%",
+              "安全拦截率: " + Math.round(Number(metrics.safetyInterceptRate || 0) * 100) + "%"
+            ];
+            if (Array.isArray(report.results)) {
+              lines.push("");
+              lines.push("失败项:");
+              report.results.filter(function(item) { return !item.pass; }).slice(0, 10).forEach(function(item) {
+                lines.push("- " + (item.id || "-") + ": " + (Array.isArray(item.reasons) ? item.reasons.join(", ") : "failed"));
+              });
+            }
+            if (box) box.textContent = lines.join("\\n");
+            showToast("Agent 黄金测试完成。", "success");
+            ignoreLoadError(loadAiAgentStatus());
+          })
+          .catch(function(error) {
+            if (box) box.textContent = "Agent 黄金测试失败：" + error.message;
+            showToast(error.message, "error");
+          });
+      }
+
+      function exportAiEvaluationReport() {
+        var report = state.aiAgentEvalReport;
+        if (!report) {
+          showToast("请先运行 Agent 黄金测试", "warning");
+          return;
+        }
+        var blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json;charset=utf-8" });
+        var link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "fosu-agent-evaluation-report.json";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast("脱敏评测报告已导出", "success");
+      }
+
+      function clearAiLocalMetrics() {
+        ["FOSU_AI_GENERATIVE_METRICS", "fosu-admin-ai-metrics"].forEach(function(key) {
+          try {
+            localStorage.removeItem(key);
+          } catch (error) {
+            // best effort
+          }
+        });
+        showToast("本地匿名 AI 指标已清除", "success");
+      }
+
       function aiProviderPayload() {
         var payload = {
           enabled: boolValue("aiEnabled"),
@@ -10325,10 +10762,16 @@ const adminConsoleHtml = `<!doctype html>
 
       function saveAiProviderConfig() {
         var payload = aiProviderPayload();
+        var previousMode = state.aiProviderConfig && state.aiProviderConfig.runtimeMode || "public";
+        if (previousMode !== "competition" && payload.runtimeMode === "competition") {
+          var confirmed = window.confirm("competition 模式仅限开发版/体验版和服务端授权会话使用。正式版配置会 fail-closed。确认继续保存？");
+          if (!confirmed) return;
+        }
         api("/api/admin/ai-provider/config", { method: "POST", body: JSON.stringify(payload) })
           .then(function(res) {
             state.aiProviderConfig = res.data || {};
             renderAiProviderConfig();
+            ignoreLoadError(loadAiAgentStatus());
             showToast("AI Provider 配置已保存。", "success");
             setStatus("AI Provider 配置已保存：" + (state.aiProviderConfig.provider || "mock"));
           })
@@ -10571,6 +11014,9 @@ const adminConsoleHtml = `<!doctype html>
       safeBind("verifyAiProviderBtn", "click", verifyAiProviderConfig);
       safeBind("forceAiProviderChatBtn", "click", forceAiProviderChatTest);
       safeBind("reloadAiProviderBtn", "click", loadAiProviderConfig);
+      safeBind("runAiGoldenEvalBtn", "click", runAiGoldenEvaluation);
+      safeBind("exportAiEvalReportBtn", "click", exportAiEvaluationReport);
+      safeBind("clearAiLocalMetricsBtn", "click", clearAiLocalMetrics);
       safeBind("saveNoticeButton", "click", saveNotice);
       safeBind("clearNoticeButton", "click", clearNoticeForm);
       safeBind("saveNewsButton", "click", saveNews);
@@ -11228,6 +11674,7 @@ const adminConsoleHtml = `<!doctype html>
         }
 
         try {
+          initThemeControls();
           if (isLoginPage) {
             showLoginView();
           } else {

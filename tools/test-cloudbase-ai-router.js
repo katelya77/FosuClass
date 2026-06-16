@@ -21,6 +21,7 @@ function futureConfig(extra = {}) {
     AI_GENERATIVE_PUBLIC_ENABLED: true,
     AI_COMPETITION_MODE: true,
     AI_TOOL_ONLY_MODE: false,
+    AI_CLIENT_EXPRESSION_LAYER_ENABLED: true,
     AI_MAX_HISTORY_MESSAGES: 6,
     AI_MAX_USER_MESSAGE_LENGTH: 1200,
     AI_MAX_DAILY_GENERATIVE_REQUESTS: 20,
@@ -122,12 +123,16 @@ async function testReleaseGateBlocksCompetitionMode() {
     redactSensitiveText: redact,
     oracleChat: async () => {
       oracleCalled += 1;
-      return { answer: "oracle should not be needed for local gate", safety: {}, metrics: {} };
+      return {
+        answer: "server agent handles disabled client expression layer",
+        safety: { provider: "mock", resolvedProvider: "mock", externalProviderUsed: false },
+        metrics: { intentName: "project_qa" },
+      };
     },
   });
   assert.strictEqual(hunyuanCalled, 0, "release + public=false + competition=true must not call Hunyuan");
-  assert.strictEqual(oracleCalled, 0, "client release gate should stop before provider fallback");
-  assert.strictEqual(response.safety.fallbackReason, "AI_GENERATIVE_PUBLIC_DISABLED");
+  assert.strictEqual(oracleCalled, 1, "disabled client expression layer should delegate to the server agent");
+  assert.strictEqual(response.answer, "server agent handles disabled client expression layer");
 }
 
 async function testReleaseGateKeepsToolOnlyQueriesAvailable() {

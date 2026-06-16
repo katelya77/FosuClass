@@ -41,7 +41,7 @@ const config = {
   // Admin sync API token. Derived mode is legacy compatibility only.
   ADMIN_API_TOKEN: explicitAdminApiToken || derivedAdminApiToken,
   ADMIN_API_TOKEN_SOURCE: explicitAdminApiToken ? "explicit" : (derivedAdminApiToken ? "derived-admin-password" : ""),
-  ADMIN_API_TOKEN_LEGACY_DERIVED: Boolean(derivedAdminApiToken),
+  ADMIN_API_LEGACY_DERIVED: Boolean(derivedAdminApiToken),
 
   // Web 后台登录凭据。ADMIN_API_TOKEN 仅保留给同步工具使用。
   // Web admin login credentials. ADMIN_API_TOKEN is reserved for publisher sync.

@@ -2,16 +2,17 @@ const mockProvider = require("./providers/mockProvider");
 const deepseekProvider = require("./providers/deepseekProvider");
 const cozeProvider = require("./providers/cozeProvider");
 const cloudbaseOpenaiProvider = require("./providers/cloudbaseOpenaiProvider");
+const providerChainService = require("./providerChainService");
 
 function getRuntimeMode() {
   const raw = String(process.env.AI_RUNTIME_MODE || "").trim().toLowerCase();
   if (raw === "public") return "public";
   if (raw === "competition") return "competition";
-  return "legacy";
+  return "public";
 }
 
-function getProviderName() {
-  if (getRuntimeMode() === "public") {
+function getProviderName(runtimeMode) {
+  if ((runtimeMode || getRuntimeMode()) === "public") {
     return "mock";
   }
   if (String(process.env.AI_AGENT_ENABLED || "false").toLowerCase() === "false") {
@@ -27,8 +28,8 @@ function getProviderName() {
   return "mock";
 }
 
-function createProvider() {
-  const provider = getProviderName();
+function createProvider(runtimeMode) {
+  const provider = getProviderName(runtimeMode);
   if (provider === "deepseek") return deepseekProvider;
   if (provider === "cloudbase-openai") return cloudbaseOpenaiProvider;
   if (provider === "coze") return cozeProvider;
@@ -39,6 +40,7 @@ module.exports = {
   createProvider,
   getProviderName,
   getRuntimeMode,
+  providerChainService,
   cloudbaseOpenaiProvider,
   mockProvider,
 };

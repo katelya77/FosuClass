@@ -12,6 +12,7 @@ const HISTORY_KEY = "FOSU_AI_ASSISTANT_HISTORY";
 const ALLOW_PERSONAL_CONTEXT_KEY = "FOSU_AI_ALLOW_PERSONAL_CONTEXT";
 const LAST_IMPORT_CONTEXT_KEY = "FOSU_AI_LAST_IMPORT_CONTEXT";
 const PENDING_CLARIFICATION_KEY = "FOSU_AI_PENDING_CLARIFICATION";
+const USER_PREFERENCES_KEY = "FOSU_AI_USER_PREFERENCES";
 const MAX_HISTORY = 20;
 const MAX_CONTEXT_COURSES = 80;
 const REDACTED = "[已脱敏]";
@@ -157,6 +158,52 @@ function isPersonalContextAllowed() {
 function setPersonalContextAllowed(allowed) {
   writeStorage(ALLOW_PERSONAL_CONTEXT_KEY, allowed === true);
   return allowed === true;
+}
+
+function normalizeUserPreferences(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const campus = ["仙溪校区", "江湾校区"].indexOf(source.campus) >= 0 ? source.campus : "";
+  const favoriteBuildings = Array.isArray(source.favoriteBuildings)
+    ? source.favoriteBuildings
+        .map((item) => redactSensitiveText(item).trim().slice(0, 40))
+        .filter(Boolean)
+        .slice(0, 8)
+    : [];
+  const duration = Number(source.defaultEmptyRoomDurationSections);
+  const answerDetail = ["brief", "normal", "detailed"].indexOf(source.answerDetail) >= 0
+    ? source.answerDetail
+    : "normal";
+  return {
+    campus,
+    favoriteBuildings,
+    defaultEmptyRoomDurationSections: Number.isFinite(duration) && duration > 0 ? Math.min(12, Math.max(1, Math.round(duration))) : 2,
+    allowMinimalScheduleSummary: source.allowMinimalScheduleSummary === true || isPersonalContextAllowed(),
+    answerDetail,
+    weatherAdviceEnabled: source.weatherAdviceEnabled !== false,
+    localOnly: true,
+  };
+}
+
+function getUserPreferences() {
+  return normalizeUserPreferences(readStorage(USER_PREFERENCES_KEY, {}));
+}
+
+function saveUserPreferences(value) {
+  const preferences = normalizeUserPreferences(value);
+  writeStorage(USER_PREFERENCES_KEY, preferences);
+  if (preferences.allowMinimalScheduleSummary !== isPersonalContextAllowed()) {
+    setPersonalContextAllowed(preferences.allowMinimalScheduleSummary);
+  }
+  return preferences;
+}
+
+function clearUserPreferences() {
+  try {
+    wx.removeStorageSync(USER_PREFERENCES_KEY);
+  } catch (error) {
+    // best effort
+  }
+  return getUserPreferences();
 }
 
 function formatLocalIsoWithOffset(date) {
@@ -331,6 +378,7 @@ function buildClientContext(extra = {}) {
     : calendarConfig;
   const calendarWeeks = calendarMatchesTerm ? (calendar.weeks || []) : [];
   const todayTeachingInfo = getTodayTeachingInfo(now, calendarWeeks, termConfig);
+  const userPreferences = getUserPreferences();
 
   return {
     term,
@@ -374,6 +422,7 @@ function buildClientContext(extra = {}) {
     currentScheduleSummary: scheduleSummary,
     latestScheduleImport: latestImport,
     pendingClarification: getPendingClarification(),
+    userPreferences,
   };
 }
 
@@ -422,6 +471,7 @@ function getRememberedPersonalization() {
     personalContextAllowed: isPersonalContextAllowed(),
     latestScheduleImport: getLatestScheduleImport(),
     pendingClarification: getPendingClarification(),
+    userPreferences: getUserPreferences(),
     localOnly: true,
   };
 }
@@ -436,6 +486,7 @@ function clearPersonalization() {
     wx.removeStorageSync(ALLOW_PERSONAL_CONTEXT_KEY);
     wx.removeStorageSync(LAST_IMPORT_CONTEXT_KEY);
     wx.removeStorageSync(PENDING_CLARIFICATION_KEY);
+    wx.removeStorageSync(USER_PREFERENCES_KEY);
   } catch (error) {
     // best effort
   }
@@ -474,20 +525,24 @@ module.exports = {
   HISTORY_KEY,
   LAST_IMPORT_CONTEXT_KEY,
   PENDING_CLARIFICATION_KEY,
+  USER_PREFERENCES_KEY,
   buildClientContext,
   chat,
   clearPendingClarification,
   clearAiHistory,
   clearPersonalization,
+  clearUserPreferences,
   formatLocalIsoWithOffset,
   getAiHistory,
   getLatestScheduleImport,
   getPendingClarification,
   getRememberedPersonalization,
+  getUserPreferences,
   isPersonalContextAllowed,
   pausePersonalization,
   redactSensitiveText,
   rememberLatestScheduleImport,
+  saveUserPreferences,
   sanitizeCourse,
   sanitizeLocalScheduleForAI,
   setPendingClarification,

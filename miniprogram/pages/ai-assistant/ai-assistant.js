@@ -994,17 +994,18 @@ Page({
   sendMessage(rawText, options) {
     const message = String(rawText || "").trim();
     if (!message || this.data.sending) return;
+    const sendOptions = options || {};
+    const isRetrySend = Number.isFinite(Number(sendOptions.retryAssistantIndex));
     const now = Date.now();
-    if (this._lastSubmitText === message && now - Number(this._lastSubmitAt || 0) < SEND_DEDUPE_MS) return;
+    if (!isRetrySend && this._lastSubmitText === message && now - Number(this._lastSubmitAt || 0) < SEND_DEDUPE_MS) return;
     this._lastSubmitText = message;
     this._lastSubmitAt = now;
 
     const requestId = `ai-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
     this._activeAiRequestId = requestId;
-    const sendOptions = options || {};
     let baseMessages = (this.data.messages || []).slice();
     let appendUserMessage = true;
-    if (Number.isFinite(Number(sendOptions.retryAssistantIndex))) {
+    if (isRetrySend) {
       const retryIndex = Number(sendOptions.retryAssistantIndex);
       const retryMessage = baseMessages[retryIndex];
       if (retryMessage && retryMessage.role === "assistant") {

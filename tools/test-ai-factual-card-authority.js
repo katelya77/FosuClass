@@ -5,6 +5,10 @@ process.env.AI_PROVIDER = "deepseek";
 process.env.AI_PROVIDER_POLICY = "always";
 process.env.AI_PROVIDER_IGNORE_ENV_FILE = "true";
 process.env.AI_API_KEY = "test-provider-key-not-real";
+process.env.AI_RUNTIME_MODE = "competition";
+process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
+process.env.AI_PROVIDER_CHAIN = "deepseek,mock";
+process.env.NODE_ENV = "development";
 
 const deepseekProvider = require("../server/src/services/ai/providers/deepseekProvider");
 deepseekProvider.generate = async () => ({
@@ -25,6 +29,7 @@ function buildContext() {
   return {
     timezone: "Asia/Shanghai",
     clientLocalTime: "2026-06-09T21:26:00+08:00",
+    envVersion: "develop",
     termStartDate: "2026-03-09",
     totalWeeks: 20,
     currentTeachingWeek: 14,
@@ -40,6 +45,8 @@ async function run() {
   const response = await agentService.chat({
     message: "帮我推荐连续 2 节自习时间",
     context: buildContext(),
+    runtimeMode: "competition",
+    serverSession: { openidHash: "unit-test-openid" },
   });
   const text = JSON.stringify(response);
   assert.strictEqual(response.safety.externalProviderUsed, true, "always policy should call mocked provider");

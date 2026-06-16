@@ -34,7 +34,8 @@ async function run() {
     assert.strictEqual(data.success, true);
     assert.strictEqual(typeof data.answer, "string");
     assert(Array.isArray(data.cards) && data.cards.length > 0, "cards must be returned");
-    assert.strictEqual(data.safety.provider, "mock", "AI_AGENT_ENABLED=false should use mock provider");
+    assert.notStrictEqual(data.metrics.externalProviderUsed, true, "AI_AGENT_ENABLED=false must not call an external provider");
+    assert.notStrictEqual(data.safety.externalProviderUsed, true, "public safety contract must show no external provider");
   } finally {
     server.close();
   }
