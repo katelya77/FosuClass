@@ -272,6 +272,7 @@ jobs:
             FOSU_STATIC_TICKET_CACHE_MAX=500
 
             FOSU_RELEASE_WORKER_ENABLED=true
+            FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB=3072
             FOSU_RELEASE_PRECOMPRESS=gzip
             FOSU_RELEASE_BROTLI_ENABLED=false
             FOSU_RELEASE_COMPRESSION_CONCURRENCY=1
@@ -282,7 +283,7 @@ jobs:
             FOSU_RAW_UPLOAD_BODY_LIMIT=150mb
             FOSU_STAGING_CHUNK_BODY_LIMIT=12mb
             FOSU_API_CPUS=1.5
-            FOSU_API_MEM_LIMIT=1536m
+            FOSU_API_MEM_LIMIT=4096m
 
             FOSU_MAINTENANCE_ENABLED=true
             FOSU_MAINTENANCE_INTERVAL_HOURS=24
@@ -350,6 +351,7 @@ jobs:
               FOSU_OPENRESTY_STATIC_SECURITY_MODE
               FOSU_AI_CONFIG_ENCRYPTION_KEY
               FOSU_RELEASE_WORKER_ENABLED
+              FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB
               FOSU_RELEASE_PRECOMPRESS
               FOSU_RELEASE_BROTLI_ENABLED
               FOSU_RELEASE_COMPRESSION_CONCURRENCY
@@ -457,7 +459,7 @@ jobs:
             fi
 
             sudo docker exec "$CONTAINER_NAME" sh -lc 'test -d /app/storage && test -w /app/storage && test -d /openresty-static/releases && test -w /openresty-static/releases && test -d /openresty-static/runtime && test -w /openresty-static/runtime'
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'test "$STATIC_RELEASE_SYNC_ENABLED" = "true" && test "$RELEASE_PACK_SRC" = "/app/storage/public/releases" && test "$OPENRESTY_STATIC_RELEASE_DIR" = "/openresty-static/releases" && test "$OPENRESTY_STATIC_RUNTIME_DIR" = "/openresty-static/runtime" && test "$PUBLIC_BASE_URL" = "https://class.katelya.eu.org/static/releases" && test "$FOSU_RELEASE_WORKER_ENABLED" = "true"'
+            sudo docker exec "$CONTAINER_NAME" sh -lc 'test "$STATIC_RELEASE_SYNC_ENABLED" = "true" && test "$RELEASE_PACK_SRC" = "/app/storage/public/releases" && test "$OPENRESTY_STATIC_RELEASE_DIR" = "/openresty-static/releases" && test "$OPENRESTY_STATIC_RUNTIME_DIR" = "/openresty-static/runtime" && test "$PUBLIC_BASE_URL" = "https://class.katelya.eu.org/static/releases" && test "$FOSU_RELEASE_WORKER_ENABLED" = "true" && test "$FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB" = "3072"'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "const s=require(\"./src/services/securityModeService\").getSecurityStatus(); if(!s.mode) process.exit(1); console.log(\"security_mode=\"+s.mode)"'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000'
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/verify-ai-provider.js --mode=status' 2>&1 | sanitize

@@ -16,6 +16,7 @@ assert(/res\.status\(202\)/.test(routeBody), "staging finalize should return 202
 assert(!routeBody.includes("finalizeUpload("), "HTTP finalize route must not call synchronous finalizeUpload");
 assert(worker.includes('type === "staging-upload-finalize"'), "worker should handle staging upload finalize");
 assert(manager.includes("FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB"), "release worker should support explicit heap sizing");
+assert(manager.includes("|| 3072"), "release worker default heap should handle full-school release packs");
 assert(manager.includes("getReleaseWorkerExecArgv()"), "release worker fork should receive memory execArgv");
 assert(finalizeService.includes("JSON.parse(fs.readFileSync"), "large JSON parse may exist only inside worker service");
 assert(finalizeService.includes('progress(job, uploadId, 52, "hashing")'), "worker finalize should hash/fingerprint after JSON parse");
