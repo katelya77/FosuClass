@@ -381,11 +381,26 @@ function compareResourceCountContracts(active, staging) {
     const activeMode = active && active[resource] && active[resource].sourceMode || "unknown";
     const stagingMode = staging && staging[resource] && staging[resource].sourceMode || "unknown";
     if (activeMode !== stagingMode) {
-      blockers.push({
+      const detail = {
         code: "SOURCE_MODE_MISMATCH",
         resource,
+        field: "sourceMode",
+        activeValue: activeMode,
+        stagingValue: stagingMode,
+        activeLabel: sourceModeLabel(activeMode),
+        stagingLabel: sourceModeLabel(stagingMode),
+        expectedValue: activeMode,
         message: `${METRIC_LABELS[`${resource}.scheduleDocuments`] || resource} 来源口径不一致，当前线上 ${sourceModeLabel(activeMode)}，本次暂存 ${sourceModeLabel(stagingMode)}。`,
-      });
+      };
+      if (isLegacyActiveSourceCompatible(active, staging, resource, activeMode, stagingMode)) {
+        warnings.push(Object.assign({}, detail, {
+          code: "LEGACY_ACTIVE_SOURCE_MODE_COMPAT",
+          severity: "warning",
+          reason: "当前线上 Release 来自旧版统计口径，本次暂存已使用本次班级课表派生口径；仅对旧 Active 做显式兼容，不放宽本次数据质量检查。",
+        }));
+      } else {
+        blockers.push(detail);
+      }
     }
     ["directoryEntities", "scheduleDocuments", "courseEvents"].forEach((field) => {
       comparisons.push(compareMetric(active, staging, resource, field));
@@ -419,6 +434,18 @@ function compareResourceCountContracts(active, staging) {
     warnings,
     comparisons,
   };
+}
+
+function isLegacyActiveSourceCompatible(active, staging, resource, activeMode, stagingMode) {
+  if (activeMode !== "legacy-derived") return false;
+  if (stagingMode !== "derived-current-run") return false;
+  if (!active || active.derivedFromLegacy !== true) return false;
+  const stagingResource = staging && staging[resource] || {};
+  if (stagingResource.directoryEntitiesStatus !== "counted") return false;
+  if (Number(stagingResource.scheduleDocuments || 0) <= 0) return false;
+  const blockingDiagnostics = asArray(staging && staging.diagnostics)
+    .filter((item) => item && item.resource === resource && item.publishable === false);
+  return blockingDiagnostics.length === 0;
 }
 
 function sourceModeLabel(value) {

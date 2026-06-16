@@ -3,8 +3,8 @@ const path = require("path");
 
 const releaseService = require("./releaseService");
 const stagingUploadService = require("./stagingUploadService");
+const stagingSafetyService = require("./stagingSafetyService");
 const { calculateFingerprint } = require("../utils/stagingFingerprint");
-const { buildResourceCountContract, compareResourceCountContracts, flattenLegacyCounts } = require("../shared/resourceCountContract");
 const { ensureDir, writeJsonAtomic } = require("../utils/jsonFileStore");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
@@ -67,37 +67,11 @@ function getStagingClassSchedules(data) {
 }
 
 function summarizeStagingData(data) {
-  const resourceCounts = buildResourceCountContract(data || {});
-  return {
-    classSchedules: getStagingClassSchedules(data),
-    counts: flattenLegacyCounts(resourceCounts),
-    resourceCounts,
-  };
+  return stagingSafetyService.summarizeStagingData(data);
 }
 
 function validateStagingData(data) {
-  const errors = [];
-  const warnings = [];
-  if (!data || typeof data !== "object") {
-    errors.push("Staging JSON must be an object");
-    return { valid: false, errors, warnings };
-  }
-  ["schemaVersion", "releaseVersion", "term", "termStartDate", "generatedAt"].forEach((field) => {
-    if (!data[field]) errors.push(`missing ${field}`);
-  });
-  const classSchedules = getStagingClassSchedules(data);
-  if (!Array.isArray(classSchedules) || classSchedules.length === 0) {
-    errors.push("classSchedules must be a non-empty array");
-  }
-  const counts = summarizeStagingData(data).counts;
-  if (Object.values(counts).every((value) => Number(value || 0) === 0)) {
-    errors.push("resource counts are all zero");
-  }
-  ["teacherSchedules", "classroomSchedules", "courseSchedules", "classrooms", "teachers", "courses"].forEach((key) => {
-    const value = data[key] || data.resources && data.resources[key];
-    if (!Array.isArray(value)) warnings.push(`missing resource array: ${key}`);
-  });
-  return { valid: errors.length === 0, errors, warnings };
+  return stagingSafetyService.validateStagingData(data);
 }
 
 function attachStagingFingerprint(stagingData, previousHash = "") {
@@ -114,28 +88,7 @@ function attachStagingFingerprint(stagingData, previousHash = "") {
 }
 
 function buildStagingSafety(stagingData, activeSnapshot) {
-  const stagingSummary = summarizeStagingData(stagingData);
-  const validation = validateStagingData(stagingData);
-  const activeResourceCounts = activeSnapshot
-    ? releaseService.getReleaseResourceCounts(
-      activeSnapshot.version || activeSnapshot.releaseVersion || "",
-      activeSnapshot
-    )
-    : null;
-  const contractComparison = activeResourceCounts
-    ? compareResourceCountContracts(activeResourceCounts, stagingSummary.resourceCounts)
-    : { allowPublish: true, blockers: [], warnings: [], comparisons: [] };
-  const blockers = validation.errors.concat((contractComparison.blockers || []).map((item) => item.message || item.code || "COUNT_CONTRACT_MISMATCH"));
-  const warnings = validation.warnings.concat((contractComparison.warnings || []).map((item) => item.message || item.code || "COUNT_CONTRACT_WARNING"));
-  return {
-    allowPublish: blockers.length === 0,
-    blockers,
-    warnings,
-    counts: stagingSummary.counts,
-    resourceCounts: stagingSummary.resourceCounts,
-    activeResourceCounts,
-    contractComparison,
-  };
+  return stagingSafetyService.buildStagingSafety(stagingData, activeSnapshot);
 }
 
 function buildStagingUploadSummary(stagingData, safety, extra = {}) {
@@ -256,7 +209,11 @@ async function finalizeChunkedUpload(input, job) {
   const summary = buildStagingUploadSummary(stagingData, safety, {
     warnings: safety.warnings,
     blockers: safety.blockers,
+    blockerDetails: safety.blockerDetails,
+    blockerCodes: safety.blockerCodes,
+    warningDetails: safety.warningDetails,
     contractComparison: safety.contractComparison,
+    safetyReport: safety.safetyReport,
     canonicalHash: fingerprint.canonicalHash,
   });
 

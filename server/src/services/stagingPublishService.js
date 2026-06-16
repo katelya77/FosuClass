@@ -9,14 +9,9 @@ const relayService = require("./relayService");
 const stagingUploadService = require("./stagingUploadService");
 const staticReleaseSyncService = require("./staticReleaseSyncService");
 const releaseLifecycleService = require("./releaseLifecycleService");
+const stagingSafetyService = require("./stagingSafetyService");
 const stagingFingerprint = require("../utils/stagingFingerprint");
 const { safeLog } = require("../utils/safeLogger");
-const {
-  buildResourceCountContract,
-  compareResourceCountContracts,
-  flattenLegacyCounts,
-  sourceModeLabel,
-} = require("../shared/resourceCountContract");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const DATA_DIR = path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../data"));
@@ -135,200 +130,27 @@ function getActiveCanonicalHash() {
 }
 
 function getStagingIncludeScopes(data) {
-  const scopes = data && data.meta && data.meta.includeScopes;
-  return Array.isArray(scopes) ? scopes : [];
+  return stagingSafetyService.getStagingIncludeScopes(data);
 }
 
 function getStagingClassSchedules(data) {
-  return data && (data.classSchedules || data.resources && data.resources.classSchedules) || [];
+  return stagingSafetyService.getStagingClassSchedules(data);
 }
 
 function summarizeStagingData(data) {
-  const classSchedules = getStagingClassSchedules(data);
-  const resourceCounts = buildResourceCountContract(data || {});
-  const counts = flattenLegacyCounts(resourceCounts);
-  return { classSchedules, counts, resourceCounts };
+  return stagingSafetyService.summarizeStagingData(data);
 }
 
 function areStagingCountsAllZero(counts) {
-  return Object.values(counts || {}).every((value) => Number(value || 0) === 0);
+  return stagingSafetyService.areStagingCountsAllZero(counts);
 }
 
 function validateStagingData(data) {
-  const errors = [];
-  const warnings = [];
-
-  if (!data || typeof data !== "object") {
-    errors.push("Staging data must be a JSON object");
-    return { valid: false, errors, warnings };
-  }
-
-  ["schemaVersion", "releaseVersion", "term", "termStartDate", "generatedAt"].forEach((field) => {
-    if (!data[field]) errors.push(`Missing required field: ${field}`);
-  });
-  const termConfig = data.termConfig && typeof data.termConfig === "object" ? data.termConfig : null;
-  if (!termConfig) {
-    errors.push("Missing required field: termConfig");
-  } else {
-    try {
-      const normalizedTermConfig = termRegistryService.normalizeTermRecord(Object.assign({}, termConfig, {
-        term: data.term || termConfig.term,
-        status: "ready",
-        releaseVersion: data.releaseVersion || data.version || termConfig.releaseVersion || "",
-        dataAvailable: true,
-        updatedAt: data.generatedAt || data.updatedAt || new Date().toISOString(),
-      }));
-      const termValidation = termRegistryService.validateTermRecord(normalizedTermConfig);
-      if (!termValidation.valid) {
-        termValidation.errors.forEach((error) => errors.push(`termConfig.${error}`));
-      }
-      if (normalizedTermConfig.term !== data.term) {
-        errors.push(`termConfig.term mismatch: ${normalizedTermConfig.term} != ${data.term}`);
-      }
-    } catch (error) {
-      errors.push(`termConfig.${error.code || error.message}`);
-    }
-  }
-
-  const includeScopes = getStagingIncludeScopes(data);
-  const hasClassSchedules = includeScopes.length === 0 || includeScopes.includes("classSchedules");
-  const { classSchedules, counts } = summarizeStagingData(data);
-
-  if (hasClassSchedules) {
-    if (!Array.isArray(classSchedules) || classSchedules.length === 0) {
-      errors.push("Missing classSchedules");
-    } else {
-      classSchedules.slice(0, 5).forEach((item, index) => {
-        if (!item.className) warnings.push(`classSchedules[${index}] missing className`);
-      });
-    }
-  }
-
-  if (areStagingCountsAllZero(counts)) {
-    errors.push("Staging counts are all zero");
-  }
-
-  ["teacherSchedules", "classroomSchedules", "courseSchedules", "classrooms", "teachers", "courses"].forEach((key) => {
-    const list = data[key] || data.resources && data.resources[key];
-    if (!Array.isArray(list)) warnings.push(`Missing resource scope: ${key}`);
-  });
-
-  return {
-    valid: errors.length === 0,
-    errors,
-    warnings,
-  };
+  return stagingSafetyService.validateStagingData(data);
 }
 
 function buildStagingSafety(data, activeSnapshot) {
-  const includeScopes = getStagingIncludeScopes(data);
-  const hasClassSchedules = includeScopes.length === 0 || includeScopes.includes("classSchedules");
-  const { counts } = summarizeStagingData(data);
-  const validation = validateStagingData(data);
-  const blockers = validation.errors.slice();
-  const warnings = validation.warnings.slice();
-  const activeInfo = releaseService.getActiveReleaseInfo();
-  const activeResourceCounts = activeSnapshot
-    ? releaseService.getReleaseResourceCounts(
-      activeSnapshot.version || activeSnapshot.releaseVersion || activeInfo && activeInfo.version || "",
-      activeSnapshot
-    )
-    : null;
-  const stagingResourceCounts = buildResourceCountContract(data || {});
-  const contractComparison = activeResourceCounts
-    ? compareResourceCountContracts(activeResourceCounts, stagingResourceCounts)
-    : { allowPublish: true, blockers: [], warnings: [], comparisons: [] };
-  const activeCounts = activeResourceCounts ? flattenLegacyCounts(activeResourceCounts) : {};
-  const activeClassCount = activeCounts.classScheduleCount || (activeSnapshot && activeSnapshot.classSchedules || []).length;
-  const currentTerm = appConfigService.getAdminConfig().currentSemester || "";
-  const stagingTerm = data.term || data.semester || "";
-  const releaseVersion = data.releaseVersion || data.version || "";
-  const releaseVersionExists = Boolean(
-    releaseVersion &&
-    releaseService.listReleases(200).some((item) => item.version === releaseVersion)
-  );
-  const riskDrops = [];
-  let maxDropRate = 0;
-  let severeDrop = false;
-
-  [
-    { key: "classScheduleCount", label: "class schedules" },
-    { key: "teacherScheduleCount", label: "教师课表" },
-    { key: "classroomScheduleCount", label: "教室课表" },
-    { key: "courseScheduleCount", label: "课程课表" },
-  ].forEach((item) => {
-    const activeCount = Number(activeCounts[item.key] || 0);
-    const stagingCount = Number(counts[item.key] || 0);
-    if (!activeSnapshot || activeCount <= 0 || stagingCount >= activeCount) return;
-    const dropRate = (activeCount - stagingCount) / activeCount;
-    if (dropRate <= 0.3) return;
-    const dropPercent = parseFloat((dropRate * 100).toFixed(2));
-    maxDropRate = Math.max(maxDropRate, dropRate);
-    if (dropRate > 0.5) severeDrop = true;
-    riskDrops.push({
-      key: item.key,
-      label: item.label,
-      activeCount,
-      stagingCount,
-      dropPercent,
-      severity: dropRate > 0.5 ? "danger" : "warning",
-    });
-    warnings.push(`${item.label}: 当前线上 ${activeCount} -> 本次暂存 ${stagingCount}，下降 ${dropPercent}%`);
-  });
-
-  const blockerDetails = [];
-  contractComparison.blockers.forEach((blocker) => {
-    const code = blocker.code || "COUNT_CONTRACT_MISMATCH";
-    const text = `${code}: ${blocker.message || "统计契约不一致"}`;
-    blockers.push(text);
-    blockerDetails.push(blocker);
-  });
-  if (activeResourceCounts && stagingResourceCounts) {
-    const teacherDiff = (contractComparison.comparisons || []).find((item) => item.path === "teacher.scheduleDocuments");
-    if (teacherDiff && Number(teacherDiff.active || 0) === 1007 && Number(teacherDiff.staging || 0) === 83) {
-      warnings.push(
-        `教师课表：当前线上 ${teacherDiff.active} 份，本次暂存 ${teacherDiff.staging} 份，变化 ${teacherDiff.delta}（${teacherDiff.percent}%）。` +
-        `当前来源：${sourceModeLabel(activeResourceCounts.teacher && activeResourceCounts.teacher.sourceMode)}；` +
-        `本次来源：${sourceModeLabel(stagingResourceCounts.teacher && stagingResourceCounts.teacher.sourceMode)}。`
-      );
-    }
-  }
-
-  if (hasClassSchedules && counts.classScheduleCount === 0 && !blockers.includes("Missing classSchedules")) {
-    blockers.push("includeScopes contains classSchedules but classSchedules=0");
-  }
-  if (!data.term) blockers.push("term is empty");
-  if (!data.releaseVersion) blockers.push("releaseVersion is empty");
-  if (areStagingCountsAllZero(counts)) blockers.push("counts are all zero");
-  if (data.partial || data.meta && data.meta.partial) {
-    blockers.push("partial staging snapshots cannot be published by default");
-  }
-  if (currentTerm && stagingTerm && currentTerm !== stagingTerm) {
-    warnings.push(`Staging term ${stagingTerm} differs from configured term ${currentTerm}`);
-  }
-  if (releaseVersionExists) {
-    warnings.push(`releaseVersion ${releaseVersion} already exists`);
-  }
-
-  return {
-    allowPublish: blockers.length === 0,
-    requiresForceConfirm: severeDrop || releaseVersionExists,
-    blockers,
-    warnings,
-    counts,
-    resourceCounts: stagingResourceCounts,
-    activeResourceCounts,
-    contractComparison,
-    blockerDetails,
-    blockerCodes: Array.from(new Set(blockerDetails.map((item) => item.code || "").filter(Boolean))),
-    activeCounts,
-    riskDrops,
-    activeClassScheduleCount: activeClassCount,
-    classScheduleDropRate: parseFloat(Math.max(0, maxDropRate * 100).toFixed(2)),
-    currentTerm,
-    stagingTerm,
-    releaseVersionExists,
-  };
+  return stagingSafetyService.buildStagingSafety(data, activeSnapshot);
 }
 
 function throwPublishError(code, message, extra) {
@@ -511,6 +333,11 @@ async function runStagingPublish(input = {}, job) {
     throwPublishError("STAGING_SAFETY_BLOCKED", "暂存数据未通过发布安全检查。", {
       blockers: safety.blockers,
       warnings: safety.warnings,
+      blockerDetails: safety.blockerDetails,
+      blockerCodes: safety.blockerCodes,
+      warningDetails: safety.warningDetails,
+      safetyReport: safety.safetyReport,
+      safety,
     });
   }
 

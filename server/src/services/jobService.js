@@ -196,15 +196,33 @@ function finishJobSuccess(id, result, patch = {}) {
 }
 
 function finishJobFailed(id, error, patch = {}) {
+  const errorPayload = {
+    message: error && error.message || "job failed",
+    code: error && error.code || "",
+  };
+  [
+    "blockers",
+    "warnings",
+    "blockerDetails",
+    "blockerCodes",
+    "warningDetails",
+    "safetyReport",
+    "safety",
+  ].forEach((key) => {
+    if (error && Object.prototype.hasOwnProperty.call(error, key)) {
+      errorPayload[key] = error[key];
+    }
+  });
   const job = saveJob(Object.assign({}, readJob(id) || { id }, patch || {}, {
     status: "failed",
-    error: {
-      message: error && error.message || "job failed",
-      code: error && error.code || "",
-    },
+    error: errorPayload,
     finishedAt: new Date().toISOString(),
   }));
-  appendLog(job, "job failed", { message: error && error.message });
+  appendLog(job, "job failed", {
+    message: error && error.message,
+    code: error && error.code || "",
+    blockerCodes: errorPayload.blockerCodes || undefined,
+  });
   return publicJob(readJob(id) || job);
 }
 
