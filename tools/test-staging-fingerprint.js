@@ -1,7 +1,9 @@
 const assert = require("assert");
+const crypto = require("crypto");
 const {
   buildSidecarMeta,
   calculateFingerprint,
+  canonicalPayload,
 } = require("../server/src/utils/stagingFingerprint");
 
 function snapshot(patch = {}) {
@@ -41,6 +43,11 @@ function snapshot(patch = {}) {
 
 function run() {
   const first = calculateFingerprint(snapshot());
+  const legacyHash = crypto
+    .createHash("sha256")
+    .update(JSON.stringify(canonicalPayload(snapshot())), "utf8")
+    .digest("hex");
+  assert.strictEqual(first.canonicalHash, legacyHash, "streaming canonical hash must match legacy canonical JSON hash");
   const second = calculateFingerprint(snapshot({
     releaseVersion: "fingerprint-b",
     version: "fingerprint-b",

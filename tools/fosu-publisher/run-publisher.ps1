@@ -109,6 +109,7 @@ function Get-PublisherFailureDetails {
   $codeText = ""
   if ($errorInfo -and "$($errorInfo.code)") { $codeText = "$($errorInfo.code)" }
   elseif ($receipt -and "$($receipt.code)") { $codeText = "$($receipt.code)" }
+  elseif ($Summary -eq "PUBLISHER_LOCKED") { $codeText = "PUBLISHER_LOCKED" }
 
   $messageText = ""
   if ($errorInfo -and "$($errorInfo.message)") { $messageText = "$($errorInfo.message)" }
@@ -125,6 +126,7 @@ function Get-PublisherFailureDetails {
       $statusText -ne "completed" -and
       $statusText -ne "no-change" -and
       $currentStageText -ne "local-preflight" -and
+      $currentStageText -ne "checking-campus-network" -and
       $currentStageText -ne "acquiring-lock"
   }
 
@@ -154,6 +156,14 @@ function Show-FailureSummary {
   if ($codeText -eq "ADMIN_API_TOKEN_REQUIRED") {
     Write-LauncherLog "尚未配置管理员同步令牌。请先运行："
     Write-LauncherLog "npm run publisher:token:setup"
+  } elseif ($codeText -eq "SESSION_EXPIRED") {
+    Write-LauncherLog "教务登录态已失效。请运行："
+    Write-LauncherLog "npm run login"
+  } elseif ($codeText -eq "CAMPUS_NETWORK_BLOCKED" -or $codeText -eq "CAMPUS_NETWORK_CHECK_FAILED") {
+    Write-LauncherLog "请连接校园网或 EasyConnect 后重试。"
+  } elseif ($codeText -eq "PUBLISHER_LOCKED") {
+    Write-LauncherLog "已有同步正在运行。请不要同时双击脚本和手动运行命令。"
+    Write-LauncherLog "查看命令：npm run publisher:status"
   } elseif ($codeText -match "401|ADMIN_API_TOKEN_MISMATCH|UNAUTHORIZED" -or $messageText -match "401") {
     Write-LauncherLog "本机令牌与服务器不一致，请运行："
     Write-LauncherLog "npm run publisher:token:verify"
@@ -175,6 +185,20 @@ function Show-FailureSummary {
     Write-LauncherLog "resume 命令: 当前失败阶段不可恢复；请重新执行 npm run sync:publish"
   }
   Write-LauncherLog "启动器日志: $LogPath"
+}
+
+function Invoke-LockReconciliation {
+  $script:Stage = "publisher-lock-reconciliation"
+  $dry = Invoke-LoggedCommand -Name "publisher-lock-dry-run" -File $NodeExe -Arguments @("tools/fosu-publisher/unlock.js", "--dry-run") -AllowFailure
+  if ($dry.code -eq 2) {
+    Write-LauncherLog "已有同步正在运行。"
+    Invoke-LoggedCommand -Name "publisher-status" -File $NodeExe -Arguments @("tools/fosu-publisher/status.js") -AllowFailure | Out-Null
+    throw "PUBLISHER_LOCKED"
+  }
+  if ($dry.output -match "would remove") {
+    Write-LauncherLog "检测到可安全清理的历史锁，正在自动清理。"
+    Invoke-LoggedCommand -Name "publisher-unlock" -File $NodeExe -Arguments @("tools/fosu-publisher/unlock.js") | Out-Null
+  }
 }
 
 function Show-SuccessSummary {
@@ -223,6 +247,7 @@ try {
     Write-LauncherLog "自检只检查环境，不抓取课表，不上传。"
   } else {
     $PublisherArgs = $LauncherArgs | Where-Object { $_ -ne "--noninteractive" -and $_ -ne "--self-test" }
+    Invoke-LockReconciliation
     Invoke-LoggedCommand -Name "publisher" -File $NodeExe -Arguments (@("tools/fosu-publisher/publish.js") + $PublisherArgs) | Out-Null
     Show-SuccessSummary
   }

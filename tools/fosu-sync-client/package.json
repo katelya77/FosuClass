@@ -6,6 +6,7 @@
   "scripts": {
     "diagnose": "node diagnose.js",
     "diagnose:browser": "node diagnose-browser.js",
+    "session:verify": "node verify-session.js",
     "login": "node login.js",
     "discover:fosu": "node discover.js",
     "analyze:har": "node analyze-har.js",

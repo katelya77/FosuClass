@@ -140,7 +140,7 @@ async function run() {
   writeJson(lockPath, { runId: "alive", pid: process.pid, createdAt: new Date().toISOString() });
   await expectReject(async () => {
     const runObj = new publisher.PublisherRun({ mode: "routine", args: {}, runId: runId("lock") });
-    publisher.acquireLock(runObj);
+    publisher.acquireLock(runObj, { commandLine: "node tools/fosu-publisher/publish.js" });
   }, "PUBLISHER_LOCKED");
 
   restoreEnv();

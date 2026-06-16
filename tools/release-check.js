@@ -127,6 +127,8 @@ function localProductionTests() {
   return [
     run("windows process runner", "node", ["tools/test-process-runner.js"]),
     run("publisher launcher", "node", ["tools/test-publisher-launcher.js"]),
+    run("publisher hardening", "node", ["tools/test-publisher-hardening.js"]),
+    run("large staging finalize worker", "node", ["tools/test-large-staging-finalize-worker.js"]),
     run("gitattributes eol", "node", ["tools/test-gitattributes-eol.js"]),
     run("publisher token setup contract", "node", ["tools/test-publisher-token-setup-contract.js"]),
     run("publisher token verify contract", "node", ["tools/test-publisher-token-verify-contract.js"]),

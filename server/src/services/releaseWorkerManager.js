@@ -28,6 +28,12 @@ function getTaskLockGroup(type, options = {}) {
   return RELEASE_HEAVY_TASKS.has(type) ? RELEASE_HEAVY_LOCK_GROUP : null;
 }
 
+function getReleaseWorkerExecArgv() {
+  const maxOldSpaceMb = Number(process.env.FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB || 1536);
+  if (!Number.isFinite(maxOldSpaceMb) || maxOldSpaceMb <= 0) return [];
+  return [`--max-old-space-size=${Math.floor(maxOldSpaceMb)}`];
+}
+
 function buildAlreadyRunningMessage(type) {
   if (type === "staging-publish") return "已有发布任务正在运行";
   if (type === "release-pack-rebuild") return "已有 Release Pack 重建任务正在运行";
@@ -62,7 +68,7 @@ function startReleaseJob(type, input = {}, options = {}) {
     child = fork(workerPath, [job.id, type], {
       cwd: path.resolve(__dirname, "../../.."),
       env: process.env,
-      execArgv: [],
+      execArgv: getReleaseWorkerExecArgv(),
       stdio: ["ignore", "ignore", "ignore", "ipc"],
     });
   } catch (error) {
@@ -121,6 +127,7 @@ function sendAlreadyRunning(res, error) {
 
 module.exports = {
   RELEASE_HEAVY_LOCK_GROUP,
+  getReleaseWorkerExecArgv,
   isReleaseWorkerEnabled,
   sendAlreadyRunning,
   startReleaseJob,
