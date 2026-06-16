@@ -12,6 +12,7 @@ const {
   joinUrl,
   parseArgs,
 } = require("./oracle-release-source");
+const { getPublisherAdminToken } = require("../fosu-publisher/admin-token-utils");
 
 const INDEX_TYPES = ["class", "teacher", "classroom", "course"];
 const DEFAULT_TIMEOUT_MS = 30000;
@@ -40,12 +41,7 @@ function adminToken(options = {}) {
   if (Object.prototype.hasOwnProperty.call(options, "adminToken")) {
     return String(options.adminToken || "").trim();
   }
-  return String(
-    process.env.ADMIN_API_TOKEN ||
-    process.env.ORACLE_ADMIN_TOKEN ||
-    process.env.ADMIN_TOKEN ||
-    ""
-  ).trim();
+  return String(getPublisherAdminToken().token || process.env.ADMIN_TOKEN || "").trim();
 }
 
 function buildAdminHeaders(options = {}) {

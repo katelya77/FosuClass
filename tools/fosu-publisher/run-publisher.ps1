@@ -92,21 +92,87 @@ function Get-LatestRunInfo {
   }
 }
 
+function Get-PublisherFailureDetails {
+  param([object]$RunInfo)
+  $state = $null
+  $errorInfo = $null
+  $receipt = $null
+  if ($RunInfo) {
+    $state = Read-JsonSafe -Path $RunInfo.statePath
+    $errorInfo = Read-JsonSafe -Path $RunInfo.errorPath
+    $receipt = Read-JsonSafe -Path $RunInfo.receiptPath
+  }
+  $stageText = "$Stage"
+  if ($errorInfo -and "$($errorInfo.currentStage)") { $stageText = "$($errorInfo.currentStage)" }
+  elseif ($state -and "$($state.currentStage)") { $stageText = "$($state.currentStage)" }
+
+  $codeText = ""
+  if ($errorInfo -and "$($errorInfo.code)") { $codeText = "$($errorInfo.code)" }
+  elseif ($receipt -and "$($receipt.code)") { $codeText = "$($receipt.code)" }
+
+  $messageText = ""
+  if ($errorInfo -and "$($errorInfo.message)") { $messageText = "$($errorInfo.message)" }
+  elseif ($receipt -and "$($receipt.message)") { $messageText = "$($receipt.message)" }
+
+  $canResume = $false
+  if ($RunInfo -and $state) {
+    $statusText = "$($state.status)"
+    $currentStageText = "$($state.currentStage)"
+    $completedStages = @()
+    if ($state.completedStages) { $completedStages = @($state.completedStages) }
+    $completedCount = $completedStages.Count
+    $canResume = $completedCount -gt 0 -and
+      $statusText -ne "completed" -and
+      $statusText -ne "no-change" -and
+      $currentStageText -ne "local-preflight" -and
+      $currentStageText -ne "acquiring-lock"
+  }
+
+  return @{
+    state = $state
+    error = $errorInfo
+    receipt = $receipt
+    stage = $stageText
+    code = $codeText
+    message = $messageText
+    canResume = $canResume
+  }
+}
+
 function Show-FailureSummary {
   param([string]$Summary, [int]$Code)
-  Write-LauncherLog "同步失败"
-  Write-LauncherLog "当前阶段: $Stage"
-  Write-LauncherLog "error code: $Code"
-  Write-LauncherLog "详细错误摘要: $Summary"
   $runInfo = Get-LatestRunInfo
+  $details = Get-PublisherFailureDetails -RunInfo $runInfo
+  $stageText = if ($details.stage) { $details.stage } else { $Stage }
+  $codeText = if ($details.code) { $details.code } else { "EXIT_$Code" }
+  $messageText = if ($details.message) { $details.message } else { $Summary }
+
+  Write-LauncherLog "同步失败"
+  Write-LauncherLog "当前阶段: $stageText"
+  Write-LauncherLog "error.code: $codeText"
+  Write-LauncherLog "error.message: $messageText"
+  if ($codeText -eq "ADMIN_API_TOKEN_REQUIRED") {
+    Write-LauncherLog "尚未配置管理员同步令牌。请先运行："
+    Write-LauncherLog "npm run publisher:token:setup"
+  } elseif ($codeText -match "401|ADMIN_API_TOKEN_MISMATCH|UNAUTHORIZED" -or $messageText -match "401") {
+    Write-LauncherLog "本机令牌与服务器不一致，请运行："
+    Write-LauncherLog "npm run publisher:token:verify"
+    Write-LauncherLog "或重新执行 publisher:token:setup -- --rotate"
+  }
   if ($runInfo) {
     Write-LauncherLog "state.json: $($runInfo.statePath)"
     Write-LauncherLog "error.json: $($runInfo.errorPath)"
-    Write-LauncherLog "resume 命令: npm run sync:publish -- --mode=resume --run-id=$($runInfo.runId)"
+    Write-LauncherLog "receipt.json: $($runInfo.receiptPath)"
+    if ($details.canResume) {
+      Write-LauncherLog "resume 命令: npm run sync:publish -- --mode=resume --run-id=$($runInfo.runId)"
+    } else {
+      Write-LauncherLog "resume 命令: 当前失败阶段不可恢复；请重新执行 npm run sync:publish"
+    }
   } else {
     Write-LauncherLog "state.json: 未生成"
     Write-LauncherLog "error.json: 未生成"
-    Write-LauncherLog "resume 命令: 等待生成 runId 后使用 npm run sync:publish -- --mode=resume --run-id=<runId>"
+    Write-LauncherLog "receipt.json: 未生成"
+    Write-LauncherLog "resume 命令: 当前失败阶段不可恢复；请重新执行 npm run sync:publish"
   }
   Write-LauncherLog "启动器日志: $LogPath"
 }

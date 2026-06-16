@@ -10,7 +10,8 @@
 | `VPS_USER` | 无 | SSH/SCP 登录用户 | 部署前置检查失败，只输出变量名 |
 | `VPS_SSH_KEY` | 无 | SSH 私钥 | 部署前置检查失败，只输出变量名 |
 | `VPS_APP_DIR` | 无 | 远端应用目录 | 部署前置检查失败，只输出变量名 |
-| `ADMIN_PASSWORD` | 无 | Web 后台登录密码，也用于派生默认 `ADMIN_API_TOKEN` | 部署前置检查失败，只输出变量名 |
+| `ADMIN_API_TOKEN` | none | Required production publisher sync token shared by local Publisher and VPS admin API | Deploy preflight fails and only prints the secret name |
+| `ADMIN_PASSWORD` | 无 | Web 后台登录密码；旧版派生 `ADMIN_API_TOKEN` 仅保留运行时兼容，不用于生产部署门禁 | 部署前置检查失败，只输出变量名 |
 
 ## 条件必需 Secrets
 
@@ -25,7 +26,6 @@
 
 | 名称 | 默认值 | 作用 | 缺失时行为 |
 | --- | --- | --- | --- |
-| `ADMIN_API_TOKEN` | 由 `ADMIN_PASSWORD` 派生 | 本地同步工具和后台写接口 token | 允许为空，部署给出 warning，服务端自动派生 |
 | `ADMIN_TOKEN` | 空 | 后台静态 Bearer token 或登录凭据 | 允许为空，后台登录依赖 `ADMIN_PASSWORD` |
 | `FOSU_SESSION_SECRET_PREVIOUS` | 空 | session token 密钥轮换旧 key | 允许为空，状态页显示未配置 previous key |
 | `FOSU_SESSION_SECRET_KID` | `current` | session token key id | 允许为空，服务端使用 `current` |

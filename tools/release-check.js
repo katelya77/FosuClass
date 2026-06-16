@@ -3,6 +3,10 @@
 const fs = require("fs");
 const path = require("path");
 const { runProcess } = require("./shared/processRunner");
+const {
+  getPublisherAdminToken,
+  isCiEnvironment,
+} = require("./fosu-publisher/admin-token-utils");
 
 const ROOT = path.resolve(__dirname, "..");
 
@@ -123,6 +127,12 @@ function localProductionTests() {
   return [
     run("windows process runner", "node", ["tools/test-process-runner.js"]),
     run("publisher launcher", "node", ["tools/test-publisher-launcher.js"]),
+    run("gitattributes eol", "node", ["tools/test-gitattributes-eol.js"]),
+    run("publisher token setup contract", "node", ["tools/test-publisher-token-setup-contract.js"]),
+    run("publisher token verify contract", "node", ["tools/test-publisher-token-verify-contract.js"]),
+    run("publisher token redaction", "node", ["tools/test-publisher-token-redaction.js"]),
+    run("release check no production token in CI", "node", ["tools/test-release-check-no-production-token-in-ci.js"]),
+    run("deploy requires admin api token", "node", ["tools/test-deploy-requires-admin-api-token.js"]),
     run("admin UTF-8", "node", ["tools/test-admin-utf8.js"]),
     run("AI public safety", "node", ["tools/test-public-ai-safety.js"]),
     run("AI input and voice", "node", ["tools/test-ai-assistant-input-and-voice.js"]),
@@ -150,8 +160,25 @@ function preflight() {
   return { mode: "preflight", checks, blockers: [] };
 }
 
+function publisherTokenGate() {
+  const token = getPublisherAdminToken({ allowOracleAlias: false });
+  return {
+    label: "publisher ADMIN_API_TOKEN",
+    ok: Boolean(token.token),
+    source: token.source || "",
+    terminalRefreshRecommended: Boolean(token.terminalRefreshRecommended),
+    message: token.token
+      ? "ADMIN_API_TOKEN is configured for local publisher use."
+      : "ADMIN_API_TOKEN is not available for live publisher checks.",
+  };
+}
+
 function experience() {
   const cloudbaseRuntimeConfig = readCloudbaseConfig();
+  const tokenGate = publisherTokenGate();
+  const ci = isCiEnvironment();
+  const externalBlocked = ci && !tokenGate.ok;
+  const tokenEnv = tokenGate.ok ? { ADMIN_API_TOKEN: getPublisherAdminToken({ allowOracleAlias: false }).token } : {};
   const checks = []
     .concat(syntaxChecks())
     .concat([
@@ -164,12 +191,35 @@ function experience() {
       run("miniprogram compile preflight", "node", ["tools/test-miniprogram-compile-preflight.js"]),
       configCheck("CloudBase Hosting ready", cloudbaseRuntimeConfig.CLOUDBASE_HOSTING_READY === true, cloudbaseRuntimeConfig),
       voiceGateCheck(false),
-      run("authenticated Oracle-only smoke", "node", ["tools/cloudbase/live-smoke.js", "--oracle-only"], { timeoutMs: 120000 }),
-      run("dual-source live smoke", "npm", ["run", "cloudbase:live-smoke"], { timeoutMs: 180000 }),
       run("git diff whitespace", "git", ["diff", "--check"]),
       secretScan(),
     ]);
   const blockers = [];
+  const warnings = [];
+  checks.push(configCheck("publisher ADMIN_API_TOKEN", tokenGate.ok || externalBlocked, {
+    source: tokenGate.source,
+    externalBlocked,
+    message: tokenGate.message,
+  }));
+  if (tokenGate.ok) {
+    checks.push(run("authenticated Oracle-only smoke", "node", ["tools/cloudbase/live-smoke.js", "--oracle-only"], {
+      timeoutMs: 120000,
+      env: tokenEnv,
+    }));
+    checks.push(run("dual-source live smoke", "npm", ["run", "cloudbase:live-smoke"], {
+      timeoutMs: 180000,
+      env: tokenEnv,
+    }));
+  } else {
+    checks.push(configCheck("authenticated Oracle-only smoke", externalBlocked, {
+      skipped: true,
+      reason: externalBlocked ? "external-blocked" : "ADMIN_API_TOKEN missing",
+    }));
+    checks.push(configCheck("dual-source live smoke", externalBlocked, {
+      skipped: true,
+      reason: externalBlocked ? "external-blocked" : "ADMIN_API_TOKEN missing",
+    }));
+  }
   const runtimeMode = String(process.env.AI_RUNTIME_MODE || "public").toLowerCase();
   checks.push({ label: "public runtime mode", ok: runtimeMode !== "competition", runtimeMode });
   if (runtimeMode === "competition") blockers.push("AI_RUNTIME_MODE is competition; experience/formal release requires public.");
@@ -180,10 +230,11 @@ function experience() {
     active,
     warning: active.ok ? "" : active.reason,
   });
-  if (!hasEnv("ADMIN_API_TOKEN") && !hasEnv("ADMIN_TOKEN")) blockers.push("ADMIN_API_TOKEN or ADMIN_TOKEN is not available for live server checks.");
+  if (!tokenGate.ok && !ci) blockers.push("ADMIN_API_TOKEN is not available for live server checks.");
+  if (tokenGate.terminalRefreshRecommended) warnings.push("请关闭并重新打开 PowerShell，或设置当前进程环境变量。");
   if (!configuredCloudbaseStaticBase(cloudbaseRuntimeConfig)) blockers.push("CloudBase static hosting base URL is not configured for live dual-source check.");
   if (cloudbaseRuntimeConfig.CLOUDBASE_HOSTING_READY !== true) blockers.push("CLOUDBASE_HOSTING_READY=true is required for experience release.");
-  return { mode: "experience", checks, blockers };
+  return { mode: "experience", checks, blockers, warnings, externalBlocked };
 }
 
 function formal() {
@@ -223,6 +274,8 @@ function summarize(result) {
     ok,
     failed: failed.map((item) => ({ label: item.label, status: item.status, stdout: item.stdout, stderr: item.stderr })),
     blockers: result.blockers,
+    warnings: result.warnings || [],
+    externalBlocked: Boolean(result.externalBlocked),
     canUploadExperience: result.canUploadExperience,
     canSubmitFormal: result.canSubmitFormal,
   }, null, 2));
@@ -231,11 +284,21 @@ function summarize(result) {
   return ok;
 }
 
-const mode = String(process.argv[2] || "preflight").replace(/^--mode=/, "");
-const result = mode === "experience"
-  ? experience()
-  : mode === "formal"
-    ? formal()
-    : preflight();
-const ok = summarize(result);
-process.exit(ok ? 0 : 1);
+if (require.main === module) {
+  const mode = String(process.argv[2] || "preflight").replace(/^--mode=/, "");
+  const result = mode === "experience"
+    ? experience()
+    : mode === "formal"
+      ? formal()
+      : preflight();
+  const ok = summarize(result);
+  process.exit(ok ? 0 : 1);
+}
+
+module.exports = {
+  experience,
+  formal,
+  preflight,
+  publisherTokenGate,
+  summarize,
+};

@@ -28,6 +28,9 @@ const envContract = fs.readFileSync(path.join(ROOT, "docs", "github-actions-env-
   "require(\\\"./src/services/ai/agentService\\\")",
   "ai runtime ok",
   "node scripts/verify-ai-provider.js --mode=status",
+  "actions/checkout@v6",
+  "actions/setup-node@v6",
+  "admin-api-token-contract=ok",
 ].forEach((needle) => {
   assert(workflow.includes(needle), `deploy workflow should include ${needle}`);
 });

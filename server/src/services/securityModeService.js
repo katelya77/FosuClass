@@ -78,6 +78,9 @@ function getSecurityMode() {
   if (!process.env.FOSU_SECURITY_MODE) {
     warnings.push("FOSU_SECURITY_MODE is not set; using observe compatibility mode.");
   }
+  if (config.ADMIN_API_TOKEN_LEGACY_DERIVED) {
+    warnings.push("ADMIN_API_TOKEN is derived from ADMIN_PASSWORD for legacy compatibility; configure an explicit ADMIN_API_TOKEN for production publisher sync.");
+  }
   if (config.NODE_ENV === "production" && requireDynamicSession && !hasSessionSecret()) {
     warnings.push("FOSU_SESSION_SECRET_CURRENT or FOSU_SESSION_SECRET is required before enforcing dynamic API sessions.");
   }
