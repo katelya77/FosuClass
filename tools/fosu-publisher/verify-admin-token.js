@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 const { spawnSync } = require("child_process");
+const axios = require("axios");
 const {
   getPublisherAdminToken,
 } = require("./admin-token-utils");
@@ -62,26 +63,18 @@ async function verify(options = {}) {
   }
 
   const baseUrl = options.baseUrl || process.env.FOSU_ADMIN_BASE_URL || process.env.ORACLE_API_BASE_URL || process.env.FOSU_API_BASE_URL || DEFAULT_BASE_URL;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), Number(options.timeoutMs || 15000));
-  if (timer.unref) timer.unref();
   try {
-    const response = await fetch(joinUrl(baseUrl, "api", "admin", "publisher", "receipt"), {
-      method: "GET",
+    const response = await axios.get(joinUrl(baseUrl, "api", "admin", "publisher", "receipt"), {
       headers: {
         Accept: "application/json",
         "X-Admin-Token": tokenStatus.token,
         Authorization: `Bearer ${tokenStatus.token}`,
       },
-      signal: controller.signal,
+      timeout: Number(options.timeoutMs || 15000),
+      validateStatus: () => true,
+      proxy: false,
     });
-    const text = await response.text();
-    let payload = null;
-    try {
-      payload = text ? JSON.parse(text) : null;
-    } catch (error) {
-      payload = null;
-    }
+    const payload = response.data && typeof response.data === "object" ? response.data : null;
     if (response.status === 200 && payload && payload.success === true) {
       return {
         ok: true,
@@ -117,11 +110,9 @@ async function verify(options = {}) {
     return {
       ok: false,
       status: 0,
-      code: error.name === "AbortError" ? "ADMIN_TOKEN_VERIFY_TIMEOUT" : (error.code || "ADMIN_TOKEN_VERIFY_FAILED"),
+      code: error.code === "ECONNABORTED" ? "ADMIN_TOKEN_VERIFY_TIMEOUT" : (error.code || "ADMIN_TOKEN_VERIFY_FAILED"),
       message: error.message,
     };
-  } finally {
-    clearTimeout(timer);
   }
 }
 
