@@ -151,12 +151,67 @@ function sha256(text) {
   return crypto.createHash("sha256").update(String(text || ""), "utf8").digest("hex");
 }
 
-function calculateFingerprint(data) {
-  const canonical = canonicalPayload(data);
-  const canonicalJson = JSON.stringify(canonical);
+function canonicalSource(data) {
+  const source = data && typeof data === "object" ? data : {};
   return {
-    canonicalHash: sha256(canonicalJson),
-    canonicalJson,
+    schemaVersion: source.schemaVersion || "",
+    term: source.term || source.semester || "",
+    semester: source.semester || source.term || "",
+    termStartDate: source.termStartDate || source.sourceStartDate || source.meta && source.meta.startDate || "",
+    catalog: source.catalog || {},
+    majors: source.majors || [],
+    classSchedules: source.classSchedules || source.resources && source.resources.classSchedules || [],
+    resources: getResources(source),
+    timeTable: source.timeTable || {},
+  };
+}
+
+function updateStableJsonHash(hash, value, path = []) {
+  if (Array.isArray(value)) {
+    const sorted = value
+      .map((item, index) => ({ item, index, sortKey: entitySortKey(item, path) }))
+      .sort((left, right) => {
+        const compared = cmpText(left.sortKey, right.sortKey);
+        return compared || left.index - right.index;
+      });
+    hash.update("[");
+    sorted.forEach((entry, index) => {
+      if (index > 0) hash.update(",");
+      updateStableJsonHash(hash, entry.item === undefined ? null : entry.item, path);
+    });
+    hash.update("]");
+    return;
+  }
+  if (!value || typeof value !== "object") {
+    const encoded = JSON.stringify(value);
+    hash.update(encoded === undefined ? "null" : encoded);
+    return;
+  }
+  let first = true;
+  hash.update("{");
+  Object.keys(value)
+    .filter((key) => !VOLATILE_KEYS.has(key))
+    .sort()
+    .forEach((key) => {
+      if (value[key] === undefined) return;
+      if (!first) hash.update(",");
+      first = false;
+      hash.update(JSON.stringify(key));
+      hash.update(":");
+      updateStableJsonHash(hash, value[key], path.concat(key));
+    });
+  hash.update("}");
+}
+
+function hashCanonicalPayload(data) {
+  const hash = crypto.createHash("sha256");
+  updateStableJsonHash(hash, canonicalSource(data));
+  return hash.digest("hex");
+}
+
+function calculateFingerprint(data) {
+  return {
+    canonicalHash: hashCanonicalPayload(data),
     counts: summarizeStagingData(data),
   };
 }

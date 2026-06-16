@@ -1,8 +1,13 @@
 const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
-require("dotenv").config();
+const {
+  loadSyncClientEnv,
+  prepareDirectNetworkEnvironment,
+} = require("./syncEnv");
 
+loadSyncClientEnv();
+prepareDirectNetworkEnvironment(process.env);
 const FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 const DEBUG_DIR = path.join(__dirname, ".debug");
 const SESSION_PATH = path.join(__dirname, ".session", "session.json");

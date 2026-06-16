@@ -60,6 +60,14 @@ function run() {
   includes(ps, "currentStage", "publisher currentStage summary");
   includes(ps, "Get-PublisherFailureDetails", "publisher failure details");
   includes(ps, 'currentStageText -ne "local-preflight"', "local-preflight should not advertise resume");
+  includes(ps, 'currentStageText -ne "checking-campus-network"', "campus network should not advertise resume");
+  includes(ps, "Invoke-LockReconciliation", "safe lock reconciliation");
+  includes(ps, "publisher-lock-dry-run", "lock dry-run before launch");
+  includes(ps, "publisher-unlock", "stale lock unlock command");
+  includes(ps, "PUBLISHER_LOCKED", "publisher locked guidance");
+  includes(ps, "请不要同时双击脚本和手动运行命令", "concurrent launcher guidance");
+  includes(ps, "npm run login", "session expired login command");
+  includes(ps, "请连接校园网或 EasyConnect 后重试", "campus network blocked guidance");
   includes(ps, "resume 命令", "resume command");
   includes(ps, "Oracle 状态", "Oracle summary");
   includes(ps, "CloudBase 状态", "CloudBase summary");

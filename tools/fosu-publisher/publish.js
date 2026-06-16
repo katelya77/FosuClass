@@ -33,8 +33,18 @@ const { syncActiveRelease } = require("../cloudbase/sync-active-release");
 const cloudbaseConfig = require("../../miniprogram/config/cloudbase");
 const { runCommand: runProcessCommand } = require("../shared/processRunner");
 const { getPublisherAdminToken } = require("./admin-token-utils");
+const {
+  probeCampusNetwork,
+} = require("../fosu-sync-client/networkProbe");
+const {
+  loadSyncClientEnv,
+  prepareDirectNetworkEnvironment,
+} = require("../fosu-sync-client/syncEnv");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
+const SYNC_CLIENT_DIR = path.join(PROJECT_ROOT, "tools", "fosu-sync-client");
+loadSyncClientEnv({ env: process.env });
+prepareDirectNetworkEnvironment(process.env, { axios });
 const RUNS_ROOT = path.join(PROJECT_ROOT, ".local", "publisher-runs");
 const LOCK_PATH = path.join(RUNS_ROOT, "publisher.lock");
 const LATEST_PATH = path.join(RUNS_ROOT, "latest.json");
@@ -64,6 +74,7 @@ const STAGES = [
   ["completed", "completed"],
 ];
 const STAGE_INDEX = new Map(STAGES.map(([name], index) => [name, index]));
+const TERMINAL_RUN_STATUSES = new Set(["completed", "failed", "partial-success", "no-change"]);
 
 function parseArgs(argv) {
   const args = {};
@@ -114,7 +125,7 @@ function readJsonSafe(filePath, fallback) {
 }
 
 function redact(value) {
-  const blockedKey = /token|ticket|cookie|secret|authorization|password|api[-_]?key/i;
+  const blockedKey = /token|ticket|cookie|secret|authorization|password|api[-_]?key|session/i;
   if (Array.isArray(value)) return value.map(redact);
   if (value && typeof value === "object") {
     return Object.keys(value).reduce((acc, key) => {
@@ -125,7 +136,9 @@ function redact(value) {
   if (typeof value === "string") {
     return value
       .replace(/([?&]?(?:token|ticket|cookie|secret|authorization|password|api[-_]?key)[^=]*=)[^&\s]+/gi, "$1[redacted]")
-      .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]");
+      .replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]")
+      .replace(/([\\/])\.session([\\/])[^"'`\s]+/gi, "$1[redacted-session]$2[redacted]")
+      .replace(/session\.json/gi, "[redacted-session-file]");
   }
   return value;
 }
@@ -157,27 +170,82 @@ function runCommand(command, args, options = {}) {
   return result;
 }
 
+function runNodeScript(scriptPath, args = [], options = {}) {
+  const absoluteScript = path.isAbsolute(scriptPath) ? scriptPath : path.join(PROJECT_ROOT, scriptPath);
+  return runCommand(process.execPath, [absoluteScript].concat(args || []), options);
+}
+
+function errorDiagnostics(error) {
+  const diagnostics = error && error.diagnostics || {};
+  return {
+    status: error && Object.prototype.hasOwnProperty.call(error, "status") ? error.status : diagnostics.status,
+    signal: error && error.signal || diagnostics.signal || null,
+    invocation: diagnostics.invocation || "",
+    executable: diagnostics.executable || "",
+    safeArgs: diagnostics.safeArgs || [],
+    stdoutTail: diagnostics.stdoutTail || "",
+    stderrTail: diagnostics.stderrTail || "",
+    processFailureCode: error && error.processFailureCode || diagnostics.processFailureCode || "",
+  };
+}
+
 function axiosHeaders() {
   const token = getPublisherAdminToken().token;
   return token ? { "x-admin-token": token, Authorization: `Bearer ${token}` } : {};
 }
 
 async function getJson(url, options = {}) {
-  const response = await axios.get(url, {
-    headers: Object.assign({ Accept: "application/json" }, options.headers || {}),
-    timeout: options.timeoutMs || 30000,
-    proxy: false,
-  });
-  return response.data;
+  return withHttpRetry(options.label || "get-json", async () => {
+    const response = await axios.get(url, {
+      headers: Object.assign({ Accept: "application/json" }, options.headers || {}),
+      timeout: options.timeoutMs || 30000,
+      proxy: false,
+    });
+    return response.data;
+  }, options);
 }
 
 async function postJson(url, body, options = {}) {
-  const response = await axios.post(url, body || {}, {
-    headers: Object.assign({ "Content-Type": "application/json" }, options.headers || {}),
-    timeout: options.timeoutMs || 60000,
-    proxy: false,
-  });
-  return response.data;
+  return withHttpRetry(options.label || "post-json", async () => {
+    const response = await axios.post(url, body || {}, {
+      headers: Object.assign({ "Content-Type": "application/json" }, options.headers || {}),
+      timeout: options.timeoutMs || 60000,
+      proxy: false,
+    });
+    return response.data;
+  }, options);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function isRetryableHttpError(error) {
+  const code = error && error.code;
+  const status = error && error.response && error.response.status;
+  if (["ECONNABORTED", "ETIMEDOUT", "ECONNRESET", "EPIPE", "EAI_AGAIN"].includes(code)) return true;
+  return [408, 425, 429, 500, 502, 503, 504].includes(status);
+}
+
+async function withHttpRetry(label, operation, options = {}) {
+  const attempts = Math.max(1, Number(options.retries || 3));
+  const baseDelayMs = Math.max(0, Number(options.retryDelayMs || 750));
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error;
+      if (attempt >= attempts || !isRetryableHttpError(error)) {
+        throw error;
+      }
+      const status = error && error.response && error.response.status;
+      const detail = status ? `status=${status}` : `code=${error && error.code || "UNKNOWN"}`;
+      console.warn(`[publisher] ${label} transient failure (${detail}); retrying ${attempt + 1}/${attempts}`);
+      await sleep(baseDelayMs * attempt);
+    }
+  }
+  throw lastError;
 }
 
 function safeRelativePath(value) {
@@ -220,12 +288,15 @@ async function uploadPublisherReceipt(args, receipt) {
 
 async function waitAdminJob(baseUrl, jobId, label, run) {
   const url = `${baseUrl.replace(/\/+$/g, "")}/api/admin/jobs/${encodeURIComponent(jobId)}`;
+  const successStates = new Set(["success", "succeeded", "completed"]);
+  const failureStates = new Set(["failed", "cancelled", "canceled", "timeout", "timed-out"]);
   for (let attempt = 1; attempt <= 240; attempt += 1) {
     const data = await getJson(url, { headers: axiosHeaders(), timeoutMs: 30000 });
     const job = data && data.job;
     run.event("job-poll", { label, jobId, attempt, status: job && job.status });
-    if (job && (job.status === "success" || job.status === "failed")) {
-      if (job.status === "failed") {
+    const status = String(job && job.status || "").toLowerCase();
+    if (job && (successStates.has(status) || failureStates.has(status))) {
+      if (failureStates.has(status)) {
         const error = new Error(`${label || "admin job"} failed: ${job.error && job.error.message || "unknown error"}`);
         error.code = "ADMIN_JOB_FAILED";
         error.job = job;
@@ -366,6 +437,14 @@ class PublisherRun {
       stack: error.stack,
       failedAt: nowIso(),
       currentStage: this.state.currentStage,
+      status: errorDiagnostics(error).status,
+      signal: errorDiagnostics(error).signal,
+      invocation: errorDiagnostics(error).invocation,
+      executable: errorDiagnostics(error).executable,
+      safeArgs: errorDiagnostics(error).safeArgs,
+      stdoutTail: errorDiagnostics(error).stdoutTail,
+      stderrTail: errorDiagnostics(error).stderrTail,
+      processFailureCode: errorDiagnostics(error).processFailureCode,
     });
     writeJsonAtomic(this.errorPath, payload);
     this.save({ status: "failed", error: payload });
@@ -389,33 +468,165 @@ class PublisherRun {
       },
     }, payload || {}));
     writeJsonAtomic(this.receiptPath, receipt);
-    this.save({ status: receipt.success ? "completed" : (receipt.status || "partial-success"), receipt });
+    const terminalStatus = receipt.status || (receipt.success ? "completed" : "partial-success");
+    this.save({ status: terminalStatus, receipt });
     return receipt;
   }
 }
 
-function acquireLock(run) {
-  ensureDir(RUNS_ROOT);
+function getProcessCommandLine(pid, deps = {}) {
+  const numeric = Number(pid || 0);
+  if (!numeric) return "";
+  const spawn = deps.spawnSync || spawnSync;
+  try {
+    if (process.platform === "win32") {
+      const script = [
+        `$p = Get-CimInstance Win32_Process -Filter "ProcessId=${numeric}" -ErrorAction SilentlyContinue`,
+        "if ($p) { $p.CommandLine }",
+      ].join("; ");
+      const result = spawn("powershell.exe", [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        script,
+      ], { encoding: "utf8", timeout: 5000, windowsHide: true });
+      return result.status === 0 ? String(result.stdout || "").trim() : "";
+    }
+    const result = spawn("ps", ["-p", String(numeric), "-o", "command="], {
+      encoding: "utf8",
+      timeout: 5000,
+    });
+    return result.status === 0 ? String(result.stdout || "").trim() : "";
+  } catch (error) {
+    return "";
+  }
+}
+
+function isPublisherCommandLine(commandLine) {
+  const text = String(commandLine || "").replace(/\\/g, "/").toLowerCase();
+  return text.includes("tools/fosu-publisher/publish.js") || text.includes("fosu-publisher/publish.js");
+}
+
+function readRunState(runId) {
+  return runId ? readJsonSafe(path.join(RUNS_ROOT, runId, "state.json"), null) : null;
+}
+
+function isTerminalRunState(state) {
+  return Boolean(state && TERMINAL_RUN_STATUSES.has(String(state.status || "")));
+}
+
+function inspectPublisherLock(deps = {}) {
   const existing = readJsonSafe(LOCK_PATH, null);
-  if (existing) {
-    const age = Date.now() - (Date.parse(existing.createdAt || "") || 0);
-    const alive = processIsAlive(existing.pid);
-    const existingState = existing.runId
-      ? readJsonSafe(path.join(RUNS_ROOT, existing.runId, "state.json"), null)
-      : null;
-    const stateRunning = existingState && !["completed", "failed", "partial-success", "no-change"].includes(String(existingState.status || ""));
-    if (alive && age < STALE_LOCK_MS) {
-      const error = new Error(`publisher is already running: ${existing.runId || existing.pid}`);
+  if (!existing) {
+    return {
+      locked: false,
+      lockPath: LOCK_PATH,
+      canUnlock: false,
+      reason: "missing",
+    };
+  }
+  const state = readRunState(existing.runId);
+  const alive = processIsAlive(existing.pid);
+  const commandLine = alive ? (deps.commandLine || getProcessCommandLine(existing.pid, deps)) : "";
+  const isPublisherProcess = alive && isPublisherCommandLine(commandLine);
+  const terminal = isTerminalRunState(state);
+  const ageMs = Date.now() - (Date.parse(existing.createdAt || "") || 0);
+  let canUnlock = false;
+  let reason = "active-publisher";
+  if (terminal) {
+    canUnlock = true;
+    reason = "terminal-state";
+  } else if (!alive) {
+    canUnlock = true;
+    reason = "pid-dead";
+  } else if (!isPublisherProcess) {
+    canUnlock = true;
+    reason = "pid-reuse";
+  }
+  return {
+    locked: true,
+    lockPath: LOCK_PATH,
+    lock: existing,
+    runId: existing.runId || "",
+    pid: existing.pid || 0,
+    startedAt: existing.createdAt || "",
+    currentStage: state && state.currentStage || "",
+    status: state && state.status || "",
+    statePath: existing.runId ? path.join(RUNS_ROOT, existing.runId, "state.json") : "",
+    ageMs,
+    alive,
+    isPublisherProcess,
+    commandLineKnown: Boolean(commandLine),
+    terminal,
+    canUnlock,
+    reason,
+  };
+}
+
+function removePublisherLock(reason, deps = {}) {
+  const inspect = inspectPublisherLock(deps);
+  if (!inspect.locked) return Object.assign({}, inspect, { removed: false });
+  try { fs.unlinkSync(LOCK_PATH); } catch (error) {}
+  return Object.assign({}, inspect, { removed: true, removedReason: reason || inspect.reason });
+}
+
+function reconcilePublisherLock(options = {}) {
+  const inspect = inspectPublisherLock(options.deps || {});
+  if (!inspect.locked) return Object.assign({}, inspect, { removed: false });
+  if (!inspect.canUnlock && !options.force) return Object.assign({}, inspect, { removed: false });
+  if (options.dryRun) return Object.assign({}, inspect, { removed: false, dryRun: true });
+  return removePublisherLock(inspect.reason, options.deps || {});
+}
+
+function formatLockStatus(status) {
+  if (!status.locked) {
+    return [
+      "Publisher lock: not locked",
+      `state.json: ${status.statePath || "n/a"}`,
+      "safeUnlock: false",
+    ];
+  }
+  return [
+    `Publisher lock: ${status.isPublisherProcess ? "running" : "stale-or-reusable"}`,
+    `runId: ${status.runId || ""}`,
+    `PID: ${status.pid || ""}`,
+    `startedAt: ${status.startedAt || ""}`,
+    `currentStage: ${status.currentStage || ""}`,
+    `status: ${status.status || ""}`,
+    `state.json: ${status.statePath || ""}`,
+    `safeUnlock: ${status.canUnlock ? "true" : "false"}`,
+    `reason: ${status.reason || ""}`,
+  ];
+}
+
+function acquireLock(run, deps = {}) {
+  ensureDir(RUNS_ROOT);
+  const lockStatus = inspectPublisherLock(deps);
+  if (lockStatus.locked) {
+    if (!lockStatus.canUnlock && lockStatus.isPublisherProcess) {
+      const error = new Error([
+        "已有同步正在运行",
+        `runId: ${lockStatus.runId || ""}`,
+        `PID: ${lockStatus.pid || ""}`,
+        `当前阶段: ${lockStatus.currentStage || ""}`,
+        `开始时间: ${lockStatus.startedAt || ""}`,
+        "查看命令: npm run publisher:status",
+      ].join(os.EOL));
       error.code = "PUBLISHER_LOCKED";
+      error.lock = redact(lockStatus);
       throw error;
     }
-    if (alive || (age < STALE_LOCK_MS && stateRunning)) {
-      const error = new Error(`publisher lock is not stale yet: ${existing.runId || existing.pid}`);
-      error.code = "PUBLISHER_LOCKED";
-      throw error;
-    }
-    run.event("stale-lock-removed", { existing, age, alive, stateStatus: existingState && existingState.status || "" });
-    try { fs.unlinkSync(LOCK_PATH); } catch (error) {}
+    const removed = reconcilePublisherLock({ deps });
+    run.event("stale-lock-removed", {
+      runId: lockStatus.runId,
+      pid: lockStatus.pid,
+      reason: lockStatus.reason,
+      alive: lockStatus.alive,
+      status: lockStatus.status,
+      removed: removed.removed,
+    });
   }
   const payload = {
     runId: run.runId,
@@ -452,26 +663,57 @@ async function resolveTerm(args) {
 
 function requireSession() {
   if (process.env.FOSU_PUBLISHER_MOCK === "1") {
-    return { sessionPath: "mock-session", size: 1, mtime: nowIso(), mocked: true };
+    return { sessionFile: "mock-session", size: 1, mtime: nowIso(), mocked: true };
   }
   const sessionPath = path.join(PROJECT_ROOT, "tools", "fosu-sync-client", ".session", "session.json");
   const stat = fs.existsSync(sessionPath) ? fs.statSync(sessionPath) : null;
   if (!stat || stat.size < 20) {
     const error = new Error("Education session is missing or invalid. Run npm run login.");
-    error.code = "SESSION_REQUIRED_RUN_NPM_LOGIN";
+    error.code = "SESSION_EXPIRED";
     throw error;
   }
-  return { sessionPath, size: stat.size, mtime: stat.mtime.toISOString() };
+  return { sessionFile: "present", size: stat.size, mtime: stat.mtime.toISOString() };
 }
 
 function verifyEducationSession() {
   const local = requireSession();
   if (process.env.FOSU_PUBLISHER_MOCK === "1") return local;
-  runCommand("node", ["tools/fosu-sync-client/sync.js", "check-session"], {
-    code: "SESSION_REQUIRED_RUN_NPM_LOGIN",
+  runNodeScript(path.join(SYNC_CLIENT_DIR, "verify-session.js"), [], {
+    code: "SESSION_EXPIRED",
     timeoutMs: 180000,
   });
   return Object.assign({}, local, { verified: true });
+}
+
+async function checkCampusNetworkForPublisher(run) {
+  if (process.env.FOSU_PUBLISHER_MOCK === "1") {
+    const readiness = process.env.FOSU_PUBLISHER_MOCK_CAMPUS_READINESS || "ready";
+    if (readiness === "blocked") {
+      const error = new Error("mock campus network blocked");
+      error.code = "CAMPUS_NETWORK_BLOCKED";
+      throw error;
+    }
+    const warnings = readiness === "ready-with-warning" ? ["mock campus warning"] : [];
+    warnings.forEach((warning) => {
+      if (run) run.event("campus-network-warning", { warning });
+    });
+    return { success: true, readiness, mocked: true, warnings, blockers: [] };
+  }
+  const result = await probeCampusNetwork({ env: process.env });
+  if (result.readiness === "blocked") {
+    const error = new Error((result.blockers || []).join("; ") || "Campus network is blocked.");
+    error.code = "CAMPUS_NETWORK_BLOCKED";
+    error.networkReadiness = result;
+    throw error;
+  }
+  if (result.readiness === "ready-with-warning") {
+    (result.warnings || []).forEach((warning) => {
+      console.warn(`[campus-network] WARN ${warning}`);
+      if (run) run.event("campus-network-warning", { warning });
+    });
+    console.warn("网络检查存在警告，将继续验证教务登录态。");
+  }
+  return result;
 }
 
 async function runLocalPreflight(args) {
@@ -539,7 +781,6 @@ function buildCrawlArgs(mode, args, run, term) {
   const catalogPolicy = mode === "full" ? "network-only" : "reuse-validated";
   const negativeCachePolicy = mode === "full" ? "revalidate" : "ignore";
   const base = [
-    "tools/fosu-sync-client/sync.js",
     action,
     `--term=${term}`,
     `--output=${output}`,
@@ -556,7 +797,7 @@ function buildCrawlArgs(mode, args, run, term) {
     base.push("--force-refresh", "--clear-progress", "--recheck-no-schedule");
   }
   if (args["verify-direct-resources"]) base.push("--verify-direct-resources");
-  return { output, args: base };
+  return { output, script: path.join(SYNC_CLIENT_DIR, "sync.js"), args: base };
 }
 
 function privacyScanText(text) {
@@ -566,7 +807,7 @@ function privacyScanText(text) {
     ["authorization", /authorization|bearer\s+[a-z0-9._~+/=-]{8,}/i],
     ["cookie", /cookie|set-cookie|JSESSIONID/i],
     ["api-key", /api[-_]?key|secret(?:id|key)?|access[-_]?token/i],
-    ["student-id", /student(?:id|number)|\b\d{10,16}\b/i],
+    ["student-id", /(?:student(?:id|number)|student[-_ ]?no|学号)["'\s:：=]+[0-9]{6,20}/i],
     ["id-card", /\b\d{17}[\dXx]\b/],
   ].forEach(([rule, pattern]) => {
     if (pattern.test(text)) findings.push({ rule });
@@ -608,6 +849,10 @@ function validateStaging(stagingPath, expectedTerm) {
   if (sourceModes.teacher !== "derived-current-run" || sourceModes.classroom !== "derived-current-run" || sourceModes.course !== "derived-current-run") {
     errors.push(`sourceMode mismatch: ${JSON.stringify(sourceModes)}`);
   }
+  const blockingDiagnostics = (contract.diagnostics || []).filter((item) => item && item.severity === "error");
+  if (blockingDiagnostics.length) {
+    errors.push(`resource diagnostics failed: ${blockingDiagnostics.map((item) => item.code || item.resource || "unknown").join(",")}`);
+  }
   if (!fingerprint.canonicalHash) errors.push("canonicalHash missing");
   if (Number(data.meta && data.meta.actualNetworkRequestCount || 0) <= 0) errors.push("actual network request count is zero");
   if (data.meta && data.meta.usedClassScheduleCache) errors.push("classSchedules used old cache");
@@ -631,6 +876,7 @@ function validateStaging(stagingPath, expectedTerm) {
     summary,
     counts: normalizedCounts,
     sourceModes,
+    diagnostics: contract.diagnostics || [],
     includeScopes,
     actualNetworkRequestCount: Number(data.meta && data.meta.actualNetworkRequestCount || 0),
     usedCache: {
@@ -748,6 +994,23 @@ async function publishStaging(baseUrl, run, args) {
     return waitAdminJob(baseUrl, data.job.id, "staging publish", run);
   }
   return data;
+}
+
+async function waitForStagingFinalize(baseUrl, uploadResult, run) {
+  const jobId = uploadResult && uploadResult.job && uploadResult.job.id;
+  if (!jobId) {
+    return { success: true, uploadResult, skipped: true };
+  }
+  if (uploadResult.finalized) {
+    return { success: true, uploadResult, skipped: true, alreadyFinalized: true };
+  }
+  const finalized = await waitAdminJob(baseUrl, jobId, "staging upload finalize", run);
+  const nextUploadResult = Object.assign({}, uploadResult, {
+    finalized: true,
+    finalizeResult: finalized,
+  });
+  run.save({ uploadResult: nextUploadResult });
+  return { success: true, uploadResult: nextUploadResult, finalizeResult: finalized };
 }
 
 function runOracleOnlySmoke(args) {
@@ -998,8 +1261,7 @@ async function runMainPipeline(run, args) {
     }
 
     await run.stage("checking-campus-network", async () => {
-      runCommand("npm", ["--prefix", "tools/fosu-sync-client", "run", "diagnose"], { code: "CAMPUS_NETWORK_CHECK_FAILED" });
-      return { success: true };
+      return checkCampusNetworkForPublisher(run);
     });
 
     await run.stage("checking-session", async () => verifyEducationSession());
@@ -1007,14 +1269,20 @@ async function runMainPipeline(run, args) {
     const effectiveMode = run.mode === "resume" ? run.originalMode : run.mode;
     const crawlPlan = buildCrawlArgs(effectiveMode === "full" ? "full" : "routine", args, run, term);
     await run.stage("crawling", async () => {
-      runCommand("node", crawlPlan.args, {
+      runNodeScript(crawlPlan.script, crawlPlan.args, {
         code: "LOCAL_CRAWL_FAILED",
         env: {
           PREFERRED_SEMESTER: term,
           SYNC_CLASS_SCOPE: "all",
           SYNC_RESOURCE_SOURCE: "derived",
+          FOSU_SKIP_CAMPUS_NETWORK_CHECK: "1",
         },
       });
+      if (process.env.FOSU_PUBLISHER_MOCK !== "1" && !fs.existsSync(crawlPlan.output)) {
+        const error = new Error(`Crawl output file was not generated: ${safeRelativePath(crawlPlan.output)}`);
+        error.code = "CRAWL_OUTPUT_MISSING";
+        throw error;
+      }
       return { success: true, output: crawlPlan.output };
     });
 
@@ -1106,7 +1374,7 @@ async function runMainPipeline(run, args) {
       });
     }
 
-    await run.stage("uploading-oracle", async () => {
+    uploadResult = await run.stage("uploading-oracle", async () => {
       if (process.env.FOSU_PUBLISHER_MOCK_ORACLE_UPLOAD_FAIL === "1") {
         const error = new Error("mock oracle upload failure");
         error.code = "MOCK_ORACLE_UPLOAD_FAILED";
@@ -1137,7 +1405,15 @@ async function runMainPipeline(run, args) {
       return uploadResult;
     });
 
-    await run.stage("waiting-staging-finalize", async () => ({ success: true, uploadResult }));
+    const finalizeStatus = await run.stage("waiting-staging-finalize", async () => {
+      return waitForStagingFinalize(args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL, uploadResult, run);
+    });
+    uploadResult = finalizeStatus && finalizeStatus.uploadResult || uploadResult || run.state.uploadResult || null;
+    if (uploadResult && uploadResult.job && uploadResult.job.id && !uploadResult.finalized) {
+      run.event("staging-finalize-reconcile", { jobId: uploadResult.job.id });
+      const reconciled = await waitForStagingFinalize(args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL, uploadResult, run);
+      uploadResult = reconciled.uploadResult || uploadResult;
+    }
 
     await run.stage("publishing-release", async () => {
       publishResult = await publishStaging(args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL, run, args);
@@ -1368,11 +1644,18 @@ module.exports = {
   acquireLock,
   buildCrawlArgs,
   buildMockStaging,
+  checkCampusNetworkForPublisher,
   exportCloudbaseManualPackage,
+  formatLockStatus,
+  getProcessCommandLine,
+  inspectPublisherLock,
+  isPublisherCommandLine,
   main,
   parseArgs,
   processIsAlive,
   redact,
+  reconcilePublisherLock,
+  removePublisherLock,
   runDualSourceSmoke,
   runLocalPreflight,
   runOracleOnlySmoke,

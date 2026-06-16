@@ -26,6 +26,9 @@ function redactArg(value, previousArg) {
   if (/^--?[^=\s]*(token|ticket|cookie|secret|authorization|password|passwd|pwd|api[-_]?key|session)[^=\s]*=/i.test(text)) {
     return text.replace(/=.*/s, "=[redacted]");
   }
+  if (/(^|[\\/])\.session([\\/]|$)|session\.json/i.test(text)) {
+    return "[redacted-session-path]";
+  }
   if (/(Bearer\s+)[A-Za-z0-9._~+/=-]+/i.test(text)) {
     return text.replace(/(Bearer\s+)[A-Za-z0-9._~+/=-]+/gi, "$1[redacted]");
   }
@@ -142,6 +145,19 @@ function normalizeSpawnError(error) {
   };
 }
 
+function classifyProcessFailure(result) {
+  const spawnCode = result.error && result.error.code || "";
+  if (spawnCode === "ETIMEDOUT") return "CHILD_PROCESS_TIMEOUT";
+  if (spawnCode === "ENOENT") return "CHILD_PROCESS_SPAWN_FAILED";
+  if (spawnCode === "EINVAL") return "CHILD_PROCESS_SPAWN_FAILED";
+  if (spawnCode === "EPERM") return "CHILD_PROCESS_SPAWN_FAILED";
+  if (spawnCode === "ENOBUFS" || /maxBuffer/i.test(String(result.error && result.error.message || ""))) return "CHILD_PROCESS_MAX_BUFFER";
+  if (spawnCode) return spawnCode;
+  if (result.signal) return `SIGNAL_${result.signal}`;
+  if (result.status === null || result.status === undefined) return "CHILD_PROCESS_EXIT_UNKNOWN";
+  return `EXIT_${result.status}`;
+}
+
 function runProcess(command, args = [], options = {}, deps = {}) {
   const spawn = deps.spawnSync || spawnSync;
   const plan = resolveCommand(command, args, options, deps);
@@ -162,7 +178,7 @@ function runProcess(command, args = [], options = {}, deps = {}) {
   const spawnError = normalizeSpawnError(result.error);
   const status = result.status === undefined ? null : result.status;
   const ok = !spawnError && status === 0;
-  return {
+  const output = {
     ok,
     command: plan.command,
     executable: plan.file,
@@ -177,12 +193,15 @@ function runProcess(command, args = [], options = {}, deps = {}) {
     stderr,
     stdoutTail: tailText(stdout, options.tailChars),
     stderrTail: tailText(stderr, options.tailChars),
+    failureCode: null,
     elapsedMs: Date.now() - startedAt,
   };
+  output.failureCode = ok ? null : classifyProcessFailure(output);
+  return output;
 }
 
 function formatFailure(result, options = {}) {
-  const code = result.error && result.error.code || (result.status === null ? "UNKNOWN" : `EXIT_${result.status}`);
+  const code = classifyProcessFailure(result);
   const diagnostics = {
     command: result.command,
     executable: result.executable,
@@ -191,6 +210,7 @@ function formatFailure(result, options = {}) {
     cwd: result.cwd,
     status: result.status,
     signal: result.signal,
+    processFailureCode: code,
     spawnErrorCode: result.error && result.error.code || "",
     spawnErrorMessage: result.error && result.error.message || "",
     stderrTail: result.stderrTail,
@@ -215,6 +235,7 @@ function runCommand(command, args = [], options = {}, deps = {}) {
   const failure = formatFailure(result, options);
   const error = new Error(failure.message);
   error.code = options.code || failure.code || "COMMAND_FAILED";
+  error.processFailureCode = failure.code;
   error.status = result.status;
   error.signal = result.signal;
   error.stdout = result.stdout;

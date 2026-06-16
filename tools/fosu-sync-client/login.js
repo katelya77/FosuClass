@@ -1,14 +1,19 @@
 /**
  * 本地登录脚本：利用 Playwright 打开可见浏览器引导用户手动登录佛大教务，
- * 登录成功后将会话 Cookie 及 Storage 状态持久化到本地 .session/session.json 文件。
+ * 登录成功后将浏览器会话状态持久化到本地 .session/session.json 文件。
  */
 
 const { chromium } = require("playwright");
 const path = require("path");
 const fs = require("fs");
 const diagnose = require("./diagnose");
-require("dotenv").config();
+const {
+  loadSyncClientEnv,
+  prepareDirectNetworkEnvironment,
+} = require("./syncEnv");
 
+loadSyncClientEnv();
+prepareDirectNetworkEnvironment(process.env);
 const FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 const SESSION_DIR = path.join(__dirname, ".session");
 const SESSION_PATH = path.join(SESSION_DIR, "session.json");
@@ -21,11 +26,12 @@ if (!fs.existsSync(SESSION_DIR)) {
 
 async function login() {
   // 1. 在登录前执行网络诊断
-  const isNetOk = await diagnose();
-  if (!isNetOk) {
+  const network = await diagnose();
+  if (!network || network.readiness === "blocked") {
     console.error("❌ 网络连接诊断未通过，无法执行登录！");
     console.error("💡 请确认已连接 VPN 或处于校园网环境中。");
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   console.log("\n=== 启动 Playwright 手动登录流程 ===");
@@ -69,7 +75,8 @@ async function login() {
 
   if (!browser) {
     console.error("❌ 无法启动任何浏览器！请检查 Playwright 安装是否完整。");
-    process.exit(1);
+    process.exitCode = 1;
+    return;
   }
 
   const context = await browser.newContext({
@@ -233,14 +240,14 @@ async function login() {
 
     console.log("🎉 检测到成功进入教务系统主页！正在保存会话状态...");
 
-    // 等待 2 秒以确保 Cookie 和 Token 写入完毕
+    // 等待 2 秒以确保浏览器会话状态写入完毕
     await page.waitForTimeout(2000);
 
     // 获取并保存 StorageState
     const storageState = await context.storageState();
     
     const cookiesCount = storageState.cookies.length;
-    console.log(`成功获取到 ${cookiesCount} 个会话 Cookie。`);
+    console.log(`成功获取到 ${cookiesCount} 个会话凭据项。`);
 
     fs.writeFileSync(SESSION_PATH, JSON.stringify(storageState, null, 2), "utf-8");
     console.log(`✅ 登录态已成功保存至本地文件: tools/fosu-sync-client/.session/session.json`);

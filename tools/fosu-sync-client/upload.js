@@ -16,6 +16,13 @@ const {
   buildResourceCountContract,
   flattenLegacyCounts,
 } = require("../../server/src/shared/resourceCountContract");
+const {
+  loadSyncClientEnv,
+  prepareDirectNetworkEnvironment,
+} = require("./syncEnv");
+
+loadSyncClientEnv();
+prepareDirectNetworkEnvironment(process.env, { axios });
 
 function parseArgs(argv) {
   const args = {};

@@ -8,8 +8,13 @@ const { chromium } = require("playwright");
 const fs = require("fs");
 const path = require("path");
 const diagnose = require("./diagnose");
-require("dotenv").config();
+const {
+  loadSyncClientEnv,
+  prepareDirectNetworkEnvironment,
+} = require("./syncEnv");
 
+loadSyncClientEnv();
+prepareDirectNetworkEnvironment(process.env);
 const FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 const SESSION_PATH = path.join(__dirname, ".session", "session.json");
 const DEBUG_DIR = path.join(__dirname, ".debug");
@@ -137,8 +142,8 @@ function extractKeysOnly(paramsObject) {
 
 async function discover() {
   // 1. 网络连接检测
-  const isNetOk = await diagnose();
-  if (!isNetOk) {
+  const network = await diagnose();
+  if (!network || network.readiness === "blocked") {
     console.error("❌ 本地网络未通过诊断，中止接口发现任务！");
     process.exit(1);
   }

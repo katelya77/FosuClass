@@ -8,9 +8,17 @@ const path = require("path");
 const axios = require("axios");
 const cheerio = require("cheerio");
 const crypto = require("crypto");
-const diagnose = require("./diagnose");
-const envPath = path.resolve(__dirname, ".env");
-require("dotenv").config({ path: envPath });
+const {
+  loadSyncClientEnv,
+  prepareDirectNetworkEnvironment,
+} = require("./syncEnv");
+const {
+  printDiagnosisSummary,
+  probeCampusNetwork,
+} = require("./networkProbe");
+const envInfo = loadSyncClientEnv();
+const envPath = envInfo.envPath;
+const directNetworkEnv = prepareDirectNetworkEnvironment(process.env, { axios });
 const {
   ALL_SCOPES,
   applyPlanToParams,
@@ -48,25 +56,12 @@ const {
   readSidecarHash,
 } = require("../../server/src/utils/stagingFingerprint");
 
-const proxyEnvNames = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"];
-const detectedProxyEnv = proxyEnvNames
-  .map((name) => [name, process.env[name]])
-  .filter(([, value]) => Boolean(value));
-const INITIAL_DETECTED_PROXIES = [...detectedProxyEnv]; // 备份初始代理，以便在 preflight 中输出
-const disableProxy = String(process.env.SYNC_DISABLE_PROXY || "true").toLowerCase() !== "false";
-if (detectedProxyEnv.length > 0) {
-  console.warn(`⚠️ 检测到代理环境变量: ${detectedProxyEnv.map(([name, value]) => `${name}=${value}`).join(", ")}`);
-  if (disableProxy) {
-    console.warn("⚠️ 同步上传默认禁用环境代理，避免 127.0.0.1:10808 等本地代理污染 VPS 上传。");
+const INITIAL_DETECTED_PROXIES = directNetworkEnv.detectedProxyNames.map((name) => [name, "[redacted]"]);
+if (directNetworkEnv.detectedProxyNames.length > 0) {
+  console.warn(`检测到代理环境变量: ${directNetworkEnv.detectedProxyNames.join(", ")}`);
+  if (directNetworkEnv.disableProxy) {
+    console.warn("当前同步进程已清理代理变量，校园教务、Oracle 与 CloudBase 默认直连。");
   }
-}
-if (disableProxy) {
-  proxyEnvNames.forEach((name) => {
-    delete process.env[name];
-  });
-  process.env.NO_PROXY = "*";
-  process.env.no_proxy = "*";
-  axios.defaults.proxy = false;
 }
 
 const FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
@@ -805,7 +800,7 @@ function buildSnapshotResources(classSchedules, options = {}) {
       const teacherName = baseCourse.canonicalTeacherName || baseCourse.displayTeacherName || baseCourse.teacherName;
       const classroom = baseCourse.canonicalClassroom || baseCourse.displayClassroom || baseCourse.classroom;
 
-      if (includeTeachers && isUsableResourceName(teacherName) && !baseCourse.isTeacherFieldActuallyCourseName && !courseIdentity.isCourseLike(teacherName)) {
+      if (includeTeachers && isUsableResourceName(teacherName) && !isInvalidTeacherName(teacherName) && !baseCourse.isTeacherFieldActuallyCourseName && !courseIdentity.isCourseLike(teacherName)) {
         pushGroupedCourse(teacherMap, teacherName, baseCourse);
       }
       if (includeClassrooms && isUsableResourceName(classroom)) {
@@ -1805,7 +1800,8 @@ async function handleUploadOnly() {
   } catch (error) {
     console.error(`❌ 执行 upload-only 模式失败: \n${error.message}`);
     printPowerShellCommands();
-    process.exit(1);
+    error.code = error.code || "UPLOAD_ONLY_FAILED";
+    throw error;
   }
 }
 
@@ -3280,7 +3276,9 @@ async function initBrowserContext() {
 
   if (!browser) {
     console.error("❌ 无法启动任何浏览器！请检查 Playwright 安装是否完整。");
-    process.exit(1);
+    const error = new Error("无法启动任何浏览器");
+    error.code = "PLAYWRIGHT_LAUNCH_FAILED";
+    throw error;
   }
 
   let context;
@@ -3290,7 +3288,9 @@ async function initBrowserContext() {
       console.error("❌ 本地未找到 session.json 登录会话文件！");
       console.error(getExpiredSessionTip());
       await browser.close();
-      process.exit(1);
+      const error = new Error("Session 已失效，请运行 npm run login");
+      error.code = "SESSION_EXPIRED";
+      throw error;
     }
     context = await browser.newContext({
       storageState: SESSION_PATH,
@@ -3298,21 +3298,25 @@ async function initBrowserContext() {
     });
   } else if (FOSU_SYNC_AUTH_MODE === "manual-cookie") {
     if (!process.env.FOSU_MANUAL_COOKIE) {
-      console.error("❌ 选择了 manual-cookie 模式，但未在 .env 中配置 FOSU_MANUAL_COOKIE！");
+      console.error("❌ 选择了 manual-cookie 模式，但未配置本地会话凭据。");
       await browser.close();
-      process.exit(1);
+      const error = new Error("manual-cookie 模式缺少本地会话配置");
+      error.code = "SESSION_EXPIRED";
+      throw error;
     }
     context = await browser.newContext({
       ignoreHTTPSErrors: true,
     });
-    // 注入 cookie
+    // 注入浏览器会话凭据
     const cookies = parseCookieString(process.env.FOSU_MANUAL_COOKIE, FOSU_BASE_URL);
     await context.addCookies(cookies);
-    console.log(`🔑 已从 .env 中注入 ${cookies.length} 个 Cookie 至浏览器会话。`);
+    console.log(`已从本地配置注入 ${cookies.length} 个会话凭据项至浏览器上下文。`);
   } else {
     console.error(`❌ 未知的登录模式: ${FOSU_SYNC_AUTH_MODE}`);
     await browser.close();
-    process.exit(1);
+    const error = new Error(`未知的登录模式: ${FOSU_SYNC_AUTH_MODE}`);
+    error.code = "UNKNOWN_AUTH_MODE";
+    throw error;
   }
 
   return { browser, context };
@@ -3907,7 +3911,9 @@ function getActiveGradesBySemester(semester, options = {}) {
   } else if (gradeRangeEnv === 'all') {
     if (!confirmFullSync) {
       console.error("❌ 检测到 SYNC_GRADE_RANGE=all，但未设置 CONFIRM_FULL_SYNC=true。为避免同步过多历史年级，已中止。");
-      process.exit(1);
+      const error = new Error("SYNC_GRADE_RANGE=all requires CONFIRM_FULL_SYNC=true");
+      error.code = "CONFIRM_FULL_SYNC_REQUIRED";
+      throw error;
     }
     return originalGrades;
   } else {
@@ -3952,7 +3958,8 @@ async function syncMajors(page, catalog) {
     filteredGrades = getActiveGradesBySemester(activeSemester, { originalGrades: grades });
   } catch (err) {
     console.error(`❌ 年级过滤失败: ${err.message}`);
-    process.exit(1);
+    err.code = err.code || "GRADE_FILTER_FAILED";
+    throw err;
   }
 
   console.log(`当前学期：${activeSemester}`);
@@ -4819,17 +4826,14 @@ function runPreflight() {
 
   if (INITIAL_DETECTED_PROXIES.length > 0) {
     console.warn(`⚠️ 检测到代理环境变量:`);
-    INITIAL_DETECTED_PROXIES.forEach(([name, value]) => {
-      console.warn(`   - ${name}=${value}`);
-      if (value.includes("127.0.0.1:10808") || value.includes("localhost:10808")) {
-        console.warn("   ⚠️ 【警告】检测到代理指向 127.0.0.1:10808，可能是 v2rayN 系统代理残留，会导致上传 VPS 失败！");
-      }
+    INITIAL_DETECTED_PROXIES.forEach(([name]) => {
+      console.warn(`   - ${name}=[redacted]`);
     });
   } else {
     console.log("- 代理环境变量: 未检测到");
   }
 
-  const disableProxy = String(process.env.SYNC_DISABLE_PROXY || "true").toLowerCase() !== "false";
+  const disableProxy = directNetworkEnv.disableProxy;
   console.log(`- SYNC_DISABLE_PROXY: ${disableProxy}`);
   if (disableProxy) {
     console.log("ℹ️ 已启用强制禁用代理配置。所有上传阶段将强制不使用代理。");
@@ -5137,28 +5141,40 @@ async function main() {
   }
 
   // 2. 网络连接检测
-  const isNetOk = await diagnose();
-  if (!isNetOk) {
-    if (action === "release") {
-      console.warn("⚠️ 本地网络未通过校园网/VPN诊断！无法在线抓取数据。");
-      console.log("💡 提示: 检测到当前非校园网环境，你可以使用离线模式直接打包本地已抓取的缓存发布快照：");
-      console.log("   PowerShell 命令: $env:SYNC_RELEASE_OFFLINE=\"true\"; npm run sync:release");
-    } else {
-      console.error("❌ 本地网络未通过校园网/VPN诊断，中止同步任务！");
-      printPowerShellCommands();
+  if (process.env.FOSU_SKIP_CAMPUS_NETWORK_CHECK === "1") {
+    console.log("ℹ️ Publisher 已完成校园网检查，本次抓取跳过重复 diagnose。");
+  } else {
+    const network = await probeCampusNetwork({ env: process.env });
+    printDiagnosisSummary(network);
+    if (network.readiness === "blocked") {
+      if (action === "release") {
+        console.warn("⚠️ 本地网络未通过校园网/VPN诊断！无法在线抓取数据。");
+        console.log("💡 提示: 检测到当前非校园网环境，你可以使用离线模式直接打包本地已抓取的缓存发布快照：");
+        console.log("   PowerShell 命令: $env:SYNC_RELEASE_OFFLINE=\"true\"; npm run sync:release");
+      } else {
+        console.error("❌ 本地网络未通过校园网/VPN诊断，中止同步任务！");
+        printPowerShellCommands();
+      }
+      const error = new Error((network.blockers || []).join("; ") || "CAMPUS_NETWORK_BLOCKED");
+      error.code = "CAMPUS_NETWORK_BLOCKED";
+      throw error;
     }
-    process.exit(1);
   }
 
   // 3. 初始化 Playwright 并启动
-  const { browser, context } = await initBrowserContext();
-  const page = await context.newPage();
+  let browser = null;
+  let context = null;
+  let page = null;
+  ({ browser, context } = await initBrowserContext());
+  page = await context.newPage();
 
   try {
     // 4. 校验 Session 状态
     const isSessionOk = await checkSession(page);
     if (!isSessionOk) {
-      process.exit(1);
+      const error = new Error("Session 已失效，请运行 npm run login");
+      error.code = "SESSION_EXPIRED";
+      throw error;
     }
 
     if (action === "check-session") {
@@ -5291,20 +5307,36 @@ async function main() {
     } else {
       console.error(`❌ 未知的同步参数: ${action}`);
       console.log("支持的参数: catalog | majors | class | resources | local-campus | local-upload | release | fresh | quick | all");
+      const error = new Error(`UNKNOWN_SYNC_ACTION: ${action}`);
+      error.code = "UNKNOWN_SYNC_ACTION";
+      throw error;
     }
 
   } catch (error) {
     console.error(`❌ 执行同步时发生致命异常: ${error.message}`);
     console.error(error.stack);
     printPowerShellCommands();
+    process.exitCode = 1;
+    throw error;
   } finally {
-    await browser.close();
-    console.log("浏览器已安全关闭。同步任务结束。");
+    if (browser && typeof browser.close === "function") {
+      await browser.close();
+      console.log("浏览器已安全关闭。同步任务结束。");
+    }
   }
 }
 
 if (require.main === module) {
-  main();
+  main().catch((error) => {
+    process.exitCode = 1;
+    if (!error || !error.__syncLogged) {
+      console.error(JSON.stringify({
+        success: false,
+        code: error && error.code || "SYNC_FATAL",
+        message: error && error.message || "unknown sync error",
+      }, null, 2));
+    }
+  });
 } else {
   module.exports = {
     selectSemester,

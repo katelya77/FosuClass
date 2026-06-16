@@ -86,7 +86,50 @@ function run() {
     assert.strictEqual(error.originalError.code, "ENOENT");
     assert.strictEqual(error.diagnostics.spawnErrorCode, "ENOENT");
     assert(error.message.includes("status=null"));
-    assert(error.message.includes("spawn=ENOENT"));
+    assert(error.message.includes("spawn=CHILD_PROCESS_SPAWN_FAILED"));
+    return true;
+  });
+
+  assert.throws(() => runCommand("node", ["script.js"], {
+    cwd,
+    code: "CAMPUS_NETWORK_CHECK_FAILED",
+  }, {
+    execPath,
+    spawnSync() {
+      return {
+        status: -1,
+        signal: null,
+        stdout: "partial stdout",
+        stderr: "partial stderr",
+      };
+    },
+  }), (error) => {
+    assert.strictEqual(error.code, "CAMPUS_NETWORK_CHECK_FAILED");
+    assert.strictEqual(error.status, -1);
+    assert.strictEqual(error.processFailureCode, "EXIT_-1");
+    assert.strictEqual(error.diagnostics.status, -1);
+    assert(error.diagnostics.stderrTail.includes("partial stderr"));
+    return true;
+  });
+
+  assert.throws(() => runCommand("node", ["slow.js"], {
+    cwd,
+  }, {
+    execPath,
+    spawnSync() {
+      return {
+        status: null,
+        signal: "SIGTERM",
+        error: Object.assign(new Error("spawnSync node ETIMEDOUT"), { code: "ETIMEDOUT" }),
+        stdout: "",
+        stderr: "",
+      };
+    },
+  }), (error) => {
+    assert.strictEqual(error.code, "CHILD_PROCESS_TIMEOUT");
+    assert.strictEqual(error.processFailureCode, "CHILD_PROCESS_TIMEOUT");
+    assert.strictEqual(error.status, null);
+    assert.strictEqual(error.signal, "SIGTERM");
     return true;
   });
 
