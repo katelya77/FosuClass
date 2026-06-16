@@ -32,6 +32,7 @@ const {
 const { syncActiveRelease } = require("../cloudbase/sync-active-release");
 const cloudbaseConfig = require("../../miniprogram/config/cloudbase");
 const { runCommand: runProcessCommand } = require("../shared/processRunner");
+const { getPublisherAdminToken } = require("./admin-token-utils");
 
 const PROJECT_ROOT = path.resolve(__dirname, "..", "..");
 const RUNS_ROOT = path.join(PROJECT_ROOT, ".local", "publisher-runs");
@@ -157,7 +158,7 @@ function runCommand(command, args, options = {}) {
 }
 
 function axiosHeaders() {
-  const token = process.env.ADMIN_API_TOKEN || process.env.ORACLE_ADMIN_TOKEN || "";
+  const token = getPublisherAdminToken().token;
   return token ? { "x-admin-token": token, Authorization: `Bearer ${token}` } : {};
 }
 
@@ -485,10 +486,21 @@ async function runLocalPreflight(args) {
   const packageLock = path.join(PROJECT_ROOT, "package-lock.json");
   const nodeModules = path.join(PROJECT_ROOT, "node_modules");
   checks.push({ name: "dependencies", ok: fs.existsSync(nodeModules) || fs.existsSync(packageLock), nodeModules: fs.existsSync(nodeModules), packageLock: fs.existsSync(packageLock) });
-  if (!process.env.ADMIN_API_TOKEN && !process.env.ORACLE_ADMIN_TOKEN) {
-    const error = new Error("ADMIN_API_TOKEN is required for Oracle staging upload and receipt sync.");
+  const adminToken = getPublisherAdminToken();
+  if (!adminToken.token) {
+    const error = new Error("ADMIN_API_TOKEN is required for Oracle staging upload and receipt sync. Run npm run publisher:token:setup.");
     error.code = "ADMIN_API_TOKEN_REQUIRED";
     throw error;
+  }
+  if (adminToken.terminalRefreshRecommended) {
+    checks.push({
+      name: "admin-api-token",
+      ok: true,
+      source: adminToken.source,
+      warning: "请关闭并重新打开 PowerShell，或设置当前进程环境变量。",
+    });
+  } else {
+    checks.push({ name: "admin-api-token", ok: true, source: adminToken.source || "process" });
   }
   const gitStatus = runCommand("git", ["status", "--porcelain"], { inherit: false, code: "GIT_STATUS_FAILED" }).stdout;
   if (args["require-clean-git"] && gitStatus.trim()) {
@@ -1114,7 +1126,7 @@ async function runMainPipeline(run, args) {
       uploadResult = await uploadStagingFile({
         filePath: crawlPlan.output,
         server: args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL,
-        token: process.env.ADMIN_API_TOKEN || process.env.ORACLE_ADMIN_TOKEN || "",
+        token: getPublisherAdminToken().token,
         authMode: "admin",
         params: Object.assign({}, args, { gzip: true }),
         term,

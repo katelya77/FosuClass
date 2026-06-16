@@ -17,6 +17,11 @@ try {
   // Runtime AI provider config must never prevent the API from booting.
 }
 
+const explicitAdminApiToken = process.env.ADMIN_API_TOKEN || "";
+const derivedAdminApiToken = !explicitAdminApiToken && process.env.ADMIN_PASSWORD
+  ? crypto.createHash("sha256").update(process.env.ADMIN_PASSWORD + "fosu_api_salt").digest("hex")
+  : "";
+
 const config = {
   // 运行环境: development | production
   NODE_ENV: process.env.NODE_ENV || "development",
@@ -33,11 +38,13 @@ const config = {
   DATA_SOURCE_MODE: process.env.DATA_SOURCE_MODE || "cache-first",
 
   // 管理端同步 API Token。如果未配置则根据密码自动安全派生，保证同步客户端正常访问
-  ADMIN_API_TOKEN: process.env.ADMIN_API_TOKEN || (process.env.ADMIN_PASSWORD
-    ? crypto.createHash("sha256").update(process.env.ADMIN_PASSWORD + "fosu_api_salt").digest("hex")
-    : ""),
+  // Admin sync API token. Derived mode is legacy compatibility only.
+  ADMIN_API_TOKEN: explicitAdminApiToken || derivedAdminApiToken,
+  ADMIN_API_TOKEN_SOURCE: explicitAdminApiToken ? "explicit" : (derivedAdminApiToken ? "derived-admin-password" : ""),
+  ADMIN_API_TOKEN_LEGACY_DERIVED: Boolean(derivedAdminApiToken),
 
   // Web 后台登录凭据。ADMIN_API_TOKEN 仅保留给同步工具使用。
+  // Web admin login credentials. ADMIN_API_TOKEN is reserved for publisher sync.
   ADMIN_TOKEN: process.env.ADMIN_TOKEN || "",
   ADMIN_PASSWORD: process.env.ADMIN_PASSWORD || "",
 

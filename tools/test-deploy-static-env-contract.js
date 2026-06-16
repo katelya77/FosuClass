@@ -57,7 +57,8 @@ const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
   "test -d /openresty-static/runtime && test -w /openresty-static/runtime",
   "node scripts/reconcile-static-release.js",
   "node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000",
-  "actions/setup-node@v4",
+  "actions/setup-node@v6",
+  "actions/checkout@v6",
   "node-version: 22",
   "cache-dependency-path:",
   "npm ci",
@@ -68,19 +69,25 @@ const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
   "npm run security:acceptance",
   "!server/storage/**",
   "Range: bytes=0-0",
+  "ADMIN_API_TOKEN=${{ secrets.ADMIN_API_TOKEN }}",
+  "admin-api-token-contract=ok",
+  "/api/admin/publisher/receipt",
   "Deployment summary",
 ].forEach((needle) => {
   assert(workflow.includes(needle), `deploy workflow should include ${needle}`);
 });
 
+assert(workflow.includes('["ADMIN_API_TOKEN"]="${{ secrets.ADMIN_API_TOKEN }}"'), "ADMIN_API_TOKEN should be a required deploy secret");
+assert(!workflow.includes("ADMIN_API_TOKEN is not configured. The server will derive one from ADMIN_PASSWORD."), "deploy must not allow derived production ADMIN_API_TOKEN");
+
 assert(!workflow.includes("cat << 'EOF' > .env"), "workflow must not write .env directly before validation");
 assert(!/set\s+-x/.test(workflow), "workflow must not enable shell xtrace");
 
 [
-  /ADMIN_PASSWORD=(?!\$\{\{ secrets\.ADMIN_PASSWORD \}\}|YOUR_|$).+/,
-  /ADMIN_TOKEN=(?!\$\{\{ secrets\.ADMIN_TOKEN \}\}|YOUR_|$).+/,
-  /ADMIN_API_TOKEN=(?!\$\{\{ secrets\.ADMIN_API_TOKEN \}\}|YOUR_|$).+/,
-  /FOSU_PASSWORD=(?!YOUR_|$).+/,
+  /^\s*ADMIN_PASSWORD=(?!\$\{\{ secrets\.ADMIN_PASSWORD \}\}|YOUR_|$).+/m,
+  /^\s*ADMIN_TOKEN=(?!\$\{\{ secrets\.ADMIN_TOKEN \}\}|YOUR_|$).+/m,
+  /^\s*ADMIN_API_TOKEN=(?!\$\{\{ secrets\.ADMIN_API_TOKEN \}\}|YOUR_|$).+/m,
+  /^\s*FOSU_PASSWORD=(?!YOUR_|$).+/m,
 ].forEach((pattern) => {
   assert(!pattern.test(workflow), `workflow appears to contain a hard-coded secret: ${pattern}`);
 });
