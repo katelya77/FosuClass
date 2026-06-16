@@ -49,6 +49,9 @@ assert(source.includes("不会改变 active pointer"), "force resync confirmatio
 assert(source.includes("不会删除 last-known-good"), "force resync confirmation should explain last-known-good is preserved");
 assert(source.includes("重新核对状态"), "OpenResty card should expose lifecycle reconcile action");
 assert(source.includes("当前 active Release 已同步且 URL 验证通过，无需重复复制。"), "already-synced note should explain why normal sync is disabled");
+assert(source.includes("safety.blockerDetails"), "staging safety UI should render structured blocker details");
+assert(source.includes("线上: "), "staging safety UI should show active values in blocker details");
+assert(source.includes("本次: "), "staging safety UI should show staging values in blocker details");
 assert(source.includes("开始发布"), "recommended flow should choose publish as next action");
 assert(source.includes("data.nextAction && data.nextAction.label"), "recommended flow should use lifecycle nextAction label");
 assert(source.includes("upload.status === \"pending-review\" && !isActiveUpload"), "published active upload should not render publish action");

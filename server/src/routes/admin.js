@@ -24,6 +24,7 @@ const semesterRepairService = require("../services/semesterRepairService");
 const releaseWorkerManager = require("../services/releaseWorkerManager");
 const relayService = require("../services/relayService");
 const stagingUploadService = require("../services/stagingUploadService");
+const stagingSafetyService = require("../services/stagingSafetyService");
 const staticReleaseSyncService = require("../services/staticReleaseSyncService");
 const releaseLifecycleService = require("../services/releaseLifecycleService");
 const storageLifecycleService = require("../services/storageLifecycleService");
@@ -39,9 +40,7 @@ const { getSecurityStatus } = require("../services/securityModeService");
 const { listRouteSecurityPolicies } = require("../security/routeSecurityPolicy");
 const {
   buildResourceCountContract,
-  compareResourceCountContracts,
   flattenLegacyCounts,
-  sourceModeLabel,
 } = require("../shared/resourceCountContract");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
@@ -3408,16 +3407,23 @@ function attachStagingFingerprint(stagingData, previousHash = "") {
 }
 
 function buildFingerprintStatus(localHash = "") {
+  const activeRelease = releaseService.getActiveReleaseInfo();
   const activeHash = getActiveCanonicalHash();
   const latest = getLatestStagingCanonicalHash();
   const normalizedLocal = String(localHash || "").trim().toLowerCase();
+  const activeResourceCounts = activeRelease && activeRelease.version
+    ? releaseService.getReleaseResourceCounts(activeRelease.version)
+    : null;
   return {
     activeCanonicalHash: activeHash,
     stagingCanonicalHash: latest.canonicalHash,
     localCanonicalHash: normalizedLocal,
     sameAsActive: Boolean(normalizedLocal && activeHash && normalizedLocal === activeHash),
     sameAsStaging: Boolean(normalizedLocal && latest.canonicalHash && normalizedLocal === latest.canonicalHash),
-    activeRelease: releaseService.getActiveReleaseInfo(),
+    activeResourceCounts,
+    activeRelease: activeRelease ? Object.assign({}, activeRelease, {
+      resourceCounts: activeRelease.resourceCounts || activeResourceCounts,
+    }) : null,
     latestStaging: latest.stagingData ? {
       term: latest.stagingData.term || latest.stagingData.semester || "",
       releaseVersion: latest.stagingData.releaseVersion || latest.stagingData.version || "",
@@ -3436,211 +3442,19 @@ function getStagingClassSchedules(data) {
 }
 
 function summarizeStagingData(data) {
-  const classSchedules = getStagingClassSchedules(data);
-  const resourceCounts = buildResourceCountContract(data || {});
-  const counts = flattenLegacyCounts(resourceCounts);
-  return { classSchedules, counts, resourceCounts };
+  return stagingSafetyService.summarizeStagingData(data);
 }
 
 function areStagingCountsAllZero(counts) {
-  return Object.values(counts || {}).every((value) => Number(value || 0) === 0);
+  return stagingSafetyService.areStagingCountsAllZero(counts);
 }
 
 function validateStagingData(data) {
-  const errors = [];
-  const warnings = [];
-
-  if (!data || typeof data !== "object") {
-    errors.push("Staging 数据必须是 JSON 对象");
-    return { valid: false, errors, warnings };
-  }
-
-  const requiredFields = ["schemaVersion", "releaseVersion", "term", "termStartDate", "generatedAt"];
-  requiredFields.forEach(f => {
-    if (!data[f]) {
-      errors.push(`缺少关键元数据字段: ${f}`);
-    }
-  });
-
-  const includeScopes = getStagingIncludeScopes(data);
-  const hasClassSchedules = includeScopes.length === 0 || includeScopes.includes("classSchedules");
-  const { classSchedules, counts } = summarizeStagingData(data);
-
-  // 支持在 resources 内部或顶层
-  if (hasClassSchedules) {
-    if (!classSchedules || !Array.isArray(classSchedules) || classSchedules.length === 0) {
-      errors.push("缺少班级课程表数据 (classSchedules)");
-    } else {
-      classSchedules.forEach((item, index) => {
-        if (index < 5) {
-          if (!item.className) {
-            warnings.push(`classSchedules[${index}] 缺少 className 字段`);
-          }
-        }
-      });
-    }
-  }
-
-  if (areStagingCountsAllZero(counts)) {
-    errors.push("Staging 数据计数全部为 0，疑似空包，禁止暂存或发布");
-  }
-
-  if (data.meta?.counts) {
-    const reportedClassCount = Number(data.meta.counts.classScheduleCount || 0);
-    if (hasClassSchedules && reportedClassCount === 0 && classSchedules.length > 0) {
-      warnings.push("meta.counts.classScheduleCount 为 0，但实际 classSchedules 非空；已按实际数据重新计算");
-    }
-  }
-
-  const cacheUsage = data.meta?.cacheUsage || {};
-  if (data.meta?.usedClassScheduleCache || cacheUsage.usedClassScheduleCache) {
-    warnings.push(`本次 Staging 使用了历史 classSchedules 缓存: ${data.meta?.cacheSource || cacheUsage.cacheSource || "未知来源"}`);
-  }
-  if (data.meta?.cacheWarning || cacheUsage.cacheWarning) {
-    warnings.push(data.meta?.cacheWarning || cacheUsage.cacheWarning);
-  }
-
-  const resourceKeys = [
-    "teacherSchedules",
-    "classroomSchedules",
-    "courseSchedules",
-    "classrooms",
-    "teachers",
-    "courses"
-  ];
-  resourceKeys.forEach(k => {
-    const list = data[k] || data.resources?.[k];
-    if (!list || !Array.isArray(list)) {
-      warnings.push(`缺少资源维度数据: ${k}`);
-    }
-  });
-
-  return {
-    valid: errors.length === 0,
-    errors,
-    warnings
-  };
+  return stagingSafetyService.validateStagingData(data);
 }
 
 function buildStagingSafety(data, activeSnapshot) {
-  const includeScopes = getStagingIncludeScopes(data);
-  const hasClassSchedules = includeScopes.length === 0 || includeScopes.includes("classSchedules");
-  const stagingSummary = summarizeStagingData(data);
-  const { counts } = stagingSummary;
-  const validation = validateStagingData(data);
-  const blockers = validation.errors.slice();
-  const warnings = validation.warnings.slice();
-  const activeInfo = releaseService.getActiveReleaseInfo();
-  const activeResourceCounts = activeSnapshot
-    ? releaseService.getReleaseResourceCounts(
-      activeSnapshot.version || activeSnapshot.releaseVersion || activeInfo?.version || "",
-      activeSnapshot
-    )
-    : null;
-  const stagingResourceCounts = stagingSummary.resourceCounts;
-  const contractComparison = activeResourceCounts
-    ? compareResourceCountContracts(activeResourceCounts, stagingResourceCounts)
-    : { allowPublish: true, blockers: [], warnings: [], comparisons: [] };
-  const activeCounts = activeResourceCounts ? flattenLegacyCounts(activeResourceCounts) : {};
-  const activeClassCount = activeCounts.classScheduleCount || (activeSnapshot?.classSchedules || []).length;
-  const currentTerm = appConfigService.getAdminConfig().currentSemester || "";
-  const stagingTerm = data.term || data.semester || "";
-  const releaseVersion = data.releaseVersion || data.version || "";
-  const releaseVersionExists = Boolean(
-    releaseVersion &&
-    releaseService.listReleases(200).some((item) => item.version === releaseVersion)
-  );
-  const riskDrops = [];
-  let maxDropRate = 0;
-  let severeDrop = false;
-
-  [
-    { key: "classScheduleCount", label: "班级课表" },
-    { key: "teacherScheduleCount", label: "教师课表" },
-    { key: "classroomScheduleCount", label: "教室课表" },
-    { key: "courseScheduleCount", label: "课程课表" },
-  ].forEach((item) => {
-    const activeCount = Number(activeCounts[item.key] || 0);
-    const stagingCount = Number(counts[item.key] || 0);
-    if (!activeSnapshot || activeCount <= 0 || stagingCount >= activeCount) {
-      return;
-    }
-    const dropRate = (activeCount - stagingCount) / activeCount;
-    if (dropRate <= 0.3) {
-      return;
-    }
-    const dropPercent = parseFloat((dropRate * 100).toFixed(2));
-    maxDropRate = Math.max(maxDropRate, dropRate);
-    if (dropRate > 0.5) {
-      severeDrop = true;
-    }
-    riskDrops.push({
-      key: item.key,
-      label: item.label,
-      activeCount,
-      stagingCount,
-      dropPercent,
-      severity: dropRate > 0.5 ? "danger" : "warning",
-    });
-    warnings.push(
-      `${item.label}: 当前线上 ${activeCount} -> 本次暂存 ${stagingCount}，下降 ${dropPercent}%` +
-      (dropRate > 0.5 ? "，普通发布被阻止。" : "，请核对是否为正常学期变化。")
-    );
-  });
-
-  const blockerDetails = [];
-  contractComparison.blockers.forEach((blocker) => {
-    const code = blocker.code || "COUNT_CONTRACT_MISMATCH";
-    blockers.push(`${code}: ${blocker.message || "统计契约不一致"}`);
-    blockerDetails.push(blocker);
-  });
-  const teacherDiff = (contractComparison.comparisons || []).find((item) => item.path === "teacher.scheduleDocuments");
-  if (teacherDiff && Number(teacherDiff.active || 0) && Number(teacherDiff.staging || 0) < Number(teacherDiff.active || 0)) {
-    warnings.push(
-      `教师课表：当前线上 ${teacherDiff.active} 份，本次暂存 ${teacherDiff.staging} 份，变化 ${teacherDiff.delta}（${teacherDiff.percent}%）。` +
-      `当前来源：${sourceModeLabel(activeResourceCounts && activeResourceCounts.teacher && activeResourceCounts.teacher.sourceMode)}；` +
-      `本次来源：${sourceModeLabel(stagingResourceCounts && stagingResourceCounts.teacher && stagingResourceCounts.teacher.sourceMode)}。`
-    );
-  }
-
-  if (hasClassSchedules && counts.classScheduleCount === 0 && !blockers.includes("缺少班级课程表数据 (classSchedules)")) {
-    blockers.push("includeScopes 包含 classSchedules，但 classSchedules=0");
-  }
-  if (!data.term) {
-    blockers.push("term 为空");
-  }
-  if (!data.releaseVersion) {
-    blockers.push("releaseVersion 为空");
-  }
-  if (areStagingCountsAllZero(counts)) {
-    blockers.push("counts 全部为 0");
-  }
-  if (currentTerm && stagingTerm && currentTerm !== stagingTerm) {
-    warnings.push(`Staging 学期 ${stagingTerm} 与当前后台配置学期 ${currentTerm} 不一致，请确认不是误传旧学期数据。`);
-  }
-  if (releaseVersionExists) {
-    warnings.push(`releaseVersion ${releaseVersion} 已存在，发布会覆盖同名版本快照，必须二次确认。`);
-  }
-
-  return {
-    allowPublish: blockers.length === 0,
-    requiresForceConfirm: severeDrop || releaseVersionExists,
-    blockers,
-    warnings,
-    counts,
-    resourceCounts: stagingResourceCounts,
-    activeResourceCounts,
-    contractComparison,
-    blockerDetails,
-    blockerCodes: Array.from(new Set(blockerDetails.map((item) => item.code || "").filter(Boolean))),
-    activeCounts,
-    riskDrops,
-    activeClassScheduleCount: activeClassCount,
-    classScheduleDropRate: parseFloat(Math.max(0, maxDropRate * 100).toFixed(2)),
-    currentTerm,
-    stagingTerm,
-    releaseVersionExists,
-  };
+  return stagingSafetyService.buildStagingSafety(data, activeSnapshot);
 }
 
 /**
@@ -4655,6 +4469,10 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
             allowPublish: summary.stagingState !== "publish-blocked",
             blockers: summary.blockers || [],
             warnings: summary.warnings || [],
+            blockerDetails: summary.blockerDetails || summary.contractComparison && summary.contractComparison.blockers || [],
+            blockerCodes: summary.blockerCodes || [],
+            warningDetails: summary.warningDetails || summary.contractComparison && summary.contractComparison.warnings || [],
+            safetyReport: summary.safetyReport || null,
             contractComparison: summary.contractComparison || null,
           },
           diff: {

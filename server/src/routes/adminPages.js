@@ -9321,7 +9321,19 @@ const adminConsoleHtml = `<!doctype html>
               if (safety.warnings && safety.warnings.length > 0) {
                 warnings = warnings.concat(safety.warnings);
               }
-              if (safety.blockers && safety.blockers.length > 0) {
+              if (safety.blockerDetails && safety.blockerDetails.length > 0) {
+                warnings = warnings.concat(safety.blockerDetails.map(function(item) {
+                  var parts = [item.code || "STAGING_SAFETY_BLOCKER"];
+                  if (item.resource) parts.push("资源: " + item.resource);
+                  if (item.field) parts.push("字段: " + item.field);
+                  if (item.activeValue !== undefined) parts.push("线上: " + item.activeValue);
+                  if (item.stagingValue !== undefined) parts.push("本次: " + item.stagingValue);
+                  if (item.expectedValue !== undefined) parts.push("预期: " + item.expectedValue);
+                  if (item.message) parts.push(item.message);
+                  return "发布阻断: " + parts.join(" | ");
+                }));
+                if (publishBtn) publishBtn.disabled = true;
+              } else if (safety.blockers && safety.blockers.length > 0) {
                 warnings = warnings.concat(safety.blockers.map(function(item) { return "发布阻断: " + item; }));
                 if (publishBtn) publishBtn.disabled = true;
               }

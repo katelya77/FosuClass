@@ -13,6 +13,7 @@ const {
 } = require("../../server/src/utils/stagingFingerprint");
 const {
   buildResourceCountContract,
+  compareResourceCountContracts,
   flattenLegacyCounts,
 } = require("../../server/src/shared/resourceCountContract");
 const { uploadStagingFile } = require("../fosu-sync-client/upload");
@@ -297,9 +298,21 @@ async function waitAdminJob(baseUrl, jobId, label, run) {
     const status = String(job && job.status || "").toLowerCase();
     if (job && (successStates.has(status) || failureStates.has(status))) {
       if (failureStates.has(status)) {
-        const error = new Error(`${label || "admin job"} failed: ${job.error && job.error.message || "unknown error"}`);
+        const jobError = job.error || {};
+        const blockerSummary = Array.isArray(jobError.blockerDetails) && jobError.blockerDetails.length
+          ? ` (${jobError.blockerDetails.map((item) => item.code || item.message || "BLOCKER").slice(0, 5).join(", ")})`
+          : "";
+        const error = new Error(`${label || "admin job"} failed: ${jobError.message || "unknown error"}${blockerSummary}`);
         error.code = "ADMIN_JOB_FAILED";
         error.job = job;
+        error.jobError = jobError;
+        error.blockers = jobError.blockers || [];
+        error.warnings = jobError.warnings || [];
+        error.blockerDetails = jobError.blockerDetails || [];
+        error.blockerCodes = jobError.blockerCodes || [];
+        error.warningDetails = jobError.warningDetails || [];
+        error.safetyReport = jobError.safetyReport || null;
+        error.safety = jobError.safety || null;
         throw error;
       }
       return Object.assign({ success: true, job }, job.result || {});
@@ -445,6 +458,13 @@ class PublisherRun {
       stdoutTail: errorDiagnostics(error).stdoutTail,
       stderrTail: errorDiagnostics(error).stderrTail,
       processFailureCode: errorDiagnostics(error).processFailureCode,
+      blockers: error.blockers || [],
+      warnings: error.warnings || [],
+      blockerDetails: error.blockerDetails || [],
+      blockerCodes: error.blockerCodes || [],
+      warningDetails: error.warningDetails || [],
+      safetyReport: error.safetyReport || null,
+      jobError: error.jobError || null,
     });
     writeJsonAtomic(this.errorPath, payload);
     this.save({ status: "failed", error: payload });
@@ -875,6 +895,7 @@ function validateStaging(stagingPath, expectedTerm) {
     rawSizeBytes: fingerprint.rawSizeBytes,
     summary,
     counts: normalizedCounts,
+    resourceCounts: contract,
     sourceModes,
     diagnostics: contract.diagnostics || [],
     includeScopes,
@@ -973,6 +994,32 @@ function buildDiffReport(stagingMeta, fingerprintStatus, run) {
     samples,
     riskReasons,
     requiresConfirmation: riskReasons.length > 0,
+    safety: buildPreUploadSafety(stagingMeta, fingerprintStatus),
+  };
+}
+
+function buildPreUploadSafety(stagingMeta, fingerprintStatus) {
+  const activeResourceCounts = fingerprintStatus && (
+    fingerprintStatus.activeResourceCounts ||
+    fingerprintStatus.activeRelease && fingerprintStatus.activeRelease.resourceCounts ||
+    fingerprintStatus.activeRelease && fingerprintStatus.activeRelease.packStatus && fingerprintStatus.activeRelease.packStatus.resourceCounts
+  ) || null;
+  const stagingResourceCounts = stagingMeta && stagingMeta.resourceCounts || null;
+  const contractComparison = activeResourceCounts && stagingResourceCounts
+    ? compareResourceCountContracts(activeResourceCounts, stagingResourceCounts)
+    : { allowPublish: true, blockers: [], warnings: [], comparisons: [], skipped: true, reason: "active-resource-counts-unavailable" };
+  const blockerDetails = contractComparison.blockers || [];
+  const warningDetails = contractComparison.warnings || [];
+  return {
+    allowPublish: blockerDetails.length === 0,
+    blockers: blockerDetails.map((item) => `${item.code || "STAGING_SAFETY_BLOCKER"}: ${item.message || "发布安全检查未通过"}`),
+    warnings: warningDetails.map((item) => `${item.code || "STAGING_SAFETY_WARNING"}: ${item.message || item.reason || "发布安全检查警告"}`),
+    blockerDetails,
+    blockerCodes: Array.from(new Set(blockerDetails.map((item) => item.code || "").filter(Boolean))),
+    warningDetails,
+    activeResourceCounts,
+    stagingResourceCounts,
+    contractComparison,
   };
 }
 
@@ -1323,6 +1370,21 @@ async function runMainPipeline(run, args) {
       error.diffReportPath = run.diffReportPath;
       throw error;
     }
+    if (diffReport.safety && diffReport.safety.allowPublish === false) {
+      const codes = diffReport.safety.blockerCodes && diffReport.safety.blockerCodes.length
+        ? diffReport.safety.blockerCodes.join(", ")
+        : "STAGING_SAFETY_BLOCKED";
+      const error = new Error(`Local publish safety check failed before upload: ${codes}`);
+      error.code = "LOCAL_PUBLISH_SAFETY_BLOCKED";
+      error.diffReportPath = run.diffReportPath;
+      error.blockers = diffReport.safety.blockers || [];
+      error.warnings = diffReport.safety.warnings || [];
+      error.blockerDetails = diffReport.safety.blockerDetails || [];
+      error.blockerCodes = diffReport.safety.blockerCodes || [];
+      error.warningDetails = diffReport.safety.warningDetails || [];
+      error.safetyReport = diffReport.safety;
+      throw error;
+    }
 
     fingerprint = await run.stage("checking-fingerprint", async () => {
       const check = fingerprint || await checkFingerprint(args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL, stagingMeta.canonicalHash);
@@ -1595,6 +1657,13 @@ async function main(argv = process.argv.slice(2)) {
       diffReportPath: run.diffReportPath,
       oracleStatus: run.state.oracleReleaseVersion ? "published" : "not-published",
       cloudbaseStatus: run.state.oracleReleaseVersion ? "cloudbase-mirror-pending" : "not-run",
+      blockers: error.blockers || [],
+      warnings: error.warnings || [],
+      blockerDetails: error.blockerDetails || [],
+      blockerCodes: error.blockerCodes || [],
+      warningDetails: error.warningDetails || [],
+      safetyReport: error.safetyReport || null,
+      jobError: error.jobError || null,
     });
     try {
       await uploadPublisherReceipt(args, failureReceipt);

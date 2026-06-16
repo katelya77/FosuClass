@@ -31,6 +31,18 @@ result = compareResourceCountContracts(
 assert(result.blockers.some((item) => item.code === "SOURCE_MODE_MISMATCH"));
 
 result = compareResourceCountContracts(
+  contract({
+    derivedFromLegacy: true,
+    teacher: Object.assign({}, contract().teacher, { sourceMode: "legacy-derived" }),
+  }),
+  contract({
+    teacher: Object.assign({}, contract().teacher, { sourceMode: "derived-current-run" }),
+  })
+);
+assert(!result.blockers.some((item) => item.code === "SOURCE_MODE_MISMATCH" && item.resource === "teacher"));
+assert(result.warnings.some((item) => item.code === "LEGACY_ACTIVE_SOURCE_MODE_COMPAT" && item.resource === "teacher"));
+
+result = compareResourceCountContracts(
   contract({ scopeFilters: { grades: ["2024"] } }),
   contract({ scopeFilters: { grades: ["2025"] } })
 );
