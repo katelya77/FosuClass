@@ -175,6 +175,7 @@ function buildSensitiveFallback(context, startTime, intentName) {
 }
 
 function shouldDisableGenerativeInClient() {
+  if (cloudbaseConfig.AI_CLIENT_EXPRESSION_LAYER_ENABLED !== true) return true;
   if (cloudbaseConfig.AI_TOOL_ONLY_MODE === true) return true;
   const envVersion = (() => {
     try {
@@ -223,7 +224,11 @@ async function chat(input = {}) {
   }
 
   if (shouldDisableGenerativeInClient()) {
-    return buildLocalProjectFallback(safeMessage, context, startTime, route.intentName, "AI_GENERATIVE_PUBLIC_DISABLED");
+    try {
+      return normalizeOracleResponse(await callOracle(input.oracleChat, safeMessage, context, callbacks));
+    } catch (error) {
+      return buildLocalProjectFallback(safeMessage, context, startTime, route.intentName, "AI_CLIENT_EXPRESSION_LAYER_DISABLED");
+    }
   }
 
   try {

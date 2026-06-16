@@ -4,6 +4,9 @@ const mockProvider = require("./providers/mockProvider");
 const projectKnowledgeService = require("./projectKnowledgeService");
 const safetyGuard = require("./safetyGuard");
 const toolRegistry = require("./toolRegistry");
+const agentProtocol = require("./agentProtocol");
+const runtimeModeService = require("./runtimeModeService");
+const providerChainService = require("./providerChainService");
 
 function nowIso() {
   return new Date().toISOString();
@@ -21,8 +24,8 @@ function stableGeneratedPayload(payload, options = {}) {
   return generatedPayloadContract.stableGeneratedPayload(payload, options);
 }
 
-function isPublicRuntime() {
-  return !providerFactory.getRuntimeMode || providerFactory.getRuntimeMode() === "public";
+function isPublicRuntime(runtimeMode) {
+  return (runtimeMode || providerFactory.getRuntimeMode && providerFactory.getRuntimeMode()) === "public";
 }
 
 const PUBLIC_BLOCK_PATTERNS = [
@@ -130,6 +133,13 @@ const FACT_TOOL_INTENTS = new Set([
   "recommend_meeting_time",
   "diagnose_data_status",
   "explain_personal_import",
+  "get_campus_weather",
+  "get_course_weather_advice",
+  "search_campus_place",
+  "get_campus_route",
+  "get_classroom_location",
+  "rag_search",
+  "campus_multi_step_advice",
 ]);
 
 function isProjectKnowledgeIntent(intent) {
@@ -142,11 +152,11 @@ function isFactToolIntent(intent) {
   return FACT_TOOL_INTENTS.has(name);
 }
 
-function evaluateProviderPolicy(intent, toolCalls, policy, providerName) {
+function evaluateProviderPolicy(intent, toolCalls, policy, providerName, runtimeMode) {
   const normalizedPolicy = ["auto", "always", "tool-only"].includes(String(policy || "").toLowerCase())
     ? String(policy).toLowerCase()
     : "auto";
-  const provider = String(providerName || providerFactory.getProviderName() || "mock").toLowerCase();
+  const provider = String(providerName || providerFactory.getProviderName(runtimeMode) || "mock").toLowerCase();
   const intentName = intent && intent.name || "generic";
   const agentEnabled = String(process.env.AI_AGENT_ENABLED || "false").toLowerCase() !== "false";
 
@@ -171,8 +181,8 @@ function evaluateProviderPolicy(intent, toolCalls, policy, providerName) {
   return { useExternal: true, reason: "未命中本地确定性规则，交给外部 Provider" };
 }
 
-function shouldUseExternalProvider(intent, toolCalls, policy) {
-  return evaluateProviderPolicy(intent, toolCalls, policy, providerFactory.getProviderName()).useExternal;
+function shouldUseExternalProvider(intent, toolCalls, policy, runtimeMode) {
+  return evaluateProviderPolicy(intent, toolCalls, policy, providerFactory.getProviderName(runtimeMode), runtimeMode || providerFactory.getRuntimeMode()).useExternal;
 }
 
 function buildMetrics(options = {}) {
@@ -184,6 +194,19 @@ function buildMetrics(options = {}) {
     fallback: options.fallback === true,
     itemCount: getItemCount(options.toolCalls),
     usedPersonalContext: options.usedPersonalContext === true,
+  };
+}
+
+function normalizeMetrics(metrics = {}, fallbackOptions = {}) {
+  const base = Object.assign({}, buildMetrics(fallbackOptions), metrics || {});
+  return {
+    latencyMs: Math.max(0, Number(base.latencyMs || 0) || 0),
+    intentName: String(base.intentName || fallbackOptions.intentName || fallbackOptions.intent && fallbackOptions.intent.name || "generic"),
+    toolCallCount: Math.max(0, Number(base.toolCallCount || 0) || 0),
+    externalProviderUsed: base.externalProviderUsed === true,
+    fallback: base.fallback === true,
+    itemCount: Math.max(0, Number(base.itemCount || 0) || 0),
+    usedPersonalContext: base.usedPersonalContext === true,
   };
 }
 
@@ -264,6 +287,7 @@ function buildPublicEvidence(evidence) {
   return {
     checkedAt: source.checkedAt || nowIso(),
     term: source.term || "",
+    releaseVersion: safetyGuard.redactSensitiveText(String(source.releaseVersion || "")).slice(0, 80),
     currentWeek: source.currentWeek || "",
     toolCount: Number(source.toolCount || 0) || 0,
     verified: Number(source.toolCount || 0) > 0,
@@ -327,6 +351,7 @@ function sanitizePublicResponse(response) {
       latencyMs: sourceMetrics.latencyMs,
       intentName: sourceMetrics.intentName,
       toolCallCount: sourceMetrics.toolCallCount,
+      fallback: sourceMetrics.fallback === true,
       itemCount: sourceMetrics.itemCount,
       usedPersonalContext: Boolean(sourceMetrics.usedPersonalContext),
     },
@@ -362,13 +387,37 @@ function buildTaskSteps(intent = {}, toolCalls = []) {
 
 function buildResponse(payload) {
   const rawToolCalls = payload.rawToolCalls || payload.toolCalls || [];
+  const envelope = agentProtocol.buildProtocolEnvelope({
+    requestId: payload.requestId,
+    conversationId: payload.conversationId,
+    runtimeMode: payload.runtimeMode || "public",
+    intent: payload.intent,
+    plan: payload.plan,
+    rawToolCalls,
+    slots: payload.slots,
+  });
+  const validation = agentProtocol.validateResponse({
+    protocolVersion: envelope.protocolVersion,
+    runtimeMode: envelope.runtimeMode,
+    intent: payload.intent,
+    plan: payload.plan,
+    cards: payload.cards,
+  });
   const response = {
+    protocolVersion: envelope.protocolVersion,
+    requestId: envelope.requestId,
+    conversationId: envelope.conversationId,
+    runtimeMode: envelope.runtimeMode,
     success: true,
     answer: payload.answer,
-    cards: payload.cards,
+    intent: payload.intent,
+    slots: envelope.slots,
+    plan: envelope.plan,
+    cards: validation.cards.length ? validation.cards : payload.cards,
     toolCalls: payload.toolCalls || [],
     taskSteps: payload.taskSteps || buildTaskSteps(payload.intent, rawToolCalls),
     evidence: payload.evidence || buildEvidence(rawToolCalls, payload.context),
+    evidenceItems: envelope.evidenceItems,
     suggestions: payload.suggestions,
     safety: {
       redacted: true,
@@ -383,11 +432,22 @@ function buildResponse(payload) {
       fallbackReason: payload.fallbackReason || "",
       pendingClarification: payload.pendingClarification || null,
       clearPendingClarification: payload.clearPendingClarification === true,
+      runtimeMode: envelope.runtimeMode,
+      requestedRuntimeMode: payload.requestedRuntimeMode || envelope.runtimeMode,
+      competitionAuthorized: payload.competitionAuthorized === true,
+      validationOk: validation.ok,
     },
-    metrics: payload.metrics || buildMetrics(),
+    metrics: normalizeMetrics(payload.metrics, {
+      intent: payload.intent,
+      toolCalls: rawToolCalls,
+      externalProviderUsed: payload.externalProviderUsed === true,
+      fallback: payload.externalProviderUsed !== true,
+      usedPersonalContext: payload.usedPersonalContext === true,
+    }),
+    errors: validation.errors || [],
     serverTime: nowIso(),
   };
-  return isPublicRuntime() ? sanitizePublicResponse(response) : response;
+  return isPublicRuntime(envelope.runtimeMode) ? sanitizePublicResponse(response) : response;
 }
 
 function sensitiveCredentialResponse(message, context, startTime) {
@@ -463,6 +523,35 @@ async function chat(input = {}) {
   const rawMessage = String(input.message || "").trim();
   const safeMessage = safetyGuard.redactSensitiveText(rawMessage).slice(0, 2000);
   const context = safetyGuard.sanitizeAgentContext(input.context || {});
+  const runtimeDecision = runtimeModeService.resolveRuntimeMode({
+    context,
+    serverSession: input.serverSession,
+    runtimeMode: input.runtimeMode,
+  });
+  context.runtimeMode = runtimeDecision.runtimeMode;
+  context.serverSession = input.serverSession || context.serverSession || null;
+  const requestId = input.requestId || agentProtocol.createRequestId();
+  const conversationId = input.conversationId || context.conversationId || "";
+  if (!agentProtocol.isSupportedProtocolVersion(input.protocolVersion || context.protocolVersion || agentProtocol.PROTOCOL_VERSION)) {
+    return buildResponse({
+      requestId,
+      conversationId,
+      runtimeMode: "public",
+      requestedRuntimeMode: runtimeDecision.requestedMode,
+      competitionAuthorized: false,
+      answer: "当前小佛协议版本不兼容，请刷新小程序后再试。",
+      cards: [],
+      suggestions: ["刷新后重试", "查看使用说明"],
+      toolCalls: [],
+      provider: "mock",
+      providerPolicy: "tool-only",
+      externalProviderUsed: false,
+      fallbackReason: "PROTOCOL_VERSION_UNSUPPORTED",
+      intent: { name: "clarify_missing_slot", slots: {} },
+      plan: [],
+      metrics: buildMetrics({ startTime, intentName: "protocol_version_unsupported", toolCalls: [] }),
+    });
+  }
   const usedPersonalContext = Boolean(context.currentScheduleSummary &&
     context.currentScheduleSummary.enabled &&
     context.currentScheduleSummary.courses &&
@@ -472,7 +561,14 @@ async function chat(input = {}) {
     const generic = mockProvider.generate({ intent: { name: "generic" }, toolResults: [] });
     const stable = stableGeneratedPayload(generic);
     return buildResponse(Object.assign({}, stable, {
+      requestId,
+      conversationId,
+      runtimeMode: runtimeDecision.runtimeMode,
+      requestedRuntimeMode: runtimeDecision.requestedMode,
+      competitionAuthorized: runtimeDecision.authorized,
       toolCalls: [],
+      intent: { name: "conversational_help", slots: {} },
+      plan: [],
       provider: "mock",
       usedPersonalContext,
       providerPolicy: getProviderPolicy(),
@@ -494,8 +590,13 @@ async function chat(input = {}) {
   }
 
   const intent = toolRegistry.resolveIntent(safeMessage, context);
-  const toolCalls = typeof toolRegistry.runToolChainForIntent === "function"
-    ? toolRegistry.runToolChainForIntent(intent, safeMessage, context)
+  const plan = typeof toolRegistry.buildPlanForIntent === "function"
+    ? toolRegistry.buildPlanForIntent(intent, safeMessage, context)
+    : [];
+  const toolCalls = typeof toolRegistry.runToolChainForIntentAsync === "function"
+    ? await toolRegistry.runToolChainForIntentAsync(intent, safeMessage, context)
+    : typeof toolRegistry.runToolChainForIntent === "function"
+      ? toolRegistry.runToolChainForIntent(intent, safeMessage, context)
     : toolRegistry.runToolsForIntent(intent, safeMessage, context);
   const publicToolCalls = toolCalls.map((item) => ({
     name: safetyGuard.redactSensitiveText(item.name || "").slice(0, 60),
@@ -503,7 +604,7 @@ async function chat(input = {}) {
     summary: safetyGuard.redactSensitiveText(item.summary || "").slice(0, 160),
   }));
 
-  if (providerFactory.getRuntimeMode && providerFactory.getRuntimeMode() === "public" &&
+  if (runtimeDecision.runtimeMode === "public" &&
     !isFactToolIntent(intent) &&
     !isProjectKnowledgeIntent(intent) &&
     intent.name !== "explain_personal_import" &&
@@ -519,6 +620,13 @@ async function chat(input = {}) {
       providerPolicy: "tool-only",
       externalProviderUsed: false,
       fallbackReason: "AI_RUNTIME_MODE=public",
+      requestId,
+      conversationId,
+      runtimeMode: runtimeDecision.runtimeMode,
+      requestedRuntimeMode: runtimeDecision.requestedMode,
+      competitionAuthorized: runtimeDecision.authorized,
+      intent,
+      plan,
       metrics: buildMetrics({
         startTime,
         intentName: intent.name,
@@ -531,9 +639,9 @@ async function chat(input = {}) {
   }
 
   const providerPolicy = getProviderPolicy();
-  const desiredProviderName = providerFactory.getProviderName();
-  const policyDecision = evaluateProviderPolicy(intent, toolCalls, providerPolicy, desiredProviderName);
-  const provider = policyDecision.useExternal ? providerFactory.createProvider() : mockProvider;
+  const desiredProviderName = providerFactory.getProviderName(runtimeDecision.runtimeMode);
+  const policyDecision = evaluateProviderPolicy(intent, toolCalls, providerPolicy, desiredProviderName, runtimeDecision.runtimeMode);
+  const provider = policyDecision.useExternal ? providerFactory.createProvider(runtimeDecision.runtimeMode) : mockProvider;
   let providerName = policyDecision.useExternal
     ? (provider.name || desiredProviderName)
     : (intent.name === "clarify_missing_slot" ? "mock/template" : "mock");
@@ -560,13 +668,20 @@ async function chat(input = {}) {
   const providerDecisionReason = policyDecision.reason || (policyDecision.useExternal ? "external provider selected" : "local provider selected");
   try {
     const generated = policyDecision.useExternal
-      ? await provider.generate(providerInput)
+      ? await providerChainService.generateWithChain(providerInput, { runtimeMode: runtimeDecision.runtimeMode })
       : deterministicGenerated;
     providerName = generated.provider || providerName;
     providerPayload = stableGeneratedPayload(generated);
     externalProviderUsed = policyDecision.useExternal && providerName !== "mock";
     fallback = !externalProviderUsed;
     if (externalProviderUsed) fallbackReason = "";
+    if (generated.providerChain) {
+      publicToolCalls.push({
+        name: "provider_chain",
+        status: externalProviderUsed ? "success" : "skipped",
+        summary: externalProviderUsed ? "external_provider_used" : "deterministic_fallback",
+      });
+    }
   } catch (error) {
     providerName = "mock";
     externalProviderUsed = false;
@@ -596,9 +711,15 @@ async function chat(input = {}) {
     pendingPatch.clearPendingClarification = true;
   }
   return buildResponse(Object.assign({}, stable, {
+    requestId,
+    conversationId,
+    runtimeMode: runtimeDecision.runtimeMode,
+    requestedRuntimeMode: runtimeDecision.requestedMode,
+    competitionAuthorized: runtimeDecision.authorized,
     toolCalls: publicToolCalls,
     rawToolCalls: toolCalls,
     intent,
+    plan,
     context,
     provider: providerName,
     desiredProvider: desiredProviderName,

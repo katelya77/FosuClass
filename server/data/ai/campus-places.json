@@ -1,0 +1,50 @@
+{
+  "version": "campus-map.v1",
+  "updatedAt": "2026-06-16",
+  "places": [
+    {
+      "id": "campus-xiangxi",
+      "campus": "仙溪校区",
+      "name": "仙溪校区",
+      "type": "campus",
+      "aliases": ["仙溪", "仙溪校区"],
+      "description": "佛山大学仙溪校区。楼栋级路径需要管理员继续维护。",
+      "verified": true,
+      "lat": 23.0336,
+      "lng": 113.1222,
+      "neighbors": []
+    },
+    {
+      "id": "campus-jiangwan",
+      "campus": "江湾校区",
+      "name": "江湾校区",
+      "type": "campus",
+      "aliases": ["江湾", "江湾校区"],
+      "description": "佛山大学江湾校区。楼栋级路径需要管理员继续维护。",
+      "verified": true,
+      "lat": 23.0382,
+      "lng": 113.1115,
+      "neighbors": []
+    },
+    {
+      "id": "building-c7",
+      "campus": "仙溪校区",
+      "name": "C7",
+      "type": "teaching_building",
+      "aliases": ["C7", "c7", "C7楼", "C7教学楼"],
+      "description": "常用教学楼别名。当前只维护楼栋名，未维护精确路线。",
+      "verified": false,
+      "neighbors": []
+    },
+    {
+      "id": "building-b8",
+      "campus": "仙溪校区",
+      "name": "B8",
+      "type": "teaching_building",
+      "aliases": ["B8", "b8", "B8楼", "B8教学楼"],
+      "description": "常用教学楼别名。当前只维护楼栋名，未维护精确路线。",
+      "verified": false,
+      "neighbors": []
+    }
+  ]
+}

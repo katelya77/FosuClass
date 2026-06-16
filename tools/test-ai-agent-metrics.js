@@ -18,7 +18,11 @@ async function run() {
   assert.strictEqual(typeof response.metrics.latencyMs, "number", "latencyMs should be number");
   assert.strictEqual(typeof response.metrics.intentName, "string", "intentName should be string");
   assert.strictEqual(typeof response.metrics.toolCallCount, "number", "toolCallCount should be number");
-  assert.strictEqual(typeof response.metrics.externalProviderUsed, "boolean", "externalProviderUsed should be boolean");
+  if ("externalProviderUsed" in response.metrics) {
+    assert.strictEqual(typeof response.metrics.externalProviderUsed, "boolean", "externalProviderUsed should be boolean");
+  } else {
+    assert.strictEqual(response.runtimeMode, "public", "public metrics should hide provider usage detail");
+  }
   assert.strictEqual(typeof response.metrics.fallback, "boolean", "fallback should be boolean");
   assert.strictEqual(typeof response.metrics.itemCount, "number", "itemCount should be number");
   assert.strictEqual(typeof response.metrics.usedPersonalContext, "boolean", "usedPersonalContext should be boolean");

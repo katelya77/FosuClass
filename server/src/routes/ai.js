@@ -1,13 +1,15 @@
 const express = require("express");
 const { scheduleLimiter } = require("../utils/rateLimit");
-const { validateJsonBody } = require("../utils/apiSecurity");
+const { optionalSessionGuard, publicFosuGuard, validateJsonBody } = require("../utils/apiSecurity");
 const { safeLog } = require("../utils/safeLogger");
 const agentService = require("../services/ai/agentService");
 const { buildSafeLogPayload } = require("../services/ai/safetyGuard");
 
 const router = express.Router();
 
-router.post("/agent/chat", scheduleLimiter, validateJsonBody(["message", "context"]), async (req, res) => {
+router.use(publicFosuGuard);
+
+router.post("/agent/chat", scheduleLimiter, optionalSessionGuard, validateJsonBody(["message", "context", "protocolVersion", "requestId", "conversationId"]), async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
@@ -26,6 +28,13 @@ router.post("/agent/chat", scheduleLimiter, validateJsonBody(["message", "contex
     const payload = await agentService.chat({
       message,
       context: req.body.context || {},
+      protocolVersion: req.body.protocolVersion,
+      requestId: req.body.requestId,
+      conversationId: req.body.conversationId,
+      serverSession: req.fosuSession ? {
+        openidHash: req.fosuSession.openidHash || "",
+        sessionIdHash: req.fosuSession.sessionIdHash || "",
+      } : null,
     });
     safeLog("ai-agent-chat", {
       metrics: payload.metrics || {},

@@ -31,6 +31,11 @@ const storageLifecycleService = require("../services/storageLifecycleService");
 const publisherReceiptService = require("../services/publisherReceiptService");
 const agentService = require("../services/ai/agentService");
 const aiProviderConfigService = require("../services/ai/providerConfigService");
+const providerChainService = require("../services/ai/providerChainService");
+const evaluationService = require("../services/ai/evaluationService");
+const knowledgeBaseService = require("../services/ai/knowledgeBaseService");
+const campusMapService = require("../services/ai/campusMapService");
+const imageGenerationGateService = require("../services/ai/imageGenerationGateService");
 const stagingFingerprint = require("../utils/stagingFingerprint");
 const staticAccessTicket = require("../utils/staticAccessTicket");
 const { getClientIpInfo } = require("../utils/clientIp");
@@ -494,10 +499,54 @@ router.post("/security/events/cleanup", adminAuth.verifyAdminAccess, (req, res) 
 
 router.get("/ai-provider/config", adminAuth.verifyAdminAccess, (req, res) => {
   res.setHeader("Cache-Control", "no-store");
+  const status = aiProviderConfigService.getStatus();
   return res.json({
     success: true,
-    data: aiProviderConfigService.getStatus(),
+    data: Object.assign({}, status, {
+      protocolVersion: "agent.v1",
+      providerChain: providerChainService.getStatus(status.runtimeMode || "public"),
+      knowledgeIndex: knowledgeBaseService.getIndexStatus(),
+      campusMap: campusMapService.getMapStatus(),
+      imageGeneration: imageGenerationGateService.getStatus(status.runtimeMode || "public"),
+    }),
   });
+});
+
+router.get("/ai-agent/status", adminAuth.verifyAdminAccess, (req, res) => {
+  const status = aiProviderConfigService.getStatus();
+  return res.json({
+    success: true,
+    data: {
+      runtimeMode: status.runtimeMode || "public",
+      protocolVersion: "agent.v1",
+      enabledTools: Object.keys(require("../services/ai/agentProtocol").TOOL_DEFINITIONS),
+      providerChain: providerChainService.getStatus(status.runtimeMode || "public"),
+      knowledgeIndex: knowledgeBaseService.getIndexStatus(),
+      campusMap: campusMapService.getMapStatus(),
+      imageGeneration: imageGenerationGateService.getStatus(status.runtimeMode || "public"),
+      metrics: {
+        fallbackCount: providerChainService.getStatus("competition").reduce((sum, item) => sum + Number(item.fallbackCount || 0), 0),
+        toolCallCount: 0,
+        factualQuestionCount: 0,
+        generativeQuestionCount: 0,
+        safetyInterceptCount: 0,
+      },
+    },
+  });
+});
+
+router.post("/ai-agent/evaluate", adminAuth.verifyAdminAccess, async (req, res) => {
+  try {
+    const report = await evaluationService.runEvaluation({});
+    return res.json({ success: true, data: report });
+  } catch (error) {
+    safeLog("ai-agent-evaluation-failed", { error: error.message, code: error.code || "" });
+    return res.status(200).json({
+      success: false,
+      code: error.code || "AI_AGENT_EVALUATION_FAILED",
+      message: "Agent evaluation failed.",
+    });
+  }
 });
 
 router.post("/ai-provider/config", verifyAdminWriteAccess, (req, res) => {

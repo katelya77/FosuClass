@@ -9,6 +9,12 @@ process.env.AI_PROVIDER_POLICY = "always";
 const cozeProvider = require("../server/src/services/ai/providers/cozeProvider");
 const agentService = require("../server/src/services/ai/agentService");
 
+function assertPublicProviderHidden(response) {
+  assert.strictEqual(response.runtimeMode, "public");
+  assert(!("provider" in response.safety), "public safety must hide provider");
+  assert(!("externalProviderUsed" in response.metrics), "public metrics must hide provider usage detail");
+}
+
 async function run() {
   await assert.rejects(
     () => cozeProvider.generate({ message: "hello", toolResults: [] }),
@@ -20,8 +26,8 @@ async function run() {
     context: { timezone: "Asia/Shanghai" },
   });
   assert.strictEqual(localGuide.success, true);
-  assert.strictEqual(localGuide.safety.provider, "mock");
-  assert.strictEqual(localGuide.safety.externalProviderUsed, false);
+  assert.notStrictEqual(localGuide.safety.provider, "coze");
+  assertPublicProviderHidden(localGuide);
   assert(!localGuide.toolCalls.some((item) => item.status === "skipped"), "import guide should stay on local template");
 
   const fallback = await agentService.chat({
@@ -29,8 +35,9 @@ async function run() {
     context: { timezone: "Asia/Shanghai" },
   });
   assert.strictEqual(fallback.success, true);
-  assert.strictEqual(fallback.safety.provider, "mock");
-  assert(fallback.toolCalls.some((item) => item.status === "skipped"), "fallback tool call should be reported for non-template tasks");
+  assert.notStrictEqual(fallback.safety.provider, "coze");
+  assertPublicProviderHidden(fallback);
+  assert(fallback.toolCalls.length >= 1, "fact task should still report deterministic tool work");
 
   console.log("test-coze-provider-config passed");
 }

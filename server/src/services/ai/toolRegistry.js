@@ -8,6 +8,11 @@ const {
   resolveCurrentTeachingWeek,
 } = require("../../shared/courseWeekRules");
 const recommendationService = require("./recommendationService");
+const weatherService = require("./weatherService");
+const campusMapService = require("./campusMapService");
+const knowledgeBaseService = require("./knowledgeBaseService");
+const imageGenerationGateService = require("./imageGenerationGateService");
+const agentProtocol = require("./agentProtocol");
 
 const MAX_SECTION = 14;
 const termRegistryService = require("../termRegistryService");
@@ -337,6 +342,66 @@ function isConversationalHelp(text) {
 function resolveModernChineseIntent(message, context = {}) {
   const text = normalizeText(message);
   if (!text) return null;
+  const campus = /\u6c5f\u6e7e/.test(text) ? "\u6c5f\u6e7e\u6821\u533a" : "\u4ed9\u6eaa\u6821\u533a";
+  const hasWeather = /\u5929\u6c14|\u4e0b\u96e8|\u964d\u96e8|\u9ad8\u6e29|\u96f7\u66b4|\u5e26\u4f1e|\u51fa\u884c/.test(text);
+  const hasEmptyRoom = /\u7a7a\u6559\u5ba4|\u81ea\u4e60|\u6ca1\u8bfe/.test(text);
+  const hasTravel = /\u8def\u7ebf|\u4f4d\u7f6e|\u5bfc\u822a|\u5728\u54ea|\u600e\u4e48\u8d70/.test(text);
+  if (/\u751f\u56fe|\u56fe\u7247|\u6d77\u62a5|\u5206\u4eab\u56fe|\u914d\u56fe|\u5c55\u793a\u7d20\u6750|\u751f\u6210.*\u56fe/.test(text)) {
+    return { name: "generate_image", slots: { scene: "competition_demo_asset" } };
+  }
+  if (hasWeather && (hasEmptyRoom || hasTravel || /\u660e\u5929|\u4e0b\u5348|\u540e\u5929|\u4e0b\u5468/.test(text))) {
+    return {
+      name: "campus_multi_step_advice",
+      slots: {
+        campus,
+        date: inferTargetDate(text, context),
+        sections: inferSections(text, context),
+        building: extractBuilding(text),
+      },
+    };
+  }
+  if (hasWeather) {
+    return { name: "get_campus_weather", slots: { campus } };
+  }
+  if (hasTravel && /[ABC]\d|\u6821\u533a|\u56fe\u4e66\u9986|\u996d\u5802|\u5bbf\u820d|\u6559\u5b66\u697c|\u6559\u5ba4/.test(text)) {
+    const classroom = (text.match(/[ABC]\d{1,2}(?:[-\u680b\u697c]?\d{0,4})?/i) || [""])[0];
+    if (classroom) return { name: "get_classroom_location", slots: { classroom } };
+    return { name: "search_campus_place", slots: { q: stripChineseIntentWords(text) || text } };
+  }
+  if (/\u9690\u79c1|\u4f7f\u7528\u8bf4\u660e|\u6545\u969c|\u5c0f\u4f5b|\u4f5b\u8bfe\u5c0f\u8868|\u6821\u56ed\u670d\u52a1|\u5e2e\u52a9|\u8bf4\u660e/.test(text)) {
+    return { name: "rag_search", slots: { q: text } };
+  }
+  if (/\u5b66\u6821|\u6821\u533a|\u6821\u56ed|\u901a\u77e5|\u670d\u52a1|\u6307\u5357|\u89c4\u5219|\u6821\u5386/.test(text)) {
+    return { name: "rag_search", slots: { q: text } };
+  }
+  if (/生图|图片|海报|分享图|配图|展示素材|生成.*图/.test(text)) {
+    return { name: "generate_image", slots: { scene: "competition_demo_asset" } };
+  }
+  if (/天气|下雨|降雨|高温|雷暴|带伞|出行/.test(text) && /空教室|自习|没课|明天|下午|路线|位置/.test(text)) {
+    return {
+      name: "campus_multi_step_advice",
+      slots: {
+        campus: /江湾/.test(text) ? "江湾校区" : "仙溪校区",
+        date: inferTargetDate(text, context),
+        sections: inferSections(text, context),
+        building: extractBuilding(text),
+      },
+    };
+  }
+  if (/天气|下雨|降雨|高温|雷暴|带伞|出行/.test(text)) {
+    return {
+      name: "get_campus_weather",
+      slots: { campus: /江湾/.test(text) ? "江湾校区" : "仙溪校区" },
+    };
+  }
+  if (/在哪里|怎么走|路线|位置|导航/.test(text) && /C\d|B\d|A\d|校区|图书馆|饭堂|宿舍|教学楼|教室/i.test(text)) {
+    const classroom = (text.match(/[ABC]\d{1,2}(?:[-栋楼]?\d{0,4})?/i) || [""])[0];
+    if (classroom) return { name: "get_classroom_location", slots: { classroom } };
+    return { name: "search_campus_place", slots: { q: stripChineseIntentWords(text) || text } };
+  }
+  if (/隐私|使用说明|故障|小佛|佛课小表|校园服务|帮助|说明/.test(text)) {
+    return { name: "rag_search", slots: { q: text } };
+  }
   if (/连续.*空教室|连着.*空教室|连堂.*空教室/.test(text)) {
     return {
       name: "search_continuous_empty_rooms",
@@ -760,6 +825,34 @@ function diagnoseDataStatus(input = {}, context = {}) {
   };
 }
 
+function getCampusWeather(input = {}) {
+  return weatherService.getCampusWeather(input);
+}
+
+function getCourseWeatherAdvice(input = {}) {
+  return weatherService.getCourseWeatherAdvice(input);
+}
+
+function searchCampusPlace(input = {}) {
+  return campusMapService.searchCampusPlace(input);
+}
+
+function getCampusRoute(input = {}) {
+  return campusMapService.getCampusRoute(input);
+}
+
+function getClassroomLocation(input = {}) {
+  return campusMapService.getClassroomLocation(input);
+}
+
+function ragSearch(input = {}) {
+  return knowledgeBaseService.searchKnowledge(input);
+}
+
+function generateImage(input = {}, context = {}) {
+  return imageGenerationGateService.buildDisabledResult(context.runtimeMode || "public");
+}
+
 function explainPersonalImport(input = {}) {
   const mode = input.mode || "unknown";
   return {
@@ -883,13 +976,61 @@ function executeTool(name, input = {}, context = {}) {
     explain_personal_import: explainPersonalImport,
     recommend_meeting_time: recommendMeetingTimeV2,
     clarify_missing_slot: clarifyMissingSlot,
+    get_campus_weather: getCampusWeather,
+    get_course_weather_advice: getCourseWeatherAdvice,
+    search_campus_place: searchCampusPlace,
+    get_campus_route: getCampusRoute,
+    get_classroom_location: getClassroomLocation,
+    rag_search: ragSearch,
+    generate_image: generateImage,
   };
   const tool = tools[name];
   if (!tool) {
     return { success: false, code: "TOOL_NOT_FOUND" };
   }
   try {
-    return sanitizeToolResult(tool(Object.assign({}, input, { message: input.message || "" }), context));
+    const result = tool(Object.assign({}, input, { message: input.message || "" }), context);
+    if (result && typeof result.then === "function") {
+      return { success: false, code: "ASYNC_TOOL_REQUIRES_AGENT" };
+    }
+    return sanitizeToolResult(result);
+  } catch (error) {
+    return {
+      success: false,
+      code: error.code || "TOOL_FAILED",
+      message: error.message || "工具调用失败",
+    };
+  }
+}
+
+async function executeToolAsync(name, input = {}, context = {}) {
+  const tools = {
+    get_today_courses: getTodayCourses,
+    get_tomorrow_courses: getTomorrowCourses,
+    get_next_course: getNextCourse,
+    get_week_schedule: getWeekSchedule,
+    get_teaching_week: getTeachingWeek,
+    get_term_calendar: getTermCalendar,
+    search_empty_rooms: searchEmptyRooms,
+    search_continuous_empty_rooms: searchContinuousEmptyRooms,
+    search_school_index: searchSchoolIndex,
+    get_schedule_detail: getScheduleDetail,
+    diagnose_data_status: diagnoseDataStatus,
+    explain_personal_import: explainPersonalImport,
+    recommend_meeting_time: recommendMeetingTimeV2,
+    clarify_missing_slot: clarifyMissingSlot,
+    get_campus_weather: getCampusWeather,
+    get_course_weather_advice: getCourseWeatherAdvice,
+    search_campus_place: searchCampusPlace,
+    get_campus_route: getCampusRoute,
+    get_classroom_location: getClassroomLocation,
+    rag_search: ragSearch,
+    generate_image: generateImage,
+  };
+  const tool = tools[name];
+  if (!tool) return { success: false, code: "TOOL_NOT_FOUND" };
+  try {
+    return sanitizeToolResult(await tool(Object.assign({}, input, { message: input.message || "" }), context));
   } catch (error) {
     return {
       success: false,
@@ -946,6 +1087,27 @@ function isHighConfidenceIndexHit(result = {}) {
   return itemName === q || q.length >= 2;
 }
 
+function buildPlanForIntent(intent, message, context = {}) {
+  const slots = Object.assign({}, intent && intent.slots || {}, {
+    message,
+    term: context.term,
+    releaseVersion: context.releaseVersion,
+  });
+  if (intent && intent.name === "campus_multi_step_advice") {
+    return [
+      agentProtocol.buildPlanStep("get_tomorrow_courses", slots, "读取明日个人课程"),
+      agentProtocol.buildPlanStep("search_empty_rooms", slots, "查询空闲节次对应空教室"),
+      agentProtocol.buildPlanStep("get_campus_weather", slots, "查询校区天气"),
+      agentProtocol.buildPlanStep("search_campus_place", { q: slots.building || slots.campus || "C7", message }, "补充地点信息"),
+    ];
+  }
+  if (!intent || intent.name === "generic" || intent.name === "project_qa" || intent.name === "conversational_help") return [];
+  if (intent.name === "clarify_missing_slot") {
+    return [agentProtocol.buildPlanStep("clarify_missing_slot", slots, "补全缺失槽位")];
+  }
+  return [agentProtocol.buildPlanStep(intent.name, slots, "执行权威工具")];
+}
+
 function runToolsForIntent(intent, message, context) {
   if (!intent || intent.name === "generic" || intent.name === "project_qa" || intent.name === "conversational_help") return [];
   const input = Object.assign({}, intent.slots || {}, {
@@ -971,6 +1133,13 @@ function runToolChainForIntent(intent, message, context) {
     releaseVersion: context.releaseVersion,
   });
   const calls = [];
+  if (intent.name === "campus_multi_step_advice") {
+    buildPlanForIntent(intent, message, context).forEach((step) => {
+      const result = executeTool(step.toolName, step.args, context);
+      calls.push(makeToolCall(step.toolName, result));
+    });
+    return calls;
+  }
   const firstResult = executeTool(intent.name, input, context);
   calls.push(makeToolCall(intent.name, firstResult));
 
@@ -1002,8 +1171,59 @@ function runToolChainForIntent(intent, message, context) {
   return calls;
 }
 
+async function runToolChainForIntentAsync(intent, message, context) {
+  if (!intent || intent.name === "generic" || intent.name === "project_qa" || intent.name === "conversational_help") return [];
+  if (intent.name === "clarify_missing_slot") return runToolsForIntent(intent, message, context);
+
+  const input = Object.assign({}, intent.slots || {}, {
+    message,
+    term: context.term,
+    releaseVersion: context.releaseVersion,
+  });
+  const calls = [];
+  if (intent.name === "campus_multi_step_advice") {
+    const plan = buildPlanForIntent(intent, message, context);
+    for (const step of plan) {
+      const result = await executeToolAsync(step.toolName, step.args, context);
+      calls.push(makeToolCall(step.toolName, result));
+    }
+    return calls;
+  }
+
+  const firstResult = await executeToolAsync(intent.name, input, context);
+  calls.push(makeToolCall(intent.name, firstResult));
+
+  if (intent.name === "search_school_index" && firstResult && firstResult.success !== false && isHighConfidenceIndexHit(firstResult)) {
+    const item = firstResult.items[0] || {};
+    const detailId = item.id || item.scheduleId || item.teacherId || item.classroomId || item.courseId || item.classId || item.name || item.displayName || "";
+    const detailResult = await executeToolAsync("get_schedule_detail", {
+      type: firstResult.type,
+      id: detailId,
+      releaseVersion: firstResult.releaseVersion,
+      term: firstResult.term || context.term,
+      message,
+    }, context);
+    calls.push(makeToolCall("get_schedule_detail", detailResult));
+  }
+
+  if (intent.name === "search_empty_rooms" || intent.name === "search_continuous_empty_rooms") {
+    const rooms = asArray(firstResult && firstResult.rooms);
+    if (!firstResult || firstResult.success === false || rooms.length === 0 || Number(firstResult.total || rooms.length) === 0) {
+      const diagnosis = await executeToolAsync("diagnose_data_status", input, context);
+      calls.push(makeToolCall("diagnose_data_status", diagnosis));
+    }
+  }
+
+  if (intent.name === "recommend_meeting_time" && firstResult && firstResult.emptyRoomResult) {
+    calls.push(makeToolCall("search_empty_rooms", firstResult.emptyRoomResult));
+  }
+
+  return calls;
+}
+
 module.exports = {
   executeTool,
+  executeToolAsync,
   courseAppliesToWeek,
   getCurrentSection,
   getCourseTimeStatus,
@@ -1011,6 +1231,8 @@ module.exports = {
   inferTargetDate,
   parseClientDate,
   resolveIntent,
+  buildPlanForIntent,
   runToolChainForIntent,
+  runToolChainForIntentAsync,
   runToolsForIntent,
 };

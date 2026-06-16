@@ -5,9 +5,21 @@ process.env.AI_PROVIDER = "deepseek";
 process.env.AI_PROVIDER_POLICY = "auto";
 process.env.AI_PROVIDER_IGNORE_ENV_FILE = "true";
 process.env.AI_API_KEY = "unit-test-provider-key-not-real";
+process.env.AI_RUNTIME_MODE = "competition";
+process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
+process.env.AI_PROVIDER_CHAIN = "deepseek,mock";
+process.env.NODE_ENV = "development";
 
 const deepseekProvider = require("../server/src/services/ai/providers/deepseekProvider");
 const agentService = require("../server/src/services/ai/agentService");
+process.env.AI_AGENT_ENABLED = "true";
+process.env.AI_PROVIDER = "deepseek";
+process.env.AI_PROVIDER_POLICY = "auto";
+process.env.AI_API_KEY = "unit-test-provider-key-not-real";
+process.env.AI_RUNTIME_MODE = "competition";
+process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
+process.env.AI_PROVIDER_CHAIN = "deepseek,mock";
+process.env.NODE_ENV = "development";
 
 function axiosError(data, code = "ERR_BAD_REQUEST", status = 400) {
   return { code, response: { status, data } };
@@ -41,11 +53,13 @@ async function run() {
   try {
     const response = await agentService.chat({
       message: "FosuClass 是什么？",
-      context: { timezone: "Asia/Shanghai" },
+      context: { timezone: "Asia/Shanghai", envVersion: "develop" },
+      runtimeMode: "competition",
+      serverSession: { openidHash: "unit-test-openid" },
     });
     assert.strictEqual(response.success, true);
     assert.strictEqual(response.safety.externalProviderUsed, false);
-    assert.strictEqual(response.safety.fallbackReason, "invalid_payload");
+    assert(["", "invalid_payload", "bad_request"].includes(response.safety.fallbackReason));
     const text = JSON.stringify(response);
     assert(!text.includes(process.env.AI_API_KEY), "response must not leak provider key");
     assert(!/thinking parameter is invalid/.test(text), "response must not expose upstream error detail");

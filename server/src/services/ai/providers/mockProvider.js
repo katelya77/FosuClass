@@ -107,6 +107,105 @@ function buildTodayCourses(result) {
   };
 }
 
+function buildCourseItems(courses) {
+  return (Array.isArray(courses) ? courses : []).slice(0, 6).map((course) => ({
+    title: course.courseName || "\u672a\u547d\u540d\u8bfe\u7a0b",
+    subtitle: [courseSectionText(course), course.teacherName, course.classroom].filter(Boolean).join(" \u00b7 "),
+    value: courseTimeValue(course),
+  }));
+}
+
+function buildTomorrowCourses(result) {
+  if (result.needContext) return buildTodayCourses(result);
+  const courses = Array.isArray(result.activeCourses) && result.activeCourses.length
+    ? result.activeCourses
+    : (Array.isArray(result.courses) ? result.courses : []);
+  const answer = courses.length
+    ? `\u660e\u5929\u6709 ${courses.length} \u95e8\u8bfe\u3002${result.nextCourse ? `\u6700\u65e9\u4e00\u95e8\u662f\u300c${result.nextCourse.courseName}\u300d\uff0c${courseTimeValue(result.nextCourse)}\u3002` : ""}`
+    : "\u660e\u5929\u6682\u65f6\u6ca1\u6709\u5728\u672c\u5730\u8bfe\u8868\u6458\u8981\u91cc\u547d\u4e2d\u8bfe\u7a0b\u3002";
+  return {
+    answer,
+    cards: [makeCard("schedule", "\u660e\u65e5\u8bfe\u7a0b", result.reminder || "", {
+      badges: ["\u8bfe\u8868\u6458\u8981", "\u5df2\u6838\u9a8c"],
+      items: buildCourseItems(courses),
+      actions: [makeAction("\u67e5\u770b\u8bfe\u8868", "navigate", result.actionUrl || "/pages/today/today")],
+    })],
+    suggestions: ["\u4e0b\u4e00\u8282\u8bfe\u662f\u4ec0\u4e48\uff1f", "\u660e\u5929\u4e0b\u5348\u6709\u7a7a\u6559\u5ba4\u5417\uff1f"],
+  };
+}
+
+function buildNextCourse(result) {
+  if (result.needContext) return buildTodayCourses(result);
+  const course = result.nextCourse || (Array.isArray(result.activeCourses) ? result.activeCourses[0] : null);
+  const answer = course
+    ? `\u4e0b\u4e00\u8282\u8bfe\u662f\u300c${course.courseName || "\u672a\u547d\u540d\u8bfe\u7a0b"}\u300d\uff0c${courseSectionText(course) || "\u8282\u6b21\u5f85\u5b9a"}\uff0c${courseTimeValue(course)}${course.classroom ? `\uff0c\u5730\u70b9 ${course.classroom}` : ""}\u3002`
+    : "\u672c\u5730\u8bfe\u8868\u6458\u8981\u91cc\u6682\u65f6\u6ca1\u6709\u627e\u5230\u4e0b\u4e00\u8282\u8bfe\u3002";
+  return {
+    answer,
+    cards: [makeCard("schedule", "\u4e0b\u4e00\u8282\u8bfe", result.summary || "", {
+      badges: ["\u8bfe\u8868\u6458\u8981", "\u5df2\u6838\u9a8c"],
+      items: course ? buildCourseItems([course]) : [],
+      actions: [makeAction("\u67e5\u770b\u4eca\u65e5\u5b89\u6392", "navigate", result.actionUrl || "/pages/today/today")],
+    })],
+    suggestions: ["\u6559\u5ba4\u5728\u54ea\u91cc\uff1f", "\u4e0b\u4e00\u8282\u8bfe\u524d\u5929\u6c14\u600e\u4e48\u6837\uff1f"],
+  };
+}
+
+function buildWeekSchedule(result) {
+  if (result.needContext) return buildTodayCourses(result);
+  const days = Array.isArray(result.days) ? result.days : [];
+  const courses = [];
+  days.forEach((day) => {
+    (Array.isArray(day.courses) ? day.courses : []).forEach((course) => {
+      courses.push(Object.assign({ weekday: day.weekday }, course));
+    });
+  });
+  return {
+    answer: result.summary || `\u672c\u5468\u5171\u6709 ${result.courseCount || courses.length} \u8282\u8bfe\u7a0b\u5b89\u6392\u3002`,
+    cards: [makeCard("schedule", "\u672c\u5468\u8bfe\u8868", result.week ? `\u7b2c ${result.week} \u6559\u5b66\u5468` : "", {
+      badges: ["\u8bfe\u8868\u6458\u8981", "\u5df2\u6838\u9a8c"],
+      items: buildCourseItems(courses),
+      actions: [makeAction("\u67e5\u770b\u8bfe\u8868", "navigate", result.actionUrl || "/pages/today/today")],
+    })],
+    suggestions: ["\u4eca\u5929\u8fd8\u6709\u8bfe\u5417\uff1f", "\u672c\u5468\u54ea\u5929\u6bd4\u8f83\u7a7a\uff1f"],
+  };
+}
+
+function buildTeachingWeek(result) {
+  const weekText = result.weekUncertain
+    ? "\u5f53\u524d\u6559\u5b66\u5468\u6682\u65f6\u4e0d\u786e\u5b9a\u3002"
+    : `\u73b0\u5728\u662f\u7b2c ${result.currentWeek || result.week || 0} \u6559\u5b66\u5468\u3002`;
+  return {
+    answer: result.summary || weekText,
+    cards: [makeCard("generic", "\u6559\u5b66\u5468", result.term || "", {
+      badges: ["\u6821\u5386\u89c4\u5219", "\u5df2\u6838\u9a8c"],
+      items: [
+        { title: "\u5f53\u524d\u5468", value: result.currentWeek || result.week || "\u4e0d\u786e\u5b9a" },
+        { title: "\u5b66\u671f", value: result.term || "" },
+        { title: "\u603b\u5468\u6570", value: result.totalWeeks || "" },
+      ],
+      actions: [],
+    })],
+    suggestions: ["\u67e5\u672c\u5468\u8bfe\u8868", "\u67e5\u5b66\u671f\u6821\u5386"],
+  };
+}
+
+function buildTermCalendar(result) {
+  return {
+    answer: result.summary || `\u5df2\u8bfb\u53d6 ${result.term || "\u5f53\u524d\u5b66\u671f"} \u7684\u6559\u5b66\u65e5\u5386\u914d\u7f6e\u3002`,
+    cards: [makeCard("guide", "\u5b66\u671f\u6821\u5386", result.term || "", {
+      badges: ["\u6559\u5b66\u5468", "\u5df2\u6838\u9a8c"],
+      items: [
+        { title: "\u5f53\u524d\u5468", value: result.currentWeek || result.week || "\u4e0d\u786e\u5b9a" },
+        { title: "\u5f00\u5b66\u65e5", value: result.termStartDate || "\u6682\u672a\u914d\u7f6e" },
+        { title: "\u603b\u5468\u6570", value: result.totalWeeks || "" },
+      ],
+      actions: [],
+    })],
+    suggestions: ["\u73b0\u5728\u7b2c\u51e0\u6559\u5b66\u5468\uff1f", "\u660e\u5929\u8bfe\u7a0b"],
+  };
+}
+
 function emptySchoolCopy(type, q) {
   if (!q && type === "teacher") return "你想查哪位老师？请输入老师姓名，例如：查张三老师课表。";
   if (type === "teacher") return "没有找到匹配的教师结果。建议换短关键词、检查姓名，或打开全校查询继续筛选。";
@@ -325,6 +424,87 @@ function buildGeneric() {
   };
 }
 
+function buildWeather(result = {}) {
+  const ok = result.success !== false;
+  return {
+    answer: ok
+      ? `${result.campus || "校区"}当前${result.weatherText || "天气待确认"}，约 ${result.temperatureC || 0}℃。${(result.alerts || [])[0] || "天气影响不大，按正常时间出发即可。"}`
+      : (result.summary || "天气暂时不可用，课表和空教室查询不受影响。"),
+    cards: [makeCard("generic", "校区天气", result.summary || "", {
+      badges: [result.campus || "校区", result.cached ? "缓存" : "实时查询", ok ? "天气数据" : "降级"].filter(Boolean),
+      items: ok ? [
+        { title: "天气", value: result.weatherText || "" },
+        { title: "温度", value: `${result.temperatureC || 0}℃` },
+        { title: "降水", value: `${result.precipitationMm || 0}mm` },
+      ] : [{ title: "状态", subtitle: result.code || "WEATHER_UNAVAILABLE", value: "不影响课表" }],
+      actions: [],
+    })],
+    suggestions: ["明天下午空教室和天气", "下一节课前要带伞吗"],
+  };
+}
+
+function buildCampusPlace(result = {}) {
+  const items = Array.isArray(result.items) ? result.items : [];
+  return {
+    answer: items.length
+      ? `找到 ${items.length} 个校园地点候选。未维护精确坐标的楼栋不会生成路线。`
+      : (result.summary || "没有找到已维护的校园地点。"),
+    cards: [makeCard("generic", "校园地点", result.q || result.classroom || "", {
+      badges: ["结构化地图", result.ambiguous ? "需要选择" : ""].filter(Boolean),
+      items: items.slice(0, 6).map((item) => ({
+        title: item.name,
+        subtitle: [item.campus, item.type, item.verified ? "已核验" : "待维护坐标"].filter(Boolean).join(" · "),
+        value: item.id,
+      })),
+      actions: [makeAction("打开全校查询", "navigate", "/pages/school/school")],
+    })],
+    suggestions: ["C7 在哪里", "仙溪校区路线"],
+  };
+}
+
+function buildKnowledge(result = {}) {
+  const items = Array.isArray(result.items) ? result.items : [];
+  return {
+    answer: items.length
+      ? `根据知识库找到 ${items.length} 条来源。课程事实仍以课表工具为准。`
+      : "知识库没有可靠答案；如果是课程、教室或教学周问题，请改用课表工具查询。",
+    cards: [makeCard("guide", "知识库来源", result.summary || "", {
+      badges: ["RAG", result.sourceId || "knowledge"],
+      items: items.slice(0, 4).map((item) => ({
+        title: item.title,
+        subtitle: item.text,
+        value: item.updatedAt || "",
+      })),
+      actions: [],
+    })],
+    suggestions: ["佛课小表怎么用", "隐私说明"],
+  };
+}
+
+function buildMultiStep(toolResults = []) {
+  const weather = (toolResults.find((item) => item.name === "get_campus_weather") || {}).result || {};
+  const rooms = (toolResults.find((item) => item.name === "search_empty_rooms") || {}).result || {};
+  const schedule = (toolResults.find((item) => item.name === "get_tomorrow_courses") || {}).result || {};
+  const place = (toolResults.find((item) => item.name === "search_campus_place") || {}).result || {};
+  const roomCount = rooms.total || (Array.isArray(rooms.rooms) ? rooms.rooms.length : 0);
+  return {
+    answer: `我按步骤查了明日课程、空教室、校区天气和地点信息。${roomCount ? `空教室候选约 ${roomCount} 间。` : "当前条件下空教室候选不足。"}${weather.summary ? ` ${weather.summary}` : ""}`,
+    cards: [
+      makeCard("reminder", "多步骤任务", "课程、空教室、天气和地点建议", {
+        badges: ["Planner", "Evidence"],
+        items: [
+          { title: "明日课程", subtitle: schedule.summary || "", value: `${schedule.courseCount || 0}` },
+          { title: "空教室", subtitle: rooms.summary || rooms.code || "", value: `${roomCount}` },
+          { title: "天气", subtitle: weather.summary || weather.code || "", value: weather.weatherText || "" },
+          { title: "地点", subtitle: place.summary || "", value: `${place.total || 0}` },
+        ],
+        actions: [makeAction("查看空教室", "navigate", rooms.actionUrl || "/pages/empty-room/empty-room")],
+      }),
+    ],
+    suggestions: ["换成江湾校区", "只看连续两节空教室"],
+  };
+}
+
 function generate({ intent, toolResults }) {
   const first = toolResults && toolResults[0] && toolResults[0].result;
   const findResult = (name) => {
@@ -334,11 +514,21 @@ function generate({ intent, toolResults }) {
   const name = intent && intent.name;
   const payload = name === "search_empty_rooms" ? buildEmptyRoom(first || {}) :
     name === "get_today_courses" ? buildTodayCourses(first || {}) :
+    name === "get_tomorrow_courses" ? buildTomorrowCourses(first || {}) :
+    name === "get_next_course" ? buildNextCourse(first || {}) :
+    name === "get_week_schedule" ? buildWeekSchedule(first || {}) :
+    name === "get_teaching_week" ? buildTeachingWeek(first || {}) :
+    name === "get_term_calendar" ? buildTermCalendar(first || {}) :
     name === "search_school_index" ? buildSchoolIndex(first || {}, findResult("get_schedule_detail")) :
     name === "diagnose_data_status" ? buildDiagnosis(first || {}) :
     name === "explain_personal_import" ? buildGuide(first || {}) :
     name === "clarify_missing_slot" ? buildClarificationV2(first || {}) :
     name === "recommend_meeting_time" ? buildMeetingV2(first || {}) :
+    name === "get_campus_weather" || name === "get_course_weather_advice" ? buildWeather(first || {}) :
+    name === "search_campus_place" || name === "get_campus_route" || name === "get_classroom_location" ? buildCampusPlace(first || {}) :
+    name === "rag_search" ? buildKnowledge(first || {}) :
+    name === "campus_multi_step_advice" ? buildMultiStep(toolResults || []) :
+    name === "generate_image" ? buildKnowledge({ items: [], summary: first && first.summary || "生图能力未启用" }) :
     (name === "project_qa" || name === "conversational_help") ? projectKnowledgeService.generateFallbackResponse(name) :
     buildGeneric();
   return Object.assign({ provider: "mock" }, payload);

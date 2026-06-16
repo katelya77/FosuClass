@@ -162,11 +162,33 @@ function sanitizePendingClarification(value) {
   };
 }
 
+function sanitizeUserPreferences(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const campus = ["仙溪校区", "江湾校区"].includes(source.campus) ? source.campus : "";
+  const favoriteBuildings = Array.isArray(source.favoriteBuildings)
+    ? source.favoriteBuildings.map((item) => sanitizeString(item, 40)).filter(Boolean).slice(0, 8)
+    : [];
+  const duration = Number(source.defaultEmptyRoomDurationSections);
+  const answerDetail = ["brief", "normal", "detailed"].includes(source.answerDetail) ? source.answerDetail : "normal";
+  return {
+    campus,
+    favoriteBuildings,
+    defaultEmptyRoomDurationSections: Number.isFinite(duration) && duration > 0 ? Math.min(12, Math.max(1, Math.round(duration))) : 2,
+    allowMinimalScheduleSummary: source.allowMinimalScheduleSummary === true,
+    answerDetail,
+    weatherAdviceEnabled: source.weatherAdviceEnabled !== false,
+    localOnly: true,
+  };
+}
+
 function sanitizeAgentContext(context) {
   const source = context && typeof context === "object" && !Array.isArray(context) ? context : {};
   return {
     term: sanitizeString(source.term || source.semester || "", 40),
     releaseVersion: sanitizeString(source.releaseVersion || source.version || "", 80),
+    envVersion: sanitizeString(source.envVersion || source.miniprogramVersion || "", 24),
+    miniprogramVersion: sanitizeString(source.miniprogramVersion || source.envVersion || "", 24),
+    runtimeMode: sanitizeString(source.runtimeMode || "", 24),
     currentPage: sanitizeString(source.currentPage || "", 40),
     clientTime: sanitizeString(source.clientTime || "", 60),
     clientLocalTime: sanitizeString(source.clientLocalTime || "", 60),
@@ -190,6 +212,7 @@ function sanitizeAgentContext(context) {
     currentScheduleSummary: sanitizeScheduleSummary(source.currentScheduleSummary),
     latestScheduleImport: sanitizeLatestScheduleImport(source.latestScheduleImport),
     pendingClarification: sanitizePendingClarification(source.pendingClarification),
+    userPreferences: sanitizeUserPreferences(source.userPreferences),
   };
 }
 

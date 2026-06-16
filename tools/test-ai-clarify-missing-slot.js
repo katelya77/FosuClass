@@ -2,6 +2,9 @@ const assert = require("assert");
 
 process.env.AI_AGENT_ENABLED = "false";
 process.env.AI_PROVIDER_POLICY = "auto";
+process.env.AI_RUNTIME_MODE = "competition";
+process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
+process.env.NODE_ENV = "development";
 
 const agentService = require("../server/src/services/ai/agentService");
 
@@ -9,10 +12,16 @@ const context = {
   term: "2025-2026-2",
   timezone: "Asia/Shanghai",
   clientLocalTime: "2026-06-08T18:20:00+08:00",
+  envVersion: "develop",
 };
 
 async function assertClarifies(message) {
-  const response = await agentService.chat({ message, context });
+  const response = await agentService.chat({
+    message,
+    context,
+    runtimeMode: "competition",
+    serverSession: { openidHash: "unit-test-openid" },
+  });
   assert.strictEqual(response.success, true);
   const names = response.toolCalls.map((item) => item.name);
   assert(names.includes("clarify_missing_slot"), `${message} should clarify, got ${names.join(",")}`);
