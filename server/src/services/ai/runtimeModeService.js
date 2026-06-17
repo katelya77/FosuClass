@@ -29,6 +29,7 @@ function isDevelopOrTrial(context = {}) {
 }
 
 function sessionAllowed(session = {}) {
+  if (session && session.adminProviderVerification === true) return true;
   const allowAll = boolEnv("AI_COMPETITION_ALLOW_ALL_SESSIONS", false) && process.env.NODE_ENV !== "production";
   if (allowAll) return true;
   const prefixes = splitList(process.env.AI_COMPETITION_OPENID_HASH_PREFIXES);
@@ -40,8 +41,43 @@ function sessionAllowed(session = {}) {
 function tokenAllowed(token) {
   const configured = String(process.env.AI_COMPETITION_CAPABILITY_TOKEN_SHA256 || "").trim().toLowerCase();
   if (!configured) return false;
+  if (isCompetitionCapabilityExpired()) return false;
   const candidate = hashToken(token).toLowerCase();
   return candidate === configured;
+}
+
+function getCompetitionCapabilityExpiry() {
+  const expiresAt = String(process.env.AI_COMPETITION_CAPABILITY_EXPIRES_AT || "").trim();
+  const expiresMs = expiresAt ? Date.parse(expiresAt) : NaN;
+  return {
+    expiresAt,
+    expiresMs,
+    configured: Boolean(expiresAt),
+    valid: Boolean(expiresAt) && Number.isFinite(expiresMs),
+    expired: Boolean(expiresAt) && Number.isFinite(expiresMs) && expiresMs <= Date.now(),
+  };
+}
+
+function isCompetitionCapabilityExpired() {
+  const expiry = getCompetitionCapabilityExpiry();
+  return !expiry.valid || expiry.expired;
+}
+
+function getAuthorizationStatus() {
+  const expiry = getCompetitionCapabilityExpiry();
+  const openidPrefixCount = splitList(process.env.AI_COMPETITION_OPENID_HASH_PREFIXES).length;
+  const tokenConfigured = Boolean(String(process.env.AI_COMPETITION_CAPABILITY_TOKEN_SHA256 || "").trim());
+  return {
+    trialEnhancedMode: protocol.normalizeRuntimeMode(process.env.AI_RUNTIME_MODE || "public") === "competition",
+    sessionAuthorizationConfigured: openidPrefixCount > 0,
+    shortCredentialConfigured: tokenConfigured,
+    shortCredentialExpiresAt: expiry.expiresAt,
+    shortCredentialExpiryValid: tokenConfigured ? expiry.valid : false,
+    shortCredentialExpired: tokenConfigured ? expiry.expired || !expiry.valid : false,
+    allowUnknownEnv: boolEnv("AI_COMPETITION_ALLOW_UNKNOWN_ENV", false),
+    allowAllSessionsNonProduction: boolEnv("AI_COMPETITION_ALLOW_ALL_SESSIONS", false) && process.env.NODE_ENV !== "production",
+    authorizedAccountRuleCount: openidPrefixCount,
+  };
 }
 
 function resolveRuntimeMode(input = {}) {
@@ -91,6 +127,7 @@ function resolveRuntimeMode(input = {}) {
 }
 
 module.exports = {
+  getAuthorizationStatus,
   isDevelopOrTrial,
   isReleaseEnv,
   resolveRuntimeMode,

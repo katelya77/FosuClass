@@ -3,11 +3,29 @@ const { scheduleLimiter } = require("../utils/rateLimit");
 const { optionalSessionGuard, publicFosuGuard, validateJsonBody } = require("../utils/apiSecurity");
 const { safeLog } = require("../utils/safeLogger");
 const agentService = require("../services/ai/agentService");
+const campusMapService = require("../services/ai/campusMapService");
 const { buildSafeLogPayload } = require("../services/ai/safetyGuard");
 
 const router = express.Router();
 
 router.use(publicFosuGuard);
+
+router.get("/campus-map/published", scheduleLimiter, (req, res) => {
+  res.setHeader("Cache-Control", "public, max-age=300");
+  try {
+    return res.json({
+      success: true,
+      data: campusMapService.getPublishedMapDocument(),
+    });
+  } catch (error) {
+    safeLog("ai-campus-map-published-failed", { error: error.message, code: error.code || "" });
+    return res.status(200).json({
+      success: false,
+      code: "CAMPUS_MAP_PUBLISHED_UNAVAILABLE",
+      message: "校园地图数据暂时不可用。",
+    });
+  }
+});
 
 router.post("/agent/chat", scheduleLimiter, optionalSessionGuard, validateJsonBody(["message", "context", "protocolVersion", "requestId", "conversationId"]), async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");

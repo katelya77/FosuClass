@@ -841,6 +841,85 @@ const adminConsoleHtml = `<!doctype html>
       white-space: pre-wrap;
     }
 
+    .campus-map-admin-grid {
+      display: grid;
+      grid-template-columns: minmax(300px, 0.9fr) minmax(420px, 1.1fr);
+      gap: 16px;
+      align-items: start;
+    }
+    .campus-map-toolbar,
+    .campus-map-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .campus-map-list {
+      display: grid;
+      gap: 8px;
+      max-height: 360px;
+      overflow: auto;
+    }
+    .campus-map-place-btn {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-2);
+      color: var(--text);
+      text-align: left;
+    }
+    .campus-map-place-btn.active {
+      border-color: var(--accent);
+      background: rgba(198, 40, 40, 0.08);
+    }
+    .campus-map-editor {
+      position: relative;
+      min-height: 420px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-2);
+      user-select: none;
+    }
+    .campus-map-editor img {
+      display: block;
+      width: 100%;
+      height: auto;
+      min-height: 420px;
+      object-fit: contain;
+    }
+    .campus-map-rect {
+      position: absolute;
+      box-sizing: border-box;
+      border: 2px solid #c62828;
+      border-radius: 4px;
+      background: rgba(198, 40, 40, 0.12);
+      cursor: move;
+    }
+    .campus-map-rect::after {
+      content: "";
+      position: absolute;
+      right: -5px;
+      bottom: -5px;
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: #c62828;
+      cursor: nwse-resize;
+    }
+    .campus-map-editor-help {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .campus-map-json {
+      width: 100%;
+      min-height: 110px;
+      font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+      font-size: 12px;
+    }
+
     /* 可视化组件：横向条形图 */
     .bar-chart-row {
       display: flex;
@@ -1652,6 +1731,7 @@ const adminConsoleHtml = `<!doctype html>
         grid-template-columns: 1fr;
       }
       .ai-provider-grid,
+      .campus-map-admin-grid,
       .ai-provider-status {
         grid-template-columns: 1fr;
       }
@@ -3241,6 +3321,7 @@ const adminConsoleHtml = `<!doctype html>
             <li class="nav-item" data-section="news"><button>最新动态</button></li>
             <li class="nav-item" data-section="config"><button>数据版本</button></li>
             <li class="nav-item" data-section="ai-provider"><button>AI 模型</button></li>
+            <li class="nav-item" data-section="campus-map"><button>校园地图</button></li>
             <li class="nav-item" data-section="feedback"><button>反馈管理</button></li>
             <li class="nav-item" data-section="security"><button>安全状态</button></li>
             <li class="nav-item" data-section="settings"><button>系统设置</button></li>
@@ -4665,7 +4746,7 @@ const adminConsoleHtml = `<!doctype html>
                 <label>运行版本</label>
                 <select id="aiRuntimeMode">
                   <option value="public">公众版（强制工具 / mock）</option>
-                  <option value="competition">比赛版（白名单 + Provider 链）</option>
+                  <option value="competition">体验版增强（授权账号 / 短期凭证）</option>
                 </select>
               </div>
             </div>
@@ -4675,7 +4756,7 @@ const adminConsoleHtml = `<!doctype html>
                 <label>Provider</label>
                 <select id="aiProvider">
                   <option value="mock">mock</option>
-                  <option value="cloudbase-openai">CloudBase OpenAI</option>
+                  <option value="cloudbase-openai">腾讯混元 hy3-preview</option>
                   <option value="deepseek">DeepSeek</option>
                   <option value="coze">Coze</option>
                 </select>
@@ -4768,22 +4849,22 @@ const adminConsoleHtml = `<!doctype html>
 
             <div class="form-row">
               <div>
-                <label>CloudBase OpenAI Base URL</label>
+                <label>腾讯混元兼容网关 Base URL</label>
                 <input id="cloudbaseOpenaiBaseUrl" placeholder="https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase">
               </div>
               <div>
-                <label>CloudBase OpenAI API Key</label>
+                <label>腾讯混元兼容网关 API Key</label>
                 <input id="cloudbaseOpenaiApiKey" type="password" autocomplete="off" placeholder="留空则保留现有密钥">
                 <div class="ai-secret-note">不要把 Key 发到聊天；后台保存时不回显完整密钥。</div>
               </div>
             </div>
             <div class="form-row">
               <div>
-                <label>CloudBase 文本模型</label>
+                <label>混元文本模型</label>
                 <input id="cloudbaseOpenaiTextModel" placeholder="hy3-preview">
               </div>
               <div>
-                <label>CloudBase Provider 开关</label>
+                <label>混元 Provider 开关</label>
                 <select id="cloudbaseOpenaiEnabled">
                   <option value="false">关闭</option>
                   <option value="true">开启</option>
@@ -4792,19 +4873,19 @@ const adminConsoleHtml = `<!doctype html>
             </div>
             <div class="form-row">
               <div>
-                <label>CloudBase 超时 / ms</label>
+                <label>混元超时 / ms</label>
                 <input id="cloudbaseOpenaiTimeoutMs" inputmode="numeric" placeholder="15000">
               </div>
               <div>
-                <label>CloudBase 最大 tokens</label>
+                <label>混元最大 tokens</label>
                 <input id="cloudbaseOpenaiMaxTokens" inputmode="numeric" placeholder="1200">
               </div>
             </div>
 
             <div class="ai-provider-actions">
               <button id="saveAiProviderBtn" class="primary">保存 AI 配置</button>
-              <button id="verifyAiProviderBtn" class="secondary">验证当前 Provider</button>
-              <button id="forceAiProviderChatBtn" class="secondary">强制测试外部 Provider</button>
+              <button id="verifyAiProviderBtn" class="secondary">Provider 真实测试</button>
+              <button id="forceAiProviderChatBtn" class="secondary">强制测试模型链路</button>
               <button id="reloadAiProviderBtn" class="ghost">刷新状态</button>
             </div>
           </div>
@@ -4868,6 +4949,125 @@ const adminConsoleHtml = `<!doctype html>
             <h4 class="card-title" style="margin-top: 8px;">AI Agent 状态</h4>
             <div class="ai-provider-status" id="aiAgentStatusGrid"></div>
             <div id="aiAgentEvalResult" class="ai-verify-box">Agent 黄金测试尚未运行。</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="section-campus-map" class="section">
+        <div class="campus-map-admin-grid">
+          <div class="card form-box">
+            <h3 class="card-title">校园地图数据</h3>
+            <div class="campus-map-toolbar">
+              <select id="campusMapCampus">
+                <option value="">全部校区</option>
+                <option value="仙溪校区">仙溪校区</option>
+                <option value="江湾校区">江湾校区</option>
+                <option value="河滨校区">河滨校区</option>
+              </select>
+              <select id="campusMapArea">
+                <option value="">全部区域</option>
+                <option value="北区">北区</option>
+                <option value="南区">南区</option>
+                <option value="江湾校区">江湾校区</option>
+                <option value="河滨校区">河滨校区</option>
+              </select>
+              <input id="campusMapSearch" placeholder="搜索名称、代码、别名">
+            </div>
+            <div class="campus-map-actions">
+              <button id="campusMapAddBtn" class="secondary">新增地点</button>
+              <button id="campusMapUndoBtn" class="ghost">撤销</button>
+              <button id="campusMapRedoBtn" class="ghost">重做</button>
+            </div>
+            <div id="campusMapPlaceList" class="campus-map-list"></div>
+            <div class="ai-secret-note">只给已人工核对的地点发布精确红框；待核对地点会保留文字说明，不会在小程序或小佛卡片中显示精确框。</div>
+          </div>
+
+          <div class="card form-box">
+            <h3 class="card-title">框选与发布</h3>
+            <div class="form-row">
+              <div>
+                <label>名称</label>
+                <input id="campusMapName" placeholder="例如 C7 医学教学楼">
+              </div>
+              <div>
+                <label>代码</label>
+                <input id="campusMapCode" placeholder="例如 C7">
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label>校区</label>
+                <select id="campusMapEditCampus">
+                  <option value="仙溪校区">仙溪校区</option>
+                  <option value="江湾校区">江湾校区</option>
+                  <option value="河滨校区">河滨校区</option>
+                </select>
+              </div>
+              <div>
+                <label>区域</label>
+                <select id="campusMapEditArea">
+                  <option value="北区">北区</option>
+                  <option value="南区">南区</option>
+                  <option value="江湾校区">江湾校区</option>
+                  <option value="河滨校区">河滨校区</option>
+                </select>
+              </div>
+            </div>
+            <div class="form-row full">
+              <div>
+                <label>别名（逗号分隔）</label>
+                <input id="campusMapAliases" placeholder="C7,C7楼,C7教学楼">
+              </div>
+            </div>
+            <div class="form-row full">
+              <div>
+                <label>说明</label>
+                <textarea id="campusMapDescription" placeholder="给用户看的地点说明"></textarea>
+              </div>
+            </div>
+            <div class="form-row">
+              <div>
+                <label>核对状态</label>
+                <select id="campusMapVerified">
+                  <option value="false">待核对</option>
+                  <option value="true">已人工核对</option>
+                </select>
+              </div>
+              <div>
+                <label>类型</label>
+                <select id="campusMapType">
+                  <option value="teaching_building">教学楼</option>
+                  <option value="library">图书馆</option>
+                  <option value="canteen">饭堂</option>
+                  <option value="campus">校区</option>
+                  <option value="area">区域</option>
+                  <option value="place">地点</option>
+                </select>
+              </div>
+            </div>
+            <div id="campusMapEditor" class="campus-map-editor">
+              <img id="campusMapAdminImage" alt="校园地图底图">
+              <div id="campusMapRect" class="campus-map-rect" hidden></div>
+            </div>
+            <div class="campus-map-editor-help">操作：点击地图新增矩形；拖动矩形移动；拖右下角圆点缩放。勾选“已人工核对”后，published 数据才会显示精确红框。</div>
+            <div class="campus-map-actions">
+              <button id="campusMapSaveDraftBtn" class="primary">保存草稿</button>
+              <button id="campusMapPublishBtn" class="secondary">发布</button>
+              <button id="campusMapBackupBtn" class="ghost">备份</button>
+              <button id="campusMapExportBtn" class="ghost">导出</button>
+            </div>
+            <div class="form-row full">
+              <div>
+                <label>导入 JSON</label>
+                <textarea id="campusMapImportJson" class="campus-map-json" placeholder="粘贴 campus map JSON 后点击导入"></textarea>
+              </div>
+            </div>
+            <div class="campus-map-actions">
+              <button id="campusMapImportBtn" class="secondary">导入为草稿</button>
+              <select id="campusMapRollbackSelect"></select>
+              <button id="campusMapRollbackBtn" class="ghost">回滚到选中版本</button>
+            </div>
+            <div id="campusMapStatus" class="ai-verify-box">尚未加载校园地图数据。</div>
           </div>
         </div>
       </section>
@@ -5462,6 +5662,13 @@ const adminConsoleHtml = `<!doctype html>
         aiProviderConfig: null,
         aiAgentStatus: null,
         aiAgentEvalReport: null,
+        campusMap: null,
+        campusMapDraft: null,
+        campusMapSelectedId: "",
+        campusMapHistory: [],
+        campusMapUndo: [],
+        campusMapRedo: [],
+        campusMapDrag: null,
         
         feedbackFilter: {
           status: "all",
@@ -5883,6 +6090,7 @@ const adminConsoleHtml = `<!doctype html>
           news: "最新动态",
           config: "数据版本",
           "ai-provider": "AI 模型",
+          "campus-map": "校园地图管理",
           feedback: "反馈管理",
           security: "安全状态",
           settings: "系统设置与日志"
@@ -5911,6 +6119,8 @@ const adminConsoleHtml = `<!doctype html>
           ignoreLoadError(loadSecurityStatus());
         } else if (section === "ai-provider") {
           ignoreLoadError(loadAiProviderConfig());
+        } else if (section === "campus-map") {
+          ignoreLoadError(loadCampusMapState());
         } else if (section === "feedback") {
           ignoreLoadError(loadFeedbacks());
         }
@@ -10575,6 +10785,7 @@ const adminConsoleHtml = `<!doctype html>
         var grid = $("aiProviderStatusGrid");
         if (grid) {
           var hunyuan = cfg.cloudbaseHunyuan || {};
+          var trialAuth = cfg.trialAuthorization || {};
           var hunyuanStatus = "<span class='badge muted'>未配置</span>";
           if (hunyuan.warningLevel === "expired") {
             hunyuanStatus = "<span class='badge danger'>已到期</span>";
@@ -10583,12 +10794,27 @@ const adminConsoleHtml = `<!doctype html>
           } else if (hunyuan.warningLevel === "ok") {
             hunyuanStatus = "<span class='badge success'>剩余 " + escapeHtml(String(hunyuan.daysUntilPromoExpires)) + " 天</span>";
           }
+          var enhancedMode = trialAuth.trialEnhancedMode
+            ? "<span class='badge warning'>已开启</span>"
+            : "<span class='badge success'>公众工具模式</span>";
+          var authReady = trialAuth.sessionAuthorizationConfigured || (trialAuth.shortCredentialConfigured && !trialAuth.shortCredentialExpired);
+          var authStatus = authReady
+            ? "<span class='badge success'>已配置</span>"
+            : "<span class='badge warning'>未配置授权</span>";
+          var expiryText = trialAuth.shortCredentialConfigured
+            ? (trialAuth.shortCredentialExpired
+              ? "<span class='badge danger'>已过期或无效</span>"
+              : "<span class='badge success'>" + escapeHtml(trialAuth.shortCredentialExpiresAt || "未设置") + "</span>")
+            : "<span class='badge muted'>未使用短期凭证</span>";
           grid.innerHTML = [
             renderHealthItem("外部模型", cfg.enabled ? "<span class='badge success'>启用</span>" : "<span class='badge muted'>mock</span>"),
-            renderHealthItem("运行版本", cfg.runtimeMode === "competition" ? "<span class='badge warning'>competition</span>" : "<span class='badge success'>public</span>"),
+            renderHealthItem("体验增强", enhancedMode),
+            renderHealthItem("授权状态", authStatus),
+            renderHealthItem("授权到期", expiryText),
+            renderHealthItem("运行版本", cfg.runtimeMode === "competition" ? "<span class='badge warning'>trial enhanced</span>" : "<span class='badge success'>public</span>"),
             renderHealthItem("Provider", "<code>" + escapeHtml(cfg.provider || "mock") + "</code>"),
             renderHealthItem("DeepSeek Key", badgeText(Boolean(cfg.deepseekKeyConfigured)) + (cfg.deepseekKeyLast4 ? " ****" + escapeHtml(cfg.deepseekKeyLast4) : "")),
-            renderHealthItem("CloudBase OpenAI", cfg.cloudbaseOpenaiEnabled && cfg.cloudbaseOpenaiKeyConfigured ? "<span class='badge success'>OK</span> ****" + escapeHtml(cfg.cloudbaseOpenaiKeyLast4 || "") : "<span class='badge muted'>可选</span>"),
+            renderHealthItem("混元网关", cfg.cloudbaseOpenaiEnabled && cfg.cloudbaseOpenaiKeyConfigured ? "<span class='badge success'>OK</span> ****" + escapeHtml(cfg.cloudbaseOpenaiKeyLast4 || "") : "<span class='badge muted'>可选</span>"),
             renderHealthItem("Coze", cfg.cozeKeyConfigured && cfg.cozeBotIdConfigured ? "<span class='badge success'>OK</span> ****" + escapeHtml(cfg.cozeKeyLast4 || "") : "<span class='badge muted'>可选</span>"),
             renderHealthItem("混元权益", hunyuanStatus),
             renderHealthItem("个人摘要", cfg.allowPersonalContext ? "<span class='badge warning'>允许</span>" : "<span class='badge success'>默认关闭</span>"),
@@ -10641,7 +10867,7 @@ const adminConsoleHtml = `<!doctype html>
         var p95 = chain.reduce(function(max, item) { return Math.max(max, Number(item.p95LatencyMs || 0)); }, 0);
         grid.innerHTML = [
           renderHealthItem("Agent Protocol", "<code>" + escapeHtml(status.protocolVersion || "agent.v1") + "</code>"),
-          renderHealthItem("Runtime Mode", status.runtimeMode === "competition" ? "<span class='badge warning'>competition</span>" : "<span class='badge success'>public</span>"),
+          renderHealthItem("Runtime Mode", status.runtimeMode === "competition" ? "<span class='badge warning'>trial enhanced</span>" : "<span class='badge success'>public</span>"),
           renderHealthItem("已启用工具", "<strong>" + tools.length + "</strong>"),
           renderHealthItem("Provider Chain", renderProviderChain(chain)),
           renderHealthItem("最近成功", "<span>" + escapeHtml(lastSuccess) + "</span>"),
@@ -10653,9 +10879,9 @@ const adminConsoleHtml = `<!doctype html>
           renderHealthItem("安全拦截", "<strong>" + escapeHtml(String(metrics.safetyInterceptCount || 0)) + "</strong>"),
           renderHealthItem("知识库", "<span>" + escapeHtml(String(knowledge.documentCount || 0)) + " docs / " + escapeHtml(String(knowledge.chunkCount || 0)) + " chunks</span>"),
           renderHealthItem("校园地图", "<span>" + escapeHtml(String(map.placeCount || 0)) + " places</span>"),
-          renderHealthItem("比赛生图", image.enabled ? "<span class='badge warning'>enabled</span>" : "<span class='badge muted'>disabled</span>"),
+          renderHealthItem("体验版生图", image.enabled ? "<span class='badge warning'>enabled</span>" : "<span class='badge muted'>disabled</span>"),
           renderHealthItem("混元权益", "<span class='badge muted'>见 Provider 状态</span>"),
-          renderHealthItem("比赛授权", status.runtimeMode === "competition" ? "<span class='badge warning'>需服务端会话授权</span>" : "<span class='badge success'>public fail-closed</span>")
+          renderHealthItem("体验授权", status.runtimeMode === "competition" ? "<span class='badge warning'>需服务端会话授权</span>" : "<span class='badge success'>public fail-closed</span>")
         ].join("");
       }
 
@@ -10813,6 +11039,13 @@ const adminConsoleHtml = `<!doctype html>
               lines.push("  fallback: " + (item.fallbackReason || "-"));
               lines.push("  answer: " + (item.answerPreview || "-"));
             });
+            if (data.releaseBlockTest) {
+              lines.push("");
+              lines.push("releaseBlockTest: " + (data.releaseBlockTest.passed ? "passed" : "failed"));
+              lines.push("  runtime: " + (data.releaseBlockTest.runtimeMode || "-"));
+              lines.push("  external: " + (data.releaseBlockTest.externalProviderUsed ? "yes" : "no"));
+              lines.push("  fallback: " + (data.releaseBlockTest.fallbackReason || "-"));
+            }
             if (Array.isArray(data.toolCalls) && data.toolCalls.length) {
               lines.push("Tools: " + data.toolCalls.map(function(item) {
                 return (item.name || "-") + "/" + (item.status || "-");
@@ -10848,12 +11081,393 @@ const adminConsoleHtml = `<!doctype html>
               lines.push("Provider 已配置但请求被拒绝，请检查 model、baseUrl、response_format、thinking 参数。");
             }
             if (box) box.textContent = lines.join("\\n");
-            showToast("DeepSeek 聊天测试完成。", "success");
+            showToast("模型链路测试完成。", "success");
           })
           .catch(function(error) {
             if (box) box.textContent = "强制聊天测试失败：" + error.message;
             showToast(error.message, "error");
           });
+      }
+
+      function campusMapKey(place) {
+        if (!place) return "xianxiNorth";
+        if (place.campus === "江湾校区") return "jiangwan";
+        if (place.campus === "河滨校区") return "hebin";
+        if (place.campus === "仙溪校区") return place.area === "南区" ? "xianxiSouth" : "xianxiNorth";
+        return "xianxiNorth";
+      }
+
+      function campusMapAssetUrl(mapKey) {
+        return "/api/admin/campus-map/asset?map=" + encodeURIComponent(mapKey || "xianxiNorth");
+      }
+
+      function cloneCampusMapDraft() {
+        return JSON.parse(JSON.stringify(state.campusMapDraft || { places: [] }));
+      }
+
+      function selectedCampusPlace() {
+        var draft = state.campusMapDraft || {};
+        var places = Array.isArray(draft.places) ? draft.places : [];
+        return places.find(function(place) { return place.id === state.campusMapSelectedId; }) || null;
+      }
+
+      function pushCampusMapUndo() {
+        state.campusMapUndo.push(cloneCampusMapDraft());
+        if (state.campusMapUndo.length > 40) state.campusMapUndo.shift();
+        state.campusMapRedo = [];
+      }
+
+      function setCampusMapStatus(text) {
+        var box = $("campusMapStatus");
+        if (box) box.textContent = text || "";
+      }
+
+      function loadCampusMapState() {
+        setCampusMapStatus("正在加载校园地图数据...");
+        return api("/api/admin/campus-map/state")
+          .then(function(res) {
+            var data = res.data || {};
+            state.campusMap = data;
+            state.campusMapDraft = data.draft || data.published || { places: [] };
+            state.campusMapHistory = Array.isArray(data.history) ? data.history : [];
+            if (!state.campusMapSelectedId && state.campusMapDraft.places && state.campusMapDraft.places.length) {
+              state.campusMapSelectedId = state.campusMapDraft.places[0].id;
+            }
+            renderCampusMapAdmin();
+            setCampusMapStatus("已加载草稿 " + (state.campusMapDraft.version || "-") + "，地点 " + ((state.campusMapDraft.places || []).length) + " 个。");
+            return data;
+          })
+          .catch(function(error) {
+            setCampusMapStatus("校园地图加载失败：" + error.message);
+            throw error;
+          });
+      }
+
+      function filteredCampusPlaces() {
+        var draft = state.campusMapDraft || {};
+        var places = Array.isArray(draft.places) ? draft.places : [];
+        var campus = value("campusMapCampus");
+        var area = value("campusMapArea");
+        var keyword = String(value("campusMapSearch") || "").trim().toLowerCase();
+        return places.filter(function(place) {
+          if (campus && place.campus !== campus) return false;
+          if (area && place.area !== area) return false;
+          if (!keyword) return true;
+          var aliases = Array.isArray(place.aliases) ? place.aliases.join(" ") : "";
+          return [place.name, place.code, place.campus, place.area, aliases, place.description].join(" ").toLowerCase().indexOf(keyword) >= 0;
+        });
+      }
+
+      function renderCampusMapList() {
+        var list = $("campusMapPlaceList");
+        if (!list) return;
+        var places = filteredCampusPlaces();
+        list.innerHTML = "";
+        if (!places.length) {
+          list.innerHTML = "<div class='ai-secret-note'>没有匹配地点，可新增或调整筛选。</div>";
+          return;
+        }
+        places.forEach(function(place) {
+          var btn = document.createElement("button");
+          btn.className = "campus-map-place-btn" + (place.id === state.campusMapSelectedId ? " active" : "");
+          btn.type = "button";
+          btn.dataset.id = place.id;
+          btn.innerHTML = "<strong>" + escapeHtml(place.name || place.id) + "</strong><br><span class='muted'>" +
+            escapeHtml([place.code, place.campus, place.area, place.verified ? "已核对" : "待核对"].filter(Boolean).join(" · ")) + "</span>";
+          btn.addEventListener("click", function() {
+            patchCampusMapSelectedFromForm();
+            state.campusMapSelectedId = place.id;
+            renderCampusMapAdmin();
+          });
+          list.appendChild(btn);
+        });
+      }
+
+      function renderCampusMapForm() {
+        var place = selectedCampusPlace();
+        if (!place) {
+          ["campusMapName", "campusMapCode", "campusMapAliases", "campusMapDescription"].forEach(function(id) { setValue(id, ""); });
+          setSelectValue("campusMapVerified", "false");
+          setSelectValue("campusMapType", "teaching_building");
+          return;
+        }
+        setValue("campusMapName", place.name || "");
+        setValue("campusMapCode", place.code || "");
+        setSelectValue("campusMapEditCampus", place.campus || "仙溪校区");
+        setSelectValue("campusMapEditArea", place.area || "北区");
+        setValue("campusMapAliases", Array.isArray(place.aliases) ? place.aliases.join(",") : "");
+        setValue("campusMapDescription", place.description || "");
+        setSelectValue("campusMapVerified", place.verified ? "true" : "false");
+        setSelectValue("campusMapType", place.type || "teaching_building");
+      }
+
+      function renderCampusMapRect() {
+        var rect = $("campusMapRect");
+        var editor = $("campusMapEditor");
+        var image = $("campusMapAdminImage");
+        var place = selectedCampusPlace();
+        if (!rect || !editor || !image) return;
+        var mapKey = campusMapKey(place);
+        if (image.dataset.mapKey !== mapKey) {
+          image.dataset.mapKey = mapKey;
+          image.src = campusMapAssetUrl(mapKey);
+        }
+        var region = place && place.mapRegion;
+        if (!region) {
+          rect.hidden = true;
+          return;
+        }
+        rect.hidden = false;
+        rect.style.left = (Math.max(0, Math.min(1, Number(region.x || 0))) * 100) + "%";
+        rect.style.top = (Math.max(0, Math.min(1, Number(region.y || 0))) * 100) + "%";
+        rect.style.width = (Math.max(0.02, Math.min(1, Number(region.width || 0.12))) * 100) + "%";
+        rect.style.height = (Math.max(0.02, Math.min(1, Number(region.height || 0.1))) * 100) + "%";
+      }
+
+      function renderCampusMapHistory() {
+        var select = $("campusMapRollbackSelect");
+        if (!select) return;
+        select.innerHTML = "";
+        (state.campusMapHistory || []).forEach(function(item) {
+          var option = document.createElement("option");
+          option.value = item.id;
+          option.textContent = (item.publishedAt || item.version || item.id) + " · " + item.placeCount + " 个地点";
+          select.appendChild(option);
+        });
+      }
+
+      function renderCampusMapAdmin() {
+        renderCampusMapList();
+        renderCampusMapForm();
+        renderCampusMapRect();
+        renderCampusMapHistory();
+      }
+
+      function patchCampusMapSelectedFromForm(options) {
+        var place = selectedCampusPlace();
+        if (!place) return;
+        if (!options || options.pushUndo !== false) pushCampusMapUndo();
+        place.name = value("campusMapName");
+        place.code = value("campusMapCode");
+        place.campus = value("campusMapEditCampus") || "仙溪校区";
+        place.area = value("campusMapEditArea") || "北区";
+        place.aliases = String(value("campusMapAliases") || "").split(/[,，]/).map(function(item) { return item.trim(); }).filter(Boolean);
+        place.description = value("campusMapDescription");
+        place.verified = value("campusMapVerified") === "true";
+        place.reviewStatus = place.verified ? "verified" : "needs-review";
+        place.type = value("campusMapType") || "teaching_building";
+        place.updatedAt = new Date().toISOString();
+        if (!options || options.render !== false) renderCampusMapAdmin();
+      }
+
+      function addCampusMapPlace() {
+        pushCampusMapUndo();
+        var draft = state.campusMapDraft || { places: [] };
+        if (!Array.isArray(draft.places)) draft.places = [];
+        var id = "place-" + Date.now();
+        var campus = value("campusMapCampus") || "仙溪校区";
+        var area = value("campusMapArea") || (campus === "仙溪校区" ? "北区" : campus);
+        draft.places.push({
+          id: id,
+          campus: campus,
+          area: area,
+          name: "新地点",
+          code: "",
+          type: "teaching_building",
+          aliases: [],
+          description: "",
+          mapRegion: { x: 0.4, y: 0.35, width: 0.14, height: 0.1 },
+          verified: false,
+          reviewStatus: "needs-review",
+          confidence: 0,
+          neighbors: [],
+          updatedAt: new Date().toISOString()
+        });
+        state.campusMapDraft = draft;
+        state.campusMapSelectedId = id;
+        renderCampusMapAdmin();
+      }
+
+      function setCampusMapRegion(region) {
+        var place = selectedCampusPlace();
+        if (!place) return;
+        place.mapRegion = {
+          x: Math.max(0, Math.min(0.98, Number(region.x || 0))),
+          y: Math.max(0, Math.min(0.98, Number(region.y || 0))),
+          width: Math.max(0.02, Math.min(1, Number(region.width || 0.12))),
+          height: Math.max(0.02, Math.min(1, Number(region.height || 0.1)))
+        };
+        place.mapRegion.width = Math.min(place.mapRegion.width, 1 - place.mapRegion.x);
+        place.mapRegion.height = Math.min(place.mapRegion.height, 1 - place.mapRegion.y);
+        renderCampusMapRect();
+      }
+
+      function campusMapPointerDown(event) {
+        var editor = $("campusMapEditor");
+        var rect = $("campusMapRect");
+        var place = selectedCampusPlace();
+        if (!editor || !place) return;
+        patchCampusMapSelectedFromForm({ pushUndo: false });
+        pushCampusMapUndo();
+        var box = editor.getBoundingClientRect();
+        var x = (event.clientX - box.left) / Math.max(1, box.width);
+        var y = (event.clientY - box.top) / Math.max(1, box.height);
+        var region = place.mapRegion || { x: x, y: y, width: 0.14, height: 0.1 };
+        var targetIsRect = rect && (event.target === rect || rect.contains(event.target));
+        if (!targetIsRect) {
+          setCampusMapRegion({ x: x, y: y, width: 0.14, height: 0.1 });
+          region = place.mapRegion;
+        }
+        var rectBox = rect && !rect.hidden ? rect.getBoundingClientRect() : null;
+        var resize = rectBox && event.clientX > rectBox.right - 18 && event.clientY > rectBox.bottom - 18;
+        state.campusMapDrag = {
+          mode: resize ? "resize" : "move",
+          startX: x,
+          startY: y,
+          region: Object.assign({}, region)
+        };
+        event.preventDefault();
+      }
+
+      function campusMapPointerMove(event) {
+        if (!state.campusMapDrag) return;
+        var editor = $("campusMapEditor");
+        if (!editor) return;
+        var box = editor.getBoundingClientRect();
+        var x = (event.clientX - box.left) / Math.max(1, box.width);
+        var y = (event.clientY - box.top) / Math.max(1, box.height);
+        var drag = state.campusMapDrag;
+        var dx = x - drag.startX;
+        var dy = y - drag.startY;
+        if (drag.mode === "resize") {
+          setCampusMapRegion({
+            x: drag.region.x,
+            y: drag.region.y,
+            width: drag.region.width + dx,
+            height: drag.region.height + dy
+          });
+        } else {
+          setCampusMapRegion({
+            x: drag.region.x + dx,
+            y: drag.region.y + dy,
+            width: drag.region.width,
+            height: drag.region.height
+          });
+        }
+        event.preventDefault();
+      }
+
+      function campusMapPointerUp() {
+        state.campusMapDrag = null;
+      }
+
+      function undoCampusMap() {
+        if (!state.campusMapUndo.length) return;
+        state.campusMapRedo.push(cloneCampusMapDraft());
+        state.campusMapDraft = state.campusMapUndo.pop();
+        renderCampusMapAdmin();
+      }
+
+      function redoCampusMap() {
+        if (!state.campusMapRedo.length) return;
+        state.campusMapUndo.push(cloneCampusMapDraft());
+        state.campusMapDraft = state.campusMapRedo.pop();
+        renderCampusMapAdmin();
+      }
+
+      function saveCampusMapDraft() {
+        patchCampusMapSelectedFromForm({ pushUndo: false });
+        return api("/api/admin/campus-map/draft", { method: "POST", body: JSON.stringify(state.campusMapDraft || {}) })
+          .then(function(res) {
+            state.campusMapDraft = res.data || state.campusMapDraft;
+            renderCampusMapAdmin();
+            setCampusMapStatus("草稿已保存：" + (state.campusMapDraft.version || "-"));
+            showToast("校园地图草稿已保存。", "success");
+          })
+          .catch(function(error) {
+            setCampusMapStatus("草稿保存失败：" + error.message);
+            showToast(error.message, "error");
+          });
+      }
+
+      function publishCampusMap() {
+        patchCampusMapSelectedFromForm({ pushUndo: false });
+        return api("/api/admin/campus-map/publish", { method: "POST", body: JSON.stringify(state.campusMapDraft || {}) })
+          .then(function(res) {
+            var nextState = res.state || {};
+            state.campusMap = nextState;
+            state.campusMapDraft = nextState.draft || res.data || state.campusMapDraft;
+            state.campusMapHistory = Array.isArray(nextState.history) ? nextState.history : state.campusMapHistory;
+            renderCampusMapAdmin();
+            setCampusMapStatus("已发布 published：" + ((res.data && res.data.version) || "-"));
+            showToast("校园地图已发布。", "success");
+          })
+          .catch(function(error) {
+            setCampusMapStatus("发布失败：" + error.message);
+            showToast(error.message, "error");
+          });
+      }
+
+      function backupCampusMap() {
+        return api("/api/admin/campus-map/backup", { method: "POST", body: JSON.stringify({ label: "manual" }) })
+          .then(function(res) {
+            setCampusMapStatus("已备份：" + ((res.data && res.data.filename) || "-"));
+            showToast("校园地图备份已创建。", "success");
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function exportCampusMap() {
+        patchCampusMapSelectedFromForm({ pushUndo: false });
+        var blob = new Blob([JSON.stringify(state.campusMapDraft || {}, null, 2)], { type: "application/json;charset=utf-8" });
+        var link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = "campus-map-draft.json";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+
+      function importCampusMap() {
+        var text = value("campusMapImportJson");
+        if (!text) {
+          showToast("请先粘贴 JSON", "warning");
+          return;
+        }
+        var payload;
+        try {
+          payload = JSON.parse(text);
+        } catch (error) {
+          showToast("JSON 解析失败", "error");
+          return;
+        }
+        return api("/api/admin/campus-map/import", { method: "POST", body: JSON.stringify(payload) })
+          .then(function(res) {
+            state.campusMapDraft = res.data || state.campusMapDraft;
+            state.campusMapSelectedId = state.campusMapDraft.places && state.campusMapDraft.places[0] && state.campusMapDraft.places[0].id || "";
+            renderCampusMapAdmin();
+            showToast("已导入为草稿。", "success");
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function rollbackCampusMap() {
+        var historyId = value("campusMapRollbackSelect");
+        if (!historyId) {
+          showToast("没有可回滚版本", "warning");
+          return;
+        }
+        if (!window.confirm("确认回滚 published 地图到选中历史版本？")) return;
+        return api("/api/admin/campus-map/rollback", { method: "POST", body: JSON.stringify({ historyId: historyId }) })
+          .then(function(res) {
+            var nextState = res.state || {};
+            state.campusMap = nextState;
+            state.campusMapDraft = nextState.draft || res.data || state.campusMapDraft;
+            state.campusMapHistory = Array.isArray(nextState.history) ? nextState.history : state.campusMapHistory;
+            renderCampusMapAdmin();
+            showToast("校园地图已回滚。", "success");
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
       }
 
       // 系统配置数据保存
@@ -10931,6 +11545,7 @@ const adminConsoleHtml = `<!doctype html>
         if (location.pathname.indexOf("/news") >= 0) return "news";
         if (location.pathname.indexOf("/config") >= 0 || location.pathname.indexOf("/version") >= 0) return "config";
         if (location.pathname.indexOf("/ai-provider") >= 0 || location.pathname.indexOf("/ai") >= 0) return "ai-provider";
+        if (location.pathname.indexOf("/campus-map") >= 0 || location.pathname.indexOf("/map") >= 0) return "campus-map";
         if (location.pathname.indexOf("/feedback") >= 0) return "feedback";
         if (location.pathname.indexOf("/security") >= 0) return "security";
         return "dashboard";
@@ -11017,6 +11632,27 @@ const adminConsoleHtml = `<!doctype html>
       safeBind("runAiGoldenEvalBtn", "click", runAiGoldenEvaluation);
       safeBind("exportAiEvalReportBtn", "click", exportAiEvaluationReport);
       safeBind("clearAiLocalMetricsBtn", "click", clearAiLocalMetrics);
+      safeBind("campusMapCampus", "change", renderCampusMapList);
+      safeBind("campusMapArea", "change", renderCampusMapList);
+      safeBind("campusMapSearch", "input", renderCampusMapList);
+      safeBind("campusMapAddBtn", "click", addCampusMapPlace);
+      safeBind("campusMapUndoBtn", "click", undoCampusMap);
+      safeBind("campusMapRedoBtn", "click", redoCampusMap);
+      ["campusMapName", "campusMapCode", "campusMapAliases", "campusMapDescription"].forEach(function(id) {
+        safeBind(id, "input", function() { patchCampusMapSelectedFromForm({ pushUndo: false, render: false }); });
+      });
+      ["campusMapEditCampus", "campusMapEditArea", "campusMapVerified", "campusMapType"].forEach(function(id) {
+        safeBind(id, "change", function() { patchCampusMapSelectedFromForm({ pushUndo: false }); });
+      });
+      safeBind("campusMapEditor", "pointerdown", campusMapPointerDown);
+      document.addEventListener("pointermove", campusMapPointerMove);
+      document.addEventListener("pointerup", campusMapPointerUp);
+      safeBind("campusMapSaveDraftBtn", "click", saveCampusMapDraft);
+      safeBind("campusMapPublishBtn", "click", publishCampusMap);
+      safeBind("campusMapBackupBtn", "click", backupCampusMap);
+      safeBind("campusMapExportBtn", "click", exportCampusMap);
+      safeBind("campusMapImportBtn", "click", importCampusMap);
+      safeBind("campusMapRollbackBtn", "click", rollbackCampusMap);
       safeBind("saveNoticeButton", "click", saveNotice);
       safeBind("clearNoticeButton", "click", clearNoticeForm);
       safeBind("saveNewsButton", "click", saveNews);

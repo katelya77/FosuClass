@@ -23,11 +23,16 @@
   line-height: 1.45;
 }
 
+.muted {
+  color: #8a94a6;
+}
+
 .filter-card,
 .summary-card,
 .room-card,
 .skeleton-card,
-.room-detail {
+.room-detail,
+.filter-sheet {
   border-radius: 16rpx;
   background: #ffffff;
   box-shadow: 0 4rpx 16rpx rgba(162, 178, 201, 0.08);
@@ -36,6 +41,10 @@
 .filter-card {
   padding: 24rpx 20rpx;
   margin-bottom: 18rpx;
+}
+
+.compact-filter-card {
+  padding: 20rpx 18rpx;
 }
 
 .status-panel {
@@ -82,6 +91,11 @@
   padding: 20rpx 0 0;
 }
 
+.chip-section.compact {
+  padding-top: 0;
+  margin-bottom: 18rpx;
+}
+
 .chip-title {
   margin-bottom: 12rpx;
   color: #3e4e68;
@@ -97,6 +111,17 @@
 .chip-row {
   display: flex;
   gap: 12rpx;
+}
+
+.date-row,
+.time-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10rpx;
+}
+
+.time-row {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .chip-row.nowrap {
@@ -118,6 +143,12 @@
   white-space: nowrap;
 }
 
+.time-row .filter-chip {
+  min-width: 0;
+  padding: 0 8rpx;
+  text-align: center;
+}
+
 .filter-chip.active,
 .building-chip.active {
   background: #c62828;
@@ -136,6 +167,15 @@
   line-height: 1.2;
 }
 
+.date-chip.compact {
+  min-width: 0;
+  padding: 12rpx 10rpx;
+}
+
+.picker-chip {
+  text-align: center;
+}
+
 .date-chip.active {
   background: #fff1f1;
   color: #c62828;
@@ -147,6 +187,42 @@
   color: #8a94a6;
   font-size: 19rpx;
   font-weight: 700;
+}
+
+.building-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  padding: 18rpx 0 0;
+  border-top: 1rpx solid #f2f5f9;
+}
+
+.building-summary-title {
+  color: #172033;
+  font-size: 28rpx;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.building-summary-sub {
+  margin-top: 6rpx;
+  color: #778297;
+  font-size: 22rpx;
+  line-height: 1.35;
+}
+
+.more-filter-btn {
+  flex: 0 0 auto;
+  height: 58rpx;
+  min-width: 126rpx;
+  padding: 0 18rpx;
+  border-radius: 29rpx;
+  background: #f1f4f8;
+  color: #536174;
+  font-size: 24rpx;
+  font-weight: 900;
+  line-height: 58rpx;
 }
 
 .preset-row,
@@ -368,6 +444,26 @@ picker {
   gap: 16rpx;
 }
 
+.result-list.grouped {
+  gap: 22rpx;
+}
+
+.building-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.building-group-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 6rpx;
+  color: #3e4e68;
+  font-size: 24rpx;
+  font-weight: 900;
+}
+
 .room-card {
   display: flex;
   align-items: center;
@@ -431,6 +527,10 @@ picker {
   gap: 10rpx;
 }
 
+.room-actions.slim {
+  gap: 0;
+}
+
 .room-schedule-badge {
   max-width: 136rpx;
   min-height: 40rpx;
@@ -475,6 +575,13 @@ picker {
   color: #ffffff;
 }
 
+.load-more-hint {
+  padding: 10rpx 0 20rpx;
+  color: #8a94a6;
+  font-size: 22rpx;
+  text-align: center;
+}
+
 .detail-mask {
   position: fixed;
   inset: 0;
@@ -491,6 +598,28 @@ picker {
   padding: 26rpx 24rpx;
   max-height: 76vh;
   overflow-y: auto;
+}
+
+.filter-sheet {
+  position: fixed;
+  left: 20rpx;
+  right: 20rpx;
+  bottom: calc(20rpx + env(safe-area-inset-bottom));
+  z-index: 21;
+  padding: 24rpx;
+  max-height: 82vh;
+}
+
+.filter-sheet-scroll {
+  max-height: 58vh;
+  padding-bottom: 12rpx;
+}
+
+.filter-sheet-actions {
+  display: flex;
+  gap: 14rpx;
+  padding-top: 18rpx;
+  border-top: 1rpx solid #f2f5f9;
 }
 
 .detail-head {

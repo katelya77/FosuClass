@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const campusMapVersionService = require("./campusMapVersionService");
 
 const DATA_PATH = path.resolve(__dirname, "../../../data/ai/campus-places.json");
 const SOURCE_ID = "campus-map:v2";
@@ -92,12 +93,17 @@ function safeNumber(value, fallback = 0) {
 
 function loadPlaces() {
   try {
-    if (fs.existsSync(DATA_PATH)) {
-      const parsed = JSON.parse(fs.readFileSync(DATA_PATH, "utf8"));
-      if (Array.isArray(parsed.places) && parsed.places.length) return parsed.places;
-    }
+    const published = campusMapVersionService.loadPublishedDocument();
+    if (Array.isArray(published.places) && published.places.length) return published.places;
   } catch (error) {
-    return FALLBACK_PLACES;
+    try {
+      if (fs.existsSync(DATA_PATH)) {
+        const parsed = JSON.parse(fs.readFileSync(DATA_PATH, "utf8"));
+        if (Array.isArray(parsed.places) && parsed.places.length) return parsed.places;
+      }
+    } catch (innerError) {
+      return FALLBACK_PLACES;
+    }
   }
   return FALLBACK_PLACES;
 }
@@ -112,7 +118,6 @@ function buildMapActionUrl(place = {}) {
   const params = new URLSearchParams();
   params.set("map", getMapKey(place));
   if (place.id) params.set("placeId", place.id);
-  if (place.name) params.set("q", place.code || place.name);
   return `/pages/campus-map/campus-map?${params.toString()}`;
 }
 
@@ -256,19 +261,33 @@ function getClassroomLocation(input = {}) {
 }
 
 function getMapStatus() {
+  const published = campusMapVersionService.loadPublishedDocument();
   const places = loadPlaces().map(sanitizePlace);
   return {
     sourceId: SOURCE_ID,
-    updatedAt: "2026-06-17",
+    updatedAt: published.publishedAt || published.updatedAt || "2026-06-17",
+    version: published.version || "",
+    source: published.source || "published",
     placeCount: places.length,
     verifiedCount: places.filter((item) => item.verified).length,
     needsAdminData: places.some((item) => !item.verified),
   };
 }
 
+function getPublishedMapDocument() {
+  const published = campusMapVersionService.loadPublishedDocument();
+  return {
+    version: published.version,
+    updatedAt: published.publishedAt || published.updatedAt,
+    note: published.note,
+    places: loadPlaces().map(sanitizePlace),
+  };
+}
+
 module.exports = {
   DATA_PATH,
   ROUTE_LIMIT_TEXT,
+  getPublishedMapDocument,
   getCampusRoute,
   getClassroomLocation,
   getMapStatus,

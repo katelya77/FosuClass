@@ -1,100 +1,56 @@
 <view class="page empty-room-page">
   <view class="page-header">
     <view class="title">空教室查询</view>
-    <view class="subtitle">{{updatedAtText || "按日期、节次和教学楼查找可用教室。"}} </view>
+    <view class="subtitle">第{{week}}周 · {{dateText}} · {{weekdayText}}</view>
+    <view class="subtitle muted">{{updatedAtText || "正在读取数据更新时间"}}</view>
   </view>
 
-  <view class="filter-card card">
-    <view class="status-panel">
-      <view>
-        <view class="status-title">第{{week}}周 · {{dateText}} · {{weekdayText}}</view>
-        <view class="status-subtitle">当前节次 {{sections}} · 数据来源：当前 Release Pack 静态索引</view>
-      </view>
-      <picker mode="date" value="{{date}}" bindchange="onDateChange">
-        <view class="date-picker-btn">选日期</view>
-      </picker>
-    </view>
-
-    <view class="chip-section">
-      <view class="chip-title">快捷筛选</view>
-      <scroll-view class="chip-scroll" scroll-x="true" enhanced="true" show-scrollbar="false">
-        <view class="chip-row nowrap">
-          <view
-            wx:for="{{quickFilters}}"
-            wx:key="key"
-            class="filter-chip {{activeQuickFilter === item.key ? 'active' : ''}}"
-            data-key="{{item.key}}"
-            bindtap="onQuickFilterTap"
-          >{{item.label}}</view>
-        </view>
-      </scroll-view>
-    </view>
-
-    <view class="chip-section">
+  <view class="filter-card card compact-filter-card">
+    <view class="chip-section compact">
       <view class="chip-title">日期</view>
-      <scroll-view class="chip-scroll" scroll-x="true" enhanced="true" show-scrollbar="false">
-        <view class="chip-row nowrap">
-          <view
-            wx:for="{{dateOptions}}"
-            wx:key="key"
-            class="date-chip {{date === item.date ? 'active' : ''}}"
-            data-key="{{item.key}}"
-            data-date="{{item.date}}"
-            bindtap="onDateChipTap"
-          >
-            <text>{{item.label}}</text>
-            <text class="date-chip-sub">{{item.date}}</text>
-          </view>
+      <view class="chip-row date-row">
+        <view
+          wx:for="{{datePrimaryOptions}}"
+          wx:key="key"
+          class="date-chip compact {{date === item.date ? 'active' : ''}}"
+          data-key="{{item.key}}"
+          data-date="{{item.date}}"
+          bindtap="onDateChipTap"
+        >
+          <text>{{item.label}}</text>
+          <text class="date-chip-sub">{{item.date}}</text>
         </view>
-      </scroll-view>
+        <picker mode="date" value="{{date}}" bindchange="onDateChange">
+          <view class="date-chip compact picker-chip">
+            <text>选日期</text>
+            <text class="date-chip-sub">{{dateText}}</text>
+          </view>
+        </picker>
+      </view>
     </view>
 
-    <view class="chip-section">
-      <view class="chip-title">节次</view>
-      <view class="preset-row">
-        <view class="preset-chip" data-key="morning" bindtap="onSectionGroupTap">上午 1-5</view>
-        <view class="preset-chip" data-key="afternoon" bindtap="onSectionGroupTap">下午 6-10</view>
-        <view class="preset-chip" data-key="evening" bindtap="onSectionGroupTap">晚上 11-14</view>
-      </view>
-      <view class="section-grid">
+    <view class="chip-section compact">
+      <view class="chip-title">时段</view>
+      <view class="chip-row time-row">
         <view
-          wx:for="{{sectionChips}}"
-          wx:key="value"
-          class="section-chip {{item.selected ? 'active' : ''}}"
-          data-value="{{item.value}}"
-          bindtap="onSectionChipTap"
+          wx:for="{{quickFilters}}"
+          wx:key="key"
+          class="filter-chip {{activeQuickFilter === item.key ? 'active' : ''}}"
+          data-key="{{item.key}}"
+          bindtap="onQuickFilterTap"
         >{{item.label}}</view>
       </view>
     </view>
 
-    <view class="chip-section">
-      <view class="chip-title">教学楼</view>
-      <view class="building-row">
-        <block wx:for="{{buildingOptions}}" wx:key="*this">
-          <view
-            wx:if="{{showUnknownBuildings || (item !== '其他/未识别' && item !== '未知')}}"
-            class="building-chip {{buildingOptions[selectedBuildingIndex] === item ? 'active' : ''}}"
-            data-building="{{item}}"
-            bindtap="onBuildingChipTap"
-          >{{item}}</view>
-        </block>
-        <view class="building-chip ghost" bindtap="toggleUnknownBuildings">{{showUnknownBuildings ? "隐藏未知" : "展开未知"}}</view>
+    <view class="building-summary">
+      <view>
+        <view class="building-summary-title">{{buildingSummaryText}}</view>
+        <view class="building-summary-sub">第{{sections}}节 · 连续空闲 {{minFreeOptions[selectedMinFreeIndex]}} 节起</view>
       </view>
-      <button
-        class="building-fav-btn {{selectedBuildingFavorite ? 'active' : ''}}"
-        bindtap="toggleFavoriteBuilding"
-      >{{selectedBuildingFavorite ? "已收藏当前楼栋" : "收藏当前楼栋"}}</button>
+      <button class="more-filter-btn" bindtap="openFilterSheet">更多筛选</button>
     </view>
 
-    <view class="switch-row">
-      <view class="switch-copy">
-        <view class="switch-title">只看常用教室</view>
-        <view class="switch-desc">过滤非常规地点名称</view>
-      </view>
-      <switch checked="{{commonOnly}}" color="#c62828" bindchange="onCommonOnlyChange" />
-    </view>
-
-    <button class="primary-search-btn" loading="{{loading}}" bindtap="onRetry">刷新静态索引</button>
+    <button class="primary-search-btn" loading="{{loading}}" bindtap="onQueryTap">查询空教室</button>
   </view>
 
   <view class="restore-hint-bar" wx:if="{{restoreHint}}">
@@ -103,7 +59,7 @@
 
   <view class="summary-card card" wx:if="{{summaryText}}">
     <view class="summary-title">{{summaryText}}</view>
-    <view class="summary-subtitle">结果来自当前 release 的预生成 empty-room index。</view>
+    <view class="summary-subtitle">已按当前筛选在本地结果中整理。</view>
   </view>
 
   <block wx:if="{{dataState === 'loading'}}">
@@ -114,34 +70,37 @@
     </view>
   </block>
 
-  <view class="result-list" wx:elif="{{rooms.length}}">
-    <view
-      wx:for="{{rooms}}"
-      wx:key="roomId"
-      class="room-card card"
-      data-index="{{index}}"
-      bindtap="onRoomTap"
-    >
-      <view class="room-main">
-        <view class="room-title">{{item.roomName}}</view>
-        <view class="room-meta">{{item.building}} · {{item.capacityText}} · {{item.freeText}} · {{item.continuousText}}</view>
-        <view class="room-chip-row" wx:if="{{item.sectionChips && item.sectionChips.length}}">
-          <text wx:for="{{item.sectionChips}}" wx:for-item="chip" wx:key="*this" class="room-section-chip">{{chip}}</text>
-        </view>
-        <view class="room-next" wx:if="{{item.nextOccupiedCourse}}">下一次占用：{{item.nextOccupiedCourse.sectionText}} {{item.nextOccupiedCourse.courseName}}</view>
+  <view class="result-list grouped" wx:elif="{{visibleRoomGroups.length}}">
+    <view wx:for="{{visibleRoomGroups}}" wx:for-item="group" wx:key="building" class="building-group">
+      <view class="building-group-head">
+        <text>{{group.building}}</text>
+        <text>{{group.total}} 间</text>
       </view>
-      <view class="room-actions">
-        <view class="room-schedule-badge {{item.hasScheduleDetail ? 'ready' : 'partial'}}">{{item.scheduleBadgeText}}</view>
-        <button
-          class="mini-btn {{item.favorite ? 'active' : ''}}"
-          catchtap="toggleFavoriteRoom"
-          data-name="{{item.roomName}}"
-          data-building="{{item.building}}"
-        >{{item.favorite ? "已收藏" : "收藏"}}</button>
-        <button class="mini-btn" catchtap="copyRoomName" data-name="{{item.roomName}}">复制</button>
-        <button class="mini-btn strong" catchtap="openClassroomSchedule" data-index="{{index}}">课表</button>
+      <view
+        wx:for="{{group.rooms}}"
+        wx:for-item="room"
+        wx:key="roomId"
+        class="room-card card"
+        data-source-index="{{room.sourceIndex}}"
+        bindtap="onRoomTap"
+      >
+        <view class="room-main">
+          <view class="room-title">{{room.roomName}}</view>
+          <view class="room-meta">{{room.building}} · {{room.freeText}} · {{room.continuousText}}</view>
+          <view class="room-next" wx:if="{{room.nextOccupiedCourse}}">下一次占用：{{room.nextOccupiedCourse.sectionText}} {{room.nextOccupiedCourse.courseName}}</view>
+          <view class="room-next muted" wx:else>下一次占用：暂无记录</view>
+        </view>
+        <view class="room-actions slim">
+          <button
+            class="mini-btn {{room.favorite ? 'active' : ''}}"
+            catchtap="toggleFavoriteRoom"
+            data-name="{{room.roomName}}"
+            data-building="{{room.building}}"
+          >{{room.favorite ? "已收藏" : "收藏"}}</button>
+        </view>
       </view>
     </view>
+    <view class="load-more-hint" wx:if="{{visibleRoomLimit < rooms.length}}">继续下拉加载更多</view>
   </view>
 
   <empty-state
@@ -155,6 +114,95 @@
     title="{{dataState === 'noRelease' ? '暂未发布课表数据' : '空教室加载失败'}}"
     desc="{{dataState === 'timeout' ? '网络较慢，可稍后重试。' : '请检查网络后重试。'}}"
   />
+
+  <view class="detail-mask" wx:if="{{filterSheetVisible}}" catchtap="closeFilterSheet"></view>
+  <view class="filter-sheet card" wx:if="{{filterSheetVisible}}">
+    <view class="detail-head">
+      <view>
+        <view class="detail-title">更多筛选</view>
+        <view class="detail-subtitle">选择后点确定，再查询空教室</view>
+      </view>
+      <view class="detail-close" bindtap="closeFilterSheet">关闭</view>
+    </view>
+    <scroll-view class="filter-sheet-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <view class="chip-section">
+        <view class="chip-title">精确日期</view>
+        <picker mode="date" value="{{date}}" bindchange="onDateChange">
+          <view class="filter-pill">{{dateText}} · {{weekdayText}}</view>
+        </picker>
+      </view>
+
+      <view class="chip-section">
+        <view class="chip-title">节次</view>
+        <view class="preset-row">
+          <view class="preset-chip" data-key="morning" bindtap="onSectionGroupTap">上午 1-5</view>
+          <view class="preset-chip" data-key="afternoon" bindtap="onSectionGroupTap">下午 6-10</view>
+          <view class="preset-chip" data-key="evening" bindtap="onSectionGroupTap">晚上 11-14</view>
+        </view>
+        <view class="section-grid">
+          <view
+            wx:for="{{sectionChips}}"
+            wx:key="value"
+            class="section-chip {{item.selected ? 'active' : ''}}"
+            data-value="{{item.value}}"
+            bindtap="onSectionChipTap"
+          >{{item.label}}</view>
+        </view>
+      </view>
+
+      <view class="filter-row">
+        <view class="filter-label">连续空闲</view>
+        <picker mode="selector" range="{{minFreeOptions}}" value="{{selectedMinFreeIndex}}" bindchange="onMinFreeChange">
+          <view class="filter-pill">{{minFreeOptions[selectedMinFreeIndex]}} 节起</view>
+        </picker>
+      </view>
+
+      <view class="chip-section">
+        <view class="chip-title">教学楼</view>
+        <view class="building-row">
+          <block wx:for="{{buildingOptions}}" wx:key="*this">
+            <view
+              wx:if="{{showUnknownBuildings || (item !== '其他/未识别' && item !== '未知')}}"
+              class="building-chip {{buildingOptions[selectedBuildingIndex] === item ? 'active' : ''}}"
+              data-building="{{item}}"
+              bindtap="onBuildingChipTap"
+            >{{item}}</view>
+          </block>
+          <view class="building-chip ghost" bindtap="toggleUnknownBuildings">{{showUnknownBuildings ? "隐藏未知" : "展开未知"}}</view>
+        </view>
+        <button
+          class="building-fav-btn {{selectedBuildingFavorite ? 'active' : ''}}"
+          bindtap="toggleFavoriteBuilding"
+        >{{selectedBuildingFavorite ? "已收藏当前楼栋" : "收藏当前楼栋"}}</button>
+      </view>
+
+      <view class="switch-row">
+        <view class="switch-copy">
+          <view class="switch-title">只看常用教室</view>
+          <view class="switch-desc">过滤非常规地点名称</view>
+        </view>
+        <switch checked="{{commonOnly}}" color="#c62828" bindchange="onCommonOnlyChange" />
+      </view>
+      <view class="switch-row">
+        <view class="switch-copy">
+          <view class="switch-title">只看收藏楼栋</view>
+          <view class="switch-desc">适合固定自习教学楼</view>
+        </view>
+        <switch checked="{{favoriteBuildingsOnly}}" color="#c62828" bindchange="onFavoriteBuildingsOnlyChange" />
+      </view>
+      <view class="switch-row">
+        <view class="switch-copy">
+          <view class="switch-title">排除未知楼栋</view>
+          <view class="switch-desc">隐藏无法识别教学楼的结果</view>
+        </view>
+        <switch checked="{{excludeUnknown}}" color="#c62828" bindchange="onExcludeUnknownChange" />
+      </view>
+    </scroll-view>
+    <view class="filter-sheet-actions">
+      <button class="secondary-btn" bindtap="resetFilters">重置</button>
+      <button class="primary-search-btn compact" bindtap="confirmFilters">确定</button>
+    </view>
+  </view>
 
   <view class="detail-mask" wx:if="{{detailVisible}}" catchtap="closeRoomDetail"></view>
   <view class="room-detail card" wx:if="{{detailVisible}}">

@@ -17,7 +17,7 @@ function run() {
     assert(js.includes(`title: "${title}"`), `task group should include ${title}`);
   });
   ["找空教室", "查老师课表", "XLS 导入指引", "这个小程序怎么用", "新学期同步说明"].forEach((label) => {
-    assert(js.includes(`label: "${label}"`), `task item should include ${label}`);
+    assert(js.includes(`taskLabel: "${label}"`) || js.includes(`label: "${label}"`), `task item should include ${label}`);
   });
 
   assert(wxml.includes('wx:for="{{taskPanelGroups}}"'), "task sheet should render grouped sections");

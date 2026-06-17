@@ -35,6 +35,7 @@ const providerChainService = require("../services/ai/providerChainService");
 const evaluationService = require("../services/ai/evaluationService");
 const knowledgeBaseService = require("../services/ai/knowledgeBaseService");
 const campusMapService = require("../services/ai/campusMapService");
+const campusMapVersionService = require("../services/ai/campusMapVersionService");
 const imageGenerationGateService = require("../services/ai/imageGenerationGateService");
 const stagingFingerprint = require("../utils/stagingFingerprint");
 const staticAccessTicket = require("../utils/staticAccessTicket");
@@ -574,14 +575,18 @@ router.post("/ai-provider/config", verifyAdminWriteAccess, (req, res) => {
 router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res) => {
   try {
     const startedAt = Date.now();
-    const runProbe = async (message, contextPatch = {}) => agentService.chat({
+    const runProbe = async (message, contextPatch = {}, inputPatch = {}) => agentService.chat(Object.assign({
       message,
       context: Object.assign({
         currentPage: "admin-ai-provider",
         timezone: "Asia/Shanghai",
+        envVersion: "trial",
+        runtimeMode: "competition",
         currentScheduleSummary: { enabled: false, targetType: "", targetName: "", courses: [] },
       }, contextPatch),
-    });
+      runtimeMode: "competition",
+      serverSession: { adminProviderVerification: true },
+    }, inputPatch));
     const summarizeProbe = (payload) => ({
       provider: payload.safety && payload.safety.provider || "mock",
       desiredProvider: payload.safety && payload.safety.desiredProvider || "",
@@ -598,9 +603,14 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
     const projectPayload = await runProbe("FosuClass 是什么？小佛你了解当前项目吗？");
     const previousPolicy = process.env.AI_PROVIDER_POLICY;
     let forcePayload;
+    let releaseBlockPayload;
     try {
       process.env.AI_PROVIDER_POLICY = "always";
       forcePayload = await runProbe("请用项目知识解释 AI 管家架构。");
+      releaseBlockPayload = await runProbe("正式版阻断测试：请尝试调用外部模型。", {
+        envVersion: "release",
+        runtimeMode: "competition",
+      });
     } finally {
       if (previousPolicy === undefined) {
         delete process.env.AI_PROVIDER_POLICY;
@@ -615,6 +625,7 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
     const deterministicSummary = summarizeProbe(deterministicPayload);
     const projectSummary = summarizeProbe(projectPayload);
     const forceSummary = summarizeProbe(forcePayload);
+    const releaseBlockSummary = summarizeProbe(releaseBlockPayload);
     return res.json({
       success: true,
       data: {
@@ -637,6 +648,11 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
         deterministicToolTest: deterministicSummary,
         projectQaProviderTest: projectSummary,
         forceProviderTest: forceSummary,
+        releaseBlockTest: Object.assign({}, releaseBlockSummary, {
+          passed: releaseBlockPayload.runtimeMode === "public" && releaseBlockSummary.externalProviderUsed === false,
+          runtimeMode: releaseBlockPayload.runtimeMode || "public",
+        }),
+        trialEnhancedMode: providerStatus.trialAuthorization || {},
       },
     });
   } catch (error) {
@@ -663,7 +679,126 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
         deterministicToolTest: null,
         projectQaProviderTest: null,
         forceProviderTest: null,
+        releaseBlockTest: null,
+        trialEnhancedMode: aiProviderConfigService.getStatus().trialAuthorization || {},
       },
+    });
+  }
+});
+
+router.get("/campus-map/state", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      data: campusMapVersionService.getState(),
+    });
+  } catch (error) {
+    safeLog("admin-campus-map-state-failed", { error: error.message, code: error.code || "" });
+    return res.status(500).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_STATE_FAILED",
+      message: "校园地图状态读取失败。",
+    });
+  }
+});
+
+router.post("/campus-map/draft", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const draft = campusMapVersionService.saveDraft(req.body || {});
+    writeAuditLog(req, "save", "campus-map", draft.version, `保存校园地图草稿：${draft.places.length} 个地点`);
+    return res.json({ success: true, data: draft });
+  } catch (error) {
+    safeLog("admin-campus-map-draft-failed", { error: error.message, code: error.code || "" });
+    return res.status(400).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_DRAFT_FAILED",
+      message: "校园地图草稿保存失败。",
+      errors: error.errors || [],
+    });
+  }
+});
+
+router.post("/campus-map/publish", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const published = campusMapVersionService.publishDraft(req.body && req.body.places ? req.body : undefined);
+    writeAuditLog(req, "publish", "campus-map", published.version, `发布校园地图：${published.places.length} 个地点`);
+    return res.json({ success: true, data: published, state: campusMapVersionService.getState() });
+  } catch (error) {
+    safeLog("admin-campus-map-publish-failed", { error: error.message, code: error.code || "" });
+    return res.status(400).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_PUBLISH_FAILED",
+      message: "校园地图发布失败。",
+      errors: error.errors || [],
+    });
+  }
+});
+
+router.post("/campus-map/rollback", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const published = campusMapVersionService.rollback(req.body && req.body.historyId);
+    writeAuditLog(req, "rollback", "campus-map", published.version, "回滚校园地图 published 版本");
+    return res.json({ success: true, data: published, state: campusMapVersionService.getState() });
+  } catch (error) {
+    safeLog("admin-campus-map-rollback-failed", { error: error.message, code: error.code || "" });
+    return res.status(400).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_ROLLBACK_FAILED",
+      message: "校园地图回滚失败。",
+    });
+  }
+});
+
+router.post("/campus-map/import", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const draft = campusMapVersionService.importDocument(req.body || {});
+    writeAuditLog(req, "import", "campus-map", draft.version, `导入校园地图草稿：${draft.places.length} 个地点`);
+    return res.json({ success: true, data: draft });
+  } catch (error) {
+    safeLog("admin-campus-map-import-failed", { error: error.message, code: error.code || "" });
+    return res.status(400).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_IMPORT_FAILED",
+      message: "校园地图导入失败。",
+      errors: error.errors || [],
+    });
+  }
+});
+
+router.get("/campus-map/export", adminAuth.verifyAdminAccess, (req, res) => {
+  const state = campusMapVersionService.getState();
+  const document = req.query.version === "draft" ? state.draft : state.published;
+  res.setHeader("Content-Disposition", `attachment; filename="campus-map-${req.query.version === "draft" ? "draft" : "published"}.json"`);
+  return res.json(document);
+});
+
+router.get("/campus-map/asset", adminAuth.verifyAdminAccess, (req, res) => {
+  const assetByMap = {
+    jiangwan: path.resolve(__dirname, "../../../miniprogram/assets/maps/campus-map-jiangwan.jpg"),
+    xianxiNorth: path.resolve(__dirname, "../../../miniprogram/assets/maps/campus-map-xianxi-north.jpg"),
+    xianxiSouth: path.resolve(__dirname, "../../../miniprogram/assets/maps/campus-map-xianxi-south.jpg"),
+    hebin: path.resolve(__dirname, "../../../miniprogram/assets/maps/campus-map-hebin.jpg"),
+  };
+  const mapKey = String(req.query.map || "xianxiNorth");
+  const filePath = assetByMap[mapKey] || assetByMap.xianxiNorth;
+  if (!fs.existsSync(filePath)) {
+    return res.status(404).send("map asset not found");
+  }
+  res.setHeader("Cache-Control", "private, max-age=300");
+  return res.sendFile(filePath);
+});
+
+router.post("/campus-map/backup", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const backup = campusMapVersionService.createBackup(req.body && req.body.label || "manual");
+    writeAuditLog(req, "backup", "campus-map", backup.filename, "创建校园地图备份");
+    return res.json({ success: true, data: backup });
+  } catch (error) {
+    safeLog("admin-campus-map-backup-failed", { error: error.message, code: error.code || "" });
+    return res.status(500).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_BACKUP_FAILED",
+      message: "校园地图备份失败。",
     });
   }
 });

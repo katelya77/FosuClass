@@ -59,7 +59,10 @@ async function run() {
     });
     assert.strictEqual(response.success, true);
     assert.strictEqual(response.safety.externalProviderUsed, false);
-    assert(["", "invalid_payload", "bad_request"].includes(response.safety.fallbackReason));
+    assert(
+      ["", "invalid_payload", "bad_request"].includes(response.safety.fallbackReason) ||
+      /^provider_chain_fallback:(invalid_payload|bad_request)(,|$)/.test(response.safety.fallbackReason)
+    );
     const text = JSON.stringify(response);
     assert(!text.includes(process.env.AI_API_KEY), "response must not leak provider key");
     assert(!/thinking parameter is invalid/.test(text), "response must not expose upstream error detail");

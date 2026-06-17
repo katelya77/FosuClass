@@ -19,7 +19,7 @@ const params = {
 
 async function run() {
   const cacheKey = service.getEmptyRoomCacheKey(params);
-  assert(cacheKey.includes("fosu:v5:empty-room"), "empty-room cache should use release pack v5 prefix");
+  assert(cacheKey.includes("fosu:v6:empty-room"), "empty-room cache should use release pack v6 prefix");
   assert.strictEqual(cacheKey, releasePackService.getEmptyRoomCacheKey(params.term, params.releaseVersion));
 
   service.writeEmptyRoomCache(params, {

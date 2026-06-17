@@ -234,6 +234,14 @@ function classifyProviderFailure(error) {
   return code || "provider_fallback";
 }
 
+function summarizeProviderChainFallback(chain = []) {
+  const reasons = Array.from(new Set((Array.isArray(chain) ? chain : [])
+    .filter((item) => item && item.provider !== "mock" && item.status !== "success")
+    .map((item) => String(item.reason || item.status || "").trim())
+    .filter(Boolean)));
+  return reasons.length ? `provider_chain_fallback:${reasons.join(",")}` : "provider_chain_fallback";
+}
+
 function addUniqueText(target, value, limit) {
   const text = safetyGuard.redactSensitiveText(String(value || "").trim()).slice(0, limit || 80);
   if (text && target.indexOf(text) < 0) target.push(text);
@@ -348,6 +356,7 @@ function sanitizePublicResponse(response) {
       redacted: true,
       usedPersonalContext: Boolean(sourceSafety.usedPersonalContext),
       mode: sourceSafety.mode || "tool-grounded",
+      externalProviderUsed: false,
       fallbackReason: sourceSafety.fallbackReason ? "已使用本地规则" : "",
       pendingClarification: sourceSafety.pendingClarification || null,
       clearPendingClarification: sourceSafety.clearPendingClarification === true,
@@ -356,6 +365,7 @@ function sanitizePublicResponse(response) {
       latencyMs: sourceMetrics.latencyMs,
       intentName: sourceMetrics.intentName,
       toolCallCount: sourceMetrics.toolCallCount,
+      externalProviderUsed: false,
       fallback: sourceMetrics.fallback === true,
       itemCount: sourceMetrics.itemCount,
       usedPersonalContext: Boolean(sourceMetrics.usedPersonalContext),
@@ -686,6 +696,9 @@ async function chat(input = {}) {
         status: externalProviderUsed ? "success" : "skipped",
         summary: externalProviderUsed ? "external_provider_used" : "deterministic_fallback",
       });
+      if (!externalProviderUsed) {
+        fallbackReason = summarizeProviderChainFallback(generated.providerChain);
+      }
     }
   } catch (error) {
     providerName = "mock";

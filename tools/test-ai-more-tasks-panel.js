@@ -24,8 +24,10 @@ function run() {
   const quickHandler = js.match(/onQuickAction\(event\)\s*\{([\s\S]*?)\n  \},/);
   assert(quickHandler, "onQuickAction handler should exist");
   const body = quickHandler[1];
-  assert(body.includes('action.id === "teacher"'), "teacher quick action should have a dedicated branch");
-  assert(body.includes("navigateByUrl"), "XLS quick action should navigate");
+  assert(js.includes("AI_CAPABILITY_REGISTRY"), "quick/task entries should be backed by the capability registry");
+  assert(body.includes("dispatchCapabilityAction"), "quick actions should use the shared capability dispatcher");
+  assert(js.includes("CAPABILITY_KINDS.SUPPLEMENT_PARAMS"), "missing-slot capabilities should be classified");
+  assert(js.includes("navigateByUrl"), "XLS quick action should navigate through the shared dispatcher");
   assert(wxml.includes('class="quick-more-button"') && wxml.includes('bindtap="openTaskPanel"'), "更多 should open the task panel sheet");
   assert(js.includes("onTaskPanelItemTap"), "task panel items should have a tap handler");
 

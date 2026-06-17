@@ -5,12 +5,15 @@
       <view wx:else class="xiaofu-avatar-text">佛</view>
     </view>
     <view class="xiaofu-title-block">
-      <view class="xiaofu-title">小佛</view>
-      <view class="xiaofu-status">在线</view>
+      <view class="xiaofu-title-line">
+        <text class="xiaofu-title">小佛</text>
+        <text class="xiaofu-dot">·</text>
+        <text class="xiaofu-status">在线</text>
+      </view>
     </view>
     <view class="xiaofu-actions">
       <button class="xiaofu-icon-btn" bindtap="openCapabilityGuide" aria-label="小佛能力指南">?</button>
-      <button class="xiaofu-icon-btn" bindtap="openHeaderMenu" aria-label="更多操作">•••</button>
+      <button class="xiaofu-icon-btn" bindtap="openHeaderMenu" aria-label="更多操作">⋯</button>
     </view>
   </view>
 

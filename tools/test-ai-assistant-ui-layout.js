@@ -36,9 +36,21 @@ function run() {
   const header = getRule(wxss, ".xiaofu-header");
   assert(/height\s*:\s*8[0-8]rpx/.test(header), "Xiaofu header should stay within 88rpx");
   assert(/z-index\s*:\s*3[0-9]/.test(header), "Xiaofu header should stay above messages without covering sheets");
+  assert(/display\s*:\s*flex/.test(header), "Xiaofu header should use a stable three-column flex row");
+  assert(/gap\s*:\s*12rpx/.test(header), "header should reserve space between avatar, title, and actions");
+
+  const titleBlock = getRule(wxss, ".xiaofu-title-block");
+  assert(/flex\s*:\s*1\s+1\s+auto/.test(titleBlock), "header title column should take remaining width");
+  assert(/min-width\s*:\s*0/.test(titleBlock), "header title column should be allowed to shrink safely");
+
+  const actions = getRule(wxss, ".xiaofu-actions");
+  assert(/flex\s*:\s*0\s+0\s+110rpx/.test(actions), "header actions should reserve a fixed compact column");
+
+  const titleLine = getRule(wxss, ".xiaofu-title-line");
+  assert(/white-space\s*:\s*nowrap/.test(titleLine), "header title should never wrap");
 
   const iconButton = getRule(wxss, ".xiaofu-icon-btn");
-  assert(/width\s*:\s*6[0-9]rpx/.test(iconButton) && /height\s*:\s*6[0-9]rpx/.test(iconButton), "header icons should have equal tap areas");
+  assert(/width\s*:\s*5[0-9]rpx/.test(iconButton) && /height\s*:\s*5[0-9]rpx/.test(iconButton), "header icons should have equal compact tap areas");
 
   const composer = getRule(wxss, ".composer");
   assert(/position\s*:\s*fixed/.test(composer), "composer must stay fixed");
