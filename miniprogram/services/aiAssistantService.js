@@ -220,6 +220,18 @@ function formatLocalIsoWithOffset(date) {
   ].join("");
 }
 
+function getMiniProgramEnvVersion() {
+  try {
+    if (wx && typeof wx.getAccountInfoSync === "function") {
+      const accountInfo = wx.getAccountInfoSync() || {};
+      return accountInfo.miniProgram && accountInfo.miniProgram.envVersion || "";
+    }
+  } catch (error) {
+    // DevTools mocks may not expose account info.
+  }
+  return "";
+}
+
 function buildScheduleFingerprint(target, courses) {
   const base = {
     type: target && target.type,
@@ -414,6 +426,7 @@ function buildClientContext(extra = {}) {
     },
     releaseVersion: extra.releaseVersion || (target && target.releaseVersion) || activeRelease.releaseVersion || manifest.releaseVersion || "",
     currentPage: extra.currentPage || getCurrentRoute(),
+    envVersion: extra.envVersion || getMiniProgramEnvVersion(),
     clientTime: now.toISOString(),
     clientLocalTime: formatLocalIsoWithOffset(now),
     timezoneOffsetMinutes: now.getTimezoneOffset(),

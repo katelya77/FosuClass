@@ -24,14 +24,18 @@
   </view>
 
   <view class="search-card card">
-    <input
-      class="search-input"
-      value="{{query}}"
-      placeholder="搜索楼栋代码或地点名"
-      confirm-type="search"
-      bindinput="onSearchInput"
-      bindconfirm="onSearchConfirm"
-    />
+    <view class="search-row">
+      <input
+        class="search-input"
+        value="{{query}}"
+        placeholder="搜索楼栋代码或地点名"
+        confirm-type="search"
+        bindinput="onSearchInput"
+        bindconfirm="onSearchConfirm"
+      />
+      <button wx:if="{{query}}" class="search-clear-btn" bindtap="clearSearch" aria-label="清除搜索">×</button>
+      <button class="search-submit-btn" loading="{{searchState === 'loading'}}" bindtap="onSearchTap">搜索</button>
+    </view>
   </view>
 
   <view class="map-card card">
@@ -64,7 +68,22 @@
     </view>
   </view>
 
-  <view class="result-section" wx:if="{{results.length}}">
+  <view class="result-section" wx:if="{{searchState === 'loading'}}">
+    <view class="section-title-small">搜索结果</view>
+    <view class="search-state-card card">正在搜索...</view>
+  </view>
+
+  <view class="result-section" wx:elif="{{searchState === 'empty'}}">
+    <view class="section-title-small">搜索结果</view>
+    <view class="search-state-card card">没有找到“{{searchedQuery}}”，可以换楼栋代码或地点名再试。</view>
+  </view>
+
+  <view class="result-section" wx:elif="{{searchState === 'error'}}">
+    <view class="section-title-small">搜索结果</view>
+    <view class="search-state-card card error">{{searchError || "搜索失败，请稍后重试"}}</view>
+  </view>
+
+  <view class="result-section" wx:elif="{{results.length}}">
     <view class="section-title-small">搜索结果</view>
     <view
       wx:for="{{results}}"

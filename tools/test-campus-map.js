@@ -49,6 +49,7 @@ assert(route.summary.includes("暂不提供精确步行路线"));
 
 const action = c7.items[0].actionUrl;
 assert(action.startsWith("/pages/campus-map/campus-map"));
+assert(!/[?&]q=/.test(action), "map card action should not inject default search query");
 assert.strictEqual(payloadContract.isAllowedNavigationUrl(action), true, "map card action should be a safe mini program page");
 
 const rendered = mockProvider.generate({

@@ -48,8 +48,15 @@ assert.strictEqual(page.data.showCapabilityGuide, false, "guide should be closed
 
 page.openCapabilityGuide();
 assert.strictEqual(page.data.showCapabilityGuide, true);
+const sent = [];
+page.sendMessage = (message) => sent.push(message);
 page.onCapabilityExampleTap({ currentTarget: { dataset: { text: "C7 在哪里" } } });
-assert.strictEqual(page.data.inputValue, "C7 在哪里");
+assert.deepStrictEqual(sent, ["C7 在哪里？"]);
+assert.strictEqual(page.data.showCapabilityGuide, false);
+
+page.openCapabilityGuide();
+page.onCapabilityExampleTap({ currentTarget: { dataset: { text: "查老师课表" } } });
+assert.strictEqual(page.data.inputValue, "查某某老师课表");
 assert.strictEqual(page.data.inputFocus, true);
 assert.strictEqual(page.data.showCapabilityGuide, false);
 

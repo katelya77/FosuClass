@@ -1,4 +1,6 @@
-const campusData = require("../../data/campusPlaces");
+const campusMapDataService = require("../../services/campusMapDataService");
+
+let campusData = campusMapDataService.getFallbackData();
 
 const CAMPUS_TABS = [
   { key: "xianxi", label: "仙溪" },
@@ -110,6 +112,9 @@ Page({
     places: [],
     query: "",
     results: [],
+    searchState: "idle",
+    searchedQuery: "",
+    searchError: "",
     selectedPlace: null,
     marker: null,
     imageLoaded: false,
@@ -136,7 +141,22 @@ Page({
       query: options.q ? decodeURIComponent(options.q) : "",
     });
     this.updateMapData(mapKey, place);
-    if (options.q) this.runSearch(decodeURIComponent(options.q), place);
+    this.loadPublishedMapData(mapKey, place);
+  },
+
+  loadPublishedMapData(mapKey, selectedPlace) {
+    campusMapDataService.loadPublishedMapData().then((data) => {
+      campusData = data || campusData;
+      const activeMapKey = this.data.mapInfo && this.data.mapInfo.key || mapKey || "xianxiNorth";
+      const nextPlace = selectedPlace && selectedPlace.id ? this.findPlaceById(selectedPlace.id) : this.data.selectedPlace;
+      this.setData({
+        note: campusData.note || this.data.note,
+      });
+      this.updateMapData(activeMapKey, nextPlace);
+      if (this.data.searchState === "success" || this.data.searchState === "empty") {
+        this.runSearch(this.data.searchedQuery || this.data.query || "");
+      }
+    });
   },
 
   findPlaceById(id) {
@@ -171,7 +191,6 @@ Page({
       : campus;
     this.setData({ activeCampus: campus });
     this.updateMapData(mapKey, null);
-    if (this.data.query) this.runSearch(this.data.query);
   },
 
   onAreaTap(event) {
@@ -179,13 +198,20 @@ Page({
     const mapKey = area === "south" ? "xianxiSouth" : "xianxiNorth";
     this.setData({ activeCampus: "xianxi", activeXianxiArea: area });
     this.updateMapData(mapKey, null);
-    if (this.data.query) this.runSearch(this.data.query);
   },
 
   onSearchInput(event) {
     const query = event.detail.value || "";
-    this.setData({ query });
-    this.runSearch(query);
+    const patch = { query };
+    if (!normalizeText(query)) {
+      patch.results = [];
+      patch.searchState = "idle";
+      patch.searchedQuery = "";
+      patch.searchError = "";
+      patch.selectedPlace = null;
+      patch.marker = null;
+    }
+    this.setData(patch);
   },
 
   onSearchConfirm(event) {
@@ -193,28 +219,73 @@ Page({
     this.runSearch(query);
   },
 
+  onSearchTap() {
+    this.runSearch(this.data.query || "");
+  },
+
+  clearSearch() {
+    this.setData({
+      query: "",
+      results: [],
+      searchState: "idle",
+      searchedQuery: "",
+      searchError: "",
+      selectedPlace: null,
+      marker: null,
+    });
+  },
+
   runSearch(query, selectedPlace) {
     const q = normalizeText(query);
     if (!q) {
-      this.setData({ results: [], selectedPlace: selectedPlace || null, marker: markerFromPlace(selectedPlace) });
+      this.setData({
+        query: "",
+        results: [],
+        searchState: "idle",
+        searchedQuery: "",
+        searchError: "",
+        selectedPlace: selectedPlace || null,
+        marker: markerFromPlace(selectedPlace),
+      });
       return;
     }
-    const results = (campusData.places || [])
-      .map((place) => {
-        const text = getPlaceSearchText(place);
-        let score = 0;
-        if (normalizeText(place.code) === q || normalizeText(place.name) === q) score = 100;
-        else if ((place.aliases || []).some((alias) => normalizeText(alias) === q)) score = 90;
-        else if (text.includes(q)) score = 70;
-        return { place, score };
-      })
-      .filter((item) => item.score > 0)
-      .sort((left, right) => right.score - left.score || String(left.place.name).localeCompare(String(right.place.name)))
-      .slice(0, 12)
-      .map((item) => withReviewStatus(item.place));
-    this.setData({ results });
-    if (results.length && !selectedPlace) {
-      this.focusPlace(results[0], false);
+    this.setData({
+      query,
+      searchState: "loading",
+      searchedQuery: query,
+      searchError: "",
+      results: [],
+      selectedPlace: selectedPlace || null,
+      marker: markerFromPlace(selectedPlace),
+    });
+    try {
+      const results = (campusData.places || [])
+        .map((place) => {
+          const text = getPlaceSearchText(place);
+          let score = 0;
+          if (normalizeText(place.code) === q || normalizeText(place.name) === q) score = 100;
+          else if ((place.aliases || []).some((alias) => normalizeText(alias) === q)) score = 90;
+          else if (text.includes(q)) score = 70;
+          return { place, score };
+        })
+        .filter((item) => item.score > 0)
+        .sort((left, right) => right.score - left.score || String(left.place.name).localeCompare(String(right.place.name)))
+        .slice(0, 12)
+        .map((item) => withReviewStatus(item.place));
+      this.setData({
+        results,
+        searchState: results.length ? "success" : "empty",
+        selectedPlace: selectedPlace || null,
+        marker: markerFromPlace(selectedPlace),
+      });
+    } catch (error) {
+      this.setData({
+        results: [],
+        searchState: "error",
+        searchError: "搜索失败，请稍后重试",
+        selectedPlace: selectedPlace || null,
+        marker: markerFromPlace(selectedPlace),
+      });
     }
   },
 

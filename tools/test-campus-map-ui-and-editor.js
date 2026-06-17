@@ -28,8 +28,20 @@ assert(!/urls:\s*this\.data\.maps/.test(js), "previewImage must not pass every c
 assert(wxml.includes("movable-area") && wxml.includes("movable-view"), "custom preview layer should support pan/zoom");
 assert(wxml.includes("retryPreviewImage") && wxml.includes("retryMapImage"), "map image failures should expose retry");
 assert(/place\.verified\s*!==\s*true/.test(js), "unverified places should not render precise marker boxes");
+assert(!/onSearchInput[\s\S]{0,120}runSearch/.test(js), "typing in map search should not execute search");
+assert(!/focusPlace\(results\[0\]/.test(js), "map search should not auto-select the first result");
+assert(wxml.includes("search-submit-btn") && wxml.includes("clearSearch"), "map search should expose explicit search and clear actions");
 assert(wxml.includes("未人工核对") || wxml.includes("待人工核对"), "unverified places should show review state");
 assert(js.includes("/pages/school/school?type=classroom"), "map building query should deep link to school classroom tab");
+
+const adminPage = read("server/src/routes/adminPages.js");
+["校园地图管理", "campusMapEditor", "保存草稿", "发布", "回滚到选中版本", "导入为草稿"].forEach((needle) => {
+  assert(adminPage.includes(needle), `admin map manager should include ${needle}`);
+});
+const adminRoutes = read("server/src/routes/admin.js");
+["/campus-map/state", "/campus-map/draft", "/campus-map/publish", "/campus-map/rollback", "/campus-map/backup"].forEach((needle) => {
+  assert(adminRoutes.includes(needle), `admin map API should include ${needle}`);
+});
 
 const packageJson = JSON.parse(read("package.json"));
 assert.strictEqual(packageJson.scripts["campus-map:editor"], "node tools/campus-map-editor/server.js");

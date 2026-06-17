@@ -12,7 +12,8 @@ const agentService = require("../server/src/services/ai/agentService");
 function assertPublicProviderHidden(response) {
   assert.strictEqual(response.runtimeMode, "public");
   assert(!("provider" in response.safety), "public safety must hide provider");
-  assert(!("externalProviderUsed" in response.metrics), "public metrics must hide provider usage detail");
+  assert.strictEqual(response.safety.externalProviderUsed, false, "public safety must explicitly disable external provider use");
+  assert.strictEqual(response.metrics.externalProviderUsed, false, "public metrics must explicitly disable external provider use");
 }
 
 async function run() {

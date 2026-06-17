@@ -1,6 +1,7 @@
 const fs = require("fs");
 const path = require("path");
 const runtimeStore = require("./providerRuntimeConfigStore");
+const runtimeModeService = require("./runtimeModeService");
 
 const SERVER_ROOT = path.resolve(__dirname, "../../..");
 const ENV_PATH = path.join(SERVER_ROOT, ".env");
@@ -33,6 +34,7 @@ const AI_ENV_KEYS = [
   "COZE_POLL_INTERVAL_MS",
   "COZE_POLL_MAX_ATTEMPTS",
   "AI_RUNTIME_MODE",
+  "AI_COMPETITION_CAPABILITY_EXPIRES_AT",
   "CLOUDBASE_OPENAI_ENABLED",
   "CLOUDBASE_OPENAI_BASE_URL",
   "CLOUDBASE_OPENAI_API_KEY",
@@ -239,6 +241,7 @@ function getStatus() {
     strictJsonMode: value("DEEPSEEK_STRICT_JSON_MODE") === "true",
     allowPersonalContext: value("AI_ALLOW_PERSONAL_CONTEXT") === "true",
     runtimeMode: value("AI_RUNTIME_MODE") === "competition" ? "competition" : "public",
+    trialAuthorization: runtimeModeService.getAuthorizationStatus(),
     deepseekKeyConfigured: hasAnyDeepSeekKey(envFileValues, runtimeValues),
     deepseekKeyLast4: keyLast4(process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY || runtimeValues.AI_API_KEY || runtimeValues.DEEPSEEK_API_KEY || envFileValues.AI_API_KEY || envFileValues.DEEPSEEK_API_KEY),
     cozeBaseUrl: value("COZE_API_BASE_URL"),

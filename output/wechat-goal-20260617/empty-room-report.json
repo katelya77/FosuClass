@@ -1,0 +1,31 @@
+{
+  "page": "pages/empty-room/empty-room",
+  "elements": [
+    null,
+    {
+      "selector": ".compact-filter-card",
+      "size": {
+        "width": 374,
+        "height": 249
+      },
+      "offset": {
+        "left": 8,
+        "top": 78.66667175292969
+      },
+      "text": "日期\n今天\n2026-06-17\n明天\n2026-06-18\n选日期\n2026-06-17\n时段\n现在可用\n上午\n下午\n晚上\n全部教学楼 · 21 栋\n第14-14节 · 连续空闲 2 节起\n更多筛选\n查询空教室"
+    },
+    null,
+    {
+      "selector": ".more-filter-btn",
+      "size": {
+        "width": 184,
+        "height": 30
+      },
+      "offset": {
+        "left": 177.84375,
+        "top": 232.83334350585938
+      },
+      "text": "更多筛选"
+    }
+  ]
+}

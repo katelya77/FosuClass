@@ -1,0 +1,100 @@
+{
+  "page": "pages/campus-map/campus-map",
+  "systemInfo": {
+    "brand": "devtools",
+    "model": "iPhone 12/13 (Pro)",
+    "system": "iOS 10.0.1",
+    "platform": "devtools",
+    "benchmarkLevel": -1,
+    "pixelRatio": 3,
+    "screenWidth": 390,
+    "screenHeight": 844,
+    "windowWidth": 390,
+    "windowHeight": 671,
+    "statusBarHeight": 47,
+    "safeArea": {
+      "top": 47,
+      "left": 0,
+      "right": 390,
+      "bottom": 810,
+      "width": 390,
+      "height": 763
+    },
+    "language": "zh_CN",
+    "version": "8.0.5",
+    "fontSizeSetting": 16,
+    "SDKVersion": "3.16.1",
+    "host": {
+      "env": "WeChat"
+    },
+    "enableDebug": false,
+    "mode": "default",
+    "deviceOrientation": "portrait",
+    "bluetoothEnabled": true,
+    "locationEnabled": true,
+    "wifiEnabled": true,
+    "albumAuthorized": true,
+    "cameraAuthorized": true,
+    "locationAuthorized": true,
+    "microphoneAuthorized": true,
+    "notificationAuthorized": true,
+    "notificationAlertAuthorized": true,
+    "notificationBadgeAuthorized": true,
+    "notificationSoundAuthorized": true,
+    "phoneCalendarAuthorized": true,
+    "bluetoothAuthorized": true,
+    "locationReducedAccuracy": true,
+    "devicePixelRatio": 3
+  },
+  "elements": [
+    {
+      "selector": ".search-card",
+      "size": {
+        "width": 366,
+        "height": 49
+      },
+      "offset": {
+        "left": 12,
+        "top": 107
+      },
+      "text": "搜索楼栋代码或地点名\n搜索"
+    },
+    {
+      "selector": ".search-row",
+      "size": {
+        "width": 350,
+        "height": 33
+      },
+      "offset": {
+        "left": 20,
+        "top": 115
+      },
+      "text": "搜索楼栋代码或地点名\n搜索"
+    },
+    {
+      "selector": ".search-input",
+      "size": {
+        "width": 297,
+        "height": 33
+      },
+      "offset": {
+        "left": 20,
+        "top": 115
+      },
+      "text": "搜索楼栋代码或地点名"
+    },
+    {
+      "selector": ".search-submit-btn",
+      "size": {
+        "width": 49,
+        "height": 33
+      },
+      "offset": {
+        "left": 321,
+        "top": 115
+      },
+      "text": "搜索"
+    },
+    null
+  ]
+}

@@ -4,6 +4,7 @@ const emptyRoomService = require("../../services/emptyRoomService");
 const platformDataService = require("../../services/platformDataService");
 const releasePackService = require("../../services/releasePackService");
 const teachingCalendarService = require("../../services/teachingCalendarService");
+const platformUtils = require("../../utils/platform");
 const {
   addLocalDays,
   formatDate,
@@ -27,10 +28,9 @@ const QUICK_FILTERS = [
   { key: "morning", label: "上午" },
   { key: "afternoon", label: "下午" },
   { key: "evening", label: "晚上" },
-  { key: "continuous2", label: "连续 2 节+" },
-  { key: "continuous4", label: "连续 4 节+" },
-  { key: "favorites", label: "收藏楼栋" },
 ];
+
+const ROOM_PAGE_SIZE = 30;
 
 const SECTION_CHIPS = Array.from({ length: 14 }, (_, index) => ({
   value: index + 1,
@@ -105,6 +105,43 @@ function decorateSectionChips(values) {
   }));
 }
 
+function groupRoomsByBuilding(rooms, limit) {
+  const max = Math.max(0, Number(limit || ROOM_PAGE_SIZE) || ROOM_PAGE_SIZE);
+  const visible = (rooms || []).slice(0, max);
+  const groups = [];
+  const groupMap = {};
+  visible.forEach((room, sourceIndex) => {
+    const building = room.building || "其他";
+    if (!groupMap[building]) {
+      groupMap[building] = {
+        building,
+        rooms: [],
+        total: 0,
+      };
+      groups.push(groupMap[building]);
+    }
+    groupMap[building].rooms.push(Object.assign({}, room, {
+      sourceIndex,
+    }));
+  });
+  (rooms || []).forEach((room) => {
+    const building = room.building || "其他";
+    if (groupMap[building]) groupMap[building].total += 1;
+  });
+  return groups;
+}
+
+function resolveRoomFromEvent(event, rooms, selectedRoom) {
+  const dataset = event && event.currentTarget && event.currentTarget.dataset || {};
+  if (dataset.room && typeof dataset.room === "object") return dataset.room;
+  const rawIndex = dataset.sourceIndex !== undefined ? dataset.sourceIndex : dataset.index;
+  if (rawIndex !== undefined) {
+    const index = Number(rawIndex);
+    if (Number.isFinite(index) && rooms && rooms[index]) return rooms[index];
+  }
+  return selectedRoom || null;
+}
+
 function normalizeActiveSnapshot(config) {
   const data = config && config.data ? config.data : config;
   const version = data && data.dataVersion ? data.dataVersion : {};
@@ -142,6 +179,7 @@ Page({
     date: "",
     dateText: "",
     dateOptions: [],
+    datePrimaryOptions: [],
     selectedDateKey: "today",
     week: 1,
     weekday: 1,
@@ -163,11 +201,16 @@ Page({
     excludeUnknown: true,
     showUnknownBuildings: false,
     loading: false,
-    dataState: "loading",
+    dataState: "idle",
+    hasSearched: false,
     restoreHint: "",
     rooms: [],
+    visibleRoomLimit: ROOM_PAGE_SIZE,
+    visibleRoomGroups: [],
     summaryText: "",
     updatedAtText: "",
+    buildingSummaryText: "全部教学楼",
+    filterSheetVisible: false,
     termPhase: "unknown",
     isInTerm: false,
     termStatusText: "",
@@ -186,7 +229,7 @@ Page({
       favoriteRooms: this.favoriteState.rooms,
     });
     this.initDefaults(options || {});
-    this.loadAndSearch({ reason: "onLoad" });
+    this.prepareInitialData();
   },
 
   initDefaults(options) {
@@ -210,10 +253,12 @@ Page({
     const selectedBuildingIndex = buildingParam ? Math.max(0, buildingOptions.indexOf(buildingParam)) : 0;
     const selectedBuilding = buildingOptions[selectedBuildingIndex] || "全部";
 
+    const dateOptions = buildDateOptions(date);
     this.setData({
       date,
       dateText: date,
-      dateOptions: buildDateOptions(date),
+      dateOptions,
+      datePrimaryOptions: dateOptions.slice(0, 2),
       selectedDateKey: formatDate(new Date()) === date ? "today" : "",
       week: Number(options.week || dateInfo.weekNo || 1),
       weekday: Number(options.weekday || dateInfo.weekday),
@@ -229,7 +274,58 @@ Page({
       buildingOptions,
       selectedBuildingIndex,
       selectedBuildingFavorite: emptyRoomService.isFavoriteBuilding(selectedBuilding, this.favoriteState),
+      buildingSummaryText: this.buildingSummaryText(buildingOptions, selectedBuildingIndex, false),
     });
+  },
+
+  prepareInitialData() {
+    this.setData({
+      loading: false,
+      dataState: "idle",
+      restoreHint: "",
+    });
+    this.resolveActiveSnapshot()
+      .then((snapshot) => {
+        if (!snapshot || !snapshot.releaseVersion) {
+          const error = new Error("NO_ACTIVE_RELEASE");
+          error.code = "NO_ACTIVE_RELEASE";
+          throw error;
+        }
+        this.setData({
+          activeSnapshot: snapshot,
+          updatedAtText: snapshot.updatedAt ? `数据更新于 ${appConfigService.formatConfigTime(snapshot.updatedAt)}` : "等待数据更新时间",
+        });
+        return this.loadEmptyRoomIndex({ forceNetwork: false });
+      })
+      .then((index) => {
+        const buildingOptions = emptyRoomService.buildBuildingOptions(
+          index.buildings || [],
+          (this.favoriteState && this.favoriteState.buildings) || []
+        );
+        const currentBuilding = this.data.buildingOptions[this.data.selectedBuildingIndex] || "全部";
+        const selectedBuildingIndex = Math.max(0, buildingOptions.indexOf(currentBuilding));
+        this.setData({
+          buildingOptions,
+          selectedBuildingIndex,
+          buildingSummaryText: this.buildingSummaryText(buildingOptions, selectedBuildingIndex, false),
+        });
+      })
+      .catch((error) => {
+        const state = error && error.code === "NO_ACTIVE_RELEASE" ? "noRelease" : "idle";
+        this.setData({
+          dataState: state,
+          updatedAtText: state === "noRelease" ? "暂未发布课表数据" : "数据更新时间暂不可用",
+        });
+      });
+  },
+
+  buildingSummaryText(buildingOptions, selectedBuildingIndex, favoritesOnly) {
+    const list = Array.isArray(buildingOptions) ? buildingOptions : [];
+    const selected = list[selectedBuildingIndex] || "全部";
+    if (favoritesOnly) return "收藏教学楼";
+    if (selected && selected !== "全部") return selected;
+    const count = Math.max(0, list.filter((item) => item && item !== "全部" && item !== "未知" && item !== "其他/未识别").length);
+    return count ? `全部教学楼 · ${count} 栋` : "全部教学楼";
   },
 
   loadAndSearch(options = {}) {
@@ -237,6 +333,7 @@ Page({
     this.setData({
       loading: true,
       dataState: hasRooms ? this.data.dataState : "loading",
+      hasSearched: true,
       restoreHint: "",
     });
 
@@ -260,6 +357,7 @@ Page({
           loading: false,
           dataState: state,
           restoreHint: hasRooms ? "网络连接慢，已保留当前结果" : "",
+          visibleRoomGroups: hasRooms ? this.data.visibleRoomGroups : [],
           summaryText: hasRooms ? this.data.summaryText : (state === "noRelease" ? "暂未发布课表数据" : "空教室数据加载失败"),
         });
       });
@@ -353,6 +451,7 @@ Page({
         loading: false,
         dataState: "empty",
         rooms: [],
+        visibleRoomGroups: [],
         summaryText: this.data.termStatusText || "当前不在教学周内",
         restoreHint: "可手动选择历史日期和节次后查询",
       });
@@ -381,16 +480,21 @@ Page({
       );
       const currentBuilding = params.building || "全部";
       const selectedBuildingIndex = Math.max(0, buildingOptions.indexOf(currentBuilding));
+      const visibleRoomLimit = ROOM_PAGE_SIZE;
       this.setData({
         loading: false,
         dataState: rooms.length ? "success" : "empty",
+        hasSearched: true,
         rooms,
+        visibleRoomLimit,
+        visibleRoomGroups: groupRoomsByBuilding(rooms, visibleRoomLimit),
         buildingOptions,
         selectedBuildingIndex,
         selectedBuildingFavorite: emptyRoomService.isFavoriteBuilding(buildingOptions[selectedBuildingIndex], this.favoriteState),
         restoreHint: data.fromStorage ? "已显示本地缓存，筛选在本地完成" : "",
         summaryText: `${params.date} ${getWeekdayLabel(Number(params.weekday))} 第${params.sections}节 · ${rooms.length}间可用`,
-        updatedAtText: data.updatedAt ? `数据更新于 ${appConfigService.formatConfigTime(data.updatedAt)} · 当前 Release Pack 静态索引` : this.data.updatedAtText,
+        updatedAtText: data.updatedAt ? `数据更新于 ${appConfigService.formatConfigTime(data.updatedAt)}` : this.data.updatedAtText,
+        buildingSummaryText: this.buildingSummaryText(buildingOptions, selectedBuildingIndex, this.data.favoriteBuildingsOnly),
       });
       return Promise.resolve(data);
     } catch (error) {
@@ -407,9 +511,54 @@ Page({
   searchRooms(options = {}) {
     if (options.forceNetwork) {
       return this.loadEmptyRoomIndex({ forceNetwork: true })
-        .then(() => this.applyLocalSearch(options));
+        .then(() => this.applyLocalSearch(options))
+        .catch((error) => {
+          const rooms = Array.isArray(this.data.rooms) ? this.data.rooms : [];
+          const hasRooms = rooms.length > 0;
+          this.setData({
+            loading: false,
+            dataState: hasRooms ? this.data.dataState || "success" : "networkError",
+            restoreHint: hasRooms ? "网络连接慢，已保留当前结果" : "",
+            visibleRoomGroups: hasRooms ? groupRoomsByBuilding(rooms, this.data.visibleRoomLimit || ROOM_PAGE_SIZE) : [],
+            summaryText: hasRooms ? this.data.summaryText : "空教室数据加载失败",
+          });
+          return Promise.reject(error);
+        });
     }
     return this.applyLocalSearch(options);
+  },
+
+  onQueryTap() {
+    return this.loadAndSearch({ reason: "manual-query" });
+  },
+
+  openFilterSheet() {
+    this.setData({ filterSheetVisible: true });
+  },
+
+  closeFilterSheet() {
+    this.setData({ filterSheetVisible: false });
+  },
+
+  resetFilters() {
+    this.initDefaults(this.sharedOptions || {});
+  },
+
+  confirmFilters() {
+    this.setData({
+      filterSheetVisible: false,
+      buildingSummaryText: this.buildingSummaryText(this.data.buildingOptions, this.data.selectedBuildingIndex, this.data.favoriteBuildingsOnly),
+    });
+  },
+
+  onReachBottom() {
+    const rooms = this.data.rooms || [];
+    if (!rooms.length || this.data.visibleRoomLimit >= rooms.length) return;
+    const visibleRoomLimit = Math.min(rooms.length, this.data.visibleRoomLimit + ROOM_PAGE_SIZE);
+    this.setData({
+      visibleRoomLimit,
+      visibleRoomGroups: groupRoomsByBuilding(rooms, visibleRoomLimit),
+    });
   },
 
   decorateRoomsWithFavorites(rooms) {
@@ -423,11 +572,13 @@ Page({
   refreshFavoriteState() {
     this.favoriteState = emptyRoomService.readEmptyRoomFavorites();
     const building = this.data.buildingOptions[this.data.selectedBuildingIndex] || "全部";
+    const rooms = this.decorateRoomsWithFavorites(this.data.rooms);
     this.setData({
       favoriteBuildings: this.favoriteState.buildings,
       favoriteRooms: this.favoriteState.rooms,
       selectedBuildingFavorite: emptyRoomService.isFavoriteBuilding(building, this.favoriteState),
-      rooms: this.decorateRoomsWithFavorites(this.data.rooms),
+      rooms,
+      visibleRoomGroups: groupRoomsByBuilding(rooms, this.data.visibleRoomLimit),
     });
   },
 
@@ -439,6 +590,7 @@ Page({
       date,
       dateText: date,
       dateOptions: buildDateOptions(date),
+      datePrimaryOptions: buildDateOptions(date).slice(0, 2),
       selectedDateKey: formatDate(new Date()) === date ? "today" : "",
       week: info.weekNo,
       weekday: info.weekday,
@@ -447,7 +599,7 @@ Page({
       isInTerm: Boolean(info.isInTerm),
       termStatusText: info.isInTerm ? "" : this.getTermPhaseText(info.termPhase),
       activeQuickFilter: "custom",
-    }, () => this.searchRooms());
+    });
   },
 
   onDateChipTap(event) {
@@ -459,6 +611,8 @@ Page({
     this.setData({
       date,
       dateText: date,
+      dateOptions: buildDateOptions(date),
+      datePrimaryOptions: buildDateOptions(date).slice(0, 2),
       selectedDateKey: key,
       week: info.weekNo,
       weekday: info.weekday,
@@ -467,7 +621,7 @@ Page({
       isInTerm: Boolean(info.isInTerm),
       termStatusText: info.isInTerm ? "" : this.getTermPhaseText(info.termPhase),
       activeQuickFilter: key === "today" ? this.data.activeQuickFilter : "custom",
-    }, () => this.searchRooms());
+    });
   },
 
   onQuickFilterTap(event) {
@@ -496,7 +650,7 @@ Page({
       patch.sectionChips = decorateSectionChips(patch.selectedSectionValues);
       patch.customSections = patch.sections;
     }
-    this.setData(patch, () => this.searchRooms());
+    this.setData(patch);
   },
 
   onSectionChipTap(event) {
@@ -517,7 +671,7 @@ Page({
       customSections: sections || this.data.customSections,
       selectedSectionPresetIndex: SECTION_PRESETS.findIndex((item) => item.key === "custom"),
       activeQuickFilter: "custom",
-    }, () => this.searchRooms());
+    });
   },
 
   onSectionGroupTap(event) {
@@ -530,7 +684,7 @@ Page({
       sectionChips: decorateSectionChips(parseSectionValues(sections)),
       selectedSectionPresetIndex: SECTION_PRESETS.findIndex((item) => item.key === key),
       activeQuickFilter: key,
-    }, () => this.searchRooms());
+    });
   },
 
   onBuildingChipTap(event) {
@@ -540,7 +694,8 @@ Page({
       selectedBuildingIndex,
       selectedBuildingFavorite: emptyRoomService.isFavoriteBuilding(building, this.favoriteState),
       favoriteBuildingsOnly: false,
-    }, () => this.searchRooms());
+      buildingSummaryText: this.buildingSummaryText(this.data.buildingOptions, selectedBuildingIndex, false),
+    });
   },
 
   toggleUnknownBuildings() {
@@ -548,7 +703,7 @@ Page({
     this.setData({
       showUnknownBuildings,
       excludeUnknown: !showUnknownBuildings,
-    }, () => this.searchRooms());
+    });
   },
 
   onWeekInput(event) {
@@ -557,7 +712,7 @@ Page({
   },
 
   applyWeekInput() {
-    this.searchRooms();
+    this.setData({ filterSheetVisible: false });
   },
 
   onSectionPresetChange(event) {
@@ -571,7 +726,7 @@ Page({
       sections,
       selectedSectionValues: parseSectionValues(sections),
       sectionChips: decorateSectionChips(parseSectionValues(sections)),
-    }, () => this.searchRooms());
+    });
   },
 
   onCustomSectionsInput(event) {
@@ -585,7 +740,7 @@ Page({
     this.setData({
       selectedSectionValues: parseSectionValues(this.data.customSections),
       sectionChips: decorateSectionChips(parseSectionValues(this.data.customSections)),
-    }, () => this.searchRooms());
+    });
   },
 
   onBuildingChange(event) {
@@ -594,33 +749,41 @@ Page({
     this.setData({
       selectedBuildingIndex,
       selectedBuildingFavorite: emptyRoomService.isFavoriteBuilding(building, this.favoriteState),
-    }, () => this.searchRooms());
+      buildingSummaryText: this.buildingSummaryText(this.data.buildingOptions, selectedBuildingIndex, this.data.favoriteBuildingsOnly),
+    });
   },
 
   onMinFreeChange(event) {
     this.setData({
       selectedMinFreeIndex: Number(event.detail.value),
-    }, () => this.searchRooms());
+    });
   },
 
   onCommonOnlyChange(event) {
-    this.setData({ commonOnly: Boolean(event.detail.value) }, () => this.searchRooms());
+    this.setData({ commonOnly: Boolean(event.detail.value) });
+  },
+
+  onFavoriteBuildingsOnlyChange(event) {
+    const favoriteBuildingsOnly = Boolean(event.detail.value);
+    this.setData({
+      favoriteBuildingsOnly,
+      buildingSummaryText: this.buildingSummaryText(this.data.buildingOptions, this.data.selectedBuildingIndex, favoriteBuildingsOnly),
+    });
   },
 
   onExcludeUnknownChange(event) {
     this.setData({
       excludeUnknown: Boolean(event.detail.value),
       showUnknownBuildings: !Boolean(event.detail.value),
-    }, () => this.searchRooms());
+    });
   },
 
   onRetry() {
-    this.searchRooms({ forceNetwork: true });
+    this.loadAndSearch({ reason: "retry", forceNetwork: true });
   },
 
   onRoomTap(event) {
-    const index = Number(event.currentTarget.dataset.index);
-    const room = this.data.rooms[index];
+    const room = resolveRoomFromEvent(event, this.data.rooms, null);
     if (!room) return;
     this.setData({
       selectedRoom: room,
@@ -680,21 +843,26 @@ Page({
   },
 
   openClassroomSchedule(event) {
-    const room = event.currentTarget.dataset.index !== undefined
-      ? this.data.rooms[Number(event.currentTarget.dataset.index)]
-      : this.data.selectedRoom;
+    const room = resolveRoomFromEvent(event, this.data.rooms, this.data.selectedRoom);
     if (!room) return;
     const snapshot = this.data.activeSnapshot || {};
     const term = snapshot.term || DEFAULT_SEMESTER_ID;
     const releaseVersion = snapshot.releaseVersion || "";
+    const localActive = releasePackService.getLocalActiveRelease(term);
+    const activeManifest = localActive &&
+      localActive.releaseVersion === releaseVersion &&
+      localActive.manifest
+      ? localActive.manifest
+      : null;
     wx.showLoading({ title: "正在打开课表...", mask: true });
     releasePackService.resolveClassroomDetail(room.roomName, {
       term,
       releaseVersion,
       detailId: room.detailId || room.classroomId || "",
     }, {
+      manifest: activeManifest,
       timeout: 15000,
-      retries: 1,
+      retries: 0,
     })
       .then((resolved) => {
         wx.hideLoading();

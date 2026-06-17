@@ -45,6 +45,9 @@ function run() {
     "card-error",
     "card-type-empty-room",
     "card-type-schedule",
+    "card-weather-cloud",
+    "card-weather-rain",
+    "card-weather-sun",
   ]);
 
   [".assistant-hero", ".hero-top", ".hero-logo-wrap", ".hero-logo", ".hero-mark", ".hero-copy", ".hero-title", ".hero-desc", ".hero-clear-mini", ".hero-meta-row", ".hero-status-chip"].forEach((selector) => {

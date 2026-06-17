@@ -12,7 +12,7 @@ function arrayBody(name) {
   return match ? match[1] : "";
 }
 
-const quickActionCount = (arrayBody("QUICK_ACTIONS").match(/id:/g) || []).length;
+const quickActionCount = (js.match(/buildQuickAction\(/g) || []).length - 1;
 assert.strictEqual(quickActionCount, 4, `quick actions should be 4, got ${quickActionCount}`);
 
 assert(!wxml.includes("privacy-tip-full"), "privacy-tip-full must not be a first-viewport card");
@@ -20,6 +20,6 @@ assert(wxml.includes("bottom-sheet") || wxml.includes("sheet-mask"), "bottom she
 assert(/class="composer"/.test(wxml), "composer should exist");
 assert(/\.composer\s*\{[\s\S]*?position\s*:\s*fixed/.test(wxss), "composer should stay fixed");
 assert(wxml.includes("xiaofu-header") && !wxml.includes("assistant-hero card"), "top should be the Xiaofu light header, not a hero card");
-assert(wxml.includes("xiaofu-title") && wxml.includes("xiaofu-subtitle"), "header should include title and subtitle");
+assert(wxml.includes("xiaofu-title-line") && wxml.includes("xiaofu-status"), "header should include stable title/status line");
 
 console.log("test-ai-assistant-minimal-ui passed");
