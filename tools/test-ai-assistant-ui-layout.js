@@ -19,7 +19,13 @@ function run() {
   const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
 
   assert(wxml.includes("xiaofu-header"), "AI page should use the Xiaofu light header");
-  assert(wxml.includes("xiaofu-title") && wxml.includes("xiaofu-subtitle"), "header title and subtitle should render");
+  assert(wxml.includes("xiaofu-title") && wxml.includes("xiaofu-status"), "header title and compact status should render");
+  assert(!wxml.includes("xiaofu-subtitle"), "header should not keep the old long subtitle");
+  assert(wxml.includes("openHeaderMenu"), "clear action should move into the more menu");
+  assert(wxml.includes("header-menu-sheet"), "more menu should render as a bottom sheet");
+  assert(wxml.includes("清空记录"), "more menu should contain clear history action");
+  assert(!/class="xiaofu-[^"]*clear/.test(wxml), "clear button should not live in the fixed header");
+  assert(wxml.includes("weather-card"), "weather responses should use a dedicated weather card");
   assert(!wxml.includes("assistant-hero card"), "AI page should not render the old hero card");
   assert(!wxml.includes("privacy-tip-full"), "full privacy card should not stay in the first viewport");
   assert(wxml.includes("bottom-sheet task-sheet"), "task panel should be a bottom sheet");
@@ -29,6 +35,10 @@ function run() {
 
   const header = getRule(wxss, ".xiaofu-header");
   assert(/height\s*:\s*8[0-8]rpx/.test(header), "Xiaofu header should stay within 88rpx");
+  assert(/z-index\s*:\s*3[0-9]/.test(header), "Xiaofu header should stay above messages without covering sheets");
+
+  const iconButton = getRule(wxss, ".xiaofu-icon-btn");
+  assert(/width\s*:\s*6[0-9]rpx/.test(iconButton) && /height\s*:\s*6[0-9]rpx/.test(iconButton), "header icons should have equal tap areas");
 
   const composer = getRule(wxss, ".composer");
   assert(/position\s*:\s*fixed/.test(composer), "composer must stay fixed");
@@ -36,6 +46,13 @@ function run() {
   const sheet = getRule(wxss, ".bottom-sheet");
   assert(/position\s*:\s*fixed/.test(sheet) && /z-index\s*:\s*40/.test(sheet), "bottom sheet should overlay content");
   assert(/max-height\s*:\s*72vh/.test(sheet), "bottom sheet should not exceed 72vh");
+
+  const aiJs = read("miniprogram/pages/ai-assistant/ai-assistant.js");
+  assert(aiJs.includes("已获取天气数据"), "weather evidence should use weather label");
+  assert(aiJs.includes("已核验课表数据"), "schedule evidence should keep schedule label");
+  assert(aiJs.includes("已查询校园地图"), "map evidence should use map label");
+  assert(aiJs.includes("已核验教室占用"), "empty classroom evidence should use occupancy label");
+  assert(aiJs.includes("normalizeWeatherPayload"), "weather card payload should be normalized for display");
 
   const page = getRule(wxss, ".ai-page");
   assert(/padding-bottom\s*:\s*(2[0-9]{2}|[3-9][0-9]{2})rpx/.test(page), "page should reserve room for fixed composer");

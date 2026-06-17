@@ -118,6 +118,11 @@ const SAFETY_MODE_LABELS = {
 const TOOL_LABELS = {
   search_empty_rooms: "空教室",
   get_today_courses: "今日课表",
+  get_campus_weather: "天气",
+  get_course_weather_advice: "天气建议",
+  search_campus_place: "校园地图",
+  get_campus_route: "校园地图",
+  get_classroom_location: "校园地图",
   search_school_index: "全校索引",
   get_schedule_detail: "课表详情",
   diagnose_data_status: "数据诊断",
@@ -132,6 +137,7 @@ const CARD_TYPE_LABELS = {
   schedule: "课表",
   teacher: "教师",
   course: "课程",
+  weather: "天气",
   diagnosis: "诊断",
   guide: "指引",
   reminder: "提醒",
@@ -143,6 +149,7 @@ const CARD_TITLE_FALLBACKS = {
   schedule: "今日课程",
   teacher: "教师查询",
   course: "课程查询",
+  weather: "校区天气",
   diagnosis: "数据诊断",
   guide: "使用指引",
   reminder: "时间推荐",
@@ -337,6 +344,24 @@ function mapCardTypeLabel(type) {
   return CARD_TYPE_LABELS[String(type || "generic").toLowerCase()] || "结果";
 }
 
+function inferEvidenceLabel(source = {}) {
+  const names = (Array.isArray(source.toolCalls) ? source.toolCalls : [])
+    .map((item) => String(item && (item.name || item.tool || item.type) || "").toLowerCase());
+  const cardTypes = (Array.isArray(source.cards) ? source.cards : [])
+    .map((item) => String(item && item.type || "").toLowerCase());
+  const text = names.concat(cardTypes).join("|");
+  if (/weather|天气/.test(text)) return "已获取天气数据";
+  if (/campus|map|route|location|地图|地点|位置/.test(text)) return "已查询校园地图";
+  if (/empty|空教室/.test(text)) return "已核验教室占用";
+  if (/guide|import|rag|help|说明|帮助|指引|知识/.test(text)) return "使用说明";
+  if (/school|schedule|today|tomorrow|week|term|teacher|course|classroom|detail|课表|课程|教师|教室|教学周|校历|查询全校/.test(text)) {
+    return "已核验课表数据";
+  }
+  const intent = source.metrics && source.metrics.intentName || "";
+  if (/weather/.test(String(intent).toLowerCase())) return "已获取天气数据";
+  return "";
+}
+
 function statusText(status) {
   const normalized = String(status || "").toLowerCase();
   if (["success", "ok", "done"].includes(normalized)) return "完成";
@@ -425,7 +450,7 @@ function normalizeTaskStep(step, index) {
   };
 }
 
-function buildEvidenceText(evidence) {
+function buildEvidenceText(evidence, evidenceLabel) {
   if (!evidence || typeof evidence !== "object" || Array.isArray(evidence)) return "";
   const parts = [];
   if (evidence.term) parts.push(`学期 ${safeText(evidence.term, 32)}`);
@@ -434,8 +459,43 @@ function buildEvidenceText(evidence) {
     const checkedTime = safeText(String(evidence.checkedAt).slice(11, 16), 8);
     if (checkedTime) parts.push(`检查 ${checkedTime}`);
   }
-  if (evidence.verified || evidence.toolCount) parts.push("已核验");
-  return parts.length ? `依据：${parts.join(" · ")}` : "";
+  const label = safeText(evidenceLabel || "", 32);
+  if (label) parts.unshift(label);
+  else if (evidence.verified || evidence.toolCount) parts.push("已核验课表数据");
+  return parts.length ? parts.join(" · ") : "";
+}
+
+function normalizeWeatherPayload(source) {
+  const weather = source && typeof source.weather === "object" && !Array.isArray(source.weather)
+    ? source.weather
+    : {};
+  const timeline = Array.isArray(weather.next6Hours) ? weather.next6Hours : [];
+  const status = safeText(weather.weatherText || weather.status || source.subtitle || "", 24);
+  const iconClass = /雨|雷|降水/.test(status)
+    ? "rain"
+    : (/云|阴/.test(status) ? "cloud" : "sun");
+  return {
+    campus: safeText(weather.campus || source.title || "校区天气", 32),
+    weatherText: status || "天气待确认",
+    updatedLabel: safeText(weather.updatedLabel || weather.updatedAt || "", 32),
+    cachedText: weather.cached ? "使用最近数据" : "实时天气",
+    temperatureC: safeText(weather.temperatureC, 12),
+    apparentTemperatureC: safeText(weather.apparentTemperatureC, 12),
+    highC: safeText(weather.highC, 12),
+    lowC: safeText(weather.lowC, 12),
+    humidity: safeText(weather.humidity, 12),
+    windSpeedKmh: safeText(weather.windSpeedKmh, 12),
+    precipitationMm: safeText(weather.precipitationMm, 12),
+    rainProbabilityMax24h: safeText(weather.rainProbabilityMax24h, 12),
+    advice: safeText(weather.advice || weather.travelAdvice || "", 90),
+    next6Hours: timeline.slice(0, 6).map((item, index) => ({
+      key: `${item.time || index}-${index}`,
+      time: safeText(item.time || "", 12),
+      temperatureC: safeText(item.temperatureC, 12),
+      rainProbability: safeText(item.rainProbability, 12),
+    })),
+    iconClass,
+  };
 }
 
 function normalizeCardItem(item, index, cardType) {
@@ -535,7 +595,8 @@ function normalizeCard(card, messageId, index, expandedCards) {
   const badges = Array.isArray(source.badges)
     ? source.badges.map((item) => safeText(item, 36)).filter(Boolean).slice(0, 2)
     : [];
-  const hasDisplayContent = rawTitle || subtitle || badges.length || items.length || actions.length;
+  const weatherPayload = type === "weather" ? normalizeWeatherPayload(source) : null;
+  const hasDisplayContent = rawTitle || subtitle || badges.length || items.length || actions.length || weatherPayload;
   if (!hasDisplayContent) return null;
 
   const key = cardKey(messageId, source, index);
@@ -559,6 +620,8 @@ function normalizeCard(card, messageId, index, expandedCards) {
     actions,
     typeLabel: mapCardTypeLabel(type),
     typeClass: typeClass(type),
+    weather: weatherPayload,
+    weatherIconClass: weatherPayload && weatherPayload.iconClass || "",
     visibleItems,
     hiddenItemCount: Math.max(0, items.length - visibleItems.length),
     overflowText: expanded ? "收起" : `展开 ${items.length - visibleItems.length} 条`,
@@ -574,7 +637,11 @@ function normalizeCard(card, messageId, index, expandedCards) {
 function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
   const source = message || {};
   const id = source.id || `m-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-  const displaySafety = source.safety ? normalizeSafety(source.safety) : null;
+  const evidenceLabel = inferEvidenceLabel(source);
+  const normalizedSafety = source.safety ? normalizeSafety(source.safety) : null;
+  const displaySafety = normalizedSafety ? Object.assign(normalizedSafety, {
+    text: evidenceLabel || normalizedSafety.text,
+  }) : null;
   const metrics = normalizeMetrics(source.metrics);
   const role = source.role === "user" ? "user" : "assistant";
   const displayTaskSteps = Array.isArray(source.taskSteps)
@@ -595,7 +662,7 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
     toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls : [],
     taskSteps: Array.isArray(source.taskSteps) ? source.taskSteps : [],
     evidence: source.evidence || null,
-    evidenceText: buildEvidenceText(source.evidence),
+    evidenceText: buildEvidenceText(source.evidence, evidenceLabel),
     displayToolCalls,
     safety: source.safety || null,
     displaySafety,
@@ -712,6 +779,7 @@ Page({
     sendingStatusText: "正在调用校园工具并生成卡片",
     showTaskPanel: false,
     showCapabilityGuide: false,
+    showHeaderMenu: false,
     showPrivacySheet: false,
     slowRequest: false,
     showPrivacyTip: false,
@@ -1261,6 +1329,7 @@ Page({
       showPrivacySheet: expanded,
       showTaskPanel: false,
       showCapabilityGuide: false,
+      showHeaderMenu: false,
     }, privacyState));
   },
 
@@ -1271,6 +1340,7 @@ Page({
       showPrivacySheet: true,
       showTaskPanel: false,
       showCapabilityGuide: false,
+      showHeaderMenu: false,
     }, privacyState));
   },
 
@@ -1297,6 +1367,7 @@ Page({
       showTaskPanel: true,
       showPrivacySheet: false,
       showCapabilityGuide: false,
+      showHeaderMenu: false,
       privacyExpanded: false,
       taskPanelReady: Boolean(cachedGroups),
       taskPanelLoading: !cachedGroups,
@@ -1325,12 +1396,27 @@ Page({
       showCapabilityGuide: true,
       showTaskPanel: false,
       showPrivacySheet: false,
+      showHeaderMenu: false,
       privacyExpanded: false,
     });
   },
 
   closeCapabilityGuide() {
     this.setData({ showCapabilityGuide: false });
+  },
+
+  openHeaderMenu() {
+    this.setData({
+      showHeaderMenu: true,
+      showCapabilityGuide: false,
+      showTaskPanel: false,
+      showPrivacySheet: false,
+      privacyExpanded: false,
+    });
+  },
+
+  closeHeaderMenu() {
+    this.setData({ showHeaderMenu: false });
   },
 
   onCapabilityExampleTap(event) {
@@ -1353,6 +1439,7 @@ Page({
       showTaskPanel: false,
       showCapabilityGuide: false,
       showPrivacySheet: false,
+      showHeaderMenu: false,
       privacyExpanded: false,
     });
   },
@@ -1393,6 +1480,7 @@ Page({
   },
 
   clearHistory() {
+    this.setData({ showHeaderMenu: false });
     wx.showModal({
       title: "清空对话",
       content: "仅清空本机保存的最近 AI 对话，不影响课表数据。",

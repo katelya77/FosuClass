@@ -426,19 +426,37 @@ function buildGeneric() {
 
 function buildWeather(result = {}) {
   const ok = result.success !== false;
+  const weatherPayload = ok ? {
+    campus: result.campus || "校区",
+    weatherText: result.weatherText || "天气待确认",
+    updatedAt: result.updatedAt || "",
+    updatedLabel: result.updatedAt ? String(result.updatedAt).replace("T", " ").slice(5, 16) : "",
+    cached: result.cached === true || result.stale === true,
+    stale: result.stale === true,
+    temperatureC: result.temperatureC,
+    apparentTemperatureC: result.apparentTemperatureC,
+    highC: result.highC,
+    lowC: result.lowC,
+    humidity: result.humidity,
+    windSpeedKmh: result.windSpeedKmh,
+    precipitationMm: result.precipitationMm,
+    rainProbabilityMax24h: result.rainProbabilityMax24h,
+    next6Hours: Array.isArray(result.next6Hours) ? result.next6Hours : [],
+    advice: result.advice || (result.alerts || [])[0] || "天气影响不大，按正常课前时间出发即可。",
+  } : null;
   return {
     answer: ok
-      ? `${result.campus || "校区"}当前${result.weatherText || "天气待确认"}，约 ${result.temperatureC || 0}℃。${(result.alerts || [])[0] || "天气影响不大，按正常时间出发即可。"}`
+      ? `${result.campus || "校区"}当前${result.weatherText || "天气待确认"}，约 ${result.temperatureC || 0}℃。${weatherPayload.advice}`
       : (result.summary || "天气暂时不可用，课表和空教室查询不受影响。"),
-    cards: [makeCard("generic", "校区天气", result.summary || "", {
-      badges: [result.campus || "校区", result.cached ? "缓存" : "实时查询", ok ? "天气数据" : "降级"].filter(Boolean),
+    cards: [Object.assign(makeCard(ok ? "weather" : "generic", ok ? (result.campus || "校区天气") : "校区天气", result.summary || "", {
+      badges: [result.campus || "校区", result.cached || result.stale ? "使用最近数据" : "实时查询", ok ? "天气数据" : "降级"].filter(Boolean),
       items: ok ? [
         { title: "天气", value: result.weatherText || "" },
         { title: "温度", value: `${result.temperatureC || 0}℃` },
         { title: "降水", value: `${result.precipitationMm || 0}mm` },
       ] : [{ title: "状态", subtitle: result.code || "WEATHER_UNAVAILABLE", value: "不影响课表" }],
       actions: [],
-    })],
+    }), weatherPayload ? { weather: weatherPayload } : {})],
     suggestions: ["明天下午空教室和天气", "下一节课前要带伞吗"],
   };
 }

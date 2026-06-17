@@ -82,6 +82,11 @@ const PUBLIC_TOOL_NAMES = {
   explain_personal_import: "说明个人课表导入",
   recommend_meeting_time: "推荐空闲时间",
   clarify_missing_slot: "补充查询条件",
+  get_campus_weather: "查询校区天气",
+  get_course_weather_advice: "查询天气建议",
+  search_campus_place: "查询校园地图",
+  get_campus_route: "查询校园地图",
+  get_classroom_location: "查询校园地图",
   safety_guard: "安全检查",
 };
 

@@ -2,21 +2,43 @@
   padding-bottom: calc(44rpx + env(safe-area-inset-bottom));
 }
 
+.campus-map-page button {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.campus-map-page button::after {
+  border: 0;
+}
+
 .campus-tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  width: 100%;
+  box-sizing: border-box;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8rpx;
   padding: 8rpx;
+  overflow: hidden;
 }
 
 .campus-tab,
 .area-tab {
+  box-sizing: border-box;
+  min-width: 0;
   height: 64rpx;
   border-radius: 12rpx;
+  background: #ffffff;
   color: #536174;
   font-size: 26rpx;
   font-weight: 800;
   line-height: 64rpx;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .campus-tab.active,
@@ -26,13 +48,14 @@
 }
 
 .area-tabs {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10rpx;
   margin-top: 16rpx;
+  overflow: hidden;
 }
 
 .area-tab {
-  flex: 1;
   background: #ffffff;
   box-shadow: 0 8rpx 22rpx rgba(31, 41, 55, 0.06);
 }
@@ -89,7 +112,8 @@
 .map-image-wrap {
   position: relative;
   overflow: hidden;
-  min-height: 360rpx;
+  height: 430rpx;
+  max-height: 46vh;
   border-radius: 12rpx;
   background: #f4f7fb;
 }
@@ -97,6 +121,7 @@
 .campus-map-image {
   display: block;
   width: 100%;
+  height: 100%;
 }
 
 .map-placeholder,
@@ -115,6 +140,23 @@
 
 .map-error {
   color: #8a4b4b;
+}
+
+.map-retry-btn,
+.preview-retry-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 112rpx;
+  height: 48rpx;
+  margin-top: 14rpx;
+  padding: 0 18rpx;
+  border-radius: 999rpx;
+  background: #c62828;
+  color: #ffffff;
+  font-size: 22rpx;
+  font-weight: 900;
+  line-height: 48rpx;
 }
 
 .map-marker {
@@ -177,6 +219,14 @@
   line-height: 1.45;
 }
 
+.place-review {
+  margin-top: 8rpx;
+  color: #9a5b08;
+  font-size: 21rpx;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .place-code {
   flex: 0 0 auto;
   min-width: 64rpx;
@@ -210,4 +260,71 @@
   font-size: 21rpx;
   line-height: 1.45;
   text-align: center;
+}
+
+.preview-layer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: rgba(17, 24, 39, 0.94);
+}
+
+.preview-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12rpx;
+  padding: calc(18rpx + env(safe-area-inset-top)) 18rpx 14rpx;
+}
+
+.preview-tool-btn {
+  width: auto;
+  min-width: 112rpx;
+  height: 56rpx;
+  padding: 0 18rpx;
+  border-radius: 999rpx;
+  background: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  font-size: 23rpx;
+  font-weight: 900;
+  line-height: 56rpx;
+  text-align: center;
+}
+
+.preview-area {
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+.preview-movable {
+  width: 100%;
+  min-height: 100%;
+}
+
+.preview-image {
+  display: block;
+  width: 100%;
+}
+
+.preview-loading,
+.preview-error {
+  position: absolute;
+  top: 44%;
+  left: 0;
+  z-index: 1;
+  width: 100%;
+  color: rgba(255, 255, 255, 0.76);
+  font-size: 25rpx;
+  font-weight: 800;
+  text-align: center;
+}
+
+.preview-error {
+  color: #ffffff;
 }

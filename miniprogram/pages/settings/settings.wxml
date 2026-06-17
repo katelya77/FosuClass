@@ -216,6 +216,17 @@
     </button>
   </view>
 
+  <view class="settings-card card">
+    <view class="group-title">工具与帮助</view>
+    <view class="setting-row" bindtap="goCampusMap">
+      <view>
+        <view class="row-title">校园地图</view>
+        <view class="row-desc">查看仙溪、江湾、河滨校区地图和教学楼位置</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
+  </view>
+
   <!-- 7. 其他 -->
   <view class="settings-card card">
     <view class="group-title">其他</view>

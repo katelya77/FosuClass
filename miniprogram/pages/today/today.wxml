@@ -18,12 +18,24 @@
     <view class="alert-content">{{urgentNotice.content}}</view>
   </view>
 
-  <view class="quick-empty-card card" bindtap="goEmptyRoom">
-    <view class="quick-empty-main">
-      <view class="quick-empty-title">找空教室</view>
-      <view class="quick-empty-desc">按当前时间查询附近可用教室</view>
+  <view class="campus-service card">
+    <view class="campus-service-title">校园服务</view>
+    <view class="campus-service-grid">
+      <view class="campus-service-btn" bindtap="goEmptyRoom">
+        <view class="service-icon">⌕</view>
+        <view class="service-copy">
+          <view class="service-title">找空教室</view>
+          <view class="service-desc">当前时间</view>
+        </view>
+      </view>
+      <view class="campus-service-btn" bindtap="goCampusMap">
+        <view class="service-icon">⌖</view>
+        <view class="service-copy">
+          <view class="service-title">校园地图</view>
+          <view class="service-desc">{{nextBuildingCode ? nextBuildingCode : "校区地图"}}</view>
+        </view>
+      </view>
     </view>
-    <view class="quick-empty-action">查询</view>
   </view>
 
   <view class="quick-empty-card ai-today-card card" bindtap="goAiAssistant">

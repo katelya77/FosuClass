@@ -106,6 +106,78 @@
   background: #ffffff;
 }
 
+.campus-service {
+  margin: 18rpx 0 4rpx;
+  padding: 20rpx;
+  border-color: #f0e4e4;
+  background: #ffffff;
+}
+
+.campus-service-title {
+  margin-bottom: 14rpx;
+  color: #172033;
+  font-size: 26rpx;
+  font-weight: 900;
+}
+
+.campus-service-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12rpx;
+}
+
+.campus-service-btn {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+  min-height: 76rpx;
+  padding: 14rpx;
+  border-radius: 14rpx;
+  background: #f8fafc;
+}
+
+.campus-service-btn:active {
+  background: #fff1f1;
+}
+
+.service-icon {
+  flex: 0 0 auto;
+  width: 40rpx;
+  height: 40rpx;
+  border-radius: 12rpx;
+  background: #fff1f1;
+  color: #c62828;
+  font-size: 25rpx;
+  font-weight: 900;
+  line-height: 40rpx;
+  text-align: center;
+}
+
+.service-copy {
+  min-width: 0;
+}
+
+.service-title {
+  overflow: hidden;
+  color: #172033;
+  font-size: 24rpx;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.service-desc {
+  overflow: hidden;
+  margin-top: 4rpx;
+  color: #778297;
+  font-size: 20rpx;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .quick-empty-main {
   flex: 1;
   min-width: 0;

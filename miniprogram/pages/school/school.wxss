@@ -316,6 +316,21 @@ picker {
   font-weight: 700;
 }
 
+.load-more-row.done {
+  background: transparent;
+  color: #98a2b3;
+}
+
+.load-more-row.loading {
+  background: #fff7ed;
+  color: #9a5b08;
+}
+
+.load-more-row.error {
+  background: #fff1f1;
+  color: #c62828;
+}
+
 .load-more-row:active {
   background: #e2e8f0;
 }
@@ -471,6 +486,56 @@ picker {
 
 .reset-filter-btn:active {
   background: #e2e8f0;
+}
+
+.secondary-map-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100% !important;
+  height: 68rpx;
+  margin-top: 14rpx;
+  border-radius: 34rpx;
+  background: #fff1f1;
+  color: #c62828;
+  font-size: 25rpx;
+  font-weight: 900;
+}
+
+.map-return-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin: 8rpx 0 14rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 14rpx;
+  background: #fffafa;
+  border: 1rpx solid #ffd7d7;
+}
+
+.map-return-title {
+  color: #172033;
+  font-size: 25rpx;
+  font-weight: 900;
+}
+
+.map-return-desc {
+  margin-top: 5rpx;
+  color: #778297;
+  font-size: 21rpx;
+}
+
+.map-return-action {
+  flex: 0 0 auto;
+  height: 46rpx;
+  padding: 0 16rpx;
+  border-radius: 999rpx;
+  background: #c62828;
+  color: #ffffff;
+  font-size: 21rpx;
+  font-weight: 900;
+  line-height: 46rpx;
 }
 
 .recent-card {
