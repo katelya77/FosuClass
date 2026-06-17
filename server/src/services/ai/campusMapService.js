@@ -2,63 +2,99 @@ const fs = require("fs");
 const path = require("path");
 
 const DATA_PATH = path.resolve(__dirname, "../../../data/ai/campus-places.json");
+const SOURCE_ID = "campus-map:v2";
+const ROUTE_LIMIT_TEXT = "目前可帮助定位校区和区域，暂不提供精确步行路线。";
 
 const FALLBACK_PLACES = [
   {
-    id: "campus-xiangxi",
+    id: "campus-xianxi",
     campus: "仙溪校区",
+    area: "全区",
     name: "仙溪校区",
+    code: "",
     type: "campus",
-    aliases: ["仙溪", "仙溪校区"],
-    description: "佛山大学仙溪校区。具体楼栋路线以管理员维护的地图数据为准。",
+    aliases: ["仙溪", "仙溪北区", "仙溪南区"],
+    description: "仙溪校区包含北区和南区。",
+    mapRegion: { x: 0.34, y: 0.18, width: 0.64, height: 0.78 },
+    confidence: 0.9,
     verified: true,
-    lat: 23.0336,
-    lng: 113.1222,
     neighbors: [],
   },
   {
     id: "campus-jiangwan",
     campus: "江湾校区",
+    area: "江湾校区",
     name: "江湾校区",
+    code: "",
     type: "campus",
-    aliases: ["江湾", "江湾校区"],
-    description: "佛山大学江湾校区。具体楼栋路线以管理员维护的地图数据为准。",
+    aliases: ["江湾"],
+    description: "江湾校区校园位置参考。",
+    mapRegion: { x: 0.02, y: 0.08, width: 0.96, height: 0.88 },
+    confidence: 0.9,
     verified: true,
-    lat: 23.0382,
-    lng: 113.1115,
     neighbors: [],
   },
   {
-    id: "building-c7",
-    campus: "仙溪校区",
-    name: "C7",
-    type: "teaching_building",
-    aliases: ["C7", "c7", "C7楼", "C7教学楼"],
-    description: "常用教学楼别名，需后台补充精确楼栋坐标和相邻路径。",
-    verified: false,
+    id: "campus-hebin",
+    campus: "河滨校区",
+    area: "河滨校区",
+    name: "河滨校区",
+    code: "",
+    type: "campus",
+    aliases: ["河滨"],
+    description: "河滨校区校园位置参考。",
+    mapRegion: { x: 0.02, y: 0.08, width: 0.96, height: 0.88 },
+    confidence: 0.9,
+    verified: true,
     neighbors: [],
   },
   {
-    id: "building-b8",
+    id: "xianxi-c7-medical-teaching",
     campus: "仙溪校区",
-    name: "B8",
+    area: "南区",
+    name: "C7 医学教学楼",
+    code: "C7",
     type: "teaching_building",
-    aliases: ["B8", "b8", "B8楼", "B8教学楼"],
-    description: "常用教学楼别名，需后台补充精确楼栋坐标和相邻路径。",
-    verified: false,
+    aliases: ["C7", "C7楼", "C7教学楼"],
+    description: "仙溪南区 C7 医学教学楼。",
+    mapRegion: { x: 0.78, y: 0.43, width: 0.16, height: 0.19 },
+    confidence: 0.9,
+    verified: true,
+    neighbors: [],
+  },
+  {
+    id: "xianxi-b8-building",
+    campus: "仙溪校区",
+    area: "南区",
+    name: "B8 教学楼",
+    code: "B8",
+    type: "teaching_building",
+    aliases: ["B8", "B8楼", "B8教学楼"],
+    description: "仙溪南区 B8 教学楼。",
+    mapRegion: { x: 0.78, y: 0.65, width: 0.13, height: 0.12 },
+    confidence: 0.9,
+    verified: true,
     neighbors: [],
   },
 ];
 
 function normalizeText(value) {
-  return String(value || "").trim().toLowerCase().replace(/\s+/g, "");
+  return String(value || "")
+    .trim()
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+function safeNumber(value, fallback = 0) {
+  const num = Number(value);
+  return Number.isFinite(num) ? num : fallback;
 }
 
 function loadPlaces() {
   try {
     if (fs.existsSync(DATA_PATH)) {
       const parsed = JSON.parse(fs.readFileSync(DATA_PATH, "utf8"));
-      if (Array.isArray(parsed.places)) return parsed.places;
+      if (Array.isArray(parsed.places) && parsed.places.length) return parsed.places;
     }
   } catch (error) {
     return FALLBACK_PLACES;
@@ -66,105 +102,152 @@ function loadPlaces() {
   return FALLBACK_PLACES;
 }
 
+function getMapKey(place = {}) {
+  if (place.campus === "河滨校区") return "hebin";
+  if (place.campus === "仙溪校区") return place.area === "南区" ? "xianxiSouth" : "xianxiNorth";
+  return "jiangwan";
+}
+
+function buildMapActionUrl(place = {}) {
+  const params = new URLSearchParams();
+  params.set("map", getMapKey(place));
+  if (place.id) params.set("placeId", place.id);
+  if (place.name) params.set("q", place.code || place.name);
+  return `/pages/campus-map/campus-map?${params.toString()}`;
+}
+
 function scorePlace(place, query) {
   const q = normalizeText(query);
   if (!q) return 0;
-  const names = [place.name, place.id].concat(place.aliases || []).map(normalizeText);
-  if (names.some((item) => item === q)) return 100;
-  if (names.some((item) => item.includes(q))) return 70;
-  if (q.length >= 2 && names.some((item) => q.includes(item))) return 50;
-  return 0;
+  const aliases = Array.isArray(place.aliases) ? place.aliases : [];
+  const exactValues = [place.id, place.name, place.code].concat(aliases).map(normalizeText).filter(Boolean);
+  const searchable = [
+    place.id,
+    place.campus,
+    place.area,
+    place.name,
+    place.code,
+    place.type,
+    place.description,
+  ].concat(aliases).map(normalizeText).filter(Boolean);
+  if (exactValues.some((item) => item === q)) return 120;
+  if (searchable.some((item) => item === q)) return 100;
+  if (searchable.some((item) => item.includes(q))) return 78;
+  if (searchable.some((item) => q.includes(item) && item.length >= 2)) return 56;
+  const campus = normalizeText(place.campus);
+  const area = normalizeText(place.area);
+  let score = 0;
+  if (campus && q.includes(campus)) score += 34;
+  if (area && q.includes(area)) score += 22;
+  if (place.type === "campus" && /校区|校园|主要地点/.test(query)) score += 12;
+  if (score > 0 && /(图书馆|饭堂|食堂|宿舍|体育馆|校门|医院|教学楼|楼|地点|哪里|在哪)/.test(query)) score += 18;
+  return score;
 }
 
-function sanitizePlace(place) {
+function sanitizeRegion(region) {
+  if (!region || typeof region !== "object" || Array.isArray(region)) return null;
+  return {
+    x: Math.max(0, Math.min(1, safeNumber(region.x))),
+    y: Math.max(0, Math.min(1, safeNumber(region.y))),
+    width: Math.max(0, Math.min(1, safeNumber(region.width))),
+    height: Math.max(0, Math.min(1, safeNumber(region.height))),
+  };
+}
+
+function sanitizePlace(place = {}) {
+  const mapKey = getMapKey(place);
   return {
     id: String(place.id || "").slice(0, 80),
     campus: String(place.campus || "").slice(0, 40),
+    area: String(place.area || "").slice(0, 40),
     name: String(place.name || "").slice(0, 80),
+    code: String(place.code || "").slice(0, 24),
     type: String(place.type || "place").slice(0, 40),
-    aliases: Array.isArray(place.aliases) ? place.aliases.slice(0, 8) : [],
+    aliases: Array.isArray(place.aliases) ? place.aliases.slice(0, 8).map((item) => String(item).slice(0, 40)) : [],
     description: String(place.description || "").slice(0, 240),
+    mapKey,
+    mapRegion: sanitizeRegion(place.mapRegion),
+    confidence: Math.max(0, Math.min(1, safeNumber(place.confidence))),
     verified: place.verified === true,
-    lat: Number(place.lat) || null,
-    lng: Number(place.lng) || null,
+    sourceId: place.sourceId || "campus-q-map-2026",
+    updatedAt: place.updatedAt || "2026-06-17",
     neighbors: Array.isArray(place.neighbors) ? place.neighbors.slice(0, 8) : [],
+    actionUrl: buildMapActionUrl(place),
   };
 }
 
 function searchCampusPlace(input = {}) {
-  const query = input.q || input.place || input.message || "";
+  const query = input.q || input.place || input.message || input.campus || "";
+  const limit = Math.max(1, Math.min(20, Number(input.limit || 8) || 8));
   const places = loadPlaces()
     .map((place) => ({ place, score: scorePlace(place, query) }))
     .filter((item) => item.score > 0)
     .sort((left, right) => right.score - left.score || String(left.place.name).localeCompare(String(right.place.name)))
-    .slice(0, Number(input.limit || 8) || 8)
+    .slice(0, limit)
     .map((item) => sanitizePlace(item.place));
   return {
     success: true,
     q: String(query || "").slice(0, 80),
-    sourceId: "campus-map:v1",
-    updatedAt: "2026-06-16",
+    sourceId: SOURCE_ID,
+    updatedAt: "2026-06-17",
     items: places,
     total: places.length,
     ambiguous: places.length > 1,
-    summary: places.length ? `找到 ${places.length} 个校园地点候选。` : "没有找到已维护的校园地点。",
+    summary: places.length
+      ? `找到 ${places.length} 个校园地点候选。Q 版地图仅供位置参考，具体以学校现场指引为准。`
+      : "没有找到已维护的校园地点。",
   };
 }
 
 function findByIdOrQuery(value) {
   const text = String(value || "").trim();
+  if (!text) return null;
   const places = loadPlaces();
-  return places.find((place) => place.id === text) ||
-    searchCampusPlace({ q: text, limit: 1 }).items[0] ||
-    null;
+  const direct = places.find((place) => place.id === text || normalizeText(place.code) === normalizeText(text));
+  if (direct) return direct;
+  const result = searchCampusPlace({ q: text, limit: 1 });
+  return result.items[0] || null;
 }
 
 function getCampusRoute(input = {}) {
   const from = findByIdOrQuery(input.from || input.fromPlace || "");
   const to = findByIdOrQuery(input.to || input.toPlace || input.place || input.message || "");
-  if (!from || !to) {
+  if (!to && !from) {
     return {
       success: false,
       code: "PLACE_NOT_FOUND",
-      sourceId: "campus-map:v1",
-      summary: "没有找到起点或终点，请先选择地点。",
+      sourceId: SOURCE_ID,
+      summary: "没有找到起点或终点。请先输入校区、楼栋代码或地点名。",
       candidates: searchCampusPlace({ q: input.to || input.message || "" }).items,
     };
   }
-  const safeFrom = sanitizePlace(from);
-  const safeTo = sanitizePlace(to);
-  if (!safeFrom.verified || !safeTo.verified || !safeFrom.lat || !safeTo.lat) {
-    return {
-      success: false,
-      code: "ROUTE_DATA_INCOMPLETE",
-      sourceId: "campus-map:v1",
-      from: safeFrom,
-      to: safeTo,
-      summary: "该地点还没有完整的后台地图坐标，不能生成路线。",
-    };
-  }
   return {
-    success: true,
-    sourceId: "campus-map:v1",
-    from: safeFrom,
-    to: safeTo,
-    steps: [
-      `从${safeFrom.name}出发。`,
-      `前往${safeTo.name}，实际路线以校园道路和现场指引为准。`,
-    ],
-    summary: `已生成从${safeFrom.name}到${safeTo.name}的简要路线。`,
-    actionUrl: `/pages/school/school?type=classroom&q=${encodeURIComponent(safeTo.name)}`,
+    success: false,
+    code: "ROUTE_DATA_INCOMPLETE",
+    sourceId: SOURCE_ID,
+    from: from ? sanitizePlace(from) : null,
+    to: to ? sanitizePlace(to) : null,
+    summary: ROUTE_LIMIT_TEXT,
   };
+}
+
+function extractBuildingCode(room) {
+  const text = String(room || "").trim();
+  const match = text.match(/\b([A-Z]\d{1,2})(?:[-\s]?\d{0,4})?/i);
+  return match ? match[1].toUpperCase() : text;
 }
 
 function getClassroomLocation(input = {}) {
   const room = String(input.classroom || input.roomName || input.message || "").trim();
-  const building = (room.match(/[ABC]\d{1,2}/i) || [room])[0];
+  const building = extractBuildingCode(room);
   const result = searchCampusPlace({ q: building, limit: 5 });
+  const first = result.items[0];
   return Object.assign({}, result, {
     classroom: room,
-    summary: result.items.length
-      ? `${room || building} 可能位于 ${result.items[0].name}，请以后台维护地图和课表详情为准。`
+    building,
+    routeAvailable: false,
+    summary: first
+      ? `${room || building} 可先查看${first.campus}${first.area && first.area !== "全区" ? first.area : ""}地图中的 ${first.name}。${ROUTE_LIMIT_TEXT}`
       : "没有找到该教室对应的楼栋位置。",
   });
 }
@@ -172,8 +255,8 @@ function getClassroomLocation(input = {}) {
 function getMapStatus() {
   const places = loadPlaces().map(sanitizePlace);
   return {
-    sourceId: "campus-map:v1",
-    updatedAt: "2026-06-16",
+    sourceId: SOURCE_ID,
+    updatedAt: "2026-06-17",
     placeCount: places.length,
     verifiedCount: places.filter((item) => item.verified).length,
     needsAdminData: places.some((item) => !item.verified),
@@ -182,6 +265,7 @@ function getMapStatus() {
 
 module.exports = {
   DATA_PATH,
+  ROUTE_LIMIT_TEXT,
   getCampusRoute,
   getClassroomLocation,
   getMapStatus,

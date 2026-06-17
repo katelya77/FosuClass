@@ -4,6 +4,7 @@
     "pages/school/school",
     "pages/today/today",
     "pages/ai-assistant/ai-assistant",
+    "pages/campus-map/campus-map",
     "pages/calendar/calendar",
     "pages/settings/settings",
     "pages/custom-courses/custom-courses",

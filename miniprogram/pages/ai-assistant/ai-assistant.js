@@ -67,6 +67,33 @@ const TASK_PANEL_GROUPS = [
   },
 ];
 
+const CAPABILITY_GUIDE_GROUPS = [
+  {
+    title: "我的课表",
+    items: ["今天有什么课", "明天有什么课", "下一节课", "本周课表", "两节课之间有多久"],
+  },
+  {
+    title: "全校查询",
+    items: ["查老师课表", "查班级课表", "查教室占用", "查课程安排"],
+  },
+  {
+    title: "空教室与时间",
+    items: ["现在有空教室吗", "找连续两节空教室", "推荐共同空闲时间"],
+  },
+  {
+    title: "校园地图",
+    items: ["C7 在哪里", "查看仙溪南区地图", "江湾校区主要地点", "下一节课的教学楼位置"],
+  },
+  {
+    title: "天气和出行",
+    items: ["仙溪校区今天会下雨吗", "下一节课需要带伞吗"],
+  },
+  {
+    title: "数据与使用帮助",
+    items: ["当前是第几教学周", "数据更新到什么时候", "如何导入个人课表", "加载失败怎么办"],
+  },
+];
+
 const TABBAR_PENDING_QUERY = {
   "/pages/school/school": "FOSU_AI_PENDING_SCHOOL_QUERY",
   "/pages/today/today": "FOSU_AI_PENDING_TODAY_QUERY",
@@ -673,6 +700,7 @@ Page({
   data: {
     quickActions: QUICK_ACTIONS,
     welcomeExamples: WELCOME_EXAMPLES,
+    capabilityGuideGroups: CAPABILITY_GUIDE_GROUPS,
     taskPanelGroups: [],
     taskPanelReady: false,
     taskPanelLoading: false,
@@ -683,6 +711,7 @@ Page({
     sending: false,
     sendingStatusText: "正在调用校园工具并生成卡片",
     showTaskPanel: false,
+    showCapabilityGuide: false,
     showPrivacySheet: false,
     slowRequest: false,
     showPrivacyTip: false,
@@ -1231,6 +1260,7 @@ Page({
       privacyExpanded: expanded,
       showPrivacySheet: expanded,
       showTaskPanel: false,
+      showCapabilityGuide: false,
     }, privacyState));
   },
 
@@ -1240,6 +1270,7 @@ Page({
       privacyExpanded: true,
       showPrivacySheet: true,
       showTaskPanel: false,
+      showCapabilityGuide: false,
     }, privacyState));
   },
 
@@ -1265,6 +1296,7 @@ Page({
     this.setData({
       showTaskPanel: true,
       showPrivacySheet: false,
+      showCapabilityGuide: false,
       privacyExpanded: false,
       taskPanelReady: Boolean(cachedGroups),
       taskPanelLoading: !cachedGroups,
@@ -1288,9 +1320,38 @@ Page({
     this.setData({ showTaskPanel: false });
   },
 
+  openCapabilityGuide() {
+    this.setData({
+      showCapabilityGuide: true,
+      showTaskPanel: false,
+      showPrivacySheet: false,
+      privacyExpanded: false,
+    });
+  },
+
+  closeCapabilityGuide() {
+    this.setData({ showCapabilityGuide: false });
+  },
+
+  onCapabilityExampleTap(event) {
+    const text = event.currentTarget.dataset.text;
+    if (!text) return;
+    this.setData({
+      inputValue: text,
+      inputFocus: true,
+      showCapabilityGuide: false,
+    });
+  },
+
+  openCampusMapFromGuide() {
+    this.setData({ showCapabilityGuide: false });
+    this.navigateByUrl("/pages/campus-map/campus-map");
+  },
+
   closeSheets() {
     this.setData({
       showTaskPanel: false,
+      showCapabilityGuide: false,
       showPrivacySheet: false,
       privacyExpanded: false,
     });

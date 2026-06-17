@@ -103,7 +103,7 @@ function normalizeText(value) {
 
 function extractBuilding(message) {
   const text = normalizeText(message);
-  const match = text.match(/\b([ABC]\d{1,2})\b/i);
+  const match = text.match(/\b([A-Z]\d{1,2})\b/i);
   if (match) return match[1].toUpperCase();
   const known = ["会通楼", "致用楼", "基础楼", "图书馆", "C7", "B8", "B5"];
   return known.find((item) => text.includes(item)) || "";
@@ -346,6 +346,13 @@ function resolveModernChineseIntent(message, context = {}) {
   const hasWeather = /\u5929\u6c14|\u4e0b\u96e8|\u964d\u96e8|\u9ad8\u6e29|\u96f7\u66b4|\u5e26\u4f1e|\u51fa\u884c/.test(text);
   const hasEmptyRoom = /\u7a7a\u6559\u5ba4|\u81ea\u4e60|\u6ca1\u8bfe/.test(text);
   const hasTravel = /\u8def\u7ebf|\u4f4d\u7f6e|\u5bfc\u822a|\u5728\u54ea|\u600e\u4e48\u8d70/.test(text);
+  const hasNextCourseLocation = /\u4e0b\u4e00\u8282|\u4e0b\u8282|\u63a5\u4e0b\u6765.*\u8bfe/.test(text) &&
+    /\u5728\u54ea|\u54ea\u91cc|\u4f4d\u7f6e|\u6559\u5b66\u697c|\u5730\u56fe|\u600e\u4e48\u8d70/.test(text);
+  const hasCampusMapQuery = /\u5730\u56fe|\u5730\u70b9|\u4f4d\u7f6e|\u5728\u54ea|\u54ea\u91cc|\u56fe\u4e66\u9986|\u996d\u5802|\u98df\u5802|\u5bbf\u820d|\u4f53\u80b2\u9986|\u6821\u95e8|\u533b\u9662|\u533b\u52a1|\u6559\u5b66\u697c|\u4e3b\u8981\u5730\u70b9|\b[A-Z]\d{1,2}\b/i.test(text);
+  const hasCampusScope = /\u6c5f\u6e7e|\u4ed9\u6eaa|\u6cb3\u6ee8|\u6821\u533a|\u6821\u56ed|\b[A-Z]\d{1,2}\b/i.test(text);
+  if (hasNextCourseLocation) {
+    return { name: "next_course_location", slots: {} };
+  }
   if (/\u751f\u56fe|\u56fe\u7247|\u6d77\u62a5|\u5206\u4eab\u56fe|\u914d\u56fe|\u5c55\u793a\u7d20\u6750|\u751f\u6210.*\u56fe/.test(text)) {
     return { name: "generate_image", slots: { scene: "competition_demo_asset" } };
   }
@@ -363,8 +370,13 @@ function resolveModernChineseIntent(message, context = {}) {
   if (hasWeather) {
     return { name: "get_campus_weather", slots: { campus } };
   }
-  if (hasTravel && /[ABC]\d|\u6821\u533a|\u56fe\u4e66\u9986|\u996d\u5802|\u5bbf\u820d|\u6559\u5b66\u697c|\u6559\u5ba4/.test(text)) {
-    const classroom = (text.match(/[ABC]\d{1,2}(?:[-\u680b\u697c]?\d{0,4})?/i) || [""])[0];
+  if (hasCampusMapQuery && hasCampusScope) {
+    const classroom = (text.match(/[A-Z]\d{1,2}(?:[-\u680b\u697c]?\d{0,4})?/i) || [""])[0];
+    if (classroom) return { name: "get_classroom_location", slots: { classroom } };
+    return { name: "search_campus_place", slots: { q: text } };
+  }
+  if (hasTravel && /[A-Z]\d|\u6821\u533a|\u56fe\u4e66\u9986|\u996d\u5802|\u5bbf\u820d|\u6559\u5b66\u697c|\u6559\u5ba4/i.test(text)) {
+    const classroom = (text.match(/[A-Z]\d{1,2}(?:[-\u680b\u697c]?\d{0,4})?/i) || [""])[0];
     if (classroom) return { name: "get_classroom_location", slots: { classroom } };
     return { name: "search_campus_place", slots: { q: stripChineseIntentWords(text) || text } };
   }
@@ -1101,6 +1113,12 @@ function buildPlanForIntent(intent, message, context = {}) {
       agentProtocol.buildPlanStep("search_campus_place", { q: slots.building || slots.campus || "C7", message }, "补充地点信息"),
     ];
   }
+  if (intent && intent.name === "next_course_location") {
+    return [
+      agentProtocol.buildPlanStep("get_next_course", slots, "读取下一节课程"),
+      agentProtocol.buildPlanStep("get_classroom_location", { message }, "查询教室楼栋位置"),
+    ];
+  }
   if (!intent || intent.name === "generic" || intent.name === "project_qa" || intent.name === "conversational_help") return [];
   if (intent.name === "clarify_missing_slot") {
     return [agentProtocol.buildPlanStep("clarify_missing_slot", slots, "补全缺失槽位")];
@@ -1110,6 +1128,7 @@ function buildPlanForIntent(intent, message, context = {}) {
 
 function runToolsForIntent(intent, message, context) {
   if (!intent || intent.name === "generic" || intent.name === "project_qa" || intent.name === "conversational_help") return [];
+  if (intent.name === "next_course_location") return runToolChainForIntent(intent, message, context);
   const input = Object.assign({}, intent.slots || {}, {
     message,
     term: context.term,
@@ -1138,6 +1157,17 @@ function runToolChainForIntent(intent, message, context) {
       const result = executeTool(step.toolName, step.args, context);
       calls.push(makeToolCall(step.toolName, result));
     });
+    return calls;
+  }
+  if (intent.name === "next_course_location") {
+    const courseResult = executeTool("get_next_course", input, context);
+    calls.push(makeToolCall("get_next_course", courseResult));
+    const nextCourse = courseResult && (courseResult.nextCourse || asArray(courseResult.courses)[0]) || {};
+    const classroom = nextCourse.classroom || nextCourse.roomName || input.classroom || "";
+    if (classroom) {
+      const locationResult = executeTool("get_classroom_location", { classroom, message }, context);
+      calls.push(makeToolCall("get_classroom_location", locationResult));
+    }
     return calls;
   }
   const firstResult = executeTool(intent.name, input, context);
@@ -1186,6 +1216,17 @@ async function runToolChainForIntentAsync(intent, message, context) {
     for (const step of plan) {
       const result = await executeToolAsync(step.toolName, step.args, context);
       calls.push(makeToolCall(step.toolName, result));
+    }
+    return calls;
+  }
+  if (intent.name === "next_course_location") {
+    const courseResult = await executeToolAsync("get_next_course", input, context);
+    calls.push(makeToolCall("get_next_course", courseResult));
+    const nextCourse = courseResult && (courseResult.nextCourse || asArray(courseResult.courses)[0]) || {};
+    const classroom = nextCourse.classroom || nextCourse.roomName || input.classroom || "";
+    if (classroom) {
+      const locationResult = await executeToolAsync("get_classroom_location", { classroom, message }, context);
+      calls.push(makeToolCall("get_classroom_location", locationResult));
     }
     return calls;
   }

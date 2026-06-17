@@ -1,7 +1,7 @@
 const BRAND = require("../../config/brand");
 const { courseTimes } = require("../../data/courseTimes");
 const { buildScheduleColumns, normalizeCourse } = require("../../utils/course");
-const { getSettings, saveSettings } = require("../../utils/storage");
+const { getSettings, getCurrentScheduleTarget, setCurrentScheduleTarget } = require("../../utils/storage");
 const customCourseService = require("../../services/customCourseService");
 const releasePackService = require("../../services/releasePackService");
 const teachingCalendarService = require("../../services/teachingCalendarService");
@@ -291,11 +291,14 @@ Page({
   },
 
   checkCurrentTargetStatus() {
-    const currentTarget = wx.getStorageSync("FOSU_CURRENT_SCHEDULE_TARGET");
-    const isCurrent = currentTarget && 
-                      currentTarget.type === this.data.type && 
-                      currentTarget.name === this.data.name && 
-                      currentTarget.semester === this.data.semester;
+    const currentTarget = getCurrentScheduleTarget();
+    const meta = this.data.scheduleMeta || {};
+    const currentId = currentTarget && (currentTarget.detailId || currentTarget.id || currentTarget.classId || "");
+    const detailId = meta.detailId || meta.id || meta.scheduleId || meta.classId || "";
+    const isCurrent = currentTarget &&
+                      currentTarget.type === this.data.type &&
+                      (currentId && detailId ? currentId === detailId : currentTarget.name === this.data.name) &&
+                      (currentTarget.term || currentTarget.semester) === this.data.semester;
     this.setData({
       isCurrentTarget: Boolean(isCurrent),
     });
@@ -497,9 +500,14 @@ Page({
 
     const nowStr = new Date().toLocaleTimeString("zh-CN", { hour12: false, hour: "2-digit", minute: "2-digit" });
     const meta = this.data.scheduleMeta || {};
+    const releaseVersion = meta.scheduleVersion || meta.releaseVersion || meta.version || "";
+    const detailId = meta.detailId || meta.id || meta.scheduleId || meta.classId || this.data.name || "";
     const target = {
       type: this.data.type,
+      id: meta.id || detailId,
+      detailId,
       name: this.data.name,
+      term: this.data.semester,
       semester: this.data.semester,
       courses: this.data.allCourses,
       updateTime: nowStr,
@@ -507,20 +515,11 @@ Page({
       className: meta.className || this.data.name || "",
       displayType: meta.displayType || this.data.displayType || "",
       isAggregated: this.data.isAggregated,
+      releaseVersion,
+      source: "schedule-view",
     };
 
-    wx.setStorageSync("FOSU_CURRENT_SCHEDULE_TARGET", target);
-    wx.setStorageSync("hasInitializedSchedule", true);
-    wx.setStorageSync("currentScheduleId", meta.classId || this.data.name || "");
-    wx.setStorageSync("currentScheduleName", this.data.name || "");
-    wx.setStorageSync("currentScheduleSource", target.type || "class");
-    
-    // 兼容原班级选项，设置页能自适应
-    saveSettings({
-      className: this.data.name,
-      semester: this.data.semester,
-      classId: meta.classId || "",
-    });
+    setCurrentScheduleTarget(target);
 
     this.setData({
       isCurrentTarget: true,

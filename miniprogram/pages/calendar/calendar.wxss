@@ -1,4 +1,13 @@
+.calendar-page {
+  display: flex;
+  min-height: 100vh;
+  height: 100vh;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .calendar-header {
+  flex: 0 0 auto;
   padding: 30rpx;
 }
 
@@ -16,6 +25,7 @@
 }
 
 .calendar-skeleton {
+  flex: 0 0 auto;
   margin-top: 22rpx;
   padding: 24rpx;
 }
@@ -32,7 +42,13 @@
 }
 
 .week-list {
-  margin-top: 22rpx;
+  padding: 22rpx 0 calc(110rpx + env(safe-area-inset-bottom));
+}
+
+.week-scroll {
+  flex: 1;
+  min-height: 0;
+  margin-top: 0;
 }
 
 .week-card {
@@ -105,4 +121,21 @@
   color: #778297;
   font-size: 24rpx;
   line-height: 1.45;
+}
+
+.back-current-week {
+  position: fixed;
+  right: 28rpx;
+  bottom: calc(36rpx + env(safe-area-inset-bottom));
+  z-index: 12;
+  min-width: 150rpx;
+  height: 64rpx;
+  padding: 0 24rpx;
+  border-radius: 32rpx;
+  background: #c62828;
+  color: #ffffff;
+  font-size: 24rpx;
+  font-weight: 800;
+  line-height: 64rpx;
+  box-shadow: 0 12rpx 28rpx rgba(198, 40, 40, 0.22);
 }

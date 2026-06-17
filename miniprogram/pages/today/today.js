@@ -1,6 +1,7 @@
 const { getTodayCoursesData } = require("../../utils/todayReminder");
 const { getSettings } = require("../../utils/storage");
 const appConfigService = require("../../services/appConfigService");
+const currentScheduleService = require("../../services/currentScheduleService");
 const customCourseService = require("../../services/customCourseService");
 const BRAND = require("../../config/brand");
 
@@ -19,7 +20,6 @@ Page({
     appConfig: { notices: [] },
     urgentNotice: null,
     dataVersionText: "",
-    releaseNote: "",
     selectedCourse: null,
     detailVisible: false,
     emptyTitle: "今天没有课程，好好休息",
@@ -30,9 +30,28 @@ Page({
     const pending = this.consumeAiPendingTodayQuery();
     this.loadToday();
     this.loadPageConfig();
+    this.refreshCurrentTargetSilently();
     if (pending) {
       this.applyAiPendingTodayQuery(pending);
     }
+  },
+
+  refreshCurrentTargetSilently() {
+    currentScheduleService.ensureCurrentScheduleFresh({
+      silent: true,
+      notify: true,
+    }).then((result) => {
+      if (result && result.status === "UPDATED") {
+        this.loadToday();
+        if (result.shouldNotify) {
+          wx.showToast({
+            title: "课表已更新至最新数据",
+            icon: "none",
+            duration: 1200,
+          });
+        }
+      }
+    }).catch(() => {});
   },
 
   consumeAiPendingTodayQuery() {
@@ -80,7 +99,6 @@ Page({
           appConfig: normalizedConfig,
           urgentNotice,
           dataVersionText: latestUpdatedAt ? `数据更新于 ${appConfigService.formatConfigTime(latestUpdatedAt)}` : "",
-          releaseNote: (normalizedConfig.dataVersion && normalizedConfig.dataVersion.releaseNote) || "",
         });
       })
       .catch((err) => {
