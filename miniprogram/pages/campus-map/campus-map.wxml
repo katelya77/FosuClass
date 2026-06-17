@@ -1,22 +1,26 @@
 <view class="page campus-map-page">
   <view class="campus-tabs card">
-    <button
+    <view
       wx:for="{{campusTabs}}"
       wx:key="key"
+      role="button"
+      aria-label="切换到{{item.label}}校区"
       class="campus-tab {{activeCampus === item.key ? 'active' : ''}}"
       data-key="{{item.key}}"
       bindtap="onCampusTap"
-    >{{item.label}}</button>
+    >{{item.label}}</view>
   </view>
 
   <view class="area-tabs" wx:if="{{activeCampus === 'xianxi'}}">
-    <button
+    <view
       wx:for="{{xianxiAreas}}"
       wx:key="key"
+      role="button"
+      aria-label="切换到仙溪{{item.label}}"
       class="area-tab {{activeXianxiArea === item.key ? 'active' : ''}}"
       data-key="{{item.key}}"
       bindtap="onAreaTap"
-    >{{item.label}}</button>
+    >{{item.label}}</view>
   </view>
 
   <view class="search-card card">
@@ -34,17 +38,20 @@
     <view class="map-head">
       <view>
         <view class="map-title">{{mapInfo.title}}</view>
-        <view class="map-subtitle">点击图片查看大图</view>
+        <view class="map-subtitle">点击后只预览当前地图</view>
       </view>
-      <button class="map-preview-btn" bindtap="previewMap">查看</button>
+      <button class="map-preview-btn" bindtap="previewMap">大图</button>
     </view>
     <view class="map-image-wrap">
       <view class="map-placeholder" wx:if="{{!imageLoaded && !imageError}}">地图加载中</view>
-      <view class="map-error" wx:if="{{imageError}}">地图暂时无法加载，请稍后重试</view>
+      <view class="map-error" wx:if="{{imageError}}">
+        <view>地图暂时无法加载</view>
+        <button class="map-retry-btn" bindtap="retryMapImage">重试</button>
+      </view>
       <image
         class="campus-map-image"
         src="{{mapInfo.asset}}"
-        mode="widthFix"
+        mode="aspectFit"
         bindtap="previewMap"
         bindload="onMapImageLoad"
         binderror="onMapImageError"
@@ -70,6 +77,7 @@
         <view class="place-title">{{item.name}}</view>
         <view class="place-meta">{{item.campus}} · {{item.area}} · {{item.verified ? '已核对' : '参考位置'}}</view>
         <view class="place-desc">{{item.description}}</view>
+        <view class="place-review" wx:if="{{!item.verified}}">未人工核对，暂不显示精确红框</view>
       </view>
       <view class="place-code" wx:if="{{item.code}}">{{item.code}}</view>
     </view>
@@ -86,8 +94,9 @@
     >
       <view class="place-main">
         <view class="place-title">{{item.name}}</view>
-        <view class="place-meta">{{item.campus}} · {{item.area}}</view>
+        <view class="place-meta">{{item.campus}} · {{item.area}} · {{item.verified ? '已核对' : '待校对'}}</view>
         <view class="place-desc">{{item.description}}</view>
+        <view class="place-review" wx:if="{{!item.verified}}">待人工核对，不显示精确红框</view>
       </view>
       <view class="place-code" wx:if="{{item.code}}">{{item.code}}</view>
     </view>
@@ -98,4 +107,34 @@
   </view>
 
   <view class="map-note">{{note}}</view>
+
+  <view class="preview-layer" wx:if="{{previewVisible}}">
+    <view class="preview-toolbar">
+      <button class="preview-tool-btn" bindtap="closeCustomPreview">关闭</button>
+      <button class="preview-tool-btn" bindtap="resetCustomPreviewScale">恢复比例</button>
+    </view>
+    <movable-area class="preview-area">
+      <movable-view
+        class="preview-movable"
+        direction="all"
+        scale="{{true}}"
+        scale-min="1"
+        scale-max="4"
+        scale-value="{{previewScale}}"
+      >
+        <view class="preview-loading" wx:if="{{!previewImageLoaded && !previewImageError}}">大图加载中</view>
+        <view class="preview-error" wx:if="{{previewImageError}}">
+          <view>大图加载失败</view>
+          <button class="preview-retry-btn" bindtap="retryPreviewImage">重试</button>
+        </view>
+        <image
+          class="preview-image"
+          src="{{previewImagePath}}"
+          mode="widthFix"
+          bindload="onPreviewImageLoad"
+          binderror="onPreviewImageError"
+        />
+      </movable-view>
+    </movable-area>
+  </view>
 </view>

@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FosuClass 校园地图校对</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="workspace">
+      <header class="topbar">
+        <div class="brand">
+          <h1>校园地图校对</h1>
+          <p>拖动红框校准位置；只有点击“应用到小程序数据”才会覆盖正式文件。</p>
+        </div>
+        <div class="map-selector" id="mapTabs" aria-label="选择地图"></div>
+      </header>
+
+      <div class="toolbar" aria-label="地图工具">
+        <button class="toolbar-btn" id="zoomOut" type="button">缩小</button>
+        <span class="zoom-label" id="zoomLabel">100%</span>
+        <button class="toolbar-btn" id="zoomIn" type="button">放大</button>
+        <button class="toolbar-btn" id="fitMap" type="button">适配</button>
+        <button class="toolbar-btn" id="addPlace" type="button">新增地点</button>
+        <button class="toolbar-btn" id="undoBtn" type="button">撤销</button>
+        <button class="toolbar-btn" id="redoBtn" type="button">恢复</button>
+      </div>
+
+      <div class="stage-wrap">
+        <div class="stage" id="stage" aria-label="地图画布">
+          <div class="map-canvas" id="mapCanvas">
+            <img class="map-image" id="mapImage" alt="校园地图" draggable="false" />
+          </div>
+        </div>
+      </div>
+
+      <footer class="statusbar">
+        <span id="statusLeft">加载中</span>
+        <span id="statusRight">待校验</span>
+      </footer>
+    </section>
+
+    <aside class="side">
+      <section class="places-panel">
+        <div class="panel-head">
+          <h2>地点列表</h2>
+          <span class="badge">点击选择</span>
+        </div>
+        <div class="place-list" id="placesList"></div>
+      </section>
+
+      <section class="inspector">
+        <div class="panel-head">
+          <h2 id="selectedTitle">未选择地点</h2>
+          <span class="badge warn">人工校对</span>
+        </div>
+
+        <form class="form" id="placeForm">
+          <div class="field"><label for="field-id">id</label><input id="field-id" name="id" /></div>
+          <div class="field"><label for="field-name">name</label><input id="field-name" name="name" /></div>
+          <div class="field-row">
+            <div class="field"><label for="field-code">code</label><input id="field-code" name="code" /></div>
+            <div class="field"><label for="field-type">type</label><input id="field-type" name="type" /></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label for="field-campus">campus</label><input id="field-campus" name="campus" /></div>
+            <div class="field"><label for="field-area">area</label><input id="field-area" name="area" /></div>
+          </div>
+          <div class="field"><label for="field-aliases">aliases</label><textarea id="field-aliases" name="aliases"></textarea></div>
+          <div class="field"><label for="field-description">description</label><textarea id="field-description" name="description"></textarea></div>
+          <div class="field-row">
+            <div class="field"><label for="field-x">x</label><input id="field-x" name="x" type="number" min="0" max="1" step="0.0001" /></div>
+            <div class="field"><label for="field-y">y</label><input id="field-y" name="y" type="number" min="0" max="1" step="0.0001" /></div>
+          </div>
+          <div class="field-row">
+            <div class="field"><label for="field-width">width</label><input id="field-width" name="width" type="number" min="0" max="1" step="0.0001" /></div>
+            <div class="field"><label for="field-height">height</label><input id="field-height" name="height" type="number" min="0" max="1" step="0.0001" /></div>
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="field-review">reviewStatus</label>
+              <select id="field-review" name="reviewStatus">
+                <option value="needs-review">needs-review</option>
+                <option value="verified">verified</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="field-verified">verified</label>
+              <select id="field-verified" name="verified">
+                <option value="false">false</option>
+                <option value="true">true</option>
+              </select>
+            </div>
+          </div>
+          <div class="field"><label for="field-updated">updatedAt</label><input id="field-updated" name="updatedAt" /></div>
+
+          <div class="actions">
+            <button class="primary-btn" type="submit">更新表单</button>
+            <button class="danger-btn" id="deletePlace" type="button">删除地点</button>
+            <button class="ghost-btn" id="verifyPlace" type="button">标记为已人工核对</button>
+            <button class="ghost-btn" id="unverifyPlace" type="button">取消核对</button>
+            <button class="ghost-btn" id="saveDraft" type="button">保存草稿</button>
+            <button class="ghost-btn" id="validateData" type="button">校验数据</button>
+            <button class="ghost-btn" id="exportJson" type="button">导出 JSON</button>
+            <button class="ghost-btn" id="importJson" type="button">导入 JSON</button>
+            <button class="ghost-btn" id="downloadBackup" type="button">下载备份</button>
+            <button class="primary-btn full" id="applyData" type="button">应用到小程序数据</button>
+          </div>
+          <input class="file-input" id="importFile" type="file" accept="application/json" />
+        </form>
+      </section>
+    </aside>
+  </main>
+
+  <div class="toast" id="toast" role="status"></div>
+  <script src="/client.js"></script>
+</body>
+</html>

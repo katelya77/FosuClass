@@ -31,6 +31,8 @@ button::after {
 
 .xiaofu-header {
   box-sizing: border-box;
+  position: relative;
+  z-index: 30;
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -82,43 +84,48 @@ button::after {
 
 .xiaofu-title {
   color: #1f2937;
-  font-size: 28rpx;
+  font-size: 30rpx;
   font-weight: 900;
   line-height: 1.1;
 }
 
-.xiaofu-subtitle {
-  overflow: hidden;
+.xiaofu-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6rpx;
   margin-top: 5rpx;
-  color: #6b7280;
+  color: #2f6f4e;
   font-size: 20rpx;
   font-weight: 700;
   line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.xiaofu-clear {
-  flex: 0 0 auto;
-  width: 72rpx;
-  height: 48rpx;
-  color: #8a4b4b;
-  font-size: 21rpx;
-  font-weight: 800;
-  line-height: 48rpx;
-  text-align: center;
-}
-
-.xiaofu-help {
-  flex: 0 0 auto;
-  width: 48rpx;
-  height: 48rpx;
+.xiaofu-status::before {
+  content: "";
+  display: inline-block;
+  width: 10rpx;
+  height: 10rpx;
   border-radius: 50%;
+  background: #2f6f4e;
+}
+
+.xiaofu-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.xiaofu-icon-btn {
+  flex: 0 0 auto;
+  width: 64rpx;
+  height: 64rpx;
+  border-radius: 18rpx;
   background: #f3f5f7;
   color: #596579;
-  font-size: 24rpx;
+  font-size: 22rpx;
   font-weight: 900;
-  line-height: 48rpx;
+  line-height: 64rpx;
   text-align: center;
 }
 
@@ -673,6 +680,231 @@ button::after {
   line-height: 1.35;
 }
 
+.weather-card {
+  position: relative;
+  overflow: hidden;
+  padding: 18rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(135deg, #fffafa 0%, #ffffff 54%, #eef8f2 100%);
+  border: 1rpx solid rgba(231, 237, 245, 0.96);
+}
+
+.weather-card-head,
+.weather-main,
+.weather-metrics,
+.weather-timeline {
+  position: relative;
+  z-index: 1;
+}
+
+.weather-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.weather-campus {
+  color: #1f2937;
+  font-size: 27rpx;
+  font-weight: 900;
+  line-height: 1.25;
+}
+
+.weather-status,
+.weather-updated {
+  margin-top: 5rpx;
+  color: #667085;
+  font-size: 20rpx;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.weather-updated {
+  max-width: 248rpx;
+  margin-top: 0;
+  text-align: right;
+}
+
+.weather-main {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  margin-top: 18rpx;
+}
+
+.weather-temp {
+  color: #172033;
+  font-size: 72rpx;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.weather-temp text {
+  font-size: 30rpx;
+}
+
+.weather-facts {
+  flex: 1;
+  min-width: 0;
+  color: #536174;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 1.6;
+}
+
+.weather-icon {
+  position: relative;
+  flex: 0 0 auto;
+  width: 88rpx;
+  height: 74rpx;
+}
+
+.sun-core {
+  position: absolute;
+  right: 14rpx;
+  top: 10rpx;
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+  background: rgba(245, 158, 11, 0.25);
+  animation: weatherBreath 3.8s ease-in-out infinite;
+}
+
+.cloud {
+  position: absolute;
+  display: none;
+  height: 28rpx;
+  border-radius: 999rpx;
+  background: rgba(148, 163, 184, 0.55);
+}
+
+.cloud-a {
+  left: 8rpx;
+  top: 26rpx;
+  width: 64rpx;
+  animation: weatherCloud 4.8s ease-in-out infinite;
+}
+
+.cloud-b {
+  left: 28rpx;
+  top: 12rpx;
+  width: 44rpx;
+  opacity: 0.72;
+  animation: weatherCloud 5.6s ease-in-out infinite reverse;
+}
+
+.drop {
+  position: absolute;
+  display: none;
+  top: 46rpx;
+  width: 6rpx;
+  height: 18rpx;
+  border-radius: 999rpx;
+  background: rgba(37, 99, 235, 0.5);
+  animation: weatherDrop 1.8s ease-in-out infinite;
+}
+
+.drop-a { left: 30rpx; }
+.drop-b { left: 48rpx; animation-delay: 0.2s; }
+.drop-c { left: 66rpx; animation-delay: 0.4s; }
+
+.card-weather-cloud .sun-core {
+  opacity: 0.4;
+}
+
+.card-weather-cloud .cloud,
+.card-weather-rain .cloud,
+.card-weather-rain .drop {
+  display: block;
+}
+
+.card-weather-rain .sun-core {
+  display: none;
+}
+
+.weather-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8rpx;
+  margin-top: 18rpx;
+}
+
+.weather-metric {
+  min-width: 0;
+  padding: 12rpx 8rpx;
+  border-radius: 12rpx;
+  background: rgba(255, 255, 255, 0.7);
+  text-align: center;
+}
+
+.weather-metric text {
+  color: #7a8494;
+  font-size: 18rpx;
+  font-weight: 800;
+}
+
+.weather-metric view {
+  margin-top: 6rpx;
+  color: #172033;
+  font-size: 20rpx;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.weather-timeline {
+  display: flex;
+  gap: 8rpx;
+  margin-top: 14rpx;
+  overflow: hidden;
+}
+
+.weather-hour {
+  flex: 1;
+  min-width: 0;
+  padding: 10rpx 6rpx;
+  border-radius: 10rpx;
+  background: rgba(248, 250, 252, 0.9);
+  color: #536174;
+  font-size: 17rpx;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.weather-hour text {
+  display: block;
+  margin-top: 4rpx;
+}
+
+.weather-advice {
+  position: relative;
+  z-index: 1;
+  margin-top: 14rpx;
+  padding-top: 12rpx;
+  border-top: 1rpx dashed rgba(203, 213, 225, 0.9);
+  color: #4b5563;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+@keyframes weatherBreath {
+  0%, 100% { opacity: 0.45; transform: scale(0.92); }
+  50% { opacity: 0.8; transform: scale(1.08); }
+}
+
+@keyframes weatherCloud {
+  0%, 100% { transform: translateX(-4rpx); }
+  50% { transform: translateX(5rpx); }
+}
+
+@keyframes weatherDrop {
+  0% { opacity: 0; transform: translateY(-8rpx); }
+  45% { opacity: 0.8; }
+  100% { opacity: 0; transform: translateY(14rpx); }
+}
+
 .suggestion-row {
   display: flex;
   flex-wrap: wrap;
@@ -892,6 +1124,27 @@ button::after {
   font-weight: 800;
   line-height: 220rpx;
   text-align: center;
+}
+
+.header-menu-sheet {
+  max-height: 36vh;
+}
+
+.header-menu-item {
+  width: 100%;
+  height: 72rpx;
+  border-radius: 14rpx;
+  background: #f8fafc;
+  color: #374151;
+  font-size: 25rpx;
+  font-weight: 900;
+  line-height: 72rpx;
+  text-align: center;
+}
+
+.header-menu-item.danger {
+  background: #fff1f1;
+  color: #c62828;
 }
 
 .capability-sheet {
@@ -1142,6 +1395,18 @@ button::after {
 
   .quick-action-pill {
     width: 154rpx;
+  }
+
+  .xiaofu-header {
+    gap: 10rpx;
+    padding-left: 10rpx;
+    padding-right: 10rpx;
+  }
+
+  .xiaofu-icon-btn {
+    width: 50rpx;
+    height: 50rpx;
+    line-height: 50rpx;
   }
 
   .quick-action-label {

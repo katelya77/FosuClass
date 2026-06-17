@@ -1,8 +1,8 @@
 const campusData = require("../../data/campusPlaces");
 
 const CAMPUS_TABS = [
-  { key: "jiangwan", label: "江湾" },
   { key: "xianxi", label: "仙溪" },
+  { key: "jiangwan", label: "江湾" },
   { key: "hebin", label: "河滨" },
 ];
 
@@ -67,7 +67,7 @@ function getMapKey(campus, area) {
   if (campus === "仙溪校区" || campus === "仙溪") {
     return area === "南区" || area === "south" ? "xianxiSouth" : "xianxiNorth";
   }
-  return "jiangwan";
+  return "xianxiNorth";
 }
 
 function getCampusFromMapKey(mapKey) {
@@ -78,13 +78,20 @@ function getCampusFromMapKey(mapKey) {
 
 function markerFromPlace(place) {
   const region = place && place.mapRegion;
-  if (!region) return null;
+  if (!region || place.verified !== true) return null;
   return {
     left: Math.max(0, Math.min(100, Number(region.x || 0) * 100)),
     top: Math.max(0, Math.min(100, Number(region.y || 0) * 100)),
     width: Math.max(8, Math.min(42, Number(region.width || 0.12) * 100)),
     height: Math.max(6, Math.min(36, Number(region.height || 0.1) * 100)),
   };
+}
+
+function withReviewStatus(place) {
+  if (!place || typeof place !== "object") return place;
+  return Object.assign({}, place, {
+    reviewStatus: place.reviewStatus || (place.verified === true ? "verified" : "needs-review"),
+  });
 }
 
 function placeMatchesMap(place, mapInfo) {
@@ -97,9 +104,9 @@ Page({
   data: {
     campusTabs: CAMPUS_TABS,
     xianxiAreas: XIANXI_AREAS,
-    activeCampus: "jiangwan",
+    activeCampus: "xianxi",
     activeXianxiArea: "north",
-    mapInfo: MAPS.jiangwan,
+    mapInfo: MAPS.xianxiNorth,
     places: [],
     query: "",
     results: [],
@@ -107,6 +114,11 @@ Page({
     marker: null,
     imageLoaded: false,
     imageError: false,
+    previewVisible: false,
+    previewImagePath: "",
+    previewImageLoaded: false,
+    previewImageError: false,
+    previewScale: 1,
     note: campusData.note || "Q 版地图仅供校园位置参考，具体以学校现场指引为准。",
   },
 
@@ -129,13 +141,14 @@ Page({
 
   findPlaceById(id) {
     const target = String(id || "");
-    return (campusData.places || []).find((place) => place.id === target) || null;
+    return withReviewStatus((campusData.places || []).find((place) => place.id === target) || null);
   },
 
   updateMapData(mapKey, selectedPlace) {
     const mapInfo = MAPS[mapKey] || MAPS.jiangwan;
     const places = (campusData.places || [])
       .filter((place) => placeMatchesMap(place, mapInfo))
+      .map(withReviewStatus)
       .sort((left, right) => {
         const typeRank = { campus: 0, area: 1, teaching_building: 2, library: 3, canteen: 4 };
         return (typeRank[left.type] || 9) - (typeRank[right.type] || 9) ||
@@ -198,7 +211,7 @@ Page({
       .filter((item) => item.score > 0)
       .sort((left, right) => right.score - left.score || String(left.place.name).localeCompare(String(right.place.name)))
       .slice(0, 12)
-      .map((item) => item.place);
+      .map((item) => withReviewStatus(item.place));
     this.setData({ results });
     if (results.length && !selectedPlace) {
       this.focusPlace(results[0], false);
@@ -225,16 +238,69 @@ Page({
   previewMap() {
     const url = this.data.mapInfo && this.data.mapInfo.asset;
     if (!url) return;
-    wx.previewImage({
-      current: url,
-      urls: [
-        "/assets/maps/campus-map-overview.jpg",
-        "/assets/maps/campus-map-jiangwan.jpg",
-        "/assets/maps/campus-map-xianxi-north.jpg",
-        "/assets/maps/campus-map-xianxi-south.jpg",
-        "/assets/maps/campus-map-hebin.jpg",
-      ],
+    wx.getImageInfo({
+      src: url,
+      success: (info) => {
+        const path = info && info.path || url;
+        wx.previewImage({
+          current: path,
+          urls: [path],
+          fail: () => this.openCustomPreview(path),
+        });
+      },
+      fail: () => this.openCustomPreview(url),
     });
+  },
+
+  openCustomPreview(path) {
+    this.setData({
+      previewVisible: true,
+      previewImagePath: path,
+      previewImageLoaded: false,
+      previewImageError: false,
+      previewScale: 1,
+    });
+  },
+
+  closeCustomPreview() {
+    this.setData({
+      previewVisible: false,
+      previewImagePath: "",
+      previewImageLoaded: false,
+      previewImageError: false,
+      previewScale: 1,
+    });
+  },
+
+  resetCustomPreviewScale() {
+    this.setData({ previewScale: 1 });
+  },
+
+  retryMapImage() {
+    this.setData({ imageLoaded: false, imageError: false });
+    const mapInfo = Object.assign({}, this.data.mapInfo || {});
+    this.setData({ mapInfo: Object.assign({}, mapInfo, { asset: "" }) }, () => {
+      this.setData({ mapInfo });
+    });
+  },
+
+  retryPreviewImage() {
+    this.setData({
+      previewImageLoaded: false,
+      previewImageError: false,
+    });
+    const path = this.data.previewImagePath;
+    this.setData({ previewImagePath: "" }, () => {
+      this.setData({ previewImagePath: path });
+    });
+  },
+
+  onPreviewImageLoad() {
+    this.setData({ previewImageLoaded: true, previewImageError: false });
+  },
+
+  onPreviewImageError() {
+    this.setData({ previewImageLoaded: false, previewImageError: true });
   },
 
   onMapImageLoad() {
@@ -250,7 +316,7 @@ Page({
     const q = place && (place.code || place.name) || this.data.query || "";
     if (!q) return;
     wx.navigateTo({
-      url: `/pages/school/school?type=classroom&q=${encodeURIComponent(q)}`,
+      url: `/pages/school/school?type=classroom&q=${encodeURIComponent(q)}&mapPlaceId=${encodeURIComponent(place && place.id || "")}&mapCode=${encodeURIComponent(place && place.code || q)}`,
     });
   },
 });

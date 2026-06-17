@@ -10,6 +10,7 @@ const {
 const recommendationService = require("./recommendationService");
 const weatherService = require("./weatherService");
 const campusMapService = require("./campusMapService");
+const classroomSearch = require("./classroomSearch");
 const knowledgeBaseService = require("./knowledgeBaseService");
 const imageGenerationGateService = require("./imageGenerationGateService");
 const agentProtocol = require("./agentProtocol");
@@ -339,10 +340,18 @@ function isConversationalHelp(text) {
   return /你好|您好|嗨|hello|hi|谢谢|感谢|帮我解释|怎么做|如何做|为什么|介绍一下/.test(value);
 }
 
+function inferCampusFromText(text) {
+  const value = normalizeText(text);
+  if (/河滨/.test(value)) return "河滨校区";
+  if (/江湾/.test(value)) return "江湾校区";
+  if (/仙溪/.test(value)) return "仙溪校区";
+  return "仙溪校区";
+}
+
 function resolveModernChineseIntent(message, context = {}) {
   const text = normalizeText(message);
   if (!text) return null;
-  const campus = /\u6c5f\u6e7e/.test(text) ? "\u6c5f\u6e7e\u6821\u533a" : "\u4ed9\u6eaa\u6821\u533a";
+  const campus = inferCampusFromText(text);
   const hasWeather = /\u5929\u6c14|\u4e0b\u96e8|\u964d\u96e8|\u9ad8\u6e29|\u96f7\u66b4|\u5e26\u4f1e|\u51fa\u884c/.test(text);
   const hasEmptyRoom = /\u7a7a\u6559\u5ba4|\u81ea\u4e60|\u6ca1\u8bfe/.test(text);
   const hasTravel = /\u8def\u7ebf|\u4f4d\u7f6e|\u5bfc\u822a|\u5728\u54ea|\u600e\u4e48\u8d70/.test(text);
@@ -393,7 +402,7 @@ function resolveModernChineseIntent(message, context = {}) {
     return {
       name: "campus_multi_step_advice",
       slots: {
-        campus: /江湾/.test(text) ? "江湾校区" : "仙溪校区",
+        campus: inferCampusFromText(text),
         date: inferTargetDate(text, context),
         sections: inferSections(text, context),
         building: extractBuilding(text),
@@ -403,7 +412,7 @@ function resolveModernChineseIntent(message, context = {}) {
   if (/天气|下雨|降雨|高温|雷暴|带伞|出行/.test(text)) {
     return {
       name: "get_campus_weather",
-      slots: { campus: /江湾/.test(text) ? "江湾校区" : "仙溪校区" },
+      slots: { campus: inferCampusFromText(text) },
     };
   }
   if (/在哪里|怎么走|路线|位置|导航/.test(text) && /C\d|B\d|A\d|校区|图书馆|饭堂|宿舍|教学楼|教室/i.test(text)) {
@@ -763,19 +772,28 @@ function searchEmptyRooms(input = {}, context = {}) {
 function searchSchoolIndex(input = {}, context = {}) {
   const type = ["class", "teacher", "classroom", "course"].includes(input.type) ? input.type : "teacher";
   const query = normalizeText(input.q || input.message || "");
+  const classroomQuery = type === "classroom" ? classroomSearch.parseClassroomQuery(query) : null;
   const result = releaseService.searchActiveIndex(type, query, {
     term: input.term || context.term || getDefaultTerm(),
     semester: input.term || context.term || getDefaultTerm(),
     releaseVersion: input.releaseVersion || context.releaseVersion || "",
-    limit: input.limit || 8,
+    limit: type === "classroom" && classroomQuery && classroomQuery.queryType !== "text" ? 500 : (input.limit || 8),
   });
+  const rawItems = asArray(result.items);
+  const filteredItems = type === "classroom"
+    ? classroomSearch.filterAndSortClassrooms(rawItems, classroomQuery)
+    : rawItems;
   return {
     success: Boolean(result.success),
     type,
     q: query,
     term: result.term || result.semester || input.term || context.term || getDefaultTerm(),
-    items: asArray(result.items).slice(0, Number(input.limit || 8) || 8),
-    total: Number(result.total || asArray(result.items).length) || 0,
+    queryType: classroomQuery && classroomQuery.queryType || "",
+    buildingCode: classroomQuery && classroomQuery.buildingCode || "",
+    roomNumber: classroomQuery && classroomQuery.roomNumber || "",
+    normalizedQuery: classroomQuery && classroomQuery.normalizedQuery || query,
+    items: filteredItems.slice(0, Number(input.limit || 8) || 8),
+    total: filteredItems.length,
     updatedAt: result.updatedAt || "",
     releaseVersion: result.releaseVersion || result.version || context.releaseVersion || "",
     actionUrl: buildActionUrl("/pages/school/school", { type, q: query }),

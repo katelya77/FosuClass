@@ -1,4 +1,5 @@
 const BRAND = require("../../config/brand");
+const classroomSearch = require("../../utils/classroomSearch");
 
 const tabs = [
   { key: "class", label: "班级" },
@@ -16,8 +17,9 @@ const SCHEDULE_DETAIL_CACHE_TTL = 6 * 60 * 60 * 1000;
 const APP_CONFIG_TIMEOUT = 12000;
 const BOOTSTRAP_TIMEOUT = 20000;
 const SCHOOL_REQUEST_TIMEOUT = 25000;
-const SCHOOL_RESULT_PAGE_SIZE = 30;
-const SCHOOL_RESULT_PAGE_STEP = 30;
+const SCHOOL_RESULT_PAGE_SIZE = 20;
+const SCHOOL_RESULT_PAGE_STEP = 20;
+const SCHOOL_KEYWORD_DEBOUNCE_MS = 300;
 const AI_PENDING_SCHOOL_QUERY_KEY = "FOSU_AI_PENDING_SCHOOL_QUERY";
 const FOSU_RELEASE_NOTICE_STATE_KEY = "FOSU_RELEASE_NOTICE_STATE";
 const SCHOOL_BACKGROUND_REFRESH_MIN_INTERVAL_MS = 45 * 1000;
@@ -266,6 +268,10 @@ Page({
     classAggregateTotal: 0,
     classroomsTotal: 0,
     coursesTotal: 0,
+    classroomEmptyTitle: "输入教室名称并查询",
+    classroomEmptyDesc: "例如输入 C7-305 或 C7，即可获取教室的周课表安排。",
+    classroomQueryType: "",
+    classroomMapReturn: null,
     hasMoreClassAdmin: false,
     hasMoreClassAggregate: false,
     hasMoreTeachers: false,
@@ -293,6 +299,8 @@ Page({
     touchStartY: 0,
     dataLoadState: "loading",
     loadingState: "none",
+    loadMoreState: "idle",
+    loadMoreText: "",
   },
   
   // 缓存清理后自动重载标志
@@ -301,12 +309,28 @@ Page({
 
   onLoad(options) {
     this.sharedQuery = options || {};
+    this._pendingDirectSchoolQuery = this.normalizeDirectSchoolQuery(options || {});
     this.isFirstLoad = false;
     this._schoolRequestSeq = 0;
     this._activeInitSeq = 0;
     this._lastInitAt = 0;
     this.resetPagedResultStore();
+    this._lastSchoolMapQuery = this.buildMapReturnFromOptions(options || {});
     this.initPageData({ reason: "onLoad" });
+  },
+
+  onUnload() {
+    if (this.keywordSearchTimer) {
+      clearTimeout(this.keywordSearchTimer);
+      this.keywordSearchTimer = null;
+    }
+    if (this.restoreTimer) {
+      clearTimeout(this.restoreTimer);
+      this.restoreTimer = null;
+    }
+    this._schoolRequestSeq += 1;
+    this._activeInitSeq += 1;
+    this._loadMoreBusy = false;
   },
 
   onShow() {
@@ -390,6 +414,39 @@ Page({
     return query;
   },
 
+  buildMapReturnFromOptions(options = {}) {
+    const placeId = safeDecodeURIComponent(options.mapPlaceId || options.placeId || "");
+    const mapCode = safeDecodeURIComponent(options.mapCode || options.buildingCode || options.q || options.keyword || "").trim();
+    if (!placeId && !mapCode) return null;
+    const query = [];
+    if (placeId) query.push(`placeId=${encodeURIComponent(placeId)}`);
+    if (mapCode) query.push(`q=${encodeURIComponent(mapCode)}`);
+    return {
+      label: mapCode ? `查看 ${mapCode} 地图位置` : "返回校园地图位置",
+      url: `/pages/campus-map/campus-map${query.length ? `?${query.join("&")}` : ""}`,
+      code: mapCode,
+      placeId,
+    };
+  },
+
+  normalizeDirectSchoolQuery(options = {}) {
+    const type = ["teacher", "classroom", "course", "class"].includes(options.type) ? options.type : "";
+    const keyword = safeDecodeURIComponent(options.q || options.keyword || "").trim();
+    if (!type || !keyword) return null;
+    return Object.assign({}, options, { type, q: keyword });
+  },
+
+  applyDirectSchoolQueryIfNeeded() {
+    const query = this._pendingDirectSchoolQuery;
+    if (!query) return false;
+    this._pendingDirectSchoolQuery = null;
+    this.applyAiPendingSchoolQuery(Object.assign({}, query, {
+      fromDirectLink: true,
+      ts: Date.now(),
+    }));
+    return true;
+  },
+
   applyAiPendingSchoolQuery(query, attempt = 0) {
     const type = ["teacher", "classroom", "course", "class"].includes(query.type) ? query.type : "teacher";
     const keyword = safeDecodeURIComponent(query.q || query.keyword || "").trim();
@@ -417,6 +474,9 @@ Page({
       updatedAtText: "",
       restoreHint: "已根据 AI 建议打开查询",
     };
+    if (type === "classroom") {
+      patch.classroomMapReturn = this.buildMapReturnFromOptions(query);
+    }
     if (selectedSemesterIndex >= 0) patch.selectedSemesterIndex = selectedSemesterIndex;
     if (releaseVersion) patch.catalogVersion = releaseVersion;
 
@@ -564,6 +624,9 @@ Page({
         catalogUpdatedAt: data.updatedAt || "",
       });
 
+      if (this.applyDirectSchoolQueryIfNeeded()) {
+        return;
+      }
       if (this.hasSharedQuery()) {
         this.applySharedQueryIfNeeded();
       } else {
@@ -780,6 +843,10 @@ Page({
       classAggregateTotal: 0,
       classroomsTotal: 0,
       coursesTotal: 0,
+      classroomEmptyTitle: "输入教室名称并查询",
+      classroomEmptyDesc: "例如输入 C7-305 或 C7，即可获取教室的周课表安排。",
+      classroomQueryType: "",
+      classroomMapReturn: null,
       hasMoreClassAdmin: false,
       hasMoreClassAggregate: false,
       hasMoreTeachers: false,
@@ -793,6 +860,8 @@ Page({
       classEmptyTitle: "请选择上方筛选并查询",
       classEmptyDesc: "查询后将展示行政班级课表，结果仅供参考。",
       classNoticeText: "",
+      loadMoreState: "idle",
+      loadMoreText: "",
     });
   },
 
@@ -812,7 +881,7 @@ Page({
       if (activeTab === "teacher") this.searchTeacherSchedule();
       if (activeTab === "classroom") this.searchClassroomSchedule();
       if (activeTab === "course") this.searchCourseSchedule();
-    }, 350);
+    }, SCHOOL_KEYWORD_DEBOUNCE_MS);
   },
 
   fallbackToCatalog() {
@@ -829,6 +898,9 @@ Page({
             catalogVersion: data.version || data.updatedAt || "",
             catalogUpdatedAt: data.updatedAt || "",
           });
+          if (this.applyDirectSchoolQueryIfNeeded()) {
+            return;
+          }
           if (this.hasSharedQuery()) {
             this.applySharedQueryIfNeeded();
           } else {
@@ -1767,27 +1839,44 @@ Page({
 
     const semester = semesters[selectedSemesterIndex]?.value || getFallbackTerm();
     const campus = selectedCampusIndex >= 0 ? campusOptions[selectedCampusIndex] : "";
+    const parsedQuery = classroomSearch.parseClassroomQuery(keyword.trim());
 
     const params = {
       semester,
       campus,
-      q: keyword.trim(),
-      limit: 100,
+      q: parsedQuery.queryType === "text" ? keyword.trim() : parsedQuery.normalizedQuery,
+      limit: parsedQuery.queryType === "text" ? 100 : 500,
     };
 
     const renderFn = (data, isFromCache) => {
       const formatTime = formatUpdateTime(data.updatedAt);
-      const classrooms = (data.items || []).map(item => normalizeIndexedScheduleItem("classroom", item, data.version));
+      const normalized = (data.items || []).map(item => normalizeIndexedScheduleItem("classroom", item, data.version));
+      const classrooms = classroomSearch.filterAndSortClassrooms(normalized, parsedQuery);
       this.setSimplePagedResults("classroom", "classroomsResult", classrooms, "classroomsTotal", "hasMoreClassrooms");
+      const hasResults = classrooms.length > 0;
       this.setData({
+        classroomQueryType: parsedQuery.queryType,
+        classroomMapReturn: this.data.classroomMapReturn || this.buildMapReturnFromOptions({ q: parsedQuery.buildingCode || parsedQuery.normalizedQuery }),
+        classroomEmptyTitle: hasResults ? "" : (parsedQuery.queryType === "building" || parsedQuery.queryType === "exact-room" ? `未找到 ${parsedQuery.normalizedQuery}` : "未找到相关教室"),
+        classroomEmptyDesc: hasResults ? "" : (parsedQuery.queryType === "text" ? "请换一个地点名或教室关键词再试。" : "不会补充其他楼栋结果，请检查楼栋代码或教室号。"),
         dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
-        updatedAtText: formatTime ? `课程索引 · 更新于 ${formatTime}` : "课程索引",
+        updatedAtText: hasResults
+          ? `${classrooms.length} 个命中 · ${parsedQuery.queryType === "text" ? "文本搜索" : parsedQuery.normalizedQuery}${formatTime ? " · 更新于 " + formatTime : ""}`
+          : `未找到 ${parsedQuery.normalizedQuery}`,
       });
     };
 
     const catchFn = () => {
       this.clearPagedResults("classroom");
-      this.setData({ updatedAtText: "", dataVersionText: "" });
+      this.setData({
+        updatedAtText: "",
+        dataVersionText: "",
+        classroomQueryType: parsedQuery.queryType,
+        classroomEmptyTitle: "教室查询失败",
+        classroomEmptyDesc: "加载失败，点击重试或稍后再试。",
+        loadMoreState: "error",
+        loadMoreText: "加载失败，点击重试",
+      });
     };
 
     this.executeSearch("classroom", params, renderFn, catchFn);
@@ -2013,6 +2102,22 @@ Page({
     });
   },
 
+  goCampusMap() {
+    const keyword = String(this.data.keyword || "").trim();
+    const parsed = classroomSearch.parseClassroomQuery(keyword);
+    const q = parsed.buildingCode || (parsed.queryType === "text" ? keyword : parsed.normalizedQuery);
+    wx.navigateTo({
+      url: `/pages/campus-map/campus-map${q ? `?q=${encodeURIComponent(q)}` : ""}`,
+    });
+  },
+
+  returnClassroomMap() {
+    const target = this.data.classroomMapReturn || null;
+    wx.navigateTo({
+      url: target && target.url || "/pages/campus-map/campus-map",
+    });
+  },
+
   goAiAssistant() {
     const keyword = String(this.data.keyword || "").trim();
     const question = keyword
@@ -2203,6 +2308,22 @@ Page({
     return items.length > limit;
   },
 
+  getLoadMoreStateForKey(key) {
+    this.ensurePagedResultStore();
+    const total = (this._schoolResultStore[key] || []).length;
+    if (!total) return { state: "idle", text: "" };
+    if (this.hasMorePagedItems(key)) return { state: "idle", text: "上滑或点击加载更多" };
+    return { state: "done", text: "已加载全部" };
+  },
+
+  updateLoadMoreState(key) {
+    const state = this.getLoadMoreStateForKey(key);
+    this.setData({
+      loadMoreState: state.state,
+      loadMoreText: state.text,
+    });
+  },
+
   setClassPagedResults(grouped) {
     this.ensurePagedResultStore();
     this._schoolResultStore.classAdmin = grouped.admin || [];
@@ -2220,6 +2341,7 @@ Page({
       hasMoreClassAdmin: this.hasMorePagedItems("classAdmin"),
       hasMoreClassAggregate: this.hasMorePagedItems("classAggregate"),
     });
+    this.updateLoadMoreState("classAdmin");
   },
 
   setSimplePagedResults(key, dataKey, items, totalKey, hasMoreKey) {
@@ -2231,6 +2353,7 @@ Page({
       [totalKey]: this._schoolResultStore[key].length,
       [hasMoreKey]: this.hasMorePagedItems(key),
     });
+    this.updateLoadMoreState(key);
   },
 
   clearPagedResults(keys) {
@@ -2263,10 +2386,18 @@ Page({
       }
     });
     this.setData(patch);
+    this.updateLoadMoreState((Array.isArray(keys) ? keys[0] : keys) || "teacher");
   },
 
   appendPagedResult(key) {
     this.ensurePagedResultStore();
+    if (this._loadMoreBusy) return;
+    if (!this.hasMorePagedItems(key)) {
+      this.updateLoadMoreState(key);
+      return;
+    }
+    this._loadMoreBusy = true;
+    this.setData({ loadMoreState: "loading", loadMoreText: "正在加载更多" });
     this._schoolResultVisible[key] = (this._schoolResultVisible[key] || SCHOOL_RESULT_PAGE_SIZE) + SCHOOL_RESULT_PAGE_STEP;
     if (key === "classAdmin" || key === "classAggregate") {
       const classAdminResults = this.getPagedItems("classAdmin");
@@ -2278,6 +2409,8 @@ Page({
         hasMoreClassAdmin: this.hasMorePagedItems("classAdmin"),
         hasMoreClassAggregate: this.hasMorePagedItems("classAggregate"),
       });
+      this._loadMoreBusy = false;
+      this.updateLoadMoreState(this.hasMorePagedItems("classAdmin") ? "classAdmin" : "classAggregate");
       return;
     }
     if (key === "teacher") {
@@ -2285,6 +2418,8 @@ Page({
         teachersResult: this.getPagedItems("teacher"),
         hasMoreTeachers: this.hasMorePagedItems("teacher"),
       });
+      this._loadMoreBusy = false;
+      this.updateLoadMoreState("teacher");
       return;
     }
     if (key === "classroom") {
@@ -2292,6 +2427,8 @@ Page({
         classroomsResult: this.getPagedItems("classroom"),
         hasMoreClassrooms: this.hasMorePagedItems("classroom"),
       });
+      this._loadMoreBusy = false;
+      this.updateLoadMoreState("classroom");
       return;
     }
     if (key === "course") {
@@ -2299,10 +2436,13 @@ Page({
         coursesResult: this.getPagedItems("course"),
         hasMoreCourses: this.hasMorePagedItems("course"),
       });
+      this._loadMoreBusy = false;
+      this.updateLoadMoreState("course");
     }
   },
 
   loadMoreActiveResults() {
+    if (this._loadMoreBusy) return;
     const activeTab = this.data.activeTab;
     if (activeTab === "class") {
       if (this.data.hasMoreClassAdmin) {
@@ -2993,6 +3133,9 @@ Page({
       });
       this.pendingReleaseNoticeText = "";
 
+      if (this.applyDirectSchoolQueryIfNeeded()) {
+        return;
+      }
       if (this.hasSharedQuery()) {
         this.applySharedQueryIfNeeded();
       } else {

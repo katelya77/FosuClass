@@ -1,0 +1,124 @@
+git diff --cached --stat
+========================
+ codex-reports/20260617-161734/scope-audit.md       | 105 +++
+ codex-reports/20260617-161734/screenshot-audit.md  |  30 +
+ miniprogram/pages/ai-assistant/ai-assistant.js     | 100 ++-
+ miniprogram/pages/ai-assistant/ai-assistant.wxml   |  62 +-
+ miniprogram/pages/ai-assistant/ai-assistant.wxss   | 305 ++++++++-
+ miniprogram/pages/campus-map/campus-map.js         | 100 ++-
+ miniprogram/pages/campus-map/campus-map.wxml       |  57 +-
+ miniprogram/pages/campus-map/campus-map.wxss       | 125 +++-
+ miniprogram/pages/school/school.js                 | 159 ++++-
+ miniprogram/pages/school/school.wxml               |  52 +-
+ miniprogram/pages/school/school.wxss               |  65 ++
+ miniprogram/pages/settings/settings.js             |   6 +
+ miniprogram/pages/settings/settings.wxml           |  11 +
+ miniprogram/pages/today/today.js                   |  21 +
+ miniprogram/pages/today/today.wxml                 |  22 +-
+ miniprogram/pages/today/today.wxss                 |  72 +++
+ miniprogram/utils/classroomSearch.js               | 173 +++++
+ package.json                                       |   4 +
+ server/src/services/ai/agentService.js             |   5 +
+ server/src/services/ai/campusMapService.js         |   7 +-
+ server/src/services/ai/classroomSearch.js          | 173 +++++
+ server/src/services/ai/generatedPayloadContract.js |  35 +
+ server/src/services/ai/providers/mockProvider.js   |  26 +-
+ server/src/services/ai/toolRegistry.js             |  30 +-
+ server/src/services/ai/weatherService.js           | 278 ++++++--
+ tools/campus-map-editor/lib.js                     | 210 ++++++
+ tools/campus-map-editor/public/client.js           | 715 +++++++++++++++++++++
+ tools/campus-map-editor/public/index.html          | 119 ++++
+ tools/campus-map-editor/public/style.css           | 446 +++++++++++++
+ tools/campus-map-editor/server.js                  | 144 +++++
+ tools/test-ai-assistant-ui-layout.js               |  19 +-
+ tools/test-campus-map-ui-and-editor.js             | 100 +++
+ tools/test-classroom-search.js                     |  61 ++
+ tools/test-school-paged-render.js                  |  40 +-
+ tools/test-weather-service-and-card.js             | 214 ++++++
+ 35 files changed, 3910 insertions(+), 181 deletions(-)
+
+git diff --cached --name-only
+============================
+codex-reports/20260617-161734/scope-audit.md
+codex-reports/20260617-161734/screenshot-audit.md
+miniprogram/pages/ai-assistant/ai-assistant.js
+miniprogram/pages/ai-assistant/ai-assistant.wxml
+miniprogram/pages/ai-assistant/ai-assistant.wxss
+miniprogram/pages/campus-map/campus-map.js
+miniprogram/pages/campus-map/campus-map.wxml
+miniprogram/pages/campus-map/campus-map.wxss
+miniprogram/pages/school/school.js
+miniprogram/pages/school/school.wxml
+miniprogram/pages/school/school.wxss
+miniprogram/pages/settings/settings.js
+miniprogram/pages/settings/settings.wxml
+miniprogram/pages/today/today.js
+miniprogram/pages/today/today.wxml
+miniprogram/pages/today/today.wxss
+miniprogram/utils/classroomSearch.js
+package.json
+server/src/services/ai/agentService.js
+server/src/services/ai/campusMapService.js
+server/src/services/ai/classroomSearch.js
+server/src/services/ai/generatedPayloadContract.js
+server/src/services/ai/providers/mockProvider.js
+server/src/services/ai/toolRegistry.js
+server/src/services/ai/weatherService.js
+tools/campus-map-editor/lib.js
+tools/campus-map-editor/public/client.js
+tools/campus-map-editor/public/index.html
+tools/campus-map-editor/public/style.css
+tools/campus-map-editor/server.js
+tools/test-ai-assistant-ui-layout.js
+tools/test-campus-map-ui-and-editor.js
+tools/test-classroom-search.js
+tools/test-school-paged-render.js
+tools/test-weather-service-and-card.js
+
+git status --short after staging
+===============================
+A  codex-reports/20260617-161734/scope-audit.md
+A  codex-reports/20260617-161734/screenshot-audit.md
+M  miniprogram/pages/ai-assistant/ai-assistant.js
+M  miniprogram/pages/ai-assistant/ai-assistant.wxml
+M  miniprogram/pages/ai-assistant/ai-assistant.wxss
+M  miniprogram/pages/campus-map/campus-map.js
+M  miniprogram/pages/campus-map/campus-map.wxml
+M  miniprogram/pages/campus-map/campus-map.wxss
+M  miniprogram/pages/school/school.js
+M  miniprogram/pages/school/school.wxml
+M  miniprogram/pages/school/school.wxss
+M  miniprogram/pages/settings/settings.js
+M  miniprogram/pages/settings/settings.wxml
+M  miniprogram/pages/today/today.js
+M  miniprogram/pages/today/today.wxml
+M  miniprogram/pages/today/today.wxss
+A  miniprogram/utils/classroomSearch.js
+M  package.json
+M  server/src/services/ai/agentService.js
+M  server/src/services/ai/campusMapService.js
+A  server/src/services/ai/classroomSearch.js
+M  server/src/services/ai/generatedPayloadContract.js
+M  server/src/services/ai/providers/mockProvider.js
+M  server/src/services/ai/toolRegistry.js
+M  server/src/services/ai/weatherService.js
+A  tools/campus-map-editor/lib.js
+A  tools/campus-map-editor/public/client.js
+A  tools/campus-map-editor/public/index.html
+A  tools/campus-map-editor/public/style.css
+A  tools/campus-map-editor/server.js
+M  tools/test-ai-assistant-ui-layout.js
+A  tools/test-campus-map-ui-and-editor.js
+A  tools/test-classroom-search.js
+M  tools/test-school-paged-render.js
+A  tools/test-weather-service-and-card.js
+?? codex-reports/20260617-161734/changed-files.txt
+?? miniprogram/project.config.json
+?? output/ui-fix-campus-ai-school/
+?? tools/capture-ui-fix-screenshots.js
+
+Left unstaged intentionally
+==========================
+miniprogram/project.config.json - pre-existing local DevTools config, not part of source change.
+output/ui-fix-campus-ai-school/ - local screenshot evidence and failed DevTools captures.
+tools/capture-ui-fix-screenshots.js - local screenshot helper that depends on the local automator install.

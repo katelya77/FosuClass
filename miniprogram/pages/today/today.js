@@ -4,6 +4,7 @@ const appConfigService = require("../../services/appConfigService");
 const currentScheduleService = require("../../services/currentScheduleService");
 const customCourseService = require("../../services/customCourseService");
 const BRAND = require("../../config/brand");
+const classroomSearch = require("../../utils/classroomSearch");
 
 const AI_PENDING_TODAY_QUERY_KEY = "FOSU_AI_PENDING_TODAY_QUERY";
 
@@ -22,6 +23,7 @@ Page({
     dataVersionText: "",
     selectedCourse: null,
     detailVisible: false,
+    nextBuildingCode: "",
     emptyTitle: "今天没有课程，好好休息",
     emptyDesc: "这里会根据当前班级、教学周和星期自动筛选课程。"
   },
@@ -138,6 +140,7 @@ Page({
         dataSourceText: "未绑定课表",
         courseCountText: "今日共 0 门课",
         courses: [],
+        nextBuildingCode: "",
         emptyTitle: "未绑定当前课表",
         emptyDesc: "请先前往「全校」页面查找班级，并在课表详情页点击「设为当前」进行绑定。"
       });
@@ -152,9 +155,20 @@ Page({
       dataSourceText: dataSource.text,
       courseCountText: `今日共 ${courses.length} 门课`,
       courses,
+      nextBuildingCode: this.resolveNextBuildingCode(courses),
       emptyTitle: "今天没有课程，好好休息",
       emptyDesc: "这里会根据当前班级、教学周和星期自动筛选课程。"
     });
+  },
+
+  resolveNextBuildingCode(courses) {
+    const list = Array.isArray(courses) ? courses : [];
+    for (const course of list) {
+      const classroom = course && (course.displayClassroom || course.canonicalClassroom || course.classroom || course.roomName);
+      const parsed = classroomSearch.parseClassroomQuery(classroom || "");
+      if (parsed.buildingCode) return parsed.buildingCode;
+    }
+    return "";
   },
 
 
@@ -175,6 +189,13 @@ Page({
   goEmptyRoom() {
     wx.navigateTo({
       url: "/pages/empty-room/empty-room",
+    });
+  },
+
+  goCampusMap() {
+    const code = this.data.nextBuildingCode || "";
+    wx.navigateTo({
+      url: `/pages/campus-map/campus-map${code ? `?q=${encodeURIComponent(code)}` : ""}`,
     });
   },
 

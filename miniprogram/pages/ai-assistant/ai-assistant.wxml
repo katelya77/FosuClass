@@ -6,10 +6,12 @@
     </view>
     <view class="xiaofu-title-block">
       <view class="xiaofu-title">小佛</view>
-      <view class="xiaofu-subtitle">{{headerSubtitle}}</view>
+      <view class="xiaofu-status">在线</view>
     </view>
-    <button class="xiaofu-help" bindtap="openCapabilityGuide" aria-label="小佛能力指南">?</button>
-    <button class="xiaofu-clear" bindtap="clearHistory">清空</button>
+    <view class="xiaofu-actions">
+      <button class="xiaofu-icon-btn" bindtap="openCapabilityGuide" aria-label="小佛能力指南">?</button>
+      <button class="xiaofu-icon-btn" bindtap="openHeaderMenu" aria-label="更多操作">•••</button>
+    </view>
   </view>
 
   <view class="quick-task-row">
@@ -88,6 +90,46 @@
             wx:key="key"
             class="ai-result-card card card-type-{{card.typeClass}} {{card.errorClass}}"
           >
+            <view wx:if="{{card.typeClass === 'weather'}}" class="weather-card card-weather-{{card.weatherIconClass}}">
+              <view class="weather-card-head">
+                <view>
+                  <view class="weather-campus">{{card.weather.campus}}</view>
+                  <view class="weather-status">{{card.weather.weatherText}}</view>
+                </view>
+                <view class="weather-updated">{{card.weather.cachedText}}<text wx:if="{{card.weather.updatedLabel}}"> · {{card.weather.updatedLabel}}</text></view>
+              </view>
+              <view class="weather-main">
+                <view class="weather-temp">{{card.weather.temperatureC}}<text>℃</text></view>
+                <view class="weather-facts">
+                  <view>体感 {{card.weather.apparentTemperatureC}}℃</view>
+                  <view>今日 {{card.weather.lowC}}° / {{card.weather.highC}}°</view>
+                </view>
+                <view class="weather-icon">
+                  <view class="sun-core"></view>
+                  <view class="cloud cloud-a"></view>
+                  <view class="cloud cloud-b"></view>
+                  <view class="drop drop-a"></view>
+                  <view class="drop drop-b"></view>
+                  <view class="drop drop-c"></view>
+                </view>
+              </view>
+              <view class="weather-metrics">
+                <view class="weather-metric"><text>湿度</text><view>{{card.weather.humidity}}%</view></view>
+                <view class="weather-metric"><text>风速</text><view>{{card.weather.windSpeedKmh}}km/h</view></view>
+                <view class="weather-metric"><text>降水</text><view>{{card.weather.precipitationMm}}mm</view></view>
+                <view class="weather-metric"><text>降雨</text><view>{{card.weather.rainProbabilityMax24h}}%</view></view>
+              </view>
+              <view class="weather-timeline" wx:if="{{card.weather.next6Hours.length}}">
+                <view wx:for="{{card.weather.next6Hours}}" wx:for-item="hour" wx:key="key" class="weather-hour">
+                  <view>{{hour.time}}</view>
+                  <text>{{hour.temperatureC}}°</text>
+                  <text>{{hour.rainProbability}}%</text>
+                </view>
+              </view>
+              <view class="weather-advice">{{card.weather.advice}}</view>
+            </view>
+
+            <block wx:else>
             <view class="card-header-row">
               <view class="card-title-block">
                 <view class="card-title">{{card.title}}</view>
@@ -149,6 +191,7 @@
 
             <view class="filtered-hint" wx:if="{{card.filteredHint}}">{{card.filteredHint}}</view>
             <view class="card-disclaimer">仅供参考，以教务数据为准</view>
+            </block>
           </view>
         </view>
 
@@ -171,7 +214,18 @@
     </view>
   </scroll-view>
 
-  <view class="sheet-mask" wx:if="{{showTaskPanel || showCapabilityGuide || showPrivacySheet}}" bindtap="closeSheets"></view>
+  <view class="sheet-mask" wx:if="{{showTaskPanel || showCapabilityGuide || showPrivacySheet || showHeaderMenu}}" bindtap="closeSheets"></view>
+
+  <view class="bottom-sheet header-menu-sheet" wx:if="{{showHeaderMenu}}">
+    <view class="sheet-handle"></view>
+    <view class="task-panel-head">
+      <view class="panel-title-wrap">
+        <view class="task-panel-title">更多操作</view>
+      </view>
+      <button class="sheet-close" bindtap="closeHeaderMenu">关闭</button>
+    </view>
+    <button class="header-menu-item danger" bindtap="clearHistory">清空记录</button>
+  </view>
 
   <view class="bottom-sheet task-sheet" wx:if="{{showTaskPanel}}">
     <view class="sheet-handle"></view>

@@ -385,6 +385,12 @@ Page({
       url: "/pages/custom-courses/custom-courses",
     });
   },
+
+  goCampusMap() {
+    wx.navigateTo({
+      url: "/pages/campus-map/campus-map",
+    });
+  },
   
   goContribute() {
     wx.navigateTo({

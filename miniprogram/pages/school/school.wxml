@@ -259,7 +259,7 @@
               </view>
             </view>
             <view class="load-more-row" wx:if="{{hasMoreClassAdmin}}" bindtap="loadMoreActiveResults">
-              加载更多行政班
+              {{loadMoreState === 'loading' ? '正在加载更多' : '加载更多行政班'}}
             </view>
           </view>
 
@@ -286,11 +286,17 @@
                 </view>
               </view>
               <view class="load-more-row" wx:if="{{hasMoreClassAggregate}}" bindtap="loadMoreActiveResults">
-                加载更多专业课表
+                {{loadMoreState === 'loading' ? '正在加载更多' : '加载更多专业课表'}}
               </view>
             </view>
           </view>
         </view>
+
+        <view
+          class="load-more-row {{loadMoreState}}"
+          wx:if="{{(classAdminResults.length || classAggregateResults.length) && !hasMoreClassAdmin && (!showAggregate || !hasMoreClassAggregate)}}"
+          bindtap="loadMoreActiveResults"
+        >{{loadMoreText}}</view>
 
         <empty-state
           wx:elif="{{!loading}}"
@@ -372,10 +378,13 @@
               <view class="count" wx:if="{{item.courseCount || item.courses.length}}">{{item.courseCount || item.courses.length}}门课</view>
             </view>
           </view>
-          <view class="load-more-row" wx:if="{{hasMoreTeachers}}" bindtap="loadMoreActiveResults">
-            加载更多教师
-          </view>
         </view>
+
+        <view
+          class="load-more-row {{loadMoreState}}"
+          wx:if="{{teachersResult.length}}"
+          bindtap="loadMoreActiveResults"
+        >{{loadMoreText}}</view>
 
         <empty-state
           wx:elif="{{!loading}}"
@@ -406,10 +415,21 @@
           <button class="primary-search-btn" loading="{{loading}}" bindtap="searchClassroomSchedule">
             查询教室占用
           </button>
+          <button class="secondary-map-btn" bindtap="goCampusMap">
+            校园地图
+          </button>
         </view>
 
         <view class="updated-hint" wx:if="{{updatedAtText}}">
           {{updatedAtText}}
+        </view>
+
+        <view class="map-return-card card" wx:if="{{classroomMapReturn}}" bindtap="returnClassroomMap">
+          <view>
+            <view class="map-return-title">{{classroomMapReturn.label}}</view>
+            <view class="map-return-desc">从地图进入的楼栋查询可返回核对位置</view>
+          </view>
+          <view class="map-return-action">地图</view>
         </view>
 
         <!-- 骨架屏与慢网络提示 -->
@@ -450,15 +470,18 @@
               <view class="count" wx:if="{{item.courseCount || item.courses.length}}">{{item.courseCount || item.courses.length}}课次</view>
             </view>
           </view>
-          <view class="load-more-row" wx:if="{{hasMoreClassrooms}}" bindtap="loadMoreActiveResults">
-            加载更多教室
-          </view>
         </view>
+
+        <view
+          class="load-more-row {{loadMoreState}}"
+          wx:if="{{classroomsResult.length}}"
+          bindtap="loadMoreActiveResults"
+        >{{loadMoreText}}</view>
 
         <empty-state
           wx:elif="{{!loading}}"
-          title="输入教室名称并查询"
-          desc="例如输入 C7-305，即可获取教室的周课表安排。"
+          title="{{classroomEmptyTitle}}"
+          desc="{{classroomEmptyDesc}}"
         />
       </view>
     </block>
@@ -521,10 +544,13 @@
               <view class="count" wx:if="{{item.courseCount || item.courses.length}}">{{item.courseCount || item.courses.length}}次排课</view>
             </view>
           </view>
-          <view class="load-more-row" wx:if="{{hasMoreCourses}}" bindtap="loadMoreActiveResults">
-            加载更多课程
-          </view>
         </view>
+
+        <view
+          class="load-more-row {{loadMoreState}}"
+          wx:if="{{coursesResult.length}}"
+          bindtap="loadMoreActiveResults"
+        >{{loadMoreText}}</view>
 
         <empty-state
           wx:elif="{{!loading}}"

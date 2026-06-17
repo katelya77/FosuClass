@@ -5,6 +5,7 @@ const ALLOWED_CARD_TYPES = new Set([
   "schedule",
   "teacher",
   "course",
+  "weather",
   "diagnosis",
   "guide",
   "reminder",
@@ -28,6 +29,7 @@ const CARD_TITLE_FALLBACKS = {
   schedule: "今日课程",
   teacher: "教师查询",
   course: "课程查询",
+  weather: "校区天气",
   diagnosis: "数据诊断",
   guide: "使用指引",
   reminder: "时间推荐",
@@ -134,6 +136,38 @@ function stableCardItem(item) {
   return normalized.title || normalized.subtitle || normalized.value ? normalized : null;
 }
 
+function stableWeatherPayload(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const next6Hours = Array.isArray(source.next6Hours)
+    ? source.next6Hours.slice(0, 6).map((item) => {
+      const hour = item && typeof item === "object" && !Array.isArray(item) ? item : {};
+      return {
+        time: safePrimitiveText(hour.time, "", 12),
+        temperatureC: safePrimitiveText(hour.temperatureC, "", 12),
+        rainProbability: safePrimitiveText(hour.rainProbability, "", 12),
+      };
+    })
+    : [];
+  return {
+    campus: safePrimitiveText(source.campus, "", 32),
+    weatherText: safePrimitiveText(source.weatherText, "", 24),
+    updatedAt: safePrimitiveText(source.updatedAt, "", 32),
+    updatedLabel: safePrimitiveText(source.updatedLabel, "", 32),
+    cached: source.cached === true,
+    stale: source.stale === true,
+    temperatureC: safePrimitiveText(source.temperatureC, "", 12),
+    apparentTemperatureC: safePrimitiveText(source.apparentTemperatureC, "", 12),
+    highC: safePrimitiveText(source.highC, "", 12),
+    lowC: safePrimitiveText(source.lowC, "", 12),
+    humidity: safePrimitiveText(source.humidity, "", 12),
+    windSpeedKmh: safePrimitiveText(source.windSpeedKmh, "", 12),
+    precipitationMm: safePrimitiveText(source.precipitationMm, "", 12),
+    rainProbabilityMax24h: safePrimitiveText(source.rainProbabilityMax24h, "", 12),
+    advice: safePrimitiveText(source.advice, "", 100),
+    next6Hours,
+  };
+}
+
 function normalizeStringArray(value, maxItems, maxLength) {
   if (!Array.isArray(value)) return [];
   const output = [];
@@ -167,6 +201,7 @@ function stableCard(card) {
     items,
     actions,
   };
+  if (type === "weather") normalized.weather = stableWeatherPayload(card.weather || card);
   if (card.allFinished === true) normalized.allFinished = true;
   if (card.variant === "error") normalized.variant = "error";
   if (card.metrics && typeof card.metrics === "object" && !Array.isArray(card.metrics)) {

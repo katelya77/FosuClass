@@ -156,6 +156,8 @@ function sanitizeRegion(region) {
 
 function sanitizePlace(place = {}) {
   const mapKey = getMapKey(place);
+  const verified = place.verified === true;
+  const reviewStatus = place.reviewStatus || (verified ? "verified" : "needs-review");
   return {
     id: String(place.id || "").slice(0, 80),
     campus: String(place.campus || "").slice(0, 40),
@@ -166,9 +168,10 @@ function sanitizePlace(place = {}) {
     aliases: Array.isArray(place.aliases) ? place.aliases.slice(0, 8).map((item) => String(item).slice(0, 40)) : [],
     description: String(place.description || "").slice(0, 240),
     mapKey,
-    mapRegion: sanitizeRegion(place.mapRegion),
+    mapRegion: verified ? sanitizeRegion(place.mapRegion) : null,
     confidence: Math.max(0, Math.min(1, safeNumber(place.confidence))),
-    verified: place.verified === true,
+    verified,
+    reviewStatus,
     sourceId: place.sourceId || "campus-q-map-2026",
     updatedAt: place.updatedAt || "2026-06-17",
     neighbors: Array.isArray(place.neighbors) ? place.neighbors.slice(0, 8) : [],
