@@ -63,6 +63,30 @@ function clearLocalSelection() {
   currentScheduleTargetMemory = null;
 }
 
+function getActiveTermFallback() {
+  try {
+    const app = typeof getApp === "function" ? getApp() : null;
+    const globalData = app && app.globalData || {};
+    const active = globalData.activeRelease || {};
+    const manifest = active.manifest || {};
+    const appConfig = globalData.appConfig || {};
+    const appTermConfig = appConfig.termConfig || {};
+    const activeSnapshot = wx.getStorageSync(SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY) || {};
+    return active.term ||
+      active.activeTerm ||
+      manifest.term ||
+      manifest.semester ||
+      appConfig.currentSemester ||
+      appConfig.term ||
+      appTermConfig.term ||
+      activeSnapshot.term ||
+      activeSnapshot.semester ||
+      DEFAULT_TERM;
+  } catch (error) {
+    return DEFAULT_TERM;
+  }
+}
+
 function resolveTargetTerm(target) {
   const source = target || {};
   const metadata = source.metadata || {};
@@ -71,14 +95,16 @@ function resolveTargetTerm(target) {
     source.currentSemester ||
     metadata.term ||
     metadata.semester ||
+    getActiveTermFallback() ||
     DEFAULT_TERM;
 }
 
 function normalizeStoredScheduleTarget(target) {
-  if (!target || !target.name || !target.type) return null;
-  const term = resolveTargetTerm(target);
+  if (!target) return null;
   const type = target.type || "class";
-  const name = target.name || target.className || target.title || "";
+  const name = target.name || target.className || target.title || target.displayTitle || "";
+  if (!name || !type) return null;
+  const term = resolveTargetTerm(target);
   const detailId = target.detailId || target.id || target.scheduleId || target.classId || "";
   return Object.assign({}, target, {
     schemaVersion: CURRENT_SCHEDULE_TARGET_SCHEMA_VERSION,
@@ -88,7 +114,12 @@ function normalizeStoredScheduleTarget(target) {
     name,
     term,
     semester: term,
+    displayType: target.displayType || "",
+    isAggregated: Boolean(target.isAggregated),
     releaseVersion: target.releaseVersion || target.version || "",
+    updatedAt: target.updatedAt || "",
+    updateTime: target.updateTime || "",
+    courses: Array.isArray(target.courses) ? target.courses : [],
     source: target.source || target.dataSource || target.type || "local",
   });
 }

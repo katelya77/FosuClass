@@ -197,6 +197,27 @@ function testSetCurrentScheduleTargetTermAndLegacyMigration() {
   assert.strictEqual(migrated.releaseVersion, "release-a");
 }
 
+function testActiveTermFallbackAndClassNameOnlyLegacyTarget() {
+  reset();
+  storage.setCurrentScheduleTarget(makeTarget({ term: "", semester: "" }));
+  assert.strictEqual(storage.getCurrentScheduleTarget().term, "2025-2026-2");
+  assert.strictEqual(storage.getSettings().semester, "2025-2026-2");
+
+  reset();
+  wx.setStorageSync(storage.CURRENT_SCHEDULE_TARGET_KEY, {
+    type: "class",
+    id: "legacy-class-id",
+    className: "legacy class",
+    version: "release-a",
+    courses: [],
+  });
+  const migrated = storage.getCurrentScheduleTarget();
+  assert.strictEqual(migrated.schemaVersion, storage.CURRENT_SCHEDULE_TARGET_SCHEMA_VERSION);
+  assert.strictEqual(migrated.name, "legacy class");
+  assert.strictEqual(migrated.term, "2025-2026-2");
+  assert.strictEqual(migrated.releaseVersion, "release-a");
+}
+
 async function run() {
   await testUpdatesOldReleaseToActiveRelease();
   await testSameReleaseDoesNotFetchOrNotify();
@@ -205,6 +226,7 @@ async function run() {
   await testAmbiguousNameDoesNotBind();
   await testPersonalXlsAndCustomCoursesProtected();
   testSetCurrentScheduleTargetTermAndLegacyMigration();
+  testActiveTermFallbackAndClassNameOnlyLegacyTarget();
   reset();
   console.log("test-current-schedule-refresh passed");
 }
