@@ -2,6 +2,7 @@ const request = require("./utils/request");
 const { BOOTSTRAP_CACHE_KEY } = require("./utils/storage");
 const appConfigService = require("./services/appConfigService");
 const releasePackService = require("./services/releasePackService");
+const currentScheduleService = require("./services/currentScheduleService");
 const platformDataService = require("./services/platformDataService");
 const securitySessionService = require("./services/securitySessionService");
 const termConfigService = require("./services/termConfigService");
@@ -105,6 +106,10 @@ App({
     termConfigService.applyRuntimeTermConfigFromApp(this);
 
     startupCoordinator.resolveRuntimePointer({ timeout: 5000, retries: 0 })
+      .then((pointer) => currentScheduleService.ensureCurrentScheduleFresh({
+        activeSnapshot: pointer,
+        silent: true,
+      }))
       .catch(() => null);
     startupCoordinator.startBackgroundRefresh({
       timeout: STARTUP_BACKGROUND_TIMEOUT_MS,
@@ -132,16 +137,17 @@ App({
       const currentKey = [
         current.term || "",
         current.releaseVersion || "",
-        current.cacheEpoch || "",
-        current.forceRefreshToken || "",
       ].join(":");
       const nextKey = [
         pointer.term || pointer.activeTerm || "",
         pointer.releaseVersion || "",
-        pointer.cacheEpoch || "",
-        pointer.forceRefreshToken || "",
       ].join(":");
-      if (currentKey === nextKey) return pointer;
+      if (currentKey === nextKey) {
+        return currentScheduleService.ensureCurrentScheduleFresh({
+          activeSnapshot: pointer,
+          silent: true,
+        }).then(() => pointer);
+      }
       return releasePackService.switchReleaseSafely({
         term: pointer.term || pointer.activeTerm,
         releaseVersion: pointer.releaseVersion,
@@ -163,7 +169,10 @@ App({
           };
           termConfigService.applyRuntimeTermConfigFromApp(this);
         }
-        return result;
+        return currentScheduleService.ensureCurrentScheduleFresh({
+          activeSnapshot: result && result.manifest || pointer,
+          silent: true,
+        }).then(() => result);
       });
     }).catch(() => null);
   },

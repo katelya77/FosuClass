@@ -4,6 +4,7 @@ const { getSettings, saveSettings } = require("../../utils/storage");
 const { getTodayCoursesData } = require("../../utils/todayReminder");
 const appConfigService = require("../../services/appConfigService");
 const customCourseService = require("../../services/customCourseService");
+const currentScheduleService = require("../../services/currentScheduleService");
 const teachingCalendarService = require("../../services/teachingCalendarService");
 const BRAND = require("../../config/brand");
 const {
@@ -134,11 +135,30 @@ Page({
       this.loadSchedule();
       this.loadPageConfig();
       this.checkTodayReminder();
+      this.refreshCurrentTargetSilently();
     }
   },
 
+  refreshCurrentTargetSilently() {
+    currentScheduleService.ensureCurrentScheduleFresh({
+      silent: true,
+      notify: true,
+    }).then((result) => {
+      if (result && result.status === "UPDATED") {
+        this.loadSchedule();
+        if (result.shouldNotify) {
+          wx.showToast({
+            title: "课表已更新至最新数据",
+            icon: "none",
+            duration: 1200,
+          });
+        }
+      }
+    }).catch(() => {});
+  },
+
   loadPageConfig() {
-    appConfigService.loadAppConfig()
+    return appConfigService.loadAppConfig()
       .then((config) => {
         const normalizedConfig = appConfigService.normalizeConfig
           ? appConfigService.normalizeConfig(config)
@@ -459,18 +479,49 @@ Page({
     });
   },
 
-  refreshData() {
+  async refreshData() {
     this.hideMoreMenu();
+    const { getCurrentScheduleTarget } = require("../../utils/storage");
+    const target = getCurrentScheduleTarget();
+    if (!target) {
+      wx.showToast({ title: "请先选择课表", icon: "none" });
+      return;
+    }
     wx.showLoading({ title: "正在刷新..." });
-    const { clearDataCaches } = require("../../utils/storage");
-    clearDataCaches();
-    getApp().loadBootstrapData();
-    getApp().loadAppConfigData({ force: true }).then(() => this.loadPageConfig());
-    setTimeout(() => {
+    const app = getApp();
+    try {
+      if (typeof app.checkReleasePackForeground === "function") {
+        await app.checkReleasePackForeground();
+      }
+      const result = await currentScheduleService.ensureCurrentScheduleFresh({
+        force: true,
+        forceNetwork: true,
+        forcePointer: true,
+      });
+      await Promise.all([
+        app.loadBootstrapData({ force: true, silent: true }).catch(() => null),
+        app.loadAppConfigData({ force: true, silent: true }).catch(() => null),
+        teachingCalendarService.loadActiveTeachingCalendar({ forceNetwork: true }).catch(() => null),
+      ]);
+      await this.loadPageConfig();
       wx.hideLoading();
       this.loadSchedule();
-      wx.showToast({ title: "已更新成功", icon: "success" });
-    }, 1000);
+      let title = "当前已是最新课表";
+      if (result && result.status === "UPDATED") {
+        title = "课表已更新";
+      } else if (result && result.status === "PROTECTED_PERSONAL_XLS") {
+        title = "个人课表请重新导入更新";
+      } else if (result && result.status === "AMBIGUOUS") {
+        title = "找到多个同名课表，请重新确认";
+      } else if (result && result.success === false) {
+        title = "网络暂不可用，已保留当前课表";
+      }
+      wx.showToast({ title, icon: result && result.status === "UPDATED" ? "success" : "none" });
+    } catch (error) {
+      wx.hideLoading();
+      this.loadSchedule();
+      wx.showToast({ title: "网络暂不可用，已保留当前课表", icon: "none" });
+    }
   },
 
   clearLocalCache() {

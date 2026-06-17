@@ -20,6 +20,7 @@ const ALLOWED_NAVIGATION_URLS = new Set([
   "/pages/schedule-view/schedule-view",
   "/pages/personal-sync/personal-sync",
   "/pages/ai-assistant/ai-assistant",
+  "/pages/campus-map/campus-map",
 ]);
 
 const CARD_TITLE_FALLBACKS = {

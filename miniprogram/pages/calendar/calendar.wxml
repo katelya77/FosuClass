@@ -16,21 +16,34 @@
     <view>教学安排待维护，请稍后刷新。</view>
   </view>
 
-  <view wx:else class="week-list">
-    <view
-      wx:for="{{weeks}}"
-      wx:key="weekNo"
-      class="week-card card {{item.active ? 'active' : ''}}"
-    >
-      <view class="week-index">第{{item.weekNo}}周</view>
-      <view class="week-info">
-        <view class="week-topline">
-          <view class="week-date">{{item.rangeText || '日期待配置'}}</view>
-          <view class="week-type">{{item.typeText}}</view>
+  <scroll-view
+    wx:else
+    class="week-scroll"
+    scroll-y
+    scroll-top="{{scrollTop}}"
+    enhanced
+    show-scrollbar="{{false}}"
+    bindscroll="onCalendarScroll"
+  >
+    <view class="week-list">
+      <view
+        wx:for="{{weeks}}"
+        wx:key="weekNo"
+        id="week-{{item.weekNo}}"
+        class="week-card card {{item.active ? 'active' : ''}}"
+      >
+        <view class="week-index">第{{item.weekNo}}周</view>
+        <view class="week-info">
+          <view class="week-topline">
+            <view class="week-date">{{item.rangeText || '日期待配置'}}</view>
+            <view class="week-type">{{item.typeText}}</view>
+          </view>
+          <view class="week-title">{{item.title}}</view>
+          <view wx:if="{{item.note}}" class="week-note">{{item.note}}</view>
         </view>
-        <view class="week-title">{{item.title}}</view>
-        <view wx:if="{{item.note}}" class="week-note">{{item.note}}</view>
       </view>
     </view>
-  </view>
+  </scroll-view>
+
+  <button wx:if="{{showBackToCurrentWeek}}" class="back-current-week" bindtap="backToCurrentWeek">回到本周</button>
 </view>

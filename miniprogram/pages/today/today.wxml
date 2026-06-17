@@ -18,11 +18,6 @@
     <view class="alert-content">{{urgentNotice.content}}</view>
   </view>
 
-  <view class="today-alert" wx:elif="{{releaseNote || dataVersionText}}">
-    <view class="alert-title">今日提醒</view>
-    <view class="alert-content">{{releaseNote || dataVersionText}}</view>
-  </view>
-
   <view class="quick-empty-card card" bindtap="goEmptyRoom">
     <view class="quick-empty-main">
       <view class="quick-empty-title">找空教室</view>

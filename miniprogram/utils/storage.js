@@ -8,6 +8,7 @@ const SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY = "FOSU_ACTIVE_SNAPSHOT";
 const SCHOOL_FILTER_CACHE_KEY = "FOSU_SCHOOL_FILTER_CACHE";
 const CURRENT_SCHEDULE_TARGET_KEY = "FOSU_CURRENT_SCHEDULE_TARGET";
 const RECENT_SCHEDULES_KEY = "FOSU_RECENT_SCHEDULES";
+const CURRENT_SCHEDULE_TARGET_SCHEMA_VERSION = 2;
 const DEFAULT_TERM = "";
 let currentScheduleTargetMemory = null;
 
@@ -62,13 +63,33 @@ function clearLocalSelection() {
   currentScheduleTargetMemory = null;
 }
 
+function resolveTargetTerm(target) {
+  const source = target || {};
+  const metadata = source.metadata || {};
+  return source.term ||
+    source.semester ||
+    source.currentSemester ||
+    metadata.term ||
+    metadata.semester ||
+    DEFAULT_TERM;
+}
+
 function normalizeStoredScheduleTarget(target) {
   if (!target || !target.name || !target.type) return null;
-  const term = target.term || target.semester || DEFAULT_TERM;
+  const term = resolveTargetTerm(target);
+  const type = target.type || "class";
+  const name = target.name || target.className || target.title || "";
+  const detailId = target.detailId || target.id || target.scheduleId || target.classId || "";
   return Object.assign({}, target, {
+    schemaVersion: CURRENT_SCHEDULE_TARGET_SCHEMA_VERSION,
+    type,
+    id: target.id || detailId || "",
+    detailId,
+    name,
     term,
     semester: term,
     releaseVersion: target.releaseVersion || target.version || "",
+    source: target.source || target.dataSource || target.type || "local",
   });
 }
 
@@ -101,8 +122,12 @@ function getCurrentScheduleTarget() {
     if (currentScheduleTargetMemory && currentScheduleTargetMemory.name && currentScheduleTargetMemory.type) {
       return currentScheduleTargetMemory;
     }
-    const target = normalizeStoredScheduleTarget(wx.getStorageSync(CURRENT_SCHEDULE_TARGET_KEY));
+    const rawTarget = wx.getStorageSync(CURRENT_SCHEDULE_TARGET_KEY);
+    const target = normalizeStoredScheduleTarget(rawTarget);
     if (target) {
+      if (!rawTarget || rawTarget.schemaVersion !== CURRENT_SCHEDULE_TARGET_SCHEMA_VERSION || rawTarget.term !== target.term || rawTarget.releaseVersion !== target.releaseVersion) {
+        wx.setStorageSync(CURRENT_SCHEDULE_TARGET_KEY, target);
+      }
       currentScheduleTargetMemory = target;
       return target;
     }
@@ -121,18 +146,19 @@ function getCurrentScheduleTarget() {
 function setCurrentScheduleTarget(target) {
   const normalizedTarget = normalizeStoredScheduleTarget(target);
   if (normalizedTarget) {
+    const term = normalizedTarget.term || normalizedTarget.semester || DEFAULT_TERM;
     wx.setStorageSync(CURRENT_SCHEDULE_TARGET_KEY, normalizedTarget);
     currentScheduleTargetMemory = normalizedTarget;
     writePersonalScheduleCache(normalizedTarget);
     wx.setStorageSync("hasInitializedSchedule", true);
-    wx.setStorageSync("currentScheduleId", target.classId || target.name || "");
-    wx.setStorageSync("currentScheduleName", target.name || "");
-    wx.setStorageSync("currentScheduleSource", target.type || "class");
+    wx.setStorageSync("currentScheduleId", normalizedTarget.detailId || normalizedTarget.classId || normalizedTarget.name || "");
+    wx.setStorageSync("currentScheduleName", normalizedTarget.name || "");
+    wx.setStorageSync("currentScheduleSource", normalizedTarget.type || "class");
     saveSettings({
-      className: target.name,
+      className: normalizedTarget.name,
       semester: term,
       semesterId: term,
-      classId: target.classId || "",
+      classId: normalizedTarget.classId || normalizedTarget.detailId || "",
     });
     return true;
   }
@@ -416,6 +442,7 @@ function clearAllSchoolCaches() {
 module.exports = {
   BOOTSTRAP_CACHE_KEY,
   CURRENT_SCHEDULE_TARGET_KEY,
+  CURRENT_SCHEDULE_TARGET_SCHEMA_VERSION,
   PERSONAL_SCHEDULE_CACHE_KEY,
   RECENT_SCHEDULES_KEY,
   SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY,

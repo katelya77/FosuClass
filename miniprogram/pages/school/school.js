@@ -19,6 +19,8 @@ const SCHOOL_REQUEST_TIMEOUT = 25000;
 const SCHOOL_RESULT_PAGE_SIZE = 30;
 const SCHOOL_RESULT_PAGE_STEP = 30;
 const AI_PENDING_SCHOOL_QUERY_KEY = "FOSU_AI_PENDING_SCHOOL_QUERY";
+const FOSU_RELEASE_NOTICE_STATE_KEY = "FOSU_RELEASE_NOTICE_STATE";
+const SCHOOL_BACKGROUND_REFRESH_MIN_INTERVAL_MS = 45 * 1000;
 
 const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
@@ -65,6 +67,46 @@ function getFallbackTerm() {
     config.term ||
     config.termConfig && config.termConfig.term ||
     DEFAULT_TERM;
+}
+
+function getReleaseContentKey(snapshot) {
+  const active = snapshot || {};
+  return [
+    active.term || DEFAULT_TERM,
+    active.releaseVersion || "",
+  ].join(":");
+}
+
+function getReleaseInvalidationKey(snapshot) {
+  const active = snapshot || {};
+  return [
+    active.term || DEFAULT_TERM,
+    active.releaseVersion || "",
+    active.cacheEpoch || "",
+    active.forceRefreshToken || "",
+  ].join(":");
+}
+
+function normalizeStoredReleaseKey(key) {
+  const parts = String(key || "").split(":");
+  if (parts.length >= 2) return `${parts[0]}:${parts[1]}`;
+  return String(key || "");
+}
+
+function readReleaseNoticeState() {
+  try {
+    return wx.getStorageSync(FOSU_RELEASE_NOTICE_STATE_KEY) || {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function writeReleaseNoticeState(patch) {
+  try {
+    wx.setStorageSync(FOSU_RELEASE_NOTICE_STATE_KEY, Object.assign({}, readReleaseNoticeState(), patch || {}));
+  } catch (error) {
+    // ignore
+  }
 }
 
 function isValidClassName(name) {
@@ -314,7 +356,7 @@ Page({
     }
 
     const now = Date.now();
-    if (!this._lastInitAt || now - this._lastInitAt >= 5000) {
+    if (!this._lastInitAt || now - this._lastInitAt >= SCHOOL_BACKGROUND_REFRESH_MIN_INTERVAL_MS) {
       if (this.data.activeSnapshot) {
         this.checkActiveSnapshotFreshness();
       } else {
@@ -450,8 +492,8 @@ Page({
           return;
         }
 
-        const remoteReleaseKey = `${term}:${releaseVersion}:${cacheEpoch}`;
-        const localReleaseKey = wx.getStorageSync("FOSU_LOCAL_RELEASE_KEY");
+        const remoteReleaseKey = `${term}:${releaseVersion}`;
+        const localReleaseKey = normalizeStoredReleaseKey(wx.getStorageSync("FOSU_LOCAL_RELEASE_KEY"));
 
         let didRefresh = false;
         if (localReleaseKey && localReleaseKey !== remoteReleaseKey) {
@@ -469,14 +511,11 @@ Page({
             updatedAtText: "",
           });
 
-          wx.showToast({
-            title: "检测到课表新版本，已自动更新",
-            icon: "none",
-            duration: 2000
-          });
-
           didRefresh = true;
           this.needAutoSearch = true;
+          if (this.shouldShowReleaseNotice({ term, releaseVersion })) {
+            this.pendingReleaseNoticeText = "检测到新版本，已刷新";
+          }
         }
 
         wx.setStorageSync("FOSU_LOCAL_RELEASE_KEY", remoteReleaseKey);
@@ -1246,7 +1285,6 @@ Page({
               selectedClassIndex: classIdx
             });
             this.printSchoolDebugLog(true, "class", "restored cached filter");
-            this.showRestoreHint();
             this.applySharedQueryIfNeeded();
           }).catch(err => {
             this.setData({ selectedClassIndex: -1, classesOptions: [] }, () => {
@@ -1295,14 +1333,10 @@ Page({
   },
 
   showFilterChangedHint(message) {
+    if (!this.shouldShowFilterHint()) return;
     const text = message || "部分筛选项已更新，请重新选择";
     this.setData({
       restoreHint: text
-    });
-    wx.showToast({
-      title: text,
-      icon: "none",
-      duration: 1600
     });
     if (this.restoreTimer) {
       clearTimeout(this.restoreTimer);
@@ -2412,13 +2446,11 @@ Page({
   },
 
   getSnapshotReleaseKey(snapshot) {
-    const active = snapshot || {};
-    return [
-      active.term || DEFAULT_TERM,
-      active.releaseVersion || "",
-      active.cacheEpoch || "",
-      active.forceRefreshToken || "",
-    ].join(":");
+    return getReleaseContentKey(snapshot);
+  },
+
+  getSnapshotInvalidationKey(snapshot) {
+    return getReleaseInvalidationKey(snapshot);
   },
 
   buildActiveSnapshotFromAppConfig(payload) {
@@ -2513,6 +2545,35 @@ Page({
     }
   },
 
+  shouldShowReleaseNotice(snapshot) {
+    if (!snapshot || !snapshot.releaseVersion) return false;
+    const state = readReleaseNoticeState();
+    if (
+      state.lastNotifiedTerm === snapshot.term &&
+      state.lastNotifiedReleaseVersion === snapshot.releaseVersion
+    ) {
+      return false;
+    }
+    writeReleaseNoticeState({
+      lastNotifiedTerm: snapshot.term || "",
+      lastNotifiedReleaseVersion: snapshot.releaseVersion || "",
+      lastNotifiedAt: Date.now(),
+    });
+    return true;
+  },
+
+  shouldShowFilterHint() {
+    const releaseVersion = this.getReleaseVersionForCache();
+    if (!releaseVersion) return true;
+    const state = readReleaseNoticeState();
+    if (state.lastFilterHintReleaseVersion === releaseVersion) return false;
+    writeReleaseNoticeState({
+      lastFilterHintReleaseVersion: releaseVersion,
+      lastFilterHintAt: Date.now(),
+    });
+    return true;
+  },
+
   getStateFromError(error) {
     const code = error && (error.code || error.reasonCode || (error.payload && (error.payload.code || error.payload.reasonCode)));
     if (code === "NO_ACTIVE_RELEASE" || code === "NO_RELEASE_DATA") return "noRelease";
@@ -2526,10 +2587,7 @@ Page({
     if (cached && !forceNetwork) {
       const platformSnapshot = platformDataService.getCachedPlatformSnapshot();
       const platformLooksNewer = platformSnapshot && platformSnapshot.releaseVersion &&
-        (
-          platformSnapshot.releaseVersion !== cached.releaseVersion ||
-          (platformSnapshot.cacheEpoch && String(platformSnapshot.cacheEpoch) !== String(cached.cacheEpoch || ""))
-        );
+        this.getSnapshotReleaseKey(platformSnapshot) !== this.getSnapshotReleaseKey(cached);
       if (platformLooksNewer) {
         this.writeCachedActiveSnapshot(platformSnapshot);
         return {
@@ -2714,13 +2772,17 @@ Page({
       .then((result) => {
         const next = result && result.activeSnapshot;
         if (!next || !currentSnapshot) return;
-        if (this.getSnapshotReleaseKey(next) !== this.getSnapshotReleaseKey(currentSnapshot)) {
-          wx.showToast({
-            title: "检测到新课表版本，已刷新",
-            icon: "none",
-            duration: 1800,
-          });
+        const nextReleaseKey = this.getSnapshotReleaseKey(next);
+        const currentReleaseKey = this.getSnapshotReleaseKey(currentSnapshot);
+        if (nextReleaseKey !== currentReleaseKey) {
+          if (this.shouldShowReleaseNotice(next)) {
+            this.pendingReleaseNoticeText = "检测到新版本，已刷新";
+          }
           this.initPageData({ reason: "snapshotRefresh" });
+          return;
+        }
+        if (this.getSnapshotInvalidationKey(next) !== this.getSnapshotInvalidationKey(currentSnapshot)) {
+          this.writeCachedActiveSnapshot(next);
         }
       })
       .catch((error) => {
@@ -2732,6 +2794,11 @@ Page({
   },
 
   checkActiveSnapshotFreshness() {
+    const now = Date.now();
+    if (this._lastBackgroundSnapshotCheckAt && now - this._lastBackgroundSnapshotCheckAt < SCHOOL_BACKGROUND_REFRESH_MIN_INTERVAL_MS) {
+      return;
+    }
+    this._lastBackgroundSnapshotCheckAt = now;
     const current = this.data.activeSnapshot || this.readCachedActiveSnapshot();
     if (current) {
       this.refreshActiveSnapshotInBackground(current);
@@ -2824,7 +2891,7 @@ Page({
 
       const activeSnapshot = resolved.activeSnapshot;
       const releaseKey = this.getSnapshotReleaseKey(activeSnapshot);
-      const localReleaseKey = wx.getStorageSync("FOSU_LOCAL_RELEASE_KEY") || "";
+      const localReleaseKey = normalizeStoredReleaseKey(wx.getStorageSync("FOSU_LOCAL_RELEASE_KEY") || "");
       let didRefresh = false;
 
       if (localReleaseKey && localReleaseKey !== releaseKey) {
@@ -2836,6 +2903,9 @@ Page({
         }
         didRefresh = true;
         this.needAutoSearch = true;
+        if (this.shouldShowReleaseNotice(activeSnapshot)) {
+          this.pendingReleaseNoticeText = "检测到新版本，已刷新";
+        }
       }
 
       wx.setStorageSync("FOSU_LOCAL_RELEASE_KEY", releaseKey);
@@ -2919,8 +2989,9 @@ Page({
         catalogEmpty: false,
         catalogVersion: releaseVersion,
         catalogUpdatedAt: catalogData.updatedAt || snapshot.catalogUpdatedAt || "",
-        restoreHint: fromCache ? "已显示本地缓存，正在校验更新" : "",
+        restoreHint: this.pendingReleaseNoticeText || (fromCache ? "已显示本地缓存，正在校验更新" : ""),
       });
+      this.pendingReleaseNoticeText = "";
 
       if (this.hasSharedQuery()) {
         this.applySharedQueryIfNeeded();

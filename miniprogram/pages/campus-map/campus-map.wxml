@@ -1,0 +1,101 @@
+<view class="page campus-map-page">
+  <view class="campus-tabs card">
+    <button
+      wx:for="{{campusTabs}}"
+      wx:key="key"
+      class="campus-tab {{activeCampus === item.key ? 'active' : ''}}"
+      data-key="{{item.key}}"
+      bindtap="onCampusTap"
+    >{{item.label}}</button>
+  </view>
+
+  <view class="area-tabs" wx:if="{{activeCampus === 'xianxi'}}">
+    <button
+      wx:for="{{xianxiAreas}}"
+      wx:key="key"
+      class="area-tab {{activeXianxiArea === item.key ? 'active' : ''}}"
+      data-key="{{item.key}}"
+      bindtap="onAreaTap"
+    >{{item.label}}</button>
+  </view>
+
+  <view class="search-card card">
+    <input
+      class="search-input"
+      value="{{query}}"
+      placeholder="搜索楼栋代码或地点名"
+      confirm-type="search"
+      bindinput="onSearchInput"
+      bindconfirm="onSearchConfirm"
+    />
+  </view>
+
+  <view class="map-card card">
+    <view class="map-head">
+      <view>
+        <view class="map-title">{{mapInfo.title}}</view>
+        <view class="map-subtitle">点击图片查看大图</view>
+      </view>
+      <button class="map-preview-btn" bindtap="previewMap">查看</button>
+    </view>
+    <view class="map-image-wrap">
+      <view class="map-placeholder" wx:if="{{!imageLoaded && !imageError}}">地图加载中</view>
+      <view class="map-error" wx:if="{{imageError}}">地图暂时无法加载，请稍后重试</view>
+      <image
+        class="campus-map-image"
+        src="{{mapInfo.asset}}"
+        mode="widthFix"
+        bindtap="previewMap"
+        bindload="onMapImageLoad"
+        binderror="onMapImageError"
+      />
+      <view
+        wx:if="{{marker}}"
+        class="map-marker"
+        style="left: {{marker.left}}%; top: {{marker.top}}%; width: {{marker.width}}%; height: {{marker.height}}%;"
+      ></view>
+    </view>
+  </view>
+
+  <view class="result-section" wx:if="{{results.length}}">
+    <view class="section-title-small">搜索结果</view>
+    <view
+      wx:for="{{results}}"
+      wx:key="id"
+      class="place-card card {{selectedPlace && selectedPlace.id === item.id ? 'selected' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="onPlaceTap"
+    >
+      <view class="place-main">
+        <view class="place-title">{{item.name}}</view>
+        <view class="place-meta">{{item.campus}} · {{item.area}} · {{item.verified ? '已核对' : '参考位置'}}</view>
+        <view class="place-desc">{{item.description}}</view>
+      </view>
+      <view class="place-code" wx:if="{{item.code}}">{{item.code}}</view>
+    </view>
+  </view>
+
+  <view class="result-section">
+    <view class="section-title-small">主要地点</view>
+    <view
+      wx:for="{{places}}"
+      wx:key="id"
+      class="place-card card {{selectedPlace && selectedPlace.id === item.id ? 'selected' : ''}}"
+      data-id="{{item.id}}"
+      bindtap="onPlaceTap"
+    >
+      <view class="place-main">
+        <view class="place-title">{{item.name}}</view>
+        <view class="place-meta">{{item.campus}} · {{item.area}}</view>
+        <view class="place-desc">{{item.description}}</view>
+      </view>
+      <view class="place-code" wx:if="{{item.code}}">{{item.code}}</view>
+    </view>
+  </view>
+
+  <view class="selected-actions" wx:if="{{selectedPlace && selectedPlace.type === 'teaching_building'}}">
+    <button class="query-btn" bindtap="openSchoolQuery">查询该楼栋教室课表</button>
+  </view>
+
+  <view class="map-note">{{note}}</view>
+</view>

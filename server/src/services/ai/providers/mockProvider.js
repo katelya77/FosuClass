@@ -462,6 +462,74 @@ function buildCampusPlace(result = {}) {
   };
 }
 
+function buildCampusPlaceV2(result = {}) {
+  const items = Array.isArray(result.items) ? result.items : [];
+  const first = items[0] || {};
+  const actionUrl = first.actionUrl || result.actionUrl || "/pages/campus-map/campus-map";
+  const routeHint = result.routeAvailable === false || result.code === "ROUTE_DATA_INCOMPLETE"
+    ? "目前可帮助定位校区和区域，暂不提供精确步行路线。"
+    : "Q 版地图仅供校园位置参考，具体以学校现场指引为准。";
+  return {
+    answer: items.length
+      ? `找到 ${items.length} 个校园地点候选。${routeHint}`
+      : (result.summary || "没有找到已维护的校园地点。"),
+    cards: [makeCard("generic", "校园地点", result.q || result.classroom || "", {
+      badges: ["地图参考", result.ambiguous ? "需要确认" : ""].filter(Boolean),
+      items: items.slice(0, 6).map((item) => ({
+        title: item.name,
+        subtitle: [item.campus, item.area, item.verified ? "已核对" : "参考位置"].filter(Boolean).join(" · "),
+        value: item.code || item.type,
+      })),
+      actions: [
+        makeAction("查看校园地图", "navigate", actionUrl),
+        first && first.type === "teaching_building"
+          ? makeAction("查询该楼栋课表", "navigate", `/pages/school/school?type=classroom&q=${encodeURIComponent(first.code || first.name || "")}`)
+          : null,
+      ].filter(Boolean),
+    })],
+    suggestions: ["C7 在哪里", "查看仙溪南区地图", "河滨校区有哪些主要地点"],
+  };
+}
+
+function buildNextCourseLocation(toolResults = []) {
+  const findResult = (name) => {
+    const match = Array.isArray(toolResults) ? toolResults.find((item) => item && item.name === name) : null;
+    return match && match.result || {};
+  };
+  const schedule = findResult("get_next_course");
+  const location = findResult("get_classroom_location");
+  const nextCourse = schedule.nextCourse || (Array.isArray(schedule.courses) ? schedule.courses[0] : null) || null;
+  const mapItems = Array.isArray(location.items) ? location.items : [];
+  if (!nextCourse) {
+    return {
+      answer: schedule.summary || "今天没有后续课程。",
+      cards: [],
+      suggestions: ["今天有什么课", "本周课表"],
+    };
+  }
+  const classroom = nextCourse.classroom || nextCourse.roomName || "";
+  const mapCard = buildCampusPlaceV2(location).cards[0];
+  return {
+    answer: [
+      `下一节课是 ${nextCourse.courseName || "未命名课程"}，教室 ${classroom || "待定"}。`,
+      mapItems.length ? (location.summary || "已找到对应楼栋的地图参考位置。") : "暂未找到该教室对应的地图位置。",
+    ].join(""),
+    cards: [
+      makeCard("schedule", "下一节课", nextCourse.courseName || "未命名课程", {
+        badges: ["课表", "仅供参考"],
+        items: [{
+          title: classroom || "教室待定",
+          subtitle: [nextCourse.teacherName, nextCourse.sectionText, nextCourse.timeText].filter(Boolean).join(" · "),
+          value: nextCourse.weekText || "",
+        }],
+        actions: [makeAction("查看今日安排", "navigate", "/pages/today/today")],
+      }),
+      mapCard,
+    ].filter(Boolean),
+    suggestions: ["查看仙溪南区地图", "C7 在哪里", "现在有空教室吗"],
+  };
+}
+
 function buildKnowledge(result = {}) {
   const items = Array.isArray(result.items) ? result.items : [];
   return {
@@ -516,6 +584,7 @@ function generate({ intent, toolResults }) {
     name === "get_today_courses" ? buildTodayCourses(first || {}) :
     name === "get_tomorrow_courses" ? buildTomorrowCourses(first || {}) :
     name === "get_next_course" ? buildNextCourse(first || {}) :
+    name === "next_course_location" ? buildNextCourseLocation(toolResults || []) :
     name === "get_week_schedule" ? buildWeekSchedule(first || {}) :
     name === "get_teaching_week" ? buildTeachingWeek(first || {}) :
     name === "get_term_calendar" ? buildTermCalendar(first || {}) :
@@ -525,7 +594,7 @@ function generate({ intent, toolResults }) {
     name === "clarify_missing_slot" ? buildClarificationV2(first || {}) :
     name === "recommend_meeting_time" ? buildMeetingV2(first || {}) :
     name === "get_campus_weather" || name === "get_course_weather_advice" ? buildWeather(first || {}) :
-    name === "search_campus_place" || name === "get_campus_route" || name === "get_classroom_location" ? buildCampusPlace(first || {}) :
+    name === "search_campus_place" || name === "get_campus_route" || name === "get_classroom_location" ? buildCampusPlaceV2(first || {}) :
     name === "rag_search" ? buildKnowledge(first || {}) :
     name === "campus_multi_step_advice" ? buildMultiStep(toolResults || []) :
     name === "generate_image" ? buildKnowledge({ items: [], summary: first && first.summary || "生图能力未启用" }) :

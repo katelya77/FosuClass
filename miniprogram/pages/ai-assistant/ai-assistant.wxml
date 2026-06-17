@@ -8,6 +8,7 @@
       <view class="xiaofu-title">小佛</view>
       <view class="xiaofu-subtitle">{{headerSubtitle}}</view>
     </view>
+    <button class="xiaofu-help" bindtap="openCapabilityGuide" aria-label="小佛能力指南">?</button>
     <button class="xiaofu-clear" bindtap="clearHistory">清空</button>
   </view>
 
@@ -170,7 +171,7 @@
     </view>
   </scroll-view>
 
-  <view class="sheet-mask" wx:if="{{showTaskPanel || showPrivacySheet}}" bindtap="closeSheets"></view>
+  <view class="sheet-mask" wx:if="{{showTaskPanel || showCapabilityGuide || showPrivacySheet}}" bindtap="closeSheets"></view>
 
   <view class="bottom-sheet task-sheet" wx:if="{{showTaskPanel}}">
     <view class="sheet-handle"></view>
@@ -209,6 +210,38 @@
       </view>
     </scroll-view>
     <view wx:else class="task-section-loading">加载中</view>
+  </view>
+
+  <view class="bottom-sheet capability-sheet" wx:if="{{showCapabilityGuide}}">
+    <view class="sheet-handle"></view>
+    <view class="task-panel-head">
+      <view class="panel-title-wrap">
+        <view class="task-panel-title">小佛可以帮你</view>
+        <view class="task-panel-subtitle">点一下示例，会先填入输入框</view>
+      </view>
+      <button class="sheet-close" bindtap="closeCapabilityGuide">关闭</button>
+    </view>
+    <scroll-view class="capability-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <view
+        wx:for="{{capabilityGuideGroups}}"
+        wx:for-item="group"
+        wx:key="title"
+        class="capability-section"
+      >
+        <view class="capability-title">{{group.title}}</view>
+        <view class="capability-list">
+          <button
+            wx:for="{{group.items}}"
+            wx:for-item="example"
+            wx:key="*this"
+            class="capability-chip"
+            data-text="{{example}}"
+            bindtap="onCapabilityExampleTap"
+          >{{example}}</button>
+        </view>
+      </view>
+      <button class="capability-map-btn" bindtap="openCampusMapFromGuide">查看校园地图</button>
+    </scroll-view>
   </view>
 
   <view class="bottom-sheet privacy-sheet" wx:if="{{showPrivacySheet}}">
