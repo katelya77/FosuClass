@@ -11,11 +11,18 @@ const router = express.Router();
 router.use(publicFosuGuard);
 
 router.get("/campus-map/published", scheduleLimiter, (req, res) => {
-  res.setHeader("Cache-Control", "public, max-age=300");
   try {
+    const data = campusMapService.getPublishedMapDocument();
+    res.setHeader("Cache-Control", "public, max-age=300, stale-while-revalidate=86400");
+    if (data.etag) res.setHeader("ETag", data.etag);
+    if (data.hash) res.setHeader("X-Fosu-Campus-Map-Hash", data.hash);
+    if (data.version) res.setHeader("X-Fosu-Campus-Map-Version", data.version);
+    if (data.etag && req.headers["if-none-match"] === data.etag) {
+      return res.status(304).end();
+    }
     return res.json({
       success: true,
-      data: campusMapService.getPublishedMapDocument(),
+      data,
     });
   } catch (error) {
     safeLog("ai-campus-map-published-failed", { error: error.message, code: error.code || "" });
