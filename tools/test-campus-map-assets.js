@@ -115,6 +115,18 @@ assert(staticPublished.places.some((place) => place.id === "test-campus-map-new-
 assert.strictEqual(staticPublished.publishMode, "dual-source", "CloudBase static assets should publish as dual-source by default");
 assert.strictEqual(versionService.buildPublicConfig(staticPublished).syncStatus.cloudbaseStatus, "synced", "public config should expose synced CloudBase status");
 
+const staleStaticPublished = Object.assign({}, staticPublished, {
+  publishMode: "oracle-only",
+  cloudbaseStatus: "pending",
+});
+const staleStaticPublic = versionService.buildPublicConfig(staleStaticPublished);
+const staleStaticStatus = versionService.buildStatus(staleStaticPublished, versionService.loadDraftDocument());
+assert.strictEqual(staleStaticPublic.syncStatus.publishMode, "dual-source", "computed CloudBase availability should override stale oracle-only status");
+assert.strictEqual(staleStaticPublic.syncStatus.cloudbaseStatus, "synced", "computed CloudBase availability should override stale pending status");
+assert.strictEqual(staleStaticPublic.syncStatus.pendingCloudbase, 0, "synced static assets should not expose pending CloudBase maps");
+assert.strictEqual(staleStaticStatus.published.publishMode, "dual-source", "admin status should override stale oracle-only status");
+assert.strictEqual(staleStaticStatus.published.cloudbaseStatus, "synced", "admin status should override stale pending status");
+
 const historyAfterStaticPublish = versionService.listHistory();
 assert(historyAfterStaticPublish.length >= 1, "publish should preserve previous published version in history");
 const rolledBackStatic = versionService.rollback(historyAfterStaticPublish[0].id);
