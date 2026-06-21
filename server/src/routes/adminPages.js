@@ -5154,7 +5154,6 @@ const adminConsoleHtml = `<!doctype html>
               <button id="campusMapPreviewAssetBtn" class="ghost">预览</button>
               <button id="campusMapDownloadAssetBtn" class="ghost">下载</button>
               <button id="campusMapRepairAssetBtn" class="ghost">修复底图</button>
-              <button id="campusMapSyncCloudBaseBtn" class="ghost">重新同步 CloudBase</button>
               <button id="campusMapRefreshHealthBtn" class="ghost">刷新健康状态</button>
               <input id="campusMapAssetFile" type="file" accept="image/jpeg,image/png,image/webp" hidden>
             </div>
@@ -5209,7 +5208,7 @@ const adminConsoleHtml = `<!doctype html>
                 <button id="campusMapRedoBtn" class="ghost">重做</button>
               </div>
               <div id="campusMapPlaceList" class="campus-map-list"></div>
-              <div class="ai-secret-note">未人工核对的地点不在公众页面显示精确红框。</div>
+              <div class="ai-secret-note">公众页面只显示搜索结果和对应校区地图，不再显示精确定位框。</div>
             </div>
 
             <div class="card form-box">
@@ -5312,8 +5311,6 @@ const adminConsoleHtml = `<!doctype html>
               <button id="campusMapSaveDraftOpsBtn" class="primary">保存草稿</button>
               <button id="campusMapValidateBtn" class="ghost">校验草稿</button>
               <button id="campusMapRepairDraftBtn" class="ghost">自动修复可修复问题</button>
-              <button id="campusMapSyncMissingCloudBaseBtn" class="ghost">只同步缺失图片</button>
-              <button id="campusMapForceSyncCloudBaseBtn" class="ghost">强制重同步全部图片</button>
               <button id="campusMapPublishBtn" class="secondary">一键发布</button>
               <button id="campusMapPublishOracleOnlyBtn" class="ghost">发布 Oracle-only 可用版本</button>
               <button id="campusMapVerifyPublishedBtn" class="ghost">重新验证线上版本</button>
@@ -12549,7 +12546,6 @@ const adminConsoleHtml = `<!doctype html>
       safeBind("campusMapPreviewAssetBtn", "click", previewCurrentCampusMapAsset);
       safeBind("campusMapDownloadAssetBtn", "click", downloadCurrentCampusMapAsset);
       safeBind("campusMapRepairAssetBtn", "click", repairCampusMapAsset);
-      safeBind("campusMapSyncCloudBaseBtn", "click", function() { syncCampusMapCloudBase({ button: $("campusMapSyncCloudBaseBtn") }); });
       safeBind("campusMapRefreshHealthBtn", "click", function() { refreshCampusMapHealth(false); });
       safeBind("campusMapRestoreAssetBtn", "click", restoreCampusMapAsset);
       ["campusMapName", "campusMapCode", "campusMapAliases", "campusMapDescription"].forEach(function(id) {
@@ -12566,8 +12562,6 @@ const adminConsoleHtml = `<!doctype html>
       safeBind("campusMapCancelBtn", "click", cancelCampusMapChanges);
       safeBind("campusMapValidateBtn", "click", validateCampusMapDraft);
       safeBind("campusMapRepairDraftBtn", "click", function() { repairCampusMapDraft($("campusMapRepairDraftBtn")); });
-      safeBind("campusMapSyncMissingCloudBaseBtn", "click", function() { syncCampusMapCloudBase({ all: true, missingOnly: true, button: $("campusMapSyncMissingCloudBaseBtn") }); });
-      safeBind("campusMapForceSyncCloudBaseBtn", "click", function() { syncCampusMapCloudBase({ all: true, force: true, button: $("campusMapForceSyncCloudBaseBtn") }); });
       safeBind("campusMapDiffBtn", "click", previewCampusMapDiff);
       safeBind("campusMapPublishBtn", "click", function() { publishCampusMap({ button: $("campusMapPublishBtn") }); });
       safeBind("campusMapPublishOracleOnlyBtn", "click", function() { publishCampusMap({ allowOracleOnly: true, skipCloudbaseSync: true, button: $("campusMapPublishOracleOnlyBtn") }); });

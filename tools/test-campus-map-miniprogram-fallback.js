@@ -150,9 +150,56 @@ function testPageImageFallbackChain() {
   assert.strictEqual(instance.data.imageError, true, "package image failure should surface image error");
 }
 
+function testSearchResultSwitchesMapWithoutMarker() {
+  installWx({});
+  resetModule(pagePath);
+  resetModule(servicePath);
+
+  const pageData = {
+    note: "test",
+    maps: {},
+    places: [{
+      id: "place-south",
+      campus: "仙溪校区",
+      area: "南区",
+      name: "C7",
+      code: "C7",
+      type: "teaching_building",
+      verified: true,
+      mapRegion: { x: 0.1, y: 0.1, width: 0.1, height: 0.1 },
+    }],
+  };
+  require.cache[require.resolve(servicePath)] = {
+    exports: {
+      getFallbackData: () => pageData,
+      loadPublishedMapData: () => Promise.resolve(pageData),
+    },
+  };
+
+  let definition = null;
+  global.Page = (config) => {
+    definition = config;
+  };
+  require(pagePath);
+
+  const instance = Object.assign({}, definition, {
+    data: JSON.parse(JSON.stringify(definition.data)),
+    setData(patch, callback) {
+      this.data = Object.assign({}, this.data, patch);
+      if (typeof callback === "function") callback();
+    },
+  });
+
+  const place = instance.findPlaceById("place-south");
+  instance.focusPlace(place, true);
+  assert.strictEqual(instance.data.mapInfo.key, "xianxiSouth", "selecting a place should still switch to the matching map");
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(instance.data, "marker"), false, "selecting a place should not create a marker rectangle");
+}
+
 (async () => {
   await testDataServiceCacheAndEtag();
   testPageImageFallbackChain();
+  testSearchResultSwitchesMapWithoutMarker();
   console.log("test-campus-map-miniprogram-fallback passed");
 })().catch((error) => {
   console.error(error.stack || error.message || String(error));

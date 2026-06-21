@@ -96,17 +96,6 @@ function getCampusFromMapKey(mapKey) {
   return "jiangwan";
 }
 
-function markerFromPlace(place) {
-  const region = place && place.mapRegion;
-  if (!region || place.verified !== true) return null;
-  return {
-    left: Math.max(0, Math.min(100, Number(region.x || 0) * 100)),
-    top: Math.max(0, Math.min(100, Number(region.y || 0) * 100)),
-    width: Math.max(8, Math.min(42, Number(region.width || 0.12) * 100)),
-    height: Math.max(6, Math.min(36, Number(region.height || 0.1) * 100)),
-  };
-}
-
 function withReviewStatus(place) {
   if (!place || typeof place !== "object") return place;
   return Object.assign({}, place, {
@@ -134,7 +123,6 @@ Page({
     searchedQuery: "",
     searchError: "",
     selectedPlace: null,
-    marker: null,
     imageLoaded: false,
     imageError: false,
     previewVisible: false,
@@ -196,7 +184,6 @@ Page({
       mapInfo,
       places,
       selectedPlace: selectedPlace || null,
-      marker: markerFromPlace(selectedPlace),
       imageLoaded: false,
       imageError: false,
     });
@@ -227,7 +214,6 @@ Page({
       patch.searchedQuery = "";
       patch.searchError = "";
       patch.selectedPlace = null;
-      patch.marker = null;
     }
     this.setData(patch);
   },
@@ -249,7 +235,6 @@ Page({
       searchedQuery: "",
       searchError: "",
       selectedPlace: null,
-      marker: null,
     });
   },
 
@@ -263,7 +248,6 @@ Page({
         searchedQuery: "",
         searchError: "",
         selectedPlace: selectedPlace || null,
-        marker: markerFromPlace(selectedPlace),
       });
       return;
     }
@@ -274,7 +258,6 @@ Page({
       searchError: "",
       results: [],
       selectedPlace: selectedPlace || null,
-      marker: markerFromPlace(selectedPlace),
     });
     try {
       const results = (campusData.places || [])
@@ -294,7 +277,6 @@ Page({
         results,
         searchState: results.length ? "success" : "empty",
         selectedPlace: selectedPlace || null,
-        marker: markerFromPlace(selectedPlace),
       });
     } catch (error) {
       this.setData({
@@ -302,7 +284,6 @@ Page({
         searchState: "error",
         searchError: "搜索失败，请稍后重试",
         selectedPlace: selectedPlace || null,
-        marker: markerFromPlace(selectedPlace),
       });
     }
   },

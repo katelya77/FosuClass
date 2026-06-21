@@ -60,11 +60,6 @@
         bindload="onMapImageLoad"
         binderror="onMapImageError"
       />
-      <view
-        wx:if="{{marker}}"
-        class="map-marker"
-        style="left: {{marker.left}}%; top: {{marker.top}}%; width: {{marker.width}}%; height: {{marker.height}}%;"
-      ></view>
     </view>
   </view>
 
@@ -94,9 +89,8 @@
     >
       <view class="place-main">
         <view class="place-title">{{item.name}}</view>
-        <view class="place-meta">{{item.campus}} · {{item.area}} · {{item.verified ? '已核对' : '参考位置'}}</view>
+        <view class="place-meta">{{item.campus}} · {{item.area}} · 参考位置</view>
         <view class="place-desc">{{item.description}}</view>
-        <view class="place-review" wx:if="{{!item.verified}}">未人工核对，暂不显示精确红框</view>
       </view>
       <view class="place-code" wx:if="{{item.code}}">{{item.code}}</view>
     </view>
@@ -113,9 +107,8 @@
     >
       <view class="place-main">
         <view class="place-title">{{item.name}}</view>
-        <view class="place-meta">{{item.campus}} · {{item.area}} · {{item.verified ? '已核对' : '待校对'}}</view>
+        <view class="place-meta">{{item.campus}} · {{item.area}} · 参考位置</view>
         <view class="place-desc">{{item.description}}</view>
-        <view class="place-review" wx:if="{{!item.verified}}">待人工核对，不显示精确红框</view>
       </view>
       <view class="place-code" wx:if="{{item.code}}">{{item.code}}</view>
     </view>

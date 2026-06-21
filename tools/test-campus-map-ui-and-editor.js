@@ -27,17 +27,22 @@ assert(js.includes("urls: [path]"), "previewImage should only receive the curren
 assert(!/urls:\s*this\.data\.maps/.test(js), "previewImage must not pass every campus map");
 assert(wxml.includes("movable-area") && wxml.includes("movable-view"), "custom preview layer should support pan/zoom");
 assert(wxml.includes("retryPreviewImage") && wxml.includes("retryMapImage"), "map image failures should expose retry");
-assert(/place\.verified\s*!==\s*true/.test(js), "unverified places should not render precise marker boxes");
+assert(!js.includes("markerFromPlace"), "campus map page should not create precise marker boxes");
+assert(!js.includes("marker:"), "campus map state should not keep marker rectangles");
+assert(!wxml.includes("map-marker"), "campus map page should not render red marker overlays");
+assert(!wxml.includes("红框") && !wxml.includes("精确红框"), "campus map copy should not mention precise red boxes");
 assert(!/onSearchInput[\s\S]{0,120}runSearch/.test(js), "typing in map search should not execute search");
 assert(!/focusPlace\(results\[0\]/.test(js), "map search should not auto-select the first result");
+assert(js.includes("if (place) this.focusPlace(place, true);"), "tapping a search result should still switch to that place's map");
 assert(wxml.includes("search-submit-btn") && wxml.includes("clearSearch"), "map search should expose explicit search and clear actions");
-assert(wxml.includes("未人工核对") || wxml.includes("待人工核对"), "unverified places should show review state");
 assert(js.includes("/pages/school/school?type=classroom"), "map building query should deep link to school classroom tab");
 
 const adminPage = read("server/src/routes/adminPages.js");
-["校园地图管理", "campusMapEditor", "保存草稿", "一键发布", "发布 Oracle-only 可用版本", "回滚上一版", "导入 JSON 到草稿", "自动修复可修复问题", "只同步缺失图片"].forEach((needle) => {
+["校园地图管理", "campusMapEditor", "保存草稿", "一键发布", "发布 Oracle-only 可用版本", "回滚上一版", "导入 JSON 到草稿", "自动修复可修复问题"].forEach((needle) => {
   assert(adminPage.includes(needle), `admin map manager should include ${needle}`);
 });
+assert(!adminPage.includes("只同步缺失图片"), "admin map manager should not expose routine CloudBase sync busywork");
+assert(!adminPage.includes("强制重同步全部图片"), "admin map manager should not expose force-resync as a routine action");
 const adminRoutes = read("server/src/routes/admin.js");
 ["/campus-map/state", "/campus-map/draft", "/campus-map/publish", "/campus-map/rollback", "/campus-map/backup", "/campus-map/repair", "/campus-map/verify-published"].forEach((needle) => {
   assert(adminRoutes.includes(needle), `admin map API should include ${needle}`);

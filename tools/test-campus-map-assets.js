@@ -86,8 +86,9 @@ assert.strictEqual(versionService.loadPublishedDocument().version, beforePublish
 assert.strictEqual(versionService.buildPublicConfig(versionService.loadPublishedDocument()).hash, beforePublic.hash, "saving draft must not change public hash");
 
 const pendingPreview = versionService.previewPublish(versionService.loadDraftDocument());
-assert.strictEqual(pendingPreview.validation.ok, true, "CloudBase pending should not be a blocker");
-assert(pendingPreview.validation.warnings.some((issue) => issue.code === "CLOUDBASE_ASSET_PENDING"), "CloudBase pending should be a warning");
+assert.strictEqual(pendingPreview.validation.ok, true, "CloudBase static URL availability should not be a blocker");
+assert(!pendingPreview.validation.warnings.some((issue) => issue.code === "CLOUDBASE_ASSET_PENDING"), "CloudBase static URL availability should not produce a pending warning");
+assert.strictEqual(pendingPreview.validation.cloudbase.cloudbaseStatus, "synced", "versioned CloudBase URLs should be treated as long-lived synced assets");
 
 const invalidDraft = versionService.loadDraftDocument();
 invalidDraft.places = invalidDraft.places.concat([{
@@ -109,18 +110,15 @@ assert.throws(
 );
 assert.strictEqual(versionService.loadPublishedDocument().version, beforePublished.version, "failed publish must keep previous published version");
 
-const oracleOnlyPublished = versionService.publishDraft(versionService.loadDraftDocument(), {
-  publishMode: "oracle-only",
-  cloudbaseStatus: "pending",
-});
-assert(oracleOnlyPublished.places.some((place) => place.id === "test-campus-map-new-place"), "Oracle-only publish should write draft places");
-assert.strictEqual(oracleOnlyPublished.publishMode, "oracle-only", "CloudBase pending publish should be marked oracle-only");
-assert.strictEqual(versionService.buildPublicConfig(oracleOnlyPublished).syncStatus.cloudbaseStatus, "pending", "public config should expose pending CloudBase status");
+const staticPublished = versionService.publishDraft(versionService.loadDraftDocument());
+assert(staticPublished.places.some((place) => place.id === "test-campus-map-new-place"), "static map publish should write draft places");
+assert.strictEqual(staticPublished.publishMode, "dual-source", "CloudBase static assets should publish as dual-source by default");
+assert.strictEqual(versionService.buildPublicConfig(staticPublished).syncStatus.cloudbaseStatus, "synced", "public config should expose synced CloudBase status");
 
-const historyAfterOracle = versionService.listHistory();
-assert(historyAfterOracle.length >= 1, "publish should preserve previous published version in history");
-const rolledBackOracle = versionService.rollback(historyAfterOracle[0].id);
-assert(!rolledBackOracle.places.some((place) => place.id === "test-campus-map-new-place"), "rollback should restore previous published places");
+const historyAfterStaticPublish = versionService.listHistory();
+assert(historyAfterStaticPublish.length >= 1, "publish should preserve previous published version in history");
+const rolledBackStatic = versionService.rollback(historyAfterStaticPublish[0].id);
+assert(!rolledBackStatic.places.some((place) => place.id === "test-campus-map-new-place"), "rollback should restore previous published places");
 
 const readyDraft = versionService.loadDraftDocument();
 Object.keys(readyDraft.mapAssets).forEach((mapKey) => {
