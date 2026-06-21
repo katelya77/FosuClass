@@ -481,6 +481,8 @@ function buildPublicConfig(document) {
   const maps = buildPublicMaps(doc.mapAssets);
   const places = doc.places.map(sanitizePlaceForPublic);
   const cloudbase = summarizeCloudbase(doc.mapAssets);
+  const computedCloudbaseStatus = cloudbase.cloudbaseStatus;
+  const computedPublishMode = computedCloudbaseStatus === "synced" ? "dual-source" : "oracle-only";
   const basePayload = {
     schemaVersion: 2,
     version: doc.version,
@@ -489,9 +491,9 @@ function buildPublicConfig(document) {
     maps,
     places,
     syncStatus: {
-      publishMode: doc.publishMode || (cloudbase.cloudbaseStatus === "synced" ? "dual-source" : "oracle-only"),
+      publishMode: computedCloudbaseStatus === "synced" ? computedPublishMode : (doc.publishMode || computedPublishMode),
       oracleStatus: cloudbase.oracleStatus,
-      cloudbaseStatus: doc.cloudbaseStatus || cloudbase.cloudbaseStatus,
+      cloudbaseStatus: computedCloudbaseStatus === "synced" ? computedCloudbaseStatus : (doc.cloudbaseStatus || computedCloudbaseStatus),
       pendingCloudbase: cloudbase.pendingCloudbase,
     },
   };
@@ -612,6 +614,8 @@ function buildStatus(published, draft) {
   const validation = validateDocument(draft, { diff });
   const publishedCloudbase = summarizeCloudbase(published.mapAssets);
   const draftCloudbase = summarizeCloudbase(draft.mapAssets);
+  const computedPublishedCloudbaseStatus = publishedCloudbase.cloudbaseStatus;
+  const computedPublishedPublishMode = computedPublishedCloudbaseStatus === "synced" ? "dual-source" : "oracle-only";
   return {
     draft: {
       version: draft.version || "",
@@ -624,8 +628,8 @@ function buildStatus(published, draft) {
       version: published.version || "",
       publishedAt: published.publishedAt || "",
       placeCount: published.places.length,
-      publishMode: published.publishMode || (publishedCloudbase.cloudbaseStatus === "synced" ? "dual-source" : "oracle-only"),
-      cloudbaseStatus: published.cloudbaseStatus || publishedCloudbase.cloudbaseStatus,
+      publishMode: computedPublishedCloudbaseStatus === "synced" ? computedPublishedPublishMode : (published.publishMode || computedPublishedPublishMode),
+      cloudbaseStatus: computedPublishedCloudbaseStatus === "synced" ? computedPublishedCloudbaseStatus : (published.cloudbaseStatus || computedPublishedCloudbaseStatus),
     },
     oracle: {
       status: draftCloudbase.oracleStatus,
@@ -921,6 +925,7 @@ function verifyPublishedDocument() {
   const published = loadPublishedDocument();
   const validation = validateDocument(published);
   const publicConfig = buildPublicConfig(published);
+  const computedCloudbaseStatus = validation.cloudbase.cloudbaseStatus;
   return {
     validation,
     publicConfig,
@@ -929,8 +934,8 @@ function verifyPublishedDocument() {
       version: published.version,
       hash: publicConfig.hash,
       publishedAt: published.publishedAt || "",
-      publishMode: published.publishMode || "",
-      cloudbaseStatus: published.cloudbaseStatus || validation.cloudbase.cloudbaseStatus,
+      publishMode: publicConfig.syncStatus.publishMode || published.publishMode || "",
+      cloudbaseStatus: computedCloudbaseStatus === "synced" ? computedCloudbaseStatus : (published.cloudbaseStatus || computedCloudbaseStatus),
       placeCount: publicConfig.places.length,
       mapCount: Object.keys(publicConfig.maps || {}).length,
     },
