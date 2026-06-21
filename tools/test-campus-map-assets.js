@@ -8,11 +8,27 @@ const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-campus-map-assets-"
 
 process.env.FOSU_STORAGE_DIR = tempRoot;
 process.env.FOSU_MAP_SKIP_LEGACY_MIRROR = "true";
-process.env.FOSU_MAP_REQUIRE_CLOUDBASE_SYNC = "true";
 process.env.PUBLIC_API_ORIGIN = "https://class.katelya.eu.org";
 
 const assetService = require("../server/src/services/campusMapAssetService");
 const versionService = require("../server/src/services/ai/campusMapVersionService");
+
+function exportedDraftFixture() {
+  const userDraft = path.join(os.homedir(), "Downloads", "campus-map-draft.json");
+  if (fs.existsSync(userDraft)) {
+    return JSON.parse(fs.readFileSync(userDraft, "utf8"));
+  }
+  const current = versionService.loadDraftDocument();
+  return Object.assign({}, current, {
+    source: "test-exported-draft-fixture",
+    places: current.places.slice(0, 8).map((place) => Object.assign({}, place, {
+      aliases: Array.isArray(place.aliases) ? place.aliases : [],
+      description: place.description || "fixture description",
+      verified: place.verified === true,
+      reviewStatus: place.verified === true ? "verified" : "needs-review",
+    })),
+  });
+}
 
 const state = versionService.getState();
 assert.strictEqual(Object.keys(state.assets).length, 4, "four campus map asset groups should exist");
@@ -38,6 +54,19 @@ const duplicate = assetService.importAssetFromFile("xianxiNorth", seedFile, {
 });
 assert.strictEqual(duplicate.duplicate, true, "same SHA-256 upload should reuse existing asset");
 
+const exportedDraft = exportedDraftFixture();
+const imported = versionService.importDocument({
+  document: exportedDraft,
+  options: { preset: "full-replace" },
+});
+assert.strictEqual(imported.document.places.length, exportedDraft.places.length, "exported draft import should preserve place count");
+assert.deepStrictEqual(imported.document.mapAssets, exportedDraft.mapAssets, "exported draft import should preserve mapAssets");
+assert(imported.document.places.every((place) => Object.prototype.hasOwnProperty.call(place, "verified")), "import should preserve verified field");
+assert(imported.document.places.every((place) => Object.prototype.hasOwnProperty.call(place, "reviewStatus")), "import should preserve reviewStatus field");
+assert(imported.document.places.every((place) => Object.prototype.hasOwnProperty.call(place, "mapRegion")), "import should preserve mapRegion field");
+assert(fs.existsSync(imported.backup.path), "import should backup current draft before writing");
+assert.strictEqual(versionService.loadPublishedDocument().version, beforePublished.version, "importing draft must not change published version");
+
 const draft = versionService.loadDraftDocument();
 draft.places = draft.places.concat([{
   id: "test-campus-map-new-place",
@@ -46,21 +75,52 @@ draft.places = draft.places.concat([{
   name: "测试地点",
   code: "T1",
   type: "place",
-  aliases: [],
+  aliases: ["测试别名"],
   description: "draft only",
   mapRegion: { x: 0.1, y: 0.1, width: 0.1, height: 0.1 },
   verified: false,
+  reviewStatus: "needs-review",
 }]);
 versionService.saveDraft(draft);
 assert.strictEqual(versionService.loadPublishedDocument().version, beforePublished.version, "saving draft must not change published version");
 assert.strictEqual(versionService.buildPublicConfig(versionService.loadPublishedDocument()).hash, beforePublic.hash, "saving draft must not change public hash");
 
+const pendingPreview = versionService.previewPublish(versionService.loadDraftDocument());
+assert.strictEqual(pendingPreview.validation.ok, true, "CloudBase pending should not be a blocker");
+assert(pendingPreview.validation.warnings.some((issue) => issue.code === "CLOUDBASE_ASSET_PENDING"), "CloudBase pending should be a warning");
+
+const invalidDraft = versionService.loadDraftDocument();
+invalidDraft.places = invalidDraft.places.concat([{
+  id: "test-campus-map-invalid-verified",
+  campus: "仙溪校区",
+  area: "北区",
+  name: "无红框已核对地点",
+  type: "place",
+  aliases: [],
+  description: "",
+  mapRegion: { x: 0, y: 0, width: 0, height: 0 },
+  verified: true,
+  reviewStatus: "verified",
+}]);
 assert.throws(
-  () => versionService.publishDraft(versionService.loadDraftDocument()),
-  (error) => error && error.code === "CAMPUS_MAP_CLOUDBASE_PENDING",
-  "publish should be blocked when CloudBase mirror is not verified"
+  () => versionService.publishDraft(invalidDraft),
+  (error) => error && error.code === "CAMPUS_MAP_PUBLISH_PREFLIGHT_FAILED",
+  "verified places without valid regions must block publish"
 );
 assert.strictEqual(versionService.loadPublishedDocument().version, beforePublished.version, "failed publish must keep previous published version");
+
+const oracleOnlyPublished = versionService.publishDraft(versionService.loadDraftDocument(), {
+  publishMode: "oracle-only",
+  cloudbaseStatus: "pending",
+});
+assert(oracleOnlyPublished.places.some((place) => place.id === "test-campus-map-new-place"), "Oracle-only publish should write draft places");
+assert.strictEqual(oracleOnlyPublished.publishMode, "oracle-only", "CloudBase pending publish should be marked oracle-only");
+assert.strictEqual(versionService.buildPublicConfig(oracleOnlyPublished).syncStatus.cloudbaseStatus, "pending", "public config should expose pending CloudBase status");
+
+const historyAfterOracle = versionService.listHistory();
+assert(historyAfterOracle.length >= 1, "publish should preserve previous published version in history");
+const rolledBackOracle = versionService.rollback(historyAfterOracle[0].id);
+assert(!rolledBackOracle.places.some((place) => place.id === "test-campus-map-new-place"), "rollback should restore previous published places");
 
 const readyDraft = versionService.loadDraftDocument();
 Object.keys(readyDraft.mapAssets).forEach((mapKey) => {
@@ -74,16 +134,30 @@ Object.keys(readyDraft.mapAssets).forEach((mapKey) => {
   });
   assert.strictEqual(assetService.isCloudbaseSynced(assetService.getAsset(asset.assetId)), true, `${mapKey} synced hash should not require duplicate CloudBase upload`);
 });
+readyDraft.places = readyDraft.places.concat([{
+  id: "test-campus-map-dual-source-place",
+  campus: "仙溪校区",
+  area: "北区",
+  name: "双源测试地点",
+  code: "T2",
+  type: "place",
+  aliases: [],
+  description: "dual source",
+  mapRegion: { x: 0.2, y: 0.2, width: 0.1, height: 0.1 },
+  verified: true,
+  reviewStatus: "verified",
+}]);
+versionService.saveDraft(readyDraft);
+const dualPublished = versionService.publishDraft(versionService.loadDraftDocument(), {
+  publishMode: "dual-source",
+  cloudbaseStatus: "synced",
+});
+assert.strictEqual(dualPublished.publishMode, "dual-source", "CloudBase synced publish should be dual-source");
+assert.strictEqual(versionService.buildPublicConfig(dualPublished).syncStatus.cloudbaseStatus, "synced", "public config should expose synced CloudBase status");
 
-const published = versionService.publishDraft(readyDraft);
-assert(published.places.some((place) => place.id === "test-campus-map-new-place"), "verified publish should write draft places");
-const afterPublic = versionService.buildPublicConfig(published);
-assert.notStrictEqual(afterPublic.hash, beforePublic.hash, "published public hash should change after publish");
-
-const history = versionService.listHistory();
-assert(history.length >= 1, "publish should preserve previous published version in history");
-const rolledBack = versionService.rollback(history[0].id);
-assert(!rolledBack.places.some((place) => place.id === "test-campus-map-new-place"), "rollback should restore previous published places");
+const verify = versionService.verifyPublishedDocument();
+assert.strictEqual(verify.receipt.version, dualPublished.version, "published verify should read latest published");
+assert.strictEqual(verify.receipt.mapCount, 4, "published verify should expose four maps");
 
 fs.rmSync(tempRoot, { recursive: true, force: true });
 console.log("test-campus-map-assets passed");

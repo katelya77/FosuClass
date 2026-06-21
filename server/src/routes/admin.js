@@ -716,22 +716,104 @@ router.post("/campus-map/draft", verifyAdminWriteAccess, (req, res) => {
       code: error.code || "CAMPUS_MAP_DRAFT_FAILED",
       message: "校园地图草稿保存失败。",
       errors: error.errors || [],
+      issues: error.issues || [],
+      validation: error.validation || null,
     });
   }
 });
 
-router.post("/campus-map/publish", verifyAdminWriteAccess, (req, res) => {
+router.post("/campus-map/publish", verifyAdminWriteAccess, async (req, res) => {
   try {
-    const published = campusMapVersionService.publishDraft(req.body && req.body.places ? req.body : undefined);
-    writeAuditLog(req, "publish", "campus-map", published.version, `发布校园地图：${published.places.length} 个地点`);
-    return res.json({ success: true, data: published, state: campusMapVersionService.getState() });
+    const body = req.body || {};
+    const document = body.document && body.document.places ? body.document : (body.places ? body : undefined);
+    const options = Object.assign({}, body.options || {}, {
+      allowOracleOnly: body.allowOracleOnly === true || body.oracleOnly === true || body.publishMode === "oracle-only",
+      skipCloudbaseSync: body.skipCloudbaseSync === true,
+    });
+    const repaired = campusMapVersionService.autoRepairDraft(document);
+    const preview = campusMapVersionService.previewPublish(repaired.document);
+    if (!preview.validation.ok) {
+      return res.status(400).json({
+        success: false,
+        code: "CAMPUS_MAP_PUBLISH_PREFLIGHT_FAILED",
+        message: "草稿还有会影响小程序地图可用性的问题，请先修复 blocker。",
+        errors: preview.validation.errors || [],
+        issues: preview.validation.issues || [],
+        validation: preview.validation,
+        state: campusMapVersionService.getState(),
+      });
+    }
+
+    let syncResult = null;
+    if (options.skipCloudbaseSync) {
+      syncResult = {
+        status: "pending",
+        code: "CLOUDBASE_SYNC_SKIPPED",
+        message: "已按要求跳过 CloudBase，同步状态保持 pending。",
+      };
+    } else {
+      const assetIds = campusMapAssetService.getMapDefinitions()
+        .map((definition) => repaired.document.mapAssets && repaired.document.mapAssets[definition.mapKey])
+        .filter(Boolean);
+      try {
+        syncResult = await syncCampusMapAssetIds(assetIds, { force: false });
+      } catch (syncError) {
+        syncResult = {
+          status: "pending",
+          code: syncError.code || "CAMPUS_MAP_CLOUDBASE_SYNC_FAILED",
+          message: syncError.message || "CloudBase 同步失败，但 Oracle 可继续使用。",
+          health: syncError.health || null,
+        };
+      }
+    }
+
+    const afterSyncPreview = campusMapVersionService.previewPublish(repaired.document);
+    const cloudbasePending = afterSyncPreview.validation.cloudbase &&
+      afterSyncPreview.validation.cloudbase.cloudbaseStatus !== "synced";
+    if (cloudbasePending && !options.allowOracleOnly) {
+      return res.status(409).json({
+        success: false,
+        code: "CAMPUS_MAP_CLOUDBASE_PENDING_CONFIRM",
+        message: "CloudBase 暂未同步，是否先发布 Oracle 可用版本，稍后自动/手动补同步？",
+        errors: [],
+        issues: afterSyncPreview.validation.issues || [],
+        validation: afterSyncPreview.validation,
+        syncResult,
+        state: campusMapVersionService.getState(),
+      });
+    }
+
+    const published = campusMapVersionService.publishDraft(repaired.document, {
+      publishMode: cloudbasePending ? "oracle-only" : "dual-source",
+      cloudbaseStatus: cloudbasePending ? "pending" : "synced",
+      syncResult,
+    });
+    const publicConfig = campusMapVersionService.buildPublicConfig(published);
+    const receipt = {
+      version: published.version,
+      hash: publicConfig.hash,
+      publishedAt: published.publishedAt,
+      publishMode: published.publishMode,
+      cloudbaseStatus: published.cloudbaseStatus,
+      oracleAvailable: true,
+      placeCount: published.places.length,
+      verifiedCount: published.places.filter((place) => place.verified).length,
+      mapCount: Object.keys(publicConfig.maps || {}).length,
+      syncResult,
+    };
+    writeAuditLog(req, "publish", "campus-map", published.version, `发布校园地图：${published.places.length} 个地点，${receipt.publishMode}`);
+    return res.json({ success: true, data: published, receipt, state: campusMapVersionService.getState() });
   } catch (error) {
     safeLog("admin-campus-map-publish-failed", { error: error.message, code: error.code || "" });
     return res.status(400).json({
       success: false,
       code: error.code || "CAMPUS_MAP_PUBLISH_FAILED",
-      message: "校园地图发布失败。",
+      message: error.code === "CAMPUS_MAP_REPAIR_BLOCKED"
+        ? "自动修复后仍有 blocker，请先按提示修正。"
+        : "校园地图发布失败。",
       errors: error.errors || [],
+      issues: error.issues || [],
+      validation: error.validation || null,
     });
   }
 });
@@ -753,9 +835,10 @@ router.post("/campus-map/rollback", verifyAdminWriteAccess, (req, res) => {
 
 router.post("/campus-map/import", verifyAdminWriteAccess, (req, res) => {
   try {
-    const draft = campusMapVersionService.importDocument(req.body || {});
+    const result = campusMapVersionService.importDocument(req.body || {}, req.body && (req.body.options || req.body.importOptions) || {});
+    const draft = result.document;
     writeAuditLog(req, "import", "campus-map", draft.version, `导入校园地图草稿：${draft.places.length} 个地点`);
-    return res.json({ success: true, data: draft });
+    return res.json({ success: true, data: draft, importResult: result });
   } catch (error) {
     safeLog("admin-campus-map-import-failed", { error: error.message, code: error.code || "" });
     return res.status(400).json({
@@ -763,6 +846,9 @@ router.post("/campus-map/import", verifyAdminWriteAccess, (req, res) => {
       code: error.code || "CAMPUS_MAP_IMPORT_FAILED",
       message: "校园地图导入失败。",
       errors: error.errors || [],
+      issues: error.issues || [],
+      validation: error.validation || null,
+      backup: error.backup || null,
     });
   }
 });
@@ -802,6 +888,43 @@ router.post("/campus-map/validate", verifyAdminWriteAccess, (req, res) => {
       code: error.code || "CAMPUS_MAP_VALIDATE_FAILED",
       message: error.message,
       errors: error.errors || [],
+      issues: error.issues || [],
+      validation: error.validation || null,
+    });
+  }
+});
+
+router.post("/campus-map/repair", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const result = campusMapVersionService.autoRepairDraft(req.body && req.body.places ? req.body : undefined);
+    writeAuditLog(req, "repair", "campus-map", result.document.version, `自动修复校园地图草稿：${result.repairs.length} 项`);
+    return res.json({ success: true, data: result, state: campusMapVersionService.getState() });
+  } catch (error) {
+    safeLog("admin-campus-map-repair-failed", { error: error.message, code: error.code || "" });
+    return res.status(400).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_REPAIR_FAILED",
+      message: "自动修复未完成，请先处理 blocker。",
+      errors: error.errors || [],
+      issues: error.issues || [],
+      validation: error.validation || null,
+    });
+  }
+});
+
+router.post("/campus-map/verify-published", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const result = campusMapVersionService.verifyPublishedDocument();
+    writeAuditLog(req, "verify", "campus-map", result.receipt.version, "重新验证校园地图 published 版本");
+    return res.json({ success: true, data: result, state: campusMapVersionService.getState() });
+  } catch (error) {
+    safeLog("admin-campus-map-verify-published-failed", { error: error.message, code: error.code || "" });
+    return res.status(400).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_VERIFY_PUBLISHED_FAILED",
+      message: "线上地图版本验证失败。",
+      errors: error.errors || [],
+      issues: error.issues || [],
     });
   }
 });
@@ -941,6 +1064,72 @@ function runTcbCampusMapDeploy(asset) {
   return { command, args, status: result.status, stdout: result.stdout || "", stderr: result.stderr || "" };
 }
 
+async function syncCampusMapAssetIds(assetIds, options = {}) {
+  const ids = Array.from(new Set((Array.isArray(assetIds) ? assetIds : []).filter(Boolean)));
+  const task = campusMapAssetService.getCloudbaseTask(ids);
+  if (!ids.length) {
+    return Object.assign({}, task, {
+      status: "pending",
+      code: "CAMPUS_MAP_NO_ASSETS_TO_SYNC",
+      message: "没有找到需要同步的底图。",
+      verified: [],
+      skipped: [],
+      commands: task.command ? [task.command] : [],
+    });
+  }
+  if (process.env.FOSU_MAP_CLOUDBASE_SYNC_ENABLED !== "true") {
+    return Object.assign({}, task, {
+      status: "pending",
+      code: "CLOUDBASE_SYNC_NOT_ENABLED",
+      message: "CloudBase 还没同步，但 Oracle 已可用。服务器未启用自动上传，后台已保留可执行命令。",
+      verified: [],
+      skipped: [],
+      commands: [task.dryRunCommand, task.command].filter(Boolean),
+    });
+  }
+
+  const commands = [];
+  const verified = [];
+  const skipped = [];
+  for (const assetId of ids) {
+    const asset = campusMapAssetService.getAsset(assetId);
+    if (!asset) continue;
+    if (!options.force && campusMapAssetService.isCloudbaseSynced(asset)) {
+      const health = await campusMapAssetService.fetchBinaryMeta(asset.cloudbaseUrl, {
+        sha256: asset.sha256,
+        size: asset.size,
+        mime: asset.mime,
+      });
+      campusMapAssetService.markCloudbaseResult(asset.assetId, health);
+      if (health.ok) {
+        skipped.push({ assetId: asset.assetId, mapKey: asset.mapKey, health, reason: "same-sha-already-synced" });
+        continue;
+      }
+    }
+    commands.push(runTcbCampusMapDeploy(asset));
+    const health = await campusMapAssetService.fetchBinaryMeta(asset.cloudbaseUrl, {
+      sha256: asset.sha256,
+      size: asset.size,
+      mime: asset.mime,
+    });
+    campusMapAssetService.markCloudbaseResult(asset.assetId, health);
+    if (!health.ok) {
+      const error = new Error(`CloudBase verification failed for ${asset.mapKey}: ${health.message || health.status}`);
+      error.code = "CAMPUS_MAP_CLOUDBASE_VERIFY_FAILED";
+      error.health = health;
+      throw error;
+    }
+    verified.push({ assetId: asset.assetId, mapKey: asset.mapKey, health });
+  }
+  return {
+    status: "synced",
+    envId: campusMapAssetService.getCloudbaseEnvId(),
+    commands,
+    verified,
+    skipped,
+  };
+}
+
 router.post("/campus-map/assets/sync-cloudbase", verifyAdminWriteAccess, async (req, res) => {
   try {
     const state = campusMapVersionService.getState();
@@ -952,52 +1141,9 @@ router.post("/campus-map/assets/sync-cloudbase", verifyAdminWriteAccess, async (
       : (mapKey
           ? [state.draft && state.draft.mapAssets && state.draft.mapAssets[mapKey]].filter(Boolean)
           : campusMapAssetService.getMapDefinitions().map((definition) => state.draft && state.draft.mapAssets && state.draft.mapAssets[definition.mapKey]).filter(Boolean));
-    const task = campusMapAssetService.getCloudbaseTask(assetIds);
-    if (process.env.FOSU_MAP_CLOUDBASE_SYNC_ENABLED !== "true") {
-      return res.json({
-        success: true,
-        data: Object.assign({}, task, {
-          status: "pending",
-          code: "CLOUDBASE_SYNC_NOT_ENABLED",
-          message: "服务器未启用直接 CloudBase CLI 同步；已生成可重复执行的地图镜像任务，不能标记为同步成功。",
-        }),
-      });
-    }
-    const commands = [];
-    const verified = [];
-    const skipped = [];
-    for (const assetId of assetIds) {
-      const asset = campusMapAssetService.getAsset(assetId);
-      if (!asset) continue;
-      if (!force && campusMapAssetService.isCloudbaseSynced(asset)) {
-        const health = await campusMapAssetService.fetchBinaryMeta(asset.cloudbaseUrl, {
-          sha256: asset.sha256,
-          size: asset.size,
-          mime: asset.mime,
-        });
-        campusMapAssetService.markCloudbaseResult(asset.assetId, health);
-        if (health.ok) {
-          skipped.push({ assetId: asset.assetId, mapKey: asset.mapKey, health, reason: "already-synced" });
-          continue;
-        }
-      }
-      commands.push(runTcbCampusMapDeploy(asset));
-      const health = await campusMapAssetService.fetchBinaryMeta(asset.cloudbaseUrl, {
-        sha256: asset.sha256,
-        size: asset.size,
-        mime: asset.mime,
-      });
-      campusMapAssetService.markCloudbaseResult(asset.assetId, health);
-      if (!health.ok) {
-        const error = new Error(`CloudBase verification failed for ${asset.mapKey}: ${health.message || health.status}`);
-        error.code = "CAMPUS_MAP_CLOUDBASE_VERIFY_FAILED";
-        error.health = health;
-        throw error;
-      }
-      verified.push({ assetId: asset.assetId, mapKey: asset.mapKey, health });
-    }
+    const result = await syncCampusMapAssetIds(assetIds, { force });
     writeAuditLog(req, "sync", "campus-map-cloudbase", assetIds.join(","), "同步并验证校园地图 CloudBase CDN");
-    return res.json({ success: true, data: { status: "synced", commands, verified, skipped, state: campusMapVersionService.getState() } });
+    return res.json({ success: true, data: Object.assign({}, result, { state: campusMapVersionService.getState() }) });
   } catch (error) {
     safeLog("admin-campus-map-cloudbase-sync-failed", { error: error.message, code: error.code || "" });
     return res.status(400).json({

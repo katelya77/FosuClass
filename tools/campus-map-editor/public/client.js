@@ -602,14 +602,14 @@ async function validateData() {
 
 async function applyToMiniprogram() {
   updateSelectedFromForm();
-  if (!confirm("应用到小程序正式数据？保存前会自动创建备份。")) return;
+  if (!confirm("发布到校园地图 published？保存前会自动创建备份，小程序和后台会读取同一份版本。")) return;
   const payload = await fetchJson("/api/apply", {
     method: "POST",
     body: JSON.stringify(state.data),
   });
   state.dirty = false;
   render();
-  showToast(`已应用，备份：${payload.backupPath || payload.backup}`);
+  showToast(`已发布：${payload.publishedVersion || "-"}，备份：${payload.serviceBackupPath || payload.backupPath || "-"}`);
 }
 
 async function createBackup() {
