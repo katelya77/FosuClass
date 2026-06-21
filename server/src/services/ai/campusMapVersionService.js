@@ -237,7 +237,8 @@ function summarizeCloudbase(mapAssets = {}) {
     }
     const local = campusMapAssetService.getLocalStatus(asset);
     const cloudbase = asset.cloudbase || {};
-    const cloudbaseOk = campusMapAssetService.isCloudbaseSynced(asset);
+    const cloudbaseUrl = String(asset.cloudbaseUrl || "");
+    const cloudbaseOk = campusMapAssetService.isCloudbaseSynced(asset) || Boolean(cloudbaseUrl);
     return {
       mapKey: definition.mapKey,
       title: definition.title,
@@ -259,7 +260,7 @@ function summarizeCloudbase(mapAssets = {}) {
         size: cloudbase.size || 0,
         sha256: cloudbase.sha256 || "",
         message: cloudbaseOk ? "" : (cloudbase.message || "CloudBase 还没同步或校验不一致"),
-        url: asset.cloudbaseUrl,
+        url: cloudbaseUrl,
       },
     };
   });
@@ -384,11 +385,10 @@ function validateDocument(document, options = {}) {
         { mapKey: definition.mapKey, assetId: asset.assetId, reason: local.reason || local.status }
       ));
     }
-    const cloudbaseOk = campusMapAssetService.isCloudbaseSynced(asset);
-    if (!cloudbaseOk) {
-      const target = options.requireCloudbase === true ? blockers : warnings;
-      target.push(makeIssue(
-        options.requireCloudbase === true ? "blocker" : "warning",
+    const cloudbaseOk = campusMapAssetService.isCloudbaseSynced(asset) || Boolean(asset.cloudbaseUrl);
+    if (!cloudbaseOk && options.requireCloudbase === true) {
+      blockers.push(makeIssue(
+        "blocker",
         "CLOUDBASE_ASSET_PENDING",
         `${definition.title} CloudBase 还没同步，但 Oracle 已可用。`,
         "可以先发布 Oracle 版本，稍后再补 CDN；也可以点击“同步底图到 CloudBase”。",

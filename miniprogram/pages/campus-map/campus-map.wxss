@@ -204,16 +204,6 @@
   line-height: 48rpx;
 }
 
-.map-marker {
-  position: absolute;
-  z-index: 2;
-  border: 4rpx solid #c62828;
-  border-radius: 10rpx;
-  background: rgba(198, 40, 40, 0.08);
-  box-shadow: 0 0 0 4rpx rgba(255, 255, 255, 0.9);
-  pointer-events: none;
-}
-
 .result-section {
   margin-top: 22rpx;
 }
@@ -275,14 +265,6 @@
   color: #536174;
   font-size: 24rpx;
   line-height: 1.45;
-}
-
-.place-review {
-  margin-top: 8rpx;
-  color: #9a5b08;
-  font-size: 21rpx;
-  font-weight: 800;
-  line-height: 1.35;
 }
 
 .place-code {
