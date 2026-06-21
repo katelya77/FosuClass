@@ -17,7 +17,9 @@ router.get("/campus-map/published", scheduleLimiter, (req, res) => {
     if (data.etag) res.setHeader("ETag", data.etag);
     if (data.hash) res.setHeader("X-Fosu-Campus-Map-Hash", data.hash);
     if (data.version) res.setHeader("X-Fosu-Campus-Map-Version", data.version);
-    if (data.etag && req.headers["if-none-match"] === data.etag) {
+    const ifNoneMatch = String(req.headers["if-none-match"] || "");
+    const acceptedEtags = data.etag ? [data.etag, `W/${data.etag}`] : [];
+    if (acceptedEtags.length && ifNoneMatch.split(",").map((item) => item.trim()).some((item) => acceptedEtags.includes(item))) {
       return res.status(304).end();
     }
     return res.json({
