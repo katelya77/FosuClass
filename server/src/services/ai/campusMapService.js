@@ -109,6 +109,7 @@ function loadPlaces() {
 }
 
 function getMapKey(place = {}) {
+  if (place.mapKey) return place.mapKey;
   if (place.campus === "河滨校区") return "hebin";
   if (place.campus === "仙溪校区") return place.area === "南区" ? "xianxiSouth" : "xianxiNorth";
   return "jiangwan";
@@ -263,25 +264,26 @@ function getClassroomLocation(input = {}) {
 function getMapStatus() {
   const published = campusMapVersionService.loadPublishedDocument();
   const places = loadPlaces().map(sanitizePlace);
+  const publicConfig = campusMapVersionService.buildPublicConfig(published);
   return {
     sourceId: SOURCE_ID,
     updatedAt: published.publishedAt || published.updatedAt || "2026-06-17",
     version: published.version || "",
+    hash: publicConfig.hash || "",
     source: published.source || "published",
     placeCount: places.length,
     verifiedCount: places.filter((item) => item.verified).length,
+    mapCount: publicConfig.maps ? Object.keys(publicConfig.maps).length : 0,
     needsAdminData: places.some((item) => !item.verified),
   };
 }
 
 function getPublishedMapDocument() {
   const published = campusMapVersionService.loadPublishedDocument();
-  return {
-    version: published.version,
-    updatedAt: published.publishedAt || published.updatedAt,
-    note: published.note,
+  const publicConfig = campusMapVersionService.buildPublicConfig(published);
+  return Object.assign({}, publicConfig, {
     places: loadPlaces().map(sanitizePlace),
-  };
+  });
 }
 
 module.exports = {

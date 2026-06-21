@@ -39,7 +39,9 @@ staging/
 /staging/
 dist/
 server/storage/public/
+server/storage/campus-map/
 server/storage/snapshots/
 output/playwright/
+output/campus-map-acceptance/
 test-results/
 playwright-report/

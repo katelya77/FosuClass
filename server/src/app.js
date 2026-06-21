@@ -19,6 +19,7 @@ const storageLifecycleService = require("./services/storageLifecycleService");
 const termRegistryService = require("./services/termRegistryService");
 const runtimePointerService = require("./services/runtimePointerService");
 const performanceMonitorService = require("./services/performanceMonitorService");
+const campusMapAssetService = require("./services/campusMapAssetService");
 
 // 路由引入
 const healthRouter = require("./routes/health");
@@ -85,7 +86,8 @@ function selectJsonParser(req) {
   if (
     routePath.indexOf("/api/admin/sync/") === 0 ||
     routePath.indexOf("/api/admin/release/activate") === 0 ||
-    routePath.indexOf("/api/relay/staging/upload") === 0
+    routePath.indexOf("/api/relay/staging/upload") === 0 ||
+    routePath === "/api/admin/campus-map/assets/upload"
   ) {
     return largeJsonParser;
   }
@@ -170,6 +172,21 @@ app.use("/static/runtime", express.static(path.join(releaseService.PUBLIC_RELEAS
     res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("X-Fosu-Static-Policy", "cacheable-public-runtime-pointer");
+  },
+}));
+
+campusMapAssetService.ensureInitialized();
+app.use("/static/campus-maps", express.static(campusMapAssetService.PUBLIC_ROOT, {
+  fallthrough: false,
+  maxAge: "1y",
+  setHeaders: (res, filePath) => {
+    if (String(filePath || "").endsWith(`${path.sep}config.json`)) {
+      res.setHeader("Cache-Control", "public, max-age=60, stale-while-revalidate=300");
+    } else {
+      res.setHeader("Cache-Control", "public, max-age=31536000, immutable");
+    }
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Fosu-Static-Policy", "cacheable-campus-map-asset");
   },
 }));
 

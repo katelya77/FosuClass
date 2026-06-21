@@ -19,6 +19,8 @@ RUN npm ci --omit=dev
 # 复制所有源代码
 COPY src/ ./src/
 COPY scripts/ ./scripts/
+COPY data/ ./data/
+COPY assets/ ./assets/
 
 # 暴露接口服务端口
 EXPOSE 3000

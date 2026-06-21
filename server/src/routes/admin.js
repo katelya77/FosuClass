@@ -6,6 +6,7 @@ const express = require("express");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const { promisify } = require("util");
 const router = express.Router();
 const config = require("../config");
@@ -36,6 +37,7 @@ const evaluationService = require("../services/ai/evaluationService");
 const knowledgeBaseService = require("../services/ai/knowledgeBaseService");
 const campusMapService = require("../services/ai/campusMapService");
 const campusMapVersionService = require("../services/ai/campusMapVersionService");
+const campusMapAssetService = require("../services/campusMapAssetService");
 const imageGenerationGateService = require("../services/ai/imageGenerationGateService");
 const stagingFingerprint = require("../utils/stagingFingerprint");
 const staticAccessTicket = require("../utils/staticAccessTicket");
@@ -773,19 +775,240 @@ router.get("/campus-map/export", adminAuth.verifyAdminAccess, (req, res) => {
 });
 
 router.get("/campus-map/asset", adminAuth.verifyAdminAccess, (req, res) => {
-  const assetByMap = {
-    jiangwan: path.resolve(__dirname, "../../../miniprogram/assets/maps/campus-map-jiangwan.jpg"),
-    xianxiNorth: path.resolve(__dirname, "../../../miniprogram/assets/maps/campus-map-xianxi-north.jpg"),
-    xianxiSouth: path.resolve(__dirname, "../../../miniprogram/assets/maps/campus-map-xianxi-south.jpg"),
-    hebin: path.resolve(__dirname, "../../../miniprogram/assets/maps/campus-map-hebin.jpg"),
-  };
-  const mapKey = String(req.query.map || "xianxiNorth");
-  const filePath = assetByMap[mapKey] || assetByMap.xianxiNorth;
-  if (!fs.existsSync(filePath)) {
-    return res.status(404).send("map asset not found");
+  try {
+    const state = campusMapVersionService.getState();
+    const mapKey = String(req.query.map || "xianxiNorth");
+    const assetId = req.query.assetId || state.draft && state.draft.mapAssets && state.draft.mapAssets[mapKey];
+    const asset = campusMapAssetService.getAssetForMap(mapKey, assetId);
+    if (!asset) return res.status(404).send("map asset not found");
+    const filePath = campusMapAssetService.getAssetAbsolutePath(asset);
+    if (!fs.existsSync(filePath)) return res.status(404).send("map asset file not found");
+    res.setHeader("Cache-Control", "private, max-age=300");
+    res.type(asset.mime || "image/jpeg");
+    return res.sendFile(filePath);
+  } catch (error) {
+    safeLog("admin-campus-map-asset-failed", { error: error.message, code: error.code || "" });
+    return res.status(500).send(error.code || "campus map asset failed");
   }
-  res.setHeader("Cache-Control", "private, max-age=300");
-  return res.sendFile(filePath);
+});
+
+router.post("/campus-map/validate", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const preview = campusMapVersionService.previewPublish(req.body && req.body.places ? req.body : undefined);
+    return res.json({ success: true, data: preview });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_VALIDATE_FAILED",
+      message: error.message,
+      errors: error.errors || [],
+    });
+  }
+});
+
+router.post("/campus-map/diff", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const state = campusMapVersionService.getState();
+    const draft = req.body && req.body.places ? req.body : state.draft;
+    return res.json({
+      success: true,
+      data: campusMapVersionService.computeDiff(state.published, draft),
+    });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_DIFF_FAILED",
+      message: error.message,
+    });
+  }
+});
+
+router.get("/campus-map/assets/health", adminAuth.verifyAdminAccess, async (req, res) => {
+  try {
+    const state = campusMapVersionService.getState();
+    const mapKey = String(req.query.mapKey || req.query.map || "");
+    const skipCloudbase = req.query.skipCloudbase === "true";
+    if (mapKey) {
+      const assetId = state.draft && state.draft.mapAssets && state.draft.mapAssets[mapKey];
+      const asset = campusMapAssetService.getAssetForMap(mapKey, assetId);
+      if (!asset) return res.status(404).json({ success: false, code: "CAMPUS_MAP_ASSET_NOT_FOUND" });
+      const health = await campusMapAssetService.checkAssetHealth(asset.assetId, { skipCloudbase });
+      return res.json({ success: true, data: health });
+    }
+    const health = {};
+    for (const definition of campusMapAssetService.getMapDefinitions()) {
+      const assetId = state.draft && state.draft.mapAssets && state.draft.mapAssets[definition.mapKey];
+      const asset = campusMapAssetService.getAssetForMap(definition.mapKey, assetId);
+      health[definition.mapKey] = asset
+        ? await campusMapAssetService.checkAssetHealth(asset.assetId, { skipCloudbase })
+        : null;
+    }
+    return res.json({ success: true, data: health });
+  } catch (error) {
+    safeLog("admin-campus-map-assets-health-failed", { error: error.message, code: error.code || "" });
+    return res.status(500).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_ASSET_HEALTH_FAILED",
+      message: error.message,
+    });
+  }
+});
+
+router.post("/campus-map/assets/upload", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const mapKey = String(req.body && req.body.mapKey || "");
+    const raw = String(req.body && (req.body.dataBase64 || req.body.base64 || "") || "");
+    const base64 = raw.replace(/^data:[^;]+;base64,/, "");
+    const buffer = Buffer.from(base64, "base64");
+    const result = campusMapAssetService.importAssetFromBuffer(mapKey, buffer, {
+      originalFileName: req.body && (req.body.originalFileName || req.body.fileName) || "",
+      mime: req.body && req.body.mime || "",
+      source: "admin-upload",
+    });
+    const draft = campusMapVersionService.setDraftMapAsset(mapKey, result.asset.assetId);
+    writeAuditLog(req, "upload", "campus-map-asset", result.asset.assetId, `上传校园地图底图：${mapKey}`);
+    return res.json({
+      success: true,
+      data: {
+        asset: result.asset,
+        duplicate: result.duplicate,
+        draft,
+        state: campusMapVersionService.getState(),
+      },
+    });
+  } catch (error) {
+    safeLog("admin-campus-map-asset-upload-failed", { error: error.message, code: error.code || "" });
+    return res.status(400).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_ASSET_UPLOAD_FAILED",
+      message: error.message,
+      errors: error.errors || [],
+    });
+  }
+});
+
+router.post("/campus-map/assets/restore", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const mapKey = String(req.body && req.body.mapKey || "");
+    const assetId = String(req.body && req.body.assetId || "");
+    const asset = campusMapAssetService.restoreMapAsset(mapKey, assetId);
+    const draft = campusMapVersionService.setDraftMapAsset(mapKey, asset.assetId);
+    writeAuditLog(req, "restore", "campus-map-asset", asset.assetId, `恢复校园地图历史底图：${mapKey}`);
+    return res.json({ success: true, data: { asset, draft, state: campusMapVersionService.getState() } });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_ASSET_RESTORE_FAILED",
+      message: error.message,
+    });
+  }
+});
+
+router.post("/campus-map/assets/repair", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const state = campusMapVersionService.getState();
+    const mapKey = String(req.body && req.body.mapKey || "");
+    const assetId = String(req.body && req.body.assetId || (mapKey && state.draft && state.draft.mapAssets && state.draft.mapAssets[mapKey]) || "");
+    const result = campusMapAssetService.repairAsset(assetId);
+    writeAuditLog(req, "repair", "campus-map-asset", assetId, `修复校园地图底图：${mapKey || assetId}`);
+    return res.json({ success: true, data: result, state: campusMapVersionService.getState() });
+  } catch (error) {
+    return res.status(400).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_ASSET_REPAIR_FAILED",
+      message: error.message,
+    });
+  }
+});
+
+function runTcbCampusMapDeploy(asset) {
+  const command = process.platform === "win32" ? "tcb.cmd" : "tcb";
+  const args = ["hosting", "deploy", campusMapAssetService.getAssetAbsolutePath(asset), asset.cloudbasePath, "-e", campusMapAssetService.getCloudbaseEnvId()];
+  const result = spawnSync(command, args, {
+    encoding: "utf8",
+    stdio: "pipe",
+    maxBuffer: 8 * 1024 * 1024,
+    shell: process.platform === "win32",
+  });
+  if (result.error || result.status !== 0) {
+    const error = new Error(`tcb hosting deploy failed: ${asset.cloudbasePath}`);
+    error.code = "CAMPUS_MAP_CLOUDBASE_DEPLOY_FAILED";
+    error.status = result.status;
+    error.stderr = result.stderr || "";
+    error.stdout = result.stdout || "";
+    throw error;
+  }
+  return { command, args, status: result.status, stdout: result.stdout || "", stderr: result.stderr || "" };
+}
+
+router.post("/campus-map/assets/sync-cloudbase", verifyAdminWriteAccess, async (req, res) => {
+  try {
+    const state = campusMapVersionService.getState();
+    const requestedIds = Array.isArray(req.body && req.body.assetIds) ? req.body.assetIds : [];
+    const mapKey = String(req.body && req.body.mapKey || "");
+    const force = req.body && req.body.force === true;
+    const assetIds = requestedIds.length
+      ? requestedIds
+      : (mapKey
+          ? [state.draft && state.draft.mapAssets && state.draft.mapAssets[mapKey]].filter(Boolean)
+          : campusMapAssetService.getMapDefinitions().map((definition) => state.draft && state.draft.mapAssets && state.draft.mapAssets[definition.mapKey]).filter(Boolean));
+    const task = campusMapAssetService.getCloudbaseTask(assetIds);
+    if (process.env.FOSU_MAP_CLOUDBASE_SYNC_ENABLED !== "true") {
+      return res.json({
+        success: true,
+        data: Object.assign({}, task, {
+          status: "pending",
+          code: "CLOUDBASE_SYNC_NOT_ENABLED",
+          message: "服务器未启用直接 CloudBase CLI 同步；已生成可重复执行的地图镜像任务，不能标记为同步成功。",
+        }),
+      });
+    }
+    const commands = [];
+    const verified = [];
+    const skipped = [];
+    for (const assetId of assetIds) {
+      const asset = campusMapAssetService.getAsset(assetId);
+      if (!asset) continue;
+      if (!force && campusMapAssetService.isCloudbaseSynced(asset)) {
+        const health = await campusMapAssetService.fetchBinaryMeta(asset.cloudbaseUrl, {
+          sha256: asset.sha256,
+          size: asset.size,
+          mime: asset.mime,
+        });
+        campusMapAssetService.markCloudbaseResult(asset.assetId, health);
+        if (health.ok) {
+          skipped.push({ assetId: asset.assetId, mapKey: asset.mapKey, health, reason: "already-synced" });
+          continue;
+        }
+      }
+      commands.push(runTcbCampusMapDeploy(asset));
+      const health = await campusMapAssetService.fetchBinaryMeta(asset.cloudbaseUrl, {
+        sha256: asset.sha256,
+        size: asset.size,
+        mime: asset.mime,
+      });
+      campusMapAssetService.markCloudbaseResult(asset.assetId, health);
+      if (!health.ok) {
+        const error = new Error(`CloudBase verification failed for ${asset.mapKey}: ${health.message || health.status}`);
+        error.code = "CAMPUS_MAP_CLOUDBASE_VERIFY_FAILED";
+        error.health = health;
+        throw error;
+      }
+      verified.push({ assetId: asset.assetId, mapKey: asset.mapKey, health });
+    }
+    writeAuditLog(req, "sync", "campus-map-cloudbase", assetIds.join(","), "同步并验证校园地图 CloudBase CDN");
+    return res.json({ success: true, data: { status: "synced", commands, verified, skipped, state: campusMapVersionService.getState() } });
+  } catch (error) {
+    safeLog("admin-campus-map-cloudbase-sync-failed", { error: error.message, code: error.code || "" });
+    return res.status(400).json({
+      success: false,
+      code: error.code || "CAMPUS_MAP_CLOUDBASE_SYNC_FAILED",
+      message: error.message,
+      stdout: error.stdout || "",
+      stderr: error.stderr || "",
+      health: error.health || null,
+    });
+  }
 });
 
 router.post("/campus-map/backup", verifyAdminWriteAccess, (req, res) => {

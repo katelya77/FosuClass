@@ -14,7 +14,7 @@
     "test:current-schedule": "node tools/test-current-schedule-refresh.js",
     "test:today-page": "node tools/test-today-page-release-note-hidden.js",
     "test:school-page": "node tools/test-school-release-notice-dedupe.js",
-    "test:campus-map": "node tools/test-campus-map.js",
+    "test:campus-map": "node tools/test-campus-map.js && node tools/test-campus-map-assets.js && node tools/test-campus-map-miniprogram-fallback.js",
     "test:campus-map-ui-editor": "node tools/test-campus-map-ui-and-editor.js",
     "test:classroom-search": "node tools/test-classroom-search.js",
     "test:weather-service-card": "node tools/test-weather-service-and-card.js",

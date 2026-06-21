@@ -44,6 +44,24 @@ const MAPS = {
   },
 };
 
+function runtimeMapInfo(base) {
+  const published = campusData && campusData.maps && campusData.maps[base.key] || {};
+  const cloudbaseAsset = published.cdnUrl || published.cloudbaseUrl || "";
+  const oracleAsset = published.fallbackUrl || published.oracleUrl || "";
+  const packageAsset = base.asset;
+  const asset = cloudbaseAsset || oracleAsset || packageAsset;
+  return Object.assign({}, base, {
+    title: published.title || base.title,
+    asset,
+    cloudbaseAsset,
+    oracleAsset,
+    packageAsset,
+    assetSource: cloudbaseAsset ? "cloudbase" : (oracleAsset ? "oracle" : "package"),
+    version: published.assetVersion || "",
+    hash: published.sha256 || "",
+  });
+}
+
 function normalizeText(value) {
   return String(value || "").trim().replace(/\s+/g, "").toLowerCase();
 }
@@ -165,7 +183,7 @@ Page({
   },
 
   updateMapData(mapKey, selectedPlace) {
-    const mapInfo = MAPS[mapKey] || MAPS.jiangwan;
+    const mapInfo = runtimeMapInfo(MAPS[mapKey] || MAPS.jiangwan);
     const places = (campusData.places || [])
       .filter((place) => placeMatchesMap(place, mapInfo))
       .map(withReviewStatus)
@@ -348,9 +366,9 @@ Page({
   },
 
   retryMapImage() {
-    this.setData({ imageLoaded: false, imageError: false });
-    const mapInfo = Object.assign({}, this.data.mapInfo || {});
-    this.setData({ mapInfo: Object.assign({}, mapInfo, { asset: "" }) }, () => {
+    const key = this.data.mapInfo && this.data.mapInfo.key || "xianxiNorth";
+    const mapInfo = runtimeMapInfo(MAPS[key] || MAPS.xianxiNorth);
+    this.setData({ imageLoaded: false, imageError: false, mapInfo: Object.assign({}, mapInfo, { asset: "" }) }, () => {
       this.setData({ mapInfo });
     });
   },
@@ -379,6 +397,23 @@ Page({
   },
 
   onMapImageError() {
+    const mapInfo = Object.assign({}, this.data.mapInfo || {});
+    if (mapInfo.assetSource === "cloudbase" && mapInfo.oracleAsset) {
+      this.setData({
+        imageLoaded: false,
+        imageError: false,
+        mapInfo: Object.assign({}, mapInfo, { asset: mapInfo.oracleAsset, assetSource: "oracle" }),
+      });
+      return;
+    }
+    if (mapInfo.assetSource === "oracle" && mapInfo.packageAsset) {
+      this.setData({
+        imageLoaded: false,
+        imageError: false,
+        mapInfo: Object.assign({}, mapInfo, { asset: mapInfo.packageAsset, assetSource: "package" }),
+      });
+      return;
+    }
     this.setData({ imageLoaded: false, imageError: true });
   },
 
