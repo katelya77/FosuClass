@@ -84,7 +84,7 @@ async function handleApi(req, res, pathname) {
   if (req.method === "POST" && pathname === "/api/draft") {
     const body = await parseBody(req);
     const file = saveDraft(body.data || body);
-    sendJson(res, 200, { success: true, file });
+    sendJson(res, 200, { success: true, file, draftPath: file });
     return;
   }
   if (req.method === "POST" && pathname === "/api/validate") {
@@ -96,7 +96,15 @@ async function handleApi(req, res, pathname) {
     const body = await parseBody(req);
     try {
       const result = applyToMiniprogram(body.data || body);
-      sendJson(res, 200, { success: true, backup: result.backup, validation: result.validation });
+      sendJson(res, 200, {
+        success: true,
+        backup: result.backup,
+        backupPath: result.backup && result.backup.path || result.backup,
+        serviceBackupPath: result.backup && result.backup.servicePath || "",
+        data: result.data,
+        publishedVersion: result.data && result.data.version || "",
+        validation: result.validation,
+      });
     } catch (error) {
       sendJson(res, 422, { success: false, code: error.message, validation: error.validation || null });
     }
@@ -104,7 +112,12 @@ async function handleApi(req, res, pathname) {
   }
   if (req.method === "POST" && pathname === "/api/backup") {
     const file = createBackup(readCampusPlaces());
-    sendJson(res, 200, { success: true, file });
+    sendJson(res, 200, {
+      success: true,
+      file: file && file.path || file,
+      backup: file,
+      serviceBackupPath: file && file.servicePath || "",
+    });
     return;
   }
   if (req.method === "GET" && pathname.startsWith("/assets/")) {

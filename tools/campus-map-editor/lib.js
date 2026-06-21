@@ -1,9 +1,13 @@
 const fs = require("fs");
 const path = require("path");
+const campusMapVersionService = require("../../server/src/services/ai/campusMapVersionService");
 
 const ROOT = path.resolve(__dirname, "../..");
 const DATA_FILE = path.join(ROOT, "miniprogram/data/campusPlaces.js");
-const SERVER_DATA_FILE = path.join(ROOT, "server/data/ai/campus-places.json");
+const SERVER_DATA_FILE = campusMapVersionService.LEGACY_DATA_PATH;
+const PUBLISHED_FILE = campusMapVersionService.PUBLISHED_PATH;
+const VERSION_DRAFT_FILE = campusMapVersionService.DRAFT_PATH;
+const PUBLIC_CONFIG_FILE = campusMapVersionService.PUBLIC_CONFIG_PATH;
 const DRAFT_FILE = path.join(ROOT, ".local/campus-map-editor/draft.json");
 const BACKUP_DIR = path.join(ROOT, ".local/campus-map-backups");
 
@@ -53,7 +57,14 @@ function normalizePlace(place = {}) {
   });
 }
 
-function readCampusPlaces() {
+function normalizeDocument(data = {}) {
+  const source = Object.assign({}, data, {
+    places: Array.isArray(data.places) ? data.places.map(normalizePlace) : [],
+  });
+  return campusMapVersionService.repairDocument(source).document;
+}
+
+function readPackageCampusPlaces() {
   delete require.cache[require.resolve(DATA_FILE)];
   const data = require(DATA_FILE);
   return Object.assign({}, data, {
@@ -61,32 +72,67 @@ function readCampusPlaces() {
   });
 }
 
+function readCampusPlaces() {
+  try {
+    return normalizeDocument(campusMapVersionService.loadPublishedDocument());
+  } catch (_error) {
+    return normalizeDocument(readPackageCampusPlaces());
+  }
+}
+
 function writeCampusPlaces(data) {
-  const normalized = Object.assign({}, data, {
-    places: Array.isArray(data.places) ? data.places.map(normalizePlace) : [],
+  const normalized = normalizeDocument(data);
+  const cloudbase = campusMapVersionService.summarizeCloudbase(normalized.mapAssets || {});
+  return campusMapVersionService.publishDraft(normalized, {
+    publishMode: cloudbase.cloudbaseStatus === "synced" ? "dual-source" : "oracle-only",
+    cloudbaseStatus: cloudbase.cloudbaseStatus,
   });
-  const content = `module.exports = ${JSON.stringify(normalized, null, 2)};\n`;
-  fs.writeFileSync(DATA_FILE, content, "utf8");
-  fs.writeFileSync(SERVER_DATA_FILE, `${JSON.stringify(normalized, null, 2)}\n`, "utf8");
-  return normalized;
 }
 
 function readDraft() {
-  if (!fs.existsSync(DRAFT_FILE)) return null;
-  return JSON.parse(fs.readFileSync(DRAFT_FILE, "utf8"));
+  if (fs.existsSync(DRAFT_FILE)) {
+    const local = JSON.parse(fs.readFileSync(DRAFT_FILE, "utf8"));
+    return local && local.data ? local : {
+      savedAt: local && local.savedAt || "",
+      source: "local",
+      data: normalizeDocument(local || {}),
+    };
+  }
+  try {
+    const draft = normalizeDocument(campusMapVersionService.loadDraftDocument());
+    return draft && draft.places.length ? {
+      savedAt: draft.updatedAt || "",
+      source: "version-service",
+      data: draft,
+    } : null;
+  } catch (_error) {
+    return null;
+  }
 }
 
 function saveDraft(data) {
   ensureDir(DRAFT_FILE);
-  fs.writeFileSync(DRAFT_FILE, JSON.stringify(data, null, 2), "utf8");
-  return DRAFT_FILE;
+  const normalized = campusMapVersionService.saveDraft(normalizeDocument(data));
+  fs.writeFileSync(DRAFT_FILE, JSON.stringify({
+    savedAt: new Date().toISOString(),
+    source: "version-service",
+    data: normalized,
+  }, null, 2), "utf8");
+  return VERSION_DRAFT_FILE;
 }
 
 function createBackup(data) {
   ensureDir(BACKUP_DIR, true);
+  const normalized = normalizeDocument(data || readCampusPlaces());
+  const serviceBackup = campusMapVersionService.createBackup("editor", { document: normalized });
   const file = path.join(BACKUP_DIR, `${timestamp()}.json`);
-  fs.writeFileSync(file, JSON.stringify(data || readCampusPlaces(), null, 2), "utf8");
-  return file;
+  fs.writeFileSync(file, JSON.stringify(normalized, null, 2), "utf8");
+  return {
+    path: file,
+    servicePath: serviceBackup.path,
+    filename: path.basename(file),
+    serviceFilename: serviceBackup.filename,
+  };
 }
 
 function normalizeRegion(region = {}) {
@@ -199,7 +245,10 @@ module.exports = {
   BACKUP_DIR,
   DATA_FILE,
   DRAFT_FILE,
+  PUBLISHED_FILE,
+  PUBLIC_CONFIG_FILE,
   SERVER_DATA_FILE,
+  VERSION_DRAFT_FILE,
   applyToMiniprogram,
   createBackup,
   readCampusPlaces,

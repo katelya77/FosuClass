@@ -901,6 +901,91 @@ const adminConsoleHtml = `<!doctype html>
     .campus-map-health-grid {
       grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     }
+    .campus-map-status-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .campus-map-status-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-2);
+      padding: 10px 12px;
+      min-width: 0;
+    }
+    .campus-map-status-card span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      margin-bottom: 4px;
+    }
+    .campus-map-status-card strong {
+      display: block;
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
+    .campus-map-status-card.warning {
+      border-color: rgba(245, 158, 11, 0.55);
+      background: rgba(245, 158, 11, 0.08);
+    }
+    .campus-map-status-card.blocker {
+      border-color: rgba(220, 38, 38, 0.55);
+      background: rgba(220, 38, 38, 0.08);
+    }
+    .campus-map-status-card.success {
+      border-color: rgba(22, 163, 74, 0.45);
+      background: rgba(22, 163, 74, 0.08);
+    }
+    .campus-map-diff-summary {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .campus-map-diff-pill {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--panel-2);
+    }
+    .campus-map-diff-pill span {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .campus-map-diff-pill strong {
+      font-size: 18px;
+    }
+    .campus-map-issue-list {
+      display: grid;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    .campus-map-issue {
+      border-left: 3px solid var(--border);
+      padding: 6px 8px;
+      background: var(--panel-2);
+      border-radius: 6px;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .campus-map-issue.blocker { border-left-color: var(--danger); }
+    .campus-map-issue.warning { border-left-color: #f59e0b; }
+    .campus-map-issue.info { border-left-color: var(--accent); }
+    .campus-map-advanced-log {
+      margin-top: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 10px;
+      background: var(--panel-2);
+      font-size: 12px;
+    }
+    .campus-map-advanced-log pre {
+      overflow: auto;
+      white-space: pre-wrap;
+      color: var(--muted);
+    }
     .campus-map-health-item {
       border: 1px solid var(--border);
       border-radius: 7px;
@@ -5103,12 +5188,23 @@ const adminConsoleHtml = `<!doctype html>
                   <option value="verified">已核对</option>
                   <option value="pending">待核对</option>
                 </select>
+                <select id="campusMapTypeFilter">
+                  <option value="">全部类型</option>
+                  <option value="teaching_building">教学楼</option>
+                  <option value="library">图书馆</option>
+                  <option value="canteen">饭堂</option>
+                  <option value="campus">校区</option>
+                  <option value="area">区域</option>
+                  <option value="place">地点</option>
+                </select>
                 <input id="campusMapSearch" placeholder="搜索名称、代码、别名">
               </div>
               <div class="campus-map-actions">
                 <button id="campusMapAddBtn" class="secondary">新增地点</button>
                 <button id="campusMapDuplicateBtn" class="ghost">复制地点</button>
                 <button id="campusMapDeleteBtn" class="ghost">删除地点</button>
+                <button id="campusMapMarkVerifiedBtn" class="ghost">批量标记已核对</button>
+                <button id="campusMapMarkPendingBtn" class="ghost">批量标记待核对</button>
                 <button id="campusMapUndoBtn" class="ghost">撤销</button>
                 <button id="campusMapRedoBtn" class="ghost">重做</button>
               </div>
@@ -5208,24 +5304,46 @@ const adminConsoleHtml = `<!doctype html>
 
           <div class="card form-box">
             <h3 class="card-title">发布管理</h3>
+            <div id="campusMapCurrentStatus" class="campus-map-status-grid"></div>
+            <h4 class="card-title">差异预览</h4>
+            <div id="campusMapDiffPreview" class="ai-verify-box">尚未生成发布差异。</div>
+            <h4 class="card-title">操作区</h4>
             <div class="campus-map-actions">
+              <button id="campusMapSaveDraftOpsBtn" class="primary">保存草稿</button>
               <button id="campusMapValidateBtn" class="ghost">校验草稿</button>
-              <button id="campusMapDiffBtn" class="ghost">发布差异预览</button>
-              <button id="campusMapPublishBtn" class="secondary">发布</button>
+              <button id="campusMapRepairDraftBtn" class="ghost">自动修复可修复问题</button>
+              <button id="campusMapSyncMissingCloudBaseBtn" class="ghost">只同步缺失图片</button>
+              <button id="campusMapForceSyncCloudBaseBtn" class="ghost">强制重同步全部图片</button>
+              <button id="campusMapPublishBtn" class="secondary">一键发布</button>
+              <button id="campusMapPublishOracleOnlyBtn" class="ghost">发布 Oracle-only 可用版本</button>
+              <button id="campusMapVerifyPublishedBtn" class="ghost">重新验证线上版本</button>
               <button id="campusMapBackupBtn" class="ghost">备份</button>
               <select id="campusMapRollbackSelect"></select>
-              <button id="campusMapRollbackBtn" class="ghost">回滚到选中版本</button>
+              <button id="campusMapRollbackBtn" class="ghost">回滚上一版</button>
             </div>
             <div class="form-row full">
               <div>
                 <label>导入 JSON</label>
+                <div class="campus-map-actions" style="margin-bottom:8px;">
+                  <select id="campusMapImportPreset">
+                    <option value="full-replace">导入地点和底图引用 · 覆盖当前草稿</option>
+                    <option value="places-replace">仅导入地点 · 覆盖当前草稿</option>
+                    <option value="full-merge">导入地点和底图引用 · 合并到当前草稿</option>
+                    <option value="places-merge">仅导入地点 · 合并到当前草稿</option>
+                  </select>
+                  <button id="campusMapImportFileBtn" class="ghost" type="button">选择 JSON 文件</button>
+                  <input id="campusMapImportFile" type="file" accept="application/json,.json" hidden>
+                </div>
                 <textarea id="campusMapImportJson" class="campus-map-json" placeholder="粘贴 campus map JSON 后点击导入"></textarea>
               </div>
             </div>
             <div class="campus-map-actions">
-              <button id="campusMapImportBtn" class="secondary">导入为草稿</button>
+              <button id="campusMapImportBtn" class="secondary">导入 JSON 到草稿</button>
             </div>
-            <div id="campusMapDiffPreview" class="ai-verify-box">尚未生成发布差异。</div>
+            <details class="campus-map-advanced-log">
+              <summary>高级日志</summary>
+              <pre id="campusMapAdvancedLog">尚无日志。</pre>
+            </details>
             <div id="campusMapStatus" class="ai-verify-box">尚未加载校园地图数据。</div>
           </div>
         </div>
@@ -5832,6 +5950,8 @@ const adminConsoleHtml = `<!doctype html>
         campusMapUndo: [],
         campusMapRedo: [],
         campusMapDrag: null,
+        campusMapLastReceipt: null,
+        campusMapLastImport: null,
         
         feedbackFilter: {
           status: "all",
@@ -6119,7 +6239,11 @@ const adminConsoleHtml = `<!doctype html>
             }
 
             if (!res.ok || data.success === false) {
-              throw new Error(data.message || ("HTTP " + res.status));
+              var httpError = new Error(data.message || ("HTTP " + res.status));
+              httpError.status = res.status;
+              httpError.code = data.code || "";
+              httpError.data = data;
+              throw httpError;
             }
 
             return data;
@@ -11258,6 +11382,14 @@ const adminConsoleHtml = `<!doctype html>
         jiangwan: "江湾",
         hebin: "河滨"
       };
+      var CAMPUS_MAP_TYPE_LABELS = {
+        teaching_building: "教学楼",
+        library: "图书馆",
+        canteen: "饭堂",
+        campus: "校区",
+        area: "区域",
+        place: "地点"
+      };
 
       function campusMapKey(place) {
         if (place && place.mapKey) return place.mapKey;
@@ -11298,18 +11430,35 @@ const adminConsoleHtml = `<!doctype html>
         return (group.versions || []).find(function(item) { return item.assetId === assetId; }) || group.current || null;
       }
 
-      function setCampusMapStatus(text) {
+      function campusMapLog(label, payload) {
+        var box = $("campusMapAdvancedLog");
+        if (!box) return;
+        var entry = "[" + new Date().toISOString() + "] " + label;
+        if (payload !== undefined) {
+          try {
+            entry += "\\n" + JSON.stringify(payload, null, 2);
+          } catch (error) {
+            entry += "\\n" + String(payload);
+          }
+        }
+        box.textContent = entry + "\\n\\n" + (box.textContent || "").slice(0, 6000);
+      }
+
+      function setCampusMapStatus(text, payload) {
         var box = $("campusMapStatus");
         if (box) box.textContent = text || "";
+        if (payload !== undefined) campusMapLog(text || "校园地图状态", payload);
       }
 
       function markCampusMapDirty(dirty) {
         state.campusMapDirty = dirty !== false;
+        renderCampusMapCurrentStatus();
       }
 
       function resetCampusMapDirty() {
         state.campusMapLoadedDraftJson = JSON.stringify(state.campusMapDraft || {});
         state.campusMapDirty = false;
+        renderCampusMapCurrentStatus();
       }
 
       function confirmCampusMapUnsaved() {
@@ -11352,12 +11501,14 @@ const adminConsoleHtml = `<!doctype html>
         var campus = value("campusMapCampus");
         var area = value("campusMapArea");
         var review = value("campusMapReviewFilter");
+        var type = value("campusMapTypeFilter");
         var keyword = String(value("campusMapSearch") || "").trim().toLowerCase();
         return places.filter(function(place) {
           if (campus && place.campus !== campus) return false;
           if (area && place.area !== area) return false;
           if (review === "verified" && place.verified !== true) return false;
           if (review === "pending" && place.verified === true) return false;
+          if (type && place.type !== type) return false;
           if (!keyword) return true;
           var aliases = Array.isArray(place.aliases) ? place.aliases.join(" ") : "";
           return [place.name, place.code, place.campus, place.area, aliases, place.description].join(" ").toLowerCase().indexOf(keyword) >= 0;
@@ -11386,6 +11537,8 @@ const adminConsoleHtml = `<!doctype html>
             state.campusMapSelectedId = place.id;
             state.campusMapSelectedMapKey = campusMapKey(place);
             renderCampusMapAdmin();
+            var editor = $("campusMapEditor");
+            if (editor && editor.scrollIntoView) editor.scrollIntoView({ block: "center", behavior: "smooth" });
           });
           list.appendChild(btn);
         });
@@ -11407,6 +11560,32 @@ const adminConsoleHtml = `<!doctype html>
         setValue("campusMapDescription", place.description || "");
         setSelectValue("campusMapVerified", place.verified ? "true" : "false");
         setSelectValue("campusMapType", place.type || "teaching_building");
+      }
+
+      function campusMapStatusCard(label, value, foot, tone) {
+        return "<div class='campus-map-status-card " + escapeHtml(tone || "") + "'><span>" + escapeHtml(label) + "</span><strong>" + escapeHtml(value || "-") + "</strong>" + (foot ? "<small>" + escapeHtml(foot) + "</small>" : "") + "</div>";
+      }
+
+      function renderCampusMapCurrentStatus() {
+        var box = $("campusMapCurrentStatus");
+        if (!box) return;
+        var map = state.campusMap || {};
+        var status = map.status || {};
+        var validation = map.validation || {};
+        var draft = state.campusMapDraft || map.draft || {};
+        var published = map.published || {};
+        var cloudbase = status.cloudbase || {};
+        var oracle = status.oracle || {};
+        var blockerCount = validation.summary && validation.summary.blocker || status.draft && status.draft.validation && status.draft.validation.blocker || 0;
+        var warningCount = validation.summary && validation.summary.warning || status.draft && status.draft.validation && status.draft.validation.warning || 0;
+        var dirtyText = state.campusMapDirty ? "未保存修改" : "已保存";
+        box.innerHTML = [
+          campusMapStatusCard("草稿", dirtyText, (draft.version || "-") + " · " + ((draft.places || []).length || 0) + " 个地点", state.campusMapDirty ? "warning" : "success"),
+          campusMapStatusCard("已发布", published.version || "尚未发布", (published.publishedAt ? formatDate(published.publishedAt) : "-") + " · " + (published.publishMode || "dual-source"), ""),
+          campusMapStatusCard("Oracle", oracle.ok === false ? "不可用" : "可用", (oracle.okCount || 0) + "/" + (oracle.total || 4) + " 张底图", oracle.ok === false ? "blocker" : "success"),
+          campusMapStatusCard("CloudBase", cloudbase.status === "synced" ? "已同步" : "待同步", (cloudbase.okCount || 0) + "/" + (cloudbase.total || 4) + " 张底图", cloudbase.status === "synced" ? "success" : "warning"),
+          campusMapStatusCard("校验", blockerCount ? ("阻断 " + blockerCount + " 项") : "可发布", "warning " + warningCount + " 项", blockerCount ? "blocker" : (warningCount ? "warning" : "success"))
+        ].join("");
       }
 
       function assetStatusBadge(ok, text) {
@@ -11459,21 +11638,28 @@ const adminConsoleHtml = `<!doctype html>
       function renderCampusMapAssetHealth() {
         var box = $("campusMapAssetHealth");
         if (!box) return;
-        var asset = currentCampusMapAsset();
-        var health = state.campusMapAssetHealth && state.campusMapAssetHealth[state.campusMapSelectedMapKey] || null;
-        if (!asset) {
-          box.innerHTML = "<div class='campus-map-health-item'><strong>未找到底图资产</strong></div>";
-          return;
-        }
-        var local = asset.localStatus || {};
-        var oracle = health && health.oracle || local;
-        var cloudbase = health && health.cloudbase || asset.cloudbase || {};
-        box.innerHTML = [
-          "<div class='campus-map-health-item'><span>Oracle 同源</span><strong>" + escapeHtml((oracle.status || local.status || "-") + " · " + (oracle.mime || asset.mime || "-") + " · " + (oracle.size || asset.size || 0) + " B") + "</strong></div>",
-          "<div class='campus-map-health-item'><span>CloudBase CDN</span><strong>" + escapeHtml((cloudbase.status || cloudbase.statusCode || "pending") + " · " + (cloudbase.mime || "-") + " · " + (cloudbase.size || 0) + " B") + "</strong></div>",
-          "<div class='campus-map-health-item'><span>SHA-256</span><strong>" + escapeHtml(asset.sha256 || "-") + "</strong></div>",
-          "<div class='campus-map-health-item'><span>当前角色</span><strong>" + escapeHtml([asset.isDraft ? "草稿" : "", asset.isPublished ? "published" : ""].filter(Boolean).join(" / ") || "历史版本") + "</strong></div>"
-        ].join("");
+        var assets = state.campusMap && state.campusMap.assets || {};
+        var healthState = state.campusMapAssetHealth || {};
+        var rows = [];
+        ["xianxiNorth", "xianxiSouth", "jiangwan", "hebin"].forEach(function(mapKey) {
+          var group = assets[mapKey] || {};
+          var asset = group.current || null;
+          var health = healthState[mapKey] || null;
+          if (!asset) {
+            rows.push("<div class='campus-map-health-item'><span>" + escapeHtml(CAMPUS_MAP_LABELS[mapKey]) + "</span><strong>缺少底图</strong></div>");
+            return;
+          }
+          var local = asset.localStatus || {};
+          var oracle = health && health.oracle || local;
+          var cloudbase = health && health.cloudbase || asset.cloudbase || {};
+          var cloudbaseStatus = cloudbase.ok ? "200" : (cloudbase.statusCode || cloudbase.status || "pending");
+          rows.push("<div class='campus-map-health-item'><span>" + escapeHtml(CAMPUS_MAP_LABELS[mapKey]) + "</span><strong>" +
+            "Oracle " + escapeHtml(String(oracle.status || local.status || "-")) + " · " + escapeHtml(oracle.mime || asset.mime || "-") + " · " + escapeHtml(String(oracle.size || asset.size || 0)) + " B" +
+            "<br>CloudBase " + escapeHtml(String(cloudbaseStatus)) + " · " + escapeHtml(cloudbase.mime || "-") + " · " + escapeHtml(String(cloudbase.size || 0)) + " B" +
+            "<br>hash " + escapeHtml(String(asset.sha256 || "-").slice(0, 16)) +
+            "</strong></div>");
+        });
+        box.innerHTML = rows.join("");
       }
 
       function renderCampusMapRect() {
@@ -11523,27 +11709,43 @@ const adminConsoleHtml = `<!doctype html>
         var diff = payload.diff || payload;
         var validation = payload.validation || null;
         var summary = diff.summary || {};
-        var lines = [
-          "新增：" + (summary.added || 0),
-          "修改：" + (summary.modified || 0),
-          "删除：" + (summary.removed || 0),
-          "坐标变化：" + (summary.coordinateChanges || 0),
-          "底图变化：" + (summary.assetChanges || 0)
-        ];
+        var pills = [
+          ["新增", summary.added || 0],
+          ["修改", summary.modified || 0],
+          ["删除", summary.removed || 0],
+          ["坐标变化", summary.coordinateChanges || 0],
+          ["待核对", validation && validation.summary ? validation.summary.needsReview || 0 : 0],
+          ["底图变化", summary.assetChanges || 0]
+        ].map(function(item) {
+          return "<div class='campus-map-diff-pill'><span>" + escapeHtml(item[0]) + "</span><strong>" + escapeHtml(item[1]) + "</strong></div>";
+        }).join("");
+        var html = "<div class='campus-map-diff-summary'>" + pills + "</div>";
         if (validation) {
-          lines.unshift(validation.ok ? "校验通过" : "校验失败");
-          (validation.errors || []).slice(0, 12).forEach(function(item) { lines.push("· " + item); });
+          var issues = (validation.issues || []).slice(0, 18);
+          html += "<div><strong>" + escapeHtml(validation.ok ? "校验通过，可继续发布。" : "校验失败，请先修复 blocker。") + "</strong></div>";
+          if (issues.length) {
+            html += "<div class='campus-map-issue-list'>" + issues.map(function(item) {
+              var level = item.level || "info";
+              return "<div class='campus-map-issue " + escapeHtml(level) + "'><strong>" + escapeHtml(level.toUpperCase()) + " · " + escapeHtml(item.message || "") + "</strong>" +
+                (item.action ? "<br><span>" + escapeHtml(item.action) + "</span>" : "") + "</div>";
+            }).join("") + "</div>";
+          }
         }
+        var details = [];
         (diff.assetChanges || []).slice(0, 8).forEach(function(item) {
-          lines.push("底图 " + item.title + ": " + (item.before || "-") + " → " + (item.after || "-"));
+          details.push("底图 " + item.title + ": " + (item.before || "-") + " -> " + (item.after || "-"));
         });
         (diff.coordinateChanges || []).slice(0, 8).forEach(function(item) {
-          lines.push("坐标 " + (item.name || item.id) + ": " + JSON.stringify(item.before) + " → " + JSON.stringify(item.after));
+          details.push("坐标 " + (item.name || item.id) + ": " + JSON.stringify(item.before) + " -> " + JSON.stringify(item.after));
         });
-        box.textContent = lines.join("\\n");
+        if (details.length) {
+          html += "<details class='campus-map-advanced-log'><summary>展开差异详情</summary><pre>" + escapeHtml(details.join("\\n")) + "</pre></details>";
+        }
+        box.innerHTML = html;
       }
 
       function renderCampusMapAdmin() {
+        renderCampusMapCurrentStatus();
         renderCampusMapAssets();
         renderCampusMapAssetHistory();
         renderCampusMapAssetHealth();
@@ -11632,6 +11834,29 @@ const adminConsoleHtml = `<!doctype html>
         state.campusMapSelectedId = draft.places[0] && draft.places[0].id || "";
         markCampusMapDirty(true);
         renderCampusMapAdmin();
+      }
+
+      function batchMarkCampusMapPlaces(verified) {
+        var places = filteredCampusPlaces();
+        if (!places.length) {
+          showToast("当前筛选条件下没有地点", "warning");
+          return;
+        }
+        var label = verified ? "已核对" : "待核对";
+        if (!window.confirm("确认将当前筛选出的 " + places.length + " 个地点批量标记为" + label + "？")) return;
+        pushCampusMapUndo();
+        var idSet = {};
+        places.forEach(function(place) { idSet[place.id] = true; });
+        var draft = state.campusMapDraft || { places: [] };
+        (draft.places || []).forEach(function(place) {
+          if (!idSet[place.id]) return;
+          place.verified = verified === true;
+          place.reviewStatus = verified ? "verified" : "needs-review";
+          place.updatedAt = new Date().toISOString();
+        });
+        markCampusMapDirty(true);
+        renderCampusMapAdmin();
+        showToast("已批量标记 " + places.length + " 个地点为" + label + "，请保存草稿。", "success");
       }
 
       function setCampusMapRegion(region, options) {
@@ -11771,8 +11996,14 @@ const adminConsoleHtml = `<!doctype html>
         patchCampusMapSelectedFromForm({ pushUndo: false, render: false });
         return api("/api/admin/campus-map/validate", { method: "POST", body: JSON.stringify(state.campusMapDraft || {}) })
           .then(function(res) {
+            state.campusMap = Object.assign({}, state.campusMap || {}, {
+              validation: res.data && res.data.validation || {},
+              diff: res.data && res.data.diff || {},
+              status: res.data && res.data.status || (state.campusMap && state.campusMap.status) || {}
+            });
             renderCampusMapDiffPreview(res.data || {});
-            setCampusMapStatus("草稿校验完成。");
+            renderCampusMapCurrentStatus();
+            setCampusMapStatus("草稿校验完成：" + ((res.data && res.data.validation && res.data.validation.ok) ? "可发布" : "有 blocker 需要修复"), res.data);
             return res.data;
           })
           .catch(function(error) {
@@ -11791,23 +12022,69 @@ const adminConsoleHtml = `<!doctype html>
           .catch(function(error) { showToast(error.message, "error"); });
       }
 
-      function publishCampusMap() {
+      function repairCampusMapDraft(btn) {
         patchCampusMapSelectedFromForm({ pushUndo: false, render: false });
-        return api("/api/admin/campus-map/publish", { method: "POST", body: JSON.stringify(state.campusMapDraft || {}) })
+        var restoreButton = setButtonLoading(btn || $("campusMapRepairDraftBtn"), "修复中...");
+        return api("/api/admin/campus-map/repair", { method: "POST", body: JSON.stringify(state.campusMapDraft || {}) })
+          .then(function(res) {
+            var nextState = res.state || {};
+            state.campusMap = nextState;
+            state.campusMapDraft = nextState.draft || res.data && res.data.document || state.campusMapDraft;
+            resetCampusMapDirty();
+            renderCampusMapAdmin();
+            setCampusMapStatus("自动修复完成：" + ((res.data && res.data.repairs && res.data.repairs.length) || 0) + " 项。", res.data);
+            showToast("可修复问题已处理。", "success");
+            return res.data;
+          })
+          .catch(function(error) {
+            setCampusMapStatus("自动修复失败：" + error.message, error.data || null);
+            showToast(error.message, "error");
+          })
+          .finally(function() { restoreButton(); });
+      }
+
+      function publishCampusMap(options) {
+        options = options || {};
+        patchCampusMapSelectedFromForm({ pushUndo: false, render: false });
+        var btn = options.button || $("campusMapPublishBtn");
+        var restoreButton = setButtonLoading(btn, options.allowOracleOnly ? "发布 Oracle 中..." : "一键发布中...");
+        return api("/api/admin/campus-map/publish", {
+          method: "POST",
+          body: JSON.stringify(Object.assign({
+            document: state.campusMapDraft || {}
+          }, options))
+        })
           .then(function(res) {
             var nextState = res.state || {};
             state.campusMap = nextState;
             state.campusMapDraft = nextState.draft || res.data || state.campusMapDraft;
             state.campusMapHistory = Array.isArray(nextState.history) ? nextState.history : state.campusMapHistory;
+            state.campusMapLastReceipt = res.receipt || null;
             resetCampusMapDirty();
             renderCampusMapAdmin();
-            setCampusMapStatus("已发布 published：" + ((res.data && res.data.version) || "-"));
-            showToast("校园地图已发布。", "success");
+            setCampusMapStatus("已发布：" + ((res.data && res.data.version) || "-") + " · " + ((res.receipt && res.receipt.publishMode) || ""), res.receipt || res.data);
+            showToast((res.receipt && res.receipt.publishMode) === "oracle-only" ? "已发布 Oracle 可用版本，CloudBase 可稍后补同步。" : "校园地图双源版本已发布。", "success");
+            return res;
           })
           .catch(function(error) {
-            setCampusMapStatus("发布失败：" + error.message);
+            var data = error.data || {};
+            if (error.code === "CAMPUS_MAP_CLOUDBASE_PENDING_CONFIRM") {
+              state.campusMap = data.state || state.campusMap;
+              if (data.validation || data.diff) renderCampusMapDiffPreview({ validation: data.validation || {}, diff: state.campusMap && state.campusMap.diff || {} });
+              renderCampusMapCurrentStatus();
+              setCampusMapStatus("CloudBase 还没同步，但 Oracle 已可用。", data);
+              if (window.confirm("CloudBase 暂未同步，是否先发布 Oracle 可用版本，稍后再补 CDN？")) {
+                restoreButton();
+                return publishCampusMap({ allowOracleOnly: true, button: options.button || $("campusMapPublishOracleOnlyBtn") });
+              }
+              showToast("已取消发布，旧 published 未被覆盖。", "warning");
+              return null;
+            }
+            setCampusMapStatus("发布失败：" + error.message, data || null);
             showToast(error.message, "error");
-          });
+            return null;
+          })
+          .finally(function() { restoreButton(); });
       }
 
       function backupCampusMap() {
@@ -11830,6 +12107,15 @@ const adminConsoleHtml = `<!doctype html>
         document.body.removeChild(link);
       }
 
+      function campusMapImportOptionsFromPreset() {
+        var preset = value("campusMapImportPreset") || "full-replace";
+        return {
+          preset: preset,
+          scope: preset.indexOf("places") === 0 ? "places-only" : "places-and-assets",
+          mode: preset.indexOf("merge") >= 0 ? "merge" : "replace"
+        };
+      }
+
       function importCampusMap() {
         var text = value("campusMapImportJson");
         if (!text) {
@@ -11843,15 +12129,29 @@ const adminConsoleHtml = `<!doctype html>
           showToast("JSON 解析失败", "error");
           return;
         }
-        return api("/api/admin/campus-map/import", { method: "POST", body: JSON.stringify(payload) })
+        pushCampusMapUndo();
+        var importOptions = campusMapImportOptionsFromPreset();
+        return api("/api/admin/campus-map/import", {
+          method: "POST",
+          body: JSON.stringify({ document: payload, options: importOptions })
+        })
           .then(function(res) {
             state.campusMapDraft = res.data || state.campusMapDraft;
+            state.campusMapLastImport = res.importResult || null;
             state.campusMapSelectedId = state.campusMapDraft.places && state.campusMapDraft.places[0] && state.campusMapDraft.places[0].id || "";
             resetCampusMapDirty();
-            renderCampusMapAdmin();
-            showToast("已导入为草稿。", "success");
+            return loadCampusMapState().then(function() {
+              renderCampusMapDiffPreview(res.importResult || {});
+              var summary = res.importResult && res.importResult.summary || {};
+              setCampusMapStatus("导入完成：新增 " + (summary.added || 0) + "，修改 " + (summary.modified || 0) + "，删除 " + (summary.removed || 0) + "，坐标变化 " + (summary.coordinateChanges || 0) + "，待核对 " + (summary.pendingReview || 0) + "，底图变化 " + (summary.mapAssetChanges || 0) + "。", res.importResult || res);
+              showToast("已导入到草稿，导入前草稿已自动备份；需要撤销可点“撤销”再保存。", "success");
+            });
           })
-          .catch(function(error) { showToast(error.message, "error"); });
+          .catch(function(error) {
+            state.campusMapUndo.pop();
+            setCampusMapStatus("导入失败：" + error.message, error.data || null);
+            showToast(error.message, "error");
+          });
       }
 
       function rollbackCampusMap() {
@@ -11902,6 +12202,28 @@ const adminConsoleHtml = `<!doctype html>
           reader.onerror = function() { reject(new Error("读取文件失败")); };
           reader.readAsDataURL(file);
         });
+      }
+
+      function readCampusMapJsonFile(file) {
+        return new Promise(function(resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function() { resolve(String(reader.result || "")); };
+          reader.onerror = function() { reject(new Error("读取 JSON 文件失败")); };
+          reader.readAsText(file, "utf-8");
+        });
+      }
+
+      function importCampusMapJsonFile() {
+        var input = $("campusMapImportFile");
+        var file = input && input.files && input.files[0];
+        if (!file) return;
+        readCampusMapJsonFile(file)
+          .then(function(text) {
+            setValue("campusMapImportJson", text);
+            showToast("JSON 文件已载入，可选择导入模式后导入。", "success");
+          })
+          .catch(function(error) { showToast(error.message, "error"); })
+          .finally(function() { if (input) input.value = ""; });
       }
 
       function uploadCampusMapAssetFromInput() {
@@ -11974,11 +12296,21 @@ const adminConsoleHtml = `<!doctype html>
           .catch(function(error) { showToast(error.message, "error"); });
       }
 
-      function syncCampusMapCloudBase() {
+      function syncCampusMapCloudBase(options) {
+        options = options || {};
+        if (options.force && !window.confirm("确认强制重新同步全部底图到 CloudBase？同 SHA 正常情况下不需要重复上传。")) return Promise.resolve();
         var asset = currentCampusMapAsset();
+        var body = {};
+        if (options.all || options.force || options.missingOnly) {
+          body = { force: options.force === true };
+        } else {
+          body = { mapKey: state.campusMapSelectedMapKey, assetIds: asset ? [asset.assetId] : [] };
+        }
+        var btn = options.button || $("campusMapSyncCloudBaseBtn");
+        var restoreButton = setButtonLoading(btn, options.force ? "强制同步中..." : "同步中...");
         return api("/api/admin/campus-map/assets/sync-cloudbase", {
           method: "POST",
-          body: JSON.stringify({ mapKey: state.campusMapSelectedMapKey, assetIds: asset ? [asset.assetId] : [] })
+          body: JSON.stringify(body)
         })
           .then(function(res) {
             var data = res.data || {};
@@ -11987,14 +12319,32 @@ const adminConsoleHtml = `<!doctype html>
               state.campusMapDraft = data.state.draft || state.campusMapDraft;
               renderCampusMapAdmin();
             }
-            setCampusMapStatus(data.status === "pending" ? ("CloudBase 待同步：" + (data.command || "")) : "CloudBase 已同步并验证。");
-            showToast(data.status === "pending" ? "CloudBase 待同步，未伪造成功。" : "CloudBase 已同步。", data.status === "pending" ? "warning" : "success");
+            setCampusMapStatus(data.status === "pending" ? "CloudBase 还没同步，但 Oracle 已可用。" : "CloudBase 已同步并验证。", data);
+            showToast(data.status === "pending" ? "CloudBase 待同步，可以先发布 Oracle 版本。" : "CloudBase 已同步。", data.status === "pending" ? "warning" : "success");
             return refreshCampusMapHealth(true);
           })
           .catch(function(error) {
-            setCampusMapStatus("CloudBase 同步失败：" + error.message);
+            setCampusMapStatus("CloudBase 同步失败：" + error.message, error.data || null);
             showToast(error.message, "error");
-          });
+          })
+          .finally(function() { restoreButton(); });
+      }
+
+      function verifyCampusMapPublished(btn) {
+        var restoreButton = setButtonLoading(btn || $("campusMapVerifyPublishedBtn"), "验证中...");
+        return api("/api/admin/campus-map/verify-published", { method: "POST", body: "{}" })
+          .then(function(res) {
+            state.campusMap = res.state || state.campusMap;
+            state.campusMapLastReceipt = res.data && res.data.receipt || null;
+            renderCampusMapAdmin();
+            setCampusMapStatus("线上版本验证完成：" + ((state.campusMapLastReceipt && state.campusMapLastReceipt.version) || "-"), res.data || res);
+            showToast("线上校园地图版本已验证。", "success");
+          })
+          .catch(function(error) {
+            setCampusMapStatus("线上版本验证失败：" + error.message, error.data || null);
+            showToast(error.message, "error");
+          })
+          .finally(function() { restoreButton(); });
       }
 
       function previewCurrentCampusMapAsset() {
@@ -12178,10 +12528,13 @@ const adminConsoleHtml = `<!doctype html>
       safeBind("campusMapCampus", "change", renderCampusMapList);
       safeBind("campusMapArea", "change", renderCampusMapList);
       safeBind("campusMapReviewFilter", "change", renderCampusMapList);
+      safeBind("campusMapTypeFilter", "change", renderCampusMapList);
       safeBind("campusMapSearch", "input", renderCampusMapList);
       safeBind("campusMapAddBtn", "click", addCampusMapPlace);
       safeBind("campusMapDuplicateBtn", "click", duplicateCampusMapPlace);
       safeBind("campusMapDeleteBtn", "click", deleteCampusMapPlace);
+      safeBind("campusMapMarkVerifiedBtn", "click", function() { batchMarkCampusMapPlaces(true); });
+      safeBind("campusMapMarkPendingBtn", "click", function() { batchMarkCampusMapPlaces(false); });
       safeBind("campusMapUndoBtn", "click", undoCampusMap);
       safeBind("campusMapRedoBtn", "click", redoCampusMap);
       safeBind("campusMapAssetSelect", "change", function() {
@@ -12196,7 +12549,7 @@ const adminConsoleHtml = `<!doctype html>
       safeBind("campusMapPreviewAssetBtn", "click", previewCurrentCampusMapAsset);
       safeBind("campusMapDownloadAssetBtn", "click", downloadCurrentCampusMapAsset);
       safeBind("campusMapRepairAssetBtn", "click", repairCampusMapAsset);
-      safeBind("campusMapSyncCloudBaseBtn", "click", syncCampusMapCloudBase);
+      safeBind("campusMapSyncCloudBaseBtn", "click", function() { syncCampusMapCloudBase({ button: $("campusMapSyncCloudBaseBtn") }); });
       safeBind("campusMapRefreshHealthBtn", "click", function() { refreshCampusMapHealth(false); });
       safeBind("campusMapRestoreAssetBtn", "click", restoreCampusMapAsset);
       ["campusMapName", "campusMapCode", "campusMapAliases", "campusMapDescription"].forEach(function(id) {
@@ -12209,13 +12562,24 @@ const adminConsoleHtml = `<!doctype html>
       document.addEventListener("pointermove", campusMapPointerMove);
       document.addEventListener("pointerup", campusMapPointerUp);
       safeBind("campusMapSaveDraftBtn", "click", saveCampusMapDraft);
+      safeBind("campusMapSaveDraftOpsBtn", "click", saveCampusMapDraft);
       safeBind("campusMapCancelBtn", "click", cancelCampusMapChanges);
       safeBind("campusMapValidateBtn", "click", validateCampusMapDraft);
+      safeBind("campusMapRepairDraftBtn", "click", function() { repairCampusMapDraft($("campusMapRepairDraftBtn")); });
+      safeBind("campusMapSyncMissingCloudBaseBtn", "click", function() { syncCampusMapCloudBase({ all: true, missingOnly: true, button: $("campusMapSyncMissingCloudBaseBtn") }); });
+      safeBind("campusMapForceSyncCloudBaseBtn", "click", function() { syncCampusMapCloudBase({ all: true, force: true, button: $("campusMapForceSyncCloudBaseBtn") }); });
       safeBind("campusMapDiffBtn", "click", previewCampusMapDiff);
-      safeBind("campusMapPublishBtn", "click", publishCampusMap);
+      safeBind("campusMapPublishBtn", "click", function() { publishCampusMap({ button: $("campusMapPublishBtn") }); });
+      safeBind("campusMapPublishOracleOnlyBtn", "click", function() { publishCampusMap({ allowOracleOnly: true, skipCloudbaseSync: true, button: $("campusMapPublishOracleOnlyBtn") }); });
+      safeBind("campusMapVerifyPublishedBtn", "click", function() { verifyCampusMapPublished($("campusMapVerifyPublishedBtn")); });
       safeBind("campusMapBackupBtn", "click", backupCampusMap);
       safeBind("campusMapExportBtn", "click", exportCampusMap);
       safeBind("campusMapImportBtn", "click", importCampusMap);
+      safeBind("campusMapImportFileBtn", "click", function() {
+        var input = $("campusMapImportFile");
+        if (input) input.click();
+      });
+      safeBind("campusMapImportFile", "change", importCampusMapJsonFile);
       safeBind("campusMapRollbackBtn", "click", rollbackCampusMap);
       safeBind("campusMapAdminImage", "load", function() {
         var errorBox = $("campusMapImageError");

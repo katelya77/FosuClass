@@ -35,11 +35,11 @@ assert(wxml.includes("未人工核对") || wxml.includes("待人工核对"), "un
 assert(js.includes("/pages/school/school?type=classroom"), "map building query should deep link to school classroom tab");
 
 const adminPage = read("server/src/routes/adminPages.js");
-["校园地图管理", "campusMapEditor", "保存草稿", "发布", "回滚到选中版本", "导入为草稿"].forEach((needle) => {
+["校园地图管理", "campusMapEditor", "保存草稿", "一键发布", "发布 Oracle-only 可用版本", "回滚上一版", "导入 JSON 到草稿", "自动修复可修复问题", "只同步缺失图片"].forEach((needle) => {
   assert(adminPage.includes(needle), `admin map manager should include ${needle}`);
 });
 const adminRoutes = read("server/src/routes/admin.js");
-["/campus-map/state", "/campus-map/draft", "/campus-map/publish", "/campus-map/rollback", "/campus-map/backup"].forEach((needle) => {
+["/campus-map/state", "/campus-map/draft", "/campus-map/publish", "/campus-map/rollback", "/campus-map/backup", "/campus-map/repair", "/campus-map/verify-published"].forEach((needle) => {
   assert(adminRoutes.includes(needle), `admin map API should include ${needle}`);
 });
 
@@ -72,12 +72,14 @@ const editorHtml = read("tools/campus-map-editor/public/index.html");
   "取消核对",
   "导出 JSON",
   "导入 JSON",
-  "应用到小程序数据",
+  "发布到校园地图 published",
   "下载备份",
 ].forEach((label) => assert(editorHtml.includes(label), `editor should expose ${label}`));
 
 const editorLib = require("./campus-map-editor/lib");
 assert(editorLib.SERVER_DATA_FILE.endsWith(path.join("server", "data", "ai", "campus-places.json")), "editor should know the server map mirror");
+assert(editorLib.PUBLISHED_FILE.endsWith(path.join("storage", "campus-map", "published.json")), "editor should read the shared published map document");
+assert(editorLib.PUBLIC_CONFIG_FILE.endsWith(path.join("storage", "campus-map", "public", "config.json")), "editor should publish the shared public map config");
 const region = editorLib.regionFromPixels(
   { left: 50, top: 25, width: 200, height: 100 },
   { left: 0, top: 0, width: 1000, height: 500 }
@@ -105,8 +107,10 @@ duplicate.places.push(Object.assign({}, duplicate.places[0]));
 assert.strictEqual(editorLib.validateCampusPlaces(duplicate).ok, false, "duplicate IDs must fail validation");
 
 const backup = editorLib.createBackup(validData);
-assert(fs.existsSync(backup), "editor should generate a backup file");
-assert(backup.includes(path.join(".local", "campus-map-backups")), "backup should be under .local/campus-map-backups");
-fs.unlinkSync(backup);
+assert(fs.existsSync(backup.path), "editor should generate a local backup file");
+assert(fs.existsSync(backup.servicePath), "editor should generate a version-service backup file");
+assert(backup.path.includes(path.join(".local", "campus-map-backups")), "backup should be under .local/campus-map-backups");
+fs.unlinkSync(backup.path);
+fs.unlinkSync(backup.servicePath);
 
 console.log("test-campus-map-ui-and-editor passed");
