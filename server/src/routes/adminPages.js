@@ -5358,7 +5358,7 @@ const adminConsoleHtml = `<!doctype html>
               <button data-status="ignored">已忽略</button>
             </div>
             <div class="search-input-wrap">
-              <input id="feedbackSearch" placeholder="关键词检索内容/联系方式/班级">
+              <input id="feedbackSearch" placeholder="关键词检索内容/班级/页面">
             </div>
           </div>
 
@@ -5369,7 +5369,6 @@ const adminConsoleHtml = `<!doctype html>
                   <th>反馈详情内容</th>
                   <th>来源页面</th>
                   <th>处理状态</th>
-                  <th>联系方式</th>
                   <th>提交时间</th>
                   <th>操作</th>
                 </tr>
@@ -5543,7 +5542,6 @@ const adminConsoleHtml = `<!doctype html>
       
       <div class="feedback-meta-list" style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 12px; background: var(--panel-2); padding: 12px; border-radius: 6px; border: 1px solid var(--border);">
         <div><span style="color: var(--muted); font-weight: 600;">提交页面:</span> <span id="drawFbPage">-</span></div>
-        <div><span style="color: var(--muted); font-weight: 600;">联系方式:</span> <span id="drawFbContact">-</span></div>
         <div><span style="color: var(--muted); font-weight: 600;">当前学期:</span> <span id="drawFbSemester">-</span></div>
         <div><span style="color: var(--muted); font-weight: 600;">数据版本:</span> <span id="drawFbDataVersion">-</span></div>
         <div><span style="color: var(--muted); font-weight: 600;">应用版本:</span> <span id="drawFbAppVersion">-</span></div>
@@ -5567,7 +5565,7 @@ const adminConsoleHtml = `<!doctype html>
 
       <div>
         <label>管理员内部备注</label>
-        <textarea id="drawFbAdminNote" placeholder="在此记录问题排查过程、处理方式，或备注待联络用户核对。"></textarea>
+        <textarea id="drawFbAdminNote" placeholder="在此记录问题排查过程、处理方式或复核结论。"></textarea>
       </div>
     </div>
     <div class="drawer-footer">
@@ -5982,6 +5980,131 @@ const adminConsoleHtml = `<!doctype html>
         return el ? el.value === "true" : false;
       }
 
+      var ADMIN_SECTION_PATHS = {
+        dashboard: "/admin/dashboard",
+        catalog: "/admin/timetable",
+        sync: "/admin/sync",
+        terms: "/admin/terms",
+        quality: "/admin/quality",
+        notices: "/admin/announcements",
+        news: "/admin/news",
+        config: "/admin/config",
+        "ai-provider": "/admin/ai-provider",
+        "campus-map": "/admin/map",
+        feedback: "/admin/feedback",
+        security: "/admin/security",
+        settings: "/admin/settings"
+      };
+      var ADMIN_CATALOG_TYPE_PATHS = {
+        class: "/admin/classes",
+        teacher: "/admin/teachers",
+        classroom: "/admin/classrooms",
+        course: "/admin/courses"
+      };
+      var ADMIN_PATH_ROUTES = {
+        "/admin": { section: "dashboard", path: "/admin/dashboard" },
+        "/admin/dashboard": { section: "dashboard" },
+        "/admin/timetable": { section: "catalog" },
+        "/admin/catalog": { section: "catalog" },
+        "/admin/resources": { section: "catalog" },
+        "/admin/classes": { section: "catalog", catalogType: "class" },
+        "/admin/teachers": { section: "catalog", catalogType: "teacher" },
+        "/admin/classrooms": { section: "catalog", catalogType: "classroom" },
+        "/admin/courses": { section: "catalog", catalogType: "course" },
+        "/admin/sync": { section: "sync" },
+        "/admin/terms": { section: "terms" },
+        "/admin/quality": { section: "quality" },
+        "/admin/notices": { section: "notices" },
+        "/admin/announcements": { section: "notices" },
+        "/admin/news": { section: "news" },
+        "/admin/config": { section: "config" },
+        "/admin/version": { section: "config" },
+        "/admin/ai": { section: "ai-provider" },
+        "/admin/ai-provider": { section: "ai-provider" },
+        "/admin/campus-map": { section: "campus-map" },
+        "/admin/map": { section: "campus-map" },
+        "/admin/feedback": { section: "feedback" },
+        "/admin/security": { section: "security" },
+        "/admin/settings": { section: "settings" },
+        "/admin/logs": { section: "settings" }
+      };
+
+      function normalizeAdminPath(pathname) {
+        var clean = String(pathname || "/admin/dashboard");
+        while (clean.length > 1 && clean.charAt(clean.length - 1) === "/") {
+          clean = clean.slice(0, -1);
+        }
+        return clean || "/admin";
+      }
+
+      function getAdminRouteForPath(pathname) {
+        var clean = normalizeAdminPath(pathname);
+        var route = ADMIN_PATH_ROUTES[clean];
+        if (route) {
+          return Object.assign({ section: "dashboard", path: clean }, route);
+        }
+        return { section: "dashboard", path: "/admin/dashboard", unknown: true };
+      }
+
+      function normalizeCatalogType(type) {
+        return ["class", "teacher", "classroom", "course", "major", "snapshot"].indexOf(type) >= 0 ? type : "";
+      }
+
+      function setCatalogType(type, options) {
+        var normalized = normalizeCatalogType(type);
+        if (!normalized) return;
+        options = options || {};
+        state.catalogType = normalized;
+        if (options.resetPage !== false) {
+          state.catalogPage = 1;
+        }
+        document.querySelectorAll("#catalogTabs button").forEach(function(btn) {
+          btn.classList.toggle("active", btn.dataset.type === normalized);
+        });
+      }
+
+      function getAdminPathForSection(section, options) {
+        options = options || {};
+        if (options.path) return options.path;
+        if (section === "catalog" && options.catalogType && ADMIN_CATALOG_TYPE_PATHS[options.catalogType]) {
+          return ADMIN_CATALOG_TYPE_PATHS[options.catalogType];
+        }
+        return ADMIN_SECTION_PATHS[section] || "/admin/dashboard";
+      }
+
+      function updateAdminHistory(section, options) {
+        options = options || {};
+        if (options.updateHistory === false) return;
+        var nextPath = getAdminPathForSection(section, options);
+        if (normalizeAdminPath(location.pathname) === normalizeAdminPath(nextPath)) return;
+        if (window.history && window.history.pushState) {
+          window.history.pushState({ section: section }, "", nextPath);
+        } else {
+          window.location.href = nextPath;
+        }
+      }
+
+      function getAdminLoginUrl() {
+        var current = location.pathname + location.search + location.hash;
+        if (location.pathname.indexOf("/admin/login") === 0) {
+          return "/admin/login";
+        }
+        return "/admin/login?next=" + encodeURIComponent(current);
+      }
+
+      function getLoginRedirectTarget() {
+        var target = "";
+        try {
+          target = new URLSearchParams(location.search).get("next") || "";
+        } catch (error) {
+          target = "";
+        }
+        if (target && target.indexOf("/admin/") === 0 && target.indexOf("/admin/login") !== 0) {
+          return target;
+        }
+        return "/admin/dashboard";
+      }
+
       var THEME_STORAGE_KEY = "fosu-admin-theme";
       var THEME_LABELS = {
         system: "跟随系统",
@@ -6230,7 +6353,7 @@ const adminConsoleHtml = `<!doctype html>
               var isSessionCheck = path.indexOf("/api/admin/session") >= 0;
               if (isSessionCheck && location.pathname.indexOf("/admin/login") < 0) {
                 showToast("后台登录已过期，请重新登录", "error");
-                window.location.href = "/admin/login";
+                window.location.href = getAdminLoginUrl();
               }
               throw new Error(message);
             }
@@ -6308,7 +6431,7 @@ const adminConsoleHtml = `<!doctype html>
         return api("/api/admin/session").then(function (res) {
           if (!res.authenticated) {
             showToast("后台登录已过期，请重新登录", "error");
-            window.location.href = "/admin/login";
+            window.location.href = getAdminLoginUrl();
             throw new Error("后台登录已过期，请重新登录");
           }
           state.csrfToken = res.csrfToken || state.csrfToken || "";
@@ -6337,7 +6460,7 @@ const adminConsoleHtml = `<!doctype html>
         }).then(function (res) {
           state.csrfToken = res.csrfToken || "";
           if (loginError) loginError.textContent = "";
-          window.location.href = "/admin/dashboard";
+          window.location.href = getLoginRedirectTarget();
         }).catch(function (error) {
           if (loginError) loginError.textContent = error.message;
         });
@@ -6355,13 +6478,23 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       // 菜单 Tab 切换
-      function switchSection(section) {
-        state.section = section;
+      function switchSection(section, options) {
+        options = options || {};
+        var targetSection = document.getElementById("section-" + section) ? section : "dashboard";
+        if (targetSection === "catalog" && options.catalogType) {
+          setCatalogType(options.catalogType, { resetPage: options.resetCatalogPage });
+        }
+        updateAdminHistory(targetSection, {
+          catalogType: options.catalogType,
+          path: options.path,
+          updateHistory: options.updateHistory
+        });
+        state.section = targetSection;
         document.querySelectorAll(".section").forEach(function (node) {
-          node.classList.toggle("active", node.id === "section-" + section);
+          node.classList.toggle("active", node.id === "section-" + targetSection);
         });
         document.querySelectorAll(".sidebar nav ul li").forEach(function (node) {
-          node.classList.toggle("active", node.dataset.section === section);
+          node.classList.toggle("active", node.dataset.section === targetSection);
         });
         
         var titles = {
@@ -6379,7 +6512,7 @@ const adminConsoleHtml = `<!doctype html>
           security: "安全状态",
           settings: "系统设置与日志"
         };
-        var nextTitle = titles[section] || "Admin Console";
+        var nextTitle = titles[targetSection] || "Admin Console";
         if ($("pageTitle")) {
           $("pageTitle").textContent = nextTitle;
         }
@@ -6389,23 +6522,23 @@ const adminConsoleHtml = `<!doctype html>
         closeMobileDrawer();
         
         // 切页面后自动获取对应页面数据
-        if (section === "catalog") {
+        if (targetSection === "catalog") {
           ignoreLoadError(loadCatalog());
-        } else if (section === "sync") {
+        } else if (targetSection === "sync") {
           ignoreLoadError(loadSyncStatus());
-        } else if (section === "terms") {
+        } else if (targetSection === "terms") {
           ignoreLoadError(loadTerms());
-        } else if (section === "quality") {
+        } else if (targetSection === "quality") {
           ignoreLoadError(loadQualityReport());
-        } else if (section === "settings") {
+        } else if (targetSection === "settings") {
           ignoreLoadError(loadSettingsLogs());
-        } else if (section === "security") {
+        } else if (targetSection === "security") {
           ignoreLoadError(loadSecurityStatus());
-        } else if (section === "ai-provider") {
+        } else if (targetSection === "ai-provider") {
           ignoreLoadError(loadAiProviderConfig());
-        } else if (section === "campus-map") {
+        } else if (targetSection === "campus-map") {
           ignoreLoadError(loadCampusMapState());
-        } else if (section === "feedback") {
+        } else if (targetSection === "feedback") {
           ignoreLoadError(loadFeedbacks());
         }
       }
@@ -10383,7 +10516,7 @@ const adminConsoleHtml = `<!doctype html>
         tbody.innerHTML = "";
         
         if (list.length === 0) {
-          tbody.innerHTML = "<tr><td colspan='6' style='text-align: center; color: var(--muted); padding: 40px 0;'>没有匹配状态或关键字的用户反馈记录。</td></tr>";
+          tbody.innerHTML = "<tr><td colspan='5' style='text-align: center; color: var(--muted); padding: 40px 0;'>没有匹配状态或关键字的用户反馈记录。</td></tr>";
           $("feedbackPaginationInfo").textContent = "第 0 条，共 0 条";
           return;
         }
@@ -10396,7 +10529,6 @@ const adminConsoleHtml = `<!doctype html>
           tr.innerHTML = "<td style='white-space: normal; max-width: 250px;'><strong>" + escapeHtml(fb.content) + "</strong></td>" +
                           "<td><code>" + escapeHtml(fb.page || "settings") + "</code></td>" +
                           "<td><span class='badge " + badgeClass + "'>" + badgeText + "</span></td>" +
-                          "<td>" + escapeHtml(fb.contact || "-") + "</td>" +
                           "<td>" + formatDate(fb.createdAt) + "</td>" +
                           "<td class='action-cell'></td>";
                           
@@ -10423,7 +10555,6 @@ const adminConsoleHtml = `<!doctype html>
         $("drawFbType").textContent = fb.type;
         $("drawFbContent").textContent = fb.content;
         $("drawFbPage").textContent = fb.page || "-";
-        $("drawFbContact").textContent = fb.contact || "-";
         $("drawFbSemester").textContent = fb.semester || "-";
         $("drawFbDataVersion").textContent = fb.dataVersion || "-";
         $("drawFbAppVersion").textContent = fb.appVersion || "-";
@@ -12427,24 +12558,31 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function getInitialSection() {
-        if (location.pathname.indexOf("/sync") >= 0) return "sync";
-        if (location.pathname.indexOf("/settings") >= 0) return "settings";
-        if (location.pathname.indexOf("/catalog") >= 0 || location.pathname.indexOf("/resources") >= 0) return "catalog";
-        if (location.pathname.indexOf("/quality") >= 0) return "quality";
-        if (location.pathname.indexOf("/notices") >= 0) return "notices";
-        if (location.pathname.indexOf("/news") >= 0) return "news";
-        if (location.pathname.indexOf("/config") >= 0 || location.pathname.indexOf("/version") >= 0) return "config";
-        if (location.pathname.indexOf("/ai-provider") >= 0 || location.pathname.indexOf("/ai") >= 0) return "ai-provider";
-        if (location.pathname.indexOf("/campus-map") >= 0 || location.pathname.indexOf("/map") >= 0) return "campus-map";
-        if (location.pathname.indexOf("/feedback") >= 0) return "feedback";
-        if (location.pathname.indexOf("/security") >= 0) return "security";
-        return "dashboard";
+        return getAdminRouteForPath(location.pathname).section;
+      }
+
+      function applyAdminRouteFromLocation() {
+        var route = getAdminRouteForPath(location.pathname);
+        switchSection(route.section, {
+          catalogType: route.catalogType,
+          path: route.path,
+          updateHistory: false
+        });
       }
 
       function loadAll(targetSection) {
         try {
-          var section = typeof targetSection === "string" ? targetSection : (state.section || getInitialSection());
-          switchSection(section);
+          var route = typeof targetSection === "object" && targetSection !== null
+            ? targetSection
+            : null;
+          var section = route
+            ? route.section
+            : (typeof targetSection === "string" ? targetSection : (state.section || getInitialSection()));
+          switchSection(section, {
+            catalogType: route && route.catalogType,
+            path: route && route.path,
+            updateHistory: false
+          });
           setStatus("正在获取佛课后台全局配置...");
 
           return Promise.allSettled([
@@ -12482,6 +12620,10 @@ const adminConsoleHtml = `<!doctype html>
       window.switchAdminPage = switchSection;
       window.loadDashboard = loadDashboard;
       window.renderDashboard = renderDashboard;
+
+      window.addEventListener("popstate", function() {
+        applyAdminRouteFromLocation();
+      });
 
       // 绑定导航与事件
       document.querySelectorAll(".sidebar nav ul li[data-section]").forEach(function (item) {
@@ -12640,10 +12782,8 @@ const adminConsoleHtml = `<!doctype html>
       // 数据资源中心事件绑定
       document.querySelectorAll("#catalogTabs button").forEach(function(btn) {
         btn.addEventListener("click", function() {
-          document.querySelectorAll("#catalogTabs button").forEach(function(b) { b.classList.remove("active"); });
-          btn.classList.add("active");
-          state.catalogType = btn.dataset.type;
-          state.catalogPage = 1;
+          setCatalogType(btn.dataset.type);
+          updateAdminHistory("catalog", { catalogType: state.catalogType });
           loadCatalog();
         });
       });
@@ -12821,7 +12961,11 @@ const adminConsoleHtml = `<!doctype html>
 
       function initNavigation() {
         closeMobileDrawer();
-        state.section = getInitialSection();
+        var route = getAdminRouteForPath(location.pathname);
+        state.section = route.section;
+        if (route.catalogType) {
+          setCatalogType(route.catalogType, { resetPage: false });
+        }
       }
 
       function initDashboard() {
@@ -13275,7 +13419,7 @@ const adminConsoleHtml = `<!doctype html>
               ].forEach(function(item) {
                 runAdminInitModule(item[0], item[1]);
               });
-              return loadAll(getInitialSection());
+              return loadAll(getAdminRouteForPath(location.pathname));
             })
             .catch(function(error) {
               console.warn("[Admin Console] session check failed:", error.message);
@@ -13308,6 +13452,13 @@ function sendAdminHtml(res) {
   res.send(adminConsoleHtml);
 }
 
+function buildAdminLoginRedirect(req) {
+  const target = req.originalUrl && req.originalUrl.startsWith("/admin") && !req.originalUrl.startsWith("/admin/login")
+    ? `?next=${encodeURIComponent(req.originalUrl)}`
+    : "";
+  return `/admin/login${target}`;
+}
+
 router.get("/", (req, res) => {
   if (adminAuth.isAdminCookieValid(req)) {
     return res.redirect("/admin/dashboard");
@@ -13321,15 +13472,24 @@ router.get("/login", (req, res) => {
 
 router.get([
   "/dashboard",
+  "/timetable",
+  "/classes",
+  "/teachers",
+  "/classrooms",
+  "/courses",
   "/feedback",
   "/sync",
+  "/terms",
   "/settings",
+  "/logs",
   "/catalog",
   "/resources",
   "/quality",
   "/ai-provider",
+  "/ai",
   "/campus-map",
   "/map",
+  "/announcements",
   "/notices",
   "/news",
   "/config",
@@ -13337,9 +13497,16 @@ router.get([
   "/security",
 ], (req, res) => {
   if (!adminAuth.isAdminCookieValid(req)) {
-    return res.redirect("/admin/login");
+    return res.redirect(buildAdminLoginRedirect(req));
   }
   return sendAdminHtml(res);
+});
+
+router.get("*", (req, res) => {
+  if (!adminAuth.isAdminCookieValid(req)) {
+    return res.redirect(buildAdminLoginRedirect(req));
+  }
+  return res.redirect("/admin/dashboard");
 });
 
 router.adminConsoleHtml = adminConsoleHtml;

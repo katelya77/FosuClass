@@ -66,6 +66,16 @@ function assertStaticHtml(html) {
   assertIncludes(html, "bootAdminConsole", "boot script");
   assertIncludes(html, 'window.addEventListener("error"', "global error handler");
   assertIncludes(html, 'window.addEventListener("unhandledrejection"', "global rejection handler");
+  [
+    'id="drawFbContact"',
+    "fb.contact",
+    "<th>联系方式</th>",
+    "关键词检索内容/联系方式/班级",
+  ].forEach((needle) => {
+    if (html.includes(needle)) {
+      fail(`feedback admin UI must not expose contact field: ${needle}`);
+    }
+  });
 
   const openScriptCount = countMatches(html, /<script\b/gi);
   const closeScriptCount = countMatches(html, /<\/script>/gi);
@@ -101,7 +111,24 @@ function assertRoutes() {
     }
   });
 
-  ["/login", "/dashboard", "/feedback", "/sync", "/settings", "/quality", "/catalog"].forEach((routePath) => {
+  [
+    "/login",
+    "/dashboard",
+    "/timetable",
+    "/classes",
+    "/teachers",
+    "/classrooms",
+    "/courses",
+    "/feedback",
+    "/sync",
+    "/terms",
+    "/settings",
+    "/logs",
+    "/quality",
+    "/catalog",
+    "/announcements",
+    "/map",
+  ].forEach((routePath) => {
     if (!paths.has(routePath)) {
       fail(`admin route is not registered: ${routePath}`);
     }

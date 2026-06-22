@@ -41,7 +41,6 @@ function normalizeFeedback(payload, req) {
     id: makeId(),
     type: toText(source.type || "other", 50),
     content,
-    contact: toText(source.contact, 200),
     page: toText(source.page, 200),
     selectedSchedule: source.selectedSchedule || null,
     selectedClass: source.selectedClass || null,
@@ -53,6 +52,22 @@ function normalizeFeedback(payload, req) {
     createdAt: new Date().toISOString(),
     status: "open",
   };
+}
+
+function stripFeedbackIdentityFields(record) {
+  const safeRecord = Object.assign({}, record);
+  [
+    "contact",
+    "contactInfo",
+    "email",
+    "wechat",
+    "phone",
+    "userId",
+    "openid",
+  ].forEach((key) => {
+    delete safeRecord[key];
+  });
+  return safeRecord;
 }
 
 function appendJsonLine(record) {
@@ -142,7 +157,6 @@ function getTextForSearch(record) {
     record.id,
     record.type,
     record.content,
-    record.contact,
     record.page,
     record.semester,
     record.appVersion,
@@ -185,7 +199,9 @@ function filterFeedback(records, options = {}) {
 
 function listFeedback(options) {
   const query = typeof options === "object" && options !== null ? options : { limit: options };
-  return filterFeedback(readAllFeedbackRecords(), query).slice(0, parseLimit(query.limit));
+  return filterFeedback(readAllFeedbackRecords(), query)
+    .slice(0, parseLimit(query.limit))
+    .map(stripFeedbackIdentityFields);
 }
 
 function getFeedbackStats(records = readAllFeedbackRecords()) {
@@ -216,7 +232,7 @@ function getFeedbackById(id) {
     err.statusCode = 404;
     throw err;
   }
-  return record;
+  return stripFeedbackIdentityFields(record);
 }
 
 function getFeedbackOverview() {
@@ -252,7 +268,6 @@ function exportFeedbackCsv(options = {}) {
     "status",
     "type",
     "content",
-    "contact",
     "semester",
     "appVersion",
     "dataVersion",
@@ -287,7 +302,7 @@ function updateFeedbackStatus(id, status) {
     updatedAt: new Date().toISOString(),
   });
   writeJsonArrayFile(records);
-  return records[index];
+  return stripFeedbackIdentityFields(records[index]);
 }
 
 function updateFeedbackReview(id, patch) {
@@ -322,7 +337,7 @@ function updateFeedbackReview(id, patch) {
 
   records[index] = next;
   writeJsonArrayFile(records);
-  return next;
+  return stripFeedbackIdentityFields(next);
 }
 
 module.exports = {

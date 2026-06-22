@@ -185,7 +185,6 @@ Page({
     feedbackSubmitting: false,
     feedbackForm: {
       typeIndex: 0,
-      contact: "",
       content: "",
     },
     contactConfig,
@@ -419,12 +418,6 @@ Page({
     });
   },
 
-  onFeedbackContactInput(event) {
-    this.setData({
-      "feedbackForm.contact": event.detail.value,
-    });
-  },
-
   onFeedbackContentInput(event) {
     this.setData({
       "feedbackForm.content": event.detail.value,
@@ -439,7 +432,6 @@ Page({
     const settings = this.data.settings || getSettings();
     return {
       type: FEEDBACK_TYPES[this.data.feedbackForm.typeIndex] || "其他",
-      contact: this.data.feedbackForm.contact,
       content: this.data.feedbackForm.content,
       page: "pages/settings/settings",
       selectedSchedule: selectedScheduleSummary,
@@ -469,7 +461,6 @@ Page({
           feedbackVisible: false,
           feedbackForm: {
             typeIndex: 0,
-            contact: "",
             content: "",
           },
         });
