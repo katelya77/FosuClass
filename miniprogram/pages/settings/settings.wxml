@@ -539,7 +539,7 @@
       <view class="popup-header">
         <view class="popup-title-block">
           <view class="popup-title">问题反馈</view>
-          <view class="popup-subtitle">会自动附带当前课表和数据版本</view>
+          <view class="popup-subtitle">反馈将仅用于定位课表数据问题，不收集用户联系方式。</view>
         </view>
         <button class="close-button" bindtap="hideFeedback">×</button>
       </view>
@@ -551,17 +551,6 @@
             <view class="feedback-picker">{{feedbackTypes[feedbackForm.typeIndex]}}</view>
           </view>
         </picker>
-
-        <view class="feedback-field">
-          <view class="feedback-label">联系方式（选填）</view>
-          <input
-            class="feedback-input"
-            value="{{feedbackForm.contact}}"
-            placeholder="微信号 / 邮箱"
-            placeholder-class="feedback-placeholder"
-            bindinput="onFeedbackContactInput"
-          />
-        </view>
 
         <view class="feedback-field feedback-content-field">
           <view class="feedback-label">反馈内容</view>
