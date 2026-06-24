@@ -1509,6 +1509,7 @@ async function fetchRowsViaCloudbaseRelay(studentId, password, options, timing) 
         Accept: "application/json",
       }, config.FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN ? {
         Authorization: `Bearer ${config.FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN}`,
+        "X-Fosu-Relay-Token": config.FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN,
       } : {}),
       validateStatus: (status) => status >= 200 && status < 500,
     });
