@@ -1,5 +1,5 @@
 <view
-  class="course-card {{layout === 'list' ? 'course-card-list' : (layout === 'overview' ? 'course-card-grid overview-card' : 'course-card-grid')}} {{isMuted ? 'is-muted' : ''}} {{course.isNext ? 'is-next' : ''}} {{course.status === 'ongoing' ? 'is-ongoing' : ''}} {{course.eventKind === 'parallel-group' ? 'is-parallel-group' : ''}} {{course.eventKind === 'shared-session' ? 'is-shared-session' : ''}} {{course.eventKind === 'true-conflict' ? 'is-true-conflict' : ''}}"
+  class="course-card {{layout === 'list' ? 'course-card-list' : (layout === 'overview' ? 'course-card-grid overview-card' : 'course-card-grid')}} {{course.previewGrid ? 'is-preview-grid' : ''}} {{isMuted ? 'is-muted' : ''}} {{course.isNext ? 'is-next' : ''}} {{course.status === 'ongoing' ? 'is-ongoing' : ''}} {{course.eventKind === 'parallel-group' ? 'is-parallel-group' : ''}} {{course.eventKind === 'shared-session' ? 'is-shared-session' : ''}} {{course.eventKind === 'true-conflict' ? 'is-true-conflict' : ''}}"
   style="{{layout === 'list' ? listStyle : cardStyle}}"
   bindtap="handleTap"
 >
@@ -50,10 +50,16 @@
     <view wx:if="{{course.source === 'custom' || course.sourceType === 'custom'}}" class="grid-custom-tag">自定义</view>
     <view class="course-name {{span === 1 ? 'span-1' : ''}}">{{course.displayCourseName || course.canonicalCourseName || course.courseName}}</view>
     <view class="course-event-badge" wx:if="{{course.badgeText}}">{{course.badgeText}}</view>
-    <view class="course-event-subtext" wx:if="{{span > 1 && course.subText}}">{{course.subText}}</view>
-    <view class="course-meta classroom-highlight" wx:if="{{course.displayClassroom || course.canonicalClassroom || course.classroom}}">{{course.displayClassroom || course.canonicalClassroom || course.classroom}}</view>
-    <view class="course-meta" wx:if="{{span > 1 && !course.subText && (course.displayTeacherName || course.canonicalTeacherName || course.teacherName)}}">{{course.displayTeacherName || course.canonicalTeacherName || course.teacherName}}</view>
-    <view class="course-week" wx:if="{{span > 2 && !course.subText && course.weekText}}">{{course.weekText}}</view>
+    <block wx:if="{{course.previewGrid}}">
+      <view class="course-meta classroom-highlight preview-classroom" wx:if="{{course.displayClassroom || course.canonicalClassroom || course.classroom}}">{{course.displayClassroom || course.canonicalClassroom || course.classroom}}</view>
+      <view class="course-event-subtext preview-subtext" wx:if="{{span > 1 && course.subText}}">{{course.subText}}</view>
+    </block>
+    <block wx:else>
+      <view class="course-event-subtext" wx:if="{{span > 1 && course.subText}}">{{course.subText}}</view>
+      <view class="course-meta classroom-highlight" wx:if="{{course.displayClassroom || course.canonicalClassroom || course.classroom}}">{{course.displayClassroom || course.canonicalClassroom || course.classroom}}</view>
+      <view class="course-meta" wx:if="{{span > 1 && !course.subText && (course.displayTeacherName || course.canonicalTeacherName || course.teacherName)}}">{{course.displayTeacherName || course.canonicalTeacherName || course.teacherName}}</view>
+      <view class="course-week" wx:if="{{span > 2 && !course.subText && course.weekText}}">{{course.weekText}}</view>
+    </block>
     <view class="course-conflict-hint active-conflict" wx:if="{{course.activeConflictLabel}}">{{course.activeConflictLabel}}</view>
     <view class="course-conflict-hint" wx:if="{{course.inactiveConflictLabel}}">{{course.inactiveConflictLabel}}</view>
   </block>

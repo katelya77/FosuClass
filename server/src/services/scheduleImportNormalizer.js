@@ -343,7 +343,7 @@ function classifyCourseCategory(course) {
     course && course.classroom,
   ].map(toText).join(" ");
   if (/在线课程|线上|在线|慕课|MOOC|从草根到殿堂|高分子化学/i.test(text)) return "online";
-  if (/劳动教育|生产见习|实验室安全教育|大学生职业发展与就业指导|职业发展|就业指导/i.test(text)) return "irregular";
+  if (/大学生职业发展|就业指导|形势与政策|劳动教育|生产见习|实验室安全教育|职业发展/i.test(text)) return "irregular";
   if (/待定|未定|另行通知|自行安排/i.test(text)) return "pending";
   return "normal";
 }
@@ -424,6 +424,13 @@ function decisionForArrangement(arrangement) {
   }
 
   if (special) {
+    if (arrangement.category === "irregular" && (classStatus === "match" || localMatched)) {
+      return {
+        importDecision: IMPORT_DECISION.AUTO_INCLUDE,
+        confidence: localMatched ? "high" : "medium",
+        reason: "特殊安排课程，时间完整，已纳入推荐",
+      };
+    }
     return {
       importDecision: IMPORT_DECISION.NEEDS_CONFIRM,
       confidence: localMatched ? "medium" : "low",
@@ -483,6 +490,100 @@ function combineClassScopeStatus(current, next) {
 
 function mergeTextList(left, right) {
   return Array.from(new Set([].concat(left || [], right || []).map(toText).filter(Boolean))).join("，");
+}
+
+function timePatternKey(arrangement) {
+  if (!arrangement || !arrangement.hasCompleteTime) return "";
+  return [
+    arrangement.weekday || "",
+    sectionKey(arrangement.sections || []),
+  ].join("|");
+}
+
+function analyzeCourseGroup(group) {
+  const arrangements = Array.isArray(group && group.arrangements) ? group.arrangements : [];
+  const complete = arrangements.filter((item) => item.hasCompleteTime);
+  const coveredWeeks = uniqSorted(complete.flatMap((item) => item.weeks || []), 80);
+  const patternCounts = new Map();
+  complete.forEach((arrangement) => {
+    const key = timePatternKey(arrangement);
+    if (!key) return;
+    patternCounts.set(key, (patternCounts.get(key) || 0) + 1);
+  });
+  const maxPatternCount = Array.from(patternCounts.values()).reduce((max, count) => Math.max(max, count), 0);
+  const hasStableTimePattern = complete.length <= 1 || maxPatternCount >= 2 || maxPatternCount >= Math.ceil(complete.length / 2);
+  const classScopeMatchCount = complete.filter((item) => item.classScopeStatus === "match").length;
+  const localMatchCount = complete.filter((item) => isLocalMatched(item.matchStatus)).length;
+  const conflictArrangementCount = arrangements.filter((item) => item.conflict).length;
+  return {
+    coveredWeeks,
+    coverageCount: coveredWeeks.length,
+    arrangementCount: arrangements.length,
+    completeArrangementCount: complete.length,
+    hasStableTimePattern,
+    hasClassScopeMatch: classScopeMatchCount > 0,
+    hasLocalTimeMatch: localMatchCount > 0,
+    hasDispersedWeeks: complete.length > 1 && new Set(complete.map((item) => weekKey(item.weeks || []))).size > 1,
+    conflictArrangementCount,
+    hasOnlySmallConflict: conflictArrangementCount > 0 &&
+      conflictArrangementCount <= Math.max(2, Math.ceil(Math.max(1, arrangements.length) * 0.25)),
+  };
+}
+
+function shouldPromoteFormalGroup(group, analysis) {
+  const category = group && group.category || "normal";
+  if (!analysis || !analysis.completeArrangementCount) return false;
+  if (!analysis.hasClassScopeMatch && !analysis.hasLocalTimeMatch) return false;
+  if (category === "online" || category === "pending") return false;
+  if (category === "irregular") return true;
+  if (analysis.coverageCount >= 4) return true;
+  return analysis.completeArrangementCount > 1 && analysis.hasStableTimePattern;
+}
+
+function shouldPromoteArrangementInFormalGroup(arrangement) {
+  if (!arrangement || !arrangement.hasCompleteTime) return false;
+  if (arrangement.importDecision === IMPORT_DECISION.AUTO_INCLUDE) return false;
+  if (arrangement.importDecision === IMPORT_DECISION.UNSCHEDULED) return false;
+  if (arrangement.importDecision === IMPORT_DECISION.SUSPECTED_NOT_MINE && !isLocalMatched(arrangement.matchStatus)) {
+    return false;
+  }
+  if (arrangement.category === "online" || arrangement.category === "pending") return false;
+  return arrangement.classScopeStatus !== "not_match" || isLocalMatched(arrangement.matchStatus);
+}
+
+function applyCourseGroupRecommendation(group) {
+  group.analysis = analyzeCourseGroup(group);
+  if (!shouldPromoteFormalGroup(group, group.analysis)) return;
+  const dispersedReason = group.analysis.hasDispersedWeeks
+    ? "分散周次课程，已整理为正式课程"
+    : "正式课程组，时间完整，已纳入推荐";
+  group.arrangements.forEach((arrangement) => {
+    if (
+      arrangement.hasCompleteTime &&
+      arrangement.importDecision === IMPORT_DECISION.AUTO_INCLUDE &&
+      arrangement.category !== "online" &&
+      arrangement.category !== "pending"
+    ) {
+      arrangement.reason = dispersedReason;
+      arrangement.selectedByDefault = true;
+      return;
+    }
+    if (!shouldPromoteArrangementInFormalGroup(arrangement)) return;
+    arrangement.importDecision = IMPORT_DECISION.AUTO_INCLUDE;
+    arrangement.confidence = arrangement.confidence === "high" ? "high" : "medium";
+    arrangement.reason = dispersedReason;
+    arrangement.selectedByDefault = true;
+  });
+  group.reason = dispersedReason;
+}
+
+function applyCourseGroupConflictAnalysis(group) {
+  group.analysis = analyzeCourseGroup(group);
+  if (!group.analysis.hasOnlySmallConflict) return;
+  group.arrangements.forEach((arrangement) => {
+    if (!arrangement.conflict || arrangement.importDecision !== IMPORT_DECISION.AUTO_INCLUDE) return;
+    arrangement.reason = arrangement.reason || "存在时间冲突，建议检查";
+  });
 }
 
 function publicArrangement(arrangement) {
@@ -580,15 +681,19 @@ function countConflicts(arrangements) {
 
 function buildPreviewGrid(arrangements, week = DEFAULT_PREVIEW_WEEK) {
   const targetWeek = Math.min(MAX_PREVIEW_WEEKS, Math.max(1, Number(week || DEFAULT_PREVIEW_WEEK) || DEFAULT_PREVIEW_WEEK));
-  const visible = (arrangements || [])
+  const complete = (arrangements || [])
+    .filter((item) => item.hasCompleteTime);
+  const hasWeekendCourses = complete.some((item) => Number(item.weekday) === 6 || Number(item.weekday) === 7);
+  const visible = complete
     .filter((item) => item.hasCompleteTime && item.weeks && item.weeks.includes(targetWeek))
     .filter((item) => item.importDecision !== IMPORT_DECISION.UNSCHEDULED)
+    .filter((item) => Number(item.weekday) >= 1 && Number(item.weekday) <= 5)
     .map((item) => publicArrangement(item));
 
   visible.forEach((item) => { item.conflict = false; });
   countConflicts(visible);
 
-  const days = Array.from({ length: 7 }, (_, index) => ({
+  const days = Array.from({ length: 5 }, (_, index) => ({
     weekday: index + 1,
     label: `周${"一二三四五六日"[index]}`,
   }));
@@ -618,7 +723,7 @@ function buildPreviewGrid(arrangements, week = DEFAULT_PREVIEW_WEEK) {
     selectedByDefault: item.selectedByDefault,
   }));
 
-  return { week: targetWeek, days, sections, cells };
+  return { week: targetWeek, hasWeekendCourses, days, sections, cells };
 }
 
 function compactPreviewCourse(arrangement) {
@@ -684,8 +789,35 @@ function summarizeGroup(group) {
     confidence: group.confidence,
     importDecision: group.importDecision,
     reason: group.reason,
+    analysis: group.analysis || analyzeCourseGroup(group),
     arrangements,
   };
+}
+
+function summarizeGroupForBucket(group, bucketKey, arrangements) {
+  const bucketGroup = Object.assign({}, group, {
+    arrangements,
+    importDecision: arrangements[0] && arrangements[0].importDecision || group.importDecision,
+  });
+  const first = arrangements.find((item) => item.reason) || arrangements[0] || {};
+  bucketGroup.reason = first.reason || group.reason || "";
+  bucketGroup.confidence = first.confidence || group.confidence || "low";
+  bucketGroup.viewBucketKey = bucketKey;
+  bucketGroup.analysis = analyzeCourseGroup(bucketGroup);
+  return summarizeGroup(bucketGroup);
+}
+
+function addGroupToPreviewBuckets(group, buckets) {
+  const byBucket = {};
+  (group.arrangements || []).forEach((arrangement) => {
+    const bucketKey = previewBucketForDecision(arrangement.importDecision);
+    if (!byBucket[bucketKey]) byBucket[bucketKey] = [];
+    byBucket[bucketKey].push(arrangement);
+  });
+  Object.keys(byBucket).forEach((bucketKey) => {
+    if (!buckets[bucketKey]) return;
+    buckets[bucketKey].push(summarizeGroupForBucket(group, bucketKey, byBucket[bucketKey]));
+  });
 }
 
 function buildScheduleImportPreview(rawRows, options = {}) {
@@ -826,8 +958,9 @@ function buildScheduleImportPreview(rawRows, options = {}) {
       if ((left.startSection || 99) !== (right.startSection || 99)) return (left.startSection || 99) - (right.startSection || 99);
       return String(left.weekText || "").localeCompare(String(right.weekText || ""));
     });
+    applyCourseGroupRecommendation(group);
     const decisions = group.arrangements.map((item) => item.importDecision);
-    if (decisions.every((item) => item === IMPORT_DECISION.AUTO_INCLUDE)) group.importDecision = IMPORT_DECISION.AUTO_INCLUDE;
+    if (decisions.some((item) => item === IMPORT_DECISION.AUTO_INCLUDE)) group.importDecision = IMPORT_DECISION.AUTO_INCLUDE;
     else if (decisions.every((item) => item === IMPORT_DECISION.SUSPECTED_NOT_MINE)) group.importDecision = IMPORT_DECISION.SUSPECTED_NOT_MINE;
     else if (decisions.every((item) => item === IMPORT_DECISION.UNSCHEDULED)) group.importDecision = IMPORT_DECISION.UNSCHEDULED;
     else group.importDecision = IMPORT_DECISION.NEEDS_CONFIRM;
@@ -840,10 +973,11 @@ function buildScheduleImportPreview(rawRows, options = {}) {
   const allArrangements = groups.flatMap((group) => group.arrangements);
   const autoArrangements = allArrangements.filter((item) => item.importDecision === IMPORT_DECISION.AUTO_INCLUDE);
   const conflictCount = countConflicts(autoArrangements);
+  groups.forEach(applyCourseGroupConflictAnalysis);
   const currentPreviewWeek = Math.min(MAX_PREVIEW_WEEKS, Math.max(1, Number(options.currentPreviewWeek || DEFAULT_PREVIEW_WEEK) || DEFAULT_PREVIEW_WEEK));
   const buckets = createEmptyPreviewBuckets();
   groups.forEach((group) => {
-    buckets[previewBucketForDecision(group.importDecision)].push(summarizeGroup(group));
+    addGroupToPreviewBuckets(group, buckets);
   });
   const groupedPayload = createLegacyGroupsFromBuckets(buckets);
 

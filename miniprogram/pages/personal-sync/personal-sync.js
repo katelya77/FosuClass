@@ -75,6 +75,12 @@ function decorateCourses(courses) {
     const weekday = getCourseWeekday(course);
     const start = Number(course.startSection || 0) || 0;
     const end = Number(course.endSection || start || 0) || 0;
+    const sections = toNumberList(course.sections && course.sections.length
+      ? course.sections
+      : (start && end ? [start, end] : []), 14);
+    const sectionText = start && end
+      ? formatStudentSectionText(sections.length > 2 ? sections : Array.from({ length: end - start + 1 }, (_, sectionIndex) => start + sectionIndex))
+      : "节次待定";
     return Object.assign({}, course, {
       previewKey: [
         course.courseName || "course",
@@ -84,7 +90,8 @@ function decorateCourses(courses) {
         course.classroom || course.roomName || "",
         index,
       ].join("-"),
-      displayTime: `${weekText[weekday] || "周次"} ${start && end ? `第${start}-${end}节` : "节次待定"}`,
+      displayTime: `${weekText[weekday] || "周次"} · ${sectionText}`,
+      displayWeekText: formatStudentWeekDisplay(course.weeks, course.weekText),
     });
   });
 }
@@ -215,16 +222,36 @@ function formatStudentWeekText(weeks) {
     start = current;
     prev = current;
   }
-  return `${ranges.join(",")}周`;
+  return `第${ranges.join(",")}周`;
 }
 
 function formatStudentSectionText(sections) {
   const list = toNumberList(sections, 14);
   if (!list.length) return "";
+  if (list.length === 1) return `第${list[0]}节`;
   const consecutive = list.every((item, index) => index === 0 || item === list[index - 1] + 1);
   return consecutive
     ? `第${list[0]}-${list[list.length - 1]}节`
     : `第${list.join(",")}节`;
+}
+
+function formatStudentWeekDisplay(weeks, rawText) {
+  const parsed = toNumberList(weeks && weeks.length ? weeks : parseStudentNumberRange(rawText, 60), 60);
+  if (parsed.length) return formatStudentWeekText(parsed);
+  const text = String(rawText || "").trim();
+  if (!text) return "周次待确认";
+  if (/待确认|待定|未定|未标明|未注明/.test(text)) return "周次待确认";
+  if (/^第.+周$/.test(text)) return text;
+  const compact = text.replace(/^第/, "").replace(/周$/, "");
+  return compact ? `第${compact}周` : "周次待确认";
+}
+
+function buildStudentArrangementMetaText(arrangement) {
+  const parts = [];
+  if (arrangement.roomName) parts.push(arrangement.roomName);
+  if (arrangement.teacherName) parts.push(arrangement.teacherName);
+  parts.push(formatStudentWeekDisplay(arrangement.weeks, arrangement.weekText));
+  return parts.filter(Boolean).join(" · ");
 }
 
 function applyEditedArrangement(arrangement, editedMap = {}) {
@@ -307,13 +334,18 @@ function markStudentPreviewConflicts(cells) {
 
 function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
   const targetWeek = clampPreviewWeek(week);
-  const cells = (arrangements || [])
+  const prepared = (arrangements || [])
     .map((arrangement) => applyEditedArrangement(arrangement, editedMap))
+    .filter((arrangement) => arrangement && arrangement.hasCompleteTime);
+  const hasWeekendCourses = prepared.some((arrangement) => Number(arrangement.weekday) === 6 || Number(arrangement.weekday) === 7);
+  const cells = prepared
     .filter((arrangement) => arrangement && arrangement.hasCompleteTime && arrangementActiveInWeek(arrangement, targetWeek))
+    .filter((arrangement) => Number(arrangement.weekday) >= 1 && Number(arrangement.weekday) <= 5)
     .map((arrangement) => {
       const selected = selectedMap && Object.prototype.hasOwnProperty.call(selectedMap, arrangement.arrangementId)
         ? Boolean(selectedMap[arrangement.arrangementId])
         : Boolean(arrangement.selectedByDefault);
+      const displayWeekText = formatStudentWeekDisplay(arrangement.weeks, arrangement.weekText);
       return {
         id: arrangement.arrangementId,
         arrangementId: arrangement.arrangementId,
@@ -325,7 +357,10 @@ function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
         sections: arrangement.sections,
         startSection: arrangement.startSection,
         endSection: arrangement.endSection,
-        weekText: arrangement.weekText,
+        weeks: arrangement.weeks,
+        sectionText: arrangement.sectionText || formatStudentSectionText(arrangement.sections),
+        weekText: displayWeekText,
+        displayWeekText,
         roomName: arrangement.roomName || "",
         teacherName: arrangement.teacherName || "",
         classNameRaw: arrangement.classNameRaw || "",
@@ -340,7 +375,8 @@ function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
   markStudentPreviewConflicts(cells);
   return {
     week: targetWeek,
-    days: STUDENT_WEEKDAY_LABELS.map((label, index) => ({ weekday: index + 1, label })),
+    hasWeekendCourses,
+    days: STUDENT_WEEKDAY_LABELS.slice(0, 5).map((label, index) => ({ weekday: index + 1, label })),
     sections: Array.from({ length: 14 }, (_, index) => ({ section: index + 1, label: `${index + 1}` })),
     cells,
   };
@@ -355,14 +391,18 @@ function decorateStudentArrangement(arrangement, selectedMap, editedMap) {
   const status = STUDENT_DECISION_STATUS[merged.importDecision] || { text: "待确认", className: "status-confirm" };
   const weekdayText = merged.weekday ? STUDENT_WEEKDAY_LABELS[merged.weekday - 1] : "";
   const sectionText = merged.sectionText || formatStudentSectionText(merged.sections);
+  const displayWeekText = formatStudentWeekDisplay(merged.weeks, merged.weekText);
   return Object.assign({}, merged, {
     selected,
     edited: Boolean(editedMap && editedMap[id]),
     statusText: selected ? status.text : "未选择",
     statusClass: selected ? status.className : "status-muted",
-    timeText: weekdayText && sectionText ? `${weekdayText} ${sectionText}` : "时间待确认",
+    timeText: weekdayText && sectionText ? `${weekdayText} · ${sectionText}` : "时间待确认",
+    displayWeekText,
     roomText: merged.roomName || "未注明",
     teacherText: merged.teacherName || "未注明",
+    metaText: buildStudentArrangementMetaText(merged),
+    conflictText: merged.conflict ? "存在时间冲突，建议检查" : "",
     reasonText: merged.reason || merged.groupReason || "请确认后再导入",
     canEdit: !merged.hasCompleteTime || merged.importDecision === "unscheduled",
   });
@@ -415,9 +455,10 @@ function buildApaasScheduleDisplay(result) {
 function sanitizeApaasMetadata(result) {
   const profile = result && result.profile || {};
   const summary = result && result.summary || {};
+  const studentId = profile.studentId || "";
   return {
-    studentId: profile.studentId || "",
-    studentIdMasked: maskStudentId(profile.studentId),
+    studentId,
+    studentIdMasked: profile.studentIdMasked || maskStudentId(studentId),
     studentName: profile.studentName || "",
     className: profile.className || "",
     classNameConfidence: profile.classNameConfidence || "low",
@@ -1001,8 +1042,8 @@ Page({
     wx.showModal({
       title: course.displayCourseName || course.courseName || "课程详情",
       content: [
-        `${weekdayText} ${sectionText}`,
-        course.weekText || "周次待确认",
+        `${weekdayText} · ${sectionText}`,
+        formatStudentWeekDisplay(course.weeks, course.weekText),
         `地点：${course.roomName || "未注明"}`,
         course.teacherName ? `教师：${course.teacherName}` : "",
       ].filter(Boolean).join("\n"),
@@ -1089,6 +1130,7 @@ Page({
         studentPreviewResult: Object.assign({}, preview, {
           displayInfo,
           metadata,
+          displayStudentId: metadata.studentId || metadata.studentIdMasked,
           maskedStudentId: metadata.studentIdMasked,
         }),
       });

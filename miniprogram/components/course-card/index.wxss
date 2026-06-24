@@ -248,6 +248,39 @@
   line-height: 22rpx;
 }
 
+.course-card-grid.is-preview-grid {
+  padding: 5rpx 6rpx;
+}
+
+.is-preview-grid .course-name {
+  font-size: 21rpx;
+  font-weight: 900;
+  line-height: 1.16;
+  -webkit-line-clamp: 2;
+}
+
+.is-preview-grid .course-name.span-1 {
+  font-size: 19rpx;
+}
+
+.is-preview-grid .course-meta {
+  margin-top: 3rpx;
+  font-size: 20rpx;
+  font-weight: 900;
+  line-height: 1.12;
+}
+
+.is-preview-grid .course-event-subtext {
+  margin-top: 3rpx;
+  font-size: 18rpx;
+  font-weight: 800;
+  line-height: 1.12;
+}
+
+.is-preview-grid .course-event-badge {
+  max-width: 54rpx;
+}
+
 .course-event-subtext {
   overflow: hidden;
   margin-top: 3rpx;
