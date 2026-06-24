@@ -112,31 +112,187 @@ function weakRandomBytes(length) {
   return bytes;
 }
 
-function installWxRandomShim(seedBytes) {
-  if (typeof globalThis === "undefined") return;
-  const root = globalThis;
-  root.window = root.window || {};
-  root.window.crypto = root.window.crypto || {};
+function makeSeededGetRandomValues(seedBytes) {
   let offset = 0;
   const seed = arrayBufferLikeToUint8Array(seedBytes) || weakRandomBytes(64);
-  root.window.crypto.getRandomValues = function getRandomValues(target) {
-    for (let index = 0; index < target.length; index += 1) {
+  return function getRandomValues(target) {
+    const bytes = arrayBufferLikeToUint8Array(target);
+    if (!bytes) return target;
+    for (let index = 0; index < bytes.length; index += 1) {
       if (offset < seed.length) {
-        target[index] = seed[offset];
+        bytes[index] = seed[offset];
         offset += 1;
       } else {
-        target[index] = Math.floor(Math.random() * 256) & 0xff;
+        bytes[index] = Math.floor(Math.random() * 256) & 0xff;
       }
     }
     return target;
   };
 }
 
+function makeSeededMathRandom(seedBytes, fallbackRandom) {
+  let offset = 0;
+  const seed = arrayBufferLikeToUint8Array(seedBytes) || weakRandomBytes(64);
+  const nextRandom = typeof fallbackRandom === "function" ? fallbackRandom : Math.random;
+  return function seededMathRandom() {
+    let value = 0;
+    for (let index = 0; index < 4; index += 1) {
+      const next = offset < seed.length ? seed[offset] : Math.floor(nextRandom() * 256) & 0xff;
+      offset += 1;
+      value = (value << 8) | next;
+    }
+    return (value >>> 0) / 0x100000000;
+  };
+}
+
+function getWindowObject() {
+  if (typeof globalThis === "undefined") return null;
+  try {
+    const candidate = globalThis.window;
+    if (candidate && typeof candidate === "object") return candidate;
+  } catch (error) {
+    return null;
+  }
+  return null;
+}
+
+function createWindowObject() {
+  if (typeof globalThis === "undefined") return null;
+  try {
+    const candidate = {};
+    Object.defineProperty(globalThis, "window", {
+      configurable: true,
+      writable: true,
+      value: candidate,
+    });
+    return candidate;
+  } catch (error) {
+    return null;
+  }
+}
+
+function getOrCreateCryptoObject(windowObject) {
+  if (!windowObject) return null;
+  try {
+    if (windowObject.crypto && typeof windowObject.crypto === "object") {
+      return windowObject.crypto;
+    }
+  } catch (error) {
+    return null;
+  }
+  try {
+    windowObject.crypto = {};
+    if (windowObject.crypto && typeof windowObject.crypto === "object") {
+      return windowObject.crypto;
+    }
+  } catch (error) {
+    // Fall through to defineProperty for runtimes with accessor-only fields.
+  }
+  try {
+    const cryptoObject = {};
+    Object.defineProperty(windowObject, "crypto", {
+      configurable: true,
+      writable: true,
+      value: cryptoObject,
+    });
+    return cryptoObject;
+  } catch (error) {
+    return null;
+  }
+}
+
+function installGetRandomValues(cryptoObject, getRandomValues) {
+  if (!cryptoObject || typeof getRandomValues !== "function") return false;
+  try {
+    if (typeof cryptoObject.getRandomValues === "function") return true;
+  } catch (error) {
+    return false;
+  }
+  try {
+    cryptoObject.getRandomValues = getRandomValues;
+    if (cryptoObject.getRandomValues === getRandomValues) return true;
+  } catch (error) {
+    // Fall through to defineProperty for accessor-only fields.
+  }
+  try {
+    Object.defineProperty(cryptoObject, "getRandomValues", {
+      configurable: true,
+      writable: true,
+      value: getRandomValues,
+    });
+    return cryptoObject.getRandomValues === getRandomValues;
+  } catch (error) {
+    return false;
+  }
+}
+
+function installNavigatorShim(restoreFns) {
+  if (typeof globalThis === "undefined") return;
+  try {
+    if (globalThis.navigator) return;
+  } catch (error) {
+    // Fall through and try to replace an accessor that returns nothing.
+  }
+  const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, "navigator");
+  try {
+    Object.defineProperty(globalThis, "navigator", {
+      configurable: true,
+      writable: true,
+      value: { appName: "", appVersion: "" },
+    });
+    restoreFns.push(() => {
+      if (previousNavigator) {
+        Object.defineProperty(globalThis, "navigator", previousNavigator);
+      } else {
+        delete globalThis.navigator;
+      }
+    });
+  } catch (error) {
+    // If the runtime refuses navigator changes, the SM2 vendor can still use Math.random fallback when no window.crypto is visible.
+  }
+}
+
+function installWxRandomShim(seedBytes) {
+  const restoreFns = [];
+  const getRandomValues = makeSeededGetRandomValues(seedBytes);
+  const windowObject = getWindowObject() || createWindowObject();
+  const cryptoObject = getOrCreateCryptoObject(windowObject);
+  const installedCrypto = installGetRandomValues(cryptoObject, getRandomValues);
+
+  installNavigatorShim(restoreFns);
+
+  if (!installedCrypto && typeof Math !== "undefined" && typeof Math.random === "function") {
+    const previousRandom = Math.random;
+    const seededRandom = makeSeededMathRandom(seedBytes, previousRandom);
+    Math.random = seededRandom;
+    restoreFns.push(() => {
+      Math.random = previousRandom;
+    });
+  }
+
+  return function restoreRandomShim() {
+    while (restoreFns.length) {
+      const restore = restoreFns.pop();
+      try {
+        restore();
+      } catch (error) {
+        // Ignore restore failures; encryption has already finished module init.
+      }
+    }
+  };
+}
+
 async function loadSm2Module() {
   if (sm2Module) return sm2Module;
   const seedBytes = await fallbackRandomBytes(128);
-  installWxRandomShim(seedBytes);
-  sm2Module = require("./vendor/sm2");
+  const restoreRandomShim = installWxRandomShim(seedBytes);
+  try {
+    sm2Module = require("./vendor/sm2");
+  } finally {
+    if (typeof restoreRandomShim === "function") {
+      restoreRandomShim();
+    }
+  }
   return sm2Module;
 }
 
