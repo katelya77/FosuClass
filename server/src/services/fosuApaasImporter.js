@@ -1299,13 +1299,57 @@ function destroySession(session) {
 }
 
 function normalizeImportChannelStrategy(value) {
-  const strategy = String(value || config.FOSU_IMPORT_CHANNEL_STRATEGY || "auto").trim().toLowerCase();
+  const strategy = String(value || config.FOSU_IMPORT_CHANNEL || config.FOSU_IMPORT_CHANNEL_STRATEGY || "auto").trim().toLowerCase();
   if (strategy === "cloudbase" || strategy === "oracle" || strategy === "auto") return strategy;
   return "auto";
 }
 
+function boolConfig(value, defaultValue = false) {
+  const text = String(value == null ? "" : value).trim().toLowerCase();
+  if (!text) return defaultValue;
+  if (["1", "true", "yes", "on"].includes(text)) return true;
+  if (["0", "false", "no", "off"].includes(text)) return false;
+  return defaultValue;
+}
+
+function cloudbaseImportEnabled() {
+  return boolConfig(config.FOSU_CLOUDBASE_IMPORT_ENABLE, false);
+}
+
+function getCloudbaseRelayUrl() {
+  return String(config.FOSU_CLOUDBASE_IMPORT_URL || config.FOSU_IMPORT_CLOUDBASE_RELAY_URL || "").trim();
+}
+
 function cloudbaseRelayConfigured() {
-  return Boolean(String(config.FOSU_IMPORT_CLOUDBASE_RELAY_URL || "").trim());
+  return cloudbaseImportEnabled() && Boolean(getCloudbaseRelayUrl());
+}
+
+function oracleFallbackEnabled() {
+  return boolConfig(config.FOSU_IMPORT_ORACLE_FALLBACK, true);
+}
+
+function resolveImportChannels(strategyValue) {
+  const strategy = normalizeImportChannelStrategy(strategyValue);
+  const cloudbaseReady = cloudbaseRelayConfigured();
+  const fallbackEnabled = oracleFallbackEnabled();
+  if (strategy === "oracle") {
+    return { strategy, channels: ["oracle"], reason: "forced_oracle" };
+  }
+  if (strategy === "cloudbase") {
+    return {
+      strategy,
+      channels: ["cloudbase"],
+      reason: cloudbaseReady ? "forced_cloudbase" : "cloudbase_not_configured",
+    };
+  }
+  if (cloudbaseReady) {
+    return {
+      strategy,
+      channels: fallbackEnabled ? ["cloudbase", "oracle"] : ["cloudbase"],
+      reason: fallbackEnabled ? "cloudbase_first_with_oracle_fallback" : "cloudbase_first_no_fallback",
+    };
+  }
+  return { strategy, channels: ["oracle"], reason: "cloudbase_not_configured" };
 }
 
 function importChannelError(code, message) {
@@ -1314,31 +1358,106 @@ function importChannelError(code, message) {
   return error;
 }
 
+function sanitizeCloudbaseRelayErrorMessage(message) {
+  const raw = toText(message);
+  if (!raw || /<!doctype|<html|<body|<\/html>/i.test(raw)) {
+    return "CloudBase import relay failed";
+  }
+  const scrubbed = raw
+    .replace(/(password|passwd|pwd|cookie|ticket|token|authorization|session)\s*[:=]\s*[^,\s;&]+/ig, "$1=[REDACTED]")
+    .replace(/JSESSIONID=[^;\s]+/ig, "JSESSIONID=[REDACTED]")
+    .replace(/<[^>]*>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!scrubbed || scrubbed.length > 300) {
+    return "CloudBase import relay failed";
+  }
+  return scrubbed.slice(0, 180);
+}
+
+function normalizeCloudbaseRelayCode(code, status) {
+  const raw = String(code || "").trim().toUpperCase();
+  if (status === 408 || status === 504) return "UPSTREAM_TIMEOUT";
+  if (status >= 500) return "CLOUDBASE_SERVICE_UNAVAILABLE";
+  if (!raw) return "CLOUDBASE_IMPORT_FAILED";
+  if (/ETIMEDOUT|ECONNABORTED|ESOCKETTIMEDOUT|TIMEOUT/.test(raw)) return "NETWORK_TIMEOUT";
+  if (/ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ERR_NETWORK|SOCKET/.test(raw)) return "NETWORK_TIMEOUT";
+  const known = new Set([
+    "INVALID_CREDENTIALS",
+    "CAPTCHA_REQUIRED",
+    "RISK_CONTROL_REQUIRED",
+    "ACCOUNT_LOCKED",
+    "SCHOOL_SYSTEM_REJECTED",
+    "SCHOOL_SYSTEM_TIMEOUT",
+    "NETWORK_TIMEOUT",
+    "UPSTREAM_TIMEOUT",
+    "LOGIN_PAGE_CHANGED",
+    "APAAS_STRUCTURE_CHANGED",
+    "APAAS_DASHBOARD_UNAVAILABLE",
+    "SCHEDULE_APP_NOT_FOUND",
+    "SCHEDULE_EMPTY",
+    "SCHEDULE_ROWS_EMPTY",
+    "CLOUDBASE_IMPORT_NOT_CONFIGURED",
+    "CLOUDBASE_SERVICE_UNAVAILABLE",
+    "CLOUDBASE_IMPORT_FAILED",
+  ]);
+  return known.has(raw) ? raw : "CLOUDBASE_IMPORT_FAILED";
+}
+
+function stripSensitiveAxiosError(error) {
+  if (!error || !error.config) return error;
+  if (error.config.data) error.config.data = "[REDACTED]";
+  if (error.config.headers) {
+    if (error.config.headers.Authorization) error.config.headers.Authorization = "[REDACTED]";
+    if (error.config.headers.authorization) error.config.headers.authorization = "[REDACTED]";
+    if (error.config.headers.Cookie) error.config.headers.Cookie = "[REDACTED]";
+    if (error.config.headers.cookie) error.config.headers.cookie = "[REDACTED]";
+  }
+  return error;
+}
+
 function isTimeoutLikeError(error) {
   const code = String(error && (error.code || error.message) || "");
-  return /ETIMEDOUT|ECONNABORTED|ESOCKETTIMEDOUT|TIMEOUT|NETWORK_TIMEOUT|SCHOOL_SYSTEM_TIMEOUT/i.test(code);
+  return /ETIMEDOUT|ECONNABORTED|ESOCKETTIMEDOUT|TIMEOUT|NETWORK_TIMEOUT|SCHOOL_SYSTEM_TIMEOUT|UPSTREAM_TIMEOUT/i.test(code);
+}
+
+function isConnectionFailureError(error) {
+  const code = String(error && (error.code || error.message) || "");
+  return /ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ERR_NETWORK|SOCKET HANG UP/i.test(code);
 }
 
 function normalizeChannelError(error, channel) {
   if (!error) return importChannelError("UNKNOWN_IMPORT_ERROR");
   const code = String(error && (error.code || error.message) || "");
-  if (/SCHOOL_SYSTEM_TIMEOUT/i.test(code)) {
+  const status = Number(error && error.response && error.response.status || 0);
+  if (channel === "cloudbase" && status >= 500) {
+    error.code = status === 504 ? "UPSTREAM_TIMEOUT" : "CLOUDBASE_SERVICE_UNAVAILABLE";
+  } else if (status === 408 || status === 504) {
+    error.code = channel === "cloudbase" ? "UPSTREAM_TIMEOUT" : "SCHOOL_SYSTEM_TIMEOUT";
+  } else if (/UPSTREAM_TIMEOUT/i.test(code)) {
+    error.code = "UPSTREAM_TIMEOUT";
+  } else if (/SCHOOL_SYSTEM_TIMEOUT/i.test(code)) {
     error.code = "SCHOOL_SYSTEM_TIMEOUT";
   } else if (/NETWORK_TIMEOUT/i.test(code)) {
     error.code = "NETWORK_TIMEOUT";
   } else if (isTimeoutLikeError(error)) {
     error.code = channel === "cloudbase" ? "NETWORK_TIMEOUT" : "SCHOOL_SYSTEM_TIMEOUT";
+  } else if (isConnectionFailureError(error)) {
+    error.code = "NETWORK_TIMEOUT";
   }
   return error;
 }
 
 function shouldFallbackToOracle(error) {
   const code = String(error && (error.code || error.message) || "");
-  if (!code) return true;
-  if (/INVALID_CREDENTIALS|CAPTCHA_REQUIRED|RISK_CONTROL_REQUIRED|IMPORT_RATE_LIMITED|FOSU_IMPORT_DISABLED/i.test(code)) {
-    return false;
-  }
-  return true;
+  if (!oracleFallbackEnabled()) return false;
+  return [
+    "NETWORK_TIMEOUT",
+    "SCHOOL_SYSTEM_TIMEOUT",
+    "UPSTREAM_TIMEOUT",
+    "CLOUDBASE_SERVICE_UNAVAILABLE",
+    "CLOUDBASE_IMPORT_FAILED",
+  ].includes(code);
 }
 
 async function fetchRowsViaOracleImporter(studentId, password, timing) {
@@ -1350,7 +1469,8 @@ async function fetchRowsViaOracleImporter(studentId, password, timing) {
     timing.loginMs = Date.now() - loginStartedAt;
     const discoverStartedAt = Date.now();
     const entry = await findStudentScheduleApp(session);
-    timing.discoverAppMs = Date.now() - discoverStartedAt;
+    timing.discoverMs = Date.now() - discoverStartedAt;
+    timing.discoverAppMs = timing.discoverMs;
     const fetchStartedAt = Date.now();
     const rawRows = await fetchScheduleRows(session, entry);
     timing.fetchRowsMs = Date.now() - fetchStartedAt;
@@ -1369,11 +1489,11 @@ async function fetchRowsViaOracleImporter(studentId, password, timing) {
 }
 
 async function fetchRowsViaCloudbaseRelay(studentId, password, options, timing) {
-  const relayUrl = String(config.FOSU_IMPORT_CLOUDBASE_RELAY_URL || "").trim();
-  if (!relayUrl) {
+  const relayUrl = getCloudbaseRelayUrl();
+  if (!cloudbaseImportEnabled() || !relayUrl) {
     throw importChannelError("CLOUDBASE_IMPORT_NOT_CONFIGURED");
   }
-  const timeout = Math.max(5000, Number(config.FOSU_IMPORT_CLOUDBASE_TIMEOUT_MS || 25000) || 25000);
+  const timeout = Math.max(5000, Number(config.FOSU_IMPORT_CHANNEL_TIMEOUT_MS || config.FOSU_IMPORT_CLOUDBASE_TIMEOUT_MS || 25000) || 25000);
   const startedAt = Date.now();
   let localPassword = password;
   try {
@@ -1395,7 +1515,10 @@ async function fetchRowsViaCloudbaseRelay(studentId, password, options, timing) 
     localPassword = "";
     const payload = parseJsonMaybe(response.data) || response.data || {};
     if (response.status >= 400 || payload.success === false) {
-      throw importChannelError(payload.code || "CLOUDBASE_IMPORT_FAILED", payload.message || "CloudBase import relay failed");
+      throw importChannelError(
+        normalizeCloudbaseRelayCode(payload.code, response.status),
+        sanitizeCloudbaseRelayErrorMessage(payload.message || payload.error || "")
+      );
     }
     const rawRows = payload.rawRows || payload.rows || payload.scheduleRows || payload.data && (payload.data.rawRows || payload.data.rows);
     if (!Array.isArray(rawRows) || !rawRows.length) {
@@ -1403,6 +1526,8 @@ async function fetchRowsViaCloudbaseRelay(studentId, password, options, timing) 
     }
     const relayTiming = payload.timing || payload.metrics || {};
     timing.loginMs = Number(relayTiming.loginMs || relayTiming.authMs || 0) || 0;
+    timing.discoverMs = Number(relayTiming.discoverMs || relayTiming.discoverAppMs || 0) || 0;
+    timing.discoverAppMs = timing.discoverMs;
     timing.fetchRowsMs = Number(relayTiming.fetchRowsMs || relayTiming.readRowsMs || 0) || (Date.now() - startedAt);
     timing.relayMs = Date.now() - startedAt;
     return {
@@ -1411,7 +1536,7 @@ async function fetchRowsViaCloudbaseRelay(studentId, password, options, timing) 
       channel: "cloudbase",
     };
   } catch (error) {
-    throw normalizeChannelError(error, "cloudbase");
+    throw normalizeChannelError(stripSensitiveAxiosError(error), "cloudbase");
   } finally {
     localPassword = "";
   }
@@ -1452,9 +1577,11 @@ async function buildPreviewFromRawRows(studentId, rawRows, options, entry, timin
   safeLog("fosu-apaas-preview-timing", {
     studentId: maskStudentId(studentId),
     channel,
+    retryCount: timing.retryCount || 0,
     rawRowCount: rawRows.length,
     localCourseCount: localCourses.length,
     loginMs: timing.loginMs,
+    discoverMs: timing.discoverMs,
     discoverAppMs: timing.discoverAppMs,
     fetchRowsMs: timing.fetchRowsMs,
     normalizeMs: timing.normalizeMs,
@@ -1465,7 +1592,7 @@ async function buildPreviewFromRawRows(studentId, rawRows, options, entry, timin
 }
 
 async function importSchedulePreviewWithChannel(channel, studentId, password, options, startedAt) {
-  const timing = { channel };
+  const timing = { channel, retryCount: Number(options.retryCount || 0) || 0 };
   const readResult = channel === "cloudbase"
     ? await fetchRowsViaCloudbaseRelay(studentId, password, options, timing)
     : await fetchRowsViaOracleImporter(studentId, password, timing);
@@ -1482,18 +1609,31 @@ async function importSchedulePreviewWithChannel(channel, studentId, password, op
 
 async function importSchedulePreview(studentId, password, options = {}) {
   const startedAt = Date.now();
-  const strategy = normalizeImportChannelStrategy(options.channelStrategy);
-  const channels = strategy === "oracle"
-    ? ["oracle"]
-    : (strategy === "cloudbase" ? ["cloudbase"] : (cloudbaseRelayConfigured() ? ["cloudbase", "oracle"] : ["oracle"]));
+  const plan = resolveImportChannels(options.channelStrategy);
+  const channels = plan.channels;
+  safeLog("fosu-apaas-import-channel-plan", {
+    studentId: maskStudentId(studentId),
+    strategy: plan.strategy,
+    channel: channels[0] || "",
+    channels: channels.join(","),
+    reason: plan.reason,
+  });
   let lastError = null;
-  for (const channel of channels) {
+  for (let channelIndex = 0; channelIndex < channels.length; channelIndex += 1) {
+    const channel = channels[channelIndex];
     try {
       safeLog("fosu-apaas-import-channel-start", {
         studentId: maskStudentId(studentId),
         channel,
+        retryCount: channelIndex,
       });
-      const preview = await importSchedulePreviewWithChannel(channel, studentId, password, options, startedAt);
+      const preview = await importSchedulePreviewWithChannel(
+        channel,
+        studentId,
+        password,
+        Object.assign({}, options, { retryCount: channelIndex }),
+        startedAt
+      );
       preview.channel = channel;
       return preview;
     } catch (error) {
@@ -1502,6 +1642,7 @@ async function importSchedulePreview(studentId, password, options = {}) {
         studentId: maskStudentId(studentId),
         channel,
         code: lastError.code || lastError.message,
+        retryCount: channelIndex,
       });
       if (channel === "cloudbase" && channels.includes("oracle") && shouldFallbackToOracle(lastError)) {
         continue;
@@ -1526,5 +1667,7 @@ module.exports = {
   normalizeImportChannelStrategy,
   parseCasLoginForm,
   parseEntryFromUrl,
+  resolveImportChannels,
+  sanitizeCloudbaseRelayErrorMessage,
   shouldFallbackToOracle,
 };

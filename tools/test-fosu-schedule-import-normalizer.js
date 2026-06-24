@@ -128,6 +128,45 @@ function testSelectedClassPriorityAndNewBuckets() {
   assert.strictEqual(preview.groups.suspectedNotMine.length, preview.buckets.suspected.length);
 }
 
+function testStrictClassRecommendationRules() {
+  const preview = buildScheduleImportPreview([
+    asciiRow({ courseName: "Range Included", className: "25动物医学[1-6]班", weekdayText: "1", sectionText: "1-2" }),
+    asciiRow({ courseName: "Range Excluded", className: "25动物医学[1-5]班", weekdayText: "2", sectionText: "3-4" }),
+    asciiRow({ courseName: "Science Excluded", className: "25动物科学3班", weekdayText: "3", sectionText: "5-6" }),
+    asciiRow({ courseName: "Temporary Class", className: "临班110", weekdayText: "4", sectionText: "7-8" }),
+  ], {
+    studentId: "202512340303",
+    semester: "2025-2026-2",
+    existingSelectedClassName: "25动物医学6班",
+    localCourses: [
+      localCourse({
+        courseName: "Temporary Class",
+        weekday: 5,
+        sections: [9, 10],
+        weeks: Array.from({ length: 16 }, (_, index) => index + 1),
+      }),
+    ],
+  });
+
+  const arrangements = allArrangements(preview);
+  const included = arrangements.find((item) => item.courseName === "Range Included");
+  const excluded = arrangements.find((item) => item.courseName === "Range Excluded");
+  const science = arrangements.find((item) => item.courseName === "Science Excluded");
+  const temporary = arrangements.find((item) => item.courseName === "Temporary Class");
+
+  assert.strictEqual(included.classScopeStatus, "match");
+  assert.strictEqual(included.importDecision, "auto_include");
+  assert.strictEqual(excluded.classScopeStatus, "not_match");
+  assert.notStrictEqual(excluded.importDecision, "auto_include");
+  assert.strictEqual(science.classScopeStatus, "not_match");
+  assert.notStrictEqual(science.importDecision, "auto_include");
+  assert.strictEqual(temporary.classScopeStatus, "unknown");
+  assert.strictEqual(temporary.matchStatus, "course_match");
+  assert.notStrictEqual(temporary.importDecision, "auto_include");
+  assert(preview.buckets.suspected.some((item) => item.displayCourseName === "Range Excluded"));
+  assert(preview.buckets.pending.some((item) => item.displayCourseName === "Temporary Class"));
+}
+
 function testPreviewGridAndConflicts() {
   const preview = buildScheduleImportPreview([
     row({ "课程名称": "第16周课程", "周次": "16", "星期几": "星期一", "节次": "1-2", "课室名称": "B101" }),
@@ -150,6 +189,36 @@ function testPreviewGridAndConflicts() {
     .buildPreviewGrid(allArrangements(preview), 9);
   assert(week9.cells.some((item) => item.courseName === "第9周课程"));
   assert(!week9.cells.some((item) => item.courseName === "第16周课程"));
+}
+
+function testStrictConflictRules() {
+  const sameCoursePreview = buildScheduleImportPreview([
+    row({ "课程名称": "动物生理学", "周次": "6-10", "星期几": "星期一", "节次": "3-5", "课室名称": "B101" }),
+    row({ "课程名称": "动物生理学", "周次": "8", "星期几": "星期二", "节次": "3-5", "课室名称": "B102" }),
+    row({ "课程名称": "动物生理学", "周次": "8", "星期几": "星期一", "节次": "7-8", "课室名称": "B103" }),
+  ], {
+    studentId: "202512340303",
+    existingSelectedClassName: "25动物医学6班",
+    currentPreviewWeek: 8,
+  });
+  assert.strictEqual(sameCoursePreview.summary.conflictCount, 0);
+  assert(allArrangements(sameCoursePreview).every((item) => !item.conflict));
+
+  const conflictPreview = buildScheduleImportPreview([
+    row({ "课程名称": "正式课程A", "周次": "8", "星期几": "星期一", "节次": "3-5", "课室名称": "B101" }),
+    row({ "课程名称": "正式课程B", "周次": "8", "星期几": "星期一", "节次": "4-6", "课室名称": "B102" }),
+    row({ "课程名称": "正式课程C", "周次": "12", "星期几": "星期一", "节次": "3-5", "课室名称": "B103" }),
+  ], {
+    studentId: "202512340303",
+    existingSelectedClassName: "25动物医学6班",
+    currentPreviewWeek: 8,
+  });
+  const conflicted = allArrangements(conflictPreview).filter((item) => item.conflict);
+  assert.strictEqual(conflictPreview.summary.conflictCount, 1);
+  assert.strictEqual(conflicted.length, 2);
+  assert(conflicted.some((item) => item.courseName === "正式课程A"));
+  assert(conflicted.some((item) => item.courseName === "正式课程B"));
+  assert(!allArrangements(conflictPreview).find((item) => item.courseName === "正式课程C").conflict);
 }
 
 function testDispersedOfficialCourseRecommended() {
@@ -227,7 +296,9 @@ testClassScopeParser();
 testGroupingAndDedupe();
 testRecommendationsAndLocalTeacherFill();
 testSelectedClassPriorityAndNewBuckets();
+testStrictClassRecommendationRules();
 testPreviewGridAndConflicts();
+testStrictConflictRules();
 testDispersedOfficialCourseRecommended();
 testWeekendCoursesHiddenFromDefaultPreview();
 testMixedGroupSplitsUnplacedArrangement();
