@@ -1,8 +1,9 @@
 const request = require("../../utils/request");
-const { getSettings, setCurrentScheduleTarget } = require("../../utils/storage");
+const { getCurrentScheduleTarget, getSettings, setCurrentScheduleTarget } = require("../../utils/storage");
 const aiAssistantService = require("../../services/aiAssistantService");
 const appConfigService = require("../../services/appConfigService");
 const personalTermOptionsService = require("../../services/personalTermOptionsService");
+const { encryptCredentialPayload } = require("../../services/fosuStudentImportCrypto");
 const { getRuntimeTermConfig } = require("../../utils/week");
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -15,6 +16,12 @@ const WEEKDAY_TABS = [
   { label: "周五", value: 5 },
   { label: "周六", value: 6 },
   { label: "周日", value: 7 },
+];
+const STUDENT_IMPORT_STEPS = [
+  "正在连接统一身份认证",
+  "正在验证账号",
+  "正在读取 APaaS 课表",
+  "正在整理课程数据",
 ];
 
 function formatFileSize(size) {
@@ -95,8 +102,67 @@ function sanitizeMetadata(metadata = {}) {
   };
 }
 
+function maskStudentId(studentId) {
+  const value = String(studentId || "").trim();
+  if (value.length <= 8) return value ? `${value.slice(0, 2)}****` : "";
+  return `${value.slice(0, 4)}****${value.slice(-4)}`;
+}
+
+function buildApaasScheduleDisplay(result) {
+  const profile = result && result.profile || {};
+  const summary = result && result.summary || {};
+  const title = profile.studentName ? `${profile.studentName}的个人课表` : "APaaS 个人课表";
+  return {
+    title,
+    subtitle: [profile.className || "班级未确认", summary.semester || "当前学期", "APaaS导入"].filter(Boolean).join(" · "),
+    sourceText: "佛山大学 APaaS 本科生学生课表",
+  };
+}
+
+function sanitizeApaasMetadata(result) {
+  const profile = result && result.profile || {};
+  const summary = result && result.summary || {};
+  return {
+    studentId: profile.studentId || "",
+    studentIdMasked: maskStudentId(profile.studentId),
+    studentName: profile.studentName || "",
+    className: profile.className || "",
+    classNameConfidence: profile.classNameConfidence || "low",
+    term: summary.semester || "",
+    source: "fosu_apaas",
+    rawRowCount: summary.rawRowCount || 0,
+    scheduledCourseCount: summary.scheduledCourseCount || 0,
+    unscheduledCourseCount: summary.unscheduledCourseCount || 0,
+    conflictCount: summary.conflictCount || 0,
+  };
+}
+
+function getExistingPersonalCoursesForStudentImport() {
+  const current = getCurrentScheduleTarget && getCurrentScheduleTarget();
+  const personalTypes = ["personal-xls", "personal-apaas", "local-personal"];
+  if (!current || personalTypes.indexOf(String(current.type || "")) < 0) {
+    return [];
+  }
+  return Array.isArray(current.courses) ? current.courses : [];
+}
+
 Page({
   data: {
+    activeImportMethod: "method",
+    studentImportEnabled: true,
+    studentImportSteps: STUDENT_IMPORT_STEPS,
+    studentLoadingStepIndex: 0,
+    studentImportStage: "form",
+    studentImportLoading: false,
+    studentImportConfirming: false,
+    studentForm: {
+      studentId: "",
+      password: "",
+      privacyConfirmed: false,
+    },
+    studentPreviewResult: null,
+    studentPreviewToken: "",
+    studentImportedSchedule: null,
     selectedFile: null,
     loadingXls: false,
     syncSuccess: false,
@@ -113,9 +179,14 @@ Page({
     filteredCourses: [],
   },
 
-  onLoad() {
+  onLoad(options = {}) {
     const settings = getSettings();
     const currentSemesterId = settings.semesterId || settings.semester || getRuntimeTermConfig().term;
+    const requestedTab = String(options.tab || "").trim();
+    const requestedMethod = requestedTab === "student"
+      ? "student"
+      : (requestedTab === "xls" ? "xls" : "method");
+    this.setData({ activeImportMethod: requestedMethod });
     const applyTerms = (config) => {
       const built = personalTermOptionsService.buildImportTermOptions(
         config.availableTerms || [],
@@ -131,10 +202,44 @@ Page({
         semesterIndex: index >= 0 ? index : 0,
         semesterPickerEnabled: built.pickerEnabled,
         selectedTermStatusText: this.getTermStatusText(records[index >= 0 ? index : 0]),
+        studentImportEnabled: config && config.appConfig ? config.appConfig.enableFosuStudentImport !== false : true,
       });
     };
     applyTerms(appConfigService.getGlobalConfig());
     appConfigService.loadAppConfig({ silent: true }).then(applyTerms).catch(() => {});
+  },
+
+  selectImportMethod(event) {
+    const method = event.currentTarget.dataset.method;
+    if (method === "student" && !this.data.studentImportEnabled) {
+      wx.showToast({ title: "学号导入暂未开放", icon: "none" });
+      return;
+    }
+    if (method === "class") {
+      wx.switchTab({ url: "/pages/school/school" });
+      return;
+    }
+    this.setData({
+      activeImportMethod: method || "method",
+      syncSuccess: false,
+      studentImportStage: "form",
+      studentPreviewResult: null,
+      studentPreviewToken: "",
+    });
+  },
+
+  backToImportMethods() {
+    this.setData({
+      activeImportMethod: "method",
+      syncSuccess: false,
+      selectedFile: null,
+      studentImportStage: "form",
+      studentImportLoading: false,
+      studentImportConfirming: false,
+      studentPreviewResult: null,
+      studentPreviewToken: "",
+      studentForm: Object.assign({}, this.data.studentForm, { password: "" }),
+    });
   },
 
   onSemesterChange(event) {
@@ -157,6 +262,129 @@ Page({
     if (record.archived) return "历史学期，导入后仅作为本地课表使用";
     if (!this.data.semesterPickerEnabled) return "当前仅有一个可导入学期";
     return "";
+  },
+
+  onStudentIdInput(event) {
+    const value = String(event.detail.value || "").replace(/[^\d]/g, "").slice(0, 20);
+    this.setData({ "studentForm.studentId": value });
+  },
+
+  onStudentPasswordInput(event) {
+    this.setData({ "studentForm.password": String(event.detail.value || "") });
+  },
+
+  onStudentPrivacyChange(event) {
+    const values = event.detail.value || [];
+    this.setData({ "studentForm.privacyConfirmed": values.indexOf("confirmed") >= 0 });
+  },
+
+  startStudentLoadingSteps() {
+    if (this.studentStepTimer) {
+      clearInterval(this.studentStepTimer);
+    }
+    this.setData({ studentLoadingStepIndex: 0 });
+    this.studentStepTimer = setInterval(() => {
+      const next = Math.min(STUDENT_IMPORT_STEPS.length - 1, this.data.studentLoadingStepIndex + 1);
+      this.setData({ studentLoadingStepIndex: next });
+      if (next >= STUDENT_IMPORT_STEPS.length - 1 && this.studentStepTimer) {
+        clearInterval(this.studentStepTimer);
+        this.studentStepTimer = null;
+      }
+    }, 1800);
+  },
+
+  stopStudentLoadingSteps() {
+    if (this.studentStepTimer) {
+      clearInterval(this.studentStepTimer);
+      this.studentStepTimer = null;
+    }
+  },
+
+  validateStudentForm() {
+    const form = this.data.studentForm || {};
+    const studentId = String(form.studentId || "").trim();
+    if (!/^\d{6,20}$/.test(studentId)) {
+      wx.showToast({ title: "请输入正确学号", icon: "none" });
+      return null;
+    }
+    if (!String(form.password || "")) {
+      wx.showToast({ title: "请输入统一身份认证密码", icon: "none" });
+      return null;
+    }
+    if (!form.privacyConfirmed) {
+      wx.showToast({ title: "请先确认隐私说明", icon: "none" });
+      return null;
+    }
+    return {
+      studentId,
+      password: String(form.password || ""),
+    };
+  },
+
+  async validateAndPreviewStudentImport() {
+    if (this.data.studentImportLoading) return;
+    const form = this.validateStudentForm();
+    if (!form) return;
+
+    this.setData({
+      studentImportLoading: true,
+      studentImportStage: "loading",
+      studentPreviewResult: null,
+      studentPreviewToken: "",
+    });
+    this.startStudentLoadingSteps();
+
+    let plainPassword = form.password;
+    try {
+      const keyResult = await request.get("/api/schedule-import/fosu/public-key", {}, {
+        showLoading: false,
+        silentError: true,
+        timeout: 10000,
+        retries: 0,
+      });
+      const encrypted = await encryptCredentialPayload(keyResult.publicKey, {
+        studentId: form.studentId,
+        password: plainPassword,
+        nonce: keyResult.nonce,
+        timestamp: Date.now(),
+      });
+      plainPassword = "";
+      this.setData({ "studentForm.password": "" });
+
+      const preview = await request.post("/api/schedule-import/fosu/preview", Object.assign({
+        keyId: keyResult.keyId,
+      }, encrypted), {
+        showLoading: false,
+        silentError: true,
+        timeout: 45000,
+        retries: 0,
+        dedupe: false,
+      });
+      const displayInfo = buildApaasScheduleDisplay(preview);
+      const metadata = sanitizeApaasMetadata(preview);
+      this.stopStudentLoadingSteps();
+      this.setData({
+        studentImportLoading: false,
+        studentImportStage: "preview",
+        studentPreviewToken: preview.importPreviewToken || "",
+        studentPreviewResult: Object.assign({}, preview, {
+          displayInfo,
+          metadata,
+          maskedStudentId: metadata.studentIdMasked,
+        }),
+      });
+      wx.showToast({ title: "读取成功", icon: "success" });
+    } catch (error) {
+      plainPassword = "";
+      this.stopStudentLoadingSteps();
+      this.setData({
+        studentImportLoading: false,
+        studentImportStage: "form",
+        "studentForm.password": "",
+      });
+      const payload = error && error.payload || {};
+      this.showStudentImportError(payload.code || error.code, payload.message || error.message);
+    }
   },
 
   onXlsBtnTap() {
@@ -318,6 +546,81 @@ Page({
     });
   },
 
+  cancelStudentImport() {
+    const token = this.data.studentPreviewToken;
+    if (token) {
+      request.post("/api/schedule-import/fosu/cancel", {
+        importPreviewToken: token,
+      }, {
+        showLoading: false,
+        silentError: true,
+        timeout: 8000,
+        retries: 0,
+        dedupe: false,
+      }).catch(() => {});
+    }
+    this.setData({
+      studentImportStage: "form",
+      studentImportLoading: false,
+      studentImportConfirming: false,
+      studentPreviewResult: null,
+      studentPreviewToken: "",
+      studentImportedSchedule: null,
+      studentForm: Object.assign({}, this.data.studentForm, { password: "" }),
+    });
+  },
+
+  confirmStudentImport() {
+    const token = this.data.studentPreviewToken;
+    if (!token || this.data.studentImportConfirming) return;
+    this.setData({ studentImportConfirming: true });
+    request.post("/api/schedule-import/fosu/confirm", {
+      importPreviewToken: token,
+      mode: "replace_fosu_source",
+      existingCourses: getExistingPersonalCoursesForStudentImport(),
+    }, {
+      loadingTitle: "正在导入...",
+      silentError: true,
+      timeout: 20000,
+      retries: 0,
+      dedupe: false,
+    })
+      .then((res) => {
+        const schedule = res && res.schedule;
+        if (!schedule || !Array.isArray(schedule.courses)) {
+          throw Object.assign(new Error("IMPORT_RESULT_INVALID"), { code: "IMPORT_RESULT_INVALID" });
+        }
+        const target = Object.assign({}, schedule, {
+          updateTime: schedule.updateTime || new Date().toISOString().slice(0, 10),
+          importedAt: schedule.importedAt || new Date().toISOString(),
+        });
+        if (setCurrentScheduleTarget(target)) {
+          aiAssistantService.rememberLatestScheduleImport(target);
+          this.setData({
+            studentImportConfirming: false,
+            studentImportStage: "done",
+            studentImportedSchedule: target,
+            studentPreviewToken: "",
+          });
+          wx.showToast({ title: "导入成功", icon: "success" });
+          setTimeout(() => {
+            wx.switchTab({ url: "/pages/index/index" });
+          }, 900);
+          return;
+        }
+        throw Object.assign(new Error("LOCAL_SAVE_FAILED"), { code: "LOCAL_SAVE_FAILED" });
+      })
+      .catch((error) => {
+        this.setData({ studentImportConfirming: false });
+        const payload = error && error.payload || {};
+        this.showStudentImportError(payload.code || error.code, payload.message || error.message);
+      });
+  },
+
+  viewImportedSchedule() {
+    wx.switchTab({ url: "/pages/index/index" });
+  },
+
   bindToLocal() {
     const result = this.data.syncResult;
     if (!result) return;
@@ -354,8 +657,52 @@ Page({
     });
   },
 
+  showStudentImportError(code, defaultMsg) {
+    let content = defaultMsg || "学号导入暂时不可用，请稍后再试。";
+    if (code === "CLIENT_CRYPTO_UNAVAILABLE") {
+      content = "当前微信环境不支持本地加密，无法提交学号和密码。请升级微信后重试，或使用 XLS 导入。";
+    } else if (code === "INVALID_CREDENTIALS") {
+      content = "学号或统一身份认证密码不正确，请重新输入。";
+    } else if (code === "CAPTCHA_REQUIRED" || code === "RISK_CONTROL_REQUIRED") {
+      content = "统一身份认证需要验证码或安全校验，暂不支持自动导入。你可以使用 XLS 导入或班级课表导入。";
+    } else if (code === "APAAS_STRUCTURE_CHANGED" || code === "LOGIN_PAGE_CHANGED") {
+      content = "学校页面结构变化，自动导入暂时不可用。请先使用 XLS 或班级课表导入。";
+    } else if (code === "SCHEDULE_EMPTY") {
+      content = "未读取到 APaaS 课表数据，请确认当前账号已有本科生学生课表。";
+    } else if (code === "IMPORT_RATE_LIMITED") {
+      content = "尝试次数过多，请 10 分钟后再试。";
+    } else if (code === "IMPORT_KEY_EXPIRED" || code === "IMPORT_TOKEN_EXPIRED") {
+      content = "导入验证已过期，请重新验证后再导入。";
+    } else if (code === "FOSU_IMPORT_DISABLED") {
+      content = "学号导入暂未开放，请使用 XLS 或班级课表导入。";
+    } else if (code === "LOCAL_SAVE_FAILED") {
+      content = "课程已读取，但本地保存失败。请清理缓存后重试。";
+    }
+    wx.showModal({
+      title: "提示",
+      content,
+      showCancel: false,
+      confirmText: "知道了",
+    });
+  },
+
   goBack() {
     wx.navigateBack();
+  },
+
+  onUnload() {
+    this.stopStudentLoadingSteps();
+    if (this.data.studentPreviewToken) {
+      request.post("/api/schedule-import/fosu/cancel", {
+        importPreviewToken: this.data.studentPreviewToken,
+      }, {
+        showLoading: false,
+        silentError: true,
+        timeout: 5000,
+        retries: 0,
+        dedupe: false,
+      }).catch(() => {});
+    }
   },
 
   showFriendlyError(code, defaultMsg) {

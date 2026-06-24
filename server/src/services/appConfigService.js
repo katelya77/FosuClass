@@ -28,6 +28,9 @@ const DEFAULT_CONFIG = {
   appName: "佛课小表",
   currentSemester: termRegistryService.LEGACY_CURRENT_TERM_CONFIG.term,
   publishStatus: "online",
+  appConfig: {
+    enableFosuStudentImport: true,
+  },
   dataVersion: {
     releaseVersion: "",
     classScheduleUpdatedAt: "",
@@ -104,6 +107,7 @@ function nowIso() {
 function mergeConfig(raw) {
   const source = raw && typeof raw === "object" ? raw : {};
   return Object.assign({}, DEFAULT_CONFIG, source, {
+    appConfig: Object.assign({}, DEFAULT_CONFIG.appConfig, source.appConfig || {}),
     dataVersion: Object.assign({}, DEFAULT_CONFIG.dataVersion, source.dataVersion || {}),
   });
 }
@@ -121,6 +125,7 @@ function saveAdminConfig(patch) {
     publishStatus: toText(source.publishStatus || current.publishStatus, 40) || "online",
     disclaimer: toText(source.disclaimer !== undefined ? source.disclaimer : current.disclaimer, 1000) || DEFAULT_DISCLAIMER,
     dataVersion: Object.assign({}, current.dataVersion, source.dataVersion || {}),
+    appConfig: Object.assign({}, current.appConfig || {}, source.appConfig || {}),
     updatedAt: nowIso(),
   });
   next.dataVersion.releaseVersion = toText(next.dataVersion.releaseVersion, 80);
@@ -420,6 +425,9 @@ function getPublicAppConfig() {
       },
       availableTerms,
       dataVersion,
+      appConfig: Object.assign({
+        enableFosuStudentImport: process.env.FOSU_IMPORT_ENABLE !== "false",
+      }, config.appConfig || {}),
       notices,
       news: listNews().filter((item) => item.enabled === true),
       disclaimer: config.disclaimer || DEFAULT_DISCLAIMER,

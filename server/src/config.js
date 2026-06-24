@@ -52,6 +52,14 @@ const config = {
   FOSU_BASE_URL: process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn",
   // 强智 CAS 统一认证地址
   FOSU_AUTH_URL: process.env.FOSU_AUTH_URL || "https://authserver.fosu.edu.cn",
+  FOSU_AUTH_BASE: process.env.FOSU_AUTH_BASE || process.env.FOSU_AUTH_URL || "https://authserver.fosu.edu.cn",
+  FOSU_APAAS_BASE: process.env.FOSU_APAAS_BASE || "https://apaas.fosu.edu.cn",
+  FOSU_IMPORT_TIMEOUT_MS: parseInt(process.env.FOSU_IMPORT_TIMEOUT_MS || "30000", 10),
+  FOSU_IMPORT_PREVIEW_TTL_SECONDS: parseInt(process.env.FOSU_IMPORT_PREVIEW_TTL_SECONDS || "600", 10),
+  FOSU_IMPORT_ENABLE: process.env.FOSU_IMPORT_ENABLE || "true",
+  FOSU_IMPORT_USE_PLAYWRIGHT_FALLBACK: process.env.FOSU_IMPORT_USE_PLAYWRIGHT_FALLBACK === "true",
+  FOSU_IMPORT_MOBILE_UA: process.env.FOSU_IMPORT_MOBILE_UA || "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49",
+  FOSU_IMPORT_RATE_LIMIT_ENABLED: process.env.FOSU_IMPORT_RATE_LIMIT_ENABLED || "true",
 
   // 缓存生存时间 (单位: 秒)
   CACHE_TTL: {

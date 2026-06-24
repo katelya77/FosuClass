@@ -29,6 +29,7 @@ const adminPageRouter = require("./routes/adminPages");
 const contributeRouter = require("./routes/contribute");
 const feedbackRouter = require("./routes/feedback");
 const personalRouter = require("./routes/personal");
+const fosuApaasImportRouter = require("./routes/fosuApaasImport");
 const relayRouter = require("./routes/relay");
 const aiRouter = require("./routes/ai");
 
@@ -213,6 +214,7 @@ app.use("/api/health", healthRouter);
 app.use("/health", healthRouter);
 app.use("/api/fosu", fosuRouter);
 app.use("/api/fosu/personal", personalRouter);
+app.use("/api/schedule-import/fosu", fosuApaasImportRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/admin", adminRouter);
 app.use("/admin", adminPageRouter);

@@ -57,6 +57,18 @@ function buildPersonalXlsHeader(target) {
   };
 }
 
+function buildPersonalApaasHeader(target) {
+  const metadata = (target && target.metadata) || {};
+  const title = target.title || target.name || (metadata.studentName ? `${metadata.studentName}的个人课表` : "个人课表");
+  const term = metadata.term || target.semester || "";
+  const subtitle = target.subtitle || [metadata.className || "班级未确认", term, "APaaS导入"].filter(Boolean).join(" · ");
+  return {
+    title,
+    subtitle,
+    sourceText: target.sourceText || "佛山大学 APaaS 本科生学生课表",
+  };
+}
+
 Page({
   data: {
     brand: BRAND,
@@ -272,8 +284,10 @@ Page({
     let syncActionText = "同步课表";
     let sourceText = dataSource.text;
     if (target) {
-      if (target.type === "personal-xls") {
-        const header = buildPersonalXlsHeader(target);
+      if (target.type === "personal-xls" || target.type === "personal-apaas") {
+        const header = target.type === "personal-apaas"
+          ? buildPersonalApaasHeader(target)
+          : buildPersonalXlsHeader(target);
         displayClassName = header.title;
         scheduleSubtitle = header.subtitle;
         sourceText = header.sourceText;
@@ -369,7 +383,7 @@ Page({
 
   goLogin() {
     wx.navigateTo({
-      url: "/pages/personal-sync/personal-sync?tab=xls"
+      url: "/pages/personal-sync/personal-sync"
     });
   },
 
@@ -414,7 +428,7 @@ Page({
 
   goToSyncLogin() {
     wx.navigateTo({
-      url: "/pages/personal-sync/personal-sync?tab=xls"
+      url: "/pages/personal-sync/personal-sync"
     });
   },
 

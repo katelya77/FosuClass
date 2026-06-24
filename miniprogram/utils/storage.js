@@ -126,7 +126,7 @@ function normalizeStoredScheduleTarget(target) {
 
 function writePersonalScheduleCache(target) {
   const normalized = normalizeStoredScheduleTarget(target);
-  if (!normalized || normalized.type !== "personal-xls") return false;
+  if (!normalized || (normalized.type !== "personal-xls" && normalized.type !== "personal-apaas")) return false;
   try {
     wx.setStorageSync(PERSONAL_SCHEDULE_CACHE_KEY, {
       savedAt: Date.now(),

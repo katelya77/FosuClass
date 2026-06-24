@@ -273,7 +273,7 @@
         <button class="init-btn primary-btn" bindtap="goToSelectClass">去选择班级课表</button>
         <button class="init-btn secondary-btn" bindtap="skipSelect">先浏览全校课表</button>
         
-        <button class="init-sync-btn" bindtap="goToSyncLogin">XLS 手动导入个人课表</button>
+        <button class="init-sync-btn" bindtap="goToSyncLogin">导入个人课表</button>
       </view>
     </view>
   </view>
