@@ -416,7 +416,7 @@ function decorateStudentArrangement(arrangement, selectedMap, editedMap) {
     roomText: merged.roomName || "未注明",
     teacherText: merged.teacherName || "未注明",
     metaText: buildStudentArrangementMetaText(merged),
-    conflictText: merged.conflict ? "存在时间冲突，建议检查" : "",
+    conflictText: merged.conflict ? "存在时间重叠，建议检查" : "",
     reasonText: merged.reason || merged.groupReason || "请确认后再导入",
     canEdit: !merged.hasCompleteTime || merged.importDecision === "unscheduled",
   });
