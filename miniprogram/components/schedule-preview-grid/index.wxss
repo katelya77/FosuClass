@@ -1,0 +1,86 @@
+.preview-grid-shell {
+  overflow: hidden;
+  border: 1rpx solid #e3e8f0;
+  border-radius: 14rpx;
+  background: #ffffff;
+}
+
+.preview-grid-scroll {
+  max-height: 760rpx;
+  background: #f8fafc;
+}
+
+.preview-grid {
+  display: flex;
+  min-height: 1rpx;
+}
+
+.time-axis {
+  flex: 0 0 64rpx;
+  width: 64rpx;
+  background: #f1f5f9;
+}
+
+.time-head,
+.weekday-head {
+  box-sizing: border-box;
+  height: 56rpx;
+  border-bottom: 1rpx solid #dbe3ee;
+  color: #667085;
+  font-size: 20rpx;
+  font-weight: 900;
+  line-height: 56rpx;
+  text-align: center;
+}
+
+.time-cell {
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  border-bottom: 1rpx solid #e8edf4;
+  color: #94a3b8;
+  font-size: 19rpx;
+  font-weight: 900;
+}
+
+.section-no {
+  padding-top: 8rpx;
+}
+
+.day-track {
+  flex: 0 0 auto;
+  background: #ffffff;
+}
+
+.weekday-heads {
+  display: flex;
+  height: 56rpx;
+  background: #ffffff;
+}
+
+.weekday-head {
+  flex: 0 0 auto;
+  border-left: 1rpx solid #e8edf4;
+}
+
+.days-area {
+  position: relative;
+  display: flex;
+}
+
+.day-column {
+  position: relative;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  border-left: 1rpx solid #edf1f6;
+}
+
+.section-slot {
+  box-sizing: border-box;
+  border-bottom: 1rpx solid #edf1f6;
+}
+
+.section-divider {
+  border-top: 2rpx solid #d5dde8;
+}

@@ -69,6 +69,18 @@ function buildPersonalApaasHeader(target) {
   };
 }
 
+function decorateUnplacedCourses(courses) {
+  return (Array.isArray(courses) ? courses : []).map((course, index) => ({
+    id: course.id || course.arrangementId || `unplaced-${index}`,
+    courseName: course.displayCourseName || course.courseName || "未命名课程",
+    reason: course.reason || course.note || course.specialNote || "时间信息需要确认",
+    teacherName: course.teacherName || "",
+    roomName: course.roomName || course.classroom || "未注明",
+    weekText: course.weekText || "周次待确认",
+    sectionText: course.sectionText || "节次待确认",
+  }));
+}
+
 Page({
   data: {
     brand: BRAND,
@@ -99,6 +111,9 @@ Page({
     showWeekend: false,
     selectedCourse: null,
     detailVisible: false,
+    unplacedCourses: [],
+    unplacedCourseCount: 0,
+    showUnplacedCourses: false,
     
     // 新增状态
     showInitModal: false,
@@ -299,6 +314,7 @@ Page({
       }
       lastSyncText = target.updateTime || "";
     }
+    const unplacedCourses = decorateUnplacedCourses(target && target.unplacedCourses);
 
     this.setData({
       className: displayClassName,
@@ -323,6 +339,8 @@ Page({
       weekendShowMode: weekendShowMode,
       scrollX: scrollX,
       hasBoundTarget,
+      unplacedCourses,
+      unplacedCourseCount: unplacedCourses.length,
     });
   },
 
@@ -352,6 +370,15 @@ Page({
       detailVisible: false,
       selectedCourse: null,
     });
+  },
+
+  showUnplacedCourses() {
+    if (!this.data.unplacedCourseCount) return;
+    this.setData({ showUnplacedCourses: true });
+  },
+
+  closeUnplacedCourses() {
+    this.setData({ showUnplacedCourses: false });
   },
 
   onCopyCourseToCustom(event) {

@@ -1,0 +1,6 @@
+{
+  "component": true,
+  "usingComponents": {
+    "course-card": "../course-card/index"
+  }
+}

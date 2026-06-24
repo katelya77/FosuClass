@@ -24,6 +24,23 @@ const STUDENT_IMPORT_STEPS = [
   "正在整理课程数据",
 ];
 
+const STUDENT_PREVIEW_WEEK_MIN = 1;
+const STUDENT_PREVIEW_WEEK_MAX = 19;
+const STUDENT_WEEKDAY_LABELS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+const STUDENT_SECTION_LABELS = Array.from({ length: 14 }, (_, index) => `第${index + 1}节`);
+const STUDENT_GROUP_TITLES = {
+  autoInclude: "推荐导入课程",
+  needsConfirm: "待确认课程",
+  suspectedNotMine: "疑似非本班课程",
+  unscheduled: "未排入课程",
+};
+const STUDENT_DECISION_STATUS = {
+  auto_include: { text: "推荐", className: "status-auto" },
+  needs_confirm: { text: "待确认", className: "status-confirm" },
+  suspected_not_mine: { text: "疑似非本班", className: "status-suspect" },
+  unscheduled: { text: "未排入", className: "status-unscheduled" },
+};
+
 function formatFileSize(size) {
   const bytes = Number(size || 0);
   if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
@@ -108,6 +125,229 @@ function maskStudentId(studentId) {
   return `${value.slice(0, 4)}****${value.slice(-4)}`;
 }
 
+function clampPreviewWeek(week) {
+  const value = Number(week || 0) || 16;
+  return Math.max(STUDENT_PREVIEW_WEEK_MIN, Math.min(STUDENT_PREVIEW_WEEK_MAX, value));
+}
+
+function toNumberList(values, max) {
+  return (Array.isArray(values) ? values : [])
+    .map(Number)
+    .filter((item) => Number.isInteger(item) && item > 0 && (!max || item <= max))
+    .sort((left, right) => left - right);
+}
+
+function parseStudentNumberRange(text, max) {
+  const value = String(text || "")
+    .replace(/[，、；;]/g, ",")
+    .replace(/[~～—–至到]/g, "-")
+    .replace(/[第周节]/g, "")
+    .replace(/\s+/g, "");
+  const result = [];
+  value.split(",").forEach((part) => {
+    if (!part) return;
+    if (part.indexOf("-") >= 0) {
+      const pieces = part.split("-");
+      const start = Number(pieces[0]);
+      const end = Number(pieces[1]);
+      if (Number.isInteger(start) && Number.isInteger(end) && start > 0 && end >= start) {
+        for (let current = start; current <= end && (!max || current <= max); current += 1) {
+          result.push(current);
+        }
+      }
+      return;
+    }
+    const single = Number(part);
+    if (Number.isInteger(single) && single > 0 && (!max || single <= max)) {
+      result.push(single);
+    }
+  });
+  return Array.from(new Set(result)).sort((left, right) => left - right);
+}
+
+function formatStudentWeekText(weeks) {
+  const list = toNumberList(weeks, 60);
+  if (!list.length) return "";
+  const ranges = [];
+  let start = list[0];
+  let prev = list[0];
+  for (let index = 1; index <= list.length; index += 1) {
+    const current = list[index];
+    if (current === prev + 1) {
+      prev = current;
+      continue;
+    }
+    ranges.push(start === prev ? `${start}` : `${start}-${prev}`);
+    start = current;
+    prev = current;
+  }
+  return `${ranges.join(",")}周`;
+}
+
+function formatStudentSectionText(sections) {
+  const list = toNumberList(sections, 14);
+  if (!list.length) return "";
+  const consecutive = list.every((item, index) => index === 0 || item === list[index - 1] + 1);
+  return consecutive
+    ? `第${list[0]}-${list[list.length - 1]}节`
+    : `第${list.join(",")}节`;
+}
+
+function applyEditedArrangement(arrangement, editedMap = {}) {
+  const id = arrangement && arrangement.arrangementId;
+  const edited = id && editedMap[id] || null;
+  if (!edited) return Object.assign({}, arrangement);
+  const sections = toNumberList(edited.sections && edited.sections.length
+    ? edited.sections
+    : parseStudentNumberRange(edited.sectionText, 14), 14);
+  const weeks = toNumberList(edited.weeks && edited.weeks.length
+    ? edited.weeks
+    : parseStudentNumberRange(edited.weekText, 60), 60);
+  return Object.assign({}, arrangement, edited, {
+    weekday: Number(edited.weekday || arrangement.weekday || 0) || 0,
+    sections,
+    startSection: sections[0] || null,
+    endSection: sections[sections.length - 1] || null,
+    sectionText: formatStudentSectionText(sections) || edited.sectionText || arrangement.sectionText || "",
+    weeks,
+    weekText: formatStudentWeekText(weeks) || edited.weekText || arrangement.weekText || "",
+    roomName: edited.roomName || arrangement.roomName || "",
+    hasCompleteTime: Boolean((Number(edited.weekday || arrangement.weekday || 0) || 0) && sections.length && weeks.length),
+    edited: true,
+  });
+}
+
+function flattenStudentPreviewArrangements(groups) {
+  const buckets = groups || {};
+  return ["autoInclude", "needsConfirm", "suspectedNotMine", "unscheduled"].reduce((list, bucketKey) => {
+    (buckets[bucketKey] || []).forEach((group) => {
+      (group.arrangements || []).forEach((arrangement) => {
+        list.push(Object.assign({}, arrangement, {
+          bucketKey,
+          groupTitle: group.displayCourseName || arrangement.displayCourseName || arrangement.courseName || "",
+          groupReason: group.reason || "",
+        }));
+      });
+    });
+    return list;
+  }, []);
+}
+
+function arrangementActiveInWeek(arrangement, week) {
+  return toNumberList(arrangement && arrangement.weeks, 60).indexOf(Number(week)) >= 0;
+}
+
+function rangesOverlap(left, right) {
+  const leftSet = new Set(toNumberList(left, 80));
+  return toNumberList(right, 80).some((item) => leftSet.has(item));
+}
+
+function markStudentPreviewConflicts(cells) {
+  const selectedCells = cells.filter((cell) => cell.selected !== false);
+  selectedCells.forEach((cell) => { cell.conflict = false; });
+  for (let leftIndex = 0; leftIndex < selectedCells.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < selectedCells.length; rightIndex += 1) {
+      const left = selectedCells[leftIndex];
+      const right = selectedCells[rightIndex];
+      if (Number(left.weekday) !== Number(right.weekday)) continue;
+      if (!rangesOverlap(left.sections, right.sections)) continue;
+      left.conflict = true;
+      right.conflict = true;
+    }
+  }
+}
+
+function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
+  const targetWeek = clampPreviewWeek(week);
+  const cells = (arrangements || [])
+    .map((arrangement) => applyEditedArrangement(arrangement, editedMap))
+    .filter((arrangement) => arrangement && arrangement.hasCompleteTime && arrangementActiveInWeek(arrangement, targetWeek))
+    .map((arrangement) => {
+      const selected = selectedMap && Object.prototype.hasOwnProperty.call(selectedMap, arrangement.arrangementId)
+        ? Boolean(selectedMap[arrangement.arrangementId])
+        : Boolean(arrangement.selectedByDefault);
+      return {
+        id: arrangement.arrangementId,
+        arrangementId: arrangement.arrangementId,
+        courseGroupId: arrangement.courseGroupId,
+        courseName: arrangement.displayCourseName || arrangement.courseName,
+        displayCourseName: arrangement.displayCourseName || arrangement.courseName,
+        weekday: arrangement.weekday,
+        sections: arrangement.sections,
+        startSection: arrangement.startSection,
+        endSection: arrangement.endSection,
+        weekText: arrangement.weekText,
+        roomName: arrangement.roomName || "",
+        teacherName: arrangement.teacherName || "",
+        classNameRaw: arrangement.classNameRaw || "",
+        matchStatus: arrangement.matchStatus || "",
+        importDecision: arrangement.importDecision,
+        reason: arrangement.reason || "",
+        selected,
+        conflict: false,
+      };
+    });
+
+  markStudentPreviewConflicts(cells);
+  return {
+    week: targetWeek,
+    days: STUDENT_WEEKDAY_LABELS.map((label, index) => ({ weekday: index + 1, label })),
+    sections: Array.from({ length: 14 }, (_, index) => ({ section: index + 1, label: `${index + 1}` })),
+    cells,
+  };
+}
+
+function decorateStudentArrangement(arrangement, selectedMap, editedMap) {
+  const merged = applyEditedArrangement(arrangement, editedMap);
+  const id = merged.arrangementId;
+  const selected = selectedMap && Object.prototype.hasOwnProperty.call(selectedMap, id)
+    ? Boolean(selectedMap[id])
+    : Boolean(merged.selectedByDefault);
+  const status = STUDENT_DECISION_STATUS[merged.importDecision] || { text: "待确认", className: "status-confirm" };
+  const weekdayText = merged.weekday ? STUDENT_WEEKDAY_LABELS[merged.weekday - 1] : "";
+  const sectionText = merged.sectionText || formatStudentSectionText(merged.sections);
+  return Object.assign({}, merged, {
+    selected,
+    edited: Boolean(editedMap && editedMap[id]),
+    statusText: selected ? status.text : "未选择",
+    statusClass: selected ? status.className : "status-muted",
+    timeText: weekdayText && sectionText ? `${weekdayText} ${sectionText}` : "时间待确认",
+    roomText: merged.roomName || "未注明",
+    teacherText: merged.teacherName || "未注明",
+    reasonText: merged.reason || merged.groupReason || "请确认后再导入",
+    canEdit: !merged.hasCompleteTime || merged.importDecision === "unscheduled",
+  });
+}
+
+function decorateStudentGroups(groups, selectedMap, editedMap) {
+  const buckets = groups || {};
+  return ["autoInclude", "needsConfirm", "unscheduled", "suspectedNotMine"].map((bucketKey) => {
+    const groupList = (buckets[bucketKey] || []).map((group) => {
+      const arrangements = (group.arrangements || []).map((arrangement) =>
+        decorateStudentArrangement(Object.assign({}, arrangement, { bucketKey, groupReason: group.reason || "" }), selectedMap, editedMap)
+      );
+      const selectedCount = arrangements.filter((item) => item.selected).length;
+      return Object.assign({}, group, {
+        bucketKey,
+        arrangements,
+        arrangementCount: arrangements.length,
+        selectedCount,
+        countText: selectedCount ? `${selectedCount}/${arrangements.length} 已选` : `${arrangements.length} 项`,
+      });
+    });
+    const arrangementCount = groupList.reduce((sum, group) => sum + group.arrangementCount, 0);
+    const selectedCount = groupList.reduce((sum, group) => sum + group.selectedCount, 0);
+    return {
+      key: bucketKey,
+      title: STUDENT_GROUP_TITLES[bucketKey],
+      groups: groupList,
+      arrangementCount,
+      selectedCount,
+      summaryText: selectedCount ? `${selectedCount}/${arrangementCount} 已选` : `${arrangementCount} 项`,
+    };
+  });
+}
+
 function buildApaasScheduleDisplay(result) {
   const profile = result && result.profile || {};
   const summary = result && result.summary || {};
@@ -156,7 +396,7 @@ function shouldRetryStudentPreview(error) {
   return code === "IMPORT_KEY_EXPIRED" || code === "INVALID_ENCRYPTED_PAYLOAD";
 }
 
-async function requestStudentSchedulePreview(form, password) {
+async function requestStudentSchedulePreview(form, password, extra = {}) {
   const keyResult = await request.get("/api/schedule-import/fosu/public-key", {}, {
     showLoading: false,
     silentError: true,
@@ -171,6 +411,8 @@ async function requestStudentSchedulePreview(form, password) {
   });
   return request.post("/api/schedule-import/fosu/preview", Object.assign({
     keyId: keyResult.keyId,
+    semester: extra.semester || "",
+    selectedClassName: extra.selectedClassName || "",
   }, encrypted), {
     showLoading: false,
     silentError: true,
@@ -196,6 +438,25 @@ Page({
     },
     studentPreviewResult: null,
     studentPreviewToken: "",
+    studentPreviewWeek: 16,
+    studentPreviewGrid: null,
+    studentPreviewBuckets: [],
+    studentExpandedSections: {
+      autoInclude: true,
+      needsConfirm: false,
+      unscheduled: false,
+      suspectedNotMine: false,
+    },
+    studentSelectionMode: false,
+    studentSelectedCount: 0,
+    studentEditingArrangement: null,
+    editWeekdayLabels: STUDENT_WEEKDAY_LABELS,
+    editWeekdayIndex: 0,
+    editSectionLabels: STUDENT_SECTION_LABELS,
+    editStartIndex: 0,
+    editEndIndex: 1,
+    editWeekText: "",
+    editRoomName: "",
     studentImportedSchedule: null,
     selectedFile: null,
     loadingXls: false,
@@ -257,16 +518,26 @@ Page({
       wx.navigateTo({ url: "/pages/custom-courses/custom-courses" });
       return;
     }
+    this.studentPreviewArrangements = [];
+    this.studentSelectedArrangementMap = {};
+    this.studentEditedArrangementMap = {};
     this.setData({
       activeImportMethod: method || "method",
       syncSuccess: false,
       studentImportStage: "form",
       studentPreviewResult: null,
       studentPreviewToken: "",
+      studentPreviewGrid: null,
+      studentPreviewBuckets: [],
+      studentSelectionMode: false,
+      studentEditingArrangement: null,
     });
   },
 
   backToImportMethods() {
+    this.studentPreviewArrangements = [];
+    this.studentSelectedArrangementMap = {};
+    this.studentEditedArrangementMap = {};
     this.setData({
       activeImportMethod: "method",
       syncSuccess: false,
@@ -276,6 +547,10 @@ Page({
       studentImportConfirming: false,
       studentPreviewResult: null,
       studentPreviewToken: "",
+      studentPreviewGrid: null,
+      studentPreviewBuckets: [],
+      studentSelectionMode: false,
+      studentEditingArrangement: null,
       studentForm: Object.assign({}, this.data.studentForm, { password: "" }),
     });
   },
@@ -338,6 +613,235 @@ Page({
     }
   },
 
+  getStudentPreviewRequestExtra() {
+    const selectedRecord = this.data.termRecords[this.data.semesterIndex] || {};
+    const settings = getSettings && getSettings() || {};
+    const current = getCurrentScheduleTarget && getCurrentScheduleTarget() || {};
+    return {
+      semester: selectedRecord.term || this.data.semesterOptions[this.data.semesterIndex] || settings.semesterId || settings.semester || "",
+      selectedClassName: settings.className || current.className || current.name || "",
+    };
+  },
+
+  resetStudentPreviewState() {
+    this.studentPreviewArrangements = [];
+    this.studentSelectedArrangementMap = {};
+    this.studentEditedArrangementMap = {};
+    this.setData({
+      studentPreviewWeek: 16,
+      studentPreviewGrid: null,
+      studentPreviewBuckets: [],
+      studentSelectionMode: false,
+      studentSelectedCount: 0,
+      studentEditingArrangement: null,
+      editWeekdayIndex: 0,
+      editStartIndex: 0,
+      editEndIndex: 1,
+      editWeekText: "",
+      editRoomName: "",
+    });
+  },
+
+  prepareStudentPreview(preview) {
+    const arrangements = flattenStudentPreviewArrangements(preview && preview.groups);
+    const selectedMap = {};
+    arrangements.forEach((arrangement) => {
+      if (arrangement && arrangement.arrangementId) {
+        selectedMap[arrangement.arrangementId] = Boolean(arrangement.selectedByDefault);
+      }
+    });
+    this.studentPreviewArrangements = arrangements;
+    this.studentSelectedArrangementMap = selectedMap;
+    this.studentEditedArrangementMap = {};
+    const week = clampPreviewWeek(
+      preview && preview.summary && preview.summary.currentPreviewWeek ||
+      preview && preview.previewGrid && preview.previewGrid.week ||
+      16
+    );
+    this.refreshStudentPreviewState(preview, week);
+  },
+
+  refreshStudentPreviewState(preview, week) {
+    const result = preview || this.data.studentPreviewResult || {};
+    const arrangements = this.studentPreviewArrangements || [];
+    const selectedMap = this.studentSelectedArrangementMap || {};
+    const editedMap = this.studentEditedArrangementMap || {};
+    const targetWeek = clampPreviewWeek(week || this.data.studentPreviewWeek);
+    const selectedCount = arrangements.filter((arrangement) => selectedMap[arrangement.arrangementId]).length;
+    const expandedSections = this.data.studentExpandedSections || {};
+    const buckets = decorateStudentGroups(result.groups || {}, selectedMap, editedMap)
+      .map((bucket) => Object.assign({}, bucket, { expanded: Boolean(expandedSections[bucket.key]) }));
+    this.setData({
+      studentPreviewWeek: targetWeek,
+      studentPreviewGrid: buildStudentPreviewGrid(arrangements, targetWeek, selectedMap, editedMap),
+      studentPreviewBuckets: buckets,
+      studentSelectedCount: selectedCount,
+    });
+  },
+
+  onStudentPreviewWeekShift(event) {
+    const delta = Number(event.currentTarget.dataset.delta || 0) || 0;
+    const nextWeek = clampPreviewWeek(this.data.studentPreviewWeek + delta);
+    this.refreshStudentPreviewState(this.data.studentPreviewResult, nextWeek);
+  },
+
+  toggleStudentSection(event) {
+    const key = event.currentTarget.dataset.section;
+    if (!key) return;
+    const expanded = Object.assign({}, this.data.studentExpandedSections || {});
+    expanded[key] = !expanded[key];
+    this.setData({ studentExpandedSections: expanded }, () => {
+      this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
+    });
+  },
+
+  toggleStudentSelectionMode() {
+    this.setData({ studentSelectionMode: !this.data.studentSelectionMode });
+  },
+
+  findStudentArrangement(arrangementId) {
+    return (this.studentPreviewArrangements || []).find((arrangement) => arrangement.arrangementId === arrangementId) || null;
+  },
+
+  toggleStudentArrangement(event) {
+    const arrangementId = event.currentTarget.dataset.id;
+    const arrangement = this.findStudentArrangement(arrangementId);
+    if (!arrangement) return;
+    const edited = this.studentEditedArrangementMap && this.studentEditedArrangementMap[arrangementId];
+    const merged = applyEditedArrangement(arrangement, this.studentEditedArrangementMap || {});
+    const currentlySelected = Boolean(this.studentSelectedArrangementMap && this.studentSelectedArrangementMap[arrangementId]);
+    if (!currentlySelected && !merged.hasCompleteTime && !edited) {
+      wx.showToast({ title: "请先编辑时间后加入", icon: "none" });
+      return;
+    }
+    this.studentSelectedArrangementMap = Object.assign({}, this.studentSelectedArrangementMap, {
+      [arrangementId]: !currentlySelected,
+    });
+    this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
+  },
+
+  startEditStudentArrangement(event) {
+    const arrangementId = event.currentTarget.dataset.id;
+    const arrangement = this.findStudentArrangement(arrangementId);
+    if (!arrangement) return;
+    const merged = decorateStudentArrangement(arrangement, this.studentSelectedArrangementMap || {}, this.studentEditedArrangementMap || {});
+    const startSection = Number(merged.startSection || 1) || 1;
+    const endSection = Number(merged.endSection || Math.min(14, startSection + 1)) || startSection;
+    this.setData({
+      studentEditingArrangement: merged,
+      editWeekdayIndex: Math.max(0, Math.min(6, Number(merged.weekday || 1) - 1)),
+      editStartIndex: Math.max(0, Math.min(13, startSection - 1)),
+      editEndIndex: Math.max(0, Math.min(13, endSection - 1)),
+      editWeekText: merged.weekText || "",
+      editRoomName: merged.roomName || "",
+    });
+  },
+
+  cancelStudentArrangementEdit() {
+    this.setData({ studentEditingArrangement: null });
+  },
+
+  onEditWeekdayChange(event) {
+    this.setData({ editWeekdayIndex: Number(event.detail.value || 0) || 0 });
+  },
+
+  onEditStartSectionChange(event) {
+    const index = Number(event.detail.value || 0) || 0;
+    this.setData({
+      editStartIndex: index,
+      editEndIndex: Math.max(index, this.data.editEndIndex),
+    });
+  },
+
+  onEditEndSectionChange(event) {
+    this.setData({ editEndIndex: Number(event.detail.value || 0) || 0 });
+  },
+
+  onEditWeekTextInput(event) {
+    this.setData({ editWeekText: String(event.detail.value || "").slice(0, 40) });
+  },
+
+  onEditRoomInput(event) {
+    this.setData({ editRoomName: String(event.detail.value || "").slice(0, 50) });
+  },
+
+  saveStudentArrangementEdit() {
+    const base = this.data.studentEditingArrangement;
+    if (!base || !base.arrangementId) return;
+    const weekday = this.data.editWeekdayIndex + 1;
+    const startSection = this.data.editStartIndex + 1;
+    const endSection = this.data.editEndIndex + 1;
+    if (endSection < startSection) {
+      wx.showToast({ title: "结束节次不能早于开始节次", icon: "none" });
+      return;
+    }
+    const weeks = parseStudentNumberRange(this.data.editWeekText, 60);
+    if (!weeks.length) {
+      wx.showToast({ title: "请填写周次，例如 1-16周", icon: "none" });
+      return;
+    }
+    const sections = [];
+    for (let section = startSection; section <= endSection; section += 1) {
+      sections.push(section);
+    }
+    const edited = {
+      arrangementId: base.arrangementId,
+      baseArrangementId: base.arrangementId,
+      weekday,
+      sections,
+      startSection,
+      endSection,
+      sectionText: formatStudentSectionText(sections),
+      weeks,
+      weekText: formatStudentWeekText(weeks),
+      roomName: String(this.data.editRoomName || "").trim(),
+    };
+    this.studentEditedArrangementMap = Object.assign({}, this.studentEditedArrangementMap, {
+      [base.arrangementId]: edited,
+    });
+    this.studentSelectedArrangementMap = Object.assign({}, this.studentSelectedArrangementMap, {
+      [base.arrangementId]: true,
+    });
+    this.setData({ studentEditingArrangement: null });
+    this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
+  },
+
+  getSelectedStudentArrangementIds() {
+    const selectedMap = this.studentSelectedArrangementMap || {};
+    return Object.keys(selectedMap).filter((arrangementId) => selectedMap[arrangementId]);
+  },
+
+  getEditedStudentArrangements() {
+    const editedMap = this.studentEditedArrangementMap || {};
+    return Object.keys(editedMap).map((arrangementId) => editedMap[arrangementId]);
+  },
+
+  onStudentPreviewCourseTap(event) {
+    const course = event.detail && event.detail.course || {};
+    const weekdayText = course.weekday ? STUDENT_WEEKDAY_LABELS[course.weekday - 1] : "星期待确认";
+    const sectionText = course.sectionText || formatStudentSectionText(course.sections) || "节次待确认";
+    const matchTextMap = {
+      exact_match: "与当前班级课表一致",
+      time_match: "时间与当前班级课表一致",
+      course_match: "课程名称已匹配",
+      no_match: "请确认是否属于本人课表",
+    };
+    wx.showModal({
+      title: course.displayCourseName || course.courseName || "课程详情",
+      content: [
+        `${weekdayText} ${sectionText}`,
+        course.weekText || "周次待确认",
+        `地点：${course.roomName || "未注明"}`,
+        course.teacherName ? `教师：${course.teacherName}` : "",
+        course.classNameRaw ? `上课班级：${course.classNameRaw}` : "",
+        matchTextMap[course.matchStatus] || "",
+        course.reason || "",
+      ].filter(Boolean).join("\n"),
+      showCancel: false,
+      confirmText: "知道了",
+    });
+  },
+
   validateStudentForm() {
     const form = this.data.studentForm || {};
     const studentId = String(form.studentId || "").trim();
@@ -363,12 +867,22 @@ Page({
     if (this.data.studentImportLoading) return;
     const form = this.validateStudentForm();
     if (!form) return;
+    const selectedRecord = this.data.termRecords[this.data.semesterIndex];
+    if (selectedRecord && !selectedRecord.importable) {
+      wx.showToast({ title: "该学期暂不能导入", icon: "none" });
+      return;
+    }
+    const previewExtra = this.getStudentPreviewRequestExtra();
 
     this.setData({
       studentImportLoading: true,
       studentImportStage: "loading",
       studentPreviewResult: null,
       studentPreviewToken: "",
+      studentPreviewGrid: null,
+      studentPreviewBuckets: [],
+      studentSelectionMode: false,
+      studentEditingArrangement: null,
     });
     this.startStudentLoadingSteps();
 
@@ -376,12 +890,12 @@ Page({
     try {
       let preview;
       try {
-        preview = await requestStudentSchedulePreview(form, plainPassword);
+        preview = await requestStudentSchedulePreview(form, plainPassword, previewExtra);
       } catch (error) {
         if (!shouldRetryStudentPreview(error)) {
           throw error;
         }
-        preview = await requestStudentSchedulePreview(form, plainPassword);
+        preview = await requestStudentSchedulePreview(form, plainPassword, previewExtra);
       }
       plainPassword = "";
       this.setData({ "studentForm.password": "" });
@@ -399,6 +913,7 @@ Page({
           maskedStudentId: metadata.studentIdMasked,
         }),
       });
+      this.prepareStudentPreview(this.data.studentPreviewResult);
       wx.showToast({ title: "读取成功", icon: "success" });
     } catch (error) {
       plainPassword = "";
@@ -585,12 +1100,19 @@ Page({
         dedupe: false,
       }).catch(() => {});
     }
+    this.studentPreviewArrangements = [];
+    this.studentSelectedArrangementMap = {};
+    this.studentEditedArrangementMap = {};
     this.setData({
       studentImportStage: "form",
       studentImportLoading: false,
       studentImportConfirming: false,
       studentPreviewResult: null,
       studentPreviewToken: "",
+      studentPreviewGrid: null,
+      studentPreviewBuckets: [],
+      studentSelectionMode: false,
+      studentEditingArrangement: null,
       studentImportedSchedule: null,
       studentForm: Object.assign({}, this.data.studentForm, { password: "" }),
     });
@@ -603,6 +1125,8 @@ Page({
     request.post("/api/schedule-import/fosu/confirm", {
       importPreviewToken: token,
       mode: "replace_fosu_source",
+      selectedArrangementIds: this.getSelectedStudentArrangementIds(),
+      editedArrangements: this.getEditedStudentArrangements(),
       existingCourses: getExistingPersonalCoursesForStudentImport(),
     }, {
       loadingTitle: "正在导入...",
@@ -627,6 +1151,8 @@ Page({
             studentImportStage: "done",
             studentImportedSchedule: target,
             studentPreviewToken: "",
+            studentSelectionMode: false,
+            studentEditingArrangement: null,
           });
           wx.showToast({ title: "导入成功", icon: "success" });
           setTimeout(() => {

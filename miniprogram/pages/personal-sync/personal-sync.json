@@ -1,4 +1,6 @@
 {
   "navigationBarTitleText": "个人课表同步",
-  "usingComponents": {}
+  "usingComponents": {
+    "schedule-preview-grid": "/components/schedule-preview-grid/index"
+  }
 }
