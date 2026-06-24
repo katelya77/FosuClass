@@ -20,6 +20,14 @@ const IMPORT_DECISION = {
   EXCLUDED_DUPLICATE: "excluded_duplicate",
 };
 
+const PREVIEW_BUCKET = {
+  RECOMMENDED: "recommended",
+  PENDING: "pending",
+  UNPLACED: "unplaced",
+  SUSPECTED: "suspected",
+  DUPLICATE: "duplicate",
+};
+
 function toText(value) {
   return String(value == null ? "" : value).trim();
 }
@@ -256,7 +264,25 @@ function isClassScopeMatch(classScope, targetClassName) {
   return "not_match";
 }
 
-function inferTargetClassName(rows, existingSelectedClassName) {
+function inferClassNameFromLocalCourses(localCourses) {
+  const counts = new Map();
+  (Array.isArray(localCourses) ? localCourses : []).forEach((course) => {
+    const raw = toText(course && (course.className || course.classNameRaw || course.targetClassName || ""));
+    const parsed = parseTargetClassName(raw);
+    if (!parsed) return;
+    counts.set(parsed.className, (counts.get(parsed.className) || 0) + 1);
+  });
+  const sorted = Array.from(counts.entries()).sort((left, right) => right[1] - left[1]);
+  if (!sorted.length) return null;
+  return {
+    targetClassName: sorted[0][0],
+    className: sorted[0][0],
+    classNameConfidence: sorted[0][1] >= 2 ? "medium" : "low",
+    source: "local_schedule",
+  };
+}
+
+function inferTargetClassName(rows, existingSelectedClassName, localCourses) {
   const existing = parseTargetClassName(existingSelectedClassName);
   const counts = new Map();
   (rows || []).forEach((row) => {
@@ -270,23 +296,21 @@ function inferTargetClassName(rows, existingSelectedClassName) {
 
   if (existing) {
     const existingCount = counts.get(existing.className) || 0;
-    if (existingCount > 0 || !counts.size) {
-      return {
-        targetClassName: existing.className,
-        className: existing.className,
-        classNameConfidence: existingCount > 0 ? "high" : "medium",
-        source: "selected_class",
-      };
-    }
+    return {
+      targetClassName: existing.className,
+      className: existing.className,
+      classNameConfidence: existingCount > 0 ? "high" : "medium",
+      source: "selected_class",
+    };
   }
 
   const sorted = Array.from(counts.entries()).sort((left, right) => right[1] - left[1]);
   if (!sorted.length) {
-    return {
-      targetClassName: existing ? existing.className : "",
-      className: existing ? existing.className : "",
-      classNameConfidence: existing ? "medium" : "low",
-      source: existing ? "selected_class" : "unknown",
+    return inferClassNameFromLocalCourses(localCourses) || {
+      targetClassName: "",
+      className: "",
+      classNameConfidence: "low",
+      source: "unknown",
     };
   }
 
@@ -616,11 +640,38 @@ function compactPreviewCourse(arrangement) {
   };
 }
 
-function groupBucketForDecision(decision) {
+function legacyGroupBucketForDecision(decision) {
   if (decision === IMPORT_DECISION.AUTO_INCLUDE) return "autoInclude";
   if (decision === IMPORT_DECISION.SUSPECTED_NOT_MINE) return "suspectedNotMine";
   if (decision === IMPORT_DECISION.UNSCHEDULED) return "unscheduled";
   return "needsConfirm";
+}
+
+function previewBucketForDecision(decision) {
+  if (decision === IMPORT_DECISION.AUTO_INCLUDE) return PREVIEW_BUCKET.RECOMMENDED;
+  if (decision === IMPORT_DECISION.SUSPECTED_NOT_MINE) return PREVIEW_BUCKET.SUSPECTED;
+  if (decision === IMPORT_DECISION.UNSCHEDULED) return PREVIEW_BUCKET.UNPLACED;
+  if (decision === IMPORT_DECISION.EXCLUDED_DUPLICATE) return PREVIEW_BUCKET.DUPLICATE;
+  return PREVIEW_BUCKET.PENDING;
+}
+
+function createEmptyPreviewBuckets() {
+  return {
+    recommended: [],
+    pending: [],
+    unplaced: [],
+    suspected: [],
+    duplicate: [],
+  };
+}
+
+function createLegacyGroupsFromBuckets(buckets) {
+  return {
+    autoInclude: buckets.recommended || [],
+    needsConfirm: buckets.pending || [],
+    suspectedNotMine: buckets.suspected || [],
+    unscheduled: buckets.unplaced || [],
+  };
 }
 
 function summarizeGroup(group) {
@@ -645,7 +696,11 @@ function buildScheduleImportPreview(rawRows, options = {}) {
   const importedAt = options.importedAt || new Date().toISOString();
   const normalized = normalizeScheduleRows(rawRows, { studentId, semester, importedAt });
   const rows = normalized.rows || [];
-  const targetInference = inferTargetClassName(rows, options.existingSelectedClassName || options.targetClassName || "");
+  const targetInference = inferTargetClassName(
+    rows,
+    options.existingSelectedClassName || options.targetClassName || "",
+    options.localCourses || []
+  );
   const targetClassName = targetInference.targetClassName || "";
   const localIndex = buildLocalScheduleIndex(options.localCourses || []);
   const groupMap = new Map();
@@ -786,10 +841,11 @@ function buildScheduleImportPreview(rawRows, options = {}) {
   const autoArrangements = allArrangements.filter((item) => item.importDecision === IMPORT_DECISION.AUTO_INCLUDE);
   const conflictCount = countConflicts(autoArrangements);
   const currentPreviewWeek = Math.min(MAX_PREVIEW_WEEKS, Math.max(1, Number(options.currentPreviewWeek || DEFAULT_PREVIEW_WEEK) || DEFAULT_PREVIEW_WEEK));
-  const groupedPayload = { autoInclude: [], needsConfirm: [], suspectedNotMine: [], unscheduled: [] };
+  const buckets = createEmptyPreviewBuckets();
   groups.forEach((group) => {
-    groupedPayload[groupBucketForDecision(group.importDecision)].push(summarizeGroup(group));
+    buckets[previewBucketForDecision(group.importDecision)].push(summarizeGroup(group));
   });
+  const groupedPayload = createLegacyGroupsFromBuckets(buckets);
 
   const scheduledCourses = autoArrangements.map((arrangement) => toImportCourse(arrangement, {
     studentId,
@@ -826,15 +882,25 @@ function buildScheduleImportPreview(rawRows, options = {}) {
       unscheduledCourseCount: unscheduledCourses.length,
       autoIncludeCount: groupedPayload.autoInclude.length,
       arrangementAutoIncludeCount: autoArrangements.length,
+      recommendedCount: buckets.recommended.length,
+      recommendedArrangementCount: autoArrangements.length,
       needsConfirmCount: allArrangements.filter((item) => item.importDecision === IMPORT_DECISION.NEEDS_CONFIRM).length,
+      pendingCount: buckets.pending.length,
+      pendingArrangementCount: allArrangements.filter((item) => item.importDecision === IMPORT_DECISION.NEEDS_CONFIRM).length,
       suspectedNotMineCount: allArrangements.filter((item) => item.importDecision === IMPORT_DECISION.SUSPECTED_NOT_MINE).length,
+      suspectedCount: buckets.suspected.length,
+      suspectedArrangementCount: allArrangements.filter((item) => item.importDecision === IMPORT_DECISION.SUSPECTED_NOT_MINE).length,
       unscheduledCount: allArrangements.filter((item) => item.importDecision === IMPORT_DECISION.UNSCHEDULED).length,
+      unplacedCount: buckets.unplaced.length,
+      unplacedArrangementCount: allArrangements.filter((item) => item.importDecision === IMPORT_DECISION.UNSCHEDULED).length,
       duplicateMergedCount,
+      duplicateCount: duplicateMergedCount,
       conflictCount,
       currentPreviewWeek,
       semester,
     },
     previewGrid: buildPreviewGrid(allArrangements, currentPreviewWeek),
+    buckets,
     groups: groupedPayload,
     uiHints: {
       defaultConfirmText: "确认导入推荐课程",
@@ -858,6 +924,7 @@ function buildScheduleImportPreview(rawRows, options = {}) {
 
 module.exports = {
   IMPORT_DECISION,
+  PREVIEW_BUCKET,
   buildLocalScheduleIndex,
   buildPreviewGrid,
   buildScheduleImportPreview,

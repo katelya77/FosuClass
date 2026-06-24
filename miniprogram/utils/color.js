@@ -1,23 +1,41 @@
 const COURSE_COLORS = [
-  "#5d9cec",
-  "#26b99a",
-  "#ff9f43",
-  "#8e6ee8",
-  "#ef6f8f",
-  "#15b6d4",
-  "#f3a63b",
-  "#4f8fdf",
-  "#43b883",
-  "#d96bd8",
+  "#2563eb",
+  "#059669",
+  "#d97706",
+  "#dc2626",
+  "#0891b2",
+  "#7c3aed",
+  "#db2777",
+  "#0f766e",
+  "#ea580c",
+  "#4f46e5",
+  "#16a34a",
+  "#be123c",
+  "#0369a1",
+  "#a16207",
+  "#9333ea",
+  "#15803d",
 ];
 
+function normalizeCourseColorKey(courseName) {
+  return String(courseName || "")
+    .toLowerCase()
+    .replace(/[（]/g, "(")
+    .replace(/[）]/g, ")")
+    .replace(/[【［]/g, "[")
+    .replace(/[】］]/g, "]")
+    .replace(/\s+/g, "")
+    .trim();
+}
+
 function hashText(text) {
-  let hash = 0;
-  const value = text || "";
+  let hash = 2166136261;
+  const value = normalizeCourseColorKey(text);
   for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 31 + value.charCodeAt(index)) % 100000;
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
   }
-  return hash;
+  return hash >>> 0;
 }
 
 function colorForCourse(courseName) {
@@ -27,4 +45,5 @@ function colorForCourse(courseName) {
 module.exports = {
   COURSE_COLORS,
   colorForCourse,
+  normalizeCourseColorKey,
 };

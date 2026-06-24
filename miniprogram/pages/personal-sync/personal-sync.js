@@ -4,7 +4,7 @@ const aiAssistantService = require("../../services/aiAssistantService");
 const appConfigService = require("../../services/appConfigService");
 const personalTermOptionsService = require("../../services/personalTermOptionsService");
 const { encryptCredentialPayload } = require("../../services/fosuStudentImportCrypto");
-const { getRuntimeTermConfig } = require("../../utils/week");
+const { getRuntimeTermConfig, getTodayTeachingInfo } = require("../../utils/week");
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const WEEKDAY_TABS = [
@@ -18,21 +18,39 @@ const WEEKDAY_TABS = [
   { label: "周日", value: 7 },
 ];
 const STUDENT_IMPORT_STEPS = [
-  "正在连接学校课表系统",
-  "正在验证账号",
-  "正在读取本人课表数据",
-  "正在整理课程数据",
+  "连接学校课表系统",
+  "验证账号",
+  "读取课程",
+  "整理课表",
+  "生成预览",
 ];
 
 const STUDENT_PREVIEW_WEEK_MIN = 1;
 const STUDENT_PREVIEW_WEEK_MAX = 19;
 const STUDENT_WEEKDAY_LABELS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
 const STUDENT_SECTION_LABELS = Array.from({ length: 14 }, (_, index) => `第${index + 1}节`);
+const STUDENT_BUCKET_KEYS = ["recommended", "pending", "unplaced", "suspected"];
+const STUDENT_BUCKET_LEGACY_KEYS = {
+  recommended: "autoInclude",
+  pending: "needsConfirm",
+  unplaced: "unscheduled",
+  suspected: "suspectedNotMine",
+};
 const STUDENT_GROUP_TITLES = {
-  autoInclude: "推荐导入课程",
-  needsConfirm: "待确认课程",
-  suspectedNotMine: "疑似非本班课程",
-  unscheduled: "未排入课程",
+  recommended: "已推荐",
+  pending: "待确认",
+  unplaced: "未排入",
+  suspected: "疑似非本班",
+  autoInclude: "已推荐",
+  needsConfirm: "待确认",
+  suspectedNotMine: "疑似非本班",
+  unscheduled: "未排入",
+};
+const STUDENT_BUCKET_HELP = {
+  recommended: "系统已按班级、时间和本地课表匹配整理好，默认会导入。",
+  pending: "这些课程可能属于你，但信息不够确定，需要你手动选择。",
+  unplaced: "这些课程缺少固定周次、星期或节次，不会直接放进课表格。",
+  suspected: "这些课程更像其他班级安排，默认不会导入。",
 };
 const STUDENT_DECISION_STATUS = {
   auto_include: { text: "推荐", className: "status-auto" },
@@ -130,6 +148,22 @@ function clampPreviewWeek(week) {
   return Math.max(STUDENT_PREVIEW_WEEK_MIN, Math.min(STUDENT_PREVIEW_WEEK_MAX, value));
 }
 
+function resolveStudentCurrentPreviewWeek() {
+  const settings = getSettings && getSettings() || {};
+  const termConfig = getRuntimeTermConfig();
+  if (settings.manualWeekOverride && settings.currentWeek) {
+    return clampPreviewWeek(settings.currentWeek);
+  }
+  const todayInfo = getTodayTeachingInfo(new Date(), [], termConfig);
+  if (todayInfo && todayInfo.isInTerm && todayInfo.weekNo) {
+    return clampPreviewWeek(todayInfo.weekNo);
+  }
+  if (settings.currentWeek) {
+    return clampPreviewWeek(settings.currentWeek);
+  }
+  return 0;
+}
+
 function toNumberList(values, max) {
   return (Array.isArray(values) ? values : [])
     .map(Number)
@@ -217,13 +251,27 @@ function applyEditedArrangement(arrangement, editedMap = {}) {
   });
 }
 
-function flattenStudentPreviewArrangements(groups) {
-  const buckets = groups || {};
-  return ["autoInclude", "needsConfirm", "suspectedNotMine", "unscheduled"].reduce((list, bucketKey) => {
+function normalizeStudentPreviewBuckets(previewOrGroups) {
+  const source = previewOrGroups && (previewOrGroups.buckets || previewOrGroups.groups)
+    ? (previewOrGroups.buckets || previewOrGroups.groups)
+    : (previewOrGroups || {});
+  return STUDENT_BUCKET_KEYS.reduce((result, bucketKey) => {
+    const legacyKey = STUDENT_BUCKET_LEGACY_KEYS[bucketKey];
+    result[bucketKey] = Array.isArray(source[bucketKey])
+      ? source[bucketKey]
+      : (Array.isArray(source[legacyKey]) ? source[legacyKey] : []);
+    return result;
+  }, {});
+}
+
+function flattenStudentPreviewArrangements(preview) {
+  const buckets = normalizeStudentPreviewBuckets(preview);
+  return STUDENT_BUCKET_KEYS.reduce((list, bucketKey) => {
     (buckets[bucketKey] || []).forEach((group) => {
       (group.arrangements || []).forEach((arrangement) => {
         list.push(Object.assign({}, arrangement, {
           bucketKey,
+          legacyBucketKey: STUDENT_BUCKET_LEGACY_KEYS[bucketKey],
           groupTitle: group.displayCourseName || arrangement.displayCourseName || arrangement.courseName || "",
           groupReason: group.reason || "",
         }));
@@ -272,6 +320,7 @@ function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
         courseGroupId: arrangement.courseGroupId,
         courseName: arrangement.displayCourseName || arrangement.courseName,
         displayCourseName: arrangement.displayCourseName || arrangement.courseName,
+        normalizedCourseName: arrangement.normalizedCourseName || arrangement.courseName || arrangement.displayCourseName || "",
         weekday: arrangement.weekday,
         sections: arrangement.sections,
         startSection: arrangement.startSection,
@@ -319,20 +368,23 @@ function decorateStudentArrangement(arrangement, selectedMap, editedMap) {
   });
 }
 
-function decorateStudentGroups(groups, selectedMap, editedMap) {
-  const buckets = groups || {};
-  return ["autoInclude", "needsConfirm", "unscheduled", "suspectedNotMine"].map((bucketKey) => {
+function decorateStudentGroups(groups, selectedMap, editedMap, expandedGroups = {}) {
+  const buckets = normalizeStudentPreviewBuckets(groups);
+  return STUDENT_BUCKET_KEYS.map((bucketKey) => {
     const groupList = (buckets[bucketKey] || []).map((group) => {
       const arrangements = (group.arrangements || []).map((arrangement) =>
         decorateStudentArrangement(Object.assign({}, arrangement, { bucketKey, groupReason: group.reason || "" }), selectedMap, editedMap)
       );
       const selectedCount = arrangements.filter((item) => item.selected).length;
+      const viewKey = group.courseGroupId || `${bucketKey}-${group.displayCourseName || group.courseName || arrangements[0] && arrangements[0].arrangementId || "group"}`;
       return Object.assign({}, group, {
         bucketKey,
+        viewKey,
         arrangements,
         arrangementCount: arrangements.length,
         selectedCount,
         countText: selectedCount ? `${selectedCount}/${arrangements.length} 已选` : `${arrangements.length} 项`,
+        expanded: Boolean(expandedGroups[viewKey]),
       });
     });
     const arrangementCount = groupList.reduce((sum, group) => sum + group.arrangementCount, 0);
@@ -340,6 +392,7 @@ function decorateStudentGroups(groups, selectedMap, editedMap) {
     return {
       key: bucketKey,
       title: STUDENT_GROUP_TITLES[bucketKey],
+      help: STUDENT_BUCKET_HELP[bucketKey],
       groups: groupList,
       arrangementCount,
       selectedCount,
@@ -393,7 +446,10 @@ function getStudentImportErrorCode(error) {
 
 function shouldRetryStudentPreview(error) {
   const code = getStudentImportErrorCode(error);
-  return code === "IMPORT_KEY_EXPIRED" || code === "INVALID_ENCRYPTED_PAYLOAD";
+  return code === "IMPORT_KEY_EXPIRED" ||
+    code === "INVALID_ENCRYPTED_PAYLOAD" ||
+    code === "SCHOOL_SYSTEM_TIMEOUT" ||
+    code === "NETWORK_TIMEOUT";
 }
 
 async function requestStudentSchedulePreview(form, password, extra = {}) {
@@ -428,6 +484,8 @@ Page({
     studentImportEnabled: true,
     studentImportSteps: STUDENT_IMPORT_STEPS,
     studentLoadingStepIndex: 0,
+    studentLoadingProgressStyle: "width: 14%;",
+    studentImportSlow: false,
     studentImportStage: "form",
     studentImportLoading: false,
     studentImportConfirming: false,
@@ -441,6 +499,13 @@ Page({
     studentPreviewWeek: 16,
     studentPreviewGrid: null,
     studentPreviewBuckets: [],
+    studentAdvancedMode: false,
+    studentAdvancedTabs: [],
+    studentActiveBucket: "recommended",
+    studentActiveBucketTitle: STUDENT_GROUP_TITLES.recommended,
+    studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
+    studentActiveBucketGroups: [],
+    studentExpandedGroups: {},
     studentExpandedSections: {
       autoInclude: true,
       needsConfirm: false,
@@ -449,6 +514,9 @@ Page({
     },
     studentSelectionMode: false,
     studentSelectedCount: 0,
+    studentRecommendedCount: 0,
+    studentPendingCount: 0,
+    studentConflictCount: 0,
     studentEditingArrangement: null,
     editWeekdayLabels: STUDENT_WEEKDAY_LABELS,
     editWeekdayIndex: 0,
@@ -529,6 +597,13 @@ Page({
       studentPreviewToken: "",
       studentPreviewGrid: null,
       studentPreviewBuckets: [],
+      studentAdvancedMode: false,
+      studentAdvancedTabs: [],
+      studentActiveBucket: "recommended",
+      studentActiveBucketTitle: STUDENT_GROUP_TITLES.recommended,
+      studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
+      studentActiveBucketGroups: [],
+      studentExpandedGroups: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
     });
@@ -549,6 +624,13 @@ Page({
       studentPreviewToken: "",
       studentPreviewGrid: null,
       studentPreviewBuckets: [],
+      studentAdvancedMode: false,
+      studentAdvancedTabs: [],
+      studentActiveBucket: "recommended",
+      studentActiveBucketTitle: STUDENT_GROUP_TITLES.recommended,
+      studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
+      studentActiveBucketGroups: [],
+      studentExpandedGroups: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
       studentForm: Object.assign({}, this.data.studentForm, { password: "" }),
@@ -595,15 +677,29 @@ Page({
     if (this.studentStepTimer) {
       clearInterval(this.studentStepTimer);
     }
-    this.setData({ studentLoadingStepIndex: 0 });
+    if (this.studentSlowTimer) {
+      clearTimeout(this.studentSlowTimer);
+    }
+    this.setData({
+      studentLoadingStepIndex: 0,
+      studentLoadingProgressStyle: "width: 14%;",
+      studentImportSlow: false,
+    });
     this.studentStepTimer = setInterval(() => {
       const next = Math.min(STUDENT_IMPORT_STEPS.length - 1, this.data.studentLoadingStepIndex + 1);
-      this.setData({ studentLoadingStepIndex: next });
+      const progress = Math.min(92, 14 + Math.round((next / (STUDENT_IMPORT_STEPS.length - 1)) * 76));
+      this.setData({
+        studentLoadingStepIndex: next,
+        studentLoadingProgressStyle: `width: ${progress}%;`,
+      });
       if (next >= STUDENT_IMPORT_STEPS.length - 1 && this.studentStepTimer) {
         clearInterval(this.studentStepTimer);
         this.studentStepTimer = null;
       }
     }, 1800);
+    this.studentSlowTimer = setTimeout(() => {
+      this.setData({ studentImportSlow: true });
+    }, 8000);
   },
 
   stopStudentLoadingSteps() {
@@ -611,6 +707,14 @@ Page({
       clearInterval(this.studentStepTimer);
       this.studentStepTimer = null;
     }
+    if (this.studentSlowTimer) {
+      clearTimeout(this.studentSlowTimer);
+      this.studentSlowTimer = null;
+    }
+    this.setData({
+      studentLoadingProgressStyle: "width: 100%;",
+      studentImportSlow: false,
+    });
   },
 
   getStudentPreviewRequestExtra() {
@@ -631,8 +735,18 @@ Page({
       studentPreviewWeek: 16,
       studentPreviewGrid: null,
       studentPreviewBuckets: [],
+      studentAdvancedMode: false,
+      studentAdvancedTabs: [],
+      studentActiveBucket: "recommended",
+      studentActiveBucketTitle: STUDENT_GROUP_TITLES.recommended,
+      studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
+      studentActiveBucketGroups: [],
+      studentExpandedGroups: {},
       studentSelectionMode: false,
       studentSelectedCount: 0,
+      studentRecommendedCount: 0,
+      studentPendingCount: 0,
+      studentConflictCount: 0,
       studentEditingArrangement: null,
       editWeekdayIndex: 0,
       editStartIndex: 0,
@@ -643,7 +757,7 @@ Page({
   },
 
   prepareStudentPreview(preview) {
-    const arrangements = flattenStudentPreviewArrangements(preview && preview.groups);
+    const arrangements = flattenStudentPreviewArrangements(preview);
     const selectedMap = {};
     arrangements.forEach((arrangement) => {
       if (arrangement && arrangement.arrangementId) {
@@ -653,7 +767,13 @@ Page({
     this.studentPreviewArrangements = arrangements;
     this.studentSelectedArrangementMap = selectedMap;
     this.studentEditedArrangementMap = {};
+    this.setData({
+      studentAdvancedMode: false,
+      studentActiveBucket: "recommended",
+      studentExpandedGroups: {},
+    });
     const week = clampPreviewWeek(
+      resolveStudentCurrentPreviewWeek() ||
       preview && preview.summary && preview.summary.currentPreviewWeek ||
       preview && preview.previewGrid && preview.previewGrid.week ||
       16
@@ -668,14 +788,33 @@ Page({
     const editedMap = this.studentEditedArrangementMap || {};
     const targetWeek = clampPreviewWeek(week || this.data.studentPreviewWeek);
     const selectedCount = arrangements.filter((arrangement) => selectedMap[arrangement.arrangementId]).length;
-    const expandedSections = this.data.studentExpandedSections || {};
-    const buckets = decorateStudentGroups(result.groups || {}, selectedMap, editedMap)
-      .map((bucket) => Object.assign({}, bucket, { expanded: Boolean(expandedSections[bucket.key]) }));
+    const expandedGroups = this.data.studentExpandedGroups || {};
+    const buckets = decorateStudentGroups(result, selectedMap, editedMap, expandedGroups);
+    const activeBucket = STUDENT_BUCKET_KEYS.indexOf(this.data.studentActiveBucket) >= 0
+      ? this.data.studentActiveBucket
+      : "recommended";
+    const activeBucketModel = buckets.find((bucket) => bucket.key === activeBucket) || buckets[0] || {};
+    const summary = result.summary || {};
+    const recommendedCount = summary.recommendedArrangementCount || summary.arrangementAutoIncludeCount || summary.scheduledCourseCount || 0;
+    const pendingCount = (summary.pendingArrangementCount || summary.needsConfirmCount || 0) +
+      (summary.unplacedArrangementCount || summary.unscheduledCount || 0);
+    const conflictCount = summary.conflictCount || 0;
     this.setData({
       studentPreviewWeek: targetWeek,
       studentPreviewGrid: buildStudentPreviewGrid(arrangements, targetWeek, selectedMap, editedMap),
       studentPreviewBuckets: buckets,
+      studentAdvancedTabs: buckets.map((bucket) => Object.assign({}, bucket, {
+        active: bucket.key === activeBucket,
+        countText: `${bucket.arrangementCount || 0}`,
+      })),
+      studentActiveBucket: activeBucket,
+      studentActiveBucketTitle: activeBucketModel.title || STUDENT_GROUP_TITLES.recommended,
+      studentActiveBucketHelp: activeBucketModel.help || STUDENT_BUCKET_HELP.recommended,
+      studentActiveBucketGroups: activeBucketModel.groups || [],
       studentSelectedCount: selectedCount,
+      studentRecommendedCount: recommendedCount,
+      studentPendingCount: pendingCount,
+      studentConflictCount: conflictCount,
     });
   },
 
@@ -699,25 +838,64 @@ Page({
     this.setData({ studentSelectionMode: !this.data.studentSelectionMode });
   },
 
+  toggleStudentAdvancedMode() {
+    const next = !this.data.studentAdvancedMode;
+    this.setData({
+      studentAdvancedMode: next,
+      studentSelectionMode: next,
+    }, () => {
+      this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
+    });
+  },
+
+  onStudentBucketTabTap(event) {
+    const key = event.currentTarget.dataset.key;
+    if (STUDENT_BUCKET_KEYS.indexOf(key) < 0) return;
+    this.setData({ studentActiveBucket: key }, () => {
+      this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
+    });
+  },
+
+  toggleStudentGroup(event) {
+    const key = event.currentTarget.dataset.key;
+    if (!key) return;
+    const expanded = Object.assign({}, this.data.studentExpandedGroups || {});
+    expanded[key] = !expanded[key];
+    this.setData({ studentExpandedGroups: expanded }, () => {
+      this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
+    });
+  },
+
   findStudentArrangement(arrangementId) {
     return (this.studentPreviewArrangements || []).find((arrangement) => arrangement.arrangementId === arrangementId) || null;
   },
 
-  toggleStudentArrangement(event) {
-    const arrangementId = event.currentTarget.dataset.id;
+  setStudentArrangementSelected(arrangementId, selected) {
     const arrangement = this.findStudentArrangement(arrangementId);
-    if (!arrangement) return;
+    if (!arrangement) return false;
     const edited = this.studentEditedArrangementMap && this.studentEditedArrangementMap[arrangementId];
     const merged = applyEditedArrangement(arrangement, this.studentEditedArrangementMap || {});
-    const currentlySelected = Boolean(this.studentSelectedArrangementMap && this.studentSelectedArrangementMap[arrangementId]);
-    if (!currentlySelected && !merged.hasCompleteTime && !edited) {
+    if (selected && !merged.hasCompleteTime && !edited) {
       wx.showToast({ title: "请先编辑时间后加入", icon: "none" });
-      return;
+      this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
+      return false;
     }
     this.studentSelectedArrangementMap = Object.assign({}, this.studentSelectedArrangementMap, {
-      [arrangementId]: !currentlySelected,
+      [arrangementId]: Boolean(selected),
     });
     this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
+    return true;
+  },
+
+  toggleStudentArrangement(event) {
+    const arrangementId = event.currentTarget.dataset.id;
+    const currentlySelected = Boolean(this.studentSelectedArrangementMap && this.studentSelectedArrangementMap[arrangementId]);
+    this.setStudentArrangementSelected(arrangementId, !currentlySelected);
+  },
+
+  toggleStudentArrangementSwitch(event) {
+    const arrangementId = event.currentTarget.dataset.id;
+    this.setStudentArrangementSelected(arrangementId, Boolean(event.detail && event.detail.value));
   },
 
   startEditStudentArrangement(event) {
@@ -820,12 +998,6 @@ Page({
     const course = event.detail && event.detail.course || {};
     const weekdayText = course.weekday ? STUDENT_WEEKDAY_LABELS[course.weekday - 1] : "星期待确认";
     const sectionText = course.sectionText || formatStudentSectionText(course.sections) || "节次待确认";
-    const matchTextMap = {
-      exact_match: "与当前班级课表一致",
-      time_match: "时间与当前班级课表一致",
-      course_match: "课程名称已匹配",
-      no_match: "请确认是否属于本人课表",
-    };
     wx.showModal({
       title: course.displayCourseName || course.courseName || "课程详情",
       content: [
@@ -833,9 +1005,6 @@ Page({
         course.weekText || "周次待确认",
         `地点：${course.roomName || "未注明"}`,
         course.teacherName ? `教师：${course.teacherName}` : "",
-        course.classNameRaw ? `上课班级：${course.classNameRaw}` : "",
-        matchTextMap[course.matchStatus] || "",
-        course.reason || "",
       ].filter(Boolean).join("\n"),
       showCancel: false,
       confirmText: "知道了",
@@ -881,6 +1050,16 @@ Page({
       studentPreviewToken: "",
       studentPreviewGrid: null,
       studentPreviewBuckets: [],
+      studentLoadingStepIndex: 0,
+      studentLoadingProgressStyle: "width: 14%;",
+      studentImportSlow: false,
+      studentAdvancedMode: false,
+      studentAdvancedTabs: [],
+      studentActiveBucket: "recommended",
+      studentActiveBucketTitle: STUDENT_GROUP_TITLES.recommended,
+      studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
+      studentActiveBucketGroups: [],
+      studentExpandedGroups: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
     });
@@ -1111,6 +1290,13 @@ Page({
       studentPreviewToken: "",
       studentPreviewGrid: null,
       studentPreviewBuckets: [],
+      studentAdvancedMode: false,
+      studentAdvancedTabs: [],
+      studentActiveBucket: "recommended",
+      studentActiveBucketTitle: STUDENT_GROUP_TITLES.recommended,
+      studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
+      studentActiveBucketGroups: [],
+      studentExpandedGroups: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
       studentImportedSchedule: null,
@@ -1151,6 +1337,7 @@ Page({
             studentImportStage: "done",
             studentImportedSchedule: target,
             studentPreviewToken: "",
+            studentAdvancedMode: false,
             studentSelectionMode: false,
             studentEditingArrangement: null,
           });
@@ -1223,12 +1410,14 @@ Page({
       content = "学校课表系统暂时无法读取，请稍后重试或使用其他导入方式。";
     } else if (code === "SCHEDULE_EMPTY" || code === "SCHEDULE_ROWS_EMPTY") {
       content = "没有读取到可导入的课表数据，请确认当前学期是否已有课表。";
+    } else if (code === "SCHOOL_SYSTEM_TIMEOUT") {
+      content = "学校系统响应较慢，本次读取已超时。你可以立即重试一次，仍失败可稍后再试。";
     } else if (code === "NETWORK_TIMEOUT") {
-      content = "连接超时，请稍后重试。";
+      content = "网络连接超时。你可以立即重试一次，仍失败可稍后再试。";
     } else if (code === "UNKNOWN_IMPORT_ERROR") {
       content = "读取失败，请稍后重试或使用其他导入方式。";
     } else if (code === "IMPORT_RATE_LIMITED") {
-      content = "尝试次数过多，请 10 分钟后再试。";
+      content = "尝试次数较多，请稍后再试。";
     } else if (code === "IMPORT_KEY_EXPIRED") {
       content = "本次安全验证已失效，请重新点击“验证并读取课表”。";
     } else if (code === "IMPORT_TOKEN_EXPIRED") {

@@ -39,20 +39,42 @@ function checkBucket(key, limit) {
   };
 }
 
+function peekBucket(key, limit) {
+  const now = nowMs();
+  cleanup(now);
+  const bucket = buckets.get(key);
+  if (!bucket || bucket.resetAtMs <= now) {
+    return {
+      allowed: true,
+      count: 0,
+      limit,
+      retryAfterSeconds: 0,
+    };
+  }
+  return {
+    allowed: bucket.count < limit,
+    count: bucket.count,
+    limit,
+    retryAfterSeconds: Math.max(1, Math.ceil((bucket.resetAtMs - now) / 1000)),
+  };
+}
+
+function strictKeys(input = {}) {
+  return [
+    ["user", input.userKey, STRICT_LIMIT],
+    ["student", hashValue(input.studentId), STRICT_LIMIT],
+  ].filter((item) => item[1]);
+}
+
 function assertImportAttemptAllowed(input = {}) {
   if (String(process.env.FOSU_IMPORT_RATE_LIMIT_ENABLED || "true") === "false") {
     return { allowed: true };
   }
 
   const ipLimit = Math.max(3, Number(process.env.FOSU_IMPORT_IP_RATE_LIMIT_10M || DEFAULT_IP_LIMIT) || DEFAULT_IP_LIMIT);
-  const checks = [
-    ["user", input.userKey, STRICT_LIMIT],
-    ["student", hashValue(input.studentId), STRICT_LIMIT],
-    ["ip", hashValue(input.ip), ipLimit],
-  ].filter((item) => item[1]);
-
-  for (const [kind, keyPart, limit] of checks) {
-    const result = checkBucket(`fosu-apaas-import:${kind}:${keyPart}`, limit);
+  const strictChecks = strictKeys(input);
+  for (const [kind, keyPart, limit] of strictChecks) {
+    const result = peekBucket(`fosu-apaas-import:auth-failed:${kind}:${keyPart}`, limit);
     if (!result.allowed) {
       const error = new Error("IMPORT_RATE_LIMITED");
       error.code = "IMPORT_RATE_LIMITED";
@@ -62,7 +84,29 @@ function assertImportAttemptAllowed(input = {}) {
     }
   }
 
+  const ipKey = hashValue(input.ip);
+  if (ipKey) {
+    const result = checkBucket(`fosu-apaas-import:request:ip:${ipKey}`, ipLimit);
+    if (!result.allowed) {
+      const error = new Error("IMPORT_RATE_LIMITED");
+      error.code = "IMPORT_RATE_LIMITED";
+      error.kind = "ip";
+      error.retryAfterSeconds = result.retryAfterSeconds;
+      throw error;
+    }
+  }
+
   return { allowed: true };
+}
+
+function recordImportCredentialFailure(input = {}) {
+  if (String(process.env.FOSU_IMPORT_RATE_LIMIT_ENABLED || "true") === "false") {
+    return { recorded: false };
+  }
+  strictKeys(input).forEach(([kind, keyPart, limit]) => {
+    checkBucket(`fosu-apaas-import:auth-failed:${kind}:${keyPart}`, limit);
+  });
+  return { recorded: true };
 }
 
 function __resetForTest() {
@@ -72,4 +116,5 @@ function __resetForTest() {
 module.exports = {
   __resetForTest,
   assertImportAttemptAllowed,
+  recordImportCredentialFailure,
 };

@@ -3,10 +3,12 @@
   border: 1rpx solid #e3e8f0;
   border-radius: 14rpx;
   background: #ffffff;
+  max-width: 100%;
 }
 
 .preview-grid-scroll {
-  max-height: 760rpx;
+  height: 660rpx;
+  max-height: 660rpx;
   background: #f8fafc;
 }
 

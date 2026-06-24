@@ -28,7 +28,8 @@ function requireMiniProgramSession(req, res, next) {
 
 function normalizeImportErrorCode(error) {
   const code = error && (error.code || error.message) || "UNKNOWN_IMPORT_ERROR";
-  if (/ETIMEDOUT|ECONNABORTED|TIMEOUT/i.test(code)) return "NETWORK_TIMEOUT";
+  if (code === "SCHOOL_SYSTEM_TIMEOUT" || code === "NETWORK_TIMEOUT") return code;
+  if (/ETIMEDOUT|ECONNABORTED|TIMEOUT/i.test(code)) return "SCHOOL_SYSTEM_TIMEOUT";
   if (code === "SCHEDULE_EMPTY") return "SCHEDULE_ROWS_EMPTY";
   if (code === "LOGIN_PAGE_CHANGED" || code === "APAAS_STRUCTURE_CHANGED") return "STRUCTURE_CHANGED";
   if (code === "APAAS_DASHBOARD_UNAVAILABLE") return "SCHEDULE_APP_NOT_FOUND";
@@ -55,7 +56,9 @@ function sendImportError(res, error) {
     STRUCTURE_CHANGED: "学校课表系统暂时无法读取，请稍后重试或使用其他导入方式。",
     SCHEDULE_EMPTY: "没有读取到可导入的课表数据，请确认当前学期是否已有课表。",
     SCHEDULE_ROWS_EMPTY: "没有读取到可导入的课表数据，请确认当前学期是否已有课表。",
-    NETWORK_TIMEOUT: "连接超时，请稍后重试。",
+    SCHOOL_SYSTEM_TIMEOUT: "学校系统响应较慢，本次读取已超时。请立即重试一次，仍失败可稍后再试。",
+    NETWORK_TIMEOUT: "网络连接超时，请立即重试一次，仍失败可稍后再试。",
+    CLOUDBASE_IMPORT_NOT_CONFIGURED: "当前读取通道暂不可用，请稍后重试或使用 XLS 导入。",
     UNKNOWN_IMPORT_ERROR: "读取失败，请稍后重试或使用其他导入方式。",
     IMPORT_TOKEN_EXPIRED: "导入预览已过期，请重新验证。",
     INVALID_IMPORT_MODE: "导入方式不受支持。",
