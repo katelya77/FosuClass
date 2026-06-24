@@ -152,10 +152,85 @@ function testPreviewGridAndConflicts() {
   assert(!week9.cells.some((item) => item.courseName === "第16周课程"));
 }
 
+function testDispersedOfficialCourseRecommended() {
+  const courseName = "大学生职业发展与就业指导1";
+  const preview = buildScheduleImportPreview([
+    row({ "课程名称": courseName, "周次": "1", "星期几": "星期一", "节次": "3-4", "课室名称": "C7-316" }),
+    row({ "课程名称": courseName, "周次": "4", "星期几": "星期一", "节次": "3-4", "课室名称": "C7-316" }),
+    row({ "课程名称": courseName, "周次": "6-16", "星期几": "星期一", "节次": "3-4", "课室名称": "C7-316" }),
+  ], {
+    studentId: "202512340303",
+    semester: "2025-2026-2",
+    existingSelectedClassName: "25动物医学6班",
+  });
+
+  const group = preview.courseGroups.find((item) => item.displayCourseName === courseName);
+  assert(group, "dispersed career course group should exist");
+  assert.strictEqual(group.importDecision, "auto_include");
+  assert.strictEqual(group.arrangements.length, 3);
+  assert(group.analysis.coverageCount >= 13, "coverage analysis should count unique covered weeks");
+  assert(group.reason.includes("分散周次"), "group should explain dispersed week normalization");
+  assert(preview.buckets.recommended.some((item) => item.displayCourseName === courseName));
+  assert.strictEqual(preview.buckets.pending.some((item) => item.displayCourseName === courseName), false);
+}
+
+function testWeekendCoursesHiddenFromDefaultPreview() {
+  const preview = buildScheduleImportPreview([
+    row({ "课程名称": "工作日课程", "周次": "16", "星期几": "星期一", "节次": "1-2", "课室名称": "B101" }),
+    row({ "课程名称": "周末课程", "周次": "16", "星期几": "星期六", "节次": "3-4", "课室名称": "B102" }),
+  ], {
+    studentId: "202512340303",
+    existingSelectedClassName: "25动物医学6班",
+    currentPreviewWeek: 16,
+  });
+
+  assert.strictEqual(preview.previewGrid.days.length, 5);
+  assert(preview.previewGrid.hasWeekendCourses, "preview should expose weekend-course hint state");
+  assert(preview.allArrangements.some((item) => item.courseName === "周末课程" && item.weekday === 6));
+  assert(!preview.previewGrid.cells.some((item) => item.weekday > 5), "default grid should not render weekend columns or cells");
+}
+
+function testMixedGroupSplitsUnplacedArrangement() {
+  const courseName = "生产见习";
+  const preview = buildScheduleImportPreview([
+    row({ "课程名称": courseName, "周次": "10-12", "星期几": "星期二", "节次": "8-9", "课室名称": "C7-316" }),
+    row({ "课程名称": courseName, "周次": "", "星期几": "", "节次": "", "课室名称": "" }),
+  ], {
+    studentId: "202512340303",
+    existingSelectedClassName: "25动物医学6班",
+  });
+
+  assert(preview.buckets.recommended.some((item) => item.displayCourseName === courseName && item.arrangements.length === 1));
+  assert(preview.buckets.unplaced.some((item) => item.displayCourseName === courseName && item.arrangements.length === 1));
+  assert.strictEqual(preview.scheduledCourses.length, 1);
+  assert(preview.unscheduledCourses.some((item) => item.courseName === courseName));
+}
+
+function testSmallConflictDoesNotDemoteRecommendedCourses() {
+  const preview = buildScheduleImportPreview([
+    row({ "课程名称": "正式课程A", "周次": "1-16", "星期几": "星期三", "节次": "5-6", "课室名称": "B101" }),
+    row({ "课程名称": "正式课程B", "周次": "10-12", "星期几": "星期三", "节次": "5-6", "课室名称": "B102" }),
+  ], {
+    studentId: "202512340303",
+    existingSelectedClassName: "25动物医学6班",
+    currentPreviewWeek: 10,
+  });
+
+  const conflicted = allArrangements(preview).filter((item) => item.conflict);
+  assert.strictEqual(conflicted.length, 2);
+  assert(conflicted.every((item) => item.importDecision === "auto_include"));
+  assert(preview.buckets.recommended.some((item) => item.displayCourseName === "正式课程A"));
+  assert(preview.buckets.recommended.some((item) => item.displayCourseName === "正式课程B"));
+}
+
 testClassScopeParser();
 testGroupingAndDedupe();
 testRecommendationsAndLocalTeacherFill();
 testSelectedClassPriorityAndNewBuckets();
 testPreviewGridAndConflicts();
+testDispersedOfficialCourseRecommended();
+testWeekendCoursesHiddenFromDefaultPreview();
+testMixedGroupSplitsUnplacedArrangement();
+testSmallConflictDoesNotDemoteRecommendedCourses();
 
 console.log("test-fosu-schedule-import-normalizer passed");

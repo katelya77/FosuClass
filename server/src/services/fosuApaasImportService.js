@@ -149,7 +149,6 @@ function assertPreviewOwner(record, req) {
 function publicPreviewPayload(preview, tokenInfo) {
   const profile = Object.assign({}, preview.profile || {});
   profile.studentIdMasked = maskStudentId(profile.studentId || "");
-  profile.studentId = profile.studentIdMasked;
   return {
     success: true,
     importPreviewToken: tokenInfo.token,

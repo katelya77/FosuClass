@@ -23,7 +23,7 @@ function colorForCell(cell) {
 }
 
 function buildDefaultDays() {
-  return Array.from({ length: 7 }, (_, index) => ({
+  return Array.from({ length: 5 }, (_, index) => ({
     weekday: index + 1,
     label: `周${"一二三四五六日"[index]}`,
   }));
@@ -43,17 +43,20 @@ function buildColumns(grid, sectionHeight, dayColumnWidth) {
         const top = (startSection - 1) * sectionHeight + 6;
         const height = span * sectionHeight - 12;
         const background = colorForCell(cell);
-        const subText = [cell.teacherName, cell.weekText].filter(Boolean).join(" · ");
+        const weekText = cell.displayWeekText || cell.weekText || "";
+        const subText = [cell.teacherName, weekText].filter(Boolean).join(" · ");
         return Object.assign({}, cell, {
           id: cell.id || cell.arrangementId,
           startSection,
           endSection,
           sections,
+          previewGrid: true,
           color: background,
           active: cell.selected !== false,
           badgeText: decisionBadge(cell.importDecision, cell.conflict, cell.selected),
           eventKind: cell.conflict ? "true-conflict" : "",
           classroom: cell.roomName || cell.classroom || "",
+          weekText,
           subText,
           cardStyle: [
             `top:${top}rpx`,

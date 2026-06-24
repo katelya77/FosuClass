@@ -124,7 +124,7 @@
         </view>
         <view class="profile-row">
           <text class="profile-label">学号</text>
-          <text class="profile-value">{{studentPreviewResult.maskedStudentId}}</text>
+          <text class="profile-value">{{studentPreviewResult.displayStudentId || studentPreviewResult.profile.studentId || studentPreviewResult.maskedStudentId}}</text>
         </view>
       </view>
 
@@ -157,6 +157,7 @@
           <text class="week-label">第{{studentPreviewWeek}}周</text>
           <button class="week-btn" data-delta="1" bindtap="onStudentPreviewWeekShift" disabled="{{studentPreviewWeek >= 19}}">›</button>
         </view>
+        <view class="student-weekend-tip" wx:if="{{studentPreviewGrid.hasWeekendCourses}}">检测到周末课程，可在调整课程中查看</view>
         <view class="grid-shell">
           <schedule-preview-grid grid="{{studentPreviewGrid}}" section-height="66" day-column-width="88" bind:course="onStudentPreviewCourseTap" />
         </view>
@@ -188,7 +189,8 @@
                   <text class="arrangement-time">{{arrangement.timeText}}</text>
                   <text class="arrangement-status {{arrangement.statusClass}}">{{arrangement.statusText}}</text>
                 </view>
-                <view class="arrangement-meta">{{arrangement.roomText}} · {{arrangement.teacherText}} · {{arrangement.weekText || '周次待确认'}}</view>
+                <view class="arrangement-meta">{{arrangement.metaText}}</view>
+                <view class="arrangement-conflict-tip" wx:if="{{arrangement.conflictText}}">{{arrangement.conflictText}}</view>
               </view>
               <view class="arrangement-tools">
                 <switch class="arrangement-switch" color="#2f855a" checked="{{arrangement.selected}}" data-id="{{arrangement.arrangementId}}" bindchange="toggleStudentArrangementSwitch" />
@@ -353,7 +355,7 @@
           </view>
           <view class="course-card-row">
             <text class="row-label">周次</text>
-            <text class="row-value">{{item.weekText || '未标明'}}</text>
+            <text class="row-value">{{item.displayWeekText || '周次待确认'}}</text>
           </view>
         </view>
       </scroll-view>
