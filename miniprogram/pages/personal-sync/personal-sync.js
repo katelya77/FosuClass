@@ -146,6 +146,40 @@ function getExistingPersonalCoursesForStudentImport() {
   return Array.isArray(current.courses) ? current.courses : [];
 }
 
+function getStudentImportErrorCode(error) {
+  const payload = error && error.payload || {};
+  return payload.code || payload.reasonCode || error && (error.code || error.reasonCode || error.message) || "";
+}
+
+function shouldRetryStudentPreview(error) {
+  const code = getStudentImportErrorCode(error);
+  return code === "IMPORT_KEY_EXPIRED" || code === "INVALID_ENCRYPTED_PAYLOAD";
+}
+
+async function requestStudentSchedulePreview(form, password) {
+  const keyResult = await request.get("/api/schedule-import/fosu/public-key", {}, {
+    showLoading: false,
+    silentError: true,
+    timeout: 10000,
+    retries: 0,
+  });
+  const encrypted = await encryptCredentialPayload(keyResult, {
+    studentId: form.studentId,
+    password,
+    nonce: keyResult.nonce,
+    timestamp: Date.now(),
+  });
+  return request.post("/api/schedule-import/fosu/preview", Object.assign({
+    keyId: keyResult.keyId,
+  }, encrypted), {
+    showLoading: false,
+    silentError: true,
+    timeout: 45000,
+    retries: 0,
+    dedupe: false,
+  });
+}
+
 Page({
   data: {
     activeImportMethod: "method",
@@ -340,30 +374,18 @@ Page({
 
     let plainPassword = form.password;
     try {
-      const keyResult = await request.get("/api/schedule-import/fosu/public-key", {}, {
-        showLoading: false,
-        silentError: true,
-        timeout: 10000,
-        retries: 0,
-      });
-      const encrypted = await encryptCredentialPayload(keyResult, {
-        studentId: form.studentId,
-        password: plainPassword,
-        nonce: keyResult.nonce,
-        timestamp: Date.now(),
-      });
+      let preview;
+      try {
+        preview = await requestStudentSchedulePreview(form, plainPassword);
+      } catch (error) {
+        if (!shouldRetryStudentPreview(error)) {
+          throw error;
+        }
+        preview = await requestStudentSchedulePreview(form, plainPassword);
+      }
       plainPassword = "";
       this.setData({ "studentForm.password": "" });
 
-      const preview = await request.post("/api/schedule-import/fosu/preview", Object.assign({
-        keyId: keyResult.keyId,
-      }, encrypted), {
-        showLoading: false,
-        silentError: true,
-        timeout: 45000,
-        retries: 0,
-        dedupe: false,
-      });
       const displayInfo = buildApaasScheduleDisplay(preview);
       const metadata = sanitizeApaasMetadata(preview);
       this.stopStudentLoadingSteps();
@@ -681,8 +703,10 @@ Page({
       content = "读取失败，请稍后重试或使用其他导入方式。";
     } else if (code === "IMPORT_RATE_LIMITED") {
       content = "尝试次数过多，请 10 分钟后再试。";
-    } else if (code === "IMPORT_KEY_EXPIRED" || code === "IMPORT_TOKEN_EXPIRED") {
-      content = "导入验证已过期，请重新验证后再导入。";
+    } else if (code === "IMPORT_KEY_EXPIRED") {
+      content = "本次安全验证已失效，请重新点击“验证并读取课表”。";
+    } else if (code === "IMPORT_TOKEN_EXPIRED") {
+      content = "预览结果已过期，请重新验证后再导入。";
     } else if (code === "FOSU_IMPORT_DISABLED") {
       content = "学号导入暂未开放，请使用 XLS 或班级课表导入。";
     } else if (code === "LOCAL_SAVE_FAILED") {

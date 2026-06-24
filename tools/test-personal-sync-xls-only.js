@@ -22,10 +22,13 @@ function run() {
   assert(js.includes("encryptCredentialPayload"), "student import should encrypt credentials before preview");
   assert(js.includes("/api/schedule-import/fosu/public-key"), "student import should fetch a one-time public key from backend");
   assert(js.includes("/api/schedule-import/fosu/preview"), "student import should preview through backend only");
+  assert(js.includes("requestStudentSchedulePreview"), "student import should isolate public-key/encrypt/preview into a retryable attempt");
+  assert(js.includes("shouldRetryStudentPreview"), "student import should retry once when a one-time import key is stale");
   assert(wxml.includes("XLS"), "personal-sync page should keep XLS import available");
   assert(js.includes("rememberLatestScheduleImport"), "XLS bind should refresh AI schedule context");
   assert(aiService.includes("personal-xls-required"), "AI context should reject deprecated credential schedule types");
   assert(!wxss.includes("captcha-"), "captcha styles should be removed from import page");
+  assert(!cryptoService.includes("root.window ="), "SM2 fallback must not assign globalThis.window in WeChat runtimes");
 
   console.log("test-personal-sync-import-boundaries passed");
 }
