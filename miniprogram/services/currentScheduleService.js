@@ -373,7 +373,7 @@ async function refreshCurrentSchedule(options = {}) {
   if (!REFRESHABLE_TYPES.includes(target.type)) {
     return {
       success: true,
-      status: target.type === "personal-xls" ? "PROTECTED_PERSONAL_XLS" : "SKIPPED_UNSUPPORTED_TYPE",
+      status: (target.type === "personal-xls" || target.type === "personal-apaas") ? "PROTECTED_PERSONAL_XLS" : "SKIPPED_UNSUPPORTED_TYPE",
       target,
     };
   }

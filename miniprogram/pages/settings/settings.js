@@ -102,7 +102,7 @@ function getSelectedSchedule() {
 function buildSelectedScheduleText(selected) {
   const target = selected && selected.target;
   if (target && target.name) {
-    if (target.type === "personal-xls") {
+    if (target.type === "personal-xls" || target.type === "personal-apaas") {
       const metadata = target.metadata || {};
       return [metadata.className, metadata.studentName, metadata.term]
         .filter(Boolean)
@@ -129,9 +129,10 @@ function buildSelectedScheduleMeta(selected) {
       importText: "",
     };
   }
-  if (target.type === "personal-xls") {
+  if (target.type === "personal-xls" || target.type === "personal-apaas") {
+    const isApaas = target.type === "personal-apaas";
     return {
-      sourceText: "来源：100网 XLS 手动导入",
+      sourceText: isApaas ? "来源：佛山大学 APaaS 本科生学生课表" : "来源：100网 XLS 手动导入",
       importText: target.importedAt ? `导入时间：${formatFullDateTime(target.importedAt)}` : "",
     };
   }
