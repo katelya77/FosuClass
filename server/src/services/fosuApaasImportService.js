@@ -10,7 +10,10 @@ const {
   takePreview,
   takePrivateKeyChallenge,
 } = require("./fosuApaasImportSessionStore");
-const { assertImportAttemptAllowed } = require("./fosuApaasImportRateLimiter");
+const {
+  assertImportAttemptAllowed,
+  recordImportCredentialFailure,
+} = require("./fosuApaasImportRateLimiter");
 const { importSchedulePreview } = require("./fosuApaasImporter");
 const { IMPORT_DECISION, toImportCourse } = require("./scheduleImportNormalizer");
 const { parseSections, parseWeeks } = require("../utils/fosuApaasScheduleParser");
@@ -129,6 +132,11 @@ function getOwnerKey(req) {
   return session.openidHash || session.sessionIdHash || session.sessionId || "";
 }
 
+function shouldRecordCredentialFailure(error) {
+  const code = String(error && (error.code || error.message) || "");
+  return code === "INVALID_CREDENTIALS";
+}
+
 function assertPreviewOwner(record, req) {
   const ownerKey = getOwnerKey(req);
   if (!record || !ownerKey || record.ownerKey !== ownerKey) {
@@ -149,6 +157,7 @@ function publicPreviewPayload(preview, tokenInfo) {
     profile,
     summary: preview.summary,
     previewGrid: preview.previewGrid,
+    buckets: preview.buckets,
     groups: preview.groups,
     uiHints: preview.uiHints,
     preview: preview.preview,
@@ -163,12 +172,14 @@ async function createStudentSchedulePreview(req, encryptedBody) {
   }
 
   let credentials = null;
+  let ownerKey = "";
+  let ipInfo = {};
   const taskId = crypto.randomBytes(8).toString("hex");
   const startedAt = Date.now();
   try {
     credentials = decryptCredentialPayload(encryptedBody);
-    const ownerKey = getOwnerKey(req);
-    const ipInfo = req.clientIpInfo || {};
+    ownerKey = getOwnerKey(req);
+    ipInfo = req.clientIpInfo || {};
     assertImportAttemptAllowed({
       userKey: ownerKey,
       studentId: credentials.studentId,
@@ -188,6 +199,7 @@ async function createStudentSchedulePreview(req, encryptedBody) {
       summary: preview.summary,
       preview: preview.preview,
       previewGrid: preview.previewGrid,
+      buckets: preview.buckets,
       groups: preview.groups,
       courseGroups: preview.courseGroups,
       allArrangements: preview.allArrangements,
@@ -205,11 +217,23 @@ async function createStudentSchedulePreview(req, encryptedBody) {
       rawRowCount: preview.summary.rawRowCount,
       scheduledCourseCount: preview.summary.scheduledCourseCount,
       unscheduledCourseCount: preview.summary.unscheduledCourseCount,
+      channel: preview.timing && preview.timing.channel,
+      loginMs: preview.timing && preview.timing.loginMs,
+      fetchRowsMs: preview.timing && preview.timing.fetchRowsMs,
+      normalizeMs: preview.timing && preview.timing.normalizeMs,
+      totalMs: preview.timing && preview.timing.totalMs,
       elapsedMs: Date.now() - startedAt,
     });
 
     return publicPreviewPayload(preview, tokenInfo);
   } catch (error) {
+    if (credentials && shouldRecordCredentialFailure(error)) {
+      recordImportCredentialFailure({
+        userKey: ownerKey,
+        studentId: credentials.studentId,
+        ip: ipInfo.effectiveIp || req.ip || "",
+      });
+    }
     safeLog("fosu-apaas-preview-failed", {
       taskId,
       code: error.code || error.message,

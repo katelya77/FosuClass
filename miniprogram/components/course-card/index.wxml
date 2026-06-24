@@ -52,8 +52,8 @@
     <view class="course-event-badge" wx:if="{{course.badgeText}}">{{course.badgeText}}</view>
     <view class="course-event-subtext" wx:if="{{span > 1 && course.subText}}">{{course.subText}}</view>
     <view class="course-meta classroom-highlight" wx:if="{{course.displayClassroom || course.canonicalClassroom || course.classroom}}">{{course.displayClassroom || course.canonicalClassroom || course.classroom}}</view>
-    <view class="course-meta" wx:if="{{span > 1 && (course.displayTeacherName || course.canonicalTeacherName || course.teacherName)}}">{{course.displayTeacherName || course.canonicalTeacherName || course.teacherName}}</view>
-    <view class="course-week" wx:if="{{span > 2 && course.weekText}}">{{course.weekText}}</view>
+    <view class="course-meta" wx:if="{{span > 1 && !course.subText && (course.displayTeacherName || course.canonicalTeacherName || course.teacherName)}}">{{course.displayTeacherName || course.canonicalTeacherName || course.teacherName}}</view>
+    <view class="course-week" wx:if="{{span > 2 && !course.subText && course.weekText}}">{{course.weekText}}</view>
     <view class="course-conflict-hint active-conflict" wx:if="{{course.activeConflictLabel}}">{{course.activeConflictLabel}}</view>
     <view class="course-conflict-hint" wx:if="{{course.inactiveConflictLabel}}">{{course.inactiveConflictLabel}}</view>
   </block>

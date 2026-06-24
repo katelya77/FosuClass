@@ -30,6 +30,20 @@ function localCourse(patch) {
   }, patch || {});
 }
 
+function asciiRow(patch) {
+  return Object.assign({
+    studentName: "Wang",
+    courseName: "Anatomy",
+    weekText: "1-16",
+    weekdayText: "1",
+    sectionText: "1-2",
+    roomName: "C3-101",
+    className: "25动物医学6班",
+    campus: "Xianxi",
+    specialNote: "",
+  }, patch || {});
+}
+
 function allArrangements(preview) {
   return preview.courseGroups.flatMap((group) => group.arrangements);
 }
@@ -89,6 +103,31 @@ function testRecommendationsAndLocalTeacherFill() {
   assert.strictEqual(online.importDecision, "needs_confirm");
 }
 
+function testSelectedClassPriorityAndNewBuckets() {
+  const preview = buildScheduleImportPreview([
+    asciiRow({ courseName: "Foreign class A", className: "25动物科学3班" }),
+    asciiRow({ courseName: "Foreign class B", className: "25动物科学3班", weekdayText: "2", sectionText: "3-4" }),
+    asciiRow({ courseName: "Mine", className: "25动物医学6班", weekdayText: "3", sectionText: "5-6" }),
+    asciiRow({ courseName: "Online safety", className: "25动物医学6班", specialNote: "线上", weekdayText: "4", sectionText: "7-8" }),
+    asciiRow({ courseName: "Unplaced practice", className: "临班211", weekText: "", weekdayText: "", sectionText: "", roomName: "" }),
+  ], {
+    studentId: "202512340303",
+    semester: "2025-2026-2",
+    existingSelectedClassName: "25动物医学6班",
+  });
+
+  assert.strictEqual(preview.profile.className, "25动物医学6班");
+  assert.strictEqual(preview.profile.classNameSource, "selected_class");
+  assert(preview.buckets.recommended.length >= 1, "recommended bucket should exist");
+  assert(preview.buckets.pending.length >= 1, "pending bucket should include online/irregular courses");
+  assert(preview.buckets.unplaced.length >= 1, "unplaced bucket should include courses without fixed time");
+  assert(preview.buckets.suspected.length >= 1, "suspected bucket should include non-target class courses");
+  assert.strictEqual(preview.groups.autoInclude.length, preview.buckets.recommended.length);
+  assert.strictEqual(preview.groups.needsConfirm.length, preview.buckets.pending.length);
+  assert.strictEqual(preview.groups.unscheduled.length, preview.buckets.unplaced.length);
+  assert.strictEqual(preview.groups.suspectedNotMine.length, preview.buckets.suspected.length);
+}
+
 function testPreviewGridAndConflicts() {
   const preview = buildScheduleImportPreview([
     row({ "课程名称": "第16周课程", "周次": "16", "星期几": "星期一", "节次": "1-2", "课室名称": "B101" }),
@@ -116,6 +155,7 @@ function testPreviewGridAndConflicts() {
 testClassScopeParser();
 testGroupingAndDedupe();
 testRecommendationsAndLocalTeacherFill();
+testSelectedClassPriorityAndNewBuckets();
 testPreviewGridAndConflicts();
 
 console.log("test-fosu-schedule-import-normalizer passed");

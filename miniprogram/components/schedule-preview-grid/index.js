@@ -14,18 +14,12 @@ function toNumberList(values) {
 function decisionBadge(decision, conflict, selected) {
   if (conflict) return "冲突";
   if (selected === false) return "未选";
-  if (decision === "needs_confirm") return "待确认";
-  if (decision === "suspected_not_mine") return "疑似";
-  if (decision === "unscheduled") return "未排入";
   return "";
 }
 
 function colorForCell(cell) {
-  if (cell.conflict) return "#b42318";
   if (cell.selected === false) return "#94a3b8";
-  if (cell.importDecision === "needs_confirm") return "#d97706";
-  if (cell.importDecision === "suspected_not_mine") return "#64748b";
-  return colorForCourse(cell.displayCourseName || cell.courseName || "");
+  return colorForCourse(cell.normalizedCourseName || cell.displayCourseName || cell.courseName || "");
 }
 
 function buildDefaultDays() {
@@ -49,16 +43,18 @@ function buildColumns(grid, sectionHeight, dayColumnWidth) {
         const top = (startSection - 1) * sectionHeight + 6;
         const height = span * sectionHeight - 12;
         const background = colorForCell(cell);
+        const subText = [cell.teacherName, cell.weekText].filter(Boolean).join(" · ");
         return Object.assign({}, cell, {
           id: cell.id || cell.arrangementId,
           startSection,
           endSection,
           sections,
           color: background,
-          active: cell.selected !== false && cell.importDecision !== "suspected_not_mine",
+          active: cell.selected !== false,
           badgeText: decisionBadge(cell.importDecision, cell.conflict, cell.selected),
           eventKind: cell.conflict ? "true-conflict" : "",
           classroom: cell.roomName || cell.classroom || "",
+          subText,
           cardStyle: [
             `top:${top}rpx`,
             `height:${height}rpx`,

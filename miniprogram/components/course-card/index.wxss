@@ -235,6 +235,19 @@
   white-space: nowrap;
 }
 
+.course-card-grid .course-event-badge {
+  position: absolute;
+  top: 5rpx;
+  right: 5rpx;
+  max-width: 58rpx;
+  height: 22rpx;
+  margin-top: 0;
+  padding: 0 5rpx;
+  border-radius: 5rpx;
+  font-size: 13rpx;
+  line-height: 22rpx;
+}
+
 .course-event-subtext {
   overflow: hidden;
   margin-top: 3rpx;
