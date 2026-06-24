@@ -35,6 +35,7 @@
 | `AI_API_KEY` | 空 | DeepSeek/OpenAI 兼容 provider key | 允许为空，AI 状态显示 key 未配置，调用外部 provider 时 fallback |
 | `DEEPSEEK_API_KEY` | 空 | DeepSeek provider 专用 key，优先级低于 `AI_API_KEY` | 允许为空，AI 状态显示 DeepSeek key 未配置 |
 | `COZE_API_KEY` | 空 | Coze provider key | 允许为空，AI 状态显示 Coze key 未配置 |
+| `FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN` | 空 | 学号导入 CloudBase relay 的可选 Bearer token | 允许为空；仅当 relay 服务要求 token 时配置 |
 
 ## Deprecated
 
@@ -52,6 +53,12 @@
 | `FOSU_STATIC_ACCESS_MODE` | `public` | 静态资源访问模式 | 使用 public |
 | `FOSU_OPENRESTY_STATIC_SECURITY_MODE` | `public` | OpenResty 静态安全模式 | 使用 public |
 | `FOSU_STATIC_TICKET_TTL_SECONDS` | `600` | 静态 ticket TTL | 使用默认值 |
+| `FOSU_IMPORT_ENABLE` | `true` | 是否启用本人授权学号导入预览 API | 使用 true |
+| `FOSU_IMPORT_CHANNEL` | `auto` | 导入通道策略：`auto`、`cloudbase`、`oracle`、`cloudbase,oracle` | 使用 auto |
+| `FOSU_CLOUDBASE_IMPORT_ENABLE` | `false` | 是否启用 CloudBase relay 导入通道 | 使用 false；未配置 relay URL 时自动走 Oracle |
+| `FOSU_CLOUDBASE_IMPORT_URL` | 空 | CloudBase relay HTTPS 地址 | 为空时 CloudBase 通道不启用，`auto` 安全回落 Oracle |
+| `FOSU_IMPORT_CHANNEL_TIMEOUT_MS` | `25000` | 单个导入通道请求超时 | 使用默认值 |
+| `FOSU_IMPORT_ORACLE_FALLBACK` | `true` | CloudBase 可重试故障时是否回落 Oracle 通道 | 使用 true |
 | `AI_AGENT_ENABLED` | `false` | 是否启用外部 AI provider | 使用本地规则/mock，不调用外部模型 |
 | `AI_PROVIDER` | `mock` | provider 名称：`mock`、`deepseek`、`coze` | 使用 mock |
 | `AI_PROVIDER_POLICY` | `auto` | 外部 provider 调用策略 | 使用 auto |

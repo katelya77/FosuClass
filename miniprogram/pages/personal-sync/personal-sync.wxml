@@ -127,6 +127,7 @@
           <text class="profile-value">{{studentPreviewResult.displayStudentId || studentPreviewResult.profile.studentId || studentPreviewResult.maskedStudentId}}</text>
         </view>
       </view>
+      <view class="student-class-warning" wx:if="{{studentClassConfidenceWarning}}">{{studentClassConfidenceWarning}}</view>
 
       <view class="student-metric-row">
         <view class="student-metric">

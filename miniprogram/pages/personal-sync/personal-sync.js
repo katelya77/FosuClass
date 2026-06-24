@@ -317,6 +317,18 @@ function rangesOverlap(left, right) {
   return toNumberList(right, 80).some((item) => leftSet.has(item));
 }
 
+function normalizePreviewCourseName(value) {
+  return String(value || "").trim().replace(/\s+/g, "").toLowerCase();
+}
+
+function isSamePreviewCourse(left, right) {
+  if (!left || !right) return false;
+  if (left.courseGroupId && right.courseGroupId && left.courseGroupId === right.courseGroupId) return true;
+  const leftName = normalizePreviewCourseName(left.normalizedCourseName || left.displayCourseName || left.courseName);
+  const rightName = normalizePreviewCourseName(right.normalizedCourseName || right.displayCourseName || right.courseName);
+  return Boolean(leftName && rightName && leftName === rightName);
+}
+
 function markStudentPreviewConflicts(cells) {
   const selectedCells = cells.filter((cell) => cell.selected !== false);
   selectedCells.forEach((cell) => { cell.conflict = false; });
@@ -326,6 +338,8 @@ function markStudentPreviewConflicts(cells) {
       const right = selectedCells[rightIndex];
       if (Number(left.weekday) !== Number(right.weekday)) continue;
       if (!rangesOverlap(left.sections, right.sections)) continue;
+      if (!rangesOverlap(left.weeks, right.weeks)) continue;
+      if (isSamePreviewCourse(left, right)) continue;
       left.conflict = true;
       right.conflict = true;
     }
@@ -490,7 +504,8 @@ function shouldRetryStudentPreview(error) {
   return code === "IMPORT_KEY_EXPIRED" ||
     code === "INVALID_ENCRYPTED_PAYLOAD" ||
     code === "SCHOOL_SYSTEM_TIMEOUT" ||
-    code === "NETWORK_TIMEOUT";
+    code === "NETWORK_TIMEOUT" ||
+    code === "UPSTREAM_TIMEOUT";
 }
 
 async function requestStudentSchedulePreview(form, password, extra = {}) {
@@ -558,6 +573,7 @@ Page({
     studentRecommendedCount: 0,
     studentPendingCount: 0,
     studentConflictCount: 0,
+    studentClassConfidenceWarning: "",
     studentEditingArrangement: null,
     editWeekdayLabels: STUDENT_WEEKDAY_LABELS,
     editWeekdayIndex: 0,
@@ -647,6 +663,7 @@ Page({
       studentExpandedGroups: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
+      studentClassConfidenceWarning: "",
     });
   },
 
@@ -674,6 +691,7 @@ Page({
       studentExpandedGroups: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
+      studentClassConfidenceWarning: "",
       studentForm: Object.assign({}, this.data.studentForm, { password: "" }),
     });
   },
@@ -788,6 +806,7 @@ Page({
       studentRecommendedCount: 0,
       studentPendingCount: 0,
       studentConflictCount: 0,
+      studentClassConfidenceWarning: "",
       studentEditingArrangement: null,
       editWeekdayIndex: 0,
       editStartIndex: 0,
@@ -836,10 +855,14 @@ Page({
       : "recommended";
     const activeBucketModel = buckets.find((bucket) => bucket.key === activeBucket) || buckets[0] || {};
     const summary = result.summary || {};
+    const profile = result.profile || {};
+    const uiHints = result.uiHints || {};
     const recommendedCount = summary.recommendedArrangementCount || summary.arrangementAutoIncludeCount || summary.scheduledCourseCount || 0;
     const pendingCount = (summary.pendingArrangementCount || summary.needsConfirmCount || 0) +
       (summary.unplacedArrangementCount || summary.unscheduledCount || 0);
     const conflictCount = summary.conflictCount || 0;
+    const classConfidenceWarning = uiHints.classNameWarningText ||
+      (profile.classNameConfidence === "low" ? "班级未能完全确认，已避免推荐明显非本班课程。" : "");
     this.setData({
       studentPreviewWeek: targetWeek,
       studentPreviewGrid: buildStudentPreviewGrid(arrangements, targetWeek, selectedMap, editedMap),
@@ -856,6 +879,7 @@ Page({
       studentRecommendedCount: recommendedCount,
       studentPendingCount: pendingCount,
       studentConflictCount: conflictCount,
+      studentClassConfidenceWarning: classConfidenceWarning,
     });
   },
 
@@ -1103,6 +1127,7 @@ Page({
       studentExpandedGroups: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
+      studentClassConfidenceWarning: "",
     });
     this.startStudentLoadingSteps();
 
@@ -1342,6 +1367,7 @@ Page({
       studentSelectionMode: false,
       studentEditingArrangement: null,
       studentImportedSchedule: null,
+      studentClassConfidenceWarning: "",
       studentForm: Object.assign({}, this.data.studentForm, { password: "" }),
     });
   },
@@ -1453,9 +1479,11 @@ Page({
     } else if (code === "SCHEDULE_EMPTY" || code === "SCHEDULE_ROWS_EMPTY") {
       content = "没有读取到可导入的课表数据，请确认当前学期是否已有课表。";
     } else if (code === "SCHOOL_SYSTEM_TIMEOUT") {
-      content = "学校系统响应较慢，本次读取已超时。你可以立即重试一次，仍失败可稍后再试。";
-    } else if (code === "NETWORK_TIMEOUT") {
-      content = "网络连接超时。你可以立即重试一次，仍失败可稍后再试。";
+      content = "学校系统响应较慢，请稍后再试。";
+    } else if (code === "NETWORK_TIMEOUT" || code === "UPSTREAM_TIMEOUT") {
+      content = "连接超时，可立即重试一次。";
+    } else if (code === "CLOUDBASE_SERVICE_UNAVAILABLE" || code === "CLOUDBASE_IMPORT_FAILED") {
+      content = "当前读取通道暂时不可用，请稍后重试。";
     } else if (code === "UNKNOWN_IMPORT_ERROR") {
       content = "读取失败，请稍后重试或使用其他导入方式。";
     } else if (code === "IMPORT_RATE_LIMITED") {

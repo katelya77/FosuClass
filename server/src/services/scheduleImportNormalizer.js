@@ -401,6 +401,10 @@ function isLocalMatched(status) {
   return status === "exact_match" || status === "time_match" || status === "course_match";
 }
 
+function isLocalTimeMatched(status) {
+  return status === "exact_match" || status === "time_match";
+}
+
 function decisionForArrangement(arrangement) {
   if (!arrangement.hasCompleteTime) {
     return {
@@ -413,6 +417,7 @@ function decisionForArrangement(arrangement) {
   const classStatus = arrangement.classScopeStatus;
   const localStatus = arrangement.matchStatus;
   const localMatched = isLocalMatched(localStatus);
+  const localTimeMatched = isLocalTimeMatched(localStatus);
   const special = arrangement.category !== "normal";
 
   if (classStatus === "not_match" && !localMatched) {
@@ -424,16 +429,16 @@ function decisionForArrangement(arrangement) {
   }
 
   if (special) {
-    if (arrangement.category === "irregular" && (classStatus === "match" || localMatched)) {
+    if (arrangement.category === "irregular" && (classStatus === "match" || localTimeMatched)) {
       return {
         importDecision: IMPORT_DECISION.AUTO_INCLUDE,
-        confidence: localMatched ? "high" : "medium",
+        confidence: localTimeMatched ? "high" : "medium",
         reason: "特殊安排课程，时间完整，已纳入推荐",
       };
     }
     return {
       importDecision: IMPORT_DECISION.NEEDS_CONFIRM,
-      confidence: localMatched ? "medium" : "low",
+      confidence: localTimeMatched ? "medium" : "low",
       reason: arrangement.category === "online"
         ? "线上或待定课程，已保留待确认"
         : "特殊安排课程，需手动确认",
@@ -458,7 +463,7 @@ function decisionForArrangement(arrangement) {
     };
   }
 
-  if (classStatus === "unknown" && localMatched) {
+  if (classStatus === "unknown" && localTimeMatched) {
     return {
       importDecision: IMPORT_DECISION.AUTO_INCLUDE,
       confidence: "medium",
@@ -544,11 +549,12 @@ function shouldPromoteArrangementInFormalGroup(arrangement) {
   if (!arrangement || !arrangement.hasCompleteTime) return false;
   if (arrangement.importDecision === IMPORT_DECISION.AUTO_INCLUDE) return false;
   if (arrangement.importDecision === IMPORT_DECISION.UNSCHEDULED) return false;
+  if (arrangement.classScopeStatus === "not_match") return false;
   if (arrangement.importDecision === IMPORT_DECISION.SUSPECTED_NOT_MINE && !isLocalMatched(arrangement.matchStatus)) {
     return false;
   }
   if (arrangement.category === "online" || arrangement.category === "pending") return false;
-  return arrangement.classScopeStatus !== "not_match" || isLocalMatched(arrangement.matchStatus);
+  return arrangement.classScopeStatus === "match" || isLocalTimeMatched(arrangement.matchStatus);
 }
 
 function applyCourseGroupRecommendation(group) {
@@ -582,7 +588,7 @@ function applyCourseGroupConflictAnalysis(group) {
   if (!group.analysis.hasOnlySmallConflict) return;
   group.arrangements.forEach((arrangement) => {
     if (!arrangement.conflict || arrangement.importDecision !== IMPORT_DECISION.AUTO_INCLUDE) return;
-    arrangement.reason = arrangement.reason || "存在时间冲突，建议检查";
+    arrangement.reason = arrangement.reason || "存在时间重叠，建议检查";
   });
 }
 
@@ -661,16 +667,32 @@ function toImportCourse(arrangement, context = {}) {
   return toRenderableCourse(base);
 }
 
+function isSameCourseArrangement(left, right) {
+  if (!left || !right) return false;
+  if (left.courseGroupId && right.courseGroupId && left.courseGroupId === right.courseGroupId) return true;
+  const leftName = normalizeCourseName(left.normalizedCourseName || left.displayCourseName || left.courseName || "");
+  const rightName = normalizeCourseName(right.normalizedCourseName || right.displayCourseName || right.courseName || "");
+  return Boolean(leftName && rightName && leftName === rightName);
+}
+
+function isArrangementConflict(left, right) {
+  if (!left || !right || !left.hasCompleteTime || !right.hasCompleteTime) return false;
+  if (Number(left.weekday) !== Number(right.weekday)) return false;
+  if (!rangesOverlap(left.sections, right.sections)) return false;
+  if (!rangesOverlap(left.weeks, right.weeks)) return false;
+  if (isSameCourseArrangement(left, right)) return false;
+  return true;
+}
+
 function countConflicts(arrangements) {
   let count = 0;
   const list = (arrangements || []).filter((item) => item.hasCompleteTime);
+  list.forEach((item) => { item.conflict = false; });
   for (let leftIndex = 0; leftIndex < list.length; leftIndex += 1) {
     for (let rightIndex = leftIndex + 1; rightIndex < list.length; rightIndex += 1) {
       const left = list[leftIndex];
       const right = list[rightIndex];
-      if (left.weekday !== right.weekday) continue;
-      if (!rangesOverlap(left.weeks, right.weeks)) continue;
-      if (!rangesOverlap(left.sections, right.sections)) continue;
+      if (!isArrangementConflict(left, right)) continue;
       count += 1;
       left.conflict = true;
       right.conflict = true;
@@ -1039,6 +1061,9 @@ function buildScheduleImportPreview(rawRows, options = {}) {
     uiHints: {
       defaultConfirmText: "确认导入推荐课程",
       warningText: "部分课程需要确认，导入后也可以继续编辑。",
+      classNameWarningText: targetInference.classNameConfidence === "low"
+        ? "班级未能完全确认，已避免推荐明显非本班课程。"
+        : "",
     },
     preview: {
       scheduled: autoArrangements.slice(0, 12).map(compactPreviewCourse),

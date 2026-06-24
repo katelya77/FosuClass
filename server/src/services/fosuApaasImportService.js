@@ -12,7 +12,7 @@ const {
 } = require("./fosuApaasImportSessionStore");
 const {
   assertImportAttemptAllowed,
-  recordImportCredentialFailure,
+  recordImportFailure,
 } = require("./fosuApaasImportRateLimiter");
 const { importSchedulePreview } = require("./fosuApaasImporter");
 const { IMPORT_DECISION, toImportCourse } = require("./scheduleImportNormalizer");
@@ -132,11 +132,6 @@ function getOwnerKey(req) {
   return session.openidHash || session.sessionIdHash || session.sessionId || "";
 }
 
-function shouldRecordCredentialFailure(error) {
-  const code = String(error && (error.code || error.message) || "");
-  return code === "INVALID_CREDENTIALS";
-}
-
 function assertPreviewOwner(record, req) {
   const ownerKey = getOwnerKey(req);
   if (!record || !ownerKey || record.ownerKey !== ownerKey) {
@@ -160,6 +155,7 @@ function publicPreviewPayload(preview, tokenInfo) {
     groups: preview.groups,
     uiHints: preview.uiHints,
     preview: preview.preview,
+    timing: preview.timing,
   };
 }
 
@@ -175,8 +171,11 @@ async function createStudentSchedulePreview(req, encryptedBody) {
   let ipInfo = {};
   const taskId = crypto.randomBytes(8).toString("hex");
   const startedAt = Date.now();
+  let decryptMs = 0;
   try {
+    const decryptStartedAt = Date.now();
     credentials = decryptCredentialPayload(encryptedBody);
+    decryptMs = Date.now() - decryptStartedAt;
     ownerKey = getOwnerKey(req);
     ipInfo = req.clientIpInfo || {};
     assertImportAttemptAllowed({
@@ -218,25 +217,29 @@ async function createStudentSchedulePreview(req, encryptedBody) {
       unscheduledCourseCount: preview.summary.unscheduledCourseCount,
       channel: preview.timing && preview.timing.channel,
       loginMs: preview.timing && preview.timing.loginMs,
+      discoverMs: preview.timing && preview.timing.discoverMs,
       fetchRowsMs: preview.timing && preview.timing.fetchRowsMs,
       normalizeMs: preview.timing && preview.timing.normalizeMs,
       totalMs: preview.timing && preview.timing.totalMs,
+      retryCount: preview.timing && preview.timing.retryCount,
+      decryptMs,
       elapsedMs: Date.now() - startedAt,
     });
 
     return publicPreviewPayload(preview, tokenInfo);
   } catch (error) {
-    if (credentials && shouldRecordCredentialFailure(error)) {
-      recordImportCredentialFailure({
+    if (credentials) {
+      recordImportFailure({
         userKey: ownerKey,
         studentId: credentials.studentId,
         ip: ipInfo.effectiveIp || req.ip || "",
-      });
+      }, error.code || error.message);
     }
     safeLog("fosu-apaas-preview-failed", {
       taskId,
       code: error.code || error.message,
       studentId: credentials && maskStudentId(credentials.studentId),
+      decryptMs,
       elapsedMs: Date.now() - startedAt,
     });
     throw error;

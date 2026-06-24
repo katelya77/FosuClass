@@ -28,7 +28,7 @@ function requireMiniProgramSession(req, res, next) {
 
 function normalizeImportErrorCode(error) {
   const code = error && (error.code || error.message) || "UNKNOWN_IMPORT_ERROR";
-  if (code === "SCHOOL_SYSTEM_TIMEOUT" || code === "NETWORK_TIMEOUT") return code;
+  if (code === "SCHOOL_SYSTEM_TIMEOUT" || code === "NETWORK_TIMEOUT" || code === "UPSTREAM_TIMEOUT") return code;
   if (/ETIMEDOUT|ECONNABORTED|TIMEOUT/i.test(code)) return "SCHOOL_SYSTEM_TIMEOUT";
   if (code === "SCHEDULE_EMPTY") return "SCHEDULE_ROWS_EMPTY";
   if (code === "LOGIN_PAGE_CHANGED" || code === "APAAS_STRUCTURE_CHANGED") return "STRUCTURE_CHANGED";
@@ -48,17 +48,22 @@ function sendImportError(res, error) {
     INVALID_CREDENTIALS: "学号或密码不正确，请检查后重试。",
     CAPTCHA_REQUIRED: "学校系统需要额外验证，暂时无法自动读取。你可以先使用 XLS 导入。",
     RISK_CONTROL_REQUIRED: "学校系统需要额外验证，暂时无法自动读取。你可以先使用 XLS 导入。",
-    LOGIN_PAGE_CHANGED: "学校课表系统暂时无法读取，请稍后重试或使用其他导入方式。",
+    ACCOUNT_LOCKED: "学校账号暂时无法登录，请稍后再试或联系学校处理。",
+    SCHOOL_SYSTEM_REJECTED: "学校系统拒绝了本次读取，请稍后重试。",
+    LOGIN_PAGE_CHANGED: "学校课表系统页面有变化，请稍后重试。",
     SCHEDULE_APP_NOT_FOUND: "暂时没有找到个人课表入口，请稍后重试或使用其他导入方式。",
     APAAS_DASHBOARD_UNAVAILABLE: "暂时没有找到个人课表入口，请稍后重试或使用其他导入方式。",
     APAAS_SESSION_EXPIRED: "本次登录已失效，请重新验证。",
-    APAAS_STRUCTURE_CHANGED: "学校课表系统暂时无法读取，请稍后重试或使用其他导入方式。",
-    STRUCTURE_CHANGED: "学校课表系统暂时无法读取，请稍后重试或使用其他导入方式。",
+    APAAS_STRUCTURE_CHANGED: "学校课表系统页面有变化，请稍后重试。",
+    STRUCTURE_CHANGED: "学校课表系统页面有变化，请稍后重试。",
     SCHEDULE_EMPTY: "没有读取到可导入的课表数据，请确认当前学期是否已有课表。",
     SCHEDULE_ROWS_EMPTY: "没有读取到可导入的课表数据，请确认当前学期是否已有课表。",
-    SCHOOL_SYSTEM_TIMEOUT: "学校系统响应较慢，本次读取已超时。请立即重试一次，仍失败可稍后再试。",
-    NETWORK_TIMEOUT: "网络连接超时，请立即重试一次，仍失败可稍后再试。",
+    SCHOOL_SYSTEM_TIMEOUT: "学校系统响应较慢，请稍后再试。",
+    NETWORK_TIMEOUT: "连接超时，可立即重试一次。",
+    UPSTREAM_TIMEOUT: "连接超时，可立即重试一次。",
     CLOUDBASE_IMPORT_NOT_CONFIGURED: "当前读取通道暂不可用，请稍后重试或使用 XLS 导入。",
+    CLOUDBASE_SERVICE_UNAVAILABLE: "当前读取通道暂时不可用，请稍后重试。",
+    CLOUDBASE_IMPORT_FAILED: "当前读取通道暂时不可用，请稍后重试。",
     UNKNOWN_IMPORT_ERROR: "读取失败，请稍后重试或使用其他导入方式。",
     IMPORT_TOKEN_EXPIRED: "导入预览已过期，请重新验证。",
     INVALID_IMPORT_MODE: "导入方式不受支持。",
@@ -70,6 +75,15 @@ function sendImportError(res, error) {
     code,
     message: messages[code] || "学号导入暂时不可用，请稍后再试。",
   };
+  if (code === "IMPORT_RATE_LIMITED") {
+    if (error && error.kind === "credential") {
+      payload.message = "连续多次密码错误，请稍后再试。";
+    } else if (error && error.kind === "network") {
+      payload.message = "学校系统响应较慢，请稍后再试。";
+    } else if (error && error.kind === "verification") {
+      payload.message = "学校系统需要额外验证，暂时无法自动读取。";
+    }
+  }
   if (error && error.retryAfterSeconds) {
     res.setHeader("Retry-After", String(error.retryAfterSeconds));
     payload.retryAfter = error.retryAfterSeconds;
@@ -80,13 +94,16 @@ function sendImportError(res, error) {
 router.use(requireMiniProgramSession);
 
 router.get("/public-key", (req, res) => {
+  const startedAt = Date.now();
   try {
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Pragma", "no-cache");
     res.setHeader("Expires", "0");
-    return res.json(Object.assign({ success: true }, createPublicKeyChallenge()));
+    const payload = Object.assign({ success: true }, createPublicKeyChallenge());
+    safeLog("fosu-apaas-public-key-timing", { elapsedMs: Date.now() - startedAt });
+    return res.json(payload);
   } catch (error) {
-    safeLog("fosu-apaas-public-key-failed", { code: error.code || error.message });
+    safeLog("fosu-apaas-public-key-failed", { code: error.code || error.message, elapsedMs: Date.now() - startedAt });
     return sendImportError(res, error);
   }
 });

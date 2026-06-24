@@ -1220,6 +1220,18 @@
   white-space: nowrap;
 }
 
+.student-class-warning {
+  margin: 0 0 18rpx;
+  padding: 12rpx 16rpx;
+  border: 1rpx solid #fde68a;
+  border-radius: 10rpx;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 21rpx;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
 .student-metric-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
