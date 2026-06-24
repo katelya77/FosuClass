@@ -132,7 +132,7 @@ function buildSelectedScheduleMeta(selected) {
   if (target.type === "personal-xls" || target.type === "personal-apaas") {
     const isApaas = target.type === "personal-apaas";
     return {
-      sourceText: isApaas ? "来源：佛山大学 APaaS 本科生学生课表" : "来源：100网 XLS 手动导入",
+      sourceText: isApaas ? "来源：学校课表系统" : "来源：100网 XLS 手动导入",
       importText: target.importedAt ? `导入时间：${formatFullDateTime(target.importedAt)}` : "",
     };
   }
@@ -370,13 +370,13 @@ Page({
 
   goImportXls() {
     wx.navigateTo({
-      url: "/pages/personal-sync/personal-sync?tab=xls",
+      url: "/pages/personal-sync/personal-sync",
     });
   },
 
   goLogin() {
     wx.navigateTo({
-      url: "/pages/personal-sync/personal-sync?tab=xls",
+      url: "/pages/personal-sync/personal-sync",
     });
   },
 
@@ -545,8 +545,7 @@ Page({
   showDeveloperApi() {
     wx.showModal({
       title: "开发者接口调试",
-      content:
-        "强智接口路径：\n/xskb/xskb_list.do\n/kbcx/kbxx_xzb\n/kbcx/kbxx_teacher\n/kbcx/kbxx_classroom\n/kbcx/kbxx_kc\n\n提交给 AI 调试前请确认已脱敏 Cookie、Token 等数据。",
+      content: "开发诊断信息仅用于排查课表数据问题。提交给 AI 调试前请确认已脱敏敏感登录信息。",
       showCancel: false,
       confirmText: "知道了",
     });
@@ -630,7 +629,7 @@ Page({
   showPrivacy() {
     wx.showModal({
       title: "隐私说明",
-      content: BRAND.appName + "严格保护您的隐私，小程序绝不会在前端保存您的教务密码。数据查询由服务器向公共数据源获取，不会记录您的个人密码，也不会在任何地方记录 Cookie 等敏感登录态。",
+      content: BRAND.appName + "严格保护您的隐私，小程序绝不会在前端保存您的学校账号密码。学号导入仅用于本次登录读取本人课表数据，导入完成后会清除临时状态。",
       showCancel: false,
       confirmText: "知道了",
     });

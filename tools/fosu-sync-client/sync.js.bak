@@ -339,7 +339,7 @@ async function initBrowserContext() {
     // 注入 cookie
     const cookies = parseCookieString(process.env.FOSU_MANUAL_COOKIE, FOSU_BASE_URL);
     await context.addCookies(cookies);
-    console.log(`🔑 已从 .env 中注入 ${cookies.length} 个 Cookie 至浏览器会话。`);
+    console.log(`已从本地环境注入 ${cookies.length} 个会话条目。`);
   } else {
     console.error(`❌ 未知的登录模式: ${FOSU_SYNC_AUTH_MODE}`);
     await browser.close();

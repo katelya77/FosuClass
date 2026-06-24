@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { sm2 } = require("sm-crypto");
 
 const DEFAULT_KEY_TTL_SECONDS = 5 * 60;
 const DEFAULT_PREVIEW_TTL_SECONDS = 10 * 60;
@@ -30,23 +31,34 @@ function createPublicKeyChallenge(options = {}) {
   const ttlSeconds = Math.max(60, Number(options.ttlSeconds || process.env.FOSU_IMPORT_KEY_TTL_SECONDS || DEFAULT_KEY_TTL_SECONDS) || DEFAULT_KEY_TTL_SECONDS);
   const keyId = randomId(KEY_PREFIX);
   const nonce = crypto.randomBytes(18).toString("base64url");
-  const pair = crypto.generateKeyPairSync("rsa", {
+  const rsaPair = crypto.generateKeyPairSync("rsa", {
     modulusLength: 2048,
     publicKeyEncoding: { type: "spki", format: "pem" },
     privateKeyEncoding: { type: "pkcs8", format: "pem" },
   });
+  const sm2Pair = sm2.generateKeyPairHex();
   keyStore.set(keyId, {
     keyId,
     nonce,
-    privateKey: pair.privateKey,
+    privateKey: rsaPair.privateKey,
+    rsaPrivateKey: rsaPair.privateKey,
+    sm2PrivateKey: sm2Pair.privateKey,
+    algorithms: ["SM2", "RSA-OAEP"],
     createdAtMs: nowMs(),
     expiresAtMs: nowMs() + ttlSeconds * 1000,
   });
   return {
     keyId,
-    publicKey: pair.publicKey,
+    publicKey: rsaPair.publicKey,
+    publicKeys: {
+      SM2: sm2Pair.publicKey,
+      "RSA-OAEP": rsaPair.publicKey,
+    },
+    sm2PublicKey: sm2Pair.publicKey,
     nonce,
     expiresIn: ttlSeconds,
+    algorithms: ["SM2", "RSA-OAEP"],
+    preferredAlgorithm: "SM2",
   };
 }
 
@@ -65,6 +77,8 @@ function takePrivateKeyChallenge(keyId) {
 function clearPrivateKeyChallenge(record) {
   if (!record) return;
   record.privateKey = null;
+  record.rsaPrivateKey = null;
+  record.sm2PrivateKey = null;
   record.nonce = null;
 }
 

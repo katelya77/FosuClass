@@ -274,7 +274,7 @@ async function loginAndGetJar(sessionId, studentId, password) {
   }
 
   if (!location.includes("ticket=")) {
-    safeLog("personal-login-ticket-missing", { location });
+    safeLog("personal-login-redirect-missing", { location });
     destroySession(sessionId);
     throw new Error("CAS_LOGIN_FAILED");
   }

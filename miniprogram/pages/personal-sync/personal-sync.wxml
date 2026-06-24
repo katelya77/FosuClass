@@ -1,7 +1,7 @@
 <view class="page personal-sync-page">
   <block wx:if="{{activeImportMethod == 'method'}}">
     <view class="sync-hero">
-      <view class="sync-title">导入课表</view>
+      <view class="sync-title">个人课表同步</view>
       <view class="sync-desc">选择一种适合你的方式同步本人课程安排。</view>
     </view>
 
@@ -12,36 +12,44 @@
           <view class="method-badges">
             <text class="method-badge recommend">推荐</text>
             <text class="method-badge">个人课表</text>
-            <text class="method-badge">一次性导入</text>
+            <text class="method-badge">不保存密码</text>
           </view>
         </view>
-        <view class="method-desc">通过佛山大学统一身份认证临时读取本人 APaaS 课表。</view>
-        <view class="method-safe">本人授权 · 不保存密码 · 导入后清除临时登录状态</view>
+        <view class="method-desc">登录学校账号读取本人课表数据。</view>
+        <view class="method-safe">本人授权 · 本次登录读取 · 导入后清除临时状态</view>
       </view>
       <button class="method-action" data-method="student" bindtap="selectImportMethod" disabled="{{!studentImportEnabled}}">{{studentImportEnabled ? '开始导入' : '暂未开放'}}</button>
     </view>
 
+    <view class="method-card" data-method="xls" bindtap="selectImportMethod">
+      <view class="method-main">
+        <view class="method-title">导入 XLS</view>
+        <view class="method-desc">上传学校导出的课表文件。</view>
+      </view>
+      <button class="method-action light" data-method="xls" bindtap="selectImportMethod">选择文件</button>
+    </view>
+
     <view class="method-card" data-method="class" bindtap="selectImportMethod">
       <view class="method-main">
-        <view class="method-title">班级课表导入</view>
-        <view class="method-desc">从已同步的全校班级课表中选择一个班级作为当前课表。</view>
+        <view class="method-title">选择班级课表</view>
+        <view class="method-desc">从已收录班级课表中选择。</view>
       </view>
       <button class="method-action light" data-method="class" bindtap="selectImportMethod">去选择</button>
     </view>
 
-    <view class="method-card" data-method="xls" bindtap="selectImportMethod">
+    <view class="method-card" data-method="custom" bindtap="selectImportMethod">
       <view class="method-main">
-        <view class="method-title">手动导入 / 编辑</view>
-        <view class="method-desc">使用 100 网导出的 XLS/XLSX 文件，或导入后在个性化课程中调整。</view>
+        <view class="method-title">手动编辑</view>
+        <view class="method-desc">自行添加或调整课程。</view>
       </view>
-      <button class="method-action light" data-method="xls" bindtap="selectImportMethod">打开 XLS</button>
+      <button class="method-action light" data-method="custom" bindtap="selectImportMethod">去编辑</button>
     </view>
   </block>
 
   <block wx:elif="{{activeImportMethod == 'student'}}">
     <view class="sync-hero" wx:if="{{studentImportStage == 'form'}}">
       <view class="sync-title">学号导入个人课表</view>
-      <view class="sync-desc">仅用于本次登录统一身份认证并读取本人 APaaS 课表。</view>
+      <view class="sync-desc">仅用于本次登录学校课表系统并读取本人课表数据。</view>
     </view>
 
     <view class="card student-form-card" wx:if="{{studentImportStage == 'form'}}">
@@ -51,16 +59,16 @@
       </view>
 
       <view class="form-group">
-        <text class="form-label">统一身份认证密码</text>
+        <text class="form-label">学校账号密码</text>
         <input class="form-input" password placeholder="仅用于本次读取，不会保存" value="{{studentForm.password}}" bindinput="onStudentPasswordInput" />
       </view>
 
-      <view class="safe-note strong-note">密码仅用于本次登录佛山大学统一身份认证并读取课表，系统不会保存密码，导入完成后会清除临时登录状态。</view>
+      <view class="safe-note strong-note">密码仅用于本次登录学校课表系统并读取本人课表数据，系统不会保存密码，导入完成后会清除临时状态。</view>
 
       <checkbox-group bindchange="onStudentPrivacyChange">
         <label class="privacy-row">
           <checkbox value="confirmed" checked="{{studentForm.privacyConfirmed}}" color="#c62828" />
-          <text>我确认导入的是本人课表，并同意本次通过佛山大学统一身份认证临时读取本人 APaaS 课表数据。系统不会保存统一身份认证密码，导入完成后将立即清除临时登录状态。</text>
+          <text>我确认导入的是本人课表，并同意本次登录学校课表系统读取本人课表数据。系统不会保存密码，导入完成后将立即清除临时状态。</text>
         </label>
       </checkbox-group>
 
@@ -76,7 +84,7 @@
           <view class="step-copy">{{item}}</view>
         </view>
       </view>
-      <view class="safe-note">若统一身份认证出现验证码或风控校验，系统会停止自动导入并提示改用其他方式。</view>
+      <view class="safe-note">若学校系统需要额外验证，系统会停止自动导入并提示改用其他方式。</view>
     </view>
 
     <view class="card result-card" wx:if="{{studentImportStage == 'preview' && studentPreviewResult}}">
@@ -93,7 +101,7 @@
         <view class="metadata-row">姓名：{{studentPreviewResult.profile.studentName || '未识别'}}</view>
         <view class="metadata-row">学号：{{studentPreviewResult.maskedStudentId}}</view>
         <view class="metadata-row">班级：{{studentPreviewResult.profile.className || '班级未能自动确认'}}</view>
-        <view class="metadata-row">数据来源：佛山大学 APaaS 本科生学生课表</view>
+        <view class="metadata-row">数据来源：学校课表系统</view>
       </view>
 
       <view class="preview-stats three-cols">

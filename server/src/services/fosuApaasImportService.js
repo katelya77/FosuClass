@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const { sm2 } = require("sm-crypto");
 const config = require("../config");
 const { maskStudentId, safeLog } = require("../utils/safeLogger");
 const {
@@ -30,67 +31,92 @@ function safeJsonParse(text) {
   }
 }
 
+function importPayloadError(code) {
+  const error = new Error(code);
+  error.code = code;
+  return error;
+}
+
+function normalizeCredentialAlgorithm(value) {
+  const text = toText(value).toUpperCase();
+  if (!text) return "RSA-OAEP";
+  if (text === "SM2" || text === "SM2-C1C3C2") return "SM2";
+  if (text === "RSA-OAEP" || text === "RSA-OAEP-256/AES-256-GCM") return "RSA-OAEP";
+  return text;
+}
+
+function validateCredentialPayload(payload, keyRecord) {
+  if (!payload || typeof payload !== "object") {
+    throw importPayloadError("INVALID_ENCRYPTED_PAYLOAD");
+  }
+
+  const studentId = toText(payload.studentId);
+  const password = String(payload.password || "");
+  const nonce = toText(payload.nonce);
+  const timestamp = Number(payload.timestamp || 0);
+  if (!studentId || !password || nonce !== keyRecord.nonce) {
+    throw importPayloadError("INVALID_ENCRYPTED_PAYLOAD");
+  }
+  if (!/^\d{6,20}$/.test(studentId)) {
+    throw importPayloadError("INVALID_STUDENT_ID");
+  }
+  if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > 5 * 60 * 1000) {
+    throw importPayloadError("IMPORT_KEY_EXPIRED");
+  }
+
+  return {
+    studentId,
+    password,
+    nonce,
+    timestamp,
+  };
+}
+
+function decryptRsaHybridCredentialPayload(body, keyRecord) {
+  const encryptedKey = fromBase64(body.encryptedKey);
+  const encryptedPayload = fromBase64(body.encryptedPayload);
+  const iv = fromBase64(body.iv);
+  const tag = fromBase64(body.tag);
+  if (!encryptedKey.length || !encryptedPayload.length || iv.length < 12 || tag.length !== 16) {
+    throw importPayloadError("INVALID_ENCRYPTED_PAYLOAD");
+  }
+
+  const aesKey = crypto.privateDecrypt({
+    key: keyRecord.rsaPrivateKey || keyRecord.privateKey,
+    padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
+    oaepHash: "sha256",
+  }, encryptedKey);
+
+  const decipher = crypto.createDecipheriv("aes-256-gcm", aesKey, iv);
+  decipher.setAuthTag(tag);
+  const decrypted = Buffer.concat([decipher.update(encryptedPayload), decipher.final()]);
+  return safeJsonParse(decrypted.toString("utf8"));
+}
+
+function decryptSm2CredentialPayload(body, keyRecord) {
+  const encryptedPayload = toText(body.encryptedPayload || body.ciphertext);
+  if (!encryptedPayload || !/^[0-9a-f]+$/i.test(encryptedPayload) || !keyRecord.sm2PrivateKey) {
+    throw importPayloadError("INVALID_ENCRYPTED_PAYLOAD");
+  }
+  const decrypted = sm2.doDecrypt(encryptedPayload, keyRecord.sm2PrivateKey, 1);
+  return safeJsonParse(decrypted);
+}
+
 function decryptCredentialPayload(body = {}) {
   const keyRecord = takePrivateKeyChallenge(body.keyId);
   if (!keyRecord) {
-    const error = new Error("IMPORT_KEY_EXPIRED");
-    error.code = "IMPORT_KEY_EXPIRED";
-    throw error;
+    throw importPayloadError("IMPORT_KEY_EXPIRED");
   }
 
   try {
-    const encryptedKey = fromBase64(body.encryptedKey);
-    const encryptedPayload = fromBase64(body.encryptedPayload);
-    const iv = fromBase64(body.iv);
-    const tag = fromBase64(body.tag);
-    if (!encryptedKey.length || !encryptedPayload.length || iv.length < 12 || tag.length !== 16) {
-      const error = new Error("INVALID_ENCRYPTED_PAYLOAD");
-      error.code = "INVALID_ENCRYPTED_PAYLOAD";
-      throw error;
+    const algorithm = normalizeCredentialAlgorithm(body.algorithm);
+    if (algorithm === "SM2") {
+      return validateCredentialPayload(decryptSm2CredentialPayload(body, keyRecord), keyRecord);
     }
-
-    const aesKey = crypto.privateDecrypt({
-      key: keyRecord.privateKey,
-      padding: crypto.constants.RSA_PKCS1_OAEP_PADDING,
-      oaepHash: "sha256",
-    }, encryptedKey);
-
-    const decipher = crypto.createDecipheriv("aes-256-gcm", aesKey, iv);
-    decipher.setAuthTag(tag);
-    const decrypted = Buffer.concat([decipher.update(encryptedPayload), decipher.final()]);
-    const payload = safeJsonParse(decrypted.toString("utf8"));
-    if (!payload || typeof payload !== "object") {
-      const error = new Error("INVALID_ENCRYPTED_PAYLOAD");
-      error.code = "INVALID_ENCRYPTED_PAYLOAD";
-      throw error;
+    if (algorithm === "RSA-OAEP") {
+      return validateCredentialPayload(decryptRsaHybridCredentialPayload(body, keyRecord), keyRecord);
     }
-
-    const studentId = toText(payload.studentId);
-    const password = String(payload.password || "");
-    const nonce = toText(payload.nonce);
-    const timestamp = Number(payload.timestamp || 0);
-    if (!studentId || !password || nonce !== keyRecord.nonce) {
-      const error = new Error("INVALID_ENCRYPTED_PAYLOAD");
-      error.code = "INVALID_ENCRYPTED_PAYLOAD";
-      throw error;
-    }
-    if (!/^\d{6,20}$/.test(studentId)) {
-      const error = new Error("INVALID_STUDENT_ID");
-      error.code = "INVALID_STUDENT_ID";
-      throw error;
-    }
-    if (!Number.isFinite(timestamp) || Math.abs(Date.now() - timestamp) > 5 * 60 * 1000) {
-      const error = new Error("IMPORT_KEY_EXPIRED");
-      error.code = "IMPORT_KEY_EXPIRED";
-      throw error;
-    }
-
-    return {
-      studentId,
-      password,
-      nonce,
-      timestamp,
-    };
+    throw importPayloadError("INVALID_ENCRYPTED_PAYLOAD");
   } finally {
     clearPrivateKeyChallenge(keyRecord);
   }
@@ -238,7 +264,7 @@ function buildConfirmedSchedule(record, mode, existingCourses = []) {
     subtitle: [
       record.profile.className || "班级未确认",
       record.summary.semester || "当前学期",
-      "APaaS导入",
+      "学号导入",
     ].filter(Boolean).join(" · "),
     classId: `personal-apaas-${crypto.createHash("sha256").update(record.studentId || "").digest("hex").slice(0, 16)}`,
     semester: record.summary.semester || "当前学期",
@@ -247,7 +273,7 @@ function buildConfirmedSchedule(record, mode, existingCourses = []) {
     unplacedCourses: record.unscheduledCourses || [],
     updateTime: importedAt.slice(0, 10),
     importedAt,
-    sourceText: "佛山大学 APaaS 本科生学生课表",
+    sourceText: "学校课表系统",
     source: "fosu_apaas",
     sourceStudentId: record.studentId,
     metadata: {

@@ -37,7 +37,7 @@
 
     <view class="overview-actions">
       <button class="overview-action primary" bindtap="goSchool">选择课表</button>
-      <button class="overview-action" bindtap="goImportXls">导入 XLS</button>
+      <button class="overview-action" bindtap="goImportXls">同步课表</button>
       <button class="overview-action" bindtap="goCustomCourses">个性化</button>
     </view>
   </view>

@@ -36,6 +36,7 @@ tools/fosu-sync-client/staging/
 staging/test-term.json
 staging/
 
+tmp/
 /staging/
 dist/
 server/storage/public/

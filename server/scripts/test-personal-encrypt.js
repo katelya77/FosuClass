@@ -8,13 +8,10 @@ const { encryptFosuPassword } = require("../src/utils/fosu-password-encrypt");
 
 function testEncrypt() {
   const salt = "nwxB9tTnv9UJDSX6";
-  const pass = "123456";
+  const pass = "sample-input";
   
   const res1 = encryptFosuPassword(pass, salt);
   const res2 = encryptFosuPassword(pass, salt);
-  
-  console.log("Generated encrypted password (attempt 1):", res1);
-  console.log("Generated encrypted password (attempt 2):", res2);
   
   // 验证是否是 Base64 格式的非空字符串
   const base64Regex = /^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/;
@@ -24,12 +21,12 @@ function testEncrypt() {
   // 验证由于随机前缀和随机 IV，两次加密输出不同
   assert.notStrictEqual(res1, res2, "每次加密结果应该由于随机因子而不同");
   
-  console.log("✔ Personal encryption tests passed successfully");
+  console.log("Personal encryption tests passed");
 }
 
 try {
   testEncrypt();
 } catch (error) {
-  console.error("✘ Personal encryption tests failed:", error);
+  console.error("Personal encryption tests failed:", error && error.message);
   process.exit(1);
 }

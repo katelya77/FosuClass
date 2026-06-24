@@ -61,11 +61,11 @@ function buildPersonalApaasHeader(target) {
   const metadata = (target && target.metadata) || {};
   const title = target.title || target.name || (metadata.studentName ? `${metadata.studentName}的个人课表` : "个人课表");
   const term = metadata.term || target.semester || "";
-  const subtitle = target.subtitle || [metadata.className || "班级未确认", term, "APaaS导入"].filter(Boolean).join(" · ");
+  const subtitle = target.subtitle || [metadata.className || "班级未确认", term, "学号导入"].filter(Boolean).join(" · ");
   return {
     title,
     subtitle,
-    sourceText: target.sourceText || "佛山大学 APaaS 本科生学生课表",
+    sourceText: target.sourceText || "学校课表系统",
   };
 }
 
