@@ -1,5 +1,6 @@
 const assert = require("assert");
 const crypto = require("crypto");
+const { sm2 } = require("sm-crypto");
 const { createPublicKeyChallenge, __resetForTest } = require("../server/src/services/fosuApaasImportSessionStore");
 const { decryptCredentialPayload } = require("../server/src/services/fosuApaasImportService");
 
@@ -28,6 +29,10 @@ function encryptForServer(publicKey, payload) {
 function testDecryptCredentialPayload() {
   __resetForTest();
   const challenge = createPublicKeyChallenge({ ttlSeconds: 300 });
+  assert(Array.isArray(challenge.algorithms) && challenge.algorithms.includes("RSA-OAEP"), "public key challenge should advertise RSA-OAEP");
+  assert(challenge.algorithms.includes("SM2"), "public key challenge should advertise SM2");
+  assert.strictEqual(challenge.preferredAlgorithm, "SM2");
+  assert(challenge.publicKeys && challenge.publicKeys.SM2, "public key challenge should include SM2 public key");
   const payload = {
     studentId: "202512340303",
     password: "not-logged-password",
@@ -47,6 +52,26 @@ function testDecryptCredentialPayload() {
   );
 }
 
+function testDecryptSm2CredentialPayload() {
+  __resetForTest();
+  const challenge = createPublicKeyChallenge({ ttlSeconds: 300 });
+  const payload = {
+    studentId: "202512340303",
+    password: "not-logged-password",
+    nonce: challenge.nonce,
+    timestamp: Date.now(),
+  };
+  const encryptedPayload = sm2.doEncrypt(JSON.stringify(payload), challenge.publicKeys.SM2, 1);
+  const decrypted = decryptCredentialPayload({
+    keyId: challenge.keyId,
+    algorithm: "SM2",
+    encryptedPayload,
+  });
+  assert.strictEqual(decrypted.studentId, payload.studentId);
+  assert.strictEqual(decrypted.password, payload.password);
+}
+
 testDecryptCredentialPayload();
+testDecryptSm2CredentialPayload();
 
 console.log("test-fosu-apaas-import-crypto passed");

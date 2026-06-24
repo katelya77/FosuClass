@@ -151,7 +151,7 @@ function buildLocalProjectFallback(message, context, startTime, intentName, reas
 }
 
 function buildSensitiveFallback(context, startTime, intentName) {
-  const answer = "我不能接收或处理学号、密码、Cookie、Token、API Key 等敏感信息。请不要在聊天里输入这些内容；查课和 XLS 导入可以继续使用校园工具。";
+  const answer = "我不能接收或处理学号、密码、登录凭证、API Key 等敏感信息。请不要在聊天里输入这些内容；查课和课表同步可以继续使用校园工具。";
   recordMetric({
     provider: "mock",
     latencyMs: Date.now() - startTime,

@@ -18,9 +18,9 @@ const WEEKDAY_TABS = [
   { label: "周日", value: 7 },
 ];
 const STUDENT_IMPORT_STEPS = [
-  "正在连接统一身份认证",
+  "正在连接学校课表系统",
   "正在验证账号",
-  "正在读取 APaaS 课表",
+  "正在读取本人课表数据",
   "正在整理课程数据",
 ];
 
@@ -111,11 +111,11 @@ function maskStudentId(studentId) {
 function buildApaasScheduleDisplay(result) {
   const profile = result && result.profile || {};
   const summary = result && result.summary || {};
-  const title = profile.studentName ? `${profile.studentName}的个人课表` : "APaaS 个人课表";
+  const title = profile.studentName ? `${profile.studentName}的个人课表` : "个人课表";
   return {
     title,
-    subtitle: [profile.className || "班级未确认", summary.semester || "当前学期", "APaaS导入"].filter(Boolean).join(" · "),
-    sourceText: "佛山大学 APaaS 本科生学生课表",
+    subtitle: [profile.className || "班级未确认", summary.semester || "当前学期", "学号导入"].filter(Boolean).join(" · "),
+    sourceText: "学校课表系统",
   };
 }
 
@@ -219,6 +219,10 @@ Page({
       wx.switchTab({ url: "/pages/school/school" });
       return;
     }
+    if (method === "custom") {
+      wx.navigateTo({ url: "/pages/custom-courses/custom-courses" });
+      return;
+    }
     this.setData({
       activeImportMethod: method || "method",
       syncSuccess: false,
@@ -308,7 +312,7 @@ Page({
       return null;
     }
     if (!String(form.password || "")) {
-      wx.showToast({ title: "请输入统一身份认证密码", icon: "none" });
+      wx.showToast({ title: "请输入学校账号密码", icon: "none" });
       return null;
     }
     if (!form.privacyConfirmed) {
@@ -342,7 +346,7 @@ Page({
         timeout: 10000,
         retries: 0,
       });
-      const encrypted = await encryptCredentialPayload(keyResult.publicKey, {
+      const encrypted = await encryptCredentialPayload(keyResult, {
         studentId: form.studentId,
         password: plainPassword,
         nonce: keyResult.nonce,
@@ -660,15 +664,21 @@ Page({
   showStudentImportError(code, defaultMsg) {
     let content = defaultMsg || "学号导入暂时不可用，请稍后再试。";
     if (code === "CLIENT_CRYPTO_UNAVAILABLE") {
-      content = "当前微信环境不支持本地加密，无法提交学号和密码。请升级微信后重试，或使用 XLS 导入。";
+      content = "当前环境暂时无法完成安全提交，请升级微信后重试，或使用 XLS 导入。";
     } else if (code === "INVALID_CREDENTIALS") {
-      content = "学号或统一身份认证密码不正确，请重新输入。";
+      content = "学号或密码不正确，请检查后重试。";
     } else if (code === "CAPTCHA_REQUIRED" || code === "RISK_CONTROL_REQUIRED") {
-      content = "统一身份认证需要验证码或安全校验，暂不支持自动导入。你可以使用 XLS 导入或班级课表导入。";
-    } else if (code === "APAAS_STRUCTURE_CHANGED" || code === "LOGIN_PAGE_CHANGED") {
-      content = "学校页面结构变化，自动导入暂时不可用。请先使用 XLS 或班级课表导入。";
-    } else if (code === "SCHEDULE_EMPTY") {
-      content = "未读取到 APaaS 课表数据，请确认当前账号已有本科生学生课表。";
+      content = "学校系统需要额外验证，暂时无法自动读取。你可以先使用 XLS 导入。";
+    } else if (code === "SCHEDULE_APP_NOT_FOUND") {
+      content = "暂时没有找到个人课表入口，请稍后重试或使用其他导入方式。";
+    } else if (code === "APAAS_STRUCTURE_CHANGED" || code === "LOGIN_PAGE_CHANGED" || code === "STRUCTURE_CHANGED") {
+      content = "学校课表系统暂时无法读取，请稍后重试或使用其他导入方式。";
+    } else if (code === "SCHEDULE_EMPTY" || code === "SCHEDULE_ROWS_EMPTY") {
+      content = "没有读取到可导入的课表数据，请确认当前学期是否已有课表。";
+    } else if (code === "NETWORK_TIMEOUT") {
+      content = "连接超时，请稍后重试。";
+    } else if (code === "UNKNOWN_IMPORT_ERROR") {
+      content = "读取失败，请稍后重试或使用其他导入方式。";
     } else if (code === "IMPORT_RATE_LIMITED") {
       content = "尝试次数过多，请 10 分钟后再试。";
     } else if (code === "IMPORT_KEY_EXPIRED" || code === "IMPORT_TOKEN_EXPIRED") {

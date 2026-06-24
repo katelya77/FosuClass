@@ -26,8 +26,17 @@ function requireMiniProgramSession(req, res, next) {
   return next();
 }
 
+function normalizeImportErrorCode(error) {
+  const code = error && (error.code || error.message) || "UNKNOWN_IMPORT_ERROR";
+  if (/ETIMEDOUT|ECONNABORTED|TIMEOUT/i.test(code)) return "NETWORK_TIMEOUT";
+  if (code === "SCHEDULE_EMPTY") return "SCHEDULE_ROWS_EMPTY";
+  if (code === "LOGIN_PAGE_CHANGED" || code === "APAAS_STRUCTURE_CHANGED") return "STRUCTURE_CHANGED";
+  if (code === "APAAS_DASHBOARD_UNAVAILABLE") return "SCHEDULE_APP_NOT_FOUND";
+  return code;
+}
+
 function sendImportError(res, error) {
-  const code = error && (error.code || error.message) || "FOSU_IMPORT_FAILED";
+  const code = normalizeImportErrorCode(error);
   const status = code === "IMPORT_RATE_LIMITED" ? 429 : 200;
   const messages = {
     FOSU_IMPORT_DISABLED: "学号导入暂未开放，请使用 XLS 或班级课表导入。",
@@ -35,14 +44,19 @@ function sendImportError(res, error) {
     INVALID_ENCRYPTED_PAYLOAD: "本地加密失败，请重新进入页面后再试。",
     INVALID_STUDENT_ID: "请输入正确的学号。",
     IMPORT_RATE_LIMITED: "尝试次数过多，请稍后再试。",
-    INVALID_CREDENTIALS: "学号或统一身份认证密码不正确。",
-    CAPTCHA_REQUIRED: "统一身份认证需要验证码，暂不支持自动导入。请使用 XLS 或班级课表导入。",
-    RISK_CONTROL_REQUIRED: "统一身份认证触发安全校验，暂不支持自动导入。请使用 XLS 或班级课表导入。",
-    LOGIN_PAGE_CHANGED: "统一身份认证页面结构变化，暂时无法自动导入。",
-    APAAS_DASHBOARD_UNAVAILABLE: "APaaS 暂时不可访问，请稍后再试。",
-    APAAS_SESSION_EXPIRED: "APaaS 登录状态已失效，请重新验证。",
-    APAAS_STRUCTURE_CHANGED: "APaaS 课表页面结构变化，暂时无法自动导入。",
-    SCHEDULE_EMPTY: "未读取到 APaaS 课表数据，请确认当前账号有本科生学生课表。",
+    INVALID_CREDENTIALS: "学号或密码不正确，请检查后重试。",
+    CAPTCHA_REQUIRED: "学校系统需要额外验证，暂时无法自动读取。你可以先使用 XLS 导入。",
+    RISK_CONTROL_REQUIRED: "学校系统需要额外验证，暂时无法自动读取。你可以先使用 XLS 导入。",
+    LOGIN_PAGE_CHANGED: "学校课表系统暂时无法读取，请稍后重试或使用其他导入方式。",
+    SCHEDULE_APP_NOT_FOUND: "暂时没有找到个人课表入口，请稍后重试或使用其他导入方式。",
+    APAAS_DASHBOARD_UNAVAILABLE: "暂时没有找到个人课表入口，请稍后重试或使用其他导入方式。",
+    APAAS_SESSION_EXPIRED: "本次登录已失效，请重新验证。",
+    APAAS_STRUCTURE_CHANGED: "学校课表系统暂时无法读取，请稍后重试或使用其他导入方式。",
+    STRUCTURE_CHANGED: "学校课表系统暂时无法读取，请稍后重试或使用其他导入方式。",
+    SCHEDULE_EMPTY: "没有读取到可导入的课表数据，请确认当前学期是否已有课表。",
+    SCHEDULE_ROWS_EMPTY: "没有读取到可导入的课表数据，请确认当前学期是否已有课表。",
+    NETWORK_TIMEOUT: "连接超时，请稍后重试。",
+    UNKNOWN_IMPORT_ERROR: "读取失败，请稍后重试或使用其他导入方式。",
     IMPORT_TOKEN_EXPIRED: "导入预览已过期，请重新验证。",
     INVALID_IMPORT_MODE: "导入方式不受支持。",
   };

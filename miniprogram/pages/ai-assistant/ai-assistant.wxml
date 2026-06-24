@@ -50,7 +50,7 @@
           bindtap="onWelcomeExampleTap"
         >{{item}}</button>
       </view>
-      <view class="empty-safe-note">不要输入学号、密码或 Cookie。</view>
+      <view class="empty-safe-note">不要输入学号、密码或登录凭证。</view>
     </view>
 
     <view

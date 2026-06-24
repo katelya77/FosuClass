@@ -8,6 +8,8 @@ function getCrypto() {
   return null;
 }
 
+let sm2Module = null;
+
 function utf8ToUint8Array(text) {
   if (typeof TextEncoder !== "undefined") {
     return new TextEncoder().encode(String(text || ""));
@@ -21,7 +23,7 @@ function utf8ToUint8Array(text) {
 }
 
 function base64ToArrayBuffer(base64) {
-  const binary = wx.base64ToArrayBuffer
+  const binary = typeof wx !== "undefined" && wx.base64ToArrayBuffer
     ? wx.base64ToArrayBuffer(base64)
     : null;
   if (binary) return binary;
@@ -34,7 +36,7 @@ function base64ToArrayBuffer(base64) {
 }
 
 function arrayBufferToBase64(buffer) {
-  if (wx.arrayBufferToBase64) {
+  if (typeof wx !== "undefined" && wx.arrayBufferToBase64) {
     return wx.arrayBufferToBase64(buffer);
   }
   const bytes = new Uint8Array(buffer);
@@ -59,7 +61,110 @@ function randomBytes(cryptoApi, length) {
   return bytes;
 }
 
-async function encryptCredentialPayload(publicKeyPem, payload) {
+function arrayBufferLikeToUint8Array(value) {
+  if (!value) return null;
+  if (value instanceof Uint8Array) return value;
+  if (value instanceof ArrayBuffer) return new Uint8Array(value);
+  if (value.buffer instanceof ArrayBuffer) {
+    return new Uint8Array(value.buffer, value.byteOffset || 0, value.byteLength || value.length || 0);
+  }
+  return null;
+}
+
+function fallbackRandomBytes(length) {
+  const cryptoApi = getCrypto();
+  const bytes = new Uint8Array(length);
+  if (cryptoApi && cryptoApi.getRandomValues) {
+    cryptoApi.getRandomValues(bytes);
+    return Promise.resolve(bytes);
+  }
+  if (typeof wx !== "undefined" && typeof wx.getRandomValues === "function") {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (value) => {
+        if (settled) return;
+        settled = true;
+        const result = arrayBufferLikeToUint8Array(value && (value.randomValues || value.data || value));
+        resolve(result && result.length >= length ? result.slice(0, length) : weakRandomBytes(length));
+      };
+      try {
+        const maybe = wx.getRandomValues({
+          length,
+          success: finish,
+          fail: () => finish(null),
+        });
+        if (maybe && (maybe.randomValues || maybe instanceof ArrayBuffer || maybe instanceof Uint8Array)) {
+          finish(maybe.randomValues || maybe);
+        }
+      } catch (error) {
+        finish(null);
+      }
+    });
+  }
+  return Promise.resolve(weakRandomBytes(length));
+}
+
+function weakRandomBytes(length) {
+  const bytes = new Uint8Array(length);
+  for (let index = 0; index < length; index += 1) {
+    bytes[index] = Math.floor(Math.random() * 256) & 0xff;
+  }
+  return bytes;
+}
+
+function installWxRandomShim(seedBytes) {
+  if (typeof globalThis === "undefined") return;
+  const root = globalThis;
+  root.window = root.window || {};
+  root.window.crypto = root.window.crypto || {};
+  let offset = 0;
+  const seed = arrayBufferLikeToUint8Array(seedBytes) || weakRandomBytes(64);
+  root.window.crypto.getRandomValues = function getRandomValues(target) {
+    for (let index = 0; index < target.length; index += 1) {
+      if (offset < seed.length) {
+        target[index] = seed[offset];
+        offset += 1;
+      } else {
+        target[index] = Math.floor(Math.random() * 256) & 0xff;
+      }
+    }
+    return target;
+  };
+}
+
+async function loadSm2Module() {
+  if (sm2Module) return sm2Module;
+  const seedBytes = await fallbackRandomBytes(128);
+  installWxRandomShim(seedBytes);
+  sm2Module = require("./vendor/sm2");
+  return sm2Module;
+}
+
+function normalizeKeyInfo(keyInfoOrPublicKey) {
+  if (typeof keyInfoOrPublicKey === "string") {
+    return {
+      publicKey: keyInfoOrPublicKey,
+      publicKeys: { "RSA-OAEP": keyInfoOrPublicKey },
+      algorithms: ["RSA-OAEP"],
+    };
+  }
+  return keyInfoOrPublicKey || {};
+}
+
+function getRsaPublicKey(keyInfo) {
+  return keyInfo.publicKey || keyInfo.publicKeys && keyInfo.publicKeys["RSA-OAEP"] || "";
+}
+
+function getSm2PublicKey(keyInfo) {
+  return keyInfo.sm2PublicKey || keyInfo.publicKeys && keyInfo.publicKeys.SM2 || "";
+}
+
+function supportsAlgorithm(keyInfo, algorithm) {
+  const algorithms = Array.isArray(keyInfo.algorithms) ? keyInfo.algorithms : [];
+  return !algorithms.length || algorithms.indexOf(algorithm) >= 0;
+}
+
+async function encryptWithRsaHybrid(publicKeyPem, payload) {
   const cryptoApi = getCrypto();
   if (!cryptoApi || !cryptoApi.subtle || !cryptoApi.getRandomValues) {
     const error = new Error("CLIENT_CRYPTO_UNAVAILABLE");
@@ -99,12 +204,47 @@ async function encryptCredentialPayload(publicKeyPem, payload) {
   const tag = encryptedBytes.slice(encryptedBytes.length - tagLength);
 
   return {
-    algorithm: "RSA-OAEP-256/AES-256-GCM",
+    algorithm: "RSA-OAEP",
     encryptedKey: arrayBufferToBase64(encryptedKey),
     encryptedPayload: arrayBufferToBase64(ciphertext.buffer),
     iv: arrayBufferToBase64(iv.buffer),
     tag: arrayBufferToBase64(tag.buffer),
   };
+}
+
+async function encryptWithSm2(publicKey, payload) {
+  const sm2 = await loadSm2Module();
+  const encryptedPayload = sm2.doEncrypt(JSON.stringify(payload || {}), publicKey, 1);
+  if (!encryptedPayload) {
+    const error = new Error("CLIENT_CRYPTO_UNAVAILABLE");
+    error.code = "CLIENT_CRYPTO_UNAVAILABLE";
+    throw error;
+  }
+  return {
+    algorithm: "SM2",
+    encryptedPayload,
+  };
+}
+
+async function encryptCredentialPayload(keyInfoOrPublicKey, payload) {
+  const keyInfo = normalizeKeyInfo(keyInfoOrPublicKey);
+  const rsaPublicKey = getRsaPublicKey(keyInfo);
+  const sm2PublicKey = getSm2PublicKey(keyInfo);
+  const cryptoApi = getCrypto();
+
+  if (rsaPublicKey && supportsAlgorithm(keyInfo, "RSA-OAEP") && cryptoApi && cryptoApi.subtle && cryptoApi.getRandomValues) {
+    return encryptWithRsaHybrid(rsaPublicKey, payload);
+  }
+  if (sm2PublicKey && supportsAlgorithm(keyInfo, "SM2")) {
+    return encryptWithSm2(sm2PublicKey, payload);
+  }
+  if (rsaPublicKey && supportsAlgorithm(keyInfo, "RSA-OAEP")) {
+    return encryptWithRsaHybrid(rsaPublicKey, payload);
+  }
+
+  const error = new Error("CLIENT_CRYPTO_UNAVAILABLE");
+  error.code = "CLIENT_CRYPTO_UNAVAILABLE";
+  throw error;
 }
 
 module.exports = {
