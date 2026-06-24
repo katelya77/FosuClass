@@ -30,6 +30,8 @@
     "helmet": "^7.1.0",
     "iconv-lite": "^0.6.3",
     "node-cache": "^5.1.2",
+    "playwright-core": "^1.60.0",
+    "sm-crypto": "^0.4.0",
     "tough-cookie": "^4.1.4",
     "xlsx": "^0.18.5"
   }

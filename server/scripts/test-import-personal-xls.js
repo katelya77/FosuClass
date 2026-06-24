@@ -54,13 +54,13 @@ function runTests() {
   console.log("[Test] 开始进行 100 网 xls 课表解析测试...");
   
   const buffer = buildMockXlsBuffer();
-  const result = parsePersonalXlsBuffer(buffer, "2025-2026-2", "学生个人课表_20250410303.xls");
+  const result = parsePersonalXlsBuffer(buffer, "2025-2026-2", "学生个人课表_202599990303.xls");
 
   // 1. 验证学期提取
   console.log(`[Test] 识别到的学期为: ${result.term}`);
   assert.strictEqual(result.term, "2025-2026-2", "学期提取不正确");
   assert.strictEqual(result.metadata.studentName, "王奕章", "学生姓名 metadata 提取不正确");
-  assert.strictEqual(result.metadata.studentId, "20250410303", "学号 metadata 应优先从文件名提取");
+  assert.strictEqual(result.metadata.studentId, "202599990303", "学号 metadata 应优先从文件名提取");
   assert.strictEqual(result.metadata.className, "25动物医学6", "班级 metadata 提取不正确");
   assert.strictEqual(result.metadata.majorName, "动物医学", "所属班级 metadata 提取不正确");
   assert.strictEqual(result.metadata.collegeName, "动物科技学院", "学院 metadata 提取不正确");
