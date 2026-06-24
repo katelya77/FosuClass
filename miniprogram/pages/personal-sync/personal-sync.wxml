@@ -104,63 +104,132 @@
         <view class="metadata-row">数据来源：学校课表系统</view>
       </view>
 
-      <view class="preview-stats three-cols">
+      <view class="preview-stats student-stats-grid">
         <view class="stat-item">
           <text class="stat-label">原始记录</text>
-          <text class="stat-value">{{studentPreviewResult.summary.rawRowCount}} 条</text>
+          <text class="stat-value">{{studentPreviewResult.summary.rawRowCount || 0}} 条</text>
         </view>
         <view class="stat-item">
-          <text class="stat-label">可导入</text>
-          <text class="stat-value">{{studentPreviewResult.summary.scheduledCourseCount}} 个</text>
+          <text class="stat-label">推荐导入</text>
+          <text class="stat-value">{{studentPreviewResult.summary.arrangementAutoIncludeCount || studentPreviewResult.summary.scheduledCourseCount || 0}} 个</text>
         </view>
         <view class="stat-item">
           <text class="stat-label">待确认</text>
-          <text class="stat-value">{{studentPreviewResult.summary.unscheduledCourseCount}} 个</text>
+          <text class="stat-value">{{studentPreviewResult.summary.needsConfirmCount || 0}} 个</text>
+        </view>
+        <view class="stat-item">
+          <text class="stat-label">疑似非本班</text>
+          <text class="stat-value">{{studentPreviewResult.summary.suspectedNotMineCount || 0}} 个</text>
+        </view>
+        <view class="stat-item">
+          <text class="stat-label">冲突</text>
+          <text class="stat-value">{{studentPreviewResult.summary.conflictCount || 0}} 个</text>
         </view>
       </view>
 
-      <view class="safe-note" wx:if="{{studentPreviewResult.summary.unscheduledCourseCount}}">
-        以下课程因缺少周次、星期或节次，已作为未排入课表课程保留，可后续手动编辑。
-      </view>
-      <view class="safe-note warning-note" wx:if="{{studentPreviewResult.summary.conflictCount}}">
-        存在时间冲突，请导入后检查。
+      <view class="safe-note warning-note" wx:if="{{studentPreviewResult.summary.needsConfirmCount || studentPreviewResult.summary.unscheduledCount || studentPreviewResult.summary.conflictCount}}">
+        部分课程需要确认，导入后也可以继续编辑。冲突课程已在预览中标记。
       </view>
 
-      <view class="student-preview-list" wx:if="{{studentPreviewResult.preview.scheduled.length}}">
-        <view class="student-preview-title">可自动导入</view>
-        <view class="preview-course-card compact" wx:for="{{studentPreviewResult.preview.scheduled}}" wx:key="id">
-          <view class="course-card-head">
-            <text class="course-card-title">{{item.courseName}}</text>
-            <text class="course-card-badge">{{item.weekdayText}} {{item.sectionText}}</text>
+      <view class="student-grid-section">
+        <view class="student-section-head">
+          <view>
+            <view class="student-preview-title">推荐导入课表预览</view>
+            <view class="student-preview-caption">只显示当前周有效课程，可左右切换周次。</view>
           </view>
-          <view class="course-card-row">
-            <text class="row-label">地点</text>
-            <text class="row-value">{{item.roomName || '未注明'}}</text>
-          </view>
-          <view class="course-card-row">
-            <text class="row-label">周次</text>
-            <text class="row-value">{{item.weekText || '未标明'}}</text>
+          <view class="week-switcher">
+            <button class="week-btn" data-delta="-1" bindtap="onStudentPreviewWeekShift" disabled="{{studentPreviewWeek <= 1}}">‹</button>
+            <text class="week-label">第{{studentPreviewWeek}}周</text>
+            <button class="week-btn" data-delta="1" bindtap="onStudentPreviewWeekShift" disabled="{{studentPreviewWeek >= 19}}">›</button>
           </view>
         </view>
+        <schedule-preview-grid grid="{{studentPreviewGrid}}" bind:course="onStudentPreviewCourseTap" />
       </view>
 
-      <view class="student-preview-list" wx:if="{{studentPreviewResult.preview.unscheduled.length}}">
-        <view class="student-preview-title">需手动确认</view>
-        <view class="preview-course-card compact muted-card" wx:for="{{studentPreviewResult.preview.unscheduled}}" wx:key="id">
-          <view class="course-card-head">
-            <text class="course-card-title">{{item.courseName}}</text>
-            <text class="course-card-badge">未排入</text>
-          </view>
-          <view class="course-card-row">
-            <text class="row-label">原因</text>
-            <text class="row-value">{{item.reason || '信息不完整'}}</text>
-          </view>
+      <view class="selection-bar">
+        <view class="selection-copy">
+          <text class="selection-title">{{studentSelectionMode ? '自定义选择中' : '已按推荐勾选'}}</text>
+          <text class="selection-subtitle">当前选择 {{studentSelectedCount}} 项</text>
         </view>
+        <button class="selection-toggle" bindtap="toggleStudentSelectionMode">{{studentSelectionMode ? '完成' : '自定义选择'}}</button>
       </view>
 
-      <view class="preview-actions">
-        <button class="btn-bind" loading="{{studentImportConfirming}}" disabled="{{studentImportConfirming}}" bindtap="confirmStudentImport">确认导入</button>
+      <view class="student-preview-buckets">
+        <block wx:for="{{studentPreviewBuckets}}" wx:key="key">
+          <view class="student-bucket" wx:if="{{item.arrangementCount}}">
+            <view class="student-bucket-head" data-section="{{item.key}}" bindtap="toggleStudentSection">
+              <view class="bucket-title-box">
+                <text class="student-preview-title">{{item.title}}</text>
+                <text class="bucket-summary">{{item.summaryText}}</text>
+              </view>
+              <text class="bucket-arrow">{{item.expanded ? '收起' : '展开'}}</text>
+            </view>
+            <view class="student-bucket-body" wx:if="{{item.expanded}}">
+              <view class="preview-course-card compact" wx:for="{{item.groups}}" wx:key="courseGroupId" wx:for-item="group">
+                <view class="course-card-head">
+                  <text class="course-card-title">{{group.displayCourseName}}</text>
+                  <text class="course-card-badge">{{group.countText}}</text>
+                </view>
+                <view class="arrangement-row" wx:for="{{group.arrangements}}" wx:key="arrangementId" wx:for-item="arrangement">
+                  <view class="arrangement-main">
+                    <view class="arrangement-line">
+                      <text class="selection-dot {{arrangement.selected ? 'selected' : ''}}" wx:if="{{studentSelectionMode}}" data-id="{{arrangement.arrangementId}}" bindtap="toggleStudentArrangement">{{arrangement.selected ? '✓' : ''}}</text>
+                      <text class="arrangement-time">{{arrangement.timeText}}</text>
+                      <text class="arrangement-status {{arrangement.statusClass}}">{{arrangement.statusText}}</text>
+                    </view>
+                    <view class="arrangement-meta">{{arrangement.roomText}} · {{arrangement.weekText || '周次待确认'}}</view>
+                    <view class="arrangement-reason">{{arrangement.reasonText}}</view>
+                  </view>
+                  <button class="edit-arrangement-btn" wx:if="{{studentSelectionMode && arrangement.canEdit}}" data-id="{{arrangement.arrangementId}}" bindtap="startEditStudentArrangement">编辑后加入</button>
+                </view>
+              </view>
+            </view>
+          </view>
+        </block>
+      </view>
+
+      <view class="preview-actions student-bottom-actions">
+        <button class="btn-bind" loading="{{studentImportConfirming}}" disabled="{{studentImportConfirming || !studentSelectedCount}}" bindtap="confirmStudentImport">{{studentPreviewResult.uiHints.defaultConfirmText || '确认导入推荐课程'}}</button>
         <button class="btn-cancel" disabled="{{studentImportConfirming}}" bindtap="cancelStudentImport">取消</button>
+      </view>
+
+      <view class="edit-panel-mask" wx:if="{{studentEditingArrangement}}">
+        <view class="edit-panel">
+          <view class="edit-panel-title">编辑后加入</view>
+          <view class="edit-course-name">{{studentEditingArrangement.displayCourseName || studentEditingArrangement.courseName}}</view>
+          <view class="edit-grid">
+            <view class="edit-field">
+              <text class="form-label">星期</text>
+              <picker mode="selector" range="{{editWeekdayLabels}}" value="{{editWeekdayIndex}}" bindchange="onEditWeekdayChange">
+                <view class="picker-selector compact-picker">{{editWeekdayLabels[editWeekdayIndex]}}</view>
+              </picker>
+            </view>
+            <view class="edit-field">
+              <text class="form-label">开始节次</text>
+              <picker mode="selector" range="{{editSectionLabels}}" value="{{editStartIndex}}" bindchange="onEditStartSectionChange">
+                <view class="picker-selector compact-picker">{{editSectionLabels[editStartIndex]}}</view>
+              </picker>
+            </view>
+            <view class="edit-field">
+              <text class="form-label">结束节次</text>
+              <picker mode="selector" range="{{editSectionLabels}}" value="{{editEndIndex}}" bindchange="onEditEndSectionChange">
+                <view class="picker-selector compact-picker">{{editSectionLabels[editEndIndex]}}</view>
+              </picker>
+            </view>
+          </view>
+          <view class="form-group">
+            <text class="form-label">周次</text>
+            <input class="form-input" placeholder="例如 1-16周" value="{{editWeekText}}" bindinput="onEditWeekTextInput" />
+          </view>
+          <view class="form-group">
+            <text class="form-label">地点</text>
+            <input class="form-input" placeholder="未注明可留空" value="{{editRoomName}}" bindinput="onEditRoomInput" />
+          </view>
+          <view class="edit-actions">
+            <button class="btn-secondary" bindtap="cancelStudentArrangementEdit">取消</button>
+            <button class="btn-bind" bindtap="saveStudentArrangementEdit">保存并加入</button>
+          </view>
+        </view>
       </view>
     </view>
 

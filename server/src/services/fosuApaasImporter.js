@@ -1,4 +1,4 @@
-const axios = require("axios");
+﻿const axios = require("axios");
 const { wrapper } = require("axios-cookiejar-support");
 const { CookieJar } = require("tough-cookie");
 const cheerio = require("cheerio");
@@ -8,7 +8,8 @@ const path = require("path");
 const config = require("../config");
 const { encryptFosuPassword } = require("../utils/fosu-password-encrypt");
 const { safeLog, maskStudentId } = require("../utils/safeLogger");
-const { buildImportPreview } = require("../utils/fosuApaasScheduleParser");
+const { buildScheduleImportPreview } = require("./scheduleImportNormalizer");
+const { getClassSchedule } = require("./scheduleService");
 
 const axiosClient = wrapper(axios.default || axios);
 const SCHEDULE_KEYWORDS = ["本科生学生课表", "学生课表", "课表"];
@@ -21,6 +22,11 @@ const FALLBACK_ENTRIES = [
 ];
 
 const DEFAULT_BROWSER_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
+const APP_ENTRY_CACHE_TTL_MS = Math.max(60_000, Number(process.env.FOSU_APAAS_ENTRY_CACHE_TTL_MS || 12 * 60 * 60 * 1000) || 12 * 60 * 60 * 1000);
+const appEntryCache = {
+  entry: null,
+  expiresAtMs: 0,
+};
 
 function toText(value) {
   return String(value == null ? "" : value).trim();
@@ -749,21 +755,55 @@ async function findStudentScheduleAppFromApi(session) {
   return null;
 }
 
+function cloneAppEntry(entry) {
+  return entry ? Object.assign({}, entry) : null;
+}
+
+function getCachedStudentScheduleApp() {
+  if (appEntryCache.entry && appEntryCache.expiresAtMs > Date.now()) {
+    return cloneAppEntry(appEntryCache.entry);
+  }
+  return null;
+}
+
+function setCachedStudentScheduleApp(entry) {
+  if (!entry || entry.fallback) return;
+  appEntryCache.entry = cloneAppEntry(entry);
+  appEntryCache.expiresAtMs = Date.now() + APP_ENTRY_CACHE_TTL_MS;
+}
+
 async function findStudentScheduleApp(session) {
   const apaasBase = getApaasBase();
+  const cached = getCachedStudentScheduleApp();
+  if (cached) {
+    safeLog("fosu-apaas-entry-cache-hit", {
+      appId: cached.appId || "",
+      discoveredBy: cached.discoveredBy || "",
+    });
+    return cached;
+  }
   const apiEntry = await findStudentScheduleAppFromApi(session);
-  if (apiEntry) return apiEntry;
+  if (apiEntry) {
+    setCachedStudentScheduleApp(apiEntry);
+    return apiEntry;
+  }
 
   const dashboardHtml = session.dashboardHtml || await fetchApaasDashboard(session);
   const found = findStudentScheduleAppInHtml(dashboardHtml, apaasBase);
-  if (found) return found;
+  if (found) {
+    setCachedStudentScheduleApp(found);
+    return found;
+  }
 
   for (const path of ["/dashboard", "/m/dashboard"]) {
     const response = await session.client.get(`${apaasBase}${path}`, {
       validateStatus: (status) => status >= 200 && status < 400,
     });
     const entry = findStudentScheduleAppInHtml(response.data, `${apaasBase}${path}`);
-    if (entry) return entry;
+    if (entry) {
+      setCachedStudentScheduleApp(entry);
+      return entry;
+    }
   }
 
   safeLog("fosu-apaas-entry-fallback", { reason: "dynamic-discovery-empty" });
@@ -903,29 +943,56 @@ function extractPaginationInfo(payload, rows) {
   return { total, page, pageSize };
 }
 
+async function runLimited(tasks, limit) {
+  const results = [];
+  let cursor = 0;
+  const workerCount = Math.max(1, Math.min(Number(limit || 3) || 3, tasks.length || 1));
+  async function worker() {
+    while (cursor < tasks.length) {
+      const index = cursor;
+      cursor += 1;
+      results[index] = await tasks[index]();
+    }
+  }
+  await Promise.all(Array.from({ length: workerCount }, worker));
+  return results;
+}
+
+async function fetchRowsFromJsonApiPage(session, url, page, pageSize) {
+  const target = new URL(url);
+  target.searchParams.set("page", String(page));
+  target.searchParams.set("current", String(page));
+  target.searchParams.set("pageSize", String(pageSize));
+  target.searchParams.set("size", String(pageSize));
+  const response = await session.client.get(target.toString(), {
+    headers: { Accept: "application/json,text/plain,*/*" },
+    validateStatus: (status) => status >= 200 && status < 500,
+  });
+  if (response.status >= 400) return { rows: [], info: { total: 0, page, pageSize } };
+  const payload = parseJsonMaybe(response.data) || response.data;
+  const groups = collectScheduleRowsFromJson(payload, []);
+  const rows = groups.sort((left, right) => right.length - left.length)[0] || [];
+  return {
+    rows,
+    info: extractPaginationInfo(payload, rows),
+  };
+}
+
+async function fetchRowsFromJsonApiPageWithRetry(session, url, page, pageSize) {
+  try {
+    return await fetchRowsFromJsonApiPage(session, url, page, pageSize);
+  } catch (error) {
+    safeLog("fosu-apaas-json-page-retry", { page, code: error.code || error.message });
+    return fetchRowsFromJsonApiPage(session, url, page, pageSize);
+  }
+}
+
 async function fetchRowsFromJsonApi(session, url) {
   const allRows = [];
   const seenKeys = new Set();
-  let page = 1;
-  let total = 0;
-  let pageSize = 100;
-
-  while (page <= 100) {
-    const target = new URL(url);
-    target.searchParams.set("page", String(page));
-    target.searchParams.set("current", String(page));
-    target.searchParams.set("pageSize", String(pageSize));
-    target.searchParams.set("size", String(pageSize));
-    const response = await session.client.get(target.toString(), {
-      headers: { Accept: "application/json,text/plain,*/*" },
-      validateStatus: (status) => status >= 200 && status < 500,
-    });
-    if (response.status >= 400) break;
-    const payload = parseJsonMaybe(response.data) || response.data;
-    const groups = collectScheduleRowsFromJson(payload, []);
-    const rows = groups.sort((left, right) => right.length - left.length)[0] || [];
-    if (!rows.length) break;
-
+  const requestedPageSize = Number(process.env.FOSU_APAAS_PAGE_SIZE || 200) || 200;
+  const first = await fetchRowsFromJsonApiPage(session, url, 1, requestedPageSize);
+  const addRows = (rows) => {
     rows.forEach((row) => {
       const key = JSON.stringify(row);
       if (!seenKeys.has(key)) {
@@ -933,13 +1000,22 @@ async function fetchRowsFromJsonApi(session, url) {
         allRows.push(row);
       }
     });
-    const info = extractPaginationInfo(payload, rows);
-    total = total || info.total;
-    pageSize = info.pageSize || pageSize;
-    if (total && allRows.length >= total) break;
-    if (rows.length < pageSize && !total) break;
-    page += 1;
+  };
+  addRows(first.rows || []);
+  if (!first.rows || !first.rows.length) return allRows;
+
+  const info = first.info || {};
+  const total = Number(info.total || 0) || 0;
+  const pageSize = Math.min(500, Math.max(20, Number(info.pageSize || requestedPageSize) || requestedPageSize));
+  if (!total || allRows.length >= total) return allRows;
+
+  const pageCount = Math.min(100, Math.ceil(total / pageSize));
+  const tasks = [];
+  for (let page = 2; page <= pageCount; page += 1) {
+    tasks.push(() => fetchRowsFromJsonApiPageWithRetry(session, url, page, pageSize));
   }
+  const pages = await runLimited(tasks, Number(process.env.FOSU_APAAS_PAGE_CONCURRENCY || 3) || 3);
+  pages.forEach((pageResult) => addRows(pageResult && pageResult.rows || []));
 
   return allRows;
 }
@@ -1031,6 +1107,37 @@ function buildApaasDataQueryBody(entry, formDefinition, from, size) {
   };
 }
 
+async function fetchApaasDataQueryPage(session, entry, formDefinition, columns, from, size) {
+  const apaasBase = getApaasBase();
+  const body = buildApaasDataQueryBody(entry, formDefinition, from, size);
+  if (!body.appId || !body.formId || !body.formCode) return { rows: [], total: 0 };
+  const response = await session.client.post(`${apaasBase}/api/data/query`, JSON.stringify(body), {
+    headers: {
+      Accept: "application/json, text/plain, */*",
+      "Content-Type": "application/json;charset=UTF-8",
+      Referer: `${apaasBase}/m/dashboard/app/${body.appId}/source/${body.formCode}`,
+    },
+    validateStatus: (status) => status >= 200 && status < 500,
+  });
+  if (response.status >= 400) return { rows: [], total: 0 };
+  const data = responseData(response);
+  const rows = data && Array.isArray(data.datas) ? data.datas : [];
+  return {
+    rows: mapApaasDataRows(rows, columns),
+    rawCount: rows.length,
+    total: Number(data && data.count || 0) || 0,
+  };
+}
+
+async function fetchApaasDataQueryPageWithRetry(session, entry, formDefinition, columns, from, size) {
+  try {
+    return await fetchApaasDataQueryPage(session, entry, formDefinition, columns, from, size);
+  } catch (error) {
+    safeLog("fosu-apaas-data-query-page-retry", { from, code: error.code || error.message });
+    return fetchApaasDataQueryPage(session, entry, formDefinition, columns, from, size);
+  }
+}
+
 async function fetchRowsFromApaasDataQuery(session, entry) {
   if (!entry || !entry.appId || !(entry.formCode || entry.sourceCode || entry.formId || entry.sourceId)) {
     return [];
@@ -1045,29 +1152,34 @@ async function fetchRowsFromApaasDataQuery(session, entry) {
 
   const columns = collectFormColumns(formDefinition.columns || formDefinition.formJson || formDefinition);
   const allRows = [];
-  const pageSize = Number(process.env.FOSU_APAAS_PAGE_SIZE || 100) || 100;
-  let total = 0;
-
-  for (let from = 0; from < 10000; from += pageSize) {
-    const body = buildApaasDataQueryBody(entry, formDefinition, from, pageSize);
-    if (!body.appId || !body.formId || !body.formCode) break;
-    const response = await session.client.post(`${apaasBase}/api/data/query`, JSON.stringify(body), {
-      headers: {
-        Accept: "application/json, text/plain, */*",
-        "Content-Type": "application/json;charset=UTF-8",
-        Referer: `${apaasBase}/m/dashboard/app/${body.appId}/source/${body.formCode}`,
-      },
-      validateStatus: (status) => status >= 200 && status < 500,
+  const seenKeys = new Set();
+  const pageSize = Math.min(500, Math.max(20, Number(process.env.FOSU_APAAS_PAGE_SIZE || 200) || 200));
+  const addRows = (rows) => {
+    (rows || []).forEach((row) => {
+      const key = JSON.stringify(row);
+      if (seenKeys.has(key)) return;
+      seenKeys.add(key);
+      allRows.push(row);
     });
-    if (response.status >= 400) break;
-    const data = responseData(response);
-    const rows = data && Array.isArray(data.datas) ? data.datas : [];
-    total = Number(data && data.count || total || 0) || total;
-    const mappedRows = mapApaasDataRows(rows, columns);
-    mappedRows.forEach((row) => allRows.push(row));
-    if (!rows.length) break;
-    if (total && from + rows.length >= total) break;
-    if (rows.length < pageSize && !total) break;
+  };
+
+  const first = await fetchApaasDataQueryPage(session, entry, formDefinition, columns, 0, pageSize);
+  addRows(first.rows);
+  const total = Number(first.total || 0) || 0;
+  if (total && first.rawCount && first.rawCount < total) {
+    const tasks = [];
+    for (let from = pageSize; from < Math.min(10000, total); from += pageSize) {
+      tasks.push(() => fetchApaasDataQueryPageWithRetry(session, entry, formDefinition, columns, from, pageSize));
+    }
+    const pages = await runLimited(tasks, Number(process.env.FOSU_APAAS_PAGE_CONCURRENCY || 3) || 3);
+    pages.forEach((pageResult) => addRows(pageResult && pageResult.rows || []));
+  } else if (!total && first.rawCount === pageSize) {
+    for (let from = pageSize; from < 10000; from += pageSize) {
+      const page = await fetchApaasDataQueryPageWithRetry(session, entry, formDefinition, columns, from, pageSize);
+      if (!page.rawCount) break;
+      addRows(page.rows);
+      if (page.rawCount < pageSize) break;
+    }
   }
 
   if (allRows.length) {
@@ -1159,7 +1271,24 @@ async function fetchScheduleRows(session, appEntry) {
 }
 
 function normalizeRowsForPreview(rawRows, options = {}) {
-  return buildImportPreview(rawRows, options);
+  return buildScheduleImportPreview(rawRows, options);
+}
+
+async function loadLocalClassCourses(targetClassName, semester) {
+  const className = toText(targetClassName);
+  if (!className) return [];
+  try {
+    const result = await getClassSchedule({ semester, className });
+    if (result && result.success && Array.isArray(result.classes) && result.classes[0]) {
+      return Array.isArray(result.classes[0].courses) ? result.classes[0].courses : [];
+    }
+  } catch (error) {
+    safeLog("fosu-apaas-local-class-match-failed", {
+      className,
+      code: error.code || error.message,
+    });
+  }
+  return [];
 }
 
 function destroySession(session) {
@@ -1171,21 +1300,65 @@ function destroySession(session) {
 
 async function importSchedulePreview(studentId, password, options = {}) {
   let session = null;
+  const timing = {};
+  const startedAt = Date.now();
   try {
+    const loginStartedAt = Date.now();
     session = await loginWithCas(studentId, password);
+    timing.loginMs = Date.now() - loginStartedAt;
+    const discoverStartedAt = Date.now();
     const entry = await findStudentScheduleApp(session);
+    timing.discoverAppMs = Date.now() - discoverStartedAt;
+    const fetchStartedAt = Date.now();
     const rawRows = await fetchScheduleRows(session, entry);
+    timing.fetchRowsMs = Date.now() - fetchStartedAt;
     if (!rawRows.length) {
       const error = new Error("SCHEDULE_EMPTY");
       error.code = "SCHEDULE_EMPTY";
       throw error;
     }
-    return normalizeRowsForPreview(rawRows, {
+    const semester = options.semester || "\u5f53\u524d\u5b66\u671f";
+    const importedAt = options.importedAt || new Date().toISOString();
+    const selectedClassName = options.existingSelectedClassName || options.selectedClassName || "";
+    const normalizeStartedAt = Date.now();
+    const preliminary = normalizeRowsForPreview(rawRows, {
       studentId,
-      semester: options.semester || "当前学期",
-      importedAt: options.importedAt || new Date().toISOString(),
+      semester,
+      importedAt,
       appEntry: entry,
+      existingSelectedClassName: selectedClassName,
+      timing,
     });
+    timing.normalizeMs = Date.now() - normalizeStartedAt;
+    const matchStartedAt = Date.now();
+    const localCourses = await loadLocalClassCourses(preliminary.profile && preliminary.profile.targetClassName, semester);
+    timing.matchLocalScheduleMs = Date.now() - matchStartedAt;
+
+    const finalNormalizeStartedAt = Date.now();
+    const preview = normalizeRowsForPreview(rawRows, {
+      studentId,
+      semester,
+      importedAt,
+      appEntry: entry,
+      existingSelectedClassName: selectedClassName,
+      localCourses,
+      timing,
+    });
+    timing.normalizeMs += Date.now() - finalNormalizeStartedAt;
+    timing.totalMs = Date.now() - startedAt;
+    preview.timing = timing;
+    safeLog("fosu-apaas-preview-timing", {
+      studentId: maskStudentId(studentId),
+      rawRowCount: rawRows.length,
+      localCourseCount: localCourses.length,
+      loginMs: timing.loginMs,
+      discoverAppMs: timing.discoverAppMs,
+      fetchRowsMs: timing.fetchRowsMs,
+      normalizeMs: timing.normalizeMs,
+      matchLocalScheduleMs: timing.matchLocalScheduleMs,
+      totalMs: timing.totalMs,
+    });
+    return preview;
   } finally {
     destroySession(session);
   }

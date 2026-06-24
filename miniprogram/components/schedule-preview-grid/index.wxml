@@ -1,0 +1,57 @@
+<view class="preview-grid-shell">
+  <scroll-view class="preview-grid-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <scroll-view scroll-x enhanced show-scrollbar="{{false}}">
+      <view class="preview-grid" style="width: {{gridWidth}}rpx;">
+        <view class="time-axis">
+          <view class="time-head">节次</view>
+          <view
+            wx:for="{{sections}}"
+            wx:key="section"
+            class="time-cell {{item.section === 5 || item.section === 10 ? 'section-divider' : ''}}"
+            style="height: {{sectionHeight}}rpx;"
+          >
+            <view class="section-no">{{item.section}}</view>
+          </view>
+        </view>
+
+        <view class="day-track" style="width: {{dayTrackWidth}}rpx;">
+          <view class="weekday-heads">
+            <view
+              wx:for="{{columns}}"
+              wx:key="weekday"
+              class="weekday-head"
+              style="width: {{dayColumnWidth}}rpx;"
+            >{{item.label}}</view>
+          </view>
+
+          <view class="days-area" style="height: {{scheduleHeight}}rpx;">
+            <view
+              wx:for="{{columns}}"
+              wx:key="weekday"
+              wx:for-item="day"
+              class="day-column"
+              style="width: {{dayColumnWidth}}rpx;"
+            >
+              <view
+                wx:for="{{sections}}"
+                wx:key="section"
+                wx:for-item="section"
+                class="section-slot {{section.section === 5 || section.section === 10 ? 'section-divider' : ''}}"
+                style="height: {{sectionHeight}}rpx;"
+              ></view>
+              <course-card
+                wx:for="{{day.courses}}"
+                wx:key="id"
+                wx:for-item="course"
+                course="{{course}}"
+                card-style="{{course.cardStyle}}"
+                layout="grid"
+                bind:tapcourse="onCourseTap"
+              />
+            </view>
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </scroll-view>
+</view>

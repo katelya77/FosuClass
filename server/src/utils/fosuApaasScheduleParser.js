@@ -13,6 +13,18 @@ const FIELD_ALIASES = {
   specialNote: ["特别说明", "说明", "备注", "specialNote", "note"],
 };
 
+Object.assign(FIELD_ALIASES, {
+  studentName: ["学生姓名", "姓名"].concat(FIELD_ALIASES.studentName),
+  courseName: ["课程名称", "课程名"].concat(FIELD_ALIASES.courseName),
+  weekText: ["周次", "上课周次", "教学周"].concat(FIELD_ALIASES.weekText),
+  weekdayText: ["星期几", "星期", "上课星期"].concat(FIELD_ALIASES.weekdayText),
+  sectionText: ["节次", "上课节次"].concat(FIELD_ALIASES.sectionText),
+  roomName: ["课室名称", "教室", "上课地点"].concat(FIELD_ALIASES.roomName),
+  className: ["上课班级", "班级", "教学班"].concat(FIELD_ALIASES.className),
+  campus: ["校区"].concat(FIELD_ALIASES.campus),
+  specialNote: ["特别说明", "说明", "备注"].concat(FIELD_ALIASES.specialNote),
+});
+
 function toText(value) {
   return String(value == null ? "" : value).trim();
 }
@@ -20,6 +32,13 @@ function toText(value) {
 function normalizePunctuation(value) {
   return toText(value)
     .replace(/\u3000/g, " ")
+    .replace(/[，、；;]/g, ",")
+    .replace(/[～~—–－]/g, "-")
+    .replace(/至|到/g, "-")
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/【|〔|［/g, "[")
+    .replace(/】|〕|］/g, "]")
     .replace(/，/g, ",")
     .replace(/、/g, ",")
     .replace(/；/g, ",")
@@ -39,6 +58,9 @@ function uniqSorted(numbers) {
 function expandRangeText(text, options = {}) {
   const max = Number(options.max || 60) || 60;
   const normalized = normalizePunctuation(text)
+    .replace(/第/g, "")
+    .replace(/周/g, "")
+    .replace(/节/g, "")
     .replace(/第/g, "")
     .replace(/周/g, "")
     .replace(/节/g, "")
@@ -86,16 +108,30 @@ function parseWeekday(weekdayText) {
     六: 6,
     日: 7,
     天: 7,
+    一: 1,
+    二: 2,
+    三: 3,
+    四: 4,
+    五: 5,
+    六: 6,
+    日: 7,
+    天: 7,
   };
   const match = text.match(/星期([一二三四五六日天])|周([一二三四五六日天])/);
   if (match) {
     return map[match[1] || match[2]] || null;
+  }
+  const zhMatch = text.match(/星期([一二三四五六日天])|周([一二三四五六日天])/);
+  if (zhMatch) {
+    return map[zhMatch[1] || zhMatch[2]] || null;
   }
   return null;
 }
 
 function parseSections(sectionText) {
   const normalized = normalizePunctuation(sectionText)
+    .replace(/第/g, "")
+    .replace(/节/g, "")
     .replace(/第/g, "")
     .replace(/节/g, "")
     .replace(/[\[\]()（）]/g, "");
@@ -143,6 +179,7 @@ function isOnlineOrPending(row) {
     row.campus,
     row.specialNote,
   ].join(" ");
+  if (/线上|在线|网络|平台|待定|未定|另行通知|自行安排|慕课/i.test(text)) return true;
   return /线上|在线|网络|平台|待定|未定|另行通知|自行安排/.test(text);
 }
 

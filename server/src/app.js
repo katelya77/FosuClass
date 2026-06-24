@@ -5,6 +5,7 @@
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
+const compression = require("compression");
 const path = require("path");
 const config = require("./config");
 const { globalLimiter } = require("./utils/rateLimit");
@@ -70,6 +71,7 @@ app.use(cors(corsOptions));
 // 3. 全局 API 访问频率限制
 app.use(globalLimiter);
 app.use(performanceMonitorService.middleware);
+app.use(compression({ threshold: 1024 }));
 
 // 4. 解析请求体。普通 API 保持轻量，大上传/导入路径单独放宽，避免 2C12G
 // 环境下任意 JSON 请求占用过多内存。

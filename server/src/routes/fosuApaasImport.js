@@ -59,6 +59,8 @@ function sendImportError(res, error) {
     UNKNOWN_IMPORT_ERROR: "读取失败，请稍后重试或使用其他导入方式。",
     IMPORT_TOKEN_EXPIRED: "导入预览已过期，请重新验证。",
     INVALID_IMPORT_MODE: "导入方式不受支持。",
+    INVALID_SELECTED_ARRANGEMENT: "课程选择已失效，请重新预览后再导入。",
+    INVALID_EDITED_ARRANGEMENT: "课程编辑内容不完整，请检查周次、星期、节次和地点。",
   };
   const payload = {
     success: false,
