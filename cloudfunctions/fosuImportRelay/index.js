@@ -985,10 +985,16 @@ function destroySession(session) {
 }
 
 function normalizeRelayErrorCode(error) {
+  const status = Number(error && (error.status || error.response && error.response.status) || 0);
   const raw = String(error && (error.code || error.message) || "CLOUDBASE_IMPORT_FAILED").toUpperCase();
+  if (status === 408 || status === 504) return "UPSTREAM_TIMEOUT";
+  if (status >= 500) return "SCHOOL_SYSTEM_TIMEOUT";
+  if (status === 401 || status === 403 || status === 429) return "CLOUDBASE_SERVICE_UNAVAILABLE";
   if (/ETIMEDOUT|ECONNABORTED|ESOCKETTIMEDOUT|TIMEOUT/.test(raw)) return "SCHOOL_SYSTEM_TIMEOUT";
   if (/ECONNRESET|ECONNREFUSED|ENOTFOUND|EAI_AGAIN|ERR_NETWORK|SOCKET/.test(raw)) return "NETWORK_TIMEOUT";
   const known = new Set([
+    "CLOUDBASE_IMPORT_NOT_CONFIGURED",
+    "CLOUDBASE_SERVICE_UNAVAILABLE",
     "INVALID_CREDENTIALS",
     "CAPTCHA_REQUIRED",
     "RISK_CONTROL_REQUIRED",
@@ -1004,6 +1010,25 @@ function normalizeRelayErrorCode(error) {
     "SCHEDULE_EMPTY",
   ]);
   return known.has(raw) ? raw : "CLOUDBASE_IMPORT_FAILED";
+}
+
+function summarizeRelayError(error) {
+  const response = error && error.response || {};
+  const config = error && error.config || response.config || {};
+  const url = config.url || response.request && response.request.res && response.request.res.responseUrl || "";
+  let upstreamHost = "";
+  let upstreamPath = "";
+  try {
+    const parsed = new URL(String(url || ""), config.baseURL || getApaasBase());
+    upstreamHost = parsed.host;
+    upstreamPath = parsed.pathname;
+  } catch (_) {}
+  return {
+    rawCode: String(error && error.code || ""),
+    status: Number(error && error.status || response.status || 0) || 0,
+    upstreamHost,
+    upstreamPath,
+  };
 }
 
 function sanitizeErrorMessage(message) {
@@ -1037,10 +1062,13 @@ async function buildRelayPayload(body) {
   const timing = { channel: "cloudbase", retryCount: 0, loginMs: 0, discoverMs: 0, fetchRowsMs: 0 };
   const startedAt = Date.now();
   let session = null;
+  let stage = "login";
   try {
     session = await loginWithCasHttp(studentId, password, timing);
     password = "";
+    stage = "discover";
     const entry = await findStudentScheduleApp(session, timing);
+    stage = "fetchRows";
     const rawRows = await fetchScheduleRows(session, entry, timing);
     if (!rawRows.length) {
       const error = new Error("SCHEDULE_EMPTY");
@@ -1078,11 +1106,19 @@ async function buildRelayPayload(body) {
     };
   } catch (error) {
     const code = normalizeRelayErrorCode(error);
+    if (stage === "login" && !timing.loginMs) timing.loginMs = Date.now() - startedAt;
     timing.totalMs = Date.now() - startedAt;
+    timing.failureStage = stage;
+    const errorSummary = summarizeRelayError(error);
     safeLog("fosu-import-relay-failed", {
       studentId: maskStudentId(studentId),
       channel: "cloudbase",
       code,
+      stage,
+      upstreamStatus: errorSummary.status,
+      upstreamHost: errorSummary.upstreamHost,
+      upstreamPath: errorSummary.upstreamPath,
+      upstreamCode: errorSummary.rawCode,
       loginMs: timing.loginMs,
       discoverMs: timing.discoverMs,
       fetchRowsMs: timing.fetchRowsMs,
@@ -1100,6 +1136,56 @@ async function buildRelayPayload(body) {
   } finally {
     password = "";
     destroySession(session);
+  }
+}
+
+async function probeUpstreamLoginPage() {
+  const startedAt = Date.now();
+  const jar = new CookieJar();
+  const client = createApaasClient(jar, { maxRedirects: 0 });
+  const loginUrl = buildCasLoginUrl("/dashboard");
+  try {
+    const response = await client.get(loginUrl, {
+      maxRedirects: 0,
+      validateStatus: (status) => status >= 200 && status < 500,
+    });
+    const fields = parseCasLoginForm(response.data);
+    const verification = detectHumanVerification(response.data);
+    const hasLoginForm = Boolean(fields.execution || fields.lt || fields.pwdEncryptSalt);
+    if (response.status >= 400 || !hasLoginForm || verification) {
+      const error = new Error(verification || "LOGIN_PAGE_CHANGED");
+      error.code = verification || "LOGIN_PAGE_CHANGED";
+      error.status = response.status;
+      throw error;
+    }
+    return {
+      success: true,
+      ok: true,
+      channel: "cloudbase",
+      probe: "upstream-login",
+      authStatus: response.status,
+      hasLoginForm,
+      elapsedMs: Date.now() - startedAt,
+    };
+  } catch (error) {
+    const code = normalizeRelayErrorCode(error);
+    const summary = summarizeRelayError(error);
+    safeLog("fosu-import-relay-upstream-probe-failed", {
+      code,
+      upstreamStatus: summary.status,
+      upstreamHost: summary.upstreamHost,
+      upstreamPath: summary.upstreamPath,
+      upstreamCode: summary.rawCode,
+      elapsedMs: Date.now() - startedAt,
+    });
+    return {
+      success: false,
+      ok: false,
+      channel: "cloudbase",
+      probe: "upstream-login",
+      code,
+      elapsedMs: Date.now() - startedAt,
+    };
   }
 }
 
@@ -1178,6 +1264,10 @@ async function handleHttpRequest(req, res) {
   }
   const url = new URL(req.url || "/", "http://127.0.0.1");
   if (req.method === "GET" && (url.pathname === "/" || url.pathname === "/health")) {
+    if (url.searchParams.get("probe") === "upstream") {
+      sendJson(res, 200, await probeUpstreamLoginPage());
+      return;
+    }
     sendJson(res, 200, { success: true, ok: true, tokenConfigured: tokenConfigured(), channel: "cloudbase" });
     return;
   }
@@ -1216,6 +1306,10 @@ function eventHeaders(event) {
   return event && (event.headers || event.header || event.Headers) || {};
 }
 
+function eventQuery(event) {
+  return event && (event.queryStringParameters || event.query || event.queryString || event.QueryStringParameters) || {};
+}
+
 function parseEventBody(event) {
   const body = event && event.body;
   if (!body) return {};
@@ -1228,6 +1322,10 @@ async function main(event) {
   const method = eventMethod(event);
   if (method === "OPTIONS") return eventResponse(204, {});
   if (method === "GET") {
+    const query = eventQuery(event);
+    if (query && query.probe === "upstream") {
+      return eventResponse(200, await probeUpstreamLoginPage());
+    }
     return eventResponse(200, { success: true, ok: true, tokenConfigured: tokenConfigured(), channel: "cloudbase" });
   }
   if (method !== "POST") {
@@ -1273,6 +1371,7 @@ module.exports = {
   main,
   maskStudentId,
   normalizeRelayErrorCode,
+  probeUpstreamLoginPage,
   redactSecrets,
   sanitizeErrorMessage,
   server,

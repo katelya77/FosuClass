@@ -37,5 +37,8 @@ assert.strictEqual(relay.validateRelayToken(customHeaderTokenRequest).ok, true, 
 
 assert.strictEqual(relay.normalizeRelayErrorCode({ code: "INVALID_CREDENTIALS" }), "INVALID_CREDENTIALS");
 assert.strictEqual(relay.normalizeRelayErrorCode({ code: "ETIMEDOUT" }), "SCHOOL_SYSTEM_TIMEOUT");
+assert.strictEqual(relay.normalizeRelayErrorCode({ response: { status: 403 } }), "CLOUDBASE_SERVICE_UNAVAILABLE");
+assert.strictEqual(relay.normalizeRelayErrorCode({ response: { status: 504 } }), "UPSTREAM_TIMEOUT");
+assert.strictEqual(relay.normalizeRelayErrorCode({ response: { status: 502 } }), "SCHOOL_SYSTEM_TIMEOUT");
 
 console.log("test-fosu-cloudbase-import-relay passed");

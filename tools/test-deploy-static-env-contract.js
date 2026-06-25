@@ -49,11 +49,11 @@ const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
   "FOSU_DEPLOY_COMMIT_SHA=",
   "FOSU_CLIENT_BUILD_ID=",
   "FOSU_IMPORT_ENABLE=true",
-  "FOSU_IMPORT_CHANNEL=cloudbase",
+  "FOSU_IMPORT_CHANNEL=auto",
   "FOSU_CLOUDBASE_IMPORT_ENABLE=true",
   "FOSU_CLOUDBASE_IMPORT_URL=",
   "FOSU_IMPORT_CHANNEL_TIMEOUT_MS=25000",
-  "FOSU_IMPORT_ORACLE_FALLBACK=false",
+  "FOSU_IMPORT_ORACLE_FALLBACK=true",
   "FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN=",
 ].forEach((line) => {
   assert(envExample.includes(line), `.env.example should include ${line}`);
