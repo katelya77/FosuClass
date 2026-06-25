@@ -406,6 +406,19 @@ function isLocalTimeMatched(status) {
 }
 
 function decisionForArrangement(arrangement) {
+  const classStatus = arrangement.classScopeStatus;
+  const localStatus = arrangement.matchStatus;
+  const localMatched = isLocalMatched(localStatus);
+  const localTimeMatched = isLocalTimeMatched(localStatus);
+
+  if (classStatus === "not_match") {
+    return {
+      importDecision: IMPORT_DECISION.SUSPECTED_NOT_MINE,
+      confidence: "low",
+      reason: "上课班级不包含当前班级，默认不导入",
+    };
+  }
+
   if (!arrangement.hasCompleteTime) {
     return {
       importDecision: IMPORT_DECISION.UNSCHEDULED,
@@ -414,19 +427,7 @@ function decisionForArrangement(arrangement) {
     };
   }
 
-  const classStatus = arrangement.classScopeStatus;
-  const localStatus = arrangement.matchStatus;
-  const localMatched = isLocalMatched(localStatus);
-  const localTimeMatched = isLocalTimeMatched(localStatus);
   const special = arrangement.category !== "normal";
-
-  if (classStatus === "not_match" && !localMatched) {
-    return {
-      importDecision: IMPORT_DECISION.SUSPECTED_NOT_MINE,
-      confidence: "low",
-      reason: "疑似不属于当前班级，默认不导入",
-    };
-  }
 
   if (special) {
     if (arrangement.category === "irregular" && (classStatus === "match" || localTimeMatched)) {
@@ -468,14 +469,6 @@ function decisionForArrangement(arrangement) {
       importDecision: IMPORT_DECISION.AUTO_INCLUDE,
       confidence: "medium",
       reason: "与当前班级课表匹配，已加入推荐导入",
-    };
-  }
-
-  if (classStatus === "not_match" && localMatched) {
-    return {
-      importDecision: IMPORT_DECISION.NEEDS_CONFIRM,
-      confidence: "medium",
-      reason: "上课班级字段异常，但与当前班级课表匹配，请确认",
     };
   }
 

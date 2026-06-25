@@ -179,6 +179,17 @@
           </view>
         </scroll-view>
         <view class="advanced-help">{{studentActiveBucketHelp}}</view>
+        <view class="bulk-selection-bar">
+          <view class="selection-copy">
+            <text class="selection-title">多选操作</text>
+            <text class="selection-subtitle">当前已选 {{studentSelectedCount}} 项，可按分组快速筛选。</text>
+          </view>
+          <view class="bulk-action-list">
+            <button class="bulk-action-btn bulk-action-primary" bindtap="selectAllStudentActiveBucket">全选本栏</button>
+            <button class="bulk-action-btn" bindtap="clearStudentActiveBucketSelection">清空本栏</button>
+            <button class="bulk-action-btn" bindtap="resetStudentRecommendedSelection">只选推荐</button>
+          </view>
+        </view>
         <view class="advanced-empty" wx:if="{{!studentActiveBucketGroups.length}}">这里没有需要处理的课程。</view>
         <view class="student-group-card" wx:for="{{studentActiveBucketGroups}}" wx:key="viewKey" wx:for-item="group">
           <view class="student-group-head" data-key="{{group.viewKey}}" bindtap="toggleStudentGroup">
@@ -190,6 +201,7 @@
           </view>
           <view class="student-group-body" wx:if="{{group.expanded}}">
             <view class="arrangement-row" wx:for="{{group.arrangements}}" wx:key="arrangementId" wx:for-item="arrangement">
+              <view class="selection-dot {{arrangement.selected ? 'selected' : ''}}" data-id="{{arrangement.arrangementId}}" bindtap="toggleStudentArrangement">{{arrangement.selected ? '✓' : ''}}</view>
               <view class="arrangement-main">
                 <view class="arrangement-line">
                   <text class="arrangement-time">{{arrangement.timeText}}</text>
