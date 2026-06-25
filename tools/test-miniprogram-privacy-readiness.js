@@ -66,9 +66,9 @@ async function main() {
   assert(chooseXlsStart >= 0, "chooseXlsFile should be async so it can await privacy authorization");
   assert(chooseMessageFile >= 0, "file import should still call wx.chooseMessageFile");
   assert(chooseXlsStart < chooseMessageFile, "file import should check privacy before opening file picker");
-  assert(wxml.includes("openStudentPrivacyContract"), "privacy contract link should be visible before student import");
-  assert(wxml.includes("studentPrivacyContractName"), "privacy contract name should come from WeChat privacy setting when available");
-  assert(wxml.includes("隐私保护指引"), "copy should explicitly mention the privacy guide");
+  assert(!wxml.includes("openStudentPrivacyContract"), "student import page should not bind a forced privacy guide link");
+  assert(!wxml.includes("studentPrivacyContractName"), "student import page should not render the privacy guide name");
+  assert(!wxml.includes("隐私保护指引"), "student import page should not show forced privacy guide copy");
 
   await runPrivacyHelperContract();
   console.log("test-miniprogram-privacy-readiness passed");

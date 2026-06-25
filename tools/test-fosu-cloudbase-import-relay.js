@@ -36,6 +36,7 @@ const customHeaderTokenRequest = { headers: { "x-fosu-relay-token": "unit-relay-
 assert.strictEqual(relay.validateRelayToken(customHeaderTokenRequest).ok, true, "custom relay token header should pass");
 
 assert.strictEqual(relay.normalizeRelayErrorCode({ code: "INVALID_CREDENTIALS" }), "INVALID_CREDENTIALS");
+assert.strictEqual(relay.normalizeRelayErrorCode({ code: "APAAS_SESSION_UNVERIFIED" }), "APAAS_SESSION_UNVERIFIED");
 assert.strictEqual(relay.normalizeRelayErrorCode({ code: "ETIMEDOUT" }), "SCHOOL_SYSTEM_TIMEOUT");
 assert.strictEqual(relay.normalizeRelayErrorCode({ response: { status: 403 } }), "CLOUDBASE_SERVICE_UNAVAILABLE");
 assert.strictEqual(relay.normalizeRelayErrorCode({ response: { status: 504 } }), "UPSTREAM_TIMEOUT");

@@ -24,8 +24,13 @@ function run() {
     "mini program must not request Fosu authserver/APaaS directly");
   assert(js.includes("encryptCredentialPayload"), "student import should encrypt credentials before preview");
   assert(js.includes("/api/schedule-import/fosu/public-key"), "student import should fetch a one-time public key from backend");
-  assert(js.includes("/api/schedule-import/fosu/preview"), "student import should preview through backend only");
+  assert(js.includes("/api/schedule-import/fosu/preview/start"), "student import should start async preview jobs");
+  assert(js.includes("/api/schedule-import/fosu/preview/status"), "student import should poll async preview job status");
+  assert(js.includes("/api/schedule-import/fosu/preview"), "student import should keep legacy preview fallback");
   assert(js.includes("requestStudentSchedulePreview"), "student import should isolate public-key/encrypt/preview into a retryable attempt");
+  assert(!wxml.includes("使用前请阅读"), "student import page should not show forced privacy guide reading copy");
+  assert(!wxml.includes("隐私保护指引"), "student import page should not show privacy guide link copy");
+  assert(!wxml.includes("openStudentPrivacyContract"), "student import page should not bind privacy guide opening");
   assert(js.includes("shouldRetryStudentPreview"), "student import should retry once when a one-time import key is stale");
   assert(wxml.includes("XLS"), "personal-sync page should keep XLS import available");
   assert(js.includes("rememberLatestScheduleImport"), "XLS bind should refresh AI schedule context");

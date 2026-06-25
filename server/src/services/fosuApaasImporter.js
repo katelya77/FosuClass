@@ -277,6 +277,7 @@ async function authorizeApaasCasSession(client, callbackUrl) {
     error.code = "APAAS_AUTHORIZATION_FAILED";
     throw error;
   }
+  applyApaasAccessTokenFromResponse(client, response);
   return response;
 }
 
@@ -306,6 +307,59 @@ function unwrapApaasStorageValue(raw) {
   } catch (error) {
     return value;
   }
+}
+
+function looksLikeAccessToken(value) {
+  const text = toText(value);
+  return text.length >= 20 && !/\s|<|>/.test(text);
+}
+
+function findAccessToken(value, depth = 0) {
+  if (!value || depth > 5) return "";
+  if (typeof value === "string") {
+    return looksLikeAccessToken(value) ? value : "";
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findAccessToken(item, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+  if (typeof value === "object") {
+    const preferredKeys = [
+      "accessToken",
+      "access_token",
+      "token",
+      "idToken",
+      "Authorization",
+      "authorization",
+      "pro__Access-Token",
+    ];
+    for (const key of preferredKeys) {
+      if (Object.prototype.hasOwnProperty.call(value, key) && looksLikeAccessToken(value[key])) {
+        return toText(value[key]);
+      }
+    }
+    for (const key of Object.keys(value)) {
+      const child = value[key];
+      if (/token|authorization/i.test(key) && looksLikeAccessToken(child)) {
+        return toText(child);
+      }
+      if (!child || typeof child !== "object") continue;
+      const found = findAccessToken(child, depth + 1);
+      if (found) return found;
+    }
+  }
+  return "";
+}
+
+function applyApaasAccessTokenFromResponse(client, response) {
+  const payload = parseJsonMaybe(response && response.data) || response && response.data || {};
+  const token = findAccessToken(payload);
+  if (!token) return "";
+  client.defaults.headers.common.Authorization = /^Bearer\s+/i.test(token) ? token : `Bearer ${token}`;
+  return token;
 }
 
 function loadPlaywrightChromium() {
@@ -538,6 +592,9 @@ async function loginWithCasHttp(studentId, password, startedAt) {
     }
 
     const verifiedClient = createApaasClient(jar);
+    if (client.defaults.headers.common.Authorization) {
+      verifiedClient.defaults.headers.common.Authorization = client.defaults.headers.common.Authorization;
+    }
     await verifyApaasSession(verifiedClient);
     const dashboard = await verifiedClient.get(`${apaasBase}/dashboard`, {
       validateStatus: (status) => status >= 200 && status < 400,
@@ -1336,6 +1393,13 @@ function resolveImportChannels(strategyValue) {
     return { strategy, channels: ["oracle"], reason: "forced_oracle" };
   }
   if (strategy === "cloudbase") {
+    if (!cloudbaseReady && fallbackEnabled) {
+      return {
+        strategy,
+        channels: ["oracle"],
+        reason: "cloudbase_not_configured_oracle_fallback",
+      };
+    }
     return {
       strategy,
       channels: ["cloudbase"],
@@ -1400,6 +1464,7 @@ function normalizeCloudbaseRelayCode(code, status) {
     "CLOUDBASE_IMPORT_NOT_CONFIGURED",
     "CLOUDBASE_SERVICE_UNAVAILABLE",
     "CLOUDBASE_IMPORT_FAILED",
+    "APAAS_SESSION_UNVERIFIED",
   ]);
   return known.has(raw) ? raw : "CLOUDBASE_IMPORT_FAILED";
 }
@@ -1457,6 +1522,7 @@ function shouldFallbackToOracle(error) {
     "UPSTREAM_TIMEOUT",
     "CLOUDBASE_SERVICE_UNAVAILABLE",
     "CLOUDBASE_IMPORT_FAILED",
+    "APAAS_SESSION_UNVERIFIED",
   ].includes(code);
 }
 
@@ -1468,6 +1534,7 @@ function shouldRetryCloudbaseChannel(error) {
     "UPSTREAM_TIMEOUT",
     "CLOUDBASE_SERVICE_UNAVAILABLE",
     "CLOUDBASE_IMPORT_FAILED",
+    "APAAS_SESSION_UNVERIFIED",
   ].includes(code);
   if (!retryable) return false;
   const elapsedMs = Number(error && error.elapsedMs || 0);
@@ -1594,6 +1661,7 @@ async function buildPreviewFromRawRows(studentId, rawRows, options, entry, timin
   preview.timing = timing;
   preview.importDiagnostics = {
     channel,
+    fallbackReason: timing.fallbackReason || "",
     retryCount: timing.retryCount || 0,
     loginMs: timing.loginMs || 0,
     discoverMs: timing.discoverMs || 0,
@@ -1604,6 +1672,7 @@ async function buildPreviewFromRawRows(studentId, rawRows, options, entry, timin
   safeLog("fosu-apaas-preview-timing", {
     studentId: maskStudentId(studentId),
     channel,
+    fallbackReason: timing.fallbackReason || "",
     retryCount: timing.retryCount || 0,
     rawRowCount: rawRows.length,
     localCourseCount: localCourses.length,
@@ -1619,7 +1688,11 @@ async function buildPreviewFromRawRows(studentId, rawRows, options, entry, timin
 }
 
 async function importSchedulePreviewWithChannel(channel, studentId, password, options, startedAt) {
-  const timing = { channel, retryCount: Number(options.retryCount || 0) || 0 };
+  const timing = {
+    channel,
+    fallbackReason: options.fallbackReason || "",
+    retryCount: Number(options.retryCount || 0) || 0,
+  };
   const readResult = channel === "cloudbase"
     ? await fetchRowsViaCloudbaseRelay(studentId, password, options, timing)
     : await fetchRowsViaOracleImporter(studentId, password, timing);
@@ -1646,6 +1719,7 @@ async function importSchedulePreview(studentId, password, options = {}) {
     reason: plan.reason,
   });
   let lastError = null;
+  let fallbackReason = "";
   for (let channelIndex = 0; channelIndex < channels.length; channelIndex += 1) {
     const channel = channels[channelIndex];
     const maxAttempts = channel === "cloudbase" ? 2 : 1;
@@ -1660,7 +1734,10 @@ async function importSchedulePreview(studentId, password, options = {}) {
           channel,
           studentId,
           password,
-          Object.assign({}, options, { retryCount: attemptIndex }),
+          Object.assign({}, options, {
+            retryCount: attemptIndex,
+            fallbackReason,
+          }),
           startedAt
         );
         preview.channel = channel;
@@ -1683,6 +1760,13 @@ async function importSchedulePreview(studentId, password, options = {}) {
           continue;
         }
         if (channel === "cloudbase" && channels.includes("oracle") && shouldFallbackToOracle(lastError)) {
+          fallbackReason = lastError.code || lastError.message || "cloudbase_failed";
+          safeLog("fosu-apaas-import-channel-fallback", {
+            studentId: maskStudentId(studentId),
+            from: "cloudbase",
+            to: "oracle",
+            reason: fallbackReason,
+          });
           break;
         }
         throw lastError;

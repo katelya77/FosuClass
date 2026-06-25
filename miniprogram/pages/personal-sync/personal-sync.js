@@ -510,12 +510,25 @@ function shouldRetryStudentPreview(error) {
     code === "UPSTREAM_TIMEOUT";
 }
 
-async function requestStudentSchedulePreview(form, password, extra = {}) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildStudentImportErrorFromStatus(status) {
+  const error = new Error(status && status.message || status && status.code || "UNKNOWN_IMPORT_ERROR");
+  error.code = status && status.code || "UNKNOWN_IMPORT_ERROR";
+  error.reasonCode = error.code;
+  error.retriable = Boolean(status && status.retriable);
+  error.payload = status || {};
+  return error;
+}
+
+async function buildEncryptedStudentPreviewPayload(form, password, extra = {}) {
   const keyResult = await request.get("/api/schedule-import/fosu/public-key", {}, {
     showLoading: false,
     silentError: true,
-    timeout: 10000,
-    retries: 0,
+    timeout: 60000,
+    retries: 1,
   });
   const encrypted = await encryptCredentialPayload(keyResult, {
     studentId: form.studentId,
@@ -523,17 +536,79 @@ async function requestStudentSchedulePreview(form, password, extra = {}) {
     nonce: keyResult.nonce,
     timestamp: Date.now(),
   });
-  return request.post("/api/schedule-import/fosu/preview", Object.assign({
+  return Object.assign({
     keyId: keyResult.keyId,
     semester: extra.semester || "",
     selectedClassName: extra.selectedClassName || "",
-  }, encrypted), {
+  }, encrypted);
+}
+
+function requestStudentSchedulePreviewLegacy(payload) {
+  return request.post("/api/schedule-import/fosu/preview", payload, {
     showLoading: false,
     silentError: true,
     timeout: 60000,
     retries: 0,
     dedupe: false,
   });
+}
+
+async function requestStudentSchedulePreviewStatus(jobId, onStatus) {
+  const startedAt = Date.now();
+  let attempt = 0;
+  while (Date.now() - startedAt < 60000) {
+    attempt += 1;
+    const status = await request.get("/api/schedule-import/fosu/preview/status", { jobId }, {
+      showLoading: false,
+      silentError: true,
+      timeout: 60000,
+      retries: 0,
+      dedupe: false,
+      suppressWarn: true,
+    });
+    if (typeof onStatus === "function") {
+      onStatus(status);
+    }
+    if (status && status.status === "success") {
+      return status.result || status;
+    }
+    if (status && status.status === "failed") {
+      throw buildStudentImportErrorFromStatus(status);
+    }
+    const delay = Math.min(2000, 1200 + (attempt % 4) * 200);
+    await sleep(delay);
+  }
+  throw buildStudentImportErrorFromStatus({
+    code: "SCHOOL_SYSTEM_TIMEOUT",
+    message: "学校系统响应较慢，请稍后再试。",
+    retriable: true,
+  });
+}
+
+async function requestStudentSchedulePreview(form, password, extra = {}, onStatus) {
+  const payload = await buildEncryptedStudentPreviewPayload(form, password, extra);
+  try {
+    const started = await request.post("/api/schedule-import/fosu/preview/start", payload, {
+      showLoading: false,
+      silentError: true,
+      timeout: 60000,
+      retries: 0,
+      dedupe: false,
+    });
+    if (typeof onStatus === "function") {
+      onStatus(started);
+    }
+    if (started && started.jobId) {
+      return requestStudentSchedulePreviewStatus(started.jobId, onStatus);
+    }
+    return started;
+  } catch (error) {
+    const code = getStudentImportErrorCode(error);
+    if (code === "HTTP_4XX" || code === "HTTP_5XX" || code === "INVALID_PAYLOAD" || code === "NETWORK") {
+      return requestStudentSchedulePreviewLegacy(payload);
+    }
+    throw error;
+  }
 }
 
 function logStudentImportDiagnostics(preview) {
@@ -558,10 +633,10 @@ Page({
     studentLoadingStepIndex: 0,
     studentLoadingProgressStyle: "width: 14%;",
     studentImportSlow: false,
+    studentImportStatusMessage: "",
     studentImportStage: "form",
     studentImportLoading: false,
     studentImportConfirming: false,
-    studentPrivacyContractName: "佛课小表隐私保护指引",
     studentForm: {
       studentId: "",
       password: "",
@@ -624,7 +699,6 @@ Page({
       ? "student"
       : (requestedTab === "xls" ? "xls" : "method");
     this.setData({ activeImportMethod: requestedMethod });
-    this.refreshPrivacyContractName();
     const applyTerms = (config) => {
       const built = personalTermOptionsService.buildImportTermOptions(
         config.availableTerms || [],
@@ -750,28 +824,10 @@ Page({
     this.setData({ "studentForm.privacyConfirmed": values.indexOf("confirmed") >= 0 });
   },
 
-  refreshPrivacyContractName() {
-    privacy.getPrivacySetting().then((setting) => {
-      if (setting && setting.privacyContractName) {
-        this.setData({ studentPrivacyContractName: setting.privacyContractName });
-      }
-    }).catch(() => {});
-  },
-
-  openStudentPrivacyContract() {
-    privacy.openPrivacyContract().catch(() => {
-      wx.showModal({
-        title: "隐私保护指引",
-        content: "请在微信小程序资料页查看并确认隐私保护指引。学号导入仅用于本次读取本人课表，不保存学校账号密码。",
-        showCancel: false,
-      });
-    });
-  },
-
   ensureStudentPrivacyAuthorized() {
     return privacy.ensurePrivacyAuthorized().then((allowed) => {
       if (!allowed) {
-        wx.showToast({ title: "请先同意隐私保护指引", icon: "none" });
+        wx.showToast({ title: "请先完成系统授权", icon: "none" });
         return false;
       }
       return true;
@@ -810,6 +866,23 @@ Page({
     }, 8000);
   },
 
+  applyStudentImportJobStatus(status = {}) {
+    const progress = Math.max(8, Math.min(98, Number(status.progress || 0) || 8));
+    const stepIndex = Math.max(0, Math.min(
+      STUDENT_IMPORT_STEPS.length - 1,
+      Math.floor((progress / 100) * STUDENT_IMPORT_STEPS.length)
+    ));
+    this.setData({
+      studentLoadingStepIndex: stepIndex,
+      studentLoadingProgressStyle: `width: ${progress}%;`,
+      studentImportStatusMessage: status.message || this.data.studentImportStatusMessage || "",
+    });
+    if (progress >= 40 && this.studentSlowTimer) {
+      clearTimeout(this.studentSlowTimer);
+      this.studentSlowTimer = null;
+    }
+  },
+
   stopStudentLoadingSteps() {
     if (this.studentStepTimer) {
       clearInterval(this.studentStepTimer);
@@ -822,6 +895,7 @@ Page({
     this.setData({
       studentLoadingProgressStyle: "width: 100%;",
       studentImportSlow: false,
+      studentImportStatusMessage: "",
     });
   },
 
@@ -1200,7 +1274,7 @@ Page({
       return null;
     }
     if (!form.privacyConfirmed) {
-      wx.showToast({ title: "请先确认隐私说明", icon: "none" });
+      wx.showToast({ title: "请先确认本人授权", icon: "none" });
       return null;
     }
     return {
@@ -1213,8 +1287,6 @@ Page({
     if (this.data.studentImportLoading) return;
     const form = this.validateStudentForm();
     if (!form) return;
-    const privacyAllowed = await this.ensureStudentPrivacyAuthorized();
-    if (!privacyAllowed) return;
     const selectedRecord = this.data.termRecords[this.data.semesterIndex];
     if (selectedRecord && !selectedRecord.importable) {
       wx.showToast({ title: "该学期暂不能导入", icon: "none" });
@@ -1232,6 +1304,7 @@ Page({
       studentLoadingStepIndex: 0,
       studentLoadingProgressStyle: "width: 14%;",
       studentImportSlow: false,
+      studentImportStatusMessage: "",
       studentAdvancedMode: false,
       studentAdvancedTabs: [],
       studentActiveBucket: "recommended",
@@ -1249,12 +1322,16 @@ Page({
     try {
       let preview;
       try {
-        preview = await requestStudentSchedulePreview(form, plainPassword, previewExtra);
+        preview = await requestStudentSchedulePreview(form, plainPassword, previewExtra, (status) => {
+          this.applyStudentImportJobStatus(status);
+        });
       } catch (error) {
         if (!shouldRetryStudentPreview(error)) {
           throw error;
         }
-        preview = await requestStudentSchedulePreview(form, plainPassword, previewExtra);
+        preview = await requestStudentSchedulePreview(form, plainPassword, previewExtra, (status) => {
+          this.applyStudentImportJobStatus(status);
+        });
       }
       plainPassword = "";
       this.setData({ "studentForm.password": "" });
@@ -1283,6 +1360,7 @@ Page({
         studentImportLoading: false,
         studentImportStage: "form",
         "studentForm.password": "",
+        studentImportStatusMessage: "",
       });
       const payload = error && error.payload || {};
       this.showStudentImportError(payload.code || error.code, payload.message || error.message);
