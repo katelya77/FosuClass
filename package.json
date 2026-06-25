@@ -406,7 +406,7 @@
     "test:no-ai-secret-committed": "node tools/test-no-ai-secret-committed.js",
     "test:ai-personal-context-gate": "node tools/test-ai-personal-context-gate.js",
     "test:personal-routes-xls-only-server": "node tools/test-personal-routes-xls-only-server.js",
-    "test:fosu-apaas-import": "node tools/test-fosu-apaas-parser.js && node tools/test-fosu-schedule-import-normalizer.js && node tools/test-fosu-apaas-import-crypto.js && node tools/test-fosu-miniprogram-crypto-wechat-runtime.js && node tools/test-fosu-apaas-import-confirm.js && node tools/test-fosu-apaas-import-channels.js && node tools/test-fosu-apaas-import-rate-limiter.js && node tools/test-fosu-cloudbase-import-relay.js",
+    "test:fosu-apaas-import": "node tools/test-fosu-apaas-parser.js && node tools/test-fosu-schedule-import-normalizer.js && node tools/test-fosu-apaas-import-crypto.js && node tools/test-fosu-miniprogram-crypto-wechat-runtime.js && node tools/test-fosu-apaas-import-confirm.js && node tools/test-fosu-apaas-import-channels.js && node tools/test-fosu-apaas-import-rate-limiter.js && node tools/test-fosu-apaas-import-async-preview.js && node tools/test-fosu-cloudbase-import-relay.js",
     "test:term-config-runtime": "node tools/test-term-config-runtime.js",
     "test:ai-term-config-context": "node tools/test-ai-term-config-context.js",
     "test:miniprogram-package-hygiene": "node tools/test-miniprogram-package-hygiene.js && node tools/test-miniprogram-privacy-readiness.js",

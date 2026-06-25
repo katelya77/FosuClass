@@ -65,15 +65,10 @@
 
       <view class="safe-note strong-note">密码仅用于本次登录学校课表系统并读取本人课表数据，系统不会保存密码，导入完成后会清除临时状态。</view>
 
-      <view class="privacy-contract-row">
-        <text>使用前请阅读</text>
-        <button class="privacy-link-btn" bindtap="openStudentPrivacyContract">《{{studentPrivacyContractName}}》</button>
-      </view>
-
       <checkbox-group bindchange="onStudentPrivacyChange">
         <label class="privacy-row">
           <checkbox value="confirmed" checked="{{studentForm.privacyConfirmed}}" color="#c62828" />
-          <text>我确认导入的是本人课表，已阅读并同意隐私保护指引，同意本次登录学校课表系统读取本人课表数据。系统不会保存密码，导入完成后将立即清除临时状态。</text>
+          <text>我确认导入的是本人课表，同意本次登录学校课表系统读取本人课表数据。系统不会保存密码，导入完成后将立即清除临时状态。</text>
         </label>
       </checkbox-group>
 
@@ -84,7 +79,7 @@
     <view class="card loading-card enhanced-loading" wx:if="{{studentImportStage == 'loading'}}">
       <view class="loading-kicker">学号导入</view>
       <view class="loading-title">正在为你整理课表</view>
-      <view class="loading-subtitle">已开始读取并整理课程，请保持页面打开。</view>
+      <view class="loading-subtitle">{{studentImportStatusMessage || '已开始读取并整理课程，请保持页面打开。'}}</view>
       <view class="loading-progress-track">
         <view class="loading-progress-fill" style="{{studentLoadingProgressStyle}}"></view>
       </view>

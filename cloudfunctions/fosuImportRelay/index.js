@@ -266,6 +266,59 @@ function isApaasCasCallback(url) {
   }
 }
 
+function looksLikeAccessToken(value) {
+  const text = toText(value);
+  return text.length >= 20 && !/\s|<|>/.test(text);
+}
+
+function findAccessToken(value, depth = 0) {
+  if (!value || depth > 5) return "";
+  if (typeof value === "string") {
+    return looksLikeAccessToken(value) ? value : "";
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findAccessToken(item, depth + 1);
+      if (found) return found;
+    }
+    return "";
+  }
+  if (typeof value === "object") {
+    const preferredKeys = [
+      "accessToken",
+      "access_token",
+      "token",
+      "idToken",
+      "Authorization",
+      "authorization",
+      "pro__Access-Token",
+    ];
+    for (const key of preferredKeys) {
+      if (Object.prototype.hasOwnProperty.call(value, key) && looksLikeAccessToken(value[key])) {
+        return toText(value[key]);
+      }
+    }
+    for (const key of Object.keys(value)) {
+      const child = value[key];
+      if (/token|authorization/i.test(key) && looksLikeAccessToken(child)) {
+        return toText(child);
+      }
+      if (!child || typeof child !== "object") continue;
+      const found = findAccessToken(child, depth + 1);
+      if (found) return found;
+    }
+  }
+  return "";
+}
+
+function applyApaasAccessTokenFromResponse(client, response) {
+  const payload = parseJsonMaybe(response && response.data) || response && response.data || {};
+  const token = findAccessToken(payload);
+  if (!token) return "";
+  client.defaults.headers.common.Authorization = /^Bearer\s+/i.test(token) ? token : `Bearer ${token}`;
+  return token;
+}
+
 async function authorizeApaasCasSession(client, callbackUrl) {
   const parsed = new URL(callbackUrl);
   const ticket = parsed.searchParams.get("ticket") || "";
@@ -296,6 +349,7 @@ async function authorizeApaasCasSession(client, callbackUrl) {
     error.code = "APAAS_AUTHORIZATION_FAILED";
     throw error;
   }
+  applyApaasAccessTokenFromResponse(client, response);
   return response;
 }
 
@@ -361,6 +415,9 @@ async function loginWithCasHttp(studentId, password, timing) {
       else await followRedirects(client, nextUrl);
     }
     const verifiedClient = createApaasClient(jar);
+    if (client.defaults.headers.common.Authorization) {
+      verifiedClient.defaults.headers.common.Authorization = client.defaults.headers.common.Authorization;
+    }
     await verifyApaasSession(verifiedClient);
     const dashboard = await verifiedClient.get(`${getApaasBase()}/dashboard`, {
       validateStatus: (status) => status >= 200 && status < 400,
@@ -1006,6 +1063,7 @@ function normalizeRelayErrorCode(error) {
     "LOGIN_PAGE_CHANGED",
     "APAAS_STRUCTURE_CHANGED",
     "APAAS_DASHBOARD_UNAVAILABLE",
+    "APAAS_SESSION_UNVERIFIED",
     "APAAS_SESSION_EXPIRED",
     "SCHEDULE_EMPTY",
   ]);
@@ -1045,7 +1103,7 @@ function sanitizeErrorMessage(message) {
 
 function statusForErrorCode(code) {
   if (["SCHOOL_SYSTEM_TIMEOUT", "NETWORK_TIMEOUT", "UPSTREAM_TIMEOUT"].includes(code)) return 504;
-  if (["CLOUDBASE_IMPORT_NOT_CONFIGURED", "CLOUDBASE_SERVICE_UNAVAILABLE", "CLOUDBASE_IMPORT_FAILED"].includes(code)) return 503;
+  if (["CLOUDBASE_IMPORT_NOT_CONFIGURED", "CLOUDBASE_SERVICE_UNAVAILABLE", "CLOUDBASE_IMPORT_FAILED", "APAAS_SESSION_UNVERIFIED"].includes(code)) return 503;
   if (code === "UNAUTHORIZED") return 401;
   return 200;
 }

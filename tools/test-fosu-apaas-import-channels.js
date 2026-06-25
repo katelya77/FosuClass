@@ -82,12 +82,24 @@ function run() {
     assert.strictEqual(plan.reason, "forced_cloudbase");
   });
 
+  withConfig({
+    FOSU_IMPORT_CHANNEL: "cloudbase",
+    FOSU_CLOUDBASE_IMPORT_ENABLE: "false",
+    FOSU_CLOUDBASE_IMPORT_URL: "",
+    FOSU_IMPORT_ORACLE_FALLBACK: "true",
+  }, () => {
+    const plan = resolveImportChannels();
+    assert.deepStrictEqual(plan.channels, ["oracle"]);
+    assert.strictEqual(plan.reason, "cloudbase_not_configured_oracle_fallback");
+  });
+
   withConfig({ FOSU_IMPORT_ORACLE_FALLBACK: "true" }, () => {
     assert.strictEqual(shouldFallbackToOracle(errorWithCode("NETWORK_TIMEOUT")), true);
     assert.strictEqual(shouldFallbackToOracle(errorWithCode("SCHOOL_SYSTEM_TIMEOUT")), true);
     assert.strictEqual(shouldFallbackToOracle(errorWithCode("UPSTREAM_TIMEOUT")), true);
     assert.strictEqual(shouldFallbackToOracle(errorWithCode("CLOUDBASE_SERVICE_UNAVAILABLE")), true);
     assert.strictEqual(shouldFallbackToOracle(errorWithCode("CLOUDBASE_IMPORT_FAILED")), true);
+    assert.strictEqual(shouldFallbackToOracle(errorWithCode("APAAS_SESSION_UNVERIFIED")), true);
     assert.strictEqual(shouldFallbackToOracle(errorWithCode("INVALID_CREDENTIALS")), false);
     assert.strictEqual(shouldFallbackToOracle(errorWithCode("CAPTCHA_REQUIRED")), false);
     assert.strictEqual(shouldFallbackToOracle(errorWithCode("RISK_CONTROL_REQUIRED")), false);
@@ -106,6 +118,9 @@ function run() {
     const slowNetworkError = errorWithCode("NETWORK_TIMEOUT");
     slowNetworkError.elapsedMs = 26000;
     assert.strictEqual(shouldRetryCloudbaseChannel(slowNetworkError), false);
+    const unverified = errorWithCode("APAAS_SESSION_UNVERIFIED");
+    unverified.elapsedMs = 5000;
+    assert.strictEqual(shouldRetryCloudbaseChannel(unverified), true);
     assert.strictEqual(shouldRetryCloudbaseChannel(errorWithCode("INVALID_CREDENTIALS")), false);
     assert.strictEqual(shouldRetryCloudbaseChannel(errorWithCode("CAPTCHA_REQUIRED")), false);
   });
