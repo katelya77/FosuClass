@@ -39,6 +39,13 @@ function normalizeImportErrorCode(error) {
 function sendImportError(res, error) {
   const code = normalizeImportErrorCode(error);
   const status = code === "IMPORT_RATE_LIMITED" ? 429 : 200;
+  const retryableCodes = new Set([
+    "NETWORK_TIMEOUT",
+    "SCHOOL_SYSTEM_TIMEOUT",
+    "UPSTREAM_TIMEOUT",
+    "CLOUDBASE_SERVICE_UNAVAILABLE",
+    "CLOUDBASE_IMPORT_FAILED",
+  ]);
   const messages = {
     FOSU_IMPORT_DISABLED: "学号导入暂未开放，请使用 XLS 或班级课表导入。",
     IMPORT_KEY_EXPIRED: "加密会话已过期，请重新验证。",
@@ -75,6 +82,9 @@ function sendImportError(res, error) {
     code,
     message: messages[code] || "学号导入暂时不可用，请稍后再试。",
   };
+  if (retryableCodes.has(code)) {
+    payload.retriable = true;
+  }
   if (code === "IMPORT_RATE_LIMITED") {
     if (error && error.kind === "credential") {
       payload.message = "连续多次密码错误，请稍后再试。";
@@ -89,6 +99,19 @@ function sendImportError(res, error) {
     payload.retryAfter = error.retryAfterSeconds;
   }
   return res.status(status).json(payload);
+}
+
+function setPreviewDiagnosticsHeaders(res, payload) {
+  const diagnostics = payload && (payload.importDiagnostics || payload.timing) || {};
+  const channel = String(diagnostics.channel || payload && payload.channel || "").trim();
+  if (channel) {
+    res.setHeader("X-Fosu-Import-Channel", channel);
+  }
+  const totalMs = Number(diagnostics.totalMs || 0) || 0;
+  const retryCount = Number(diagnostics.retryCount || 0) || 0;
+  if (totalMs || retryCount) {
+    res.setHeader("X-Fosu-Import-Timing", `totalMs=${totalMs}; retryCount=${retryCount}`);
+  }
 }
 
 router.use(requireMiniProgramSession);
@@ -112,6 +135,7 @@ router.post("/preview", async (req, res) => {
   try {
     res.setHeader("Cache-Control", "no-store");
     const payload = await createStudentSchedulePreview(req, req.body || {});
+    setPreviewDiagnosticsHeaders(res, payload);
     return res.json(payload);
   } catch (error) {
     return sendImportError(res, error);

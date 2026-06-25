@@ -1,5 +1,7 @@
 const request = require("../../utils/request");
+const privacy = require("../../utils/privacy");
 const { getCurrentScheduleTarget, getSettings, setCurrentScheduleTarget } = require("../../utils/storage");
+const platform = require("../../utils/platform");
 const aiAssistantService = require("../../services/aiAssistantService");
 const appConfigService = require("../../services/appConfigService");
 const personalTermOptionsService = require("../../services/personalTermOptionsService");
@@ -528,9 +530,23 @@ async function requestStudentSchedulePreview(form, password, extra = {}) {
   }, encrypted), {
     showLoading: false,
     silentError: true,
-    timeout: 45000,
+    timeout: 60000,
     retries: 0,
     dedupe: false,
+  });
+}
+
+function logStudentImportDiagnostics(preview) {
+  if (!platform.isDeveloperEnv()) return;
+  const diagnostics = preview && (preview.importDiagnostics || preview.timing) || {};
+  console.info("[Fosu student import]", {
+    channel: diagnostics.channel || preview && preview.channel || "",
+    retryCount: Number(diagnostics.retryCount || 0) || 0,
+    loginMs: Number(diagnostics.loginMs || 0) || 0,
+    discoverMs: Number(diagnostics.discoverMs || 0) || 0,
+    fetchRowsMs: Number(diagnostics.fetchRowsMs || 0) || 0,
+    normalizeMs: Number(diagnostics.normalizeMs || 0) || 0,
+    totalMs: Number(diagnostics.totalMs || 0) || 0,
   });
 }
 
@@ -545,6 +561,7 @@ Page({
     studentImportStage: "form",
     studentImportLoading: false,
     studentImportConfirming: false,
+    studentPrivacyContractName: "佛课小表隐私保护指引",
     studentForm: {
       studentId: "",
       password: "",
@@ -607,6 +624,7 @@ Page({
       ? "student"
       : (requestedTab === "xls" ? "xls" : "method");
     this.setData({ activeImportMethod: requestedMethod });
+    this.refreshPrivacyContractName();
     const applyTerms = (config) => {
       const built = personalTermOptionsService.buildImportTermOptions(
         config.availableTerms || [],
@@ -730,6 +748,37 @@ Page({
   onStudentPrivacyChange(event) {
     const values = event.detail.value || [];
     this.setData({ "studentForm.privacyConfirmed": values.indexOf("confirmed") >= 0 });
+  },
+
+  refreshPrivacyContractName() {
+    privacy.getPrivacySetting().then((setting) => {
+      if (setting && setting.privacyContractName) {
+        this.setData({ studentPrivacyContractName: setting.privacyContractName });
+      }
+    }).catch(() => {});
+  },
+
+  openStudentPrivacyContract() {
+    privacy.openPrivacyContract().catch(() => {
+      wx.showModal({
+        title: "隐私保护指引",
+        content: "请在微信小程序资料页查看并确认隐私保护指引。学号导入仅用于本次读取本人课表，不保存学校账号密码。",
+        showCancel: false,
+      });
+    });
+  },
+
+  ensureStudentPrivacyAuthorized() {
+    return privacy.ensurePrivacyAuthorized().then((allowed) => {
+      if (!allowed) {
+        wx.showToast({ title: "请先同意隐私保护指引", icon: "none" });
+        return false;
+      }
+      return true;
+    }).catch(() => {
+      wx.showToast({ title: "隐私授权状态异常，请稍后重试", icon: "none" });
+      return false;
+    });
   },
 
   startStudentLoadingSteps() {
@@ -1101,6 +1150,8 @@ Page({
     if (this.data.studentImportLoading) return;
     const form = this.validateStudentForm();
     if (!form) return;
+    const privacyAllowed = await this.ensureStudentPrivacyAuthorized();
+    if (!privacyAllowed) return;
     const selectedRecord = this.data.termRecords[this.data.semesterIndex];
     if (selectedRecord && !selectedRecord.importable) {
       wx.showToast({ title: "该学期暂不能导入", icon: "none" });
@@ -1144,6 +1195,7 @@ Page({
       }
       plainPassword = "";
       this.setData({ "studentForm.password": "" });
+      logStudentImportDiagnostics(preview);
 
       const displayInfo = buildApaasScheduleDisplay(preview);
       const metadata = sanitizeApaasMetadata(preview);
@@ -1182,7 +1234,9 @@ Page({
     this.chooseXlsFile();
   },
 
-  chooseXlsFile() {
+  async chooseXlsFile() {
+    const privacyAllowed = await this.ensureStudentPrivacyAuthorized();
+    if (!privacyAllowed) return;
     wx.chooseMessageFile({
       count: 1,
       type: "file",

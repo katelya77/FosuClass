@@ -65,10 +65,15 @@
 
       <view class="safe-note strong-note">密码仅用于本次登录学校课表系统并读取本人课表数据，系统不会保存密码，导入完成后会清除临时状态。</view>
 
+      <view class="privacy-contract-row">
+        <text>使用前请阅读</text>
+        <button class="privacy-link-btn" bindtap="openStudentPrivacyContract">《{{studentPrivacyContractName}}》</button>
+      </view>
+
       <checkbox-group bindchange="onStudentPrivacyChange">
         <label class="privacy-row">
           <checkbox value="confirmed" checked="{{studentForm.privacyConfirmed}}" color="#c62828" />
-          <text>我确认导入的是本人课表，并同意本次登录学校课表系统读取本人课表数据。系统不会保存密码，导入完成后将立即清除临时状态。</text>
+          <text>我确认导入的是本人课表，已阅读并同意隐私保护指引，同意本次登录学校课表系统读取本人课表数据。系统不会保存密码，导入完成后将立即清除临时状态。</text>
         </label>
       </checkbox-group>
 
@@ -160,7 +165,7 @@
         </view>
         <view class="student-weekend-tip" wx:if="{{studentPreviewGrid.hasWeekendCourses}}">检测到周末课程，可在调整课程中查看</view>
         <view class="grid-shell">
-          <schedule-preview-grid grid="{{studentPreviewGrid}}" section-height="66" day-column-width="88" bind:course="onStudentPreviewCourseTap" />
+          <schedule-preview-grid grid="{{studentPreviewGrid}}" section-height="66" day-column-width="120" bind:course="onStudentPreviewCourseTap" />
         </view>
       </view>
 

@@ -258,7 +258,18 @@ function formal() {
   if (cloudbaseRuntimeConfig.AI_COMPETITION_MODE === true) {
     blockers.push("Formal release must not enable AI_COMPETITION_MODE.");
   }
-  if (!fs.existsSync(path.join(ROOT, "miniprogram", "privacy.json")) &&
+  const personalSyncWxml = path.join(ROOT, "miniprogram", "pages", "personal-sync", "personal-sync.wxml");
+  const appJsonPath = path.join(ROOT, "miniprogram", "app.json");
+  let hasWechatPrivacyEntry = false;
+  try {
+    const appJson = JSON.parse(fs.readFileSync(appJsonPath, "utf8"));
+    const personalSync = fs.existsSync(personalSyncWxml) ? fs.readFileSync(personalSyncWxml, "utf8") : "";
+    hasWechatPrivacyEntry = appJson.__usePrivacyCheck__ === true &&
+      personalSync.includes("openStudentPrivacyContract") &&
+      personalSync.includes("隐私保护指引");
+  } catch (_) {}
+  if (!hasWechatPrivacyEntry &&
+      !fs.existsSync(path.join(ROOT, "miniprogram", "privacy.json")) &&
       !fs.existsSync(path.join(ROOT, "docs", "privacy.md")) &&
       !fs.existsSync(path.join(ROOT, "miniprogram", "pages", "settings", "settings.wxml"))) {
     blockers.push("Privacy document entry was not found.");

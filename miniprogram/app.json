@@ -22,6 +22,10 @@
     "navigationBarTitleText": "佛课小表",
     "navigationBarTextStyle": "black"
   },
+  "networkTimeout": {
+    "request": 60000
+  },
+  "__usePrivacyCheck__": true,
   "tabBar": {
     "color": "#7a8494",
     "selectedColor": "#c62828",

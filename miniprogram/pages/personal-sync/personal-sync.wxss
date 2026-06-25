@@ -575,6 +575,36 @@
   transform-origin: left top;
 }
 
+.privacy-contract-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6rpx;
+  margin-top: 16rpx;
+  color: #667085;
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+
+.privacy-link-btn {
+  display: inline;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: #c62828;
+  font-size: 22rpx;
+  font-weight: 900;
+  line-height: 1.4;
+  text-align: left;
+}
+
+.privacy-link-btn::after {
+  border: 0;
+}
+
 .loading-card {
   margin-top: 12rpx;
 }
