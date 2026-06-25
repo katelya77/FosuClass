@@ -5,6 +5,7 @@ const {
   normalizeImportChannelStrategy,
   resolveImportChannels,
   sanitizeCloudbaseRelayErrorMessage,
+  shouldRetryCloudbaseChannel,
   shouldFallbackToOracle,
 } = require("../server/src/services/fosuApaasImporter");
 const config = require("../server/src/config");
@@ -85,6 +86,17 @@ function run() {
 
   withConfig({ FOSU_IMPORT_ORACLE_FALLBACK: "false" }, () => {
     assert.strictEqual(shouldFallbackToOracle(errorWithCode("NETWORK_TIMEOUT")), false);
+  });
+
+  withConfig({ FOSU_IMPORT_CHANNEL_TIMEOUT_MS: 25000 }, () => {
+    const quickNetworkError = errorWithCode("NETWORK_TIMEOUT");
+    quickNetworkError.elapsedMs = 9000;
+    assert.strictEqual(shouldRetryCloudbaseChannel(quickNetworkError), true);
+    const slowNetworkError = errorWithCode("NETWORK_TIMEOUT");
+    slowNetworkError.elapsedMs = 26000;
+    assert.strictEqual(shouldRetryCloudbaseChannel(slowNetworkError), false);
+    assert.strictEqual(shouldRetryCloudbaseChannel(errorWithCode("INVALID_CREDENTIALS")), false);
+    assert.strictEqual(shouldRetryCloudbaseChannel(errorWithCode("CAPTCHA_REQUIRED")), false);
   });
 
   const sanitized = sanitizeCloudbaseRelayErrorMessage("<html><body>password=secret Cookie: JSESSIONID=abc ticket=TICKET</body></html>");

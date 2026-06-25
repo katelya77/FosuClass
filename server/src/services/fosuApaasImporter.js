@@ -1460,6 +1460,22 @@ function shouldFallbackToOracle(error) {
   ].includes(code);
 }
 
+function shouldRetryCloudbaseChannel(error) {
+  const code = String(error && (error.code || error.message) || "");
+  const retryable = [
+    "NETWORK_TIMEOUT",
+    "SCHOOL_SYSTEM_TIMEOUT",
+    "UPSTREAM_TIMEOUT",
+    "CLOUDBASE_SERVICE_UNAVAILABLE",
+    "CLOUDBASE_IMPORT_FAILED",
+  ].includes(code);
+  if (!retryable) return false;
+  const elapsedMs = Number(error && error.elapsedMs || 0);
+  const channelTimeout = Math.max(5000, Number(config.FOSU_IMPORT_CHANNEL_TIMEOUT_MS || config.FOSU_IMPORT_CLOUDBASE_TIMEOUT_MS || 25000) || 25000);
+  const quickRetryWindowMs = Math.min(22000, Math.max(8000, Math.floor(channelTimeout * 0.9)));
+  return !elapsedMs || elapsedMs <= quickRetryWindowMs;
+}
+
 async function fetchRowsViaOracleImporter(studentId, password, timing) {
   let session = null;
   const startedAt = Date.now();
@@ -1537,6 +1553,7 @@ async function fetchRowsViaCloudbaseRelay(studentId, password, options, timing) 
       channel: "cloudbase",
     };
   } catch (error) {
+    error.elapsedMs = error.elapsedMs || (Date.now() - startedAt);
     throw normalizeChannelError(stripSensitiveAxiosError(error), "cloudbase");
   } finally {
     localPassword = "";
@@ -1575,6 +1592,15 @@ async function buildPreviewFromRawRows(studentId, rawRows, options, entry, timin
   timing.totalMs = Date.now() - startedAt;
   timing.channel = channel;
   preview.timing = timing;
+  preview.importDiagnostics = {
+    channel,
+    retryCount: timing.retryCount || 0,
+    loginMs: timing.loginMs || 0,
+    discoverMs: timing.discoverMs || 0,
+    fetchRowsMs: timing.fetchRowsMs || 0,
+    normalizeMs: timing.normalizeMs || 0,
+    totalMs: timing.totalMs || 0,
+  };
   safeLog("fosu-apaas-preview-timing", {
     studentId: maskStudentId(studentId),
     channel,
@@ -1622,33 +1648,45 @@ async function importSchedulePreview(studentId, password, options = {}) {
   let lastError = null;
   for (let channelIndex = 0; channelIndex < channels.length; channelIndex += 1) {
     const channel = channels[channelIndex];
-    try {
-      safeLog("fosu-apaas-import-channel-start", {
-        studentId: maskStudentId(studentId),
-        channel,
-        retryCount: channelIndex,
-      });
-      const preview = await importSchedulePreviewWithChannel(
-        channel,
-        studentId,
-        password,
-        Object.assign({}, options, { retryCount: channelIndex }),
-        startedAt
-      );
-      preview.channel = channel;
-      return preview;
-    } catch (error) {
-      lastError = normalizeChannelError(error, channel);
-      safeLog("fosu-apaas-import-channel-failed", {
-        studentId: maskStudentId(studentId),
-        channel,
-        code: lastError.code || lastError.message,
-        retryCount: channelIndex,
-      });
-      if (channel === "cloudbase" && channels.includes("oracle") && shouldFallbackToOracle(lastError)) {
-        continue;
+    const maxAttempts = channel === "cloudbase" ? 2 : 1;
+    for (let attemptIndex = 0; attemptIndex < maxAttempts; attemptIndex += 1) {
+      try {
+        safeLog("fosu-apaas-import-channel-start", {
+          studentId: maskStudentId(studentId),
+          channel,
+          retryCount: attemptIndex,
+        });
+        const preview = await importSchedulePreviewWithChannel(
+          channel,
+          studentId,
+          password,
+          Object.assign({}, options, { retryCount: attemptIndex }),
+          startedAt
+        );
+        preview.channel = channel;
+        return preview;
+      } catch (error) {
+        lastError = normalizeChannelError(error, channel);
+        safeLog("fosu-apaas-import-channel-failed", {
+          studentId: maskStudentId(studentId),
+          channel,
+          code: lastError.code || lastError.message,
+          retryCount: attemptIndex,
+        });
+        if (channel === "cloudbase" && attemptIndex + 1 < maxAttempts && shouldRetryCloudbaseChannel(lastError)) {
+          safeLog("fosu-apaas-import-channel-retry", {
+            studentId: maskStudentId(studentId),
+            channel,
+            code: lastError.code || lastError.message,
+            retryCount: attemptIndex + 1,
+          });
+          continue;
+        }
+        if (channel === "cloudbase" && channels.includes("oracle") && shouldFallbackToOracle(lastError)) {
+          break;
+        }
+        throw lastError;
       }
-      throw lastError;
     }
   }
   throw lastError || importChannelError("UNKNOWN_IMPORT_ERROR");
@@ -1670,5 +1708,6 @@ module.exports = {
   parseEntryFromUrl,
   resolveImportChannels,
   sanitizeCloudbaseRelayErrorMessage,
+  shouldRetryCloudbaseChannel,
   shouldFallbackToOracle,
 };

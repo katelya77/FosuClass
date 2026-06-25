@@ -1,7 +1,7 @@
 const { colorForCourse } = require("../../utils/color");
 
 const TIME_AXIS_WIDTH = 64;
-const DEFAULT_DAY_WIDTH = 88;
+const DEFAULT_DAY_WIDTH = 120;
 const DEFAULT_SECTION_HEIGHT = 72;
 
 function toNumberList(values) {
@@ -90,8 +90,8 @@ Component({
   data: {
     sections: [],
     columns: [],
-    gridWidth: TIME_AXIS_WIDTH + DEFAULT_DAY_WIDTH * 7,
-    dayTrackWidth: DEFAULT_DAY_WIDTH * 7,
+    gridWidth: TIME_AXIS_WIDTH + DEFAULT_DAY_WIDTH * 5,
+    dayTrackWidth: DEFAULT_DAY_WIDTH * 5,
     scheduleHeight: DEFAULT_SECTION_HEIGHT * 14,
   },
 
