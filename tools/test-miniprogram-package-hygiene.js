@@ -65,6 +65,18 @@ function run() {
   assert(/\.quick-action-pill\s*\{[\s\S]*?height:\s*58rpx;/.test(aiWxss), "quick action pills should remain compact");
   assert(!aiWxss.includes(".assistant-hero"), "legacy AI hero styles should be removed");
 
+  const personalSyncJs = fs.readFileSync(path.join(miniprogramRoot, "pages", "personal-sync", "personal-sync.js"), "utf8");
+  const personalSyncWxml = fs.readFileSync(path.join(miniprogramRoot, "pages", "personal-sync", "personal-sync.wxml"), "utf8");
+  [
+    "selectAllStudentActiveBucket",
+    "clearStudentActiveBucketSelection",
+    "resetStudentRecommendedSelection",
+  ].forEach((handler) => {
+    assert(personalSyncJs.includes(`${handler}()`), `personal sync should define ${handler}`);
+    assert(personalSyncWxml.includes(`bindtap="${handler}"`), `personal sync WXML should bind ${handler}`);
+  });
+  assert(personalSyncWxml.includes("selection-dot"), "advanced course rows should expose a tap-friendly multi-select dot");
+
   console.log("test-miniprogram-package-hygiene passed");
 }
 

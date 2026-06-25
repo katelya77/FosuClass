@@ -790,6 +790,39 @@
   line-height: 54rpx;
 }
 
+.bulk-selection-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-top: 16rpx;
+  padding: 16rpx;
+  border: 1rpx solid #e3e8f0;
+  border-radius: 14rpx;
+  background: #fbfcfe;
+}
+
+.bulk-action-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10rpx;
+}
+
+.bulk-action-btn {
+  height: 54rpx;
+  padding: 0 8rpx;
+  border-radius: 12rpx;
+  background: #f1f5f9;
+  color: #334155;
+  font-size: 20rpx;
+  font-weight: 900;
+  line-height: 54rpx;
+}
+
+.bulk-action-primary {
+  background: #142033;
+  color: #ffffff;
+}
+
 .student-preview-buckets {
   margin-top: 18rpx;
   padding-bottom: 176rpx;

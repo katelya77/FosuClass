@@ -952,6 +952,69 @@ Page({
     this.setData({ studentSelectionMode: !this.data.studentSelectionMode });
   },
 
+  canSelectStudentArrangement(arrangement) {
+    if (!arrangement || !arrangement.arrangementId) return false;
+    const editedMap = this.studentEditedArrangementMap || {};
+    const merged = applyEditedArrangement(arrangement, editedMap);
+    return Boolean(merged.hasCompleteTime || editedMap[arrangement.arrangementId]);
+  },
+
+  getActiveStudentBucketArrangementIds() {
+    return (this.data.studentActiveBucketGroups || []).reduce((ids, group) => {
+      (group.arrangements || []).forEach((arrangement) => {
+        if (arrangement && arrangement.arrangementId) ids.push(arrangement.arrangementId);
+      });
+      return ids;
+    }, []);
+  },
+
+  setStudentArrangementsSelected(arrangementIds, selected) {
+    const ids = Array.from(new Set(arrangementIds || [])).filter(Boolean);
+    if (!ids.length) {
+      wx.showToast({ title: "当前分组没有课程", icon: "none" });
+      return;
+    }
+    const nextMap = Object.assign({}, this.studentSelectedArrangementMap || {});
+    let changedCount = 0;
+    let skippedCount = 0;
+    ids.forEach((arrangementId) => {
+      const arrangement = this.findStudentArrangement(arrangementId);
+      if (!arrangement) return;
+      if (selected && !this.canSelectStudentArrangement(arrangement)) {
+        skippedCount += 1;
+        return;
+      }
+      nextMap[arrangementId] = Boolean(selected);
+      changedCount += 1;
+    });
+    this.studentSelectedArrangementMap = nextMap;
+    this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
+    if (skippedCount) {
+      wx.showToast({ title: `已跳过${skippedCount}项未排时间课程`, icon: "none" });
+    } else if (changedCount) {
+      wx.showToast({ title: selected ? "已全选本栏" : "已清空本栏", icon: "none" });
+    }
+  },
+
+  selectAllStudentActiveBucket() {
+    this.setStudentArrangementsSelected(this.getActiveStudentBucketArrangementIds(), true);
+  },
+
+  clearStudentActiveBucketSelection() {
+    this.setStudentArrangementsSelected(this.getActiveStudentBucketArrangementIds(), false);
+  },
+
+  resetStudentRecommendedSelection() {
+    const nextMap = {};
+    (this.studentPreviewArrangements || []).forEach((arrangement) => {
+      if (!arrangement || !arrangement.arrangementId) return;
+      nextMap[arrangement.arrangementId] = Boolean(arrangement.selectedByDefault);
+    });
+    this.studentSelectedArrangementMap = nextMap;
+    this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
+    wx.showToast({ title: "已恢复推荐选择", icon: "none" });
+  },
+
   toggleStudentAdvancedMode() {
     const next = !this.data.studentAdvancedMode;
     this.setData({

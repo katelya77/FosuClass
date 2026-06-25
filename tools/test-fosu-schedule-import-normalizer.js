@@ -167,6 +167,34 @@ function testStrictClassRecommendationRules() {
   assert(preview.buckets.pending.some((item) => item.displayCourseName === "Temporary Class"));
 }
 
+function testNotMatchedClassNeverFallsBackToPending() {
+  const courseName = "跨班实训";
+  const preview = buildScheduleImportPreview([
+    row({
+      "课程名称": courseName,
+      "上课班级": "25动物科学3班",
+      "周次": "1-16",
+      "星期几": "星期一",
+      "节次": "1-2",
+      "课室名称": "C3-101",
+    }),
+  ], {
+    studentId: "202512340303",
+    semester: "2025-2026-2",
+    existingSelectedClassName: "25动物医学6班",
+    localCourses: [
+      localCourse({ courseName }),
+    ],
+  });
+
+  const arrangement = allArrangements(preview).find((item) => item.courseName === courseName);
+  assert.strictEqual(arrangement.classScopeStatus, "not_match");
+  assert.strictEqual(arrangement.matchStatus, "exact_match");
+  assert.strictEqual(arrangement.importDecision, "suspected_not_mine");
+  assert(preview.buckets.suspected.some((item) => item.displayCourseName === courseName));
+  assert(!preview.buckets.pending.some((item) => item.displayCourseName === courseName));
+}
+
 function testPreviewGridAndConflicts() {
   const preview = buildScheduleImportPreview([
     row({ "课程名称": "第16周课程", "周次": "16", "星期几": "星期一", "节次": "1-2", "课室名称": "B101" }),
@@ -297,6 +325,7 @@ testGroupingAndDedupe();
 testRecommendationsAndLocalTeacherFill();
 testSelectedClassPriorityAndNewBuckets();
 testStrictClassRecommendationRules();
+testNotMatchedClassNeverFallsBackToPending();
 testPreviewGridAndConflicts();
 testStrictConflictRules();
 testDispersedOfficialCourseRecommended();

@@ -71,6 +71,17 @@ function run() {
     assert.deepStrictEqual(resolveImportChannels().channels, ["cloudbase"]);
   });
 
+  withConfig({
+    FOSU_IMPORT_CHANNEL: "cloudbase",
+    FOSU_CLOUDBASE_IMPORT_ENABLE: "true",
+    FOSU_CLOUDBASE_IMPORT_URL: "https://relay.example.test/fosu-preview",
+    FOSU_IMPORT_ORACLE_FALLBACK: "true",
+  }, () => {
+    const plan = resolveImportChannels();
+    assert.deepStrictEqual(plan.channels, ["cloudbase"]);
+    assert.strictEqual(plan.reason, "forced_cloudbase");
+  });
+
   withConfig({ FOSU_IMPORT_ORACLE_FALLBACK: "true" }, () => {
     assert.strictEqual(shouldFallbackToOracle(errorWithCode("NETWORK_TIMEOUT")), true);
     assert.strictEqual(shouldFallbackToOracle(errorWithCode("SCHOOL_SYSTEM_TIMEOUT")), true);

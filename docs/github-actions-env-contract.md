@@ -54,11 +54,11 @@
 | `FOSU_OPENRESTY_STATIC_SECURITY_MODE` | `public` | OpenResty 静态安全模式 | 使用 public |
 | `FOSU_STATIC_TICKET_TTL_SECONDS` | `600` | 静态 ticket TTL | 使用默认值 |
 | `FOSU_IMPORT_ENABLE` | `true` | 是否启用本人授权学号导入预览 API | 使用 true |
-| `FOSU_IMPORT_CHANNEL` | `auto` | 导入通道策略：`auto`、`cloudbase`、`oracle`、`cloudbase,oracle` | 使用 auto |
-| `FOSU_CLOUDBASE_IMPORT_ENABLE` | `false` | 是否启用 CloudBase relay 导入通道 | 使用 false；未配置 relay URL 时自动走 Oracle |
-| `FOSU_CLOUDBASE_IMPORT_URL` | 空 | CloudBase relay HTTPS 地址 | 为空时 CloudBase 通道不启用，`auto` 安全回落 Oracle |
+| `FOSU_IMPORT_CHANNEL` | `cloudbase` | 导入通道策略：`auto`、`cloudbase`、`oracle` | 生产使用 cloudbase |
+| `FOSU_CLOUDBASE_IMPORT_ENABLE` | `true` | 是否启用 CloudBase relay 导入通道 | 生产使用 true |
+| `FOSU_CLOUDBASE_IMPORT_URL` | 空 | CloudBase relay HTTPS 地址 | 生产必须配置 relay URL |
 | `FOSU_IMPORT_CHANNEL_TIMEOUT_MS` | `25000` | 单个导入通道请求超时 | 使用默认值 |
-| `FOSU_IMPORT_ORACLE_FALLBACK` | `true` | CloudBase 可重试故障时是否回落 Oracle 通道 | 使用 true |
+| `FOSU_IMPORT_ORACLE_FALLBACK` | `false` | CloudBase 可重试故障时是否回落 Oracle 通道 | 生产关闭 Oracle fallback |
 | `AI_AGENT_ENABLED` | `false` | 是否启用外部 AI provider | 使用本地规则/mock，不调用外部模型 |
 | `AI_PROVIDER` | `mock` | provider 名称：`mock`、`deepseek`、`coze` | 使用 mock |
 | `AI_PROVIDER_POLICY` | `auto` | 外部 provider 调用策略 | 使用 auto |
