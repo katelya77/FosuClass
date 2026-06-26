@@ -5,6 +5,23 @@
       <view class="sync-desc">选择一种适合你的方式同步本人课程安排。</view>
     </view>
 
+    <view class="recent-import-card card" wx:if="{{recentStudentImport}}">
+      <view class="recent-import-main">
+        <view class="recent-import-title-row">
+          <view class="recent-import-title">最近一次学号导入</view>
+          <view class="recent-import-status" wx:if="{{recentStudentImportChecking}}">校验中</view>
+        </view>
+        <view class="recent-import-meta">最近同步：{{recentStudentImport.importedAtText}}</view>
+        <view class="recent-import-meta" wx:if="{{recentStudentImport.className}}">班级：{{recentStudentImport.className}}</view>
+        <view class="recent-import-meta">课程：{{recentStudentImport.courseCount}} 个</view>
+        <view class="recent-import-warning" wx:if="{{recentStudentImport.staleText}}">{{recentStudentImport.staleText}}</view>
+      </view>
+      <view class="recent-import-actions">
+        <button class="recent-import-btn primary" bindtap="useRecentStudentImport">直接使用</button>
+        <button class="recent-import-btn" bindtap="resyncStudentImport">重新同步</button>
+      </view>
+    </view>
+
     <view class="method-card primary-method" data-method="student" bindtap="selectImportMethod">
       <view class="method-main">
         <view class="method-title-row">
@@ -168,7 +185,7 @@
         <scroll-view class="student-tabs-scroll" scroll-x enhanced show-scrollbar="{{false}}">
           <view class="student-tabs">
             <view wx:for="{{studentAdvancedTabs}}" wx:key="key" class="student-tab {{item.active ? 'active' : ''}}" data-key="{{item.key}}" bindtap="onStudentBucketTabTap">
-              <text>{{item.title}}</text>
+              <text class="student-tab-label">{{item.title}}</text>
               <text class="student-tab-count">{{item.countText}}</text>
             </view>
           </view>

@@ -44,7 +44,7 @@ const PROFILE_RULES = [
   { name: "schedule-detail", pattern: /\/api\/fosu\/schedule-detail$/, timeout: 20000, retries: 2 },
   { name: "empty-room", pattern: /\/api\/fosu\/release-pack\/empty-room$/, timeout: 25000, retries: 2 },
   { name: "empty-classrooms", pattern: /\/api\/fosu\/empty-classrooms$/, timeout: 25000, retries: 2 },
-  { name: "fosu-import", pattern: /\/api\/schedule-import\/fosu\/(?:public-key|preview|preview\/start|preview\/status|confirm|cancel)$/, timeout: 60000, retries: 0 },
+  { name: "fosu-import", pattern: /\/api\/schedule-import\/fosu\/(?:public-key|preview|preview\/start|preview\/status|confirm|cancel|recent)$/, timeout: 60000, retries: 0 },
   { name: "static-release-manifest", pattern: /\/static\/releases\/[^/]+\/manifest\.json$/, timeout: SECURITY_FAST_TIMEOUT_MS, retries: 1 },
   { name: "static-release-index", pattern: /\/static\/releases\/[^/]+\/index\/.+\.json$/, timeout: 25000, retries: 2 },
   { name: "static-release-detail", pattern: /\/static\/releases\/[^/]+\/detail\/[^/]+\/[^/]+\.json$/, timeout: 20000, retries: 2 },

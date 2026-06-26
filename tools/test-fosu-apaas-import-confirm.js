@@ -1,4 +1,18 @@
 const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+
+const tempRecentStoreFile = path.join(__dirname, "..", ".tmp", "test-fosu-apaas-import-confirm-recent.json");
+fs.mkdirSync(path.dirname(tempRecentStoreFile), { recursive: true });
+try { fs.unlinkSync(tempRecentStoreFile); } catch (error) {}
+
+const {
+  __resetForTest: resetRecentImportStore,
+  __setStoreFileForTest,
+} = require("../server/src/services/fosuApaasRecentImportStore");
+__setStoreFileForTest(tempRecentStoreFile);
+resetRecentImportStore();
+
 const {
   __resetForTest,
   __setPreviewForTest,
@@ -257,5 +271,7 @@ testConfirmKeepsExistingManualCourses();
 testConfirmSelectedArrangementIdsOnly();
 testConfirmRejectsForeignArrangementId();
 testConfirmEditedUnscheduledArrangement();
+
+try { fs.unlinkSync(tempRecentStoreFile); } catch (error) {}
 
 console.log("test-fosu-apaas-import-confirm passed");

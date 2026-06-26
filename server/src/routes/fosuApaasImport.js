@@ -10,6 +10,7 @@ const {
   getStudentSchedulePreviewJobStatus,
   startStudentSchedulePreviewJob,
 } = require("../services/fosuApaasImportService");
+const { getRecentImportForSession } = require("../services/fosuApaasRecentImportStore");
 
 const router = express.Router();
 
@@ -224,6 +225,18 @@ router.get("/preview/status", (req, res) => {
       }));
     }
     return res.json(payload);
+  } catch (error) {
+    return sendImportError(res, error);
+  }
+});
+
+router.get("/recent", (req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-store");
+    return res.json({
+      success: true,
+      recentImport: getRecentImportForSession(req.fosuSession),
+    });
   } catch (error) {
     return sendImportError(res, error);
   }
