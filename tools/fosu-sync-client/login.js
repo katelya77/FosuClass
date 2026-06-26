@@ -17,7 +17,58 @@ prepareDirectNetworkEnvironment(process.env);
 const FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 const SESSION_DIR = path.join(__dirname, ".session");
 const SESSION_PATH = path.join(SESSION_DIR, "session.json");
-const FOSU_LOGIN_PROFILE = process.env.FOSU_LOGIN_PROFILE || "desktop";
+const MOBILE_SAFARI_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1";
+const WECHAT_IOS_UA = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 MicroMessenger/8.0.49";
+const DESKTOP_UA = "";
+const FOSU_LOGIN_UA_MODE = String(process.env.FOSU_LOGIN_UA_MODE || process.env.FOSU_LOGIN_PROFILE || "mobile").toLowerCase() === "desktop" ? "desktop" : "mobile";
+const LOGIN_AUTO = process.argv.includes("--auto") || process.argv.includes("auto") || process.env.FOSU_LOGIN_AUTO === "true";
+
+function maskStudentId(studentId) {
+  const value = String(studentId || "").trim();
+  if (!value) return "";
+  if (process.env.FOSU_LOGIN_SHOW_STUDENT_ID === "true") return value;
+  if (value.length <= 8) return `${value.slice(0, 2)}****`;
+  return `${value.slice(0, 4)}****${value.slice(-4)}`;
+}
+
+function getLoginCredentials() {
+  const studentId = String(
+    process.env.FOSU_SYNC_STUDENT_ID ||
+    process.env.FOSU_USERNAME ||
+    process.env.FOSU_STUDENT_ID ||
+    ""
+  ).trim();
+  const password = String(
+    process.env.FOSU_SYNC_PASSWORD ||
+    process.env.FOSU_PASSWORD ||
+    ""
+  );
+  return { studentId, password };
+}
+
+function classifyLoginFailureContent(content, url, errorMessage) {
+  const text = String(content || "").replace(/\s+/g, " ");
+  const currentUrl = String(url || "");
+  const message = String(errorMessage || "");
+  if (/Timeout|超时|Navigation timeout/i.test(message)) return "NETWORK_TIMEOUT";
+  if (/验证码|captcha/i.test(text)) return "CAPTCHA_REQUIRED";
+  if (/滑块|拼图|人机|风险|风控|安全验证|risk/i.test(text)) return "RISK_CONTROL_REQUIRED";
+  if (/密码错误|用户名或密码|账号或密码|认证失败|登录失败|不存在|incorrect/i.test(text)) return "INVALID_CREDENTIALS";
+  if (/authserver\.fosu\.edu\.cn|\/authserver\/login/i.test(currentUrl) && !/username|password|账号|密码/i.test(text)) {
+    return "LOGIN_PAGE_CHANGED";
+  }
+  if (/100\.fosu\.edu\.cn|authserver\.fosu\.edu\.cn/i.test(currentUrl)) return "LOGIN_NOT_COMPLETED";
+  return "NETWORK_TIMEOUT";
+}
+
+function failureTipForCode(code) {
+  if (code === "INVALID_CREDENTIALS") return "学号或密码不正确，请确认后重试。";
+  if (code === "CAPTCHA_REQUIRED") return "当前需要验证码，请改用手动登录完成验证。";
+  if (code === "RISK_CONTROL_REQUIRED") return "当前触发安全核验，请在浏览器中手动完成验证。";
+  if (code === "LOGIN_PAGE_CHANGED") return "登录页结构可能已变化，需要检查选择器。";
+  if (code === "NETWORK_TIMEOUT") return "访问超时，请确认校园网或 VPN 可用。";
+  return "未检测到登录成功，请重新执行登录流程。";
+}
 
 // 确保会话目录存在
 if (!fs.existsSync(SESSION_DIR)) {
@@ -40,10 +91,15 @@ async function login() {
   // 根据配置设定 User-Agent
   let userAgent = undefined;
   let viewport = undefined;
-  if (FOSU_LOGIN_PROFILE === "mobile") {
-    userAgent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36";
-    viewport = { width: 375, height: 812 };
+  if (FOSU_LOGIN_UA_MODE === "mobile") {
+    userAgent = process.env.FOSU_LOGIN_UA || process.env.FOSU_IMPORT_MOBILE_UA || WECHAT_IOS_UA || MOBILE_SAFARI_UA;
+    viewport = { width: 390, height: 844, isMobile: true };
+  } else if (process.env.FOSU_LOGIN_UA) {
+    userAgent = process.env.FOSU_LOGIN_UA;
+  } else if (DESKTOP_UA) {
+    userAgent = DESKTOP_UA;
   }
+  console.log(`登录 UA 模式: ${FOSU_LOGIN_UA_MODE}${LOGIN_AUTO ? "，自动登录" : "，手动登录"}`);
 
   const launchArgs = [
     "--disable-blink-features=AutomationControlled",
@@ -111,10 +167,23 @@ async function login() {
   console.log("4. 请在 5 分钟内完成登录操作。");
   console.log("========================================================");
 
+  const configuredCredentials = getLoginCredentials();
+  if (LOGIN_AUTO) {
+    if (!configuredCredentials.studentId || !configuredCredentials.password) {
+      console.error("❌ 自动登录需要配置 FOSU_SYNC_STUDENT_ID 和 FOSU_SYNC_PASSWORD，或在 .env.local 中提供。");
+      console.error("密码不会输出到日志，也不会写入 Git。");
+      await browser.close();
+      process.exitCode = 1;
+      return;
+    }
+    console.log(`自动登录账号: ${maskStudentId(configuredCredentials.studentId)}`);
+  }
+
   try {
     // 轮询检查登录态是否成功
     let loggedIn = false;
     let hasClickedTab = false; // 新增 Flag，防止频繁点击干扰用户输入
+    let autoSubmitted = false;
     const checkInterval = 1000;
     const maxWaitTime = 300000; // 5分钟
     let elapsed = 0;
@@ -165,9 +234,9 @@ async function login() {
       }
 
       // 3. 支持用户手动输入账号密码登录，不要强制自动填密码。但如果有配置环境变量可以作为便利性辅助填充。
-      const username = process.env.FOSU_USERNAME;
-      const password = process.env.FOSU_PASSWORD;
-      if (username && password) {
+      const username = configuredCredentials.studentId;
+      const password = configuredCredentials.password;
+      if ((LOGIN_AUTO || username && password) && username && password) {
         try {
           const userSelectors = ['input[name="username"]', '#username', 'input[type="text"]'];
           const passSelectors = ['input[name="password"]', '#password', 'input[type="password"]'];
@@ -197,10 +266,33 @@ async function login() {
           }
           
           if (userEl && passEl) {
-            console.log("检测到未填写的账号密码输入框，尝试自动填充...");
+            console.log(`检测到未填写的账号密码输入框，尝试自动填充账号 ${maskStudentId(username)}...`);
             await userEl.fill(username);
             await passEl.fill(password);
-            console.log("✅ 账号密码自动填充成功，请手动完成验证（如验证码、滑块等）并提交登录。");
+            if (LOGIN_AUTO && !autoSubmitted) {
+              const submitSelectors = [
+                "#login_submit",
+                "#login",
+                "button[type='submit']",
+                "input[type='submit']",
+                ".login-btn",
+                "text=/^(登录|登 录|提交)$/"
+              ];
+              for (const selector of submitSelectors) {
+                const submit = page.locator(selector).first();
+                if (await submit.isVisible()) {
+                  await submit.click();
+                  autoSubmitted = true;
+                  console.log("✅ 已提交自动登录请求。");
+                  break;
+                }
+              }
+              if (!autoSubmitted) {
+                console.warn("⚠️ 未找到登录按钮，已填充账号，请手动点击登录。");
+              }
+            } else {
+              console.log("✅ 账号密码自动填充成功，请手动完成验证（如验证码、滑块等）并提交登录。");
+            }
           }
         } catch (e) {
           // 忽略自动填充错误
@@ -235,7 +327,11 @@ async function login() {
     }
 
     if (!loggedIn) {
-      throw new Error("登录超时或未检测到登录成功的页面状态");
+      const content = page.isClosed() ? "" : await page.content().catch(() => "");
+      const code = classifyLoginFailureContent(content, page.isClosed() ? "" : page.url(), "登录超时或未检测到登录成功的页面状态");
+      const error = new Error(failureTipForCode(code));
+      error.code = code;
+      throw error;
     }
 
     console.log("🎉 检测到成功进入教务系统主页！正在保存会话状态...");
@@ -254,11 +350,14 @@ async function login() {
     console.log("该文件包含敏感登录凭证，请勿将其提交到 Git 或共享给他人。");
 
   } catch (error) {
-    if (error.name === "TimeoutError" || error.message.includes("Timeout") || error.message.includes("登录超时或未检测到登录成功的页面状态")) {
-      console.error("\n❌ 登录超时或失败！");
+    const content = page && !page.isClosed() ? await page.content().catch(() => "") : "";
+    const code = error.code || classifyLoginFailureContent(content, page && !page.isClosed() ? page.url() : "", error.message);
+    if (code === "NETWORK_TIMEOUT") {
+      console.error("\n❌ 登录超时或网络访问失败！");
     } else {
-      console.error(`\n❌ 登录过程中发生错误: ${error.message}`);
+      console.error(`\n❌ 登录失败: ${failureTipForCode(code)}`);
     }
+    console.error(`失败类型: ${code}`);
     console.error("💡 提示：");
     console.error("   - 请确认是否处于校园网 / 校园 VPN 环境（100.fosu.edu.cn 必须能正常解析和访问）");
     console.error("   - 请确认是否切换到账号登录，且已正确完成验证码或滑块验证等安全核验");

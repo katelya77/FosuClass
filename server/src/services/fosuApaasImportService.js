@@ -20,6 +20,10 @@ const { parseSections, parseWeeks } = require("../utils/fosuApaasScheduleParser"
 
 const ALLOWED_CONFIRM_MODES = new Set(["replace_fosu_source", "merge", "replace_all_personal"]);
 const PREVIEW_JOB_TTL_MS = Math.max(2 * 60 * 1000, Number(process.env.FOSU_IMPORT_PREVIEW_JOB_TTL_SECONDS || 10 * 60) * 1000 || 10 * 60 * 1000);
+const PREVIEW_JOB_REUSE_TTL_MS = Math.max(
+  2 * 60 * 1000,
+  Math.min(5 * 60 * 1000, Number(process.env.FOSU_IMPORT_PREVIEW_REUSE_SECONDS || 4 * 60) * 1000 || 4 * 60 * 1000)
+);
 const previewJobs = new Map();
 
 function toText(value) {
@@ -179,16 +183,50 @@ function createPreviewJobId() {
   return `fosu_preview_${Date.now()}_${crypto.randomBytes(8).toString("hex")}`;
 }
 
+function createPreviewReuseKey(context) {
+  return crypto
+    .createHash("sha256")
+    .update([
+      context.ownerKey || "",
+      context.credentials && context.credentials.studentId || "",
+      context.options && context.options.semester || "",
+      context.options && context.options.existingSelectedClassName || "",
+    ].join("|"))
+    .digest("hex");
+}
+
+function isReusablePreviewJob(record, context, now = Date.now()) {
+  if (!record || !context || !record.reuseKey) return false;
+  if (record.ownerKey !== context.ownerKey) return false;
+  if (record.reuseKey !== context.reuseKey) return false;
+  if (Number(record.reuseUntilMs || 0) <= now) return false;
+  return record.status === "pending" || record.status === "running" || record.status === "success";
+}
+
+function findReusablePreviewJob(context) {
+  cleanupPreviewJobs();
+  const now = Date.now();
+  context.reuseKey = context.reuseKey || createPreviewReuseKey(context);
+  for (const record of previewJobs.values()) {
+    if (isReusablePreviewJob(record, context, now)) return record;
+  }
+  return null;
+}
+
 function safeJobTiming(timing) {
   const source = timing || {};
   return {
     channel: source.channel || "",
     fallbackReason: source.fallbackReason || "",
+    hitCache: Boolean(source.hitCache),
     retryCount: Number(source.retryCount || 0) || 0,
     decryptMs: Number(source.decryptMs || 0) || 0,
     loginMs: Number(source.loginMs || 0) || 0,
     discoverMs: Number(source.discoverMs || source.discoverAppMs || 0) || 0,
     fetchRowsMs: Number(source.fetchRowsMs || 0) || 0,
+    relayMs: Number(source.relayMs || 0) || 0,
+    rowsCount: Number(source.rowsCount || source.rawRowCount || 0) || 0,
+    bytesApprox: Number(source.bytesApprox || 0) || 0,
     normalizeMs: Number(source.normalizeMs || 0) || 0,
     totalMs: Number(source.totalMs || 0) || 0,
   };
@@ -203,6 +241,7 @@ function publicPreviewJob(record) {
     step: record.step || "",
     message: record.message || "",
     timing: safeJobTiming(record.timing),
+    hitCache: Boolean(record.hitCache),
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -241,7 +280,10 @@ function createPreviewJobRecord(context) {
     progress: 8,
     step: "queued",
     message: "已创建读取任务，正在准备连接学校系统。",
-    timing: { decryptMs: context.decryptMs || 0 },
+    reuseKey: context.reuseKey || createPreviewReuseKey(context),
+    reuseUntilMs: Date.now() + PREVIEW_JOB_REUSE_TTL_MS,
+    hitCache: false,
+    timing: { decryptMs: context.decryptMs || 0, hitCache: false },
     result: null,
     error: null,
     createdAt: now,
@@ -378,6 +420,11 @@ async function runPreparedStudentSchedulePreview(context, progress) {
       loginMs: preview.timing && preview.timing.loginMs,
       discoverMs: preview.timing && preview.timing.discoverMs,
       fetchRowsMs: preview.timing && preview.timing.fetchRowsMs,
+      relayMs: preview.timing && preview.timing.relayMs,
+      rowsCount: preview.timing && (preview.timing.rowsCount || preview.timing.rawRowCount),
+      bytesApprox: preview.timing && preview.timing.bytesApprox,
+      fallbackReason: preview.timing && preview.timing.fallbackReason,
+      hitCache: preview.timing && preview.timing.hitCache,
       normalizeMs: preview.timing && preview.timing.normalizeMs,
       totalMs: preview.timing && preview.timing.totalMs,
       retryCount: preview.timing && preview.timing.retryCount,
@@ -417,6 +464,34 @@ async function createStudentSchedulePreview(req, encryptedBody) {
 
 function startStudentSchedulePreviewJob(req, encryptedBody) {
   const context = prepareStudentSchedulePreview(req, encryptedBody);
+  context.reuseKey = createPreviewReuseKey(context);
+  const reusable = findReusablePreviewJob(context);
+  if (reusable) {
+    reusable.hitCache = true;
+    reusable.updatedAt = new Date().toISOString();
+    reusable.timing = Object.assign({}, reusable.timing || {}, {
+      hitCache: true,
+      decryptMs: context.decryptMs || reusable.timing && reusable.timing.decryptMs || 0,
+    });
+    if (reusable.result) {
+      reusable.result.hitCache = true;
+      reusable.result.timing = Object.assign({}, reusable.result.timing || {}, { hitCache: true });
+    }
+    previewJobs.set(reusable.jobId, reusable);
+    if (context.credentials) {
+      context.credentials.password = null;
+      context.credentials.nonce = null;
+    }
+    safeLog("fosu-apaas-preview-job-reused", {
+      taskId: context.taskId,
+      jobId: reusable.jobId,
+      status: reusable.status,
+      userKey: context.ownerKey ? `${context.ownerKey.slice(0, 8)}...` : "",
+      studentId: maskStudentId(context.credentials && context.credentials.studentId),
+      decryptMs: context.decryptMs,
+    });
+    return publicPreviewJob(reusable);
+  }
   const record = createPreviewJobRecord(context);
   const jobId = record.jobId;
 

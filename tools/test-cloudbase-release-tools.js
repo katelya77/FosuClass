@@ -324,6 +324,31 @@ async function run() {
   assert(remotePrune.protectedVersions.includes("r4"), "pinned release should be protected");
   assert.deepStrictEqual(remotePrune.deletions, [], "protected active/last-good/latest/pinned should leave no remote deletion");
 
+  const remoteFiles = utils.parseRemoteHostingFilePathsFromList(JSON.stringify({
+    data: [
+      { Path: "releases/r5/manifest.json" },
+      { Path: "releases/r5/index/class/all.json" },
+      { Path: "releases/r5/index/class/all.json.gz" },
+      { Path: "releases/r5/index/class/stale.json" },
+      { Path: "releases/r4/manifest.json" },
+    ],
+  }));
+  assert(remoteFiles.includes("releases/r5/index/class/stale.json"));
+  const orphanPlan = utils.planRemotePruneReleasePack({
+    remoteReleases,
+    remoteFiles,
+    activePointer: { releaseVersion: "r5" },
+    manifest: {
+      files: {
+        "index/class/all.json": { size: 1, hash: "abc" },
+      },
+    },
+    keepLatest: 2,
+    dryRun: true,
+  });
+  assert(orphanPlan.deletions.some((item) => item.type === "orphan-file" && item.path === "releases/r5/index/class/stale.json"));
+  assert(!orphanPlan.deletions.some((item) => item.path === "releases/r5/index/class/all.json.gz"));
+
   const deleteCalls = [];
   const executablePrune = await utils.pruneRemoteReleasePack({
     hostingListOutput: remoteList,

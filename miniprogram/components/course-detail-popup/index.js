@@ -1,6 +1,18 @@
 const { courseTimes } = require("../../data/courseTimes");
 const { getCourseTimeRange } = require("../../utils/course");
 
+function splitAudienceClasses(course) {
+  if (!course) return [];
+  if (Array.isArray(course.audienceClasses) && course.audienceClasses.length) {
+    return course.audienceClasses.map((item) => String(item || "").trim()).filter(Boolean);
+  }
+  const raw = course.classNameRaw || course.audienceClassNameRaw || "";
+  return String(raw || "")
+    .split(/[，、,;；\n\r]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 Component({
   properties: {
     visible: {
@@ -18,6 +30,7 @@ Component({
     timeText: "",
     weekTypeText: "",
     audienceClassesText: "",
+    classScopeReasonText: "",
   },
 
   observers: {
@@ -31,7 +44,8 @@ Component({
         sectionText: course && course.startSection ? `第${course.startSection}-${course.endSection}节` : "",
         timeText: course ? course.timeText || getCourseTimeRange(course, courseTimes) : "",
         weekTypeText: weekTypeMap[(course && course.weekType) || "all"],
-        audienceClassesText: course && Array.isArray(course.audienceClasses) ? course.audienceClasses.join("、") : "",
+        audienceClassesText: splitAudienceClasses(course).join("、"),
+        classScopeReasonText: course && (course.classScopeReason || course.classScopeReasonText || "") || "",
       });
     },
   },

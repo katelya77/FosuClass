@@ -15,7 +15,7 @@ function help() {
     "Options:",
     `  --env-id=<id>             CloudBase env id, default ${ENV_ID}`,
     "  --hosting-base-url=<url>  CloudBase hosting origin used to read runtime/active.json",
-    "  --keep-latest=<n>         stable releases to keep, default 3",
+    "  --keep-latest=<n>         stable releases to keep, default 2",
     "  --keep=a,b,c              extra releaseVersion values to preserve",
     "  --execute                 actually call tcb hosting delete",
     "  --confirm=<text>          must equal CONFIRM_DELETE_CLOUDBASE_OLD_RELEASES with --execute",
@@ -36,7 +36,7 @@ async function main() {
   const plan = await pruneRemoteReleasePack({
     envId: args["env-id"] || ENV_ID,
     hostingBaseUrl: args["hosting-base-url"] || args.hostingBaseUrl,
-    keepLatest: args["keep-latest"] || args.keepLatest || 3,
+    keepLatest: args["keep-latest"] || args.keepLatest || 2,
     keep: splitList(args.keep),
     execute: args.execute === true,
     dryRun: args.execute !== true,

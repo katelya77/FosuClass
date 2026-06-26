@@ -8,6 +8,7 @@
     "diagnose:browser": "node diagnose-browser.js",
     "session:verify": "node verify-session.js",
     "login": "node login.js",
+    "login:auto": "node login.js --auto",
     "discover:fosu": "node discover.js",
     "analyze:har": "node analyze-har.js",
     "sync:catalog": "node sync.js catalog",

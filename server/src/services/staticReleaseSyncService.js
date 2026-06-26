@@ -78,7 +78,7 @@ function getConfig(env = process.env) {
     env.PUBLIC_RUNTIME_BASE_URL ||
     publicBaseUrl.replace(/\/releases\/?$/i, "/runtime") ||
     DEFAULT_RUNTIME_PUBLIC_URL;
-  const keepLatestN = Math.max(3, Number(env.STATIC_RELEASE_KEEP_LATEST || 3) || 3);
+  const keepLatestN = Math.max(2, Number(env.STATIC_RELEASE_KEEP_LATEST || 2) || 2);
   const lockPath = path.resolve(env.STATIC_RELEASE_SYNC_LOCK || path.join(dst || src, ".static-release-sync.lock"));
   const httpTimeoutMs = Math.max(1000, Number(env.STATIC_RELEASE_SYNC_HTTP_TIMEOUT_MS || 8000) || 8000);
   const verifyConcurrency = Math.max(1, Math.min(2, Number(env.STATIC_RELEASE_VERIFY_CONCURRENCY || 2) || 2));

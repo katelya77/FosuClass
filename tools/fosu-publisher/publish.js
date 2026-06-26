@@ -106,6 +106,13 @@ function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
 }
 
+function assertInside(baseDir, targetPath) {
+  const base = path.resolve(baseDir);
+  const target = path.resolve(targetPath);
+  const relative = path.relative(base, target);
+  return Boolean(relative && !relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
 function writeJsonAtomic(filePath, value) {
   ensureDir(path.dirname(filePath));
   const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`;
@@ -490,6 +497,13 @@ class PublisherRun {
     writeJsonAtomic(this.receiptPath, receipt);
     const terminalStatus = receipt.status || (receipt.success ? "completed" : "partial-success");
     this.save({ status: terminalStatus, receipt });
+    try {
+      receipt.artifactCleanup = cleanupPublisherRunArtifacts({ currentRunId: this.runId });
+      writeJsonAtomic(this.receiptPath, receipt);
+      this.save({ receipt });
+    } catch (error) {
+      this.event("artifact-cleanup-failed", { code: error.code || "", message: error.message });
+    }
     return receipt;
   }
 }
@@ -671,6 +685,45 @@ function releaseLock(run) {
   if (existing && existing.runId === run.runId) {
     try { fs.unlinkSync(LOCK_PATH); } catch (error) {}
   }
+}
+
+function cleanupPublisherRunArtifacts(options = {}) {
+  const keepLatest = Math.max(1, Number(options.keepLatest || process.env.FOSU_PUBLISHER_KEEP_RUNS || 2) || 2);
+  if (!fs.existsSync(RUNS_ROOT)) return { removed: [], kept: [], keepLatest };
+  const latest = readJsonSafe(LATEST_PATH, {});
+  const keepRunIds = new Set([options.currentRunId, latest.runId].filter(Boolean));
+  const entries = fs.readdirSync(RUNS_ROOT, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => {
+      const runDir = path.join(RUNS_ROOT, entry.name);
+      const state = readJsonSafe(path.join(runDir, "state.json"), null);
+      return {
+        runId: entry.name,
+        runDir,
+        state,
+        terminal: isTerminalRunState(state),
+        updatedAt: state && state.updatedAt || "",
+        mtimeMs: fs.statSync(runDir).mtimeMs,
+      };
+    })
+    .sort((left, right) => {
+      const leftTime = Date.parse(left.updatedAt || "") || left.mtimeMs || 0;
+      const rightTime = Date.parse(right.updatedAt || "") || right.mtimeMs || 0;
+      return rightTime - leftTime;
+    });
+  entries.slice(0, keepLatest).forEach((item) => keepRunIds.add(item.runId));
+  const removed = [];
+  const kept = [];
+  entries.forEach((item) => {
+    if (keepRunIds.has(item.runId) || !item.terminal) {
+      kept.push(item.runId);
+      return;
+    }
+    if (!assertInside(RUNS_ROOT, item.runDir)) return;
+    fs.rmSync(item.runDir, { recursive: true, force: true });
+    removed.push(item.runId);
+  });
+  return { removed, kept, keepLatest };
 }
 
 async function resolveTerm(args) {

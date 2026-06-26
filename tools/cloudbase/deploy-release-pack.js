@@ -19,6 +19,8 @@ function help() {
     "  --hosting-base-url=<url>      real CloudBase Hosting base URL for remote verification",
     "  --execute                     upload only releases/{releaseVersion}",
     "  --dry-run                     validate and print planned commands only (default)",
+    "  --skip-unchanged              with --execute, skip upload when remote release already verifies identical (default)",
+    "  --no-skip-unchanged           force upload even when remote release verifies identical",
     "  --skip-remote-verify          allow execute without remote HTTP verification",
   ].join("\n"));
 }
@@ -37,6 +39,7 @@ async function main() {
     execute: args.execute === true,
     dryRun: args.execute !== true,
     skipRemoteVerify: args["skip-remote-verify"] === true,
+    skipUnchanged: args["no-skip-unchanged"] === true ? false : args.execute === true,
     concurrency: args.concurrency || 5,
     retryCount: args["retry-count"] || 3,
   });
@@ -49,6 +52,10 @@ async function main() {
     checkedFiles: result.verification.checkedFiles.length,
     privacyScan: result.privacy.success,
     planned: result.planned,
+    uploaded: result.commands ? result.commands.length : 0,
+    skipped: Boolean(result.skipped || result.unchanged),
+    skipReason: result.skipReason || "",
+    savedFiles: result.skipped ? result.planned.length : 0,
     pointerSource: result.pointer.source,
   }, null, 2));
 }

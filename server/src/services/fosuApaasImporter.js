@@ -32,6 +32,14 @@ function toText(value) {
   return String(value == null ? "" : value).trim();
 }
 
+function approxJsonBytes(value) {
+  try {
+    return Buffer.byteLength(JSON.stringify(value == null ? null : value), "utf8");
+  } catch (error) {
+    return 0;
+  }
+}
+
 function getApaasBase() {
   return String(config.FOSU_APAAS_BASE || "https://apaas.fosu.edu.cn").replace(/\/+$/g, "");
 }
@@ -1614,6 +1622,9 @@ async function fetchRowsViaCloudbaseRelay(studentId, password, options, timing) 
     timing.discoverAppMs = timing.discoverMs;
     timing.fetchRowsMs = Number(relayTiming.fetchRowsMs || relayTiming.readRowsMs || 0) || (Date.now() - startedAt);
     timing.relayMs = Date.now() - startedAt;
+    timing.rowsCount = Number(relayTiming.rowsCount || relayTiming.rowCount || rawRows.length) || rawRows.length;
+    timing.bytesApprox = Number(relayTiming.bytesApprox || 0) || approxJsonBytes(rawRows);
+    timing.hitCache = Boolean(relayTiming.hitCache);
     return {
       rawRows,
       entry: payload.appEntry || payload.entry || { channel: "cloudbase" },
@@ -1658,11 +1669,17 @@ async function buildPreviewFromRawRows(studentId, rawRows, options, entry, timin
   timing.normalizeMs += Date.now() - finalNormalizeStartedAt;
   timing.totalMs = Date.now() - startedAt;
   timing.channel = channel;
+  timing.rowsCount = timing.rowsCount || rawRows.length;
+  timing.bytesApprox = timing.bytesApprox || approxJsonBytes(rawRows);
   preview.timing = timing;
   preview.importDiagnostics = {
     channel,
     fallbackReason: timing.fallbackReason || "",
+    hitCache: Boolean(timing.hitCache),
     retryCount: timing.retryCount || 0,
+    relayMs: timing.relayMs || 0,
+    rowsCount: timing.rowsCount || rawRows.length,
+    bytesApprox: timing.bytesApprox || approxJsonBytes(rawRows),
     loginMs: timing.loginMs || 0,
     discoverMs: timing.discoverMs || 0,
     fetchRowsMs: timing.fetchRowsMs || 0,
@@ -1673,13 +1690,17 @@ async function buildPreviewFromRawRows(studentId, rawRows, options, entry, timin
     studentId: maskStudentId(studentId),
     channel,
     fallbackReason: timing.fallbackReason || "",
+    hitCache: Boolean(timing.hitCache),
     retryCount: timing.retryCount || 0,
     rawRowCount: rawRows.length,
+    rowsCount: timing.rowsCount || rawRows.length,
+    bytesApprox: timing.bytesApprox || approxJsonBytes(rawRows),
     localCourseCount: localCourses.length,
     loginMs: timing.loginMs,
     discoverMs: timing.discoverMs,
     discoverAppMs: timing.discoverAppMs,
     fetchRowsMs: timing.fetchRowsMs,
+    relayMs: timing.relayMs,
     normalizeMs: timing.normalizeMs,
     matchLocalScheduleMs: timing.matchLocalScheduleMs,
     totalMs: timing.totalMs,

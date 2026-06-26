@@ -53,6 +53,7 @@
     "sync:local-campus": "npm --prefix tools/fosu-sync-client run sync:local-campus --",
     "sync:local-upload": "npm --prefix tools/fosu-sync-client run sync:local-upload --",
     "login": "npm --prefix tools/fosu-sync-client run login",
+    "login:auto": "npm --prefix tools/fosu-sync-client run login:auto",
     "sync:relay-agent": "npm --prefix tools/fosu-relay-agent run start",
     "build:relay-agent": "npm --prefix tools/fosu-relay-agent run build",
     "sync:resources": "npm --prefix tools/fosu-sync-client run sync:resources",

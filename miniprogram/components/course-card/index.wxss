@@ -250,9 +250,13 @@
 
 .course-card-grid.is-preview-grid {
   padding: 5rpx 6rpx;
+  color: #173247;
+  border: 1rpx solid rgba(50, 74, 99, 0.16);
+  box-shadow: 0 4rpx 12rpx rgba(50, 74, 99, 0.08);
 }
 
 .is-preview-grid .course-name {
+  color: inherit;
   font-size: 21rpx;
   font-weight: 900;
   line-height: 1.16;
@@ -265,13 +269,16 @@
 
 .is-preview-grid .course-meta {
   margin-top: 3rpx;
+  color: inherit;
   font-size: 20rpx;
   font-weight: 900;
   line-height: 1.12;
+  opacity: 0.92;
 }
 
 .is-preview-grid .course-event-subtext {
   margin-top: 3rpx;
+  color: rgba(23, 50, 71, 0.72);
   font-size: 18rpx;
   font-weight: 800;
   line-height: 1.12;
@@ -279,6 +286,9 @@
 
 .is-preview-grid .course-event-badge {
   max-width: 54rpx;
+  background: rgba(255, 255, 255, 0.72);
+  color: #475569;
+  border: 1rpx solid rgba(71, 85, 105, 0.14);
 }
 
 .course-event-subtext {
@@ -320,6 +330,21 @@
   color: #ffeb3b !important;
   font-weight: 800;
   opacity: 1 !important;
+}
+
+.is-preview-grid .classroom-highlight {
+  color: inherit !important;
+}
+
+.is-preview-grid.is-muted {
+  background: #eef2f6 !important;
+  color: #64748b;
+  border-color: #cbd5e1;
+  box-shadow: none;
+}
+
+.is-preview-grid.is-true-conflict {
+  color: #8c1d35;
 }
 
 .is-muted {
