@@ -405,6 +405,15 @@ function isLocalTimeMatched(status) {
   return status === "exact_match" || status === "time_match";
 }
 
+function classScopeReasonForArrangement(arrangement) {
+  const classStatus = arrangement && arrangement.classScopeStatus || "unknown";
+  const decision = arrangement && arrangement.importDecision || "";
+  if (classStatus === "match") return "包含当前班级，已推荐";
+  if (classStatus === "not_match") return "看起来不是当前班级，默认不选";
+  if (decision === IMPORT_DECISION.AUTO_INCLUDE) return "已和当前课表时间匹配，已推荐";
+  return "未确认是否属于当前班级";
+}
+
 function decisionForArrangement(arrangement) {
   const classStatus = arrangement.classScopeStatus;
   const localStatus = arrangement.matchStatus;
@@ -415,7 +424,7 @@ function decisionForArrangement(arrangement) {
     return {
       importDecision: IMPORT_DECISION.SUSPECTED_NOT_MINE,
       confidence: "low",
-      reason: "上课班级不包含当前班级，默认不导入",
+      reason: "看起来不是当前班级，默认不选",
     };
   }
 
@@ -451,8 +460,8 @@ function decisionForArrangement(arrangement) {
       importDecision: IMPORT_DECISION.AUTO_INCLUDE,
       confidence: "high",
       reason: localStatus === "exact_match"
-        ? "与当前班级课表匹配，已加入推荐导入"
-        : "班级范围匹配，已加入推荐导入",
+        ? "包含当前班级，已推荐"
+        : "包含当前班级，已推荐",
     };
   }
 
@@ -460,7 +469,7 @@ function decisionForArrangement(arrangement) {
     return {
       importDecision: IMPORT_DECISION.AUTO_INCLUDE,
       confidence: "medium",
-      reason: "班级范围匹配，已加入推荐导入；未在当前班级课表中匹配到，请检查",
+      reason: "包含当前班级，已推荐",
     };
   }
 
@@ -468,14 +477,14 @@ function decisionForArrangement(arrangement) {
     return {
       importDecision: IMPORT_DECISION.AUTO_INCLUDE,
       confidence: "medium",
-      reason: "与当前班级课表匹配，已加入推荐导入",
+      reason: "已和当前课表时间匹配，已推荐",
     };
   }
 
   return {
     importDecision: IMPORT_DECISION.NEEDS_CONFIRM,
     confidence: "low",
-    reason: "班级范围或时间信息需确认",
+    reason: "未确认是否属于当前班级",
   };
 }
 
@@ -603,8 +612,10 @@ function publicArrangement(arrangement) {
     campus: arrangement.campus,
     teacherName: arrangement.teacherName,
     classNameRaw: arrangement.classNameRaw,
+    audienceClasses: splitClassScopeSegments(arrangement.classNameRaw),
     classScope: arrangement.classScope,
     classScopeStatus: arrangement.classScopeStatus,
+    classScopeReason: arrangement.classScopeReason || classScopeReasonForArrangement(arrangement),
     specialNote: arrangement.specialNote,
     sourceHash: arrangement.sourceHash,
     matchStatus: arrangement.matchStatus,
@@ -640,6 +651,8 @@ function toImportCourse(arrangement, context = {}) {
     classroom: roomName,
     teacherName: arrangement.teacherName || "",
     className: arrangement.classNameRaw || context.targetClassName || "",
+    classNameRaw: arrangement.classNameRaw || "",
+    audienceClasses: splitClassScopeSegments(arrangement.classNameRaw),
     campus: arrangement.campus || "",
     specialNote: arrangement.specialNote || "",
     note: arrangement.specialNote || "",
@@ -653,6 +666,7 @@ function toImportCourse(arrangement, context = {}) {
     importDecision: arrangement.importDecision,
     matchStatus: arrangement.matchStatus,
     classScopeStatus: arrangement.classScopeStatus,
+    classScopeReason: arrangement.classScopeReason || classScopeReasonForArrangement(arrangement),
     courseGroupId: arrangement.courseGroupId,
     arrangementId: arrangement.arrangementId,
     importedAt,
@@ -731,6 +745,9 @@ function buildPreviewGrid(arrangements, week = DEFAULT_PREVIEW_WEEK) {
     roomName: item.roomName,
     teacherName: item.teacherName,
     classNameRaw: item.classNameRaw,
+    audienceClasses: item.audienceClasses || splitClassScopeSegments(item.classNameRaw),
+    classScopeStatus: item.classScopeStatus,
+    classScopeReason: item.classScopeReason || classScopeReasonForArrangement(item),
     matchStatus: item.matchStatus,
     importDecision: item.importDecision,
     reason: item.reason,
@@ -752,9 +769,13 @@ function compactPreviewCourse(arrangement) {
     sectionText: arrangement.sectionText,
     roomName: arrangement.roomName,
     className: arrangement.classNameRaw,
+    classNameRaw: arrangement.classNameRaw,
+    audienceClasses: splitClassScopeSegments(arrangement.classNameRaw),
     campus: arrangement.campus,
     specialNote: arrangement.specialNote,
     reason: arrangement.reason,
+    classScopeReason: arrangement.classScopeReason || classScopeReasonForArrangement(arrangement),
+    classScopeStatus: arrangement.classScopeStatus,
     importDecision: arrangement.importDecision,
     matchStatus: arrangement.matchStatus,
   };
@@ -986,6 +1007,10 @@ function buildScheduleImportPreview(rawRows, options = {}) {
   }).sort((left, right) => left.displayCourseName.localeCompare(right.displayCourseName, "zh-Hans-CN"));
 
   const allArrangements = groups.flatMap((group) => group.arrangements);
+  allArrangements.forEach((arrangement) => {
+    arrangement.classScopeReason = arrangement.classScopeReason || classScopeReasonForArrangement(arrangement);
+    arrangement.audienceClasses = splitClassScopeSegments(arrangement.classNameRaw);
+  });
   const autoArrangements = allArrangements.filter((item) => item.importDecision === IMPORT_DECISION.AUTO_INCLUDE);
   const conflictCount = countConflicts(autoArrangements);
   groups.forEach(applyCourseGroupConflictAnalysis);

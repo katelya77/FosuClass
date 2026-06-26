@@ -22,6 +22,14 @@ function toText(value) {
   return String(value == null ? "" : value).trim();
 }
 
+function approxJsonBytes(value) {
+  try {
+    return Buffer.byteLength(JSON.stringify(value == null ? null : value), "utf8");
+  } catch (error) {
+    return 0;
+  }
+}
+
 function maskStudentId(studentId) {
   const value = toText(studentId);
   if (!value) return "";
@@ -1134,13 +1142,19 @@ async function buildRelayPayload(body) {
       throw error;
     }
     timing.totalMs = Date.now() - startedAt;
+    timing.relayMs = timing.totalMs;
+    timing.rowsCount = rawRows.length;
+    timing.bytesApprox = approxJsonBytes(rawRows);
     safeLog("fosu-import-relay-success", {
       studentId: maskStudentId(studentId),
       rowCount: rawRows.length,
+      rowsCount: timing.rowsCount,
+      bytesApprox: timing.bytesApprox,
       channel: "cloudbase",
       loginMs: timing.loginMs,
       discoverMs: timing.discoverMs,
       fetchRowsMs: timing.fetchRowsMs,
+      relayMs: timing.relayMs,
       totalMs: timing.totalMs,
     });
     return {
@@ -1149,15 +1163,8 @@ async function buildRelayPayload(body) {
         success: true,
         channel: "cloudbase",
         rawRows,
-        rows: rawRows,
-        appEntry: {
-          appId: entry.appId || "",
-          formId: entry.formId || "",
-          sourceId: entry.sourceId || "",
-          formCode: entry.formCode || "",
-          sourceCode: entry.sourceCode || "",
-          discoveredBy: entry.discoveredBy || "",
-          fallback: Boolean(entry.fallback),
+        profile: {
+          studentIdMasked: maskStudentId(studentId),
         },
         timing,
       },
@@ -1166,6 +1173,7 @@ async function buildRelayPayload(body) {
     const code = normalizeRelayErrorCode(error);
     if (stage === "login" && !timing.loginMs) timing.loginMs = Date.now() - startedAt;
     timing.totalMs = Date.now() - startedAt;
+    timing.relayMs = timing.totalMs;
     timing.failureStage = stage;
     const errorSummary = summarizeRelayError(error);
     safeLog("fosu-import-relay-failed", {
@@ -1180,6 +1188,7 @@ async function buildRelayPayload(body) {
       loginMs: timing.loginMs,
       discoverMs: timing.discoverMs,
       fetchRowsMs: timing.fetchRowsMs,
+      relayMs: timing.relayMs,
       totalMs: timing.totalMs,
     });
     return {

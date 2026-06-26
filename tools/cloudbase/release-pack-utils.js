@@ -9,7 +9,7 @@ const releaseService = require("../../server/src/services/releaseService");
 const runtimePointerService = require("../../server/src/services/runtimePointerService");
 
 const ENV_ID = cloudbaseConfig.ENV_ID;
-const DEFAULT_KEEP_LATEST = 3;
+const DEFAULT_KEEP_LATEST = 2;
 const INDEX_TYPES = ["class", "teacher", "classroom", "course"];
 
 const TEXT_SCAN_EXTENSIONS = new Set([".json", ".txt", ".md", ".csv", ".tsv"]);
@@ -687,6 +687,28 @@ async function deployReleasePack(options = {}) {
 
   const commandRunner = options.commandRunner || runTcbHostingDeploy;
   const commands = [];
+  if (options.skipUnchanged === true && remoteBaseUrl && options.verifyRemote !== false) {
+    const verifier = options.remoteVerifier || verifyRemoteReleasePack;
+    try {
+      const remoteBefore = await verifier(Object.assign({}, options, { releaseVersion, hostingBaseUrl: remoteBaseUrl }));
+      return {
+        success: true,
+        dryRun: false,
+        unchanged: true,
+        skipped: true,
+        skipReason: "remote-release-identical",
+        releaseVersion,
+        verification,
+        privacy,
+        pointer,
+        planned,
+        commands,
+        remote: remoteBefore,
+      };
+    } catch (error) {
+      // Remote diff only skips when the existing release is verified identical.
+    }
+  }
   for (let index = 0; index < planned.length; index += 1) {
     commands.push(await runDeployTaskWithRetry(commandRunner, planned[index], index, planned.length, options));
   }
@@ -834,6 +856,68 @@ function parseRemoteReleaseVersionsFromHostingList(output) {
   });
 }
 
+function parseRemoteHostingFilePathsFromList(output) {
+  const text = String(output || "");
+  const paths = [];
+  try {
+    collectPathsFromJson(JSON.parse(text), paths);
+  } catch (error) {
+    // Fall back to text parsing below.
+  }
+  const releaseFilePattern = /(?:^|[\s"'`])\/?((?:releases|runtime)\/[^"'`\s]+)(?:[\s"'`]|$)/g;
+  let match;
+  while ((match = releaseFilePattern.exec(text))) {
+    paths.push(match[1]);
+  }
+  return Array.from(new Set(paths
+    .map((item) => toPosixPath(item).replace(/^\/+/, ""))
+    .filter((item) => item && !item.endsWith("/"))));
+}
+
+function readLocalReleaseManifest(releaseVersion, options = {}) {
+  const version = String(releaseVersion || "").trim();
+  if (!version) return null;
+  const manifestPath = path.join(getReleaseDir(version, options), "manifest.json");
+  try {
+    return readJson(manifestPath);
+  } catch (error) {
+    return null;
+  }
+}
+
+function manifestRemotePaths(releaseVersion, manifest) {
+  const version = String(releaseVersion || "").trim();
+  if (!version || !manifest) return new Set();
+  const paths = new Set([`releases/${version}/manifest.json`]);
+  const files = manifest.files && typeof manifest.files === "object" ? manifest.files : {};
+  Object.keys(files).forEach((relativePath) => {
+    const normalized = toPosixPath(relativePath).replace(/^\/+/, "");
+    if (!normalized) return;
+    paths.add(`releases/${version}/${normalized}`);
+    paths.add(`releases/${version}/${normalized}.gz`);
+    paths.add(`releases/${version}/${normalized}.br`);
+  });
+  return paths;
+}
+
+function planRemoteReleaseOrphanFiles(options = {}) {
+  const releaseVersion = String(options.releaseVersion || "").trim();
+  const manifest = options.manifest || readLocalReleaseManifest(releaseVersion, options);
+  const remoteFiles = options.remoteFiles || [];
+  if (!releaseVersion || !manifest || !remoteFiles.length) return [];
+  const releasePrefix = `releases/${releaseVersion}/`;
+  const referenced = manifestRemotePaths(releaseVersion, manifest);
+  return remoteFiles
+    .filter((remotePath) => remotePath.startsWith(releasePrefix))
+    .filter((remotePath) => !referenced.has(remotePath))
+    .map((remotePath) => ({
+      releaseVersion,
+      path: remotePath,
+      type: "orphan-file",
+      dir: false,
+    }));
+}
+
 async function fetchCloudbaseRuntimePointer(options = {}) {
   if (options.activePointer) return options.activePointer;
   const baseUrl = String(options.hostingBaseUrl || cloudbaseConfig.CLOUDBASE_HOSTING_BASE_URL || "").trim().replace(/\/+$/g, "");
@@ -864,8 +948,15 @@ function planRemotePruneReleasePack(options = {}) {
     .map((item) => ({
       releaseVersion: item.releaseVersion,
       path: `releases/${item.releaseVersion}`,
+      type: "old-release",
+      dir: true,
     }))
     .filter((item) => item.path !== "runtime/active.json" && item.path.startsWith("releases/"));
+  const activeVersion = activePointer.releaseVersion || activePointer.version || options.activeReleaseVersion || "";
+  const orphanDeletions = planRemoteReleaseOrphanFiles(Object.assign({}, options, {
+    releaseVersion: activeVersion,
+  })).filter((item) => protectedVersions.has(item.releaseVersion));
+  deletions.push.apply(deletions, orphanDeletions);
   return {
     success: true,
     scope: "remote-hosting",
@@ -874,6 +965,15 @@ function planRemotePruneReleasePack(options = {}) {
     protectedVersions: Array.from(protectedVersions),
     remoteReleases: releases,
     deletions,
+    summary: {
+      added: 0,
+      updated: 0,
+      skipped: 0,
+      deleted: deletions.length,
+      orphanFiles: orphanDeletions.length,
+      keptVersions: protectedVersions.size,
+      savedFiles: releases.filter((item) => protectedVersions.has(item.releaseVersion)).length,
+    },
   };
 }
 
@@ -882,10 +982,12 @@ async function pruneRemoteReleasePack(options = {}) {
     ? { stdout: options.hostingListOutput, command: "mock", args: [] }
     : runTcbHostingList(options);
   const remoteReleases = parseRemoteReleaseVersionsFromHostingList(listResult.stdout);
+  const remoteFiles = options.remoteFiles || parseRemoteHostingFilePathsFromList(listResult.stdout);
   const activePointer = options.activePointer || await fetchCloudbaseRuntimePointer(options);
   const dryRun = options.execute === true ? false : options.dryRun !== false;
   const plan = planRemotePruneReleasePack(Object.assign({}, options, {
     remoteReleases,
+    remoteFiles,
     activePointer,
     dryRun,
   }));
@@ -903,7 +1005,7 @@ async function pruneRemoteReleasePack(options = {}) {
     throw error;
   }
   const commandRunner = options.deleteRunner || runTcbHostingDelete;
-  const commands = plan.deletions.map((item) => commandRunner(item.path, Object.assign({}, options, { dryRun: false, dir: true })));
+  const commands = plan.deletions.map((item) => commandRunner(item.path, Object.assign({}, options, { dryRun: false, dir: item.dir !== false })));
   return Object.assign({}, plan, { commands });
 }
 
@@ -961,8 +1063,10 @@ module.exports = {
   getReleaseDir,
   joinUrl,
   listLocalReleaseVersions,
+  parseRemoteHostingFilePathsFromList,
   parseRemoteReleaseVersionsFromHostingList,
   parseArgs,
+  planRemoteReleaseOrphanFiles,
   planPruneReleasePack,
   planRemotePruneReleasePack,
   pruneReleasePack,

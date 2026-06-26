@@ -256,6 +256,44 @@ function buildStudentArrangementMetaText(arrangement) {
   return parts.filter(Boolean).join(" · ");
 }
 
+function splitStudentClassNameRaw(value) {
+  return Array.from(new Set(String(value || "")
+    .split(/[，、,;；\n\r]+/)
+    .map((item) => item.trim())
+    .filter(Boolean)));
+}
+
+function compactStudentClassNameRaw(value) {
+  const list = splitStudentClassNameRaw(value);
+  const fullText = list.join("、");
+  if (!fullText) {
+    return { fullText: "", previewText: "", truncated: false };
+  }
+  const previewItems = list.slice(0, 2);
+  const previewText = previewItems.join("、");
+  return {
+    fullText,
+    previewText: list.length > previewItems.length ? `${previewText}等${list.length}个班级` : previewText,
+    truncated: list.length > previewItems.length || fullText.length > 28,
+  };
+}
+
+function humanizeClassScopeReason(arrangement) {
+  const status = String(arrangement && arrangement.classScopeStatus || "");
+  const decision = String(arrangement && arrangement.importDecision || "");
+  if (status === "match") return "包含当前班级，已推荐";
+  if (status === "not_match") return "看起来不是当前班级，默认不选";
+  if (decision === "auto_include") return "已和当前课表时间匹配，已推荐";
+  return "未确认是否属于当前班级";
+}
+
+function classScopeReasonClass(arrangement) {
+  const status = String(arrangement && arrangement.classScopeStatus || "");
+  if (status === "match") return "scope-match";
+  if (status === "not_match") return "scope-not-match";
+  return "scope-unknown";
+}
+
 function applyEditedArrangement(arrangement, editedMap = {}) {
   const id = arrangement && arrangement.arrangementId;
   const edited = id && editedMap[id] || null;
@@ -380,6 +418,8 @@ function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
         roomName: arrangement.roomName || "",
         teacherName: arrangement.teacherName || "",
         classNameRaw: arrangement.classNameRaw || "",
+        classScopeStatus: arrangement.classScopeStatus || "",
+        classScopeReason: arrangement.classScopeReason || humanizeClassScopeReason(arrangement),
         matchStatus: arrangement.matchStatus || "",
         importDecision: arrangement.importDecision,
         reason: arrangement.reason || "",
@@ -398,7 +438,7 @@ function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
   };
 }
 
-function decorateStudentArrangement(arrangement, selectedMap, editedMap) {
+function decorateStudentArrangement(arrangement, selectedMap, editedMap, expandedClassNames = {}) {
   const merged = applyEditedArrangement(arrangement, editedMap);
   const id = merged.arrangementId;
   const selected = selectedMap && Object.prototype.hasOwnProperty.call(selectedMap, id)
@@ -408,6 +448,8 @@ function decorateStudentArrangement(arrangement, selectedMap, editedMap) {
   const weekdayText = merged.weekday ? STUDENT_WEEKDAY_LABELS[merged.weekday - 1] : "";
   const sectionText = merged.sectionText || formatStudentSectionText(merged.sections);
   const displayWeekText = formatStudentWeekDisplay(merged.weeks, merged.weekText);
+  const classNameInfo = compactStudentClassNameRaw(merged.classNameRaw || "");
+  const classNameExpanded = Boolean(expandedClassNames && expandedClassNames[id]);
   return Object.assign({}, merged, {
     selected,
     edited: Boolean(editedMap && editedMap[id]),
@@ -418,18 +460,24 @@ function decorateStudentArrangement(arrangement, selectedMap, editedMap) {
     roomText: merged.roomName || "未注明",
     teacherText: merged.teacherName || "未注明",
     metaText: buildStudentArrangementMetaText(merged),
+    classNameFullText: classNameInfo.fullText,
+    classNamePreviewText: classNameExpanded ? classNameInfo.fullText : classNameInfo.previewText,
+    classNameExpanded,
+    classNameTruncated: classNameInfo.truncated,
+    classScopeReasonText: merged.classScopeReason || humanizeClassScopeReason(merged),
+    classScopeClass: classScopeReasonClass(merged),
     conflictText: merged.conflict ? "存在时间重叠，建议检查" : "",
     reasonText: merged.reason || merged.groupReason || "请确认后再导入",
     canEdit: !merged.hasCompleteTime || merged.importDecision === "unscheduled",
   });
 }
 
-function decorateStudentGroups(groups, selectedMap, editedMap, expandedGroups = {}) {
+function decorateStudentGroups(groups, selectedMap, editedMap, expandedGroups = {}, expandedClassNames = {}) {
   const buckets = normalizeStudentPreviewBuckets(groups);
   return STUDENT_BUCKET_KEYS.map((bucketKey) => {
     const groupList = (buckets[bucketKey] || []).map((group) => {
       const arrangements = (group.arrangements || []).map((arrangement) =>
-        decorateStudentArrangement(Object.assign({}, arrangement, { bucketKey, groupReason: group.reason || "" }), selectedMap, editedMap)
+        decorateStudentArrangement(Object.assign({}, arrangement, { bucketKey, groupReason: group.reason || "" }), selectedMap, editedMap, expandedClassNames)
       );
       const selectedCount = arrangements.filter((item) => item.selected).length;
       const viewKey = group.courseGroupId || `${bucketKey}-${group.displayCourseName || group.courseName || arrangements[0] && arrangements[0].arrangementId || "group"}`;
@@ -504,10 +552,7 @@ function getStudentImportErrorCode(error) {
 function shouldRetryStudentPreview(error) {
   const code = getStudentImportErrorCode(error);
   return code === "IMPORT_KEY_EXPIRED" ||
-    code === "INVALID_ENCRYPTED_PAYLOAD" ||
-    code === "SCHOOL_SYSTEM_TIMEOUT" ||
-    code === "NETWORK_TIMEOUT" ||
-    code === "UPSTREAM_TIMEOUT";
+    code === "INVALID_ENCRYPTED_PAYLOAD";
 }
 
 function sleep(ms) {
@@ -575,7 +620,8 @@ async function requestStudentSchedulePreviewStatus(jobId, onStatus) {
     if (status && status.status === "failed") {
       throw buildStudentImportErrorFromStatus(status);
     }
-    const delay = Math.min(2000, 1200 + (attempt % 4) * 200);
+    const elapsed = Date.now() - startedAt;
+    const delay = elapsed < 10000 ? 1200 : (2600 + (attempt % 2) * 200);
     await sleep(delay);
   }
   throw buildStudentImportErrorFromStatus({
@@ -620,6 +666,11 @@ function logStudentImportDiagnostics(preview) {
     loginMs: Number(diagnostics.loginMs || 0) || 0,
     discoverMs: Number(diagnostics.discoverMs || 0) || 0,
     fetchRowsMs: Number(diagnostics.fetchRowsMs || 0) || 0,
+    relayMs: Number(diagnostics.relayMs || 0) || 0,
+    rowsCount: Number(diagnostics.rowsCount || diagnostics.rawRowCount || 0) || 0,
+    bytesApprox: Number(diagnostics.bytesApprox || 0) || 0,
+    fallbackReason: diagnostics.fallbackReason || "",
+    hitCache: Boolean(diagnostics.hitCache || preview && preview.hitCache),
     normalizeMs: Number(diagnostics.normalizeMs || 0) || 0,
     totalMs: Number(diagnostics.totalMs || 0) || 0,
   });
@@ -654,6 +705,7 @@ Page({
     studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
     studentActiveBucketGroups: [],
     studentExpandedGroups: {},
+    studentExpandedClassNames: {},
     studentExpandedSections: {
       autoInclude: true,
       needsConfirm: false,
@@ -753,6 +805,7 @@ Page({
       studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
       studentActiveBucketGroups: [],
       studentExpandedGroups: {},
+      studentExpandedClassNames: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
       studentClassConfidenceWarning: "",
@@ -781,6 +834,7 @@ Page({
       studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
       studentActiveBucketGroups: [],
       studentExpandedGroups: {},
+      studentExpandedClassNames: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
       studentClassConfidenceWarning: "",
@@ -924,6 +978,7 @@ Page({
       studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
       studentActiveBucketGroups: [],
       studentExpandedGroups: {},
+      studentExpandedClassNames: {},
       studentSelectionMode: false,
       studentSelectedCount: 0,
       studentRecommendedCount: 0,
@@ -954,6 +1009,7 @@ Page({
       studentAdvancedMode: false,
       studentActiveBucket: "recommended",
       studentExpandedGroups: {},
+      studentExpandedClassNames: {},
     });
     const week = clampPreviewWeek(
       resolveStudentCurrentPreviewWeek() ||
@@ -972,7 +1028,8 @@ Page({
     const targetWeek = clampPreviewWeek(week || this.data.studentPreviewWeek);
     const selectedCount = arrangements.filter((arrangement) => selectedMap[arrangement.arrangementId]).length;
     const expandedGroups = this.data.studentExpandedGroups || {};
-    const buckets = decorateStudentGroups(result, selectedMap, editedMap, expandedGroups);
+    const expandedClassNames = this.data.studentExpandedClassNames || {};
+    const buckets = decorateStudentGroups(result, selectedMap, editedMap, expandedGroups, expandedClassNames);
     const activeBucket = STUDENT_BUCKET_KEYS.indexOf(this.data.studentActiveBucket) >= 0
       ? this.data.studentActiveBucket
       : "recommended";
@@ -1117,6 +1174,16 @@ Page({
     });
   },
 
+  toggleStudentClassNameRaw(event) {
+    const arrangementId = event.currentTarget.dataset.id;
+    if (!arrangementId) return;
+    const expanded = Object.assign({}, this.data.studentExpandedClassNames || {});
+    expanded[arrangementId] = !expanded[arrangementId];
+    this.setData({ studentExpandedClassNames: expanded }, () => {
+      this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
+    });
+  },
+
   findStudentArrangement(arrangementId) {
     return (this.studentPreviewArrangements || []).find((arrangement) => arrangement.arrangementId === arrangementId) || null;
   },
@@ -1256,6 +1323,8 @@ Page({
         formatStudentWeekDisplay(course.weeks, course.weekText),
         `地点：${course.roomName || "未注明"}`,
         course.teacherName ? `教师：${course.teacherName}` : "",
+        course.classNameRaw ? `上课班级：${compactStudentClassNameRaw(course.classNameRaw).fullText}` : "",
+        course.classScopeReason ? `判断：${course.classScopeReason}` : "",
       ].filter(Boolean).join("\n"),
       showCancel: false,
       confirmText: "知道了",
@@ -1312,6 +1381,7 @@ Page({
       studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
       studentActiveBucketGroups: [],
       studentExpandedGroups: {},
+      studentExpandedClassNames: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
       studentClassConfidenceWarning: "",
@@ -1559,6 +1629,7 @@ Page({
       studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
       studentActiveBucketGroups: [],
       studentExpandedGroups: {},
+      studentExpandedClassNames: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
       studentImportedSchedule: null,

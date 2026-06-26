@@ -98,7 +98,10 @@ function testRecommendationsAndLocalTeacherFill() {
   assert.strictEqual(anatomy.importDecision, "auto_include");
   assert.strictEqual(anatomy.matchStatus, "exact_match");
   assert.strictEqual(anatomy.teacherName, "李老师");
+  assert.strictEqual(anatomy.classScopeReason, "包含当前班级，已推荐");
+  assert.deepStrictEqual(anatomy.audienceClasses, ["25动物医学6班"]);
   assert.strictEqual(science.importDecision, "suspected_not_mine");
+  assert.strictEqual(science.classScopeReason, "看起来不是当前班级，默认不选");
   assert.strictEqual(labor.importDecision, "unscheduled");
   assert.strictEqual(online.importDecision, "needs_confirm");
 }
@@ -163,6 +166,7 @@ function testStrictClassRecommendationRules() {
   assert.strictEqual(temporary.classScopeStatus, "unknown");
   assert.strictEqual(temporary.matchStatus, "course_match");
   assert.notStrictEqual(temporary.importDecision, "auto_include");
+  assert.strictEqual(temporary.classScopeReason, "未确认是否属于当前班级");
   assert(preview.buckets.suspected.some((item) => item.displayCourseName === "Range Excluded"));
   assert(preview.buckets.pending.some((item) => item.displayCourseName === "Temporary Class"));
 }

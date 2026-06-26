@@ -3,6 +3,8 @@ const path = require("path");
 
 const CLIENT_DIR = __dirname;
 const SYNC_ENV_PATH = path.join(CLIENT_DIR, ".env");
+const SYNC_LOCAL_ENV_PATH = path.join(CLIENT_DIR, ".env.local");
+const REPO_LOCAL_ENV_PATH = path.resolve(CLIENT_DIR, "..", "..", ".env.local");
 
 const SYNC_DEFAULTS = {
   FOSU_BASE_URL: "https://100.fosu.edu.cn",
@@ -66,7 +68,15 @@ function readSyncClientEnv(envPath = SYNC_ENV_PATH, deps = {}) {
 function loadSyncClientEnv(options = {}) {
   const env = options.env || process.env;
   const envPath = options.envPath || SYNC_ENV_PATH;
-  const parsed = readSyncClientEnv(envPath, options.deps || {});
+  const deps = options.deps || {};
+  const parsed = Object.prototype.hasOwnProperty.call(options, "envPath")
+    ? readSyncClientEnv(envPath, deps)
+    : Object.assign(
+      {},
+      readSyncClientEnv(envPath, deps),
+      readSyncClientEnv(REPO_LOCAL_ENV_PATH, deps),
+      readSyncClientEnv(SYNC_LOCAL_ENV_PATH, deps),
+    );
 
   Object.keys(parsed).forEach((key) => {
     if (env[key] === undefined || env[key] === "") {
@@ -156,7 +166,9 @@ module.exports = {
   PROXY_ENV_NAMES,
   SYNC_DEFAULTS,
   SYNC_ENV_FIELDS,
+  SYNC_LOCAL_ENV_PATH,
   SYNC_ENV_PATH,
+  REPO_LOCAL_ENV_PATH,
   loadSyncClientEnv,
   mergeNoProxy,
   parseEnvText,

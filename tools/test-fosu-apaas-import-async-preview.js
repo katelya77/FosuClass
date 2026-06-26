@@ -8,6 +8,7 @@ const sessionStorePath = path.join(__dirname, "..", "server", "src", "services",
 const limiterPath = path.join(__dirname, "..", "server", "src", "services", "fosuApaasImportRateLimiter.js");
 
 let capturedPassword = "";
+let importCallCount = 0;
 
 delete require.cache[require.resolve(importerPath)];
 require.cache[require.resolve(importerPath)] = {
@@ -16,6 +17,7 @@ require.cache[require.resolve(importerPath)] = {
   loaded: true,
   exports: {
     importSchedulePreview: async (studentId, password, options = {}) => {
+      importCallCount += 1;
       capturedPassword = password;
       await new Promise((resolve) => setTimeout(resolve, 10));
       return {
@@ -48,6 +50,9 @@ require.cache[require.resolve(importerPath)] = {
           loginMs: 1,
           discoverMs: 2,
           fetchRowsMs: 3,
+          relayMs: 0,
+          rowsCount: 1,
+          bytesApprox: 128,
           normalizeMs: 4,
           totalMs: 15,
         },
@@ -129,8 +134,26 @@ async function run() {
     assert(done.importPreviewToken, "success status should include preview token");
     assert.strictEqual(done.timing.channel, "oracle");
     assert.strictEqual(done.timing.fallbackReason, "APAAS_SESSION_UNVERIFIED");
+    assert.strictEqual(done.timing.rowsCount, 1);
+    assert.strictEqual(done.timing.bytesApprox, 128);
     assert.strictEqual(capturedPassword, password);
     assert(!JSON.stringify(done).includes(password), "status payload must not expose password");
+
+    const secondChallenge = createPublicKeyChallenge({ ttlSeconds: 300 });
+    const secondEncrypted = encryptForServer(secondChallenge.publicKey, {
+      studentId: "202512340303",
+      password,
+      nonce: secondChallenge.nonce,
+      timestamp: Date.now(),
+    });
+    const reused = startStudentSchedulePreviewJob(req, Object.assign({
+      keyId: secondChallenge.keyId,
+      semester: "2025-2026-2",
+    }, secondEncrypted));
+    assert.strictEqual(reused.jobId, started.jobId, "same user/student should reuse recent preview job");
+    assert.strictEqual(reused.hitCache, true);
+    assert.strictEqual(reused.timing.hitCache, true);
+    assert.strictEqual(importCallCount, 1, "cache hit must not call importer again");
   } finally {
     if (oldRateLimit == null) delete process.env.FOSU_IMPORT_RATE_LIMIT_ENABLED;
     else process.env.FOSU_IMPORT_RATE_LIMIT_ENABLED = oldRateLimit;

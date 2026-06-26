@@ -81,6 +81,10 @@
           <text class="detail-label">上课班级</text>
           <text class="detail-value">{{audienceClassesText}}</text>
         </view>
+        <view class="detail-item full" wx:if="{{classScopeReasonText}}">
+          <text class="detail-label">确认提示</text>
+          <text class="detail-value">{{classScopeReasonText}}</text>
+        </view>
       </view>
 
       <view class="remark">

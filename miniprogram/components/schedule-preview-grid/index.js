@@ -1,8 +1,16 @@
-const { colorForCourse } = require("../../utils/color");
-
 const TIME_AXIS_WIDTH = 64;
 const DEFAULT_DAY_WIDTH = 120;
 const DEFAULT_SECTION_HEIGHT = 72;
+const PREVIEW_THEMES = [
+  { background: "#e8f5ee", border: "#84c7a3", text: "#174b36" },
+  { background: "#eef4ff", border: "#93b9f5", text: "#1d4f8f" },
+  { background: "#fff3e6", border: "#f2b36c", text: "#7a3f10" },
+  { background: "#f2efff", border: "#afa0ea", text: "#43327f" },
+  { background: "#eaf8fb", border: "#80c9d6", text: "#155668" },
+  { background: "#fff0f4", border: "#e99aa9", text: "#7f2437" },
+  { background: "#f3f6e8", border: "#b7c971", text: "#46591f" },
+  { background: "#f0f5f4", border: "#9bbdb6", text: "#244a43" },
+];
 
 function toNumberList(values) {
   return (Array.isArray(values) ? values : [])
@@ -17,9 +25,26 @@ function decisionBadge(decision, conflict, selected) {
   return "";
 }
 
-function colorForCell(cell) {
-  if (cell.selected === false) return "#94a3b8";
-  return colorForCourse(cell.normalizedCourseName || cell.displayCourseName || cell.courseName || "");
+function hashText(value) {
+  const text = String(value || "");
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function themeForCell(cell) {
+  if (cell.selected === false) {
+    return { background: "#eef2f6", border: "#cbd5e1", text: "#64748b" };
+  }
+  const key = cell.normalizedCourseName || cell.displayCourseName || cell.courseName || "";
+  const theme = PREVIEW_THEMES[hashText(key) % PREVIEW_THEMES.length];
+  if (cell.conflict) {
+    return { background: "#fff1f2", border: "#f199a8", text: "#8c1d35" };
+  }
+  return theme;
 }
 
 function buildDefaultDays() {
@@ -42,7 +67,7 @@ function buildColumns(grid, sectionHeight, dayColumnWidth) {
         const span = Math.max(1, endSection - startSection + 1);
         const top = (startSection - 1) * sectionHeight + 6;
         const height = span * sectionHeight - 12;
-        const background = colorForCell(cell);
+        const theme = themeForCell(cell);
         const weekText = cell.displayWeekText || cell.weekText || "";
         const subText = [cell.teacherName, weekText].filter(Boolean).join(" · ");
         return Object.assign({}, cell, {
@@ -51,7 +76,8 @@ function buildColumns(grid, sectionHeight, dayColumnWidth) {
           endSection,
           sections,
           previewGrid: true,
-          color: background,
+          color: theme.background,
+          textColor: theme.text,
           active: cell.selected !== false,
           badgeText: decisionBadge(cell.importDecision, cell.conflict, cell.selected),
           eventKind: cell.conflict ? "true-conflict" : "",
@@ -61,7 +87,9 @@ function buildColumns(grid, sectionHeight, dayColumnWidth) {
           cardStyle: [
             `top:${top}rpx`,
             `height:${height}rpx`,
-            `background:${background}`,
+            `background:${theme.background}`,
+            `border:1rpx solid ${theme.border}`,
+            `color:${theme.text}`,
             "left:3rpx",
             "right:3rpx",
           ].join(";") + ";",

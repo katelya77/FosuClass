@@ -203,6 +203,19 @@
                   <text class="arrangement-status {{arrangement.statusClass}}">{{arrangement.statusText}}</text>
                 </view>
                 <view class="arrangement-meta">{{arrangement.metaText}}</view>
+                <view class="arrangement-scope-reason {{arrangement.classScopeClass}}" wx:if="{{arrangement.classScopeReasonText}}">{{arrangement.classScopeReasonText}}</view>
+                <view
+                  class="arrangement-class-line {{arrangement.classNameExpanded ? 'expanded' : ''}}"
+                  wx:if="{{arrangement.classNamePreviewText}}"
+                  data-id="{{arrangement.arrangementId}}"
+                  bindtap="toggleStudentClassNameRaw"
+                >班级：{{arrangement.classNamePreviewText}}</view>
+                <view
+                  class="arrangement-class-more"
+                  wx:if="{{arrangement.classNameTruncated}}"
+                  data-id="{{arrangement.arrangementId}}"
+                  bindtap="toggleStudentClassNameRaw"
+                >{{arrangement.classNameExpanded ? '收起班级' : '查看完整班级'}}</view>
                 <view class="arrangement-conflict-tip" wx:if="{{arrangement.conflictText}}">{{arrangement.conflictText}}</view>
               </view>
               <view class="arrangement-tools">

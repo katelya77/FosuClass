@@ -169,6 +169,9 @@
 }
 
 .file-remove {
+  box-sizing: border-box;
+  min-width: 0;
+  flex-shrink: 1;
   flex: 0 0 auto;
   width: 76rpx;
   height: 44rpx;
@@ -186,6 +189,8 @@
 .btn-bind,
 .btn-cancel {
   box-sizing: border-box;
+  min-width: 0;
+  flex-shrink: 1;
   width: 100%;
   height: 78rpx;
   border-radius: 14rpx;
@@ -329,8 +334,11 @@
 }
 
 .weekday-tab {
+  box-sizing: border-box;
+  min-width: 0;
+  flex-shrink: 1;
   width: auto;
-  min-width: 84rpx;
+  flex-basis: 84rpx;
   height: 48rpx;
   padding: 0 16rpx;
   border-radius: 12rpx;
@@ -513,6 +521,9 @@
 }
 
 .method-action {
+  box-sizing: border-box;
+  min-width: 0;
+  flex-shrink: 1;
   flex: 0 0 auto;
   width: 142rpx;
   height: 58rpx;
@@ -687,6 +698,9 @@
 }
 
 .week-btn {
+  box-sizing: border-box;
+  min-width: 0;
+  flex-shrink: 1;
   width: 48rpx;
   height: 44rpx;
   padding: 0;
@@ -761,6 +775,8 @@
 }
 
 .bulk-selection-bar {
+  box-sizing: border-box;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 14rpx;
@@ -772,25 +788,34 @@
 }
 
 .bulk-action-list {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
   gap: 10rpx;
+  min-width: 0;
 }
 
 .bulk-action-btn {
-  height: 54rpx;
-  padding: 0 8rpx;
-  border-radius: 12rpx;
+  box-sizing: border-box;
+  flex: 1 1 184rpx;
+  min-width: 0;
+  max-width: 100%;
+  flex-shrink: 1;
+  height: 56rpx;
+  padding: 0 14rpx;
+  border-radius: 999rpx;
   background: #f1f5f9;
   color: #334155;
-  font-size: 20rpx;
+  font-size: 21rpx;
   font-weight: 900;
-  line-height: 54rpx;
+  line-height: 56rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .bulk-action-primary {
-  background: #142033;
-  color: #ffffff;
+  background: #e8f5ee;
+  color: #176b45;
 }
 
 .student-preview-buckets {
@@ -839,8 +864,9 @@
 }
 
 .arrangement-row {
+  box-sizing: border-box;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12rpx;
   min-width: 0;
   margin-top: 12rpx;
@@ -890,6 +916,8 @@
 
 .arrangement-status {
   flex: 0 0 auto;
+  box-sizing: border-box;
+  min-width: 0;
   max-width: 150rpx;
   overflow: hidden;
   padding: 4rpx 8rpx;
@@ -941,6 +969,65 @@
   color: #8a94a6;
 }
 
+.arrangement-scope-reason {
+  display: inline-flex;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+  margin-top: 8rpx;
+  padding: 4rpx 10rpx;
+  border-radius: 999rpx;
+  font-size: 19rpx;
+  font-weight: 900;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.arrangement-scope-reason.scope-match {
+  background: #e8f5ee;
+  color: #176b45;
+}
+
+.arrangement-scope-reason.scope-unknown {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.arrangement-scope-reason.scope-not-match {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.arrangement-class-line {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 8rpx;
+  color: #475569;
+  font-size: 20rpx;
+  font-weight: 800;
+  line-height: 1.38;
+  word-break: break-word;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.arrangement-class-line.expanded {
+  display: block;
+  overflow: visible;
+  -webkit-line-clamp: initial;
+}
+
+.arrangement-class-more {
+  display: inline-flex;
+  margin-top: 6rpx;
+  color: #2f855a;
+  font-size: 20rpx;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
 .arrangement-conflict-tip {
   overflow: hidden;
   margin-top: 6rpx;
@@ -953,6 +1040,9 @@
 }
 
 .edit-arrangement-btn {
+  box-sizing: border-box;
+  min-width: 0;
+  flex-shrink: 1;
   flex: 0 0 auto;
   width: 132rpx;
   height: 50rpx;
@@ -1372,10 +1462,13 @@
 }
 
 .student-tab {
+  box-sizing: border-box;
   display: inline-flex;
   align-items: center;
   gap: 8rpx;
-  min-width: 120rpx;
+  min-width: 0;
+  flex-shrink: 1;
+  flex-basis: 120rpx;
   height: 54rpx;
   padding: 0 16rpx;
   border-radius: 12rpx;
@@ -1474,7 +1567,10 @@
   flex: 0 0 auto;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 8rpx;
+  min-width: 118rpx;
+  max-width: 170rpx;
 }
 
 .arrangement-switch {
@@ -1492,6 +1588,8 @@
   flex: 1;
   margin-top: 0;
   min-width: 0;
+  box-sizing: border-box;
+  flex-shrink: 1;
   overflow: hidden;
   padding: 0 8rpx;
   font-size: 24rpx;
