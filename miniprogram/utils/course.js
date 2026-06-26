@@ -1,7 +1,7 @@
 const { mockCourses } = require("../data/mockCourses");
 const { importedCourses } = require("../data/importedCourses");
 const { courseTimes, courseTimesMeta } = require("../data/courseTimes");
-const { colorForCourse } = require("./color");
+const { courseColorTokenForCourse, courseSemanticColorToken } = require("./color");
 const { isCourseInWeek } = require("./week");
 const customCourseService = require("../services/customCourseService");
 const {
@@ -24,7 +24,17 @@ function isCourseActiveInCurrentWeek(course, currentWeek) {
 
 function normalizeCourse(course) {
   const normalized = toRenderableCourse(Object.assign({}, course));
-  normalized.color = normalized.color || colorForCourse(normalized.canonicalCourseName || normalized.courseName);
+  const theme = courseColorTokenForCourse(normalized.canonicalCourseName || normalized.courseName);
+  const detailText = [
+    normalized.displayTeacherName || normalized.canonicalTeacherName || normalized.teacherName || "",
+    normalized.weekText || "",
+  ].filter(Boolean).join(" / ");
+  normalized.color = theme.background;
+  normalized.borderColor = theme.border;
+  normalized.textColor = theme.text;
+  normalized.accentColor = theme.accent;
+  normalized.roomTextColor = theme.roomText;
+  normalized.subText = normalized.subText || detailText;
   normalized.startSection = Number(normalized.startSection);
   normalized.endSection = Number(normalized.endSection);
   normalized.weekday = Number(normalized.weekday);
@@ -162,15 +172,21 @@ function assignOverlapLanes(courses) {
 }
 
 function buildCardStyle(course) {
-  const semanticBackground = course.eventKind === "true-conflict"
-    ? "#b42318"
-    : (course.eventKind === "parallel-group" ? "#2f6f73" : "");
-  const background = course.active ? (semanticBackground || course.color) : "#eef2f7";
+  const semanticTheme = course.eventKind === "true-conflict"
+    ? courseSemanticColorToken("conflict")
+    : (course.eventKind === "parallel-group" || course.eventKind === "shared-session" ? courseSemanticColorToken("parallel") : null);
+  const mutedTheme = courseSemanticColorToken("muted");
+  const theme = course.active ? (semanticTheme || course) : mutedTheme;
+  const background = theme.background || theme.color || course.color;
+  const borderColor = theme.border || course.borderColor || "rgba(50, 74, 99, 0.14)";
+  const textColor = theme.text || course.textColor || "#173247";
   const zIndex = course.active ? 30 + (course.lane || 0) : 10 + (course.lane || 0);
   const base = [
     `top:${course.top}rpx`,
     `height:${course.height}rpx`,
     `background:${background}`,
+    `border:1rpx solid ${borderColor}`,
+    `color:${textColor}`,
     `z-index:${zIndex}`,
   ];
   base.push("left:4rpx");

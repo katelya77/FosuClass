@@ -22,7 +22,7 @@ Component({
 
   observers: {
     "course, layout": function (course, layout) {
-      const color = (course && course.color) || "#5d9cec";
+      const color = (course && (course.accentColor || course.borderColor || course.color)) || "#5d9cec";
       const status = (course && course.status) || "";
       const isNext = Boolean(course && course.isNext);
       const startSection = Number(course && course.startSection) || 1;

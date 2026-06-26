@@ -55,8 +55,8 @@
       <view class="course-event-subtext preview-subtext" wx:if="{{span > 1 && course.subText}}">{{course.subText}}</view>
     </block>
     <block wx:else>
-      <view class="course-event-subtext" wx:if="{{span > 1 && course.subText}}">{{course.subText}}</view>
       <view class="course-meta classroom-highlight" wx:if="{{course.displayClassroom || course.canonicalClassroom || course.classroom}}">{{course.displayClassroom || course.canonicalClassroom || course.classroom}}</view>
+      <view class="course-event-subtext" wx:if="{{span > 1 && course.subText}}">{{course.subText}}</view>
       <view class="course-meta" wx:if="{{span > 1 && !course.subText && (course.displayTeacherName || course.canonicalTeacherName || course.teacherName)}}">{{course.displayTeacherName || course.canonicalTeacherName || course.teacherName}}</view>
       <view class="course-week" wx:if="{{span > 2 && !course.subText && course.weekText}}">{{course.weekText}}</view>
     </block>

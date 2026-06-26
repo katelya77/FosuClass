@@ -48,6 +48,52 @@ function isSessionUsable(session, options = {}) {
   return expiresAt - now() > (options.refreshSkewMs == null ? REFRESH_SKEW_MS : options.refreshSkewMs);
 }
 
+function decodeBase64Url(input) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+  const normalized = String(input || "").replace(/-/g, "+").replace(/_/g, "/");
+  let buffer = 0;
+  let bits = 0;
+  let output = "";
+  for (let index = 0; index < normalized.length; index += 1) {
+    const char = normalized[index];
+    if (char === "=") break;
+    const value = chars.indexOf(char);
+    if (value < 0) continue;
+    buffer = (buffer << 6) | value;
+    bits += 6;
+    if (bits >= 8) {
+      bits -= 8;
+      output += String.fromCharCode((buffer >> bits) & 0xff);
+    }
+  }
+  return output;
+}
+
+function parseSessionPayload(session) {
+  const token = session && session.sessionToken || "";
+  const body = String(token || "").split(".")[0] || "";
+  if (!body) return null;
+  try {
+    return JSON.parse(decodeBase64Url(body));
+  } catch (error) {
+    return null;
+  }
+}
+
+function getCurrentSessionPayload() {
+  const session = readStorage();
+  if (!isSessionUsable(session, { refreshSkewMs: 0 })) return null;
+  return parseSessionPayload(session);
+}
+
+function getCurrentSessionOwnerKey() {
+  const payload = getCurrentSessionPayload() || {};
+  if (payload.openidHash) return `openid:${payload.openidHash}`;
+  if (payload.userIdHash) return `user:${payload.userIdHash}`;
+  if (payload.sessionIdHash) return `session:${payload.sessionIdHash}`;
+  return "";
+}
+
 function wxLogin() {
   return new Promise((resolve, reject) => {
     wx.login({
@@ -163,6 +209,8 @@ module.exports = {
   clearSession,
   ensureSession,
   getCachedSecurityMode,
+  getCurrentSessionOwnerKey,
+  getCurrentSessionPayload,
   isBootstrapUrl,
   isSessionAvailable,
   isTrustedApiUrl,

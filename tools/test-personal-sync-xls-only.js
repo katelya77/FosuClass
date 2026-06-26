@@ -17,6 +17,7 @@ function run() {
   const courseCardWxss = read("miniprogram/components/course-card/index.wxss");
   const aiService = read("miniprogram/services/aiAssistantService.js");
   const cryptoService = read("miniprogram/services/fosuStudentImportCrypto.js");
+  const recentImportService = read("miniprogram/services/recentStudentImportService.js");
 
   assert(!/startLoginFlow|loginAndSyncSchedule|showCaptchaModal|\/api\/fosu\/personal\/login/.test(js + wxml),
     "personal-sync page should not expose deprecated direct account/password sync flow");
@@ -50,6 +51,22 @@ function run() {
   assert(/\.student-bottom-actions \.btn-bind,[\s\S]*?\.student-bottom-actions \.btn-cancel\s*\{[\s\S]*?min-width:\s*0;/.test(wxss), "bottom buttons must allow shrinking");
   assert(courseCardWxml.includes("course.previewGrid"), "course card should support preview-only layout");
   assert(courseCardWxss.includes(".is-preview-grid .course-name"), "preview course blocks should have dedicated readable text sizing");
+  assert(wxml.includes("recentStudentImport"), "personal-sync should render recent student import card");
+  assert(wxml.includes("useRecentStudentImport"), "recent import card should support direct use");
+  assert(wxml.includes("resyncStudentImport"), "recent import card should support resync");
+  assert(js.includes("/api/schedule-import/fosu/recent"), "personal-sync should asynchronously verify recent import with backend");
+  assert(js.includes("recentStudentImportService.buildScheduleTarget"), "direct use should build a local schedule target");
+  assert(recentImportService.includes("getCurrentSessionOwnerKey"), "local recent import cache must be scoped to the current session owner");
+  assert(wxml.includes("student-tab-label"), "student import tabs should split label from count badge");
+  assert(/\.student-tab\s*\{[\s\S]*?box-sizing:\s*border-box;/.test(wxss), "student tabs must use border-box sizing");
+  assert(/\.student-tab\s*\{[\s\S]*?flex:\s*0 0 auto;/.test(wxss), "student tabs should avoid shrinking inside horizontal scroll");
+  assert(/\.student-tab\s*\{[\s\S]*?max-width:\s*246rpx;/.test(wxss), "student tabs should cap long labels");
+  assert(/\.student-tab-label\s*\{[\s\S]*?min-width:\s*0;/.test(wxss), "student tab labels must allow ellipsis");
+  assert(/\.student-tab-label\s*\{[\s\S]*?text-overflow:\s*ellipsis;/.test(wxss), "student tab labels must ellipsize");
+  assert(/\.student-tab-count\s*\{[\s\S]*?flex:\s*0 0 auto;/.test(wxss), "student tab count badges must not shrink");
+  assert(/\.student-tab-count\s*\{[\s\S]*?min-width:\s*30rpx;/.test(wxss), "student tab count badges need adaptive minimum width");
+  assert(/\.bulk-action-list\s*\{[\s\S]*?flex-wrap:\s*wrap;/.test(wxss), "bulk actions should wrap on small screens");
+  assert(/\.bulk-action-btn\s*\{[\s\S]*?min-width:\s*0;/.test(wxss), "bulk action buttons must allow shrinking");
 
   console.log("test-personal-sync-import-boundaries passed");
 }

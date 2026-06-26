@@ -11,6 +11,9 @@ const {
   takePrivateKeyChallenge,
 } = require("./fosuApaasImportSessionStore");
 const {
+  saveRecentImportForSession,
+} = require("./fosuApaasRecentImportStore");
+const {
   assertImportAttemptAllowed,
   recordImportFailure,
 } = require("./fosuApaasImportRateLimiter");
@@ -758,7 +761,7 @@ function buildConfirmedSchedule(record, mode, existingCourses = [], selectedOpti
     term: record.summary.semester || "当前学期",
     courses,
     unplacedCourses,
-    updateTime: importedAt.slice(0, 10),
+    updateTime: formatImportTime(importedAt),
     importedAt,
     sourceText: "学校课表系统",
     source: "fosu_apaas",
@@ -778,6 +781,13 @@ function buildConfirmedSchedule(record, mode, existingCourses = [], selectedOpti
       conflictCount: record.summary.conflictCount || 0,
     },
   };
+}
+
+function formatImportTime(value) {
+  const date = value ? new Date(value) : new Date();
+  if (Number.isNaN(date.getTime())) return "";
+  const pad = (num) => String(num).padStart(2, "0");
+  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
 }
 
 function confirmStudentScheduleImport(req, body = {}) {
@@ -807,6 +817,21 @@ function confirmStudentScheduleImport(req, body = {}) {
     totalCourseCount: schedule.courses.length,
     unscheduledCourseCount: schedule.unplacedCourses.length,
   });
+  let recentImport = null;
+  try {
+    recentImport = saveRecentImportForSession(req && req.fosuSession, {
+      record,
+      schedule,
+      selection,
+      mode,
+      importedCourseCount,
+    });
+  } catch (error) {
+    safeLog("fosu-apaas-recent-import-save-failed", {
+      taskId: record.taskId,
+      code: error.code || error.message,
+    });
+  }
   return {
     success: true,
     mode,
@@ -820,6 +845,7 @@ function confirmStudentScheduleImport(req, body = {}) {
     unplacedCourses: schedule.unplacedCourses,
     profile: publicProfile,
     summary: record.summary,
+    recentImport,
   };
 }
 

@@ -1,16 +1,10 @@
 const TIME_AXIS_WIDTH = 64;
 const DEFAULT_DAY_WIDTH = 120;
 const DEFAULT_SECTION_HEIGHT = 72;
-const PREVIEW_THEMES = [
-  { background: "#e8f5ee", border: "#84c7a3", text: "#174b36" },
-  { background: "#eef4ff", border: "#93b9f5", text: "#1d4f8f" },
-  { background: "#fff3e6", border: "#f2b36c", text: "#7a3f10" },
-  { background: "#f2efff", border: "#afa0ea", text: "#43327f" },
-  { background: "#eaf8fb", border: "#80c9d6", text: "#155668" },
-  { background: "#fff0f4", border: "#e99aa9", text: "#7f2437" },
-  { background: "#f3f6e8", border: "#b7c971", text: "#46591f" },
-  { background: "#f0f5f4", border: "#9bbdb6", text: "#244a43" },
-];
+const {
+  courseColorTokenForCourse,
+  courseSemanticColorToken,
+} = require("../../utils/color");
 
 function toNumberList(values) {
   return (Array.isArray(values) ? values : [])
@@ -25,26 +19,15 @@ function decisionBadge(decision, conflict, selected) {
   return "";
 }
 
-function hashText(value) {
-  const text = String(value || "");
-  let hash = 2166136261;
-  for (let index = 0; index < text.length; index += 1) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 16777619);
-  }
-  return hash >>> 0;
-}
-
 function themeForCell(cell) {
   if (cell.selected === false) {
-    return { background: "#eef2f6", border: "#cbd5e1", text: "#64748b" };
+    return courseSemanticColorToken("muted");
   }
   const key = cell.normalizedCourseName || cell.displayCourseName || cell.courseName || "";
-  const theme = PREVIEW_THEMES[hashText(key) % PREVIEW_THEMES.length];
   if (cell.conflict) {
-    return { background: "#fff1f2", border: "#f199a8", text: "#8c1d35" };
+    return courseSemanticColorToken("conflict");
   }
-  return theme;
+  return courseColorTokenForCourse(key);
 }
 
 function buildDefaultDays() {

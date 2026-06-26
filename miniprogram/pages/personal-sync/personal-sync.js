@@ -5,6 +5,7 @@ const platform = require("../../utils/platform");
 const aiAssistantService = require("../../services/aiAssistantService");
 const appConfigService = require("../../services/appConfigService");
 const personalTermOptionsService = require("../../services/personalTermOptionsService");
+const recentStudentImportService = require("../../services/recentStudentImportService");
 const { encryptCredentialPayload } = require("../../services/fosuStudentImportCrypto");
 const { getRuntimeTermConfig, getTodayTeachingInfo } = require("../../utils/week");
 
@@ -741,6 +742,8 @@ Page({
     previewDayFilter: "all",
     weekdayTabs: WEEKDAY_TABS,
     filteredCourses: [],
+    recentStudentImport: null,
+    recentStudentImportChecking: false,
   },
 
   onLoad(options = {}) {
@@ -751,6 +754,7 @@ Page({
       ? "student"
       : (requestedTab === "xls" ? "xls" : "method");
     this.setData({ activeImportMethod: requestedMethod });
+    this.loadRecentStudentImport();
     const applyTerms = (config) => {
       const built = personalTermOptionsService.buildImportTermOptions(
         config.availableTerms || [],
@@ -862,6 +866,75 @@ Page({
     if (record.archived) return "历史学期，导入后仅作为本地课表使用";
     if (!this.data.semesterPickerEnabled) return "当前仅有一个可导入学期";
     return "";
+  },
+
+  loadRecentStudentImport() {
+    const cached = recentStudentImportService.readLocalRecentImport();
+    if (cached) {
+      this.setData({ recentStudentImport: cached });
+    }
+    this.setData({ recentStudentImportChecking: true });
+    request.get("/api/schedule-import/fosu/recent", {}, {
+      showLoading: false,
+      silentError: true,
+      timeout: 8000,
+      retries: 0,
+      dedupe: false,
+      suppressWarn: true,
+    })
+      .then((res) => {
+        const recent = res && res.recentImport;
+        if (recent) {
+          const saved = recentStudentImportService.writeLocalRecentImport(recent);
+          this.setData({
+            recentStudentImport: saved || recentStudentImportService.normalizeRecentImport(recent),
+            recentStudentImportChecking: false,
+          });
+          return;
+        }
+        this.setData({
+          recentStudentImport: cached || null,
+          recentStudentImportChecking: false,
+        });
+      })
+      .catch(() => {
+        this.setData({ recentStudentImportChecking: false });
+      });
+  },
+
+  useRecentStudentImport() {
+    const record = this.data.recentStudentImport || recentStudentImportService.readLocalRecentImport();
+    const target = recentStudentImportService.buildScheduleTarget(record);
+    if (!target || !Array.isArray(target.courses) || !target.courses.length) {
+      wx.showToast({ title: "最近同步记录不可用，请重新同步", icon: "none" });
+      return;
+    }
+    if (setCurrentScheduleTarget(target)) {
+      aiAssistantService.rememberLatestScheduleImport(target);
+      wx.showToast({ title: "已切换到个人课表", icon: "success" });
+      setTimeout(() => {
+        wx.switchTab({ url: "/pages/index/index" });
+      }, 500);
+      return;
+    }
+    wx.showToast({ title: "本地缓存保存失败", icon: "none" });
+  },
+
+  resyncStudentImport() {
+    this.studentPreviewArrangements = [];
+    this.studentSelectedArrangementMap = {};
+    this.studentEditedArrangementMap = {};
+    this.setData({
+      activeImportMethod: "student",
+      studentImportStage: "form",
+      studentPreviewResult: null,
+      studentPreviewToken: "",
+      studentPreviewGrid: null,
+      studentAdvancedMode: false,
+      studentSelectionMode: false,
+      studentEditingArrangement: null,
+      studentForm: Object.assign({}, this.data.studentForm, { password: "" }),
+    });
   },
 
   onStudentIdInput(event) {
@@ -1661,10 +1734,16 @@ Page({
           throw Object.assign(new Error("IMPORT_RESULT_INVALID"), { code: "IMPORT_RESULT_INVALID" });
         }
         const target = Object.assign({}, schedule, {
-          updateTime: schedule.updateTime || new Date().toISOString().slice(0, 10),
+          updateTime: schedule.updateTime || recentStudentImportService.formatImportTime(new Date().toISOString()),
           importedAt: schedule.importedAt || new Date().toISOString(),
         });
         if (setCurrentScheduleTarget(target)) {
+          if (res && res.recentImport) {
+            const recent = recentStudentImportService.writeLocalRecentImport(res.recentImport);
+            if (recent) {
+              this.setData({ recentStudentImport: recent });
+            }
+          }
           aiAssistantService.rememberLatestScheduleImport(target);
           this.setData({
             studentImportConfirming: false,

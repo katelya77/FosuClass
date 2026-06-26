@@ -586,6 +586,105 @@
   transform-origin: left top;
 }
 
+.recent-import-card {
+  display: flex;
+  align-items: stretch;
+  gap: 18rpx;
+  min-width: 0;
+  border-color: #dbeafe;
+  background: #f8fbff;
+}
+
+.recent-import-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.recent-import-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  min-width: 0;
+}
+
+.recent-import-title {
+  flex: 1;
+  overflow: hidden;
+  color: #142033;
+  font-size: 27rpx;
+  font-weight: 900;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-import-status {
+  flex: 0 0 auto;
+  height: 32rpx;
+  padding: 0 10rpx;
+  border-radius: 999rpx;
+  background: #e0f2fe;
+  color: #0369a1;
+  font-size: 18rpx;
+  font-weight: 900;
+  line-height: 32rpx;
+}
+
+.recent-import-meta {
+  overflow: hidden;
+  margin-top: 8rpx;
+  color: #596579;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-import-warning {
+  margin-top: 10rpx;
+  padding: 10rpx 12rpx;
+  border-radius: 10rpx;
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 20rpx;
+  font-weight: 800;
+  line-height: 1.35;
+}
+
+.recent-import-actions {
+  box-sizing: border-box;
+  flex: 0 0 150rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  min-width: 0;
+}
+
+.recent-import-btn {
+  box-sizing: border-box;
+  width: 100%;
+  min-width: 0;
+  height: 54rpx;
+  padding: 0 8rpx;
+  border: 1rpx solid #dbe3ee;
+  border-radius: 12rpx;
+  background: #ffffff;
+  color: #334155;
+  font-size: 21rpx;
+  font-weight: 900;
+  line-height: 54rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recent-import-btn.primary {
+  border-color: #2f855a;
+  background: #2f855a;
+  color: #ffffff;
+}
+
 .loading-card {
   margin-top: 12rpx;
 }
@@ -788,10 +887,12 @@
 }
 
 .bulk-action-list {
+  box-sizing: border-box;
   display: flex;
   flex-wrap: wrap;
   gap: 10rpx;
   min-width: 0;
+  max-width: 100%;
 }
 
 .bulk-action-btn {
@@ -1465,18 +1566,28 @@
   box-sizing: border-box;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8rpx;
-  min-width: 0;
-  flex-shrink: 1;
-  flex-basis: 120rpx;
+  min-width: 118rpx;
+  max-width: 246rpx;
+  flex: 0 0 auto;
   height: 54rpx;
-  padding: 0 16rpx;
+  padding: 0 12rpx;
   border-radius: 12rpx;
   background: #eef2f6;
   color: #596579;
   font-size: 22rpx;
   font-weight: 900;
   line-height: 54rpx;
+  overflow: hidden;
+}
+
+.student-tab-label {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .student-tab.active {
@@ -1485,9 +1596,11 @@
 }
 
 .student-tab-count {
-  min-width: 28rpx;
+  box-sizing: border-box;
+  flex: 0 0 auto;
+  min-width: 30rpx;
   height: 28rpx;
-  padding: 0 6rpx;
+  padding: 0 8rpx;
   border-radius: 999rpx;
   background: rgba(255, 255, 255, 0.74);
   color: #142033;
