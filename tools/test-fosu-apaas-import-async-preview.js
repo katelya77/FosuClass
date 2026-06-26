@@ -136,6 +136,9 @@ async function run() {
     assert.strictEqual(done.timing.fallbackReason, "APAAS_SESSION_UNVERIFIED");
     assert.strictEqual(done.timing.rowsCount, 1);
     assert.strictEqual(done.timing.bytesApprox, 128);
+    assert.strictEqual(done.profile.studentId, "202512340303", "preview UI payload should keep full student id");
+    assert.strictEqual(done.profile.studentIdMasked, "2025****0303", "preview UI payload should also include masked student id");
+    assert(Array.isArray(done.courseGroups), "preview payload should expose courseGroups for grouped UI");
     assert.strictEqual(capturedPassword, password);
     assert(!JSON.stringify(done).includes(password), "status payload must not expose password");
 

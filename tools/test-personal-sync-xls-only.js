@@ -39,11 +39,30 @@ function run() {
   assert(!wxss.includes("captcha-"), "captcha styles should be removed from import page");
   assert(!cryptoService.includes("root.window ="), "SM2 fallback must not assign globalThis.window in WeChat runtimes");
   assert(wxml.includes("displayStudentId"), "student import preview should bind the full display student id");
+  assert(js.includes("function resolveDisplayStudentId(metadata = {}, profile = {})"), "student import should centralize display student id priority");
+  assert(js.includes("return metadata.studentId || profile.studentId || metadata.studentIdMasked || profile.studentIdMasked || \"\";"),
+    "student import UI must prefer full studentId before masked value");
   assert(wxml.includes("检测到周末课程，可在调整课程中查看"), "student preview should show a weekend-course hint");
   assert(js.includes("STUDENT_WEEKDAY_LABELS.slice(0, 5)"), "student preview grid should default to weekdays only");
   assert(previewGridJs.includes("Array.from({ length: 5 }"), "preview grid fallback days should be Monday to Friday");
   assert(js.includes("formatStudentWeekDisplay"), "student import UI should format week text semantically");
   assert(js.includes("`${weekdayText} · ${sectionText}`"), "student import arrangements should display semantic weekday/section text");
+  assert(js.includes("function needsTimeCompletion(arrangement)"), "student import should use a single time-completion predicate");
+  assert(js.includes("canEdit: needsCompletion"), "补时间 button should only depend on missing weekday/sections/weeks");
+  assert(wxml.includes("wx:if=\"{{!arrangement.needsTimeCompletion}}\""), "time-complete pending arrangements should show selection controls, not 补时间");
+  assert(wxml.includes("data-bucket=\"{{group.bucketKey}}\""), "group toggle events must carry the active bucket");
+  assert(js.includes("function normalizeStudentExpandedGroups"), "expanded group state must be normalized by bucket");
+  assert(js.includes("expanded[bucketKey] = bucketMap"), "expanded group state should update tab + courseGroupId only");
+  assert(js.includes("const bucketMap = Object.assign({}, expanded[bucketKey] || {});"),
+    "student group toggle must update the bucket-local map");
+  assert(js.includes("function buildStudentCourseGroupId"), "student preview should derive stable courseGroupId for fallback grouping");
+  assert(js.includes("isArrangementScopedGroupId"), "student preview should reject arrangement-scoped group ids");
+  assert(js.includes("normalizeStudentPreviewBuckets") && js.includes("previewOrGroups.courseGroups"),
+    "student preview should accept backend courseGroups when buckets are unavailable");
+  assert(js.includes("resolveClassNameText"), "all student import buckets should normalize class display text");
+  assert(js.includes("classScope.raw"), "student import class display should fall back to classScope.raw");
+  assert(wxml.includes("arrangement-class-line"), "arrangements should render classNameRaw/classNames in every active bucket");
+  assert(!/studentActiveBucketGroups[^]*wx:key=\"index\"/.test(wxml), "student group rendering must not key by array index");
   assert(/\.student-bottom-actions\s*\{[\s\S]*?width:\s*100%;/.test(wxss), "bottom actions must be full width");
   assert(/\.student-bottom-actions\s*\{[\s\S]*?display:\s*flex;/.test(wxss), "bottom actions must use flex layout");
   assert(/\.student-bottom-actions\s*\{[\s\S]*?gap:\s*16rpx;/.test(wxss), "bottom actions must keep a 16rpx gap");
@@ -62,6 +81,8 @@ function run() {
   assert(js.includes("recentStudentImportService.buildScheduleTarget"), "direct use should build a local schedule target");
   assert(recentImportService.includes("getCurrentSessionOwnerKey"), "local recent import cache must be scoped to the current session owner");
   assert(recentImportService.includes("buildCachedPreview"), "recent import service should expose cached preview rebuilding");
+  assert(recentImportService.includes("function parseNumberRangeText"), "cached preview should rebuild sections/weeks from text");
+  assert(recentImportService.includes("function resolveCourseClassNameRaw"), "cached preview should preserve class display text in every bucket");
   assert(/\.recent-import-card\s*\{[\s\S]*?flex-direction:\s*column;/.test(wxss), "recent import card should stack content to avoid horizontal overflow");
   assert(/\.recent-import-card\s*\{[\s\S]*?overflow:\s*hidden;/.test(wxss), "recent import card should clip internal overflow");
   assert(/\.recent-import-actions\s*\{[\s\S]*?display:\s*grid;/.test(wxss), "recent import actions should use a responsive grid");

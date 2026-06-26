@@ -1021,6 +1021,11 @@
   background: #2f855a;
 }
 
+.selection-dot.disabled {
+  border-style: dashed;
+  background: #f8fafc;
+}
+
 .arrangement-time {
   flex: 1;
   overflow: hidden;

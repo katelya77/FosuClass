@@ -76,17 +76,69 @@ function sanitizeForRecentImport(value, depth = 0) {
   return value;
 }
 
+function numberList(values, max) {
+  return (Array.isArray(values) ? values : [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0 && (!max || value <= max));
+}
+
+function resolveCourseClassNameRaw(course = {}) {
+  const classScope = course.classScope && typeof course.classScope === "object" ? course.classScope : {};
+  const raw = toText(course.classNameRaw ||
+    course.className ||
+    course.classNameText ||
+    course.teachingClass ||
+    course.rawClassText ||
+    classScope.raw ||
+    "");
+  if (raw) return raw;
+  const classNames = course.classNames ||
+    course.audienceClasses ||
+    course.audienceClassNames ||
+    classScope.classNames ||
+    classScope.audienceClasses ||
+    classScope.segments;
+  if (!Array.isArray(classNames)) return toText(classNames);
+  return classNames
+    .map((item) => item && typeof item === "object" ? (item.className || item.raw || item.name || "") : item)
+    .map(toText)
+    .filter(Boolean)
+    .join("、");
+}
+
 function briefCourse(course = {}) {
+  const classNameRaw = resolveCourseClassNameRaw(course);
   return sanitizeForRecentImport({
     id: course.id || course.arrangementId || "",
+    arrangementId: course.arrangementId || course.id || "",
+    courseGroupId: course.courseGroupId || "",
     courseName: course.displayCourseName || course.courseName || "",
+    displayCourseName: course.displayCourseName || course.courseName || "",
+    normalizedCourseName: course.normalizedCourseName || "",
     teacherName: course.teacherName || course.displayTeacherName || "",
     roomName: course.roomName || course.classroom || course.displayClassroom || "",
     weekday: course.weekday || course.weekDay || null,
+    weekDay: course.weekDay || course.weekday || null,
+    sections: numberList(course.sections, 14),
+    startSection: course.startSection || null,
+    endSection: course.endSection || null,
     sectionText: course.sectionText || "",
+    weeks: numberList(course.weeks, 60),
     weekText: course.weekText || "",
+    className: classNameRaw || course.className || "",
+    classNameRaw,
+    classNames: Array.isArray(course.classNames) ? course.classNames : [],
+    audienceClasses: Array.isArray(course.audienceClasses) ? course.audienceClasses : [],
+    classScope: course.classScope || null,
+    classScopeStatus: course.classScopeStatus || "",
+    classScopeReason: course.classScopeReason || "",
+    matchStatus: course.matchStatus || "",
     reason: course.reason || course.note || "",
     importDecision: course.importDecision || "",
+    category: course.category || "",
+    hasCompleteTime: Boolean(course.hasCompleteTime),
+    selectedByDefault: Boolean(course.selectedByDefault),
+    sourceHash: course.sourceHash || "",
   });
 }
 
@@ -149,6 +201,7 @@ function buildEditablePreview(record = {}, metadata = {}, selection = {}) {
     previewGrid: record.previewGrid || null,
     buckets: record.buckets || record.groups || {},
     groups: record.groups || record.buckets || {},
+    courseGroups: Array.isArray(record.courseGroups) ? record.courseGroups.slice(0, 300) : [],
     uiHints: record.uiHints || {},
     allArrangements: Array.isArray(record.allArrangements) ? record.allArrangements.slice(0, 600) : [],
     defaultSelectedArrangementIds: Array.isArray(record.defaultSelectedArrangementIds)

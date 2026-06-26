@@ -51,8 +51,8 @@ const STUDENT_GROUP_TITLES = {
 };
 const STUDENT_BUCKET_HELP = {
   recommended: "系统已按班级、时间和本地课表匹配整理好，默认会导入。",
-  pending: "这些课程可能属于你，但信息不够确定，需要你手动选择。",
-  unplaced: "这些课程缺少固定周次、星期或节次，不会直接放进课表格。",
+  pending: "信息需确认，已具备上课时间。",
+  unplaced: "缺少周次、星期或节次，暂不能放入课表。",
   suspected: "这些课程更像其他班级安排，默认不会导入。",
 };
 const STUDENT_DECISION_STATUS = {
@@ -298,15 +298,22 @@ function classScopeReasonClass(arrangement) {
 function applyEditedArrangement(arrangement, editedMap = {}) {
   const id = arrangement && arrangement.arrangementId;
   const edited = id && editedMap[id] || null;
-  if (!edited) return Object.assign({}, arrangement);
+  if (!edited) return Object.assign({}, arrangement, {
+    classNameRaw: resolveClassNameText(arrangement),
+  });
   const sections = toNumberList(edited.sections && edited.sections.length
     ? edited.sections
     : parseStudentNumberRange(edited.sectionText, 14), 14);
   const weeks = toNumberList(edited.weeks && edited.weeks.length
     ? edited.weeks
     : parseStudentNumberRange(edited.weekText, 60), 60);
+  const weekday = Number(edited.weekday || arrangement.weekday || 0) || 0;
+  const hasCompleteTime = Boolean(weekday && sections.length && weeks.length);
+  const importDecision = hasCompleteTime && arrangement.importDecision === "unscheduled"
+    ? "needs_confirm"
+    : arrangement.importDecision;
   return Object.assign({}, arrangement, edited, {
-    weekday: Number(edited.weekday || arrangement.weekday || 0) || 0,
+    weekday,
     sections,
     startSection: sections[0] || null,
     endSection: sections[sections.length - 1] || null,
@@ -314,22 +321,48 @@ function applyEditedArrangement(arrangement, editedMap = {}) {
     weeks,
     weekText: formatStudentWeekText(weeks) || edited.weekText || arrangement.weekText || "",
     roomName: edited.roomName || arrangement.roomName || "",
-    hasCompleteTime: Boolean((Number(edited.weekday || arrangement.weekday || 0) || 0) && sections.length && weeks.length),
+    classNameRaw: resolveClassNameText(arrangement),
+    hasCompleteTime,
+    importDecision,
+    reason: importDecision === "needs_confirm" && arrangement.importDecision === "unscheduled"
+      ? "已补全时间，待确认后导入"
+      : arrangement.reason,
     edited: true,
   });
 }
 
 function normalizeStudentPreviewBuckets(previewOrGroups) {
-  const source = previewOrGroups && (previewOrGroups.buckets || previewOrGroups.groups)
+  const hasBucketSource = previewOrGroups && (previewOrGroups.buckets || previewOrGroups.groups);
+  const source = hasBucketSource
     ? (previewOrGroups.buckets || previewOrGroups.groups)
     : (previewOrGroups || {});
-  return STUDENT_BUCKET_KEYS.reduce((result, bucketKey) => {
+  if (!hasBucketSource && Array.isArray(previewOrGroups && previewOrGroups.courseGroups)) {
+    return Object.assign(createEmptyStudentBuckets(), {
+      recommended: previewOrGroups.courseGroups,
+    });
+  }
+  if (!hasBucketSource && Array.isArray(previewOrGroups && previewOrGroups.allArrangements)) {
+    return Object.assign(createEmptyStudentBuckets(), {
+      recommended: [{
+        displayCourseName: "",
+        arrangements: previewOrGroups.allArrangements,
+      }],
+    });
+  }
+  const normalized = STUDENT_BUCKET_KEYS.reduce((result, bucketKey) => {
     const legacyKey = STUDENT_BUCKET_LEGACY_KEYS[bucketKey];
     result[bucketKey] = Array.isArray(source[bucketKey])
       ? source[bucketKey]
       : (Array.isArray(source[legacyKey]) ? source[legacyKey] : []);
     return result;
   }, {});
+  const totalGroups = STUDENT_BUCKET_KEYS.reduce((sum, bucketKey) => sum + normalized[bucketKey].length, 0);
+  if (!totalGroups && Array.isArray(previewOrGroups && previewOrGroups.courseGroups) && previewOrGroups.courseGroups.length) {
+    return Object.assign(createEmptyStudentBuckets(), {
+      recommended: previewOrGroups.courseGroups,
+    });
+  }
+  return normalized;
 }
 
 function flattenStudentPreviewArrangements(preview) {
@@ -359,7 +392,188 @@ function rangesOverlap(left, right) {
 }
 
 function normalizePreviewCourseName(value) {
-  return String(value || "").trim().replace(/\s+/g, "").toLowerCase();
+  return String(value || "")
+    .trim()
+    .replace(/\u3000/g, " ")
+    .replace(/[（]/g, "(")
+    .replace(/[）]/g, ")")
+    .replace(/[【［]/g, "[")
+    .replace(/[】］]/g, "]")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+function stableStudentHash(value) {
+  const text = String(value || "");
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function isArrangementScopedGroupId(groupId, arrangement) {
+  const value = String(groupId || "");
+  if (!value) return true;
+  if (arrangement && value === String(arrangement.arrangementId || "")) return true;
+  return /^arr[_-]/i.test(value) || /^recent-/i.test(value);
+}
+
+function resolveArrangementCourseName(arrangement) {
+  return arrangement && (
+    arrangement.normalizedCourseName ||
+    arrangement.displayCourseName ||
+    arrangement.courseName ||
+    arrangement.groupTitle ||
+    ""
+  ) || "";
+}
+
+function buildStudentCourseGroupId(bucketKey, group, arrangement) {
+  const sourceId = group && group.courseGroupId || arrangement && arrangement.courseGroupId || "";
+  if (sourceId && !isArrangementScopedGroupId(sourceId, arrangement)) {
+    return String(sourceId);
+  }
+  const normalizedName = normalizePreviewCourseName(resolveArrangementCourseName(arrangement));
+  const category = String(arrangement && arrangement.category || group && group.category || "");
+  return `group_${stableStudentHash([bucketKey, normalizedName, category].join("|"))}`;
+}
+
+function needsTimeCompletion(arrangement) {
+  return !(
+    Number(arrangement && arrangement.weekday || 0) ||
+    Number(arrangement && arrangement.weekDay || 0)
+  ) || !toNumberList(arrangement && arrangement.sections, 14).length ||
+    !toNumberList(arrangement && arrangement.weeks, 60).length;
+}
+
+function resolveClassNameText(arrangement) {
+  const classScope = arrangement && arrangement.classScope && typeof arrangement.classScope === "object"
+    ? arrangement.classScope
+    : {};
+  const raw = arrangement && (
+    arrangement.classNameRaw ||
+    arrangement.className ||
+    arrangement.classNameText ||
+    arrangement.teachingClass ||
+    arrangement.rawClassText ||
+    classScope.raw ||
+    ""
+  );
+  if (raw) return raw;
+  const scopedClassNames = arrangement && (
+    arrangement.audienceClassNames ||
+    classScope.classNames ||
+    classScope.audienceClasses ||
+    classScope.segments
+  );
+  if (Array.isArray(scopedClassNames) && scopedClassNames.length) {
+    return scopedClassNames
+      .map((item) => item && typeof item === "object" ? (item.className || item.raw || item.name || "") : item)
+      .filter(Boolean)
+      .join("、");
+  }
+  const classNames = arrangement && (arrangement.classNames || arrangement.audienceClasses);
+  return Array.isArray(classNames) ? classNames.filter(Boolean).join("、") : String(classNames || "");
+}
+
+function effectiveStudentBucketKey(sourceBucketKey, arrangement) {
+  if (needsTimeCompletion(arrangement)) return "unplaced";
+  const decision = String(arrangement && arrangement.importDecision || "");
+  if (decision === "auto_include") return "recommended";
+  if (decision === "suspected_not_mine") return "suspected";
+  if (decision === "unscheduled") return "pending";
+  return STUDENT_BUCKET_KEYS.indexOf(sourceBucketKey) >= 0 && sourceBucketKey !== "unplaced"
+    ? sourceBucketKey
+    : "pending";
+}
+
+function createEmptyStudentBuckets() {
+  return STUDENT_BUCKET_KEYS.reduce((result, bucketKey) => {
+    result[bucketKey] = [];
+    return result;
+  }, {});
+}
+
+function createEmptyStudentExpandedGroups() {
+  return STUDENT_BUCKET_KEYS.reduce((result, bucketKey) => {
+    result[bucketKey] = {};
+    return result;
+  }, {});
+}
+
+function normalizeStudentExpandedGroups(value = {}) {
+  const result = createEmptyStudentExpandedGroups();
+  STUDENT_BUCKET_KEYS.forEach((bucketKey) => {
+    if (value[bucketKey] && typeof value[bucketKey] === "object") {
+      result[bucketKey] = Object.assign({}, value[bucketKey]);
+    }
+  });
+  return result;
+}
+
+function createStudentBucketAccumulator() {
+  return STUDENT_BUCKET_KEYS.reduce((result, bucketKey) => {
+    result[bucketKey] = new Map();
+    return result;
+  }, {});
+}
+
+function pushStudentArrangementGroup(accumulator, bucketKey, sourceGroup, arrangement) {
+  if (!arrangement) return;
+  const normalizedName = normalizePreviewCourseName(resolveArrangementCourseName(arrangement));
+  const groupKey = normalizedName || String(sourceGroup && sourceGroup.displayCourseName || sourceGroup && sourceGroup.courseName || "course");
+  const courseGroupId = buildStudentCourseGroupId(bucketKey, sourceGroup, arrangement);
+  const map = accumulator[bucketKey];
+  if (!map.has(groupKey)) {
+    map.set(groupKey, {
+      courseGroupId,
+      normalizedCourseName: arrangement.normalizedCourseName || normalizedName,
+      displayCourseName: sourceGroup && sourceGroup.displayCourseName || arrangement.displayCourseName || arrangement.courseName || "",
+      courseName: sourceGroup && sourceGroup.courseName || arrangement.courseName || arrangement.displayCourseName || "",
+      category: sourceGroup && sourceGroup.category || arrangement.category || "",
+      confidence: sourceGroup && sourceGroup.confidence || arrangement.confidence || "",
+      importDecision: arrangement.importDecision || sourceGroup && sourceGroup.importDecision || "",
+      reason: sourceGroup && sourceGroup.reason || arrangement.groupReason || arrangement.reason || "",
+      arrangements: [],
+    });
+  }
+  const target = map.get(groupKey);
+  const arrangementCourseGroupId = isArrangementScopedGroupId(arrangement.courseGroupId, arrangement)
+    ? courseGroupId
+    : (arrangement.courseGroupId || courseGroupId);
+  target.arrangements.push(Object.assign({}, arrangement, {
+    bucketKey,
+    courseGroupId: arrangementCourseGroupId,
+    classNameRaw: resolveClassNameText(arrangement),
+  }));
+}
+
+function sortStudentArrangements(arrangements) {
+  return (arrangements || []).slice().sort((left, right) => {
+    if ((left.weekday || 99) !== (right.weekday || 99)) return (left.weekday || 99) - (right.weekday || 99);
+    if ((left.startSection || 99) !== (right.startSection || 99)) return (left.startSection || 99) - (right.startSection || 99);
+    return String(left.weekText || "").localeCompare(String(right.weekText || ""));
+  });
+}
+
+function finalizeStudentBucketGroups(accumulator, bucketKey, expandedBucket = {}) {
+  return Array.from((accumulator[bucketKey] || new Map()).values()).map((group) => {
+    const arrangements = sortStudentArrangements(group.arrangements);
+    const selectedCount = arrangements.filter((item) => item.selected).length;
+    const viewKey = group.courseGroupId;
+    return Object.assign({}, group, {
+      bucketKey,
+      viewKey,
+      arrangements,
+      arrangementCount: arrangements.length,
+      selectedCount,
+      countText: `${selectedCount}/${arrangements.length} 已选`,
+      expanded: Boolean(expandedBucket && expandedBucket[viewKey]),
+    });
+  }).sort((left, right) => String(left.displayCourseName || left.courseName || "")
+    .localeCompare(String(right.displayCourseName || right.courseName || ""), "zh-Hans-CN"));
 }
 
 function isSamePreviewCourse(left, right) {
@@ -391,10 +605,10 @@ function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
   const targetWeek = clampPreviewWeek(week);
   const prepared = (arrangements || [])
     .map((arrangement) => applyEditedArrangement(arrangement, editedMap))
-    .filter((arrangement) => arrangement && arrangement.hasCompleteTime);
+    .filter((arrangement) => arrangement && !needsTimeCompletion(arrangement));
   const hasWeekendCourses = prepared.some((arrangement) => Number(arrangement.weekday) === 6 || Number(arrangement.weekday) === 7);
   const cells = prepared
-    .filter((arrangement) => arrangement && arrangement.hasCompleteTime && arrangementActiveInWeek(arrangement, targetWeek))
+    .filter((arrangement) => arrangement && !needsTimeCompletion(arrangement) && arrangementActiveInWeek(arrangement, targetWeek))
     .filter((arrangement) => Number(arrangement.weekday) >= 1 && Number(arrangement.weekday) <= 5)
     .map((arrangement) => {
       const selected = selectedMap && Object.prototype.hasOwnProperty.call(selectedMap, arrangement.arrangementId)
@@ -449,8 +663,9 @@ function decorateStudentArrangement(arrangement, selectedMap, editedMap, expande
   const weekdayText = merged.weekday ? STUDENT_WEEKDAY_LABELS[merged.weekday - 1] : "";
   const sectionText = merged.sectionText || formatStudentSectionText(merged.sections);
   const displayWeekText = formatStudentWeekDisplay(merged.weeks, merged.weekText);
-  const classNameInfo = compactStudentClassNameRaw(merged.classNameRaw || "");
+  const classNameInfo = compactStudentClassNameRaw(resolveClassNameText(merged));
   const classNameExpanded = Boolean(expandedClassNames && expandedClassNames[id]);
+  const needsCompletion = needsTimeCompletion(merged);
   return Object.assign({}, merged, {
     selected,
     edited: Boolean(editedMap && editedMap[id]),
@@ -469,29 +684,33 @@ function decorateStudentArrangement(arrangement, selectedMap, editedMap, expande
     classScopeClass: classScopeReasonClass(merged),
     conflictText: merged.conflict ? "存在时间重叠，建议检查" : "",
     reasonText: merged.reason || merged.groupReason || "请确认后再导入",
-    canEdit: !merged.hasCompleteTime || merged.importDecision === "unscheduled",
+    needsTimeCompletion: needsCompletion,
+    canEdit: needsCompletion,
   });
 }
 
 function decorateStudentGroups(groups, selectedMap, editedMap, expandedGroups = {}, expandedClassNames = {}) {
   const buckets = normalizeStudentPreviewBuckets(groups);
-  return STUDENT_BUCKET_KEYS.map((bucketKey) => {
-    const groupList = (buckets[bucketKey] || []).map((group) => {
-      const arrangements = (group.arrangements || []).map((arrangement) =>
-        decorateStudentArrangement(Object.assign({}, arrangement, { bucketKey, groupReason: group.reason || "" }), selectedMap, editedMap, expandedClassNames)
-      );
-      const selectedCount = arrangements.filter((item) => item.selected).length;
-      const viewKey = group.courseGroupId || `${bucketKey}-${group.displayCourseName || group.courseName || arrangements[0] && arrangements[0].arrangementId || "group"}`;
-      return Object.assign({}, group, {
-        bucketKey,
-        viewKey,
-        arrangements,
-        arrangementCount: arrangements.length,
-        selectedCount,
-        countText: selectedCount ? `${selectedCount}/${arrangements.length} 已选` : `${arrangements.length} 项`,
-        expanded: Boolean(expandedGroups[viewKey]),
+  const accumulator = createStudentBucketAccumulator();
+  STUDENT_BUCKET_KEYS.forEach((sourceBucketKey) => {
+    (buckets[sourceBucketKey] || []).forEach((group) => {
+      const rawArrangements = Array.isArray(group && group.arrangements)
+        ? group.arrangements
+        : (group && group.arrangementId ? [group] : []);
+      rawArrangements.forEach((arrangement) => {
+        const decorated = decorateStudentArrangement(Object.assign({}, arrangement, {
+          sourceBucketKey,
+          bucketKey: sourceBucketKey,
+          groupTitle: group && (group.displayCourseName || group.courseName) || arrangement.displayCourseName || arrangement.courseName || "",
+          groupReason: group && group.reason || "",
+        }), selectedMap, editedMap, expandedClassNames);
+        const bucketKey = effectiveStudentBucketKey(sourceBucketKey, decorated);
+        pushStudentArrangementGroup(accumulator, bucketKey, group, decorated);
       });
     });
+  });
+  return STUDENT_BUCKET_KEYS.map((bucketKey) => {
+    const groupList = finalizeStudentBucketGroups(accumulator, bucketKey, expandedGroups[bucketKey] || {});
     const arrangementCount = groupList.reduce((sum, group) => sum + group.arrangementCount, 0);
     const selectedCount = groupList.reduce((sum, group) => sum + group.selectedCount, 0);
     return {
@@ -501,7 +720,7 @@ function decorateStudentGroups(groups, selectedMap, editedMap, expandedGroups = 
       groups: groupList,
       arrangementCount,
       selectedCount,
-      summaryText: selectedCount ? `${selectedCount}/${arrangementCount} 已选` : `${arrangementCount} 项`,
+      summaryText: `${selectedCount}/${arrangementCount} 已选`,
     };
   });
 }
@@ -534,6 +753,10 @@ function sanitizeApaasMetadata(result) {
     unscheduledCourseCount: summary.unscheduledCourseCount || 0,
     conflictCount: summary.conflictCount || 0,
   };
+}
+
+function resolveDisplayStudentId(metadata = {}, profile = {}) {
+  return metadata.studentId || profile.studentId || metadata.studentIdMasked || profile.studentIdMasked || "";
 }
 
 function getExistingPersonalCoursesForStudentImport() {
@@ -706,7 +929,7 @@ Page({
     studentActiveBucketTitle: STUDENT_GROUP_TITLES.recommended,
     studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
     studentActiveBucketGroups: [],
-    studentExpandedGroups: {},
+    studentExpandedGroups: createEmptyStudentExpandedGroups(),
     studentExpandedClassNames: {},
     studentExpandedSections: {
       autoInclude: true,
@@ -811,7 +1034,7 @@ Page({
       studentActiveBucketTitle: STUDENT_GROUP_TITLES.recommended,
       studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
       studentActiveBucketGroups: [],
-      studentExpandedGroups: {},
+      studentExpandedGroups: createEmptyStudentExpandedGroups(),
       studentExpandedClassNames: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
@@ -841,7 +1064,7 @@ Page({
       studentActiveBucketTitle: STUDENT_GROUP_TITLES.recommended,
       studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
       studentActiveBucketGroups: [],
-      studentExpandedGroups: {},
+      studentExpandedGroups: createEmptyStudentExpandedGroups(),
       studentExpandedClassNames: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
@@ -936,7 +1159,7 @@ Page({
     const previewResult = Object.assign({}, preview, {
       displayInfo,
       metadata,
-      displayStudentId: metadata.studentId || metadata.studentIdMasked,
+      displayStudentId: resolveDisplayStudentId(metadata, preview.profile || {}),
       maskedStudentId: metadata.studentIdMasked,
     });
     this.studentPreviewArrangements = [];
@@ -1093,7 +1316,7 @@ Page({
       studentActiveBucketTitle: STUDENT_GROUP_TITLES.recommended,
       studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
       studentActiveBucketGroups: [],
-      studentExpandedGroups: {},
+      studentExpandedGroups: createEmptyStudentExpandedGroups(),
       studentExpandedClassNames: {},
       studentSelectionMode: false,
       studentSelectedCount: 0,
@@ -1140,7 +1363,7 @@ Page({
       studentAdvancedMode: Boolean(options.openAdvanced),
       studentSelectionMode: Boolean(options.openAdvanced),
       studentActiveBucket: "recommended",
-      studentExpandedGroups: {},
+      studentExpandedGroups: createEmptyStudentExpandedGroups(),
       studentExpandedClassNames: {},
     });
     const week = clampPreviewWeek(
@@ -1159,7 +1382,7 @@ Page({
     const editedMap = this.studentEditedArrangementMap || {};
     const targetWeek = clampPreviewWeek(week || this.data.studentPreviewWeek);
     const selectedCount = arrangements.filter((arrangement) => selectedMap[arrangement.arrangementId]).length;
-    const expandedGroups = this.data.studentExpandedGroups || {};
+    const expandedGroups = normalizeStudentExpandedGroups(this.data.studentExpandedGroups || {});
     const expandedClassNames = this.data.studentExpandedClassNames || {};
     const buckets = decorateStudentGroups(result, selectedMap, editedMap, expandedGroups, expandedClassNames);
     const activeBucket = STUDENT_BUCKET_KEYS.indexOf(this.data.studentActiveBucket) >= 0
@@ -1219,7 +1442,7 @@ Page({
     if (!arrangement || !arrangement.arrangementId) return false;
     const editedMap = this.studentEditedArrangementMap || {};
     const merged = applyEditedArrangement(arrangement, editedMap);
-    return Boolean(merged.hasCompleteTime || editedMap[arrangement.arrangementId]);
+    return Boolean(!needsTimeCompletion(merged) || editedMap[arrangement.arrangementId]);
   },
 
   getActiveStudentBucketArrangementIds() {
@@ -1299,8 +1522,12 @@ Page({
   toggleStudentGroup(event) {
     const key = event.currentTarget.dataset.key;
     if (!key) return;
-    const expanded = Object.assign({}, this.data.studentExpandedGroups || {});
-    expanded[key] = !expanded[key];
+    const bucketKey = event.currentTarget.dataset.bucket || this.data.studentActiveBucket || "recommended";
+    if (STUDENT_BUCKET_KEYS.indexOf(bucketKey) < 0) return;
+    const expanded = normalizeStudentExpandedGroups(this.data.studentExpandedGroups || {});
+    const bucketMap = Object.assign({}, expanded[bucketKey] || {});
+    bucketMap[key] = !bucketMap[key];
+    expanded[bucketKey] = bucketMap;
     this.setData({ studentExpandedGroups: expanded }, () => {
       this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
     });
@@ -1325,7 +1552,7 @@ Page({
     if (!arrangement) return false;
     const edited = this.studentEditedArrangementMap && this.studentEditedArrangementMap[arrangementId];
     const merged = applyEditedArrangement(arrangement, this.studentEditedArrangementMap || {});
-    if (selected && !merged.hasCompleteTime && !edited) {
+    if (selected && needsTimeCompletion(merged) && !edited) {
       wx.showToast({ title: "请先编辑时间后加入", icon: "none" });
       this.refreshStudentPreviewState(this.data.studentPreviewResult, this.data.studentPreviewWeek);
       return false;
@@ -1513,7 +1740,7 @@ Page({
       studentActiveBucketTitle: STUDENT_GROUP_TITLES.recommended,
       studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
       studentActiveBucketGroups: [],
-      studentExpandedGroups: {},
+      studentExpandedGroups: createEmptyStudentExpandedGroups(),
       studentExpandedClassNames: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,
@@ -1550,7 +1777,7 @@ Page({
         studentPreviewResult: Object.assign({}, preview, {
           displayInfo,
           metadata,
-          displayStudentId: metadata.studentId || metadata.studentIdMasked,
+          displayStudentId: resolveDisplayStudentId(metadata, preview.profile || {}),
           maskedStudentId: metadata.studentIdMasked,
         }),
       });
@@ -1762,7 +1989,7 @@ Page({
       studentActiveBucketTitle: STUDENT_GROUP_TITLES.recommended,
       studentActiveBucketHelp: STUDENT_BUCKET_HELP.recommended,
       studentActiveBucketGroups: [],
-      studentExpandedGroups: {},
+      studentExpandedGroups: createEmptyStudentExpandedGroups(),
       studentExpandedClassNames: {},
       studentSelectionMode: false,
       studentEditingArrangement: null,

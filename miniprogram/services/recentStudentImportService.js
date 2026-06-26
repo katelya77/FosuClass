@@ -88,21 +88,138 @@ function toNumberList(values, max) {
     .filter((value) => Number.isFinite(value) && value > 0 && (!max || value <= max));
 }
 
+function parseNumberRangeText(text, max) {
+  const normalized = String(text || "")
+    .replace(/[－–—~～至到]/g, "-")
+    .replace(/[，、；;]/g, ",");
+  const result = [];
+  normalized.split(",").forEach((part) => {
+    const range = String(part || "").match(/(\d+)\s*-\s*(\d+)/);
+    if (range) {
+      const start = Number(range[1]);
+      const end = Number(range[2]);
+      if (Number.isInteger(start) && Number.isInteger(end) && start > 0 && end >= start) {
+        for (let current = start; current <= end && (!max || current <= max); current += 1) {
+          result.push(current);
+        }
+      }
+      return;
+    }
+    const matches = String(part || "").match(/\d+/g) || [];
+    matches.forEach((item) => {
+      const value = Number(item);
+      if (Number.isInteger(value) && value > 0 && (!max || value <= max)) {
+        result.push(value);
+      }
+    });
+  });
+  return Array.from(new Set(result)).sort((left, right) => left - right);
+}
+
+function resolveCourseClassNameRaw(course = {}) {
+  const classScope = course.classScope && typeof course.classScope === "object" ? course.classScope : {};
+  const raw = course.classNameRaw ||
+    course.className ||
+    course.classNameText ||
+    course.teachingClass ||
+    course.rawClassText ||
+    classScope.raw ||
+    "";
+  if (raw) return raw;
+  const classNames = course.classNames ||
+    course.audienceClasses ||
+    course.audienceClassNames ||
+    classScope.classNames ||
+    classScope.audienceClasses ||
+    classScope.segments;
+  if (!Array.isArray(classNames)) return String(classNames || "");
+  return classNames
+    .map((item) => item && typeof item === "object" ? (item.className || item.raw || item.name || "") : item)
+    .filter(Boolean)
+    .join("、");
+}
+
+function normalizeCourseName(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\u3000/g, " ")
+    .replace(/[（]/g, "(")
+    .replace(/[）]/g, ")")
+    .replace(/[【［]/g, "[")
+    .replace(/[】］]/g, "]")
+    .replace(/\s+/g, "")
+    .toLowerCase();
+}
+
+function stableHash(value) {
+  const text = String(value || "");
+  let hash = 2166136261;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(36);
+}
+
+function recentCourseGroupId(bucketKey, course = {}) {
+  const name = normalizeCourseName(course.normalizedCourseName || course.displayCourseName || course.courseName || "");
+  const category = String(course.category || "");
+  return `group_recent_${stableHash([bucketKey, name, category].join("|"))}`;
+}
+
+function isArrangementScopedGroupId(groupId, arrangementId) {
+  const value = String(groupId || "");
+  if (!value) return true;
+  if (value === String(arrangementId || "")) return true;
+  return /^arr[_-]/i.test(value) || /^recent-/i.test(value);
+}
+
+function groupArrangements(arrangements, bucketKey) {
+  const map = new Map();
+  (Array.isArray(arrangements) ? arrangements : []).forEach((arrangement) => {
+    const normalizedName = normalizeCourseName(arrangement.normalizedCourseName || arrangement.displayCourseName || arrangement.courseName || "");
+    const key = normalizedName || recentCourseGroupId(bucketKey, arrangement);
+    const fallbackGroupId = recentCourseGroupId(bucketKey, arrangement);
+    const courseGroupId = isArrangementScopedGroupId(arrangement.courseGroupId, arrangement.arrangementId)
+      ? fallbackGroupId
+      : arrangement.courseGroupId;
+    if (!map.has(key)) {
+      map.set(key, {
+        courseGroupId,
+        courseName: arrangement.courseName,
+        displayCourseName: arrangement.displayCourseName || arrangement.courseName,
+        normalizedCourseName: arrangement.normalizedCourseName || normalizedName,
+        reason: arrangement.classScopeReason || arrangement.reason || "",
+        arrangements: [],
+        bucketKey,
+      });
+    }
+    map.get(key).arrangements.push(Object.assign({}, arrangement, { courseGroupId }));
+  });
+  return Array.from(map.values());
+}
+
 function toRecentArrangement(course = {}, index = 0, bucketKey = "recommended", selectedByDefault = false) {
   const startSection = Number(course.startSection || 0) || null;
   const endSection = Number(course.endSection || startSection || 0) || startSection;
   const sections = toNumberList(course.sections, 14);
+  const textSections = parseNumberRangeText(course.sectionText, 14);
   const normalizedSections = sections.length
     ? sections
     : (startSection && endSection
       ? Array.from({ length: Math.max(1, endSection - startSection + 1) }, (_, offset) => startSection + offset)
-      : []);
+      : textSections);
   const weeks = toNumberList(course.weeks, 60);
+  const normalizedWeeks = weeks.length ? weeks : parseNumberRangeText(course.weekText, 60);
   const arrangementId = String(course.arrangementId || course.id || `recent-${bucketKey}-${index}`);
   const importDecision = course.importDecision || (selectedByDefault ? "auto_include" : "unscheduled");
+  const fallbackGroupId = recentCourseGroupId(bucketKey, course);
+  const classNameRaw = resolveCourseClassNameRaw(course);
   return {
     arrangementId,
-    courseGroupId: course.courseGroupId || arrangementId,
+    courseGroupId: isArrangementScopedGroupId(course.courseGroupId, arrangementId)
+      ? fallbackGroupId
+      : course.courseGroupId,
     courseName: course.displayCourseName || course.courseName || "",
     displayCourseName: course.displayCourseName || course.courseName || "",
     normalizedCourseName: course.normalizedCourseName || course.displayCourseName || course.courseName || "",
@@ -113,26 +230,19 @@ function toRecentArrangement(course = {}, index = 0, bucketKey = "recommended", 
     startSection: normalizedSections[0] || startSection,
     endSection: normalizedSections[normalizedSections.length - 1] || endSection,
     sectionText: course.sectionText || "",
-    weeks,
+    weeks: normalizedWeeks,
     weekText: course.weekText || "",
-    classNameRaw: course.classNameRaw || course.className || "",
+    classNameRaw,
+    className: classNameRaw || course.className || "",
+    classNames: Array.isArray(course.classNames) ? course.classNames : [],
+    audienceClasses: Array.isArray(course.audienceClasses) ? course.audienceClasses : [],
+    classScope: course.classScope || null,
     importDecision,
     selectedByDefault,
-    hasCompleteTime: Boolean((Number(course.weekday || course.weekDay || 0) || 0) && normalizedSections.length && weeks.length),
+    hasCompleteTime: Boolean((Number(course.weekday || course.weekDay || 0) || 0) && normalizedSections.length && normalizedWeeks.length),
     classScopeStatus: course.classScopeStatus || "",
     classScopeReason: course.classScopeReason || course.reason || "",
     matchStatus: course.matchStatus || "",
-  };
-}
-
-function groupForArrangement(arrangement, bucketKey) {
-  return {
-    courseGroupId: arrangement.courseGroupId,
-    courseName: arrangement.courseName,
-    displayCourseName: arrangement.displayCourseName,
-    reason: arrangement.classScopeReason || "",
-    arrangements: [arrangement],
-    bucketKey,
   };
 }
 
@@ -171,9 +281,9 @@ function buildFallbackPreview(recent) {
       conflictCount: Number(summary.conflictCount || 0) || 0,
     },
     buckets: {
-      recommended: recommendedArrangements.map((item) => groupForArrangement(item, "recommended")),
-      pending: pendingArrangements.map((item) => groupForArrangement(item, "pending")),
-      unplaced: unplacedArrangements.map((item) => groupForArrangement(item, "unplaced")),
+      recommended: groupArrangements(recommendedArrangements, "recommended"),
+      pending: groupArrangements(pendingArrangements, "pending"),
+      unplaced: groupArrangements(unplacedArrangements, "unplaced"),
       suspected: [],
     },
     groups: {},
