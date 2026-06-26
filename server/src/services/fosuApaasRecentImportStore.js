@@ -7,6 +7,7 @@ const RECENT_IMPORT_SCHEMA_VERSION = 1;
 const SOURCE = "fosu_student_import";
 const STALE_AFTER_DAYS = 30;
 const STALE_AFTER_MS = STALE_AFTER_DAYS * 24 * 60 * 60 * 1000;
+const CHINA_TIME_OFFSET_MS = 8 * 60 * 60 * 1000;
 const SENSITIVE_KEY_PATTERN = /(password|passwd|pwd|cookie|ticket|token|authorization|privatekey|publickey|encrypted|rawhtml|html|headers)/i;
 
 let storeFileOverride = "";
@@ -107,8 +108,9 @@ function pendingBriefFromPreview(record = {}, selectedSet) {
 function formatDisplayTime(value) {
   const date = value ? new Date(value) : new Date();
   if (Number.isNaN(date.getTime())) return "";
+  const chinaDate = new Date(date.getTime() + CHINA_TIME_OFFSET_MS);
   const pad = (num) => String(num).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${chinaDate.getUTCFullYear()}-${pad(chinaDate.getUTCMonth() + 1)}-${pad(chinaDate.getUTCDate())} ${pad(chinaDate.getUTCHours())}:${pad(chinaDate.getUTCMinutes())}`;
 }
 
 function buildSummary(record = {}, schedule = {}, selection = {}, importedCourseCount = 0) {
@@ -122,6 +124,41 @@ function buildSummary(record = {}, schedule = {}, selection = {}, importedCourse
     importedCourseCount: Number(importedCourseCount || schedule.courses && schedule.courses.length || 0) || 0,
     unplacedCount: Number(schedule.unplacedCourses && schedule.unplacedCourses.length || selection.unplacedCourses && selection.unplacedCourses.length || 0) || 0,
   };
+}
+
+function buildPublicProfile(record = {}, metadata = {}) {
+  const profile = record.profile || {};
+  const studentIdMasked = metadata.studentIdMasked || metadata.studentId || profile.studentIdMasked || "";
+  return sanitizeForRecentImport(Object.assign({}, profile, {
+    studentId: studentIdMasked,
+    studentIdMasked,
+    studentName: metadata.studentName || profile.studentName || "",
+    className: metadata.className || profile.className || "",
+  }));
+}
+
+function buildEditablePreview(record = {}, metadata = {}, selection = {}) {
+  const selectedArrangementIds = Array.isArray(selection.selectedArrangementIds)
+    ? selection.selectedArrangementIds
+    : [];
+  return sanitizeForRecentImport({
+    schemaVersion: RECENT_IMPORT_SCHEMA_VERSION,
+    source: SOURCE,
+    profile: buildPublicProfile(record, metadata),
+    summary: record.summary || {},
+    previewGrid: record.previewGrid || null,
+    buckets: record.buckets || record.groups || {},
+    groups: record.groups || record.buckets || {},
+    uiHints: record.uiHints || {},
+    allArrangements: Array.isArray(record.allArrangements) ? record.allArrangements.slice(0, 600) : [],
+    defaultSelectedArrangementIds: Array.isArray(record.defaultSelectedArrangementIds)
+      ? record.defaultSelectedArrangementIds
+      : [],
+    selectedArrangementIds,
+    editedArrangements: Array.isArray(selection.editedArrangements)
+      ? selection.editedArrangements
+      : [],
+  });
 }
 
 function buildRecentImportRecord({ ownerKey, record = {}, schedule = {}, selection = {}, mode = "", importedCourseCount = 0 } = {}) {
@@ -153,6 +190,7 @@ function buildRecentImportRecord({ ownerKey, record = {}, schedule = {}, selecti
     unplaced: (cleanSchedule.unplacedCourses || selection.unplacedCourses || []).slice(0, 80).map(briefCourse),
     pending: pendingBriefFromPreview(record, selectedSet),
     summary,
+    editablePreview: buildEditablePreview(record, metadata, selection),
     schedule: cleanSchedule,
     updatedAt: new Date().toISOString(),
   });
@@ -166,7 +204,7 @@ function decorateRecentImport(record) {
   const importedCourses = Array.isArray(record.importedCourses) ? record.importedCourses : (Array.isArray(schedule.courses) ? schedule.courses : []);
   return Object.assign({}, record, {
     schemaVersion: RECENT_IMPORT_SCHEMA_VERSION,
-    importedAtText: record.importedAtText || formatDisplayTime(record.importedAt),
+    importedAtText: formatDisplayTime(record.importedAt) || record.importedAtText || "",
     courseCount: importedCourses.length,
     isStale,
     staleText: isStale ? `数据可能超过${STALE_AFTER_DAYS}天，建议重新同步。` : "",

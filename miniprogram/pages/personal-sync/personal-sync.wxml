@@ -17,7 +17,8 @@
         <view class="recent-import-warning" wx:if="{{recentStudentImport.staleText}}">{{recentStudentImport.staleText}}</view>
       </view>
       <view class="recent-import-actions">
-        <button class="recent-import-btn primary" bindtap="useRecentStudentImport">直接使用</button>
+        <button class="recent-import-btn primary wide" bindtap="openRecentStudentImportEditor">查看调整</button>
+        <button class="recent-import-btn" bindtap="useRecentStudentImport">直接使用</button>
         <button class="recent-import-btn" bindtap="resyncStudentImport">重新同步</button>
       </view>
     </view>
@@ -245,7 +246,7 @@
       </view>
 
       <view class="preview-actions student-bottom-actions">
-        <button class="btn-bind" loading="{{studentImportConfirming}}" disabled="{{studentImportConfirming || !studentSelectedCount}}" bindtap="confirmStudentImport">{{studentAdvancedMode ? '确认导入已选课程' : '确认导入推荐课表'}}</button>
+        <button class="btn-bind" loading="{{studentImportConfirming}}" disabled="{{studentImportConfirming || !studentSelectedCount}}" bindtap="confirmStudentImport">{{studentCachedPreviewMode ? '应用缓存调整' : (studentAdvancedMode ? '确认导入已选课程' : '确认导入推荐课表')}}</button>
         <button class="btn-cancel" disabled="{{studentImportConfirming}}" bindtap="toggleStudentAdvancedMode">{{studentAdvancedMode ? '返回预览' : '调整课程'}}</button>
       </view>
 

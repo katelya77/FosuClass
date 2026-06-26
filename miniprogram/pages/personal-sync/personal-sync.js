@@ -696,6 +696,7 @@ Page({
     },
     studentPreviewResult: null,
     studentPreviewToken: "",
+    studentCachedPreviewMode: false,
     studentPreviewWeek: 16,
     studentPreviewGrid: null,
     studentPreviewBuckets: [],
@@ -744,6 +745,7 @@ Page({
     filteredCourses: [],
     recentStudentImport: null,
     recentStudentImportChecking: false,
+    studentCachedPreviewMode: false,
   },
 
   onLoad(options = {}) {
@@ -800,6 +802,7 @@ Page({
       studentImportStage: "form",
       studentPreviewResult: null,
       studentPreviewToken: "",
+      studentCachedPreviewMode: false,
       studentPreviewGrid: null,
       studentPreviewBuckets: [],
       studentAdvancedMode: false,
@@ -829,6 +832,7 @@ Page({
       studentImportConfirming: false,
       studentPreviewResult: null,
       studentPreviewToken: "",
+      studentCachedPreviewMode: false,
       studentPreviewGrid: null,
       studentPreviewBuckets: [],
       studentAdvancedMode: false,
@@ -920,6 +924,43 @@ Page({
     wx.showToast({ title: "本地缓存保存失败", icon: "none" });
   },
 
+  openRecentStudentImportEditor() {
+    const record = this.data.recentStudentImport || recentStudentImportService.readLocalRecentImport();
+    const preview = recentStudentImportService.buildCachedPreview(record);
+    if (!preview || !Array.isArray(preview.allArrangements) || !preview.allArrangements.length) {
+      wx.showToast({ title: "历史记录暂不可编辑，请重新同步", icon: "none" });
+      return;
+    }
+    const displayInfo = buildApaasScheduleDisplay(preview);
+    const metadata = sanitizeApaasMetadata(preview);
+    const previewResult = Object.assign({}, preview, {
+      displayInfo,
+      metadata,
+      displayStudentId: metadata.studentId || metadata.studentIdMasked,
+      maskedStudentId: metadata.studentIdMasked,
+    });
+    this.studentPreviewArrangements = [];
+    this.studentSelectedArrangementMap = {};
+    this.studentEditedArrangementMap = {};
+    this.setData({
+      activeImportMethod: "student",
+      studentImportStage: "preview",
+      studentImportLoading: false,
+      studentImportConfirming: false,
+      studentPreviewToken: "",
+      studentCachedPreviewMode: true,
+      studentPreviewResult: previewResult,
+      studentEditingArrangement: null,
+      studentClassConfidenceWarning: "",
+    });
+    this.prepareStudentPreview(previewResult, {
+      openAdvanced: true,
+      useExplicitSelection: true,
+      selectedArrangementIds: preview.selectedArrangementIds || preview.defaultSelectedArrangementIds || [],
+      editedArrangements: preview.editedArrangements || [],
+    });
+  },
+
   resyncStudentImport() {
     this.studentPreviewArrangements = [];
     this.studentSelectedArrangementMap = {};
@@ -929,6 +970,7 @@ Page({
       studentImportStage: "form",
       studentPreviewResult: null,
       studentPreviewToken: "",
+      studentCachedPreviewMode: false,
       studentPreviewGrid: null,
       studentAdvancedMode: false,
       studentSelectionMode: false,
@@ -1042,6 +1084,7 @@ Page({
     this.studentEditedArrangementMap = {};
     this.setData({
       studentPreviewWeek: 16,
+      studentCachedPreviewMode: false,
       studentPreviewGrid: null,
       studentPreviewBuckets: [],
       studentAdvancedMode: false,
@@ -1067,19 +1110,35 @@ Page({
     });
   },
 
-  prepareStudentPreview(preview) {
+  prepareStudentPreview(preview, options = {}) {
     const arrangements = flattenStudentPreviewArrangements(preview);
+    const selectedIds = Array.isArray(options.selectedArrangementIds)
+      ? options.selectedArrangementIds
+      : (Array.isArray(preview && preview.selectedArrangementIds) ? preview.selectedArrangementIds : []);
+    const selectedSet = new Set(selectedIds);
+    const useExplicitSelection = Boolean(options.useExplicitSelection || selectedIds.length);
     const selectedMap = {};
     arrangements.forEach((arrangement) => {
       if (arrangement && arrangement.arrangementId) {
-        selectedMap[arrangement.arrangementId] = Boolean(arrangement.selectedByDefault);
+        selectedMap[arrangement.arrangementId] = useExplicitSelection
+          ? selectedSet.has(arrangement.arrangementId)
+          : Boolean(arrangement.selectedByDefault);
       }
+    });
+    const editedMap = {};
+    const editedArrangements = Array.isArray(options.editedArrangements)
+      ? options.editedArrangements
+      : (Array.isArray(preview && preview.editedArrangements) ? preview.editedArrangements : []);
+    editedArrangements.forEach((edited) => {
+      const id = edited && (edited.baseArrangementId || edited.arrangementId);
+      if (id) editedMap[id] = edited;
     });
     this.studentPreviewArrangements = arrangements;
     this.studentSelectedArrangementMap = selectedMap;
-    this.studentEditedArrangementMap = {};
+    this.studentEditedArrangementMap = editedMap;
     this.setData({
-      studentAdvancedMode: false,
+      studentAdvancedMode: Boolean(options.openAdvanced),
+      studentSelectionMode: Boolean(options.openAdvanced),
       studentActiveBucket: "recommended",
       studentExpandedGroups: {},
       studentExpandedClassNames: {},
@@ -1441,6 +1500,7 @@ Page({
       studentImportStage: "loading",
       studentPreviewResult: null,
       studentPreviewToken: "",
+      studentCachedPreviewMode: false,
       studentPreviewGrid: null,
       studentPreviewBuckets: [],
       studentLoadingStepIndex: 0,
@@ -1693,6 +1753,7 @@ Page({
       studentImportConfirming: false,
       studentPreviewResult: null,
       studentPreviewToken: "",
+      studentCachedPreviewMode: false,
       studentPreviewGrid: null,
       studentPreviewBuckets: [],
       studentAdvancedMode: false,
@@ -1711,7 +1772,68 @@ Page({
     });
   },
 
+  confirmRecentStudentImport() {
+    if (this.data.studentImportConfirming || !this.data.studentSelectedCount) return;
+    this.setData({ studentImportConfirming: true });
+    request.post("/api/schedule-import/fosu/recent/confirm", {
+      mode: "replace_fosu_source",
+      selectedArrangementIds: this.getSelectedStudentArrangementIds(),
+      editedArrangements: this.getEditedStudentArrangements(),
+      existingCourses: getExistingPersonalCoursesForStudentImport(),
+    }, {
+      loadingTitle: "正在应用缓存...",
+      silentError: true,
+      timeout: 20000,
+      retries: 0,
+      dedupe: false,
+    })
+      .then((res) => {
+        const schedule = res && res.schedule;
+        if (!schedule || !Array.isArray(schedule.courses)) {
+          throw Object.assign(new Error("IMPORT_RESULT_INVALID"), { code: "IMPORT_RESULT_INVALID" });
+        }
+        const target = Object.assign({}, schedule, {
+          updateTime: schedule.updateTime || recentStudentImportService.formatImportTime(new Date().toISOString()),
+          importedAt: schedule.importedAt || new Date().toISOString(),
+        });
+        if (setCurrentScheduleTarget(target)) {
+          if (res && res.recentImport) {
+            const recent = recentStudentImportService.writeLocalRecentImport(res.recentImport);
+            if (recent) {
+              this.setData({ recentStudentImport: recent });
+            }
+          }
+          aiAssistantService.rememberLatestScheduleImport(target);
+          this.setData({
+            studentImportConfirming: false,
+            studentImportStage: "done",
+            studentImportedSchedule: target,
+            studentPreviewToken: "",
+            studentCachedPreviewMode: false,
+            studentAdvancedMode: false,
+            studentSelectionMode: false,
+            studentEditingArrangement: null,
+          });
+          wx.showToast({ title: "已用缓存更新课表", icon: "success" });
+          setTimeout(() => {
+            wx.switchTab({ url: "/pages/index/index" });
+          }, 900);
+          return;
+        }
+        throw Object.assign(new Error("LOCAL_SAVE_FAILED"), { code: "LOCAL_SAVE_FAILED" });
+      })
+      .catch((error) => {
+        this.setData({ studentImportConfirming: false });
+        const payload = error && error.payload || {};
+        this.showStudentImportError(payload.code || error.code, payload.message || error.message);
+      });
+  },
+
   confirmStudentImport() {
+    if (this.data.studentCachedPreviewMode) {
+      this.confirmRecentStudentImport();
+      return;
+    }
     const token = this.data.studentPreviewToken;
     if (!token || this.data.studentImportConfirming) return;
     this.setData({ studentImportConfirming: true });
@@ -1750,6 +1872,7 @@ Page({
             studentImportStage: "done",
             studentImportedSchedule: target,
             studentPreviewToken: "",
+            studentCachedPreviewMode: false,
             studentAdvancedMode: false,
             studentSelectionMode: false,
             studentEditingArrangement: null,

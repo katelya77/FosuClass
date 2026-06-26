@@ -32,6 +32,7 @@ function normalizeCourse(course) {
   normalized.color = theme.background;
   normalized.borderColor = theme.border;
   normalized.textColor = theme.text;
+  normalized.metaTextColor = theme.metaText;
   normalized.accentColor = theme.accent;
   normalized.roomTextColor = theme.roomText;
   normalized.subText = normalized.subText || detailText;
@@ -180,6 +181,8 @@ function buildCardStyle(course) {
   const background = theme.background || theme.color || course.color;
   const borderColor = theme.border || course.borderColor || "rgba(50, 74, 99, 0.14)";
   const textColor = theme.text || course.textColor || "#173247";
+  const metaTextColor = theme.metaText || course.metaTextColor || textColor;
+  const roomTextColor = theme.roomText || course.roomTextColor || "#f1c40f";
   const zIndex = course.active ? 30 + (course.lane || 0) : 10 + (course.lane || 0);
   const base = [
     `top:${course.top}rpx`,
@@ -187,8 +190,14 @@ function buildCardStyle(course) {
     `background:${background}`,
     `border:1rpx solid ${borderColor}`,
     `color:${textColor}`,
+    `--course-text:${textColor}`,
+    `--course-meta-text:${metaTextColor}`,
+    `--course-room-text:${roomTextColor}`,
     `z-index:${zIndex}`,
   ];
+  if (!course.active) {
+    base.push("opacity:0.78");
+  }
   base.push("left:4rpx");
   base.push("right:4rpx");
   return `${base.join(";")};`;

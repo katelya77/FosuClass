@@ -11,6 +11,7 @@ const {
   takePrivateKeyChallenge,
 } = require("./fosuApaasImportSessionStore");
 const {
+  getRecentImportForSession,
   saveRecentImportForSession,
 } = require("./fosuApaasRecentImportStore");
 const {
@@ -22,6 +23,7 @@ const { IMPORT_DECISION, toImportCourse } = require("./scheduleImportNormalizer"
 const { parseSections, parseWeeks } = require("../utils/fosuApaasScheduleParser");
 
 const ALLOWED_CONFIRM_MODES = new Set(["replace_fosu_source", "merge", "replace_all_personal"]);
+const CHINA_TIME_OFFSET_MS = 8 * 60 * 60 * 1000;
 const PREVIEW_JOB_TTL_MS = Math.max(2 * 60 * 1000, Number(process.env.FOSU_IMPORT_PREVIEW_JOB_TTL_SECONDS || 10 * 60) * 1000 || 10 * 60 * 1000);
 const PREVIEW_JOB_REUSE_TTL_MS = Math.max(
   2 * 60 * 1000,
@@ -654,6 +656,7 @@ function validateEditedArrangement(base, edited) {
   })).digest("hex").slice(0, 22)}`;
   return Object.assign({}, base, {
     arrangementId,
+    baseArrangementId: base.arrangementId,
     weekday,
     sections: sortedSections,
     startSection: sortedSections[0],
@@ -691,12 +694,15 @@ function buildSelectedImportCourses(record, body = {}, importedAt) {
   });
 
   const editedByBaseId = new Map();
+  const confirmedEditedArrangements = [];
   const editedArrangements = Array.isArray(body.editedArrangements) ? body.editedArrangements.slice(0, 100) : [];
   editedArrangements.forEach((edited) => {
     const baseId = toText(edited && (edited.baseArrangementId || edited.arrangementId));
     const base = arrangementMap.get(baseId);
     if (!base) throw selectionError("INVALID_EDITED_ARRANGEMENT");
-    editedByBaseId.set(baseId, validateEditedArrangement(base, edited || {}));
+    const validated = validateEditedArrangement(base, edited || {});
+    editedByBaseId.set(baseId, validated);
+    confirmedEditedArrangements.push(validated);
   });
 
   const incomingCourses = [];
@@ -731,7 +737,12 @@ function buildSelectedImportCourses(record, body = {}, importedAt) {
       reason: arrangement.reason || "",
     }));
 
-  return { incomingCourses, selectedArrangementIds: Array.from(selectedSet), unplacedCourses };
+  return {
+    incomingCourses,
+    selectedArrangementIds: Array.from(selectedSet),
+    editedArrangements: confirmedEditedArrangements,
+    unplacedCourses,
+  };
 }
 
 function buildConfirmedSchedule(record, mode, existingCourses = [], selectedOptions = {}) {
@@ -786,8 +797,9 @@ function buildConfirmedSchedule(record, mode, existingCourses = [], selectedOpti
 function formatImportTime(value) {
   const date = value ? new Date(value) : new Date();
   if (Number.isNaN(date.getTime())) return "";
+  const chinaDate = new Date(date.getTime() + CHINA_TIME_OFFSET_MS);
   const pad = (num) => String(num).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${chinaDate.getUTCFullYear()}-${pad(chinaDate.getUTCMonth() + 1)}-${pad(chinaDate.getUTCDate())} ${pad(chinaDate.getUTCHours())}:${pad(chinaDate.getUTCMinutes())}`;
 }
 
 function confirmStudentScheduleImport(req, body = {}) {
@@ -849,6 +861,165 @@ function confirmStudentScheduleImport(req, body = {}) {
   };
 }
 
+function toRecentArrangement(course = {}, index = 0, bucketKey = "recommended", selectedByDefault = false) {
+  const startSection = Number(course.startSection || 0) || null;
+  const endSection = Number(course.endSection || startSection || 0) || startSection;
+  const sections = Array.isArray(course.sections) && course.sections.length
+    ? course.sections.map((item) => Number(item)).filter(Boolean)
+    : (startSection && endSection
+      ? Array.from({ length: Math.max(1, endSection - startSection + 1) }, (_, offset) => startSection + offset)
+      : []);
+  const weeks = Array.isArray(course.weeks) && course.weeks.length
+    ? course.weeks.map((item) => Number(item)).filter(Boolean)
+    : [];
+  const arrangementId = toText(course.arrangementId || course.id || `recent-${bucketKey}-${index}`);
+  const importDecision = course.importDecision || (selectedByDefault ? "auto_include" : "unscheduled");
+  return {
+    arrangementId,
+    courseGroupId: course.courseGroupId || arrangementId,
+    courseName: course.displayCourseName || course.courseName || "",
+    displayCourseName: course.displayCourseName || course.courseName || "",
+    normalizedCourseName: course.normalizedCourseName || course.displayCourseName || course.courseName || "",
+    teacherName: course.teacherName || course.displayTeacherName || "",
+    roomName: course.roomName || course.classroom || course.displayClassroom || "",
+    weekday: Number(course.weekday || course.weekDay || 0) || null,
+    sections,
+    startSection: sections[0] || startSection,
+    endSection: sections[sections.length - 1] || endSection,
+    sectionText: course.sectionText || "",
+    weeks,
+    weekText: course.weekText || "",
+    classNameRaw: course.classNameRaw || course.className || "",
+    importDecision,
+    selectedByDefault,
+    hasCompleteTime: Boolean((Number(course.weekday || course.weekDay || 0) || 0) && sections.length && weeks.length),
+    classScopeStatus: course.classScopeStatus || "",
+    classScopeReason: course.classScopeReason || course.reason || "",
+    matchStatus: course.matchStatus || "",
+    sourceHash: course.sourceHash || "",
+  };
+}
+
+function buildFallbackRecentPreviewRecord(recent = {}) {
+  const schedule = recent.schedule || {};
+  const importedCourses = Array.isArray(recent.importedCourses)
+    ? recent.importedCourses
+    : (Array.isArray(schedule.courses) ? schedule.courses : []);
+  const unplaced = Array.isArray(recent.unplaced) ? recent.unplaced : [];
+  const pending = Array.isArray(recent.pending) ? recent.pending : [];
+  const selectedArrangements = importedCourses.map((course, index) => toRecentArrangement(course, index, "recommended", true));
+  const pendingArrangements = pending.map((course, index) => toRecentArrangement(course, index, "pending", false));
+  const unplacedArrangements = unplaced.map((course, index) => toRecentArrangement(course, index, "unplaced", false));
+  const allArrangements = selectedArrangements.concat(pendingArrangements, unplacedArrangements);
+  const groupFor = (arrangement, bucketKey) => ({
+    courseGroupId: arrangement.courseGroupId,
+    courseName: arrangement.courseName,
+    displayCourseName: arrangement.displayCourseName,
+    reason: arrangement.classScopeReason || "",
+    arrangements: [arrangement],
+    bucketKey,
+  });
+  const summary = recent.summary || {};
+  return {
+    studentId: recent.studentIdMasked || recent.studentId || "",
+    profile: {
+      studentId: recent.studentIdMasked || recent.studentId || "",
+      studentIdMasked: recent.studentIdMasked || recent.studentId || "",
+      studentName: recent.studentName || "",
+      className: recent.className || "",
+      classNameConfidence: "low",
+    },
+    summary: {
+      semester: schedule.term || schedule.semester || "",
+      recommendedArrangementCount: selectedArrangements.length,
+      pendingArrangementCount: pendingArrangements.length,
+      unplacedArrangementCount: unplacedArrangements.length,
+      scheduledCourseCount: selectedArrangements.length,
+      unscheduledCourseCount: unplacedArrangements.length,
+      conflictCount: Number(summary.conflictCount || 0) || 0,
+    },
+    allArrangements,
+    defaultSelectedArrangementIds: selectedArrangements.map((item) => item.arrangementId),
+    buckets: {
+      recommended: selectedArrangements.map((item) => groupFor(item, "recommended")),
+      pending: pendingArrangements.map((item) => groupFor(item, "pending")),
+      unplaced: unplacedArrangements.map((item) => groupFor(item, "unplaced")),
+      suspected: [],
+    },
+    groups: {},
+    uiHints: {},
+  };
+}
+
+function buildRecentPreviewRecord(recent = {}) {
+  const editable = recent.editablePreview || {};
+  const allArrangements = Array.isArray(editable.allArrangements) ? editable.allArrangements : [];
+  if (allArrangements.length) {
+    return {
+      studentId: recent.studentIdMasked || recent.studentId || "",
+      profile: editable.profile || {
+        studentId: recent.studentIdMasked || recent.studentId || "",
+        studentIdMasked: recent.studentIdMasked || recent.studentId || "",
+        studentName: recent.studentName || "",
+        className: recent.className || "",
+      },
+      summary: editable.summary || recent.summary || {},
+      previewGrid: editable.previewGrid || null,
+      buckets: editable.buckets || editable.groups || {},
+      groups: editable.groups || editable.buckets || {},
+      uiHints: editable.uiHints || {},
+      allArrangements,
+      defaultSelectedArrangementIds: Array.isArray(editable.selectedArrangementIds) && editable.selectedArrangementIds.length
+        ? editable.selectedArrangementIds
+        : (Array.isArray(editable.defaultSelectedArrangementIds) ? editable.defaultSelectedArrangementIds : []),
+    };
+  }
+  return buildFallbackRecentPreviewRecord(recent);
+}
+
+function confirmRecentStudentScheduleImport(req, body = {}) {
+  const recent = getRecentImportForSession(req && req.fosuSession);
+  if (!recent) {
+    const error = new Error("RECENT_IMPORT_NOT_FOUND");
+    error.code = "RECENT_IMPORT_NOT_FOUND";
+    throw error;
+  }
+  const record = buildRecentPreviewRecord(recent);
+  if (!Array.isArray(record.allArrangements) || !record.allArrangements.length) {
+    const error = new Error("RECENT_IMPORT_NOT_EDITABLE");
+    error.code = "RECENT_IMPORT_NOT_EDITABLE";
+    throw error;
+  }
+  const mode = toText(body.mode) || "replace_fosu_source";
+  const existingCourses = Array.isArray(body.existingCourses) ? body.existingCourses.slice(0, 500) : [];
+  const selection = buildSelectedImportCourses(record, body, new Date().toISOString());
+  const schedule = buildConfirmedSchedule(record, mode, existingCourses, selection);
+  const importedCourseCount = selection.incomingCourses.length;
+  const recentImport = saveRecentImportForSession(req && req.fosuSession, {
+    record,
+    schedule,
+    selection,
+    mode,
+    importedCourseCount,
+  });
+  return {
+    success: true,
+    fromRecentImport: true,
+    mode,
+    importedCourseCount,
+    selectedArrangementIds: selection.selectedArrangementIds,
+    totalCourseCount: schedule.courses.length,
+    unscheduledCourseCount: schedule.unplacedCourses.length,
+    conflictCount: record.summary && record.summary.conflictCount || 0,
+    schedule,
+    courses: schedule.courses,
+    unplacedCourses: schedule.unplacedCourses,
+    profile: record.profile,
+    summary: record.summary,
+    recentImport,
+  };
+}
+
 function cancelStudentScheduleImport(req, body = {}) {
   const token = toText(body.importPreviewToken);
   const record = getPreview(token);
@@ -863,6 +1034,7 @@ module.exports = {
   ALLOWED_CONFIRM_MODES,
   applyImportMode,
   cancelStudentScheduleImport,
+  confirmRecentStudentScheduleImport,
   confirmStudentScheduleImport,
   createStudentSchedulePreview,
   decryptCredentialPayload,
