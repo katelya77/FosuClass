@@ -16,7 +16,10 @@ const {
   __resetForTest: resetPreviewStore,
   createPreviewToken,
 } = require("../server/src/services/fosuApaasImportSessionStore");
-const { confirmStudentScheduleImport } = require("../server/src/services/fosuApaasImportService");
+const {
+  confirmRecentStudentScheduleImport,
+  confirmStudentScheduleImport,
+} = require("../server/src/services/fosuApaasImportService");
 
 __setStoreFileForTest(tempFile);
 __resetForTest();
@@ -120,6 +123,10 @@ function testConfirmSavesReadableRecentImport() {
   assert.strictEqual(recent.summary.conflictCount, 1);
   assert.strictEqual(recent.courseCount, 1);
   assert(Array.isArray(recent.schedule.courses) && recent.schedule.courses.length === 1);
+  assert(recent.editablePreview, "recent import should keep an editable preview snapshot");
+  assert(Array.isArray(recent.editablePreview.allArrangements) && recent.editablePreview.allArrangements.length === 2,
+    "editable preview should keep sanitized arrangements for cached editing");
+  assert.deepStrictEqual(recent.editablePreview.selectedArrangementIds, ["arr-auto"]);
 }
 
 function testDifferentOwnerCannotRead() {
@@ -131,6 +138,31 @@ function testSensitiveFieldsAreNotSaved() {
   const text = JSON.stringify(recent);
   assert(!/plain-secret-password|secret-cookie|ticket-secret|<html>secret<\/html>/i.test(text), "recent import must not contain sensitive values");
   assert(!/"password"|"cookie"|"ticket"|"rawHtml"/i.test(text), "recent import must not keep sensitive keys");
+  assert(!/"studentId":"202512340303"/.test(text), "recent import should not keep raw student id in editable cache");
+}
+
+function testRecentConfirmUsesCachedPreviewWithoutSchoolRequest() {
+  const result = confirmRecentStudentScheduleImport(makeReq("owner-a"), {
+    mode: "replace_fosu_source",
+    selectedArrangementIds: ["arr-auto", "arr-pending"],
+    editedArrangements: [{
+      arrangementId: "arr-pending",
+      baseArrangementId: "arr-pending",
+      weekday: 2,
+      sections: [3, 4],
+      weeks: [1, 2, 3],
+      weekText: "1-3",
+      roomName: "B1-201",
+    }],
+    existingCourses: [],
+  });
+  assert.strictEqual(result.success, true);
+  assert.strictEqual(result.fromRecentImport, true);
+  assert.strictEqual(result.importedCourseCount, 2);
+  assert.strictEqual(result.schedule.courses.length, 2);
+  const recent = getRecentImportForSession(makeSession("owner-a"));
+  assert.deepStrictEqual(recent.editablePreview.selectedArrangementIds.sort(), ["arr-auto", "arr-pending"].sort());
+  assert.strictEqual(recent.editablePreview.editedArrangements.length, 1);
 }
 
 function testResyncOverwritesOldRecord() {
@@ -175,11 +207,37 @@ function testStaleRecordKeepsDirectUseHint() {
   assert.strictEqual(recent.courseCount, 1);
 }
 
+function testImportedAtTextUsesBeijingTime() {
+  saveRecentImportForSession(makeSession("owner-timezone"), {
+    record: makePreviewRecord("openid:owner-timezone"),
+    schedule: {
+      type: "personal-apaas",
+      name: "北京时间课表",
+      title: "北京时间课表",
+      importedAt: "2026-06-26T06:19:00.000Z",
+      courses: [{ courseName: "时间校准", weekday: 1, startSection: 1, endSection: 2 }],
+      unplacedCourses: [],
+      metadata: {
+        studentName: "时间同学",
+        className: "时间班",
+        studentIdMasked: "2026****0001",
+      },
+    },
+    selection: { selectedArrangementIds: ["arr-auto"], unplacedCourses: [] },
+    mode: "replace_fosu_source",
+    importedCourseCount: 1,
+  });
+  const recent = getRecentImportForSession(makeSession("owner-timezone"));
+  assert.strictEqual(recent.importedAtText, "2026-06-26 14:19");
+}
+
 testConfirmSavesReadableRecentImport();
 testDifferentOwnerCannotRead();
 testSensitiveFieldsAreNotSaved();
+testRecentConfirmUsesCachedPreviewWithoutSchoolRequest();
 testResyncOverwritesOldRecord();
 testStaleRecordKeepsDirectUseHint();
+testImportedAtTextUsesBeijingTime();
 
 try { fs.unlinkSync(tempFile); } catch (error) {}
 

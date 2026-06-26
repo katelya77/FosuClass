@@ -1,38 +1,48 @@
 const COURSE_COLOR_TOKENS = [
-  { name: "mint", background: "#e8f7f1", border: "#a7dfc8", text: "#174a3a", accent: "#23966d", roomText: "#a16207" },
-  { name: "sky", background: "#edf5ff", border: "#bad7ff", text: "#1e4e8c", accent: "#3b82c4", roomText: "#b7791f" },
-  { name: "apricot", background: "#fff3e3", border: "#ffd19a", text: "#7a3f10", accent: "#d97706", roomText: "#a16207" },
-  { name: "rose", background: "#fff0f5", border: "#f9b5cf", text: "#7f2444", accent: "#d65d82", roomText: "#a16207" },
-  { name: "lavender", background: "#f3efff", border: "#d4c6ff", text: "#4b367c", accent: "#7c62c9", roomText: "#a16207" },
-  { name: "ice", background: "#edf8fb", border: "#a9dce7", text: "#155668", accent: "#2893a8", roomText: "#a16207" },
-  { name: "leaf", background: "#f0f8e8", border: "#c9e6a4", text: "#365a20", accent: "#6ca33b", roomText: "#9a5b08" },
-  { name: "periwinkle", background: "#f0f3ff", border: "#c9d4ff", text: "#34447a", accent: "#6474c9", roomText: "#a16207" },
+  { name: "blue-solid", background: "#4f93dc", border: "#3e82cb", text: "#ffffff", metaText: "rgba(255,255,255,0.88)", accent: "#2f70bb", roomText: "#fff36a" },
+  { name: "green-solid", background: "#43b883", border: "#34a975", text: "#ffffff", metaText: "rgba(255,255,255,0.9)", accent: "#258f61", roomText: "#fff36a" },
+  { name: "rose-solid", background: "#ea638e", border: "#d94f7b", text: "#ffffff", metaText: "rgba(255,255,255,0.88)", accent: "#c93b68", roomText: "#fff0a6" },
+  { name: "cyan-solid", background: "#1fb7ca", border: "#14a7b9", text: "#ffffff", metaText: "rgba(255,255,255,0.88)", accent: "#0a8fa0", roomText: "#fff36a" },
+  { name: "orange-solid", background: "#f3a32d", border: "#df901a", text: "#ffffff", metaText: "rgba(255,255,255,0.9)", accent: "#c9770b", roomText: "#fff36a" },
+  { name: "purple-solid", background: "#8d65df", border: "#7b53cc", text: "#ffffff", metaText: "rgba(255,255,255,0.88)", accent: "#6843ba", roomText: "#fff0a6" },
+  { name: "teal-solid", background: "#25a99a", border: "#169989", text: "#ffffff", metaText: "rgba(255,255,255,0.88)", accent: "#0e8275", roomText: "#fff36a" },
+  { name: "indigo-solid", background: "#5d7fdf", border: "#4b6ed0", text: "#ffffff", metaText: "rgba(255,255,255,0.88)", accent: "#3a5ab7", roomText: "#fff36a" },
+  { name: "lime-solid", background: "#79b94c", border: "#68a73c", text: "#ffffff", metaText: "rgba(255,255,255,0.88)", accent: "#548d2f", roomText: "#fff36a" },
+  { name: "coral-solid", background: "#ee755f", border: "#dc604a", text: "#ffffff", metaText: "rgba(255,255,255,0.88)", accent: "#c24c39", roomText: "#fff0a6" },
+  { name: "sky-solid", background: "#32a9df", border: "#2298cd", text: "#ffffff", metaText: "rgba(255,255,255,0.88)", accent: "#147fb1", roomText: "#fff36a" },
+  { name: "mauve-solid", background: "#a267d7", border: "#9256c7", text: "#ffffff", metaText: "rgba(255,255,255,0.88)", accent: "#7b43af", roomText: "#fff0a6" },
 ];
+
+const COURSE_FEATURE_TOKENS = COURSE_COLOR_TOKENS;
+const COURSE_BASE_TOKENS = COURSE_COLOR_TOKENS;
 
 const COURSE_COLORS = COURSE_COLOR_TOKENS.map((token) => token.background);
 const COURSE_MUTED_TOKEN = {
   name: "muted",
-  background: "#eef2f6",
-  border: "#cbd5e1",
-  text: "#64748b",
-  accent: "#94a3b8",
-  roomText: "#64748b",
+  background: "#e8edf5",
+  border: "#d6deea",
+  text: "#7a8392",
+  metaText: "#596675",
+  accent: "#a8b3c2",
+  roomText: "#f1c40f",
 };
 const COURSE_CONFLICT_TOKEN = {
   name: "conflict",
   background: "#fff1f2",
   border: "#f7b2bd",
   text: "#8c1d35",
+  metaText: "#8c1d35",
   accent: "#be3657",
   roomText: "#b7791f",
 };
 const COURSE_PARALLEL_TOKEN = {
   name: "parallel",
-  background: "#e8f7f8",
-  border: "#a6dade",
-  text: "#164e55",
-  accent: "#2f8f96",
-  roomText: "#a16207",
+  background: "#25a99a",
+  border: "#169989",
+  text: "#ffffff",
+  metaText: "rgba(255,255,255,0.88)",
+  accent: "#0e8275",
+  roomText: "#fff36a",
 };
 
 function normalizeCourseColorKey(courseName) {
@@ -73,8 +83,10 @@ function courseSemanticColorToken(kind) {
 
 module.exports = {
   COURSE_COLORS,
+  COURSE_BASE_TOKENS,
   COURSE_COLOR_TOKENS,
   COURSE_CONFLICT_TOKEN,
+  COURSE_FEATURE_TOKENS,
   COURSE_MUTED_TOKEN,
   COURSE_PARALLEL_TOKEN,
   courseColorTokenForCourse,

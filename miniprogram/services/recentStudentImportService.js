@@ -4,6 +4,7 @@ const STORAGE_KEY = "FOSU_RECENT_STUDENT_IMPORT_CACHE";
 const SCHEMA_VERSION = 1;
 const STALE_AFTER_DAYS = 30;
 const STALE_AFTER_MS = STALE_AFTER_DAYS * 24 * 60 * 60 * 1000;
+const CHINA_TIME_OFFSET_MS = 8 * 60 * 60 * 1000;
 
 function readStorage() {
   try {
@@ -36,8 +37,9 @@ function writeStorage(value) {
 function formatImportTime(value) {
   const date = value ? new Date(value) : null;
   if (!date || Number.isNaN(date.getTime())) return "";
+  const chinaDate = new Date(date.getTime() + CHINA_TIME_OFFSET_MS);
   const pad = (num) => String(num).padStart(2, "0");
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  return `${chinaDate.getUTCFullYear()}-${pad(chinaDate.getUTCMonth() + 1)}-${pad(chinaDate.getUTCDate())} ${pad(chinaDate.getUTCHours())}:${pad(chinaDate.getUTCMinutes())}`;
 }
 
 function normalizeRecentImport(record) {
@@ -53,7 +55,7 @@ function normalizeRecentImport(record) {
   const importedAtMs = Date.parse(record.importedAt || "");
   const isStale = Number.isFinite(importedAtMs) && Date.now() - importedAtMs > STALE_AFTER_MS;
   return Object.assign({}, record, {
-    importedAtText: record.importedAtText || formatImportTime(record.importedAt),
+    importedAtText: formatImportTime(record.importedAt) || record.importedAtText || "",
     courseCount: courses.length,
     isStale,
     staleText: isStale ? `数据可能超过${STALE_AFTER_DAYS}天，建议重新同步。` : "",
@@ -80,12 +82,135 @@ function writeLocalRecentImport(record) {
   return normalizeRecentImport(next);
 }
 
+function toNumberList(values, max) {
+  return (Array.isArray(values) ? values : [])
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value > 0 && (!max || value <= max));
+}
+
+function toRecentArrangement(course = {}, index = 0, bucketKey = "recommended", selectedByDefault = false) {
+  const startSection = Number(course.startSection || 0) || null;
+  const endSection = Number(course.endSection || startSection || 0) || startSection;
+  const sections = toNumberList(course.sections, 14);
+  const normalizedSections = sections.length
+    ? sections
+    : (startSection && endSection
+      ? Array.from({ length: Math.max(1, endSection - startSection + 1) }, (_, offset) => startSection + offset)
+      : []);
+  const weeks = toNumberList(course.weeks, 60);
+  const arrangementId = String(course.arrangementId || course.id || `recent-${bucketKey}-${index}`);
+  const importDecision = course.importDecision || (selectedByDefault ? "auto_include" : "unscheduled");
+  return {
+    arrangementId,
+    courseGroupId: course.courseGroupId || arrangementId,
+    courseName: course.displayCourseName || course.courseName || "",
+    displayCourseName: course.displayCourseName || course.courseName || "",
+    normalizedCourseName: course.normalizedCourseName || course.displayCourseName || course.courseName || "",
+    teacherName: course.teacherName || course.displayTeacherName || "",
+    roomName: course.roomName || course.classroom || course.displayClassroom || "",
+    weekday: Number(course.weekday || course.weekDay || 0) || null,
+    sections: normalizedSections,
+    startSection: normalizedSections[0] || startSection,
+    endSection: normalizedSections[normalizedSections.length - 1] || endSection,
+    sectionText: course.sectionText || "",
+    weeks,
+    weekText: course.weekText || "",
+    classNameRaw: course.classNameRaw || course.className || "",
+    importDecision,
+    selectedByDefault,
+    hasCompleteTime: Boolean((Number(course.weekday || course.weekDay || 0) || 0) && normalizedSections.length && weeks.length),
+    classScopeStatus: course.classScopeStatus || "",
+    classScopeReason: course.classScopeReason || course.reason || "",
+    matchStatus: course.matchStatus || "",
+  };
+}
+
+function groupForArrangement(arrangement, bucketKey) {
+  return {
+    courseGroupId: arrangement.courseGroupId,
+    courseName: arrangement.courseName,
+    displayCourseName: arrangement.displayCourseName,
+    reason: arrangement.classScopeReason || "",
+    arrangements: [arrangement],
+    bucketKey,
+  };
+}
+
+function buildFallbackPreview(recent) {
+  const schedule = recent.schedule || {};
+  const importedCourses = Array.isArray(recent.importedCourses)
+    ? recent.importedCourses
+    : (Array.isArray(schedule.courses) ? schedule.courses : []);
+  const unplaced = Array.isArray(recent.unplaced) ? recent.unplaced : [];
+  const pending = Array.isArray(recent.pending) ? recent.pending : [];
+  const recommendedArrangements = importedCourses.map((course, index) => toRecentArrangement(course, index, "recommended", true));
+  const pendingArrangements = pending.map((course, index) => toRecentArrangement(course, index, "pending", false));
+  const unplacedArrangements = unplaced.map((course, index) => toRecentArrangement(course, index, "unplaced", false));
+  const allArrangements = recommendedArrangements.concat(pendingArrangements, unplacedArrangements);
+  const selectedArrangementIds = recommendedArrangements.map((item) => item.arrangementId);
+  const summary = recent.summary || {};
+  return {
+    schemaVersion: SCHEMA_VERSION,
+    source: "fosu_student_import",
+    fromRecentCache: true,
+    fallbackPreview: true,
+    profile: {
+      studentId: recent.studentIdMasked || recent.studentId || "",
+      studentIdMasked: recent.studentIdMasked || recent.studentId || "",
+      studentName: recent.studentName || "",
+      className: recent.className || "",
+      classNameConfidence: "low",
+    },
+    summary: {
+      semester: schedule.term || schedule.semester || "",
+      recommendedArrangementCount: recommendedArrangements.length,
+      pendingArrangementCount: pendingArrangements.length,
+      unplacedArrangementCount: unplacedArrangements.length,
+      scheduledCourseCount: recommendedArrangements.length,
+      unscheduledCourseCount: unplacedArrangements.length,
+      conflictCount: Number(summary.conflictCount || 0) || 0,
+    },
+    buckets: {
+      recommended: recommendedArrangements.map((item) => groupForArrangement(item, "recommended")),
+      pending: pendingArrangements.map((item) => groupForArrangement(item, "pending")),
+      unplaced: unplacedArrangements.map((item) => groupForArrangement(item, "unplaced")),
+      suspected: [],
+    },
+    groups: {},
+    uiHints: {},
+    allArrangements,
+    defaultSelectedArrangementIds: selectedArrangementIds,
+    selectedArrangementIds,
+    editedArrangements: [],
+  };
+}
+
+function buildCachedPreview(record) {
+  const recent = normalizeRecentImport(record);
+  if (!recent) return null;
+  const editable = recent.editablePreview || {};
+  const allArrangements = Array.isArray(editable.allArrangements) ? editable.allArrangements : [];
+  if (allArrangements.length) {
+    return Object.assign({}, editable, {
+      schemaVersion: editable.schemaVersion || SCHEMA_VERSION,
+      source: "fosu_student_import",
+      fromRecentCache: true,
+      importPreviewToken: "",
+      selectedArrangementIds: Array.isArray(editable.selectedArrangementIds)
+        ? editable.selectedArrangementIds
+        : (Array.isArray(recent.selectedArrangements) ? recent.selectedArrangements : []),
+      editedArrangements: Array.isArray(editable.editedArrangements) ? editable.editedArrangements : [],
+    });
+  }
+  return buildFallbackPreview(recent);
+}
+
 function buildScheduleTarget(record) {
   const recent = normalizeRecentImport(record);
   if (!recent) return null;
   const schedule = recent.schedule || {};
   const importedAt = recent.importedAt || schedule.importedAt || "";
-  const updateTime = recent.importedAtText || formatImportTime(importedAt) || schedule.updateTime || "";
+  const updateTime = formatImportTime(importedAt) || recent.importedAtText || schedule.updateTime || "";
   const metadata = Object.assign({}, schedule.metadata || {}, {
     studentName: schedule.metadata && schedule.metadata.studentName || recent.studentName || "",
     className: schedule.metadata && schedule.metadata.className || recent.className || "",
@@ -117,6 +242,7 @@ module.exports = {
   STALE_AFTER_DAYS,
   STORAGE_KEY,
   buildScheduleTarget,
+  buildCachedPreview,
   formatImportTime,
   normalizeRecentImport,
   readLocalRecentImport,

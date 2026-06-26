@@ -5,6 +5,7 @@ const { verifySessionTokenDetailed } = require("../utils/apiSecurity");
 const { createPublicKeyChallenge } = require("../services/fosuApaasImportSessionStore");
 const {
   cancelStudentScheduleImport,
+  confirmRecentStudentScheduleImport,
   confirmStudentScheduleImport,
   createStudentSchedulePreview,
   getStudentSchedulePreviewJobStatus,
@@ -237,6 +238,15 @@ router.get("/recent", (req, res) => {
       success: true,
       recentImport: getRecentImportForSession(req.fosuSession),
     });
+  } catch (error) {
+    return sendImportError(res, error);
+  }
+});
+
+router.post("/recent/confirm", (req, res) => {
+  try {
+    res.setHeader("Cache-Control", "no-store");
+    return res.json(confirmRecentStudentScheduleImport(req, req.body || {}));
   } catch (error) {
     return sendImportError(res, error);
   }
