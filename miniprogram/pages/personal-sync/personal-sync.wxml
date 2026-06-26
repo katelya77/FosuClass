@@ -205,7 +205,7 @@
         </view>
         <view class="advanced-empty" wx:if="{{!studentActiveBucketGroups.length}}">这里没有需要处理的课程。</view>
         <view class="student-group-card" wx:for="{{studentActiveBucketGroups}}" wx:key="viewKey" wx:for-item="group">
-          <view class="student-group-head" data-key="{{group.viewKey}}" bindtap="toggleStudentGroup">
+          <view class="student-group-head" data-key="{{group.viewKey}}" data-bucket="{{group.bucketKey}}" bindtap="toggleStudentGroup">
             <view class="student-group-main">
               <view class="student-group-title">{{group.displayCourseName || group.courseName}}</view>
               <view class="student-group-meta">{{group.countText}}</view>
@@ -214,7 +214,8 @@
           </view>
           <view class="student-group-body" wx:if="{{group.expanded}}">
             <view class="arrangement-row" wx:for="{{group.arrangements}}" wx:key="arrangementId" wx:for-item="arrangement">
-              <view class="selection-dot {{arrangement.selected ? 'selected' : ''}}" data-id="{{arrangement.arrangementId}}" bindtap="toggleStudentArrangement">{{arrangement.selected ? '✓' : ''}}</view>
+              <view wx:if="{{!arrangement.needsTimeCompletion}}" class="selection-dot {{arrangement.selected ? 'selected' : ''}}" data-id="{{arrangement.arrangementId}}" bindtap="toggleStudentArrangement">{{arrangement.selected ? '✓' : ''}}</view>
+              <view wx:else class="selection-dot disabled"></view>
               <view class="arrangement-main">
                 <view class="arrangement-line">
                   <text class="arrangement-time">{{arrangement.timeText}}</text>
@@ -237,7 +238,7 @@
                 <view class="arrangement-conflict-tip" wx:if="{{arrangement.conflictText}}">{{arrangement.conflictText}}</view>
               </view>
               <view class="arrangement-tools">
-                <switch class="arrangement-switch" color="#2f855a" checked="{{arrangement.selected}}" data-id="{{arrangement.arrangementId}}" bindchange="toggleStudentArrangementSwitch" />
+                <switch class="arrangement-switch" wx:if="{{!arrangement.needsTimeCompletion}}" color="#2f855a" checked="{{arrangement.selected}}" data-id="{{arrangement.arrangementId}}" bindchange="toggleStudentArrangementSwitch" />
                 <button class="edit-arrangement-btn" wx:if="{{arrangement.canEdit}}" data-id="{{arrangement.arrangementId}}" bindtap="startEditStudentArrangement">补时间</button>
               </view>
             </view>

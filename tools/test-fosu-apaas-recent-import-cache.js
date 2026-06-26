@@ -127,6 +127,16 @@ function testConfirmSavesReadableRecentImport() {
   assert(Array.isArray(recent.editablePreview.allArrangements) && recent.editablePreview.allArrangements.length === 2,
     "editable preview should keep sanitized arrangements for cached editing");
   assert.deepStrictEqual(recent.editablePreview.selectedArrangementIds, ["arr-auto"]);
+  assert(Array.isArray(recent.pending) && recent.pending.length === 1,
+    "recent import should keep pending arrangements for cached adjustment");
+  assert.strictEqual(recent.pending[0].classNameRaw, makeArrangement().classNameRaw);
+  assert.deepStrictEqual(recent.pending[0].sections, [1, 2]);
+  assert.deepStrictEqual(recent.pending[0].weeks, [1, 2, 3]);
+  assert(Array.isArray(recent.unplaced) && recent.unplaced.length === 1,
+    "recent import should keep unplaced arrangements for cached adjustment");
+  assert.strictEqual(recent.unplaced[0].classNameRaw, makeArrangement().classNameRaw);
+  assert.deepStrictEqual(recent.unplaced[0].sections, [1, 2]);
+  assert.deepStrictEqual(recent.unplaced[0].weeks, [1, 2, 3]);
 }
 
 function testDifferentOwnerCannotRead() {

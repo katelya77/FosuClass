@@ -48,6 +48,13 @@ function allArrangements(preview) {
   return preview.courseGroups.flatMap((group) => group.arrangements);
 }
 
+function normalizeNameForAssert(value) {
+  return String(value || "")
+    .replace(/\s+/g, "")
+    .replace(/（/g, "(")
+    .replace(/）/g, ")");
+}
+
 function testClassScopeParser() {
   assert.strictEqual(isClassScopeMatch(parseClassScope("25动物医学6班"), "25动物医学6班"), "match");
   assert.strictEqual(isClassScopeMatch(parseClassScope("25动物医学[1-6]班"), "25动物医学6班"), "match");
@@ -74,6 +81,62 @@ function testGroupingAndDedupe() {
   assert.strictEqual(preview.courseGroups.length, 1);
   assert.strictEqual(preview.courseGroups[0].arrangements.length, 2);
   assert.strictEqual(preview.summary.duplicateMergedCount, 2);
+}
+
+function testSameCourseNameGroupsAcrossDifferentTimes() {
+  const englishName = "大学英语2(跨文化交流英语)";
+  const careerName = "大学生职业发展与就业指导1";
+  const preview = buildScheduleImportPreview([
+    row({ "课程名称": "大学英语2（跨文化交流英语）", "周次": "1,4,6-16", "星期几": "星期二", "节次": "8-9", "课室名称": "C7-116", "上课班级": "25动物医学[1-6]班" }),
+    row({ "课程名称": "大学英语2(跨文化交流英语)", "周次": "5", "星期几": "星期二", "节次": "8-9", "课室名称": "C7-502（琴）", "上课班级": "25动物医学[1-6]班" }),
+    row({ "课程名称": " 大学英语2 (跨文化交流英语) ", "周次": "1-16", "星期几": "星期四", "节次": "11-12", "课室名称": "B5-304", "上课班级": "25动物医学[1-6]班" }),
+    row({ "课程名称": careerName, "周次": "1", "星期几": "星期一", "节次": "3-5", "课室名称": "C7-316", "上课班级": "25动物医学6班" }),
+    row({ "课程名称": careerName, "周次": "4", "星期几": "星期一", "节次": "3-5", "课室名称": "C7-316", "上课班级": "25动物医学6班" }),
+    row({ "课程名称": careerName, "周次": "6-16", "星期几": "星期一", "节次": "3-5", "课室名称": "C7-316", "上课班级": "25动物医学6班" }),
+  ], {
+    studentId: "202512340303",
+    semester: "2025-2026-2",
+    existingSelectedClassName: "25动物医学6班",
+  });
+
+  const englishGroups = preview.courseGroups.filter((item) => normalizeNameForAssert(item.displayCourseName).includes(englishName));
+  const careerGroups = preview.courseGroups.filter((item) => item.displayCourseName === careerName);
+  assert.strictEqual(englishGroups.length, 1, "大学英语2 variants should normalize into one course group");
+  assert.strictEqual(englishGroups[0].arrangements.length, 3, "大学英语2 should keep all time/place arrangements under one group");
+  assert.strictEqual(careerGroups.length, 1, "大学生职业发展与就业指导1 should be one course group");
+  assert.strictEqual(careerGroups[0].arrangements.length, 3, "career course dispersed weeks should not split groups");
+  assert(preview.buckets.recommended.some((item) => normalizeNameForAssert(item.displayCourseName).includes(englishName) && item.arrangements.length === 3));
+  assert(preview.buckets.recommended.some((item) => item.displayCourseName === careerName && item.arrangements.length === 3));
+}
+
+function testPendingUnplacedAndClassDisplayFields() {
+  const preview = buildScheduleImportPreview([
+    asciiRow({ courseName: "Recommended class", className: "25动物医学6班", weekdayText: "1", sectionText: "1-2", weekText: "1-16" }),
+    asciiRow({ courseName: "Pending complete time", className: "临班110", weekdayText: "2", sectionText: "3-4", weekText: "1-16", roomName: "C7-316" }),
+    asciiRow({ courseName: "Unplaced no sections", className: "临班110", weekdayText: "3", sectionText: "", weekText: "1-16" }),
+    asciiRow({ courseName: "Suspected class", className: "25动物科学3班", weekdayText: "4", sectionText: "5-6", weekText: "1-16" }),
+  ], {
+    studentId: "202512340303",
+    semester: "2025-2026-2",
+    existingSelectedClassName: "25动物医学6班",
+  });
+
+  const pending = preview.buckets.pending.find((item) => item.displayCourseName === "Pending complete time");
+  const unplaced = preview.buckets.unplaced.find((item) => item.displayCourseName === "Unplaced no sections");
+  assert(pending, "complete unknown-class course should be pending, not unplaced");
+  assert.strictEqual(pending.arrangements[0].weekday, 2);
+  assert.deepStrictEqual(pending.arrangements[0].sections, [3, 4]);
+  assert(pending.arrangements[0].weeks.length > 0);
+  assert(!preview.buckets.unplaced.some((item) => item.displayCourseName === "Pending complete time"));
+  assert(unplaced, "missing sections should be unplaced");
+  assert.strictEqual(unplaced.arrangements[0].importDecision, "unscheduled");
+
+  ["recommended", "pending", "unplaced", "suspected"].forEach((bucketKey) => {
+    const bucket = preview.buckets[bucketKey] || [];
+    assert(bucket.length, `${bucketKey} bucket should have test data`);
+    assert(bucket.every((group) => group.arrangements.every((item) => item.classNameRaw && Array.isArray(item.audienceClasses))),
+      `${bucketKey} arrangements should expose class display fields`);
+  });
 }
 
 function testRecommendationsAndLocalTeacherFill() {
@@ -326,6 +389,8 @@ function testSmallConflictDoesNotDemoteRecommendedCourses() {
 
 testClassScopeParser();
 testGroupingAndDedupe();
+testSameCourseNameGroupsAcrossDifferentTimes();
+testPendingUnplacedAndClassDisplayFields();
 testRecommendationsAndLocalTeacherFill();
 testSelectedClassPriorityAndNewBuckets();
 testStrictClassRecommendationRules();
