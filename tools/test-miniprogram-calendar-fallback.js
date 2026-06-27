@@ -23,6 +23,31 @@ const { getBuiltinTeachingCalendar } = require("../miniprogram/data/builtinTeach
 
 async function run() {
   const builtin = getBuiltinTeachingCalendar();
+  const defaultOnly = Object.assign({}, builtin, {
+    source: "generated-date-range",
+    releaseVersion: "bad-generated-v1",
+    schemaVersion: teachingCalendarService.TERM_CALENDAR_CACHE_SCHEMA,
+    weeks: builtin.weeks.map((week) => ({
+      weekNo: week.weekNo,
+      startDate: week.startDate,
+      endDate: week.endDate,
+      type: "teaching",
+      typeText: builtin.defaultWeekTitle,
+      title: builtin.defaultWeekTitle,
+      note: builtin.defaultWeekTitle,
+    })),
+  });
+  wx.setStorageSync(teachingCalendarService.getCacheKey(defaultOnly.term, defaultOnly.releaseVersion), {
+    savedAt: Date.now(),
+    schemaVersion: teachingCalendarService.TERM_CALENDAR_CACHE_SCHEMA,
+    calendar: defaultOnly,
+  });
+  assert.strictEqual(
+    teachingCalendarService.readCache(defaultOnly.term, defaultOnly.releaseVersion),
+    null,
+    "default-only generated calendar cache should be invalidated"
+  );
+
   const lastGood = Object.assign({}, builtin, {
     releaseVersion: "last-good-v1",
     schemaVersion: teachingCalendarService.TERM_CALENDAR_CACHE_SCHEMA,

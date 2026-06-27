@@ -6,7 +6,7 @@ const { BUILTIN_TERM_CONFIG, getBuiltinTeachingCalendar } = require("../data/bui
 
 const CACHE_PREFIX = "fosu:v6:teaching-calendar";
 const LAST_GOOD_PREFIX = `${CACHE_PREFIX}:last-good`;
-const TERM_CALENDAR_CACHE_SCHEMA = 2;
+const TERM_CALENDAR_CACHE_SCHEMA = 3;
 const FAST_CALENDAR_TIMEOUT_MS = 2500;
 const FAST_POINTER_TIMEOUT_MS = 2000;
 const TYPE_TEXT = {
@@ -114,6 +114,31 @@ function hasBadCalendarDates(calendar) {
   });
 }
 
+function isDefaultOnlyBuiltinCalendar(calendar) {
+  const termConfig = calendar && calendar.termConfig || {};
+  const term = String(calendar && (calendar.term || termConfig.term) || "");
+  if (term !== BUILTIN_TERM_CONFIG.term) return false;
+  const weeks = Array.isArray(calendar && calendar.weeks) ? calendar.weeks : [];
+  if (weeks.length !== BUILTIN_TERM_CONFIG.totalWeeks) return false;
+  const specialTypes = new Set(["opening", "holiday", "adjustment", "midterm", "closing", "review", "exam", "flexible"]);
+  const hasSpecialType = weeks.some((week) => specialTypes.has(String(week && week.type || "")));
+  if (hasSpecialType) return false;
+  const defaultText = String(calendar.defaultWeekTitle || TYPE_TEXT.teaching || "");
+  const hasSpecificNote = weeks.some((week) => {
+    const note = String(week && (week.note || week.notes) || "").trim();
+    return note && note !== defaultText && note !== TYPE_TEXT.teaching;
+  });
+  if (hasSpecificNote) return false;
+  const source = String(calendar.source || "");
+  return /generated|date-range|fallback|cache/i.test(source) ||
+    weeks.every((week) => {
+      const title = String(week && week.title || "").trim();
+      const note = String(week && (week.note || week.notes) || "").trim();
+      return (!title || title === defaultText || title === TYPE_TEXT.teaching) &&
+        (!note || note === defaultText || note === TYPE_TEXT.teaching);
+    });
+}
+
 function isStaleCalendar(calendar) {
   if (!calendar || typeof calendar !== "object") return true;
   const termConfig = calendar.termConfig || {};
@@ -124,6 +149,7 @@ function isStaleCalendar(calendar) {
     if (String(termConfig.weekStart || calendar.weekStart || "") !== BUILTIN_TERM_CONFIG.weekStart) return true;
     if (calendar.weeks.length !== BUILTIN_TERM_CONFIG.totalWeeks) return true;
   }
+  if (isDefaultOnlyBuiltinCalendar(calendar)) return true;
   return hasBadCalendarDates(calendar);
 }
 
