@@ -1,11 +1,14 @@
 const assert = require("assert");
 const crypto = require("crypto");
+const fs = require("fs");
 const path = require("path");
 
 const importerPath = path.join(__dirname, "..", "server", "src", "services", "fosuApaasImporter.js");
 const servicePath = path.join(__dirname, "..", "server", "src", "services", "fosuApaasImportService.js");
 const sessionStorePath = path.join(__dirname, "..", "server", "src", "services", "fosuApaasImportSessionStore.js");
 const limiterPath = path.join(__dirname, "..", "server", "src", "services", "fosuApaasImportRateLimiter.js");
+const recentStorePath = path.join(__dirname, "..", "server", "src", "services", "fosuApaasRecentImportStore.js");
+const tempRecentFile = path.join(__dirname, "..", ".tmp", `test-fosu-apaas-preview-recent-${process.pid}.json`);
 
 let capturedPassword = "";
 let importCallCount = 0;
@@ -20,6 +23,24 @@ require.cache[require.resolve(importerPath)] = {
       importCallCount += 1;
       capturedPassword = password;
       await new Promise((resolve) => setTimeout(resolve, 10));
+      const arrangement = {
+        arrangementId: "arr-auto",
+        courseGroupId: "group-auto",
+        courseName: "瀛﹀彿棰勮璇剧▼",
+        displayCourseName: "瀛﹀彿棰勮璇剧▼",
+        weekday: 1,
+        sections: [1, 2],
+        startSection: 1,
+        endSection: 2,
+        weeks: [1, 2, 3],
+        weekText: "1-3",
+        sectionText: "1-2",
+        roomName: "C7-101",
+        teacherName: "棰勮鏁欏笀",
+        importDecision: "auto_include",
+        hasCompleteTime: true,
+        selectedByDefault: true,
+      };
       return {
         profile: {
           studentId,
@@ -39,8 +60,8 @@ require.cache[require.resolve(importerPath)] = {
         uiHints: {},
         preview: [],
         courseGroups: [],
-        allArrangements: [],
-        defaultSelectedArrangementIds: [],
+        allArrangements: [arrangement],
+        defaultSelectedArrangementIds: ["arr-auto"],
         scheduledCourses: [],
         unscheduledCourses: [],
         timing: {
@@ -64,6 +85,11 @@ delete require.cache[require.resolve(servicePath)];
 
 const { createPublicKeyChallenge, __resetForTest: resetSessionStore } = require(sessionStorePath);
 const { __resetForTest: resetLimiter } = require(limiterPath);
+const {
+  __resetForTest: resetRecentStore,
+  __setStoreFileForTest,
+  getRecentImportForSession,
+} = require(recentStorePath);
 const {
   getStudentSchedulePreviewJobStatus,
   startStudentSchedulePreviewJob,
@@ -104,8 +130,11 @@ async function waitForJob(req, jobId) {
 async function run() {
   const oldRateLimit = process.env.FOSU_IMPORT_RATE_LIMIT_ENABLED;
   process.env.FOSU_IMPORT_RATE_LIMIT_ENABLED = "false";
+  fs.mkdirSync(path.dirname(tempRecentFile), { recursive: true });
+  __setStoreFileForTest(tempRecentFile);
   resetSessionStore();
   resetLimiter();
+  resetRecentStore();
   try {
     const challenge = createPublicKeyChallenge({ ttlSeconds: 300 });
     const password = "unit-secret-password";
@@ -139,6 +168,12 @@ async function run() {
     assert.strictEqual(done.profile.studentId, "202512340303", "preview UI payload should keep full student id");
     assert.strictEqual(done.profile.studentIdMasked, "2025****0303", "preview UI payload should also include masked student id");
     assert(Array.isArray(done.courseGroups), "preview payload should expose courseGroups for grouped UI");
+    assert(done.recentImport, "preview success should return recent import metadata before confirm");
+    assert.strictEqual(done.recentImport.courseCount, 1);
+    const recent = getRecentImportForSession(req.fosuSession);
+    assert(recent, "preview success should save recent import for this mini program session");
+    assert.strictEqual(recent.courseCount, 1);
+    assert(Array.isArray(recent.editablePreview.allArrangements) && recent.editablePreview.allArrangements.length === 1);
     assert.strictEqual(capturedPassword, password);
     assert(!JSON.stringify(done).includes(password), "status payload must not expose password");
 
@@ -157,11 +192,30 @@ async function run() {
     assert.strictEqual(reused.hitCache, true);
     assert.strictEqual(reused.timing.hitCache, true);
     assert.strictEqual(importCallCount, 1, "cache hit must not call importer again");
+
+    const thirdChallenge = createPublicKeyChallenge({ ttlSeconds: 300 });
+    const thirdEncrypted = encryptForServer(thirdChallenge.publicKey, {
+      studentId: "202512340303",
+      password,
+      nonce: thirdChallenge.nonce,
+      timestamp: Date.now(),
+    });
+    const fresh = startStudentSchedulePreviewJob(req, Object.assign({
+      keyId: thirdChallenge.keyId,
+      semester: "2025-2026-2",
+      forceRefresh: true,
+    }, thirdEncrypted));
+    assert.notStrictEqual(fresh.jobId, started.jobId, "forceRefresh should bypass reusable preview jobs");
+    const freshDone = await waitForJob(req, fresh.jobId);
+    assert.strictEqual(freshDone.status, "success");
+    assert.strictEqual(importCallCount, 2, "forceRefresh should fetch a fresh preview");
   } finally {
     if (oldRateLimit == null) delete process.env.FOSU_IMPORT_RATE_LIMIT_ENABLED;
     else process.env.FOSU_IMPORT_RATE_LIMIT_ENABLED = oldRateLimit;
     resetSessionStore();
     resetLimiter();
+    resetRecentStore();
+    try { fs.unlinkSync(tempRecentFile); } catch (error) {}
   }
 }
 

@@ -208,7 +208,11 @@ function isReusablePreviewJob(record, context, now = Date.now()) {
   if (record.ownerKey !== context.ownerKey) return false;
   if (record.reuseKey !== context.reuseKey) return false;
   if (Number(record.reuseUntilMs || 0) <= now) return false;
-  return record.status === "pending" || record.status === "running" || record.status === "success";
+  if (record.status === "success") {
+    const preview = getPreview(record.result && record.result.importPreviewToken);
+    return Boolean(preview && preview.ownerKey === context.ownerKey);
+  }
+  return record.status === "pending" || record.status === "running";
 }
 
 function findReusablePreviewJob(context) {
@@ -319,6 +323,7 @@ function getPreviewRequestOptions(encryptedBody = {}) {
   return {
     semester: encryptedBody.semester || "\u5f53\u524d\u5b66\u671f",
     existingSelectedClassName: encryptedBody && (encryptedBody.selectedClassName || encryptedBody.currentClassName) || "",
+    forceRefresh: encryptedBody.forceRefresh === true || encryptedBody.noCache === true || encryptedBody.fresh === true,
   };
 }
 
@@ -349,6 +354,7 @@ function prepareStudentSchedulePreview(req, encryptedBody = {}) {
       ownerKey,
       ipInfo,
       reqIp: req.ip || "",
+      fosuSession: req.fosuSession || null,
       taskId,
       startedAt,
       decryptMs,
@@ -367,6 +373,47 @@ function prepareStudentSchedulePreview(req, encryptedBody = {}) {
       elapsedMs: Date.now() - startedAt,
     });
     throw error;
+  }
+}
+
+function buildPreviewRecord(context, preview) {
+  return {
+    ownerKey: context.ownerKey || "",
+    taskId: context.taskId,
+    studentId: context.credentials && context.credentials.studentId || "",
+    profile: preview.profile || {},
+    summary: preview.summary || {},
+    preview: preview.preview,
+    previewGrid: preview.previewGrid,
+    buckets: preview.buckets,
+    groups: preview.groups,
+    courseGroups: preview.courseGroups,
+    allArrangements: preview.allArrangements,
+    defaultSelectedArrangementIds: preview.defaultSelectedArrangementIds,
+    scheduledCourses: preview.scheduledCourses,
+    unscheduledCourses: preview.unscheduledCourses,
+    timing: preview.timing,
+    source: "fosu_apaas",
+  };
+}
+
+function saveRecentImportFromPreview(context, record) {
+  try {
+    const selection = buildSelectedImportCourses(record, {}, new Date().toISOString());
+    const schedule = buildConfirmedSchedule(record, "replace_fosu_source", [], selection);
+    return saveRecentImportForSession(context && context.fosuSession, {
+      record,
+      schedule,
+      selection,
+      mode: "replace_fosu_source",
+      importedCourseCount: selection.incomingCourses.length,
+    });
+  } catch (error) {
+    safeLog("fosu-apaas-preview-recent-import-save-failed", {
+      taskId: record && record.taskId,
+      code: error.code || error.message,
+    });
+    return null;
   }
 }
 
@@ -397,26 +444,13 @@ async function runPreparedStudentSchedulePreview(context, progress) {
       timing: Object.assign({ decryptMs: context.decryptMs || 0 }, preview.timing || {}),
     });
 
-    const tokenInfo = createPreviewToken({
-      ownerKey,
-      taskId,
-      studentId: credentials.studentId,
-      profile: preview.profile,
-      summary: preview.summary,
-      preview: preview.preview,
-      previewGrid: preview.previewGrid,
-      buckets: preview.buckets,
-      groups: preview.groups,
-      courseGroups: preview.courseGroups,
-      allArrangements: preview.allArrangements,
-      defaultSelectedArrangementIds: preview.defaultSelectedArrangementIds,
-      scheduledCourses: preview.scheduledCourses,
-      unscheduledCourses: preview.unscheduledCourses,
-      timing: preview.timing,
-      source: "fosu_apaas",
-    });
+    const previewRecord = buildPreviewRecord(context, preview);
+    const tokenInfo = createPreviewToken(previewRecord);
+    const recentImport = saveRecentImportFromPreview(context, previewRecord);
 
-    const payload = publicPreviewPayload(preview, tokenInfo);
+    const payload = Object.assign(publicPreviewPayload(preview, tokenInfo), {
+      recentImport,
+    });
     safeLog("fosu-apaas-preview-success", {
       taskId,
       userKey: ownerKey ? `${ownerKey.slice(0, 8)}...` : "",
@@ -473,7 +507,7 @@ async function createStudentSchedulePreview(req, encryptedBody) {
 function startStudentSchedulePreviewJob(req, encryptedBody) {
   const context = prepareStudentSchedulePreview(req, encryptedBody);
   context.reuseKey = createPreviewReuseKey(context);
-  const reusable = findReusablePreviewJob(context);
+  const reusable = context.options && context.options.forceRefresh ? null : findReusablePreviewJob(context);
   if (reusable) {
     reusable.hitCache = true;
     reusable.updatedAt = new Date().toISOString();

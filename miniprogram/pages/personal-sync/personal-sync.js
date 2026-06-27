@@ -805,11 +805,15 @@ async function buildEncryptedStudentPreviewPayload(form, password, extra = {}) {
     nonce: keyResult.nonce,
     timestamp: Date.now(),
   });
-  return Object.assign({
+  const basePayload = {
     keyId: keyResult.keyId,
     semester: extra.semester || "",
     selectedClassName: extra.selectedClassName || "",
-  }, encrypted);
+  };
+  if (extra.forceRefresh === true) {
+    basePayload.forceRefresh = true;
+  }
+  return Object.assign(basePayload, encrypted);
 }
 
 function requestStudentSchedulePreviewLegacy(payload) {
@@ -1298,6 +1302,7 @@ Page({
     return {
       semester: selectedRecord.term || this.data.semesterOptions[this.data.semesterIndex] || settings.semesterId || settings.semester || "",
       selectedClassName: settings.className || current.className || current.name || "",
+      forceRefresh: true,
     };
   },
 
@@ -1769,8 +1774,10 @@ Page({
 
       const displayInfo = buildApaasScheduleDisplay(preview);
       const metadata = sanitizeApaasMetadata(preview);
-      this.stopStudentLoadingSteps();
-      this.setData({
+      const recent = preview && preview.recentImport
+        ? recentStudentImportService.writeLocalRecentImport(preview.recentImport)
+        : null;
+      const previewPatch = {
         studentImportLoading: false,
         studentImportStage: "preview",
         studentPreviewToken: preview.importPreviewToken || "",
@@ -1780,7 +1787,12 @@ Page({
           displayStudentId: resolveDisplayStudentId(metadata, preview.profile || {}),
           maskedStudentId: metadata.studentIdMasked,
         }),
-      });
+      };
+      if (recent) {
+        previewPatch.recentStudentImport = recent;
+      }
+      this.stopStudentLoadingSteps();
+      this.setData(previewPatch);
       this.prepareStudentPreview(this.data.studentPreviewResult);
       wx.showToast({ title: "读取成功", icon: "success" });
     } catch (error) {
