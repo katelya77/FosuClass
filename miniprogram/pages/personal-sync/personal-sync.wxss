@@ -1563,6 +1563,8 @@
 }
 
 .grid-shell {
+  position: relative;
+  z-index: 0;
   overflow: hidden;
   margin-top: 14rpx;
   border-radius: 14rpx;

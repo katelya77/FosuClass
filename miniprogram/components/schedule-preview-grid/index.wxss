@@ -1,4 +1,6 @@
 .preview-grid-shell {
+  position: relative;
+  z-index: 0;
   overflow: hidden;
   border: 1rpx solid #e3e8f0;
   border-radius: 14rpx;
@@ -7,12 +9,17 @@
 }
 
 .preview-grid-scroll {
+  position: relative;
+  z-index: 0;
+  overflow: hidden;
   height: 660rpx;
   max-height: 660rpx;
   background: #f8fafc;
 }
 
 .preview-grid {
+  position: relative;
+  z-index: 0;
   display: flex;
   min-height: 1rpx;
 }
@@ -68,11 +75,14 @@
 
 .days-area {
   position: relative;
+  z-index: 0;
+  overflow: hidden;
   display: flex;
 }
 
 .day-column {
   position: relative;
+  overflow: hidden;
   flex: 0 0 auto;
   box-sizing: border-box;
   border-left: 1rpx solid #edf1f6;
