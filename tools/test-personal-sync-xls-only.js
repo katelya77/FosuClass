@@ -45,6 +45,13 @@ function run() {
   assert(wxml.includes("检测到周末课程，可在调整课程中查看"), "student preview should show a weekend-course hint");
   assert(js.includes("STUDENT_WEEKDAY_LABELS.slice(0, 5)"), "student preview grid should default to weekdays only");
   assert(previewGridJs.includes("Array.from({ length: 5 }"), "preview grid fallback days should be Monday to Friday");
+  assert(js.includes("function studentPreviewLayerPriority"), "student preview should rank current-week/selected courses before rendering");
+  assert(js.includes("activeInPreviewWeek: true"), "student preview grid cells should mark current preview-week courses");
+  assert(js.includes("cell.zIndex = 10 + cell.previewLayerPriority;"), "student preview should assign z-index from preview priority");
+  assert(js.includes("sortStudentPreviewGridCells"), "student preview grid cells should be sorted by preview layer priority");
+  assert(previewGridJs.includes("function getPreviewLayerPriority"), "preview grid should resolve layer priority at render time");
+  assert(previewGridJs.includes("sortPreviewCellsForRender"), "preview grid should render lower-priority cells before higher-priority cells");
+  assert(previewGridJs.includes("`z-index:${zIndex}`"), "preview grid course cards should include priority z-index");
   assert(js.includes("formatStudentWeekDisplay"), "student import UI should format week text semantically");
   assert(js.includes("`${weekdayText} · ${sectionText}`"), "student import arrangements should display semantic weekday/section text");
   assert(js.includes("function needsTimeCompletion(arrangement)"), "student import should use a single time-completion predicate");

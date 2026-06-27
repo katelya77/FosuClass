@@ -601,6 +601,28 @@ function markStudentPreviewConflicts(cells) {
   }
 }
 
+function studentPreviewLayerPriority(cell) {
+  let priority = 0;
+  if (cell && cell.activeInPreviewWeek !== false) priority += 20;
+  if (cell && cell.selected !== false) priority += 10;
+  if (cell && cell.importDecision === "auto_include") priority += 4;
+  if (cell && cell.importDecision === "needs_confirm") priority += 2;
+  if (cell && cell.conflict) priority += 1;
+  return priority;
+}
+
+function sortStudentPreviewGridCells(cells) {
+  return (cells || []).slice().sort((left, right) => {
+    const leftPriority = Number(left.previewLayerPriority || 0);
+    const rightPriority = Number(right.previewLayerPriority || 0);
+    if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+    if ((left.weekday || 99) !== (right.weekday || 99)) return (left.weekday || 99) - (right.weekday || 99);
+    if ((left.startSection || 99) !== (right.startSection || 99)) return (left.startSection || 99) - (right.startSection || 99);
+    if ((left.endSection || 99) !== (right.endSection || 99)) return (left.endSection || 99) - (right.endSection || 99);
+    return String(left.id || left.courseName || "").localeCompare(String(right.id || right.courseName || ""));
+  });
+}
+
 function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
   const targetWeek = clampPreviewWeek(week);
   const prepared = (arrangements || [])
@@ -639,17 +661,22 @@ function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
         importDecision: arrangement.importDecision,
         reason: arrangement.reason || "",
         selected,
+        activeInPreviewWeek: true,
         conflict: false,
       };
     });
 
   markStudentPreviewConflicts(cells);
+  cells.forEach((cell) => {
+    cell.previewLayerPriority = studentPreviewLayerPriority(cell);
+    cell.zIndex = 10 + cell.previewLayerPriority;
+  });
   return {
     week: targetWeek,
     hasWeekendCourses,
     days: STUDENT_WEEKDAY_LABELS.slice(0, 5).map((label, index) => ({ weekday: index + 1, label })),
     sections: Array.from({ length: 14 }, (_, index) => ({ section: index + 1, label: `${index + 1}` })),
-    cells,
+    cells: sortStudentPreviewGridCells(cells),
   };
 }
 

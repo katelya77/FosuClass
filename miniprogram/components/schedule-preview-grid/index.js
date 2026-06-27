@@ -37,12 +37,52 @@ function buildDefaultDays() {
   }));
 }
 
+function isCellActiveInGridWeek(cell, gridWeek) {
+  if (cell && typeof cell.activeInPreviewWeek === "boolean") {
+    return cell.activeInPreviewWeek;
+  }
+  const targetWeek = Number(gridWeek);
+  if (!Number.isInteger(targetWeek) || targetWeek <= 0) {
+    return cell && cell.activeInPreviewWeek !== false;
+  }
+  const weeks = toNumberList(cell && cell.weeks);
+  if (!weeks.length) return true;
+  return weeks.indexOf(targetWeek) >= 0;
+}
+
+function getPreviewLayerPriority(cell, gridWeek) {
+  let priority = 0;
+  if (isCellActiveInGridWeek(cell, gridWeek)) priority += 20;
+  if (cell && cell.selected !== false) priority += 10;
+  if (cell && cell.importDecision === "auto_include") priority += 4;
+  if (cell && cell.importDecision === "needs_confirm") priority += 2;
+  if (cell && cell.conflict) priority += 1;
+  return priority;
+}
+
+function sortPreviewCellsForRender(cells, gridWeek) {
+  return (cells || []).slice().sort((left, right) => {
+    const leftPriority = getPreviewLayerPriority(left, gridWeek);
+    const rightPriority = getPreviewLayerPriority(right, gridWeek);
+    if (leftPriority !== rightPriority) return leftPriority - rightPriority;
+    const leftStart = Number(left.startSection || 99);
+    const rightStart = Number(right.startSection || 99);
+    if (leftStart !== rightStart) return leftStart - rightStart;
+    const leftEnd = Number(left.endSection || leftStart);
+    const rightEnd = Number(right.endSection || rightStart);
+    if (leftEnd !== rightEnd) return leftEnd - rightEnd;
+    return String(left.id || left.arrangementId || left.courseName || "")
+      .localeCompare(String(right.id || right.arrangementId || right.courseName || ""));
+  });
+}
+
 function buildColumns(grid, sectionHeight, dayColumnWidth) {
   const days = (grid && grid.days || []).length ? grid.days : buildDefaultDays();
   const cells = grid && Array.isArray(grid.cells) ? grid.cells : [];
   return days.map((day) => {
-    const courses = cells
-      .filter((cell) => Number(cell.weekday) === Number(day.weekday))
+    const gridWeek = grid && grid.week;
+    const courses = sortPreviewCellsForRender(cells
+      .filter((cell) => Number(cell.weekday) === Number(day.weekday)), gridWeek)
       .map((cell) => {
         const sections = toNumberList(cell.sections);
         const startSection = Number(cell.startSection || sections[0] || 1);
@@ -53,6 +93,7 @@ function buildColumns(grid, sectionHeight, dayColumnWidth) {
         const theme = themeForCell(cell);
         const weekText = cell.displayWeekText || cell.weekText || "";
         const subText = [cell.teacherName, weekText].filter(Boolean).join(" · ");
+        const zIndex = 10 + getPreviewLayerPriority(cell, gridWeek);
         return Object.assign({}, cell, {
           id: cell.id || cell.arrangementId,
           startSection,
@@ -78,6 +119,7 @@ function buildColumns(grid, sectionHeight, dayColumnWidth) {
             `--course-text:${theme.text}`,
             `--course-meta-text:${theme.metaText || theme.text}`,
             `--course-room-text:${theme.roomText || "#f1c40f"}`,
+            `z-index:${zIndex}`,
             "left:3rpx",
             "right:3rpx",
           ].join(";") + ";",
