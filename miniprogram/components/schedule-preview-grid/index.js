@@ -1,6 +1,7 @@
 const TIME_AXIS_WIDTH = 64;
 const DEFAULT_DAY_WIDTH = 120;
 const DEFAULT_SECTION_HEIGHT = 72;
+const PREVIEW_LAYER_BASE_Z_INDEX = 1;
 const {
   courseColorTokenForCourse,
   courseSemanticColorToken,
@@ -52,10 +53,10 @@ function isCellActiveInGridWeek(cell, gridWeek) {
 
 function getPreviewLayerPriority(cell, gridWeek) {
   let priority = 0;
-  if (isCellActiveInGridWeek(cell, gridWeek)) priority += 20;
-  if (cell && cell.selected !== false) priority += 10;
-  if (cell && cell.importDecision === "auto_include") priority += 4;
-  if (cell && cell.importDecision === "needs_confirm") priority += 2;
+  if (isCellActiveInGridWeek(cell, gridWeek)) priority += 4;
+  if (cell && cell.selected !== false) priority += 2;
+  if (cell && cell.importDecision === "auto_include") priority += 1;
+  if (cell && cell.importDecision === "needs_confirm") priority += 1;
   if (cell && cell.conflict) priority += 1;
   return priority;
 }
@@ -93,7 +94,7 @@ function buildColumns(grid, sectionHeight, dayColumnWidth) {
         const theme = themeForCell(cell);
         const weekText = cell.displayWeekText || cell.weekText || "";
         const subText = [cell.teacherName, weekText].filter(Boolean).join(" · ");
-        const zIndex = 10 + getPreviewLayerPriority(cell, gridWeek);
+        const zIndex = PREVIEW_LAYER_BASE_Z_INDEX + getPreviewLayerPriority(cell, gridWeek);
         return Object.assign({}, cell, {
           id: cell.id || cell.arrangementId,
           startSection,

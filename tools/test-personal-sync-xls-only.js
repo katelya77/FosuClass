@@ -13,6 +13,7 @@ function run() {
   const wxml = read("miniprogram/pages/personal-sync/personal-sync.wxml");
   const wxss = read("miniprogram/pages/personal-sync/personal-sync.wxss");
   const previewGridJs = read("miniprogram/components/schedule-preview-grid/index.js");
+  const previewGridWxss = read("miniprogram/components/schedule-preview-grid/index.wxss");
   const courseCardWxml = read("miniprogram/components/course-card/index.wxml");
   const courseCardWxss = read("miniprogram/components/course-card/index.wxss");
   const aiService = read("miniprogram/services/aiAssistantService.js");
@@ -47,11 +48,16 @@ function run() {
   assert(previewGridJs.includes("Array.from({ length: 5 }"), "preview grid fallback days should be Monday to Friday");
   assert(js.includes("function studentPreviewLayerPriority"), "student preview should rank current-week/selected courses before rendering");
   assert(js.includes("activeInPreviewWeek: true"), "student preview grid cells should mark current preview-week courses");
-  assert(js.includes("cell.zIndex = 10 + cell.previewLayerPriority;"), "student preview should assign z-index from preview priority");
+  assert(js.includes("cell.zIndex = 1 + cell.previewLayerPriority;"), "student preview should assign bounded z-index from preview priority");
   assert(js.includes("sortStudentPreviewGridCells"), "student preview grid cells should be sorted by preview layer priority");
   assert(previewGridJs.includes("function getPreviewLayerPriority"), "preview grid should resolve layer priority at render time");
   assert(previewGridJs.includes("sortPreviewCellsForRender"), "preview grid should render lower-priority cells before higher-priority cells");
   assert(previewGridJs.includes("`z-index:${zIndex}`"), "preview grid course cards should include priority z-index");
+  assert(previewGridJs.includes("PREVIEW_LAYER_BASE_Z_INDEX = 1"), "preview grid z-index should stay within the component layer");
+  assert(/\.preview-grid-shell\s*\{[\s\S]*?position:\s*relative;[\s\S]*?z-index:\s*0;[\s\S]*?overflow:\s*hidden;/.test(previewGridWxss),
+    "preview grid shell should create a clipped local stacking context");
+  assert(/\.day-column\s*\{[\s\S]*?position:\s*relative;[\s\S]*?overflow:\s*hidden;/.test(previewGridWxss),
+    "preview grid columns should clip absolutely positioned course cards");
   assert(js.includes("formatStudentWeekDisplay"), "student import UI should format week text semantically");
   assert(js.includes("`${weekdayText} · ${sectionText}`"), "student import arrangements should display semantic weekday/section text");
   assert(js.includes("function needsTimeCompletion(arrangement)"), "student import should use a single time-completion predicate");
@@ -75,6 +81,8 @@ function run() {
   assert(/\.student-bottom-actions\s*\{[\s\S]*?gap:\s*16rpx;/.test(wxss), "bottom actions must keep a 16rpx gap");
   assert(/\.student-bottom-actions \.btn-bind,[\s\S]*?\.student-bottom-actions \.btn-cancel\s*\{[\s\S]*?flex:\s*1;/.test(wxss), "bottom buttons must flex equally");
   assert(/\.student-bottom-actions \.btn-bind,[\s\S]*?\.student-bottom-actions \.btn-cancel\s*\{[\s\S]*?min-width:\s*0;/.test(wxss), "bottom buttons must allow shrinking");
+  assert(/\.grid-shell\s*\{[\s\S]*?position:\s*relative;[\s\S]*?z-index:\s*0;[\s\S]*?overflow:\s*hidden;/.test(wxss),
+    "student preview grid shell must clip course cards inside the preview card");
   assert(courseCardWxml.includes("course.previewGrid"), "course card should support preview-only layout");
   assert(courseCardWxss.includes(".is-preview-grid .course-name"), "preview course blocks should have dedicated readable text sizing");
   assert(wxml.includes("recentStudentImport"), "personal-sync should render recent student import card");

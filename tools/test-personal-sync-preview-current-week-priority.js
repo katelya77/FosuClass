@@ -60,5 +60,6 @@ const active = courses.find((course) => course.id === "active-week");
 assert(inactive && active, "preview should render both overlapping courses");
 assert.strictEqual(courses[courses.length - 1].id, "active-week", "active-week course should render after inactive overlaps");
 assert(readZIndex(active) > readZIndex(inactive), "active-week course z-index should be higher than inactive-week course");
+assert(readZIndex(active) < 20, "preview course z-index should stay below the fixed bottom actions layer");
 
 console.log("test-personal-sync-preview-current-week-priority passed");

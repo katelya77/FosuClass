@@ -603,10 +603,10 @@ function markStudentPreviewConflicts(cells) {
 
 function studentPreviewLayerPriority(cell) {
   let priority = 0;
-  if (cell && cell.activeInPreviewWeek !== false) priority += 20;
-  if (cell && cell.selected !== false) priority += 10;
-  if (cell && cell.importDecision === "auto_include") priority += 4;
-  if (cell && cell.importDecision === "needs_confirm") priority += 2;
+  if (cell && cell.activeInPreviewWeek !== false) priority += 4;
+  if (cell && cell.selected !== false) priority += 2;
+  if (cell && cell.importDecision === "auto_include") priority += 1;
+  if (cell && cell.importDecision === "needs_confirm") priority += 1;
   if (cell && cell.conflict) priority += 1;
   return priority;
 }
@@ -669,7 +669,7 @@ function buildStudentPreviewGrid(arrangements, week, selectedMap, editedMap) {
   markStudentPreviewConflicts(cells);
   cells.forEach((cell) => {
     cell.previewLayerPriority = studentPreviewLayerPriority(cell);
-    cell.zIndex = 10 + cell.previewLayerPriority;
+    cell.zIndex = 1 + cell.previewLayerPriority;
   });
   return {
     week: targetWeek,
