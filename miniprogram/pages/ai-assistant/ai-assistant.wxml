@@ -21,7 +21,7 @@
   <view class="ai-mode-row">
     <view class="quick-nav-segment" aria-label="对话与任务">
       <view class="quick-nav-option active" bindtap="openConversationSheet"><text>对话</text></view>
-      <view class="quick-nav-option" bindtap="openTaskPanel"><text>任务</text></view>
+      <view class="quick-nav-option quick-more-button" bindtap="openTaskPanel"><text>任务</text></view>
     </view>
   </view>
 
