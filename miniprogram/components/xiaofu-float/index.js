@@ -1,9 +1,12 @@
 const floatService = require("../../services/xiaofuFloatService");
 
 const FLOAT_SIZE = 58;
-const EDGE_MARGIN = 10;
-const DRAG_THRESHOLD = 5;
+const EDGE_MARGIN = 8;
+const TOP_SAFE_GAP = 8;
+const CAPSULE_GAP = 8;
+const DRAG_THRESHOLD = 9;
 const FRAME_MS = 16;
+const TAP_DEDUPE_MS = 360;
 
 function getSystemInfo() {
   try {
@@ -20,6 +23,15 @@ function getSystemInfo() {
       safeArea: null,
     };
   }
+}
+
+function getMenuButtonRect() {
+  try {
+    if (wx.getMenuButtonBoundingClientRect) return wx.getMenuButtonBoundingClientRect();
+  } catch (error) {
+    // No capsule information outside real WeChat runtime.
+  }
+  return null;
 }
 
 Component({
@@ -87,24 +99,44 @@ Component({
       const safeTop = Number(safeArea.top || 0) || 0;
       const safeBottomGap = safeArea.bottom ? Math.max(0, height - Number(safeArea.bottom || height)) : 0;
       const bottomAvoid = Number(policy && policy.bottomAvoidPx || 28) + safeBottomGap + Number(this.properties.bottomOffset || 0);
+      const menuButton = getMenuButtonRect();
       return {
         minX: EDGE_MARGIN,
         maxX: Math.max(EDGE_MARGIN, width - FLOAT_SIZE - EDGE_MARGIN),
-        minY: Math.max(EDGE_MARGIN, safeTop + 56),
+        minY: Math.max(EDGE_MARGIN, safeTop + TOP_SAFE_GAP),
         maxY: Math.max(EDGE_MARGIN, height - FLOAT_SIZE - bottomAvoid),
+        menuButton,
         width,
         height,
       };
+    },
+
+    avoidCapsule(position, bounds) {
+      const rect = bounds && bounds.menuButton;
+      if (!rect) return position;
+      const left = Number(rect.left);
+      const bottom = Number(rect.bottom);
+      if (!Number.isFinite(left) || !Number.isFinite(bottom)) return position;
+      const x = Number(position && position.x);
+      const y = Number(position && position.y);
+      if (!Number.isFinite(x) || !Number.isFinite(y)) return position;
+      const nearRightEdge = x + FLOAT_SIZE > left - CAPSULE_GAP;
+      const overlapsCapsuleY = y < bottom + CAPSULE_GAP;
+      if (!nearRightEdge || !overlapsCapsuleY) return position;
+      return Object.assign({}, position, {
+        y: Math.min(bounds.maxY, Math.max(bounds.minY, bottom + CAPSULE_GAP)),
+      });
     },
 
     clampPosition(position, bounds) {
       const source = position || {};
       const x = Number(source.x);
       const y = Number(source.y);
-      return {
+      const clamped = {
         x: Math.min(bounds.maxX, Math.max(bounds.minX, Number.isFinite(x) ? x : bounds.maxX)),
         y: Math.min(bounds.maxY, Math.max(bounds.minY, Number.isFinite(y) ? y : bounds.maxY - 18)),
       };
+      return this.avoidCapsule(clamped, bounds);
     },
 
     refreshPosition() {
@@ -147,6 +179,7 @@ Component({
         dragging: false,
       };
       this._longPressed = false;
+      this._tapOpenedAt = 0;
     },
 
     onTouchMove(event) {
@@ -154,9 +187,12 @@ Component({
       if (!touch || !this._touch) return;
       const currentX = Number(touch.clientX || 0);
       const currentY = Number(touch.clientY || 0);
+      this._touch.lastX = currentX;
+      this._touch.lastY = currentY;
       const dx = currentX - this._touch.startX;
       const dy = currentY - this._touch.startY;
       if (!this._touch.dragging && Math.sqrt(dx * dx + dy * dy) < DRAG_THRESHOLD) return;
+      if (this._longPressed) return;
       this._touch.dragging = true;
       const now = Date.now();
       if (now - Number(this._lastMoveAt || 0) < FRAME_MS) return;
@@ -174,19 +210,35 @@ Component({
       });
     },
 
-    onTouchEnd() {
+    onTouchEnd(event) {
       if (!this._touch) return;
       const dragging = this._touch.dragging === true;
+      const touch = this.getTouch(event);
+      if (touch) {
+        this._touch.lastX = Number(touch.clientX || this._touch.lastX || 0);
+        this._touch.lastY = Number(touch.clientY || this._touch.lastY || 0);
+      }
+      const touchState = this._touch;
       this._touch = null;
       if (!dragging) {
         this.setData({ moving: false });
+        if (!this._longPressed && Date.now() >= Number(this._ignoreTapUntil || 0)) {
+          this._tapOpenedAt = Date.now();
+          this.openAssistant();
+        }
         return;
       }
       const policy = floatService.getRoutePolicy(this.currentRoute());
       const bounds = this.getBounds(policy);
-      const currentX = Number(this.data.x || 0);
+      const dx = Number(touchState.lastX || touchState.startX || 0) - Number(touchState.startX || 0);
+      const dy = Number(touchState.lastY || touchState.startY || 0) - Number(touchState.startY || 0);
+      const settled = this.clampPosition({
+        x: Number(touchState.originX || 0) + dx,
+        y: Number(touchState.originY || 0) + dy,
+      }, bounds);
+      const currentX = Number.isFinite(settled.x) ? settled.x : Number(this.data.x || 0);
       const snapX = currentX + FLOAT_SIZE / 2 < bounds.width / 2 ? bounds.minX : bounds.maxX;
-      const next = this.clampPosition({ x: snapX, y: this.data.y }, bounds);
+      const next = this.clampPosition({ x: snapX, y: settled.y }, bounds);
       floatService.savePosition(next);
       this._ignoreTapUntil = Date.now() + 260;
       this.setData({
@@ -198,6 +250,8 @@ Component({
 
     onTap() {
       if (Date.now() < Number(this._ignoreTapUntil || 0) || this._longPressed) return;
+      if (Date.now() - Number(this._tapOpenedAt || 0) < TAP_DEDUPE_MS) return;
+      this._tapOpenedAt = Date.now();
       this.openAssistant();
     },
 
@@ -227,11 +281,15 @@ Component({
     },
 
     openAssistant() {
+      if (/pages\/ai-assistant\/ai-assistant/.test(this.currentRoute())) return;
       floatService.savePendingContext(this.properties.context || {});
       wx.navigateTo({
         url: "/pages/ai-assistant/ai-assistant?from=float",
         fail: () => {
-          wx.showToast({ title: "暂时无法打开小佛AI", icon: "none" });
+          wx.redirectTo({
+            url: "/pages/ai-assistant/ai-assistant?from=float",
+            fail: () => wx.showToast({ title: "暂时无法打开小佛AI", icon: "none" }),
+          });
         },
       });
     },

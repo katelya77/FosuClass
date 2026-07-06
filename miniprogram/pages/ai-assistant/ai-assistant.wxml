@@ -267,7 +267,10 @@
       </view>
       <button class="sheet-close" bindtap="closeHeaderMenu">关闭</button>
     </view>
-    <button class="header-menu-item" bindtap="enableXiaofuFloat">开启小佛AI浮窗</button>
+    <button class="header-menu-item float-toggle {{xiaofuFloatEnabled ? 'warning' : ''}}" bindtap="toggleXiaofuFloat">
+      <view class="header-menu-title">{{xiaofuFloatToggleText}}</view>
+      <view class="header-menu-desc">{{xiaofuFloatToggleDesc}}</view>
+    </button>
     <button class="header-menu-item danger" bindtap="clearHistory">清空记录</button>
   </view>
 
