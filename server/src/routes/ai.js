@@ -43,6 +43,8 @@ router.get("/weather", scheduleLimiter, async (req, res) => {
     const weather = await weatherService.getCampusWeather({
       campus: req.query && (req.query.campus || req.query.location),
       message: req.query && req.query.message,
+      dateHint: req.query && req.query.dateHint,
+      topic: req.query && req.query.topic,
     });
     return res.json({
       success: true,

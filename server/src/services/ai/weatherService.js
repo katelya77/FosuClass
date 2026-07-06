@@ -11,21 +11,26 @@ const CAMPUS = {
   xianxi: {
     id: "xianxi",
     name: "仙溪校区",
-    latitude: 23.0336,
-    longitude: 113.1222,
+    latitude: 23.14817,
+    longitude: 113.04939,
     configured: true,
+    coordinateNote: "按佛山大学站/仙溪校区附近坐标近似。",
   },
   jiangwan: {
     id: "jiangwan",
     name: "江湾校区",
-    latitude: 23.0382,
-    longitude: 113.1115,
+    latitude: 23.02586,
+    longitude: 113.09257,
     configured: true,
+    coordinateNote: "按江湾校区校园范围坐标近似。",
   },
   hebin: {
     id: "hebin",
     name: "河滨校区",
-    configured: false,
+    latitude: 23.05039,
+    longitude: 113.11074,
+    configured: true,
+    coordinateNote: "TODO: 替换为官方校区中心点；当前按河滨路/中山公园站附近坐标近似。",
   },
   foshan: {
     id: "foshan",
@@ -61,6 +66,21 @@ function normalizeCampus(value) {
 
 function resolveCampus(input = {}) {
   return normalizeCampus(input.campus || input.campusId || input.message) || CAMPUS.xianxi;
+}
+
+function resolveTargetDay(input = {}) {
+  const text = fullWidthToHalfWidth(`${input.dateHint || ""} ${input.message || ""}`).trim().toLowerCase();
+  if (/day_after_tomorrow|后天/.test(text)) return { dateHint: "day_after_tomorrow", dayOffset: 2, label: "后天" };
+  if (/tomorrow|明天|明日/.test(text)) return { dateHint: "tomorrow", dayOffset: 1, label: "明天" };
+  return { dateHint: "today", dayOffset: 0, label: "今天" };
+}
+
+function resolveTopic(input = {}) {
+  const text = fullWidthToHalfWidth(`${input.topic || ""} ${input.message || ""}`).trim().toLowerCase();
+  if (/running|跑步|晨跑|夜跑/.test(text)) return "running";
+  if (/umbrella|带伞|伞|下雨|雨|降雨/.test(text)) return "rain";
+  if (/temperature|温度|气温|热|冷/.test(text)) return "temperature";
+  return "weather";
 }
 
 function readCache(key) {
@@ -132,31 +152,48 @@ function getNextHours(hourly = {}, updatedAt) {
   return output;
 }
 
+function getNextHoursForTarget(hourly = {}, updatedAt, targetDate) {
+  if (!targetDate) return getNextHours(hourly, updatedAt);
+  const times = Array.isArray(hourly.time) ? hourly.time : [];
+  const targetIndex = times.findIndex((item) => String(item || "").slice(0, 10) === targetDate && Number(String(item || "").slice(11, 13)) >= 6);
+  if (targetIndex < 0) return getNextHours(hourly, updatedAt);
+  return getNextHours(hourly, times[targetIndex]);
+}
+
 function maxRainProbability(hourly = {}, hours = 24) {
   const values = Array.isArray(hourly.precipitation_probability) ? hourly.precipitation_probability : [];
-  if (!values.length) return 0;
+  if (!values.length) return null;
   return Math.max(...values.slice(0, hours).map((item) => Math.max(0, Math.min(100, Number(item) || 0))));
 }
 
-function buildAdvice(result) {
+function buildAdvice(result, topic) {
   const advice = [];
-  if (Number(result.precipitationMm) >= 1 || Number(result.rainProbabilityMax24h) >= 60) {
+  const precipitation = numberOrNull(result.precipitationMm);
+  const rainProbability = numberOrNull(result.rainProbabilityMax24h);
+  const temperature = numberOrNull(result.temperatureC);
+  const high = numberOrNull(result.highC);
+  const windSpeed = numberOrNull(result.windSpeedKmh);
+  if ((precipitation != null && precipitation >= 1) || (rainProbability != null && rainProbability >= 60)) {
     advice.push("短时降雨概率较高，建议带伞并预留通行时间。");
   }
-  if (Number(result.temperatureC) >= 33 || Number(result.highC) >= 34) {
+  if ((temperature != null && temperature >= 33) || (high != null && high >= 34)) {
     advice.push("气温偏高，课前通行注意补水和防晒。");
   }
   if (/雷/.test(result.weatherText)) {
     advice.push("有雷阵雨风险，尽量避开露天长距离通行。");
   }
-  if (Number(result.windSpeedKmh) >= 28) {
+  if (windSpeed != null && windSpeed >= 28) {
     advice.push("风速偏大，骑行和过桥路段注意安全。");
+  }
+  if (topic === "running") {
+    if (advice.length) return `不太适合跑步：${advice[0]}`;
+    return "适合轻量跑步，建议避开正午高温时段并及时补水。";
   }
   if (!advice.length) advice.push("天气影响不大，按正常课前时间出发即可。");
   return advice[0];
 }
 
-async function fetchOpenMeteo(campus) {
+async function fetchOpenMeteo(campus, targetDay) {
   const response = await weatherFetcher("https://api.open-meteo.com/v1/forecast", {
     timeout: Number(process.env.AI_WEATHER_TIMEOUT_MS || 3500) || 3500,
     params: {
@@ -164,46 +201,66 @@ async function fetchOpenMeteo(campus) {
       longitude: campus.longitude,
       current: "temperature_2m,apparent_temperature,relative_humidity_2m,precipitation,weather_code,wind_speed_10m",
       hourly: "temperature_2m,precipitation_probability",
-      daily: "temperature_2m_max,temperature_2m_min,precipitation_probability_max",
-      forecast_days: 2,
+      daily: "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+      forecast_days: Math.max(2, Math.min(3, Number(targetDay && targetDay.dayOffset || 0) + 1)),
       timezone: "Asia/Shanghai",
     },
   });
   return response.data || {};
 }
 
-function buildWeatherResult(campus, data) {
+function buildWeatherResult(campus, data, targetDay, topic) {
   const current = data.current || {};
   const hourly = data.hourly || {};
   const daily = data.daily || {};
   const updatedAt = current.time || new Date(nowFn()).toISOString();
-  const highC = Array.isArray(daily.temperature_2m_max) ? daily.temperature_2m_max[0] : null;
-  const lowC = Array.isArray(daily.temperature_2m_min) ? daily.temperature_2m_min[0] : null;
-  const dailyRainMax = Array.isArray(daily.precipitation_probability_max) ? daily.precipitation_probability_max[0] : null;
+  const dayOffset = Math.max(0, Math.min(2, Number(targetDay && targetDay.dayOffset || 0) || 0));
+  const dailyTime = Array.isArray(daily.time) ? daily.time : [];
+  const dayIndex = dailyTime.length > dayOffset ? dayOffset : 0;
+  const targetDate = dailyTime[dayIndex] || String(updatedAt).slice(0, 10);
+  const highC = Array.isArray(daily.temperature_2m_max) ? daily.temperature_2m_max[dayIndex] : null;
+  const lowC = Array.isArray(daily.temperature_2m_min) ? daily.temperature_2m_min[dayIndex] : null;
+  const dailyRainMax = Array.isArray(daily.precipitation_probability_max) ? daily.precipitation_probability_max[dayIndex] : null;
+  const dailyCode = Array.isArray(daily.weather_code) ? daily.weather_code[dayIndex] : null;
+  const currentTemp = dayOffset === 0 ? current.temperature_2m : null;
+  const currentFeelsLike = dayOffset === 0 ? current.apparent_temperature : null;
+  const displayTemp = currentTemp != null ? currentTemp : (highC != null && lowC != null ? (Number(highC) + Number(lowC)) / 2 : highC);
+  const hourlyRainMax = maxRainProbability(hourly, 24);
+  const dailyRainMaxRounded = roundNumber(dailyRainMax, 0);
+  const rainProbabilityMax24h = dayOffset > 0
+    ? dailyRainMaxRounded
+    : (hourlyRainMax == null
+      ? dailyRainMaxRounded
+      : (dailyRainMaxRounded == null ? hourlyRainMax : Math.max(hourlyRainMax, dailyRainMaxRounded)));
   const result = {
     success: true,
     campus: campus.name,
     campusId: campus.id,
     provider: "open-meteo",
     sourceId: `open-meteo:${campus.id}`,
+    coordinateNote: campus.coordinateNote || "",
+    targetDate,
+    targetLabel: targetDay && targetDay.label || "今天",
+    dateHint: targetDay && targetDay.dateHint || "today",
     updatedAt,
-    temperatureC: roundNumber(current.temperature_2m, 0),
-    apparentTemperatureC: roundNumber(current.apparent_temperature != null ? current.apparent_temperature : current.temperature_2m, 0),
-    weatherCode: numberOrNull(current.weather_code),
-    weatherText: weatherLabel(current.weather_code),
-    humidity: roundNumber(current.relative_humidity_2m, 0),
-    precipitationMm: roundNumber(current.precipitation, 1),
-    windSpeedKmh: roundNumber(current.wind_speed_10m, 0),
+    temperatureC: roundNumber(displayTemp, 0),
+    apparentTemperatureC: roundNumber(currentFeelsLike != null ? currentFeelsLike : displayTemp, 0),
+    weatherCode: numberOrNull(dailyCode != null ? dailyCode : current.weather_code),
+    weatherText: weatherLabel(dailyCode != null ? dailyCode : current.weather_code),
+    humidity: dayOffset === 0 ? roundNumber(current.relative_humidity_2m, 0) : null,
+    precipitationMm: dayOffset === 0 ? roundNumber(current.precipitation, 1) : null,
+    windSpeedKmh: dayOffset === 0 ? roundNumber(current.wind_speed_10m, 0) : null,
     highC: roundNumber(highC != null ? highC : current.temperature_2m, 0),
     lowC: roundNumber(lowC != null ? lowC : current.temperature_2m, 0),
-    next6Hours: getNextHours(hourly, updatedAt),
-    rainProbabilityMax24h: Math.max(maxRainProbability(hourly, 24), roundNumber(dailyRainMax, 0) || 0),
+    next6Hours: getNextHoursForTarget(hourly, updatedAt, targetDate),
+    rainProbabilityMax24h,
     cached: false,
     stale: false,
   };
-  result.advice = buildAdvice(result);
+  result.advice = buildAdvice(result, topic);
   result.alerts = [result.advice];
-  result.summary = `${result.campus}${result.weatherText}，约 ${result.temperatureC || 0}℃。`;
+  const tempText = result.temperatureC == null ? "暂无温度数据" : `约 ${result.temperatureC}℃`;
+  result.summary = `${result.campus}${result.targetLabel}${result.weatherText}，${tempText}。`;
   return result;
 }
 
@@ -223,6 +280,8 @@ function unavailableCampus(campus) {
 
 async function getCampusWeather(input = {}) {
   const campus = resolveCampus(input);
+  const targetDay = resolveTargetDay(input);
+  const topic = resolveTopic(input);
   if (String(process.env.AI_WEATHER_ENABLED || "true").toLowerCase() === "false") {
     return {
       success: false,
@@ -238,7 +297,7 @@ async function getCampusWeather(input = {}) {
   }
   if (!campus.configured) return unavailableCampus(campus);
 
-  const key = `campus:${campus.id}`;
+  const key = `campus:${campus.id}:${targetDay.dateHint}:${topic}`;
   const ttlMs = Number(process.env.AI_WEATHER_CACHE_TTL_MS || DEFAULT_TTL_MS) || DEFAULT_TTL_MS;
   const staleMs = Number(process.env.AI_WEATHER_STALE_MAX_MS || DEFAULT_STALE_MS) || DEFAULT_STALE_MS;
   const cached = readCache(key);
@@ -246,8 +305,8 @@ async function getCampusWeather(input = {}) {
 
   if (INFLIGHT.has(key)) return INFLIGHT.get(key);
 
-  const promise = fetchOpenMeteo(campus)
-    .then((data) => writeCache(key, buildWeatherResult(campus, data), ttlMs, staleMs))
+  const promise = fetchOpenMeteo(campus, targetDay)
+    .then((data) => writeCache(key, buildWeatherResult(campus, data, targetDay, topic), ttlMs, staleMs))
     .catch((error) => {
       const fallback = readCache(key).stale;
       if (fallback) {
@@ -261,8 +320,10 @@ async function getCampusWeather(input = {}) {
         code: error.code || "WEATHER_PROVIDER_FAILED",
         campus: campus.name,
         campusId: campus.id,
+        targetLabel: targetDay.label,
+        dateHint: targetDay.dateHint,
         sourceId: `open-meteo:${campus.id}`,
-        summary: "天气暂时不可用，课表和空教室查询不受影响。",
+        summary: "Open-Meteo 天气接口暂时不可用，课表和空教室查询不受影响。",
         alerts: [],
         cached: false,
         stale: false,

@@ -30,9 +30,11 @@ function sampleWeather(temp = 31) {
         precipitation_probability: Array.from({ length: 30 }, (_, index) => Math.min(100, index * 3)),
       },
       daily: {
-        temperature_2m_max: [35],
-        temperature_2m_min: [27],
-        precipitation_probability_max: [68],
+        time: ["2026-06-17", "2026-06-18", "2026-06-19"],
+        weather_code: [2, 61, 0],
+        temperature_2m_max: [35, 32, 30],
+        temperature_2m_min: [27, 26, 24],
+        precipitation_probability_max: [68, 75, 10],
       },
     },
   };
@@ -139,16 +141,39 @@ async function testCampusSeparationAndHebin() {
   assert.notStrictEqual(calls[0].latitude, calls[1].latitude, "campuses should not reuse coordinates");
 
   weatherService.__resetForTest();
-  let fetchCalled = false;
-  weatherService.__setFetcherForTest(async () => {
-    fetchCalled = true;
+  const hebinCalls = [];
+  weatherService.__setFetcherForTest(async (_url, options) => {
+    hebinCalls.push(options.params);
     return sampleWeather();
   });
   const hebin = await weatherService.getCampusWeather({ campus: HEBIN });
-  assert.strictEqual(hebin.success, false);
+  assert.strictEqual(hebin.success, true);
   assert.strictEqual(hebin.campusId, "hebin");
-  assert.strictEqual(hebin.code, "CAMPUS_WEATHER_LOCATION_UNCONFIGURED");
-  assert.strictEqual(fetchCalled, false, "hebin should not fall back to xianxi weather");
+  assert.strictEqual(hebin.provider, "open-meteo");
+  assert.strictEqual(hebinCalls.length, 1, "hebin should query its own configured coordinate");
+  assert.notStrictEqual(hebinCalls[0].latitude, calls[0].latitude, "hebin should not fall back to xianxi weather");
+}
+
+async function testTomorrowRunningAdvice() {
+  weatherService.__resetForTest();
+  const calls = [];
+  weatherService.__setFetcherForTest(async (_url, options) => {
+    calls.push(options.params);
+    return sampleWeather(30);
+  });
+  const tomorrow = await weatherService.getCampusWeather({
+    campus: XIANXI,
+    dateHint: "tomorrow",
+    topic: "running",
+    message: "明天适合跑步吗",
+  });
+  assert.strictEqual(tomorrow.success, true);
+  assert.strictEqual(tomorrow.targetLabel, "明天");
+  assert.strictEqual(tomorrow.dateHint, "tomorrow");
+  assert.strictEqual(tomorrow.weatherText, "有雨");
+  assert.strictEqual(tomorrow.rainProbabilityMax24h, 75);
+  assert.match(tomorrow.advice, /不太适合跑步|带伞/);
+  assert.strictEqual(calls[0].forecast_days, 2);
 }
 
 function testWeatherCardContract() {
@@ -203,6 +228,7 @@ async function run() {
   await testOpenMeteoFieldsAndCache();
   await testSingleflightAndStaleLimit();
   await testCampusSeparationAndHebin();
+  await testTomorrowRunningAdvice();
   testWeatherCardContract();
   weatherService.__resetForTest();
   console.log("test-weather-service-and-card passed");

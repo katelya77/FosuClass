@@ -850,6 +850,12 @@ button::after {
   line-height: 1;
 }
 
+.weather-temp.missing {
+  max-width: 210rpx;
+  font-size: 30rpx;
+  line-height: 1.25;
+}
+
 .weather-temp text {
   font-size: 30rpx;
 }

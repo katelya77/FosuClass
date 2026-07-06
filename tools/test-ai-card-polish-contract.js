@@ -35,11 +35,31 @@ function run() {
   assert.strictEqual(card.filteredHint, "已过滤 1 门非本周课程");
   assert(!card.visibleItems.some((item) => item.title === "非本周课程"), "inactive course should not render");
 
+  const weatherCard = normalizeCard({
+    type: "weather_card",
+    title: "仙溪校区天气",
+    weather: {
+      campus: "仙溪校区",
+      weatherText: "天气待确认",
+      temperatureC: "--",
+      humidity: "",
+      rainProbabilityMax24h: null,
+      next6Hours: [{ time: "09时", temperatureC: "--", rainProbability: "" }],
+    },
+  }, "m-weather", 0, {});
+  assert.strictEqual(weatherCard.weather.temperatureText, "暂无该项数据");
+  assert.strictEqual(weatherCard.weather.humidityText, "暂无该项数据");
+  assert.strictEqual(weatherCard.weather.rainProbabilityText, "暂无该项数据");
+  assert.strictEqual(weatherCard.weather.next6Hours[0].temperatureText, "暂无该项数据");
+  assert(!/--[℃%]|--\s*(?:km\/h|mm)/.test(JSON.stringify(weatherCard.weather)), "weather display payload should not expose placeholder units");
+
   assert(js.includes("服务暂时不可用，已保留你的问题。"), "error card title should use the polished copy");
   assert(js.includes("可以重试，或先使用全校课表/空教室页面。"), "error card subtitle should suggest safe next steps");
   assert(wxml.includes("card-disclaimer"), "result cards should render the disclaimer");
   assert(wxml.includes("card-action-primary"), "primary card action class should be explicit");
   assert(wxml.includes("card-action-secondary"), "secondary card action class should be explicit");
+  assert(!wxml.includes("{{card.weather.temperatureC}}<text>℃</text>"), "weather card should not hard-code °C for missing temperature");
+  assert(!wxml.includes("{{card.weather.humidity}}%"), "weather card should not hard-code % for missing humidity");
 
   console.log("test-ai-card-polish-contract passed");
 }
