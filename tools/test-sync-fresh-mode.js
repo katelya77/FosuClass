@@ -12,7 +12,7 @@ assert(syncSource.includes("resource-fresh"), "sync CLI should expose resource-f
 assert(syncSource.includes("ignoreProgress"), "--fresh should ignore progress cache");
 assert(syncSource.includes("ignoreNoScheduleCache"), "--fresh should ignore no-schedule cache");
 assert(syncSource.includes("!forceRefresh && (completedProgressCount > 0 || pendingMajors.length === 0)"), "fresh crawl must not merge old classSchedules cache");
-assert(syncSource.includes("actualNetworkRequestCount += 1"), "sync crawl should count real network requests");
+assert(syncSource.includes("actualNetworkRequestCount += batch.length"), "sync crawl should count real network requests by batch");
 assert(syncSource.includes("freshRunId"), "fresh crawl should emit a fresh run id");
 assert(syncSource.includes("SYNC_FORCE_RESOURCE_CRAWL"), "sync CLI should support force resource crawl");
 assert(syncSource.includes("buildResourcesForClassSchedules"), "fresh/resource flows should use source-aware resource generation");

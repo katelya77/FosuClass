@@ -36,7 +36,7 @@ console.log(`[env] PREFERRED_SEMESTER: ${process.env.PREFERRED_SEMESTER || "未�
 console.log(`[env] SYNC_GRADE_RANGE: ${process.env.SYNC_GRADE_RANGE || "未配置"}`);
 console.log(`[env] SYNC_GRADES (专业同步使用): ${process.env.SYNC_GRADES || "未配置"}`);
 console.log(`[env] SYNC_CLASS_GRADES (班级课表同步使用): ${process.env.SYNC_CLASS_GRADES || "未配置"}`);
-console.log(`[env] SYNC_UPLOAD_CHUNK_SIZE: ${process.env.SYNC_UPLOAD_CHUNK_SIZE || "10"}`);
+console.log(`[env] SYNC_UPLOAD_CHUNK_SIZE: ${process.env.SYNC_UPLOAD_CHUNK_SIZE || "50"}`);
 console.log(`[env] SYNC_SKIP_NO_SCHEDULE_CACHE: ${process.env.SYNC_SKIP_NO_SCHEDULE_CACHE || "true"}`);
 console.log(`[env] SYNC_RECHECK_NO_SCHEDULE: ${process.env.SYNC_RECHECK_NO_SCHEDULE || "false"}`);
 console.log(`[env] ADMIN_API_TOKEN: ${process.env.ADMIN_API_TOKEN ? "present" : "missing"}`);
@@ -579,6 +579,30 @@ async function waitBetweenClassSyncRequests(isFiltered) {
   const delay = Math.floor(Math.random() * (delayMax - delayMin + 1)) + delayMin;
   console.log(`      ⏳ 随机等待 ${delay}ms...`);
   await sleep(delay);
+}
+
+function getClassCrawlConcurrency() {
+  const raw = process.env.SYNC_CLASS_MAX_CONCURRENCY || process.env.SYNC_CLASS_CONCURRENCY || "1";
+  const parsed = parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    console.warn(`⚠️ SYNC_CLASS_MAX_CONCURRENCY=${raw} 无效，已回退为 1。`);
+    return 1;
+  }
+  if (parsed > 5) {
+    console.warn(`⚠️ SYNC_CLASS_MAX_CONCURRENCY=${parsed} 过高，已限制为 5 以保护教务系统。`);
+    return 5;
+  }
+  return parsed;
+}
+
+function formatElapsedMs(ms) {
+  const value = Number(ms || 0);
+  if (value < 1000) return `${value}ms`;
+  const seconds = value / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  return `${minutes}m${String(rest).padStart(2, "0")}s`;
 }
 
 /**
@@ -1339,12 +1363,12 @@ function validateLocalReleaseSnapshot(snapshot) {
 }
 
 function getUploadChunkSize() {
-  const parsed = parseInt(process.env.SYNC_UPLOAD_CHUNK_SIZE || "10", 10);
+  const parsed = parseInt(process.env.SYNC_UPLOAD_CHUNK_SIZE || "50", 10);
   if (Number.isFinite(parsed) && parsed > 0) {
     return parsed;
   }
-  console.warn(`⚠️ SYNC_UPLOAD_CHUNK_SIZE=${process.env.SYNC_UPLOAD_CHUNK_SIZE} 无效，已回退为 10。`);
-  return 10;
+  console.warn(`⚠️ SYNC_UPLOAD_CHUNK_SIZE=${process.env.SYNC_UPLOAD_CHUNK_SIZE} 无效，已回退为 50。`);
+  return 50;
 }
 
 /**
@@ -1774,13 +1798,13 @@ function printPowerShellCommands() {
   console.log("👉 只上传本地缓存 (Upload Only):");
   console.log('   $env:SYNC_CLASS_CRAWL_ONLY=""');
   console.log('   $env:SYNC_CLASS_UPLOAD_ONLY="true"');
-  console.log('   $env:SYNC_UPLOAD_CHUNK_SIZE="10"');
+  console.log('   $env:SYNC_UPLOAD_CHUNK_SIZE="50"');
   console.log("   npm run sync:upload-cache");
   console.log("");
   console.log("👉 强制重新上传本地缓存 (Force Restart Upload):");
   console.log('   $env:SYNC_UPLOAD_FORCE_RESTART="true"');
   console.log('   $env:SYNC_CLASS_UPLOAD_ONLY="true"');
-  console.log('   $env:SYNC_UPLOAD_CHUNK_SIZE="10"');
+  console.log('   $env:SYNC_UPLOAD_CHUNK_SIZE="50"');
   console.log("   npm run sync:class");
   console.log("--------------------------------------------------\n");
 }
@@ -4517,17 +4541,18 @@ async function syncClassSchedules(page, catalog, majors) {
   let newNoScheduleCount = 0;
 
   let allClassSchedules = cachedClassSchedules.slice();
-  let count = 0;
+  const classCrawlConcurrency = getClassCrawlConcurrency();
+  console.log(`⚙️ 班级课表抓取并发: ${classCrawlConcurrency}，待抓取 ${pendingMajors.length} 个专业。`);
+  if (classCrawlConcurrency > 1) {
+    console.log("ℹ️ 将按批次并发发起教务网请求；本地进度在每个批次结束后落盘，失败专业仍可 resume。");
+  }
 
-  for (const major of pendingMajors) {
-    count++;
-    console.log(`   [${count}/${pendingMajors.length}] 正在抓取: ${major.grade}级 - ${major.name} 专业课表 ...`);
+  async function crawlMajorClassSchedule(major, sequence) {
+    const startedAt = Date.now();
+    console.log(`   [${sequence}/${pendingMajors.length}] 正在抓取: ${major.grade}级 - ${major.name} 专业课表 ...`);
 
-    try {
-      crawlStats.actualNetworkRequestCount += 1;
-      global.SYNC_CRAWL_STATS = crawlStats;
-      // 页面内 POST 请求课表 HTML
-      const htmlText = await page.evaluate(async (params) => {
+    // 页面内 POST 请求课表 HTML
+    const htmlText = await page.evaluate(async (params) => {
         const formBody = new URLSearchParams({
           xnxqh: params.semester,
           skyx: params.collegeCode,
@@ -4554,150 +4579,204 @@ async function syncClassSchedules(page, catalog, majors) {
         majorCode: major.code,
       });
 
-      // 保存 raw HTML 到本地，便于调试且不提交到 git
-      const rawHtmlPath = path.join(rawPagesDir, `class_${major.grade}_${major.code}.html`);
-      fs.writeFileSync(rawHtmlPath, htmlText, "utf-8");
+    // 保存 raw HTML 到本地，便于调试且不提交到 git
+    const rawHtmlPath = path.join(rawPagesDir, `class_${major.grade}_${major.code}.html`);
+    fs.writeFileSync(rawHtmlPath, htmlText, "utf-8");
 
-      const candidateResult = parser.extractClassNameCandidates(htmlText, {
-        semester: activeSemester,
-        collegeCode: major.collegeCode,
-        grade: major.grade,
-        majorCode: major.code,
-        majorName: major.name,
+    const candidateResult = parser.extractClassNameCandidates(htmlText, {
+      semester: activeSemester,
+      collegeCode: major.collegeCode,
+      grade: major.grade,
+      majorCode: major.code,
+      majorName: major.name,
+    });
+    const candidateRecord = {
+      semester: activeSemester,
+      collegeCode: major.collegeCode,
+      collegeName: collegeNameByCode.get(String(major.collegeCode)) || major.collegeName || "",
+      grade: major.grade,
+      majorCode: major.code,
+      majorName: major.name,
+      rawHtmlPath,
+      classNames: candidateResult.classNames || [],
+      candidates: (candidateResult.candidates || []).slice(0, 80),
+      checkedAt: new Date().toISOString(),
+    };
+
+    // 解析课表 HTML
+    const parsed = parser.parseClassScheduleIfrHtml(htmlText, {
+      semester: activeSemester,
+      collegeCode: major.collegeCode,
+      grade: major.grade,
+      majorCode: major.code,
+      majorName: major.name,
+    });
+
+    // 规范化课表
+    const courses = normalizer.normalizeCourseList(parsed.courses || [], {
+      semester: activeSemester,
+      sourceType: "class",
+      audienceType: "student",
+    });
+
+    let dedupedDiff = 0;
+    let groupedCoursesNum = 0;
+    if (courses.length > 0) {
+      const seenKeys = new Set();
+      const uniqueCourses = courses.filter(c => {
+        const key = [
+          c.courseName || "",
+          c.weekday || "",
+          c.startSection || "",
+          c.endSection || "",
+          c.startWeek || "",
+          c.endWeek || "",
+          c.teacherName || "",
+          c.classroom || "",
+        ].join("_");
+        if (seenKeys.has(key)) return false;
+        seenKeys.add(key);
+        return true;
       });
-      classNameCandidateRecords = upsertClassNameCandidateRecord(classNameCandidateRecords, {
+      dedupedDiff = courses.length - uniqueCourses.length;
+
+      const groupMap = {};
+      uniqueCourses.forEach(c => {
+        const key = [
+          c.courseName || "",
+          c.weekday || "",
+          c.startSection || "",
+          c.endSection || "",
+          c.startWeek || "",
+          c.endWeek || "",
+        ].join("_");
+        groupMap[key] = (groupMap[key] || 0) + 1;
+      });
+      Object.keys(groupMap).forEach(key => {
+        if (groupMap[key] > 1) {
+          groupedCoursesNum++;
+        }
+      });
+    }
+
+    let noScheduleRecord = null;
+    let classes = [];
+    if (courses.length === 0) {
+      noScheduleRecord = {
         semester: activeSemester,
         collegeCode: major.collegeCode,
         collegeName: collegeNameByCode.get(String(major.collegeCode)) || major.collegeName || "",
         grade: major.grade,
         majorCode: major.code,
         majorName: major.name,
-        rawHtmlPath,
-        classNames: candidateResult.classNames || [],
-        candidates: (candidateResult.candidates || []).slice(0, 80),
         checkedAt: new Date().toISOString(),
-      });
-      writeJsonFile(classNameCandidatesPath, classNameCandidateRecords);
-      console.log(`      班级文本候选: ${(candidateResult.classNames || []).join(", ") || "未发现"}`);
-
-      // 解析课表 HTML
-      const parsed = parser.parseClassScheduleIfrHtml(htmlText, {
+      };
+    } else {
+      // 按可靠行政班名分组；无法识别行政班时降级为专业聚合课表，不丢弃课程。
+      classes = normalizer.buildClassScheduleEntries(courses, {
         semester: activeSemester,
         collegeCode: major.collegeCode,
+        collegeName: collegeNameByCode.get(String(major.collegeCode)) || major.collegeName || "",
         grade: major.grade,
         majorCode: major.code,
         majorName: major.name,
       });
+    }
 
-      // 规范化课表
-      const courses = normalizer.normalizeCourseList(parsed.courses || [], {
-        semester: activeSemester,
-        sourceType: "class",
-        audienceType: "student",
-      });
+    return {
+      major,
+      sequence,
+      candidateRecord,
+      courses,
+      dedupedDiff,
+      groupedCoursesNum,
+      noScheduleRecord,
+      classes,
+      elapsedMs: Date.now() - startedAt,
+    };
+  }
 
-      totalCoursesFetched += courses.length;
-      if (courses.length > 0) {
-        const seenKeys = new Set();
-        const uniqueCourses = courses.filter(c => {
-          const key = [
-            c.courseName || "",
-            c.weekday || "",
-            c.startSection || "",
-            c.endSection || "",
-            c.startWeek || "",
-            c.endWeek || "",
-            c.teacherName || "",
-            c.classroom || "",
-          ].join("_");
-          if (seenKeys.has(key)) return false;
-          seenKeys.add(key);
-          return true;
-        });
-        const dedupedDiff = courses.length - uniqueCourses.length;
-        totalDedupledCount += dedupedDiff;
+  for (let batchStart = 0; batchStart < pendingMajors.length; batchStart += classCrawlConcurrency) {
+    const batch = pendingMajors.slice(batchStart, batchStart + classCrawlConcurrency);
+    const batchNumber = Math.floor(batchStart / classCrawlConcurrency) + 1;
+    const totalBatches = Math.ceil(pendingMajors.length / classCrawlConcurrency);
+    const batchStartedAt = Date.now();
+    crawlStats.actualNetworkRequestCount += batch.length;
+    global.SYNC_CRAWL_STATS = crawlStats;
 
-        const groupMap = {};
-        uniqueCourses.forEach(c => {
-          const key = [
-            c.courseName || "",
-            c.weekday || "",
-            c.startSection || "",
-            c.endSection || "",
-            c.startWeek || "",
-            c.endWeek || "",
-          ].join("_");
-          groupMap[key] = (groupMap[key] || 0) + 1;
-        });
-        let groupedCoursesNum = 0;
-        Object.keys(groupMap).forEach(key => {
-          if (groupMap[key] > 1) {
-            groupedCoursesNum++;
-          }
-        });
-        totalGroupedCount += groupedCoursesNum;
-      }
+    const batchResults = await Promise.all(batch.map((major, offset) => {
+      const sequence = batchStart + offset + 1;
+      return crawlMajorClassSchedule(major, sequence)
+        .then((value) => ({ ok: true, value }))
+        .catch((error) => ({ ok: false, major, sequence, error }));
+    }));
 
-      if (courses.length === 0) {
-        newNoScheduleCount++;
-        const noScheduleRecord = {
-          semester: activeSemester,
-          collegeCode: major.collegeCode,
-          collegeName: collegeNameByCode.get(String(major.collegeCode)) || major.collegeName || "",
-          grade: major.grade,
-          majorCode: major.code,
-          majorName: major.name,
-          checkedAt: new Date().toISOString(),
-        };
-        noScheduleMajors = upsertNoScheduleMajor(noScheduleMajors, noScheduleRecord);
-        writeJsonFile(noScheduleCachePath, noScheduleMajors);
-        console.log(`      没有排课数据，已记录到 ${noScheduleCachePath}`);
+    let candidateChanged = false;
+    let noScheduleChanged = false;
+    let progressChanged = false;
+    let successCount = 0;
 
-        // 将该专业标记为已完成
-        markCompletedMajor(progress, major, activeSemester);
-        writeJsonFile(PROGRESS_PATH, progress);
-        crawlStats.succeededTargetCount += 1;
-        global.SYNC_CRAWL_STATS = crawlStats;
-        await waitBetweenClassSyncRequests(isFiltered);
+    for (const item of batchResults) {
+      if (!item.ok) {
+        console.error(`      ⚠️  [${item.sequence}/${pendingMajors.length}] 抓取失败: ${item.error.message}`);
         continue;
       }
 
-      const beforeNoScheduleCount = noScheduleMajors.length;
-      noScheduleMajors = removeNoScheduleMajor(noScheduleMajors, major, activeSemester);
-      if (noScheduleMajors.length !== beforeNoScheduleCount) {
-        writeJsonFile(noScheduleCachePath, noScheduleMajors);
-        console.log("      此前无排课缓存已失效，本次抓到课程并已移除缓存记录。");
+      const result = item.value;
+      const major = result.major;
+      const candidateNames = result.candidateRecord.classNames || [];
+      classNameCandidateRecords = upsertClassNameCandidateRecord(classNameCandidateRecords, result.candidateRecord);
+      candidateChanged = true;
+      console.log(`      [${result.sequence}/${pendingMajors.length}] 班级文本候选: ${candidateNames.join(", ") || "未发现"} (${formatElapsedMs(result.elapsedMs)})`);
+
+      totalCoursesFetched += result.courses.length;
+      totalDedupledCount += result.dedupedDiff;
+      totalGroupedCount += result.groupedCoursesNum;
+
+      if (result.noScheduleRecord) {
+        newNoScheduleCount++;
+        noScheduleMajors = upsertNoScheduleMajor(noScheduleMajors, result.noScheduleRecord);
+        noScheduleChanged = true;
+        console.log(`      [${result.sequence}/${pendingMajors.length}] 没有排课数据，已记录到 ${noScheduleCachePath}`);
+      } else {
+        const beforeNoScheduleCount = noScheduleMajors.length;
+        noScheduleMajors = removeNoScheduleMajor(noScheduleMajors, major, activeSemester);
+        if (noScheduleMajors.length !== beforeNoScheduleCount) {
+          noScheduleChanged = true;
+          console.log(`      [${result.sequence}/${pendingMajors.length}] 此前无排课缓存已失效，本次抓到课程并已移除缓存记录。`);
+        }
+
+        if (result.classes.length > 0) {
+          const aggregateCount = result.classes.filter((classItem) => classItem.isAggregated).length;
+          const classCount = result.classes.length - aggregateCount;
+          console.log(`      [${result.sequence}/${pendingMajors.length}] 整理课表条目: 行政班 ${classCount} 个，专业聚合 ${aggregateCount} 个 (${result.classes.map(c => c.className).join(", ")})`);
+          allClassSchedules = mergeClassSchedules(allClassSchedules, result.classes);
+        }
       }
 
-      // 按可靠行政班名分组；无法识别行政班时降级为专业聚合课表，不丢弃课程。
-      const classes = normalizer.buildClassScheduleEntries(courses, {
-        semester: activeSemester,
-        collegeCode: major.collegeCode,
-        collegeName: collegeNameByCode.get(String(major.collegeCode)) || major.collegeName || "",
-        grade: major.grade,
-        majorCode: major.code,
-        majorName: major.name,
-      });
-
-      if (classes.length > 0) {
-        const aggregateCount = classes.filter((item) => item.isAggregated).length;
-        const classCount = classes.length - aggregateCount;
-        console.log(`      整理课表条目: 行政班 ${classCount} 个，专业聚合 ${aggregateCount} 个 (${classes.map(c => c.className).join(", ")})`);
-        allClassSchedules = mergeClassSchedules(allClassSchedules, classes);
-      }
-
-      // 将该专业标记为已完成
       markCompletedMajor(progress, major, activeSemester);
-      writeJsonFile(PROGRESS_PATH, progress);
-      crawlStats.succeededTargetCount += 1;
-      global.SYNC_CRAWL_STATS = crawlStats;
-
-    } catch (err) {
-      console.error(`      ⚠️  抓取失败: ${err.message}`);
+      progressChanged = true;
+      successCount++;
     }
 
-    // 随机限流延迟：如果是全量同步则进一步限速保护教务系统
-    await waitBetweenClassSyncRequests(isFiltered);
+    if (candidateChanged) {
+      writeJsonFile(classNameCandidatesPath, classNameCandidateRecords);
+    }
+    if (noScheduleChanged) {
+      writeJsonFile(noScheduleCachePath, noScheduleMajors);
+    }
+    if (progressChanged) {
+      writeJsonFile(PROGRESS_PATH, progress);
+      crawlStats.succeededTargetCount += successCount;
+      global.SYNC_CRAWL_STATS = crawlStats;
+    }
+
+    console.log(`   ✅ 批次 ${batchNumber}/${totalBatches} 完成: 成功 ${successCount}, 失败 ${batch.length - successCount}, 累计课表 ${allClassSchedules.length}, 用时 ${formatElapsedMs(Date.now() - batchStartedAt)}。`);
+
+    // 批次间限流：并发请求只在批内发生，批间仍保留延迟保护教务系统。
+    if (batchStart + classCrawlConcurrency < pendingMajors.length) {
+      await waitBetweenClassSyncRequests(isFiltered);
+    }
   }
 
   console.log(`📊 班级课表抓取完毕，共整理出 ${allClassSchedules.length} 个行政班级的课表。`);
