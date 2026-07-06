@@ -96,6 +96,34 @@ function toBytesMb(value, fallbackMb) {
   return Math.floor(num * 1024 * 1024);
 }
 
+function getUploadConcurrency(params, totalChunks) {
+  const raw = params["upload-concurrency"] ||
+    params.uploadConcurrency ||
+    params["chunk-concurrency"] ||
+    process.env.SYNC_LOCAL_UPLOAD_CONCURRENCY ||
+    "2";
+  const parsed = parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    console.warn(`invalid upload concurrency: ${raw}; fallback to 1`);
+    return 1;
+  }
+  const capped = Math.min(parsed, 4, Math.max(1, totalChunks || 1));
+  if (parsed !== capped) {
+    console.warn(`upload concurrency capped from ${parsed} to ${capped}`);
+  }
+  return capped;
+}
+
+function formatElapsedMs(ms) {
+  const value = Number(ms || 0);
+  if (value < 1000) return `${value}ms`;
+  const seconds = value / 1000;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  return `${minutes}m${String(rest).padStart(2, "0")}s`;
+}
+
 function hashFile(filePath) {
   return new Promise((resolve, reject) => {
     const hash = crypto.createHash("sha256");
@@ -424,18 +452,35 @@ async function uploadStagingFile(options) {
 
   const startedAt = Date.now();
   let uploaded = 0;
-  for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+  let finishedChunks = 0;
+  let nextChunkIndex = 0;
+  const uploadConcurrency = getUploadConcurrency(params, totalChunks);
+  console.log(`upload concurrency: ${uploadConcurrency}`);
+
+  async function uploadOneChunk(chunkIndex) {
     const start = chunkIndex * chunkSize;
     const end = Math.min(uploadStat.size - 1, start + chunkSize - 1);
     const buffer = readChunk(prepared.uploadPath, start, end);
     const chunkUrl = `${endpointBase}/chunk?uploadId=${encodeURIComponent(uploadId)}&chunkIndex=${chunkIndex}`;
     await uploadChunkWithRetry(chunkUrl, buffer, headers, timeoutMs, retryCount);
     uploaded += buffer.length;
+    finishedChunks += 1;
     const elapsed = Math.max(1, (Date.now() - startedAt) / 1000);
     const percent = ((uploaded / uploadStat.size) * 100).toFixed(2);
     const speed = formatMb(uploaded / elapsed);
-    console.log(`[${chunkIndex + 1}/${totalChunks}] ${percent}% ${formatMb(uploaded)}/${formatMb(uploadStat.size)} MB, ${speed} MB/s`);
+    console.log(`[${finishedChunks}/${totalChunks}] chunk ${chunkIndex + 1} done, ${percent}% ${formatMb(uploaded)}/${formatMb(uploadStat.size)} MB, ${speed} MB/s`);
   }
+
+  async function uploadWorker() {
+    while (nextChunkIndex < totalChunks) {
+      const chunkIndex = nextChunkIndex;
+      nextChunkIndex += 1;
+      await uploadOneChunk(chunkIndex);
+    }
+  }
+
+  await Promise.all(Array.from({ length: uploadConcurrency }, () => uploadWorker()));
+  console.log(`all chunks uploaded in ${formatElapsedMs(Date.now() - startedAt)}`);
 
   const finalize = await postJson(`${endpointBase}/finalize`, {
     uploadId,
