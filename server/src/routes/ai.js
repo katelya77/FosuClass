@@ -4,6 +4,7 @@ const { optionalSessionGuard, publicFosuGuard, validateJsonBody } = require("../
 const { safeLog } = require("../utils/safeLogger");
 const agentService = require("../services/ai/agentService");
 const campusMapService = require("../services/ai/campusMapService");
+const weatherService = require("../services/ai/weatherService");
 const { buildSafeLogPayload } = require("../services/ai/safetyGuard");
 
 const router = express.Router();
@@ -32,6 +33,35 @@ router.get("/campus-map/published", scheduleLimiter, (req, res) => {
       success: false,
       code: "CAMPUS_MAP_PUBLISHED_UNAVAILABLE",
       message: "校园地图数据暂时不可用。",
+    });
+  }
+});
+
+router.get("/weather", scheduleLimiter, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const weather = await weatherService.getCampusWeather({
+      campus: req.query && (req.query.campus || req.query.location),
+      message: req.query && req.query.message,
+    });
+    return res.json({
+      success: true,
+      weather,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    safeLog("ai-weather-failed", { error: error.message, code: error.code || "" });
+    return res.json({
+      success: true,
+      weather: {
+        success: false,
+        code: error.code || "WEATHER_PROVIDER_FAILED",
+        campus: String(req.query && req.query.campus || "仙溪校区").slice(0, 40),
+        sourceId: "weather-provider",
+        summary: "当前天气数据源暂不可用。",
+        alerts: [],
+      },
+      serverTime: new Date().toISOString(),
     });
   }
 });

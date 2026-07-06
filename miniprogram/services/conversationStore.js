@@ -117,6 +117,9 @@ function normalizeCardAction(action) {
 
 function normalizeCard(card) {
   const source = card && typeof card === "object" && !Array.isArray(card) ? card : {};
+  const weather = source.weather && typeof source.weather === "object" && !Array.isArray(source.weather)
+    ? Object.assign({}, source.weather)
+    : null;
   return {
     type: safeText(source.type || "generic", 40),
     variant: safeText(source.variant, 24),
@@ -125,6 +128,7 @@ function normalizeCard(card) {
     badges: Array.isArray(source.badges) ? source.badges.map((item) => safeText(item, 40)).filter(Boolean).slice(0, 4) : [],
     items: Array.isArray(source.items) ? source.items.slice(0, MAX_CARD_ITEMS).map(normalizeCardItem).filter((item) => item.title || item.subtitle || item.value) : [],
     actions: Array.isArray(source.actions) ? source.actions.slice(0, 3).map(normalizeCardAction).filter((item) => item.label) : [],
+    weather,
     sourceUrl: safeText(source.sourceUrl, 260),
     updatedAt: safeText(source.updatedAt, 40),
   };
@@ -136,7 +140,7 @@ function normalizeMessage(message) {
     id: safeText(source.id, 80) || `m-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
     role: source.role === "user" ? "user" : "assistant",
     content: safeText(source.content, MAX_MESSAGE_TEXT_LENGTH),
-    cards: Array.isArray(source.cards) ? source.cards.slice(0, 5).map(normalizeCard).filter((card) => card.title || card.subtitle || card.items.length || card.actions.length) : [],
+    cards: Array.isArray(source.cards) ? source.cards.slice(0, 5).map(normalizeCard).filter((card) => card.title || card.subtitle || card.items.length || card.actions.length || card.weather) : [],
     suggestions: Array.isArray(source.suggestions) ? source.suggestions.map((item) => safeText(item, 80)).filter(Boolean).slice(0, 6) : [],
     toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls.slice(0, 8) : [],
     taskSteps: Array.isArray(source.taskSteps) ? source.taskSteps.slice(0, 8) : [],

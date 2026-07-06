@@ -18,6 +18,12 @@ function isNavigationQuery(query) {
     /(佛大|佛山大学|教务|信息门户|统一身份|系统|入口|官网|图书馆|办事|课表|小程序|校园地图|地图|导入)/i.test(value);
 }
 
+function isDynamicToolQuery(query) {
+  const value = normalizeText(query);
+  if (!value) return false;
+  return /(天气|下雨|降雨|雨|带伞|伞|温度|气温|热不热|冷不冷|风大|风力|湿度|空气|适合跑步|跑步|出行|今天要不要|下一节课要|当前是第几教学周|第几教学周|课表数据|更新到什么时候|数据是否最新|今天有什么课|明天有什么课|本周课表|下一节课|查班级|查教师|查老师|查教室|查课程|导入个人课表|小佛能做什么|怎么用|如何使用)/.test(value);
+}
+
 function normalizeText(value) {
   return String(value == null ? "" : value)
     .trim()
@@ -130,6 +136,7 @@ function scoreDoc(doc, query, tokens) {
 function isCampusKnowledgeQuery(query) {
   const value = normalizeText(query);
   if (!value) return false;
+  if (isDynamicToolQuery(value)) return false;
   return /(佛大|佛山大学|fosu|校区|仙溪|江湾|河滨|教务|信息门户|统一身份|图书馆|校园卡|校园网|宿舍|后勤|报修|团委|第二课堂|易班|i志愿|学院|部门|招生|就业|校园|办事|学生事务|地址|在哪里|怎么进|怎么用|入口|官网|通知|公告|小佛ai|知识库)/i.test(value);
 }
 
@@ -169,6 +176,7 @@ module.exports = {
   MIN_RELIABLE_SCORE,
   expandQueryTokens,
   isCampusKnowledgeQuery,
+  isDynamicToolQuery,
   isNavigationQuery,
   normalizeText,
   searchKnowledge,

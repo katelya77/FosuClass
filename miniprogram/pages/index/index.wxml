@@ -383,4 +383,5 @@
       <button class="notice-modal-btn" bindtap="closeAppNoticeModal">我知道了</button>
     </view>
   </view>
+  <xiaofu-float />
 </view>

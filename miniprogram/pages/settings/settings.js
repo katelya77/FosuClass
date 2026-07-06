@@ -19,6 +19,7 @@ const request = require("../../utils/request");
 const appConfigService = require("../../services/appConfigService");
 const releasePackService = require("../../services/releasePackService");
 const staticOriginService = require("../../services/staticOriginService");
+const xiaofuFloatService = require("../../services/xiaofuFloatService");
 const platformUtils = require("../../utils/platform");
 const { courseTimesMeta } = require("../../data/courseTimes");
 const { contactConfig } = require("../../config/contact");
@@ -201,6 +202,8 @@ Page({
     versionDetailVisible: false,
     diagnosisExpanded: false,
     diagnosisCanShowFull: false,
+    xiaofuFloatEnabled: true,
+    xiaofuFloatEnabledText: "右下角常驻，可拖拽吸附",
     versionData: {
       appVersion: APP_VERSION,
       sdkVersion: "",
@@ -283,6 +286,7 @@ Page({
     const selectedSchedule = getSelectedSchedule();
     const selectedMeta = buildSelectedScheduleMeta(selectedSchedule);
     const startWeekdayText = getWeekdayLabel(termConfig.termStartDate) || "周一";
+    const xiaofuFloatEnabled = xiaofuFloatService.isEnabled();
     this.setData({
       settings: Object.assign({}, settings, {
         currentWeek: effectiveWeek,
@@ -297,6 +301,8 @@ Page({
       selectedScheduleText: buildSelectedScheduleText(selectedSchedule),
       selectedScheduleSourceText: selectedMeta.sourceText,
       selectedScheduleImportText: selectedMeta.importText,
+      xiaofuFloatEnabled,
+      xiaofuFloatEnabledText: xiaofuFloatEnabled ? "右下角常驻，可拖拽吸附" : "已关闭，可在这里重新开启",
     });
     teachingCalendarService.loadActiveTeachingCalendar()
       .then((latest) => {
@@ -354,6 +360,20 @@ Page({
       [key]: event.detail.value,
     });
     this.loadSettings();
+  },
+
+  onXiaofuFloatToggle(event) {
+    const enabled = event.detail.value === true;
+    if (enabled) {
+      xiaofuFloatService.enableEverywhere();
+    } else {
+      xiaofuFloatService.setEnabled(false);
+    }
+    this.setData({
+      xiaofuFloatEnabled: enabled,
+      xiaofuFloatEnabledText: enabled ? "右下角常驻，可拖拽吸附" : "已关闭，可在这里重新开启",
+    });
+    wx.showToast({ title: enabled ? "已开启小佛AI浮窗" : "已关闭小佛AI浮窗", icon: "none" });
   },
 
   goSchool() {
@@ -431,6 +451,7 @@ Page({
     const sysInfo = platformUtils.getWxSystemInfo();
     const bootstrap = getApp().globalData.bootstrapData || wx.getStorageSync(BOOTSTRAP_CACHE_KEY) || {};
     const settings = this.data.settings || getSettings();
+    const bootstrapVersions = bootstrap.versions && typeof bootstrap.versions === "object" ? bootstrap.versions : {};
     return {
       type: FEEDBACK_TYPES[this.data.feedbackForm.typeIndex] || "其他",
       content: this.data.feedbackForm.content,
@@ -439,7 +460,7 @@ Page({
       selectedClass: selectedScheduleSummary.target || selectedScheduleSummary.filter || null,
       semester: bootstrap.semester || settings.semesterId || settings.semester,
       appVersion: APP_VERSION,
-      dataVersion: bootstrap.version || bootstrap.versions?.snapshot || bootstrap.updatedAt || "",
+      dataVersion: bootstrap.version || bootstrapVersions.snapshot || bootstrap.updatedAt || "",
       platform: `${sysInfo.platform || "unknown"} / ${sysInfo.system || ""} / SDK ${sysInfo.SDKVersion || ""}`,
     };
   },

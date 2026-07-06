@@ -5,6 +5,7 @@ const INTENTS = {
   SCHEDULE_QUERY: "schedule_query",
   PERSONAL_SCHEDULE: "personal_schedule",
   SCHEDULE_STATUS: "schedule_status",
+  WEATHER: "weather",
   SCHOOL_KNOWLEDGE: "school_knowledge",
   NAVIGATION: "navigation",
   APP_NAVIGATION: "app_navigation",
@@ -25,6 +26,41 @@ function compactText(value) {
     .replace(/[，。！？；：、\s]+/g, "")
     .replace(/[\uFF01-\uFF5E]/g, (char) => String.fromCharCode(char.charCodeAt(0) - 0xFEE0))
     .toLowerCase();
+}
+
+function isWeatherQuery(message) {
+  const value = compactText(message);
+  if (!value) return false;
+  return /(天气|下雨|降雨|雨|带伞|伞|温度|气温|热不热|冷不冷|风大|风力|湿度|空气|适合跑步|跑步|出行|晒不晒|闷不闷)/.test(value);
+}
+
+function resolveWeatherEntities(message, clientContext = {}) {
+  const value = compactText(message);
+  const preferences = clientContext.userPreferences || {};
+  let campus = preferences.campus || "";
+  if (/江湾/.test(value)) campus = "江湾校区";
+  else if (/河滨/.test(value)) campus = "河滨校区";
+  else if (/南海/.test(value)) campus = "南海区";
+  else if (/佛山/.test(value) && !/佛山大学|佛大/.test(value)) campus = "佛山";
+  else if (/仙溪|佛大|佛山大学/.test(value)) campus = "仙溪校区";
+  if (!campus) campus = "仙溪校区";
+
+  const needsPersonalSchedule = /(下一节|下节|接下来).*(课)?.*(带伞|伞|天气|下雨|雨)|带伞.*(下一节|下节|课)/.test(value);
+  const dateHint = /明天|明日/.test(value)
+    ? "tomorrow"
+    : (/后天/.test(value) ? "day_after_tomorrow" : "today");
+  const topic = /跑步/.test(value)
+    ? "running"
+    : (/(带伞|伞|下雨|雨|降雨)/.test(value)
+      ? "rain"
+      : (/(热|冷|温度|气温)/.test(value) ? "temperature" : "weather"));
+  return {
+    campus,
+    location: campus,
+    dateHint,
+    topic,
+    needsPersonalSchedule,
+  };
 }
 
 function hasPersonalScheduleContext(clientContext = {}) {
@@ -50,6 +86,7 @@ function baseRoute(intent, patch = {}) {
     shouldUseRag: false,
     shouldUseScheduleTool: false,
     shouldUsePersonalScheduleTool: false,
+    shouldUseWeatherTool: false,
     cardType: "",
     replyChannel: "chat",
     reason: "",
@@ -118,6 +155,18 @@ function scheduleEntities(parsed) {
 function routeMessage(message, clientContext = {}) {
   const query = safeText(message, 600);
   const contextSlots = getContextSlots(clientContext);
+
+  if (isWeatherQuery(query)) {
+    const entities = resolveWeatherEntities(query, clientContext);
+    return baseRoute(INTENTS.WEATHER, {
+      confidence: 0.95,
+      entities,
+      shouldUseWeatherTool: true,
+      shouldUsePersonalScheduleTool: entities.needsPersonalSchedule && hasPersonalScheduleContext(clientContext),
+      cardType: "weather_card",
+      reason: "matched weather wording before RAG",
+    });
+  }
 
   if (isScheduleStatusQuery(query)) {
     return baseRoute(INTENTS.SCHEDULE_STATUS, {
@@ -228,5 +277,7 @@ module.exports = {
   isHelpQuery,
   isPersonalScheduleQuery,
   isScheduleStatusQuery,
+  isWeatherQuery,
+  resolveWeatherEntities,
   routeMessage,
 };

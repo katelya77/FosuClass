@@ -238,4 +238,5 @@
       <button class="primary-search-btn compact" bindtap="openClassroomSchedule">查看教室课表</button>
     </view>
   </view>
+  <xiaofu-float />
 </view>

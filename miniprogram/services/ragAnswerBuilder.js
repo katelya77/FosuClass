@@ -116,7 +116,7 @@ function buildNoResultCard(query) {
     type: "school_knowledge",
     variant: "error",
     title: "暂未收录可靠信息",
-    subtitle: "建议以学校官网或对应部门页面为准",
+    subtitle: "知识库暂未收录可靠信息",
     badges: ["校园知识", "待补充"],
     items: [
       {
@@ -126,19 +126,17 @@ function buildNoResultCard(query) {
       },
       {
         title: "建议",
-        subtitle: "知识库暂未收录可靠信息，建议以学校官网或对应部门页面为准。",
+        subtitle: "我不会用学校概况或官网链接替代未收录的信息；请换一种更具体的问法，或等待知识库补充可靠来源。",
         value: "",
       },
     ],
-    actions: [
-      { label: "复制学校官网", type: "copy", payload: { text: "https://www.fosu.edu.cn/" } },
-    ],
+    actions: [],
   };
 }
 
 function buildAnswerText(doc, query) {
   if (!doc) {
-    return "我理解你是在问佛山大学校园知识。知识库暂未收录可靠信息，建议以学校官网或对应部门页面为准。";
+    return "我理解你是在问佛山大学校园知识。知识库暂未收录可靠信息，我不会用学校概况或官网链接替代答案。";
   }
   const sourceText = doc.sourceUrl ? `\n\n信息来源：${doc.sourceUrl}` : "";
   const updatedText = doc.updatedAt ? `\n更新时间：${doc.updatedAt}` : "";

@@ -149,4 +149,5 @@
       </movable-view>
     </movable-area>
   </view>
+  <xiaofu-float />
 </view>

@@ -10,4 +10,5 @@
     
     <button class="primary-button" style="width: 100%; border-radius: 999rpx; background: #c62828; color: #ffffff;" bindtap="goImportXls">打开 XLS 导入</button>
   </view>
+  <xiaofu-float />
 </view>

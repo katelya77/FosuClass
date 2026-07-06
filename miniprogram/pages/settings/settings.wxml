@@ -218,6 +218,17 @@
 
   <view class="settings-card card">
     <view class="group-title">工具与帮助</view>
+    <view class="setting-row">
+      <view>
+        <view class="row-title">小佛AI浮窗</view>
+        <view class="row-desc">{{xiaofuFloatEnabledText}}</view>
+      </view>
+      <switch
+        checked="{{xiaofuFloatEnabled}}"
+        color="#2f855a"
+        bindchange="onXiaofuFloatToggle"
+      />
+    </view>
     <view class="setting-row" bindtap="goCampusMap">
       <view>
         <view class="row-title">校园地图</view>
@@ -570,4 +581,5 @@
       </view>
     </view>
   </view>
+  <xiaofu-float hidden="{{!xiaofuFloatEnabled}}" />
 </view>

@@ -1,0 +1,18 @@
+<view
+  wx:if="{{visible}}"
+  class="xiaofu-float {{moving ? 'moving' : ''}} {{dimmed ? 'dimmed' : ''}}"
+  style="left: {{x}}px; top: {{y}}px; width: {{size}}px; height: {{size}}px;"
+  catchtouchstart="onTouchStart"
+  catchtouchmove="onTouchMove"
+  catchtouchend="onTouchEnd"
+  catchtouchcancel="onTouchEnd"
+  bindtap="onTap"
+  bindlongpress="onLongPress"
+>
+  <view class="xiaofu-float-glow"></view>
+  <view class="xiaofu-float-ball">
+    <image class="xiaofu-float-logo" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" binderror="onLogoError" wx:if="{{logoReady}}" />
+    <text wx:else class="xiaofu-float-text">佛</text>
+    <view class="xiaofu-float-online"></view>
+  </view>
+</view>

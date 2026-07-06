@@ -16,4 +16,5 @@
       <view class="time-range">{{time.start}} - {{time.end}}</view>
     </view>
   </view>
+  <xiaofu-float />
 </view>

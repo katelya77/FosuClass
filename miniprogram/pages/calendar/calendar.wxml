@@ -46,4 +46,5 @@
   </scroll-view>
 
   <button wx:if="{{showBackToCurrentWeek}}" class="back-current-week" bindtap="backToCurrentWeek">回到本周</button>
+  <xiaofu-float />
 </view>
