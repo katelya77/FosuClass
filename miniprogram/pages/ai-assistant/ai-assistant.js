@@ -911,6 +911,24 @@ function buildEvidenceText(evidence, evidenceLabel) {
   return parts.length ? parts.join(" · ") : "";
 }
 
+function isMissingWeatherValue(value) {
+  const text = String(value == null ? "" : value).trim();
+  return !text || text === "--" || text === "NaN" || text === "null" || text === "undefined";
+}
+
+function weatherValueText(value, unit) {
+  if (isMissingWeatherValue(value)) return "暂无该项数据";
+  const text = String(value).trim();
+  const suffix = unit || "";
+  if (!suffix) return text;
+  if (suffix === "℃" && /(?:℃|°)$/.test(text)) return text;
+  if (suffix === "°" && /(?:℃|°)$/.test(text)) return text;
+  if (suffix === "%" && /%$/.test(text)) return text;
+  if (suffix === "km/h" && /(?:km\/h|公里\/小时)$/i.test(text)) return text;
+  if (suffix === "mm" && /(?:mm|毫米)$/i.test(text)) return text;
+  return `${text}${suffix}`;
+}
+
 function normalizeWeatherPayload(source) {
   const weather = source && typeof source.weather === "object" && !Array.isArray(source.weather)
     ? source.weather
@@ -933,6 +951,15 @@ function normalizeWeatherPayload(source) {
     windSpeedKmh: safeText(weather.windSpeedKmh, 12),
     precipitationMm: safeText(weather.precipitationMm, 12),
     rainProbabilityMax24h: safeText(weather.rainProbabilityMax24h, 12),
+    targetLabel: safeText(weather.targetLabel || "今天", 12),
+    temperatureText: weatherValueText(weather.temperatureText || weather.temperatureC, "℃"),
+    apparentTemperatureText: weatherValueText(weather.apparentTemperatureText || weather.apparentTemperatureC, "℃"),
+    highText: weatherValueText(weather.highText || weather.highC, "℃"),
+    lowText: weatherValueText(weather.lowText || weather.lowC, "℃"),
+    humidityText: weatherValueText(weather.humidityText || weather.humidity, "%"),
+    windSpeedText: weatherValueText(weather.windSpeedText || weather.windSpeedKmh, "km/h"),
+    precipitationText: weatherValueText(weather.precipitationText || weather.precipitationMm, "mm"),
+    rainProbabilityText: weatherValueText(weather.rainProbabilityText || weather.rainProbabilityMax24h, "%"),
     advice: safeText(weather.advice || weather.travelAdvice || "", 90),
     sourceText: safeText(weather.sourceText || weather.provider || source.sourceUrl || "", 60),
     sourceId: safeText(weather.sourceId || source.sourceUrl || "", 80),
@@ -941,6 +968,8 @@ function normalizeWeatherPayload(source) {
       time: safeText(item.time || "", 12),
       temperatureC: safeText(item.temperatureC, 12),
       rainProbability: safeText(item.rainProbability, 12),
+      temperatureText: weatherValueText(item.temperatureText || item.temperatureC, "°"),
+      rainProbabilityText: weatherValueText(item.rainProbabilityText || item.rainProbability, "%"),
     })),
     iconClass,
   };

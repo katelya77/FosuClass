@@ -107,10 +107,10 @@
                 <view class="weather-updated">{{card.weather.cachedText}}<text wx:if="{{card.weather.updatedLabel}}"> · {{card.weather.updatedLabel}}</text></view>
               </view>
               <view class="weather-main">
-                <view class="weather-temp">{{card.weather.temperatureC}}<text>℃</text></view>
+                <view class="weather-temp {{card.weather.temperatureText === '暂无该项数据' ? 'missing' : ''}}">{{card.weather.temperatureText}}</view>
                 <view class="weather-facts">
-                  <view>体感 {{card.weather.apparentTemperatureC}}℃</view>
-                  <view>今日 {{card.weather.lowC}}° / {{card.weather.highC}}°</view>
+                  <view>体感 {{card.weather.apparentTemperatureText}}</view>
+                  <view>{{card.weather.targetLabel}} {{card.weather.lowText}} / {{card.weather.highText}}</view>
                 </view>
                 <view class="weather-icon">
                   <view class="sun-core"></view>
@@ -122,16 +122,16 @@
                 </view>
               </view>
               <view class="weather-metrics">
-                <view class="weather-metric"><text>湿度</text><view>{{card.weather.humidity}}%</view></view>
-                <view class="weather-metric"><text>风速</text><view>{{card.weather.windSpeedKmh}}km/h</view></view>
-                <view class="weather-metric"><text>降水</text><view>{{card.weather.precipitationMm}}mm</view></view>
-                <view class="weather-metric"><text>降雨</text><view>{{card.weather.rainProbabilityMax24h}}%</view></view>
+                <view class="weather-metric"><text>湿度</text><view>{{card.weather.humidityText}}</view></view>
+                <view class="weather-metric"><text>风速</text><view>{{card.weather.windSpeedText}}</view></view>
+                <view class="weather-metric"><text>降水</text><view>{{card.weather.precipitationText}}</view></view>
+                <view class="weather-metric"><text>降雨</text><view>{{card.weather.rainProbabilityText}}</view></view>
               </view>
               <view class="weather-timeline" wx:if="{{card.weather.next6Hours.length}}">
                 <view wx:for="{{card.weather.next6Hours}}" wx:for-item="hour" wx:key="key" class="weather-hour">
                   <view>{{hour.time}}</view>
-                  <text>{{hour.temperatureC}}°</text>
-                  <text>{{hour.rainProbability}}%</text>
+                  <text>{{hour.temperatureText}}</text>
+                  <text>{{hour.rainProbabilityText}}</text>
                 </view>
               </view>
               <view class="weather-advice">{{card.weather.advice}}</view>

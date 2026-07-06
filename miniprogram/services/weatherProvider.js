@@ -50,6 +50,8 @@ async function getCampusWeather(input = {}) {
     const payload = await request.get("/api/ai/weather", {
       campus,
       message: safeText(input.message || "", 300),
+      dateHint: safeText(input.dateHint || "", 40),
+      topic: safeText(input.topic || "", 40),
     }, {
       showLoading: false,
       silentError: true,

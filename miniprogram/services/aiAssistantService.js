@@ -839,13 +839,34 @@ function reportPipelineStatus(callbacks, text, type) {
 }
 
 function displayWeatherValue(value, fallback) {
-  if (value == null || value === "") return fallback || "--";
-  return String(value);
+  const text = String(value == null ? "" : value).trim();
+  if (!text || text === "--" || text === "NaN" || text === "null" || text === "undefined") return fallback || "暂无该项数据";
+  return text;
+}
+
+function weatherValueWithUnit(value, unit, fallback) {
+  const text = displayWeatherValue(value, fallback);
+  const suffix = unit || "";
+  if (text === "暂无该项数据" || !suffix) return text;
+  if (suffix === "℃" && /(?:℃|°)$/.test(text)) return text;
+  if (suffix === "%" && /%$/.test(text)) return text;
+  if (suffix === "km/h" && /(?:km\/h|公里\/小时)$/i.test(text)) return text;
+  if (suffix === "mm" && /(?:mm|毫米)$/i.test(text)) return text;
+  return `${text}${suffix}`;
 }
 
 function formatWeatherTime(value) {
   if (!value) return formatStatusTime(new Date().toISOString());
   return formatStatusTime(value);
+}
+
+function weatherTargetLabel(source, route) {
+  const direct = safeText(source && source.targetLabel || "", 12);
+  if (direct) return direct;
+  const hint = safeText(source && source.dateHint || route && route.entities && route.entities.dateHint || "today", 24);
+  if (hint === "day_after_tomorrow") return "后天";
+  if (hint === "tomorrow") return "明天";
+  return "今天";
 }
 
 function minutesFromTime(value) {
@@ -931,8 +952,9 @@ function normalizeWeatherForCard(weather, route, nextCourse) {
   const source = weather && typeof weather === "object" && !Array.isArray(weather) ? weather : {};
   const success = source.success !== false;
   const campus = safeText(source.campus || route && route.entities && route.entities.campus || "仙溪校区", 40);
+  const targetLabel = weatherTargetLabel(source, route);
   const sourceText = source.provider === "open-meteo"
-    ? "Open-Meteo 实时天气"
+    ? (targetLabel === "今天" ? "Open-Meteo 实时天气" : "Open-Meteo 天气预报")
     : (safeText(source.provider || source.source || "", 60) || "天气数据源");
   const unavailableText = "当前天气数据源暂不可用";
   const weatherText = success ? (safeText(source.weatherText || source.summary, 40) || "天气待确认") : unavailableText;
@@ -948,17 +970,28 @@ function normalizeWeatherForCard(weather, route, nextCourse) {
     provider: source.provider || "",
     sourceId: source.sourceId || source.provider || "weather-provider",
     sourceText,
+    targetLabel,
+    targetDate: safeText(source.targetDate || "", 16),
+    dateHint: safeText(source.dateHint || route && route.entities && route.entities.dateHint || "today", 24),
     updatedAt: source.updatedAt || "",
     updatedLabel,
     weatherText,
-    temperatureC: success ? displayWeatherValue(source.temperatureC) : "--",
-    apparentTemperatureC: success ? displayWeatherValue(source.apparentTemperatureC || source.temperatureC) : "--",
-    highC: success ? displayWeatherValue(source.highC || source.temperatureC) : "--",
-    lowC: success ? displayWeatherValue(source.lowC || source.temperatureC) : "--",
-    humidity: success ? displayWeatherValue(source.humidity) : "--",
-    windSpeedKmh: success ? displayWeatherValue(source.windSpeedKmh) : "--",
-    precipitationMm: success ? displayWeatherValue(source.precipitationMm, "0") : "--",
-    rainProbabilityMax24h: success ? displayWeatherValue(source.rainProbabilityMax24h, "0") : "--",
+    temperatureC: success ? displayWeatherValue(source.temperatureC) : "暂无该项数据",
+    apparentTemperatureC: success ? displayWeatherValue(source.apparentTemperatureC || source.temperatureC) : "暂无该项数据",
+    highC: success ? displayWeatherValue(source.highC || source.temperatureC) : "暂无该项数据",
+    lowC: success ? displayWeatherValue(source.lowC || source.temperatureC) : "暂无该项数据",
+    humidity: success ? displayWeatherValue(source.humidity) : "暂无该项数据",
+    windSpeedKmh: success ? displayWeatherValue(source.windSpeedKmh) : "暂无该项数据",
+    precipitationMm: success ? displayWeatherValue(source.precipitationMm) : "暂无该项数据",
+    rainProbabilityMax24h: success ? displayWeatherValue(source.rainProbabilityMax24h) : "暂无该项数据",
+    temperatureText: success ? weatherValueWithUnit(source.temperatureC, "℃") : "暂无该项数据",
+    apparentTemperatureText: success ? weatherValueWithUnit(source.apparentTemperatureC || source.temperatureC, "℃") : "暂无该项数据",
+    highText: success ? weatherValueWithUnit(source.highC || source.temperatureC, "℃") : "暂无该项数据",
+    lowText: success ? weatherValueWithUnit(source.lowC || source.temperatureC, "℃") : "暂无该项数据",
+    humidityText: success ? weatherValueWithUnit(source.humidity, "%") : "暂无该项数据",
+    windSpeedText: success ? weatherValueWithUnit(source.windSpeedKmh, "km/h") : "暂无该项数据",
+    precipitationText: success ? weatherValueWithUnit(source.precipitationMm, "mm") : "暂无该项数据",
+    rainProbabilityText: success ? weatherValueWithUnit(source.rainProbabilityMax24h, "%") : "暂无该项数据",
     cached: source.cached === true,
     stale: source.stale === true,
     advice,
@@ -970,16 +1003,16 @@ function buildWeatherAnswerText(weatherPayload, route, nextCourse) {
   if (!weatherPayload.success) {
     return `我理解你是在问${weatherPayload.campus}天气。${weatherPayload.advice}`;
   }
-  const rainText = weatherPayload.rainProbabilityMax24h === "--"
+  const rainText = weatherPayload.rainProbabilityText === "暂无该项数据"
     ? "暂未返回降雨概率"
-    : `未来 24 小时最高降雨概率约 ${weatherPayload.rainProbabilityMax24h}%`;
+    : `${weatherPayload.targetLabel || "今天"}最高降雨概率约 ${weatherPayload.rainProbabilityText}`;
   const nextCourseText = route && route.entities && route.entities.needsPersonalSchedule
     ? (nextCourse
       ? `我也参考了你本机个人课表里的下一节课：${safeText(nextCourse.courseName || nextCourse.name || "下一节课", 60)}${safeText(nextCourse.classroom || nextCourse.roomName || "", 60) ? `，地点 ${safeText(nextCourse.classroom || nextCourse.roomName || "", 60)}` : ""}。`
       : "你问到下一节课，我先按校区天气判断；导入个人课表后可以结合下一节课时间和地点提醒。")
     : "";
   return [
-    `我理解你是在问${weatherPayload.campus}天气。当前${weatherPayload.weatherText}，约 ${weatherPayload.temperatureC}℃，${rainText}。`,
+    `我理解你是在问${weatherPayload.campus}天气。${weatherPayload.targetLabel || "今天"}${weatherPayload.weatherText}，温度 ${weatherPayload.temperatureText}，${rainText}。`,
     nextCourseText,
     weatherPayload.advice,
   ].filter(Boolean).join("\n");
@@ -995,9 +1028,9 @@ function buildWeatherCard(weatherPayload) {
     weather: weatherPayload,
     items: [
       { title: "地点", subtitle: weatherPayload.campus, value: "" },
-      { title: "当前天气", subtitle: weatherPayload.weatherText, value: weatherPayload.temperatureC === "--" ? "" : `${weatherPayload.temperatureC}℃` },
-      { title: "降雨提醒", subtitle: weatherPayload.rainProbabilityMax24h === "--" ? "数据源未返回降雨概率" : `未来 24 小时最高降雨概率约 ${weatherPayload.rainProbabilityMax24h}%`, value: "" },
-      { title: "风力/湿度", subtitle: `风速 ${weatherPayload.windSpeedKmh}km/h · 湿度 ${weatherPayload.humidity}%`, value: "" },
+      { title: `${weatherPayload.targetLabel || "今天"}天气`, subtitle: weatherPayload.weatherText, value: weatherPayload.temperatureText === "暂无该项数据" ? "" : weatherPayload.temperatureText },
+      { title: "降雨提醒", subtitle: weatherPayload.rainProbabilityText === "暂无该项数据" ? "暂无该项数据：数据源未返回降雨概率" : `${weatherPayload.targetLabel || "今天"}最高降雨概率约 ${weatherPayload.rainProbabilityText}`, value: "" },
+      { title: "风力/湿度", subtitle: `风速 ${weatherPayload.windSpeedText} · 湿度 ${weatherPayload.humidityText}`, value: "" },
       { title: "更新时间", subtitle: weatherPayload.updatedLabel, value: "" },
       { title: "数据来源", subtitle: weatherPayload.sourceText, value: "" },
       { title: "建议", subtitle: weatherPayload.advice, value: "" },
@@ -1020,6 +1053,8 @@ async function buildWeatherResponse(message, clientContext = {}, route = {}, cal
   const weather = await weatherProvider.getCampusWeather({
     campus: entities.campus || entities.location || "",
     message,
+    dateHint: entities.dateHint || "",
+    topic: entities.topic || "",
   });
   reportPipelineStatus(callbacks, "正在整理结果…", "compose");
   const weatherPayload = normalizeWeatherForCard(weather, route, nextCourse);
