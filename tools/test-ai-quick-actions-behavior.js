@@ -42,8 +42,9 @@ function run() {
   page.onQuickAction(tap("today"));
   page.onQuickAction(tap("class"));
   page.onQuickAction(tap("room"));
+  page.onQuickAction(tap("weather"));
   page.onQuickAction(tap("xls"));
-  assert.deepStrictEqual(sent, ["今天有什么课", "查班级本周课表", "查教室明天是否有课", "如何导入个人课表"]);
+  assert.deepStrictEqual(sent, ["今天有什么课", "查班级本周课表", "查教室明天是否有课", "仙溪校区今天会下雨吗？", "如何导入个人课表"]);
 
   assert.strictEqual(page.data.inputValue, "");
   assert.strictEqual(navigated, "");

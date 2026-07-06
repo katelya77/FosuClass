@@ -411,4 +411,5 @@
       </view>
     </view>
   </block>
+  <xiaofu-float />
 </view>

@@ -72,4 +72,5 @@
       {{loading ? '正在提交...' : '确认并上传为班级公共课表'}}
     </button>
   </form>
+  <xiaofu-float />
 </view>

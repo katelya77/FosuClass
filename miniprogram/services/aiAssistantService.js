@@ -8,7 +8,9 @@ const xiaofuAgentRouter = require("./xiaofuAgentRouter");
 const ragAnswerBuilder = require("./ragAnswerBuilder");
 const scheduleAssistantService = require("./scheduleAssistantService");
 const teachingCalendarService = require("./teachingCalendarService");
+const weatherProvider = require("./weatherProvider");
 const contextManager = require("./xiaofuContextManager");
+const { courseTimes } = require("../data/courseTimes");
 const {
   getTodayTeachingInfo,
   getTodayWeekday,
@@ -80,6 +82,12 @@ function stableHash(text) {
     hash = Math.imul(hash, 16777619);
   }
   return (hash >>> 0).toString(36);
+}
+
+function safeText(value, maxLength) {
+  const text = String(value == null ? "" : value).trim();
+  if (!text) return "";
+  return redactSensitiveText(text).slice(0, maxLength || 200);
 }
 
 function normalizeWeekday(course) {
@@ -824,6 +832,226 @@ function buildPersonalScheduleClarificationResponse(message, clientContext = {},
   };
 }
 
+function reportPipelineStatus(callbacks, text, type) {
+  if (callbacks && typeof callbacks.onStatus === "function" && text) {
+    callbacks.onStatus({ type: type || "status", text });
+  }
+}
+
+function displayWeatherValue(value, fallback) {
+  if (value == null || value === "") return fallback || "--";
+  return String(value);
+}
+
+function formatWeatherTime(value) {
+  if (!value) return formatStatusTime(new Date().toISOString());
+  return formatStatusTime(value);
+}
+
+function minutesFromTime(value) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return null;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (!Number.isFinite(hour) || !Number.isFinite(minute)) return null;
+  return hour * 60 + minute;
+}
+
+function getSectionStartMinutes(section) {
+  const target = Number(section || 0);
+  if (!target) return null;
+  const item = (courseTimes || []).find((entry) => Number(entry.section) === target);
+  return item ? minutesFromTime(item.start) : null;
+}
+
+function getCurrentLocalMinutes(clientContext = {}) {
+  const value = clientContext.clientLocalTime || clientContext.clientTime || "";
+  const match = String(value || "").match(/T(\d{2}):(\d{2})/);
+  if (match) return Number(match[1]) * 60 + Number(match[2]);
+  const now = new Date();
+  return now.getHours() * 60 + now.getMinutes();
+}
+
+function courseMatchesTeachingWeek(course, weekNo) {
+  const week = Number(weekNo || 0);
+  if (!week) return true;
+  if (Array.isArray(course.weeks) && course.weeks.length) {
+    return course.weeks.map((item) => Number(item)).indexOf(week) >= 0;
+  }
+  const startWeek = Number(course.startWeek || 0);
+  const endWeek = Number(course.endWeek || 0);
+  if (startWeek && endWeek) return week >= startWeek && week <= endWeek;
+  return true;
+}
+
+function findNextCourseForWeather(clientContext = {}) {
+  const summary = clientContext.currentScheduleSummary || {};
+  if (!summary.enabled || !Array.isArray(summary.courses) || !summary.courses.length) return null;
+  const weekday = Number(clientContext.todayWeekday || 0);
+  const teachingWeek = Number(clientContext.currentTeachingWeek || 0);
+  const nowMinutes = getCurrentLocalMinutes(clientContext);
+  const candidates = summary.courses
+    .filter((course) => Number(course.weekday || 0) === weekday)
+    .filter((course) => courseMatchesTeachingWeek(course, teachingWeek))
+    .map((course) => {
+      const startSection = Number(course.startSection || course.sectionStart || 0) || 0;
+      return Object.assign({}, course, {
+        _startMinutes: getSectionStartMinutes(startSection),
+      });
+    })
+    .filter((course) => Number.isFinite(Number(course._startMinutes)))
+    .sort((left, right) => Number(left._startMinutes) - Number(right._startMinutes));
+  for (let index = 0; index < candidates.length; index += 1) {
+    if (Number(candidates[index]._startMinutes) + 5 >= nowMinutes) return candidates[index];
+  }
+  return candidates[0] || null;
+}
+
+function buildWeatherAdvice(weather, route, nextCourse) {
+  const sourceAdvice = safeText(weather && weather.advice || "", 160);
+  const probability = Number(weather && weather.rainProbabilityMax24h);
+  const precipitation = Number(weather && weather.precipitationMm);
+  const rainLike = /雨|雷|降水/.test(String(weather && weather.weatherText || "")) ||
+    (Number.isFinite(probability) && probability >= 55) ||
+    (Number.isFinite(precipitation) && precipitation >= 0.8);
+  let advice = sourceAdvice || (rainLike ? "有降雨风险，建议带伞并预留通行时间。" : "降雨影响不明显，按正常出行准备即可。");
+  if (route && route.entities && route.entities.needsPersonalSchedule) {
+    if (nextCourse) {
+      const courseName = safeText(nextCourse.courseName || nextCourse.name || "下一节课", 60);
+      const roomName = safeText(nextCourse.classroom || nextCourse.roomName || "", 60);
+      advice = `${courseName}${roomName ? `（${roomName}）` : ""}前：${advice}`;
+    } else {
+      advice = `${advice} 当前没有可用的个人课表摘要，导入个人课表后可以结合下一节课时间和地点提醒。`;
+    }
+  }
+  return safeText(advice, 180);
+}
+
+function normalizeWeatherForCard(weather, route, nextCourse) {
+  const source = weather && typeof weather === "object" && !Array.isArray(weather) ? weather : {};
+  const success = source.success !== false;
+  const campus = safeText(source.campus || route && route.entities && route.entities.campus || "仙溪校区", 40);
+  const sourceText = source.provider === "open-meteo"
+    ? "Open-Meteo 实时天气"
+    : (safeText(source.provider || source.source || "", 60) || "天气数据源");
+  const unavailableText = "当前天气数据源暂不可用";
+  const weatherText = success ? (safeText(source.weatherText || source.summary, 40) || "天气待确认") : unavailableText;
+  const updatedLabel = success
+    ? formatWeatherTime(source.updatedAt || new Date().toISOString())
+    : formatWeatherTime(new Date().toISOString());
+  const advice = success
+    ? buildWeatherAdvice(source, route, nextCourse)
+    : "当前天气数据源未配置或暂不可用，不能用学校官网概况代替天气。请稍后重试或在服务端配置稳定天气数据源。";
+  return {
+    success,
+    campus,
+    provider: source.provider || "",
+    sourceId: source.sourceId || source.provider || "weather-provider",
+    sourceText,
+    updatedAt: source.updatedAt || "",
+    updatedLabel,
+    weatherText,
+    temperatureC: success ? displayWeatherValue(source.temperatureC) : "--",
+    apparentTemperatureC: success ? displayWeatherValue(source.apparentTemperatureC || source.temperatureC) : "--",
+    highC: success ? displayWeatherValue(source.highC || source.temperatureC) : "--",
+    lowC: success ? displayWeatherValue(source.lowC || source.temperatureC) : "--",
+    humidity: success ? displayWeatherValue(source.humidity) : "--",
+    windSpeedKmh: success ? displayWeatherValue(source.windSpeedKmh) : "--",
+    precipitationMm: success ? displayWeatherValue(source.precipitationMm, "0") : "--",
+    rainProbabilityMax24h: success ? displayWeatherValue(source.rainProbabilityMax24h, "0") : "--",
+    cached: source.cached === true,
+    stale: source.stale === true,
+    advice,
+    next6Hours: Array.isArray(source.next6Hours) ? source.next6Hours.slice(0, 6) : [],
+  };
+}
+
+function buildWeatherAnswerText(weatherPayload, route, nextCourse) {
+  if (!weatherPayload.success) {
+    return `我理解你是在问${weatherPayload.campus}天气。${weatherPayload.advice}`;
+  }
+  const rainText = weatherPayload.rainProbabilityMax24h === "--"
+    ? "暂未返回降雨概率"
+    : `未来 24 小时最高降雨概率约 ${weatherPayload.rainProbabilityMax24h}%`;
+  const nextCourseText = route && route.entities && route.entities.needsPersonalSchedule
+    ? (nextCourse
+      ? `我也参考了你本机个人课表里的下一节课：${safeText(nextCourse.courseName || nextCourse.name || "下一节课", 60)}${safeText(nextCourse.classroom || nextCourse.roomName || "", 60) ? `，地点 ${safeText(nextCourse.classroom || nextCourse.roomName || "", 60)}` : ""}。`
+      : "你问到下一节课，我先按校区天气判断；导入个人课表后可以结合下一节课时间和地点提醒。")
+    : "";
+  return [
+    `我理解你是在问${weatherPayload.campus}天气。当前${weatherPayload.weatherText}，约 ${weatherPayload.temperatureC}℃，${rainText}。`,
+    nextCourseText,
+    weatherPayload.advice,
+  ].filter(Boolean).join("\n");
+}
+
+function buildWeatherCard(weatherPayload) {
+  return {
+    type: "weather_card",
+    variant: weatherPayload.success ? "" : "error",
+    title: `${weatherPayload.campus}天气`,
+    subtitle: weatherPayload.success ? weatherPayload.weatherText : "天气数据暂不可用",
+    badges: ["天气", weatherPayload.success ? "实时信息" : "数据暂不可用"].concat(weatherPayload.cached ? ["最近数据"] : []),
+    weather: weatherPayload,
+    items: [
+      { title: "地点", subtitle: weatherPayload.campus, value: "" },
+      { title: "当前天气", subtitle: weatherPayload.weatherText, value: weatherPayload.temperatureC === "--" ? "" : `${weatherPayload.temperatureC}℃` },
+      { title: "降雨提醒", subtitle: weatherPayload.rainProbabilityMax24h === "--" ? "数据源未返回降雨概率" : `未来 24 小时最高降雨概率约 ${weatherPayload.rainProbabilityMax24h}%`, value: "" },
+      { title: "风力/湿度", subtitle: `风速 ${weatherPayload.windSpeedKmh}km/h · 湿度 ${weatherPayload.humidity}%`, value: "" },
+      { title: "更新时间", subtitle: weatherPayload.updatedLabel, value: "" },
+      { title: "数据来源", subtitle: weatherPayload.sourceText, value: "" },
+      { title: "建议", subtitle: weatherPayload.advice, value: "" },
+    ],
+    actions: weatherPayload.success ? [] : [
+      { label: "稍后重试", type: "retry", payload: {} },
+    ],
+    updatedAt: weatherPayload.updatedAt,
+    sourceUrl: weatherPayload.sourceId,
+  };
+}
+
+async function buildWeatherResponse(message, clientContext = {}, route = {}, callbacks = {}) {
+  const entities = route.entities || {};
+  reportPipelineStatus(callbacks, "正在查询天气…", "weather");
+  const nextCourse = entities.needsPersonalSchedule ? findNextCourseForWeather(clientContext) : null;
+  if (entities.needsPersonalSchedule) {
+    reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
+  }
+  const weather = await weatherProvider.getCampusWeather({
+    campus: entities.campus || entities.location || "",
+    message,
+  });
+  reportPipelineStatus(callbacks, "正在整理结果…", "compose");
+  const weatherPayload = normalizeWeatherForCard(weather, route, nextCourse);
+  return {
+    answer: buildWeatherAnswerText(weatherPayload, route, nextCourse),
+    cards: [buildWeatherCard(weatherPayload)],
+    suggestions: ["今天要不要带伞", "仙溪校区今天会下雨吗", "明天适合跑步吗"],
+    toolCalls: [
+      { name: entities.needsPersonalSchedule ? "get_course_weather_advice" : "get_campus_weather", status: weatherPayload.success ? "success" : "not_found" },
+    ],
+    evidence: {
+      verified: weatherPayload.success,
+      checkedAt: new Date().toISOString(),
+      source: weatherPayload.sourceId,
+    },
+    safety: {
+      provider: "weather-provider",
+      resolvedProvider: weatherPayload.provider || "weather-provider",
+      externalProviderUsed: weatherPayload.success,
+      mode: "tool-grounded",
+      clearPendingClarification: true,
+    },
+    metrics: {
+      intentName: "weather",
+      latencyMs: 0,
+      externalProviderUsed: weatherPayload.success,
+      resultCount: weatherPayload.success ? 1 : 0,
+      routeConfidence: route.confidence || 0,
+    },
+  };
+}
+
 function buildSmalltalkResponse(message, clientContext = {}, route = {}) {
   const compact = String(message || "").replace(/\s+/g, "");
   const answer = /^谢谢|^感谢/.test(compact)
@@ -880,19 +1108,26 @@ async function chat(message, context, options = {}) {
   });
   const callbacks = options && options.callbacks || {};
   const route = xiaofuAgentRouter.routeMessage(message, localContext);
-  if (callbacks.onStatus) {
-    callbacks.onStatus({ type: "route", text: "正在分流到合适的校园能力", route });
-  }
+  reportPipelineStatus(callbacks, "正在理解你的问题…", "understand");
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_STATUS) {
+    reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
+    reportPipelineStatus(callbacks, "正在整理结果…", "compose");
     return buildScheduleStatusResponse(message, localContext, route);
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.HELP) {
+    reportPipelineStatus(callbacks, "正在查找使用说明…", "help");
+    reportPipelineStatus(callbacks, "正在整理结果…", "compose");
     return buildHelpResponse(message, localContext, route);
   }
 
+  if (route.intent === xiaofuAgentRouter.INTENTS.WEATHER) {
+    return buildWeatherResponse(message, localContext, route, callbacks);
+  }
+
   if (route.intent === xiaofuAgentRouter.INTENTS.PERSONAL_SCHEDULE) {
+    reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
     if (route.shouldUsePersonalScheduleTool) {
       return aiTransportRouter.chat({
         message,
@@ -903,16 +1138,20 @@ async function chat(message, context, options = {}) {
         options,
       });
     }
+    reportPipelineStatus(callbacks, "正在整理结果…", "compose");
     return buildPersonalScheduleClarificationResponse(message, localContext, route);
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.APP_NAVIGATION) {
+    reportPipelineStatus(callbacks, "正在查找入口…", "navigation");
     const navigationResponse = ragAnswerBuilder.tryBuildContextNavigationAnswer(message, localContext);
     if (navigationResponse) return navigationResponse;
+    reportPipelineStatus(callbacks, "正在整理结果…", "compose");
     return buildAppNavigationResponse(message, localContext, route);
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_QUERY) {
+    reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
     if (route.shouldUsePersonalScheduleTool) {
       return aiTransportRouter.chat({
         message,
@@ -928,6 +1167,7 @@ async function chat(message, context, options = {}) {
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHOOL_KNOWLEDGE) {
+    reportPipelineStatus(callbacks, "正在检索校园知识…", "knowledge");
     const navigationResponse = ragAnswerBuilder.tryBuildContextNavigationAnswer(message, localContext);
     if (navigationResponse) return navigationResponse;
     const knowledgeResponse = ragAnswerBuilder.tryBuildKnowledgeAnswer(message, localContext);
@@ -935,6 +1175,7 @@ async function chat(message, context, options = {}) {
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.NAVIGATION) {
+    reportPipelineStatus(callbacks, "正在查找入口…", "navigation");
     const navigationResponse = ragAnswerBuilder.tryBuildKnowledgeAnswer(message, localContext, {
       preferredEntryType: "navigation",
       intentName: "navigation",
@@ -943,6 +1184,7 @@ async function chat(message, context, options = {}) {
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SMALLTALK) {
+    reportPipelineStatus(callbacks, "正在整理结果…", "compose");
     return buildSmalltalkResponse(message, localContext, route);
   }
 

@@ -27,6 +27,20 @@ const CAMPUS = {
     name: "河滨校区",
     configured: false,
   },
+  foshan: {
+    id: "foshan",
+    name: "佛山",
+    latitude: 23.0215,
+    longitude: 113.1214,
+    configured: true,
+  },
+  nanhai: {
+    id: "nanhai",
+    name: "南海区",
+    latitude: 23.0312,
+    longitude: 113.1434,
+    configured: true,
+  },
 };
 
 function fullWidthToHalfWidth(text) {
@@ -40,6 +54,8 @@ function normalizeCampus(value) {
   if (/河滨|hebin|he\s*bin/.test(text)) return CAMPUS.hebin;
   if (/江湾|jiangwan|jiang\s*wan/.test(text)) return CAMPUS.jiangwan;
   if (/仙溪|xianxi|xiangxi|xian\s*xi|xiang\s*xi/.test(text)) return CAMPUS.xianxi;
+  if (/南海|nanhai|nan\s*hai/.test(text)) return CAMPUS.nanhai;
+  if (/佛山|foshan|fo\s*shan/.test(text)) return CAMPUS.foshan;
   return null;
 }
 

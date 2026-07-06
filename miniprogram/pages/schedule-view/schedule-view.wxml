@@ -157,4 +157,5 @@
     bind:close="closeCourseDetail"
     bind:copycustom="onCopyCourseToCustom"
   />
+  <xiaofu-float />
 </view>

@@ -20,12 +20,12 @@
 
   <view class="ai-mode-row">
     <view class="quick-nav-segment" aria-label="对话与任务">
-      <button class="quick-conversation-button quick-nav-button active" bindtap="openConversationSheet">对话</button>
-      <button class="quick-more-button quick-nav-button" bindtap="openTaskPanel">任务</button>
+      <view class="quick-nav-option active" bindtap="openConversationSheet"><text>对话</text></view>
+      <view class="quick-nav-option" bindtap="openTaskPanel"><text>任务</text></view>
     </view>
   </view>
 
-  <scroll-view class="quick-action-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+  <scroll-view class="quick-action-scroll" scroll-x enhanced enable-flex="{{true}}" scroll-with-animation="{{false}}" show-scrollbar="{{false}}">
     <view class="quick-action-list">
       <button
         wx:for="{{quickActions}}"
@@ -42,7 +42,7 @@
 
   <view class="history-trim-tip" wx:if="{{historyTrimNotice}}">已仅保留最近 20 条</view>
 
-  <scroll-view class="message-scroll" scroll-y scroll-top="{{scrollTop}}" enhanced show-scrollbar="{{false}}">
+  <scroll-view class="message-scroll" scroll-y scroll-top="{{scrollTop}}" scroll-into-view="{{scrollIntoView}}" scroll-with-animation="{{scrollWithAnimation}}" scroll-anchoring="{{true}}" enhanced show-scrollbar="{{false}}" lower-threshold="80">
     <view class="empty-welcome" wx:if="{{!messages.length}}">
       <view class="empty-title">问校园事项、查全校课表</view>
       <view class="empty-desc">我会先判断问题类型，再决定查课表、检索校园知识或说明数据状态。</view>
@@ -135,6 +135,7 @@
                 </view>
               </view>
               <view class="weather-advice">{{card.weather.advice}}</view>
+              <view class="weather-source" wx:if="{{card.weather.sourceText}}">数据来源：{{card.weather.sourceText}}</view>
             </view>
 
             <block wx:else>
@@ -220,6 +221,7 @@
       <view class="sending-dot"></view>
       <view class="sending-text">{{sendingStatusText}}</view>
     </view>
+    <view id="message-bottom-anchor" class="message-bottom-anchor"></view>
   </scroll-view>
 
   <view class="sheet-mask" wx:if="{{showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu}}" bindtap="closeSheets"></view>
@@ -234,7 +236,7 @@
       <button class="sheet-close" bindtap="closeConversationSheet">关闭</button>
     </view>
     <button class="conversation-new-btn" bindtap="createNewConversation">新建对话</button>
-    <scroll-view class="conversation-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <scroll-view class="conversation-scroll" scroll-y enhanced scroll-with-animation="{{false}}" show-scrollbar="{{false}}">
       <view
         wx:for="{{conversations}}"
         wx:key="conversationId"
@@ -265,6 +267,7 @@
       </view>
       <button class="sheet-close" bindtap="closeHeaderMenu">关闭</button>
     </view>
+    <button class="header-menu-item" bindtap="enableXiaofuFloat">开启小佛AI浮窗</button>
     <button class="header-menu-item danger" bindtap="clearHistory">清空记录</button>
   </view>
 
@@ -277,7 +280,7 @@
       </view>
       <button class="sheet-close" bindtap="closeTaskPanel">关闭</button>
     </view>
-    <scroll-view wx:if="{{taskPanelReady}}" class="task-section-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <scroll-view wx:if="{{taskPanelReady}}" class="task-section-scroll" scroll-y enhanced scroll-with-animation="{{false}}" show-scrollbar="{{false}}">
       <view
         wx:for="{{taskPanelGroups}}"
         wx:for-item="group"
@@ -316,7 +319,7 @@
       </view>
       <button class="sheet-close" bindtap="closeCapabilityGuide">关闭</button>
     </view>
-    <scroll-view class="capability-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <scroll-view class="capability-scroll" scroll-y enhanced scroll-with-animation="{{false}}" show-scrollbar="{{false}}">
       <view
         wx:for="{{capabilityGuideGroups}}"
         wx:for-item="group"
@@ -398,4 +401,5 @@
     <view wx:if="{{voiceStatusText}}" class="voice-status">{{voiceStatusText}}</view>
     <button class="composer-note" bindtap="openPrivacySheet">{{composerNote}}</button>
   </view>
+  <xiaofu-float />
 </view>

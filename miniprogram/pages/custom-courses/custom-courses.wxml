@@ -128,4 +128,5 @@
       </view>
     </view>
   </view>
+  <xiaofu-float />
 </view>

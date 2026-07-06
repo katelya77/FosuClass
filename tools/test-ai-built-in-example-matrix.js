@@ -23,6 +23,41 @@ global.getApp = () => ({
   },
 });
 
+global.wx.mockRequest = (options) => {
+  const url = String(options && options.url || "");
+  if (url.indexOf("/api/ai/weather") >= 0) {
+    options.success({
+      statusCode: 200,
+      data: {
+        success: true,
+        weather: {
+          success: true,
+          campus: "仙溪校区",
+          provider: "open-meteo",
+          sourceId: "open-meteo:xianxi",
+          updatedAt: "2026-07-07T09:00:00+08:00",
+          weatherText: "多云",
+          temperatureC: 31,
+          apparentTemperatureC: 33,
+          highC: 35,
+          lowC: 27,
+          humidity: 72,
+          windSpeedKmh: 11,
+          precipitationMm: 0.2,
+          rainProbabilityMax24h: 68,
+          advice: "短时降雨概率较高，建议带伞并预留通行时间。",
+          next6Hours: [
+            { time: "09时", temperatureC: 31, rainProbability: 30 },
+            { time: "10时", temperatureC: 32, rainProbability: 42 },
+          ],
+        },
+      },
+    });
+    return;
+  }
+  options.success({ statusCode: 200, data: { success: true } });
+};
+
 const aiAssistantService = require("../miniprogram/services/aiAssistantService");
 const contextManager = require("../miniprogram/services/xiaofuContextManager");
 require("../miniprogram/pages/ai-assistant/ai-assistant.js");
@@ -106,6 +141,34 @@ const MATRIX = [
     answer: /更新时间|未记录精确更新时间/,
   },
   {
+    text: "仙溪校区什么天气",
+    intentName: "weather",
+    tool: "get_campus_weather",
+    cardType: "weather_card",
+    answer: /仙溪校区天气|降雨概率|带伞/,
+  },
+  {
+    text: "仙溪校区今天会下雨吗",
+    intentName: "weather",
+    tool: "get_campus_weather",
+    cardType: "weather_card",
+    answer: /仙溪校区天气|降雨概率|带伞/,
+  },
+  {
+    text: "今天要不要带伞",
+    intentName: "weather",
+    tool: "get_campus_weather",
+    cardType: "weather_card",
+    answer: /天气|降雨概率|带伞/,
+  },
+  {
+    text: "下一节课要带伞吗",
+    intentName: "weather",
+    tool: "get_course_weather_advice",
+    cardType: "weather_card",
+    answer: /导入个人课表|天气|带伞/,
+  },
+  {
     text: "课表数据是否最新",
     intentName: "schedule_status",
     cardType: "schedule_status",
@@ -149,6 +212,12 @@ const MATRIX = [
   },
   {
     text: "佛大有哪些学院和部门",
+    intentName: "school_knowledge",
+    cardType: "school_knowledge",
+    answer: /学院|部门|官网/,
+  },
+  {
+    text: "佛大有哪些学院和部门？",
     intentName: "school_knowledge",
     cardType: "school_knowledge",
     answer: /学院|部门|官网/,
@@ -202,6 +271,9 @@ async function run() {
       assert.strictEqual(response.cards[0].type, item.cardType, `unexpected card type for ${item.text}`);
     }
     const names = (response.toolCalls || []).map((tool) => tool.name);
+    if (item.tool) {
+      assert(names.includes(item.tool), `${item.text} should use ${item.tool}`);
+    }
     if (["schedule_status", "help", "personal_schedule", "school_knowledge", "navigation", "smalltalk"].includes(item.intentName)) {
       assert(!names.includes("search_school_schedule_local"), `${item.text} should not use schedule object search`);
     }

@@ -2,13 +2,14 @@ const aiAssistantService = require("../../services/aiAssistantService");
 const aiVoiceInputService = require("../../services/aiVoiceInputService");
 const conversationStore = require("../../services/conversationStore");
 const contextManager = require("../../services/xiaofuContextManager");
+const xiaofuFloatService = require("../../services/xiaofuFloatService");
 const cloudbaseConfig = require("../../config/cloudbase");
 const demoData = require("./demo-data");
 const { courseTimes } = require("../../data/courseTimes");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
-const TASK_PANEL_CACHE_VERSION = "2026-07-campus-agent-v3";
+const TASK_PANEL_CACHE_VERSION = "2026-07-campus-agent-v4";
 const TASK_PANEL_DEBOUNCE_MS = 180;
 const TASK_ACTION_DEBOUNCE_MS = 180;
 const SEND_DEDUPE_MS = 420;
@@ -34,6 +35,7 @@ const CAPABILITY_KINDS = {
   SUPPLEMENT_PARAMS: "supplement_params",
   NAVIGATE: "navigate",
   GENERATIVE_QA: "generative_qa",
+  LOCAL_ACTION: "local_action",
 };
 
 const AI_CAPABILITY_REGISTRY = [
@@ -210,7 +212,26 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.term,
     label: "校区天气",
+    taskGroup: "实时信息",
+    taskLabel: "校区天气",
+    taskDesc: "下雨、温度、带伞和出行建议",
+    guideGroup: "实时信息",
+    guideExamples: ["仙溪校区今天会下雨吗"],
+    welcomeExample: "仙溪校区今天会下雨吗",
     message: "仙溪校区今天会下雨吗？",
+  },
+  {
+    id: "umbrellaAdvice",
+    kind: CAPABILITY_KINDS.DIRECT_TOOL,
+    iconPath: ICONS.term,
+    label: "带伞建议",
+    taskGroup: "实时信息",
+    taskLabel: "今天要不要带伞",
+    taskDesc: "优先查询天气，不走学校官网概况",
+    guideGroup: "实时信息",
+    guideExamples: ["今天要不要带伞", "下一节课要带伞吗"],
+    welcomeExample: "今天要不要带伞",
+    message: "今天要不要带伞",
   },
   {
     id: "teachingWeek",
@@ -263,6 +284,16 @@ const AI_CAPABILITY_REGISTRY = [
     guideExamples: ["小佛能做什么", "如何问得更准确"],
     welcomeExample: "这个小程序怎么用？",
     message: "这个小程序怎么用？",
+  },
+  {
+    id: "enableFloat",
+    kind: CAPABILITY_KINDS.LOCAL_ACTION,
+    iconPath: ICONS.app,
+    label: "开启浮窗",
+    taskGroup: "使用帮助",
+    taskLabel: "开启小佛AI浮窗",
+    taskDesc: "恢复右下角可拖拽小佛入口",
+    message: "开启小佛AI浮窗",
   },
   {
     id: "termSync",
@@ -381,13 +412,15 @@ const QUICK_ACTIONS = [
   buildQuickAction("today"),
   buildQuickAction("classSchedule", "class"),
   buildQuickAction("classroomOccupancy", "room"),
+  buildQuickAction("campusWeather", "weather"),
   buildQuickAction("xlsImport", "xls"),
 ];
 
 const WELCOME_EXAMPLES = [
   "查班级本周课表",
-  "查教室明天是否有课",
+  "今天有什么课",
   "当前是第几教学周",
+  "仙溪校区今天会下雨吗",
   "教务系统在哪里",
   "小佛能做什么",
 ];
@@ -403,12 +436,16 @@ function buildTaskPanelGroups() {
       abilityIds: ["today", "tomorrow", "weekSchedule", "xlsImport", "dataStatus"],
     },
     {
+      title: "实时信息",
+      abilityIds: ["campusWeather", "umbrellaAdvice"],
+    },
+    {
       title: "校园知识",
-      abilityIds: ["jwcEntry", "campusLocations", "libraryService", "commonSystems"],
+      abilityIds: ["jwcEntry", "campusLocations", "collegeDepartments", "libraryService", "commonSystems"],
     },
     {
       title: "使用帮助",
-      abilityIds: ["appHelp", "askBetter", "termSync"],
+      abilityIds: ["appHelp", "xlsImport", "enableFloat", "askBetter", "termSync"],
     },
   ].map((group) => ({
     title: group.title,
@@ -437,6 +474,7 @@ function buildCapabilityGuideGroups() {
   return [
     "课表查询",
     "个人课表",
+    "实时信息",
     "校园知识",
     "使用帮助",
   ].map((title) => ({
@@ -468,7 +506,7 @@ const PROVIDER_LABELS = {
 };
 
 const SAFETY_MODE_LABELS = {
-  "tool-grounded": "工具验证",
+  "tool-grounded": "已核验",
   fallback: "降级模式",
   "fallback-mock": "已降级",
 };
@@ -507,6 +545,7 @@ const CARD_TYPE_LABELS = {
   teacher: "教师",
   course: "课程",
   weather: "天气",
+  weather_card: "天气",
   diagnosis: "数据状态",
   guide: "指引",
   reminder: "提醒",
@@ -528,6 +567,7 @@ const CARD_TITLE_FALLBACKS = {
   teacher: "教师查询",
   course: "课程查询",
   weather: "校区天气",
+  weather_card: "校区天气",
   diagnosis: "数据状态",
   guide: "使用指引",
   reminder: "时间推荐",
@@ -600,6 +640,29 @@ function actionFromAbility(ability, fallbackText) {
     url: source.url || "",
     missingText: source.missingText || "请补充必要信息后发送",
   };
+}
+
+function buildFloatContextSlots(floatContext, currentSlots) {
+  const source = floatContext && typeof floatContext === "object" && !Array.isArray(floatContext)
+    ? floatContext
+    : {};
+  const targetName = safeText(source.targetName || source.title || source.route || "", 100);
+  if (!targetName) return contextManager.normalizeContextSlots(currentSlots);
+  const targetType = safeText(source.targetType || "navigation", 40) || "navigation";
+  return contextManager.mergeContextSlots(currentSlots, {
+    lastIntent: "page_context",
+    lastTargetType: targetType,
+    lastTargetName: targetName,
+    lastWeek: null,
+    lastWeekday: null,
+    lastQueryResult: {
+      title: safeText(source.title || targetName, 80),
+      targetName,
+      route: safeText(source.route || "", 120),
+      query: safeText(source.query || "", 160),
+    },
+    lastSource: "xiaofu-float",
+  });
 }
 
 function createDebounced(fn, wait) {
@@ -707,7 +770,7 @@ function mapSafetyModeLabel(mode) {
   const normalized = String(mode || "tool-grounded").toLowerCase();
   if (SAFETY_MODE_LABELS[normalized]) return SAFETY_MODE_LABELS[normalized];
   if (normalized.indexOf("fallback") >= 0) return "降级模式";
-  if (normalized.indexOf("tool") >= 0 || normalized.indexOf("grounded") >= 0) return "工具验证";
+  if (normalized.indexOf("tool") >= 0 || normalized.indexOf("grounded") >= 0) return "已核验";
   return "安全模式";
 }
 
@@ -871,6 +934,8 @@ function normalizeWeatherPayload(source) {
     precipitationMm: safeText(weather.precipitationMm, 12),
     rainProbabilityMax24h: safeText(weather.rainProbabilityMax24h, 12),
     advice: safeText(weather.advice || weather.travelAdvice || "", 90),
+    sourceText: safeText(weather.sourceText || weather.provider || source.sourceUrl || "", 60),
+    sourceId: safeText(weather.sourceId || source.sourceUrl || "", 80),
     next6Hours: timeline.slice(0, 6).map((item, index) => ({
       key: `${item.time || index}-${index}`,
       time: safeText(item.time || "", 12),
@@ -954,7 +1019,8 @@ function cardKey(messageId, card, index) {
 
 function normalizeCard(card, messageId, index, expandedCards) {
   const source = card && typeof card === "object" && !Array.isArray(card) ? card : {};
-  const type = safeText(source.type || "generic", 30, "generic").toLowerCase() || "generic";
+  const rawType = safeText(source.type || "generic", 30, "generic").toLowerCase() || "generic";
+  const type = rawType === "weather_card" ? "weather" : rawType;
   const rawTitle = safeText(source.title || "", 80);
   const subtitle = safeText(source.subtitle || "", 140);
   const scheduleLike = type === "schedule" || type === "schedule_result" || /今日|课程|课表|today|schedule/i.test(rawTitle);
@@ -1170,7 +1236,7 @@ function resolveProviderState(messages) {
   }
   return {
     providerLabel: "已核验课表数据",
-    providerModeLabel: "工具验证",
+    providerModeLabel: "已核验",
     lastProvider: "unknown",
     lastExternalProviderUsed: false,
     lastFallbackReason: "",
@@ -1191,6 +1257,14 @@ function buildHeaderSubtitle(state) {
   return "校园知识 · 全校课表 · 数据状态";
 }
 
+function bottomScrollPatch(animated) {
+  return {
+    scrollTop: Date.now(),
+    scrollIntoView: "message-bottom-anchor",
+    scrollWithAnimation: animated !== false,
+  };
+}
+
 Page({
   data: {
     quickActions: QUICK_ACTIONS,
@@ -1208,7 +1282,7 @@ Page({
     inputValue: "",
     inputFocus: false,
     sending: false,
-    sendingStatusText: "正在调用校园工具并生成卡片",
+    sendingStatusText: "正在整理结果…",
     showTaskPanel: false,
     showConversationSheet: false,
     showCapabilityGuide: false,
@@ -1224,7 +1298,7 @@ Page({
     privacyActionLabel: "说明",
     allowPersonalContext: false,
     providerLabel: "AI",
-    providerModeLabel: "工具验证",
+    providerModeLabel: "已核验",
     lastExternalProviderUsed: false,
     lastFallbackReason: "",
     lastProvider: "unknown",
@@ -1233,6 +1307,8 @@ Page({
     hasHeroLogo: true,
     demoMode: "",
     scrollTop: 0,
+    scrollIntoView: "",
+    scrollWithAnimation: true,
     composerNote: "默认不发送个人课表摘要",
     voiceInputVisible: false,
     voiceRecording: false,
@@ -1255,6 +1331,10 @@ Page({
     const allowPersonalContext = aiAssistantService.isPersonalContextAllowed();
     const demoMode = demoData.normalizeDemoMode(options && options.demo);
     const activeConversation = conversationStore.getActiveConversation();
+    const floatContext = options && options.from === "float" ? xiaofuFloatService.consumePendingContext() : null;
+    const activeContextSlots = floatContext
+      ? buildFloatContextSlots(floatContext, activeConversation.contextSlots)
+      : contextManager.normalizeContextSlots(activeConversation.contextSlots);
     const sourceMessages = demoMode ? demoData.getDemoMessages(demoMode) : activeConversation.messages;
     const messages = normalizeMessagesForDisplay(trimMessages(sourceMessages), this.data.expandedCards);
     const providerState = resolveProviderState(messages);
@@ -1268,11 +1348,11 @@ Page({
       conversations: buildConversationDisplayList(activeConversation.conversationId),
       activeConversationId: activeConversation.conversationId,
       activeConversationTitle: activeConversation.title,
-      activeConversationContext: contextManager.normalizeContextSlots(activeConversation.contextSlots),
+      activeConversationContext: activeContextSlots,
     }, privacyState, providerState);
     nextState.headerSubtitle = buildHeaderSubtitle(nextState);
 
-    this.setData(Object.assign(nextState, { scrollTop: Date.now() }));
+    this.setData(Object.assign(nextState, bottomScrollPatch(false)));
     this.initVoiceInput();
 
     const question = decodeQuery(options && (options.q || options.question || ""));
@@ -1343,6 +1423,8 @@ Page({
       activeConversationContext: contextManager.normalizeContextSlots(conversation.contextSlots),
       conversations: buildConversationDisplayList(conversation.conversationId),
       scrollTop: Date.now(),
+      scrollIntoView: "message-bottom-anchor",
+      scrollWithAnimation: false,
     });
     if (!options || options.toast !== false) {
       wx.showToast({ title: "已新建对话", icon: "none" });
@@ -1371,6 +1453,8 @@ Page({
       showConversationSheet: false,
       historyTrimNotice: false,
       scrollTop: Date.now(),
+      scrollIntoView: "message-bottom-anchor",
+      scrollWithAnimation: false,
     }, providerState);
     nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
     this.setData(nextState);
@@ -1445,6 +1529,8 @@ Page({
           showConversationSheet: true,
           historyTrimNotice: false,
           scrollTop: Date.now(),
+          scrollIntoView: "message-bottom-anchor",
+          scrollWithAnimation: false,
         }, providerState);
         nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
         this.setData(nextState);
@@ -1616,6 +1702,13 @@ Page({
       showConversationSheet: false,
     };
 
+    if (action.kind === CAPABILITY_KINDS.LOCAL_ACTION) {
+      if (action.id === "enableFloat") {
+        this.enableXiaofuFloat();
+      }
+      return;
+    }
+
     if (action.kind === CAPABILITY_KINDS.SUPPLEMENT_PARAMS) {
       if (action.message) {
         this.setData(closePatch);
@@ -1686,6 +1779,8 @@ Page({
     const nextState = Object.assign({
       messages,
       scrollTop: Date.now(),
+      scrollIntoView: "message-bottom-anchor",
+      scrollWithAnimation: !(options && options.instantScroll),
       historyTrimNotice: this.data.historyTrimNotice || trimmed,
     }, providerState, patch || {});
     nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
@@ -1889,7 +1984,7 @@ Page({
           activeConversationContext: nextContext,
           sending: false,
           slowRequest: false,
-          sendingStatusText: "正在调用校园工具并生成卡片",
+          sendingStatusText: "正在整理结果…",
         }, { save: true });
       })
       .catch((error) => {
@@ -1926,7 +2021,7 @@ Page({
         this.setMessages(finalMessages, {
           sending: false,
           slowRequest: false,
-          sendingStatusText: "正在调用校园工具并生成卡片",
+          sendingStatusText: "正在整理结果…",
         }, { save: true });
       })
       .finally(() => {
@@ -2053,6 +2148,16 @@ Page({
     this.setData({ showHeaderMenu: false });
   },
 
+  enableXiaofuFloat() {
+    xiaofuFloatService.enableEverywhere();
+    this.setData({
+      showHeaderMenu: false,
+      showTaskPanel: false,
+      showCapabilityGuide: false,
+    });
+    wx.showToast({ title: "已开启小佛AI浮窗", icon: "none" });
+  },
+
   onCapabilityExampleTap(event) {
     const text = event.currentTarget.dataset.text;
     if (!text) return;
@@ -2139,6 +2244,8 @@ Page({
       expandedCards,
       messages,
       scrollTop: Date.now(),
+      scrollIntoView: "message-bottom-anchor",
+      scrollWithAnimation: true,
     });
   },
 
