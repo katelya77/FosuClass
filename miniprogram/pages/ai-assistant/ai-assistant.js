@@ -1265,6 +1265,15 @@ function bottomScrollPatch(animated) {
   };
 }
 
+function buildXiaofuFloatState() {
+  const enabled = xiaofuFloatService.isEnabled();
+  return {
+    xiaofuFloatEnabled: enabled,
+    xiaofuFloatToggleText: enabled ? "关闭小佛AI浮窗" : "开启小佛AI浮窗",
+    xiaofuFloatToggleDesc: enabled ? "关闭后不再显示，可在这里或设置页重新开启" : "恢复右下角可拖拽入口",
+  };
+}
+
 Page({
   data: {
     quickActions: QUICK_ACTIONS,
@@ -1305,6 +1314,9 @@ Page({
     headerSubtitle: "已核验课表数据",
     historyTrimNotice: false,
     hasHeroLogo: true,
+    xiaofuFloatEnabled: true,
+    xiaofuFloatToggleText: "开启小佛AI浮窗",
+    xiaofuFloatToggleDesc: "恢复右下角可拖拽入口",
     demoMode: "",
     scrollTop: 0,
     scrollIntoView: "",
@@ -1349,7 +1361,7 @@ Page({
       activeConversationId: activeConversation.conversationId,
       activeConversationTitle: activeConversation.title,
       activeConversationContext: activeContextSlots,
-    }, privacyState, providerState);
+    }, privacyState, providerState, buildXiaofuFloatState());
     nextState.headerSubtitle = buildHeaderSubtitle(nextState);
 
     this.setData(Object.assign(nextState, bottomScrollPatch(false)));
@@ -1368,7 +1380,7 @@ Page({
       this.data.privacyExpanded,
       this.data.showPrivacyTip
     );
-    const nextState = Object.assign({}, privacyState, resolveProviderState(this.data.messages));
+    const nextState = Object.assign({}, privacyState, resolveProviderState(this.data.messages), buildXiaofuFloatState());
     nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
     this.setData(nextState);
   },
@@ -2150,12 +2162,27 @@ Page({
 
   enableXiaofuFloat() {
     xiaofuFloatService.enableEverywhere();
-    this.setData({
+    this.setData(Object.assign({
       showHeaderMenu: false,
       showTaskPanel: false,
       showCapabilityGuide: false,
-    });
+    }, buildXiaofuFloatState()));
     wx.showToast({ title: "已开启小佛AI浮窗", icon: "none" });
+  },
+
+  toggleXiaofuFloat() {
+    const nextEnabled = !xiaofuFloatService.isEnabled();
+    if (nextEnabled) {
+      xiaofuFloatService.enableEverywhere();
+    } else {
+      xiaofuFloatService.setEnabled(false);
+    }
+    this.setData(Object.assign({
+      showHeaderMenu: false,
+      showTaskPanel: false,
+      showCapabilityGuide: false,
+    }, buildXiaofuFloatState()));
+    wx.showToast({ title: nextEnabled ? "已开启小佛AI浮窗" : "已关闭小佛AI浮窗", icon: "none" });
   },
 
   onCapabilityExampleTap(event) {

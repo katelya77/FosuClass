@@ -1,0 +1,127 @@
+const assert = require("assert");
+const path = require("path");
+
+const ROOT = path.resolve(__dirname, "..");
+const servicePath = path.join(ROOT, "miniprogram/services/xiaofuFloatService.js");
+const componentPath = path.join(ROOT, "miniprogram/components/xiaofu-float/index.js");
+
+function makeTouch(x, y) {
+  return { clientX: x, clientY: y };
+}
+
+function loadComponent(routeRef, storage, calls) {
+  delete require.cache[require.resolve(servicePath)];
+  delete require.cache[require.resolve(componentPath)];
+
+  global.getCurrentPages = function getCurrentPagesMock() {
+    return [{ route: routeRef.route, data: routeRef.data || {} }];
+  };
+  global.wx = {
+    getStorageSync(key) {
+      return Object.prototype.hasOwnProperty.call(storage, key) ? storage[key] : "";
+    },
+    setStorageSync(key, value) {
+      storage[key] = value;
+    },
+    removeStorageSync(key) {
+      delete storage[key];
+    },
+    getWindowInfo() {
+      return {
+        windowWidth: 390,
+        windowHeight: 844,
+        safeArea: { top: 47, bottom: 810 },
+      };
+    },
+    getMenuButtonBoundingClientRect() {
+      return { left: 300, right: 382, top: 52, bottom: 84 };
+    },
+    navigateTo(options) {
+      calls.navigateTo.push(options);
+      if (options && options.success) options.success();
+    },
+    redirectTo(options) {
+      calls.redirectTo.push(options);
+    },
+    showToast(options) {
+      calls.showToast.push(options);
+    },
+    showActionSheet(options) {
+      calls.showActionSheet.push(options);
+      if (options && options.complete) options.complete();
+    },
+  };
+
+  let capturedComponent = null;
+  global.Component = function ComponentMock(definition) {
+    capturedComponent = definition;
+  };
+
+  const floatService = require(servicePath);
+  require(componentPath);
+  assert(capturedComponent, "xiaofu float component should register itself");
+
+  const instance = {
+    data: Object.assign({}, capturedComponent.data),
+    properties: {
+      context: { title: "首页" },
+      hidden: false,
+      bottomOffset: 0,
+    },
+    setData(patch) {
+      this.data = Object.assign({}, this.data, patch || {});
+    },
+  };
+  Object.keys(capturedComponent.methods).forEach((key) => {
+    instance[key] = capturedComponent.methods[key];
+  });
+  capturedComponent.lifetimes.attached.call(instance);
+
+  return { instance, floatService };
+}
+
+function run() {
+  const routeRef = { route: "pages/index/index", data: {} };
+  const storage = {};
+  const calls = { navigateTo: [], redirectTo: [], showToast: [], showActionSheet: [] };
+  const loaded = loadComponent(routeRef, storage, calls);
+  const instance = loaded.instance;
+  const floatService = loaded.floatService;
+
+  const indexPolicy = floatService.getRoutePolicy("pages/index/index");
+  assert.strictEqual(indexPolicy.bottomAvoidPx, 64, "tabBar pages should keep a tighter bottom safe area");
+  assert.strictEqual(floatService.getRoutePolicy("pages/ai-assistant/ai-assistant").hidden, true, "AI page float should stay hidden by default");
+
+  instance.onTouchStart({ touches: [makeTouch(340, 650)] });
+  instance.onTouchMove({ touches: [makeTouch(344, 653)] });
+  instance.onTouchEnd({ changedTouches: [makeTouch(344, 653)] });
+  assert.strictEqual(calls.navigateTo.length, 1, "a light tap should open Xiaofu AI from touchend");
+  instance.onTap();
+  assert.strictEqual(calls.navigateTo.length, 1, "tap fallback should not duplicate a touchend-opened navigation");
+
+  calls.navigateTo.length = 0;
+  instance.onTouchStart({ touches: [makeTouch(340, 650)] });
+  instance.onTouchMove({ touches: [makeTouch(280, 610)] });
+  instance.onTouchEnd({ changedTouches: [makeTouch(120, 560)] });
+  assert.strictEqual(calls.navigateTo.length, 0, "dragging should not trigger AI navigation");
+  const savedPosition = storage[floatService.POSITION_KEY];
+  assert(savedPosition && Number.isFinite(savedPosition.x) && Number.isFinite(savedPosition.y), "drag end should persist snapped position");
+  assert(savedPosition.y >= 55 && savedPosition.y <= 722, "saved position should stay inside safe vertical bounds");
+
+  calls.showActionSheet.length = 0;
+  instance.onLongPress();
+  assert.deepStrictEqual(
+    calls.showActionSheet[0] && calls.showActionSheet[0].itemList,
+    ["打开小佛AI", "隐藏本页", "关闭浮窗"],
+    "long press menu should expose open, hide and close actions"
+  );
+
+  calls.navigateTo.length = 0;
+  routeRef.route = "pages/ai-assistant/ai-assistant";
+  instance.openAssistant();
+  assert.strictEqual(calls.navigateTo.length, 0, "AI page should not navigate to itself from the float");
+
+  console.log("test-xiaofu-float-behavior passed");
+}
+
+run();
