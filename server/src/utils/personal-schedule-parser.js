@@ -56,13 +56,7 @@ function stripTeacherTitle(name) {
  * @returns {Object} 包含 weeks 数组、oddEven 类型及范围等信息
  */
 function parseWeeks(weekText) {
-  const raw = String(weekText || "")
-    .replace(/（/g, "(")
-    .replace(/）/g, ")")
-    .replace(/，/g, ",")
-    .replace(/至/g, "-")
-    .replace(/－/g, "-")
-    .trim();
+  const raw = normalizeScheduleText(weekText);
 
   let oddEven = null;
   if (/单周|单/.test(raw)) {
@@ -137,7 +131,9 @@ function parseSections(sectionsText, fallbackSections) {
     };
   }
 
-  const match = sectionsText.match(/[\[［【]([0-9\s,，、\-－—]+)[\]］】]\s*节?/);
+  const normalized = normalizeScheduleText(sectionsText);
+  const match = normalized.match(/[\[［【]([0-9\s,，、\-—]+)[\]］】]\s*节?/) ||
+    normalized.match(/(?:节次|上课节次|课节|上课时间)?\s*[:：]?\s*([0-9]{1,2}\s*[-,，、]\s*[0-9]{1,2}(?:\s*[-,，、]\s*[0-9]{1,2})*)\s*节?/);
   if (!match) {
     return {
       sections: Array.from({ length: fallbackSections[1] - fallbackSections[0] + 1 }, (_, i) => fallbackSections[0] + i),
@@ -147,7 +143,7 @@ function parseSections(sectionsText, fallbackSections) {
   }
 
   const raw = match[1].replace(/\s/g, "");
-  const parts = raw.split(/[-－—,，、]/).map(Number).filter((n) => !isNaN(n));
+  const parts = raw.split(/[-—,，、]/).map(Number).filter((n) => !isNaN(n));
   if (parts.length === 0) {
     return {
       sections: Array.from({ length: fallbackSections[1] - fallbackSections[0] + 1 }, (_, i) => fallbackSections[0] + i),
@@ -170,11 +166,62 @@ function parseSections(sectionsText, fallbackSections) {
 }
 
 function isWeekLine(line) {
-  return /([0-9０-９]+.*周|单周|双周)/.test(line || "");
+  return /([0-9]+.*周|单周|双周|周次|教学周|起止周)/.test(normalizeScheduleText(line));
 }
 
 function isSectionLine(line) {
-  return /[\[［【][0-9０-９\s,，、－—–~～至-]+[\]］】]\s*节?/.test(line || "");
+  const normalized = normalizeScheduleText(line);
+  return /[\[［【][0-9\s,，、—~～至-]+[\]］】]\s*节?/.test(normalized) ||
+    /^(节次|上课节次|课节|上课时间)\s*[:：]?\s*[0-9]{1,2}\s*[-,，、]\s*[0-9]{1,2}/.test(normalized);
+}
+
+function normalizeScheduleText(value) {
+  return String(value || "")
+    .replace(/[０-９]/g, (char) => String(char.charCodeAt(0) - 0xFF10))
+    .replace(/\u00a0/g, " ")
+    .replace(/（/g, "(")
+    .replace(/）/g, ")")
+    .replace(/，/g, ",")
+    .replace(/－|–|—|~|～|至|到/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function stripCourseFieldLabel(value) {
+  return String(value || "").replace(/^(课程名称|课程|名称)\s*[:：]\s*/, "").trim();
+}
+
+function stripTeacherFieldLabel(value) {
+  return String(value || "").replace(/^(任课教师|授课教师|主讲教师|教师|老师)\s*[:：]\s*/, "").trim();
+}
+
+function stripClassroomFieldLabel(value) {
+  return String(value || "").replace(/^(上课地点|上课教室|课室名称|课室|教室|地点|场地)\s*[:：]\s*/, "").trim();
+}
+
+function appendWeekQualifier(weekText, value) {
+  const base = String(weekText || "").trim();
+  const qualifier = String(value || "").trim();
+  if (!qualifier) return base;
+  if (!base) return qualifier;
+  if (base.indexOf(qualifier) >= 0) return base;
+  return `${base}(${qualifier})`;
+}
+
+function parseLabeledCourseField(line) {
+  const text = normalizeScheduleText(line);
+  const match = text.match(/^(课程名称|课程|名称|任课教师|授课教师|主讲教师|教师|老师|周次|上课周次|教学周|起止周次|节次|上课节次|课节|上课时间|上课地点|上课教室|课室名称|课室|教室|地点|场地|单双周|周类型|备注|说明)\s*[:：]\s*(.+)$/);
+  if (!match) return null;
+  const label = match[1];
+  const value = match[2].trim();
+  if (/课程|名称/.test(label)) return { type: "courseName", value };
+  if (/教师|老师/.test(label)) return { type: "teacherName", value: stripTeacherTitle(value) };
+  if (/周次|教学周|起止周/.test(label)) return { type: "weekText", value };
+  if (/单双周|周类型/.test(label)) return { type: "weekQualifier", value };
+  if (/节次|课节|上课时间/.test(label)) return { type: "sectionsText", value };
+  if (/地点|教室|课室|场地/.test(label)) return { type: "classroom", value };
+  if (/备注|说明/.test(label)) return { type: "note", value };
+  return null;
 }
 
 /**
@@ -363,11 +410,32 @@ function parseCourseBlock(blockText, context) {
   let weekText = "";
   let sectionsText = "";
   let classroom = "";
+  let note = "";
 
   const weekIndex = lines.findIndex((l) => isWeekLine(l));
   const sectionIndex = lines.findIndex((l) => isSectionLine(l));
 
   lines.forEach((line, index) => {
+    const labeled = parseLabeledCourseField(line);
+    if (labeled) {
+      if (labeled.type === "courseName" && !courseName) {
+        courseName = labeled.value;
+      } else if (labeled.type === "teacherName" && !teacherName) {
+        teacherName = labeled.value;
+      } else if (labeled.type === "weekText") {
+        weekText = labeled.value;
+      } else if (labeled.type === "weekQualifier") {
+        weekText = appendWeekQualifier(weekText, labeled.value);
+      } else if (labeled.type === "sectionsText") {
+        sectionsText = labeled.value;
+      } else if (labeled.type === "classroom" && !classroom) {
+        classroom = labeled.value;
+      } else if (labeled.type === "note") {
+        note = labeled.value;
+      }
+      return;
+    }
+
     if (index === weekIndex || index === sectionIndex || /^备注[:：]/.test(line)) {
       if (index === weekIndex) {
         weekText = line;
@@ -375,17 +443,20 @@ function parseCourseBlock(blockText, context) {
       if (index === sectionIndex) {
         sectionsText = line;
       }
+      if (/^备注[:：]/.test(line)) {
+        note = line.replace(/^备注[:：]/, "").trim();
+      }
       return;
     }
 
     if (!courseName) {
-      courseName = line.replace(/^(课程|课程名称)[:：]/, "").trim();
+      courseName = stripCourseFieldLabel(line);
     } else if (weekIndex >= 0 && index > weekIndex && !classroom) {
-      classroom = line.replace(/^(教室|地点)[:：]/, "").trim();
+      classroom = stripClassroomFieldLabel(line);
     } else if (!teacherName) {
-      teacherName = stripTeacherTitle(line);
+      teacherName = stripTeacherTitle(stripTeacherFieldLabel(line));
     } else if (!classroom) {
-      classroom = line.replace(/^(教室|地点)[:：]/, "").trim();
+      classroom = stripClassroomFieldLabel(line);
     }
   });
 
@@ -393,7 +464,7 @@ function parseCourseBlock(blockText, context) {
   if (sectionsText) {
     const match = sectionsText.match(/^([\s\S]*?)[\[［【]/);
     if (match) {
-      const extractedClass = match[1].replace(/^(教室|地点)[:：]/, "").trim();
+      const extractedClass = stripClassroomFieldLabel(match[1]);
       if (extractedClass) {
         classroom = extractedClass;
       }
@@ -422,9 +493,9 @@ function parseCourseBlock(blockText, context) {
     startWeek,
     endWeek,
     weekText: weekText || "未标明周次",
-    note: "",
+    note,
     rawText: blockText,
-    source: "personal-xskb",
+    source: context.source || "personal-xskb",
   };
 
   if (oddEven) {
@@ -488,6 +559,7 @@ function parsePersonalScheduleHtml(html, context) {
         const parsed = parseCourseBlock(block, {
           weekDay,
           fallbackSections,
+          source: context && context.source || "personal-xskb",
         });
         if (parsed) {
           // 调用已有的 toRenderableCourse 对课程数据进行高精度规范化（比如 PE 作息等）
@@ -516,7 +588,12 @@ function parsePersonalScheduleHtml(html, context) {
 
 module.exports = {
   parsePersonalScheduleHtml,
+  parseCourseBlock,
   parseWeeks,
   parseSections,
   stripTeacherTitle,
+  _test: {
+    normalizeScheduleText,
+    parseLabeledCourseField,
+  },
 };
