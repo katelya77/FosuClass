@@ -40,15 +40,13 @@ function run() {
   };
 
   page.onQuickAction(tap("today"));
-  page.onQuickAction(tap("emptyRoom"));
-  assert.deepStrictEqual(sent, ["今天还有课吗？", "现在有空教室吗？"]);
-
-  page.onQuickAction(tap("teacher"));
-  assert.strictEqual(page.data.inputValue, "查某某老师课表");
-  assert.strictEqual(page.data.inputFocus, true);
-
+  page.onQuickAction(tap("class"));
+  page.onQuickAction(tap("room"));
   page.onQuickAction(tap("xls"));
-  assert.strictEqual(navigated, "/pages/personal-sync/personal-sync?tab=xls");
+  assert.deepStrictEqual(sent, ["今天有什么课", "查班级本周课表", "查教室明天是否有课", "如何导入个人课表"]);
+
+  assert.strictEqual(page.data.inputValue, "");
+  assert.strictEqual(navigated, "");
 
   page.openTaskPanel();
   assert.strictEqual(page.data.showTaskPanel, true);

@@ -1,8 +1,14 @@
 const request = require("../utils/request");
 const { getCurrentScheduleTarget } = require("../utils/storage");
-const { DEFAULT_TERM } = require("./releasePackService");
+const releasePackService = require("./releasePackService");
+const { DEFAULT_TERM } = releasePackService;
 const aiTransportRouter = require("./aiTransportRouter");
+const conversationStore = require("./conversationStore");
+const xiaofuAgentRouter = require("./xiaofuAgentRouter");
+const ragAnswerBuilder = require("./ragAnswerBuilder");
+const scheduleAssistantService = require("./scheduleAssistantService");
 const teachingCalendarService = require("./teachingCalendarService");
+const contextManager = require("./xiaofuContextManager");
 const {
   getTodayTeachingInfo,
   getTodayWeekday,
@@ -391,6 +397,16 @@ function buildClientContext(extra = {}) {
   const calendarWeeks = calendarMatchesTerm ? (calendar.weeks || []) : [];
   const todayTeachingInfo = getTodayTeachingInfo(now, calendarWeeks, termConfig);
   const userPreferences = getUserPreferences();
+  const extraConversation = extra.conversation && typeof extra.conversation === "object" && !Array.isArray(extra.conversation)
+    ? extra.conversation
+    : {};
+  const conversationId = extra.conversationId || extra.activeConversationId || extraConversation.conversationId || "";
+  const contextSlots = contextManager.normalizeContextSlots(
+    extra.contextSlots ||
+    extra.conversationContextSlots ||
+    extraConversation.contextSlots ||
+    {}
+  );
 
   return {
     term,
@@ -436,6 +452,11 @@ function buildClientContext(extra = {}) {
     latestScheduleImport: latestImport,
     pendingClarification: getPendingClarification(),
     userPreferences,
+    conversation: {
+      conversationId,
+      contextSlots,
+    },
+    contextSlots,
   };
 }
 
@@ -456,26 +477,34 @@ function normalizeHistoryItem(item) {
   };
 }
 
-function getAiHistory() {
+function getAiHistory(conversationId) {
+  const store = conversationStore.getStore();
+  const id = conversationId || store.activeConversationId;
+  const conversation = store.conversations.find((item) => item.conversationId === id) ||
+    store.conversations[0] ||
+    null;
+  if (conversation) {
+    return (conversation.messages || []).slice(-MAX_HISTORY).map(normalizeHistoryItem);
+  }
   const list = readStorage(HISTORY_KEY, []);
   return Array.isArray(list) ? list.slice(-MAX_HISTORY).map(normalizeHistoryItem) : [];
 }
 
-function saveAiHistory(messages) {
+function saveAiHistory(messages, conversationId, contextSlots) {
   const next = Array.isArray(messages)
     ? messages.slice(-MAX_HISTORY).map(normalizeHistoryItem)
     : [];
-  writeStorage(HISTORY_KEY, next);
+  conversationStore.saveConversationMessages(conversationId || conversationStore.getActiveConversation().conversationId, next, contextSlots);
   return next;
 }
 
-function clearAiHistory() {
+function clearAiHistory(conversationId) {
   try {
-    wx.removeStorageSync(HISTORY_KEY);
     wx.removeStorageSync(PENDING_CLARIFICATION_KEY);
   } catch (error) {
     // best effort
   }
+  conversationStore.clearConversation(conversationId || conversationStore.getActiveConversation().conversationId);
   return [];
 }
 
@@ -506,6 +535,327 @@ function clearPersonalization() {
   return getRememberedPersonalization();
 }
 
+function formatStatusTime(value) {
+  if (!value) return "";
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return formatLocalIsoWithOffset(new Date(value));
+  }
+  const parsed = Date.parse(value);
+  if (Number.isFinite(parsed)) return formatLocalIsoWithOffset(new Date(parsed));
+  return redactSensitiveText(value).slice(0, 80);
+}
+
+function getRuntimeReleaseStatus(clientContext = {}) {
+  let app = {};
+  try {
+    app = getApp() || {};
+  } catch (error) {
+    app = {};
+  }
+  const globalData = app.globalData || {};
+  const activeRelease = globalData.activeRelease || {};
+  const manifest = activeRelease.manifest || {};
+  const appConfig = globalData.appConfig || {};
+  const term = clientContext.term ||
+    clientContext.selectedTerm ||
+    appConfig.currentSemester ||
+    activeRelease.term ||
+    manifest.term ||
+    DEFAULT_TERM ||
+    "";
+  const localActive = releasePackService.getLocalActiveRelease(term) || {};
+  const localManifest = localActive.manifest || {};
+  const releaseVersion = clientContext.releaseVersion ||
+    activeRelease.releaseVersion ||
+    manifest.releaseVersion ||
+    localActive.releaseVersion ||
+    localManifest.releaseVersion ||
+    "";
+  const termConfig = manifest.termConfig || localManifest.termConfig || appConfig.termConfig || {};
+  const updatedAt = manifest.updatedAt ||
+    activeRelease.updatedAt ||
+    localActive.updatedAt ||
+    localManifest.updatedAt ||
+    "";
+  const savedAt = localActive.savedAt || 0;
+  return {
+    term,
+    activeTerm: clientContext.activeTerm || appConfig.currentSemester || activeRelease.term || manifest.term || term,
+    semesterText: clientContext.semesterText || termConfig.semesterText || "",
+    releaseVersion,
+    updatedAt,
+    cachedAt: savedAt ? formatStatusTime(savedAt) : "",
+    cacheEpoch: manifest.cacheEpoch || activeRelease.cacheEpoch || localActive.cacheEpoch || "",
+    source: "本地全校课表索引（Release Pack）",
+    selectedTermDataAvailable: clientContext.selectedTermDataAvailable !== false,
+    currentTeachingWeek: clientContext.currentTeachingWeek || "",
+    checkedAt: new Date().toISOString(),
+  };
+}
+
+function buildScheduleStatusResponse(message, clientContext = {}, route = {}) {
+  const status = getRuntimeReleaseStatus(clientContext);
+  const hasRelease = Boolean(status.releaseVersion);
+  const updatedText = status.updatedAt
+    ? formatStatusTime(status.updatedAt)
+    : "当前系统未记录精确更新时间";
+  const cacheText = status.cachedAt || "当前系统未记录本机缓存时间";
+  const teachingWeekText = status.currentTeachingWeek ? `第${status.currentTeachingWeek}教学周` : "当前系统未记录教学周";
+  const reliability = hasRelease && status.selectedTermDataAvailable
+    ? "可用于全校课表查询；具体上课安排仍以学校教务系统和任课教师通知为准。"
+    : "当前未确认完整课表发布版本，暂不能判断为最新数据。";
+  const answer = [
+    "我理解你是在问课表数据状态，不是在查某个班级、老师、教室或课程。",
+    `当前学期：${status.term || "未记录"}${status.semesterText ? `（${status.semesterText}）` : ""}。`,
+    `当前教学周：${teachingWeekText}。`,
+    `数据来源：${status.source}。`,
+    `发布版本：${status.releaseVersion || "当前系统未记录发布版本"}。`,
+    `更新时间：${updatedText}；本次检查：${formatStatusTime(status.checkedAt)}。`,
+    reliability,
+  ].join("\n");
+  return {
+    answer,
+    cards: [
+      {
+        type: "schedule_status",
+        title: "课表数据状态",
+        subtitle: status.term || "当前学期未记录",
+        badges: ["全校课表", hasRelease ? "已加载发布包" : "版本待确认"].concat(status.currentTeachingWeek ? [`第${status.currentTeachingWeek}周`] : []),
+        items: [
+          { title: "数据来源", subtitle: status.source, value: "" },
+          { title: "当前学期", subtitle: status.semesterText || status.term || "未记录", value: "" },
+          { title: "当前教学周", subtitle: teachingWeekText, value: "" },
+          { title: "发布版本", subtitle: status.releaseVersion || "当前系统未记录发布版本", value: "" },
+          { title: "更新时间", subtitle: updatedText, value: "" },
+          { title: "本机缓存", subtitle: cacheText, value: "" },
+          { title: "可靠性", subtitle: reliability, value: "" },
+        ],
+        actions: [],
+      },
+    ],
+    suggestions: ["查班级本周课表", "现在用的是哪个学期数据", "小佛能做什么"],
+    toolCalls: [{ name: "diagnose_data_status", status: "success" }],
+    evidence: {
+      verified: hasRelease,
+      term: status.term,
+      releaseVersion: status.releaseVersion,
+      checkedAt: status.checkedAt,
+      source: "local-release-pack-status",
+    },
+    safety: {
+      provider: "status-handler",
+      resolvedProvider: "status-handler",
+      externalProviderUsed: false,
+      mode: "tool-grounded",
+      clearPendingClarification: true,
+    },
+    metrics: {
+      intentName: "schedule_status",
+      latencyMs: 0,
+      externalProviderUsed: false,
+      resultCount: hasRelease ? 1 : 0,
+      routeConfidence: route.confidence || 0,
+    },
+  };
+}
+
+function buildHelpResponse(message, clientContext = {}, route = {}) {
+  const value = String(message || "").replace(/\s+/g, "");
+  const isImportHelp = /导入.*个人课表|个人课表.*导入|导入课表|xls/i.test(value);
+  const isDataSourceHelp = /数据来源|来源说明|知识来源|课表来源/.test(value);
+  const card = isImportHelp
+    ? {
+        type: "help",
+        title: "导入个人课表",
+        subtitle: "用于回答今日、明日、本周和下一节课",
+        badges: ["使用帮助", "个人课表"],
+        items: [
+          { title: "适用问题", subtitle: "今天有什么课、明天有什么课、本周课表、下一节课在哪里", value: "" },
+          { title: "导入方式", subtitle: "从个人课表导入入口了解 XLS 导入方式", value: "" },
+          { title: "安全提醒", subtitle: "不要在聊天框输入学号、密码或登录凭证", value: "" },
+        ],
+        actions: [
+          { label: "打开导入入口", type: "navigate", url: "/pages/personal-sync/personal-sync?tab=xls" },
+        ],
+      }
+    : isDataSourceHelp
+      ? {
+          type: "help",
+          title: "数据来源说明",
+          subtitle: "课表状态读运行时字段，校园知识读本地知识库",
+          badges: ["使用帮助", "数据边界"],
+          items: [
+            { title: "全校课表", subtitle: "优先读取项目内 Release Pack、学期、版本、缓存和更新时间字段", value: "" },
+            { title: "校园知识", subtitle: "只回答知识库收录的佛山大学公开信息和本地入口说明", value: "" },
+            { title: "缺少来源时", subtitle: "会说明知识库暂未收录可靠信息，不编造电话、地址、制度或入口", value: "" },
+          ],
+          actions: [],
+        }
+    : {
+        type: "help",
+        title: "小佛可以帮你",
+        subtitle: "校园知识、全校课表、数据状态和使用指引",
+        badges: ["使用说明", "当前对话内回答"],
+        items: [
+          { title: "查全校课表", subtitle: "可以查班级、教师、教室或课程安排", value: "" },
+          { title: "问校园事项", subtitle: "例如：佛大有哪些校区、教务系统在哪里进", value: "" },
+          { title: "看数据状态", subtitle: "例如：课表数据是否最新、现在用的是哪个学期数据", value: "" },
+          { title: "上下文追问", subtitle: "查到一个对象后，可以继续问“那周三呢”“换成另一个班级”。", value: "" },
+        ],
+        actions: [],
+      };
+  return {
+    answer: isImportHelp
+      ? "我理解你想了解如何导入个人课表。导入后，小佛才能回答“今天有什么课”“明天有什么课”“下一节课在哪里”这类个人安排问题。"
+      : (isDataSourceHelp
+        ? "我理解你是在问数据来源说明。课表状态会读取项目内真实字段，校园知识只使用已收录来源；缺少可靠来源时不会编造。"
+        : "我理解你是在问小佛能做什么。你可以问校园事项，也可以查全校课表；涉及课表时，请尽量说清楚班级、老师、教室或课程。"),
+    cards: [
+      card,
+    ],
+    suggestions: isImportHelp
+      ? ["今天有什么课", "查班级本周课表", "课表数据更新到什么时候"]
+      : (isDataSourceHelp
+        ? ["课表数据更新到什么时候", "教务系统在哪里", "佛大有哪些校区"]
+        : ["查班级本周课表", "教务系统在哪里", "课表数据是否最新"]),
+    toolCalls: [{ name: "clarify_missing_slot", status: "success" }],
+    evidence: {
+      verified: true,
+      checkedAt: new Date().toISOString(),
+      source: "local-xiaofu-help",
+    },
+    safety: {
+      provider: "help-handler",
+      resolvedProvider: "help-handler",
+      externalProviderUsed: false,
+      mode: "tool-grounded",
+      clearPendingClarification: true,
+    },
+    metrics: {
+      intentName: "help",
+      latencyMs: 0,
+      externalProviderUsed: false,
+      resultCount: 1,
+      routeConfidence: route.confidence || 0,
+    },
+  };
+}
+
+function buildAppNavigationResponse(message, clientContext = {}, route = {}) {
+  const target = route.entities || {};
+  return {
+    answer: `我理解你想打开${target.label || "相关功能"}。入口放在这条回复里，当前回答仍保留在对话中。`,
+    cards: [
+      {
+        type: "navigation",
+        title: target.label || "应用入口",
+        subtitle: "从当前对话打开",
+        badges: ["应用入口"],
+        items: [
+          { title: "入口", subtitle: target.label || "", value: "" },
+        ],
+        actions: target.url ? [{ label: `打开${target.label}`, type: "navigate", url: target.url }] : [],
+      },
+    ],
+    suggestions: ["小佛能做什么", "课表数据是否最新"],
+    toolCalls: [{ name: "clarify_missing_slot", status: "success" }],
+    evidence: {
+      verified: true,
+      checkedAt: new Date().toISOString(),
+      source: "local-app-navigation",
+    },
+    safety: {
+      provider: "navigation-handler",
+      resolvedProvider: "navigation-handler",
+      externalProviderUsed: false,
+      mode: "tool-grounded",
+      clearPendingClarification: true,
+    },
+    metrics: {
+      intentName: "app_navigation",
+      latencyMs: 0,
+      externalProviderUsed: false,
+      resultCount: target.url ? 1 : 0,
+      routeConfidence: route.confidence || 0,
+    },
+  };
+}
+
+function buildPersonalScheduleClarificationResponse(message, clientContext = {}, route = {}) {
+  return {
+    answer: "我理解你是在问个人课表安排。当前对话里还没有可用的个人课表，也没有明确的班级、老师或教室；你可以先导入个人课表，或告诉我要查哪个对象。",
+    cards: [
+      {
+        type: "personal_schedule",
+        title: "需要个人课表或查询对象",
+        subtitle: "今日、明日、本周安排需要有明确来源",
+        badges: ["个人课表", "需要补充"],
+        items: [
+          { title: "导入个人课表", subtitle: "用于回答今天、明天、本周和下一节课", value: "" },
+          { title: "指定班级", subtitle: "用于查询某个班级的全校课表", value: "" },
+          { title: "指定教师或教室", subtitle: "用于查询教师课表或教室占用", value: "" },
+        ],
+        actions: [
+          { label: "导入个人课表", type: "navigate", url: "/pages/personal-sync/personal-sync?tab=xls" },
+        ],
+      },
+    ],
+    suggestions: ["如何导入个人课表", "查班级本周课表", "查教室明天是否有课"],
+    toolCalls: [{ name: "clarify_missing_slot", status: "clarify" }],
+    evidence: {
+      verified: false,
+      checkedAt: new Date().toISOString(),
+      source: "local-personal-schedule-gate",
+    },
+    safety: {
+      provider: "personal-schedule-gate",
+      resolvedProvider: "personal-schedule-gate",
+      externalProviderUsed: false,
+      mode: "tool-grounded",
+      clearPendingClarification: true,
+    },
+    metrics: {
+      intentName: "personal_schedule",
+      latencyMs: 0,
+      externalProviderUsed: false,
+      resultCount: 0,
+      routeConfidence: route.confidence || 0,
+    },
+  };
+}
+
+function buildSmalltalkResponse(message, clientContext = {}, route = {}) {
+  const compact = String(message || "").replace(/\s+/g, "");
+  const answer = /^谢谢|^感谢/.test(compact)
+    ? "不客气。我会把普通聊天和校园工具分开处理，不会把这类话当成课表对象。"
+    : "可以，我们就用普通话聊。需要查校园事项时，直接说清楚问题；需要查课表时，再告诉我班级、老师、教室或课程。";
+  return {
+    answer,
+    cards: [],
+    suggestions: ["佛大有哪些校区", "查班级本周课表", "课表数据是否最新"],
+    toolCalls: [],
+    evidence: {
+      verified: false,
+      checkedAt: new Date().toISOString(),
+      source: "local-smalltalk",
+    },
+    safety: {
+      provider: "smalltalk-handler",
+      resolvedProvider: "smalltalk-handler",
+      externalProviderUsed: false,
+      mode: "tool-grounded",
+      clearPendingClarification: true,
+    },
+    metrics: {
+      intentName: "smalltalk",
+      latencyMs: 0,
+      externalProviderUsed: false,
+      resultCount: 0,
+      routeConfidence: route.confidence || 0,
+    },
+  };
+}
+
 function oracleAgentChat(message, context) {
   return request.post("/api/ai/agent/chat", {
     message: redactSensitiveText(message).slice(0, 2000),
@@ -521,12 +871,85 @@ function oracleAgentChat(message, context) {
   });
 }
 
-function chat(message, context, options = {}) {
+async function chat(message, context, options = {}) {
   const resolvedContext = context || buildClientContext();
+  const localContext = Object.assign({}, resolvedContext, {
+    contextSlots: resolvedContext.contextSlots ||
+      resolvedContext.conversation && resolvedContext.conversation.contextSlots ||
+      {},
+  });
+  const callbacks = options && options.callbacks || {};
+  const route = xiaofuAgentRouter.routeMessage(message, localContext);
+  if (callbacks.onStatus) {
+    callbacks.onStatus({ type: "route", text: "正在分流到合适的校园能力", route });
+  }
+
+  if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_STATUS) {
+    return buildScheduleStatusResponse(message, localContext, route);
+  }
+
+  if (route.intent === xiaofuAgentRouter.INTENTS.HELP) {
+    return buildHelpResponse(message, localContext, route);
+  }
+
+  if (route.intent === xiaofuAgentRouter.INTENTS.PERSONAL_SCHEDULE) {
+    if (route.shouldUsePersonalScheduleTool) {
+      return aiTransportRouter.chat({
+        message,
+        context: resolvedContext,
+        history: getAiHistory(resolvedContext.conversation && resolvedContext.conversation.conversationId),
+        oracleChat: oracleAgentChat,
+        redactSensitiveText,
+        options,
+      });
+    }
+    return buildPersonalScheduleClarificationResponse(message, localContext, route);
+  }
+
+  if (route.intent === xiaofuAgentRouter.INTENTS.APP_NAVIGATION) {
+    const navigationResponse = ragAnswerBuilder.tryBuildContextNavigationAnswer(message, localContext);
+    if (navigationResponse) return navigationResponse;
+    return buildAppNavigationResponse(message, localContext, route);
+  }
+
+  if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_QUERY) {
+    if (route.shouldUsePersonalScheduleTool) {
+      return aiTransportRouter.chat({
+        message,
+        context: resolvedContext,
+        history: getAiHistory(resolvedContext.conversation && resolvedContext.conversation.conversationId),
+        oracleChat: oracleAgentChat,
+        redactSensitiveText,
+        options,
+      });
+    }
+    const scheduleResponse = await scheduleAssistantService.tryHandleScheduleQuery(message, localContext);
+    if (scheduleResponse) return scheduleResponse;
+  }
+
+  if (route.intent === xiaofuAgentRouter.INTENTS.SCHOOL_KNOWLEDGE) {
+    const navigationResponse = ragAnswerBuilder.tryBuildContextNavigationAnswer(message, localContext);
+    if (navigationResponse) return navigationResponse;
+    const knowledgeResponse = ragAnswerBuilder.tryBuildKnowledgeAnswer(message, localContext);
+    if (knowledgeResponse) return knowledgeResponse;
+  }
+
+  if (route.intent === xiaofuAgentRouter.INTENTS.NAVIGATION) {
+    const navigationResponse = ragAnswerBuilder.tryBuildKnowledgeAnswer(message, localContext, {
+      preferredEntryType: "navigation",
+      intentName: "navigation",
+    });
+    if (navigationResponse) return navigationResponse;
+  }
+
+  if (route.intent === xiaofuAgentRouter.INTENTS.SMALLTALK) {
+    return buildSmalltalkResponse(message, localContext, route);
+  }
+
   return aiTransportRouter.chat({
     message,
     context: resolvedContext,
-    history: getAiHistory(),
+    history: getAiHistory(resolvedContext.conversation && resolvedContext.conversation.conversationId),
     oracleChat: oracleAgentChat,
     redactSensitiveText,
     options,

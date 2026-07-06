@@ -4,7 +4,7 @@ const { classifyAiRoute } = require("../shared/aiRouteClassifier");
 const cloudbaseHunyuanService = require("./cloudbaseHunyuanService");
 
 const METRICS_KEY = "FOSU_AI_GENERATIVE_METRICS";
-const GENERIC_SUGGESTIONS = ["怎么导入个人课表？", "现在有空教室吗？", "今天还有课吗？"];
+const GENERIC_SUGGESTIONS = ["如何导入个人课表", "查教室明天是否有课", "今天有什么课"];
 const INVALID_TEXT_TOKENS = new Set(["[object Object]", "undefined", "null", "NaN"]);
 
 function nowIso() {
@@ -118,7 +118,7 @@ function buildGenericCard(providerLabel, subtitle) {
 function buildLocalProjectFallback(message, context, startTime, intentName, reason) {
   const answer = [
     "生成式问答暂时不可用，已切换到规则降级回答。",
-    "佛课小表用于查课、找空教室、导入个人 XLS 课表和查看数据诊断；课表事实由确定性工具提供，不由模型编造。",
+    "佛课小表用于查课、找空教室、导入个人 XLS 课表和查看数据状态；课表事实由确定性工具提供，不由模型编造。",
     "课表信息仅供参考，以学校教务系统为准。",
   ].join("\n");
   recordMetric({

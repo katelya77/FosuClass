@@ -13,10 +13,10 @@ function run() {
   const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
   const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
 
-  ["常用校园任务", "个人课表", "项目与诊断"].forEach((title) => {
+  ["课表查询", "个人课表", "校园知识", "使用帮助"].forEach((title) => {
     assert(js.includes(`title: "${title}"`), `task group should include ${title}`);
   });
-  ["找空教室", "查老师课表", "XLS 导入指引", "这个小程序怎么用", "新学期同步说明"].forEach((label) => {
+  ["查班级课表", "查教师课表", "查教室占用", "查课程安排", "导入个人课表", "教务系统入口", "校区与地图", "图书馆服务", "常用系统入口", "小佛能做什么", "数据来源说明"].forEach((label) => {
     assert(js.includes(`taskLabel: "${label}"`) || js.includes(`label: "${label}"`), `task item should include ${label}`);
   });
 

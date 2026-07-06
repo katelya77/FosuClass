@@ -57,6 +57,11 @@ function isTruthyParam(value) {
   return value === true || value === "1" || value === "true";
 }
 
+function parsePositiveIntParam(value) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : null;
+}
+
 function getScheduleKindText(type, displayType, isAggregated) {
   if (type !== "class") {
     return getTypeText(type);
@@ -121,7 +126,7 @@ Page({
   },
 
   onLoad(options) {
-    const { type = "class", name = "", id = "", semester = "", term = "", releaseVersion = "", displayType = "", isAggregated = "", shareScheduleId = "" } = options;
+    const { type = "class", name = "", id = "", semester = "", term = "", releaseVersion = "", displayType = "", isAggregated = "", shareScheduleId = "", week = "", weekday = "" } = options;
     const decodedName = safeDecodeURIComponent(name);
     const decodedId = safeDecodeURIComponent(id);
     const immediateCalendar = teachingCalendarService.getImmediateActiveCalendar();
@@ -135,6 +140,8 @@ Page({
     const aggregated = isTruthyParam(isAggregated) || decodedDisplayType === "major-schedule" || decodedDisplayType === "major-shared-schedule";
     const title = decodedName || decodedId;
     const isFromShare = !!shareScheduleId;
+    this._initialWeek = parsePositiveIntParam(week);
+    this._initialWeekday = parsePositiveIntParam(weekday);
     
     this.setData({
       type,
@@ -367,15 +374,18 @@ Page({
     const calendar = teachingCalendarService.getImmediateActiveCalendar({ term: this.data.semester });
     const termConfig = calendar.termConfig || {};
     const now = new Date();
-    const currentWeek = settings.manualWeekOverride
+    const currentWeek = this._initialWeek
+      ? clampWeek(this._initialWeek, termConfig)
+      : settings.manualWeekOverride
       ? clampWeek(settings.currentWeek, termConfig)
       : getCurrentTeachingWeek(now, calendar.weeks || [], termConfig);
+    const showWeekend = this._initialWeekday >= 6 ? true : (settings.showWeekend || false);
     this.activeTeachingCalendar = calendar;
       
     this.setData({
       currentWeek,
       totalWeeks: termConfig.totalWeeks || TOTAL_WEEKS,
-      showWeekend: settings.showWeekend || false,
+      showWeekend,
       weekendShowMode: settings.weekendShowMode || "overview",
     }, () => {
       this.renderSchedule();
@@ -385,7 +395,9 @@ Page({
         if (!calendarChanged(this.activeTeachingCalendar, latest)) return;
         this.activeTeachingCalendar = latest;
         const latestConfig = latest.termConfig || {};
-        const nextWeek = getSettings().manualWeekOverride
+        const nextWeek = this._initialWeek
+          ? clampWeek(this._initialWeek, latestConfig)
+          : getSettings().manualWeekOverride
           ? clampWeek(getSettings().currentWeek, latestConfig)
           : getCurrentTeachingWeek(new Date(), latest.weeks || [], latestConfig);
         this.setData({

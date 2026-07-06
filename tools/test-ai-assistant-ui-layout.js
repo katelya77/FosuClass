@@ -29,6 +29,8 @@ function run() {
   assert(!wxml.includes("assistant-hero card"), "AI page should not render the old hero card");
   assert(!wxml.includes("privacy-tip-full"), "full privacy card should not stay in the first viewport");
   assert(wxml.includes("bottom-sheet task-sheet"), "task panel should be a bottom sheet");
+  assert(wxml.includes("ai-mode-row"), "dialog/task switch should live in a dedicated mode row");
+  assert(!wxml.includes("quick-task-row"), "dialog/task switch should not share the quick chip row");
   assert(wxml.includes("bottom-sheet privacy-sheet"), "privacy details should be a bottom sheet");
   assert(wxml.includes("message-scroll"), "message area should remain the main content");
   assert(!/\{\{\s*card\.type\s*\}\}/.test(wxml), "WXML must not render raw card.type");
@@ -45,6 +47,13 @@ function run() {
 
   const actions = getRule(wxss, ".xiaofu-actions");
   assert(/flex\s*:\s*0\s+0\s+110rpx/.test(actions), "header actions should reserve a fixed compact column");
+
+  const modeRow = getRule(wxss, ".ai-mode-row");
+  assert(/justify-content\s*:\s*center/.test(modeRow), "mode switch should be centered");
+
+  const segment = getRule(wxss, ".quick-nav-segment");
+  assert(/overflow\s*:\s*hidden/.test(segment), "mode switch should not leak residual blocks");
+  assert(/width\s*:\s*18[0-9]rpx/.test(segment), "mode switch should keep a compact capsule width");
 
   const titleLine = getRule(wxss, ".xiaofu-title-line");
   assert(/white-space\s*:\s*nowrap/.test(titleLine), "header title should never wrap");

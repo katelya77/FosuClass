@@ -50,14 +50,14 @@ page.openCapabilityGuide();
 assert.strictEqual(page.data.showCapabilityGuide, true);
 const sent = [];
 page.sendMessage = (message) => sent.push(message);
-page.onCapabilityExampleTap({ currentTarget: { dataset: { text: "C7 在哪里" } } });
-assert.deepStrictEqual(sent, ["C7 在哪里？"]);
+page.onCapabilityExampleTap({ currentTarget: { dataset: { text: "佛大有哪些校区" } } });
+assert.deepStrictEqual(sent, ["佛大有哪些校区？"]);
 assert.strictEqual(page.data.showCapabilityGuide, false);
 
 page.openCapabilityGuide();
-page.onCapabilityExampleTap({ currentTarget: { dataset: { text: "查老师课表" } } });
-assert.strictEqual(page.data.inputValue, "查某某老师课表");
-assert.strictEqual(page.data.inputFocus, true);
+page.onCapabilityExampleTap({ currentTarget: { dataset: { text: "查教师课表" } } });
+assert.deepStrictEqual(sent, ["佛大有哪些校区？", "查教师课表"]);
+assert.strictEqual(page.data.inputValue, "");
 assert.strictEqual(page.data.showCapabilityGuide, false);
 
 page.openCapabilityGuide();
