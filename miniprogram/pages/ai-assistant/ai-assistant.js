@@ -1,12 +1,14 @@
 const aiAssistantService = require("../../services/aiAssistantService");
 const aiVoiceInputService = require("../../services/aiVoiceInputService");
+const conversationStore = require("../../services/conversationStore");
+const contextManager = require("../../services/xiaofuContextManager");
 const cloudbaseConfig = require("../../config/cloudbase");
 const demoData = require("./demo-data");
 const { courseTimes } = require("../../data/courseTimes");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
-const TASK_PANEL_CACHE_VERSION = "2026-06-ui-svg-v1";
+const TASK_PANEL_CACHE_VERSION = "2026-07-campus-agent-v3";
 const TASK_PANEL_DEBOUNCE_MS = 180;
 const TASK_ACTION_DEBOUNCE_MS = 180;
 const SEND_DEDUPE_MS = 420;
@@ -44,18 +46,18 @@ const AI_CAPABILITY_REGISTRY = [
     className: "today",
     taskGroup: "个人课表",
     taskLabel: "今日安排",
-    taskDesc: "基于当前课表摘要",
-    guideGroup: "我的课表",
+    taskDesc: "需要个人课表或指定对象",
+    guideGroup: "个人课表",
     guideExamples: ["今天有什么课"],
-    welcomeExample: "今天还有课吗？",
-    message: "今天还有课吗？",
+    welcomeExample: "今天有什么课",
+    message: "今天有什么课",
   },
   {
     id: "tomorrow",
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.today,
     label: "明日课表",
-    guideGroup: "我的课表",
+    guideGroup: "个人课表",
     guideExamples: ["明天有什么课"],
     message: "明天有什么课？",
   },
@@ -64,16 +66,16 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.today,
     label: "下一节课",
-    guideGroup: "我的课表",
+    guideGroup: "个人课表",
     guideExamples: ["下一节课"],
-    message: "下一节课是什么？",
+    message: "下一节课",
   },
   {
     id: "weekSchedule",
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.today,
     label: "本周课表",
-    guideGroup: "我的课表",
+    guideGroup: "个人课表",
     guideExamples: ["本周课表"],
     message: "本周课表",
   },
@@ -82,8 +84,6 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.study,
     label: "课间间隔",
-    guideGroup: "我的课表",
-    guideExamples: ["两节课之间有多久"],
     message: "两节课之间有多久？",
   },
   {
@@ -93,11 +93,9 @@ const AI_CAPABILITY_REGISTRY = [
     label: "空教室",
     quickLabel: "空教室",
     className: "room",
-    taskGroup: "常用校园任务",
-    taskLabel: "找空教室",
-    taskDesc: "按当前时间找可用教室",
-    guideGroup: "空教室与时间",
-    guideExamples: ["现在有空教室吗"],
+    taskGroup: "课表查询",
+    taskLabel: "查教室占用",
+    taskDesc: "先说明时间或教室",
     message: "现在有空教室吗？",
   },
   {
@@ -105,8 +103,6 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.room,
     label: "连续空教室",
-    guideGroup: "空教室与时间",
-    guideExamples: ["找连续两节空教室"],
     message: "找连续两节空教室",
   },
   {
@@ -117,8 +113,6 @@ const AI_CAPABILITY_REGISTRY = [
     taskGroup: "个人课表",
     taskLabel: "自习时间推荐",
     taskDesc: "需要开启课表摘要",
-    guideGroup: "空教室与时间",
-    guideExamples: ["推荐共同空闲时间"],
     message: "帮我推荐连续 2 节自习时间",
   },
   {
@@ -128,22 +122,29 @@ const AI_CAPABILITY_REGISTRY = [
     label: "查老师",
     quickLabel: "查老师",
     className: "teacher",
-    taskGroup: "常用校园任务",
-    taskLabel: "查老师课表",
-    taskDesc: "需要补充老师姓名",
-    guideGroup: "全校查询",
-    guideExamples: ["查老师课表"],
-    draft: "查某某老师课表",
-    missingText: "请补充老师姓名后发送",
+    taskGroup: "课表查询",
+    taskLabel: "查教师课表",
+    taskDesc: "输入教师姓名更准确",
+    guideGroup: "课表查询",
+    guideExamples: ["查教师课表"],
+    message: "查教师课表",
+    draft: "查教师课表",
+    missingText: "请补充教师姓名后发送",
   },
   {
     id: "classSchedule",
     kind: CAPABILITY_KINDS.SUPPLEMENT_PARAMS,
     iconPath: ICONS.classroom,
     label: "查班级课表",
-    guideGroup: "全校查询",
-    guideExamples: ["查班级课表"],
-    draft: "查 22级某某班课表",
+    quickLabel: "查班级",
+    className: "classroom",
+    taskGroup: "课表查询",
+    taskLabel: "查班级课表",
+    taskDesc: "输入完整班级更准确",
+    guideGroup: "课表查询",
+    guideExamples: ["查班级本周课表"],
+    message: "查班级本周课表",
+    draft: "查班级本周课表",
     missingText: "请补充班级名称后发送",
   },
   {
@@ -151,12 +152,15 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.SUPPLEMENT_PARAMS,
     iconPath: ICONS.classroom,
     label: "查教室占用",
-    taskGroup: "常用校园任务",
+    quickLabel: "查教室",
+    className: "room",
+    taskGroup: "课表查询",
     taskLabel: "查教室占用",
-    taskDesc: "需要补充教室或楼栋",
-    guideGroup: "全校查询",
-    guideExamples: ["查教室占用"],
-    draft: "查 C7-203 教室",
+    taskDesc: "输入教室和时间",
+    guideGroup: "课表查询",
+    guideExamples: ["查教室明天是否有课"],
+    message: "查教室明天是否有课",
+    draft: "查教室明天是否有课",
     missingText: "请补充教室或楼栋后发送",
   },
   {
@@ -164,31 +168,27 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.SUPPLEMENT_PARAMS,
     iconPath: ICONS.course,
     label: "查课程安排",
-    taskGroup: "常用校园任务",
+    taskGroup: "课表查询",
     taskLabel: "查课程安排",
-    taskDesc: "需要补充课程名称",
-    guideGroup: "全校查询",
+    taskDesc: "输入课程名称更准确",
+    guideGroup: "课表查询",
     guideExamples: ["查课程安排"],
-    draft: "查高等数学课程",
+    message: "查课程安排",
+    draft: "查课程安排",
     missingText: "请补充课程名称后发送",
   },
   {
     id: "placeC7",
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.app,
-    label: "C7 位置",
-    guideGroup: "校园地图",
-    guideExamples: ["C7 在哪里"],
-    welcomeExample: "C7 附近现在有空教室吗？",
-    message: "C7 在哪里？",
+    label: "教学楼位置",
+    message: "某教学楼在哪里？",
   },
   {
     id: "xianxiSouthMap",
     kind: CAPABILITY_KINDS.NAVIGATE,
     iconPath: ICONS.app,
     label: "仙溪南区地图",
-    guideGroup: "校园地图",
-    guideExamples: ["查看仙溪南区地图"],
     url: "/pages/campus-map/campus-map?map=xianxiSouth",
   },
   {
@@ -196,8 +196,6 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.app,
     label: "江湾地点",
-    guideGroup: "校园地图",
-    guideExamples: ["江湾校区主要地点"],
     message: "江湾校区主要地点",
   },
   {
@@ -205,8 +203,6 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.app,
     label: "下一节课位置",
-    guideGroup: "校园地图",
-    guideExamples: ["下一节课的教学楼位置"],
     message: "下一节课在哪里？",
   },
   {
@@ -214,8 +210,6 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.term,
     label: "校区天气",
-    guideGroup: "天气和出行",
-    guideExamples: ["仙溪校区今天会下雨吗", "下一节课需要带伞吗"],
     message: "仙溪校区今天会下雨吗？",
   },
   {
@@ -223,7 +217,10 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.term,
     label: "教学周",
-    guideGroup: "数据与使用帮助",
+    taskGroup: "个人课表",
+    taskLabel: "当前教学周",
+    taskDesc: "查看当前是第几周",
+    guideGroup: "个人课表",
     guideExamples: ["当前是第几教学周"],
     message: "当前是第几教学周？",
   },
@@ -231,12 +228,12 @@ const AI_CAPABILITY_REGISTRY = [
     id: "dataStatus",
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.diagnosis,
-    label: "数据诊断",
-    taskGroup: "项目与诊断",
-    taskLabel: "数据诊断",
-    taskDesc: "检查索引和缓存状态",
-    guideGroup: "数据与使用帮助",
-    guideExamples: ["数据更新到什么时候", "加载失败怎么办"],
+    label: "数据状态",
+    taskGroup: "个人课表",
+    taskLabel: "课表数据状态",
+    taskDesc: "查看学期、版本和更新时间",
+    guideGroup: "个人课表",
+    guideExamples: ["课表数据更新到什么时候", "当前是第几教学周"],
     message: "课表数据是否最新？",
   },
   {
@@ -247,21 +244,23 @@ const AI_CAPABILITY_REGISTRY = [
     quickLabel: "导入 XLS",
     className: "xls",
     taskGroup: "个人课表",
-    taskLabel: "XLS 导入指引",
-    taskDesc: "安全导入个人课表",
-    guideGroup: "数据与使用帮助",
+    taskLabel: "导入个人课表",
+    taskDesc: "了解导入方式",
+    guideGroup: "个人课表",
     guideExamples: ["如何导入个人课表"],
     url: PERSONAL_SYNC_XLS_URL,
-    fallbackMessage: "怎么导入个人课表？",
+    fallbackMessage: "如何导入个人课表",
   },
   {
     id: "appHelp",
     kind: CAPABILITY_KINDS.GENERATIVE_QA,
     iconPath: ICONS.app,
     label: "怎么使用",
-    taskGroup: "项目与诊断",
-    taskLabel: "这个小程序怎么用",
-    taskDesc: "了解查课、空教室和导入方法",
+    taskGroup: "使用帮助",
+    taskLabel: "小佛能做什么",
+    taskDesc: "查看能力和问法",
+    guideGroup: "使用帮助",
+    guideExamples: ["小佛能做什么", "如何问得更准确"],
     welcomeExample: "这个小程序怎么用？",
     message: "这个小程序怎么用？",
   },
@@ -269,11 +268,92 @@ const AI_CAPABILITY_REGISTRY = [
     id: "termSync",
     kind: CAPABILITY_KINDS.GENERATIVE_QA,
     iconPath: ICONS.term,
-    label: "个人课表导入",
-    taskGroup: "项目与诊断",
-    taskLabel: "新学期同步说明",
-    taskDesc: "了解 XLS 导入方式",
-    message: "怎么导入个人课表？",
+    label: "数据来源",
+    taskGroup: "使用帮助",
+    taskLabel: "数据来源说明",
+    taskDesc: "了解课表与知识来源",
+    guideGroup: "使用帮助",
+    guideExamples: ["数据来源说明"],
+    message: "数据来源说明",
+  },
+  {
+    id: "jwcEntry",
+    kind: CAPABILITY_KINDS.GENERATIVE_QA,
+    iconPath: ICONS.app,
+    label: "教务入口",
+    taskGroup: "校园知识",
+    taskLabel: "教务系统入口",
+    taskDesc: "查看教务相关入口",
+    guideGroup: "校园知识",
+    guideExamples: ["教务系统在哪里"],
+    message: "教务系统在哪里进？",
+  },
+  {
+    id: "campusLocations",
+    kind: CAPABILITY_KINDS.GENERATIVE_QA,
+    iconPath: ICONS.app,
+    label: "校区与地图",
+    taskGroup: "校园知识",
+    taskLabel: "校区与地图",
+    taskDesc: "了解校区和位置",
+    guideGroup: "校园知识",
+    guideExamples: ["佛大有哪些校区"],
+    message: "佛大有哪些校区？",
+  },
+  {
+    id: "collegeDepartments",
+    kind: CAPABILITY_KINDS.GENERATIVE_QA,
+    iconPath: ICONS.study,
+    label: "学院部门",
+    taskGroup: "校园知识",
+    taskLabel: "学院与部门",
+    taskDesc: "查看学院部门入口",
+    guideGroup: "校园知识",
+    guideExamples: ["佛大有哪些学院和部门"],
+    message: "佛大有哪些学院和部门？",
+  },
+  {
+    id: "libraryService",
+    kind: CAPABILITY_KINDS.GENERATIVE_QA,
+    iconPath: ICONS.term,
+    label: "图书馆服务",
+    taskGroup: "校园知识",
+    taskLabel: "图书馆服务",
+    taskDesc: "查图书馆入口与服务边界",
+    guideGroup: "校园知识",
+    guideExamples: ["图书馆服务"],
+    message: "图书馆服务",
+  },
+  {
+    id: "commonSystems",
+    kind: CAPABILITY_KINDS.GENERATIVE_QA,
+    iconPath: ICONS.app,
+    label: "常用系统",
+    taskGroup: "校园知识",
+    taskLabel: "常用系统入口",
+    taskDesc: "查教务、门户等公开入口",
+    guideGroup: "校园知识",
+    guideExamples: ["常用系统入口"],
+    message: "常用系统入口",
+  },
+  {
+    id: "serviceGuide",
+    kind: CAPABILITY_KINDS.GENERATIVE_QA,
+    iconPath: ICONS.term,
+    label: "办事指南",
+    message: "常用办事指南在哪里？",
+  },
+  {
+    id: "askBetter",
+    kind: CAPABILITY_KINDS.GENERATIVE_QA,
+    iconPath: ICONS.study,
+    label: "问法建议",
+    taskGroup: "使用帮助",
+    taskLabel: "如何问得更准确",
+    taskDesc: "获得更稳的回答",
+    guideGroup: "使用帮助",
+    guideExamples: ["如何问得更准确"],
+    message: "如何问得更准确？",
   },
 ];
 
@@ -299,29 +379,36 @@ function buildQuickAction(id, quickId) {
 
 const QUICK_ACTIONS = [
   buildQuickAction("today"),
-  buildQuickAction("emptyRoomNow", "emptyRoom"),
-  buildQuickAction("teacherSchedule", "teacher"),
+  buildQuickAction("classSchedule", "class"),
+  buildQuickAction("classroomOccupancy", "room"),
   buildQuickAction("xlsImport", "xls"),
 ];
 
-const WELCOME_EXAMPLES = AI_CAPABILITY_REGISTRY
-  .map((item) => item.welcomeExample)
-  .filter(Boolean)
-  .slice(0, 3);
+const WELCOME_EXAMPLES = [
+  "查班级本周课表",
+  "查教室明天是否有课",
+  "当前是第几教学周",
+  "教务系统在哪里",
+  "小佛能做什么",
+];
 
 function buildTaskPanelGroups() {
   return [
     {
-      title: "常用校园任务",
-      abilityIds: ["emptyRoomNow", "teacherSchedule", "classroomOccupancy", "courseSchedule"],
+      title: "课表查询",
+      abilityIds: ["classSchedule", "teacherSchedule", "classroomOccupancy", "courseSchedule"],
     },
     {
       title: "个人课表",
-      abilityIds: ["today", "meetingTime", "xlsImport"],
+      abilityIds: ["today", "tomorrow", "weekSchedule", "xlsImport", "dataStatus"],
     },
     {
-      title: "项目与诊断",
-      abilityIds: ["dataStatus", "appHelp", "termSync"],
+      title: "校园知识",
+      abilityIds: ["jwcEntry", "campusLocations", "libraryService", "commonSystems"],
+    },
+    {
+      title: "使用帮助",
+      abilityIds: ["appHelp", "askBetter", "termSync"],
     },
   ].map((group) => ({
     title: group.title,
@@ -348,12 +435,10 @@ const TASK_PANEL_GROUPS = buildTaskPanelGroups();
 
 function buildCapabilityGuideGroups() {
   return [
-    "我的课表",
-    "全校查询",
-    "空教室与时间",
-    "校园地图",
-    "天气和出行",
-    "数据与使用帮助",
+    "课表查询",
+    "个人课表",
+    "校园知识",
+    "使用帮助",
   ].map((title) => ({
     title,
     items: AI_CAPABILITY_REGISTRY
@@ -397,8 +482,10 @@ const TOOL_LABELS = {
   get_campus_route: "校园地图",
   get_classroom_location: "校园地图",
   search_school_index: "全校索引",
+  search_school_schedule_local: "全校课表",
+  fosu_rag_retrieve: "校园知识库",
   get_schedule_detail: "课表详情",
-  diagnose_data_status: "数据诊断",
+  diagnose_data_status: "数据状态",
   explain_personal_import: "导入指引",
   recommend_meeting_time: "时间推荐",
   clarify_missing_slot: "追问",
@@ -407,11 +494,20 @@ const TOOL_LABELS = {
 
 const CARD_TYPE_LABELS = {
   empty_room: "空教室",
+  schedule_result: "课表",
   schedule: "课表",
+  schedule_status: "数据状态",
+  clarification: "追问",
+  schedule_candidate: "候选",
+  personal_schedule: "个人课表",
+  school_knowledge: "校园知识",
+  navigation: "入口",
+  help: "帮助",
+  not_found: "未找到",
   teacher: "教师",
   course: "课程",
   weather: "天气",
-  diagnosis: "诊断",
+  diagnosis: "数据状态",
   guide: "指引",
   reminder: "提醒",
   generic: "结果",
@@ -419,11 +515,20 @@ const CARD_TYPE_LABELS = {
 
 const CARD_TITLE_FALLBACKS = {
   empty_room: "空教室推荐",
+  schedule_result: "课表结果",
   schedule: "今日课程",
+  schedule_status: "课表数据状态",
+  clarification: "需要补充信息",
+  schedule_candidate: "请选择对象",
+  personal_schedule: "个人课表",
+  school_knowledge: "校园知识",
+  navigation: "校园入口",
+  help: "使用帮助",
+  not_found: "未找到结果",
   teacher: "教师查询",
   course: "课程查询",
   weather: "校区天气",
-  diagnosis: "数据诊断",
+  diagnosis: "数据状态",
   guide: "使用指引",
   reminder: "时间推荐",
   generic: "结果",
@@ -441,37 +546,7 @@ const ALLOWED_ACTION_TYPES = ["navigate", "copy", "retry", "bind", "noop"];
 const INVALID_DISPLAY_TEXT = new Set(["[object Object]", "undefined", "null", "NaN"]);
 
 function cloneTaskPanelGroups() {
-  const groups = JSON.parse(JSON.stringify(TASK_PANEL_GROUPS));
-  if (groups[2]) {
-    groups[2].title = "使用与数据";
-    if (Array.isArray(groups[2].items)) {
-      groups[2].items = groups[2].items.map((item) => {
-        if (item.iconPath === ICONS.diagnosis) {
-          return Object.assign({}, item, {
-            label: "数据是否最新",
-            desc: "查看课表数据是否可用",
-            message: "课表数据是否最新？",
-          });
-        }
-        if (item.iconPath === ICONS.app) {
-          return Object.assign({}, item, {
-            label: "怎么使用",
-            desc: "查看查课、空教室和导入方法",
-            message: "这个小程序怎么用？",
-          });
-        }
-        if (item.iconPath === ICONS.term) {
-          return Object.assign({}, item, {
-            label: "个人课表导入",
-            desc: "了解 XLS 导入方式",
-            message: "怎么导入个人课表？",
-          });
-        }
-        return item;
-      });
-    }
-  }
-  return groups;
+  return JSON.parse(JSON.stringify(TASK_PANEL_GROUPS));
 }
 
 function readTaskPanelGroupsCache() {
@@ -654,14 +729,18 @@ function inferEvidenceLabel(source = {}) {
   const cardTypes = (Array.isArray(source.cards) ? source.cards : [])
     .map((item) => String(item && item.type || "").toLowerCase());
   const text = names.concat(cardTypes).join("|");
+  if (/diagnose_data_status|schedule_status|数据状态/.test(text)) return "数据状态";
+  if (/navigation|入口|官网/.test(text)) return "已找到校园入口";
   if (/weather|天气/.test(text)) return "已获取天气数据";
   if (/campus|map|route|location|地图|地点|位置/.test(text)) return "已查询校园地图";
   if (/empty|空教室/.test(text)) return "已核验教室占用";
-  if (/guide|import|rag|help|说明|帮助|指引|知识/.test(text)) return "使用说明";
+  if (/fosu_rag_retrieve|school_knowledge|知识/.test(text)) return "校园知识";
+  if (/guide|import|help|说明|帮助|指引/.test(text)) return "使用说明";
   if (/school|schedule|today|tomorrow|week|term|teacher|course|classroom|detail|课表|课程|教师|教室|教学周|校历|查询全校/.test(text)) {
     return "已核验课表数据";
   }
   const intent = source.metrics && source.metrics.intentName || "";
+  if (/navigation/.test(String(intent).toLowerCase())) return "已找到校园入口";
   if (/weather/.test(String(intent).toLowerCase())) return "已获取天气数据";
   return "";
 }
@@ -808,7 +887,7 @@ function normalizeCardItem(item, index, cardType) {
   let displaySubtitle = String(cardType || "") === "empty_room"
     ? subtitle.replace(/(?:\s*·\s*)?容量未知/g, "").replace(/^\s*·\s*|\s*·\s*$/g, "")
     : subtitle;
-  const courseLike = ["schedule", "teacher", "course", "reminder", "generic"].indexOf(String(cardType || "")) >= 0;
+  const courseLike = ["schedule", "schedule_result", "teacher", "course", "reminder", "generic"].indexOf(String(cardType || "")) >= 0;
   const section = courseLike ? inferSectionText(source) : "";
   const timeRange = courseLike ? inferCourseTimeRange(source) : "";
   let value = safeText(source.value || source.time || source.status || "", 60);
@@ -878,7 +957,7 @@ function normalizeCard(card, messageId, index, expandedCards) {
   const type = safeText(source.type || "generic", 30, "generic").toLowerCase() || "generic";
   const rawTitle = safeText(source.title || "", 80);
   const subtitle = safeText(source.subtitle || "", 140);
-  const scheduleLike = type === "schedule" || /今日|课程|课表|today|schedule/i.test(rawTitle);
+  const scheduleLike = type === "schedule" || type === "schedule_result" || /今日|课程|课表|today|schedule/i.test(rawTitle);
   const rawItems = Array.isArray(source.items) ? source.items : [];
   const filteredRawItems = scheduleLike ? rawItems.filter((item) => !isInactiveScheduleItem(item)) : rawItems;
   const items = filteredRawItems
@@ -912,6 +991,12 @@ function normalizeCard(card, messageId, index, expandedCards) {
   const title = scheduleLike && source.allFinished === true
     ? "今日课程已结束"
     : (rawTitle || CARD_TITLE_FALLBACKS[type] || CARD_TITLE_FALLBACKS.generic);
+  const disclaimer = type === "school_knowledge" || type === "navigation"
+    ? "信息以知识库来源和学校官方页面为准"
+    : (type === "schedule_status" ? "数据状态来自本机缓存和发布包元信息"
+      : (type === "help" || type === "clarification" || type === "personal_schedule"
+        ? "回答会保留在当前对话中"
+        : "课表以学校教务系统为准"));
   const primaryActions = actions.slice(0, 1);
   const secondaryActions = actions.slice(1, 3);
   const errorClass = source.variant === "error" || /服务暂时不可用|服务暂不可用/.test(title) ? "card-error" : "";
@@ -935,6 +1020,7 @@ function normalizeCard(card, messageId, index, expandedCards) {
     actionLayoutClass: primaryActions.length === 1 ? "one-action" : "",
     errorClass,
     filteredHint,
+    disclaimer,
   });
 }
 
@@ -999,6 +1085,44 @@ function makeMessage(role, content, patch) {
   }, patch || {});
 }
 
+function formatConversationTime(value) {
+  const time = Date.parse(value || "");
+  if (!time) return "";
+  const diffMs = Date.now() - time;
+  if (diffMs < 60000) return "刚刚";
+  if (diffMs < 3600000) return `${Math.floor(diffMs / 60000)}分钟前`;
+  const date = new Date(time);
+  const today = new Date();
+  const pad = (number) => String(number).padStart(2, "0");
+  if (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth() &&
+    date.getDate() === today.getDate()
+  ) {
+    return `${pad(date.getHours())}:${pad(date.getMinutes())}`;
+  }
+  return `${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
+}
+
+function buildConversationDisplayList(activeConversationId) {
+  return conversationStore.getConversationList().map((item) => ({
+    conversationId: item.conversationId,
+    title: item.title,
+    createdAt: item.createdAt,
+    updatedAt: item.updatedAt,
+    updatedAtText: formatConversationTime(item.updatedAt || item.createdAt),
+    messageCount: item.messageCount,
+    active: item.conversationId === activeConversationId,
+  }));
+}
+
+function isNewConversationCommand(text) {
+  const value = String(text || "").replace(/\s+/g, "");
+  return /^(新建|创建|新开|开启|开一个)(一个)?(新)?对话$/.test(value) ||
+    value === "新建一个对话" ||
+    value === "创建新对话";
+}
+
 function parseActionUrl(url) {
   const target = String(url || "");
   const parts = target.split("?");
@@ -1056,15 +1180,15 @@ function resolveProviderState(messages) {
 function buildHeaderSubtitle(state) {
   const source = state || {};
   if (source.lastFallbackReason) {
-    return "已使用本地规则";
+    return "本地规则可用";
   }
   if (source.lastExternalProviderUsed) {
     return "正在整理结果";
   }
   if (source.allowPersonalContext === true) {
-    return "已核验课表数据 · 已开启课表摘要";
+    return "校园知识 · 全校课表 · 摘要已开";
   }
-  return "已核验课表数据";
+  return "校园知识 · 全校课表 · 数据状态";
 }
 
 Page({
@@ -1076,12 +1200,17 @@ Page({
     taskPanelReady: false,
     taskPanelLoading: false,
     messages: [],
+    conversations: [],
+    activeConversationId: "",
+    activeConversationTitle: "新对话",
+    activeConversationContext: contextManager.createEmptyContextSlots(),
     expandedCards: {},
     inputValue: "",
     inputFocus: false,
     sending: false,
     sendingStatusText: "正在调用校园工具并生成卡片",
     showTaskPanel: false,
+    showConversationSheet: false,
     showCapabilityGuide: false,
     showHeaderMenu: false,
     showPrivacySheet: false,
@@ -1125,7 +1254,8 @@ Page({
     const showPrivacyTip = wx.getStorageSync(PRIVACY_TIP_KEY) !== true;
     const allowPersonalContext = aiAssistantService.isPersonalContextAllowed();
     const demoMode = demoData.normalizeDemoMode(options && options.demo);
-    const sourceMessages = demoMode ? demoData.getDemoMessages(demoMode) : aiAssistantService.getAiHistory();
+    const activeConversation = conversationStore.getActiveConversation();
+    const sourceMessages = demoMode ? demoData.getDemoMessages(demoMode) : activeConversation.messages;
     const messages = normalizeMessagesForDisplay(trimMessages(sourceMessages), this.data.expandedCards);
     const providerState = resolveProviderState(messages);
     const privacyState = buildPrivacyState(allowPersonalContext, false, showPrivacyTip);
@@ -1135,6 +1265,10 @@ Page({
       privacyExpanded: false,
       showPrivacySheet: false,
       demoMode,
+      conversations: buildConversationDisplayList(activeConversation.conversationId),
+      activeConversationId: activeConversation.conversationId,
+      activeConversationTitle: activeConversation.title,
+      activeConversationContext: contextManager.normalizeContextSlots(activeConversation.contextSlots),
     }, privacyState, providerState);
     nextState.headerSubtitle = buildHeaderSubtitle(nextState);
 
@@ -1162,6 +1296,160 @@ Page({
   onUnload() {
     this._aiPageUnloaded = true;
     this._activeAiRequestId = "";
+  },
+
+  refreshConversationState(activeConversation) {
+    const conversation = activeConversation || conversationStore.getActiveConversation();
+    this.setData({
+      activeConversationId: conversation.conversationId,
+      activeConversationTitle: conversation.title,
+      activeConversationContext: contextManager.normalizeContextSlots(conversation.contextSlots),
+      conversations: buildConversationDisplayList(conversation.conversationId),
+    });
+  },
+
+  openConversationSheet() {
+    this.setData({
+      showConversationSheet: true,
+      showCapabilityGuide: false,
+      showTaskPanel: false,
+      showPrivacySheet: false,
+      showHeaderMenu: false,
+      privacyExpanded: false,
+      conversations: buildConversationDisplayList(this.data.activeConversationId),
+    });
+  },
+
+  closeConversationSheet() {
+    this.setData({ showConversationSheet: false });
+  },
+
+  createNewConversation(options) {
+    if (this.data.sending) {
+      wx.showToast({ title: "请等待当前回复完成", icon: "none" });
+      return null;
+    }
+    const conversation = conversationStore.createConversation();
+    this.setData({
+      messages: [],
+      inputValue: "",
+      sending: false,
+      slowRequest: false,
+      historyTrimNotice: false,
+      showConversationSheet: false,
+      showHeaderMenu: false,
+      activeConversationId: conversation.conversationId,
+      activeConversationTitle: conversation.title,
+      activeConversationContext: contextManager.normalizeContextSlots(conversation.contextSlots),
+      conversations: buildConversationDisplayList(conversation.conversationId),
+      scrollTop: Date.now(),
+    });
+    if (!options || options.toast !== false) {
+      wx.showToast({ title: "已新建对话", icon: "none" });
+    }
+    return conversation;
+  },
+
+  switchConversationById(conversationId) {
+    if (!conversationId || conversationId === this.data.activeConversationId) {
+      this.setData({ showConversationSheet: false });
+      return;
+    }
+    if (this.data.sending) {
+      wx.showToast({ title: "请等待当前回复完成", icon: "none" });
+      return;
+    }
+    const conversation = conversationStore.setActiveConversation(conversationId);
+    const messages = normalizeMessagesForDisplay(trimMessages(conversation.messages), this.data.expandedCards);
+    const providerState = resolveProviderState(messages);
+    const nextState = Object.assign({
+      messages,
+      activeConversationId: conversation.conversationId,
+      activeConversationTitle: conversation.title,
+      activeConversationContext: contextManager.normalizeContextSlots(conversation.contextSlots),
+      conversations: buildConversationDisplayList(conversation.conversationId),
+      showConversationSheet: false,
+      historyTrimNotice: false,
+      scrollTop: Date.now(),
+    }, providerState);
+    nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
+    this.setData(nextState);
+  },
+
+  onConversationTap(event) {
+    this.switchConversationById(event.currentTarget.dataset.conversationId);
+  },
+
+  renameConversation(event) {
+    const conversationId = event.currentTarget.dataset.conversationId;
+    const conversation = (conversationStore.getStore().conversations || []).find((item) => item.conversationId === conversationId);
+    if (!conversation) return;
+    wx.showModal({
+      title: "重命名对话",
+      editable: true,
+      placeholderText: "输入对话标题",
+      content: conversation.title || "",
+      success: (res) => {
+        if (!res.confirm) return;
+        const next = conversationStore.renameConversation(conversationId, res.content || "");
+        if (!next) return;
+        this.refreshConversationState(
+          next.conversationId === this.data.activeConversationId ? next : conversationStore.getActiveConversation()
+        );
+      },
+    });
+  },
+
+  clearConversation(event) {
+    const conversationId = event && event.currentTarget && event.currentTarget.dataset.conversationId || this.data.activeConversationId;
+    wx.showModal({
+      title: "清空当前对话",
+      content: "只清空这个对话的消息和上下文，不影响其他对话和课表数据。",
+      confirmText: "清空",
+      success: (res) => {
+        if (!res.confirm) return;
+        const next = conversationStore.clearConversation(conversationId);
+        aiAssistantService.clearPendingClarification();
+        if (conversationId === this.data.activeConversationId) {
+          this.setMessages([], {
+            activeConversationContext: contextManager.normalizeContextSlots(next && next.contextSlots),
+            historyTrimNotice: false,
+          }, { save: false });
+        }
+        this.refreshConversationState(next || conversationStore.getActiveConversation());
+      },
+    });
+  },
+
+  deleteConversation(event) {
+    const conversationId = event.currentTarget.dataset.conversationId;
+    if (!conversationId) return;
+    wx.showModal({
+      title: "删除对话",
+      content: "删除后无法恢复，但不会影响课表数据。",
+      confirmText: "删除",
+      confirmColor: "#c62828",
+      success: (res) => {
+        if (!res.confirm) return;
+        const store = conversationStore.deleteConversation(conversationId);
+        const activeConversation = store.conversations.find((item) => item.conversationId === store.activeConversationId) ||
+          store.conversations[0];
+        const messages = normalizeMessagesForDisplay(trimMessages(activeConversation.messages), this.data.expandedCards);
+        const providerState = resolveProviderState(messages);
+        const nextState = Object.assign({
+          messages,
+          activeConversationId: activeConversation.conversationId,
+          activeConversationTitle: activeConversation.title,
+          activeConversationContext: contextManager.normalizeContextSlots(activeConversation.contextSlots),
+          conversations: buildConversationDisplayList(activeConversation.conversationId),
+          showConversationSheet: true,
+          historyTrimNotice: false,
+          scrollTop: Date.now(),
+        }, providerState);
+        nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
+        this.setData(nextState);
+      },
+    });
   },
 
   onInput(event) {
@@ -1322,23 +1610,35 @@ Page({
   dispatchCapabilityAction(rawAction, fallbackText, options = {}) {
     const action = actionFromAbility(rawAction && rawAction.abilityId ? AI_CAPABILITY_BY_ID[rawAction.abilityId] : rawAction, fallbackText);
     if (!action.message && !action.url && !action.draft) return;
+    const closePatch = {
+      showTaskPanel: false,
+      showCapabilityGuide: false,
+      showConversationSheet: false,
+    };
 
     if (action.kind === CAPABILITY_KINDS.SUPPLEMENT_PARAMS) {
+      if (action.message) {
+        this.setData(closePatch);
+        this.queueTaskMessage(action.message);
+        return;
+      }
       this.setData({
         inputValue: action.draft || action.message || fallbackText || "",
         inputFocus: true,
-        showTaskPanel: false,
-        showCapabilityGuide: false,
+        ...closePatch,
       });
       wx.showToast({ title: action.missingText || "请补充必要信息后发送", icon: "none" });
       return;
     }
 
+    if (action.kind === CAPABILITY_KINDS.NAVIGATE && action.url && action.message) {
+      this.setData(closePatch);
+      this.queueTaskMessage(action.message || fallbackText || action.draft);
+      return;
+    }
+
     if (action.kind === CAPABILITY_KINDS.NAVIGATE && action.url) {
-      this.setData({
-        showTaskPanel: false,
-        showCapabilityGuide: false,
-      });
+      this.setData(closePatch);
       this.navigateByUrl(action.url);
       return;
     }
@@ -1391,13 +1691,28 @@ Page({
     nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
     this.setData(nextState);
     if (options && options.save) {
-      aiAssistantService.saveAiHistory(messages);
+      const savedConversation = conversationStore.saveConversationMessages(
+        this.data.activeConversationId,
+        sourceMessages,
+        nextState.activeConversationContext || this.data.activeConversationContext
+      );
+      if (savedConversation) {
+        this.setData({
+          activeConversationTitle: savedConversation.title,
+          activeConversationContext: contextManager.normalizeContextSlots(savedConversation.contextSlots),
+          conversations: buildConversationDisplayList(savedConversation.conversationId),
+        });
+      }
     }
   },
 
   sendMessage(rawText, options) {
     const message = String(rawText || "").trim();
     if (!message || this.data.sending) return;
+    if (!this.data.demoMode && isNewConversationCommand(message)) {
+      this.createNewConversation();
+      return;
+    }
     const sendOptions = options || {};
     const isRetrySend = Number.isFinite(Number(sendOptions.retryAssistantIndex));
     const now = Date.now();
@@ -1534,7 +1849,12 @@ Page({
       },
     };
 
-    aiAssistantService.chat(message, aiAssistantService.buildClientContext(), { callbacks })
+    const clientContext = aiAssistantService.buildClientContext({
+      conversationId: this.data.activeConversationId,
+      contextSlots: this.data.activeConversationContext,
+    });
+
+    aiAssistantService.chat(message, clientContext, { callbacks })
       .then((response) => {
         if (!isRequestActive()) return;
         flushStream(true);
@@ -1564,7 +1884,9 @@ Page({
         } else {
           finalMessages.push(assistantMessage);
         }
+        const nextContext = contextManager.updateFromResponse(this.data.activeConversationContext, response);
         this.setMessages(finalMessages, {
+          activeConversationContext: nextContext,
           sending: false,
           slowRequest: false,
           sendingStatusText: "正在调用校园工具并生成卡片",
@@ -1578,12 +1900,12 @@ Page({
             type: "generic",
             variant: "error",
             title: "服务暂时不可用，已保留你的问题。",
-            subtitle: "可以重试，或先使用全校查询/空教室页面。",
+            subtitle: "可以重试，或先使用全校课表/空教室页面。",
             badges: [],
             items: [],
             actions: [
               { label: "重试", type: "retry", url: "", payload: { message } },
-              { label: "打开全校查询", type: "navigate", url: "/pages/school/school", payload: {} },
+              { label: "打开全校课表", type: "navigate", url: "/pages/school/school", payload: {} },
               { label: "打开空教室", type: "navigate", url: "/pages/empty-room/empty-room", payload: {} },
             ],
           }],
@@ -1637,6 +1959,7 @@ Page({
       showTaskPanel: false,
       showCapabilityGuide: false,
       showHeaderMenu: false,
+      showConversationSheet: false,
     }, privacyState));
   },
 
@@ -1648,6 +1971,7 @@ Page({
       showTaskPanel: false,
       showCapabilityGuide: false,
       showHeaderMenu: false,
+      showConversationSheet: false,
     }, privacyState));
   },
 
@@ -1675,6 +1999,7 @@ Page({
       showPrivacySheet: false,
       showCapabilityGuide: false,
       showHeaderMenu: false,
+      showConversationSheet: false,
       privacyExpanded: false,
       taskPanelReady: Boolean(cachedGroups),
       taskPanelLoading: !cachedGroups,
@@ -1704,6 +2029,7 @@ Page({
       showTaskPanel: false,
       showPrivacySheet: false,
       showHeaderMenu: false,
+      showConversationSheet: false,
       privacyExpanded: false,
     });
   },
@@ -1718,6 +2044,7 @@ Page({
       showCapabilityGuide: false,
       showTaskPanel: false,
       showPrivacySheet: false,
+      showConversationSheet: false,
       privacyExpanded: false,
     });
   },
@@ -1743,6 +2070,7 @@ Page({
       showCapabilityGuide: false,
       showPrivacySheet: false,
       showHeaderMenu: false,
+      showConversationSheet: false,
       privacyExpanded: false,
     });
   },
@@ -1785,14 +2113,18 @@ Page({
   clearHistory() {
     this.setData({ showHeaderMenu: false });
     wx.showModal({
-      title: "清空对话",
-      content: "仅清空本机保存的最近 AI 对话，不影响课表数据。",
+      title: "清空当前对话",
+      content: "仅清空当前对话的消息和上下文，不影响其他对话和课表数据。",
       confirmText: "清空",
       success: (res) => {
         if (!res.confirm) return;
-        aiAssistantService.clearAiHistory();
+        const next = conversationStore.clearConversation(this.data.activeConversationId);
         aiAssistantService.clearPendingClarification();
-        this.setMessages([], { historyTrimNotice: false }, { save: false });
+        this.setMessages([], {
+          activeConversationContext: contextManager.normalizeContextSlots(next && next.contextSlots),
+          historyTrimNotice: false,
+        }, { save: false });
+        this.refreshConversationState(next || conversationStore.getActiveConversation());
       },
     });
   },

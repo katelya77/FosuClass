@@ -36,7 +36,7 @@ function run() {
   assert(!card.visibleItems.some((item) => item.title === "非本周课程"), "inactive course should not render");
 
   assert(js.includes("服务暂时不可用，已保留你的问题。"), "error card title should use the polished copy");
-  assert(js.includes("可以重试，或先使用全校查询/空教室页面。"), "error card subtitle should suggest safe next steps");
+  assert(js.includes("可以重试，或先使用全校课表/空教室页面。"), "error card subtitle should suggest safe next steps");
   assert(wxml.includes("card-disclaimer"), "result cards should render the disclaimer");
   assert(wxml.includes("card-action-primary"), "primary card action class should be explicit");
   assert(wxml.includes("card-action-secondary"), "secondary card action class should be explicit");

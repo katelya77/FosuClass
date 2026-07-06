@@ -10,6 +10,7 @@
         <text class="xiaofu-dot">·</text>
         <text class="xiaofu-status">在线</text>
       </view>
+      <view class="xiaofu-capability">{{headerSubtitle}}</view>
     </view>
     <view class="xiaofu-actions">
       <button class="xiaofu-icon-btn" bindtap="openCapabilityGuide" aria-label="小佛能力指南">?</button>
@@ -17,30 +18,34 @@
     </view>
   </view>
 
-  <view class="quick-task-row">
-    <scroll-view class="quick-action-scroll" scroll-x enhanced show-scrollbar="{{false}}">
-      <view class="quick-action-list">
-        <button
-          wx:for="{{quickActions}}"
-          wx:key="id"
-          class="quick-action-pill {{item.className}}"
-          data-action-id="{{item.id}}"
-          bindtap="onQuickAction"
-        >
-          <image class="quick-action-icon" src="{{item.iconPath}}" mode="aspectFit" />
-          <text class="quick-action-label">{{item.label}}</text>
-        </button>
-      </view>
-    </scroll-view>
-    <button class="quick-more-button" bindtap="openTaskPanel">更多</button>
+  <view class="ai-mode-row">
+    <view class="quick-nav-segment" aria-label="对话与任务">
+      <button class="quick-conversation-button quick-nav-button active" bindtap="openConversationSheet">对话</button>
+      <button class="quick-more-button quick-nav-button" bindtap="openTaskPanel">任务</button>
+    </view>
   </view>
+
+  <scroll-view class="quick-action-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+    <view class="quick-action-list">
+      <button
+        wx:for="{{quickActions}}"
+        wx:key="id"
+        class="quick-action-pill {{item.className}}"
+        data-action-id="{{item.id}}"
+        bindtap="onQuickAction"
+      >
+        <image class="quick-action-icon" src="{{item.iconPath}}" mode="aspectFit" />
+        <text class="quick-action-label">{{item.label}}</text>
+      </button>
+    </view>
+  </scroll-view>
 
   <view class="history-trim-tip" wx:if="{{historyTrimNotice}}">已仅保留最近 20 条</view>
 
   <scroll-view class="message-scroll" scroll-y scroll-top="{{scrollTop}}" enhanced show-scrollbar="{{false}}">
     <view class="empty-welcome" wx:if="{{!messages.length}}">
-      <view class="empty-title">今天想做什么？</view>
-      <view class="empty-desc">我可以查课、找空教室、看今日安排，也能解释 FosuClass 的功能。</view>
+      <view class="empty-title">问校园事项、查全校课表</view>
+      <view class="empty-desc">我会先判断问题类型，再决定查课表、检索校园知识或说明数据状态。</view>
       <view class="empty-example-list">
         <button
           wx:for="{{welcomeExamples}}"
@@ -193,7 +198,7 @@
             </view>
 
             <view class="filtered-hint" wx:if="{{card.filteredHint}}">{{card.filteredHint}}</view>
-            <view class="card-disclaimer">仅供参考，以教务数据为准</view>
+            <view class="card-disclaimer">{{card.disclaimer}}</view>
             </block>
           </view>
         </view>
@@ -217,7 +222,40 @@
     </view>
   </scroll-view>
 
-  <view class="sheet-mask" wx:if="{{showTaskPanel || showCapabilityGuide || showPrivacySheet || showHeaderMenu}}" bindtap="closeSheets"></view>
+  <view class="sheet-mask" wx:if="{{showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu}}" bindtap="closeSheets"></view>
+
+  <view class="bottom-sheet conversation-sheet" wx:if="{{showConversationSheet}}">
+    <view class="sheet-handle"></view>
+    <view class="task-panel-head">
+      <view class="panel-title-wrap">
+        <view class="task-panel-title">对话</view>
+        <view class="task-panel-subtitle">每个对话独立保存上下文</view>
+      </view>
+      <button class="sheet-close" bindtap="closeConversationSheet">关闭</button>
+    </view>
+    <button class="conversation-new-btn" bindtap="createNewConversation">新建对话</button>
+    <scroll-view class="conversation-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <view
+        wx:for="{{conversations}}"
+        wx:key="conversationId"
+        class="conversation-item {{item.active ? 'active' : ''}}"
+      >
+        <button
+          class="conversation-main"
+          data-conversation-id="{{item.conversationId}}"
+          bindtap="onConversationTap"
+        >
+          <view class="conversation-title">{{item.title}}</view>
+          <view class="conversation-meta">{{item.messageCount}} 条消息 · {{item.updatedAtText}}</view>
+        </button>
+        <view class="conversation-actions">
+          <button catchtap="renameConversation" data-conversation-id="{{item.conversationId}}">重命名</button>
+          <button catchtap="clearConversation" data-conversation-id="{{item.conversationId}}">清空</button>
+          <button catchtap="deleteConversation" data-conversation-id="{{item.conversationId}}" class="danger">删除</button>
+        </view>
+      </view>
+    </scroll-view>
+  </view>
 
   <view class="bottom-sheet header-menu-sheet" wx:if="{{showHeaderMenu}}">
     <view class="sheet-handle"></view>
@@ -235,7 +273,7 @@
     <view class="task-panel-head">
       <view class="panel-title-wrap">
         <view class="task-panel-title">更多任务</view>
-        <view class="task-panel-subtitle">按场景选择，小佛会先调用工具核验</view>
+        <view class="task-panel-subtitle">辅助入口，核心回答仍在当前对话</view>
       </view>
       <button class="sheet-close" bindtap="closeTaskPanel">关闭</button>
     </view>
@@ -274,7 +312,7 @@
     <view class="task-panel-head">
       <view class="panel-title-wrap">
         <view class="task-panel-title">小佛可以帮你</view>
-        <view class="task-panel-subtitle">点一下示例，会先填入输入框</view>
+        <view class="task-panel-subtitle">点一下示例，会在当前对话回答</view>
       </view>
       <button class="sheet-close" bindtap="closeCapabilityGuide">关闭</button>
     </view>
@@ -336,7 +374,7 @@
       <textarea
         class="composer-input"
         value="{{inputValue}}"
-        placeholder="输入校园任务，不填密码学号"
+        placeholder="问我校园事项、课表和常用入口"
         placeholder-class="composer-placeholder"
         auto-height="{{true}}"
         maxlength="600"
