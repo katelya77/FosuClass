@@ -4,6 +4,7 @@ process.env.AI_AGENT_ENABLED = "false";
 process.env.AI_PROVIDER = "mock";
 
 const agentService = require("../server/src/services/ai/agentService");
+const toolRegistry = require("../server/src/services/ai/toolRegistry");
 const demoData = require("../miniprogram/pages/ai-assistant/demo-data");
 
 async function testAgentEvidenceAndSteps() {
@@ -76,10 +77,66 @@ function testLocalPersonalizationControls() {
   assert.strictEqual(cleared.latestScheduleImport, null);
 }
 
+function testImportedPersonalScheduleTools() {
+  const context = {
+    term: "2026-2027-1",
+    clientLocalTime: "2026-09-07T08:00:00+08:00",
+    currentTeachingWeek: 1,
+    currentScheduleSummary: {
+      enabled: true,
+      targetType: "personal-xls",
+      term: "2026-2027-1",
+      source: "xls-import",
+      courses: [
+        {
+          courseName: "机器学习导论",
+          teacherName: "李明",
+          classroom: "仙溪C7-101",
+          weekday: 1,
+          startSection: 3,
+          endSection: 4,
+          weeks: [1, 3, 5, 7, 9, 11, 13, 15],
+          weekText: "1-16周(单)",
+        },
+        {
+          courseName: "数据科学基础",
+          teacherName: "王芳",
+          classroom: "C1-202",
+          weekday: 2,
+          startSection: 5,
+          endSection: 6,
+          weeks: [1, 2, 3, 4],
+          weekText: "1-4周",
+        },
+      ],
+    },
+  };
+
+  const today = toolRegistry.executeTool("get_today_courses", { message: "今天有什么课" }, context);
+  assert.strictEqual(today.needContext, false);
+  assert.strictEqual(today.courseCount, 1);
+  assert.strictEqual(today.courses[0].courseName, "机器学习导论");
+
+  const tomorrow = toolRegistry.executeTool("get_tomorrow_courses", { message: "明天有什么课" }, context);
+  assert.strictEqual(tomorrow.needContext, false);
+  assert.strictEqual(tomorrow.courseCount, 1);
+  assert.strictEqual(tomorrow.courses[0].courseName, "数据科学基础");
+
+  const next = toolRegistry.executeTool("get_next_course", { message: "下一节课" }, context);
+  assert.strictEqual(next.courseCount, 1);
+  assert.strictEqual(next.nextCourse.courseName, "机器学习导论");
+
+  const week = toolRegistry.executeTool("get_week_schedule", { message: "本周课表" }, context);
+  assert.strictEqual(week.needContext, false);
+  assert.strictEqual(week.courseCount, 2);
+  assert.strictEqual(week.days.length, 2);
+}
+
 async function run() {
   await testAgentEvidenceAndSteps();
   testDemoDataProvenance();
   testLocalPersonalizationControls();
+  testImportedPersonalScheduleTools();
   console.log("test-ai-agent-operations passed");
 }
 

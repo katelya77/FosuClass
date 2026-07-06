@@ -5,7 +5,7 @@
 
 const XLSX = require("xlsx");
 const { toRenderableCourse } = require("./courseNormalizer");
-const { stripTeacherTitle, parseWeeks, parseSections } = require("./personal-schedule-parser");
+const { parseCourseBlock, parsePersonalScheduleHtml } = require("./personal-schedule-parser");
 const { safeLog } = require("./safeLogger");
 const termRegistryService = require("../services/termRegistryService");
 
@@ -52,6 +52,47 @@ function normalizeDateText(value) {
   return `${match[1]}-${pad(match[2])}-${pad(match[3])}`;
 }
 
+function normalizeSemesterPart(value) {
+  const text = String(value || "").trim();
+  const map = {
+    "一": "1",
+    "二": "2",
+    "两": "2",
+    "上": "1",
+    "下": "2",
+    "春": "2",
+    "秋": "1",
+  };
+  if (/^[1-4]$/.test(text)) return text;
+  return map[text] || "";
+}
+
+function normalizeTermText(value) {
+  const text = normalizeHeaderCell(value)
+    .replace(/[０-９]/g, (char) => String(char.charCodeAt(0) - 0xFF10))
+    .replace(/—|–|－|~|～|至/g, "-");
+  if (!text) return "";
+
+  let match = text.match(/(\d{4})\s*-\s*(\d{4})\s*[-_/]\s*([1-4])/);
+  if (match) {
+    return `${match[1]}-${match[2]}-${match[3]}`;
+  }
+
+  match = text.match(/(\d{4})\s*-\s*(\d{4})\s*学年\s*(?:第?\s*)?([一二两三四上下春秋1-4])\s*(?:学期|期)?/);
+  if (match) {
+    const semester = normalizeSemesterPart(match[3]);
+    if (semester) return `${match[1]}-${match[2]}-${semester}`;
+  }
+
+  match = text.match(/学年学期\s*[:：]\s*(\d{4})\s*-\s*(\d{4})\s*([一二两三四上下春秋1-4])?/);
+  if (match) {
+    const semester = normalizeSemesterPart(match[3] || "");
+    if (semester) return `${match[1]}-${match[2]}-${semester}`;
+  }
+
+  return "";
+}
+
 function buildHeaderRows(rows) {
   return rows.slice(0, 5).map((row) => (Array.isArray(row) ? row : []).map(normalizeHeaderCell));
 }
@@ -79,7 +120,15 @@ function findHeaderLabelValue(headerRows, label) {
   return "";
 }
 
-function extractPersonalXlsMetadata(rows, sourceFileName, finalTerm) {
+function getImportSourceFromFileName(sourceFileName) {
+  const filename = String(sourceFileName || "").toLowerCase();
+  const extMatch = filename.match(/\.([a-z0-9]+)$/);
+  const ext = extMatch && extMatch[1] || "";
+  if (ext === "txt" || ext === "csv") return "fosu-100-print-text";
+  return "fosu-100-print-xls";
+}
+
+function extractPersonalXlsMetadata(rows, sourceFileName, finalTerm, source) {
   const headerRows = buildHeaderRows(rows);
   const headerText = headerRows
     .map((row) => row.filter(Boolean).join(" "))
@@ -89,7 +138,7 @@ function extractPersonalXlsMetadata(rows, sourceFileName, finalTerm) {
 
   const titleNameMatch = headerText.match(/佛山大学\s*(.+?)\s*学生(?:个人)?(?:理论)?课表/);
   const fileStudentIdMatch = filename.match(/(\d{8,12})/);
-  const termMatch = headerText.match(/学年学期\s*[:：]\s*(\d{4}-\d{4}-\d)/);
+  const termMatch = headerText.match(/学年学期\s*[:：]\s*([^\s]+)/);
   const classMatch = headerText.match(/(?:^|\s)班级\s*[:：]\s*([^\s]+)/);
   const majorMatch = headerText.match(/所属班级\s*[:：]\s*([^\s]+)/);
   const collegeMatch = headerText.match(/学院\s*[:：]\s*([^\s]+)/);
@@ -101,10 +150,10 @@ function extractPersonalXlsMetadata(rows, sourceFileName, finalTerm) {
   const studentId = (fileStudentIdMatch && fileStudentIdMatch[1])
     || findHeaderLabelValue(headerRows, "学号")
     || "";
-  const term = (termMatch && termMatch[1])
+  const term = normalizeTermText((termMatch && termMatch[1])
     || findHeaderLabelValue(headerRows, "学年学期")
     || finalTerm
-    || "";
+    || "") || finalTerm || "";
   const className = (classMatch && classMatch[1])
     || findHeaderLabelValue(headerRows, "班级")
     || "";
@@ -126,8 +175,54 @@ function extractPersonalXlsMetadata(rows, sourceFileName, finalTerm) {
     majorName: majorName.trim(),
     collegeName: collegeName.trim(),
     printDate,
-    source: "fosu-100-print-xls",
+    source: source || getImportSourceFromFileName(sourceFileName),
     sourceFileName: filename,
+  };
+}
+
+function createPersonalImportError(code, message) {
+  const error = new Error(message);
+  error.code = code;
+  return error;
+}
+
+function isLikelyHtmlSchedule(buffer, sourceFileName) {
+  const filename = String(sourceFileName || "").toLowerCase();
+  const extMatch = filename.match(/\.([a-z0-9]+)$/);
+  const ext = extMatch && extMatch[1] || "";
+  if (ext === "html" || ext === "htm") return true;
+  const head = buffer.toString("utf8", 0, Math.min(buffer.length, 4096));
+  return /<table[\s>]/i.test(head) && /(星期|周一|周二|kbtable|kbcontent)/.test(head);
+}
+
+function parsePersonalHtmlBuffer(buffer, targetTermFromUser, sourceFileName) {
+  const html = buffer.toString("utf8");
+  const finalTerm = normalizeTermText(html) || normalizeTermText(targetTermFromUser) || targetTermFromUser || getDefaultTerm();
+  const courses = parsePersonalScheduleHtml(html, {
+    semester: finalTerm,
+    source: "fosu-100-print-html",
+  });
+  if (!courses || courses.length === 0) {
+    throw createPersonalImportError(
+      "PERSONAL_SCHEDULE_NO_COURSES",
+      "已读取 HTML 文件，但没有识别到课程。请确认文件包含个人课表表格、星期表头、周次和节次。"
+    );
+  }
+  const filename = normalizeHeaderCell(sourceFileName);
+  return {
+    term: finalTerm,
+    metadata: {
+      studentName: "",
+      studentId: "",
+      term: finalTerm,
+      className: "",
+      majorName: "",
+      collegeName: "",
+      printDate: "",
+      source: "fosu-100-print-html",
+      sourceFileName: filename,
+    },
+    courses,
   };
 }
 
@@ -180,37 +275,47 @@ function mergeMultiVenueCourses(courses) {
  * @returns {Object} 包含学期与已解析去重的课程数组
  */
 function parsePersonalXlsBuffer(buffer, targetTermFromUser, sourceFileName) {
+  if (isLikelyHtmlSchedule(buffer, sourceFileName)) {
+    return parsePersonalHtmlBuffer(buffer, targetTermFromUser, sourceFileName);
+  }
+
   // 1. 读取 xls
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: false, raw: false });
+  let workbook;
+  try {
+    workbook = XLSX.read(buffer, { type: "buffer", cellDates: false, raw: false });
+  } catch (error) {
+    const text = buffer.toString("utf8");
+    try {
+      workbook = XLSX.read(text, { type: "string", cellDates: false, raw: false });
+    } catch (fallbackError) {
+      throw createPersonalImportError(
+        "UNSUPPORTED_PERSONAL_SCHEDULE_FILE",
+        "无法读取课表文件。请确认文件是 100 网导出的 XLS/XLSX，或包含课表表格的 HTML/文本文件。"
+      );
+    }
+  }
   const firstSheetName = workbook.SheetNames[0];
   const sheet = workbook.Sheets[firstSheetName];
   if (!sheet) {
-    throw new Error("工作表为空，无法解析。");
+    throw createPersonalImportError("PERSONAL_SCHEDULE_EMPTY_SHEET", "工作表为空，无法解析课程。请重新从 100 网打印导出课表文件。");
   }
 
   // 2. 转换为二维数组并扩散合并单元格的值
   const rows = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
   fillMergedCells(sheet, rows);
+  const importSource = getImportSourceFromFileName(sourceFileName);
 
   // 3. 寻找学期（优先从表格上方识别）
   let detectedTerm = "";
   for (let r = 0; r < Math.min(10, rows.length); r++) {
     const rowStr = rows[r].join(" ");
-    // 匹配类似 "2025-2026学年第二学期" 或 "2025-2026-2"
-    const termMatch = rowStr.match(/(\d{4})-(\d{4})学年第([一二三四])学期/);
-    if (termMatch) {
-      const semMap = { "一": "1", "二": "2", "三": "3", "四": "4" };
-      detectedTerm = `${termMatch[1]}-${termMatch[2]}-${semMap[termMatch[3]] || "1"}`;
-      break;
-    }
-    const termMatch2 = rowStr.match(/(\d{4}-\d{4}-\d)/);
-    if (termMatch2) {
-      detectedTerm = termMatch2[1];
+    detectedTerm = normalizeTermText(rowStr);
+    if (detectedTerm) {
       break;
     }
   }
-  const finalTerm = detectedTerm || targetTermFromUser || getDefaultTerm();
-  const metadata = extractPersonalXlsMetadata(rows, sourceFileName, finalTerm);
+  const finalTerm = detectedTerm || normalizeTermText(targetTermFromUser) || targetTermFromUser || getDefaultTerm();
+  const metadata = extractPersonalXlsMetadata(rows, sourceFileName, finalTerm, importSource);
 
   // 4. 定位星期表头行
   let headerRowIndex = -1;
@@ -238,7 +343,10 @@ function parsePersonalXlsBuffer(buffer, targetTermFromUser, sourceFileName) {
   }
 
   if (headerRowIndex === -1) {
-    throw new Error("无法在课表中定位星期表头列（未匹配到包含“星期一”至“星期五”的表头行）");
+    throw createPersonalImportError(
+      "PERSONAL_SCHEDULE_HEADER_NOT_FOUND",
+      "无法定位星期表头列。请确认文件包含“星期一”到“星期五”等课表表头，而不是截图或空白文件。"
+    );
   }
 
   // 5. 遍历表头行之下的数据行，解析课程块
@@ -284,87 +392,14 @@ function parsePersonalXlsBuffer(buffer, targetTermFromUser, sourceFileName) {
         .filter(Boolean);
 
       blocks.forEach((blockText) => {
-        const lines = blockText.split("\n").map((l) => l.trim()).filter(Boolean);
-        if (lines.length === 0) return;
-
-        let courseName = "";
-        let teacherName = "";
-        let weekText = "";
-        let sectionsText = "";
-        let classroom = "";
-        let note = "";
-
-        const weekIdx = lines.findIndex((l) => /([0-9]+.*周|单周|双周)/.test(l));
-        const sectionIdx = lines.findIndex((l) => /[\[［【][0-9\s,，、－—–~～至-]+[\]］】]\s*节?/.test(l));
-
-        lines.forEach((line, index) => {
-          if (index === weekIdx || index === sectionIdx) {
-            if (index === weekIdx) weekText = line;
-            if (index === sectionIdx) sectionsText = line;
-            return;
-          }
-
-          if (/^备注[:：]/.test(line)) {
-            note = line.replace(/^备注[:：]/, "").trim();
-            return;
-          }
-
-          if (!courseName) {
-            courseName = line.replace(/^(课程|课程名称)[:：]/, "").trim();
-          } else if (weekIdx >= 0 && index > weekIdx && !classroom) {
-            classroom = line.replace(/^(教室|地点)[:：]/, "").trim();
-          } else if (!teacherName) {
-            teacherName = stripTeacherTitle(line);
-          } else if (!classroom) {
-            classroom = line.replace(/^(教室|地点)[:：]/, "").trim();
-          }
+        const parsed = parseCourseBlock(blockText, {
+          weekDay,
+          fallbackSections,
+          source: importSource,
         });
-
-        // 进一步提取可能包含在节次前面的教室字段
-        if (sectionsText) {
-          const match = sectionsText.match(/^([\s\S]*?)[\[［【]/);
-          if (match) {
-            const extractedClass = match[1].replace(/^(教室|地点)[:：]/, "").trim();
-            if (extractedClass) {
-              classroom = extractedClass;
-            }
-          }
-        }
-
-        if (!courseName || /^星期[一二三四五六日]$/.test(courseName)) {
-          return;
-        }
-
-        // 若无周次，视为无效片段直接过滤
-        if (!weekText) {
-          return;
-        }
-
-        const { startWeek, endWeek, weeks } = parseWeeks(weekText);
-        const { startSection, endSection, sections } = parseSections(sectionsText, fallbackSections);
-
-        const courseItem = {
-          courseName,
-          displayCourseName: courseName,
-          canonicalCourseName: courseName,
-          teacherName: teacherName || "",
-          rawTeacherName: teacherName || "",
-          classroom: classroom || "",
-          weekDay: weekDay,
-          weekday: weekDay,
-          sections,
-          startSection,
-          endSection,
-          weeks,
-          startWeek,
-          endWeek,
-          weekText: weekText || "未标明周次",
-          note: note,
-          rawText: blockText,
-          source: "fosu-100-print-xls",
-        };
-
-        const rendered = toRenderableCourse(courseItem);
+        if (!parsed) return;
+        parsed.rawTeacherName = parsed.teacherName || "";
+        const rendered = toRenderableCourse(parsed);
         courses.push(rendered);
       });
     }
@@ -386,6 +421,12 @@ function parsePersonalXlsBuffer(buffer, targetTermFromUser, sourceFileName) {
   });
 
   safeLog("personal-xls-parsed", { term: finalTerm, courseCount: uniqueCourses.length });
+  if (!uniqueCourses.length) {
+    throw createPersonalImportError(
+      "PERSONAL_SCHEDULE_NO_COURSES",
+      "已识别课表表头，但没有解析到课程。请确认课程单元格包含课程名、周次、节次和地点/教师信息。"
+    );
+  }
 
   return {
     term: metadata.term || finalTerm,
@@ -398,5 +439,6 @@ module.exports = {
   parsePersonalXlsBuffer,
   _test: {
     extractPersonalXlsMetadata,
+    normalizeTermText,
   },
 };

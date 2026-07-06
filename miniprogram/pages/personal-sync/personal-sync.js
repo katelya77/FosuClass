@@ -125,12 +125,15 @@ function buildFingerprint(result = {}) {
 function buildXlsScheduleDisplay(result) {
   const metadata = (result && result.metadata) || {};
   const term = metadata.term || (result && result.term) || "";
+  const sourceLabel = metadata.source === "fosu-100-print-html"
+    ? "HTML导入"
+    : (metadata.source === "fosu-100-print-text" ? "文本导入" : "XLS导入");
   const title = metadata.className ? `${metadata.className}课表` : "个人课表";
-  const subtitle = [metadata.className, term, "XLS导入"].filter(Boolean).join(" · ") || "XLS导入";
+  const subtitle = [metadata.className, term, sourceLabel].filter(Boolean).join(" · ") || sourceLabel;
   return {
     title,
     subtitle,
-    sourceText: "100网 XLS 手动导入",
+    sourceText: `100网 ${sourceLabel} 手动导入`,
   };
 }
 
@@ -1850,7 +1853,7 @@ Page({
     wx.chooseMessageFile({
       count: 1,
       type: "file",
-      extension: ["xls", "xlsx"],
+      extension: ["xls", "xlsx", "html", "htm", "txt", "csv"],
       success: (res) => {
         const file = res.tempFiles && res.tempFiles[0];
         if (!file) return;
@@ -1905,7 +1908,7 @@ Page({
         request.post("/api/fosu/personal/import-xls", {
           filename: file.name,
           fileBase64: readRes.data,
-          source: "fosu-100-print-xls",
+          source: "fosu-100-print-file",
           targetTerm: this.data.semesterOptions[this.data.semesterIndex],
         }, {
           silentError: true,
@@ -1948,7 +1951,7 @@ Page({
         this.setData({ loadingXls: false });
         wx.showModal({
           title: "文件读取失败",
-          content: "无法读取微信文件，请重新从聊天记录选择课表 XLS。",
+          content: "无法读取微信文件，请重新从聊天记录选择课表文件。",
           showCancel: false,
         });
       },
@@ -2263,7 +2266,13 @@ Page({
     if (code === "FILE_TOO_LARGE") {
       content = "课表文件过大，请重新下载或压缩后再导入。";
     } else if (code === "INVALID_PARAMS") {
-      content = "文件内容为空，请重新选择 XLS/XLSX 文件。";
+      content = "文件内容为空，请重新选择 XLS/XLSX/HTML 文件。";
+    } else if (code === "UNSUPPORTED_PERSONAL_SCHEDULE_FILE") {
+      content = "无法读取该文件，请选择 100 网导出的 XLS/XLSX，或包含课表表格的 HTML/文本文件。";
+    } else if (code === "PERSONAL_SCHEDULE_HEADER_NOT_FOUND") {
+      content = "没有找到星期表头，请确认文件不是截图，且包含星期一到星期五的课表表格。";
+    } else if (code === "PERSONAL_SCHEDULE_NO_COURSES") {
+      content = "已读取文件，但没有识别到课程。请确认课程单元格包含课程名、周次、节次和上课地点。";
     } else if (code === "SCHEDULE_PARSE_FAILED" || code === "PERSONAL_SCHEDULE_PARSE_FAILED") {
       content = "无法识别课表结构，请确认文件来自 100 网“打印”导出的个人理论课表。";
     }
