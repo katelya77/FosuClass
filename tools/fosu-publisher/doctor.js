@@ -166,14 +166,14 @@ async function buildDoctorReport(options = {}) {
   }
   checks.push(sessionFileOk
     ? check("PASS", "session-file", "present")
-    : check("BLOCKED", "session-file", "missing; run npm run login"));
+    : check("BLOCKED", "session-file", "missing; run npm run sync:login"));
 
   const session = env.FOSU_PUBLISHER_MOCK === "1"
     ? { ok: true, code: "SESSION_VALID" }
     : await verifySession({ headless: true }).catch((error) => ({ ok: false, code: error.code || "SESSION_EXPIRED", message: error.message }));
   checks.push(session.ok
     ? check("PASS", "playwright-session", "SESSION_VALID")
-    : check("BLOCKED", "playwright-session", session.message || "请运行 npm run login", { code: "SESSION_EXPIRED" }));
+    : check("BLOCKED", "playwright-session", session.message || "请运行 npm run sync:login", { code: "SESSION_EXPIRED" }));
 
   checks.push(await oracleHealth(env));
   checks.push(cloudbasePreflight(env));

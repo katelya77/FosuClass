@@ -281,7 +281,7 @@ function buildSyncPlan(action, params = {}, env = process.env) {
     verifyClient: buildRelease && !boolParam(params, ["no-verify-client"], false),
     allowPartial: boolParam(params, "allow-partial", false),
     allowDerived: boolParam(params, "allow-derived", false),
-    forceRefresh: schedulePolicy === "network-only" && !isUploadOnly,
+    forceRefresh: schedulePolicy === "network-only" && !isUploadOnly && progressPolicy === "ignore",
     ignoreProgress: progressPolicy === "ignore",
     ignoreNoScheduleCache: negativeCachePolicy === "ignore",
     cacheOnlyExplicit: schedulePolicy === "cache-only" || catalogPolicy === "cache-only",
@@ -321,7 +321,7 @@ function applyPlanToParams(plan, params = {}) {
   next.ignoreProgress = Boolean(plan.ignoreProgress);
   next.ignoreNoScheduleCache = Boolean(plan.ignoreNoScheduleCache);
   next.mergeOldData = Boolean(plan.mergeOldData);
-  next.crawlMode = plan.schedulePolicy === "network-only" ? "full-fresh" : "cache-only";
+  next.crawlMode = plan.forceRefresh ? "full-fresh" : (plan.schedulePolicy === "cache-only" ? "cache-only" : "incremental");
   next.freshRunId = plan.runId;
   next.catalogPolicy = plan.catalogPolicy;
   next.schedulePolicy = plan.schedulePolicy;

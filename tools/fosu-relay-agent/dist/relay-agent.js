@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __commonJS = (cb, mod) => function __require() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e) {
+    throw mod = 0, e;
+  }
 };
 
 // ../../server/src/utils/stagingFingerprint.js
@@ -15,20 +19,27 @@ var require_stagingFingerprint = __commonJS({
       "canonicalHash",
       "changed",
       "dataEpoch",
+      "duration",
+      "durationMs",
+      "elapsedMs",
       "forceRefreshToken",
       "generatedAt",
       "hash",
-      "id",
       "joinedPath",
       "jsonPath",
+      "log",
+      "logs",
       "meta",
       "pack",
       "packHealth",
       "publishedAt",
+      "requestDuration",
+      "requestDurationMs",
       "releasePack",
       "releaseVersion",
       "size",
       "stagingUploadId",
+      "uploadId",
       "updatedAt",
       "version"
     ]);
@@ -62,16 +73,55 @@ var require_stagingFingerprint = __commonJS({
         courses: resources.courses.length
       };
     }
-    function stableClone(value) {
+    function cmpText(left, right) {
+      return String(left || "").localeCompare(String(right || ""), "zh-CN", { numeric: true });
+    }
+    function firstOf(value, keys) {
+      for (const key of keys) {
+        if (value && value[key] !== void 0 && value[key] !== null && value[key] !== "") {
+          return value[key];
+        }
+      }
+      return "";
+    }
+    function eventSortKey(item) {
+      const source = item && typeof item === "object" ? item : {};
+      return [
+        Number(firstOf(source, ["weekday", "weekDay", "dayOfWeek"]) || 0),
+        Number(firstOf(source, ["startSection", "sectionStart"]) || 0),
+        Number(firstOf(source, ["endSection", "sectionEnd"]) || 0),
+        Number(firstOf(source, ["startWeek"]) || 0),
+        Number(firstOf(source, ["endWeek"]) || 0),
+        firstOf(source, ["weekPattern", "weekType", "oddEven", "weekParity", "parity"]),
+        firstOf(source, ["courseName", "name"]),
+        firstOf(source, ["teacherName", "teacher"]),
+        firstOf(source, ["classroom", "roomName", "classroomName"])
+      ].join("");
+    }
+    function entitySortKey(item, path2) {
+      const source = item && typeof item === "object" ? item : {};
+      const key = path2[path2.length - 1] || "";
+      if (key === "colleges") return [firstOf(source, ["code", "collegeCode"]), firstOf(source, ["name", "collegeName"])].join("");
+      if (key === "majors") return [firstOf(source, ["code", "majorCode"]), firstOf(source, ["name", "majorName"]), firstOf(source, ["collegeCode", "collegeName"]), firstOf(source, ["grade"])].join("");
+      if (key === "classSchedules" || key === "classes") return [firstOf(source, ["classId", "id"]), firstOf(source, ["className", "name"])].join("");
+      if (key === "teacherSchedules" || key === "teachers") return [firstOf(source, ["teacherId", "id"]), firstOf(source, ["teacherName", "name"])].join("");
+      if (key === "classroomSchedules" || key === "classrooms") return [firstOf(source, ["roomId", "classroomId", "id"]), firstOf(source, ["roomName", "classroomName", "name"])].join("");
+      if (key === "courseSchedules") return [firstOf(source, ["courseId", "id"]), firstOf(source, ["courseName", "name"])].join("");
+      if (key === "courses" && (source.weekday || source.startSection || source.endSection || source.teacherName || source.classroom)) return eventSortKey(source);
+      if (key === "courses") return [firstOf(source, ["courseId", "id"]), firstOf(source, ["courseName", "name"])].join("");
+      if (source.weekday || source.startSection || source.endSection || source.courseName) return eventSortKey(source);
+      return stableStringify(source);
+    }
+    function stableClone(value, path2 = []) {
       if (Array.isArray(value)) {
-        return value.map(stableClone);
+        return value.map((item) => stableClone(item, path2)).sort((left, right) => cmpText(entitySortKey(left, path2), entitySortKey(right, path2)));
       }
       if (!value || typeof value !== "object") {
         return value;
       }
       const output = {};
       Object.keys(value).filter((key) => !VOLATILE_KEYS.has(key)).sort().forEach((key) => {
-        const next = stableClone(value[key]);
+        const next = stableClone(value[key], path2.concat(key));
         if (next !== void 0) output[key] = next;
       });
       return output;
@@ -96,12 +146,59 @@ var require_stagingFingerprint = __commonJS({
     function sha256(text) {
       return crypto.createHash("sha256").update(String(text || ""), "utf8").digest("hex");
     }
-    function calculateFingerprint(data) {
-      const canonical = canonicalPayload(data);
-      const canonicalJson = JSON.stringify(canonical);
+    function canonicalSource(data) {
+      const source = data && typeof data === "object" ? data : {};
       return {
-        canonicalHash: sha256(canonicalJson),
-        canonicalJson,
+        schemaVersion: source.schemaVersion || "",
+        term: source.term || source.semester || "",
+        semester: source.semester || source.term || "",
+        termStartDate: source.termStartDate || source.sourceStartDate || source.meta && source.meta.startDate || "",
+        catalog: source.catalog || {},
+        majors: source.majors || [],
+        classSchedules: source.classSchedules || source.resources && source.resources.classSchedules || [],
+        resources: getResources(source),
+        timeTable: source.timeTable || {}
+      };
+    }
+    function updateStableJsonHash(hash, value, path2 = []) {
+      if (Array.isArray(value)) {
+        const sorted = value.map((item, index) => ({ item, index, sortKey: entitySortKey(item, path2) })).sort((left, right) => {
+          const compared = cmpText(left.sortKey, right.sortKey);
+          return compared || left.index - right.index;
+        });
+        hash.update("[");
+        sorted.forEach((entry, index) => {
+          if (index > 0) hash.update(",");
+          updateStableJsonHash(hash, entry.item === void 0 ? null : entry.item, path2);
+        });
+        hash.update("]");
+        return;
+      }
+      if (!value || typeof value !== "object") {
+        const encoded = JSON.stringify(value);
+        hash.update(encoded === void 0 ? "null" : encoded);
+        return;
+      }
+      let first = true;
+      hash.update("{");
+      Object.keys(value).filter((key) => !VOLATILE_KEYS.has(key)).sort().forEach((key) => {
+        if (value[key] === void 0) return;
+        if (!first) hash.update(",");
+        first = false;
+        hash.update(JSON.stringify(key));
+        hash.update(":");
+        updateStableJsonHash(hash, value[key], path2.concat(key));
+      });
+      hash.update("}");
+    }
+    function hashCanonicalPayload(data) {
+      const hash = crypto.createHash("sha256");
+      updateStableJsonHash(hash, canonicalSource(data));
+      return hash.digest("hex");
+    }
+    function calculateFingerprint(data) {
+      return {
+        canonicalHash: hashCanonicalPayload(data),
         counts: summarizeStagingData(data)
       };
     }
@@ -357,7 +454,7 @@ var require_resourceCountContract = __commonJS({
         majors: asArray(catalog.majors || snapshot && snapshot.majors).length
       };
     }
-    function buildResourceCountContract2(snapshot, options = {}) {
+    function buildResourceCountContract(snapshot, options = {}) {
       const sourceSnapshot = snapshot || {};
       const scopeSources = normalizeScopeSources(sourceSnapshot);
       const resourceCounts = buildResourceCounts(sourceSnapshot, options);
@@ -390,7 +487,7 @@ var require_resourceCountContract = __commonJS({
     }
     function deriveLegacyResourceCountContract(snapshot, manifest = {}) {
       const counts = Object.assign({}, snapshot && snapshot.coverage || {}, manifest && manifest.counts || {});
-      const base = buildResourceCountContract2(snapshot || {}, {
+      const base = buildResourceCountContract(snapshot || {}, {
         derivedFromLegacy: true,
         teacherSourceMode: "legacy-derived",
         classroomSourceMode: "legacy-derived",
@@ -407,20 +504,20 @@ var require_resourceCountContract = __commonJS({
           aggregateSchedules: Number(counts.majorAggregateCount || 0) || base.class.aggregateSchedules
         }),
         teacher: Object.assign({}, base.teacher, {
-          directoryEntities: base.teacher.directoryEntitiesStatus === "counted" ? base.teacher.directoryEntities : teacherCount || null,
-          directoryEntitiesStatus: base.teacher.directoryEntitiesStatus === "counted" ? "counted" : teacherCount ? "derived-from-legacy-index" : "not-counted",
+          directoryEntities: base.teacher.directoryEntitiesStatus === "counted" ? base.teacher.directoryEntities : null,
+          directoryEntitiesStatus: base.teacher.directoryEntitiesStatus === "counted" ? "counted" : "not-counted",
           scheduleDocuments: teacherCount,
           sourceMode: "legacy-derived"
         }),
         classroom: Object.assign({}, base.classroom, {
-          directoryEntities: base.classroom.directoryEntitiesStatus === "counted" ? base.classroom.directoryEntities : classroomCount || null,
-          directoryEntitiesStatus: base.classroom.directoryEntitiesStatus === "counted" ? "counted" : classroomCount ? "derived-from-legacy-index" : "not-counted",
+          directoryEntities: base.classroom.directoryEntitiesStatus === "counted" ? base.classroom.directoryEntities : null,
+          directoryEntitiesStatus: base.classroom.directoryEntitiesStatus === "counted" ? "counted" : "not-counted",
           scheduleDocuments: classroomCount,
           sourceMode: "legacy-derived"
         }),
         course: Object.assign({}, base.course, {
-          directoryEntities: base.course.directoryEntitiesStatus === "counted" ? base.course.directoryEntities : courseCount || null,
-          directoryEntitiesStatus: base.course.directoryEntitiesStatus === "counted" ? "counted" : courseCount ? "derived-from-legacy-index" : "not-counted",
+          directoryEntities: base.course.directoryEntitiesStatus === "counted" ? base.course.directoryEntities : null,
+          directoryEntitiesStatus: base.course.directoryEntitiesStatus === "counted" ? "counted" : "not-counted",
           scheduleDocuments: courseCount,
           sourceMode: "legacy-derived"
         }),
@@ -432,7 +529,7 @@ var require_resourceCountContract = __commonJS({
         derivedFromLegacy: true
       });
     }
-    function flattenLegacyCounts2(contract) {
+    function flattenLegacyCounts(contract) {
       const value = contract || {};
       return {
         collegeCount: value.catalog && value.catalog.colleges || 0,
@@ -519,11 +616,26 @@ var require_resourceCountContract = __commonJS({
         const activeMode = active && active[resource] && active[resource].sourceMode || "unknown";
         const stagingMode = staging && staging[resource] && staging[resource].sourceMode || "unknown";
         if (activeMode !== stagingMode) {
-          blockers.push({
+          const detail = {
             code: "SOURCE_MODE_MISMATCH",
             resource,
+            field: "sourceMode",
+            activeValue: activeMode,
+            stagingValue: stagingMode,
+            activeLabel: sourceModeLabel(activeMode),
+            stagingLabel: sourceModeLabel(stagingMode),
+            expectedValue: activeMode,
             message: `${METRIC_LABELS[`${resource}.scheduleDocuments`] || resource} \u6765\u6E90\u53E3\u5F84\u4E0D\u4E00\u81F4\uFF0C\u5F53\u524D\u7EBF\u4E0A ${sourceModeLabel(activeMode)}\uFF0C\u672C\u6B21\u6682\u5B58 ${sourceModeLabel(stagingMode)}\u3002`
-          });
+          };
+          if (isLegacyActiveSourceCompatible(active, staging, resource, activeMode, stagingMode)) {
+            warnings.push(Object.assign({}, detail, {
+              code: "LEGACY_ACTIVE_SOURCE_MODE_COMPAT",
+              severity: "warning",
+              reason: "\u5F53\u524D\u7EBF\u4E0A Release \u6765\u81EA\u65E7\u7248\u7EDF\u8BA1\u53E3\u5F84\uFF0C\u672C\u6B21\u6682\u5B58\u5DF2\u4F7F\u7528\u672C\u6B21\u73ED\u7EA7\u8BFE\u8868\u6D3E\u751F\u53E3\u5F84\uFF1B\u4EC5\u5BF9\u65E7 Active \u505A\u663E\u5F0F\u517C\u5BB9\uFF0C\u4E0D\u653E\u5BBD\u672C\u6B21\u6570\u636E\u8D28\u91CF\u68C0\u67E5\u3002"
+            }));
+          } else {
+            blockers.push(detail);
+          }
         }
         ["directoryEntities", "scheduleDocuments", "courseEvents"].forEach((field) => {
           comparisons.push(compareMetric(active, staging, resource, field));
@@ -556,6 +668,16 @@ var require_resourceCountContract = __commonJS({
         comparisons
       };
     }
+    function isLegacyActiveSourceCompatible(active, staging, resource, activeMode, stagingMode) {
+      if (activeMode !== "legacy-derived") return false;
+      if (stagingMode !== "derived-current-run") return false;
+      if (!active || active.derivedFromLegacy !== true) return false;
+      const stagingResource = staging && staging[resource] || {};
+      if (stagingResource.directoryEntitiesStatus !== "counted") return false;
+      if (Number(stagingResource.scheduleDocuments || 0) <= 0) return false;
+      const blockingDiagnostics = asArray(staging && staging.diagnostics).filter((item) => item && item.resource === resource && item.publishable === false);
+      return blockingDiagnostics.length === 0;
+    }
     function sourceModeLabel(value) {
       const key = String(value || "unknown");
       const labels = {
@@ -574,13 +696,169 @@ var require_resourceCountContract = __commonJS({
       return String(value);
     }
     module2.exports = {
-      buildResourceCountContract: buildResourceCountContract2,
+      buildResourceCountContract,
       compareResourceCountContracts,
       deriveLegacyResourceCountContract,
-      flattenLegacyCounts: flattenLegacyCounts2,
+      flattenLegacyCounts,
       formatResourceMetricValue,
       isInvalidTeacherName,
       sourceModeLabel
+    };
+  }
+});
+
+// ../fosu-sync-client/syncEnv.js
+var require_syncEnv = __commonJS({
+  "../fosu-sync-client/syncEnv.js"(exports2, module2) {
+    var fs2 = require("fs");
+    var path2 = require("path");
+    var CLIENT_DIR = __dirname;
+    var SYNC_ENV_PATH = path2.join(CLIENT_DIR, ".env");
+    var SYNC_LOCAL_ENV_PATH = path2.join(CLIENT_DIR, ".env.local");
+    var REPO_LOCAL_ENV_PATH = path2.resolve(CLIENT_DIR, "..", "..", ".env.local");
+    var SYNC_DEFAULTS = {
+      FOSU_BASE_URL: "https://100.fosu.edu.cn",
+      FOSU_AUTH_URL: "https://authserver.fosu.edu.cn",
+      FOSU_API_BASE: "https://class.katelya.eu.org",
+      SYNC_DISABLE_PROXY: "true",
+      PREFERRED_SEMESTER: ""
+    };
+    var SYNC_ENV_FIELDS = Object.keys(SYNC_DEFAULTS);
+    var PROXY_ENV_NAMES = [
+      "HTTP_PROXY",
+      "HTTPS_PROXY",
+      "ALL_PROXY",
+      "http_proxy",
+      "https_proxy",
+      "all_proxy"
+    ];
+    var DIRECT_NO_PROXY_HOSTS = [
+      "100.fosu.edu.cn",
+      "authserver.fosu.edu.cn",
+      "class.katelya.eu.org",
+      "cloud1-d3g17rpe7566d3d5c-1442900641.tcloudbaseapp.com",
+      "localhost",
+      "127.0.0.1",
+      "172.16.0.0/12"
+    ];
+    function parseEnvValue(rawValue) {
+      let value = String(rawValue == null ? "" : rawValue).trim();
+      if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
+        value = value.slice(1, -1);
+      }
+      return value.replace(/\\n/g, "\n");
+    }
+    function parseEnvText(text) {
+      return String(text || "").split(/\r?\n/).reduce((acc, line) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) return acc;
+        const index = trimmed.indexOf("=");
+        if (index <= 0) return acc;
+        const key = trimmed.slice(0, index).trim();
+        if (!key) return acc;
+        acc[key] = parseEnvValue(trimmed.slice(index + 1));
+        return acc;
+      }, {});
+    }
+    function readSyncClientEnv(envPath = SYNC_ENV_PATH, deps = {}) {
+      const fsImpl = deps.fs || fs2;
+      try {
+        if (!fsImpl.existsSync(envPath)) return {};
+        return parseEnvText(fsImpl.readFileSync(envPath, "utf8"));
+      } catch (error) {
+        return {};
+      }
+    }
+    function loadSyncClientEnv(options = {}) {
+      const env = options.env || process.env;
+      const envPath = options.envPath || SYNC_ENV_PATH;
+      const deps = options.deps || {};
+      const parsed = Object.prototype.hasOwnProperty.call(options, "envPath") ? readSyncClientEnv(envPath, deps) : Object.assign(
+        {},
+        readSyncClientEnv(envPath, deps),
+        readSyncClientEnv(REPO_LOCAL_ENV_PATH, deps),
+        readSyncClientEnv(SYNC_LOCAL_ENV_PATH, deps)
+      );
+      Object.keys(parsed).forEach((key) => {
+        if (env[key] === void 0 || env[key] === "") {
+          env[key] = parsed[key];
+        }
+      });
+      SYNC_ENV_FIELDS.forEach((key) => {
+        if (env[key] === void 0 || env[key] === "") {
+          env[key] = SYNC_DEFAULTS[key];
+        }
+      });
+      return {
+        envPath,
+        loaded: Object.keys(parsed),
+        values: SYNC_ENV_FIELDS.reduce((acc, key) => {
+          acc[key] = env[key];
+          return acc;
+        }, {})
+      };
+    }
+    function mergeNoProxy(existing, additions) {
+      const seen = /* @__PURE__ */ new Set();
+      return String(existing || "").split(",").concat(additions || []).map((item) => String(item || "").trim()).filter(Boolean).filter((item) => {
+        const key = item.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).join(",");
+    }
+    function envFlag(value, defaultValue) {
+      if (value === void 0 || value === "") return Boolean(defaultValue);
+      return !["0", "false", "no", "off"].includes(String(value).trim().toLowerCase());
+    }
+    function prepareDirectNetworkEnvironment(env = process.env, options = {}) {
+      if (env.SYNC_DISABLE_PROXY === void 0 || env.SYNC_DISABLE_PROXY === "") {
+        env.SYNC_DISABLE_PROXY = "true";
+      }
+      const disableProxy = envFlag(env.SYNC_DISABLE_PROXY, true);
+      const detectedProxyNames = PROXY_ENV_NAMES.filter((name) => Boolean(env[name]));
+      if (disableProxy) {
+        PROXY_ENV_NAMES.forEach((name) => {
+          delete env[name];
+        });
+      }
+      const mergedNoProxy = mergeNoProxy(env.NO_PROXY || env.no_proxy || "", DIRECT_NO_PROXY_HOSTS);
+      env.NO_PROXY = mergedNoProxy;
+      env.no_proxy = mergedNoProxy;
+      if (options.axios && options.axios.defaults) {
+        options.axios.defaults.proxy = false;
+      }
+      return {
+        disableProxy,
+        detectedProxyNames,
+        noProxy: mergedNoProxy,
+        removedProxyNames: disableProxy ? detectedProxyNames : []
+      };
+    }
+    function safeEnvSummary(env = process.env) {
+      return {
+        FOSU_BASE_URL: env.FOSU_BASE_URL || SYNC_DEFAULTS.FOSU_BASE_URL,
+        FOSU_AUTH_URL: env.FOSU_AUTH_URL || SYNC_DEFAULTS.FOSU_AUTH_URL,
+        FOSU_API_BASE: env.FOSU_API_BASE || SYNC_DEFAULTS.FOSU_API_BASE,
+        SYNC_DISABLE_PROXY: env.SYNC_DISABLE_PROXY || SYNC_DEFAULTS.SYNC_DISABLE_PROXY,
+        PREFERRED_SEMESTER: env.PREFERRED_SEMESTER || ""
+      };
+    }
+    module2.exports = {
+      CLIENT_DIR,
+      DIRECT_NO_PROXY_HOSTS,
+      PROXY_ENV_NAMES,
+      SYNC_DEFAULTS,
+      SYNC_ENV_FIELDS,
+      SYNC_LOCAL_ENV_PATH,
+      SYNC_ENV_PATH,
+      REPO_LOCAL_ENV_PATH,
+      loadSyncClientEnv,
+      mergeNoProxy,
+      parseEnvText,
+      prepareDirectNetworkEnvironment,
+      readSyncClientEnv,
+      safeEnvSummary
     };
   }
 });
@@ -601,9 +879,15 @@ var require_upload = __commonJS({
       readSidecarHash
     } = require_stagingFingerprint();
     var {
-      buildResourceCountContract: buildResourceCountContract2,
-      flattenLegacyCounts: flattenLegacyCounts2
+      buildResourceCountContract,
+      flattenLegacyCounts
     } = require_resourceCountContract();
+    var {
+      loadSyncClientEnv,
+      prepareDirectNetworkEnvironment
+    } = require_syncEnv();
+    loadSyncClientEnv();
+    prepareDirectNetworkEnvironment(process.env, { axios });
     function parseArgs2(argv) {
       const args = {};
       for (const arg of argv) {
@@ -669,6 +953,28 @@ var require_upload = __commonJS({
       }
       return Math.floor(num * 1024 * 1024);
     }
+    function getUploadConcurrency(params, totalChunks) {
+      const raw = params["upload-concurrency"] || params.uploadConcurrency || params["chunk-concurrency"] || process.env.SYNC_LOCAL_UPLOAD_CONCURRENCY || "2";
+      const parsed = parseInt(raw, 10);
+      if (!Number.isFinite(parsed) || parsed < 1) {
+        console.warn(`invalid upload concurrency: ${raw}; fallback to 1`);
+        return 1;
+      }
+      const capped = Math.min(parsed, 4, Math.max(1, totalChunks || 1));
+      if (parsed !== capped) {
+        console.warn(`upload concurrency capped from ${parsed} to ${capped}`);
+      }
+      return capped;
+    }
+    function formatElapsedMs(ms) {
+      const value = Number(ms || 0);
+      if (value < 1e3) return `${value}ms`;
+      const seconds = value / 1e3;
+      if (seconds < 60) return `${seconds.toFixed(1)}s`;
+      const minutes = Math.floor(seconds / 60);
+      const rest = Math.round(seconds % 60);
+      return `${minutes}m${String(rest).padStart(2, "0")}s`;
+    }
     function hashFile(filePath) {
       return new Promise((resolve, reject) => {
         const hash = crypto.createHash("sha256");
@@ -713,8 +1019,8 @@ var require_upload = __commonJS({
     function summarizeLocalSnapshot(filePath) {
       try {
         const data = JSON.parse(fs2.readFileSync(filePath, "utf-8"));
-        const resourceCounts = buildResourceCountContract2(data);
-        const counts = flattenLegacyCounts2(resourceCounts);
+        const resourceCounts = buildResourceCountContract(data);
+        const counts = flattenLegacyCounts(resourceCounts);
         return {
           resourceCounts,
           counts,
@@ -961,18 +1267,32 @@ var require_upload = __commonJS({
       }
       const startedAt = Date.now();
       let uploaded = 0;
-      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+      let finishedChunks = 0;
+      let nextChunkIndex = 0;
+      const uploadConcurrency = getUploadConcurrency(params, totalChunks);
+      console.log(`upload concurrency: ${uploadConcurrency}`);
+      async function uploadOneChunk(chunkIndex) {
         const start = chunkIndex * chunkSize;
         const end = Math.min(uploadStat.size - 1, start + chunkSize - 1);
         const buffer = readChunk(prepared.uploadPath, start, end);
         const chunkUrl = `${endpointBase}/chunk?uploadId=${encodeURIComponent(uploadId)}&chunkIndex=${chunkIndex}`;
         await uploadChunkWithRetry(chunkUrl, buffer, headers, timeoutMs, retryCount);
         uploaded += buffer.length;
+        finishedChunks += 1;
         const elapsed = Math.max(1, (Date.now() - startedAt) / 1e3);
         const percent = (uploaded / uploadStat.size * 100).toFixed(2);
         const speed = formatMb(uploaded / elapsed);
-        console.log(`[${chunkIndex + 1}/${totalChunks}] ${percent}% ${formatMb(uploaded)}/${formatMb(uploadStat.size)} MB, ${speed} MB/s`);
+        console.log(`[${finishedChunks}/${totalChunks}] chunk ${chunkIndex + 1} done, ${percent}% ${formatMb(uploaded)}/${formatMb(uploadStat.size)} MB, ${speed} MB/s`);
       }
+      async function uploadWorker() {
+        while (nextChunkIndex < totalChunks) {
+          const chunkIndex = nextChunkIndex;
+          nextChunkIndex += 1;
+          await uploadOneChunk(chunkIndex);
+        }
+      }
+      await Promise.all(Array.from({ length: uploadConcurrency }, () => uploadWorker()));
+      console.log(`all chunks uploaded in ${formatElapsedMs(Date.now() - startedAt)}`);
       const finalize = await postJson(`${endpointBase}/finalize`, {
         uploadId,
         uploadSize: uploadStat.size,
@@ -1077,10 +1397,6 @@ var {
   resolveInputFilePath,
   uploadStagingFile
 } = require_upload();
-var {
-  buildResourceCountContract,
-  flattenLegacyCounts
-} = require_resourceCountContract();
 var SECRET_KEY_PATTERN = /(studentId|student_id|password|passwd|pwd|cookie|ticket|execution|session|token|authorization|jsessionid|captcha)/i;
 function parseArgs(argv) {
   const args = {};
@@ -1188,6 +1504,10 @@ function pickJsonNumber(head, key) {
   const match = head.match(new RegExp(`"${key}"\\s*:\\s*(\\d+)`));
   return match ? Number(match[1]) : 0;
 }
+function pickNestedJsonNumber(head, objectKey, key) {
+  const match = head.match(new RegExp(`"${objectKey}"\\s*:\\s*\\{[\\s\\S]{0,4000}?"${key}"\\s*:\\s*(\\d+)`));
+  return match ? Number(match[1]) : 0;
+}
 function extractSummary(filePath) {
   const head = readLeadingText(filePath);
   const summary = {
@@ -1195,28 +1515,43 @@ function extractSummary(filePath) {
     releaseVersion: pickJsonString(head, "releaseVersion") || pickJsonString(head, "version"),
     generatedAt: pickJsonString(head, "generatedAt") || pickJsonString(head, "updatedAt")
   };
-  try {
-    const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-    const resourceCounts = buildResourceCountContract(data);
-    const counts = flattenLegacyCounts(resourceCounts);
-    return Object.assign(summary, counts, {
-      resourceCounts,
-      totalScheduleDocuments: Number(resourceCounts.class.scheduleDocuments || 0) + Number(resourceCounts.teacher.scheduleDocuments || 0) + Number(resourceCounts.classroom.scheduleDocuments || 0) + Number(resourceCounts.course.scheduleDocuments || 0),
-      actualNetworkRequestCount: data.meta && data.meta.actualNetworkRequestCount || data.actualNetworkRequestCount || 0,
-      usedClassScheduleCache: Boolean(data.meta && (data.meta.usedClassScheduleCache || data.meta.cacheUsage && data.meta.cacheUsage.usedClassScheduleCache)),
-      teacherQualityPass: !(resourceCounts.diagnostics || []).some((item) => item.resource === "teacher" && item.publishable === false)
-    });
-  } catch (error) {
-    return Object.assign(summary, {
-      classScheduleCount: pickJsonNumber(head, "classScheduleCount"),
-      teacherScheduleCount: pickJsonNumber(head, "teacherScheduleCount"),
-      classroomScheduleCount: pickJsonNumber(head, "classroomScheduleCount"),
-      courseScheduleCount: pickJsonNumber(head, "courseScheduleCount"),
-      teacherCount: pickJsonNumber(head, "teacherCount"),
-      classroomCount: pickJsonNumber(head, "classroomCount"),
-      courseCount: pickJsonNumber(head, "courseCount")
-    });
-  }
+  const resourceCounts = {
+    class: {
+      scheduleDocuments: pickNestedJsonNumber(head, "class", "scheduleDocuments") || pickJsonNumber(head, "classScheduleCount"),
+      administrativeClasses: pickNestedJsonNumber(head, "class", "administrativeClasses"),
+      aggregateSchedules: pickNestedJsonNumber(head, "class", "aggregateSchedules")
+    },
+    teacher: {
+      directoryEntities: pickNestedJsonNumber(head, "teacher", "directoryEntities") || pickJsonNumber(head, "teacherCount"),
+      scheduleDocuments: pickNestedJsonNumber(head, "teacher", "scheduleDocuments") || pickJsonNumber(head, "teacherScheduleCount"),
+      courseEvents: pickNestedJsonNumber(head, "teacher", "courseEvents")
+    },
+    classroom: {
+      directoryEntities: pickNestedJsonNumber(head, "classroom", "directoryEntities") || pickJsonNumber(head, "classroomCount"),
+      scheduleDocuments: pickNestedJsonNumber(head, "classroom", "scheduleDocuments") || pickJsonNumber(head, "classroomScheduleCount"),
+      courseEvents: pickNestedJsonNumber(head, "classroom", "courseEvents")
+    },
+    course: {
+      directoryEntities: pickNestedJsonNumber(head, "course", "directoryEntities") || pickJsonNumber(head, "courseCount"),
+      scheduleDocuments: pickNestedJsonNumber(head, "course", "scheduleDocuments") || pickJsonNumber(head, "courseScheduleCount"),
+      courseEvents: pickNestedJsonNumber(head, "course", "courseEvents")
+    }
+  };
+  const totalScheduleDocuments = Number(resourceCounts.class.scheduleDocuments || 0) + Number(resourceCounts.teacher.scheduleDocuments || 0) + Number(resourceCounts.classroom.scheduleDocuments || 0) + Number(resourceCounts.course.scheduleDocuments || 0);
+  return Object.assign(summary, {
+    classScheduleCount: pickJsonNumber(head, "classScheduleCount"),
+    teacherScheduleCount: pickJsonNumber(head, "teacherScheduleCount"),
+    classroomScheduleCount: pickJsonNumber(head, "classroomScheduleCount"),
+    courseScheduleCount: pickJsonNumber(head, "courseScheduleCount"),
+    teacherCount: pickJsonNumber(head, "teacherCount"),
+    classroomCount: pickJsonNumber(head, "classroomCount"),
+    courseCount: pickJsonNumber(head, "courseCount"),
+    resourceCounts,
+    totalScheduleDocuments,
+    actualNetworkRequestCount: pickJsonNumber(head, "actualNetworkRequestCount"),
+    usedClassScheduleCache: /"usedClassScheduleCache"\s*:\s*true/.test(head),
+    teacherQualityPass: true
+  });
 }
 function scanFileForSensitiveData(filePath) {
   const fd = fs.openSync(filePath, "r");

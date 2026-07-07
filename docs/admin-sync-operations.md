@@ -29,6 +29,54 @@
 npm run sync:publish
 ```
 
+## 统一同步入口
+
+主入口固定为：
+
+```powershell
+npm run sync:publish
+```
+
+该入口自动串联 session 检查、校园网采集、规范化、Staging/Release Pack 生成、gzip/chunk 上传、服务端校验、Release 发布、OpenResty 静态同步、CloudBase 镜像和状态回报。100 网 session 过期时必须快速失败，并提示：
+
+```powershell
+session 已过期，请执行 npm run sync:login 后重试
+```
+
+常用模式：
+
+```powershell
+npm run sync:publish -- --incremental --term=2026-2027-1 --grade=2026 --concurrency=8 --resume
+npm run sync:publish -- --full --term=2026-2027-1 --term-start-date=2026-09-07 --total-weeks=20 --grade=2026
+```
+
+- `--incremental` 用于开学初频繁调整，只拉取目录和疑似变化课表，并复用断点进度。
+- `--full` 用于新学期首次采集或源站目录大变更，会忽略旧进度并重新校验负缓存。
+- `--resume` 用于中断后继续，避免无意义重复抓取。
+- `--grade=2026` 只限定采集范围，不硬编码 26 级；源站未发现 26 级课表时应提示“当前源站未发现 2026 级课表”，不作为发布失败。
+- `--concurrency=8` 为受控并发，仍受限速、超时和重试保护。
+
+每次同步回执必须记录阶段耗时：session 检查、目录抓取、课表抓取、规范化、hash、gzip、上传、校验、release、OpenResty、CloudBase。后台只展示摘要；完整 hash、manifest URL、uploadId、stagingId、target dir 只放在技术详情中。
+
+## Release 与镜像约束
+
+- Release Pack 是不可变版本；active pointer 切换必须保持原子化。
+- OpenResty 可先完成并作为线上 active 数据源。
+- CloudBase 是镜像状态，可单独失败和重试，但不能破坏 active release 的正确性。
+- Relay 只能上传候选 Staging JSON，不能登录后台、不能发布、不能查看管理员配置。
+
+## 安全清理策略
+
+后台“执行安全清理”默认应先预览。删除前必须确认目标不被 active pointer、manifest 或 history index 引用。
+
+- active release 永久保留。
+- 每个学期最新 published 永久保留。
+- duplicate staging 超 7 天可清理。
+- failed 超 7 天可清理。
+- incomplete 超 24 小时可清理。
+- superseded 原始大文件超 30 天可清理。
+- archived release 按最近 N 个/最近 N 天保留，删除前必须再次检查引用关系。
+
 ## 资源计数契约
 
 后台和上传摘要统一读取 v2 计数契约：

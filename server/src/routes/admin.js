@@ -2990,6 +2990,10 @@ router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
     classroomScheduleCount: payload.classroomScheduleCount || 0,
     courseScheduleCount: payload.courseScheduleCount || 0,
   };
+  attachSyncOpsSummary(payload, {
+    publisherRun: getLatestPublisherRunSafe(),
+    stagingUploads: lifecycleStatus.stagingUploads || [],
+  });
 
   res.json({
     success: true,
@@ -3985,6 +3989,165 @@ function buildFingerprintStatus(localHash = "") {
   };
 }
 
+function getLatestPublisherRunSafe() {
+  try {
+    const latest = publisherReceiptService.getLatestReceipt();
+    return latest && latest.run || null;
+  } catch (error) {
+    safeLog("publisher-receipt-read-failed", { error: error.message });
+    return null;
+  }
+}
+
+function firstNonEmpty(...values) {
+  for (const value of values) {
+    if (value !== undefined && value !== null && String(value).trim() !== "") return value;
+  }
+  return "";
+}
+
+function normalizeOpsStatus(value) {
+  const status = String(value || "").trim().toLowerCase();
+  if (!status) return "not-run";
+  if (["ok", "success", "completed", "healthy", "synced", "unchanged", "no-change"].includes(status)) return "success";
+  if (["failed", "error", "unhealthy", "validation-failed"].includes(status)) return "failed";
+  if (["partial-success", "cloudbase-mirror-pending"].includes(status)) return "partial-success";
+  return status;
+}
+
+function buildPublisherOpsSummary(run) {
+  const summary = run && run.summary || {};
+  const receipt = run && run.receipt || {};
+  const cloudbaseReceipt = receipt.cloudbaseReceipt || {};
+  const cloudbaseMirror = cloudbaseReceipt.mirror || receipt.cloudbase || receipt.cloudbaseResult || {};
+  const status = normalizeOpsStatus(firstNonEmpty(
+    receipt.overallStatus,
+    receipt.status,
+    summary.partialSuccess ? "partial-success" : "",
+    summary.errorCode ? "failed" : "",
+    summary.noChange ? "no-change" : "",
+    summary.oracleStatus
+  ));
+  const cloudbaseStatus = normalizeOpsStatus(firstNonEmpty(
+    receipt.cloudbaseStatus,
+    summary.cloudbaseStatus,
+    cloudbaseMirror.status,
+    cloudbaseReceipt.status
+  ));
+  const stageTimings = receipt.stageTimings || {};
+  const performanceSummary = receipt.performanceSummary || {};
+  return {
+    runId: run && run.runId || "",
+    mode: firstNonEmpty(receipt.mode, summary.mode),
+    term: firstNonEmpty(receipt.term, summary.term),
+    status,
+    completedAt: firstNonEmpty(receipt.completedAt, receipt.endedAt, summary.completedAt, run && run.updatedAt),
+    currentStage: firstNonEmpty(receipt.currentStage, receipt.stage, ""),
+    errorCode: firstNonEmpty(receipt.errorCode, summary.errorCode, receipt.error && receipt.error.code),
+    errorMessage: firstNonEmpty(receipt.errorMessage, receipt.message, receipt.error && receipt.error.message),
+    oracleStatus: normalizeOpsStatus(firstNonEmpty(receipt.oracleStatus, summary.oracleStatus)),
+    cloudbaseStatus,
+    dualSourceStatus: normalizeOpsStatus(firstNonEmpty(receipt.dualSourceStatus, summary.dualSourceStatus)),
+    stageTimings,
+    performanceSummary,
+  };
+}
+
+function buildDataHashState(payload) {
+  if (payload.activeCanonicalHash && payload.stagingCanonicalHash) {
+    return payload.activeCanonicalHash === payload.stagingCanonicalHash ? "consistent" : "different";
+  }
+  if (payload.activeCanonicalHash) return "active-only";
+  if (payload.stagingCanonicalHash) return "staging-only";
+  return "unknown";
+}
+
+function buildOpsPendingItems(payload, publisher) {
+  const items = [];
+  const uploads = Array.isArray(payload.stagingUploads)
+    ? payload.stagingUploads
+    : (payload.latestStagingUpload ? [payload.latestStagingUpload] : []);
+  const userActionStatuses = new Set(["pending-review", "failed", "validation-failed", "publish-blocked", "duplicate", "waiting-confirmation"]);
+  uploads.forEach((upload) => {
+    const state = upload.stagingState || upload.status || "";
+    const blocked = Array.isArray(upload.blockers) && upload.blockers.length;
+    if (!userActionStatuses.has(state) && !upload.failureReason && !blocked) return;
+    items.push({
+      type: "staging",
+      status: state || "pending-review",
+      severity: state === "failed" || state === "validation-failed" ? "danger" : "warning",
+      title: state === "duplicate" ? "重复上传待确认" : "Staging 需要处理",
+      detail: upload.failureReason || (blocked ? upload.blockers.join("; ") : "候选 Staging 等待确认或发布"),
+      command: state === "duplicate" ? "npm run sync:publish -- --resume" : "npm run sync:publish",
+      uploadId: upload.uploadId || upload.stagingId || "",
+      term: upload.term || upload.summary && upload.summary.term || "",
+    });
+  });
+  if (payload.stagingNeedsPublish && !items.some((item) => item.type === "staging")) {
+    items.push({
+      type: "publish",
+      status: "pending-review",
+      severity: "warning",
+      title: "发现新 Staging，等待发布",
+      detail: "active hash 与最新 Staging hash 不一致，需要执行发布链路。",
+      command: "npm run sync:publish -- --resume",
+    });
+  }
+  const staticStatus = normalizeOpsStatus(payload.openRestyStaticSyncStatus || payload.staticSync && payload.staticSync.status);
+  if (staticStatus === "failed") {
+    items.push({
+      type: "openresty",
+      status: "failed",
+      severity: "danger",
+      title: "OpenResty 静态同步失败",
+      detail: payload.staticSync && (payload.staticSync.errorMessage || payload.staticSync.needsSyncReason) || "请重新同步当前 Release 静态目录。",
+      command: "npm run sync:publish -- --resume",
+    });
+  }
+  if (publisher && publisher.errorCode) {
+    items.push({
+      type: "publisher",
+      status: "failed",
+      severity: "danger",
+      title: publisher.errorCode === "SESSION_EXPIRED" ? "100 网 session 已过期" : "最近一次本机同步失败",
+      detail: publisher.errorMessage || publisher.errorCode,
+      command: publisher.errorCode === "SESSION_EXPIRED" ? "npm run sync:login" : "npm run sync:publish -- --resume",
+    });
+  }
+  if (publisher && ["failed", "partial-success"].includes(publisher.cloudbaseStatus)) {
+    items.push({
+      type: "cloudbase",
+      status: publisher.cloudbaseStatus,
+      severity: publisher.cloudbaseStatus === "failed" ? "danger" : "warning",
+      title: "CloudBase 镜像未完成",
+      detail: "OpenResty active release 可先作为线上源，CloudBase 镜像可单独重试。",
+      command: "npm run sync:publish -- --mode=mirror-only",
+    });
+  }
+  return items.slice(0, 8);
+}
+
+function attachSyncOpsSummary(payload, options = {}) {
+  const publisher = buildPublisherOpsSummary(options.publisherRun || getLatestPublisherRunSafe());
+  if (!payload.stagingUploads && options.stagingUploads) payload.stagingUploads = options.stagingUploads;
+  const dataHashState = buildDataHashState(payload);
+  const cloudbaseStatus = firstNonEmpty(publisher.cloudbaseStatus, payload.cloudbaseStatus, "not-run");
+  const lastSyncStatus = firstNonEmpty(publisher.status, payload.latestJob && payload.latestJob.status, payload.latestStagingUpload && payload.latestStagingUpload.status, "not-run");
+  const lastSyncTime = firstNonEmpty(publisher.completedAt, payload.latestJob && (payload.latestJob.finishedAt || payload.latestJob.updatedAt), payload.lastUploadTime);
+  Object.assign(payload, {
+    publisher,
+    cloudbaseStatus,
+    lastSyncStatus,
+    lastSyncTime,
+    dataHashState,
+    dataHashConsistent: dataHashState === "consistent",
+    stageTimings: publisher.stageTimings || {},
+    performanceSummary: publisher.performanceSummary || {},
+  });
+  payload.pendingItems = buildOpsPendingItems(payload, publisher);
+  return payload;
+}
+
 function getStagingIncludeScopes(data) {
   const scopes = data?.meta?.includeScopes;
   return Array.isArray(scopes) ? scopes : [];
@@ -4645,11 +4808,11 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
       reconcile: false,
       uploadLimit: 1,
     });
-    return res.json({
-      success: true,
-      data: {
+    const payload = {
         ...lifecycleStatus,
         releaseVersion: lifecycleStatus.activeReleaseVersion || meta.releaseVersion || "-",
+        activeReleaseUpdatedAt: activeInfo && activeInfo.updatedAt || lifecycleStatus.activeRelease && lifecycleStatus.activeRelease.updatedAt || null,
+        activeReleaseActivatedAt: activeInfo && activeInfo.activatedAt || lifecycleStatus.activeRelease && lifecycleStatus.activeRelease.activatedAt || null,
         semester: appConfigService.getAdminConfig().currentSemester,
         releasePackStatus,
         releasePackHealthy: Boolean(releasePackStatus && releasePackStatus.healthy),
@@ -4689,7 +4852,15 @@ router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
           classroomScheduleCount: syncMeta["classroom-schedules"]?.itemCount || 0,
           courseScheduleCount: syncMeta["course-schedules"]?.itemCount || 0,
         }
-      }
+      };
+    attachSyncOpsSummary(payload, {
+      publisherRun: getLatestPublisherRunSafe(),
+      stagingUploads: lifecycleStatus.stagingUploads || [],
+    });
+    return res.json({
+      success: true,
+      data: payload,
+      ...payload,
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });

@@ -89,7 +89,16 @@ function parseArgs(argv) {
       args[body] = true;
     }
   });
+  if (args.grade && !args.grades) args.grades = args.grade;
   return args;
+}
+
+function normalizeRequestedMode(args = {}) {
+  if (args.mode === "resume") return "resume";
+  if (args.full === true || args.full === "true" || args.mode === "full") return "full";
+  if (args.incremental === true || args.incremental === "true") return "routine";
+  const requestedMode = String(args.mode || "routine").trim();
+  return requestedMode === "export-cloudbase" ? "export-cloudbase" : requestedMode;
 }
 
 function nowIso() {
@@ -331,6 +340,40 @@ async function waitAdminJob(baseUrl, jobId, label, run) {
   throw error;
 }
 
+function stageDuration(timings, stage) {
+  const item = timings && timings[stage];
+  return item && Number.isFinite(Number(item.durationMs)) ? Number(item.durationMs) : null;
+}
+
+function sumStageDurations(timings, stages) {
+  let total = 0;
+  let hasValue = false;
+  (stages || []).forEach((stage) => {
+    const value = stageDuration(timings, stage);
+    if (value != null) {
+      total += value;
+      hasValue = true;
+    }
+  });
+  return hasValue ? total : null;
+}
+
+function buildPerformanceSummary(stageTimings = {}) {
+  return {
+    sessionCheckMs: stageDuration(stageTimings, "checking-session"),
+    directoryAndScheduleFetchMs: stageDuration(stageTimings, "crawling"),
+    normalizeAndStagingBuildMs: sumStageDurations(stageTimings, ["building-staging", "validating-local"]),
+    hashAndDiffMs: sumStageDurations(stageTimings, ["calculating-diff", "checking-fingerprint"]),
+    gzipAndUploadMs: stageDuration(stageTimings, "uploading-oracle"),
+    serverValidationMs: stageDuration(stageTimings, "waiting-staging-finalize"),
+    releaseMs: sumStageDurations(stageTimings, ["publishing-release", "waiting-release-job"]),
+    oracleVerifyMs: stageDuration(stageTimings, "verifying-oracle-only"),
+    cloudbaseMirrorMs: stageDuration(stageTimings, "cloudbase-preflight-and-mirror"),
+    dualSourceVerifyMs: stageDuration(stageTimings, "verifying-cloudbase-and-dual-source"),
+    totalKnownMs: sumStageDurations(stageTimings, Object.keys(stageTimings || {})),
+  };
+}
+
 class PublisherRun {
   constructor(options) {
     this.mode = options.mode || "routine";
@@ -372,6 +415,7 @@ class PublisherRun {
       cloudbaseRelation: null,
       cloudbaseReceipt: null,
       manualPackage: null,
+      stageTimings: {},
       paths: {
         state: this.statePath,
         events: this.eventsPath,
@@ -383,6 +427,7 @@ class PublisherRun {
       },
       summary: {},
     });
+    this.stageStartedAt = {};
     if (this.mode === "resume") {
       this.originalMode = this.state.originalMode && this.state.originalMode !== "resume"
         ? this.state.originalMode
@@ -413,18 +458,26 @@ class PublisherRun {
   startStage(stage) {
     const index = STAGE_INDEX.get(stage);
     const label = STAGES[index] && STAGES[index][1] || stage;
+    this.stageStartedAt[stage] = { ms: Date.now(), at: nowIso() };
     console.log(`[${index + 1}/${STAGES.length}] ${label}`);
-    this.event("stage-start", { stage, index: index + 1, label });
-    this.save({ currentStage: stage });
+    this.event("stage-start", { stage, index: index + 1, label, startedAt: this.stageStartedAt[stage].at });
+    this.save({ currentStage: stage, currentStageStartedAt: this.stageStartedAt[stage].at });
   }
 
   completeStage(stage, summary) {
     const completed = new Set(this.state.completedStages || []);
     completed.add(stage);
-    this.event("stage-complete", { stage, summary: summary || null });
+    const started = this.stageStartedAt[stage] || {};
+    const finishedAt = nowIso();
+    const durationMs = started.ms ? Date.now() - started.ms : null;
+    const label = STAGES[STAGE_INDEX.get(stage)] && STAGES[STAGE_INDEX.get(stage)][1] || stage;
+    const stageTimings = Object.assign({}, this.state.stageTimings || {});
+    stageTimings[stage] = { stage, label, startedAt: started.at || "", finishedAt, durationMs };
+    this.event("stage-complete", { stage, durationMs, summary: summary || null });
     this.save({
       completedStages: Array.from(completed),
       summary: Object.assign({}, this.state.summary || {}, summary || {}),
+      stageTimings,
     });
   }
 
@@ -448,6 +501,21 @@ class PublisherRun {
   }
 
   fail(error) {
+    const currentStage = this.state.currentStage;
+    if (currentStage && !(this.state.stageTimings || {})[currentStage]) {
+      const started = this.stageStartedAt[currentStage] || {};
+      const label = STAGES[STAGE_INDEX.get(currentStage)] && STAGES[STAGE_INDEX.get(currentStage)][1] || currentStage;
+      const stageTimings = Object.assign({}, this.state.stageTimings || {});
+      stageTimings[currentStage] = {
+        stage: currentStage,
+        label,
+        startedAt: started.at || "",
+        finishedAt: nowIso(),
+        durationMs: started.ms ? Date.now() - started.ms : null,
+        status: "failed",
+      };
+      this.save({ stageTimings });
+    }
     const payload = redact({
       success: false,
       runId: this.runId,
@@ -457,6 +525,8 @@ class PublisherRun {
       stack: error.stack,
       failedAt: nowIso(),
       currentStage: this.state.currentStage,
+      stageTimings: this.state.stageTimings || {},
+      performanceSummary: buildPerformanceSummary(this.state.stageTimings || {}),
       status: errorDiagnostics(error).status,
       signal: errorDiagnostics(error).signal,
       invocation: errorDiagnostics(error).invocation,
@@ -493,6 +563,8 @@ class PublisherRun {
         diffReport: this.diffReportPath,
         cloudbaseReceipt: this.cloudbaseReceiptPath,
       },
+      stageTimings: this.state.stageTimings || {},
+      performanceSummary: buildPerformanceSummary(this.state.stageTimings || {}),
     }, payload || {}));
     writeJsonAtomic(this.receiptPath, receipt);
     const terminalStatus = receipt.status || (receipt.success ? "completed" : "partial-success");
@@ -741,7 +813,7 @@ function requireSession() {
   const sessionPath = path.join(PROJECT_ROOT, "tools", "fosu-sync-client", ".session", "session.json");
   const stat = fs.existsSync(sessionPath) ? fs.statSync(sessionPath) : null;
   if (!stat || stat.size < 20) {
-    const error = new Error("Education session is missing or invalid. Run npm run login.");
+    const error = new Error("session 已过期，请执行 npm run sync:login 后重试");
     error.code = "SESSION_EXPIRED";
     throw error;
   }
@@ -753,7 +825,7 @@ function verifyEducationSession() {
   if (process.env.FOSU_PUBLISHER_MOCK === "1") return local;
   runNodeScript(path.join(SYNC_CLIENT_DIR, "verify-session.js"), [], {
     code: "SESSION_EXPIRED",
-    timeoutMs: 180000,
+    timeoutMs: Number(process.env.FOSU_SESSION_VERIFY_TIMEOUT_MS || 45000),
   });
   return Object.assign({}, local, { verified: true });
 }
@@ -853,17 +925,25 @@ function buildCrawlArgs(mode, args, run, term) {
   const action = "crawl:daily";
   const catalogPolicy = mode === "full" ? "network-only" : "reuse-validated";
   const negativeCachePolicy = mode === "full" ? "revalidate" : "ignore";
+  const progressPolicy = mode === "full" || args["no-resume"] ? "ignore" : "resume";
   const base = [
     action,
     `--term=${term}`,
     `--output=${output}`,
     `--catalog-policy=${catalogPolicy}`,
     "--schedule-policy=network-only",
-    "--progress-policy=ignore",
+    `--progress-policy=${progressPolicy}`,
     `--negative-cache-policy=${negativeCachePolicy}`,
     "--allow-derived",
     "--class-scope=all",
   ];
+  const grades = args.grades || args.grade;
+  if (grades) base.push(`--grades=${grades}`);
+  if (args.concurrency) base.push(`--concurrency=${args.concurrency}`);
+  if (args["delay-ms"]) base.push(`--delay-ms=${args["delay-ms"]}`);
+  if (args.include) base.push(`--include=${args.include}`);
+  if (args["college-codes"]) base.push(`--college-codes=${args["college-codes"]}`);
+  if (args["major-codes"]) base.push(`--major-codes=${args["major-codes"]}`);
   if (mode === "full") {
     if (args["term-start-date"]) base.push(`--term-start-date=${args["term-start-date"]}`);
     if (args["total-weeks"]) base.push(`--total-weeks=${args["total-weeks"]}`);
@@ -1663,6 +1743,8 @@ async function main(argv = process.argv.slice(2)) {
     console.log([
       "Usage:",
       "  npm run sync:publish",
+      "  npm run sync:publish -- --incremental --term=2026-2027-1 --grade=2026 --concurrency=8 --resume",
+      "  npm run sync:publish -- --full --term=2026-2027-1 --term-start-date=YYYY-MM-DD --total-weeks=20 --grade=2026",
       "  npm run sync:publish -- --mode=full --term=2026-2027-1 --term-start-date=YYYY-MM-DD --total-weeks=20",
       "  npm run sync:publish -- --mode=resume --run-id=<runId>",
       "  npm run sync:publish -- --mode=mirror-only",
@@ -1670,8 +1752,7 @@ async function main(argv = process.argv.slice(2)) {
     ].join(os.EOL));
     return null;
   }
-  const requestedMode = String(args.mode || "routine").trim();
-  const mode = requestedMode === "export-cloudbase" ? "export-cloudbase" : requestedMode;
+  const mode = normalizeRequestedMode(args);
   if (args.deprecated) {
     console.warn(`[deprecated] ${args.deprecated} is deprecated. Use npm run sync:publish instead.`);
   }
@@ -1764,6 +1845,7 @@ module.exports = {
   STAGES,
   PublisherRun,
   acquireLock,
+  buildPerformanceSummary,
   buildCrawlArgs,
   buildMockStaging,
   checkCampusNetworkForPublisher,
@@ -1773,6 +1855,7 @@ module.exports = {
   inspectPublisherLock,
   isPublisherCommandLine,
   main,
+  normalizeRequestedMode,
   parseArgs,
   processIsAlive,
   redact,

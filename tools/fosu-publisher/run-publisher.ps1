@@ -158,7 +158,7 @@ function Show-FailureSummary {
     Write-LauncherLog "npm run publisher:token:setup"
   } elseif ($codeText -eq "SESSION_EXPIRED") {
     Write-LauncherLog "教务登录态已失效。请运行："
-    Write-LauncherLog "npm run login"
+    Write-LauncherLog "npm run sync:login"
   } elseif ($codeText -eq "CAMPUS_NETWORK_BLOCKED" -or $codeText -eq "CAMPUS_NETWORK_CHECK_FAILED") {
     Write-LauncherLog "请连接校园网或 EasyConnect 后重试。"
   } elseif ($codeText -eq "PUBLISHER_LOCKED") {
