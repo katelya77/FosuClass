@@ -1,6 +1,16 @@
 const knowledgeBase = require("../data/fosuKnowledgeBase");
 
 const MIN_RELIABLE_SCORE = 5;
+const HIGH_RISK_DETAIL_PATTERN = /(电话|联系方式|开放时间|几点开|几点关|上班时间|办公地点|办公室|窗口|材料|流程|费用|挂失|补办|办理)/;
+const HIGH_RISK_SUBJECTS = [
+  { pattern: /(校医院|医务室|门诊|医保)/, support: /(校医院|医务室|门诊|医保)/ },
+  { pattern: /(校园卡|饭卡|一卡通)/, support: /(校园卡|饭卡|一卡通)/ },
+  { pattern: /(校园网|网络|wifi|上网)/i, support: /(校园网|网络|wifi|上网)/i },
+  { pattern: /(宿舍|寝室)/, support: /(宿舍|寝室)/ },
+  { pattern: /(后勤|报修|水电|维修)/, support: /(后勤|报修|水电|维修)/ },
+  { pattern: /(校车|班车|通勤车)/, support: /(校车|班车|通勤车)/ },
+  { pattern: /(办公室|办公地点|窗口)/, support: /(办公室|办公地点|窗口)/ },
+];
 
 const CATEGORY_HINTS = {
   school_overview: ["佛山大学", "佛大", "学校", "概况", "简介"],
@@ -157,6 +167,23 @@ function buildDocSearchText(doc) {
   ].join(" "));
 }
 
+function isHighRiskDetailQuery(query) {
+  const value = normalizeText(query);
+  if (!value) return false;
+  return HIGH_RISK_DETAIL_PATTERN.test(value) ||
+    HIGH_RISK_SUBJECTS.some((item) => item.pattern.test(value));
+}
+
+function hasSupportedHighRiskSubject(doc, query) {
+  const value = normalizeText(query);
+  if (!isHighRiskDetailQuery(value)) return true;
+  const docText = buildDocSearchText(doc);
+  const unsupportedSubject = HIGH_RISK_SUBJECTS.some((item) => item.pattern.test(value) && !item.support.test(docText));
+  if (unsupportedSubject) return false;
+  if (HIGH_RISK_DETAIL_PATTERN.test(value) && doc.category === "school_overview") return false;
+  return true;
+}
+
 function addScore(state, amount, reason) {
   if (!amount) return;
   state.score += amount;
@@ -242,7 +269,7 @@ function isCampusKnowledgeQuery(query) {
   const value = normalizeText(query);
   if (!value) return false;
   if (isDynamicToolQuery(value)) return false;
-  return /(佛大|佛山大学|fosu|校区|仙溪|江湾|河滨|教务|信息门户|统一身份|图书馆|校园卡|校园网|宿舍|后勤|报修|团委|第二课堂|易班|i志愿|学院|部门|招生|就业|招聘|研究生|学报|校园|办事|学生事务|地址|在哪里|怎么进|怎么用|入口|官网|通知|公告|小佛ai|知识库|期刊|投稿)/i.test(value);
+  return /(佛大|佛山大学|fosu|校区|仙溪|江湾|河滨|教务|信息门户|统一身份|图书馆|校医院|医务室|校园卡|校园网|宿舍|后勤|报修|电话|联系方式|开放时间|办公室|办事窗口|团委|第二课堂|易班|i志愿|学院|部门|招生|就业|招聘|研究生|学报|校园|办事|学生事务|地址|在哪里|怎么进|怎么用|入口|官网|通知|公告|小佛ai|知识库|期刊|投稿)/i.test(value);
 }
 
 function inferPreferredEntryType(query) {
@@ -254,6 +281,7 @@ function inferPreferredEntryType(query) {
 function hasIntentAlignedResult(doc, query) {
   if (!doc) return false;
   const queryNorm = normalizeText(query);
+  if (!hasSupportedHighRiskSubject(doc, query)) return false;
   if (isNavigationQuery(query)) return doc.entryType === "navigation";
   if (isKnowledgeIntroQuery(query)) return ["knowledge", "faq"].indexOf(doc.entryType) >= 0 || /(校区|学院|部门|概况|图书馆)/.test(queryNorm);
   if (isHelpQuery(query)) return ["app_help", "schedule_help", "weather_help"].indexOf(doc.entryType) >= 0 || doc.category === "app_help";
