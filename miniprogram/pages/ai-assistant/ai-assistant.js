@@ -16,6 +16,7 @@ const TASK_ACTION_DEBOUNCE_MS = 180;
 const SEND_DEDUPE_MS = 420;
 const PRIVACY_SUMMARY_TEXT = "仅发送课程名、教师、教室、星期、节次、教学周；不发送学号、姓名、密码或原始文件。";
 const MAX_MESSAGE_COUNT = 20;
+const PERSONAL_SYNC_URL = "/pages/personal-sync/personal-sync";
 const PERSONAL_SYNC_XLS_URL = "/pages/personal-sync/personal-sync?tab=xls";
 const ICON_BASE = "/assets/icons/ai-tasks";
 const ICONS = {
@@ -259,18 +260,33 @@ const AI_CAPABILITY_REGISTRY = [
     message: "课表数据是否最新？",
   },
   {
-    id: "xlsImport",
+    id: "personalSync",
     kind: CAPABILITY_KINDS.NAVIGATE,
     iconPath: ICONS.xls,
-    label: "导入 XLS",
-    quickLabel: "导入 XLS",
+    label: "个人课表同步",
+    quickLabel: "导入课表",
     className: "xls",
     taskGroup: "个人课表",
     taskLabel: "导入个人课表",
-    taskDesc: "了解导入方式",
+    taskDesc: "打开同步主入口",
     guideGroup: "个人课表",
     guideExamples: ["如何导入个人课表"],
+    url: PERSONAL_SYNC_URL,
+    message: "如何导入个人课表",
+    fallbackMessage: "如何导入个人课表",
+  },
+  {
+    id: "xlsImport",
+    kind: CAPABILITY_KINDS.NAVIGATE,
+    iconPath: ICONS.xls,
+    label: "XLS 文件导入",
+    quickLabel: "XLS导入",
+    className: "xls",
+    taskGroup: "个人课表",
+    taskLabel: "XLS 文件导入",
+    taskDesc: "表格/文件导入入口",
     url: PERSONAL_SYNC_XLS_URL,
+    message: "XLS文件导入怎么用？",
     fallbackMessage: "如何导入个人课表",
   },
   {
@@ -413,7 +429,7 @@ const QUICK_ACTIONS = [
   buildQuickAction("classSchedule", "class"),
   buildQuickAction("classroomOccupancy", "room"),
   buildQuickAction("campusWeather", "weather"),
-  buildQuickAction("xlsImport", "xls"),
+  buildQuickAction("personalSync", "xls"),
 ];
 
 const WELCOME_EXAMPLES = [
@@ -433,7 +449,7 @@ function buildTaskPanelGroups() {
     },
     {
       title: "个人课表",
-      abilityIds: ["today", "tomorrow", "weekSchedule", "xlsImport", "dataStatus"],
+      abilityIds: ["today", "tomorrow", "weekSchedule", "personalSync", "dataStatus"],
     },
     {
       title: "实时信息",
@@ -445,7 +461,7 @@ function buildTaskPanelGroups() {
     },
     {
       title: "使用与数据",
-      abilityIds: ["appHelp", "xlsImport", "enableFloat", "askBetter", "termSync"],
+      abilityIds: ["appHelp", "personalSync", "enableFloat", "askBetter", "termSync"],
     },
   ].map((group) => ({
     title: group.title,

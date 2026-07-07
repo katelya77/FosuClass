@@ -204,7 +204,7 @@ const MATRIX = [
     intentName: "help",
     cardType: "import_guide",
     answer: /导入个人课表/,
-    actions: ["打开导入入口", "复制导入说明"],
+    actions: ["打开个人课表同步", "查看 XLS 文件导入", "复制导入说明", "继续问今天课程"],
   },
   {
     text: "小佛能做什么",
