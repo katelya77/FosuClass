@@ -60,7 +60,8 @@ global.wx.mockRequest = (options) => {
 
 const aiAssistantService = require("../miniprogram/services/aiAssistantService");
 const contextManager = require("../miniprogram/services/xiaofuContextManager");
-require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+const ragRetriever = require("../miniprogram/services/ragRetriever");
+const aiPage = require("../miniprogram/pages/ai-assistant/ai-assistant.js");
 
 function baseContext() {
   const contextSlots = contextManager.createEmptyContextSlots();
@@ -153,6 +154,7 @@ const MATRIX = [
     tool: "get_campus_weather",
     cardType: "weather_card",
     answer: /仙溪校区天气|降雨概率|带伞/,
+    actions: ["复制天气建议", "重新获取天气", "继续问带伞"],
   },
   {
     text: "今天要不要带伞",
@@ -160,7 +162,7 @@ const MATRIX = [
     tool: "get_campus_weather",
     cardType: "weather_card",
     answer: /天气|降雨概率|带伞/,
-    actions: ["复制天气建议", "重新获取天气"],
+    actions: ["复制天气建议", "重新获取天气", "继续问带伞", "明天适合跑步吗"],
   },
   {
     text: "下一节课要带伞吗",
@@ -195,6 +197,7 @@ const MATRIX = [
     intentName: "school_knowledge",
     cardType: "school_knowledge",
     answer: /仙溪|江湾|河滨/,
+    actions: ["复制回答", "打开校园地图", "复制来源", "继续追问"],
   },
   {
     text: "如何导入个人课表",
@@ -226,6 +229,7 @@ const MATRIX = [
     intentName: "school_knowledge",
     cardType: "school_knowledge",
     answer: /学院|部门|官网/,
+    actions: ["复制回答", "复制来源", "继续追问"],
   },
   {
     text: "佛大有哪些学院和部门？",
@@ -239,6 +243,20 @@ const MATRIX = [
     cardType: "navigation",
     answer: /图书馆/,
     actions: ["复制入口", "复制来源"],
+  },
+  {
+    text: "佛大校医院电话是多少",
+    intentName: "school_knowledge",
+    cardType: "school_knowledge",
+    answer: /知识库暂未收录可靠信息|不会.*编造电话/,
+    noReliableActions: true,
+  },
+  {
+    text: "校医院开放时间",
+    intentName: "school_knowledge",
+    cardType: "school_knowledge",
+    answer: /知识库暂未收录可靠信息|不会.*开放时间/,
+    noReliableActions: true,
   },
   {
     text: "常用系统入口",
@@ -261,6 +279,47 @@ const MATRIX = [
   },
 ];
 
+function visibleDisplayText(response) {
+  const messages = aiPage.normalizeMessagesForDisplay([
+    {
+      id: "assistant-visible-test",
+      role: "assistant",
+      content: response.answer || "",
+      cards: response.cards || [],
+      suggestions: response.suggestions || [],
+      toolCalls: response.toolCalls || [],
+      evidence: response.evidence || null,
+      safety: response.safety || null,
+      metrics: response.metrics || null,
+    },
+  ], {});
+  const message = messages[0] || {};
+  return JSON.stringify({
+    content: message.content,
+    evidenceText: message.evidenceText,
+    safetyText: message.displaySafety && message.displaySafety.text || "",
+    toolLabels: (message.displayToolCalls || []).map((tool) => tool.displayText),
+    cards: (message.displayCards || []).map((card) => ({
+      title: card.title,
+      subtitle: card.subtitle,
+      typeLabel: card.typeLabel,
+      badges: card.badges,
+      items: card.visibleItems,
+      actions: (card.actions || []).map((action) => action.label),
+      disclaimer: card.disclaimer,
+    })),
+    suggestions: message.suggestions,
+  });
+}
+
+function assertNoVisibleTechnicalLeak(response, text) {
+  const visibleText = visibleDisplayText(response);
+  assert(
+    !/(intentname|ragmatchedreason|matchedreason|handler|cardtype|\[object object\])/i.test(visibleText),
+    `${text} should not expose internal routing or RAG debug fields: ${visibleText}`
+  );
+}
+
 async function run() {
   const page = mockEnv.createPageInstance();
   const covered = new Set(MATRIX.map((item) => item.text));
@@ -274,6 +333,7 @@ async function run() {
   for (const item of MATRIX) {
     const response = await aiAssistantService.chat(item.text, baseContext());
     assert(response, `expected response for ${item.text}`);
+    assertNoVisibleTechnicalLeak(response, item.text);
     assert.strictEqual(response.metrics && response.metrics.intentName, item.intentName, `unexpected intent for ${item.text}`);
     assert.match(response.answer || "", item.answer, `unexpected answer for ${item.text}`);
     if (item.noCards) {
@@ -287,6 +347,9 @@ async function run() {
           assert(labels.includes(label), `${item.text} should expose action ${label}; got ${labels.join(", ")}`);
         });
       }
+      if (item.noReliableActions) {
+        assert.strictEqual((response.cards[0].actions || []).length, 0, `${item.text} should not expose actions for unreliable knowledge`);
+      }
     }
     const names = (response.toolCalls || []).map((tool) => tool.name);
     if (item.tool) {
@@ -296,6 +359,9 @@ async function run() {
       assert(!names.includes("search_school_schedule_local"), `${item.text} should not use schedule object search`);
     }
   }
+
+  const retrieval = ragRetriever.searchKnowledge("图书馆入口在哪里");
+  assert(retrieval.top && retrieval.top.matchedReason, "RAG search should keep matchedReason for internal diagnostics");
 
   console.log("test-ai-built-in-example-matrix passed");
 }
