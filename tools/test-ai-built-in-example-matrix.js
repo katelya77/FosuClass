@@ -154,7 +154,7 @@ const MATRIX = [
     tool: "get_campus_weather",
     cardType: "weather_card",
     answer: /仙溪校区天气|降雨概率|带伞/,
-    actions: ["复制天气建议", "重新获取天气", "继续问带伞"],
+    actions: ["重新获取天气", "继续问带伞"],
   },
   {
     text: "今天要不要带伞",
@@ -162,7 +162,7 @@ const MATRIX = [
     tool: "get_campus_weather",
     cardType: "weather_card",
     answer: /天气|降雨概率|带伞/,
-    actions: ["复制天气建议", "重新获取天气", "继续问带伞", "明天适合跑步吗"],
+    actions: ["重新获取天气", "继续问带伞", "明天适合跑步吗"],
   },
   {
     text: "下一节课要带伞吗",
@@ -176,35 +176,35 @@ const MATRIX = [
     intentName: "schedule_status",
     cardType: "schedule_status",
     answer: /课表数据状态|更新时间|最新/,
-    actions: ["查看全校课表", "复制状态"],
+    actions: ["查看全校课表"],
   },
   {
     text: "教务系统在哪里",
     intentName: "navigation",
     cardType: "navigation",
     answer: /教务/,
-    actions: ["复制入口", "复制来源"],
+    actions: ["打开教务部官网", "继续追问"],
   },
   {
     text: "图书馆入口在哪里",
     intentName: "navigation",
     cardType: "navigation",
     answer: /图书馆/,
-    actions: ["复制入口", "复制来源"],
+    actions: ["打开图书馆官网", "继续追问"],
   },
   {
     text: "佛大有哪些校区",
     intentName: "school_knowledge",
     cardType: "school_knowledge",
     answer: /仙溪|江湾|河滨/,
-    actions: ["复制回答", "打开校园地图", "复制来源", "继续追问"],
+    actions: ["打开校园地图", "继续追问"],
   },
   {
     text: "如何导入个人课表",
     intentName: "help",
     cardType: "import_guide",
     answer: /导入个人课表/,
-    actions: ["打开个人课表同步", "查看 XLS 文件导入", "复制导入说明", "继续问今天课程"],
+    actions: ["打开个人课表同步", "查看 XLS 文件导入", "继续问今天课程"],
   },
   {
     text: "小佛能做什么",
@@ -229,7 +229,7 @@ const MATRIX = [
     intentName: "school_knowledge",
     cardType: "school_knowledge",
     answer: /学院|部门|官网/,
-    actions: ["复制回答", "复制来源", "继续追问"],
+    actions: ["打开学校官网", "继续追问"],
   },
   {
     text: "佛大有哪些学院和部门？",
@@ -242,7 +242,7 @@ const MATRIX = [
     intentName: "navigation",
     cardType: "navigation",
     answer: /图书馆/,
-    actions: ["复制入口", "复制来源"],
+    actions: ["打开图书馆官网", "继续追问"],
   },
   {
     text: "佛大校医院电话是多少",
@@ -347,6 +347,10 @@ async function run() {
           assert(labels.includes(label), `${item.text} should expose action ${label}; got ${labels.join(", ")}`);
         });
       }
+      (response.cards[0].actions || []).forEach((action) => {
+        assert.notStrictEqual(action.type, "copy", `${item.text} should not expose copy action type`);
+        assert(!/^复制/.test(action.label || ""), `${item.text} should not expose copy action label: ${action.label}`);
+      });
       if (item.noReliableActions) {
         assert.strictEqual((response.cards[0].actions || []).length, 0, `${item.text} should not expose actions for unreliable knowledge`);
       }
