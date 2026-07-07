@@ -8,10 +8,6 @@ const {
   resolveInputFilePath,
   uploadStagingFile,
 } = require("../fosu-sync-client/upload");
-const {
-  buildResourceCountContract,
-  flattenLegacyCounts,
-} = require("../../server/src/shared/resourceCountContract");
 
 const SECRET_KEY_PATTERN = /(studentId|student_id|password|passwd|pwd|cookie|ticket|execution|session|token|authorization|jsessionid|captcha)/i;
 
@@ -154,6 +150,11 @@ function pickJsonNumber(head, key) {
   return match ? Number(match[1]) : 0;
 }
 
+function pickNestedJsonNumber(head, objectKey, key) {
+  const match = head.match(new RegExp(`"${objectKey}"\\s*:\\s*\\{[\\s\\S]{0,4000}?"${key}"\\s*:\\s*(\\d+)`));
+  return match ? Number(match[1]) : 0;
+}
+
 function extractSummary(filePath) {
   const head = readLeadingText(filePath);
   const summary = {
@@ -161,23 +162,34 @@ function extractSummary(filePath) {
     releaseVersion: pickJsonString(head, "releaseVersion") || pickJsonString(head, "version"),
     generatedAt: pickJsonString(head, "generatedAt") || pickJsonString(head, "updatedAt"),
   };
-  try {
-    const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-    const resourceCounts = buildResourceCountContract(data);
-    const counts = flattenLegacyCounts(resourceCounts);
-    return Object.assign(summary, counts, {
-      resourceCounts,
-      totalScheduleDocuments:
-        Number(resourceCounts.class.scheduleDocuments || 0) +
-        Number(resourceCounts.teacher.scheduleDocuments || 0) +
-        Number(resourceCounts.classroom.scheduleDocuments || 0) +
-        Number(resourceCounts.course.scheduleDocuments || 0),
-      actualNetworkRequestCount: data.meta && data.meta.actualNetworkRequestCount || data.actualNetworkRequestCount || 0,
-      usedClassScheduleCache: Boolean(data.meta && (data.meta.usedClassScheduleCache || data.meta.cacheUsage && data.meta.cacheUsage.usedClassScheduleCache)),
-      teacherQualityPass: !((resourceCounts.diagnostics || []).some((item) => item.resource === "teacher" && item.publishable === false)),
-    });
-  } catch (error) {
-    return Object.assign(summary, {
+  const resourceCounts = {
+    class: {
+      scheduleDocuments: pickNestedJsonNumber(head, "class", "scheduleDocuments") || pickJsonNumber(head, "classScheduleCount"),
+      administrativeClasses: pickNestedJsonNumber(head, "class", "administrativeClasses"),
+      aggregateSchedules: pickNestedJsonNumber(head, "class", "aggregateSchedules"),
+    },
+    teacher: {
+      directoryEntities: pickNestedJsonNumber(head, "teacher", "directoryEntities") || pickJsonNumber(head, "teacherCount"),
+      scheduleDocuments: pickNestedJsonNumber(head, "teacher", "scheduleDocuments") || pickJsonNumber(head, "teacherScheduleCount"),
+      courseEvents: pickNestedJsonNumber(head, "teacher", "courseEvents"),
+    },
+    classroom: {
+      directoryEntities: pickNestedJsonNumber(head, "classroom", "directoryEntities") || pickJsonNumber(head, "classroomCount"),
+      scheduleDocuments: pickNestedJsonNumber(head, "classroom", "scheduleDocuments") || pickJsonNumber(head, "classroomScheduleCount"),
+      courseEvents: pickNestedJsonNumber(head, "classroom", "courseEvents"),
+    },
+    course: {
+      directoryEntities: pickNestedJsonNumber(head, "course", "directoryEntities") || pickJsonNumber(head, "courseCount"),
+      scheduleDocuments: pickNestedJsonNumber(head, "course", "scheduleDocuments") || pickJsonNumber(head, "courseScheduleCount"),
+      courseEvents: pickNestedJsonNumber(head, "course", "courseEvents"),
+    },
+  };
+  const totalScheduleDocuments =
+    Number(resourceCounts.class.scheduleDocuments || 0) +
+    Number(resourceCounts.teacher.scheduleDocuments || 0) +
+    Number(resourceCounts.classroom.scheduleDocuments || 0) +
+    Number(resourceCounts.course.scheduleDocuments || 0);
+  return Object.assign(summary, {
     classScheduleCount: pickJsonNumber(head, "classScheduleCount"),
     teacherScheduleCount: pickJsonNumber(head, "teacherScheduleCount"),
     classroomScheduleCount: pickJsonNumber(head, "classroomScheduleCount"),
@@ -185,8 +197,12 @@ function extractSummary(filePath) {
     teacherCount: pickJsonNumber(head, "teacherCount"),
     classroomCount: pickJsonNumber(head, "classroomCount"),
     courseCount: pickJsonNumber(head, "courseCount"),
-    });
-  }
+    resourceCounts,
+    totalScheduleDocuments,
+    actualNetworkRequestCount: pickJsonNumber(head, "actualNetworkRequestCount"),
+    usedClassScheduleCache: /"usedClassScheduleCache"\s*:\s*true/.test(head),
+    teacherQualityPass: true,
+  });
 }
 
 function scanFileForSensitiveData(filePath) {

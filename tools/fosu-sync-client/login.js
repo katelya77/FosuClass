@@ -361,7 +361,7 @@ async function login() {
     console.error("💡 提示：");
     console.error("   - 请确认是否处于校园网 / 校园 VPN 环境（100.fosu.edu.cn 必须能正常解析和访问）");
     console.error("   - 请确认是否切换到账号登录，且已正确完成验证码或滑块验证等安全核验");
-    console.error("   - 请重新执行 npm run login");
+    console.error("   - 请重新执行 npm run sync:login");
   } finally {
     await browser.close();
     console.log("浏览器已关闭。");

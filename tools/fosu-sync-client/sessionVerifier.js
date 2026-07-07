@@ -15,7 +15,7 @@ function createError(code, message) {
 }
 
 function getExpiredSessionTip() {
-  return "Session 已失效，请运行 npm run login";
+  return "session 已过期，请执行 npm run sync:login 后重试";
 }
 
 function hasLoginUrl(url) {

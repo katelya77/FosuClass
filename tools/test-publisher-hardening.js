@@ -202,6 +202,12 @@ async function run() {
   assert(publishSource.includes("ECONNABORTED"), "publisher should classify write timeouts as retryable");
   assert(publishSource.includes("staging upload finalize"), "publisher should wait for staging finalize jobs before publishing");
   assert(publishSource.includes("staging-finalize-reconcile"), "publisher resume should reconcile old finalize-wait stages");
+  const incrementalArgs = publisher.parseArgs(["--incremental", "--term=2026-2027-1", "--grade=2026", "--concurrency=8", "--resume"]);
+  assert.strictEqual(publisher.normalizeRequestedMode(incrementalArgs), "routine");
+  const crawlPlan = publisher.buildCrawlArgs("routine", incrementalArgs, { runDir: path.join(root, ".local", "test-run") }, "2026-2027-1");
+  assert(crawlPlan.args.includes("--progress-policy=resume"));
+  assert(crawlPlan.args.includes("--grades=2026"));
+  assert(crawlPlan.args.includes("--concurrency=8"));
 
   const syncSource = fs.readFileSync(path.join(root, "tools", "fosu-sync-client", "sync.js"), "utf8");
   assert(syncSource.includes("loadSyncClientEnv()"), "sync.js should load explicit client .env");
@@ -282,9 +288,10 @@ async function run() {
   assert(launcherSource.includes("publisher-lock-dry-run"));
   assert(launcherSource.includes("PUBLISHER_LOCKED"));
   assert(launcherSource.includes("checking-campus-network"));
-  assert(launcherSource.includes("npm run login"));
+  assert(launcherSource.includes("npm run sync:login"));
 
   const verifySessionSource = fs.readFileSync(path.join(root, "tools", "fosu-sync-client", "verify-session.js"), "utf8");
+  assert(verifySessionSource.includes("npm run sync:login"));
   assert(!verifySessionSource.toLowerCase().includes("cookie"));
 
   console.log("test-publisher-hardening passed");

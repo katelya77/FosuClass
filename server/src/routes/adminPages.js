@@ -2629,6 +2629,52 @@ const adminConsoleHtml = `<!doctype html>
       color: var(--primary);
       background: var(--primary-soft);
     }
+    #section-sync,
+    #section-sync * {
+      min-width: 0;
+      box-sizing: border-box;
+    }
+    .sync-core-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+    .sync-core-actions button {
+      min-height: 42px;
+      width: 100%;
+      justify-content: center;
+    }
+    .sync-secondary-heading {
+      margin: 18px 0 10px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+    .sync-copy-value {
+      display: inline-flex;
+      align-items: center;
+      max-width: 100%;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .sync-copy-value code,
+    .sync-copy-value span {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      min-width: 0;
+      max-width: 100%;
+    }
+    .sync-copy-value button {
+      flex: 0 0 auto;
+      padding: 2px 6px;
+      font-size: 11px;
+      min-height: 22px;
+    }
     .sync-ops-section {
       display: flex;
       flex-direction: column;
@@ -2721,6 +2767,18 @@ const adminConsoleHtml = `<!doctype html>
       color: var(--text);
       white-space: pre-wrap;
       overflow-wrap: anywhere;
+    }
+    @media (max-width: 720px) {
+      .sync-core-actions {
+        grid-template-columns: 1fr;
+      }
+      .sync-section-heading {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .sync-section-nav {
+        position: static;
+      }
     }
     .sync-main-col {
       display: flex;
@@ -3698,6 +3756,11 @@ const adminConsoleHtml = `<!doctype html>
           <div class="stats-grid" id="syncStatsGrid">
           <!-- 同步状态卡片 -->
         </div>
+          <div class="sync-core-actions" aria-label="同步中心主操作">
+            <button type="button" class="primary" id="copyPublisherCommandTopBtn">生成本机一键同步命令</button>
+            <button type="button" class="secondary" id="syncRefreshTopBtn">刷新状态</button>
+            <button type="button" class="secondary" id="syncFocusPendingBtn">查看失败/待处理项</button>
+          </div>
 
         </div>
 
@@ -3727,6 +3790,8 @@ const adminConsoleHtml = `<!doctype html>
           </div>
           <div id="syncActiveResourceContract" class="sync-resource-contract"></div>
         </div>
+
+        <div class="sync-secondary-heading">二级区域：上传、Relay、Release 历史、技术详情、日志与清理</div>
 
         <div class="card" id="static-release-sync-panel" style="margin-bottom:16px;">
           <div class="section-title-row">
@@ -7842,7 +7907,16 @@ const adminConsoleHtml = `<!doctype html>
         var error = latest && latest.error || {};
         var oracle = receipt.oracle || receipt.oracleResult || {};
         var cloudbase = receipt.cloudbase || receipt.cloudbaseResult || {};
+        var perf = receipt.performanceSummary || {};
+        function durationText(ms) {
+          var value = Number(ms);
+          if (!Number.isFinite(value) || value < 0) return "-";
+          if (value < 1000) return Math.round(value) + "ms";
+          if (value < 60000) return (value / 1000).toFixed(1) + "s";
+          return Math.floor(value / 60000) + "m " + Math.round((value % 60000) / 1000) + "s";
+        }
         var overall = receipt.overallStatus || receipt.status || runState.status || (error.message ? "failed" : "waiting");
+        var hashUploadMs = perf.hashAndDiffMs == null && perf.gzipAndUploadMs == null ? null : (Number(perf.hashAndDiffMs || 0) + Number(perf.gzipAndUploadMs || 0));
         var rows = [
           ["本地采集", receipt.crawlDurationMs ? ("完成 · " + Math.round(receipt.crawlDurationMs / 1000) + "s") : (runState.stage || "等待运行")],
           ["Staging 上传", receipt.stagingUploadId || receipt.stagingStatus || "-"],
@@ -7850,6 +7924,13 @@ const adminConsoleHtml = `<!doctype html>
           ["OpenResty", receipt.openRestyStatus || oracle.openRestyStatus || "-"],
           ["CloudBase", cloudbase.status || receipt.cloudbaseStatus || receipt.cloudbaseReleaseVersion || "-"],
           ["双源一致性", receipt.dualSourceConsistent === true ? "一致" : (receipt.dualSourceConsistent === false ? "不一致" : "-")],
+          ["session 检查", durationText(perf.sessionCheckMs)],
+          ["100 网采集", durationText(perf.directoryAndScheduleFetchMs)],
+          ["规范化/生成", durationText(perf.normalizeAndStagingBuildMs)],
+          ["hash/gzip/上传", durationText(hashUploadMs)],
+          ["服务端校验", durationText(perf.serverValidationMs)],
+          ["Release 发布", durationText(perf.releaseMs)],
+          ["CloudBase 镜像", durationText(perf.cloudbaseMirrorMs)],
         ];
         var grid = $("publisherStatusGrid");
         if (grid) {
@@ -7904,7 +7985,7 @@ const adminConsoleHtml = `<!doctype html>
             state.syncStatus = res.data;
             renderSyncStatusGrid();
             if ($("syncLastRefreshAt")) {
-              $("syncLastRefreshAt").textContent = "鏈€杩戝埛鏂帮細" + formatDate(new Date().toISOString());
+              $("syncLastRefreshAt").textContent = "最近刷新：" + formatDate(new Date().toISOString());
             }
             var defaultTerm = state.syncStatus ? state.syncStatus.semester : (state.dashboard && state.dashboard.currentSemester) || "";
             if (!state.termSelectsInitialized) {
@@ -8022,26 +8103,29 @@ const adminConsoleHtml = `<!doctype html>
           $("stagingPublishNeedText").textContent = data.stagingSameAsActive ? "无需发布" : (data.stagingNeedsPublish ? "需要发布" : "等待上传");
         }
         
+        var hashStateText = {
+          consistent: "一致",
+          different: "不一致",
+          "active-only": "仅 active",
+          "staging-only": "仅 staging",
+          unknown: "待确认"
+        }[data.dataHashState || "unknown"] || "待确认";
         var list = [
-          { label: "当前正式版本", val: data.releaseVersion || "-", icon: "🏷️", foot: "小程序读取的 active release" },
-          { label: "当前学期", val: data.semester || "-", icon: "📅", foot: "后台配置学期" },
-          { label: "Staging 状态", val: data.latestStagingUpload ? relayStatusText(data.latestStagingUpload.status) : "等待上传", icon: "📦", foot: "候选数据审核状态" },
-          { label: "Release Pack", val: data.releasePackHealthy ? "Quick OK" : "需检查", icon: "🧩", foot: data.releasePackStatus ? ("manifest " + (data.releasePackStatus.manifestExists ? "OK" : "缺失") + " / " + (data.releasePackStatus.durationMs || 0) + "ms") : "静态离线包状态" },
-          { label: "OpenResty 静态同步", val: relayStatusText(staticSyncStatus), icon: "URL", foot: data.lastStaticSyncTime ? ("最后同步 " + formatDate(data.lastStaticSyncTime)) : (staticSync.needsSyncReason || "尚未执行静态同步") },
-          { label: "静态保留版本", val: retainedLabels.length ? (retainedLabels.length + " 个") : "未采集", icon: "KEEP", foot: retainedLabels.slice(0, 3).join(" / ") || "来自一级目录快速扫描" },
-          { label: "最近任务", val: data.latestJob ? relayStatusText(data.latestJob.status) : "无任务", icon: "⏱️", foot: data.latestJob ? ((data.latestJob.type || "job") + " · " + (data.latestJob.progress || 0) + "%") : "后台重任务状态" },
-          { label: "Release 重任务锁", val: releaseHeavyBusy ? "运行中" : "空闲", icon: "LOCK", foot: releaseHeavyBusy ? ((data.runningReleaseJob.type || "release-heavy") + " · " + (data.runningReleaseJob.progress || 0) + "%") : "publish / rebuild / deep health 共享锁" },
-          { label: "最近上传", val: data.latestStagingUpload ? formatDate(data.latestStagingUpload.updatedAt || data.latestStagingUpload.createdAt) : "暂无", icon: "⬆️", foot: "CLI gzip 分片上传" },
-          { label: "数据指纹", val: data.stagingSameAsActive ? "无变化" : (data.stagingNeedsPublish ? "有变化" : "等待 staging"), icon: "HASH", foot: data.activeCanonicalHash ? ("active " + String(data.activeCanonicalHash).slice(0, 12)) : "active hash 未生成" },
-          { label: "最后发布", val: formatDate(data.classScheduleUpdatedAt || data.lastUploadTime), icon: "🕒", foot: "线上课表更新时间" },
+          { label: "当前 active release", val: data.releaseVersion || "-", icon: "REL", foot: "小程序读取的当前版本" },
+          { label: "学期", val: data.semester || "-", icon: "TERM", foot: "同步与发布使用的学期" },
+          { label: "最后发布时间", val: formatDate(data.activeReleaseActivatedAt || data.activeReleaseUpdatedAt || data.classScheduleUpdatedAt || data.lastUploadTime), icon: "TIME", foot: "active pointer 最近生效时间" },
+          { label: "最后同步状态", val: relayStatusText(data.lastSyncStatus), icon: "SYNC", foot: data.lastSyncTime ? formatDate(data.lastSyncTime) : "尚未收到本机同步回执" },
+          { label: "OpenResty 状态", val: staticFullySynced ? "已同步" : relayStatusText(staticSyncStatus), icon: "ORY", foot: data.lastStaticSyncTime ? formatDate(data.lastStaticSyncTime) : (staticSync.needsSyncReason || "尚未执行静态同步") },
+          { label: "CloudBase 状态", val: relayStatusText(data.cloudbaseStatus), icon: "CB", foot: data.cloudbaseStatus === "failed" ? "镜像可单独重试，不影响 active pointer" : "镜像状态来自最近回执" },
+          { label: "数据 hash", val: hashStateText, icon: "HASH", foot: data.activeCanonicalHash ? ("active " + String(data.activeCanonicalHash).slice(0, 12)) : "技术详情中查看完整 hash" },
         ];
         
         list.forEach(function(item) {
           var card = document.createElement("div");
           card.className = "stat-card card";
-          card.innerHTML = "<div class='stat-head'>" + item.label + "<span>" + item.icon + "</span></div>" +
-                           "<div class='stat-num' style='font-size:16px;'>" + item.val + "</div>" +
-                           "<div class='stat-foot'>" + item.foot + "</div>";
+          card.innerHTML = "<div class='stat-head'>" + escapeHtml(item.label) + "<span>" + escapeHtml(item.icon) + "</span></div>" +
+                           "<div class='stat-num' style='font-size:16px;'>" + escapeHtml(item.val || "-") + "</div>" +
+                           "<div class='stat-foot'>" + escapeHtml(item.foot || "") + "</div>";
           wrap.appendChild(card);
         });
 
@@ -8278,30 +8362,19 @@ const adminConsoleHtml = `<!doctype html>
           failed: true,
           "validation-failed": true,
           duplicate: true,
-          unchanged: true,
-          uploading: true,
-          validating: true,
-          "publish-blocked": true
+          "publish-blocked": true,
+          "waiting-confirmation": true
         };
-        var pending = uploads.filter(function(upload) {
+        var pending = Array.isArray(data.pendingItems) && data.pendingItems.length ? data.pendingItems : uploads.filter(function(upload) {
           var stateValue = upload.stagingState || upload.status || "";
           return pendingStatuses[stateValue] || upload.failureReason || upload.blockers && upload.blockers.length;
         }).slice(0, 6);
-        if (data.releaseHeavyBusy && data.runningReleaseJob) {
-          pending.unshift({
-            status: "running",
-            stagingState: "running",
-            term: data.semester || "",
-            summary: { releaseVersion: data.runningReleaseJob.type || "release-job" },
-            failureReason: "Release 重任务锁占用，等待当前任务完成。"
-          });
-        }
         if ($("syncPendingBadge")) {
           $("syncPendingBadge").className = "badge " + (pending.length ? "warning" : "success");
           $("syncPendingBadge").textContent = pending.length ? ("待处理 " + pending.length + " 项") : "无待处理";
         }
         if (!pending.length) {
-          pendingWrap.innerHTML = "<div class='sync-compact-card'><strong>无待处理</strong><span>当前没有待审核、失败、发布受阻或重复上传项目。</span></div>";
+          pendingWrap.innerHTML = "<div class='sync-compact-card'><strong>当前无需处理</strong><span>没有失败、发布阻塞、重复上传或等待确认的项目。</span></div>";
           return;
         }
         pendingWrap.innerHTML = pending.map(function(upload) {
@@ -8311,21 +8384,28 @@ const adminConsoleHtml = `<!doctype html>
           var activeSame = data.activeCanonicalHash && upload.canonicalHash && data.activeCanonicalHash === upload.canonicalHash;
           var duplicateText = activeSame
             ? "与当前线上数据一致"
-            : (upload.duplicateCount ? ("重复上传 " + upload.duplicateCount + " 次") : relayStatusText(stateValue));
+            : (upload.title || (upload.duplicateCount ? ("重复上传 " + upload.duplicateCount + " 次") : relayStatusText(stateValue)));
           var detail = {
             uploadId: upload.uploadId || "",
             canonicalHash: upload.canonicalHash || summary.canonicalHash || "",
             stagingState: upload.stagingState || "",
             releaseState: upload.releaseState || "",
             runtimeState: upload.runtimeState || "",
+            command: upload.command || "",
           };
           return "<div class='sync-compact-card'><strong>" + escapeHtml(duplicateText) + "</strong>" +
             "<span>" + escapeHtml(upload.term || summary.term || "-") + " · " + escapeHtml(relayStatusText(stateValue)) + "</span>" +
-            "<span>班级 " + (counts.classScheduleCount || 0) + " / 教师课表 " + (counts.teacherScheduleCount || 0) + " / 教室 " + (counts.classroomScheduleCount || 0) + " / 课程 " + (counts.courseScheduleCount || 0) + "</span>" +
+            (upload.detail ? "<span>" + escapeHtml(upload.detail) + "</span>" : "<span>班级 " + (counts.classScheduleCount || 0) + " / 教师课表 " + (counts.teacherScheduleCount || 0) + " / 教室 " + (counts.classroomScheduleCount || 0) + " / 课程 " + (counts.courseScheduleCount || 0) + "</span>") +
             (upload.failureReason ? "<span style='color:var(--danger);'>" + escapeHtml(upload.failureReason) + "</span>" : "") +
+            (upload.command ? "<button type='button' class='secondary sync-copy-pending-command' data-command='" + escapeHtml(upload.command) + "' style='margin-top:8px;padding:4px 8px;font-size:12px;'>复制建议命令</button>" : "") +
             "<details class='sync-technical-details'><summary>技术详情</summary><code>" + escapeHtml(JSON.stringify(detail, null, 2)) + "</code></details>" +
           "</div>";
         }).join("");
+        pendingWrap.querySelectorAll(".sync-copy-pending-command").forEach(function(btn) {
+          btn.addEventListener("click", function() {
+            copyText(btn.getAttribute("data-command") || "");
+          });
+        });
       }
 
       function buildRelayRunCommand(task) {
@@ -9362,13 +9442,25 @@ const adminConsoleHtml = `<!doctype html>
         }
         var tbody = $("releasesTableBody");
         tbody.innerHTML = "";
+        var currentActiveVer = state.syncStatus ? state.syncStatus.releaseVersion : "";
+        var compactList = [];
+        var seenRelease = {};
+        function addReleaseCard(item) {
+          if (!item || !item.version || seenRelease[item.version]) return;
+          seenRelease[item.version] = true;
+          compactList.push(item);
+        }
+        filteredList.filter(function(r) { return r.version === currentActiveVer; }).forEach(addReleaseCard);
+        filteredList.filter(function(r) { return r.version !== currentActiveVer; }).slice(0, 3).forEach(addReleaseCard);
+        filteredList.filter(function(r) {
+          return r.version !== currentActiveVer && (!r.releasePack || r.releasePack.healthy !== false);
+        }).slice(0, 3).forEach(addReleaseCard);
+        filteredList = compactList.length ? compactList : filteredList.slice(0, 6);
         
         if (filteredList.length === 0) {
           tbody.innerHTML = "<div class='release-empty'>暂无历史 Release 数据包。</div>";
           return;
         }
-        
-        var currentActiveVer = state.syncStatus ? state.syncStatus.releaseVersion : "";
         
         filteredList.forEach(function(r) {
           var card = document.createElement("div");
@@ -13014,6 +13106,17 @@ const adminConsoleHtml = `<!doctype html>
           var winSlash = String.fromCharCode(92);
           var projectDirWin = ["C:", "Users", "Katelya", "Documents", "VScode", "FosuClass"].join(winSlash);
           copyText("cd " + projectDirWin + String.fromCharCode(10) + "npm run sync:publish");
+        });
+        safeBind("copyPublisherCommandTopBtn", "click", function() {
+          var btn = $("copyPublisherCommandBtn");
+          if (btn) btn.click();
+        });
+        safeBind("syncRefreshTopBtn", "click", function() {
+          loadSyncStatus({ force: true });
+        });
+        safeBind("syncFocusPendingBtn", "click", function() {
+          var target = $("sync-pending-panel");
+          if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
         });
         safeBind("refreshPublisherStatusBtn", "click", function() {
           var btn = $("refreshPublisherStatusBtn");

@@ -101,6 +101,46 @@ function resolveProjectPath() {
 
 const PROJECT_ROOT = resolveProjectPath();
 
+global.SYNC_STAGE_TIMINGS = global.SYNC_STAGE_TIMINGS || {};
+
+function beginSyncStage(stage) {
+  return { stage, startedAt: new Date().toISOString(), startedMs: Date.now() };
+}
+
+function finishSyncStage(token, patch = {}) {
+  const finishedAt = new Date().toISOString();
+  global.SYNC_STAGE_TIMINGS[token.stage] = Object.assign({
+    stage: token.stage,
+    startedAt: token.startedAt,
+    finishedAt,
+    durationMs: Date.now() - token.startedMs,
+  }, patch || {});
+}
+
+async function withSyncStage(stage, fn) {
+  const token = beginSyncStage(stage);
+  try {
+    const result = await fn();
+    finishSyncStage(token, { status: "success" });
+    return result;
+  } catch (error) {
+    finishSyncStage(token, { status: "failed", code: error.code || "", message: error.message });
+    throw error;
+  }
+}
+
+function measureSyncStage(stage, fn) {
+  const token = beginSyncStage(stage);
+  try {
+    const result = fn();
+    finishSyncStage(token, { status: "success" });
+    return result;
+  } catch (error) {
+    finishSyncStage(token, { status: "failed", code: error.code || "", message: error.message });
+    throw error;
+  }
+}
+
 function resolveInputFilePath(fileArg) {
   if (!fileArg) {
     return {
@@ -1180,6 +1220,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
         cacheSource: cacheUsage.cacheSource || cacheUsage.source || null,
         cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null,
       },
+      stageTimings: global.SYNC_STAGE_TIMINGS || {},
       warnings: metaWarnings,
       cacheSource: cacheUsage.cacheSource || cacheUsage.source || null,
       cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null,
@@ -2056,12 +2097,12 @@ async function handleLocalCampusStaging(page, params) {
     }
   }
 
-  const { catalog, majors } = await resolveCatalogForPlan(page, params);
+  const { catalog, majors } = await withSyncStage("directory-fetch", () => resolveCatalogForPlan(page, params));
   
   let allClassSchedules = [];
   if (includeScopes.includes("classSchedules")) {
     try {
-      allClassSchedules = await syncClassSchedules(page, catalog, majors);
+      allClassSchedules = await withSyncStage("schedule-fetch", () => syncClassSchedules(page, catalog, majors));
     } catch (error) {
       const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
       throw new Error(`${error.message} 已生成 debug JSON: ${debugPath}`);
@@ -2090,14 +2131,14 @@ async function handleLocalCampusStaging(page, params) {
   const resourceIncludeOptions = buildResourceIncludeOptionsFromScopes(includeScopes);
   const resourceTypesForScopes = getResourceTypesFromIncludeScopes(includeScopes);
   const resourceSchedules = resourceTypesForScopes.length
-    ? await buildResourcesForClassSchedules(allClassSchedules, resourceTypesForScopes, {
+    ? await withSyncStage("resource-build", () => buildResourcesForClassSchedules(allClassSchedules, resourceTypesForScopes, {
         page,
         semester: process.env.PREFERRED_SEMESTER || params.term || catalog.semesters?.[0]?.value,
-      })
+      }))
     : null;
-  const snapshot = buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, {
+  const snapshot = measureSyncStage("normalize", () => buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, {
     resources: resourceIncludeOptions,
-  });
+  }));
   if (includeScopes.includes("classSchedules") && (!snapshot.classSchedules || snapshot.classSchedules.length === 0)) {
     const error = new Error("includeScopes 包含 classSchedules，但最终快照 classSchedules 为 0，已禁止生成正式 Staging。");
     const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
@@ -2110,21 +2151,22 @@ async function handleLocalCampusStaging(page, params) {
   printLocalCampusPathSummary(params, output);
   const sidecarPath = getSidecarMetaPath(output);
   const previousHash = readSidecarHash(sidecarPath);
-  const fingerprint = calculateFingerprint(snapshot);
+  const fingerprint = measureSyncStage("hash", () => calculateFingerprint(snapshot));
   snapshot.canonicalHash = fingerprint.canonicalHash;
   snapshot.meta = Object.assign({}, snapshot.meta || {}, {
     canonicalHash: fingerprint.canonicalHash,
     previousHash,
     changed: previousHash ? previousHash !== fingerprint.canonicalHash : true,
+    stageTimings: global.SYNC_STAGE_TIMINGS || {},
   });
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, JSON.stringify(snapshot, null, 2), "utf-8");
   const rawSizeBytes = fs.statSync(output).size;
-  const sidecarMeta = buildSidecarMeta(snapshot, {
+  const sidecarMeta = measureSyncStage("staging-meta", () => buildSidecarMeta(snapshot, {
     fingerprint,
     previousHash,
     rawSizeBytes,
-  });
+  }));
   fs.writeFileSync(sidecarPath, JSON.stringify(sidecarMeta, null, 2), "utf-8");
   console.log(`💾 Staging JSON 已生成: ${output}`);
   console.log(`🧾 Staging meta 已生成: ${sidecarPath}`);
@@ -3312,7 +3354,7 @@ async function initBrowserContext() {
       console.error("❌ 本地未找到 session.json 登录会话文件！");
       console.error(getExpiredSessionTip());
       await browser.close();
-      const error = new Error("Session 已失效，请运行 npm run login");
+      const error = new Error("session 已过期，请执行 npm run sync:login 后重试");
       error.code = "SESSION_EXPIRED";
       throw error;
     }
@@ -3356,19 +3398,19 @@ function getExpiredSessionTip() {
   const hasRootLoginScript = (() => {
     try {
       const pkg = JSON.parse(fs.readFileSync(rootPackageJson, "utf-8"));
-      return Boolean(pkg.scripts && pkg.scripts.login);
+      return Boolean(pkg.scripts && pkg.scripts["sync:login"]);
     } catch (error) {
       return false;
     }
   })();
   const lines = [
-    "请在项目根目录执行 npm run login，登录成功后重新运行当前同步命令。"
+    "session 已过期，请执行 npm run sync:login 后重试。"
   ];
   if (!isProjectRoot) {
     lines.push("你可能不在项目根目录，请先 cd 到 FosuClass 根目录。");
   }
   if (!hasRootLoginScript) {
-    lines.push("当前根目录 package.json 未检测到 login script，请补充后再重试。");
+    lines.push("当前根目录 package.json 未检测到 sync:login script，请补充后再重试。");
   }
   return lines.join("\n");
 }
@@ -3948,7 +3990,14 @@ function getActiveGradesBySemester(semester, options = {}) {
   }
 
   // 过滤出在教务系统原始年级中匹配的部分
-  return originalGrades.filter(g => targetGrades.includes(g));
+  const matchedGrades = originalGrades.filter(g => targetGrades.includes(g));
+  if (syncGradesEnv && matchedGrades.length === 0) {
+    const requested = targetGrades.join(",");
+    const error = new Error(`当前源站未发现 ${requested} 级课表`);
+    error.code = "SOURCE_GRADE_NOT_FOUND";
+    throw error;
+  }
+  return matchedGrades;
 }
 
 /**
@@ -5067,8 +5116,23 @@ async function main() {
 
   // 还原真实执行指令
   const parsed = parseCliArgs(args);
-  const syncPlan = buildSyncPlan(parsed.action || action, Object.assign({}, params, parsed.params || {}), process.env);
-  Object.assign(params, applyPlanToParams(syncPlan, Object.assign({}, params, parsed.params || {})));
+  const inputParams = Object.assign({}, params, parsed.params || {});
+  if (inputParams.grade && !inputParams.grades) inputParams.grades = inputParams.grade;
+  if (inputParams.full === true || inputParams.full === "true") {
+    inputParams["catalog-policy"] = inputParams["catalog-policy"] || "network-only";
+    inputParams["schedule-policy"] = inputParams["schedule-policy"] || "network-only";
+    inputParams["progress-policy"] = inputParams["progress-policy"] || "ignore";
+    inputParams["negative-cache-policy"] = inputParams["negative-cache-policy"] || "revalidate";
+    inputParams["force-refresh"] = true;
+  }
+  if (inputParams.incremental === true || inputParams.incremental === "true") {
+    inputParams["catalog-policy"] = inputParams["catalog-policy"] || "reuse-validated";
+    inputParams["schedule-policy"] = inputParams["schedule-policy"] || "network-only";
+    inputParams["progress-policy"] = inputParams["progress-policy"] || "resume";
+    inputParams["negative-cache-policy"] = inputParams["negative-cache-policy"] || "ignore";
+  }
+  const syncPlan = buildSyncPlan(parsed.action || action, inputParams, process.env);
+  Object.assign(params, inputParams, applyPlanToParams(syncPlan, inputParams));
   action = parsed.action || action;
   if (action === "resume" && !params.term) {
     const resumeTerm = findTermByRunId(params["run-id"] || params.runId);
@@ -5119,6 +5183,9 @@ async function main() {
   if (params.grades) {
     process.env.SYNC_CLASS_GRADES = params.grades;
     process.env.SYNC_GRADES = params.grades;
+    if (!process.env.SYNC_GRADE_RANGE) {
+      process.env.SYNC_GRADE_RANGE = "custom";
+    }
   }
   if (params["college-codes"]) {
     process.env.SYNC_CLASS_COLLEGE_CODES = params["college-codes"];
@@ -5251,7 +5318,7 @@ async function main() {
     // 4. 校验 Session 状态
     const isSessionOk = await checkSession(page);
     if (!isSessionOk) {
-      const error = new Error("Session 已失效，请运行 npm run login");
+      const error = new Error("session 已过期，请执行 npm run sync:login 后重试");
       error.code = "SESSION_EXPIRED";
       throw error;
     }

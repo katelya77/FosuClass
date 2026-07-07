@@ -1,152 +1,443 @@
 var __getOwnPropNames = Object.getOwnPropertyNames;
 var __commonJS = (cb, mod) => function __require() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  try {
+    return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
+  } catch (e2) {
+    throw mod = 0, e2;
+  }
 };
 
-// ../fosu-sync-client/diagnose.js
-var require_diagnose = __commonJS({
-  "../fosu-sync-client/diagnose.js"(exports2, module2) {
-    var dns = require("dns").promises;
-    var axios2 = require("axios");
-    require("dotenv").config();
-    var FOSU_BASE_URL2 = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
-    var FOSU_AUTH_URL = process.env.FOSU_AUTH_URL || "https://authserver.fosu.edu.cn";
-    function isInternalIp(ip) {
-      if (!ip) return false;
-      if (ip.startsWith("10.") || ip.startsWith("192.168.")) return true;
-      if (ip.startsWith("172.")) {
-        const parts = ip.split(".").map(Number);
-        if (parts.length >= 2) {
-          return parts[1] >= 16 && parts[1] <= 31;
-        }
+// ../fosu-sync-client/syncEnv.js
+var require_syncEnv = __commonJS({
+  "../fosu-sync-client/syncEnv.js"(exports2, module2) {
+    var fs2 = require("fs");
+    var path2 = require("path");
+    var CLIENT_DIR = __dirname;
+    var SYNC_ENV_PATH = path2.join(CLIENT_DIR, ".env");
+    var SYNC_LOCAL_ENV_PATH = path2.join(CLIENT_DIR, ".env.local");
+    var REPO_LOCAL_ENV_PATH = path2.resolve(CLIENT_DIR, "..", "..", ".env.local");
+    var SYNC_DEFAULTS = {
+      FOSU_BASE_URL: "https://100.fosu.edu.cn",
+      FOSU_AUTH_URL: "https://authserver.fosu.edu.cn",
+      FOSU_API_BASE: "https://class.katelya.eu.org",
+      SYNC_DISABLE_PROXY: "true",
+      PREFERRED_SEMESTER: ""
+    };
+    var SYNC_ENV_FIELDS = Object.keys(SYNC_DEFAULTS);
+    var PROXY_ENV_NAMES = [
+      "HTTP_PROXY",
+      "HTTPS_PROXY",
+      "ALL_PROXY",
+      "http_proxy",
+      "https_proxy",
+      "all_proxy"
+    ];
+    var DIRECT_NO_PROXY_HOSTS = [
+      "100.fosu.edu.cn",
+      "authserver.fosu.edu.cn",
+      "class.katelya.eu.org",
+      "cloud1-d3g17rpe7566d3d5c-1442900641.tcloudbaseapp.com",
+      "localhost",
+      "127.0.0.1",
+      "172.16.0.0/12"
+    ];
+    function parseEnvValue(rawValue) {
+      let value = String(rawValue == null ? "" : rawValue).trim();
+      if (value.startsWith('"') && value.endsWith('"') || value.startsWith("'") && value.endsWith("'")) {
+        value = value.slice(1, -1);
       }
-      return ip.startsWith("172.");
+      return value.replace(/\\n/g, "\n");
     }
-    async function diagnose2() {
-      console.log("=== \u5F00\u59CB\u8BCA\u65AD\u4F5B\u5927\u6559\u52A1\u7F51\u8FDE\u63A5\u72B6\u6001 ===");
-      console.log(`\u76EE\u6807\u6559\u52A1\u7F51: ${FOSU_BASE_URL2}`);
-      console.log(`\u76EE\u6807\u7EDF\u4E00\u8BA4\u8BC1: ${FOSU_AUTH_URL}`);
-      let hostname;
+    function parseEnvText(text) {
+      return String(text || "").split(/\r?\n/).reduce((acc, line) => {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) return acc;
+        const index = trimmed.indexOf("=");
+        if (index <= 0) return acc;
+        const key = trimmed.slice(0, index).trim();
+        if (!key) return acc;
+        acc[key] = parseEnvValue(trimmed.slice(index + 1));
+        return acc;
+      }, {});
+    }
+    function readSyncClientEnv(envPath2 = SYNC_ENV_PATH, deps = {}) {
+      const fsImpl = deps.fs || fs2;
       try {
-        hostname = new URL(FOSU_BASE_URL2).hostname;
-      } catch (e2) {
-        console.error(`\u274C FOSU_BASE_URL \u683C\u5F0F\u4E0D\u6B63\u786E: ${e2.message}`);
-        process.exit(1);
-      }
-      console.log(`
-1. \u6B63\u5728\u89E3\u6790 DNS: ${hostname} ...`);
-      let addresses = [];
-      let easyConnectLikelyConnected = false;
-      try {
-        const result = await dns.lookup(hostname, { all: true });
-        addresses = result.map((r) => r.address);
-        console.log(`   \u89E3\u6790\u6210\u529F\uFF01\u89E3\u6790\u5230\u4EE5\u4E0B IP \u5730\u5740:`);
-        addresses.forEach((addr) => {
-          const isInternal = isInternalIp(addr);
-          if (isInternal) {
-            easyConnectLikelyConnected = true;
-          }
-          console.log(`   - ${addr} [${isInternal ? "\u6821\u5185\u5185\u7F51 IP" : "\u5916\u7F51/\u516C\u7F51 IP"}]`);
-        });
+        if (!fsImpl.existsSync(envPath2)) return {};
+        return parseEnvText(fsImpl.readFileSync(envPath2, "utf8"));
       } catch (error) {
-        console.error(`\u274C DNS \u89E3\u6790\u5931\u8D25: ${error.message}`);
-        console.log(`\u26A0\uFE0F  \u63D0\u793A: \u65E0\u6CD5\u89E3\u6790\u57DF\u540D\u3002\u8BF7\u5148\u8FDE\u63A5\u201C\u4F5B\u5927 EasyConnect\u201D\u6216\u8EAB\u5904\u201C\u4F5B\u5927\u6821\u56ED\u7F51\u201D\u73AF\u5883\u5185\u518D\u8BD5\uFF01`);
-        return false;
+        return {};
       }
-      if (!easyConnectLikelyConnected) {
-        console.warn(`\u26A0\uFE0F  \u8B66\u544A: DNS \u89E3\u6790\u6210\u529F\u4F46\u672A\u5339\u914D\u5230\u6821\u5185\u5185\u7F51 IP \u8303\u56F4\u3002`);
-      }
-      console.log(`
-2. \u6B63\u5728\u5C1D\u8BD5\u901A\u8FC7 Node.js \u8BBF\u95EE HTTPS ${FOSU_BASE_URL2} ...`);
-      let httpsSuccess = false;
-      let tlsHandshakeFailed = false;
-      try {
-        const response = await axios2.get(FOSU_BASE_URL2, {
-          timeout: 8e3,
-          maxRedirects: 5,
-          validateStatus: (status) => status >= 200 && status < 400
-        });
-        console.log(`   HTTPS \u8BBF\u95EE\u6210\u529F\uFF01HTTP \u72B6\u6001\u7801: ${response.status}`);
-        httpsSuccess = true;
-      } catch (error) {
-        const responseUrl = error.config?.url || "";
-        const isRedirectToAuth = responseUrl.includes("authserver.fosu.edu.cn") || error.message.includes("Redirect");
-        if (isRedirectToAuth || error.response && error.response.status === 302) {
-          console.log(`   HTTPS \u8BBF\u95EE\u6210\u529F\uFF01\u5DF2\u6210\u529F\u8DF3\u8F6C\u81F3\u7EDF\u4E00\u8EAB\u4EFD\u8BA4\u8BC1\u9875\u9762\u3002`);
-          httpsSuccess = true;
-        } else {
-          console.warn(`\u26A0\uFE0F  HTTPS \u8BBF\u95EE\u5931\u8D25: ${error.message}`);
-          const errStr = (error.message || "") + (error.code || "");
-          if (errStr.includes("TLS") || errStr.includes("handshake") || errStr.includes("SSL") || errStr.includes("disconnected") || error.code === "ECONNRESET") {
-            tlsHandshakeFailed = true;
-          }
+    }
+    function loadSyncClientEnv2(options = {}) {
+      const env = options.env || process.env;
+      const envPath2 = options.envPath || SYNC_ENV_PATH;
+      const deps = options.deps || {};
+      const parsed2 = Object.prototype.hasOwnProperty.call(options, "envPath") ? readSyncClientEnv(envPath2, deps) : Object.assign(
+        {},
+        readSyncClientEnv(envPath2, deps),
+        readSyncClientEnv(REPO_LOCAL_ENV_PATH, deps),
+        readSyncClientEnv(SYNC_LOCAL_ENV_PATH, deps)
+      );
+      Object.keys(parsed2).forEach((key) => {
+        if (env[key] === void 0 || env[key] === "") {
+          env[key] = parsed2[key];
         }
-      }
-      let httpSuccess = false;
-      const httpUrl = FOSU_BASE_URL2.replace(/^https:/i, "http:");
-      console.log(`
-3. \u6B63\u5728\u5C1D\u8BD5\u8BBF\u95EE HTTP \u7AEF\u53E3 ${httpUrl} ...`);
-      try {
-        const response = await axios2.get(httpUrl, {
-          timeout: 8e3,
-          maxRedirects: 5,
-          validateStatus: (status) => status >= 200 && status < 400
-        });
-        console.log(`   HTTP \u8BBF\u95EE\u6210\u529F\uFF01HTTP \u72B6\u6001\u7801: ${response.status}`);
-        httpSuccess = true;
-      } catch (error) {
-        const responseUrl = error.config?.url || "";
-        const isRedirectToAuth = responseUrl.includes("authserver.fosu.edu.cn") || error.message.includes("Redirect");
-        if (isRedirectToAuth || error.response && error.response.status === 302) {
-          console.log(`   HTTP \u8BBF\u95EE\u6210\u529F\uFF01\u5DF2\u6210\u529F\u8DF3\u8F6C\u81F3\u7EDF\u4E00\u8EAB\u4EFD\u8BA4\u8BC1\u9875\u9762\u3002`);
-          httpSuccess = true;
-        } else {
-          console.warn(`\u26A0\uFE0F  HTTP \u8BBF\u95EE\u5931\u8D25: ${error.message}`);
+      });
+      SYNC_ENV_FIELDS.forEach((key) => {
+        if (env[key] === void 0 || env[key] === "") {
+          env[key] = SYNC_DEFAULTS[key];
         }
+      });
+      return {
+        envPath: envPath2,
+        loaded: Object.keys(parsed2),
+        values: SYNC_ENV_FIELDS.reduce((acc, key) => {
+          acc[key] = env[key];
+          return acc;
+        }, {})
+      };
+    }
+    function mergeNoProxy(existing, additions) {
+      const seen = /* @__PURE__ */ new Set();
+      return String(existing || "").split(",").concat(additions || []).map((item) => String(item || "").trim()).filter(Boolean).filter((item) => {
+        const key = item.toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      }).join(",");
+    }
+    function envFlag(value, defaultValue) {
+      if (value === void 0 || value === "") return Boolean(defaultValue);
+      return !["0", "false", "no", "off"].includes(String(value).trim().toLowerCase());
+    }
+    function prepareDirectNetworkEnvironment2(env = process.env, options = {}) {
+      if (env.SYNC_DISABLE_PROXY === void 0 || env.SYNC_DISABLE_PROXY === "") {
+        env.SYNC_DISABLE_PROXY = "true";
       }
-      console.log(`
-4. \u6B63\u5728\u5C1D\u8BD5\u8BBF\u95EE\u7EDF\u4E00\u8EAB\u4EFD\u8BA4\u8BC1 ${FOSU_AUTH_URL} ...`);
-      let authSuccess = false;
-      try {
-        await axios2.get(FOSU_AUTH_URL, {
-          timeout: 8e3
+      const disableProxy = envFlag(env.SYNC_DISABLE_PROXY, true);
+      const detectedProxyNames = PROXY_ENV_NAMES.filter((name) => Boolean(env[name]));
+      if (disableProxy) {
+        PROXY_ENV_NAMES.forEach((name) => {
+          delete env[name];
         });
-        console.log(`   \u7EDF\u4E00\u8EAB\u4EFD\u8BA4\u8BC1\u7CFB\u7EDF\u54CD\u5E94\u6B63\u5E38\u3002`);
-        authSuccess = true;
+      }
+      const mergedNoProxy = mergeNoProxy(env.NO_PROXY || env.no_proxy || "", DIRECT_NO_PROXY_HOSTS);
+      env.NO_PROXY = mergedNoProxy;
+      env.no_proxy = mergedNoProxy;
+      if (options.axios && options.axios.defaults) {
+        options.axios.defaults.proxy = false;
+      }
+      return {
+        disableProxy,
+        detectedProxyNames,
+        noProxy: mergedNoProxy,
+        removedProxyNames: disableProxy ? detectedProxyNames : []
+      };
+    }
+    function safeEnvSummary(env = process.env) {
+      return {
+        FOSU_BASE_URL: env.FOSU_BASE_URL || SYNC_DEFAULTS.FOSU_BASE_URL,
+        FOSU_AUTH_URL: env.FOSU_AUTH_URL || SYNC_DEFAULTS.FOSU_AUTH_URL,
+        FOSU_API_BASE: env.FOSU_API_BASE || SYNC_DEFAULTS.FOSU_API_BASE,
+        SYNC_DISABLE_PROXY: env.SYNC_DISABLE_PROXY || SYNC_DEFAULTS.SYNC_DISABLE_PROXY,
+        PREFERRED_SEMESTER: env.PREFERRED_SEMESTER || ""
+      };
+    }
+    module2.exports = {
+      CLIENT_DIR,
+      DIRECT_NO_PROXY_HOSTS,
+      PROXY_ENV_NAMES,
+      SYNC_DEFAULTS,
+      SYNC_ENV_FIELDS,
+      SYNC_LOCAL_ENV_PATH,
+      SYNC_ENV_PATH,
+      REPO_LOCAL_ENV_PATH,
+      loadSyncClientEnv: loadSyncClientEnv2,
+      mergeNoProxy,
+      parseEnvText,
+      prepareDirectNetworkEnvironment: prepareDirectNetworkEnvironment2,
+      readSyncClientEnv,
+      safeEnvSummary
+    };
+  }
+});
+
+// ../fosu-sync-client/networkProbe.js
+var require_networkProbe = __commonJS({
+  "../fosu-sync-client/networkProbe.js"(exports2, module2) {
+    var dns = require("dns").promises;
+    var net = require("net");
+    var axios2 = require("axios");
+    var {
+      loadSyncClientEnv: loadSyncClientEnv2,
+      prepareDirectNetworkEnvironment: prepareDirectNetworkEnvironment2,
+      safeEnvSummary
+    } = require_syncEnv();
+    var ACCEPTABLE_HTTP_STATUSES = /* @__PURE__ */ new Set([200, 204, 301, 302, 303, 307, 308, 401, 403, 503]);
+    function toUrl(value, fallback) {
+      try {
+        return new URL(value || fallback);
       } catch (error) {
-        console.log(`\u26A0\uFE0F  \u7EDF\u4E00\u8EAB\u4EFD\u8BA4\u8BC1\u7CFB\u7EDF\u8BBF\u95EE\u8B66\u544A (\u53EF\u80FD\u4E0D\u5F71\u54CD\u4F7F\u7528): ${error.message}`);
+        const wrapped = new Error(`Invalid URL: ${value || fallback}`);
+        wrapped.code = "INVALID_URL";
+        throw wrapped;
       }
-      console.log(`
-===================================`);
-      if (httpsSuccess || httpSuccess) {
-        console.log(`\u{1F389} \u8BCA\u65AD\u7ED3\u679C: \u672C\u673A\u6821\u5185\u7F51\u73AF\u5883\u6B63\u5E38\uFF01\u5DF2\u6210\u529F\u8FDE\u63A5\u5230\u6559\u52A1\u7F51\u3002`);
-        console.log(`\u60A8\u53EF\u4EE5\u7EE7\u7EED\u8FD0\u884C 'npm run login' \u8FDB\u884C\u767B\u5F55\u3002`);
-        console.log(`===================================`);
-        return true;
-      }
-      if (easyConnectLikelyConnected && tlsHandshakeFailed) {
-        console.log(`\u2139\uFE0F  [NODE_TLS_HANDSHAKE_FAILED]`);
-        console.log(`\u63D0\u793A: Node.js \u4E0E\u5B66\u6821\u5185\u7F51 HTTPS \u670D\u52A1\u63E1\u624B\u5931\u8D25\uFF0C\u4F46 DNS \u5DF2\u89E3\u6790\u5230\u6821\u5185 IP\uFF0C\u53EF\u7EE7\u7EED\u5C1D\u8BD5 Playwright \u6D4F\u89C8\u5668\u767B\u5F55\u3002`);
-        console.log(`\u8BF7\u8FD0\u884C 'npm run login'\uFF0CPlaywright \u6D4F\u89C8\u5668\u80FD\u591F\u5FFD\u7565\u6B64 TLS \u63E1\u624B\u95EE\u9898\u3002`);
-        console.log(`===================================`);
-        return true;
-      }
-      if (easyConnectLikelyConnected) {
-        console.log(`\u2139\uFE0F  \u63D0\u793A: \u867D\u7136 Node.js \u7F51\u7EDC\u8BF7\u6C42\u5931\u8D25\uFF0C\u4F46 DNS \u5DF2\u89E3\u6790\u5230\u6821\u5185\u5185\u7F51 IP\uFF0C\u5141\u8BB8\u7EE7\u7EED\u5C1D\u8BD5 Playwright \u767B\u5F55\u3002`);
-        console.log(`===================================`);
-        return true;
-      }
-      console.error(`\u274C \u8BCA\u65AD\u7ED3\u679C: \u65E0\u6CD5\u8FDE\u63A5\u5230\u5B66\u6821\u6559\u52A1\u7F51\uFF01`);
-      console.log(`\u{1F4A1} \u63D0\u793A: \u8BF7\u5148\u786E\u8BA4\u5DF2\u542F\u52A8\u5E76\u6210\u529F\u8FDE\u63A5\u4E86 EasyConnect VPN\u3002`);
-      console.log(`===================================`);
+    }
+    function isPrivateIpv4(ip) {
+      const parts = String(ip || "").split(".").map((part) => Number(part));
+      if (parts.length !== 4 || parts.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+      if (parts[0] === 10) return true;
+      if (parts[0] === 192 && parts[1] === 168) return true;
+      if (parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31) return true;
       return false;
     }
-    if (require.main === module2) {
-      diagnose2().then((success) => {
-        process.exit(success ? 0 : 1);
+    function isFosuCampusIpv4(ip) {
+      const parts = String(ip || "").split(".").map((part) => Number(part));
+      return parts.length === 4 && parts[0] === 172 && parts[1] >= 16 && parts[1] <= 31;
+    }
+    async function lookupHost(hostname, deps = {}) {
+      const lookup = deps.lookup || dns.lookup.bind(dns);
+      try {
+        const records = await lookup(hostname, { all: true });
+        const addresses = (Array.isArray(records) ? records : [records]).map((item) => item && item.address || item).filter(Boolean);
+        return {
+          ok: addresses.length > 0,
+          hostname,
+          addresses,
+          privateAddresses: addresses.filter(isPrivateIpv4),
+          campusAddresses: addresses.filter(isFosuCampusIpv4)
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          hostname,
+          addresses: [],
+          privateAddresses: [],
+          campusAddresses: [],
+          code: error.code || "DNS_LOOKUP_FAILED",
+          message: error.message
+        };
+      }
+    }
+    function probeTcp(hostname, port, timeoutMs = 5e3, deps = {}) {
+      const socketFactory = deps.createConnection || net.createConnection;
+      return new Promise((resolve) => {
+        const startedAt = Date.now();
+        let settled = false;
+        const socket = socketFactory({ host: hostname, port });
+        const done = (result) => {
+          if (settled) return;
+          settled = true;
+          try {
+            socket.destroy();
+          } catch (error) {
+          }
+          resolve(Object.assign({ hostname, port, elapsedMs: Date.now() - startedAt }, result));
+        };
+        socket.setTimeout(timeoutMs);
+        socket.once("connect", () => done({ ok: true }));
+        socket.once("timeout", () => done({ ok: false, code: "TCP_TIMEOUT", message: `timeout after ${timeoutMs}ms` }));
+        socket.once("error", (error) => done({ ok: false, code: error.code || "TCP_CONNECT_FAILED", message: error.message }));
       });
     }
-    module2.exports = diagnose2;
+    function sanitizeLocation(value) {
+      const text = String(value || "");
+      if (!text) return "";
+      try {
+        const url = new URL(text);
+        return `${url.protocol}//${url.hostname}${url.pathname}`;
+      } catch (error) {
+        return text.replace(/([?&](?:token|ticket|cookie|session|password|secret)[^=]*=)[^&\s]+/gi, "$1[redacted]");
+      }
+    }
+    async function probeHttp(url, options = {}) {
+      const client = options.axios || axios2;
+      const startedAt = Date.now();
+      try {
+        const response = await client.get(String(url), {
+          timeout: options.timeoutMs || 8e3,
+          maxRedirects: 0,
+          validateStatus: () => true,
+          proxy: false,
+          headers: { Accept: "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8" }
+        });
+        const location = response.headers && (response.headers.location || response.headers.Location) || "";
+        const redirectedToLogin = response.status >= 300 && response.status < 400 && /authserver\.fosu\.edu\.cn|login/i.test(String(location));
+        return {
+          ok: response.status >= 200 && response.status < 400,
+          url: String(url),
+          status: response.status,
+          redirectedToLogin,
+          location: sanitizeLocation(location),
+          elapsedMs: Date.now() - startedAt
+        };
+      } catch (error) {
+        const status = error.response && error.response.status || 0;
+        const location = error.response && error.response.headers && error.response.headers.location || "";
+        return {
+          ok: false,
+          url: String(url),
+          status,
+          redirectedToLogin: Boolean(location && /authserver\.fosu\.edu\.cn|login/i.test(String(location))),
+          location: sanitizeLocation(location),
+          code: error.code || "HTTP_REQUEST_FAILED",
+          message: error.message,
+          elapsedMs: Date.now() - startedAt
+        };
+      }
+    }
+    function hasAcceptableHttp(http) {
+      const status = Number(http && http.status || 0);
+      return Boolean(http && (http.redirectedToLogin || ACCEPTABLE_HTTP_STATUSES.has(status) || status >= 200 && status < 400));
+    }
+    function summarizeHttp(http) {
+      if (!http) return "";
+      if (http.redirectedToLogin) return "HTTP 302 \u767B\u5F55\u8DF3\u8F6C";
+      if (http.status) return `HTTP ${http.status}`;
+      if (http.code) return http.code;
+      return "";
+    }
+    function evaluateNetworkReadiness(input = {}) {
+      const dnsResult = input.dns || {};
+      const tcpResult = input.tcp || {};
+      const httpResult = input.http || {};
+      const authResult = input.auth || {};
+      const sessionCapable = input.sessionCapable;
+      const warnings = [];
+      const blockers = [];
+      const dnsOk = dnsResult.ok === true;
+      const dnsPrivate = Boolean(dnsResult.hasPrivateAddress || dnsResult.privateAddresses && dnsResult.privateAddresses.length);
+      const dnsCampus = Boolean(dnsResult.hasCampusAddress || dnsResult.campusAddresses && dnsResult.campusAddresses.length);
+      const httpAcceptable = hasAcceptableHttp(httpResult);
+      const authTimeout = /TIMEOUT|ETIMEDOUT|ECONNABORTED/i.test(String(authResult.code || authResult.message || ""));
+      const anyRoute = Boolean(tcpResult.ok || httpAcceptable || authResult.ok);
+      if (dnsCampus) {
+        const status = summarizeHttp(httpResult);
+        if (status && (!httpResult.ok || Number(httpResult.status) === 503 || Number(httpResult.status) === 401 || Number(httpResult.status) === 403)) {
+          warnings.push(`\u5DF2\u89E3\u6790\u5230\u6821\u5185\u5730\u5740\uFF0CNode HTTP \u8FD4\u56DE ${status.replace(/^HTTP\s+/i, "")}\uFF0C\u4F46\u53EF\u7EE7\u7EED\u9A8C\u8BC1\u6D4F\u89C8\u5668\u767B\u5F55\u6001\u3002`);
+        }
+      } else if (dnsPrivate) {
+        warnings.push("DNS \u5DF2\u89E3\u6790\u5230 RFC1918 \u5185\u7F51\u5730\u5740\uFF0C\u53EF\u7EE7\u7EED\u9A8C\u8BC1\u6D4F\u89C8\u5668\u767B\u5F55\u6001\u3002");
+      } else if (dnsOk) {
+        warnings.push("DNS \u672A\u89E3\u6790\u5230\u6821\u5185\u5185\u7F51\u5730\u5740\uFF1B\u5982\u679C\u6D4F\u89C8\u5668\u767B\u5F55\u6001\u6709\u6548\uFF0C\u5C06\u7EE7\u7EED\u6267\u884C\u3002");
+      }
+      if (httpResult.redirectedToLogin) {
+        return {
+          success: true,
+          readiness: "ready",
+          warnings,
+          blockers
+        };
+      }
+      if (authTimeout && sessionCapable === true) {
+        warnings.push("\u7EDF\u4E00\u8BA4\u8BC1\u670D\u52A1\u8BBF\u95EE\u8D85\u65F6\uFF0C\u4F46\u5DF2\u6709\u6709\u6548\u6559\u52A1\u767B\u5F55\u6001\uFF0C\u53EF\u7EE7\u7EED\u6293\u53D6\u3002");
+      } else if (authTimeout) {
+        warnings.push("\u7EDF\u4E00\u8BA4\u8BC1\u670D\u52A1\u8BBF\u95EE\u8D85\u65F6\uFF0C\u5C06\u7531\u767B\u5F55\u6001\u9A8C\u8BC1\u51B3\u5B9A\u662F\u5426\u7EE7\u7EED\u3002");
+      }
+      if (dnsCampus || dnsPrivate) {
+        return {
+          success: true,
+          readiness: warnings.length ? "ready-with-warning" : "ready",
+          warnings,
+          blockers
+        };
+      }
+      if (httpAcceptable || tcpResult.ok || authResult.ok) {
+        return {
+          success: true,
+          readiness: warnings.length ? "ready-with-warning" : "ready",
+          warnings,
+          blockers
+        };
+      }
+      if (!dnsOk) blockers.push("DNS \u89E3\u6790\u5931\u8D25\u3002");
+      if (!anyRoute) blockers.push("\u672A\u68C0\u6D4B\u5230\u53EF\u7528\u6821\u56ED\u7F51\u8DEF\u7531\u3002");
+      if (sessionCapable === false) blockers.push("\u6559\u52A1\u767B\u5F55\u6001\u9A8C\u8BC1\u5931\u8D25\u3002");
+      return {
+        success: false,
+        readiness: "blocked",
+        warnings,
+        blockers: blockers.length ? blockers : ["\u6821\u56ED\u7F51 DNS\u3001TCP/HTTP \u4E0E\u767B\u5F55\u6001\u5747\u4E0D\u53EF\u7528\u3002"]
+      };
+    }
+    async function probeCampusNetwork2(options = {}) {
+      const env = options.env || process.env;
+      loadSyncClientEnv2({ env });
+      const proxy = prepareDirectNetworkEnvironment2(env, { axios: options.axios || axios2 });
+      const baseUrl = toUrl(env.FOSU_BASE_URL, "https://100.fosu.edu.cn");
+      const authUrl = toUrl(env.FOSU_AUTH_URL, "https://authserver.fosu.edu.cn");
+      const port = baseUrl.port ? Number(baseUrl.port) : baseUrl.protocol === "https:" ? 443 : 80;
+      const dnsResult = await lookupHost(baseUrl.hostname, options.deps || {});
+      const tcpResult = dnsResult.ok ? await probeTcp(baseUrl.hostname, port, options.tcpTimeoutMs || 5e3, options.deps || {}) : { ok: false, hostname: baseUrl.hostname, port, code: "DNS_UNAVAILABLE", message: "DNS lookup did not return addresses" };
+      const httpResult = await probeHttp(baseUrl.toString(), {
+        axios: options.axios || axios2,
+        timeoutMs: options.httpTimeoutMs || 8e3
+      });
+      const authResult = await probeHttp(authUrl.toString(), {
+        axios: options.axios || axios2,
+        timeoutMs: options.authTimeoutMs || 8e3
+      });
+      const readiness = evaluateNetworkReadiness({
+        dns: dnsResult,
+        tcp: tcpResult,
+        http: httpResult,
+        auth: authResult,
+        sessionCapable: options.sessionCapable
+      });
+      return {
+        success: readiness.success,
+        readiness: readiness.readiness,
+        dns: Object.assign({}, dnsResult, {
+          hasPrivateAddress: Boolean(dnsResult.privateAddresses && dnsResult.privateAddresses.length),
+          hasCampusAddress: Boolean(dnsResult.campusAddresses && dnsResult.campusAddresses.length)
+        }),
+        tcp: tcpResult,
+        http: httpResult,
+        auth: authResult,
+        sessionCapable: options.sessionCapable === void 0 ? "unknown" : Boolean(options.sessionCapable),
+        warnings: readiness.warnings,
+        blockers: readiness.blockers,
+        proxy: {
+          disabled: proxy.disableProxy,
+          detectedProxyNames: proxy.detectedProxyNames,
+          removedProxyNames: proxy.removedProxyNames,
+          noProxy: proxy.noProxy
+        },
+        env: safeEnvSummary(env)
+      };
+    }
+    function printDiagnosisSummary2(result, logger = console) {
+      logger.log("=== FosuClass \u6821\u56ED\u7F51\u68C0\u67E5 ===");
+      logger.log(`readiness: ${result.readiness}`);
+      logger.log(`DNS: ${result.dns.ok ? "PASS" : "BLOCKED"} ${result.dns.addresses && result.dns.addresses.length ? result.dns.addresses.join(", ") : result.dns.code || ""}`);
+      logger.log(`TCP: ${result.tcp.ok ? "PASS" : "WARN"} ${result.tcp.code || ""}`);
+      logger.log(`HTTP: ${result.http.status || result.http.code || "n/a"}${result.http.redirectedToLogin ? " \u767B\u5F55\u8DF3\u8F6C" : ""}`);
+      logger.log(`Auth: ${result.auth.status || result.auth.code || "n/a"}`);
+      if (result.proxy.detectedProxyNames.length) {
+        logger.warn(`\u68C0\u6D4B\u5230\u4EE3\u7406\u73AF\u5883\u53D8\u91CF: ${result.proxy.detectedProxyNames.join(", ")}`);
+        if (result.proxy.disabled) logger.warn("\u5DF2\u5728\u5F53\u524D\u8FDB\u7A0B\u7981\u7528\u4EE3\u7406\u53D8\u91CF\uFF0C\u5E76\u4F7F\u7528\u76F4\u8FDE\u8BBF\u95EE\u6821\u56ED\u6559\u52A1\u3001Oracle \u4E0E CloudBase\u3002");
+      }
+      result.warnings.forEach((warning) => logger.warn(`WARN: ${warning}`));
+      result.blockers.forEach((blocker) => logger.error(`BLOCKED: ${blocker}`));
+      if (result.readiness === "ready-with-warning") {
+        logger.warn("\u7F51\u7EDC\u68C0\u67E5\u5B58\u5728\u8B66\u544A\uFF0C\u5C06\u7EE7\u7EED\u9A8C\u8BC1\u6559\u52A1\u767B\u5F55\u6001\u3002");
+      }
+      if (result.readiness === "blocked") {
+        logger.error("\u8BF7\u8FDE\u63A5\u6821\u56ED\u7F51\u6216 EasyConnect \u540E\u91CD\u8BD5\u3002");
+      }
+    }
+    module2.exports = {
+      ACCEPTABLE_HTTP_STATUSES,
+      evaluateNetworkReadiness,
+      isFosuCampusIpv4,
+      isPrivateIpv4,
+      lookupHost,
+      printDiagnosisSummary: printDiagnosisSummary2,
+      probeCampusNetwork: probeCampusNetwork2,
+      probeHttp,
+      probeTcp
+    };
   }
 });
 
@@ -181,6 +472,7 @@ var require_syncPlan = __commonJS({
     var PROGRESS_POLICIES = Object.freeze(["ignore", "resume"]);
     var NEGATIVE_CACHE_POLICIES = Object.freeze(["ignore", "use", "revalidate"]);
     var LEGACY_ACTIONS = Object.freeze({
+      publish: "sync:publish",
       fresh: "sync:daily",
       quick: "sync:daily",
       all: "sync:daily",
@@ -276,6 +568,10 @@ var require_syncPlan = __commonJS({
       const normalized = String(action || "").trim();
       const map = {
         daily: "daily",
+        publish: "daily",
+        "sync:publish": "daily",
+        "sync:publish:routine": "daily",
+        "sync:publish:full": "new-term",
         "daily:classes": "daily-classes",
         "daily:teachers": "daily-teachers",
         "daily:classrooms": "daily-classrooms",
@@ -403,7 +699,7 @@ var require_syncPlan = __commonJS({
         verifyClient: buildRelease && !boolParam(params, ["no-verify-client"], false),
         allowPartial: boolParam(params, "allow-partial", false),
         allowDerived: boolParam(params, "allow-derived", false),
-        forceRefresh: schedulePolicy === "network-only" && !isUploadOnly,
+        forceRefresh: schedulePolicy === "network-only" && !isUploadOnly && progressPolicy === "ignore",
         ignoreProgress: progressPolicy === "ignore",
         ignoreNoScheduleCache: negativeCachePolicy === "ignore",
         cacheOnlyExplicit: schedulePolicy === "cache-only" || catalogPolicy === "cache-only",
@@ -442,7 +738,7 @@ var require_syncPlan = __commonJS({
       next.ignoreProgress = Boolean(plan.ignoreProgress);
       next.ignoreNoScheduleCache = Boolean(plan.ignoreNoScheduleCache);
       next.mergeOldData = Boolean(plan.mergeOldData);
-      next.crawlMode = plan.schedulePolicy === "network-only" ? "full-fresh" : "cache-only";
+      next.crawlMode = plan.forceRefresh ? "full-fresh" : plan.schedulePolicy === "cache-only" ? "cache-only" : "incremental";
       next.freshRunId = plan.runId;
       next.catalogPolicy = plan.catalogPolicy;
       next.schedulePolicy = plan.schedulePolicy;
@@ -482,7 +778,8 @@ var require_syncPlan = __commonJS({
     function renderPowerShellCommand(task, options = {}) {
       const term = options.term || "2025-2026-2";
       const start = options.termStartDate || options.start || "YYYY-MM-DD";
-      const weeks = options.totalWeeks || "TOTAL_WEEKS";
+      const weekCount = Number(options.totalWeeks);
+      const weeks = Number.isInteger(weekCount) && weekCount > 0 ? weekCount : "TOTAL_WEEKS";
       const scopes = Array.isArray(options.scopes) && options.scopes.length ? options.scopes.join(",") : "classSchedules,teacherSchedules,classroomSchedules,courseSchedules";
       const base = `npm run ${task}`;
       if (task === "sync:new-term") {
@@ -527,7 +824,8 @@ ${base} -- --file="$file" --term=${term}`;
     function getRecommendedOperations2(options = {}) {
       const term = options.term || "2025-2026-2";
       const termStartDate = options.termStartDate || "YYYY-MM-DD";
-      const totalWeeks = options.totalWeeks || "TOTAL_WEEKS";
+      const weekCount = Number(options.totalWeeks);
+      const totalWeeks = Number.isInteger(weekCount) && weekCount > 0 ? weekCount : "";
       const operations = [
         ["sync:daily", "daily_all_dynamic", true, true, false, true, true, true, "medium", "daily_all"],
         ["sync:daily:classes", "daily_classes", true, true, false, true, true, true, "medium", "class_changes"],
@@ -2492,20 +2790,27 @@ var require_stagingFingerprint = __commonJS({
       "canonicalHash",
       "changed",
       "dataEpoch",
+      "duration",
+      "durationMs",
+      "elapsedMs",
       "forceRefreshToken",
       "generatedAt",
       "hash",
-      "id",
       "joinedPath",
       "jsonPath",
+      "log",
+      "logs",
       "meta",
       "pack",
       "packHealth",
       "publishedAt",
+      "requestDuration",
+      "requestDurationMs",
       "releasePack",
       "releaseVersion",
       "size",
       "stagingUploadId",
+      "uploadId",
       "updatedAt",
       "version"
     ]);
@@ -2539,16 +2844,55 @@ var require_stagingFingerprint = __commonJS({
         courses: resources.courses.length
       };
     }
-    function stableClone(value) {
+    function cmpText(left, right) {
+      return String(left || "").localeCompare(String(right || ""), "zh-CN", { numeric: true });
+    }
+    function firstOf(value, keys) {
+      for (const key of keys) {
+        if (value && value[key] !== void 0 && value[key] !== null && value[key] !== "") {
+          return value[key];
+        }
+      }
+      return "";
+    }
+    function eventSortKey(item) {
+      const source = item && typeof item === "object" ? item : {};
+      return [
+        Number(firstOf(source, ["weekday", "weekDay", "dayOfWeek"]) || 0),
+        Number(firstOf(source, ["startSection", "sectionStart"]) || 0),
+        Number(firstOf(source, ["endSection", "sectionEnd"]) || 0),
+        Number(firstOf(source, ["startWeek"]) || 0),
+        Number(firstOf(source, ["endWeek"]) || 0),
+        firstOf(source, ["weekPattern", "weekType", "oddEven", "weekParity", "parity"]),
+        firstOf(source, ["courseName", "name"]),
+        firstOf(source, ["teacherName", "teacher"]),
+        firstOf(source, ["classroom", "roomName", "classroomName"])
+      ].join("");
+    }
+    function entitySortKey(item, path2) {
+      const source = item && typeof item === "object" ? item : {};
+      const key = path2[path2.length - 1] || "";
+      if (key === "colleges") return [firstOf(source, ["code", "collegeCode"]), firstOf(source, ["name", "collegeName"])].join("");
+      if (key === "majors") return [firstOf(source, ["code", "majorCode"]), firstOf(source, ["name", "majorName"]), firstOf(source, ["collegeCode", "collegeName"]), firstOf(source, ["grade"])].join("");
+      if (key === "classSchedules" || key === "classes") return [firstOf(source, ["classId", "id"]), firstOf(source, ["className", "name"])].join("");
+      if (key === "teacherSchedules" || key === "teachers") return [firstOf(source, ["teacherId", "id"]), firstOf(source, ["teacherName", "name"])].join("");
+      if (key === "classroomSchedules" || key === "classrooms") return [firstOf(source, ["roomId", "classroomId", "id"]), firstOf(source, ["roomName", "classroomName", "name"])].join("");
+      if (key === "courseSchedules") return [firstOf(source, ["courseId", "id"]), firstOf(source, ["courseName", "name"])].join("");
+      if (key === "courses" && (source.weekday || source.startSection || source.endSection || source.teacherName || source.classroom)) return eventSortKey(source);
+      if (key === "courses") return [firstOf(source, ["courseId", "id"]), firstOf(source, ["courseName", "name"])].join("");
+      if (source.weekday || source.startSection || source.endSection || source.courseName) return eventSortKey(source);
+      return stableStringify(source);
+    }
+    function stableClone(value, path2 = []) {
       if (Array.isArray(value)) {
-        return value.map(stableClone);
+        return value.map((item) => stableClone(item, path2)).sort((left, right) => cmpText(entitySortKey(left, path2), entitySortKey(right, path2)));
       }
       if (!value || typeof value !== "object") {
         return value;
       }
       const output = {};
       Object.keys(value).filter((key) => !VOLATILE_KEYS.has(key)).sort().forEach((key) => {
-        const next = stableClone(value[key]);
+        const next = stableClone(value[key], path2.concat(key));
         if (next !== void 0) output[key] = next;
       });
       return output;
@@ -2573,12 +2917,59 @@ var require_stagingFingerprint = __commonJS({
     function sha256(text) {
       return crypto2.createHash("sha256").update(String(text || ""), "utf8").digest("hex");
     }
-    function calculateFingerprint2(data) {
-      const canonical = canonicalPayload(data);
-      const canonicalJson = JSON.stringify(canonical);
+    function canonicalSource(data) {
+      const source = data && typeof data === "object" ? data : {};
       return {
-        canonicalHash: sha256(canonicalJson),
-        canonicalJson,
+        schemaVersion: source.schemaVersion || "",
+        term: source.term || source.semester || "",
+        semester: source.semester || source.term || "",
+        termStartDate: source.termStartDate || source.sourceStartDate || source.meta && source.meta.startDate || "",
+        catalog: source.catalog || {},
+        majors: source.majors || [],
+        classSchedules: source.classSchedules || source.resources && source.resources.classSchedules || [],
+        resources: getResources(source),
+        timeTable: source.timeTable || {}
+      };
+    }
+    function updateStableJsonHash(hash, value, path2 = []) {
+      if (Array.isArray(value)) {
+        const sorted = value.map((item, index) => ({ item, index, sortKey: entitySortKey(item, path2) })).sort((left, right) => {
+          const compared = cmpText(left.sortKey, right.sortKey);
+          return compared || left.index - right.index;
+        });
+        hash.update("[");
+        sorted.forEach((entry, index) => {
+          if (index > 0) hash.update(",");
+          updateStableJsonHash(hash, entry.item === void 0 ? null : entry.item, path2);
+        });
+        hash.update("]");
+        return;
+      }
+      if (!value || typeof value !== "object") {
+        const encoded = JSON.stringify(value);
+        hash.update(encoded === void 0 ? "null" : encoded);
+        return;
+      }
+      let first = true;
+      hash.update("{");
+      Object.keys(value).filter((key) => !VOLATILE_KEYS.has(key)).sort().forEach((key) => {
+        if (value[key] === void 0) return;
+        if (!first) hash.update(",");
+        first = false;
+        hash.update(JSON.stringify(key));
+        hash.update(":");
+        updateStableJsonHash(hash, value[key], path2.concat(key));
+      });
+      hash.update("}");
+    }
+    function hashCanonicalPayload(data) {
+      const hash = crypto2.createHash("sha256");
+      updateStableJsonHash(hash, canonicalSource(data));
+      return hash.digest("hex");
+    }
+    function calculateFingerprint2(data) {
+      return {
+        canonicalHash: hashCanonicalPayload(data),
         counts: summarizeStagingData(data)
       };
     }
@@ -2744,18 +3135,21 @@ var require_termRegistryService = __commonJS({
       const [startYear, endYear, half] = value.split("-");
       return `${startYear}-${endYear}\u5B66\u5E74${half === "1" ? "\u7B2C\u4E00" : "\u7B2C\u4E8C"}\u5B66\u671F`;
     }
-    function normalizeTotalWeeks(value, fallback) {
-      const number = Number(value == null || value === "" ? fallback : value);
-      return Number.isFinite(number) ? Math.floor(number) : NaN;
+    function hasExplicitValue(value) {
+      return value !== void 0 && value !== null && value !== "";
     }
-    function legacyTotalWeeksForTerm(term) {
-      return term === LEGACY_CURRENT_TERM_CONFIG.term ? LEGACY_CURRENT_TERM_CONFIG.totalWeeks : undefined;
+    function normalizeTotalWeeks(value, fallback) {
+      const number = Number(hasExplicitValue(value) ? value : fallback);
+      return Number.isFinite(number) ? Math.floor(number) : NaN;
     }
     function normalizeTermRecord(record = {}, options = {}) {
       const source = record && typeof record === "object" ? record : {};
       const term = assertTermId(source.term || options.term);
       const now = options.now || nowIso();
-      const totalWeeks = normalizeTotalWeeks(source.totalWeeks, options.defaultTotalWeeks);
+      let totalWeeks = normalizeTotalWeeks(source.totalWeeks, options.defaultTotalWeeks);
+      if (!Number.isFinite(totalWeeks) && options.allowLegacyCurrentTermFallback && term === LEGACY_CURRENT_TERM_CONFIG.term) {
+        totalWeeks = LEGACY_CURRENT_TERM_CONFIG.totalWeeks;
+      }
       return {
         term,
         semesterText: String(source.semesterText || generateSemesterText2(term)).trim(),
@@ -2810,7 +3204,10 @@ var require_termRegistryService = __commonJS({
       const normalizedTerms = [];
       terms.forEach((item) => {
         try {
-          const normalized = normalizeTermRecord(item, { now: source.updatedAt || nowIso() });
+          const normalized = normalizeTermRecord(item, {
+            now: source.updatedAt || nowIso(),
+            allowLegacyCurrentTermFallback: true
+          });
           if (!seen.has(normalized.term)) {
             seen.add(normalized.term);
             normalizedTerms.push(normalized);
@@ -2954,7 +3351,7 @@ var require_termRegistryService = __commonJS({
           term,
           semesterText: termConfig && termConfig.semesterText || generateSemesterText2(term),
           termStartDate: termConfig && termConfig.termStartDate || "",
-          totalWeeks: termConfig && termConfig.totalWeeks || legacyTotalWeeksForTerm(term),
+          totalWeeks: termConfig && termConfig.totalWeeks,
           weekStart: termConfig && termConfig.weekStart || "monday",
           status: releaseVersion && termConfig ? "current" : "planned",
           releaseVersion,
@@ -3109,7 +3506,7 @@ var require_termRegistryService = __commonJS({
         term: config.term || source.term || source.semester,
         semesterText: config.semesterText || source.semesterText || "",
         termStartDate: config.termStartDate || source.termStartDate || "",
-        totalWeeks: config.totalWeeks || source.totalWeeks || legacyTotalWeeksForTerm(config.term || source.term || source.semester),
+        totalWeeks: config.totalWeeks || source.totalWeeks,
         weekStart: config.weekStart || source.weekStart || "monday",
         status: "ready",
         releaseVersion: config.releaseVersion || source.releaseVersion || source.version || "",
@@ -3117,7 +3514,7 @@ var require_termRegistryService = __commonJS({
         publishedAt: source.publishedAt || source.updatedAt || "",
         updatedAt: source.updatedAt || nowIso(),
         source: config.source || source.source || "release-manifest"
-      });
+      }, { allowLegacyCurrentTermFallback: true });
     }
     function validateManifestForTerm(term, releaseVersion) {
       const id = assertTermId(term);
@@ -3769,13 +4166,17 @@ var require_teachingCalendarService = __commonJS({
         note: String(week.note || week.notes || "").trim()
       };
     }
-    function generateWeeks(termConfig, options = {}) {
-      const totalWeeks = Number(termConfig.totalWeeks);
-      if (!Number.isInteger(totalWeeks) || totalWeeks < 1 || totalWeeks > 30) {
-        const error = new Error("TOTAL_WEEKS_REQUIRED");
-        error.code = "TOTAL_WEEKS_REQUIRED";
+    function requireTotalWeeks(value, code = "CALENDAR_TOTAL_WEEKS_MISSING") {
+      const number = Number(value);
+      if (!Number.isInteger(number) || number < 1 || number > 30) {
+        const error = new Error(code);
+        error.code = code;
         throw error;
       }
+      return number;
+    }
+    function generateWeeks(termConfig, options = {}) {
+      const totalWeeks = requireTotalWeeks(termConfig && termConfig.totalWeeks);
       const start = parseDate(termConfig.termStartDate);
       const weeks = [];
       for (let weekNo = 1; weekNo <= totalWeeks; weekNo += 1) {
@@ -3810,9 +4211,10 @@ var require_teachingCalendarService = __commonJS({
         term,
         semesterText: source.semesterText || record.semesterText || "",
         termStartDate: source.termStartDate || record.termStartDate || "",
-        totalWeeks: source.totalWeeks || record.totalWeeks || (term === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.totalWeeks : undefined),
+        totalWeeks: source.totalWeeks || record.totalWeeks,
         weekStart: source.weekStart || record.weekStart || "monday"
       };
+      requireTotalWeeks(termConfig.totalWeeks);
       const defaultWeekTitle = source.defaultWeekTitle || "\u6B63\u5E38\u6559\u5B66\u5468";
       const explicitWeeks = Array.isArray(source.weeks) ? source.weeks : [];
       const generated = generateWeeks(termConfig, { type: record.status === "planned" ? "pending" : "teaching", title: record.status === "planned" ? "\u6559\u5B66\u5B89\u6392\u5F85\u7EF4\u62A4" : defaultWeekTitle });
@@ -4007,13 +4409,20 @@ var require_runtimePointerService = __commonJS({
       const term = manifest.term || manifest.semester || manifest.termConfig && manifest.termConfig.term || "";
       const releaseVersion = manifest.releaseVersion || manifest.version || "";
       if (!term || !releaseVersion) return null;
-      const termConfig = manifest.termConfig || {
+      const registryRecord = termRegistryService2.getTerm(term);
+      const rawTermConfig = manifest.termConfig && typeof manifest.termConfig === "object" ? manifest.termConfig : {};
+      const termConfig = termRegistryService2.normalizeTermRecord({
         term,
-        semesterText: manifest.semesterText || "",
-        termStartDate: manifest.termStartDate || "",
-        totalWeeks: manifest.totalWeeks || (term === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.totalWeeks : undefined),
-        weekStart: manifest.weekStart || "monday"
-      };
+        semesterText: rawTermConfig.semesterText || manifest.semesterText || registryRecord && registryRecord.semesterText || "",
+        termStartDate: rawTermConfig.termStartDate || manifest.termStartDate || registryRecord && registryRecord.termStartDate || "",
+        totalWeeks: rawTermConfig.totalWeeks || manifest.totalWeeks || registryRecord && registryRecord.totalWeeks,
+        weekStart: rawTermConfig.weekStart || manifest.weekStart || registryRecord && registryRecord.weekStart || "monday",
+        status: "ready",
+        releaseVersion,
+        dataAvailable: true,
+        updatedAt: manifest.updatedAt || manifest.publishedAt || nowIso(),
+        source: rawTermConfig.source || manifest.source || "release-manifest"
+      }, { allowLegacyCurrentTermFallback: true });
       return normalizePointer({
         activeTerm: term,
         semester: manifest.semester || term,
@@ -4114,6 +4523,10 @@ var require_runtimePointerService = __commonJS({
       }
       ensureDir(RUNTIME_DIR);
       writeJsonAtomic(ACTIVE_RUNTIME_PATH, pointer);
+      const openrestyRuntimeDir = process.env.OPENRESTY_STATIC_RUNTIME_DIR ? path2.resolve(process.env.OPENRESTY_STATIC_RUNTIME_DIR) : "";
+      if (openrestyRuntimeDir) {
+        writeJsonAtomic(path2.join(openrestyRuntimeDir, "active.json"), pointer);
+      }
       cache.invalidate(ACTIVE_RUNTIME_PATH);
       return pointer;
     }
@@ -4130,6 +4543,210 @@ var require_runtimePointerService = __commonJS({
       readActivePointer,
       resolveActiveRuntimeManifest,
       writeActivePointerForManifest
+    };
+  }
+});
+
+// ../../server/src/services/releaseSummaryStore.js
+var require_releaseSummaryStore = __commonJS({
+  "../../server/src/services/releaseSummaryStore.js"(exports2, module2) {
+    var fs2 = require("fs");
+    var path2 = require("path");
+    var { SmallJsonCache, ensureDir, readJsonFile, statJsonFile, writeJsonAtomic } = require_jsonFileStore();
+    var SUMMARY_FILE_NAME = "summary.json";
+    var HEALTH_SUMMARY_FILE_NAME = "health-summary.json";
+    var cache = new SmallJsonCache({ maxEntries: 200 });
+    function nowIso() {
+      return (/* @__PURE__ */ new Date()).toISOString();
+    }
+    function readSmallJson(filePath, fallback = null) {
+      return cache.read(filePath, fallback);
+    }
+    function summaryPathForFiles(files) {
+      return files && files.releaseDir ? path2.join(files.releaseDir, SUMMARY_FILE_NAME) : "";
+    }
+    function healthSummaryPathForFiles(files) {
+      return files && files.releaseDir ? path2.join(files.releaseDir, HEALTH_SUMMARY_FILE_NAME) : "";
+    }
+    function normalizeVersion(value) {
+      return String(value || "").trim();
+    }
+    function pickUpdatedAt(manifest, stat) {
+      return manifest && (manifest.publishedAt || manifest.updatedAt || manifest.generatedAt) || stat && stat.mtime && stat.mtime.toISOString && stat.mtime.toISOString() || "";
+    }
+    function buildQuickHealthFromManifest(manifest, fallback = {}) {
+      const pack = manifest && manifest.pack || {};
+      const health = manifest && manifest.packHealth || {};
+      return {
+        success: true,
+        healthy: manifest ? manifest.validation?.valid !== false : false,
+        manifestExists: Boolean(manifest),
+        manifestValid: Boolean(manifest && (manifest.releaseVersion || manifest.version)),
+        counts: manifest && manifest.counts || fallback.counts || {},
+        resourceCounts: manifest && manifest.resourceCounts || fallback.resourceCounts || null,
+        detailCounts: pack.detail || fallback.detailCounts || {},
+        indexCounts: pack.index || fallback.indexCounts || {},
+        emptyRoomHealth: health.emptyRoom || fallback.emptyRoomHealth || {},
+        durationMs: 0,
+        source: "manifest-summary"
+      };
+    }
+    function buildSummaryFromManifest(version, manifest, files, options = {}) {
+      const stat = files && files.releaseDir && fs2.existsSync(files.releaseDir) ? fs2.statSync(files.releaseDir) : null;
+      const releaseVersion = normalizeVersion(
+        version || manifest && (manifest.releaseVersion || manifest.version)
+      );
+      const updatedAt = pickUpdatedAt(manifest, stat) || options.updatedAt || "";
+      const deepHealth = files ? readSmallJson(healthSummaryPathForFiles(files), null) : null;
+      const active = options.active || {};
+      const quickHealth = options.quickHealth || buildQuickHealthFromManifest(manifest, options);
+      return {
+        success: true,
+        schemaVersion: 1,
+        summaryStatus: manifest ? "from-manifest" : "missing-summary",
+        version: releaseVersion,
+        releaseVersion,
+        term: manifest && (manifest.term || manifest.semester) || active.term || active.semester || "",
+        semester: manifest && (manifest.semester || manifest.term) || active.semester || active.term || "",
+        termConfig: manifest && manifest.termConfig || active.termConfig || null,
+        createdAt: manifest && (manifest.createdAt || manifest.generatedAt) || "",
+        generatedAt: manifest && manifest.generatedAt || "",
+        updatedAt,
+        publishedAt: active.activatedAt || active.publishedAt || manifest && manifest.publishedAt || "",
+        activatedAt: active.activatedAt || "",
+        active: Boolean(active && active.version === releaseVersion),
+        archived: Boolean(manifest && manifest.archived),
+        canonicalHash: active.canonicalHash || manifest && manifest.canonicalHash || "",
+        counts: manifest && manifest.counts || active.counts || {},
+        resourceCounts: manifest && manifest.resourceCounts || active.resourceCounts || null,
+        quickHealth,
+        releasePack: quickHealth,
+        packBytes: Number(manifest && manifest.size && manifest.size.packBytes || 0) || 0,
+        snapshotBytes: Number(manifest && manifest.size && manifest.size.snapshotBytes || 0) || 0,
+        indexBytes: Number(manifest && manifest.size && manifest.size.indexBytes || 0) || 0,
+        detailBytes: Number(manifest && manifest.size && manifest.size.detailBytes || 0) || 0,
+        deepHealthLastRunAt: deepHealth && (deepHealth.completedAt || deepHealth.updatedAt || deepHealth.startedAt) || "",
+        deepHealthStatus: deepHealth && (deepHealth.status || (deepHealth.healthy ? "healthy" : "failed")) || "not-run",
+        deepHealthJobId: deepHealth && deepHealth.jobId || "",
+        source: manifest ? "release-manifest" : "release-directory"
+      };
+    }
+    function readReleaseSummary(version, files, options = {}) {
+      const summaryPath = summaryPathForFiles(files);
+      const active = options.active || {};
+      const stored = summaryPath ? readSmallJson(summaryPath, null) : null;
+      if (stored && stored.version) {
+        const quickHealth = options.quickHealth || stored.quickHealth || stored.releasePack || null;
+        return Object.assign({}, stored, {
+          success: true,
+          summaryStatus: stored.summaryStatus || "generated",
+          active: Boolean(active && active.version === stored.version),
+          activatedAt: active.activatedAt || stored.activatedAt || "",
+          publishedAt: active.activatedAt || active.publishedAt || stored.publishedAt || "",
+          canonicalHash: active.canonicalHash || stored.canonicalHash || "",
+          quickHealth: quickHealth || buildQuickHealthFromManifest(null, stored),
+          releasePack: quickHealth || stored.releasePack || buildQuickHealthFromManifest(null, stored)
+        });
+      }
+      const manifest = files ? readSmallJson(files.manifestPath, null) || readSmallJson(path2.join(files.publicReleaseDir || "", "manifest.json"), null) : null;
+      return buildSummaryFromManifest(version, manifest, files, Object.assign({}, options, {
+        active,
+        quickHealth: options.quickHealth
+      }));
+    }
+    function writeReleaseSummary(version, manifest, files, options = {}) {
+      if (!files || !files.releaseDir) return null;
+      const summary = Object.assign(
+        {},
+        buildSummaryFromManifest(version, manifest, files, options),
+        {
+          summaryStatus: "generated",
+          generatedSummaryAt: nowIso()
+        }
+      );
+      const target = summaryPathForFiles(files);
+      ensureDir(path2.dirname(target));
+      writeJsonAtomic(target, summary);
+      cache.invalidate(target);
+      return summary;
+    }
+    function buildDeepHealthSummary(status, options = {}) {
+      return {
+        schemaVersion: 1,
+        status: status && status.healthy ? "healthy" : "failed",
+        healthy: Boolean(status && status.healthy),
+        releaseVersion: status && (status.releaseVersion || status.version) || options.version || "",
+        version: status && (status.version || status.releaseVersion) || options.version || "",
+        jobId: options.jobId || "",
+        startedAt: options.startedAt || "",
+        completedAt: nowIso(),
+        totalBytes: status && status.totalBytes || 0,
+        detailCounts: status && status.detailCounts || {},
+        missing: status && status.missing || [],
+        hashErrors: status && status.hashErrors || [],
+        workerPid: options.workerPid || process.pid
+      };
+    }
+    async function writeJsonAtomicAsync(filePath, data) {
+      await fs2.promises.mkdir(path2.dirname(filePath), { recursive: true });
+      const tempPath = `${filePath}.${process.pid}.${Date.now()}.${Math.random().toString(36).slice(2)}.tmp`;
+      const buffer = Buffer.from(JSON.stringify(data, null, 2), "utf-8");
+      await fs2.promises.writeFile(tempPath, buffer);
+      try {
+        if (process.platform === "win32" && fs2.existsSync(filePath)) {
+          try {
+            await fs2.promises.unlink(filePath);
+          } catch (error) {
+          }
+        }
+        await fs2.promises.rename(tempPath, filePath);
+      } catch (error) {
+        await fs2.promises.writeFile(filePath, buffer);
+        try {
+          await fs2.promises.unlink(tempPath);
+        } catch (cleanupError) {
+        }
+      }
+    }
+    function writeDeepHealthSummary(files, status, options = {}) {
+      if (!files || !files.releaseDir) return null;
+      const target = healthSummaryPathForFiles(files);
+      const summary = buildDeepHealthSummary(status, options);
+      ensureDir(path2.dirname(target));
+      writeJsonAtomic(target, summary);
+      cache.invalidate(target);
+      return summary;
+    }
+    async function writeDeepHealthSummaryAsync(files, status, options = {}) {
+      if (!files || !files.releaseDir) return null;
+      const target = healthSummaryPathForFiles(files);
+      const summary = buildDeepHealthSummary(status, options);
+      await writeJsonAtomicAsync(target, summary);
+      cache.invalidate(target);
+      return summary;
+    }
+    function getSummaryStats(files) {
+      const summaryPath = summaryPathForFiles(files);
+      return summaryPath ? statJsonFile(summaryPath) : null;
+    }
+    function clearCache() {
+      cache.clear();
+    }
+    module2.exports = {
+      HEALTH_SUMMARY_FILE_NAME,
+      SUMMARY_FILE_NAME,
+      buildDeepHealthSummary,
+      buildQuickHealthFromManifest,
+      buildSummaryFromManifest,
+      clearCache,
+      getSummaryStats,
+      healthSummaryPathForFiles,
+      readReleaseSummary,
+      readSmallJson,
+      summaryPathForFiles,
+      writeDeepHealthSummary,
+      writeDeepHealthSummaryAsync,
+      writeReleaseSummary
     };
   }
 });
@@ -4373,20 +4990,20 @@ var require_resourceCountContract = __commonJS({
           aggregateSchedules: Number(counts.majorAggregateCount || 0) || base.class.aggregateSchedules
         }),
         teacher: Object.assign({}, base.teacher, {
-          directoryEntities: base.teacher.directoryEntitiesStatus === "counted" ? base.teacher.directoryEntities : teacherCount || null,
-          directoryEntitiesStatus: base.teacher.directoryEntitiesStatus === "counted" ? "counted" : teacherCount ? "derived-from-legacy-index" : "not-counted",
+          directoryEntities: base.teacher.directoryEntitiesStatus === "counted" ? base.teacher.directoryEntities : null,
+          directoryEntitiesStatus: base.teacher.directoryEntitiesStatus === "counted" ? "counted" : "not-counted",
           scheduleDocuments: teacherCount,
           sourceMode: "legacy-derived"
         }),
         classroom: Object.assign({}, base.classroom, {
-          directoryEntities: base.classroom.directoryEntitiesStatus === "counted" ? base.classroom.directoryEntities : classroomCount || null,
-          directoryEntitiesStatus: base.classroom.directoryEntitiesStatus === "counted" ? "counted" : classroomCount ? "derived-from-legacy-index" : "not-counted",
+          directoryEntities: base.classroom.directoryEntitiesStatus === "counted" ? base.classroom.directoryEntities : null,
+          directoryEntitiesStatus: base.classroom.directoryEntitiesStatus === "counted" ? "counted" : "not-counted",
           scheduleDocuments: classroomCount,
           sourceMode: "legacy-derived"
         }),
         course: Object.assign({}, base.course, {
-          directoryEntities: base.course.directoryEntitiesStatus === "counted" ? base.course.directoryEntities : courseCount || null,
-          directoryEntitiesStatus: base.course.directoryEntitiesStatus === "counted" ? "counted" : courseCount ? "derived-from-legacy-index" : "not-counted",
+          directoryEntities: base.course.directoryEntitiesStatus === "counted" ? base.course.directoryEntities : null,
+          directoryEntitiesStatus: base.course.directoryEntitiesStatus === "counted" ? "counted" : "not-counted",
           scheduleDocuments: courseCount,
           sourceMode: "legacy-derived"
         }),
@@ -4485,11 +5102,26 @@ var require_resourceCountContract = __commonJS({
         const activeMode = active && active[resource] && active[resource].sourceMode || "unknown";
         const stagingMode = staging && staging[resource] && staging[resource].sourceMode || "unknown";
         if (activeMode !== stagingMode) {
-          blockers.push({
+          const detail = {
             code: "SOURCE_MODE_MISMATCH",
             resource,
+            field: "sourceMode",
+            activeValue: activeMode,
+            stagingValue: stagingMode,
+            activeLabel: sourceModeLabel(activeMode),
+            stagingLabel: sourceModeLabel(stagingMode),
+            expectedValue: activeMode,
             message: `${METRIC_LABELS[`${resource}.scheduleDocuments`] || resource} \u6765\u6E90\u53E3\u5F84\u4E0D\u4E00\u81F4\uFF0C\u5F53\u524D\u7EBF\u4E0A ${sourceModeLabel(activeMode)}\uFF0C\u672C\u6B21\u6682\u5B58 ${sourceModeLabel(stagingMode)}\u3002`
-          });
+          };
+          if (isLegacyActiveSourceCompatible(active, staging, resource, activeMode, stagingMode)) {
+            warnings.push(Object.assign({}, detail, {
+              code: "LEGACY_ACTIVE_SOURCE_MODE_COMPAT",
+              severity: "warning",
+              reason: "\u5F53\u524D\u7EBF\u4E0A Release \u6765\u81EA\u65E7\u7248\u7EDF\u8BA1\u53E3\u5F84\uFF0C\u672C\u6B21\u6682\u5B58\u5DF2\u4F7F\u7528\u672C\u6B21\u73ED\u7EA7\u8BFE\u8868\u6D3E\u751F\u53E3\u5F84\uFF1B\u4EC5\u5BF9\u65E7 Active \u505A\u663E\u5F0F\u517C\u5BB9\uFF0C\u4E0D\u653E\u5BBD\u672C\u6B21\u6570\u636E\u8D28\u91CF\u68C0\u67E5\u3002"
+            }));
+          } else {
+            blockers.push(detail);
+          }
         }
         ["directoryEntities", "scheduleDocuments", "courseEvents"].forEach((field) => {
           comparisons.push(compareMetric(active, staging, resource, field));
@@ -4521,6 +5153,16 @@ var require_resourceCountContract = __commonJS({
         warnings,
         comparisons
       };
+    }
+    function isLegacyActiveSourceCompatible(active, staging, resource, activeMode, stagingMode) {
+      if (activeMode !== "legacy-derived") return false;
+      if (stagingMode !== "derived-current-run") return false;
+      if (!active || active.derivedFromLegacy !== true) return false;
+      const stagingResource = staging && staging[resource] || {};
+      if (stagingResource.directoryEntitiesStatus !== "counted") return false;
+      if (Number(stagingResource.scheduleDocuments || 0) <= 0) return false;
+      const blockingDiagnostics = asArray(staging && staging.diagnostics).filter((item) => item && item.resource === resource && item.publishable === false);
+      return blockingDiagnostics.length === 0;
     }
     function sourceModeLabel(value) {
       const key = String(value || "unknown");
@@ -4662,6 +5304,8 @@ var require_releaseService = __commonJS({
     var termReleaseIndexService = require_termReleaseIndexService();
     var teachingCalendarService = require_teachingCalendarService();
     var runtimePointerService = require_runtimePointerService();
+    var releaseSummaryStore = require_releaseSummaryStore();
+    var { SmallJsonCache } = require_jsonFileStore();
     var {
       buildResourceCountContract,
       deriveLegacyResourceCountContract,
@@ -4684,6 +5328,7 @@ var require_releaseService = __commonJS({
     var STATIC_RELEASE_BASE_URL = process.env.FOSU_STATIC_RELEASE_BASE_URL || STATIC_RELEASE_BASE_PATH;
     var gzipAsync = promisify(zlib.gzip);
     var brotliCompressAsync = typeof zlib.brotliCompress === "function" ? promisify(zlib.brotliCompress) : null;
+    var smallJsonCache = new SmallJsonCache({ maxEntries: 300 });
     function ensureDir(dirPath) {
       if (!fs2.existsSync(dirPath)) {
         fs2.mkdirSync(dirPath, { recursive: true });
@@ -4706,6 +5351,9 @@ var require_releaseService = __commonJS({
         return null;
       }
     }
+    function readSmallJsonFile(filePath, fallback = null) {
+      return smallJsonCache.read(filePath, fallback);
+    }
     function writeJsonAtomic(filePath, data) {
       ensureDir(path2.dirname(filePath));
       const tempPath = `${filePath}.tmp-${process.pid}-${Date.now()}`;
@@ -4725,6 +5373,7 @@ var require_releaseService = __commonJS({
         } catch (e2) {
         }
       }
+      smallJsonCache.invalidate(filePath);
     }
     function normalizeVersion(version) {
       return String(version || "").trim().replace(/[:/\\?%*|"<>]/g, "-").replace(/\s+/g, "-");
@@ -4991,9 +5640,9 @@ var require_releaseService = __commonJS({
         if (!items2.length) return;
         next[kind].scheduleDocuments = items2.length;
         next[kind].courseEvents = sumIndexCourseCounts(items2);
-        if (next[kind].directoryEntities == null || next[kind].directoryEntitiesStatus === "not-counted") {
-          next[kind].directoryEntities = items2.length;
-          next[kind].directoryEntitiesStatus = "derived-from-legacy-index";
+        if (next[kind].directoryEntitiesStatus !== "counted") {
+          next[kind].directoryEntities = null;
+          next[kind].directoryEntitiesStatus = "not-counted";
         }
         if (!next[kind].sourceMode || next[kind].sourceMode === "unknown") {
           next[kind].sourceMode = "legacy-derived";
@@ -5004,6 +5653,10 @@ var require_releaseService = __commonJS({
     function getReleaseResourceCounts(version, snapshot) {
       const normalizedVersion = normalizeVersion(version || snapshot && (snapshot.version || snapshot.releaseVersion) || "");
       const files = normalizedVersion ? getReleaseFiles(normalizedVersion) : null;
+      const summary = files ? releaseSummaryStore.readReleaseSummary(normalizedVersion, files) : null;
+      if (summary && summary.resourceCounts && Number(summary.resourceCounts.countSchemaVersion) === 2) {
+        return summary.resourceCounts;
+      }
       const manifest = files ? readJsonFile(files.manifestPath) || readJsonFile(path2.join(files.publicReleaseDir, "manifest.json")) : null;
       if (manifest && manifest.resourceCounts && Number(manifest.resourceCounts.countSchemaVersion) === 2) {
         return manifest.resourceCounts;
@@ -6074,18 +6727,19 @@ var require_releaseService = __commonJS({
         errors.push("classScheduleCount must be greater than 0");
       }
       const term = snapshot.term || snapshot.semester || snapshot.termConfig && snapshot.termConfig.term || "";
+      const legacyTermConfig = term === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService2.LEGACY_CURRENT_TERM_CONFIG : {};
       try {
         const termConfig = termRegistryService2.normalizeTermRecord(Object.assign({}, snapshot.termConfig || {}, {
           term,
           termStartDate: snapshot.termConfig && snapshot.termConfig.termStartDate || snapshot.termStartDate || "",
-          totalWeeks: snapshot.termConfig && snapshot.termConfig.totalWeeks || snapshot.totalWeeks || (term === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.totalWeeks : undefined),
+          totalWeeks: snapshot.termConfig && snapshot.termConfig.totalWeeks || snapshot.totalWeeks || legacyTermConfig.totalWeeks,
           weekStart: snapshot.termConfig && snapshot.termConfig.weekStart || snapshot.weekStart || "monday",
           status: "ready",
           releaseVersion: snapshot.version || snapshot.releaseVersion || "",
           dataAvailable: true,
           updatedAt: snapshot.updatedAt || (/* @__PURE__ */ new Date()).toISOString(),
           source: snapshot.source || "release-snapshot"
-        }));
+        }), { allowLegacyCurrentTermFallback: true });
         const termValidation = termRegistryService2.validateTermRecord(termConfig);
         if (!termValidation.valid) {
           termValidation.errors.forEach((error) => errors.push(`termConfig.${error}`));
@@ -6154,7 +6808,7 @@ var require_releaseService = __commonJS({
         publishedAt: snapshot.publishedAt || updatedAt,
         updatedAt,
         source: rawTermConfig.source || snapshot.source || "release-snapshot"
-      });
+      }, { allowLegacyCurrentTermFallback: true });
       const resourceCounts = buildResourceCountContract(snapshot);
       const releaseCalendarForHash = calendar ? Object.assign({}, calendar, {
         releaseVersion: version,
@@ -6266,7 +6920,7 @@ var require_releaseService = __commonJS({
           publishedAt: snapshot.publishedAt || snapshot.updatedAt,
           updatedAt: snapshot.updatedAt,
           source: rawTermConfig.source || snapshot.source || "release-snapshot"
-        });
+        }, { allowLegacyCurrentTermFallback: true });
         snapshot.term = termConfig.term;
         snapshot.semester = snapshot.semester || termConfig.term;
         snapshot.termConfig = termConfig;
@@ -6307,6 +6961,9 @@ var require_releaseService = __commonJS({
       });
       const compression = mirrorStaticReleaseFiles(version);
       manifest.compression = Object.assign({}, manifest.compression || {}, compression);
+      releaseSummaryStore.writeReleaseSummary(version, manifest, files, {
+        quickHealth: releaseSummaryStore.buildQuickHealthFromManifest(manifest)
+      });
       return {
         version,
         releaseDir: files.releaseDir,
@@ -6372,6 +7029,9 @@ var require_releaseService = __commonJS({
           }
         });
         manifest.compression = Object.assign({}, manifest.compression || {}, compression);
+        releaseSummaryStore.writeReleaseSummary(version, manifest, files, {
+          quickHealth: releaseSummaryStore.buildQuickHealthFromManifest(manifest)
+        });
         if (atomic) {
           if (options.job) options.job.progress(64, "deep validating", { releaseVersion: version });
           const deepStatus = getReleasePackStatus(version, { files });
@@ -6433,7 +7093,7 @@ var require_releaseService = __commonJS({
         semester: bootstrap.semester || manifest?.semester || manifest?.term,
         termConfig: bootstrap.termConfig || manifest?.termConfig || null,
         termStartDate: manifest?.termStartDate || manifest?.termConfig?.termStartDate || "",
-        totalWeeks: manifest?.totalWeeks || manifest?.termConfig?.totalWeeks || (manifest && (manifest.term || manifest.semester) === termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.term ? termRegistryService2.LEGACY_CURRENT_TERM_CONFIG.totalWeeks : undefined),
+        totalWeeks: manifest?.totalWeeks || manifest?.termConfig?.totalWeeks,
         weekStart: manifest?.weekStart || manifest?.termConfig?.weekStart || "monday",
         updatedAt: bootstrap.updatedAt || manifest?.updatedAt,
         source: bootstrap.metaDetails?.source || manifest?.source || "local-sync-client",
@@ -6572,23 +7232,73 @@ var require_releaseService = __commonJS({
       const activated = activateReleaseVersion(written.version);
       return Object.assign({}, written, activated);
     }
-    function getActiveReleaseInfo() {
+    function compactReleaseManifest(manifest, fallback = {}) {
+      if (!manifest || typeof manifest !== "object") {
+        return null;
+      }
+      const releaseVersion = manifest.releaseVersion || manifest.version || fallback.version || fallback.releaseVersion || "";
+      const term = manifest.term || manifest.semester || fallback.term || fallback.semester || "";
+      return {
+        success: manifest.success !== false,
+        schemaVersion: manifest.schemaVersion || 1,
+        version: manifest.version || releaseVersion,
+        releaseVersion,
+        term,
+        semester: manifest.semester || term,
+        semesterText: manifest.semesterText || "",
+        termConfig: manifest.termConfig || fallback.termConfig || null,
+        generatedAt: manifest.generatedAt || "",
+        updatedAt: manifest.updatedAt || fallback.updatedAt || "",
+        publishedAt: manifest.publishedAt || fallback.publishedAt || fallback.activatedAt || "",
+        cacheEpoch: manifest.cacheEpoch || manifest.dataEpoch || fallback.cacheEpoch || "",
+        dataEpoch: manifest.dataEpoch || manifest.cacheEpoch || fallback.cacheEpoch || "",
+        forceRefreshToken: manifest.forceRefreshToken || fallback.forceRefreshToken || "",
+        counts: manifest.counts || fallback.counts || {},
+        resourceCounts: manifest.resourceCounts || fallback.resourceCounts || null,
+        canonicalHash: manifest.canonicalHash || fallback.canonicalHash || "",
+        staticBasePath: manifest.staticBasePath || STATIC_RELEASE_BASE_PATH,
+        staticBaseUrl: manifest.staticBaseUrl || STATIC_RELEASE_BASE_URL,
+        staticReleaseUrl: manifest.staticReleaseUrl || (releaseVersion ? `${STATIC_RELEASE_BASE_URL}/${releaseVersion}` : ""),
+        manifestUrl: manifest.manifestUrl || "",
+        bootstrapUrl: manifest.bootstrapUrl || manifest.catalogUrl || "",
+        catalogUrl: manifest.catalogUrl || manifest.bootstrapUrl || "",
+        calendarUrl: manifest.calendarUrl || "",
+        indexUrls: manifest.indexUrls || {},
+        emptyRoomUrl: manifest.emptyRoomUrl || "",
+        detailUrlPattern: manifest.detailUrlPattern || "",
+        shards: manifest.shards || {},
+        pack: manifest.pack || {},
+        packHealth: manifest.packHealth || {},
+        validation: manifest.validation || null
+      };
+    }
+    function getActiveReleaseInfoFast() {
       ensureStorageDirs();
-      const active = readJsonFile(ACTIVE_RELEASE_PATH);
+      const active = readSmallJsonFile(ACTIVE_RELEASE_PATH);
       if (!active || !active.version) {
         return null;
       }
       const files = getReleaseFiles(active.version);
-      const manifest = readJsonFile(files.manifestPath);
-      const quickHealth = getReleasePackQuickHealth(active.version);
+      const fullManifest = readSmallJsonFile(files.manifestPath) || readSmallJsonFile(path2.join(files.publicReleaseDir, "manifest.json"));
+      const manifest = compactReleaseManifest(fullManifest, active);
+      const quickHealth = releaseSummaryStore.buildQuickHealthFromManifest(manifest || fullManifest, {
+        counts: manifest?.counts || fullManifest?.counts || active.counts || {},
+        resourceCounts: manifest?.resourceCounts || fullManifest?.resourceCounts || active.resourceCounts || null
+      });
+      const summary = releaseSummaryStore.readReleaseSummary(active.version, files, {
+        active,
+        quickHealth
+      });
+      const packHealth = summary?.quickHealth || summary?.releasePack || quickHealth;
       const counts = manifest?.counts || active.counts || {};
-      const resourceCounts = getReleaseResourceCounts(active.version);
+      const resourceCounts = manifest?.resourceCounts || active.resourceCounts || summary?.resourceCounts || null;
       const semester2 = active.semester || manifest?.semester || manifest?.term || "";
+      const pointer = runtimePointerService.readActivePointer();
       return Object.assign({}, active, {
         version: active.version,
         releaseVersion: active.version,
-        term: semester2,
-        semester: semester2,
+        term: pointer?.activeTerm || pointer?.term || summary?.term || semester2,
+        semester: pointer?.activeTerm || pointer?.term || summary?.semester || semester2,
         termConfig: active.termConfig || manifest?.termConfig || null,
         publishedAt: active.activatedAt || active.updatedAt || "",
         counts,
@@ -6596,6 +7306,7 @@ var require_releaseService = __commonJS({
         canonicalHash: active.canonicalHash || manifest?.canonicalHash || "",
         source: "release",
         status: "active",
+        manifest,
         paths: {
           releaseDir: files.releaseDir,
           snapshotPath: files.snapshotPath,
@@ -6606,8 +7317,9 @@ var require_releaseService = __commonJS({
           coursesIndexPath: files.coursesIndexPath,
           emptyRoomIndexPath: files.emptyRoomIndexPath
         },
-        releasePack: quickHealth,
-        packStatus: quickHealth,
+        summary,
+        releasePack: packHealth,
+        packStatus: packHealth,
         snapshot: {
           version: manifest?.version || active.version,
           releaseVersion: manifest?.releaseVersion || manifest?.version || active.version,
@@ -6618,9 +7330,30 @@ var require_releaseService = __commonJS({
           generatedAt: manifest?.generatedAt || "",
           source: manifest?.source || ""
         },
-        valid: quickHealth.healthy,
-        errors: quickHealth.healthy ? [] : ["Release Pack quick health failed"]
+        valid: packHealth.healthy,
+        errors: packHealth.healthy ? [] : ["Release Pack quick health failed"]
       });
+    }
+    function getActiveReleaseInfo() {
+      return getActiveReleaseInfoFast();
+    }
+    function getReleaseStatusFast() {
+      const active = getActiveReleaseInfoFast();
+      return {
+        activeReleaseVersion: active?.version || null,
+        activeReleaseUpdatedAt: active?.updatedAt || active?.publishedAt || null,
+        activeReleaseActivatedAt: active?.activatedAt || null,
+        semester: active?.semester || null,
+        term: active?.term || active?.semester || null,
+        termConfig: active?.termConfig || null,
+        counts: active?.counts || {},
+        resourceCounts: active?.resourceCounts || null,
+        valid: active ? active.valid !== false : false,
+        errors: active?.errors || [],
+        storagePath: RELEASES_DIR,
+        summary: active?.summary || null,
+        manifest: active?.manifest || null
+      };
     }
     function readActiveReleaseSnapshot() {
       const active = getActiveReleaseInfo();
@@ -6692,26 +7425,35 @@ var require_releaseService = __commonJS({
     }
     function listReleases(limit = 20) {
       ensureStorageDirs();
-      const entries = fs2.readdirSync(RELEASES_DIR, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => {
+      const requestedLimit = Math.max(1, Number(limit || 20) || 20);
+      const candidateLimit = Math.max(requestedLimit * 4, 40);
+      const active = readSmallJsonFile(ACTIVE_RELEASE_PATH, {}) || {};
+      const dirs = fs2.readdirSync(RELEASES_DIR, { withFileTypes: true }).filter((entry) => entry.isDirectory()).map((entry) => {
+        const dirPath = path2.join(RELEASES_DIR, entry.name);
+        let mtimeMs = 0;
+        try {
+          mtimeMs = fs2.statSync(dirPath).mtimeMs;
+        } catch (error) {
+        }
+        return { name: entry.name, mtimeMs };
+      }).sort((left, right) => right.mtimeMs - left.mtimeMs);
+      const candidates = dirs.slice(0, candidateLimit);
+      if (active.version && !candidates.some((entry) => entry.name === active.version)) {
+        const activeDir = dirs.find((entry) => entry.name === active.version);
+        if (activeDir) candidates.push(activeDir);
+      }
+      const entries = candidates.map((entry) => {
         const version = entry.name;
         const files = getReleaseFiles(version);
-        const manifest = readJsonFile(files.manifestPath);
-        const stat = fs2.statSync(files.releaseDir);
-        const releasePack = getReleasePackStatus(version);
-        const resourceCounts = getReleaseResourceCounts(version);
-        return {
+        const summary = releaseSummaryStore.readReleaseSummary(version, files, { active });
+        return Object.assign({}, summary, {
           version,
-          updatedAt: manifest?.updatedAt || stat.mtime.toISOString(),
-          releaseVersion: manifest?.releaseVersion || version,
-          term: manifest?.term || manifest?.semester || "",
-          semester: manifest?.semester || manifest?.term || "",
-          counts: manifest?.counts || {},
-          resourceCounts,
-          valid: manifest?.validation?.valid !== false,
-          releasePack
-        };
+          releaseVersion: summary.releaseVersion || version,
+          valid: summary.quickHealth ? summary.quickHealth.healthy !== false : true,
+          releasePack: summary.quickHealth || summary.releasePack || null
+        });
       }).sort((left, right) => String(right.updatedAt).localeCompare(String(left.updatedAt)));
-      return entries.slice(0, limit);
+      return entries.slice(0, requestedLimit);
     }
     function deleteReleaseVersion(version) {
       ensureStorageDirs();
@@ -6762,7 +7504,7 @@ var require_releaseService = __commonJS({
     }
     function getReleasePackQuickHealth(version) {
       const startedAt = Date.now();
-      const active = readJsonFile(ACTIVE_RELEASE_PATH);
+      const active = readSmallJsonFile(ACTIVE_RELEASE_PATH);
       const normalizedVersion = normalizeVersion(version || active?.version || "");
       if (!normalizedVersion) {
         return {
@@ -6774,8 +7516,9 @@ var require_releaseService = __commonJS({
         };
       }
       const files = getReleaseFiles(normalizedVersion);
-      const manifest = readJsonFile(files.manifestPath) || readJsonFile(path2.join(files.publicReleaseDir, "manifest.json"));
+      const manifest = readSmallJsonFile(files.manifestPath) || readSmallJsonFile(path2.join(files.publicReleaseDir, "manifest.json"));
       const keyFiles = {
+        activePointer: ACTIVE_RELEASE_PATH,
         manifest: files.manifestPath,
         staticManifest: path2.join(files.publicReleaseDir, "manifest.json"),
         classIndex: files.classIndexAllPath,
@@ -6784,13 +7527,15 @@ var require_releaseService = __commonJS({
         classroomIndex: files.classroomIndexAllPath,
         courseIndex: files.courseIndexAllPath,
         emptyRoom: files.emptyRoomIndexPath,
-        staticEmptyRoom: path2.join(files.publicReleaseDir, "empty-room", "index.json")
+        staticEmptyRoom: path2.join(files.publicReleaseDir, "empty-room", "index.json"),
+        calendar: path2.join(files.releaseDir, "calendar.json"),
+        staticCalendar: path2.join(files.publicReleaseDir, "calendar.json")
       };
       const checks = Object.fromEntries(Object.entries(keyFiles).map(([key, filePath]) => [key, {
         exists: Boolean(filePath && fs2.existsSync(filePath)),
         size: filePath && fs2.existsSync(filePath) ? fs2.statSync(filePath).size : 0
       }]));
-      const requiredOk = Boolean(manifest && manifest.releaseVersion === normalizedVersion) && checks.manifest.exists && checks.staticManifest.exists && (checks.classIndex.exists || checks.legacyClassIndex.exists) && checks.teacherIndex.exists && checks.classroomIndex.exists && checks.courseIndex.exists && checks.emptyRoom.exists && checks.staticEmptyRoom.exists;
+      const requiredOk = Boolean(manifest && manifest.releaseVersion === normalizedVersion) && checks.manifest.exists && checks.staticManifest.exists && (checks.classIndex.exists || checks.legacyClassIndex.exists) && checks.teacherIndex.exists && checks.classroomIndex.exists && checks.courseIndex.exists && checks.emptyRoom.exists && checks.staticEmptyRoom.exists && (checks.calendar.exists || checks.staticCalendar.exists);
       return {
         success: true,
         version: normalizedVersion,
@@ -6801,15 +7546,17 @@ var require_releaseService = __commonJS({
         healthy: requiredOk,
         checks,
         counts: manifest?.counts || active?.counts || {},
-        resourceCounts: getReleaseResourceCounts(normalizedVersion),
+        resourceCounts: manifest?.resourceCounts || active?.resourceCounts || null,
         emptyRoomHealth: manifest?.packHealth?.emptyRoom || manifest?.emptyRoomHealth || {},
+        packBytes: Number(manifest?.size?.packBytes || 0) || 0,
+        source: "quick-fixed-files",
         durationMs: Date.now() - startedAt
       };
     }
     function getReleasePackStatus(version, options = {}) {
       const normalizedVersion = normalizeVersion(version);
       const files = options.files || getReleaseFiles(normalizedVersion);
-      const manifest = readJsonFile(files.manifestPath);
+      const manifest = readSmallJsonFile(files.manifestPath);
       const kinds = ["class", "teacher", "classroom", "course"];
       const index = {};
       const detail = {};
@@ -6820,7 +7567,7 @@ var require_releaseService = __commonJS({
         const info = getDerivedFileInfo(kind, files);
         const indexPath = info && info.indexPath;
         const indexExists = Boolean(indexPath && fs2.existsSync(indexPath));
-        const items2 = indexExists ? readJsonFile(indexPath) : [];
+        const items2 = indexExists ? readSmallJsonFile(indexPath, []) : [];
         const detailFiles = collectJsonFiles(info && info.scheduleDir);
         index[kind] = {
           exists: indexExists,
@@ -6874,7 +7621,7 @@ var require_releaseService = __commonJS({
           hashErrors.push(`${relativePath}:size`);
         }
       });
-      return {
+      const status = {
         version: normalizedVersion,
         releaseVersion: normalizedVersion,
         manifestExists: Boolean(manifest),
@@ -6896,6 +7643,27 @@ var require_releaseService = __commonJS({
         resourceCounts: getReleaseResourceCounts(normalizedVersion),
         healthy: missing.length === 0 && hashErrors.length === 0
       };
+      if (options.writeSummary !== false) {
+        const summaryOptions = {
+          version: normalizedVersion,
+          jobId: options.jobId || "",
+          startedAt: options.startedAt || "",
+          workerPid: options.workerPid || process.pid
+        };
+        try {
+          if (options.writeSummaryAsync === false) {
+            releaseSummaryStore.writeDeepHealthSummary(files, status, summaryOptions);
+          } else {
+            Promise.resolve(releaseSummaryStore.writeDeepHealthSummaryAsync(files, status, summaryOptions)).catch((error) => {
+              if (error && error.code === "ENOENT" && !fs2.existsSync(files.releaseDir)) return;
+              safeLog("release-deep-health-summary-write-failed", { version: normalizedVersion, error: error.message });
+            });
+          }
+        } catch (error) {
+          safeLog("release-deep-health-summary-write-failed", { version: normalizedVersion, error: error.message });
+        }
+      }
+      return status;
     }
     function assertHealthyReleasePack(version) {
       const status = getReleasePackStatus(version);
@@ -6925,24 +7693,31 @@ var require_releaseService = __commonJS({
       if (!resolved.success) {
         return termMismatchPayload({}, resolved, { releaseVersion: version });
       }
-      const targetVersion = normalizeVersion(resolved.releaseVersion || version || getActiveReleaseInfo()?.version || "");
+      const active = readSmallJsonFile(ACTIVE_RELEASE_PATH, {}) || {};
+      const targetVersion = normalizeVersion(resolved.releaseVersion || version || active.version || "");
       if (!targetVersion) {
         return { success: false, code: "NO_ACTIVE_RELEASE", reasonCode: "NO_ACTIVE_RELEASE" };
       }
       const files = getReleaseFiles(targetVersion);
-      const manifest = readJsonFile(files.manifestPath);
+      const manifest = readSmallJsonFile(files.manifestPath) || readSmallJsonFile(path2.join(files.publicReleaseDir, "manifest.json"));
       if (manifest && manifest.releaseVersion) {
-        const active = getActiveReleaseInfo();
         const isActive = active && active.version === targetVersion;
-        const status2 = getReleasePackQuickHealth(targetVersion);
-        const resourceCounts = manifest.resourceCounts || getReleaseResourceCounts(targetVersion);
+        const status2 = releaseSummaryStore.buildQuickHealthFromManifest(manifest, {
+          counts: manifest.counts || active.counts || {},
+          resourceCounts: manifest.resourceCounts || active.resourceCounts || null
+        });
+        const summary = releaseSummaryStore.readReleaseSummary(targetVersion, files, { active, quickHealth: status2 });
+        const packStatus = summary?.quickHealth || summary?.releasePack || status2;
+        const resourceCounts = manifest.resourceCounts || summary.resourceCounts || null;
         return Object.assign({ success: true }, manifest, {
           releaseVersion: manifest.releaseVersion || targetVersion,
           version: manifest.version || targetVersion,
-          cacheEpoch: isActive ? active.cacheEpoch || manifest.cacheEpoch : manifest.cacheEpoch,
-          dataEpoch: isActive ? active.cacheEpoch || manifest.cacheEpoch : manifest.dataEpoch || manifest.cacheEpoch,
-          forceRefreshToken: isActive ? active.forceRefreshToken || manifest.forceRefreshToken || `${targetVersion}:${manifest.cacheEpoch || ""}` : manifest.forceRefreshToken || `${targetVersion}:${manifest.cacheEpoch || ""}`,
-          packStatus: status2,
+          cacheEpoch: manifest.cacheEpoch,
+          dataEpoch: manifest.dataEpoch || manifest.cacheEpoch,
+          forceRefreshToken: manifest.forceRefreshToken || `${targetVersion}:${manifest.cacheEpoch || ""}`,
+          activeCacheEpoch: isActive ? active.cacheEpoch || "" : "",
+          activeForceRefreshToken: isActive ? active.forceRefreshToken || "" : "",
+          packStatus,
           resourceCounts,
           minClientCacheSchema: manifest.minClientCacheSchema || 5
         });
@@ -6958,7 +7733,8 @@ var require_releaseService = __commonJS({
         };
       }
       const status = getReleasePackQuickHealth(targetVersion);
-      if (!Object.keys(status.currentFiles || {}).length) {
+      const hasAnyPackFile = Object.values(status.checks || {}).some((item) => item && item.exists);
+      if (!hasAnyPackFile) {
         return {
           success: false,
           code: "RELEASE_PACK_NOT_FOUND",
@@ -6978,14 +7754,14 @@ var require_releaseService = __commonJS({
         updatedAt: "",
         cacheEpoch: Date.now(),
         counts: {},
-        files: status.currentFiles,
+        files: {},
         size: {
           snapshotBytes: 0,
-          packBytes: sumMetaSize(status.currentFiles)
+          packBytes: status.packBytes || 0
         },
         validation: {
           valid: status.healthy,
-          errors: status.missing.concat(status.hashErrors),
+          errors: status.healthy ? [] : ["Release Pack quick health failed"],
           validatedAt: (/* @__PURE__ */ new Date()).toISOString()
         },
         legacyCompat: true
@@ -7019,6 +7795,9 @@ var require_releaseService = __commonJS({
       });
       const compression = mirrorStaticReleaseFiles(normalizedVersion);
       manifest.compression = Object.assign({}, manifest.compression || {}, compression);
+      releaseSummaryStore.writeReleaseSummary(normalizedVersion, manifest, files, {
+        quickHealth: releaseSummaryStore.buildQuickHealthFromManifest(manifest)
+      });
       clearDerivedCache();
       return {
         success: true,
@@ -7091,9 +7870,12 @@ var require_releaseService = __commonJS({
           }
         });
         manifest.compression = Object.assign({}, manifest.compression || {}, compression);
+        releaseSummaryStore.writeReleaseSummary(normalizedVersion, manifest, files, {
+          quickHealth: releaseSummaryStore.buildQuickHealthFromManifest(manifest)
+        });
         if (atomic) {
           if (options.job) options.job.progress(66, "deep validating", { version: normalizedVersion });
-          const deepStatus = getReleasePackStatus(normalizedVersion, { files });
+          const deepStatus = getReleasePackStatus(normalizedVersion, { files, writeSummary: false });
           if (!deepStatus.healthy) {
             const err = new Error("Release Pack rebuild validation failed");
             err.code = "RELEASE_PACK_REBUILD_UNHEALTHY";
@@ -7159,12 +7941,13 @@ var require_releaseService = __commonJS({
       if (!assertReleaseRelativePath(publicDir, targetPath) || !fs2.existsSync(targetPath)) {
         return null;
       }
-      return readJsonFile(targetPath);
+      return readSmallJsonFile(targetPath);
     }
     function readReleasePackStaticManifest(version) {
-      const normalizedVersion = normalizeVersion(version || getActiveReleaseInfo()?.version || "");
+      const active = readSmallJsonFile(ACTIVE_RELEASE_PATH, {}) || {};
+      const normalizedVersion = normalizeVersion(version || active.version || "");
       if (!normalizedVersion) return null;
-      return readStaticReleaseJson(normalizedVersion, "manifest.json") || readJsonFile(getReleaseFiles(normalizedVersion).manifestPath);
+      return readStaticReleaseJson(normalizedVersion, "manifest.json") || readSmallJsonFile(getReleaseFiles(normalizedVersion).manifestPath);
     }
     function resolveTermAwareReleaseVersion(options = {}) {
       const requestedTerm = String(options.term || options.semester || "").trim();
@@ -7461,36 +8244,26 @@ var require_releaseService = __commonJS({
       let active;
       if (version) {
         const normalized = normalizeVersion(version);
-        const snapshot = readReleaseSnapshot(normalized);
-        if (snapshot) {
+        const files2 = getReleaseFiles(normalized);
+        const info2 = getDerivedFileInfo(kind, files2);
+        if (info2 && fs2.existsSync(info2.indexPath)) {
+          const manifest = readReleasePackStaticManifest(normalized);
           active = {
             source: "release",
             version: normalized,
-            semester: snapshot.semester || snapshot.term || "",
-            updatedAt: snapshot.updatedAt || "",
-            snapshot
+            semester: manifest && (manifest.term || manifest.semester) || "",
+            updatedAt: manifest && manifest.updatedAt || "",
+            snapshot: null
           };
         } else {
-          const files2 = getReleaseFiles(normalized);
-          const info2 = getDerivedFileInfo(kind, files2);
-          if (info2 && fs2.existsSync(info2.indexPath)) {
-            active = {
-              source: "release",
-              version: normalized,
-              semester: "",
-              updatedAt: "",
-              snapshot: null
-            };
-          } else {
-            return {
-              success: false,
-              code: "RELEASE_NOT_FOUND",
-              reasonCode: "RELEASE_NOT_FOUND",
-              version: normalized,
-              releaseVersion: normalized,
-              items: []
-            };
-          }
+          return {
+            success: false,
+            code: "INDEX_NOT_FOUND",
+            reasonCode: "INDEX_NOT_FOUND",
+            version: normalized,
+            releaseVersion: normalized,
+            items: []
+          };
         }
       }
       if (!active) {
@@ -7507,7 +8280,7 @@ var require_releaseService = __commonJS({
           releaseVersion: active.version
         }));
       }
-      const files = ensureDerivedIndexes(active.version, active.snapshot);
+      const files = active.snapshot ? ensureDerivedIndexes(active.version, active.snapshot) : getReleaseFiles(active.version);
       const info = getDerivedFileInfo(kind, files);
       if (!info || !fs2.existsSync(info.indexPath)) {
         return {
@@ -7525,7 +8298,7 @@ var require_releaseService = __commonJS({
       if (cached && cached.mtimeMs === stat.mtimeMs) {
         return cached.value;
       }
-      const items2 = readJsonFile(info.indexPath) || [];
+      const items2 = readSmallJsonFile(info.indexPath, []) || [];
       const value = {
         success: true,
         dataSource: active.source === "legacy-current" ? "legacy-current-index" : version ? "release-isolated-index" : "release-index",
@@ -7598,25 +8371,26 @@ var require_releaseService = __commonJS({
       let active;
       if (version) {
         const normalized = normalizeVersion(version);
-        const snapshot = readReleaseSnapshot(normalized);
-        if (snapshot) {
+        const files2 = getReleaseFiles(normalized);
+        const info2 = getDerivedFileInfo(kind, files2);
+        const manifest = readReleasePackStaticManifest(normalized) || {};
+        if (info2 && fs2.existsSync(info2.scheduleDir)) {
           active = {
             source: "release",
             version: normalized,
-            semester: snapshot.semester || snapshot.term || "",
-            updatedAt: snapshot.updatedAt || "",
-            snapshot
+            semester: manifest.semester || manifest.term || "",
+            updatedAt: manifest.updatedAt || manifest.generatedAt || "",
+            snapshot: null
           };
         } else {
-          const files2 = getReleaseFiles(normalized);
-          const info2 = getDerivedFileInfo(kind, files2);
-          if (info2 && fs2.existsSync(info2.scheduleDir)) {
+          const snapshot = readReleaseSnapshot(normalized);
+          if (snapshot) {
             active = {
               source: "release",
               version: normalized,
-              semester: "",
-              updatedAt: "",
-              snapshot: null
+              semester: snapshot.semester || snapshot.term || "",
+              updatedAt: snapshot.updatedAt || "",
+              snapshot
             };
           } else {
             return { success: false, code: "RELEASE_NOT_FOUND", reasonCode: "RELEASE_NOT_FOUND" };
@@ -7657,7 +8431,7 @@ var require_releaseService = __commonJS({
       if (cached && cached.mtimeMs === stat.mtimeMs) {
         return cached.value;
       }
-      const schedule = readJsonFile(filePath);
+      const schedule = readSmallJsonFile(filePath);
       const value = {
         success: true,
         dataSource: active.source === "legacy-current" ? "legacy-current-index" : version ? "release-isolated-index" : "release-index",
@@ -7965,6 +8739,7 @@ var require_releaseService = __commonJS({
     }
     function clearDerivedCache() {
       derivedCache.clear();
+      smallJsonCache.clear();
     }
     module2.exports = {
       ACTIVE_RELEASE_PATH,
@@ -7984,6 +8759,7 @@ var require_releaseService = __commonJS({
       getReleaseCompressionConfig,
       assertHealthyReleasePack,
       getReleaseStatus,
+      getReleaseStatusFast,
       deleteReleaseVersion,
       readReleasePackStaticDetail,
       readReleasePackStaticEmptyRoom,
@@ -8006,7 +8782,8 @@ var require_releaseService = __commonJS({
       writeReleaseSnapshot,
       writeReleaseSnapshotAsync,
       mirrorStaticReleaseFilesAsync,
-      clearDerivedCache
+      clearDerivedCache,
+      getActiveReleaseInfoFast
     };
   }
 });
@@ -8030,6 +8807,12 @@ var require_upload = __commonJS({
       buildResourceCountContract,
       flattenLegacyCounts
     } = require_resourceCountContract();
+    var {
+      loadSyncClientEnv: loadSyncClientEnv2,
+      prepareDirectNetworkEnvironment: prepareDirectNetworkEnvironment2
+    } = require_syncEnv();
+    loadSyncClientEnv2();
+    prepareDirectNetworkEnvironment2(process.env, { axios: axios2 });
     function parseArgs(argv) {
       const args = {};
       for (const arg of argv) {
@@ -8094,6 +8877,28 @@ var require_upload = __commonJS({
         return fallbackMb * 1024 * 1024;
       }
       return Math.floor(num * 1024 * 1024);
+    }
+    function getUploadConcurrency(params, totalChunks) {
+      const raw2 = params["upload-concurrency"] || params.uploadConcurrency || params["chunk-concurrency"] || process.env.SYNC_LOCAL_UPLOAD_CONCURRENCY || "2";
+      const parsed2 = parseInt(raw2, 10);
+      if (!Number.isFinite(parsed2) || parsed2 < 1) {
+        console.warn(`invalid upload concurrency: ${raw2}; fallback to 1`);
+        return 1;
+      }
+      const capped = Math.min(parsed2, 4, Math.max(1, totalChunks || 1));
+      if (parsed2 !== capped) {
+        console.warn(`upload concurrency capped from ${parsed2} to ${capped}`);
+      }
+      return capped;
+    }
+    function formatElapsedMs2(ms) {
+      const value = Number(ms || 0);
+      if (value < 1e3) return `${value}ms`;
+      const seconds = value / 1e3;
+      if (seconds < 60) return `${seconds.toFixed(1)}s`;
+      const minutes = Math.floor(seconds / 60);
+      const rest = Math.round(seconds % 60);
+      return `${minutes}m${String(rest).padStart(2, "0")}s`;
     }
     function hashFile(filePath) {
       return new Promise((resolve, reject) => {
@@ -8387,18 +9192,32 @@ var require_upload = __commonJS({
       }
       const startedAt = Date.now();
       let uploaded = 0;
-      for (let chunkIndex = 0; chunkIndex < totalChunks; chunkIndex += 1) {
+      let finishedChunks = 0;
+      let nextChunkIndex = 0;
+      const uploadConcurrency = getUploadConcurrency(params, totalChunks);
+      console.log(`upload concurrency: ${uploadConcurrency}`);
+      async function uploadOneChunk(chunkIndex) {
         const start = chunkIndex * chunkSize;
         const end = Math.min(uploadStat.size - 1, start + chunkSize - 1);
         const buffer = readChunk(prepared.uploadPath, start, end);
         const chunkUrl = `${endpointBase}/chunk?uploadId=${encodeURIComponent(uploadId)}&chunkIndex=${chunkIndex}`;
         await uploadChunkWithRetry(chunkUrl, buffer, headers, timeoutMs, retryCount);
         uploaded += buffer.length;
+        finishedChunks += 1;
         const elapsed = Math.max(1, (Date.now() - startedAt) / 1e3);
         const percent = (uploaded / uploadStat.size * 100).toFixed(2);
         const speed = formatMb(uploaded / elapsed);
-        console.log(`[${chunkIndex + 1}/${totalChunks}] ${percent}% ${formatMb(uploaded)}/${formatMb(uploadStat.size)} MB, ${speed} MB/s`);
+        console.log(`[${finishedChunks}/${totalChunks}] chunk ${chunkIndex + 1} done, ${percent}% ${formatMb(uploaded)}/${formatMb(uploadStat.size)} MB, ${speed} MB/s`);
       }
+      async function uploadWorker() {
+        while (nextChunkIndex < totalChunks) {
+          const chunkIndex = nextChunkIndex;
+          nextChunkIndex += 1;
+          await uploadOneChunk(chunkIndex);
+        }
+      }
+      await Promise.all(Array.from({ length: uploadConcurrency }, () => uploadWorker()));
+      console.log(`all chunks uploaded in ${formatElapsedMs2(Date.now() - startedAt)}`);
       const finalize = await postJson(`${endpointBase}/finalize`, {
         uploadId,
         uploadSize: uploadStat.size,
@@ -8501,9 +9320,17 @@ var path = require("path");
 var axios = require("axios");
 var cheerio = require("cheerio");
 var crypto = require("crypto");
-var diagnose = require_diagnose();
-var envPath = path.resolve(__dirname, ".env");
-require("dotenv").config({ path: envPath });
+var {
+  loadSyncClientEnv,
+  prepareDirectNetworkEnvironment
+} = require_syncEnv();
+var {
+  printDiagnosisSummary,
+  probeCampusNetwork
+} = require_networkProbe();
+var envInfo = loadSyncClientEnv();
+var envPath = envInfo.envPath;
+var directNetworkEnv = prepareDirectNetworkEnvironment(process.env, { axios });
 var {
   ALL_SCOPES,
   applyPlanToParams,
@@ -8519,7 +9346,7 @@ console.log(`[env] PREFERRED_SEMESTER: ${process.env.PREFERRED_SEMESTER || "\u67
 console.log(`[env] SYNC_GRADE_RANGE: ${process.env.SYNC_GRADE_RANGE || "\u672A\u914D\u7F6E"}`);
 console.log(`[env] SYNC_GRADES (\u4E13\u4E1A\u540C\u6B65\u4F7F\u7528): ${process.env.SYNC_GRADES || "\u672A\u914D\u7F6E"}`);
 console.log(`[env] SYNC_CLASS_GRADES (\u73ED\u7EA7\u8BFE\u8868\u540C\u6B65\u4F7F\u7528): ${process.env.SYNC_CLASS_GRADES || "\u672A\u914D\u7F6E"}`);
-console.log(`[env] SYNC_UPLOAD_CHUNK_SIZE: ${process.env.SYNC_UPLOAD_CHUNK_SIZE || "10"}`);
+console.log(`[env] SYNC_UPLOAD_CHUNK_SIZE: ${process.env.SYNC_UPLOAD_CHUNK_SIZE || "50"}`);
 console.log(`[env] SYNC_SKIP_NO_SCHEDULE_CACHE: ${process.env.SYNC_SKIP_NO_SCHEDULE_CACHE || "true"}`);
 console.log(`[env] SYNC_RECHECK_NO_SCHEDULE: ${process.env.SYNC_RECHECK_NO_SCHEDULE || "false"}`);
 console.log(`[env] ADMIN_API_TOKEN: ${process.env.ADMIN_API_TOKEN ? "present" : "missing"}`);
@@ -8537,23 +9364,12 @@ var {
   calculateFingerprint,
   readSidecarHash
 } = require_stagingFingerprint();
-var proxyEnvNames = ["HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "http_proxy", "https_proxy", "all_proxy"];
-var detectedProxyEnv = proxyEnvNames.map((name) => [name, process.env[name]]).filter(([, value]) => Boolean(value));
-var INITIAL_DETECTED_PROXIES = [...detectedProxyEnv];
-var disableProxy = String(process.env.SYNC_DISABLE_PROXY || "true").toLowerCase() !== "false";
-if (detectedProxyEnv.length > 0) {
-  console.warn(`\u26A0\uFE0F \u68C0\u6D4B\u5230\u4EE3\u7406\u73AF\u5883\u53D8\u91CF: ${detectedProxyEnv.map(([name, value]) => `${name}=${value}`).join(", ")}`);
-  if (disableProxy) {
-    console.warn("\u26A0\uFE0F \u540C\u6B65\u4E0A\u4F20\u9ED8\u8BA4\u7981\u7528\u73AF\u5883\u4EE3\u7406\uFF0C\u907F\u514D 127.0.0.1:10808 \u7B49\u672C\u5730\u4EE3\u7406\u6C61\u67D3 VPS \u4E0A\u4F20\u3002");
+var INITIAL_DETECTED_PROXIES = directNetworkEnv.detectedProxyNames.map((name) => [name, "[redacted]"]);
+if (directNetworkEnv.detectedProxyNames.length > 0) {
+  console.warn(`\u68C0\u6D4B\u5230\u4EE3\u7406\u73AF\u5883\u53D8\u91CF: ${directNetworkEnv.detectedProxyNames.join(", ")}`);
+  if (directNetworkEnv.disableProxy) {
+    console.warn("\u5F53\u524D\u540C\u6B65\u8FDB\u7A0B\u5DF2\u6E05\u7406\u4EE3\u7406\u53D8\u91CF\uFF0C\u6821\u56ED\u6559\u52A1\u3001Oracle \u4E0E CloudBase \u9ED8\u8BA4\u76F4\u8FDE\u3002");
   }
-}
-if (disableProxy) {
-  proxyEnvNames.forEach((name) => {
-    delete process.env[name];
-  });
-  process.env.NO_PROXY = "*";
-  process.env.no_proxy = "*";
-  axios.defaults.proxy = false;
 }
 var FOSU_BASE_URL = process.env.FOSU_BASE_URL || "https://100.fosu.edu.cn";
 var FOSU_API_BASE = process.env.FOSU_API_BASE || "https://class.katelya.eu.org";
@@ -8580,6 +9396,41 @@ function resolveProjectPath() {
   return fallbackPath;
 }
 var PROJECT_ROOT = resolveProjectPath();
+global.SYNC_STAGE_TIMINGS = global.SYNC_STAGE_TIMINGS || {};
+function beginSyncStage(stage) {
+  return { stage, startedAt: (/* @__PURE__ */ new Date()).toISOString(), startedMs: Date.now() };
+}
+function finishSyncStage(token, patch = {}) {
+  const finishedAt = (/* @__PURE__ */ new Date()).toISOString();
+  global.SYNC_STAGE_TIMINGS[token.stage] = Object.assign({
+    stage: token.stage,
+    startedAt: token.startedAt,
+    finishedAt,
+    durationMs: Date.now() - token.startedMs
+  }, patch || {});
+}
+async function withSyncStage(stage, fn) {
+  const token = beginSyncStage(stage);
+  try {
+    const result = await fn();
+    finishSyncStage(token, { status: "success" });
+    return result;
+  } catch (error) {
+    finishSyncStage(token, { status: "failed", code: error.code || "", message: error.message });
+    throw error;
+  }
+}
+function measureSyncStage(stage, fn) {
+  const token = beginSyncStage(stage);
+  try {
+    const result = fn();
+    finishSyncStage(token, { status: "success" });
+    return result;
+  } catch (error) {
+    finishSyncStage(token, { status: "failed", code: error.code || "", message: error.message });
+    throw error;
+  }
+}
 function resolveInputFilePath(fileArg) {
   if (!fileArg) {
     return {
@@ -8996,6 +9847,28 @@ async function waitBetweenClassSyncRequests(isFiltered) {
   console.log(`      \u23F3 \u968F\u673A\u7B49\u5F85 ${delay}ms...`);
   await sleep(delay);
 }
+function getClassCrawlConcurrency() {
+  const raw2 = process.env.SYNC_CLASS_MAX_CONCURRENCY || process.env.SYNC_CLASS_CONCURRENCY || "1";
+  const parsed2 = parseInt(raw2, 10);
+  if (!Number.isFinite(parsed2) || parsed2 < 1) {
+    console.warn(`\u26A0\uFE0F SYNC_CLASS_MAX_CONCURRENCY=${raw2} \u65E0\u6548\uFF0C\u5DF2\u56DE\u9000\u4E3A 1\u3002`);
+    return 1;
+  }
+  if (parsed2 > 5) {
+    console.warn(`\u26A0\uFE0F SYNC_CLASS_MAX_CONCURRENCY=${parsed2} \u8FC7\u9AD8\uFF0C\u5DF2\u9650\u5236\u4E3A 5 \u4EE5\u4FDD\u62A4\u6559\u52A1\u7CFB\u7EDF\u3002`);
+    return 5;
+  }
+  return parsed2;
+}
+function formatElapsedMs(ms) {
+  const value = Number(ms || 0);
+  if (value < 1e3) return `${value}ms`;
+  const seconds = value / 1e3;
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const rest = Math.round(seconds % 60);
+  return `${minutes}m${String(rest).padStart(2, "0")}s`;
+}
 async function gotoPage(page, relativePath, options = { waitUntil: "networkidle" }) {
   const cleanPath = relativePath.startsWith("/") ? relativePath : `/${relativePath}`;
   const httpUrl = `${FOSU_BASE_URL.replace(/^https:/i, "http:")}${cleanPath}`;
@@ -9172,7 +10045,7 @@ function buildSnapshotResources(classSchedules, options = {}) {
       const courseName = baseCourse.canonicalCourseName || baseCourse.displayCourseName || baseCourse.courseName;
       const teacherName = baseCourse.canonicalTeacherName || baseCourse.displayTeacherName || baseCourse.teacherName;
       const classroom = baseCourse.canonicalClassroom || baseCourse.displayClassroom || baseCourse.classroom;
-      if (includeTeachers && isUsableResourceName(teacherName) && !baseCourse.isTeacherFieldActuallyCourseName && !courseIdentity.isCourseLike(teacherName)) {
+      if (includeTeachers && isUsableResourceName(teacherName) && !isInvalidTeacherName(teacherName) && !baseCourse.isTeacherFieldActuallyCourseName && !courseIdentity.isCourseLike(teacherName)) {
         pushGroupedCourse(teacherMap, teacherName, baseCourse);
       }
       if (includeClassrooms && isUsableResourceName(classroom)) {
@@ -9501,6 +10374,7 @@ function buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, op
         cacheSource: cacheUsage.cacheSource || cacheUsage.source || null,
         cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null
       },
+      stageTimings: global.SYNC_STAGE_TIMINGS || {},
       warnings: metaWarnings,
       cacheSource: cacheUsage.cacheSource || cacheUsage.source || null,
       cacheWarning: cacheUsage.cacheWarning || cacheUsage.warning || null
@@ -9672,12 +10546,12 @@ function validateLocalReleaseSnapshot(snapshot) {
   return validation;
 }
 function getUploadChunkSize() {
-  const parsed2 = parseInt(process.env.SYNC_UPLOAD_CHUNK_SIZE || "10", 10);
+  const parsed2 = parseInt(process.env.SYNC_UPLOAD_CHUNK_SIZE || "50", 10);
   if (Number.isFinite(parsed2) && parsed2 > 0) {
     return parsed2;
   }
-  console.warn(`\u26A0\uFE0F SYNC_UPLOAD_CHUNK_SIZE=${process.env.SYNC_UPLOAD_CHUNK_SIZE} \u65E0\u6548\uFF0C\u5DF2\u56DE\u9000\u4E3A 10\u3002`);
-  return 10;
+  console.warn(`\u26A0\uFE0F SYNC_UPLOAD_CHUNK_SIZE=${process.env.SYNC_UPLOAD_CHUNK_SIZE} \u65E0\u6548\uFF0C\u5DF2\u56DE\u9000\u4E3A 50\u3002`);
+  return 50;
 }
 function getFormattedTimestamp() {
   const now = /* @__PURE__ */ new Date();
@@ -9997,13 +10871,13 @@ function printPowerShellCommands() {
   console.log("\u{1F449} \u53EA\u4E0A\u4F20\u672C\u5730\u7F13\u5B58 (Upload Only):");
   console.log('   $env:SYNC_CLASS_CRAWL_ONLY=""');
   console.log('   $env:SYNC_CLASS_UPLOAD_ONLY="true"');
-  console.log('   $env:SYNC_UPLOAD_CHUNK_SIZE="10"');
+  console.log('   $env:SYNC_UPLOAD_CHUNK_SIZE="50"');
   console.log("   npm run sync:upload-cache");
   console.log("");
   console.log("\u{1F449} \u5F3A\u5236\u91CD\u65B0\u4E0A\u4F20\u672C\u5730\u7F13\u5B58 (Force Restart Upload):");
   console.log('   $env:SYNC_UPLOAD_FORCE_RESTART="true"');
   console.log('   $env:SYNC_CLASS_UPLOAD_ONLY="true"');
-  console.log('   $env:SYNC_UPLOAD_CHUNK_SIZE="10"');
+  console.log('   $env:SYNC_UPLOAD_CHUNK_SIZE="50"');
   console.log("   npm run sync:class");
   console.log("--------------------------------------------------\n");
 }
@@ -10019,7 +10893,8 @@ async function handleUploadOnly() {
     console.error(`\u274C \u6267\u884C upload-only \u6A21\u5F0F\u5931\u8D25: 
 ${error.message}`);
     printPowerShellCommands();
-    process.exit(1);
+    error.code = error.code || "UPLOAD_ONLY_FAILED";
+    throw error;
   }
 }
 async function handleOfflineRelease() {
@@ -10221,11 +11096,11 @@ async function handleLocalCampusStaging(page, params) {
       process.env.SYNC_CLASS_SCOPE = "all";
     }
   }
-  const { catalog, majors } = await resolveCatalogForPlan(page, params);
+  const { catalog, majors } = await withSyncStage("directory-fetch", () => resolveCatalogForPlan(page, params));
   let allClassSchedules = [];
   if (includeScopes.includes("classSchedules")) {
     try {
-      allClassSchedules = await syncClassSchedules(page, catalog, majors);
+      allClassSchedules = await withSyncStage("schedule-fetch", () => syncClassSchedules(page, catalog, majors));
     } catch (error) {
       const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
       throw new Error(`${error.message} \u5DF2\u751F\u6210 debug JSON: ${debugPath}`);
@@ -10252,13 +11127,13 @@ async function handleLocalCampusStaging(page, params) {
   }
   const resourceIncludeOptions = buildResourceIncludeOptionsFromScopes(includeScopes);
   const resourceTypesForScopes = getResourceTypesFromIncludeScopes(includeScopes);
-  const resourceSchedules = resourceTypesForScopes.length ? await buildResourcesForClassSchedules(allClassSchedules, resourceTypesForScopes, {
+  const resourceSchedules = resourceTypesForScopes.length ? await withSyncStage("resource-build", () => buildResourcesForClassSchedules(allClassSchedules, resourceTypesForScopes, {
     page,
     semester: process.env.PREFERRED_SEMESTER || params.term || catalog.semesters?.[0]?.value
-  }) : null;
-  const snapshot = buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, {
+  })) : null;
+  const snapshot = measureSyncStage("normalize", () => buildSnapshot(catalog, majors, allClassSchedules, resourceSchedules, {
     resources: resourceIncludeOptions
-  });
+  }));
   if (includeScopes.includes("classSchedules") && (!snapshot.classSchedules || snapshot.classSchedules.length === 0)) {
     const error = new Error("includeScopes \u5305\u542B classSchedules\uFF0C\u4F46\u6700\u7EC8\u5FEB\u7167 classSchedules \u4E3A 0\uFF0C\u5DF2\u7981\u6B62\u751F\u6210\u6B63\u5F0F Staging\u3002");
     const debugPath = writeLocalStagingDebugFailure(params, catalog, majors, error);
@@ -10270,21 +11145,22 @@ async function handleLocalCampusStaging(page, params) {
   printLocalCampusPathSummary(params, output);
   const sidecarPath = getSidecarMetaPath(output);
   const previousHash = readSidecarHash(sidecarPath);
-  const fingerprint = calculateFingerprint(snapshot);
+  const fingerprint = measureSyncStage("hash", () => calculateFingerprint(snapshot));
   snapshot.canonicalHash = fingerprint.canonicalHash;
   snapshot.meta = Object.assign({}, snapshot.meta || {}, {
     canonicalHash: fingerprint.canonicalHash,
     previousHash,
-    changed: previousHash ? previousHash !== fingerprint.canonicalHash : true
+    changed: previousHash ? previousHash !== fingerprint.canonicalHash : true,
+    stageTimings: global.SYNC_STAGE_TIMINGS || {}
   });
   fs.mkdirSync(path.dirname(output), { recursive: true });
   fs.writeFileSync(output, JSON.stringify(snapshot, null, 2), "utf-8");
   const rawSizeBytes = fs.statSync(output).size;
-  const sidecarMeta = buildSidecarMeta(snapshot, {
+  const sidecarMeta = measureSyncStage("staging-meta", () => buildSidecarMeta(snapshot, {
     fingerprint,
     previousHash,
     rawSizeBytes
-  });
+  }));
   fs.writeFileSync(sidecarPath, JSON.stringify(sidecarMeta, null, 2), "utf-8");
   console.log(`\u{1F4BE} Staging JSON \u5DF2\u751F\u6210: ${output}`);
   console.log(`\u{1F9FE} Staging meta \u5DF2\u751F\u6210: ${sidecarPath}`);
@@ -11364,7 +12240,9 @@ async function initBrowserContext() {
   }
   if (!browser) {
     console.error("\u274C \u65E0\u6CD5\u542F\u52A8\u4EFB\u4F55\u6D4F\u89C8\u5668\uFF01\u8BF7\u68C0\u67E5 Playwright \u5B89\u88C5\u662F\u5426\u5B8C\u6574\u3002");
-    process.exit(1);
+    const error = new Error("\u65E0\u6CD5\u542F\u52A8\u4EFB\u4F55\u6D4F\u89C8\u5668");
+    error.code = "PLAYWRIGHT_LAUNCH_FAILED";
+    throw error;
   }
   let context;
   if (FOSU_SYNC_AUTH_MODE === "playwright-manual") {
@@ -11372,7 +12250,9 @@ async function initBrowserContext() {
       console.error("\u274C \u672C\u5730\u672A\u627E\u5230 session.json \u767B\u5F55\u4F1A\u8BDD\u6587\u4EF6\uFF01");
       console.error(getExpiredSessionTip());
       await browser.close();
-      process.exit(1);
+      const error = new Error("session \u5DF2\u8FC7\u671F\uFF0C\u8BF7\u6267\u884C npm run sync:login \u540E\u91CD\u8BD5");
+      error.code = "SESSION_EXPIRED";
+      throw error;
     }
     context = await browser.newContext({
       storageState: SESSION_PATH,
@@ -11380,20 +12260,24 @@ async function initBrowserContext() {
     });
   } else if (FOSU_SYNC_AUTH_MODE === "manual-cookie") {
     if (!process.env.FOSU_MANUAL_COOKIE) {
-      console.error("\u274C \u9009\u62E9\u4E86 manual-cookie \u6A21\u5F0F\uFF0C\u4F46\u672A\u5728 .env \u4E2D\u914D\u7F6E FOSU_MANUAL_COOKIE\uFF01");
+      console.error("\u274C \u9009\u62E9\u4E86 manual-cookie \u6A21\u5F0F\uFF0C\u4F46\u672A\u914D\u7F6E\u672C\u5730\u4F1A\u8BDD\u51ED\u636E\u3002");
       await browser.close();
-      process.exit(1);
+      const error = new Error("manual-cookie \u6A21\u5F0F\u7F3A\u5C11\u672C\u5730\u4F1A\u8BDD\u914D\u7F6E");
+      error.code = "SESSION_EXPIRED";
+      throw error;
     }
     context = await browser.newContext({
       ignoreHTTPSErrors: true
     });
     const cookies = parseCookieString(process.env.FOSU_MANUAL_COOKIE, FOSU_BASE_URL);
     await context.addCookies(cookies);
-    console.log(`\u{1F511} \u5DF2\u4ECE .env \u4E2D\u6CE8\u5165 ${cookies.length} \u4E2A Cookie \u81F3\u6D4F\u89C8\u5668\u4F1A\u8BDD\u3002`);
+    console.log(`\u5DF2\u4ECE\u672C\u5730\u914D\u7F6E\u6CE8\u5165 ${cookies.length} \u4E2A\u4F1A\u8BDD\u51ED\u636E\u9879\u81F3\u6D4F\u89C8\u5668\u4E0A\u4E0B\u6587\u3002`);
   } else {
     console.error(`\u274C \u672A\u77E5\u7684\u767B\u5F55\u6A21\u5F0F: ${FOSU_SYNC_AUTH_MODE}`);
     await browser.close();
-    process.exit(1);
+    const error = new Error(`\u672A\u77E5\u7684\u767B\u5F55\u6A21\u5F0F: ${FOSU_SYNC_AUTH_MODE}`);
+    error.code = "UNKNOWN_AUTH_MODE";
+    throw error;
   }
   return { browser, context };
 }
@@ -11404,19 +12288,19 @@ function getExpiredSessionTip() {
   const hasRootLoginScript = (() => {
     try {
       const pkg = JSON.parse(fs.readFileSync(rootPackageJson, "utf-8"));
-      return Boolean(pkg.scripts && pkg.scripts.login);
+      return Boolean(pkg.scripts && pkg.scripts["sync:login"]);
     } catch (error) {
       return false;
     }
   })();
   const lines = [
-    "\u8BF7\u5728\u9879\u76EE\u6839\u76EE\u5F55\u6267\u884C npm run login\uFF0C\u767B\u5F55\u6210\u529F\u540E\u91CD\u65B0\u8FD0\u884C\u5F53\u524D\u540C\u6B65\u547D\u4EE4\u3002"
+    "session \u5DF2\u8FC7\u671F\uFF0C\u8BF7\u6267\u884C npm run sync:login \u540E\u91CD\u8BD5\u3002"
   ];
   if (!isProjectRoot) {
     lines.push("\u4F60\u53EF\u80FD\u4E0D\u5728\u9879\u76EE\u6839\u76EE\u5F55\uFF0C\u8BF7\u5148 cd \u5230 FosuClass \u6839\u76EE\u5F55\u3002");
   }
   if (!hasRootLoginScript) {
-    lines.push("\u5F53\u524D\u6839\u76EE\u5F55 package.json \u672A\u68C0\u6D4B\u5230 login script\uFF0C\u8BF7\u8865\u5145\u540E\u518D\u91CD\u8BD5\u3002");
+    lines.push("\u5F53\u524D\u6839\u76EE\u5F55 package.json \u672A\u68C0\u6D4B\u5230 sync:login script\uFF0C\u8BF7\u8865\u5145\u540E\u518D\u91CD\u8BD5\u3002");
   }
   return lines.join("\n");
 }
@@ -11853,7 +12737,9 @@ function getActiveGradesBySemester(semester2, options = {}) {
   } else if (gradeRangeEnv === "all") {
     if (!confirmFullSync) {
       console.error("\u274C \u68C0\u6D4B\u5230 SYNC_GRADE_RANGE=all\uFF0C\u4F46\u672A\u8BBE\u7F6E CONFIRM_FULL_SYNC=true\u3002\u4E3A\u907F\u514D\u540C\u6B65\u8FC7\u591A\u5386\u53F2\u5E74\u7EA7\uFF0C\u5DF2\u4E2D\u6B62\u3002");
-      process.exit(1);
+      const error = new Error("SYNC_GRADE_RANGE=all requires CONFIRM_FULL_SYNC=true");
+      error.code = "CONFIRM_FULL_SYNC_REQUIRED";
+      throw error;
     }
     return originalGrades;
   } else {
@@ -11861,7 +12747,14 @@ function getActiveGradesBySemester(semester2, options = {}) {
       targetGrades.push(String(startYear - i));
     }
   }
-  return originalGrades.filter((g) => targetGrades.includes(g));
+  const matchedGrades = originalGrades.filter((g) => targetGrades.includes(g));
+  if (syncGradesEnv && matchedGrades.length === 0) {
+    const requested = targetGrades.join(",");
+    const error = new Error(`\u5F53\u524D\u6E90\u7AD9\u672A\u53D1\u73B0 ${requested} \u7EA7\u8BFE\u8868`);
+    error.code = "SOURCE_GRADE_NOT_FOUND";
+    throw error;
+  }
+  return matchedGrades;
 }
 async function syncMajors(page, catalog) {
   console.log("\n=== [\u6B65\u9AA4 2] \u5F00\u59CB\u6293\u53D6 Majors \u4E13\u4E1A\u8054\u52A8 ===");
@@ -11885,7 +12778,8 @@ async function syncMajors(page, catalog) {
     filteredGrades = getActiveGradesBySemester(activeSemester, { originalGrades: grades });
   } catch (err) {
     console.error(`\u274C \u5E74\u7EA7\u8FC7\u6EE4\u5931\u8D25: ${err.message}`);
-    process.exit(1);
+    err.code = err.code || "GRADE_FILTER_FAILED";
+    throw err;
   }
   console.log(`\u5F53\u524D\u5B66\u671F\uFF1A${activeSemester}`);
   console.log(`\u5B66\u5E74\u8D77\u59CB\u5E74\u4EFD\uFF1A${startYear}`);
@@ -12334,141 +13228,124 @@ async function syncClassSchedules(page, catalog, majors) {
   let totalGroupedCount = 0;
   let newNoScheduleCount = 0;
   let allClassSchedules = cachedClassSchedules.slice();
-  let count = 0;
-  for (const major of pendingMajors) {
-    count++;
-    console.log(`   [${count}/${pendingMajors.length}] \u6B63\u5728\u6293\u53D6: ${major.grade}\u7EA7 - ${major.name} \u4E13\u4E1A\u8BFE\u8868 ...`);
-    try {
-      crawlStats.actualNetworkRequestCount += 1;
-      global.SYNC_CRAWL_STATS = crawlStats;
-      const htmlText = await page.evaluate(async (params) => {
-        const formBody = new URLSearchParams({
-          xnxqh: params.semester,
-          skyx: params.collegeCode,
-          sknj: params.grade,
-          skzy: params.majorCode,
-          zc1: "",
-          zc2: "",
-          jc1: "",
-          jc2: ""
-        }).toString();
-        const res = await fetch("/kbcx/kbxx_xzb_ifr", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/x-www-form-urlencoded"
-          },
-          body: formBody
-        });
-        return res.text();
-      }, {
-        semester: activeSemester,
-        collegeCode: major.collegeCode,
-        grade: major.grade,
-        majorCode: major.code
+  const classCrawlConcurrency = getClassCrawlConcurrency();
+  console.log(`\u2699\uFE0F \u73ED\u7EA7\u8BFE\u8868\u6293\u53D6\u5E76\u53D1: ${classCrawlConcurrency}\uFF0C\u5F85\u6293\u53D6 ${pendingMajors.length} \u4E2A\u4E13\u4E1A\u3002`);
+  if (classCrawlConcurrency > 1) {
+    console.log("\u2139\uFE0F \u5C06\u6309\u6279\u6B21\u5E76\u53D1\u53D1\u8D77\u6559\u52A1\u7F51\u8BF7\u6C42\uFF1B\u672C\u5730\u8FDB\u5EA6\u5728\u6BCF\u4E2A\u6279\u6B21\u7ED3\u675F\u540E\u843D\u76D8\uFF0C\u5931\u8D25\u4E13\u4E1A\u4ECD\u53EF resume\u3002");
+  }
+  async function crawlMajorClassSchedule(major, sequence) {
+    const startedAt = Date.now();
+    console.log(`   [${sequence}/${pendingMajors.length}] \u6B63\u5728\u6293\u53D6: ${major.grade}\u7EA7 - ${major.name} \u4E13\u4E1A\u8BFE\u8868 ...`);
+    const htmlText = await page.evaluate(async (params) => {
+      const formBody = new URLSearchParams({
+        xnxqh: params.semester,
+        skyx: params.collegeCode,
+        sknj: params.grade,
+        skzy: params.majorCode,
+        zc1: "",
+        zc2: "",
+        jc1: "",
+        jc2: ""
+      }).toString();
+      const res = await fetch("/kbcx/kbxx_xzb_ifr", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: formBody
       });
-      const rawHtmlPath = path.join(rawPagesDir, `class_${major.grade}_${major.code}.html`);
-      fs.writeFileSync(rawHtmlPath, htmlText, "utf-8");
-      const candidateResult = parser.extractClassNameCandidates(htmlText, {
-        semester: activeSemester,
-        collegeCode: major.collegeCode,
-        grade: major.grade,
-        majorCode: major.code,
-        majorName: major.name
+      return res.text();
+    }, {
+      semester: activeSemester,
+      collegeCode: major.collegeCode,
+      grade: major.grade,
+      majorCode: major.code
+    });
+    const rawHtmlPath = path.join(rawPagesDir, `class_${major.grade}_${major.code}.html`);
+    fs.writeFileSync(rawHtmlPath, htmlText, "utf-8");
+    const candidateResult = parser.extractClassNameCandidates(htmlText, {
+      semester: activeSemester,
+      collegeCode: major.collegeCode,
+      grade: major.grade,
+      majorCode: major.code,
+      majorName: major.name
+    });
+    const candidateRecord = {
+      semester: activeSemester,
+      collegeCode: major.collegeCode,
+      collegeName: collegeNameByCode.get(String(major.collegeCode)) || major.collegeName || "",
+      grade: major.grade,
+      majorCode: major.code,
+      majorName: major.name,
+      rawHtmlPath,
+      classNames: candidateResult.classNames || [],
+      candidates: (candidateResult.candidates || []).slice(0, 80),
+      checkedAt: (/* @__PURE__ */ new Date()).toISOString()
+    };
+    const parsed2 = parser.parseClassScheduleIfrHtml(htmlText, {
+      semester: activeSemester,
+      collegeCode: major.collegeCode,
+      grade: major.grade,
+      majorCode: major.code,
+      majorName: major.name
+    });
+    const courses = normalizer.normalizeCourseList(parsed2.courses || [], {
+      semester: activeSemester,
+      sourceType: "class",
+      audienceType: "student"
+    });
+    let dedupedDiff = 0;
+    let groupedCoursesNum = 0;
+    if (courses.length > 0) {
+      const seenKeys = /* @__PURE__ */ new Set();
+      const uniqueCourses = courses.filter((c) => {
+        const key = [
+          c.courseName || "",
+          c.weekday || "",
+          c.startSection || "",
+          c.endSection || "",
+          c.startWeek || "",
+          c.endWeek || "",
+          c.teacherName || "",
+          c.classroom || ""
+        ].join("_");
+        if (seenKeys.has(key)) return false;
+        seenKeys.add(key);
+        return true;
       });
-      classNameCandidateRecords = upsertClassNameCandidateRecord(classNameCandidateRecords, {
+      dedupedDiff = courses.length - uniqueCourses.length;
+      const groupMap = {};
+      uniqueCourses.forEach((c) => {
+        const key = [
+          c.courseName || "",
+          c.weekday || "",
+          c.startSection || "",
+          c.endSection || "",
+          c.startWeek || "",
+          c.endWeek || ""
+        ].join("_");
+        groupMap[key] = (groupMap[key] || 0) + 1;
+      });
+      Object.keys(groupMap).forEach((key) => {
+        if (groupMap[key] > 1) {
+          groupedCoursesNum++;
+        }
+      });
+    }
+    let noScheduleRecord = null;
+    let classes = [];
+    if (courses.length === 0) {
+      noScheduleRecord = {
         semester: activeSemester,
         collegeCode: major.collegeCode,
         collegeName: collegeNameByCode.get(String(major.collegeCode)) || major.collegeName || "",
         grade: major.grade,
         majorCode: major.code,
         majorName: major.name,
-        rawHtmlPath,
-        classNames: candidateResult.classNames || [],
-        candidates: (candidateResult.candidates || []).slice(0, 80),
         checkedAt: (/* @__PURE__ */ new Date()).toISOString()
-      });
-      writeJsonFile(classNameCandidatesPath, classNameCandidateRecords);
-      console.log(`      \u73ED\u7EA7\u6587\u672C\u5019\u9009: ${(candidateResult.classNames || []).join(", ") || "\u672A\u53D1\u73B0"}`);
-      const parsed2 = parser.parseClassScheduleIfrHtml(htmlText, {
-        semester: activeSemester,
-        collegeCode: major.collegeCode,
-        grade: major.grade,
-        majorCode: major.code,
-        majorName: major.name
-      });
-      const courses = normalizer.normalizeCourseList(parsed2.courses || [], {
-        semester: activeSemester,
-        sourceType: "class",
-        audienceType: "student"
-      });
-      totalCoursesFetched += courses.length;
-      if (courses.length > 0) {
-        const seenKeys = /* @__PURE__ */ new Set();
-        const uniqueCourses = courses.filter((c) => {
-          const key = [
-            c.courseName || "",
-            c.weekday || "",
-            c.startSection || "",
-            c.endSection || "",
-            c.startWeek || "",
-            c.endWeek || "",
-            c.teacherName || "",
-            c.classroom || ""
-          ].join("_");
-          if (seenKeys.has(key)) return false;
-          seenKeys.add(key);
-          return true;
-        });
-        const dedupedDiff = courses.length - uniqueCourses.length;
-        totalDedupledCount += dedupedDiff;
-        const groupMap = {};
-        uniqueCourses.forEach((c) => {
-          const key = [
-            c.courseName || "",
-            c.weekday || "",
-            c.startSection || "",
-            c.endSection || "",
-            c.startWeek || "",
-            c.endWeek || ""
-          ].join("_");
-          groupMap[key] = (groupMap[key] || 0) + 1;
-        });
-        let groupedCoursesNum = 0;
-        Object.keys(groupMap).forEach((key) => {
-          if (groupMap[key] > 1) {
-            groupedCoursesNum++;
-          }
-        });
-        totalGroupedCount += groupedCoursesNum;
-      }
-      if (courses.length === 0) {
-        newNoScheduleCount++;
-        const noScheduleRecord = {
-          semester: activeSemester,
-          collegeCode: major.collegeCode,
-          collegeName: collegeNameByCode.get(String(major.collegeCode)) || major.collegeName || "",
-          grade: major.grade,
-          majorCode: major.code,
-          majorName: major.name,
-          checkedAt: (/* @__PURE__ */ new Date()).toISOString()
-        };
-        noScheduleMajors = upsertNoScheduleMajor(noScheduleMajors, noScheduleRecord);
-        writeJsonFile(noScheduleCachePath, noScheduleMajors);
-        console.log(`      \u6CA1\u6709\u6392\u8BFE\u6570\u636E\uFF0C\u5DF2\u8BB0\u5F55\u5230 ${noScheduleCachePath}`);
-        markCompletedMajor(progress, major, activeSemester);
-        writeJsonFile(PROGRESS_PATH, progress);
-        crawlStats.succeededTargetCount += 1;
-        global.SYNC_CRAWL_STATS = crawlStats;
-        await waitBetweenClassSyncRequests(isFiltered);
-        continue;
-      }
-      const beforeNoScheduleCount = noScheduleMajors.length;
-      noScheduleMajors = removeNoScheduleMajor(noScheduleMajors, major, activeSemester);
-      if (noScheduleMajors.length !== beforeNoScheduleCount) {
-        writeJsonFile(noScheduleCachePath, noScheduleMajors);
-        console.log("      \u6B64\u524D\u65E0\u6392\u8BFE\u7F13\u5B58\u5DF2\u5931\u6548\uFF0C\u672C\u6B21\u6293\u5230\u8BFE\u7A0B\u5E76\u5DF2\u79FB\u9664\u7F13\u5B58\u8BB0\u5F55\u3002");
-      }
-      const classes = normalizer.buildClassScheduleEntries(courses, {
+      };
+    } else {
+      classes = normalizer.buildClassScheduleEntries(courses, {
         semester: activeSemester,
         collegeCode: major.collegeCode,
         collegeName: collegeNameByCode.get(String(major.collegeCode)) || major.collegeName || "",
@@ -12476,20 +13353,86 @@ async function syncClassSchedules(page, catalog, majors) {
         majorCode: major.code,
         majorName: major.name
       });
-      if (classes.length > 0) {
-        const aggregateCount = classes.filter((item) => item.isAggregated).length;
-        const classCount = classes.length - aggregateCount;
-        console.log(`      \u6574\u7406\u8BFE\u8868\u6761\u76EE: \u884C\u653F\u73ED ${classCount} \u4E2A\uFF0C\u4E13\u4E1A\u805A\u5408 ${aggregateCount} \u4E2A (${classes.map((c) => c.className).join(", ")})`);
-        allClassSchedules = mergeClassSchedules(allClassSchedules, classes);
+    }
+    return {
+      major,
+      sequence,
+      candidateRecord,
+      courses,
+      dedupedDiff,
+      groupedCoursesNum,
+      noScheduleRecord,
+      classes,
+      elapsedMs: Date.now() - startedAt
+    };
+  }
+  for (let batchStart = 0; batchStart < pendingMajors.length; batchStart += classCrawlConcurrency) {
+    const batch = pendingMajors.slice(batchStart, batchStart + classCrawlConcurrency);
+    const batchNumber = Math.floor(batchStart / classCrawlConcurrency) + 1;
+    const totalBatches = Math.ceil(pendingMajors.length / classCrawlConcurrency);
+    const batchStartedAt = Date.now();
+    crawlStats.actualNetworkRequestCount += batch.length;
+    global.SYNC_CRAWL_STATS = crawlStats;
+    const batchResults = await Promise.all(batch.map((major, offset) => {
+      const sequence = batchStart + offset + 1;
+      return crawlMajorClassSchedule(major, sequence).then((value) => ({ ok: true, value })).catch((error) => ({ ok: false, major, sequence, error }));
+    }));
+    let candidateChanged = false;
+    let noScheduleChanged = false;
+    let progressChanged = false;
+    let successCount = 0;
+    for (const item of batchResults) {
+      if (!item.ok) {
+        console.error(`      \u26A0\uFE0F  [${item.sequence}/${pendingMajors.length}] \u6293\u53D6\u5931\u8D25: ${item.error.message}`);
+        continue;
+      }
+      const result = item.value;
+      const major = result.major;
+      const candidateNames = result.candidateRecord.classNames || [];
+      classNameCandidateRecords = upsertClassNameCandidateRecord(classNameCandidateRecords, result.candidateRecord);
+      candidateChanged = true;
+      console.log(`      [${result.sequence}/${pendingMajors.length}] \u73ED\u7EA7\u6587\u672C\u5019\u9009: ${candidateNames.join(", ") || "\u672A\u53D1\u73B0"} (${formatElapsedMs(result.elapsedMs)})`);
+      totalCoursesFetched += result.courses.length;
+      totalDedupledCount += result.dedupedDiff;
+      totalGroupedCount += result.groupedCoursesNum;
+      if (result.noScheduleRecord) {
+        newNoScheduleCount++;
+        noScheduleMajors = upsertNoScheduleMajor(noScheduleMajors, result.noScheduleRecord);
+        noScheduleChanged = true;
+        console.log(`      [${result.sequence}/${pendingMajors.length}] \u6CA1\u6709\u6392\u8BFE\u6570\u636E\uFF0C\u5DF2\u8BB0\u5F55\u5230 ${noScheduleCachePath}`);
+      } else {
+        const beforeNoScheduleCount = noScheduleMajors.length;
+        noScheduleMajors = removeNoScheduleMajor(noScheduleMajors, major, activeSemester);
+        if (noScheduleMajors.length !== beforeNoScheduleCount) {
+          noScheduleChanged = true;
+          console.log(`      [${result.sequence}/${pendingMajors.length}] \u6B64\u524D\u65E0\u6392\u8BFE\u7F13\u5B58\u5DF2\u5931\u6548\uFF0C\u672C\u6B21\u6293\u5230\u8BFE\u7A0B\u5E76\u5DF2\u79FB\u9664\u7F13\u5B58\u8BB0\u5F55\u3002`);
+        }
+        if (result.classes.length > 0) {
+          const aggregateCount = result.classes.filter((classItem) => classItem.isAggregated).length;
+          const classCount = result.classes.length - aggregateCount;
+          console.log(`      [${result.sequence}/${pendingMajors.length}] \u6574\u7406\u8BFE\u8868\u6761\u76EE: \u884C\u653F\u73ED ${classCount} \u4E2A\uFF0C\u4E13\u4E1A\u805A\u5408 ${aggregateCount} \u4E2A (${result.classes.map((c) => c.className).join(", ")})`);
+          allClassSchedules = mergeClassSchedules(allClassSchedules, result.classes);
+        }
       }
       markCompletedMajor(progress, major, activeSemester);
-      writeJsonFile(PROGRESS_PATH, progress);
-      crawlStats.succeededTargetCount += 1;
-      global.SYNC_CRAWL_STATS = crawlStats;
-    } catch (err) {
-      console.error(`      \u26A0\uFE0F  \u6293\u53D6\u5931\u8D25: ${err.message}`);
+      progressChanged = true;
+      successCount++;
     }
-    await waitBetweenClassSyncRequests(isFiltered);
+    if (candidateChanged) {
+      writeJsonFile(classNameCandidatesPath, classNameCandidateRecords);
+    }
+    if (noScheduleChanged) {
+      writeJsonFile(noScheduleCachePath, noScheduleMajors);
+    }
+    if (progressChanged) {
+      writeJsonFile(PROGRESS_PATH, progress);
+      crawlStats.succeededTargetCount += successCount;
+      global.SYNC_CRAWL_STATS = crawlStats;
+    }
+    console.log(`   \u2705 \u6279\u6B21 ${batchNumber}/${totalBatches} \u5B8C\u6210: \u6210\u529F ${successCount}, \u5931\u8D25 ${batch.length - successCount}, \u7D2F\u8BA1\u8BFE\u8868 ${allClassSchedules.length}, \u7528\u65F6 ${formatElapsedMs(Date.now() - batchStartedAt)}\u3002`);
+    if (batchStart + classCrawlConcurrency < pendingMajors.length) {
+      await waitBetweenClassSyncRequests(isFiltered);
+    }
   }
   console.log(`\u{1F4CA} \u73ED\u7EA7\u8BFE\u8868\u6293\u53D6\u5B8C\u6BD5\uFF0C\u5171\u6574\u7406\u51FA ${allClassSchedules.length} \u4E2A\u884C\u653F\u73ED\u7EA7\u7684\u8BFE\u8868\u3002`);
   const unfinishedTargets = effectiveTargetMajors.filter((major) => !hasCompletedMajor(progress, major, activeSemester));
@@ -12595,18 +13538,15 @@ function runPreflight() {
   console.log(`- ADMIN_API_TOKEN: ${tokenExists ? "\u5DF2\u914D\u7F6E" : "\u274C \u672A\u914D\u7F6E\uFF01(\u53EF\u80FD\u4F1A\u5BFC\u81F4 VPS \u6821\u9A8C\u5931\u8D25)"}`);
   if (INITIAL_DETECTED_PROXIES.length > 0) {
     console.warn(`\u26A0\uFE0F \u68C0\u6D4B\u5230\u4EE3\u7406\u73AF\u5883\u53D8\u91CF:`);
-    INITIAL_DETECTED_PROXIES.forEach(([name, value]) => {
-      console.warn(`   - ${name}=${value}`);
-      if (value.includes("127.0.0.1:10808") || value.includes("localhost:10808")) {
-        console.warn("   \u26A0\uFE0F \u3010\u8B66\u544A\u3011\u68C0\u6D4B\u5230\u4EE3\u7406\u6307\u5411 127.0.0.1:10808\uFF0C\u53EF\u80FD\u662F v2rayN \u7CFB\u7EDF\u4EE3\u7406\u6B8B\u7559\uFF0C\u4F1A\u5BFC\u81F4\u4E0A\u4F20 VPS \u5931\u8D25\uFF01");
-      }
+    INITIAL_DETECTED_PROXIES.forEach(([name]) => {
+      console.warn(`   - ${name}=[redacted]`);
     });
   } else {
     console.log("- \u4EE3\u7406\u73AF\u5883\u53D8\u91CF: \u672A\u68C0\u6D4B\u5230");
   }
-  const disableProxy2 = String(process.env.SYNC_DISABLE_PROXY || "true").toLowerCase() !== "false";
-  console.log(`- SYNC_DISABLE_PROXY: ${disableProxy2}`);
-  if (disableProxy2) {
+  const disableProxy = directNetworkEnv.disableProxy;
+  console.log(`- SYNC_DISABLE_PROXY: ${disableProxy}`);
+  if (disableProxy) {
     console.log("\u2139\uFE0F \u5DF2\u542F\u7528\u5F3A\u5236\u7981\u7528\u4EE3\u7406\u914D\u7F6E\u3002\u6240\u6709\u4E0A\u4F20\u9636\u6BB5\u5C06\u5F3A\u5236\u4E0D\u4F7F\u7528\u4EE3\u7406\u3002");
   }
   console.log("========================================================\n");
@@ -12712,8 +13652,23 @@ async function main() {
     }
   }
   const parsed2 = parseCliArgs(args);
-  const syncPlan = buildSyncPlan(parsed2.action || action, Object.assign({}, params, parsed2.params || {}), process.env);
-  Object.assign(params, applyPlanToParams(syncPlan, Object.assign({}, params, parsed2.params || {})));
+  const inputParams = Object.assign({}, params, parsed2.params || {});
+  if (inputParams.grade && !inputParams.grades) inputParams.grades = inputParams.grade;
+  if (inputParams.full === true || inputParams.full === "true") {
+    inputParams["catalog-policy"] = inputParams["catalog-policy"] || "network-only";
+    inputParams["schedule-policy"] = inputParams["schedule-policy"] || "network-only";
+    inputParams["progress-policy"] = inputParams["progress-policy"] || "ignore";
+    inputParams["negative-cache-policy"] = inputParams["negative-cache-policy"] || "revalidate";
+    inputParams["force-refresh"] = true;
+  }
+  if (inputParams.incremental === true || inputParams.incremental === "true") {
+    inputParams["catalog-policy"] = inputParams["catalog-policy"] || "reuse-validated";
+    inputParams["schedule-policy"] = inputParams["schedule-policy"] || "network-only";
+    inputParams["progress-policy"] = inputParams["progress-policy"] || "resume";
+    inputParams["negative-cache-policy"] = inputParams["negative-cache-policy"] || "ignore";
+  }
+  const syncPlan = buildSyncPlan(parsed2.action || action, inputParams, process.env);
+  Object.assign(params, inputParams, applyPlanToParams(syncPlan, inputParams));
   action = parsed2.action || action;
   if (action === "resume" && !params.term) {
     const resumeTerm = findTermByRunId(params["run-id"] || params.runId);
@@ -12759,6 +13714,9 @@ async function main() {
   if (params.grades) {
     process.env.SYNC_CLASS_GRADES = params.grades;
     process.env.SYNC_GRADES = params.grades;
+    if (!process.env.SYNC_GRADE_RANGE) {
+      process.env.SYNC_GRADE_RANGE = "custom";
+    }
   }
   if (params["college-codes"]) {
     process.env.SYNC_CLASS_COLLEGE_CODES = params["college-codes"];
@@ -12859,24 +13817,40 @@ async function main() {
     await handleResourcesSync(resourceActionTypes);
     return;
   }
-  const isNetOk = await diagnose();
-  if (!isNetOk) {
-    if (action === "release") {
-      console.warn("\u26A0\uFE0F \u672C\u5730\u7F51\u7EDC\u672A\u901A\u8FC7\u6821\u56ED\u7F51/VPN\u8BCA\u65AD\uFF01\u65E0\u6CD5\u5728\u7EBF\u6293\u53D6\u6570\u636E\u3002");
-      console.log("\u{1F4A1} \u63D0\u793A: \u68C0\u6D4B\u5230\u5F53\u524D\u975E\u6821\u56ED\u7F51\u73AF\u5883\uFF0C\u4F60\u53EF\u4EE5\u4F7F\u7528\u79BB\u7EBF\u6A21\u5F0F\u76F4\u63A5\u6253\u5305\u672C\u5730\u5DF2\u6293\u53D6\u7684\u7F13\u5B58\u53D1\u5E03\u5FEB\u7167\uFF1A");
-      console.log('   PowerShell \u547D\u4EE4: $env:SYNC_RELEASE_OFFLINE="true"; npm run sync:release');
-    } else {
-      console.error("\u274C \u672C\u5730\u7F51\u7EDC\u672A\u901A\u8FC7\u6821\u56ED\u7F51/VPN\u8BCA\u65AD\uFF0C\u4E2D\u6B62\u540C\u6B65\u4EFB\u52A1\uFF01");
-      printPowerShellCommands();
+  if (process.env.FOSU_SKIP_CAMPUS_NETWORK_CHECK === "1") {
+    console.log("\u2139\uFE0F Publisher \u5DF2\u5B8C\u6210\u6821\u56ED\u7F51\u68C0\u67E5\uFF0C\u672C\u6B21\u6293\u53D6\u8DF3\u8FC7\u91CD\u590D diagnose\u3002");
+  } else {
+    const network = await probeCampusNetwork({ env: process.env });
+    printDiagnosisSummary(network);
+    if (network.readiness === "blocked") {
+      if (action === "release") {
+        console.warn("\u26A0\uFE0F \u672C\u5730\u7F51\u7EDC\u672A\u901A\u8FC7\u6821\u56ED\u7F51/VPN\u8BCA\u65AD\uFF01\u65E0\u6CD5\u5728\u7EBF\u6293\u53D6\u6570\u636E\u3002");
+        console.log("\u{1F4A1} \u63D0\u793A: \u68C0\u6D4B\u5230\u5F53\u524D\u975E\u6821\u56ED\u7F51\u73AF\u5883\uFF0C\u4F60\u53EF\u4EE5\u4F7F\u7528\u79BB\u7EBF\u6A21\u5F0F\u76F4\u63A5\u6253\u5305\u672C\u5730\u5DF2\u6293\u53D6\u7684\u7F13\u5B58\u53D1\u5E03\u5FEB\u7167\uFF1A");
+        console.log('   PowerShell \u547D\u4EE4: $env:SYNC_RELEASE_OFFLINE="true"; npm run sync:release');
+      } else {
+        console.error("\u274C \u672C\u5730\u7F51\u7EDC\u672A\u901A\u8FC7\u6821\u56ED\u7F51/VPN\u8BCA\u65AD\uFF0C\u4E2D\u6B62\u540C\u6B65\u4EFB\u52A1\uFF01");
+        printPowerShellCommands();
+      }
+      const error = new Error((network.blockers || []).join("; ") || "CAMPUS_NETWORK_BLOCKED");
+      error.code = "CAMPUS_NETWORK_BLOCKED";
+      throw error;
     }
-    process.exit(1);
   }
-  const { browser, context } = await initBrowserContext();
-  const page = await context.newPage();
+  let browser = null;
+  let context = null;
+  let page = null;
+  ({ browser, context } = await initBrowserContext());
+  page = await context.newPage();
   try {
     const isSessionOk = await checkSession(page);
     if (!isSessionOk) {
-      process.exit(1);
+      const error = new Error("session \u5DF2\u8FC7\u671F\uFF0C\u8BF7\u6267\u884C npm run sync:login \u540E\u91CD\u8BD5");
+      error.code = "SESSION_EXPIRED";
+      throw error;
+    }
+    if (action === "check-session") {
+      console.log("SESSION_VALID");
+      return;
     }
     let catalog, majors;
     if (action === "catalog") {
@@ -12999,18 +13973,34 @@ async function main() {
     } else {
       console.error(`\u274C \u672A\u77E5\u7684\u540C\u6B65\u53C2\u6570: ${action}`);
       console.log("\u652F\u6301\u7684\u53C2\u6570: catalog | majors | class | resources | local-campus | local-upload | release | fresh | quick | all");
+      const error = new Error(`UNKNOWN_SYNC_ACTION: ${action}`);
+      error.code = "UNKNOWN_SYNC_ACTION";
+      throw error;
     }
   } catch (error) {
     console.error(`\u274C \u6267\u884C\u540C\u6B65\u65F6\u53D1\u751F\u81F4\u547D\u5F02\u5E38: ${error.message}`);
     console.error(error.stack);
     printPowerShellCommands();
+    process.exitCode = 1;
+    throw error;
   } finally {
-    await browser.close();
-    console.log("\u6D4F\u89C8\u5668\u5DF2\u5B89\u5168\u5173\u95ED\u3002\u540C\u6B65\u4EFB\u52A1\u7ED3\u675F\u3002");
+    if (browser && typeof browser.close === "function") {
+      await browser.close();
+      console.log("\u6D4F\u89C8\u5668\u5DF2\u5B89\u5168\u5173\u95ED\u3002\u540C\u6B65\u4EFB\u52A1\u7ED3\u675F\u3002");
+    }
   }
 }
 if (require.main === module) {
-  main();
+  main().catch((error) => {
+    process.exitCode = 1;
+    if (!error || !error.__syncLogged) {
+      console.error(JSON.stringify({
+        success: false,
+        code: error && error.code || "SYNC_FATAL",
+        message: error && error.message || "unknown sync error"
+      }, null, 2));
+    }
+  });
 } else {
   module.exports = {
     selectSemester,

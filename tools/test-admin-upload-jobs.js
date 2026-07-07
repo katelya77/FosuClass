@@ -32,6 +32,7 @@ function snapshot(version, className = "25上传1班") {
     term: "2025-2026-2",
     semester: "2025-2026-2",
     termStartDate: "2026-03-09",
+    termConfig: { term: "2025-2026-2", termStartDate: "2026-03-09", totalWeeks: 20, weekStart: "monday" },
     generatedAt: "2026-06-04T00:00:00.000Z",
     updatedAt: "2026-06-04T00:00:00.000Z",
     catalog: { colleges: [{ code: "04", name: "测试学院" }], grades: ["2025"] },

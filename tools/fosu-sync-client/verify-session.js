@@ -13,7 +13,7 @@ async function main() {
   console.error(JSON.stringify({
     ok: false,
     code: result.code || "SESSION_EXPIRED",
-    message: result.message || "Session 已失效，请运行 npm run login",
+    message: result.message || "session 已过期，请执行 npm run sync:login 后重试",
   }, null, 2));
   return 1;
 }
@@ -25,7 +25,7 @@ if (require.main === module) {
     console.error(JSON.stringify({
       ok: false,
       code: error.code || "SESSION_EXPIRED",
-      message: error.message || "Session 已失效，请运行 npm run login",
+      message: error.message || "session 已过期，请执行 npm run sync:login 后重试",
     }, null, 2));
     process.exitCode = 1;
   });

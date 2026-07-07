@@ -28,6 +28,27 @@ assert.strictEqual(publisher.progressPolicy, "ignore");
 assert.strictEqual(publisher.upload, true);
 assert.strictEqual(publisher.buildRelease, true);
 
+const incremental = syncPlan.buildSyncPlan("sync:publish", {
+  term: "2026-2027-1",
+  "schedule-policy": "network-only",
+  "progress-policy": "resume",
+  "negative-cache-policy": "ignore",
+  grade: "2026",
+}, {});
+assert.strictEqual(incremental.forceRefresh, false);
+assert.strictEqual(incremental.ignoreProgress, false);
+assert.strictEqual(syncPlan.applyPlanToParams(incremental, {}).crawlMode, "incremental");
+
+const full = syncPlan.buildSyncPlan("sync:publish", {
+  term: "2026-2027-1",
+  "schedule-policy": "network-only",
+  "progress-policy": "ignore",
+  "negative-cache-policy": "revalidate",
+  "force-refresh": true,
+}, {});
+assert.strictEqual(full.forceRefresh, true);
+assert.strictEqual(syncPlan.applyPlanToParams(full, {}).crawlMode, "full-fresh");
+
 const classes = plan("daily:classes");
 assert(classes.scopes.includes("classSchedules"), "class-only daily should crawl class schedules");
 assert.strictEqual(classes.sourceRequirements.classSchedules.mode, "network-direct");

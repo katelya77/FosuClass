@@ -29,6 +29,14 @@ assertIncludes(html, "resolveSyncScriptName", "new sync script command resolver"
 assertIncludes(html, "sync:upload-staging", "explicit staging upload command");
 assertIncludes(html, 'id="publisher-status-card"', "publisher status card");
 assertIncludes(html, "生成本机一键同步命令", "local publisher command action");
+assertIncludes(html, 'id="copyPublisherCommandTopBtn"', "top local publisher command action");
+assertIncludes(html, 'id="syncRefreshTopBtn"', "top refresh action");
+assertIncludes(html, 'id="syncFocusPendingBtn"', "top pending action");
+assertIncludes(html, "当前 active release", "minimal ops active release card");
+assertIncludes(html, "最后同步状态", "minimal ops sync status card");
+assertIncludes(html, "CloudBase 状态", "minimal ops cloudbase card");
+assertIncludes(html, "当前无需处理", "clean no-pending state");
+assertIncludes(html, "二级区域：上传、Relay、Release 历史、技术详情、日志与清理", "secondary sync area label");
 assertIncludes(html, "重试 CloudBase 镜像", "CloudBase mirror retry action");
 assertIncludes(html, "cancelRelayTask", "relay cancel action");
 assertIncludes(html, 'safeBind("flowCopyBtnLocal"', "local flow copy binding");
