@@ -24,6 +24,8 @@ const USER_PREFERENCES_KEY = "FOSU_AI_USER_PREFERENCES";
 const MAX_HISTORY = 20;
 const MAX_CONTEXT_COURSES = 80;
 const REDACTED = "[已脱敏]";
+const PERSONAL_SYNC_URL = "/pages/personal-sync/personal-sync";
+const PERSONAL_SYNC_XLS_URL = "/pages/personal-sync/personal-sync?tab=xls";
 
 const SENSITIVE_PATTERNS = [
   { pattern: /((?:password|passwd|pwd|密码|口令)\s*[:：=是为]?\s*)[^\s，。；;,&]+/gi, replacement: `$1${REDACTED}` },
@@ -698,12 +700,15 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
         badges: ["使用帮助", "个人课表"],
         items: [
           { title: "适用问题", subtitle: "今天有什么课、明天有什么课、本周课表、下一节课在哪里", value: "" },
-          { title: "导入方式", subtitle: "从个人课表导入入口了解 XLS 导入方式", value: "" },
+          { title: "主入口", subtitle: "先打开个人课表同步，再按页面提示选择合适方式", value: "" },
+          { title: "XLS 文件导入", subtitle: "明确需要表格/文件导入时再进入 XLS 页签", value: "" },
           { title: "安全提醒", subtitle: "不要在聊天框输入学号、密码或登录凭证", value: "" },
         ],
         actions: [
-          { label: "打开导入入口", type: "navigate", url: "/pages/personal-sync/personal-sync?tab=xls" },
-          { label: "复制导入说明", type: "copy", payload: { text: "打开个人课表导入入口，按页面提示使用 XLS 导入。不要在聊天框输入学号、密码或登录凭证。" } },
+          { label: "打开个人课表同步", type: "navigate", url: PERSONAL_SYNC_URL },
+          { label: "查看 XLS 文件导入", type: "navigate", url: PERSONAL_SYNC_XLS_URL },
+          { label: "复制导入说明", type: "copy", payload: { text: "打开个人课表同步主入口，按页面提示选择导入方式；只有明确需要表格或文件导入时，再进入 XLS 文件导入。不要在聊天框输入学号、密码或登录凭证。" } },
+          { label: "继续问今天课程", type: "ask", payload: { message: "今天有什么课" } },
         ],
       }
     : isDataSourceHelp
@@ -839,8 +844,9 @@ function buildPersonalScheduleClarificationResponse(message, clientContext = {},
           { title: "指定教师或教室", subtitle: "用于查询教师课表或教室占用", value: "" },
         ],
         actions: [
-          { label: "导入个人课表", type: "navigate", url: "/pages/personal-sync/personal-sync?tab=xls" },
-          { label: "复制导入说明", type: "copy", payload: { text: "打开个人课表导入入口，按页面提示使用 XLS 导入。导入后可问今天、明天、本周和下一节课。" } },
+          { label: "打开个人课表同步", type: "navigate", url: PERSONAL_SYNC_URL },
+          { label: "查看 XLS 文件导入", type: "navigate", url: PERSONAL_SYNC_XLS_URL },
+          { label: "复制导入说明", type: "copy", payload: { text: "打开个人课表同步主入口，按页面提示选择导入方式。导入后可问今天、明天、本周和下一节课；明确需要文件导入时再进入 XLS 文件导入。" } },
         ],
       },
     ],
