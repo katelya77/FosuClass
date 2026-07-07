@@ -615,7 +615,7 @@ function buildScheduleStatusResponse(message, clientContext = {}, route = {}) {
     ? "可用于全校课表查询；具体上课安排仍以学校教务系统和任课教师通知为准。"
     : "当前未确认完整课表发布版本，暂不能判断为最新数据。";
   const answer = [
-    "我理解你是在问课表数据状态，不是在查某个班级、老师、教室或课程。",
+    "已根据关键词匹配到课表数据状态查询。",
     `当前学期：${status.term || "未记录"}${status.semesterText ? `（${status.semesterText}）` : ""}。`,
     `当前教学周：${teachingWeekText}。`,
     `数据来源：${status.source}。`,
@@ -645,7 +645,7 @@ function buildScheduleStatusResponse(message, clientContext = {}, route = {}) {
         ],
       },
     ],
-    suggestions: ["查班级本周课表", "现在用的是哪个学期数据", "小佛能做什么"],
+    suggestions: ["查班级本周课表", "现在用的是哪个学期数据", "可以查询什么"],
     toolCalls: [{ name: "diagnose_data_status", status: "success" }],
     evidence: {
       verified: hasRelease,
@@ -675,17 +675,17 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
   const value = String(message || "").replace(/\s+/g, "");
   const isImportHelp = /导入.*个人课表|个人课表.*导入|导入课表|xls/i.test(value);
   const isDataSourceHelp = /数据来源|来源说明|知识来源|课表来源/.test(value);
-  const isFloatHelp = /小佛AI浮窗|小佛浮窗|浮窗/.test(value);
+  const isFloatHelp = /小佛助手浮窗|小佛浮窗|浮窗/.test(value);
   const card = isFloatHelp
     ? {
         type: "help",
-        title: "小佛AI浮窗",
+        title: "小佛助手浮窗",
         subtitle: "可点击、拖拽、隐藏或关闭",
         badges: ["使用帮助", "浮窗"],
         items: [
-          { title: "打开方式", subtitle: "单击浮窗会打开 AI校园管家；拖动后会吸附到左右边缘", value: "" },
-          { title: "关闭与开启", subtitle: "AI 管家右上角更多操作里可以开启或关闭浮窗", value: "" },
-          { title: "长按菜单", subtitle: "可打开小佛AI、隐藏本页或关闭浮窗", value: "" },
+          { title: "打开方式", subtitle: "单击浮窗会打开校园服务管家；拖动后会吸附到左右边缘", value: "" },
+          { title: "关闭与开启", subtitle: "页面右上角更多操作里可以开启或关闭浮窗", value: "" },
+          { title: "长按菜单", subtitle: "可打开小佛校园助手、隐藏本页或关闭浮窗", value: "" },
         ],
         actions: [
           { label: "关闭浮窗", type: "toggleFloat", payload: { enabled: false } },
@@ -701,7 +701,7 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
           { title: "适用问题", subtitle: "今天有什么课、明天有什么课、本周课表、下一节课在哪里", value: "" },
           { title: "主入口", subtitle: "先打开个人课表同步，再按页面提示选择合适方式", value: "" },
           { title: "XLS 文件导入", subtitle: "明确需要表格/文件导入时再进入 XLS 页签", value: "" },
-          { title: "安全提醒", subtitle: "不要在聊天框输入学号、密码或登录凭证", value: "" },
+          { title: "安全提醒", subtitle: "请勿输入学号、密码、验证码等敏感信息", value: "" },
         ],
         actions: [
           { label: "打开个人课表同步", type: "navigate", url: PERSONAL_SYNC_URL },
@@ -713,11 +713,11 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
       ? {
           type: "help",
           title: "数据来源说明",
-          subtitle: "课表状态读运行时字段，校园知识读本地知识库",
+          subtitle: "课表状态读运行时字段，校园信息读本地知识库",
           badges: ["使用帮助", "数据边界"],
           items: [
             { title: "全校课表", subtitle: "优先读取项目内 Release Pack、学期、版本、缓存和更新时间字段", value: "" },
-            { title: "校园知识", subtitle: "只回答知识库收录的佛山大学公开信息和本地入口说明", value: "" },
+            { title: "校园信息", subtitle: "只返回知识库收录的佛山大学公开信息和本地入口说明", value: "" },
             { title: "缺少来源时", subtitle: "会说明知识库暂未收录可靠信息，不编造电话、地址、制度或入口", value: "" },
           ],
           actions: [
@@ -727,14 +727,14 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
         }
     : {
         type: "help",
-        title: "小佛可以帮你",
-        subtitle: "校园知识、全校课表、数据状态和使用指引",
-        badges: ["使用说明", "当前对话内回答"],
+        title: "可以查询什么",
+        subtitle: "校园事项、全校课表、天气提醒和常用入口",
+        badges: ["使用说明", "当前查询"],
         items: [
           { title: "查全校课表", subtitle: "可以查班级、教师、教室或课程安排", value: "" },
-          { title: "问校园事项", subtitle: "例如：佛大有哪些校区、教务系统在哪里进", value: "" },
+          { title: "查校园事项", subtitle: "例如：佛大有哪些校区、教务系统在哪里进", value: "" },
           { title: "看数据状态", subtitle: "例如：课表数据是否最新、现在用的是哪个学期数据", value: "" },
-          { title: "上下文追问", subtitle: "查到一个对象后，可以继续问“那周三呢”“换成另一个班级”。", value: "" },
+          { title: "连续查询", subtitle: "查到一个对象后，可以继续输入“那周三呢”“换成另一个班级”。", value: "" },
         ],
         actions: [
           { label: "打开全校课表", type: "navigate", url: "/pages/school/school" },
@@ -743,17 +743,17 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
       };
   return {
     answer: isFloatHelp
-      ? "小佛AI浮窗已可通过更多操作开启或关闭。单击会打开 AI校园管家，拖拽会吸附到左右边缘，长按可以打开菜单。"
+      ? "小佛助手浮窗已可通过更多操作开启或关闭。单击会打开校园服务管家，拖拽会吸附到左右边缘，长按可以打开菜单。"
       : isImportHelp
-      ? "我理解你想了解如何导入个人课表。导入后，小佛才能回答“今天有什么课”“明天有什么课”“下一节课在哪里”这类个人安排问题。"
+      ? "已根据关键词匹配到个人课表导入说明。导入后，可查询“今天有什么课”“明天有什么课”“下一节课在哪里”这类个人安排。"
       : (isDataSourceHelp
-        ? "我理解你是在问数据来源说明。课表状态会读取项目内真实字段，校园知识只使用已收录来源；缺少可靠来源时不会编造。"
-        : "我理解你是在问小佛能做什么。你可以问校园事项，也可以查全校课表；涉及课表时，请尽量说清楚班级、老师、教室或课程。"),
+        ? "已根据关键词匹配到数据来源说明。课表状态会读取项目内真实字段，校园信息只使用已收录来源；缺少可靠来源时不会编造。"
+        : "可以查询校园事项、全校课表、个人课表、天气提醒和常用入口。涉及课表时，请尽量说清楚班级、老师、教室或课程。"),
     cards: [
       card,
     ],
     suggestions: isFloatHelp
-      ? ["关闭小佛AI浮窗", "打开小佛AI", "小佛能做什么"]
+      ? ["关闭小佛助手浮窗", "打开小佛校园助手", "可以查询什么"]
       : isImportHelp
       ? ["今天有什么课", "查班级本周课表", "课表数据更新到什么时候"]
       : (isDataSourceHelp
@@ -790,12 +790,12 @@ function buildAppNavigationResponse(message, clientContext = {}, route = {}) {
       ]
     : [];
   return {
-    answer: `我理解你想打开${target.label || "相关功能"}。入口放在这条回复里，当前回答仍保留在对话中。`,
+    answer: `已根据关键词匹配到${target.label || "相关功能"}入口。入口放在这条结果里，当前查询记录仍会保留。`,
     cards: [
       {
         type: "navigation",
         title: target.label || "应用入口",
-        subtitle: "从当前对话打开",
+        subtitle: "从当前查询打开",
         badges: ["应用入口"],
         items: [
           { title: "入口", subtitle: target.label || "", value: "" },
@@ -803,7 +803,7 @@ function buildAppNavigationResponse(message, clientContext = {}, route = {}) {
         actions,
       },
     ],
-    suggestions: ["小佛能做什么", "课表数据是否最新"],
+    suggestions: ["可以查询什么", "课表数据是否最新"],
     toolCalls: [{ name: "clarify_missing_slot", status: "success" }],
     evidence: {
       verified: true,
@@ -829,7 +829,7 @@ function buildAppNavigationResponse(message, clientContext = {}, route = {}) {
 
 function buildPersonalScheduleClarificationResponse(message, clientContext = {}, route = {}) {
   return {
-    answer: "我理解你是在问个人课表安排。当前对话里还没有可用的个人课表，也没有明确的班级、老师或教室；你可以先导入个人课表，或告诉我要查哪个对象。",
+    answer: "已匹配到个人课表安排查询。当前查询里还没有可用的个人课表，也没有明确的班级、老师或教室；可以先导入个人课表，或补充要查的对象。",
     cards: [
       {
         type: "personal_schedule",
@@ -1040,7 +1040,7 @@ function normalizeWeatherForCard(weather, route, nextCourse) {
 
 function buildWeatherAnswerText(weatherPayload, route, nextCourse) {
   if (!weatherPayload.success) {
-    return `我理解你是在问${weatherPayload.campus}天气。${weatherPayload.advice}`;
+    return `已根据关键词匹配到${weatherPayload.campus}天气查询。${weatherPayload.advice}`;
   }
   const rainText = weatherPayload.rainProbabilityText === "暂无该项数据"
     ? "暂未返回降雨概率"
@@ -1051,7 +1051,7 @@ function buildWeatherAnswerText(weatherPayload, route, nextCourse) {
       : "你问到下一节课，我先按校区天气判断；导入个人课表后可以结合下一节课时间和地点提醒。")
     : "";
   return [
-    `我理解你是在问${weatherPayload.campus}天气。${weatherPayload.targetLabel || "今天"}${weatherPayload.weatherText}，温度 ${weatherPayload.temperatureText}，${rainText}。`,
+    `已根据关键词匹配到${weatherPayload.campus}天气查询。${weatherPayload.targetLabel || "今天"}${weatherPayload.weatherText}，温度 ${weatherPayload.temperatureText}，${rainText}。`,
     nextCourseText,
     weatherPayload.advice,
   ].filter(Boolean).join("\n");
@@ -1063,7 +1063,7 @@ function buildWeatherCard(weatherPayload) {
     variant: weatherPayload.success ? "" : "error",
     title: `${weatherPayload.campus}天气`,
     subtitle: weatherPayload.success ? weatherPayload.weatherText : "天气数据暂不可用",
-    badges: ["天气", weatherPayload.success ? "实时信息" : "数据暂不可用"].concat(weatherPayload.cached ? ["最近数据"] : []),
+    badges: ["校区天气", weatherPayload.success ? "天气数据" : "数据暂不可用"].concat(weatherPayload.cached ? ["最近数据"] : []),
     weather: weatherPayload,
     items: [
       { title: "地点", subtitle: weatherPayload.campus, value: "" },
@@ -1101,7 +1101,7 @@ async function buildWeatherResponse(message, clientContext = {}, route = {}, cal
     dateHint: entities.dateHint || "",
     topic: entities.topic || "",
   });
-  reportPipelineStatus(callbacks, "正在整理结果…", "compose");
+  reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
   const weatherPayload = normalizeWeatherForCard(weather, route, nextCourse);
   return {
     answer: buildWeatherAnswerText(weatherPayload, route, nextCourse),
@@ -1135,7 +1135,7 @@ async function buildWeatherResponse(message, clientContext = {}, route = {}, cal
 function buildSmalltalkResponse(message, clientContext = {}, route = {}) {
   const compact = String(message || "").replace(/\s+/g, "");
   const answer = /^谢谢|^感谢/.test(compact)
-    ? "不客气。我会把普通聊天和校园工具分开处理，不会把这类话当成课表对象。"
+    ? "不客气。系统会把寒暄内容和校园查询分开处理，不会把这类话当成课表对象。"
     : "可以，我们就用普通话聊。需要查校园事项时，直接说清楚问题；需要查课表时，再告诉我班级、老师、教室或课程。";
   return {
     answer,
@@ -1188,17 +1188,17 @@ async function chat(message, context, options = {}) {
   });
   const callbacks = options && options.callbacks || {};
   const route = xiaofuAgentRouter.routeMessage(message, localContext);
-  reportPipelineStatus(callbacks, "正在理解你的问题…", "understand");
+  reportPipelineStatus(callbacks, "正在匹配查询内容…", "understand");
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_STATUS) {
     reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
-    reportPipelineStatus(callbacks, "正在整理结果…", "compose");
+    reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildScheduleStatusResponse(message, localContext, route);
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.HELP) {
     reportPipelineStatus(callbacks, "正在查找使用说明…", "help");
-    reportPipelineStatus(callbacks, "正在整理结果…", "compose");
+    reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildHelpResponse(message, localContext, route);
   }
 
@@ -1218,7 +1218,7 @@ async function chat(message, context, options = {}) {
         options,
       });
     }
-    reportPipelineStatus(callbacks, "正在整理结果…", "compose");
+    reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildPersonalScheduleClarificationResponse(message, localContext, route);
   }
 
@@ -1226,7 +1226,7 @@ async function chat(message, context, options = {}) {
     reportPipelineStatus(callbacks, "正在查找入口…", "navigation");
     const navigationResponse = ragAnswerBuilder.tryBuildContextNavigationAnswer(message, localContext);
     if (navigationResponse) return navigationResponse;
-    reportPipelineStatus(callbacks, "正在整理结果…", "compose");
+    reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildAppNavigationResponse(message, localContext, route);
   }
 
@@ -1247,7 +1247,7 @@ async function chat(message, context, options = {}) {
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHOOL_KNOWLEDGE) {
-    reportPipelineStatus(callbacks, "正在检索校园知识…", "knowledge");
+    reportPipelineStatus(callbacks, "正在查询校园信息…", "knowledge");
     const navigationResponse = ragAnswerBuilder.tryBuildContextNavigationAnswer(message, localContext);
     if (navigationResponse) return navigationResponse;
     const knowledgeResponse = ragAnswerBuilder.tryBuildKnowledgeAnswer(message, localContext);
@@ -1264,7 +1264,7 @@ async function chat(message, context, options = {}) {
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SMALLTALK) {
-    reportPipelineStatus(callbacks, "正在整理结果…", "compose");
+    reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildSmalltalkResponse(message, localContext, route);
   }
 

@@ -569,7 +569,7 @@ router.post("/ai-provider/config", verifyAdminWriteAccess, (req, res) => {
     return res.status(statusCode).json({
       success: false,
       code: error.code || "AI_PROVIDER_CONFIG_SAVE_FAILED",
-      message: "AI Provider 配置保存失败。",
+      message: "查询服务配置保存失败。",
     });
   }
 });
@@ -608,8 +608,8 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
     let releaseBlockPayload;
     try {
       process.env.AI_PROVIDER_POLICY = "always";
-      forcePayload = await runProbe("请用项目知识解释 AI 管家架构。");
-      releaseBlockPayload = await runProbe("正式版阻断测试：请尝试调用外部模型。", {
+      forcePayload = await runProbe("请用项目知识解释校园服务管家架构。");
+      releaseBlockPayload = await runProbe("正式版阻断测试：请尝试调用外部 Provider。", {
         envVersion: "release",
         runtimeMode: "competition",
       });

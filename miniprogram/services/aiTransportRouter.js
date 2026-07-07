@@ -107,7 +107,7 @@ function buildMetrics(startTime, intentName, options = {}) {
 function buildGenericCard(providerLabel, subtitle) {
   return {
     type: "generic",
-    title: "AI 生成内容，仅供参考",
+    title: "校园查询结果",
     subtitle: subtitle || "课表信息仅供参考，以学校教务系统为准。",
     badges: [providerLabel].filter(Boolean),
     items: [],
@@ -117,8 +117,8 @@ function buildGenericCard(providerLabel, subtitle) {
 
 function buildLocalProjectFallback(message, context, startTime, intentName, reason) {
   const answer = [
-    "生成式问答暂时不可用，已切换到规则降级回答。",
-    "佛课小表用于查课、找空教室、导入个人 XLS 课表和查看数据状态；课表事实由确定性工具提供，不由模型编造。",
+    "暂未匹配到更完整的校园信息，已使用本地规则整理可用结果。",
+    "佛课小表可用于查课、找空教室、导入个人 XLS 课表和查看数据状态；课表事实以已有数据和工具结果为准。",
     "课表信息仅供参考，以学校教务系统为准。",
   ].join("\n");
   recordMetric({
@@ -133,12 +133,12 @@ function buildLocalProjectFallback(message, context, startTime, intentName, reas
   return {
     success: true,
     answer,
-    cards: [buildGenericCard("规则降级", "生成式模型不可用，校园工具仍可继续使用。")],
+    cards: [buildGenericCard("本地规则", "校园工具仍可继续使用。")],
     suggestions: GENERIC_SUGGESTIONS,
     toolCalls: [],
     taskSteps: [
-      { key: "understand", label: "已理解需求", status: "done" },
-      { key: "fallback", label: "已切换备用回答", status: "done" },
+      { key: "understand", label: "已匹配查询内容", status: "done" },
+      { key: "fallback", label: "已使用本地规则", status: "done" },
     ],
     evidence: buildEvidence(context, { sources: ["local-project-knowledge"] }),
     safety: buildSafety("mock", {
@@ -151,7 +151,7 @@ function buildLocalProjectFallback(message, context, startTime, intentName, reas
 }
 
 function buildSensitiveFallback(context, startTime, intentName) {
-  const answer = "我不能接收或处理学号、密码、登录凭证、API Key 等敏感信息。请不要在聊天里输入这些内容；查课和课表同步可以继续使用校园工具。";
+  const answer = "请勿输入学号、密码、登录凭证、API Key 等敏感信息。查课和课表同步可以继续使用校园工具。";
   recordMetric({
     provider: "mock",
     latencyMs: Date.now() - startTime,
@@ -164,7 +164,7 @@ function buildSensitiveFallback(context, startTime, intentName) {
   return {
     success: true,
     answer,
-    cards: [buildGenericCard("规则降级", "已拦截敏感信息，不会发送给模型。")],
+    cards: [buildGenericCard("安全提醒", "已拦截敏感信息，不会继续处理。")],
     suggestions: ["怎么导入个人课表？", "数据会上传吗？"],
     toolCalls: [{ name: "safety_guard", status: "skipped", summary: "敏感内容已脱敏" }],
     taskSteps: [{ key: "safety", label: "已完成安全拦截", status: "done" }],
@@ -211,7 +211,7 @@ async function chat(input = {}) {
   const callbacks = input.options && input.options.callbacks || input.callbacks || {};
   const history = input.history || [];
   const route = classifyAiRoute(safeMessage, context);
-  if (callbacks.onStatus) callbacks.onStatus({ type: "understanding", text: "正在理解问题", route });
+  if (callbacks.onStatus) callbacks.onStatus({ type: "understanding", text: "正在匹配查询内容", route });
 
   if (safeMessage !== rawMessage && /\[已脱敏\]/.test(safeMessage)) {
     return buildSensitiveFallback(context, startTime, route.intentName);
@@ -252,7 +252,7 @@ async function chat(input = {}) {
     return {
       success: true,
       answer,
-      cards: [buildGenericCard("腾讯混元", "AI 生成内容仅用于说明和帮助，不作为课表事实来源。")],
+      cards: [buildGenericCard("校园查询结果", "说明内容仅用于帮助理解，不作为课表事实来源。")],
       suggestions: GENERIC_SUGGESTIONS,
       toolCalls: [],
       taskSteps: [

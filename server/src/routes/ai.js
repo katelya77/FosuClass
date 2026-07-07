@@ -117,11 +117,11 @@ router.post("/agent/chat", scheduleLimiter, optionalSessionGuard, validateJsonBo
     };
     return res.status(200).json({
       success: true,
-      answer: "AI 校园管家暂时不可用，已进入规则降级模式。你可以先使用全校查询、空教室或个人课表导入页面完成操作。",
+      answer: "校园服务管家暂时不可用，已进入本地规则模式。你可以先使用全校查询、空教室或个人课表导入页面完成操作。",
       cards: [{
         type: "generic",
         title: "已降级到规则模式",
-        subtitle: "没有调用外部模型，核心入口仍可使用。",
+        subtitle: "核心入口仍可使用。",
         badges: ["mock fallback", "仅供参考"],
         items: [],
         actions: [

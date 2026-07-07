@@ -374,7 +374,7 @@ function buildClarificationResponse(parsed) {
   const type = parsed && parsed.targetType ? normalizeScheduleType(parsed.targetType) : "";
   const textByType = {
     class: {
-      answer: "我理解你想查班级课表，还需要补充班级名称。",
+      answer: "已匹配到班级课表查询，还需要补充班级名称。",
       title: "需要补充班级",
       subtitle: "请输入完整班级名称",
       itemTitle: "班级名称",
@@ -382,7 +382,7 @@ function buildClarificationResponse(parsed) {
       suggestions: ["输入班级名称", "查教师课表", "查教室明天是否有课"],
     },
     teacher: {
-      answer: "我理解你想查教师课表，还需要补充教师姓名。",
+      answer: "已匹配到教师课表查询，还需要补充教师姓名。",
       title: "需要补充教师",
       subtitle: "请输入教师姓名",
       itemTitle: "教师姓名",
@@ -390,7 +390,7 @@ function buildClarificationResponse(parsed) {
       suggestions: ["输入教师姓名", "查班级本周课表", "查课程安排"],
     },
     classroom: {
-      answer: "我理解你想查教室占用，还需要补充教室或楼栋。",
+      answer: "已匹配到教室占用查询，还需要补充教室或楼栋。",
       title: "需要补充教室",
       subtitle: "请输入校区、楼栋或教室号",
       itemTitle: "教室或楼栋",
@@ -398,7 +398,7 @@ function buildClarificationResponse(parsed) {
       suggestions: ["输入教室号", "查班级本周课表", "查教师课表"],
     },
     course: {
-      answer: "我理解你想查课程安排，还需要补充课程名称。",
+      answer: "已匹配到课程安排查询，还需要补充课程名称。",
       title: "需要补充课程",
       subtitle: "请输入课程名称",
       itemTitle: "课程名称",
@@ -407,7 +407,7 @@ function buildClarificationResponse(parsed) {
     },
   };
   const text = textByType[type] || {
-    answer: "我理解你想查课表，但还缺少查询对象。你想查哪个班级、老师、教室或课程？",
+    answer: "已匹配到课表查询，但还缺少查询对象。请补充班级、老师、教室或课程。",
     title: "需要补充课表对象",
     subtitle: "支持班级、教师、教室、课程",
     itemTitle: "查询对象",

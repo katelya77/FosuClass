@@ -13,7 +13,7 @@
 
 手动操作前先确认这些规则：
 
-- 不把 `AppSecret`、上传密钥、`ADMIN_PASSWORD`、`ADMIN_TOKEN`、`ADMIN_API_TOKEN`、relay token 写入仓库、文档、截图或聊天记录。
+- 不把 `AppSecret`、上传密钥、`ADMIN_PASSWORD`、`ADMIN_TOKEN`、`ADMIN_API_TOKEN`、relay token 写入仓库、文档、截图或沟通记录。
 - 185MB 级别全量 JSON 不走网页上传，只使用 `npm run sync:local-upload` 的 gzip 分片上传。
 - 小程序只读取正式 release；Staging 和 relay upload area 不会自动影响线上用户。
 - 发布前必须看 diff、counts、blockers、warnings；发布后必须跑 API 验证。

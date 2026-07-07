@@ -93,7 +93,7 @@ async function run() {
   let forceProviderTest;
   try {
     process.env.AI_PROVIDER_POLICY = "always";
-    forceProviderTest = await runProbe("请用项目知识解释 AI 管家架构。");
+    forceProviderTest = await runProbe("请用项目知识解释校园服务管家架构。");
   } finally {
     if (previousPolicy === undefined) {
       delete process.env.AI_PROVIDER_POLICY;
