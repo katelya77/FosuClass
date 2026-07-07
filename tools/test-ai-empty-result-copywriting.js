@@ -49,13 +49,13 @@ function run() {
     actionUrl: "/pages/empty-room/empty-room",
   }))), "empty room empty result should suggest changing filters");
 
-  assert(/绑定班级课表|导入 XLS/.test(textOf(generate("get_today_courses", {
+  assert(/绑定班级课表|个人课表同步|导入个人课表/.test(textOf(generate("get_today_courses", {
     success: true,
     needContext: true,
     courses: [],
     summary: "未收到当前课表摘要",
-    actionUrl: "/pages/personal-sync/personal-sync?tab=xls",
-  }))), "today no-context copy should guide schedule binding or XLS import");
+    actionUrl: "/pages/personal-sync/personal-sync",
+  }))), "today no-context copy should guide schedule binding or personal sync");
 
   const diagnosis = generate("diagnose_data_status", {
     success: true,
@@ -66,9 +66,10 @@ function run() {
   assert(/班级索引/.test(textOf(diagnosis)) && /教师索引/.test(textOf(diagnosis)) && /教室索引/.test(textOf(diagnosis)) && /课程索引/.test(textOf(diagnosis)),
     "diagnosis should translate index count names to Chinese");
 
-  const labels = textOf(diagnosis) + textOf(generate("explain_personal_import", { success: true, steps: [], actionUrl: "/pages/personal-sync/personal-sync?tab=xls" }));
+  const labels = textOf(diagnosis) + textOf(generate("explain_personal_import", { success: true, steps: [], actionUrl: "/pages/personal-sync/personal-sync", xlsActionUrl: "/pages/personal-sync/personal-sync?tab=xls" }));
   assert(/打开全校查询/.test(labels), "actions should include natural school query label");
-  assert(/去 XLS 导入/.test(labels), "actions should include natural XLS label");
+  assert(/打开个人课表同步/.test(labels), "actions should include natural personal sync label");
+  assert(/查看 XLS 文件导入/.test(labels), "actions should include explicit XLS label");
 
   console.log("test-ai-empty-result-copywriting passed");
 }
