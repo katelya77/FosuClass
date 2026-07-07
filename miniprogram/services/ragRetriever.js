@@ -193,6 +193,7 @@ function addScore(state, amount, reason) {
 function scoreDoc(doc, query, tokens) {
   const queryNorm = normalizeText(query);
   const titleNorm = normalizeText(doc.title);
+  const aliasTerms = (Array.isArray(doc.aliases) ? doc.aliases : []).map(normalizeText).filter(Boolean);
   const categoryNorm = normalizeText(doc.category);
   const categoryLabelNorm = normalizeText(doc.categoryLabel);
   const keywordNorm = normalizeText((doc.keywords || []).join(" "));
@@ -203,9 +204,10 @@ function scoreDoc(doc, query, tokens) {
   const haystack = buildDocSearchText(doc);
   const state = { score: 0, reasons: [] };
 
-  if (queryNorm && titleNorm === queryNorm) addScore(state, 14, "title_exact");
-  else if (queryNorm && titleNorm.indexOf(queryNorm) >= 0) addScore(state, 10, "title_contains_query");
-  if (queryNorm && aliasNorm.indexOf(queryNorm) >= 0) addScore(state, 11, "alias_contains_query");
+  if (queryNorm && titleNorm === queryNorm) addScore(state, 18, "title_exact");
+  else if (queryNorm && titleNorm.indexOf(queryNorm) >= 0) addScore(state, 12, "title_contains_query");
+  if (queryNorm && aliasTerms.indexOf(queryNorm) >= 0) addScore(state, 16, "alias_exact");
+  else if (queryNorm && aliasNorm.indexOf(queryNorm) >= 0) addScore(state, 11, "alias_contains_query");
   if (queryNorm && keywordNorm.indexOf(queryNorm) >= 0) addScore(state, 8, "keyword_contains_query");
   if (queryNorm && contentNorm.indexOf(queryNorm) >= 0) addScore(state, 4, "content_contains_query");
   if (queryNorm && (categoryNorm.indexOf(queryNorm) >= 0 || categoryLabelNorm.indexOf(queryNorm) >= 0)) {
@@ -252,7 +254,7 @@ function scoreDoc(doc, query, tokens) {
   }
 
   if (isHelpQuery(query)) {
-    if (["app_help", "schedule_help", "weather_help"].indexOf(doc.entryType) >= 0 || doc.category === "app_help") {
+    if (["app_help", "schedule_help", "weather_help", "tool_guide"].indexOf(doc.entryType) >= 0 || doc.category === "app_help") {
       addScore(state, 8, "help_intent_boost");
     } else if (/^https?:\/\//.test(String(doc.sourceUrl || ""))) {
       addScore(state, -3, "help_intent_external_penalty");
@@ -274,6 +276,7 @@ function isCampusKnowledgeQuery(query) {
 
 function inferPreferredEntryType(query) {
   if (isNavigationQuery(query)) return "navigation";
+  if (isHelpQuery(query) && /(导入|xls|excel|表格|文件)/i.test(normalizeText(query))) return "tool_guide";
   if (isHelpQuery(query)) return "app_help";
   return "";
 }
@@ -284,7 +287,7 @@ function hasIntentAlignedResult(doc, query) {
   if (!hasSupportedHighRiskSubject(doc, query)) return false;
   if (isNavigationQuery(query)) return doc.entryType === "navigation";
   if (isKnowledgeIntroQuery(query)) return ["knowledge", "faq"].indexOf(doc.entryType) >= 0 || /(校区|学院|部门|概况|图书馆)/.test(queryNorm);
-  if (isHelpQuery(query)) return ["app_help", "schedule_help", "weather_help"].indexOf(doc.entryType) >= 0 || doc.category === "app_help";
+  if (isHelpQuery(query)) return ["app_help", "schedule_help", "weather_help", "tool_guide"].indexOf(doc.entryType) >= 0 || doc.category === "app_help";
   return true;
 }
 
