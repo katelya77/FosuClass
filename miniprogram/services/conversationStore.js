@@ -105,9 +105,11 @@ function normalizeCardItem(item) {
 
 function normalizeCardAction(action) {
   const source = action && typeof action === "object" && !Array.isArray(action) ? action : {};
+  const type = safeText(source.type || "noop", 20);
+  if (type.toLowerCase() === "copy") return null;
   return {
     label: safeText(source.label, 32),
-    type: safeText(source.type || "noop", 20),
+    type,
     url: safeText(source.url, 260),
     payload: source.payload && typeof source.payload === "object" && !Array.isArray(source.payload)
       ? Object.assign({}, source.payload)
@@ -127,7 +129,7 @@ function normalizeCard(card) {
     subtitle: safeText(source.subtitle, 180),
     badges: Array.isArray(source.badges) ? source.badges.map((item) => safeText(item, 40)).filter(Boolean).slice(0, 4) : [],
     items: Array.isArray(source.items) ? source.items.slice(0, MAX_CARD_ITEMS).map(normalizeCardItem).filter((item) => item.title || item.subtitle || item.value) : [],
-    actions: Array.isArray(source.actions) ? source.actions.slice(0, 3).map(normalizeCardAction).filter((item) => item.label) : [],
+    actions: Array.isArray(source.actions) ? source.actions.slice(0, 3).map(normalizeCardAction).filter((item) => item && item.label) : [],
     weather,
     sourceUrl: safeText(source.sourceUrl, 260),
     updatedAt: safeText(source.updatedAt, 40),

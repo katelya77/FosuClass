@@ -642,7 +642,6 @@ function buildScheduleStatusResponse(message, clientContext = {}, route = {}) {
         ],
         actions: [
           { label: "查看全校课表", type: "navigate", url: "/pages/school/school" },
-          { label: "复制状态", type: "copy", payload: { text: answer } },
         ],
       },
     ],
@@ -689,7 +688,7 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
           { title: "长按菜单", subtitle: "可打开小佛AI、隐藏本页或关闭浮窗", value: "" },
         ],
         actions: [
-          { label: "复制说明", type: "copy", payload: { text: "小佛AI浮窗可单击打开、拖拽吸附、长按打开菜单；可在 AI 管家更多操作中开启或关闭。" } },
+          { label: "关闭浮窗", type: "toggleFloat", payload: { enabled: false } },
         ],
       }
     : isImportHelp
@@ -707,7 +706,6 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
         actions: [
           { label: "打开个人课表同步", type: "navigate", url: PERSONAL_SYNC_URL },
           { label: "查看 XLS 文件导入", type: "navigate", url: PERSONAL_SYNC_XLS_URL },
-          { label: "复制导入说明", type: "copy", payload: { text: "打开个人课表同步主入口，按页面提示选择导入方式；只有明确需要表格或文件导入时，再进入 XLS 文件导入。不要在聊天框输入学号、密码或登录凭证。" } },
           { label: "继续问今天课程", type: "ask", payload: { message: "今天有什么课" } },
         ],
       }
@@ -723,7 +721,8 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
             { title: "缺少来源时", subtitle: "会说明知识库暂未收录可靠信息，不编造电话、地址、制度或入口", value: "" },
           ],
           actions: [
-            { label: "复制说明", type: "copy", payload: { text: "课表状态读取项目内真实字段；校园知识只回答已收录来源。缺少可靠来源时不会编造电话、地址、制度或入口。" } },
+            { label: "查看全校课表", type: "navigate", url: "/pages/school/school" },
+            { label: "继续追问", type: "ask", payload: { message: "教务系统在哪里" } },
           ],
         }
     : {
@@ -739,7 +738,7 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
         ],
         actions: [
           { label: "打开全校课表", type: "navigate", url: "/pages/school/school" },
-          { label: "复制说明", type: "copy", payload: { text: "小佛AI可以查全校课表、说明课表数据状态、回答已收录校园知识、提供常用入口、导入个人课表帮助，以及天气出行提醒。" } },
+          { label: "更多任务", type: "openSheet", payload: { sheet: "task" } },
         ],
       };
   return {
@@ -788,7 +787,6 @@ function buildAppNavigationResponse(message, clientContext = {}, route = {}) {
   const actions = target.url
     ? [
         { label: `打开${target.label}`, type: "navigate", url: target.url },
-        { label: "复制入口", type: "copy", payload: { text: target.url } },
       ]
     : [];
   return {
@@ -846,7 +844,6 @@ function buildPersonalScheduleClarificationResponse(message, clientContext = {},
         actions: [
           { label: "打开个人课表同步", type: "navigate", url: PERSONAL_SYNC_URL },
           { label: "查看 XLS 文件导入", type: "navigate", url: PERSONAL_SYNC_XLS_URL },
-          { label: "复制导入说明", type: "copy", payload: { text: "打开个人课表同步主入口，按页面提示选择导入方式。导入后可问今天、明天、本周和下一节课；明确需要文件导入时再进入 XLS 文件导入。" } },
         ],
       },
     ],
@@ -1061,7 +1058,6 @@ function buildWeatherAnswerText(weatherPayload, route, nextCourse) {
 }
 
 function buildWeatherCard(weatherPayload) {
-  const adviceText = `${weatherPayload.campus}${weatherPayload.targetLabel || "今天"}天气：${weatherPayload.weatherText}，温度 ${weatherPayload.temperatureText}，降雨 ${weatherPayload.rainProbabilityText}。${weatherPayload.advice}`;
   return {
     type: "weather_card",
     variant: weatherPayload.success ? "" : "error",
@@ -1080,7 +1076,6 @@ function buildWeatherCard(weatherPayload) {
     ],
     actions: weatherPayload.success
       ? [
-          { label: "复制天气建议", type: "copy", payload: { text: adviceText } },
           { label: "重新获取天气", type: "retry", payload: {} },
           { label: "继续问带伞", type: "ask", payload: { message: "今天要不要带伞" } },
           { label: "明天适合跑步吗", type: "ask", payload: { message: "明天适合跑步吗" } },

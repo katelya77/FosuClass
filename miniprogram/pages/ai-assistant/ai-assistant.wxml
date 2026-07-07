@@ -85,12 +85,6 @@
               <text>{{message.timeText}}</text>
               <text wx:if="{{message.displaySafety && message.displaySafety.text}}"> · {{message.displaySafety.text}}</text>
             </view>
-            <button
-              wx:if="{{message.role == 'assistant'}}"
-              class="message-copy-btn"
-              data-message-index="{{messageIndex}}"
-              bindtap="onCopyMessage"
-            >复制回答</button>
           </view>
         </view>
 

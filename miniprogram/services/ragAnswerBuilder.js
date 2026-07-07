@@ -26,10 +26,6 @@ function displayCategory(doc) {
   return safeText(doc && (doc.categoryLabel || doc.category) || "", 40);
 }
 
-function compactDocAnswer(doc) {
-  return safeText(doc && (doc.summary || doc.content) || "", 600);
-}
-
 function firstRelatedLink(doc) {
   const links = Array.isArray(doc && doc.relatedLinks) ? doc.relatedLinks : [];
   return links.find((link) => link && link.url) || null;
@@ -49,16 +45,13 @@ function buildEntryAction(link, fallbackUrl, fallbackLabel) {
   }
   if (isExternalUrl(url)) {
     return {
-      label: "复制入口",
-      type: "copy",
-      payload: { text: url },
+      label: label.indexOf("打开") === 0 ? label : `打开${label}`,
+      type: "navigate",
+      url,
+      payload: {},
     };
   }
-  return {
-    label: "复制入口",
-    type: "copy",
-    payload: { text: url },
-  };
+  return null;
 }
 
 function uniqueActions(actions) {
@@ -80,23 +73,8 @@ function uniqueActions(actions) {
 function buildRelatedActions(doc, mode) {
   const actions = [];
   const primaryLink = firstRelatedLink(doc);
-  const answerText = compactDocAnswer(doc);
-  if (mode === "knowledge" && answerText) {
-    actions.push({
-      label: "复制回答",
-      type: "copy",
-      payload: { text: answerText },
-    });
-  }
   const entryAction = buildEntryAction(primaryLink, doc.sourceUrl, primaryLink && primaryLink.label || doc.title || "入口");
   if (entryAction) actions.push(entryAction);
-  if (doc.sourceUrl) {
-    actions.push({ label: "复制来源", type: "copy", payload: { text: doc.sourceUrl } });
-  }
-  if (mode === "navigation") {
-    const entryUrl = primaryLink && primaryLink.url || doc.sourceUrl || "";
-    if (entryUrl) actions.push({ label: "复制入口", type: "copy", payload: { text: entryUrl } });
-  }
   const followup = mode === "navigation"
     ? `${safeText(doc.title, 40)}怎么用`
     : `${safeText(doc.title, 40)}还有哪些相关入口`;
@@ -269,7 +247,6 @@ function tryBuildContextNavigationAnswer(message, clientContext = {}) {
         ],
         actions: [
           { label: "打开校园地图", type: "navigate", url: "/pages/campus-map/campus-map" },
-          { label: "复制地点", type: "copy", payload: { text: targetName } },
         ],
       },
     ],

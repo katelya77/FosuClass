@@ -320,7 +320,7 @@ function sanitizePublicAction(action) {
 
 function sanitizePublicCard(card) {
   const source = stableCard(card || {});
-  const urlOptionalActionTypes = new Set(["noop", "copy", "retry", "ask", "openSheet", "toggleFloat"]);
+  const urlOptionalActionTypes = new Set(["noop", "retry", "ask", "openSheet", "toggleFloat"]);
   return Object.assign({}, source, {
     title: sanitizePublicText(source.title, "结果"),
     subtitle: sanitizePublicText(source.subtitle, ""),
