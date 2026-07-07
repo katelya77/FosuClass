@@ -1585,19 +1585,46 @@ button::after {
   color: #94a3b8;
 }
 
-.composer-input {
+.composer-input-wrap {
+  position: relative;
   box-sizing: border-box;
   flex: 1;
   min-width: 0;
   min-height: 72rpx;
   max-height: 154rpx;
-  padding: 17rpx 18rpx;
   border: 1rpx solid #dbe3ee;
   border-radius: 18rpx;
   background: #ffffff;
+}
+
+.composer-input {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 72rpx;
+  max-height: 154rpx;
+  padding: 17rpx 18rpx;
+  border: 0;
+  border-radius: 18rpx;
+  background: transparent;
   color: #1f2937;
   font-size: 24rpx;
   line-height: 1.45;
+}
+
+.composer-custom-placeholder {
+  position: absolute;
+  left: 18rpx;
+  right: 18rpx;
+  top: 50%;
+  z-index: 1;
+  overflow: hidden;
+  color: #a5adba;
+  font-size: 24rpx;
+  line-height: 1.2;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  transform: translateY(-50%);
+  white-space: nowrap;
 }
 
 .composer-placeholder {

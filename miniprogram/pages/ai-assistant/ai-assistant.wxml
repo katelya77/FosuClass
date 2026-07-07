@@ -377,25 +377,27 @@
       >
         {{voiceRecording ? "停" : "麦"}}
       </button>
-      <textarea
-        class="composer-input"
-        value="{{inputValue}}"
-        placeholder="问我校园事项、课表和常用入口"
-        placeholder-class="composer-placeholder"
-        auto-height="{{true}}"
-        maxlength="600"
-        fixed="{{true}}"
-        cursor-spacing="16"
-        focus="{{inputFocus}}"
-        confirm-type="send"
-        confirm-hold="{{false}}"
-        show-confirm-bar="{{false}}"
-        bindinput="onInput"
-        bindconfirm="onComposerConfirm"
-        bindcompositionstart="onCompositionStart"
-        bindcompositionend="onCompositionEnd"
-        disabled="{{sending}}"
-      />
+      <view class="composer-input-wrap">
+        <view wx:if="{{!inputValue}}" class="composer-custom-placeholder">问校园事项、课表和入口</view>
+        <textarea
+          class="composer-input"
+          value="{{inputValue}}"
+          placeholder=""
+          auto-height="{{true}}"
+          maxlength="600"
+          fixed="{{true}}"
+          cursor-spacing="16"
+          focus="{{inputFocus}}"
+          confirm-type="send"
+          confirm-hold="{{false}}"
+          show-confirm-bar="{{false}}"
+          bindinput="onInput"
+          bindconfirm="onComposerConfirm"
+          bindcompositionstart="onCompositionStart"
+          bindcompositionend="onCompositionEnd"
+          disabled="{{sending}}"
+        />
+      </view>
       <button class="newline-btn" bindtap="onInsertNewline" disabled="{{sending}}" aria-label="换行">↵</button>
       <button class="send-btn {{sending || !inputValue ? 'disabled' : ''}}" bindtap="onSubmit" disabled="{{sending || !inputValue}}">
         {{sending ? "发送中" : "发送"}}
