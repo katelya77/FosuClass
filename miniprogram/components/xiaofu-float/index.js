@@ -1,10 +1,10 @@
 const floatService = require("../../services/xiaofuFloatService");
 
 const FLOAT_SIZE = 58;
-const EDGE_MARGIN = 8;
-const TOP_SAFE_GAP = 8;
-const CAPSULE_GAP = 8;
-const DRAG_THRESHOLD = 9;
+const EDGE_MARGIN = 6;
+const TOP_SAFE_GAP = 0;
+const CAPSULE_GAP = 10;
+const DRAG_THRESHOLD = 11;
 const FRAME_MS = 16;
 const TAP_DEDUPE_MS = 360;
 
@@ -98,12 +98,14 @@ Component({
       const safeArea = info.safeArea || {};
       const safeTop = Number(safeArea.top || 0) || 0;
       const safeBottomGap = safeArea.bottom ? Math.max(0, height - Number(safeArea.bottom || height)) : 0;
-      const bottomAvoid = Number(policy && policy.bottomAvoidPx || 28) + safeBottomGap + Number(this.properties.bottomOffset || 0);
+      const bottomAvoid = Math.max(10, Number(policy && policy.bottomAvoidPx || 18)) +
+        safeBottomGap +
+        Number(this.properties.bottomOffset || 0);
       const menuButton = getMenuButtonRect();
       return {
         minX: EDGE_MARGIN,
         maxX: Math.max(EDGE_MARGIN, width - FLOAT_SIZE - EDGE_MARGIN),
-        minY: Math.max(EDGE_MARGIN, safeTop + TOP_SAFE_GAP),
+        minY: Math.max(EDGE_MARGIN, Math.min(safeTop + TOP_SAFE_GAP, EDGE_MARGIN)),
         maxY: Math.max(EDGE_MARGIN, height - FLOAT_SIZE - bottomAvoid),
         menuButton,
         width,

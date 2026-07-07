@@ -111,7 +111,7 @@ function getRoutePolicy(route) {
     hidden,
     dimmed,
     tabbar,
-    bottomAvoidPx: tabbar ? 64 : (dimmed ? 52 : 24),
+    bottomAvoidPx: tabbar ? 58 : (dimmed ? 42 : 14),
   };
 }
 

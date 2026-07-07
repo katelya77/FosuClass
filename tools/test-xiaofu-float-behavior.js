@@ -48,6 +48,10 @@ function loadComponent(routeRef, storage, calls) {
     },
     showActionSheet(options) {
       calls.showActionSheet.push(options);
+      if (Number.isInteger(calls.nextActionSheetTapIndex) && options && typeof options.success === "function") {
+        options.success({ tapIndex: calls.nextActionSheetTapIndex });
+      }
+      calls.nextActionSheetTapIndex = null;
       if (options && options.complete) options.complete();
     },
   };
@@ -83,14 +87,15 @@ function loadComponent(routeRef, storage, calls) {
 function run() {
   const routeRef = { route: "pages/index/index", data: {} };
   const storage = {};
-  const calls = { navigateTo: [], redirectTo: [], showToast: [], showActionSheet: [] };
+  const calls = { navigateTo: [], redirectTo: [], showToast: [], showActionSheet: [], nextActionSheetTapIndex: null };
   const loaded = loadComponent(routeRef, storage, calls);
   const instance = loaded.instance;
   const floatService = loaded.floatService;
 
   const indexPolicy = floatService.getRoutePolicy("pages/index/index");
-  assert.strictEqual(indexPolicy.bottomAvoidPx, 64, "tabBar pages should keep a tighter bottom safe area");
+  assert.strictEqual(indexPolicy.bottomAvoidPx, 58, "tabBar pages should avoid the tabBar without leaving a large blank area");
   assert.strictEqual(floatService.getRoutePolicy("pages/ai-assistant/ai-assistant").hidden, true, "AI page float should stay hidden by default");
+  assert(instance.data.visible, "float should be visible on regular pages when enabled");
 
   instance.onTouchStart({ touches: [makeTouch(340, 650)] });
   instance.onTouchMove({ touches: [makeTouch(344, 653)] });
@@ -106,7 +111,8 @@ function run() {
   assert.strictEqual(calls.navigateTo.length, 0, "dragging should not trigger AI navigation");
   const savedPosition = storage[floatService.POSITION_KEY];
   assert(savedPosition && Number.isFinite(savedPosition.x) && Number.isFinite(savedPosition.y), "drag end should persist snapped position");
-  assert(savedPosition.y >= 55 && savedPosition.y <= 722, "saved position should stay inside safe vertical bounds");
+  assert(savedPosition.x === 6 || savedPosition.x === 326, "drag end should snap to either horizontal edge");
+  assert(savedPosition.y >= 6 && savedPosition.y <= 728, "saved position should stay inside freer vertical bounds");
 
   calls.showActionSheet.length = 0;
   instance.onLongPress();
@@ -117,7 +123,33 @@ function run() {
   );
 
   calls.navigateTo.length = 0;
+  calls.nextActionSheetTapIndex = 0;
+  instance.onLongPress();
+  assert.strictEqual(calls.navigateTo.length, 1, "long press open should navigate to Xiaofu AI");
+
+  calls.nextActionSheetTapIndex = 1;
+  instance.onLongPress();
+  assert.strictEqual(floatService.isRouteHidden("pages/index/index"), true, "long press hide should hide only the current route");
+  assert.strictEqual(instance.data.visible, false, "hidden route should hide the float immediately");
+
+  floatService.enableEverywhere();
+  instance.refreshPosition();
+  assert.strictEqual(instance.data.visible, true, "enableEverywhere should restore a route-hidden float");
+
+  calls.nextActionSheetTapIndex = 2;
+  instance.onLongPress();
+  assert.strictEqual(floatService.isEnabled(), false, "long press close should disable the float globally");
+  assert.strictEqual(instance.data.visible, false, "closed float should disappear immediately");
+
+  floatService.enableEverywhere();
+  instance.refreshPosition();
+  assert.strictEqual(floatService.isEnabled(), true, "float should be re-enabled from service state");
+  assert.strictEqual(instance.data.visible, true, "re-enabled float should become visible again");
+
+  calls.navigateTo.length = 0;
   routeRef.route = "pages/ai-assistant/ai-assistant";
+  instance.refreshPosition();
+  assert.strictEqual(instance.data.visible, false, "AI page should hide the float entry");
   instance.openAssistant();
   assert.strictEqual(calls.navigateTo.length, 0, "AI page should not navigate to itself from the float");
 
