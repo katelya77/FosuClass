@@ -1,4 +1,4 @@
-const scheduleIntentParser = require("./scheduleIntentParser");
+﻿const scheduleIntentParser = require("./scheduleIntentParser");
 const ragRetriever = require("./ragRetriever");
 
 const INTENTS = {
@@ -120,6 +120,7 @@ function isHelpQuery(message) {
     /^(这个|这款|小程序|app|应用).*(怎么用|如何用|怎么使用|使用方法|使用说明)$/.test(value) ||
     /^(如何问得更准确|怎么问得更准确|问法建议|数据来源说明)$/.test(value) ||
     /^(怎么用|如何使用|使用帮助|帮助|功能|功能说明|功能介绍)$/.test(value) ||
+    /(小佛ai浮窗|小佛浮窗|浮窗).*(开启|关闭|打开|隐藏|怎么用|如何用|设置)|^(开启|关闭|打开|隐藏)小佛ai浮窗$/.test(value) ||
     /^(怎么|如何|怎样).*(查课表|查全校课表|查班级|查老师|查教师|查教室|查课程)/.test(value);
 }
 

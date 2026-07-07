@@ -160,6 +160,7 @@ const MATRIX = [
     tool: "get_campus_weather",
     cardType: "weather_card",
     answer: /天气|降雨概率|带伞/,
+    actions: ["复制天气建议", "重新获取天气"],
   },
   {
     text: "下一节课要带伞吗",
@@ -173,12 +174,21 @@ const MATRIX = [
     intentName: "schedule_status",
     cardType: "schedule_status",
     answer: /课表数据状态|更新时间|最新/,
+    actions: ["查看全校课表", "复制状态"],
   },
   {
     text: "教务系统在哪里",
     intentName: "navigation",
     cardType: "navigation",
     answer: /教务/,
+    actions: ["复制入口", "复制来源"],
+  },
+  {
+    text: "图书馆入口在哪里",
+    intentName: "navigation",
+    cardType: "navigation",
+    answer: /图书馆/,
+    actions: ["复制入口", "复制来源"],
   },
   {
     text: "佛大有哪些校区",
@@ -189,8 +199,9 @@ const MATRIX = [
   {
     text: "如何导入个人课表",
     intentName: "help",
-    cardType: "help",
+    cardType: "import_guide",
     answer: /导入个人课表/,
+    actions: ["打开导入入口", "复制导入说明"],
   },
   {
     text: "小佛能做什么",
@@ -227,6 +238,7 @@ const MATRIX = [
     intentName: "navigation",
     cardType: "navigation",
     answer: /图书馆/,
+    actions: ["复制入口", "复制来源"],
   },
   {
     text: "常用系统入口",
@@ -269,6 +281,12 @@ async function run() {
     } else {
       assert(response.cards && response.cards[0], `expected card for ${item.text}`);
       assert.strictEqual(response.cards[0].type, item.cardType, `unexpected card type for ${item.text}`);
+      if (item.actions) {
+        const labels = (response.cards[0].actions || []).map((action) => action.label);
+        item.actions.forEach((label) => {
+          assert(labels.includes(label), `${item.text} should expose action ${label}; got ${labels.join(", ")}`);
+        });
+      }
     }
     const names = (response.toolCalls || []).map((tool) => tool.name);
     if (item.tool) {

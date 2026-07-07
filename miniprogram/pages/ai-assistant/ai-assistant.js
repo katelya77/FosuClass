@@ -1,4 +1,4 @@
-const aiAssistantService = require("../../services/aiAssistantService");
+﻿const aiAssistantService = require("../../services/aiAssistantService");
 const aiVoiceInputService = require("../../services/aiVoiceInputService");
 const conversationStore = require("../../services/conversationStore");
 const contextManager = require("../../services/xiaofuContextManager");
@@ -407,7 +407,6 @@ function buildQuickAction(id, quickId) {
     kind: ability.kind,
   };
 }
-
 const QUICK_ACTIONS = [
   buildQuickAction("today"),
   buildQuickAction("classSchedule", "class"),
@@ -541,6 +540,7 @@ const CARD_TYPE_LABELS = {
   school_knowledge: "校园知识",
   navigation: "入口",
   help: "帮助",
+  import_guide: "导入指引",
   not_found: "未找到",
   teacher: "教师",
   course: "课程",
@@ -563,6 +563,7 @@ const CARD_TITLE_FALLBACKS = {
   school_knowledge: "校园知识",
   navigation: "校园入口",
   help: "使用帮助",
+  import_guide: "导入个人课表",
   not_found: "未找到结果",
   teacher: "教师查询",
   course: "课程查询",
@@ -579,10 +580,11 @@ const ACTION_LABEL_FALLBACKS = {
   retry: "重新尝试",
   copy: "复制",
   bind: "前往设置",
+  ask: "继续追问",
   noop: "查看",
 };
 
-const ALLOWED_ACTION_TYPES = ["navigate", "copy", "retry", "bind", "noop"];
+const ALLOWED_ACTION_TYPES = ["navigate", "copy", "retry", "bind", "ask", "noop"];
 const INVALID_DISPLAY_TEXT = new Set(["[object Object]", "undefined", "null", "NaN"]);
 
 function cloneTaskPanelGroups() {
@@ -1068,7 +1070,7 @@ function normalizeCard(card, messageId, index, expandedCards) {
       seenActions[key] = true;
       return true;
     })
-    .slice(0, 3)
+    .slice(0, 4)
     .map((action, actionIndex) => Object.assign({}, action, { originalIndex: actionIndex }));
   const badges = Array.isArray(source.badges)
     ? source.badges.map((item) => safeText(item, 36)).filter(Boolean).slice(0, 2)
@@ -1093,7 +1095,7 @@ function normalizeCard(card, messageId, index, expandedCards) {
         ? "回答会保留在当前对话中"
         : "课表以学校教务系统为准"));
   const primaryActions = actions.slice(0, 1);
-  const secondaryActions = actions.slice(1, 3);
+  const secondaryActions = actions.slice(1, 4);
   const errorClass = source.variant === "error" || /服务暂时不可用|服务暂不可用/.test(title) ? "card-error" : "";
   return Object.assign({}, source, {
     key,
@@ -1744,8 +1746,12 @@ Page({
     };
 
     if (action.kind === CAPABILITY_KINDS.LOCAL_ACTION) {
+      this.setData(closePatch);
       if (action.id === "enableFloat") {
         this.enableXiaofuFloat();
+      }
+      if (action.message) {
+        this.queueTaskMessage(action.message);
       }
       return;
     }
@@ -2321,12 +2327,36 @@ Page({
       return;
     }
     if (type === "copy") {
-      wx.setClipboardData({ data: action.payload && action.payload.text || action.url || card.title || "" });
+      this.copyToClipboard(action.payload && action.payload.text || action.url || card.title || "", "已复制");
+      return;
+    }
+    if (type === "ask") {
+      const nextMessage = action.payload && action.payload.message || action.label || "";
+      if (nextMessage) this.queueTaskMessage(nextMessage);
       return;
     }
     if ((type === "navigate" || type === "bind") && action.url) {
       this.navigateByUrl(action.url);
     }
+  },
+
+  onCopyMessage(event) {
+    const messageIndex = Number(event.currentTarget.dataset.messageIndex);
+    const message = this.data.messages[messageIndex] || {};
+    this.copyToClipboard(message.content || "", "已复制回答");
+  },
+
+  copyToClipboard(text, title) {
+    const value = String(text || "").trim();
+    if (!value) {
+      wx.showToast({ title: "暂无可复制内容", icon: "none" });
+      return;
+    }
+    wx.setClipboardData({
+      data: value,
+      success: () => wx.showToast({ title: title || "已复制", icon: "none" }),
+      fail: () => wx.showToast({ title: "复制失败，请重试", icon: "none" }),
+    });
   },
 
   findLastUserMessage() {
@@ -2340,6 +2370,10 @@ Page({
   navigateByUrl(url) {
     const parsed = parseActionUrl(url);
     if (!parsed.path) return;
+    if (/^https?:\/\//i.test(parsed.raw)) {
+      this.copyToClipboard(parsed.raw, "外部链接已复制");
+      return;
+    }
     const storageKey = TABBAR_PENDING_QUERY[parsed.path];
     if (storageKey) {
       if (parsed.query && Object.keys(parsed.query).length) {
@@ -2354,7 +2388,7 @@ Page({
     }
     wx.navigateTo({
       url: parsed.raw,
-      fail: () => wx.showToast({ title: "暂时无法打开该页面", icon: "none" }),
+      fail: () => wx.showToast({ title: "暂时无法打开该页面，可复制入口再试", icon: "none" }),
     });
   },
 });

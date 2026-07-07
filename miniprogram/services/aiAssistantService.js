@@ -1,4 +1,4 @@
-const request = require("../utils/request");
+﻿const request = require("../utils/request");
 const { getCurrentScheduleTarget } = require("../utils/storage");
 const releasePackService = require("./releasePackService");
 const { DEFAULT_TERM } = releasePackService;
@@ -638,7 +638,10 @@ function buildScheduleStatusResponse(message, clientContext = {}, route = {}) {
           { title: "本机缓存", subtitle: cacheText, value: "" },
           { title: "可靠性", subtitle: reliability, value: "" },
         ],
-        actions: [],
+        actions: [
+          { label: "查看全校课表", type: "navigate", url: "/pages/school/school" },
+          { label: "复制状态", type: "copy", payload: { text: answer } },
+        ],
       },
     ],
     suggestions: ["查班级本周课表", "现在用的是哪个学期数据", "小佛能做什么"],
@@ -671,9 +674,25 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
   const value = String(message || "").replace(/\s+/g, "");
   const isImportHelp = /导入.*个人课表|个人课表.*导入|导入课表|xls/i.test(value);
   const isDataSourceHelp = /数据来源|来源说明|知识来源|课表来源/.test(value);
-  const card = isImportHelp
+  const isFloatHelp = /小佛AI浮窗|小佛浮窗|浮窗/.test(value);
+  const card = isFloatHelp
     ? {
         type: "help",
+        title: "小佛AI浮窗",
+        subtitle: "可点击、拖拽、隐藏或关闭",
+        badges: ["使用帮助", "浮窗"],
+        items: [
+          { title: "打开方式", subtitle: "单击浮窗会打开 AI校园管家；拖动后会吸附到左右边缘", value: "" },
+          { title: "关闭与开启", subtitle: "AI 管家右上角更多操作里可以开启或关闭浮窗", value: "" },
+          { title: "长按菜单", subtitle: "可打开小佛AI、隐藏本页或关闭浮窗", value: "" },
+        ],
+        actions: [
+          { label: "复制说明", type: "copy", payload: { text: "小佛AI浮窗可单击打开、拖拽吸附、长按打开菜单；可在 AI 管家更多操作中开启或关闭。" } },
+        ],
+      }
+    : isImportHelp
+    ? {
+        type: "import_guide",
         title: "导入个人课表",
         subtitle: "用于回答今日、明日、本周和下一节课",
         badges: ["使用帮助", "个人课表"],
@@ -684,6 +703,7 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
         ],
         actions: [
           { label: "打开导入入口", type: "navigate", url: "/pages/personal-sync/personal-sync?tab=xls" },
+          { label: "复制导入说明", type: "copy", payload: { text: "打开个人课表导入入口，按页面提示使用 XLS 导入。不要在聊天框输入学号、密码或登录凭证。" } },
         ],
       }
     : isDataSourceHelp
@@ -697,7 +717,9 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
             { title: "校园知识", subtitle: "只回答知识库收录的佛山大学公开信息和本地入口说明", value: "" },
             { title: "缺少来源时", subtitle: "会说明知识库暂未收录可靠信息，不编造电话、地址、制度或入口", value: "" },
           ],
-          actions: [],
+          actions: [
+            { label: "复制说明", type: "copy", payload: { text: "课表状态读取项目内真实字段；校园知识只回答已收录来源。缺少可靠来源时不会编造电话、地址、制度或入口。" } },
+          ],
         }
     : {
         type: "help",
@@ -710,10 +732,15 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
           { title: "看数据状态", subtitle: "例如：课表数据是否最新、现在用的是哪个学期数据", value: "" },
           { title: "上下文追问", subtitle: "查到一个对象后，可以继续问“那周三呢”“换成另一个班级”。", value: "" },
         ],
-        actions: [],
+        actions: [
+          { label: "打开全校课表", type: "navigate", url: "/pages/school/school" },
+          { label: "复制说明", type: "copy", payload: { text: "小佛AI可以查全校课表、说明课表数据状态、回答已收录校园知识、提供常用入口、导入个人课表帮助，以及天气出行提醒。" } },
+        ],
       };
   return {
-    answer: isImportHelp
+    answer: isFloatHelp
+      ? "小佛AI浮窗已可通过更多操作开启或关闭。单击会打开 AI校园管家，拖拽会吸附到左右边缘，长按可以打开菜单。"
+      : isImportHelp
       ? "我理解你想了解如何导入个人课表。导入后，小佛才能回答“今天有什么课”“明天有什么课”“下一节课在哪里”这类个人安排问题。"
       : (isDataSourceHelp
         ? "我理解你是在问数据来源说明。课表状态会读取项目内真实字段，校园知识只使用已收录来源；缺少可靠来源时不会编造。"
@@ -721,7 +748,9 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
     cards: [
       card,
     ],
-    suggestions: isImportHelp
+    suggestions: isFloatHelp
+      ? ["关闭小佛AI浮窗", "打开小佛AI", "小佛能做什么"]
+      : isImportHelp
       ? ["今天有什么课", "查班级本周课表", "课表数据更新到什么时候"]
       : (isDataSourceHelp
         ? ["课表数据更新到什么时候", "教务系统在哪里", "佛大有哪些校区"]
@@ -751,6 +780,12 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
 
 function buildAppNavigationResponse(message, clientContext = {}, route = {}) {
   const target = route.entities || {};
+  const actions = target.url
+    ? [
+        { label: `打开${target.label}`, type: "navigate", url: target.url },
+        { label: "复制入口", type: "copy", payload: { text: target.url } },
+      ]
+    : [];
   return {
     answer: `我理解你想打开${target.label || "相关功能"}。入口放在这条回复里，当前回答仍保留在对话中。`,
     cards: [
@@ -762,7 +797,7 @@ function buildAppNavigationResponse(message, clientContext = {}, route = {}) {
         items: [
           { title: "入口", subtitle: target.label || "", value: "" },
         ],
-        actions: target.url ? [{ label: `打开${target.label}`, type: "navigate", url: target.url }] : [],
+        actions,
       },
     ],
     suggestions: ["小佛能做什么", "课表数据是否最新"],
@@ -805,6 +840,7 @@ function buildPersonalScheduleClarificationResponse(message, clientContext = {},
         ],
         actions: [
           { label: "导入个人课表", type: "navigate", url: "/pages/personal-sync/personal-sync?tab=xls" },
+          { label: "复制导入说明", type: "copy", payload: { text: "打开个人课表导入入口，按页面提示使用 XLS 导入。导入后可问今天、明天、本周和下一节课。" } },
         ],
       },
     ],
@@ -1019,6 +1055,7 @@ function buildWeatherAnswerText(weatherPayload, route, nextCourse) {
 }
 
 function buildWeatherCard(weatherPayload) {
+  const adviceText = `${weatherPayload.campus}${weatherPayload.targetLabel || "今天"}天气：${weatherPayload.weatherText}，温度 ${weatherPayload.temperatureText}，降雨 ${weatherPayload.rainProbabilityText}。${weatherPayload.advice}`;
   return {
     type: "weather_card",
     variant: weatherPayload.success ? "" : "error",
@@ -1035,9 +1072,16 @@ function buildWeatherCard(weatherPayload) {
       { title: "数据来源", subtitle: weatherPayload.sourceText, value: "" },
       { title: "建议", subtitle: weatherPayload.advice, value: "" },
     ],
-    actions: weatherPayload.success ? [] : [
-      { label: "稍后重试", type: "retry", payload: {} },
-    ],
+    actions: weatherPayload.success
+      ? [
+          { label: "复制天气建议", type: "copy", payload: { text: adviceText } },
+          { label: "重新获取天气", type: "retry", payload: {} },
+          { label: "继续问带伞", type: "ask", payload: { message: "今天要不要带伞" } },
+          { label: "明天适合跑步吗", type: "ask", payload: { message: "明天适合跑步吗" } },
+        ]
+      : [
+          { label: "重新获取天气", type: "retry", payload: {} },
+        ],
     updatedAt: weatherPayload.updatedAt,
     sourceUrl: weatherPayload.sourceId,
   };

@@ -75,8 +75,16 @@
         <view class="message-bubble" wx:if="{{message.content}}">
           <view class="message-content">{{message.content}}</view>
           <view class="message-meta">
-            <text>{{message.timeText}}</text>
-            <text wx:if="{{message.displaySafety && message.displaySafety.text}}"> · {{message.displaySafety.text}}</text>
+            <view class="message-meta-text">
+              <text>{{message.timeText}}</text>
+              <text wx:if="{{message.displaySafety && message.displaySafety.text}}"> · {{message.displaySafety.text}}</text>
+            </view>
+            <button
+              wx:if="{{message.role == 'assistant'}}"
+              class="message-copy-btn"
+              data-message-index="{{messageIndex}}"
+              bindtap="onCopyMessage"
+            >复制回答</button>
           </view>
         </view>
 
@@ -136,6 +144,30 @@
               </view>
               <view class="weather-advice">{{card.weather.advice}}</view>
               <view class="weather-source" wx:if="{{card.weather.sourceText}}">数据来源：{{card.weather.sourceText}}</view>
+              <view class="card-actions {{card.actionLayoutClass}}" wx:if="{{card.primaryActions.length}}">
+                <button
+                  wx:for="{{card.primaryActions}}"
+                  wx:for-item="action"
+                  wx:key="label"
+                  class="card-action card-action-primary"
+                  data-message-index="{{messageIndex}}"
+                  data-card-index="{{cardIndex}}"
+                  data-action-index="{{action.originalIndex}}"
+                  bindtap="onCardAction"
+                >{{action.label}}</button>
+              </view>
+              <view class="secondary-action-row" wx:if="{{card.secondaryActions.length}}">
+                <button
+                  wx:for="{{card.secondaryActions}}"
+                  wx:for-item="action"
+                  wx:key="label"
+                  class="card-action-secondary"
+                  data-message-index="{{messageIndex}}"
+                  data-card-index="{{cardIndex}}"
+                  data-action-index="{{action.originalIndex}}"
+                  bindtap="onCardAction"
+                >{{action.label}}</button>
+              </view>
             </view>
 
             <block wx:else>

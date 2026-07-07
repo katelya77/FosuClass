@@ -6,6 +6,13 @@ global.wx = {
   getStorageSync() { return ""; },
   setStorageSync() {},
   removeStorageSync() {},
+  setClipboardData(options) {
+    global.__CLIPBOARD_TEXT__ = options && options.data || "";
+    if (options && typeof options.success === "function") options.success();
+  },
+  showToast(options) {
+    global.__TOAST_TEXT__ = options && options.title || "";
+  },
 };
 global.getCurrentPages = () => [];
 global.getApp = () => ({ globalData: {} });
@@ -58,8 +65,43 @@ function run() {
   assert(wxml.includes("card-disclaimer"), "result cards should render the disclaimer");
   assert(wxml.includes("card-action-primary"), "primary card action class should be explicit");
   assert(wxml.includes("card-action-secondary"), "secondary card action class should be explicit");
+  assert(wxml.includes("onCopyMessage"), "assistant text replies should expose copy answer");
   assert(!wxml.includes("{{card.weather.temperatureC}}<text>℃</text>"), "weather card should not hard-code °C for missing temperature");
   assert(!wxml.includes("{{card.weather.humidity}}%"), "weather card should not hard-code % for missing humidity");
+
+  const page = Object.assign({}, global.__AI_ASSISTANT_PAGE__, {
+    data: {
+      messages: [
+        {
+          role: "assistant",
+          content: "可复制回答",
+          displayCards: [
+            {
+              actions: [
+                { label: "复制入口", type: "copy", payload: { text: "https://www.fosu.edu.cn/" }, originalIndex: 0 },
+                { label: "继续追问", type: "ask", payload: { message: "佛大有哪些校区" }, originalIndex: 1 },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+    queued: [],
+    setData(patch) { this.data = Object.assign({}, this.data, patch || {}); },
+    queueTaskMessage(message) { this.queued.push(message); },
+  });
+  page.onCardAction({
+    currentTarget: { dataset: { messageIndex: 0, cardIndex: 0, actionIndex: 0 } },
+  });
+  assert.strictEqual(global.__CLIPBOARD_TEXT__, "https://www.fosu.edu.cn/", "copy card action should use wx.setClipboardData");
+  page.onCardAction({
+    currentTarget: { dataset: { messageIndex: 0, cardIndex: 0, actionIndex: 1 } },
+  });
+  assert.deepStrictEqual(page.queued, ["佛大有哪些校区"], "ask card action should continue in the chat flow");
+  page.onCopyMessage({
+    currentTarget: { dataset: { messageIndex: 0 } },
+  });
+  assert.strictEqual(global.__CLIPBOARD_TEXT__, "可复制回答", "copy answer should copy assistant text");
 
   console.log("test-ai-card-polish-contract passed");
 }
