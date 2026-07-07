@@ -1,4 +1,5 @@
 const assert = require("assert");
+const fs = require("fs");
 const path = require("path");
 
 const ROOT = path.resolve(__dirname, "..");
@@ -106,6 +107,12 @@ function run() {
 
   calls.navigateTo.length = 0;
   instance.onTouchStart({ touches: [makeTouch(340, 650)] });
+  instance.onTouchCancel();
+  instance.onTap();
+  assert.strictEqual(calls.navigateTo.length, 0, "touchcancel should not open Xiaofu AI or allow immediate tap fallback");
+
+  calls.navigateTo.length = 0;
+  instance.onTouchStart({ touches: [makeTouch(340, 650)] });
   instance.onTouchMove({ touches: [makeTouch(280, 610)] });
   instance.onTouchEnd({ changedTouches: [makeTouch(120, 560)] });
   assert.strictEqual(calls.navigateTo.length, 0, "dragging should not trigger AI navigation");
@@ -113,6 +120,10 @@ function run() {
   assert(savedPosition && Number.isFinite(savedPosition.x) && Number.isFinite(savedPosition.y), "drag end should persist snapped position");
   assert(savedPosition.x === 6 || savedPosition.x === 326, "drag end should snap to either horizontal edge");
   assert(savedPosition.y >= 6 && savedPosition.y <= 728, "saved position should stay inside freer vertical bounds");
+
+  floatService.savePosition({ x: 340, y: 52 });
+  instance.refreshPosition();
+  assert(instance.data.y >= 94, "top-right position should avoid the WeChat capsule");
 
   calls.showActionSheet.length = 0;
   instance.onLongPress();
@@ -145,6 +156,12 @@ function run() {
   instance.refreshPosition();
   assert.strictEqual(floatService.isEnabled(), true, "float should be re-enabled from service state");
   assert.strictEqual(instance.data.visible, true, "re-enabled float should become visible again");
+
+  const settingsJs = fs.readFileSync(path.join(ROOT, "miniprogram/pages/settings/settings.js"), "utf8");
+  const settingsWxml = fs.readFileSync(path.join(ROOT, "miniprogram/pages/settings/settings.wxml"), "utf8");
+  assert(settingsJs.includes("xiaofuFloatService.enableEverywhere()"), "settings page should be able to re-enable the float");
+  assert(settingsJs.includes("xiaofuFloatService.setEnabled(false)"), "settings page should be able to close the float");
+  assert(settingsWxml.includes('bindchange="onXiaofuFloatToggle"'), "settings page should expose the float switch");
 
   calls.navigateTo.length = 0;
   routeRef.route = "pages/ai-assistant/ai-assistant";
