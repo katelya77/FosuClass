@@ -13,7 +13,7 @@ function run() {
   const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
   const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
 
-  ["课表查询", "个人课表", "校园知识", "使用帮助"].forEach((title) => {
+  ["课表查询", "个人课表", "校园知识", "使用与数据"].forEach((title) => {
     assert(js.includes(`title: "${title}"`), `task group should include ${title}`);
   });
   ["查班级课表", "查教师课表", "查教室占用", "查课程安排", "导入个人课表", "教务系统入口", "校区与地图", "图书馆服务", "常用系统入口", "小佛能做什么", "数据来源说明"].forEach((label) => {
