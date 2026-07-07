@@ -276,7 +276,7 @@ const DOCS = [
     id: "apaas_schedule_system_boundary",
     title: "教务/课表相关系统边界",
     summary: "项目内记录过 apaas.fosu.edu.cn 作为教务/课表相关系统来源之一，但具体登录方式、权限和可展示范围需要项目与学校页面继续核验。",
-    content: "这条只用于说明数据来源边界，不直接指导用户输入账号密码。个人课表请优先使用小程序内 XLS 导入入口。",
+    content: "这条只用于说明数据来源边界，不直接指导用户输入账号密码。个人课表请优先使用小程序内“个人课表同步”主入口；只有明确需要表格或文件导入时，再查看 XLS 文件导入。",
     category: "navigation",
     categoryLabel: "常用入口",
     entryType: "navigation",
