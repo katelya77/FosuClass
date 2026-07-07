@@ -41,7 +41,7 @@ function run() {
     assert(!source.includes("25动医6"), `formal AI copy should not include personal class alias in source ${index}`);
   });
 
-  ["查班级本周课表", "查教师课表", "查教室明天是否有课", "查课程安排", "今天有什么课", "当前是第几教学周", "课表数据更新到什么时候", "教务系统在哪里", "佛大有哪些校区", "如何导入个人课表", "小佛能做什么"].forEach((phrase) => {
+  ["查班级本周课表", "查教师课表", "查教室明天是否有课", "查课程安排", "今天有什么课", "当前是第几教学周", "课表数据更新到什么时候", "教务系统在哪里", "佛大有哪些校区", "如何导入个人课表", "可以查询什么"].forEach((phrase) => {
     assert(js.includes(phrase) || helpCopy.includes(phrase) || scheduleCopy.includes(phrase) || knowledge.includes(phrase), `built-in phrase should be present and testable: ${phrase}`);
   });
 

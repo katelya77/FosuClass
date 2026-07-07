@@ -253,7 +253,7 @@ async function testHunyuanUnavailableFallsBackOracle() {
   reset();
   let oracleCalled = 0;
   const response = await aiTransportRouter.chat({
-    message: "这个小程序怎么用？",
+    message: "如何使用校园查询？",
     context: {},
     redactSensitiveText: redact,
     oracleChat: async () => {
@@ -281,8 +281,8 @@ async function testOracleUnavailableFriendlyFallback() {
     },
   });
   assert.strictEqual(response.safety.resolvedProvider, "mock");
-  assert(response.answer.includes("规则降级"));
-  assert(response.cards[0].title.includes("AI 生成内容"));
+  assert(response.answer.includes("本地规则"));
+  assert(response.cards[0].title.includes("校园查询结果"));
 }
 
 async function testConcurrentLimitFallsBackAfterOneRetry() {
@@ -375,7 +375,7 @@ async function testSensitiveCredentialNotSentToModel() {
     return streamFromChunks(["不应调用"]);
   });
   const response = await aiTransportRouter.chat({
-    message: "token: abcdefghijklmnop 这个小程序怎么用？",
+    message: "token: abcdefghijklmnop 如何使用校园查询？",
     context: {},
     redactSensitiveText: redact,
     oracleChat: async () => {

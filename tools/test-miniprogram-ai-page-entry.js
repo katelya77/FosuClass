@@ -27,9 +27,9 @@ const entryFiles = [
 
 const entryText = entryFiles.map((file) => fs.readFileSync(path.join(root, file), "utf8")).join("\n");
 assert(entryText.includes("/pages/ai-assistant/ai-assistant"), "index/school/today should reference ai-assistant route");
-assert(fs.readFileSync(path.join(root, "miniprogram/pages/index/index.wxml"), "utf8").includes("AI校园管家") ||
-  fs.readFileSync(path.join(root, "miniprogram/pages/index/index.wxml"), "utf8").includes("AI管家"), "home page should expose AI entry");
-assert(fs.readFileSync(path.join(root, "miniprogram/pages/school/school.wxml"), "utf8").includes("问 AI 帮我查课/找教室"), "school page should expose AI entry");
-assert(fs.readFileSync(path.join(root, "miniprogram/pages/today/today.wxml"), "utf8").includes("问 AI 分析今天安排"), "today page should expose AI entry");
+assert(fs.readFileSync(path.join(root, "miniprogram/pages/index/index.wxml"), "utf8").includes("校园服务管家") ||
+  fs.readFileSync(path.join(root, "miniprogram/pages/index/index.wxml"), "utf8").includes("校园管家"), "home page should expose campus assistant entry");
+assert(fs.readFileSync(path.join(root, "miniprogram/pages/school/school.wxml"), "utf8").includes("校园助手查课/找教室"), "school page should expose campus assistant entry");
+assert(fs.readFileSync(path.join(root, "miniprogram/pages/today/today.wxml"), "utf8").includes("查询今日安排"), "today page should expose campus assistant entry");
 
 console.log("test-miniprogram-ai-page-entry passed");

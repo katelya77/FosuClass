@@ -13,7 +13,7 @@ function arrayBody(name) {
 }
 
 const quickActionCount = (js.match(/buildQuickAction\(/g) || []).length - 1;
-assert.strictEqual(quickActionCount, 4, `quick actions should be 4, got ${quickActionCount}`);
+assert.strictEqual(quickActionCount, 5, `quick actions should be 5, got ${quickActionCount}`);
 
 assert(!wxml.includes("privacy-tip-full"), "privacy-tip-full must not be a first-viewport card");
 assert(wxml.includes("bottom-sheet") || wxml.includes("sheet-mask"), "bottom sheet / overlay should exist");

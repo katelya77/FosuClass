@@ -61,7 +61,7 @@ async function run() {
   assert.strictEqual(fallback.safety.resolvedProvider, "mock");
   const text = JSON.stringify(fallback);
   assert(!text.includes(process.env.AI_API_KEY), "answer must not contain provider key");
-  assert(/FosuClass|Release Pack|XLS-only|XLS/.test(text), "mock fallback should include local project knowledge");
+  assert(/佛课小表|课表查询|个人课表|空教室/.test(text), "mock fallback should include local project knowledge");
 
   console.log("test-ai-project-qa-provider passed");
 }

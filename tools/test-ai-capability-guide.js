@@ -36,8 +36,8 @@ const guideSource = js.slice(js.indexOf("const CAPABILITY_GUIDE_GROUPS"), js.ind
   assert(!guideSource.includes(word), `capability guide should not expose ${word}`);
 });
 
-assert(wxml.includes("aria-label=\"小佛能力指南\""), "guide button should have an accessibility label");
-assert(wxml.includes("小佛可以帮你"), "bottom sheet title should exist");
+assert(wxml.includes("aria-label=\"小佛校园助手说明\""), "guide button should have an accessibility label");
+assert(wxml.includes("小佛校园助手可以查询什么？"), "bottom sheet title should exist");
 assert(wxml.includes("onCapabilityExampleTap"), "examples should be clickable");
 assert(wxml.includes("openCampusMapFromGuide"), "guide should include campus map button");
 assert(wxss.includes(".capability-scroll"), "small screens should scroll the guide");
