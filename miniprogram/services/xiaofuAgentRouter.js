@@ -135,8 +135,8 @@ function isExplicitAppNavigation(message) {
     { pattern: /^(打开|跳转到|进入|去|切到)(全校课表|查课|课表系统)$/, target: "school_schedule", label: "全校课表", url: "/pages/school/school" },
     { pattern: /^(打开|跳转到|进入|去|切到)(校园地图|地图)$/, target: "campus_map", label: "校园地图", url: "/pages/campus-map/campus-map" },
     { pattern: /^(打开|跳转到|进入|去|切到)(空教室|找空教室)$/, target: "empty_room", label: "空教室", url: "/pages/empty-room/empty-room" },
-    { pattern: /^(打开|跳转到|进入|去|切到)?(xls导入|xls文件导入|excel导入|表格导入|文件导入)$/, target: "personal_import_xls", label: "XLS 文件导入", url: PERSONAL_SYNC_XLS_URL },
-    { pattern: /^(打开|跳转到|进入|去|切到)(个人课表同步|个人课表导入|导入课表|导入入口|个人课表)$/, target: "personal_sync", label: "个人课表同步", url: PERSONAL_SYNC_URL },
+    { pattern: /^(打开|跳转到|进入|去|切到)?(xls导入|xls文件导入|excel导入|表格导入|文件导入|表格导入入口|文件导入入口)$/, target: "personal_import_xls", label: "XLS 文件导入", url: PERSONAL_SYNC_XLS_URL },
+    { pattern: /^(打开|跳转到|进入|去|切到)(个人课表同步|个人课表导入|个人课表导入入口|导入课表|导入入口|同步入口|个人课表)$/, target: "personal_sync", label: "个人课表同步", url: PERSONAL_SYNC_URL },
   ];
   return mappings.find((item) => item.pattern.test(value)) || null;
 }
