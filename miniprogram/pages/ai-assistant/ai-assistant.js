@@ -6,6 +6,7 @@ const xiaofuFloatService = require("../../services/xiaofuFloatService");
 const cloudbaseConfig = require("../../config/cloudbase");
 const demoData = require("./demo-data");
 const { courseTimes } = require("../../data/courseTimes");
+const { copyToClipboard: copyTextToClipboard, normalizeCopyText } = require("../../utils/clipboard");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
@@ -1014,9 +1015,39 @@ function normalizeCardAction(action, index) {
     label,
     type,
     url: safeText(source.url || "", 240),
+    text: safeText(source.text || "", 600),
+    fallbackText: safeText(source.fallbackText || "", 600),
     payload: source.payload && typeof source.payload === "object" && !Array.isArray(source.payload) ? source.payload : {},
     originalIndex: index,
   };
+}
+
+function firstCopyableText(candidates) {
+  const list = Array.isArray(candidates) ? candidates : [];
+  for (let index = 0; index < list.length; index += 1) {
+    const text = normalizeCopyText(list[index]);
+    if (text) return text;
+  }
+  return "";
+}
+
+function resolveActionCopyText(action, card, message) {
+  const safeAction = action && typeof action === "object" && !Array.isArray(action) ? action : {};
+  const safeCard = card && typeof card === "object" && !Array.isArray(card) ? card : {};
+  const safeMessage = message && typeof message === "object" && !Array.isArray(message) ? message : {};
+  const payload = safeAction.payload && typeof safeAction.payload === "object" && !Array.isArray(safeAction.payload)
+    ? safeAction.payload
+    : {};
+  return firstCopyableText([
+    payload.text,
+    safeAction.text,
+    safeAction.url,
+    payload.url,
+    safeCard.copyText,
+    safeCard.summary,
+    safeAction.fallbackText,
+    safeMessage.content,
+  ]);
 }
 
 function isInactiveScheduleItem(item) {
@@ -2327,7 +2358,7 @@ Page({
       return;
     }
     if (type === "copy") {
-      this.copyToClipboard(action.payload && action.payload.text || action.url || card.title || "", "已复制");
+      this.copyToClipboard(resolveActionCopyText(action, card, message));
       return;
     }
     if (type === "ask") {
@@ -2343,20 +2374,11 @@ Page({
   onCopyMessage(event) {
     const messageIndex = Number(event.currentTarget.dataset.messageIndex);
     const message = this.data.messages[messageIndex] || {};
-    this.copyToClipboard(message.content || "", "已复制回答");
+    this.copyToClipboard(message.content || "");
   },
 
-  copyToClipboard(text, title) {
-    const value = String(text || "").trim();
-    if (!value) {
-      wx.showToast({ title: "暂无可复制内容", icon: "none" });
-      return;
-    }
-    wx.setClipboardData({
-      data: value,
-      success: () => wx.showToast({ title: title || "已复制", icon: "none" }),
-      fail: () => wx.showToast({ title: "复制失败，请重试", icon: "none" }),
-    });
+  copyToClipboard(text, options) {
+    return copyTextToClipboard(text, options || {});
   },
 
   findLastUserMessage() {
@@ -2371,7 +2393,7 @@ Page({
     const parsed = parseActionUrl(url);
     if (!parsed.path) return;
     if (/^https?:\/\//i.test(parsed.raw)) {
-      this.copyToClipboard(parsed.raw, "外部链接已复制");
+      this.copyToClipboard(parsed.raw);
       return;
     }
     const storageKey = TABBAR_PENDING_QUERY[parsed.path];
@@ -2398,5 +2420,6 @@ if (typeof module !== "undefined") {
     normalizeCard,
     normalizeCardItem,
     normalizeMessagesForDisplay,
+    resolveActionCopyText,
   };
 }
