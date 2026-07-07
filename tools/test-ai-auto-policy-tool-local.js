@@ -55,7 +55,7 @@ async function run() {
   assert.strictEqual(recommendation.metrics.externalProviderUsed, false);
 
   const qa = await agentService.chat({
-    message: "这个小程序怎么用？",
+    message: "如何使用校园查询？",
     context: { timezone: "Asia/Shanghai", envVersion: "develop" },
     runtimeMode: "competition",
     serverSession: { openidHash: "unit-test-openid" },

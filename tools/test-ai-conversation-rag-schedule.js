@@ -190,7 +190,7 @@ async function main() {
   const status = await assertChat("课表数据是否最新？", null, {
     intentName: "schedule_status",
     cardType: "schedule_status",
-    answerPattern: /不是在查某个班级/,
+    answerPattern: /课表数据状态查询/,
     noScheduleTool: true,
   });
   assert(!JSON.stringify(status.cards).includes("未找到课表对象"), "status should not render not-found schedule card");
@@ -198,14 +198,14 @@ async function main() {
   await assertChat("你能做什么", null, {
     intentName: "help",
     cardType: "help",
-    answerPattern: /小佛能做什么/,
+    answerPattern: /可以查询|校园事项/,
     noScheduleTool: true,
   });
 
-  await assertChat("这个小程序怎么用？", null, {
+  await assertChat("如何使用校园查询？", null, {
     intentName: "help",
     cardType: "help",
-    answerPattern: /小佛能做什么|校园事项/,
+    answerPattern: /可以查询什么|校园事项/,
     noScheduleTool: true,
   });
 
@@ -232,7 +232,7 @@ async function main() {
     lastWeek: 16,
     lastWeekday: null,
   });
-  const second = conversationStore.createConversation({ title: "新对话" });
+  const second = conversationStore.createConversation({ title: "新查询" });
   assert.strictEqual(second.messages.length, 0);
   assert.strictEqual(second.contextSlots.lastTargetName, "");
   const restored = conversationStore.setActiveConversation(first.conversationId);
@@ -304,7 +304,7 @@ async function main() {
     answerPattern: /仙溪/,
     noScheduleTool: true,
   });
-  assert.match(ragChat.answer, /校园知识/);
+  assert.match(ragChat.answer, /校园信息/);
 
   const jwc = ragAnswerBuilder.tryBuildKnowledgeAnswer("教务系统在哪里进", baseContext());
   assert(jwc, "expected JWC RAG response");

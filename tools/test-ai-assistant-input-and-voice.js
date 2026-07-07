@@ -49,13 +49,13 @@ async function run() {
   const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
   const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
 
-  assert(wxml.includes('confirm-type="send"'), "textarea must request send confirm key");
+  assert(wxml.includes('confirm-type="search"'), "textarea must request search confirm key");
   assert(wxml.includes('confirm-hold="{{false}}"'), "confirm-hold must be false");
   assert(wxml.includes('show-confirm-bar="{{false}}"'), "mobile confirm bar must be hidden");
-  assert(wxml.includes('bindconfirm="onComposerConfirm"'), "textarea confirm must send");
+  assert(wxml.includes('bindconfirm="onComposerConfirm"'), "textarea confirm must query");
   assert(wxml.includes('bindcompositionstart="onCompositionStart"'), "IME composition start must be tracked");
   assert(wxml.includes('bindcompositionend="onCompositionEnd"'), "IME composition end must be tracked");
-  assert(wxml.includes('bindtap="onSubmit"'), "button send must use onSubmit");
+  assert(wxml.includes('bindtap="onSubmit"'), "query button must use onSubmit");
   assert(wxml.includes('bindtap="onInsertNewline"'), "explicit newline button must exist");
   assert(wxml.includes('bindtap="onVoiceTap"'), "voice button must exist");
   assert(wxml.includes('voiceRecognizing || sending'), "voice must be disabled while recognizing or sending");
