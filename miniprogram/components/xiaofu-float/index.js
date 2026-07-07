@@ -250,6 +250,12 @@ Component({
       });
     },
 
+    onTouchCancel() {
+      this._touch = null;
+      this._ignoreTapUntil = Date.now() + 260;
+      this.setData({ moving: false });
+    },
+
     onTap() {
       if (Date.now() < Number(this._ignoreTapUntil || 0) || this._longPressed) return;
       if (Date.now() - Number(this._tapOpenedAt || 0) < TAP_DEDUPE_MS) return;

@@ -5,7 +5,7 @@
   catchtouchstart="onTouchStart"
   catchtouchmove="onTouchMove"
   catchtouchend="onTouchEnd"
-  catchtouchcancel="onTouchEnd"
+  catchtouchcancel="onTouchCancel"
   bindtap="onTap"
   bindlongpress="onLongPress"
 >
