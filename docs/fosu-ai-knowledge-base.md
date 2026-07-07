@@ -1,7 +1,7 @@
-# 小佛AI 校园知识库与智能体强化方案（Codex 导入版）
+# 小佛AI 校园知识库与智能体强化方案（人工维护版）
 
 > 用途：把本文件作为 Codex GPT-5.5 xhigh 的上下文资料，让它据此重构/增强小佛AI的 RAG 知识库、卡片系统、前端交互和 Agent 工具分流。
-> 当前版本：v0.1 seed
+> 当前版本：v0.2 maintained
 > 生成日期：2026-07-07
 > 注意：本文件是“知识库种子 + 架构规范 + 前端实现目标”，不是一次性写死的最终数据。Codex 应继续把它转为可维护的 JSON/TS 数据结构、爬虫脚本、测试矩阵和 UI 组件。
 
@@ -499,3 +499,36 @@ Codex 实现 UI 前，应先参考：
 - 天气 API 配置与校区坐标。
 - 全校课表数据包精确更新时间。
 - 个人课表最近导入时间与导入状态。
+
+---
+
+## 11. 2026-07-07 维护补充
+
+### 11.1 已落到运行知识库的入口类
+
+- 教务部与教务系统入口：`academic_affairs_portal`
+- 图书馆入口与服务边界：`library_portal`
+- 本科招生入口：`undergraduate_admission_portal`
+- 智慧就业中心：`employment_center_portal`
+- 招聘报名系统：`recruitment_system_portal`
+- 研究生相关入口：`graduate_related_portal`
+- 学报与期刊入口：`journal_editorial_portal`
+- 校园地图入口：`campus_map_entry`
+- 个人课表同步主入口：`personal_schedule_sync_entry`
+- XLS 文件导入说明：`personal_schedule_xls_import_guide`
+- 数据来源说明：`xiaofu_data_source_explanation`
+
+### 11.2 个人课表导入路由约定
+
+- “如何导入个人课表”“打开导入入口”默认打开 `/pages/personal-sync/personal-sync`。
+- 只有用户明确说“XLS导入 / 表格导入 / 文件导入 / Excel导入”时，才打开 `/pages/personal-sync/personal-sync?tab=xls`。
+- 导入说明卡必须同时提供“打开个人课表同步”和“查看 XLS 文件导入”。
+
+### 11.3 检索约定
+
+- 完整标题和 alias 精确命中优先。
+- `entryType=navigation` 优先回答入口/官网/系统/怎么进/在哪里。
+- `entryType=tool_guide` 优先回答如何导入、XLS、表格导入、文件导入。
+- 天气、带伞、下雨、跑步问题必须走天气工具，不走官网 RAG。
+- 课表数据状态、第几教学周、更新时间必须走 schedule_status，不走学校概况。
+- 无可靠结果时统一说“知识库暂未收录可靠信息”，不要用学校概况兜底。
