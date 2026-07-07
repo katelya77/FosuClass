@@ -373,7 +373,7 @@ Page({
       xiaofuFloatEnabled: enabled,
       xiaofuFloatEnabledText: enabled ? "右下角常驻，可拖拽吸附" : "已关闭，可在这里重新开启",
     });
-    wx.showToast({ title: enabled ? "已开启小佛AI浮窗" : "已关闭小佛AI浮窗", icon: "none" });
+    wx.showToast({ title: enabled ? "已开启小佛助手浮窗" : "已关闭小佛助手浮窗", icon: "none" });
   },
 
   goSchool() {
@@ -566,7 +566,7 @@ Page({
   showDeveloperApi() {
     wx.showModal({
       title: "开发者接口调试",
-      content: "开发诊断信息仅用于排查课表数据问题。提交给 AI 调试前请确认已脱敏敏感登录信息。",
+      content: "开发诊断信息仅用于排查课表数据问题。提交调试前请确认已脱敏敏感登录信息。",
       showCancel: false,
       confirmText: "知道了",
     });

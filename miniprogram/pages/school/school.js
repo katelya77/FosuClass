@@ -472,7 +472,7 @@ Page({
       hasMoreClassrooms: false,
       hasMoreCourses: false,
       updatedAtText: "",
-      restoreHint: "已根据 AI 建议打开查询",
+      restoreHint: "已根据关键词打开查询",
     };
     if (type === "classroom") {
       patch.classroomMapReturn = this.buildMapReturnFromOptions(query);
@@ -495,7 +495,7 @@ Page({
         return;
       }
       this.setData({
-        classEmptyTitle: "已填入 AI 推荐关键词",
+        classEmptyTitle: "已填入查询关键词",
         classEmptyDesc: keyword ? `请按「${keyword}」继续选择学院、年级或专业。` : "请继续选择班级筛选条件。",
       });
     };

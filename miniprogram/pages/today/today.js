@@ -77,7 +77,7 @@ Page({
       this.loadPageConfig();
     }
     wx.showToast({
-      title: "已根据 AI 建议打开今日安排",
+      title: "已根据关键词打开今日安排",
       icon: "none",
     });
   },
@@ -201,7 +201,7 @@ Page({
 
   goAiAssistant() {
     wx.navigateTo({
-      url: `/pages/ai-assistant/ai-assistant?q=${encodeURIComponent("问 AI 分析今天安排")}`,
+      url: `/pages/ai-assistant/ai-assistant?q=${encodeURIComponent("查询今日安排")}`,
     });
   },
 

@@ -35,7 +35,7 @@ const DEMO_RESPONSES = {
     cards: [{
       type: "schedule",
       title: "演示数据 · 今日安排",
-      subtitle: "根据本机课表摘要生成，不含个人身份字段。",
+      subtitle: "根据本机课表摘要整理，不含个人身份字段。",
       badges: ["演示数据", "今日课程", "仅供参考"],
       items: [
         { title: "高等数学", subtitle: "第 3-4 节 · C7-305", value: "09:40-11:05" },
@@ -70,7 +70,7 @@ const DEMO_RESPONSES = {
     }],
   },
   teacher: {
-    answer: "演示数据：已通过全校索引命中教师课表，并读取到详情缓存。结果只来自 Release Pack，不由模型编造。",
+    answer: "演示数据：已通过全校索引命中教师课表，并读取到详情缓存。结果只来自 Release Pack，不额外补写。",
     toolCalls: [
       { name: "search_school_index", status: "success" },
       { name: "get_schedule_detail", status: "success" },
@@ -118,7 +118,7 @@ const DEMO_RESPONSES = {
     }],
   },
   guide: {
-    answer: "演示数据：个人课表同步用于把自己的课程带入首页、今日课程和 AI 摘要。需要表格文件时，再选择 XLS 文件导入。",
+    answer: "演示数据：个人课表同步用于把自己的课程带入首页、今日课程和课表摘要。需要表格文件时，再选择 XLS 文件导入。",
     toolCalls: [
       { name: "explain_personal_import", status: "success" },
     ],
@@ -133,7 +133,7 @@ const DEMO_RESPONSES = {
         { title: "进入同步入口", subtitle: "打开个人课表同步页面", value: "第 1 步" },
         { title: "选择导入方式", subtitle: "按页面提示选择适合自己的来源", value: "第 2 步" },
         { title: "检查课程字段", subtitle: "确认课程名、教师、教室、节次和教学周", value: "第 3 步" },
-        { title: "启用摘要", subtitle: "需要 AI 结合本机课程时再开启", value: "可选" },
+        { title: "启用摘要", subtitle: "需要结合本机课程查询时再开启", value: "可选" },
       ],
       actions: [
         { label: "打开个人课表同步", type: "navigate", url: "/pages/personal-sync/personal-sync", payload: {} },

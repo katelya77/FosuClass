@@ -6,21 +6,21 @@
     </view>
     <view class="xiaofu-title-block">
       <view class="xiaofu-title-line">
-        <text class="xiaofu-title">小佛</text>
+        <text class="xiaofu-title">小佛校园助手</text>
         <text class="xiaofu-dot">·</text>
         <text class="xiaofu-status">在线</text>
       </view>
       <view class="xiaofu-capability">{{headerSubtitle}}</view>
     </view>
     <view class="xiaofu-actions">
-      <button class="xiaofu-icon-btn" bindtap="openCapabilityGuide" aria-label="小佛能力指南">?</button>
+      <button class="xiaofu-icon-btn" bindtap="openCapabilityGuide" aria-label="小佛校园助手说明">?</button>
       <button class="xiaofu-icon-btn" bindtap="openHeaderMenu" aria-label="更多操作">⋯</button>
     </view>
   </view>
 
   <view class="ai-mode-row">
-    <view class="quick-nav-segment" aria-label="对话与任务">
-      <view class="quick-nav-option active" bindtap="openConversationSheet"><text>对话</text></view>
+    <view class="quick-nav-segment" aria-label="查询与任务">
+      <view class="quick-nav-option active" bindtap="openConversationSheet"><text>查询</text></view>
       <view class="quick-nav-option quick-more-button" bindtap="openTaskPanel"><text>任务</text></view>
     </view>
   </view>
@@ -45,7 +45,7 @@
   <scroll-view class="message-scroll" scroll-y scroll-top="{{scrollTop}}" scroll-into-view="{{scrollIntoView}}" scroll-with-animation="{{scrollWithAnimation}}" scroll-anchoring="{{true}}" enhanced show-scrollbar="{{false}}" lower-threshold="80">
     <view class="empty-welcome" wx:if="{{!messages.length}}">
       <view class="empty-title">问校园事项、查全校课表</view>
-      <view class="empty-desc">我会先判断问题类型，再决定查课表、检索校园知识或说明数据状态。</view>
+      <view class="empty-desc">输入班级、教师、教室、课程或校园事项关键词，系统会匹配已有数据并返回对应结果。</view>
       <view class="empty-example-list">
         <button
           wx:for="{{welcomeExamples}}"
@@ -55,7 +55,7 @@
           bindtap="onWelcomeExampleTap"
         >{{item}}</button>
       </view>
-      <view class="empty-safe-note">不要输入学号、密码或登录凭证。</view>
+      <view class="empty-safe-note">请勿输入学号、密码、验证码等敏感信息。</view>
     </view>
 
     <view
@@ -248,7 +248,7 @@
       </view>
     </view>
 
-    <view class="slow-tip" wx:if="{{slowRequest}}">网络较慢，正在继续等待小佛返回结果...</view>
+    <view class="slow-tip" wx:if="{{slowRequest}}">网络较慢，正在继续等待查询结果...</view>
     <view class="sending-row" wx:if="{{sending}}">
       <view class="sending-dot"></view>
       <view class="sending-text">{{sendingStatusText}}</view>
@@ -262,12 +262,12 @@
     <view class="sheet-handle"></view>
     <view class="task-panel-head">
       <view class="panel-title-wrap">
-        <view class="task-panel-title">对话</view>
-        <view class="task-panel-subtitle">每个对话独立保存上下文</view>
+        <view class="task-panel-title">查询记录</view>
+        <view class="task-panel-subtitle">每条记录独立保存查询内容和结果</view>
       </view>
       <button class="sheet-close" bindtap="closeConversationSheet">关闭</button>
     </view>
-    <button class="conversation-new-btn" bindtap="createNewConversation">新建对话</button>
+    <button class="conversation-new-btn" bindtap="createNewConversation">新建查询</button>
     <scroll-view class="conversation-scroll" scroll-y enhanced scroll-with-animation="{{false}}" show-scrollbar="{{false}}">
       <view
         wx:for="{{conversations}}"
@@ -280,7 +280,7 @@
           bindtap="onConversationTap"
         >
           <view class="conversation-title">{{item.title}}</view>
-          <view class="conversation-meta">{{item.messageCount}} 条消息 · {{item.updatedAtText}}</view>
+          <view class="conversation-meta">{{item.messageCount}} 条内容 · {{item.updatedAtText}}</view>
         </button>
         <view class="conversation-actions">
           <button catchtap="renameConversation" data-conversation-id="{{item.conversationId}}">重命名</button>
@@ -310,8 +310,8 @@
     <view class="sheet-handle"></view>
     <view class="task-panel-head">
       <view class="panel-title-wrap">
-        <view class="task-panel-title">更多任务</view>
-        <view class="task-panel-subtitle">常用问答和校园入口</view>
+        <view class="task-panel-title">校园工具</view>
+        <view class="task-panel-subtitle">课表、校园信息和常用入口</view>
       </view>
       <button class="sheet-close" bindtap="closeTaskPanel">关闭</button>
     </view>
@@ -349,8 +349,8 @@
     <view class="sheet-handle"></view>
     <view class="task-panel-head">
       <view class="panel-title-wrap">
-        <view class="task-panel-title">小佛可以帮你</view>
-        <view class="task-panel-subtitle">点一下示例，会在当前对话回答</view>
+        <view class="task-panel-title">小佛校园助手可以查询什么？</view>
+        <view class="task-panel-subtitle">选择示例后，会在当前查询中整理结果</view>
       </view>
       <button class="sheet-close" bindtap="closeCapabilityGuide">关闭</button>
     </view>
@@ -410,7 +410,7 @@
         {{voiceRecording ? "停" : "麦"}}
       </button>
       <view class="composer-input-wrap">
-        <view wx:if="{{!inputValue}}" class="composer-custom-placeholder">问校园事项、课表和入口</view>
+        <view wx:if="{{!inputValue}}" class="composer-custom-placeholder">输入校园事项、课表或入口关键词</view>
         <textarea
           class="composer-input"
           value="{{inputValue}}"
@@ -420,7 +420,7 @@
           fixed="{{true}}"
           cursor-spacing="16"
           focus="{{inputFocus}}"
-          confirm-type="send"
+          confirm-type="search"
           confirm-hold="{{false}}"
           show-confirm-bar="{{false}}"
           bindinput="onInput"
@@ -432,7 +432,7 @@
       </view>
       <button class="newline-btn" bindtap="onInsertNewline" disabled="{{sending}}" aria-label="换行">↵</button>
       <button class="send-btn {{sending || !inputValue ? 'disabled' : ''}}" bindtap="onSubmit" disabled="{{sending || !inputValue}}">
-        {{sending ? "发送中" : "发送"}}
+        {{sending ? "查询中" : "查询"}}
       </button>
     </view>
     <view wx:if="{{voiceStatusText}}" class="voice-status">{{voiceStatusText}}</view>
