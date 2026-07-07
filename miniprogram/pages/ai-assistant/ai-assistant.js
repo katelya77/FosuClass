@@ -9,7 +9,7 @@ const { courseTimes } = require("../../data/courseTimes");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
-const TASK_PANEL_CACHE_VERSION = "2026-07-campus-query-v6";
+const TASK_PANEL_CACHE_VERSION = "2026-07-campus-query-v7";
 const TASK_PANEL_DEBOUNCE_MS = 180;
 const TASK_ACTION_DEBOUNCE_MS = 180;
 const SEND_DEDUPE_MS = 420;
@@ -455,7 +455,7 @@ function buildTaskPanelGroups() {
       abilityIds: ["campusWeather", "umbrellaAdvice", "jwcEntry", "campusLocations", "libraryService", "commonSystems"],
     },
     {
-      title: "使用帮助",
+      title: "使用与数据",
       abilityIds: ["appHelp", "askBetter", "termSync", "enableFloat"],
     },
   ].map((group) => ({
