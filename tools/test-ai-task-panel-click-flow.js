@@ -33,10 +33,12 @@ async function run() {
   assert.strictEqual(page.data.taskPanelReady, true, "task panel groups should be ready");
   assert(page.data.taskPanelGroups.length >= 4, "task panel should have grouped sections");
 
-  let total = 0;
+  let expectedSent = 0;
+  let expectedNavigated = 0;
   page.data.taskPanelGroups.forEach((group, groupIndex) => {
     group.items.forEach((task, taskIndex) => {
-      total += 1;
+      if (task.abilityId === "personalSync") expectedNavigated += 1;
+      else expectedSent += 1;
       page.setData({ showTaskPanel: true });
       page.onTaskPanelItemTap({
         currentTarget: {
@@ -47,9 +49,13 @@ async function run() {
     });
   });
 
-  assert.strictEqual(sent.length, total, "every task panel item should send a chat message");
-  assert.strictEqual(navigated.length, 0, "task panel items should not jump away before answering in chat");
-  ["查班级本周课表", "查教师课表", "查教室明天是否有课", "查课程安排", "如何导入个人课表", "教务系统在哪里进？", "佛大有哪些校区？", "图书馆服务", "常用系统入口", "这个小程序怎么用？"].forEach((message) => {
+  assert.strictEqual(sent.length, expectedSent, "question tasks should send a chat message");
+  assert.strictEqual(navigated.length, expectedNavigated, "personal sync tasks should open the sync page");
+  navigated.forEach((url) => {
+    assert.strictEqual(url, "/pages/personal-sync/personal-sync", "personal sync task should not open XLS tab");
+  });
+  assert(!sent.includes("XLS文件导入怎么用？"), "task panel should not send the stale XLS import question");
+  ["查班级本周课表", "查教师课表", "查教室明天是否有课", "查课程安排", "教务系统在哪里进？", "佛大有哪些校区？", "图书馆服务", "常用系统入口", "这个小程序怎么用？"].forEach((message) => {
     assert(sent.includes(message), `task panel should send ${message}`);
   });
 

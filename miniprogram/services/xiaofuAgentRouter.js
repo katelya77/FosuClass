@@ -119,6 +119,7 @@ function isHelpQuery(message) {
   if (!value) return false;
   return scheduleIntentParser.isScheduleHelpText(value) ||
     /^(怎么|如何|怎样).*(导入|同步|上传).*(个人课表|课表|xls)|导入个人课表/.test(value) ||
+    /^(xls|excel|表格|文件).*(导入|同步).*(怎么用|如何用|使用|帮助|教程|说明)|^(xls导入|xls文件导入|excel导入|表格导入|文件导入)(怎么用|如何用|使用说明|帮助|教程)?$/.test(value) ||
     /^(你能做什么|你可以做什么|能做什么|能查什么|我能问你什么|小佛能做什么|小佛可以做什么)$/.test(value) ||
     /^(这个|这款|小程序|app|应用).*(怎么用|如何用|怎么使用|使用方法|使用说明)$/.test(value) ||
     /^(如何问得更准确|怎么问得更准确|问法建议|数据来源说明)$/.test(value) ||

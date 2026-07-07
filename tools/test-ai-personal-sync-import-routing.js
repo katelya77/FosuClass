@@ -80,6 +80,10 @@ async function run() {
   assert.strictEqual(openXlsResponse.cards[0].type, "navigation");
   assert.strictEqual(openXlsResponse.cards[0].actions[0].url, "/pages/personal-sync/personal-sync?tab=xls");
 
+  const explicitXlsHelpResponse = await aiAssistantService.chat("XLS文件导入怎么用？", baseContext());
+  assert.strictEqual(explicitXlsHelpResponse.cards[0].type, "import_guide", "explicit XLS help should not fall back to smalltalk");
+  assert(/导入个人课表/.test(explicitXlsHelpResponse.answer), "explicit XLS help should answer the import guide");
+
   const page = mockEnv.createPageInstance();
   page.sendMessage = (message) => {
     page.sent = page.sent || [];
@@ -91,11 +95,25 @@ async function run() {
   };
   page.openTaskPanelNow();
   await wait(50);
-  const personalTask = page.data.taskPanelGroups
-    .flatMap((group) => group.items || [])
-    .find((item) => item.abilityId === "personalSync");
+  let personalTask = null;
+  let personalTaskLocation = null;
+  page.data.taskPanelGroups.forEach((group, groupIndex) => {
+    (group.items || []).forEach((item, taskIndex) => {
+      if (item.abilityId === "personalSync" && !personalTask) {
+        personalTask = item;
+        personalTaskLocation = { groupIndex, taskIndex };
+      }
+    });
+  });
   assert(personalTask, "task panel should use personalSync for personal import");
   assert.strictEqual(personalTask.url, "/pages/personal-sync/personal-sync");
+  page.onTaskPanelItemTap({
+    currentTarget: {
+      dataset: personalTaskLocation,
+    },
+  });
+  assert.deepStrictEqual(page.navigated, ["/pages/personal-sync/personal-sync"], "task personal import should open the sync page directly");
+  assert.deepStrictEqual(page.sent || [], [], "task personal import should not send the stale XLS help question");
 
   console.log("test-ai-personal-sync-import-routing passed");
 }

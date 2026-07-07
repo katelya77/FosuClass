@@ -6,6 +6,7 @@ let clipboardText = "";
 let toastText = "";
 let setClipboardCalls = 0;
 let shouldFail = false;
+let failTimesRemaining = 0;
 let warnCount = 0;
 
 global.wx = {
@@ -14,7 +15,8 @@ global.wx = {
   removeStorageSync() {},
   setClipboardData(options) {
     setClipboardCalls += 1;
-    if (shouldFail) {
+    if (shouldFail || failTimesRemaining > 0) {
+      if (failTimesRemaining > 0) failTimesRemaining -= 1;
       if (options && typeof options.fail === "function") options.fail({ errMsg: "mock fail" });
       if (options && typeof options.complete === "function") options.complete({ errMsg: "mock complete" });
       return;
@@ -116,9 +118,19 @@ async function run() {
   assert.strictEqual(clipboardText, "卡片兜底内容", "object payload should use safe card fallback");
   assert.notStrictEqual(clipboardText, "[object Object]", "object payload must not be copied as [object Object]");
 
+  const callsBeforeRetry = setClipboardCalls;
+  failTimesRemaining = 1;
+  const retryResult = await page.copyToClipboard("二次复制成功");
+  assert.strictEqual(retryResult.ok, true, "transient copy failure should retry once and succeed");
+  assert.strictEqual(setClipboardCalls - callsBeforeRetry, 2, "transient copy should call wx.setClipboardData twice");
+  assert.strictEqual(clipboardText, "二次复制成功", "retry should keep the original copy text");
+  assert.strictEqual(toastText, "已复制", "retry success should show success toast");
+
   shouldFail = true;
+  const callsBeforeFailure = setClipboardCalls;
   const failResult = await page.copyToClipboard("失败兜底");
   assert.strictEqual(failResult.ok, false, "copy failure should resolve as failed");
+  assert.strictEqual(setClipboardCalls - callsBeforeFailure, 2, "final failure should retry before falling back");
   assert.strictEqual(toastText, "复制失败，可长按文本手动复制", "copy failure should show manual-copy fallback");
   assert(warnCount >= 1, "copy failure should keep console.warn diagnostics");
 

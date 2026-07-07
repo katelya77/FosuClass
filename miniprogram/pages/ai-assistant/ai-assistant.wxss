@@ -237,7 +237,8 @@ button::after {
   color: #8a4b4b;
 }
 
-.quick-action-pill.xls {
+.quick-action-pill.xls,
+.quick-action-pill.sync {
   color: #6b4d16;
 }
 
@@ -461,6 +462,16 @@ button::after {
   line-height: 1.58;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+.message-content-text {
+  display: inline;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.message-row.assistant .message-content-text {
+  user-select: text;
 }
 
 .message-row.user .message-content {
