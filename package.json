@@ -419,6 +419,7 @@
     "test:ai-quick-actions-behavior": "node tools/test-ai-quick-actions-behavior.js",
     "test:ai-task-sheet-groups": "node tools/test-ai-task-sheet-groups.js",
     "test:ai-card-polish-contract": "node tools/test-ai-card-polish-contract.js",
+    "test:ai-xiaofu-stability-matrix": "node tools/test-ai-action-import-clipboard-float-matrix.js",
     "test:ai-assistant-unused-selector": "node tools/test-ai-assistant-unused-selector.js",
     "test:deepseek-provider-json-text-modes": "node tools/test-deepseek-provider-json-text-modes.js",
     "test:ai-message-retry-replace": "node tools/test-ai-message-retry-replace.js",
