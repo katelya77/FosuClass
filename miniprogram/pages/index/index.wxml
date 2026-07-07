@@ -41,7 +41,7 @@
       <button class="action-btn" bindtap="goCustomCourses">个性化</button>
       <button class="action-btn ai-btn" bindtap="goAiAssistant">
         <image class="ai-entry-icon" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" />
-        <text>AI管家</text>
+        <text>校园管家</text>
       </button>
       <button class="action-btn sync-btn" bindtap="goLogin">{{syncActionText}}</button>
       <button class="action-btn" bindtap="toggleMoreMenu">更多</button>
@@ -323,7 +323,7 @@
         <text class="menu-icon">+</text>个性化课程
       </view>
       <view class="menu-item" bindtap="goAiAssistant">
-        <image class="menu-icon-img" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" />AI校园管家
+        <image class="menu-icon-img" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" />校园服务管家
       </view>
       <view class="menu-item danger-item" bindtap="clearLocalCache">
         <text class="menu-icon">🗑</text>清除本地缓存

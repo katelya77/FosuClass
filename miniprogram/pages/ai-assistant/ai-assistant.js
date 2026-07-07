@@ -9,11 +9,11 @@ const { courseTimes } = require("../../data/courseTimes");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
-const TASK_PANEL_CACHE_VERSION = "2026-07-campus-agent-v5";
+const TASK_PANEL_CACHE_VERSION = "2026-07-campus-query-v6";
 const TASK_PANEL_DEBOUNCE_MS = 180;
 const TASK_ACTION_DEBOUNCE_MS = 180;
 const SEND_DEDUPE_MS = 420;
-const PRIVACY_SUMMARY_TEXT = "仅发送课程名、教师、教室、星期、节次、教学周；不发送学号、姓名、密码或原始文件。";
+const PRIVACY_SUMMARY_TEXT = "仅使用课程名、教师、教室、星期、节次、教学周；不包含学号、姓名、密码或原始文件。";
 const MAX_MESSAGE_COUNT = 20;
 const PERSONAL_SYNC_URL = "/pages/personal-sync/personal-sync";
 const PERSONAL_SYNC_XLS_URL = "/pages/personal-sync/personal-sync?tab=xls";
@@ -132,7 +132,7 @@ const AI_CAPABILITY_REGISTRY = [
     guideExamples: ["查教师课表"],
     message: "查教师课表",
     draft: "查教师课表",
-    missingText: "请补充教师姓名后发送",
+    missingText: "请补充教师姓名后查询",
   },
   {
     id: "classSchedule",
@@ -148,7 +148,7 @@ const AI_CAPABILITY_REGISTRY = [
     guideExamples: ["查班级本周课表"],
     message: "查班级本周课表",
     draft: "查班级本周课表",
-    missingText: "请补充班级名称后发送",
+    missingText: "请补充班级名称后查询",
   },
   {
     id: "classroomOccupancy",
@@ -164,7 +164,7 @@ const AI_CAPABILITY_REGISTRY = [
     guideExamples: ["查教室明天是否有课"],
     message: "查教室明天是否有课",
     draft: "查教室明天是否有课",
-    missingText: "请补充教室或楼栋后发送",
+    missingText: "请补充教室或楼栋后查询",
   },
   {
     id: "courseSchedule",
@@ -178,7 +178,7 @@ const AI_CAPABILITY_REGISTRY = [
     guideExamples: ["查课程安排"],
     message: "查课程安排",
     draft: "查课程安排",
-    missingText: "请补充课程名称后发送",
+    missingText: "请补充课程名称后查询",
   },
   {
     id: "placeC7",
@@ -213,10 +213,10 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.term,
     label: "校区天气",
-    taskGroup: "实时信息",
+    taskGroup: "校园服务",
     taskLabel: "校区天气",
     taskDesc: "下雨、温度、带伞和出行建议",
-    guideGroup: "实时信息",
+    guideGroup: "校园服务",
     guideExamples: ["仙溪校区今天会下雨吗"],
     welcomeExample: "仙溪校区今天会下雨吗",
     message: "仙溪校区今天会下雨吗？",
@@ -226,10 +226,10 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.DIRECT_TOOL,
     iconPath: ICONS.term,
     label: "带伞建议",
-    taskGroup: "实时信息",
+    taskGroup: "校园服务",
     taskLabel: "今天要不要带伞",
     taskDesc: "优先查询天气，不走学校官网概况",
-    guideGroup: "实时信息",
+    guideGroup: "校园服务",
     guideExamples: ["今天要不要带伞", "下一节课要带伞吗"],
     welcomeExample: "今天要不要带伞",
     message: "今天要不要带伞",
@@ -293,33 +293,33 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.GENERATIVE_QA,
     iconPath: ICONS.app,
     label: "怎么使用",
-    taskGroup: "使用与数据",
-    taskLabel: "小佛能做什么",
-    taskDesc: "查看能力和问法",
-    guideGroup: "使用与数据",
-    guideExamples: ["小佛能做什么", "如何问得更准确"],
-    welcomeExample: "这个小程序怎么用？",
-    message: "这个小程序怎么用？",
+    taskGroup: "使用帮助",
+    taskLabel: "可以查询什么",
+    taskDesc: "查看范围和关键词",
+    guideGroup: "使用帮助",
+    guideExamples: ["可以查询什么", "如何问得更准确"],
+    welcomeExample: "如何使用校园查询",
+    message: "如何使用校园查询",
   },
   {
     id: "enableFloat",
     kind: CAPABILITY_KINDS.LOCAL_ACTION,
     iconPath: ICONS.app,
     label: "开启浮窗",
-    taskGroup: "使用与数据",
-    taskLabel: "开启小佛AI浮窗",
+    taskGroup: "使用帮助",
+    taskLabel: "开启小佛助手浮窗",
     taskDesc: "恢复右下角可拖拽小佛入口",
-    message: "开启小佛AI浮窗",
+    message: "开启小佛助手浮窗",
   },
   {
     id: "termSync",
     kind: CAPABILITY_KINDS.GENERATIVE_QA,
     iconPath: ICONS.term,
     label: "数据来源",
-    taskGroup: "使用与数据",
+    taskGroup: "使用帮助",
     taskLabel: "数据来源说明",
     taskDesc: "了解课表与知识来源",
-    guideGroup: "使用与数据",
+    guideGroup: "使用帮助",
     guideExamples: ["数据来源说明"],
     message: "数据来源说明",
   },
@@ -328,10 +328,10 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.GENERATIVE_QA,
     iconPath: ICONS.app,
     label: "教务入口",
-    taskGroup: "校园知识",
+    taskGroup: "校园服务",
     taskLabel: "教务系统入口",
     taskDesc: "查看教务相关入口",
-    guideGroup: "校园知识",
+    guideGroup: "校园服务",
     guideExamples: ["教务系统在哪里"],
     message: "教务系统在哪里进？",
   },
@@ -340,10 +340,10 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.GENERATIVE_QA,
     iconPath: ICONS.app,
     label: "校区与地图",
-    taskGroup: "校园知识",
+    taskGroup: "校园服务",
     taskLabel: "校区与地图",
     taskDesc: "了解校区和位置",
-    guideGroup: "校园知识",
+    guideGroup: "校园服务",
     guideExamples: ["佛大有哪些校区"],
     message: "佛大有哪些校区？",
   },
@@ -352,10 +352,10 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.GENERATIVE_QA,
     iconPath: ICONS.study,
     label: "学院部门",
-    taskGroup: "校园知识",
+    taskGroup: "校园服务",
     taskLabel: "学院与部门",
     taskDesc: "查看学院部门入口",
-    guideGroup: "校园知识",
+    guideGroup: "校园服务",
     guideExamples: ["佛大有哪些学院和部门"],
     message: "佛大有哪些学院和部门？",
   },
@@ -364,10 +364,10 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.GENERATIVE_QA,
     iconPath: ICONS.term,
     label: "图书馆服务",
-    taskGroup: "校园知识",
+    taskGroup: "校园服务",
     taskLabel: "图书馆服务",
     taskDesc: "查图书馆入口与服务边界",
-    guideGroup: "校园知识",
+    guideGroup: "校园服务",
     guideExamples: ["图书馆服务"],
     message: "图书馆服务",
   },
@@ -376,10 +376,10 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.GENERATIVE_QA,
     iconPath: ICONS.app,
     label: "常用系统",
-    taskGroup: "校园知识",
+    taskGroup: "校园服务",
     taskLabel: "常用系统入口",
     taskDesc: "查教务、门户等公开入口",
-    guideGroup: "校园知识",
+    guideGroup: "校园服务",
     guideExamples: ["常用系统入口"],
     message: "常用系统入口",
   },
@@ -395,10 +395,10 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.GENERATIVE_QA,
     iconPath: ICONS.study,
     label: "问法建议",
-    taskGroup: "使用与数据",
+    taskGroup: "使用帮助",
     taskLabel: "如何问得更准确",
     taskDesc: "获得更稳的回答",
-    guideGroup: "使用与数据",
+    guideGroup: "使用帮助",
     guideExamples: ["如何问得更准确"],
     message: "如何问得更准确？",
   },
@@ -437,7 +437,7 @@ const WELCOME_EXAMPLES = [
   "当前是第几教学周",
   "仙溪校区今天会下雨吗",
   "教务系统在哪里",
-  "小佛能做什么",
+  "可以查询什么",
 ];
 
 function buildTaskPanelGroups() {
@@ -451,16 +451,12 @@ function buildTaskPanelGroups() {
       abilityIds: ["today", "tomorrow", "weekSchedule", "personalSync", "dataStatus"],
     },
     {
-      title: "实时信息",
-      abilityIds: ["campusWeather", "umbrellaAdvice"],
+      title: "校园服务",
+      abilityIds: ["campusWeather", "umbrellaAdvice", "jwcEntry", "campusLocations", "libraryService", "commonSystems"],
     },
     {
-      title: "校园知识",
-      abilityIds: ["jwcEntry", "campusLocations", "collegeDepartments", "libraryService", "commonSystems"],
-    },
-    {
-      title: "使用与数据",
-      abilityIds: ["appHelp", "personalSync", "enableFloat", "askBetter", "termSync"],
+      title: "使用帮助",
+      abilityIds: ["appHelp", "askBetter", "termSync", "enableFloat"],
     },
   ].map((group) => ({
     title: group.title,
@@ -489,9 +485,8 @@ function buildCapabilityGuideGroups() {
   return [
     "课表查询",
     "个人课表",
-    "实时信息",
-    "校园知识",
-    "使用与数据",
+    "校园服务",
+    "使用帮助",
   ].map((title) => ({
     title,
     items: AI_CAPABILITY_REGISTRY
@@ -517,7 +512,7 @@ const PROVIDER_LABELS = {
   mock: "已使用本地规则",
   deepseek: "已核验课表数据",
   coze: "已核验课表数据",
-  unknown: "正在整理结果",
+  unknown: "正在整理查询结果",
 };
 
 const SAFETY_MODE_LABELS = {
@@ -536,7 +531,7 @@ const TOOL_LABELS = {
   get_classroom_location: "校园地图",
   search_school_index: "全校索引",
   search_school_schedule_local: "全校课表",
-  fosu_rag_retrieve: "校园知识库",
+  fosu_rag_retrieve: "校园信息",
   get_schedule_detail: "课表详情",
   diagnose_data_status: "数据状态",
   explain_personal_import: "导入指引",
@@ -553,15 +548,15 @@ const CARD_TYPE_LABELS = {
   clarification: "追问",
   schedule_candidate: "候选",
   personal_schedule: "个人课表",
-  school_knowledge: "校园知识",
-  navigation: "入口",
-  help: "帮助",
+  school_knowledge: "校园信息",
+  navigation: "常用入口",
+  help: "使用说明",
   import_guide: "导入指引",
-  not_found: "未找到",
+  not_found: "暂未匹配",
   teacher: "教师",
   course: "课程",
-  weather: "天气",
-  weather_card: "天气",
+  weather: "校区天气",
+  weather_card: "校区天气",
   diagnosis: "数据状态",
   guide: "指引",
   reminder: "提醒",
@@ -576,11 +571,11 @@ const CARD_TITLE_FALLBACKS = {
   clarification: "需要补充信息",
   schedule_candidate: "请选择对象",
   personal_schedule: "个人课表",
-  school_knowledge: "校园知识",
-  navigation: "校园入口",
+  school_knowledge: "校园信息",
+  navigation: "常用入口",
   help: "使用帮助",
   import_guide: "导入个人课表",
-  not_found: "未找到结果",
+  not_found: "暂未匹配结果",
   teacher: "教师查询",
   course: "课程查询",
   weather: "校区天气",
@@ -681,7 +676,7 @@ function actionFromAbility(ability, fallbackText) {
     message: source.message || source.fallbackMessage || fallbackText || source.label,
     draft: source.draft || fallbackText || source.message || source.label,
     url: source.url || "",
-    missingText: source.missingText || "请补充必要信息后发送",
+    missingText: source.missingText || "请补充必要信息后查询",
   };
 }
 
@@ -806,7 +801,7 @@ function mapProviderLabel(provider) {
   const normalized = String(provider || "unknown").toLowerCase();
   if (normalized.indexOf("mock") >= 0 || normalized.indexOf("local") >= 0) return "已使用本地规则";
   if (normalized && normalized !== "unknown") return "已核验课表数据";
-  return "正在整理结果";
+  return "正在整理查询结果";
 }
 
 function mapSafetyModeLabel(mode) {
@@ -840,7 +835,7 @@ function inferEvidenceLabel(source = {}) {
   if (/weather|天气/.test(text)) return "已获取天气数据";
   if (/campus|map|route|location|地图|地点|位置/.test(text)) return "已查询校园地图";
   if (/empty|空教室/.test(text)) return "已核验教室占用";
-  if (/fosu_rag_retrieve|school_knowledge|知识/.test(text)) return "校园知识";
+  if (/fosu_rag_retrieve|school_knowledge|知识/.test(text)) return "校园信息";
   if (/guide|import|help|说明|帮助|指引/.test(text)) return "使用说明";
   if (/school|schedule|today|tomorrow|week|term|teacher|course|classroom|detail|课表|课程|教师|教室|教学周|校历|查询全校/.test(text)) {
     return "已核验课表数据";
@@ -885,7 +880,7 @@ function normalizeSafety(safety) {
   if (fallbackReason) {
     text = "已使用本地规则";
   } else if (externalUsed) {
-    text = "正在整理结果";
+    text = "正在整理查询结果";
   }
   return {
     provider,
@@ -1246,7 +1241,7 @@ function normalizeCard(card, messageId, index, expandedCards, message) {
     ? "信息以知识库来源和学校官方页面为准"
     : (type === "schedule_status" ? "数据状态来自本机缓存和发布包元信息"
       : (type === "help" || type === "clarification" || type === "personal_schedule"
-        ? "回答会保留在当前对话中"
+        ? "结果会保留在当前查询中"
         : "课表以学校教务系统为准"));
   const primaryActions = actions.slice(0, 1);
   const secondaryActions = actions.slice(1, 4);
@@ -1369,9 +1364,9 @@ function buildConversationDisplayList(activeConversationId) {
 
 function isNewConversationCommand(text) {
   const value = String(text || "").replace(/\s+/g, "");
-  return /^(新建|创建|新开|开启|开一个)(一个)?(新)?对话$/.test(value) ||
-    value === "新建一个对话" ||
-    value === "创建新对话";
+  return /^(新建|创建|新开|开启|开一个)(一个)?(新)?查询$/.test(value) ||
+    value === "新建一个查询" ||
+    value === "创建新查询";
 }
 
 function parseActionUrl(url) {
@@ -1396,10 +1391,10 @@ function buildPrivacyState(allowed, expanded, firstTipVisible) {
   const enabled = allowed === true;
   return {
     allowPersonalContext: enabled,
-    privacyStatusText: enabled ? "仅发送脱敏课表摘要" : "默认不发送课表摘要",
+    privacyStatusText: enabled ? "仅使用脱敏课表摘要" : "默认不使用课表摘要",
     privacyCompactClass: enabled ? "enabled" : "disabled",
     privacyActionText: enabled ? "已允许" : "已关闭",
-    composerNote: enabled ? "摘要开启：仅发送脱敏课表摘要" : "摘要关闭：默认不发送个人课表摘要",
+    composerNote: enabled ? "摘要开启：仅使用脱敏课表摘要" : "摘要关闭：默认不使用个人课表摘要",
     privacyActionLabel: firstTipVisible ? "知道了" : (expanded ? "收起" : "说明"),
   };
 }
@@ -1434,12 +1429,12 @@ function buildHeaderSubtitle(state) {
     return "本地规则可用";
   }
   if (source.lastExternalProviderUsed) {
-    return "正在整理结果";
+    return "正在整理查询结果";
   }
   if (source.allowPersonalContext === true) {
-    return "校园知识 · 全校课表 · 摘要已开";
+    return "校园事项 · 全校课表 · 摘要已开";
   }
-  return "校园知识 · 全校课表 · 数据状态";
+  return "校园事项 · 全校课表 · 常用入口";
 }
 
 function bottomScrollPatch(animated) {
@@ -1454,7 +1449,7 @@ function buildXiaofuFloatState() {
   const enabled = xiaofuFloatService.isEnabled();
   return {
     xiaofuFloatEnabled: enabled,
-    xiaofuFloatToggleText: enabled ? "关闭小佛AI浮窗" : "开启小佛AI浮窗",
+    xiaofuFloatToggleText: enabled ? "关闭小佛助手浮窗" : "开启小佛助手浮窗",
     xiaofuFloatToggleDesc: enabled ? "关闭后不再显示，可在这里或设置页重新开启" : "恢复右下角可拖拽入口",
   };
 }
@@ -1470,13 +1465,13 @@ Page({
     messages: [],
     conversations: [],
     activeConversationId: "",
-    activeConversationTitle: "新对话",
+    activeConversationTitle: "新查询",
     activeConversationContext: contextManager.createEmptyContextSlots(),
     expandedCards: {},
     inputValue: "",
     inputFocus: false,
     sending: false,
-    sendingStatusText: "正在整理结果…",
+    sendingStatusText: "正在整理查询结果…",
     showTaskPanel: false,
     showConversationSheet: false,
     showCapabilityGuide: false,
@@ -1491,22 +1486,22 @@ Page({
     privacyActionText: "摘要关闭",
     privacyActionLabel: "说明",
     allowPersonalContext: false,
-    providerLabel: "AI",
+    providerLabel: "本地规则",
     providerModeLabel: "已核验",
     lastExternalProviderUsed: false,
     lastFallbackReason: "",
     lastProvider: "unknown",
-    headerSubtitle: "已核验课表数据",
+    headerSubtitle: "校园事项 · 全校课表 · 常用入口",
     historyTrimNotice: false,
     hasHeroLogo: true,
     xiaofuFloatEnabled: true,
-    xiaofuFloatToggleText: "开启小佛AI浮窗",
+    xiaofuFloatToggleText: "开启小佛助手浮窗",
     xiaofuFloatToggleDesc: "恢复右下角可拖拽入口",
     demoMode: "",
     scrollTop: 0,
     scrollIntoView: "",
     scrollWithAnimation: true,
-    composerNote: "默认不发送个人课表摘要",
+    composerNote: "摘要关闭：默认不使用个人课表摘要",
     voiceInputVisible: false,
     voiceRecording: false,
     voiceRecognizing: false,
@@ -1624,7 +1619,7 @@ Page({
       scrollWithAnimation: false,
     });
     if (!options || options.toast !== false) {
-      wx.showToast({ title: "已新建对话", icon: "none" });
+      wx.showToast({ title: "已新建查询", icon: "none" });
     }
     return conversation;
   },
@@ -1666,9 +1661,9 @@ Page({
     const conversation = (conversationStore.getStore().conversations || []).find((item) => item.conversationId === conversationId);
     if (!conversation) return;
     wx.showModal({
-      title: "重命名对话",
+      title: "重命名查询",
       editable: true,
-      placeholderText: "输入对话标题",
+      placeholderText: "输入查询标题",
       content: conversation.title || "",
       success: (res) => {
         if (!res.confirm) return;
@@ -1684,8 +1679,8 @@ Page({
   clearConversation(event) {
     const conversationId = event && event.currentTarget && event.currentTarget.dataset.conversationId || this.data.activeConversationId;
     wx.showModal({
-      title: "清空当前对话",
-      content: "只清空这个对话的消息和上下文，不影响其他对话和课表数据。",
+      title: "清空当前查询",
+      content: "只清空这条查询记录的内容和结果，不影响其他记录和课表数据。",
       confirmText: "清空",
       success: (res) => {
         if (!res.confirm) return;
@@ -1706,7 +1701,7 @@ Page({
     const conversationId = event.currentTarget.dataset.conversationId;
     if (!conversationId) return;
     wx.showModal({
-      title: "删除对话",
+      title: "删除查询",
       content: "删除后无法恢复，但不会影响课表数据。",
       confirmText: "删除",
       confirmColor: "#c62828",
@@ -1921,7 +1916,7 @@ Page({
         inputFocus: true,
         ...closePatch,
       });
-      wx.showToast({ title: action.missingText || "请补充必要信息后发送", icon: "none" });
+      wx.showToast({ title: action.missingText || "请补充必要信息后查询", icon: "none" });
       return;
     }
 
@@ -2063,13 +2058,13 @@ Page({
       inputFocus: false,
       sending: true,
       slowRequest: false,
-      sendingStatusText: "正在理解问题",
+      sendingStatusText: "正在匹配查询内容",
     }, { save: !this.data.demoMode });
 
     if (this.data.demoMode) {
       setTimeout(() => {
         const response = demoData.getDemoResponse(this.data.demoMode, message);
-        const assistantMessage = makeMessage("assistant", response.answer || "我已经整理好演示结果。", {
+        const assistantMessage = makeMessage("assistant", response.answer || "已整理演示结果。", {
           cards: Array.isArray(response.cards) ? response.cards : [],
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
           toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
@@ -2169,7 +2164,7 @@ Page({
         } else if (safety.clearPendingClarification || response && response.metrics && response.metrics.intentName !== "clarify_missing_slot") {
           aiAssistantService.clearPendingClarification();
         }
-        const assistantMessage = makeMessage("assistant", response.answer || "我已经整理好结果。", {
+        const assistantMessage = makeMessage("assistant", response.answer || "已为你整理以下查询结果。", {
           cards: Array.isArray(response.cards) ? response.cards : [],
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
           toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
@@ -2194,7 +2189,7 @@ Page({
           activeConversationContext: nextContext,
           sending: false,
           slowRequest: false,
-          sendingStatusText: "正在整理结果…",
+          sendingStatusText: "正在整理查询结果…",
         }, { save: true });
       })
       .catch((error) => {
@@ -2231,7 +2226,7 @@ Page({
         this.setMessages(finalMessages, {
           sending: false,
           slowRequest: false,
-          sendingStatusText: "正在整理结果…",
+          sendingStatusText: "正在整理查询结果…",
         }, { save: true });
       })
       .finally(() => {
@@ -2365,7 +2360,7 @@ Page({
       showTaskPanel: false,
       showCapabilityGuide: false,
     }, buildXiaofuFloatState()));
-    wx.showToast({ title: "已开启小佛AI浮窗", icon: "none" });
+    wx.showToast({ title: "已开启小佛助手浮窗", icon: "none" });
   },
 
   toggleXiaofuFloat() {
@@ -2380,7 +2375,7 @@ Page({
       showTaskPanel: false,
       showCapabilityGuide: false,
     }, buildXiaofuFloatState()));
-    wx.showToast({ title: nextEnabled ? "已开启小佛AI浮窗" : "已关闭小佛AI浮窗", icon: "none" });
+    wx.showToast({ title: nextEnabled ? "已开启小佛助手浮窗" : "已关闭小佛助手浮窗", icon: "none" });
   },
 
   onCapabilityExampleTap(event) {
@@ -2443,8 +2438,8 @@ Page({
   clearHistory() {
     this.setData({ showHeaderMenu: false });
     wx.showModal({
-      title: "清空当前对话",
-      content: "仅清空当前对话的消息和上下文，不影响其他对话和课表数据。",
+      title: "清空当前查询",
+      content: "仅清空当前查询记录的内容和结果，不影响其他记录和课表数据。",
       confirmText: "清空",
       success: (res) => {
         if (!res.confirm) return;
@@ -2588,7 +2583,7 @@ Page({
       xiaofuFloatService.setEnabled(false);
     }
     this.setData(Object.assign({}, buildXiaofuFloatState()));
-    wx.showToast({ title: nextEnabled ? "已开启小佛AI浮窗" : "已关闭小佛AI浮窗", icon: "none" });
+    wx.showToast({ title: nextEnabled ? "已开启小佛助手浮窗" : "已关闭小佛助手浮窗", icon: "none" });
   },
 
   findLastUserMessage() {

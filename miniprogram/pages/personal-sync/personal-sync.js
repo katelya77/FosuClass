@@ -25,7 +25,7 @@ const STUDENT_IMPORT_STEPS = [
   "验证账号",
   "读取课程",
   "整理课表",
-  "生成预览",
+  "整理预览",
 ];
 
 const STUDENT_PREVIEW_WEEK_MIN = 1;
@@ -1951,7 +1951,7 @@ Page({
         this.setData({ loadingXls: false });
         wx.showModal({
           title: "文件读取失败",
-          content: "无法读取微信文件，请重新从聊天记录选择课表文件。",
+          content: "无法读取微信文件，请重新从微信文件列表选择课表文件。",
           showCancel: false,
         });
       },

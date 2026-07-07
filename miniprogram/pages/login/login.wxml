@@ -5,7 +5,7 @@
       为了保障账号与密码安全，当前版本不再提供手动输入学号密码的同步入口。个人课表请使用 XLS/XLSX 文件导入。
     </view>
     <view class="security-text" style="font-size: 24rpx; color: #778297; line-height: 1.6; text-align: left; background: #f8fafc; padding: 24rpx; border-radius: 12rpx; border: 1rpx solid #edf0f5; margin-bottom: 40rpx;">
-      XLS 导入只解析课程名、教师、教室、星期、节次和教学周；原始文件内容不会发送给 AI Provider。
+      XLS 导入只解析课程名、教师、教室、星期、节次和教学周；原始文件内容不会用于其他服务。
     </view>
     
     <button class="primary-button" style="width: 100%; border-radius: 999rpx; background: #c62828; color: #ffffff;" bindtap="goImportXls">打开 XLS 导入</button>

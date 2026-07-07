@@ -220,7 +220,7 @@
     <view class="group-title">工具与帮助</view>
     <view class="setting-row">
       <view>
-        <view class="row-title">小佛AI浮窗</view>
+        <view class="row-title">小佛助手浮窗</view>
         <view class="row-desc">{{xiaofuFloatEnabledText}}</view>
       </view>
       <switch

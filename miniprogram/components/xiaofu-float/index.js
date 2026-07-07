@@ -266,7 +266,7 @@ Component({
     onLongPress() {
       this._longPressed = true;
       wx.showActionSheet({
-        itemList: ["打开小佛AI", "隐藏本页", "关闭浮窗"],
+        itemList: ["打开小佛校园助手", "隐藏本页", "关闭浮窗"],
         success: (res) => {
           if (res.tapIndex === 0) {
             this.openAssistant();
@@ -277,7 +277,7 @@ Component({
           } else if (res.tapIndex === 2) {
             floatService.setEnabled(false);
             this.setData({ visible: false });
-            wx.showToast({ title: "可在设置或小佛页重新开启", icon: "none" });
+            wx.showToast({ title: "可在设置或小佛页面重新开启", icon: "none" });
           }
         },
         complete: () => {
@@ -296,7 +296,7 @@ Component({
         fail: () => {
           wx.redirectTo({
             url: "/pages/ai-assistant/ai-assistant?from=float",
-            fail: () => wx.showToast({ title: "暂时无法打开小佛AI", icon: "none" }),
+            fail: () => wx.showToast({ title: "暂时无法打开小佛校园助手", icon: "none" }),
           });
         },
       });
