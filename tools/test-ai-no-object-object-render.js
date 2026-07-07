@@ -47,7 +47,8 @@ function run() {
         items: [{ title: { text: "候选" }, subtitle: { foo: "bad" }, value: ["bad"] }],
         actions: [
           { label: { foo: "bad" }, type: "navigate", url: "/pages/empty-room/empty-room" },
-          { label: { text: "复制结果" }, type: "copy", payload: { text: "ok" } },
+          { label: { text: "继续追问" }, type: "ask", payload: { message: "继续查空教室" } },
+          { label: { text: "旧快捷动作" }, type: "copy", payload: { text: "ok" } },
         ],
       },
       {},
@@ -61,7 +62,8 @@ function run() {
   assert.strictEqual(card.title, "时间推荐");
   assert.strictEqual(card.subtitle, "对象副标题");
   assert.strictEqual(card.primaryActions[0].label, "查看详情");
-  assert.strictEqual(card.secondaryActions[0].label, "复制结果");
+  assert.strictEqual(card.secondaryActions[0].label, "继续追问");
+  assert(!card.actions.some((action) => action.type === "copy"), "copy actions should be filtered");
   assert.deepStrictEqual(messages[0].suggestions, ["对象建议"]);
   assertNoBadText(messages);
 

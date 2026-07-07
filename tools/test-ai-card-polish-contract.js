@@ -65,7 +65,9 @@ function run() {
   assert(wxml.includes("card-disclaimer"), "result cards should render the disclaimer");
   assert(wxml.includes("card-action-primary"), "primary card action class should be explicit");
   assert(wxml.includes("card-action-secondary"), "secondary card action class should be explicit");
-  assert(wxml.includes("onCopyMessage"), "assistant text replies should expose copy answer");
+  assert(!wxml.includes("onCopyMessage"), "assistant text replies should not expose copy answer");
+  assert(!wxml.includes("复制回答"), "assistant copy answer button should be removed");
+  assert(!js.includes("copyToClipboard"), "AI page should not use clipboard helper");
   assert(!wxml.includes("{{card.weather.temperatureC}}<text>℃</text>"), "weather card should not hard-code °C for missing temperature");
   assert(!wxml.includes("{{card.weather.humidity}}%"), "weather card should not hard-code % for missing humidity");
 
@@ -74,12 +76,11 @@ function run() {
       messages: [
         {
           role: "assistant",
-          content: "可复制回答",
+          content: "可选择回答",
           displayCards: [
             {
               actions: [
-                { label: "复制入口", type: "copy", payload: { text: "https://www.fosu.edu.cn/" }, originalIndex: 0 },
-                { label: "继续追问", type: "ask", payload: { message: "佛大有哪些校区" }, originalIndex: 1 },
+                { label: "继续追问", type: "ask", payload: { message: "佛大有哪些校区" }, originalIndex: 0 },
               ],
             },
           ],
@@ -93,15 +94,8 @@ function run() {
   page.onCardAction({
     currentTarget: { dataset: { messageIndex: 0, cardIndex: 0, actionIndex: 0 } },
   });
-  assert.strictEqual(global.__CLIPBOARD_TEXT__, "https://www.fosu.edu.cn/", "copy card action should use wx.setClipboardData");
-  page.onCardAction({
-    currentTarget: { dataset: { messageIndex: 0, cardIndex: 0, actionIndex: 1 } },
-  });
   assert.deepStrictEqual(page.queued, ["佛大有哪些校区"], "ask card action should continue in the chat flow");
-  page.onCopyMessage({
-    currentTarget: { dataset: { messageIndex: 0 } },
-  });
-  assert.strictEqual(global.__CLIPBOARD_TEXT__, "可复制回答", "copy answer should copy assistant text");
+  assert.strictEqual(global.__CLIPBOARD_TEXT__ || "", "", "AI card actions should not use wx.setClipboardData");
 
   console.log("test-ai-card-polish-contract passed");
 }

@@ -1,35 +1,23 @@
 const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
 
-const clipboard = require("../miniprogram/utils/clipboard");
-
-let clipboardText = "";
-let toastText = "";
+const storage = {};
 let setClipboardCalls = 0;
-let shouldFail = false;
-let failTimesRemaining = 0;
-let warnCount = 0;
+let lastToast = "";
 
 global.wx = {
-  getStorageSync() { return ""; },
-  setStorageSync() {},
-  removeStorageSync() {},
-  setClipboardData(options) {
-    setClipboardCalls += 1;
-    if (shouldFail || failTimesRemaining > 0) {
-      if (failTimesRemaining > 0) failTimesRemaining -= 1;
-      if (options && typeof options.fail === "function") options.fail({ errMsg: "mock fail" });
-      if (options && typeof options.complete === "function") options.complete({ errMsg: "mock complete" });
-      return;
-    }
-    clipboardText = options && options.data || "";
-    if (options && typeof options.success === "function") options.success({ errMsg: "ok" });
-    if (options && typeof options.complete === "function") options.complete({ errMsg: "complete" });
+  getStorageSync(key) { return Object.prototype.hasOwnProperty.call(storage, key) ? storage[key] : ""; },
+  setStorageSync(key, value) { storage[key] = value; },
+  removeStorageSync(key) { delete storage[key]; },
+  setClipboardData() { setClipboardCalls += 1; },
+  showToast(options) { lastToast = options && options.title || ""; },
+  navigateTo(options) {
+    if (options && typeof options.success === "function") options.success();
   },
-  showToast(options) {
-    toastText = options && options.title || "";
+  switchTab(options) {
+    if (options && typeof options.success === "function") options.success();
   },
-  navigateTo() {},
-  switchTab() {},
 };
 global.getCurrentPages = () => [];
 global.getApp = () => ({ globalData: {} });
@@ -37,109 +25,92 @@ global.Page = (config) => {
   global.__AI_ASSISTANT_PAGE__ = config;
 };
 
-const originalWarn = console.warn;
-console.warn = function warnProxy() {
-  warnCount += 1;
-};
-
+const ROOT = path.resolve(__dirname, "..");
 const aiPage = require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+const conversationStore = require("../miniprogram/services/conversationStore");
 
-function makePage(messages) {
-  const config = global.__AI_ASSISTANT_PAGE__;
-  return Object.assign({}, config, {
-    data: { messages: messages || [] },
-    setData(patch) {
-      this.data = Object.assign({}, this.data, patch || {});
-    },
-  });
+function read(file) {
+  return fs.readFileSync(path.join(ROOT, file), "utf8");
 }
 
-async function run() {
-  assert.strictEqual(clipboard.normalizeCopyText(undefined), "", "undefined should not become copy text");
-  assert.strictEqual(clipboard.normalizeCopyText({ text: "对象" }), "", "objects should not be stringified");
-  assert.strictEqual(clipboard.normalizeCopyText(" [object Object] "), "", "invalid object token should not be copied");
+function actionLabels(card) {
+  return (card && card.actions || []).map((action) => action.label);
+}
 
-  const page = makePage([
-    { role: "assistant", content: "这是一段回答", displayCards: [] },
-  ]);
-  page.onCopyMessage({ currentTarget: { dataset: { messageIndex: 0 } } });
-  assert.strictEqual(clipboardText, "这是一段回答", "copy answer should copy assistant text");
-  assert.strictEqual(toastText, "已复制", "copy answer should use unified success toast");
+function actionTypes(card) {
+  return (card && card.actions || []).map((action) => action.type);
+}
 
-  page.data.messages = [{
+function firstCard(rawCard, content) {
+  const messages = aiPage.normalizeMessagesForDisplay([{
+    id: "m-no-copy-actions",
     role: "assistant",
-    content: "",
-    displayCards: [{
+    content: content || "这是一段可选择的助手回答",
+    cards: [rawCard],
+  }], {});
+  return messages[0].displayCards[0];
+}
+
+function run() {
+  const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
+  const js = read("miniprogram/pages/ai-assistant/ai-assistant.js");
+
+  assert(!wxml.includes("onCopyMessage"), "assistant message copy handler should not be rendered");
+  assert(!wxml.includes("复制回答"), "assistant message copy button should not be visible");
+  assert(!js.includes("copyToClipboard"), "AI page should not call the clipboard helper");
+  assert(!js.includes("setClipboardData"), "AI page should not call wx.setClipboardData");
+
+  const legacyCard = firstCard({
+    type: "navigation",
+    title: "旧入口卡",
+    actions: [
+      { label: "复制入口", type: "copy", payload: { text: "https://www.fosu.edu.cn/" } },
+      { label: "打开入口", type: "navigate", url: "https://www.fosu.edu.cn/" },
+      { label: "继续追问", type: "ask", payload: { message: "教务系统在哪里" } },
+    ],
+  });
+  assert(!actionLabels(legacyCard).includes("复制入口"), "legacy copy action should be filtered");
+  assert(!actionTypes(legacyCard).includes("copy"), "card actions should not expose type=copy");
+  assert(actionLabels(legacyCard).includes("打开入口"), "navigation should keep the open entry action");
+  assert(actionLabels(legacyCard).includes("继续追问"), "navigation should keep follow-up action");
+
+  const page = Object.assign({}, global.__AI_ASSISTANT_PAGE__, {
+    data: {
+      messages: [{
+        role: "assistant",
+        content: "官网入口见正文",
+        displayCards: [legacyCard],
+      }],
+    },
+    setData(patch) { this.data = Object.assign({}, this.data, patch || {}); },
+  });
+  page.onCardAction({
+    currentTarget: { dataset: { messageIndex: 0, cardIndex: 0, actionIndex: 0 } },
+  });
+  assert.strictEqual(setClipboardCalls, 0, "external entry action should not use wx.setClipboardData");
+  assert.strictEqual(lastToast, "请前往对应官网查看", "external entry should ask the user to view the official site");
+
+  const conversation = conversationStore.createConversation({ conversationId: "no-copy-test" });
+  conversationStore.saveConversationMessages(conversation.conversationId, [{
+    id: "m1",
+    role: "assistant",
+    content: "回答正文",
+    cards: [{
+      type: "navigation",
+      title: "历史入口",
       actions: [
-        { label: "复制来源", type: "copy", payload: { text: "https://www.fosu.edu.cn/jwc/" }, originalIndex: 0 },
+        { label: "复制来源", type: "copy", payload: { text: "https://www.fosu.edu.cn/" } },
+        { label: "打开入口", type: "navigate", url: "/pages/school/school" },
       ],
     }],
-  }];
-  page.onCardAction({ currentTarget: { dataset: { messageIndex: 0, cardIndex: 0, actionIndex: 0 } } });
-  assert.strictEqual(clipboardText, "https://www.fosu.edu.cn/jwc/", "copy source should copy payload.text");
+  }]);
+  const active = conversationStore.getActiveConversation();
+  const storedActions = active.messages[0].cards[0].actions || [];
+  assert.strictEqual(storedActions.length, 1, "conversation storage should drop copy actions");
+  assert.strictEqual(storedActions[0].label, "打开入口");
+  assert.strictEqual(storedActions[0].type, "navigate");
 
-  page.data.messages = [{
-    role: "assistant",
-    content: "",
-    displayCards: [{
-      actions: [
-        { label: "复制入口", type: "copy", url: "https://www.fosu.edu.cn/library/", payload: {}, originalIndex: 0 },
-      ],
-    }],
-  }];
-  page.onCardAction({ currentTarget: { dataset: { messageIndex: 0, cardIndex: 0, actionIndex: 0 } } });
-  assert.strictEqual(clipboardText, "https://www.fosu.edu.cn/library/", "copy entry should fall back to action.url");
-
-  const callsBeforeEmpty = setClipboardCalls;
-  page.data.messages = [{
-    role: "assistant",
-    content: "",
-    displayCards: [{
-      actions: [
-        { label: "复制空内容", type: "copy", payload: {}, originalIndex: 0 },
-      ],
-    }],
-  }];
-  page.onCardAction({ currentTarget: { dataset: { messageIndex: 0, cardIndex: 0, actionIndex: 0 } } });
-  assert.strictEqual(setClipboardCalls, callsBeforeEmpty, "empty copy payload should not call wx.setClipboardData");
-  assert.strictEqual(toastText, "暂无可复制内容", "empty copy payload should show empty toast");
-
-  page.data.messages = [{
-    role: "assistant",
-    content: "",
-    displayCards: [{
-      copyText: "卡片兜底内容",
-      actions: [
-        { label: "复制对象", type: "copy", payload: { text: { bad: true } }, originalIndex: 0 },
-      ],
-    }],
-  }];
-  page.onCardAction({ currentTarget: { dataset: { messageIndex: 0, cardIndex: 0, actionIndex: 0 } } });
-  assert.strictEqual(clipboardText, "卡片兜底内容", "object payload should use safe card fallback");
-  assert.notStrictEqual(clipboardText, "[object Object]", "object payload must not be copied as [object Object]");
-
-  const callsBeforeRetry = setClipboardCalls;
-  failTimesRemaining = 1;
-  const retryResult = await page.copyToClipboard("二次复制成功");
-  assert.strictEqual(retryResult.ok, true, "transient copy failure should retry once and succeed");
-  assert.strictEqual(setClipboardCalls - callsBeforeRetry, 2, "transient copy should call wx.setClipboardData twice");
-  assert.strictEqual(clipboardText, "二次复制成功", "retry should keep the original copy text");
-  assert.strictEqual(toastText, "已复制", "retry success should show success toast");
-
-  shouldFail = true;
-  const callsBeforeFailure = setClipboardCalls;
-  const failResult = await page.copyToClipboard("失败兜底");
-  assert.strictEqual(failResult.ok, false, "copy failure should resolve as failed");
-  assert.strictEqual(setClipboardCalls - callsBeforeFailure, 2, "final failure should retry before falling back");
-  assert.strictEqual(toastText, "复制失败，可长按文本手动复制", "copy failure should show manual-copy fallback");
-  assert(warnCount >= 1, "copy failure should keep console.warn diagnostics");
-
-  console.warn = originalWarn;
   console.log("test-ai-clipboard-actions passed");
 }
 
-run().catch((error) => {
-  console.warn = originalWarn;
-  console.error(error);
-  process.exit(1);
-});
+run();

@@ -55,8 +55,9 @@ function run() {
   assert.deepStrictEqual(payload.suggestions, ["对象建议"]);
   assertNoBadText(payload);
 
-  const emptyLabel = contract.stableAction({ type: "copy", label: Symbol("bad") });
-  assert.strictEqual(emptyLabel.label, "复制");
+  const removedCopy = contract.stableAction({ type: "copy", label: Symbol("bad") });
+  assert.strictEqual(removedCopy.type, "noop");
+  assert.strictEqual(removedCopy.label, "查看");
 
   console.log("test-ai-generated-payload-contract passed");
 }
