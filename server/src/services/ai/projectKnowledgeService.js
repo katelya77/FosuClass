@@ -72,7 +72,7 @@ function generateFallbackResponse(intentName) {
     suggestions: [
       "今天还有课吗？",
       "现在有空教室吗？",
-      "这个小程序怎么用？",
+      "如何使用校园查询？",
       "怎么导入个人课表？",
     ],
   };

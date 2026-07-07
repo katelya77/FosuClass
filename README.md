@@ -9,25 +9,25 @@
 - CLI 分片上传的 `/api/admin/staging/upload/finalize` 只返回 `202 Accepted` 和后台 job，JSON parse、canonical hash、深度安全检查全部在 Release Worker 中执行。
 - 全校页搜索结果采用 cache-first、同 `releaseVersion` 快速路径与分页渲染；命中同版本索引缓存后不再立即重复请求 API，触底或点击“加载更多”再追加，避免教师、课程、教室索引命中较多时卡住小程序视图层。
 - 个人 XLS 课表绑定后会写入 `FOSU_PERSONAL_SCHEDULE_CACHE`，页面内优先走内存快速路径，减少大课表对象反复从小程序 storage 反序列化。
-- AI 校园管家的常用任务图标使用小程序本地 SVG 静态资源，更多任务分组打开时按需渲染，并写入 runtime 缓存，降低首屏节点数和连续点击瞬时请求。
+- 校园服务管家的常用任务图标使用小程序本地 SVG 静态资源，更多任务分组打开时按需渲染，并写入 runtime 缓存，降低首屏节点数和连续点击瞬时请求。
 - staging 发布保留 active/staging/legacy 安全边界，教师目录缺失时显式标记 `not-counted`，不会把教师课表数量冒充教师目录数量。
 
-## 2026 智能体应用创新大赛版本
+## 2026 校园服务管家版本
 
-本仓库已新增“AI校园管家”能力，作品定位为《佛课小表·AI校园管家：面向佛山大学的课程与空间服务智能体》，参赛赛道为“2-E 数智生活—综合服务智能体开发 / 校园服务”。
+本仓库已新增“校园服务管家”能力，定位为《佛课小表·校园服务管家：面向佛山大学的课程与空间服务工具》，用于整合课表、空教室、个人课表、校园信息和常用入口查询。
 
-### AI 校园管家功能
+### 校园服务管家功能
 
-- 小程序新增 `pages/ai-assistant/ai-assistant` 页面，支持快捷问题、聊天输入、结构化结果卡片和一键跳转操作。
+- 小程序新增 `pages/ai-assistant/ai-assistant` 页面，支持快捷查询、查询输入、结构化结果卡片和一键跳转操作。
 - 后端新增 `POST /api/ai/agent/chat`，响应稳定包含 `answer`、`cards`、`toolCalls`、`suggestions`、`safety` 和 `serverTime`。
-- 智能体采用“工具优先”架构：先识别意图和槽位，再调用 Release Pack、全校索引、空教室、今日课表摘要、数据诊断等确定性工具，最后生成中文卡片。
+- 校园服务管家采用“工具优先”架构：先识别意图和槽位，再调用 Release Pack、全校索引、空教室、今日课表摘要、数据诊断等确定性工具，最后整理中文卡片。
 - 课程类卡片会优先展示具体上课时间段，例如 `08:00-09:25`，节次信息保留在副标题中，避免只显示“第几节”。
-- 默认 `mockProvider` 可在无模型 key 的情况下演示“现在有空教室吗”“今天还有课吗”“查老师课表”“怎么导入个人课表”“为什么数据加载失败”等核心场景；配置 DeepSeek/Coze 后，项目知识问答、自然聊天和复杂解释会调用外部 Provider，课程事实仍只来自工具结果。
+- 默认 `mockProvider` 可在无外部 Provider 凭证的情况下演示“现在有空教室吗”“今天还有课吗”“查老师课表”“怎么导入个人课表”“为什么数据加载失败”等核心场景；配置 DeepSeek/Coze 后，项目知识说明和复杂解释会调用外部 Provider，课程事实仍只来自工具结果。
 
 ### 架构图文字版
 
 ```
-微信小程序 AI 助手页
+微信小程序校园服务管家页
   -> /api/ai/agent/chat
   -> safetyGuard 脱敏与上下文白名单
   -> 意图识别与槽位抽取
@@ -37,19 +37,19 @@
   -> 结构化卡片 + 后续操作
 ```
 
-### 参赛演示版本合规说明
+### 参赛演示版本说明
 
-AI 校园管家支持三种运行模式：
+校园服务管家支持三种运行模式：
 
-- 本地/评审机 mock 演示模式：`AI_AGENT_ENABLED=false` 或 `AI_PROVIDER=mock`，不调用外部模型，适合断网、无 key 或安全演示。
-- 国产模型脱敏调用模式：`AI_PROVIDER=deepseek` 或 `AI_PROVIDER=coze`，只发送脱敏后的消息、工具结果和最小上下文；DeepSeek 默认使用 `deepseek-v4-flash`，复杂说明书或离线分析可切换 `deepseek-v4-pro`。
-- 境内部署生产模式：未来迁移到境内云、校内服务器或微信云托管并完成备案；是否满足“数据不出境”以服务器 region、模型服务 region 和实际数据链路为准。
+- 本地/评审机 mock 演示模式：`AI_AGENT_ENABLED=false` 或 `AI_PROVIDER=mock`，不调用外部 Provider，适合断网、无 key 或安全演示。
+- 国产 Provider 脱敏调用模式：`AI_PROVIDER=deepseek` 或 `AI_PROVIDER=coze`，只使用脱敏后的消息、工具结果和最小上下文；DeepSeek 默认使用 `deepseek-v4-flash`，复杂说明书或离线分析可切换 `deepseek-v4-pro`。
+- 境内部署生产模式：未来迁移到境内云、校内服务器或微信云托管并完成备案；是否满足“数据不出境”以服务器 region、Provider region 和实际数据链路为准。
 
-参赛演示不把学号、密码、Cookie、JSESSIONID、ticket、Authorization、token、文件 base64 或完整原始文件内容发送给 AI Provider。个人课表摘要默认关闭，用户开启后也只传递课程名、教师、教室、星期、节次、教学周等最小字段，日志只记录脱敏后的摘要、工具名和状态。
+参赛演示不把学号、密码、Cookie、JSESSIONID、ticket、Authorization、token、文件 base64 或完整原始文件内容交给外部 Provider。个人课表摘要默认关闭，用户开启后也只传递课程名、教师、教室、星期、节次、教学周等最小字段，日志只记录脱敏后的摘要、工具名和状态。
 
 Oracle ARM、海外 VPS、1Panel 和 GitHub Actions 说明保留为开发/运维方案，不等同于境内合规部署。比赛现场建议使用 mock/local 演示，或配置合规的国产 Provider。
 
-### AI Provider 配置
+### Provider 配置
 
 本机一键配置 DeepSeek：
 
@@ -74,19 +74,19 @@ npm run test:ai-competition
 
 更多说明见：
 
-- [AI Agent 参赛设计](docs/competition-2026-agent-design.md)
-- [AI Agent 合规说明](docs/ai-agent-compliance.md)
+- [校园查询参赛设计](docs/competition-2026-agent-design.md)
+- [校园查询合规说明](docs/ai-agent-compliance.md)
 - [5 分钟演示脚本](docs/demo-script-5min.md)
-- [模型 Provider 配置](docs/model-provider-config.md)
-- [Oracle ARM / Docker AI 部署说明](docs/oracle-arm-deploy-ai.md)
+- [Provider 配置](docs/model-provider-config.md)
+- [Oracle ARM / Docker Provider 部署说明](docs/oracle-arm-deploy-ai.md)
 - [CloudBase 混合架构](docs/cloudbase-hybrid-architecture.md)
 - [CloudBase Release Pack 发布手册](docs/cloudbase-release-deploy.md)
-- [CloudBase 混元 AI 接入说明](docs/cloudbase-ai-hunyuan.md)
+- [CloudBase 混元接入说明](docs/cloudbase-ai-hunyuan.md)
 - [CloudBase 故障演练](docs/cloudbase-failure-drill.md)
 
 ### CloudBase 国内数据面
 
-本仓库已预留 CloudBase 环境 `cloud1-d3g17rpe7566d3d5c`。小程序端通过 `miniprogram/config/cloudbase.js` 集中管理 CloudBase Hosting、混元模型、比赛模式和公开发布开关。当前已通过 `tcb hosting detail -e cloud1-d3g17rpe7566d3d5c` 查询到 Hosting 域名 `https://cloud1-d3g17rpe7566d3d5c-1442900641.tcloudbaseapp.com`；代码不会猜测域名，也不会提交任何 SecretId、SecretKey、Token 或 API Key。
+本仓库已预留 CloudBase 环境 `cloud1-d3g17rpe7566d3d5c`。小程序端通过 `miniprogram/config/cloudbase.js` 集中管理 CloudBase Hosting、混元配置、比赛模式和公开发布开关。当前已通过 `tcb hosting detail -e cloud1-d3g17rpe7566d3d5c` 查询到 Hosting 域名 `https://cloud1-d3g17rpe7566d3d5c-1442900641.tcloudbaseapp.com`；代码不会猜测域名，也不会提交任何 SecretId、SecretKey、Token 或 API Key。
 
 Release Pack 读取顺序为本地缓存、last-known-good、CloudBase Hosting、Oracle 静态目录、Oracle 兼容 API。CloudBase 只承载已验证的公开静态 JSON，不承载原始 XLS、staging 大 JSON、上传分片或管理员文件。
 
@@ -100,7 +100,7 @@ npm run cloudbase:release:dry-run -- --release-version <releaseVersion>
 npm run cloudbase:release:verify -- --release-version <releaseVersion> --hosting-base-url https://your-cloudbase-hosting-domain
 ```
 
-混元只处理项目问答、使用帮助和自然对话；今日课程、教师课表、教室课表、空教室、教学周等事实仍只来自确定性工具。公开正式版资质未确认时，保持 `AI_GENERATIVE_PUBLIC_ENABLED=false` 或 `AI_TOOL_ONLY_MODE=true`，校园工具仍可正常使用。
+增强说明只处理项目问答、使用帮助和复杂解释；今日课程、教师课表、教室课表、空教室、教学周等事实仍只来自确定性工具。公开正式版资质未确认时，保持 `AI_GENERATIVE_PUBLIC_ENABLED=false` 或 `AI_TOOL_ONLY_MODE=true`，校园工具仍可正常使用。
 
 ## 长期数据演进与去中心化方案
 
@@ -149,7 +149,7 @@ CAMPUS_AGENT_TOKEN=your_secure_agent_token_here
 
 v0.5 起个人课表后端仅保留 `POST /api/fosu/personal/import-xls`。学号密码同步、滑块验证和登录抓取接口已下线；旧客户端访问 `/diagnose`、`/session/start`、`/session/verify-slider`、`/session/login-and-sync` 会收到 `410 XLS_ONLY`，提示改用 XLS 导入。
 
-XLS 导入只解析课程名、教师、教室、星期、节次、教学周和学期元数据，不接收教务密码，也不会把原始 XLS/base64 发给 AI Provider。
+XLS 导入只解析课程名、教师、教室、星期、节次、教学周和学期元数据，不接收教务密码，也不会把原始 XLS/base64 交给外部 Provider。
 
 ---
 

@@ -87,7 +87,7 @@ function buildRelatedActions(doc, mode) {
 }
 
 function buildKnowledgeCard(doc, query) {
-  const category = displayCategory(doc) || "佛山大学校园知识";
+  const category = displayCategory(doc) || "佛山大学校园信息";
   const items = [
     {
       title: "摘要",
@@ -111,7 +111,7 @@ function buildKnowledgeCard(doc, query) {
   }
   return {
     type: "school_knowledge",
-    title: safeText(doc.title || query || "校园知识", 80),
+    title: safeText(doc.title || query || "校园信息", 80),
     subtitle: category,
     badges: [category, formatConfidence(doc.confidence)].filter(Boolean),
     items,
@@ -162,7 +162,7 @@ function buildNoResultCard(query) {
     variant: "error",
     title: "暂未收录可靠信息",
     subtitle: "知识库暂未收录可靠信息",
-    badges: ["校园知识", "待补充"],
+    badges: ["校园信息", "待补充"],
     items: [
       {
         title: "你的问题",
@@ -186,8 +186,8 @@ function buildAnswerText(doc, query) {
   const sourceText = doc.sourceUrl ? `\n\n信息来源：${doc.sourceUrl}` : "";
   const updatedText = doc.updatedAt ? `\n更新时间：${doc.updatedAt}` : "";
   const prefix = doc.entryType === "navigation"
-    ? "我理解你是在找校园入口。"
-    : "我理解你是在问佛山大学校园知识。";
+    ? "已根据关键词匹配到相关校园入口。"
+    : "已匹配到以下佛山大学校园信息。";
   return `${prefix}${doc.summary || doc.content}${sourceText}${updatedText}`;
 }
 
@@ -226,7 +226,7 @@ function tryBuildContextNavigationAnswer(message, clientContext = {}) {
     lastSource: "campus-map",
   });
   return {
-    answer: `我按当前对话理解，你问的是 ${targetName} 的位置。已为你准备校园地图入口；具体楼层、门禁和临时调整以现场指引为准。`,
+    answer: `已根据当前查询记录匹配到 ${targetName} 的位置需求。可通过校园地图入口查看；具体楼层、门禁和临时调整以现场指引为准。`,
     cards: [
       {
         type: "navigation",

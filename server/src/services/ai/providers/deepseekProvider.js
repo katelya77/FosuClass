@@ -70,7 +70,7 @@ function boolEnv(name, fallback) {
 function buildSystemPrompt(projectKnowledge, options = {}) {
   const useJsonMode = options.useJsonMode !== false;
   const lines = [
-    "你是佛课小表 AI 校园管家。",
+    "你是佛课小表校园服务管家。",
     "你只能基于 user content 中的 toolResults 和最小上下文回答，不得编造课程、教师、教室、空教室或数据状态事实。",
     "你了解 FosuClass 项目的内置知识摘要，但不能编造未在知识库中的功能、接口或承诺。",
     "课程事实、今日课程、空教室、教师课表和数据状态仍只能来自 toolResults；项目知识只能用于解释产品、架构、合规边界和使用引导。",
@@ -169,7 +169,7 @@ function wrapTextResponse(content) {
       items: [],
       actions: [],
     }],
-    suggestions: ["这个小程序怎么用？", "怎么导入个人课表？"],
+    suggestions: ["如何使用校园查询？", "怎么导入个人课表？"],
   };
 }
 

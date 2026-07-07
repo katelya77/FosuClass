@@ -83,7 +83,7 @@ function buildTodayCourses(result) {
         badges: ["最小必要信息", "不需要密码"],
         actions: [makeAction("打开个人课表同步", "navigate", result.actionUrl || "/pages/personal-sync/personal-sync")],
       })],
-      suggestions: ["怎么导入个人课表？", "问 AI 分析今天安排"],
+      suggestions: ["怎么导入个人课表？", "查询今日安排"],
     };
   }
   const courses = Array.isArray(result.courses) ? result.courses : [];
@@ -268,8 +268,8 @@ function buildDiagnosis(result) {
 
 function buildGuide(result) {
   return {
-    answer: "个人课表请先打开个人课表同步主入口。AI 不接收学号密码，只在你开启摘要后读取最小课程字段来做提醒和建议；明确需要表格文件时再查看 XLS 文件导入。",
-    cards: [makeCard("guide", result.title || "个人课表导入", "新学期重新导入即可刷新本机课表和 AI 摘要", {
+    answer: "个人课表请先打开个人课表同步主入口。系统不接收学号密码，只在你开启摘要后读取最小课程字段来做提醒和建议；明确需要表格文件时再查看 XLS 文件导入。",
+    cards: [makeCard("guide", result.title || "个人课表导入", "新学期重新导入即可刷新本机课表和课表摘要", {
       badges: ["无需密码", "最小化字段", "本地优先"],
       items: (result.steps || []).map((step, index) => ({
         title: `步骤 ${index + 1}`,
@@ -413,8 +413,8 @@ function buildMeetingV2(result) {
 
 function buildGeneric() {
   return {
-    answer: "你可以直接问我查课、找空教室、分析今日课程、导入个人课表或排查数据加载问题。我会先调用项目内工具，再把结果整理成卡片。",
-    cards: [makeCard("generic", "AI 校园管家能做什么", "事实来自课表、空教室和 Release Pack 工具", {
+    answer: "你可以直接查课、找空教室、查询今日安排、导入个人课表或排查数据加载问题。系统会先调用项目内工具，再把结果整理成卡片。",
+    cards: [makeCard("generic", "校园服务管家可以查询什么", "事实来自课表、空教室和 Release Pack 工具", {
       badges: ["工具优先", "不编造事实", "可降级演示"],
       items: [
         { title: "查课", subtitle: "教师、教室、课程、班级索引", value: "全校查询" },

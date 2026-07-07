@@ -218,7 +218,7 @@ function getPendingClarification(context = {}) {
 function isCompleteNewTask(text) {
   const value = normalizeText(text);
   if (!value) return false;
-  return /空教室|自习时间|推荐时间|今天|今日|明天|下一节|还有课|导入|XLS|excel|数据|诊断|缓存|这个小程序|怎么用|FosuClass|佛课小表|AI\s*管家/i.test(value);
+  return /空教室|自习时间|推荐时间|今天|今日|明天|下一节|还有课|导入|XLS|excel|数据|诊断|缓存|校园查询|怎么用|FosuClass|佛课小表|校园服务管家/i.test(value);
 }
 
 function extractPendingQuery(message, type) {
@@ -281,7 +281,7 @@ function stripChineseIntentWords(message) {
 function resolveIntentChinese(message, context = {}) {
   const text = normalizeText(message);
   if (!text) return null;
-  if (/这个小程序怎么用|怎么使用|如何使用|你是谁|你能做什么|FosuClass|佛课小表|AI\s*管家|项目知识|比赛|Release Pack|XLS-only/i.test(text)) {
+  if (/如何使用校园查询|怎么使用|如何使用|你是谁|你能做什么|FosuClass|佛课小表|校园服务管家|项目知识|比赛|Release Pack|XLS-only/i.test(text)) {
     return { name: "project_qa", slots: {} };
   }
   if (/导入|XLS|excel|个人课表|账号|登录|密码/i.test(text)) {
@@ -328,7 +328,7 @@ function resolveIntentChinese(message, context = {}) {
 function isProjectQaMessage(text) {
   const value = normalizeText(text);
   if (!value) return false;
-  return /你是谁|你能做什么|这个小程序怎么用|怎么使用|怎么同步新学期课表|新学期.*同步|为什么要\s*XLS\s*导入|FosuClass|佛课小表|小佛.*项目|了解当前项目|解释.*功能|比赛.*展示|AI\s*管家架构|AI管家架构|项目知识|Release Pack|XLS-only/i.test(value);
+  return /你是谁|你能做什么|如何使用校园查询|怎么使用|怎么同步新学期课表|新学期.*同步|为什么要\s*XLS\s*导入|FosuClass|佛课小表|小佛.*项目|了解当前项目|解释.*功能|比赛.*展示|校园服务管家架构|项目知识|Release Pack|XLS-only/i.test(value);
 }
 
 function isConversationalHelp(text) {
@@ -458,15 +458,15 @@ function resolveModernChineseIntent(message, context = {}) {
 
 function resolveIntent(message, context = {}) {
   const text = normalizeText(message);
+  if (isProjectQaMessage(text)) {
+    return { name: "project_qa", slots: {} };
+  }
   const modernIntent = resolveModernChineseIntent(text, context);
   if (modernIntent) return modernIntent;
   const pendingIntent = resolvePendingClarificationIntent(text, context);
   if (pendingIntent) return pendingIntent;
   const chineseIntent = resolveIntentChinese(text, context);
   if (chineseIntent) return chineseIntent;
-  if (isProjectQaMessage(text)) {
-    return { name: "project_qa", slots: {} };
-  }
   if (/导入|XLS|excel|个人课表|账号|登录|密码/.test(text)) {
     return { name: "explain_personal_import", slots: { mode: /XLS|excel/i.test(text) ? "xls" : "unknown" } };
   }
@@ -890,10 +890,10 @@ function explainPersonalImport(input = {}) {
     mode,
     title: "个人课表导入说明",
     steps: [
-      "先打开个人课表同步主入口，再按页面提示选择合适的导入方式；AI 和小程序聊天框都不接收学号、密码、Cookie 或 token。",
+      "先打开个人课表同步主入口，再按页面提示选择合适的导入方式；系统和查询框都不接收学号、密码、Cookie 或 token。",
       "只有明确需要 XLS、表格或文件导入时，才进入 XLS 文件导入页签。",
       "从 100 网打印/导出的 XLS 课表会自动解析表头中的学期、班级、学院、打印日期和课程列。",
-      "导入后写入本机当前课表缓存，AI 仅在你开启摘要时读取课程名、教师、教室、星期、节次和教学周。",
+      "导入后写入本机当前课表缓存，系统仅在你开启摘要时读取课程名、教师、教室、星期、节次和教学周。",
       "新学期或新版课表重新导入即可刷新本地课程索引，今日安排、空闲时间推荐和后端工具链会自动使用最新课表摘要。",
     ],
     actionUrl: "/pages/personal-sync/personal-sync",

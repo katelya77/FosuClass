@@ -3506,7 +3506,7 @@ const adminConsoleHtml = `<!doctype html>
             <li class="nav-item" data-section="notices"><button>公告管理</button></li>
             <li class="nav-item" data-section="news"><button>最新动态</button></li>
             <li class="nav-item" data-section="config"><button>数据版本</button></li>
-            <li class="nav-item" data-section="ai-provider"><button>AI 模型</button></li>
+            <li class="nav-item" data-section="ai-provider"><button>查询服务</button></li>
             <li class="nav-item" data-section="campus-map"><button>校园地图</button></li>
             <li class="nav-item" data-section="feedback"><button>反馈管理</button></li>
             <li class="nav-item" data-section="security"><button>安全状态</button></li>
@@ -4911,21 +4911,21 @@ const adminConsoleHtml = `<!doctype html>
         </div>
       </section>
 
-      <!-- 面板八：AI 模型配置 -->
+      <!-- 面板八：查询服务配置 -->
       <section id="section-ai-provider" class="section">
         <div class="ai-provider-grid">
           <div class="card form-box">
-            <h3 class="card-title">AI 校园管家 Provider</h3>
+            <h3 class="card-title">校园查询 Provider</h3>
             <div class="ai-secret-note">
-              auto 模式下，确定性课表查询默认走本地工具；项目问答、自然聊天和复杂解释会调用 DeepSeek/Coze。课程事实仍以工具结果为准。
+              auto 模式下，确定性课表查询默认走本地工具；项目说明和复杂解释会调用 DeepSeek/Coze。课程事实仍以工具结果为准。
             </div>
 
             <div class="form-row">
               <div>
                 <label>调用模式</label>
                 <select id="aiEnabled">
-                  <option value="false">mock 演示模式（不调用外部模型）</option>
-                  <option value="true">启用外部模型</option>
+                  <option value="false">mock 演示模式（本地规则）</option>
+                  <option value="true">启用外部 Provider</option>
                 </select>
               </div>
               <div>
@@ -4959,11 +4959,11 @@ const adminConsoleHtml = `<!doctype html>
 
             <div class="form-row">
               <div>
-                <label>DeepSeek 快速模型</label>
+                <label>DeepSeek 快速配置</label>
                 <input id="aiModel" placeholder="deepseek-v4-flash">
               </div>
               <div>
-                <label>DeepSeek 推理模型</label>
+                <label>DeepSeek 增强配置</label>
                 <input id="aiReasoningModel" placeholder="deepseek-v4-pro">
               </div>
             </div>
@@ -4997,10 +4997,10 @@ const adminConsoleHtml = `<!doctype html>
                 <input id="aiTemperature" inputmode="decimal" placeholder="0.1">
               </div>
               <div>
-                <label>思考模式</label>
+                <label>增强模式</label>
                 <select id="aiThinkingEnabled">
                   <option value="false">关闭（小程序快速响应）</option>
-                  <option value="true">开启（仅 pro 模型）</option>
+                  <option value="true">开启（仅 pro 配置）</option>
                 </select>
               </div>
             </div>
@@ -5041,12 +5041,12 @@ const adminConsoleHtml = `<!doctype html>
               <div>
                 <label>腾讯混元兼容网关 API Key</label>
                 <input id="cloudbaseOpenaiApiKey" type="password" autocomplete="off" placeholder="留空则保留现有密钥">
-                <div class="ai-secret-note">不要把 Key 发到聊天；后台保存时不回显完整密钥。</div>
+                <div class="ai-secret-note">不要把 Key 粘贴到查询框；后台保存时不回显完整密钥。</div>
               </div>
             </div>
             <div class="form-row">
               <div>
-                <label>混元文本模型</label>
+                <label>混元文本配置</label>
                 <input id="cloudbaseOpenaiTextModel" placeholder="hy3-preview">
               </div>
               <div>
@@ -5069,9 +5069,9 @@ const adminConsoleHtml = `<!doctype html>
             </div>
 
             <div class="ai-provider-actions">
-              <button id="saveAiProviderBtn" class="primary">保存 AI 配置</button>
+              <button id="saveAiProviderBtn" class="primary">保存查询服务配置</button>
               <button id="verifyAiProviderBtn" class="secondary">Provider 真实测试</button>
-              <button id="forceAiProviderChatBtn" class="secondary">强制测试模型链路</button>
+              <button id="forceAiProviderChatBtn" class="secondary">强制测试 Provider 链路</button>
               <button id="reloadAiProviderBtn" class="ghost">刷新状态</button>
             </div>
           </div>
@@ -5125,16 +5125,16 @@ const adminConsoleHtml = `<!doctype html>
                 <input id="cozePollMaxAttempts" inputmode="numeric" placeholder="8">
               </div>
             </div>
-            <div id="aiVerifyResult" class="ai-verify-box">还没有验证。点击“验证当前 Provider”会同时测试确定性工具、项目问答和强制模型链路，不会打印 prompt 或密钥。</div>
+            <div id="aiVerifyResult" class="ai-verify-box">还没有验证。点击“验证当前 Provider”会同时测试确定性工具、项目知识查询和强制 Provider 链路，不会打印 prompt 或密钥。</div>
             <div class="ai-provider-actions">
-              <button id="runAiGoldenEvalBtn" class="secondary">运行 Agent 黄金测试</button>
+              <button id="runAiGoldenEvalBtn" class="secondary">运行黄金测试</button>
               <button id="exportAiEvalReportBtn" class="ghost">导出脱敏报告</button>
               <button id="clearAiLocalMetricsBtn" class="ghost">清除本地匿名指标</button>
             </div>
-            <div class="ai-secret-note">公众界面不会显示 Provider、模型、Token、Oracle、CloudBase、比赛模式或内部 Prompt；这里仅管理员可见，密钥只展示脱敏状态。</div>
-            <h4 class="card-title" style="margin-top: 8px;">AI Agent 状态</h4>
+            <div class="ai-secret-note">公众界面不会显示 Provider、Token、Oracle、CloudBase、比赛模式或内部 Prompt；这里仅管理员可见，密钥只展示脱敏状态。</div>
+            <h4 class="card-title" style="margin-top: 8px;">查询链路状态</h4>
             <div class="ai-provider-status" id="aiAgentStatusGrid"></div>
-            <div id="aiAgentEvalResult" class="ai-verify-box">Agent 黄金测试尚未运行。</div>
+            <div id="aiAgentEvalResult" class="ai-verify-box">黄金测试尚未运行。</div>
           </div>
         </div>
       </section>
@@ -6506,7 +6506,7 @@ const adminConsoleHtml = `<!doctype html>
           notices: "公告管理",
           news: "最新动态",
           config: "数据版本",
-          "ai-provider": "AI 模型",
+          "ai-provider": "查询服务",
           "campus-map": "校园地图管理",
           feedback: "反馈管理",
           security: "安全状态",
@@ -11222,7 +11222,7 @@ const adminConsoleHtml = `<!doctype html>
               : "<span class='badge success'>" + escapeHtml(trialAuth.shortCredentialExpiresAt || "未设置") + "</span>")
             : "<span class='badge muted'>未使用短期凭证</span>";
           grid.innerHTML = [
-            renderHealthItem("外部模型", cfg.enabled ? "<span class='badge success'>启用</span>" : "<span class='badge muted'>mock</span>"),
+            renderHealthItem("外部 Provider", cfg.enabled ? "<span class='badge success'>启用</span>" : "<span class='badge muted'>mock</span>"),
             renderHealthItem("体验增强", enhancedMode),
             renderHealthItem("授权状态", authStatus),
             renderHealthItem("授权到期", expiryText),
@@ -11290,7 +11290,7 @@ const adminConsoleHtml = `<!doctype html>
           renderHealthItem("P50 / P95", "<span>" + escapeHtml(String(p50)) + "ms / " + escapeHtml(String(p95)) + "ms</span>"),
           renderHealthItem("fallback 次数", "<strong>" + escapeHtml(String(metrics.fallbackCount || 0)) + "</strong>"),
           renderHealthItem("工具调用量", "<strong>" + escapeHtml(String(metrics.toolCallCount || 0)) + "</strong>"),
-          renderHealthItem("事实类 / 生成式", "<span>" + escapeHtml(String(metrics.factualQuestionCount || 0)) + " / " + escapeHtml(String(metrics.generativeQuestionCount || 0)) + "</span>"),
+          renderHealthItem("事实类 / 说明类", "<span>" + escapeHtml(String(metrics.factualQuestionCount || 0)) + " / " + escapeHtml(String(metrics.generativeQuestionCount || 0)) + "</span>"),
           renderHealthItem("安全拦截", "<strong>" + escapeHtml(String(metrics.safetyInterceptCount || 0)) + "</strong>"),
           renderHealthItem("知识库", "<span>" + escapeHtml(String(knowledge.documentCount || 0)) + " docs / " + escapeHtml(String(knowledge.chunkCount || 0)) + " chunks</span>"),
           renderHealthItem("校园地图", "<span>" + escapeHtml(String(map.placeCount || 0)) + " places</span>"),
@@ -11359,7 +11359,7 @@ const adminConsoleHtml = `<!doctype html>
             // best effort
           }
         });
-        showToast("本地匿名 AI 指标已清除", "success");
+        showToast("本地匿名指标已清除", "success");
       }
 
       function aiProviderPayload() {
@@ -11413,8 +11413,8 @@ const adminConsoleHtml = `<!doctype html>
             state.aiProviderConfig = res.data || {};
             renderAiProviderConfig();
             ignoreLoadError(loadAiAgentStatus());
-            showToast("AI Provider 配置已保存。", "success");
-            setStatus("AI Provider 配置已保存：" + (state.aiProviderConfig.provider || "mock"));
+            showToast("查询服务配置已保存。", "success");
+            setStatus("查询服务配置已保存：" + (state.aiProviderConfig.provider || "mock"));
           })
           .catch(function(error) { showToast(error.message, "error"); });
       }
@@ -11467,7 +11467,7 @@ const adminConsoleHtml = `<!doctype html>
               }).join(", "));
             }
             if (box) box.textContent = lines.join("\\n");
-            showToast("AI Provider 验证完成。", "success");
+            showToast("Provider 验证完成。", "success");
           })
           .catch(function(error) {
             if (box) box.textContent = "验证失败：" + error.message;
@@ -11477,13 +11477,13 @@ const adminConsoleHtml = `<!doctype html>
 
       function forceAiProviderChatTest() {
         var box = $("aiVerifyResult");
-        if (box) box.textContent = "正在强制测试项目知识聊天...";
+        if (box) box.textContent = "正在测试项目知识查询...";
         api("/api/admin/ai-provider/verify", { method: "POST", body: JSON.stringify({ mode: "project_qa" }) })
           .then(function(res) {
             var data = res.data || {};
             var project = data.projectQaProviderTest || data;
             var lines = [
-              "强制项目问答测试",
+              "强制项目知识查询测试",
               "Key configured: " + (data.keyConfigured ? "true" : "false"),
               "Provider: " + (project.resolvedProvider || project.provider || "-"),
               "External: " + (project.externalProviderUsed ? "yes" : "no"),
@@ -11496,10 +11496,10 @@ const adminConsoleHtml = `<!doctype html>
               lines.push("Provider 已配置但请求被拒绝，请检查 model、baseUrl、response_format、thinking 参数。");
             }
             if (box) box.textContent = lines.join("\\n");
-            showToast("模型链路测试完成。", "success");
+            showToast("Provider 链路测试完成。", "success");
           })
           .catch(function(error) {
-            if (box) box.textContent = "强制聊天测试失败：" + error.message;
+            if (box) box.textContent = "项目知识查询测试失败：" + error.message;
             showToast(error.message, "error");
           });
       }
