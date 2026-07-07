@@ -12,7 +12,7 @@ const ALLOWED_CARD_TYPES = new Set([
   "generic",
 ]);
 
-const ALLOWED_ACTION_TYPES = new Set(["navigate", "switchTab", "copy", "retry", "ask", "openSheet", "toggleFloat", "noop"]);
+const ALLOWED_ACTION_TYPES = new Set(["navigate", "switchTab", "retry", "ask", "openSheet", "toggleFloat", "noop"]);
 
 const ALLOWED_NAVIGATION_URLS = new Set([
   "/pages/school/school",
@@ -40,7 +40,6 @@ const ACTION_LABEL_FALLBACKS = {
   navigate: "查看详情",
   switchTab: "打开页面",
   retry: "重新尝试",
-  copy: "复制",
   ask: "继续追问",
   openSheet: "打开面板",
   toggleFloat: "调整浮窗",

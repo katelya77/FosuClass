@@ -372,7 +372,7 @@ function buildUnknownAliasResponse(parsed) {
 
 function buildClarificationResponse(parsed) {
   const type = parsed && parsed.targetType ? normalizeScheduleType(parsed.targetType) : "";
-  const copyByType = {
+  const textByType = {
     class: {
       answer: "我理解你想查班级课表，还需要补充班级名称。",
       title: "需要补充班级",
@@ -406,7 +406,7 @@ function buildClarificationResponse(parsed) {
       suggestions: ["输入课程名称", "查教师课表", "查班级本周课表"],
     },
   };
-  const copy = copyByType[type] || {
+  const text = textByType[type] || {
     answer: "我理解你想查课表，但还缺少查询对象。你想查哪个班级、老师、教室或课程？",
     title: "需要补充课表对象",
     subtitle: "支持班级、教师、教室、课程",
@@ -415,21 +415,21 @@ function buildClarificationResponse(parsed) {
     suggestions: ["查班级本周课表", "查教师课表", "查教室明天是否有课"],
   };
   return {
-    answer: copy.answer,
+    answer: text.answer,
     cards: [
       {
         type: "clarification",
-        title: copy.title,
-        subtitle: copy.subtitle,
+        title: text.title,
+        subtitle: text.subtitle,
         badges: ["全校课表"],
         items: [
-          { title: copy.itemTitle, subtitle: copy.itemSubtitle, value: "" },
+          { title: text.itemTitle, subtitle: text.itemSubtitle, value: "" },
           { title: "也可以查", subtitle: "班级、教师、教室或课程安排", value: "" },
         ],
         actions: [],
       },
     ],
-    suggestions: copy.suggestions,
+    suggestions: text.suggestions,
     toolCalls: [{ name: "search_school_schedule_local", status: "clarify" }],
     safety: {
       provider: "local-schedule",
@@ -490,13 +490,6 @@ function buildScheduleResponse(parsed, target, detailPayload, releaseParams, sta
         label: "查看完整课表",
         type: "navigate",
         url: scheduleNavigator.buildScheduleViewUrl(scheduleUrlParams),
-      },
-      {
-        label: "复制课表摘要",
-        type: "copy",
-        payload: {
-          text: `${title} ${subtitle}\n${courseItems.map((item) => `${item.title}${item.value ? ` ${item.value}` : ""}${item.subtitle ? `：${item.subtitle}` : ""}`).join("\n")}`,
-        },
       },
       {
         label: parsed.weekday ? "继续查其他星期" : "继续查其他周次",

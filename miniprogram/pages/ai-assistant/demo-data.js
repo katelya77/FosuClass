@@ -21,7 +21,6 @@ const DEMO_RESPONSES = {
       ],
       actions: [
         { label: "打开空教室", type: "navigate", url: "/pages/empty-room/empty-room", payload: {} },
-        { label: "复制结果", type: "copy", url: "", payload: { text: "演示数据：C7-305、C6-202、A2-104 可用。" } },
         { label: "再查连续时段", type: "retry", url: "", payload: { message: "找连续 2 节空教室" } },
       ],
     }],
@@ -67,7 +66,6 @@ const DEMO_RESPONSES = {
       ],
       actions: [
         { label: "打开全校查询", type: "navigate", url: "/pages/school/school", payload: {} },
-        { label: "复制诊断", type: "copy", url: "", payload: { text: "演示数据：索引、详情、空教室缓存状态正常。" } },
       ],
     }],
   },

@@ -6,7 +6,6 @@ const xiaofuFloatService = require("../../services/xiaofuFloatService");
 const cloudbaseConfig = require("../../config/cloudbase");
 const demoData = require("./demo-data");
 const { courseTimes } = require("../../data/courseTimes");
-const { copyToClipboard: copyTextToClipboard, normalizeCopyText } = require("../../utils/clipboard");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
@@ -596,7 +595,6 @@ const ACTION_LABEL_FALLBACKS = {
   navigate: "查看详情",
   switchTab: "打开页面",
   retry: "重新尝试",
-  copy: "复制",
   ask: "继续追问",
   openSheet: "打开面板",
   toggleFloat: "调整浮窗",
@@ -607,7 +605,6 @@ const ACTION_TYPE_ALIASES = {
   bind: "navigate",
   navigate: "navigate",
   switchtab: "switchTab",
-  copy: "copy",
   retry: "retry",
   ask: "ask",
   opensheet: "openSheet",
@@ -1050,6 +1047,7 @@ function normalizeCardItem(item, index, cardType) {
 function normalizeCardAction(action, index) {
   const source = action && typeof action === "object" && !Array.isArray(action) ? action : {};
   const rawType = safeText(source.type || "noop", 20, "noop").toLowerCase();
+  if (rawType === "copy") return null;
   const type = ACTION_TYPE_ALIASES[rawType] || "noop";
   const label = safeText(source.label, 30, ACTION_LABEL_FALLBACKS[type] || ACTION_LABEL_FALLBACKS.noop) ||
     ACTION_LABEL_FALLBACKS[type] ||
@@ -1085,54 +1083,13 @@ function normalizeActionConfirm(value) {
   };
 }
 
-function firstCopyableText(candidates) {
+function firstActionText(candidates) {
   const list = Array.isArray(candidates) ? candidates : [];
   for (let index = 0; index < list.length; index += 1) {
-    const text = normalizeCopyText(list[index]);
+    const text = safeText(list[index], 600);
     if (text) return text;
   }
   return "";
-}
-
-function resolveActionCopyText(action, card, message) {
-  const safeAction = action && typeof action === "object" && !Array.isArray(action) ? action : {};
-  const safeCard = card && typeof card === "object" && !Array.isArray(card) ? card : {};
-  const safeMessage = message && typeof message === "object" && !Array.isArray(message) ? message : {};
-  const payload = safeAction.payload && typeof safeAction.payload === "object" && !Array.isArray(safeAction.payload)
-    ? safeAction.payload
-    : {};
-  return firstCopyableText([
-    payload.text,
-    safeAction.text,
-    safeAction.url,
-    payload.url,
-    safeCard.copyText,
-    safeCard.summary,
-    safeAction.fallbackText,
-    safeMessage.content,
-  ]);
-}
-
-function cardItemsSummary(source) {
-  const items = Array.isArray(source && source.items) ? source.items : [];
-  return items.slice(0, 8).map((item) => {
-    const entry = item && typeof item === "object" && !Array.isArray(item) ? item : {};
-    return [
-      safeText(entry.title || entry.name || "", 80),
-      safeText(entry.value || entry.time || "", 60),
-      safeText(entry.subtitle || entry.desc || entry.detail || "", 120),
-    ].filter(Boolean).join(" ");
-  }).filter(Boolean).join("\n");
-}
-
-function buildCardCopyText(source, message, maxLength) {
-  const text = [
-    safeText(message && message.content || "", 1000),
-    safeText(source && source.copyText || "", 1000),
-    safeText(source && (source.summary || source.subtitle || source.title) || "", 500),
-    cardItemsSummary(source),
-  ].filter(Boolean).join("\n");
-  return safeText(text, maxLength || 1200);
 }
 
 function firstCardEntryUrl(source) {
@@ -1150,19 +1107,16 @@ function buildDefaultCardActions(source, type, message) {
   const title = safeText(source && source.title || "", 80);
   const sourceUrl = safeText(source && source.sourceUrl || "", 240);
   const entryUrl = firstCardEntryUrl(source);
-  const answerText = buildCardCopyText(source, message, 1200);
   if (variant === "error" && ["school_knowledge", "navigation"].indexOf(cardType) >= 0) return [];
   if (cardType === "import_guide") {
     return [
       { type: "navigate", label: "打开个人课表同步", url: PERSONAL_SYNC_URL },
       { type: "navigate", label: "查看 XLS 文件导入", url: PERSONAL_SYNC_XLS_URL },
-      { type: "copy", label: "复制导入说明", payload: { text: answerText || "打开个人课表同步主入口，按页面提示选择导入方式；明确需要表格或文件导入时再进入 XLS 文件导入。" } },
       { type: "ask", label: "继续问今天课程", payload: { message: "今天有什么课" } },
     ];
   }
   if (cardType === "help") {
     return [
-      { type: "copy", label: "复制说明", payload: { text: answerText } },
       { type: "ask", label: "继续问课表", payload: { message: "今天有什么课" } },
       { type: "openSheet", label: "更多任务", payload: { sheet: "task" } },
     ];
@@ -1170,18 +1124,13 @@ function buildDefaultCardActions(source, type, message) {
   if (cardType === "navigation") {
     const actions = [];
     if (entryUrl) {
-      actions.push(/^\/pages\//.test(entryUrl)
-        ? { type: "navigate", label: "打开入口", url: entryUrl }
-        : { type: "copy", label: "复制入口", payload: { text: entryUrl } });
+      actions.push({ type: "navigate", label: "打开入口", url: entryUrl });
     }
-    if (sourceUrl && sourceUrl !== entryUrl) actions.push({ type: "copy", label: "复制来源", payload: { text: sourceUrl } });
     actions.push({ type: "ask", label: "继续追问", payload: { message: `${title || "这个入口"}怎么用` } });
     return actions;
   }
   if (cardType === "school_knowledge") {
     const actions = [];
-    if (answerText) actions.push({ type: "copy", label: "复制回答", payload: { text: answerText } });
-    if (sourceUrl) actions.push({ type: "copy", label: "复制来源", payload: { text: sourceUrl } });
     if (entryUrl && entryUrl !== sourceUrl && /^\/pages\//.test(entryUrl)) {
       actions.push({ type: "navigate", label: "相关入口", url: entryUrl });
     }
@@ -1192,7 +1141,6 @@ function buildDefaultCardActions(source, type, message) {
     const actions = [];
     if (entryUrl && /^\/pages\//.test(entryUrl)) actions.push({ type: "navigate", label: "查看完整课表", url: entryUrl });
     else actions.push({ type: "navigate", label: "查看完整课表", url: "/pages/today/today" });
-    if (answerText) actions.push({ type: "copy", label: "复制课表摘要", payload: { text: answerText } });
     actions.push({ type: "ask", label: "继续查本周", payload: { message: "本周课表" } });
     actions.push({ type: "ask", label: "继续查明天", payload: { message: "明天有什么课" } });
     return actions;
@@ -1200,14 +1148,10 @@ function buildDefaultCardActions(source, type, message) {
   if (cardType === "schedule_status") {
     return [
       { type: "navigate", label: "查看全校课表", url: "/pages/school/school" },
-      { type: "copy", label: "复制状态", payload: { text: answerText } },
     ];
   }
   if (cardType === "weather") {
-    const weather = source && source.weather || {};
-    const advice = safeText(weather.advice || source.copyText || answerText, 800);
     return [
-      { type: "copy", label: "复制天气建议", payload: { text: advice } },
       { type: "retry", label: "重新获取天气" },
       { type: "ask", label: "继续问带伞", payload: { message: "今天要不要带伞" } },
       { type: "ask", label: "明天适合跑步吗", payload: { message: "明天适合跑步吗" } },
@@ -1226,7 +1170,7 @@ function buildDefaultCardActions(source, type, message) {
       { type: "navigate", label: "打开全校课表", url: "/pages/school/school" },
     ];
   }
-  return answerText ? [{ type: "copy", label: "复制回答", payload: { text: answerText } }] : [];
+  return [];
 }
 
 function isInactiveScheduleItem(item) {
@@ -2564,7 +2508,7 @@ Page({
       ? action.payload
       : {};
     if (type === "retry") {
-      const message = firstCopyableText([payload.message, action.fallbackText, this.findLastUserMessage()]);
+      const message = firstActionText([payload.message, action.fallbackText, this.findLastUserMessage()]);
       if (!message) {
         this.showActionFallback("暂无可重试的问题");
         return;
@@ -2574,12 +2518,8 @@ Page({
       });
       return;
     }
-    if (type === "copy") {
-      this.copyToClipboard(resolveActionCopyText(action, context && context.card, context && context.message));
-      return;
-    }
     if (type === "ask") {
-      const nextMessage = firstCopyableText([payload.message, action.text, action.fallbackText, action.label]);
+      const nextMessage = firstActionText([payload.message, action.text, action.fallbackText, action.label]);
       if (!nextMessage) {
         this.showActionFallback("暂无可追问内容");
         return;
@@ -2588,7 +2528,7 @@ Page({
       return;
     }
     if (type === "navigate" || type === "switchTab") {
-      const url = firstCopyableText([action.url, payload.url]);
+      const url = firstActionText([action.url, payload.url]);
       if (!url) {
         this.showActionFallback("暂时无法打开该入口");
         return;
@@ -2651,16 +2591,6 @@ Page({
     wx.showToast({ title: nextEnabled ? "已开启小佛AI浮窗" : "已关闭小佛AI浮窗", icon: "none" });
   },
 
-  onCopyMessage(event) {
-    const messageIndex = Number(event.currentTarget.dataset.messageIndex);
-    const message = this.data.messages[messageIndex] || {};
-    this.copyToClipboard(message.content || "");
-  },
-
-  copyToClipboard(text, options) {
-    return copyTextToClipboard(text, options || {});
-  },
-
   findLastUserMessage() {
     const list = this.data.messages || [];
     for (let index = list.length - 1; index >= 0; index -= 1) {
@@ -2672,11 +2602,11 @@ Page({
   navigateByUrl(url, options) {
     const navOptions = options || {};
     const parsed = parseActionUrl(url);
-    if (!parsed.path) return;
     if (/^https?:\/\//i.test(parsed.raw)) {
-      this.copyToClipboard(parsed.raw);
+      wx.showToast({ title: "请前往对应官网查看", icon: "none" });
       return;
     }
+    if (!parsed.path) return;
     const storageKey = TABBAR_PENDING_QUERY[parsed.path];
     if (storageKey || navOptions.forceSwitchTab) {
       if (parsed.query && Object.keys(parsed.query).length) {
@@ -2707,7 +2637,7 @@ Page({
       },
       fail: (error) => {
         console.warn("[ai-action] navigateTo failed", error);
-        wx.showToast({ title: "暂时无法打开该页面，可复制入口再试", icon: "none" });
+        wx.showToast({ title: "暂时无法打开该页面", icon: "none" });
       },
     });
   },
@@ -2718,6 +2648,5 @@ if (typeof module !== "undefined") {
     normalizeCard,
     normalizeCardItem,
     normalizeMessagesForDisplay,
-    resolveActionCopyText,
   };
 }

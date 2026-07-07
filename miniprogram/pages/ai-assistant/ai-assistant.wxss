@@ -501,19 +501,6 @@ button::after {
   color: rgba(255, 255, 255, 0.78);
 }
 
-.message-copy-btn {
-  flex: 0 0 auto;
-  height: 34rpx;
-  padding: 0 10rpx;
-  border-radius: 999rpx;
-  background: #f4f6f8;
-  color: #667085;
-  font-size: 17rpx;
-  font-weight: 800;
-  line-height: 34rpx;
-  text-align: center;
-}
-
 .tool-strip {
   display: flex;
   flex-wrap: nowrap;

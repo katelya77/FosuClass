@@ -6,7 +6,7 @@ const DEFAULT_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_MODEL = "deepseek-v4-flash";
 const DEFAULT_REASONING_MODEL = "deepseek-v4-pro";
 const ALLOWED_CARD_TYPES = "empty_room/schedule/teacher/course/diagnosis/guide/reminder/generic";
-const ALLOWED_ACTION_TYPES = "navigate/switchTab/copy/retry/ask/openSheet/toggleFloat/noop";
+const ALLOWED_ACTION_TYPES = "navigate/switchTab/retry/ask/openSheet/toggleFloat/noop";
 const ENV_PATH = path.resolve(__dirname, "../../../../.env");
 
 let cachedEnvFileValues = null;
