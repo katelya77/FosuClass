@@ -18,6 +18,10 @@ function formatConfidence(confidence) {
   return "待核验";
 }
 
+function displayCategory(doc) {
+  return safeText(doc && (doc.categoryLabel || doc.category) || "", 40);
+}
+
 function buildRelatedActions(doc) {
   const actions = [];
   const links = Array.isArray(doc.relatedLinks) ? doc.relatedLinks : [];
@@ -44,6 +48,7 @@ function buildRelatedActions(doc) {
 }
 
 function buildKnowledgeCard(doc, query) {
+  const category = displayCategory(doc) || "佛山大学校园知识";
   const items = [
     {
       title: "摘要",
@@ -68,8 +73,8 @@ function buildKnowledgeCard(doc, query) {
   return {
     type: "school_knowledge",
     title: safeText(doc.title || query || "校园知识", 80),
-    subtitle: safeText(doc.category || "佛山大学校园知识", 80),
-    badges: [doc.category, formatConfidence(doc.confidence)].filter(Boolean),
+    subtitle: category,
+    badges: [category, formatConfidence(doc.confidence)].filter(Boolean),
     items,
     actions: buildRelatedActions(doc),
     sourceUrl: doc.sourceUrl || "",
@@ -78,6 +83,7 @@ function buildKnowledgeCard(doc, query) {
 }
 
 function buildNavigationCard(doc, query) {
+  const category = displayCategory(doc) || "佛山大学校园入口";
   const items = [
     {
       title: "入口说明",
@@ -102,8 +108,8 @@ function buildNavigationCard(doc, query) {
   return {
     type: "navigation",
     title: safeText(doc.title || query || "校园入口", 80),
-    subtitle: safeText(doc.category || "佛山大学校园入口", 80),
-    badges: ["入口", doc.category, formatConfidence(doc.confidence)].filter(Boolean),
+    subtitle: category,
+    badges: ["入口", category, formatConfidence(doc.confidence)].filter(Boolean),
     items,
     actions: buildRelatedActions(doc),
     sourceUrl: doc.sourceUrl || "",
@@ -136,7 +142,7 @@ function buildNoResultCard(query) {
 
 function buildAnswerText(doc, query) {
   if (!doc) {
-    return "我理解你是在问佛山大学校园知识。知识库暂未收录可靠信息，我不会用学校概况或官网链接替代答案。";
+    return "知识库暂未收录可靠信息。我不会用学校概况或官网链接替代答案，也不会编造电话、开放时间、办公室或制度细节。";
   }
   const sourceText = doc.sourceUrl ? `\n\n信息来源：${doc.sourceUrl}` : "";
   const updatedText = doc.updatedAt ? `\n更新时间：${doc.updatedAt}` : "";
@@ -278,6 +284,7 @@ function tryBuildKnowledgeAnswer(message, clientContext = {}, options = {}) {
       latencyMs: Date.now() - startedAt,
       externalProviderUsed: false,
       resultCount: retrieval.results.length,
+      ragMatchedReason: top && top.matchedReason || "",
     },
     contextSlots: contextManager.mergeContextSlots(
       clientContext && clientContext.contextSlots || clientContext && clientContext.conversation && clientContext.conversation.contextSlots,
