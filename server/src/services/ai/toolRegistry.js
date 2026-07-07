@@ -548,8 +548,8 @@ function getTodayCourses(input = {}, context = {}) {
       nextCourse: null,
       allFinished: false,
       currentSection: getCurrentSection(context.clientLocalTime || context.clientTime || new Date()),
-      summary: "未收到当前课表摘要，需要先绑定班级课表或导入 XLS 个人课表。",
-      actionUrl: "/pages/personal-sync/personal-sync?tab=xls",
+      summary: "未收到当前课表摘要，需要先打开个人课表同步并导入个人课表。",
+      actionUrl: "/pages/personal-sync/personal-sync",
     };
   }
   const date = input.date || inferTargetDate(input.message || "", context);
@@ -658,8 +658,8 @@ function getWeekSchedule(input = {}, context = {}) {
       weekUncertain: resolvedWeek.weekUncertain,
       days: [],
       courseCount: 0,
-      summary: "未收到当前课表摘要，需要先导入或授权个人课表摘要。",
-      actionUrl: "/pages/personal-sync/personal-sync?tab=xls",
+      summary: "未收到当前课表摘要，需要先打开个人课表同步并导入个人课表。",
+      actionUrl: "/pages/personal-sync/personal-sync",
     };
   }
   const days = [];
@@ -888,14 +888,16 @@ function explainPersonalImport(input = {}) {
   return {
     success: true,
     mode,
-    title: "个人课表 XLS 导入说明",
+    title: "个人课表导入说明",
     steps: [
-      "只保留 XLS 文件导入方案，AI 和小程序聊天框都不接收学号、密码、Cookie 或 token。",
+      "先打开个人课表同步主入口，再按页面提示选择合适的导入方式；AI 和小程序聊天框都不接收学号、密码、Cookie 或 token。",
+      "只有明确需要 XLS、表格或文件导入时，才进入 XLS 文件导入页签。",
       "从 100 网打印/导出的 XLS 课表会自动解析表头中的学期、班级、学院、打印日期和课程列。",
       "导入后写入本机当前课表缓存，AI 仅在你开启摘要时读取课程名、教师、教室、星期、节次和教学周。",
       "新学期或新版课表重新导入即可刷新本地课程索引，今日安排、空闲时间推荐和后端工具链会自动使用最新课表摘要。",
     ],
-    actionUrl: "/pages/personal-sync/personal-sync?tab=xls",
+    actionUrl: "/pages/personal-sync/personal-sync",
+    xlsActionUrl: "/pages/personal-sync/personal-sync?tab=xls",
   };
 }
 
@@ -935,7 +937,7 @@ function recommendMeetingTime(input = {}, context = {}) {
       needContext: true,
       candidates: [],
       summary: "需要参与者主动提供本地课表摘要后，才能计算共同空闲时间。",
-      actionUrl: "/pages/personal-sync/personal-sync?tab=xls",
+      actionUrl: "/pages/personal-sync/personal-sync",
     };
   }
   const duration = Math.max(1, Math.min(4, Number(input.durationSections || 2) || 2));

@@ -474,7 +474,7 @@ function sensitiveCredentialResponse(message, context, startTime) {
   });
   const stable = stableGeneratedPayload(generated);
   return buildResponse(Object.assign({}, stable, {
-    answer: "我不能接收或处理学号、密码、Cookie、token 等敏感信息。请不要在聊天里输入这些内容；如需导入个人课表，请使用 XLS 导入页面。",
+    answer: "我不能接收或处理学号、密码、Cookie、token 等敏感信息。请不要在聊天里输入这些内容；如需导入个人课表，请打开个人课表同步页面。",
     toolCalls: [{ name: "safety_guard", status: "skipped", summary: "检测到敏感凭证，已拦截并脱敏" }],
     provider: "mock",
     usedPersonalContext: false,

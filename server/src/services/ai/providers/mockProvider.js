@@ -78,10 +78,10 @@ function buildEmptyRoom(result) {
 function buildTodayCourses(result) {
   if (result.needContext) {
     return {
-      answer: "我还没有拿到当前课表摘要。先绑定班级课表或导入 XLS 后，就能分析今天和明天的安排。",
+      answer: "我还没有拿到当前课表摘要。先打开个人课表同步并导入个人课表后，就能分析今天和明天的安排。",
       cards: [makeCard("guide", "需要当前课表", result.summary, {
         badges: ["最小必要信息", "不需要密码"],
-        actions: [makeAction("去 XLS 导入", "bind", result.actionUrl || "/pages/personal-sync/personal-sync?tab=xls")],
+        actions: [makeAction("打开个人课表同步", "navigate", result.actionUrl || "/pages/personal-sync/personal-sync")],
       })],
       suggestions: ["怎么导入个人课表？", "问 AI 分析今天安排"],
     };
@@ -268,15 +268,18 @@ function buildDiagnosis(result) {
 
 function buildGuide(result) {
   return {
-    answer: "个人课表只推荐使用 XLS 导入。AI 不接收学号密码，只在你开启摘要后读取最小课程字段来做提醒和建议。",
-    cards: [makeCard("guide", result.title || "个人课表 XLS 导入", "新学期重新导入即可刷新本机课表和 AI 摘要", {
+    answer: "个人课表请先打开个人课表同步主入口。AI 不接收学号密码，只在你开启摘要后读取最小课程字段来做提醒和建议；明确需要表格文件时再查看 XLS 文件导入。",
+    cards: [makeCard("guide", result.title || "个人课表导入", "新学期重新导入即可刷新本机课表和 AI 摘要", {
       badges: ["无需密码", "最小化字段", "本地优先"],
       items: (result.steps || []).map((step, index) => ({
         title: `步骤 ${index + 1}`,
         subtitle: step,
         value: "",
       })),
-      actions: [makeAction("去 XLS 导入", "bind", result.actionUrl || "/pages/personal-sync/personal-sync?tab=xls")],
+      actions: [
+        makeAction("打开个人课表同步", "navigate", result.actionUrl || "/pages/personal-sync/personal-sync"),
+        makeAction("查看 XLS 文件导入", "navigate", result.xlsActionUrl || "/pages/personal-sync/personal-sync?tab=xls"),
+      ],
     })],
     suggestions: ["今天还有课吗？", "为什么数据加载失败？"],
   };
@@ -292,12 +295,12 @@ function buildClarification(result = {}) {
     class: "你想查哪个班级？请输入班级、年级或专业关键词。",
     schedule: "推荐组会或自习时间前，需要先开启课表摘要或导入 XLS 课表。",
   }[type] || "还需要一个关键词，请补充后我再查。";
-  const actionUrl = type === "schedule" ? "/pages/personal-sync/personal-sync?tab=xls" : (result.actionUrl || "/pages/school/school");
+  const actionUrl = type === "schedule" ? "/pages/personal-sync/personal-sync" : (result.actionUrl || "/pages/school/school");
   return {
     answer: copy,
     cards: [makeCard("guide", "还需要一个关键词", slot.prompt || "请补充必要信息后继续。", {
       badges: ["追问", "不编造事实"],
-      actions: [makeAction(type === "schedule" ? "去 XLS 导入" : "打开全校查询", type === "schedule" ? "bind" : "navigate", actionUrl)],
+      actions: [makeAction(type === "schedule" ? "打开个人课表同步" : "打开全校查询", "navigate", actionUrl)],
     })],
     suggestions: [
       "查某某老师课表",
@@ -366,7 +369,7 @@ function buildMeetingV2(result) {
       answer: result.summary || "需要先开启课表摘要或导入 XLS 个人课表，我才能推荐自习时间。",
       cards: [makeCard("guide", "需要课表摘要", "只会使用脱敏后的课程名、教师、教室、星期、节次和教学周。", {
         badges: ["XLS-only", "本地优先"],
-        actions: [makeAction("前往设置", "bind", result.actionUrl || "/pages/personal-sync/personal-sync?tab=xls")],
+        actions: [makeAction("打开个人课表同步", "navigate", result.actionUrl || "/pages/personal-sync/personal-sync")],
       })],
       suggestions: ["怎么导入个人课表？", "今天还有课吗？"],
     };

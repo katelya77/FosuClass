@@ -52,10 +52,10 @@ function getProjectCapabilityCards() {
     items: [
       { title: "查课程", subtitle: "输入课程名、教师、教室或行政班，可以查询对应安排。", value: "已核验" },
       { title: "找空教室", subtitle: "按当前时间或指定条件查找可用教室。", value: "已核验" },
-      { title: "导入个人课表", subtitle: "从教务系统导出 XLS 后，在小程序内按提示导入。", value: "本机授权" },
+      { title: "导入个人课表", subtitle: "先打开个人课表同步主入口，再按页面提示选择导入方式。", value: "本机授权" },
     ],
     actions: [
-      { label: "导入个人课表", type: "bind", url: "/pages/personal-sync/personal-sync?tab=xls", payload: {} },
+      { label: "打开个人课表同步", type: "navigate", url: "/pages/personal-sync/personal-sync", payload: {} },
       { label: "查看今日安排", type: "navigate", url: "/pages/today/today", payload: {} },
     ],
   }];

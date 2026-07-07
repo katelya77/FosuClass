@@ -416,7 +416,7 @@ function buildRecommendations(input = {}, context = {}, deps = {}) {
       candidates: [],
       weekUncertain: false,
       summary: formatRecommendationSummary({ needContext: true }),
-      actionUrl: "/pages/personal-sync/personal-sync?tab=xls",
+      actionUrl: "/pages/personal-sync/personal-sync",
     };
   }
 

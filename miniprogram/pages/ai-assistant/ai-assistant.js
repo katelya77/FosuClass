@@ -1098,6 +1098,122 @@ function resolveActionCopyText(action, card, message) {
   ]);
 }
 
+function cardItemsSummary(source) {
+  const items = Array.isArray(source && source.items) ? source.items : [];
+  return items.slice(0, 8).map((item) => {
+    const entry = item && typeof item === "object" && !Array.isArray(item) ? item : {};
+    return [
+      safeText(entry.title || entry.name || "", 80),
+      safeText(entry.value || entry.time || "", 60),
+      safeText(entry.subtitle || entry.desc || entry.detail || "", 120),
+    ].filter(Boolean).join(" ");
+  }).filter(Boolean).join("\n");
+}
+
+function buildCardCopyText(source, message, maxLength) {
+  const text = [
+    safeText(message && message.content || "", 1000),
+    safeText(source && source.copyText || "", 1000),
+    safeText(source && (source.summary || source.subtitle || source.title) || "", 500),
+    cardItemsSummary(source),
+  ].filter(Boolean).join("\n");
+  return safeText(text, maxLength || 1200);
+}
+
+function firstCardEntryUrl(source) {
+  const links = Array.isArray(source && source.relatedLinks) ? source.relatedLinks : [];
+  for (let index = 0; index < links.length; index += 1) {
+    const url = safeText(links[index] && links[index].url || "", 240);
+    if (url) return url;
+  }
+  return safeText(source && (source.url || source.actionUrl || source.sourceUrl) || "", 240);
+}
+
+function buildDefaultCardActions(source, type, message) {
+  const cardType = String(type || "");
+  const variant = safeText(source && source.variant || "", 30);
+  const title = safeText(source && source.title || "", 80);
+  const sourceUrl = safeText(source && source.sourceUrl || "", 240);
+  const entryUrl = firstCardEntryUrl(source);
+  const answerText = buildCardCopyText(source, message, 1200);
+  if (variant === "error" && ["school_knowledge", "navigation"].indexOf(cardType) >= 0) return [];
+  if (cardType === "import_guide") {
+    return [
+      { type: "navigate", label: "打开个人课表同步", url: PERSONAL_SYNC_URL },
+      { type: "navigate", label: "查看 XLS 文件导入", url: PERSONAL_SYNC_XLS_URL },
+      { type: "copy", label: "复制导入说明", payload: { text: answerText || "打开个人课表同步主入口，按页面提示选择导入方式；明确需要表格或文件导入时再进入 XLS 文件导入。" } },
+      { type: "ask", label: "继续问今天课程", payload: { message: "今天有什么课" } },
+    ];
+  }
+  if (cardType === "help") {
+    return [
+      { type: "copy", label: "复制说明", payload: { text: answerText } },
+      { type: "ask", label: "继续问课表", payload: { message: "今天有什么课" } },
+      { type: "openSheet", label: "更多任务", payload: { sheet: "task" } },
+    ];
+  }
+  if (cardType === "navigation") {
+    const actions = [];
+    if (entryUrl) {
+      actions.push(/^\/pages\//.test(entryUrl)
+        ? { type: "navigate", label: "打开入口", url: entryUrl }
+        : { type: "copy", label: "复制入口", payload: { text: entryUrl } });
+    }
+    if (sourceUrl && sourceUrl !== entryUrl) actions.push({ type: "copy", label: "复制来源", payload: { text: sourceUrl } });
+    actions.push({ type: "ask", label: "继续追问", payload: { message: `${title || "这个入口"}怎么用` } });
+    return actions;
+  }
+  if (cardType === "school_knowledge") {
+    const actions = [];
+    if (answerText) actions.push({ type: "copy", label: "复制回答", payload: { text: answerText } });
+    if (sourceUrl) actions.push({ type: "copy", label: "复制来源", payload: { text: sourceUrl } });
+    if (entryUrl && entryUrl !== sourceUrl && /^\/pages\//.test(entryUrl)) {
+      actions.push({ type: "navigate", label: "相关入口", url: entryUrl });
+    }
+    actions.push({ type: "ask", label: "继续追问", payload: { message: `${title || "这个问题"}还有哪些相关入口` } });
+    return actions;
+  }
+  if (["schedule_result", "schedule", "personal_schedule"].indexOf(cardType) >= 0) {
+    const actions = [];
+    if (entryUrl && /^\/pages\//.test(entryUrl)) actions.push({ type: "navigate", label: "查看完整课表", url: entryUrl });
+    else actions.push({ type: "navigate", label: "查看完整课表", url: "/pages/today/today" });
+    if (answerText) actions.push({ type: "copy", label: "复制课表摘要", payload: { text: answerText } });
+    actions.push({ type: "ask", label: "继续查本周", payload: { message: "本周课表" } });
+    actions.push({ type: "ask", label: "继续查明天", payload: { message: "明天有什么课" } });
+    return actions;
+  }
+  if (cardType === "schedule_status") {
+    return [
+      { type: "navigate", label: "查看全校课表", url: "/pages/school/school" },
+      { type: "copy", label: "复制状态", payload: { text: answerText } },
+    ];
+  }
+  if (cardType === "weather") {
+    const weather = source && source.weather || {};
+    const advice = safeText(weather.advice || source.copyText || answerText, 800);
+    return [
+      { type: "copy", label: "复制天气建议", payload: { text: advice } },
+      { type: "retry", label: "重新获取天气" },
+      { type: "ask", label: "继续问带伞", payload: { message: "今天要不要带伞" } },
+      { type: "ask", label: "明天适合跑步吗", payload: { message: "明天适合跑步吗" } },
+    ];
+  }
+  if (cardType === "clarification") {
+    return [
+      { type: "ask", label: "补充老师姓名", payload: { message: "查教师课表：" } },
+      { type: "ask", label: "补充教室", payload: { message: "查教室占用：" } },
+      { type: "ask", label: "补充班级", payload: { message: "查班级本周课表：" } },
+    ];
+  }
+  if (cardType === "not_found") {
+    return [
+      { type: "ask", label: "换个关键词", payload: { message: "我换一个关键词查询" } },
+      { type: "navigate", label: "打开全校课表", url: "/pages/school/school" },
+    ];
+  }
+  return answerText ? [{ type: "copy", label: "复制回答", payload: { text: answerText } }] : [];
+}
+
 function isInactiveScheduleItem(item) {
   const source = item || {};
   const status = String(source.status || source.weekStatus || source.activeStatus || source.weekReason || "").toLowerCase();
@@ -1127,7 +1243,7 @@ function cardKey(messageId, card, index) {
   return `${messageId}:${index}:${safeText(card && (card.title || card.type) || "card", 40)}`;
 }
 
-function normalizeCard(card, messageId, index, expandedCards) {
+function normalizeCard(card, messageId, index, expandedCards, message) {
   const source = card && typeof card === "object" && !Array.isArray(card) ? card : {};
   const rawType = safeText(source.type || "generic", 30, "generic").toLowerCase() || "generic";
   const type = rawType === "weather_card" ? "weather" : rawType;
@@ -1139,12 +1255,12 @@ function normalizeCard(card, messageId, index, expandedCards) {
   const items = filteredRawItems
     .map((item, itemIndex) => normalizeCardItem(item, itemIndex, type))
     .filter(Boolean);
-  const rawActions = Array.isArray(source.actions) ? source.actions : [];
+  const rawActions = (Array.isArray(source.actions) ? source.actions : []).concat(buildDefaultCardActions(source, type, message));
   const seenActions = {};
   const actions = rawActions.map(normalizeCardAction)
     .filter((action) => action && action.label && action.type !== "noop")
     .filter((action) => {
-      const key = `${action.type}|${action.url}|${action.label}`;
+      const key = `${action.type}|${action.url}|${action.label}|${action.payload && action.payload.text || ""}|${action.payload && action.payload.message || ""}`;
       if (seenActions[key]) return false;
       seenActions[key] = true;
       return true;
@@ -1222,7 +1338,7 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
     content: safeText(source.content || "", 1200),
     cards: Array.isArray(source.cards) ? source.cards : [],
     displayCards: Array.isArray(source.cards)
-      ? source.cards.slice(0, 5).map((card, index) => normalizeCard(card, id, index, expandedCards)).filter(Boolean)
+      ? source.cards.slice(0, 5).map((card, index) => normalizeCard(card, id, index, expandedCards, source)).filter(Boolean)
       : [],
     suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6).map((item) => safeText(item, 60)).filter(Boolean) : [],
     toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls : [],
