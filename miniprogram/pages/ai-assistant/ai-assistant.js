@@ -594,14 +594,26 @@ const CARD_TITLE_FALLBACKS = {
 
 const ACTION_LABEL_FALLBACKS = {
   navigate: "查看详情",
+  switchTab: "打开页面",
   retry: "重新尝试",
   copy: "复制",
-  bind: "前往设置",
   ask: "继续追问",
+  openSheet: "打开面板",
+  toggleFloat: "调整浮窗",
   noop: "查看",
 };
 
-const ALLOWED_ACTION_TYPES = ["navigate", "copy", "retry", "bind", "ask", "noop"];
+const ACTION_TYPE_ALIASES = {
+  bind: "navigate",
+  navigate: "navigate",
+  switchtab: "switchTab",
+  copy: "copy",
+  retry: "retry",
+  ask: "ask",
+  opensheet: "openSheet",
+  togglefloat: "toggleFloat",
+  noop: "noop",
+};
 const INVALID_DISPLAY_TEXT = new Set(["[object Object]", "undefined", "null", "NaN"]);
 
 function cloneTaskPanelGroups() {
@@ -1023,7 +1035,7 @@ function normalizeCardItem(item, index, cardType) {
 function normalizeCardAction(action, index) {
   const source = action && typeof action === "object" && !Array.isArray(action) ? action : {};
   const rawType = safeText(source.type || "noop", 20, "noop").toLowerCase();
-  const type = ALLOWED_ACTION_TYPES.indexOf(rawType) >= 0 ? rawType : "noop";
+  const type = ACTION_TYPE_ALIASES[rawType] || "noop";
   const label = safeText(source.label, 30, ACTION_LABEL_FALLBACKS[type] || ACTION_LABEL_FALLBACKS.noop) ||
     ACTION_LABEL_FALLBACKS[type] ||
     ACTION_LABEL_FALLBACKS.noop;
@@ -1033,8 +1045,28 @@ function normalizeCardAction(action, index) {
     url: safeText(source.url || "", 240),
     text: safeText(source.text || "", 600),
     fallbackText: safeText(source.fallbackText || "", 600),
+    confirm: normalizeActionConfirm(source.confirm),
+    toast: safeText(source.toast || "", 40),
+    analyticsName: safeText(source.analyticsName || "", 80),
     payload: source.payload && typeof source.payload === "object" && !Array.isArray(source.payload) ? source.payload : {},
     originalIndex: index,
+  };
+}
+
+function normalizeActionConfirm(value) {
+  if (!value) return null;
+  if (typeof value === "string") {
+    const content = safeText(value, 120);
+    return content ? { title: "确认操作", content } : null;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const content = safeText(value.content || value.text || "", 140);
+  if (!content) return null;
+  return {
+    title: safeText(value.title || "确认操作", 40, "确认操作") || "确认操作",
+    content,
+    confirmText: safeText(value.confirmText || "继续", 8, "继续") || "继续",
+    cancelText: safeText(value.cancelText || "取消", 8, "取消") || "取消",
   };
 }
 
@@ -2365,26 +2397,118 @@ Page({
     const message = this.data.messages[messageIndex] || {};
     const card = (message.displayCards || [])[cardIndex] || {};
     const action = (card.actions || [])[actionIndex] || {};
-    const type = action.type || "noop";
+    this.executeCardAction(action, { messageIndex, cardIndex, actionIndex, message, card });
+  },
 
+  executeCardAction(action, context) {
+    const safeAction = action && typeof action === "object" && !Array.isArray(action) ? action : {};
+    if (safeAction.confirm) {
+      wx.showModal({
+        title: safeAction.confirm.title || "确认操作",
+        content: safeAction.confirm.content || "",
+        confirmText: safeAction.confirm.confirmText || "继续",
+        cancelText: safeAction.confirm.cancelText || "取消",
+        success: (res) => {
+          if (res.confirm) this.performCardAction(safeAction, context || {});
+        },
+        fail: () => this.showActionFallback("操作已取消"),
+      });
+      return;
+    }
+    this.performCardAction(safeAction, context || {});
+  },
+
+  performCardAction(action, context) {
+    const type = action.type || "noop";
+    const payload = action.payload && typeof action.payload === "object" && !Array.isArray(action.payload)
+      ? action.payload
+      : {};
     if (type === "retry") {
-      this.sendMessage(action.payload && action.payload.message || this.findLastUserMessage(), {
-        retryAssistantIndex: messageIndex,
+      const message = firstCopyableText([payload.message, action.fallbackText, this.findLastUserMessage()]);
+      if (!message) {
+        this.showActionFallback("暂无可重试的问题");
+        return;
+      }
+      this.sendMessage(message, {
+        retryAssistantIndex: Number(context && context.messageIndex),
       });
       return;
     }
     if (type === "copy") {
-      this.copyToClipboard(resolveActionCopyText(action, card, message));
+      this.copyToClipboard(resolveActionCopyText(action, context && context.card, context && context.message));
       return;
     }
     if (type === "ask") {
-      const nextMessage = action.payload && action.payload.message || action.label || "";
-      if (nextMessage) this.queueTaskMessage(nextMessage);
+      const nextMessage = firstCopyableText([payload.message, action.text, action.fallbackText, action.label]);
+      if (!nextMessage) {
+        this.showActionFallback("暂无可追问内容");
+        return;
+      }
+      this.queueTaskMessage(nextMessage);
       return;
     }
-    if ((type === "navigate" || type === "bind") && action.url) {
-      this.navigateByUrl(action.url);
+    if (type === "navigate" || type === "switchTab") {
+      const url = firstCopyableText([action.url, payload.url]);
+      if (!url) {
+        this.showActionFallback("暂时无法打开该入口");
+        return;
+      }
+      this.navigateByUrl(url, {
+        forceSwitchTab: type === "switchTab",
+        toast: action.toast,
+      });
+      return;
     }
+    if (type === "toggleFloat") {
+      this.applyFloatAction(payload);
+      return;
+    }
+    if (type === "openSheet") {
+      this.openActionSheet(payload);
+      return;
+    }
+    this.showActionFallback(action.toast || "暂时无法执行该操作");
+  },
+
+  showActionFallback(title) {
+    wx.showToast({ title: title || "操作失败，请稍后再试", icon: "none" });
+  },
+
+  openActionSheet(payload) {
+    const sheet = safeText(payload && (payload.sheet || payload.name || payload.target), 40).toLowerCase();
+    if (["task", "tasks", "taskpanel"].indexOf(sheet) >= 0) {
+      this.openTaskPanelNow();
+      return;
+    }
+    if (["conversation", "conversations", "chat"].indexOf(sheet) >= 0) {
+      this.openConversationSheet();
+      return;
+    }
+    if (["help", "capability", "capabilities"].indexOf(sheet) >= 0) {
+      this.openCapabilityGuide();
+      return;
+    }
+    if (["privacy", "schedule-summary"].indexOf(sheet) >= 0) {
+      this.openPrivacySheet();
+      return;
+    }
+    if (["menu", "more"].indexOf(sheet) >= 0) {
+      this.openHeaderMenu();
+      return;
+    }
+    this.showActionFallback("暂时无法打开该面板");
+  },
+
+  applyFloatAction(payload) {
+    const explicitEnabled = payload && typeof payload.enabled === "boolean" ? payload.enabled : null;
+    const nextEnabled = explicitEnabled === null ? !xiaofuFloatService.isEnabled() : explicitEnabled;
+    if (nextEnabled) {
+      xiaofuFloatService.enableEverywhere();
+    } else {
+      xiaofuFloatService.setEnabled(false);
+    }
+    this.setData(Object.assign({}, buildXiaofuFloatState()));
+    wx.showToast({ title: nextEnabled ? "已开启小佛AI浮窗" : "已关闭小佛AI浮窗", icon: "none" });
   },
 
   onCopyMessage(event) {
@@ -2405,7 +2529,8 @@ Page({
     return "";
   },
 
-  navigateByUrl(url) {
+  navigateByUrl(url, options) {
+    const navOptions = options || {};
     const parsed = parseActionUrl(url);
     if (!parsed.path) return;
     if (/^https?:\/\//i.test(parsed.raw)) {
@@ -2413,20 +2538,37 @@ Page({
       return;
     }
     const storageKey = TABBAR_PENDING_QUERY[parsed.path];
-    if (storageKey) {
+    if (storageKey || navOptions.forceSwitchTab) {
       if (parsed.query && Object.keys(parsed.query).length) {
         try {
-          wx.setStorageSync(storageKey, Object.assign({}, parsed.query, { fromAiAssistant: true, ts: Date.now() }));
+          if (storageKey) {
+            wx.setStorageSync(storageKey, Object.assign({}, parsed.query, { fromAiAssistant: true, ts: Date.now() }));
+          }
         } catch (error) {
           // switchTab still opens the target page.
         }
       }
-      wx.switchTab({ url: parsed.path });
+      wx.switchTab({
+        url: parsed.path,
+        success: () => {
+          if (navOptions.toast) wx.showToast({ title: navOptions.toast, icon: "none" });
+        },
+        fail: (error) => {
+          console.warn("[ai-action] switchTab failed", error);
+          wx.showToast({ title: "暂时无法打开该页面", icon: "none" });
+        },
+      });
       return;
     }
     wx.navigateTo({
       url: parsed.raw,
-      fail: () => wx.showToast({ title: "暂时无法打开该页面，可复制入口再试", icon: "none" }),
+      success: () => {
+        if (navOptions.toast) wx.showToast({ title: navOptions.toast, icon: "none" });
+      },
+      fail: (error) => {
+        console.warn("[ai-action] navigateTo failed", error);
+        wx.showToast({ title: "暂时无法打开该页面，可复制入口再试", icon: "none" });
+      },
     });
   },
 });
