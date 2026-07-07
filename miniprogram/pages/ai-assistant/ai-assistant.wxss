@@ -468,17 +468,39 @@ button::after {
 }
 
 .message-meta {
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
   margin-top: 7rpx;
   color: #98a2b3;
   font-size: 18rpx;
   line-height: 1.35;
+}
+
+.message-meta-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .message-row.user .message-meta {
   color: rgba(255, 255, 255, 0.78);
+}
+
+.message-copy-btn {
+  flex: 0 0 auto;
+  height: 34rpx;
+  padding: 0 10rpx;
+  border-radius: 999rpx;
+  background: #f4f6f8;
+  color: #667085;
+  font-size: 17rpx;
+  font-weight: 800;
+  line-height: 34rpx;
+  text-align: center;
 }
 
 .tool-strip {

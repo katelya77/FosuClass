@@ -11,6 +11,10 @@ function isLocalUrl(url) {
   return /^\/pages\//.test(String(url || ""));
 }
 
+function isExternalUrl(url) {
+  return /^https?:\/\//i.test(String(url || ""));
+}
+
 function formatConfidence(confidence) {
   const value = Number(confidence || 0);
   if (value >= 0.85) return "高可信";
@@ -22,29 +26,86 @@ function displayCategory(doc) {
   return safeText(doc && (doc.categoryLabel || doc.category) || "", 40);
 }
 
-function buildRelatedActions(doc) {
-  const actions = [];
-  const links = Array.isArray(doc.relatedLinks) ? doc.relatedLinks : [];
-  links.forEach((link) => {
-    if (actions.length >= 2) return;
-    const label = safeText(link.label || "相关入口", 18);
-    const url = safeText(link.url, 260);
-    if (!label || !url) return;
-    actions.push({
-      label: isLocalUrl(url) ? label : `复制${label}`,
-      type: isLocalUrl(url) ? "navigate" : "copy",
-      url: isLocalUrl(url) ? url : "",
-      payload: isLocalUrl(url) ? {} : { text: url },
-    });
-  });
-  if (doc.sourceUrl && actions.length < 3) {
-    actions.push({
-      label: "复制来源",
+function compactDocAnswer(doc) {
+  return safeText(doc && (doc.summary || doc.content) || "", 600);
+}
+
+function firstRelatedLink(doc) {
+  const links = Array.isArray(doc && doc.relatedLinks) ? doc.relatedLinks : [];
+  return links.find((link) => link && link.url) || null;
+}
+
+function buildEntryAction(link, fallbackUrl, fallbackLabel) {
+  const url = safeText(link && link.url || fallbackUrl || "", 260);
+  const label = safeText(link && link.label || fallbackLabel || "相关入口", 18);
+  if (!url) return null;
+  if (isLocalUrl(url)) {
+    return {
+      label: label.indexOf("打开") === 0 ? label : `打开${label}`,
+      type: "navigate",
+      url,
+      payload: {},
+    };
+  }
+  if (isExternalUrl(url)) {
+    return {
+      label: "复制入口",
       type: "copy",
-      payload: { text: doc.sourceUrl },
+      payload: { text: url },
+    };
+  }
+  return {
+    label: "复制入口",
+    type: "copy",
+    payload: { text: url },
+  };
+}
+
+function uniqueActions(actions) {
+  const seen = {};
+  return actions.filter(Boolean).filter((action) => {
+    const key = [
+      action.type,
+      action.url || "",
+      action.label || "",
+      action.payload && action.payload.text || "",
+      action.payload && action.payload.message || "",
+    ].join("|");
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
+  });
+}
+
+function buildRelatedActions(doc, mode) {
+  const actions = [];
+  const primaryLink = firstRelatedLink(doc);
+  const answerText = compactDocAnswer(doc);
+  if (mode === "knowledge" && answerText) {
+    actions.push({
+      label: "复制回答",
+      type: "copy",
+      payload: { text: answerText },
     });
   }
-  return actions;
+  const entryAction = buildEntryAction(primaryLink, doc.sourceUrl, primaryLink && primaryLink.label || doc.title || "入口");
+  if (entryAction) actions.push(entryAction);
+  if (doc.sourceUrl) {
+    actions.push({ label: "复制来源", type: "copy", payload: { text: doc.sourceUrl } });
+  }
+  if (mode === "navigation") {
+    const entryUrl = primaryLink && primaryLink.url || doc.sourceUrl || "";
+    if (entryUrl) actions.push({ label: "复制入口", type: "copy", payload: { text: entryUrl } });
+  }
+  const followup = mode === "navigation"
+    ? `${safeText(doc.title, 40)}怎么用`
+    : `${safeText(doc.title, 40)}还有哪些相关入口`;
+  actions.push({
+    label: "继续追问",
+    type: "ask",
+    payload: { message: followup },
+  });
+  return uniqueActions(actions).slice(0, 4);
 }
 
 function buildKnowledgeCard(doc, query) {
@@ -76,7 +137,7 @@ function buildKnowledgeCard(doc, query) {
     subtitle: category,
     badges: [category, formatConfidence(doc.confidence)].filter(Boolean),
     items,
-    actions: buildRelatedActions(doc),
+    actions: buildRelatedActions(doc, "knowledge"),
     sourceUrl: doc.sourceUrl || "",
     updatedAt: doc.updatedAt || "",
   };
@@ -111,7 +172,7 @@ function buildNavigationCard(doc, query) {
     subtitle: category,
     badges: ["入口", category, formatConfidence(doc.confidence)].filter(Boolean),
     items,
-    actions: buildRelatedActions(doc),
+    actions: buildRelatedActions(doc, "navigation"),
     sourceUrl: doc.sourceUrl || "",
     updatedAt: doc.updatedAt || "",
   };

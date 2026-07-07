@@ -473,6 +473,8 @@ function buildScheduleResponse(parsed, target, detailPayload, releaseParams, sta
     week: parsed.week,
     weekday: parsed.weekday,
   };
+  const followupWeek = Number(parsed.week || releaseParams.currentTeachingWeek || 0);
+  const nextWeekText = followupWeek ? `第${Math.max(1, followupWeek + 1)}周` : "其他周次";
   const card = {
     type: "schedule_result",
     title,
@@ -488,6 +490,20 @@ function buildScheduleResponse(parsed, target, detailPayload, releaseParams, sta
         label: "查看完整课表",
         type: "navigate",
         url: scheduleNavigator.buildScheduleViewUrl(scheduleUrlParams),
+      },
+      {
+        label: "复制课表摘要",
+        type: "copy",
+        payload: {
+          text: `${title} ${subtitle}\n${courseItems.map((item) => `${item.title}${item.value ? ` ${item.value}` : ""}${item.subtitle ? `：${item.subtitle}` : ""}`).join("\n")}`,
+        },
+      },
+      {
+        label: parsed.weekday ? "继续查其他星期" : "继续查其他周次",
+        type: "ask",
+        payload: {
+          message: parsed.weekday ? `${target.name}看全周课表` : `${target.name}${nextWeekText}课表`,
+        },
       },
       {
         label: "打开全校课表",
