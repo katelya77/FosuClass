@@ -5,7 +5,7 @@ process.env.AI_AGENT_ENABLED = "false";
 const agentService = require("../server/src/services/ai/agentService");
 
 const ALLOWED_CARD_TYPES = new Set(["empty_room", "schedule", "teacher", "course", "diagnosis", "guide", "reminder", "generic"]);
-const ALLOWED_ACTION_TYPES = new Set(["navigate", "copy", "retry", "bind", "noop"]);
+const ALLOWED_ACTION_TYPES = new Set(["navigate", "switchTab", "copy", "retry", "ask", "openSheet", "toggleFloat", "noop"]);
 
 async function run() {
   const response = await agentService.chat({

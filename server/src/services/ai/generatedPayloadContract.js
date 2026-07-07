@@ -12,7 +12,7 @@ const ALLOWED_CARD_TYPES = new Set([
   "generic",
 ]);
 
-const ALLOWED_ACTION_TYPES = new Set(["navigate", "copy", "retry", "bind", "noop"]);
+const ALLOWED_ACTION_TYPES = new Set(["navigate", "switchTab", "copy", "retry", "ask", "openSheet", "toggleFloat", "noop"]);
 
 const ALLOWED_NAVIGATION_URLS = new Set([
   "/pages/school/school",
@@ -38,9 +38,12 @@ const CARD_TITLE_FALLBACKS = {
 
 const ACTION_LABEL_FALLBACKS = {
   navigate: "查看详情",
+  switchTab: "打开页面",
   retry: "重新尝试",
   copy: "复制",
-  bind: "前往设置",
+  ask: "继续追问",
+  openSheet: "打开面板",
+  toggleFloat: "调整浮窗",
   noop: "查看",
 };
 
@@ -84,6 +87,10 @@ function safePrimitiveText(value, fallback = "", maxLength = 0) {
 
 function normalizeActionType(type) {
   const value = safePrimitiveText(type, "noop", 20).toLowerCase();
+  if (value === "bind") return "navigate";
+  if (value === "switchtab") return "switchTab";
+  if (value === "opensheet") return "openSheet";
+  if (value === "togglefloat") return "toggleFloat";
   return ALLOWED_ACTION_TYPES.has(value) ? value : "noop";
 }
 
@@ -109,7 +116,7 @@ function stableAction(action) {
   const source = action && typeof action === "object" && !Array.isArray(action) ? action : {};
   let type = normalizeActionType(source.type);
   let url = safePrimitiveText(source.url, "", 240);
-  if ((type === "navigate" || type === "bind") && !isAllowedNavigationUrl(url)) {
+  if ((type === "navigate" || type === "switchTab") && !isAllowedNavigationUrl(url)) {
     type = "noop";
     url = "";
   }
@@ -118,12 +125,21 @@ function stableAction(action) {
   }
   const fallbackLabel = ACTION_LABEL_FALLBACKS[type] || ACTION_LABEL_FALLBACKS.noop;
   const label = safePrimitiveText(source.label, fallbackLabel, 30) || fallbackLabel;
-  return {
+  const normalized = {
     label,
     type,
     url,
     payload: normalizePayloadObject(source.payload),
   };
+  const confirm = source.confirm ? normalizePayloadObject(source.confirm) : {};
+  const toast = safePrimitiveText(source.toast, "", 40);
+  const analyticsName = safePrimitiveText(source.analyticsName, "", 80);
+  const fallbackText = safePrimitiveText(source.fallbackText, "", 600);
+  if (Object.keys(confirm).length) normalized.confirm = confirm;
+  if (toast) normalized.toast = toast;
+  if (analyticsName) normalized.analyticsName = analyticsName;
+  if (fallbackText) normalized.fallbackText = fallbackText;
+  return normalized;
 }
 
 function stableCardItem(item) {

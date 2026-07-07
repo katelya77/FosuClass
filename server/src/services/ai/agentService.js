@@ -320,6 +320,7 @@ function sanitizePublicAction(action) {
 
 function sanitizePublicCard(card) {
   const source = stableCard(card || {});
+  const urlOptionalActionTypes = new Set(["noop", "copy", "retry", "ask", "openSheet", "toggleFloat"]);
   return Object.assign({}, source, {
     title: sanitizePublicText(source.title, "结果"),
     subtitle: sanitizePublicText(source.subtitle, ""),
@@ -329,7 +330,7 @@ function sanitizePublicCard(card) {
       subtitle: sanitizePublicText(item.subtitle, ""),
       value: sanitizePublicText(item.value, ""),
     })).filter((item) => item.title || item.subtitle || item.value).slice(0, 8),
-    actions: (source.actions || []).map(sanitizePublicAction).filter((item) => item.type === "noop" || item.url || item.type === "copy").slice(0, 3),
+    actions: (source.actions || []).map(sanitizePublicAction).filter((item) => item.url || urlOptionalActionTypes.has(item.type)).slice(0, 3),
   });
 }
 
