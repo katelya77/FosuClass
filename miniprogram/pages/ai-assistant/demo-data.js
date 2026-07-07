@@ -120,7 +120,7 @@ const DEMO_RESPONSES = {
     }],
   },
   guide: {
-    answer: "演示数据：XLS 导入适合录入自己的课程安排。导入前请确认文件来自可信来源，页面只保留课程必要字段。",
+    answer: "演示数据：个人课表同步用于把自己的课程带入首页、今日课程和 AI 摘要。需要表格文件时，再选择 XLS 文件导入。",
     toolCalls: [
       { name: "explain_personal_import", status: "success" },
     ],
@@ -128,17 +128,18 @@ const DEMO_RESPONSES = {
     suggestions: ["怎么导入个人课表？", "看今天课程"],
     cards: [{
       type: "guide",
-      title: "演示数据 · XLS 导入指引",
-      subtitle: "适合手动导入个人课程，用于首页、今日课程和 AI 摘要。",
+      title: "演示数据 · 个人课表同步",
+      subtitle: "先进入同步主入口，再按自己的数据来源选择导入方式。",
       badges: ["演示数据", "导入指引", "本机处理"],
       items: [
-        { title: "进入个性化", subtitle: "首页点击个性化或设置入口", value: "第 1 步" },
-        { title: "选择 XLS 导入", subtitle: "按页面提示选择课程文件", value: "第 2 步" },
+        { title: "进入同步入口", subtitle: "打开个人课表同步页面", value: "第 1 步" },
+        { title: "选择导入方式", subtitle: "按页面提示选择适合自己的来源", value: "第 2 步" },
         { title: "检查课程字段", subtitle: "确认课程名、教师、教室、节次和教学周", value: "第 3 步" },
         { title: "启用摘要", subtitle: "需要 AI 结合本机课程时再开启", value: "可选" },
       ],
       actions: [
-        { label: "打开导入页", type: "navigate", url: "/pages/personal-sync/personal-sync?tab=xls", payload: {} },
+        { label: "打开个人课表同步", type: "navigate", url: "/pages/personal-sync/personal-sync", payload: {} },
+        { label: "查看 XLS 文件导入", type: "navigate", url: "/pages/personal-sync/personal-sync?tab=xls", payload: {} },
       ],
     }],
   },

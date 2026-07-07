@@ -10,7 +10,7 @@ const { copyToClipboard: copyTextToClipboard, normalizeCopyText } = require("../
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
-const TASK_PANEL_CACHE_VERSION = "2026-07-campus-agent-v4";
+const TASK_PANEL_CACHE_VERSION = "2026-07-campus-agent-v5";
 const TASK_PANEL_DEBOUNCE_MS = 180;
 const TASK_ACTION_DEBOUNCE_MS = 180;
 const SEND_DEDUPE_MS = 420;
@@ -265,7 +265,7 @@ const AI_CAPABILITY_REGISTRY = [
     iconPath: ICONS.xls,
     label: "个人课表同步",
     quickLabel: "导入课表",
-    className: "xls",
+    className: "sync",
     taskGroup: "个人课表",
     taskLabel: "导入个人课表",
     taskDesc: "打开同步主入口",
@@ -429,7 +429,7 @@ const QUICK_ACTIONS = [
   buildQuickAction("classSchedule", "class"),
   buildQuickAction("classroomOccupancy", "room"),
   buildQuickAction("campusWeather", "weather"),
-  buildQuickAction("personalSync", "xls"),
+  buildQuickAction("personalSync", "sync"),
 ];
 
 const WELCOME_EXAMPLES = [
@@ -620,10 +620,25 @@ function cloneTaskPanelGroups() {
   return JSON.parse(JSON.stringify(TASK_PANEL_GROUPS));
 }
 
+function hasLegacyPersonalImportTask(groups) {
+  if (!Array.isArray(groups)) return true;
+  return groups.some((group) => {
+    const items = Array.isArray(group && group.items) ? group.items : [];
+    return items.some((item) => {
+      const label = safeText(item && item.label, 40);
+      const url = safeText(item && item.url, 120);
+      if (item && item.abilityId === "personalSync" && url && url !== PERSONAL_SYNC_URL) return true;
+      if (item && item.abilityId === "xlsImport" && /导入个人课表|个人课表同步/.test(label)) return true;
+      return /导入个人课表|个人课表同步/.test(label) && /tab=xls/.test(url);
+    });
+  });
+}
+
 function readTaskPanelGroupsCache() {
   try {
     const cached = wx.getStorageSync(TASK_PANEL_CACHE_KEY);
     if (!cached || cached.version !== TASK_PANEL_CACHE_VERSION || !Array.isArray(cached.groups)) return null;
+    if (hasLegacyPersonalImportTask(cached.groups)) return null;
     return cached.groups;
   } catch (error) {
     return null;
@@ -1984,7 +1999,7 @@ Page({
   },
 
   onQuickAction(event) {
-    const actionId = event.currentTarget.dataset.actionId;
+    const actionId = event.currentTarget.dataset.actionId === "xls" ? "sync" : event.currentTarget.dataset.actionId;
     const action = QUICK_ACTIONS.find((item) => item.id === actionId || item.abilityId === actionId);
     if (!action) return;
     this.dispatchCapabilityAction(action, action.message || action.label);
@@ -2001,6 +2016,15 @@ Page({
     const group = this.data.taskPanelGroups[groupIndex] || {};
     const task = Array.isArray(group.items) ? group.items[taskIndex] : null;
     if (!task) return;
+    if (task.abilityId === "personalSync") {
+      this.setData({
+        showTaskPanel: false,
+        showCapabilityGuide: false,
+        showConversationSheet: false,
+      });
+      this.navigateByUrl(PERSONAL_SYNC_URL, { toast: "已打开个人课表同步" });
+      return;
+    }
     this.dispatchCapabilityAction(task, task.message || task.fallbackMessage || task.label, { closeTaskPanel: true });
   },
 

@@ -73,7 +73,13 @@
 
       <view class="message-body">
         <view class="message-bubble" wx:if="{{message.content}}">
-          <view class="message-content">{{message.content}}</view>
+            <view class="message-content">
+              <text
+                class="message-content-text"
+                selectable="{{message.role == 'assistant'}}"
+                user-select="{{message.role == 'assistant'}}"
+              >{{message.content}}</text>
+            </view>
           <view class="message-meta">
             <view class="message-meta-text">
               <text>{{message.timeText}}</text>
@@ -311,7 +317,7 @@
     <view class="task-panel-head">
       <view class="panel-title-wrap">
         <view class="task-panel-title">更多任务</view>
-        <view class="task-panel-subtitle">辅助入口，核心回答仍在当前对话</view>
+        <view class="task-panel-subtitle">常用问答和校园入口</view>
       </view>
       <button class="sheet-close" bindtap="closeTaskPanel">关闭</button>
     </view>
