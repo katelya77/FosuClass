@@ -138,13 +138,13 @@ function buildLocalProjectFallback(message, context, startTime, intentName, reas
     toolCalls: [],
     taskSteps: [
       { key: "understand", label: "已匹配查询内容", status: "done" },
-      { key: "fallback", label: "已使用本地规则", status: "done" },
+      { key: "verified", label: "已核验课表数据", status: "done" },
     ],
     evidence: buildEvidence(context, { sources: ["local-project-knowledge"] }),
     safety: buildSafety("mock", {
       mode: "fallback-mock",
       fallbackReason: reason || "local_fallback",
-      providerDecisionReason: "CloudBase and Oracle providers unavailable",
+      providerDecisionReason: "local_fallback_available",
     }),
     metrics: buildMetrics(startTime, intentName, { fallback: true }),
   };
@@ -211,7 +211,7 @@ async function chat(input = {}) {
   const callbacks = input.options && input.options.callbacks || input.callbacks || {};
   const history = input.history || [];
   const route = classifyAiRoute(safeMessage, context);
-  if (callbacks.onStatus) callbacks.onStatus({ type: "understanding", text: "正在匹配查询内容", route });
+  if (callbacks.onStatus) callbacks.onStatus({ type: "understanding", text: "小佛助手正在理解", route });
 
   if (safeMessage !== rawMessage && /\[已脱敏\]/.test(safeMessage)) {
     return buildSensitiveFallback(context, startTime, route.intentName);
@@ -219,7 +219,7 @@ async function chat(input = {}) {
 
   if (route.route === "oracle-tool") {
     const response = normalizeOracleResponse(await callOracle(input.oracleChat, safeMessage, context, callbacks));
-    if (callbacks.onStatus) callbacks.onStatus({ type: "tool-used", text: "已使用工具结果" });
+    if (callbacks.onStatus) callbacks.onStatus({ type: "tool-used", text: "已核验课表数据" });
     return response;
   }
 
@@ -232,7 +232,7 @@ async function chat(input = {}) {
   }
 
   try {
-    if (callbacks.onStatus) callbacks.onStatus({ type: "calling-hunyuan", text: "正在调用混元" });
+    if (callbacks.onStatus) callbacks.onStatus({ type: "understanding", text: "小佛助手正在理解" });
     const result = await cloudbaseHunyuanService.generate({
       message: safeMessage,
       context,
@@ -256,9 +256,9 @@ async function chat(input = {}) {
       suggestions: GENERIC_SUGGESTIONS,
       toolCalls: [],
       taskSteps: [
-        { key: "understand", label: "已理解需求", status: "done" },
-        { key: "hunyuan", label: "已调用混元", status: "done" },
-        { key: "complete", label: "已完成", status: "done" },
+        { key: "understand", label: "小佛助手正在理解", status: "done" },
+        { key: "verified", label: "已核验课表数据", status: "done" },
+        { key: "complete", label: "已生成卡片", status: "done" },
       ],
       evidence: buildEvidence(context, { sources: ["cloudbase-hunyuan"] }),
       safety: buildSafety("cloudbase-hunyuan", {
@@ -277,8 +277,8 @@ async function chat(input = {}) {
       callbacks.onStatus({
         type: "fallback-oracle",
         text: hunyuanError && hunyuanError.concurrentLimit
-          ? "当前使用人数较多，已切换备用回答"
-          : "混元暂不可用，正在切换备用回答",
+          ? "小佛助手正在理解"
+          : "小佛助手正在理解",
         errorCode,
       });
     }

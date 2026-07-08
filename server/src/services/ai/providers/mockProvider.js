@@ -594,13 +594,31 @@ function buildMultiStep(toolResults = []) {
   };
 }
 
-function generate({ intent, toolResults, message, context }) {
+function buildLocalRuleReply(rule = {}) {
+  const answer = String(rule.reply || rule.body || "").trim();
+  if (!answer) return null;
+  const card = rule.card && rule.card.type ? rule.card : makeCard("guide", rule.title || "小佛助手", "", {
+    badges: ["本地规则", "知识库"],
+    items: [],
+    actions: rule.action && rule.action.type ? [rule.action] : [],
+  });
+  return {
+    answer,
+    cards: [card],
+    suggestions: Array.isArray(rule.suggestions) && rule.suggestions.length
+      ? rule.suggestions.slice(0, 6)
+      : ["查今日课表", "查空教室", "怎么导入个人课表？"],
+  };
+}
+
+function generate({ intent, toolResults, message, context, localRule }) {
   const first = toolResults && toolResults[0] && toolResults[0].result;
   const findResult = (name) => {
     const match = Array.isArray(toolResults) ? toolResults.find((item) => item && item.name === name) : null;
     return match && match.result;
   };
   const name = intent && intent.name;
+  const rulePayload = (name === "project_qa" || name === "conversational_help") ? buildLocalRuleReply(localRule) : null;
   const payload = name === "search_empty_rooms" ? buildEmptyRoom(first || {}) :
     name === "get_today_courses" ? buildTodayCourses(first || {}) :
     name === "get_tomorrow_courses" ? buildTomorrowCourses(first || {}) :
@@ -619,6 +637,7 @@ function generate({ intent, toolResults, message, context }) {
     name === "rag_search" ? buildKnowledge(first || {}) :
     name === "campus_multi_step_advice" ? buildMultiStep(toolResults || []) :
     name === "generate_image" ? buildKnowledge({ items: [], summary: first && first.summary || "生图能力未启用" }) :
+    rulePayload ? rulePayload :
     (name === "project_qa" || name === "conversational_help") ? projectKnowledgeService.generateFallbackResponse(name, message || "", context && context.assistantEnvironment || context && context.runtimeMode || "public") :
     buildGeneric();
   return Object.assign({ provider: "mock" }, payload);

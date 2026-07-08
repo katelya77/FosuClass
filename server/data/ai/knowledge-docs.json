@@ -1,30 +1,3766 @@
 {
-  "version": "knowledge.v1",
-  "updatedAt": "2026-06-16",
-  "docs": [
+  "version": "assistant-kb.v2",
+  "updatedAt": "2026-07-08T13:04:15.429Z",
+  "currentVersion": "assistant-local-rules-20260708130415",
+  "draft": {
+    "rules": [
+      {
+        "id": "rule-xiaofu-intro",
+        "sourceId": "rule-xiaofu-intro",
+        "type": "rule",
+        "title": "小佛助手能力介绍",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "help"
+        ],
+        "keywords": [
+          "你是谁",
+          "小佛",
+          "能做什么",
+          "帮助"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 90,
+        "body": "我是小佛助手，可以帮你查课表、找空教室、看教学周、解释个人课表导入方式，也能回答佛课小表的使用问题。涉及课程、教师、教室和空教室的事实，我会以已核验的工具数据为准。",
+        "updatedAt": "2026-06-16T00:00:00.000Z",
+        "intentName": "",
+        "toolName": "",
+        "cardType": "",
+        "reply": "我是小佛助手，可以帮你查课表、找空教室、看教学周、解释个人课表导入方式，也能回答佛课小表的使用问题。涉及课程、教师、教室和空教室的事实，我会以已核验的工具数据为准。",
+        "suggestions": [],
+        "action": {},
+        "card": {}
+      },
+      {
+        "id": "assistant-rule-capability-intro",
+        "sourceId": "assistant-rule-capability-intro",
+        "type": "rule",
+        "title": "小佛助手能力介绍",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "你能做什么",
+          "佛课小表能做什么",
+          "小佛助手",
+          "怎么用",
+          "使用帮助"
+        ],
+        "synonyms": [
+          "能力介绍",
+          "功能介绍",
+          "校园助手",
+          "佛课小表"
+        ],
+        "patterns": [
+          "(你|小佛).*(能做|会做|能查)",
+          "佛课小表.*(功能|能做什么|怎么用)"
+        ],
+        "priority": 160,
+        "body": "介绍小佛助手能力时，可以说明它能帮你查今日/明日/本周课表、下一节课、班级/教师/教室/课程课表、空教室、教学周、校历、天气、校园地图、个人课表导入和数据状态。涉及课程、教室、教师、空教室和教学周事实时，必须转交工具核验。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "project_qa",
+        "toolName": "",
+        "cardType": "guide",
+        "reply": "我是小佛助手，可以帮你查课表、找空教室、看教学周和校历、查询天气和校园地点，也能引导你导入个人课表。涉及具体课程、教师、教室和空教室时，我会先用工具核验，再把结果整理成卡片。",
+        "suggestions": [
+          "查今日课表",
+          "查空教室",
+          "C7在哪？"
+        ],
+        "action": {},
+        "card": {
+          "type": "guide",
+          "title": "小佛助手能力",
+          "subtitle": "工具优先，结果以卡片展示",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开全校查询",
+              "url": "/pages/school/school",
+              "payload": {}
+            },
+            {
+              "type": "navigate",
+              "label": "导入个人课表",
+              "url": "/pages/personal-sync/personal-sync",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-today-schedule",
+        "sourceId": "assistant-rule-today-schedule",
+        "type": "rule",
+        "title": "今日课表",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "今天课表",
+          "今日课表",
+          "今天有什么课",
+          "今天还上课吗",
+          "今天安排"
+        ],
+        "synonyms": [
+          "今天课程",
+          "今日安排",
+          "今天还剩什么课"
+        ],
+        "patterns": [
+          "(今天|今日).*(课表|课程|安排|上什么课)",
+          "今天.*还有.*课"
+        ],
+        "priority": 150,
+        "body": "今日课表规则只负责触发 `get_today_courses`，课程事实来自用户授权的个人课表摘要。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_today_courses",
+        "toolName": "get_today_courses",
+        "cardType": "schedule",
+        "reply": "今日课表规则只负责触发 `get_today_courses`，课程事实来自用户授权的个人课表摘要。",
+        "suggestions": [
+          "下一节课是什么？",
+          "今天有空教室吗？"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看今日安排",
+          "url": "/pages/today/today",
+          "payload": {}
+        },
+        "card": {
+          "type": "schedule",
+          "title": "今日课表",
+          "subtitle": "基于个人课表摘要核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看今日安排",
+              "url": "/pages/today/today",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-tomorrow-schedule",
+        "sourceId": "assistant-rule-tomorrow-schedule",
+        "type": "rule",
+        "title": "明日课表",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "明天课表",
+          "明日课表",
+          "明天有什么课",
+          "明天安排"
+        ],
+        "synonyms": [
+          "明天课程",
+          "明日安排",
+          "明天上课"
+        ],
+        "patterns": [
+          "(明天|明日).*(课表|课程|安排|上什么课)"
+        ],
+        "priority": 148,
+        "body": "明日课表规则只触发工具查询，不在知识库写入明天课程事实。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_tomorrow_courses",
+        "toolName": "get_tomorrow_courses",
+        "cardType": "schedule",
+        "reply": "明日课表规则只触发工具查询，不在知识库写入明天课程事实。",
+        "suggestions": [
+          "明天下午有空教室吗？",
+          "本周课表"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看课表",
+          "url": "/pages/today/today",
+          "payload": {}
+        },
+        "card": {
+          "type": "schedule",
+          "title": "明日课表",
+          "subtitle": "基于个人课表摘要核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看课表",
+              "url": "/pages/today/today",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-next-course",
+        "sourceId": "assistant-rule-next-course",
+        "type": "rule",
+        "title": "下一节课",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "下一节课",
+          "下节课",
+          "马上上什么课",
+          "接下来什么课"
+        ],
+        "synonyms": [
+          "下一门课",
+          "接下来上课",
+          "还剩什么课"
+        ],
+        "patterns": [
+          "(下一节|下节|接下来|马上).*(课|课程)",
+          "还.*什么课"
+        ],
+        "priority": 148,
+        "body": "下一节课规则触发个人课表摘要工具，地点和时间以工具结果为准。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_next_course",
+        "toolName": "get_next_course",
+        "cardType": "schedule",
+        "reply": "下一节课规则触发个人课表摘要工具，地点和时间以工具结果为准。",
+        "suggestions": [
+          "下一节课教室在哪？",
+          "今天课表"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看今日安排",
+          "url": "/pages/today/today",
+          "payload": {}
+        },
+        "card": {
+          "type": "schedule",
+          "title": "下一节课",
+          "subtitle": "基于个人课表摘要核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看今日安排",
+              "url": "/pages/today/today",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-week-schedule",
+        "sourceId": "assistant-rule-week-schedule",
+        "type": "rule",
+        "title": "本周课表",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "本周课表",
+          "这一周课表",
+          "整周课表",
+          "本周安排"
+        ],
+        "synonyms": [
+          "这周课程",
+          "周课表",
+          "一周安排"
+        ],
+        "patterns": [
+          "(本周|这周|这一周|整周).*(课表|课程|安排)"
+        ],
+        "priority": 145,
+        "body": "本周课表规则触发个人课表摘要工具，教学周和课程事实由工具核验。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_week_schedule",
+        "toolName": "get_week_schedule",
+        "cardType": "schedule",
+        "reply": "本周课表规则触发个人课表摘要工具，教学周和课程事实由工具核验。",
+        "suggestions": [
+          "今天有什么课？",
+          "现在第几周？"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看课表",
+          "url": "/pages/today/today",
+          "payload": {}
+        },
+        "card": {
+          "type": "schedule",
+          "title": "本周课表",
+          "subtitle": "基于当前教学周核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看课表",
+              "url": "/pages/today/today",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-class-schedule",
+        "sourceId": "assistant-rule-class-schedule",
+        "type": "rule",
+        "title": "查班级课表",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "班级课表",
+          "行政班课表",
+          "25动物医学6班",
+          "25动医6",
+          "动医6班"
+        ],
+        "synonyms": [
+          "查班级",
+          "专业班级课表",
+          "某班课表"
+        ],
+        "patterns": [
+          "\\d{2}.*(班|专业).*课表",
+          "(动医|动物医学).*\\d.*班",
+          "查.*班.*课表"
+        ],
+        "priority": 142,
+        "body": "班级课表规则触发全校索引查询，班级名称和课程详情必须来自已发布课表索引和详情。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_school_index",
+        "toolName": "search_school_index",
+        "cardType": "generic",
+        "reply": "班级课表规则触发全校索引查询，班级名称和课程详情必须来自已发布课表索引和详情。",
+        "suggestions": [
+          "查25动物医学6班课表",
+          "查教师课表"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "打开全校查询",
+          "url": "/pages/school/school?type=class",
+          "payload": {}
+        },
+        "card": {
+          "type": "generic",
+          "title": "班级课表查询",
+          "subtitle": "从全校课表索引核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开全校查询",
+              "url": "/pages/school/school?type=class",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-teacher-schedule",
+        "sourceId": "assistant-rule-teacher-schedule",
+        "type": "rule",
+        "title": "查教师课表",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "教师课表",
+          "老师课表",
+          "任课老师",
+          "查老师"
+        ],
+        "synonyms": [
+          "查教师",
+          "老师上课",
+          "教师安排"
+        ],
+        "patterns": [
+          "查.*(老师|教师).*课表",
+          "(老师|教师).*(课表|安排|上课)"
+        ],
+        "priority": 140,
+        "body": "教师课表规则触发全校教师索引查询，教师和课程事实来自已发布课表数据。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_school_index",
+        "toolName": "search_school_index",
+        "cardType": "teacher",
+        "reply": "教师课表规则触发全校教师索引查询，教师和课程事实来自已发布课表数据。",
+        "suggestions": [
+          "查某老师课表",
+          "查教室课表"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "打开教师查询",
+          "url": "/pages/school/school?type=teacher",
+          "payload": {}
+        },
+        "card": {
+          "type": "teacher",
+          "title": "教师课表查询",
+          "subtitle": "从教师索引核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开教师查询",
+              "url": "/pages/school/school?type=teacher",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-classroom-schedule",
+        "sourceId": "assistant-rule-classroom-schedule",
+        "type": "rule",
+        "title": "查教室课表",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "教室课表",
+          "教室占用",
+          "C7-203",
+          "B8教室",
+          "查教室"
+        ],
+        "synonyms": [
+          "教室安排",
+          "教室使用情况",
+          "课室占用"
+        ],
+        "patterns": [
+          "[A-Z]\\d{1,2}[-栋楼]?\\d{0,4}.*(课表|占用|安排)",
+          "查.*(教室|课室).*课表"
+        ],
+        "priority": 140,
+        "body": "教室课表规则触发全校教室索引查询，楼栋和占用事实来自已发布课表数据。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_school_index",
+        "toolName": "search_school_index",
+        "cardType": "generic",
+        "reply": "教室课表规则触发全校教室索引查询，楼栋和占用事实来自已发布课表数据。",
+        "suggestions": [
+          "查C7-203教室",
+          "现在有空教室吗？"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "打开教室查询",
+          "url": "/pages/school/school?type=classroom",
+          "payload": {}
+        },
+        "card": {
+          "type": "generic",
+          "title": "教室课表查询",
+          "subtitle": "从教室索引核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开教室查询",
+              "url": "/pages/school/school?type=classroom",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-course-schedule",
+        "sourceId": "assistant-rule-course-schedule",
+        "type": "rule",
+        "title": "查课程课表",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "课程课表",
+          "课程安排",
+          "查课程",
+          "高等数学",
+          "大学英语"
+        ],
+        "synonyms": [
+          "查课名",
+          "课程上课时间",
+          "课程任课"
+        ],
+        "patterns": [
+          "查.*(课程|课名|科目).*(课表|安排)?",
+          "(高等数学|大学英语|体育|实验).*课"
+        ],
+        "priority": 138,
+        "body": "课程课表规则触发全校课程索引查询，课程事实来自已发布课表数据。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_school_index",
+        "toolName": "search_school_index",
+        "cardType": "course",
+        "reply": "课程课表规则触发全校课程索引查询，课程事实来自已发布课表数据。",
+        "suggestions": [
+          "查高等数学课程",
+          "查教师课表"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "打开课程查询",
+          "url": "/pages/school/school?type=course",
+          "payload": {}
+        },
+        "card": {
+          "type": "course",
+          "title": "课程课表查询",
+          "subtitle": "从课程索引核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开课程查询",
+              "url": "/pages/school/school?type=course",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-empty-room",
+        "sourceId": "assistant-rule-empty-room",
+        "type": "rule",
+        "title": "空教室",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "空教室",
+          "自习室",
+          "哪里没课",
+          "可用教室",
+          "找教室"
+        ],
+        "synonyms": [
+          "空课室",
+          "自习位置",
+          "有空教室吗"
+        ],
+        "patterns": [
+          "(空教室|自习室|可用教室|哪里没课)",
+          "(现在|今天|下午|晚上).*空.*教室"
+        ],
+        "priority": 150,
+        "body": "空教室规则触发空教室索引工具，教室可用事实来自已发布空教室索引。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_empty_rooms",
+        "toolName": "search_empty_rooms",
+        "cardType": "empty_room",
+        "reply": "空教室规则触发空教室索引工具，教室可用事实来自已发布空教室索引。",
+        "suggestions": [
+          "C7附近现在有空教室吗？",
+          "找连续两节空教室"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看空教室",
+          "url": "/pages/empty-room/empty-room",
+          "payload": {}
+        },
+        "card": {
+          "type": "empty_room",
+          "title": "空教室查询",
+          "subtitle": "从空教室索引核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看空教室",
+              "url": "/pages/empty-room/empty-room",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-continuous-empty-room",
+        "sourceId": "assistant-rule-continuous-empty-room",
+        "type": "rule",
+        "title": "连续空教室",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "连续空教室",
+          "连续两节",
+          "连续三节",
+          "连着空",
+          "连堂空教室"
+        ],
+        "synonyms": [
+          "连续自习室",
+          "连着两节空教室",
+          "长时间自习"
+        ],
+        "patterns": [
+          "连续.*(空教室|自习室)",
+          "连着.*(空教室|自习室)",
+          "(两节|2节|三节|3节).*空教室"
+        ],
+        "priority": 149,
+        "body": "连续空教室规则触发连续节数筛选，结果来自空教室工具。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_continuous_empty_rooms",
+        "toolName": "search_continuous_empty_rooms",
+        "cardType": "empty_room",
+        "reply": "连续空教室规则触发连续节数筛选，结果来自空教室工具。",
+        "suggestions": [
+          "找连续2节空教室",
+          "找下午连续空教室"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看空教室",
+          "url": "/pages/empty-room/empty-room",
+          "payload": {}
+        },
+        "card": {
+          "type": "empty_room",
+          "title": "连续空教室",
+          "subtitle": "按连续节数筛选",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看空教室",
+              "url": "/pages/empty-room/empty-room",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-teaching-week",
+        "sourceId": "assistant-rule-teaching-week",
+        "type": "rule",
+        "title": "教学周",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "第几周",
+          "教学周",
+          "当前周",
+          "现在第几教学周"
+        ],
+        "synonyms": [
+          "本周是第几周",
+          "当前教学周",
+          "学期周次"
+        ],
+        "patterns": [
+          "(现在|今天|当前).*(第几周|教学周)",
+          "第几.*教学周"
+        ],
+        "priority": 135,
+        "body": "教学周规则触发教学周工具，周次事实来自学期配置和日期计算。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_teaching_week",
+        "toolName": "get_teaching_week",
+        "cardType": "generic",
+        "reply": "教学周规则触发教学周工具，周次事实来自学期配置和日期计算。",
+        "suggestions": [
+          "本周课表",
+          "校历"
+        ],
+        "action": {},
+        "card": {
+          "type": "generic",
+          "title": "教学周",
+          "subtitle": "从学期配置计算",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "assistant-rule-term-calendar",
+        "sourceId": "assistant-rule-term-calendar",
+        "type": "rule",
+        "title": "校历",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "校历",
+          "学期日历",
+          "什么时候开学",
+          "什么时候放假",
+          "学期安排"
+        ],
+        "synonyms": [
+          "教学日历",
+          "开学日期",
+          "放假安排"
+        ],
+        "patterns": [
+          "(校历|学期日历|教学日历)",
+          "(开学|放假|学期).*(日期|安排|什么时候)"
+        ],
+        "priority": 132,
+        "body": "校历规则触发学期日历工具，日期事实来自学期配置。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_term_calendar",
+        "toolName": "get_term_calendar",
+        "cardType": "guide",
+        "reply": "校历规则触发学期日历工具，日期事实来自学期配置。",
+        "suggestions": [
+          "现在第几教学周？",
+          "本周课表"
+        ],
+        "action": {},
+        "card": {
+          "type": "guide",
+          "title": "学期校历",
+          "subtitle": "从学期配置核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "assistant-rule-weather",
+        "sourceId": "assistant-rule-weather",
+        "type": "rule",
+        "title": "天气查询和建议",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "天气",
+          "下雨",
+          "带伞",
+          "高温",
+          "降雨",
+          "出行建议"
+        ],
+        "synonyms": [
+          "校区天气",
+          "天气建议",
+          "雨伞提醒"
+        ],
+        "patterns": [
+          "(天气|下雨|带伞|降雨|高温|雷暴)",
+          "(仙溪|江湾|河滨).*天气"
+        ],
+        "priority": 146,
+        "body": "天气规则必须触发天气工具并返回天气卡片；天气事实来自天气服务。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_campus_weather",
+        "toolName": "get_campus_weather",
+        "cardType": "weather",
+        "reply": "天气规则必须触发天气工具并返回天气卡片；天气事实来自天气服务。",
+        "suggestions": [
+          "仙溪天气",
+          "下一节课前要带伞吗？"
+        ],
+        "action": {},
+        "card": {
+          "type": "weather",
+          "title": "校区天气",
+          "subtitle": "调用天气卡片",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "assistant-rule-campus-map",
+        "sourceId": "assistant-rule-campus-map",
+        "type": "rule",
+        "title": "校园地图、地点查询、路线和教室位置",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "校园地图",
+          "地点查询",
+          "怎么走",
+          "在哪",
+          "教室位置",
+          "C7在哪",
+          "图书馆位置"
+        ],
+        "synonyms": [
+          "路线",
+          "导航",
+          "地点",
+          "楼栋位置",
+          "校区地图"
+        ],
+        "patterns": [
+          "(地图|地点|位置|路线|怎么走|在哪)",
+          "[A-Z]\\d{1,2}.*(在哪|位置|怎么走)"
+        ],
+        "priority": 144,
+        "body": "校园地图规则触发地图/地点工具；教室和楼栋位置以结构化地图数据为准。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_campus_place",
+        "toolName": "search_campus_place",
+        "cardType": "generic",
+        "reply": "校园地图规则触发地图/地点工具；教室和楼栋位置以结构化地图数据为准。",
+        "suggestions": [
+          "C7在哪？",
+          "仙溪图书馆怎么走？"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "打开校园地图",
+          "url": "/pages/campus-map/campus-map",
+          "payload": {}
+        },
+        "card": {
+          "type": "generic",
+          "title": "校园地图",
+          "subtitle": "查询地点和教室位置",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开校园地图",
+              "url": "/pages/campus-map/campus-map",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-next-course-location",
+        "sourceId": "assistant-rule-next-course-location",
+        "type": "rule",
+        "title": "下一节课位置",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "下一节课教室在哪",
+          "下节课怎么走",
+          "接下来上课位置"
+        ],
+        "synonyms": [
+          "下一节课地图",
+          "下节课位置",
+          "教室怎么走"
+        ],
+        "patterns": [
+          "(下一节|下节|接下来).*课.*(在哪|位置|怎么走|地图)"
+        ],
+        "priority": 147,
+        "body": "下一节课位置规则先查个人课表的下一节课，再查教室位置；不在知识库写死上课地点。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "next_course_location",
+        "toolName": "get_next_course",
+        "cardType": "schedule",
+        "reply": "下一节课位置规则先查个人课表的下一节课，再查教室位置；不在知识库写死上课地点。",
+        "suggestions": [
+          "下一节课是什么？",
+          "C7在哪？"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看今日安排",
+          "url": "/pages/today/today",
+          "payload": {}
+        },
+        "card": {
+          "type": "schedule",
+          "title": "下一节课位置",
+          "subtitle": "课表和地图组合查询",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看今日安排",
+              "url": "/pages/today/today",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-personal-import",
+        "sourceId": "assistant-rule-personal-import",
+        "type": "rule",
+        "title": "个人课表导入和同步",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "导入个人课表",
+          "同步课表",
+          "XLS导入",
+          "Excel课表",
+          "个人课表"
+        ],
+        "synonyms": [
+          "课表导入",
+          "文件导入",
+          "表格导入",
+          "同步个人安排"
+        ],
+        "patterns": [
+          "(导入|同步).*(个人)?课表",
+          "(XLS|Excel|表格|文件).*课表"
+        ],
+        "priority": 150,
+        "body": "个人课表导入规则触发导入说明工具。正式版不得在聊天框接收学号、密码或其他敏感凭证。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "explain_personal_import",
+        "toolName": "explain_personal_import",
+        "cardType": "guide",
+        "reply": "个人课表导入规则触发导入说明工具。正式版不得在聊天框接收学号、密码或其他敏感凭证。",
+        "suggestions": [
+          "打开个人课表同步",
+          "今天有什么课？"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "打开个人课表同步",
+          "url": "/pages/personal-sync/personal-sync",
+          "payload": {}
+        },
+        "card": {
+          "type": "guide",
+          "title": "个人课表导入",
+          "subtitle": "不接收账号密码",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开个人课表同步",
+              "url": "/pages/personal-sync/personal-sync",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-data-status",
+        "sourceId": "assistant-rule-data-status",
+        "type": "rule",
+        "title": "数据是否最新和异常诊断",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "数据最新吗",
+          "数据异常",
+          "加载失败",
+          "为什么查不到",
+          "课表不对",
+          "空教室数据"
+        ],
+        "synonyms": [
+          "数据状态",
+          "数据诊断",
+          "缓存异常",
+          "课表是否最新"
+        ],
+        "patterns": [
+          "数据.*(最新|异常|失败|不对)",
+          "(加载失败|查不到|课表不对|缓存)"
+        ],
+        "priority": 136,
+        "body": "数据状态规则触发诊断工具，状态事实来自 active release、索引和缓存检查。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "diagnose_data_status",
+        "toolName": "diagnose_data_status",
+        "cardType": "diagnosis",
+        "reply": "数据状态规则触发诊断工具，状态事实来自 active release、索引和缓存检查。",
+        "suggestions": [
+          "检查数据状态",
+          "重新查空教室"
+        ],
+        "action": {},
+        "card": {
+          "type": "diagnosis",
+          "title": "数据状态",
+          "subtitle": "检查课表索引和空教室索引",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "assistant-rule-privacy",
+        "sourceId": "assistant-rule-privacy",
+        "type": "rule",
+        "title": "隐私说明",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "隐私",
+          "会保存密码吗",
+          "会上传课表吗",
+          "账号密码",
+          "安全吗",
+          "个人信息"
+        ],
+        "synonyms": [
+          "隐私安全吗",
+          "数据安全",
+          "密码安全",
+          "课表摘要"
+        ],
+        "patterns": [
+          "(隐私|安全|个人信息|账号|密码)",
+          "(保存|上传|读取).*(课表|密码|个人信息)"
+        ],
+        "priority": 130,
+        "body": "隐私规则从知识库返回公开隐私说明。若用户输入账号、密码或其他敏感凭证，应先由安全过滤拦截。",
+        "updatedAt": "2026-07-08T13:04:15.423Z",
+        "intentName": "rag_search",
+        "toolName": "rag_search",
+        "cardType": "guide",
+        "reply": "隐私规则从知识库返回公开隐私说明。若用户输入账号、密码或其他敏感凭证，应先由安全过滤拦截。",
+        "suggestions": [
+          "怎么导入个人课表？",
+          "小佛助手能做什么？"
+        ],
+        "action": {},
+        "card": {
+          "type": "guide",
+          "title": "隐私与安全",
+          "subtitle": "最小必要信息原则",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "assistant-rule-clarify",
+        "sourceId": "assistant-rule-clarify",
+        "type": "rule",
+        "title": "无法识别时的友好追问",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "帮我查一下",
+          "看看课表",
+          "找个教室",
+          "查课",
+          "安排一下"
+        ],
+        "synonyms": [
+          "不完整问题",
+          "缺少关键词",
+          "追问"
+        ],
+        "patterns": [
+          "^(帮我)?查(一下)?$",
+          "^找个教室$",
+          "^看看课表$"
+        ],
+        "priority": 80,
+        "body": "无法识别或缺少槽位时，追问用户要查教师、班级、教室、课程、空教室还是个人课表。",
+        "updatedAt": "2026-07-08T13:04:15.423Z",
+        "intentName": "clarify_missing_slot",
+        "toolName": "clarify_missing_slot",
+        "cardType": "guide",
+        "reply": "无法识别或缺少槽位时，追问用户要查教师、班级、教室、课程、空教室还是个人课表。",
+        "suggestions": [
+          "查今日课表",
+          "查C7-203教室",
+          "找空教室"
+        ],
+        "action": {},
+        "card": {
+          "type": "guide",
+          "title": "需要补充条件",
+          "subtitle": "请补充教师、班级、教室、课程或时间",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": []
+        }
+      }
+    ],
+    "docs": [
+      {
+        "id": "fosuclass-guide",
+        "sourceId": "fosuclass-guide",
+        "type": "doc",
+        "title": "佛课小表使用说明",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [],
+        "keywords": [],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 0,
+        "body": "佛课小表用于查询全校课表、教师课表、教室占用、课程安排、空教室、教学周和个人本地课表摘要。课程事实必须来自确定性课表工具，知识库只用于解释功能、隐私和常见故障。",
+        "updatedAt": "2026-06-16",
+        "chunks": [
+          {
+            "chunkId": "fosuclass-guide:c1-1",
+            "sourceId": "fosuclass-guide",
+            "title": "佛课小表使用说明",
+            "updatedAt": "2026-06-16",
+            "text": "佛课小表用于查询全校课表、教师课表、教室占用、课程安排、空教室、教学周和个人本地课表摘要。课程事实必须来自确定性课表工具，知识库只用于解释功能、隐私和常见故障。"
+          }
+        ]
+      },
+      {
+        "id": "privacy-guide",
+        "sourceId": "privacy-guide",
+        "type": "doc",
+        "title": "隐私说明",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [],
+        "keywords": [],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 0,
+        "body": "小佛默认不保存学号、密码、Cookie、完整个人课表、精确位置轨迹和私密聊天内容。用户主动授权后，只发送完成任务所需的最小课表摘要，例如课程名、教师、教室、星期、节次和教学周。",
+        "updatedAt": "2026-06-16",
+        "chunks": [
+          {
+            "chunkId": "privacy-guide:c1-1",
+            "sourceId": "privacy-guide",
+            "title": "隐私说明",
+            "updatedAt": "2026-06-16",
+            "text": "小佛默认不保存学号、密码、Cookie、完整个人课表、精确位置轨迹和私密聊天内容。用户主动授权后，只发送完成任务所需的最小课表摘要，例如课程名、教师、教室、星期、节次和教学周。"
+          }
+        ]
+      },
+      {
+        "id": "term-week-guide",
+        "sourceId": "term-week-guide",
+        "type": "doc",
+        "title": "学期与教学周规则",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [],
+        "keywords": [],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 0,
+        "body": "教学周由当前学期配置和校历规则计算。单双周、指定周次和日期查询必须通过课表工具解析，不能从知识库推断具体课程安排。",
+        "updatedAt": "2026-06-16",
+        "chunks": [
+          {
+            "chunkId": "term-week-guide:c1-1",
+            "sourceId": "term-week-guide",
+            "title": "学期与教学周规则",
+            "updatedAt": "2026-06-16",
+            "text": "教学周由当前学期配置和校历规则计算。单双周、指定周次和日期查询必须通过课表工具解析，不能从知识库推断具体课程安排。"
+          }
+        ]
+      },
+      {
+        "id": "failure-guide",
+        "sourceId": "failure-guide",
+        "type": "doc",
+        "title": "常见故障说明",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [],
+        "keywords": [],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 0,
+        "body": "如果课表、全校查询或空教室加载失败，优先检查网络状态、当前学期、数据更新时间和本地缓存。公众回答只展示用户可理解的原因，不展示内部域名、服务器名称、鉴权凭据或发布控制面细节。",
+        "updatedAt": "2026-06-16",
+        "chunks": [
+          {
+            "chunkId": "failure-guide:c1-1",
+            "sourceId": "failure-guide",
+            "title": "常见故障说明",
+            "updatedAt": "2026-06-16",
+            "text": "如果课表、全校查询或空教室加载失败，优先检查网络状态、当前学期、数据更新时间和本地缓存。公众回答只展示用户可理解的原因，不展示内部域名、服务器名称、鉴权凭据或发布控制面细节。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-overview",
+        "sourceId": "assistant-doc-overview",
+        "type": "doc",
+        "title": "佛课小表功能总览",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "佛课小表",
+          "功能总览",
+          "小佛助手",
+          "校园查询"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 60,
+        "body": "# 佛课小表功能总览\n\n佛课小表提供全校课表查询、个人课表摘要、空教室查询、教学周和校历、天气提醒、校园地图、数据状态说明和常见问题帮助。\n\n小佛助手负责把这些能力组织成自然语言入口和卡片结果。课程、教师、教室、空教室、教学周等事实必须来自工具链或用户授权的个人课表摘要。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-overview:c1-1",
+            "sourceId": "assistant-doc-overview",
+            "title": "佛课小表功能总览",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "佛课小表提供全校课表查询、个人课表摘要、空教室查询、教学周和校历、天气提醒、校园地图、数据状态说明和常见问题帮助。\n\n小佛助手负责把这些能力组织成自然语言入口和卡片结果。课程、教师、教室、空教室、教学周等事实必须来自工具链或用户授权的个人课表摘要。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-formal-local-rules",
+        "sourceId": "assistant-doc-formal-local-rules",
+        "type": "doc",
+        "title": "正式版本地规则说明",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "正式版",
+          "本地规则",
+          "公开发布",
+          "工具优先"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 58,
+        "body": "# 正式版本地规则说明\n\n正式版使用本地规则、已发布知识库和已有工具卡片处理用户问题。规则负责理解入口和追问，工具负责核验事实，卡片负责展示结果。\n\n正式版不向用户展示内部实现细节，也不让说明文档编造课程、教室、教师、空教室、教学周或校历事实。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-formal-local-rules:c1-1",
+            "sourceId": "assistant-doc-formal-local-rules",
+            "title": "正式版本地规则说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "正式版使用本地规则、已发布知识库和已有工具卡片处理用户问题。规则负责理解入口和追问，工具负责核验事实，卡片负责展示结果。\n\n正式版不向用户展示内部实现细节，也不让说明文档编造课程、教室、教师、空教室、教学周或校历事实。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-schedule-query",
+        "sourceId": "assistant-doc-schedule-query",
+        "type": "doc",
+        "title": "课表查询说明",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "课表查询",
+          "今日课表",
+          "明日课表",
+          "班级课表",
+          "教师课表",
+          "教室课表",
+          "课程课表"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 56,
+        "body": "# 课表查询说明\n\n用户可以问今日课表、明日课表、下一节课、本周课表，也可以按班级、教师、教室、课程查询全校课表。\n\n个人今日/明日/本周课表需要用户先导入或授权个人课表摘要。全校班级、教师、教室、课程查询以已发布课表索引和详情为准。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-schedule-query:c1-1",
+            "sourceId": "assistant-doc-schedule-query",
+            "title": "课表查询说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "用户可以问今日课表、明日课表、下一节课、本周课表，也可以按班级、教师、教室、课程查询全校课表。\n\n个人今日/明日/本周课表需要用户先导入或授权个人课表摘要。全校班级、教师、教室、课程查询以已发布课表索引和详情为准。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-empty-room",
+        "sourceId": "assistant-doc-empty-room",
+        "type": "doc",
+        "title": "空教室查询说明",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "空教室",
+          "连续空教室",
+          "自习室",
+          "可用教室"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 55,
+        "body": "# 空教室查询说明\n\n用户可以按日期、节次、楼栋和连续节数查询空教室，例如“现在有空教室吗”“C7附近连续两节空教室”。\n\n空教室结果来自已发布的空教室索引。没有结果时，应提示用户换楼栋、换节次或检查数据状态。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-empty-room:c1-1",
+            "sourceId": "assistant-doc-empty-room",
+            "title": "空教室查询说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "用户可以按日期、节次、楼栋和连续节数查询空教室，例如“现在有空教室吗”“C7附近连续两节空教室”。\n\n空教室结果来自已发布的空教室索引。没有结果时，应提示用户换楼栋、换节次或检查数据状态。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-weather-card",
+        "sourceId": "assistant-doc-weather-card",
+        "type": "doc",
+        "title": "天气卡片说明",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "天气",
+          "天气卡片",
+          "带伞",
+          "出行建议"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 54,
+        "body": "# 天气卡片说明\n\n天气问题必须调用天气工具并返回天气卡片。卡片可展示校区、天气文字、温度、降水、更新时间和出行建议。\n\n天气也可以和下一节课、空教室、路线建议组合，但课程和教室事实仍来自对应工具。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-weather-card:c1-1",
+            "sourceId": "assistant-doc-weather-card",
+            "title": "天气卡片说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "天气问题必须调用天气工具并返回天气卡片。卡片可展示校区、天气文字、温度、降水、更新时间和出行建议。\n\n天气也可以和下一节课、空教室、路线建议组合，但课程和教室事实仍来自对应工具。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-personal-import",
+        "sourceId": "assistant-doc-personal-import",
+        "type": "doc",
+        "title": "个人课表导入说明",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "个人课表",
+          "导入",
+          "同步",
+          "XLS",
+          "Excel"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 54,
+        "body": "# 个人课表导入说明\n\n用户需要先打开个人课表同步入口，按页面指引导入或同步本地个人课表。小佛助手不会在聊天框接收学号、密码或其他敏感凭证。\n\n导入后，今日课表、明日课表、下一节课、本周课表和自习时间推荐会使用最小必要课表摘要。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-personal-import:c1-1",
+            "sourceId": "assistant-doc-personal-import",
+            "title": "个人课表导入说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "用户需要先打开个人课表同步入口，按页面指引导入或同步本地个人课表。小佛助手不会在聊天框接收学号、密码或其他敏感凭证。\n\n导入后，今日课表、明日课表、下一节课、本周课表和自习时间推荐会使用最小必要课表摘要。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-data-source",
+        "sourceId": "assistant-doc-data-source",
+        "type": "doc",
+        "title": "数据来源与更新说明",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "数据来源",
+          "更新",
+          "数据最新",
+          "已发布课表数据",
+          "缓存"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 52,
+        "body": "# 数据来源与更新说明\n\n全校课表、索引、详情和空教室来自已发布的数据包和本地缓存。小佛助手只能说明数据状态，不应在知识库里写死课程事实。\n\n当用户问数据是否最新或为什么加载失败时，应调用数据诊断工具，展示索引数量、空教室索引和当前数据状态。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-data-source:c1-1",
+            "sourceId": "assistant-doc-data-source",
+            "title": "数据来源与更新说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "全校课表、索引、详情和空教室来自已发布的数据包和本地缓存。小佛助手只能说明数据状态，不应在知识库里写死课程事实。\n\n当用户问数据是否最新或为什么加载失败时，应调用数据诊断工具，展示索引数量、空教室索引和当前数据状态。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-campus-map",
+        "sourceId": "assistant-doc-campus-map",
+        "type": "doc",
+        "title": "校园地图使用说明",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "校园地图",
+          "地点查询",
+          "路线",
+          "教室位置",
+          "C7",
+          "图书馆"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 52,
+        "body": "# 校园地图使用说明\n\n用户可以查询校区地点、楼栋、教室位置和大致路线，例如“C7在哪”“图书馆怎么走”。\n\n地图数据用于定位和入口跳转；未维护精确坐标时，应明确说明只能提供参考位置。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-campus-map:c1-1",
+            "sourceId": "assistant-doc-campus-map",
+            "title": "校园地图使用说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "用户可以查询校区地点、楼栋、教室位置和大致路线，例如“C7在哪”“图书馆怎么走”。\n\n地图数据用于定位和入口跳转；未维护精确坐标时，应明确说明只能提供参考位置。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-faq",
+        "sourceId": "assistant-doc-faq",
+        "type": "doc",
+        "title": "常见问题 FAQ",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "FAQ",
+          "常见问题",
+          "查不到",
+          "怎么问",
+          "为什么没有结果"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 50,
+        "body": "# 常见问题 FAQ\n\n如果查不到教师、班级、教室或课程，建议换更短关键词、检查名称是否完整，或打开全校查询页面继续筛选。\n\n如果空教室没有结果，建议换楼栋、换节次、减少连续节数，或检查数据状态。\n\n如果今日课表为空，建议先确认是否已经导入个人课表摘要。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-faq:c1-1",
+            "sourceId": "assistant-doc-faq",
+            "title": "常见问题 FAQ",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "如果查不到教师、班级、教室或课程，建议换更短关键词、检查名称是否完整，或打开全校查询页面继续筛选。\n\n如果空教室没有结果，建议换楼栋、换节次、减少连续节数，或检查数据状态。\n\n如果今日课表为空，建议先确认是否已经导入个人课表摘要。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-privacy",
+        "sourceId": "assistant-doc-privacy",
+        "type": "doc",
+        "title": "隐私与安全说明",
+        "status": "draft",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "隐私",
+          "安全",
+          "账号密码",
+          "敏感凭证",
+          "个人课表"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 50,
+        "body": "# 隐私与安全说明\n\n聊天框不应接收学号、密码或其他敏感凭证。用户需要导入个人课表时，应进入个人课表同步页面。\n\n个人课表摘要只包含完成查询所需的课程名、教师、教室、星期、节次和周次等最小字段。用户可重新导入或清理本地数据。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-privacy:c1-1",
+            "sourceId": "assistant-doc-privacy",
+            "title": "隐私与安全说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "聊天框不应接收学号、密码或其他敏感凭证。用户需要导入个人课表时，应进入个人课表同步页面。\n\n个人课表摘要只包含完成查询所需的课程名、教师、教室、星期、节次和周次等最小字段。用户可重新导入或清理本地数据。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-trial-dev-internal",
+        "sourceId": "assistant-doc-trial-dev-internal",
+        "type": "doc",
+        "title": "体验版/开发版内部说明",
+        "status": "draft",
+        "scope": [
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "体验版",
+          "开发版",
+          "Provider",
+          "DeepSeek",
+          "Coze",
+          "CloudBase"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 20,
+        "body": "# 体验版/开发版内部说明\n\n体验版和开发版可启用增强理解能力，用于槽位补全、表达组织和调试。可选 Provider 包括 DeepSeek、CloudBase OpenAI 和 Coze。\n\n外部模型不得编造课程、教师、教室、空教室、教学周或校历事实；事实任务必须使用工具链结果。\n\n本说明仅用于 trial/dev 范围，不能发布到 public 范围。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-trial-dev-internal:c1-1",
+            "sourceId": "assistant-doc-trial-dev-internal",
+            "title": "体验版/开发版内部说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "体验版和开发版可启用增强理解能力，用于槽位补全、表达组织和调试。可选 Provider 包括 DeepSeek、CloudBase OpenAI 和 Coze。\n\n外部模型不得编造课程、教师、教室、空教室、教学周或校历事实；事实任务必须使用工具链结果。\n\n本说明仅用于 trial/dev 范围，不能发布到 public 范围。"
+          }
+        ]
+      }
+    ]
+  },
+  "published": {
+    "versionId": "assistant-local-rules-20260708130415",
+    "publishedAt": "2026-07-08T13:04:15.429Z",
+    "rules": [
+      {
+        "id": "rule-xiaofu-intro",
+        "sourceId": "rule-xiaofu-intro",
+        "type": "rule",
+        "title": "小佛助手能力介绍",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "help"
+        ],
+        "keywords": [
+          "你是谁",
+          "小佛",
+          "能做什么",
+          "帮助"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 90,
+        "body": "我是小佛助手，可以帮你查课表、找空教室、看教学周、解释个人课表导入方式，也能回答佛课小表的使用问题。涉及课程、教师、教室和空教室的事实，我会以已核验的工具数据为准。",
+        "updatedAt": "2026-06-16T00:00:00.000Z",
+        "intentName": "",
+        "toolName": "",
+        "cardType": "",
+        "reply": "我是小佛助手，可以帮你查课表、找空教室、看教学周、解释个人课表导入方式，也能回答佛课小表的使用问题。涉及课程、教师、教室和空教室的事实，我会以已核验的工具数据为准。",
+        "suggestions": [],
+        "action": {},
+        "card": {}
+      },
+      {
+        "id": "assistant-rule-capability-intro",
+        "sourceId": "assistant-rule-capability-intro",
+        "type": "rule",
+        "title": "小佛助手能力介绍",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "你能做什么",
+          "佛课小表能做什么",
+          "小佛助手",
+          "怎么用",
+          "使用帮助"
+        ],
+        "synonyms": [
+          "能力介绍",
+          "功能介绍",
+          "校园助手",
+          "佛课小表"
+        ],
+        "patterns": [
+          "(你|小佛).*(能做|会做|能查)",
+          "佛课小表.*(功能|能做什么|怎么用)"
+        ],
+        "priority": 160,
+        "body": "介绍小佛助手能力时，可以说明它能帮你查今日/明日/本周课表、下一节课、班级/教师/教室/课程课表、空教室、教学周、校历、天气、校园地图、个人课表导入和数据状态。涉及课程、教室、教师、空教室和教学周事实时，必须转交工具核验。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "project_qa",
+        "toolName": "",
+        "cardType": "guide",
+        "reply": "我是小佛助手，可以帮你查课表、找空教室、看教学周和校历、查询天气和校园地点，也能引导你导入个人课表。涉及具体课程、教师、教室和空教室时，我会先用工具核验，再把结果整理成卡片。",
+        "suggestions": [
+          "查今日课表",
+          "查空教室",
+          "C7在哪？"
+        ],
+        "action": {},
+        "card": {
+          "type": "guide",
+          "title": "小佛助手能力",
+          "subtitle": "工具优先，结果以卡片展示",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开全校查询",
+              "url": "/pages/school/school",
+              "payload": {}
+            },
+            {
+              "type": "navigate",
+              "label": "导入个人课表",
+              "url": "/pages/personal-sync/personal-sync",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-today-schedule",
+        "sourceId": "assistant-rule-today-schedule",
+        "type": "rule",
+        "title": "今日课表",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "今天课表",
+          "今日课表",
+          "今天有什么课",
+          "今天还上课吗",
+          "今天安排"
+        ],
+        "synonyms": [
+          "今天课程",
+          "今日安排",
+          "今天还剩什么课"
+        ],
+        "patterns": [
+          "(今天|今日).*(课表|课程|安排|上什么课)",
+          "今天.*还有.*课"
+        ],
+        "priority": 150,
+        "body": "今日课表规则只负责触发 `get_today_courses`，课程事实来自用户授权的个人课表摘要。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_today_courses",
+        "toolName": "get_today_courses",
+        "cardType": "schedule",
+        "reply": "今日课表规则只负责触发 `get_today_courses`，课程事实来自用户授权的个人课表摘要。",
+        "suggestions": [
+          "下一节课是什么？",
+          "今天有空教室吗？"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看今日安排",
+          "url": "/pages/today/today",
+          "payload": {}
+        },
+        "card": {
+          "type": "schedule",
+          "title": "今日课表",
+          "subtitle": "基于个人课表摘要核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看今日安排",
+              "url": "/pages/today/today",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-tomorrow-schedule",
+        "sourceId": "assistant-rule-tomorrow-schedule",
+        "type": "rule",
+        "title": "明日课表",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "明天课表",
+          "明日课表",
+          "明天有什么课",
+          "明天安排"
+        ],
+        "synonyms": [
+          "明天课程",
+          "明日安排",
+          "明天上课"
+        ],
+        "patterns": [
+          "(明天|明日).*(课表|课程|安排|上什么课)"
+        ],
+        "priority": 148,
+        "body": "明日课表规则只触发工具查询，不在知识库写入明天课程事实。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_tomorrow_courses",
+        "toolName": "get_tomorrow_courses",
+        "cardType": "schedule",
+        "reply": "明日课表规则只触发工具查询，不在知识库写入明天课程事实。",
+        "suggestions": [
+          "明天下午有空教室吗？",
+          "本周课表"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看课表",
+          "url": "/pages/today/today",
+          "payload": {}
+        },
+        "card": {
+          "type": "schedule",
+          "title": "明日课表",
+          "subtitle": "基于个人课表摘要核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看课表",
+              "url": "/pages/today/today",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-next-course",
+        "sourceId": "assistant-rule-next-course",
+        "type": "rule",
+        "title": "下一节课",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "下一节课",
+          "下节课",
+          "马上上什么课",
+          "接下来什么课"
+        ],
+        "synonyms": [
+          "下一门课",
+          "接下来上课",
+          "还剩什么课"
+        ],
+        "patterns": [
+          "(下一节|下节|接下来|马上).*(课|课程)",
+          "还.*什么课"
+        ],
+        "priority": 148,
+        "body": "下一节课规则触发个人课表摘要工具，地点和时间以工具结果为准。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_next_course",
+        "toolName": "get_next_course",
+        "cardType": "schedule",
+        "reply": "下一节课规则触发个人课表摘要工具，地点和时间以工具结果为准。",
+        "suggestions": [
+          "下一节课教室在哪？",
+          "今天课表"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看今日安排",
+          "url": "/pages/today/today",
+          "payload": {}
+        },
+        "card": {
+          "type": "schedule",
+          "title": "下一节课",
+          "subtitle": "基于个人课表摘要核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看今日安排",
+              "url": "/pages/today/today",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-week-schedule",
+        "sourceId": "assistant-rule-week-schedule",
+        "type": "rule",
+        "title": "本周课表",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "本周课表",
+          "这一周课表",
+          "整周课表",
+          "本周安排"
+        ],
+        "synonyms": [
+          "这周课程",
+          "周课表",
+          "一周安排"
+        ],
+        "patterns": [
+          "(本周|这周|这一周|整周).*(课表|课程|安排)"
+        ],
+        "priority": 145,
+        "body": "本周课表规则触发个人课表摘要工具，教学周和课程事实由工具核验。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_week_schedule",
+        "toolName": "get_week_schedule",
+        "cardType": "schedule",
+        "reply": "本周课表规则触发个人课表摘要工具，教学周和课程事实由工具核验。",
+        "suggestions": [
+          "今天有什么课？",
+          "现在第几周？"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看课表",
+          "url": "/pages/today/today",
+          "payload": {}
+        },
+        "card": {
+          "type": "schedule",
+          "title": "本周课表",
+          "subtitle": "基于当前教学周核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看课表",
+              "url": "/pages/today/today",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-class-schedule",
+        "sourceId": "assistant-rule-class-schedule",
+        "type": "rule",
+        "title": "查班级课表",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "班级课表",
+          "行政班课表",
+          "25动物医学6班",
+          "25动医6",
+          "动医6班"
+        ],
+        "synonyms": [
+          "查班级",
+          "专业班级课表",
+          "某班课表"
+        ],
+        "patterns": [
+          "\\d{2}.*(班|专业).*课表",
+          "(动医|动物医学).*\\d.*班",
+          "查.*班.*课表"
+        ],
+        "priority": 142,
+        "body": "班级课表规则触发全校索引查询，班级名称和课程详情必须来自已发布课表索引和详情。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_school_index",
+        "toolName": "search_school_index",
+        "cardType": "generic",
+        "reply": "班级课表规则触发全校索引查询，班级名称和课程详情必须来自已发布课表索引和详情。",
+        "suggestions": [
+          "查25动物医学6班课表",
+          "查教师课表"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "打开全校查询",
+          "url": "/pages/school/school?type=class",
+          "payload": {}
+        },
+        "card": {
+          "type": "generic",
+          "title": "班级课表查询",
+          "subtitle": "从全校课表索引核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开全校查询",
+              "url": "/pages/school/school?type=class",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-teacher-schedule",
+        "sourceId": "assistant-rule-teacher-schedule",
+        "type": "rule",
+        "title": "查教师课表",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "教师课表",
+          "老师课表",
+          "任课老师",
+          "查老师"
+        ],
+        "synonyms": [
+          "查教师",
+          "老师上课",
+          "教师安排"
+        ],
+        "patterns": [
+          "查.*(老师|教师).*课表",
+          "(老师|教师).*(课表|安排|上课)"
+        ],
+        "priority": 140,
+        "body": "教师课表规则触发全校教师索引查询，教师和课程事实来自已发布课表数据。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_school_index",
+        "toolName": "search_school_index",
+        "cardType": "teacher",
+        "reply": "教师课表规则触发全校教师索引查询，教师和课程事实来自已发布课表数据。",
+        "suggestions": [
+          "查某老师课表",
+          "查教室课表"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "打开教师查询",
+          "url": "/pages/school/school?type=teacher",
+          "payload": {}
+        },
+        "card": {
+          "type": "teacher",
+          "title": "教师课表查询",
+          "subtitle": "从教师索引核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开教师查询",
+              "url": "/pages/school/school?type=teacher",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-classroom-schedule",
+        "sourceId": "assistant-rule-classroom-schedule",
+        "type": "rule",
+        "title": "查教室课表",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "教室课表",
+          "教室占用",
+          "C7-203",
+          "B8教室",
+          "查教室"
+        ],
+        "synonyms": [
+          "教室安排",
+          "教室使用情况",
+          "课室占用"
+        ],
+        "patterns": [
+          "[A-Z]\\d{1,2}[-栋楼]?\\d{0,4}.*(课表|占用|安排)",
+          "查.*(教室|课室).*课表"
+        ],
+        "priority": 140,
+        "body": "教室课表规则触发全校教室索引查询，楼栋和占用事实来自已发布课表数据。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_school_index",
+        "toolName": "search_school_index",
+        "cardType": "generic",
+        "reply": "教室课表规则触发全校教室索引查询，楼栋和占用事实来自已发布课表数据。",
+        "suggestions": [
+          "查C7-203教室",
+          "现在有空教室吗？"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "打开教室查询",
+          "url": "/pages/school/school?type=classroom",
+          "payload": {}
+        },
+        "card": {
+          "type": "generic",
+          "title": "教室课表查询",
+          "subtitle": "从教室索引核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开教室查询",
+              "url": "/pages/school/school?type=classroom",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-course-schedule",
+        "sourceId": "assistant-rule-course-schedule",
+        "type": "rule",
+        "title": "查课程课表",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "课程课表",
+          "课程安排",
+          "查课程",
+          "高等数学",
+          "大学英语"
+        ],
+        "synonyms": [
+          "查课名",
+          "课程上课时间",
+          "课程任课"
+        ],
+        "patterns": [
+          "查.*(课程|课名|科目).*(课表|安排)?",
+          "(高等数学|大学英语|体育|实验).*课"
+        ],
+        "priority": 138,
+        "body": "课程课表规则触发全校课程索引查询，课程事实来自已发布课表数据。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_school_index",
+        "toolName": "search_school_index",
+        "cardType": "course",
+        "reply": "课程课表规则触发全校课程索引查询，课程事实来自已发布课表数据。",
+        "suggestions": [
+          "查高等数学课程",
+          "查教师课表"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "打开课程查询",
+          "url": "/pages/school/school?type=course",
+          "payload": {}
+        },
+        "card": {
+          "type": "course",
+          "title": "课程课表查询",
+          "subtitle": "从课程索引核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开课程查询",
+              "url": "/pages/school/school?type=course",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-empty-room",
+        "sourceId": "assistant-rule-empty-room",
+        "type": "rule",
+        "title": "空教室",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "空教室",
+          "自习室",
+          "哪里没课",
+          "可用教室",
+          "找教室"
+        ],
+        "synonyms": [
+          "空课室",
+          "自习位置",
+          "有空教室吗"
+        ],
+        "patterns": [
+          "(空教室|自习室|可用教室|哪里没课)",
+          "(现在|今天|下午|晚上).*空.*教室"
+        ],
+        "priority": 150,
+        "body": "空教室规则触发空教室索引工具，教室可用事实来自已发布空教室索引。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_empty_rooms",
+        "toolName": "search_empty_rooms",
+        "cardType": "empty_room",
+        "reply": "空教室规则触发空教室索引工具，教室可用事实来自已发布空教室索引。",
+        "suggestions": [
+          "C7附近现在有空教室吗？",
+          "找连续两节空教室"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看空教室",
+          "url": "/pages/empty-room/empty-room",
+          "payload": {}
+        },
+        "card": {
+          "type": "empty_room",
+          "title": "空教室查询",
+          "subtitle": "从空教室索引核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看空教室",
+              "url": "/pages/empty-room/empty-room",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-continuous-empty-room",
+        "sourceId": "assistant-rule-continuous-empty-room",
+        "type": "rule",
+        "title": "连续空教室",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "连续空教室",
+          "连续两节",
+          "连续三节",
+          "连着空",
+          "连堂空教室"
+        ],
+        "synonyms": [
+          "连续自习室",
+          "连着两节空教室",
+          "长时间自习"
+        ],
+        "patterns": [
+          "连续.*(空教室|自习室)",
+          "连着.*(空教室|自习室)",
+          "(两节|2节|三节|3节).*空教室"
+        ],
+        "priority": 149,
+        "body": "连续空教室规则触发连续节数筛选，结果来自空教室工具。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_continuous_empty_rooms",
+        "toolName": "search_continuous_empty_rooms",
+        "cardType": "empty_room",
+        "reply": "连续空教室规则触发连续节数筛选，结果来自空教室工具。",
+        "suggestions": [
+          "找连续2节空教室",
+          "找下午连续空教室"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看空教室",
+          "url": "/pages/empty-room/empty-room",
+          "payload": {}
+        },
+        "card": {
+          "type": "empty_room",
+          "title": "连续空教室",
+          "subtitle": "按连续节数筛选",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看空教室",
+              "url": "/pages/empty-room/empty-room",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-teaching-week",
+        "sourceId": "assistant-rule-teaching-week",
+        "type": "rule",
+        "title": "教学周",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "第几周",
+          "教学周",
+          "当前周",
+          "现在第几教学周"
+        ],
+        "synonyms": [
+          "本周是第几周",
+          "当前教学周",
+          "学期周次"
+        ],
+        "patterns": [
+          "(现在|今天|当前).*(第几周|教学周)",
+          "第几.*教学周"
+        ],
+        "priority": 135,
+        "body": "教学周规则触发教学周工具，周次事实来自学期配置和日期计算。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_teaching_week",
+        "toolName": "get_teaching_week",
+        "cardType": "generic",
+        "reply": "教学周规则触发教学周工具，周次事实来自学期配置和日期计算。",
+        "suggestions": [
+          "本周课表",
+          "校历"
+        ],
+        "action": {},
+        "card": {
+          "type": "generic",
+          "title": "教学周",
+          "subtitle": "从学期配置计算",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "assistant-rule-term-calendar",
+        "sourceId": "assistant-rule-term-calendar",
+        "type": "rule",
+        "title": "校历",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "校历",
+          "学期日历",
+          "什么时候开学",
+          "什么时候放假",
+          "学期安排"
+        ],
+        "synonyms": [
+          "教学日历",
+          "开学日期",
+          "放假安排"
+        ],
+        "patterns": [
+          "(校历|学期日历|教学日历)",
+          "(开学|放假|学期).*(日期|安排|什么时候)"
+        ],
+        "priority": 132,
+        "body": "校历规则触发学期日历工具，日期事实来自学期配置。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_term_calendar",
+        "toolName": "get_term_calendar",
+        "cardType": "guide",
+        "reply": "校历规则触发学期日历工具，日期事实来自学期配置。",
+        "suggestions": [
+          "现在第几教学周？",
+          "本周课表"
+        ],
+        "action": {},
+        "card": {
+          "type": "guide",
+          "title": "学期校历",
+          "subtitle": "从学期配置核验",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "assistant-rule-weather",
+        "sourceId": "assistant-rule-weather",
+        "type": "rule",
+        "title": "天气查询和建议",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "天气",
+          "下雨",
+          "带伞",
+          "高温",
+          "降雨",
+          "出行建议"
+        ],
+        "synonyms": [
+          "校区天气",
+          "天气建议",
+          "雨伞提醒"
+        ],
+        "patterns": [
+          "(天气|下雨|带伞|降雨|高温|雷暴)",
+          "(仙溪|江湾|河滨).*天气"
+        ],
+        "priority": 146,
+        "body": "天气规则必须触发天气工具并返回天气卡片；天气事实来自天气服务。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "get_campus_weather",
+        "toolName": "get_campus_weather",
+        "cardType": "weather",
+        "reply": "天气规则必须触发天气工具并返回天气卡片；天气事实来自天气服务。",
+        "suggestions": [
+          "仙溪天气",
+          "下一节课前要带伞吗？"
+        ],
+        "action": {},
+        "card": {
+          "type": "weather",
+          "title": "校区天气",
+          "subtitle": "调用天气卡片",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "assistant-rule-campus-map",
+        "sourceId": "assistant-rule-campus-map",
+        "type": "rule",
+        "title": "校园地图、地点查询、路线和教室位置",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "校园地图",
+          "地点查询",
+          "怎么走",
+          "在哪",
+          "教室位置",
+          "C7在哪",
+          "图书馆位置"
+        ],
+        "synonyms": [
+          "路线",
+          "导航",
+          "地点",
+          "楼栋位置",
+          "校区地图"
+        ],
+        "patterns": [
+          "(地图|地点|位置|路线|怎么走|在哪)",
+          "[A-Z]\\d{1,2}.*(在哪|位置|怎么走)"
+        ],
+        "priority": 144,
+        "body": "校园地图规则触发地图/地点工具；教室和楼栋位置以结构化地图数据为准。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "search_campus_place",
+        "toolName": "search_campus_place",
+        "cardType": "generic",
+        "reply": "校园地图规则触发地图/地点工具；教室和楼栋位置以结构化地图数据为准。",
+        "suggestions": [
+          "C7在哪？",
+          "仙溪图书馆怎么走？"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "打开校园地图",
+          "url": "/pages/campus-map/campus-map",
+          "payload": {}
+        },
+        "card": {
+          "type": "generic",
+          "title": "校园地图",
+          "subtitle": "查询地点和教室位置",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开校园地图",
+              "url": "/pages/campus-map/campus-map",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-next-course-location",
+        "sourceId": "assistant-rule-next-course-location",
+        "type": "rule",
+        "title": "下一节课位置",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "下一节课教室在哪",
+          "下节课怎么走",
+          "接下来上课位置"
+        ],
+        "synonyms": [
+          "下一节课地图",
+          "下节课位置",
+          "教室怎么走"
+        ],
+        "patterns": [
+          "(下一节|下节|接下来).*课.*(在哪|位置|怎么走|地图)"
+        ],
+        "priority": 147,
+        "body": "下一节课位置规则先查个人课表的下一节课，再查教室位置；不在知识库写死上课地点。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "next_course_location",
+        "toolName": "get_next_course",
+        "cardType": "schedule",
+        "reply": "下一节课位置规则先查个人课表的下一节课，再查教室位置；不在知识库写死上课地点。",
+        "suggestions": [
+          "下一节课是什么？",
+          "C7在哪？"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "查看今日安排",
+          "url": "/pages/today/today",
+          "payload": {}
+        },
+        "card": {
+          "type": "schedule",
+          "title": "下一节课位置",
+          "subtitle": "课表和地图组合查询",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "查看今日安排",
+              "url": "/pages/today/today",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-personal-import",
+        "sourceId": "assistant-rule-personal-import",
+        "type": "rule",
+        "title": "个人课表导入和同步",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "导入个人课表",
+          "同步课表",
+          "XLS导入",
+          "Excel课表",
+          "个人课表"
+        ],
+        "synonyms": [
+          "课表导入",
+          "文件导入",
+          "表格导入",
+          "同步个人安排"
+        ],
+        "patterns": [
+          "(导入|同步).*(个人)?课表",
+          "(XLS|Excel|表格|文件).*课表"
+        ],
+        "priority": 150,
+        "body": "个人课表导入规则触发导入说明工具。正式版不得在聊天框接收学号、密码或其他敏感凭证。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "explain_personal_import",
+        "toolName": "explain_personal_import",
+        "cardType": "guide",
+        "reply": "个人课表导入规则触发导入说明工具。正式版不得在聊天框接收学号、密码或其他敏感凭证。",
+        "suggestions": [
+          "打开个人课表同步",
+          "今天有什么课？"
+        ],
+        "action": {
+          "type": "navigate",
+          "label": "打开个人课表同步",
+          "url": "/pages/personal-sync/personal-sync",
+          "payload": {}
+        },
+        "card": {
+          "type": "guide",
+          "title": "个人课表导入",
+          "subtitle": "不接收账号密码",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": [
+            {
+              "type": "navigate",
+              "label": "打开个人课表同步",
+              "url": "/pages/personal-sync/personal-sync",
+              "payload": {}
+            }
+          ]
+        }
+      },
+      {
+        "id": "assistant-rule-data-status",
+        "sourceId": "assistant-rule-data-status",
+        "type": "rule",
+        "title": "数据是否最新和异常诊断",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "数据最新吗",
+          "数据异常",
+          "加载失败",
+          "为什么查不到",
+          "课表不对",
+          "空教室数据"
+        ],
+        "synonyms": [
+          "数据状态",
+          "数据诊断",
+          "缓存异常",
+          "课表是否最新"
+        ],
+        "patterns": [
+          "数据.*(最新|异常|失败|不对)",
+          "(加载失败|查不到|课表不对|缓存)"
+        ],
+        "priority": 136,
+        "body": "数据状态规则触发诊断工具，状态事实来自 active release、索引和缓存检查。",
+        "updatedAt": "2026-07-08T13:04:15.421Z",
+        "intentName": "diagnose_data_status",
+        "toolName": "diagnose_data_status",
+        "cardType": "diagnosis",
+        "reply": "数据状态规则触发诊断工具，状态事实来自 active release、索引和缓存检查。",
+        "suggestions": [
+          "检查数据状态",
+          "重新查空教室"
+        ],
+        "action": {},
+        "card": {
+          "type": "diagnosis",
+          "title": "数据状态",
+          "subtitle": "检查课表索引和空教室索引",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "assistant-rule-privacy",
+        "sourceId": "assistant-rule-privacy",
+        "type": "rule",
+        "title": "隐私说明",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "隐私",
+          "会保存密码吗",
+          "会上传课表吗",
+          "账号密码",
+          "安全吗",
+          "个人信息"
+        ],
+        "synonyms": [
+          "隐私安全吗",
+          "数据安全",
+          "密码安全",
+          "课表摘要"
+        ],
+        "patterns": [
+          "(隐私|安全|个人信息|账号|密码)",
+          "(保存|上传|读取).*(课表|密码|个人信息)"
+        ],
+        "priority": 130,
+        "body": "隐私规则从知识库返回公开隐私说明。若用户输入账号、密码或其他敏感凭证，应先由安全过滤拦截。",
+        "updatedAt": "2026-07-08T13:04:15.423Z",
+        "intentName": "rag_search",
+        "toolName": "rag_search",
+        "cardType": "guide",
+        "reply": "隐私规则从知识库返回公开隐私说明。若用户输入账号、密码或其他敏感凭证，应先由安全过滤拦截。",
+        "suggestions": [
+          "怎么导入个人课表？",
+          "小佛助手能做什么？"
+        ],
+        "action": {},
+        "card": {
+          "type": "guide",
+          "title": "隐私与安全",
+          "subtitle": "最小必要信息原则",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": []
+        }
+      },
+      {
+        "id": "assistant-rule-clarify",
+        "sourceId": "assistant-rule-clarify",
+        "type": "rule",
+        "title": "无法识别时的友好追问",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-local-rule"
+        ],
+        "keywords": [
+          "帮我查一下",
+          "看看课表",
+          "找个教室",
+          "查课",
+          "安排一下"
+        ],
+        "synonyms": [
+          "不完整问题",
+          "缺少关键词",
+          "追问"
+        ],
+        "patterns": [
+          "^(帮我)?查(一下)?$",
+          "^找个教室$",
+          "^看看课表$"
+        ],
+        "priority": 80,
+        "body": "无法识别或缺少槽位时，追问用户要查教师、班级、教室、课程、空教室还是个人课表。",
+        "updatedAt": "2026-07-08T13:04:15.423Z",
+        "intentName": "clarify_missing_slot",
+        "toolName": "clarify_missing_slot",
+        "cardType": "guide",
+        "reply": "无法识别或缺少槽位时，追问用户要查教师、班级、教室、课程、空教室还是个人课表。",
+        "suggestions": [
+          "查今日课表",
+          "查C7-203教室",
+          "找空教室"
+        ],
+        "action": {},
+        "card": {
+          "type": "guide",
+          "title": "需要补充条件",
+          "subtitle": "请补充教师、班级、教室、课程或时间",
+          "badges": [
+            "本地规则",
+            "工具优先"
+          ],
+          "items": [],
+          "actions": []
+        }
+      }
+    ],
+    "docs": [
+      {
+        "id": "fosuclass-guide",
+        "sourceId": "fosuclass-guide",
+        "type": "doc",
+        "title": "佛课小表使用说明",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [],
+        "keywords": [],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 0,
+        "body": "佛课小表用于查询全校课表、教师课表、教室占用、课程安排、空教室、教学周和个人本地课表摘要。课程事实必须来自确定性课表工具，知识库只用于解释功能、隐私和常见故障。",
+        "updatedAt": "2026-06-16",
+        "chunks": [
+          {
+            "chunkId": "fosuclass-guide:c1-1",
+            "sourceId": "fosuclass-guide",
+            "title": "佛课小表使用说明",
+            "updatedAt": "2026-06-16",
+            "text": "佛课小表用于查询全校课表、教师课表、教室占用、课程安排、空教室、教学周和个人本地课表摘要。课程事实必须来自确定性课表工具，知识库只用于解释功能、隐私和常见故障。"
+          }
+        ]
+      },
+      {
+        "id": "privacy-guide",
+        "sourceId": "privacy-guide",
+        "type": "doc",
+        "title": "隐私说明",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [],
+        "keywords": [],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 0,
+        "body": "小佛默认不保存学号、密码、Cookie、完整个人课表、精确位置轨迹和私密聊天内容。用户主动授权后，只发送完成任务所需的最小课表摘要，例如课程名、教师、教室、星期、节次和教学周。",
+        "updatedAt": "2026-06-16",
+        "chunks": [
+          {
+            "chunkId": "privacy-guide:c1-1",
+            "sourceId": "privacy-guide",
+            "title": "隐私说明",
+            "updatedAt": "2026-06-16",
+            "text": "小佛默认不保存学号、密码、Cookie、完整个人课表、精确位置轨迹和私密聊天内容。用户主动授权后，只发送完成任务所需的最小课表摘要，例如课程名、教师、教室、星期、节次和教学周。"
+          }
+        ]
+      },
+      {
+        "id": "term-week-guide",
+        "sourceId": "term-week-guide",
+        "type": "doc",
+        "title": "学期与教学周规则",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [],
+        "keywords": [],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 0,
+        "body": "教学周由当前学期配置和校历规则计算。单双周、指定周次和日期查询必须通过课表工具解析，不能从知识库推断具体课程安排。",
+        "updatedAt": "2026-06-16",
+        "chunks": [
+          {
+            "chunkId": "term-week-guide:c1-1",
+            "sourceId": "term-week-guide",
+            "title": "学期与教学周规则",
+            "updatedAt": "2026-06-16",
+            "text": "教学周由当前学期配置和校历规则计算。单双周、指定周次和日期查询必须通过课表工具解析，不能从知识库推断具体课程安排。"
+          }
+        ]
+      },
+      {
+        "id": "failure-guide",
+        "sourceId": "failure-guide",
+        "type": "doc",
+        "title": "常见故障说明",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [],
+        "keywords": [],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 0,
+        "body": "如果课表、全校查询或空教室加载失败，优先检查网络状态、当前学期、数据更新时间和本地缓存。公众回答只展示用户可理解的原因，不展示内部域名、服务器名称、鉴权凭据或发布控制面细节。",
+        "updatedAt": "2026-06-16",
+        "chunks": [
+          {
+            "chunkId": "failure-guide:c1-1",
+            "sourceId": "failure-guide",
+            "title": "常见故障说明",
+            "updatedAt": "2026-06-16",
+            "text": "如果课表、全校查询或空教室加载失败，优先检查网络状态、当前学期、数据更新时间和本地缓存。公众回答只展示用户可理解的原因，不展示内部域名、服务器名称、鉴权凭据或发布控制面细节。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-overview",
+        "sourceId": "assistant-doc-overview",
+        "type": "doc",
+        "title": "佛课小表功能总览",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "佛课小表",
+          "功能总览",
+          "小佛助手",
+          "校园查询"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 60,
+        "body": "# 佛课小表功能总览\n\n佛课小表提供全校课表查询、个人课表摘要、空教室查询、教学周和校历、天气提醒、校园地图、数据状态说明和常见问题帮助。\n\n小佛助手负责把这些能力组织成自然语言入口和卡片结果。课程、教师、教室、空教室、教学周等事实必须来自工具链或用户授权的个人课表摘要。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-overview:c1-1",
+            "sourceId": "assistant-doc-overview",
+            "title": "佛课小表功能总览",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "佛课小表提供全校课表查询、个人课表摘要、空教室查询、教学周和校历、天气提醒、校园地图、数据状态说明和常见问题帮助。\n\n小佛助手负责把这些能力组织成自然语言入口和卡片结果。课程、教师、教室、空教室、教学周等事实必须来自工具链或用户授权的个人课表摘要。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-formal-local-rules",
+        "sourceId": "assistant-doc-formal-local-rules",
+        "type": "doc",
+        "title": "正式版本地规则说明",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "正式版",
+          "本地规则",
+          "公开发布",
+          "工具优先"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 58,
+        "body": "# 正式版本地规则说明\n\n正式版使用本地规则、已发布知识库和已有工具卡片处理用户问题。规则负责理解入口和追问，工具负责核验事实，卡片负责展示结果。\n\n正式版不向用户展示内部实现细节，也不让说明文档编造课程、教室、教师、空教室、教学周或校历事实。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-formal-local-rules:c1-1",
+            "sourceId": "assistant-doc-formal-local-rules",
+            "title": "正式版本地规则说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "正式版使用本地规则、已发布知识库和已有工具卡片处理用户问题。规则负责理解入口和追问，工具负责核验事实，卡片负责展示结果。\n\n正式版不向用户展示内部实现细节，也不让说明文档编造课程、教室、教师、空教室、教学周或校历事实。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-schedule-query",
+        "sourceId": "assistant-doc-schedule-query",
+        "type": "doc",
+        "title": "课表查询说明",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "课表查询",
+          "今日课表",
+          "明日课表",
+          "班级课表",
+          "教师课表",
+          "教室课表",
+          "课程课表"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 56,
+        "body": "# 课表查询说明\n\n用户可以问今日课表、明日课表、下一节课、本周课表，也可以按班级、教师、教室、课程查询全校课表。\n\n个人今日/明日/本周课表需要用户先导入或授权个人课表摘要。全校班级、教师、教室、课程查询以已发布课表索引和详情为准。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-schedule-query:c1-1",
+            "sourceId": "assistant-doc-schedule-query",
+            "title": "课表查询说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "用户可以问今日课表、明日课表、下一节课、本周课表，也可以按班级、教师、教室、课程查询全校课表。\n\n个人今日/明日/本周课表需要用户先导入或授权个人课表摘要。全校班级、教师、教室、课程查询以已发布课表索引和详情为准。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-empty-room",
+        "sourceId": "assistant-doc-empty-room",
+        "type": "doc",
+        "title": "空教室查询说明",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "空教室",
+          "连续空教室",
+          "自习室",
+          "可用教室"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 55,
+        "body": "# 空教室查询说明\n\n用户可以按日期、节次、楼栋和连续节数查询空教室，例如“现在有空教室吗”“C7附近连续两节空教室”。\n\n空教室结果来自已发布的空教室索引。没有结果时，应提示用户换楼栋、换节次或检查数据状态。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-empty-room:c1-1",
+            "sourceId": "assistant-doc-empty-room",
+            "title": "空教室查询说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "用户可以按日期、节次、楼栋和连续节数查询空教室，例如“现在有空教室吗”“C7附近连续两节空教室”。\n\n空教室结果来自已发布的空教室索引。没有结果时，应提示用户换楼栋、换节次或检查数据状态。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-weather-card",
+        "sourceId": "assistant-doc-weather-card",
+        "type": "doc",
+        "title": "天气卡片说明",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "天气",
+          "天气卡片",
+          "带伞",
+          "出行建议"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 54,
+        "body": "# 天气卡片说明\n\n天气问题必须调用天气工具并返回天气卡片。卡片可展示校区、天气文字、温度、降水、更新时间和出行建议。\n\n天气也可以和下一节课、空教室、路线建议组合，但课程和教室事实仍来自对应工具。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-weather-card:c1-1",
+            "sourceId": "assistant-doc-weather-card",
+            "title": "天气卡片说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "天气问题必须调用天气工具并返回天气卡片。卡片可展示校区、天气文字、温度、降水、更新时间和出行建议。\n\n天气也可以和下一节课、空教室、路线建议组合，但课程和教室事实仍来自对应工具。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-personal-import",
+        "sourceId": "assistant-doc-personal-import",
+        "type": "doc",
+        "title": "个人课表导入说明",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "个人课表",
+          "导入",
+          "同步",
+          "XLS",
+          "Excel"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 54,
+        "body": "# 个人课表导入说明\n\n用户需要先打开个人课表同步入口，按页面指引导入或同步本地个人课表。小佛助手不会在聊天框接收学号、密码或其他敏感凭证。\n\n导入后，今日课表、明日课表、下一节课、本周课表和自习时间推荐会使用最小必要课表摘要。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-personal-import:c1-1",
+            "sourceId": "assistant-doc-personal-import",
+            "title": "个人课表导入说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "用户需要先打开个人课表同步入口，按页面指引导入或同步本地个人课表。小佛助手不会在聊天框接收学号、密码或其他敏感凭证。\n\n导入后，今日课表、明日课表、下一节课、本周课表和自习时间推荐会使用最小必要课表摘要。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-data-source",
+        "sourceId": "assistant-doc-data-source",
+        "type": "doc",
+        "title": "数据来源与更新说明",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "数据来源",
+          "更新",
+          "数据最新",
+          "已发布课表数据",
+          "缓存"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 52,
+        "body": "# 数据来源与更新说明\n\n全校课表、索引、详情和空教室来自已发布的数据包和本地缓存。小佛助手只能说明数据状态，不应在知识库里写死课程事实。\n\n当用户问数据是否最新或为什么加载失败时，应调用数据诊断工具，展示索引数量、空教室索引和当前数据状态。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-data-source:c1-1",
+            "sourceId": "assistant-doc-data-source",
+            "title": "数据来源与更新说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "全校课表、索引、详情和空教室来自已发布的数据包和本地缓存。小佛助手只能说明数据状态，不应在知识库里写死课程事实。\n\n当用户问数据是否最新或为什么加载失败时，应调用数据诊断工具，展示索引数量、空教室索引和当前数据状态。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-campus-map",
+        "sourceId": "assistant-doc-campus-map",
+        "type": "doc",
+        "title": "校园地图使用说明",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "校园地图",
+          "地点查询",
+          "路线",
+          "教室位置",
+          "C7",
+          "图书馆"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 52,
+        "body": "# 校园地图使用说明\n\n用户可以查询校区地点、楼栋、教室位置和大致路线，例如“C7在哪”“图书馆怎么走”。\n\n地图数据用于定位和入口跳转；未维护精确坐标时，应明确说明只能提供参考位置。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-campus-map:c1-1",
+            "sourceId": "assistant-doc-campus-map",
+            "title": "校园地图使用说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "用户可以查询校区地点、楼栋、教室位置和大致路线，例如“C7在哪”“图书馆怎么走”。\n\n地图数据用于定位和入口跳转；未维护精确坐标时，应明确说明只能提供参考位置。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-faq",
+        "sourceId": "assistant-doc-faq",
+        "type": "doc",
+        "title": "常见问题 FAQ",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "FAQ",
+          "常见问题",
+          "查不到",
+          "怎么问",
+          "为什么没有结果"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 50,
+        "body": "# 常见问题 FAQ\n\n如果查不到教师、班级、教室或课程，建议换更短关键词、检查名称是否完整，或打开全校查询页面继续筛选。\n\n如果空教室没有结果，建议换楼栋、换节次、减少连续节数，或检查数据状态。\n\n如果今日课表为空，建议先确认是否已经导入个人课表摘要。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-faq:c1-1",
+            "sourceId": "assistant-doc-faq",
+            "title": "常见问题 FAQ",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "如果查不到教师、班级、教室或课程，建议换更短关键词、检查名称是否完整，或打开全校查询页面继续筛选。\n\n如果空教室没有结果，建议换楼栋、换节次、减少连续节数，或检查数据状态。\n\n如果今日课表为空，建议先确认是否已经导入个人课表摘要。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-privacy",
+        "sourceId": "assistant-doc-privacy",
+        "type": "doc",
+        "title": "隐私与安全说明",
+        "status": "published",
+        "scope": [
+          "public",
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "隐私",
+          "安全",
+          "账号密码",
+          "敏感凭证",
+          "个人课表"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 50,
+        "body": "# 隐私与安全说明\n\n聊天框不应接收学号、密码或其他敏感凭证。用户需要导入个人课表时，应进入个人课表同步页面。\n\n个人课表摘要只包含完成查询所需的课程名、教师、教室、星期、节次和周次等最小字段。用户可重新导入或清理本地数据。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-privacy:c1-1",
+            "sourceId": "assistant-doc-privacy",
+            "title": "隐私与安全说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "聊天框不应接收学号、密码或其他敏感凭证。用户需要导入个人课表时，应进入个人课表同步页面。\n\n个人课表摘要只包含完成查询所需的课程名、教师、教室、星期、节次和周次等最小字段。用户可重新导入或清理本地数据。"
+          }
+        ]
+      },
+      {
+        "id": "assistant-doc-trial-dev-internal",
+        "sourceId": "assistant-doc-trial-dev-internal",
+        "type": "doc",
+        "title": "体验版/开发版内部说明",
+        "status": "published",
+        "scope": [
+          "trial",
+          "dev"
+        ],
+        "tags": [
+          "assistant-seed-doc"
+        ],
+        "keywords": [
+          "体验版",
+          "开发版",
+          "Provider",
+          "DeepSeek",
+          "Coze",
+          "CloudBase"
+        ],
+        "synonyms": [],
+        "patterns": [],
+        "priority": 20,
+        "body": "# 体验版/开发版内部说明\n\n体验版和开发版可启用增强理解能力，用于槽位补全、表达组织和调试。可选 Provider 包括 DeepSeek、CloudBase OpenAI 和 Coze。\n\n外部模型不得编造课程、教师、教室、空教室、教学周或校历事实；事实任务必须使用工具链结果。\n\n本说明仅用于 trial/dev 范围，不能发布到 public 范围。",
+        "updatedAt": "2026-07-08T13:04:15.424Z",
+        "chunks": [
+          {
+            "chunkId": "assistant-doc-trial-dev-internal:c1-1",
+            "sourceId": "assistant-doc-trial-dev-internal",
+            "title": "体验版/开发版内部说明",
+            "updatedAt": "2026-07-08T13:04:15.419Z",
+            "text": "体验版和开发版可启用增强理解能力，用于槽位补全、表达组织和调试。可选 Provider 包括 DeepSeek、CloudBase OpenAI 和 Coze。\n\n外部模型不得编造课程、教师、教室、空教室、教学周或校历事实；事实任务必须使用工具链结果。\n\n本说明仅用于 trial/dev 范围，不能发布到 public 范围。"
+          }
+        ]
+      }
+    ]
+  },
+  "backups": [
     {
-      "sourceId": "fosuclass-guide",
-      "title": "佛课小表使用说明",
-      "updatedAt": "2026-06-16",
-      "body": "佛课小表用于查询全校课表、教师课表、教室占用、课程安排、空教室、教学周和个人本地课表摘要。课程事实必须来自确定性课表工具，知识库只用于解释功能、隐私和常见故障。"
-    },
-    {
-      "sourceId": "privacy-guide",
-      "title": "隐私说明",
-      "updatedAt": "2026-06-16",
-      "body": "小佛默认不保存学号、密码、Cookie、完整个人课表、精确位置轨迹和私密聊天内容。用户主动授权后，只发送完成任务所需的最小课表摘要，例如课程名、教师、教室、星期、节次和教学周。"
-    },
-    {
-      "sourceId": "term-week-guide",
-      "title": "学期与教学周规则",
-      "updatedAt": "2026-06-16",
-      "body": "教学周由当前学期配置和校历规则计算。单双周、指定周次和日期查询必须通过课表工具解析，不能从知识库推断具体课程安排。"
-    },
-    {
-      "sourceId": "failure-guide",
-      "title": "常见故障说明",
-      "updatedAt": "2026-06-16",
-      "body": "如果课表、全校查询或空教室加载失败，优先检查网络状态、当前学期、数据更新时间和本地缓存。公众回答只展示用户可理解的原因，不展示内部域名、服务器名称、Provider、Token 或发布控制面细节。"
+      "versionId": "knowledge.v1",
+      "label": "assistant-local-rules-seed",
+      "createdAt": "2026-07-08T13:04:15.428Z",
+      "publishedAt": "2026-06-16",
+      "rules": [
+        {
+          "id": "rule-xiaofu-intro",
+          "sourceId": "rule-xiaofu-intro",
+          "type": "rule",
+          "title": "小佛助手能力介绍",
+          "status": "published",
+          "scope": [
+            "public",
+            "trial",
+            "dev"
+          ],
+          "tags": [
+            "help"
+          ],
+          "keywords": [
+            "你是谁",
+            "小佛",
+            "能做什么",
+            "帮助"
+          ],
+          "synonyms": [],
+          "patterns": [],
+          "priority": 90,
+          "body": "我是小佛助手，可以帮你查课表、找空教室、看教学周、解释个人课表导入方式，也能回答佛课小表的使用问题。涉及课程、教师、教室和空教室的事实，我会以已核验的工具数据为准。",
+          "updatedAt": "2026-06-16T00:00:00.000Z",
+          "intentName": "",
+          "toolName": "",
+          "cardType": "",
+          "reply": "我是小佛助手，可以帮你查课表、找空教室、看教学周、解释个人课表导入方式，也能回答佛课小表的使用问题。涉及课程、教师、教室和空教室的事实，我会以已核验的工具数据为准。",
+          "suggestions": [],
+          "action": {},
+          "card": {}
+        }
+      ],
+      "docs": [
+        {
+          "id": "fosuclass-guide",
+          "sourceId": "fosuclass-guide",
+          "type": "doc",
+          "title": "佛课小表使用说明",
+          "status": "published",
+          "scope": [
+            "public",
+            "trial",
+            "dev"
+          ],
+          "tags": [],
+          "keywords": [],
+          "synonyms": [],
+          "patterns": [],
+          "priority": 0,
+          "body": "佛课小表用于查询全校课表、教师课表、教室占用、课程安排、空教室、教学周和个人本地课表摘要。课程事实必须来自确定性课表工具，知识库只用于解释功能、隐私和常见故障。",
+          "updatedAt": "2026-06-16",
+          "chunks": [
+            {
+              "chunkId": "fosuclass-guide:c1-1",
+              "sourceId": "fosuclass-guide",
+              "title": "佛课小表使用说明",
+              "updatedAt": "2026-06-16",
+              "text": "佛课小表用于查询全校课表、教师课表、教室占用、课程安排、空教室、教学周和个人本地课表摘要。课程事实必须来自确定性课表工具，知识库只用于解释功能、隐私和常见故障。"
+            }
+          ]
+        },
+        {
+          "id": "privacy-guide",
+          "sourceId": "privacy-guide",
+          "type": "doc",
+          "title": "隐私说明",
+          "status": "published",
+          "scope": [
+            "public",
+            "trial",
+            "dev"
+          ],
+          "tags": [],
+          "keywords": [],
+          "synonyms": [],
+          "patterns": [],
+          "priority": 0,
+          "body": "小佛默认不保存学号、密码、Cookie、完整个人课表、精确位置轨迹和私密聊天内容。用户主动授权后，只发送完成任务所需的最小课表摘要，例如课程名、教师、教室、星期、节次和教学周。",
+          "updatedAt": "2026-06-16",
+          "chunks": [
+            {
+              "chunkId": "privacy-guide:c1-1",
+              "sourceId": "privacy-guide",
+              "title": "隐私说明",
+              "updatedAt": "2026-06-16",
+              "text": "小佛默认不保存学号、密码、Cookie、完整个人课表、精确位置轨迹和私密聊天内容。用户主动授权后，只发送完成任务所需的最小课表摘要，例如课程名、教师、教室、星期、节次和教学周。"
+            }
+          ]
+        },
+        {
+          "id": "term-week-guide",
+          "sourceId": "term-week-guide",
+          "type": "doc",
+          "title": "学期与教学周规则",
+          "status": "published",
+          "scope": [
+            "public",
+            "trial",
+            "dev"
+          ],
+          "tags": [],
+          "keywords": [],
+          "synonyms": [],
+          "patterns": [],
+          "priority": 0,
+          "body": "教学周由当前学期配置和校历规则计算。单双周、指定周次和日期查询必须通过课表工具解析，不能从知识库推断具体课程安排。",
+          "updatedAt": "2026-06-16",
+          "chunks": [
+            {
+              "chunkId": "term-week-guide:c1-1",
+              "sourceId": "term-week-guide",
+              "title": "学期与教学周规则",
+              "updatedAt": "2026-06-16",
+              "text": "教学周由当前学期配置和校历规则计算。单双周、指定周次和日期查询必须通过课表工具解析，不能从知识库推断具体课程安排。"
+            }
+          ]
+        },
+        {
+          "id": "failure-guide",
+          "sourceId": "failure-guide",
+          "type": "doc",
+          "title": "常见故障说明",
+          "status": "published",
+          "scope": [
+            "public",
+            "trial",
+            "dev"
+          ],
+          "tags": [],
+          "keywords": [],
+          "synonyms": [],
+          "patterns": [],
+          "priority": 0,
+          "body": "如果课表、全校查询或空教室加载失败，优先检查网络状态、当前学期、数据更新时间和本地缓存。公众回答只展示用户可理解的原因，不展示内部域名、服务器名称、鉴权凭据或发布控制面细节。",
+          "updatedAt": "2026-06-16",
+          "chunks": [
+            {
+              "chunkId": "failure-guide:c1-1",
+              "sourceId": "failure-guide",
+              "title": "常见故障说明",
+              "updatedAt": "2026-06-16",
+              "text": "如果课表、全校查询或空教室加载失败，优先检查网络状态、当前学期、数据更新时间和本地缓存。公众回答只展示用户可理解的原因，不展示内部域名、服务器名称、鉴权凭据或发布控制面细节。"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

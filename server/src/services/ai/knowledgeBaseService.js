@@ -12,7 +12,7 @@ const DEFAULT_DOCS = [
     title: "佛课小表使用说明",
     updatedAt: "2026-06-16",
     keywords: ["佛课小表", "小佛", "使用说明", "校园查询"],
-    body: "佛课小表用于查询全校课表、空教室、教学周和个人本地课表摘要。课程事实只能来自课表工具和 Release Pack；知识库只负责说明功能、隐私和常见问题。",
+    body: "佛课小表用于查询全校课表、空教室、教学周和个人本地课表摘要。课程事实只能来自课表工具和已发布课表数据；知识库只负责说明功能、隐私和常见问题。",
   },
   {
     sourceId: "privacy-guide",
@@ -92,6 +92,15 @@ function normalizeArray(value) {
     .filter(Boolean);
 }
 
+function normalizePlainObject(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  try {
+    return JSON.parse(JSON.stringify(value));
+  } catch (error) {
+    return {};
+  }
+}
+
 function normalizeScope(value) {
   const items = normalizeArray(value).map((item) => {
     const env = item.toLowerCase();
@@ -167,6 +176,16 @@ function normalizeEntry(input = {}, fallbackType = "doc") {
     body: body.slice(0, 30000),
     updatedAt: normalizeText(input.updatedAt) || nowIso(),
   };
+  if (type === "rule") {
+    const card = normalizePlainObject(input.card);
+    entry.intentName = normalizeText(input.intentName || input.intent || "").slice(0, 80);
+    entry.toolName = normalizeText(input.toolName || input.tool || "").slice(0, 80);
+    entry.cardType = normalizeText(input.cardType || card.type || "").slice(0, 80);
+    entry.reply = normalizeText(input.reply || input.answer || body).slice(0, 3000);
+    entry.suggestions = normalizeArray(input.suggestions).slice(0, 12);
+    entry.action = normalizePlainObject(input.action);
+    entry.card = card;
+  }
   if (type === "doc") {
     entry.chunks = Array.isArray(input.chunks) && input.chunks.length
       ? input.chunks.map((chunk, index) => ({
@@ -563,6 +582,9 @@ function searchKnowledge(input = {}) {
         title: item.rule.title,
         score: Number(item.score.toFixed(3)),
         matchedKeywords: item.matchedKeywords,
+        intentName: item.rule.intentName || "",
+        toolName: item.rule.toolName || "",
+        cardType: item.rule.cardType || "",
       })),
       items: [{
         sourceId: top.rule.sourceId,
@@ -572,8 +594,15 @@ function searchKnowledge(input = {}) {
         score: Number(top.score.toFixed(3)),
         type: "rule",
         updatedAt: top.rule.updatedAt,
+        intentName: top.rule.intentName || "",
+        toolName: top.rule.toolName || "",
+        cardType: top.rule.cardType || "",
+        reply: top.rule.reply || top.rule.body || "",
+        suggestions: top.rule.suggestions || [],
+        action: top.rule.action || {},
+        card: top.rule.card || {},
       }],
-      answer: top.rule.body,
+      answer: top.rule.reply || top.rule.body,
       total: 1,
       noAnswer: false,
       fallback: false,
@@ -615,6 +644,47 @@ function searchKnowledge(input = {}) {
     fallback: items.length === 0,
     answer: items.length ? items.map((item) => item.text).join("\n\n").slice(0, 1200) : "",
     summary: items.length ? `找到 ${items.length} 条知识来源。` : "知识库没有可靠答案。",
+  };
+}
+
+function matchLocalRule(input = {}) {
+  const query = normalizeText(input.q || input.query || input.message || "");
+  const environment = normalizeScope(input.environment || input.scope || "public")[0] || "public";
+  const store = readStore();
+  if (!query) {
+    return {
+      success: true,
+      matched: false,
+      environment,
+      version: store.published.versionId,
+      rule: null,
+      ruleMatches: [],
+    };
+  }
+  const matches = (store.published.rules || [])
+    .filter((rule) => rule.status !== "disabled" && scopeMatches(rule, environment))
+    .map((rule) => matchRule(rule, query))
+    .filter(Boolean)
+    .sort((left, right) => right.score - left.score);
+  const top = matches[0] || null;
+  return {
+    success: true,
+    matched: Boolean(top),
+    environment,
+    version: store.published.versionId,
+    sourceId: `knowledge:${store.published.versionId}`,
+    rule: top ? top.rule : null,
+    score: top ? Number(top.score.toFixed(3)) : 0,
+    matchedKeywords: top ? top.matchedKeywords : [],
+    ruleMatches: matches.slice(0, 5).map((item) => ({
+      id: item.rule.id,
+      title: item.rule.title,
+      score: Number(item.score.toFixed(3)),
+      matchedKeywords: item.matchedKeywords,
+      intentName: item.rule.intentName || "",
+      toolName: item.rule.toolName || "",
+      cardType: item.rule.cardType || "",
+    })),
   };
 }
 
@@ -742,6 +812,7 @@ module.exports = {
   importMarkdown,
   listKnowledge,
   loadDocs,
+  matchLocalRule,
   normalizeDocument,
   normalizeEntry,
   publish,

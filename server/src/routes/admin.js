@@ -35,6 +35,7 @@ const aiProviderConfigService = require("../services/ai/providerConfigService");
 const providerChainService = require("../services/ai/providerChainService");
 const evaluationService = require("../services/ai/evaluationService");
 const knowledgeBaseService = require("../services/ai/knowledgeBaseService");
+const agentProtocol = require("../services/ai/agentProtocol");
 const campusMapService = require("../services/ai/campusMapService");
 const campusMapVersionService = require("../services/ai/campusMapVersionService");
 const campusMapAssetService = require("../services/campusMapAssetService");
@@ -502,6 +503,7 @@ router.post("/security/events/cleanup", adminAuth.verifyAdminAccess, (req, res) 
 
 function buildAiProviderAdminPayload(environment) {
   const status = aiProviderConfigService.getStatus(environment);
+  const enabledTools = Object.keys(agentProtocol.TOOL_DEFINITIONS || {});
   const environments = (status.environments || []).map((item) => {
     const runtimeConfig = aiProviderConfigService.getRuntimeConfigForEnvironment(item.environment);
     const chain = providerChainService.getStatus(item.environment === "public" ? "public" : "competition", runtimeConfig);
@@ -529,6 +531,10 @@ function buildAiProviderAdminPayload(environment) {
   return Object.assign({}, status, {
     environments,
     protocolVersion: "agent.v1",
+    enabledTools,
+    toolCount: enabledTools.length,
+    enabledToolCount: enabledTools.length,
+    protocolToolCount: enabledTools.length,
     providerChain: providerChainService.getStatus(activeRuntimeMode, activeRuntimeConfig),
     knowledgeIndex: knowledgeBaseService.getIndexStatus(),
     campusMap: campusMapService.getMapStatus(),
@@ -629,8 +635,11 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
       providerPolicy: payload.safety && payload.safety.providerPolicy || "",
       providerDecisionReason: payload.safety && payload.safety.providerDecisionReason || "",
       fallbackReason: payload.safety && payload.safety.fallbackReason || "",
+      fallback: payload.metrics && payload.metrics.fallback === true || Boolean(payload.safety && payload.safety.fallbackReason),
+      latencyMs: payload.metrics && payload.metrics.latencyMs || 0,
       mode: payload.safety && payload.safety.mode || "tool-grounded",
       toolCalls: payload.toolCalls || [],
+      answerSnippet: String(payload.answer || "").slice(0, 120),
       answerPreview: String(payload.answer || "").slice(0, 120),
     });
     const deterministicPayload = await runProbe("今天还有课吗？");
@@ -677,7 +686,10 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
         projectQaExternalProviderUsed: projectSummary.externalProviderUsed === true,
         mode: payload.safety && payload.safety.mode || "tool-grounded",
         elapsedMs: Date.now() - startedAt,
+        latencyMs: payload.metrics && payload.metrics.latencyMs || (Date.now() - startedAt),
+        fallback: payload.metrics && payload.metrics.fallback === true || Boolean(payload.safety && payload.safety.fallbackReason),
         toolCalls: payload.toolCalls || [],
+        answerSnippet: String(payload.answer || "").slice(0, 120),
         answerPreview: String(payload.answer || "").slice(0, 120),
         deterministicToolTest: deterministicSummary,
         projectQaProviderTest: projectSummary,
@@ -708,7 +720,10 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
         projectQaExternalProviderUsed: false,
         mode: "fallback",
         elapsedMs: 0,
+        latencyMs: 0,
+        fallback: true,
         toolCalls: [{ name: "ai-provider", status: "skipped", summary: error.code || "verify fallback mock" }],
+        answerSnippet: "Provider verify failed; local fallback is available.",
         answerPreview: "当前 Provider 验证失败，请检查配置或回退 mock。",
         deterministicToolTest: null,
         projectQaProviderTest: null,
