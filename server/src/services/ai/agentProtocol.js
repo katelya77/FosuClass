@@ -24,6 +24,7 @@ const INTENT_DEFINITIONS = Object.freeze({
   search_campus_place: { public: true, fact: true },
   get_campus_route: { public: true, fact: true },
   get_classroom_location: { public: true, fact: true },
+  next_course_location: { public: true, fact: true },
   rag_search: { public: true, fact: false },
   project_qa: { public: true, fact: false },
   conversational_help: { public: false, fact: false },

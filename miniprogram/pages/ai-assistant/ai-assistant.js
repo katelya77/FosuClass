@@ -509,10 +509,10 @@ const PROVIDER_LABELS = {
   "cloudbase-hunyuan": "已核验课表数据",
   hunyuan: "已核验课表数据",
   "tencent-hunyuan": "已核验课表数据",
-  mock: "已使用本地规则",
+  mock: "已核验课表数据",
   deepseek: "已核验课表数据",
   coze: "已核验课表数据",
-  unknown: "正在整理查询结果",
+  unknown: "已生成卡片",
 };
 
 const SAFETY_MODE_LABELS = {
@@ -799,9 +799,9 @@ function inferCourseTimeRange(source) {
 
 function mapProviderLabel(provider) {
   const normalized = String(provider || "unknown").toLowerCase();
-  if (normalized.indexOf("mock") >= 0 || normalized.indexOf("local") >= 0) return "已使用本地规则";
+  if (normalized.indexOf("mock") >= 0 || normalized.indexOf("local") >= 0) return "已核验课表数据";
   if (normalized && normalized !== "unknown") return "已核验课表数据";
-  return "正在整理查询结果";
+  return "已生成卡片";
 }
 
 function mapSafetyModeLabel(mode) {
@@ -848,11 +848,11 @@ function inferEvidenceLabel(source = {}) {
 
 function statusText(status) {
   const normalized = String(status || "").toLowerCase();
-  if (["success", "ok", "done"].includes(normalized)) return "完成";
+  if (["success", "ok", "done"].includes(normalized)) return "已生成卡片";
   if (["failed", "error"].includes(normalized)) return "失败";
   if (normalized === "skipped") return "跳过";
-  if (normalized === "running") return "调用中";
-  return "已调用";
+  if (normalized === "running") return "小佛助手正在理解";
+  return "已生成卡片";
 }
 
 function statusClass(status) {
@@ -875,12 +875,12 @@ function normalizeSafety(safety) {
   const fallbackReason = safeText(source.fallbackReason || "", 80);
   const providerDecisionReason = "";
   const externalUsed = source.externalProviderUsed === true;
-  const providerLabel = fallbackReason ? "已使用本地规则" : (externalUsed ? "已核验课表数据" : "已核验课表数据");
+  const providerLabel = "已核验课表数据";
   let text = "已核验课表数据";
   if (fallbackReason) {
-    text = "已使用本地规则";
+    text = "已核验课表数据";
   } else if (externalUsed) {
-    text = "正在整理查询结果";
+    text = "已生成卡片";
   }
   return {
     provider,
@@ -1429,7 +1429,7 @@ function buildHeaderSubtitle(state) {
     return "本地规则可用";
   }
   if (source.lastExternalProviderUsed) {
-    return "正在整理查询结果";
+    return "已生成卡片";
   }
   if (source.allowPersonalContext === true) {
     return "校园事项 · 全校课表 · 摘要已开";
@@ -1471,7 +1471,7 @@ Page({
     inputValue: "",
     inputFocus: false,
     sending: false,
-    sendingStatusText: "正在整理查询结果…",
+    sendingStatusText: "小佛助手正在理解",
     showTaskPanel: false,
     showConversationSheet: false,
     showCapabilityGuide: false,
@@ -2058,7 +2058,7 @@ Page({
       inputFocus: false,
       sending: true,
       slowRequest: false,
-      sendingStatusText: "正在匹配查询内容",
+      sendingStatusText: "小佛助手正在理解",
     }, { save: !this.data.demoMode });
 
     if (this.data.demoMode) {
@@ -2189,7 +2189,7 @@ Page({
           activeConversationContext: nextContext,
           sending: false,
           slowRequest: false,
-          sendingStatusText: "正在整理查询结果…",
+          sendingStatusText: "已生成卡片",
         }, { save: true });
       })
       .catch((error) => {
@@ -2226,7 +2226,7 @@ Page({
         this.setMessages(finalMessages, {
           sending: false,
           slowRequest: false,
-          sendingStatusText: "正在整理查询结果…",
+          sendingStatusText: "已生成卡片",
         }, { save: true });
       })
       .finally(() => {

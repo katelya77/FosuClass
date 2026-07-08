@@ -902,6 +902,71 @@ const adminConsoleHtml = `<!doctype html>
       gap: 16px;
       align-items: start;
     }
+    .provider-mode-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      align-items: start;
+    }
+    .provider-mode-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px;
+      box-shadow: var(--shadow);
+      min-height: 280px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .provider-status-hero strong {
+      color: var(--primary);
+    }
+    .provider-static-landing + .ai-provider-grid {
+      display: none;
+    }
+    .provider-switch-row,
+    .provider-checkbox-row,
+    .provider-radio-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-2);
+      font-size: 13px;
+      color: var(--text);
+    }
+    .provider-radio-group {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .provider-radio-row {
+      justify-content: flex-start;
+      cursor: pointer;
+    }
+    .provider-selected-form {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .provider-metric span,
+    .provider-metric small {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.4;
+      overflow-wrap: anywhere;
+    }
+    .provider-metric strong {
+      display: block;
+      margin-top: 2px;
+      color: var(--text);
+      overflow-wrap: anywhere;
+    }
     .provider-card-grid,
     .kb-list-grid {
       display: grid;
@@ -1008,7 +1073,11 @@ const adminConsoleHtml = `<!doctype html>
     }
     @media (max-width: 980px) {
       .provider-main-grid,
+      .provider-mode-grid,
       .kb-two-column {
+        grid-template-columns: 1fr;
+      }
+      .provider-radio-group {
         grid-template-columns: 1fr;
       }
       .provider-config-panel,
@@ -5155,6 +5224,26 @@ const adminConsoleHtml = `<!doctype html>
 
       <!-- 面板八：查询服务配置 -->
       <section id="section-ai-provider" class="section">
+        <div class="provider-console provider-static-landing">
+          <div class="provider-hero provider-status-hero">
+            <div>
+              <h3>小佛助手 Provider 控制台</h3>
+              <p>当前小程序实际使用 = <strong>正式版本地规则</strong></p>
+            </div>
+          </div>
+          <div class="provider-mode-grid">
+            <section class="provider-mode-card">
+              <div class="provider-card-title">正式版 / 公开发布</div>
+              <div class="ai-secret-note">本地规则 + 已发布知识库 + 已有工具卡片。</div>
+              <button class="primary" type="button">启用正式版本地规则</button>
+            </section>
+            <section class="provider-mode-card">
+              <div class="provider-card-title">体验版 / 开发调试</div>
+              <div class="ai-secret-note">开启后选择混元、deepseek 或 coze。</div>
+              <button class="secondary" type="button">保存并立即生效</button>
+            </section>
+          </div>
+        </div>
         <div class="ai-provider-grid">
           <div class="card form-box">
             <h3 class="card-title">校园查询 Provider</h3>
@@ -12044,6 +12133,250 @@ const adminConsoleHtml = `<!doctype html>
             showToast("预设已应用。", "success");
           })
           .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function aiProviderActualUseLabel() {
+        var cfg = state.aiProviderConfig || {};
+        var envStatus = findAiEnvironment(cfg.activeEnvironment || "public") || {};
+        var profile = envStatus.profile || {};
+        var provider = String(profile.provider || envStatus.provider || "mock").toLowerCase();
+        if ((cfg.activeEnvironment || "public") === "public" || provider === "mock" || profile.enabled === false) return "正式版本地规则";
+        if (provider === "cloudbase-openai") return "体验版混元";
+        if (provider === "deepseek") return "体验版 deepseek";
+        if (provider === "coze") return "体验版 coze";
+        return "正式版本地规则";
+      }
+
+      function aiExperienceEnvironment() {
+        var cfg = state.aiProviderConfig || {};
+        return cfg.activeEnvironment === "dev" ? "dev" : "trial";
+      }
+
+      function aiModeMetric(label, valueText, foot) {
+        return "<div class='provider-metric'><span>" + escapeHtml(label) + "</span><strong>" + valueText + "</strong>" + (foot ? "<small>" + escapeHtml(foot) + "</small>" : "") + "</div>";
+      }
+
+      function renderExperienceProviderRadios(selectedProvider) {
+        return ["cloudbase-openai", "deepseek", "coze"].map(function(name) {
+          var checked = selectedProvider === name ? " checked" : "";
+          return "<label class='provider-radio-row'><input type='radio' name='aiExperienceProvider' value='" + escapeHtml(name) + "'" + checked + " data-experience-provider='" + escapeHtml(name) + "'><span>" + escapeHtml(AI_PROVIDER_LABELS[name] || name) + "</span></label>";
+        }).join("");
+      }
+
+      function renderAiProviderConfig() {
+        var cfg = state.aiProviderConfig || {};
+        var publicEnv = findAiEnvironment("public") || {};
+        var publicProfile = publicEnv.profile || {};
+        var experienceEnvName = aiExperienceEnvironment();
+        var experienceEnv = findAiEnvironment(experienceEnvName) || findAiEnvironment("trial") || {};
+        var experienceProfile = experienceEnv.profile || {};
+        var kb = cfg.knowledgeIndex || {};
+        var toolCount = cfg.toolCount || cfg.enabledToolCount || cfg.protocolToolCount || 0;
+        var selectedProvider = state.aiProviderSelectedProvider || experienceProfile.provider || "cloudbase-openai";
+        if (["cloudbase-openai", "deepseek", "coze"].indexOf(selectedProvider) < 0) selectedProvider = "cloudbase-openai";
+        state.aiProviderSelectedProvider = selectedProvider;
+        state.aiProviderEnvironment = experienceEnvName;
+        var activeEnvName = cfg.activeEnvironment || "public";
+        var activeEnv = findAiEnvironment(activeEnvName) || {};
+        var activeProfile = activeEnv.profile || {};
+        var formalActive = activeEnvName === "public" || (activeProfile.provider || "mock") === "mock" || activeProfile.enabled === false;
+        var experienceEnabled = state.aiProviderDraftExperienceEnabled === true || (!formalActive && (activeEnvName === "trial" || activeEnvName === "dev") && experienceProfile.enabled !== false && experienceProfile.provider !== "mock");
+        var section = $("section-ai-provider");
+        if (!section) return;
+        section.innerHTML = "<div class='provider-console'>" +
+          "<div class='provider-hero provider-status-hero'><div><h3>小佛助手 Provider 控制台</h3><p>当前小程序实际使用 = <strong>" + escapeHtml(aiProviderActualUseLabel()) + "</strong></p></div><button id='reloadAiProviderBtn' class='ghost'>刷新状态</button></div>" +
+          "<div class='provider-mode-grid'>" +
+            "<section class='provider-mode-card'>" +
+              "<div class='provider-card-head'><div><div class='provider-card-title'>正式版 / 公开发布</div><div class='ai-secret-note'>公开用户默认入口：本地规则 + 已发布知识库 + 已有工具卡片</div></div><span class='badge " + (formalActive ? "success" : "muted") + "'>" + (formalActive ? "当前启用" : "未启用") + "</span></div>" +
+              "<div class='provider-metrics'>" +
+                aiModeMetric("实际运行", "<code>mock</code>", "tool-only") +
+                aiModeMetric("本地规则", escapeHtml(String(kb.ruleCount || 0)), "已发布规则") +
+                aiModeMetric("工具数量", escapeHtml(String(toolCount || 0)), "课表/空教室/天气/地图") +
+                aiModeMetric("知识库版本", "<code>" + escapeHtml(kb.version || kb.currentVersion || "-") + "</code>", "chunks " + String(kb.chunkCount || 0)) +
+                aiModeMetric("最后发布", escapeHtml(kb.publishedAt || "-"), "") +
+              "</div>" +
+              "<div class='provider-actions-row'><button id='aiPresetPublicSafeBtn' class='primary'>启用正式版本地规则</button></div>" +
+            "</section>" +
+            "<section class='provider-mode-card'>" +
+              "<div class='provider-card-head'><div><div class='provider-card-title'>体验版 / 开发调试</div><div class='ai-secret-note'>只用于增强理解、槽位补全和表达组织；事实任务仍走工具链</div></div><span class='badge " + (experienceEnabled ? "warning" : "muted") + "'>" + (experienceEnabled ? "增强已启用" : "增强未启用") + "</span></div>" +
+              "<label class='provider-switch-row'><span>启用增强理解能力</span><select id='aiExperienceEnabled'><option value='false'>关闭</option><option value='true'>开启</option></select></label>" +
+              "<input id='aiProvider' type='hidden' value='" + escapeHtml(selectedProvider) + "'><input id='aiEnabled' type='hidden' value='" + (experienceEnabled ? "true" : "false") + "'><input id='aiProviderPolicy' type='hidden' value='auto'><input id='aiRuntimeMode' type='hidden' value='" + (experienceEnabled ? "competition" : "public") + "'>" +
+              (experienceEnabled ? "<div class='provider-radio-group'>" + renderExperienceProviderRadios(selectedProvider) + "</div><div class='provider-selected-form'>" + renderProviderConfigFields(selectedProvider, experienceProfile) + "</div><label class='provider-checkbox-row'><input id='aiSaveAndVerify' type='checkbox' value='true'><span>保存后运行真实测试</span></label><div class='provider-actions-row'><button id='saveAiProviderBtn' class='primary'>保存并立即生效</button></div>" : "<div class='ai-secret-note'>关闭后会恢复正式版本地规则。需要调试时再开启并选择一个 Provider。</div>") +
+            "</section>" +
+          "</div>" +
+          "<details class='diagnostic-panel'><summary>高级诊断</summary><div id='aiVerifyResult' class='ai-verify-box'>尚未测试。运行后会显示 resolvedProvider、latencyMs、fallback、toolCalls、answerSnippet。</div><div class='provider-actions-row' style='padding:12px;'><button id='verifyAiProviderBtn' class='secondary'>运行真实测试</button><button id='forceAiProviderChatBtn' class='secondary'>测试项目问答</button><button id='runAiGoldenEvalBtn' class='secondary'>黄金测试</button><button id='exportAiEvalReportBtn' class='ghost'>导出报告</button><button id='clearAiLocalMetricsBtn' class='ghost'>清除本地指标</button></div><div id='aiAgentStatusGrid' class='ai-provider-status' style='padding:0 12px 12px;'></div><div id='aiAgentEvalResult' class='ai-verify-box'>黄金测试尚未运行。</div></details>" +
+        "</div>";
+        setSelectValue("aiExperienceEnabled", experienceEnabled ? "true" : "false");
+        setSelectValue("cozePollEnabled", experienceProfile.cozePollEnabled === false ? "false" : "true");
+        setSelectValue("aiJsonRepair", experienceProfile.jsonRepair === false ? "false" : "true");
+        setSelectValue("aiThinkingEnabled", experienceProfile.thinkingEnabled ? "true" : "false");
+        bindAiProviderConsoleEvents();
+        renderAiAgentStatus();
+      }
+
+      function bindAiProviderConsoleEvents() {
+        document.querySelectorAll("[data-experience-provider]").forEach(function(input) {
+          input.addEventListener("change", function() {
+            state.aiProviderSelectedProvider = input.value || "cloudbase-openai";
+            renderAiProviderConfig();
+          });
+        });
+        safeBind("saveAiProviderBtn", "click", saveAiProviderConfig);
+        safeBind("verifyAiProviderBtn", "click", verifyAiProviderConfig);
+        safeBind("forceAiProviderChatBtn", "click", forceAiProviderChatTest);
+        safeBind("reloadAiProviderBtn", "click", loadAiProviderConfig);
+        safeBind("runAiGoldenEvalBtn", "click", runAiGoldenEvaluation);
+        safeBind("exportAiEvalReportBtn", "click", exportAiEvaluationReport);
+        safeBind("clearAiLocalMetricsBtn", "click", clearAiLocalMetrics);
+        safeBind("aiPresetPublicSafeBtn", "click", function() { saveAiProviderPreset("public-safe", "public", { noConfirm: true }); });
+        safeBind("aiExperienceEnabled", "change", function() {
+          if (value("aiExperienceEnabled") === "true") {
+            state.aiProviderDraftExperienceEnabled = true;
+            state.aiProviderEnvironment = aiExperienceEnvironment();
+            if (!state.aiProviderSelectedProvider || state.aiProviderSelectedProvider === "mock") state.aiProviderSelectedProvider = "cloudbase-openai";
+            renderAiProviderConfig();
+          } else {
+            state.aiProviderDraftExperienceEnabled = false;
+            saveAiProviderPreset("public-safe", "public", { noConfirm: true });
+          }
+        });
+      }
+
+      function aiProviderPayload() {
+        var profile = activeAiProfile();
+        var provider = state.aiProviderSelectedProvider || value("aiProvider") || profile.provider || "cloudbase-openai";
+        var enhanced = value("aiExperienceEnabled") === "true";
+        if (!enhanced) {
+          return {
+            environment: "public",
+            activeEnvironment: "public",
+            activeMode: "public",
+            enabled: false,
+            provider: "mock",
+            providerPolicy: "tool-only",
+            runtimeMode: "public"
+          };
+        }
+        var payload = {
+          environment: aiExperienceEnvironment(),
+          activeEnvironment: aiExperienceEnvironment(),
+          activeMode: "trial",
+          enabled: true,
+          provider: provider,
+          providerPolicy: "auto",
+          runtimeMode: "competition"
+        };
+        if (provider === "deepseek") {
+          Object.assign(payload, { baseUrl: value("aiBaseUrl"), model: value("aiModel"), reasoningModel: value("aiReasoningModel"), temperature: value("aiTemperature"), maxTokens: value("aiMaxTokens"), jsonRepair: boolValue("aiJsonRepair"), thinkingEnabled: boolValue("aiThinkingEnabled") });
+          if (value("aiApiKey")) payload.apiKey = value("aiApiKey");
+        } else if (provider === "cloudbase-openai") {
+          Object.assign(payload, { cloudbaseOpenaiEnabled: true, cloudbaseOpenaiBaseUrl: value("cloudbaseOpenaiBaseUrl"), cloudbaseOpenaiTextModel: value("cloudbaseOpenaiTextModel"), cloudbaseOpenaiTimeoutMs: value("cloudbaseOpenaiTimeoutMs"), cloudbaseOpenaiMaxTokens: value("cloudbaseOpenaiMaxTokens") });
+          if (value("cloudbaseOpenaiApiKey")) payload.cloudbaseOpenaiApiKey = value("cloudbaseOpenaiApiKey");
+        } else if (provider === "coze") {
+          Object.assign(payload, { cozeBaseUrl: value("cozeBaseUrl"), cozeBotId: value("cozeBotId"), cozeUserId: value("cozeUserId"), cozeChatEndpoint: value("cozeChatEndpoint"), cozePollEnabled: boolValue("cozePollEnabled"), cozePollIntervalMs: value("cozePollIntervalMs"), cozePollMaxAttempts: value("cozePollMaxAttempts") });
+          if (value("cozeApiKey")) payload.cozeApiKey = value("cozeApiKey");
+        }
+        return payload;
+      }
+
+      function saveAiProviderConfig() {
+        var payload = aiProviderPayload();
+        api("/api/admin/ai-provider/config", { method: "POST", body: JSON.stringify(payload) })
+          .then(function(res) {
+            state.aiProviderConfig = res.data || {};
+            state.aiProviderDraftExperienceEnabled = false;
+            state.aiProviderEnvironment = state.aiProviderConfig.activeEnvironment || payload.environment;
+            state.aiProviderSelectedProvider = payload.provider || "mock";
+            renderAiProviderConfig();
+            ignoreLoadError(loadAiAgentStatus());
+            showToast("配置已保存并立即生效。", "success");
+            setStatus("小佛助手实际使用：" + aiProviderActualUseLabel());
+            var saveAndVerifyEl = $("aiSaveAndVerify");
+            if (saveAndVerifyEl && saveAndVerifyEl.checked) verifyAiProviderConfig();
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function saveAiProviderPreset(preset, environment, options) {
+        var payload = { preset: preset, environment: environment, activeEnvironment: environment, provider: state.aiProviderSelectedProvider || "deepseek" };
+        if (preset === "public-safe") {
+          payload.provider = "mock";
+          payload.providerPolicy = "tool-only";
+          payload.enabled = false;
+          payload.runtimeMode = "public";
+          payload.activeMode = "public";
+        }
+        if (!options || options.noConfirm !== true) {
+          if (!window.confirm(["将应用预设：" + preset, "目标模式：" + (AI_ENV_LABELS[environment] || environment)].join("\\n"))) return;
+        }
+        api("/api/admin/ai-provider/config", { method: "POST", body: JSON.stringify(payload) })
+          .then(function(res) {
+            state.aiProviderConfig = res.data || {};
+            state.aiProviderDraftExperienceEnabled = false;
+            state.aiProviderEnvironment = environment;
+            var envStatus = findAiEnvironment(environment);
+            state.aiProviderSelectedProvider = envStatus && envStatus.provider || "mock";
+            renderAiProviderConfig();
+            showToast(environment === "public" ? "已启用正式版本地规则。" : "预设已应用。", "success");
+            setStatus("小佛助手实际使用：" + aiProviderActualUseLabel());
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function formatAiProviderVerifyResult(data) {
+        data = data || {};
+        var toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls : [];
+        var lines = [
+          "provider: " + (data.provider || "-"),
+          "resolvedProvider: " + (data.resolvedProvider || data.provider || "-"),
+          "latencyMs: " + (data.latencyMs || data.elapsedMs || 0),
+          "fallback: " + (data.fallback || data.fallbackReason ? "true" : "false"),
+          "fallbackReason: " + (data.fallbackReason || "-"),
+          "toolCalls: " + (toolCalls.length ? toolCalls.map(function(item) { return (item.name || "-") + "/" + (item.status || "-"); }).join(", ") : "-"),
+          "answerSnippet: " + (data.answerSnippet || data.answerPreview || "-")
+        ];
+        ["deterministicToolTest", "projectQaProviderTest", "forceProviderTest"].forEach(function(key) {
+          var item = data[key];
+          if (!item) return;
+          lines.push("");
+          lines.push(key + ".resolvedProvider: " + (item.resolvedProvider || item.provider || "-"));
+          lines.push(key + ".latencyMs: " + (item.latencyMs || item.elapsedMs || 0));
+          lines.push(key + ".fallback: " + (item.fallback || item.fallbackReason ? "true" : "false"));
+          lines.push(key + ".toolCalls: " + ((item.toolCalls || []).map(function(call) { return (call.name || "-") + "/" + (call.status || "-"); }).join(", ") || "-"));
+          lines.push(key + ".answerSnippet: " + (item.answerSnippet || item.answerPreview || "-"));
+        });
+        return lines.join("\\n");
+      }
+
+      function verifyAiProviderConfig() {
+        var box = $("aiVerifyResult");
+        if (box) box.textContent = "正在运行真实测试...";
+        api("/api/admin/ai-provider/verify", { method: "POST", body: "{}" })
+          .then(function(res) {
+            var data = res.data || {};
+            if (box) box.textContent = formatAiProviderVerifyResult(data);
+            showToast("Provider 测试完成。", "success");
+          })
+          .catch(function(error) {
+            if (box) box.textContent = "测试失败：" + error.message;
+            showToast(error.message, "error");
+          });
+      }
+
+      function forceAiProviderChatTest() {
+        var box = $("aiVerifyResult");
+        if (box) box.textContent = "正在测试项目问答...";
+        api("/api/admin/ai-provider/verify", { method: "POST", body: JSON.stringify({ mode: "project_qa" }) })
+          .then(function(res) {
+            var data = res.data || {};
+            var project = data.projectQaProviderTest || data;
+            if (box) box.textContent = formatAiProviderVerifyResult(Object.assign({}, data, project));
+            showToast("项目问答测试完成。", "success");
+          })
+          .catch(function(error) {
+            if (box) box.textContent = "项目问答测试失败：" + error.message;
+            showToast(error.message, "error");
+          });
       }
 
       var KB_TAB_LABELS = { rules: "规则问答", docs: "文档知识库", test: "测试预览", versions: "版本发布" };

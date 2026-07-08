@@ -8,6 +8,7 @@ const agentProtocol = require("./agentProtocol");
 const runtimeModeService = require("./runtimeModeService");
 const providerChainService = require("./providerChainService");
 const providerConfigService = require("./providerConfigService");
+const knowledgeBaseService = require("./knowledgeBaseService");
 
 function nowIso() {
   return new Date().toISOString();
@@ -153,6 +154,7 @@ const FACT_TOOL_INTENTS = new Set([
   "search_campus_place",
   "get_campus_route",
   "get_classroom_location",
+  "next_course_location",
   "rag_search",
   "campus_multi_step_advice",
 ]);
@@ -165,6 +167,43 @@ function isProjectKnowledgeIntent(intent) {
 function isFactToolIntent(intent) {
   const name = intent && intent.name;
   return FACT_TOOL_INTENTS.has(name);
+}
+
+function isKnownRuleIntentName(name) {
+  const value = String(name || "").trim();
+  return Boolean(value && (FACT_TOOL_INTENTS.has(value) || value === "project_qa" || value === "conversational_help" || value === "next_course_location"));
+}
+
+function shouldRuleOverrideIntent(ruleIntentName, parsedIntent) {
+  if (!isKnownRuleIntentName(ruleIntentName)) return false;
+  const parsedName = parsedIntent && parsedIntent.name || "";
+  if (!parsedName || parsedName === "generic" || parsedName === "conversational_help" || parsedName === "project_qa") return true;
+  if (parsedName === "rag_search" && ruleIntentName !== "rag_search") return true;
+  return parsedName === ruleIntentName;
+}
+
+function resolveRuleBackedIntent(message, context = {}) {
+  const parsedIntent = toolRegistry.resolveIntent(message, context);
+  const environment = context.assistantEnvironment || context.runtimeMode || "public";
+  let ruleMatch = null;
+  try {
+    const matched = knowledgeBaseService.matchLocalRule({ query: message, environment });
+    ruleMatch = matched && matched.matched ? matched : null;
+  } catch (error) {
+    ruleMatch = null;
+  }
+  if (!ruleMatch || !ruleMatch.rule || !shouldRuleOverrideIntent(ruleMatch.rule.intentName, parsedIntent)) {
+    return { intent: parsedIntent, ruleMatch };
+  }
+  const intent = Object.assign({}, parsedIntent, {
+    name: ruleMatch.rule.intentName,
+    slots: Object.assign({}, parsedIntent.slots || {}),
+    ruleId: ruleMatch.rule.id,
+    ruleTitle: ruleMatch.rule.title,
+    ruleScore: ruleMatch.score,
+    source: "knowledge-rule",
+  });
+  return { intent, ruleMatch };
 }
 
 function evaluateProviderPolicy(intent, toolCalls, policy, providerName, runtimeMode, runtimeConfig) {
@@ -620,7 +659,9 @@ async function chat(input = {}) {
     return sensitiveCredentialResponse(safeMessage, context, startTime, providerRuntimeConfig);
   }
 
-  const intent = toolRegistry.resolveIntent(safeMessage, context);
+  const ruleResolution = resolveRuleBackedIntent(safeMessage, context);
+  const intent = ruleResolution.intent;
+  const localRuleMatch = ruleResolution.ruleMatch;
   const plan = typeof toolRegistry.buildPlanForIntent === "function"
     ? toolRegistry.buildPlanForIntent(intent, safeMessage, context)
     : [];
@@ -680,6 +721,7 @@ async function chat(input = {}) {
     message: safeMessage,
     context,
     intent,
+    localRule: localRuleMatch && localRuleMatch.rule || null,
     projectKnowledge: isProjectKnowledgeIntent(intent) ? projectKnowledgeService.getProjectKnowledgePrompt(context.assistantEnvironment || runtimeDecision.runtimeMode, safeMessage) : "",
     providerRuntimeConfig,
     toolResults: toolCalls.map((item) => ({

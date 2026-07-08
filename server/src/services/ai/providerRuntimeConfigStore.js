@@ -21,6 +21,8 @@ const RUNTIME_CONFIG_KEYS = [
   "AI_ALLOW_PERSONAL_CONTEXT",
   "AI_PROVIDER_ACTIVE_ENV",
   "AI_PROVIDER_ENVIRONMENTS",
+  "AI_PROVIDER_RUNTIME_VERSION",
+  "AI_PROVIDER_RUNTIME_UPDATED_AT",
   "AI_API_KEY",
   "DEEPSEEK_API_KEY",
   "COZE_API_BASE_URL",
@@ -241,6 +243,8 @@ function writeRuntimeConfig(updates = {}, configPath = getConfigPath()) {
   }
   const current = fs.existsSync(configPath) ? readRuntimeConfig(configPath) : {};
   const next = Object.assign({}, current, sanitizeRuntimeConfig(updates));
+  next.AI_PROVIDER_RUNTIME_VERSION = String(Date.now());
+  next.AI_PROVIDER_RUNTIME_UPDATED_AT = new Date().toISOString();
   writeRawRuntimeConfig(configPath, serializeRuntimeConfig(next));
   return next;
 }

@@ -457,6 +457,9 @@ function buildClientContext(extra = {}) {
     clientLocalTime: formatLocalIsoWithOffset(now),
     timezoneOffsetMinutes: now.getTimezoneOffset(),
     clientTimestampMs: now.getTime(),
+    assistantRuntimeRequestedAt: now.toISOString(),
+    assistantRuntimeCacheBust: `${now.getTime()}-${Math.floor(Math.random() * 100000)}`,
+    assistantRuntimeMaxAgeMs: 5000,
     timezone: "Asia/Shanghai",
     currentScheduleSummary: scheduleSummary,
     latestScheduleImport: latestImport,
@@ -873,7 +876,15 @@ function buildPersonalScheduleClarificationResponse(message, clientContext = {},
 
 function reportPipelineStatus(callbacks, text, type) {
   if (callbacks && typeof callbacks.onStatus === "function" && text) {
-    callbacks.onStatus({ type: type || "status", text });
+    const normalizedType = type || "status";
+    const friendlyText = normalizedType === "schedule"
+      ? "正在查询课表"
+      : normalizedType === "compose"
+        ? "已生成卡片"
+        : normalizedType === "tool-used"
+          ? "已核验课表数据"
+          : "小佛助手正在理解";
+    callbacks.onStatus({ type: normalizedType, text: friendlyText });
   }
 }
 
