@@ -270,7 +270,7 @@ function printSyncPlan(plan) {
     console.warn(`[deprecated] ${plan.action} is mapped to ${plan.deprecatedTarget}. Use the new command name in runbooks.`);
   }
   if (plan.schedulePolicy === "network-only" && plan.dynamicScopes.length) {
-    console.log("[policy] Dynamic schedules are network-only. Progress, negative cache, and old schedule merge are disabled.");
+    console.log(`[policy] Dynamic schedules are network-only; progress=${plan.progressPolicy}, no-schedule=${plan.negativeCachePolicy}, derived resources=${plan.allowDerived ? "enabled" : "disabled"}.`);
   }
   console.log("======================================================\n");
 }
@@ -588,6 +588,32 @@ function removeNoScheduleMajor(records, major, semester) {
   }, record.semester) !== key);
 }
 
+function getNoScheduleCacheTtlMs() {
+  const rawHours = Number(process.env.SYNC_NO_SCHEDULE_CACHE_TTL_HOURS || 168);
+  if (!Number.isFinite(rawHours) || rawHours <= 0) return 0;
+  return rawHours * 3600000;
+}
+
+function getNewestGrade(majors) {
+  const grades = (majors || [])
+    .map((major) => Number(String(major && major.grade || "").replace(/\D/g, "")))
+    .filter((grade) => Number.isFinite(grade) && grade > 0);
+  if (!grades.length) return "";
+  return String(Math.max(...grades));
+}
+
+function canReuseNoScheduleCache(record, major, newestGrade) {
+  if (!record) return false;
+  if (newestGrade && String(major && major.grade || "") === String(newestGrade)) {
+    return false;
+  }
+  const ttlMs = getNoScheduleCacheTtlMs();
+  if (!ttlMs) return false;
+  const checkedAt = Date.parse(record.checkedAt || record.updatedAt || "");
+  if (!checkedAt) return false;
+  return Date.now() - checkedAt <= ttlMs;
+}
+
 function upsertClassNameCandidateRecord(records, item) {
   const key = getMajorIdentityKey({
     collegeCode: item.collegeCode,
@@ -628,9 +654,9 @@ function getClassCrawlConcurrency() {
     console.warn(`⚠️ SYNC_CLASS_MAX_CONCURRENCY=${raw} 无效，已回退为 1。`);
     return 1;
   }
-  if (parsed > 5) {
-    console.warn(`⚠️ SYNC_CLASS_MAX_CONCURRENCY=${parsed} 过高，已限制为 5 以保护教务系统。`);
-    return 5;
+  if (parsed > 8) {
+    console.warn(`⚠️ SYNC_CLASS_MAX_CONCURRENCY=${parsed} 过高，已限制为 8 以保护教务系统。`);
+    return 8;
   }
   return parsed;
 }
@@ -1831,7 +1857,7 @@ function printPowerShellCommands() {
   console.log("👉 只抓取不上传 (Crawl Only):");
   console.log('   $env:SYNC_CLASS_SCOPE="all"');
   console.log('   $env:SYNC_CLASS_GRADES="2025,2024,2023,2022"');
-  console.log('   $env:SYNC_CLASS_MAX_CONCURRENCY="1"');
+  console.log('   $env:SYNC_CLASS_MAX_CONCURRENCY="5"');
   console.log('   $env:SYNC_CLASS_REQUEST_DELAY_MS="900"');
   console.log('   $env:SYNC_CLASS_CRAWL_ONLY="true"');
   console.log("   npm run sync:class");
@@ -4368,9 +4394,14 @@ async function syncClassSchedules(page, catalog, majors) {
   const PROGRESS_PATH = isPlanNetworkOnly()
     ? syncCacheStore.progressPath(__dirname, activeSemester, "class", runId)
     : path.join(debugDir, "sync-progress.json");
+  const PROGRESS_CLASS_SCHEDULES_PATH = PROGRESS_PATH.replace(/\.json$/i, ".classSchedules.json");
   if ((clearProgress || forceRefresh) && fs.existsSync(PROGRESS_PATH)) {
     fs.unlinkSync(PROGRESS_PATH);
     console.log(`🧹 已清理本地同步进度文件: ${PROGRESS_PATH}`);
+  }
+
+  if ((clearProgress || forceRefresh) && fs.existsSync(PROGRESS_CLASS_SCHEDULES_PATH)) {
+    fs.unlinkSync(PROGRESS_CLASS_SCHEDULES_PATH);
   }
 
   let progress = { completed: [] };
@@ -4392,8 +4423,9 @@ async function syncClassSchedules(page, catalog, majors) {
   }
 
   const collegeNameByCode = new Map((catalog.colleges || []).map((college) => [String(college.code), college.name]));
+  const noScheduleCacheRunId = syncPlan && syncPlan.negativeCachePolicy === "use" ? "" : runId;
   const noScheduleCachePath = isPlanNetworkOnly()
-    ? syncCacheStore.negativePath(__dirname, activeSemester, "class-schedule", runId)
+    ? syncCacheStore.negativePath(__dirname, activeSemester, "class-schedule", noScheduleCacheRunId)
     : path.join(debugDir, "no-schedule-majors.json");
   const classNameCandidatesPath = path.join(debugDir, "class-name-candidates.json");
   let noScheduleMajors = readJsonArray(noScheduleCachePath);
@@ -4414,6 +4446,15 @@ async function syncClassSchedules(page, catalog, majors) {
         grade: item.grade,
         code: item.majorCode,
       }, item.semester)) : []
+  );
+  const cachedNoScheduleByKey = new Map(
+    skipNoScheduleCache && !recheckNoSchedule ? noScheduleMajors
+      .filter((item) => item && item.semester === activeSemester)
+      .map((item) => [getMajorIdentityKey({
+        collegeCode: item.collegeCode,
+        grade: item.grade,
+        code: item.majorCode,
+      }, item.semester), item]) : []
   );
 
   // 解析环境变量过滤条件
@@ -4506,12 +4547,14 @@ async function syncClassSchedules(page, catalog, majors) {
 
   console.log(`🎯 匹配的目标专业总计: ${targetMajors.length} 个。`);
 
+  const newestTargetGrade = getNewestGrade(targetMajors);
   const effectiveTargetMajors = targetMajors.filter((major) => {
     if (!skipNoScheduleCache || recheckNoSchedule) {
       return true;
     }
     const key = getMajorIdentityKey(major, activeSemester);
-    if (cachedNoScheduleKeys.has(key)) {
+    const cachedNoSchedule = cachedNoScheduleByKey.get(key);
+    if (cachedNoScheduleKeys.has(key) && canReuseNoScheduleCache(cachedNoSchedule, major, newestTargetGrade)) {
       console.log(`   跳过已确认无排课专业: ${major.grade}级 - ${major.name} (${major.code})`);
       return false;
     }
@@ -4535,7 +4578,7 @@ async function syncClassSchedules(page, catalog, majors) {
     actualNetworkRequestCount: 0,
     skippedByProgressCount: completedProgressCount,
     skippedByNoScheduleCount: skipNoScheduleCount,
-    freshRunId: cliParams.freshRunId || cliParams["fresh-run-id"] || (forceRefresh ? `fresh-${Date.now()}-${crypto.randomBytes(4).toString("hex")}` : ""),
+    freshRunId: runId,
     requestedTargetCount: pendingMajors.length,
     succeededTargetCount: 0,
     failedTargetCount: 0,
@@ -4549,7 +4592,23 @@ async function syncClassSchedules(page, catalog, majors) {
   };
 
   if (!forceRefresh && (completedProgressCount > 0 || pendingMajors.length === 0)) {
-    const cache = readClassScheduleCacheForSemester(activeSemester);
+    let cache = null;
+    if (completedProgressCount > 0 && fs.existsSync(PROGRESS_CLASS_SCHEDULES_PATH)) {
+      try {
+        const progressPayload = JSON.parse(fs.readFileSync(PROGRESS_CLASS_SCHEDULES_PATH, "utf-8"));
+        const progressItems = Array.isArray(progressPayload.items) ? progressPayload.items : [];
+        cache = { items: progressItems, filePath: PROGRESS_CLASS_SCHEDULES_PATH };
+      } catch (error) {
+        cache = { items: [], filePath: PROGRESS_CLASS_SCHEDULES_PATH, error };
+      }
+    }
+    if ((!cache || !cache.items || cache.items.length === 0) && completedProgressCount > 0) {
+      const detail = cache && cache.error ? ` (${cache.error.message})` : "";
+      throw new Error(`Progress cache exists but partial classSchedules are missing for ${completedProgressCount} completed target(s)${detail}. Use --clear-progress to restart safely.`);
+    }
+    if (!cache || !cache.items || cache.items.length === 0) {
+      cache = readClassScheduleCacheForSemester(activeSemester);
+    }
     if (cache.items && cache.items.length > 0) {
       cachedClassSchedules = cache.items;
       crawlStats.usedClassScheduleCache = true;
@@ -4816,6 +4875,13 @@ async function syncClassSchedules(page, catalog, majors) {
     }
     if (progressChanged) {
       writeJsonFile(PROGRESS_PATH, progress);
+      writeJsonFile(PROGRESS_CLASS_SCHEDULES_PATH, {
+        term: activeSemester,
+        runId,
+        updatedAt: new Date().toISOString(),
+        completedCount: progress.completed.length,
+        items: allClassSchedules,
+      });
       crawlStats.succeededTargetCount += successCount;
       global.SYNC_CRAWL_STATS = crawlStats;
     }
@@ -4928,6 +4994,9 @@ async function syncClassSchedules(page, catalog, majors) {
   if (allEffectiveTargetsDone) {
     try {
       fs.unlinkSync(PROGRESS_PATH);
+      if (fs.existsSync(PROGRESS_CLASS_SCHEDULES_PATH)) {
+        fs.unlinkSync(PROGRESS_CLASS_SCHEDULES_PATH);
+      }
       console.log("🎉 所有目标专业已同步完成，进度已重置。");
     } catch (e) {}
   }
@@ -5129,7 +5198,7 @@ async function main() {
     inputParams["catalog-policy"] = inputParams["catalog-policy"] || "reuse-validated";
     inputParams["schedule-policy"] = inputParams["schedule-policy"] || "network-only";
     inputParams["progress-policy"] = inputParams["progress-policy"] || "resume";
-    inputParams["negative-cache-policy"] = inputParams["negative-cache-policy"] || "ignore";
+    inputParams["negative-cache-policy"] = inputParams["negative-cache-policy"] || "use";
   }
   const syncPlan = buildSyncPlan(parsed.action || action, inputParams, process.env);
   Object.assign(params, inputParams, applyPlanToParams(syncPlan, inputParams));

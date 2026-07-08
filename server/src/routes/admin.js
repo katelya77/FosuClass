@@ -4560,6 +4560,41 @@ router.post("/staging/upload/init", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
+router.post("/staging/upload/unchanged", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const body = req.body || {};
+    const canonicalHash = String(body.canonicalHash || "").trim().toLowerCase();
+    const fingerprint = buildFingerprintStatus(canonicalHash);
+    const sameAsActive = Boolean(canonicalHash && fingerprint.activeCanonicalHash && fingerprint.activeCanonicalHash === canonicalHash);
+    const sameAsStaging = Boolean(canonicalHash && fingerprint.stagingCanonicalHash && fingerprint.stagingCanonicalHash === canonicalHash);
+    if (!sameAsActive && !sameAsStaging) {
+      return res.status(409).json({
+        success: false,
+        code: "UNCHANGED_MARKER_HASH_NOT_FOUND",
+        message: "canonicalHash does not match current active release or existing staging",
+        fingerprint,
+      });
+    }
+    const upload = stagingUploadService.recordUnchangedUpload(Object.assign({}, body, {
+      reason: sameAsActive ? "active-release" : "staging",
+      activeReleaseVersion: body.activeReleaseVersion || fingerprint.activeRelease?.version || fingerprint.activeRelease?.releaseVersion || "",
+    }), buildAdminStagingUploadActor(req));
+    writeAuditLog(req, "upload-skip", "staging-upload", upload.uploadId, `No-change sync marker: ${upload.term || ""}`);
+    return res.json({
+      success: true,
+      skipped: true,
+      unchanged: true,
+      reason: sameAsActive ? "active-release" : "staging",
+      uploadId: upload.uploadId,
+      upload,
+      canonicalHash,
+      fingerprint,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
 router.post(
   "/staging/upload/chunk",
   adminAuth.verifyAdminAccess,

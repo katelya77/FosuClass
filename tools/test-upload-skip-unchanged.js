@@ -11,6 +11,7 @@ process.env.ADMIN_PASSWORD = "test-admin-password";
 process.env.NODE_ENV = "test";
 
 const express = require("../server/node_modules/express");
+const axios = require("../server/node_modules/axios");
 const adminRouter = require("../server/src/routes/admin");
 const releaseService = require("../server/src/services/releaseService");
 const upload = require("./fosu-sync-client/upload");
@@ -86,6 +87,34 @@ async function run() {
     assert.strictEqual(result.skipped, true);
     assert.strictEqual(result.reason, "active-release");
     assert(!fs.existsSync(`${filePath}.gz`), "skip should happen before gzip");
+
+    const marker = await axios.post(`${baseUrl}/api/admin/staging/upload/unchanged`, {
+      term: "2025-2026-2",
+      canonicalHash: result.canonicalHash,
+      counts: {
+        classScheduleCount: 1,
+        teacherScheduleCount: 1,
+        classroomScheduleCount: 1,
+        courseScheduleCount: 1,
+      },
+      source: "fosu-publisher",
+      publisherRunId: "test-no-change-marker",
+    }, {
+      headers: { "x-admin-token": "test-admin-token" },
+      proxy: false,
+    });
+    assert.strictEqual(marker.data.success, true);
+    assert.strictEqual(marker.data.reason, "active-release");
+    assert(marker.data.uploadId, "marker should create an upload record");
+
+    const records = await axios.get(`${baseUrl}/api/admin/staging/upload`, {
+      headers: { "x-admin-token": "test-admin-token" },
+      proxy: false,
+    });
+    const markerRecord = (records.data.records || []).find((item) => item.uploadId === marker.data.uploadId);
+    assert(markerRecord, "unchanged marker should be listed in upload records");
+    assert.strictEqual(markerRecord.status, "unchanged");
+    assert.strictEqual(markerRecord.stagingState, "duplicate-active");
   } finally {
     server.close();
   }

@@ -337,6 +337,85 @@ function initUpload(input, actor) {
   return publicManifest(manifest);
 }
 
+function countTotalScheduleDocuments(counts = {}) {
+  return Number(counts.classScheduleCount || counts.classSchedules || 0) +
+    Number(counts.teacherScheduleCount || counts.teacherSchedules || 0) +
+    Number(counts.classroomScheduleCount || counts.classroomSchedules || 0) +
+    Number(counts.courseScheduleCount || counts.courseSchedules || 0);
+}
+
+function recordUnchangedUpload(input = {}, actor) {
+  ensureStorage();
+  const canonicalHash = normalizeHash(input.canonicalHash);
+  if (!canonicalHash) {
+    const error = new Error("canonicalHash is required");
+    error.statusCode = 400;
+    throw error;
+  }
+  const reason = String(input.reason || input.unchangedReason || "active-release");
+  const now = new Date().toISOString();
+  const uploadId = `unchanged_${Date.now()}_${crypto.randomBytes(6).toString("hex")}`;
+  const dir = getUploadDir(uploadId);
+  ensureDir(dir);
+  const counts = input.counts && typeof input.counts === "object" ? input.counts : {};
+  const summary = Object.assign({
+    term: String(input.term || ""),
+    releaseVersion: String(input.activeReleaseVersion || input.releaseVersion || ""),
+    publishedReleaseVersion: String(input.activeReleaseVersion || ""),
+    canonicalHash,
+    counts,
+    resourceCounts: input.resourceCounts || null,
+    sourceModes: input.sourceModes || null,
+    includeScopes: Array.isArray(input.includeScopes) ? input.includeScopes.slice() : [],
+    totalScheduleDocuments: Number(input.totalScheduleDocuments || countTotalScheduleDocuments(counts)) || 0,
+    actualNetworkRequestCount: Number(input.actualNetworkRequestCount || 0) || null,
+    unchanged: true,
+    unchangedReason: reason,
+    stagingState: reason === "active-release" ? "duplicate-active" : "duplicate-staging",
+    releaseState: reason === "active-release" ? "published" : "not-built",
+    runtimeState: reason === "active-release" ? "active" : "inactive",
+    message: reason === "active-release"
+      ? "local sync matched current active release"
+      : "local sync matched existing staging",
+  }, input.summary && typeof input.summary === "object" ? input.summary : {});
+  const manifest = {
+    uploadId,
+    fileName: "unchanged-sync-marker.json",
+    originalFileName: "unchanged-sync-marker.json",
+    term: summary.term,
+    releaseVersion: summary.releaseVersion,
+    note: String(input.note || ""),
+    source: String(input.source || "fosu-publisher"),
+    actorType: actor && actor.type ? String(actor.type) : "admin",
+    actorId: actor && actor.id ? String(actor.id || "") : "",
+    contentEncoding: "identity",
+    contentType: "application/json",
+    chunkSize: 0,
+    totalChunks: 0,
+    uploadSize: 0,
+    uploadSha256: "",
+    originalSize: 0,
+    originalSha256: "",
+    canonicalHash,
+    receivedChunks: {},
+    status: "unchanged",
+    stagingState: summary.stagingState,
+    releaseState: summary.releaseState,
+    runtimeState: summary.runtimeState,
+    active: summary.runtimeState === "active",
+    unchangedReason: reason,
+    unchangedAt: now,
+    createdAt: now,
+    updatedAt: now,
+    publisherRunId: String(input.publisherRunId || ""),
+    summary,
+    resourceCounts: summary.resourceCounts || null,
+    uploadDir: dir,
+  };
+  writeManifest(manifest);
+  return publicManifest(manifest);
+}
+
 function writeChunk(uploadId, chunkIndexRaw, buffer, actor, options = {}) {
   const manifest = readManifest(uploadId);
   checkActor(manifest, actor);
@@ -1130,6 +1209,7 @@ module.exports = {
   finalizeUpload,
   getUploadStatus,
   initUpload,
+  recordUnchangedUpload,
   deleteUpload,
   listUploads,
   listUploadRecords,

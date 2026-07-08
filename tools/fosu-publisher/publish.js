@@ -65,6 +65,7 @@ const STAGES = [
   ["validating-local", "validating local staging"],
   ["calculating-diff", "writing diff report"],
   ["checking-fingerprint", "checking canonicalHash"],
+  ["recording-unchanged-upload", "recording unchanged sync marker"],
   ["uploading-oracle", "uploading Oracle staging"],
   ["waiting-staging-finalize", "waiting Oracle staging finalize"],
   ["publishing-release", "publishing Oracle release"],
@@ -141,12 +142,19 @@ function readJsonSafe(filePath, fallback) {
   }
 }
 
-function redact(value) {
+function isSafeOperationalSessionKey(key) {
+  const text = String(key || "").toLowerCase();
+  return text === "checking-session" || text === "sessioncheckms";
+}
+
+function redact(value, key = "") {
   const blockedKey = /token|ticket|cookie|secret|authorization|password|api[-_]?key|session/i;
-  if (Array.isArray(value)) return value.map(redact);
+  if (Array.isArray(value)) return value.map((item) => redact(item, key));
   if (value && typeof value === "object") {
     return Object.keys(value).reduce((acc, key) => {
-      acc[key] = blockedKey.test(key) ? "[redacted]" : redact(value[key]);
+      acc[key] = blockedKey.test(key) && !isSafeOperationalSessionKey(key)
+        ? "[redacted]"
+        : redact(value[key], key);
       return acc;
     }, {});
   }
@@ -924,11 +932,24 @@ function buildCrawlArgs(mode, args, run, term) {
   const output = path.join(run.runDir, "staging.json");
   const action = "crawl:daily";
   const catalogPolicy = mode === "full" ? "network-only" : "reuse-validated";
-  const negativeCachePolicy = mode === "full" ? "revalidate" : "ignore";
+  const negativeCachePolicy = mode === "full" || args["recheck-no-schedule"] ? "revalidate" : "use";
   const progressPolicy = mode === "full" || args["no-resume"] ? "ignore" : "resume";
+  const defaultConcurrency = String(
+    args.concurrency ||
+    process.env.SYNC_PUBLISH_CLASS_CONCURRENCY ||
+    process.env.SYNC_CLASS_MAX_CONCURRENCY ||
+    (mode === "full" ? 4 : 5)
+  );
+  const defaultDelayMs = String(
+    args["delay-ms"] ||
+    process.env.SYNC_PUBLISH_CLASS_DELAY_MS ||
+    process.env.SYNC_CLASS_REQUEST_DELAY_MS ||
+    (mode === "full" ? 1200 : 900)
+  );
   const base = [
     action,
     `--term=${term}`,
+    `--run-id=${run.runId}`,
     `--output=${output}`,
     `--catalog-policy=${catalogPolicy}`,
     "--schedule-policy=network-only",
@@ -939,8 +960,8 @@ function buildCrawlArgs(mode, args, run, term) {
   ];
   const grades = args.grades || args.grade;
   if (grades) base.push(`--grades=${grades}`);
-  if (args.concurrency) base.push(`--concurrency=${args.concurrency}`);
-  if (args["delay-ms"]) base.push(`--delay-ms=${args["delay-ms"]}`);
+  if (defaultConcurrency) base.push(`--concurrency=${defaultConcurrency}`);
+  if (defaultDelayMs) base.push(`--delay-ms=${defaultDelayMs}`);
   if (args.include) base.push(`--include=${args.include}`);
   if (args["college-codes"]) base.push(`--college-codes=${args["college-codes"]}`);
   if (args["major-codes"]) base.push(`--major-codes=${args["major-codes"]}`);
@@ -1008,7 +1029,9 @@ function validateStaging(stagingPath, expectedTerm) {
   }
   if (!fingerprint.canonicalHash) errors.push("canonicalHash missing");
   if (Number(data.meta && data.meta.actualNetworkRequestCount || 0) <= 0) errors.push("actual network request count is zero");
-  if (data.meta && data.meta.usedClassScheduleCache) errors.push("classSchedules used old cache");
+  if (data.meta && data.meta.usedClassScheduleCache && !data.meta.usedProgressCache) {
+    errors.push("classSchedules used old cache");
+  }
   if (summary.teacherSchedules > 0 && summary.teacherSchedules < 500) errors.push(`teacher schedules too low: ${summary.teacherSchedules}`);
   if (data.partial === true || data.meta && data.meta.partial === true) errors.push("partial staging is blocked");
   const privacyFindings = privacyScanText(raw);
@@ -1059,6 +1082,57 @@ async function checkFingerprint(baseUrl, canonicalHash) {
   }
   const url = `${baseUrl.replace(/\/+$/g, "")}/api/admin/staging/fingerprint?canonicalHash=${encodeURIComponent(canonicalHash)}`;
   return getJson(url, { headers: axiosHeaders(), timeoutMs: 30000 });
+}
+
+function buildStagingReceiptFields(stagingMeta = {}) {
+  return {
+    actualNetworkRequestCount: Number(stagingMeta.actualNetworkRequestCount || 0) || null,
+    networkRequestCount: Number(stagingMeta.actualNetworkRequestCount || 0) || null,
+    usedCache: stagingMeta.usedCache || null,
+    resourceCounts: stagingMeta.resourceCounts || null,
+    sourceModes: stagingMeta.sourceModes || null,
+    includeScopes: stagingMeta.includeScopes || [],
+  };
+}
+
+function totalScheduleDocumentsFromCounts(counts = {}) {
+  return Number(counts.classScheduleCount || counts.classSchedules || 0) +
+    Number(counts.teacherScheduleCount || counts.teacherSchedules || 0) +
+    Number(counts.classroomScheduleCount || counts.classroomSchedules || 0) +
+    Number(counts.courseScheduleCount || counts.courseSchedules || 0);
+}
+
+async function recordUnchangedUpload(baseUrl, run, args, stagingMeta, fingerprintStatus) {
+  if (process.env.FOSU_PUBLISHER_MOCK === "1") {
+    return {
+      success: true,
+      uploadId: `mock-unchanged-${run.runId}`,
+      skipped: true,
+      unchanged: true,
+      reason: "active-release",
+      canonicalHash: stagingMeta.canonicalHash,
+    };
+  }
+  const activeRelease = fingerprintStatus && fingerprintStatus.activeRelease || {};
+  const body = {
+    publisherRunId: run.runId,
+    reason: "active-release",
+    term: stagingMeta.term || args.term || "",
+    canonicalHash: stagingMeta.canonicalHash || "",
+    counts: stagingMeta.counts || {},
+    resourceCounts: stagingMeta.resourceCounts || null,
+    sourceModes: stagingMeta.sourceModes || null,
+    includeScopes: stagingMeta.includeScopes || [],
+    actualNetworkRequestCount: Number(stagingMeta.actualNetworkRequestCount || 0) || null,
+    totalScheduleDocuments: totalScheduleDocumentsFromCounts(stagingMeta.counts || {}),
+    activeReleaseVersion: activeRelease.version || activeRelease.releaseVersion || "",
+    note: args.note || `publisher ${run.runId} no data change`,
+    source: "fosu-publisher",
+  };
+  return postJson(`${baseUrl.replace(/\/+$/g, "")}/api/admin/staging/upload/unchanged`, body, {
+    headers: axiosHeaders(),
+    timeoutMs: 30000,
+  });
 }
 
 function countDelta(oldValue, newValue) {
@@ -1529,8 +1603,24 @@ async function runMainPipeline(run, args) {
     });
     if (fingerprint.sameAsActive) {
       let noChangeSmoke = null;
+      let noChangeUploadResult = null;
       let noChangeStatus = "no-change";
       let noChangeCloudbaseStatus = "same-and-healthy";
+      try {
+        noChangeUploadResult = await run.stage("recording-unchanged-upload", async () => {
+          const result = await recordUnchangedUpload(
+            args["oracle-base-url"] || DEFAULT_ORACLE_BASE_URL,
+            run,
+            args,
+            stagingMeta,
+            fingerprint
+          );
+          run.save({ uploadId: result.uploadId || result.upload && result.upload.uploadId || "", uploadResult: result });
+          return result;
+        });
+      } catch (markerError) {
+        run.event("no-change-upload-marker-failed", { code: markerError.code || "", message: markerError.message });
+      }
       try {
         noChangeSmoke = await run.stage("verifying-cloudbase-and-dual-source", async () => runDualSourceSmoke(args));
       } catch (smokeError) {
@@ -1552,7 +1642,7 @@ async function runMainPipeline(run, args) {
         }
       }
       await run.stage("completed", async () => ({ success: true, status: noChangeStatus }));
-      showToast("Publisher", "No data change; dual-source health check completed.");
+      showToast("Publisher", "No data change; sync marker and dual-source health check completed.");
       return run.receipt({
         success: noChangeStatus !== "partial-success",
         status: noChangeStatus,
@@ -1561,6 +1651,8 @@ async function runMainPipeline(run, args) {
         term,
         canonicalHash: stagingMeta.canonicalHash,
         counts: stagingMeta.counts,
+        ...buildStagingReceiptFields(stagingMeta),
+        uploadResult: noChangeUploadResult,
         oracleStatus: "no-change",
         cloudbaseStatus: noChangeCloudbaseStatus,
         cloudbaseReceipt,
@@ -1641,6 +1733,7 @@ async function runMainPipeline(run, args) {
         term,
         canonicalHash: stagingMeta.canonicalHash,
         counts: stagingMeta.counts,
+        ...buildStagingReceiptFields(stagingMeta),
         diffReportPath: run.diffReportPath,
         uploadResult,
         publishResult,
@@ -1670,6 +1763,7 @@ async function runMainPipeline(run, args) {
         term,
         canonicalHash: stagingMeta.canonicalHash,
         counts: stagingMeta.counts,
+        ...buildStagingReceiptFields(stagingMeta),
         diffReportPath: run.diffReportPath,
         uploadResult,
         publishResult,

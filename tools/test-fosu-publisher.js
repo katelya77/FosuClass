@@ -115,6 +115,7 @@ async function run() {
   const noChange = await publisher.main(["--mode=routine", "--term=2025-2026-2", `--run-id=${runId("no-change")}`]);
   assert.strictEqual(noChange.status, "no-change");
   assert.strictEqual(noChange.cloudbaseStatus, "same-and-healthy");
+  assert(noChange.uploadResult && noChange.uploadResult.unchanged, "no-change should record an unchanged upload marker");
   assert(noChange.liveSmoke && noChange.liveSmoke.mode === "dual-source-full", "no-change should still run lightweight dual-source health");
 
   restoreEnv();

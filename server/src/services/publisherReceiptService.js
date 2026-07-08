@@ -37,7 +37,9 @@ function stripLocalPath(value) {
 
 function sanitizeValue(value, key = "") {
   if (value === null || value === undefined) return value;
-  if (SENSITIVE_KEY_PATTERN.test(key)) {
+  const safeOperationalKey = String(key || "").toLowerCase() === "checking-session" ||
+    String(key || "").toLowerCase() === "sessioncheckms";
+  if (SENSITIVE_KEY_PATTERN.test(key) && !safeOperationalKey) {
     if (key === "canonicalHash" || key === "previousCanonicalHash") return shortHash(value);
     return "[redacted]";
   }
