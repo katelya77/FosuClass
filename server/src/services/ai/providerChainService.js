@@ -14,6 +14,15 @@ const DEFAULT_COMPETITION_CHAIN = ["cloudbase-openai", "deepseek", "coze", "mock
 const DEFAULT_PUBLIC_CHAIN = ["mock"];
 const state = new Map();
 
+function configValue(runtimeConfig, key, fallback = "") {
+  const source = runtimeConfig || {};
+  if (Object.prototype.hasOwnProperty.call(source, key)) {
+    const value = source[key];
+    return value === undefined || value === null || value === "" ? fallback : value;
+  }
+  return process.env[key] || fallback;
+}
+
 function nowIso() {
   return new Date().toISOString();
 }
@@ -48,24 +57,35 @@ function parseChain(value, fallback) {
   return items.length ? items : fallback.slice();
 }
 
-function getProviderChain(runtimeMode = "public") {
+function normalizeProviderName(name) {
+  const provider = String(name || "").trim().toLowerCase();
+  return PROVIDERS[provider] ? provider : "";
+}
+
+function getProviderChain(runtimeMode = "public", runtimeConfig = {}) {
   if (runtimeMode !== "competition") return DEFAULT_PUBLIC_CHAIN.slice();
-  return parseChain(process.env.AI_PROVIDER_CHAIN, DEFAULT_COMPETITION_CHAIN);
+  const explicit = parseChain(configValue(runtimeConfig, "AI_PROVIDER_CHAIN", process.env.AI_PROVIDER_CHAIN || ""), []);
+  if (explicit.length) return explicit;
+  const configured = normalizeProviderName(configValue(runtimeConfig, "AI_PROVIDER", ""));
+  if (configured && configured !== "mock") {
+    return [configured].concat(DEFAULT_COMPETITION_CHAIN.filter((item) => item !== configured));
+  }
+  return DEFAULT_COMPETITION_CHAIN.slice();
 }
 
 function getProviderModule(name) {
   return PROVIDERS[name] || mockProvider;
 }
 
-function isProviderConfigured(name) {
+function isProviderConfigured(name, runtimeConfig = {}) {
   if (name === "mock") return true;
-  if (name === "deepseek") return Boolean(deepseekProvider.firstConfiguredKey());
+  if (name === "deepseek") return Boolean(deepseekProvider.firstConfiguredKey(runtimeConfig));
   if (name === "coze") {
-    const cfg = cozeProvider.getConfig();
+    const cfg = cozeProvider.getConfig(runtimeConfig);
     return Boolean(cfg.apiKey && cfg.botId);
   }
   if (name === "cloudbase-openai") {
-    return process.env.CLOUDBASE_OPENAI_ENABLED === "true" && Boolean(cloudbaseOpenaiProvider.firstConfiguredKey());
+    return configValue(runtimeConfig, "CLOUDBASE_OPENAI_ENABLED", "false") === "true" && Boolean(cloudbaseOpenaiProvider.firstConfiguredKey(runtimeConfig));
   }
   return false;
 }
@@ -133,14 +153,15 @@ function markFailure(name, reason) {
 
 async function generateWithChain(input = {}, options = {}) {
   const runtimeMode = options.runtimeMode || "public";
-  const names = getProviderChain(runtimeMode);
+  const runtimeConfig = options.providerRuntimeConfig || input.providerRuntimeConfig || {};
+  const names = getProviderChain(runtimeMode, runtimeConfig);
   const attempts = [];
   for (const name of names) {
     if (isCircuitOpen(name)) {
       attempts.push({ provider: name, status: "skipped", reason: "circuit_open" });
       continue;
     }
-    if (!isProviderConfigured(name)) {
+    if (!isProviderConfigured(name, runtimeConfig)) {
       markFailure(name, "not_configured");
       attempts.push({ provider: name, status: "skipped", reason: "not_configured" });
       continue;
@@ -148,7 +169,7 @@ async function generateWithChain(input = {}, options = {}) {
     const provider = getProviderModule(name);
     const started = Date.now();
     try {
-      const payload = await provider.generate(input);
+      const payload = await provider.generate(Object.assign({}, input, { providerRuntimeConfig: runtimeConfig }));
       markSuccess(name, Date.now() - started);
       return Object.assign({}, payload, {
         provider: payload.provider || name,
@@ -174,11 +195,11 @@ function percentile(values, p) {
   return nums[index];
 }
 
-function getStatus(runtimeMode = "competition") {
-  return getProviderChain(runtimeMode).map((name) => {
+function getStatus(runtimeMode = "competition", runtimeConfig = {}) {
+  return getProviderChain(runtimeMode, runtimeConfig).map((name) => {
     const item = readState(name);
     return Object.assign({}, item, {
-      enabled: isProviderConfigured(name),
+      enabled: isProviderConfigured(name, runtimeConfig),
       p50LatencyMs: percentile(item.latencies, 50),
       p95LatencyMs: percentile(item.latencies, 95),
     });

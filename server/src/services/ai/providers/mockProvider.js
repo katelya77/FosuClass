@@ -594,7 +594,7 @@ function buildMultiStep(toolResults = []) {
   };
 }
 
-function generate({ intent, toolResults }) {
+function generate({ intent, toolResults, message, context }) {
   const first = toolResults && toolResults[0] && toolResults[0].result;
   const findResult = (name) => {
     const match = Array.isArray(toolResults) ? toolResults.find((item) => item && item.name === name) : null;
@@ -619,7 +619,7 @@ function generate({ intent, toolResults }) {
     name === "rag_search" ? buildKnowledge(first || {}) :
     name === "campus_multi_step_advice" ? buildMultiStep(toolResults || []) :
     name === "generate_image" ? buildKnowledge({ items: [], summary: first && first.summary || "生图能力未启用" }) :
-    (name === "project_qa" || name === "conversational_help") ? projectKnowledgeService.generateFallbackResponse(name) :
+    (name === "project_qa" || name === "conversational_help") ? projectKnowledgeService.generateFallbackResponse(name, message || "", context && context.assistantEnvironment || context && context.runtimeMode || "public") :
     buildGeneric();
   return Object.assign({ provider: "mock" }, payload);
 }

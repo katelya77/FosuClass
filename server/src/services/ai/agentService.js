@@ -7,6 +7,7 @@ const toolRegistry = require("./toolRegistry");
 const agentProtocol = require("./agentProtocol");
 const runtimeModeService = require("./runtimeModeService");
 const providerChainService = require("./providerChainService");
+const providerConfigService = require("./providerConfigService");
 
 function nowIso() {
   return new Date().toISOString();
@@ -94,8 +95,17 @@ function publicToolName(name) {
   return PUBLIC_TOOL_NAMES[String(name || "").toLowerCase()] || "校园工具";
 }
 
-function getProviderPolicy() {
-  const value = String(process.env.AI_PROVIDER_POLICY || "auto").trim().toLowerCase();
+function configValue(runtimeConfig, key, fallback = "") {
+  const source = runtimeConfig || {};
+  if (Object.prototype.hasOwnProperty.call(source, key)) {
+    const value = source[key];
+    return value === undefined || value === null || value === "" ? fallback : value;
+  }
+  return process.env[key] || fallback;
+}
+
+function getProviderPolicy(runtimeConfig) {
+  const value = String(configValue(runtimeConfig, "AI_PROVIDER_POLICY", "auto")).trim().toLowerCase();
   return ["auto", "always", "tool-only"].includes(value) ? value : "auto";
 }
 
@@ -157,13 +167,13 @@ function isFactToolIntent(intent) {
   return FACT_TOOL_INTENTS.has(name);
 }
 
-function evaluateProviderPolicy(intent, toolCalls, policy, providerName, runtimeMode) {
+function evaluateProviderPolicy(intent, toolCalls, policy, providerName, runtimeMode, runtimeConfig) {
   const normalizedPolicy = ["auto", "always", "tool-only"].includes(String(policy || "").toLowerCase())
     ? String(policy).toLowerCase()
     : "auto";
-  const provider = String(providerName || providerFactory.getProviderName(runtimeMode) || "mock").toLowerCase();
+  const provider = String(providerName || providerFactory.getProviderName(runtimeMode, runtimeConfig) || "mock").toLowerCase();
   const intentName = intent && intent.name || "generic";
-  const agentEnabled = String(process.env.AI_AGENT_ENABLED || "false").toLowerCase() !== "false";
+  const agentEnabled = String(configValue(runtimeConfig, "AI_AGENT_ENABLED", "false")).toLowerCase() !== "false";
 
   if (!agentEnabled) return { useExternal: false, reason: "AI_AGENT_ENABLED=false" };
   if (provider === "mock") return { useExternal: false, reason: "AI_PROVIDER=mock" };
@@ -466,7 +476,7 @@ function buildResponse(payload) {
   return isPublicRuntime(envelope.runtimeMode) ? sanitizePublicResponse(response) : response;
 }
 
-function sensitiveCredentialResponse(message, context, startTime) {
+function sensitiveCredentialResponse(message, context, startTime, providerRuntimeConfig) {
   const guide = toolRegistry.executeTool("explain_personal_import", { mode: "xls", message }, context);
   const generated = mockProvider.generate({
     intent: { name: "explain_personal_import" },
@@ -478,7 +488,7 @@ function sensitiveCredentialResponse(message, context, startTime) {
     toolCalls: [{ name: "safety_guard", status: "skipped", summary: "检测到敏感凭证，已拦截并脱敏" }],
     provider: "mock",
     usedPersonalContext: false,
-    providerPolicy: getProviderPolicy(),
+    providerPolicy: getProviderPolicy(providerRuntimeConfig),
     externalProviderUsed: false,
     fallbackReason: "检测到敏感凭证",
     metrics: buildMetrics({
@@ -546,6 +556,11 @@ async function chat(input = {}) {
   });
   context.runtimeMode = runtimeDecision.runtimeMode;
   context.serverSession = input.serverSession || context.serverSession || null;
+  const providerRuntimeConfig = providerConfigService.resolveRuntimeProviderConfig({
+    context,
+    runtimeMode: runtimeDecision.runtimeMode,
+  });
+  context.assistantEnvironment = providerConfigService.getEnvironmentForContext(context, runtimeDecision.runtimeMode);
   const requestId = input.requestId || agentProtocol.createRequestId();
   const conversationId = input.conversationId || context.conversationId || "";
   if (!agentProtocol.isSupportedProtocolVersion(input.protocolVersion || context.protocolVersion || agentProtocol.PROTOCOL_VERSION)) {
@@ -587,7 +602,7 @@ async function chat(input = {}) {
       plan: [],
       provider: "mock",
       usedPersonalContext,
-      providerPolicy: getProviderPolicy(),
+      providerPolicy: getProviderPolicy(providerRuntimeConfig),
       externalProviderUsed: false,
       fallbackReason: "空消息",
       metrics: buildMetrics({
@@ -602,7 +617,7 @@ async function chat(input = {}) {
   }
 
   if (safetyGuard.hasSensitiveCredential(rawMessage)) {
-    return sensitiveCredentialResponse(safeMessage, context, startTime);
+    return sensitiveCredentialResponse(safeMessage, context, startTime, providerRuntimeConfig);
   }
 
   const intent = toolRegistry.resolveIntent(safeMessage, context);
@@ -654,10 +669,10 @@ async function chat(input = {}) {
     });
   }
 
-  const providerPolicy = getProviderPolicy();
-  const desiredProviderName = providerFactory.getProviderName(runtimeDecision.runtimeMode);
-  const policyDecision = evaluateProviderPolicy(intent, toolCalls, providerPolicy, desiredProviderName, runtimeDecision.runtimeMode);
-  const provider = policyDecision.useExternal ? providerFactory.createProvider(runtimeDecision.runtimeMode) : mockProvider;
+  const providerPolicy = getProviderPolicy(providerRuntimeConfig);
+  const desiredProviderName = providerFactory.getProviderName(runtimeDecision.runtimeMode, providerRuntimeConfig);
+  const policyDecision = evaluateProviderPolicy(intent, toolCalls, providerPolicy, desiredProviderName, runtimeDecision.runtimeMode, providerRuntimeConfig);
+  const provider = policyDecision.useExternal ? providerFactory.createProvider(runtimeDecision.runtimeMode, providerRuntimeConfig) : mockProvider;
   let providerName = policyDecision.useExternal
     ? (provider.name || desiredProviderName)
     : (intent.name === "clarify_missing_slot" ? "mock/template" : "mock");
@@ -665,7 +680,8 @@ async function chat(input = {}) {
     message: safeMessage,
     context,
     intent,
-    projectKnowledge: isProjectKnowledgeIntent(intent) ? projectKnowledgeService.getProjectKnowledgePrompt() : "",
+    projectKnowledge: isProjectKnowledgeIntent(intent) ? projectKnowledgeService.getProjectKnowledgePrompt(context.assistantEnvironment || runtimeDecision.runtimeMode, safeMessage) : "",
+    providerRuntimeConfig,
     toolResults: toolCalls.map((item) => ({
       name: item.name,
       status: item.status,
@@ -684,7 +700,7 @@ async function chat(input = {}) {
   const providerDecisionReason = policyDecision.reason || (policyDecision.useExternal ? "external provider selected" : "local provider selected");
   try {
     const generated = policyDecision.useExternal
-      ? await providerChainService.generateWithChain(providerInput, { runtimeMode: runtimeDecision.runtimeMode })
+      ? await providerChainService.generateWithChain(providerInput, { runtimeMode: runtimeDecision.runtimeMode, providerRuntimeConfig })
       : deterministicGenerated;
     providerName = generated.provider || providerName;
     providerPayload = stableGeneratedPayload(generated);
@@ -710,7 +726,7 @@ async function chat(input = {}) {
       ? stableGeneratedPayload(projectKnowledgeService.generateFallbackResponse(intent.name))
       : null;
     publicToolCalls.push({
-      name: provider.name || providerFactory.getProviderName(),
+      name: provider.name || providerFactory.getProviderName(runtimeDecision.runtimeMode, providerRuntimeConfig),
       status: "skipped",
       summary: fallbackReason,
     });

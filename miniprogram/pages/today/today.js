@@ -77,7 +77,7 @@ Page({
       this.loadPageConfig();
     }
     wx.showToast({
-      title: "已根据关键词打开今日安排",
+      title: "已根据小佛助手建议打开今日安排",
       icon: "none",
     });
   },
