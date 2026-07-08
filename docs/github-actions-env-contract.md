@@ -34,6 +34,7 @@
 | `FOSU_STATIC_TICKET_SECRET_KID` | `current` | 静态 ticket key id | 允许为空，服务端使用 `current` |
 | `AI_API_KEY` | 空 | DeepSeek/OpenAI 兼容 provider key | 允许为空，AI 状态显示 key 未配置，调用外部 provider 时 fallback |
 | `DEEPSEEK_API_KEY` | 空 | DeepSeek provider 专用 key，优先级低于 `AI_API_KEY` | 允许为空，AI 状态显示 DeepSeek key 未配置 |
+| `CLOUDBASE_OPENAI_API_KEY` | 空 | CloudBase OpenAI-compatible provider key | 允许为空，AI 状态显示 CloudBase OpenAI key 未配置 |
 | `COZE_API_KEY` | 空 | Coze provider key | 允许为空，AI 状态显示 Coze key 未配置 |
 | `FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN` | 空 | 学号导入 CloudBase relay 的可选 Bearer token | 允许为空；仅当 relay 服务要求 token 时配置 |
 
@@ -62,6 +63,8 @@
 | `AI_AGENT_ENABLED` | `false` | 是否启用外部 AI provider | 使用本地规则/mock，不调用外部模型 |
 | `AI_PROVIDER` | `mock` | provider 名称：`mock`、`deepseek`、`coze` | 使用 mock |
 | `AI_PROVIDER_POLICY` | `auto` | 外部 provider 调用策略 | 使用 auto |
+| `AI_RUNTIME_MODE` | `public` | 运行模式：`public` 或 `competition` | 使用 public，正式版 fail-closed |
+| `AI_PROVIDER_ACTIVE_ENV` | `public` | 后台默认查看/编辑的环境：`public`、`trial`、`dev` | 使用 public |
 | `AI_MODEL` | `deepseek-v4-flash` | 默认模型 | 使用默认值 |
 | `AI_REASONING_MODEL` | `deepseek-v4-pro` | 推理模型 | 使用默认值 |
 | `AI_BASE_URL` | `https://api.deepseek.com` | DeepSeek/OpenAI 兼容接口地址 | 使用默认值 |
@@ -73,6 +76,11 @@
 | `AI_PROVIDER_JSON_REPAIR` | `true` | provider 文本 JSON 修复 | 使用默认值 |
 | `DEEPSEEK_STRICT_JSON_MODE` | `false` | DeepSeek 严格 JSON mode | 使用默认值 |
 | `AI_ALLOW_PERSONAL_CONTEXT` | `false` | 后端是否允许使用脱敏个人课表摘要 | 使用默认值，不使用个人摘要 |
+| `CLOUDBASE_OPENAI_ENABLED` | `false` | CloudBase OpenAI-compatible provider enabled flag | 使用默认值 |
+| `CLOUDBASE_OPENAI_BASE_URL` | `https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase` | CloudBase OpenAI-compatible base URL | 使用默认值 |
+| `CLOUDBASE_OPENAI_TEXT_MODEL` | `hy3-preview` | CloudBase text model | 使用默认值 |
+| `CLOUDBASE_OPENAI_TIMEOUT_MS` | `15000` | CloudBase provider timeout | 使用默认值 |
+| `CLOUDBASE_OPENAI_MAX_TOKENS` | `1200` | CloudBase provider max output tokens | 使用默认值 |
 | `COZE_API_BASE_URL` | `https://api.coze.cn` | Coze API 地址 | 使用默认值 |
 | `COZE_BOT_ID` | 空 | Coze bot id | Coze 状态显示未配置，调用时 fallback |
 | `COZE_USER_ID` | `fosuclass-user` | Coze user id | 使用默认值 |

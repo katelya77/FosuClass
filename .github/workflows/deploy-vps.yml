@@ -156,7 +156,7 @@ jobs:
 
             sanitize() {
               sed -E \
-                -e 's/(ADMIN_PASSWORD|ADMIN_TOKEN|ADMIN_API_TOKEN|FOSU_PASSWORD|WECHAT_APPSECRET|FOSU_CSRF_SECRET|FOSU_SESSION_SECRET(_CURRENT|_PREVIOUS)?|FOSU_STATIC_TICKET_SECRET(_CURRENT|_PREVIOUS)?|FOSU_AI_CONFIG_ENCRYPTION_KEY|AI_API_KEY|DEEPSEEK_API_KEY|COZE_API_KEY)=([^[:space:]]*)/\1=***/g' \
+                -e 's/(ADMIN_PASSWORD|ADMIN_TOKEN|ADMIN_API_TOKEN|FOSU_PASSWORD|WECHAT_APPSECRET|FOSU_CSRF_SECRET|FOSU_SESSION_SECRET(_CURRENT|_PREVIOUS)?|FOSU_STATIC_TICKET_SECRET(_CURRENT|_PREVIOUS)?|FOSU_AI_CONFIG_ENCRYPTION_KEY|AI_API_KEY|DEEPSEEK_API_KEY|CLOUDBASE_OPENAI_API_KEY|COZE_API_KEY)=([^[:space:]]*)/\1=***/g' \
                 -e 's/(Authorization: Bearer )[A-Za-z0-9._~+\/=-]+/\1***/gi' \
                 -e 's/(token|password|secret|key)["=: ]+[A-Za-z0-9._\/+=-]+/\1=***/gi'
             }
@@ -321,6 +321,8 @@ jobs:
             append_ai_env "AI_AGENT_ENABLED" "${{ vars.AI_AGENT_ENABLED }}" "false"
             append_ai_env "AI_PROVIDER" "${{ vars.AI_PROVIDER }}" "mock"
             append_ai_env "AI_PROVIDER_POLICY" "${{ vars.AI_PROVIDER_POLICY }}" "auto"
+            append_ai_env "AI_RUNTIME_MODE" "${{ vars.AI_RUNTIME_MODE }}" "public"
+            append_ai_env "AI_PROVIDER_ACTIVE_ENV" "${{ vars.AI_PROVIDER_ACTIVE_ENV }}" "public"
             append_ai_env "AI_MODEL" "${{ vars.AI_MODEL }}" "deepseek-v4-flash"
             append_ai_env "AI_REASONING_MODEL" "${{ vars.AI_REASONING_MODEL }}" "deepseek-v4-pro"
             append_ai_env "AI_BASE_URL" "${{ vars.AI_BASE_URL }}" "https://api.deepseek.com"
@@ -335,6 +337,12 @@ jobs:
             append_ai_env "FOSU_AI_CONFIG_ENCRYPTION_KEY" "${{ secrets.FOSU_AI_CONFIG_ENCRYPTION_KEY }}" ""
             append_ai_env "AI_API_KEY" "${{ secrets.AI_API_KEY }}" ""
             append_ai_env "DEEPSEEK_API_KEY" "${{ secrets.DEEPSEEK_API_KEY }}" ""
+            append_ai_env "CLOUDBASE_OPENAI_ENABLED" "${{ vars.CLOUDBASE_OPENAI_ENABLED }}" "false"
+            append_ai_env "CLOUDBASE_OPENAI_BASE_URL" "${{ vars.CLOUDBASE_OPENAI_BASE_URL }}" "https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase"
+            append_ai_env "CLOUDBASE_OPENAI_API_KEY" "${{ secrets.CLOUDBASE_OPENAI_API_KEY }}" ""
+            append_ai_env "CLOUDBASE_OPENAI_TEXT_MODEL" "${{ vars.CLOUDBASE_OPENAI_TEXT_MODEL }}" "hy3-preview"
+            append_ai_env "CLOUDBASE_OPENAI_TIMEOUT_MS" "${{ vars.CLOUDBASE_OPENAI_TIMEOUT_MS }}" "15000"
+            append_ai_env "CLOUDBASE_OPENAI_MAX_TOKENS" "${{ vars.CLOUDBASE_OPENAI_MAX_TOKENS }}" "1200"
             append_ai_env "COZE_API_BASE_URL" "${{ vars.COZE_API_BASE_URL }}" "https://api.coze.cn"
             append_ai_env "COZE_API_KEY" "${{ secrets.COZE_API_KEY }}" ""
             append_ai_env "COZE_BOT_ID" "${{ vars.COZE_BOT_ID }}" ""
