@@ -19,8 +19,13 @@ const envContract = fs.readFileSync(path.join(ROOT, "docs", "github-actions-env-
   "AI_AGENT_ENABLED",
   "AI_PROVIDER",
   "AI_PROVIDER_POLICY",
+  "AI_RUNTIME_MODE",
+  "AI_PROVIDER_ACTIVE_ENV",
   "AI_API_KEY",
   "DEEPSEEK_API_KEY",
+  "CLOUDBASE_OPENAI_API_KEY",
+  "CLOUDBASE_OPENAI_BASE_URL",
+  "CLOUDBASE_OPENAI_TEXT_MODEL",
   "COZE_API_KEY",
   "COZE_BOT_ID",
   "DEEPSEEK_STRICT_JSON_MODE",
@@ -43,6 +48,7 @@ assert(!/grep\s+-E\s+"\\"/.test(runtimeReader[0]), "read_runtime_env_value must 
 [
   "AI_API_KEY",
   "DEEPSEEK_API_KEY",
+  "CLOUDBASE_OPENAI_API_KEY",
   "COZE_API_KEY",
   "Authorization: Bearer",
   "token|password|secret|key",
@@ -62,7 +68,7 @@ assert(!/grep\s+-E\s+"\\"/.test(runtimeReader[0]), "read_runtime_env_value must 
   assert(workflow.includes(needle), `on_error diagnostics should include ${needle}`);
 });
 
-assert(!/echo\s+["']?\$\{\{\s*secrets\.(AI_API_KEY|DEEPSEEK_API_KEY|COZE_API_KEY)\s*\}\}/.test(workflow),
+assert(!/echo\s+["']?\$\{\{\s*secrets\.(AI_API_KEY|DEEPSEEK_API_KEY|CLOUDBASE_OPENAI_API_KEY|COZE_API_KEY)\s*\}\}/.test(workflow),
   "workflow must not echo provider API keys");
 assert(!/set\s+-x/.test(workflow), "workflow must not enable shell xtrace");
 assert(!workflow.includes("FOSU_STATIC_TICKET_SECRET=${{ secrets.FOSU_STATIC_TICKET_SECRET }}"),

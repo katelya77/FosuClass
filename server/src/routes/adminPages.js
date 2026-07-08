@@ -12181,10 +12181,11 @@ const adminConsoleHtml = `<!doctype html>
         var activeProfile = activeEnv.profile || {};
         var formalActive = activeEnvName === "public" || (activeProfile.provider || "mock") === "mock" || activeProfile.enabled === false;
         var experienceEnabled = state.aiProviderDraftExperienceEnabled === true || (!formalActive && (activeEnvName === "trial" || activeEnvName === "dev") && experienceProfile.enabled !== false && experienceProfile.provider !== "mock");
+        var experienceLaneLabel = experienceEnabled ? (AI_PROVIDER_LABELS[selectedProvider] || selectedProvider) : "增强未启用";
         var section = $("section-ai-provider");
         if (!section) return;
         section.innerHTML = "<div class='provider-console'>" +
-          "<div class='provider-hero provider-status-hero'><div><h3>小佛助手 Provider 控制台</h3><p>当前小程序实际使用 = <strong>" + escapeHtml(aiProviderActualUseLabel()) + "</strong></p></div><button id='reloadAiProviderBtn' class='ghost'>刷新状态</button></div>" +
+          "<div class='provider-hero provider-status-hero'><div><h3>小佛助手 Provider 控制台</h3><p>公开发布 = <strong>正式版本地规则</strong>；体验/开发 = <strong>" + escapeHtml(experienceLaneLabel) + "</strong></p></div><button id='reloadAiProviderBtn' class='ghost'>刷新状态</button></div>" +
           "<div class='provider-mode-grid'>" +
             "<section class='provider-mode-card'>" +
               "<div class='provider-card-head'><div><div class='provider-card-title'>正式版 / 公开发布</div><div class='ai-secret-note'>公开用户默认入口：本地规则 + 已发布知识库 + 已有工具卡片</div></div><span class='badge " + (formalActive ? "success" : "muted") + "'>" + (formalActive ? "当前启用" : "未启用") + "</span></div>" +
