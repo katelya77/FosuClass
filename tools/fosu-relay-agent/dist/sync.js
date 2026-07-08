@@ -9530,7 +9530,7 @@ function printSyncPlan(plan) {
     console.warn(`[deprecated] ${plan.action} is mapped to ${plan.deprecatedTarget}. Use the new command name in runbooks.`);
   }
   if (plan.schedulePolicy === "network-only" && plan.dynamicScopes.length) {
-    console.log("[policy] Dynamic schedules are network-only. Progress, negative cache, and old schedule merge are disabled.");
+    console.log(`[policy] Dynamic schedules are network-only; progress=${plan.progressPolicy}, no-schedule=${plan.negativeCachePolicy}, derived resources=${plan.allowDerived ? "enabled" : "disabled"}.`);
   }
   console.log("======================================================\n");
 }
@@ -9816,6 +9816,27 @@ function removeNoScheduleMajor(records, major, semester2) {
     code: record.majorCode
   }, record.semester) !== key);
 }
+function getNoScheduleCacheTtlMs() {
+  const rawHours = Number(process.env.SYNC_NO_SCHEDULE_CACHE_TTL_HOURS || 168);
+  if (!Number.isFinite(rawHours) || rawHours <= 0) return 0;
+  return rawHours * 36e5;
+}
+function getNewestGrade(majors) {
+  const grades = (majors || []).map((major) => Number(String(major && major.grade || "").replace(/\D/g, ""))).filter((grade2) => Number.isFinite(grade2) && grade2 > 0);
+  if (!grades.length) return "";
+  return String(Math.max(...grades));
+}
+function canReuseNoScheduleCache(record, major, newestGrade) {
+  if (!record) return false;
+  if (newestGrade && String(major && major.grade || "") === String(newestGrade)) {
+    return false;
+  }
+  const ttlMs = getNoScheduleCacheTtlMs();
+  if (!ttlMs) return false;
+  const checkedAt = Date.parse(record.checkedAt || record.updatedAt || "");
+  if (!checkedAt) return false;
+  return Date.now() - checkedAt <= ttlMs;
+}
 function upsertClassNameCandidateRecord(records, item) {
   const key = getMajorIdentityKey({
     collegeCode: item.collegeCode,
@@ -9854,9 +9875,9 @@ function getClassCrawlConcurrency() {
     console.warn(`\u26A0\uFE0F SYNC_CLASS_MAX_CONCURRENCY=${raw2} \u65E0\u6548\uFF0C\u5DF2\u56DE\u9000\u4E3A 1\u3002`);
     return 1;
   }
-  if (parsed2 > 5) {
-    console.warn(`\u26A0\uFE0F SYNC_CLASS_MAX_CONCURRENCY=${parsed2} \u8FC7\u9AD8\uFF0C\u5DF2\u9650\u5236\u4E3A 5 \u4EE5\u4FDD\u62A4\u6559\u52A1\u7CFB\u7EDF\u3002`);
-    return 5;
+  if (parsed2 > 8) {
+    console.warn(`\u26A0\uFE0F SYNC_CLASS_MAX_CONCURRENCY=${parsed2} \u8FC7\u9AD8\uFF0C\u5DF2\u9650\u5236\u4E3A 8 \u4EE5\u4FDD\u62A4\u6559\u52A1\u7CFB\u7EDF\u3002`);
+    return 8;
   }
   return parsed2;
 }
@@ -13049,9 +13070,13 @@ async function syncClassSchedules(page, catalog, majors) {
   const syncPlan = getActiveSyncPlan();
   const runId = syncPlan && syncPlan.runId || cliParams.freshRunId || cliParams["fresh-run-id"] || `class-${Date.now()}`;
   const PROGRESS_PATH = isPlanNetworkOnly() ? syncCacheStore.progressPath(__dirname, activeSemester, "class", runId) : path.join(debugDir, "sync-progress.json");
+  const PROGRESS_CLASS_SCHEDULES_PATH = PROGRESS_PATH.replace(/\.json$/i, ".classSchedules.json");
   if ((clearProgress || forceRefresh) && fs.existsSync(PROGRESS_PATH)) {
     fs.unlinkSync(PROGRESS_PATH);
     console.log(`\u{1F9F9} \u5DF2\u6E05\u7406\u672C\u5730\u540C\u6B65\u8FDB\u5EA6\u6587\u4EF6: ${PROGRESS_PATH}`);
+  }
+  if ((clearProgress || forceRefresh) && fs.existsSync(PROGRESS_CLASS_SCHEDULES_PATH)) {
+    fs.unlinkSync(PROGRESS_CLASS_SCHEDULES_PATH);
   }
   let progress = { completed: [] };
   if (!ignoreProgress && fs.existsSync(PROGRESS_PATH)) {
@@ -13069,7 +13094,8 @@ async function syncClassSchedules(page, catalog, majors) {
     console.log(`\u2139\uFE0F \u5F53\u524D\u767B\u5F55\u5B66\u751F\u73ED\u7EA7\u4EC5\u7528\u4E8E\u8BCA\u65AD\u53C2\u8003: ${currentStudentClass}`);
   }
   const collegeNameByCode = new Map((catalog.colleges || []).map((college) => [String(college.code), college.name]));
-  const noScheduleCachePath = isPlanNetworkOnly() ? syncCacheStore.negativePath(__dirname, activeSemester, "class-schedule", runId) : path.join(debugDir, "no-schedule-majors.json");
+  const noScheduleCacheRunId = syncPlan && syncPlan.negativeCachePolicy === "use" ? "" : runId;
+  const noScheduleCachePath = isPlanNetworkOnly() ? syncCacheStore.negativePath(__dirname, activeSemester, "class-schedule", noScheduleCacheRunId) : path.join(debugDir, "no-schedule-majors.json");
   const classNameCandidatesPath = path.join(debugDir, "class-name-candidates.json");
   let noScheduleMajors = readJsonArray(noScheduleCachePath);
   if ((clearNoScheduleCache || forceRefresh) && noScheduleMajors.length > 0) {
@@ -13087,6 +13113,13 @@ async function syncClassSchedules(page, catalog, majors) {
       grade: item.grade,
       code: item.majorCode
     }, item.semester)) : []
+  );
+  const cachedNoScheduleByKey = new Map(
+    skipNoScheduleCache && !recheckNoSchedule ? noScheduleMajors.filter((item) => item && item.semester === activeSemester).map((item) => [getMajorIdentityKey({
+      collegeCode: item.collegeCode,
+      grade: item.grade,
+      code: item.majorCode
+    }, item.semester), item]) : []
   );
   const syncCollegeCodes = process.env.SYNC_CLASS_COLLEGE_CODES ? process.env.SYNC_CLASS_COLLEGE_CODES.split(",").map((c) => c.trim()).filter(Boolean) : null;
   const syncGrades = process.env.SYNC_CLASS_GRADES ? process.env.SYNC_CLASS_GRADES.split(",").map((g) => g.trim()).filter(Boolean) : null;
@@ -13156,12 +13189,14 @@ async function syncClassSchedules(page, catalog, majors) {
     console.log("\u26A0\uFE0F \u672A\u68C0\u6D4B\u5230\u7CBE\u51C6\u540C\u6B65\u73AF\u5883\u53D8\u91CF\u9650\u5236 (SYNC_CLASS_COLLEGE_CODES \u7B49)\uFF0C\u4E14\u672A\u663E\u5F0F\u8BBE\u7F6E SYNC_CLASS_SCOPE=all\u3002\u8DF3\u8FC7\u5168\u6821\u540C\u6B65\u3002");
   }
   console.log(`\u{1F3AF} \u5339\u914D\u7684\u76EE\u6807\u4E13\u4E1A\u603B\u8BA1: ${targetMajors.length} \u4E2A\u3002`);
+  const newestTargetGrade = getNewestGrade(targetMajors);
   const effectiveTargetMajors = targetMajors.filter((major) => {
     if (!skipNoScheduleCache || recheckNoSchedule) {
       return true;
     }
     const key = getMajorIdentityKey(major, activeSemester);
-    if (cachedNoScheduleKeys.has(key)) {
+    const cachedNoSchedule = cachedNoScheduleByKey.get(key);
+    if (cachedNoScheduleKeys.has(key) && canReuseNoScheduleCache(cachedNoSchedule, major, newestTargetGrade)) {
       console.log(`   \u8DF3\u8FC7\u5DF2\u786E\u8BA4\u65E0\u6392\u8BFE\u4E13\u4E1A: ${major.grade}\u7EA7 - ${major.name} (${major.code})`);
       return false;
     }
@@ -13182,7 +13217,7 @@ async function syncClassSchedules(page, catalog, majors) {
     actualNetworkRequestCount: 0,
     skippedByProgressCount: completedProgressCount,
     skippedByNoScheduleCount: skipNoScheduleCount,
-    freshRunId: cliParams.freshRunId || cliParams["fresh-run-id"] || (forceRefresh ? `fresh-${Date.now()}-${crypto.randomBytes(4).toString("hex")}` : ""),
+    freshRunId: runId,
     requestedTargetCount: pendingMajors.length,
     succeededTargetCount: 0,
     failedTargetCount: 0,
@@ -13195,7 +13230,19 @@ async function syncClassSchedules(page, catalog, majors) {
     cacheWarning: null
   };
   if (!forceRefresh && (completedProgressCount > 0 || pendingMajors.length === 0)) {
-    const cache = readClassScheduleCacheForSemester(activeSemester);
+    let cache = null;
+    if (completedProgressCount > 0 && fs.existsSync(PROGRESS_CLASS_SCHEDULES_PATH)) {
+      try {
+        const progressPayload = JSON.parse(fs.readFileSync(PROGRESS_CLASS_SCHEDULES_PATH, "utf-8"));
+        const progressItems = Array.isArray(progressPayload.items) ? progressPayload.items : [];
+        cache = { items: progressItems, filePath: PROGRESS_CLASS_SCHEDULES_PATH };
+      } catch (error) {
+        cache = { items: [], filePath: PROGRESS_CLASS_SCHEDULES_PATH, error };
+      }
+    }
+    if (!cache || !cache.items || cache.items.length === 0) {
+      cache = readClassScheduleCacheForSemester(activeSemester);
+    }
     if (cache.items && cache.items.length > 0) {
       cachedClassSchedules = cache.items;
       crawlStats.usedClassScheduleCache = true;
@@ -13426,6 +13473,13 @@ async function syncClassSchedules(page, catalog, majors) {
     }
     if (progressChanged) {
       writeJsonFile(PROGRESS_PATH, progress);
+      writeJsonFile(PROGRESS_CLASS_SCHEDULES_PATH, {
+        term: activeSemester,
+        runId,
+        updatedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        completedCount: progress.completed.length,
+        items: allClassSchedules
+      });
       crawlStats.succeededTargetCount += successCount;
       global.SYNC_CRAWL_STATS = crawlStats;
     }
@@ -13519,6 +13573,9 @@ async function syncClassSchedules(page, catalog, majors) {
   if (allEffectiveTargetsDone) {
     try {
       fs.unlinkSync(PROGRESS_PATH);
+      if (fs.existsSync(PROGRESS_CLASS_SCHEDULES_PATH)) {
+        fs.unlinkSync(PROGRESS_CLASS_SCHEDULES_PATH);
+      }
       console.log("\u{1F389} \u6240\u6709\u76EE\u6807\u4E13\u4E1A\u5DF2\u540C\u6B65\u5B8C\u6210\uFF0C\u8FDB\u5EA6\u5DF2\u91CD\u7F6E\u3002");
     } catch (e2) {
     }
@@ -13665,7 +13722,7 @@ async function main() {
     inputParams["catalog-policy"] = inputParams["catalog-policy"] || "reuse-validated";
     inputParams["schedule-policy"] = inputParams["schedule-policy"] || "network-only";
     inputParams["progress-policy"] = inputParams["progress-policy"] || "resume";
-    inputParams["negative-cache-policy"] = inputParams["negative-cache-policy"] || "ignore";
+    inputParams["negative-cache-policy"] = inputParams["negative-cache-policy"] || "use";
   }
   const syncPlan = buildSyncPlan(parsed2.action || action, inputParams, process.env);
   Object.assign(params, inputParams, applyPlanToParams(syncPlan, inputParams));
