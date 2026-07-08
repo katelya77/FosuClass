@@ -37,7 +37,9 @@ function run() {
   assert(adminConsoleHtml.includes("@media (prefers-reduced-motion: reduce)"));
   assert(adminConsoleHtml.includes("localStorage.setItem(THEME_STORAGE_KEY"));
   assert.strictEqual(count(/\/api\/admin\/theme/g), 0, "theme preference must not call the server");
-  assert(adminConsoleHtml.includes("AI Agent"));
+  assert(adminConsoleHtml.includes("provider-console"));
+  assert(adminConsoleHtml.includes("assistant-kb"));
+  assert(adminConsoleHtml.includes("aiAgentStatusGrid"));
   assert(adminConsoleHtml.includes("/api/admin/ai-agent/status"));
   assert(adminConsoleHtml.includes("/api/admin/ai-agent/evaluate"));
 

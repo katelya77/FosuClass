@@ -841,6 +841,182 @@ const adminConsoleHtml = `<!doctype html>
       white-space: pre-wrap;
     }
 
+    .provider-console,
+    .kb-console {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .provider-hero,
+    .kb-hero {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: var(--shadow);
+    }
+    .provider-hero h3,
+    .kb-hero h3 {
+      font-size: 20px;
+      line-height: 1.25;
+      margin-bottom: 4px;
+    }
+    .provider-hero p,
+    .kb-hero p {
+      color: var(--muted);
+      font-size: 13px;
+      max-width: 760px;
+    }
+    .env-tabs,
+    .kb-tabs {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      padding: 4px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel-2);
+    }
+    .env-tabs button,
+    .kb-tabs button {
+      border: 0;
+      background: transparent;
+      color: var(--muted);
+      padding: 8px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+    .env-tabs button.active,
+    .kb-tabs button.active {
+      background: var(--panel);
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+    .provider-main-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+      gap: 16px;
+      align-items: start;
+    }
+    .provider-card-grid,
+    .kb-list-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 12px;
+    }
+    .provider-card,
+    .kb-entry-card {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px;
+      cursor: pointer;
+      min-height: 154px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .provider-card.active,
+    .kb-entry-card.active {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--focus-ring);
+    }
+    .provider-card-head,
+    .kb-entry-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: flex-start;
+    }
+    .provider-card-title,
+    .kb-entry-title {
+      font-weight: 800;
+      color: var(--text);
+    }
+    .provider-metrics {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .provider-metric,
+    .kb-meta-pill {
+      padding: 8px;
+      border-radius: 8px;
+      background: var(--panel-2);
+      min-width: 0;
+    }
+    .provider-config-panel,
+    .kb-editor-panel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 16px;
+      box-shadow: var(--shadow);
+      position: sticky;
+      top: 16px;
+    }
+    .provider-actions-row,
+    .kb-actions-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .diagnostic-panel {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+    }
+    .diagnostic-panel summary {
+      cursor: pointer;
+      padding: 12px 14px;
+      font-weight: 800;
+      color: var(--text);
+    }
+    .diagnostic-panel .ai-verify-box {
+      margin: 0;
+      border: 0;
+      border-top: 1px solid var(--border);
+      border-radius: 0;
+    }
+    .kb-tab-panel {
+      display: none;
+    }
+    .kb-tab-panel.active {
+      display: block;
+    }
+    .kb-two-column {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(320px, 430px);
+      gap: 16px;
+      align-items: start;
+    }
+    .kb-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    @media (max-width: 980px) {
+      .provider-main-grid,
+      .kb-two-column {
+        grid-template-columns: 1fr;
+      }
+      .provider-config-panel,
+      .kb-editor-panel {
+        position: static;
+      }
+    }
+
     .campus-map-stack {
       display: flex;
       flex-direction: column;
@@ -872,7 +1048,7 @@ const adminConsoleHtml = `<!doctype html>
       object-fit: contain;
       border: 1px solid var(--border);
       border-radius: 6px;
-      background: #fff;
+      background: var(--surface);
     }
     .campus-map-asset-title {
       display: flex;
@@ -1052,7 +1228,7 @@ const adminConsoleHtml = `<!doctype html>
       height: auto;
       min-height: 360px;
       object-fit: contain;
-      background: #fff;
+      background: var(--surface);
     }
     .campus-map-rect {
       position: absolute;
@@ -3565,6 +3741,7 @@ const adminConsoleHtml = `<!doctype html>
             <li class="nav-item" data-section="news"><button>最新动态</button></li>
             <li class="nav-item" data-section="config"><button>数据版本</button></li>
             <li class="nav-item" data-section="ai-provider"><button>查询服务</button></li>
+            <li class="nav-item" data-section="assistant-kb"><button>小佛助手知识库</button></li>
             <li class="nav-item" data-section="campus-map"><button>校园地图</button></li>
             <li class="nav-item" data-section="feedback"><button>反馈管理</button></li>
             <li class="nav-item" data-section="security"><button>安全状态</button></li>
@@ -5204,6 +5381,10 @@ const adminConsoleHtml = `<!doctype html>
         </div>
       </section>
 
+      <section id="section-assistant-kb" class="section">
+        <div id="assistantKbConsole" class="kb-console"></div>
+      </section>
+
       <section id="section-campus-map" class="section">
         <div class="campus-map-stack">
           <div class="card form-box">
@@ -5997,8 +6178,18 @@ const adminConsoleHtml = `<!doctype html>
         csrfToken: "",
         securityStatus: null,
         aiProviderConfig: null,
+        aiProviderEnvironment: "public",
+        aiProviderSelectedProvider: "mock",
         aiAgentStatus: null,
         aiAgentEvalReport: null,
+        assistantKb: null,
+        assistantKbTab: "rules",
+        assistantKbSelectedId: "",
+        assistantKbImportText: "",
+        assistantKbImportPreview: null,
+        assistantKbTestQuery: "",
+        assistantKbTestEnvironment: "public",
+        assistantKbTestResult: null,
         campusMap: null,
         campusMapDraft: null,
         campusMapSelectedId: "",
@@ -6055,6 +6246,7 @@ const adminConsoleHtml = `<!doctype html>
         news: "/admin/news",
         config: "/admin/config",
         "ai-provider": "/admin/ai-provider",
+        "assistant-kb": "/admin/assistant-kb",
         "campus-map": "/admin/map",
         feedback: "/admin/feedback",
         security: "/admin/security",
@@ -6086,6 +6278,7 @@ const adminConsoleHtml = `<!doctype html>
         "/admin/version": { section: "config" },
         "/admin/ai": { section: "ai-provider" },
         "/admin/ai-provider": { section: "ai-provider" },
+        "/admin/assistant-kb": { section: "assistant-kb" },
         "/admin/campus-map": { section: "campus-map" },
         "/admin/map": { section: "campus-map" },
         "/admin/feedback": { section: "feedback" },
@@ -6384,6 +6577,10 @@ const adminConsoleHtml = `<!doctype html>
           .slice(0, 240) || ("HTTP " + (status || 0));
       }
 
+      function isAbortError(error) {
+        return error && (error.name === "AbortError" || /abort/i.test(String(error.message || "")));
+      }
+
       function api(path, options) {
         options = options || {};
         options.headers = Object.assign({ "Content-Type": "application/json" }, options.headers || {});
@@ -6572,6 +6769,7 @@ const adminConsoleHtml = `<!doctype html>
           news: "最新动态",
           config: "数据版本",
           "ai-provider": "查询服务",
+          "assistant-kb": "小佛助手知识库",
           "campus-map": "校园地图管理",
           feedback: "反馈管理",
           security: "安全状态",
@@ -6601,6 +6799,8 @@ const adminConsoleHtml = `<!doctype html>
           ignoreLoadError(loadSecurityStatus());
         } else if (targetSection === "ai-provider") {
           ignoreLoadError(loadAiProviderConfig());
+        } else if (targetSection === "assistant-kb") {
+          ignoreLoadError(loadAssistantKb());
         } else if (targetSection === "campus-map") {
           ignoreLoadError(loadCampusMapState());
         } else if (targetSection === "feedback") {
@@ -6618,6 +6818,7 @@ const adminConsoleHtml = `<!doctype html>
             return state.dashboard;
           })
           .catch(function (error) {
+            if (isAbortError(error)) return null;
             console.error("[Admin Console] loadDashboard failed:", error);
             setStatus("数据概览加载失败：" + (error.message || "未知错误"));
             showToast(error.message || "数据概览加载失败", "error");
@@ -6978,6 +7179,7 @@ const adminConsoleHtml = `<!doctype html>
             return state.config;
           })
           .catch(function (error) {
+            if (isAbortError(error)) return null;
             console.error("[Admin Console] loadConfig failed:", error);
             showToast(error.message || "系统配置加载失败", "error");
             showModuleError("config", error);
@@ -6993,6 +7195,7 @@ const adminConsoleHtml = `<!doctype html>
             return state.notices;
           })
           .catch(function (error) {
+            if (isAbortError(error)) return null;
             console.error("[Admin Console] loadNotices failed:", error);
             showToast(error.message || "公告配置加载失败", "error");
             showModuleError("notices", error);
@@ -7008,6 +7211,7 @@ const adminConsoleHtml = `<!doctype html>
             return state.news;
           })
           .catch(function (error) {
+            if (isAbortError(error)) return null;
             console.error("[Admin Console] loadNews failed:", error);
             showToast(error.message || "最新动态加载失败", "error");
             showModuleError("news", error);
@@ -11596,6 +11800,412 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
+      var AI_ENV_LABELS = {
+        public: "正式版",
+        trial: "体验版",
+        dev: "开发版"
+      };
+      var AI_PROVIDER_LABELS = {
+        mock: "mock 本地规则",
+        "cloudbase-openai": "混元 cloudbase-openai",
+        deepseek: "deepseek",
+        coze: "coze"
+      };
+
+      function findAiEnvironment(env) {
+        var cfg = state.aiProviderConfig || {};
+        var list = Array.isArray(cfg.environments) ? cfg.environments : [];
+        return list.find(function(item) { return item.environment === env; }) || list[0] || null;
+      }
+
+      function activeAiProfile() {
+        var env = findAiEnvironment(state.aiProviderEnvironment || "public");
+        return env && env.profile || {};
+      }
+
+      function providerCompletenessText(provider) {
+        var completeness = provider && provider.completeness || {};
+        return (completeness.percent || 0) + "% (" + (completeness.passed || 0) + "/" + (completeness.total || 0) + ")";
+      }
+
+      function renderProviderCard(provider) {
+        var name = provider.name || "mock";
+        var active = state.aiProviderSelectedProvider === name ? " active" : "";
+        var enabledBadge = provider.enabled ? "<span class='badge success'>启用</span>" : "<span class='badge muted'>未启用</span>";
+        var healthClass = provider.health === "ok" ? "success" : (provider.health === "degraded" ? "warning" : "muted");
+        return "<div class='provider-card" + active + "' data-provider='" + escapeHtml(name) + "'>" +
+          "<div class='provider-card-head'><div><div class='provider-card-title'>" + escapeHtml(AI_PROVIDER_LABELS[name] || name) + "</div><div class='ai-secret-note'>" + escapeHtml(name) + "</div></div>" + enabledBadge + "</div>" +
+          "<div class='provider-metrics'>" +
+            "<div class='provider-metric'>配置完整度<br><strong>" + escapeHtml(providerCompletenessText(provider)) + "</strong></div>" +
+            "<div class='provider-metric'>最近测试<br><span class='badge " + healthClass + "'>" + escapeHtml(provider.health || "unknown") + "</span></div>" +
+            "<div class='provider-metric'>延迟<br><strong>" + escapeHtml(String(provider.latencyMs || provider.p50LatencyMs || 0)) + "ms</strong></div>" +
+            "<div class='provider-metric'>fallback<br><strong>" + escapeHtml(String(provider.fallbackCount || 0)) + "</strong></div>" +
+          "</div>" +
+          (provider.keyConfigured ? "<div class='ai-secret-note'>密钥 configured true" + (provider.keyLast4 ? " / ****" + escapeHtml(provider.keyLast4) : "") + "</div>" : "<div class='ai-secret-note'>密钥 configured false</div>") +
+        "</div>";
+      }
+
+      function aiConfigInput(id, label, valueText, placeholder, type) {
+        return "<div><label>" + label + "</label><input id='" + id + "' type='" + (type || "text") + "' autocomplete='off' value='" + escapeHtml(valueText || "") + "' placeholder='" + escapeHtml(placeholder || "") + "'></div>";
+      }
+
+      function renderProviderConfigFields(providerName, profile) {
+        if (providerName === "mock") {
+          var kb = state.aiProviderConfig && state.aiProviderConfig.knowledgeIndex || {};
+          return "<div class='ai-provider-status'>" +
+            renderHealthItem("本地规则", "<span class='badge success'>可用</span>") +
+            renderHealthItem("知识库版本", "<code>" + escapeHtml(kb.version || kb.currentVersion || "-") + "</code>") +
+            renderHealthItem("规则数量", "<strong>" + escapeHtml(String(kb.ruleCount || 0)) + "</strong>") +
+            renderHealthItem("chunk 数量", "<strong>" + escapeHtml(String(kb.chunkCount || 0)) + "</strong>") +
+          "</div>";
+        }
+        if (providerName === "cloudbase-openai") {
+          return "<div class='form-row'>" +
+            aiConfigInput("cloudbaseOpenaiBaseUrl", "Base URL", profile.cloudbaseOpenaiBaseUrl, "https://.../v1/ai/cloudbase") +
+            aiConfigInput("cloudbaseOpenaiTextModel", "模型名", profile.cloudbaseOpenaiTextModel, "hy3-preview") +
+          "</div><div class='form-row'>" +
+            aiConfigInput("cloudbaseOpenaiTimeoutMs", "timeout / ms", profile.cloudbaseOpenaiTimeoutMs, "15000") +
+            aiConfigInput("cloudbaseOpenaiMaxTokens", "max tokens", profile.cloudbaseOpenaiMaxTokens, "1200") +
+          "</div><div class='form-row full'>" +
+            aiConfigInput("cloudbaseOpenaiApiKey", "API Key", "", "留空表示保留原密钥", "password") +
+          "</div>";
+        }
+        if (providerName === "coze") {
+          return "<div class='form-row'>" +
+            aiConfigInput("cozeBaseUrl", "Base URL", profile.cozeBaseUrl, "https://api.coze.cn") +
+            aiConfigInput("cozeBotId", "Bot ID", profile.cozeBotId || "", "留空则 fallback mock") +
+          "</div><div class='form-row'>" +
+            aiConfigInput("cozeUserId", "User ID", profile.cozeUserId, "fosuclass-user") +
+            aiConfigInput("cozeChatEndpoint", "Chat Endpoint", profile.cozeChatEndpoint, "/v3/chat") +
+          "</div><div class='form-row'>" +
+            "<div><label>轮询开关</label><select id='cozePollEnabled'><option value='true'>开启</option><option value='false'>关闭</option></select></div>" +
+            aiConfigInput("cozePollIntervalMs", "轮询间隔 / ms", profile.cozePollIntervalMs, "1000") +
+          "</div><div class='form-row'>" +
+            aiConfigInput("cozePollMaxAttempts", "最大轮询次数", profile.cozePollMaxAttempts, "8") +
+            aiConfigInput("cozeApiKey", "API Key", "", "留空表示保留原密钥", "password") +
+          "</div>";
+        }
+        return "<div class='form-row'>" +
+          aiConfigInput("aiBaseUrl", "Base URL", profile.baseUrl, "https://api.deepseek.com") +
+          aiConfigInput("aiModel", "快速模型", profile.model, "deepseek-v4-flash") +
+        "</div><div class='form-row'>" +
+          aiConfigInput("aiReasoningModel", "推理模型", profile.reasoningModel, "deepseek-v4-pro") +
+          aiConfigInput("aiTemperature", "temperature", profile.temperature, "0.1") +
+        "</div><div class='form-row'>" +
+          aiConfigInput("aiMaxTokens", "max tokens", profile.maxTokens, "1200") +
+          aiConfigInput("aiApiKey", "API Key", "", "留空表示保留原密钥", "password") +
+        "</div><div class='form-row'>" +
+          "<div><label>json repair</label><select id='aiJsonRepair'><option value='true'>开启</option><option value='false'>关闭</option></select></div>" +
+          "<div><label>Thinking</label><select id='aiThinkingEnabled'><option value='false'>关闭</option><option value='true'>开启</option></select></div>" +
+        "</div>";
+      }
+
+      function renderAiProviderConfig() {
+        var cfg = state.aiProviderConfig || {};
+        if (!state.aiProviderEnvironment) state.aiProviderEnvironment = cfg.activeEnvironment || "public";
+        var envStatus = findAiEnvironment(state.aiProviderEnvironment) || {};
+        var profile = envStatus.profile || {};
+        if (!state.aiProviderSelectedProvider) state.aiProviderSelectedProvider = profile.provider || "mock";
+        var providers = Array.isArray(envStatus.providers) ? envStatus.providers : [];
+        if (!providers.some(function(item) { return item.name === state.aiProviderSelectedProvider; })) state.aiProviderSelectedProvider = profile.provider || "mock";
+        var section = $("section-ai-provider");
+        if (!section) return;
+        var envTabs = ["public", "trial", "dev"].map(function(env) {
+          return "<button type='button' class='" + (state.aiProviderEnvironment === env ? "active" : "") + "' data-ai-env='" + env + "'>" + AI_ENV_LABELS[env] + "</button>";
+        }).join("");
+        var selectedProvider = state.aiProviderSelectedProvider || "mock";
+        section.innerHTML = "<div class='provider-console'>" +
+          "<div class='provider-hero'><div><h3>查询服务 / Provider 控制台</h3><p>正式版保持本地规则；体验版和开发版可启用外部理解能力。课程、教师、教室、空教室等事实仍必须由工具和 Release Pack 核验。</p></div><div class='env-tabs' id='aiEnvTabs'>" + envTabs + "</div></div>" +
+          "<div class='provider-actions-row'><button id='aiPresetPublicSafeBtn' class='secondary'>一键切换为正式安全模式</button><button id='aiPresetTrialBtn' class='secondary'>一键切换为体验增强模式</button><button id='aiPresetMockBtn' class='ghost'>一键恢复 mock</button><button id='reloadAiProviderBtn' class='ghost'>刷新状态</button></div>" +
+          "<div class='provider-main-grid'><div><div class='provider-card-grid' id='aiProviderCards'>" + providers.map(renderProviderCard).join("") + "</div>" +
+          "<details class='diagnostic-panel' style='margin-top:16px;'><summary>诊断抽屉 / 链路日志 / 黄金测试</summary><div id='aiVerifyResult' class='ai-verify-box'>尚未验证。运行测试后会显示 resolved provider、fallback、工具链和延迟。</div><div class='provider-actions-row' style='padding:12px;'><button id='verifyAiProviderBtn' class='secondary'>运行 Provider 测试</button><button id='forceAiProviderChatBtn' class='secondary'>强制测试项目问答</button><button id='runAiGoldenEvalBtn' class='secondary'>运行黄金测试</button><button id='exportAiEvalReportBtn' class='ghost'>导出脱敏报告</button><button id='clearAiLocalMetricsBtn' class='ghost'>清除本地指标</button></div><div id='aiAgentStatusGrid' class='ai-provider-status' style='padding:0 12px 12px;'></div><div id='aiAgentEvalResult' class='ai-verify-box'>黄金测试尚未运行。</div></details></div>" +
+          "<div class='provider-config-panel'><h3 class='card-title'>" + escapeHtml(AI_PROVIDER_LABELS[selectedProvider] || selectedProvider) + "</h3><div class='form-row'><div><label>启用状态</label><select id='aiEnabled'><option value='false'>关闭 / mock fallback</option><option value='true'>启用</option></select></div><div><label>Provider Policy</label><select id='aiProviderPolicy'><option value='tool-only'>tool-only</option><option value='auto'>auto</option><option value='always'>always</option></select></div></div><input id='aiProvider' type='hidden' value='" + escapeHtml(selectedProvider) + "'><input id='aiRuntimeMode' type='hidden' value='" + escapeHtml(profile.runtimeMode || "public") + "'>" + renderProviderConfigFields(selectedProvider, profile) + "<div class='ai-secret-note'>密钥不会回显明文；留空表示保留原密钥。保存会立即更新 runtime config，兼容写 .env 的逻辑仅在服务器显式开启时生效。</div><div class='provider-actions-row' style='margin-top:14px;'><button id='saveAiProviderBtn' class='primary'>保存当前环境配置</button></div></div></div></div>";
+        setSelectValue("aiEnabled", profile.enabled ? "true" : "false");
+        setSelectValue("aiProviderPolicy", profile.providerPolicy || "auto");
+        setSelectValue("cozePollEnabled", profile.cozePollEnabled === false ? "false" : "true");
+        setSelectValue("aiJsonRepair", profile.jsonRepair === false ? "false" : "true");
+        setSelectValue("aiThinkingEnabled", profile.thinkingEnabled ? "true" : "false");
+        bindAiProviderConsoleEvents();
+        renderAiAgentStatus();
+      }
+
+      function bindAiProviderConsoleEvents() {
+        document.querySelectorAll("[data-ai-env]").forEach(function(btn) {
+          btn.addEventListener("click", function() {
+            state.aiProviderEnvironment = btn.dataset.aiEnv || "public";
+            var env = findAiEnvironment(state.aiProviderEnvironment);
+            state.aiProviderSelectedProvider = env && env.provider || "mock";
+            renderAiProviderConfig();
+          });
+        });
+        document.querySelectorAll("[data-provider]").forEach(function(card) {
+          card.addEventListener("click", function() {
+            state.aiProviderSelectedProvider = card.dataset.provider || "mock";
+            renderAiProviderConfig();
+          });
+        });
+        safeBind("saveAiProviderBtn", "click", saveAiProviderConfig);
+        safeBind("verifyAiProviderBtn", "click", verifyAiProviderConfig);
+        safeBind("forceAiProviderChatBtn", "click", forceAiProviderChatTest);
+        safeBind("reloadAiProviderBtn", "click", loadAiProviderConfig);
+        safeBind("runAiGoldenEvalBtn", "click", runAiGoldenEvaluation);
+        safeBind("exportAiEvalReportBtn", "click", exportAiEvaluationReport);
+        safeBind("clearAiLocalMetricsBtn", "click", clearAiLocalMetrics);
+        safeBind("aiPresetPublicSafeBtn", "click", function() { saveAiProviderPreset("public-safe", "public"); });
+        safeBind("aiPresetTrialBtn", "click", function() { saveAiProviderPreset("trial-enhanced", "trial"); });
+        safeBind("aiPresetMockBtn", "click", function() { saveAiProviderPreset("mock", state.aiProviderEnvironment || "public"); });
+      }
+
+      function loadAiProviderConfig() {
+        var env = state.aiProviderEnvironment || "";
+        return api("/api/admin/ai-provider/config" + (env ? "?environment=" + encodeURIComponent(env) : ""))
+          .then(function(res) {
+            state.aiProviderConfig = res.data || {};
+            if (!state.aiProviderEnvironment) state.aiProviderEnvironment = state.aiProviderConfig.activeEnvironment || "public";
+            var envStatus = findAiEnvironment(state.aiProviderEnvironment);
+            state.aiProviderSelectedProvider = state.aiProviderSelectedProvider || (envStatus && envStatus.provider) || "mock";
+            renderAiProviderConfig();
+            ignoreLoadError(loadAiAgentStatus());
+            return state.aiProviderConfig;
+          })
+          .catch(function(error) {
+            showModuleError("ai-provider", error);
+            throw error;
+          });
+      }
+
+      function aiProviderPayload() {
+        var profile = activeAiProfile();
+        var provider = state.aiProviderSelectedProvider || value("aiProvider") || profile.provider || "mock";
+        var payload = {
+          environment: state.aiProviderEnvironment || "public",
+          activeEnvironment: state.aiProviderEnvironment || "public",
+          enabled: boolValue("aiEnabled"),
+          provider: provider,
+          providerPolicy: value("aiProviderPolicy") || profile.providerPolicy || "auto",
+          runtimeMode: (state.aiProviderEnvironment === "public") ? "public" : "competition"
+        };
+        if (provider === "deepseek") {
+          Object.assign(payload, { baseUrl: value("aiBaseUrl"), model: value("aiModel"), reasoningModel: value("aiReasoningModel"), temperature: value("aiTemperature"), maxTokens: value("aiMaxTokens"), jsonRepair: boolValue("aiJsonRepair"), thinkingEnabled: boolValue("aiThinkingEnabled") });
+          if (value("aiApiKey")) payload.apiKey = value("aiApiKey");
+        } else if (provider === "cloudbase-openai") {
+          Object.assign(payload, { cloudbaseOpenaiEnabled: boolValue("aiEnabled"), cloudbaseOpenaiBaseUrl: value("cloudbaseOpenaiBaseUrl"), cloudbaseOpenaiTextModel: value("cloudbaseOpenaiTextModel"), cloudbaseOpenaiTimeoutMs: value("cloudbaseOpenaiTimeoutMs"), cloudbaseOpenaiMaxTokens: value("cloudbaseOpenaiMaxTokens") });
+          if (value("cloudbaseOpenaiApiKey")) payload.cloudbaseOpenaiApiKey = value("cloudbaseOpenaiApiKey");
+        } else if (provider === "coze") {
+          Object.assign(payload, { cozeBaseUrl: value("cozeBaseUrl"), cozeBotId: value("cozeBotId"), cozeUserId: value("cozeUserId"), cozeChatEndpoint: value("cozeChatEndpoint"), cozePollEnabled: boolValue("cozePollEnabled"), cozePollIntervalMs: value("cozePollIntervalMs"), cozePollMaxAttempts: value("cozePollMaxAttempts") });
+          if (value("cozeApiKey")) payload.cozeApiKey = value("cozeApiKey");
+        }
+        return payload;
+      }
+
+      function describeAiProviderChanges(payload) {
+        var profile = activeAiProfile();
+        var fields = ["enabled", "provider", "providerPolicy", "model", "reasoningModel", "baseUrl", "temperature", "maxTokens", "cloudbaseOpenaiBaseUrl", "cloudbaseOpenaiTextModel", "cozeBaseUrl", "cozeBotId", "cozeUserId", "cozeChatEndpoint"];
+        var lines = ["将保存到：" + (AI_ENV_LABELS[payload.environment] || payload.environment)];
+        fields.forEach(function(key) {
+          if (!Object.prototype.hasOwnProperty.call(payload, key)) return;
+          var beforeValue = profile[key] == null ? "" : String(profile[key]);
+          var afterValue = payload[key] == null ? "" : String(payload[key]);
+          if (beforeValue !== afterValue) lines.push(key + ": " + beforeValue + " -> " + afterValue);
+        });
+        ["apiKey", "cozeApiKey", "cloudbaseOpenaiApiKey"].forEach(function(key) {
+          if (payload[key]) lines.push(key + ": configured false/true -> configured true (不显示明文)");
+        });
+        return lines;
+      }
+
+      function saveAiProviderConfig() {
+        var payload = aiProviderPayload();
+        var lines = describeAiProviderChanges(payload);
+        if (!window.confirm(lines.join("\\n") || "确认保存当前 Provider 配置？")) return;
+        api("/api/admin/ai-provider/config", { method: "POST", body: JSON.stringify(payload) })
+          .then(function(res) {
+            state.aiProviderConfig = res.data || {};
+            state.aiProviderEnvironment = state.aiProviderConfig.activeEnvironment || payload.environment;
+            state.aiProviderSelectedProvider = payload.provider || "mock";
+            renderAiProviderConfig();
+            ignoreLoadError(loadAiAgentStatus());
+            showToast("查询服务配置已保存。", "success");
+            setStatus("查询服务配置已保存：" + (payload.environment || "public") + " / " + (payload.provider || "mock"));
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function saveAiProviderPreset(preset, environment) {
+        var payload = { preset: preset, environment: environment, activeEnvironment: environment, provider: state.aiProviderSelectedProvider || "deepseek" };
+        if (!window.confirm(["将应用预设：" + preset, "目标环境：" + (AI_ENV_LABELS[environment] || environment)].join("\\n"))) return;
+        api("/api/admin/ai-provider/config", { method: "POST", body: JSON.stringify(payload) })
+          .then(function(res) {
+            state.aiProviderConfig = res.data || {};
+            state.aiProviderEnvironment = environment;
+            var envStatus = findAiEnvironment(environment);
+            state.aiProviderSelectedProvider = envStatus && envStatus.provider || "mock";
+            renderAiProviderConfig();
+            showToast("预设已应用。", "success");
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      var KB_TAB_LABELS = { rules: "规则问答", docs: "文档知识库", test: "测试预览", versions: "版本发布" };
+
+      function loadAssistantKb() {
+        return api("/api/admin/assistant-kb?status=draft")
+          .then(function(res) {
+            state.assistantKb = res || {};
+            renderAssistantKb();
+            return state.assistantKb;
+          })
+          .catch(function(error) {
+            showModuleError("assistant-kb", error);
+            throw error;
+          });
+      }
+
+      function assistantKbEntries(type) {
+        var kb = state.assistantKb || {};
+        return (Array.isArray(kb.entries) ? kb.entries : []).filter(function(item) { return item.type === type; });
+      }
+
+      function renderKbEntryCard(entry) {
+        var active = state.assistantKbSelectedId === entry.id ? " active" : "";
+        return "<div class='kb-entry-card" + active + "' data-kb-id='" + escapeHtml(entry.id) + "'><div class='kb-entry-head'><div><div class='kb-entry-title'>" + escapeHtml(entry.title || entry.id) + "</div><div class='ai-secret-note'>" + escapeHtml(entry.id) + "</div></div><span class='badge " + (entry.status === "disabled" ? "muted" : "success") + "'>" + escapeHtml(entry.status || "draft") + "</span></div><div class='provider-metrics'><div class='kb-meta-pill'>环境<br><strong>" + escapeHtml((entry.scope || []).join(",")) + "</strong></div><div class='kb-meta-pill'>优先级<br><strong>" + escapeHtml(String(entry.priority || 0)) + "</strong></div></div><div class='ai-secret-note'>" + escapeHtml((entry.keywords || []).slice(0, 6).join(" / ") || "未设置关键词") + "</div></div>";
+      }
+
+      function selectedKbEntry(type) {
+        return assistantKbEntries(type).find(function(item) { return item.id === state.assistantKbSelectedId; }) || null;
+      }
+
+      function renderKbEditor(type) {
+        var entry = selectedKbEntry(type) || { type: type, scope: ["public", "trial", "dev"], tags: [], keywords: [], priority: 0, body: "" };
+        return "<div class='kb-editor-panel'><h3 class='card-title'>" + (entry.id ? "编辑知识" : "新增知识") + "</h3><div class='form-row'>" + aiConfigInput("kbEntryId", "id / sourceId", entry.id || "", "留空自动生成") + aiConfigInput("kbEntryTitle", "标题", entry.title || "", "标题") + "</div><div class='form-row'>" + aiConfigInput("kbEntryScope", "适用环境", (entry.scope || []).join(","), "public,trial,dev") + aiConfigInput("kbEntryTags", "标签", (entry.tags || []).join(","), "help,faq") + "</div><div class='form-row'>" + aiConfigInput("kbEntryKeywords", "关键词 / 同义词", (entry.keywords || []).join(","), "关键词逗号分隔") + aiConfigInput("kbEntryPriority", "优先级", entry.priority || "0", "0-999") + "</div>" + (type === "rule" ? "<div class='form-row full'>" + aiConfigInput("kbEntryPatterns", "正则触发", (entry.patterns || []).join(","), "可选") + "</div>" : "") + "<div class='form-row full'><div><label>正文 / 固定回复</label><textarea id='kbEntryBody' style='min-height:180px;'>" + escapeHtml(entry.body || "") + "</textarea></div></div><div class='kb-actions-row'><button id='kbSaveEntryBtn' class='primary'>" + (entry.id ? "保存修改" : "新增") + "</button>" + (entry.id ? "<button id='kbDeleteEntryBtn' class='danger'>删除</button>" : "") + "<button id='kbNewEntryBtn' class='ghost'>清空</button></div></div>";
+      }
+
+      function renderKbImportPreview() {
+        var preview = state.assistantKbImportPreview;
+        if (!preview) return "尚未解析。";
+        var risks = (preview.risks || []).map(function(risk) { return risk.level + ":" + risk.code; }).join(", ") || "none";
+        return ["标题: " + (preview.entry && preview.entry.title || "-"), "chunks: " + ((preview.chunks || []).length), "conflict: " + (preview.conflict ? "yes" : "no"), "risks: " + risks].join("\\n");
+      }
+
+      function renderKbTestResult() {
+        var result = state.assistantKbTestResult;
+        if (!result) return "输入问题后可查看命中关键词、RAG 文档、分数、最终回答和 fallback。";
+        return ["fallback: " + (result.fallback ? "true" : "false"), "score: " + (result.score || 0), "matchedKeywords: " + (result.matchedKeywords || []).join(", "), "documents: " + (result.ragDocuments || []).map(function(item) { return item.title + "(" + item.score + ")"; }).join(", "), "answer: " + (result.finalAnswer || "-")].join("\\n");
+      }
+
+      function renderKbBackups() {
+        var backups = state.assistantKb && state.assistantKb.backups || [];
+        if (!backups.length) return "<tr><td colspan='4'>暂无备份</td></tr>";
+        return backups.map(function(item) { return "<tr><td><code>" + escapeHtml(item.versionId || "-") + "</code></td><td>" + escapeHtml(item.createdAt || "-") + "</td><td>" + escapeHtml(String(item.ruleCount || 0)) + " / " + escapeHtml(String(item.docCount || 0)) + "</td><td><button class='ghost kb-rollback-btn' data-version='" + escapeHtml(item.versionId || "") + "'>回滚</button></td></tr>"; }).join("");
+      }
+
+      function renderAssistantKb() {
+        var wrap = $("assistantKbConsole");
+        if (!wrap) return;
+        var tab = state.assistantKbTab || "rules";
+        var kb = state.assistantKb || {};
+        var tabs = ["rules", "docs", "test", "versions"].map(function(key) { return "<button type='button' class='" + (tab === key ? "active" : "") + "' data-kb-tab='" + key + "'>" + KB_TAB_LABELS[key] + "</button>"; }).join("");
+        var rules = assistantKbEntries("rule");
+        var docs = assistantKbEntries("doc");
+        wrap.innerHTML = "<div class='kb-hero'><div><h3>小佛助手知识库</h3><p>维护规则问答、RAG 文档和发布版本。保存会做安全校验；发布后小程序端通过后端已发布版本生效。</p></div><div class='kb-tabs'>" + tabs + "</div></div>" +
+          "<div class='kb-tab-panel " + (tab === "rules" ? "active" : "") + "'><div class='kb-two-column'><div><div class='kb-toolbar'><strong>规则问答</strong><button id='kbRefreshBtn' class='ghost'>刷新</button></div><div class='kb-list-grid'>" + rules.map(renderKbEntryCard).join("") + "</div></div>" + renderKbEditor("rule") + "</div></div>" +
+          "<div class='kb-tab-panel " + (tab === "docs" ? "active" : "") + "'><div class='kb-two-column'><div><div class='kb-toolbar'><strong>文档知识库</strong><div class='kb-actions-row'><button id='kbExportJsonBtn' class='ghost'>导出 JSON</button><button id='kbExportMdBtn' class='ghost'>导出 MD</button></div></div><div class='kb-list-grid'>" + docs.map(renderKbEntryCard).join("") + "</div><div class='card' style='margin-top:12px;'><h3 class='card-title'>导入 Markdown</h3><textarea id='kbImportMarkdown' style='min-height:180px;' placeholder='支持 YAML frontmatter: title/tags/keywords/scope/priority'>" + escapeHtml(state.assistantKbImportText || "") + "</textarea><div id='kbImportPreview' class='ai-verify-box'>" + renderKbImportPreview() + "</div><div class='kb-actions-row'><button id='kbPreviewMdBtn' class='secondary'>预览解析</button><button id='kbCommitMdBtn' class='primary'>导入草稿</button></div></div></div>" + renderKbEditor("doc") + "</div></div>" +
+          "<div class='kb-tab-panel " + (tab === "test" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>测试预览</h3><div class='form-row'><div><label>用户问题</label><input id='kbTestQuery' value='" + escapeHtml(state.assistantKbTestQuery || "") + "' placeholder='例如：小佛能做什么'></div><div><label>环境</label><select id='kbTestEnvironment'><option value='public'" + (state.assistantKbTestEnvironment === "public" ? " selected" : "") + ">public</option><option value='trial'" + (state.assistantKbTestEnvironment === "trial" ? " selected" : "") + ">trial</option><option value='dev'" + (state.assistantKbTestEnvironment === "dev" ? " selected" : "") + ">dev</option></select></div></div><button id='kbRunTestBtn' class='primary'>运行测试</button><div id='kbTestResult' class='ai-verify-box'>" + renderKbTestResult() + "</div></div></div>" +
+          "<div class='kb-tab-panel " + (tab === "versions" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>版本发布</h3><div class='ai-provider-status'>" + renderHealthItem("草稿", "<strong>" + escapeHtml(String(kb.draft && kb.draft.ruleCount || 0)) + "</strong> rules / <strong>" + escapeHtml(String(kb.draft && kb.draft.docCount || 0)) + "</strong> docs") + renderHealthItem("已发布", "<code>" + escapeHtml(kb.published && kb.published.versionId || "-") + "</code>") + renderHealthItem("备份", "<strong>" + escapeHtml(String(kb.store && kb.store.backupCount || 0)) + "</strong>") + "</div><div class='kb-actions-row'><button id='kbPublishBtn' class='primary'>发布草稿</button><button id='kbRefreshVersionsBtn' class='ghost'>刷新</button></div><div class='table-container'><table><thead><tr><th>版本</th><th>时间</th><th>数量</th><th>操作</th></tr></thead><tbody>" + renderKbBackups() + "</tbody></table></div></div></div>";
+        bindAssistantKbEvents();
+      }
+
+      function bindAssistantKbEvents() {
+        document.querySelectorAll("[data-kb-tab]").forEach(function(btn) { btn.addEventListener("click", function() { state.assistantKbTab = btn.dataset.kbTab || "rules"; state.assistantKbSelectedId = ""; renderAssistantKb(); }); });
+        document.querySelectorAll("[data-kb-id]").forEach(function(card) { card.addEventListener("click", function() { state.assistantKbSelectedId = card.dataset.kbId || ""; renderAssistantKb(); }); });
+        safeBind("kbRefreshBtn", "click", loadAssistantKb);
+        safeBind("kbRefreshVersionsBtn", "click", loadAssistantKb);
+        safeBind("kbSaveEntryBtn", "click", saveAssistantKbEntry);
+        safeBind("kbDeleteEntryBtn", "click", deleteAssistantKbEntry);
+        safeBind("kbNewEntryBtn", "click", function() { state.assistantKbSelectedId = ""; renderAssistantKb(); });
+        safeBind("kbPreviewMdBtn", "click", previewAssistantKbMarkdown);
+        safeBind("kbCommitMdBtn", "click", commitAssistantKbMarkdown);
+        safeBind("kbRunTestBtn", "click", runAssistantKbTest);
+        safeBind("kbImportMarkdown", "input", function() { state.assistantKbImportText = value("kbImportMarkdown"); });
+        safeBind("kbTestQuery", "input", function() { state.assistantKbTestQuery = value("kbTestQuery"); });
+        safeBind("kbTestEnvironment", "change", function() { state.assistantKbTestEnvironment = value("kbTestEnvironment") || "public"; });
+        safeBind("kbPublishBtn", "click", publishAssistantKb);
+        safeBind("kbExportJsonBtn", "click", function() { exportAssistantKb("json"); });
+        safeBind("kbExportMdBtn", "click", function() { exportAssistantKb("md"); });
+        document.querySelectorAll(".kb-rollback-btn").forEach(function(btn) { btn.addEventListener("click", function() { rollbackAssistantKb(btn.dataset.version); }); });
+      }
+
+      function kbEntryPayload() {
+        var type = state.assistantKbTab === "rules" ? "rule" : "doc";
+        return { id: value("kbEntryId"), sourceId: value("kbEntryId"), type: type, title: value("kbEntryTitle"), scope: value("kbEntryScope"), tags: value("kbEntryTags"), keywords: value("kbEntryKeywords"), patterns: value("kbEntryPatterns"), priority: value("kbEntryPriority"), body: value("kbEntryBody") };
+      }
+
+      function saveAssistantKbEntry() {
+        var payload = kbEntryPayload();
+        var selected = state.assistantKbSelectedId;
+        api(selected ? "/api/admin/assistant-kb/" + encodeURIComponent(selected) : "/api/admin/assistant-kb", { method: selected ? "PUT" : "POST", body: JSON.stringify(payload) })
+          .then(function() { showToast("知识已保存。", "success"); state.assistantKbSelectedId = payload.id || selected; return loadAssistantKb(); })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function deleteAssistantKbEntry() {
+        var selected = state.assistantKbSelectedId;
+        if (!selected || !confirm("确认删除这条知识？")) return;
+        api("/api/admin/assistant-kb/" + encodeURIComponent(selected), { method: "DELETE" })
+          .then(function() { state.assistantKbSelectedId = ""; showToast("知识已删除。", "success"); return loadAssistantKb(); })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function previewAssistantKbMarkdown() {
+        state.assistantKbImportText = value("kbImportMarkdown") || state.assistantKbImportText || "";
+        api("/api/admin/assistant-kb/import-md", { method: "POST", body: JSON.stringify({ content: state.assistantKbImportText, commit: false }) })
+          .then(function(res) { state.assistantKbImportPreview = res.preview || null; renderAssistantKb(); })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function commitAssistantKbMarkdown() {
+        state.assistantKbImportText = value("kbImportMarkdown") || state.assistantKbImportText || "";
+        api("/api/admin/assistant-kb/import-md", { method: "POST", body: JSON.stringify({ content: state.assistantKbImportText, commit: true, conflictMode: "overwrite" }) })
+          .then(function() { state.assistantKbImportPreview = null; state.assistantKbImportText = ""; showToast("Markdown 已导入草稿。", "success"); return loadAssistantKb(); })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function runAssistantKbTest() {
+        state.assistantKbTestQuery = value("kbTestQuery") || state.assistantKbTestQuery || "";
+        state.assistantKbTestEnvironment = value("kbTestEnvironment") || state.assistantKbTestEnvironment || "public";
+        api("/api/admin/assistant-kb/test", { method: "POST", body: JSON.stringify({ query: state.assistantKbTestQuery, environment: state.assistantKbTestEnvironment }) })
+          .then(function(res) { state.assistantKbTestResult = res; renderAssistantKb(); })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function publishAssistantKb() {
+        if (!confirm("确认发布当前草稿？发布后小程序端会读取新的已发布版本。")) return;
+        api("/api/admin/assistant-kb/publish", { method: "POST", body: JSON.stringify({ label: "admin-publish" }) })
+          .then(function() { showToast("知识库已发布。", "success"); return loadAssistantKb(); })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function rollbackAssistantKb(versionId) {
+        if (!versionId || !confirm("确认回滚到 " + versionId + "？")) return;
+        api("/api/admin/assistant-kb/rollback", { method: "POST", body: JSON.stringify({ versionId: versionId }) })
+          .then(function() { showToast("知识库已回滚。", "success"); return loadAssistantKb(); })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function exportAssistantKb(format) {
+        api("/api/admin/assistant-kb/export?format=" + encodeURIComponent(format || "json"))
+          .then(function(res) {
+            var blob = new Blob([res.content || ""], { type: format === "md" ? "text/markdown;charset=utf-8" : "application/json;charset=utf-8" });
+            var link = document.createElement("a");
+            link.href = URL.createObjectURL(blob);
+            link.download = "assistant-kb." + (format === "md" ? "md" : "json");
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
       var CAMPUS_MAP_LABELS = {
         xianxiNorth: "仙溪北区",
         xianxiSouth: "仙溪南区",
@@ -13589,6 +14199,7 @@ router.get([
   "/resources",
   "/quality",
   "/ai-provider",
+  "/assistant-kb",
   "/ai",
   "/campus-map",
   "/map",

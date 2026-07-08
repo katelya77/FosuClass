@@ -1,13 +1,21 @@
 const axios = require("axios");
 
-function numberEnv(name, fallback, min, max) {
-  const value = Number(process.env[name]);
+function configuredEnv(name, fallback = "", overrides = {}) {
+  if (Object.prototype.hasOwnProperty.call(overrides || {}, name)) {
+    const value = overrides[name];
+    return value === undefined || value === null || value === "" ? fallback : value;
+  }
+  return process.env[name] || fallback;
+}
+
+function numberEnv(name, fallback, min, max, overrides = {}) {
+  const value = Number(configuredEnv(name, "", overrides));
   if (!Number.isFinite(value)) return fallback;
   return Math.max(min, Math.min(max, value));
 }
 
-function boolEnv(name, fallback) {
-  const raw = process.env[name];
+function boolEnv(name, fallback, overrides = {}) {
+  const raw = configuredEnv(name, "", overrides);
   if (raw === undefined || raw === null || raw === "") return fallback;
   return String(raw).toLowerCase() === "true";
 }
@@ -24,17 +32,17 @@ function unsupported() {
   return error;
 }
 
-function getConfig() {
+function getConfig(overrides = {}) {
   return {
-    baseUrl: String(process.env.COZE_API_BASE_URL || "https://api.coze.cn").replace(/\/+$/, ""),
-    apiKey: process.env.COZE_API_KEY || "",
-    botId: process.env.COZE_BOT_ID || "",
-    userId: process.env.COZE_USER_ID || "fosuclass-user",
-    chatEndpoint: process.env.COZE_CHAT_ENDPOINT || "/v3/chat",
-    pollEnabled: boolEnv("COZE_POLL_ENABLED", true),
-    pollIntervalMs: numberEnv("COZE_POLL_INTERVAL_MS", 1000, 200, 10000),
-    pollMaxAttempts: numberEnv("COZE_POLL_MAX_ATTEMPTS", 8, 1, 30),
-    timeoutMs: numberEnv("AI_TIMEOUT_MS", 15000, 1000, 60000),
+    baseUrl: String(configuredEnv("COZE_API_BASE_URL", "https://api.coze.cn", overrides)).replace(/\/+$/, ""),
+    apiKey: configuredEnv("COZE_API_KEY", "", overrides),
+    botId: configuredEnv("COZE_BOT_ID", "", overrides),
+    userId: configuredEnv("COZE_USER_ID", "fosuclass-user", overrides),
+    chatEndpoint: configuredEnv("COZE_CHAT_ENDPOINT", "/v3/chat", overrides),
+    pollEnabled: boolEnv("COZE_POLL_ENABLED", true, overrides),
+    pollIntervalMs: numberEnv("COZE_POLL_INTERVAL_MS", 1000, 200, 10000, overrides),
+    pollMaxAttempts: numberEnv("COZE_POLL_MAX_ATTEMPTS", 8, 1, 30, overrides),
+    timeoutMs: numberEnv("AI_TIMEOUT_MS", 15000, 1000, 60000, overrides),
   };
 }
 
@@ -135,7 +143,7 @@ async function pollChatResult(config, pollInfo) {
 }
 
 async function generate(input = {}) {
-  const config = getConfig();
+  const config = getConfig(input.providerRuntimeConfig || {});
   if (!config.apiKey || !config.botId) {
     throw notConfigured();
   }

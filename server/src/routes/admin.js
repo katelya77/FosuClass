@@ -500,35 +500,67 @@ router.post("/security/events/cleanup", adminAuth.verifyAdminAccess, (req, res) 
   return res.json(clearExpiredSecurityEvents());
 });
 
+function buildAiProviderAdminPayload(environment) {
+  const status = aiProviderConfigService.getStatus(environment);
+  const environments = (status.environments || []).map((item) => {
+    const runtimeConfig = aiProviderConfigService.getRuntimeConfigForEnvironment(item.environment);
+    const chain = providerChainService.getStatus(item.environment === "public" ? "public" : "competition", runtimeConfig);
+    const chainByName = new Map(chain.map((state) => [state.name, state]));
+    return Object.assign({}, item, {
+      providerChain: chain,
+      providers: (item.providers || []).map((provider) => {
+        const metrics = chainByName.get(provider.name) || {};
+        return Object.assign({}, provider, {
+          health: metrics.health || (provider.enabled ? "unknown" : "disabled"),
+          lastSuccessAt: metrics.lastSuccessAt || "",
+          lastFailureAt: metrics.lastFailureAt || "",
+          latencyMs: Number(metrics.latencyMs || 0) || 0,
+          p50LatencyMs: Number(metrics.p50LatencyMs || 0) || 0,
+          p95LatencyMs: Number(metrics.p95LatencyMs || 0) || 0,
+          fallbackCount: Number(metrics.fallbackCount || 0) || 0,
+          fallbackReason: metrics.fallbackReason || "",
+          circuitBreaker: metrics.circuitBreaker || { state: "closed" },
+        });
+      }),
+    });
+  });
+  const activeRuntimeConfig = aiProviderConfigService.getRuntimeConfigForEnvironment(status.activeEnvironment);
+  const activeRuntimeMode = status.activeEnvironment === "public" ? "public" : "competition";
+  return Object.assign({}, status, {
+    environments,
+    protocolVersion: "agent.v1",
+    providerChain: providerChainService.getStatus(activeRuntimeMode, activeRuntimeConfig),
+    knowledgeIndex: knowledgeBaseService.getIndexStatus(),
+    campusMap: campusMapService.getMapStatus(),
+    imageGeneration: imageGenerationGateService.getStatus(activeRuntimeMode),
+  });
+}
+
 router.get("/ai-provider/config", adminAuth.verifyAdminAccess, (req, res) => {
   res.setHeader("Cache-Control", "no-store");
-  const status = aiProviderConfigService.getStatus();
   return res.json({
     success: true,
-    data: Object.assign({}, status, {
-      protocolVersion: "agent.v1",
-      providerChain: providerChainService.getStatus(status.runtimeMode || "public"),
-      knowledgeIndex: knowledgeBaseService.getIndexStatus(),
-      campusMap: campusMapService.getMapStatus(),
-      imageGeneration: imageGenerationGateService.getStatus(status.runtimeMode || "public"),
-    }),
+    data: buildAiProviderAdminPayload(req.query && req.query.environment),
   });
 });
 
 router.get("/ai-agent/status", adminAuth.verifyAdminAccess, (req, res) => {
   const status = aiProviderConfigService.getStatus();
+  const runtimeConfig = aiProviderConfigService.getRuntimeConfigForEnvironment(status.activeEnvironment);
+  const runtimeMode = status.activeEnvironment === "public" ? "public" : "competition";
   return res.json({
     success: true,
     data: {
       runtimeMode: status.runtimeMode || "public",
+      activeEnvironment: status.activeEnvironment,
       protocolVersion: "agent.v1",
       enabledTools: Object.keys(require("../services/ai/agentProtocol").TOOL_DEFINITIONS),
-      providerChain: providerChainService.getStatus(status.runtimeMode || "public"),
+      providerChain: providerChainService.getStatus(runtimeMode, runtimeConfig),
       knowledgeIndex: knowledgeBaseService.getIndexStatus(),
       campusMap: campusMapService.getMapStatus(),
-      imageGeneration: imageGenerationGateService.getStatus(status.runtimeMode || "public"),
+      imageGeneration: imageGenerationGateService.getStatus(runtimeMode),
       metrics: {
-        fallbackCount: providerChainService.getStatus("competition").reduce((sum, item) => sum + Number(item.fallbackCount || 0), 0),
+        fallbackCount: providerChainService.getStatus("competition", runtimeConfig).reduce((sum, item) => sum + Number(item.fallbackCount || 0), 0),
         toolCallCount: 0,
         factualQuestionCount: 0,
         generativeQuestionCount: 0,
@@ -558,7 +590,7 @@ router.post("/ai-provider/config", verifyAdminWriteAccess, (req, res) => {
     writeAuditLog(req, "save", "ai-provider", status.provider, `AI provider config saved: ${status.provider}`);
     return res.json({
       success: true,
-      data: status,
+      data: buildAiProviderAdminPayload(status.activeEnvironment),
     });
   } catch (error) {
     safeLog("ai-provider-config-save-failed", { error: error.message, code: error.code || "" });
@@ -685,6 +717,121 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
         trialEnhancedMode: aiProviderConfigService.getStatus().trialAuthorization || {},
       },
     });
+  }
+});
+
+router.get("/assistant-kb", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json(knowledgeBaseService.listKnowledge({
+      status: req.query.status,
+      type: req.query.type,
+      environment: req.query.environment,
+    }));
+  } catch (error) {
+    safeLog("assistant-kb-list-failed", { error: error.message, code: error.code || "" });
+    return res.status(500).json({ success: false, code: error.code || "ASSISTANT_KB_LIST_FAILED", message: error.message });
+  }
+});
+
+router.get("/assistant-kb/export", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const payload = knowledgeBaseService.exportKnowledge({
+      format: req.query.format,
+      status: req.query.status,
+    });
+    return res.json(payload);
+  } catch (error) {
+    safeLog("assistant-kb-export-failed", { error: error.message, code: error.code || "" });
+    return res.status(500).json({ success: false, code: error.code || "ASSISTANT_KB_EXPORT_FAILED", message: error.message });
+  }
+});
+
+router.post("/assistant-kb/test", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json(knowledgeBaseService.testKnowledge(req.body || {}));
+  } catch (error) {
+    safeLog("assistant-kb-test-failed", { error: error.message, code: error.code || "" });
+    return res.status(500).json({ success: false, code: error.code || "ASSISTANT_KB_TEST_FAILED", message: error.message });
+  }
+});
+
+router.post("/assistant-kb", verifyAdminWriteAccess, (req, res) => {
+  try {
+    createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
+    const payload = knowledgeBaseService.createEntry(req.body || {});
+    writeAuditLog(req, "create", "assistant-kb", payload.entry && payload.entry.id, `assistant kb entry created: ${payload.entry && payload.entry.title}`);
+    return res.json(payload);
+  } catch (error) {
+    safeLog("assistant-kb-create-failed", { error: error.message, code: error.code || "" });
+    const statusCode = error.code === "ASSISTANT_KB_SECURITY_BLOCKED" ? 400 : 500;
+    return res.status(statusCode).json({ success: false, code: error.code || "ASSISTANT_KB_CREATE_FAILED", message: error.message, risks: error.risks || [] });
+  }
+});
+
+router.put("/assistant-kb/:id", verifyAdminWriteAccess, (req, res) => {
+  try {
+    createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
+    const payload = knowledgeBaseService.updateEntry(req.params.id, req.body || {});
+    writeAuditLog(req, "update", "assistant-kb", req.params.id, `assistant kb entry updated: ${payload.entry && payload.entry.title}`);
+    return res.json(payload);
+  } catch (error) {
+    safeLog("assistant-kb-update-failed", { error: error.message, code: error.code || "" });
+    const statusCode = error.code === "ASSISTANT_KB_NOT_FOUND" ? 404 : (error.code === "ASSISTANT_KB_SECURITY_BLOCKED" ? 400 : 500);
+    return res.status(statusCode).json({ success: false, code: error.code || "ASSISTANT_KB_UPDATE_FAILED", message: error.message, risks: error.risks || [] });
+  }
+});
+
+router.delete("/assistant-kb/:id", verifyAdminWriteAccess, (req, res) => {
+  try {
+    createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
+    const payload = knowledgeBaseService.deleteEntry(req.params.id);
+    writeAuditLog(req, "delete", "assistant-kb", req.params.id, `assistant kb entry deleted: ${payload.removed && payload.removed.title}`);
+    return res.json(payload);
+  } catch (error) {
+    safeLog("assistant-kb-delete-failed", { error: error.message, code: error.code || "" });
+    const statusCode = error.code === "ASSISTANT_KB_NOT_FOUND" ? 404 : 500;
+    return res.status(statusCode).json({ success: false, code: error.code || "ASSISTANT_KB_DELETE_FAILED", message: error.message });
+  }
+});
+
+router.post("/assistant-kb/import-md", verifyAdminWriteAccess, (req, res) => {
+  try {
+    if (req.body && req.body.commit === true) createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
+    const payload = knowledgeBaseService.importMarkdown(req.body || {});
+    if (req.body && req.body.commit === true && !payload.skipped) {
+      writeAuditLog(req, "import", "assistant-kb", payload.entry && payload.entry.id, `assistant kb markdown imported: ${payload.entry && payload.entry.title}`);
+    }
+    return res.json(payload);
+  } catch (error) {
+    safeLog("assistant-kb-import-md-failed", { error: error.message, code: error.code || "" });
+    const statusCode = error.code === "ASSISTANT_KB_SECURITY_BLOCKED" ? 400 : 500;
+    return res.status(statusCode).json({ success: false, code: error.code || "ASSISTANT_KB_IMPORT_MD_FAILED", message: error.message, risks: error.risks || [] });
+  }
+});
+
+router.post("/assistant-kb/publish", verifyAdminWriteAccess, (req, res) => {
+  try {
+    createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
+    const payload = knowledgeBaseService.publish(req.body || {});
+    writeAuditLog(req, "publish", "assistant-kb", payload.store && payload.store.published && payload.store.published.versionId, "assistant kb published");
+    return res.json(payload);
+  } catch (error) {
+    safeLog("assistant-kb-publish-failed", { error: error.message, code: error.code || "" });
+    const statusCode = error.code === "ASSISTANT_KB_SECURITY_BLOCKED" ? 400 : 500;
+    return res.status(statusCode).json({ success: false, code: error.code || "ASSISTANT_KB_PUBLISH_FAILED", message: error.message, risks: error.risks || [] });
+  }
+});
+
+router.post("/assistant-kb/rollback", verifyAdminWriteAccess, (req, res) => {
+  try {
+    createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
+    const payload = knowledgeBaseService.rollback(req.body && req.body.versionId);
+    writeAuditLog(req, "rollback", "assistant-kb", req.body && req.body.versionId, "assistant kb rolled back");
+    return res.json(payload);
+  } catch (error) {
+    safeLog("assistant-kb-rollback-failed", { error: error.message, code: error.code || "" });
+    const statusCode = error.code === "ASSISTANT_KB_BACKUP_NOT_FOUND" ? 404 : 500;
+    return res.status(statusCode).json({ success: false, code: error.code || "ASSISTANT_KB_ROLLBACK_FAILED", message: error.message });
   }
 });
 

@@ -27,7 +27,7 @@ function run() {
 
   assert(today.includes("FOSU_AI_PENDING_TODAY_QUERY"), "today should read pending AI query key");
   assert(today.includes("removeStorageSync(AI_PENDING_TODAY_QUERY_KEY)"), "today should remove pending query after reading");
-  assert(today.includes("已根据 AI 建议打开今日安排"), "today should show AI deeplink toast");
+  assert(today.includes("已根据小佛助手建议打开今日安排"), "today should show assistant deeplink toast");
 
   console.log("test-ai-tabbar-deeplink passed");
 }

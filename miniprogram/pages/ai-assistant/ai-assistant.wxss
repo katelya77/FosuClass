@@ -1647,10 +1647,6 @@ button::after {
   white-space: nowrap;
 }
 
-.composer-placeholder {
-  color: #a5adba;
-}
-
 .voice-status {
   height: 30rpx;
   margin-top: 6rpx;

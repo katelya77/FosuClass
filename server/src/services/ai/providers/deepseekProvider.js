@@ -42,27 +42,31 @@ function readEnvFileValues() {
   return cachedEnvFileValues;
 }
 
-function configuredEnv(name, fallback = "") {
+function configuredEnv(name, fallback = "", overrides = {}) {
+  if (Object.prototype.hasOwnProperty.call(overrides || {}, name)) {
+    const direct = overrides[name];
+    return direct === undefined || direct === null || direct === "" ? fallback : direct;
+  }
   const envFileValues = readEnvFileValues();
   const value = process.env[name] || envFileValues[name];
   return value === undefined || value === null || value === "" ? fallback : value;
 }
 
-function firstConfiguredKey() {
-  return configuredEnv("AI_API_KEY") ||
-    configuredEnv("DEEPSEEK_API_KEY") ||
-    configuredEnv("FOSUCLASS_DEEPSEEK_API_KEY") ||
+function firstConfiguredKey(overrides = {}) {
+  return configuredEnv("AI_API_KEY", "", overrides) ||
+    configuredEnv("DEEPSEEK_API_KEY", "", overrides) ||
+    configuredEnv("FOSUCLASS_DEEPSEEK_API_KEY", "", overrides) ||
     "";
 }
 
-function numberEnv(name, fallback, min, max) {
-  const value = Number(configuredEnv(name));
+function numberEnv(name, fallback, min, max, overrides = {}) {
+  const value = Number(configuredEnv(name, "", overrides));
   if (!Number.isFinite(value)) return fallback;
   return Math.max(min, Math.min(max, value));
 }
 
-function boolEnv(name, fallback) {
-  const raw = configuredEnv(name);
+function boolEnv(name, fallback, overrides = {}) {
+  const raw = configuredEnv(name, "", overrides);
   if (raw === undefined || raw === null || raw === "") return fallback;
   return String(raw).toLowerCase() === "true";
 }
@@ -127,8 +131,8 @@ function isProjectQaIntent(intent) {
   return name === "project_qa" || name === "conversational_help";
 }
 
-function shouldUseJsonMode(intent) {
-  const strictJsonMode = boolEnv("DEEPSEEK_STRICT_JSON_MODE", false);
+function shouldUseJsonMode(intent, overrides = {}) {
+  const strictJsonMode = boolEnv("DEEPSEEK_STRICT_JSON_MODE", false, overrides);
   if (isProjectQaIntent(intent) && !strictJsonMode) return false;
   return true;
 }
@@ -189,22 +193,23 @@ function classifyHttpError(error) {
   return code || "PROVIDER_REQUEST_FAILED";
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge }) {
-  const apiKey = firstConfiguredKey();
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig }) {
+  const runtimeConfig = providerRuntimeConfig || {};
+  const apiKey = firstConfiguredKey(runtimeConfig);
   if (!apiKey) {
     const error = new Error("DeepSeek provider is not configured.");
     error.code = "NOT_CONFIGURED";
     throw error;
   }
-  const baseUrl = String(configuredEnv("AI_BASE_URL", DEFAULT_BASE_URL)).replace(/\/+$/, "");
-  const requestedModel = configuredEnv("AI_MODEL", DEFAULT_MODEL);
-  const reasoningModel = configuredEnv("AI_REASONING_MODEL", DEFAULT_REASONING_MODEL);
-  const thinkingEnabled = boolEnv("AI_THINKING_ENABLED", false);
+  const baseUrl = String(configuredEnv("AI_BASE_URL", DEFAULT_BASE_URL, runtimeConfig)).replace(/\/+$/, "");
+  const requestedModel = configuredEnv("AI_MODEL", DEFAULT_MODEL, runtimeConfig);
+  const reasoningModel = configuredEnv("AI_REASONING_MODEL", DEFAULT_REASONING_MODEL, runtimeConfig);
+  const thinkingEnabled = boolEnv("AI_THINKING_ENABLED", false, runtimeConfig);
   const model = thinkingEnabled && /pro/i.test(requestedModel) ? requestedModel : requestedModel || reasoningModel;
-  const timeout = numberEnv("AI_TIMEOUT_MS", 15000, 1000, 60000);
-  const maxTokens = numberEnv("AI_MAX_TOKENS", 1200, 128, 4096);
-  const temperature = numberEnv("AI_TEMPERATURE", 0.1, 0, 2);
-  const useJsonMode = shouldUseJsonMode(intent);
+  const timeout = numberEnv("AI_TIMEOUT_MS", 15000, 1000, 60000, runtimeConfig);
+  const maxTokens = numberEnv("AI_MAX_TOKENS", 1200, 128, 4096, runtimeConfig);
+  const temperature = numberEnv("AI_TEMPERATURE", 0.1, 0, 2, runtimeConfig);
+  const useJsonMode = shouldUseJsonMode(intent, runtimeConfig);
   const body = {
     model,
     stream: false,
@@ -235,7 +240,7 @@ async function generate({ message, intent, toolResults, projectKnowledge }) {
   }
   if (thinkingEnabled && /pro/i.test(model)) {
     body.thinking = { type: "enabled" };
-    body.reasoning_effort = configuredEnv("AI_REASONING_EFFORT", "medium");
+    body.reasoning_effort = configuredEnv("AI_REASONING_EFFORT", "medium", runtimeConfig);
   }
 
   let response;
@@ -269,14 +274,14 @@ async function generate({ message, intent, toolResults, projectKnowledge }) {
     response.data.choices[0].message &&
     response.data.choices[0].message.content;
   if (!useJsonMode) {
-    const parsedTextMode = boolEnv("AI_PROVIDER_JSON_REPAIR", true) ? parseJsonFromText(content) : null;
+    const parsedTextMode = boolEnv("AI_PROVIDER_JSON_REPAIR", true, runtimeConfig) ? parseJsonFromText(content) : null;
     if (parsedTextMode && typeof parsedTextMode === "object") {
       return Object.assign({ provider: "deepseek" }, parsedTextMode);
     }
     return wrapTextResponse(content);
   }
   const parsed = parseJsonFromText(content) ||
-    (boolEnv("AI_PROVIDER_JSON_REPAIR", true) ? parseJsonCodeBlock(content) : null);
+    (boolEnv("AI_PROVIDER_JSON_REPAIR", true, runtimeConfig) ? parseJsonCodeBlock(content) : null);
   if (!parsed || typeof parsed !== "object") {
     const error = new Error("DeepSeek provider returned invalid JSON.");
     error.code = "INVALID_PROVIDER_JSON";

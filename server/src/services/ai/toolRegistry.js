@@ -875,8 +875,10 @@ function getClassroomLocation(input = {}) {
   return campusMapService.getClassroomLocation(input);
 }
 
-function ragSearch(input = {}) {
-  return knowledgeBaseService.searchKnowledge(input);
+function ragSearch(input = {}, context = {}) {
+  return knowledgeBaseService.searchKnowledge(Object.assign({}, input, {
+    environment: context.assistantEnvironment || context.runtimeMode || input.environment,
+  }));
 }
 
 function generateImage(input = {}, context = {}) {

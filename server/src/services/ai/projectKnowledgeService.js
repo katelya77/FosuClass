@@ -1,3 +1,5 @@
+const knowledgeBaseService = require("./knowledgeBaseService");
+
 const publicAssistantKnowledge = [
   "佛课小表是一款面向佛山大学的校园课表工具。",
   "它可以帮助用户查询课程、教师、教室、空教室、教学周和个人课表导入方式。",
@@ -19,28 +21,37 @@ const adminDiagnosisKnowledge = [
   "管理员诊断知识仅允许在后台鉴权后展示，用于排查 Provider、静态源、Ticket、熔断和发布状态。",
 ].join("\n");
 
-function getProjectKnowledgePrompt(mode = "public") {
+function getProjectKnowledgePrompt(mode = "public", query = "") {
   const normalized = String(mode || "public").toLowerCase();
+  const environment = normalized === "dev" || normalized === "develop" || normalized === "development" || normalized === "admin"
+    ? "dev"
+    : normalized === "trial" || normalized === "competition"
+      ? "trial"
+      : "public";
+  const publishedKnowledge = knowledgeBaseService.getPublishedKnowledgePrompt(environment, query);
   if (normalized === "admin") {
     return [
       publicAssistantKnowledge,
+      publishedKnowledge,
       internalOperatorKnowledge,
       adminDiagnosisKnowledge,
-    ].join("\n\n");
+    ].filter(Boolean).join("\n\n");
   }
   if (normalized === "competition") {
     return [
       publicAssistantKnowledge,
+      publishedKnowledge,
       competitionKnowledge,
-    ].join("\n\n");
+    ].filter(Boolean).join("\n\n");
   }
   if (normalized === "internal") {
     return [
       publicAssistantKnowledge,
+      publishedKnowledge,
       internalOperatorKnowledge,
-    ].join("\n\n");
+    ].filter(Boolean).join("\n\n");
   }
-  return publicAssistantKnowledge;
+  return [publicAssistantKnowledge, publishedKnowledge].filter(Boolean).join("\n\n");
 }
 
 function getProjectCapabilityCards() {
@@ -61,7 +72,31 @@ function getProjectCapabilityCards() {
   }];
 }
 
-function generateFallbackResponse(intentName) {
+function generateFallbackResponse(intentName, message = "", environment = "public") {
+  const kb = knowledgeBaseService.searchKnowledge({ query: message, environment, limit: 3 });
+  if (kb && kb.noAnswer !== true && (kb.answer || (kb.items && kb.items.length))) {
+    return {
+      provider: "mock",
+      answer: kb.answer || kb.items.map((item) => item.text).join("\n\n").slice(0, 900),
+      cards: [{
+        type: "guide",
+        title: kb.ruleMatched ? "小佛助手已命中规则" : "小佛助手知识库",
+        subtitle: kb.summary || "",
+        badges: [kb.ruleMatched ? "规则问答" : "知识库", "已发布"],
+        items: (kb.items || []).slice(0, 3).map((item) => ({
+          title: item.title,
+          subtitle: item.text,
+          value: item.updatedAt || "",
+        })),
+        actions: [],
+      }],
+      suggestions: [
+        "如何使用校园查询？",
+        "怎么导入个人课表？",
+        "现在有空教室吗？",
+      ],
+    };
+  }
   const isConversation = intentName === "conversational_help";
   return {
     provider: "mock",

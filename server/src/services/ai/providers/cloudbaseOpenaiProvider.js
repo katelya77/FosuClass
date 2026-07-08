@@ -4,18 +4,26 @@ const deepseekProvider = require("./deepseekProvider");
 const DEFAULT_BASE_URL = "https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase";
 const DEFAULT_MODEL = "hy3-preview";
 
-function firstConfiguredKey() {
-  return process.env.CLOUDBASE_OPENAI_API_KEY || "";
+function configuredEnv(name, fallback = "", overrides = {}) {
+  if (Object.prototype.hasOwnProperty.call(overrides || {}, name)) {
+    const value = overrides[name];
+    return value === undefined || value === null || value === "" ? fallback : value;
+  }
+  return process.env[name] || fallback;
 }
 
-function boolEnv(name, fallback) {
-  const raw = process.env[name];
+function firstConfiguredKey(overrides = {}) {
+  return configuredEnv("CLOUDBASE_OPENAI_API_KEY", "", overrides) || "";
+}
+
+function boolEnv(name, fallback, overrides = {}) {
+  const raw = configuredEnv(name, "", overrides);
   if (raw === undefined || raw === null || raw === "") return fallback;
   return String(raw).toLowerCase() === "true";
 }
 
-function numberEnv(name, fallback, min, max) {
-  const value = Number(process.env[name]);
+function numberEnv(name, fallback, min, max, overrides = {}) {
+  const value = Number(configuredEnv(name, "", overrides));
   if (!Number.isFinite(value)) return fallback;
   return Math.max(min, Math.min(max, value));
 }
@@ -24,23 +32,24 @@ function classifyHttpError(error) {
   return deepseekProvider.classifyHttpError(error);
 }
 
-async function generate({ message, intent, toolResults, projectKnowledge }) {
-  if (!boolEnv("CLOUDBASE_OPENAI_ENABLED", false)) {
+async function generate({ message, intent, toolResults, projectKnowledge, providerRuntimeConfig }) {
+  const runtimeConfig = providerRuntimeConfig || {};
+  if (!boolEnv("CLOUDBASE_OPENAI_ENABLED", false, runtimeConfig)) {
     const error = new Error("CloudBase OpenAI provider is disabled.");
     error.code = "NOT_CONFIGURED";
     throw error;
   }
-  const apiKey = firstConfiguredKey();
+  const apiKey = firstConfiguredKey(runtimeConfig);
   if (!apiKey) {
     const error = new Error("CloudBase OpenAI provider is not configured.");
     error.code = "NOT_CONFIGURED";
     throw error;
   }
-  const baseUrl = String(process.env.CLOUDBASE_OPENAI_BASE_URL || DEFAULT_BASE_URL).replace(/\/+$/, "");
-  const model = process.env.CLOUDBASE_OPENAI_TEXT_MODEL || DEFAULT_MODEL;
-  const timeout = numberEnv("CLOUDBASE_OPENAI_TIMEOUT_MS", 15000, 1000, 60000);
-  const maxTokens = numberEnv("CLOUDBASE_OPENAI_MAX_TOKENS", 1200, 128, 4096);
-  const useJsonMode = deepseekProvider.shouldUseJsonMode(intent);
+  const baseUrl = String(configuredEnv("CLOUDBASE_OPENAI_BASE_URL", DEFAULT_BASE_URL, runtimeConfig)).replace(/\/+$/, "");
+  const model = configuredEnv("CLOUDBASE_OPENAI_TEXT_MODEL", DEFAULT_MODEL, runtimeConfig);
+  const timeout = numberEnv("CLOUDBASE_OPENAI_TIMEOUT_MS", 15000, 1000, 60000, runtimeConfig);
+  const maxTokens = numberEnv("CLOUDBASE_OPENAI_MAX_TOKENS", 1200, 128, 4096, runtimeConfig);
+  const useJsonMode = deepseekProvider.shouldUseJsonMode(intent, runtimeConfig);
   const body = {
     model,
     stream: false,
