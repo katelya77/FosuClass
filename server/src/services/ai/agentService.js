@@ -717,12 +717,17 @@ async function chat(input = {}) {
   let providerName = policyDecision.useExternal
     ? (provider.name || desiredProviderName)
     : (intent.name === "clarify_missing_slot" ? "mock/template" : "mock");
+  // 体验/开发对话类意图始终注入公开产品知识，帮助模型做人设化表达；不含私密部署信息。
+  const shouldInjectProjectKnowledge = isProjectKnowledgeIntent(intent)
+    || runtimeDecision.runtimeMode === "competition";
   const providerInput = {
     message: safeMessage,
     context,
     intent,
     localRule: localRuleMatch && localRuleMatch.rule || null,
-    projectKnowledge: isProjectKnowledgeIntent(intent) ? projectKnowledgeService.getProjectKnowledgePrompt(context.assistantEnvironment || runtimeDecision.runtimeMode, safeMessage) : "",
+    projectKnowledge: shouldInjectProjectKnowledge
+      ? projectKnowledgeService.getProjectKnowledgePrompt(context.assistantEnvironment || runtimeDecision.runtimeMode, safeMessage)
+      : "",
     providerRuntimeConfig,
     toolResults: toolCalls.map((item) => ({
       name: item.name,

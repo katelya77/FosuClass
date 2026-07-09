@@ -141,10 +141,18 @@ function isExplicitAppNavigation(message) {
   return mappings.find((item) => item.pattern.test(value)) || null;
 }
 
+function isIdentityOrPersonaQuery(message) {
+  const value = compactText(message);
+  if (!value) return false;
+  if (/(课表|空教室|教室|老师|教师|天气|导入|同步|班级|课程)/.test(value)) return false;
+  return /(你是谁|你是什么|介绍一下自己|介绍下自己|自我介绍|你叫什么|小佛是谁|你是小佛吗|你是什么助手)/.test(value);
+}
+
 function isPlainSmalltalk(message) {
   const value = compactText(message);
   if (!value) return false;
-  return /^(你好|您好|在吗|谢谢|感谢|辛苦了|随便问一句普通话|随便聊聊|普通话|讲个笑话|早上好|中午好|晚上好)/.test(value);
+  if (isIdentityOrPersonaQuery(message)) return true;
+  return /^(你好|您好|嗨|哈喽|在吗|谢谢|感谢|辛苦了|随便问一句普通话|随便聊聊|普通话|讲个笑话|早上好|中午好|晚上好|hello|hi)([\W_]*|$)/i.test(value);
 }
 
 function scheduleEntities(parsed) {
@@ -281,7 +289,9 @@ module.exports = {
   INTENTS,
   hasPersonalScheduleContext,
   isHelpQuery,
+  isIdentityOrPersonaQuery,
   isPersonalScheduleQuery,
+  isPlainSmalltalk,
   isScheduleStatusQuery,
   isWeatherQuery,
   resolveWeatherEntities,

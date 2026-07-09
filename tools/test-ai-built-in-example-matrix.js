@@ -210,19 +210,19 @@ const MATRIX = [
     text: "可以查询什么",
     intentName: "help",
     cardType: "help",
-    answer: /可以查询什么|校园事项/,
+    answer: /可以查询|校园事项|课表|空教室|教学周|小佛/,
   },
   {
     text: "如何使用校园查询？",
     intentName: "help",
     cardType: "help",
-    answer: /可以查询什么|校园事项/,
+    answer: /可以查询|校园事项|课表|空教室|教学周|小佛/,
   },
   {
     text: "如何问得更准确",
     intentName: "help",
     cardType: "help",
-    answer: /可以查询什么|校园事项/,
+    answer: /可以查询|校园事项|课表|空教室|教学周|小佛|关键词|更准确/,
   },
   {
     text: "佛大有哪些学院和部门",
@@ -268,7 +268,7 @@ const MATRIX = [
     text: "数据来源说明",
     intentName: "help",
     cardType: "help",
-    answer: /可以查询什么|校园事项|数据/,
+    answer: /可以查询|校园事项|数据|课表|来源/,
   },
   {
     text: "随便问一句普通话",
