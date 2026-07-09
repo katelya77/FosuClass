@@ -1,14 +1,25 @@
 const assert = require("assert");
+const fs = require("fs");
+const os = require("os");
+const path = require("path");
+
+const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-ai-auto-policy-tool-local-"));
 
 process.env.AI_AGENT_ENABLED = "true";
 process.env.AI_PROVIDER = "deepseek";
 process.env.AI_PROVIDER_POLICY = "auto";
 process.env.AI_PROVIDER_IGNORE_ENV_FILE = "true";
+process.env.FOSU_AI_PROVIDER_CONFIG_PATH = path.join(tempRoot, "ai-provider-config.json");
 process.env.AI_API_KEY = "test-provider-key-not-real";
 process.env.AI_RUNTIME_MODE = "competition";
 process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
 process.env.AI_PROVIDER_CHAIN = "deepseek,mock";
 process.env.NODE_ENV = "development";
+process.env.AI_PROVIDER_ENVIRONMENTS = JSON.stringify({
+  public: { environment: "public", enabled: false, provider: "mock", providerPolicy: "tool-only" },
+  trial: { environment: "trial", enabled: true, provider: "deepseek", providerPolicy: "auto" },
+  dev: { environment: "dev", enabled: true, provider: "deepseek", providerPolicy: "auto" },
+});
 
 let providerCalls = 0;
 const deepseekProvider = require("../server/src/services/ai/providers/deepseekProvider");
@@ -71,4 +82,6 @@ async function run() {
 run().catch((error) => {
   console.error(error);
   process.exit(1);
+}).finally(() => {
+  fs.rmSync(tempRoot, { recursive: true, force: true });
 });

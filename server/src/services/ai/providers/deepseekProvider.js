@@ -53,8 +53,8 @@ function configuredEnv(name, fallback = "", overrides = {}) {
 }
 
 function firstConfiguredKey(overrides = {}) {
-  return configuredEnv("AI_API_KEY", "", overrides) ||
-    configuredEnv("DEEPSEEK_API_KEY", "", overrides) ||
+  return configuredEnv("DEEPSEEK_API_KEY", "", overrides) ||
+    configuredEnv("AI_API_KEY", "", overrides) ||
     configuredEnv("FOSUCLASS_DEEPSEEK_API_KEY", "", overrides) ||
     "";
 }

@@ -12136,20 +12136,26 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function aiProviderActualUseLabel() {
-        var cfg = state.aiProviderConfig || {};
-        var envStatus = findAiEnvironment(cfg.activeEnvironment || "public") || {};
-        var profile = envStatus.profile || {};
-        var provider = String(profile.provider || envStatus.provider || "mock").toLowerCase();
-        if ((cfg.activeEnvironment || "public") === "public" || provider === "mock" || profile.enabled === false) return "正式版本地规则";
-        if (provider === "cloudbase-openai") return "体验版混元";
-        if (provider === "deepseek") return "体验版 deepseek";
-        if (provider === "coze") return "体验版 coze";
-        return "正式版本地规则";
+        var trialEnv = findAiEnvironment("trial") || {};
+        var devEnv = findAiEnvironment("dev") || {};
+        var trialProfile = trialEnv.profile || {};
+        var devProfile = devEnv.profile || {};
+        var profile = trialProfile.enabled !== false && isExperienceProvider(trialProfile.provider) ? trialProfile : devProfile;
+        var provider = String(profile.provider || "mock").toLowerCase();
+        if (!isExperienceProvider(provider) || profile.enabled === false) return "公开发布=正式版本地规则；体验/开发=增强未启用";
+        if (provider === "cloudbase-openai") return "公开发布=正式版本地规则；体验/开发=体验版混元";
+        if (provider === "deepseek") return "公开发布=正式版本地规则；体验/开发=体验版 deepseek";
+        if (provider === "coze") return "公开发布=正式版本地规则；体验/开发=体验版 coze";
+        return "公开发布=正式版本地规则；体验/开发=增强未启用";
       }
 
       function aiExperienceEnvironment() {
         var cfg = state.aiProviderConfig || {};
         return cfg.activeEnvironment === "dev" ? "dev" : "trial";
+      }
+
+      function isExperienceProvider(name) {
+        return ["cloudbase-openai", "deepseek", "coze"].indexOf(String(name || "").toLowerCase()) >= 0;
       }
 
       function aiModeMetric(label, valueText, foot) {
@@ -12172,15 +12178,13 @@ const adminConsoleHtml = `<!doctype html>
         var experienceProfile = experienceEnv.profile || {};
         var kb = cfg.knowledgeIndex || {};
         var toolCount = cfg.toolCount || cfg.enabledToolCount || cfg.protocolToolCount || 0;
-        var selectedProvider = state.aiProviderSelectedProvider || experienceProfile.provider || "cloudbase-openai";
-        if (["cloudbase-openai", "deepseek", "coze"].indexOf(selectedProvider) < 0) selectedProvider = "cloudbase-openai";
+        var selectedProvider = state.aiProviderSelectedProvider;
+        if (!isExperienceProvider(selectedProvider)) selectedProvider = experienceProfile.provider;
+        if (!isExperienceProvider(selectedProvider)) selectedProvider = "cloudbase-openai";
         state.aiProviderSelectedProvider = selectedProvider;
         state.aiProviderEnvironment = experienceEnvName;
-        var activeEnvName = cfg.activeEnvironment || "public";
-        var activeEnv = findAiEnvironment(activeEnvName) || {};
-        var activeProfile = activeEnv.profile || {};
-        var formalActive = activeEnvName === "public" || (activeProfile.provider || "mock") === "mock" || activeProfile.enabled === false;
-        var experienceEnabled = state.aiProviderDraftExperienceEnabled === true || (!formalActive && (activeEnvName === "trial" || activeEnvName === "dev") && experienceProfile.enabled !== false && experienceProfile.provider !== "mock");
+        var formalActive = publicEnv.safePublic === true || ((publicProfile.provider || "mock") === "mock" && publicProfile.enabled === false);
+        var experienceEnabled = state.aiProviderDraftExperienceEnabled === true || (experienceProfile.enabled !== false && isExperienceProvider(experienceProfile.provider));
         var experienceLaneLabel = experienceEnabled ? (AI_PROVIDER_LABELS[selectedProvider] || selectedProvider) : "增强未启用";
         var section = $("section-ai-provider");
         if (!section) return;
@@ -12238,7 +12242,7 @@ const adminConsoleHtml = `<!doctype html>
             renderAiProviderConfig();
           } else {
             state.aiProviderDraftExperienceEnabled = false;
-            saveAiProviderPreset("public-safe", "public", { noConfirm: true });
+            saveAiExperienceDisabled();
           }
         });
       }
@@ -12249,13 +12253,14 @@ const adminConsoleHtml = `<!doctype html>
         var enhanced = value("aiExperienceEnabled") === "true";
         if (!enhanced) {
           return {
-            environment: "public",
+            environment: aiExperienceEnvironment(),
             activeEnvironment: "public",
             activeMode: "public",
             enabled: false,
             provider: "mock",
             providerPolicy: "tool-only",
-            runtimeMode: "public"
+            runtimeMode: "public",
+            mirrorEnvironments: ["trial", "dev"]
           };
         }
         var payload = {
@@ -12265,7 +12270,8 @@ const adminConsoleHtml = `<!doctype html>
           enabled: true,
           provider: provider,
           providerPolicy: "auto",
-          runtimeMode: "competition"
+          runtimeMode: "competition",
+          mirrorEnvironments: ["trial", "dev"]
         };
         if (provider === "deepseek") {
           Object.assign(payload, { baseUrl: value("aiBaseUrl"), model: value("aiModel"), reasoningModel: value("aiReasoningModel"), temperature: value("aiTemperature"), maxTokens: value("aiMaxTokens"), jsonRepair: boolValue("aiJsonRepair"), thinkingEnabled: boolValue("aiThinkingEnabled") });
@@ -12286,8 +12292,8 @@ const adminConsoleHtml = `<!doctype html>
           .then(function(res) {
             state.aiProviderConfig = res.data || {};
             state.aiProviderDraftExperienceEnabled = false;
-            state.aiProviderEnvironment = state.aiProviderConfig.activeEnvironment || payload.environment;
-            state.aiProviderSelectedProvider = payload.provider || "mock";
+            state.aiProviderEnvironment = aiExperienceEnvironment();
+            if (isExperienceProvider(payload.provider)) state.aiProviderSelectedProvider = payload.provider;
             renderAiProviderConfig();
             ignoreLoadError(loadAiAgentStatus());
             showToast("配置已保存并立即生效。", "success");
@@ -12314,12 +12320,37 @@ const adminConsoleHtml = `<!doctype html>
           .then(function(res) {
             state.aiProviderConfig = res.data || {};
             state.aiProviderDraftExperienceEnabled = false;
-            state.aiProviderEnvironment = environment;
-            var envStatus = findAiEnvironment(environment);
-            state.aiProviderSelectedProvider = envStatus && envStatus.provider || "mock";
+            state.aiProviderEnvironment = environment === "public" ? aiExperienceEnvironment() : environment;
+            var envStatus = findAiEnvironment(state.aiProviderEnvironment);
+            if (environment !== "public" && envStatus && isExperienceProvider(envStatus.provider)) state.aiProviderSelectedProvider = envStatus.provider;
             renderAiProviderConfig();
             showToast(environment === "public" ? "已启用正式版本地规则。" : "预设已应用。", "success");
             setStatus("小佛助手实际使用：" + aiProviderActualUseLabel());
+          })
+          .catch(function(error) { showToast(error.message, "error"); });
+      }
+
+      function saveAiExperienceDisabled() {
+        var payload = {
+          environment: aiExperienceEnvironment(),
+          activeEnvironment: "public",
+          activeMode: "public",
+          enabled: false,
+          provider: "mock",
+          providerPolicy: "tool-only",
+          runtimeMode: "public",
+          mirrorEnvironments: ["trial", "dev"]
+        };
+        api("/api/admin/ai-provider/config", { method: "POST", body: JSON.stringify(payload) })
+          .then(function(res) {
+            state.aiProviderConfig = res.data || {};
+            state.aiProviderDraftExperienceEnabled = false;
+            state.aiProviderEnvironment = "trial";
+            if (!isExperienceProvider(state.aiProviderSelectedProvider)) state.aiProviderSelectedProvider = "cloudbase-openai";
+            renderAiProviderConfig();
+            ignoreLoadError(loadAiAgentStatus());
+            showToast("已关闭体验/开发 AI，正式版本地规则保持启用。", "success");
+            setStatus("体验/开发 AI 已关闭；公开发布保持正式版本地规则。");
           })
           .catch(function(error) { showToast(error.message, "error"); });
       }

@@ -65,6 +65,7 @@
 | `AI_PROVIDER_POLICY` | `auto` | 外部 provider 调用策略 | 使用 auto |
 | `AI_RUNTIME_MODE` | `public` | 运行模式：`public` 或 `competition` | 使用 public，正式版 fail-closed |
 | `AI_PROVIDER_ACTIVE_ENV` | `public` | 后台默认查看/编辑的环境：`public`、`trial`、`dev` | 使用 public |
+| `AI_COMPETITION_ALLOW_TRIAL_ENV` | `true` | 微信体验版/开发版/devtools 是否允许进入增强模式 | 使用 true；release 仍强制 public |
 | `AI_MODEL` | `deepseek-v4-flash` | 默认模型 | 使用默认值 |
 | `AI_REASONING_MODEL` | `deepseek-v4-pro` | 推理模型 | 使用默认值 |
 | `AI_BASE_URL` | `https://api.deepseek.com` | DeepSeek/OpenAI 兼容接口地址 | 使用默认值 |

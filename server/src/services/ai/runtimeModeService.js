@@ -28,6 +28,10 @@ function isDevelopOrTrial(context = {}) {
   return envVersion === "develop" || envVersion === "trial" || envVersion === "devtools";
 }
 
+function trialEnvironmentAllowed(context = {}) {
+  return isDevelopOrTrial(context) && boolEnv("AI_COMPETITION_ALLOW_TRIAL_ENV", true);
+}
+
 function sessionAllowed(session = {}) {
   if (session && session.adminProviderVerification === true) return true;
   const allowAll = boolEnv("AI_COMPETITION_ALLOW_ALL_SESSIONS", false) && process.env.NODE_ENV !== "production";
@@ -75,6 +79,7 @@ function getAuthorizationStatus() {
     shortCredentialExpiryValid: tokenConfigured ? expiry.valid : false,
     shortCredentialExpired: tokenConfigured ? expiry.expired || !expiry.valid : false,
     allowUnknownEnv: boolEnv("AI_COMPETITION_ALLOW_UNKNOWN_ENV", false),
+    allowTrialEnv: boolEnv("AI_COMPETITION_ALLOW_TRIAL_ENV", true),
     allowAllSessionsNonProduction: boolEnv("AI_COMPETITION_ALLOW_ALL_SESSIONS", false) && process.env.NODE_ENV !== "production",
     authorizedAccountRuleCount: openidPrefixCount,
   };
@@ -109,6 +114,14 @@ function resolveRuntimeMode(input = {}) {
       reason: "env_version_not_develop_or_trial",
     };
   }
+  if (trialEnvironmentAllowed(context)) {
+    return {
+      runtimeMode: "competition",
+      requestedMode: requested,
+      authorized: true,
+      reason: "trial_env_authorized",
+    };
+  }
   const capabilityToken = String(context.competitionCapabilityToken || "").trim();
   if (sessionAllowed(session) || tokenAllowed(capabilityToken)) {
     return {
@@ -132,5 +145,6 @@ module.exports = {
   isReleaseEnv,
   resolveRuntimeMode,
   sessionAllowed,
+  trialEnvironmentAllowed,
   tokenAllowed,
 };
