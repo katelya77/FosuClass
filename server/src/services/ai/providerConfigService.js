@@ -224,8 +224,8 @@ function defaultProfile(environment) {
   const env = normalizeEnvironment(environment);
   const base = {
     environment: env,
-    enabled: env !== "public",
-    provider: env === "public" ? "mock" : "deepseek",
+    enabled: false,
+    provider: "mock",
     providerPolicy: env === "public" ? "tool-only" : "auto",
     model: DEFAULTS.AI_MODEL,
     reasoningModel: DEFAULTS.AI_REASONING_MODEL,
@@ -411,6 +411,20 @@ function resolveSaveEnvironment(payload = {}, currentStatus = {}) {
   if (String(payload.runtimeMode || "").toLowerCase() === "competition") return "trial";
   if (payload.provider && normalizeProvider(payload.provider) !== "mock") return "trial";
   return normalizeEnvironment(currentStatus.activeEnvironment || "public");
+}
+
+function normalizeMirrorEnvironments(value, primaryEnvironment) {
+  const primary = normalizeEnvironment(primaryEnvironment);
+  const list = Array.isArray(value) ? value : [];
+  const seen = new Set();
+  return list
+    .map((item) => normalizeEnvironment(item))
+    .filter((env) => env !== "public" && env !== primary)
+    .filter((env) => {
+      if (seen.has(env)) return false;
+      seen.add(env);
+      return true;
+    });
 }
 
 function computeGlobalRuntimeMode(profiles = {}) {
@@ -660,6 +674,9 @@ function saveConfig(payload = {}) {
   profile = applyPreset(profile, payload.preset, payload);
   environment = normalizeEnvironment(profile.environment || environment);
   current.profiles[environment] = normalizeProfile(profile, environment);
+  normalizeMirrorEnvironments(payload.mirrorEnvironments || payload.applyToEnvironments, environment).forEach((env) => {
+    current.profiles[env] = normalizeProfile(Object.assign({}, profile, { environment: env }), env);
+  });
   current.profiles.public = normalizeProfile(current.profiles.public || defaultProfile("public"), "public");
 
   const activeEnvironment = normalizeEnvironment(payload.activeEnvironment || payload.environment || environment);

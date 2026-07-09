@@ -21,6 +21,7 @@ const envContract = fs.readFileSync(path.join(ROOT, "docs", "github-actions-env-
   "AI_PROVIDER_POLICY",
   "AI_RUNTIME_MODE",
   "AI_PROVIDER_ACTIVE_ENV",
+  "AI_COMPETITION_ALLOW_TRIAL_ENV",
   "AI_API_KEY",
   "DEEPSEEK_API_KEY",
   "CLOUDBASE_OPENAI_API_KEY",

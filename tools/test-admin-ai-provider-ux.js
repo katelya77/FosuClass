@@ -21,6 +21,9 @@ const text = fs.readFileSync(file, "utf8");
   "toolCalls",
   "answerSnippet",
   "provider-mode-grid",
+  "mirrorEnvironments",
+  "saveAiExperienceDisabled",
+  "isExperienceProvider",
   "provider-static-landing + .ai-provider-grid",
 ].forEach((needle) => {
   assert(text.includes(needle), `admin ai provider UX missing: ${needle}`);

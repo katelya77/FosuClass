@@ -323,6 +323,7 @@ jobs:
             append_ai_env "AI_PROVIDER_POLICY" "${{ vars.AI_PROVIDER_POLICY }}" "auto"
             append_ai_env "AI_RUNTIME_MODE" "${{ vars.AI_RUNTIME_MODE }}" "public"
             append_ai_env "AI_PROVIDER_ACTIVE_ENV" "${{ vars.AI_PROVIDER_ACTIVE_ENV }}" "public"
+            append_ai_env "AI_COMPETITION_ALLOW_TRIAL_ENV" "${{ vars.AI_COMPETITION_ALLOW_TRIAL_ENV }}" "true"
             append_ai_env "AI_MODEL" "${{ vars.AI_MODEL }}" "deepseek-v4-flash"
             append_ai_env "AI_REASONING_MODEL" "${{ vars.AI_REASONING_MODEL }}" "deepseek-v4-pro"
             append_ai_env "AI_BASE_URL" "${{ vars.AI_BASE_URL }}" "https://api.deepseek.com"

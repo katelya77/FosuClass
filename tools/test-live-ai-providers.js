@@ -1,6 +1,11 @@
 #!/usr/bin/env node
 
 const axios = require("axios");
+try {
+  require("../server/src/config");
+} catch (error) {
+  // Standalone provider tests can run without the full server config module.
+}
 const agentService = require("../server/src/services/ai/agentService");
 const deepseekProvider = require("../server/src/services/ai/providers/deepseekProvider");
 const cloudbaseOpenaiProvider = require("../server/src/services/ai/providers/cloudbaseOpenaiProvider");
@@ -120,6 +125,7 @@ function withProviderEnv(provider, fn) {
     "AI_PROVIDER",
     "AI_PROVIDER_POLICY",
     "AI_RUNTIME_MODE",
+    "AI_COMPETITION_ALLOW_TRIAL_ENV",
     "AI_API_KEY",
     "DEEPSEEK_API_KEY",
     "AI_BASE_URL",
@@ -134,10 +140,34 @@ function withProviderEnv(provider, fn) {
   keys.forEach((key) => {
     previous[key] = process.env[key];
   });
+  const runtimeConfig = provider.runtimeConfig();
+  const externalProfile = {
+    enabled: true,
+    provider: provider.name,
+    providerPolicy: "auto",
+  };
+  if (provider.name === "cloudbase-openai") {
+    Object.assign(externalProfile, {
+      cloudbaseOpenaiEnabled: true,
+      cloudbaseOpenaiBaseUrl: runtimeConfig.CLOUDBASE_OPENAI_BASE_URL,
+      cloudbaseOpenaiTextModel: runtimeConfig.CLOUDBASE_OPENAI_TEXT_MODEL,
+      cloudbaseOpenaiTimeoutMs: runtimeConfig.CLOUDBASE_OPENAI_TIMEOUT_MS,
+      cloudbaseOpenaiMaxTokens: runtimeConfig.CLOUDBASE_OPENAI_MAX_TOKENS,
+    });
+  } else if (provider.name === "deepseek") {
+    Object.assign(externalProfile, {
+      baseUrl: runtimeConfig.AI_BASE_URL,
+      model: runtimeConfig.AI_MODEL,
+      reasoningModel: runtimeConfig.AI_REASONING_MODEL,
+      timeoutMs: runtimeConfig.AI_TIMEOUT_MS,
+      maxTokens: runtimeConfig.AI_MAX_TOKENS,
+      jsonRepair: runtimeConfig.AI_PROVIDER_JSON_REPAIR === "true",
+    });
+  }
   const profiles = {
     public: { environment: "public", enabled: false, provider: "mock", providerPolicy: "tool-only" },
-    trial: { environment: "trial", enabled: true, provider: provider.name, providerPolicy: "auto" },
-    dev: { environment: "dev", enabled: true, provider: provider.name, providerPolicy: "auto" },
+    trial: Object.assign({ environment: "trial" }, externalProfile),
+    dev: Object.assign({ environment: "dev" }, externalProfile),
   };
   process.env.AI_PROVIDER_ACTIVE_ENV = "trial";
   process.env.AI_PROVIDER_ENVIRONMENTS = JSON.stringify(profiles);
@@ -145,7 +175,8 @@ function withProviderEnv(provider, fn) {
   process.env.AI_PROVIDER = provider.name;
   process.env.AI_PROVIDER_POLICY = "auto";
   process.env.AI_RUNTIME_MODE = "competition";
-  Object.assign(process.env, provider.runtimeConfig());
+  process.env.AI_COMPETITION_ALLOW_TRIAL_ENV = "true";
+  Object.assign(process.env, runtimeConfig);
   return Promise.resolve()
     .then(fn)
     .finally(() => {
@@ -183,6 +214,32 @@ async function agentToolDecision(provider, message) {
   };
 }
 
+async function agentProjectQaTrial(provider) {
+  const startedAt = Date.now();
+  const payload = await withProviderEnv(provider, () => agentService.chat({
+    message: "佛课小表能做什么",
+    runtimeMode: "competition",
+    context: {
+      envVersion: "trial",
+      runtimeMode: "competition",
+      currentPage: "tools/test-live-ai-providers",
+      clientTime: nowIso(),
+      clientLocalTime: nowIso(),
+      assistantRuntimeCacheBust: `${Date.now()}-${Math.random()}`,
+      assistantRuntimeMaxAgeMs: 5000,
+      currentScheduleSummary: { enabled: false, courses: [] },
+    },
+  }));
+  return {
+    provider: provider.name,
+    resolvedProvider: payload.safety && payload.safety.resolvedProvider || payload.safety && payload.safety.provider || "mock",
+    latencyMs: payload.metrics && payload.metrics.latencyMs || Date.now() - startedAt,
+    fallback: payload.metrics && payload.metrics.fallback === true || Boolean(payload.safety && payload.safety.fallbackReason),
+    toolCalls: (payload.toolCalls || []).map((item) => ({ name: item.name, status: item.status })),
+    answerSnippet: snippet(payload.answer, 160),
+  };
+}
+
 async function runProvider(provider) {
   const results = [];
   if (!provider.key) {
@@ -198,6 +255,7 @@ async function runProvider(provider) {
   const cases = [
     ["basic_connectivity", () => directCompletion(provider, "你好，只回复 OK")],
     ["project_qa", () => providerProjectQa(provider)],
+    ["agent_project_qa_trial_env", () => agentProjectQaTrial(provider)],
     ["tool_today_schedule", () => agentToolDecision(provider, "帮我查今天课表")],
     ["tool_empty_room", () => agentToolDecision(provider, "帮我查空教室")],
   ];
@@ -205,7 +263,12 @@ async function runProvider(provider) {
     try {
       const result = await fn();
       const factCase = name.startsWith("tool_");
-      const ok = factCase ? result.toolCalls.length > 0 && result.resolvedProvider !== provider.name : Boolean(result.answerSnippet);
+      const agentExternalCase = name === "agent_project_qa_trial_env";
+      const ok = factCase
+        ? result.toolCalls.length > 0 && result.resolvedProvider !== provider.name
+        : agentExternalCase
+          ? result.resolvedProvider === provider.name && Boolean(result.answerSnippet)
+          : Boolean(result.answerSnippet);
       results.push(Object.assign({ case: name, ok }, result));
     } catch (error) {
       results.push(Object.assign({
