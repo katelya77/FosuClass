@@ -411,22 +411,6 @@ function buildMeetingV2(result) {
   };
 }
 
-function buildGeneric() {
-  return {
-    answer: "你可以直接查课、找空教室、查询今日安排、导入个人课表或排查数据加载问题。系统会先调用项目内工具，再把结果整理成卡片。",
-    cards: [makeCard("generic", "校园服务管家可以查询什么", "事实来自课表、空教室和 Release Pack 工具", {
-      badges: ["工具优先", "不编造事实", "可降级演示"],
-      items: [
-        { title: "查课", subtitle: "教师、教室、课程、班级索引", value: "全校查询" },
-        { title: "找空间", subtitle: "按日期、节次、楼栋找空教室", value: "空教室" },
-        { title: "个人安排", subtitle: "基于本地课表摘要分析今日安排", value: "今日课程" },
-      ],
-      actions: [makeAction("打开全校查询", "navigate", "/pages/school/school")],
-    })],
-    suggestions: ["现在有空教室吗？", "今天还有课吗？", "怎么导入个人课表？"],
-  };
-}
-
 function buildWeather(result = {}) {
   const ok = result.success !== false;
   const weatherPayload = ok ? {
@@ -594,20 +578,54 @@ function buildMultiStep(toolResults = []) {
   };
 }
 
-function buildLocalRuleReply(rule = {}) {
+function buildLocalRuleReply(rule = {}, message = "", intentName = "") {
   const answer = String(rule.reply || rule.body || "").trim();
   if (!answer) return null;
+  // 对话类规则回复只作为候选之一，避免正式版每次同一模板。
+  const conversational = intentName === "project_qa" || intentName === "conversational_help";
+  const finalAnswer = conversational
+    ? projectKnowledgeService.pickVariant([
+      answer,
+      projectKnowledgeService.conversationalFallbackAnswer(message, intentName),
+    ], `${message}|${answer}`)
+    : answer;
   const card = rule.card && rule.card.type ? rule.card : makeCard("guide", rule.title || "小佛助手", "", {
     badges: ["本地规则", "知识库"],
     items: [],
     actions: rule.action && rule.action.type ? [rule.action] : [],
   });
   return {
-    answer,
+    answer: finalAnswer,
     cards: [card],
     suggestions: Array.isArray(rule.suggestions) && rule.suggestions.length
       ? rule.suggestions.slice(0, 6)
-      : ["查今日课表", "查空教室", "怎么导入个人课表？"],
+      : projectKnowledgeService.pickVariant([
+        ["查今日课表", "查空教室", "怎么导入个人课表？"],
+        ["今天还有课吗？", "现在第几教学周？", "佛大有哪些校区"],
+      ], message),
+  };
+}
+
+function buildGeneric(message = "") {
+  return {
+    answer: projectKnowledgeService.pickVariant([
+      "你可以直接查课、找空教室、查询今日安排、导入个人课表或排查数据加载问题。系统会先调用项目内工具，再把结果整理成卡片。",
+      "我是小佛。想查班级/老师/教室课表、空教室、教学周，或了解个人课表导入，直接说就行。",
+      "可以继续问校园相关问题。有具体对象时尽量带上班级、老师、教室或课程名。",
+    ], message),
+    cards: [makeCard("generic", "小佛可以查询什么", "事实来自课表、空教室和已发布数据工具", {
+      badges: ["工具优先", "不编造事实", "可降级演示"],
+      items: [
+        { title: "查课", subtitle: "教师、教室、课程、班级索引", value: "全校查询" },
+        { title: "找空间", subtitle: "按日期、节次、楼栋找空教室", value: "空教室" },
+        { title: "个人安排", subtitle: "基于本地课表摘要分析今日安排", value: "今日课程" },
+      ],
+      actions: [makeAction("打开全校查询", "navigate", "/pages/school/school")],
+    })],
+    suggestions: projectKnowledgeService.pickVariant([
+      ["现在有空教室吗？", "今天还有课吗？", "怎么导入个人课表？"],
+      ["查班级本周课表", "现在第几教学周？", "你能做什么"],
+    ], message),
   };
 }
 
@@ -618,7 +636,9 @@ function generate({ intent, toolResults, message, context, localRule }) {
     return match && match.result;
   };
   const name = intent && intent.name;
-  const rulePayload = (name === "project_qa" || name === "conversational_help") ? buildLocalRuleReply(localRule) : null;
+  const rulePayload = (name === "project_qa" || name === "conversational_help")
+    ? buildLocalRuleReply(localRule, message || "", name)
+    : null;
   const payload = name === "search_empty_rooms" ? buildEmptyRoom(first || {}) :
     name === "get_today_courses" ? buildTodayCourses(first || {}) :
     name === "get_tomorrow_courses" ? buildTomorrowCourses(first || {}) :
@@ -639,7 +659,7 @@ function generate({ intent, toolResults, message, context, localRule }) {
     name === "generate_image" ? buildKnowledge({ items: [], summary: first && first.summary || "生图能力未启用" }) :
     rulePayload ? rulePayload :
     (name === "project_qa" || name === "conversational_help") ? projectKnowledgeService.generateFallbackResponse(name, message || "", context && context.assistantEnvironment || context && context.runtimeMode || "public") :
-    buildGeneric();
+    buildGeneric(message || "");
   return Object.assign({ provider: "mock" }, payload);
 }
 

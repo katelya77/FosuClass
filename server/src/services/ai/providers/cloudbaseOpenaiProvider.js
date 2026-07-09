@@ -49,20 +49,19 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   const model = configuredEnv("CLOUDBASE_OPENAI_TEXT_MODEL", DEFAULT_MODEL, runtimeConfig);
   const timeout = numberEnv("CLOUDBASE_OPENAI_TIMEOUT_MS", 15000, 1000, 60000, runtimeConfig);
   const maxTokens = numberEnv("CLOUDBASE_OPENAI_MAX_TOKENS", 1200, 128, 4096, runtimeConfig);
+  const conversational = intent && (intent.name === "project_qa" || intent.name === "conversational_help");
   const useJsonMode = deepseekProvider.shouldUseJsonMode(intent, runtimeConfig);
   const body = {
     model,
     stream: false,
     max_tokens: maxTokens,
-    temperature: 0.1,
+    temperature: conversational ? 0.7 : 0.1,
     messages: [
       {
         role: "system",
         content: deepseekProvider.buildSystemPrompt(
-          intent && (intent.name === "project_qa" || intent.name === "conversational_help")
-            ? projectKnowledge
-            : "",
-          { useJsonMode }
+          conversational ? projectKnowledge : "",
+          { useJsonMode, conversational: Boolean(conversational) }
         ),
       },
       {

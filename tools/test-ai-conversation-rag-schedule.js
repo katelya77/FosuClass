@@ -198,14 +198,14 @@ async function main() {
   await assertChat("你能做什么", null, {
     intentName: "help",
     cardType: "help",
-    answerPattern: /可以查询|校园事项/,
+    answerPattern: /可以查询|校园事项|课表|空教室|教学周|小佛/,
     noScheduleTool: true,
   });
 
   await assertChat("如何使用校园查询？", null, {
     intentName: "help",
     cardType: "help",
-    answerPattern: /可以查询什么|校园事项/,
+    answerPattern: /可以查询|校园事项|课表|空教室|教学周|小佛/,
     noScheduleTool: true,
   });
 

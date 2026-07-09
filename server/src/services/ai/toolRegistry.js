@@ -328,7 +328,7 @@ function resolveIntentChinese(message, context = {}) {
 function isProjectQaMessage(text) {
   const value = normalizeText(text);
   if (!value) return false;
-  return /你是谁|你能做什么|如何使用校园查询|怎么使用|怎么同步新学期课表|新学期.*同步|为什么要\s*XLS\s*导入|FosuClass|佛课小表|小佛.*项目|了解当前项目|解释.*功能|比赛.*展示|校园服务管家架构|项目知识|Release Pack|XLS-only/i.test(value);
+  return /你是谁|介绍一下自己|自我介绍|你叫什么|小佛是谁|你是什么助手|你能做什么|你可以做什么|如何使用校园查询|怎么使用|怎么同步新学期课表|新学期.*同步|为什么要\s*XLS\s*导入|FosuClass|佛课小表|小佛.*项目|了解当前项目|解释.*功能|比赛.*展示|校园服务管家架构|项目知识|Release Pack|XLS-only/i.test(value);
 }
 
 function isConversationalHelp(text) {
@@ -337,7 +337,7 @@ function isConversationalHelp(text) {
   if (/今天|今日|明天|还有课|下一节|空教室|老师|教师|教室|课室|课程|班级|查课|课表|诊断|缓存|加载失败|数据失败/.test(value)) {
     return false;
   }
-  return /你好|您好|嗨|hello|hi|谢谢|感谢|帮我解释|怎么做|如何做|为什么|介绍一下/.test(value);
+  return /你好|您好|嗨|哈喽|在吗|hello|hi|谢谢|感谢|辛苦了|帮我解释|怎么做|如何做|为什么|介绍一下|早上好|中午好|晚上好|随便聊|普通话/.test(value);
 }
 
 function inferCampusFromText(text) {

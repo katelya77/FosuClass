@@ -744,14 +744,19 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
           { label: "更多任务", type: "openSheet", payload: { sheet: "task" } },
         ],
       };
+  const generalHelpAnswer = pickResponseVariant([
+    "可以查询校园事项、全校课表、个人课表、天气提醒和常用入口。涉及课表时，请尽量说清楚班级、老师、教室或课程。",
+    "我是小佛，常见能力包括：查班级/教师/教室课表、找空教室、看教学周与校历、问校区天气，以及引导导入个人课表。",
+    "你可以问我“今天有什么课”“C7 附近空教室”“现在第几周”，也可以问“佛大有哪些校区”。查课表时带上对象关键词会更准。",
+  ], value);
   return {
     answer: isFloatHelp
       ? "小佛助手浮窗已可通过更多操作开启或关闭。单击会打开校园服务管家，拖拽会吸附到左右边缘，长按可以打开菜单。"
       : isImportHelp
-      ? "已根据关键词匹配到个人课表导入说明。导入后，可查询“今天有什么课”“明天有什么课”“下一节课在哪里”这类个人安排。"
+      ? "已根据关键词匹配到导入个人课表说明。导入后，可查询“今天有什么课”“明天有什么课”“下一节课在哪里”这类个人安排。"
       : (isDataSourceHelp
         ? "已根据关键词匹配到数据来源说明。课表状态会读取项目内真实字段，校园信息只使用已收录来源；缺少可靠来源时不会编造。"
-        : "可以查询校园事项、全校课表、个人课表、天气提醒和常用入口。涉及课表时，请尽量说清楚班级、老师、教室或课程。"),
+        : generalHelpAnswer),
     cards: [
       card,
     ],
@@ -761,7 +766,10 @@ function buildHelpResponse(message, clientContext = {}, route = {}) {
       ? ["今天有什么课", "查班级本周课表", "课表数据更新到什么时候"]
       : (isDataSourceHelp
         ? ["课表数据更新到什么时候", "教务系统在哪里", "佛大有哪些校区"]
-        : ["查班级本周课表", "教务系统在哪里", "课表数据是否最新"]),
+        : pickResponseVariant([
+          ["查班级本周课表", "教务系统在哪里", "课表数据是否最新"],
+          ["现在有空教室吗", "今天有什么课", "怎么导入个人课表"],
+        ], value)),
     toolCalls: [{ name: "clarify_missing_slot", status: "success" }],
     evidence: {
       verified: true,
@@ -1143,15 +1151,77 @@ async function buildWeatherResponse(message, clientContext = {}, route = {}, cal
   };
 }
 
+function pickResponseVariant(variants, seedText) {
+  const items = (Array.isArray(variants) ? variants : []).filter((item) => String(item || "").trim());
+  if (!items.length) return "";
+  if (items.length === 1) return items[0];
+  const text = String(seedText || "");
+  const hourBucket = Math.floor(Date.now() / (15 * 60 * 1000));
+  let hash = hourBucket * 131;
+  for (let i = 0; i < text.length; i += 1) {
+    hash = (hash * 31 + text.charCodeAt(i)) >>> 0;
+  }
+  return items[hash % items.length];
+}
+
+function isAiEnhancedClientEnv(envVersion) {
+  const env = String(envVersion || "").trim().toLowerCase();
+  return env === "develop" || env === "trial" || env === "devtools";
+}
+
+function hasUsableAgentAnswer(response) {
+  const answer = String(response && response.answer || "").trim();
+  return answer.length >= 8;
+}
+
+function isStructuredLocalHelp(message) {
+  const value = String(message || "").replace(/\s+/g, "");
+  return /导入.*个人课表|个人课表.*导入|导入课表|xls|excel|小佛助手浮窗|小佛浮窗|浮窗|数据来源|来源说明|知识来源/i.test(value);
+}
+
 function buildSmalltalkResponse(message, clientContext = {}, route = {}) {
   const compact = String(message || "").replace(/\s+/g, "");
-  const answer = /^谢谢|^感谢/.test(compact)
-    ? "不客气。系统会把寒暄内容和校园查询分开处理，不会把这类话当成课表对象。"
-    : "可以，我们就用普通话聊。需要查校园事项时，直接说清楚问题；需要查课表时，再告诉我班级、老师、教室或课程。";
+  let answer = "";
+  if (/^谢谢|^感谢|^辛苦了/.test(compact)) {
+    answer = pickResponseVariant([
+      "不客气，有课表、空教室或校园问题随时再问我。",
+      "没事，我继续帮你查课表、天气和校园事项就好。",
+      "举手之劳。接下来想查班级课表、空教室，还是教学周？",
+    ], compact);
+  } else if (/普通话|随便聊|随便问/.test(compact)) {
+    answer = pickResponseVariant([
+      "可以，我们就用普通话聊。需要查校园事项时，直接说清楚问题；需要查课表时，再告诉我班级、老师、教室或课程。",
+      "普通话完全没问题。想查课表、空教室、天气或校园入口，直接说就行。",
+      "好的，我们用普通话交流。你可以问校区、课表、空教室，也可以先让我介绍一下能力。",
+    ], compact);
+  } else if (xiaofuAgentRouter.isIdentityOrPersonaQuery(message)) {
+    answer = pickResponseVariant([
+      "我是小佛，佛课小表里的校园助手。擅长查课表、空教室、教学周、天气和校园入口，也可以帮你理解怎么导入个人课表。",
+      "叫我小佛就好。我是佛课小表的校园服务助手，能帮你查全校课表、找自习教室、看天气和校区信息；具体课程事实会以工具数据为准。",
+      "我是小佛助手，不是万能聊天机器人。校园课表、空教室、教学周和常用入口我比较熟，你也可以直接问“今天有什么课”。",
+    ], compact);
+  } else if (/^(你好|您好|嗨|哈喽|在吗|早上好|中午好|晚上好|hello|hi)/i.test(compact)) {
+    answer = pickResponseVariant([
+      "你好，我是小佛。想查课表、空教室、天气，还是先了解一下我能做什么？",
+      "嗨，我在。直接说班级、老师、教室，或问今天有没有课就行。",
+      "你好呀。我可以帮你查佛大课表和校园事项，也可以回答使用问题。",
+      "在的。课表、空教室、教学周、天气和导入个人课表，都可以问我。",
+    ], compact);
+  } else {
+    answer = pickResponseVariant([
+      "我先按校园助手来理解你的问题。如果是课表，请尽量带上班级、老师、教室或课程名；如果是闲聊，也可以继续说。",
+      "可以继续问。常见的有：查班级课表、找空教室、看教学周、问校区天气，或问怎么导入个人课表。",
+      "收到。若你在找课表信息，补充对象关键词会更准；若只是想了解功能，直接问“你能做什么”也可以。",
+    ], compact);
+  }
   return {
     answer,
     cards: [],
-    suggestions: ["佛大有哪些校区", "查班级本周课表", "课表数据是否最新"],
+    suggestions: pickResponseVariant([
+      ["佛大有哪些校区", "查班级本周课表", "课表数据是否最新"],
+      ["今天有什么课", "现在有空教室吗", "你能做什么"],
+      ["仙溪校区今天会下雨吗", "怎么导入个人课表", "现在第几教学周"],
+    ], compact),
     toolCalls: [],
     evidence: {
       verified: false,
@@ -1190,6 +1260,36 @@ function oracleAgentChat(message, context) {
   });
 }
 
+async function callServerAgent(message, resolvedContext, options = {}) {
+  const callbacks = options && options.callbacks || {};
+  reportPipelineStatus(callbacks, "正在调用小佛智能体…", "agent");
+  return aiTransportRouter.chat({
+    message,
+    context: resolvedContext,
+    history: getAiHistory(resolvedContext.conversation && resolvedContext.conversation.conversationId),
+    oracleChat: oracleAgentChat,
+    redactSensitiveText,
+    options,
+  });
+}
+
+async function tryServerAgentThenLocal(message, resolvedContext, options, localBuilder) {
+  try {
+    const serverResponse = await callServerAgent(message, resolvedContext, options);
+    if (hasUsableAgentAnswer(serverResponse)) {
+      const metrics = Object.assign({}, serverResponse.metrics || {}, {
+        clientAgentPreferred: true,
+        externalProviderUsed: serverResponse.metrics && serverResponse.metrics.externalProviderUsed === true
+          || serverResponse.safety && serverResponse.safety.externalProviderUsed === true,
+      });
+      return Object.assign({}, serverResponse, { metrics });
+    }
+  } catch (error) {
+    // Fall back to local mock rules when agent/provider is unavailable.
+  }
+  return localBuilder();
+}
+
 async function chat(message, context, options = {}) {
   const resolvedContext = context || buildClientContext();
   const localContext = Object.assign({}, resolvedContext, {
@@ -1199,6 +1299,8 @@ async function chat(message, context, options = {}) {
   });
   const callbacks = options && options.callbacks || {};
   const route = xiaofuAgentRouter.routeMessage(message, localContext);
+  const envVersion = resolvedContext.envVersion || getMiniProgramEnvVersion();
+  const aiEnhanced = isAiEnhancedClientEnv(envVersion);
   reportPipelineStatus(callbacks, "正在匹配查询内容…", "understand");
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_STATUS) {
@@ -1208,6 +1310,13 @@ async function chat(message, context, options = {}) {
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.HELP) {
+    // 体验版/开发版：通用帮助与自我介绍优先走服务端 AI；结构化导入/浮窗说明保留本地卡片。
+    if (aiEnhanced && !isStructuredLocalHelp(message)) {
+      return tryServerAgentThenLocal(message, resolvedContext, options, () => {
+        reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
+        return buildHelpResponse(message, localContext, route);
+      });
+    }
     reportPipelineStatus(callbacks, "正在查找使用说明…", "help");
     reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildHelpResponse(message, localContext, route);
@@ -1220,14 +1329,7 @@ async function chat(message, context, options = {}) {
   if (route.intent === xiaofuAgentRouter.INTENTS.PERSONAL_SCHEDULE) {
     reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
     if (route.shouldUsePersonalScheduleTool) {
-      return aiTransportRouter.chat({
-        message,
-        context: resolvedContext,
-        history: getAiHistory(resolvedContext.conversation && resolvedContext.conversation.conversationId),
-        oracleChat: oracleAgentChat,
-        redactSensitiveText,
-        options,
-      });
+      return callServerAgent(message, resolvedContext, options);
     }
     reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildPersonalScheduleClarificationResponse(message, localContext, route);
@@ -1244,14 +1346,7 @@ async function chat(message, context, options = {}) {
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_QUERY) {
     reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
     if (route.shouldUsePersonalScheduleTool) {
-      return aiTransportRouter.chat({
-        message,
-        context: resolvedContext,
-        history: getAiHistory(resolvedContext.conversation && resolvedContext.conversation.conversationId),
-        oracleChat: oracleAgentChat,
-        redactSensitiveText,
-        options,
-      });
+      return callServerAgent(message, resolvedContext, options);
     }
     const scheduleResponse = await scheduleAssistantService.tryHandleScheduleQuery(message, localContext);
     if (scheduleResponse) return scheduleResponse;
@@ -1263,6 +1358,10 @@ async function chat(message, context, options = {}) {
     if (navigationResponse) return navigationResponse;
     const knowledgeResponse = ragAnswerBuilder.tryBuildKnowledgeAnswer(message, localContext);
     if (knowledgeResponse) return knowledgeResponse;
+    // 体验版：本地知识未命中时交给服务端 agent 组织表达，避免直接模板化。
+    if (aiEnhanced) {
+      return tryServerAgentThenLocal(message, resolvedContext, options, () => buildSmalltalkResponse(message, localContext, route));
+    }
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.NAVIGATION) {
@@ -1275,18 +1374,18 @@ async function chat(message, context, options = {}) {
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SMALLTALK) {
+    // 体验版/开发版：寒暄、自我介绍、闲聊优先走 AI 模型；正式版走本地多变体 mock。
+    if (aiEnhanced) {
+      return tryServerAgentThenLocal(message, resolvedContext, options, () => {
+        reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
+        return buildSmalltalkResponse(message, localContext, route);
+      });
+    }
     reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildSmalltalkResponse(message, localContext, route);
   }
 
-  return aiTransportRouter.chat({
-    message,
-    context: resolvedContext,
-    history: getAiHistory(resolvedContext.conversation && resolvedContext.conversation.conversationId),
-    oracleChat: oracleAgentChat,
-    redactSensitiveText,
-    options,
-  });
+  return callServerAgent(message, resolvedContext, options);
 }
 
 module.exports = {
@@ -1296,6 +1395,7 @@ module.exports = {
   PENDING_CLARIFICATION_KEY,
   USER_PREFERENCES_KEY,
   buildClientContext,
+  buildSmalltalkResponse,
   chat,
   clearPendingClarification,
   clearAiHistory,
@@ -1307,8 +1407,12 @@ module.exports = {
   getPendingClarification,
   getRememberedPersonalization,
   getUserPreferences,
+  hasUsableAgentAnswer,
+  isAiEnhancedClientEnv,
   isPersonalContextAllowed,
+  isStructuredLocalHelp,
   pausePersonalization,
+  pickResponseVariant,
   redactSensitiveText,
   rememberLatestScheduleImport,
   saveUserPreferences,
