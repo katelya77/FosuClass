@@ -42,6 +42,9 @@ function buildError(message: string, status?: number, payload?: unknown): ApiErr
 }
 
 function withAuthHeaders(headers: Headers, method: string) {
+  if (!headers.has('X-Fosu-Admin-Client')) {
+    headers.set('X-Fosu-Admin-Client', 'next')
+  }
   if (csrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(method) && !headers.has('X-Fosu-CSRF')) {
     headers.set('X-Fosu-CSRF', csrfToken)
   }

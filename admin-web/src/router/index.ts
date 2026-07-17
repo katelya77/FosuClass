@@ -15,6 +15,7 @@ import SecurityPage from '@/pages/SecurityPage.vue'
 import SettingsPage from '@/pages/SettingsPage.vue'
 import AuditPage from '@/pages/AuditPage.vue'
 import ExperimentalPage from '@/pages/ExperimentalPage.vue'
+import BackupsPage from '@/pages/BackupsPage.vue'
 import PlaceholderPage from '@/pages/PlaceholderPage.vue'
 
 const runtimePaths = getAdminRuntimePaths()
@@ -125,14 +126,8 @@ const router = createRouter({
         {
           path: 'backups',
           name: 'backups',
-          component: ExperimentalPage,
-          props: {
-            title: '备份与快照',
-            description:
-              '备份/快照列表 API 已对齐；完整下载与删除操作仍可在旧版后台完成。',
-            legacySection: 'backups',
-          },
-          meta: { title: '备份' },
+          component: BackupsPage,
+          meta: { title: '备份', subtitle: '列表 · 下载 · 删除 · 恢复预检' },
         },
         {
           path: 'legacy',

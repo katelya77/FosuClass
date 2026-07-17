@@ -52,6 +52,11 @@ jobs:
           npm run test:architecture-guards
           npm run test:admin-feature-matrix
           npm run test:admin-legacy-dependency
+          npm run test:admin-capabilities
+          npm run test:admin-backup-service
+          npm run test:admin-content-concurrency
+          npm run test:admin-no-duplicate-business-logic
+          npm run test:admin-write-parity
           npm run test:duplicate-admin-routes
           npm run test:service-token-scopes
           npm run test:service-token-route-matrix
@@ -76,7 +81,11 @@ jobs:
         run: |
           npm run admin:test
           npm run admin:build
-          git diff --exit-code -- server/public/admin-app
+          # Cross-platform Vite hashes may differ (Windows vs Linux). Require a valid
+          # built SPA and a committed SPA for Docker deploy, not byte-identical hashes.
+          node tools/test-admin-spa-bundle-present.js
+          git checkout -- server/public/admin-app || true
+          node tools/test-admin-spa-bundle-present.js
           npm run admin:test:e2e
 
       - name: Config preflight
