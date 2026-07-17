@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
 const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
+const serviceTokenService = require("./serviceTokenService");
 
 const ADMIN_SESSION_COOKIE = "fosu_admin_session";
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
@@ -76,8 +77,9 @@ function signPayload(payloadText) {
 
 function createSessionToken() {
   const now = Math.floor(Date.now() / 1000);
+  const sid = crypto.randomBytes(16).toString("hex");
   const payload = base64Url(JSON.stringify({
-    sid: crypto.randomBytes(16).toString("hex"),
+    sid,
     iat: now,
     exp: now + SESSION_TTL_SECONDS,
     scope: "admin",
@@ -105,23 +107,30 @@ function verifyCsrfToken(sessionToken, csrfToken) {
   return timingSafeEqualText(parts[1], expected);
 }
 
-function verifySessionToken(token) {
+function parseSessionPayload(token) {
   const parts = String(token || "").split(".");
   if (parts.length !== 2) {
-    return false;
+    return null;
   }
   const [payload, signature] = parts;
   const expected = signPayload(payload);
   if (!expected || !timingSafeEqualText(signature, expected)) {
-    return false;
+    return null;
   }
 
   try {
     const data = JSON.parse(fromBase64Url(payload));
-    return data.scope === "admin" && Number(data.exp) > Math.floor(Date.now() / 1000);
+    if (data.scope !== "admin" || Number(data.exp) <= Math.floor(Date.now() / 1000)) {
+      return null;
+    }
+    return data;
   } catch (error) {
-    return false;
+    return null;
   }
+}
+
+function verifySessionToken(token) {
+  return Boolean(parseSessionPayload(token));
 }
 
 function parseCookies(req) {
@@ -145,14 +154,7 @@ function getBearerToken(req) {
 }
 
 function isStaticAdminTokenValid(token) {
-  const value = toText(token);
-  if (!value) {
-    return false;
-  }
-  return Boolean(
-    (config.ADMIN_TOKEN && timingSafeEqualText(value, config.ADMIN_TOKEN)) ||
-    (config.ADMIN_API_TOKEN && timingSafeEqualText(value, config.ADMIN_API_TOKEN))
-  );
+  return Boolean(serviceTokenService.resolveServiceToken(token));
 }
 
 function isLoginCredentialValid(input) {
@@ -177,14 +179,43 @@ function getAdminCookieToken(req) {
   return verifySessionToken(token) ? token : "";
 }
 
+function resolveAdminIdentity(req) {
+  const cookieToken = getAdminCookieToken(req);
+  if (cookieToken) {
+    const session = parseSessionPayload(cookieToken);
+    return {
+      authMethod: "admin-cookie",
+      kind: "session",
+      name: "admin-session",
+      scopes: [serviceTokenService.SCOPES.ADMIN_FULL],
+      sessionIdPrefix: session && session.sid ? String(session.sid).slice(0, 8) : "",
+      sessionToken: cookieToken,
+    };
+  }
+
+  const bearer = getBearerToken(req);
+  const tokenIdentity = serviceTokenService.resolveServiceToken(bearer);
+  if (tokenIdentity) {
+    return {
+      ...tokenIdentity,
+      authMethod: tokenIdentity.kind === "static-admin-token" ? "admin-token" : "service-token",
+      rawTokenPresent: true,
+    };
+  }
+  return null;
+}
+
 function getAdminAuthMethod(req) {
-  if (isStaticAdminTokenValid(getBearerToken(req))) return "admin-token";
-  if (getAdminCookieToken(req)) return "admin-cookie";
-  return "";
+  const identity = resolveAdminIdentity(req);
+  if (!identity) return "";
+  if (identity.authMethod === "admin-cookie") return "admin-cookie";
+  if (identity.kind === "static-admin-token") return "admin-token";
+  if (identity.kind === "legacy-admin-api-token") return "admin-token";
+  return "service-token";
 }
 
 function isAdminRequest(req) {
-  return Boolean(getAdminAuthMethod(req));
+  return Boolean(resolveAdminIdentity(req));
 }
 
 function isStateChangingMethod(method) {
@@ -232,13 +263,41 @@ function clearSessionCookie(res) {
   res.setHeader("Set-Cookie", parts.join("; "));
 }
 
+/**
+ * CSRF rules:
+ * - Safe methods always pass.
+ * - Cookie session writes always require CSRF.
+ * - Browser-like requests (Origin present + credentials cookie) require CSRF.
+ * - Pure machine service tokens without cookies may skip CSRF.
+ */
 function verifyAdminCsrf(req) {
   if (!isStateChangingMethod(req.method)) return true;
-  const authMethod = getAdminAuthMethod(req);
-  if (authMethod === "admin-token") return true;
-  const sessionToken = getAdminCookieToken(req);
-  if (!sessionToken) return false;
-  return verifyCsrfToken(sessionToken, req.headers[CSRF_HEADER]);
+
+  const cookieToken = getAdminCookieToken(req);
+  if (cookieToken) {
+    return verifyCsrfToken(cookieToken, req.headers[CSRF_HEADER]);
+  }
+
+  const identity = resolveAdminIdentity(req);
+  if (!identity) return false;
+
+  // Machine clients: bearer/service token only, no session cookie.
+  // If an Origin is present (browser fetch with token), still require CSRF header
+  // bound to a session is impossible; reject browser token-only state changes
+  // unless explicitly marked as service client.
+  const origin = toText(req.headers.origin);
+  const serviceClient = toText(req.headers["x-fosu-client"]).toLowerCase() === "service"
+    || toText(req.headers["x-fosu-service-client"]).toLowerCase() === "1";
+  if (origin && !serviceClient) {
+    // Browser token-only write is rejected to force cookie+CSRF login path.
+    return false;
+  }
+  return true;
+}
+
+function attachIdentity(req, identity) {
+  req.adminIdentity = identity;
+  req.adminScopes = identity && identity.scopes ? identity.scopes.slice() : [];
 }
 
 function verifyAdminAccess(req, res, next) {
@@ -250,7 +309,8 @@ function verifyAdminAccess(req, res, next) {
     });
   }
 
-  if (!isAdminRequest(req)) {
+  const identity = resolveAdminIdentity(req);
+  if (!identity) {
     return res.status(401).json({
       success: false,
       message: "请先登录后台",
@@ -275,24 +335,65 @@ function verifyAdminAccess(req, res, next) {
     });
   }
 
+  attachIdentity(req, identity);
   return next();
+}
+
+function requireScopes(requiredScopes) {
+  const required = serviceTokenService.normalizeScopes(requiredScopes);
+  return function requireScopesMiddleware(req, res, next) {
+    const identity = req.adminIdentity || resolveAdminIdentity(req);
+    if (!identity) {
+      return res.status(401).json({
+        success: false,
+        code: "ADMIN_AUTH_REQUIRED",
+        message: "请先登录后台或提供有效服务令牌",
+      });
+    }
+    if (!serviceTokenService.hasAnyScope(identity, required)) {
+      safeLog("admin-scope-denied", {
+        path: req.path,
+        required,
+        scopes: identity.scopes || [],
+        operator: identity.name || "",
+      });
+      return res.status(403).json({
+        success: false,
+        code: "ADMIN_SCOPE_DENIED",
+        message: "当前令牌缺少所需权限范围",
+        requiredScopes: required,
+      });
+    }
+    attachIdentity(req, identity);
+    return next();
+  };
+}
+
+function getAuditIdentity(req) {
+  const identity = req.adminIdentity || resolveAdminIdentity(req);
+  return serviceTokenService.describeIdentity(identity);
 }
 
 module.exports = {
   ADMIN_SESSION_COOKIE,
   CSRF_HEADER,
   adminLoginLimiter,
+  attachIdentity,
   clearSessionCookie,
   createCsrfToken,
   createSessionToken,
   getAdminAuthMethod,
   getAdminCookieToken,
+  getAuditIdentity,
   hasAdminLoginSecret,
   isAdminConfiguredForCurrentEnv,
   isAdminCookieValid,
   isAdminOriginAllowed,
   isAdminRequest,
   isLoginCredentialValid,
+  isStaticAdminTokenValid,
+  requireScopes,
+  resolveAdminIdentity,
   setSessionCookie,
   verifyAdminCsrf,
   verifyAdminAccess,

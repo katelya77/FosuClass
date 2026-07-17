@@ -242,7 +242,24 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 8. 启动监听
+// 8. 启动配置有效性检查（生产可 hard-fail）
+try {
+  const { validateStartupConfig } = require("./services/configValidation");
+  const configValidation = validateStartupConfig({
+    hardFail: config.NODE_ENV === "production" && process.env.FOSU_CONFIG_HARD_FAIL !== "false",
+  });
+  if (configValidation.warnings.length) {
+    console.warn(`[FosuClass Server] Config warnings: ${configValidation.warnings.join("; ")}`);
+  }
+} catch (error) {
+  if (error && error.code === "CONFIG_VALIDATION_FAILED") {
+    console.error(`[FosuClass Server] ${error.message}`);
+    process.exit(1);
+  }
+  safeLog("startup-config-validation-failed", { error: error.message });
+}
+
+// 9. 启动监听
 app.listen(config.PORT, () => {
   console.log(`[FosuClass Server] Server is running at http://localhost:${config.PORT}`);
   console.log(`[FosuClass Server] Environment: ${config.NODE_ENV}`);

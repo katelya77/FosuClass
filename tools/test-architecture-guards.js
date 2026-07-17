@@ -54,23 +54,12 @@ assert.ok(
 const adminSource = fs.readFileSync(adminRoutesPath, "utf8");
 const duplicates = listDuplicateAdminRoutes(adminSource);
 
-// During phase 0 we document the known duplicate; phase 1 must remove it.
-// Guard records the expected set so new duplicates cannot land unnoticed.
-const allowedDuplicates = new Set(["GET /sync/status"]);
-const unexpected = duplicates.filter(([key]) => !allowedDuplicates.has(key));
+// Phase 1+: zero duplicate routes allowed.
 assert.deepStrictEqual(
-  unexpected,
+  duplicates,
   [],
-  `Unexpected duplicate admin routes: ${unexpected.map(([k, c]) => `${k} x${c}`).join(", ") || "(none)"}`
+  `Duplicate admin routes are forbidden: ${duplicates.map(([k, c]) => `${k} x${c}`).join(", ") || "(none)"}`
 );
-
-// Document known debt for phase 1
-const knownSyncStatusDup = duplicates.find(([key]) => key === "GET /sync/status");
-if (knownSyncStatusDup) {
-  console.log(
-    `[architecture-guards] known debt: ${knownSyncStatusDup[0]} registered ${knownSyncStatusDup[1]} times (must fix in phase 1)`
-  );
-}
 
 // Ensure architecture docs exist
 const requiredDocs = [
