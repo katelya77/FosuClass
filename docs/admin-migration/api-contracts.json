@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-17T18:37:13.427Z",
-  "sourceCommit": "525776eb9c979f5ecc73386e1d2c18d89361e0cc",
+  "generatedAt": "2026-07-17T19:14:08.019Z",
+  "sourceCommit": "065d2ef05e61fee6ed75c1c38bbd8c42bbc7c145",
   "basePath": "/api/admin",
   "envelope": {
     "success": "boolean",

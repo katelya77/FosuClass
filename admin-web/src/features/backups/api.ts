@@ -42,10 +42,10 @@ export async function downloadBackup(filename: string) {
 }
 
 export async function deleteBackup(filename: string) {
-  return api<{ success: boolean }>(
-    `/api/admin/backups?filename=${encodeURIComponent(filename)}`,
-    { method: 'DELETE' },
-  )
+  return api<{ success: boolean }>('/api/admin/backups', {
+    method: 'DELETE',
+    body: JSON.stringify({ filename, confirm: filename }),
+  })
 }
 
 export async function preflightRestore(filename: string) {
@@ -56,7 +56,10 @@ export async function preflightRestore(filename: string) {
   return data.preflight
 }
 
-export async function restoreBackup(filename: string, options: { dryRun?: boolean; confirm?: string } = {}) {
+export async function restoreBackup(
+  filename: string,
+  options: { dryRun?: boolean; confirm?: string; idempotencyKey?: string } = {},
+) {
   return api<{ success: boolean; restored?: boolean; dryRun?: boolean; preflight?: RestorePreflight }>(
     '/api/admin/backups/restore',
     {
@@ -65,6 +68,7 @@ export async function restoreBackup(filename: string, options: { dryRun?: boolea
         filename,
         dryRun: options.dryRun === true,
         confirm: options.confirm || filename,
+        idempotencyKey: options.idempotencyKey || `restore-${filename}-${Date.now()}`,
       }),
     },
   )

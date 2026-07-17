@@ -1,8 +1,8 @@
 {
   "version": 1,
-  "phase": "A",
-  "generatedAt": "2026-07-17T18:37:13.427Z",
-  "sourceCommit": "525776eb9c979f5ecc73386e1d2c18d89361e0cc",
+  "phase": "B.1",
+  "generatedAt": "2026-07-17T19:14:08.019Z",
+  "sourceCommit": "065d2ef05e61fee6ed75c1c38bbd8c42bbc7c145",
   "nextStatusEnum": [
     "missing",
     "read-only",
@@ -17,8 +17,15 @@
     "FOSU_ADMIN_PRIMARY": "legacy",
     "FOSU_ADMIN_NEXT_ENABLED": true,
     "FOSU_ADMIN_LEGACY_ENABLED": true,
-    "FOSU_ADMIN_NEXT_WRITE_MODULES": ""
+    "FOSU_ADMIN_NEXT_WRITE_MODULES": "content,feedback,audit,backups",
+    "FOSU_CONFIG_HARD_FAIL": false
   },
+  "productionWriteModules": [
+    "content",
+    "feedback",
+    "audit",
+    "backups"
+  ],
   "summary": {
     "totalFeatures": 153,
     "apiRoutes": 150,
@@ -53,8 +60,9 @@
     },
     "byNextStatus": {
       "missing": 31,
-      "write-implemented": 27,
-      "read-only": 95
+      "write-implemented": 4,
+      "read-only": 95,
+      "browser-verified": 23
     }
   },
   "legacyNav": [
@@ -1529,12 +1537,17 @@
       "hasExplicitScope": false,
       "auditInHandler": false,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-backup-service.js",
+        "tools/test-admin-backup-transaction.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -1555,12 +1568,17 @@
       "hasExplicitScope": false,
       "auditInHandler": false,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": true,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": false,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-backup-service.js",
+        "tools/test-admin-backup-transaction.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -1737,12 +1755,17 @@
       "hasExplicitScope": false,
       "auditInHandler": true,
       "backupInHandler": true,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-content-concurrency.js",
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -1763,12 +1786,17 @@
       "hasExplicitScope": false,
       "auditInHandler": true,
       "backupInHandler": true,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": true,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-content-concurrency.js",
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -1789,12 +1817,17 @@
       "hasExplicitScope": false,
       "auditInHandler": true,
       "backupInHandler": true,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": true,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-content-concurrency.js",
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -1815,12 +1848,17 @@
       "hasExplicitScope": false,
       "auditInHandler": true,
       "backupInHandler": true,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": true,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-content-concurrency.js",
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -1841,12 +1879,17 @@
       "hasExplicitScope": false,
       "auditInHandler": true,
       "backupInHandler": true,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-content-concurrency.js",
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -1867,12 +1910,17 @@
       "hasExplicitScope": false,
       "auditInHandler": true,
       "backupInHandler": true,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": true,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-content-concurrency.js",
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -1893,12 +1941,17 @@
       "hasExplicitScope": false,
       "auditInHandler": true,
       "backupInHandler": true,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": true,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-content-concurrency.js",
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -1919,12 +1972,17 @@
       "hasExplicitScope": false,
       "auditInHandler": true,
       "backupInHandler": true,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": true,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-content-concurrency.js",
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -1945,12 +2003,16 @@
       "hasExplicitScope": false,
       "auditInHandler": true,
       "backupInHandler": true,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -1971,12 +2033,16 @@
       "hasExplicitScope": false,
       "auditInHandler": true,
       "backupInHandler": true,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -1997,12 +2063,16 @@
       "hasExplicitScope": false,
       "auditInHandler": false,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -2023,12 +2093,16 @@
       "hasExplicitScope": false,
       "auditInHandler": false,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -2049,12 +2123,16 @@
       "hasExplicitScope": false,
       "auditInHandler": false,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -3921,12 +3999,17 @@
       "hasExplicitScope": false,
       "auditInHandler": false,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-backup-service.js",
+        "tools/test-admin-backup-transaction.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -3947,12 +4030,17 @@
       "hasExplicitScope": false,
       "auditInHandler": false,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-backup-service.js",
+        "tools/test-admin-backup-transaction.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -3973,12 +4061,17 @@
       "hasExplicitScope": false,
       "auditInHandler": false,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-backup-service.js",
+        "tools/test-admin-backup-transaction.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -3999,12 +4092,17 @@
       "hasExplicitScope": false,
       "auditInHandler": true,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
-      "idempotencyRequired": false,
+      "nextStatus": "browser-verified",
+      "idempotencyRequired": true,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-backup-service.js",
+        "tools/test-admin-backup-transaction.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -4025,12 +4123,17 @@
       "hasExplicitScope": false,
       "auditInHandler": false,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-backup-service.js",
+        "tools/test-admin-backup-transaction.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -4051,12 +4154,17 @@
       "hasExplicitScope": false,
       "auditInHandler": false,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-backup-service.js",
+        "tools/test-admin-backup-transaction.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -4077,12 +4185,17 @@
       "hasExplicitScope": false,
       "auditInHandler": true,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-backup-service.js",
+        "tools/test-admin-backup-transaction.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {
@@ -4103,12 +4216,16 @@
       "hasExplicitScope": false,
       "auditInHandler": false,
       "backupInHandler": false,
-      "nextStatus": "write-implemented",
+      "nextStatus": "browser-verified",
       "idempotencyRequired": false,
       "concurrencyControlRecommended": false,
       "productionSmokeAllowed": true,
-      "apiTests": [],
-      "playwrightTests": [],
+      "apiTests": [
+        "tools/test-admin-http-write-parity.js"
+      ],
+      "playwrightTests": [
+        "tools/test-admin-playwright-phase-b.js"
+      ],
       "notes": ""
     },
     {

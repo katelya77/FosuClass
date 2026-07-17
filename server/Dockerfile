@@ -1,33 +1,77 @@
-# 使用 Node.js 20 作为基础镜像
-FROM node:20-alpine
+# syntax=docker/dockerfile:1.7
+# Build from repository root:
+#   docker build -f server/Dockerfile --build-arg GIT_REVISION=$(git rev-parse HEAD) .
+#
+# Chromium retained: personal schedule import may enable
+# FOSU_IMPORT_USE_PLAYWRIGHT_FALLBACK with system chromium.
 
-# 安装基础网络诊断与 CA 证书依赖
-RUN apk add --no-cache curl bind-tools ca-certificates chromium nss freetype harfbuzz ttf-freefont
+ARG NODE_VERSION=20
 
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
-ENV FOSU_IMPORT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium-browser
+# ---------- admin SPA ----------
+FROM node:${NODE_VERSION}-bookworm-slim AS admin-builder
+WORKDIR /src
+COPY admin-web/package.json admin-web/package-lock.json ./admin-web/
+WORKDIR /src/admin-web
+RUN npm ci
+COPY admin-web/ ./
+# vite outDir is ../server/public/admin-app relative to admin-web
+RUN mkdir -p /src/server/public/admin-app && npm run build \
+  && test -f /src/server/public/admin-app/index.html
 
-# 设置工作目录
+# ---------- production node_modules ----------
+FROM node:${NODE_VERSION}-alpine AS server-deps
+WORKDIR /app
+COPY server/package.json server/package-lock.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
+# ---------- runtime ----------
+FROM node:${NODE_VERSION}-alpine AS runtime
+
+ARG GIT_REVISION=unknown
+ARG BUILD_CREATED=unknown
+ARG IMAGE_VERSION=0.0.0
+
+LABEL org.opencontainers.image.source="https://github.com/katelya77/FosuClass" \
+      org.opencontainers.image.revision="${GIT_REVISION}" \
+      org.opencontainers.image.created="${BUILD_CREATED}" \
+      org.opencontainers.image.version="${IMAGE_VERSION}" \
+      org.opencontainers.image.title="fosuclass-api" \
+      org.opencontainers.image.description="FosuClass API + progressive admin SPA"
+
+RUN apk add --no-cache \
+      curl \
+      ca-certificates \
+      chromium \
+      nss \
+      freetype \
+      harfbuzz \
+      ttf-freefont \
+    && rm -rf /var/cache/apk/*
+
+ENV NODE_ENV=production \
+    PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
+    FOSU_IMPORT_BROWSER_EXECUTABLE_PATH=/usr/bin/chromium-browser \
+    PORT=3000
+
 WORKDIR /app
 
-# 确保持久化 storage 目录存在
-RUN mkdir -p /app/storage
+COPY --from=server-deps /app/node_modules ./node_modules
+COPY server/package.json server/package-lock.json ./
+COPY server/src ./src
+COPY server/scripts ./scripts
+COPY server/assets ./assets
+COPY server/data ./data
+COPY server/public ./public
+COPY --from=admin-builder /src/server/public/admin-app ./public/admin-app
 
-# 复制 package.json 和 package-lock.json
-COPY package*.json ./
+RUN mkdir -p /app/storage /app/data/backups \
+    && chmod -R a+rX /app/src /app/public /app/scripts /app/assets \
+    && chmod a+rwx /app/storage /app/data /app/data/backups
 
-# 安装生产环境依赖
-RUN npm ci --omit=dev
-
-# 复制所有源代码与静态资源（含 progressive admin SPA 构建产物）
-COPY src/ ./src/
-COPY scripts/ ./scripts/
-COPY data/ ./data/
-COPY assets/ ./assets/
-COPY public/ ./public/
-
-# 暴露接口服务端口
 EXPOSE 3000
 
-# 启动命令
+HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
+  CMD node scripts/test-health.js || exit 1
+
+# Root retained for 1Panel bind-mount write compatibility.
 CMD ["node", "src/app.js"]

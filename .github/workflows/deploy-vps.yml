@@ -34,6 +34,9 @@ jobs:
   deploy:
     needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
     steps:
       - name: Checkout code
         uses: actions/checkout@v6
@@ -126,14 +129,15 @@ jobs:
       - name: Security acceptance tests
         run: npm run security:acceptance
 
-      - name: Upload server/ directory via SCP
+      - name: Upload deploy context (server + admin-web for hybrid fallback build)
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          source: "server/**,!server/node_modules/**,!server/.env,!server/storage/**"
+          # Transitional: still SCP sources for hybrid fallback. Prefer GHCR digest when available.
+          source: "server/**,!server/node_modules/**,!server/.env,!server/storage/**,admin-web/**,!admin-web/node_modules/**,.dockerignore"
           target: "${{ secrets.VPS_APP_DIR }}"
 
       - name: SSH Remote Deploy & Health Check
@@ -234,7 +238,11 @@ jobs:
             # Progressive admin SPA: Legacy remains production write authority.
             FOSU_ADMIN_NEXT_ENABLED=true
             FOSU_ADMIN_PRIMARY=legacy
+            FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups
             FOSU_CONFIG_HARD_FAIL=false
+            FOSU_API_PULL_POLICY=always
+            FOSU_DEPLOY_IMAGE_MODE=${{ vars.FOSU_DEPLOY_IMAGE_MODE || 'hybrid' }}
+            FOSU_API_IMAGE=${{ vars.FOSU_API_IMAGE || '' }}
             FOSU_BASE_URL=https://100.fosu.edu.cn
             FOSU_AUTH_URL=https://authserver.fosu.edu.cn
             FOSU_AUTH_BASE=https://authserver.fosu.edu.cn
@@ -416,15 +424,123 @@ jobs:
               rm -f "$tmp_env"
               exit 1
             fi
+            # Explicit Phase B Vue write modules (never rely on empty-default)
+            if ! grep -q '^FOSU_ADMIN_NEXT_WRITE_MODULES=' "$tmp_env"; then
+              echo 'FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups' >> "$tmp_env"
+            fi
             mv "$tmp_env" .env
 
-            node -e "require('./src/services/ai/providerRuntimeConfigStore'); console.log('ai runtime config store ok')"
+            DEPLOY_STATE_DIR="$APP_DIR/server/.deploy"
+            mkdir -p "$DEPLOY_STATE_DIR"
+            PREVIOUS_IMAGE_REFERENCE="$(grep -E '^FOSU_API_IMAGE=' .env 2>/dev/null | tail -n1 | cut -d= -f2- || true)"
+            if [ -f "$DEPLOY_STATE_DIR/current-image.txt" ]; then
+              PREVIOUS_IMAGE_REFERENCE="$(cat "$DEPLOY_STATE_DIR/current-image.txt" | tr -d '\r\n')"
+            fi
+            PREVIOUS_CONTAINER_ID="$(sudo docker inspect -f '{{.Id}}' "$CONTAINER_NAME" 2>/dev/null || true)"
+            ACTIVE_POINTER_BEFORE="$(sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "try{const p=require(\"./src/services/runtimePointerService\");const a=p.getActivePointer&&p.getActivePointer()||p.readActivePointer&&p.readActivePointer()||null;console.log(JSON.stringify(a||{}));}catch(e){console.log(\"{}\")}"' 2>/dev/null || echo '{}')"
+            echo "ACTIVE_POINTER_BEFORE=$ACTIVE_POINTER_BEFORE"
+
+            GHCR_IMAGE_REPO='ghcr.io/katelya77/fosuclass-api'
+            CANDIDATE_TAG="${GHCR_IMAGE_REPO}:sha-${COMMIT_SHA}"
+            DEPLOY_MODE="$(grep '^FOSU_DEPLOY_IMAGE_MODE=' .env | cut -d= -f2- || echo hybrid)"
+            NEW_IMAGE_REFERENCE=""
+            NEW_IMAGE_DIGEST=""
+            USED_GHCR=false
+
+            try_ghcr_pull() {
+              local image_ref="$1"
+              tmp_docker_config="$(mktemp -d)"
+              export DOCKER_CONFIG="$tmp_docker_config"
+              # Prefer dedicated pull token; fall back to empty (public) — secrets may be set in Actions env via ssh is hard.
+              # Use file written by Actions step if present.
+              if [ -n "${GHCR_PULL_TOKEN:-}" ]; then
+                printf '%s' "$GHCR_PULL_TOKEN" | docker login ghcr.io -u "${GHCR_PULL_USERNAME:-${GITHUB_ACTOR:-katelya77}}" --password-stdin
+              elif [ -f "$APP_DIR/server/.deploy/ghcr.token" ]; then
+                docker login ghcr.io -u "$(cat "$APP_DIR/server/.deploy/ghcr.user" 2>/dev/null || echo katelya77)" --password-stdin < "$APP_DIR/server/.deploy/ghcr.token"
+              fi
+              if docker pull "$image_ref"; then
+                NEW_IMAGE_REFERENCE="$image_ref"
+                NEW_IMAGE_DIGEST="$(docker image inspect "$image_ref" --format '{{index .RepoDigests 0}}' 2>/dev/null || true)"
+                ARCH="$(docker image inspect "$image_ref" --format '{{.Architecture}}' 2>/dev/null || true)"
+                echo "pulled image arch=${ARCH} digest=${NEW_IMAGE_DIGEST}"
+                if [ -n "$ARCH" ] && [ "$ARCH" != "arm64" ] && [ "$ARCH" != "aarch64" ]; then
+                  echo "::error::Image architecture is ${ARCH}, expected arm64"
+                  docker logout ghcr.io || true
+                  rm -rf "$tmp_docker_config"
+                  return 1
+                fi
+                USED_GHCR=true
+                docker logout ghcr.io || true
+                rm -rf "$tmp_docker_config"
+                unset DOCKER_CONFIG
+                return 0
+              fi
+              docker logout ghcr.io || true
+              rm -rf "$tmp_docker_config"
+              unset DOCKER_CONFIG
+              return 1
+            }
+
+            # GHCR credentials from Actions (passed via env files dropped next to compose)
+            export GHCR_PULL_TOKEN='${{ secrets.GHCR_PULL_TOKEN || secrets.GITHUB_TOKEN }}'
+            export GHCR_PULL_USERNAME='${{ secrets.GHCR_PULL_USERNAME || github.actor }}'
+            export GITHUB_ACTOR='${{ github.actor }}'
+
+            if [ "$DEPLOY_MODE" = "source" ]; then
+              echo "DEPLOY_MODE=source → local build"
+            elif try_ghcr_pull "$CANDIDATE_TAG"; then
+              echo "Using GHCR image $NEW_IMAGE_REFERENCE"
+              # rewrite FOSU_API_IMAGE in .env
+              if grep -q '^FOSU_API_IMAGE=' .env; then
+                sed -i.bak "s|^FOSU_API_IMAGE=.*|FOSU_API_IMAGE=${NEW_IMAGE_REFERENCE}|" .env
+              else
+                echo "FOSU_API_IMAGE=${NEW_IMAGE_REFERENCE}" >> .env
+              fi
+              echo "FOSU_API_PULL_POLICY=always" >> .env
+            elif [ "$DEPLOY_MODE" = "ghcr" ]; then
+              echo "::error::GHCR pull failed and DEPLOY_MODE=ghcr"
+              exit 1
+            else
+              echo "GHCR pull unavailable; hybrid fallback to local --build"
+              if grep -q '^FOSU_API_IMAGE=' .env; then
+                sed -i.bak 's|^FOSU_API_IMAGE=.*|FOSU_API_IMAGE=fosuclass-api:local|' .env
+              else
+                echo 'FOSU_API_IMAGE=fosuclass-api:local' >> .env
+              fi
+              echo 'FOSU_API_PULL_POLICY=never' >> .env
+            fi
+
+            node -e "require('./src/services/ai/providerRuntimeConfigStore'); console.log('ai runtime config store ok')" || true
+            # Compose lives in server/; build context is parent for multi-stage Dockerfile
             sudo docker compose config >/dev/null
-            sudo docker compose up -d --build
+
+            rollback_to_previous() {
+              echo "::warning::Rolling back to previous image: ${PREVIOUS_IMAGE_REFERENCE}"
+              if [ -n "$PREVIOUS_IMAGE_REFERENCE" ]; then
+                if grep -q '^FOSU_API_IMAGE=' .env; then
+                  sed -i.bak "s|^FOSU_API_IMAGE=.*|FOSU_API_IMAGE=${PREVIOUS_IMAGE_REFERENCE}|" .env
+                else
+                  echo "FOSU_API_IMAGE=${PREVIOUS_IMAGE_REFERENCE}" >> .env
+                fi
+                sudo docker compose up -d --no-build || sudo docker compose up -d --build
+              else
+                sudo docker compose up -d --build
+              fi
+            }
+
+            if [ "$USED_GHCR" = true ]; then
+              if ! sudo docker compose up -d --no-build; then
+                rollback_to_previous
+                exit 1
+              fi
+            else
+              sudo docker compose up -d --build
+            fi
 
             container_id="$(sudo docker ps -aqf "name=^/${CONTAINER_NAME}$")"
             if [ -z "$container_id" ]; then
               echo "::error::${CONTAINER_NAME} does not exist after docker compose up"
+              rollback_to_previous
               exit 1
             fi
 
@@ -464,11 +580,44 @@ jobs:
 
             if ! curl -fsS http://127.0.0.1:18318/api/health >/dev/null; then
               echo "::error::http://127.0.0.1:18318/api/health failed"
+              rollback_to_previous
               exit 1
             fi
+            # Admin capabilities smoke (primary must stay legacy; write modules explicit)
+            caps_json="$(curl -fsS http://127.0.0.1:18318/api/admin/capabilities || true)"
+            echo "$caps_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const j=JSON.parse(s||"{}");if(j.primary!=="legacy"){console.error("primary!=legacy");process.exit(1)}const w=j.writeModules||{};if(!w.content||!w.feedback||!w.audit||!w.backups){console.error("phase B modules not enabled");process.exit(1)}if(w.release){console.error("release write must stay off");process.exit(1)}console.log("capabilities-ok")})'
+            ui_mode="$(curl -fsS http://127.0.0.1:18318/api/admin/ui-mode || true)"
+            echo "$ui_mode" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const j=JSON.parse(s||"{}");if(j.primary!=="legacy"&&j.effectivePrimary!=="legacy"){console.error("ui-mode primary not legacy");process.exit(1)}console.log("ui-mode-ok")})'
+            curl -fsS -o /dev/null http://127.0.0.1:18318/admin-next/ || true
+
+            ACTIVE_POINTER_AFTER="$(sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "try{const p=require(\"./src/services/runtimePointerService\");const a=p.getActivePointer&&p.getActivePointer()||p.readActivePointer&&p.readActivePointer()||null;console.log(JSON.stringify(a||{}));}catch(e){console.log(\"{}\")}"' 2>/dev/null || echo '{}')"
+            echo "ACTIVE_POINTER_AFTER=$ACTIVE_POINTER_AFTER"
+            if [ "$ACTIVE_POINTER_BEFORE" != "$ACTIVE_POINTER_AFTER" ]; then
+              echo "::error::Active Pointer changed during deploy (forbidden)"
+              rollback_to_previous
+              exit 1
+            fi
+
+            # Persist deploy state for digest rollback
+            {
+              echo "COMMIT_SHA=${COMMIT_SHA}"
+              echo "USED_GHCR=${USED_GHCR}"
+              echo "NEW_IMAGE_REFERENCE=${NEW_IMAGE_REFERENCE}"
+              echo "NEW_IMAGE_DIGEST=${NEW_IMAGE_DIGEST}"
+              echo "PREVIOUS_IMAGE_REFERENCE=${PREVIOUS_IMAGE_REFERENCE}"
+              echo "PREVIOUS_CONTAINER_ID=${PREVIOUS_CONTAINER_ID}"
+            } > "$DEPLOY_STATE_DIR/last-deploy.env"
+            if [ -n "$NEW_IMAGE_REFERENCE" ]; then
+              echo "$NEW_IMAGE_REFERENCE" > "$DEPLOY_STATE_DIR/current-image.txt"
+              echo "$PREVIOUS_IMAGE_REFERENCE" > "$DEPLOY_STATE_DIR/previous-image.txt"
+            fi
+            # prune dangling only; keep previous image
+            sudo docker image prune -f >/dev/null 2>&1 || true
+
             admin_unauth_status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18318/api/admin/publisher/receipt || true)"
             if [ "$admin_unauth_status" != "401" ]; then
               echo "::error::protected admin publisher receipt API without token returned HTTP ${admin_unauth_status}, expected 401"
+              rollback_to_previous
               exit 1
             fi
             sudo docker exec "$CONTAINER_NAME" sh -lc 'test -n "$ADMIN_API_TOKEN" && status="$(curl -sS -o /tmp/fosu-admin-token-contract.json -w "%{http_code}" -H "X-Admin-Token: ${ADMIN_API_TOKEN}" http://127.0.0.1:3000/api/admin/publisher/receipt)" && test "$status" = "200" && node -e "const fs=require(\"fs\");const data=JSON.parse(fs.readFileSync(\"/tmp/fosu-admin-token-contract.json\",\"utf8\"));if(!data||data.success!==true)process.exit(1)" && rm -f /tmp/fosu-admin-token-contract.json'

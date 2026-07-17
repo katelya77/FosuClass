@@ -6,9 +6,8 @@
  *   FOSU_ADMIN_NEXT_ENABLED=true|false
  *   FOSU_ADMIN_LEGACY_ENABLED=true|false
  *   FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups
- *     - unset  → Phase B defaults (low-risk modules)
- *     - ""     → no Vue write modules
- *     - "*"    → all known modules (dev only)
+ *     - unset or "" → no Vue write modules (explicit grant required)
+ *     - "*" → all known modules; FORBIDDEN when NODE_ENV=production
  */
 
 const KNOWN_WRITE_MODULES = Object.freeze([
@@ -32,8 +31,8 @@ const KNOWN_WRITE_MODULES = Object.freeze([
   "runtime",
 ]);
 
-/** Modules that ship write-ready in Vue after Phase B without requiring env on every host. */
-const PHASE_B_DEFAULT_WRITE_MODULES = Object.freeze([
+/** Explicit production grant for Phase B (set by deploy workflow, not implicit default). */
+const PHASE_B_PRODUCTION_WRITE_MODULES = Object.freeze([
   "content",
   "feedback",
   "audit",
@@ -60,17 +59,50 @@ const PATH_MODULE_RULES = [
   { module: "jobs", test: (p) => /^\/jobs(\/|$)/.test(p) },
 ];
 
-function parseWriteModules(raw) {
+function isProductionEnv() {
+  return String(process.env.NODE_ENV || "").toLowerCase() === "production";
+}
+
+function parseWriteModules(raw, options = {}) {
+  const allowStar = options.allowStar !== false;
   if (raw === undefined || raw === null) {
-    return PHASE_B_DEFAULT_WRITE_MODULES.slice();
+    return [];
   }
   const text = String(raw).trim();
   if (text === "") return [];
-  if (text === "*") return KNOWN_WRITE_MODULES.slice();
+  if (text === "*") {
+    if (!allowStar || isProductionEnv()) {
+      const err = new Error(
+        "FOSU_ADMIN_NEXT_WRITE_MODULES=* is forbidden in production (and when allowStar=false)"
+      );
+      err.code = "WRITE_MODULES_STAR_FORBIDDEN";
+      err.statusCode = 500;
+      throw err;
+    }
+    return KNOWN_WRITE_MODULES.slice();
+  }
   return text
     .split(",")
     .map((part) => part.trim().toLowerCase())
     .filter((part) => part && KNOWN_WRITE_MODULES.includes(part));
+}
+
+/**
+ * Fail-fast for production misconfiguration.
+ * Call from app bootstrap / config preflight.
+ */
+function assertWriteModulesConfigSafe() {
+  const raw = process.env.FOSU_ADMIN_NEXT_WRITE_MODULES;
+  if (String(raw || "").trim() === "*" && isProductionEnv()) {
+    const err = new Error(
+      "FOSU_ADMIN_NEXT_WRITE_MODULES=* is not allowed when NODE_ENV=production"
+    );
+    err.code = "WRITE_MODULES_STAR_FORBIDDEN";
+    throw err;
+  }
+  // Ensure parse does not throw for normal lists
+  parseWriteModules(raw, { allowStar: !isProductionEnv() });
+  return true;
 }
 
 function getAdminPrimary() {
@@ -86,7 +118,9 @@ function getAdminPrimary() {
 }
 
 function getWriteModuleList() {
-  return parseWriteModules(process.env.FOSU_ADMIN_NEXT_WRITE_MODULES);
+  return parseWriteModules(process.env.FOSU_ADMIN_NEXT_WRITE_MODULES, {
+    allowStar: !isProductionEnv(),
+  });
 }
 
 function getWriteModulesMap() {
@@ -114,6 +148,7 @@ function resolveModuleForPath(routePath) {
 function getCapabilities() {
   const flags = getAdminPrimary();
   const writeModules = getWriteModulesMap();
+  const list = getWriteModuleList();
   return {
     success: true,
     primary: flags.primary,
@@ -121,8 +156,14 @@ function getCapabilities() {
     legacyEnabled: flags.legacyEnabled,
     nextEnabled: flags.nextEnabled,
     writeModules,
-    writeModuleList: getWriteModuleList(),
+    writeModuleList: list,
     knownWriteModules: KNOWN_WRITE_MODULES.slice(),
+    writeModulesSource:
+      process.env.FOSU_ADMIN_NEXT_WRITE_MODULES === undefined
+        ? "unset"
+        : String(process.env.FOSU_ADMIN_NEXT_WRITE_MODULES).trim() === ""
+          ? "empty"
+          : "explicit",
     paths: {
       next: flags.primary === "next" ? "/admin/" : "/admin-next/",
       legacy: flags.primary === "next" ? "/admin-legacy/" : "/admin/",
@@ -143,7 +184,6 @@ function assertNextWriteAllowed(req) {
   if (["GET", "HEAD", "OPTIONS"].includes(method)) {
     return { ok: true, skipped: true };
   }
-  // Always allow auth mutations
   const routePath =
     (req.route && req.route.path) ||
     String(req.originalUrl || req.url || "")
@@ -155,7 +195,6 @@ function assertNextWriteAllowed(req) {
   }
   const moduleName = resolveModuleForPath(routePath);
   if (!moduleName) {
-    // Unknown mutating path from Vue: deny by default for safety.
     return {
       ok: false,
       status: 403,
@@ -177,21 +216,32 @@ function assertNextWriteAllowed(req) {
 
 function createWriteModuleGateMiddleware() {
   return function adminWriteModuleGate(req, res, next) {
-    const result = assertNextWriteAllowed(req);
-    if (result.ok) return next();
-    return res.status(result.status || 403).json({
-      success: false,
-      code: result.code || "MODULE_WRITE_DISABLED",
-      message: result.message || "write module disabled",
-      module: result.module || null,
-    });
+    try {
+      const result = assertNextWriteAllowed(req);
+      if (result.ok) return next();
+      return res.status(result.status || 403).json({
+        success: false,
+        code: result.code || "MODULE_WRITE_DISABLED",
+        message: result.message || "write module disabled",
+        module: result.module || null,
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        code: error.code || "WRITE_MODULES_CONFIG_ERROR",
+        message: error.message,
+      });
+    }
   };
 }
 
 module.exports = {
   KNOWN_WRITE_MODULES,
-  PHASE_B_DEFAULT_WRITE_MODULES,
+  PHASE_B_PRODUCTION_WRITE_MODULES,
+  /** @deprecated use PHASE_B_PRODUCTION_WRITE_MODULES; no longer applied as default */
+  PHASE_B_DEFAULT_WRITE_MODULES: Object.freeze([]),
   parseWriteModules,
+  assertWriteModulesConfigSafe,
   getAdminPrimary,
   getWriteModuleList,
   getWriteModulesMap,

@@ -50,13 +50,19 @@ jobs:
       - name: Architecture & admin contracts
         run: |
           npm run test:architecture-guards
+          npm run admin:feature-matrix:generate
           npm run test:admin-feature-matrix
+          npm run test:admin-matrix-freshness
+          npm run test:admin-matrix-status-evidence
           npm run test:admin-legacy-dependency
           npm run test:admin-capabilities
           npm run test:admin-backup-service
+          npm run test:admin-backup-transaction
           npm run test:admin-content-concurrency
           npm run test:admin-no-duplicate-business-logic
           npm run test:admin-write-parity
+          npm run test:admin-http-write-parity
+          npm run test:docker-secret-scan
           npm run test:duplicate-admin-routes
           npm run test:service-token-scopes
           npm run test:service-token-route-matrix
@@ -93,6 +99,11 @@ jobs:
 
       - name: Install Playwright Chromium
         run: npx --prefix admin-web playwright install --with-deps chromium
+
+      - name: Phase B Playwright write flows (isolated temp storage)
+        run: npm run test:admin-playwright-phase-b
+        env:
+          FOSU_ADMIN_NEXT_WRITE_MODULES: content,feedback,audit,backups
 
       - name: Browser acceptance
         run: npm run admin:test:browser
