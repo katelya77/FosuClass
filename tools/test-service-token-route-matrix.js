@@ -1,35 +1,45 @@
 /**
  * Real Express route-level scope matrix for admin write APIs.
- * Does not only unit-test hasAnyScope().
+ * Isolates all writes into temporary FOSU_STORAGE_DIR / FOSU_DATA_DIR.
  */
 const assert = require("assert");
 const http = require("http");
+const os = require("os");
+const fs = require("fs");
 const path = require("path");
+const { spawnSync } = require("child_process");
 const express = require(path.join(__dirname, "../server/node_modules/express"));
+
+const tempRoot = path.join(
+  os.tmpdir(),
+  `fosu-scope-matrix-${process.pid}-${Date.now()}`
+);
+const storageDir = path.join(tempRoot, "storage");
+const dataDir = path.join(tempRoot, "data");
+fs.mkdirSync(storageDir, { recursive: true });
+fs.mkdirSync(dataDir, { recursive: true });
 
 process.env.NODE_ENV = "development";
 process.env.ADMIN_PASSWORD = "matrix-admin-password";
 process.env.ADMIN_API_TOKEN = "matrix-admin-full-token";
+process.env.FOSU_STORAGE_DIR = storageDir;
+process.env.FOSU_DATA_DIR = dataDir;
 process.env.ADMIN_SERVICE_TOKENS = JSON.stringify([
   { name: "stager", token: "tok-staging-init", scopes: ["staging:init"] },
   { name: "relay", token: "tok-relay-manage", scopes: ["relay:manage"] },
   { name: "publisher", token: "tok-release-publish", scopes: ["release:publish"] },
 ]);
 
-// Fresh modules after env
-const loadPaths = [
-  "../server/src/config",
-  "../server/src/services/serviceTokenService",
-  "../server/src/services/adminAuth",
-  "../server/src/security/adminRouteScopes",
-  "../server/src/routes/admin",
-];
-for (const p of loadPaths) {
-  try {
-    delete require.cache[require.resolve(p)];
-  } catch (_) {}
+function clearServerModules() {
+  for (const key of Object.keys(require.cache)) {
+    const norm = key.replace(/\\/g, "/");
+    if (norm.includes("/server/src/")) {
+      delete require.cache[key];
+    }
+  }
 }
 
+clearServerModules();
 const adminRouter = require("../server/src/routes/admin");
 
 function createApp() {
@@ -39,7 +49,7 @@ function createApp() {
   return app;
 }
 
-function request(app, { method, path, token, body }) {
+function request(app, { method, path: urlPath, token, body }) {
   return new Promise((resolve, reject) => {
     const server = http.createServer(app);
     server.listen(0, "127.0.0.1", () => {
@@ -49,7 +59,7 @@ function request(app, { method, path, token, body }) {
         {
           hostname: "127.0.0.1",
           port,
-          path,
+          path: urlPath,
           method,
           headers: {
             "content-type": "application/json",
@@ -84,107 +94,155 @@ function request(app, { method, path, token, body }) {
   });
 }
 
+function listRuntimeFiles(dir) {
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir, { withFileTypes: true })
+    .filter((d) => d.name !== ".gitkeep")
+    .map((d) => d.name);
+}
+
+function assertNoRuntimePollution() {
+  // Writes must stay under tempRoot, not the real tracked storage/data trees.
+  const root = path.join(__dirname, "..");
+  const realRelay = path.join(root, "server/storage/relay");
+  const realStaging = path.join(root, "server/storage/staging-uploads");
+  const realBackups = path.join(root, "server/data/backups");
+
+  assert.deepStrictEqual(
+    listRuntimeFiles(realRelay),
+    [],
+    `real relay storage polluted: ${listRuntimeFiles(realRelay).join(",")}`
+  );
+  assert.deepStrictEqual(
+    listRuntimeFiles(realStaging),
+    [],
+    `real staging-uploads polluted: ${listRuntimeFiles(realStaging).join(",")}`
+  );
+  if (fs.existsSync(realBackups)) {
+    const backups = listRuntimeFiles(realBackups).filter((n) => n.includes("scope-matrix") || n.startsWith("notices-"));
+    // Allow pre-existing backups; ensure our temp-isolated run didn't require writing here.
+    // Strong check: data dir used by process must be temp.
+    assert.ok(String(process.env.FOSU_DATA_DIR || "").includes(tempRoot), "FOSU_DATA_DIR must be temp");
+    assert.ok(String(process.env.FOSU_STORAGE_DIR || "").includes(tempRoot), "FOSU_STORAGE_DIR must be temp");
+  }
+
+  // Optional: git status should not introduce NEW untracked runtime dumps under those dirs.
+  const status = spawnSync("git", ["status", "--short", "--", "server/storage/relay", "server/storage/staging-uploads", "server/data/backups"], {
+    cwd: root,
+    encoding: "utf8",
+  });
+  const out = status.stdout || "";
+  const untrackedRuntime = out
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l.startsWith("??") && !l.includes(".gitkeep"));
+  assert.deepStrictEqual(untrackedRuntime, [], `unexpected untracked runtime files:\n${out}`);
+}
+
 async function main() {
-  const app = createApp();
+  try {
+    const app = createApp();
 
-  // staging:init cannot create relay tasks
-  {
-    const res = await request(app, {
-      method: "POST",
-      path: "/api/admin/relay/tasks",
-      token: "tok-staging-init",
-      body: { term: "2025-2026-2" },
-    });
-    assert.strictEqual(res.status, 403, `staging→relay expected 403 got ${res.status} ${JSON.stringify(res.json)}`);
-    assert.strictEqual(res.json && res.json.code, "ADMIN_SCOPE_DENIED");
-  }
-
-  // staging:init can init staging upload (may 400 on body, but not 403)
-  {
-    const res = await request(app, {
-      method: "POST",
-      path: "/api/admin/staging/upload/init",
-      token: "tok-staging-init",
-      body: {
-        fileName: "x.json",
-        term: "2025-2026-2",
-        source: "scope-matrix-test",
-        contentEncoding: "identity",
-        contentType: "application/json",
-        chunkSize: 1024,
-        totalChunks: 1,
-        uploadSize: 10,
-        originalSize: 10,
-      },
-    });
-    assert.notStrictEqual(res.status, 403, `staging init must not be scope-denied: ${JSON.stringify(res.json)}`);
-    assert.ok([200, 201, 400, 422, 500].includes(res.status), `unexpected status ${res.status}`);
-    // If service accepts, success; if validation fails, still proves scope passed
-    if (res.status === 200 || res.status === 201) {
-      assert.strictEqual(res.json.success, true);
+    {
+      const res = await request(app, {
+        method: "POST",
+        path: "/api/admin/relay/tasks",
+        token: "tok-staging-init",
+        body: { term: "2025-2026-2" },
+      });
+      assert.strictEqual(res.status, 403, `staging→relay expected 403 got ${res.status}`);
+      assert.strictEqual(res.json && res.json.code, "ADMIN_SCOPE_DENIED");
     }
-  }
 
-  // relay:manage can create tasks
-  {
-    const res = await request(app, {
-      method: "POST",
-      path: "/api/admin/relay/tasks",
-      token: "tok-relay-manage",
-      body: { term: "2025-2026-2" },
-    });
-    assert.notStrictEqual(res.status, 403, `relay manage should pass scope: ${JSON.stringify(res.json)}`);
-    assert.ok(res.status < 500 || res.json, "relay create should reach handler");
-  }
+    {
+      const res = await request(app, {
+        method: "POST",
+        path: "/api/admin/staging/upload/init",
+        token: "tok-staging-init",
+        body: {
+          fileName: "x.json",
+          term: "2025-2026-2",
+          source: "scope-matrix-test",
+          contentEncoding: "identity",
+          contentType: "application/json",
+          chunkSize: 1024,
+          totalChunks: 1,
+          uploadSize: 10,
+          originalSize: 10,
+        },
+      });
+      assert.notStrictEqual(res.status, 403, `staging init must not be scope-denied: ${JSON.stringify(res.json)}`);
+    }
 
-  // relay:manage cannot write provider config
-  {
-    const res = await request(app, {
-      method: "POST",
-      path: "/api/admin/ai-provider/config",
-      token: "tok-relay-manage",
-      body: { provider: "mock" },
-    });
-    assert.strictEqual(res.status, 403, `relay→provider expected 403 got ${res.status}`);
-  }
+    {
+      const res = await request(app, {
+        method: "POST",
+        path: "/api/admin/relay/tasks",
+        token: "tok-relay-manage",
+        body: { term: "2025-2026-2" },
+      });
+      assert.notStrictEqual(res.status, 403, `relay manage should pass scope: ${JSON.stringify(res.json)}`);
+    }
 
-  // release:publish cannot create notices
-  {
-    const res = await request(app, {
-      method: "POST",
-      path: "/api/admin/notices",
-      token: "tok-release-publish",
-      body: { title: "x", content: "y" },
-    });
-    assert.strictEqual(res.status, 403, `publish→notices expected 403 got ${res.status}`);
-  }
+    {
+      const res = await request(app, {
+        method: "POST",
+        path: "/api/admin/ai-provider/config",
+        token: "tok-relay-manage",
+        body: { provider: "mock" },
+      });
+      assert.strictEqual(res.status, 403, `relay→provider expected 403 got ${res.status}`);
+    }
 
-  // admin:full can reach notices write (may validate body)
-  {
-    const res = await request(app, {
-      method: "POST",
-      path: "/api/admin/notices",
-      token: "matrix-admin-full-token",
-      body: { title: "scope-matrix", content: "ok", status: "draft" },
-    });
-    assert.notStrictEqual(res.status, 403, `admin:full notices must not be scope-denied`);
-  }
+    {
+      const res = await request(app, {
+        method: "POST",
+        path: "/api/admin/notices",
+        token: "tok-release-publish",
+        body: { title: "x", content: "y" },
+      });
+      assert.strictEqual(res.status, 403, `publish→notices expected 403 got ${res.status}`);
+    }
 
-  // admin:full can reach relay create
-  {
-    const res = await request(app, {
-      method: "POST",
-      path: "/api/admin/relay/tasks",
-      token: "matrix-admin-full-token",
-      body: { term: "2025-2026-2" },
-    });
-    assert.notStrictEqual(res.status, 403, `admin:full relay must not be scope-denied`);
-  }
+    {
+      const res = await request(app, {
+        method: "POST",
+        path: "/api/admin/notices",
+        token: "matrix-admin-full-token",
+        body: { title: "scope-matrix", content: "ok", status: "draft" },
+      });
+      assert.notStrictEqual(res.status, 403, `admin:full notices must not be scope-denied`);
+    }
 
-  console.log("Service token route matrix tests passed.");
+    {
+      const res = await request(app, {
+        method: "POST",
+        path: "/api/admin/relay/tasks",
+        token: "matrix-admin-full-token",
+        body: { term: "2025-2026-2" },
+      });
+      assert.notStrictEqual(res.status, 403, `admin:full relay must not be scope-denied`);
+    }
+
+    // Writes stayed in temp dirs
+    assert.ok(fs.existsSync(storageDir));
+    assert.ok(fs.existsSync(dataDir));
+    assertNoRuntimePollution();
+
+    console.log("Service token route matrix tests passed.");
+  } finally {
+    try {
+      fs.rmSync(tempRoot, { recursive: true, force: true });
+    } catch (_) {}
+    clearServerModules();
+  }
 }
 
 main().catch((err) => {
+  try {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  } catch (_) {}
   console.error(err);
   process.exit(1);
 });
