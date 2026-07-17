@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { GROUP_LABELS, NAV_ITEMS, type NavItem } from '@/app/navigation'
 import { useUiStore } from '@/stores/ui'
@@ -14,6 +14,8 @@ const emit = defineEmits<{ closeMobile: [] }>()
 const route = useRoute()
 const ui = useUiStore()
 const legacyHref = legacyAdminRoot()
+const mobileCloseRef = ref<HTMLButtonElement | null>(null)
+let previousFocus: HTMLElement | null = null
 
 const groups = computed(() => {
   const map = new Map<NavItem['group'], NavItem[]>()
@@ -41,9 +43,20 @@ function onKey(e: KeyboardEvent) {
 
 watch(
   () => props.mobileOpen,
-  (open) => {
+  async (open) => {
     if (typeof document === 'undefined') return
     document.body.style.overflow = open ? 'hidden' : ''
+    if (open) {
+      previousFocus = document.activeElement as HTMLElement | null
+      await nextTick()
+      mobileCloseRef.value?.focus()
+    } else if (previousFocus) {
+      previousFocus.focus?.()
+      previousFocus = null
+    } else {
+      const menuBtn = document.getElementById('admin-nav-menu-btn') as HTMLButtonElement | null
+      menuBtn?.focus()
+    }
   },
 )
 
@@ -104,7 +117,15 @@ onUnmounted(() => {
             <strong>佛课小表</strong>
             <span>校园数据运营台</span>
           </div>
-          <button type="button" class="close" aria-label="关闭导航" @click="emit('closeMobile')">×</button>
+          <button
+            ref="mobileCloseRef"
+            type="button"
+            class="close"
+            aria-label="关闭导航"
+            @click="emit('closeMobile')"
+          >
+            ×
+          </button>
         </div>
         <nav>
           <section v-for="[group, items] in groups" :key="group">

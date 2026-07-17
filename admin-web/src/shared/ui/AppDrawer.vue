@@ -1,15 +1,90 @@
 <script setup lang="ts">
-defineProps<{ open: boolean; title?: string; side?: 'right' | 'left' }>()
+import { nextTick, onBeforeUnmount, ref, watch } from 'vue'
+
+const props = withDefaults(
+  defineProps<{
+    open: boolean
+    title?: string
+    side?: 'right' | 'left'
+    titleId?: string
+  }>(),
+  { side: 'right', titleId: 'admin-drawer-title' },
+)
 const emit = defineEmits<{ close: [] }>()
+
+const panelRef = ref<HTMLElement | null>(null)
+const closeBtnRef = ref<HTMLButtonElement | null>(null)
+let previousFocus: HTMLElement | null = null
+
+function onKeydown(e: KeyboardEvent) {
+  if (!props.open) return
+  if (e.key === 'Escape') {
+    e.preventDefault()
+    emit('close')
+    return
+  }
+  if (e.key !== 'Tab' || !panelRef.value) return
+  const focusable = panelRef.value.querySelectorAll<HTMLElement>(
+    'a[href],button:not([disabled]),textarea,input,select,[tabindex]:not([tabindex="-1"])',
+  )
+  if (!focusable.length) return
+  const first = focusable[0]
+  const last = focusable[focusable.length - 1]
+  if (e.shiftKey && document.activeElement === first) {
+    e.preventDefault()
+    last.focus()
+  } else if (!e.shiftKey && document.activeElement === last) {
+    e.preventDefault()
+    first.focus()
+  }
+}
+
+watch(
+  () => props.open,
+  async (open) => {
+    if (open) {
+      previousFocus = document.activeElement as HTMLElement | null
+      document.addEventListener('keydown', onKeydown)
+      document.body.style.overflow = 'hidden'
+      await nextTick()
+      closeBtnRef.value?.focus()
+    } else {
+      document.removeEventListener('keydown', onKeydown)
+      document.body.style.overflow = ''
+      previousFocus?.focus?.()
+      previousFocus = null
+    }
+  },
+)
+
+onBeforeUnmount(() => {
+  document.removeEventListener('keydown', onKeydown)
+  document.body.style.overflow = ''
+})
 </script>
 
 <template>
   <Teleport to="body">
     <div v-if="open" class="overlay" @click.self="emit('close')">
-      <aside class="drawer" :class="side || 'right'" role="dialog" aria-modal="true">
+      <aside
+        ref="panelRef"
+        class="drawer"
+        :class="side"
+        role="dialog"
+        aria-modal="true"
+        :aria-labelledby="titleId"
+      >
         <header class="head">
-          <h2>{{ title }}</h2>
-          <button type="button" class="close" aria-label="关闭" @click="emit('close')">×</button>
+          <h2 :id="titleId">{{ title }}</h2>
+          <button
+            ref="closeBtnRef"
+            type="button"
+            class="close"
+            aria-label="关闭"
+            @click="emit('close')"
+          >
+            ×
+          </button>
         </header>
         <div class="body">
           <slot />

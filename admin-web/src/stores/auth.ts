@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
-import { fetchSession, login as apiLogin, logout as apiLogout } from '@/shared/api/client'
+import { fetchSession, login as apiLogin, logout as apiLogout, type ApiError } from '@/shared/api/client'
 
 export const useAuthStore = defineStore('auth', () => {
   const authenticated = ref(false)
@@ -48,5 +48,29 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { authenticated, loading, error, bootstrapped, bootstrap, login, logout }
+  function clearSession(message = '') {
+    authenticated.value = false
+    if (message) error.value = message
+  }
+
+  function handleApiError(err: unknown) {
+    const e = err as ApiError
+    if (e && e.status === 401) {
+      clearSession(e.message || '后台登录已过期，请重新登录')
+      return true
+    }
+    return false
+  }
+
+  return {
+    authenticated,
+    loading,
+    error,
+    bootstrapped,
+    bootstrap,
+    login,
+    logout,
+    clearSession,
+    handleApiError,
+  }
 })

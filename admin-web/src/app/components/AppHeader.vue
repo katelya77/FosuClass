@@ -30,7 +30,13 @@ function onMenuClick() {
 <template>
   <header class="header">
     <div class="left">
-      <button type="button" class="icon-btn" aria-label="打开导航菜单" @click="onMenuClick">
+      <button
+        id="admin-nav-menu-btn"
+        type="button"
+        class="icon-btn"
+        aria-label="打开导航菜单"
+        @click="onMenuClick"
+      >
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
           <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" />
         </svg>
