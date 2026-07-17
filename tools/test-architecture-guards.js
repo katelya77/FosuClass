@@ -72,6 +72,11 @@ const requiredDocs = [
   "docs/adr/0003-modular-express-monolith.md",
   "docs/adr/0004-release-pack-data-plane.md",
   "docs/adr/0005-scoped-service-tokens.md",
+  // Phase A admin parity inventory
+  "docs/admin-migration/legacy-feature-inventory.md",
+  "docs/admin-migration/feature-matrix.json",
+  "docs/admin-migration/api-contracts.json",
+  "docs/admin-migration/risk-register.md",
 ];
 
 for (const rel of requiredDocs) {

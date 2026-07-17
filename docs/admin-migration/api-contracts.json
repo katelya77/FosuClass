@@ -1,0 +1,8296 @@
+{
+  "version": 1,
+  "generatedAt": "2026-07-17T18:27:37.686Z",
+  "sourceCommit": "89286e0937508706e95cc50afa2f6c658796cc84",
+  "basePath": "/api/admin",
+  "envelope": {
+    "success": "boolean",
+    "message": "string on error",
+    "notes": "Do not break existing fields; additive fields allowed."
+  },
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/api/admin/login",
+      "routePath": "/login",
+      "auth": "public-or-session",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "csrfToken": {
+            "type": "string"
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/logout",
+      "routePath": "/logout",
+      "auth": "public-or-session",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/session",
+      "routePath": "/session",
+      "auth": "public-or-session",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/security/status",
+      "routePath": "/security/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/security/self-check",
+      "routePath": "/security/self-check",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/security/report",
+      "routePath": "/security/report",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/security/events/cleanup",
+      "routePath": "/security/events/cleanup",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/ai-provider/config",
+      "routePath": "/ai-provider/config",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/ai-agent/status",
+      "routePath": "/ai-agent/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/ai-agent/evaluate",
+      "routePath": "/ai-agent/evaluate",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/ai-provider/config",
+      "routePath": "/ai-provider/config",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/ai-provider/verify",
+      "routePath": "/ai-provider/verify",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/assistant-kb",
+      "routePath": "/assistant-kb",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/assistant-kb/export",
+      "routePath": "/assistant-kb/export",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/assistant-kb/test",
+      "routePath": "/assistant-kb/test",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/assistant-kb",
+      "routePath": "/assistant-kb",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/assistant-kb/:id",
+      "routePath": "/assistant-kb/:id",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/assistant-kb/:id",
+      "routePath": "/assistant-kb/:id",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/assistant-kb/import-md",
+      "routePath": "/assistant-kb/import-md",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/assistant-kb/publish",
+      "routePath": "/assistant-kb/publish",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/assistant-kb/rollback",
+      "routePath": "/assistant-kb/rollback",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/campus-map/state",
+      "routePath": "/campus-map/state",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/draft",
+      "routePath": "/campus-map/draft",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/publish",
+      "routePath": "/campus-map/publish",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/rollback",
+      "routePath": "/campus-map/rollback",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/import",
+      "routePath": "/campus-map/import",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/campus-map/export",
+      "routePath": "/campus-map/export",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/campus-map/asset",
+      "routePath": "/campus-map/asset",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/validate",
+      "routePath": "/campus-map/validate",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/repair",
+      "routePath": "/campus-map/repair",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/verify-published",
+      "routePath": "/campus-map/verify-published",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/diff",
+      "routePath": "/campus-map/diff",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/campus-map/assets/health",
+      "routePath": "/campus-map/assets/health",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/assets/upload",
+      "routePath": "/campus-map/assets/upload",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/assets/restore",
+      "routePath": "/campus-map/assets/restore",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/assets/repair",
+      "routePath": "/campus-map/assets/repair",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/assets/sync-cloudbase",
+      "routePath": "/campus-map/assets/sync-cloudbase",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/campus-map/backup",
+      "routePath": "/campus-map/backup",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/catalog",
+      "routePath": "/sync/catalog",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/majors",
+      "routePath": "/sync/majors",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/class-schedules",
+      "routePath": "/sync/class-schedules",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/teacher-schedules",
+      "routePath": "/sync/teacher-schedules",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/classroom-schedules",
+      "routePath": "/sync/classroom-schedules",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/course-schedules",
+      "routePath": "/sync/course-schedules",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/resources",
+      "routePath": "/sync/resources",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/release/upload",
+      "routePath": "/release/upload",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/release/activate",
+      "routePath": "/release/activate",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/release/status",
+      "routePath": "/release/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/release/list",
+      "routePath": "/release/list",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/snapshot/upload",
+      "routePath": "/snapshot/upload",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/snapshot/activate",
+      "routePath": "/snapshot/activate",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/sync/status",
+      "routePath": "/sync/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "activeReleaseVersion": {
+            "type": "string",
+            "optional": true
+          },
+          "releaseVersion": {
+            "type": "string",
+            "optional": true
+          },
+          "semester": {
+            "type": "string",
+            "optional": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/review/contributions",
+      "routePath": "/review/contributions",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/dashboard",
+      "routePath": "/dashboard",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/classroom-heatmap",
+      "routePath": "/classroom-heatmap",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/config",
+      "routePath": "/config",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/config",
+      "routePath": "/config",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/notices",
+      "routePath": "/notices",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/notices",
+      "routePath": "/notices",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "required": [
+          "title"
+        ],
+        "properties": {
+          "title": {
+            "type": "string"
+          },
+          "content": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "publishAt": {
+            "type": "string",
+            "optional": true
+          },
+          "expireAt": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          },
+          "item": {
+            "type": "object"
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/notices/:id",
+      "routePath": "/notices/:id",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/notices/:id",
+      "routePath": "/notices/:id",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/news",
+      "routePath": "/news",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/news",
+      "routePath": "/news",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/news/:id",
+      "routePath": "/news/:id",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/news/:id",
+      "routePath": "/news/:id",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/feedbacks",
+      "routePath": "/feedbacks",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "PUT",
+      "path": "/api/admin/feedbacks/:id",
+      "routePath": "/feedbacks/:id",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string",
+            "optional": true
+          },
+          "adminNote": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/feedback",
+      "routePath": "/feedback",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/feedback/export.csv",
+      "routePath": "/feedback/export.csv",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/feedback/:id",
+      "routePath": "/feedback/:id",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/catalog/stats",
+      "routePath": "/catalog/stats",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/catalog/list",
+      "routePath": "/catalog/list",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/catalog/detail",
+      "routePath": "/catalog/detail",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/catalog/meta",
+      "routePath": "/catalog/meta",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/staging/upload",
+      "routePath": "/staging/upload",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/staging/upload/rebuild-index",
+      "routePath": "/staging/upload/rebuild-index",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/publisher/receipt",
+      "routePath": "/publisher/receipt",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/publisher/receipt",
+      "routePath": "/publisher/receipt",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/staging/status",
+      "routePath": "/staging/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/terms",
+      "routePath": "/terms",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/terms",
+      "routePath": "/terms",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "PATCH",
+      "path": "/api/admin/terms/:term",
+      "routePath": "/terms/:term",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/terms/:term/bind-release",
+      "routePath": "/terms/:term/bind-release",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/terms/:term/readiness",
+      "routePath": "/terms/:term/readiness",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/terms/:term/repair-release/dry-run",
+      "routePath": "/terms/:term/repair-release/dry-run",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/terms/:term/repair-release/start",
+      "routePath": "/terms/:term/repair-release/start",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/terms/:term/repair-release/status",
+      "routePath": "/terms/:term/repair-release/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/terms/:term/rebuild-runtime-pointer",
+      "routePath": "/terms/:term/rebuild-runtime-pointer",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/terms/:term/activate",
+      "routePath": "/terms/:term/activate",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/terms/:term/archive",
+      "routePath": "/terms/:term/archive",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/terms/:term/disable",
+      "routePath": "/terms/:term/disable",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/staging/fingerprint",
+      "routePath": "/staging/fingerprint",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/staging/:uploadId",
+      "routePath": "/staging/:uploadId",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/staging/upload/init",
+      "routePath": "/staging/upload/init",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "required": [
+          "term"
+        ],
+        "properties": {
+          "term": {
+            "type": "string"
+          },
+          "semester": {
+            "type": "string",
+            "optional": true
+          },
+          "fileName": {
+            "type": "string",
+            "optional": true
+          },
+          "fileSize": {
+            "type": "number",
+            "optional": true
+          },
+          "contentHash": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/staging/upload/unchanged",
+      "routePath": "/staging/upload/unchanged",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/staging/upload/chunk",
+      "routePath": "/staging/upload/chunk",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/staging/upload/finalize",
+      "routePath": "/staging/upload/finalize",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/staging/upload/:uploadId/status",
+      "routePath": "/staging/upload/:uploadId/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/relay/tasks",
+      "routePath": "/relay/tasks",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/relay/tasks",
+      "routePath": "/relay/tasks",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "explicit-requireScopes",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/relay/tasks/:id/revoke",
+      "routePath": "/relay/tasks/:id/revoke",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/relay/tasks/:id/cancel",
+      "routePath": "/relay/tasks/:id/cancel",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/relay/tasks/:id",
+      "routePath": "/relay/tasks/:id",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/relay/uploads",
+      "routePath": "/relay/uploads",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "explicit-requireScopes",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/relay/uploads/:id/promote-to-staging",
+      "routePath": "/relay/uploads/:id/promote-to-staging",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/jobs",
+      "routePath": "/jobs",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/jobs/:id",
+      "routePath": "/jobs/:id",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/system/load",
+      "routePath": "/system/load",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/reconcile",
+      "routePath": "/sync/reconcile",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/static-release-sync/start",
+      "routePath": "/static-release-sync/start",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/static-release-sync/status",
+      "routePath": "/static-release-sync/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/storage/status",
+      "routePath": "/storage/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/storage/scan",
+      "routePath": "/storage/scan",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/storage/maintenance/preview",
+      "routePath": "/storage/maintenance/preview",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/storage/maintenance/run",
+      "routePath": "/storage/maintenance/run",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/static-ticket/create",
+      "routePath": "/static-ticket/create",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/static-ticket/verify",
+      "routePath": "/static-ticket/verify",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/release-pack/quick-health",
+      "routePath": "/release-pack/quick-health",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/release-pack/deep-health/start",
+      "routePath": "/release-pack/deep-health/start",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/release-pack/deep-health/status",
+      "routePath": "/release-pack/deep-health/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "explicit-requireScopes",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/release-pack/rebuild/start",
+      "routePath": "/release-pack/rebuild/start",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/release-pack/rebuild/status",
+      "routePath": "/release-pack/rebuild/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "explicit-requireScopes",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/release-pack/verify/start",
+      "routePath": "/release-pack/verify/start",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/release-pack/verify/status",
+      "routePath": "/release-pack/verify/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "explicit-requireScopes",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/staging/publish/start",
+      "routePath": "/sync/staging/publish/start",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/sync/staging/publish/status",
+      "routePath": "/sync/staging/publish/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/staging/upload",
+      "routePath": "/sync/staging/upload",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/sync/staging/upload/status",
+      "routePath": "/sync/staging/upload/status",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/sync/staging/current",
+      "routePath": "/sync/staging/current",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/staging/publish",
+      "routePath": "/sync/staging/publish",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "explicit-requireScopes",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/sync/releases",
+      "routePath": "/sync/releases",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/releases/rollback",
+      "routePath": "/sync/releases/rollback",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/sync/releases/:version",
+      "routePath": "/sync/releases/:version",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/releases/rebuild-index",
+      "routePath": "/sync/releases/rebuild-index",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/sync/releases/check-availability",
+      "routePath": "/sync/releases/check-availability",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/sync/command-guide",
+      "routePath": "/sync/command-guide",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/sync/history",
+      "routePath": "/sync/history",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/sync/record",
+      "routePath": "/sync/record",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/quality/report",
+      "routePath": "/quality/report",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/quality/mark",
+      "routePath": "/quality/mark",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/export",
+      "routePath": "/export",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/backups",
+      "routePath": "/backups",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/backups/download",
+      "routePath": "/backups/download",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/snapshots",
+      "routePath": "/snapshots",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/snapshots/download",
+      "routePath": "/snapshots/download",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/admin/backups",
+      "routePath": "/backups",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/audit-logs",
+      "routePath": "/audit-logs",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    }
+  ]
+}
