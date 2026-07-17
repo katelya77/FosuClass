@@ -12579,10 +12579,14 @@ const adminConsoleHtml = `<!doctype html>
       }
 
       function uploadRawChunk(url, blob) {
+        var headers = { "Content-Type": "application/octet-stream" };
+        if (state.csrfToken) {
+          headers["X-Fosu-CSRF"] = state.csrfToken;
+        }
         return fetch(url, {
           method: "POST",
           credentials: "include",
-          headers: { "Content-Type": "application/octet-stream" },
+          headers: headers,
           body: blob,
         }).then(function(res) {
           return res.text().then(function(text) {

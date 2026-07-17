@@ -1,0 +1,93 @@
+name: Admin modernization CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "admin-web/**"
+      - "server/src/**"
+      - "server/public/admin-app/**"
+      - "tools/test-admin*.js"
+      - "tools/test-architecture-guards.js"
+      - "tools/test-service-token*.js"
+      - "tools/test-chunk-upload-csrf.js"
+      - "tools/test-snapshot-concurrency.js"
+      - "tools/test-config*.js"
+      - "tools/test-duplicate-admin-routes.js"
+      - "tools/test-logo-csp-fallback.js"
+      - "tools/test-tier3-failure-isolation.js"
+      - "tools/test-staging-upload.js"
+      - "package.json"
+      - ".github/workflows/admin-modernization-ci.yml"
+  push:
+    branches: [grok/admin-modernization]
+
+jobs:
+  admin-checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install root deps
+        run: npm ci || npm install
+
+      - name: Install server deps
+        run: npm --prefix server ci || npm --prefix server install
+
+      - name: Install admin-web deps
+        run: npm --prefix admin-web ci || npm --prefix admin-web install
+
+      - name: Architecture & admin contracts
+        run: |
+          npm run test:architecture-guards
+          npm run test:duplicate-admin-routes
+          npm run test:service-token-scopes
+          npm run test:service-token-route-matrix
+          npm run test:chunk-upload-csrf
+          npm run test:snapshot-concurrency
+          npm run test:admin-api-contract
+          npm run test:admin-auth-modes
+          npm run test:admin-page
+          npm run test:admin-inline-script
+          npm run test:staging-upload
+          npm run test:admin-sync-page
+          npm run test:config-migration-safe
+          npm run test:admin-runtime-dual-base
+          npm run test:admin-ui-mode-conflict
+          npm run test:admin-spa-shell
+          npm run test:admin-spa-deeplink
+          npm run test:admin-legacy-fallback
+          npm run test:tier3-failure-isolation
+          npm run test:logo-csp-fallback
+
+      - name: Admin web unit + build + bundle parity
+        run: |
+          npm run admin:test
+          npm run admin:build
+          git diff --exit-code -- server/public/admin-app
+          npm run admin:test:e2e
+
+      - name: Config preflight
+        run: npm run config:preflight
+
+      - name: Install Playwright Chromium
+        run: npx --prefix admin-web playwright install --with-deps chromium
+
+      - name: Browser acceptance
+        run: npm run admin:test:browser
+
+      - name: Upload browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-browser-acceptance
+          path: output/admin-modernization-browser/
+          if-no-files-found: warn
