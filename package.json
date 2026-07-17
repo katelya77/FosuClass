@@ -113,6 +113,7 @@
     "test:config-validation": "node tools/test-config-validation.js",
     "test:config-migration-safe": "node tools/test-config-migration-safe.js",
     "test:admin-runtime-dual-base": "node tools/test-admin-runtime-dual-base.js",
+    "test:admin-ui-mode-conflict": "node tools/test-admin-ui-mode-conflict.js",
     "test:admin-spa-shell": "node tools/test-admin-spa-shell.js",
     "test:admin-spa-deeplink": "node tools/test-admin-spa-deeplink.js",
     "test:admin-legacy-fallback": "node tools/test-admin-legacy-fallback.js",

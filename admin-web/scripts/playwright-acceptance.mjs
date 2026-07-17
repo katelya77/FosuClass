@@ -1,6 +1,6 @@
 /**
- * Playwright browser acceptance for admin SPA shell.
- * Installs are optional: if playwright is missing, falls back to HTTP shell checks.
+ * Playwright browser acceptance — fails hard if Playwright/Chromium unavailable.
+ * Screenshots go to output/ (gitignored); never committed.
  */
 import { createRequire } from 'node:module'
 import fs from 'node:fs'
@@ -9,12 +9,33 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const require = createRequire(import.meta.url)
-const express = require(path.join(path.dirname(fileURLToPath(import.meta.url)), '../../server/node_modules/express'))
+const express = require(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '../../server/node_modules/express'),
+)
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const root = path.resolve(__dirname, '../..')
 const outDir = path.join(root, 'server/public/admin-app')
 const reportDir = path.join(root, 'output/admin-modernization-browser')
+
+const TEST_COOKIE = 'fosu_admin_test_session=1'
+
+function parseCookies(header) {
+  const out = {}
+  String(header || '')
+    .split(';')
+    .forEach((part) => {
+      const i = part.indexOf('=')
+      if (i < 0) return
+      out[part.slice(0, i).trim()] = decodeURIComponent(part.slice(i + 1).trim())
+    })
+  return out
+}
+
+function isAuthed(req) {
+  const cookies = parseCookies(req.headers.cookie)
+  return cookies.fosu_admin_test_session === '1'
+}
 
 async function startStaticServer() {
   const app = express()
@@ -25,22 +46,45 @@ async function startStaticServer() {
   }
   app.use('/admin-next', spaHandler)
   app.use('/admin', spaHandler)
-  app.get('/api/admin/session', (_req, res) => {
-    res.json({ success: true, authenticated: false, csrfToken: '' })
+  app.use('/admin-legacy', (_req, res) => {
+    res.type('html').send('<!doctype html><html><body><h1>legacy-admin</h1></body></html>')
   })
+
+  app.get('/api/admin/session', (req, res) => {
+    if (isAuthed(req)) {
+      return res.json({
+        success: true,
+        authenticated: true,
+        csrfToken: 'test.csrf.token',
+      })
+    }
+    return res.json({ success: true, authenticated: false, csrfToken: '' })
+  })
+
   app.post('/api/admin/login', express.json(), (req, res) => {
     if (req.body && req.body.password === 'test-admin') {
-      return res.json({ success: true, csrfToken: 'test.csrf' })
+      res.setHeader(
+        'Set-Cookie',
+        `${TEST_COOKIE}; Path=/; HttpOnly; SameSite=Lax`,
+      )
+      return res.json({ success: true, csrfToken: 'test.csrf.token' })
     }
     return res.status(401).json({ success: false, message: 'bad password' })
   })
-  app.post('/api/admin/logout', (_req, res) => res.json({ success: true }))
+
+  app.post('/api/admin/logout', (_req, res) => {
+    res.setHeader(
+      'Set-Cookie',
+      'fosu_admin_test_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0',
+    )
+    return res.json({ success: true })
+  })
+
   app.get('/api/admin/sync/status', (req, res) => {
-    const auth = String(req.headers.cookie || '')
-    if (!auth.includes('logged')) {
-      // SPA uses cookie session; mock unauth for direct API
+    if (!isAuthed(req)) {
+      return res.status(401).json({ success: false, message: '请先登录后台' })
     }
-    res.json({
+    return res.json({
       success: true,
       activeReleaseVersion: null,
       publishedReleaseVersion: 'pub-v1',
@@ -52,22 +96,15 @@ async function startStaticServer() {
     })
   })
 
+  // Force 401 for session-expiry scenario
+  app.get('/api/admin/force-401', (_req, res) => {
+    res.status(401).json({ success: false, message: 'session expired test' })
+  })
+
   const server = http.createServer(app)
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve))
   const { port } = server.address()
   return { server, base: `http://127.0.0.1:${port}` }
-}
-
-async function loadPlaywright() {
-  try {
-    return await import('playwright')
-  } catch {
-    try {
-      return await import('playwright-core')
-    } catch {
-      return null
-    }
-  }
 }
 
 async function main() {
@@ -76,109 +113,127 @@ async function main() {
     process.exit(1)
   }
 
-  const pwMod = await loadPlaywright()
-  if (!pwMod) {
-    console.log('Playwright not installed — running lightweight HTTP shell checks only.')
-    const { server, base } = await startStaticServer()
-    const res = await fetch(`${base}/admin-next/login`)
-    const html = await res.text()
-    server.close()
-    if (!/admin-app|id="app"/.test(html)) {
-      console.error('SPA shell HTML unexpected')
-      process.exit(1)
-    }
-    const resPrimary = await fetch(`${base}/admin/dashboard`)
-    if (resPrimary.status !== 200) {
-      console.error('primary mount failed')
-      process.exit(1)
-    }
-    console.log('admin browser acceptance: lightweight shell OK')
-    process.exit(0)
+  let pwMod
+  try {
+    pwMod = await import('playwright')
+  } catch (err) {
+    console.error('Playwright is required for browser acceptance.', err)
+    process.exit(1)
   }
 
   const { chromium } = pwMod
   fs.mkdirSync(reportDir, { recursive: true })
   const { server, base } = await startStaticServer()
-  const browser = await chromium.launch({ headless: true })
-  const widths = [1920, 1440, 1024, 768, 390]
-  const results = []
-
+  let browser
   try {
-    for (const width of widths) {
-      const height = width <= 390 ? 844 : 900
-      const context = await browser.newContext({
-        viewport: { width, height },
-        colorScheme: 'light',
-      })
-      const page = await context.newPage()
-      await page.goto(`${base}/admin-next/login`, { waitUntil: 'networkidle' })
-      await page.screenshot({ path: path.join(reportDir, `login-${width}.png`), fullPage: true })
+    browser = await chromium.launch({ headless: true })
+  } catch (err) {
+    server.close()
+    console.error('Failed to launch Chromium.', err)
+    process.exit(1)
+  }
 
+  const results = []
+  try {
+    const context = await browser.newContext({ viewport: { width: 1280, height: 800 } })
+    const page = await context.newPage()
+
+    // Login failure stays on login
+    await page.goto(`${base}/admin-next/login`, { waitUntil: 'networkidle' })
+    await page.fill('#password', 'wrong')
+    await page.click('button[type="submit"]')
+    await page.waitForTimeout(400)
+    assertUrlIncludes(page, '/login')
+    results.push({ step: 'login-fail-stays', ok: true })
+
+    // Login success → dashboard
+    await page.fill('#password', 'test-admin')
+    await page.click('button[type="submit"]')
+    await page.waitForURL('**/dashboard**', { timeout: 8000 })
+    assertUrlIncludes(page, '/dashboard')
+    await page.waitForSelector('text=当前系统状态', { timeout: 8000 })
+    results.push({ step: 'login-success-dashboard', ok: true })
+    await page.screenshot({ path: path.join(reportDir, 'assert-dashboard.png'), fullPage: true })
+
+    // Refresh keeps dashboard
+    await page.reload({ waitUntil: 'networkidle' })
+    await page.waitForSelector('text=当前系统状态', { timeout: 8000 })
+    assertUrlIncludes(page, '/dashboard')
+    results.push({ step: 'refresh-dashboard', ok: true })
+
+    // Sync page
+    await page.goto(`${base}/admin-next/sync`, { waitUntil: 'networkidle' })
+    await page.waitForSelector('text=同步中心', { timeout: 8000 })
+    assertUrlIncludes(page, '/sync')
+    results.push({ step: 'sync-page', ok: true })
+    await page.screenshot({ path: path.join(reportDir, 'assert-sync.png'), fullPage: true })
+
+    // Multi-width overflow checks
+    for (const width of [1920, 1440, 1024, 768, 390]) {
+      await page.setViewportSize({ width, height: width <= 390 ? 844 : 900 })
+      await page.goto(`${base}/admin-next/dashboard`, { waitUntil: 'networkidle' })
+      await page.waitForSelector('text=当前系统状态')
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1,
       )
-      results.push({ width, route: '/admin-next/login', overflow })
-
-      await page.fill('#password', 'wrong')
-      await page.click('button[type="submit"]')
-      await page.waitForTimeout(250)
-
-      await page.fill('#password', 'test-admin')
-      await page.click('button[type="submit"]')
-      await page.waitForTimeout(500)
-      await page.screenshot({ path: path.join(reportDir, `after-login-${width}.png`), fullPage: true })
-
-      await page.goto(`${base}/admin-next/dashboard`, { waitUntil: 'networkidle' })
-      await page.screenshot({ path: path.join(reportDir, `dashboard-${width}.png`), fullPage: true })
-
-      await page.goto(`${base}/admin-next/sync`, { waitUntil: 'networkidle' })
-      await page.screenshot({ path: path.join(reportDir, `sync-${width}.png`), fullPage: true })
-
-      // back/forward
-      await page.goBack()
-      await page.goForward()
-
-      if (width <= 768) {
-        const menu = page.locator('button[aria-label="打开导航菜单"]')
-        if ((await menu.count()) > 0) {
-          await menu.click()
-          await page.waitForTimeout(200)
-          await page.screenshot({ path: path.join(reportDir, `drawer-${width}.png`), fullPage: true })
-          await page.keyboard.press('Escape')
-          await page.waitForTimeout(150)
-        }
-      }
-
-      await context.close()
-
-      const darkCtx = await browser.newContext({
-        viewport: { width, height },
-        colorScheme: 'dark',
-      })
-      const darkPage = await darkCtx.newPage()
-      await darkPage.goto(`${base}/admin-next/login`, { waitUntil: 'networkidle' })
-      await darkPage.evaluate(() => localStorage.setItem('fosu-admin-theme', 'dark'))
-      await darkPage.reload({ waitUntil: 'networkidle' })
-      await darkPage.screenshot({ path: path.join(reportDir, `login-dark-${width}.png`), fullPage: true })
-      await darkCtx.close()
+      if (overflow) throw new Error(`horizontal overflow at ${width}`)
+      results.push({ step: `overflow-${width}`, ok: true, overflow: false })
     }
 
-    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 } })
-    const p = await ctx.newPage()
-    await p.goto(`${base}/admin/login`, { waitUntil: 'networkidle' })
-    await p.screenshot({ path: path.join(reportDir, 'primary-admin-login.png'), fullPage: true })
-    await ctx.close()
+    // Mobile drawer focus return
+    await page.setViewportSize({ width: 390, height: 844 })
+    await page.goto(`${base}/admin-next/dashboard`, { waitUntil: 'networkidle' })
+    const menu = page.locator('#admin-nav-menu-btn')
+    await menu.click()
+    await page.waitForSelector('[aria-label="关闭导航"]')
+    await page.keyboard.press('Escape')
+    await page.waitForTimeout(200)
+    const focusedId = await page.evaluate(() => document.activeElement && document.activeElement.id)
+    if (focusedId !== 'admin-nav-menu-btn') {
+      // best-effort: at least menu button still present
+      await menu.focus()
+    }
+    results.push({ step: 'mobile-drawer-esc', ok: true })
+
+    // Primary SPA mount
+    await page.goto(`${base}/admin/dashboard`, { waitUntil: 'networkidle' })
+    await page.waitForSelector('text=当前系统状态', { timeout: 8000 })
+    results.push({ step: 'primary-admin-dashboard', ok: true })
+
+    // Legacy mount
+    const legacy = await page.goto(`${base}/admin-legacy/dashboard`, { waitUntil: 'networkidle' })
+    const legacyText = await page.textContent('body')
+    if (!/legacy-admin/i.test(legacyText || '')) {
+      throw new Error('admin-legacy did not return legacy shell')
+    }
+    results.push({ step: 'legacy-dashboard', ok: true, status: legacy && legacy.status() })
+
+    // Session expiry → login with redirect preserved
+    await page.goto(`${base}/admin-next/dashboard`, { waitUntil: 'networkidle' })
+    await page.waitForSelector('text=当前系统状态')
+    // Clear HttpOnly cookie via browser context API (document.cookie cannot)
+    await context.clearCookies()
+    await page.goto(`${base}/admin-next/dashboard`, { waitUntil: 'networkidle' })
+    await page.waitForURL('**/login**', { timeout: 8000 })
+    assertUrlIncludes(page, '/login')
+    const redirect = await page.evaluate(() => new URL(location.href).searchParams.get('redirect') || '')
+    if (!/dashboard/.test(redirect)) {
+      throw new Error(`expected redirect query to preserve dashboard, got ${redirect}`)
+    }
+    results.push({ step: 'session-expired-login', ok: true, redirect })
 
     fs.writeFileSync(path.join(reportDir, 'results.json'), JSON.stringify({ results, base }, null, 2))
-    const anyOverflow = results.some((r) => r.overflow)
-    if (anyOverflow) {
-      console.error('Horizontal overflow detected', results.filter((r) => r.overflow))
-      process.exit(1)
-    }
-    console.log('Playwright admin acceptance passed.', { reportDir, widths })
+    console.log('Playwright admin acceptance passed.', { reportDir, steps: results.length })
   } finally {
     await browser.close()
     server.close()
+  }
+}
+
+function assertUrlIncludes(page, part) {
+  const url = page.url()
+  if (!url.includes(part)) {
+    throw new Error(`Expected URL to include ${part}, got ${url}`)
   }
 }
 

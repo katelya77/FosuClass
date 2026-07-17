@@ -25,7 +25,7 @@ on:
 jobs:
   admin-checks:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,21 +61,33 @@ jobs:
           npm run test:admin-sync-page
           npm run test:config-migration-safe
           npm run test:admin-runtime-dual-base
+          npm run test:admin-ui-mode-conflict
           npm run test:admin-spa-shell
           npm run test:admin-spa-deeplink
           npm run test:admin-legacy-fallback
           npm run test:tier3-failure-isolation
           npm run test:logo-csp-fallback
 
-      - name: Admin web unit + build
+      - name: Admin web unit + build + bundle parity
         run: |
           npm run admin:test
           npm run admin:build
+          git diff --exit-code -- server/public/admin-app
           npm run admin:test:e2e
 
       - name: Config preflight
         run: npm run config:preflight
 
-      - name: Browser acceptance (Playwright if available)
+      - name: Install Playwright Chromium
+        run: npx --prefix admin-web playwright install --with-deps chromium
+
+      - name: Browser acceptance
         run: npm run admin:test:browser
-        continue-on-error: false
+
+      - name: Upload browser artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-browser-acceptance
+          path: output/admin-modernization-browser/
+          if-no-files-found: warn
