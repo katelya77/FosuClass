@@ -23,7 +23,8 @@ export default defineConfig({
   build: {
     outDir: '../server/public/admin-app',
     emptyOutDir: true,
-    sourcemap: true,
+    // Do not publish source maps under /admin-app
+    sourcemap: false,
   },
   test: {
     environment: 'happy-dom',
