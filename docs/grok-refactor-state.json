@@ -1,29 +1,15 @@
 {
   "branch": "grok/admin-modernization",
-  "baselineCommit": "5d7eb469",
-  "currentPhase": 6,
-  "completedPhases": [0, 1, 2, 3, 4, 5, 6],
-  "lastCommit": "",
   "honestStatus": {
     "vueAdmin": "phase-1-read-only-ops-views",
-    "writePaths": "still-on-legacy",
-    "productionPrimary": "legacy-/admin"
+    "writeAuthority": "legacy-/admin",
+    "productionPrimaryDefault": "legacy",
+    "fullMigrationClaim": false,
+    "browserAcceptanceClaim": "only-when-github-actions-green"
   },
-  "testsPassed": [
-    "test:architecture-guards",
-    "test:admin-runtime-dual-base",
-    "test:service-token-route-matrix",
-    "test:config-migration-safe",
-    "admin:test",
-    "admin:build",
-    "admin:test:e2e",
-    "admin:test:browser"
-  ],
-  "testsFailed": [],
   "remainingRisks": [
-    "Full write UX still on legacy console",
-    "admin.js still oversized",
-    "FOSU_ADMIN_PRIMARY=next not enabled by default"
+    "Write paths remain on legacy console",
+    "Must wait for CI success before merge-ready claim"
   ],
-  "nextAction": "PR review + staging dual-mode acceptance; do not merge/deploy from agent"
+  "nextAction": "Push cleanup commits; wait for GitHub Actions success; do not merge"
 }
