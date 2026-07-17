@@ -62,6 +62,7 @@ jobs:
           npm run test:admin-no-duplicate-business-logic
           npm run test:admin-write-parity
           npm run test:admin-http-write-parity
+          npm run test:admin-c1-modules
           npm run test:docker-secret-scan
           npm run test:duplicate-admin-routes
           npm run test:service-token-scopes

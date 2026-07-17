@@ -1,11 +1,11 @@
 # Legacy Admin Feature Inventory (Phase A)
 
-- Generated: `2026-07-17T19:14:08.019Z`
-- Source commit: `065d2ef05e61fee6ed75c1c38bbd8c42bbc7c145`
+- Generated: `2026-07-17T19:32:53.542Z`
+- Source commit: `d3972d2e01de0b757943636f4cbaf8699fcbf190`
 - Production primary remains: **legacy**
-- API routes inventoried: **150**
-- Write routes: **90**
-- Total matrix rows (API + UI): **153**
+- API routes inventoried: **155**
+- Write routes: **92**
+- Total matrix rows (API + UI): **158**
 
 ## Goals
 
@@ -32,11 +32,11 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 | Group | Section | Label | Domain | Vue route | Vue baseline |
 |-------|---------|-------|--------|-----------|--------------|
 | 总览 | `dashboard` | 数据概览 | dashboard | `/dashboard` | read-only |
-| 数据与课表 | `catalog` | 数据资源 | catalog | `/catalog` | read-only |
+| 数据与课表 | `catalog` | 数据资源 | catalog | `/catalog` | write-implemented |
 | 数据与课表 | `terms` | 学期管理 | term | `/terms` | read-only |
-| 数据与课表 | `quality` | 数据质量 | quality | `/quality` | read-only |
+| 数据与课表 | `quality` | 数据质量 | quality | `/quality` | write-implemented |
 | 发布与运维 | `sync` | 同步中心 | sync | `/sync` | read-only |
-| 发布与运维 | `config` | 数据版本 | settings | `/settings` | read-only |
+| 发布与运维 | `config` | 数据版本 | settings | `/settings` | write-implemented |
 | 内容管理 | `notices` | 公告管理 | content | `/content` | write-implemented |
 | 内容管理 | `news` | 最新动态 | content | `/content` | write-implemented |
 | 内容管理 | `campus-map` | 校园地图 | campus-map | `/campus-map` | read-only |
@@ -44,7 +44,7 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 | 内容管理 | `assistant-kb` | 助手知识库 | assistant | `/assistant` | missing |
 | 系统与安全 | `ai-provider` | 查询服务 | provider | `/provider` | missing |
 | 系统与安全 | `security` | 安全状态 | security | `/security` | read-only |
-| 系统与安全 | `settings` | 系统设置 | settings | `/settings` | read-only |
+| 系统与安全 | `settings` | 系统设置 | settings | `/settings` | write-implemented |
 
 ## Domain summary
 
@@ -55,14 +55,14 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 | auth | 3 | `auth` |
 | backups | 9 | `backups` |
 | campus-map | 17 | `campus-map` |
-| catalog | 5 | `catalog` |
+| catalog | 6 | `catalog` |
 | content | 8 | `content` |
 | dashboard | 4 | `dashboard` |
 | feedback | 5 | `feedback` |
 | jobs | 2 | `jobs` |
-| misc | 8 | `settings` |
+| misc | 11 | `settings` |
 | provider | 5 | `provider` |
-| quality | 2 | `quality` |
+| quality | 3 | `quality` |
 | relay | 6 | `relay` |
 | release | 31 | `release` |
 | security | 4 | `security` |
@@ -75,9 +75,9 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 | Status | Count |
 |--------|-------|
 | browser-verified | 23 |
-| missing | 31 |
-| read-only | 95 |
-| write-implemented | 4 |
+| missing | 34 |
+| read-only | 81 |
+| write-implemented | 20 |
 
 ## Risk distribution
 
@@ -85,8 +85,8 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 |------|-------|
 | critical | 22 |
 | high | 52 |
-| low | 29 |
-| medium | 50 |
+| low | 31 |
+| medium | 53 |
 
 ## Critical write / control-plane APIs
 
@@ -116,7 +116,7 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 
 - ExperimentalPage used: **true**
 - Experimental legacy sections: `assistant-kb`, `ai-provider`
-- Pages still calling `legacyAdminUrl()`: `CampusMapPage.vue`, `ExperimentalPage.vue`, `SettingsPage.vue`, `SyncCenterPage.vue`, `TermsPage.vue`
+- Pages still calling `legacyAdminUrl()`: `CampusMapPage.vue`, `ExperimentalPage.vue`, `SyncCenterPage.vue`, `TermsPage.vue`
 
 ## Feature matrix schema
 
@@ -141,7 +141,7 @@ Canonical machine-readable file: [`feature-matrix.json`](./feature-matrix.json)
 
 ## API contracts
 
-- Routes with contract stubs: **150**
+- Routes with contract stubs: **155**
 - File: [`api-contracts.json`](./api-contracts.json)
 - Methods, request/response envelopes, and error code sets are recorded for every `/api/admin/*` route.
 - Domain-specific Zod/schemas are filled as modules are extracted (Phase B+).
