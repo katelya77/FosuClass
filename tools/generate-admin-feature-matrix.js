@@ -46,7 +46,10 @@ const LEGACY_NAV = [
   { section: "settings", label: "系统设置", group: "系统与安全", domain: "settings", vueRoute: "/settings" },
 ];
 
-/** Known Vue status at Phase A baseline (after PR #7 shell). */
+/**
+ * Honest baseline status. Never claim production-verified without evidence files.
+ * Phase B domains are write-implemented once code exists; tests attach evidence separately.
+ */
 const DOMAIN_NEXT_STATUS = {
   auth: "write-implemented",
   dashboard: "read-only",
@@ -69,6 +72,49 @@ const DOMAIN_NEXT_STATUS = {
   relay: "missing",
   misc: "missing",
 };
+
+/** Production explicit grant (deploy workflow). Matrix must match this list. */
+const PRODUCTION_WRITE_MODULES = ["content", "feedback", "audit", "backups"];
+
+/** Evidence paths that elevate status (must exist on disk). */
+const EVIDENCE = {
+  content: {
+    apiTests: ["tools/test-admin-content-concurrency.js", "tools/test-admin-http-write-parity.js"],
+    playwrightTests: ["tools/test-admin-playwright-phase-b.js"],
+  },
+  feedback: {
+    apiTests: ["tools/test-admin-http-write-parity.js"],
+    playwrightTests: ["tools/test-admin-playwright-phase-b.js"],
+  },
+  audit: {
+    apiTests: ["tools/test-admin-http-write-parity.js"],
+    playwrightTests: ["tools/test-admin-playwright-phase-b.js"],
+  },
+  backups: {
+    apiTests: ["tools/test-admin-backup-service.js", "tools/test-admin-backup-transaction.js"],
+    playwrightTests: ["tools/test-admin-playwright-phase-b.js"],
+  },
+};
+
+function evidenceExists(relPaths) {
+  return (relPaths || []).filter((rel) => fs.existsSync(path.join(ROOT, rel)));
+}
+
+function statusWithEvidence(domain, baseStatus) {
+  const ev = EVIDENCE[domain];
+  if (!ev) return { nextStatus: baseStatus, apiTests: [], playwrightTests: [] };
+  const apiTests = evidenceExists(ev.apiTests);
+  const playwrightTests = evidenceExists(ev.playwrightTests);
+  let nextStatus = baseStatus;
+  if (apiTests.length && baseStatus === "write-implemented") {
+    nextStatus = "contract-verified";
+  }
+  if (apiTests.length && playwrightTests.length && nextStatus === "contract-verified") {
+    nextStatus = "browser-verified";
+  }
+  // production-verified requires deploy+smoke records — never auto-promote here
+  return { nextStatus, apiTests, playwrightTests };
+}
 
 const DOMAIN_TARGET_MODULE = {
   auth: "auth",
@@ -405,7 +451,9 @@ function main() {
   const features = routes.map((route) => {
     const domain = domainForPath(route.path);
     const risk = riskForRoute(route);
-    const nextStatus = DOMAIN_NEXT_STATUS[domain] || "missing";
+    const baseStatus = DOMAIN_NEXT_STATUS[domain] || "missing";
+    const evidence = statusWithEvidence(domain, baseStatus);
+    const nextStatus = evidence.nextStatus;
     if (!NEXT_STATUS.has(nextStatus)) {
       throw new Error(`invalid nextStatus ${nextStatus}`);
     }
@@ -438,7 +486,7 @@ function main() {
       auditInHandler: route.auditLikely,
       backupInHandler: route.backupLikely,
       nextStatus,
-      idempotencyRequired: /publish|rebuild|static-release-sync|activate|repair-release\/start|finalize|rollback|maintenance\/run|snapshot\/activate|release\/activate/i.test(
+      idempotencyRequired: /publish|rebuild|static-release-sync|activate|repair-release\/start|finalize|rollback|maintenance\/run|snapshot\/activate|release\/activate|backups\/restore/i.test(
         route.path
       ),
       concurrencyControlRecommended:
@@ -447,8 +495,8 @@ function main() {
       productionSmokeAllowed: !/activate|publish|rollback|maintenance\/run|delete|repair-release\/start|snapshot\/activate/i.test(
         route.path
       ) || !route.writesData,
-      apiTests: [],
-      playwrightTests: [],
+      apiTests: evidence.apiTests,
+      playwrightTests: evidence.playwrightTests,
       notes: "",
     };
   });
@@ -552,7 +600,7 @@ function main() {
 
   const matrix = {
     version: 1,
-    phase: "A",
+    phase: "B.1",
     generatedAt,
     sourceCommit: commit,
     nextStatusEnum: [...NEXT_STATUS],
@@ -561,8 +609,10 @@ function main() {
       FOSU_ADMIN_PRIMARY: "legacy",
       FOSU_ADMIN_NEXT_ENABLED: true,
       FOSU_ADMIN_LEGACY_ENABLED: true,
-      FOSU_ADMIN_NEXT_WRITE_MODULES: "",
+      FOSU_ADMIN_NEXT_WRITE_MODULES: PRODUCTION_WRITE_MODULES.join(","),
+      FOSU_CONFIG_HARD_FAIL: false,
     },
+    productionWriteModules: PRODUCTION_WRITE_MODULES.slice(),
     summary: {
       totalFeatures: allFeatures.length,
       apiRoutes: routes.length,

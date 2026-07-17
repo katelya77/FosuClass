@@ -3486,14 +3486,19 @@ router.put("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     createBackup("notices", contentDomainService.NOTICES_PATH);
     const body = req.body || {};
+    const client = String(req.get("x-fosu-admin-client") || "").toLowerCase();
     const ifMatch = req.get("if-match") || body.expectedVersion || body.version;
     const item = contentDomainService.updateNotice(req.params.id, body, {
       expectedVersion: ifMatch,
+      ifMatch,
+      requireIfMatch: client === "next",
+      client,
     });
     writeAuditLog(req, "update", "notices", req.params.id, `编辑公告: ${item.title}`);
     return res.json({
       success: true,
       item,
+      etag: item.version,
     });
   } catch (error) {
     safeLog("admin-notice-update-failed", { id: req.params.id, error: error.message });
@@ -3552,14 +3557,19 @@ router.put("/news/:id", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     createBackup("news", contentDomainService.NEWS_PATH);
     const body = req.body || {};
+    const client = String(req.get("x-fosu-admin-client") || "").toLowerCase();
     const ifMatch = req.get("if-match") || body.expectedVersion || body.version;
     const item = contentDomainService.updateNews(req.params.id, body, {
       expectedVersion: ifMatch,
+      ifMatch,
+      requireIfMatch: client === "next",
+      client,
     });
     writeAuditLog(req, "update", "news", req.params.id, `编辑动态: ${item.title}`);
     return res.json({
       success: true,
       item,
+      etag: item.version,
     });
   } catch (error) {
     safeLog("admin-news-update-failed", { id: req.params.id, error: error.message });
@@ -6147,19 +6157,23 @@ router.post("/backups/restore", adminAuth.verifyAdminAccess, (req, res) => {
     const filename = body.filename;
     const confirm = String(body.confirm || "");
     const dryRun = body.dryRun === true;
+    const idempotencyKey = body.idempotencyKey || req.get("idempotency-key") || "";
     if (!filename) {
       return res.status(400).json({ success: false, message: "filename is required" });
     }
-    if (!dryRun && confirm !== path.basename(String(filename))) {
-      return res.status(400).json({
-        success: false,
-        code: "CONFIRM_REQUIRED",
-        message: "confirm must equal the backup filename for restore",
-      });
-    }
-    const result = backupService.restoreBackup(filename, { dryRun });
-    if (!dryRun) {
-      writeAuditLog(req, "restore", "backups", path.basename(String(filename)), `恢复备份: ${filename}`);
+    const result = backupService.restoreBackup(filename, {
+      dryRun,
+      confirm,
+      idempotencyKey,
+    });
+    if (!dryRun && result.restored) {
+      writeAuditLog(
+        req,
+        "restore",
+        "backups",
+        path.basename(String(filename)),
+        `恢复备份: ${filename}; hash=${result.beforeHash || ""}`
+      );
     }
     return res.json({ success: true, ...result });
   } catch (e) {
@@ -6168,6 +6182,8 @@ router.post("/backups/restore", adminAuth.verifyAdminAccess, (req, res) => {
       message: e.message,
       code: e.code || undefined,
       preflight: e.preflight,
+      rollbackStatus: e.rollbackStatus,
+      safetyBackup: e.safetyBackup,
     });
   }
 });
@@ -6257,7 +6273,13 @@ router.get("/snapshots/download", adminAuth.verifyAdminAccess, (req, res) => {
 router.delete("/backups", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     const file = req.query.filename || (req.body && req.body.filename);
-    const deleted = backupService.deleteBackup(file);
+    const confirm =
+      (req.body && req.body.confirm) || req.query.confirm || req.get("x-confirm-filename") || "";
+    const client = String(req.get("x-fosu-admin-client") || "").toLowerCase();
+    const deleted = backupService.deleteBackup(file, {
+      confirm,
+      requireConfirm: client === "next" || Boolean(confirm),
+    });
     writeAuditLog(req, "delete", "backups", deleted.filename, `删除数据备份: ${deleted.filename}`);
     return res.json({ success: true, message: "删除备份成功", ...deleted });
   } catch (e) {

@@ -1,7 +1,7 @@
 # Legacy Admin Feature Inventory (Phase A)
 
-- Generated: `2026-07-17T18:37:13.427Z`
-- Source commit: `525776eb9c979f5ecc73386e1d2c18d89361e0cc`
+- Generated: `2026-07-17T19:14:08.019Z`
+- Source commit: `065d2ef05e61fee6ed75c1c38bbd8c42bbc7c145`
 - Production primary remains: **legacy**
 - API routes inventoried: **150**
 - Write routes: **90**
@@ -74,9 +74,10 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 
 | Status | Count |
 |--------|-------|
+| browser-verified | 23 |
 | missing | 31 |
 | read-only | 95 |
-| write-implemented | 27 |
+| write-implemented | 4 |
 
 ## Risk distribution
 
