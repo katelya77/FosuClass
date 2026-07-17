@@ -96,6 +96,7 @@
     "sync:personal": "node server/scripts/sync-personal.js",
     "inspect:personal-auth": "node server/scripts/inspect-personal-auth.js",
     "test:admin-inline-script": "node tools/check-admin-inline-script.js",
+    "test:architecture-guards": "node tools/test-architecture-guards.js",
     "test:admin-page": "node tools/check-admin-page.js",
     "test:admin-operations-studio-ui": "node tools/test-admin-operations-studio-ui.js",
     "test:admin-sync-page": "node tools/test-admin-sync-page.js",
