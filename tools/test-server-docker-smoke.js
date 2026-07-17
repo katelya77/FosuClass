@@ -152,7 +152,11 @@ async function run() {
   const port = await findPort();
   writeSmokeEnv(port);
   try {
-    let result = runDocker(["build", "-t", imageTag, "."]);
+    // Multi-stage Dockerfile expects monorepo root context (admin-web + server).
+    let result = runDocker(
+      ["build", "-f", "server/Dockerfile", "-t", imageTag, "."],
+      { cwd: ROOT }
+    );
     if (result.status !== 0) {
       throw new Error(sanitize(`${result.stdout}\n${result.stderr}`));
     }
@@ -164,6 +168,12 @@ async function run() {
       containerName,
       "--env-file",
       envPath,
+      "-e",
+      "FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups",
+      "-e",
+      "FOSU_ADMIN_PRIMARY=legacy",
+      "-e",
+      "FOSU_ADMIN_NEXT_ENABLED=true",
       "-p",
       `127.0.0.1:${port}:3000`,
       imageTag,
