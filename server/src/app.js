@@ -112,7 +112,16 @@ app.use(express.static(path.join(__dirname, "../public"), {
 //   default primary=legacy         → /admin old, /admin-next new (safe rollout)
 const ADMIN_APP_DIR = path.join(__dirname, "../public/admin-app");
 const adminNextEnabled = process.env.FOSU_ADMIN_NEXT_ENABLED !== "false";
-const adminPrimaryNext = String(process.env.FOSU_ADMIN_PRIMARY || "legacy").toLowerCase() === "next";
+const requestedAdminPrimaryNext = String(process.env.FOSU_ADMIN_PRIMARY || "legacy").toLowerCase() === "next";
+// Effective primary only when Next SPA is enabled; otherwise force legacy.
+const effectiveAdminPrimaryNext = adminNextEnabled && requestedAdminPrimaryNext;
+if (requestedAdminPrimaryNext && !adminNextEnabled) {
+  console.warn(
+    "[FosuClass Server] FOSU_ADMIN_PRIMARY=next ignored because FOSU_ADMIN_NEXT_ENABLED=false"
+  );
+}
+// Back-compat alias used below
+const adminPrimaryNext = effectiveAdminPrimaryNext;
 
 function sendAdminSpa(res) {
   const indexPath = path.join(ADMIN_APP_DIR, "index.html");
@@ -151,10 +160,16 @@ app.get("/api/admin/ui-mode", (req, res) => {
   res.json({
     success: true,
     adminNextEnabled,
-    primary: adminPrimaryNext ? "next" : "legacy",
+    requestedPrimary: requestedAdminPrimaryNext ? "next" : "legacy",
+    primary: effectiveAdminPrimaryNext ? "next" : "legacy",
+    effectivePrimary: effectiveAdminPrimaryNext ? "next" : "legacy",
+    conflict:
+      requestedAdminPrimaryNext && !adminNextEnabled
+        ? "FOSU_ADMIN_PRIMARY=next ignored because FOSU_ADMIN_NEXT_ENABLED=false"
+        : null,
     paths: {
-      next: adminPrimaryNext ? "/admin/" : "/admin-next/",
-      legacy: adminPrimaryNext ? "/admin-legacy/" : "/admin/",
+      next: effectiveAdminPrimaryNext ? "/admin/" : "/admin-next/",
+      legacy: effectiveAdminPrimaryNext ? "/admin-legacy/" : "/admin/",
     },
   });
 });
