@@ -1,28 +1,22 @@
 {
   "branch": "grok/admin-modernization",
   "baselineCommit": "5d7eb469",
-  "currentPhase": 1,
-  "completedPhases": [0],
-  "lastCommit": "d6799b60",
+  "currentPhase": 2,
+  "completedPhases": [0, 1],
+  "lastCommit": "481608be",
   "testsPassed": [
-    "test:architecture-guards",
-    "test:duplicate-admin-routes",
-    "test:service-token-scopes",
-    "test:chunk-upload-csrf",
-    "test:snapshot-concurrency",
-    "test:admin-api-contract",
-    "test:config-validation",
-    "test:admin-auth-modes",
+    "admin:test",
+    "admin:build",
+    "admin:test:e2e",
+    "test:admin-spa-shell",
     "test:admin-page",
-    "test:admin-inline-script",
-    "test:staging-upload",
-    "test:admin-sync-page"
+    "test:architecture-guards"
   ],
   "testsFailed": [],
   "remainingRisks": [
-    "admin.js still oversized (soft max); modularize in phase 4",
-    "ADMIN_API_TOKEN still admin:full by default for compat",
-    "Legacy snapshot activate without uploadId remains racy for old clients"
+    "New admin pages beyond dashboard/sync are placeholders",
+    "Primary /admin not switched yet (intentional until acceptance)",
+    "admin.js soft line-count ceiling still exceeded"
   ],
-  "nextAction": "Commit phase 1 then scaffold admin-web Vue 3 foundation"
+  "nextAction": "Commit phase 2 then deepen core ops pages (phase 3)"
 }

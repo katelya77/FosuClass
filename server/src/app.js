@@ -6,6 +6,7 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
+const fs = require("fs");
 const path = require("path");
 const config = require("./config");
 const { globalLimiter } = require("./utils/rateLimit");
@@ -103,6 +104,38 @@ app.use(express.urlencoded({ extended: true, limit: DEFAULT_URLENCODED_BODY_LIMI
 app.use(express.static(path.join(__dirname, "../public"), {
   maxAge: config.NODE_ENV === "production" ? "1h" : 0,
 }));
+
+// Vue admin SPA assets + deep-link shell (/admin-next/*)
+// Feature flag: FOSU_ADMIN_NEXT_ENABLED=false disables the new shell (legacy /admin remains).
+const ADMIN_APP_DIR = path.join(__dirname, "../public/admin-app");
+const adminNextEnabled = process.env.FOSU_ADMIN_NEXT_ENABLED !== "false";
+
+function sendAdminSpa(res) {
+  const indexPath = path.join(ADMIN_APP_DIR, "index.html");
+  if (!fs.existsSync(indexPath)) {
+    return res.status(503).type("html").send(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>Admin Next</title></head><body style="font-family:system-ui;padding:24px"><h1>新后台尚未构建</h1><p>请运行 <code>npm run admin:build</code>，或使用 <a href="/admin/">旧版后台</a>。</p></body></html>`);
+  }
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("Referrer-Policy", "no-referrer");
+  // Allow app origin + logo CDN only
+  res.setHeader(
+    "Content-Security-Policy",
+    "default-src 'self'; img-src 'self' data: https://pan.katelya.eu.org; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'"
+  );
+  return res.sendFile(indexPath);
+}
+
+if (adminNextEnabled) {
+  app.use("/admin-app", express.static(ADMIN_APP_DIR, {
+    maxAge: config.NODE_ENV === "production" ? "1h" : 0,
+    index: false,
+  }));
+  app.use("/admin-next", (req, res, next) => {
+    const method = String(req.method || "GET").toUpperCase();
+    if (method !== "GET" && method !== "HEAD") return next();
+    return sendAdminSpa(res);
+  });
+}
 
 function staticReleaseAccessGuard(req, res, next) {
   const method = String(req.method || "GET").toUpperCase();
