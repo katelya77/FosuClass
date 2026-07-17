@@ -1,0 +1,27 @@
+# Root build context for server/Dockerfile
+.git
+.github
+**/node_modules
+**/npm-debug.log*
+**/.env
+**/.env.*
+!**/.env.example
+server/storage
+server/storage/**
+server/data/backups
+output
+test-results
+playwright-report
+coverage
+tmp
+dist
+docs
+miniprogram
+cloudfunctions
+tools/fosu-sync-client/node_modules
+tools/**/node_modules
+*.log
+.DS_Store
+Thumbs.db
+local.secrets*.json
+staging

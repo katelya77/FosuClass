@@ -1,8 +1,16 @@
 services:
   fosu-api:
+    # Production: FOSU_API_IMAGE=ghcr.io/katelya77/fosuclass-api@sha256:...
+    # Local/dev fallback build from monorepo root when image unset.
+    image: ${FOSU_API_IMAGE:-fosuclass-api:local}
+    pull_policy: ${FOSU_API_PULL_POLICY:-always}
     build:
-      context: .
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: server/Dockerfile
+      args:
+        GIT_REVISION: ${FOSU_DEPLOY_COMMIT_SHA:-unknown}
+        BUILD_CREATED: ${FOSU_BUILD_CREATED:-unknown}
+        IMAGE_VERSION: ${FOSU_IMAGE_VERSION:-0.0.0}
     container_name: fosuclass-api
     restart: unless-stopped
     env_file:
@@ -17,10 +25,13 @@ services:
       FOSU_RELEASE_WORKER_ENABLED: ${FOSU_RELEASE_WORKER_ENABLED:-true}
       FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB: ${FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB:-3072}
       FOSU_RELEASE_COMPRESSION_CONCURRENCY: ${FOSU_RELEASE_COMPRESSION_CONCURRENCY:-1}
+      FOSU_ADMIN_NEXT_ENABLED: ${FOSU_ADMIN_NEXT_ENABLED:-true}
+      FOSU_ADMIN_PRIMARY: ${FOSU_ADMIN_PRIMARY:-legacy}
+      FOSU_ADMIN_NEXT_WRITE_MODULES: ${FOSU_ADMIN_NEXT_WRITE_MODULES:-}
+      FOSU_CONFIG_HARD_FAIL: ${FOSU_CONFIG_HARD_FAIL:-false}
     cpus: ${FOSU_API_CPUS:-1.5}
     mem_limit: ${FOSU_API_MEM_LIMIT:-4096m}
     ports:
-      # 将端口绑定限制在 HOST_BIND_IP 宿主机本地环回 IP，防范公网安全风险
       - "${HOST_BIND_IP:-127.0.0.1}:${HOST_API_PORT:-18318}:${PORT:-3000}"
     volumes:
       - ./storage:/app/storage

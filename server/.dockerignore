@@ -1,0 +1,40 @@
+# VCS / CI
+.git
+.github
+.gitignore
+
+# Dependencies (installed in image)
+node_modules
+npm-debug.log*
+yarn-error.log*
+
+# Secrets & local env
+.env
+.env.*
+!.env.example
+local.secrets*.json
+
+# Runtime data (bind-mounted in production)
+storage
+storage/**
+data/backups
+data/admin-audit-log.jsonl
+
+# Dev / test artifacts
+output
+test-results
+playwright-report
+coverage
+tmp
+*.log
+*.tmp
+
+# Docs not needed at runtime
+docs
+README.md
+**/*.md
+!package.json
+
+# Host OS junk
+.DS_Store
+Thumbs.db

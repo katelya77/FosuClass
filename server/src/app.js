@@ -343,8 +343,10 @@ try {
       "[FosuClass Server] [HIGH] ADMIN_API_TOKEN is password-derived. Set an independent ADMIN_API_TOKEN for production. (Token value never logged.)"
     );
   }
+  const adminCapabilitiesService = require("./services/adminCapabilitiesService");
+  adminCapabilitiesService.assertWriteModulesConfigSafe();
 } catch (error) {
-  if (error && error.code === "CONFIG_VALIDATION_FAILED") {
+  if (error && (error.code === "CONFIG_VALIDATION_FAILED" || error.code === "WRITE_MODULES_STAR_FORBIDDEN")) {
     console.error(`[FosuClass Server] ${error.message}`);
     process.exit(1);
   }

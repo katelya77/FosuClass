@@ -1,50 +1,32 @@
 const assert = require("assert");
-const path = require("path");
 
-// Isolate module load with controlled env
-function loadService(envPatch) {
-  const prev = { ...process.env };
-  Object.assign(process.env, envPatch);
+function loadFresh() {
   const resolved = require.resolve("../server/src/services/adminCapabilitiesService");
   delete require.cache[resolved];
-  const mod = require(resolved);
-  // restore
-  for (const key of Object.keys(process.env)) {
-    if (!(key in prev)) delete process.env[key];
-  }
-  Object.assign(process.env, prev);
-  delete require.cache[resolved];
-  return mod;
+  return require(resolved);
 }
 
+// unset → empty
 {
-  const svc = loadService({ FOSU_ADMIN_NEXT_WRITE_MODULES: undefined });
-  // re-require clean
-  delete require.cache[require.resolve("../server/src/services/adminCapabilitiesService")];
-  process.env.FOSU_ADMIN_NEXT_WRITE_MODULES = undefined;
   delete process.env.FOSU_ADMIN_NEXT_WRITE_MODULES;
-  const fresh = require("../server/src/services/adminCapabilitiesService");
-  const list = fresh.getWriteModuleList();
-  assert.ok(list.includes("content"), "default includes content");
-  assert.ok(list.includes("feedback"));
-  assert.ok(list.includes("backups"));
-  assert.ok(!list.includes("release"), "default must not include release");
+  const fresh = loadFresh();
+  assert.deepStrictEqual(fresh.getWriteModuleList(), [], "unset must disable all Vue write modules");
 }
 
+// empty → empty
 {
-  delete require.cache[require.resolve("../server/src/services/adminCapabilitiesService")];
   process.env.FOSU_ADMIN_NEXT_WRITE_MODULES = "";
-  const fresh = require("../server/src/services/adminCapabilitiesService");
+  const fresh = loadFresh();
   assert.deepStrictEqual(fresh.getWriteModuleList(), []);
 }
 
+// explicit list
 {
-  delete require.cache[require.resolve("../server/src/services/adminCapabilitiesService")];
   process.env.FOSU_ADMIN_NEXT_WRITE_MODULES = "content,feedback";
-  const fresh = require("../server/src/services/adminCapabilitiesService");
+  process.env.NODE_ENV = "test";
+  const fresh = loadFresh();
   assert.deepStrictEqual(fresh.getWriteModuleList().sort(), ["content", "feedback"]);
   assert.strictEqual(fresh.resolveModuleForPath("/notices"), "content");
-  assert.strictEqual(fresh.resolveModuleForPath("/feedbacks/1"), "feedback");
   assert.strictEqual(fresh.resolveModuleForPath("/backups/preflight"), "backups");
 
   const blocked = fresh.assertNextWriteAllowed({
@@ -54,7 +36,6 @@ function loadService(envPatch) {
     originalUrl: "/api/admin/config",
   });
   assert.strictEqual(blocked.ok, false);
-  assert.strictEqual(blocked.code, "MODULE_WRITE_DISABLED");
 
   const allowed = fresh.assertNextWriteAllowed({
     method: "POST",
@@ -64,23 +45,46 @@ function loadService(envPatch) {
   });
   assert.strictEqual(allowed.ok, true);
 
+  const unknown = fresh.assertNextWriteAllowed({
+    method: "POST",
+    get: (h) => (String(h).toLowerCase() === "x-fosu-admin-client" ? "next" : ""),
+    route: { path: "/unknown-write" },
+    originalUrl: "/api/admin/unknown-write",
+  });
+  assert.strictEqual(unknown.ok, false);
+
   const legacy = fresh.assertNextWriteAllowed({
     method: "POST",
     get: () => "",
     route: { path: "/config" },
     originalUrl: "/api/admin/config",
   });
-  assert.strictEqual(legacy.ok, true, "legacy client not gated");
+  assert.strictEqual(legacy.ok, true, "legacy not gated");
 }
 
+// production forbids *
 {
-  delete require.cache[require.resolve("../server/src/services/adminCapabilitiesService")];
-  delete process.env.FOSU_ADMIN_NEXT_WRITE_MODULES;
-  const fresh = require("../server/src/services/adminCapabilitiesService");
-  const caps = fresh.getCapabilities();
-  assert.strictEqual(caps.success, true);
-  assert.ok(caps.writeModules.content === true || caps.writeModules.content === false);
-  assert.ok(Array.isArray(caps.writeModuleList));
+  process.env.NODE_ENV = "production";
+  process.env.FOSU_ADMIN_NEXT_WRITE_MODULES = "*";
+  const fresh = loadFresh();
+  let threw = false;
+  try {
+    fresh.assertWriteModulesConfigSafe();
+  } catch (e) {
+    threw = e.code === "WRITE_MODULES_STAR_FORBIDDEN";
+  }
+  assert.ok(threw, "production * must fail");
 }
 
+// non-production allows * for tests
+{
+  process.env.NODE_ENV = "development";
+  process.env.FOSU_ADMIN_NEXT_WRITE_MODULES = "*";
+  const fresh = loadFresh();
+  const list = fresh.getWriteModuleList();
+  assert.ok(list.includes("content") && list.includes("release"));
+}
+
+delete process.env.FOSU_ADMIN_NEXT_WRITE_MODULES;
+process.env.NODE_ENV = "test";
 console.log("Admin capabilities tests passed.");

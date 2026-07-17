@@ -93,6 +93,13 @@ function toBool(value, defaultValue) {
   return value === true || value === "true" || value === 1 || value === "1";
 }
 
+function makeResourceVersion() {
+  if (crypto.randomUUID) {
+    return `v_${crypto.randomUUID()}`;
+  }
+  return `v_${Date.now()}_${crypto.randomBytes(8).toString("hex")}`;
+}
+
 function makeId(prefix) {
   if (crypto.randomUUID) {
     return crypto.randomUUID();
@@ -191,7 +198,7 @@ function normalizeNotice(payload, existing) {
     endAt: normalizeOptionalDate(source.endAt !== undefined ? source.endAt : base.endAt),
     enabled: toBool(source.enabled, base.enabled !== undefined ? base.enabled : true),
     closable: toBool(source.closable, base.closable !== undefined ? base.closable : true),
-    version: toText(source.version !== undefined ? source.version : base.version, 80) || `v${Date.now()}`,
+    version: makeResourceVersion(),
     createdAt: base.createdAt || now,
     updatedAt: now,
   };
@@ -216,19 +223,88 @@ function normalizeNews(payload, existing) {
     link: toText(source.link !== undefined ? source.link : base.link, 500),
     date: normalizeOptionalDate(source.date !== undefined ? source.date : base.date) || now,
     enabled: toBool(source.enabled, base.enabled !== undefined ? base.enabled : true),
+    version: makeResourceVersion(),
     createdAt: base.createdAt || now,
     updatedAt: now,
   };
 }
 
-function listNotices() {
-  return readArray(NOTICES_PATH).sort((left, right) => {
-    const scoreDiff = (PRIORITY_SCORE[right.priority] || 0) - (PRIORITY_SCORE[left.priority] || 0);
-    if (scoreDiff !== 0) {
-      return scoreDiff;
+function ensureItemVersion(item) {
+  if (!item || typeof item !== "object") return item;
+  if (!item.version) {
+    item.version = makeResourceVersion();
+  }
+  return item;
+}
+
+/**
+ * @param {object} existing
+ * @param {object} options
+ * @param {{ requireIfMatch?: boolean, client?: string }} options
+ */
+function assertVersionMatch(existing, options) {
+  const opts = options || {};
+  const expected = opts.expectedVersion || opts.ifMatch || opts.version;
+  const current = existing && existing.version;
+  const requireIfMatch = opts.requireIfMatch === true;
+
+  if (requireIfMatch && (expected == null || expected === "")) {
+    const err = new Error("If-Match or expectedVersion is required for this update");
+    err.statusCode = 428;
+    err.code = "PRECONDITION_REQUIRED";
+    err.currentVersion = current || null;
+    throw err;
+  }
+
+  if (expected == null || expected === "") {
+    if (opts.client !== "next") {
+      safeLog("content-version-compat-warning", {
+        message: "legacy update without If-Match accepted during migration",
+        id: existing && existing.id,
+      });
     }
-    return String(right.updatedAt || "").localeCompare(String(left.updatedAt || ""));
+    return;
+  }
+
+  const stableCurrent = current || null;
+  if (!stableCurrent) {
+    // Existing record lacked version: assign on write but still accept once
+    return;
+  }
+  if (String(stableCurrent) !== String(expected)) {
+    const err = new Error("resource was modified by another request; reload and retry");
+    err.statusCode = 409;
+    err.code = "CONFLICT";
+    err.currentVersion = stableCurrent;
+    err.expectedVersion = expected;
+    throw err;
+  }
+}
+
+function listNotices() {
+  const items = readArray(NOTICES_PATH).map((item) => ensureItemVersion({ ...item }));
+  // Persist missing versions so subsequent editors always have If-Match targets
+  let dirty = false;
+  const raw = readArray(NOTICES_PATH);
+  const withVersions = raw.map((item) => {
+    if (item && !item.version) {
+      dirty = true;
+      return ensureItemVersion({ ...item });
+    }
+    return item;
   });
+  if (dirty) {
+    saveArray(NOTICES_PATH, withVersions);
+  }
+  return withVersions
+    .map((item) => ensureItemVersion({ ...item }))
+    .sort((left, right) => {
+      const scoreDiff = (PRIORITY_SCORE[right.priority] || 0) - (PRIORITY_SCORE[left.priority] || 0);
+      if (scoreDiff !== 0) {
+        return scoreDiff;
+      }
+      return String(right.updatedAt || "").localeCompare(String(left.updatedAt || ""));
+    });
 }
 
 function createNotice(payload) {
@@ -239,21 +315,6 @@ function createNotice(payload) {
   return notice;
 }
 
-function assertVersionMatch(existing, options) {
-  const expected =
-    options && (options.expectedVersion || options.ifMatch || options.version);
-  if (expected == null || expected === "") return;
-  const current = existing && existing.version;
-  if (current && String(current) !== String(expected)) {
-    const err = new Error("resource was modified by another request; reload and retry");
-    err.statusCode = 409;
-    err.code = "CONFLICT";
-    err.currentVersion = current;
-    err.expectedVersion = expected;
-    throw err;
-  }
-}
-
 function updateNotice(id, payload, options) {
   const items = listNotices();
   const index = items.findIndex((item) => item.id === id);
@@ -262,10 +323,11 @@ function updateNotice(id, payload, options) {
     err.statusCode = 404;
     throw err;
   }
-  assertVersionMatch(items[index], options || payload || {});
+  const opts = Object.assign({}, options || {}, options && options.payload ? {} : {});
+  const mergedOpts = Object.assign({}, payload || {}, options || {});
+  assertVersionMatch(items[index], mergedOpts);
   const next = normalizeNotice(payload, items[index]);
-  // Always bump version after a successful write so concurrent editors conflict.
-  next.version = `v${Date.now()}`;
+  next.version = makeResourceVersion();
   items[index] = next;
   saveArray(NOTICES_PATH, items);
   return items[index];
@@ -284,9 +346,25 @@ function deleteNotice(id) {
 }
 
 function listNews() {
-  return readArray(NEWS_PATH).sort((left, right) => {
-    return String(right.date || right.updatedAt || "").localeCompare(String(left.date || left.updatedAt || ""));
+  const raw = readArray(NEWS_PATH);
+  let dirty = false;
+  const withVersions = raw.map((item) => {
+    if (item && !item.version) {
+      dirty = true;
+      return ensureItemVersion({ ...item });
+    }
+    return item;
   });
+  if (dirty) {
+    saveArray(NEWS_PATH, withVersions);
+  }
+  return withVersions
+    .map((item) => ensureItemVersion({ ...item }))
+    .sort((left, right) => {
+      return String(right.date || right.updatedAt || "").localeCompare(
+        String(left.date || left.updatedAt || "")
+      );
+    });
 }
 
 function createNews(payload) {
@@ -305,9 +383,10 @@ function updateNews(id, payload, options) {
     err.statusCode = 404;
     throw err;
   }
-  assertVersionMatch(items[index], options || payload || {});
+  const mergedOpts = Object.assign({}, payload || {}, options || {});
+  assertVersionMatch(items[index], mergedOpts);
   const next = normalizeNews(payload, items[index]);
-  next.version = `v${Date.now()}`;
+  next.version = makeResourceVersion();
   items[index] = next;
   saveArray(NEWS_PATH, items);
   return items[index];
