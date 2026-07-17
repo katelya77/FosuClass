@@ -241,8 +241,8 @@ jobs:
             FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups
             FOSU_CONFIG_HARD_FAIL=false
             FOSU_API_PULL_POLICY=always
-            FOSU_DEPLOY_IMAGE_MODE=${{ vars.FOSU_DEPLOY_IMAGE_MODE || 'hybrid' }}
-            FOSU_API_IMAGE=${{ vars.FOSU_API_IMAGE || '' }}
+            FOSU_DEPLOY_IMAGE_MODE=hybrid
+            FOSU_API_IMAGE=
             FOSU_BASE_URL=https://100.fosu.edu.cn
             FOSU_AUTH_URL=https://authserver.fosu.edu.cn
             FOSU_AUTH_BASE=https://authserver.fosu.edu.cn
@@ -481,9 +481,15 @@ jobs:
               return 1
             }
 
-            # GHCR credentials from Actions (passed via env files dropped next to compose)
-            export GHCR_PULL_TOKEN='${{ secrets.GHCR_PULL_TOKEN || secrets.GITHUB_TOKEN }}'
-            export GHCR_PULL_USERNAME='${{ secrets.GHCR_PULL_USERNAME || github.actor }}'
+            # GHCR credentials: prefer dedicated pull PAT; otherwise Actions token (packages:read).
+            export GHCR_PULL_TOKEN='${{ secrets.GHCR_PULL_TOKEN }}'
+            if [ -z "$GHCR_PULL_TOKEN" ]; then
+              export GHCR_PULL_TOKEN='${{ secrets.GITHUB_TOKEN }}'
+            fi
+            export GHCR_PULL_USERNAME='${{ secrets.GHCR_PULL_USERNAME }}'
+            if [ -z "$GHCR_PULL_USERNAME" ]; then
+              export GHCR_PULL_USERNAME='${{ github.actor }}'
+            fi
             export GITHUB_ACTOR='${{ github.actor }}'
 
             if [ "$DEPLOY_MODE" = "source" ]; then
