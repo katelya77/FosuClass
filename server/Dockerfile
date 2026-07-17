@@ -19,11 +19,12 @@ COPY package*.json ./
 # 安装生产环境依赖
 RUN npm ci --omit=dev
 
-# 复制所有源代码
+# 复制所有源代码与静态资源（含 progressive admin SPA 构建产物）
 COPY src/ ./src/
 COPY scripts/ ./scripts/
 COPY data/ ./data/
 COPY assets/ ./assets/
+COPY public/ ./public/
 
 # 暴露接口服务端口
 EXPOSE 3000
