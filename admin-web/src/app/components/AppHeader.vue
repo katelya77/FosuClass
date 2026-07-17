@@ -5,6 +5,7 @@ import { useUiStore } from '@/stores/ui'
 import { useTheme } from '@/shared/theme/useTheme'
 import AppButton from '@/shared/ui/AppButton.vue'
 
+const emit = defineEmits<{ openMobileNav: [] }>()
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
@@ -15,12 +16,21 @@ async function onLogout() {
   await auth.logout()
   router.push({ name: 'login' })
 }
+
+function onMenuClick() {
+  // Desktop: collapse; Mobile: open drawer
+  if (typeof window !== 'undefined' && window.matchMedia('(max-width: 900px)').matches) {
+    emit('openMobileNav')
+  } else {
+    ui.toggleSidebar()
+  }
+}
 </script>
 
 <template>
   <header class="header">
     <div class="left">
-      <button type="button" class="icon-btn" aria-label="切换侧栏" @click="ui.toggleSidebar">
+      <button type="button" class="icon-btn" aria-label="打开导航菜单" @click="onMenuClick">
         <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true">
           <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" />
         </svg>

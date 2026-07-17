@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api } from '@/shared/api/client'
 import LoadingBlock from '@/shared/ui/LoadingBlock.vue'
 import AppButton from '@/shared/ui/AppButton.vue'
 import { useUiStore } from '@/stores/ui'
 
 interface SyncStatus {
-  activeReleaseVersion?: string
-  releaseVersion?: string
+  activeReleaseVersion?: string | null
+  publishedReleaseVersion?: string | null
+  latestPublishedReleaseVersion?: string | null
+  releaseVersion?: string | null
   semester?: string
   releasePackHealthy?: boolean
   stagingNeedsPublish?: boolean
@@ -16,12 +18,42 @@ interface SyncStatus {
   snapshotUpdatedAt?: string
   nextAction?: string
   opsSummary?: { primaryAction?: string; blockers?: string[] }
+  activeRelease?: { version?: string | null }
+  latestPublished?: { version?: string | null }
+  publishedRelease?: { version?: string | null }
 }
 
 const loading = ref(true)
 const error = ref('')
 const status = ref<SyncStatus | null>(null)
 const ui = useUiStore()
+
+function pickActive(s: SyncStatus | null): string | null {
+  if (!s) return null
+  const v =
+    s.activeReleaseVersion ||
+    s.activeRelease?.version ||
+    null
+  const text = v == null ? '' : String(v).trim()
+  return text || null
+}
+
+function pickPublished(s: SyncStatus | null): string | null {
+  if (!s) return null
+  const v =
+    s.publishedReleaseVersion ||
+    s.latestPublishedReleaseVersion ||
+    s.latestPublished?.version ||
+    s.publishedRelease?.version ||
+    // releaseVersion is treated as published/candidate metadata, never as Active fallback label
+    s.releaseVersion ||
+    null
+  const text = v == null ? '' : String(v).trim()
+  return text || null
+}
+
+const activeLabel = computed(() => pickActive(status.value) || '未生效')
+const publishedLabel = computed(() => pickPublished(status.value) || '—')
 
 async function load() {
   loading.value = true
@@ -44,6 +76,7 @@ function primaryActionLabel(s: SyncStatus | null) {
   if (s.opsSummary?.primaryAction) return s.opsSummary.primaryAction
   if (s.stagingNeedsPublish) return '去同步中心发布'
   if (s.releasePackHealthy === false) return '检查 Release 健康'
+  if (!pickActive(s)) return '确认 Active Pointer'
   return '进入同步中心'
 }
 </script>
@@ -54,7 +87,7 @@ function primaryActionLabel(s: SyncStatus | null) {
       <div>
         <p class="eyebrow">Campus Operations Studio</p>
         <h2>当前系统状态</h2>
-        <p class="lead">先回答：Active 是什么、数据是否新鲜、有没有阻断、下一步做什么。</p>
+        <p class="lead">先回答：Active 是什么、Published 是什么、数据是否新鲜、有没有阻断、下一步做什么。</p>
       </div>
       <AppButton variant="primary" :loading="loading" @click="$router.push('/sync')">
         {{ primaryActionLabel(status) }}
@@ -67,8 +100,13 @@ function primaryActionLabel(s: SyncStatus | null) {
       <div class="grid">
         <article class="card primary-card">
           <span class="label">Active Release</span>
-          <strong>{{ status.activeReleaseVersion || status.releaseVersion || '—' }}</strong>
-          <p>学期 {{ status.semester || '—' }}</p>
+          <strong :class="{ muted: !pickActive(status) }">{{ activeLabel }}</strong>
+          <p>学期 {{ status.semester || '—' }} · 用户端真正生效指针</p>
+        </article>
+        <article class="card">
+          <span class="label">Published Release</span>
+          <strong>{{ publishedLabel }}</strong>
+          <p>已发布候选（不得冒充 Active）</p>
         </article>
         <article class="card">
           <span class="label">Release 健康</span>
@@ -82,16 +120,12 @@ function primaryActionLabel(s: SyncStatus | null) {
           <strong>{{ status.openRestyStaticSyncStatus || '—' }}</strong>
           <p>{{ status.lastStaticSyncTime || '尚无同步时间' }}</p>
         </article>
-        <article class="card">
-          <span class="label">数据新鲜度</span>
-          <strong>{{ status.snapshotUpdatedAt ? '已有快照' : '待确认' }}</strong>
-          <p>{{ status.snapshotUpdatedAt || '无 snapshot 时间' }}</p>
-        </article>
       </div>
 
       <article class="card next">
         <h3>下一步</h3>
-        <p v-if="status.stagingNeedsPublish">Staging 与 Active 不一致，建议进入同步中心完成发布链路。</p>
+        <p v-if="!pickActive(status)">当前没有 Active Release 指针，请先完成发布并激活，勿将 Published 当作已生效。</p>
+        <p v-else-if="status.stagingNeedsPublish">Staging 与 Active 不一致，建议进入同步中心完成发布链路。</p>
         <p v-else-if="status.releasePackHealthy === false">Release Pack 健康检查未通过，请先修复后再切换 Active。</p>
         <p v-else>当前无强制阻断。可在同步中心巡检 Staging → Release → 静态 → URL → Active。</p>
         <div class="actions">
@@ -134,7 +168,7 @@ h2 {
 }
 .grid {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1fr;
+  grid-template-columns: 1.2fr 1.2fr 1fr 1fr;
   gap: 12px;
 }
 .card {
@@ -155,8 +189,11 @@ h2 {
   margin-bottom: 6px;
 }
 .card strong {
-  font-size: 1.15rem;
+  font-size: 1.1rem;
   word-break: break-all;
+}
+.card strong.muted {
+  color: var(--warning);
 }
 .card p {
   margin: 6px 0 0;
