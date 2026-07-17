@@ -10,6 +10,15 @@ const path = require("path");
 const { spawnSync } = require("child_process");
 const { promisify } = require("util");
 const router = express.Router();
+
+// Progressive domain modules (thin boundaries; no duplicated business logic)
+try {
+  router.use(require("../modules/audit/routes"));
+  router.use(require("../modules/dashboard/routes"));
+} catch (error) {
+  // Domain modules must not prevent legacy admin routes from loading.
+  console.warn("[admin] optional domain modules failed to load:", error.message);
+}
 const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
 const scheduleNormalizer = require("../utils/scheduleNormalizer");
