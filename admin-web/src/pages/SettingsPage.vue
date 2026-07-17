@@ -4,6 +4,9 @@ import { api } from '@/shared/api/client'
 import AppButton from '@/shared/ui/AppButton.vue'
 import LoadingBlock from '@/shared/ui/LoadingBlock.vue'
 import { useUiStore } from '@/stores/ui'
+import { legacyAdminUrl } from '@/shared/runtime/paths'
+
+const legacySettingsHref = legacyAdminUrl('settings')
 
 const loading = ref(true)
 const config = ref<Record<string, unknown> | null>(null)
@@ -35,7 +38,7 @@ onMounted(load)
       </div>
       <div class="actions">
         <AppButton variant="primary" :loading="loading" @click="load">刷新</AppButton>
-        <a href="/admin/#settings">旧版设置</a>
+        <a :href="legacySettingsHref">旧版设置</a>
       </div>
     </div>
     <LoadingBlock v-if="loading" />

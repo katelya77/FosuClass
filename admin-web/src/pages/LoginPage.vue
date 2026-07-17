@@ -5,11 +5,14 @@ import { useAuthStore } from '@/stores/auth'
 import AppLogo from '@/app/components/AppLogo.vue'
 import AppButton from '@/shared/ui/AppButton.vue'
 import AppFormField from '@/shared/ui/AppFormField.vue'
+import { getAdminRuntimePaths, legacyAdminRoot } from '@/shared/runtime/paths'
 
 const auth = useAuthStore()
 const router = useRouter()
 const route = useRoute()
 const password = ref('')
+const paths = getAdminRuntimePaths()
+const legacyHref = legacyAdminRoot()
 
 async function onSubmit() {
   const ok = await auth.login(password.value)
@@ -27,7 +30,7 @@ async function onSubmit() {
         <AppLogo :size="48" />
         <div>
           <h1>校园数据运营台</h1>
-          <p>佛课小表 · Admin Console</p>
+          <p>佛课小表 · 只读运营视图（写路径仍在迁移）</p>
         </div>
       </div>
 
@@ -47,8 +50,8 @@ async function onSubmit() {
       <AppButton type="submit" variant="primary" block :loading="auth.loading">登录</AppButton>
 
       <p class="foot">
-        新后台运行于 <code>/admin-next</code> ·
-        <a href="/admin/">返回旧版后台</a>
+        当前挂载 <code>{{ paths.spaBase }}</code> ·
+        <a :href="legacyHref">打开旧版后台（生产主后台）</a>
       </p>
     </form>
   </div>

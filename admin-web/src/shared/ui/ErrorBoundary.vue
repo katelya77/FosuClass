@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { onErrorCaptured, ref } from 'vue'
 import AppButton from './AppButton.vue'
+import { legacyAdminRoot } from '@/shared/runtime/paths'
 
 const error = ref<Error | null>(null)
 const emit = defineEmits<{ error: [Error] }>()
+const legacyHref = legacyAdminRoot()
 
 onErrorCaptured((err) => {
   error.value = err instanceof Error ? err : new Error(String(err))
@@ -23,7 +25,7 @@ function reset() {
     <p class="hint">其他后台功能不受影响。可重试或使用旧版后台。</p>
     <div class="actions">
       <AppButton variant="primary" @click="reset">重试</AppButton>
-      <a class="legacy" href="/admin/">打开旧版后台</a>
+      <a class="legacy" :href="legacyHref">打开旧版后台</a>
     </div>
   </div>
   <slot v-else />

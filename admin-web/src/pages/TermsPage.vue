@@ -5,6 +5,9 @@ import AppButton from '@/shared/ui/AppButton.vue'
 import AppTable from '@/shared/ui/AppTable.vue'
 import LoadingBlock from '@/shared/ui/LoadingBlock.vue'
 import { useUiStore } from '@/stores/ui'
+import { legacyAdminUrl } from '@/shared/runtime/paths'
+
+const legacyTermsHref = legacyAdminUrl('terms')
 
 const loading = ref(true)
 const rows = ref<Record<string, unknown>[]>([])
@@ -49,7 +52,7 @@ onMounted(load)
       </div>
       <div class="actions">
         <AppButton variant="primary" :loading="loading" @click="load">刷新</AppButton>
-        <a href="/admin/#terms">旧版学期页</a>
+        <a :href="legacyTermsHref">旧版学期页</a>
       </div>
     </div>
     <LoadingBlock v-if="loading" />

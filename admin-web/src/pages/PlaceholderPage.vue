@@ -2,19 +2,21 @@
 import { useRoute } from 'vue-router'
 import EmptyState from '@/shared/ui/EmptyState.vue'
 import AppButton from '@/shared/ui/AppButton.vue'
+import { legacyAdminRoot } from '@/shared/runtime/paths'
 
 const route = useRoute()
+const legacyHref = legacyAdminRoot()
 </script>
 
 <template>
   <section class="page">
     <EmptyState
       :title="`${String(route.meta.title || '页面')} 迁移中`"
-      description="新后台骨架已就绪。此模块将在后续阶段接入相同 API，旧版后台功能保持可用。"
+      description="Vue 后台第一阶段为只读运营视图。完整写路径仍在旧版（当前生产主后台）。"
     >
       <template #action>
         <AppButton variant="primary" @click="$router.push('/dashboard')">返回总览</AppButton>
-        <a class="legacy" href="/admin/">在旧版打开</a>
+        <a class="legacy" :href="legacyHref">在旧版打开</a>
       </template>
     </EmptyState>
   </section>

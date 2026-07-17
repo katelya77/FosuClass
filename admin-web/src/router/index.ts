@@ -1,5 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { getAdminRuntimePaths, legacyAdminRoot } from '@/shared/runtime/paths'
 import AdminLayout from '@/app/layouts/AdminLayout.vue'
 import LoginPage from '@/pages/LoginPage.vue'
 import DashboardPage from '@/pages/DashboardPage.vue'
@@ -16,8 +17,10 @@ import AuditPage from '@/pages/AuditPage.vue'
 import ExperimentalPage from '@/pages/ExperimentalPage.vue'
 import PlaceholderPage from '@/pages/PlaceholderPage.vue'
 
+const runtimePaths = getAdminRuntimePaths()
+
 const router = createRouter({
-  history: createWebHistory('/admin-next/'),
+  history: createWebHistory(runtimePaths.spaBase),
   routes: [
     {
       path: '/login',
@@ -34,7 +37,7 @@ const router = createRouter({
           path: 'dashboard',
           name: 'dashboard',
           component: DashboardPage,
-          meta: { title: '运营总览', subtitle: 'Active · 新鲜度 · 阻断 · 下一步' },
+          meta: { title: '运营总览', subtitle: 'Active · Published · 新鲜度 · 阻断 · 下一步' },
         },
         {
           path: 'sync',
@@ -84,8 +87,9 @@ const router = createRouter({
           component: ExperimentalPage,
           props: {
             title: '小佛助手知识库（Tier 3）',
-            description: '实验功能。Provider / 知识库故障不得阻塞课表。Kill Switch 与旧版入口保留。',
-            legacyHash: '#assistant-kb',
+            description:
+              '实验功能。完整写路径仍在旧版后台；Provider/知识库故障不得阻塞课表。',
+            legacySection: 'assistant-kb',
           },
           meta: { title: '小佛助手' },
         },
@@ -95,8 +99,8 @@ const router = createRouter({
           component: ExperimentalPage,
           props: {
             title: 'AI Provider（Tier 3）',
-            description: 'Provider 配置独立于 Release Pack。故障降级不影响 Active Pointer。',
-            legacyHash: '#ai-provider',
+            description: 'Provider 配置完整写路径仍在旧版。故障降级不影响 Active Pointer。',
+            legacySection: 'ai-provider',
           },
           meta: { title: 'Provider' },
         },
@@ -124,8 +128,9 @@ const router = createRouter({
           component: ExperimentalPage,
           props: {
             title: '备份与快照',
-            description: '备份下载契约已与 Snapshot 对齐（/api/admin/backups 与 /api/admin/snapshots）。',
-            legacyHash: '#backups',
+            description:
+              '备份/快照列表 API 已对齐；完整下载与删除操作仍可在旧版后台完成。',
+            legacySection: 'backups',
           },
           meta: { title: '备份' },
         },
@@ -133,7 +138,7 @@ const router = createRouter({
           path: 'legacy',
           name: 'legacy-redirect',
           redirect: () => {
-            window.location.href = '/admin/'
+            window.location.href = legacyAdminRoot()
             return '/dashboard'
           },
         },
