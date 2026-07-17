@@ -47,6 +47,21 @@ function withAuthHeaders(headers: Headers, method: string) {
   }
 }
 
+let unauthorizedDispatching = false
+
+function notifyUnauthorized(message: string) {
+  if (!onUnauthorized || unauthorizedDispatching) return
+  unauthorizedDispatching = true
+  try {
+    onUnauthorized(message)
+  } finally {
+    // Allow later 401s (e.g. after re-login) to notify again.
+    queueMicrotask(() => {
+      unauthorizedDispatching = false
+    })
+  }
+}
+
 export async function api<T = unknown>(path: string, options: RequestOptions = {}): Promise<T> {
   const method = String(options.method || 'GET').toUpperCase()
   const headers = new Headers(options.headers || {})
@@ -83,7 +98,7 @@ export async function api<T = unknown>(path: string, options: RequestOptions = {
       if (res.status === 401) {
         const message =
           (data as { message?: string })?.message || '后台登录已过期，请重新登录'
-        if (onUnauthorized) onUnauthorized(message)
+        notifyUnauthorized(message)
         throw buildError(message, 401, data)
       }
 
@@ -127,7 +142,9 @@ export async function download(
     credentials: 'include',
   })
   if (res.status === 401) {
-    throw buildError('后台登录已过期，请重新登录', 401)
+    const message = '后台登录已过期，请重新登录'
+    notifyUnauthorized(message)
+    throw buildError(message, 401)
   }
   if (!res.ok) {
     throw buildError(`HTTP ${res.status}`, res.status)
