@@ -3,8 +3,8 @@ const adminAuth = require("../services/adminAuth");
 
 const router = express.Router();
 
-const ADMIN_LOGO_URL = "https://pan.katelya.eu.org/file/tgs_eyJ2IjoxLCJmIjoiQWdBQ0FnVUFBeUVGQUFUYW1yME1BQUlCcjJvZEZiTTBGUVFjQzFUclVwVWlDNFdadG0tckFBSnBFR3NidWJQb1ZITjJyQjhxcWZNbkFRQURBZ0FEZVFBRE93USIsImUiOiJqcGciLCJuIjoicGhvdG9fNDMxLmpwZyIsIm0iOiJpbWFnZS9qcGVnIiwicyI6MTE0ODAwLCJ0IjoxNzgwMjkwOTk2MjkyLCJtaWQiOjQzMX0.pCRB9D4sdHdjeP1XpKnQfMVMlSCh37uQE67VGaKBWFw.jpg";
-const ADMIN_LOGO_FALLBACK_URL = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2714%27%20fill%3D%27%233b82f6%27%2F%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20text-anchor%3D%27middle%27%20font-size%3D%2732%27%20font-family%3D%27Arial%2Csans-serif%27%20font-weight%3D%27700%27%20fill%3D%27white%27%3E%E8%AF%BE%3C%2Ftext%3E%3C%2Fsvg%3E";
+const ADMIN_LOGO_URL = "/assets/logo.png";
+const ADMIN_LOGO_FALLBACK_URL = "data:image/svg+xml,%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%2064%2064%27%3E%3Crect%20width%3D%2764%27%20height%3D%2764%27%20rx%3D%2714%27%20fill%3D%27%23c13b33%27%2F%3E%3Ctext%20x%3D%2732%27%20y%3D%2742%27%20text-anchor%3D%27middle%27%20font-size%3D%2732%27%20font-family%3D%27Arial%2Csans-serif%27%20font-weight%3D%27700%27%20fill%3D%27white%27%3E%E8%AF%BE%3C%2Ftext%3E%3C%2Fsvg%3E";
 const ADMIN_LOGO_IMG_ATTRS = `src="${ADMIN_LOGO_URL}" alt="佛课小表" referrerpolicy="no-referrer" onerror="this.onerror=null;this.src='${ADMIN_LOGO_FALLBACK_URL}';"`;
 
 const adminConsoleHtml = `<!doctype html>
@@ -13,7 +13,7 @@ const adminConsoleHtml = `<!doctype html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>佛课小表 Admin Console</title>
-  <link rel="icon" type="image/jpeg" href="${ADMIN_LOGO_URL}">
+  <link rel="icon" type="image/png" href="${ADMIN_LOGO_URL}">
   <link rel="apple-touch-icon" href="${ADMIN_LOGO_URL}">
   <script>
     (function () {
@@ -41,71 +41,91 @@ const adminConsoleHtml = `<!doctype html>
   <style>
     :root {
       color-scheme: light dark;
-      --page-bg: #f7f9fc;
-      --surface: #ffffff;
-      --surface-raised: #ffffff;
-      --surface-muted: #f1f5f9;
-      --border: #d7dee8;
-      --border-strong: #b8c3d1;
-      --border-hover: #b8c3d1;
-      --text-primary: #111827;
-      --text-secondary: #4b5563;
-      --text-muted: #6b7280;
-      --primary: #2563eb;
-      --primary-hover: #1d4ed8;
-      --primary-soft: #eaf2ff;
-      --success: #0f8f5f;
-      --success-soft: #e8f7ef;
-      --warning: #b7791f;
-      --warning-soft: #fff3d8;
+      --page-bg: #f4f2ed;
+      --surface: #fbfaf7;
+      --surface-raised: #fffefa;
+      --surface-muted: #eeece6;
+      --surface-sunken: #e8e5de;
+      --border: #d9d5cc;
+      --border-strong: #b8b2a7;
+      --border-hover: #aaa398;
+      --text-primary: #181b20;
+      --text-secondary: #4b515b;
+      --text-muted: #626a75;
+      --primary: #3158c7;
+      --primary-hover: #2447a9;
+      --primary-soft: #e7ecfb;
+      --on-primary: #ffffff;
+      --brand-accent: #c13b33;
+      --brand-soft: #f8e9e6;
+      --success: #14795a;
+      --success-soft: #e5f3ed;
+      --on-success: #ffffff;
+      --warning: #9a5d08;
+      --warning-soft: #f8edd9;
       --danger: #b42318;
-      --danger-soft: #fde7e7;
-      --overlay: rgba(17, 24, 39, 0.46);
-      --shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
-      --shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.14);
-      --code-bg: #eef2f7;
-      --table-hover: #eef5ff;
-      --focus-ring: rgba(37, 99, 235, 0.28);
-      --scrollbar-track: #eef2f7;
-      --scrollbar-thumb: #bac6d5;
+      --danger-soft: #f8e6e3;
+      --on-danger: #ffffff;
+      --status-success-bg: var(--success-soft);
+      --status-warning-bg: var(--warning-soft);
+      --status-danger-bg: var(--danger-soft);
+      --overlay: rgba(24, 27, 32, 0.5);
+      --shadow: 0 1px 2px rgba(31, 28, 23, 0.06);
+      --shadow-lg: 0 18px 42px rgba(31, 28, 23, 0.16);
+      --code-bg: #ebe8e1;
+      --table-hover: #f0f3fb;
+      --focus-ring: rgba(49, 88, 199, 0.3);
+      --scrollbar-track: #ebe8e1;
+      --scrollbar-thumb: #bcb6aa;
+      --sidebar-width: 264px;
+      --sidebar-collapsed-width: 76px;
       --bg: var(--page-bg);
       --panel: var(--surface);
       --panel-2: var(--surface-muted);
       --text: var(--text-primary);
       --muted: var(--text-muted);
-      --radius: 10px;
-      --font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --radius: 9px;
+      --font-family: Inter, "SF Pro Text", "PingFang SC", "Microsoft YaHei", "Noto Sans CJK SC", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       --transition: color 180ms cubic-bezier(0.4, 0, 0.2, 1), background-color 180ms cubic-bezier(0.4, 0, 0.2, 1), border-color 180ms cubic-bezier(0.4, 0, 0.2, 1), box-shadow 180ms cubic-bezier(0.4, 0, 0.2, 1);
     }
 
     html[data-resolved-theme="dark"] {
-      --page-bg: #111827;
-      --surface: #17202c;
-      --surface-raised: #1f2937;
-      --surface-muted: #202a36;
-      --border: #273344;
-      --border-strong: #3a4758;
-      --border-hover: #46566b;
-      --text-primary: #e5e7eb;
-      --text-secondary: #c6d0dc;
-      --text-muted: #9ca8b7;
-      --primary: #60a5fa;
-      --primary-hover: #93c5fd;
-      --primary-soft: rgba(96, 165, 250, 0.16);
-      --success: #34d399;
-      --success-soft: rgba(52, 211, 153, 0.14);
-      --warning: #fbbf24;
-      --warning-soft: rgba(251, 191, 36, 0.16);
-      --danger: #f87171;
-      --danger-soft: rgba(248, 113, 113, 0.14);
-      --overlay: rgba(3, 7, 18, 0.68);
-      --shadow: 0 1px 3px rgba(0, 0, 0, 0.34), 0 1px 2px rgba(0, 0, 0, 0.22);
-      --shadow-lg: 0 24px 48px rgba(0, 0, 0, 0.38);
-      --code-bg: #0f172a;
-      --table-hover: #1f2f44;
-      --focus-ring: rgba(96, 165, 250, 0.34);
-      --scrollbar-track: #141c27;
-      --scrollbar-thumb: #435266;
+      --page-bg: #101318;
+      --surface: #171b21;
+      --surface-raised: #1d222a;
+      --surface-muted: #222832;
+      --surface-sunken: #0c0f13;
+      --border: #303742;
+      --border-strong: #46505e;
+      --border-hover: #586474;
+      --text-primary: #f0f2f4;
+      --text-secondary: #c2c8d0;
+      --text-muted: #949eaa;
+      --primary: #7f9df2;
+      --primary-hover: #a1b6f6;
+      --primary-soft: rgba(127, 157, 242, 0.16);
+      --on-primary: #111827;
+      --brand-accent: #ed7168;
+      --brand-soft: rgba(237, 113, 104, 0.14);
+      --success: #5bc69a;
+      --success-soft: rgba(91, 198, 154, 0.14);
+      --on-success: #102119;
+      --warning: #e3ad55;
+      --warning-soft: rgba(227, 173, 85, 0.14);
+      --danger: #f0877f;
+      --danger-soft: rgba(240, 135, 127, 0.14);
+      --on-danger: #2a1010;
+      --status-success-bg: var(--success-soft);
+      --status-warning-bg: var(--warning-soft);
+      --status-danger-bg: var(--danger-soft);
+      --overlay: rgba(4, 6, 9, 0.74);
+      --shadow: 0 1px 2px rgba(0, 0, 0, 0.26);
+      --shadow-lg: 0 24px 52px rgba(0, 0, 0, 0.44);
+      --code-bg: #0d1117;
+      --table-hover: #222b3a;
+      --focus-ring: rgba(127, 157, 242, 0.38);
+      --scrollbar-track: #11161c;
+      --scrollbar-thumb: #46515f;
     }
 
     * {
@@ -338,7 +358,7 @@ const adminConsoleHtml = `<!doctype html>
     }
     button.primary, .btn.primary {
       background: var(--primary);
-      color: #ffffff;
+      color: var(--on-primary);
     }
     button.primary:hover, .btn.primary:hover {
       background: var(--primary-hover);
@@ -379,7 +399,7 @@ const adminConsoleHtml = `<!doctype html>
       grid-template-columns: 240px 1fr;
       min-height: 100vh;
     }
-    
+
     /* 侧边导航 */
     .sidebar {
       background: var(--panel);
@@ -488,7 +508,7 @@ const adminConsoleHtml = `<!doctype html>
     }
     .env-tag.production { background: var(--danger-soft); color: var(--danger); }
     .env-tag.local { background: #e0f2fe; color: #0369a1; }
-    
+
     /* 主体内容区 */
     .main-content {
       padding: 20px 24px;
@@ -709,7 +729,7 @@ const adminConsoleHtml = `<!doctype html>
     }
     .readiness-fix {
       margin-top: 6px;
-      color: #92400e;
+      color: var(--warning);
     }
 
     /* 分页组件 */
@@ -741,7 +761,7 @@ const adminConsoleHtml = `<!doctype html>
     }
     .drawer {
       position: fixed;
-      top: 0; right: -640px; bottom: 0;
+      top: 0; right: 0; bottom: 0;
       width: 100%;
       max-width: 600px;
       background: var(--panel);
@@ -751,11 +771,19 @@ const adminConsoleHtml = `<!doctype html>
       overflow-y: auto;
       display: flex;
       flex-direction: column;
-      transition: right 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateX(100%);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), visibility 0s linear 0.25s;
       border-left: 1px solid var(--border);
     }
     .drawer-mask.show { display: block; opacity: 1; }
-    .drawer.show { right: 0; }
+    .drawer.show {
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateX(0);
+      transition-delay: 0s;
+    }
     .drawer-header {
       display: flex;
       justify-content: space-between;
@@ -1405,7 +1433,7 @@ const adminConsoleHtml = `<!doctype html>
     }
     .heatmap-alert {
       background: var(--warning-soft);
-      color: #92400e;
+      color: var(--warning);
       border: 1px solid #fde68a;
       border-radius: 6px;
       padding: 10px 12px;
@@ -1595,8 +1623,8 @@ const adminConsoleHtml = `<!doctype html>
       font-size: 10px;
       color: var(--primary);
     }
-    .mini-banner.urgent { background: var(--danger-soft); border-left-color: var(--danger); color: #991b1b; }
-    .mini-banner.warning { background: var(--warning-soft); border-left-color: var(--warning); color: #92400e; }
+    .mini-banner.urgent { background: var(--danger-soft); border-left-color: var(--danger); color: var(--danger); }
+    .mini-banner.warning { background: var(--warning-soft); border-left-color: var(--warning); color: var(--warning); }
     
     .mini-modal-mask {
       position: absolute;
@@ -1618,7 +1646,7 @@ const adminConsoleHtml = `<!doctype html>
     }
     .mini-modal h4 { font-size: 11px; font-weight: 800; margin-bottom: 4px; }
     .mini-modal p { font-size: 9px; color: var(--muted); line-height: 1.4; margin-bottom: 8px; }
-    .mini-modal button { padding: 4px; border-radius: 4px; font-size: 10px; width: 100%; background: var(--primary); color: white; border: none;}
+    .mini-modal button { padding: 4px; border-radius: 4px; font-size: 10px; width: 100%; background: var(--primary); color: var(--on-primary); border: none;}
 
     .mini-ticker {
       display: flex;
@@ -1769,7 +1797,7 @@ const adminConsoleHtml = `<!doctype html>
       left: 0;
       right: 0;
       background: var(--danger);
-      color: #ffffff;
+      color: var(--on-danger);
       padding: 12px 24px;
       font-size: 13px;
       font-weight: 600;
@@ -1784,7 +1812,7 @@ const adminConsoleHtml = `<!doctype html>
     .admin-runtime-error-bar button {
       background: var(--danger-soft);
       border: 1px solid var(--border-strong);
-      color: #ffffff;
+      color: var(--text-primary);
       padding: 4px 8px;
       font-size: 11px;
       border-radius: 4px;
@@ -1895,6 +1923,11 @@ const adminConsoleHtml = `<!doctype html>
     .sidebar-overlay.show {
       display: block;
       opacity: 1;
+    }
+
+    body.sidebar-drawer-open,
+    body.detail-drawer-open {
+      overflow: hidden;
     }
 
     /* 热力图摘要卡片 */
@@ -2749,7 +2782,7 @@ const adminConsoleHtml = `<!doctype html>
     }
     .flow-go-btn:hover {
       background: var(--primary);
-      color: #fff;
+      color: var(--on-primary);
     }
 
     .code-preview.command-code-box,
@@ -3229,7 +3262,7 @@ const adminConsoleHtml = `<!doctype html>
     .sync-flow-step.success .sync-flow-step-num { background: var(--success-soft); color: var(--success); border-color: rgba(22,163,107,.25); }
     .sync-flow-step.running .sync-flow-step-num { background: var(--primary-soft); color: var(--primary); border-color: rgba(37,99,235,.25); }
     .sync-flow-step.failed .sync-flow-step-num { background: var(--danger-soft); color: var(--danger); border-color: rgba(220,38,38,.25); }
-    .sync-flow-step.skipped .sync-flow-step-num { background: var(--warning-soft); color: #92400e; border-color: rgba(146,64,14,.25); }
+    .sync-flow-step.skipped .sync-flow-step-num { background: var(--warning-soft); color: var(--warning); border-color: rgba(146,64,14,.25); }
     .sync-side-col {
       display: grid;
       grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
@@ -3467,7 +3500,7 @@ const adminConsoleHtml = `<!doctype html>
     }
     .staging-state-badge.pending-review {
       background: var(--warning-soft);
-      color: #92400e;
+      color: var(--warning);
     }
     .staging-state-badge.uploading,
     .staging-state-badge.uploaded,
@@ -3630,7 +3663,7 @@ const adminConsoleHtml = `<!doctype html>
     }
     .step-indicator-item.completed .step-num {
       background: var(--success);
-      color: white;
+      color: var(--on-success);
       border-color: var(--success);
     }
     .step-label {
@@ -3715,7 +3748,7 @@ const adminConsoleHtml = `<!doctype html>
       padding-top: 12px !important;
       margin-top: 12px !important;
     }
-    
+
     /* 目标 Shell 按钮组 */
     .segmented-control {
       display: flex;
@@ -3742,7 +3775,7 @@ const adminConsoleHtml = `<!doctype html>
       color: var(--text);
       box-shadow: var(--shadow);
     }
-    
+
     .stepper-actions {
       display: flex;
       justify-content: space-between;
@@ -3750,27 +3783,1845 @@ const adminConsoleHtml = `<!doctype html>
       border-top: 1px solid var(--border);
       padding-top: 10px;
     }
+
+    /* === Campus Operations Studio / 校园数据运营台 === */
+    html {
+      background: var(--page-bg);
+    }
+
+    body {
+      background: var(--page-bg);
+      color: var(--text-primary);
+      font-size: 14px;
+      letter-spacing: 0.002em;
+    }
+
+    body,
+    button,
+    input,
+    textarea,
+    select {
+      font-family: var(--font-family);
+    }
+
+    :focus-visible {
+      outline: 2px solid var(--primary);
+      outline-offset: 3px;
+      box-shadow: 0 0 0 4px var(--focus-ring);
+    }
+
+    .skip-link {
+      position: fixed;
+      top: 10px;
+      left: 10px;
+      z-index: 1000;
+      padding: 9px 12px;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      background: var(--surface-raised);
+      color: var(--text-primary);
+      font-weight: 700;
+      text-decoration: none;
+      transform: translateY(-160%);
+      transition: transform 120ms ease;
+    }
+
+    .skip-link:focus {
+      transform: translateY(0);
+    }
+
+    .page-eyebrow,
+    .section-kicker {
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      line-height: 1.3;
+      text-transform: uppercase;
+    }
+
+    .section-kicker {
+      margin-bottom: 5px;
+    }
+
+    svg.nav-icon,
+    button svg,
+    .btn svg {
+      width: 18px;
+      height: 18px;
+      flex: 0 0 18px;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.75;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    .icon-button {
+      width: 38px;
+      height: 38px;
+      min-width: 38px;
+      padding: 0;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--surface);
+      color: var(--text-secondary);
+    }
+
+    .icon-button:hover {
+      border-color: var(--border-strong);
+      background: var(--surface-muted);
+      color: var(--text-primary);
+    }
+
+    /* Login: quiet, trustworthy, and visually connected to the console. */
+    body.is-login-page {
+      position: relative;
+      background: var(--page-bg);
+    }
+
+    body.is-login-page::before {
+      content: "";
+      position: fixed;
+      inset: 0 auto 0 0;
+      width: 6px;
+      background: var(--brand-accent);
+    }
+
+    .login-wrap {
+      width: min(440px, calc(100% - 32px));
+      margin: 0 auto;
+    }
+
+    .login-panel {
+      padding: 34px;
+      border-color: var(--border-strong);
+      border-radius: 12px;
+      background: var(--surface-raised);
+      box-shadow: 0 18px 50px rgba(31, 28, 23, 0.1);
+    }
+
+    html[data-resolved-theme="dark"] .login-panel {
+      box-shadow: 0 22px 60px rgba(0, 0, 0, 0.32);
+    }
+
+    .login-brand-lockup {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+
+    .login-logo {
+      width: 48px;
+      height: 48px;
+      min-width: 48px;
+      margin: 0;
+      border: 1px solid var(--border);
+      border-radius: 11px;
+      box-shadow: none;
+    }
+
+    .login-brand-lockup h1 {
+      margin-top: 3px;
+      color: var(--text-primary);
+      font-size: 21px;
+      font-weight: 780;
+      letter-spacing: -0.02em;
+    }
+
+    .login-intro {
+      margin-bottom: 24px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .field-group {
+      margin-bottom: 16px;
+    }
+
+    .login-submit {
+      width: 100%;
+      min-height: 42px;
+    }
+
+    .login-error {
+      min-height: 22px;
+      margin-top: 10px;
+      color: var(--danger);
+      font-size: 12px;
+    }
+
+    .login-theme-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 8px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 12px;
+    }
+
+    .login-theme-row + .theme-current-label {
+      margin-top: 8px;
+      text-align: right;
+    }
+
+    /* Shell and navigation */
+    .app-shell,
+    body.is-dashboard-page #dashboardView {
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+      background: var(--page-bg);
+    }
+
+    .app-shell.sidebar-collapsed {
+      grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
+    }
+
+    .sidebar {
+      width: var(--sidebar-width);
+      min-width: 0;
+      padding: 14px 12px 12px;
+      overflow: hidden;
+      border-right-color: var(--border);
+      background: var(--surface);
+      box-shadow: none;
+      transition: width 180ms ease, transform 180ms ease, background-color 180ms ease, border-color 180ms ease;
+    }
+
+    .sidebar-primary {
+      display: flex;
+      min-height: 0;
+      flex: 1;
+      flex-direction: column;
+    }
+
+    .sidebar-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 6px;
+      min-height: 52px;
+      margin-bottom: 10px;
+    }
+
+    .sidebar-brand {
+      min-width: 0;
+      margin: 0;
+      padding: 0 7px;
+      gap: 10px;
+    }
+
+    .brand-logo {
+      width: 36px;
+      height: 36px;
+      min-width: 36px;
+      flex-basis: 36px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      box-shadow: none;
+    }
+
+    .sidebar-brand-title {
+      font-size: 14px;
+      letter-spacing: -0.01em;
+    }
+
+    .sidebar-brand-subtitle {
+      margin-top: 2px;
+      font-size: 10px;
+    }
+
+    .sidebar nav {
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      scrollbar-width: thin;
+    }
+
+    .nav-list {
+      gap: 2px;
+      padding: 0 2px 12px;
+    }
+
+    .nav-group-label {
+      margin: 14px 9px 5px;
+      color: var(--text-muted);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.12em;
+      list-style: none;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    .nav-group-label:first-child {
+      margin-top: 4px;
+    }
+
+    .nav-item button {
+      position: relative;
+      min-height: 36px;
+      padding: 8px 10px;
+      border: 1px solid transparent;
+      border-radius: 7px;
+      color: var(--text-secondary);
+      font-size: 12px;
+      font-weight: 650;
+      gap: 10px;
+    }
+
+    .nav-item button:hover {
+      border-color: var(--border);
+      background: var(--surface-muted);
+      color: var(--text-primary);
+    }
+
+    .nav-item.active button {
+      border-color: color-mix(in srgb, var(--primary) 22%, var(--border));
+      background: var(--primary-soft);
+      color: var(--primary);
+      box-shadow: none;
+    }
+
+    .nav-item.active button::before {
+      content: "";
+      position: absolute;
+      top: 8px;
+      bottom: 8px;
+      left: -3px;
+      width: 2px;
+      border-radius: 2px;
+      background: var(--primary);
+    }
+
+    .nav-label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .sidebar-close-button {
+      display: none;
+    }
+
+    .sidebar-footer {
+      flex: 0 0 auto;
+      gap: 8px;
+      padding-top: 10px;
+    }
+
+    .sidebar-collapse-button,
+    .logout-button {
+      width: 100%;
+      min-height: 34px;
+      justify-content: flex-start;
+      padding: 7px 9px;
+      color: var(--text-secondary);
+      font-size: 11px;
+      gap: 9px;
+    }
+
+    .sidebar-collapse-button svg,
+    .logout-button svg {
+      width: 16px;
+      height: 16px;
+    }
+
+    .logout-button:hover {
+      border-color: var(--danger);
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .account-panel {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      padding: 9px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-muted);
+    }
+
+    .account-mark {
+      display: grid;
+      width: 30px;
+      height: 30px;
+      flex: 0 0 30px;
+      place-items: center;
+      border-radius: 7px;
+      background: var(--brand-soft);
+      color: var(--brand-accent);
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    .account-copy {
+      min-width: 0;
+    }
+
+    .account-copy strong {
+      display: block;
+      color: var(--text-primary);
+      font-size: 11px;
+    }
+
+    .account-copy .env-info {
+      justify-content: flex-start;
+      gap: 6px;
+      min-width: 0;
+      padding: 0;
+    }
+
+    .account-copy #versionLabel {
+      max-width: 104px;
+      overflow: hidden;
+      color: var(--text-muted);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 9px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .env-tag {
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      background: transparent !important;
+      font-size: 8px;
+      letter-spacing: 0.06em;
+    }
+
+    .env-tag.local {
+      color: var(--primary);
+    }
+
+    .app-shell.sidebar-collapsed .sidebar {
+      width: var(--sidebar-collapsed-width);
+      padding-inline: 9px;
+    }
+
+    .app-shell.sidebar-collapsed .sidebar-brand-text,
+    .app-shell.sidebar-collapsed .nav-label,
+    .app-shell.sidebar-collapsed .nav-group-label,
+    .app-shell.sidebar-collapsed .account-copy {
+      display: none;
+    }
+
+    .app-shell.sidebar-collapsed .sidebar-header-row,
+    .app-shell.sidebar-collapsed .sidebar-brand,
+    .app-shell.sidebar-collapsed .nav-item button,
+    .app-shell.sidebar-collapsed .sidebar-collapse-button,
+    .app-shell.sidebar-collapsed .logout-button,
+    .app-shell.sidebar-collapsed .account-panel {
+      justify-content: center;
+    }
+
+    .app-shell.sidebar-collapsed .sidebar-brand {
+      padding: 0;
+    }
+
+    .app-shell.sidebar-collapsed .nav-item button {
+      padding-inline: 0;
+    }
+
+    .app-shell.sidebar-collapsed .nav-item.active button::before {
+      left: -4px;
+    }
+
+    .app-shell.sidebar-collapsed .sidebar-collapse-button svg {
+      transform: rotate(180deg);
+    }
+
+    /* Main work surface */
+    .main-content {
+      max-width: 1760px;
+      min-width: 0;
+      padding: 24px 32px 48px;
+      margin: 0 auto;
+      overflow: visible;
+    }
+
+    .topbar {
+      min-height: 70px;
+      margin-bottom: 22px;
+      padding: 0 0 16px;
+      border-bottom-color: var(--border-strong);
+      background: var(--page-bg);
+    }
+
+    .topbar-copy {
+      min-width: 0;
+    }
+
+    .topbar h2 {
+      margin-top: 3px;
+      color: var(--text-primary);
+      font-size: clamp(21px, 2vw, 27px);
+      font-weight: 780;
+      letter-spacing: -0.035em;
+    }
+
+    .topbar p {
+      max-width: 720px;
+      margin-top: 3px;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .topbar-actions {
+      flex: 0 0 auto;
+      gap: 8px;
+    }
+
+    .system-presence {
+      display: inline-flex;
+      min-height: 34px;
+      align-items: center;
+      gap: 7px;
+      padding: 0 10px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      color: var(--text-secondary);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .status-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      flex: 0 0 7px;
+      border-radius: 50%;
+      background: var(--text-muted);
+      box-shadow: 0 0 0 3px var(--surface-muted);
+    }
+
+    .status-dot.success { background: var(--success); box-shadow: 0 0 0 3px var(--success-soft); }
+    .status-dot.warning { background: var(--warning); box-shadow: 0 0 0 3px var(--warning-soft); }
+    .status-dot.danger { background: var(--danger); box-shadow: 0 0 0 3px var(--danger-soft); }
+    .status-dot.info { background: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+
+    .theme-switcher {
+      min-height: 34px;
+      padding: 2px;
+      border-radius: 7px;
+      background: var(--surface-muted);
+    }
+
+    .theme-switcher button {
+      min-width: 38px;
+      min-height: 28px;
+      padding: 5px 7px;
+      border-radius: 5px;
+      font-size: 10px;
+    }
+
+    .theme-switcher button[aria-pressed="true"] {
+      border: 1px solid var(--border);
+      box-shadow: none;
+    }
+
+    .refresh-button {
+      min-height: 34px;
+      padding: 7px 10px;
+      font-size: 11px;
+    }
+
+    .refresh-button svg {
+      width: 15px;
+      height: 15px;
+    }
+
+    .section {
+      min-width: 0;
+    }
+
+    .card {
+      border-color: var(--border);
+      border-radius: var(--radius);
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .card:hover {
+      border-color: var(--border);
+    }
+
+    .card-title,
+    .section-title,
+    .sync-section-heading h3 {
+      color: var(--text-primary);
+      letter-spacing: -0.015em;
+    }
+
+    /* Dashboard command hierarchy */
+    .dashboard-command-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(290px, 0.75fr);
+      gap: 14px;
+      align-items: stretch;
+      margin-bottom: 24px;
+    }
+
+    .dashboard-system-grid {
+      display: grid;
+      min-height: 168px;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      overflow: hidden;
+      border: 1px solid var(--border-strong);
+      border-radius: 10px;
+      background: var(--surface-raised);
+      box-shadow: var(--shadow);
+    }
+
+    .system-metric {
+      position: relative;
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 18px 16px;
+      border-right: 1px solid var(--border);
+    }
+
+    .system-metric:last-child {
+      border-right: 0;
+    }
+
+    .system-metric::after {
+      content: "";
+      position: absolute;
+      right: 16px;
+      bottom: 13px;
+      left: 16px;
+      height: 2px;
+      background: var(--surface-sunken);
+    }
+
+    .system-metric[data-tone="success"]::after { background: var(--success); }
+    .system-metric[data-tone="warning"]::after { background: var(--warning); }
+    .system-metric[data-tone="danger"]::after { background: var(--danger); }
+    .system-metric[data-tone="info"]::after { background: var(--primary); }
+
+    .system-metric-label {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 780;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+
+    .system-metric-value {
+      min-width: 0;
+      margin: 13px 0 8px;
+      overflow: hidden;
+      color: var(--text-primary);
+      font-size: clamp(18px, 1.7vw, 25px);
+      font-weight: 790;
+      letter-spacing: -0.035em;
+      line-height: 1.15;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .system-metric-foot {
+      min-height: 34px;
+      padding-bottom: 10px;
+      color: var(--text-muted);
+      font-size: 10px;
+      line-height: 1.55;
+    }
+
+    .attention-panel {
+      min-width: 0;
+      padding: 16px;
+      border: 1px solid var(--border-strong);
+      border-left: 3px solid var(--warning);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .attention-panel.is-clear {
+      border-left-color: var(--success);
+    }
+
+    .attention-panel-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .attention-panel h3,
+    .resource-section-head h3 {
+      color: var(--text-primary);
+      font-size: 14px;
+      font-weight: 760;
+    }
+
+    .attention-list {
+      display: flex;
+      flex-direction: column;
+      gap: 7px;
+    }
+
+    .attention-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 9px;
+      min-width: 0;
+      padding: 9px;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      background: var(--surface-muted);
+    }
+
+    .attention-item-copy {
+      min-width: 0;
+      flex: 1;
+    }
+
+    .attention-item strong {
+      display: block;
+      color: var(--text-primary);
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .attention-item small {
+      display: block;
+      margin-top: 2px;
+      color: var(--text-muted);
+      font-size: 9px;
+      line-height: 1.5;
+    }
+
+    .attention-item button {
+      flex: 0 0 auto;
+      min-height: 28px;
+      padding: 5px 7px;
+      font-size: 9px;
+    }
+
+    .resource-section-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 10px;
+    }
+
+    .dashboard-resource-link {
+      min-height: 30px;
+      padding: 5px 9px;
+      font-size: 10px;
+    }
+
+    .resource-metric-strip {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0;
+      overflow: hidden;
+      margin-bottom: 18px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    .resource-metric-strip .stat-card {
+      min-height: 112px;
+      padding: 14px 16px;
+      border: 0;
+      border-right: 1px solid var(--border);
+      border-radius: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .resource-metric-strip .stat-card:last-child {
+      border-right: 0;
+    }
+
+    .resource-metric-strip .stat-head {
+      justify-content: flex-start;
+      color: var(--text-secondary);
+      font-size: 10px;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+
+    .resource-metric-strip .stat-num {
+      margin-top: 5px;
+      font-size: 25px;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -0.04em;
+    }
+
+    .resource-metric-strip .stat-foot {
+      margin-top: 3px;
+      font-size: 9px;
+    }
+
+    .dash-columns {
+      grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.75fr);
+      gap: 14px;
+    }
+
+    #section-dashboard > .card {
+      box-shadow: none;
+    }
+
+    /* Unified data table and toolbar system */
+    .filter-bar,
+    .catalog-toolbar {
+      min-height: 48px;
+      margin: -4px -4px 14px;
+      padding: 4px;
+    }
+
+    .catalog-toolbar .tab-filter {
+      max-width: min(100%, 720px);
+      overflow-x: auto;
+      border: 1px solid var(--border);
+      background: var(--surface-muted);
+      scrollbar-width: none;
+    }
+
+    .catalog-toolbar .tab-filter::-webkit-scrollbar {
+      display: none;
+    }
+
+    .catalog-toolbar .tab-filter button {
+      flex: 0 0 auto;
+      min-height: 30px;
+      white-space: nowrap;
+    }
+
+    .search-input-wrap {
+      max-width: 360px;
+      margin-left: auto;
+    }
+
+    .search-input-wrap::before {
+      content: "";
+      position: absolute;
+      top: 50%;
+      left: 11px;
+      width: 10px;
+      height: 10px;
+      border: 1.5px solid var(--text-muted);
+      border-radius: 50%;
+      transform: translateY(-62%);
+      pointer-events: none;
+    }
+
+    .search-input-wrap::after {
+      content: "";
+      position: absolute;
+      top: calc(50% + 4px);
+      left: 20px;
+      width: 5px;
+      height: 1.5px;
+      background: var(--text-muted);
+      transform: rotate(45deg);
+      pointer-events: none;
+    }
+
+    .search-input-wrap input {
+      min-height: 36px;
+      padding-left: 32px;
+      border-radius: 7px;
+      background: var(--surface-raised);
+    }
+
+    .catalog-result-count {
+      flex: 0 0 auto;
+      color: var(--text-muted);
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+    }
+
+    .catalog-loading-state,
+    .catalog-error-state {
+      padding: 36px 16px !important;
+      text-align: center;
+    }
+
+    .catalog-loading-state { color: var(--text-muted); }
+    .catalog-error-state {
+      color: var(--danger);
+      background: var(--danger-soft) !important;
+    }
+
+    #catalogTable[aria-busy="true"] { opacity: 0.72; }
+
+    .table-container {
+      position: relative;
+      max-width: 100%;
+      overflow: auto;
+      border-color: var(--border);
+      border-radius: 7px;
+      background: var(--surface);
+      scrollbar-gutter: stable;
+    }
+
+    table {
+      width: 100%;
+      min-width: 720px;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      z-index: 2;
+      height: 38px;
+      padding: 9px 11px !important;
+      border-bottom: 1px solid var(--border-strong) !important;
+      background: var(--surface-muted) !important;
+      color: var(--text-secondary) !important;
+      font-size: 9px !important;
+      font-weight: 800 !important;
+      letter-spacing: 0.06em;
+      text-align: left;
+      text-transform: uppercase;
+      white-space: nowrap;
+    }
+
+    td {
+      max-width: 360px;
+      height: 43px;
+      padding: 9px 11px !important;
+      border-bottom: 1px solid var(--border) !important;
+      color: var(--text-secondary);
+      vertical-align: middle;
+    }
+
+    tbody tr:last-child td {
+      border-bottom: 0 !important;
+    }
+
+    tbody tr {
+      transition: background-color 120ms ease;
+    }
+
+    tbody tr:focus-within td {
+      background: var(--primary-soft) !important;
+    }
+
+    tbody tr:hover td {
+      background: var(--table-hover) !important;
+    }
+
+    td strong {
+      color: var(--text-primary);
+      font-weight: 700;
+    }
+
+    .action-cell {
+      width: 1%;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .action-cell .btn,
+    .action-cell button {
+      min-height: 29px;
+      padding: 5px 9px !important;
+      border: 1px solid var(--border-strong);
+      border-radius: 6px;
+      background: var(--surface-raised);
+      color: var(--primary);
+      font-size: 10px !important;
+      box-shadow: var(--shadow);
+    }
+
+    .action-cell .btn:hover,
+    .action-cell button:hover {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+    }
+
+    .badge,
+    .tag,
+    .pill {
+      min-height: 20px;
+      padding: 3px 7px;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      font-size: 9px;
+      font-weight: 760;
+      line-height: 1.2;
+      white-space: nowrap;
+    }
+
+    .badge.info,
+    .tag.info {
+      border-color: color-mix(in srgb, var(--primary) 44%, transparent);
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .pagination {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .pagination-info {
+      font-size: 10px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Form, actions, status and feedback states */
+    label {
+      color: var(--text-secondary);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    input,
+    textarea,
+    select {
+      min-height: 38px;
+      border-color: var(--border-strong);
+      border-radius: 7px;
+      background: var(--surface-raised);
+      color: var(--text-primary);
+    }
+
+    input::placeholder,
+    textarea::placeholder {
+      color: var(--text-muted);
+    }
+
+    input:focus,
+    textarea:focus,
+    select:focus {
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px var(--focus-ring);
+    }
+
+    button,
+    .btn {
+      min-height: 34px;
+      border-radius: 7px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    button.primary,
+    .btn.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: var(--on-primary);
+      box-shadow: 0 1px 2px color-mix(in srgb, var(--primary) 28%, transparent);
+    }
+
+    button.secondary,
+    .btn.secondary {
+      border-color: color-mix(in srgb, var(--primary) 30%, var(--border));
+      background: var(--surface-raised);
+      color: var(--primary);
+    }
+
+    button.ghost,
+    .btn.ghost {
+      border-color: var(--border);
+      color: var(--text-secondary);
+    }
+
+    button.danger,
+    .btn.danger {
+      border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    button:disabled,
+    .btn:disabled {
+      cursor: not-allowed;
+      filter: saturate(0.55);
+      opacity: 0.52;
+    }
+
+    button.is-loading,
+    .btn.is-loading {
+      position: relative;
+      padding-left: 32px;
+    }
+
+    button.is-loading::before,
+    .btn.is-loading::before {
+      content: "";
+      position: absolute;
+      left: 12px;
+      width: 12px;
+      height: 12px;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      border-radius: 50%;
+      animation: operation-spin 700ms linear infinite;
+    }
+
+    @keyframes operation-spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .empty-state {
+      padding: 32px 20px;
+      border: 1px dashed var(--border-strong) !important;
+      border-radius: 8px;
+      background: var(--surface-muted) !important;
+      color: var(--text-muted) !important;
+      text-align: center;
+    }
+
+    .module-error,
+    .error-state {
+      border: 1px solid color-mix(in srgb, var(--danger) 38%, var(--border));
+      border-left: 3px solid var(--danger);
+      border-radius: 7px;
+      background: var(--danger-soft);
+      color: var(--danger);
+    }
+
+    .toast {
+      min-width: 280px;
+      max-width: min(420px, calc(100vw - 32px));
+      padding: 12px 14px;
+      border-left: 3px solid var(--primary) !important;
+      border-radius: 8px;
+      color: var(--text-primary) !important;
+      font-size: 12px;
+    }
+
+    .toast.success { border-left-color: var(--success) !important; }
+    .toast.error { border-left-color: var(--danger) !important; }
+    .toast.warning { border-left-color: var(--warning) !important; }
+
+    .drawer,
+    .catalog-drawer,
+    .feedback-drawer {
+      width: min(680px, 92vw);
+      max-width: 92vw;
+      border-left: 1px solid var(--border-strong) !important;
+      box-shadow: -18px 0 48px rgba(24, 27, 32, 0.14);
+    }
+
+    .drawer-header,
+    .drawer-footer {
+      border-color: var(--border);
+      background: var(--surface-raised);
+    }
+
+    .drawer-close {
+      display: inline-flex;
+      width: 36px;
+      height: 36px;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid var(--border);
+      border-radius: 7px;
+      font-size: 18px;
+    }
+
+    /* Sync center: one visible path, with operational detail kept below. */
+    .sync-hero {
+      margin-bottom: 12px;
+      padding: 17px 18px;
+      overflow: hidden;
+      border: 1px solid var(--border-strong);
+      border-left: 4px solid var(--brand-accent);
+      border-radius: 9px;
+      background: var(--surface-raised);
+      box-shadow: var(--shadow);
+    }
+
+    .sync-hero-title {
+      color: var(--text-primary);
+      font-size: 18px;
+      letter-spacing: -0.025em;
+    }
+
+    .sync-hero-badge {
+      border: 1px solid color-mix(in srgb, var(--brand-accent) 40%, var(--border));
+      background: var(--brand-soft);
+      color: var(--brand-accent);
+    }
+
+    .sync-hero-subtitle {
+      margin-top: 5px;
+      color: var(--text-muted);
+      font-size: 11px;
+    }
+
+    .sync-pipeline-shell {
+      margin-bottom: 12px;
+      padding: 16px;
+      border: 1px solid var(--border);
+      border-radius: 9px;
+      background: var(--surface);
+      box-shadow: var(--shadow);
+    }
+
+    .sync-pipeline-summary {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .sync-pipeline-summary h3 {
+      color: var(--text-primary);
+      font-size: 14px;
+      font-weight: 760;
+    }
+
+    .sync-pipeline-current {
+      display: flex;
+      align-items: baseline;
+      gap: 7px;
+      color: var(--text-muted);
+      font-size: 9px;
+    }
+
+    .sync-pipeline-current strong {
+      color: var(--primary);
+      font-size: 11px;
+    }
+
+    .sync-pipeline-rail {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      margin: 0;
+      padding: 0;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-muted);
+      list-style: none;
+    }
+
+    .sync-pipeline-rail li {
+      position: relative;
+      display: flex;
+      min-width: 0;
+      min-height: 78px;
+      align-items: flex-start;
+      gap: 9px;
+      padding: 13px 11px;
+      border-right: 1px solid var(--border);
+      background: var(--surface);
+    }
+
+    .sync-pipeline-rail li:last-child {
+      border-right: 0;
+    }
+
+    .sync-pipeline-rail li::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      height: 2px;
+      background: var(--border-strong);
+    }
+
+    .sync-pipeline-rail li[data-stage-state="complete"]::after { background: var(--success); }
+    .sync-pipeline-rail li[data-stage-state="current"]::after { height: 3px; background: var(--primary); }
+    .sync-pipeline-rail li[data-stage-state="blocked"]::after { height: 3px; background: var(--danger); }
+
+    .sync-pipeline-rail li[data-stage-state="complete"] .pipeline-index { background: var(--success-soft); color: var(--success); }
+    .sync-pipeline-rail li[data-stage-state="current"] .pipeline-index { background: var(--primary); color: var(--on-primary); }
+    .sync-pipeline-rail li[data-stage-state="blocked"] .pipeline-index { background: var(--danger-soft); color: var(--danger); }
+
+    .pipeline-index {
+      display: grid;
+      width: 25px;
+      height: 25px;
+      flex: 0 0 25px;
+      place-items: center;
+      border-radius: 6px;
+      background: var(--surface-muted);
+      color: var(--text-muted);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 8px;
+      font-weight: 800;
+    }
+
+    .sync-pipeline-rail strong,
+    .sync-pipeline-rail small {
+      display: block;
+      min-width: 0;
+    }
+
+    .sync-pipeline-rail strong {
+      color: var(--text-primary);
+      font-size: 10px;
+      line-height: 1.4;
+    }
+
+    .sync-pipeline-rail small {
+      margin-top: 3px;
+      color: var(--text-muted);
+      font-size: 8px;
+      line-height: 1.45;
+    }
+
+    .sync-next-guidance {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 11px;
+      padding: 8px 10px;
+      border-radius: 6px;
+      background: var(--primary-soft);
+      color: var(--text-secondary);
+      font-size: 9px;
+    }
+
+    .sync-next-guidance strong {
+      color: var(--primary);
+      font-size: 10px;
+    }
+
+    .sync-section-nav {
+      top: 10px;
+      margin-bottom: 12px;
+      padding: 6px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface-raised);
+      box-shadow: var(--shadow);
+    }
+
+    .sync-section-nav a {
+      min-height: 30px;
+      padding: 7px 9px;
+      border-radius: 6px;
+      color: var(--text-secondary);
+      font-size: 9px;
+      font-weight: 700;
+    }
+
+    .sync-section-nav a:hover {
+      background: var(--surface-muted);
+      color: var(--text-primary);
+    }
+
+    .sync-ops-section {
+      margin-bottom: 12px;
+      padding: 15px;
+      border-color: var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: none;
+    }
+
+    #sync-ops-console {
+      border-color: var(--border-strong);
+      background: var(--surface-raised);
+    }
+
+    .sync-core-actions {
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .sync-core-actions .primary {
+      min-height: 38px;
+    }
+
+    .sync-secondary-heading {
+      margin: 20px 0 10px;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--text-muted);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: 0.09em;
+      text-transform: uppercase;
+    }
+
+    #section-sync > .card,
+    #section-sync details,
+    #section-sync .sync-card {
+      box-shadow: none;
+    }
+
+    #section-sync .danger-zone,
+    #section-sync [class*="danger-zone"] {
+      border-color: color-mix(in srgb, var(--danger) 38%, var(--border));
+      background: var(--danger-soft);
+    }
+
+    details {
+      border-color: var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+
+    summary {
+      color: var(--text-primary);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    code,
+    pre,
+    .code-block {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Tablet: deliberate compact rail. */
+    @media (min-width: 1024px) and (max-width: 1199.98px) {
+      .app-shell,
+      body.is-dashboard-page #dashboardView {
+        grid-template-columns: var(--sidebar-collapsed-width) minmax(0, 1fr);
+      }
+
+      .sidebar {
+        width: var(--sidebar-collapsed-width);
+        padding-inline: 9px;
+      }
+
+      .sidebar-brand-text,
+      .sidebar .nav-label,
+      .sidebar .nav-group-label,
+      .sidebar .account-copy {
+        display: none;
+      }
+
+      .sidebar-header-row,
+      .sidebar-brand,
+      .sidebar .nav-item button,
+      .sidebar-collapse-button,
+      .logout-button,
+      .account-panel {
+        justify-content: center;
+      }
+
+      .sidebar-brand {
+        padding: 0;
+      }
+
+      .sidebar-collapse-button {
+        display: none;
+      }
+
+      .main-content {
+        padding-inline: 24px;
+      }
+
+      .dashboard-system-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .system-metric:nth-child(2) {
+        border-right: 0;
+      }
+
+      .system-metric:nth-child(-n + 2) {
+        border-bottom: 1px solid var(--border);
+      }
+
+      .sync-pipeline-rail {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+      }
+
+      .sync-pipeline-rail li:nth-child(3) {
+        border-right: 0;
+      }
+
+      .sync-pipeline-rail li:nth-child(-n + 3) {
+        border-bottom: 1px solid var(--border);
+      }
+    }
+
+    /* Drawer navigation for medium and small screens. */
+    @media (max-width: 1023.98px) {
+      html,
+      body {
+        max-width: 100%;
+        overflow-x: hidden;
+      }
+
+      .app-shell,
+      body.is-dashboard-page #dashboardView,
+      .app-shell.sidebar-collapsed {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .mobile-topbar {
+        display: flex;
+        grid-column: 1;
+        height: 58px;
+        border-bottom-color: var(--border-strong);
+        background: var(--surface-raised);
+        box-shadow: none;
+      }
+
+      .mobile-logo-wrap .brand-logo {
+        width: 30px;
+        height: 30px;
+        min-width: 30px;
+      }
+
+      .sidebar,
+      .app-shell.sidebar-collapsed .sidebar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        z-index: 100;
+        width: min(330px, 88vw);
+        height: 100dvh;
+        padding: 14px 12px 12px;
+        transform: translateX(-105%);
+        box-shadow: 16px 0 48px rgba(14, 17, 22, 0.24);
+      }
+
+      .sidebar.show,
+      .app-shell.sidebar-collapsed .sidebar.show {
+        transform: translateX(0);
+      }
+
+      .sidebar-brand-text,
+      .app-shell.sidebar-collapsed .sidebar-brand-text,
+      .sidebar .nav-label,
+      .app-shell.sidebar-collapsed .nav-label,
+      .sidebar .nav-group-label,
+      .app-shell.sidebar-collapsed .nav-group-label,
+      .sidebar .account-copy,
+      .app-shell.sidebar-collapsed .account-copy {
+        display: block;
+      }
+
+      .sidebar-header-row,
+      .app-shell.sidebar-collapsed .sidebar-header-row {
+        justify-content: space-between;
+      }
+
+      .sidebar-brand,
+      .app-shell.sidebar-collapsed .sidebar-brand,
+      .sidebar .nav-item button,
+      .app-shell.sidebar-collapsed .nav-item button,
+      .sidebar-collapse-button,
+      .logout-button,
+      .account-panel {
+        justify-content: flex-start;
+      }
+
+      .sidebar .nav-item button,
+      .app-shell.sidebar-collapsed .nav-item button {
+        flex-direction: row;
+        gap: 10px;
+        padding: 9px 10px;
+        font-size: 13px;
+      }
+
+      .sidebar-brand,
+      .app-shell.sidebar-collapsed .sidebar-brand {
+        padding: 0 7px;
+      }
+
+      .sidebar-close-button {
+        display: inline-flex;
+      }
+
+      .sidebar-collapse-button {
+        display: none;
+      }
+
+      .sidebar-overlay {
+        backdrop-filter: none;
+      }
+
+      .main-content {
+        grid-column: 1;
+        width: 100%;
+        max-width: 100%;
+        padding: 20px 22px 40px;
+      }
+
+      .dashboard-command-layout {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .dashboard-system-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .system-metric:nth-child(2) {
+        border-right: 0;
+      }
+
+      .system-metric:nth-child(-n + 2) {
+        border-bottom: 1px solid var(--border);
+      }
+
+      .sync-pipeline-rail {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .sync-pipeline-rail li:nth-child(even) {
+        border-right: 0;
+      }
+
+      .sync-pipeline-rail li:not(:nth-last-child(-n + 2)) {
+        border-bottom: 1px solid var(--border);
+      }
+    }
+
+    @media (max-width: 767.98px) {
+      .main-content {
+        padding: 16px 14px 32px;
+      }
+
+      .topbar {
+        min-height: auto;
+        align-items: center;
+        flex-direction: row;
+        gap: 8px;
+        margin-bottom: 14px;
+        padding-bottom: 12px;
+      }
+
+      .topbar-copy {
+        flex: 1;
+      }
+
+      .topbar-copy h2,
+      .topbar-copy .page-eyebrow {
+        display: none;
+      }
+
+      .topbar p {
+        margin: 0;
+        overflow: hidden;
+        font-size: 9px;
+        line-height: 1.4;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+
+      .topbar-actions {
+        width: auto;
+        flex-direction: row;
+        justify-content: flex-end;
+      }
+
+      .system-presence {
+        display: none;
+      }
+
+      .topbar .theme-switcher button {
+        min-width: 33px;
+        padding-inline: 5px;
+      }
+
+      .refresh-button {
+        width: 34px !important;
+        min-width: 34px;
+        padding: 0;
+      }
+
+      .refresh-button span {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip: rect(0 0 0 0);
+      }
+
+      .dashboard-command-layout {
+        margin-bottom: 18px;
+      }
+
+      .resource-metric-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .resource-metric-strip .stat-card:nth-child(2) {
+        border-right: 0;
+      }
+
+      .resource-metric-strip .stat-card:nth-child(-n + 2) {
+        border-bottom: 1px solid var(--border);
+      }
+
+      .dash-columns {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .catalog-toolbar {
+        align-items: stretch;
+      }
+
+      .catalog-toolbar .tab-filter,
+      .search-input-wrap {
+        max-width: none;
+        width: 100%;
+      }
+
+      .catalog-result-count {
+        width: 100%;
+      }
+
+      .sync-hero {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .sync-hero-actions {
+        width: 100%;
+        justify-content: space-between;
+      }
+
+      .sync-pipeline-summary {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .sync-pipeline-rail {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .sync-pipeline-rail li,
+      .sync-pipeline-rail li:nth-child(even) {
+        min-height: 64px;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .sync-pipeline-rail li:last-child {
+        border-bottom: 0;
+      }
+
+      .sync-next-guidance {
+        align-items: flex-start;
+        flex-wrap: wrap;
+      }
+
+      .sync-section-nav {
+        position: static;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+      }
+
+      .sync-section-nav a {
+        flex: 0 0 auto;
+      }
+
+      .drawer,
+      .catalog-drawer,
+      .feedback-drawer {
+        width: 100vw !important;
+        max-width: 100vw !important;
+      }
+    }
+
+    @media (max-width: 479.98px) {
+      .mobile-logo-wrap span {
+        display: none;
+      }
+
+      .mobile-topbar-title {
+        text-align: left;
+      }
+
+      .dashboard-system-grid {
+        grid-template-columns: minmax(0, 1fr);
+      }
+
+      .system-metric,
+      .system-metric:nth-child(2) {
+        min-height: 122px;
+        border-right: 0;
+        border-bottom: 1px solid var(--border);
+      }
+
+      .system-metric:last-child {
+        border-bottom: 0;
+      }
+
+      .resource-section-head {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .resource-section-head .dashboard-resource-link {
+        width: 100%;
+      }
+
+      .login-panel {
+        padding: 25px 20px;
+      }
+
+      .login-theme-row {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .login-theme-row .theme-switcher {
+        width: 100%;
+      }
+
+      .login-theme-row .theme-switcher button {
+        flex: 1;
+      }
+    }
   </style>
   </head>
 <body>
 
+  <a class="skip-link" id="adminSkipLink" href="#adminMainContent">跳到主要内容</a>
+
   <!-- 登录页视图 -->
-  <main id="loginView" class="login-wrap" style="width: min(400px, calc(100% - 32px)); margin: 15vh auto;" hidden>
-    <div class="card" style="padding: 32px;">
-      <img class="login-logo" ${ADMIN_LOGO_IMG_ATTRS}>
-      <h1 style="font-size: 20px; font-weight: 800; margin-bottom: 8px;">佛课小表后台</h1>
-      <p style="color: var(--muted); font-size: 13px; margin-bottom: 24px;">管理端控制台安全验证。请输入管理员密码进行登录。</p>
+  <main id="loginView" class="login-wrap" tabindex="-1" hidden>
+    <div class="card login-panel">
+      <div class="login-brand-lockup">
+        <img class="login-logo" ${ADMIN_LOGO_IMG_ATTRS}>
+        <div>
+          <div class="page-eyebrow">Campus Operations Studio</div>
+          <h1>佛课小表后台</h1>
+        </div>
+      </div>
+      <p class="login-intro">校园课表数据运营控制台。验证管理员凭据后继续。</p>
       <div class="login-form">
-        <div style="margin-bottom: 16px;">
-          <label for="loginPassword">安全凭据 (Password / Token)</label>
+        <div class="field-group">
+          <label for="loginPassword">管理员密码或令牌</label>
           <input id="loginPassword" type="password" autocomplete="current-password" placeholder="请输入密码">
         </div>
-        <button id="loginButton" class="primary" style="width: 100%;">验证登录</button>
-        <div id="loginError" style="color: var(--danger); font-size: 13px; margin-top: 12px; min-height: 20px;"></div>
-        <div class="theme-switcher" role="group" aria-label="后台主题" style="width: 100%; margin-top: 18px;">
+        <button id="loginButton" class="primary login-submit">验证并进入控制台</button>
+        <div id="loginError" role="alert" aria-live="polite" class="login-error"></div>
+        <div class="login-theme-row">
+          <span>界面主题</span>
+          <div class="theme-switcher" role="group" aria-label="后台主题">
           <button type="button" data-theme-choice="system" aria-label="跟随系统主题">系统</button>
           <button type="button" data-theme-choice="light" aria-label="切换浅色主题">浅色</button>
           <button type="button" data-theme-choice="dark" aria-label="切换深色主题">深色</button>
+          </div>
         </div>
         <div class="theme-current-label" data-theme-current>当前：跟随系统</div>
       </div>
@@ -3784,76 +5635,123 @@ const adminConsoleHtml = `<!doctype html>
         <img class="brand-logo" ${ADMIN_LOGO_IMG_ATTRS}>
         <span>佛课小表</span>
       </div>
-      <div class="mobile-topbar-title" id="mobilePageTitle">数据概览</div>
-      <button id="mobileMenuBtn" class="mobile-menu-toggle" type="button" aria-label="打开后台导航">☰</button>
+      <h1 class="mobile-topbar-title" id="mobilePageTitle">数据概览</h1>
+      <button id="mobileMenuBtn" class="mobile-menu-toggle icon-button" type="button" aria-label="打开后台导航" aria-expanded="false" aria-controls="appSidebar">
+        <svg aria-hidden="true" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
     </div>
-    <div id="sidebarOverlay" class="sidebar-overlay"></div>
+    <div id="sidebarOverlay" class="sidebar-overlay" aria-hidden="true"></div>
 
     <!-- 左侧导航侧边栏 -->
-    <aside id="appSidebar" class="sidebar">
-      <div>
-        <div class="brand sidebar-brand">
-          <img class="brand-logo" ${ADMIN_LOGO_IMG_ATTRS}>
-          <div class="sidebar-brand-text">
-            <div class="brand-title sidebar-brand-title">佛课小表</div>
-            <div class="brand-subtitle sidebar-brand-subtitle">Admin Console v1.5</div>
+    <aside id="appSidebar" class="sidebar" aria-label="后台主导航">
+      <div class="sidebar-primary">
+        <div class="sidebar-header-row">
+          <div class="brand sidebar-brand">
+            <img class="brand-logo" ${ADMIN_LOGO_IMG_ATTRS}>
+            <div class="sidebar-brand-text">
+              <div class="brand-title sidebar-brand-title">佛课小表</div>
+              <div class="brand-subtitle sidebar-brand-subtitle">校园数据运营台</div>
+            </div>
           </div>
+          <button id="sidebarCloseBtn" class="icon-button sidebar-close-button" type="button" aria-label="关闭后台导航">
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
         </div>
         <nav>
           <ul class="nav-list">
-            <li class="nav-item active" data-section="dashboard"><button>数据概览</button></li>
-            <li class="nav-item" data-section="catalog"><button>数据资源</button></li>
-            <li class="nav-item" data-section="sync"><button>同步中心</button></li>
-            <li class="nav-item" data-section="terms"><button>学期管理</button></li>
-            <li class="nav-item" data-section="quality"><button>数据质量</button></li>
-            <li class="nav-item" data-section="notices"><button>公告管理</button></li>
-            <li class="nav-item" data-section="news"><button>最新动态</button></li>
-            <li class="nav-item" data-section="config"><button>数据版本</button></li>
-            <li class="nav-item" data-section="ai-provider"><button>查询服务</button></li>
-            <li class="nav-item" data-section="assistant-kb"><button>小佛助手知识库</button></li>
-            <li class="nav-item" data-section="campus-map"><button>校园地图</button></li>
-            <li class="nav-item" data-section="feedback"><button>反馈管理</button></li>
-            <li class="nav-item" data-section="security"><button>安全状态</button></li>
-            <li class="nav-item" data-section="settings"><button>系统设置</button></li>
+            <li class="nav-group-label" data-nav-group="总览">总览</li>
+            <li class="nav-item active" data-section="dashboard"><button type="button" title="数据概览"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13h6V4H4v9Zm0 7h6v-4H4v4Zm10 0h6v-9h-6v9Zm0-16v4h6V4h-6Z"/></svg><span class="nav-label">数据概览</span></button></li>
+
+            <li class="nav-group-label" data-nav-group="数据与课表">数据与课表</li>
+            <li class="nav-item" data-section="catalog"><button type="button" title="数据资源"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 6.5C4 5.12 7.58 4 12 4s8 1.12 8 2.5S16.42 9 12 9 4 7.88 4 6.5Zm0 0V12c0 1.38 3.58 2.5 8 2.5s8-1.12 8-2.5V6.5M4 12v5.5C4 18.88 7.58 20 12 20s8-1.12 8-2.5V12"/></svg><span class="nav-label">数据资源</span></button></li>
+            <li class="nav-item" data-section="terms"><button type="button" title="学期管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M6 3v3m12-3v3M4 9h16M5 5h14a1 1 0 0 1 1 1v14H4V6a1 1 0 0 1 1-1Zm3 8h3m2 0h3m-8 4h3m2 0h3"/></svg><span class="nav-label">学期管理</span></button></li>
+            <li class="nav-item" data-section="quality"><button type="button" title="数据质量"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.2c0 4.5 3 7.8 7.5 9.8 4.5-2 7.5-5.3 7.5-9.8V6L12 3Zm-3 9 2 2 4-4"/></svg><span class="nav-label">数据质量</span></button></li>
+
+            <li class="nav-group-label" data-nav-group="发布与运维">发布与运维</li>
+            <li class="nav-item" data-section="sync"><button type="button" title="同步中心"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M20 7h-7a4 4 0 0 0-4 4v0M16 3l4 4-4 4M4 17h7a4 4 0 0 0 4-4v0m-7 8-4-4 4-4"/></svg><span class="nav-label">同步中心</span></button></li>
+            <li class="nav-item" data-section="config"><button type="button" title="数据版本"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m12 3 8 4.5-8 4.5-8-4.5L12 3Zm-8 9 8 4.5 8-4.5M4 16.5l8 4.5 8-4.5"/></svg><span class="nav-label">数据版本</span></button></li>
+
+            <li class="nav-group-label" data-nav-group="内容管理">内容管理</li>
+            <li class="nav-item" data-section="notices"><button type="button" title="公告管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 13V9l12-5v14L4 13Zm12-4h3a2 2 0 0 1 0 4h-3M6 14l1.5 6h4L10 15"/></svg><span class="nav-label">公告管理</span></button></li>
+            <li class="nav-item" data-section="news"><button type="button" title="最新动态"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h14v16H5V4Zm3 4h8M8 12h8m-8 4h5"/></svg><span class="nav-label">最新动态</span></button></li>
+            <li class="nav-item" data-section="campus-map"><button type="button" title="校园地图"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3V6Zm6-3v15m6-12v15"/></svg><span class="nav-label">校园地图</span></button></li>
+            <li class="nav-item" data-section="feedback"><button type="button" title="反馈管理"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M4 5h16v12H9l-5 4V5Zm4 4h8m-8 4h5"/></svg><span class="nav-label">反馈管理</span></button></li>
+            <li class="nav-item" data-section="assistant-kb"><button type="button" title="小佛助手知识库"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M5 4h11a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3V4Zm0 13a3 3 0 0 1 3-3h11M9 8h6"/></svg><span class="nav-label">助手知识库</span></button></li>
+
+            <li class="nav-group-label" data-nav-group="系统与安全">系统与安全</li>
+            <li class="nav-item" data-section="ai-provider"><button type="button" title="查询服务"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M8 4h8v4H8V4ZM5 10h14v10H5V10Zm4 4h.01M15 14h.01M9 17h6"/></svg><span class="nav-label">查询服务</span></button></li>
+            <li class="nav-item" data-section="security"><button type="button" title="安全状态"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 3 4.5 6v5.2c0 4.5 3 7.8 7.5 9.8 4.5-2 7.5-5.3 7.5-9.8V6L12 3Zm0 5v4m0 4h.01"/></svg><span class="nav-label">安全状态</span></button></li>
+            <li class="nav-item" data-section="settings"><button type="button" title="系统设置"><svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24"><path d="M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8Zm7.4 4a7.7 7.7 0 0 0-.1-1l2-1.5-2-3.4-2.4 1a8.7 8.7 0 0 0-1.8-1L14.8 3h-4l-.3 2.7a8.7 8.7 0 0 0-1.8 1l-2.4-1-2 3.4 2 1.5a7.7 7.7 0 0 0 0 2.8l-2 1.5 2 3.4 2.4-1a8.7 8.7 0 0 0 1.8 1l.3 2.7h4l.3-2.7a8.7 8.7 0 0 0 1.8-1l2.4 1 2-3.4-2-1.5a7.7 7.7 0 0 0 .1-1.4Z"/></svg><span class="nav-label">系统设置</span></button></li>
           </ul>
         </nav>
       </div>
       <div class="sidebar-footer">
-        <div class="theme-switcher" role="group" aria-label="后台主题">
-          <button type="button" data-theme-choice="system" aria-label="跟随系统主题">系统</button>
-          <button type="button" data-theme-choice="light" aria-label="切换浅色主题">浅色</button>
-          <button type="button" data-theme-choice="dark" aria-label="切换深色主题">深色</button>
+        <button id="sidebarCollapseBtn" class="sidebar-collapse-button ghost" type="button" aria-label="收起侧栏" aria-expanded="true">
+          <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m14 7-5 5 5 5"/></svg><span class="nav-label">收起侧栏</span>
+        </button>
+        <div class="account-panel">
+          <div class="account-mark" aria-hidden="true">管</div>
+          <div class="account-copy">
+            <strong>管理员</strong>
+            <div class="env-info">
+              <span id="envTag" class="env-tag local">local</span>
+              <span id="versionLabel">-</span>
+            </div>
+          </div>
         </div>
-        <div class="theme-current-label" data-theme-current>当前：跟随系统</div>
-        <div class="env-info">
-          <span id="envTag" class="env-tag local">local</span>
-          <span style="font-size: 11px; color: var(--muted);" id="versionLabel">-</span>
-        </div>
-        <button id="logoutButton" class="danger" style="width: 100%; padding: 6px 12px; font-size: 12px;">退出登录</button>
+        <button id="logoutButton" class="logout-button ghost" type="button" aria-label="退出登录" title="退出登录"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M10 5H5v14h5m4-4 4-3-4-3m4 3H9"/></svg><span class="nav-label">退出登录</span></button>
       </div>
     </aside>
 
     <!-- 右侧主体内容 -->
-    <div class="main-content">
+    <div class="main-content" id="adminMainContent" tabindex="-1">
       <div class="topbar">
-        <div>
+        <div class="topbar-copy">
+          <div class="page-eyebrow" id="pageEyebrow">总览 / 数据运营</div>
           <h2 id="pageTitle">数据概览</h2>
           <p id="statusLine">加载中...</p>
         </div>
         <div class="topbar-actions">
+          <div class="system-presence" title="后台会话已连接"><span class="status-dot success"></span><span>控制台在线</span></div>
           <div class="theme-switcher" role="group" aria-label="后台主题">
             <button type="button" data-theme-choice="system" aria-label="跟随系统主题">系统</button>
             <button type="button" data-theme-choice="light" aria-label="切换浅色主题">浅色</button>
             <button type="button" data-theme-choice="dark" aria-label="切换深色主题">深色</button>
           </div>
-          <button id="refreshButton" class="ghost" style="padding: 6px 12px; font-size: 12px;">一键刷新</button>
+          <button id="refreshButton" class="ghost refresh-button" type="button" aria-label="刷新当前页面"><svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg><span>刷新本页</span></button>
         </div>
       </div>
 
       <!-- 面板一：数据概览 Dashboard -->
       <section id="section-dashboard" class="section active">
-        <div class="stats-grid" id="statsGrid">
-          <!-- 动态加载卡片 -->
+        <div class="dashboard-command-layout">
+          <div>
+            <div class="section-kicker">运行态势</div>
+            <div class="dashboard-system-grid" id="dashboardSystemGrid" aria-live="polite">
+              <!-- 动态加载系统状态、当前学期、Active Release 与最近同步 -->
+            </div>
+          </div>
+          <aside class="attention-panel" aria-labelledby="dashboardAttentionTitle">
+            <div class="attention-panel-head">
+              <div>
+                <div class="section-kicker">需要关注</div>
+                <h3 id="dashboardAttentionTitle">待处理事项</h3>
+              </div>
+              <span class="badge muted" id="dashboardAttentionCount">0 项</span>
+            </div>
+            <div id="dashboardAttentionList" class="attention-list" aria-live="polite"></div>
+          </aside>
+        </div>
+
+        <div class="resource-section-head">
+          <div>
+            <div class="section-kicker">资源规模</div>
+            <h3>核心课表数据</h3>
+          </div>
+          <button type="button" class="ghost dashboard-resource-link" data-dashboard-target="catalog">进入数据资源</button>
+        </div>
+        <div class="stats-grid resource-metric-strip" id="statsGrid">
+          <!-- 动态加载资源指标 -->
         </div>
 
         <div class="dash-columns">
@@ -3928,7 +5826,7 @@ const adminConsoleHtml = `<!doctype html>
       <!-- 面板二：数据资源 Data Catalog -->
       <section id="section-catalog" class="section">
         <div class="card">
-          <div class="filter-bar">
+          <div class="filter-bar catalog-toolbar" role="search">
             <div class="tab-filter" id="catalogTabs">
               <button class="active" data-type="class">行政班</button>
               <button data-type="teacher">教师</button>
@@ -3938,8 +5836,9 @@ const adminConsoleHtml = `<!doctype html>
               <button data-type="snapshot">原始快照</button>
             </div>
             <div class="search-input-wrap">
-              <input id="catalogSearch" placeholder="搜索名称 / 别名 / 学院等关键词">
+              <input id="catalogSearch" aria-label="搜索数据资源" placeholder="搜索名称 / 别名 / 学院等关键词">
             </div>
+            <span class="catalog-result-count" id="catalogResultCount" aria-live="polite">0 条结果</span>
           </div>
 
           <div class="table-container">
@@ -3981,6 +5880,24 @@ const adminConsoleHtml = `<!doctype html>
           </div>
         </div>
 
+        <div class="sync-pipeline-shell" aria-labelledby="syncPipelineTitle">
+          <div class="sync-pipeline-summary">
+            <div>
+              <div class="section-kicker">发布链路</div>
+              <h3 id="syncPipelineTitle">从候选数据到线上生效</h3>
+            </div>
+            <div class="sync-pipeline-current"><span>当前阶段</span><strong id="syncCurrentStageLabel">等待读取状态</strong></div>
+          </div>
+          <ol class="sync-pipeline-rail" id="syncPipelineRail">
+            <li id="syncStageStaging" data-stage-state="pending"><span class="pipeline-index">01</span><div><strong>Staging 上传</strong><small>接收并校验候选数据</small></div></li>
+            <li id="syncStageRelease" data-stage-state="pending"><span class="pipeline-index">02</span><div><strong>Release Pack 生成</strong><small>构建不可变发布包</small></div></li>
+            <li id="syncStageStatic" data-stage-state="pending"><span class="pipeline-index">03</span><div><strong>OpenResty 静态目录同步</strong><small>复制完整静态资源</small></div></li>
+            <li id="syncStageVerify" data-stage-state="pending"><span class="pipeline-index">04</span><div><strong>URL 验证</strong><small>检查关键公网资源</small></div></li>
+            <li id="syncStageActive" data-stage-state="pending"><span class="pipeline-index">05</span><div><strong>Active Pointer 生效</strong><small>以运行时指针为准</small></div></li>
+          </ol>
+          <div class="sync-next-guidance"><span class="status-dot info"></span><span>建议下一步</span><strong id="syncNextStepText">正在分析同步状态…</strong></div>
+        </div>
+
         <!-- 2. sync-status-grid -->
         <nav class="sync-section-nav" aria-label="同步中心分段导航">
           <a href="#sync-ops-console">操作台</a>
@@ -4003,7 +5920,7 @@ const adminConsoleHtml = `<!doctype html>
           <!-- 同步状态卡片 -->
         </div>
           <div class="sync-core-actions" aria-label="同步中心主操作">
-            <button type="button" class="primary" id="copyPublisherCommandTopBtn">生成本机一键同步命令</button>
+            <button type="button" class="secondary" id="copyPublisherCommandTopBtn">生成本机一键同步命令</button>
             <button type="button" class="secondary" id="syncRefreshTopBtn">刷新状态</button>
             <button type="button" class="secondary" id="syncFocusPendingBtn">查看失败/待处理项</button>
           </div>
@@ -4058,7 +5975,7 @@ const adminConsoleHtml = `<!doctype html>
           <div class="openresty-actions">
             <button type="button" class="secondary" id="copyStaticManifestBtn">复制 manifest URL</button>
             <button type="button" class="secondary" id="verifyStaticUrlBtn">验证静态 URL</button>
-            <button type="button" class="primary" id="manualStaticSyncBtn">手动同步当前 Release</button>
+            <button type="button" class="secondary" id="manualStaticSyncBtn">手动同步当前 Release</button>
             <button type="button" class="ghost" id="forceStaticSyncBtn">强制重新同步</button>
             <button type="button" class="secondary" id="reconcileLifecycleBtn">重新核对状态</button>
             <button type="button" class="ghost" id="viewStaticSyncLogBtn">查看同步日志</button>
@@ -4080,7 +5997,7 @@ const adminConsoleHtml = `<!doctype html>
             <div class="openresty-meta-item"><span>双源一致性</span><strong>-</strong></div>
           </div>
           <div class="openresty-actions">
-            <button type="button" class="primary" id="copyPublisherCommandBtn">生成本机一键同步命令</button>
+            <button type="button" class="secondary" id="copyPublisherCommandBtn">生成本机一键同步命令</button>
             <button type="button" class="secondary" id="refreshPublisherStatusBtn">查看本机 Publisher 状态</button>
             <button type="button" class="secondary" id="copyCloudbaseRetryBtn">重试 CloudBase 镜像</button>
             <button type="button" class="ghost" id="copyCloudbaseExportBtn">导出人工上传包</button>
@@ -4508,7 +6425,7 @@ const adminConsoleHtml = `<!doctype html>
                       <div id="stagingPreviewBox" style="display: none;">
                         <div class="staging-preview-container">
                           <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 8px;">
-                            <strong style="font-size: 14px; color: var(--text);">📋 上传的 Staging 数据预览</strong>
+                            <strong style="font-size: 14px; color: var(--text);">上传的 Staging 数据预览</strong>
                             <span class="badge info" id="stagingMetaBadge">学期: - | 版本: -</span>
                           </div>
 
@@ -4576,13 +6493,13 @@ const adminConsoleHtml = `<!doctype html>
 
                           <!-- 校验 Warning 列表 -->
                           <div id="stagingWarningsBox" class="warnings-list" style="display: none;">
-                            <strong>⚠️ 数据合规性校验警告:</strong>
+                            <strong>数据合规性校验警告:</strong>
                             <div id="stagingWarningsList"></div>
                           </div>
 
                           <!-- 详细班级 Diff 列表 -->
                           <div>
-                            <strong style="font-size: 12px; color: var(--text);">🏫 行政班级变动明细：</strong>
+                            <strong style="font-size: 12px; color: var(--text);">行政班级变动明细：</strong>
                             <div class="diff-classes-list" id="stagingDiffClassesList">
                               暂无变动。
                             </div>
@@ -4590,10 +6507,10 @@ const adminConsoleHtml = `<!doctype html>
 
                           <!-- 变动熔断与二次强确认发布控制 -->
                           <div style="border-top: 1px solid var(--border); padding-top: 14px; display: flex; flex-direction: column; gap: 10px;">
-                            <div id="forceConfirmContainer" style="display: none; background: var(--danger-soft); border: 1px solid var(--danger); padding: 12px; border-radius: 8px; font-size: 12px; color: #991b1b;">
-                              <strong>⚠️ 警报: 数据变动幅度超过熔断阈值(30%)!</strong>
+                          <div id="forceConfirmContainer" style="display: none; background: var(--danger-soft); border: 1px solid var(--danger); padding: 12px; border-radius: 8px; font-size: 12px; color: var(--danger);">
+                              <strong>警报: 数据变动幅度超过熔断阈值(30%)!</strong>
                               <p style="margin-top: 4px; margin-bottom: 8px;">本次同步的行政班/课表记录变动量较大，为防止误清空线上数据，直接发布已被拦截。若确属新学期全量重构，请在下方手动勾选确认后强行发布。</p>
-                              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: #991b1b; font-weight: 700; margin-bottom:0;">
+                              <label style="display: flex; align-items: center; gap: 6px; cursor: pointer; color: var(--danger); font-weight: 700; margin-bottom:0;">
                                 <input type="checkbox" id="stagingForceConfirm"> 我已知晓风险，确认本次数据变动为正常新学期更迭，强行发布
                               </label>
                             </div>
@@ -4601,7 +6518,7 @@ const adminConsoleHtml = `<!doctype html>
                             <div style="display: flex; justify-content: flex-end; gap: 12px; align-items: center;">
                               <span id="publishStatusText" style="font-size:12px; color:var(--muted);"></span>
                               <button type="button" class="secondary" id="postPublishVerifyBtn" style="padding: 10px 16px;">发布后验证 job</button>
-                              <button type="button" class="primary" id="stagingPublishBtn" style="padding: 10px 20px;">🚀 发布为正式版本</button>
+                              <button type="button" class="secondary" id="stagingPublishBtn" style="padding: 10px 20px;">发布为正式版本</button>
                             </div>
                           </div>
                         </div>
@@ -4614,7 +6531,7 @@ const adminConsoleHtml = `<!doctype html>
                 <!-- Stepper Actions Navigation -->
                 <div class="stepper-actions">
                   <button type="button" class="ghost" id="stepperPrevBtn" disabled>上一步</button>
-                  <button type="button" class="primary" id="stepperNextBtn">下一步</button>
+                  <button type="button" class="secondary" id="stepperNextBtn">下一步</button>
                 </div>
               </div>
             </div>
@@ -4622,7 +6539,7 @@ const adminConsoleHtml = `<!doctype html>
 
             <!-- 6. relay-task-panel -->
             <div class="card" id="relay-task-panel">
-              <h3 class="card-title">🔁 接力任务管理</h3>
+              <h3 class="card-title">接力任务管理</h3>
               <p style="font-size: 13px; color: var(--muted); margin-bottom: 12px;">
                 接力任务适合把采集任务临时交给在校同学。对方只获得一次性 relay token，只能读取任务并上传候选 Staging JSON，不能登录后台、不能发布课表、不能查看管理员配置。
               </p>
@@ -4651,7 +6568,7 @@ const adminConsoleHtml = `<!doctype html>
                 </div>
               </div>
               <div style="display:flex; justify-content:flex-end; margin-top: 12px;">
-                <button type="button" class="primary" id="createRelayTaskBtn">创建接力任务</button>
+                <button type="button" class="secondary" id="createRelayTaskBtn">创建接力任务</button>
               </div>
               <div class="table-container" style="margin-top: 14px;">
                 <table class="relay-table">
@@ -4690,7 +6607,7 @@ const adminConsoleHtml = `<!doctype html>
           <div class="sync-side-col">
             <!-- 4. sync-command-accordion -->
             <div class="card" id="sync-command-accordion">
-              <h3 class="card-title">📖 同步运维命令手册</h3>
+              <h3 class="card-title">同步运维命令手册</h3>
               <div id="syncCommands" class="command-card-list">
                 <!-- 动态命令列表 (折叠手风琴) -->
               </div>
@@ -4699,7 +6616,7 @@ const adminConsoleHtml = `<!doctype html>
             <!-- 9. api-health-panel -->
             <div class="card" id="api-health-panel">
               <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                <h3 class="card-title" style="margin-bottom: 0;">🌐 API 健康状态检测</h3>
+                <h3 class="card-title" style="margin-bottom: 0;">API 健康状态检测</h3>
                 <button class="secondary" id="recheckHealthBtn" style="padding: 4px 10px; font-size: 12px;">一键测试</button>
               </div>
               <div class="health-grid" id="healthGrid">
@@ -4757,7 +6674,7 @@ const adminConsoleHtml = `<!doctype html>
           </div>
           <!-- 8. sync-log-panel -->
           <div class="card" id="sync-log-panel">
-            <h3 class="card-title">📜 最近同步历史日志</h3>
+            <h3 class="card-title">最近同步历史日志</h3>
             <div class="table-container">
               <table>
                 <thead>
@@ -5004,7 +6921,7 @@ const adminConsoleHtml = `<!doctype html>
               <div class="phone-bar">
                 <span>9:41</span>
                 <span style="font-size: 10px;">FosuClass 佛大</span>
-                <span>📶</span>
+                <span>Wi-Fi</span>
               </div>
               <div class="phone-screen" id="noticePhoneScreen">
                 <!-- 实时预览公告 -->
@@ -5097,7 +7014,7 @@ const adminConsoleHtml = `<!doctype html>
               <div class="phone-bar">
                 <span>9:41</span>
                 <span style="font-size: 10px;">动态公告</span>
-                <span>📶</span>
+                <span>Wi-Fi</span>
               </div>
               <div class="phone-screen" id="newsPhoneScreen">
                 <!-- 动态卡片预览 -->
@@ -5645,6 +7562,7 @@ const adminConsoleHtml = `<!doctype html>
             <div class="campus-map-actions">
               <button id="campusMapSaveDraftOpsBtn" class="primary">保存草稿</button>
               <button id="campusMapValidateBtn" class="ghost">校验草稿</button>
+              <button id="campusMapDiffBtn" class="secondary" type="button">生成差异预览</button>
               <button id="campusMapRepairDraftBtn" class="ghost">自动修复可修复问题</button>
               <button id="campusMapPublishBtn" class="secondary">一键发布</button>
               <button id="campusMapPublishOracleOnlyBtn" class="ghost">发布 Oracle-only 可用版本</button>
@@ -5782,17 +7700,17 @@ const adminConsoleHtml = `<!doctype html>
       <section id="section-settings" class="section">
         <div class="stats-grid">
           <div class="card stat-card">
-            <div class="stat-head">系统安全状态<span>🔒</span></div>
+            <div class="stat-head">系统安全状态<span class="status-dot info"></span></div>
             <div class="stat-num" id="settingsSecurityStatus">未检测</div>
             <div class="stat-foot">管理员验证状态</div>
           </div>
           <div class="card stat-card">
-            <div class="stat-head">历史备份数<span>📂</span></div>
+            <div class="stat-head">历史备份数<span class="status-dot info"></span></div>
             <div class="stat-num" id="settingsBackupCount">0 个</div>
             <div class="stat-foot">server/data/backups/</div>
           </div>
           <div class="card stat-card">
-            <div class="stat-head">Audit Log 条数<span>📝</span></div>
+            <div class="stat-head">Audit Log 条数<span class="status-dot info"></span></div>
             <div class="stat-num" id="settingsAuditLogCount">0 条</div>
             <div class="stat-foot">管理端操作审计日志</div>
           </div>
@@ -5859,11 +7777,11 @@ const adminConsoleHtml = `<!doctype html>
   </main>
 
   <!-- 反馈详情及操作 Drawer -->
-  <div class="drawer-mask" id="feedbackDrawerMask"></div>
-  <div class="drawer" id="feedbackDrawer">
+  <div class="drawer-mask" id="feedbackDrawerMask" aria-hidden="true"></div>
+  <div class="drawer" id="feedbackDrawer" role="dialog" aria-modal="true" aria-labelledby="feedbackDrawerTitle" aria-hidden="true" tabindex="-1" inert>
     <div class="drawer-header">
-      <h3>用户反馈详情与备注处理</h3>
-      <button class="drawer-close" id="closeFeedbackDrawerBtn">&times;</button>
+      <h3 id="feedbackDrawerTitle">用户反馈详情与备注处理</h3>
+      <button class="drawer-close" id="closeFeedbackDrawerBtn" type="button" aria-label="关闭反馈详情抽屉">&times;</button>
     </div>
     <div class="drawer-body">
       <div>
@@ -5885,7 +7803,7 @@ const adminConsoleHtml = `<!doctype html>
 
       <div id="drawFbClassBlock" style="display: none;">
         <label>关联排课班级/课程</label>
-        <div id="drawFbClass" style="padding: 8px 12px; background: var(--success-soft); border-radius: 6px; font-size: 12px; color: #065f46; font-weight: 600;">-</div>
+        <div id="drawFbClass" style="padding: 8px 12px; background: var(--success-soft); border-radius: 6px; font-size: 12px; color: var(--success); font-weight: 600;">-</div>
       </div>
 
       <div>
@@ -5910,11 +7828,11 @@ const adminConsoleHtml = `<!doctype html>
   </div>
 
   <!-- 数据资源中心详情 Drawer -->
-  <div class="drawer-mask" id="catalogDrawerMask"></div>
-  <div class="drawer" id="catalogDrawer" style="max-width: 640px;">
+  <div class="drawer-mask" id="catalogDrawerMask" aria-hidden="true"></div>
+  <div class="drawer" id="catalogDrawer" role="dialog" aria-modal="true" aria-labelledby="catalogDrawerTitle" aria-hidden="true" tabindex="-1" inert style="max-width: 640px;">
     <div class="drawer-header">
       <h3 id="catalogDrawerTitle">资源详情</h3>
-      <button class="drawer-close" id="closeCatalogDrawerBtn">&times;</button>
+      <button class="drawer-close" id="closeCatalogDrawerBtn" type="button" aria-label="关闭数据详情抽屉">&times;</button>
     </div>
     <div class="drawer-body">
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; font-size: 12px;" id="catalogDrawerMeta">
@@ -6033,7 +7951,7 @@ const adminConsoleHtml = `<!doctype html>
             
             "<div style='display:flex; gap:12px; flex-wrap:wrap;'>" +
               "<button id='copyErrBtn' style='background:var(--primary-soft); color:var(--primary); border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:var(--transition);'>复制错误信息</button>" +
-              "<button onclick='location.reload()' style='background:var(--primary); color:#ffffff; border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:var(--transition);'>刷新页面</button>" +
+              "<button onclick='location.reload()' style='background:var(--primary); color:var(--on-primary); border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:var(--transition);'>刷新页面</button>" +
               "<button id='logoutErrBtn' style='background:var(--danger-soft); color:var(--danger); border:none; padding:10px 18px; font-size:14px; font-weight:600; border-radius:6px; cursor:pointer; transition:var(--transition);'>退出登录</button>" +
             "</div>" +
           "</div>" +
@@ -6099,7 +8017,7 @@ const adminConsoleHtml = `<!doctype html>
         var errMsg = error && (error.message || String(error)) || "网络请求失败或数据解析异常";
         container.innerHTML = 
           "<div class='card' style='border: 1px solid var(--danger); background: var(--danger-soft); padding: 24px; margin: 16px 0; text-align: center; border-radius: var(--radius);'>" +
-            "<h3 style='color: var(--danger); font-size: 16px; margin-bottom: 8px;'>⚠️ 模块加载失败 (" + escapeHtml(section) + ")</h3>" +
+            "<h3 style='color: var(--danger); font-size: 16px; margin-bottom: 8px;'>模块加载失败 (" + escapeHtml(section) + ")</h3>" +
             "<p style='font-size: 13px; color: var(--text); margin-bottom: 12px;'>" + escapeHtml(errMsg) + "</p>" +
             "<button class='btn secondary' onclick='location.reload()' style='font-size:12px; padding:4px 10px;'>重试刷新</button>" +
           "</div>";
@@ -6211,6 +8129,9 @@ const adminConsoleHtml = `<!doctype html>
       var state = {
         section: "dashboard",
         dashboard: null,
+        dashboardOps: null,
+        dashboardOpsLoading: false,
+        dashboardOpsUnavailable: false,
         config: null,
         notices: [],
         news: [],
@@ -6533,6 +8454,7 @@ const adminConsoleHtml = `<!doctype html>
       function showLoginView() {
         if (loginView) loginView.hidden = false;
         if (dashboardView) dashboardView.hidden = true;
+        if ($("adminSkipLink")) $("adminSkipLink").setAttribute("href", "#loginView");
         document.body.classList.add("is-login-page");
         document.body.classList.remove("is-dashboard-page");
       }
@@ -6540,22 +8462,160 @@ const adminConsoleHtml = `<!doctype html>
       function showDashboardView() {
         if (loginView) loginView.hidden = true;
         if (dashboardView) dashboardView.hidden = false;
+        if ($("adminSkipLink")) $("adminSkipLink").setAttribute("href", "#adminMainContent");
         document.body.classList.remove("is-login-page");
         document.body.classList.add("is-dashboard-page");
       }
 
-      function openMobileDrawer() {
-        var sidebar = $("appSidebar");
-        var overlay = $("sidebarOverlay");
-        if (sidebar) sidebar.classList.add("show");
-        if (overlay) overlay.classList.add("show");
+      function setElementInert(element, inert) {
+        if (!element) return;
+        if (inert) element.setAttribute("inert", "");
+        else element.removeAttribute("inert");
+        try { element.inert = Boolean(inert); } catch (error) {}
       }
 
-      function closeMobileDrawer() {
+      function isMobileDrawerViewport() {
+        return Boolean(window.matchMedia && window.matchMedia("(max-width: 1023.98px)").matches);
+      }
+
+      function focusableElementsWithin(container) {
+        if (!container) return [];
+        return Array.prototype.filter.call(container.querySelectorAll(
+          'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+        ), function (element) {
+          return !element.hasAttribute("hidden") && element.getAttribute("aria-hidden") !== "true";
+        });
+      }
+
+      function trapFocusWithin(container, event) {
+        if (!container || event.key !== "Tab") return;
+        var focusable = focusableElementsWithin(container);
+        if (!focusable.length) {
+          event.preventDefault();
+          container.focus();
+          return;
+        }
+        var first = focusable[0];
+        var last = focusable[focusable.length - 1];
+        if (event.shiftKey && (document.activeElement === first || !container.contains(document.activeElement))) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && (document.activeElement === last || !container.contains(document.activeElement))) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+
+      function syncSidebarAccessibility() {
         var sidebar = $("appSidebar");
         var overlay = $("sidebarOverlay");
+        var mobileTopbar = $("mobileAdminTopbar");
+        var mainContent = $("adminMainContent");
+        var menuButton = $("mobileMenuBtn");
+        var drawerMode = isMobileDrawerViewport();
+        var isOpen = Boolean(drawerMode && sidebar && sidebar.classList.contains("show"));
+
+        if (!drawerMode && sidebar) sidebar.classList.remove("show");
+        setElementInert(sidebar, drawerMode && !isOpen);
+        if (sidebar) {
+          if (drawerMode) sidebar.setAttribute("aria-hidden", isOpen ? "false" : "true");
+          else sidebar.removeAttribute("aria-hidden");
+        }
+        setElementInert(mobileTopbar, isOpen);
+        setElementInert(mainContent, isOpen);
+        if (overlay) {
+          overlay.classList.toggle("show", isOpen);
+          overlay.setAttribute("aria-hidden", isOpen ? "false" : "true");
+        }
+        if (menuButton) menuButton.setAttribute("aria-expanded", isOpen ? "true" : "false");
+        document.body.classList.toggle("sidebar-drawer-open", isOpen);
+      }
+
+      function openMobileDrawer() {
+        var sidebar = $("appSidebar");
+        if (!sidebar || !isMobileDrawerViewport()) return;
+        sidebar.classList.add("show");
+        syncSidebarAccessibility();
+        window.setTimeout(function () {
+          if ($("sidebarCloseBtn")) $("sidebarCloseBtn").focus();
+        }, 0);
+      }
+
+      function closeMobileDrawer(returnFocus) {
+        var sidebar = $("appSidebar");
+        var wasOpen = Boolean(sidebar && sidebar.classList.contains("show"));
         if (sidebar) sidebar.classList.remove("show");
-        if (overlay) overlay.classList.remove("show");
+        syncSidebarAccessibility();
+        if (wasOpen && returnFocus !== false && $("mobileMenuBtn")) $("mobileMenuBtn").focus();
+      }
+
+      var activeDetailDrawer = null;
+      var activeDetailDrawerReturnFocus = null;
+
+      function openDetailDrawer(drawerId, maskId, initialFocusId, returnFocusElement) {
+        var drawer = $(drawerId);
+        var mask = $(maskId);
+        if (!drawer) return;
+        activeDetailDrawer = drawer;
+        activeDetailDrawerReturnFocus = returnFocusElement || document.activeElement;
+        drawer.classList.add("show");
+        drawer.setAttribute("aria-hidden", "false");
+        setElementInert(drawer, false);
+        if (mask) {
+          mask.classList.add("show");
+          mask.setAttribute("aria-hidden", "false");
+        }
+        setElementInert(dashboardView, true);
+        document.body.classList.add("detail-drawer-open");
+        window.setTimeout(function () {
+          var initialFocus = initialFocusId ? $(initialFocusId) : null;
+          (initialFocus || focusableElementsWithin(drawer)[0] || drawer).focus();
+        }, 0);
+      }
+
+      function closeDetailDrawer(drawerId, maskId, returnFocus) {
+        var drawer = $(drawerId);
+        var mask = $(maskId);
+        var focusTarget = activeDetailDrawer === drawer ? activeDetailDrawerReturnFocus : null;
+        if (drawer) {
+          drawer.classList.remove("show");
+          drawer.setAttribute("aria-hidden", "true");
+          setElementInert(drawer, true);
+        }
+        if (mask) {
+          mask.classList.remove("show");
+          mask.setAttribute("aria-hidden", "true");
+        }
+        if (activeDetailDrawer === drawer) {
+          activeDetailDrawer = null;
+          activeDetailDrawerReturnFocus = null;
+          setElementInert(dashboardView, false);
+          document.body.classList.remove("detail-drawer-open");
+          syncSidebarAccessibility();
+          if (returnFocus !== false && focusTarget && document.documentElement.contains(focusTarget)) {
+            focusTarget.focus();
+          }
+        }
+      }
+
+      function setSidebarCollapsed(collapsed, persist) {
+        var shell = $("dashboardView");
+        var button = $("sidebarCollapseBtn");
+        if (!shell || !button) return;
+        shell.classList.toggle("sidebar-collapsed", Boolean(collapsed));
+        button.setAttribute("aria-expanded", collapsed ? "false" : "true");
+        button.setAttribute("aria-label", collapsed ? "展开侧栏" : "收起侧栏");
+        var label = button.querySelector(".nav-label");
+        if (label) label.textContent = collapsed ? "展开侧栏" : "收起侧栏";
+        if (persist !== false) {
+          try { localStorage.setItem("fosu-admin-sidebar-collapsed", collapsed ? "1" : "0"); } catch (error) {}
+        }
+      }
+
+      function initSidebarPreference() {
+        var collapsed = false;
+        try { collapsed = localStorage.getItem("fosu-admin-sidebar-collapsed") === "1"; } catch (error) {}
+        setSidebarCollapsed(collapsed, false);
       }
 
       function ignoreLoadError(promise) {
@@ -6621,6 +8681,8 @@ const adminConsoleHtml = `<!doctype html>
         }
         var toast = document.createElement("div");
         toast.className = "toast " + type;
+        toast.setAttribute("role", type === "error" ? "alert" : "status");
+        toast.setAttribute("aria-live", type === "error" ? "assertive" : "polite");
         toast.textContent = message;
         document.body.appendChild(toast);
         setTimeout(function() { toast.classList.add("show"); }, 50);
@@ -6637,9 +8699,13 @@ const adminConsoleHtml = `<!doctype html>
         var originalText = btn.textContent;
         var originalDisabled = btn.disabled;
         btn.disabled = true;
+        btn.classList.add("is-loading");
+        btn.setAttribute("aria-busy", "true");
         btn.textContent = loadingText || "处理中...";
         return function() {
           btn.disabled = originalDisabled;
+          btn.classList.remove("is-loading");
+          btn.removeAttribute("aria-busy");
           btn.textContent = originalText;
         };
       }
@@ -6801,10 +8867,14 @@ const adminConsoleHtml = `<!doctype html>
       function login() {
         var password = value("loginPassword");
         var loginError = $("loginError");
+        var loginButton = $("loginButton");
         if (!password) {
           if (loginError) loginError.textContent = "请输入验证密码";
+          if ($("loginPassword")) $("loginPassword").focus();
           return;
         }
+        if (loginError) loginError.textContent = "";
+        var restoreLoginButton = setButtonLoading(loginButton, "正在验证...");
         api("/api/admin/login", {
           method: "POST",
           body: JSON.stringify({ password: password })
@@ -6814,6 +8884,8 @@ const adminConsoleHtml = `<!doctype html>
           window.location.href = getLoginRedirectTarget();
         }).catch(function (error) {
           if (loginError) loginError.textContent = error.message;
+        }).finally(function () {
+          restoreLoginButton();
         });
       }
 
@@ -6831,6 +8903,7 @@ const adminConsoleHtml = `<!doctype html>
       // 菜单 Tab 切换
       function switchSection(section, options) {
         options = options || {};
+        var mobileDrawerWasOpen = Boolean(isMobileDrawerViewport() && $("appSidebar") && $("appSidebar").classList.contains("show"));
         var targetSection = document.getElementById("section-" + section) ? section : "dashboard";
         if (targetSection === "catalog" && options.catalogType) {
           setCatalogType(options.catalogType, { resetPage: options.resetCatalogPage });
@@ -6845,7 +8918,13 @@ const adminConsoleHtml = `<!doctype html>
           node.classList.toggle("active", node.id === "section-" + targetSection);
         });
         document.querySelectorAll(".sidebar nav ul li").forEach(function (node) {
-          node.classList.toggle("active", node.dataset.section === targetSection);
+          var isActive = node.dataset.section === targetSection;
+          node.classList.toggle("active", isActive);
+          var navButton = node.querySelector("button");
+          if (navButton) {
+            if (isActive) navButton.setAttribute("aria-current", "page");
+            else navButton.removeAttribute("aria-current");
+          }
         });
         
         var titles = {
@@ -6865,16 +8944,43 @@ const adminConsoleHtml = `<!doctype html>
           settings: "系统设置与日志"
         };
         var nextTitle = titles[targetSection] || "Admin Console";
+        var eyebrows = {
+          dashboard: "总览 / 数据运营",
+          catalog: "数据与课表 / 资源目录",
+          terms: "数据与课表 / 学期生命周期",
+          quality: "数据与课表 / 质量门禁",
+          sync: "发布与运维 / 同步管线",
+          config: "发布与运维 / 版本配置",
+          notices: "内容管理 / 公告",
+          news: "内容管理 / 动态",
+          "assistant-kb": "内容管理 / 助手知识库",
+          "campus-map": "内容管理 / 校园地图",
+          feedback: "内容管理 / 用户反馈",
+          "ai-provider": "系统与安全 / 查询服务",
+          security: "系统与安全 / 安全状态",
+          settings: "系统与安全 / 设置与日志"
+        };
         if ($("pageTitle")) {
           $("pageTitle").textContent = nextTitle;
+        }
+        if ($("pageEyebrow")) {
+          $("pageEyebrow").textContent = eyebrows[targetSection] || "校园数据运营台";
         }
         if ($("mobilePageTitle")) {
           $("mobilePageTitle").textContent = nextTitle;
         }
-        closeMobileDrawer();
+        closeMobileDrawer(false);
+        if (mobileDrawerWasOpen && $("adminMainContent")) {
+          window.setTimeout(function () {
+            $("adminMainContent").focus();
+          }, 0);
+        }
         
         // 切页面后自动获取对应页面数据
-        if (targetSection === "catalog") {
+        if (targetSection === "dashboard") {
+          renderDashboard();
+          if (!state.dashboardOpsLoading) ignoreLoadError(loadDashboardOperations());
+        } else if (targetSection === "catalog") {
           ignoreLoadError(loadCatalog());
         } else if (targetSection === "sync") {
           ignoreLoadError(loadSyncStatus());
@@ -6903,6 +9009,9 @@ const adminConsoleHtml = `<!doctype html>
           .then(function (res) {
             state.dashboard = res.data || res || {};
             renderDashboard();
+            if (state.section === "dashboard" && !state.dashboardOpsLoading) {
+              ignoreLoadError(loadDashboardOperations());
+            }
             setStatus("数据概览已更新：" + formatDate(new Date().toISOString()));
             return state.dashboard;
           })
@@ -6913,6 +9022,27 @@ const adminConsoleHtml = `<!doctype html>
             showToast(error.message || "数据概览加载失败", "error");
             showModuleError("dashboard", error);
             throw error;
+          });
+      }
+
+      function loadDashboardOperations() {
+        state.dashboardOpsLoading = true;
+        state.dashboardOpsUnavailable = false;
+        return api("/api/admin/sync/status")
+          .then(function (res) {
+            state.dashboardOps = res.data || res || {};
+            state.dashboardOpsLoading = false;
+            state.dashboardOpsUnavailable = false;
+            if (state.section === "dashboard") renderDashboard();
+            return state.dashboardOps;
+          })
+          .catch(function (error) {
+            state.dashboardOps = null;
+            state.dashboardOpsLoading = false;
+            state.dashboardOpsUnavailable = true;
+            console.warn("[Admin Console] dashboard operations status unavailable:", error.message);
+            if (state.section === "dashboard") renderDashboard();
+            return null;
           });
       }
 
@@ -7311,51 +9441,112 @@ const adminConsoleHtml = `<!doctype html>
       // Panel 1: Dashboard 数据渲染
       function renderDashboard() {
         var data = state.dashboard || {};
+        var ops = state.dashboardOps || null;
+        var opsUnavailable = Boolean(state.dashboardOpsUnavailable);
         var counts = data.counts || {};
         var version = data.dataVersion || {};
-        
+        var updateFields = [
+          version.classScheduleUpdatedAt,
+          version.teacherScheduleUpdatedAt,
+          version.classroomScheduleUpdatedAt,
+          version.courseScheduleUpdatedAt
+        ];
+        var validUpdateDates = updateFields.map(function (value) {
+          return { raw: value, time: new Date(value).getTime() };
+        }).filter(function (item) {
+          return Number.isFinite(item.time);
+        });
+        validUpdateDates.sort(function (a, b) { return b.time - a.time; });
+        var latestUpdate = validUpdateDates.length ? validUpdateDates[0].raw : null;
+        var latestSync = ops && ops.lastSyncTime || latestUpdate;
+        var staleResourceCount = updateFields.filter(function (value) {
+          var time = new Date(value).getTime();
+          return !Number.isFinite(time) || Date.now() - time > 30 * 24 * 60 * 60 * 1000;
+        }).length;
+        var isOnline = String(data.publishStatus || "").toLowerCase() === "online";
+        var activeRelease = ops
+          ? (ops.activeReleaseVersion || "未生效")
+          : (opsUnavailable ? "状态不可用" : "正在确认");
+
+        var systemMetrics = [
+          { label: "系统状态", value: isOnline ? "运行正常" : (data.publishStatus || "待确认"), foot: isOnline ? "核心后台服务可用" : "请检查发布与运行配置", tone: isOnline ? "success" : "warning" },
+          { label: "当前学期", value: data.currentSemester || "未配置", foot: "全局课表数据作用域", tone: data.currentSemester ? "info" : "warning" },
+          { label: "Active Release", value: activeRelease, foot: ops ? (ops.activeReleaseVersion ? "已按 runtime pointer 核对" : "当前没有生效的 runtime pointer") : (opsUnavailable ? "同步状态暂不可用，请刷新重试" : "正在读取 runtime pointer"), tone: ops ? (ops.activeReleaseVersion ? "success" : "danger") : (opsUnavailable ? "warning" : "info") },
+          { label: "最近数据同步", value: latestSync ? formatDate(latestSync) : "暂无记录", foot: staleResourceCount ? staleResourceCount + " 类资源超过 30 天未更新" : "四类核心资源均在更新窗口内", tone: latestSync ? (staleResourceCount ? "warning" : "success") : "danger" }
+        ];
+
+        var systemWrap = $("dashboardSystemGrid");
+        if (systemWrap) {
+          systemWrap.innerHTML = systemMetrics.map(function (item) {
+            return "<div class='system-metric' data-tone='" + item.tone + "'>" +
+              "<div class='system-metric-label'><span class='status-dot " + item.tone + "'></span>" + escapeHtml(item.label) + "</div>" +
+              "<div class='system-metric-value' title='" + escapeHtml(String(item.value)) + "'>" + escapeHtml(String(item.value)) + "</div>" +
+              "<div class='system-metric-foot'>" + escapeHtml(item.foot) + "</div>" +
+              "</div>";
+          }).join("");
+        }
+
+        var attentionItems = [];
+        if (!isOnline) attentionItems.push({ tone: "danger", title: "后台发布状态需要确认", detail: "当前状态：" + (data.publishStatus || "unknown"), target: "sync", action: "检查同步" });
+        if (opsUnavailable) attentionItems.push({ tone: "warning", title: "运营状态暂时不可用", detail: "未能读取 runtime pointer 与同步状态，请刷新后重试。", target: "dashboard", action: "重新读取" });
+        if (ops && !ops.activeReleaseVersion) attentionItems.push({ tone: "danger", title: "当前没有 Active Release", detail: "runtime pointer 尚未生效；Published 不等于 Active。", target: "sync", action: "查看管线" });
+        if (staleResourceCount > 0) attentionItems.push({ tone: "warning", title: staleResourceCount + " 类核心资源更新过旧", detail: "超过 30 天未更新，建议先查看质量报告。", target: "quality", action: "查看质量" });
+        if ((counts.openFeedbackCount || 0) > 0) attentionItems.push({ tone: "warning", title: (counts.openFeedbackCount || 0) + " 条反馈尚未处理", detail: "及时标记处理状态并记录结论。", target: "feedback", action: "处理反馈" });
+        var pendingNoticeCount = Math.max(0, (counts.noticeCount || 0) - (counts.enabledNoticeCount || 0));
+        if (pendingNoticeCount > 0) attentionItems.push({ tone: "info", title: pendingNoticeCount + " 条公告未启用", detail: "请确认内容是否需要发布。", target: "notices", action: "查看公告" });
+        if (attentionItems.length === 0) attentionItems.push({ tone: "success", title: "当前没有紧急待办", detail: "系统、版本、数据更新与用户反馈均无明显阻塞。" });
+
+        var attentionWrap = $("dashboardAttentionList");
+        var attentionPanel = attentionWrap && attentionWrap.closest(".attention-panel");
+        if (attentionPanel) attentionPanel.classList.toggle("is-clear", attentionItems.length === 1 && attentionItems[0].tone === "success");
+        if ($("dashboardAttentionCount")) {
+          var actionableCount = attentionItems.filter(function (item) { return item.tone !== "success"; }).length;
+          $("dashboardAttentionCount").className = "badge " + (actionableCount ? "warning" : "success");
+          $("dashboardAttentionCount").textContent = actionableCount + " 项";
+        }
+        if (attentionWrap) {
+          attentionWrap.innerHTML = attentionItems.map(function (item) {
+            var action = item.target ? "<button type='button' class='ghost' data-dashboard-target='" + item.target + "'>" + escapeHtml(item.action) + "</button>" : "";
+            return "<div class='attention-item'><span class='status-dot " + item.tone + "'></span><div class='attention-item-copy'><strong>" + escapeHtml(item.title) + "</strong><small>" + escapeHtml(item.detail) + "</small></div>" + action + "</div>";
+          }).join("");
+          attentionWrap.querySelectorAll("[data-dashboard-target]").forEach(function (button) {
+            button.addEventListener("click", function () { switchSection(button.dataset.dashboardTarget); });
+          });
+        }
+
         var stats = [
-          { label: "在线状态", val: data.publishStatus || "online", icon: "🌐", foot: "发布状态标签" },
-          { label: "当前学期", val: data.currentSemester || "-", icon: "📅", foot: "全局配置学期" },
-          { label: "行政班级数", val: counts.classScheduleCount || 0, icon: "🏫", foot: "更新于：" + formatDate(version.classScheduleUpdatedAt) },
-          { label: "教师课表数", val: counts.teacherScheduleCount || 0, icon: "👨‍🏫", foot: "更新于：" + formatDate(version.teacherScheduleUpdatedAt) },
-          { label: "教室课表数", val: counts.classroomScheduleCount || 0, icon: "🚪", foot: "更新于：" + formatDate(version.classroomScheduleUpdatedAt) },
-          { label: "课程课表数", val: counts.courseScheduleCount || 0, icon: "📚", foot: "更新于：" + formatDate(version.courseScheduleUpdatedAt) },
-          { label: "启用公告数", val: counts.enabledNoticeCount || 0, icon: "📢", foot: "公告总数：" + (counts.noticeCount || 0) + " 个" },
-          { label: "未处理反馈", val: counts.openFeedbackCount || 0, icon: "💬", foot: "反馈总数：" + (counts.feedbackCount || 0), highlight: (counts.openFeedbackCount > 0) },
+          { label: "行政班", val: counts.classScheduleCount || 0, foot: "更新于 " + formatDate(version.classScheduleUpdatedAt) },
+          { label: "教师", val: counts.teacherScheduleCount || 0, foot: "更新于 " + formatDate(version.teacherScheduleUpdatedAt) },
+          { label: "教室", val: counts.classroomScheduleCount || 0, foot: "更新于 " + formatDate(version.classroomScheduleUpdatedAt) },
+          { label: "课程", val: counts.courseScheduleCount || 0, foot: "更新于 " + formatDate(version.courseScheduleUpdatedAt) }
         ];
 
         var wrap = $("statsGrid");
-        wrap.textContent = "";
-        stats.forEach(function (item) {
-          var card = document.createElement("div");
-          card.className = "stat-card card";
-          
-          var head = document.createElement("div");
-          head.className = "stat-head";
-          head.appendChild(document.createTextNode(item.label));
-          var icon = document.createElement("span");
-          icon.textContent = item.icon;
-          head.appendChild(icon);
-          card.appendChild(head);
-
-          var num = document.createElement("div");
-          num.className = "stat-num";
-          if (item.highlight) num.style.color = "var(--danger)";
-          num.textContent = item.val;
-          card.appendChild(num);
-
-          var foot = document.createElement("div");
-          foot.className = "stat-foot";
-          foot.textContent = item.foot;
-          card.appendChild(foot);
-
-          wrap.appendChild(card);
-        });
+        if (wrap) {
+          wrap.textContent = "";
+          stats.forEach(function (item) {
+            var card = document.createElement("div");
+            card.className = "stat-card card";
+            var head = document.createElement("div");
+            head.className = "stat-head";
+            head.textContent = item.label;
+            card.appendChild(head);
+            var num = document.createElement("div");
+            num.className = "stat-num";
+            num.textContent = item.val;
+            card.appendChild(num);
+            var foot = document.createElement("div");
+            foot.className = "stat-foot";
+            foot.title = item.foot;
+            foot.textContent = item.foot;
+            card.appendChild(foot);
+            wrap.appendChild(card);
+          });
+        }
 
         $("envTag").textContent = data.publishStatus === "online" ? "production" : "local";
         $("envTag").className = "env-tag " + (data.publishStatus === "online" ? "production" : "local");
-        $("versionLabel").textContent = version.releaseVersion || "-";
+        $("versionLabel").textContent = ops && ops.activeReleaseVersion || version.releaseVersion || "-";
 
         // 渲染图表可视化
         renderDashboardVisuals();
@@ -7427,7 +9618,7 @@ const adminConsoleHtml = `<!doctype html>
         if (recent.length === 0) {
           var emptyDiv = document.createElement("div");
           emptyDiv.style = "color: var(--muted); font-size: 13px; text-align: center; padding: 20px 0;";
-          emptyDiv.textContent = "当前没有待处理反馈 ☕️";
+          emptyDiv.textContent = "当前没有待处理反馈";
           feedWrap.appendChild(emptyDiv);
         } else {
           recent.forEach(function (fb) {
@@ -7677,9 +9868,17 @@ const adminConsoleHtml = `<!doctype html>
         var type = state.catalogType;
         var page = state.catalogPage;
         var pageSize = state.catalogPageSize;
+        var table = $("catalogTable");
+        var tbody = $("catalogListTable");
         
         setStatus("正在获取 " + type + " 资源列表...");
-        api("/api/admin/catalog/list?type=" + type + "&semester=" + semester + "&keyword=" + encodeURIComponent(keyword) + "&page=" + page + "&pageSize=" + pageSize)
+        if (table) table.setAttribute("aria-busy", "true");
+        if (tbody) tbody.innerHTML = "<tr><td colspan='8' class='catalog-loading-state'>正在加载数据资源…</td></tr>";
+        if ($("catalogResultCount")) $("catalogResultCount").textContent = "正在加载…";
+        if ($("catalogPaginationInfo")) $("catalogPaginationInfo").textContent = "正在读取结果";
+        if ($("catalogPrevBtn")) $("catalogPrevBtn").disabled = true;
+        if ($("catalogNextBtn")) $("catalogNextBtn").disabled = true;
+        return api("/api/admin/catalog/list?type=" + type + "&semester=" + semester + "&keyword=" + encodeURIComponent(keyword) + "&page=" + page + "&pageSize=" + pageSize)
           .then(function(data) {
             state.catalogItems = data.items || [];
             state.catalogTotal = data.total || 0;
@@ -7687,8 +9886,16 @@ const adminConsoleHtml = `<!doctype html>
             setStatus("数据获取成功。共 " + state.catalogTotal + " 个实体。");
           })
           .catch(function(err) {
+            state.catalogItems = [];
+            state.catalogTotal = 0;
+            if (tbody) tbody.innerHTML = "<tr><td colspan='8' class='catalog-error-state' role='alert'>资源加载失败：" + escapeHtml(err.message || "未知错误") + "。请刷新后重试。</td></tr>";
+            if ($("catalogResultCount")) $("catalogResultCount").textContent = "加载失败";
+            if ($("catalogPaginationInfo")) $("catalogPaginationInfo").textContent = "未能读取结果";
             showToast(err.message, "error");
             setStatus(err.message);
+          })
+          .then(function() {
+            if (table) table.removeAttribute("aria-busy");
           });
       }
 
@@ -7720,6 +9927,7 @@ const adminConsoleHtml = `<!doctype html>
         if (list.length === 0) {
           tbody.innerHTML = "<tr><td colspan='8' style='text-align: center; color: var(--muted); padding: 40px 0;'>暂无相关数据资源。请调整搜索词或学期重试。</td></tr>";
           $("catalogPaginationInfo").textContent = "第 0 条，共 0 条";
+          if ($("catalogResultCount")) $("catalogResultCount").textContent = "0 条结果";
           return;
         }
 
@@ -7830,6 +10038,7 @@ const adminConsoleHtml = `<!doctype html>
         var start = (state.catalogPage - 1) * state.catalogPageSize + 1;
         var end = Math.min(state.catalogPage * state.catalogPageSize, state.catalogTotal);
         $("catalogPaginationInfo").textContent = "第 " + start + " - " + end + " 条，共 " + state.catalogTotal + " 条";
+        if ($("catalogResultCount")) $("catalogResultCount").textContent = state.catalogTotal + " 条结果";
         
         $("catalogPrevBtn").disabled = state.catalogPage <= 1;
         $("catalogNextBtn").disabled = state.catalogPage * state.catalogPageSize >= state.catalogTotal;
@@ -7841,6 +10050,7 @@ const adminConsoleHtml = `<!doctype html>
 
       // Drawer 详细信息拉取
       window.openCatalogDetail = function(type, id) {
+        var returnFocusElement = document.activeElement;
         id = decodeURIComponent(id);
         setStatus("正在获取 " + id + " 详细课程结构...");
         api("/api/admin/catalog/detail?type=" + type + "&id=" + encodeURIComponent(id))
@@ -7857,17 +10067,15 @@ const adminConsoleHtml = `<!doctype html>
             if ($("catalogRawJson")) {
               $("catalogRawJson").textContent = JSON.stringify(res.data.original || res.data, null, 2);
             }
-            if ($("catalogDrawerMask")) $("catalogDrawerMask").classList.add("show");
-            if ($("catalogDrawer")) $("catalogDrawer").classList.add("show");
+            openDetailDrawer("catalogDrawer", "catalogDrawerMask", "closeCatalogDrawerBtn", returnFocusElement);
           })
           .catch(function(error) {
             showToast(error.message || "读取资源详情失败", "error");
           });
       };
 
-      function closeCatalogDrawer() {
-        if ($("catalogDrawerMask")) $("catalogDrawerMask").classList.remove("show");
-        if ($("catalogDrawer")) $("catalogDrawer").classList.remove("show");
+      function closeCatalogDrawer(returnFocus) {
+        closeDetailDrawer("catalogDrawer", "catalogDrawerMask", returnFocus);
       }
 
       function saveCatalogMetaDetail() {
@@ -8299,6 +10507,116 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
+      function renderSyncPipelineState(data, details) {
+        data = data || {};
+        details = details || {};
+        var stageIds = ["syncStageStaging", "syncStageRelease", "syncStageStatic", "syncStageVerify", "syncStageActive"];
+        var labels = ["Staging 上传", "Release Pack 生成", "OpenResty 静态目录同步", "URL 验证", "Active Pointer 生效"];
+        var stateLabels = { pending: "待处理", current: "当前阶段", complete: "已完成", blocked: "已阻塞" };
+        var states = ["pending", "pending", "pending", "pending", "pending"];
+        var pendingItems = Array.isArray(data.pendingItems) ? data.pendingItems : [];
+        var hasBlocker = pendingItems.some(function (item) { return item && item.severity === "danger"; });
+        var latestStaging = data.latestStagingUpload || null;
+        var hasStaging = Boolean(latestStaging || data.stagingCanonicalHash || data.stagingNeedsPublish);
+        var hasPublishedVersion = Boolean(data.releaseVersion && data.releaseVersion !== "-");
+        var hasActivePointer = Boolean(data.activeReleaseVersion);
+        var pointerMatchesRelease = Boolean(hasActivePointer && hasPublishedVersion && data.activeReleaseVersion === data.releaseVersion);
+        var releaseHealthy = Boolean(data.releasePackHealthy || data.releasePackStatus && data.releasePackStatus.healthy);
+        var staticDirectorySynced = Boolean(details.staticDirectorySynced);
+        var staticUrlVerified = Boolean(details.staticUrlVerified);
+        var currentIndex = 0;
+        var nextText = "上传或确认最新 Staging 候选数据";
+
+        if (hasStaging) {
+          states[0] = "complete";
+          currentIndex = 1;
+          nextText = "生成并验证新的 Release Pack";
+        }
+        if (hasPublishedVersion) {
+          states[0] = "complete";
+          currentIndex = 1;
+          nextText = "检查或重建当前版本的 Release Pack";
+        }
+        if (hasPublishedVersion && releaseHealthy) {
+          states[0] = "complete";
+          states[1] = "complete";
+          currentIndex = 2;
+          nextText = "同步当前 Release 到 OpenResty 静态目录";
+        }
+        if (hasPublishedVersion && releaseHealthy && staticDirectorySynced) {
+          states[2] = "complete";
+          currentIndex = 3;
+          nextText = "验证 manifest、class index 与 empty-room URL";
+        }
+        if (hasPublishedVersion && releaseHealthy && staticDirectorySynced && staticUrlVerified) {
+          states[3] = "complete";
+          currentIndex = 4;
+          nextText = "确认 runtime pointer 指向已验证版本";
+        }
+        if (pointerMatchesRelease && releaseHealthy && staticDirectorySynced && staticUrlVerified && !hasBlocker) {
+          states[4] = "complete";
+          currentIndex = 4;
+          nextText = "链路已完成；仅在有新数据时再次发布";
+        } else {
+          states[currentIndex] = hasBlocker ? "blocked" : "current";
+        }
+        if (hasBlocker) {
+          nextText = pendingItems.filter(function (item) { return item && item.severity === "danger"; }).map(function (item) { return item.title; })[0] || "先处理发布阻塞项";
+        } else if (data.stagingNeedsPublish && data.nextAction && data.nextAction.message) {
+          nextText = data.nextAction.message;
+        }
+
+        stageIds.forEach(function (id, index) {
+          var stage = $(id);
+          if (!stage) return;
+          stage.dataset.stageState = states[index];
+          stage.setAttribute("aria-label", labels[index] + "：" + stateLabels[states[index]]);
+          if (states[index] === "current" || states[index] === "blocked") stage.setAttribute("aria-current", "step");
+          else stage.removeAttribute("aria-current");
+        });
+        if ($("syncCurrentStageLabel")) {
+          $("syncCurrentStageLabel").textContent = states[4] === "complete" ? "链路已完成" : (hasBlocker ? labels[currentIndex] + " · 已阻塞" : labels[currentIndex]);
+        }
+        if ($("syncNextStepText")) $("syncNextStepText").textContent = nextText;
+      }
+
+      function deriveStaticDirectorySynced(data, staticSync) {
+        data = data || {};
+        staticSync = staticSync || {};
+        var expectedVersion = data.releaseVersion || data.activeReleaseVersion || "";
+        var observedVersion = staticSync.releaseVersion || staticSync.activeReleaseVersion || "";
+        return Boolean(
+          expectedVersion &&
+          observedVersion === expectedVersion &&
+          staticSync.enabled &&
+          staticSync.configured &&
+          staticSync.targetDirExists &&
+          staticSync.targetReleaseDirExists &&
+          staticSync.localRequiredFilesPresent
+        );
+      }
+
+      function deriveStaticUrlVerified(staticSync, statusValue) {
+        staticSync = staticSync || {};
+        var currentStatuses = [staticSync.status, statusValue].map(function (value) {
+          return String(value || "").toLowerCase();
+        });
+        if (staticSync.success === false || currentStatuses.indexOf("failed") >= 0) return false;
+        var isVerifiedStatus = function (value) {
+          if (typeof value === "number") return value >= 200 && value < 300;
+          if (typeof value !== "string") return false;
+          var normalized = value.toLowerCase();
+          if (/^\d+$/.test(normalized)) {
+            var statusCode = Number(normalized);
+            return statusCode >= 200 && statusCode < 300;
+          }
+          return normalized === "ok" || normalized === "success";
+        };
+        return isVerifiedStatus(staticSync.manifestStatus) &&
+          isVerifiedStatus(staticSync.classIndexStatus) &&
+          isVerifiedStatus(staticSync.emptyRoomStatus);
+      }
+
       function renderSyncStatusGrid() {
         var data = state.syncStatus || {};
         var wrap = $("syncStatsGrid");
@@ -8315,32 +10633,14 @@ const adminConsoleHtml = `<!doctype html>
         var staticWritable = Boolean(staticSync.targetDirWritable);
         var staticVersionMatched = Boolean(staticSync.versionMatched);
         var staticTargetExists = Boolean(staticSync.targetDirExists);
-        var staticLocalReady = Boolean(staticSync.localRequiredFilesPresent);
         var releaseHeavyBusy = Boolean(data.releaseHeavyBusy && data.runningReleaseJob);
-        var isVerifiedStatus = function(value) {
-          if (typeof value === "number") return value >= 200 && value < 300;
-          if (typeof value !== "string") return false;
-          var normalized = value.toLowerCase();
-          if (/^\d+$/.test(normalized)) {
-            var statusCode = Number(normalized);
-            return statusCode >= 200 && statusCode < 300;
-          }
-          return normalized === "ok" || normalized === "success";
-        };
-        var staticUrlVerified = isVerifiedStatus(staticSync.manifestStatus) && isVerifiedStatus(staticSync.classIndexStatus) && isVerifiedStatus(staticSync.emptyRoomStatus);
-        var staticRecentlySucceeded = staticSync.success !== false && staticSyncStatus !== "failed" && Boolean(staticSync.lastSuccessAt || staticSync.lastSyncTime || staticSync.syncedAt || staticSync.status === "success" || staticSync.status === "unchanged");
-        var staticFullySynced = Boolean(staticSync.fullySynced || (
-          staticEnabled &&
-          staticConfigured &&
-          staticTargetExists &&
-          staticWritable &&
-          data.releaseVersion &&
-          staticSync.syncedReleaseVersion &&
-          data.releaseVersion === staticSync.syncedReleaseVersion &&
-          staticLocalReady &&
-          staticRecentlySucceeded &&
-          staticUrlVerified
-        ));
+        var staticUrlVerified = deriveStaticUrlVerified(staticSync, staticSyncStatus);
+        var staticDirectorySynced = deriveStaticDirectorySynced(data, staticSync);
+        var staticFullySynced = Boolean(staticDirectorySynced && staticUrlVerified);
+        renderSyncPipelineState(data, {
+          staticDirectorySynced: staticDirectorySynced,
+          staticUrlVerified: staticUrlVerified
+        });
         var staticSyncReasonText = function() {
           var reason = staticSync.needsSyncReason || "";
           var map = {
@@ -8404,9 +10704,10 @@ const adminConsoleHtml = `<!doctype html>
           unknown: "待确认"
         }[data.dataHashState || "unknown"] || "待确认";
         var list = [
-          { label: "当前 active release", val: data.releaseVersion || "-", icon: "REL", foot: "小程序读取的当前版本" },
+          { label: "当前 active release", val: data.activeReleaseVersion || "未生效", icon: "ACT", foot: data.activeReleaseVersion ? "已按 runtime pointer 核对" : "Published 版本尚未成为线上 Active" },
+          { label: "最新 Published Release", val: data.releaseVersion || "-", icon: "REL", foot: "已生成的最近发布候选版本" },
           { label: "学期", val: data.semester || "-", icon: "TERM", foot: "同步与发布使用的学期" },
-          { label: "最后发布时间", val: formatDate(data.activeReleaseActivatedAt || data.activeReleaseUpdatedAt || data.classScheduleUpdatedAt || data.lastUploadTime), icon: "TIME", foot: "active pointer 最近生效时间" },
+          { label: "最近 Active 时间", val: data.activeReleaseVersion ? formatDate(data.activeReleaseActivatedAt || data.activeReleaseUpdatedAt) : "暂无生效记录", icon: "TIME", foot: "runtime pointer 最近生效时间" },
           { label: "最后同步状态", val: relayStatusText(data.lastSyncStatus), icon: "SYNC", foot: data.lastSyncTime ? formatDate(data.lastSyncTime) : "尚未收到本机同步回执" },
           { label: "OpenResty 状态", val: staticFullySynced ? "已同步" : relayStatusText(staticSyncStatus), icon: "ORY", foot: data.lastStaticSyncTime ? formatDate(data.lastStaticSyncTime) : (staticSync.needsSyncReason || "尚未执行静态同步") },
           { label: "CloudBase 状态", val: relayStatusText(data.cloudbaseStatus), icon: "CB", foot: data.cloudbaseStatus === "failed" ? "镜像可单独重试，不影响 active pointer" : "镜像状态来自最近回执" },
@@ -8495,7 +10796,7 @@ const adminConsoleHtml = `<!doctype html>
         renderSyncOperationsPanels(data);
         if ($("manualStaticSyncBtn")) {
           $("manualStaticSyncBtn").textContent = staticFullySynced ? "✓ 已同步，无需操作" : "手动同步当前 Release";
-          $("manualStaticSyncBtn").className = staticFullySynced ? "secondary" : "primary";
+          $("manualStaticSyncBtn").className = "secondary";
           $("manualStaticSyncBtn").disabled = Boolean(!staticEnabled || !staticConfigured || !staticTargetExists || !staticWritable || releaseHeavyBusy || !data.releaseVersion || staticFullySynced);
           $("manualStaticSyncBtn").title = staticSyncReasonText();
         }
@@ -8608,18 +10909,19 @@ const adminConsoleHtml = `<!doctype html>
 
       function renderSyncOperationsPanels(data) {
         data = data || {};
-        var active = data.resourceCounts || data.activeResourceCounts || data.releasePackStatus && data.releasePackStatus.resourceCounts || null;
+        var hasActiveRelease = Boolean(data.activeReleaseVersion);
+        var active = hasActiveRelease ? (data.activeResourceCounts || data.resourceCounts || data.releasePackStatus && data.releasePackStatus.resourceCounts || null) : null;
         var activeCards = $("syncActiveReleaseCards");
         if (activeCards) {
-          var runtimeState = data.releaseVersion ? "active" : "inactive";
+          var runtimeState = hasActiveRelease ? "active" : "inactive";
           if ($("syncRuntimeStateBadge")) {
             $("syncRuntimeStateBadge").className = "badge " + (runtimeState === "active" ? "success" : "warning");
             $("syncRuntimeStateBadge").textContent = runtimeState === "active" ? "当前生效" : "未生效";
           }
           activeCards.innerHTML = [
-            ["当前线上版本", data.releaseVersion || "暂无 active Release"],
+            ["当前线上版本", data.activeReleaseVersion || "未生效"],
+            ["最近 Published Release", data.releaseVersion || "-"],
             ["当前学期", data.semester || "-"],
-            ["Release Pack", data.releasePackHealthy ? "版本健康" : "需要检查"],
             ["静态同步", relayStatusText(data.openRestyStaticSyncStatus || data.staticSync && data.staticSync.status || "not-run")],
           ].map(function(row) {
             return "<div class='sync-compact-card'><strong>" + escapeHtml(row[0]) + "</strong><span>" + escapeHtml(row[1]) + "</span></div>";
@@ -8627,6 +10929,7 @@ const adminConsoleHtml = `<!doctype html>
           "<details class='sync-technical-details'><summary>技术详情</summary><code>" +
           escapeHtml(JSON.stringify({
             releaseVersion: data.releaseVersion || "",
+            activeReleaseVersion: data.activeReleaseVersion || "",
             activeCanonicalHash: data.activeCanonicalHash || "",
             staticReleaseVersion: data.staticSync && data.staticSync.syncedReleaseVersion || "",
           }, null, 2)) + "</code></details>";
@@ -8644,7 +10947,7 @@ const adminConsoleHtml = `<!doctype html>
             resourceMetricCard("教室课表", active.classroom && active.classroom.scheduleDocuments, "份", active.classroom && active.classroom.sourceMode),
             resourceMetricCard("课程目录", active.course && active.course.directoryEntities, "门", active.course && active.course.sourceMode, active.course && active.course.directoryEntitiesStatus),
             resourceMetricCard("课程课表", active.course && active.course.scheduleDocuments, "份", active.course && active.course.sourceMode),
-          ].join("") : "";
+          ].join("") : "<div class='empty-state'><strong>当前没有 Active Release</strong><span>资源规模不会以 Published 候选版本冒充线上数据。</span></div>";
         }
 
         var pendingWrap = $("syncPendingCards");
@@ -8792,7 +11095,7 @@ const adminConsoleHtml = `<!doctype html>
             "<td><span class='badge info'>" + relayStatusText(upload.status) + "</span></td>" +
             "<td class='action-cell'></td>";
           var promoteBtn = document.createElement("button");
-          promoteBtn.className = "btn primary";
+          promoteBtn.className = "btn secondary";
           promoteBtn.style = "padding: 3px 8px; font-size:11px;";
           promoteBtn.textContent = "设为 Staging";
           promoteBtn.disabled = upload.status === "published";
@@ -8891,7 +11194,7 @@ const adminConsoleHtml = `<!doctype html>
 
           if (upload.status === "pending-review" && !isActiveUpload) {
             var publishBtn = document.createElement("button");
-            publishBtn.className = "btn primary";
+            publishBtn.className = "btn secondary";
             publishBtn.style = "padding: 3px 8px; font-size:11px;";
             publishBtn.textContent = "发布";
             publishBtn.addEventListener("click", function() {
@@ -9174,7 +11477,7 @@ const adminConsoleHtml = `<!doctype html>
           actions.appendChild(copyHashBtn);
           if (upload.status === "pending-review" && !group.isActive) {
             var publishBtn = document.createElement("button");
-            publishBtn.className = "btn primary";
+            publishBtn.className = "btn secondary";
             publishBtn.style = "padding: 3px 8px; font-size:11px;";
             publishBtn.textContent = "发布";
             publishBtn.addEventListener("click", function() { publishStaging(publishBtn); });
@@ -9659,14 +11962,14 @@ const adminConsoleHtml = `<!doctype html>
                 normalCmds.forEach(function(c) {
                   var riskClass = c.risk === "low" || c.risk.indexOf("低") >= 0 ? "low" : (c.risk === "high" || c.risk.indexOf("中高") >= 0 ? "high" : "medium");
                   var riskBadge = "<span class='command-tag " + riskClass + "'>风险: " + c.risk + "</span>";
-                  var intranetBadge = c.intranetRequired ? "<span class='command-tag high'>⚠️ 需校园网</span>" : "<span class='command-tag low'>外网可用</span>";
+                  var intranetBadge = c.intranetRequired ? "<span class='command-tag high'>需校园网</span>" : "<span class='command-tag low'>外网可用</span>";
                   var isDefaultExpanded = false;
                   
                   var item = document.createElement("div");
                   item.className = "command-card" + (isDefaultExpanded ? "" : " collapsed");
                   item.innerHTML = 
                     "<div class='command-header'>" +
-                      "<div class='command-title'>🔧 " + escapeHtml(c.name) + "</div>" +
+                      "<div class='command-title'>" + escapeHtml(c.name) + "</div>" +
                       "<div style='display:flex; gap:6px; align-items: center;'>" + riskBadge + intranetBadge + "</div>" +
                     "</div>" +
                     "<div class='command-body'>" +
@@ -9682,7 +11985,7 @@ const adminConsoleHtml = `<!doctype html>
                         "<div class='command-meta-item'><strong>常见失败原因</strong><span>" + escapeHtml(c.failureReason) + "</span></div>" +
                       "</div>" +
                       "<div class='command-tip-box'>" +
-                        "<strong>💡 修复建议:</strong><span>" + escapeHtml(c.solution) + "</span>" +
+                        "<strong>修复建议:</strong><span>" + escapeHtml(c.solution) + "</span>" +
                       "</div>" +
                     "</div>";
                   item.__copyCommand = c.command || "";
@@ -10056,7 +12359,7 @@ const adminConsoleHtml = `<!doctype html>
 
       // 执行回滚
       function rollbackToVersion(version, btn) {
-        if (!confirm("🚨 警告：确定要将线上全校课表一键回滚到快照 [" + version + "] 吗？\\\\n该操作会立即覆盖小程序端当前的可见数据，并自动创建当前版本的备份！")) {
+        if (!confirm("警告：确定要将线上全校课表一键回滚到快照 [" + version + "] 吗？\\\\n该操作会立即覆盖小程序端当前的可见数据，并自动创建当前版本的备份！")) {
           return;
         }
         
@@ -10092,27 +12395,53 @@ const adminConsoleHtml = `<!doctype html>
       window.copyText = function(text) {
         var value = text == null ? "" : String(text);
         if (navigator.clipboard && navigator.clipboard.writeText) {
+          var clipboardSettled = false;
+          var clipboardFallbackTimer = window.setTimeout(function() {
+            if (clipboardSettled) return;
+            clipboardSettled = true;
+            fallbackCopyText(value);
+          }, 900);
           navigator.clipboard.writeText(value)
-            .then(function() { showToast("命令已复制到剪贴板。"); })
-            .catch(function() { fallbackCopyText(value); });
+            .then(function() {
+              if (clipboardSettled) return;
+              clipboardSettled = true;
+              window.clearTimeout(clipboardFallbackTimer);
+              showToast("命令已复制到剪贴板。");
+            })
+            .catch(function() {
+              if (clipboardSettled) return;
+              clipboardSettled = true;
+              window.clearTimeout(clipboardFallbackTimer);
+              fallbackCopyText(value);
+            });
           return;
         }
         fallbackCopyText(value);
       };
 
       function fallbackCopyText(text) {
+        var previousFocus = document.activeElement;
         var input = document.createElement("textarea");
         input.value = text;
         input.setAttribute("readonly", "readonly");
         input.style.position = "fixed";
         input.style.top = "-1000px";
         input.style.left = "-1000px";
-        document.body.appendChild(input);
-        input.focus();
-        input.select();
-        document.execCommand("copy");
-        input.remove();
-        showToast("命令已复制到剪贴板。");
+        var copied = false;
+        try {
+          document.body.appendChild(input);
+          input.focus();
+          input.select();
+          copied = document.execCommand("copy") === true;
+        } catch (error) {
+          copied = false;
+        } finally {
+          if (input.parentNode) input.parentNode.removeChild(input);
+          if (previousFocus && document.documentElement.contains(previousFocus) && previousFocus.focus) previousFocus.focus();
+        }
+        if (copied) showToast("命令已复制到剪贴板。", "success");
+        else showToast("复制失败，请手动选择命令文本后复制。", "error");
+        return copied;
       };
 
       function copyAppConfigUrl() {
@@ -10277,7 +12606,7 @@ const adminConsoleHtml = `<!doctype html>
           .then(function(head) {
             var meta = extractStagingMetadataFromHead(head);
             if (!meta.term) {
-              uploadInfo.innerHTML = "<span style='color: var(--danger);'>❌ 错误: 文件头未读取到 term 字段，请确认这是 Staging JSON。</span>";
+              uploadInfo.innerHTML = "<span style='color: var(--danger);'>错误: 文件头未读取到 term 字段，请确认这是 Staging JSON。</span>";
               throw new Error("Staging JSON 缺少 term 字段");
             }
             return api("/api/admin/staging/upload/init", {
@@ -10327,7 +12656,7 @@ const adminConsoleHtml = `<!doctype html>
             });
           })
           .then(function(res) {
-            uploadInfo.innerHTML = "<span style='color: var(--success);'>✓ " + escapeHtml(res.message || "分片上传校验成功，已进入 pending-review。") + "</span>";
+            uploadInfo.innerHTML = "<span style='color: var(--success);'>已通过: " + escapeHtml(res.message || "分片上传校验成功，已进入 pending-review。") + "</span>";
             showToast("Staging JSON 已分片上传并进入 pending-review", "success");
             loadStagingPreview();
             return loadSyncStatus();
@@ -10336,7 +12665,7 @@ const adminConsoleHtml = `<!doctype html>
             if (uploadId) {
               api("/api/admin/staging/" + encodeURIComponent(uploadId), { method: "DELETE" }).catch(function() {});
             }
-            uploadInfo.innerHTML = "<span style='color: var(--danger);'>❌ 上传失败: " + escapeHtml(err.message) + "</span>";
+            uploadInfo.innerHTML = "<span style='color: var(--danger);'>上传失败: " + escapeHtml(err.message) + "</span>";
             showToast(err.message, "error");
           });
       }
@@ -10604,11 +12933,11 @@ const adminConsoleHtml = `<!doctype html>
               if (diffListEl) {
                 var html = "";
                 if (d.diff.deletedCount > 0) {
-                  html += "<strong style='color:var(--danger);'>❌ 删除了以下行政班 (" + d.diff.deletedCount + " 个)：</strong>";
+                  html += "<strong style='color:var(--danger);'>删除了以下行政班 (" + d.diff.deletedCount + " 个)：</strong>";
                   html += "<div>" + d.diff.deletedClasses.map(function(c) { return "<span>" + escapeHtml(c) + "</span>"; }).join("") + "</div>";
                 }
                 if (d.diff.addedCount > 0) {
-                  html += "<strong style='color:var(--success);'>➕ 新增了以下行政班 (" + d.diff.addedCount + " 个)：</strong>";
+                  html += "<strong style='color:var(--success);'>新增了以下行政班 (" + d.diff.addedCount + " 个)：</strong>";
                   html += "<div>" + d.diff.addedClasses.map(function(c) { return "<span>" + escapeHtml(c) + "</span>"; }).join("") + "</div>";
                 }
                 if (d.diff.deletedCount === 0 && d.diff.addedCount === 0) {
@@ -10669,9 +12998,9 @@ const adminConsoleHtml = `<!doctype html>
                 if (publishBtn) publishBtn.disabled = true;
                 if (warnBox && warnList) {
                   warnBox.style.display = "flex";
-                  warnList.innerHTML = "<div style='color: var(--danger); font-weight: bold;'>🚨 熔断拦截: 本次上传的行政班课表数为 0，但您的同步范围中勾选了行政班。这可能意味着本地同步没有成功跑完行政班抓取，或者没有在本地命令中正确传入 SYNC_CLASS_SCOPE=all。为了防止发布空包清空小程序线上数据，正式发布已被强行禁用！请使用命令生成器推荐的完整命令重新抓取。</div>";
+                  warnList.innerHTML = "<div style='color: var(--danger); font-weight: bold;'>熔断拦截: 本次上传的行政班课表数为 0，但您的同步范围中勾选了行政班。这可能意味着本地同步没有成功跑完行政班抓取，或者没有在本地命令中正确传入 SYNC_CLASS_SCOPE=all。为了防止发布空包清空小程序线上数据，正式发布已被强行禁用！请使用命令生成器推荐的完整命令重新抓取。</div>";
                 }
-                showToast("🚨 行政班课表为空，疑似同步未生效！发布已被强行禁止。", "error");
+                showToast("行政班课表为空，疑似同步未生效！发布已被强行禁止。", "error");
                 
                 // 触发熔断二次强确认面板显示为 none 避免混淆
                 var forceBox = $("forceConfirmContainer");
@@ -10695,7 +13024,7 @@ const adminConsoleHtml = `<!doctype html>
                 if (safety.requiresForceConfirm || Number(d.diff.changeRate || 0) > 50) {
                   forceBox.style.display = "block";
                   if (forceCheckbox) forceCheckbox.checked = false;
-                  showToast("⚠️ 上传的数据变动较大，发布需要勾选下方二次确认。", "warning");
+                  showToast("上传的数据变动较大，发布需要勾选下方二次确认。", "warning");
                 } else {
                   forceBox.style.display = "none";
                 }
@@ -10794,17 +13123,17 @@ const adminConsoleHtml = `<!doctype html>
         var wrap = $("qualityStatsGrid");
         wrap.innerHTML = "";
         var cardList = [
-          { label: "课表总节数", val: stats.totalCoursesCount || 0, icon: "📊", foot: "当前有效排课记录" },
-          { label: "教师缺失课次", val: stats.missingTeacher || 0, icon: "👨", foot: "课表中教师为空", highlight: (stats.missingTeacher > 0) },
-          { label: "课室缺失课次", val: stats.missingClassroom || 0, icon: "📍", foot: "上课教室为空", highlight: (stats.missingClassroom > 0) },
-          { label: "严重冲突数", val: stats.duplicateCount || 0, icon: "⚡", foot: "同人同地同课时冲突", highlight: (stats.duplicateCount > 0) },
+          { label: "课表总节数", val: stats.totalCoursesCount || 0, foot: "当前有效排课记录" },
+          { label: "教师缺失课次", val: stats.missingTeacher || 0, foot: "课表中教师为空", highlight: (stats.missingTeacher > 0) },
+          { label: "课室缺失课次", val: stats.missingClassroom || 0, foot: "上课教室为空", highlight: (stats.missingClassroom > 0) },
+          { label: "严重冲突数", val: stats.duplicateCount || 0, foot: "同人同地同课时冲突", highlight: (stats.duplicateCount > 0) },
         ];
         
         cardList.forEach(function(item) {
           var card = document.createElement("div");
           card.className = "stat-card card";
           if (item.highlight) card.style.borderColor = "var(--danger)";
-          card.innerHTML = "<div class='stat-head'>" + item.label + "<span>" + item.icon + "</span></div>" +
+          card.innerHTML = "<div class='stat-head'>" + item.label + "</div>" +
                            "<div class='stat-num' " + (item.highlight ? "style='color:var(--danger);'" : "") + ">" + item.val + "</div>" +
                            "<div class='stat-foot'>" + item.foot + "</div>";
           wrap.appendChild(card);
@@ -10815,7 +13144,7 @@ const adminConsoleHtml = `<!doctype html>
         tbody.innerHTML = "";
         
         if (list.length === 0) {
-          tbody.innerHTML = "<tr><td colspan='6' style='text-align: center; color: var(--muted); padding: 40px 0;'>✓ 完美！课表数据未发现任何明显的缺陷和冲突安排。</td></tr>";
+          tbody.innerHTML = "<tr><td colspan='6' style='text-align: center; color: var(--muted); padding: 40px 0;'>校验通过：课表数据未发现明显的缺陷和冲突安排。</td></tr>";
           return;
         }
 
@@ -10955,13 +13284,11 @@ const adminConsoleHtml = `<!doctype html>
         $("drawFbStatusSelect").value = fb.status || "open";
         $("drawFbAdminNote").value = fb.adminNote || fb.note || "";
         
-        $("feedbackDrawerMask").classList.add("show");
-        $("feedbackDrawer").classList.add("show");
+        openDetailDrawer("feedbackDrawer", "feedbackDrawerMask", "closeFeedbackDrawerBtn");
       }
 
-      function closeFeedbackDrawer() {
-        $("feedbackDrawerMask").classList.remove("show");
-        $("feedbackDrawer").classList.remove("show");
+      function closeFeedbackDrawer(returnFocus) {
+        closeDetailDrawer("feedbackDrawer", "feedbackDrawerMask", returnFocus);
         state.currentFeedback = null;
       }
 
@@ -12473,8 +14800,8 @@ const adminConsoleHtml = `<!doctype html>
         var rules = assistantKbEntries("rule");
         var docs = assistantKbEntries("doc");
         wrap.innerHTML = "<div class='kb-hero'><div><h3>小佛助手知识库</h3><p>维护规则问答、RAG 文档和发布版本。保存会做安全校验；发布后小程序端通过后端已发布版本生效。</p></div><div class='kb-tabs'>" + tabs + "</div></div>" +
-          "<div class='kb-tab-panel " + (tab === "rules" ? "active" : "") + "'><div class='kb-two-column'><div><div class='kb-toolbar'><strong>规则问答</strong><button id='kbRefreshBtn' class='ghost'>刷新</button></div><div class='kb-list-grid'>" + rules.map(renderKbEntryCard).join("") + "</div></div>" + renderKbEditor("rule") + "</div></div>" +
-          "<div class='kb-tab-panel " + (tab === "docs" ? "active" : "") + "'><div class='kb-two-column'><div><div class='kb-toolbar'><strong>文档知识库</strong><div class='kb-actions-row'><button id='kbExportJsonBtn' class='ghost'>导出 JSON</button><button id='kbExportMdBtn' class='ghost'>导出 MD</button></div></div><div class='kb-list-grid'>" + docs.map(renderKbEntryCard).join("") + "</div><div class='card' style='margin-top:12px;'><h3 class='card-title'>导入 Markdown</h3><textarea id='kbImportMarkdown' style='min-height:180px;' placeholder='支持 YAML frontmatter: title/tags/keywords/scope/priority'>" + escapeHtml(state.assistantKbImportText || "") + "</textarea><div id='kbImportPreview' class='ai-verify-box'>" + renderKbImportPreview() + "</div><div class='kb-actions-row'><button id='kbPreviewMdBtn' class='secondary'>预览解析</button><button id='kbCommitMdBtn' class='primary'>导入草稿</button></div></div></div>" + renderKbEditor("doc") + "</div></div>" +
+          "<div class='kb-tab-panel " + (tab === "rules" ? "active" : "") + "'><div class='kb-two-column'><div><div class='kb-toolbar'><strong>规则问答</strong><button id='kbRefreshBtn' class='ghost'>刷新</button></div><div class='kb-list-grid'>" + rules.map(renderKbEntryCard).join("") + "</div></div>" + (tab === "rules" ? renderKbEditor("rule") : "") + "</div></div>" +
+          "<div class='kb-tab-panel " + (tab === "docs" ? "active" : "") + "'><div class='kb-two-column'><div><div class='kb-toolbar'><strong>文档知识库</strong><div class='kb-actions-row'><button id='kbExportJsonBtn' class='ghost'>导出 JSON</button><button id='kbExportMdBtn' class='ghost'>导出 MD</button></div></div><div class='kb-list-grid'>" + docs.map(renderKbEntryCard).join("") + "</div><div class='card' style='margin-top:12px;'><h3 class='card-title'>导入 Markdown</h3><textarea id='kbImportMarkdown' style='min-height:180px;' placeholder='支持 YAML frontmatter: title/tags/keywords/scope/priority'>" + escapeHtml(state.assistantKbImportText || "") + "</textarea><div id='kbImportPreview' class='ai-verify-box'>" + renderKbImportPreview() + "</div><div class='kb-actions-row'><button id='kbPreviewMdBtn' class='secondary'>预览解析</button><button id='kbCommitMdBtn' class='primary'>导入草稿</button></div></div></div>" + (tab === "docs" ? renderKbEditor("doc") : "") + "</div></div>" +
           "<div class='kb-tab-panel " + (tab === "test" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>测试预览</h3><div class='form-row'><div><label>用户问题</label><input id='kbTestQuery' value='" + escapeHtml(state.assistantKbTestQuery || "") + "' placeholder='例如：小佛能做什么'></div><div><label>环境</label><select id='kbTestEnvironment'><option value='public'" + (state.assistantKbTestEnvironment === "public" ? " selected" : "") + ">public</option><option value='trial'" + (state.assistantKbTestEnvironment === "trial" ? " selected" : "") + ">trial</option><option value='dev'" + (state.assistantKbTestEnvironment === "dev" ? " selected" : "") + ">dev</option></select></div></div><button id='kbRunTestBtn' class='primary'>运行测试</button><div id='kbTestResult' class='ai-verify-box'>" + renderKbTestResult() + "</div></div></div>" +
           "<div class='kb-tab-panel " + (tab === "versions" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>版本发布</h3><div class='ai-provider-status'>" + renderHealthItem("草稿", "<strong>" + escapeHtml(String(kb.draft && kb.draft.ruleCount || 0)) + "</strong> rules / <strong>" + escapeHtml(String(kb.draft && kb.draft.docCount || 0)) + "</strong> docs") + renderHealthItem("已发布", "<code>" + escapeHtml(kb.published && kb.published.versionId || "-") + "</code>") + renderHealthItem("备份", "<strong>" + escapeHtml(String(kb.store && kb.store.backupCount || 0)) + "</strong>") + "</div><div class='kb-actions-row'><button id='kbPublishBtn' class='primary'>发布草稿</button><button id='kbRefreshVersionsBtn' class='ghost'>刷新</button></div><div class='table-container'><table><thead><tr><th>版本</th><th>时间</th><th>数量</th><th>操作</th></tr></thead><tbody>" + renderKbBackups() + "</tbody></table></div></div></div>";
         bindAssistantKbEvents();
@@ -12485,9 +14812,11 @@ const adminConsoleHtml = `<!doctype html>
         document.querySelectorAll("[data-kb-id]").forEach(function(card) { card.addEventListener("click", function() { state.assistantKbSelectedId = card.dataset.kbId || ""; renderAssistantKb(); }); });
         safeBind("kbRefreshBtn", "click", loadAssistantKb);
         safeBind("kbRefreshVersionsBtn", "click", loadAssistantKb);
-        safeBind("kbSaveEntryBtn", "click", saveAssistantKbEntry);
-        safeBind("kbDeleteEntryBtn", "click", deleteAssistantKbEntry);
-        safeBind("kbNewEntryBtn", "click", function() { state.assistantKbSelectedId = ""; renderAssistantKb(); });
+        if (state.assistantKbTab === "rules" || state.assistantKbTab === "docs") {
+          safeBind("kbSaveEntryBtn", "click", saveAssistantKbEntry);
+          if ($("kbDeleteEntryBtn")) safeBind("kbDeleteEntryBtn", "click", deleteAssistantKbEntry);
+          safeBind("kbNewEntryBtn", "click", function() { state.assistantKbSelectedId = ""; renderAssistantKb(); });
+        }
         safeBind("kbPreviewMdBtn", "click", previewAssistantKbMarkdown);
         safeBind("kbCommitMdBtn", "click", commitAssistantKbMarkdown);
         safeBind("kbRunTestBtn", "click", runAssistantKbTest);
@@ -13696,7 +16025,6 @@ const adminConsoleHtml = `<!doctype html>
       document.querySelectorAll(".sidebar nav ul li[data-section]").forEach(function (item) {
         item.addEventListener("click", function () {
           switchSection(item.dataset.section);
-          closeMobileDrawer();
         });
       });
 
@@ -13922,8 +16250,52 @@ const adminConsoleHtml = `<!doctype html>
       safeBind("mobileMenuBtn", "click", function() {
         openMobileDrawer();
       });
+      safeBind("sidebarCloseBtn", "click", function() {
+        closeMobileDrawer();
+      });
+      safeBind("sidebarCollapseBtn", "click", function() {
+        var shell = $("dashboardView");
+        setSidebarCollapsed(!(shell && shell.classList.contains("sidebar-collapsed")));
+      });
       safeBind("sidebarOverlay", "click", function() {
         closeMobileDrawer();
+      });
+      document.addEventListener("keydown", function(event) {
+        if (activeDetailDrawer) {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            if (activeDetailDrawer.id === "catalogDrawer") closeCatalogDrawer();
+            else if (activeDetailDrawer.id === "feedbackDrawer") closeFeedbackDrawer();
+          } else {
+            trapFocusWithin(activeDetailDrawer, event);
+          }
+          return;
+        }
+        var sidebar = $("appSidebar");
+        if (sidebar && sidebar.classList.contains("show")) {
+          if (event.key === "Escape") {
+            event.preventDefault();
+            closeMobileDrawer();
+          } else {
+            trapFocusWithin(sidebar, event);
+          }
+        }
+      });
+      var sidebarDrawerMediaQuery = window.matchMedia ? window.matchMedia("(max-width: 1023.98px)") : null;
+      var handleSidebarBreakpointChange = function() {
+        if (!isMobileDrawerViewport()) closeMobileDrawer(false);
+        else syncSidebarAccessibility();
+      };
+      if (sidebarDrawerMediaQuery && sidebarDrawerMediaQuery.addEventListener) {
+        sidebarDrawerMediaQuery.addEventListener("change", handleSidebarBreakpointChange);
+      } else if (sidebarDrawerMediaQuery && sidebarDrawerMediaQuery.addListener) {
+        sidebarDrawerMediaQuery.addListener(handleSidebarBreakpointChange);
+      }
+      syncSidebarAccessibility();
+      document.querySelectorAll("[data-dashboard-target]").forEach(function(button) {
+        button.addEventListener("click", function() {
+          switchSection(button.dataset.dashboardTarget);
+        });
       });
 
       // 热力图切换全周/工作日/周末视图绑定
@@ -13978,7 +16350,7 @@ const adminConsoleHtml = `<!doctype html>
             .then(function(res) {
               var resultDiv = $("xlsTestResult");
               if (res.success) {
-                $("xlsTestInfo").innerHTML = "✔ 解析成功！文件名：" + escapeHtml(res.filename);
+                $("xlsTestInfo").innerHTML = "解析成功！文件名：" + escapeHtml(res.filename);
                 resultDiv.style.display = "block";
                 resultDiv.style.borderColor = "var(--success)";
 
@@ -13992,14 +16364,14 @@ const adminConsoleHtml = `<!doctype html>
                 });
                 resultDiv.innerHTML = html;
               } else {
-                $("xlsTestInfo").textContent = "✘ 解析失败";
+                $("xlsTestInfo").textContent = "解析失败";
                 resultDiv.style.display = "block";
                 resultDiv.style.borderColor = "var(--danger)";
                 resultDiv.innerHTML = "<span style='color: var(--danger); font-weight:700;'>解析错误信息：</span><br/>" + escapeHtml(res.message || "未知错误");
               }
             })
             .catch(function(err) {
-              $("xlsTestInfo").textContent = "✘ 上传失败";
+              $("xlsTestInfo").textContent = "上传失败";
               var resultDiv = $("xlsTestResult");
               resultDiv.style.display = "block";
               resultDiv.style.borderColor = "var(--danger)";
@@ -14028,6 +16400,7 @@ const adminConsoleHtml = `<!doctype html>
 
       function initNavigation() {
         closeMobileDrawer();
+        initSidebarPreference();
         var route = getAdminRouteForPath(location.pathname);
         state.section = route.section;
         if (route.catalogType) {

@@ -97,6 +97,7 @@
     "inspect:personal-auth": "node server/scripts/inspect-personal-auth.js",
     "test:admin-inline-script": "node tools/check-admin-inline-script.js",
     "test:admin-page": "node tools/check-admin-page.js",
+    "test:admin-operations-studio-ui": "node tools/test-admin-operations-studio-ui.js",
     "test:admin-sync-page": "node tools/test-admin-sync-page.js",
     "test:timetable-current-week-priority": "node tools/test-timetable-current-week-priority.js",
     "test:timetable-hide-inactive-courses": "node tools/test-timetable-hide-inactive-courses.js",
