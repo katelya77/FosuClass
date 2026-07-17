@@ -2,41 +2,28 @@
   "branch": "grok/admin-modernization",
   "baselineCommit": "5d7eb469",
   "currentPhase": 6,
-  "completedPhases": [
-    0,
-    1,
-    2,
-    3,
-    4,
-    5,
-    6
-  ],
+  "completedPhases": [0, 1, 2, 3, 4, 5, 6],
   "lastCommit": "",
+  "honestStatus": {
+    "vueAdmin": "phase-1-read-only-ops-views",
+    "writePaths": "still-on-legacy",
+    "productionPrimary": "legacy-/admin"
+  },
   "testsPassed": [
-    "architecture-guards",
-    "duplicate-admin-routes",
-    "service-token-scopes",
-    "chunk-upload-csrf",
-    "snapshot-concurrency",
-    "admin-api-contract",
-    "config-validation",
-    "admin-auth-modes",
-    "admin-page",
-    "admin-sync-page",
+    "test:architecture-guards",
+    "test:admin-runtime-dual-base",
+    "test:service-token-route-matrix",
+    "test:config-migration-safe",
     "admin:test",
     "admin:build",
-    "admin-spa-shell",
-    "admin-spa-deeplink",
-    "admin-legacy-fallback",
-    "tier3-failure-isolation",
-    "logo-csp-fallback"
+    "admin:test:e2e",
+    "admin:test:browser"
   ],
   "testsFailed": [],
   "remainingRisks": [
-    "Primary /admin still defaults to legacy until FOSU_ADMIN_PRIMARY=next",
-    "Write actions for many pages still deep-link to legacy forms",
-    "admin.js soft line ceiling still exceeded",
-    "Full browser visual regression matrix not automated"
+    "Full write UX still on legacy console",
+    "admin.js still oversized",
+    "FOSU_ADMIN_PRIMARY=next not enabled by default"
   ],
-  "nextAction": "Open PR; enable FOSU_ADMIN_PRIMARY=next only after staging acceptance"
+  "nextAction": "PR review + staging dual-mode acceptance; do not merge/deploy from agent"
 }

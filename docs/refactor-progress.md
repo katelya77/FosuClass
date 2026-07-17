@@ -1,28 +1,36 @@
-﻿# Grok Admin Modernization Progress
+# Grok Admin Modernization Progress
 
-Branch: `grok/admin-modernization`
+Branch: `grok/admin-modernization`  
 Baseline: `5d7eb469` (main)
 
-## Phase status
+## Honest status (2026-07-18)
 
-| Phase | Name | Status | Commit |
-|------:|------|--------|--------|
-| 0 | Audit + architecture baseline | completed | `d6799b60` |
-| 1 | Backend P0 security + contracts | completed | `481608be` |
-| 2 | admin-web foundation | completed | `f1dd3829` |
-| 3 | Core admin UI/UX | completed | (see log) |
-| 4 | Backend domain modularization | completed | (see log) |
-| 5 | Remaining admin pages | completed | (see log) |
-| 6 | Switchover + acceptance | completed | (see log) |
+**Vue 后台第一阶段只读运营视图完成。**  
+**完整写路径仍在迁移。**  
+**Legacy 是当前生产主后台**（默认 `FOSU_ADMIN_PRIMARY=legacy`）。
 
-## Rollout
+| Phase | Name | Status |
+|------:|------|--------|
+| 0–1 | Architecture + P0 security | completed |
+| 2 | admin-web foundation | completed |
+| 3 | Core read ops UI | completed (read-only) |
+| 4 | Domain module boundaries | started (auth/audit/dashboard shells) |
+| 5 | Remaining pages | partial — read views + legacy write links |
+| 6 | Switchover readiness | dual-base + flags ready; **default not cut over** |
 
-- Default: `/admin` = legacy, `/admin-next` = new SPA
-- Cutover flag: `FOSU_ADMIN_PRIMARY=next` → `/admin` SPA, `/admin-legacy` old
-- Disable new SPA: `FOSU_ADMIN_NEXT_ENABLED=false`
+## Runtime paths
 
-## Remaining
+| Mount | spaBase | legacyBase |
+|-------|---------|------------|
+| `/admin-next/*` | `/admin-next/` | `/admin/` |
+| `/admin/*` (primary SPA) | `/admin/` | `/admin-legacy/` |
 
-- Full write-path UX for content/settings still legacy-linked by design
-- Visual regression browser matrix not fully automated
-- Further domain extraction from admin.js
+## Flags
+
+- `FOSU_ADMIN_PRIMARY=legacy` (default): production main = Legacy `/admin`
+- `FOSU_ADMIN_PRIMARY=next`: SPA at `/admin`, Legacy at `/admin-legacy`
+- `FOSU_CONFIG_HARD_FAIL=true`: only then hard-fail derived token in production
+
+## Remaining write paths (still Legacy)
+
+Sync publish/upload, Terms activate/repair, Content CRUD, Settings save, Assistant KB, Provider config, Backups delete, Campus map editor.

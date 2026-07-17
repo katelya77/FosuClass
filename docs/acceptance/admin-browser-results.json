@@ -1,0 +1,30 @@
+{
+  "results": [
+    {
+      "width": 1920,
+      "route": "/admin-next/login",
+      "overflow": false
+    },
+    {
+      "width": 1440,
+      "route": "/admin-next/login",
+      "overflow": false
+    },
+    {
+      "width": 1024,
+      "route": "/admin-next/login",
+      "overflow": false
+    },
+    {
+      "width": 768,
+      "route": "/admin-next/login",
+      "overflow": false
+    },
+    {
+      "width": 390,
+      "route": "/admin-next/login",
+      "overflow": false
+    }
+  ],
+  "base": "http://127.0.0.1:5950"
+}
