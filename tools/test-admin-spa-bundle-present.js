@@ -15,13 +15,18 @@ assert.ok(fs.existsSync(indexPath), "server/public/admin-app/index.html missing"
 const html = fs.readFileSync(indexPath, "utf8");
 assert.ok(html.includes("<div id=\"app\">") || html.includes("id=\"app\""), "SPA root #app missing");
 
-const refs = [...html.matchAll(/(?:src|href)="(\.?\/?assets\/[^"]+)"/g)].map((m) => m[1]);
+const refs = [...html.matchAll(/(?:src|href)="([^"]*assets\/[^"]+)"/g)].map((m) => m[1]);
 assert.ok(refs.length >= 1, "index.html must reference hashed assets");
 
 for (const rel of refs) {
-  const cleaned = rel.replace(/^\.\//, "").replace(/^\//, "");
+  // Support /admin-app/assets/foo.js and assets/foo.js
+  const cleaned = rel
+    .replace(/^https?:\/\/[^/]+/i, "")
+    .replace(/^\/admin-app\//, "")
+    .replace(/^\.\//, "")
+    .replace(/^\//, "");
   const assetPath = path.join(dir, cleaned);
-  assert.ok(fs.existsSync(assetPath), `missing asset referenced by index.html: ${rel}`);
+  assert.ok(fs.existsSync(assetPath), `missing asset referenced by index.html: ${rel} -> ${cleaned}`);
 }
 
 const assetsDir = path.join(dir, "assets");
