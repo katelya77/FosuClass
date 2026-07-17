@@ -29,3 +29,15 @@ server/src/modules/<domain>/
 | auth | routes re-export login/logout/session helpers via shared service |
 | audit | thin router mounting audit-log read API |
 | dashboard | thin status aggregation adapter |
+
+## Phase A inventory target modules
+
+See `docs/admin-migration/feature-matrix.json` `targetModules`:
+
+```text
+auth, dashboard, catalog, sync, staging, release, runtime,
+term, quality, content, feedback, campus-map, assistant,
+provider, security, settings, audit, backups, jobs, relay
+```
+
+Extract handlers domain-by-domain in Phases B–D. Do not duplicate business logic into Vue-only handlers.

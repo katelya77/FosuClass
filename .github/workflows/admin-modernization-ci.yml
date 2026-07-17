@@ -8,6 +8,8 @@ on:
       - "server/src/**"
       - "server/public/admin-app/**"
       - "tools/test-admin*.js"
+      - "tools/generate-admin-feature-matrix.js"
+      - "docs/admin-migration/**"
       - "tools/test-architecture-guards.js"
       - "tools/test-service-token*.js"
       - "tools/test-chunk-upload-csrf.js"
@@ -48,6 +50,8 @@ jobs:
       - name: Architecture & admin contracts
         run: |
           npm run test:architecture-guards
+          npm run test:admin-feature-matrix
+          npm run test:admin-legacy-dependency
           npm run test:duplicate-admin-routes
           npm run test:service-token-scopes
           npm run test:service-token-route-matrix
