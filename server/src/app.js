@@ -316,14 +316,17 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 8. 启动配置有效性检查（生产可 hard-fail）
+// 8. 启动配置有效性检查（默认 migration-safe；仅 FOSU_CONFIG_HARD_FAIL=true 时 hard-fail）
 try {
   const { validateStartupConfig } = require("./services/configValidation");
-  const configValidation = validateStartupConfig({
-    hardFail: config.NODE_ENV === "production" && process.env.FOSU_CONFIG_HARD_FAIL !== "false",
-  });
+  const configValidation = validateStartupConfig();
   if (configValidation.warnings.length) {
     console.warn(`[FosuClass Server] Config warnings: ${configValidation.warnings.join("; ")}`);
+  }
+  if (configValidation.derivedAdminApiToken) {
+    console.warn(
+      "[FosuClass Server] [HIGH] ADMIN_API_TOKEN is password-derived. Set an independent ADMIN_API_TOKEN for production. (Token value never logged.)"
+    );
   }
 } catch (error) {
   if (error && error.code === "CONFIG_VALIDATION_FAILED") {
