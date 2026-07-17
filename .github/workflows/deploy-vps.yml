@@ -142,11 +142,15 @@ jobs:
 
       - name: SSH Remote Deploy & Health Check
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GHCR_PULL_TOKEN: ${{ github.token }}
+          GHCR_PULL_USERNAME: ${{ github.actor }}
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
+          envs: GHCR_PULL_TOKEN,GHCR_PULL_USERNAME
           script: |
             set -Eeuo pipefail
 
@@ -437,7 +441,7 @@ jobs:
               PREVIOUS_IMAGE_REFERENCE="$(cat "$DEPLOY_STATE_DIR/current-image.txt" | tr -d '\r\n')"
             fi
             PREVIOUS_CONTAINER_ID="$(sudo docker inspect -f '{{.Id}}' "$CONTAINER_NAME" 2>/dev/null || true)"
-            ACTIVE_POINTER_BEFORE="$(sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "try{const p=require(\"./src/services/runtimePointerService\");const a=p.getActivePointer&&p.getActivePointer()||p.readActivePointer&&p.readActivePointer()||null;console.log(JSON.stringify(a||{}));}catch(e){console.log(\"{}\")}"' 2>/dev/null || echo '{}')"
+            ACTIVE_POINTER_BEFORE="$(sudo docker exec "$CONTAINER_NAME" node -e 'try{const p=require("./src/services/runtimePointerService");const a=(p.getActivePointer&&p.getActivePointer())||null;console.log(JSON.stringify(a||{}));}catch(e){console.log("{}");}' 2>/dev/null || echo '{}')"
             echo "ACTIVE_POINTER_BEFORE=$ACTIVE_POINTER_BEFORE"
 
             GHCR_IMAGE_REPO='ghcr.io/katelya77/fosuclass-api'
@@ -451,12 +455,8 @@ jobs:
               local image_ref="$1"
               tmp_docker_config="$(mktemp -d)"
               export DOCKER_CONFIG="$tmp_docker_config"
-              # Prefer dedicated pull token; fall back to empty (public) — secrets may be set in Actions env via ssh is hard.
-              # Use file written by Actions step if present.
               if [ -n "${GHCR_PULL_TOKEN:-}" ]; then
-                printf '%s' "$GHCR_PULL_TOKEN" | docker login ghcr.io -u "${GHCR_PULL_USERNAME:-${GITHUB_ACTOR:-katelya77}}" --password-stdin
-              elif [ -f "$APP_DIR/server/.deploy/ghcr.token" ]; then
-                docker login ghcr.io -u "$(cat "$APP_DIR/server/.deploy/ghcr.user" 2>/dev/null || echo katelya77)" --password-stdin < "$APP_DIR/server/.deploy/ghcr.token"
+                printf '%s' "$GHCR_PULL_TOKEN" | docker login ghcr.io -u "${GHCR_PULL_USERNAME:-katelya77}" --password-stdin
               fi
               if docker pull "$image_ref"; then
                 NEW_IMAGE_REFERENCE="$image_ref"
@@ -467,6 +467,7 @@ jobs:
                   echo "::error::Image architecture is ${ARCH}, expected arm64"
                   docker logout ghcr.io || true
                   rm -rf "$tmp_docker_config"
+                  unset DOCKER_CONFIG
                   return 1
                 fi
                 USED_GHCR=true
@@ -481,22 +482,10 @@ jobs:
               return 1
             }
 
-            # GHCR credentials: prefer dedicated pull PAT; otherwise Actions token (packages:read).
-            export GHCR_PULL_TOKEN='${{ secrets.GHCR_PULL_TOKEN }}'
-            if [ -z "$GHCR_PULL_TOKEN" ]; then
-              export GHCR_PULL_TOKEN='${{ secrets.GITHUB_TOKEN }}'
-            fi
-            export GHCR_PULL_USERNAME='${{ secrets.GHCR_PULL_USERNAME }}'
-            if [ -z "$GHCR_PULL_USERNAME" ]; then
-              export GHCR_PULL_USERNAME='${{ github.actor }}'
-            fi
-            export GITHUB_ACTOR='${{ github.actor }}'
-
             if [ "$DEPLOY_MODE" = "source" ]; then
-              echo "DEPLOY_MODE=source → local build"
+              echo "DEPLOY_MODE=source -> local build"
             elif try_ghcr_pull "$CANDIDATE_TAG"; then
               echo "Using GHCR image $NEW_IMAGE_REFERENCE"
-              # rewrite FOSU_API_IMAGE in .env
               if grep -q '^FOSU_API_IMAGE=' .env; then
                 sed -i.bak "s|^FOSU_API_IMAGE=.*|FOSU_API_IMAGE=${NEW_IMAGE_REFERENCE}|" .env
               else
@@ -517,7 +506,6 @@ jobs:
             fi
 
             node -e "require('./src/services/ai/providerRuntimeConfigStore'); console.log('ai runtime config store ok')" || true
-            # Compose lives in server/; build context is parent for multi-stage Dockerfile
             sudo docker compose config >/dev/null
 
             rollback_to_previous() {
@@ -596,7 +584,7 @@ jobs:
             echo "$ui_mode" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const j=JSON.parse(s||"{}");if(j.primary!=="legacy"&&j.effectivePrimary!=="legacy"){console.error("ui-mode primary not legacy");process.exit(1)}console.log("ui-mode-ok")})'
             curl -fsS -o /dev/null http://127.0.0.1:18318/admin-next/ || true
 
-            ACTIVE_POINTER_AFTER="$(sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "try{const p=require(\"./src/services/runtimePointerService\");const a=p.getActivePointer&&p.getActivePointer()||p.readActivePointer&&p.readActivePointer()||null;console.log(JSON.stringify(a||{}));}catch(e){console.log(\"{}\")}"' 2>/dev/null || echo '{}')"
+            ACTIVE_POINTER_AFTER="$(sudo docker exec "$CONTAINER_NAME" node -e 'try{const p=require("./src/services/runtimePointerService");const a=(p.getActivePointer&&p.getActivePointer())||null;console.log(JSON.stringify(a||{}));}catch(e){console.log("{}");}' 2>/dev/null || echo '{}')"
             echo "ACTIVE_POINTER_AFTER=$ACTIVE_POINTER_AFTER"
             if [ "$ACTIVE_POINTER_BEFORE" != "$ACTIVE_POINTER_AFTER" ]; then
               echo "::error::Active Pointer changed during deploy (forbidden)"
