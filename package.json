@@ -118,6 +118,7 @@
     "test:admin-content-concurrency": "node tools/test-admin-content-concurrency.js",
     "test:admin-no-duplicate-business-logic": "node tools/test-admin-no-duplicate-business-logic.js",
     "test:admin-write-parity": "node tools/test-admin-write-parity.js",
+    "test:admin-spa-bundle-present": "node tools/test-admin-spa-bundle-present.js",
     "test:config-validation": "node tools/test-config-validation.js",
     "test:config-migration-safe": "node tools/test-config-migration-safe.js",
     "test:admin-runtime-dual-base": "node tools/test-admin-runtime-dual-base.js",
