@@ -1,11 +1,11 @@
 # Legacy Admin Feature Inventory (Phase A)
 
-- Generated: `2026-07-17T18:27:37.686Z`
-- Source commit: `89286e0937508706e95cc50afa2f6c658796cc84`
+- Generated: `2026-07-17T18:37:13.427Z`
+- Source commit: `525776eb9c979f5ecc73386e1d2c18d89361e0cc`
 - Production primary remains: **legacy**
-- API routes inventoried: **147**
-- Write routes: **88**
-- Total matrix rows (API + UI): **150**
+- API routes inventoried: **150**
+- Write routes: **90**
+- Total matrix rows (API + UI): **153**
 
 ## Goals
 
@@ -37,10 +37,10 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 | 数据与课表 | `quality` | 数据质量 | quality | `/quality` | read-only |
 | 发布与运维 | `sync` | 同步中心 | sync | `/sync` | read-only |
 | 发布与运维 | `config` | 数据版本 | settings | `/settings` | read-only |
-| 内容管理 | `notices` | 公告管理 | content | `/content` | read-only |
-| 内容管理 | `news` | 最新动态 | content | `/content` | read-only |
+| 内容管理 | `notices` | 公告管理 | content | `/content` | write-implemented |
+| 内容管理 | `news` | 最新动态 | content | `/content` | write-implemented |
 | 内容管理 | `campus-map` | 校园地图 | campus-map | `/campus-map` | read-only |
-| 内容管理 | `feedback` | 反馈管理 | feedback | `/feedback` | read-only |
+| 内容管理 | `feedback` | 反馈管理 | feedback | `/feedback` | write-implemented |
 | 内容管理 | `assistant-kb` | 助手知识库 | assistant | `/assistant` | missing |
 | 系统与安全 | `ai-provider` | 查询服务 | provider | `/provider` | missing |
 | 系统与安全 | `security` | 安全状态 | security | `/security` | read-only |
@@ -53,14 +53,14 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 | assistant | 9 | `assistant` |
 | audit | 1 | `audit` |
 | auth | 3 | `auth` |
-| backups | 7 | `backups` |
+| backups | 9 | `backups` |
 | campus-map | 17 | `campus-map` |
 | catalog | 5 | `catalog` |
 | content | 8 | `content` |
 | dashboard | 4 | `dashboard` |
 | feedback | 5 | `feedback` |
 | jobs | 2 | `jobs` |
-| misc | 7 | `settings` |
+| misc | 8 | `settings` |
 | provider | 5 | `provider` |
 | quality | 2 | `quality` |
 | relay | 6 | `relay` |
@@ -74,9 +74,9 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 
 | Status | Count |
 |--------|-------|
-| missing | 37 |
-| read-only | 109 |
-| write-implemented | 4 |
+| missing | 31 |
+| read-only | 95 |
+| write-implemented | 27 |
 
 ## Risk distribution
 
@@ -84,8 +84,8 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 |------|-------|
 | critical | 22 |
 | high | 52 |
-| low | 28 |
-| medium | 48 |
+| low | 29 |
+| medium | 50 |
 
 ## Critical write / control-plane APIs
 
@@ -114,8 +114,8 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 ## Vue baseline (PR #7 shell)
 
 - ExperimentalPage used: **true**
-- Experimental legacy sections: `assistant-kb`, `ai-provider`, `backups`
-- Pages still calling `legacyAdminUrl()`: `CampusMapPage.vue`, `ContentPage.vue`, `ExperimentalPage.vue`, `SettingsPage.vue`, `SyncCenterPage.vue`, `TermsPage.vue`
+- Experimental legacy sections: `assistant-kb`, `ai-provider`
+- Pages still calling `legacyAdminUrl()`: `CampusMapPage.vue`, `ExperimentalPage.vue`, `SettingsPage.vue`, `SyncCenterPage.vue`, `TermsPage.vue`
 
 ## Feature matrix schema
 
@@ -140,7 +140,7 @@ Canonical machine-readable file: [`feature-matrix.json`](./feature-matrix.json)
 
 ## API contracts
 
-- Routes with contract stubs: **147**
+- Routes with contract stubs: **150**
 - File: [`api-contracts.json`](./api-contracts.json)
 - Methods, request/response envelopes, and error code sets are recorded for every `/api/admin/*` route.
 - Domain-specific Zod/schemas are filled as modules are extracted (Phase B+).

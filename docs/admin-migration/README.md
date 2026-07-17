@@ -4,8 +4,9 @@
 
 | Item | Value |
 |------|-------|
-| Phase | A (inventory + contracts + CI guards) |
+| Phase | B (content / feedback / audit / backups writes) |
 | Production primary | `legacy` (`FOSU_ADMIN_PRIMARY=legacy`) |
+| Vue write modules (default) | `content,feedback,audit,backups` |
 | Parallel Vue entry | `/admin-next` |
 | Legacy emergency | `/admin-legacy` (when primary=next) |
 

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-17T18:27:37.686Z",
-  "sourceCommit": "89286e0937508706e95cc50afa2f6c658796cc84",
+  "generatedAt": "2026-07-17T18:37:13.427Z",
+  "sourceCommit": "525776eb9c979f5ecc73386e1d2c18d89361e0cc",
   "basePath": "/api/admin",
   "envelope": {
     "success": "boolean",
@@ -9,6 +9,60 @@
     "notes": "Do not break existing fields; additive fields allowed."
   },
   "routes": [
+    {
+      "method": "GET",
+      "path": "/api/admin/capabilities",
+      "routePath": "/capabilities",
+      "auth": "public-or-session",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": true
+    },
     {
       "method": "POST",
       "path": "/api/admin/login",
@@ -8071,6 +8125,120 @@
         500
       ],
       "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/backups/preflight",
+      "routePath": "/backups/preflight",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/backups/restore",
+      "routePath": "/backups/restore",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
       "backup": false
     },
     {

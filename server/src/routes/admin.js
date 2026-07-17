@@ -25,6 +25,9 @@ const scheduleNormalizer = require("../utils/scheduleNormalizer");
 const adminAuth = require("../services/adminAuth");
 const appConfigService = require("../services/appConfigService");
 const feedbackService = require("../services/feedbackService");
+const adminCapabilitiesService = require("../services/adminCapabilitiesService");
+const backupService = require("../services/backupService");
+const contentDomainService = require("../modules/content/service");
 const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
 const termRegistryService = require("../services/termRegistryService");
@@ -111,6 +114,16 @@ if (!fs.existsSync(DATA_DIR)) {
 if (!fs.existsSync(BACKUPS_DIR)) {
   fs.mkdirSync(BACKUPS_DIR, { recursive: true });
 }
+
+// Vue write-module gate (Legacy UI omits X-Fosu-Admin-Client and is not blocked)
+router.use(adminCapabilitiesService.createWriteModuleGateMiddleware());
+
+/**
+ * GET /api/admin/capabilities — primary flag + write module switches
+ */
+router.get("/capabilities", (req, res) => {
+  return res.json(adminCapabilitiesService.getCapabilities());
+});
 
 /**
  * 自动备份机制
@@ -3442,7 +3455,7 @@ router.get("/notices", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     return res.json({
       success: true,
-      items: appConfigService.listNotices(),
+      items: contentDomainService.listNotices(),
     });
   } catch (error) {
     safeLog("admin-notices-list-failed", { error: error.message });
@@ -3452,8 +3465,8 @@ router.get("/notices", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.post("/notices", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    createBackup("notices", appConfigService.NOTICES_PATH);
-    const item = appConfigService.createNotice(req.body || {});
+    createBackup("notices", contentDomainService.NOTICES_PATH);
+    const item = contentDomainService.createNotice(req.body || {});
     writeAuditLog(req, "create", "notices", item.id, `创建公告: ${item.title}`);
     return res.json({
       success: true,
@@ -3461,14 +3474,22 @@ router.post("/notices", adminAuth.verifyAdminAccess, (req, res) => {
     });
   } catch (error) {
     safeLog("admin-notice-create-failed", { error: error.message });
-    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+      code: error.code || undefined,
+    });
   }
 });
 
 router.put("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    createBackup("notices", appConfigService.NOTICES_PATH);
-    const item = appConfigService.updateNotice(req.params.id, req.body || {});
+    createBackup("notices", contentDomainService.NOTICES_PATH);
+    const body = req.body || {};
+    const ifMatch = req.get("if-match") || body.expectedVersion || body.version;
+    const item = contentDomainService.updateNotice(req.params.id, body, {
+      expectedVersion: ifMatch,
+    });
     writeAuditLog(req, "update", "notices", req.params.id, `编辑公告: ${item.title}`);
     return res.json({
       success: true,
@@ -3476,14 +3497,19 @@ router.put("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
     });
   } catch (error) {
     safeLog("admin-notice-update-failed", { id: req.params.id, error: error.message });
-    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+      code: error.code || undefined,
+      currentVersion: error.currentVersion,
+    });
   }
 });
 
 router.delete("/notices/:id", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    createBackup("notices", appConfigService.NOTICES_PATH);
-    const deleted = appConfigService.deleteNotice(req.params.id);
+    createBackup("notices", contentDomainService.NOTICES_PATH);
+    const deleted = contentDomainService.deleteNotice(req.params.id);
     writeAuditLog(req, "delete", "notices", req.params.id, `删除公告 id: ${req.params.id}`);
     return res.json({
       success: true,
@@ -3499,7 +3525,7 @@ router.get("/news", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     return res.json({
       success: true,
-      items: appConfigService.listNews(),
+      items: contentDomainService.listNews(),
     });
   } catch (error) {
     safeLog("admin-news-list-failed", { error: error.message });
@@ -3509,8 +3535,8 @@ router.get("/news", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.post("/news", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    createBackup("news", appConfigService.NEWS_PATH);
-    const item = appConfigService.createNews(req.body || {});
+    createBackup("news", contentDomainService.NEWS_PATH);
+    const item = contentDomainService.createNews(req.body || {});
     writeAuditLog(req, "create", "news", item.id, `创建动态: ${item.title}`);
     return res.json({
       success: true,
@@ -3524,8 +3550,12 @@ router.post("/news", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.put("/news/:id", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    createBackup("news", appConfigService.NEWS_PATH);
-    const item = appConfigService.updateNews(req.params.id, req.body || {});
+    createBackup("news", contentDomainService.NEWS_PATH);
+    const body = req.body || {};
+    const ifMatch = req.get("if-match") || body.expectedVersion || body.version;
+    const item = contentDomainService.updateNews(req.params.id, body, {
+      expectedVersion: ifMatch,
+    });
     writeAuditLog(req, "update", "news", req.params.id, `编辑动态: ${item.title}`);
     return res.json({
       success: true,
@@ -3533,14 +3563,19 @@ router.put("/news/:id", adminAuth.verifyAdminAccess, (req, res) => {
     });
   } catch (error) {
     safeLog("admin-news-update-failed", { id: req.params.id, error: error.message });
-    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+      code: error.code || undefined,
+      currentVersion: error.currentVersion,
+    });
   }
 });
 
 router.delete("/news/:id", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    createBackup("news", appConfigService.NEWS_PATH);
-    const deleted = appConfigService.deleteNews(req.params.id);
+    createBackup("news", contentDomainService.NEWS_PATH);
+    const deleted = contentDomainService.deleteNews(req.params.id);
     writeAuditLog(req, "delete", "news", req.params.id, `删除动态 id: ${req.params.id}`);
     return res.json({
       success: true,
@@ -6073,24 +6108,7 @@ router.get("/export", adminAuth.verifyAdminAccess, (req, res) => {
  */
 router.get("/backups", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    if (!fs.existsSync(BACKUPS_DIR)) {
-      return res.json({ success: true, items: [] });
-    }
-    const files = fs.readdirSync(BACKUPS_DIR)
-      .filter(f => f.endsWith(".json"))
-      .map(f => {
-        const stat = fs.statSync(path.join(BACKUPS_DIR, f));
-        return {
-          filename: f,
-          size: `${Math.round(stat.size / 1024)} KB`,
-          sizeBytes: stat.size,
-          createdAt: stat.mtime.toISOString(),
-          kind: "backup",
-          downloadPath: `/api/admin/backups/download?filename=${encodeURIComponent(f)}`,
-        };
-      })
-      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    return res.json({ success: true, items: files });
+    return res.json({ success: true, items: backupService.listBackups() });
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
   }
@@ -6098,15 +6116,59 @@ router.get("/backups", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.get("/backups/download", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const file = req.query.filename;
-    const safeFile = path.basename(file);
-    const filePath = path.join(BACKUPS_DIR, safeFile);
-    if (!fs.existsSync(filePath) || !filePath.startsWith(BACKUPS_DIR)) {
-      return res.status(404).json({ success: false, message: "备份文件不存在" });
-    }
+    const { filePath } = backupService.getBackupFile(req.query.filename);
     return res.download(filePath);
   } catch (e) {
-    return res.status(500).json({ success: false, message: e.message });
+    return res.status(e.statusCode || 500).json({
+      success: false,
+      message: e.message,
+      code: e.code || undefined,
+    });
+  }
+});
+
+router.post("/backups/preflight", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const filename = (req.body && req.body.filename) || req.query.filename;
+    const preflight = backupService.preflightRestore(filename);
+    return res.json({ success: true, preflight });
+  } catch (e) {
+    return res.status(e.statusCode || 500).json({
+      success: false,
+      message: e.message,
+      code: e.code || undefined,
+    });
+  }
+});
+
+router.post("/backups/restore", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const body = req.body || {};
+    const filename = body.filename;
+    const confirm = String(body.confirm || "");
+    const dryRun = body.dryRun === true;
+    if (!filename) {
+      return res.status(400).json({ success: false, message: "filename is required" });
+    }
+    if (!dryRun && confirm !== path.basename(String(filename))) {
+      return res.status(400).json({
+        success: false,
+        code: "CONFIRM_REQUIRED",
+        message: "confirm must equal the backup filename for restore",
+      });
+    }
+    const result = backupService.restoreBackup(filename, { dryRun });
+    if (!dryRun) {
+      writeAuditLog(req, "restore", "backups", path.basename(String(filename)), `恢复备份: ${filename}`);
+    }
+    return res.json({ success: true, ...result });
+  } catch (e) {
+    return res.status(e.statusCode || 500).json({
+      success: false,
+      message: e.message,
+      code: e.code || undefined,
+      preflight: e.preflight,
+    });
   }
 });
 
@@ -6194,17 +6256,16 @@ router.get("/snapshots/download", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.delete("/backups", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const file = req.query.filename;
-    const safeFile = path.basename(file);
-    const filePath = path.join(BACKUPS_DIR, safeFile);
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ success: false, message: "备份文件不存在" });
-    }
-    fs.unlinkSync(filePath);
-    writeAuditLog(req, "delete", "backups", safeFile, `删除数据备份: ${safeFile}`);
-    return res.json({ success: true, message: "删除备份成功" });
+    const file = req.query.filename || (req.body && req.body.filename);
+    const deleted = backupService.deleteBackup(file);
+    writeAuditLog(req, "delete", "backups", deleted.filename, `删除数据备份: ${deleted.filename}`);
+    return res.json({ success: true, message: "删除备份成功", ...deleted });
   } catch (e) {
-    return res.status(500).json({ success: false, message: e.message });
+    return res.status(e.statusCode || 500).json({
+      success: false,
+      message: e.message,
+      code: e.code || undefined,
+    });
   }
 });
 

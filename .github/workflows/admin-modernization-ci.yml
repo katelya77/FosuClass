@@ -52,6 +52,11 @@ jobs:
           npm run test:architecture-guards
           npm run test:admin-feature-matrix
           npm run test:admin-legacy-dependency
+          npm run test:admin-capabilities
+          npm run test:admin-backup-service
+          npm run test:admin-content-concurrency
+          npm run test:admin-no-duplicate-business-logic
+          npm run test:admin-write-parity
           npm run test:duplicate-admin-routes
           npm run test:service-token-scopes
           npm run test:service-token-route-matrix

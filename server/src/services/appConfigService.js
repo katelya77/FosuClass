@@ -239,7 +239,22 @@ function createNotice(payload) {
   return notice;
 }
 
-function updateNotice(id, payload) {
+function assertVersionMatch(existing, options) {
+  const expected =
+    options && (options.expectedVersion || options.ifMatch || options.version);
+  if (expected == null || expected === "") return;
+  const current = existing && existing.version;
+  if (current && String(current) !== String(expected)) {
+    const err = new Error("resource was modified by another request; reload and retry");
+    err.statusCode = 409;
+    err.code = "CONFLICT";
+    err.currentVersion = current;
+    err.expectedVersion = expected;
+    throw err;
+  }
+}
+
+function updateNotice(id, payload, options) {
   const items = listNotices();
   const index = items.findIndex((item) => item.id === id);
   if (index < 0) {
@@ -247,7 +262,11 @@ function updateNotice(id, payload) {
     err.statusCode = 404;
     throw err;
   }
-  items[index] = normalizeNotice(payload, items[index]);
+  assertVersionMatch(items[index], options || payload || {});
+  const next = normalizeNotice(payload, items[index]);
+  // Always bump version after a successful write so concurrent editors conflict.
+  next.version = `v${Date.now()}`;
+  items[index] = next;
   saveArray(NOTICES_PATH, items);
   return items[index];
 }
@@ -278,7 +297,7 @@ function createNews(payload) {
   return record;
 }
 
-function updateNews(id, payload) {
+function updateNews(id, payload, options) {
   const items = listNews();
   const index = items.findIndex((item) => item.id === id);
   if (index < 0) {
@@ -286,7 +305,10 @@ function updateNews(id, payload) {
     err.statusCode = 404;
     throw err;
   }
-  items[index] = normalizeNews(payload, items[index]);
+  assertVersionMatch(items[index], options || payload || {});
+  const next = normalizeNews(payload, items[index]);
+  next.version = `v${Date.now()}`;
+  items[index] = next;
   saveArray(NEWS_PATH, items);
   return items[index];
 }
