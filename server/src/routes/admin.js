@@ -266,7 +266,7 @@ function verifyAdminWriteAccess(req, res, next) {
       });
     }
     adminAuth.attachIdentity(req, identity);
-    return next();
+    return adminAuth.enforceRouteScopes(req, res, next);
   }
 
   safeLog("admin-write-auth-failed", { reason: "missing cookie session or ADMIN_API_TOKEN" });
@@ -4934,7 +4934,7 @@ router.get("/staging/upload/:uploadId/status", adminAuth.verifyAdminAccess, (req
   }
 });
 
-router.post("/relay/tasks", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/relay/tasks", verifyAdminWriteAccess, adminAuth.requireScopes(["relay:manage"]), (req, res) => {
   try {
     const task = relayService.createTask(req.body || {});
     writeAuditLog(req, "create", "relay-task", task.id, `创建接力任务 ${task.term}`);
@@ -4960,7 +4960,7 @@ router.get("/relay/tasks", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.post("/relay/tasks/:id/revoke", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/relay/tasks/:id/revoke", verifyAdminWriteAccess, adminAuth.requireScopes(["relay:manage"]), (req, res) => {
   try {
     const task = relayService.revokeTask(req.params.id);
     if (!task) {
@@ -4973,7 +4973,7 @@ router.post("/relay/tasks/:id/revoke", adminAuth.verifyAdminAccess, (req, res) =
   }
 });
 
-router.post("/relay/tasks/:id/cancel", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/relay/tasks/:id/cancel", verifyAdminWriteAccess, adminAuth.requireScopes(["relay:manage"]), (req, res) => {
   try {
     const task = relayService.cancelTask(req.params.id);
     if (!task) {
@@ -4986,7 +4986,7 @@ router.post("/relay/tasks/:id/cancel", adminAuth.verifyAdminAccess, (req, res) =
   }
 });
 
-router.delete("/relay/tasks/:id", adminAuth.verifyAdminAccess, (req, res) => {
+router.delete("/relay/tasks/:id", verifyAdminWriteAccess, adminAuth.requireScopes(["relay:manage"]), (req, res) => {
   try {
     const deleted = relayService.deleteTask(req.params.id);
     if (!deleted) {
@@ -5011,7 +5011,7 @@ router.get("/relay/uploads", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.post("/relay/uploads/:id/promote-to-staging", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/relay/uploads/:id/promote-to-staging", verifyAdminWriteAccess, adminAuth.requireScopes(["relay:manage"]), (req, res) => {
   try {
     const uploadResult = relayService.readUploadPayload(req.params.id);
     if (!uploadResult) {
@@ -5175,7 +5175,7 @@ router.post("/sync/reconcile", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.post("/static-release-sync/start", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/static-release-sync/start", verifyAdminWriteAccess, adminAuth.requireScopes(["static:sync"]), (req, res) => {
   try {
     storageLifecycleService.assertReleaseCanStart();
     const version = getRequestedReleaseVersion(req);
@@ -5272,7 +5272,7 @@ router.get("/release-pack/deep-health/status", adminAuth.verifyAdminAccess, (req
   return sendJobStatus(res, "release-pack-deep-health", req.query.id);
 });
 
-router.post("/release-pack/rebuild/start", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/release-pack/rebuild/start", verifyAdminWriteAccess, adminAuth.requireScopes(["release:build"]), (req, res) => {
   try {
     storageLifecycleService.assertReleaseCanStart();
     const version = getRequestedReleaseVersion(req);
@@ -5291,7 +5291,7 @@ router.get("/release-pack/rebuild/status", adminAuth.verifyAdminAccess, (req, re
   return sendJobStatus(res, "release-pack-rebuild", req.query.id);
 });
 
-router.post("/release-pack/verify/start", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/release-pack/verify/start", verifyAdminWriteAccess, adminAuth.requireScopes(["static:verify"]), (req, res) => {
   try {
     const version = getRequestedReleaseVersion(req);
     const job = releaseWorkerManager.startReleaseJob("release-pack-verify", { version }, { lockGroup: null });
@@ -5305,7 +5305,7 @@ router.get("/release-pack/verify/status", adminAuth.verifyAdminAccess, (req, res
   return sendJobStatus(res, "release-pack-verify", req.query.id);
 });
 
-router.post("/sync/staging/publish/start", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/sync/staging/publish/start", verifyAdminWriteAccess, adminAuth.requireScopes(["release:publish"]), (req, res) => {
   try {
     storageLifecycleService.assertReleaseCanStart();
     const input = {
@@ -5522,7 +5522,7 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
  * 5.3 POST /api/admin/sync/staging/publish
  * 发布当前 Staging JSON 为正式 Release (变动>30%需要force强制参数)
  */
-router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, res) => {
+router.post("/sync/staging/publish", verifyAdminWriteAccess, adminAuth.requireScopes(["release:publish"]), async (req, res) => {
   try {
     storageLifecycleService.assertReleaseCanStart();
     if (!fs.existsSync(STAGING_LATEST_PATH)) {

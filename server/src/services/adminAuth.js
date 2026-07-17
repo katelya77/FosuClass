@@ -3,6 +3,7 @@ const rateLimit = require("express-rate-limit");
 const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
 const serviceTokenService = require("./serviceTokenService");
+const adminRouteScopes = require("../security/adminRouteScopes");
 
 const ADMIN_SESSION_COOKIE = "fosu_admin_session";
 const SESSION_TTL_SECONDS = 12 * 60 * 60;
@@ -300,6 +301,49 @@ function attachIdentity(req, identity) {
   req.adminScopes = identity && identity.scopes ? identity.scopes.slice() : [];
 }
 
+/**
+ * Default-deny scope gate for mutating admin APIs.
+ * Explicit route scopes win; undeclared mutations require admin:full.
+ * GET/HEAD skip (authenticated identity already required by caller).
+ */
+function enforceRouteScopes(req, res, next) {
+  if (!isStateChangingMethod(req.method)) {
+    return next();
+  }
+
+  const routePath = adminRouteScopes.resolveRequestRoutePath(req);
+  const required = adminRouteScopes.getRequiredScopesForRoute(req.method, routePath);
+  if (required == null) {
+    return next();
+  }
+
+  const identity = req.adminIdentity || resolveAdminIdentity(req);
+  if (!identity) {
+    return res.status(401).json({
+      success: false,
+      code: "ADMIN_AUTH_REQUIRED",
+      message: "请先登录后台或提供有效服务令牌",
+    });
+  }
+
+  if (!serviceTokenService.hasAnyScope(identity, required)) {
+    safeLog("admin-scope-denied", {
+      path: routePath,
+      method: req.method,
+      required,
+      scopes: identity.scopes || [],
+      operator: identity.name || "",
+    });
+    return res.status(403).json({
+      success: false,
+      code: "ADMIN_SCOPE_DENIED",
+      message: "当前令牌缺少所需权限范围",
+      requiredScopes: required,
+    });
+  }
+  return next();
+}
+
 function verifyAdminAccess(req, res, next) {
   if (!isAdminConfiguredForCurrentEnv()) {
     safeLog("admin-access-blocked", { reason: "ADMIN_TOKEN or ADMIN_PASSWORD not configured" });
@@ -336,7 +380,7 @@ function verifyAdminAccess(req, res, next) {
   }
 
   attachIdentity(req, identity);
-  return next();
+  return enforceRouteScopes(req, res, next);
 }
 
 function requireScopes(requiredScopes) {
@@ -382,6 +426,7 @@ module.exports = {
   clearSessionCookie,
   createCsrfToken,
   createSessionToken,
+  enforceRouteScopes,
   getAdminAuthMethod,
   getAdminCookieToken,
   getAuditIdentity,
