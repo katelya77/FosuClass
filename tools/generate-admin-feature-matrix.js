@@ -53,19 +53,19 @@ const LEGACY_NAV = [
 const DOMAIN_NEXT_STATUS = {
   auth: "write-implemented",
   dashboard: "read-only",
-  catalog: "read-only",
+  catalog: "write-implemented",
   staging: "read-only",
   release: "read-only",
   sync: "read-only",
   term: "read-only",
-  quality: "read-only",
+  quality: "write-implemented",
   content: "write-implemented",
   feedback: "write-implemented",
   "campus-map": "read-only",
   assistant: "missing",
   provider: "missing",
   security: "read-only",
-  settings: "read-only",
+  settings: "write-implemented",
   audit: "write-implemented",
   backups: "write-implemented",
   jobs: "missing",
@@ -74,7 +74,15 @@ const DOMAIN_NEXT_STATUS = {
 };
 
 /** Production explicit grant (deploy workflow). Matrix must match this list. */
-const PRODUCTION_WRITE_MODULES = ["content", "feedback", "audit", "backups"];
+const PRODUCTION_WRITE_MODULES = [
+  "content",
+  "feedback",
+  "audit",
+  "backups",
+  "catalog",
+  "quality",
+  "settings",
+];
 
 /** Evidence paths that elevate status (must exist on disk). */
 const EVIDENCE = {
@@ -600,7 +608,7 @@ function main() {
 
   const matrix = {
     version: 1,
-    phase: "B.1",
+    phase: "C1",
     generatedAt,
     sourceCommit: commit,
     nextStatusEnum: [...NEXT_STATUS],

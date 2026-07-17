@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-17T19:14:08.019Z",
-  "sourceCommit": "065d2ef05e61fee6ed75c1c38bbd8c42bbc7c145",
+  "generatedAt": "2026-07-17T19:32:53.542Z",
+  "sourceCommit": "d3972d2e01de0b757943636f4cbaf8699fcbf190",
   "basePath": "/api/admin",
   "envelope": {
     "success": "boolean",
@@ -3223,6 +3223,174 @@
         404,
         500
       ],
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/settings",
+      "routePath": "/settings",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/settings/preview",
+      "routePath": "/settings/preview",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
+      "audit": true,
+      "backup": true
+    },
+    {
+      "method": "POST",
+      "path": "/api/admin/settings",
+      "routePath": "/settings",
+      "auth": "admin-session-or-token",
+      "csrf": true,
+      "scopes": "default-admin:full",
+      "requestBody": {
+        "type": "object",
+        "notes": "See handler in server/src/routes/admin.js; Phase B+ will attach Zod/schema per domain."
+      },
+      "query": null,
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        400,
+        401,
+        403,
+        404,
+        409,
+        429,
+        500
+      ],
       "audit": true,
       "backup": true
     },
@@ -4258,8 +4426,62 @@
         429,
         500
       ],
-      "audit": true,
+      "audit": false,
       "backup": true
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/catalog/meta",
+      "routePath": "/catalog/meta",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
+      "backup": false
     },
     {
       "method": "GET",
@@ -7962,7 +8184,61 @@
         429,
         500
       ],
-      "audit": true,
+      "audit": false,
+      "backup": false
+    },
+    {
+      "method": "GET",
+      "path": "/api/admin/quality/ignores",
+      "routePath": "/quality/ignores",
+      "auth": "admin-session-or-token",
+      "csrf": false,
+      "scopes": "authenticated-read",
+      "requestBody": null,
+      "query": {
+        "type": "object",
+        "notes": "Optional filters; see handler."
+      },
+      "successResponse": {
+        "type": "object",
+        "required": [
+          "success"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": true
+          }
+        },
+        "notes": "Legacy envelope preserved; additional fields vary by endpoint."
+      },
+      "errorResponse": {
+        "type": "object",
+        "required": [
+          "success",
+          "message"
+        ],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "const": false
+          },
+          "message": {
+            "type": "string"
+          },
+          "code": {
+            "type": "string",
+            "optional": true
+          }
+        }
+      },
+      "errorCodes": [
+        401,
+        403,
+        404,
+        500
+      ],
+      "audit": false,
       "backup": false
     },
     {

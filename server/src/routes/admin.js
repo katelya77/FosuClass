@@ -28,6 +28,9 @@ const feedbackService = require("../services/feedbackService");
 const adminCapabilitiesService = require("../services/adminCapabilitiesService");
 const backupService = require("../services/backupService");
 const contentDomainService = require("../modules/content/service");
+const settingsDomainService = require("../modules/settings/service");
+const catalogDomainService = require("../modules/catalog/service");
+const qualityDomainService = require("../modules/quality/service");
 const jobService = require("../services/jobService");
 const releaseService = require("../services/releaseService");
 const termRegistryService = require("../services/termRegistryService");
@@ -3424,10 +3427,14 @@ router.get("/classroom-heatmap", adminAuth.verifyAdminAccess, (req, res) => {
 
 router.get("/config", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    const typed = settingsDomainService.getTypedSettings();
     return res.json({
       success: true,
       data: appConfigService.getAdminConfig(),
       publicConfig: appConfigService.getPublicAppConfig().data,
+      settings: typed,
+      version: typed.version,
+      etag: typed.etag,
     });
   } catch (error) {
     safeLog("admin-config-get-failed", { error: error.message });
@@ -3435,9 +3442,70 @@ router.get("/config", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
+router.get("/settings", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const typed = settingsDomainService.getTypedSettings();
+    return res.json({ success: true, ...typed });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/settings/preview", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({ success: true, ...settingsDomainService.previewDiff(req.body || {}) });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+  }
+});
+
+router.post("/settings", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const client = String(req.get("x-fosu-admin-client") || "").toLowerCase();
+    const body = req.body || {};
+    createBackup("config", appConfigService.CONFIG_PATH);
+    const result = settingsDomainService.saveTypedSettings(body, {
+      expectedVersion: req.get("if-match") || body.expectedVersion || body.version,
+      ifMatch: req.get("if-match"),
+      requireIfMatch: client === "next",
+    });
+    writeAuditLog(req, "save", "settings", "admin-config", "保存类型化系统配置");
+    return res.json({
+      success: true,
+      data: result.data,
+      version: result.version,
+      etag: result.etag,
+      settings: result.settings,
+      publicConfig: appConfigService.getPublicAppConfig().data,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+      code: error.code,
+      currentVersion: error.currentVersion,
+    });
+  }
+});
+
 router.post("/config", adminAuth.verifyAdminAccess, (req, res) => {
   try {
+    const client = String(req.get("x-fosu-admin-client") || "").toLowerCase();
     createBackup("config", appConfigService.CONFIG_PATH);
+    if (client === "next") {
+      // Vue should use /settings; keep compat with typed save
+      const result = settingsDomainService.saveTypedSettings(req.body || {}, {
+        expectedVersion: req.get("if-match") || (req.body && req.body.expectedVersion),
+        requireIfMatch: true,
+      });
+      writeAuditLog(req, "save", "config", "admin-config", "保存系统配置(typed)");
+      return res.json({
+        success: true,
+        data: result.data,
+        version: result.version,
+        publicConfig: appConfigService.getPublicAppConfig().data,
+      });
+    }
     const result = appConfigService.saveAdminConfig(req.body || {});
     writeAuditLog(req, "save", "config", "admin-config", "保存系统配置并应用");
     return res.json({
@@ -3447,7 +3515,12 @@ router.post("/config", adminAuth.verifyAdminAccess, (req, res) => {
     });
   } catch (error) {
     safeLog("admin-config-save-failed", { error: error.message });
-    return res.status(error.statusCode || 500).json({ success: false, message: error.message });
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+      code: error.code,
+      currentVersion: error.currentVersion,
+    });
   }
 });
 
@@ -3893,17 +3966,24 @@ function generateQualityReport() {
 }
 
 function getCatalogMeta() {
+  // Prefer domain service (versioned document, flat entries for list mappers)
   try {
-    if (fs.existsSync(CATALOG_META_PATH)) {
-      return JSON.parse(fs.readFileSync(CATALOG_META_PATH, "utf-8"));
-    }
-  } catch (e) {}
-  return {};
+    return catalogDomainService.getCatalogMeta();
+  } catch (e) {
+    try {
+      if (fs.existsSync(CATALOG_META_PATH)) {
+        const raw = JSON.parse(fs.readFileSync(CATALOG_META_PATH, "utf-8"));
+        if (raw && raw.entries) return raw.entries;
+        return raw || {};
+      }
+    } catch (err) {}
+    return {};
+  }
 }
 
 function saveCatalogMeta(meta) {
   try {
-    writeJsonAtomic(CATALOG_META_PATH, meta);
+    catalogDomainService.saveCatalogMetaBulk(meta || {});
   } catch (e) {
     safeLog("save-catalog-meta-failed", { error: e.message });
   }
@@ -4202,27 +4282,49 @@ router.get("/catalog/detail", adminAuth.verifyAdminAccess, (req, res) => {
  */
 router.post("/catalog/meta", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const { type, id, displayName, note, hidden, tags } = req.body;
+    const body = req.body || {};
+    const { type, id, displayName, note, hidden, tags } = body;
     if (!type || !id) {
       return res.status(400).json({ success: false, message: "缺少必要参数 type 或 id" });
     }
-    
-    createBackup("catalog-meta", CATALOG_META_PATH);
-    const catMeta = getCatalogMeta();
+    const client = String(req.get("x-fosu-admin-client") || "").toLowerCase();
+    createBackup("catalog-meta", catalogDomainService.CATALOG_META_PATH || CATALOG_META_PATH);
     const key = `${type}::${id}`;
-    
-    catMeta[key] = {
-      displayName: String(displayName || "").trim(),
-      note: String(note || "").trim(),
-      hidden: !!hidden,
-      tags: Array.isArray(tags) ? tags : [],
-      updatedAt: new Date().toISOString()
-    };
-    
-    saveCatalogMeta(catMeta);
+    const result = catalogDomainService.saveCatalogMetaEntry(
+      key,
+      {
+        displayName: String(displayName || "").trim(),
+        note: String(note || "").trim(),
+        hidden: !!hidden,
+        tags: Array.isArray(tags) ? tags : [],
+      },
+      {
+        expectedVersion: req.get("if-match") || body.expectedVersion || body.version,
+        requireIfMatch: client === "next",
+      }
+    );
     writeAuditLog(req, "update", "catalog-meta", key, `修改数据资源 [${type}] ${id} 的元数据别名和备注`);
-    
-    return res.json({ success: true, message: "修改成功", metaInfo: catMeta[key] });
+    return res.json({
+      success: true,
+      message: "修改成功",
+      metaInfo: result.entry,
+      version: result.version,
+      etag: result.etag,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+      code: error.code,
+      currentVersion: error.currentVersion,
+    });
+  }
+});
+
+router.get("/catalog/meta", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const doc = catalogDomainService.getCatalogMetaDocument();
+    return res.json({ success: true, ...doc });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
@@ -6031,30 +6133,52 @@ router.get("/quality/report", adminAuth.verifyAdminAccess, (req, res) => {
  */
 router.post("/quality/mark", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const { type, target, ignore } = req.body;
+    const body = req.body || {};
+    const { type, target, ignore } = body;
     if (!type || !target) {
       return res.status(400).json({ success: false, message: "缺少必要参数 type 或 target" });
     }
-    
-    let ignores = [];
-    try {
-      if (fs.existsSync(QUALITY_IGNORES_PATH)) {
-        ignores = JSON.parse(fs.readFileSync(QUALITY_IGNORES_PATH, "utf-8"));
-      }
-    } catch (e) {}
-    
+    const client = String(req.get("x-fosu-admin-client") || "").toLowerCase();
+    const fingerprint = `${type}::${target}`;
+    const opts = {
+      expectedVersion: req.get("if-match") || body.expectedVersion || body.version,
+      requireIfMatch: client === "next",
+    };
+    let result;
     if (ignore) {
-      if (!ignores.some(x => x.type === type && x.target === target)) {
-        ignores.push({ type, target, markedAt: new Date().toISOString() });
-      }
+      result = qualityDomainService.markIgnore(
+        {
+          fingerprint,
+          category: type,
+          reason: body.reason || `ignore ${target}`,
+          severity: body.severity || "info",
+        },
+        opts
+      );
     } else {
-      ignores = ignores.filter(x => !(x.type === type && x.target === target));
+      result = qualityDomainService.unmarkIgnore(fingerprint, opts);
     }
-    
-    writeJsonAtomic(QUALITY_IGNORES_PATH, ignores);
     writeAuditLog(req, "ignore", "quality", `${type}:${target}`, `${ignore ? "标记忽略" : "取消忽略"} 质量缺陷`);
-    
-    return res.json({ success: true, ignores });
+    return res.json({
+      success: true,
+      ignores: result.rules,
+      version: result.version,
+      etag: result.etag,
+    });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+      code: error.code,
+      currentVersion: error.currentVersion,
+    });
+  }
+});
+
+router.get("/quality/ignores", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const doc = qualityDomainService.listIgnores();
+    return res.json({ success: true, ...doc });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
