@@ -1,0 +1,54 @@
+[
+  {
+    "id": "relay_1784306208686_2aed3873",
+    "relayToken": "03ed76aede878b0e2c02669de7149c425a40e100e20282ea1d9e9ba5c8946696",
+    "taskType": "daily",
+    "term": "2025-2026-2",
+    "termConfig": {
+      "term": "2025-2026-2",
+      "semesterText": "2025-2026学年第二学期",
+      "termStartDate": "2026-03-09",
+      "totalWeeks": 19,
+      "weekStart": "monday",
+      "source": "term-registry",
+      "releaseVersion": ""
+    },
+    "syncPlan": null,
+    "description": "全校课表接力采集",
+    "expiresAt": "2026-07-18T16:36:48.686Z",
+    "maxUploads": 1,
+    "uploadCount": 0,
+    "status": "pending",
+    "phase": "created",
+    "progress": 0,
+    "cancelRequested": false,
+    "createdAt": "2026-07-17T16:36:48.686Z",
+    "updatedAt": "2026-07-17T16:36:48.686Z"
+  },
+  {
+    "id": "relay_1784306208660_3c318d00",
+    "relayToken": "e1430caf2f1dc93d90b616c8b660f8f2c42e0aef6a69ffa15c515ac734456a44",
+    "taskType": "daily",
+    "term": "2025-2026-2",
+    "termConfig": {
+      "term": "2025-2026-2",
+      "semesterText": "2025-2026学年第二学期",
+      "termStartDate": "2026-03-09",
+      "totalWeeks": 19,
+      "weekStart": "monday",
+      "source": "term-registry",
+      "releaseVersion": ""
+    },
+    "syncPlan": null,
+    "description": "全校课表接力采集",
+    "expiresAt": "2026-07-18T16:36:48.660Z",
+    "maxUploads": 1,
+    "uploadCount": 0,
+    "status": "pending",
+    "phase": "created",
+    "progress": 0,
+    "cancelRequested": false,
+    "createdAt": "2026-07-17T16:36:48.659Z",
+    "updatedAt": "2026-07-17T16:36:48.659Z"
+  }
+]
