@@ -4,6 +4,16 @@ import AdminLayout from '@/app/layouts/AdminLayout.vue'
 import LoginPage from '@/pages/LoginPage.vue'
 import DashboardPage from '@/pages/DashboardPage.vue'
 import SyncCenterPage from '@/pages/SyncCenterPage.vue'
+import CatalogPage from '@/pages/CatalogPage.vue'
+import TermsPage from '@/pages/TermsPage.vue'
+import QualityPage from '@/pages/QualityPage.vue'
+import ContentPage from '@/pages/ContentPage.vue'
+import FeedbackPage from '@/pages/FeedbackPage.vue'
+import CampusMapPage from '@/pages/CampusMapPage.vue'
+import SecurityPage from '@/pages/SecurityPage.vue'
+import SettingsPage from '@/pages/SettingsPage.vue'
+import AuditPage from '@/pages/AuditPage.vue'
+import ExperimentalPage from '@/pages/ExperimentalPage.vue'
 import PlaceholderPage from '@/pages/PlaceholderPage.vue'
 
 const router = createRouter({
@@ -35,56 +45,89 @@ const router = createRouter({
         {
           path: 'catalog',
           name: 'catalog',
-          component: PlaceholderPage,
+          component: CatalogPage,
           meta: { title: '数据资源中心' },
         },
         {
           path: 'terms',
           name: 'terms',
-          component: PlaceholderPage,
+          component: TermsPage,
           meta: { title: '学期管理' },
         },
         {
           path: 'quality',
           name: 'quality',
-          component: PlaceholderPage,
+          component: QualityPage,
           meta: { title: '数据质量中心' },
         },
         {
           path: 'content',
           name: 'content',
-          component: PlaceholderPage,
+          component: ContentPage,
           meta: { title: '内容运营' },
         },
         {
           path: 'feedback',
           name: 'feedback',
-          component: PlaceholderPage,
+          component: FeedbackPage,
           meta: { title: '反馈' },
         },
         {
           path: 'campus-map',
           name: 'campus-map',
-          component: PlaceholderPage,
+          component: CampusMapPage,
           meta: { title: '校园地图' },
+        },
+        {
+          path: 'assistant',
+          name: 'assistant',
+          component: ExperimentalPage,
+          props: {
+            title: '小佛助手知识库（Tier 3）',
+            description: '实验功能。Provider / 知识库故障不得阻塞课表。Kill Switch 与旧版入口保留。',
+            legacyHash: '#assistant-kb',
+          },
+          meta: { title: '小佛助手' },
+        },
+        {
+          path: 'provider',
+          name: 'provider',
+          component: ExperimentalPage,
+          props: {
+            title: 'AI Provider（Tier 3）',
+            description: 'Provider 配置独立于 Release Pack。故障降级不影响 Active Pointer。',
+            legacyHash: '#ai-provider',
+          },
+          meta: { title: 'Provider' },
         },
         {
           path: 'security',
           name: 'security',
-          component: PlaceholderPage,
+          component: SecurityPage,
           meta: { title: '安全' },
         },
         {
           path: 'settings',
           name: 'settings',
-          component: PlaceholderPage,
+          component: SettingsPage,
           meta: { title: '设置' },
         },
         {
           path: 'audit',
           name: 'audit',
-          component: PlaceholderPage,
+          component: AuditPage,
           meta: { title: '审计日志' },
+        },
+        {
+          path: 'backups',
+          name: 'backups',
+          component: ExperimentalPage,
+          props: {
+            title: '备份与快照',
+            description: '备份下载契约已与 Snapshot 对齐（/api/admin/backups 与 /api/admin/snapshots）。',
+            legacyHash: '#backups',
+          },
+          meta: { title: '备份' },
         },
         {
           path: 'legacy',
