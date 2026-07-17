@@ -1,22 +1,42 @@
 {
   "branch": "grok/admin-modernization",
   "baselineCommit": "5d7eb469",
-  "currentPhase": 2,
-  "completedPhases": [0, 1],
-  "lastCommit": "481608be",
+  "currentPhase": 6,
+  "completedPhases": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6
+  ],
+  "lastCommit": "",
   "testsPassed": [
+    "architecture-guards",
+    "duplicate-admin-routes",
+    "service-token-scopes",
+    "chunk-upload-csrf",
+    "snapshot-concurrency",
+    "admin-api-contract",
+    "config-validation",
+    "admin-auth-modes",
+    "admin-page",
+    "admin-sync-page",
     "admin:test",
     "admin:build",
-    "admin:test:e2e",
-    "test:admin-spa-shell",
-    "test:admin-page",
-    "test:architecture-guards"
+    "admin-spa-shell",
+    "admin-spa-deeplink",
+    "admin-legacy-fallback",
+    "tier3-failure-isolation",
+    "logo-csp-fallback"
   ],
   "testsFailed": [],
   "remainingRisks": [
-    "New admin pages beyond dashboard/sync are placeholders",
-    "Primary /admin not switched yet (intentional until acceptance)",
-    "admin.js soft line-count ceiling still exceeded"
+    "Primary /admin still defaults to legacy until FOSU_ADMIN_PRIMARY=next",
+    "Write actions for many pages still deep-link to legacy forms",
+    "admin.js soft line ceiling still exceeded",
+    "Full browser visual regression matrix not automated"
   ],
-  "nextAction": "Commit phase 2 then deepen core ops pages (phase 3)"
+  "nextAction": "Open PR; enable FOSU_ADMIN_PRIMARY=next only after staging acceptance"
 }
