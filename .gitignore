@@ -44,5 +44,12 @@ server/storage/campus-map/
 server/storage/snapshots/
 output/playwright/
 output/campus-map-acceptance/
+output/admin-modernization-browser/
 test-results/
 playwright-report/
+server/storage/relay/
+server/storage/staging-uploads/
+server/data/backups/
+# Keep empty structure placeholders only when explicitly force-added
+!server/storage/relay/.gitkeep
+!server/storage/staging-uploads/.gitkeep

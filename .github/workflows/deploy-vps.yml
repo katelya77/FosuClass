@@ -231,6 +231,10 @@ jobs:
             ADMIN_API_TOKEN=${{ secrets.ADMIN_API_TOKEN }}
             ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
             ADMIN_TOKEN=${{ secrets.ADMIN_TOKEN }}
+            # Progressive admin SPA: Legacy remains production write authority.
+            FOSU_ADMIN_NEXT_ENABLED=true
+            FOSU_ADMIN_PRIMARY=legacy
+            FOSU_CONFIG_HARD_FAIL=false
             FOSU_BASE_URL=https://100.fosu.edu.cn
             FOSU_AUTH_URL=https://authserver.fosu.edu.cn
             FOSU_AUTH_BASE=https://authserver.fosu.edu.cn

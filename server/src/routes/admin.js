@@ -3,12 +3,22 @@
  */
 
 const express = require("express");
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawnSync } = require("child_process");
 const { promisify } = require("util");
 const router = express.Router();
+
+// Progressive domain modules (thin boundaries; no duplicated business logic)
+try {
+  router.use(require("../modules/audit/routes"));
+  router.use(require("../modules/dashboard/routes"));
+} catch (error) {
+  // Domain modules must not prevent legacy admin routes from loading.
+  console.warn("[admin] optional domain modules failed to load:", error.message);
+}
 const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
 const scheduleNormalizer = require("../utils/scheduleNormalizer");
@@ -132,20 +142,26 @@ function createBackup(type, sourceFile) {
 }
 
 /**
- * 审计日志写入
+ * 审计日志写入（记录明确身份：会话 / 服务令牌名 / scope）
  */
 function writeAuditLog(req, action, moduleName, target, summary) {
   try {
     const ipInfo = getClientIpInfo(req);
+    const identity = adminAuth.getAuditIdentity(req);
     const logItem = {
       time: new Date().toISOString(),
       action,
       module: moduleName,
       target: target || "",
-      operator: "admin",
+      operator: identity.operator || "admin",
+      operatorName: identity.operator || "admin",
+      tokenName: identity.tokenName || "",
+      scopes: Array.isArray(identity.scopes) ? identity.scopes : [],
+      sessionIdPrefix: identity.sessionIdPrefix || "",
       summary: summary || "",
       ip: ipInfo.anonymizedIp,
-      authMethod: adminAuth.getAdminAuthMethod(req) || "unknown",
+      authMethod: identity.authMethod || adminAuth.getAdminAuthMethod(req) || "unknown",
+      legacyToken: Boolean(identity.legacy),
       requestId: req.headers["x-request-id"] || ""
     };
     fs.appendFileSync(AUDIT_LOG_PATH, `${JSON.stringify(logItem)}\n`, "utf-8");
@@ -178,23 +194,25 @@ const RESOURCE_NAME_KEY_BY_TYPE = {
   course: "courseName",
 };
 
+const serviceTokenService = require("../services/serviceTokenService");
+
 /**
- * 校验管理员 Token
+ * 校验管理员 / 服务 Token（支持 scoped service tokens）
  */
 function verifyAdminToken(req, res, next) {
   const authHeader = String(req.headers.authorization || "");
   const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
   const token = req.headers["x-admin-token"] || (bearerMatch ? bearerMatch[1] : "");
-  
-  if (!config.ADMIN_API_TOKEN) {
-    safeLog("admin-sync-auth-failed", { reason: "ADMIN_API_TOKEN not configured on server" });
-    return res.status(401).json({
-      success: false,
-      message: "服务器未配置 ADMIN_API_TOKEN，拒绝写入请求",
-    });
-  }
+  const identity = serviceTokenService.resolveServiceToken(token);
 
-  if (token !== config.ADMIN_API_TOKEN) {
+  if (!identity) {
+    if (!config.ADMIN_API_TOKEN && !config.ADMIN_TOKEN && !(process.env.ADMIN_SERVICE_TOKENS || "").trim()) {
+      safeLog("admin-sync-auth-failed", { reason: "no service tokens configured on server" });
+      return res.status(401).json({
+        success: false,
+        message: "服务器未配置 ADMIN_API_TOKEN，拒绝写入请求",
+      });
+    }
     safeLog("admin-sync-auth-failed", { reason: "Invalid or missing token" });
     return res.status(401).json({
       success: false,
@@ -202,7 +220,11 @@ function verifyAdminToken(req, res, next) {
     });
   }
 
-  next();
+  adminAuth.attachIdentity(req, {
+    ...identity,
+    authMethod: identity.kind === "static-admin-token" ? "admin-token" : "service-token",
+  });
+  return next();
 }
 
 function verifyAdminWriteAccess(req, res, next) {
@@ -214,7 +236,8 @@ function verifyAdminWriteAccess(req, res, next) {
     });
   }
 
-  if (adminAuth.isAdminRequest(req)) {
+  const identity = adminAuth.resolveAdminIdentity(req);
+  if (identity) {
     if (!["GET", "HEAD", "OPTIONS"].includes(String(req.method || "GET").toUpperCase()) && !adminAuth.isAdminOriginAllowed(req)) {
       safeLog("admin-write-origin-rejected", { origin: req.headers.origin || "", path: req.path });
       recordSecurityEvent("security-origin-rejected", {
@@ -242,7 +265,8 @@ function verifyAdminWriteAccess(req, res, next) {
         message: "Admin CSRF token is invalid.",
       });
     }
-    return next();
+    adminAuth.attachIdentity(req, identity);
+    return adminAuth.enforceRouteScopes(req, res, next);
   }
 
   safeLog("admin-write-auth-failed", { reason: "missing cookie session or ADMIN_API_TOKEN" });
@@ -250,6 +274,11 @@ function verifyAdminWriteAccess(req, res, next) {
     success: false,
     message: "请先登录后台或提供有效 ADMIN_API_TOKEN",
   });
+}
+
+/** Scope-aware middleware factory (admin:full always passes). */
+function requireAdminScopes(...scopes) {
+  return [verifyAdminWriteAccess, adminAuth.requireScopes(scopes)];
 }
 
 router.post("/login", adminAuth.adminLoginLimiter, (req, res) => {
@@ -2841,7 +2870,50 @@ router.get("/release/list", verifyAdminWriteAccess, (req, res) => {
   });
 });
 
-// 6.5. 上传快照临时文件
+function sanitizeSnapshotUploadId(value) {
+  const id = String(value || "").trim();
+  if (!/^[a-zA-Z0-9_-]{8,64}$/.test(id)) return "";
+  return id;
+}
+
+function getSnapshotTempPaths(uploadId) {
+  const safeId = sanitizeSnapshotUploadId(uploadId);
+  if (!safeId) return null;
+  return {
+    uploadId: safeId,
+    tempJsonPath: path.join(SNAPSHOTS_DIR, `temp_upload-${safeId}.json`),
+    tempGzPath: path.join(SNAPSHOTS_DIR, `temp_upload-${safeId}.json.gz`),
+  };
+}
+
+function resolveSnapshotTempPaths(req) {
+  const requested = sanitizeSnapshotUploadId(
+    (req.body && (req.body.uploadId || req.body.snapshotUploadId)) ||
+    req.query.uploadId ||
+    req.headers["x-snapshot-upload-id"]
+  );
+  if (requested) {
+    const paths = getSnapshotTempPaths(requested);
+    if (paths && fs.existsSync(paths.tempJsonPath) && fs.existsSync(paths.tempGzPath)) {
+      return paths;
+    }
+    return null;
+  }
+  // Backward compatible fixed names (legacy single-slot).
+  const legacyJson = path.join(SNAPSHOTS_DIR, "temp_upload.json");
+  const legacyGz = path.join(SNAPSHOTS_DIR, "temp_upload.json.gz");
+  if (fs.existsSync(legacyJson) && fs.existsSync(legacyGz)) {
+    return {
+      uploadId: "legacy",
+      tempJsonPath: legacyJson,
+      tempGzPath: legacyGz,
+      legacy: true,
+    };
+  }
+  return null;
+}
+
+// 6.5. 上传快照临时文件（每请求独立 uploadId，避免并发覆盖）
 router.post(
   "/snapshot/upload",
   verifyAdminWriteAccess,
@@ -2875,8 +2947,13 @@ router.post(
         return res.status(400).json({ success: false, message: "解析 JSON 失败，数据可能损坏: " + err.message });
       }
 
-      const tempJsonPath = path.join(SNAPSHOTS_DIR, "temp_upload.json");
-      const tempGzPath = path.join(SNAPSHOTS_DIR, "temp_upload.json.gz");
+      const uploadId = `${Date.now().toString(36)}-${crypto.randomBytes(8).toString("hex")}`;
+      const paths = getSnapshotTempPaths(uploadId);
+      const tempJsonPath = paths.tempJsonPath;
+      const tempGzPath = paths.tempGzPath;
+      // Legacy single-slot paths kept for older clients that activate without uploadId.
+      const legacyJsonPath = path.join(SNAPSHOTS_DIR, "temp_upload.json");
+      const legacyGzPath = path.join(SNAPSHOTS_DIR, "temp_upload.json.gz");
 
       if (isGzip) {
         fs.writeFileSync(tempGzPath, buffer);
@@ -2886,12 +2963,20 @@ router.post(
         const gzBuffer = await gzipAsync(Buffer.from(jsonStr, "utf-8"));
         fs.writeFileSync(tempGzPath, gzBuffer);
       }
+      // Best-effort legacy alias (still racy by design for old clients).
+      try {
+        fs.copyFileSync(tempJsonPath, legacyJsonPath);
+        fs.copyFileSync(tempGzPath, legacyGzPath);
+      } catch (aliasError) {
+        safeLog("snapshot-legacy-alias-failed", { error: aliasError.message });
+      }
 
       return res.json({
         success: true,
         message: "快照上传成功，暂存在临时文件，请调用 activate 接口激活",
         isGzip,
         size: buffer.length,
+        uploadId,
         version: snapshotData.version,
         semester: snapshotData.semester
       });
@@ -2908,12 +2993,12 @@ router.post(
   verifyAdminWriteAccess,
   async (req, res) => {
     try {
-      const tempJsonPath = path.join(SNAPSHOTS_DIR, "temp_upload.json");
-      const tempGzPath = path.join(SNAPSHOTS_DIR, "temp_upload.json.gz");
-
-      if (!fs.existsSync(tempJsonPath) || !fs.existsSync(tempGzPath)) {
+      const resolved = resolveSnapshotTempPaths(req);
+      if (!resolved) {
         return res.status(400).json({ success: false, message: "未找到待激活的快照临时文件，请先上传" });
       }
+      const tempJsonPath = resolved.tempJsonPath;
+      const tempGzPath = resolved.tempGzPath;
 
       const jsonStr = fs.readFileSync(tempJsonPath, "utf-8");
       const snapshot = JSON.parse(jsonStr);
@@ -3049,119 +3134,140 @@ router.post(
   }
 );
 
-// 7. 获取当前缓存状态
-router.get("/sync/status", verifyAdminWriteAccess, (req, res) => {
+// 7. 获取当前缓存状态（单一实现；合并历史重复 handler 字段）
+router.get("/sync/status", verifyAdminWriteAccess, async (req, res) => {
   setJsonUtf8(res);
-  const meta = getSyncMeta();
-  const snapshotMeta = getActiveSnapshotMeta();
-  const activeInfo = releaseService.getActiveReleaseInfo();
-  const releaseStatus = {
-    activeReleaseVersion: activeInfo?.version || null,
-    activeReleaseUpdatedAt: activeInfo?.updatedAt || null,
-    activeReleaseActivatedAt: activeInfo?.activatedAt || null,
-  };
-  const releasePackStatus = activeInfo?.version ? releaseService.getReleasePackQuickHealth(activeInfo.version) : null;
-  const staticSync = staticReleaseSyncService.getSyncStatus({
-    version: activeInfo?.version || releaseStatus.activeReleaseVersion || "",
-  });
-  const feedbackStats = feedbackService.getFeedbackStats();
-  const resourcesUpdatedAt = getUpdatedAt("teacher-schedules") || getUpdatedAt("classroom-schedules") || getUpdatedAt("course-schedules") || (snapshotMeta ? snapshotMeta.updatedAt : null);
-  const teacherScheduleCount = getItemCount("teacher-schedules") || (snapshotMeta ? snapshotMeta.teacherScheduleCount : 0);
-  const classroomScheduleCount = getItemCount("classroom-schedules") || (snapshotMeta ? snapshotMeta.classroomScheduleCount : 0);
-  const courseScheduleCount = getItemCount("course-schedules") || (snapshotMeta ? snapshotMeta.courseScheduleCount : 0);
-  const semester = snapshotMeta ? snapshotMeta.semester : (meta.snapshot ? meta.snapshot.semester : getDefaultTerm());
-  const classSchedulesUpdatedAt = getUpdatedAt("class-schedules");
-  const relayUploads = relayService.listUploads();
-  const stagingUploads = stagingUploadService.listUploadRecords({ limit: 1 }).records || [];
-  const latestRelayUpload = relayUploads[0] || null;
-  const latestJob = jobService.latestJob();
-  const payload = {
-    dataSourceMode: config.DATA_SOURCE_MODE,
-    activeReleaseVersion: releaseStatus.activeReleaseVersion,
-    activeReleaseUpdatedAt: releaseStatus.activeReleaseUpdatedAt,
-    activeReleaseActivatedAt: releaseStatus.activeReleaseActivatedAt,
-    snapshotUpdatedAt: snapshotMeta ? snapshotMeta.updatedAt : (meta.snapshot ? meta.snapshot.updatedAt : null),
-    snapshotVersion: snapshotMeta ? snapshotMeta.version : (meta.snapshot ? meta.snapshot.version : null),
-    releaseVersion: releaseStatus.activeReleaseVersion || (meta.snapshot ? meta.snapshot.version : "-"),
-    semester,
-    collegesCount: snapshotMeta ? snapshotMeta.collegesCount : getItemCount("catalog"),
-    majorsCount: snapshotMeta ? snapshotMeta.majorsCount : getItemCount("majors"),
-    classScheduleCount: snapshotMeta ? snapshotMeta.classScheduleCount : getItemCount("class-schedules"),
-    adminClassCount: snapshotMeta ? snapshotMeta.adminClassCount : 0,
-    majorAggregateCount: snapshotMeta ? snapshotMeta.majorAggregateCount : 0,
-    teacherScheduleCount,
-    classroomScheduleCount,
-    courseScheduleCount,
-    resourcesUpdatedAt,
-    resourcesVersion: snapshotMeta ? snapshotMeta.version : (releaseStatus.activeReleaseVersion || (meta.snapshot ? meta.snapshot.version : null)),
-    feedbackCount: feedbackStats.total,
-    openFeedbackCount: feedbackStats.open,
-    catalogUpdatedAt: getUpdatedAt("catalog"),
-    classSchedulesUpdatedAt,
-    classScheduleUpdatedAt: classSchedulesUpdatedAt,
-    teacherScheduleUpdatedAt: getUpdatedAt("teacher-schedules"),
-    classroomScheduleUpdatedAt: getUpdatedAt("classroom-schedules"),
-    courseScheduleUpdatedAt: getUpdatedAt("course-schedules"),
-    lastUploadTime: classSchedulesUpdatedAt || resourcesUpdatedAt || (snapshotMeta ? snapshotMeta.updatedAt : null),
-    intranetAccessible: false,
-    intranetMessage: "公网服务器无法访问学校内网是预期情况；主流程请在校园网电脑或接力代理端采集。",
-    latestRelayUpload,
-    latestStagingUpload: stagingUploads[0] || null,
-    latestJob: jobService.publicJob(latestJob),
-    releasePackStatus,
-    releasePackHealthy: Boolean(releasePackStatus && releasePackStatus.healthy),
-    staticSync,
-    staticManifestUrl: staticSync.staticManifestUrl,
-    staticClassIndexUrl: staticSync.staticClassIndexUrl,
-    staticEmptyRoomIndexUrl: staticSync.staticEmptyRoomIndexUrl,
-    openRestyStaticSyncStatus: staticSync.status,
-    lastStaticSyncTime: staticSync.lastSyncTime || staticSync.syncedAt || staticSync.updatedAt || null,
-    staticRetainedReleases: staticSync.keptReleases || [],
-    storageMounted: isStorageMounted(),
-    storagePath: STORAGE_DIR,
-    metaDetails: meta,
-    adminSessionAuthenticated: adminAuth.isAdminRequest(req),
-    apiTokenConfigured: Boolean(config.ADMIN_API_TOKEN),
-  };
-  const lifecycleStatus = releaseLifecycleService.buildLifecycleStatus({
-    reason: "sync-status",
-    uploadLimit: 50,
-    reconcile: false,
-  });
-  Object.assign(payload, lifecycleStatus, {
-    releaseVersion: lifecycleStatus.activeReleaseVersion || payload.releaseVersion,
-    activeReleaseVersion: lifecycleStatus.activeReleaseVersion || payload.activeReleaseVersion,
-    latestStagingUpload: lifecycleStatus.latestStagingUpload || payload.latestStagingUpload,
-    releasePackStatus: lifecycleStatus.releasePackStatus || payload.releasePackStatus,
-    releasePackHealthy: Boolean(lifecycleStatus.releasePackHealthy || payload.releasePackHealthy),
-    staticSync: lifecycleStatus.staticSync || payload.staticSync,
-    staticManifestUrl: lifecycleStatus.staticManifestUrl || payload.staticManifestUrl,
-    staticClassIndexUrl: lifecycleStatus.staticClassIndexUrl || payload.staticClassIndexUrl,
-    staticEmptyRoomIndexUrl: lifecycleStatus.staticEmptyRoomIndexUrl || payload.staticEmptyRoomIndexUrl,
-    openRestyStaticSyncStatus: lifecycleStatus.openRestyStaticSyncStatus || payload.openRestyStaticSyncStatus,
-    lastStaticSyncTime: lifecycleStatus.lastStaticSyncTime || payload.lastStaticSyncTime,
-    staticRetainedReleases: lifecycleStatus.staticRetainedReleases || payload.staticRetainedReleases,
-  });
-  payload.counts = {
-    collegeCount: payload.collegesCount || 0,
-    majorCount: payload.majorsCount || 0,
-    classScheduleCount: payload.classScheduleCount || 0,
-    adminClassCount: payload.adminClassCount || 0,
-    majorAggregateCount: payload.majorAggregateCount || 0,
-    teacherScheduleCount: payload.teacherScheduleCount || 0,
-    classroomScheduleCount: payload.classroomScheduleCount || 0,
-    courseScheduleCount: payload.courseScheduleCount || 0,
-  };
-  attachSyncOpsSummary(payload, {
-    publisherRun: getLatestPublisherRunSafe(),
-    stagingUploads: lifecycleStatus.stagingUploads || [],
-  });
+  try {
+    const meta = getSyncMeta();
+    const snapshotMeta = getActiveSnapshotMeta();
+    const activeInfo = releaseService.getActiveReleaseInfo();
+    const releaseStatus = {
+      activeReleaseVersion: activeInfo?.version || null,
+      activeReleaseUpdatedAt: activeInfo?.updatedAt || null,
+      activeReleaseActivatedAt: activeInfo?.activatedAt || null,
+    };
+    const releasePackStatus = activeInfo?.version ? releaseService.getReleasePackQuickHealth(activeInfo.version) : null;
+    const staticSync = staticReleaseSyncService.getSyncStatus({
+      version: activeInfo?.version || releaseStatus.activeReleaseVersion || "",
+    });
+    const feedbackStats = feedbackService.getFeedbackStats();
+    const resourcesUpdatedAt = getUpdatedAt("teacher-schedules") || getUpdatedAt("classroom-schedules") || getUpdatedAt("course-schedules") || (snapshotMeta ? snapshotMeta.updatedAt : null);
+    const teacherScheduleCount = getItemCount("teacher-schedules") || (snapshotMeta ? snapshotMeta.teacherScheduleCount : 0);
+    const classroomScheduleCount = getItemCount("classroom-schedules") || (snapshotMeta ? snapshotMeta.classroomScheduleCount : 0);
+    const courseScheduleCount = getItemCount("course-schedules") || (snapshotMeta ? snapshotMeta.courseScheduleCount : 0);
+    const semester = snapshotMeta ? snapshotMeta.semester : (meta.snapshot ? meta.snapshot.semester : getDefaultTerm());
+    const classSchedulesUpdatedAt = getUpdatedAt("class-schedules");
+    const relayUploads = relayService.listUploads();
+    const stagingUploads = stagingUploadService.listUploadRecords({ limit: 1 }).records || [];
+    const latestRelayUpload = relayUploads[0] || null;
+    const latestJob = jobService.latestJob();
+    const runningReleaseJob = jobService.getRunningJobByLockGroup(releaseWorkerManager.RELEASE_HEAVY_LOCK_GROUP);
+    const fingerprint = buildFingerprintStatus();
+    const intranetDiagnostic = typeof getCachedIntranetDiagnostic === "function"
+      ? await getCachedIntranetDiagnostic(req.query.diagnoseNetwork === "true")
+      : { intranetAccessible: false, status: "unavailable", checkedAtIso: null };
+    const intranetAccessible = intranetDiagnostic.intranetAccessible === true;
+    const payload = {
+      dataSourceMode: config.DATA_SOURCE_MODE,
+      activeReleaseVersion: releaseStatus.activeReleaseVersion,
+      activeReleaseUpdatedAt: releaseStatus.activeReleaseUpdatedAt,
+      activeReleaseActivatedAt: releaseStatus.activeReleaseActivatedAt,
+      snapshotUpdatedAt: snapshotMeta ? snapshotMeta.updatedAt : (meta.snapshot ? meta.snapshot.updatedAt : null),
+      snapshotVersion: snapshotMeta ? snapshotMeta.version : (meta.snapshot ? meta.snapshot.version : null),
+      releaseVersion: releaseStatus.activeReleaseVersion || (meta.snapshot ? meta.snapshot.version : "-"),
+      semester,
+      collegesCount: snapshotMeta ? snapshotMeta.collegesCount : getItemCount("catalog"),
+      majorsCount: snapshotMeta ? snapshotMeta.majorsCount : getItemCount("majors"),
+      classScheduleCount: snapshotMeta ? snapshotMeta.classScheduleCount : getItemCount("class-schedules"),
+      adminClassCount: snapshotMeta ? snapshotMeta.adminClassCount : 0,
+      majorAggregateCount: snapshotMeta ? snapshotMeta.majorAggregateCount : 0,
+      teacherScheduleCount,
+      classroomScheduleCount,
+      courseScheduleCount,
+      resourcesUpdatedAt,
+      resourcesVersion: snapshotMeta ? snapshotMeta.version : (releaseStatus.activeReleaseVersion || (meta.snapshot ? meta.snapshot.version : null)),
+      feedbackCount: feedbackStats.total,
+      openFeedbackCount: feedbackStats.open,
+      catalogUpdatedAt: getUpdatedAt("catalog"),
+      classSchedulesUpdatedAt,
+      classScheduleUpdatedAt: classSchedulesUpdatedAt,
+      teacherScheduleUpdatedAt: getUpdatedAt("teacher-schedules"),
+      classroomScheduleUpdatedAt: getUpdatedAt("classroom-schedules"),
+      courseScheduleUpdatedAt: getUpdatedAt("course-schedules"),
+      lastUploadTime: classSchedulesUpdatedAt || resourcesUpdatedAt || (snapshotMeta ? snapshotMeta.updatedAt : null),
+      intranetAccessible,
+      intranetDiagnosticStatus: intranetDiagnostic.status,
+      intranetDiagnosticCheckedAt: intranetDiagnostic.checkedAtIso || null,
+      intranetMessage: intranetAccessible
+        ? "当前服务器 DNS 能解析教务域名，但主流程仍建议使用本机校园网采集。"
+        : "公网服务器无法访问学校内网是预期情况；主流程请在校园网电脑或接力代理端采集。",
+      latestRelayUpload,
+      latestStagingUpload: stagingUploads[0] || null,
+      latestJob: jobService.publicJob(latestJob),
+      runningReleaseJob: jobService.publicJob(runningReleaseJob),
+      releaseHeavyBusy: Boolean(runningReleaseJob),
+      releasePackStatus,
+      releasePackHealthy: Boolean(releasePackStatus && releasePackStatus.healthy),
+      staticSync,
+      activeCanonicalHash: fingerprint.activeCanonicalHash,
+      stagingCanonicalHash: fingerprint.stagingCanonicalHash,
+      stagingSameAsActive: Boolean(fingerprint.activeCanonicalHash && fingerprint.stagingCanonicalHash && fingerprint.activeCanonicalHash === fingerprint.stagingCanonicalHash),
+      stagingNeedsPublish: Boolean(fingerprint.stagingCanonicalHash && fingerprint.activeCanonicalHash !== fingerprint.stagingCanonicalHash),
+      staticManifestUrl: staticSync.staticManifestUrl,
+      staticClassIndexUrl: staticSync.staticClassIndexUrl,
+      staticEmptyRoomIndexUrl: staticSync.staticEmptyRoomIndexUrl,
+      openRestyStaticSyncStatus: staticSync.status,
+      lastStaticSyncTime: staticSync.lastSyncTime || staticSync.syncedAt || staticSync.updatedAt || null,
+      staticRetainedReleases: staticSync.keptReleases || [],
+      storageMounted: isStorageMounted(),
+      storagePath: STORAGE_DIR,
+      metaDetails: meta,
+      adminSessionAuthenticated: adminAuth.isAdminRequest(req),
+      apiTokenConfigured: Boolean(config.ADMIN_API_TOKEN),
+      resourceCounts: activeInfo && activeInfo.resourceCounts || releasePackStatus && releasePackStatus.resourceCounts || null,
+    };
+    const lifecycleStatus = releaseLifecycleService.buildLifecycleStatus({
+      reason: "sync-status",
+      uploadLimit: 50,
+      reconcile: false,
+    });
+    Object.assign(payload, lifecycleStatus, {
+      releaseVersion: lifecycleStatus.activeReleaseVersion || payload.releaseVersion,
+      activeReleaseVersion: lifecycleStatus.activeReleaseVersion || payload.activeReleaseVersion,
+      latestStagingUpload: lifecycleStatus.latestStagingUpload || payload.latestStagingUpload,
+      releasePackStatus: lifecycleStatus.releasePackStatus || payload.releasePackStatus,
+      releasePackHealthy: Boolean(lifecycleStatus.releasePackHealthy || payload.releasePackHealthy),
+      staticSync: lifecycleStatus.staticSync || payload.staticSync,
+      staticManifestUrl: lifecycleStatus.staticManifestUrl || payload.staticManifestUrl,
+      staticClassIndexUrl: lifecycleStatus.staticClassIndexUrl || payload.staticClassIndexUrl,
+      staticEmptyRoomIndexUrl: lifecycleStatus.staticEmptyRoomIndexUrl || payload.staticEmptyRoomIndexUrl,
+      openRestyStaticSyncStatus: lifecycleStatus.openRestyStaticSyncStatus || payload.openRestyStaticSyncStatus,
+      lastStaticSyncTime: lifecycleStatus.lastStaticSyncTime || payload.lastStaticSyncTime,
+      staticRetainedReleases: lifecycleStatus.staticRetainedReleases || payload.staticRetainedReleases,
+    });
+    payload.counts = {
+      collegeCount: payload.collegesCount || 0,
+      majorCount: payload.majorsCount || 0,
+      classScheduleCount: payload.classScheduleCount || 0,
+      adminClassCount: payload.adminClassCount || 0,
+      majorAggregateCount: payload.majorAggregateCount || 0,
+      teacherScheduleCount: payload.teacherScheduleCount || 0,
+      classroomScheduleCount: payload.classroomScheduleCount || 0,
+      courseScheduleCount: payload.courseScheduleCount || 0,
+    };
+    attachSyncOpsSummary(payload, {
+      publisherRun: getLatestPublisherRunSafe(),
+      stagingUploads: lifecycleStatus.stagingUploads || [],
+    });
 
-  res.json({
-    success: true,
-    data: payload,
-    ...payload,
-  });
+    return res.json({
+      success: true,
+      data: payload,
+      ...payload,
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: error.message });
+  }
 });
 
 // 8. 管理员审核贡献接口
@@ -4339,9 +4445,13 @@ function buildStagingSafety(data, activeSnapshot) {
  * Relay Agent: 管理员创建与审核接力采集任务。
  */
 function buildAdminStagingUploadActor(req) {
+  const identity = adminAuth.getAuditIdentity(req);
   return {
     type: "admin",
-    id: adminAuth.isAdminRequest(req) ? "admin-session" : "admin-token",
+    id: identity.operator || (adminAuth.isAdminRequest(req) ? "admin-session" : "admin-token"),
+    authMethod: identity.authMethod || "",
+    scopes: identity.scopes || [],
+    tokenName: identity.tokenName || "",
   };
 }
 
@@ -4709,7 +4819,7 @@ router.delete("/staging/:uploadId", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.post("/staging/upload/init", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/staging/upload/init", verifyAdminWriteAccess, adminAuth.requireScopes(["staging:init"]), (req, res) => {
   try {
     const upload = stagingUploadService.initUpload(req.body || {}, buildAdminStagingUploadActor(req));
     return res.json({
@@ -4759,7 +4869,8 @@ router.post("/staging/upload/unchanged", adminAuth.verifyAdminAccess, (req, res)
 
 router.post(
   "/staging/upload/chunk",
-  adminAuth.verifyAdminAccess,
+  verifyAdminWriteAccess,
+  adminAuth.requireScopes(["staging:chunk"]),
   express.raw({ type: "*/*", limit: STAGING_CHUNK_BODY_LIMIT }),
   (req, res) => {
     try {
@@ -4779,7 +4890,7 @@ router.post(
   }
 );
 
-router.post("/staging/upload/finalize", adminAuth.verifyAdminAccess, async (req, res) => {
+router.post("/staging/upload/finalize", verifyAdminWriteAccess, adminAuth.requireScopes(["staging:finalize"]), async (req, res) => {
   const uploadId = req.body && req.body.uploadId;
   try {
     if (!uploadId) {
@@ -4823,7 +4934,7 @@ router.get("/staging/upload/:uploadId/status", adminAuth.verifyAdminAccess, (req
   }
 });
 
-router.post("/relay/tasks", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/relay/tasks", verifyAdminWriteAccess, adminAuth.requireScopes(["relay:manage"]), (req, res) => {
   try {
     const task = relayService.createTask(req.body || {});
     writeAuditLog(req, "create", "relay-task", task.id, `创建接力任务 ${task.term}`);
@@ -4849,7 +4960,7 @@ router.get("/relay/tasks", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.post("/relay/tasks/:id/revoke", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/relay/tasks/:id/revoke", verifyAdminWriteAccess, adminAuth.requireScopes(["relay:manage"]), (req, res) => {
   try {
     const task = relayService.revokeTask(req.params.id);
     if (!task) {
@@ -4862,7 +4973,7 @@ router.post("/relay/tasks/:id/revoke", adminAuth.verifyAdminAccess, (req, res) =
   }
 });
 
-router.post("/relay/tasks/:id/cancel", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/relay/tasks/:id/cancel", verifyAdminWriteAccess, adminAuth.requireScopes(["relay:manage"]), (req, res) => {
   try {
     const task = relayService.cancelTask(req.params.id);
     if (!task) {
@@ -4875,7 +4986,7 @@ router.post("/relay/tasks/:id/cancel", adminAuth.verifyAdminAccess, (req, res) =
   }
 });
 
-router.delete("/relay/tasks/:id", adminAuth.verifyAdminAccess, (req, res) => {
+router.delete("/relay/tasks/:id", verifyAdminWriteAccess, adminAuth.requireScopes(["relay:manage"]), (req, res) => {
   try {
     const deleted = relayService.deleteTask(req.params.id);
     if (!deleted) {
@@ -4900,7 +5011,7 @@ router.get("/relay/uploads", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.post("/relay/uploads/:id/promote-to-staging", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/relay/uploads/:id/promote-to-staging", verifyAdminWriteAccess, adminAuth.requireScopes(["relay:manage"]), (req, res) => {
   try {
     const uploadResult = relayService.readUploadPayload(req.params.id);
     if (!uploadResult) {
@@ -4978,91 +5089,7 @@ async function getCachedIntranetDiagnostic(force = false) {
   return syncStatusDnsCache;
 }
 
-router.get("/sync/status", adminAuth.verifyAdminAccess, async (req, res) => {
-  setJsonUtf8(res);
-  try {
-    const meta = getAdminDataVersion();
-    const syncMeta = getSyncMeta();
-    
-    // 快速进行 EasyConnect / 教务网 DNS 解析诊断 (1秒超时)
-    const intranetDiagnostic = await getCachedIntranetDiagnostic(req.query.diagnoseNetwork === "true");
-    const intranetAccessible = intranetDiagnostic.intranetAccessible === true;
-
-    const relayUploads = relayService.listUploads();
-    const stagingUploads = stagingUploadService.listUploadRecords({ limit: 1 }).records || [];
-    const activeInfo = releaseService.getActiveReleaseInfo();
-    const releasePackStatus = activeInfo && activeInfo.version
-      ? releaseService.getReleasePackQuickHealth(activeInfo.version)
-      : null;
-    const staticSync = staticReleaseSyncService.getSyncStatus({
-      version: activeInfo && activeInfo.version || meta.releaseVersion || "",
-    });
-    const latestJob = jobService.latestJob();
-    const runningReleaseJob = jobService.getRunningJobByLockGroup(releaseWorkerManager.RELEASE_HEAVY_LOCK_GROUP);
-    const fingerprint = buildFingerprintStatus();
-    const lifecycleStatus = releaseLifecycleService.buildLifecycleStatus({
-      reason: "sync-status",
-      reconcile: false,
-      uploadLimit: 1,
-    });
-    const payload = {
-        ...lifecycleStatus,
-        releaseVersion: lifecycleStatus.activeReleaseVersion || meta.releaseVersion || "-",
-        activeReleaseUpdatedAt: activeInfo && activeInfo.updatedAt || lifecycleStatus.activeRelease && lifecycleStatus.activeRelease.updatedAt || null,
-        activeReleaseActivatedAt: activeInfo && activeInfo.activatedAt || lifecycleStatus.activeRelease && lifecycleStatus.activeRelease.activatedAt || null,
-        semester: appConfigService.getAdminConfig().currentSemester,
-        releasePackStatus,
-        releasePackHealthy: Boolean(releasePackStatus && releasePackStatus.healthy),
-        staticSync,
-        activeCanonicalHash: fingerprint.activeCanonicalHash,
-        stagingCanonicalHash: fingerprint.stagingCanonicalHash,
-        stagingSameAsActive: Boolean(fingerprint.activeCanonicalHash && fingerprint.stagingCanonicalHash && fingerprint.activeCanonicalHash === fingerprint.stagingCanonicalHash),
-        stagingNeedsPublish: Boolean(fingerprint.stagingCanonicalHash && fingerprint.activeCanonicalHash !== fingerprint.stagingCanonicalHash),
-        staticManifestUrl: staticSync.staticManifestUrl,
-        staticClassIndexUrl: staticSync.staticClassIndexUrl,
-        staticEmptyRoomIndexUrl: staticSync.staticEmptyRoomIndexUrl,
-        openRestyStaticSyncStatus: staticSync.status,
-        lastStaticSyncTime: staticSync.lastSyncTime || staticSync.syncedAt || staticSync.updatedAt || null,
-        staticRetainedReleases: staticSync.keptReleases || [],
-        latestJob: jobService.publicJob(latestJob),
-        runningReleaseJob: jobService.publicJob(runningReleaseJob),
-        releaseHeavyBusy: Boolean(runningReleaseJob),
-        classScheduleUpdatedAt: syncMeta["class-schedules"]?.updatedAt || null,
-        teacherScheduleUpdatedAt: syncMeta["teacher-schedules"]?.updatedAt || null,
-        classroomScheduleUpdatedAt: syncMeta["classroom-schedules"]?.updatedAt || null,
-        courseScheduleUpdatedAt: syncMeta["course-schedules"]?.updatedAt || null,
-        lastUploadTime: syncMeta["class-schedules"]?.updatedAt || syncMeta["sync-meta"]?.updatedAt || null,
-        intranetAccessible,
-        intranetDiagnosticStatus: intranetDiagnostic.status,
-        intranetDiagnosticCheckedAt: intranetDiagnostic.checkedAtIso || null,
-        intranetMessage: intranetAccessible
-          ? "当前服务器 DNS 能解析教务域名，但主流程仍建议使用本机校园网采集。"
-          : "公网服务器无法访问学校内网是预期情况；请使用本机校园网同步或接力代理端。",
-        latestRelayUpload: relayUploads[0] || null,
-        latestStagingUpload: stagingUploads[0] || null,
-        resourceCounts: activeInfo && activeInfo.resourceCounts || releasePackStatus && releasePackStatus.resourceCounts || null,
-        counts: {
-          classScheduleCount: syncMeta["class-schedules"]?.itemCount || 0,
-          adminClassCount: syncMeta["class-schedules"]?.adminClassCount || 0,
-          majorAggregateCount: syncMeta["class-schedules"]?.majorAggregateCount || 0,
-          teacherScheduleCount: syncMeta["teacher-schedules"]?.itemCount || 0,
-          classroomScheduleCount: syncMeta["classroom-schedules"]?.itemCount || 0,
-          courseScheduleCount: syncMeta["course-schedules"]?.itemCount || 0,
-        }
-      };
-    attachSyncOpsSummary(payload, {
-      publisherRun: getLatestPublisherRunSafe(),
-      stagingUploads: lifecycleStatus.stagingUploads || [],
-    });
-    return res.json({
-      success: true,
-      data: payload,
-      ...payload,
-    });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
-  }
-});
+// NOTE: duplicate GET /sync/status removed in phase 1 — single handler above.
 
 function getRequestedReleaseVersion(req) {
   const active = releaseService.getActiveReleaseInfo();
@@ -5148,7 +5175,7 @@ router.post("/sync/reconcile", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.post("/static-release-sync/start", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/static-release-sync/start", verifyAdminWriteAccess, adminAuth.requireScopes(["static:sync"]), (req, res) => {
   try {
     storageLifecycleService.assertReleaseCanStart();
     const version = getRequestedReleaseVersion(req);
@@ -5245,7 +5272,7 @@ router.get("/release-pack/deep-health/status", adminAuth.verifyAdminAccess, (req
   return sendJobStatus(res, "release-pack-deep-health", req.query.id);
 });
 
-router.post("/release-pack/rebuild/start", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/release-pack/rebuild/start", verifyAdminWriteAccess, adminAuth.requireScopes(["release:build"]), (req, res) => {
   try {
     storageLifecycleService.assertReleaseCanStart();
     const version = getRequestedReleaseVersion(req);
@@ -5264,7 +5291,7 @@ router.get("/release-pack/rebuild/status", adminAuth.verifyAdminAccess, (req, re
   return sendJobStatus(res, "release-pack-rebuild", req.query.id);
 });
 
-router.post("/release-pack/verify/start", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/release-pack/verify/start", verifyAdminWriteAccess, adminAuth.requireScopes(["static:verify"]), (req, res) => {
   try {
     const version = getRequestedReleaseVersion(req);
     const job = releaseWorkerManager.startReleaseJob("release-pack-verify", { version }, { lockGroup: null });
@@ -5278,7 +5305,7 @@ router.get("/release-pack/verify/status", adminAuth.verifyAdminAccess, (req, res
   return sendJobStatus(res, "release-pack-verify", req.query.id);
 });
 
-router.post("/sync/staging/publish/start", adminAuth.verifyAdminAccess, (req, res) => {
+router.post("/sync/staging/publish/start", verifyAdminWriteAccess, adminAuth.requireScopes(["release:publish"]), (req, res) => {
   try {
     storageLifecycleService.assertReleaseCanStart();
     const input = {
@@ -5495,7 +5522,7 @@ router.get("/sync/staging/current", adminAuth.verifyAdminAccess, (req, res) => {
  * 5.3 POST /api/admin/sync/staging/publish
  * 发布当前 Staging JSON 为正式 Release (变动>30%需要force强制参数)
  */
-router.post("/sync/staging/publish", adminAuth.verifyAdminAccess, async (req, res) => {
+router.post("/sync/staging/publish", verifyAdminWriteAccess, adminAuth.requireScopes(["release:publish"]), async (req, res) => {
   try {
     storageLifecycleService.assertReleaseCanStart();
     if (!fs.existsSync(STAGING_LATEST_PATH)) {
@@ -6056,7 +6083,10 @@ router.get("/backups", adminAuth.verifyAdminAccess, (req, res) => {
         return {
           filename: f,
           size: `${Math.round(stat.size / 1024)} KB`,
-          createdAt: stat.mtime.toISOString()
+          sizeBytes: stat.size,
+          createdAt: stat.mtime.toISOString(),
+          kind: "backup",
+          downloadPath: `/api/admin/backups/download?filename=${encodeURIComponent(f)}`,
         };
       })
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
@@ -6071,10 +6101,92 @@ router.get("/backups/download", adminAuth.verifyAdminAccess, (req, res) => {
     const file = req.query.filename;
     const safeFile = path.basename(file);
     const filePath = path.join(BACKUPS_DIR, safeFile);
-    if (!fs.existsSync(filePath)) {
+    if (!fs.existsSync(filePath) || !filePath.startsWith(BACKUPS_DIR)) {
       return res.status(404).json({ success: false, message: "备份文件不存在" });
     }
     return res.download(filePath);
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+/**
+ * Snapshot list/download — aligned with backups contract.
+ * GET /api/admin/snapshots
+ * GET /api/admin/snapshots/download?filename=
+ */
+router.get("/snapshots", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const items = [];
+    const currentJson = path.join(SNAPSHOTS_DIR, "current.json");
+    const currentGz = path.join(SNAPSHOTS_DIR, "current.json.gz");
+    if (fs.existsSync(currentJson)) {
+      const stat = fs.statSync(currentJson);
+      items.push({
+        filename: "current.json",
+        kind: "snapshot-current",
+        size: `${Math.round(stat.size / 1024)} KB`,
+        sizeBytes: stat.size,
+        createdAt: stat.mtime.toISOString(),
+        downloadPath: "/api/admin/snapshots/download?filename=current.json",
+      });
+    }
+    if (fs.existsSync(currentGz)) {
+      const stat = fs.statSync(currentGz);
+      items.push({
+        filename: "current.json.gz",
+        kind: "snapshot-current",
+        size: `${Math.round(stat.size / 1024)} KB`,
+        sizeBytes: stat.size,
+        createdAt: stat.mtime.toISOString(),
+        downloadPath: "/api/admin/snapshots/download?filename=current.json.gz",
+      });
+    }
+    if (fs.existsSync(HISTORY_DIR)) {
+      fs.readdirSync(HISTORY_DIR)
+        .filter((f) => f.startsWith("snapshot-") && (f.endsWith(".json") || f.endsWith(".json.gz")))
+        .forEach((f) => {
+          const filePath = path.join(HISTORY_DIR, f);
+          const stat = fs.statSync(filePath);
+          items.push({
+            filename: f,
+            kind: "snapshot-history",
+            size: `${Math.round(stat.size / 1024)} KB`,
+            sizeBytes: stat.size,
+            createdAt: stat.mtime.toISOString(),
+            downloadPath: `/api/admin/snapshots/download?filename=${encodeURIComponent(f)}`,
+          });
+        });
+    }
+    items.sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+    return res.json({ success: true, items });
+  } catch (e) {
+    return res.status(500).json({ success: false, message: e.message });
+  }
+});
+
+router.get("/snapshots/download", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const file = path.basename(String(req.query.filename || ""));
+    if (!file) {
+      return res.status(400).json({ success: false, message: "filename is required" });
+    }
+    let filePath = "";
+    if (file === "current.json" || file === "current.json.gz") {
+      filePath = path.join(SNAPSHOTS_DIR, file);
+    } else if (file.startsWith("snapshot-")) {
+      filePath = path.join(HISTORY_DIR, file);
+    } else {
+      return res.status(400).json({ success: false, message: "invalid snapshot filename" });
+    }
+    const resolved = path.resolve(filePath);
+    if (
+      !resolved.startsWith(path.resolve(SNAPSHOTS_DIR)) ||
+      !fs.existsSync(resolved)
+    ) {
+      return res.status(404).json({ success: false, message: "快照文件不存在" });
+    }
+    return res.download(resolved);
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
   }
