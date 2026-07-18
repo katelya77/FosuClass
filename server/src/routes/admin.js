@@ -92,7 +92,6 @@ const DATA_DIR = path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, 
 const BACKUPS_DIR = path.join(DATA_DIR, "backups");
 const AUDIT_LOG_PATH = path.join(DATA_DIR, "admin-audit-log.jsonl");
 const CATALOG_META_PATH = path.join(STORAGE_DIR, "catalog-meta.json");
-const QUALITY_IGNORES_PATH = path.join(STORAGE_DIR, "quality-ignores.json");
 const SYNC_HISTORY_PATH = path.join(DATA_DIR, "sync-history.json");
 
 // 确保目录存在
@@ -3813,14 +3812,10 @@ function generateQualityReport() {
   
   const anomalies = [];
   
-  let ignores = [];
-  try {
-    if (fs.existsSync(QUALITY_IGNORES_PATH)) {
-      ignores = JSON.parse(fs.readFileSync(QUALITY_IGNORES_PATH, "utf-8"));
-    }
-  } catch (e) {}
-  
-  const isIgnored = (type, target) => Array.isArray(ignores) && ignores.some(ig => ig.type === type && ig.target === target);
+  const ignores = qualityDomainService.listIgnores().rules;
+  const isIgnored = (type, target) => ignores.some((rule) =>
+    (rule.fingerprint || `${rule.type || ""}::${rule.target || ""}`) === `${type}::${target}` && rule.ignored !== false
+  );
 
   classes.forEach(c => {
     const className = c.className || "";
@@ -6154,7 +6149,7 @@ router.post("/sync/record", adminAuth.verifyAdminAccess, (req, res) => {
  */
 router.get("/quality/report", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const report = generateQualityReport();
+    const report = qualityDomainService.buildQualityReport();
     return res.json({
       success: true,
       data: report
@@ -6197,7 +6192,7 @@ router.post("/quality/mark", adminAuth.verifyAdminAccess, (req, res) => {
     }
     const result = commitWithBackup({
       type: "quality",
-      sourceFile: qualityDomainService.QUALITY_IGNORES_PATH || QUALITY_IGNORES_PATH,
+      sourceFile: qualityDomainService.QUALITY_IGNORES_PATH,
       fallbackData: prepared.backupData,
       commit: () => qualityDomainService.commitPreparedQualityMutation(prepared),
     });
@@ -6225,6 +6220,27 @@ router.get("/quality/ignores", adminAuth.verifyAdminAccess, (req, res) => {
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
+});
+
+router.post("/quality/recheck/start", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const job = qualityDomainService.startQualityRecheck(req.body || {});
+    writeAuditLog(req, "recheck", "quality", job.id, "启动质量复检任务");
+    return res.status(202).json({ success: true, job });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+      code: error.code,
+      job: error.job,
+    });
+  }
+});
+
+router.get("/quality/recheck/:id", adminAuth.verifyAdminAccess, (req, res) => {
+  const job = qualityDomainService.getQualityRecheck(req.params.id);
+  if (!job) return res.status(404).json({ success: false, message: "质量复检任务不存在" });
+  return res.json({ success: true, job });
 });
 
 /**

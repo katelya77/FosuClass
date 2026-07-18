@@ -128,6 +128,7 @@ async function startAdminHttpHarness(options = {}) {
       { name: "c1-settings", token: "c1-settings-token", scopes: ["settings:write"] },
       { name: "c1-wrong", token: "c1-wrong-token", scopes: ["catalog:write"] },
     ]),
+    ...(options.environment || {}),
   };
   for (const [key, value] of Object.entries(environment)) {
     previousEnv[key] = process.env[key];
