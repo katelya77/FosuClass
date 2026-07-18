@@ -118,6 +118,20 @@ function ensureSafeTargetParent(dataDir, relativePath) {
 function bootstrapRuntimeData(options = {}) {
   const seedDir = path.resolve(options.seedDir || process.env.FOSU_SEED_DATA_DIR || path.join(__dirname, "../../data"));
   const dataDir = path.resolve(options.dataDir || process.env.FOSU_DATA_DIR || path.join(__dirname, "../../data"));
+  if (seedDir === dataDir) {
+    // Source checkouts historically use server/data for both reads and writes.
+    // Treat that compatibility layout as a strict no-op: a bootstrap command
+    // must not add a marker to, or recursively scan, the developer's source.
+    assertDirectory(dataDir, "RUNTIME_DATA_UNSAFE", false);
+    return {
+      schemaVersion: 1,
+      seedFingerprint: sha256(Buffer.from("same-root-noop-v1")),
+      files: [],
+      copied: [],
+      skipped: [],
+      sameRoot: true,
+    };
+  }
   const seedFiles = walkSeedFiles(seedDir).filter((entry) => entry.path !== MARKER_NAME);
   assertDirectory(dataDir, "RUNTIME_DATA_UNSAFE", true);
   const copied = [];
