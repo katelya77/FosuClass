@@ -180,3 +180,22 @@ pause marker, proving the intended interleaving was not yet exercised.
 - The live-owner subprocess test releases and awaits its paused owner from a
   `finally` block, so a failed assertion cannot leave a test child holding the
   lock.
+
+## Fifth independent-review follow-up
+
+### RED evidence
+
+A freshly written `{}` lock was parsed as JSON and immediately reclaimed. The
+module assertion requiring bounded `503` and byte preservation failed before
+the validator was added.
+
+### Implementation and verification
+
+- Lock metadata is valid only for a non-array object with a positive integer
+  PID, non-empty token and instance ID, and a parseable creation timestamp.
+  Any other parsed JSON follows the malformed-lock path: it is fail-closed
+  while fresh and recoverable only after the stale mtime threshold.
+- Module coverage verifies byte-preserving `503` followed by stale recovery for
+  `{}`, arrays, invalid PID, empty token, empty instance ID, invalid timestamp,
+  and non-JSON bytes. Existing live-owner, prior-instance same-PID, and dead
+  PID paths remain green.

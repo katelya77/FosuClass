@@ -60,6 +60,20 @@ function fileIdentity(filePath) {
   } catch (_) { return null; }
 }
 
+function isValidLockMetadata(details) {
+  return !!details
+    && typeof details === "object"
+    && !Array.isArray(details)
+    && Number.isInteger(details.pid)
+    && details.pid > 0
+    && typeof details.token === "string"
+    && details.token.trim().length > 0
+    && typeof details.instanceId === "string"
+    && details.instanceId.trim().length > 0
+    && typeof details.createdAt === "string"
+    && Number.isFinite(Date.parse(details.createdAt));
+}
+
 function reclaimStaleLock(lockPath) {
   let stat;
   let details = null;
@@ -68,10 +82,11 @@ function reclaimStaleLock(lockPath) {
     try { details = JSON.parse(fs.readFileSync(lockPath, "utf8")); } catch (_) {}
   } catch (_) { return false; }
   const now = Date.now();
-  if (!details) {
+  const validMetadata = isValidLockMetadata(details);
+  if (!validMetadata) {
     if (now - stat.mtimeMs < LOCK_STALE_MS) return false;
   }
-  if (details && Number.isInteger(details.pid) && details.pid > 0) {
+  if (validMetadata) {
     try {
       process.kill(details.pid, 0);
       const createdAt = Date.parse(details.createdAt || "");
@@ -84,7 +99,7 @@ function reclaimStaleLock(lockPath) {
       if (error.code && error.code !== "ESRCH") return false;
     }
   }
-  const retired = `${lockPath}.stale.${details && details.token || "invalid"}.${process.pid}.${crypto.randomBytes(3).toString("hex")}`;
+  const retired = `${lockPath}.stale.${validMetadata ? details.token : "invalid"}.${process.pid}.${crypto.randomBytes(3).toString("hex")}`;
   try {
     fs.renameSync(lockPath, retired);
     fs.unlinkSync(retired);
