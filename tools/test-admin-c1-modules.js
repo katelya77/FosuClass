@@ -309,10 +309,30 @@ assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::aft
 
 fs.writeFileSync(lockPath, JSON.stringify({ pid: 99999999, token: "dead-owner", instanceId: "dead-owner", createdAt: new Date().toISOString() }), "utf8");
 assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-dead-owner", reason: "dead pid recovery" }), "dead PID locks must remain recoverable");
-fs.writeFileSync(lockPath, "not-json", "utf8");
-const staleAt = new Date(Date.now() - 60 * 1000);
-fs.utimesSync(lockPath, staleAt, staleAt);
-assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-malformed-stale", reason: "malformed stale recovery" }), "old malformed locks must remain recoverable");
+const malformedLockVariants = [
+  ["empty object", "{}"],
+  ["array", "[]"],
+  ["invalid pid", JSON.stringify({ pid: 0, token: "invalid-pid", instanceId: "invalid-pid", createdAt: new Date().toISOString() })],
+  ["empty token", JSON.stringify({ pid: process.pid, token: "", instanceId: "invalid-token", createdAt: new Date().toISOString() })],
+  ["empty instance ID", JSON.stringify({ pid: process.pid, token: "invalid-instance", instanceId: "", createdAt: new Date().toISOString() })],
+  ["invalid date", JSON.stringify({ pid: process.pid, token: "invalid-date", instanceId: "invalid-date", createdAt: "not-a-date" })],
+  ["non-JSON", "not-json"],
+];
+for (const [label, bytes] of malformedLockVariants) {
+  fs.writeFileSync(lockPath, bytes, "utf8");
+  assert.throws(
+    () => quality.markIgnore({ fingerprint: `empty-schedule::fresh-malformed-${label}`, reason: "fresh malformed lock" }),
+    (error) => error && error.code === "QUALITY_IGNORES_LOCK_TIMEOUT" && error.statusCode === 503,
+    `fresh ${label} metadata must fail closed`
+  );
+  assert.strictEqual(fs.readFileSync(lockPath, "utf8"), bytes, `fresh ${label} metadata must remain byte-identical`);
+  const staleAt = new Date(Date.now() - 60 * 1000);
+  fs.utimesSync(lockPath, staleAt, staleAt);
+  assert.doesNotThrow(
+    () => quality.markIgnore({ fingerprint: `empty-schedule::stale-malformed-${label}`, reason: "stale malformed recovery" }),
+    `stale ${label} metadata must be recoverable`
+  );
+}
 
 function waitFor(condition, timeoutMs = 3000) {
   const startedAt = Date.now();
