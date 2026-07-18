@@ -36,6 +36,7 @@ function buildComposeDocument(image) {
     "      FOSU_DATA_DIR: /app/data",
     "      FOSU_SEED_DATA_DIR: /app/seed-data",
     "      FOSU_STORAGE_DIR: /app/storage",
+    "      FOSU_RUNTIME_DATA_REQUIRE_MIGRATION: \"true\"",
     "    volumes:",
     "      - ./data:/app/data",
     "      - ./storage:/app/storage",
@@ -97,6 +98,26 @@ function write(filePath, value) {
   fs.writeFileSync(filePath, value);
 }
 
+function migrationFileManifest(dataDir) {
+  const files = [];
+  function visit(directory) {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((left, right) => left.name < right.name ? -1 : left.name > right.name ? 1 : 0)) {
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(absolute);
+      else if (entry.isFile() && entry.name !== ".fosu-runtime-migration.json") {
+        const bytes = fs.readFileSync(absolute);
+        files.push({
+          path: path.relative(dataDir, absolute).replace(/\\/g, "/"),
+          size: bytes.length,
+          sha256: crypto.createHash("sha256").update(bytes).digest("hex"),
+        });
+      }
+    }
+  }
+  visit(dataDir);
+  return files;
+}
+
 function executeRecreateTest(options = {}) {
   const availability = dockerAvailability();
   if (!availability.ok) return { ok: false, status: "UNKNOWN", reason: availability.reason };
@@ -132,14 +153,34 @@ function executeRecreateTest(options = {}) {
     write(path.join(storageDir, "admin-config.json"), '{"appName":"before"}\n');
     write(path.join(storageDir, "jobs", "job-before.json"), '{"status":"success"}\n');
     write(path.join(storageDir, "quality-ignores.json"), '[]\n');
+    write(path.join(storageDir, "feedback.jsonl"), '{"id":"feedback-before"}\n');
+    write(path.join(storageDir, "releases", "fixture-v1", "manifest.json"), '{"version":"fixture-v1"}\n');
+    write(path.join(storageDir, "public", "runtime", "active.json"), '{"releaseVersion":"fixture-v1"}\n');
+    write(path.join(storageDir, "relay", "tasks.json"), '[]\n');
+    write(path.join(storageDir, "terms", "2026-1", "calendar.json"), '{"weeks":20}\n');
+    const migratedFiles = migrationFileManifest(dataDir);
+    write(path.join(dataDir, ".fosu-runtime-migration.json"), `${JSON.stringify({
+      schemaVersion: 1,
+      migratedAt: "2026-07-19T01:02:03.456Z",
+      sourceContainer: "fixture-old-container",
+      sourcePath: "/app/data",
+      archive: "fosu-runtime-data-20260719T010203Z.tar.gz",
+      archiveSha256: "a".repeat(64),
+      dataFingerprint: crypto.createHash("sha256").update(JSON.stringify(migratedFiles)).digest("hex"),
+      files: migratedFiles,
+    }, null, 2)}\n`);
 
     const composeArgs = ["compose", "-p", project, "-f", composePath];
     run("docker", composeArgs.concat(["up", "-d", "--no-build"]), { cwd: fixtureRoot, code: "RUNTIME_RECREATE_UP_FAILED" });
     beforeContainer = run("docker", composeArgs.concat(["ps", "-q", "verify"]), { cwd: fixtureRoot });
     if (!beforeContainer) throw typedError("initial persistence container was not created", "RUNTIME_RECREATE_CONTAINER_MISSING");
-    const baseline = capturePersistenceSnapshot({ dataDir, storageDir });
-    assert.ok(baseline.domains.audit && baseline.domains.backups && baseline.domains.configuration && baseline.domains.jobs, "baseline persistence evidence is incomplete");
     assert.ok(fs.existsSync(path.join(dataDir, ".fosu-runtime-bootstrap.json")), "runtime seed marker was not persisted");
+    fs.appendFileSync(path.join(dataDir, "admin-audit-log.jsonl"), '{"id":"audit-after-first-start"}\n');
+    write(path.join(storageDir, "jobs", "job-after-first-start.json"), '{"status":"success"}\n');
+    const baseline = capturePersistenceSnapshot({ dataDir, storageDir });
+    for (const domain of ["audit", "backups", "configuration", "jobs", "feedback", "release", "runtime", "relay", "term"]) {
+      assert.ok(baseline.domains[domain], `baseline persistence evidence is missing ${domain}`);
+    }
 
     run("docker", composeArgs.concat(["up", "-d", "--force-recreate", "--no-build"]), { cwd: fixtureRoot, code: "RUNTIME_RECREATE_FORCE_FAILED" });
     afterContainer = run("docker", composeArgs.concat(["ps", "-q", "verify"]), { cwd: fixtureRoot });
