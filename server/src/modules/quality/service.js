@@ -9,18 +9,11 @@ function commitPreparedQualityMutation(prepared) { return repository.commitPrepa
 function markIgnore(rule, options) { return commitPreparedQualityMutation(prepareMarkIgnoreMutation(rule, options)); }
 function unmarkIgnore(fingerprint, options) { return commitPreparedQualityMutation(prepareUnmarkIgnoreMutation(fingerprint, options)); }
 
-function startQualityRecheck(input = {}) {
+function startQualityRecheck(input = {}, dependencies = {}) {
+  const buildReport = dependencies.buildReport || buildQualityReport;
   return jobService.createSingletonJob("quality-recheck", input, async (context) => {
     context.progress(20, "quality report started");
-    // Yield after the queued record is persisted so a second request observes
-    // the singleton lock instead of racing a synchronous report calculation.
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    if (process.env.FOSU_QUALITY_RECHECK_TEST_FAIL === "true") {
-      const error = new Error("injected quality recheck failure");
-      error.code = "QUALITY_RECHECK_INJECTED_FAILURE";
-      throw error;
-    }
-    const report = buildQualityReport();
+    const report = await buildReport();
     context.progress(90, "quality report completed");
     return { activeCount: report.summary.activeCount, ignoredCount: report.summary.ignoredCount, totalCount: report.summary.totalCount, generatedAt: report.generatedAt };
   }, { lockGroup: "quality-recheck" });
