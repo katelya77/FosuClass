@@ -93,6 +93,38 @@ After the fixes, the following failure-propagating verification completed with e
     Docker is not available for server smoke test. Skipping outside CI.
     git diff --check
 
-The final Docker stage now copies the loader to /app/tools/lib and the manifest to /app/config, matching the existing service import and loader resolution. Static contract coverage verifies those paths without requiring a local Docker daemon.
+The first-review Docker copy repair was superseded by the second-review fix below: the loader now lives in the server runtime tree and only the manifest is copied to /app/config. Static contract coverage verifies the final paths without requiring a local Docker daemon.
 
 The manifest restores production writes for content, feedback, audit, and backups only. Catalog, quality, and settings remain production-disabled. The source guard now reports both a dynamic method and dynamic path failure unless the call is the narrowly identified fetch transport wrapper in admin-web/src/shared/api/client.ts.
+
+## Second-review RED/GREEN evidence
+
+### RED
+
+The second review repairs again started with focused failures.
+
+    npm run test:admin-rollout-runtime-contract
+    AssertionError: capabilities service must use the server-owned manifest loader
+
+    npm run test:admin-next-write-route-guard
+    AssertionError: same-shaped fetch outside api/download must not receive the transport exemption
+
+### GREEN
+
+The final verification run completed with exit 0.
+
+    npm run test:admin-capabilities
+    Admin capabilities tests passed.
+    npm run test:admin-next-write-route-guard
+    Admin next write route guard passed (14 writes).
+    npm run test:admin-rollout-runtime-contract
+    Admin rollout runtime Docker contract passed.
+    npm run test:config-migration-safe
+    Config migration-safe tests passed.
+    npm run test:server-docker-smoke
+    Docker is not available for server smoke test. Skipping outside CI.
+    git diff --check
+
+The true loader now resides in server/src/services/adminRolloutManifestService.js. It explicitly selects /app/config/admin-rollout-manifest.json when that final-image path exists and otherwise uses the repository config path for local tooling. tools/lib/admin-rollout-manifest.js is only a re-export, and the Docker runtime copies only the manifest config in addition to server/src.
+
+The Docker contract uses path.posix.resolve and an explicit final-image file set to validate the capabilities-service import target and the loader manifest target. The AST guard permits only the fetch calls structurally enclosed by the named api or download functions in client.ts, with shorthand method and headers plus credentials: include. A same-shaped extra function is rejected.
