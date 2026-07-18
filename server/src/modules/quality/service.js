@@ -62,7 +62,7 @@ function listIgnores() {
   return readDoc();
 }
 
-function markIgnore(rule, options = {}) {
+function prepareMarkIgnoreMutation(rule, options = {}) {
   const doc = readDoc();
   const expected = options.expectedVersion || options.ifMatch;
   if (options.requireIfMatch && !expected) {
@@ -97,11 +97,40 @@ function markIgnore(rule, options = {}) {
   nextRules.push(entry);
   const version = makeVersion(nextRules);
   const out = { version, updatedAt: new Date().toISOString(), rules: nextRules };
-  writeJsonAtomic(QUALITY_IGNORES_PATH, out);
-  return { version, etag: version, rule: entry, rules: nextRules };
+  return {
+    version: doc.version,
+    out,
+    entry,
+    nextVersion: version,
+    rules: nextRules,
+    backupData: { version: doc.version, updatedAt: doc.updatedAt, rules: doc.rules },
+  };
 }
 
-function unmarkIgnore(fingerprint, options = {}) {
+function commitPreparedQualityMutation(prepared) {
+  if (!prepared || !prepared.version || !prepared.out) {
+    const err = new Error("invalid prepared quality mutation");
+    err.statusCode = 400;
+    err.code = "PREPARED_MUTATION_INVALID";
+    throw err;
+  }
+  const current = readDoc();
+  if (current.version !== prepared.version) {
+    const err = new Error("quality ignores conflict");
+    err.statusCode = 409;
+    err.code = "CONFLICT";
+    err.currentVersion = current.version;
+    throw err;
+  }
+  writeJsonAtomic(QUALITY_IGNORES_PATH, prepared.out);
+  return { version: prepared.nextVersion, etag: prepared.nextVersion, rule: prepared.entry, rules: prepared.rules };
+}
+
+function markIgnore(rule, options = {}) {
+  return commitPreparedQualityMutation(prepareMarkIgnoreMutation(rule, options));
+}
+
+function prepareUnmarkIgnoreMutation(fingerprint, options = {}) {
   const doc = readDoc();
   const expected = options.expectedVersion || options.ifMatch;
   if (options.requireIfMatch && !expected) {
@@ -119,17 +148,29 @@ function unmarkIgnore(fingerprint, options = {}) {
   }
   const nextRules = doc.rules.filter((r) => r.fingerprint !== fingerprint);
   const version = makeVersion(nextRules);
-  writeJsonAtomic(QUALITY_IGNORES_PATH, {
+  return {
+    version: doc.version,
+    out: {
     version,
     updatedAt: new Date().toISOString(),
     rules: nextRules,
-  });
-  return { version, etag: version, rules: nextRules };
+    },
+    nextVersion: version,
+    rules: nextRules,
+    backupData: { version: doc.version, updatedAt: doc.updatedAt, rules: doc.rules },
+  };
+}
+
+function unmarkIgnore(fingerprint, options = {}) {
+  return commitPreparedQualityMutation(prepareUnmarkIgnoreMutation(fingerprint, options));
 }
 
 module.exports = {
   QUALITY_IGNORES_PATH,
   listIgnores,
+  prepareMarkIgnoreMutation,
+  prepareUnmarkIgnoreMutation,
+  commitPreparedQualityMutation,
   markIgnore,
   unmarkIgnore,
 };

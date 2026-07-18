@@ -83,7 +83,7 @@ function getCatalogMetaDocument() {
   };
 }
 
-function saveCatalogMetaEntry(key, patch, options = {}) {
+function prepareCatalogMetaEntryMutation(key, patch, options = {}) {
   const doc = getCatalogMetaDocument();
   const expected = options.expectedVersion || options.ifMatch || options.version;
   if (options.requireIfMatch && !expected) {
@@ -106,18 +106,48 @@ function saveCatalogMetaEntry(key, patch, options = {}) {
     err.statusCode = 400;
     throw err;
   }
-  const prev = doc.entries[k] || {};
+  const entries = JSON.parse(JSON.stringify(doc.entries || {}));
+  const prev = entries[k] || {};
   const next = Object.assign({}, prev, patch || {}, {
     updatedAt: new Date().toISOString(),
   });
-  doc.entries[k] = next;
-  const version = makeVersion(doc.entries);
+  entries[k] = next;
+  const version = makeVersion(entries);
   const out = {
     __meta: { version, updatedAt: new Date().toISOString() },
-    entries: doc.entries,
+    entries,
   };
-  writeJsonAtomic(CATALOG_META_PATH, out);
-  return { key: k, entry: next, version, etag: version };
+  return {
+    version: doc.version,
+    key: k,
+    entry: next,
+    out,
+    nextVersion: version,
+    backupData: { __meta: { version: doc.version, updatedAt: doc.updatedAt }, entries: doc.entries },
+  };
+}
+
+function commitPreparedCatalogMetaEntryMutation(prepared) {
+  if (!prepared || !prepared.version || !prepared.out || !prepared.key) {
+    const err = new Error("invalid prepared catalog meta mutation");
+    err.statusCode = 400;
+    err.code = "PREPARED_MUTATION_INVALID";
+    throw err;
+  }
+  const current = getCatalogMetaDocument();
+  if (current.version !== prepared.version) {
+    const err = new Error("catalog meta was modified by another request");
+    err.statusCode = 409;
+    err.code = "CONFLICT";
+    err.currentVersion = current.version;
+    throw err;
+  }
+  writeJsonAtomic(CATALOG_META_PATH, prepared.out);
+  return { key: prepared.key, entry: prepared.entry, version: prepared.nextVersion, etag: prepared.nextVersion };
+}
+
+function saveCatalogMetaEntry(key, patch, options = {}) {
+  return commitPreparedCatalogMetaEntryMutation(prepareCatalogMetaEntryMutation(key, patch, options));
 }
 
 function saveCatalogMetaBulk(entriesPatch, options = {}) {
@@ -149,6 +179,8 @@ module.exports = {
   CATALOG_META_PATH,
   getCatalogMeta,
   getCatalogMetaDocument,
+  prepareCatalogMetaEntryMutation,
+  commitPreparedCatalogMetaEntryMutation,
   saveCatalogMetaEntry,
   saveCatalogMetaBulk,
   makeVersion,

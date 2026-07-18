@@ -122,6 +122,7 @@
     "test:admin-no-duplicate-business-logic": "node tools/test-admin-no-duplicate-business-logic.js",
     "test:admin-write-parity": "node tools/test-admin-write-parity.js",
     "test:admin-http-write-parity": "node tools/test-admin-http-write-parity.js",
+    "test:admin-c1-http": "node tools/test-admin-c1-http.js",
     "test:admin-playwright-phase-b": "node tools/test-admin-playwright-phase-b.js",
     "test:admin-matrix-freshness": "node tools/test-admin-matrix-freshness.js",
     "test:admin-matrix-status-evidence": "node tools/test-admin-matrix-status-evidence.js",
