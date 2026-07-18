@@ -8,7 +8,9 @@
 !**/.env.example
 server/storage
 server/storage/**
-server/data/backups
+server/data/**
+!server/data/ai
+!server/data/ai/**
 output
 test-results
 playwright-report

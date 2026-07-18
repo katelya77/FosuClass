@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 const campusMapVersionService = require("./campusMapVersionService");
 
-const DATA_PATH = path.resolve(__dirname, "../../../data/ai/campus-places.json");
+const DATA_PATH = campusMapVersionService.LEGACY_DATA_PATH;
 const SOURCE_ID = "campus-map:v2";
 const ROUTE_LIMIT_TEXT = "目前可帮助定位校区和区域，暂不提供精确步行路线。";
 
