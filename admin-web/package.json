@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "node ./scripts/e2e-smoke.mjs",
-    "test:browser": "node ./scripts/playwright-acceptance.mjs"
+    "test:browser": "node ./scripts/playwright-acceptance.mjs",
+    "test:c1-browser": "node ./scripts/playwright-c1-acceptance.mjs"
   },
   "dependencies": {
     "pinia": "^4.0.2",

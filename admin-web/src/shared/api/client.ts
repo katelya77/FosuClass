@@ -25,6 +25,7 @@ export function setUnauthorizedHandler(handler: ((message: string) => void) | nu
 
 export type RequestOptions = RequestInit & {
   dedupe?: boolean
+  idempotencyKey?: string
 }
 
 export type DownloadFormat = 'blob' | 'arrayBuffer' | 'text' | 'response'
@@ -41,12 +42,31 @@ function buildError(message: string, status?: number, payload?: unknown): ApiErr
   return err
 }
 
-function withAuthHeaders(headers: Headers, method: string) {
+export function createIdempotencyKey(_scope = 'admin-write') {
+  // Scope is intentionally local context only. The durable C1 journal wire
+  // contract accepts a canonical UUID and derives its signed operation ID on
+  // the server, so prefixes would make an otherwise safe retry invalid.
+  const cryptoApi = globalThis.crypto
+  if (typeof cryptoApi?.randomUUID === 'function') return cryptoApi.randomUUID().toLowerCase()
+  if (typeof cryptoApi?.getRandomValues === 'function') {
+    const bytes = cryptoApi.getRandomValues(new Uint8Array(16))
+    bytes[6] = (bytes[6] & 0x0f) | 0x40
+    bytes[8] = (bytes[8] & 0x3f) | 0x80
+    const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+  }
+  throw new Error(`无法为 ${_scope} 生成安全的幂等键：当前浏览器不支持 Web Crypto`)
+}
+
+function withAuthHeaders(headers: Headers, method: string, idempotencyKey?: string) {
   if (!headers.has('X-Fosu-Admin-Client')) {
     headers.set('X-Fosu-Admin-Client', 'next')
   }
   if (csrfToken && !['GET', 'HEAD', 'OPTIONS'].includes(method) && !headers.has('X-Fosu-CSRF')) {
     headers.set('X-Fosu-CSRF', csrfToken)
+  }
+  if (!['GET', 'HEAD', 'OPTIONS'].includes(method) && !headers.has('Idempotency-Key')) {
+    headers.set('Idempotency-Key', idempotencyKey || createIdempotencyKey())
   }
 }
 
@@ -76,7 +96,11 @@ export async function api<T = unknown>(path: string, options: RequestOptions = {
   ) {
     headers.set('Content-Type', 'application/json')
   }
-  withAuthHeaders(headers, method)
+  withAuthHeaders(headers, method, options.idempotencyKey)
+
+  const requestOptions: RequestOptions = { ...options }
+  delete requestOptions.dedupe
+  delete requestOptions.idempotencyKey
 
   const key = `${method} ${path}`
   if (method === 'GET' && options.dedupe !== false && inflight.has(key)) {
@@ -84,7 +108,7 @@ export async function api<T = unknown>(path: string, options: RequestOptions = {
   }
 
   const request = fetch(path, {
-    ...options,
+    ...requestOptions,
     method,
     headers,
     credentials: 'include',

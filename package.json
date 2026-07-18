@@ -102,6 +102,7 @@
     "admin:test": "npm --prefix admin-web run test",
     "admin:test:e2e": "npm --prefix admin-web run test:e2e",
     "admin:test:browser": "npm --prefix admin-web run test:browser",
+    "admin:test:c1-browser": "npm --prefix admin-web run test:c1-browser",
     "config:preflight": "node tools/config-preflight.js",
     "test:architecture-guards": "node tools/test-architecture-guards.js",
     "test:duplicate-admin-routes": "node tools/test-duplicate-admin-routes.js",
