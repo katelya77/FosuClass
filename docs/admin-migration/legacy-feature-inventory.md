@@ -1,6 +1,6 @@
 # Legacy Admin Feature Inventory (Phase A)
 
-- Stable input fingerprint: `8223b28861ecda39ee2418c5cd5d2c60f5c08f919d8dd73707a541cf658f7e6e`
+- Stable input fingerprint: `26a1fd4f2a7ea82a68d1db2c9a7e84889be41efa3767c38d46b227666ecf83a7`
 - Generator version: `2`
 - Rollout manifest version: `2026-07-18.c1-foundation.1`
 - Production primary remains: **legacy**
