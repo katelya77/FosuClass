@@ -14,6 +14,8 @@ const FULL = [SCOPES.ADMIN_FULL];
 const ROUTE_SCOPE_MAP = {
   // C1 domain writes
   "POST /catalog/meta": [SCOPES.CATALOG_WRITE, SCOPES.ADMIN_FULL],
+  "POST /catalog/import/preview": [SCOPES.CATALOG_WRITE, SCOPES.ADMIN_FULL],
+  "POST /catalog/import/apply": [SCOPES.CATALOG_WRITE, SCOPES.ADMIN_FULL],
   "POST /quality/mark": [SCOPES.QUALITY_WRITE, SCOPES.ADMIN_FULL],
   "POST /quality/recheck/start": [SCOPES.QUALITY_WRITE, SCOPES.ADMIN_FULL],
   "POST /settings": [SCOPES.SETTINGS_WRITE, SCOPES.ADMIN_FULL],

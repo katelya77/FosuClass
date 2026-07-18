@@ -4,13 +4,12 @@ const path = require("path");
 const releaseService = require("./releaseService");
 const stagingUploadService = require("./stagingUploadService");
 const stagingSafetyService = require("./stagingSafetyService");
+const adminAuditService = require("./adminAuditService");
 const { calculateFingerprint } = require("../utils/stagingFingerprint");
-const { ensureDir, writeJsonAtomic } = require("../utils/jsonFileStore");
+const { writeJsonAtomic } = require("../utils/jsonFileStore");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
-const DATA_DIR = path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../data"));
 const STAGING_LATEST_PATH = path.join(STORAGE_DIR, "staging-latest.json");
-const AUDIT_LOG_PATH = path.join(DATA_DIR, "admin-audit-log.jsonl");
 
 function readJsonIfExists(filePath) {
   try {
@@ -23,15 +22,14 @@ function readJsonIfExists(filePath) {
 
 function appendAudit(reqMeta, action, moduleName, target, summary) {
   try {
-    ensureDir(DATA_DIR);
-    fs.appendFileSync(AUDIT_LOG_PATH, `${JSON.stringify({
+    adminAuditService.append({
       time: new Date().toISOString(),
       ip: reqMeta && reqMeta.ip || "",
       action,
       module: moduleName,
       target,
       summary,
-    })}\n`, "utf-8");
+    });
   } catch (error) {}
 }
 
