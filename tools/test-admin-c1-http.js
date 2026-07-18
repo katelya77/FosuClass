@@ -460,6 +460,47 @@ async function assertQualityLockTimeoutContract() {
   }
 }
 
+async function assertCommittedQualityReleaseFailureContract() {
+  const harness = await startAdminHttpHarness();
+  try {
+    const session = await harness.login();
+    const version = await getVersion(harness, DOMAINS.quality, session);
+    const lockPath = path.join(harness.paths.storage, "quality-ignores.json.lock");
+    const beforeBackups = backupFiles(harness.paths, "quality-").length;
+    const beforeAudit = auditCount(harness.paths);
+    const originalRead = fs.readFileSync;
+    let injectedReads = 0;
+    fs.readFileSync = (target, ...args) => {
+      if (path.resolve(target) === path.resolve(lockPath) && injectedReads < 2) {
+        injectedReads += 1;
+        const error = new Error("injected post-commit lock read failure");
+        error.code = "EIO";
+        throw error;
+      }
+      return originalRead(target, ...args);
+    };
+    let committed;
+    try {
+      committed = await harness.request("/api/admin/quality/mark", {
+        method: "POST", cookie: session.cookie, headers: browserHeaders(session, version), body: DOMAINS.quality.valid("release-warning"),
+      });
+    } finally {
+      fs.readFileSync = originalRead;
+    }
+    assert.strictEqual(committed.status, 200, committed.text);
+    assert.strictEqual(committed.json && committed.json.lockWarning && committed.json.lockWarning.code, "QUALITY_IGNORES_LOCK_RELEASE_FAILED");
+    assert.strictEqual(auditCount(harness.paths), beforeAudit + 1, "committed mutation with release warning must audit exactly once");
+    assert.strictEqual(backupFiles(harness.paths, "quality-").length, beforeBackups + 1, "committed mutation must retain exactly one backup");
+    const retry = await harness.request("/api/admin/quality/mark", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session, version), body: DOMAINS.quality.valid("release-warning-retry"),
+    });
+    assert.strictEqual(retry.status, 409, retry.text);
+    assert.strictEqual(auditCount(harness.paths), beforeAudit + 1, "stale retry must not duplicate audit");
+  } finally {
+    await harness.close();
+  }
+}
+
 async function main() {
   await assertHarnessStartupFailureCleanup();
   await assertModuleGuards();
@@ -468,6 +509,7 @@ async function main() {
   await assertQualityRecheckFailureContract();
   await assertMalformedQualityIgnoreContract();
   await assertQualityLockTimeoutContract();
+  await assertCommittedQualityReleaseFailureContract();
   console.log("Admin C1 real HTTP write contracts passed.");
 }
 

@@ -6,6 +6,7 @@ const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dir
 const QUALITY_IGNORES_PATH = path.join(STORAGE_DIR, "quality-ignores.json");
 const LOCK_WAIT_MS = Number(process.env.FOSU_QUALITY_IGNORE_LOCK_WAIT_MS || 1000);
 const LOCK_STALE_MS = Number(process.env.FOSU_QUALITY_IGNORE_LOCK_STALE_MS || 30000);
+const LOCK_LEASE_MS = Number(process.env.FOSU_QUALITY_IGNORE_LOCK_LEASE_MS || 30000);
 
 function makeVersion(rules) {
   return `qi_${crypto.createHash("sha256").update(JSON.stringify(rules || [])).digest("hex").slice(0, 16)}`;
@@ -55,13 +56,15 @@ function reclaimStaleLock(lockPath) {
   let details = null;
   try {
     stat = fs.statSync(lockPath);
-    if (Date.now() - stat.mtimeMs < LOCK_STALE_MS) return false;
     try { details = JSON.parse(fs.readFileSync(lockPath, "utf8")); } catch (_) {}
   } catch (_) { return false; }
+  const now = Date.now();
+  const expiredLease = details && Date.parse(details.leaseExpiresAt || "") <= now;
+  if (now - stat.mtimeMs < LOCK_STALE_MS && !expiredLease) return false;
   if (details && Number.isInteger(details.pid) && details.pid > 0) {
     try {
       process.kill(details.pid, 0);
-      return false;
+      if (!expiredLease) return false;
     } catch (error) {
       if (error.code && error.code !== "ESRCH") return false;
     }
@@ -89,14 +92,36 @@ function retireLock(lockPath, label) {
 function discardNewLock(lockPath) {
   let lastError;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    try { fs.unlinkSync(lockPath); return; } catch (error) { lastError = error; wait(5); }
+    try { fs.unlinkSync(lockPath); return; } catch (error) {
+      if (error && error.code === "ENOENT") return;
+      lastError = error;
+      wait(5);
+    }
   }
   try { retireLock(lockPath, "aborted"); } catch (error) { throw releaseError("failed to discard newly-created quality ignore lock", error || lastError); }
 }
 
 function releaseOwnedLock(lockPath, token) {
-  let held;
-  try { held = JSON.parse(fs.readFileSync(lockPath, "utf8")); } catch (error) { throw releaseError("cannot verify quality ignore lock ownership", error); }
+  let held = null;
+  let readError = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      held = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+      readError = null;
+      break;
+    } catch (error) {
+      readError = error;
+      wait(5);
+    }
+  }
+  if (readError) {
+    try {
+      retireLock(lockPath, `unverified-${token}`);
+      return { warning: { code: "QUALITY_IGNORES_LOCK_RELEASE_FAILED" } };
+    } catch (error) {
+      throw releaseError("cannot recover unreadable owned quality ignore lock", error);
+    }
+  }
   if (!held || held.token !== token) throw releaseError("quality ignore lock ownership changed");
   let lastError;
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -112,21 +137,18 @@ function acquireFileLock(filePath) {
   while (Date.now() - startedAt <= LOCK_WAIT_MS) {
     try {
       fs.mkdirSync(path.dirname(lockPath), { recursive: true });
-      let descriptor = fs.openSync(lockPath, "wx");
-      try {
-        fs.writeFileSync(descriptor, JSON.stringify({ pid: process.pid, token, createdAt: new Date().toISOString() }), "utf8");
-        fs.closeSync(descriptor);
-        descriptor = null;
-      } catch (error) {
-        if (descriptor !== null) {
-          try { fs.closeSync(descriptor); } catch (_) {}
-        }
-        try { discardNewLock(lockPath); } catch (cleanupError) { throw releaseError("quality ignore lock initialization cleanup failed", cleanupError); }
-        throw typedError(`quality ignore lock failed: ${error.message}`, "QUALITY_IGNORES_LOCK_FAILED");
-      }
+      fs.writeFileSync(lockPath, JSON.stringify({
+        pid: process.pid,
+        token,
+        createdAt: new Date().toISOString(),
+        leaseExpiresAt: new Date(Date.now() + LOCK_LEASE_MS).toISOString(),
+      }), { encoding: "utf8", flag: "wx" });
       return () => releaseOwnedLock(lockPath, token);
     } catch (error) {
-      if (!error || error.code !== "EEXIST") throw typedError(`quality ignore lock failed: ${error && error.message || "unknown"}`, "QUALITY_IGNORES_LOCK_FAILED");
+      if (!error || error.code !== "EEXIST") {
+        try { discardNewLock(lockPath); } catch (cleanupError) { throw releaseError("quality ignore lock initialization cleanup failed", cleanupError); }
+        throw typedError(`quality ignore lock failed: ${error && error.message || "unknown"}`, "QUALITY_IGNORES_LOCK_FAILED");
+      }
       reclaimStaleLock(lockPath);
       wait(10);
     }
@@ -189,14 +211,22 @@ function prepareIgnoreMutation(input, options = {}) {
 function commitPreparedIgnoreMutation(prepared) {
   if (!prepared || !prepared.version || !prepared.out) throw typedError("invalid prepared quality mutation", "PREPARED_MUTATION_INVALID", 400);
   const release = acquireFileLock(QUALITY_IGNORES_PATH);
+  let result = null;
   try {
     const current = readIgnoreDocument();
     if (current.version !== prepared.version) throw conflict(current.version);
     writeJsonAtomic(QUALITY_IGNORES_PATH, prepared.out);
-    return { version: prepared.nextVersion, etag: prepared.nextVersion, updatedAt: prepared.updatedAt, rules: prepared.rules, rule: prepared.rule || undefined };
+    result = { version: prepared.nextVersion, etag: prepared.nextVersion, updatedAt: prepared.updatedAt, rules: prepared.rules, rule: prepared.rule || undefined };
   } finally {
-    release();
+    try {
+      const releaseResult = release();
+      if (result && releaseResult && releaseResult.warning) result.lockWarning = releaseResult.warning;
+    } catch (error) {
+      if (!result) throw error;
+      result.lockWarning = { code: "QUALITY_IGNORES_LOCK_RELEASE_FAILED" };
+    }
   }
+  return result;
 }
 
 module.exports = { QUALITY_IGNORES_PATH, readIgnoreDocument, prepareIgnoreMutation, commitPreparedIgnoreMutation };

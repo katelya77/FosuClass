@@ -112,3 +112,28 @@ amending the original Task 3 commit).
   covers held-lock 503, no audit, recovery-backup retention, and later success.
 - Fresh green: Task 3 module/HTTP/tier3 tests plus Task 2 HTTP parity, auth,
   route matrix, backup transaction, capabilities, and `git diff --check`.
+
+## Third independent-review follow-up
+
+### RED evidence
+
+1. The repository exposed `openSync`/`closeSync` lock initialization, leaving a
+   descriptor-close failure surface.
+2. A post-write injected lock-read failure returned HTTP 500 before the audit,
+   despite the ignore mutation already being persisted.
+
+### Implementation and verification
+
+- Lock creation is now one path-based exclusive `writeFileSync(..., {flag:
+  "wx"})` operation; there is no exposed descriptor open/close path. Failed
+  initialization discards the canonical name when present.
+- Lock records have a finite lease. Release retries reads, then safely retires
+  a known owned lock when it cannot be reread; persistent Windows-style
+  unlink/rename failures produce a non-secret warning and the expired lease
+  enables subsequent recovery without stealing normal short transactions.
+- `commitPreparedIgnoreMutation()` distinguishes post-write release trouble:
+  it returns the committed result with `lockWarning` instead of throwing. The
+  quality route returns 200 and performs its exactly-one audit; stale retry is
+  still a 409 with no duplicate audit.
+- Fresh green includes all Task 2 and Task 3 regressions, `git diff --check`,
+  a descriptor-path source assertion, and forbidden-import review.
