@@ -95,6 +95,26 @@ function loadFresh() {
   assert.ok(threw, "production * must fail");
 }
 
+// Existing Phase B production writes remain enabled; C1 writes remain disabled.
+{
+  process.env.NODE_ENV = "production";
+  process.env.FOSU_ADMIN_NEXT_WRITE_MODULES = "content,feedback,audit,backups,catalog,quality,settings";
+  const fresh = loadFresh();
+  assert.deepStrictEqual(
+    fresh.getWriteModuleList().sort(),
+    ["audit", "backups", "content", "feedback"],
+    "production must retain only proven Phase B modules",
+  );
+  const map = fresh.getWriteModulesMap();
+  assert.strictEqual(map.content, true);
+  assert.strictEqual(map.feedback, true);
+  assert.strictEqual(map.audit, true);
+  assert.strictEqual(map.backups, true);
+  assert.strictEqual(map.catalog, false);
+  assert.strictEqual(map.quality, false);
+  assert.strictEqual(map.settings, false);
+}
+
 // non-production allows * for tests
 {
   process.env.NODE_ENV = "development";

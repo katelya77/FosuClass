@@ -51,6 +51,26 @@ function staticPathPrefix(expression) {
   return null;
 }
 
+function isTransportWrapper(call, sourceFile) {
+  if (
+    sourceFile.fileName.replace(/\\/g, "/") !== "admin-web/src/shared/api/client.ts" ||
+    getCallName(call.expression) !== "fetch" ||
+    !ts.isIdentifier(call.arguments[0]) ||
+    call.arguments[0].text !== "path" ||
+    !ts.isObjectLiteralExpression(call.arguments[1])
+  ) {
+    return false;
+  }
+  return call.arguments[1].properties.some(
+    (property) =>
+      ts.isPropertyAssignment(property) &&
+      ts.isIdentifier(property.name) &&
+      property.name.text === "method" &&
+      ts.isIdentifier(property.initializer) &&
+      property.initializer.text === "method",
+  );
+}
+
 function scanText(sourceText, fileName) {
   const sourceFile = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
   const errors = [];
@@ -61,11 +81,15 @@ function scanText(sourceText, fileName) {
       const route = staticPathPrefix(node.arguments[0]);
       const methodErrors = [];
       const method = getMethod(node, sourceFile, methodErrors);
-      if (route !== null) errors.push(...methodErrors);
+      const transportWrapper = isTransportWrapper(node, sourceFile);
+      if (!transportWrapper) errors.push(...methodErrors);
+      const line = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+      if (route === null && !transportWrapper && (method === null || !READ_METHODS.has(method))) {
+        errors.push(fileName + ":" + line + " dynamic write path is not allowed");
+      }
       if (method && !READ_METHODS.has(method)) {
-        const line = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
         if (route === null) {
-          errors.push(`${fileName}:${line} dynamic write path is not allowed`);
+          // The dynamic path is already reported above.
         } else if (!AUTH_PATHS.has(route)) {
           const moduleName = resolveWriteModule(route);
           if (!moduleName) {
@@ -121,12 +145,19 @@ function assertFixtureFailures() {
       api('/api/admin/unknown-write', { method: 'POST' });
       api(dynamicPath, { method: 'POST' });
       fetch('/api/admin/catalog/meta', { method: dynamicMethod });
+      api(dynamicPath, { method: dynamicMethod });
     `,
     "fixture.ts",
   );
   assert.ok(fixture.errors.some((error) => error.includes("unknown-write")), "unknown literal writes must fail");
   assert.ok(fixture.errors.some((error) => error.includes("dynamic write path")), "dynamic write paths must fail");
   assert.ok(fixture.errors.some((error) => error.includes("dynamic request method")), "dynamic write methods must fail");
+  const combinedErrors = fixture.errors.filter((error) => error.includes("fixture.ts:5"));
+  assert.ok(
+    combinedErrors.some((error) => error.includes("dynamic write path")) &&
+      combinedErrors.some((error) => error.includes("dynamic request method")),
+    "combined dynamic path and method must report both failures",
+  );
 }
 
 assertFixtureFailures();

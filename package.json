@@ -115,6 +115,7 @@
     "test:admin-legacy-dependency": "node tools/test-admin-legacy-dependency.js",
     "test:admin-capabilities": "node tools/test-admin-capabilities.js",
     "test:admin-next-write-route-guard": "node tools/test-admin-next-write-route-guard.js",
+    "test:admin-rollout-runtime-contract": "node tools/test-admin-rollout-runtime-contract.js",
     "test:admin-backup-service": "node tools/test-admin-backup-service.js",
     "test:admin-backup-transaction": "node tools/test-admin-backup-transaction.js",
     "test:admin-content-concurrency": "node tools/test-admin-content-concurrency.js",
