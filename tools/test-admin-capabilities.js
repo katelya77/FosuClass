@@ -62,6 +62,25 @@ function loadFresh() {
   assert.strictEqual(legacy.ok, true, "legacy not gated");
 }
 
+// settings write routes must be covered by the same route-to-module source as the gate.
+{
+  process.env.NODE_ENV = "test";
+  process.env.FOSU_ADMIN_NEXT_WRITE_MODULES = "catalog,quality,settings";
+  const fresh = loadFresh();
+  const nextReq = (method, routePath) => ({
+    method,
+    get: (h) => (String(h).toLowerCase() === "x-fosu-admin-client" ? "next" : ""),
+    route: { path: routePath },
+    originalUrl: `/api/admin${routePath}`,
+  });
+
+  assert.strictEqual(fresh.resolveModuleForPath("/settings"), "settings");
+  assert.strictEqual(fresh.resolveModuleForPath("/settings/preview"), "settings");
+  assert.strictEqual(fresh.resolveModuleForPath("/unknown-write"), null);
+  assert.strictEqual(fresh.assertNextWriteAllowed(nextReq("POST", "/settings")).ok, true);
+  assert.strictEqual(fresh.assertNextWriteAllowed(nextReq("POST", "/unknown-write")).ok, false);
+}
+
 // production forbids *
 {
   process.env.NODE_ENV = "production";
