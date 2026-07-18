@@ -2,7 +2,7 @@ services:
   fosu-api:
     # Production accepts only a caller-supplied immutable GHCR digest. Local
     # builds live in docker-compose.dev.yml and never participate in deploys.
-    image: ${FOSU_API_IMAGE:?Set FOSU_API_IMAGE to an exact private GHCR digest}
+    image: ghcr.io/katelya77/fosuclass-api@${FOSU_API_DIGEST:?Set FOSU_API_DIGEST to sha256 followed by 64 lowercase hex characters}
     pull_policy: always
     container_name: fosuclass-api
     restart: unless-stopped
@@ -25,13 +25,14 @@ services:
       FOSU_DATA_DIR: /app/data
       FOSU_SEED_DATA_DIR: /app/seed-data
       FOSU_STORAGE_DIR: /app/storage
+      FOSU_RUNTIME_DATA_REQUIRE_MIGRATION: "true"
     cpus: ${FOSU_API_CPUS:-1.5}
     mem_limit: ${FOSU_API_MEM_LIMIT:-4096m}
     ports:
       - "${HOST_BIND_IP:-127.0.0.1}:${HOST_API_PORT:-18318}:${PORT:-3000}"
     volumes:
       - ./storage:/app/storage
-      - ./data:/app/data
+      - ${FOSU_RUNTIME_DATA_HOST_DIR:?Set FOSU_RUNTIME_DATA_HOST_DIR to the dedicated absolute migrated runtime data directory}:/app/data
       - ${OPENRESTY_HOST_RELEASE_DIR:-/opt/1panel/www/sites/class.katelya.eu.org/index/static/releases}:/openresty-static/releases
       - ${OPENRESTY_HOST_RUNTIME_DIR:-/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime}:/openresty-static/runtime
     healthcheck:
