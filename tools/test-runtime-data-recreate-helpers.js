@@ -10,6 +10,7 @@ const document = buildComposeDocument("fosuclass-persistence:test");
 assert.match(document, /image:\s+fosuclass-persistence:test/);
 assert.match(document, /\.\/data:\/app\/data/);
 assert.match(document, /\.\/storage:\/app\/storage/);
+assert.match(document, /FOSU_RUNTIME_DATA_REQUIRE_MIGRATION:\s*"true"/);
 assert.ok(!/^\s+build:/m.test(document));
 
 const root = path.resolve("fixture-root");
