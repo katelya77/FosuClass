@@ -1,7 +1,32 @@
 const assert = require("assert");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
 const { startAdminHttpHarness } = require("./test-helpers/admin-http-harness");
+
+const HARNESS_ENV_KEYS = [
+  "NODE_ENV", "PORT", "FOSU_STORAGE_DIR", "FOSU_DATA_DIR", "ADMIN_PASSWORD", "ADMIN_API_TOKEN",
+  "FOSU_ADMIN_NEXT_ENABLED", "FOSU_ADMIN_PRIMARY", "FOSU_ADMIN_NEXT_WRITE_MODULES",
+  "FOSU_RELEASE_WORKER_ENABLED", "FOSU_CONFIG_HARD_FAIL", "FOSU_ALLOWED_ADMIN_ORIGINS",
+  "FOSU_ALLOWED_PUBLIC_ORIGINS", "ADMIN_SERVICE_TOKENS",
+];
+
+function snapshotHarnessEnv() {
+  return Object.fromEntries(HARNESS_ENV_KEYS.map((key) => [key, process.env[key]]));
+}
+
+function serverCacheKeys() {
+  return Object.keys(require.cache)
+    .filter((key) => key.replace(/\\/g, "/").includes("/server/src/"))
+    .sort();
+}
+
+function harnessTempRoots() {
+  return fs.readdirSync(os.tmpdir(), { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && entry.name.startsWith("fosu-admin-c1-http-"))
+    .map((entry) => entry.name)
+    .sort();
+}
 
 const DOMAINS = {
   settings: {
@@ -11,6 +36,9 @@ const DOMAINS = {
     backupPrefix: "config-",
     valid: (suffix) => ({ appName: `C1 settings ${suffix}` }),
     invalid: () => ({ publishStatus: "not-a-status" }),
+    servicePath: "../server/src/modules/settings/service",
+    commitMethod: "commitPreparedTypedSettingsMutation",
+    storageFile: "admin-config.json",
   },
   catalog: {
     readPath: "/api/admin/catalog/meta",
@@ -19,6 +47,9 @@ const DOMAINS = {
     backupPrefix: "catalog-meta-",
     valid: (suffix) => ({ type: "class", id: `C1-${suffix}`, displayName: `C1 class ${suffix}`, note: "", hidden: false, tags: [] }),
     invalid: () => ({ type: "class" }),
+    servicePath: "../server/src/modules/catalog/service",
+    commitMethod: "commitPreparedCatalogMetaEntryMutation",
+    storageFile: "catalog-meta.json",
   },
   quality: {
     readPath: "/api/admin/quality/ignores",
@@ -27,8 +58,58 @@ const DOMAINS = {
     backupPrefix: "quality-",
     valid: (suffix) => ({ type: "missingTeacher", target: `C1-${suffix}`, ignore: true, reason: "fixture", severity: "info" }),
     invalid: () => ({ type: "missingTeacher" }),
+    servicePath: "../server/src/modules/quality/service",
+    commitMethod: "commitPreparedQualityMutation",
+    storageFile: "quality-ignores.json",
   },
 };
+
+async function assertHarnessFailureCleanup(label, options, expectedMessage) {
+  const express = require("../server/node_modules/express");
+  const beforeExpressListen = express.application.listen;
+  const beforeEnv = snapshotHarnessEnv();
+  const beforeCache = serverCacheKeys();
+  const beforeRoots = harnessTempRoots();
+  let unexpectedHarness = null;
+  let failure = null;
+  try {
+    unexpectedHarness = await startAdminHttpHarness(options);
+  } catch (error) {
+    failure = error;
+  }
+  if (unexpectedHarness) await unexpectedHarness.close();
+  assert.ok(failure, `${label} did not fail`);
+  assert.match(failure.message, expectedMessage, `${label} returned the wrong error`);
+  assert.ok(options.captured.paths, `${label} did not expose its temporary paths to the injected failure`);
+  assert.strictEqual(fs.existsSync(options.captured.paths.root), false, `${label} leaked its temporary root`);
+  assert.deepStrictEqual(snapshotHarnessEnv(), beforeEnv, `${label} leaked environment overrides`);
+  assert.deepStrictEqual(serverCacheKeys(), beforeCache, `${label} leaked server/src module cache`);
+  assert.deepStrictEqual(harnessTempRoots(), beforeRoots, `${label} leaked a prefixed temporary root`);
+  assert.strictEqual(express.application.listen, beforeExpressListen, `${label} leaked its Express listen instrumentation`);
+}
+
+async function assertHarnessStartupFailureCleanup() {
+  const importFailure = { captured: {} };
+  importFailure.onPaths = (paths) => { importFailure.captured.paths = paths; };
+  importFailure.importApp = () => {
+    require("../server/src/config");
+    throw new Error("INJECTED_ADMIN_IMPORT_FAILURE");
+  };
+  await assertHarnessFailureCleanup("import failure", importFailure, /INJECTED_ADMIN_IMPORT_FAILURE/);
+
+  const listenFailure = { captured: {} };
+  listenFailure.onPaths = (paths) => { listenFailure.captured.paths = paths; };
+  listenFailure.listenServer = async (server) => {
+    listenFailure.captured.server = server;
+    await new Promise((resolve, reject) => {
+      server.once("error", reject);
+      server.listen(0, "127.0.0.1", resolve);
+    });
+    throw new Error("INJECTED_ADMIN_LISTEN_FAILURE");
+  };
+  await assertHarnessFailureCleanup("listen failure", listenFailure, /INJECTED_ADMIN_LISTEN_FAILURE/);
+  assert.strictEqual(listenFailure.captured.server.listening, false, "listen failure leaked a partial listener");
+}
 
 function backupFiles(paths, prefix) {
   const directory = path.join(paths.data, "backups");
@@ -39,6 +120,24 @@ function auditCount(paths) {
   const file = path.join(paths.data, "admin-audit-log.jsonl");
   if (!fs.existsSync(file)) return 0;
   return fs.readFileSync(file, "utf8").split(/\r?\n/).filter(Boolean).length;
+}
+
+function writeExternalVersion(name, domain, paths) {
+  const file = path.join(paths.storage, domain.storageFile);
+  const document = JSON.parse(fs.readFileSync(file, "utf8"));
+  const externalVersion = `external_${name}_${Date.now()}`;
+  if (name === "settings") {
+    document.appName = externalVersion;
+    document.updatedAt = new Date().toISOString();
+  } else if (name === "catalog") {
+    document.__meta = { ...(document.__meta || {}), version: externalVersion, updatedAt: new Date().toISOString() };
+    document.entries = document.entries || {};
+  } else {
+    document.version = externalVersion;
+    document.updatedAt = new Date().toISOString();
+    document.rules = Array.isArray(document.rules) ? document.rules : [];
+  }
+  fs.writeFileSync(file, JSON.stringify(document, null, 2), "utf8");
 }
 
 function browserHeaders(session, version) {
@@ -113,26 +212,71 @@ async function exerciseDomain(name, domain) {
     assert.strictEqual(backupFiles(harness.paths, domain.backupPrefix).length, beforeBackups, `${name} 400 created a backup`);
     assert.strictEqual(auditCount(harness.paths), beforeAudit, `${name} 400 created audit`);
 
+    const service = require(domain.servicePath);
+    const originalCommit = service[domain.commitMethod];
+    service[domain.commitMethod] = (prepared) => {
+      writeExternalVersion(name, domain, harness.paths);
+      return originalCommit(prepared);
+    };
+    let commitConflict;
+    try {
+      commitConflict = await harness.request(domain.writePath, {
+        method: "POST", cookie: session.cookie, headers: browserHeaders(session, initialVersion), body: domain.valid("commit-conflict"),
+      });
+    } finally {
+      service[domain.commitMethod] = originalCommit;
+    }
+    assert.strictEqual(commitConflict.status, 409, `${name} forced commit conflict: ${commitConflict.text}`);
+    assert.strictEqual(commitConflict.json && commitConflict.json.code, "CONFLICT", `${name} forced conflict code`);
+    assert.strictEqual(backupFiles(harness.paths, domain.backupPrefix).length, beforeBackups, `${name} commit-time 409 left a backup`);
+    assert.strictEqual(auditCount(harness.paths), beforeAudit, `${name} commit-time 409 created audit`);
+
+    const validVersion = await getVersion(harness, domain, session);
+    const beforeRecoveryBackups = backupFiles(harness.paths, domain.backupPrefix).length;
+    const beforeRecoveryAudit = auditCount(harness.paths);
+    service[domain.commitMethod] = () => {
+      const error = new Error("INJECTED_NON_CONFLICT_COMMIT_FAILURE");
+      error.code = "INJECTED_COMMIT_FAILURE";
+      error.statusCode = 500;
+      throw error;
+    };
+    let commitFailure;
+    try {
+      commitFailure = await harness.request(domain.writePath, {
+        method: "POST", cookie: session.cookie, headers: browserHeaders(session, validVersion), body: domain.valid("recovery-backup"),
+      });
+    } finally {
+      service[domain.commitMethod] = originalCommit;
+    }
+    assert.strictEqual(commitFailure.status, 500, `${name} forced non-conflict failure: ${commitFailure.text}`);
+    assert.strictEqual(backupFiles(harness.paths, domain.backupPrefix).length, beforeRecoveryBackups + 1, `${name} non-conflict failure lost its recovery backup`);
+    assert.strictEqual(auditCount(harness.paths), beforeRecoveryAudit, `${name} non-conflict failure created audit`);
+
+    const beforeSuccessFiles = new Set(backupFiles(harness.paths, domain.backupPrefix));
+    const beforeSuccessAudit = auditCount(harness.paths);
+
     const first = await assertStatus(harness, domain, {
-      method: "POST", cookie: session.cookie, headers: browserHeaders(session, initialVersion), body: domain.valid("first"),
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session, validVersion), body: domain.valid("first"),
     }, 200, `${name} valid mutation`);
     assert.ok(first.json && first.json.version, `${name} success did not return version`);
     const backups = backupFiles(harness.paths, domain.backupPrefix);
-    assert.strictEqual(backups.length, beforeBackups + 1, `${name} success must create exactly one backup`);
-    assert.strictEqual(auditCount(harness.paths), beforeAudit + 1, `${name} success must append exactly one audit record`);
+    assert.strictEqual(backups.length, beforeSuccessFiles.size + 1, `${name} success must create exactly one backup`);
+    assert.strictEqual(auditCount(harness.paths), beforeSuccessAudit + 1, `${name} success must append exactly one audit record`);
+    const successBackup = backups.find((filename) => !beforeSuccessFiles.has(filename));
+    assert.ok(successBackup, `${name} success backup could not be identified`);
 
     const preflight = await harness.request("/api/admin/backups/preflight", {
-      method: "POST", cookie: session.cookie, headers: { Origin: "http://admin.test", "X-Fosu-CSRF": session.csrfToken }, body: { filename: backups[backups.length - 1] },
+      method: "POST", cookie: session.cookie, headers: { Origin: "http://admin.test", "X-Fosu-CSRF": session.csrfToken }, body: { filename: successBackup },
     });
     assert.strictEqual(preflight.status, 200, `${name} backup preflight: ${preflight.text}`);
     assert.strictEqual(preflight.json && preflight.json.preflight && preflight.json.preflight.ok, true, `${name} backup is not recoverable`);
 
     const stale = await assertStatus(harness, domain, {
-      method: "POST", cookie: session.cookie, headers: browserHeaders(session, initialVersion), body: domain.valid("stale"),
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session, validVersion), body: domain.valid("stale"),
     }, 409, `${name} stale If-Match`);
     assert.ok(stale.json && stale.json.currentVersion, `${name} stale response lacks current version`);
-    assert.strictEqual(backupFiles(harness.paths, domain.backupPrefix).length, beforeBackups + 1, `${name} 409 created a backup`);
-    assert.strictEqual(auditCount(harness.paths), beforeAudit + 1, `${name} 409 created audit`);
+    assert.strictEqual(backupFiles(harness.paths, domain.backupPrefix).length, beforeSuccessFiles.size + 1, `${name} 409 created a backup`);
+    assert.strictEqual(auditCount(harness.paths), beforeSuccessAudit + 1, `${name} 409 created audit`);
 
     const concurrentVersion = await getVersion(harness, domain, session);
     const beforeConcurrentBackups = backupFiles(harness.paths, domain.backupPrefix).length;
@@ -157,7 +301,10 @@ async function assertModuleGuards() {
     });
     assert.strictEqual(response.status, 403, response.text);
     assert.strictEqual(response.json && response.json.code, "MODULE_WRITE_DISABLED");
-  } finally { await disabled.close(); }
+  } finally {
+    await disabled.close();
+    await disabled.close();
+  }
 
   const enabled = await startAdminHttpHarness();
   try {
@@ -171,6 +318,7 @@ async function assertModuleGuards() {
 }
 
 async function main() {
+  await assertHarnessStartupFailureCleanup();
   await assertModuleGuards();
   for (const [name, domain] of Object.entries(DOMAINS)) await exerciseDomain(name, domain);
   console.log("Admin C1 real HTTP write contracts passed.");

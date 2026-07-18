@@ -157,8 +157,29 @@ function createBackup(type, sourceFile, fallbackData) {
         try { fs.unlinkSync(f.path); } catch (e) {}
       });
     }
+    return destPath;
   } catch (error) {
     safeLog("create-backup-failed", { type, error: error.message });
+    throw error;
+  }
+}
+
+function commitWithBackup({ type, sourceFile, fallbackData, commit }) {
+  const backupPath = createBackup(type, sourceFile, fallbackData);
+  try {
+    return commit();
+  } catch (error) {
+    const conflict = error && (error.code === "CONFLICT" || Number(error.statusCode) === 409);
+    if (conflict && backupPath && fs.existsSync(backupPath)) {
+      try {
+        fs.unlinkSync(backupPath);
+      } catch (cleanupError) {
+        cleanupError.code = "BACKUP_ROLLBACK_FAILED";
+        cleanupError.statusCode = 500;
+        cleanupError.conflict = error;
+        throw cleanupError;
+      }
+    }
     throw error;
   }
 }
@@ -3474,8 +3495,12 @@ router.post("/settings", adminAuth.verifyAdminAccess, (req, res) => {
       ifMatch: req.get("if-match"),
       requireIfMatch: client === "next",
     });
-    createBackup("config", appConfigService.CONFIG_PATH, prepared.backupData);
-    const result = settingsDomainService.commitPreparedTypedSettingsMutation(prepared);
+    const result = commitWithBackup({
+      type: "config",
+      sourceFile: appConfigService.CONFIG_PATH,
+      fallbackData: prepared.backupData,
+      commit: () => settingsDomainService.commitPreparedTypedSettingsMutation(prepared),
+    });
     writeAuditLog(req, "save", "settings", "admin-config", "保存类型化系统配置");
     return res.json({
       success: true,
@@ -4309,8 +4334,12 @@ router.post("/catalog/meta", adminAuth.verifyAdminAccess, (req, res) => {
         requireIfMatch: client === "next",
       }
     );
-    createBackup("catalog-meta", catalogDomainService.CATALOG_META_PATH || CATALOG_META_PATH, prepared.backupData);
-    const result = catalogDomainService.commitPreparedCatalogMetaEntryMutation(prepared);
+    const result = commitWithBackup({
+      type: "catalog-meta",
+      sourceFile: catalogDomainService.CATALOG_META_PATH || CATALOG_META_PATH,
+      fallbackData: prepared.backupData,
+      commit: () => catalogDomainService.commitPreparedCatalogMetaEntryMutation(prepared),
+    });
     writeAuditLog(req, "update", "catalog-meta", key, `修改数据资源 [${type}] ${id} 的元数据别名和备注`);
     return res.json({
       success: true,
@@ -6166,8 +6195,12 @@ router.post("/quality/mark", adminAuth.verifyAdminAccess, (req, res) => {
     } else {
       prepared = qualityDomainService.prepareUnmarkIgnoreMutation(fingerprint, opts);
     }
-    createBackup("quality", qualityDomainService.QUALITY_IGNORES_PATH || QUALITY_IGNORES_PATH, prepared.backupData);
-    const result = qualityDomainService.commitPreparedQualityMutation(prepared);
+    const result = commitWithBackup({
+      type: "quality",
+      sourceFile: qualityDomainService.QUALITY_IGNORES_PATH || QUALITY_IGNORES_PATH,
+      fallbackData: prepared.backupData,
+      commit: () => qualityDomainService.commitPreparedQualityMutation(prepared),
+    });
     writeAuditLog(req, "ignore", "quality", `${type}:${target}`, `${ignore ? "标记忽略" : "取消忽略"} 质量缺陷`);
     return res.json({
       success: true,

@@ -58,6 +58,56 @@ async function startAdminHttpHarness(options = {}) {
     data: path.join(root, "data"),
   };
   const previousEnv = {};
+  let express = null;
+  let originalExpressListen = null;
+  let server = null;
+  let cleanupPromise = null;
+
+  function restoreExpressPrototype() {
+    if (express && originalExpressListen) {
+      express.application.listen = originalExpressListen;
+    }
+  }
+
+  function restoreEnvironment() {
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
+
+  function removeTemporaryRoot() {
+    const tempDir = path.resolve(os.tmpdir());
+    const resolvedRoot = path.resolve(root);
+    const relative = path.relative(tempDir, resolvedRoot);
+    assert.ok(relative && !relative.startsWith("..") && !path.isAbsolute(relative), `refusing to remove non-temporary root: ${root}`);
+    assert.ok(path.basename(resolvedRoot).startsWith(TEMP_PREFIX), `refusing to remove unexpected root: ${root}`);
+    fs.rmSync(resolvedRoot, { recursive: true, force: true });
+  }
+
+  async function cleanup() {
+    if (cleanupPromise) return cleanupPromise;
+    cleanupPromise = (async () => {
+      const errors = [];
+      if (server && server.listening) {
+        try {
+          await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      try { restoreExpressPrototype(); } catch (error) { errors.push(error); }
+      try { clearServerModuleCache(); } catch (error) { errors.push(error); }
+      try { restoreEnvironment(); } catch (error) { errors.push(error); }
+      try { removeTemporaryRoot(); } catch (error) { errors.push(error); }
+      if (errors.length) {
+        const error = new Error(`admin HTTP harness cleanup failed: ${errors.map((item) => item.message).join("; ")}`);
+        error.causes = errors;
+        throw error;
+      }
+    })();
+    return cleanupPromise;
+  }
+
   const environment = {
     NODE_ENV: "test",
     PORT: "0",
@@ -83,37 +133,52 @@ async function startAdminHttpHarness(options = {}) {
     previousEnv[key] = process.env[key];
     process.env[key] = value;
   }
-  fs.mkdirSync(paths.storage, { recursive: true });
-  fs.mkdirSync(path.join(paths.data, "backups"), { recursive: true });
-  fs.writeFileSync(path.join(paths.storage, "admin-config.json"), JSON.stringify({ appName: "C1 seed" }));
-  fs.writeFileSync(path.join(paths.storage, "catalog-meta.json"), JSON.stringify({}));
-  fs.writeFileSync(path.join(paths.storage, "quality-ignores.json"), JSON.stringify({ rules: [] }));
-  assertInsideRoot(root, paths.storage);
-  assertInsideRoot(root, paths.data);
 
-  clearServerModuleCache();
-  const express = require(path.join(ROOT, "server/node_modules/express"));
-  const originalListen = express.application.listen;
-  let importedApp;
+  let baseUrl;
   try {
+    if (typeof options.onPaths === "function") options.onPaths(paths);
+    fs.mkdirSync(paths.storage, { recursive: true });
+    fs.mkdirSync(path.join(paths.data, "backups"), { recursive: true });
+    fs.writeFileSync(path.join(paths.storage, "admin-config.json"), JSON.stringify({ appName: "C1 seed" }));
+    fs.writeFileSync(path.join(paths.storage, "catalog-meta.json"), JSON.stringify({}));
+    fs.writeFileSync(path.join(paths.storage, "quality-ignores.json"), JSON.stringify({ rules: [] }));
+    assertInsideRoot(root, paths.storage);
+    assertInsideRoot(root, paths.data);
+
+    clearServerModuleCache();
+    express = require(path.join(ROOT, "server/node_modules/express"));
+    originalExpressListen = express.application.listen;
     // Importing the production app must be side-effect-free. This instruments the
     // real Express prototype solely to turn an import-time listener into a clear failure.
     express.application.listen = function importTimeListenForbidden() {
       throw new Error("APP_IMPORT_LISTEN_FORBIDDEN");
     };
-    importedApp = require(path.join(ROOT, "server/src/app"));
-  } finally {
-    express.application.listen = originalListen;
+    const appPath = path.join(ROOT, "server/src/app");
+    const importedApp = typeof options.importApp === "function"
+      ? await options.importApp({ appPath, paths })
+      : require(appPath);
+    restoreExpressPrototype();
+
+    const app = importedApp.default || importedApp;
+    server = http.createServer(app);
+    if (typeof options.listenServer === "function") {
+      await options.listenServer(server, { paths });
+    } else {
+      await new Promise((resolve, reject) => {
+        server.once("error", reject);
+        server.listen(0, "127.0.0.1", resolve);
+      });
+    }
+    const address = server.address();
+    baseUrl = `http://127.0.0.1:${address.port}`;
+  } catch (error) {
+    try {
+      await cleanup();
+    } catch (cleanupError) {
+      error.cleanupError = cleanupError;
+    }
+    throw error;
   }
-  const app = importedApp.default || importedApp;
-  const server = http.createServer(app);
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  const address = server.address();
-  const baseUrl = `http://127.0.0.1:${address.port}`;
-  let closed = false;
 
   return {
     baseUrl,
@@ -132,17 +197,7 @@ async function startAdminHttpHarness(options = {}) {
       return { cookie, csrfToken: response.json.csrfToken };
     },
     async close() {
-      if (closed) return;
-      closed = true;
-      await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
-      clearServerModuleCache();
-      const tempDir = path.resolve(os.tmpdir());
-      assert.ok(root.startsWith(tempDir + path.sep), `refusing to remove non-temporary root: ${root}`);
-      assert.ok(path.basename(root).startsWith(TEMP_PREFIX), `refusing to remove unexpected root: ${root}`);
-      fs.rmSync(root, { recursive: true, force: true });
-      for (const [key, value] of Object.entries(previousEnv)) {
-        if (value === undefined) delete process.env[key]; else process.env[key] = value;
-      }
+      await cleanup();
     },
   };
 }
