@@ -1,16 +1,9 @@
 services:
   fosu-api:
-    # Production: FOSU_API_IMAGE=ghcr.io/katelya77/fosuclass-api@sha256:...
-    # Local/dev fallback build from monorepo root when image unset.
-    image: ${FOSU_API_IMAGE:-fosuclass-api:local}
-    pull_policy: ${FOSU_API_PULL_POLICY:-always}
-    build:
-      context: ..
-      dockerfile: server/Dockerfile
-      args:
-        GIT_REVISION: ${FOSU_DEPLOY_COMMIT_SHA:-unknown}
-        BUILD_CREATED: ${FOSU_BUILD_CREATED:-unknown}
-        IMAGE_VERSION: ${FOSU_IMAGE_VERSION:-0.0.0}
+    # Production accepts only a caller-supplied immutable GHCR digest. Local
+    # builds live in docker-compose.dev.yml and never participate in deploys.
+    image: ${FOSU_API_IMAGE:?Set FOSU_API_IMAGE to an exact private GHCR digest}
+    pull_policy: always
     container_name: fosuclass-api
     restart: unless-stopped
     env_file:
@@ -29,12 +22,16 @@ services:
       FOSU_ADMIN_PRIMARY: ${FOSU_ADMIN_PRIMARY:-legacy}
       FOSU_ADMIN_NEXT_WRITE_MODULES: ${FOSU_ADMIN_NEXT_WRITE_MODULES:-}
       FOSU_CONFIG_HARD_FAIL: ${FOSU_CONFIG_HARD_FAIL:-false}
+      FOSU_DATA_DIR: /app/data
+      FOSU_SEED_DATA_DIR: /app/seed-data
+      FOSU_STORAGE_DIR: /app/storage
     cpus: ${FOSU_API_CPUS:-1.5}
     mem_limit: ${FOSU_API_MEM_LIMIT:-4096m}
     ports:
       - "${HOST_BIND_IP:-127.0.0.1}:${HOST_API_PORT:-18318}:${PORT:-3000}"
     volumes:
       - ./storage:/app/storage
+      - ./data:/app/data
       - ${OPENRESTY_HOST_RELEASE_DIR:-/opt/1panel/www/sites/class.katelya.eu.org/index/static/releases}:/openresty-static/releases
       - ${OPENRESTY_HOST_RUNTIME_DIR:-/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime}:/openresty-static/runtime
     healthcheck:
