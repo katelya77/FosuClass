@@ -111,6 +111,7 @@
     "test:snapshot-concurrency": "node tools/test-snapshot-concurrency.js",
     "test:admin-api-contract": "node tools/test-admin-api-contract.js",
     "admin:feature-matrix:generate": "node tools/generate-admin-feature-matrix.js",
+    "admin:feature-matrix:check": "node tools/generate-admin-feature-matrix.js --check",
     "test:admin-feature-matrix": "node tools/test-admin-feature-matrix.js",
     "test:admin-legacy-dependency": "node tools/test-admin-legacy-dependency.js",
     "test:admin-capabilities": "node tools/test-admin-capabilities.js",
