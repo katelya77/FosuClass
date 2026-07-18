@@ -58,6 +58,12 @@ try {
   const sameRoot = bootstrapRuntimeData({ seedDir: dataDir, dataDir });
   assert.strictEqual(sameRoot.copied.length, 0, "local same-root mode must be a no-op");
 
+  const freshSameRoot = path.join(root, "fresh-same-root");
+  writeJson(path.join(freshSameRoot, "ai", "knowledge-docs.json"), { version: "local-only" });
+  const freshSameRootResult = bootstrapRuntimeData({ seedDir: freshSameRoot, dataDir: freshSameRoot });
+  assert.strictEqual(freshSameRootResult.sameRoot, true);
+  assert.strictEqual(fs.existsSync(path.join(freshSameRoot, ".fosu-runtime-bootstrap.json")), false, "same-root local mode must not mutate the source tree");
+
   console.log(JSON.stringify({ ok: true, copied: first.copied, skipped: second.skipped, symlinkCheck: linkCreated ? "verified" : "unsupported" }, null, 2));
 } finally {
   fs.rmSync(root, { recursive: true, force: true });
