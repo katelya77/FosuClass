@@ -118,6 +118,7 @@
     "test:admin-next-write-route-guard": "node tools/test-admin-next-write-route-guard.js",
     "test:admin-rollout-runtime-contract": "node tools/test-admin-rollout-runtime-contract.js",
     "test:admin-backup-service": "node tools/test-admin-backup-service.js",
+    "test:admin-audit-operation": "node tools/test-admin-audit-operation.js",
     "test:admin-backup-transaction": "node tools/test-admin-backup-transaction.js",
     "test:admin-content-concurrency": "node tools/test-admin-content-concurrency.js",
     "test:admin-no-duplicate-business-logic": "node tools/test-admin-no-duplicate-business-logic.js",
