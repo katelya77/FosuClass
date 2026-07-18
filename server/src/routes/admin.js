@@ -27,6 +27,7 @@ const appConfigService = require("../services/appConfigService");
 const feedbackService = require("../services/feedbackService");
 const adminCapabilitiesService = require("../services/adminCapabilitiesService");
 const backupService = require("../services/backupService");
+const adminAuditService = require("../services/adminAuditService");
 const contentDomainService = require("../modules/content/service");
 const settingsDomainService = require("../modules/settings/service");
 const catalogDomainService = require("../modules/catalog/service");
@@ -90,7 +91,6 @@ const STAGING_CHUNK_BODY_LIMIT = process.env.FOSU_STAGING_CHUNK_BODY_LIMIT || "1
 
 const DATA_DIR = path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../data"));
 const BACKUPS_DIR = path.join(DATA_DIR, "backups");
-const AUDIT_LOG_PATH = path.join(DATA_DIR, "admin-audit-log.jsonl");
 const CATALOG_META_PATH = path.join(STORAGE_DIR, "catalog-meta.json");
 const SYNC_HISTORY_PATH = path.join(DATA_DIR, "sync-history.json");
 
@@ -206,10 +206,23 @@ function writeAuditLog(req, action, moduleName, target, summary) {
       legacyToken: Boolean(identity.legacy),
       requestId: req.headers["x-request-id"] || ""
     };
-    fs.appendFileSync(AUDIT_LOG_PATH, `${JSON.stringify(logItem)}\n`, "utf-8");
+    adminAuditService.append(logItem);
   } catch (error) {
     safeLog("write-audit-log-failed", { error: error.message });
   }
+}
+
+function catalogAuditContext(req) {
+  const identity = adminAuth.getAuditIdentity(req);
+  return {
+    operator: identity.operator || "admin",
+    tokenName: identity.tokenName || "",
+    scopes: Array.isArray(identity.scopes) ? identity.scopes : [],
+    sessionIdPrefix: identity.sessionIdPrefix || "",
+    authMethod: identity.authMethod || adminAuth.getAdminAuthMethod(req) || "unknown",
+    requestId: req.headers["x-request-id"] || "",
+    ip: getClientIpInfo(req).anonymizedIp,
+  };
 }
 
 // 缓存文件路径映射
@@ -3858,6 +3871,56 @@ router.get("/catalog/stats", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
+router.get("/catalog/resources", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({ success: true, ...catalogDomainService.listResources(req.query || {}) });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code, details: error.details });
+  }
+});
+
+router.get("/catalog/relationships", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({ success: true, ...catalogDomainService.getRelationships() });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code });
+  }
+});
+
+router.get("/catalog/export", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const exported = catalogDomainService.exportRows(req.query || {});
+    res.setHeader("Content-Type", exported.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${exported.filename}"`);
+    res.setHeader("X-Fosu-Catalog-Generation", exported.generationId);
+    return res.send(exported.body);
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code });
+  }
+});
+
+router.post("/catalog/import/preview", verifyAdminWriteAccess, adminAuth.requireScopes(["catalog:write"]), (req, res) => {
+  try {
+    return res.json({ success: true, ...catalogDomainService.previewImport(req.body || {}) });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code, currentVersion: error.currentVersion, details: error.details });
+  }
+});
+
+router.post("/catalog/import/apply", verifyAdminWriteAccess, adminAuth.requireScopes(["catalog:write"]), (req, res) => {
+  try {
+    const body = req.body || {};
+    const result = catalogDomainService.applyImport(body.previewId, {
+      ifMatch: req.get("if-match"),
+      confirm: body.confirm,
+      auditContext: catalogAuditContext(req),
+    });
+    return res.status(result.auditPending ? 202 : 200).json({ success: !result.auditPending, ...result });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code, currentVersion: error.currentVersion });
+  }
+});
+
 /**
  * 2. GET /api/admin/catalog/list
  * 数据分类列表查询 (行政班、教师、教室、课程、学院专业、原始快照)
@@ -6289,19 +6352,8 @@ router.delete("/backups", adminAuth.verifyAdminAccess, (req, res) => {
  */
 router.get("/audit-logs", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    if (!fs.existsSync(AUDIT_LOG_PATH)) {
-      return res.json({ success: true, items: [] });
-    }
-    const lines = fs.readFileSync(AUDIT_LOG_PATH, "utf-8")
-      .split(/\r?\n/)
-      .map(l => l.trim())
-      .filter(Boolean)
-      .map(l => {
-        try { return JSON.parse(l); } catch(err) { return null; }
-      })
-      .filter(Boolean)
-      .reverse();
-    return res.json({ success: true, items: lines.slice(0, 100) });
+    const entries = adminAuditService.readAll();
+    return res.json({ success: true, items: entries.reverse().slice(0, 100) });
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
   }

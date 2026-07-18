@@ -10,13 +10,13 @@ const stagingUploadService = require("./stagingUploadService");
 const staticReleaseSyncService = require("./staticReleaseSyncService");
 const releaseLifecycleService = require("./releaseLifecycleService");
 const stagingSafetyService = require("./stagingSafetyService");
+const adminAuditService = require("./adminAuditService");
 const stagingFingerprint = require("../utils/stagingFingerprint");
 const { safeLog } = require("../utils/safeLogger");
 
 const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dirname, "../../storage"));
 const DATA_DIR = path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../data"));
 const BACKUPS_DIR = path.join(DATA_DIR, "backups");
-const AUDIT_LOG_PATH = path.join(DATA_DIR, "admin-audit-log.jsonl");
 const STAGING_LATEST_PATH = path.join(STORAGE_DIR, "staging-latest.json");
 
 const FILE_MAP = {
@@ -85,7 +85,6 @@ function backupActiveReleaseSnapshot() {
 
 function writeAuditLog(reqMeta, action, moduleName, target, summary) {
   try {
-    ensureDir(DATA_DIR);
     const logItem = {
       time: new Date().toISOString(),
       action,
@@ -95,7 +94,7 @@ function writeAuditLog(reqMeta, action, moduleName, target, summary) {
       summary: summary || "",
       ip: reqMeta && reqMeta.ip || "",
     };
-    fs.appendFileSync(AUDIT_LOG_PATH, `${JSON.stringify(logItem)}\n`, "utf-8");
+    adminAuditService.append(logItem);
   } catch (error) {
     safeLog("write-audit-log-failed", { error: error.message });
   }

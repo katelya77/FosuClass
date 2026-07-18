@@ -9,6 +9,7 @@ const HARNESS_ENV_KEYS = [
   "FOSU_ADMIN_NEXT_ENABLED", "FOSU_ADMIN_PRIMARY", "FOSU_ADMIN_NEXT_WRITE_MODULES",
   "FOSU_RELEASE_WORKER_ENABLED", "FOSU_CONFIG_HARD_FAIL", "FOSU_ALLOWED_ADMIN_ORIGINS",
   "FOSU_ALLOWED_PUBLIC_ORIGINS", "ADMIN_SERVICE_TOKENS", "FOSU_QUALITY_IGNORE_LOCK_WAIT_MS",
+  "FOSU_CATALOG_LOCK_WAIT_MS", "FOSU_CATALOG_PREVIEW_TTL_MS", "FOSU_ADMIN_AUDIT_LOCK_WAIT_MS", "OPENRESTY_STATIC_RUNTIME_DIR",
 ];
 
 function snapshotHarnessEnv() {
@@ -120,6 +121,46 @@ function auditCount(paths) {
   const file = path.join(paths.data, "admin-audit-log.jsonl");
   if (!fs.existsSync(file)) return 0;
   return fs.readFileSync(file, "utf8").split(/\r?\n/).filter(Boolean).length;
+}
+
+function auditEntries(paths) {
+  const file = path.join(paths.data, "admin-audit-log.jsonl");
+  if (!fs.existsSync(file)) return [];
+  return fs.readFileSync(file, "utf8").split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+}
+
+function recursiveSnapshot(root) {
+  const out = {};
+  if (!fs.existsSync(root)) return out;
+  const visit = (directory) => {
+    for (const entry of fs.readdirSync(directory, { withFileTypes: true }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0)) {
+      const target = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(target);
+      else {
+        const stat = fs.lstatSync(target);
+        out[path.relative(root, target).replace(/\\/g, "/")] = { bytes: fs.readFileSync(target).toString("base64"), mtimeMs: stat.mtimeMs };
+      }
+    }
+  };
+  visit(root);
+  return out;
+}
+
+function seedCatalogHttpFixture(paths) {
+  fs.writeFileSync(path.join(paths.storage, "catalog.json"), JSON.stringify({
+    semesters: ["2025-2026-2"],
+    colleges: [{ code: "04", name: "Engineering, \"North\"" }],
+    grades: ["2025"],
+  }, null, 2));
+  fs.writeFileSync(path.join(paths.storage, "majors-index.json"), JSON.stringify({
+    semester: "2025-2026-2",
+    colleges: [{ collegeCode: "04", collegeName: "Engineering, \"North\"", grades: [{ grade: "2025", majors: [{ majorCode: "0401", majorName: "Software" }] }] }],
+  }, null, 2));
+  const course = { courseName: "Catalog Course", teacherName: "Teacher One", className: "Class One", classroom: "A101", weeks: [1], sections: [1] };
+  fs.writeFileSync(path.join(paths.storage, "class-schedules.json"), JSON.stringify([{ className: "Class One", semester: "2025-2026-2", collegeCode: "04", collegeName: "Engineering, \"North\"", grade: "2025", majorCode: "0401", majorName: "Software", courses: [course] }], null, 2));
+  fs.writeFileSync(path.join(paths.storage, "teacher-schedules.json"), JSON.stringify([{ teacherName: "Teacher One", semester: "2025-2026-2", collegeName: "Engineering, \"North\"", courses: [course] }], null, 2));
+  fs.writeFileSync(path.join(paths.storage, "classroom-schedules.json"), JSON.stringify([{ roomName: "A101", semester: "2025-2026-2", courses: [course] }], null, 2));
+  fs.writeFileSync(path.join(paths.storage, "course-schedules.json"), JSON.stringify([{ courseName: "Catalog Course", semester: "2025-2026-2", collegeName: "Engineering, \"North\"", courses: [course] }], null, 2));
 }
 
 function writeExternalVersion(name, domain, paths) {
@@ -501,6 +542,192 @@ async function assertCommittedQualityReleaseFailureContract() {
   }
 }
 
+async function assertCatalogOperationsHttpContract() {
+  const harness = await startAdminHttpHarness({ environment: { FOSU_ADMIN_AUDIT_LOCK_WAIT_MS: "60" } });
+  try {
+    seedCatalogHttpFixture(harness.paths);
+    const session = await harness.login();
+    const stagingRoot = path.join(harness.paths.data, "admin-catalog-staging");
+    assert.strictEqual(fs.existsSync(stagingRoot), false);
+    const anonymousRead = await harness.request("/api/admin/catalog/resources?type=class&page=1&pageSize=1");
+    assert.strictEqual(anonymousRead.status, 401, anonymousRead.text);
+    assert.strictEqual(fs.existsSync(stagingRoot), false, "anonymous Catalog GET must not bootstrap staging");
+    for (const invalidPath of [
+      "/api/admin/catalog/resources?type=unknown&page=1&pageSize=1",
+      "/api/admin/catalog/resources?type=class&page=0&pageSize=1",
+      "/api/admin/catalog/resources?type=class&page=1&pageSize=101",
+      "/api/admin/catalog/export?type=unknown&format=json",
+      "/api/admin/catalog/export?type=class&format=xml",
+    ]) {
+      const invalidRead = await harness.request(invalidPath, { cookie: session.cookie });
+      assert.strictEqual(invalidRead.status, 400, invalidRead.text);
+      assert.strictEqual(fs.existsSync(stagingRoot), false, `${invalidPath} must fail before bootstrap`);
+      assert.strictEqual(fs.existsSync(path.join(harness.paths.data, "catalog-control", ".integrity-key")), false, `${invalidPath} must not create private import state`);
+    }
+    const guardDocument = { type: "teacher", semester: "2025-2026-2", items: [{ teacherName: "Teacher Two", collegeName: "Engineering, \"North\"", courses: [] }] };
+    const guardBackups = backupFiles(harness.paths, "catalog-import-").length;
+    const guardAudit = auditCount(harness.paths);
+    const missingCsrf = await harness.request("/api/admin/catalog/import/preview", {
+      method: "POST", cookie: session.cookie, headers: { Origin: "http://admin.test", "X-Fosu-Admin-Client": "next" }, body: guardDocument,
+    });
+    assert.strictEqual(missingCsrf.status, 403, missingCsrf.text);
+    const rejectedOrigin = await harness.request("/api/admin/catalog/import/preview", {
+      method: "POST", cookie: session.cookie, headers: { Origin: "http://public.test", "X-Fosu-Admin-Client": "next", "X-Fosu-CSRF": session.csrfToken }, body: guardDocument,
+    });
+    assert.strictEqual(rejectedOrigin.status, 403, rejectedOrigin.text);
+    assert.strictEqual(fs.existsSync(stagingRoot), false, "rejected import guards must run before staging bootstrap");
+    assert.strictEqual(fs.existsSync(path.join(harness.paths.data, "catalog-control")), false, "rejected import guards must not create preview or HMAC state");
+    assert.strictEqual(backupFiles(harness.paths, "catalog-import-").length, guardBackups);
+    assert.strictEqual(auditCount(harness.paths), guardAudit);
+    const read = await harness.request("/api/admin/catalog/resources?type=class&page=1&pageSize=1", { cookie: session.cookie });
+    assert.strictEqual(read.status, 200, read.text);
+    assert.strictEqual(read.json.items[0].id, "class:2025-2026-2:04:2025:0401:Class One");
+    assert.strictEqual(read.json.totalPages, 1);
+    assert.strictEqual(read.json.source.label, "Catalog 工作区（未发布）");
+    assert.ok(fs.existsSync(stagingRoot));
+    assert.strictEqual(fs.existsSync(path.join(harness.paths.storage, "admin-catalog-staging")), false, "mutable staging must live under FOSU_DATA_DIR");
+    const badPage = await harness.request("/api/admin/catalog/resources?type=class&pageSize=101", { cookie: session.cookie });
+    assert.strictEqual(badPage.status, 400, badPage.text);
+    assert.strictEqual(badPage.json && badPage.json.code, "INVALID_PAGINATION");
+    const relationships = await harness.request("/api/admin/catalog/relationships", { cookie: session.cookie });
+    assert.strictEqual(relationships.status, 200, relationships.text);
+    assert.strictEqual(relationships.json.colleges[0].grades[0].majors[0].id, "0401");
+
+    const jsonExport = await harness.request("/api/admin/catalog/export?type=class&format=json", { cookie: session.cookie });
+    const csvExport = await harness.request("/api/admin/catalog/export?type=class&format=csv", { cookie: session.cookie });
+    assert.strictEqual(jsonExport.status, 200, jsonExport.text);
+    assert.ok(Array.isArray(jsonExport.json));
+    assert.match(String(jsonExport.headers["content-type"]), /^application\/json/);
+    assert.match(String(jsonExport.headers["content-disposition"]), /attachment/);
+    assert.strictEqual(csvExport.status, 200, csvExport.text);
+    assert.match(String(csvExport.headers["content-type"]), /^text\/csv/);
+    assert.match(csvExport.text, /"Engineering, ""North"""/);
+    assert.strictEqual(csvExport.text.replace(/^\uFEFF/, "").trim().split(/\r?\n/).length, jsonExport.json.length + 1);
+    const repeatSnapshot = recursiveSnapshot(stagingRoot);
+    for (let index = 0; index < 10; index += 1) {
+      const repeated = await harness.request(index % 2 ? "/api/admin/catalog/relationships" : "/api/admin/catalog/resources?type=class&page=1&pageSize=1", { cookie: session.cookie });
+      assert.strictEqual(repeated.status, 200, repeated.text);
+    }
+    assert.deepStrictEqual(recursiveSnapshot(stagingRoot), repeatSnapshot, "repeated HTTP reads must preserve staging bytes and mtimes");
+
+    const document = guardDocument;
+    const anonymous = await harness.request("/api/admin/catalog/import/preview", { method: "POST", headers: { "X-Fosu-Admin-Client": "next" }, body: document });
+    assert.strictEqual(anonymous.status, 401, anonymous.text);
+    const wrongScope = await harness.request("/api/admin/catalog/import/preview", {
+      method: "POST", headers: { "X-Admin-Token": "c1-settings-token", "X-Fosu-Client": "service", "X-Fosu-Admin-Client": "next" }, body: document,
+    });
+    assert.strictEqual(wrongScope.status, 403, wrongScope.text);
+    const beforePreviewBackups = backupFiles(harness.paths, "catalog-import-").length;
+    const beforePreviewAudit = auditCount(harness.paths);
+    const preview = await harness.request("/api/admin/catalog/import/preview", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session), body: document,
+    });
+    assert.strictEqual(preview.status, 200, preview.text);
+    assert.strictEqual(preview.json.summary.deleted, 0);
+    assert.strictEqual(backupFiles(harness.paths, "catalog-import-").length, beforePreviewBackups, "preview must not create backup");
+    assert.strictEqual(auditCount(harness.paths), beforePreviewAudit, "preview must not audit");
+
+    const missingIfMatch = await harness.request("/api/admin/catalog/import/apply", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session), body: { previewId: preview.json.previewId, confirm: true },
+    });
+    assert.strictEqual(missingIfMatch.status, 428, missingIfMatch.text);
+    const missingConfirm = await harness.request("/api/admin/catalog/import/apply", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session, preview.json.baseVersion), body: { previewId: preview.json.previewId },
+    });
+    assert.strictEqual(missingConfirm.status, 400, missingConfirm.text);
+    const stale = await harness.request("/api/admin/catalog/import/apply", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session, "stale"), body: { previewId: preview.json.previewId, confirm: true },
+    });
+    assert.strictEqual(stale.status, 409, stale.text);
+    assert.strictEqual(backupFiles(harness.paths, "catalog-import-").length, beforePreviewBackups);
+    assert.strictEqual(auditCount(harness.paths), beforePreviewAudit);
+
+    const invalid = await harness.request("/api/admin/catalog/import/preview", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session), body: { ...document, replace: true },
+    });
+    assert.strictEqual(invalid.status, 400, invalid.text);
+    assert.strictEqual(invalid.json && invalid.json.code, "DELETE_NOT_ALLOWED");
+
+    const concurrentPreview = await harness.request("/api/admin/catalog/import/preview", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session), body: document,
+    });
+    assert.strictEqual(concurrentPreview.status, 200, concurrentPreview.text);
+    const beforeApplyBackups = backupFiles(harness.paths, "catalog-import-").length;
+    const beforeApplyAudit = auditCount(harness.paths);
+    const applyOptions = {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session, concurrentPreview.json.baseVersion), body: { previewId: concurrentPreview.json.previewId, confirm: true },
+    };
+    const [left, right] = await Promise.all([
+      harness.request("/api/admin/catalog/import/apply", applyOptions),
+      harness.request("/api/admin/catalog/import/apply", applyOptions),
+    ]);
+    assert.deepStrictEqual([left.status, right.status].sort(), [200, 409], `${left.text}\n${right.text}`);
+    assert.strictEqual(backupFiles(harness.paths, "catalog-import-").length, beforeApplyBackups + 1, "one winning apply must create one backup");
+    assert.strictEqual(auditCount(harness.paths), beforeApplyAudit + 1, "one winning apply must create one audit");
+    const winner = left.status === 200 ? left : right;
+    assert.strictEqual(winner.json.summary.deleted, 0);
+    assert.ok(winner.json.backup && winner.json.backup.sha256);
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(winner.json.backup, "path"), false, "HTTP backup evidence must not expose absolute paths");
+    assert.strictEqual(Object.prototype.hasOwnProperty.call(winner.json.backup, "manifestPath"), false, "HTTP backup evidence must not expose manifest paths");
+    const winnerBackupPath = path.join(harness.paths.data, "backups", `${winner.json.backup.id}.json`);
+    const winnerManifestPath = path.join(harness.paths.data, "backups", `${winner.json.backup.id}.manifest`);
+    assert.strictEqual(require("crypto").createHash("sha256").update(fs.readFileSync(winnerBackupPath)).digest("hex"), winner.json.backup.sha256);
+    assert.ok(fs.existsSync(winnerManifestPath));
+    const lastAudit = auditEntries(harness.paths).at(-1);
+    assert.strictEqual(lastAudit.action, "catalog-import-apply");
+    assert.strictEqual(lastAudit.module, "catalog");
+    assert.ok(!JSON.stringify(lastAudit).includes("Teacher Two"), "catalog audit must not contain imported rows");
+
+    const replay = await harness.request("/api/admin/catalog/import/apply", applyOptions);
+    assert.strictEqual(replay.status, 409, replay.text);
+    assert.strictEqual(replay.json && replay.json.code, "PREVIEW_REPLAYED");
+    assert.strictEqual(backupFiles(harness.paths, "catalog-import-").length, beforeApplyBackups + 1);
+    assert.strictEqual(auditCount(harness.paths), beforeApplyAudit + 1);
+
+    const pendingDocument = { type: "teacher", semester: "2025-2026-2", items: [{ teacherName: "Audit Pending", collegeName: "Engineering, \"North\"", courses: [] }] };
+    const pendingPreview = await harness.request("/api/admin/catalog/import/preview", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session), body: pendingDocument,
+    });
+    assert.strictEqual(pendingPreview.status, 200, pendingPreview.text);
+    const auditLockPath = path.join(harness.paths.data, "admin-audit-log.jsonl.lock");
+    fs.writeFileSync(auditLockPath, JSON.stringify({ pid: process.pid, token: "held-audit", instanceId: "external-live-owner", createdAt: new Date().toISOString() }), "utf8");
+    const auditBeforePending = auditCount(harness.paths);
+    let pendingApply;
+    try {
+      pendingApply = await harness.request("/api/admin/catalog/import/apply", {
+        method: "POST", cookie: session.cookie, headers: browserHeaders(session, pendingPreview.json.baseVersion), body: { previewId: pendingPreview.json.previewId, confirm: true },
+      });
+      assert.strictEqual(pendingApply.status, 202, pendingApply.text);
+      assert.strictEqual(pendingApply.json.success, false);
+      assert.strictEqual(pendingApply.json.committed, true);
+      assert.strictEqual(pendingApply.json.auditPending, true);
+      assert.ok(pendingApply.json.operationId && Array.isArray(pendingApply.json.warnings));
+      assert.strictEqual(auditCount(harness.paths), auditBeforePending, "202 pending response must not claim a missing audit exists");
+
+      const blockedPreview = await harness.request("/api/admin/catalog/import/preview", {
+        method: "POST", cookie: session.cookie, headers: browserHeaders(session), body: { ...pendingDocument, items: [{ ...pendingDocument.items[0], teacherName: "Blocked Audit Writer" }] },
+      });
+      assert.strictEqual(blockedPreview.status, 200, blockedPreview.text);
+      const blockedApply = await harness.request("/api/admin/catalog/import/apply", {
+        method: "POST", cookie: session.cookie, headers: browserHeaders(session, blockedPreview.json.baseVersion), body: { previewId: blockedPreview.json.previewId, confirm: true },
+      });
+      assert.strictEqual(blockedApply.status, 503, blockedApply.text);
+      assert.strictEqual(blockedApply.json.code, "CATALOG_AUDIT_PENDING");
+    } finally {
+      fs.unlinkSync(auditLockPath);
+    }
+    const recoveredAudit = await harness.request("/api/admin/catalog/import/apply", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session, pendingPreview.json.baseVersion), body: { previewId: pendingPreview.json.previewId, confirm: true },
+    });
+    assert.strictEqual(recoveredAudit.status, 200, recoveredAudit.text);
+    assert.strictEqual(recoveredAudit.json.reconciled, true);
+    assert.strictEqual(recoveredAudit.json.auditPending, false);
+    assert.strictEqual(auditEntries(harness.paths).filter((entry) => entry.operationId === pendingApply.json.operationId).length, 1, "audit recovery must append exactly once");
+  } finally {
+    await harness.close();
+  }
+}
+
 async function main() {
   await assertHarnessStartupFailureCleanup();
   await assertModuleGuards();
@@ -510,6 +737,7 @@ async function main() {
   await assertMalformedQualityIgnoreContract();
   await assertQualityLockTimeoutContract();
   await assertCommittedQualityReleaseFailureContract();
+  await assertCatalogOperationsHttpContract();
   console.log("Admin C1 real HTTP write contracts passed.");
 }
 
