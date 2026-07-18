@@ -135,12 +135,22 @@ function stableValue(value) {
   }, {});
 }
 
+function compareText(left, right) {
+  const a = String(left);
+  const b = String(right);
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
 function stableStringify(value) {
   return JSON.stringify(stableValue(value));
 }
 
 function sha256(value) {
   return crypto.createHash("sha256").update(Buffer.isBuffer(value) ? value : String(value)).digest("hex");
+}
+
+function normalizedTextFileSha256(filePath) {
+  return sha256(fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n"));
 }
 
 function loadRolloutManifest() {
@@ -157,7 +167,7 @@ function loadRolloutManifest() {
 function walkFiles(dir, predicate) {
   const files = [];
   if (!fs.existsSync(dir)) return files;
-  const entries = fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name, "en"));
+  const entries = fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => compareText(a.name, b.name));
   for (const entry of entries) {
     const absolute = path.join(dir, entry.name);
     if (entry.isDirectory()) files.push(...walkFiles(absolute, predicate));
@@ -170,7 +180,7 @@ function discoverRouteSourceFiles() {
   const routeFiles = walkFiles(SERVER_ROUTES_DIR, (_absolute, name) => /\.(?:c?js|mjs|ts)$/i.test(name));
   const moduleRouteFiles = walkFiles(SERVER_MODULES_DIR, (_absolute, name) => /^routes?\.(?:c?js|mjs|ts)$/i.test(name));
   return [...new Set([...routeFiles, ...moduleRouteFiles])].sort((a, b) =>
-    path.relative(ROOT, a).replace(/\\/g, "/").localeCompare(path.relative(ROOT, b).replace(/\\/g, "/"), "en")
+    compareText(path.relative(ROOT, a).replace(/\\/g, "/"), path.relative(ROOT, b).replace(/\\/g, "/"))
   );
 }
 
@@ -348,6 +358,7 @@ function detectVueUsage() {
   const pageFiles = fs
     .readdirSync(VUE_PAGES_DIR)
     .filter((f) => f.endsWith(".vue"))
+    .sort(compareText)
     .map((f) => ({
       file: f,
       src: fs.readFileSync(path.join(VUE_PAGES_DIR, f), "utf8"),
@@ -490,22 +501,22 @@ function main() {
     .filter((source) => source.adminSurface)
     .flatMap((source) => source.extracted)
     .sort((left, right) =>
-      left.sourceFile.localeCompare(right.sourceFile, "en")
-      || left.path.localeCompare(right.path, "en")
-      || left.method.localeCompare(right.method, "en")
+      compareText(left.sourceFile, right.sourceFile)
+      || compareText(left.path, right.path)
+      || compareText(left.method, right.method)
     );
   const pagesSrc = fs.readFileSync(ADMIN_PAGES, "utf8");
   const uiWrites = extractLegacyUiWriteCalls(pagesSrc);
   const vue = detectVueUsage();
-  const evidenceInputs = Object.entries(rollout.modules).sort(([left], [right]) => left.localeCompare(right, "en")).map(([moduleName, record]) => ({
+  const evidenceInputs = Object.entries(rollout.modules).sort(([left], [right]) => compareText(left, right)).map(([moduleName, record]) => ({
     module: moduleName,
     httpEvidence: (record.httpEvidence || []).slice().sort().map((relative) => ({
       path: relative,
-      sha256: fs.existsSync(path.join(ROOT, relative)) ? sha256(fs.readFileSync(path.join(ROOT, relative))) : null,
+      sha256: fs.existsSync(path.join(ROOT, relative)) ? normalizedTextFileSha256(path.join(ROOT, relative)) : null,
     })),
     browserEvidence: (record.browserEvidence || []).slice().sort().map((relative) => ({
       path: relative,
-      sha256: fs.existsSync(path.join(ROOT, relative)) ? sha256(fs.readFileSync(path.join(ROOT, relative))) : null,
+      sha256: fs.existsSync(path.join(ROOT, relative)) ? normalizedTextFileSha256(path.join(ROOT, relative)) : null,
     })),
   }));
   const stableInputs = {
@@ -674,7 +685,7 @@ function main() {
   const productionWriteModules = Object.entries(rollout.modules)
     .filter(([, record]) => record.productionWriteEnabled === true)
     .map(([moduleName]) => moduleName)
-    .sort((left, right) => left.localeCompare(right, "en"));
+    .sort(compareText);
 
   const contracts = {
     version: 1,
@@ -786,7 +797,17 @@ function main() {
       fs.rmSync(tempDir, { recursive: true, force: true });
     }
     if (drift.length) {
-      console.error(JSON.stringify({ ok: false, code: "ADMIN_FEATURE_MATRIX_DRIFT", drift }, null, 2));
+      let committedInputFingerprint = null;
+      try {
+        committedInputFingerprint = JSON.parse(fs.readFileSync(path.join(OUT_DIR, "feature-matrix.json"), "utf8")).inputFingerprint || null;
+      } catch (_) {}
+      console.error(JSON.stringify({
+        ok: false,
+        code: "ADMIN_FEATURE_MATRIX_DRIFT",
+        drift,
+        committedInputFingerprint,
+        expectedInputFingerprint: inputFingerprint,
+      }, null, 2));
       process.exitCode = 1;
       return;
     }
