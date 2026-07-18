@@ -1,11 +1,12 @@
 # Legacy Admin Feature Inventory (Phase A)
 
-- Generated: `2026-07-17T19:32:53.542Z`
-- Source commit: `d3972d2e01de0b757943636f4cbaf8699fcbf190`
+- Stable input fingerprint: `8223b28861ecda39ee2418c5cd5d2c60f5c08f919d8dd73707a541cf658f7e6e`
+- Generator version: `2`
+- Rollout manifest version: `2026-07-18.c1-foundation.1`
 - Production primary remains: **legacy**
-- API routes inventoried: **155**
-- Write routes: **92**
-- Total matrix rows (API + UI): **158**
+- API routes inventoried: **164**
+- Write routes: **95**
+- Total matrix rows (API + UI): **167**
 
 ## Goals
 
@@ -51,22 +52,22 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 | Domain | Features | Target module |
 |--------|----------|---------------|
 | assistant | 9 | `assistant` |
-| audit | 1 | `audit` |
+| audit | 2 | `audit` |
 | auth | 3 | `auth` |
 | backups | 9 | `backups` |
 | campus-map | 17 | `campus-map` |
-| catalog | 6 | `catalog` |
+| catalog | 11 | `catalog` |
 | content | 8 | `content` |
-| dashboard | 4 | `dashboard` |
+| dashboard | 5 | `dashboard` |
 | feedback | 5 | `feedback` |
 | jobs | 2 | `jobs` |
-| misc | 11 | `settings` |
+| misc | 8 | `settings` |
 | provider | 5 | `provider` |
-| quality | 3 | `quality` |
+| quality | 5 | `quality` |
 | relay | 6 | `relay` |
 | release | 31 | `release` |
 | security | 4 | `security` |
-| settings | 8 | `settings` |
+| settings | 11 | `settings` |
 | staging | 17 | `staging` |
 | term | 9 | `term` |
 
@@ -74,10 +75,11 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 
 | Status | Count |
 |--------|-------|
-| browser-verified | 23 |
-| missing | 34 |
-| read-only | 81 |
-| write-implemented | 20 |
+| browser-verified | 24 |
+| contract-verified | 26 |
+| missing | 31 |
+| read-only | 82 |
+| write-implemented | 4 |
 
 ## Risk distribution
 
@@ -85,8 +87,8 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 |------|-------|
 | critical | 22 |
 | high | 52 |
-| low | 31 |
-| medium | 53 |
+| low | 37 |
+| medium | 56 |
 
 ## Critical write / control-plane APIs
 
@@ -96,20 +98,20 @@ No duplicated business logic between Legacy handlers and Vue-only handlers.
 | `POST /api/admin/assistant-kb/rollback` | assistant | true | true | false |
 | `POST /api/admin/campus-map/publish` | campus-map | true | true | false |
 | `POST /api/admin/campus-map/rollback` | campus-map | true | true | false |
+| `POST /api/admin/release-pack/rebuild/start` | release | true | true | true |
 | `POST /api/admin/release/activate` | release | true | true | false |
 | `POST /api/admin/snapshot/activate` | backups | true | true | false |
 | `POST /api/admin/staging/upload/rebuild-index` | staging | true | true | true |
-| `POST /api/admin/terms/:term/bind-release` | term | true | false | true |
-| `POST /api/admin/terms/:term/repair-release/start` | release | true | true | false |
-| `POST /api/admin/terms/:term/rebuild-runtime-pointer` | term | true | true | true |
-| `POST /api/admin/terms/:term/activate` | term | true | true | false |
 | `POST /api/admin/static-release-sync/start` | release | true | true | true |
 | `POST /api/admin/storage/maintenance/run` | settings | true | true | false |
-| `POST /api/admin/release-pack/rebuild/start` | release | true | true | true |
-| `POST /api/admin/sync/staging/publish/start` | staging | true | true | false |
-| `POST /api/admin/sync/staging/publish` | staging | true | true | false |
-| `POST /api/admin/sync/releases/rollback` | release | true | true | false |
 | `POST /api/admin/sync/releases/rebuild-index` | release | true | true | true |
+| `POST /api/admin/sync/releases/rollback` | release | true | true | false |
+| `POST /api/admin/sync/staging/publish` | staging | true | true | false |
+| `POST /api/admin/sync/staging/publish/start` | staging | true | true | false |
+| `POST /api/admin/terms/:term/activate` | term | true | true | false |
+| `POST /api/admin/terms/:term/bind-release` | term | true | false | true |
+| `POST /api/admin/terms/:term/rebuild-runtime-pointer` | term | true | true | true |
+| `POST /api/admin/terms/:term/repair-release/start` | release | true | true | false |
 | `POST /api/admin/release/activate` | release | true | true | false |
 
 ## Vue baseline (PR #7 shell)
@@ -141,7 +143,7 @@ Canonical machine-readable file: [`feature-matrix.json`](./feature-matrix.json)
 
 ## API contracts
 
-- Routes with contract stubs: **155**
+- Routes with contract stubs: **164**
 - File: [`api-contracts.json`](./api-contracts.json)
 - Methods, request/response envelopes, and error code sets are recorded for every `/api/admin/*` route.
 - Domain-specific Zod/schemas are filled as modules are extracted (Phase B+).
@@ -161,6 +163,7 @@ Canonical machine-readable file: [`feature-matrix.json`](./feature-matrix.json)
 
 ```bash
 node tools/generate-admin-feature-matrix.js
+node tools/generate-admin-feature-matrix.js --check
 node tools/test-admin-feature-matrix.js
 ```
 
