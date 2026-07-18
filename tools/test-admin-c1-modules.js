@@ -6,6 +6,7 @@ const { spawn } = require("child_process");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-c1-"));
 process.env.FOSU_STORAGE_DIR = path.join(tmp, "storage");
+process.env.FOSU_QUALITY_IGNORE_LOCK_WAIT_MS = "60";
 fs.mkdirSync(process.env.FOSU_STORAGE_DIR, { recursive: true });
 
 for (const key of Object.keys(require.cache)) {
@@ -21,6 +22,7 @@ const appConfig = require("../server/src/services/appConfigService");
 const repositorySource = fs.readFileSync(path.join(__dirname, "../server/src/modules/quality/repository.js"), "utf8");
 assert.ok(!repositorySource.includes("fs.openSync"), "lock initialization must not expose an open/write/close descriptor sequence");
 assert.ok(!repositorySource.includes("fs.closeSync"), "lock initialization must not expose a closeSync failure path");
+assert.ok(!repositorySource.includes("leaseExpiresAt"), "live owners must never be reclaimed by an elapsed lease");
 
 // seed config
 appConfig.saveAdminConfig({ appName: "C1 Test App" });
@@ -190,6 +192,27 @@ try {
 assert.strictEqual(fs.existsSync(lockPath), false, "failed lock initialization must not strand the canonical lock");
 assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-lock-write", reason: "acquire immediately" }));
 
+const foreignLockBytes = JSON.stringify({ pid: process.pid, token: "foreign-lock-token", instanceId: "foreign-instance", createdAt: new Date().toISOString() });
+fs.writeFileSync(lockPath, foreignLockBytes, "utf8");
+fs.writeFileSync = (target, ...args) => {
+  if (path.resolve(target) === path.resolve(lockPath)) {
+    const error = new Error("injected non-EEXIST lock write failure");
+    error.code = "EACCES";
+    throw error;
+  }
+  return originalLockWrite(target, ...args);
+};
+try {
+  assert.throws(
+    () => quality.markIgnore({ fingerprint: "empty-schedule::foreign-lock-write", reason: "must not delete another owner" }),
+    (error) => error && error.code === "QUALITY_IGNORES_LOCK_FAILED"
+  );
+} finally {
+  fs.writeFileSync = originalLockWrite;
+}
+assert.strictEqual(fs.readFileSync(lockPath, "utf8"), foreignLockBytes, "a non-EEXIST write failure must not delete an unverified canonical lock");
+fs.unlinkSync(lockPath);
+
 const originalLockUnlink = fs.unlinkSync;
 let injectedLockUnlink = false;
 fs.unlinkSync = (target, ...args) => {
@@ -256,9 +279,40 @@ try {
   fs.renameSync = originalPersistentRename;
 }
 assert.ok(persistentRelease.lockWarning && persistentRelease.lockWarning.code === "QUALITY_IGNORES_LOCK_RELEASE_FAILED", "persistent release failure must report a committed warning");
-const heldLock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
-fs.writeFileSync(lockPath, JSON.stringify({ ...heldLock, leaseExpiresAt: new Date(Date.now() - 1).toISOString() }), "utf8");
-assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-persistent-release", reason: "lease recovery" }), "expired owned lock must be recoverable after I/O recovers");
+const originalLockStat = fs.statSync;
+fs.statSync = (target, ...args) => {
+  if (path.resolve(target) === path.resolve(lockPath)) {
+    const error = new Error("injected lock identity failure");
+    error.code = "EIO";
+    throw error;
+  }
+  return originalLockStat(target, ...args);
+};
+try {
+  assert.throws(
+    () => quality.markIgnore({ fingerprint: "empty-schedule::null-lock-identity", reason: "must not claim null identity" }),
+    (error) => error && error.code === "QUALITY_IGNORES_LOCK_TIMEOUT" && error.statusCode === 503
+  );
+} finally {
+  fs.statSync = originalLockStat;
+}
+assert.strictEqual(fs.existsSync(lockPath), true, "null lock identity must not prove ownership of an abandoned canonical lock");
+assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-persistent-release", reason: "owner recovery" }), "same-process abandoned lock must be recoverable without a lease takeover");
+
+fs.writeFileSync(lockPath, JSON.stringify({
+  pid: process.pid,
+  token: "prior-container-token",
+  instanceId: "prior-container-instance",
+  createdAt: "1970-01-01T00:00:00.000Z",
+}), "utf8");
+assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-container-recreate", reason: "prior instance recovery" }), "a known prior-instance same-PID lock must not permanently block a recreated container");
+
+fs.writeFileSync(lockPath, JSON.stringify({ pid: 99999999, token: "dead-owner", instanceId: "dead-owner", createdAt: new Date().toISOString() }), "utf8");
+assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-dead-owner", reason: "dead pid recovery" }), "dead PID locks must remain recoverable");
+fs.writeFileSync(lockPath, "not-json", "utf8");
+const staleAt = new Date(Date.now() - 60 * 1000);
+fs.utimesSync(lockPath, staleAt, staleAt);
+assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-malformed-stale", reason: "malformed stale recovery" }), "old malformed locks must remain recoverable");
 
 function waitFor(condition, timeoutMs = 3000) {
   const startedAt = Date.now();
@@ -318,7 +372,76 @@ async function assertCrossProcessCas() {
   assert.doesNotThrow(() => JSON.parse(fs.readFileSync(malformedIgnorePath, "utf8")), "CAS output must remain parseable JSON");
 }
 
-assertCrossProcessCas().then(() => {
+function runQualityChild(program, environment = {}) {
+  return new Promise((resolve, reject) => {
+    const child = spawn(process.execPath, ["-e", program], {
+      env: { ...process.env, FOSU_STORAGE_DIR: process.env.FOSU_STORAGE_DIR, ...environment },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    let output = "";
+    let errors = "";
+    child.stdout.on("data", (chunk) => { output += chunk; });
+    child.stderr.on("data", (chunk) => { errors += chunk; });
+    child.on("error", reject);
+    child.on("close", (code) => {
+      if (code !== 0) return reject(new Error(`quality child exited ${code}: ${errors}`));
+      resolve(JSON.parse(output));
+    });
+  });
+}
+
+async function assertLiveOwnerCannotBeReclaimed() {
+  fs.writeFileSync(malformedIgnorePath, JSON.stringify({ version: "qi_live_seed", updatedAt: null, rules: [] }, null, 2));
+  const readyPath = path.join(tmp, "live-owner-ready");
+  const resumePath = path.join(tmp, "live-owner-resume");
+  const repositoryPath = path.resolve(__dirname, "../server/src/modules/quality/repository");
+  const ownerProgram = `
+    const fs = require("fs");
+    const repository = require(${JSON.stringify(repositoryPath)});
+    const doc = repository.readIgnoreDocument();
+    const prepared = repository.prepareIgnoreMutation({ action: "mark", fingerprint: "empty-schedule::live-owner", reason: "A" }, { expectedVersion: doc.version, requireIfMatch: true });
+    const pause = new Int32Array(new SharedArrayBuffer(4));
+    const result = repository.commitPreparedIgnoreMutation(prepared, { afterRead: () => {
+      fs.writeFileSync(${JSON.stringify(readyPath)}, "ready");
+      while (!fs.existsSync(${JSON.stringify(resumePath)})) Atomics.wait(pause, 0, 0, 10);
+    }});
+    process.stdout.write(JSON.stringify({ ok: true, version: result.version }));
+  `;
+  const owner = runQualityChild(ownerProgram, { FOSU_QUALITY_IGNORE_LOCK_LEASE_MS: "20" });
+  try {
+    await waitFor(() => fs.existsSync(readyPath));
+    await new Promise((resolve) => setTimeout(resolve, 80));
+    const blockedProgram = `
+      const repository = require(${JSON.stringify(repositoryPath)});
+      const doc = repository.readIgnoreDocument();
+      const prepared = repository.prepareIgnoreMutation({ action: "mark", fingerprint: "empty-schedule::blocked-writer", reason: "B" }, { expectedVersion: doc.version, requireIfMatch: true });
+      try { repository.commitPreparedIgnoreMutation(prepared); process.stdout.write(JSON.stringify({ ok: true })); }
+      catch (error) { process.stdout.write(JSON.stringify({ ok: false, code: error.code, statusCode: error.statusCode })); }
+    `;
+    const blocked = await runQualityChild(blockedProgram, { FOSU_QUALITY_IGNORE_LOCK_WAIT_MS: "40", FOSU_QUALITY_IGNORE_LOCK_LEASE_MS: "20" });
+    assert.deepStrictEqual(blocked, { ok: false, code: "QUALITY_IGNORES_LOCK_TIMEOUT", statusCode: 503 }, "a live owner must not be reclaimed after the old lease threshold");
+    fs.writeFileSync(resumePath, "resume");
+    await owner;
+    const afterProgram = `
+      const repository = require(${JSON.stringify(repositoryPath)});
+      const doc = repository.readIgnoreDocument();
+      const prepared = repository.prepareIgnoreMutation({ action: "mark", fingerprint: "empty-schedule::after-live-owner", reason: "B2" }, { expectedVersion: doc.version, requireIfMatch: true });
+      try { const result = repository.commitPreparedIgnoreMutation(prepared); process.stdout.write(JSON.stringify({ ok: true, version: result.version })); }
+      catch (error) { process.stdout.write(JSON.stringify({ ok: false, code: error.code, statusCode: error.statusCode })); }
+    `;
+    const after = await runQualityChild(afterProgram);
+    assert.strictEqual(after.ok, true, "a writer with the new version must commit after the live owner releases");
+    const finalRules = JSON.parse(fs.readFileSync(malformedIgnorePath, "utf8")).rules;
+    assert.ok(finalRules.some((rule) => rule.fingerprint === "empty-schedule::live-owner"));
+    assert.ok(finalRules.some((rule) => rule.fingerprint === "empty-schedule::after-live-owner"));
+    assert.strictEqual(finalRules.some((rule) => rule.fingerprint === "empty-schedule::blocked-writer"), false, "blocked writer must never overwrite the live owner");
+  } finally {
+    if (!fs.existsSync(resumePath)) fs.writeFileSync(resumePath, "resume");
+    await owner.catch(() => {});
+  }
+}
+
+assertCrossProcessCas().then(assertLiveOwnerCannotBeReclaimed).then(() => {
   fs.rmSync(tmp, { recursive: true, force: true });
   console.log("Admin C1 modules tests passed.");
 }).catch((error) => {

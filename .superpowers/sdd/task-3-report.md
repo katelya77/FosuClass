@@ -137,3 +137,46 @@ amending the original Task 3 commit).
   still a 409 with no duplicate audit.
 - Fresh green includes all Task 2 and Task 3 regressions, `git diff --check`,
   a descriptor-path source assertion, and forbidden-import review.
+
+## Fourth independent-review follow-up
+
+### RED evidence
+
+The live-holder test was introduced with process A paused immediately after its
+in-lock version read and process B launched after the old 20 ms lease window.
+Before the internal after-read test seam existed it timed out waiting for A's
+pause marker, proving the intended interleaving was not yet exercised.
+
+### Implementation and verification
+
+- Lease-based live-owner takeover was removed. A live foreign PID always holds
+  the lock until bounded acquisition returns `503`; only dead PIDs, stale
+  malformed locks, and an explicitly recognized prior-instance same-PID record
+  are retired.
+- Each process now has an instance token and start timestamp. An old lock with
+  the same PID but a foreign instance token is recoverable only when its
+  creation time predates this process, covering durable storage after a
+  container recreation where PID 1 is reused.
+- Same-process release/initialization failures register an abandoned token and
+  filesystem identity. Only that process may subsequently retire the matching
+  canonical lock; other live owners remain fail-closed.
+- Two real Node processes now prove the full no-steal sequence: A pauses past
+  the old lease threshold, B receives 503 and never writes, A commits, then B
+  reads the new version and commits without a lost update. Module fixtures also
+  cover current-PID prior-instance, dead-PID, and stale-malformed lock recovery.
+
+## Fourth follow-up boundary hardening
+
+- Ownership is now fail-closed: an unavailable filesystem identity cannot
+  compare equal to another unavailable identity, and abandoned-lock recovery
+  also rechecks the token stored in the canonical file.
+- A non-`EEXIST` exclusive-write failure performs cleanup only after proving
+  both the created file identity and token belong to this attempt. Injected
+  `EACCES` against an existing foreign canonical lock preserves its bytes.
+- An injected `stat` failure against a same-process abandoned lock now yields
+  bounded `503` while leaving the lock untouched; after identity reads recover,
+  the matching token/identity is safely retired. Fresh module and HTTP suites
+  are green.
+- The live-owner subprocess test releases and awaits its paused owner from a
+  `finally` block, so a failed assertion cannot leave a test child holding the
+  lock.
