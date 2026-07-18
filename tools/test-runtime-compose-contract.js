@@ -10,11 +10,14 @@ const dockerignore = fs.readFileSync(path.join(root, ".dockerignore"), "utf8");
 const rollout = JSON.parse(fs.readFileSync(path.join(root, "config", "admin-rollout-manifest.json"), "utf8"));
 
 assert.ok(!/^\s+build:\s*$/m.test(productionCompose), "production compose must never build on the VPS");
-assert.match(productionCompose, /image:\s*\$\{FOSU_API_IMAGE:\?[^}]+\}/, "production image must be an explicitly supplied digest reference");
-assert.match(productionCompose, /\.\/data:\/app\/data/, "production must bind-mount runtime data");
+assert.match(productionCompose, /image:\s*ghcr\.io\/katelya77\/fosuclass-api@\$\{FOSU_API_DIGEST:\?[^}]+\}/, "production registry and digest separator must be fixed by Compose");
+assert.ok(!productionCompose.includes("FOSU_API_IMAGE"), "production must not accept an arbitrary registry or mutable tag");
+assert.match(productionCompose, /\$\{FOSU_RUNTIME_DATA_HOST_DIR:\?[^}]+\}:\/app\/data/, "production must bind-mount an explicit dedicated runtime data directory");
+assert.ok(!/^\s*-\s*\.\/data:\/app\/data\s*$/m.test(productionCompose), "production must not reuse the SCP-populated server/data source directory");
 assert.match(productionCompose, /\.\/storage:\/app\/storage/, "production must keep storage durable");
 assert.match(productionCompose, /FOSU_DATA_DIR:\s*\/app\/data/);
 assert.match(productionCompose, /FOSU_SEED_DATA_DIR:\s*\/app\/seed-data/);
+assert.match(productionCompose, /FOSU_RUNTIME_DATA_REQUIRE_MIGRATION:\s*"true"/);
 assert.match(productionCompose, /FOSU_ADMIN_PRIMARY:\s*\$\{FOSU_ADMIN_PRIMARY:-legacy\}/);
 assert.match(productionCompose, /FOSU_ADMIN_NEXT_ENABLED:\s*\$\{FOSU_ADMIN_NEXT_ENABLED:-true\}/);
 
