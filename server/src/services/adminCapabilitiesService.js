@@ -10,9 +10,9 @@
  *     - "*" → all known modules; FORBIDDEN when NODE_ENV=production
  */
 
-const { getKnownWriteModules, getProductionWriteModules, resolveWriteModule } = require("../../../tools/lib/admin-rollout-manifest");
+const { getKnownWriteModules, getProductionWriteModules, resolveWriteModule } = require("./adminRolloutManifestService");
 const KNOWN_WRITE_MODULES = getKnownWriteModules();
-/** Explicit production grant for Phase B (currently empty for C1 foundation). */
+/** Explicit production grant for Phase B, derived from the rollout manifest. */
 const PHASE_B_PRODUCTION_WRITE_MODULES = getProductionWriteModules();
 
 function isProductionEnv() {

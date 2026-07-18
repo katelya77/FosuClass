@@ -62,7 +62,6 @@ COPY server/scripts ./scripts
 COPY server/assets ./assets
 COPY server/data ./data
 COPY server/public ./public
-COPY tools/lib/admin-rollout-manifest.js ./tools/lib/admin-rollout-manifest.js
 COPY config/admin-rollout-manifest.json ./config/admin-rollout-manifest.json
 COPY --from=admin-builder /src/server/public/admin-app ./public/admin-app
 

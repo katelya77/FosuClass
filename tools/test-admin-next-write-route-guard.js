@@ -32,12 +32,12 @@ function getMethod(call, sourceFile, errors) {
   }
   const method = options.properties.find(
     (property) =>
-      ts.isPropertyAssignment(property) &&
+      (ts.isPropertyAssignment(property) || ts.isShorthandPropertyAssignment(property)) &&
       ((ts.isIdentifier(property.name) && property.name.text === "method") ||
         (ts.isStringLiteral(property.name) && property.name.text === "method")),
   );
   if (!method) return "GET";
-  const value = getString(method.initializer);
+  const value = ts.isPropertyAssignment(method) ? getString(method.initializer) : null;
   if (value === null) {
     errors.push(`${sourceFile.fileName}:${sourceFile.getLineAndCharacterOfPosition(method.getStart()).line + 1} dynamic request method is not allowed`);
     return null;
@@ -52,8 +52,22 @@ function staticPathPrefix(expression) {
 }
 
 function isTransportWrapper(call, sourceFile) {
+  let ancestor = call.parent;
+  let functionName = null;
+  while (ancestor) {
+    if (
+      (ts.isFunctionDeclaration(ancestor) || ts.isFunctionExpression(ancestor) || ts.isArrowFunction(ancestor)) &&
+      ancestor.name &&
+      ts.isIdentifier(ancestor.name)
+    ) {
+      functionName = ancestor.name.text;
+      break;
+    }
+    ancestor = ancestor.parent;
+  }
   if (
     sourceFile.fileName.replace(/\\/g, "/") !== "admin-web/src/shared/api/client.ts" ||
+    !["api", "download"].includes(functionName) ||
     getCallName(call.expression) !== "fetch" ||
     !ts.isIdentifier(call.arguments[0]) ||
     call.arguments[0].text !== "path" ||
@@ -63,12 +77,24 @@ function isTransportWrapper(call, sourceFile) {
   }
   return call.arguments[1].properties.some(
     (property) =>
-      ts.isPropertyAssignment(property) &&
+      ts.isShorthandPropertyAssignment(property) &&
       ts.isIdentifier(property.name) &&
-      property.name.text === "method" &&
-      ts.isIdentifier(property.initializer) &&
-      property.initializer.text === "method",
-  );
+      property.name.text === "method",
+  ) &&
+    call.arguments[1].properties.some(
+      (property) =>
+        ts.isShorthandPropertyAssignment(property) &&
+        ts.isIdentifier(property.name) &&
+        property.name.text === "headers",
+    ) &&
+    call.arguments[1].properties.some(
+      (property) =>
+        ts.isPropertyAssignment(property) &&
+        ts.isIdentifier(property.name) &&
+        property.name.text === "credentials" &&
+        isStringLike(property.initializer) &&
+        property.initializer.text === "include",
+    );
 }
 
 function scanText(sourceText, fileName) {
@@ -157,6 +183,20 @@ function assertFixtureFailures() {
     combinedErrors.some((error) => error.includes("dynamic write path")) &&
       combinedErrors.some((error) => error.includes("dynamic request method")),
     "combined dynamic path and method must report both failures",
+  );
+
+  const clientFixture = scanText(
+    [
+      "async function api() { fetch(path, { method, headers, credentials: 'include' }); }",
+      "async function download() { fetch(path, { method, headers, credentials: 'include' }); }",
+      "async function extraWrite() { fetch(path, { method, headers, credentials: 'include' }); }",
+    ].join("\\n"),
+    "admin-web/src/shared/api/client.ts",
+  );
+  assert.ok(
+    clientFixture.errors.some((error) => error.includes("dynamic write path")) &&
+      clientFixture.errors.some((error) => error.includes("dynamic request method")),
+    "same-shaped fetch outside api/download must not receive the transport exemption",
   );
 }
 
