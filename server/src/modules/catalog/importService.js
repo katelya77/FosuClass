@@ -3,13 +3,16 @@ const path = require("path");
 const crypto = require("crypto");
 
 const { normalizeImportDocument, sha256, stableStringify, typedError } = require("./contracts");
+const durableStore = require("./durableStore");
 const repository = require("./repository");
 const adminAuditService = require("../../services/adminAuditService");
+const { acquireExclusiveFileLock } = require("../../services/exclusiveFileLockService");
 
 const PRIVATE_DIR = path.join(repository.DATA_DIR, "catalog-control");
 const CATALOG_PREVIEWS_DIR = path.join(PRIVATE_DIR, "previews");
 const CATALOG_OPERATIONS_DIR = path.join(PRIVATE_DIR, "operations");
 const INTEGRITY_KEY_PATH = path.join(PRIVATE_DIR, ".integrity-key");
+const RETENTION_LOCK_PATH = path.join(PRIVATE_DIR, "retention.target");
 const VALID_STATES = new Set(["prepared", "backup_verified", "pointer_committed", "preview_consumed", "audit_committed", "complete"]);
 const STATE_ORDER = Object.freeze(["prepared", "backup_verified", "pointer_committed", "preview_consumed", "audit_committed", "complete"]);
 
@@ -27,6 +30,15 @@ function assertPrivatePath(root, candidate) {
   return resolved;
 }
 
+function privateRootFor(filePath) {
+  const resolved = path.resolve(filePath);
+  for (const root of [CATALOG_PREVIEWS_DIR, CATALOG_OPERATIONS_DIR]) {
+    const relative = path.relative(path.resolve(root), resolved);
+    if (relative && !relative.startsWith("..") && !path.isAbsolute(relative)) return root;
+  }
+  throw typedError("catalog private record escaped known roots", "CATALOG_PRIVATE_PATH_INVALID", 500);
+}
+
 function strictUuid(value, code) {
   const text = String(value || "");
   if (text.length !== 36 || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(text)) throw typedError("catalog identifier is invalid", code, 409);
@@ -41,8 +53,8 @@ function operationIdFor(previewId) { return `catop_${strictUuid(previewId, "PREV
 function operationPath(previewId) { return assertPrivatePath(CATALOG_OPERATIONS_DIR, path.join(CATALOG_OPERATIONS_DIR, `${operationIdFor(previewId)}.json`)); }
 
 function readIntegrityKey() {
-  fs.mkdirSync(PRIVATE_DIR, { recursive: true });
-  try { fs.writeFileSync(INTEGRITY_KEY_PATH, crypto.randomBytes(32).toString("hex"), { encoding: "utf8", flag: "wx", mode: 0o600 }); } catch (error) {
+  durableStore.ensureManagedDirectory(repository.DATA_DIR, PRIVATE_DIR, "CATALOG_PRIVATE_PATH_INVALID");
+  try { durableStore.writeFileExclusive(PRIVATE_DIR, INTEGRITY_KEY_PATH, crypto.randomBytes(32).toString("hex"), { targetCode: "CATALOG_PRIVATE_PATH_INVALID" }); } catch (error) {
     if (!error || error.code !== "EEXIST") throw typedError("catalog integrity key cannot be created", "CATALOG_PRIVATE_STORAGE_FAILED", 500);
   }
   let key;
@@ -58,23 +70,26 @@ function integrityFor(record) {
 }
 
 function writePrivateRecord(filePath, record) {
-  const root = filePath.startsWith(path.resolve(CATALOG_PREVIEWS_DIR)) ? CATALOG_PREVIEWS_DIR : CATALOG_OPERATIONS_DIR;
+  const root = privateRootFor(filePath);
   assertPrivatePath(root, filePath);
-  fs.mkdirSync(root, { recursive: true });
-  const temp = assertPrivatePath(root, `${filePath}.${process.pid}.${crypto.randomBytes(5).toString("hex")}.tmp`);
+  durableStore.ensureManagedDirectory(repository.DATA_DIR, root, "CATALOG_PRIVATE_PATH_INVALID");
   const signed = { ...record, integrity: integrityFor(record) };
   try {
-    fs.writeFileSync(temp, `${JSON.stringify(signed, null, 2)}\n`, { flag: "wx", mode: 0o600 });
-    JSON.parse(fs.readFileSync(temp, "utf8"));
-    fs.renameSync(temp, filePath);
+    durableStore.writeFileAtomic(root, filePath, `${JSON.stringify(signed, null, 2)}\n`, {
+      code: "CATALOG_PRIVATE_STORAGE_FAILED",
+      targetCode: "CATALOG_PRIVATE_PATH_INVALID",
+      verify: (temp) => JSON.parse(fs.readFileSync(temp, "utf8")),
+    });
   } catch (_) {
-    try { fs.unlinkSync(temp); } catch (_) {}
     throw typedError("catalog private record could not be persisted", "CATALOG_PRIVATE_STORAGE_FAILED", 500);
   }
   return signed;
 }
 
 function readSignedRecord(filePath, missingCode, tamperedCode) {
+  const root = privateRootFor(filePath);
+  if (fs.existsSync(root)) durableStore.assertManagedPath(repository.DATA_DIR, root, { kind: "directory", code: "CATALOG_PRIVATE_PATH_INVALID" });
+  assertPrivatePath(root, filePath);
   let record;
   try { record = JSON.parse(fs.readFileSync(filePath, "utf8")); } catch (error) {
     if (error && error.code === "ENOENT") throw typedError("catalog private record does not exist", missingCode, 409);
@@ -125,6 +140,77 @@ function listOperations() {
     .filter(Boolean);
 }
 
+function positiveLimit(name, fallback) {
+  const value = Number(process.env[name]);
+  return Number.isInteger(value) && value > 0 ? value : fallback;
+}
+
+function previewIdFromOperationName(name) {
+  const compact = name.slice("catop_".length, -".json".length);
+  return `${compact.slice(0, 8)}-${compact.slice(8, 12)}-${compact.slice(12, 16)}-${compact.slice(16, 20)}-${compact.slice(20)}`;
+}
+
+function pruneRetentionRecords() {
+  if (fs.existsSync(CATALOG_OPERATIONS_DIR)) durableStore.assertManagedPath(repository.DATA_DIR, CATALOG_OPERATIONS_DIR, { kind: "directory", code: "CATALOG_PRIVATE_PATH_INVALID" });
+  if (fs.existsSync(CATALOG_PREVIEWS_DIR)) durableStore.assertManagedPath(repository.DATA_DIR, CATALOG_PREVIEWS_DIR, { kind: "directory", code: "CATALOG_PRIVATE_PATH_INVALID" });
+  const completedMaximum = positiveLimit("FOSU_CATALOG_COMPLETED_MAX_RECORDS", 500);
+  const completedTtl = positiveLimit("FOSU_CATALOG_COMPLETED_RETENTION_MS", 30 * 24 * 60 * 60 * 1000);
+  const now = Date.now();
+  const operationNames = fs.existsSync(CATALOG_OPERATIONS_DIR)
+    ? fs.readdirSync(CATALOG_OPERATIONS_DIR).filter((name) => /^catop_[0-9a-f]{32}\.json$/i.test(name)).sort()
+    : [];
+  const operations = operationNames.map((name) => ({ name, previewId: previewIdFromOperationName(name), record: readOperation(previewIdFromOperationName(name)) })).filter((entry) => entry.record);
+  const completed = operations.filter((entry) => entry.record.state === "complete").sort((left, right) => {
+    const leftTime = Date.parse(left.record.completedAt || left.record.updatedAt || left.record.createdAt) || 0;
+    const rightTime = Date.parse(right.record.completedAt || right.record.updatedAt || right.record.createdAt) || 0;
+    return leftTime - rightTime || left.name.localeCompare(right.name);
+  });
+  const excessCompleted = Math.max(0, completed.length - completedMaximum);
+  const removable = completed.filter((entry, index) => index < excessCompleted || (Date.parse(entry.record.completedAt || entry.record.updatedAt || entry.record.createdAt) || 0) <= now - completedTtl);
+  for (const entry of removable) {
+    durableStore.unlinkDurable(CATALOG_OPERATIONS_DIR, path.join(CATALOG_OPERATIONS_DIR, entry.name), { targetCode: "CATALOG_PRIVATE_PATH_INVALID" });
+    const pairedPreview = previewPath(entry.previewId);
+    if (fs.existsSync(pairedPreview)) durableStore.unlinkDurable(CATALOG_PREVIEWS_DIR, pairedPreview, { targetCode: "CATALOG_PRIVATE_PATH_INVALID" });
+  }
+  const protectedPreviewIds = new Set(operations.filter((entry) => !removable.includes(entry)).map((entry) => entry.previewId));
+  const previewMaximum = positiveLimit("FOSU_CATALOG_PREVIEW_MAX_RECORDS", 1000);
+  const previews = fs.existsSync(CATALOG_PREVIEWS_DIR)
+    ? fs.readdirSync(CATALOG_PREVIEWS_DIR).filter((name) => /^[0-9a-f-]{36}\.json$/i.test(name)).sort().map((name) => {
+      const previewId = name.slice(0, -".json".length);
+      let record = null;
+      try {
+        const parsed = JSON.parse(fs.readFileSync(path.join(CATALOG_PREVIEWS_DIR, name), "utf8"));
+        if (parsed && parsed.previewId === previewId && Number.isFinite(Date.parse(parsed.createdAt)) && Number.isFinite(Date.parse(parsed.expiresAt))) record = parsed;
+      } catch (_) {}
+      return { name, previewId, record };
+    })
+    : [];
+  const candidates = previews.filter((entry) => !protectedPreviewIds.has(entry.previewId)).sort((left, right) => {
+    if (!left.record && right.record) return -1;
+    if (left.record && !right.record) return 1;
+    return (left.record ? Date.parse(left.record.createdAt) : 0) - (right.record ? Date.parse(right.record.createdAt) : 0) || left.name.localeCompare(right.name);
+  });
+  const expired = new Set(candidates.filter((entry) => !entry.record || Date.parse(entry.record.expiresAt) <= now).map((entry) => entry.previewId));
+  const remainingAfterExpiry = previews.length - expired.size;
+  const overflow = Math.max(0, remainingAfterExpiry - previewMaximum);
+  candidates.filter((entry) => !expired.has(entry.previewId)).slice(0, overflow).forEach((entry) => expired.add(entry.previewId));
+  for (const entry of candidates) {
+    if (expired.has(entry.previewId) && fs.existsSync(path.join(CATALOG_PREVIEWS_DIR, entry.name))) {
+      durableStore.unlinkDurable(CATALOG_PREVIEWS_DIR, path.join(CATALOG_PREVIEWS_DIR, entry.name), { targetCode: "CATALOG_PRIVATE_PATH_INVALID" });
+    }
+  }
+}
+
+function withRetentionLock(callback) {
+  durableStore.ensureManagedDirectory(repository.DATA_DIR, PRIVATE_DIR, "CATALOG_PRIVATE_PATH_INVALID");
+  const release = acquireExclusiveFileLock(RETENTION_LOCK_PATH, {
+    codePrefix: "CATALOG_RETENTION",
+    waitMs: Number(process.env.FOSU_CATALOG_LOCK_WAIT_MS || 1000),
+    staleMs: Number(process.env.FOSU_CATALOG_LOCK_STALE_MS || 30000),
+  });
+  try { return callback(); } finally { release(); }
+}
+
 function rowMap(rows) { return new Map(rows.map((row) => [row.id, row])); }
 function buildDiff(document, snapshot, mergedRaw) {
   const beforeRows = rowMap(repository.rowsFromRaw(document.type, snapshot.raw));
@@ -151,7 +237,7 @@ function previewImport(input) {
   const generation = repository.readCurrentGeneration();
   const snapshot = repository.readSnapshot(document.type, generation);
   const dependency = repository.readRelationshipSnapshot(generation);
-  repository.validateMajorRelationships(document, dependency);
+  repository.validateMajorRelationships(document, dependency, snapshot);
   const mergedRaw = repository.mergeImport(snapshot, document);
   const changes = buildDiff(document, snapshot, mergedRaw);
   const now = Date.now();
@@ -179,7 +265,11 @@ function previewImport(input) {
     expiresAt: new Date(now + ttl).toISOString(),
     used: false,
   };
-  writePrivateRecord(previewPath(previewId), record);
+  withRetentionLock(() => {
+    pruneRetentionRecords();
+    writePrivateRecord(previewPath(previewId), record);
+    pruneRetentionRecords();
+  });
   return { previewId, operationId: record.operationId, baseVersion: record.baseVersion, sourceFingerprint, generationId: record.generationId, relationshipVersion: record.relationshipVersion, summary: record.summary, changes, warnings: [], expiresAt: record.expiresAt, source: publicSource(snapshot.source) };
 }
 
@@ -283,7 +373,7 @@ function rebuildOperationPlan(operation, preview, generation) {
   validateCurrent(preview, generation, snapshot, dependency);
   const document = normalizeImportDocument(preview.document);
   if (sha256(stableStringify(document)) !== preview.sourceFingerprint) throw typedError("catalog operation preview fingerprint mismatch", "CATALOG_OPERATION_TAMPERED", 500);
-  repository.validateMajorRelationships(document, dependency);
+  repository.validateMajorRelationships(document, dependency, snapshot);
   const merged = repository.mergeImport(snapshot, document);
   const changes = buildDiff(document, snapshot, merged);
   const summary = summaryFor(changes);
@@ -395,7 +485,7 @@ function createPreparedOperation(preview, generation, options) {
   validateCurrent(preview, generation, snapshot, dependency);
   const document = normalizeImportDocument(preview.document);
   if (sha256(stableStringify(document)) !== preview.sourceFingerprint) throw conflict("catalog preview fingerprint mismatch", snapshot.version, "PREVIEW_TAMPERED");
-  repository.validateMajorRelationships(document, dependency);
+  repository.validateMajorRelationships(document, dependency, snapshot);
   const merged = repository.mergeImport(snapshot, document);
   const changes = buildDiff(document, snapshot, merged);
   const summary = summaryFor(changes);
@@ -462,9 +552,17 @@ function applyImport(previewId, options = {}) {
       auditPending: resumed.auditPending || resumed.previewPending,
       warnings: resumed.warnings,
     });
+    try { withRetentionLock(pruneRetentionRecords); }
+    catch (_) { result.warnings = (result.warnings || []).concat({ code: "CATALOG_RETENTION_PENDING" }); }
     return result;
   } finally {
-    try { release(); } catch (_) {
+    try {
+      const released = release();
+      if (result && released) {
+        const releaseWarnings = Array.isArray(released.warnings) ? released.warnings : released.warning ? [released.warning] : [];
+        result.warnings = (result.warnings || []).concat(releaseWarnings);
+      }
+    } catch (_) {
       if (!committed) throw typedError("catalog lock could not be released", "CATALOG_LOCK_RELEASE_FAILED", 500);
       if (result) result.warnings = (result.warnings || []).concat({ code: "CATALOG_LOCK_RELEASE_FAILED" });
     }

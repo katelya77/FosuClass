@@ -3,9 +3,30 @@ const crypto = require("crypto");
 const CATALOG_TYPES = Object.freeze(["class", "teacher", "classroom", "course", "major"]);
 const TYPE_SET = new Set(CATALOG_TYPES);
 const SENSITIVE_KEY = /(?:password|passwd|secret|token|cookie|authorization|credential|session)/i;
-const SENSITIVE_VALUE = /(?:authorization\s*:\s*bearer|bearer\s+[a-z0-9._~+\/-]{12,}|(?:jsessionid|casticket|cookie)\s*[=:])/i;
+const SENSITIVE_VALUE = /(?:(?:password|passwd|secret|token|cookie|authorization|credential|session|api[-_]?key|jsessionid|casticket)\s*[=:]\s*\S{4,}|(?:bearer|basic)\s+[a-z0-9._~+\/=:-]{8,})/i;
 const FORBIDDEN_OBJECT_KEYS = new Set(["__proto__", "prototype", "constructor"]);
-const COURSE_FIELDS = new Set(["courseName", "displayCourseName", "canonicalCourseName", "courseCode", "teacherName", "teacherNames", "classroom", "classroomName", "roomName", "className", "classNames", "weekday", "dayOfWeek", "startSection", "endSection", "sections", "weeks", "note", "weekText", "sectionText", "collegeName", "majorName", "credit", "nature", "campus"]);
+const COURSE_STRING_FIELDS = new Set([
+  "adminClass", "audience", "audienceType", "canonicalClassroom", "canonicalCourseName", "canonicalTeacherName",
+  "classId", "className", "classroom", "classroomName", "collegeCode", "collegeName", "color", "courseCode",
+  "courseIdentityType", "courseName", "displayClassroom", "displayCourseName", "displayTeacherName", "grade", "id",
+  "majorCode", "majorName", "nature", "normalizationReason", "note", "originalClassName", "rawClassText",
+  "rawClassroom", "rawCourseName", "rawHtml", "rawTeacherName", "rawText", "remark", "roomName", "sectionText",
+  "semester", "source", "sourceType", "teacherName", "teachingClass", "campus", "weekText", "weekType",
+]);
+const COURSE_MULTILINE_FIELDS = new Set(["rawHtml", "rawText"]);
+const COURSE_STRING_ARRAY_FIELDS = new Set(["classNames", "teacherNames", "venueCandidates"]);
+const COURSE_INTEGER_FIELDS = new Set(["dayOfWeek", "endSection", "endWeek", "startSection", "startWeek", "weekday"]);
+const COURSE_INTEGER_ARRAY_FIELDS = new Set(["sections", "weeks"]);
+const COURSE_BOOLEAN_FIELDS = new Set(["isPhysicalEducationLike", "isTeacherFieldActuallyCourseName", "isVenueCandidate", "sourceClassNameUnreliable"]);
+const COURSE_NUMBER_FIELDS = new Set(["credit"]);
+const COURSE_FIELDS = new Set([
+  ...COURSE_STRING_FIELDS,
+  ...COURSE_STRING_ARRAY_FIELDS,
+  ...COURSE_INTEGER_FIELDS,
+  ...COURSE_INTEGER_ARRAY_FIELDS,
+  ...COURSE_BOOLEAN_FIELDS,
+  ...COURSE_NUMBER_FIELDS,
+]);
 
 const TYPE_FIELDS = Object.freeze({
   class: new Set(["id", "className", "semester", "collegeCode", "collegeName", "grade", "majorCode", "majorName", "courses"]),
@@ -69,15 +90,21 @@ function normalizeListQuery(query = {}) {
   };
 }
 
-function stringField(item, field, required = false) {
-  const value = item[field];
+function normalizeStringValue(value, field, options = {}) {
   if (value !== undefined && value !== null && typeof value !== "string") {
     throw typedError(`${field} must be a string`, "INVALID_IMPORT_DOCUMENT");
   }
-  const normalized = String(value || "").normalize("NFC").trim();
-  if (normalized.length > 4096 || /[\u0000-\u001f\u007f]/.test(normalized)) throw typedError(`${field} contains invalid characters`, "INVALID_IMPORT_DOCUMENT");
-  if (required && !normalized) throw typedError(`${field} is required`, "INVALID_IMPORT_DOCUMENT");
+  const multiline = options.multiline === true;
+  const normalized = String(value || "").normalize("NFC").replace(/\r\n?/g, "\n").trim();
+  const invalidControl = multiline ? /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/ : /[\u0000-\u001f\u007f]/;
+  const maximum = multiline ? 64 * 1024 : 4096;
+  if (normalized.length > maximum || invalidControl.test(normalized)) throw typedError(`${field} contains invalid characters`, "INVALID_IMPORT_DOCUMENT");
+  if (options.required && !normalized) throw typedError(`${field} is required`, "INVALID_IMPORT_DOCUMENT");
   return normalized;
+}
+
+function stringField(item, field, required = false) {
+  return normalizeStringValue(item[field], field, { required });
 }
 
 function findSensitivePath(value, location = "document") {
@@ -100,29 +127,45 @@ function findSensitivePath(value, location = "document") {
 
 function stableId(type, item) {
   const semester = stringField(item, "semester", true);
-  const component = (field) => {
-    const value = stringField(item, field, true);
+  const component = (field, required = true) => {
+    const value = stringField(item, field, required);
     if (value.includes(":")) throw typedError(`${field} cannot contain ':'`, "INVALID_IMPORT_DOCUMENT");
     return value;
   };
   if (semester.includes(":")) throw typedError("semester cannot contain ':'", "INVALID_IMPORT_DOCUMENT");
-  if (type === "class") return `class:${semester}:${component("collegeCode")}:${component("grade")}:${component("majorCode")}:${component("className")}`;
+  if (type === "class") return `class:${semester}:${component("collegeCode", false)}:${component("grade")}:${component("majorCode", false)}:${component("className")}`;
   if (type === "teacher") return `teacher:${semester}:${component("teacherName")}`;
   if (type === "classroom") return `classroom:${semester}:${component("roomName")}`;
   if (type === "course") return `course:${semester}:${component("courseName")}`;
   return `major:${semester}:${component("collegeCode")}:${component("grade")}:${component("majorCode")}`;
 }
 
-function validateCourse(course, location, depth = 0) {
+function normalizeCourse(course, location, depth = 0) {
   if (!isPlainObject(course) || depth > 8) throw typedError(`${location} must be a bounded object`, "INVALID_IMPORT_DOCUMENT");
   const unknown = Object.keys(course).filter((key) => !COURSE_FIELDS.has(key) || FORBIDDEN_OBJECT_KEYS.has(key));
   if (unknown.length) throw typedError(`${location} contains unknown fields: ${unknown.join(", ")}`, "INVALID_IMPORT_DOCUMENT");
+  const normalized = {};
   for (const [key, value] of Object.entries(course)) {
-    if (typeof value === "string") stringField({ [key]: value }, key);
-    else if (Array.isArray(value)) {
-      if (value.length > 500 || value.some((item) => item !== null && !["string", "number", "boolean"].includes(typeof item))) throw typedError(`${location}.${key} is too large or nested`, "INVALID_IMPORT_DOCUMENT");
-    } else if (value !== null && !["number", "boolean"].includes(typeof value)) throw typedError(`${location}.${key} has an invalid value`, "INVALID_IMPORT_DOCUMENT");
+    if (COURSE_STRING_FIELDS.has(key)) {
+      normalized[key] = normalizeStringValue(value, `${location}.${key}`, { multiline: COURSE_MULTILINE_FIELDS.has(key) });
+    } else if (COURSE_STRING_ARRAY_FIELDS.has(key)) {
+      if (!Array.isArray(value) || value.length > 500) throw typedError(`${location}.${key} must be a bounded string array`, "INVALID_IMPORT_DOCUMENT");
+      normalized[key] = value.map((item, index) => normalizeStringValue(item, `${location}.${key}[${index}]`));
+    } else if (COURSE_INTEGER_ARRAY_FIELDS.has(key)) {
+      if (!Array.isArray(value) || value.length > 500 || value.some((item) => !Number.isInteger(item))) throw typedError(`${location}.${key} must be a bounded integer array`, "INVALID_IMPORT_DOCUMENT");
+      normalized[key] = value.slice();
+    } else if (COURSE_INTEGER_FIELDS.has(key)) {
+      if (!Number.isInteger(value)) throw typedError(`${location}.${key} must be an integer`, "INVALID_IMPORT_DOCUMENT");
+      normalized[key] = value;
+    } else if (COURSE_NUMBER_FIELDS.has(key)) {
+      if (typeof value !== "number" || !Number.isFinite(value)) throw typedError(`${location}.${key} must be a finite number`, "INVALID_IMPORT_DOCUMENT");
+      normalized[key] = value;
+    } else if (COURSE_BOOLEAN_FIELDS.has(key)) {
+      if (typeof value !== "boolean") throw typedError(`${location}.${key} must be a boolean`, "INVALID_IMPORT_DOCUMENT");
+      normalized[key] = value;
+    }
   }
+  return stableValue(normalized);
 }
 
 function normalizeImportItem(type, item, documentSemester, index) {
@@ -131,16 +174,23 @@ function normalizeImportItem(type, item, documentSemester, index) {
   const unknown = Object.keys(item).filter((key) => !allowed.has(key));
   if (unknown.length) throw typedError(`items[${index}] contains unknown fields: ${unknown.join(", ")}`, "INVALID_IMPORT_DOCUMENT", 400, { location: index, fields: unknown });
   if (item.courses !== undefined && !Array.isArray(item.courses)) throw typedError(`items[${index}].courses must be an array`, "INVALID_IMPORT_DOCUMENT");
+  let courses;
   if (Array.isArray(item.courses)) {
     if (item.courses.length > 500) throw typedError(`items[${index}].courses is too large`, "INVALID_IMPORT_DOCUMENT");
-    item.courses.forEach((course, courseIndex) => validateCourse(course, `items[${index}].courses[${courseIndex}]`));
+    courses = item.courses.map((course, courseIndex) => normalizeCourse(course, `items[${index}].courses[${courseIndex}]`));
   }
-  const out = stableValue({ ...item, semester: stringField(item, "semester") || documentSemester });
-  if (documentSemester && stringField(item, "semester") && stringField(item, "semester") !== documentSemester) throw typedError(`items[${index}].semester does not match document semester`, "SEMESTER_MISMATCH");
+  const out = {};
+  for (const field of allowed) {
+    if (field === "id" || field === "courses" || field === "semester" || item[field] === undefined) continue;
+    out[field] = stringField(item, field);
+  }
+  const itemSemester = stringField(item, "semester");
+  out.semester = itemSemester || documentSemester;
+  if (courses !== undefined) out.courses = courses;
+  if (documentSemester && itemSemester && itemSemester !== documentSemester) throw typedError(`items[${index}].semester does not match document semester`, "SEMESTER_MISMATCH");
   const id = stableId(type, out);
   if (item.id !== undefined && String(item.id) !== id) throw typedError(`items[${index}].id does not match its stable id`, "INVALID_IMPORT_DOCUMENT");
-  delete out.id;
-  return { id, item: out };
+  return { id, item: stableValue(out) };
 }
 
 function normalizeImportDocument(input) {
@@ -168,9 +218,11 @@ function normalizeImportDocument(input) {
 module.exports = {
   CATALOG_TYPES,
   TYPE_FIELDS,
+  COURSE_FIELDS,
   findSensitivePath,
   isPlainObject,
   normalizeImportDocument,
+  normalizeCourse,
   normalizeListQuery,
   requireType,
   sha256,

@@ -196,6 +196,32 @@ function createWriteModuleGateMiddleware() {
   };
 }
 
+/**
+ * Route-owned rollout barrier for newly introduced write APIs. Unlike the
+ * admin-next client hint gate, this cannot be bypassed by omitting a header.
+ */
+function createRequiredWriteModuleMiddleware(moduleName) {
+  const normalized = String(moduleName || "").trim().toLowerCase();
+  if (!KNOWN_WRITE_MODULES.includes(normalized)) throw new Error(`Unknown required write module: ${normalized}`);
+  return function requiredWriteModuleGate(_req, res, next) {
+    try {
+      if (isWriteModuleEnabled(normalized)) return next();
+      return res.status(403).json({
+        success: false,
+        code: "MODULE_WRITE_DISABLED",
+        message: `Write module "${normalized}" is disabled by the rollout manifest`,
+        module: normalized,
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        code: error.code || "WRITE_MODULES_CONFIG_ERROR",
+        message: error.message,
+      });
+    }
+  };
+}
+
 module.exports = {
   KNOWN_WRITE_MODULES,
   PHASE_B_PRODUCTION_WRITE_MODULES,
@@ -211,4 +237,5 @@ module.exports = {
   getCapabilities,
   assertNextWriteAllowed,
   createWriteModuleGateMiddleware,
+  createRequiredWriteModuleMiddleware,
 };

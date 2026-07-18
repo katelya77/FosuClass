@@ -119,6 +119,7 @@ if (!fs.existsSync(BACKUPS_DIR)) {
 
 // Vue write-module gate (Legacy UI omits X-Fosu-Admin-Client and is not blocked)
 router.use(adminCapabilitiesService.createWriteModuleGateMiddleware());
+const requireCatalogWriteEnabled = adminCapabilitiesService.createRequiredWriteModuleMiddleware("catalog");
 
 /**
  * GET /api/admin/capabilities — primary flag + write module switches
@@ -3899,7 +3900,7 @@ router.get("/catalog/export", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
-router.post("/catalog/import/preview", verifyAdminWriteAccess, adminAuth.requireScopes(["catalog:write"]), (req, res) => {
+router.post("/catalog/import/preview", requireCatalogWriteEnabled, verifyAdminWriteAccess, adminAuth.requireScopes(["catalog:write"]), (req, res) => {
   try {
     return res.json({ success: true, ...catalogDomainService.previewImport(req.body || {}) });
   } catch (error) {
@@ -3907,7 +3908,7 @@ router.post("/catalog/import/preview", verifyAdminWriteAccess, adminAuth.require
   }
 });
 
-router.post("/catalog/import/apply", verifyAdminWriteAccess, adminAuth.requireScopes(["catalog:write"]), (req, res) => {
+router.post("/catalog/import/apply", requireCatalogWriteEnabled, verifyAdminWriteAccess, adminAuth.requireScopes(["catalog:write"]), (req, res) => {
   try {
     const body = req.body || {};
     const result = catalogDomainService.applyImport(body.previewId, {
@@ -3915,7 +3916,7 @@ router.post("/catalog/import/apply", verifyAdminWriteAccess, adminAuth.requireSc
       confirm: body.confirm,
       auditContext: catalogAuditContext(req),
     });
-    return res.status(result.auditPending ? 202 : 200).json({ success: !result.auditPending, ...result });
+    return res.status(200).json({ success: true, ...result });
   } catch (error) {
     return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code, currentVersion: error.currentVersion });
   }
