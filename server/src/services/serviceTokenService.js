@@ -14,6 +14,9 @@ const SCOPES = Object.freeze({
   STATIC_SYNC: "static:sync",
   STATIC_VERIFY: "static:verify",
   RELAY_MANAGE: "relay:manage",
+  CATALOG_WRITE: "catalog:write",
+  QUALITY_WRITE: "quality:write",
+  SETTINGS_WRITE: "settings:write",
   ADMIN_FULL: "admin:full",
 });
 

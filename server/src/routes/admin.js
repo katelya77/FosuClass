@@ -131,15 +131,20 @@ router.get("/capabilities", (req, res) => {
 /**
  * 自动备份机制
  */
-function createBackup(type, sourceFile) {
+function createBackup(type, sourceFile, fallbackData) {
   try {
-    if (!fs.existsSync(sourceFile)) return;
     const now = new Date();
     const pad = (num) => String(num).padStart(2, "0");
     const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const backupName = `${type}-${timestamp}.json`;
+    const backupName = `${type}-${timestamp}-${crypto.randomBytes(8).toString("hex")}.json`;
     const destPath = path.join(BACKUPS_DIR, backupName);
-    fs.copyFileSync(sourceFile, destPath);
+    if (fs.existsSync(sourceFile)) {
+      fs.copyFileSync(sourceFile, destPath);
+    } else if (fallbackData !== undefined) {
+      fs.writeFileSync(destPath, JSON.stringify(fallbackData, null, 2), "utf8");
+    } else {
+      return null;
+    }
     
     // 保留最近 30 个备份文件
     const files = fs.readdirSync(BACKUPS_DIR)
@@ -154,6 +159,7 @@ function createBackup(type, sourceFile) {
     }
   } catch (error) {
     safeLog("create-backup-failed", { type, error: error.message });
+    throw error;
   }
 }
 
@@ -3463,12 +3469,13 @@ router.post("/settings", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     const client = String(req.get("x-fosu-admin-client") || "").toLowerCase();
     const body = req.body || {};
-    createBackup("config", appConfigService.CONFIG_PATH);
-    const result = settingsDomainService.saveTypedSettings(body, {
+    const prepared = settingsDomainService.prepareTypedSettingsMutation(body, {
       expectedVersion: req.get("if-match") || body.expectedVersion || body.version,
       ifMatch: req.get("if-match"),
       requireIfMatch: client === "next",
     });
+    createBackup("config", appConfigService.CONFIG_PATH, prepared.backupData);
+    const result = settingsDomainService.commitPreparedTypedSettingsMutation(prepared);
     writeAuditLog(req, "save", "settings", "admin-config", "保存类型化系统配置");
     return res.json({
       success: true,
@@ -4288,9 +4295,8 @@ router.post("/catalog/meta", adminAuth.verifyAdminAccess, (req, res) => {
       return res.status(400).json({ success: false, message: "缺少必要参数 type 或 id" });
     }
     const client = String(req.get("x-fosu-admin-client") || "").toLowerCase();
-    createBackup("catalog-meta", catalogDomainService.CATALOG_META_PATH || CATALOG_META_PATH);
     const key = `${type}::${id}`;
-    const result = catalogDomainService.saveCatalogMetaEntry(
+    const prepared = catalogDomainService.prepareCatalogMetaEntryMutation(
       key,
       {
         displayName: String(displayName || "").trim(),
@@ -4303,6 +4309,8 @@ router.post("/catalog/meta", adminAuth.verifyAdminAccess, (req, res) => {
         requireIfMatch: client === "next",
       }
     );
+    createBackup("catalog-meta", catalogDomainService.CATALOG_META_PATH || CATALOG_META_PATH, prepared.backupData);
+    const result = catalogDomainService.commitPreparedCatalogMetaEntryMutation(prepared);
     writeAuditLog(req, "update", "catalog-meta", key, `修改数据资源 [${type}] ${id} 的元数据别名和备注`);
     return res.json({
       success: true,
@@ -6144,9 +6152,9 @@ router.post("/quality/mark", adminAuth.verifyAdminAccess, (req, res) => {
       expectedVersion: req.get("if-match") || body.expectedVersion || body.version,
       requireIfMatch: client === "next",
     };
-    let result;
+    let prepared;
     if (ignore) {
-      result = qualityDomainService.markIgnore(
+      prepared = qualityDomainService.prepareMarkIgnoreMutation(
         {
           fingerprint,
           category: type,
@@ -6156,8 +6164,10 @@ router.post("/quality/mark", adminAuth.verifyAdminAccess, (req, res) => {
         opts
       );
     } else {
-      result = qualityDomainService.unmarkIgnore(fingerprint, opts);
+      prepared = qualityDomainService.prepareUnmarkIgnoreMutation(fingerprint, opts);
     }
+    createBackup("quality", qualityDomainService.QUALITY_IGNORES_PATH || QUALITY_IGNORES_PATH, prepared.backupData);
+    const result = qualityDomainService.commitPreparedQualityMutation(prepared);
     writeAuditLog(req, "ignore", "quality", `${type}:${target}`, `${ignore ? "标记忽略" : "取消忽略"} 质量缺陷`);
     return res.json({
       success: true,
