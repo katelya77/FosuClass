@@ -90,3 +90,25 @@ amending the original Task 3 commit).
   safely reclaims only stale dead-PID locks, rechecks CAS under that lock, and
   always releases it. The module test starts two real Node processes with the
   same prepared version and proves exactly one success and one `409 CONFLICT`.
+
+## Second independent-review follow-up
+
+### RED evidence
+
+1. Injecting a lock-file descriptor write failure left the canonical `.lock`
+   file behind, blocking the following mutation.
+2. A fresh held lock returned `409 QUALITY_IGNORES_LOCK_TIMEOUT`, causing the
+   generic backup cleanup to delete a recovery backup.
+
+### Implementation and verification
+
+- Initialization closes an acquired descriptor and discards its owned lock on
+  write/close failure. Stale malformed locks are atomically retired when old;
+  valid locks require a dead owner PID.
+- Release verifies the token, retries unlink, then retires the canonical name;
+  irrecoverable release errors are typed `QUALITY_IGNORES_LOCK_RELEASE_FAILED`.
+- Lock timeout is `503`, and backup cleanup is now only `error.code ===
+  "CONFLICT"`. Module injection covers lock write/unlink failures; real HTTP
+  covers held-lock 503, no audit, recovery-backup retention, and later success.
+- Fresh green: Task 3 module/HTTP/tier3 tests plus Task 2 HTTP parity, auth,
+  route matrix, backup transaction, capabilities, and `git diff --check`.
