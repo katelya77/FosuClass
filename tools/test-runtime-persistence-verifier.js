@@ -1,4 +1,5 @@
 const assert = require("assert");
+const crypto = require("crypto");
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
@@ -70,6 +71,17 @@ try {
   assert.throws(
     () => verifyPersistenceSnapshot(duplicateSnapshot, { dataDir, storageDir }),
     (error) => error && error.code === "RUNTIME_PERSISTENCE_SNAPSHOT_INVALID"
+  );
+  const policyTamperFiles = snapshot.files.map((entry, index) => index === 0 ? { ...entry, mode: entry.mode === "exact" ? "append-only" : "exact" } : entry);
+  const policyTamper = {
+    ...snapshot,
+    files: policyTamperFiles,
+    fingerprint: crypto.createHash("sha256").update(JSON.stringify(policyTamperFiles)).digest("hex"),
+  };
+  assert.throws(
+    () => verifyPersistenceSnapshot(policyTamper, { dataDir, storageDir }),
+    (error) => error && error.code === "RUNTIME_PERSISTENCE_SNAPSHOT_INVALID",
+    "snapshot paths must retain their versioned domain/mode policy"
   );
 
   fs.appendFileSync(path.join(dataDir, "admin-audit-log.jsonl"), '{"id":"audit-2"}\n');
