@@ -59,5 +59,65 @@ const unmarked = quality.unmarkIgnore("missingTeacher::x", {
 });
 assert.ok(unmarked.version);
 
+// Task 3 quality contract: a versioned rule partitions the report, recovery
+// returns the anomaly to active, and legacy arrays remain read-only until write.
+fs.writeFileSync(path.join(process.env.FOSU_STORAGE_DIR, "class-schedules.json"), JSON.stringify([
+  { className: "C1", courses: [] },
+], null, 2));
+fs.writeFileSync(path.join(process.env.FOSU_STORAGE_DIR, "teacher-schedules.json"), "[]");
+fs.writeFileSync(path.join(process.env.FOSU_STORAGE_DIR, "classroom-schedules.json"), "[]");
+fs.writeFileSync(path.join(process.env.FOSU_STORAGE_DIR, "quality-ignores.json"), JSON.stringify({
+  version: "qi_seed",
+  updatedAt: "2026-07-18T00:00:00.000Z",
+  rules: [{
+    id: "seed-rule",
+    fingerprint: "empty-schedule::C1",
+    reason: "known empty class",
+    category: "empty-schedule",
+    severity: "warning",
+    createdAt: "2026-07-18T00:00:00.000Z",
+    ignored: true,
+  }],
+}, null, 2));
+
+const report = quality.buildQualityReport();
+assert.ok(report.generatedAt);
+assert.strictEqual(report.active.some((item) => item.fingerprint === "empty-schedule::C1"), false);
+const ignoredAnomaly = report.ignored.find((item) => item.fingerprint === "empty-schedule::C1");
+assert.ok(ignoredAnomaly, "versioned ignored anomaly must be reported in ignored");
+assert.strictEqual(ignoredAnomaly.reason, "known empty class");
+assert.strictEqual(ignoredAnomaly.status, "ignored");
+assert.strictEqual(ignoredAnomaly.rule.category, "empty-schedule");
+assert.strictEqual(report.summary.activeCount + report.summary.ignoredCount, report.summary.totalCount);
+assert.strictEqual(report.stats, report.summary, "legacy stats alias must retain the canonical summary");
+assert.strictEqual(report.anomalies, report.active, "legacy anomalies alias must expose active anomalies only");
+
+const seeded = quality.listIgnores();
+const recovered = quality.unmarkIgnore("empty-schedule::C1", {
+  expectedVersion: seeded.version,
+  requireIfMatch: true,
+});
+assert.ok(recovered.version);
+const recoveredReport = quality.buildQualityReport();
+assert.ok(recoveredReport.active.some((item) => item.fingerprint === "empty-schedule::C1"));
+let staleRecovery = null;
+try {
+  quality.unmarkIgnore("empty-schedule::C1", { expectedVersion: seeded.version, requireIfMatch: true });
+} catch (error) {
+  staleRecovery = error;
+}
+assert.ok(staleRecovery && staleRecovery.statusCode === 409 && staleRecovery.currentVersion);
+
+const legacyRules = [{ type: "empty-schedule", target: "Legacy" }];
+fs.writeFileSync(path.join(process.env.FOSU_STORAGE_DIR, "quality-ignores.json"), JSON.stringify(legacyRules, null, 2));
+const legacy = quality.listIgnores();
+assert.deepStrictEqual(legacy.rules, legacyRules);
+assert.strictEqual(JSON.parse(fs.readFileSync(path.join(process.env.FOSU_STORAGE_DIR, "quality-ignores.json"), "utf8")).length, 1);
+quality.markIgnore({ fingerprint: "empty-schedule::Legacy", reason: "migrate" }, {
+  expectedVersion: legacy.version,
+  requireIfMatch: true,
+});
+assert.ok(Array.isArray(JSON.parse(fs.readFileSync(path.join(process.env.FOSU_STORAGE_DIR, "quality-ignores.json"), "utf8")).rules));
+
 fs.rmSync(tmp, { recursive: true, force: true });
 console.log("Admin C1 modules tests passed.");

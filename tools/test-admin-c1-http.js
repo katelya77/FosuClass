@@ -8,7 +8,7 @@ const HARNESS_ENV_KEYS = [
   "NODE_ENV", "PORT", "FOSU_STORAGE_DIR", "FOSU_DATA_DIR", "ADMIN_PASSWORD", "ADMIN_API_TOKEN",
   "FOSU_ADMIN_NEXT_ENABLED", "FOSU_ADMIN_PRIMARY", "FOSU_ADMIN_NEXT_WRITE_MODULES",
   "FOSU_RELEASE_WORKER_ENABLED", "FOSU_CONFIG_HARD_FAIL", "FOSU_ALLOWED_ADMIN_ORIGINS",
-  "FOSU_ALLOWED_PUBLIC_ORIGINS", "ADMIN_SERVICE_TOKENS",
+  "FOSU_ALLOWED_PUBLIC_ORIGINS", "ADMIN_SERVICE_TOKENS", "FOSU_QUALITY_RECHECK_TEST_FAIL",
 ];
 
 function snapshotHarnessEnv() {
@@ -317,10 +317,78 @@ async function assertModuleGuards() {
   } finally { await enabled.close(); }
 }
 
+async function assertQualityRecheckContract() {
+  const harness = await startAdminHttpHarness();
+  try {
+    const session = await harness.login();
+    const beforeAudit = auditCount(harness.paths);
+    const started = await harness.request("/api/admin/quality/recheck/start", {
+      method: "POST",
+      cookie: session.cookie,
+      headers: browserHeaders(session),
+      body: {},
+    });
+    assert.strictEqual(started.status, 202, started.text);
+    assert.ok(started.json && started.json.job && started.json.job.id);
+    assert.strictEqual(started.json.job.type, "quality-recheck");
+    assert.strictEqual(auditCount(harness.paths), beforeAudit + 1, "successful recheck creation must audit once");
+
+    const second = await harness.request("/api/admin/quality/recheck/start", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session), body: {},
+    });
+    assert.strictEqual(second.status, 409, second.text);
+    assert.strictEqual(second.json && second.json.code, "JOB_ALREADY_RUNNING");
+    assert.strictEqual(auditCount(harness.paths), beforeAudit + 1, "singleton rejection must not audit");
+
+    let current = started.json.job;
+    for (let attempt = 0; attempt < 60 && ["queued", "running"].includes(current.status); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const status = await harness.request(`/api/admin/quality/recheck/${current.id}`, { cookie: session.cookie });
+      assert.strictEqual(status.status, 200, status.text);
+      current = status.json && status.json.job;
+    }
+    assert.strictEqual(current.status, "success");
+    assert.ok(current.result && Number.isInteger(current.result.totalCount));
+    assert.strictEqual(auditCount(harness.paths), beforeAudit + 1, "polling must not audit");
+
+    const nonQuality = path.join(harness.paths.storage, "jobs", "other-job.json");
+    fs.mkdirSync(path.dirname(nonQuality), { recursive: true });
+    fs.writeFileSync(nonQuality, JSON.stringify({ id: "other-job", type: "catalog-rebuild", status: "success", logs: [] }));
+    const hidden = await harness.request("/api/admin/quality/recheck/other-job", { cookie: session.cookie });
+    assert.strictEqual(hidden.status, 404, hidden.text);
+  } finally {
+    await harness.close();
+  }
+}
+
+async function assertQualityRecheckFailureContract() {
+  const harness = await startAdminHttpHarness({ environment: { FOSU_QUALITY_RECHECK_TEST_FAIL: "true" } });
+  try {
+    const session = await harness.login();
+    const started = await harness.request("/api/admin/quality/recheck/start", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session), body: {},
+    });
+    assert.strictEqual(started.status, 202, started.text);
+    let current = started.json.job;
+    for (let attempt = 0; attempt < 60 && ["queued", "running"].includes(current.status); attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const status = await harness.request(`/api/admin/quality/recheck/${current.id}`, { cookie: session.cookie });
+      assert.strictEqual(status.status, 200, status.text);
+      current = status.json.job;
+    }
+    assert.strictEqual(current.status, "failed");
+    assert.strictEqual(current.error && current.error.code, "QUALITY_RECHECK_INJECTED_FAILURE");
+  } finally {
+    await harness.close();
+  }
+}
+
 async function main() {
   await assertHarnessStartupFailureCleanup();
   await assertModuleGuards();
   for (const [name, domain] of Object.entries(DOMAINS)) await exerciseDomain(name, domain);
+  await assertQualityRecheckContract();
+  await assertQualityRecheckFailureContract();
   console.log("Admin C1 real HTTP write contracts passed.");
 }
 
