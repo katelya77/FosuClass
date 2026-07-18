@@ -2,9 +2,12 @@ const assert = require("assert");
 const fs = require("fs");
 const path = require("path");
 
-const root = path.join(__dirname, "..");
-const workflow = fs.readFileSync(path.join(root, ".github", "workflows", "deploy-vps.yml"), "utf-8");
-const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
+const root = path.resolve(__dirname, "..");
+const workflow = fs.readFileSync(path.join(root, ".github", "workflows", "deploy-vps.yml"), "utf8");
+const deployScript = fs.readFileSync(path.join(root, "server", "scripts", "deploy-ghcr-digest.sh"), "utf8");
+const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf8");
+const compose = fs.readFileSync(path.join(root, "server", "docker-compose.yml"), "utf8");
+const rollout = JSON.parse(fs.readFileSync(path.join(root, "config", "admin-rollout-manifest.json"), "utf8"));
 
 [
   "OPENRESTY_HOST_RUNTIME_DIR=/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime",
@@ -34,78 +37,48 @@ const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
   "FOSU_IMPORT_USE_PLAYWRIGHT_FALLBACK=false",
   "FOSU_IMPORT_RATE_LIMIT_ENABLED=true",
   "FOSU_IMPORT_IP_RATE_LIMIT_10M=12",
-].forEach((line) => {
-  assert(workflow.includes(line), `deploy workflow should include ${line}`);
-  assert(envExample.includes(line), `.env.example should include ${line}`);
-});
+].forEach((line) => assert(envExample.includes(line), `.env.example should retain ${line}`));
+
+assert.strictEqual(rollout.admin.primary, "legacy");
+assert.strictEqual(rollout.admin.nextEnabled, true);
+assert.match(compose, /image:\s*ghcr\.io\/katelya77\/fosuclass-api@\$\{FOSU_API_DIGEST:\?[^}]+\}/);
+assert.ok(!/^\s+build:\s*$/m.test(compose));
 
 [
-  "FOSU_SECURITY_MODE=observe",
-  "FOSU_DYNAMIC_API_SESSION_REQUIRED=false",
-  "FOSU_STATIC_ACCESS_MODE=public",
-  "FOSU_OPENRESTY_STATIC_SECURITY_MODE=public",
-  "FOSU_SESSION_TTL_SECONDS=7200",
-  "FOSU_STATIC_TICKET_TTL_SECONDS=600",
-  "FOSU_DEPLOY_COMMIT_SHA=",
-  "FOSU_CLIENT_BUILD_ID=",
-  "FOSU_IMPORT_ENABLE=true",
-  "FOSU_IMPORT_CHANNEL=auto",
-  "FOSU_CLOUDBASE_IMPORT_ENABLE=true",
-  "FOSU_CLOUDBASE_IMPORT_URL=",
-  "FOSU_IMPORT_CHANNEL_TIMEOUT_MS=25000",
-  "FOSU_IMPORT_ORACLE_FALLBACK=true",
-  "FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN=",
-].forEach((line) => {
-  assert(envExample.includes(line), `.env.example should include ${line}`);
-  const key = line.split("=")[0];
-  assert(workflow.includes(`${key}=`), `deploy workflow should include ${key}`);
-});
-
-[
-  'tmp_env=".env.',
-  "umask 077",
-  'chmod 600 "$tmp_env"',
-  'mv "$tmp_env" .env',
-  "sudo docker compose config >/dev/null",
-  "sudo docker compose up -d --build",
-  "test -d /app/storage && test -w /app/storage",
-  "test -d /openresty-static/releases && test -w /openresty-static/releases",
-  "test -d /openresty-static/runtime && test -w /openresty-static/runtime",
-  "node scripts/reconcile-static-release.js",
-  "node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000",
-  "actions/setup-node@v6",
-  "actions/checkout@v6",
-  "node-version: 22",
-  "cache-dependency-path:",
-  "npm ci",
-  "npm --prefix server ci",
-  "Generate miniprogram build metadata",
   "npm run build:miniprogram-info",
-  "steps.build_info.outputs.client_build_id",
+  "npm run release:preflight",
   "npm run security:acceptance",
-  "!server/storage/**",
-  "Range: bytes=0-0",
-  "ADMIN_API_TOKEN=${{ secrets.ADMIN_API_TOKEN }}",
-  "admin-api-token-contract=ok",
-  "/api/admin/publisher/receipt",
-  "Deployment summary",
-].forEach((needle) => {
-  assert(workflow.includes(needle), `deploy workflow should include ${needle}`);
-});
-
-assert(workflow.includes('["ADMIN_API_TOKEN"]="${{ secrets.ADMIN_API_TOKEN }}"'), "ADMIN_API_TOKEN should be a required deploy secret");
-assert(!workflow.includes("ADMIN_API_TOKEN is not configured. The server will derive one from ADMIN_PASSWORD."), "deploy must not allow derived production ADMIN_API_TOKEN");
-
-assert(!workflow.includes("cat << 'EOF' > .env"), "workflow must not write .env directly before validation");
-assert(!/set\s+-x/.test(workflow), "workflow must not enable shell xtrace");
+  "npm run test:runtime-data-recreate",
+  "actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38",
+  "actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10",
+  'archive_name="deploy-control-${GITHUB_SHA}.tar.gz"',
+  "control-files.sha256",
+  'export FOSU_DEPLOY_CONTROL_DIR="$control_dir/server"',
+  "GHCR_READ_TOKEN: ${{ github.token }}",
+].forEach((needle) => assert(workflow.includes(needle), `deploy workflow should include ${needle}`));
 
 [
-  /^\s*ADMIN_PASSWORD=(?!\$\{\{ secrets\.ADMIN_PASSWORD \}\}|YOUR_|$).+/m,
-  /^\s*ADMIN_TOKEN=(?!\$\{\{ secrets\.ADMIN_TOKEN \}\}|YOUR_|$).+/m,
-  /^\s*ADMIN_API_TOKEN=(?!\$\{\{ secrets\.ADMIN_API_TOKEN \}\}|YOUR_|$).+/m,
-  /^\s*FOSU_PASSWORD=(?!YOUR_|$).+/m,
-].forEach((pattern) => {
-  assert(!pattern.test(workflow), `workflow appears to contain a hard-coded secret: ${pattern}`);
-});
+  'test -s "$ENV_FILE"',
+  "FOSU_ADMIN_PRIMARY=legacy",
+  "FOSU_ADMIN_NEXT_ENABLED=true",
+  'FOSU_ADMIN_NEXT_WRITE_MODULES="$write_modules"',
+  'FOSU_ROLLOUT_VERSION="$rollout_version"',
+  "compose_with_image \"$FOSU_API_IMAGE\" pull fosu-api",
+  "compose_with_image \"$FOSU_API_IMAGE\" up -d --no-build fosu-api",
+  "migrate-runtime-data.js",
+  "test -d /app/data && test -w /app/data",
+  "node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000",
+  "/api/admin/publisher/receipt",
+  "admin-api-token-contract=ok",
+].forEach((needle) => assert(deployScript.includes(needle), `digest deploy script should include ${needle}`));
+
+assert.ok(!workflow.includes("source: \"server/**"), "application source must no longer be SCP-deployed");
+assert.ok(!workflow.includes("secrets.ADMIN_API_TOKEN"), "application secrets stay in the existing protected VPS env file");
+assert.ok(!workflow.includes("secrets.ADMIN_PASSWORD"), "application secrets stay in the existing protected VPS env file");
+assert.ok(!deployScript.includes("compose up -d --build"), "production deployment must not build on the VPS");
+assert.ok(!deployScript.includes("update_rollout_env"), "deployment must not rewrite the protected VPS env file");
+assert.ok(!deployScript.includes("DEPLOY_ENV_FILE"), "deployment must not stage a replacement for the protected VPS env file");
+assert.ok(!deployScript.includes("reconcile-static-release"), "image delivery must not switch the Active Pointer");
+assert.ok(!/set\s+-x/.test(workflow + deployScript), "deployment must not enable shell xtrace");
 
 console.log("test-deploy-static-env-contract passed");

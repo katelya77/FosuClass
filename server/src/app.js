@@ -358,27 +358,35 @@ function startServer(port = config.PORT) {
   return app.listen(port, () => {
   console.log(`[FosuClass Server] Server is running at http://localhost:${port}`);
   console.log(`[FosuClass Server] Environment: ${config.NODE_ENV}`);
-  try {
-    termRegistryService.migrateLegacyTermState();
-  } catch (error) {
-    safeLog("startup-term-registry-migration-failed", { error: error.message });
+  const startupDataReconciliationEnabled = !["0", "false", "no", "off"]
+    .includes(String(process.env.FOSU_STARTUP_DATA_RECONCILIATION_ENABLED || "true").trim().toLowerCase());
+  if (startupDataReconciliationEnabled) {
+    try {
+      termRegistryService.migrateLegacyTermState();
+    } catch (error) {
+      safeLog("startup-term-registry-migration-failed", { error: error.message });
+    }
+    try {
+      releaseLifecycleService.reconcileLifecycle({ reason: "startup" });
+    } catch (error) {
+      safeLog("startup-lifecycle-reconcile-failed", { error: error.message });
+    }
+    try {
+      runtimePointerService.ensureActivePointer();
+    } catch (error) {
+      safeLog("startup-runtime-pointer-ensure-failed", { code: error.code || "", error: error.message });
+    }
+  } else {
+    safeLog("startup-data-reconciliation-disabled", { source: "environment" });
   }
-  try {
-    releaseLifecycleService.reconcileLifecycle({ reason: "startup" });
-  } catch (error) {
-    safeLog("startup-lifecycle-reconcile-failed", { error: error.message });
+  if (startupDataReconciliationEnabled) {
+    try {
+      storageLifecycleService.scheduleMaintenance();
+    } catch (error) {
+      safeLog("startup-maintenance-schedule-failed", { error: error.message });
+    }
   }
-  try {
-    runtimePointerService.ensureActivePointer();
-  } catch (error) {
-    safeLog("startup-runtime-pointer-ensure-failed", { code: error.code || "", error: error.message });
-  }
-  try {
-    storageLifecycleService.scheduleMaintenance();
-  } catch (error) {
-    safeLog("startup-maintenance-schedule-failed", { error: error.message });
-  }
-  if (process.env.STATIC_RELEASE_SYNC_ENABLED === "true") {
+  if (startupDataReconciliationEnabled && process.env.STATIC_RELEASE_SYNC_ENABLED === "true") {
     const delayMs = Math.max(1000, Number(process.env.STATIC_RELEASE_RECONCILE_START_DELAY_MS || 5000) || 5000);
     const timer = setTimeout(() => {
       try {

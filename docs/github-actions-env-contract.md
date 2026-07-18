@@ -1,96 +1,69 @@
-# GitHub Actions 环境契约
+# GitHub Actions 生产部署凭据契约
 
-本文档描述 `.github/workflows/deploy-vps.yml` 在部署 VPS 时读取的 GitHub Secrets 和仓库变量。不要把 Secret 值写入仓库、变量、日志或文档。
+`.github/workflows/deploy-vps.yml` 是 API 镜像唯一的 `main` push 发布与部署流水线。它先验证代码和持久化重建，再构建 ARM64 `core`/`browser` 两个 Target，按 `config/admin-rollout-manifest.json` 选择精确 GHCR Digest，执行只读生产前置检查，最后才串行部署到 VPS。
+
+## PR 与手动生产前置检查
+
+PR 事件只运行本地验证与真实 Docker recreate，绝不读取 production environment Secrets，也不执行 PR 中的脚本到 VPS。合并前由维护者从该分支手动执行 `workflow_dispatch` 且设置 `preflight_only=true`；受保护的手动运行会构建并推送当前提交的精确 Digest，再执行生产前置检查，但不会部署。这样既能取得真实主机证据，也不会让 PR 控制的代码自动获得生产 SSH 私钥。
+
+远端脚本只读取 ARM64 架构、磁盘余量、tar 创建/真实解压能力、Docker/Compose、当前容器的四个持久化 bind、运行路径覆盖、可信 `last-healthy-image.txt` 和候选 GHCR Manifest；候选 Digest 必须显式传入，不能回退验证当前镜像。脚本不停止、暂停或替换容器，不拉取镜像，也不改写应用数据目录。结果保存为 `production-preflight-<commit>` artifact。缺少生产 Secrets 或候选 Digest 时必须生成 `status=UNKNOWN` 证据并失败，不能把缺失检查解释为成功。
+
+候选 Compose 只会暂存到提交专属的 `.deploy-preflight/<commit>` 控制目录供解析，不覆盖在线 `server/docker-compose.yml`。正式部署的 Compose 与迁移/验证脚本被打成单一 `tar.gz`，先校验归档 SHA256、封闭文件集合和逐文件 SHA256，再原子移动为 `.deploy-control/<commit>` 不可变控制目录；传输中断或半包不会污染在线控制文件。
 
 ## 必需 Secrets
 
-| 名称 | 默认值 | 作用 | 缺失时行为 |
-| --- | --- | --- | --- |
-| `VPS_HOST` | 无 | SSH/SCP 目标主机 | 部署前置检查失败，只输出变量名 |
-| `VPS_USER` | 无 | SSH/SCP 登录用户 | 部署前置检查失败，只输出变量名 |
-| `VPS_SSH_KEY` | 无 | SSH 私钥 | 部署前置检查失败，只输出变量名 |
-| `VPS_APP_DIR` | 无 | 远端应用目录 | 部署前置检查失败，只输出变量名 |
-| `ADMIN_API_TOKEN` | none | Required production publisher sync token shared by local Publisher and VPS admin API | Deploy preflight fails and only prints the secret name |
-| `ADMIN_PASSWORD` | 无 | Web 后台登录密码；旧版派生 `ADMIN_API_TOKEN` 仅保留运行时兼容，不用于生产部署门禁 | 部署前置检查失败，只输出变量名 |
+| 名称 | 用途 | 缺失时行为 |
+| --- | --- | --- |
+| `VPS_HOST` | SSH/SCP 目标主机 | 部署前失败，只输出变量名 |
+| `VPS_USER` | SSH/SCP 用户 | 部署前失败，只输出变量名 |
+| `VPS_SSH_KEY` | SSH 私钥 | 部署前失败，只输出变量名 |
+| `VPS_APP_DIR` | VPS 应用目录 | 部署前失败，只输出变量名 |
 
-## 条件必需 Secrets
+应用长期凭据不再经由 GitHub Actions 传输或重写。`ADMIN_API_TOKEN`、`ADMIN_PASSWORD`、`ADMIN_TOKEN`、微信 Session/Ticket 密钥、`FOSU_AI_CONFIG_ENCRYPTION_KEY`、`AI_API_KEY`、`DEEPSEEK_API_KEY`、`CLOUDBASE_OPENAI_API_KEY`、`COZE_API_KEY`、`COZE_BOT_ID` 和 `FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN` 必须已经存在于 VPS 权限为 `0600` 的 `server/.env`，或存在于既有加密运行时配置中。
 
-| 名称 | 默认值 | 作用 | 缺失时行为 |
-| --- | --- | --- | --- |
-| `WECHAT_APPID` | 空 | 微信 session bootstrap 的 AppID | `FOSU_SECURITY_MODE` 非 `observe` 时部署前置检查失败 |
-| `WECHAT_APPSECRET` | 空 | 微信 session bootstrap 的 AppSecret | `FOSU_SECURITY_MODE` 非 `observe` 时部署前置检查失败 |
-| `FOSU_SESSION_SECRET_CURRENT` | 空 | 动态 API session token 当前签名密钥 | `FOSU_SECURITY_MODE` 非 `observe` 时部署前置检查失败 |
-| `FOSU_STATIC_TICKET_SECRET_CURRENT` | 空 | 静态资源 ticket 当前签名密钥 | `FOSU_SECURITY_MODE=ticket` 或 `ticket-enforce` 时部署前置检查失败 |
+## 私有 GHCR 读取
 
-## 可选 Secrets
+部署 Job 只声明 `packages: read`，把本次 Job 的短期 `GITHUB_TOKEN` 通过 SSH 进程环境交给远端。远端使用 `mktemp -d` 创建权限为 `0700` 的 `DOCKER_CONFIG`，通过 `--password-stdin` 登录，并在脚本退出时删除整个临时配置。
 
-| 名称 | 默认值 | 作用 | 缺失时行为 |
-| --- | --- | --- | --- |
-| `ADMIN_TOKEN` | 空 | 后台静态 Bearer token 或登录凭据 | 允许为空，后台登录依赖 `ADMIN_PASSWORD` |
-| `FOSU_SESSION_SECRET_PREVIOUS` | 空 | session token 密钥轮换旧 key | 允许为空，状态页显示未配置 previous key |
-| `FOSU_SESSION_SECRET_KID` | `current` | session token key id | 允许为空，服务端使用 `current` |
-| `FOSU_CSRF_SECRET` | 由后台凭据派生 | 后台 Cookie session/CSRF 签名 | 允许为空，服务端从后台凭据派生 |
-| `FOSU_STATIC_TICKET_SECRET_PREVIOUS` | 空 | 静态 ticket 密钥轮换旧 key | 允许为空，状态页显示未配置 previous key |
-| `FOSU_STATIC_TICKET_SECRET_KID` | `current` | 静态 ticket key id | 允许为空，服务端使用 `current` |
-| `AI_API_KEY` | 空 | DeepSeek/OpenAI 兼容 provider key | 允许为空，AI 状态显示 key 未配置，调用外部 provider 时 fallback |
-| `DEEPSEEK_API_KEY` | 空 | DeepSeek provider 专用 key，优先级低于 `AI_API_KEY` | 允许为空，AI 状态显示 DeepSeek key 未配置 |
-| `CLOUDBASE_OPENAI_API_KEY` | 空 | CloudBase OpenAI-compatible provider key | 允许为空，AI 状态显示 CloudBase OpenAI key 未配置 |
-| `COZE_API_KEY` | 空 | Coze provider key | 允许为空，AI 状态显示 Coze key 未配置 |
-| `FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN` | 空 | 学号导入 CloudBase relay 的可选 Bearer token | 允许为空；仅当 relay 服务要求 token 时配置 |
+GHCR 用户名、Token 或 Docker `auth.json` 不得写入仓库、`.env`、Compose、`storage` 或用户的永久 `~/.docker/config.json`。构建 Job 独立声明 `packages: write`；部署 Job 没有包写权限。
+
+## Rollout Manifest 与固定安全值
+
+以下生产值来自版本化 Rollout Manifest 或部署脚本的固定不变量，不允许由 Repository Variables 临时覆盖：
+
+- `FOSU_ADMIN_PRIMARY=legacy`
+- `FOSU_ADMIN_NEXT_ENABLED=true`
+- `FOSU_ADMIN_NEXT_WRITE_MODULES` 仅包含 Manifest 中 `productionWriteEnabled=true` 的模块
+- `FOSU_RUNTIME_DATA_REQUIRE_MIGRATION=true`
+- `FOSU_DATA_DIR=/app/data`
+- `FOSU_SEED_DATA_DIR=/app/seed-data`
+- `FOSU_STORAGE_DIR=/app/storage`
+- `FOSU_STARTUP_DATA_RECONCILIATION_ENABLED=false`，镜像替换不得在启动时迁移 Term、重写 Lifecycle 或补写 Active Pointer
+- `imageTarget=browser`，直至个人课表 APaaS 导入被证明不依赖 Chromium
+
+部署脚本不改写 `.env`。候选 Rollout 版本和写模块只作为本次 Compose 调用的进程环境注入；失败回滚时使用旧容器记录的写模块和 Rollout 版本启动旧 Digest。因此 AI、认证、静态资源、导入与其他运行参数保持原样，Repository Variables 也不参与生产应用配置重写。
+
+## 首次持久化迁移与回滚前置
+
+首次挂载 `${FOSU_RUNTIME_DATA_HOST_DIR}:/app/data` 前，部署必须：
+
+1. 确认当前旧容器存在；
+2. 记录旧容器原始状态并冻结写入；
+3. 检查旧容器 `/app/data` 是否已经是专用 bind 且 receipt 与 migration marker 绑定；若不是，每次尝试都把已有未投产 target 原子移入权限为 `0700` 的 quarantine，再从冻结的权威旧容器导出一个全新 generation；
+4. 生成时间戳 `tar.gz`、SHA256 sidecar、独立 Manifest、逐文件哈希和 `.fosu-runtime-migration.json`，并实际解压 tar 后逐文件比对；
+5. 在随机的 `127.0.0.1` 临时端口启动 shadow：使用数据副本、只读 `storage`/OpenResty bind，并关闭发布与维护 worker；shadow smoke 通过后才允许替换正式 `18318` 服务；
+6. 失败时恢复原容器状态；若正式替换已经开始，只能回到可信的上一 Digest，并在相同专用数据 bind 上验证持久化快照。
+
+允许写入的持久化根只有经 `docker inspect` 验证为显式 durable bind 的 `/app/data`、`/app/storage`、`/openresty-static/releases` 和 `/openresty-static/runtime`。`FOSU_ASSISTANT_KB_PATH`、`FOSU_AI_PROVIDER_CONFIG_PATH`、`RELAY_DIR`、`STAGING_DIR`、OpenResty 路径及静态同步锁/状态路径必须为空或落在这些根内；检查只输出变量名与 `empty/inside/outside`，不输出配置值。
+
+若 VPS 没有由既往成功流水线写入、且与当前容器精确 `.Config.Image` 相等的 `last-healthy-image.txt`，回滚 Digest 必须记录为 `UNKNOWN (bootstrap cutover)`，流水线在停止容器或迁移数据前失败。当前镜像仅仅“看起来是精确 Digest”、Repository Variable 或任意未验证 GHCR Digest 都不能充当上一健康回滚点；若要完成首次引导，必须另行把现有 Digest 在同一 ARM64 主机和 shadow 数据副本上验证并明确记录为 `bootstrap-validated`，不能伪称 previously deployed。
+
+每次成功部署把候选 Digest、上一健康 Digest、Rollout 版本和时间写入宿主机专用的 `server/.deploy/last-deployment.json`；VPS 实测的旧/新镜像本地 Size 与 `docker history` 写入 `server/.deploy/evidence/<commit>-<attempt>-image-sizes.json`。该目录不挂载给应用容器，运行中的服务不能伪造可信回滚指针。CI 同时保留 core/browser 的 OCI Manifest、config/layer descriptor 和压缩字节 JSON artifact。
 
 ## Deprecated
 
-| 名称 | 替代项 | 作用 | 当前部署行为 |
-| --- | --- | --- | --- |
-| `FOSU_STATIC_TICKET_SECRET` | `FOSU_STATIC_TICKET_SECRET_CURRENT` | 旧版静态 ticket 兼容密钥名 | GitHub Actions 不再写入生产 `.env`；代码仍保留运行时兼容读取 |
+`FOSU_STATIC_TICKET_SECRET` 已废弃，替代项为 `FOSU_STATIC_TICKET_SECRET_CURRENT`。流水线不会读取、传输或写入两者；既有 VPS 配置由运行时兼容逻辑读取。
 
-## Repository Variables
+## 不属于镜像部署的操作
 
-| 名称 | 默认值 | 作用 | 缺失时行为 |
-| --- | --- | --- | --- |
-| `FOSU_SECURITY_MODE` | `observe` | 动态 API session 安全模式 | 使用 observe，不要求微信凭据和 session secret |
-| `FOSU_DYNAMIC_API_SESSION_REQUIRED` | `false` | 是否强制动态 API session | 使用 false |
-| `FOSU_SESSION_TTL_SECONDS` | `7200` | session token TTL | 使用默认值 |
-| `FOSU_STATIC_ACCESS_MODE` | `public` | 静态资源访问模式 | 使用 public |
-| `FOSU_OPENRESTY_STATIC_SECURITY_MODE` | `public` | OpenResty 静态安全模式 | 使用 public |
-| `FOSU_STATIC_TICKET_TTL_SECONDS` | `600` | 静态 ticket TTL | 使用默认值 |
-| `FOSU_IMPORT_ENABLE` | `true` | 是否启用本人授权学号导入预览 API | 使用 true |
-| `FOSU_IMPORT_CHANNEL` | `auto` | 导入通道策略：`auto`、`cloudbase`、`oracle` | 生产使用 auto，优先 CloudBase |
-| `FOSU_CLOUDBASE_IMPORT_ENABLE` | `true` | 是否启用 CloudBase relay 导入通道 | 生产使用 true |
-| `FOSU_CLOUDBASE_IMPORT_URL` | 空 | CloudBase relay HTTPS 地址 | 生产必须配置 relay URL |
-| `FOSU_IMPORT_CHANNEL_TIMEOUT_MS` | `25000` | 单个导入通道请求超时 | 使用默认值 |
-| `FOSU_IMPORT_ORACLE_FALLBACK` | `true` | CloudBase 可重试故障时是否回落 Oracle 通道 | 生产开启 Oracle fallback |
-| `AI_AGENT_ENABLED` | `false` | 是否启用外部 AI provider | 使用本地规则/mock，不调用外部模型 |
-| `AI_PROVIDER` | `mock` | provider 名称：`mock`、`deepseek`、`coze` | 使用 mock |
-| `AI_PROVIDER_POLICY` | `auto` | 外部 provider 调用策略 | 使用 auto |
-| `AI_RUNTIME_MODE` | `public` | 运行模式：`public` 或 `competition` | 使用 public，正式版 fail-closed |
-| `AI_PROVIDER_ACTIVE_ENV` | `public` | 后台默认查看/编辑的环境：`public`、`trial`、`dev` | 使用 public |
-| `AI_COMPETITION_ALLOW_TRIAL_ENV` | `true` | 微信体验版/开发版/devtools 是否允许进入增强模式 | 使用 true；release 仍强制 public |
-| `AI_MODEL` | `deepseek-v4-flash` | 默认模型 | 使用默认值 |
-| `AI_REASONING_MODEL` | `deepseek-v4-pro` | 推理模型 | 使用默认值 |
-| `AI_BASE_URL` | `https://api.deepseek.com` | DeepSeek/OpenAI 兼容接口地址 | 使用默认值 |
-| `AI_TIMEOUT_MS` | `15000` | provider 请求超时 | 使用默认值 |
-| `AI_MAX_TOKENS` | `1200` | provider 最大输出 token | 使用默认值 |
-| `AI_TEMPERATURE` | `0.1` | provider temperature | 使用默认值 |
-| `AI_THINKING_ENABLED` | `false` | 是否对 reasoning model 发送 thinking/reasoning 参数 | 使用默认值 |
-| `AI_REASONING_EFFORT` | `medium` | reasoning effort | 使用默认值 |
-| `AI_PROVIDER_JSON_REPAIR` | `true` | provider 文本 JSON 修复 | 使用默认值 |
-| `DEEPSEEK_STRICT_JSON_MODE` | `false` | DeepSeek 严格 JSON mode | 使用默认值 |
-| `AI_ALLOW_PERSONAL_CONTEXT` | `false` | 后端是否允许使用脱敏个人课表摘要 | 使用默认值，不使用个人摘要 |
-| `CLOUDBASE_OPENAI_ENABLED` | `false` | CloudBase OpenAI-compatible provider enabled flag | 使用默认值 |
-| `CLOUDBASE_OPENAI_BASE_URL` | `https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase` | CloudBase OpenAI-compatible base URL | 使用默认值 |
-| `CLOUDBASE_OPENAI_TEXT_MODEL` | `hy3-preview` | CloudBase text model | 使用默认值 |
-| `CLOUDBASE_OPENAI_TIMEOUT_MS` | `15000` | CloudBase provider timeout | 使用默认值 |
-| `CLOUDBASE_OPENAI_MAX_TOKENS` | `1200` | CloudBase provider max output tokens | 使用默认值 |
-| `COZE_API_BASE_URL` | `https://api.coze.cn` | Coze API 地址 | 使用默认值 |
-| `COZE_BOT_ID` | 空 | Coze bot id | Coze 状态显示未配置，调用时 fallback |
-| `COZE_USER_ID` | `fosuclass-user` | Coze user id | 使用默认值 |
-| `COZE_CHAT_ENDPOINT` | `/v3/chat` | Coze chat endpoint | 使用默认值 |
-
-## 固定部署默认值
-
-这些值由 workflow 固定写入远端 `.env`，不是 GitHub Secret 或仓库变量：`NODE_ENV=production`、`PORT=3000`、`HOST_BIND_IP=127.0.0.1`、`HOST_API_PORT=18318`、`PUBLIC_API_ORIGIN=https://class.katelya.eu.org`、`FOSU_API_BASE_URL=https://class.katelya.eu.org`、`FOSU_STATIC_RELEASE_BASE_URL=/static/releases`、OpenResty 静态同步路径、release worker、维护任务和磁盘水位参数。
-
-## 缺失值诊断
-
-部署前置检查只对必需和条件必需 Secret 失败，并且只打印缺失变量名。可选 Secret 缺失不会阻断部署；远端 `node scripts/verify-ai-provider.js --mode=status` 会输出 provider、policy、model、baseUrl 以及 key 是否配置的布尔状态，不输出任何 Secret 值。
+这条流水线不会发布 GitHub Release，不调用 `release-auto`/`release-cutover`，不修改静态 Active Pointer，不激活学期，不切换 Admin Primary，也不删除 Legacy 后台。

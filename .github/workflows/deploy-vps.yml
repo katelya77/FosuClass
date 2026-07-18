@@ -1,561 +1,726 @@
-name: Deploy to VPS
+name: Verify, publish and deploy API digest
 
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "server/**"
+      - "admin-web/**"
+      - "config/admin-rollout-manifest.json"
+      - "tools/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".dockerignore"
+      - ".github/workflows/deploy-vps.yml"
   push:
-    branches:
-      - main
+    branches: [main]
+    paths:
+      - "server/**"
+      - "admin-web/**"
+      - "config/admin-rollout-manifest.json"
+      - "tools/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".dockerignore"
+      - ".github/workflows/deploy-vps.yml"
   workflow_dispatch:
+    inputs:
+      preflight_only:
+        description: Build the branch digest and run read-only production preflight without deploying
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: fosuclass-api-${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'production' }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: katelya77/fosuclass-api
 
 jobs:
-  ci:
+  verify:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    outputs:
+      image_target: ${{ steps.rollout.outputs.image_target }}
+      rollout_version: ${{ steps.rollout.outputs.rollout_version }}
+      write_modules: ${{ steps.rollout.outputs.write_modules }}
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
+      - name: Checkout immutable source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: |
             package-lock.json
             server/package-lock.json
+            admin-web/package-lock.json
 
-      - name: Install root dependencies
-        run: npm ci
-
-      - name: Install server dependencies
-        run: npm --prefix server ci
-
-      - name: Release preflight
-        run: npm run release:preflight
-
-  deploy:
-    needs: ci
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v6
-
-      - name: Check GitHub Secrets
-        shell: bash
+      - name: Install dependencies
         run: |
-          set -euo pipefail
-          declare -A required_secrets=(
-            ["VPS_HOST"]="${{ secrets.VPS_HOST }}"
-            ["VPS_USER"]="${{ secrets.VPS_USER }}"
-            ["VPS_SSH_KEY"]="${{ secrets.VPS_SSH_KEY }}"
-            ["VPS_APP_DIR"]="${{ secrets.VPS_APP_DIR }}"
-            ["ADMIN_API_TOKEN"]="${{ secrets.ADMIN_API_TOKEN }}"
-            ["ADMIN_PASSWORD"]="${{ secrets.ADMIN_PASSWORD }}"
-            ["FOSU_AI_CONFIG_ENCRYPTION_KEY"]="${{ secrets.FOSU_AI_CONFIG_ENCRYPTION_KEY }}"
-          )
+          npm ci
+          npm --prefix server ci
+          npm --prefix admin-web ci
 
-          has_missing_required=false
-          for key in "${!required_secrets[@]}"; do
-            if [ -z "${required_secrets[$key]}" ]; then
-              echo "::error::Missing GitHub Actions Secret: ${key}"
-              has_missing_required=true
-            fi
-          done
-
-          if [ -z "${{ secrets.ADMIN_TOKEN }}" ]; then
-            echo "::warning::ADMIN_TOKEN is not configured. Admin login will rely on ADMIN_PASSWORD."
-          fi
-          security_mode="${{ vars.FOSU_SECURITY_MODE || 'observe' }}"
-          if [ "$security_mode" != "observe" ]; then
-            if [ -z "${{ secrets.WECHAT_APPID }}" ] || [ -z "${{ secrets.WECHAT_APPSECRET }}" ]; then
-              echo "::error::WECHAT_APPID and WECHAT_APPSECRET are required for session/ticket security modes."
-              has_missing_required=true
-            fi
-            if [ -z "${{ secrets.FOSU_SESSION_SECRET_CURRENT }}" ]; then
-              echo "::error::FOSU_SESSION_SECRET_CURRENT is required for session/ticket security modes."
-              has_missing_required=true
-            fi
-          fi
-          if { [ "$security_mode" = "ticket" ] || [ "$security_mode" = "ticket-enforce" ]; } && [ -z "${{ secrets.FOSU_STATIC_TICKET_SECRET_CURRENT }}" ]; then
-            echo "::error::FOSU_STATIC_TICKET_SECRET_CURRENT is required for ticket security mode."
-            has_missing_required=true
-          fi
-
-          if [ "$has_missing_required" = true ]; then
-            exit 1
-          fi
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            server/package-lock.json
-
-      - name: Install root dependencies
-        run: npm ci
-
-      - name: Install server dependencies
-        run: npm --prefix server ci
+      - name: Resolve versioned rollout manifest
+        id: rollout
+        run: node tools/resolve-deploy-rollout.js --github-output
 
       - name: Generate miniprogram build metadata
-        id: build_info
         run: npm run build:miniprogram-info
 
-      - name: Predeploy server module checks
-        working-directory: server
+      - name: Release and architecture preflight
         run: |
-          node --check src/services/staticReleaseSyncService.js
-          node --check src/services/securityModeService.js
-          node --check src/services/rateLimitService.js
-          node --check src/services/securityEventService.js
-          node --check src/services/clientCheckService.js
-          node --check src/security/routeSecurityPolicy.js
-          node --check src/workers/releaseWorker.js
-          node --check scripts/security-postdeploy-check.js
-          node --check scripts/reconcile-static-release.js
-          node -e "require('./src/utils/courseNormalizer'); console.log('courseNormalizer ok')"
-          node -e "require('./src/utils/scheduleNormalizer'); console.log('scheduleNormalizer ok')"
+          npm run release:preflight
+          npm run admin:feature-matrix:check
+          npm run test:architecture-guards
 
-      - name: AI deploy smoke checks
+      - name: Runtime data and production compose contracts
+        run: |
+          npm run test:runtime-data-bootstrap
+          npm run test:runtime-data-migration
+          npm run test:runtime-data-paths
+          npm run test:runtime-compose-contract
+          npm run test:runtime-persistence-verifier
+          npm run test:runtime-data-recreate-helpers
+          npm run test:startup-data-reconciliation-guard
+          npm run test:deploy-rollout-resolver
+          npm run test:ghcr-digest-deploy-contract
+
+      - name: Server and security acceptance
         run: |
           npm run test:server-ai-module-require
           npm run test:server-no-root-shared-require
           npm run test:server-docker-smoke
+          npm run security:acceptance
 
-      - name: Security acceptance tests
-        run: npm run security:acceptance
-
-      - name: Upload server/ directory via SCP
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
-          source: "server/**,!server/node_modules/**,!server/.env,!server/storage/**,admin-web/**,!admin-web/node_modules/**,.dockerignore"
-          target: "${{ secrets.VPS_APP_DIR }}"
-
-      - name: SSH Remote Deploy & Health Check
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VPS_HOST }}
-          username: ${{ secrets.VPS_USER }}
-          key: ${{ secrets.VPS_SSH_KEY }}
-          port: 22
-          script: |
-            set -Eeuo pipefail
-
-            APP_DIR='${{ secrets.VPS_APP_DIR }}'
-            COMMIT_SHA='${{ github.sha }}'
-            CONTAINER_NAME='fosuclass-api'
-            PUBLIC_BASE_URL='https://class.katelya.eu.org/static/releases'
-            OPENRESTY_HOST_RELEASE_DIR='/opt/1panel/www/sites/class.katelya.eu.org/index/static/releases'
-            OPENRESTY_HOST_RUNTIME_DIR='/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime'
-            STARTED_AT="$(date +%s)"
-
-            sanitize() {
-              sed -E \
-                -e 's/(ADMIN_PASSWORD|ADMIN_TOKEN|ADMIN_API_TOKEN|FOSU_PASSWORD|WECHAT_APPSECRET|FOSU_CSRF_SECRET|FOSU_SESSION_SECRET(_CURRENT|_PREVIOUS)?|FOSU_STATIC_TICKET_SECRET(_CURRENT|_PREVIOUS)?|FOSU_AI_CONFIG_ENCRYPTION_KEY|AI_API_KEY|DEEPSEEK_API_KEY|CLOUDBASE_OPENAI_API_KEY|COZE_API_KEY)=([^[:space:]]*)/\1=***/g' \
-                -e 's/(Authorization: Bearer )[A-Za-z0-9._~+\/=-]+/\1***/gi' \
-                -e 's/(token|password|secret|key)["=: ]+[A-Za-z0-9._\/+=-]+/\1=***/gi'
-            }
-
-            on_error() {
-              echo "::error::Remote deploy failed. Sanitized diagnostics follow."
-              sudo docker compose ps 2>&1 | sanitize || true
-              sudo docker inspect "$CONTAINER_NAME" --format '{{json .State}}' 2>&1 | sanitize || true
-              sudo docker inspect "$CONTAINER_NAME" --format '{{range .State.Health.Log}}{{println .Output}}{{end}}' 2>&1 | tail -n 10 | sanitize || true
-              sudo docker logs "$CONTAINER_NAME" --tail=200 2>&1 | sanitize || true
-              sudo docker compose logs --tail=200 2>&1 | sanitize || true
-              ss -lntp 2>/dev/null | grep 18318 || true
-            }
-            trap on_error ERR
-
-            cd "$APP_DIR/server"
-
-            mkdir -p "$APP_DIR/server/storage"
-            chmod 755 "$APP_DIR/server/storage"
-            sudo mkdir -p "$OPENRESTY_HOST_RELEASE_DIR"
-            sudo mkdir -p "$OPENRESTY_HOST_RUNTIME_DIR"
-            sudo chmod 755 "$OPENRESTY_HOST_RELEASE_DIR"
-            sudo chmod 755 "$OPENRESTY_HOST_RUNTIME_DIR"
-
-            restart_before="$(sudo docker inspect -f '{{.RestartCount}}' "$CONTAINER_NAME" 2>/dev/null || echo 0)"
-
-            umask 077
-            tmp_env=".env.$$.$(date +%s).tmp"
-            existing_env=".env"
-            runtime_ai_config="storage/secure/ai-provider-config.json"
-            read_existing_env_value() {
-              local key="$1"
-              if [ -f "$existing_env" ]; then
-                grep -E "^${key}=" "$existing_env" | tail -n 1 | cut -d= -f2- || true
-              fi
-            }
-            read_runtime_env_value() {
-              local key="$1"
-              if [ -f "$runtime_ai_config" ]; then
-                node -e 'const fs=require("fs");const key=process.argv[1];const file=process.argv[2];try{const data=JSON.parse(fs.readFileSync(file,"utf8"));const value=data&&Object.prototype.hasOwnProperty.call(data,key)?data[key]:"";process.stdout.write(value==null?"":String(value));}catch(error){}' "$key" "$runtime_ai_config" || true
-              fi
-            }
-            append_ai_env() {
-              local key="$1"
-              local incoming="$2"
-              local default_value="${3:-}"
-              local value=""
-              if [ -n "$incoming" ]; then
-                value="$incoming"
-              else
-                value="$(read_runtime_env_value "$key")"
-                if [ -z "$value" ]; then
-                  value="$(read_existing_env_value "$key")"
-                fi
-                if [ -z "$value" ]; then
-                  value="$default_value"
-                fi
-              fi
-              printf '%s=%s\n' "$key" "$value" >> "$tmp_env"
-            }
-            cat > "$tmp_env" <<EOF
-            NODE_ENV=production
-            PORT=3000
-            HOST_BIND_IP=127.0.0.1
-            HOST_API_PORT=18318
-            PUBLIC_API_ORIGIN=https://class.katelya.eu.org
-            FOSU_API_BASE_URL=https://class.katelya.eu.org
-            FOSU_STATIC_RELEASE_BASE_URL=/static/releases
-            FOSU_DEPLOY_COMMIT_SHA=${COMMIT_SHA}
-            FOSU_CLIENT_BUILD_ID=${{ steps.build_info.outputs.client_build_id || github.sha }}
-            DATA_SOURCE_MODE=cache-first
-            ADMIN_API_TOKEN=${{ secrets.ADMIN_API_TOKEN }}
-            ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
-            ADMIN_TOKEN=${{ secrets.ADMIN_TOKEN }}
-            # Progressive admin SPA: Legacy remains production write authority.
-            FOSU_ADMIN_NEXT_ENABLED=true
-            FOSU_ADMIN_PRIMARY=legacy
-            FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups,catalog,quality,settings
-            FOSU_CONFIG_HARD_FAIL=false
-            FOSU_BASE_URL=https://100.fosu.edu.cn
-            FOSU_AUTH_URL=https://authserver.fosu.edu.cn
-            FOSU_AUTH_BASE=https://authserver.fosu.edu.cn
-            FOSU_APAAS_BASE=https://apaas.fosu.edu.cn
-            FOSU_IMPORT_TIMEOUT_MS=30000
-            FOSU_IMPORT_PREVIEW_TTL_SECONDS=600
-            FOSU_IMPORT_ENABLE=${{ vars.FOSU_IMPORT_ENABLE || 'true' }}
-            FOSU_IMPORT_CHANNEL=${{ vars.FOSU_IMPORT_CHANNEL || 'auto' }}
-            FOSU_CLOUDBASE_IMPORT_ENABLE=${{ vars.FOSU_CLOUDBASE_IMPORT_ENABLE || 'true' }}
-            FOSU_CLOUDBASE_IMPORT_URL=${{ vars.FOSU_CLOUDBASE_IMPORT_URL || '' }}
-            FOSU_IMPORT_CHANNEL_TIMEOUT_MS=${{ vars.FOSU_IMPORT_CHANNEL_TIMEOUT_MS || '25000' }}
-            FOSU_IMPORT_ORACLE_FALLBACK=${{ vars.FOSU_IMPORT_ORACLE_FALLBACK || 'true' }}
-            FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN=${{ secrets.FOSU_IMPORT_CLOUDBASE_RELAY_TOKEN }}
-            FOSU_IMPORT_USE_PLAYWRIGHT_FALLBACK=false
-            FOSU_IMPORT_RATE_LIMIT_ENABLED=true
-            FOSU_IMPORT_IP_RATE_LIMIT_10M=12
-            CACHE_TTL_CATALOG=600
-            CACHE_TTL_MAJOR=1800
-            CACHE_TTL_SCHEDULE=600
-            REQUEST_TIMEOUT_MS=15000
-            CORS_ALLOWED_ORIGINS=https://class.katelya.eu.org,http://127.0.0.1:18318
-            FOSU_ALLOWED_ADMIN_ORIGINS=https://class.katelya.eu.org
-            FOSU_ALLOWED_PUBLIC_ORIGINS=
-            FOSU_TRUSTED_PROXY_IPS=
-
-            FOSU_SECURITY_MODE=${{ vars.FOSU_SECURITY_MODE || 'observe' }}
-            FOSU_DYNAMIC_API_SESSION_REQUIRED=${{ vars.FOSU_DYNAMIC_API_SESSION_REQUIRED || 'false' }}
-            WECHAT_APPID=${{ secrets.WECHAT_APPID }}
-            WECHAT_APPSECRET=${{ secrets.WECHAT_APPSECRET }}
-            FOSU_SESSION_SECRET_CURRENT=${{ secrets.FOSU_SESSION_SECRET_CURRENT }}
-            FOSU_SESSION_SECRET_PREVIOUS=${{ secrets.FOSU_SESSION_SECRET_PREVIOUS }}
-            FOSU_SESSION_SECRET_KID=${{ secrets.FOSU_SESSION_SECRET_KID }}
-            FOSU_SESSION_TTL_SECONDS=${{ vars.FOSU_SESSION_TTL_SECONDS || '7200' }}
-            FOSU_CSRF_SECRET=${{ secrets.FOSU_CSRF_SECRET }}
-
-            OPENRESTY_HOST_RELEASE_DIR=/opt/1panel/www/sites/class.katelya.eu.org/index/static/releases
-            OPENRESTY_HOST_RUNTIME_DIR=/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime
-            STATIC_RELEASE_SYNC_ENABLED=true
-            RELEASE_PACK_SRC=/app/storage/public/releases
-            OPENRESTY_STATIC_RELEASE_DIR=/openresty-static/releases
-            OPENRESTY_STATIC_RUNTIME_DIR=/openresty-static/runtime
-            PUBLIC_BASE_URL=https://class.katelya.eu.org/static/releases
-            STATIC_RELEASE_KEEP_LATEST=3
-            STATIC_RELEASE_SYNC_VERIFY_HTTP=true
-            STATIC_RELEASE_SYNC_HTTP_TIMEOUT_MS=8000
-            STATIC_RELEASE_VERIFY_CONCURRENCY=2
-            FOSU_STATIC_ACCESS_MODE=${{ vars.FOSU_STATIC_ACCESS_MODE || 'public' }}
-            FOSU_OPENRESTY_STATIC_SECURITY_MODE=${{ vars.FOSU_OPENRESTY_STATIC_SECURITY_MODE || 'public' }}
-            FOSU_STATIC_TICKET_SECRET_CURRENT=${{ secrets.FOSU_STATIC_TICKET_SECRET_CURRENT }}
-            FOSU_STATIC_TICKET_SECRET_PREVIOUS=${{ secrets.FOSU_STATIC_TICKET_SECRET_PREVIOUS }}
-            FOSU_STATIC_TICKET_SECRET_KID=${{ secrets.FOSU_STATIC_TICKET_SECRET_KID }}
-            FOSU_STATIC_TICKET_TTL_SECONDS=${{ vars.FOSU_STATIC_TICKET_TTL_SECONDS || '600' }}
-            FOSU_STATIC_TICKET_CACHE_MAX=500
-
-            FOSU_RELEASE_WORKER_ENABLED=true
-            FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB=3072
-            FOSU_RELEASE_PRECOMPRESS=gzip
-            FOSU_RELEASE_BROTLI_ENABLED=false
-            FOSU_RELEASE_COMPRESSION_CONCURRENCY=1
-            FOSU_JSON_BODY_LIMIT=2mb
-            FOSU_LARGE_JSON_BODY_LIMIT=30mb
-            FOSU_PERSONAL_XLS_BODY_LIMIT=20mb
-            FOSU_URLENCODED_BODY_LIMIT=1mb
-            FOSU_RAW_UPLOAD_BODY_LIMIT=150mb
-            FOSU_STAGING_CHUNK_BODY_LIMIT=12mb
-            FOSU_API_CPUS=1.5
-            FOSU_API_MEM_LIMIT=4096m
-
-            FOSU_MAINTENANCE_ENABLED=true
-            FOSU_MAINTENANCE_INTERVAL_HOURS=24
-            FOSU_MAINTENANCE_START_DELAY_MS=60000
-            FOSU_RELEASE_RETENTION_COUNT=3
-            FOSU_RELEASE_RETENTION_DAYS=30
-            FOSU_JOB_SUCCESS_RETENTION_DAYS=14
-            FOSU_JOB_FAILED_RETENTION_DAYS=30
-            FOSU_STAGING_FILE_RETENTION_DAYS=14
-            FOSU_ARCHIVE_METADATA_RETENTION_DAYS=90
-            FOSU_TEMP_RETENTION_HOURS=24
-            FOSU_LOG_RETENTION_DAYS=30
-            FOSU_LOG_ROTATE_SIZE_MB=10
-            FOSU_DISK_WARNING_PERCENT=80
-            FOSU_DISK_CRITICAL_PERCENT=90
-            FOSU_MIN_FREE_DISK_GB=5
-            EOF
-            {
-              printf '\n# AI Provider\n'
-            } >> "$tmp_env"
-            append_ai_env "AI_AGENT_ENABLED" "${{ vars.AI_AGENT_ENABLED }}" "false"
-            append_ai_env "AI_PROVIDER" "${{ vars.AI_PROVIDER }}" "mock"
-            append_ai_env "AI_PROVIDER_POLICY" "${{ vars.AI_PROVIDER_POLICY }}" "auto"
-            append_ai_env "AI_RUNTIME_MODE" "${{ vars.AI_RUNTIME_MODE }}" "public"
-            append_ai_env "AI_PROVIDER_ACTIVE_ENV" "${{ vars.AI_PROVIDER_ACTIVE_ENV }}" "public"
-            append_ai_env "AI_COMPETITION_ALLOW_TRIAL_ENV" "${{ vars.AI_COMPETITION_ALLOW_TRIAL_ENV }}" "true"
-            append_ai_env "AI_MODEL" "${{ vars.AI_MODEL }}" "deepseek-v4-flash"
-            append_ai_env "AI_REASONING_MODEL" "${{ vars.AI_REASONING_MODEL }}" "deepseek-v4-pro"
-            append_ai_env "AI_BASE_URL" "${{ vars.AI_BASE_URL }}" "https://api.deepseek.com"
-            append_ai_env "AI_TIMEOUT_MS" "${{ vars.AI_TIMEOUT_MS }}" "15000"
-            append_ai_env "AI_MAX_TOKENS" "${{ vars.AI_MAX_TOKENS }}" "1200"
-            append_ai_env "AI_TEMPERATURE" "${{ vars.AI_TEMPERATURE }}" "0.1"
-            append_ai_env "AI_THINKING_ENABLED" "${{ vars.AI_THINKING_ENABLED }}" "false"
-            append_ai_env "AI_REASONING_EFFORT" "${{ vars.AI_REASONING_EFFORT }}" "medium"
-            append_ai_env "AI_PROVIDER_JSON_REPAIR" "${{ vars.AI_PROVIDER_JSON_REPAIR }}" "true"
-            append_ai_env "DEEPSEEK_STRICT_JSON_MODE" "${{ vars.DEEPSEEK_STRICT_JSON_MODE }}" "false"
-            append_ai_env "AI_ALLOW_PERSONAL_CONTEXT" "${{ vars.AI_ALLOW_PERSONAL_CONTEXT }}" "false"
-            append_ai_env "FOSU_AI_CONFIG_ENCRYPTION_KEY" "${{ secrets.FOSU_AI_CONFIG_ENCRYPTION_KEY }}" ""
-            append_ai_env "AI_API_KEY" "${{ secrets.AI_API_KEY }}" ""
-            append_ai_env "DEEPSEEK_API_KEY" "${{ secrets.DEEPSEEK_API_KEY }}" ""
-            append_ai_env "CLOUDBASE_OPENAI_ENABLED" "${{ vars.CLOUDBASE_OPENAI_ENABLED }}" "false"
-            append_ai_env "CLOUDBASE_OPENAI_BASE_URL" "${{ vars.CLOUDBASE_OPENAI_BASE_URL }}" "https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase"
-            append_ai_env "CLOUDBASE_OPENAI_API_KEY" "${{ secrets.CLOUDBASE_OPENAI_API_KEY }}" ""
-            append_ai_env "CLOUDBASE_OPENAI_TEXT_MODEL" "${{ vars.CLOUDBASE_OPENAI_TEXT_MODEL }}" "hy3-preview"
-            append_ai_env "CLOUDBASE_OPENAI_TIMEOUT_MS" "${{ vars.CLOUDBASE_OPENAI_TIMEOUT_MS }}" "15000"
-            append_ai_env "CLOUDBASE_OPENAI_MAX_TOKENS" "${{ vars.CLOUDBASE_OPENAI_MAX_TOKENS }}" "1200"
-            append_ai_env "COZE_API_BASE_URL" "${{ vars.COZE_API_BASE_URL }}" "https://api.coze.cn"
-            append_ai_env "COZE_API_KEY" "${{ secrets.COZE_API_KEY }}" ""
-            append_ai_env "COZE_BOT_ID" "${{ vars.COZE_BOT_ID }}" ""
-            append_ai_env "COZE_USER_ID" "${{ vars.COZE_USER_ID }}" "fosuclass-user"
-            append_ai_env "COZE_CHAT_ENDPOINT" "${{ vars.COZE_CHAT_ENDPOINT }}" "/v3/chat"
-            append_ai_env "COZE_POLL_ENABLED" "" "true"
-            append_ai_env "COZE_POLL_INTERVAL_MS" "" "1000"
-            append_ai_env "COZE_POLL_MAX_ATTEMPTS" "" "8"
-            chmod 600 "$tmp_env"
-
-            required_env_keys=(
-              NODE_ENV
-              PORT
-              ADMIN_API_TOKEN
-              ADMIN_PASSWORD
-              OPENRESTY_HOST_RELEASE_DIR
-              OPENRESTY_HOST_RUNTIME_DIR
-              STATIC_RELEASE_SYNC_ENABLED
-              RELEASE_PACK_SRC
-              OPENRESTY_STATIC_RELEASE_DIR
-              OPENRESTY_STATIC_RUNTIME_DIR
-              PUBLIC_BASE_URL
-              STATIC_RELEASE_KEEP_LATEST
-              STATIC_RELEASE_SYNC_VERIFY_HTTP
-              FOSU_STATIC_ACCESS_MODE
-              FOSU_SECURITY_MODE
-              FOSU_DYNAMIC_API_SESSION_REQUIRED
-              FOSU_OPENRESTY_STATIC_SECURITY_MODE
-              FOSU_AI_CONFIG_ENCRYPTION_KEY
-              FOSU_RELEASE_WORKER_ENABLED
-              FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB
-              FOSU_RELEASE_PRECOMPRESS
-              FOSU_RELEASE_BROTLI_ENABLED
-              FOSU_RELEASE_COMPRESSION_CONCURRENCY
-              FOSU_MAINTENANCE_ENABLED
-              FOSU_RELEASE_RETENTION_COUNT
-              FOSU_LOG_ROTATE_SIZE_MB
-              FOSU_DISK_WARNING_PERCENT
-              FOSU_DISK_CRITICAL_PERCENT
-              FOSU_MIN_FREE_DISK_GB
-            )
-            for key in "${required_env_keys[@]}"; do
-              if ! grep -q "^${key}=" "$tmp_env"; then
-                echo "::error::.env is missing required key: ${key}"
-                rm -f "$tmp_env"
-                exit 1
-              fi
-            done
-            if ! grep -q '^ADMIN_API_TOKEN=.\+' "$tmp_env"; then
-              echo "::error::.env missing non-empty ADMIN_API_TOKEN"
-              rm -f "$tmp_env"
-              exit 1
-            fi
-            effective_security_mode="$(grep '^FOSU_SECURITY_MODE=' "$tmp_env" | cut -d= -f2-)"
-            if [ "$effective_security_mode" != "observe" ]; then
-              for key in WECHAT_APPID WECHAT_APPSECRET FOSU_SESSION_SECRET_CURRENT; do
-                if ! grep -q "^${key}=.\+" "$tmp_env"; then
-                  echo "::error::.env missing ${key} for security mode ${effective_security_mode}"
-                  rm -f "$tmp_env"
-                  exit 1
-                fi
-              done
-            fi
-            if { [ "$effective_security_mode" = "ticket" ] || [ "$effective_security_mode" = "ticket-enforce" ]; } && ! grep -q '^FOSU_STATIC_TICKET_SECRET_CURRENT=.\+' "$tmp_env"; then
-              echo "::error::.env missing FOSU_STATIC_TICKET_SECRET_CURRENT for ticket mode"
-              rm -f "$tmp_env"
-              exit 1
-            fi
-            mv "$tmp_env" .env
-
-            node -e "require('./src/services/ai/providerRuntimeConfigStore'); console.log('ai runtime config store ok')"
-            sudo docker compose config >/dev/null
-            sudo docker compose up -d --build
-
-            container_id="$(sudo docker ps -aqf "name=^/${CONTAINER_NAME}$")"
-            if [ -z "$container_id" ]; then
-              echo "::error::${CONTAINER_NAME} does not exist after docker compose up"
-              exit 1
-            fi
-
-            for i in $(seq 1 30); do
-              container_state="$(sudo docker inspect -f '{{.State.Status}}' "$CONTAINER_NAME")"
-              if [ "$container_state" = "running" ]; then
-                break
-              fi
-              echo "Waiting for ${CONTAINER_NAME} to run... (${i}/30, status=${container_state})"
-              sleep 1
-            done
-
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "require(\"./src/services/ai/providerRuntimeConfigStore\"); require(\"./src/services/ai/agentService\"); console.log(\"ai runtime ok\")"'
-
-            container_health="unknown"
-            unhealthy_count=0
-            for i in $(seq 1 60); do
-              container_health="$(sudo docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$CONTAINER_NAME")"
-              if [ "$container_health" = "healthy" ] || [ "$container_health" = "running" ]; then
-                if curl -fsS http://127.0.0.1:18318/api/health >/dev/null; then
-                  break
-                fi
-              fi
-              if [ "$container_health" = "unhealthy" ]; then
-                unhealthy_count=$((unhealthy_count + 1))
-                if [ "$unhealthy_count" -ge 5 ]; then
-                  echo "Recent healthcheck log after ${unhealthy_count} unhealthy checks:"
-                  sudo docker inspect "$CONTAINER_NAME" --format '{{range .State.Health.Log}}{{println .Output}}{{end}}' 2>&1 | tail -n 10 | sanitize || true
-                  unhealthy_count=0
-                fi
-              else
-                unhealthy_count=0
-              fi
-              echo "Waiting for ${CONTAINER_NAME} health... (${i}/60, status=${container_health})"
-              sleep 2
-            done
-
-            if ! curl -fsS http://127.0.0.1:18318/api/health >/dev/null; then
-              echo "::error::http://127.0.0.1:18318/api/health failed"
-              exit 1
-            fi
-            # Phase B capabilities smoke (primary stays legacy)
-            caps_json="$(curl -fsS http://127.0.0.1:18318/api/admin/capabilities || true)"
-            echo "$caps_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const j=JSON.parse(s||"{}");if(j.primary!=="legacy"){console.error("primary!=legacy");process.exit(1)};const w=j.writeModules||{};if(!w.content||!w.feedback||!w.audit||!w.backups){console.error("phase B modules not enabled");process.exit(1)};if(w.release){console.error("release write must stay off");process.exit(1)};console.log("capabilities-ok")})'
-            curl -fsS -o /dev/null http://127.0.0.1:18318/admin-next/ || true
-            admin_unauth_status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18318/api/admin/publisher/receipt || true)"
-            if [ "$admin_unauth_status" != "401" ]; then
-              echo "::error::protected admin publisher receipt API without token returned HTTP ${admin_unauth_status}, expected 401"
-              exit 1
-            fi
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'test -n "$ADMIN_API_TOKEN" && status="$(curl -sS -o /tmp/fosu-admin-token-contract.json -w "%{http_code}" -H "X-Admin-Token: ${ADMIN_API_TOKEN}" http://127.0.0.1:3000/api/admin/publisher/receipt)" && test "$status" = "200" && node -e "const fs=require(\"fs\");const data=JSON.parse(fs.readFileSync(\"/tmp/fosu-admin-token-contract.json\",\"utf8\"));if(!data||data.success!==true)process.exit(1)" && rm -f /tmp/fosu-admin-token-contract.json'
-            echo "admin-api-token-contract=ok"
-            bootstrap_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' http://127.0.0.1:18318/api/fosu/session/bootstrap || true)"
-            if [ "$bootstrap_status" = "404" ] || [ "$bootstrap_status" = "000" ]; then
-              echo "::error::session bootstrap route is unavailable: HTTP ${bootstrap_status}"
-              exit 1
-            fi
-
-            restart_after="$(sudo docker inspect -f '{{.RestartCount}}' "$CONTAINER_NAME")"
-            if [ "$restart_after" -gt $((restart_before + 1)) ]; then
-              echo "::error::Container restartCount increased unexpectedly: before=${restart_before}, after=${restart_after}"
-              exit 1
-            fi
-
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'test -d /app/storage && test -w /app/storage && test -d /openresty-static/releases && test -w /openresty-static/releases && test -d /openresty-static/runtime && test -w /openresty-static/runtime'
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'test "$STATIC_RELEASE_SYNC_ENABLED" = "true" && test "$RELEASE_PACK_SRC" = "/app/storage/public/releases" && test "$OPENRESTY_STATIC_RELEASE_DIR" = "/openresty-static/releases" && test "$OPENRESTY_STATIC_RUNTIME_DIR" = "/openresty-static/runtime" && test "$PUBLIC_BASE_URL" = "https://class.katelya.eu.org/static/releases" && test "$FOSU_RELEASE_WORKER_ENABLED" = "true" && test "$FOSU_RELEASE_WORKER_MAX_OLD_SPACE_MB" = "3072"'
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'node -e "const s=require(\"./src/services/securityModeService\").getSecurityStatus(); if(!s.mode) process.exit(1); console.log(\"security_mode=\"+s.mode)"'
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/security-postdeploy-check.js --base-url=http://127.0.0.1:3000'
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/verify-ai-provider.js --mode=status' 2>&1 | sanitize
-
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/reconcile-static-release.js > /tmp/fosu-static-reconcile.json'
-            active_release="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.releaseVersion||'')")"
-            synced_release="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.syncedReleaseVersion||'')")"
-            files_copied="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.filesCopied||0)")"
-            retained_releases="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log((d.staticSync.retainedReleases||[]).join(','))")"
-            runtime_status_from_reconcile="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.runtimeActiveStatus||d.staticSync.verifiedRuntimeUrl&&d.staticSync.verifiedRuntimeUrl.status||'')")"
-
-            if [ -z "$active_release" ]; then
-              echo "::error::No active release found during postdeploy static reconcile"
-              exit 1
-            fi
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'test -f /app/storage/public/runtime/active.json && test -f /openresty-static/runtime/active.json'
-
-            verify_url() {
-              local relative_path="$1"
-              local url="${PUBLIC_BASE_URL}/${active_release}/${relative_path}"
-              local status
-              status="$(curl -L -sS -o /dev/null -w '%{http_code}' -I --max-time 10 "$url" || true)"
-              if [ "$status" = "403" ] || [ "$status" = "405" ] || [ "$status" = "501" ] || [ "$status" = "000" ]; then
-                status="$(curl -L -sS -o /dev/null -w '%{http_code}' -H 'Range: bytes=0-0' --max-time 10 "$url" || true)"
-              fi
-              if [ "$status" != "200" ] && [ "$status" != "206" ]; then
-                echo "::error::Static URL verification failed: ${relative_path} HTTP ${status}"
-                exit 1
-              fi
-              printf '%s:%s ' "$relative_path" "$status"
-            }
-
-            url_status=""
-            runtime_status="$(curl -L -sS -o /dev/null -w '%{http_code}' -I --max-time 10 "https://class.katelya.eu.org/static/runtime/active.json" || true)"
-            if [ "$runtime_status" = "403" ] || [ "$runtime_status" = "405" ] || [ "$runtime_status" = "501" ] || [ "$runtime_status" = "000" ]; then
-              runtime_status="$(curl -L -sS -o /dev/null -w '%{http_code}' -H 'Range: bytes=0-0' --max-time 10 "https://class.katelya.eu.org/static/runtime/active.json" || true)"
-            fi
-            if [ "$runtime_status" != "200" ] && [ "$runtime_status" != "206" ]; then
-              echo "::error::Static runtime verification failed: active.json HTTP ${runtime_status}"
-              exit 1
-            fi
-            url_status="${url_status}$(verify_url manifest.json)"
-            url_status="${url_status}$(verify_url index/class/all.json)"
-            url_status="${url_status}$(verify_url empty-room/index.json)"
-
-            elapsed="$(( $(date +%s) - STARTED_AT ))"
-            echo "=================================================="
-            echo "Deployment summary"
-            echo "=================================================="
-            echo "commit_sha=${COMMIT_SHA}"
-            echo "container_health=${container_health}"
-            echo "active_release=${active_release}"
-            echo "synced_release=${synced_release}"
-            echo "files_copied=${files_copied}"
-            echo "retained_releases=${retained_releases}"
-            echo "runtime_status=${runtime_status} reconcile=${runtime_status_from_reconcile}"
-            echo "url_status=${url_status}"
-            echo "elapsed_seconds=${elapsed}"
-            echo "=================================================="
-
-      - name: Show Deployment Info
+      - name: Admin unit and production build
         run: |
-          echo "Deployment completed for commit ${{ github.sha }}"
-          echo "Container: fosuclass-api"
-          echo "Health: http://127.0.0.1:18318/api/health"
-          echo "Public API: https://class.katelya.eu.org"
-          echo "Static releases: https://class.katelya.eu.org/static/releases"
+          npm run admin:test
+          npm run admin:build
+          node tools/test-admin-spa-bundle-present.js
+
+  runtime-data-recreate:
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout immutable source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          npm --prefix server ci
+
+      - name: Prove mounted runtime state survives a real recreate
+        run: npm run test:runtime-data-recreate
+
+  build-arm64:
+    if: github.event_name != 'pull_request'
+    needs: [verify, runtime-data-recreate]
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      core_digest: ${{ steps.core.outputs.digest }}
+      browser_digest: ${{ steps.browser.outputs.digest }}
+      image_digest: ${{ steps.select.outputs.image_digest }}
+      image_ref: ${{ steps.select.outputs.image_ref }}
+      image_target: ${{ steps.select.outputs.image_target }}
+    steps:
+      - name: Checkout verified source
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Resolve stable source metadata
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_created="$(git show -s --format=%cI "$GITHUB_SHA")"
+          if [ -z "$build_created" ]; then
+            echo "::error::Commit timestamp is unavailable"
+            exit 1
+          fi
+          echo "build_created=$build_created" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Generate the same build metadata used by verification
+        run: |
+          npm ci
+          npm run build:miniprogram-info
+
+      - name: Login for image publication
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Build and push core ARM64 image
+        id: core
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: server/Dockerfile
+          target: core
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-core
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          build-args: |
+            GIT_REVISION=${{ github.sha }}
+            BUILD_CREATED=${{ steps.source.outputs.build_created }}
+            IMAGE_VERSION=sha-${{ github.sha }}-core
+          cache-from: type=gha,scope=fosu-api-core-arm64
+          cache-to: type=gha,mode=max,scope=fosu-api-core-arm64
+          provenance: true
+          sbom: true
+
+      - name: Build and push browser ARM64 image
+        id: browser
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: .
+          file: server/Dockerfile
+          target: browser
+          platforms: linux/arm64
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:sha-${{ github.sha }}-browser
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
+          build-args: |
+            GIT_REVISION=${{ github.sha }}
+            BUILD_CREATED=${{ steps.source.outputs.build_created }}
+            IMAGE_VERSION=sha-${{ github.sha }}-browser
+          cache-from: type=gha,scope=fosu-api-browser-arm64
+          cache-to: type=gha,mode=max,scope=fosu-api-browser-arm64
+          provenance: true
+          sbom: true
+
+      - name: Select exact digest from rollout manifest
+        id: select
+        shell: bash
+        env:
+          IMAGE_TARGET: ${{ needs.verify.outputs.image_target }}
+          CORE_DIGEST: ${{ steps.core.outputs.digest }}
+          BROWSER_DIGEST: ${{ steps.browser.outputs.digest }}
+        run: |
+          set -euo pipefail
+          case "$IMAGE_TARGET" in
+            core) digest="$CORE_DIGEST" ;;
+            browser) digest="$BROWSER_DIGEST" ;;
+            *) echo "::error::Unsupported rollout image target: $IMAGE_TARGET"; exit 1 ;;
+          esac
+          if [[ ! "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "::error::Build did not return an immutable digest"
+            exit 1
+          fi
+          image_ref="${REGISTRY}/${IMAGE_NAME}@${digest}"
+          echo "image_target=$IMAGE_TARGET" >> "$GITHUB_OUTPUT"
+          echo "image_digest=$digest" >> "$GITHUB_OUTPUT"
+          echo "image_ref=$image_ref" >> "$GITHUB_OUTPUT"
+          printf 'target=%s\ncore=%s\nbrowser=%s\nselected=%s\n' "$IMAGE_TARGET" "$CORE_DIGEST" "$BROWSER_DIGEST" "$image_ref" > image-digests.txt
+          docker buildx imagetools inspect "$image_ref" > selected-image-inspect.txt
+
+      - name: Capture registry compression evidence
+        shell: bash
+        env:
+          CORE_DIGEST: ${{ steps.core.outputs.digest }}
+          BROWSER_DIGEST: ${{ steps.browser.outputs.digest }}
+        run: |
+          set -euo pipefail
+          collect_registry_evidence() {
+            local target="$1"
+            local digest="$2"
+            local image_ref="${REGISTRY}/${IMAGE_NAME}@${digest}"
+            local top_file="${target}-top-manifest.json"
+            local platform_file="${target}-platform-manifest.json"
+            docker buildx imagetools inspect --raw "$image_ref" > "$top_file"
+            local platform_digest
+            platform_digest="$(node -e '
+              const fs=require("fs");
+              const value=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+              const item=Array.isArray(value.manifests)
+                ? value.manifests.find((entry)=>entry.platform&&entry.platform.os==="linux"&&entry.platform.architecture==="arm64")
+                : null;
+              process.stdout.write(item&&item.digest||"");
+            ' "$top_file")"
+            if [ -n "$platform_digest" ]; then
+              docker buildx imagetools inspect --raw "${REGISTRY}/${IMAGE_NAME}@${platform_digest}" > "$platform_file"
+            else
+              cp "$top_file" "$platform_file"
+              platform_digest="$digest"
+            fi
+            EVIDENCE_TARGET="$target" \
+            EVIDENCE_TOP_DIGEST="$digest" \
+            EVIDENCE_PLATFORM_DIGEST="$platform_digest" \
+            EVIDENCE_TOP_FILE="$top_file" \
+            EVIDENCE_PLATFORM_FILE="$platform_file" \
+            node <<'NODE' > "${target}-registry-evidence.json"
+          const fs = require("fs");
+          const top = JSON.parse(fs.readFileSync(process.env.EVIDENCE_TOP_FILE, "utf8"));
+          const manifest = JSON.parse(fs.readFileSync(process.env.EVIDENCE_PLATFORM_FILE, "utf8"));
+          const layers = Array.isArray(manifest.layers) ? manifest.layers : [];
+          const evidence = {
+            schemaVersion: 1,
+            target: process.env.EVIDENCE_TARGET,
+            architecture: "linux/arm64",
+            topLevelDigest: process.env.EVIDENCE_TOP_DIGEST,
+            topLevelMediaType: top.mediaType || null,
+            platformManifestDigest: process.env.EVIDENCE_PLATFORM_DIGEST,
+            platformManifestMediaType: manifest.mediaType || null,
+            configDescriptor: manifest.config || null,
+            configBytes: Number(manifest.config && manifest.config.size || 0),
+            layers,
+            compressedLayerBytes: layers.reduce((total, layer) => total + Number(layer.size || 0), 0),
+          };
+          process.stdout.write(`${JSON.stringify(evidence, null, 2)}\n`);
+          NODE
+          }
+          collect_registry_evidence core "$CORE_DIGEST"
+          collect_registry_evidence browser "$BROWSER_DIGEST"
+
+      - name: Upload immutable image evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: ghcr-arm64-digests-${{ github.sha }}
+          path: |
+            image-digests.txt
+            selected-image-inspect.txt
+            core-top-manifest.json
+            core-platform-manifest.json
+            core-registry-evidence.json
+            browser-top-manifest.json
+            browser-platform-manifest.json
+            browser-registry-evidence.json
+
+  production-preflight:
+    # Never execute pull-request-controlled code with production SSH material.
+    # A protected pre-merge preflight is run by workflow_dispatch on the PR SHA.
+    if: always() && github.event_name != 'pull_request' && needs.verify.result == 'success'
+    needs: [verify, build-arm64]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout read-only preflight
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Fingerprint candidate Compose
+        id: candidate_compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          digest="$(sha256sum server/docker-compose.yml | awk '{print $1}')"
+          [[ "$digest" =~ ^[0-9a-f]{64}$ ]]
+          echo "sha256=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Classify production secret availability
+        id: production_secrets
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for name in VPS_HOST VPS_USER VPS_SSH_KEY VPS_APP_DIR; do
+            if [ -z "${!name:-}" ]; then missing+=("$name"); fi
+          done
+          if [ "${#missing[@]}" -gt 0 ]; then
+            printf '{"schemaVersion":1,"status":"UNKNOWN","reason":"production-secrets-unavailable","missingSecretNames":[' > production-preflight.json
+            separator=""
+            for name in "${missing[@]}"; do
+              printf '%s"%s"' "$separator" "$name" >> production-preflight.json
+              separator=,
+            done
+            printf '],"manualRemediation":"dispatch this branch with preflight_only=true where the production environment is authorized"}\n' >> production-preflight.json
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Prepare isolated candidate preflight directory
+        id: host_preflight
+        if: steps.production_secrets.outputs.available == 'true'
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2
+        env:
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          envs: VPS_APP_DIR
+          script: |
+            set -euo pipefail
+            mkdir -p "$VPS_APP_DIR/.deploy-preflight/${{ github.sha }}"
+            chmod 700 "$VPS_APP_DIR/.deploy-preflight" "$VPS_APP_DIR/.deploy-preflight/${{ github.sha }}"
+
+      - name: Stage candidate Compose for remote validation
+        if: steps.production_secrets.outputs.available == 'true' && steps.host_preflight.outcome == 'success'
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          source: "server/docker-compose.yml"
+          target: "${{ secrets.VPS_APP_DIR }}/.deploy-preflight/${{ github.sha }}"
+          overwrite: true
+
+      - name: Inspect production host and candidate without service mutation
+        id: candidate_preflight
+        if: steps.production_secrets.outputs.available == 'true' && steps.host_preflight.outcome == 'success'
+        continue-on-error: true
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2
+        env:
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+          GHCR_READ_USERNAME: ${{ github.actor }}
+          GHCR_READ_TOKEN: ${{ github.token }}
+          FOSU_PREFLIGHT_IMAGE: ${{ needs.build-arm64.outputs.image_ref }}
+          FOSU_ROLLOUT_VERSION: ${{ needs.verify.outputs.rollout_version }}
+          FOSU_ADMIN_WRITE_MODULES: ${{ needs.verify.outputs.write_modules }}
+          FOSU_DEPLOY_COMMIT_SHA: ${{ github.sha }}
+          FOSU_PREFLIGHT_COMPOSE_FILE: ${{ secrets.VPS_APP_DIR }}/.deploy-preflight/${{ github.sha }}/server/docker-compose.yml
+          FOSU_PREFLIGHT_COMPOSE_SHA256: ${{ steps.candidate_compose.outputs.sha256 }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          envs: VPS_APP_DIR,GHCR_READ_USERNAME,GHCR_READ_TOKEN,FOSU_PREFLIGHT_IMAGE,FOSU_ROLLOUT_VERSION,FOSU_ADMIN_WRITE_MODULES,FOSU_DEPLOY_COMMIT_SHA,FOSU_PREFLIGHT_COMPOSE_FILE,FOSU_PREFLIGHT_COMPOSE_SHA256
+          script_path: server/scripts/preflight-ghcr-digest-deploy.sh
+          capture_stdout: true
+
+      - name: Materialize production preflight evidence
+        if: always() && steps.production_secrets.outputs.available == 'true'
+        shell: bash
+        env:
+          REMOTE_STDOUT: ${{ steps.candidate_preflight.outputs.stdout }}
+          REMOTE_OUTCOME: ${{ steps.candidate_preflight.outcome }}
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const lines = String(process.env.REMOTE_STDOUT || "").split(/\r?\n/).filter(Boolean);
+          let evidence = null;
+          for (let index = lines.length - 1; index >= 0; index -= 1) {
+            try {
+              const value = JSON.parse(lines[index]);
+              if (value && value.schemaVersion === 1 && ["SUCCESS", "UNKNOWN"].includes(value.status)) {
+                evidence = value;
+                break;
+              }
+            } catch (_) {}
+          }
+          if (!evidence) evidence = {
+            schemaVersion: 1,
+            status: "UNKNOWN",
+            reason: "remote-preflight-produced-no-parseable-evidence",
+          };
+          evidence.actionOutcome = process.env.REMOTE_OUTCOME || "unknown";
+          fs.writeFileSync("production-preflight.json", `${JSON.stringify(evidence, null, 2)}\n`);
+          NODE
+
+      - name: Upload production preflight evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: production-preflight-${{ github.sha }}
+          path: production-preflight.json
+
+      - name: Enforce known-good production preflight
+        if: always()
+        run: |
+          node -e '
+            const fs = require("fs");
+            if (!fs.existsSync("production-preflight.json")) throw new Error("production preflight evidence is missing");
+            const value = JSON.parse(fs.readFileSync("production-preflight.json", "utf8"));
+            if (value.status !== "SUCCESS" || (value.actionOutcome && value.actionOutcome !== "success")) {
+              throw new Error(`production preflight is ${value.status || "UNKNOWN"}: ${value.reason || "unknown reason"}`);
+            }
+          '
+
+  deploy-production:
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main' &&
+      !(github.event_name == 'workflow_dispatch' && inputs.preflight_only) &&
+      needs.verify.result == 'success' &&
+      needs.build-arm64.result == 'success' &&
+      needs.production-preflight.result == 'success'
+    needs: [verify, build-arm64, production-preflight]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Checkout deployment files
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+
+      - name: Validate SSH deployment secrets
+        shell: bash
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_USER: ${{ secrets.VPS_USER }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+        run: |
+          set -euo pipefail
+          for name in VPS_HOST VPS_USER VPS_SSH_KEY VPS_APP_DIR; do
+            if [ -z "${!name:-}" ]; then
+              echo "::error::Missing required production secret: $name"
+              exit 1
+            fi
+          done
+
+      - name: Package immutable deployment control files
+        id: control_bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle_root="$(mktemp -d "$RUNNER_TEMP/fosu-deploy-control.XXXXXXXX")"
+          archive_name="deploy-control-${GITHUB_SHA}.tar.gz"
+          mkdir -p "$bundle_root/server/scripts"
+          cp server/docker-compose.yml "$bundle_root/server/docker-compose.yml"
+          cp server/scripts/deploy-ghcr-digest.sh "$bundle_root/server/scripts/deploy-ghcr-digest.sh"
+          cp server/scripts/migrate-runtime-data.js "$bundle_root/server/scripts/migrate-runtime-data.js"
+          cp server/scripts/verify-runtime-persistence.js "$bundle_root/server/scripts/verify-runtime-persistence.js"
+          (
+            cd "$bundle_root"
+            sha256sum \
+              server/docker-compose.yml \
+              server/scripts/deploy-ghcr-digest.sh \
+              server/scripts/migrate-runtime-data.js \
+              server/scripts/verify-runtime-persistence.js > control-files.sha256
+          )
+          tar -czf "$GITHUB_WORKSPACE/$archive_name" -C "$bundle_root" .
+          archive_sha256="$(sha256sum "$GITHUB_WORKSPACE/$archive_name" | awk '{print $1}')"
+          [[ "$archive_sha256" =~ ^[0-9a-f]{64}$ ]]
+          echo "archive_name=$archive_name" >> "$GITHUB_OUTPUT"
+          echo "archive_sha256=$archive_sha256" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable deployment control archive
+        uses: appleboy/scp-action@917f8b81dfc1ccd331fef9e2d61bdc6c8be94634
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          source: "${{ steps.control_bundle.outputs.archive_name }}"
+          target: "${{ secrets.VPS_APP_DIR }}/.deploy-incoming"
+          overwrite: true
+
+      - name: Pull exact digest, deploy, smoke and rollback on failure
+        id: deploy_exact_digest
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2
+        env:
+          VPS_APP_DIR: ${{ secrets.VPS_APP_DIR }}
+          GHCR_READ_USERNAME: ${{ github.actor }}
+          GHCR_READ_TOKEN: ${{ github.token }}
+          FOSU_API_IMAGE: ${{ needs.build-arm64.outputs.image_ref }}
+          FOSU_IMAGE_TARGET: ${{ needs.build-arm64.outputs.image_target }}
+          FOSU_ROLLOUT_VERSION: ${{ needs.verify.outputs.rollout_version }}
+          FOSU_ADMIN_WRITE_MODULES: ${{ needs.verify.outputs.write_modules }}
+          FOSU_DEPLOY_COMMIT_SHA: ${{ github.sha }}
+          CONTROL_ARCHIVE_SHA256: ${{ steps.control_bundle.outputs.archive_sha256 }}
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          envs: GHCR_READ_USERNAME,GHCR_READ_TOKEN,FOSU_API_IMAGE,FOSU_IMAGE_TARGET,FOSU_ROLLOUT_VERSION,FOSU_ADMIN_WRITE_MODULES,FOSU_DEPLOY_COMMIT_SHA,CONTROL_ARCHIVE_SHA256,VPS_APP_DIR
+          capture_stdout: true
+          script: |
+            set -euo pipefail
+            for command_name in node tar sha256sum diff; do command -v "$command_name" >/dev/null; done
+            [[ "$FOSU_DEPLOY_COMMIT_SHA" =~ ^[0-9a-f]{40}$ ]]
+            [[ "$CONTROL_ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+            incoming="$VPS_APP_DIR/.deploy-incoming/deploy-control-${FOSU_DEPLOY_COMMIT_SHA}.tar.gz"
+            control_parent="$VPS_APP_DIR/.deploy-control"
+            control_dir="$control_parent/$FOSU_DEPLOY_COMMIT_SHA"
+            test -f "$incoming"
+            test "$(sha256sum "$incoming" | awk '{print $1}')" = "$CONTROL_ARCHIVE_SHA256"
+            mkdir -p "$control_parent"
+            chmod 700 "$control_parent"
+
+            validate_control_dir() {
+              local candidate="$1"
+              CONTROL_STAGE="$candidate" node <<'NODE'
+            const fs = require("fs");
+            const path = require("path");
+            const root = fs.realpathSync(process.env.CONTROL_STAGE);
+            const expected = new Set([
+              ".archive-sha256",
+              "control-files.sha256",
+              "server/docker-compose.yml",
+              "server/scripts/deploy-ghcr-digest.sh",
+              "server/scripts/migrate-runtime-data.js",
+              "server/scripts/verify-runtime-persistence.js",
+            ]);
+            const actual = [];
+            function visit(directory) {
+              for (const name of fs.readdirSync(directory).sort()) {
+                const absolute = path.join(directory, name);
+                const stat = fs.lstatSync(absolute);
+                if (stat.isSymbolicLink()) throw new Error("deployment control archive contains a symlink");
+                if (stat.isDirectory()) visit(absolute);
+                else if (stat.isFile()) actual.push(path.relative(root, absolute).replace(/\\/g, "/"));
+                else throw new Error("deployment control archive contains a special file");
+              }
+            }
+            visit(root);
+            if (actual.length !== expected.size || actual.some((name) => !expected.has(name))) {
+              throw new Error("deployment control archive file set is invalid");
+            }
+            const archiveDigest = fs.readFileSync(path.join(root, ".archive-sha256"), "utf8").trim();
+            if (archiveDigest !== process.env.CONTROL_ARCHIVE_SHA256) throw new Error("deployment control directory is not bound to the uploaded archive");
+            NODE
+              (cd "$candidate" && sha256sum -c control-files.sha256)
+            }
+
+            control_stage="$(mktemp -d "$control_parent/.stage-${FOSU_DEPLOY_COMMIT_SHA}.XXXXXXXX")"
+            cleanup_control_stage() {
+              if [ -n "${control_stage:-}" ] && [ -d "$control_stage" ]; then
+                case "$control_stage" in "$control_parent"/.stage-*) rm -rf -- "$control_stage" ;; esac
+              fi
+            }
+            trap cleanup_control_stage EXIT
+            tar -xzf "$incoming" --no-same-owner --no-same-permissions -C "$control_stage"
+            printf '%s\n' "$CONTROL_ARCHIVE_SHA256" > "$control_stage/.archive-sha256"
+            validate_control_dir "$control_stage"
+            chmod 700 "$control_stage" "$control_stage/server" "$control_stage/server/scripts"
+            chmod 600 "$control_stage/.archive-sha256" "$control_stage/control-files.sha256" "$control_stage/server/docker-compose.yml" "$control_stage/server/scripts/"*
+            if [ ! -d "$control_dir" ]; then
+              mv "$control_stage" "$control_dir"
+              control_stage=""
+            else
+              validate_control_dir "$control_dir"
+              diff -qr -- "$control_stage" "$control_dir"
+              cleanup_control_stage
+              control_stage=""
+            fi
+            trap - EXIT
+            rm -f -- "$incoming"
+            export FOSU_DEPLOY_CONTROL_DIR="$control_dir/server"
+            chmod 700 "$FOSU_DEPLOY_CONTROL_DIR/scripts/deploy-ghcr-digest.sh"
+            cd "$VPS_APP_DIR/server"
+            bash "$FOSU_DEPLOY_CONTROL_DIR/scripts/deploy-ghcr-digest.sh"
+
+      - name: Materialize deployment and rollback evidence
+        if: always()
+        shell: bash
+        env:
+          DEPLOY_STDOUT: ${{ steps.deploy_exact_digest.outputs.stdout }}
+          DEPLOY_OUTCOME: ${{ steps.deploy_exact_digest.outcome }}
+          EXPECTED_IMAGE: ${{ needs.build-arm64.outputs.image_ref }}
+          EXPECTED_TARGET: ${{ needs.build-arm64.outputs.image_target }}
+          EXPECTED_ROLLOUT: ${{ needs.verify.outputs.rollout_version }}
+        run: |
+          node - <<'NODE'
+          const fs = require("fs");
+          const allowed = new Set([
+            "deployment_digest", "rollback_digest", "rollout_version", "image_target",
+            "original_container_state", "persistence_snapshot", "persistence_result",
+            "admin_primary", "admin_next_enabled", "runtime_migration_gate",
+            "runtime_persistence_result", "rollback_persistence_result",
+            "image_size_evidence", "old_uncompressed_image_bytes", "candidate_uncompressed_image_bytes",
+          ]);
+          const values = {};
+          for (const line of String(process.env.DEPLOY_STDOUT || "").split(/\r?\n/)) {
+            const index = line.indexOf("=");
+            if (index < 1) continue;
+            const key = line.slice(0, index).trim();
+            if (allowed.has(key)) values[key] = line.slice(index + 1).trim();
+          }
+          const actionOutcome = process.env.DEPLOY_OUTCOME || "unknown";
+          const exactImage = (value) => /^ghcr\.io\/katelya77\/fosuclass-api@sha256:[0-9a-f]{64}$/.test(String(value || ""));
+          const succeeded = actionOutcome === "success"
+            && values.deployment_digest === process.env.EXPECTED_IMAGE
+            && exactImage(values.rollback_digest)
+            && values.image_target === process.env.EXPECTED_TARGET
+            && values.rollout_version === process.env.EXPECTED_ROLLOUT
+            && values.admin_primary === "legacy"
+            && values.admin_next_enabled === "true"
+            && Boolean(values.runtime_migration_gate)
+            && Boolean(values.persistence_snapshot)
+            && Boolean(values.persistence_result)
+            && Boolean(values.runtime_persistence_result);
+          const evidence = {
+            schemaVersion: 1,
+            status: succeeded ? "SUCCESS" : actionOutcome === "failure" ? "FAILED" : "UNKNOWN",
+            actionOutcome,
+            expectedDigest: process.env.EXPECTED_IMAGE || "UNKNOWN",
+            deploymentDigest: values.deployment_digest || "UNKNOWN",
+            rollbackDigest: values.rollback_digest || "UNKNOWN",
+            rollbackObserved: actionOutcome === "failure" && exactImage(values.rollback_digest),
+            rolloutVersion: values.rollout_version || process.env.EXPECTED_ROLLOUT || "UNKNOWN",
+            imageTarget: values.image_target || process.env.EXPECTED_TARGET || "UNKNOWN",
+            originalContainerState: values.original_container_state || "UNKNOWN",
+            adminPrimary: values.admin_primary || "UNKNOWN",
+            adminNextEnabled: values.admin_next_enabled || "UNKNOWN",
+            persistenceSnapshot: values.persistence_snapshot || "UNKNOWN",
+            persistenceResult: values.persistence_result || values.runtime_persistence_result || "UNKNOWN",
+            rollbackPersistenceResult: values.rollback_persistence_result || "UNKNOWN",
+            migrationEvidence: values.runtime_migration_gate || "UNKNOWN",
+            imageSizeEvidence: values.image_size_evidence || "UNKNOWN",
+            oldUncompressedImageBytes: Number(values.old_uncompressed_image_bytes || 0) || "UNKNOWN",
+            candidateUncompressedImageBytes: Number(values.candidate_uncompressed_image_bytes || 0) || "UNKNOWN",
+          };
+          fs.writeFileSync("deployment-evidence.json", `${JSON.stringify(evidence, null, 2)}\n`);
+          if (actionOutcome === "success" && !succeeded) process.exitCode = 1;
+          NODE
+
+      - name: Upload deployment evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: deployment-evidence-${{ github.sha }}
+          path: deployment-evidence.json
+
+      - name: Deployment evidence
+        run: |
+          echo "### Production digest deployment" >> "$GITHUB_STEP_SUMMARY"
+          echo "- commit: \`${{ github.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- rollout: \`${{ needs.verify.outputs.rollout_version }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- target: \`${{ needs.build-arm64.outputs.image_target }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- image: \`${{ needs.build-arm64.outputs.image_ref }}\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "- admin primary: \`legacy\`; admin-next enabled: \`true\`" >> "$GITHUB_STEP_SUMMARY"

@@ -51,6 +51,25 @@ function buildComposeDocument(image, options = {}) {
   ].join("\n");
 }
 
+function buildShadowComposeOverride(serviceName, fixtureRoot) {
+  if (!/^[a-z][a-z0-9_-]{0,62}$/.test(String(serviceName || ""))) {
+    throw typedError("shadow compose service name is invalid", "RUNTIME_RECREATE_SHADOW_INVALID");
+  }
+  const root = path.resolve(fixtureRoot);
+  return `${JSON.stringify({
+    services: {
+      [serviceName]: {
+        volumes: [
+          { type: "bind", source: path.join(root, "shadow-data"), target: "/app/data", read_only: false },
+          { type: "bind", source: path.join(root, "storage"), target: "/app/storage", read_only: true },
+          { type: "bind", source: path.join(root, "openresty-releases"), target: "/openresty-static/releases", read_only: true },
+          { type: "bind", source: path.join(root, "openresty-runtime"), target: "/openresty-static/runtime", read_only: true },
+        ],
+      },
+    },
+  }, null, 2)}\n`;
+}
+
 function normalizeHostPath(value) {
   const normalized = path.resolve(value);
   return process.platform === "win32" ? normalized.toLowerCase() : normalized;
@@ -69,6 +88,55 @@ function validateExpectedMounts(mounts, fixtureRoot) {
     }
   }
   return { ok: true, destinations: Array.from(expected.keys()) };
+}
+
+function validateShadowIsolation(record, fixtureRoot, expectedImage) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) {
+    throw typedError("shadow container inspection is invalid", "RUNTIME_RECREATE_SHADOW_INVALID");
+  }
+  if (!record.Config || record.Config.Image !== expectedImage) {
+    throw typedError("shadow container does not use the expected image", "RUNTIME_RECREATE_SHADOW_INVALID");
+  }
+
+  const bindings = record.NetworkSettings && record.NetworkSettings.Ports
+    ? record.NetworkSettings.Ports["3000/tcp"]
+    : null;
+  if (!Array.isArray(bindings) || bindings.length !== 1) {
+    throw typedError("shadow container must publish exactly one HTTP binding", "RUNTIME_RECREATE_SHADOW_INVALID");
+  }
+  const binding = bindings[0];
+  const hostPort = Number(binding && binding.HostPort);
+  if (!binding || binding.HostIp !== "127.0.0.1" || !Number.isSafeInteger(hostPort) || hostPort < 1 || hostPort > 65535) {
+    throw typedError("shadow HTTP binding is not an ephemeral loopback port", "RUNTIME_RECREATE_SHADOW_INVALID");
+  }
+  const publishedPorts = Object.entries(record.NetworkSettings.Ports || {})
+    .filter(([, entries]) => Array.isArray(entries) && entries.length > 0);
+  if (publishedPorts.length !== 1 || publishedPorts[0][0] !== "3000/tcp") {
+    throw typedError("shadow container published an unexpected port", "RUNTIME_RECREATE_SHADOW_INVALID");
+  }
+
+  if (!Array.isArray(record.Mounts)) {
+    throw typedError("shadow container mount inspection is invalid", "RUNTIME_RECREATE_SHADOW_INVALID");
+  }
+  if (record.Mounts.some((entry) => entry && entry.RW === true && entry.Destination !== "/app/data")) {
+    throw typedError("shadow container has an unexpected writable mount", "RUNTIME_RECREATE_SHADOW_INVALID");
+  }
+  const expectedMounts = [
+    { destination: "/app/data", source: path.join(fixtureRoot, "shadow-data"), writable: true },
+    { destination: "/app/storage", source: path.join(fixtureRoot, "storage"), writable: false },
+    { destination: "/openresty-static/releases", source: path.join(fixtureRoot, "openresty-releases"), writable: false },
+    { destination: "/openresty-static/runtime", source: path.join(fixtureRoot, "openresty-runtime"), writable: false },
+  ];
+  for (const expected of expectedMounts) {
+    const matches = record.Mounts.filter((entry) => entry && entry.Destination === expected.destination);
+    const mount = matches[0];
+    if (matches.length !== 1 || !mount || mount.Type !== "bind" || mount.RW !== expected.writable || normalizeHostPath(mount.Source) !== normalizeHostPath(expected.source)) {
+      const actual = matches.map((entry) => ({ Type: entry.Type, Source: entry.Source, RW: entry.RW }));
+      throw typedError(`shadow mount is not isolated as required: ${expected.destination}; actual=${JSON.stringify(actual)}`, "RUNTIME_RECREATE_SHADOW_INVALID");
+    }
+  }
+
+  return { ok: true, hostIp: binding.HostIp, hostPort };
 }
 
 function run(command, args, options = {}) {
@@ -158,10 +226,16 @@ function executeRecreateTest(options = {}) {
   let image = options.image || process.env.FOSU_RECREATE_TEST_IMAGE || "";
   let builtImage = false;
   const composePath = path.join(fixtureRoot, "compose.yml");
+  const shadowComposePath = path.join(fixtureRoot, "compose.shadow.json");
   const dataDir = path.join(fixtureRoot, "data");
   const storageDir = path.join(fixtureRoot, "storage");
+  const shadowDataDir = path.join(fixtureRoot, "shadow-data");
+  const openrestyReleasesDir = path.join(fixtureRoot, "openresty-releases");
+  const openrestyRuntimeDir = path.join(fixtureRoot, "openresty-runtime");
+  const shadowContainerName = `${project}-shadow`;
   let beforeContainer = "";
   let afterContainer = "";
+  let shadowContainer = "";
   try {
     if (!image) {
       image = `fosuclass-runtime-recreate:${process.pid}-${crypto.randomBytes(4).toString("hex")}`.toLowerCase();
@@ -183,6 +257,9 @@ function executeRecreateTest(options = {}) {
     write(path.join(dataDir, "backups", "config-before.json"), '{"appName":"before"}\n');
     write(path.join(dataDir, "sync-history.json"), '[{"id":"sync-before"}]\n');
     write(path.join(dataDir, "admin-catalog-staging", "current.json"), '{"generation":"before"}\n');
+    write(path.join(dataDir, "admin-c1-control", ".integrity-key"), "fixture-integrity-key\n");
+    write(path.join(dataDir, "admin-c1-control", "operations", "op-before.json"), '{"state":"audit_committed","signature":"fixture"}\n');
+    write(path.join(dataDir, "admin-c1-control", "results", "op-before.json"), '{"status":"completed"}\n');
     write(path.join(storageDir, "admin-config.json"), '{"appName":"before"}\n');
     write(path.join(storageDir, "jobs", "job-before.json"), '{"status":"success"}\n');
     write(path.join(storageDir, "quality-ignores.json"), '[]\n');
@@ -211,7 +288,7 @@ function executeRecreateTest(options = {}) {
     fs.appendFileSync(path.join(dataDir, "admin-audit-log.jsonl"), '{"id":"audit-after-first-start"}\n');
     write(path.join(storageDir, "jobs", "job-after-first-start.json"), '{"status":"success"}\n');
     const baseline = capturePersistenceSnapshot({ dataDir, storageDir });
-    for (const domain of ["audit", "backups", "configuration", "jobs", "feedback", "release", "runtime", "relay", "term"]) {
+    for (const domain of ["audit", "backups", "c1-control", "configuration", "jobs", "feedback", "release", "runtime", "relay", "term"]) {
       assert.ok(baseline.domains[domain], `baseline persistence evidence is missing ${domain}`);
     }
 
@@ -222,6 +299,31 @@ function executeRecreateTest(options = {}) {
     const mountEvidence = validateExpectedMounts(mounts, fixtureRoot);
     const verification = verifyPersistenceSnapshot(baseline, { dataDir, storageDir });
     if (!verification.ok) throw typedError(`runtime persistence mismatch: ${JSON.stringify(verification.mismatches)}`, "RUNTIME_RECREATE_DATA_LOST");
+
+    fs.mkdirSync(shadowDataDir, { recursive: true });
+    fs.mkdirSync(openrestyReleasesDir, { recursive: true });
+    fs.mkdirSync(openrestyRuntimeDir, { recursive: true });
+    write(shadowComposePath, buildShadowComposeOverride("verify", fixtureRoot));
+    const shadowComposeArgs = ["compose", "-p", project, "-f", composePath, "-f", shadowComposePath];
+    shadowContainer = run("docker", shadowComposeArgs.concat([
+      "run",
+      "-d",
+      "--no-deps",
+      "--name",
+      shadowContainerName,
+      "-p",
+      "127.0.0.1::3000",
+      "verify",
+      "node",
+      "-e",
+      "require('http').createServer((request,response)=>{response.writeHead(200,{'content-type':'application/json'});response.end('{\"ok\":true}');}).listen(3000,'0.0.0.0');setInterval(()=>{},1000)",
+    ]), { cwd: fixtureRoot, code: "RUNTIME_RECREATE_SHADOW_START_FAILED" });
+    if (!shadowContainer) throw typedError("shadow persistence container was not created", "RUNTIME_RECREATE_SHADOW_INVALID");
+    const shadowInspection = JSON.parse(run("docker", ["inspect", shadowContainer], { cwd: fixtureRoot }));
+    if (!Array.isArray(shadowInspection) || shadowInspection.length !== 1) {
+      throw typedError("shadow container inspection returned an unexpected record count", "RUNTIME_RECREATE_SHADOW_INVALID");
+    }
+    const shadowIsolation = validateShadowIsolation(shadowInspection[0], fixtureRoot, image);
 
     return {
       ok: true,
@@ -235,9 +337,13 @@ function executeRecreateTest(options = {}) {
       verifiedFileCount: verification.verifiedFileCount,
       domains: baseline.domains,
       mounts: mountEvidence.destinations,
+      shadowIsolation,
       docker: availability,
     };
   } finally {
+    if (shadowContainer) {
+      try { run("docker", ["rm", "-f", shadowContainer], { cwd: fixtureRoot, timeout: 120000 }); } catch (_) {}
+    }
     try { run("docker", ["compose", "-p", project, "-f", composePath, "down", "--remove-orphans"], { cwd: fixtureRoot, timeout: 120000 }); } catch (_) {}
     if (builtImage && image) {
       try { run("docker", ["image", "rm", image], { cwd: repositoryRoot, timeout: 120000 }); } catch (_) {}
@@ -259,6 +365,8 @@ if (require.main === module) {
 
 module.exports = {
   buildComposeDocument,
+  buildShadowComposeOverride,
   executeRecreateTest,
   validateExpectedMounts,
+  validateShadowIsolation,
 };

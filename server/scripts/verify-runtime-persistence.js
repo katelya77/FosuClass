@@ -8,6 +8,7 @@ const DATA_SELECTORS = [
   { path: "sync-history.json", domain: "sync", mode: "exact" },
   { path: "admin-catalog-staging", domain: "catalog", mode: "exact" },
   { path: "catalog-control", domain: "catalog", mode: "exact" },
+  { path: "admin-c1-control", domain: "c1-control", mode: "exact" },
   { path: "ai", domain: "runtime-ai", mode: "exact" },
   { path: ".fosu-runtime-bootstrap.json", domain: "migration", mode: "exact" },
   { path: ".fosu-runtime-migration.json", domain: "migration", mode: "exact" },
@@ -25,7 +26,7 @@ const STORAGE_SELECTORS = [
   { path: "releases", domain: "release", mode: "exact" },
   { path: "snapshots", domain: "release", mode: "exact" },
   { path: "public", domain: "runtime", mode: "exact" },
-  { path: "release-lifecycle-state.json", domain: "release", mode: "exact" },
+  { path: "release-lifecycle-state.json", domain: "release", mode: "lifecycle-semantic" },
   { path: "static-release-sync-status.json", domain: "release", mode: "exact" },
   { path: "feedback.jsonl", domain: "feedback", mode: "exact" },
   { path: "feedbacks.json", domain: "feedback", mode: "exact" },
@@ -80,6 +81,35 @@ function hashDescriptor(descriptor, byteLimit) {
   return { sha256: hash.digest("hex"), bytesRead: position };
 }
 
+function lifecycleSemanticDescriptor(descriptor, byteLimit) {
+  const size = Math.max(0, Number(byteLimit));
+  if (!Number.isSafeInteger(size) || size > 8 * 1024 * 1024) {
+    throw typedError("release lifecycle state is too large to validate safely", "RUNTIME_PERSISTENCE_JSON_INVALID");
+  }
+  const bytes = Buffer.alloc(size);
+  let position = 0;
+  while (position < size) {
+    const read = fs.readSync(descriptor, bytes, position, size - position, position);
+    if (!read) break;
+    position += read;
+  }
+  let value;
+  try { value = JSON.parse(bytes.subarray(0, position).toString("utf8")); }
+  catch (error) { throw typedError("release lifecycle state is not valid JSON", "RUNTIME_PERSISTENCE_JSON_INVALID", error); }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw typedError("release lifecycle state is not a JSON object", "RUNTIME_PERSISTENCE_JSON_INVALID");
+  }
+  const projection = {
+    activeReleaseVersion: String(value.activeReleaseVersion || ""),
+    activeCanonicalHash: String(value.activeCanonicalHash || ""),
+    stagingCanonicalHash: String(value.stagingCanonicalHash || ""),
+    stagingSameAsActive: value.stagingSameAsActive === true,
+    relayUploadId: String(value.relayUploadId || ""),
+  };
+  const semanticBytes = Buffer.from(JSON.stringify(projection));
+  return { sha256: sha256(semanticBytes), size: semanticBytes.length, bytesRead: position };
+}
+
 function sameFileIdentity(left, right) {
   return left.dev === right.dev && left.ino === right.ino;
 }
@@ -106,7 +136,9 @@ function captureFileRecord(filePath, mode, context = {}, options = {}) {
         observerCalled = true;
         options.onFileOpened(context);
       }
-      const digest = hashDescriptor(opened.descriptor, before.size);
+      const digest = mode === "lifecycle-semantic"
+        ? lifecycleSemanticDescriptor(opened.descriptor, before.size)
+        : hashDescriptor(opened.descriptor, before.size);
       const after = fs.fstatSync(opened.descriptor);
       const identityStable = sameFileIdentity(before, after);
       const complete = digest.bytesRead === before.size;
@@ -114,7 +146,7 @@ function captureFileRecord(filePath, mode, context = {}, options = {}) {
         ? after.size >= before.size
         : after.size === before.size && after.mtimeMs === before.mtimeMs && after.ctimeMs === before.ctimeMs;
       if (identityStable && complete && contentWindowStable) {
-        return { size: before.size, sha256: digest.sha256 };
+        return { size: mode === "lifecycle-semantic" ? digest.size : before.size, sha256: digest.sha256 };
       }
     } catch (error) {
       if (error && ["ELOOP", "EMLINK"].includes(error.code)) {
@@ -262,7 +294,7 @@ function validateSnapshot(snapshot) {
   const files = snapshot.files.map((entry) => {
     if (!entry || !["data", "storage"].includes(entry.root)) throw typedError("persistence snapshot root is invalid", "RUNTIME_PERSISTENCE_SNAPSHOT_INVALID");
     const relative = normalizeRelativePath(entry.path);
-    if (!DOMAIN_NAMES.includes(entry.domain) || !["exact", "append-only"].includes(entry.mode)) throw typedError("persistence snapshot policy is invalid", "RUNTIME_PERSISTENCE_SNAPSHOT_INVALID");
+    if (!DOMAIN_NAMES.includes(entry.domain) || !["exact", "append-only", "lifecycle-semantic"].includes(entry.mode)) throw typedError("persistence snapshot policy is invalid", "RUNTIME_PERSISTENCE_SNAPSHOT_INVALID");
     const expectedPolicy = policyForPath(relative, entry.root === "data" ? DATA_SELECTORS : STORAGE_SELECTORS);
     if (!expectedPolicy || entry.domain !== expectedPolicy.domain || entry.mode !== expectedPolicy.mode) {
       throw typedError("persistence snapshot path policy is invalid", "RUNTIME_PERSISTENCE_SNAPSHOT_INVALID");
@@ -322,9 +354,9 @@ function verifyPersistenceSnapshot(snapshot, options = {}) {
         mismatches.push({ root: entry.root, path: entry.path, reason: "append-prefix-mismatch" });
       }
     } else {
-      const current = captureFileRecord(target.path, "exact", { root: entry.root, path: entry.path, domain: entry.domain, mode: entry.mode });
+      const current = captureFileRecord(target.path, entry.mode, { root: entry.root, path: entry.path, domain: entry.domain, mode: entry.mode });
       if (current.size !== entry.size || current.sha256 !== entry.sha256) {
-        mismatches.push({ root: entry.root, path: entry.path, reason: "hash-mismatch" });
+        mismatches.push({ root: entry.root, path: entry.path, reason: entry.mode === "lifecycle-semantic" ? "semantic-mismatch" : "hash-mismatch" });
       }
     }
   }
