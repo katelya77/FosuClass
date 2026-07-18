@@ -164,6 +164,48 @@ try {
 }
 assert.strictEqual(fs.readFileSync(malformedIgnorePath, "utf8"), beforeReplaceFailure, "rename failure must preserve original bytes");
 
+const lockPath = `${malformedIgnorePath}.lock`;
+const originalLockWrite = fs.writeFileSync;
+let injectedLockWrite = false;
+fs.writeFileSync = (target, ...args) => {
+  if (!injectedLockWrite && typeof target === "number") {
+    injectedLockWrite = true;
+    const error = new Error("injected lock write failure");
+    error.code = "EIO";
+    throw error;
+  }
+  return originalLockWrite(target, ...args);
+};
+try {
+  assert.throws(
+    () => quality.markIgnore({ fingerprint: "empty-schedule::lock-write", reason: "lock write" }),
+    (error) => error && error.code === "QUALITY_IGNORES_LOCK_FAILED"
+  );
+} finally {
+  fs.writeFileSync = originalLockWrite;
+}
+assert.strictEqual(fs.existsSync(lockPath), false, "failed lock initialization must not strand the canonical lock");
+assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-lock-write", reason: "acquire immediately" }));
+
+const originalLockUnlink = fs.unlinkSync;
+let injectedLockUnlink = false;
+fs.unlinkSync = (target, ...args) => {
+  if (!injectedLockUnlink && path.resolve(target) === path.resolve(lockPath)) {
+    injectedLockUnlink = true;
+    const error = new Error("injected lock unlink failure");
+    error.code = "EBUSY";
+    throw error;
+  }
+  return originalLockUnlink(target, ...args);
+};
+try {
+  assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::lock-unlink", reason: "release retry" }));
+} finally {
+  fs.unlinkSync = originalLockUnlink;
+}
+assert.strictEqual(fs.existsSync(lockPath), false, "release retry must remove the canonical lock");
+assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-lock-unlink", reason: "acquire after release" }));
+
 function waitFor(condition, timeoutMs = 3000) {
   const startedAt = Date.now();
   return new Promise((resolve, reject) => {

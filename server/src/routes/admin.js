@@ -168,7 +168,7 @@ function commitWithBackup({ type, sourceFile, fallbackData, commit }) {
   try {
     return commit();
   } catch (error) {
-    const conflict = error && (error.code === "CONFLICT" || Number(error.statusCode) === 409);
+    const conflict = error && error.code === "CONFLICT";
     if (conflict && backupPath && fs.existsSync(backupPath)) {
       try {
         fs.unlinkSync(backupPath);

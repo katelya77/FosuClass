@@ -8,7 +8,7 @@ const HARNESS_ENV_KEYS = [
   "NODE_ENV", "PORT", "FOSU_STORAGE_DIR", "FOSU_DATA_DIR", "ADMIN_PASSWORD", "ADMIN_API_TOKEN",
   "FOSU_ADMIN_NEXT_ENABLED", "FOSU_ADMIN_PRIMARY", "FOSU_ADMIN_NEXT_WRITE_MODULES",
   "FOSU_RELEASE_WORKER_ENABLED", "FOSU_CONFIG_HARD_FAIL", "FOSU_ALLOWED_ADMIN_ORIGINS",
-  "FOSU_ALLOWED_PUBLIC_ORIGINS", "ADMIN_SERVICE_TOKENS",
+  "FOSU_ALLOWED_PUBLIC_ORIGINS", "ADMIN_SERVICE_TOKENS", "FOSU_QUALITY_IGNORE_LOCK_WAIT_MS",
 ];
 
 function snapshotHarnessEnv() {
@@ -434,6 +434,32 @@ async function assertMalformedQualityIgnoreContract() {
   }
 }
 
+async function assertQualityLockTimeoutContract() {
+  const harness = await startAdminHttpHarness({ environment: { FOSU_QUALITY_IGNORE_LOCK_WAIT_MS: "30" } });
+  try {
+    const session = await harness.login();
+    const version = await getVersion(harness, DOMAINS.quality, session);
+    const lockPath = path.join(harness.paths.storage, "quality-ignores.json.lock");
+    fs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, token: "held-by-test", createdAt: new Date().toISOString() }), "utf8");
+    const beforeBackups = backupFiles(harness.paths, "quality-").length;
+    const beforeAudit = auditCount(harness.paths);
+    const held = await harness.request("/api/admin/quality/mark", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session, version), body: DOMAINS.quality.valid("held-lock"),
+    });
+    assert.strictEqual(held.status, 503, held.text);
+    assert.strictEqual(held.json && held.json.code, "QUALITY_IGNORES_LOCK_TIMEOUT");
+    assert.strictEqual(auditCount(harness.paths), beforeAudit, "lock timeout must not audit");
+    assert.strictEqual(backupFiles(harness.paths, "quality-").length, beforeBackups + 1, "lock timeout must retain recovery backup");
+    fs.unlinkSync(lockPath);
+    const recovered = await harness.request("/api/admin/quality/mark", {
+      method: "POST", cookie: session.cookie, headers: browserHeaders(session, version), body: DOMAINS.quality.valid("after-lock"),
+    });
+    assert.strictEqual(recovered.status, 200, recovered.text);
+  } finally {
+    await harness.close();
+  }
+}
+
 async function main() {
   await assertHarnessStartupFailureCleanup();
   await assertModuleGuards();
@@ -441,6 +467,7 @@ async function main() {
   await assertQualityRecheckContract();
   await assertQualityRecheckFailureContract();
   await assertMalformedQualityIgnoreContract();
+  await assertQualityLockTimeoutContract();
   console.log("Admin C1 real HTTP write contracts passed.");
 }
 
