@@ -52,3 +52,41 @@ git diff --check
 The existing test environment still emits its unrelated `PORT=0` configuration
 warning and npm's `electron_mirror` deprecation warning. Neither affects test
 exit status or the quality implementation.
+
+## Independent-review follow-up
+
+The review's four Important findings were fixed in a new commit (without
+amending the original Task 3 commit).
+
+### Additional RED evidence
+
+1. The new HTTP seam test reached `success !== failed` before the runner used
+   its code-only report-builder dependency; the former environment switch was
+   no longer involved.
+2. Module and real HTTP malformed-file tests demonstrated that malformed JSON
+   was treated as an empty document (HTTP instead returned a CAS `409`), rather
+   than a typed persistence failure with no backup/audit.
+3. The absent-course-name fixture failed because the new detector generated
+   `C2:` instead of the legacy `C2:undefined` target.
+4. The rename-failure test showed the former replacement fallback could replace
+   the live document instead of reporting a recoverable replacement error.
+
+### Follow-up implementation
+
+- `startQualityRecheck(input, { buildReport })` has an internal-only second
+  dependency seam. Production always uses `buildQualityReport`; routes pass
+  only request input. HTTP tests monkeypatch the cached facade to inject
+  deferred and throwing builders. There is no recheck test environment switch
+  or artificial delay in production code.
+- Ignore reads now return empty only for `ENOENT`; malformed or unreadable
+  documents raise `500 QUALITY_IGNORES_MALFORMED` without mutation, backup, or
+  audit.
+- Report target construction now mirrors legacy `undefined` interpolation and
+  skips empty classroom names. The legacy generator is a thin compatibility
+  wrapper over the canonical report service.
+- Replacement uses write-temp then one rename only; a failed replacement cleans
+  the temp file and raises `QUALITY_IGNORES_REPLACE_FAILED` without deleting or
+  copying over the live document. Commit obtains a tokenized `wx` per-file lock,
+  safely reclaims only stale dead-PID locks, rechecks CAS under that lock, and
+  always releases it. The module test starts two real Node processes with the
+  same prepared version and proves exactly one success and one `409 CONFLICT`.

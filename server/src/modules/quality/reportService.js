@@ -30,7 +30,7 @@ function buildQualityReport() {
     const slots = {};
     courses.forEach((course) => {
       if (!course.courseName) add("missing-coursename", className, "danger", "包含空的课程名称", "补充课程名称");
-      const courseTarget = `${className}:${course.courseName || ""}`;
+      const courseTarget = `${className}:${course.courseName}`;
       if (!course.teacherName) { stats.missingTeacher += 1; add("missing-teacher", courseTarget, "info", "课程缺少授课教师", "补充授课教师"); }
       if (!course.classroom) { stats.missingClassroom += 1; add("missing-classroom", courseTarget, "warning", "课程缺少上课教室", "补充上课教室"); }
       const weeks = Array.isArray(course.weeks) ? course.weeks : [];
@@ -57,6 +57,7 @@ function buildQualityReport() {
   });
   classrooms.forEach((item) => {
     const room = item.roomName || item.classroom || "";
+    if (!room) return;
     const slots = {};
     (Array.isArray(item.courses) ? item.courses : []).forEach((course) => {
       (Array.isArray(course.weeks) ? course.weeks : []).forEach((week) => (Array.isArray(course.sections) ? course.sections : []).forEach((section) => {
