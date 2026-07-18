@@ -128,3 +128,28 @@ The final verification run completed with exit 0.
 The true loader now resides in server/src/services/adminRolloutManifestService.js. It explicitly selects /app/config/admin-rollout-manifest.json when that final-image path exists and otherwise uses the repository config path for local tooling. tools/lib/admin-rollout-manifest.js is only a re-export, and the Docker runtime copies only the manifest config in addition to server/src.
 
 The Docker contract uses path.posix.resolve and an explicit final-image file set to validate the capabilities-service import target and the loader manifest target. The AST guard permits only the fetch calls structurally enclosed by the named api or download functions in client.ts, with shorthand method and headers plus credentials: include. A same-shaped extra function is rejected.
+
+## Third-review RED/GREEN evidence
+
+### RED
+
+The third-review fixture first marked the approved wrappers as exported and added collisions for non-exported top-level, nested api/download, and local named wrappers.
+
+    npm run test:admin-next-write-route-guard
+    AssertionError: non-exported, nested, and local same-named wrappers must not receive the transport exemption
+
+### GREEN
+
+After narrowing the exception, the final regression run completed with exit 0.
+
+    npm run test:admin-capabilities
+    Admin capabilities tests passed.
+    npm run test:admin-next-write-route-guard
+    Admin next write route guard passed (14 writes).
+    npm run test:admin-rollout-runtime-contract
+    Admin rollout runtime Docker contract passed.
+    npm run test:config-migration-safe
+    Config migration-safe tests passed.
+    git diff --check
+
+The AST transport exception now requires a FunctionDeclaration whose direct parent is the source file, an export modifier, and an exact api or download name. Function expressions, arrows, non-exported declarations, and nested same-named declarations are all rejected.
