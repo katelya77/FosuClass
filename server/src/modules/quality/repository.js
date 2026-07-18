@@ -6,7 +6,9 @@ const STORAGE_DIR = path.resolve(process.env.FOSU_STORAGE_DIR || path.join(__dir
 const QUALITY_IGNORES_PATH = path.join(STORAGE_DIR, "quality-ignores.json");
 const LOCK_WAIT_MS = Number(process.env.FOSU_QUALITY_IGNORE_LOCK_WAIT_MS || 1000);
 const LOCK_STALE_MS = Number(process.env.FOSU_QUALITY_IGNORE_LOCK_STALE_MS || 30000);
-const LOCK_LEASE_MS = Number(process.env.FOSU_QUALITY_IGNORE_LOCK_LEASE_MS || 30000);
+const PROCESS_STARTED_AT = Date.now();
+const PROCESS_INSTANCE_ID = crypto.randomBytes(12).toString("hex");
+const ownedLocks = new Map();
 
 function makeVersion(rules) {
   return `qi_${crypto.createHash("sha256").update(JSON.stringify(rules || [])).digest("hex").slice(0, 16)}`;
@@ -51,6 +53,13 @@ function wait(milliseconds) {
   Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
 }
 
+function fileIdentity(filePath) {
+  try {
+    const stat = fs.statSync(filePath);
+    return `${stat.dev}:${stat.ino}:${stat.birthtimeMs}:${stat.size}`;
+  } catch (_) { return null; }
+}
+
 function reclaimStaleLock(lockPath) {
   let stat;
   let details = null;
@@ -59,12 +68,18 @@ function reclaimStaleLock(lockPath) {
     try { details = JSON.parse(fs.readFileSync(lockPath, "utf8")); } catch (_) {}
   } catch (_) { return false; }
   const now = Date.now();
-  const expiredLease = details && Date.parse(details.leaseExpiresAt || "") <= now;
-  if (now - stat.mtimeMs < LOCK_STALE_MS && !expiredLease) return false;
+  if (!details) {
+    if (now - stat.mtimeMs < LOCK_STALE_MS) return false;
+  }
   if (details && Number.isInteger(details.pid) && details.pid > 0) {
     try {
       process.kill(details.pid, 0);
-      if (!expiredLease) return false;
+      const createdAt = Date.parse(details.createdAt || "");
+      const priorSamePidInstance = details.pid === process.pid
+        && details.instanceId !== PROCESS_INSTANCE_ID
+        && Number.isFinite(createdAt)
+        && createdAt < PROCESS_STARTED_AT;
+      if (!priorSamePidInstance) return false;
     } catch (error) {
       if (error.code && error.code !== "ESRCH") return false;
     }
@@ -89,19 +104,49 @@ function retireLock(lockPath, label) {
   try { fs.unlinkSync(retired); } catch (error) { throw releaseError("quality ignore lock retired but cleanup failed", error); }
 }
 
-function discardNewLock(lockPath) {
+function matchesOwnedLock(lockPath, record, requireToken = true) {
+  if (!record || !record.identity) return false;
+  const identity = fileIdentity(lockPath);
+  if (!identity || identity !== record.identity) return false;
+  if (!requireToken) return true;
+  try {
+    const held = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+    return held && held.token === record.token;
+  } catch (_) { return false; }
+}
+
+function reclaimOwnedAbandoned(lockPath) {
+  for (const record of ownedLocks.values()) {
+    if (!record.abandoned || record.lockPath !== lockPath) continue;
+    if (!matchesOwnedLock(lockPath, record)) continue;
+    try {
+      retireLock(lockPath, `abandoned-${record.token}`);
+      ownedLocks.delete(record.token);
+      return true;
+    } catch (_) { return false; }
+  }
+  return false;
+}
+
+function discardNewLock(lockPath, record) {
+  if (!matchesOwnedLock(lockPath, record)) return false;
   let lastError;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    try { fs.unlinkSync(lockPath); return; } catch (error) {
-      if (error && error.code === "ENOENT") return;
+    try { fs.unlinkSync(lockPath); return true; } catch (error) {
+      if (error && error.code === "ENOENT") return true;
       lastError = error;
       wait(5);
     }
   }
-  try { retireLock(lockPath, "aborted"); } catch (error) { throw releaseError("failed to discard newly-created quality ignore lock", error || lastError); }
+  try {
+    if (!matchesOwnedLock(lockPath, record)) return false;
+    retireLock(lockPath, "aborted");
+    return true;
+  } catch (error) { throw releaseError("failed to discard newly-created quality ignore lock", error || lastError); }
 }
 
 function releaseOwnedLock(lockPath, token) {
+  const record = ownedLocks.get(token);
   let held = null;
   let readError = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -116,18 +161,27 @@ function releaseOwnedLock(lockPath, token) {
   }
   if (readError) {
     try {
+      if (!matchesOwnedLock(lockPath, record, false)) throw new Error("owned lock identity changed");
       retireLock(lockPath, `unverified-${token}`);
+      ownedLocks.delete(token);
       return { warning: { code: "QUALITY_IGNORES_LOCK_RELEASE_FAILED" } };
     } catch (error) {
+      if (record) record.abandoned = true;
       throw releaseError("cannot recover unreadable owned quality ignore lock", error);
     }
   }
   if (!held || held.token !== token) throw releaseError("quality ignore lock ownership changed");
   let lastError;
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    try { fs.unlinkSync(lockPath); return; } catch (error) { lastError = error; wait(5); }
+    try { fs.unlinkSync(lockPath); ownedLocks.delete(token); return; } catch (error) { lastError = error; wait(5); }
   }
-  try { retireLock(lockPath, "released"); } catch (error) { throw releaseError("failed to release quality ignore lock", error || lastError); }
+  try {
+    retireLock(lockPath, "released");
+    ownedLocks.delete(token);
+  } catch (error) {
+    if (record) record.abandoned = true;
+    throw releaseError("failed to release quality ignore lock", error || lastError);
+  }
 }
 
 function acquireFileLock(filePath) {
@@ -135,20 +189,31 @@ function acquireFileLock(filePath) {
   const startedAt = Date.now();
   const token = crypto.randomBytes(12).toString("hex");
   while (Date.now() - startedAt <= LOCK_WAIT_MS) {
+    let writeAttempted = false;
     try {
       fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+      writeAttempted = true;
       fs.writeFileSync(lockPath, JSON.stringify({
         pid: process.pid,
         token,
+        instanceId: PROCESS_INSTANCE_ID,
         createdAt: new Date().toISOString(),
-        leaseExpiresAt: new Date(Date.now() + LOCK_LEASE_MS).toISOString(),
       }), { encoding: "utf8", flag: "wx" });
+      ownedLocks.set(token, { token, lockPath, identity: fileIdentity(lockPath), abandoned: false });
       return () => releaseOwnedLock(lockPath, token);
     } catch (error) {
       if (!error || error.code !== "EEXIST") {
-        try { discardNewLock(lockPath); } catch (cleanupError) { throw releaseError("quality ignore lock initialization cleanup failed", cleanupError); }
+        const record = writeAttempted && { token, lockPath, identity: fileIdentity(lockPath), abandoned: true };
+        if (record && matchesOwnedLock(lockPath, record)) {
+          ownedLocks.set(token, record);
+          try {
+            discardNewLock(lockPath, record);
+            ownedLocks.delete(token);
+          } catch (cleanupError) { throw releaseError("quality ignore lock initialization cleanup failed", cleanupError); }
+        }
         throw typedError(`quality ignore lock failed: ${error && error.message || "unknown"}`, "QUALITY_IGNORES_LOCK_FAILED");
       }
+      if (reclaimOwnedAbandoned(lockPath)) continue;
       reclaimStaleLock(lockPath);
       wait(10);
     }
@@ -208,13 +273,14 @@ function prepareIgnoreMutation(input, options = {}) {
   return { version: doc.version, out, nextVersion: out.version, updatedAt: out.updatedAt, rules, rule, backupData: { version: doc.version, updatedAt: doc.updatedAt, rules: doc.rules } };
 }
 
-function commitPreparedIgnoreMutation(prepared) {
+function commitPreparedIgnoreMutation(prepared, options = {}) {
   if (!prepared || !prepared.version || !prepared.out) throw typedError("invalid prepared quality mutation", "PREPARED_MUTATION_INVALID", 400);
   const release = acquireFileLock(QUALITY_IGNORES_PATH);
   let result = null;
   try {
     const current = readIgnoreDocument();
     if (current.version !== prepared.version) throw conflict(current.version);
+    if (typeof options.afterRead === "function") options.afterRead(current);
     writeJsonAtomic(QUALITY_IGNORES_PATH, prepared.out);
     result = { version: prepared.nextVersion, etag: prepared.nextVersion, updatedAt: prepared.updatedAt, rules: prepared.rules, rule: prepared.rule || undefined };
   } finally {
