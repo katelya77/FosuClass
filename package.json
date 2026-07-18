@@ -128,6 +128,7 @@
     "test:admin-matrix-status-evidence": "node tools/test-admin-matrix-status-evidence.js",
     "test:docker-secret-scan": "node tools/test-docker-secret-scan.js",
     "test:admin-c1-modules": "node tools/test-admin-c1-modules.js",
+    "test:exclusive-file-lock": "node tools/test-exclusive-file-lock.js",
     "test:admin-spa-bundle-present": "node tools/test-admin-spa-bundle-present.js",
     "test:config-validation": "node tools/test-config-validation.js",
     "test:config-migration-safe": "node tools/test-config-migration-safe.js",

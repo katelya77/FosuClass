@@ -8,6 +8,7 @@ on:
       - "server/src/**"
       - "server/public/admin-app/**"
       - "tools/test-admin*.js"
+      - "tools/test-exclusive-file-lock.js"
       - "tools/generate-admin-feature-matrix.js"
       - "docs/admin-migration/**"
       - "tools/test-architecture-guards.js"
@@ -63,6 +64,7 @@ jobs:
           npm run test:admin-write-parity
           npm run test:admin-http-write-parity
           npm run test:admin-c1-modules
+          npm run test:exclusive-file-lock
           npm run test:docker-secret-scan
           npm run test:duplicate-admin-routes
           npm run test:service-token-scopes
