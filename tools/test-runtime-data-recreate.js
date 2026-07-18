@@ -23,9 +23,16 @@ function validateImageReference(image) {
   return value;
 }
 
-function buildComposeDocument(image) {
+function buildComposeDocument(image, options = {}) {
   const safeImage = validateImageReference(image);
-  const holdCommand = "require('./src/services/runtimeDataBootstrapService').bootstrapRuntimeData();setInterval(()=>{},1000)";
+  const bootstrapDelayMs = Number(options.bootstrapDelayMs || 0);
+  if (!Number.isSafeInteger(bootstrapDelayMs) || bootstrapDelayMs < 0 || bootstrapDelayMs > 30_000) {
+    throw typedError("runtime recreate bootstrap delay is invalid", "RUNTIME_RECREATE_DELAY_INVALID");
+  }
+  const bootstrapAction = "require('./src/services/runtimeDataBootstrapService').bootstrapRuntimeData();setInterval(()=>{},1000)";
+  const holdCommand = bootstrapDelayMs > 0
+    ? `setTimeout(()=>{${bootstrapAction}},${bootstrapDelayMs})`
+    : bootstrapAction;
   return [
     "services:",
     "  verify:",
@@ -98,6 +105,29 @@ function write(filePath, value) {
   fs.writeFileSync(filePath, value);
 }
 
+function waitForBootstrapReceipt(markerPath, containerId, cwd, timeoutMs = 15_000) {
+  const startedAt = Date.now();
+  const sleeper = new Int32Array(new SharedArrayBuffer(4));
+  let lastState = "{}";
+  while (!fs.existsSync(markerPath)) {
+    lastState = run("docker", ["inspect", containerId, "--format", "{{json .State}}"], { cwd });
+    let state;
+    try { state = JSON.parse(lastState); } catch (_) { state = null; }
+    if (!state || (state.Running !== true && state.Restarting !== true)) {
+      const logs = run("docker", ["logs", containerId], { cwd });
+      throw typedError(`runtime bootstrap exited before its receipt; state=${lastState}; logs=${logs.slice(0, 2000)}`, "RUNTIME_RECREATE_BOOTSTRAP_FAILED");
+    }
+    if (Date.now() - startedAt >= timeoutMs) {
+      const logs = run("docker", ["logs", containerId], { cwd });
+      throw typedError(`runtime bootstrap receipt timed out; state=${lastState}; logs=${logs.slice(0, 2000)}`, "RUNTIME_RECREATE_BOOTSTRAP_TIMEOUT");
+    }
+    // This is condition polling, not a guessed startup delay: the loop exits
+    // immediately when the durable receipt becomes visible on the bind mount.
+    Atomics.wait(sleeper, 0, 0, 50);
+  }
+  return { elapsedMs: Date.now() - startedAt };
+}
+
 function migrationFileManifest(dataDir) {
   const files = [];
   function visit(directory) {
@@ -145,7 +175,10 @@ function executeRecreateTest(options = {}) {
       builtImage = true;
     }
     image = validateImageReference(image);
-    write(composePath, buildComposeDocument(image));
+    const bootstrapDelayMs = options.bootstrapDelayMs === undefined
+      ? Number(process.env.FOSU_RECREATE_BOOTSTRAP_DELAY_MS || 0)
+      : options.bootstrapDelayMs;
+    write(composePath, buildComposeDocument(image, { bootstrapDelayMs }));
     write(path.join(dataDir, "admin-audit-log.jsonl"), '{"id":"audit-before-recreate"}\n');
     write(path.join(dataDir, "backups", "config-before.json"), '{"appName":"before"}\n');
     write(path.join(dataDir, "sync-history.json"), '[{"id":"sync-before"}]\n');
@@ -174,7 +207,7 @@ function executeRecreateTest(options = {}) {
     run("docker", composeArgs.concat(["up", "-d", "--no-build"]), { cwd: fixtureRoot, code: "RUNTIME_RECREATE_UP_FAILED" });
     beforeContainer = run("docker", composeArgs.concat(["ps", "-q", "verify"]), { cwd: fixtureRoot });
     if (!beforeContainer) throw typedError("initial persistence container was not created", "RUNTIME_RECREATE_CONTAINER_MISSING");
-    assert.ok(fs.existsSync(path.join(dataDir, ".fosu-runtime-bootstrap.json")), "runtime seed marker was not persisted");
+    const bootstrapWait = waitForBootstrapReceipt(path.join(dataDir, ".fosu-runtime-bootstrap.json"), beforeContainer, fixtureRoot);
     fs.appendFileSync(path.join(dataDir, "admin-audit-log.jsonl"), '{"id":"audit-after-first-start"}\n');
     write(path.join(storageDir, "jobs", "job-after-first-start.json"), '{"status":"success"}\n');
     const baseline = capturePersistenceSnapshot({ dataDir, storageDir });
@@ -198,6 +231,7 @@ function executeRecreateTest(options = {}) {
       beforeContainer,
       afterContainer,
       baselineFingerprint: baseline.fingerprint,
+      bootstrapWaitMs: bootstrapWait.elapsedMs,
       verifiedFileCount: verification.verifiedFileCount,
       domains: baseline.domains,
       mounts: mountEvidence.destinations,
