@@ -263,6 +263,10 @@ function validateSnapshot(snapshot) {
     if (!entry || !["data", "storage"].includes(entry.root)) throw typedError("persistence snapshot root is invalid", "RUNTIME_PERSISTENCE_SNAPSHOT_INVALID");
     const relative = normalizeRelativePath(entry.path);
     if (!DOMAIN_NAMES.includes(entry.domain) || !["exact", "append-only"].includes(entry.mode)) throw typedError("persistence snapshot policy is invalid", "RUNTIME_PERSISTENCE_SNAPSHOT_INVALID");
+    const expectedPolicy = policyForPath(relative, entry.root === "data" ? DATA_SELECTORS : STORAGE_SELECTORS);
+    if (!expectedPolicy || entry.domain !== expectedPolicy.domain || entry.mode !== expectedPolicy.mode) {
+      throw typedError("persistence snapshot path policy is invalid", "RUNTIME_PERSISTENCE_SNAPSHOT_INVALID");
+    }
     if (!Number.isSafeInteger(entry.size) || entry.size < 0 || !/^[a-f0-9]{64}$/.test(String(entry.sha256 || ""))) throw typedError("persistence snapshot hash metadata is invalid", "RUNTIME_PERSISTENCE_SNAPSHOT_INVALID");
     const identity = `${entry.root}\0${relative}`;
     if (seen.has(identity)) throw typedError("persistence snapshot contains duplicate paths", "RUNTIME_PERSISTENCE_SNAPSHOT_INVALID");
