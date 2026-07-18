@@ -53,21 +53,23 @@ function staticPathPrefix(expression) {
 
 function isTransportWrapper(call, sourceFile) {
   let ancestor = call.parent;
-  let functionName = null;
-  while (ancestor) {
-    if (
-      (ts.isFunctionDeclaration(ancestor) || ts.isFunctionExpression(ancestor) || ts.isArrowFunction(ancestor)) &&
-      ancestor.name &&
-      ts.isIdentifier(ancestor.name)
-    ) {
-      functionName = ancestor.name.text;
-      break;
-    }
+  while (ancestor && !ts.isFunctionLike(ancestor)) {
     ancestor = ancestor.parent;
   }
+  const isApprovedWrapper =
+    Boolean(ancestor) &&
+    ts.isFunctionDeclaration(ancestor) &&
+    ancestor.parent === sourceFile &&
+    ancestor.name &&
+    ts.isIdentifier(ancestor.name) &&
+    ["api", "download"].includes(ancestor.name.text) &&
+    Boolean(
+      ancestor.modifiers &&
+        ancestor.modifiers.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
+    );
   if (
     sourceFile.fileName.replace(/\\/g, "/") !== "admin-web/src/shared/api/client.ts" ||
-    !["api", "download"].includes(functionName) ||
+    !isApprovedWrapper ||
     getCallName(call.expression) !== "fetch" ||
     !ts.isIdentifier(call.arguments[0]) ||
     call.arguments[0].text !== "path" ||
@@ -187,16 +189,28 @@ function assertFixtureFailures() {
 
   const clientFixture = scanText(
     [
+      "export async function api() { fetch(path, { method, headers, credentials: 'include' }); }",
+      "export async function download() { fetch(path, { method, headers, credentials: 'include' }); }",
       "async function api() { fetch(path, { method, headers, credentials: 'include' }); }",
-      "async function download() { fetch(path, { method, headers, credentials: 'include' }); }",
+      "function outer() { function api() { fetch(path, { method, headers, credentials: 'include' }); } }",
+      "function outerDownload() { function download() { fetch(path, { method, headers, credentials: 'include' }); } }",
+      "const localApi = async function api() { fetch(path, { method, headers, credentials: 'include' }); };",
+      "const localArrow = async () => fetch(path, { method, headers, credentials: 'include' });",
       "async function extraWrite() { fetch(path, { method, headers, credentials: 'include' }); }",
-    ].join("\\n"),
+    ].join("\n"),
     "admin-web/src/shared/api/client.ts",
   );
   assert.ok(
-    clientFixture.errors.some((error) => error.includes("dynamic write path")) &&
-      clientFixture.errors.some((error) => error.includes("dynamic request method")),
-    "same-shaped fetch outside api/download must not receive the transport exemption",
+    !clientFixture.errors.some((error) => /client\.ts:[12] /.test(error)),
+    "only exported top-level api/download wrappers may receive the exemption",
+  );
+  assert.ok(
+    [3, 4, 5, 6].every(
+      (line) =>
+        clientFixture.errors.some((error) => error.includes("client.ts:" + line + " dynamic write path")) &&
+        clientFixture.errors.some((error) => error.includes("client.ts:" + line + " dynamic request method")),
+    ),
+    "non-exported, nested, and local same-named wrappers must not receive the transport exemption",
   );
 }
 
