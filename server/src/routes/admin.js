@@ -6010,6 +6010,7 @@ router.post("/quality/mark", adminAuth.verifyAdminAccess, (req, res) => {
       ignores: result.rules,
       version: result.version,
       etag: result.etag,
+      lockWarning: result.lockWarning || undefined,
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({

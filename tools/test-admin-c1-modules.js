@@ -18,6 +18,9 @@ const settings = require("../server/src/modules/settings/service");
 const catalog = require("../server/src/modules/catalog/service");
 const quality = require("../server/src/modules/quality/service");
 const appConfig = require("../server/src/services/appConfigService");
+const repositorySource = fs.readFileSync(path.join(__dirname, "../server/src/modules/quality/repository.js"), "utf8");
+assert.ok(!repositorySource.includes("fs.openSync"), "lock initialization must not expose an open/write/close descriptor sequence");
+assert.ok(!repositorySource.includes("fs.closeSync"), "lock initialization must not expose a closeSync failure path");
 
 // seed config
 appConfig.saveAdminConfig({ appName: "C1 Test App" });
@@ -168,7 +171,7 @@ const lockPath = `${malformedIgnorePath}.lock`;
 const originalLockWrite = fs.writeFileSync;
 let injectedLockWrite = false;
 fs.writeFileSync = (target, ...args) => {
-  if (!injectedLockWrite && typeof target === "number") {
+  if (!injectedLockWrite && path.resolve(target) === path.resolve(lockPath)) {
     injectedLockWrite = true;
     const error = new Error("injected lock write failure");
     error.code = "EIO";
@@ -205,6 +208,57 @@ try {
 }
 assert.strictEqual(fs.existsSync(lockPath), false, "release retry must remove the canonical lock");
 assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-lock-unlink", reason: "acquire after release" }));
+
+const originalLockRead = fs.readFileSync;
+let lockReadFailures = 0;
+fs.readFileSync = (target, ...args) => {
+  if (path.resolve(target) === path.resolve(lockPath) && lockReadFailures < 2) {
+    lockReadFailures += 1;
+    const error = new Error("injected lock read failure");
+    error.code = "EIO";
+    throw error;
+  }
+  return originalLockRead(target, ...args);
+};
+let readRecovery;
+try {
+  readRecovery = quality.markIgnore({ fingerprint: "empty-schedule::lock-read", reason: "retire after unreadable lock" });
+} finally {
+  fs.readFileSync = originalLockRead;
+}
+assert.ok(readRecovery.lockWarning && readRecovery.lockWarning.code === "QUALITY_IGNORES_LOCK_RELEASE_FAILED", "unreadable owned lock must surface a non-secret warning after commit");
+assert.strictEqual(fs.existsSync(lockPath), false, "unreadable owned lock must be retired");
+assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-lock-read", reason: "acquire after read recovery" }));
+
+const originalPersistentUnlink = fs.unlinkSync;
+const originalPersistentRename = fs.renameSync;
+fs.unlinkSync = (target, ...args) => {
+  if (path.resolve(target) === path.resolve(lockPath)) {
+    const error = new Error("persistent Windows unlink failure");
+    error.code = "EBUSY";
+    throw error;
+  }
+  return originalPersistentUnlink(target, ...args);
+};
+fs.renameSync = (from, to) => {
+  if (path.resolve(from) === path.resolve(lockPath)) {
+    const error = new Error("persistent Windows rename failure");
+    error.code = "EACCES";
+    throw error;
+  }
+  return originalPersistentRename(from, to);
+};
+let persistentRelease;
+try {
+  persistentRelease = quality.markIgnore({ fingerprint: "empty-schedule::persistent-release", reason: "committed despite release failure" });
+} finally {
+  fs.unlinkSync = originalPersistentUnlink;
+  fs.renameSync = originalPersistentRename;
+}
+assert.ok(persistentRelease.lockWarning && persistentRelease.lockWarning.code === "QUALITY_IGNORES_LOCK_RELEASE_FAILED", "persistent release failure must report a committed warning");
+const heldLock = JSON.parse(fs.readFileSync(lockPath, "utf8"));
+fs.writeFileSync(lockPath, JSON.stringify({ ...heldLock, leaseExpiresAt: new Date(Date.now() - 1).toISOString() }), "utf8");
+assert.doesNotThrow(() => quality.markIgnore({ fingerprint: "empty-schedule::after-persistent-release", reason: "lease recovery" }), "expired owned lock must be recoverable after I/O recovers");
 
 function waitFor(condition, timeoutMs = 3000) {
   const startedAt = Date.now();
