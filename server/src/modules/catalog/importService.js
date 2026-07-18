@@ -320,7 +320,12 @@ function finishCommittedOperation(operation, preview) {
   let auditPending = false;
   if (!stateAtLeast(operation, "audit_committed")) {
     try {
-      adminAuditService.appendCatalogOperation(operation.audit);
+      // The audit event is replayable after a crash, so its semantic time must
+      // come from the durable operation rather than from the recovery attempt.
+      adminAuditService.appendCatalogOperation({
+        ...operation.audit,
+        time: operation.audit.time || operation.createdAt,
+      });
       if (previewPending) {
         auditPending = true;
         warnings.push({ code: "CATALOG_JOURNAL_AUDIT_PENDING" });
@@ -422,6 +427,7 @@ function createPreparedOperation(preview, generation, options) {
     result: { generationId: plan.generationId, version: plan.result.version, rawSha256: plan.result.rawSha256, logicalSha256: plan.result.logicalSha256 },
     audit: {
       operationId,
+      time: operationCreatedAt,
       type: preview.type,
       previewIdPrefix: preview.previewId.slice(0, 12),
       sourceFingerprint: preview.sourceFingerprint,
