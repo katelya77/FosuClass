@@ -147,20 +147,46 @@ function recursiveSnapshot(root) {
 }
 
 function seedCatalogHttpFixture(paths) {
-  fs.writeFileSync(path.join(paths.storage, "catalog.json"), JSON.stringify({
+  const { calculateFingerprint } = require("../server/src/utils/stagingFingerprint");
+  const catalog = {
     semesters: ["2025-2026-2"],
     colleges: [{ code: "04", name: "Engineering, \"North\"" }],
     grades: ["2025"],
-  }, null, 2));
-  fs.writeFileSync(path.join(paths.storage, "majors-index.json"), JSON.stringify({
+  };
+  const nestedMajors = {
     semester: "2025-2026-2",
     colleges: [{ collegeCode: "04", collegeName: "Engineering, \"North\"", grades: [{ grade: "2025", majors: [{ majorCode: "0401", majorName: "Software" }] }] }],
-  }, null, 2));
-  const course = { courseName: "Catalog Course", teacherName: "Teacher One", className: "Class One", classroom: "A101", weeks: [1], sections: [1] };
-  fs.writeFileSync(path.join(paths.storage, "class-schedules.json"), JSON.stringify([{ className: "Class One", semester: "2025-2026-2", collegeCode: "04", collegeName: "Engineering, \"North\"", grade: "2025", majorCode: "0401", majorName: "Software", courses: [course] }], null, 2));
-  fs.writeFileSync(path.join(paths.storage, "teacher-schedules.json"), JSON.stringify([{ teacherName: "Teacher One", semester: "2025-2026-2", collegeName: "Engineering, \"North\"", courses: [course] }], null, 2));
-  fs.writeFileSync(path.join(paths.storage, "classroom-schedules.json"), JSON.stringify([{ roomName: "A101", semester: "2025-2026-2", courses: [course] }], null, 2));
-  fs.writeFileSync(path.join(paths.storage, "course-schedules.json"), JSON.stringify([{ courseName: "Catalog Course", semester: "2025-2026-2", collegeName: "Engineering, \"North\"", courses: [course] }], null, 2));
+  };
+  const course = { courseName: "Catalog Course", teacherName: "Teacher One", className: "Class One", classroom: "A101", weekday: 1, startSection: 1, endSection: 1, weeks: [1], sections: [1] };
+  const classSchedules = [{ className: "Class One", semester: "2025-2026-2", collegeCode: "04", collegeName: "Engineering, \"North\"", grade: "2025", majorCode: "0401", majorName: "Software", courses: [course] }];
+  const teacherSchedules = [{ teacherName: "Teacher One", semester: "2025-2026-2", collegeName: "Engineering, \"North\"", courses: [course] }];
+  const classroomSchedules = [{ roomName: "A101", semester: "2025-2026-2", courses: [course] }];
+  const courseSchedules = [{ courseName: "Catalog Course", semester: "2025-2026-2", collegeName: "Engineering, \"North\"", courses: [course] }];
+  const legacy = { "catalog.json": catalog, "majors-index.json": nestedMajors, "class-schedules.json": classSchedules, "teacher-schedules.json": teacherSchedules, "classroom-schedules.json": classroomSchedules, "course-schedules.json": courseSchedules };
+  for (const [name, value] of Object.entries(legacy)) fs.writeFileSync(path.join(paths.storage, name), JSON.stringify(value, null, 2));
+  const version = "c1-http-active";
+  const snapshot = {
+    schemaVersion: 1,
+    version,
+    releaseVersion: version,
+    term: "2025-2026-2",
+    semester: "2025-2026-2",
+    termStartDate: "2026-03-09",
+    totalWeeks: 20,
+    weekStart: "monday",
+    updatedAt: "2026-07-19T00:00:00.000Z",
+    catalog,
+    majors: [{ collegeCode: "04", collegeName: "Engineering, \"North\"", code: "0401", name: "Software", grade: "2025" }],
+    classSchedules,
+    resources: { teachers: [{ teacherName: "Teacher One" }], classrooms: [{ roomName: "A101" }], courses: [{ courseName: "Catalog Course" }], teacherSchedules, classroomSchedules, courseSchedules },
+  };
+  const canonicalHash = calculateFingerprint(snapshot).canonicalHash;
+  const releaseRoot = path.join(paths.storage, "releases");
+  const releaseDir = path.join(releaseRoot, version);
+  fs.mkdirSync(releaseDir, { recursive: true });
+  fs.writeFileSync(path.join(releaseDir, "snapshot.json"), JSON.stringify(snapshot, null, 2));
+  fs.writeFileSync(path.join(releaseDir, "manifest.json"), JSON.stringify({ success: true, schemaVersion: 2, releaseVersion: version, version, term: snapshot.term, semester: snapshot.semester, canonicalHash, packHealth: { valid: true, errors: [] } }, null, 2));
+  fs.writeFileSync(path.join(releaseRoot, "active.json"), JSON.stringify({ version, releaseVersion: version, term: snapshot.term, semester: snapshot.semester, canonicalHash, packStatus: { healthy: true, manifestExists: true, manifestValid: true, hashValid: true, missing: [], hashErrors: [] } }, null, 2));
 }
 
 function writeExternalVersion(name, domain, paths) {
@@ -697,12 +723,12 @@ async function assertCatalogOperationsHttpContract() {
       pendingApply = await harness.request("/api/admin/catalog/import/apply", {
         method: "POST", cookie: session.cookie, headers: browserHeaders(session, pendingPreview.json.baseVersion), body: { previewId: pendingPreview.json.previewId, confirm: true },
       });
-      assert.strictEqual(pendingApply.status, 202, pendingApply.text);
-      assert.strictEqual(pendingApply.json.success, false);
+      assert.strictEqual(pendingApply.status, 200, pendingApply.text);
+      assert.strictEqual(pendingApply.json.success, true);
       assert.strictEqual(pendingApply.json.committed, true);
       assert.strictEqual(pendingApply.json.auditPending, true);
       assert.ok(pendingApply.json.operationId && Array.isArray(pendingApply.json.warnings));
-      assert.strictEqual(auditCount(harness.paths), auditBeforePending, "202 pending response must not claim a missing audit exists");
+      assert.strictEqual(auditCount(harness.paths), auditBeforePending, "committed response must expose auditPending without claiming a missing audit exists");
 
       const blockedPreview = await harness.request("/api/admin/catalog/import/preview", {
         method: "POST", cookie: session.cookie, headers: browserHeaders(session), body: { ...pendingDocument, items: [{ ...pendingDocument.items[0], teacherName: "Blocked Audit Writer" }] },
@@ -728,6 +754,27 @@ async function assertCatalogOperationsHttpContract() {
   }
 }
 
+async function assertCatalogRouteOwnedRolloutGate() {
+  const harness = await startAdminHttpHarness({ enabledModules: "" });
+  try {
+    seedCatalogHttpFixture(harness.paths);
+    const session = await harness.login();
+    const response = await harness.request("/api/admin/catalog/import/preview", {
+      method: "POST",
+      cookie: session.cookie,
+      headers: { Origin: "http://admin.test", "X-Fosu-CSRF": session.csrfToken },
+      body: { type: "teacher", semester: "2025-2026-2", items: [{ teacherName: "Headerless Writer", courses: [] }] },
+    });
+    assert.strictEqual(response.status, 403, response.text);
+    assert.strictEqual(response.json && response.json.code, "MODULE_WRITE_DISABLED");
+    assert.strictEqual(response.json && response.json.module, "catalog");
+    assert.strictEqual(fs.existsSync(path.join(harness.paths.data, "admin-catalog-staging")), false, "disabled headerless write must not bootstrap staging");
+    assert.strictEqual(fs.existsSync(path.join(harness.paths.data, "catalog-control")), false, "disabled headerless write must not create private records");
+  } finally {
+    await harness.close();
+  }
+}
+
 async function main() {
   await assertHarnessStartupFailureCleanup();
   await assertModuleGuards();
@@ -737,6 +784,7 @@ async function main() {
   await assertMalformedQualityIgnoreContract();
   await assertQualityLockTimeoutContract();
   await assertCommittedQualityReleaseFailureContract();
+  await assertCatalogRouteOwnedRolloutGate();
   await assertCatalogOperationsHttpContract();
   console.log("Admin C1 real HTTP write contracts passed.");
 }

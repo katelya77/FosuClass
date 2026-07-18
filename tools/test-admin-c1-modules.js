@@ -3,6 +3,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { spawn, spawnSync } = require("child_process");
+const { calculateFingerprint } = require("../server/src/utils/stagingFingerprint");
 
 const tmp = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-c1-"));
 process.env.FOSU_STORAGE_DIR = path.join(tmp, "storage");
@@ -62,7 +63,7 @@ function seedCatalogFixture() {
   const storage = process.env.FOSU_STORAGE_DIR;
   fs.rmSync(path.join(process.env.FOSU_DATA_DIR, "admin-catalog-staging"), { recursive: true, force: true });
   fs.writeFileSync(path.join(storage, "catalog.json"), JSON.stringify({
-    semesters: ["2025-2026-2", "2024-2025-2"],
+    semesters: ["2025-2026-2"],
     colleges: [{ code: "04", name: "Engineering, \"North\"" }],
     grades: ["2025", "2024"],
   }, null, 2));
@@ -79,23 +80,71 @@ function seedCatalogFixture() {
       ],
     }],
   }, null, 2));
-  const repeatedCourse = { courseName: "Catalog Course", teacherName: "Teacher One", className: "Class One", classroom: "A101", weeks: [1], sections: [1, 2] };
+  const repeatedCourse = { courseName: "Catalog Course", teacherName: "Teacher One", className: "Class One", classroom: "A101", weekday: 1, startSection: 1, endSection: 2, weeks: [1], sections: [1, 2] };
   fs.writeFileSync(path.join(storage, "class-schedules.json"), JSON.stringify([
     { className: "Class One", semester: "2025-2026-2", collegeCode: "04", collegeName: "Engineering, \"North\"", grade: "2025", majorCode: "0401", majorName: "Software", courses: [repeatedCourse] },
-    { className: "Class One", semester: "2024-2025-2", collegeCode: "04", collegeName: "Engineering, \"North\"", grade: "2024", majorCode: "0402", majorName: "Networks", courses: [] },
+    { className: "Class Two", semester: "2025-2026-2", collegeCode: "04", collegeName: "Engineering, \"North\"", grade: "2024", majorCode: "0402", majorName: "Networks", courses: [] },
   ], null, 2));
   fs.writeFileSync(path.join(storage, "teacher-schedules.json"), JSON.stringify([
     { teacherName: "Teacher One", semester: "2025-2026-2", collegeName: "Engineering, \"North\"", courses: [repeatedCourse] },
-    { teacherName: "Teacher One", semester: "2024-2025-2", collegeName: "Engineering, \"North\"", courses: [] },
+    { teacherName: "Teacher Two", semester: "2025-2026-2", collegeName: "Engineering, \"North\"", courses: [] },
   ], null, 2));
   fs.writeFileSync(path.join(storage, "classroom-schedules.json"), JSON.stringify([
     { roomName: "A101", semester: "2025-2026-2", courses: [repeatedCourse] },
-    { roomName: "A101", semester: "2024-2025-2", courses: [] },
+    { roomName: "A102", semester: "2025-2026-2", courses: [] },
   ], null, 2));
   fs.writeFileSync(path.join(storage, "course-schedules.json"), JSON.stringify([
     { courseName: "Catalog Course", semester: "2025-2026-2", collegeName: "Engineering, \"North\"", courses: [repeatedCourse] },
-    { courseName: "Catalog Course", semester: "2024-2025-2", collegeName: "Engineering, \"North\"", courses: [] },
+    { courseName: "Other Course", semester: "2025-2026-2", collegeName: "Engineering, \"North\"", courses: [] },
   ], null, 2));
+  writeCatalogActiveFixtureFromLegacy();
+}
+
+function writeCatalogActiveFixtureFromLegacy(version = "c1-modules-active") {
+  const storage = process.env.FOSU_STORAGE_DIR;
+  const catalogDocument = JSON.parse(fs.readFileSync(path.join(storage, "catalog.json"), "utf8"));
+  const majorsDocument = JSON.parse(fs.readFileSync(path.join(storage, "majors-index.json"), "utf8"));
+  const majors = [];
+  for (const college of majorsDocument.colleges || []) for (const grade of college.grades || []) for (const major of grade.majors || []) majors.push({
+    collegeCode: college.collegeCode || college.code,
+    collegeName: college.collegeName || college.name,
+    code: major.majorCode || major.code,
+    name: major.majorName || major.name,
+    grade: grade.grade,
+  });
+  const classSchedules = JSON.parse(fs.readFileSync(path.join(storage, "class-schedules.json"), "utf8"));
+  const teacherSchedules = JSON.parse(fs.readFileSync(path.join(storage, "teacher-schedules.json"), "utf8"));
+  const classroomSchedules = JSON.parse(fs.readFileSync(path.join(storage, "classroom-schedules.json"), "utf8"));
+  const courseSchedules = JSON.parse(fs.readFileSync(path.join(storage, "course-schedules.json"), "utf8"));
+  const snapshot = {
+    schemaVersion: 1,
+    version,
+    releaseVersion: version,
+    term: majorsDocument.semester,
+    semester: majorsDocument.semester,
+    termStartDate: "2026-03-09",
+    totalWeeks: 20,
+    weekStart: "monday",
+    updatedAt: "2026-07-19T00:00:00.000Z",
+    catalog: catalogDocument,
+    majors,
+    classSchedules,
+    resources: {
+      teachers: teacherSchedules.map((row) => ({ teacherName: row.teacherName, collegeName: row.collegeName })),
+      classrooms: classroomSchedules.map((row) => ({ roomName: row.roomName, buildingName: row.buildingName })),
+      courses: courseSchedules.map((row) => ({ courseName: row.courseName, collegeName: row.collegeName })),
+      teacherSchedules,
+      classroomSchedules,
+      courseSchedules,
+    },
+  };
+  const canonicalHash = calculateFingerprint(snapshot).canonicalHash;
+  const releaseRoot = path.join(storage, "releases");
+  const releaseDir = path.join(releaseRoot, version);
+  fs.mkdirSync(releaseDir, { recursive: true });
+  fs.writeFileSync(path.join(releaseDir, "snapshot.json"), JSON.stringify(snapshot, null, 2));
+  fs.writeFileSync(path.join(releaseDir, "manifest.json"), JSON.stringify({ success: true, schemaVersion: 2, releaseVersion: version, version, term: snapshot.term, semester: snapshot.semester, canonicalHash, packHealth: { valid: true, errors: [] } }, null, 2));
+  fs.writeFileSync(path.join(releaseRoot, "active.json"), JSON.stringify({ version, releaseVersion: version, term: snapshot.term, semester: snapshot.semester, canonicalHash, packStatus: { healthy: true, manifestExists: true, manifestValid: true, hashValid: true, missing: [], hashErrors: [] } }, null, 2));
 }
 
 function expectCatalogError(fn, code, statusCode) {
@@ -125,7 +174,7 @@ function assertCatalogBootstrapCrashRecoveryContracts() {
   const stagingRoot = path.join(process.env.FOSU_DATA_DIR, "admin-catalog-staging");
   const currentPath = path.join(stagingRoot, "current.json");
   const legacyFiles = ["catalog.json", "class-schedules.json", "teacher-schedules.json", "classroom-schedules.json", "course-schedules.json", "majors-index.json"];
-  for (const boundary of ["staging-mkdir", "partial-build", "generation-renamed", "pointer-temp", "pointer-committed"]) {
+  for (const boundary of ["staging-mkdir", "bootstrap-journal-temp", "partial-build", "generation-renamed", "pointer-temp", "pointer-committed"]) {
     seedCatalogFixture();
     const legacyBefore = Object.fromEntries(legacyFiles.map((name) => [name, fs.readFileSync(path.join(process.env.FOSU_STORAGE_DIR, name)).toString("base64")]));
     const program = `
@@ -139,6 +188,21 @@ function assertCatalogBootstrapCrashRecoveryContracts() {
       const originalWrite = fs.writeFileSync;
       const originalRename = fs.renameSync;
       const originalUnlink = fs.unlinkSync;
+      const originalOpen = fs.openSync;
+      const originalFsync = fs.fsyncSync;
+      const descriptorPaths = new Map();
+      fs.openSync = function(target, ...args) {
+        const descriptor = originalOpen.call(fs, target, ...args);
+        descriptorPaths.set(descriptor, String(target));
+        return descriptor;
+      };
+      fs.fsyncSync = function(descriptor) {
+        const result = originalFsync.call(fs, descriptor);
+        const target = descriptorPaths.get(descriptor) || "";
+        if (!injected && boundary === "bootstrap-journal-temp" && path.basename(target).startsWith(".bootstrap.json.") && path.basename(target).endsWith(".tmp")) { injected = true; process.exit(91); }
+        if (!injected && boundary === "partial-build" && target.includes(".building-") && path.basename(target).includes("catalog.json")) { injected = true; process.exit(91); }
+        return result;
+      };
       fs.mkdirSync = function(target, ...args) {
         const result = originalMkdir.call(fs, target, ...args);
         if (!injected && boundary === "staging-mkdir" && path.resolve(target) === path.resolve(staging)) { injected = true; process.exit(91); }
@@ -164,7 +228,9 @@ function assertCatalogBootstrapCrashRecoveryContracts() {
     `;
     const crashed = spawnSync(process.execPath, ["-e", program], { env: { ...process.env }, encoding: "utf8" });
     assert.strictEqual(crashed.status, 91, `${boundary} did not stop at the intended bootstrap crash point: ${crashed.stderr}`);
-    const recovered = catalog.listResources({ type: "class", page: 1, pageSize: 1 });
+    let recovered;
+    try { recovered = catalog.listResources({ type: "class", page: 1, pageSize: 1 }); }
+    catch (error) { error.message = `${boundary} recovery failed: ${error.message}`; throw error; }
     assert.strictEqual(recovered.source.label, "Catalog 工作区（未发布）");
     assert.ok(fs.existsSync(currentPath), `${boundary} recovery did not publish current.json`);
     assert.strictEqual(fs.existsSync(catalogRepository.BOOTSTRAP_JOURNAL_PATH), false, `${boundary} recovery left a bootstrap journal`);
@@ -197,10 +263,10 @@ function assertCatalogBootstrapCrashRecoveryContracts() {
 function assertCatalogReadContracts() {
   seedCatalogFixture();
   const expected = {
-    class: ["class:2024-2025-2:04:2024:0402:Class One", "className", "coursesCount"],
-    teacher: ["teacher:2024-2025-2:Teacher One", "teacherName", "classesCount"],
-    classroom: ["classroom:2024-2025-2:A101", "roomName", "occupationRate"],
-    course: ["course:2024-2025-2:Catalog Course", "courseName", "teachersCount"],
+    class: ["class:2025-2026-2:04:2024:0402:Class Two", "className", "coursesCount"],
+    teacher: ["teacher:2025-2026-2:Teacher One", "teacherName", "classesCount"],
+    classroom: ["classroom:2025-2026-2:A101", "roomName", "occupationRate"],
+    course: ["course:2025-2026-2:Catalog Course", "courseName", "teachersCount"],
     major: ["major:2025-2026-2:04:2024:0402", "majorName", "collegeCode"],
   };
   for (const [type, [firstId, nameField, countField]] of Object.entries(expected)) {
@@ -225,7 +291,7 @@ function assertCatalogReadContracts() {
   for (const page of [0, "NaN", -1, 1.5]) {
     expectCatalogError(() => catalog.listResources({ type: "class", page }), "INVALID_PAGINATION", 400);
   }
-  assert.strictEqual(catalog.listResources({ type: "class", semester: "2025-2026-2" }).total, 1);
+  assert.strictEqual(catalog.listResources({ type: "class", semester: "2025-2026-2" }).total, 2);
   assert.strictEqual(catalog.listResources({ type: "class", keyword: "software" }).total, 1);
 
   const relationshipResult = catalog.getRelationships();
@@ -268,6 +334,7 @@ function assertCatalogReadContracts() {
     courses: [],
   }));
   fs.writeFileSync(path.join(process.env.FOSU_STORAGE_DIR, "teacher-schedules.json"), JSON.stringify(manyTeachers, null, 2));
+  writeCatalogActiveFixtureFromLegacy("c1-modules-many-teachers");
   const firstHundred = catalog.listResources({ type: "teacher", page: 1, pageSize: 100 });
   const manyJson = catalog.exportRows({ type: "teacher", format: "json" });
   const manyCsv = catalog.exportRows({ type: "teacher", format: "csv" });
@@ -289,7 +356,7 @@ function assertCatalogImportContracts() {
   const valid = {
     type: "teacher",
     semester: "2025-2026-2",
-    items: [{ teacherName: "Teacher Two", collegeName: "Engineering, \"North\"", courses: [] }],
+    items: [{ teacherName: "Teacher Three", collegeName: "Engineering, \"North\"", courses: [] }],
   };
   for (const [document, code] of [
     [{ ...valid, replace: true }, "DELETE_NOT_ALLOWED"],
@@ -303,7 +370,7 @@ function assertCatalogImportContracts() {
 
   const beforeSource = fs.readFileSync(sourcePath, "utf8");
   const first = catalog.previewImport(valid);
-  const second = catalog.previewImport({ items: [{ courses: [], collegeName: "Engineering, \"North\"", teacherName: "Teacher Two" }], semester: "2025-2026-2", type: "teacher" });
+  const second = catalog.previewImport({ items: [{ courses: [], collegeName: "Engineering, \"North\"", teacherName: "Teacher Three" }], semester: "2025-2026-2", type: "teacher" });
   assert.strictEqual(first.sourceFingerprint, second.sourceFingerprint);
   assert.strictEqual(first.source.kind, "catalog-staging");
   assert.strictEqual(first.source.published, false);
@@ -344,7 +411,7 @@ function assertCatalogImportContracts() {
   assert.ok(fs.existsSync(backupManifestPath));
   const backupBytes = fs.readFileSync(backupPath);
   assert.strictEqual(applied.backup.sha256, require("crypto").createHash("sha256").update(backupBytes).digest("hex"));
-  assert.ok(JSON.parse(fs.readFileSync(catalog.getCatalogTargetPath("teacher"), "utf8")).some((item) => item.teacherName === "Teacher Two"));
+  assert.ok(JSON.parse(fs.readFileSync(catalog.getCatalogTargetPath("teacher"), "utf8")).some((item) => item.teacherName === "Teacher Three"));
   const operationAudit = fs.readFileSync(adminAuditService.AUDIT_LOG_PATH, "utf8")
     .trim().split(/\r?\n/).filter(Boolean).map(JSON.parse)
     .filter((entry) => entry.operationId === applied.operationId);
