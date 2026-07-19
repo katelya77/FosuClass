@@ -234,7 +234,7 @@ jobs:
             # Progressive admin SPA: Legacy remains production write authority.
             FOSU_ADMIN_NEXT_ENABLED=true
             FOSU_ADMIN_PRIMARY=legacy
-            FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups,catalog,quality,settings
+            FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups
             FOSU_CONFIG_HARD_FAIL=false
             FOSU_BASE_URL=https://100.fosu.edu.cn
             FOSU_AUTH_URL=https://authserver.fosu.edu.cn
@@ -476,7 +476,26 @@ jobs:
               echo "::error::protected admin publisher receipt API without token returned HTTP ${admin_unauth_status}, expected 401"
               exit 1
             fi
-            sudo docker exec "$CONTAINER_NAME" sh -lc 'test -n "$ADMIN_API_TOKEN" && status="$(curl -sS -o /tmp/fosu-admin-token-contract.json -w "%{http_code}" -H "X-Admin-Token: ${ADMIN_API_TOKEN}" http://127.0.0.1:3000/api/admin/publisher/receipt)" && test "$status" = "200" && node -e "const fs=require(\"fs\");const data=JSON.parse(fs.readFileSync(\"/tmp/fosu-admin-token-contract.json\",\"utf8\"));if(!data||data.success!==true)process.exit(1)" && rm -f /tmp/fosu-admin-token-contract.json'
+            sudo docker exec "$CONTAINER_NAME" node -e '
+              const fail = (message) => {
+                console.error("admin token smoke failed: " + message);
+                process.exit(1);
+              };
+              const token = process.env.ADMIN_API_TOKEN;
+              if (!token) fail("ADMIN_API_TOKEN is empty");
+              fetch("http://127.0.0.1:3000/api/admin/publisher/receipt", {
+                headers: { "X-Admin-Token": token },
+              }).then(async (response) => {
+                let body;
+                try {
+                  body = await response.json();
+                } catch {
+                  fail("response is not valid JSON");
+                }
+                if (response.status !== 200) fail("unexpected HTTP status " + response.status);
+                if (!body || body.success !== true) fail("response success flag is not true");
+              }).catch(() => fail("request failed"));
+            '
             echo "admin-api-token-contract=ok"
             bootstrap_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' http://127.0.0.1:18318/api/fosu/session/bootstrap || true)"
             if [ "$bootstrap_status" = "404" ] || [ "$bootstrap_status" = "000" ]; then
