@@ -2,7 +2,7 @@ const fs = require("fs");
 const path = require("path");
 
 const RUNTIME_MANIFEST_PATH = path.posix.resolve("/app", "config/admin-rollout-manifest.json");
-const REPOSITORY_MANIFEST_PATH = path.resolve(__dirname, "../../../config/admin-rollout-manifest.json");
+const REPOSITORY_MANIFEST_PATH = path.resolve(__dirname, "../../config/admin-rollout-manifest.json");
 const REQUIRED_MODULE_FIELDS = ["productionWriteEnabled", "routes", "httpEvidence", "browserEvidence"];
 
 function fail(message) {
