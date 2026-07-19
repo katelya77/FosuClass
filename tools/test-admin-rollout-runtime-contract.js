@@ -15,7 +15,7 @@ assert.match(
 );
 assert.match(
   dockerfile,
-  /^COPY config\/admin-rollout-manifest\.json \.\/config\/admin-rollout-manifest\.json$/m,
+  /^COPY server\/config\/admin-rollout-manifest\.json \.\/config\/admin-rollout-manifest\.json$/m,
   "final runtime must copy the rollout manifest to /app/config",
 );
 assert.doesNotMatch(

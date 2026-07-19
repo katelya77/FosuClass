@@ -44,7 +44,6 @@ RUN apk add --no-cache ca-certificates \
 ENV NODE_ENV=production \
     PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1 \
     FOSU_DATA_DIR=/app/data \
-    FOSU_SEED_DATA_DIR=/app/seed-data \
     FOSU_STORAGE_DIR=/app/storage \
     PORT=3000
 
@@ -55,13 +54,13 @@ COPY server/package.json server/package-lock.json ./
 COPY server/src ./src
 COPY server/scripts ./scripts
 COPY server/assets ./assets
-COPY server/data/ai ./seed-data/ai
+COPY server/data ./data
 COPY server/public ./public
-COPY config/admin-rollout-manifest.json ./config/admin-rollout-manifest.json
+COPY server/config/admin-rollout-manifest.json ./config/admin-rollout-manifest.json
 COPY --from=admin-builder /src/server/public/admin-app ./public/admin-app
 
-RUN mkdir -p /app/storage /app/data /app/seed-data \
-    && chmod -R a+rX /app/src /app/public /app/scripts /app/assets /app/seed-data \
+RUN mkdir -p /app/storage /app/data/backups \
+    && chmod -R a+rX /app/src /app/public /app/scripts /app/assets /app/data \
     && chmod a+rwx /app/storage /app/data
 
 EXPOSE 3000
@@ -69,9 +68,9 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
   CMD node scripts/test-health.js || exit 1
 
-# Root retained for 1Panel bind-mount write compatibility. The launcher copies
-# only missing curated seed files before Express imports any writable service.
-CMD ["node", "scripts/start-runtime.js"]
+# Root retained for 1Panel bind-mount write compatibility. Runtime-data
+# bootstrap remains available for the deferred persistent-data delivery PR.
+CMD ["node", "src/app.js"]
 
 # ---------- core (no browser runtime) ----------
 FROM runtime-common AS core

@@ -8,13 +8,7 @@
 !**/.env.example
 server/storage
 server/storage/**
-server/data/**
-!server/data/ai
-!server/data/ai/**
-# The committed SPA is a host/deploy fallback. The image copies the freshly
-# built admin-builder output once, avoiding a stale duplicate lower layer.
-server/public/admin-app
-server/public/admin-app/**
+server/data/backups
 output
 test-results
 playwright-report

@@ -136,7 +136,6 @@
     "test:runtime-data-recreate": "node tools/test-runtime-data-recreate.js",
     "test:admin-matrix-status-evidence": "node tools/test-admin-matrix-status-evidence.js",
     "test:docker-secret-scan": "node tools/test-docker-secret-scan.js",
-    "test:docker-image-context": "node tools/test-docker-image-context.js",
     "test:admin-c1-modules": "node tools/test-admin-c1-modules.js && node tools/test-admin-catalog-hardening.js",
     "test:exclusive-file-lock": "node tools/test-exclusive-file-lock.js",
     "test:admin-spa-bundle-present": "node tools/test-admin-spa-bundle-present.js",

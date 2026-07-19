@@ -82,7 +82,7 @@ try {
     "server/src/modules",
     "admin-web/src/router",
     "admin-web/src/pages",
-    "config",
+    "server/config",
     "docs/admin-migration",
     "tools",
   ]) {

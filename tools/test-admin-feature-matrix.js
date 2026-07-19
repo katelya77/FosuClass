@@ -309,7 +309,7 @@ assert.strictEqual(matrix.flags.FOSU_ADMIN_PRIMARY, "legacy");
 assert.strictEqual(matrix.flags.FOSU_ADMIN_NEXT_ENABLED, true);
 
 // Rollout manifest is the single source of production write grants/evidence.
-const rollout = loadJson(path.join(ROOT, "config/admin-rollout-manifest.json"));
+const rollout = loadJson(path.join(ROOT, "server/config/admin-rollout-manifest.json"));
 const enabledByManifest = Object.entries(rollout.modules)
   .filter(([, record]) => record.productionWriteEnabled === true)
   .map(([name]) => name)

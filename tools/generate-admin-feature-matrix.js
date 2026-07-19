@@ -22,7 +22,7 @@ const SERVER_ROUTES_DIR = path.join(ROOT, "server/src/routes");
 const SERVER_MODULES_DIR = path.join(ROOT, "server/src/modules");
 const VUE_ROUTER = path.join(ROOT, "admin-web/src/router/index.ts");
 const VUE_PAGES_DIR = path.join(ROOT, "admin-web/src/pages");
-const ROLLOUT_MANIFEST = path.join(ROOT, "config/admin-rollout-manifest.json");
+const ROLLOUT_MANIFEST = path.join(ROOT, "server/config/admin-rollout-manifest.json");
 const OUTPUT_FILES = Object.freeze([
   "feature-matrix.json",
   "api-contracts.json",
@@ -156,7 +156,7 @@ function normalizedTextFileSha256(filePath) {
 function loadRolloutManifest() {
   const manifest = JSON.parse(fs.readFileSync(ROLLOUT_MANIFEST, "utf8"));
   if (!manifest || manifest.schemaVersion !== 1 || !manifest.admin || !manifest.modules) {
-    throw new Error("config/admin-rollout-manifest.json is invalid");
+    throw new Error("server/config/admin-rollout-manifest.json is invalid");
   }
   if (manifest.admin.primary !== "legacy" || manifest.admin.nextEnabled !== true) {
     throw new Error("C1 rollout manifest must keep Legacy primary and admin-next enabled");
