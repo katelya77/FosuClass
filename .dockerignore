@@ -2,6 +2,9 @@
 # Legacy admin assets ship with server/public; no standalone frontend build context is required.
 .git
 .github
+# Keep retired SPA remnants out of overlay-based VPS build contexts.
+admin-web
+server/public/admin-app
 **/node_modules
 **/npm-debug.log*
 **/.env

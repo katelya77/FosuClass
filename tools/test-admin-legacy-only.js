@@ -22,6 +22,11 @@ function assertRepositoryNoLongerBuildsAdminNext() {
   ["admin-web", "admin-builder", "admin-app"].forEach((needle) => {
     assert.strictEqual(dockerfile.includes(needle), false, `Dockerfile must not reference ${needle}`);
   });
+  const dockerignore = read(".dockerignore").split(/\r?\n/);
+  ["admin-web", "server/public/admin-app"].forEach((entry) => {
+    assert(dockerignore.includes(entry), ".dockerignore must exclude stale " + entry + " overlay remnants");
+  });
+
 
   const appSource = read("server/src/app.js");
   ["ADMIN_APP_DIR", "sendAdminSpa", "FOSU_ADMIN_PRIMARY", "express.static(ADMIN_APP_DIR"].forEach((needle) => {
