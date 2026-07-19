@@ -115,22 +115,30 @@ assert(
   "admin token smoke must use the container's Node runtime",
 );
 
-const tokenSmokeStart = workflow.indexOf("const token = process.env.ADMIN_API_TOKEN;");
+const tokenSmokeStart = workflow.indexOf("process.env.ADMIN_API_TOKEN");
 const tokenSmokeEnd = workflow.indexOf('echo "admin-api-token-contract=ok"', tokenSmokeStart);
 assert(tokenSmokeStart >= 0 && tokenSmokeEnd > tokenSmokeStart, "admin token Node smoke block must be present");
 const tokenSmoke = workflow.slice(tokenSmokeStart, tokenSmokeEnd);
 [
   'fetch("http://127.0.0.1:3000/api/admin/publisher/receipt"',
-  '"X-Admin-Token": token',
-  "response.status !== 200",
-  "body.success !== true",
-  'fail("ADMIN_API_TOKEN is empty")',
+  '"X-Admin-Token":t',
+  "r.status!==200",
+  "b?.success!==true",
+  'if(!t)fail("empty ADMIN_API_TOKEN")',
 ].forEach((needle) => {
   assert(tokenSmoke.includes(needle), `admin token Node smoke should include ${needle}`);
 });
 assert(!/console\.(?:log|error)\s*\(\s*token\s*\)/.test(tokenSmoke), "admin token smoke must not print the token");
 assert(!workflow.includes("/tmp/fosu-admin-token-contract.json"), "admin token smoke must not leave a temporary response file");
 assert(!/(?:release|terms?|active[-_ ]?pointer)/i.test(tokenSmoke), "admin token smoke must not touch Release, Term, or Active Pointer");
+
+const remoteDeployScriptMatch = workflow.replace(/\r/g, "").match(/          script: \|\n([\s\S]*?)(?=\n      - name: Show Deployment Info)/);
+assert(remoteDeployScriptMatch, "remote deploy script block must be present");
+const remoteDeployScript = remoteDeployScriptMatch[1].replace(/^ {12}/gm, "");
+assert(
+  remoteDeployScript.length <= 20_750,
+  `remote deploy script must stay below the GitHub Actions expression limit (got ${remoteDeployScript.length} characters)`,
+);
 
 assert(workflow.includes("FOSU_ADMIN_NEXT_ENABLED=true"), "admin-next must remain enabled");
 assert(workflow.includes("FOSU_ADMIN_PRIMARY=legacy"), "Legacy must remain primary");

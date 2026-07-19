@@ -476,26 +476,7 @@ jobs:
               echo "::error::protected admin publisher receipt API without token returned HTTP ${admin_unauth_status}, expected 401"
               exit 1
             fi
-            sudo docker exec "$CONTAINER_NAME" node -e '
-              const fail = (message) => {
-                console.error("admin token smoke failed: " + message);
-                process.exit(1);
-              };
-              const token = process.env.ADMIN_API_TOKEN;
-              if (!token) fail("ADMIN_API_TOKEN is empty");
-              fetch("http://127.0.0.1:3000/api/admin/publisher/receipt", {
-                headers: { "X-Admin-Token": token },
-              }).then(async (response) => {
-                let body;
-                try {
-                  body = await response.json();
-                } catch {
-                  fail("response is not valid JSON");
-                }
-                if (response.status !== 200) fail("unexpected HTTP status " + response.status);
-                if (!body || body.success !== true) fail("response success flag is not true");
-              }).catch(() => fail("request failed"));
-            '
+            sudo docker exec "$CONTAINER_NAME" node -e 'const fail=m=>{console.error("admin token smoke failed: "+m);process.exit(1)},t=process.env.ADMIN_API_TOKEN;if(!t)fail("empty ADMIN_API_TOKEN");fetch("http://127.0.0.1:3000/api/admin/publisher/receipt",{headers:{"X-Admin-Token":t}}).then(async r=>{let b;try{b=await r.json()}catch{fail("invalid JSON")}if(r.status!==200)fail("HTTP "+r.status);if(b?.success!==true)fail("success flag")}).catch(()=>fail("request failed"))'
             echo "admin-api-token-contract=ok"
             bootstrap_status="$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H 'Content-Type: application/json' --data '{}' http://127.0.0.1:18318/api/fosu/session/bootstrap || true)"
             if [ "$bootstrap_status" = "404" ] || [ "$bootstrap_status" = "000" ]; then
