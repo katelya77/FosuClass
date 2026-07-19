@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "rolloutVersion": "2026-07-18.c1-foundation.1",
+  "admin": { "primary": "legacy", "nextEnabled": true },
+  "imageTarget": "browser",
+  "modules": {
+    "content": { "productionWriteEnabled": true, "routes": ["/notices", "/news"], "httpEvidence": ["tools/test-admin-http-write-parity.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "feedback": { "productionWriteEnabled": true, "routes": ["/feedback", "/feedbacks"], "httpEvidence": ["tools/test-admin-http-write-parity.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "audit": { "productionWriteEnabled": true, "routes": ["/audit", "/audit-logs"], "httpEvidence": ["tools/test-admin-http-write-parity.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "backups": { "productionWriteEnabled": true, "routes": ["/backups", "/snapshots"], "httpEvidence": ["tools/test-admin-http-write-parity.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "catalog": { "productionWriteEnabled": false, "routes": ["/catalog"], "httpEvidence": ["tools/test-admin-c1-http.js"], "browserEvidence": ["admin-web/scripts/playwright-c1-acceptance.mjs"] },
+    "quality": { "productionWriteEnabled": false, "routes": ["/quality"], "httpEvidence": ["tools/test-admin-c1-http.js"], "browserEvidence": ["admin-web/scripts/playwright-c1-acceptance.mjs"] },
+    "campus-map": { "productionWriteEnabled": false, "routes": ["/campus-map"], "httpEvidence": ["tools/test-campus-map-ui-and-editor.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "assistant": { "productionWriteEnabled": false, "routes": ["/assistant-kb"], "httpEvidence": ["tools/test-admin-api-contract.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "provider": { "productionWriteEnabled": false, "routes": ["/ai-provider", "/ai-agent"], "httpEvidence": ["tools/test-admin-api-contract.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "security": { "productionWriteEnabled": false, "routes": ["/security"], "httpEvidence": ["tools/test-admin-auth-modes.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "settings": { "productionWriteEnabled": false, "routes": ["/config", "/storage", "/export", "/settings"], "httpEvidence": ["tools/test-admin-c1-http.js"], "browserEvidence": ["admin-web/scripts/playwright-c1-acceptance.mjs"] },
+    "relay": { "productionWriteEnabled": false, "routes": ["/relay"], "httpEvidence": ["tools/test-relay-agent.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "staging": { "productionWriteEnabled": false, "routes": ["/staging"], "httpEvidence": ["tools/test-staging-upload.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "sync": { "productionWriteEnabled": false, "routes": ["/sync"], "httpEvidence": ["tools/test-admin-sync-page.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "release": { "productionWriteEnabled": false, "routes": ["/release", "/release-pack", "/static-release", "/static-ticket", "/publisher"], "httpEvidence": ["tools/test-release-pack-api.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "term": { "productionWriteEnabled": false, "routes": ["/terms"], "httpEvidence": ["tools/test-semester-lifecycle.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "jobs": { "productionWriteEnabled": false, "routes": ["/jobs"], "httpEvidence": ["tools/test-admin-release-pack-jobs.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] },
+    "runtime": { "productionWriteEnabled": false, "routes": ["/runtime"], "httpEvidence": ["tools/test-admin-runtime-dual-base.js"], "browserEvidence": ["admin-web/scripts/playwright-acceptance.mjs"] }
+  }
+}

@@ -354,8 +354,9 @@ try {
 }
 
 // 9. 启动监听
-app.listen(config.PORT, () => {
-  console.log(`[FosuClass Server] Server is running at http://localhost:${config.PORT}`);
+function startServer(port = config.PORT) {
+  return app.listen(port, () => {
+  console.log(`[FosuClass Server] Server is running at http://localhost:${port}`);
   console.log(`[FosuClass Server] Environment: ${config.NODE_ENV}`);
   try {
     termRegistryService.migrateLegacyTermState();
@@ -388,6 +389,12 @@ app.listen(config.PORT, () => {
     }, delayMs);
     if (timer.unref) timer.unref();
   }
-});
+  });
+}
+
+if (require.main === module) {
+  startServer();
+}
 
 module.exports = app;
+module.exports.startServer = startServer;

@@ -97,7 +97,7 @@ function previewDiff(patch) {
   return { version: current.version, changes };
 }
 
-function saveTypedSettings(patch, options = {}) {
+function prepareTypedSettingsMutation(patch, options = {}) {
   const current = getTypedSettings();
   const expected = options.expectedVersion || options.ifMatch || options.version;
   if (options.requireIfMatch && !expected) {
@@ -139,7 +139,25 @@ function saveTypedSettings(patch, options = {}) {
     throw err;
   }
 
-  const saved = appConfigService.saveAdminConfig(nextPatch);
+  return { version: current.version, nextPatch, backupData: appConfigService.getAdminConfig() };
+}
+
+function commitPreparedTypedSettingsMutation(prepared) {
+  if (!prepared || !prepared.version || !prepared.nextPatch) {
+    const err = new Error("invalid prepared settings mutation");
+    err.statusCode = 400;
+    err.code = "PREPARED_MUTATION_INVALID";
+    throw err;
+  }
+  const current = getTypedSettings();
+  if (current.version !== prepared.version) {
+    const err = new Error("settings were modified by another request");
+    err.statusCode = 409;
+    err.code = "CONFLICT";
+    err.currentVersion = current.version;
+    throw err;
+  }
+  const saved = appConfigService.saveAdminConfig(prepared.nextPatch);
   const after = getTypedSettings();
   return {
     data: saved,
@@ -149,10 +167,16 @@ function saveTypedSettings(patch, options = {}) {
   };
 }
 
+function saveTypedSettings(patch, options = {}) {
+  return commitPreparedTypedSettingsMutation(prepareTypedSettingsMutation(patch, options));
+}
+
 module.exports = {
   SETTINGS_FIELDS,
   getTypedSettings,
   previewDiff,
+  prepareTypedSettingsMutation,
+  commitPreparedTypedSettingsMutation,
   saveTypedSettings,
   makeVersion,
 };

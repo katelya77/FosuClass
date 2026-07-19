@@ -284,7 +284,6 @@ async function main() {
   } finally {
     await new Promise((resolve) => server.close(resolve));
     fs.rmSync(tmp, { recursive: true, force: true });
-    setTimeout(() => process.exit(0), 50);
   }
 }
 

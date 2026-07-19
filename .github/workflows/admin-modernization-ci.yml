@@ -5,9 +5,17 @@ on:
     branches: [main]
     paths:
       - "admin-web/**"
+      - ".dockerignore"
+      - "server/config/admin-rollout-manifest.json"
       - "server/src/**"
+      - "server/Dockerfile"
+      - "server/docker-compose*.yml"
+      - "server/scripts/*runtime-data.js"
+      - "server/scripts/verify-runtime-persistence.js"
       - "server/public/admin-app/**"
       - "tools/test-admin*.js"
+      - "tools/test-exclusive-file-lock.js"
+      - "tools/test-runtime*.js"
       - "tools/generate-admin-feature-matrix.js"
       - "docs/admin-migration/**"
       - "tools/test-architecture-guards.js"
@@ -50,19 +58,28 @@ jobs:
       - name: Architecture & admin contracts
         run: |
           npm run test:architecture-guards
-          npm run admin:feature-matrix:generate
+          npm run admin:feature-matrix:check
           npm run test:admin-feature-matrix
           npm run test:admin-matrix-freshness
           npm run test:admin-matrix-status-evidence
           npm run test:admin-legacy-dependency
           npm run test:admin-capabilities
+          npm run test:admin-next-write-route-guard
+          npm run test:admin-rollout-runtime-contract
           npm run test:admin-backup-service
           npm run test:admin-backup-transaction
           npm run test:admin-content-concurrency
           npm run test:admin-no-duplicate-business-logic
           npm run test:admin-write-parity
           npm run test:admin-http-write-parity
+          npm run test:admin-c1-http
           npm run test:admin-c1-modules
+          npm run test:exclusive-file-lock
+          npm run test:runtime-data-bootstrap
+          npm run test:runtime-data-migration
+          npm run test:runtime-data-paths
+          npm run test:runtime-compose-contract
+          npm run test:runtime-persistence-verifier
           npm run test:docker-secret-scan
           npm run test:duplicate-admin-routes
           npm run test:service-token-scopes

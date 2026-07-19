@@ -10,54 +10,10 @@
  *     - "*" → all known modules; FORBIDDEN when NODE_ENV=production
  */
 
-const KNOWN_WRITE_MODULES = Object.freeze([
-  "content",
-  "feedback",
-  "audit",
-  "backups",
-  "catalog",
-  "quality",
-  "campus-map",
-  "assistant",
-  "provider",
-  "security",
-  "settings",
-  "relay",
-  "staging",
-  "sync",
-  "release",
-  "term",
-  "jobs",
-  "runtime",
-]);
-
-/** Explicit production grant for Phase B (set by deploy workflow, not implicit default). */
-const PHASE_B_PRODUCTION_WRITE_MODULES = Object.freeze([
-  "content",
-  "feedback",
-  "audit",
-  "backups",
-]);
-
-const PATH_MODULE_RULES = [
-  { module: "content", test: (p) => /^\/(notices|news)(\/|$)/.test(p) },
-  { module: "feedback", test: (p) => /^\/feedbacks?(\/|$)/.test(p) },
-  { module: "audit", test: (p) => /^\/audit(-logs)?(\/|$)/.test(p) },
-  { module: "backups", test: (p) => /^\/(backups|snapshots)(\/|$)/.test(p) },
-  { module: "catalog", test: (p) => /^\/catalog(\/|$)/.test(p) },
-  { module: "quality", test: (p) => /^\/quality(\/|$)/.test(p) },
-  { module: "campus-map", test: (p) => /^\/campus-map(\/|$)/.test(p) },
-  { module: "assistant", test: (p) => /^\/assistant-kb(\/|$)/.test(p) },
-  { module: "provider", test: (p) => /^\/(ai-provider|ai-agent)(\/|$)/.test(p) },
-  { module: "security", test: (p) => /^\/security(\/|$)/.test(p) },
-  { module: "settings", test: (p) => /^\/(config|storage|export)(\/|$)/.test(p) },
-  { module: "relay", test: (p) => /^\/relay(\/|$)/.test(p) },
-  { module: "staging", test: (p) => /^\/staging(\/|$)/.test(p) },
-  { module: "sync", test: (p) => /^\/sync(\/|$)/.test(p) },
-  { module: "release", test: (p) => /^\/(release|release-pack|static-release|static-ticket|publisher)(\/|$)/.test(p) },
-  { module: "term", test: (p) => /^\/terms(\/|$)/.test(p) },
-  { module: "jobs", test: (p) => /^\/jobs(\/|$)/.test(p) },
-];
+const { getKnownWriteModules, getProductionWriteModules, resolveWriteModule } = require("./adminRolloutManifestService");
+const KNOWN_WRITE_MODULES = getKnownWriteModules();
+/** Explicit production grant for Phase B, derived from the rollout manifest. */
+const PHASE_B_PRODUCTION_WRITE_MODULES = getProductionWriteModules();
 
 function isProductionEnv() {
   return String(process.env.NODE_ENV || "").toLowerCase() === "production";
@@ -81,10 +37,20 @@ function parseWriteModules(raw, options = {}) {
     }
     return KNOWN_WRITE_MODULES.slice();
   }
-  return text
+  const requested = text
     .split(",")
     .map((part) => part.trim().toLowerCase())
-    .filter((part) => part && KNOWN_WRITE_MODULES.includes(part));
+    .filter(Boolean);
+  const unknown = requested.filter((part) => !KNOWN_WRITE_MODULES.includes(part));
+  if (unknown.length && isProductionEnv()) {
+    const err = new Error("Unknown production write modules: " + unknown.join(","));
+    err.code = "WRITE_MODULES_UNKNOWN";
+    err.statusCode = 500;
+    throw err;
+  }
+  const enabled = requested.filter((part) => KNOWN_WRITE_MODULES.includes(part));
+  if (!isProductionEnv()) return enabled;
+  return enabled.filter((part) => PHASE_B_PRODUCTION_WRITE_MODULES.includes(part));
 }
 
 /**
@@ -137,12 +103,7 @@ function isWriteModuleEnabled(moduleName) {
 }
 
 function resolveModuleForPath(routePath) {
-  const p = String(routePath || "");
-  const normalized = p.startsWith("/") ? p : `/${p}`;
-  for (const rule of PATH_MODULE_RULES) {
-    if (rule.test(normalized)) return rule.module;
-  }
-  return null;
+  return resolveWriteModule(routePath);
 }
 
 function getCapabilities() {
@@ -235,6 +196,32 @@ function createWriteModuleGateMiddleware() {
   };
 }
 
+/**
+ * Route-owned rollout barrier for newly introduced write APIs. Unlike the
+ * admin-next client hint gate, this cannot be bypassed by omitting a header.
+ */
+function createRequiredWriteModuleMiddleware(moduleName) {
+  const normalized = String(moduleName || "").trim().toLowerCase();
+  if (!KNOWN_WRITE_MODULES.includes(normalized)) throw new Error(`Unknown required write module: ${normalized}`);
+  return function requiredWriteModuleGate(_req, res, next) {
+    try {
+      if (isWriteModuleEnabled(normalized)) return next();
+      return res.status(403).json({
+        success: false,
+        code: "MODULE_WRITE_DISABLED",
+        message: `Write module "${normalized}" is disabled by the rollout manifest`,
+        module: normalized,
+      });
+    } catch (error) {
+      return res.status(error.statusCode || 500).json({
+        success: false,
+        code: error.code || "WRITE_MODULES_CONFIG_ERROR",
+        message: error.message,
+      });
+    }
+  };
+}
+
 module.exports = {
   KNOWN_WRITE_MODULES,
   PHASE_B_PRODUCTION_WRITE_MODULES,
@@ -250,4 +237,5 @@ module.exports = {
   getCapabilities,
   assertNextWriteAllowed,
   createWriteModuleGateMiddleware,
+  createRequiredWriteModuleMiddleware,
 };

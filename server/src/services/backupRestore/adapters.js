@@ -140,6 +140,7 @@ function createAdapters(paths) {
     feedbacksPath,
     feedbackJsonlPath,
     catalogMetaPath,
+    qualityIgnoresPath,
     assistantKbPath,
   } = paths;
 
@@ -310,12 +311,27 @@ function createAdapters(paths) {
     },
   });
 
+  const quality = createAdapter({
+    type: "quality",
+    getTargetFiles: () => [{ path: qualityIgnoresPath, role: "main" }],
+    validate: (data) => assertObject(data, "quality"),
+    restoreFiles: (data, _ctx, write) => {
+      write(qualityIgnoresPath, data);
+      return { files: [qualityIgnoresPath] };
+    },
+    postVerify: () => {
+      JSON.parse(fs.readFileSync(qualityIgnoresPath, "utf8"));
+      return { ok: true };
+    },
+  });
+
   return {
     notices,
     news,
     config,
     feedback,
     "catalog-meta": catalogMeta,
+    quality,
     "assistant-kb": assistantKb,
   };
 }

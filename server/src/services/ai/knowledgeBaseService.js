@@ -2,7 +2,8 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 
-const DATA_PATH = path.resolve(process.env.FOSU_ASSISTANT_KB_PATH || path.join(__dirname, "../../../data/ai/knowledge-docs.json"));
+const RUNTIME_DATA_DIR = path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../../data"));
+const DATA_PATH = path.resolve(process.env.FOSU_ASSISTANT_KB_PATH || path.join(RUNTIME_DATA_DIR, "ai", "knowledge-docs.json"));
 const STORE_VERSION = "assistant-kb.v2";
 const ALL_SCOPES = ["public", "trial", "dev"];
 
