@@ -152,7 +152,7 @@ async function run() {
   const port = await findPort();
   writeSmokeEnv(port);
   try {
-    // Multi-stage Dockerfile expects monorepo root context (admin-web + server).
+    // Dockerfile uses the repository root context for server paths.
     let result = runDocker(
       ["build", "-f", "server/Dockerfile", "-t", imageTag, "."],
       { cwd: ROOT }
@@ -170,10 +170,6 @@ async function run() {
       envPath,
       "-e",
       "FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups",
-      "-e",
-      "FOSU_ADMIN_PRIMARY=legacy",
-      "-e",
-      "FOSU_ADMIN_NEXT_ENABLED=true",
       "-p",
       `127.0.0.1:${port}:3000`,
       imageTag,
@@ -183,6 +179,11 @@ async function run() {
     }
 
     await waitForHealth(port);
+    result = runDocker(["exec", containerName, "sh", "-lc", "test ! -e /app/public/admin-app"], { cwd: ROOT });
+    if (result.status !== 0) {
+      throw new Error("Docker image must not contain /app/public/admin-app");
+    }
+
     const chat = await requestJson(port, "POST", "/api/ai/agent/chat", {
       message: "你能做什么",
       context: { clientLocalTime: "2026-06-08T22:00:00+08:00" },

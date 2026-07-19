@@ -2,7 +2,9 @@
 
 ## Status
 
-Accepted
+Superseded
+
+Decision: Legacy-only admin retained
 
 ## Context
 
@@ -18,3 +20,7 @@ Accepted
 - 组件化、主题、深链与测试可行
 - 需维护双后台一段时间
 - 不使用 SSR、不使用 iframe 包裹旧后台
+
+## Superseding outcome
+
+独立 Vue SPA 已停止维护。`/admin/*` 永远使用 Legacy 后台；`/admin-next/*` 与 `/admin-legacy/*` 仅保留到对应 `/admin/*` 的兼容重定向。共享 API、Repository、Service、安全与并发控制继续保留。

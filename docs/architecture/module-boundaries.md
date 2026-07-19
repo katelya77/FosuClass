@@ -51,13 +51,13 @@ Tier 3 (experimental AI)
 | release / staging | ai/provider | 发布链路不得依赖 AI |
 | runtime pointer | campus-map | 地图故障不影响 Active |
 | admin shell load | heavy AI require | 启动/页面加载失败隔离 |
-| miniprogram schedule read | admin UI | 客户端不依赖后台 SPA |
+| miniprogram schedule read | admin UI | 客户端不依赖后台页面 |
 
 ## File growth policy
 
 | File | Soft max | Hard max (guard test) | Action when exceeded |
 |------|---------:|----------------------:|----------------------|
-| `routes/adminPages.js` | 17000 | 17500 | 新 UI 必须进 `admin-web/` |
+| `routes/adminPages.js` | 17000 | 17500 | 仅做紧凑、可测试的 Legacy UI 改动 |
 | `routes/admin.js` | 6200 | 6500 | 新路由必须进 `modules/*` |
 | New domain modules | 400 | 800 | 继续拆分 service/repo |
 
@@ -72,14 +72,10 @@ Guard test: `tools/test-architecture-guards.js`
 3. 旧 `admin.js` 逐步 `require` 领域路由或删除已迁移 handler
 4. **禁止** 复制业务逻辑到两处
 
-## Frontend module boundaries (admin-web)
+## Legacy frontend boundary
 
-```text
-admin-web/src/
-  app/          # shell, router, theme
-  shared/       # ui primitives, api client, csrf
-  features/     # dashboard, sync, catalog, ...
-  pages/        # route-level views
-```
+`server/src/routes/adminPages.js` 保留服务端输出的 Legacy HTML、CSS 与浏览器 JavaScript。
 
-Feature modules may call shared API client only；不得直接操作 `document` 旧后台 DOM。
+- 页面层只负责展示、可访问交互与调用现有 API。
+- 业务语义继续位于共享 Router、Service、Repository 与模块中。
+- 不引入第二套后台页面、独立前端框架或构建产物。

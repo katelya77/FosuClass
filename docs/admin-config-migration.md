@@ -19,14 +19,13 @@ Production should use an **independent** `ADMIN_API_TOKEN` that is not derived f
 4. Run `npm run config:preflight` and confirm `derivedAdminApiToken: false`.
 5. Optionally set `FOSU_CONFIG_HARD_FAIL=true` to prevent regressions.
 
-## Admin SPA paths
+## Admin paths
 
-| Flag | `/admin` | `/admin-next` | `/admin-legacy` |
-|------|----------|---------------|-----------------|
-| default (`FOSU_ADMIN_PRIMARY=legacy`) | Legacy console (production main) | Vue SPA | Legacy mirror |
-| `FOSU_ADMIN_PRIMARY=next` | Vue SPA | Vue SPA | Legacy console |
-
-Vue SPA first phase is a **read-only operations view**. Full write paths still live in Legacy.
+| Path | Behavior |
+|------|----------|
+| `/admin/*` | Legacy console (only maintained admin UI) |
+| `/admin-next/*` | 302 redirect to matching `/admin/*` path |
+| `/admin-legacy/*` | 302 redirect to matching `/admin/*` path |
 
 ## Related commands
 

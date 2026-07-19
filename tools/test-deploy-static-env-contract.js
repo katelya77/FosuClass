@@ -140,8 +140,15 @@ assert(
   `remote deploy script must stay below the GitHub Actions expression limit (got ${remoteDeployScript.length} characters)`,
 );
 
-assert(workflow.includes("FOSU_ADMIN_NEXT_ENABLED=true"), "admin-next must remain enabled");
-assert(workflow.includes("FOSU_ADMIN_PRIMARY=legacy"), "Legacy must remain primary");
+assert(!workflow.includes("admin-web/**"), "deploy must not SCP admin-web");
+assert(!workflow.includes("FOSU_ADMIN_NEXT_ENABLED="), "deploy must not configure the retired Admin Next UI");
+assert(!workflow.includes("FOSU_ADMIN_PRIMARY="), "deploy must not configure a retired primary UI switch");
+[
+  "/api/admin/ui-mode",
+  "/admin-next/sync",
+  "/admin-legacy/sync",
+  "/app/public/admin-app",
+].forEach((needle) => assert(remoteDeployScript.includes(needle), `legacy-only deploy smoke should include ${needle}`));
 assert(
   workflow.includes("FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups"),
   "production writes must remain limited to the proven Phase B modules",

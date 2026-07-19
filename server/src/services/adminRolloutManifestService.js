@@ -36,7 +36,7 @@ function validateManifest(manifest) {
   if (typeof manifest.rolloutVersion !== "string" || !manifest.rolloutVersion.trim()) fail("rolloutVersion must be a non-empty string");
   if (!manifest.admin || typeof manifest.admin !== "object") fail("admin is required");
   if (manifest.admin.primary !== "legacy") fail("admin.primary must remain legacy");
-  if (manifest.admin.nextEnabled !== true) fail("admin.nextEnabled must remain true");
+  if (manifest.admin.nextEnabled !== false) fail("admin.nextEnabled must remain false");
   if (!["core", "browser"].includes(manifest.imageTarget)) fail("imageTarget must be core or browser");
   if (!manifest.modules || typeof manifest.modules !== "object" || Array.isArray(manifest.modules)) fail("modules must be an object");
 

@@ -115,8 +115,6 @@ async function startAdminHttpHarness(options = {}) {
     FOSU_DATA_DIR: paths.data,
     ADMIN_PASSWORD: "c1-password",
     ADMIN_API_TOKEN: "c1-admin-full",
-    FOSU_ADMIN_NEXT_ENABLED: "true",
-    FOSU_ADMIN_PRIMARY: "legacy",
     FOSU_ADMIN_NEXT_WRITE_MODULES: options.enabledModules === undefined ? "catalog,quality,settings" : options.enabledModules,
     FOSU_RELEASE_WORKER_ENABLED: "false",
     FOSU_CONFIG_HARD_FAIL: "false",

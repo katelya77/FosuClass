@@ -1,31 +1,23 @@
-# Grok Admin Modernization Progress
+# Admin Modernization History
 
-Branch: `grok/admin-modernization`
+Status: **Superseded — Legacy-only admin retained.**
 
 ## Honest status
 
-**Vue 后台 = 第一阶段只读运营台（read-only ops views）。**  
-**Legacy `/admin` 是唯一权威写操作后台（默认生产主后台）。**  
-**完整写路径仍在迁移，不得声称“完整迁移完成”。**
+独立 Vue SPA 已下线。今后只维护 Legacy `/admin/*`；共享 API、Service、Repository、安全与并发控制继续保留。
 
 | Area | Status |
 |------|--------|
-| Dual-base SPA routing | done |
+| Legacy-only routing | done |
+| Historical alias redirects | done |
 | Scoped service tokens (default deny) | done |
 | Config migration-safe | done |
 | Active vs Published UI | done |
-| Playwright + CI | in progress until Actions green |
-| Full write UX on Vue | **not done** |
+| Vue SPA | removed |
 
-## Flags
+## Generated artifacts
 
-- Default: `FOSU_ADMIN_PRIMARY=legacy`
-- Cutover candidate: `FOSU_ADMIN_PRIMARY=next` **and** `FOSU_ADMIN_NEXT_ENABLED=true`
-- Conflict: `PRIMARY=next` + `NEXT_ENABLED=false` → effective **legacy** + warning
-
-## Do not commit
-
-- `output/admin-modernization-browser/**`
+- `output/legacy-sync-compact/**`
 - `server/storage/relay/**` runtime JSON
 - `server/storage/staging-uploads/**` runtime JSON
 - `server/data/backups/**` runtime dumps

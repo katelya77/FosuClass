@@ -1,5 +1,7 @@
 # Legacy Admin Feature Inventory (Phase A)
 
+> Historical snapshot. The Vue migration is superseded; the Legacy-only admin is retained.
+
 - Stable input fingerprint: `ab33c3a8d2f50faf7543a90849f44426f926db85ae3cae0aa3bfdac5cdc3e8a0`
 - Generator version: `2`
 - Rollout manifest version: `2026-07-18.c1-foundation.1`
@@ -139,7 +141,7 @@ Each feature row includes:
 }
 ```
 
-Canonical machine-readable file: [`feature-matrix.json`](./feature-matrix.json)
+The generated Vue parity matrix was retired with the SPA. This inventory remains as a historical snapshot.
 
 ## API contracts
 
@@ -161,11 +163,5 @@ Canonical machine-readable file: [`feature-matrix.json`](./feature-matrix.json)
 
 ## Regeneration
 
-```bash
-node tools/generate-admin-feature-matrix.js
-node tools/generate-admin-feature-matrix.js --check
-node tools/test-admin-feature-matrix.js
-```
-
-Do not hand-edit `feature-matrix.json` route rows without regenerating, or CI will fail drift checks.
+Superseded. Legacy coverage now lives in the active Admin CI test list and the shared rollout manifest.
 
