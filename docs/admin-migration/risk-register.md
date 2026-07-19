@@ -1,5 +1,7 @@
 # Admin Migration Risk Register (Phase A)
 
+> Historical snapshot. The Vue migration is superseded; the Legacy-only admin is retained.
+
 Generated for Phase A inventory. Update when phases complete or new hazards appear.
 
 ## Risk scale

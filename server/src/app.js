@@ -6,7 +6,6 @@ const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const compression = require("compression");
-const fs = require("fs");
 const path = require("path");
 const config = require("./config");
 const { globalLimiter } = require("./utils/rateLimit");
@@ -105,72 +104,13 @@ app.use(express.static(path.join(__dirname, "../public"), {
   maxAge: config.NODE_ENV === "production" ? "1h" : 0,
 }));
 
-// Vue admin SPA assets + deep-link shell
-// Flags:
-//   FOSU_ADMIN_NEXT_ENABLED=false  → disable new SPA entirely
-//   FOSU_ADMIN_PRIMARY=next        → /admin serves SPA, /admin-legacy serves old console
-//   default primary=legacy         → /admin old, /admin-next new (safe rollout)
-const ADMIN_APP_DIR = path.join(__dirname, "../public/admin-app");
-const adminNextEnabled = process.env.FOSU_ADMIN_NEXT_ENABLED !== "false";
-const requestedAdminPrimaryNext = String(process.env.FOSU_ADMIN_PRIMARY || "legacy").toLowerCase() === "next";
-// Effective primary only when Next SPA is enabled; otherwise force legacy.
-const effectiveAdminPrimaryNext = adminNextEnabled && requestedAdminPrimaryNext;
-if (requestedAdminPrimaryNext && !adminNextEnabled) {
-  console.warn(
-    "[FosuClass Server] FOSU_ADMIN_PRIMARY=next ignored because FOSU_ADMIN_NEXT_ENABLED=false"
-  );
-}
-// Back-compat alias used below
-const adminPrimaryNext = effectiveAdminPrimaryNext;
-
-function sendAdminSpa(res) {
-  const indexPath = path.join(ADMIN_APP_DIR, "index.html");
-  if (!fs.existsSync(indexPath)) {
-    return res.status(503).type("html").send(`<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><title>Admin Next</title></head><body style="font-family:system-ui;padding:24px"><h1>新后台尚未构建</h1><p>请运行 <code>npm run admin:build</code>，或使用 <a href="/admin-legacy/">旧版后台</a> / <a href="/admin/">后台入口</a>。</p></body></html>`);
-  }
-  res.setHeader("Cache-Control", "no-store");
-  res.setHeader("Referrer-Policy", "no-referrer");
-  // Allow app origin + logo CDN only
-  res.setHeader(
-    "Content-Security-Policy",
-    "default-src 'self'; img-src 'self' data: https://pan.katelya.eu.org; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self'; font-src 'self' data:; frame-ancestors 'none'; base-uri 'self'"
-  );
-  return res.sendFile(indexPath);
-}
-
-if (adminNextEnabled) {
-  app.use("/admin-app", express.static(ADMIN_APP_DIR, {
-    maxAge: config.NODE_ENV === "production" ? "1h" : 0,
-    index: false,
-  }));
-  app.use("/admin-next", (req, res, next) => {
-    const method = String(req.method || "GET").toUpperCase();
-    if (method !== "GET" && method !== "HEAD") return next();
-    return sendAdminSpa(res);
-  });
-  // Always keep an explicit legacy alias once primary switch is available.
-  app.use("/admin-legacy", (req, res, next) => {
-    // Handled after adminPageRouter mount via rewrite? We mount a redirector post-router.
-    req.url = req.url === "/" ? "/" : req.url;
-    return next();
-  });
-}
-
 app.get("/api/admin/ui-mode", (req, res) => {
   res.json({
     success: true,
-    adminNextEnabled,
-    requestedPrimary: requestedAdminPrimaryNext ? "next" : "legacy",
-    primary: effectiveAdminPrimaryNext ? "next" : "legacy",
-    effectivePrimary: effectiveAdminPrimaryNext ? "next" : "legacy",
-    conflict:
-      requestedAdminPrimaryNext && !adminNextEnabled
-        ? "FOSU_ADMIN_PRIMARY=next ignored because FOSU_ADMIN_NEXT_ENABLED=false"
-        : null,
-    paths: {
-      next: effectiveAdminPrimaryNext ? "/admin/" : "/admin-next/",
-      legacy: effectiveAdminPrimaryNext ? "/admin-legacy/" : "/admin/",
-    },
+    primary: "legacy",
+    effectivePrimary: "legacy",
+    adminNextEnabled: false,
+    paths: { legacy: "/admin/" },
   });
 });
 
@@ -290,24 +230,19 @@ app.use("/api/schedule-import/fosu", fosuApaasImportRouter);
 app.use("/api/ai", aiRouter);
 app.use("/api/admin", adminRouter);
 
-// Admin UI routing: progressive primary switch with legacy fallback.
-if (adminNextEnabled && adminPrimaryNext) {
-  // New primary at /admin/*
-  app.use("/admin", (req, res, next) => {
-    const method = String(req.method || "GET").toUpperCase();
-    if (method !== "GET" && method !== "HEAD") return next();
-    // Let API-looking paths fall through (none under /admin currently).
-    return sendAdminSpa(res);
-  });
-  // Old console preserved
-  app.use("/admin-legacy", adminPageRouter);
-} else {
-  app.use("/admin", adminPageRouter);
-  if (adminNextEnabled) {
-    // Mirror legacy under /admin-legacy for forward-compatible deep links / docs.
-    app.use("/admin-legacy", adminPageRouter);
-  }
+function redirectAdminAlias(prefix) {
+  return function adminAliasRedirect(req, res) {
+    const originalUrl = String(req.originalUrl || prefix);
+    const suffix = originalUrl.slice(prefix.length);
+    const targetSuffix = suffix && suffix !== "/" ? suffix : "/";
+    return res.redirect(302, `/admin${targetSuffix}`);
+  };
 }
+
+// Legacy is the only admin UI. Historical bookmarks keep their deep path and query.
+app.use("/admin-next", redirectAdminAlias("/admin-next"));
+app.use("/admin-legacy", redirectAdminAlias("/admin-legacy"));
+app.use("/admin", adminPageRouter);
 
 app.use("/api/relay", relayRouter);
 app.use("/api/contribute", contributeRouter);

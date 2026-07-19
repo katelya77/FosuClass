@@ -7,17 +7,6 @@
 
 ARG NODE_VERSION=20
 
-# ---------- admin SPA ----------
-FROM node:${NODE_VERSION}-bookworm-slim AS admin-builder
-WORKDIR /src
-COPY admin-web/package.json admin-web/package-lock.json ./admin-web/
-WORKDIR /src/admin-web
-RUN npm ci
-COPY admin-web/ ./
-# vite outDir is ../server/public/admin-app relative to admin-web
-RUN mkdir -p /src/server/public/admin-app && npm run build \
-  && test -f /src/server/public/admin-app/index.html
-
 # ---------- production node_modules ----------
 FROM node:${NODE_VERSION}-alpine AS server-deps
 WORKDIR /app
@@ -36,7 +25,7 @@ LABEL org.opencontainers.image.source="https://github.com/katelya77/FosuClass" \
       org.opencontainers.image.created="${BUILD_CREATED}" \
       org.opencontainers.image.version="${IMAGE_VERSION}" \
       org.opencontainers.image.title="fosuclass-api" \
-      org.opencontainers.image.description="FosuClass API + progressive admin SPA"
+      org.opencontainers.image.description="FosuClass API + Legacy admin console"
 
 RUN apk add --no-cache ca-certificates \
     && rm -rf /var/cache/apk/*
@@ -57,7 +46,6 @@ COPY server/assets ./assets
 COPY server/data ./data
 COPY server/public ./public
 COPY server/config/admin-rollout-manifest.json ./config/admin-rollout-manifest.json
-COPY --from=admin-builder /src/server/public/admin-app ./public/admin-app
 
 RUN mkdir -p /app/storage /app/data/backups \
     && chmod -R a+rX /app/src /app/public /app/scripts /app/assets /app/data \

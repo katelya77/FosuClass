@@ -5591,6 +5591,116 @@ const adminConsoleHtml = `<!doctype html>
         flex: 1;
       }
     }
+
+    /* Legacy sync operations console: compact task-oriented layout. */ #section-sync { gap: 12px; min-width: 0; }
+    #section-sync > *, .sync-tab-panel, .sync-panel-stack, .sync-overview-layout > * { min-width: 0; }
+    #section-sync [hidden], .sync-tab-panel[hidden] { display: none !important; }
+    #section-sync .sync-hero { min-height: 0; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: none; }
+    #section-sync .sync-hero::before, #section-sync .sync-hero::after { display: none; }
+    #section-sync .sync-hero-title { margin: 0; color: var(--text-primary); font-size: 20px; line-height: 1.25; }
+    #section-sync .sync-hero-actions { display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+    #section-sync .sync-online-status, #section-sync .sync-last-refresh { display: inline-flex; align-items: center; gap: 6px; color: var(--text-muted); font-size: 12px; white-space: nowrap; }
+    #section-sync button, #section-sync select { min-height: 34px; }
+    .sync-tab-shell { display: flex; align-items: center; min-width: 0; padding: 4px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+    .sync-tab-list { display: flex; gap: 2px; width: 100%; overflow-x: auto; scrollbar-width: thin; }
+    .sync-tab-list [role="tab"] { flex: 1 0 auto; min-width: 132px; height: 34px; padding: 0 14px; border: 0; border-radius: 6px; background: transparent; color: var(--text-secondary); font-size: 13px; font-weight: 650; box-shadow: none; }
+    .sync-tab-list [role="tab"]:hover { background: var(--surface-muted); color: var(--text-primary); }
+    .sync-tab-list [role="tab"][aria-selected="true"] { background: var(--primary-soft); color: var(--primary); box-shadow: inset 0 -2px 0 var(--primary); }
+    .sync-tab-select-wrap { display: none; width: 100%; gap: 6px; color: var(--text-muted); font-size: 12px; }
+    .sync-tab-select-wrap select { width: 100%; }
+    .sync-tab-panels, .sync-panel-stack, .sync-overview-primary, .sync-overview-aside { display: grid; gap: 12px; align-content: start; }
+    .sync-metric-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+    .sync-metric-item { min-width: 0; min-height: 66px; padding: 9px 11px; border-right: 1px solid var(--border); }
+    .sync-metric-item:last-child { border-right: 0; }
+    .sync-metric-item span, .sync-metric-item small { display: block; overflow: hidden; color: var(--text-muted); font-size: 11px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
+    .sync-metric-item strong { display: block; overflow: hidden; margin: 4px 0 2px; color: var(--text-primary); font-size: 14px; line-height: 1.3; text-overflow: ellipsis; white-space: nowrap; }
+    #sync-ops-console { margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+    #section-sync .sync-pipeline-shell { display: grid; gap: 5px; min-height: 0; margin: 0; padding: 9px 12px; overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: none; }
+    #section-sync .sync-pipeline-summary { min-width: 620px; min-height: 0; margin: 0; }
+    #section-sync .sync-pipeline-summary .section-kicker { display: none; }
+    #section-sync .sync-pipeline-summary h3 { margin: 0; font-size: 13px; }
+    #section-sync .sync-pipeline-current { padding: 0; border: 0; background: transparent; font-size: 11px; }
+    #section-sync .sync-pipeline-rail { display: grid; grid-template-columns: repeat(5, minmax(116px, 1fr)); min-width: 620px; gap: 6px; margin: 0; padding: 0; }
+    #section-sync .sync-pipeline-rail li, #section-sync .sync-pipeline-rail li:nth-child(even) { display: flex; min-width: 0; min-height: 30px; padding: 3px 6px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface-muted); }
+    #section-sync .sync-pipeline-rail li::after { bottom: -1px; }
+    #section-sync .sync-pipeline-rail .pipeline-index { width: 20px; height: 20px; font-size: 10px; }
+    #section-sync .sync-pipeline-rail strong { overflow: hidden; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    #section-sync .sync-pipeline-rail small { display: none; }
+    #section-sync .sync-next-guidance { min-width: 620px; margin: 0; padding: 0; border: 0; background: transparent; font-size: 11px; }
+    .sync-overview-layout { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 12px; }
+    .sync-overview-primary { grid-column: span 8; }
+    .sync-overview-aside { grid-column: span 4; }
+    #section-sync .sync-ops-section, #section-sync .card, #section-sync details.sync-card { margin: 0 !important; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); box-shadow: none; }
+    #section-sync .sync-section-heading, #section-sync .section-title-row { margin-bottom: 8px; }
+    #section-sync .sync-section-heading h3, #section-sync .card-title, #section-sync .section-title { margin-bottom: 0; font-size: 14px; line-height: 1.35; }
+    #section-sync .sync-section-heading p, #section-sync .card > p { margin-top: 4px; margin-bottom: 8px; font-size: 12px; line-height: 1.45; }
+    #section-sync .sync-ops-card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 8px; }
+    #section-sync .sync-compact-card { min-height: 0; padding: 9px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); box-shadow: none; }
+    .sync-quick-actions { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    .sync-recommendation-copy { margin: 0 0 8px; color: var(--text-secondary); font-size: 12px; }
+    #section-sync details.sync-technical-details { margin-top: 8px !important; padding: 0; border: 0; background: transparent; }
+    #section-sync details.sync-technical-details > summary { cursor: pointer; color: var(--text-muted); font-size: 12px; font-weight: 650; }
+    #section-sync details.sync-technical-details[open] > summary { margin-bottom: 8px; }
+    #section-sync .mini-list-row strong { max-width: 64%; overflow-wrap: anywhere; text-align: right; }
+    .runtime-metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .runtime-metric-grid .runtime-metric-item { min-width: 0; min-height: 66px; padding: 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface-muted); }
+    .runtime-metric-item span, .runtime-metric-item small { display: block; color: var(--text-muted); font-size: 11px; }
+    .runtime-metric-item strong { display: block; overflow: hidden; margin-top: 5px; color: var(--text-primary); font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+    #section-sync .sync-primary-flow { display: grid; gap: 8px; padding: 0; border: 0; background: transparent; }
+    #section-sync details.flow-card { margin: 0 !important; padding: 0; overflow: hidden; border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
+    #section-sync details.flow-card > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 44px; padding: 8px 12px; cursor: pointer; list-style: none; }
+    #section-sync details.flow-card > summary::-webkit-details-marker { display: none; }
+    .flow-summary-main, .flow-summary-meta { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .flow-summary-main strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .flow-summary-meta { flex: 0 0 auto; color: var(--text-muted); font-size: 11px; }
+    #section-sync details.flow-card > .flow-content { padding: 0 12px 12px; }
+    #section-sync details.flow-card > .flow-step, #section-sync details.flow-card > .flow-title { display: none; }
+    #section-sync .table-container { width: 100%; max-width: 100%; overflow-x: auto; }
+    #section-sync table { width: 100%; }
+    #section-sync th, #section-sync td { height: 44px; padding: 6px 8px; vertical-align: middle; }
+    #section-sync .release-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 8px; }
+    #section-sync .release-card, #section-sync .release-strip > * { min-height: 0; padding: 10px; box-shadow: none; }
+    #section-sync .openresty-card-grid, #section-sync .openresty-summary-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+    #section-sync .openresty-summary-grid .openresty-meta-item { min-height: 60px; padding: 9px 10px; }
+    #section-sync .sync-health-empty { min-height: 0; display: block; }
+    .sync-empty-inline { padding: 7px 0; color: var(--text-muted); font-size: 12px; }
+    #staticReleaseSyncSummary { display: block !important; }
+    #staticReleaseSyncSummary > details { margin-top: 8px !important; }
+    #section-sync .staging-upload-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+    #section-sync .staging-upload-filters, #section-sync .staging-upload-bulk-actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    #section-sync .staging-upload-filters { flex: 1 1 420px; }
+    #section-sync .staging-upload-bulk-actions { flex: 1 1 520px; justify-content: flex-end; }
+    #section-sync .staging-upload-table { min-width: 720px; }
+    #section-sync .staging-group-row > td { height: 46px; }
+    .staging-row-summary { display: block; margin-top: 2px; color: var(--text-muted); font-size: 11px; line-height: 1.3; }
+    #section-sync .staging-action-row { display: flex; gap: 5px; flex-wrap: wrap; }
+    #section-sync .sync-online-status.is-online { color: var(--text-secondary); }
+    #section-sync .sync-online-status.is-offline { color: var(--danger); }
+    #section-sync .health-grid:not(.sync-health-empty) { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 8px; }
+    @media (max-width: 1100px) { .sync-metric-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .sync-metric-item:nth-child(3) { border-right: 0; }
+    .sync-metric-item:nth-child(-n + 3) { border-bottom: 1px solid var(--border); }
+    .sync-overview-primary { grid-column: span 7; }
+    .sync-overview-aside { grid-column: span 5; }
+    .runtime-metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    #section-sync .openresty-summary-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+     }
+    @media (max-width: 760px) { #section-sync .sync-hero { align-items: flex-start; flex-direction: column; }
+    #section-sync .sync-hero-actions { width: 100%; justify-content: flex-start; }
+    .sync-overview-primary, .sync-overview-aside { grid-column: 1 / -1; }
+    #section-sync .openresty-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+     }
+    @media (max-width: 640px) { .sync-tab-list { display: none; }
+    .sync-tab-select-wrap { display: grid; }
+    .sync-metric-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .sync-metric-item, .sync-metric-item:nth-child(3) { border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .sync-metric-item:nth-child(even) { border-right: 0; }
+    .sync-metric-item:nth-last-child(-n + 2) { border-bottom: 0; }
+    .runtime-metric-grid, #section-sync .openresty-summary-grid { grid-template-columns: minmax(0, 1fr); }
+    #section-sync .openresty-actions, #section-sync .sync-next-action-row { display: grid; grid-template-columns: minmax(0, 1fr); }
+    #section-sync .openresty-actions button, #section-sync .sync-next-action-row button { width: 100%; }
+    .flow-summary-meta span:first-child { display: none; }
+     }
   </style>
   </head>
 <body>
@@ -5868,19 +5978,64 @@ const adminConsoleHtml = `<!doctype html>
         <!-- 1. sync-hero -->
         <div class="sync-hero" id="sync-hero">
           <div class="sync-hero-main">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-              <div class="sync-hero-title">数据同步中心</div>
-              <div class="sync-hero-badge">推荐链路</div>
-            </div>
-            <div class="sync-hero-subtitle">上传 staging → 生成 release pack → 同步 OpenResty 静态目录 → 线上静态 URL 验证 → active pointer 生效</div>
+            <h2 class="sync-hero-title">数据同步中心</h2>
           </div>
           <div class="sync-hero-actions">
+            <span class="sync-online-status" id="syncOnlineStatus"><span class="status-dot info"></span>在线状态：检测中</span>
             <span class="sync-last-refresh" id="syncLastRefreshAt">最近刷新：-</span>
-            <button type="button" class="secondary" id="syncRefreshInlineBtn" style="padding:6px 12px;font-size:12px;">刷新状态</button>
+            <button type="button" class="secondary" id="syncRefreshInlineBtn">刷新状态</button>
           </div>
         </div>
 
-        <div class="sync-pipeline-shell" aria-labelledby="syncPipelineTitle">
+        <div class="sync-tab-shell">
+          <div id="syncTaskTabs" class="sync-tab-list" role="tablist" aria-label="同步中心任务">
+            <button type="button" id="sync-tab-overview" role="tab" aria-selected="true" aria-controls="sync-panel-overview" tabindex="0" data-sync-tab="overview">运营概览</button>
+            <button type="button" id="sync-tab-upload" role="tab" aria-selected="false" aria-controls="sync-panel-upload" tabindex="-1" data-sync-tab="upload">上传与发布</button>
+            <button type="button" id="sync-tab-versions" role="tab" aria-selected="false" aria-controls="sync-panel-versions" tabindex="-1" data-sync-tab="versions">版本与回滚</button>
+            <button type="button" id="sync-tab-operations" role="tab" aria-selected="false" aria-controls="sync-panel-operations" tabindex="-1" data-sync-tab="operations">运维与诊断</button>
+          </div>
+          <label class="sync-tab-select-wrap" for="syncTabSelect">
+            <span>当前任务</span>
+            <select id="syncTabSelect">
+              <option value="overview">运营概览</option>
+              <option value="upload">上传与发布</option>
+              <option value="versions">版本与回滚</option>
+              <option value="operations">运维与诊断</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="sync-tab-panels">
+          <section id="sync-panel-overview" class="sync-tab-panel" role="tabpanel" aria-labelledby="sync-tab-overview">
+            <div id="syncOverviewMetricsMount"></div>
+            <div id="syncOverviewPipelineMount"></div>
+            <div class="sync-overview-layout">
+              <div id="syncOverviewPrimary" class="sync-overview-primary"></div>
+              <aside id="syncOverviewAside" class="sync-overview-aside">
+                <div id="syncOverviewActiveMount"></div>
+                <div class="card sync-quick-actions">
+                  <div class="section-title">主要快捷操作</div>
+                  <button type="button" class="secondary" id="copyPublisherCommandTopBtn">生成本机一键同步命令</button>
+                  <button type="button" class="secondary" id="syncFocusPendingBtn">查看失败/待处理项</button>
+                  <button type="button" class="secondary" data-sync-tab-jump="upload">转到上传与发布</button>
+                  <button type="button" class="ghost" data-sync-tab-jump="versions">转到版本与回滚</button>
+                </div>
+              </aside>
+            </div>
+          </section>
+          <section id="sync-panel-upload" class="sync-tab-panel" role="tabpanel" aria-labelledby="sync-tab-upload" hidden inert>
+            <div id="syncUploadStack" class="sync-panel-stack"></div>
+          </section>
+          <section id="sync-panel-versions" class="sync-tab-panel" role="tabpanel" aria-labelledby="sync-tab-versions" hidden inert>
+            <div id="syncVersionsStack" class="sync-panel-stack"></div>
+          </section>
+          <section id="sync-panel-operations" class="sync-tab-panel" role="tabpanel" aria-labelledby="sync-tab-operations" hidden inert>
+            <div id="syncOperationsStack" class="sync-panel-stack"></div>
+          </section>
+        </div>
+
+        <div id="syncTabPayload" hidden>
+        <div class="sync-pipeline-shell" id="sync-pipeline-shell" aria-labelledby="syncPipelineTitle">
           <div class="sync-pipeline-summary">
             <div>
               <div class="section-kicker">发布链路</div>
@@ -5898,33 +6053,8 @@ const adminConsoleHtml = `<!doctype html>
           <div class="sync-next-guidance"><span class="status-dot info"></span><span>建议下一步</span><strong id="syncNextStepText">正在分析同步状态…</strong></div>
         </div>
 
-        <!-- 2. sync-status-grid -->
-        <nav class="sync-section-nav" aria-label="同步中心分段导航">
-          <a href="#sync-ops-console">操作台</a>
-          <a href="#sync-pending-panel">待处理</a>
-          <a href="#sync-active-panel">当前线上</a>
-          <a href="#release-history-panel">版本管理</a>
-          <a href="#staging-cli-upload-panel">上传记录</a>
-          <a href="#sync-command-accordion">命令手册</a>
-        </nav>
-
         <div class="sync-ops-section" id="sync-ops-console">
-          <div class="sync-section-heading">
-            <div>
-              <h3>操作台</h3>
-              <p>当前线上版本、最近一次同步、待处理任务与系统状态集中查看。</p>
-            </div>
-            <button type="button" class="secondary" id="syncRefreshInlineBtnMirror" style="padding:6px 12px;font-size:12px;">刷新状态</button>
-          </div>
-          <div class="stats-grid" id="syncStatsGrid">
-          <!-- 同步状态卡片 -->
-        </div>
-          <div class="sync-core-actions" aria-label="同步中心主操作">
-            <button type="button" class="secondary" id="copyPublisherCommandTopBtn">生成本机一键同步命令</button>
-            <button type="button" class="secondary" id="syncRefreshTopBtn">刷新状态</button>
-            <button type="button" class="secondary" id="syncFocusPendingBtn">查看失败/待处理项</button>
-          </div>
-
+          <div class="sync-metric-strip" id="syncStatsGrid" aria-label="同步核心状态"></div>
         </div>
 
         <div class="sync-ops-section" id="sync-pending-panel">
@@ -5951,21 +6081,22 @@ const adminConsoleHtml = `<!doctype html>
           <div id="syncActiveReleaseCards" class="sync-ops-card-grid">
             <div class="sync-compact-card"><strong>当前线上版本</strong><span>等待读取 active pointer。</span></div>
           </div>
-          <div id="syncActiveResourceContract" class="sync-resource-contract"></div>
+          <details class="sync-technical-details sync-resource-details">
+            <summary>资源规模</summary>
+            <div id="syncActiveResourceContract" class="sync-resource-contract"></div>
+          </details>
         </div>
-
-        <div class="sync-secondary-heading">二级区域：上传、Relay、Release 历史、技术详情、日志与清理</div>
 
         <div class="card" id="static-release-sync-panel" style="margin-bottom:16px;">
           <div class="section-title-row">
             <div class="section-title">OpenResty 静态同步</div>
             <div class="openresty-badges">
-              <span class="badge info" id="openRestyEnabledBadge">状态检测中</span>
-              <span class="badge info" id="openRestyConfiguredBadge">配置检测中</span>
-              <span class="badge info" id="openRestyDirBadge">目录检测中</span>
-              <span class="badge info" id="openRestyVersionBadge">版本检测中</span>
               <span class="badge info" id="openRestySyncBadge">同步状态</span>
-              <span class="badge info" id="openRestyVerifyBadge">URL 验证</span>
+              <span class="badge info" id="openRestyEnabledBadge" hidden>状态检测中</span>
+              <span class="badge info" id="openRestyConfiguredBadge" hidden>配置检测中</span>
+              <span class="badge info" id="openRestyDirBadge" hidden>目录检测中</span>
+              <span class="badge info" id="openRestyVersionBadge" hidden>版本检测中</span>
+              <span class="badge info" id="openRestyVerifyBadge" hidden>URL 验证</span>
             </div>
           </div>
           <div id="staticReleaseSyncSummary" class="openresty-card-grid">
@@ -6010,16 +6141,19 @@ const adminConsoleHtml = `<!doctype html>
             <div class="section-title">推荐操作流程</div>
             <span class="badge info" id="syncNextActionBadge">等待状态</span>
           </div>
-          <div class="sync-timeline" id="syncRecommendedTimeline"></div>
-          <div class="mini-list" style="margin-top:10px;">
-            <div class="mini-list-row"><span>当前 active hash</span><strong id="activeCanonicalHashText" style="word-break:break-all;text-align:right;">-</strong></div>
-            <div class="mini-list-row"><span>最新 staging hash</span><strong id="stagingCanonicalHashText" style="word-break:break-all;text-align:right;">-</strong></div>
-            <div class="mini-list-row"><span>数据差异</span><strong id="stagingHashCompareText">等待 hash</strong></div>
-            <div class="mini-list-row"><span>发布建议</span><strong id="stagingPublishNeedText">等待判断</strong></div>
-          </div>
+          <p class="sync-recommendation-copy" id="syncRecommendationText">正在根据当前状态生成建议。</p>
           <div class="sync-next-action-row">
             <button type="button" class="primary" id="syncNextActionBtn">复制采集命令</button>
           </div>
+          <details class="sync-technical-details">
+            <summary>技术详情</summary>
+            <div class="mini-list">
+              <div class="mini-list-row"><span>Active Hash</span><strong id="activeCanonicalHashText">-</strong></div>
+              <div class="mini-list-row"><span>Staging Hash</span><strong id="stagingCanonicalHashText">-</strong></div>
+              <div class="mini-list-row"><span>数据差异</span><strong id="stagingHashCompareText">等待 hash</strong></div>
+              <div class="mini-list-row"><span>发布建议</span><strong id="stagingPublishNeedText">等待判断</strong></div>
+            </div>
+          </details>
         </div>
 
         <div class="card" id="runtime-storage-panel" style="margin-bottom:16px;">
@@ -6027,7 +6161,7 @@ const adminConsoleHtml = `<!doctype html>
             <div class="section-title">运行与存储</div>
             <span class="badge info" id="storageStatusBadge">状态检测中</span>
           </div>
-          <div id="runtimeStorageSummary" class="openresty-meta-grid">
+          <div id="runtimeStorageSummary" class="runtime-metric-grid">
             <!-- runtime and storage status -->
           </div>
           <div class="openresty-actions">
@@ -6150,17 +6284,14 @@ const adminConsoleHtml = `<!doctype html>
                   <thead>
                     <tr>
                       <th><input type="checkbox" id="stagingUploadSelectAll" aria-label="选择本页全部可删记录"></th>
-                      <th>学期 / canonicalHash</th>
-                      <th>最新 Release</th>
+                      <th>Staging 摘要</th>
                       <th>状态</th>
-                      <th>数据计数</th>
                       <th>记录数量</th>
-                      <th>最新上传时间</th>
                       <th>操作</th>
                     </tr>
                   </thead>
                   <tbody id="stagingUploadListBody">
-                    <tr><td colspan="8" style="text-align:center;color:var(--muted);padding:12px 0;">暂无 CLI 上传记录</td></tr>
+                    <tr><td colspan="5" style="text-align:center;color:var(--muted);padding:12px 0;">暂无 CLI 上传记录</td></tr>
                   </tbody>
                 </table>
               </div>
@@ -6619,35 +6750,8 @@ const adminConsoleHtml = `<!doctype html>
                 <h3 class="card-title" style="margin-bottom: 0;">API 健康状态检测</h3>
                 <button class="secondary" id="recheckHealthBtn" style="padding: 4px 10px; font-size: 12px;">一键测试</button>
               </div>
-              <div class="health-grid" id="healthGrid">
-                <!-- 接口连通度 -->
-              </div>
-            </div>
-            <!-- 7. release-history-panel -->
-            <div class="card" id="release-history-panel-side-disabled" style="display:none;">
-              <h3 class="card-title">Release 历史</h3>
-              <p style="font-size: 12px; color: var(--muted); margin-bottom: 10px;">
-                最近发布的课表快照。发生数据污染、排课错误或临时调整时，可秒级回滚到历史版本。
-              </p>
-              <div style="display: flex; justify-content: flex-end; align-items: center; margin-bottom: 10px; gap: 8px;">
-                <label for="releaseTermFilterSide" style="margin-bottom: 0; white-space: nowrap; font-size: 12px; font-weight: 600; color: var(--muted);">筛选学期：</label>
-                <select id="releaseTermFilterSide" style="width: auto; padding: 4px 10px; font-size: 12px; height: 32px;"></select>
-              </div>
-              <div class="table-container">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>版本</th>
-                      <th>学期</th>
-                      <th>发布时间</th>
-                      <th>状态</th>
-                      <th>操作</th>
-                    </tr>
-                  </thead>
-                  <tbody id="releasesTableBodySide">
-                    <tr><td colspan="5" style="text-align: center; color: var(--muted); padding: 16px 0;">获取数据中...</td></tr>
-                  </tbody>
-                </table>
+              <div id="healthGrid" class="health-grid sync-health-empty">
+                <div class="sync-empty-inline">尚未检测；运行后在此展开结果。</div>
               </div>
             </div>
           </div>
@@ -6692,6 +6796,7 @@ const adminConsoleHtml = `<!doctype html>
               </table>
             </div>
           </div>
+        </div>
         </div>
       </section>
 
@@ -8969,6 +9074,9 @@ const adminConsoleHtml = `<!doctype html>
         if ($("mobilePageTitle")) {
           $("mobilePageTitle").textContent = nextTitle;
         }
+        if ($("refreshButton")) {
+          $("refreshButton").hidden = targetSection === "sync";
+        }
         closeMobileDrawer(false);
         if (mobileDrawerWasOpen && $("adminMainContent")) {
           window.setTimeout(function () {
@@ -10254,6 +10362,7 @@ const adminConsoleHtml = `<!doctype html>
         return api("/api/admin/sync/status")
           .then(function(res) {
             state.syncStatus = res.data;
+            setSyncOnlineState(true);
             renderSyncStatusGrid();
             if ($("syncLastRefreshAt")) {
               $("syncLastRefreshAt").textContent = "最近刷新：" + formatDate(new Date().toISOString());
@@ -10320,6 +10429,7 @@ const adminConsoleHtml = `<!doctype html>
             renderRuntimeStorage();
           })
           .catch(function(err) {
+            setSyncOnlineState(false);
             showToast(err.message, "error");
             showModuleError("sync", err);
           });
@@ -10473,6 +10583,13 @@ const adminConsoleHtml = `<!doctype html>
         loadRuntimeStatusPanel();
       }
 
+      function setSyncOnlineState(online) {
+        var badge = $("syncOnlineStatus");
+        if (!badge) return;
+        badge.className = "sync-online-status " + (online ? "is-online" : "is-offline");
+        badge.innerHTML = "<span class='status-dot " + (online ? "success" : "danger") + "'></span>在线状态：" + (online ? "正常" : "异常");
+      }
+
       function loadSyncStatus(options) {
         options = options || {};
         var now = Date.now();
@@ -10484,6 +10601,7 @@ const adminConsoleHtml = `<!doctype html>
         return api("/api/admin/sync/status")
           .then(function(res) {
             state.syncStatus = res.data;
+            setSyncOnlineState(true);
             renderSyncStatusGrid();
             if ($("syncLastRefreshAt")) {
               $("syncLastRefreshAt").textContent = "最近刷新：" + formatDate(new Date().toISOString());
@@ -10501,6 +10619,7 @@ const adminConsoleHtml = `<!doctype html>
             return state.syncStatus;
           })
           .catch(function(err) {
+            setSyncOnlineState(false);
             showToast(err.message, "error");
             showModuleError("sync", err);
             throw err;
@@ -10704,22 +10823,20 @@ const adminConsoleHtml = `<!doctype html>
           unknown: "待确认"
         }[data.dataHashState || "unknown"] || "待确认";
         var list = [
-          { label: "当前 active release", val: data.activeReleaseVersion || "未生效", icon: "ACT", foot: data.activeReleaseVersion ? "已按 runtime pointer 核对" : "Published 版本尚未成为线上 Active" },
-          { label: "最新 Published Release", val: data.releaseVersion || "-", icon: "REL", foot: "已生成的最近发布候选版本" },
-          { label: "学期", val: data.semester || "-", icon: "TERM", foot: "同步与发布使用的学期" },
-          { label: "最近 Active 时间", val: data.activeReleaseVersion ? formatDate(data.activeReleaseActivatedAt || data.activeReleaseUpdatedAt) : "暂无生效记录", icon: "TIME", foot: "runtime pointer 最近生效时间" },
-          { label: "最后同步状态", val: relayStatusText(data.lastSyncStatus), icon: "SYNC", foot: data.lastSyncTime ? formatDate(data.lastSyncTime) : "尚未收到本机同步回执" },
-          { label: "OpenResty 状态", val: staticFullySynced ? "已同步" : relayStatusText(staticSyncStatus), icon: "ORY", foot: data.lastStaticSyncTime ? formatDate(data.lastStaticSyncTime) : (staticSync.needsSyncReason || "尚未执行静态同步") },
-          { label: "CloudBase 状态", val: relayStatusText(data.cloudbaseStatus), icon: "CB", foot: data.cloudbaseStatus === "failed" ? "镜像可单独重试，不影响 active pointer" : "镜像状态来自最近回执" },
-          { label: "数据 hash", val: hashStateText, icon: "HASH", foot: data.activeCanonicalHash ? ("active " + String(data.activeCanonicalHash).slice(0, 12)) : "技术详情中查看完整 hash" },
+          { label: "Active Release", val: data.activeReleaseVersion || "未生效", foot: "runtime pointer" },
+          { label: "Published Release", val: data.releaseVersion || "-", foot: "最近发布候选" },
+          { label: "当前学期", val: data.semester || "-", foot: "同步目标" },
+          { label: "OpenResty", val: staticFullySynced ? "已同步" : relayStatusText(staticSyncStatus), foot: staticUrlVerified ? "URL 已验证" : "待核对" },
+          { label: "CloudBase", val: relayStatusText(data.cloudbaseStatus), foot: data.cloudbaseStatus === "failed" ? "镜像可单独重试" : "最近回执" },
+          { label: "数据 Hash", val: hashStateText, foot: data.activeCanonicalHash ? String(data.activeCanonicalHash).slice(0, 12) : "技术详情中查看" },
         ];
         
         list.forEach(function(item) {
           var card = document.createElement("div");
-          card.className = "stat-card card";
-          card.innerHTML = "<div class='stat-head'>" + escapeHtml(item.label) + "<span>" + escapeHtml(item.icon) + "</span></div>" +
-                           "<div class='stat-num' style='font-size:16px;'>" + escapeHtml(item.val || "-") + "</div>" +
-                           "<div class='stat-foot'>" + escapeHtml(item.foot || "") + "</div>";
+          card.className = "sync-metric-item";
+          card.innerHTML = "<span>" + escapeHtml(item.label) + "</span>" +
+                           "<strong>" + escapeHtml(item.val || "-") + "</strong>" +
+                           "<small>" + escapeHtml(item.foot || "") + "</small>";
           wrap.appendChild(card);
         });
 
@@ -10730,57 +10847,44 @@ const adminConsoleHtml = `<!doctype html>
             ["class index", data.staticClassIndexUrl || "未配置"],
             ["empty-room", data.staticEmptyRoomIndexUrl || "未配置"],
           ];
-          var metaRows = [
-            ["active releaseVersion", data.releaseVersion || "暂无 active Release"],
-            ["synced releaseVersion", staticSync.syncedReleaseVersion || "尚未执行静态同步"],
-            ["last sync time", data.lastStaticSyncTime ? formatDate(data.lastStaticSyncTime) : "尚未执行静态同步"],
-            ["target dir", staticSync.targetDir || "未配置"],
-            ["retained releases", retainedLabels.length ? retainedLabels.slice(0, 3).join(" / ") : "未采集"],
-            ["active canonical hash", data.activeCanonicalHash || "当前版本未包含 canonical hash"],
-            ["latest staging hash", data.stagingCanonicalHash || "暂无 Staging"],
-            ["needs publish", data.stagingSameAsActive ? "无需发布" : (data.stagingNeedsPublish ? "需要发布" : (staticSync.needsSyncReason || "等待判断"))],
+          var summaryRows = [
+            ["状态", staticFullySynced ? "已就绪" : relayStatusText(staticSyncStatus)],
+            ["Active", data.activeReleaseVersion || "未生效"],
+            ["Synced", staticSync.syncedReleaseVersion || "未同步"],
+            ["最后同步", data.lastStaticSyncTime ? formatDate(data.lastStaticSyncTime) : "尚未执行"],
+            ["URL 验证", staticUrlVerified ? "通过" : "待验证"],
+          ];
+          var technicalRows = [
+            ["Enabled / Configured", (staticEnabled ? "已启用" : "未启用") + " / " + (staticConfigured ? "已配置" : "未配置")],
+            ["Directory", staticTargetExists ? (staticWritable ? "存在且可写" : "存在但不可写") : "不存在"],
+            ["Version Matched", staticVersionMatched ? "一致" : "待同步"],
+            ["Target Dir", staticSync.targetDir || "未配置"],
+            ["Retained Releases", retainedLabels.length ? retainedLabels.slice(0, 3).join(" / ") : "未采集"],
+            ["Canonical Hash", data.activeCanonicalHash || "当前版本未包含 canonical hash"],
+            ["Latest Staging Hash", data.stagingCanonicalHash || "暂无 Staging"],
           ];
           staticWrap.innerHTML =
-            "<div class='openresty-url-grid'>" + urlItems.map(function(row) {
-              var isUrl = /^https?:\/\//.test(row[1]) || row[1].charAt(0) === "/";
-              var tag = isUrl ? "a" : "div";
-              var href = isUrl ? " href='" + escapeHtml(row[1]) + "' target='_blank' rel='noreferrer'" : "";
-              return "<" + tag + " class='static-url-pill'" + href + ">" +
-                "<span>" + escapeHtml(row[0]) + "</span>" +
-                "<strong>" + escapeHtml(row[1]) + "</strong>" +
-              "</" + tag + ">";
-            }).join("") + "</div>" +
-            "<div class='openresty-meta-grid'>" + metaRows.map(function(row) {
+            "<div class='openresty-summary-grid'>" + summaryRows.map(function(row) {
               return "<div class='openresty-meta-item'><span>" + escapeHtml(row[0]) + "</span><strong>" + escapeHtml(row[1]) + "</strong></div>";
-            }).join("") + "</div>";
+            }).join("") + "</div>" +
+            "<details class='sync-technical-details'><summary>技术详情</summary>" +
+              "<div class='openresty-url-grid'>" + urlItems.map(function(row) {
+                var isUrl = /^https?:\/\//.test(row[1]) || row[1].charAt(0) === "/";
+                var tag = isUrl ? "a" : "div";
+                var href = isUrl ? " href='" + escapeHtml(row[1]) + "' target='_blank' rel='noreferrer'" : "";
+                return "<" + tag + " class='static-url-pill'" + href + ">" +
+                  "<span>" + escapeHtml(row[0]) + "</span><strong>" + escapeHtml(row[1]) + "</strong></" + tag + ">";
+              }).join("") + "</div>" +
+              "<div class='openresty-meta-grid'>" + technicalRows.map(function(row) {
+                return "<div class='openresty-meta-item'><span>" + escapeHtml(row[0]) + "</span><strong>" + escapeHtml(row[1]) + "</strong></div>";
+              }).join("") + "</div>" +
+            "</details>";
         }
 
-        var timelineWrap = $("syncRecommendedTimeline");
-        if (timelineWrap) {
-          var hasStaging = Boolean(data.latestStagingUpload || data.stagingCanonicalHash);
-          var noChange = Boolean(data.stagingSameAsActive);
-          var needsPublish = Boolean(data.stagingNeedsPublish);
-          var stages = Array.isArray(data.stages) && data.stages.length ? data.stages : [
-            { label: "数据采集", status: hasStaging ? "success" : "running", next: hasStaging ? "已生成 staging 候选" : "复制命令后在本机运行" },
-            { label: "上传与校验", status: hasStaging ? "success" : "pending", next: hasStaging ? "已收到候选包" : "CLI gzip 分片上传" },
-            { label: "Release 发布", status: noChange ? "skipped" : (needsPublish ? "running" : "pending"), next: noChange ? "无需发布" : (needsPublish ? "建议发布" : "等待差异判断") },
-            { label: "OpenResty 同步", status: staticSyncStatus === "success" ? "success" : (staticSyncStatus === "failed" ? "failed" : "pending"), next: relayStatusText(staticSyncStatus) },
-            { label: "小程序生效", status: data.releasePackHealthy ? "success" : "pending", next: data.releasePackHealthy ? "静态资源可用" : "等待 Release Pack OK" },
-          ];
-          var steps = stages.map(function(stage) {
-            return [
-              stage.label || stage.key || "阶段",
-              stage.status || "pending",
-              stage.next || stage.version || ""
-            ];
-          });
-          timelineWrap.innerHTML = steps.map(function(step, index) {
-            return "<div class='sync-flow-step " + step[1] + "'>" +
-              "<div class='sync-flow-step-num'>" + (index + 1) + "</div>" +
-              "<div><div class='sync-flow-step-title'>" + escapeHtml(step[0]) + "</div><div class='sync-flow-step-caption'>" + escapeHtml(step[2]) + "</div></div>" +
-              "<span class='badge " + (step[1] === "success" ? "success" : (step[1] === "failed" ? "danger" : (step[1] === "skipped" ? "warning" : "info"))) + "'>" + escapeHtml(relayStatusText(step[1])) + "</span>" +
-            "</div>";
-          }).join("");
+        if ($("syncRecommendationText")) {
+          $("syncRecommendationText").textContent = data.nextAction && data.nextAction.message
+            ? data.nextAction.message
+            : (data.stagingNeedsPublish ? "候选数据已就绪，建议进入发布。" : (data.stagingSameAsActive ? "线上数据一致，建议核对静态 URL。" : "请先在校园网本机完成采集与上传。"));
         }
         if ($("syncNextActionBadge")) {
           $("syncNextActionBadge").textContent = data.nextAction && data.nextAction.message ? data.nextAction.message : (data.stagingNeedsPublish ? "下一步：开始发布" : (data.stagingSameAsActive ? "下一步：验证静态 URL" : "下一步：复制采集命令"));
@@ -10836,7 +10940,7 @@ const adminConsoleHtml = `<!doctype html>
           ["下次维护时间", data.nextMaintenanceAt ? formatDate(data.nextMaintenanceAt) : "未启用定时维护"],
         ];
         wrap.innerHTML = rows.map(function(row) {
-          return "<div class='openresty-meta-item'><span>" + escapeHtml(row[0]) + "</span><strong>" + escapeHtml(row[1]) + "</strong></div>";
+          return "<div class='runtime-metric-item'><span>" + escapeHtml(row[0]) + "</span><strong>" + escapeHtml(row[1]) + "</strong></div>";
         }).join("");
       }
 
@@ -10919,20 +11023,13 @@ const adminConsoleHtml = `<!doctype html>
             $("syncRuntimeStateBadge").textContent = runtimeState === "active" ? "当前生效" : "未生效";
           }
           activeCards.innerHTML = [
-            ["当前线上版本", data.activeReleaseVersion || "未生效"],
-            ["最近 Published Release", data.releaseVersion || "-"],
-            ["当前学期", data.semester || "-"],
-            ["静态同步", relayStatusText(data.openRestyStaticSyncStatus || data.staticSync && data.staticSync.status || "not-run")],
+            ["Pointer 状态", hasActiveRelease ? "Active" : "未生效"],
+            ["最近生效", hasActiveRelease ? formatDate(data.activeReleaseActivatedAt || data.activeReleaseUpdatedAt) : "暂无记录"],
+            ["最近同步", data.lastSyncTime ? (relayStatusText(data.lastSyncStatus) + " · " + formatDate(data.lastSyncTime)) : "尚无回执"],
+            ["Release 健康", data.releasePackHealthy ? "正常" : "待核对"],
           ].map(function(row) {
             return "<div class='sync-compact-card'><strong>" + escapeHtml(row[0]) + "</strong><span>" + escapeHtml(row[1]) + "</span></div>";
-          }).join("") +
-          "<details class='sync-technical-details'><summary>技术详情</summary><code>" +
-          escapeHtml(JSON.stringify({
-            releaseVersion: data.releaseVersion || "",
-            activeReleaseVersion: data.activeReleaseVersion || "",
-            activeCanonicalHash: data.activeCanonicalHash || "",
-            staticReleaseVersion: data.staticSync && data.staticSync.syncedReleaseVersion || "",
-          }, null, 2)) + "</code></details>";
+          }).join("");
         }
         var contractWrap = $("syncActiveResourceContract");
         if (contractWrap) {
@@ -11431,7 +11528,7 @@ const adminConsoleHtml = `<!doctype html>
         if ($("stagingUploadSelectAll")) $("stagingUploadSelectAll").checked = false;
         tbody.innerHTML = "";
         if (!groups.length) {
-          tbody.innerHTML = "<tr><td colspan='8' style='text-align:center;color:var(--muted);padding:12px 0;'>暂无 CLI 上传记录</td></tr>";
+          tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;color:var(--muted);padding:12px 0;'>暂无 CLI 上传记录</td></tr>";
           return;
         }
         groups.forEach(function(group, index) {
@@ -11451,12 +11548,9 @@ const adminConsoleHtml = `<!doctype html>
           tr.className = "staging-group-row";
           tr.innerHTML =
             "<td><input type='checkbox' class='staging-upload-group-select' data-group-key='" + escapeHtml(groupKey) + "'" + (canDeleteCount ? "" : " disabled title='" + escapeHtml(groupProtection) + "'") + "></td>" +
-            "<td><strong>" + escapeHtml(group.term || "-") + "</strong><br><code>" + escapeHtml(hash ? hash.slice(0, 12) : "-") + "</code><br><span style='color:var(--muted);word-break:break-all;'>" + escapeHtml(hash || "未采集 canonicalHash") + "</span></td>" +
-            "<td><strong>" + escapeHtml(releaseVersion) + "</strong><br><span style='color:var(--muted);'>最新上传 " + formatDate(upload.updatedAt || upload.createdAt) + "</span></td>" +
-            "<td><span class='staging-state-badge " + statusClass + "'>" + escapeHtml(group.isActive ? "Active" : relayStatusText(stagingState)) + "</span><br><span style='color:var(--muted);font-size:11px;'>staging " + escapeHtml(relayStatusText(stagingState)) + "</span><br><span style='color:var(--muted);font-size:11px;'>release " + escapeHtml(relayStatusText(releaseState)) + "</span><br><span style='color:var(--muted);font-size:11px;'>runtime " + escapeHtml(relayStatusText(runtimeState)) + "</span></td>" +
-            "<td><div class='staging-count-stack'><span>班级 " + (counts.classScheduleCount || 0) + "</span><span>教师 " + (counts.teacherScheduleCount || 0) + "</span><span>教室 " + (counts.classroomScheduleCount || 0) + "</span><span>课程 " + (counts.courseScheduleCount || 0) + "</span></div></td>" +
-            "<td><strong>" + group.uploads.length + "</strong><br><span style='color:var(--muted);'>可删 " + canDeleteCount + "</span></td>" +
-            "<td>" + formatDate(upload.updatedAt || upload.createdAt) + "</td>" +
+            "<td><strong>" + escapeHtml(group.term || "-") + "</strong><span class='staging-row-summary'>Release " + escapeHtml(releaseVersion) + " · " + formatDate(upload.updatedAt || upload.createdAt) + "</span></td>" +
+            "<td><span class='staging-state-badge " + statusClass + "'>" + escapeHtml(group.isActive ? "Active" : relayStatusText(stagingState)) + "</span><span class='staging-row-summary'>release " + escapeHtml(relayStatusText(releaseState)) + " · runtime " + escapeHtml(relayStatusText(runtimeState)) + "</span></td>" +
+            "<td><strong>" + group.uploads.length + "</strong><span class='staging-row-summary'>可删 " + canDeleteCount + " · 展开查看 Hash 与计数</span></td>" +
             "<td class='action-cell'><div class='staging-action-row'></div></td>";
           var actions = tr.querySelector(".staging-action-row");
           var expandBtn = document.createElement("button");
@@ -11487,7 +11581,7 @@ const adminConsoleHtml = `<!doctype html>
           if (expanded) {
             var detailRow = document.createElement("tr");
             detailRow.className = "staging-detail-row";
-            detailRow.innerHTML = "<td colspan='8'>" + renderStagingDetailRows(group) + "</td>";
+            detailRow.innerHTML = "<td colspan='5'>" + renderStagingDetailRows(group) + "</td>";
             tbody.appendChild(detailRow);
             group.uploads.forEach(function(item) {
               detailRow.querySelectorAll("tr[data-upload-id]").forEach(function(row) {
@@ -12493,6 +12587,8 @@ const adminConsoleHtml = `<!doctype html>
       // API 连通健康检查
       function runHealthChecks() {
         var grid = $("healthGrid");
+        if (!grid) return;
+        grid.classList.remove("sync-health-empty");
         grid.innerHTML = "";
         
         var apis = [
@@ -16428,7 +16524,178 @@ const adminConsoleHtml = `<!doctype html>
         }
       }
 
+      var syncTabKeys = ["overview", "upload", "versions", "operations"];
+      var syncLegacyAnchorMap = {
+        "sync-ops-console": "overview",
+        "sync-pending-panel": "overview",
+        "sync-active-panel": "overview",
+        "recommended-sync-flow-card": "overview",
+        "sync-primary-flow": "upload",
+        "staging-cli-upload-panel": "upload",
+        "staging-upload-panel": "upload",
+        "publisher-status-card": "upload",
+        "relay-task-panel": "upload",
+        "static-release-sync-panel": "versions",
+        "release-history-panel": "versions",
+        "sync-log-panel": "versions",
+        "runtime-storage-panel": "operations",
+        "api-health-panel": "operations",
+        "sync-command-accordion": "operations"
+      };
+
+      function syncTabFromHash(hashValue) {
+        var anchor = String(hashValue || "").replace(/^#/, "");
+        if (syncTabKeys.indexOf(anchor) >= 0) return anchor;
+        return syncLegacyAnchorMap[anchor] || "overview";
+      }
+
+      function moveSyncPanelNode(nodeId, mountId) {
+        var node = $(nodeId);
+        var mount = $(mountId);
+        if (node && mount) mount.appendChild(node);
+      }
+
+      function collapseSyncFlowCards() {
+        var cards = document.querySelectorAll("#sync-primary-flow .flow-card");
+        Array.prototype.forEach.call(cards, function(card, index) {
+          if (String(card.tagName || "").toLowerCase() === "details") return;
+          var titleNode = card.querySelector(".flow-title");
+          var details = document.createElement("details");
+          var summary = document.createElement("summary");
+          var riskText = index === 0 ? "需校园网 · 中风险" : "外网可用 · 中风险";
+          details.className = card.className;
+          summary.innerHTML =
+            "<span class='flow-summary-main'><span class='flow-step'>Step " + (index + 1) + "</span><strong>" +
+            escapeHtml(titleNode ? titleNode.textContent : "同步流程") +
+            "</strong></span><span class='flow-summary-meta'><span>" + riskText + "</span><span>展开命令</span></span>";
+          details.appendChild(summary);
+          while (card.firstChild) details.appendChild(card.firstChild);
+          card.parentNode.replaceChild(details, card);
+        });
+      }
+
+      function distributeSyncTabPanels() {
+        var payload = $("syncTabPayload");
+        if (!payload) return;
+        moveSyncPanelNode("sync-ops-console", "syncOverviewMetricsMount");
+        moveSyncPanelNode("sync-pipeline-shell", "syncOverviewPipelineMount");
+        moveSyncPanelNode("sync-pending-panel", "syncOverviewPrimary");
+        moveSyncPanelNode("recommended-sync-flow-card", "syncOverviewPrimary");
+        moveSyncPanelNode("sync-active-panel", "syncOverviewActiveMount");
+
+        [
+          "sync-primary-flow",
+          "publisher-status-card",
+          "staging-cli-upload-panel",
+          "staging-upload-panel",
+          "relay-task-panel"
+        ].forEach(function(id) { moveSyncPanelNode(id, "syncUploadStack"); });
+
+        [
+          "static-release-sync-panel",
+          "release-history-panel",
+          "sync-log-panel"
+        ].forEach(function(id) { moveSyncPanelNode(id, "syncVersionsStack"); });
+
+        [
+          "runtime-storage-panel",
+          "api-health-panel",
+          "sync-command-accordion"
+        ].forEach(function(id) { moveSyncPanelNode(id, "syncOperationsStack"); });
+
+        collapseSyncFlowCards();
+        payload.remove();
+      }
+
+      function activateSyncTab(tabKey, options) {
+        options = options || {};
+        var key = syncTabKeys.indexOf(tabKey) >= 0 ? tabKey : "overview";
+        syncTabKeys.forEach(function(candidate) {
+          var tab = $("sync-tab-" + candidate);
+          var panel = $("sync-panel-" + candidate);
+          var active = candidate === key;
+          if (tab) {
+            tab.setAttribute("aria-selected", active ? "true" : "false");
+            tab.setAttribute("tabindex", active ? "0" : "-1");
+          }
+          if (panel) {
+            panel.hidden = !active;
+            if (active) panel.removeAttribute("inert");
+            else panel.setAttribute("inert", "");
+          }
+        });
+        if ($("syncTabSelect")) $("syncTabSelect").value = key;
+        if (options.updateHash && location.hash !== "#" + key) {
+          history.replaceState(null, "", location.pathname + location.search + "#" + key);
+        }
+        if (options.focus) {
+          var activeTab = $("sync-tab-" + key);
+          if (activeTab) activeTab.focus();
+        }
+        return key;
+      }
+
+      function initSyncTabs() {
+        var tablist = $("syncTaskTabs");
+        if (!tablist || tablist.dataset.initialized === "true") return;
+        tablist.dataset.initialized = "true";
+        var legacyAnchor = String(location.hash || "").replace(/^#/, "");
+        distributeSyncTabPanels();
+
+        var tabs = Array.prototype.slice.call(tablist.querySelectorAll('[role="tab"]'));
+        tabs.forEach(function(tab, index) {
+          tab.addEventListener("click", function() {
+            activateSyncTab(tab.getAttribute("data-sync-tab"), { updateHash: true });
+          });
+          tab.addEventListener("keydown", function(event) {
+            var nextIndex = index;
+            switch (event.key) {
+              case "ArrowLeft":
+                nextIndex = (index - 1 + tabs.length) % tabs.length;
+                break;
+              case "ArrowRight":
+                nextIndex = (index + 1) % tabs.length;
+                break;
+              case "Home":
+                nextIndex = 0;
+                break;
+              case "End":
+                nextIndex = tabs.length - 1;
+                break;
+              default:
+                return;
+            }
+            event.preventDefault();
+            activateSyncTab(tabs[nextIndex].getAttribute("data-sync-tab"), { updateHash: true, focus: true });
+          });
+        });
+
+        if ($("syncTabSelect")) {
+          $("syncTabSelect").addEventListener("change", function(event) {
+            activateSyncTab(event.target.value, { updateHash: true });
+          });
+        }
+        Array.prototype.forEach.call(document.querySelectorAll("[data-sync-tab-jump]"), function(button) {
+          button.addEventListener("click", function() {
+            activateSyncTab(button.getAttribute("data-sync-tab-jump"), { updateHash: true });
+          });
+        });
+        window.addEventListener("hashchange", function() {
+          activateSyncTab(syncTabFromHash(location.hash));
+        });
+
+        var initialKey = syncTabFromHash(location.hash);
+        activateSyncTab(initialKey, { updateHash: Boolean(legacyAnchor && syncLegacyAnchorMap[legacyAnchor]) });
+        if (syncLegacyAnchorMap[legacyAnchor]) {
+          window.requestAnimationFrame(function() {
+            var target = $(legacyAnchor);
+            if (target) target.scrollIntoView({ block: "start" });
+          });
+        }
+      }
+
       function initSyncModule() {
+        initSyncTabs();
         updateWizardCommand();
         
         // 绑定向导折叠/展开 (如果存在的话，向后兼容)
@@ -16463,10 +16730,8 @@ const adminConsoleHtml = `<!doctype html>
           var btn = $("copyPublisherCommandBtn");
           if (btn) btn.click();
         });
-        safeBind("syncRefreshTopBtn", "click", function() {
-          loadSyncStatus({ force: true });
-        });
         safeBind("syncFocusPendingBtn", "click", function() {
+          activateSyncTab("overview", { updateHash: true });
           var target = $("sync-pending-panel");
           if (target) target.scrollIntoView({ behavior: "smooth", block: "start" });
         });
@@ -16569,7 +16834,7 @@ const adminConsoleHtml = `<!doctype html>
           if (text) copyText(text);
         });
         safeBind("syncRefreshInlineBtn", "click", function() {
-          loadSyncStatus();
+          loadSyncStatus({ force: true });
         });
 
         // ------------------ 新版同步向导初始化 ------------------

@@ -21,7 +21,9 @@ for (const pattern of mustExclude) {
 // Dockerfile must not COPY .env
 const dockerfile = fs.readFileSync(path.join(ROOT, "server/Dockerfile"), "utf8");
 assert.ok(!/COPY\s+\.env/.test(dockerfile), "Dockerfile must not COPY .env");
-assert.ok(dockerfile.includes("admin-builder") || dockerfile.includes("admin-app"), "SPA build stage");
+assert.ok(!dockerfile.includes("admin-builder"), "retired admin SPA builder must stay removed");
+assert.ok(!dockerfile.includes("admin-web"), "Dockerfile must not depend on admin-web");
+assert.ok(!dockerfile.includes("admin-app"), "Dockerfile must not copy admin-app");
 assert.ok(dockerfile.includes("chromium"), "Chromium decision documented in image");
 
 console.log(JSON.stringify({ ok: true, excludes: mustExclude }, null, 2));

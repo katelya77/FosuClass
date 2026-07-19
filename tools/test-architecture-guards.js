@@ -1,6 +1,6 @@
 /**
- * Architecture guards for progressive admin modernization.
- * Prevents unbounded growth of legacy admin monoliths and
+ * Architecture guards for the Legacy-only admin.
+ * Prevents unbounded growth of the existing admin monolith and
  * re-introduction of known P0 route duplication.
  */
 const assert = require("assert");
@@ -42,7 +42,7 @@ const ADMIN_ROUTES_HARD_MAX = 6500;
 assert.ok(
   adminPagesLines <= ADMIN_PAGES_HARD_MAX,
   `adminPages.js has ${adminPagesLines} lines; hard max is ${ADMIN_PAGES_HARD_MAX}. ` +
-    "New admin UI must go into admin-web/, not adminPages.js."
+    "Keep Legacy UI changes compact and scoped to existing page behavior."
 );
 
 assert.ok(
@@ -74,7 +74,6 @@ const requiredDocs = [
   "docs/adr/0005-scoped-service-tokens.md",
   // Phase A admin parity inventory
   "docs/admin-migration/legacy-feature-inventory.md",
-  "docs/admin-migration/feature-matrix.json",
   "docs/admin-migration/api-contracts.json",
   "docs/admin-migration/risk-register.md",
 ];

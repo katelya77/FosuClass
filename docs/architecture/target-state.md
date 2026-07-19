@@ -1,5 +1,7 @@
 # Target Architecture State
 
+> **Status: Superseded for the admin frontend.** ADR-0002 is superseded and the Legacy-only admin is retained. The Vue topology below is preserved as historical design context; the Express modular monolith, Release Pack, Term, and Active Pointer decisions remain current.
+
 ## Target topology
 
 ```text

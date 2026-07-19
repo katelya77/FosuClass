@@ -241,10 +241,11 @@ function run() {
 
   const syncStatusRenderer = between("function renderSyncStatusGrid()", "function renderRuntimeStorage()");
   assert(syncStatusRenderer.includes('data.activeReleaseVersion || "未生效"'), "sync summary must use the runtime pointer for Active Release");
-  assert(syncStatusRenderer.includes('label: "最新 Published Release"'), "sync summary must distinguish Published from Active");
+  assert(syncStatusRenderer.includes('label: "Published Release"'), "sync summary must distinguish Published from Active");
   const syncOperationsRenderer = between("function renderSyncOperationsPanels(data)", "function buildRelayRunCommand");
   assert(syncOperationsRenderer.includes("Boolean(data.activeReleaseVersion)"), "current-online panel must derive state from activeReleaseVersion");
-  assert(syncOperationsRenderer.includes('["最近 Published Release", data.releaseVersion || "-"]'), "current-online panel must label the published candidate explicitly");
+  assert(syncOperationsRenderer.includes('["Pointer 状态", hasActiveRelease ? "Active" : "未生效"]'), "current-online panel must summarize the pointer without duplicating version metrics");
+  assert(!syncOperationsRenderer.includes('["最近 Published Release"'), "current-online panel must not repeat the published metric");
 
   ["feedbackDrawer", "catalogDrawer"].forEach((id) => {
     const markup = between(`id="${id}"`, "</div>");
