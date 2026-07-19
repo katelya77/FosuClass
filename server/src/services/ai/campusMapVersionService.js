@@ -11,7 +11,7 @@ const BACKUP_DIR = path.join(STORE_DIR, "backups");
 const DRAFT_PATH = path.join(STORE_DIR, "draft.json");
 const PUBLISHED_PATH = path.join(STORE_DIR, "published.json");
 const PUBLIC_CONFIG_PATH = path.join(STORE_DIR, "public", "config.json");
-const DATA_DIR = path.resolve(__dirname, "../../../data/ai");
+const DATA_DIR = path.join(path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../../data")), "ai");
 const LEGACY_DATA_PATH = path.join(DATA_DIR, "campus-places.json");
 const DEFAULT_NOTE = "Q 版地图仅供校园位置参考，具体以学校现场指引为准。";
 

@@ -19,6 +19,7 @@ const adapters = createAdapters({
   feedbacksPath: path.join(STORAGE_DIR, "feedbacks.json"),
   feedbackJsonlPath: path.join(STORAGE_DIR, "feedback.jsonl"),
   catalogMetaPath: path.join(STORAGE_DIR, "catalog-meta.json"),
+  qualityIgnoresPath: path.join(STORAGE_DIR, "quality-ignores.json"),
   assistantKbPath: path.join(STORAGE_DIR, "assistant-kb.json"),
 });
 
@@ -33,7 +34,7 @@ function ensureBackupsDir() {
 
 function parseBackupType(filename) {
   const name = path.basename(String(filename || ""));
-  const match = name.match(/^([a-z0-9-]+)-\d{8}-\d{6}\.json$/i);
+  const match = name.match(/^([a-z0-9-]+)-\d{8}-\d{6}(?:-[a-f0-9]+)?\.json$/i);
   if (match) return match[1].toLowerCase();
   // pre-restore-notices-...
   const pre = name.match(/^pre-restore-([a-z0-9-]+)-/i);

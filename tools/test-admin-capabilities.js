@@ -62,6 +62,25 @@ function loadFresh() {
   assert.strictEqual(legacy.ok, true, "legacy not gated");
 }
 
+// settings write routes must be covered by the same route-to-module source as the gate.
+{
+  process.env.NODE_ENV = "test";
+  process.env.FOSU_ADMIN_NEXT_WRITE_MODULES = "catalog,quality,settings";
+  const fresh = loadFresh();
+  const nextReq = (method, routePath) => ({
+    method,
+    get: (h) => (String(h).toLowerCase() === "x-fosu-admin-client" ? "next" : ""),
+    route: { path: routePath },
+    originalUrl: `/api/admin${routePath}`,
+  });
+
+  assert.strictEqual(fresh.resolveModuleForPath("/settings"), "settings");
+  assert.strictEqual(fresh.resolveModuleForPath("/settings/preview"), "settings");
+  assert.strictEqual(fresh.resolveModuleForPath("/unknown-write"), null);
+  assert.strictEqual(fresh.assertNextWriteAllowed(nextReq("POST", "/settings")).ok, true);
+  assert.strictEqual(fresh.assertNextWriteAllowed(nextReq("POST", "/unknown-write")).ok, false);
+}
+
 // production forbids *
 {
   process.env.NODE_ENV = "production";
@@ -74,6 +93,26 @@ function loadFresh() {
     threw = e.code === "WRITE_MODULES_STAR_FORBIDDEN";
   }
   assert.ok(threw, "production * must fail");
+}
+
+// Existing Phase B production writes remain enabled; C1 writes remain disabled.
+{
+  process.env.NODE_ENV = "production";
+  process.env.FOSU_ADMIN_NEXT_WRITE_MODULES = "content,feedback,audit,backups,catalog,quality,settings";
+  const fresh = loadFresh();
+  assert.deepStrictEqual(
+    fresh.getWriteModuleList().sort(),
+    ["audit", "backups", "content", "feedback"],
+    "production must retain only proven Phase B modules",
+  );
+  const map = fresh.getWriteModulesMap();
+  assert.strictEqual(map.content, true);
+  assert.strictEqual(map.feedback, true);
+  assert.strictEqual(map.audit, true);
+  assert.strictEqual(map.backups, true);
+  assert.strictEqual(map.catalog, false);
+  assert.strictEqual(map.quality, false);
+  assert.strictEqual(map.settings, false);
 }
 
 // non-production allows * for tests

@@ -27,6 +27,7 @@ const appConfigService = require("../services/appConfigService");
 const feedbackService = require("../services/feedbackService");
 const adminCapabilitiesService = require("../services/adminCapabilitiesService");
 const backupService = require("../services/backupService");
+const adminAuditService = require("../services/adminAuditService");
 const contentDomainService = require("../modules/content/service");
 const settingsDomainService = require("../modules/settings/service");
 const catalogDomainService = require("../modules/catalog/service");
@@ -90,9 +91,7 @@ const STAGING_CHUNK_BODY_LIMIT = process.env.FOSU_STAGING_CHUNK_BODY_LIMIT || "1
 
 const DATA_DIR = path.resolve(process.env.FOSU_DATA_DIR || path.join(__dirname, "../../data"));
 const BACKUPS_DIR = path.join(DATA_DIR, "backups");
-const AUDIT_LOG_PATH = path.join(DATA_DIR, "admin-audit-log.jsonl");
 const CATALOG_META_PATH = path.join(STORAGE_DIR, "catalog-meta.json");
-const QUALITY_IGNORES_PATH = path.join(STORAGE_DIR, "quality-ignores.json");
 const SYNC_HISTORY_PATH = path.join(DATA_DIR, "sync-history.json");
 
 // 确保目录存在
@@ -120,6 +119,7 @@ if (!fs.existsSync(BACKUPS_DIR)) {
 
 // Vue write-module gate (Legacy UI omits X-Fosu-Admin-Client and is not blocked)
 router.use(adminCapabilitiesService.createWriteModuleGateMiddleware());
+const requireCatalogWriteEnabled = adminCapabilitiesService.createRequiredWriteModuleMiddleware("catalog");
 
 /**
  * GET /api/admin/capabilities — primary flag + write module switches
@@ -131,15 +131,20 @@ router.get("/capabilities", (req, res) => {
 /**
  * 自动备份机制
  */
-function createBackup(type, sourceFile) {
+function createBackup(type, sourceFile, fallbackData) {
   try {
-    if (!fs.existsSync(sourceFile)) return;
     const now = new Date();
     const pad = (num) => String(num).padStart(2, "0");
     const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    const backupName = `${type}-${timestamp}.json`;
+    const backupName = `${type}-${timestamp}-${crypto.randomBytes(8).toString("hex")}.json`;
     const destPath = path.join(BACKUPS_DIR, backupName);
-    fs.copyFileSync(sourceFile, destPath);
+    if (fs.existsSync(sourceFile)) {
+      fs.copyFileSync(sourceFile, destPath);
+    } else if (fallbackData !== undefined) {
+      fs.writeFileSync(destPath, JSON.stringify(fallbackData, null, 2), "utf8");
+    } else {
+      return null;
+    }
     
     // 保留最近 30 个备份文件
     const files = fs.readdirSync(BACKUPS_DIR)
@@ -152,8 +157,30 @@ function createBackup(type, sourceFile) {
         try { fs.unlinkSync(f.path); } catch (e) {}
       });
     }
+    return destPath;
   } catch (error) {
     safeLog("create-backup-failed", { type, error: error.message });
+    throw error;
+  }
+}
+
+function commitWithBackup({ type, sourceFile, fallbackData, commit }) {
+  const backupPath = createBackup(type, sourceFile, fallbackData);
+  try {
+    return commit();
+  } catch (error) {
+    const conflict = error && error.code === "CONFLICT";
+    if (conflict && backupPath && fs.existsSync(backupPath)) {
+      try {
+        fs.unlinkSync(backupPath);
+      } catch (cleanupError) {
+        cleanupError.code = "BACKUP_ROLLBACK_FAILED";
+        cleanupError.statusCode = 500;
+        cleanupError.conflict = error;
+        throw cleanupError;
+      }
+    }
+    throw error;
   }
 }
 
@@ -180,10 +207,23 @@ function writeAuditLog(req, action, moduleName, target, summary) {
       legacyToken: Boolean(identity.legacy),
       requestId: req.headers["x-request-id"] || ""
     };
-    fs.appendFileSync(AUDIT_LOG_PATH, `${JSON.stringify(logItem)}\n`, "utf-8");
+    adminAuditService.append(logItem);
   } catch (error) {
     safeLog("write-audit-log-failed", { error: error.message });
   }
+}
+
+function catalogAuditContext(req) {
+  const identity = adminAuth.getAuditIdentity(req);
+  return {
+    operator: identity.operator || "admin",
+    tokenName: identity.tokenName || "",
+    scopes: Array.isArray(identity.scopes) ? identity.scopes : [],
+    sessionIdPrefix: identity.sessionIdPrefix || "",
+    authMethod: identity.authMethod || adminAuth.getAdminAuthMethod(req) || "unknown",
+    requestId: req.headers["x-request-id"] || "",
+    ip: getClientIpInfo(req).anonymizedIp,
+  };
 }
 
 // 缓存文件路径映射
@@ -3463,11 +3503,16 @@ router.post("/settings", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     const client = String(req.get("x-fosu-admin-client") || "").toLowerCase();
     const body = req.body || {};
-    createBackup("config", appConfigService.CONFIG_PATH);
-    const result = settingsDomainService.saveTypedSettings(body, {
+    const prepared = settingsDomainService.prepareTypedSettingsMutation(body, {
       expectedVersion: req.get("if-match") || body.expectedVersion || body.version,
       ifMatch: req.get("if-match"),
       requireIfMatch: client === "next",
+    });
+    const result = commitWithBackup({
+      type: "config",
+      sourceFile: appConfigService.CONFIG_PATH,
+      fallbackData: prepared.backupData,
+      commit: () => settingsDomainService.commitPreparedTypedSettingsMutation(prepared),
     });
     writeAuditLog(req, "save", "settings", "admin-config", "保存类型化系统配置");
     return res.json({
@@ -3766,205 +3811,9 @@ router.get("/feedback/:id", verifyAdminToken, (req, res) => {
  * 数据质量检测中心检测核心逻辑
  */
 function generateQualityReport() {
-  const classes = readJsonArray(FILE_MAP["class-schedules"]);
-  const teachers = readJsonArray(FILE_MAP["teacher-schedules"]);
-  const classrooms = readJsonArray(FILE_MAP["classroom-schedules"]);
-  
-  let totalCoursesCount = 0;
-  let missingTeacher = 0;
-  let missingClassroom = 0;
-  let missingWeeks = 0;
-  let missingSections = 0;
-  let duplicateCount = 0;
-  let emptyClassSchedules = 0;
-  let abnormalLessCourses = 0;
-  
-  const anomalies = [];
-  
-  let ignores = [];
-  try {
-    if (fs.existsSync(QUALITY_IGNORES_PATH)) {
-      ignores = JSON.parse(fs.readFileSync(QUALITY_IGNORES_PATH, "utf-8"));
-    }
-  } catch (e) {}
-  
-  const isIgnored = (type, target) => Array.isArray(ignores) && ignores.some(ig => ig.type === type && ig.target === target);
-
-  classes.forEach(c => {
-    const className = c.className || "";
-    const courses = c.courses || [];
-    totalCoursesCount += courses.length;
-    
-    if (courses.length === 0) {
-      emptyClassSchedules++;
-      if (!isIgnored("empty-schedule", className)) {
-        anomalies.push({
-          type: "empty-schedule",
-          target: className,
-          original: "课表无课程安排数据",
-          suggestion: "核实班级是否本学期确无课，或重新同步",
-          severity: "warning"
-        });
-      }
-    } else if (courses.length < 3) {
-      abnormalLessCourses++;
-      if (!isIgnored("few-courses", className)) {
-        anomalies.push({
-          type: "few-courses",
-          target: className,
-          original: `课程数量较少: 仅 ${courses.length} 门课`,
-          suggestion: "核查该班级排课数据是否解析完整",
-          severity: "info"
-        });
-      }
-    }
-    
-    const timeSlots = {};
-    courses.forEach(course => {
-      if (!course.courseName) {
-        if (!isIgnored("missing-coursename", className)) {
-          anomalies.push({
-            type: "missing-coursename",
-            target: className,
-            original: "包含空的课程名称",
-            suggestion: "核对并补充该课程的名称",
-            severity: "danger"
-          });
-        }
-      }
-      if (!course.teacherName) {
-        missingTeacher++;
-        if (!isIgnored("missing-teacher", `${className}:${course.courseName}`)) {
-          anomalies.push({
-            type: "missing-teacher",
-            target: `${className}:${course.courseName}`,
-            original: `课程《${course.courseName}》缺少授课教师`,
-            suggestion: "补充授课教师姓名或填写'见通知'",
-            severity: "info"
-          });
-        }
-      }
-      if (!course.classroom) {
-        missingClassroom++;
-        if (!isIgnored("missing-classroom", `${className}:${course.courseName}`)) {
-          anomalies.push({
-            type: "missing-classroom",
-            target: `${className}:${course.courseName}`,
-            original: `课程《${course.courseName}》缺少上课教室`,
-            suggestion: "补充上课课室名称",
-            severity: "warning"
-          });
-        }
-      }
-      
-      const weeks = course.weeks || [];
-      const sections = course.sections || [];
-      const day = course.dayOfWeek || course.weekday || 0;
-      
-      if (weeks.length === 0) missingWeeks++;
-      if (sections.length === 0) missingSections++;
-      
-      weeks.forEach(w => {
-        sections.forEach(s => {
-          const key = `${w}_${day}_${s}`;
-          if (timeSlots[key] && timeSlots[key] !== course.courseName) {
-            duplicateCount++;
-            const targetKey = `${className}:${key}`;
-            if (!isIgnored("class-conflict", targetKey)) {
-              anomalies.push({
-                type: "class-conflict",
-                target: targetKey,
-                original: `班级课表第 ${w} 周星期 ${day} 第 ${s} 节课程重叠: 《${timeSlots[key]}》与《${course.courseName}》`,
-                suggestion: "确认是否为合班课、多地点可选课程，或解析数据重叠",
-                severity: "danger"
-              });
-            }
-          }
-          timeSlots[key] = course.courseName;
-        });
-      });
-    });
-  });
-
-  teachers.forEach(t => {
-    const teacherName = t.teacherName || "";
-    const courses = t.courses || [];
-    const timeSlots = {};
-    courses.forEach(course => {
-      const weeks = course.weeks || [];
-      const sections = course.sections || [];
-      const day = course.dayOfWeek || course.weekday || 0;
-      const room = course.classroom || "未知";
-      
-      weeks.forEach(w => {
-        sections.forEach(s => {
-          const key = `${w}_${day}_${s}`;
-          if (timeSlots[key] && timeSlots[key] !== room) {
-            const targetKey = `${teacherName}:${key}`;
-            if (!isIgnored("teacher-conflict", targetKey)) {
-              anomalies.push({
-                type: "teacher-conflict",
-                target: targetKey,
-                original: `教师冲突: 同一时间在 [${timeSlots[key]}] 与 [${room}] 均有上课安排`,
-                suggestion: "检查教师是否同时被派往两地授课",
-                severity: "danger"
-              });
-            }
-          }
-          timeSlots[key] = room;
-        });
-      });
-    });
-  });
-
-  classrooms.forEach(c => {
-    const roomName = c.roomName || c.classroom || "";
-    if (!roomName) return;
-    const courses = c.courses || [];
-    const timeSlots = {};
-    courses.forEach(course => {
-      const weeks = course.weeks || [];
-      const sections = course.sections || [];
-      const day = course.dayOfWeek || course.weekday || 0;
-      const desc = `${course.teacherName || "未知"}:${course.className || "未知"}`;
-      
-      weeks.forEach(w => {
-        sections.forEach(s => {
-          const key = `${w}_${day}_${s}`;
-          if (timeSlots[key] && timeSlots[key] !== desc) {
-            const targetKey = `${roomName}:${key}`;
-            if (!isIgnored("classroom-conflict", targetKey)) {
-              anomalies.push({
-                type: "classroom-conflict",
-                target: targetKey,
-                original: `教室冲突: 同一时间被 [${timeSlots[key]}] 和 [${desc}] 重叠使用`,
-                suggestion: "核实该教室是否为多班合课，或发生撞室排错",
-                severity: "danger"
-              });
-            }
-          }
-          timeSlots[key] = desc;
-        });
-      });
-    });
-  });
-
-  return {
-    stats: {
-      totalCoursesCount,
-      missingTeacher,
-      missingClassroom,
-      missingWeeks,
-      missingSections,
-      duplicateCount,
-      emptyClassSchedules,
-      abnormalLessCourses,
-      anomalyCount: anomalies.length
-    },
-    anomalies
-  };
+  const report = qualityDomainService.buildQualityReport();
+  return { stats: report.summary, anomalies: report.active };
 }
-
 function getCatalogMeta() {
   // Prefer domain service (versioned document, flat entries for list mappers)
   try {
@@ -4020,6 +3869,56 @@ router.get("/catalog/stats", adminAuth.verifyAdminAccess, (req, res) => {
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
+  }
+});
+
+router.get("/catalog/resources", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({ success: true, ...catalogDomainService.listResources(req.query || {}) });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code, details: error.details });
+  }
+});
+
+router.get("/catalog/relationships", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({ success: true, ...catalogDomainService.getRelationships() });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code });
+  }
+});
+
+router.get("/catalog/export", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const exported = catalogDomainService.exportRows(req.query || {});
+    res.setHeader("Content-Type", exported.contentType);
+    res.setHeader("Content-Disposition", `attachment; filename="${exported.filename}"`);
+    res.setHeader("X-Fosu-Catalog-Generation", exported.generationId);
+    return res.send(exported.body);
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code });
+  }
+});
+
+router.post("/catalog/import/preview", requireCatalogWriteEnabled, verifyAdminWriteAccess, adminAuth.requireScopes(["catalog:write"]), (req, res) => {
+  try {
+    return res.json({ success: true, ...catalogDomainService.previewImport(req.body || {}) });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code, currentVersion: error.currentVersion, details: error.details });
+  }
+});
+
+router.post("/catalog/import/apply", requireCatalogWriteEnabled, verifyAdminWriteAccess, adminAuth.requireScopes(["catalog:write"]), (req, res) => {
+  try {
+    const body = req.body || {};
+    const result = catalogDomainService.applyImport(body.previewId, {
+      ifMatch: req.get("if-match"),
+      confirm: body.confirm,
+      auditContext: catalogAuditContext(req),
+    });
+    return res.status(200).json({ success: true, ...result });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({ success: false, message: error.message, code: error.code, currentVersion: error.currentVersion });
   }
 });
 
@@ -4288,9 +4187,8 @@ router.post("/catalog/meta", adminAuth.verifyAdminAccess, (req, res) => {
       return res.status(400).json({ success: false, message: "缺少必要参数 type 或 id" });
     }
     const client = String(req.get("x-fosu-admin-client") || "").toLowerCase();
-    createBackup("catalog-meta", catalogDomainService.CATALOG_META_PATH || CATALOG_META_PATH);
     const key = `${type}::${id}`;
-    const result = catalogDomainService.saveCatalogMetaEntry(
+    const prepared = catalogDomainService.prepareCatalogMetaEntryMutation(
       key,
       {
         displayName: String(displayName || "").trim(),
@@ -4303,6 +4201,12 @@ router.post("/catalog/meta", adminAuth.verifyAdminAccess, (req, res) => {
         requireIfMatch: client === "next",
       }
     );
+    const result = commitWithBackup({
+      type: "catalog-meta",
+      sourceFile: catalogDomainService.CATALOG_META_PATH || CATALOG_META_PATH,
+      fallbackData: prepared.backupData,
+      commit: () => catalogDomainService.commitPreparedCatalogMetaEntryMutation(prepared),
+    });
     writeAuditLog(req, "update", "catalog-meta", key, `修改数据资源 [${type}] ${id} 的元数据别名和备注`);
     return res.json({
       success: true,
@@ -6117,7 +6021,7 @@ router.post("/sync/record", adminAuth.verifyAdminAccess, (req, res) => {
  */
 router.get("/quality/report", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    const report = generateQualityReport();
+    const report = qualityDomainService.buildQualityReport();
     return res.json({
       success: true,
       data: report
@@ -6144,9 +6048,9 @@ router.post("/quality/mark", adminAuth.verifyAdminAccess, (req, res) => {
       expectedVersion: req.get("if-match") || body.expectedVersion || body.version,
       requireIfMatch: client === "next",
     };
-    let result;
+    let prepared;
     if (ignore) {
-      result = qualityDomainService.markIgnore(
+      prepared = qualityDomainService.prepareMarkIgnoreMutation(
         {
           fingerprint,
           category: type,
@@ -6156,14 +6060,21 @@ router.post("/quality/mark", adminAuth.verifyAdminAccess, (req, res) => {
         opts
       );
     } else {
-      result = qualityDomainService.unmarkIgnore(fingerprint, opts);
+      prepared = qualityDomainService.prepareUnmarkIgnoreMutation(fingerprint, opts);
     }
+    const result = commitWithBackup({
+      type: "quality",
+      sourceFile: qualityDomainService.QUALITY_IGNORES_PATH,
+      fallbackData: prepared.backupData,
+      commit: () => qualityDomainService.commitPreparedQualityMutation(prepared),
+    });
     writeAuditLog(req, "ignore", "quality", `${type}:${target}`, `${ignore ? "标记忽略" : "取消忽略"} 质量缺陷`);
     return res.json({
       success: true,
       ignores: result.rules,
       version: result.version,
       etag: result.etag,
+      lockWarning: result.lockWarning || undefined,
     });
   } catch (error) {
     return res.status(error.statusCode || 500).json({
@@ -6182,6 +6093,27 @@ router.get("/quality/ignores", adminAuth.verifyAdminAccess, (req, res) => {
   } catch (error) {
     return res.status(500).json({ success: false, message: error.message });
   }
+});
+
+router.post("/quality/recheck/start", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const job = qualityDomainService.startQualityRecheck(req.body || {});
+    writeAuditLog(req, "recheck", "quality", job.id, "启动质量复检任务");
+    return res.status(202).json({ success: true, job });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+      code: error.code,
+      job: error.job,
+    });
+  }
+});
+
+router.get("/quality/recheck/:id", adminAuth.verifyAdminAccess, (req, res) => {
+  const job = qualityDomainService.getQualityRecheck(req.params.id);
+  if (!job) return res.status(404).json({ success: false, message: "质量复检任务不存在" });
+  return res.json({ success: true, job });
 });
 
 /**
@@ -6421,19 +6353,8 @@ router.delete("/backups", adminAuth.verifyAdminAccess, (req, res) => {
  */
 router.get("/audit-logs", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    if (!fs.existsSync(AUDIT_LOG_PATH)) {
-      return res.json({ success: true, items: [] });
-    }
-    const lines = fs.readFileSync(AUDIT_LOG_PATH, "utf-8")
-      .split(/\r?\n/)
-      .map(l => l.trim())
-      .filter(Boolean)
-      .map(l => {
-        try { return JSON.parse(l); } catch(err) { return null; }
-      })
-      .filter(Boolean)
-      .reverse();
-    return res.json({ success: true, items: lines.slice(0, 100) });
+    const entries = adminAuditService.readAll();
+    return res.json({ success: true, items: entries.reverse().slice(0, 100) });
   } catch (e) {
     return res.status(500).json({ success: false, message: e.message });
   }

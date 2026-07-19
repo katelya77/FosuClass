@@ -9,15 +9,25 @@
  * Run: node tools/generate-admin-feature-matrix.js
  */
 const fs = require("fs");
+const crypto = require("crypto");
+const os = require("os");
 const path = require("path");
-const { execSync } = require("child_process");
 
-const ROOT = path.resolve(__dirname, "..");
+const GENERATOR_VERSION = 2;
+const ROOT = path.resolve(process.env.FOSU_ADMIN_MATRIX_ROOT || path.resolve(__dirname, ".."));
 const OUT_DIR = path.join(ROOT, "docs/admin-migration");
 const ADMIN_JS = path.join(ROOT, "server/src/routes/admin.js");
 const ADMIN_PAGES = path.join(ROOT, "server/src/routes/adminPages.js");
+const SERVER_ROUTES_DIR = path.join(ROOT, "server/src/routes");
+const SERVER_MODULES_DIR = path.join(ROOT, "server/src/modules");
 const VUE_ROUTER = path.join(ROOT, "admin-web/src/router/index.ts");
 const VUE_PAGES_DIR = path.join(ROOT, "admin-web/src/pages");
+const ROLLOUT_MANIFEST = path.join(ROOT, "server/config/admin-rollout-manifest.json");
+const OUTPUT_FILES = Object.freeze([
+  "feature-matrix.json",
+  "api-contracts.json",
+  "legacy-feature-inventory.md",
+]);
 
 const NEXT_STATUS = new Set([
   "missing",
@@ -73,46 +83,15 @@ const DOMAIN_NEXT_STATUS = {
   misc: "missing",
 };
 
-/** Production explicit grant (deploy workflow). Matrix must match this list. */
-const PRODUCTION_WRITE_MODULES = [
-  "content",
-  "feedback",
-  "audit",
-  "backups",
-  "catalog",
-  "quality",
-  "settings",
-];
-
-/** Evidence paths that elevate status (must exist on disk). */
-const EVIDENCE = {
-  content: {
-    apiTests: ["tools/test-admin-content-concurrency.js", "tools/test-admin-http-write-parity.js"],
-    playwrightTests: ["tools/test-admin-playwright-phase-b.js"],
-  },
-  feedback: {
-    apiTests: ["tools/test-admin-http-write-parity.js"],
-    playwrightTests: ["tools/test-admin-playwright-phase-b.js"],
-  },
-  audit: {
-    apiTests: ["tools/test-admin-http-write-parity.js"],
-    playwrightTests: ["tools/test-admin-playwright-phase-b.js"],
-  },
-  backups: {
-    apiTests: ["tools/test-admin-backup-service.js", "tools/test-admin-backup-transaction.js"],
-    playwrightTests: ["tools/test-admin-playwright-phase-b.js"],
-  },
-};
-
 function evidenceExists(relPaths) {
   return (relPaths || []).filter((rel) => fs.existsSync(path.join(ROOT, rel)));
 }
 
-function statusWithEvidence(domain, baseStatus) {
-  const ev = EVIDENCE[domain];
+function statusWithEvidence(domain, baseStatus, rollout) {
+  const ev = rollout.modules[domain];
   if (!ev) return { nextStatus: baseStatus, apiTests: [], playwrightTests: [] };
-  const apiTests = evidenceExists(ev.apiTests);
-  const playwrightTests = evidenceExists(ev.playwrightTests);
+  const apiTests = evidenceExists(ev.httpEvidence);
+  const playwrightTests = evidenceExists(ev.browserEvidence);
   let nextStatus = baseStatus;
   if (apiTests.length && baseStatus === "write-implemented") {
     nextStatus = "contract-verified";
@@ -147,15 +126,70 @@ const DOMAIN_TARGET_MODULE = {
   misc: "settings",
 };
 
-function gitCommit() {
-  try {
-    return execSync("git rev-parse HEAD", { cwd: ROOT, encoding: "utf8" }).trim();
-  } catch {
-    return "unknown";
-  }
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (!value || typeof value !== "object") return value;
+  return Object.keys(value).sort().reduce((out, key) => {
+    out[key] = stableValue(value[key]);
+    return out;
+  }, {});
 }
 
-function extractRoutes(src) {
+function compareText(left, right) {
+  const a = String(left);
+  const b = String(right);
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+function stableStringify(value) {
+  return JSON.stringify(stableValue(value));
+}
+
+function sha256(value) {
+  return crypto.createHash("sha256").update(Buffer.isBuffer(value) ? value : String(value)).digest("hex");
+}
+
+function normalizedTextFileSha256(filePath) {
+  return sha256(fs.readFileSync(filePath, "utf8").replace(/^\uFEFF/, "").replace(/\r\n?/g, "\n"));
+}
+
+function loadRolloutManifest() {
+  const manifest = JSON.parse(fs.readFileSync(ROLLOUT_MANIFEST, "utf8"));
+  if (!manifest || manifest.schemaVersion !== 1 || !manifest.admin || !manifest.modules) {
+    throw new Error("server/config/admin-rollout-manifest.json is invalid");
+  }
+  if (manifest.admin.primary !== "legacy" || manifest.admin.nextEnabled !== true) {
+    throw new Error("C1 rollout manifest must keep Legacy primary and admin-next enabled");
+  }
+  return manifest;
+}
+
+function walkFiles(dir, predicate) {
+  const files = [];
+  if (!fs.existsSync(dir)) return files;
+  const entries = fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => compareText(a.name, b.name));
+  for (const entry of entries) {
+    const absolute = path.join(dir, entry.name);
+    if (entry.isDirectory()) files.push(...walkFiles(absolute, predicate));
+    else if (entry.isFile() && predicate(absolute, entry.name)) files.push(absolute);
+  }
+  return files;
+}
+
+function discoverRouteSourceFiles() {
+  const routeFiles = walkFiles(SERVER_ROUTES_DIR, (_absolute, name) => /\.(?:c?js|mjs|ts)$/i.test(name));
+  const moduleRouteFiles = walkFiles(SERVER_MODULES_DIR, (_absolute, name) => /^routes?\.(?:c?js|mjs|ts)$/i.test(name));
+  return [...new Set([...routeFiles, ...moduleRouteFiles])].sort((a, b) =>
+    compareText(path.relative(ROOT, a).replace(/\\/g, "/"), path.relative(ROOT, b).replace(/\\/g, "/"))
+  );
+}
+
+function isAdminRouteSource(filePath) {
+  const relative = path.relative(ROOT, filePath).replace(/\\/g, "/");
+  return relative === "server/src/routes/admin.js" || /^server\/src\/modules\/.+\/routes?\.(?:c?js|mjs|ts)$/i.test(relative);
+}
+
+function extractRoutes(src, sourceFile = "server/src/routes/admin.js") {
   const routes = [];
   const re = /router\.(get|post|put|patch|delete)\s*\(\s*[\r\n\s]*['"]([^'"]+)['"]/g;
   let m;
@@ -180,6 +214,7 @@ function extractRoutes(src) {
       hasRequireScopes,
       auditLikely: audit,
       backupLikely: createsBackup,
+      sourceFile,
       index: m.index,
     });
   }
@@ -243,7 +278,7 @@ function domainForPath(p) {
   if (/assistant-kb/.test(s)) return "assistant";
   if (/ai-provider|ai-agent/.test(s)) return "provider";
   if (/security/.test(s)) return "security";
-  if (/^\/config$|\/export$|storage\//.test(s)) return "settings";
+  if (/^\/settings(?:\/|$)|^\/config$|\/export$|storage\//.test(s)) return "settings";
   if (/audit/.test(s)) return "audit";
   if (/backup|snapshot/.test(s)) return "backups";
   if (/jobs/.test(s)) return "jobs";
@@ -323,6 +358,7 @@ function detectVueUsage() {
   const pageFiles = fs
     .readdirSync(VUE_PAGES_DIR)
     .filter((f) => f.endsWith(".vue"))
+    .sort(compareText)
     .map((f) => ({
       file: f,
       src: fs.readFileSync(path.join(VUE_PAGES_DIR, f), "utf8"),
@@ -348,6 +384,7 @@ function buildContract(route) {
     method: route.method,
     path: route.fullPath,
     routePath: route.path,
+    sourceFile: route.sourceFile,
     auth: route.usesAdminAccess || route.usesWriteAccess ? "admin-session-or-token" : "public-or-session",
     csrf: writes,
     scopes: route.hasRequireScopes ? "explicit-requireScopes" : writes ? "default-admin:full" : "authenticated-read",
@@ -448,19 +485,66 @@ function buildContract(route) {
 }
 
 function main() {
-  const adminSrc = fs.readFileSync(ADMIN_JS, "utf8");
+  const rollout = loadRolloutManifest();
+  const routeSourceFiles = discoverRouteSourceFiles();
+  const routeSourceInventory = routeSourceFiles.map((filePath) => {
+    const sourceFile = path.relative(ROOT, filePath).replace(/\\/g, "/");
+    const sourceRoutes = extractRoutes(fs.readFileSync(filePath, "utf8"), sourceFile);
+    return {
+      sourceFile,
+      adminSurface: isAdminRouteSource(filePath),
+      routes: sourceRoutes.map((route) => ({ method: route.method, path: route.path })),
+      extracted: sourceRoutes,
+    };
+  });
+  const routes = routeSourceInventory
+    .filter((source) => source.adminSurface)
+    .flatMap((source) => source.extracted)
+    .sort((left, right) =>
+      compareText(left.sourceFile, right.sourceFile)
+      || compareText(left.path, right.path)
+      || compareText(left.method, right.method)
+    );
   const pagesSrc = fs.readFileSync(ADMIN_PAGES, "utf8");
-  const routes = extractRoutes(adminSrc);
   const uiWrites = extractLegacyUiWriteCalls(pagesSrc);
   const vue = detectVueUsage();
-  const commit = gitCommit();
-  const generatedAt = new Date().toISOString();
+  const evidenceInputs = Object.entries(rollout.modules).sort(([left], [right]) => compareText(left, right)).map(([moduleName, record]) => ({
+    module: moduleName,
+    httpEvidence: (record.httpEvidence || []).slice().sort().map((relative) => ({
+      path: relative,
+      sha256: fs.existsSync(path.join(ROOT, relative)) ? normalizedTextFileSha256(path.join(ROOT, relative)) : null,
+    })),
+    browserEvidence: (record.browserEvidence || []).slice().sort().map((relative) => ({
+      path: relative,
+      sha256: fs.existsSync(path.join(ROOT, relative)) ? normalizedTextFileSha256(path.join(ROOT, relative)) : null,
+    })),
+  }));
+  const stableInputs = {
+    generatorVersion: GENERATOR_VERSION,
+    routes: routes.map(({ method, path: routePath, writesData, usesWriteAccess, usesAdminAccess, hasRequireScopes, auditLikely, backupLikely, sourceFile }) => ({
+      method,
+      path: routePath,
+      writesData,
+      usesWriteAccess,
+      usesAdminAccess,
+      hasRequireScopes,
+      auditLikely,
+      backupLikely,
+      sourceFile,
+    })),
+    scannedRouteSources: routeSourceInventory.map(({ sourceFile, adminSurface, routes: sourceRoutes }) => ({ sourceFile, adminSurface, routes: sourceRoutes })),
+    legacyUi: { calls: uiWrites.calls, pathOnly: uiWrites.pathOnly },
+    vue,
+    rollout,
+    evidence: evidenceInputs,
+    model: { legacyNav: LEGACY_NAV, domainNextStatus: DOMAIN_NEXT_STATUS, domainTargetModule: DOMAIN_TARGET_MODULE },
+  };
 
   const features = routes.map((route) => {
     const domain = domainForPath(route.path);
     const risk = riskForRoute(route);
     const baseStatus = DOMAIN_NEXT_STATUS[domain] || "missing";
-    const evidence = statusWithEvidence(domain, baseStatus);
+    const evidence = statusWithEvidence(domain, baseStatus, rollout);
     const nextStatus = evidence.nextStatus;
     if (!NEXT_STATUS.has(nextStatus)) {
       throw new Error(`invalid nextStatus ${nextStatus}`);
@@ -475,6 +559,7 @@ function main() {
       legacyApi: `${route.method} ${route.fullPath}`,
       method: route.method,
       path: route.path,
+      sourceFile: route.sourceFile,
       risk,
       writesData: route.writesData,
       requiresCsrf: route.writesData,
@@ -592,35 +677,48 @@ function main() {
   ];
 
   const allFeatures = [...features, ...uiFeatures];
+  const contractRoutes = routes.map(buildContract);
+  const inputFingerprint = sha256(stableStringify({
+    inputs: stableInputs,
+    derived: { features: allFeatures, contracts: contractRoutes },
+  }));
+  const productionWriteModules = Object.entries(rollout.modules)
+    .filter(([, record]) => record.productionWriteEnabled === true)
+    .map(([moduleName]) => moduleName)
+    .sort(compareText);
 
   const contracts = {
     version: 1,
-    generatedAt,
-    sourceCommit: commit,
+    generatorVersion: GENERATOR_VERSION,
+    inputFingerprint,
+    rolloutVersion: rollout.rolloutVersion,
     basePath: "/api/admin",
     envelope: {
       success: "boolean",
       message: "string on error",
       notes: "Do not break existing fields; additive fields allowed.",
     },
-    routes: routes.map(buildContract),
+    routes: contractRoutes,
   };
 
   const matrix = {
     version: 1,
+    generatorVersion: GENERATOR_VERSION,
+    inputFingerprint,
     phase: "C1",
-    generatedAt,
-    sourceCommit: commit,
+    rolloutVersion: rollout.rolloutVersion,
+    imageTarget: rollout.imageTarget,
     nextStatusEnum: [...NEXT_STATUS],
-    primaryAdmin: "legacy",
+    primaryAdmin: rollout.admin.primary,
     flags: {
-      FOSU_ADMIN_PRIMARY: "legacy",
-      FOSU_ADMIN_NEXT_ENABLED: true,
+      FOSU_ADMIN_PRIMARY: rollout.admin.primary,
+      FOSU_ADMIN_NEXT_ENABLED: rollout.admin.nextEnabled,
       FOSU_ADMIN_LEGACY_ENABLED: true,
-      FOSU_ADMIN_NEXT_WRITE_MODULES: PRODUCTION_WRITE_MODULES.join(","),
+      FOSU_ADMIN_NEXT_WRITE_MODULES: productionWriteModules.join(","),
       FOSU_CONFIG_HARD_FAIL: false,
     },
-    productionWriteModules: PRODUCTION_WRITE_MODULES.slice(),
+    productionWriteModules,
+    rolloutModules: rollout.modules,
     summary: {
       totalFeatures: allFeatures.length,
       apiRoutes: routes.length,
@@ -632,6 +730,12 @@ function main() {
     },
     legacyNav: LEGACY_NAV,
     vueBaseline: vue,
+    scannedRouteSources: routeSourceInventory.map(({ sourceFile, adminSurface, routes: sourceRoutes }) => ({
+      sourceFile,
+      adminSurface,
+      routeCount: sourceRoutes.length,
+      routes: sourceRoutes,
+    })),
     targetModules: [
       "auth",
       "dashboard",
@@ -669,26 +773,61 @@ function main() {
     matrix.summary.byNextStatus[f.nextStatus] = (matrix.summary.byNextStatus[f.nextStatus] || 0) + 1;
   }
 
-  fs.mkdirSync(OUT_DIR, { recursive: true });
-  fs.writeFileSync(path.join(OUT_DIR, "feature-matrix.json"), `${JSON.stringify(matrix, null, 2)}\n`);
-  fs.writeFileSync(path.join(OUT_DIR, "api-contracts.json"), `${JSON.stringify(contracts, null, 2)}\n`);
-
   const invMd = buildInventoryMarkdown(matrix, contracts);
-  fs.writeFileSync(path.join(OUT_DIR, "legacy-feature-inventory.md"), invMd);
+  const artifacts = new Map([
+    ["feature-matrix.json", Buffer.from(`${JSON.stringify(matrix, null, 2)}\n`)],
+    ["api-contracts.json", Buffer.from(`${JSON.stringify(contracts, null, 2)}\n`)],
+    ["legacy-feature-inventory.md", Buffer.from(invMd)],
+  ]);
+  const args = process.argv.slice(2);
+  const unknownArgs = args.filter((arg) => arg !== "--check");
+  if (unknownArgs.length) throw new Error(`unknown arguments: ${unknownArgs.join(", ")}`);
+  const check = args.includes("--check");
+  let drift = [];
+  if (check) {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-admin-matrix-check-"));
+    try {
+      for (const [name, bytes] of artifacts) fs.writeFileSync(path.join(tempDir, name), bytes);
+      drift = OUTPUT_FILES.filter((name) => {
+        const committed = path.join(OUT_DIR, name);
+        const generated = path.join(tempDir, name);
+        return !fs.existsSync(committed) || !fs.readFileSync(committed).equals(fs.readFileSync(generated));
+      });
+    } finally {
+      fs.rmSync(tempDir, { recursive: true, force: true });
+    }
+    if (drift.length) {
+      let committedInputFingerprint = null;
+      try {
+        committedInputFingerprint = JSON.parse(fs.readFileSync(path.join(OUT_DIR, "feature-matrix.json"), "utf8")).inputFingerprint || null;
+      } catch (_) {}
+      console.error(JSON.stringify({
+        ok: false,
+        code: "ADMIN_FEATURE_MATRIX_DRIFT",
+        drift,
+        committedInputFingerprint,
+        expectedInputFingerprint: inputFingerprint,
+      }, null, 2));
+      process.exitCode = 1;
+      return;
+    }
+  } else {
+    fs.mkdirSync(OUT_DIR, { recursive: true });
+    for (const [name, bytes] of artifacts) fs.writeFileSync(path.join(OUT_DIR, name), bytes);
+  }
 
   console.log(
     JSON.stringify(
       {
         ok: true,
+        check,
+        generatorVersion: GENERATOR_VERSION,
+        inputFingerprint,
         features: matrix.summary.totalFeatures,
         apiRoutes: matrix.summary.apiRoutes,
         writeRoutes: matrix.summary.writeRoutes,
         byNextStatus: matrix.summary.byNextStatus,
-        out: [
-          "docs/admin-migration/feature-matrix.json",
-          "docs/admin-migration/api-contracts.json",
-          "docs/admin-migration/legacy-feature-inventory.md",
-        ],
+        out: OUTPUT_FILES.map((name) => `docs/admin-migration/${name}`),
       },
       null,
       2
@@ -700,8 +839,9 @@ function buildInventoryMarkdown(matrix, contracts) {
   const lines = [];
   lines.push("# Legacy Admin Feature Inventory (Phase A)");
   lines.push("");
-  lines.push(`- Generated: \`${matrix.generatedAt}\``);
-  lines.push(`- Source commit: \`${matrix.sourceCommit}\``);
+  lines.push(`- Stable input fingerprint: \`${matrix.inputFingerprint}\``);
+  lines.push(`- Generator version: \`${matrix.generatorVersion}\``);
+  lines.push(`- Rollout manifest version: \`${matrix.rolloutVersion}\``);
   lines.push(`- Production primary remains: **legacy**`);
   lines.push(`- API routes inventoried: **${matrix.summary.apiRoutes}**`);
   lines.push(`- Write routes: **${matrix.summary.writeRoutes}**`);
@@ -832,6 +972,7 @@ function buildInventoryMarkdown(matrix, contracts) {
   lines.push("");
   lines.push("```bash");
   lines.push("node tools/generate-admin-feature-matrix.js");
+  lines.push("node tools/generate-admin-feature-matrix.js --check");
   lines.push("node tools/test-admin-feature-matrix.js");
   lines.push("```");
   lines.push("");

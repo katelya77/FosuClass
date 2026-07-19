@@ -12,6 +12,14 @@ const FULL = [SCOPES.ADMIN_FULL];
  * routePath uses Express-style params (:id).
  */
 const ROUTE_SCOPE_MAP = {
+  // C1 domain writes
+  "POST /catalog/meta": [SCOPES.CATALOG_WRITE, SCOPES.ADMIN_FULL],
+  "POST /catalog/import/preview": [SCOPES.CATALOG_WRITE, SCOPES.ADMIN_FULL],
+  "POST /catalog/import/apply": [SCOPES.CATALOG_WRITE, SCOPES.ADMIN_FULL],
+  "POST /quality/mark": [SCOPES.QUALITY_WRITE, SCOPES.ADMIN_FULL],
+  "POST /quality/recheck/start": [SCOPES.QUALITY_WRITE, SCOPES.ADMIN_FULL],
+  "POST /settings": [SCOPES.SETTINGS_WRITE, SCOPES.ADMIN_FULL],
+
   // Staging pipeline
   "POST /staging/upload/init": [SCOPES.STAGING_INIT, SCOPES.ADMIN_FULL],
   "POST /staging/upload/chunk": [SCOPES.STAGING_CHUNK, SCOPES.ADMIN_FULL],

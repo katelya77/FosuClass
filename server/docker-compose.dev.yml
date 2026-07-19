@@ -1,0 +1,28 @@
+services:
+  fosu-api:
+    image: fosuclass-api:local
+    pull_policy: never
+    build:
+      context: ..
+      dockerfile: server/Dockerfile
+      target: browser
+      args:
+        GIT_REVISION: ${FOSU_DEPLOY_COMMIT_SHA:-dev}
+        BUILD_CREATED: ${FOSU_BUILD_CREATED:-dev}
+        IMAGE_VERSION: ${FOSU_IMAGE_VERSION:-0.0.0-dev}
+    container_name: fosuclass-api-dev
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      FOSU_ADMIN_NEXT_ENABLED: ${FOSU_ADMIN_NEXT_ENABLED:-true}
+      FOSU_ADMIN_PRIMARY: ${FOSU_ADMIN_PRIMARY:-legacy}
+      FOSU_CONFIG_HARD_FAIL: ${FOSU_CONFIG_HARD_FAIL:-false}
+      FOSU_DATA_DIR: /app/data
+      FOSU_SEED_DATA_DIR: /app/seed-data
+      FOSU_STORAGE_DIR: /app/storage
+    ports:
+      - "${HOST_BIND_IP:-127.0.0.1}:${HOST_API_PORT:-18318}:${PORT:-3000}"
+    volumes:
+      - ./storage:/app/storage
+      - ./data:/app/data

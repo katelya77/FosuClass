@@ -2,6 +2,7 @@ const crypto = require("crypto");
 const rateLimit = require("express-rate-limit");
 const config = require("../config");
 const { safeLog } = require("../utils/safeLogger");
+const { recordSecurityEvent } = require("./securityEventService");
 const serviceTokenService = require("./serviceTokenService");
 const adminRouteScopes = require("../security/adminRouteScopes");
 
@@ -333,6 +334,12 @@ function enforceRouteScopes(req, res, next) {
       required,
       scopes: identity.scopes || [],
       operator: identity.name || "",
+    });
+    recordSecurityEvent("security-scope-denied", {
+      route: routePath,
+      method: req.method,
+      reasonCode: "ADMIN_SCOPE_DENIED",
+      sessionIdPrefix: identity.sessionIdPrefix || "",
     });
     return res.status(403).json({
       success: false,
