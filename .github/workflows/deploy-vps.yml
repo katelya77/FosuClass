@@ -133,7 +133,7 @@ jobs:
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_SSH_KEY }}
           port: 22
-          source: "server/**,!server/node_modules/**,!server/.env,!server/storage/**,admin-web/**,!admin-web/node_modules/**,.dockerignore"
+          source: "server/**,!server/node_modules/**,!server/.env,!server/storage/**,.dockerignore"
           target: "${{ secrets.VPS_APP_DIR }}"
 
       - name: SSH Remote Deploy & Health Check
@@ -231,9 +231,7 @@ jobs:
             ADMIN_API_TOKEN=${{ secrets.ADMIN_API_TOKEN }}
             ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
             ADMIN_TOKEN=${{ secrets.ADMIN_TOKEN }}
-            # Progressive admin SPA: Legacy remains production write authority.
-            FOSU_ADMIN_NEXT_ENABLED=true
-            FOSU_ADMIN_PRIMARY=legacy
+            # Shared API rollout gates remain; the only admin UI is Legacy.
             FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups
             FOSU_CONFIG_HARD_FAIL=false
             FOSU_BASE_URL=https://100.fosu.edu.cn
@@ -467,10 +465,7 @@ jobs:
               echo "::error::http://127.0.0.1:18318/api/health failed"
               exit 1
             fi
-            # Phase B capabilities smoke (primary stays legacy)
-            caps_json="$(curl -fsS http://127.0.0.1:18318/api/admin/capabilities || true)"
-            echo "$caps_json" | node -e 'let s="";process.stdin.on("data",d=>s+=d);process.stdin.on("end",()=>{const j=JSON.parse(s||"{}");if(j.primary!=="legacy"){console.error("primary!=legacy");process.exit(1)};const w=j.writeModules||{};if(!w.content||!w.feedback||!w.audit||!w.backups){console.error("phase B modules not enabled");process.exit(1)};if(w.release){console.error("release write must stay off");process.exit(1)};console.log("capabilities-ok")})'
-            curl -fsS -o /dev/null http://127.0.0.1:18318/admin-next/ || true
+            sudo docker exec "$CONTAINER_NAME" node -e 'const f=require("fs"),x=m=>{throw Error(m)};Promise.all([fetch("http://127.0.0.1:3000/api/admin/ui-mode"),fetch("http://127.0.0.1:3000/admin-next/sync",{redirect:"manual"}),fetch("http://127.0.0.1:3000/admin-legacy/sync",{redirect:"manual"})]).then(async([u,n,l])=>{u=await u.json();if(u.primary!=="legacy"||u.effectivePrimary!=="legacy"||u.adminNextEnabled!==false)x("ui-mode");if([n,l].some(r=>r.status!==302||r.headers.get("location")!=="/admin/sync"))x("redirect");if(f.existsSync("/app/public/admin-app"))x("admin-app");console.log("legacy-admin-ok")}).catch(e=>{console.error(e);process.exit(1)})'
             admin_unauth_status="$(curl -sS -o /dev/null -w '%{http_code}' http://127.0.0.1:18318/api/admin/publisher/receipt || true)"
             if [ "$admin_unauth_status" != "401" ]; then
               echo "::error::protected admin publisher receipt API without token returned HTTP ${admin_unauth_status}, expected 401"

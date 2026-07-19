@@ -1,12 +1,9 @@
 /**
- * Admin UI capability flags — single source for primary/fallback and write modules.
+ * Legacy-only admin capability response plus shared write-module gates.
  *
  * Env:
- *   FOSU_ADMIN_PRIMARY=legacy|next
- *   FOSU_ADMIN_NEXT_ENABLED=true|false
- *   FOSU_ADMIN_LEGACY_ENABLED=true|false
  *   FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups
- *     - unset or "" → no Vue write modules (explicit grant required)
+ *     - unset or "" → no compatibility-client write modules (explicit grant required)
  *     - "*" → all known modules; FORBIDDEN when NODE_ENV=production
  */
 
@@ -72,14 +69,11 @@ function assertWriteModulesConfigSafe() {
 }
 
 function getAdminPrimary() {
-  const nextEnabled = process.env.FOSU_ADMIN_NEXT_ENABLED !== "false";
-  const requested = String(process.env.FOSU_ADMIN_PRIMARY || "legacy").toLowerCase() === "next";
-  const primary = nextEnabled && requested ? "next" : "legacy";
   return {
-    nextEnabled,
-    requestedPrimary: requested ? "next" : "legacy",
-    primary,
-    legacyEnabled: process.env.FOSU_ADMIN_LEGACY_ENABLED !== "false",
+    nextEnabled: false,
+    requestedPrimary: "legacy",
+    primary: "legacy",
+    legacyEnabled: true,
   };
 }
 
@@ -125,15 +119,12 @@ function getCapabilities() {
         : String(process.env.FOSU_ADMIN_NEXT_WRITE_MODULES).trim() === ""
           ? "empty"
           : "explicit",
-    paths: {
-      next: flags.primary === "next" ? "/admin/" : "/admin-next/",
-      legacy: flags.primary === "next" ? "/admin-legacy/" : "/admin/",
-    },
+    paths: { legacy: "/admin/" },
   };
 }
 
 /**
- * Gate Vue (admin-next) mutating requests by write module flags.
+ * Gate historical compatibility clients that still send the Admin Next client hint.
  * Legacy UI / tools omit X-Fosu-Admin-Client and are not blocked here.
  */
 function assertNextWriteAllowed(req) {
@@ -160,7 +151,7 @@ function assertNextWriteAllowed(req) {
       ok: false,
       status: 403,
       code: "MODULE_WRITE_DISABLED",
-      message: `Vue write blocked: route ${routePath} is not enabled for admin-next yet`,
+      message: `Compatibility-client write blocked: route ${routePath} is not enabled`,
     };
   }
   if (!isWriteModuleEnabled(moduleName)) {
@@ -168,7 +159,7 @@ function assertNextWriteAllowed(req) {
       ok: false,
       status: 403,
       code: "MODULE_WRITE_DISABLED",
-      message: `Vue write blocked: module "${moduleName}" is not in FOSU_ADMIN_NEXT_WRITE_MODULES`,
+      message: `Compatibility-client write blocked: module "${moduleName}" is not in FOSU_ADMIN_NEXT_WRITE_MODULES`,
       module: moduleName,
     };
   }
@@ -198,7 +189,7 @@ function createWriteModuleGateMiddleware() {
 
 /**
  * Route-owned rollout barrier for newly introduced write APIs. Unlike the
- * admin-next client hint gate, this cannot be bypassed by omitting a header.
+ * historical compatibility-client hint gate, this cannot be bypassed by omitting a header.
  */
 function createRequiredWriteModuleMiddleware(moduleName) {
   const normalized = String(moduleName || "").trim().toLowerCase();

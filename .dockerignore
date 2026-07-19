@@ -1,4 +1,5 @@
 # Root build context for server/Dockerfile
+# Legacy admin assets ship with server/public; no standalone frontend build context is required.
 .git
 .github
 **/node_modules

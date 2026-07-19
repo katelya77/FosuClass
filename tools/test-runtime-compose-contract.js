@@ -16,8 +16,8 @@ assert.ok(!productionCompose.includes("FOSU_RUNTIME_DATA_HOST_DIR"), "first runt
 assert.ok(!/^\s*-\s*\.\/data:\/app\/data\s*$/m.test(productionCompose), "production must not activate a new empty data bind");
 assert.match(productionCompose, /\.\/storage:\/app\/storage/, "production must keep storage durable");
 assert.ok(!productionCompose.includes("FOSU_RUNTIME_DATA_REQUIRE_MIGRATION"), "production must not require an unperformed first migration");
-assert.match(productionCompose, /FOSU_ADMIN_PRIMARY:\s*\$\{FOSU_ADMIN_PRIMARY:-legacy\}/);
-assert.match(productionCompose, /FOSU_ADMIN_NEXT_ENABLED:\s*\$\{FOSU_ADMIN_NEXT_ENABLED:-true\}/);
+assert.ok(!productionCompose.includes("FOSU_ADMIN_PRIMARY"), "retired primary UI switch must stay removed");
+assert.ok(!productionCompose.includes("FOSU_ADMIN_NEXT_ENABLED"), "retired Admin Next flag must stay removed");
 
 assert.ok(fs.existsSync(developmentComposePath), "local builds must live in a separate development compose file");
 const developmentCompose = fs.readFileSync(developmentComposePath, "utf8");
@@ -40,6 +40,7 @@ for (const relativePath of [
   assert.ok(fs.existsSync(path.join(root, relativePath)), `${relativePath} must remain prepared for the delivery PR`);
 }
 assert.strictEqual(rollout.imageTarget, "browser", "browser stays selected until APaaS import is proven Chromium-independent");
+assert.deepStrictEqual(rollout.admin, { primary: "legacy", nextEnabled: false }, "rollout manifest must describe the Legacy-only admin");
 
 console.log(JSON.stringify({
   ok: true,

@@ -1,6 +1,6 @@
 /**
  * Shared admin API contracts (plain JS runtime).
- * Compatible with future TypeScript + Zod consumers in admin-web.
+ * Shared by the Legacy admin and service-token clients.
  * Validates shapes without changing legacy response envelopes.
  */
 

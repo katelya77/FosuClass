@@ -1,5 +1,5 @@
 /**
- * Isolated HTTP Legacy vs Vue (X-Fosu-Admin-Client: next) write parity.
+ * Isolated HTTP Legacy vs historical compatibility-client write parity.
  * Uses temporary storage/data dirs — never production.
  */
 const assert = require("assert");
@@ -20,8 +20,6 @@ process.env.FOSU_DATA_DIR = dataDir;
 process.env.PORT = "0";
 process.env.ADMIN_PASSWORD = "parity-test-password-123";
 process.env.ADMIN_API_TOKEN = "parity-test-token-12345678";
-process.env.FOSU_ADMIN_NEXT_ENABLED = "true";
-process.env.FOSU_ADMIN_PRIMARY = "legacy";
 process.env.FOSU_ADMIN_NEXT_WRITE_MODULES = "content,feedback,audit,backups";
 process.env.FOSU_CONFIG_HARD_FAIL = "false";
 process.env.FOSU_RELEASE_WORKER_ENABLED = "false";
