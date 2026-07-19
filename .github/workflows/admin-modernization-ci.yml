@@ -6,6 +6,7 @@ on:
     paths:
       - "admin-web/**"
       - ".dockerignore"
+      - ".github/workflows/deploy-vps.yml"
       - "server/config/admin-rollout-manifest.json"
       - "server/src/**"
       - "server/Dockerfile"
@@ -15,6 +16,7 @@ on:
       - "server/public/admin-app/**"
       - "tools/test-admin*.js"
       - "tools/test-exclusive-file-lock.js"
+      - "tools/test-deploy-static-env-contract.js"
       - "tools/test-runtime*.js"
       - "tools/generate-admin-feature-matrix.js"
       - "docs/admin-migration/**"
@@ -80,6 +82,7 @@ jobs:
           npm run test:runtime-data-paths
           npm run test:runtime-compose-contract
           npm run test:runtime-persistence-verifier
+          npm run test:deploy-static-env-contract
           npm run test:docker-secret-scan
           npm run test:duplicate-admin-routes
           npm run test:service-token-scopes

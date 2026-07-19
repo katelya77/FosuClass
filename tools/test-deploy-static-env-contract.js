@@ -5,6 +5,7 @@ const path = require("path");
 const root = path.join(__dirname, "..");
 const workflow = fs.readFileSync(path.join(root, ".github", "workflows", "deploy-vps.yml"), "utf-8");
 const envExample = fs.readFileSync(path.join(root, ".env.example"), "utf-8");
+const dockerfile = fs.readFileSync(path.join(root, "server", "Dockerfile"), "utf-8");
 
 [
   "OPENRESTY_HOST_RUNTIME_DIR=/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime",
@@ -98,6 +99,49 @@ assert(!workflow.includes("ADMIN_API_TOKEN is not configured. The server will de
 
 assert(!workflow.includes("cat << 'EOF' > .env"), "workflow must not write .env directly before validation");
 assert(!/set\s+-x/.test(workflow), "workflow must not enable shell xtrace");
+
+const dockerfileLines = dockerfile.split(/\r?\n/);
+assert(
+  !dockerfileLines.some((line) => /\bapk add\b.*\bcurl\b/.test(line) || /^\s*curl(?:\s|\\|$)/.test(line)),
+  "runtime image must not install curl for deployment smoke tests",
+);
+
+assert(
+  !/^\s*sudo docker exec[^\r\n]*\bcurl\b/m.test(workflow),
+  "container smoke tests must not depend on curl",
+);
+assert(
+  /^\s*sudo docker exec "\$CONTAINER_NAME" node -e /m.test(workflow),
+  "admin token smoke must use the container's Node runtime",
+);
+
+const tokenSmokeStart = workflow.indexOf("const token = process.env.ADMIN_API_TOKEN;");
+const tokenSmokeEnd = workflow.indexOf('echo "admin-api-token-contract=ok"', tokenSmokeStart);
+assert(tokenSmokeStart >= 0 && tokenSmokeEnd > tokenSmokeStart, "admin token Node smoke block must be present");
+const tokenSmoke = workflow.slice(tokenSmokeStart, tokenSmokeEnd);
+[
+  'fetch("http://127.0.0.1:3000/api/admin/publisher/receipt"',
+  '"X-Admin-Token": token',
+  "response.status !== 200",
+  "body.success !== true",
+  'fail("ADMIN_API_TOKEN is empty")',
+].forEach((needle) => {
+  assert(tokenSmoke.includes(needle), `admin token Node smoke should include ${needle}`);
+});
+assert(!/console\.(?:log|error)\s*\(\s*token\s*\)/.test(tokenSmoke), "admin token smoke must not print the token");
+assert(!workflow.includes("/tmp/fosu-admin-token-contract.json"), "admin token smoke must not leave a temporary response file");
+assert(!/(?:release|terms?|active[-_ ]?pointer)/i.test(tokenSmoke), "admin token smoke must not touch Release, Term, or Active Pointer");
+
+assert(workflow.includes("FOSU_ADMIN_NEXT_ENABLED=true"), "admin-next must remain enabled");
+assert(workflow.includes("FOSU_ADMIN_PRIMARY=legacy"), "Legacy must remain primary");
+assert(
+  workflow.includes("FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups"),
+  "production writes must remain limited to the proven Phase B modules",
+);
+assert(
+  !workflow.includes("FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups,catalog,quality,settings"),
+  "Catalog, Quality, and Settings production writes must remain disabled",
+);
 
 [
   /^\s*ADMIN_PASSWORD=(?!\$\{\{ secrets\.ADMIN_PASSWORD \}\}|YOUR_|$).+/m,
