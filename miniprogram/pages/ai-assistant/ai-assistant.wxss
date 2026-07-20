@@ -96,13 +96,61 @@ button::after {
   line-height: 1;
 }
 
+.xiaofu-conversation-sub {
+  max-width: 100%;
+  margin-top: 6rpx;
+  overflow: hidden;
+  color: #4a433c;
+  font-size: 22rpx;
+  font-weight: 500;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xiaofu-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-top: 8rpx;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.xiaofu-chip {
+  max-width: 100%;
+  padding: 4rpx 12rpx;
+  border-radius: 999rpx;
+  background: #f3f0eb;
+  color: #6b635a;
+  font-size: 18rpx;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.xiaofu-chip.soft {
+  background: #efece7;
+  color: #8a8178;
+}
+
+.xiaofu-chip.status-online {
+  color: #2f855a;
+  background: rgba(47, 133, 90, 0.1);
+}
+
+.xiaofu-chip.status-offline,
+.xiaofu-chip.status-warn {
+  color: #c05621;
+  background: rgba(192, 86, 33, 0.1);
+}
+
 .xiaofu-capability {
   max-width: 100%;
   margin-top: 6rpx;
   overflow: hidden;
   color: #667085;
   font-size: 19rpx;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.15;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -125,6 +173,12 @@ button::after {
 
 .xiaofu-status.status-offline {
   color: #c05621;
+}
+
+.send-btn.cancel {
+  background: #4a433c !important;
+  color: #fff !important;
+  min-width: 72rpx;
 }
 
 .xiaofu-status.status-unknown {

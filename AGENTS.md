@@ -44,6 +44,12 @@ npm run test:ai-competition
 npm run test:agent-phase2
 ```
 
+涉及 Runtime Truth Layer（Run Events、Readiness、记忆前端闭环、Coze 临时适配、实时 Loading UI）时，额外运行：
+
+```text
+npm run test:agent-phase3
+```
+
 或按模块：
 
 ```text
@@ -51,6 +57,12 @@ npm run test:conversation-memory
 npm run test:kb-control-plane
 npm run test:kb-mcp
 npm run test:xiaofu-agent-ui
+npm run test:agent-run-events
+npm run test:provider-readiness
+npm run test:provider-runtime-matrix
+npm run test:coze-provider-v3
+npm run test:xiaofu-runtime-ui
+npm run test:xiaofu-memory-integration
 ```
 
 同时运行与修改模块直接相关的既有测试。若既有命令存在已确认的基线失败，必须保留失败证据并在交付报告中区分“改动引入”与“改动前已存在”；不得跳过、静默吞掉或削弱检查。需要真实 Provider 的验证必须单独说明环境和凭据条件，不能用 mock 代替。
@@ -61,6 +73,16 @@ npm run test:xiaofu-agent-ui
 - 无有效 Session 不得假装云端同步成功；默认 `local_only`。
 - `cloud_sync` 必须用户显式开启。
 - 知识库 MCP（`tools/fosu-kb-mcp`）只走受保护后台 API，不直读写知识 JSON；不得注册 publish/rollback Tool。
+
+## Runtime Truth Layer（Phase 3）
+
+- Loading / Thinking 状态必须来自服务端真实 Run Events，不得由客户端猜测“正在查询课表”。
+- `Thinking` 仅在 `provider.started` 真实发生后展示；Provider 未调用时禁止显示 Thinking。
+- `GET /api/ai/agent/readiness` 是小程序顶部 Agent 状态的权威来源之一；`wx.getNetworkType` 只能判断网络，不能等同 Agent 已连接。
+- 记忆模式切换、清除云端记忆、对话列表合并必须调用服务端 API；禁止只写 wx Storage 后显示“已同步”。
+- 会话 REST API 必须与请求作用域 Runtime Mode（Session + envVersion + 授权）对齐，不得仅用全局 configuredMode 串环境。
+- Coze 仅允许 PAT / Service Token / 官方 API Token；禁止账号密码、浏览器 Cookie；禁止全员共用固定 `user_id`；到期后自动跳过。
+- Coze 与任何外部 Provider 默认不得成为 public 主 Provider；public 永远 mock。
 
 ## 变更与发布纪律
 

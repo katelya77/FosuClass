@@ -576,7 +576,14 @@
     "test:kb-control-plane": "node tools/test-kb-control-plane-v2.js && node tools/test-knowledge-control-plane.js",
     "test:kb-mcp": "node tools/test-kb-mcp.js",
     "test:xiaofu-agent-ui": "node tools/test-xiaofu-agent-ui-v2.js && node tools/test-ai-assistant-minimal-ui.js && node tools/test-ai-assistant-ui-layout.js",
-    "test:agent-phase2": "node tools/run-agent-phase2-tests.js"
+    "test:agent-phase2": "node tools/run-agent-phase2-tests.js",
+    "test:agent-phase3": "node tools/run-agent-phase3-tests.js",
+    "test:agent-run-events": "node tools/test-agent-run-events.js",
+    "test:provider-readiness": "node tools/test-provider-readiness.js",
+    "test:provider-runtime-matrix": "node tools/test-provider-runtime-matrix.js",
+    "test:coze-provider-v3": "node tools/test-coze-provider-v3.js",
+    "test:xiaofu-runtime-ui": "node tools/test-xiaofu-runtime-ui.js",
+    "test:xiaofu-memory-integration": "node tools/test-xiaofu-memory-integration.js"
   },
   "repository": {
     "type": "git",

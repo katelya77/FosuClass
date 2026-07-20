@@ -81,6 +81,12 @@ function isProviderConfigured(name, runtimeConfig = {}) {
   if (name === "mock") return true;
   if (name === "deepseek") return Boolean(deepseekProvider.firstConfiguredKey(runtimeConfig));
   if (name === "coze") {
+    if (typeof cozeProvider.isEnabled === "function" && !cozeProvider.isEnabled(runtimeConfig)) {
+      return false;
+    }
+    if (typeof cozeProvider.isExpired === "function" && cozeProvider.isExpired(runtimeConfig)) {
+      return false;
+    }
     const cfg = cozeProvider.getConfig(runtimeConfig);
     return Boolean(cfg.apiKey && cfg.botId);
   }
@@ -151,12 +157,27 @@ function markFailure(name, reason) {
   }
 }
 
+function emitProviderEvent(options, event) {
+  if (typeof options.onEvent === "function") {
+    try {
+      options.onEvent(event);
+    } catch (error) {
+      // event emission must never break provider chain
+    }
+  }
+}
+
 async function generateWithChain(input = {}, options = {}) {
   const runtimeMode = options.runtimeMode || "public";
   const runtimeConfig = options.providerRuntimeConfig || input.providerRuntimeConfig || {};
   const names = getProviderChain(runtimeMode, runtimeConfig);
   const attempts = [];
   for (const name of names) {
+    if (name === "coze" && typeof cozeProvider.isExpired === "function" && cozeProvider.isExpired(runtimeConfig)) {
+      markFailure(name, "expired");
+      attempts.push({ provider: name, status: "skipped", reason: "expired" });
+      continue;
+    }
     if (isCircuitOpen(name)) {
       attempts.push({ provider: name, status: "skipped", reason: "circuit_open" });
       continue;
@@ -166,11 +187,36 @@ async function generateWithChain(input = {}, options = {}) {
       attempts.push({ provider: name, status: "skipped", reason: "not_configured" });
       continue;
     }
+    if (name === "mock") {
+      const payload = mockProvider.generate(input);
+      return Object.assign({}, payload, {
+        provider: "mock",
+        providerChain: attempts.concat({ provider: "mock", status: "success", reason: "deterministic_local_response" }),
+      });
+    }
     const provider = getProviderModule(name);
     const started = Date.now();
+    emitProviderEvent(options, {
+      type: "provider.selected",
+      status: "selected",
+      reasonCode: name === "coze" ? "PROVIDER_TEMPORARY" : "PROVIDER_SELECTED",
+    });
+    emitProviderEvent(options, {
+      type: "provider.started",
+      status: "started",
+      providerUsed: true,
+    });
     try {
-      const payload = await provider.generate(Object.assign({}, input, { providerRuntimeConfig: runtimeConfig }));
+      const payload = await provider.generate(Object.assign({}, input, {
+        providerRuntimeConfig: runtimeConfig,
+        principal: input.principal || options.principal || null,
+      }));
       markSuccess(name, Date.now() - started);
+      emitProviderEvent(options, {
+        type: "provider.completed",
+        status: "success",
+        providerUsed: true,
+      });
       return Object.assign({}, payload, {
         provider: payload.provider || name,
         providerChain: attempts.concat({ provider: name, status: "success", latencyMs: Date.now() - started }),
@@ -179,6 +225,12 @@ async function generateWithChain(input = {}, options = {}) {
       const reason = classifyFailure(error);
       markFailure(name, reason);
       attempts.push({ provider: name, status: "failed", reason });
+      emitProviderEvent(options, {
+        type: "provider.failed",
+        status: "failed",
+        reasonCode: String(reason || "provider_failed").slice(0, 80),
+        providerUsed: false,
+      });
     }
   }
   const fallback = mockProvider.generate(input);
@@ -216,6 +268,7 @@ module.exports = {
   getProviderChain,
   getProviderModule,
   getStatus,
+  isCircuitOpen,
   isProviderConfigured,
   resetForTest,
 };

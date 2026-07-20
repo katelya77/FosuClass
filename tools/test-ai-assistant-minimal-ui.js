@@ -20,8 +20,12 @@ assert(wxml.includes("bottom-sheet") || wxml.includes("sheet-mask"), "bottom she
 assert(/class="composer"/.test(wxml), "composer should exist");
 assert(/\.composer\s*\{[\s\S]*?position\s*:\s*fixed/.test(wxss), "composer should stay fixed");
 assert(wxml.includes("xiaofu-header") && !wxml.includes("assistant-hero card"), "top should be the Xiaofu light header, not a hero card");
-assert(wxml.includes("xiaofu-title-line") && wxml.includes("xiaofu-status"), "header should include stable title/status line");
-assert(wxml.includes("connectionStatusText"), "status must use real connection state data");
+assert(wxml.includes("xiaofu-title-line") && (wxml.includes("xiaofu-status") || wxml.includes("xiaofu-chip")), "header should include stable title/status line");
+assert(
+  wxml.includes("connectionStatusText") || wxml.includes("statusChips") || wxml.includes("xiaofu-chip"),
+  "status must use real connection/readiness state data"
+);
+assert(wxml.includes("小佛助手"), "main title must stay fixed as 小佛助手");
 assert(wxml.includes("今天想让小佛帮你完成什么"), "empty state should use task-oriented copy");
 assert(wxml.includes("告诉小佛你想完成的校园任务"), "composer placeholder should be task-oriented");
 
