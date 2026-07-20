@@ -14,9 +14,9 @@ global.wx.switchTab = (options) => {
 };
 
 const root = path.resolve(__dirname, "..");
-const js = fs.readFileSync(path.join(root, "miniprogram/pages/ai-assistant/ai-assistant.js"), "utf8");
-const wxml = fs.readFileSync(path.join(root, "miniprogram/pages/ai-assistant/ai-assistant.wxml"), "utf8");
-const wxss = fs.readFileSync(path.join(root, "miniprogram/pages/ai-assistant/ai-assistant.wxss"), "utf8");
+const js = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js"), "utf8");
+const wxml = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml"), "utf8");
+const wxss = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss"), "utf8");
 const guideSource = js.slice(js.indexOf("const CAPABILITY_GUIDE_GROUPS"), js.indexOf("const TABBAR_PENDING_QUERY"));
 
 [
@@ -42,7 +42,7 @@ assert(wxml.includes("onCapabilityExampleTap"), "examples should be clickable");
 assert(wxml.includes("openCampusMapFromGuide"), "guide should include campus map button");
 assert(wxss.includes(".capability-scroll"), "small screens should scroll the guide");
 
-require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+require("../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 const page = mockEnv.createPageInstance();
 assert.strictEqual(page.data.showCapabilityGuide, false, "guide should be closed by default");
 
@@ -63,6 +63,6 @@ assert.strictEqual(page.data.showCapabilityGuide, false);
 page.openCapabilityGuide();
 page.openCampusMapFromGuide();
 assert.strictEqual(page.data.showCapabilityGuide, false);
-assert.strictEqual(navigatedUrl, "/pages/campus-map/campus-map");
+assert.strictEqual(navigatedUrl, "/packageMaps/pages/campus-map/campus-map");
 
 console.log("test-ai-capability-guide passed");

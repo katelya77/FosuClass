@@ -16,7 +16,7 @@ async function run() {
     setTimeout(() => options.success({ statusCode: 200, data: { success: true, activeSnapshot: { releaseVersion: "v1" } } }), 5);
   };
 
-  require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+  require("../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
   const page = mockEnv.createPageInstance();
   page.onLoad({});
   await wait(10);

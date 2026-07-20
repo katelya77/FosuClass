@@ -195,13 +195,13 @@ Page({
   goCampusMap() {
     const code = this.data.nextBuildingCode || "";
     wx.navigateTo({
-      url: `/pages/campus-map/campus-map${code ? `?q=${encodeURIComponent(code)}` : ""}`,
+      url: `/packageMaps/pages/campus-map/campus-map${code ? `?q=${encodeURIComponent(code)}` : ""}`,
     });
   },
 
   goAiAssistant() {
     wx.navigateTo({
-      url: `/pages/ai-assistant/ai-assistant?q=${encodeURIComponent("查询今日安排")}`,
+      url: `/packageXiaofu/pages/ai-assistant/ai-assistant?q=${encodeURIComponent("查询今日安排")}`,
     });
   },
 

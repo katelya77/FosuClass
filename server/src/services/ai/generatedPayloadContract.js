@@ -20,6 +20,10 @@ const ALLOWED_NAVIGATION_URLS = new Set([
   "/pages/empty-room/empty-room",
   "/pages/schedule-view/schedule-view",
   "/pages/personal-sync/personal-sync",
+  // Subpackage routes (AI assistant + campus map moved out of main package)
+  "/packageXiaofu/pages/ai-assistant/ai-assistant",
+  "/packageMaps/pages/campus-map/campus-map",
+  // Legacy aliases kept for older clients; still resolve only if page exists on client
   "/pages/ai-assistant/ai-assistant",
   "/pages/campus-map/campus-map",
 ]);

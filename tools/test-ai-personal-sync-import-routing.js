@@ -6,7 +6,7 @@ global.getCurrentPages = () => [];
 global.getApp = () => ({ globalData: {} });
 
 const aiAssistantService = require("../miniprogram/services/aiAssistantService");
-const aiPageModule = require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+const aiPageModule = require("../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 
 function baseContext() {
   return {

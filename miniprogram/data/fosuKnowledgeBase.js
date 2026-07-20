@@ -72,7 +72,7 @@ const DOCS = [
     aliases: ["佛大有哪些校区", "佛山大学校区", "仙溪江湾河滨", "佛大校区在哪里"],
     sourceUrl: "https://www.fosu.edu.cn/school-overview",
     relatedLinks: [
-      { label: "校园地图", url: "/pages/campus-map/campus-map" },
+      { label: "校园地图", url: "/packageMaps/pages/campus-map/campus-map" },
       { label: "学校概况", url: "https://www.fosu.edu.cn/school-overview" },
     ],
     updatedAt: UPDATED_AT,
@@ -90,7 +90,7 @@ const DOCS = [
     aliases: ["地图在哪里", "校区地图在哪里看", "校园地点", "打开校园地图"],
     sourceUrl: "local://fosu-class/campus-map",
     relatedLinks: [
-      { label: "打开校园地图", url: "/pages/campus-map/campus-map" },
+      { label: "打开校园地图", url: "/packageMaps/pages/campus-map/campus-map" },
     ],
     updatedAt: UPDATED_AT,
     confidence: 0.88,
@@ -161,7 +161,7 @@ const DOCS = [
     sourceUrl: "https://www.fosu.edu.cn/library/",
     relatedLinks: [
       { label: "图书馆官网", url: "https://www.fosu.edu.cn/library/" },
-      { label: "校园地图", url: "/pages/campus-map/campus-map" },
+      { label: "校园地图", url: "/packageMaps/pages/campus-map/campus-map" },
     ],
     updatedAt: UPDATED_AT,
     confidence: 0.74,
@@ -476,7 +476,7 @@ const DOCS = [
     relatedLinks: [
       { label: "全校课表", url: "/pages/school/school" },
       { label: "个人课表同步", url: "/pages/personal-sync/personal-sync" },
-      { label: "校园地图", url: "/pages/campus-map/campus-map" },
+      { label: "校园地图", url: "/packageMaps/pages/campus-map/campus-map" },
     ],
     updatedAt: UPDATED_AT,
     confidence: 0.92,

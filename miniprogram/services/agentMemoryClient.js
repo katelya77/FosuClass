@@ -3,6 +3,7 @@
  * Uses existing request + session headers; never stores OpenID.
  */
 const http = require("../utils/request");
+const agentClientErrorMapper = require("./agentClientErrorMapper");
 
 function safeText(value, max = 200) {
   return String(value == null ? "" : value).trim().slice(0, max);
@@ -33,11 +34,19 @@ function requestOptions(extra = {}) {
   }, extra);
 }
 
+function mapError(payload, fallbackCode) {
+  const code = (payload && (payload.code || payload.errorCode)) || fallbackCode;
+  const message = payload && (payload.message || payload.error || payload.errMsg);
+  const mapped = agentClientErrorMapper.mapAgentError({ code, message }, agentClientErrorMapper.userMessage(fallbackCode));
+  return { code: mapped.code, error: mapped.userMessage };
+}
+
 async function listCloudConversations() {
   try {
     const response = await http.get(withEnvQuery("/api/ai/agent/conversations"), {}, requestOptions());
     if (!response || response.success === false) {
-      return { success: false, conversations: [], error: response && (response.message || response.code) || "LIST_FAILED" };
+      const mapped = mapError(response, "LIST_FAILED");
+      return { success: false, conversations: [], error: mapped.error, code: mapped.code };
     }
     const conversations = Array.isArray(response.conversations)
       ? response.conversations
@@ -48,21 +57,27 @@ async function listCloudConversations() {
       memory: response.memory || null,
     };
   } catch (error) {
-    return { success: false, conversations: [], error: error && error.message || "LIST_FAILED" };
+    const mapped = mapError(error, "LIST_FAILED");
+    return { success: false, conversations: [], error: mapped.error, code: mapped.code };
   }
 }
 
 async function getCloudConversation(conversationId) {
   const id = encodeURIComponent(safeText(conversationId, 96));
-  if (!id) return { success: false, conversation: null, error: "CONVERSATION_ID_REQUIRED" };
+  if (!id) {
+    const mapped = mapError({ code: "CONVERSATION_ID_REQUIRED" }, "CONVERSATION_ID_REQUIRED");
+    return { success: false, conversation: null, error: mapped.error, code: mapped.code };
+  }
   try {
     const response = await http.get(withEnvQuery(`/api/ai/agent/conversations/${id}`), {}, requestOptions());
     if (!response || response.success === false) {
-      return { success: false, conversation: null, error: response && (response.message || response.code) || "GET_FAILED" };
+      const mapped = mapError(response, "GET_FAILED");
+      return { success: false, conversation: null, error: mapped.error, code: mapped.code };
     }
     return { success: true, conversation: response.conversation || response.data || null };
   } catch (error) {
-    return { success: false, conversation: null, error: error && error.message || "GET_FAILED" };
+    const mapped = mapError(error, "GET_FAILED");
+    return { success: false, conversation: null, error: mapped.error, code: mapped.code };
   }
 }
 
@@ -73,33 +88,47 @@ async function updateMemoryPolicy(input = {}) {
     const response = await http.post(withEnvQuery("/api/ai/agent/memory-policy"), {
       mode,
       conversationId,
+      title: safeText(input.title, 80),
       clearExisting: input.clearExisting === true,
       expectedRevision: input.expectedRevision,
     }, requestOptions({ timeout: 15000 }));
     if (!response || response.success === false) {
+      const mapped = mapError(response, "MEMORY_POLICY_FAILED");
       return {
         success: false,
-        error: response && (response.message || response.code) || "POLICY_FAILED",
-        code: response && response.code || "POLICY_FAILED",
+        error: mapped.error,
+        code: mapped.code,
       };
     }
-    return { success: true, memory: response.memory || response, conversation: response.conversation || null };
+    return {
+      success: true,
+      memory: response.memory || response,
+      conversation: response.conversation || null,
+      created: response.created === true,
+      upserted: response.upserted === true,
+    };
   } catch (error) {
-    return { success: false, error: error && error.message || "POLICY_FAILED", code: "POLICY_FAILED" };
+    const mapped = mapError(error, "MEMORY_POLICY_FAILED");
+    return { success: false, error: mapped.error, code: mapped.code };
   }
 }
 
 async function patchCloudConversation(conversationId, body = {}) {
   const id = encodeURIComponent(safeText(conversationId, 96));
-  if (!id) return { success: false, error: "CONVERSATION_ID_REQUIRED" };
+  if (!id) {
+    const mapped = mapError({ code: "CONVERSATION_ID_REQUIRED" }, "CONVERSATION_ID_REQUIRED");
+    return { success: false, error: mapped.error, code: mapped.code };
+  }
   try {
     const response = await http.request(withEnvQuery(`/api/ai/agent/conversations/${id}`), "PATCH", body, requestOptions());
     if (!response || response.success === false) {
-      return { success: false, error: response && (response.message || response.code) || "PATCH_FAILED", code: response && response.code };
+      const mapped = mapError(response, "PATCH_FAILED");
+      return { success: false, error: mapped.error, code: mapped.code };
     }
     return { success: true, conversation: response.conversation || response, memory: response.memory || null };
   } catch (error) {
-    return { success: false, error: error && error.message || "PATCH_FAILED" };
+    const mapped = mapError(error, "PATCH_FAILED");
+    return { success: false, error: mapped.error, code: mapped.code };
   }
 }
 
@@ -112,15 +141,20 @@ async function renameCloudConversation(conversationId, title, expectedRevision) 
 
 async function deleteCloudConversation(conversationId) {
   const id = encodeURIComponent(safeText(conversationId, 96));
-  if (!id) return { success: false, error: "CONVERSATION_ID_REQUIRED" };
+  if (!id) {
+    const mapped = mapError({ code: "CONVERSATION_ID_REQUIRED" }, "CONVERSATION_ID_REQUIRED");
+    return { success: false, error: mapped.error, code: mapped.code };
+  }
   try {
     const response = await http.request(withEnvQuery(`/api/ai/agent/conversations/${id}`), "DELETE", {}, requestOptions());
     if (!response || response.success === false) {
-      return { success: false, error: response && (response.message || response.code) || "DELETE_FAILED" };
+      const mapped = mapError(response, "DELETE_FAILED");
+      return { success: false, error: mapped.error, code: mapped.code };
     }
     return { success: true };
   } catch (error) {
-    return { success: false, error: error && error.message || "DELETE_FAILED" };
+    const mapped = mapError(error, "DELETE_FAILED");
+    return { success: false, error: mapped.error, code: mapped.code };
   }
 }
 
@@ -128,11 +162,13 @@ async function clearCloudMemory() {
   try {
     const response = await http.request(withEnvQuery("/api/ai/agent/memory"), "DELETE", {}, requestOptions({ timeout: 15000 }));
     if (!response || response.success === false) {
-      return { success: false, error: response && (response.message || response.code) || "CLEAR_FAILED", code: response && response.code };
+      const mapped = mapError(response, "CLEAR_FAILED");
+      return { success: false, error: mapped.error, code: mapped.code };
     }
     return { success: true, cleared: true, memory: response.memory || null };
   } catch (error) {
-    return { success: false, error: error && error.message || "CLEAR_FAILED" };
+    const mapped = mapError(error, "CLEAR_FAILED");
+    return { success: false, error: mapped.error, code: mapped.code };
   }
 }
 

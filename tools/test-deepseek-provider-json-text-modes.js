@@ -42,7 +42,10 @@ async function run() {
       projectKnowledge: "FosuClass 项目知识",
     });
     assert.strictEqual(textResult.provider, "deepseek");
-    assert.strictEqual(textResult.cards[0].type, "generic");
+    // Final convergence: plain text responses must not invent generic assistant cards.
+    assert.ok(Array.isArray(textResult.cards));
+    assert.strictEqual(textResult.cards.length, 0);
+    assert.ok(textResult.answer && textResult.answer.includes("FosuClass"));
     assert(!calls[0].body.response_format, "project_qa text mode should not force response_format");
 
     const jsonResult = await deepseekProvider.generate({

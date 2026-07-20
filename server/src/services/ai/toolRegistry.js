@@ -909,10 +909,91 @@ function getClassroomLocation(input = {}) {
   return campusMapService.getClassroomLocation(input);
 }
 
-function ragSearch(input = {}, context = {}) {
-  return knowledgeBaseService.searchKnowledge(Object.assign({}, input, {
-    environment: context.assistantEnvironment || context.runtimeMode || input.environment,
-  }));
+/**
+ * Hybrid RAG entry — always goes through KnowledgeRetriever (rule + BM25 + optional vector).
+ * Async; callers must use executeToolAsync (Agent Kernel does).
+ */
+async function ragSearch(input = {}, context = {}) {
+  const environment = context.assistantEnvironment || context.runtimeMode || input.environment || "public";
+  const query = String(input.q || input.query || input.message || "").trim();
+  try {
+    const { retrieveKnowledge } = require("./retrieval/knowledgeRetriever");
+    const result = await retrieveKnowledge({
+      query,
+      q: query,
+      environment,
+      runtimeMode: environment,
+      campus: input.campus || (context && context.campus) || "",
+      category: input.category || "",
+      rewrittenQuery: input.rewrittenQuery || "",
+    });
+    const hits = (result && result.hits) || [];
+    const vectorUsed = result && result.vectorUsed === true;
+    const lexicalFallback = !vectorUsed;
+    if (!result || result.noAnswer || !hits.length) {
+      return {
+        success: true,
+        query: result && result.query || query,
+        rewrittenQuery: result && result.rewrittenQuery || query,
+        hits: [],
+        confidence: result && result.confidence || 0,
+        citations: result && result.citations || [],
+        noAnswer: true,
+        reason: result && result.reason || "NO_RELIABLE_HIT",
+        summary: "暂未找到可靠的公开知识依据，请换个说法或查看使用说明。",
+        hybrid: true,
+        vectorUsed,
+        lexicalFallback,
+        lexicalCount: result && result.lexicalCount || 0,
+        vectorIndex: result && result.vectorIndex || null,
+        documents: [],
+        total: 0,
+      };
+    }
+    return {
+      success: true,
+      query: result.query || query,
+      rewrittenQuery: result.rewrittenQuery || query,
+      hits,
+      confidence: result.confidence || 0,
+      citations: result.citations || [],
+      noAnswer: false,
+      reason: result.reason || "OK",
+      summary: hits[0] && (hits[0].excerpt || hits[0].title) || "已检索到相关说明。",
+      hybrid: true,
+      vectorUsed,
+      lexicalFallback,
+      lexicalCount: result.lexicalCount || 0,
+      vectorIndex: result.vectorIndex || null,
+      documents: hits,
+      total: hits.length,
+    };
+  } catch (error) {
+    // Hard degrade to legacy KB search (lexical/rule only)
+    try {
+      const legacy = knowledgeBaseService.searchKnowledge(Object.assign({}, input, {
+        environment,
+        query,
+        q: query,
+      }));
+      return Object.assign({}, legacy, {
+        success: legacy && legacy.success !== false,
+        hybrid: true,
+        vectorUsed: false,
+        lexicalFallback: true,
+        reason: "RETRIEVER_FALLBACK",
+      });
+    } catch (legacyError) {
+      return {
+        success: false,
+        code: error.code || "RAG_FAILED",
+        message: "知识检索暂时不可用",
+        hybrid: true,
+        vectorUsed: false,
+        lexicalFallback: true,
+      };
+    }
+  }
 }
 
 function generateImage(input = {}, context = {}) {

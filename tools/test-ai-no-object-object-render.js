@@ -15,7 +15,7 @@ global.Page = (config) => {
 };
 
 const ROOT = path.resolve(__dirname, "..");
-const pageModule = require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+const pageModule = require("../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 
 function read(file) {
   return fs.readFileSync(path.join(ROOT, file), "utf8");
@@ -29,8 +29,8 @@ function assertNoBadText(value) {
 }
 
 function run() {
-  const js = read("miniprogram/pages/ai-assistant/ai-assistant.js");
-  const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
+  const js = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
+  const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
   assert(!/String\s*\(\s*action\.label/.test(js), "action.label must not be directly String() converted");
   assert(!/String\s*\(\s*source\.label/.test(js), "source.label must not be directly String() converted");
   assert(wxml.includes("{{action.label}}"), "WXML should render normalized action label only");

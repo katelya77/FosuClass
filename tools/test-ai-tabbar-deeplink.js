@@ -9,7 +9,7 @@ function read(file) {
 }
 
 function run() {
-  const assistant = read("miniprogram/pages/ai-assistant/ai-assistant.js");
+  const assistant = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
   const school = read("miniprogram/pages/school/school.js");
   const today = read("miniprogram/pages/today/today.js");
 

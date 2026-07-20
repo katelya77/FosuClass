@@ -18,7 +18,7 @@ const aiAssistantService = require("../miniprogram/services/aiAssistantService")
 aiAssistantService.buildClientContext = () => ({ timezone: "Asia/Shanghai" });
 aiAssistantService.saveAiHistory = (messages) => messages;
 
-require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+require("../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 
 function makePage() {
   const config = global.__AI_ASSISTANT_PAGE__;

@@ -15,6 +15,10 @@ const agentTraceRecorder = require("./agentTraceRecorder");
 const { defaultMemoryService } = require("./conversation/conversationMemoryService");
 const agentRunEventService = require("./agentRunEventService");
 const { loadingTextForEvent } = require("./runEventCatalog");
+const responseComposer = require("./responseComposer");
+const { getPlannerPolicy, isGeneralAssistantEnabled } = require("./planner/plannerPolicy");
+const plannerModelAdapter = require("./planner/plannerModelAdapter");
+const { assemble: assembleContext } = require("./context/contextAssembler");
 
 function nowIso() {
   return new Date().toISOString();
@@ -302,6 +306,14 @@ function buildMetrics(options = {}) {
     fallback: options.fallback === true,
     itemCount: getItemCount(options.toolCalls),
     usedPersonalContext: options.usedPersonalContext === true,
+    // Planner vs Response diagnostics (no secrets)
+    plannerProvider: options.plannerProvider || "none",
+    responseProvider: options.responseProvider || options.provider || "none",
+    plannerLatency: Math.max(0, Number(options.plannerLatency || 0) || 0),
+    responseLatency: Math.max(0, Number(options.responseLatency || 0) || 0),
+    plannerFallback: options.plannerFallback === true,
+    responseFallback: options.responseFallback === true,
+    plannerType: options.plannerType || "",
   };
 }
 
@@ -315,6 +327,13 @@ function normalizeMetrics(metrics = {}, fallbackOptions = {}) {
     fallback: base.fallback === true,
     itemCount: Math.max(0, Number(base.itemCount || 0) || 0),
     usedPersonalContext: base.usedPersonalContext === true,
+    plannerProvider: String(base.plannerProvider || "none"),
+    responseProvider: String(base.responseProvider || "none"),
+    plannerLatency: Math.max(0, Number(base.plannerLatency || 0) || 0),
+    responseLatency: Math.max(0, Number(base.responseLatency || 0) || 0),
+    plannerFallback: base.plannerFallback === true,
+    responseFallback: base.responseFallback === true,
+    plannerType: String(base.plannerType || ""),
   };
 }
 
@@ -470,6 +489,38 @@ function sanitizePublicSkill(skill) {
   };
 }
 
+function sanitizePublicPlan(plan) {
+  const list = Array.isArray(plan) ? plan : [];
+  return list.map((step) => {
+    const source = step && typeof step === "object" ? step : {};
+    const args = source.args && typeof source.args === "object" && !Array.isArray(source.args)
+      ? source.args
+      : {};
+    const safeArgs = {};
+    Object.keys(args).forEach((key) => {
+      const value = args[key];
+      if (value == null) return;
+      if (typeof value === "number" || typeof value === "boolean") {
+        safeArgs[key] = value;
+        return;
+      }
+      if (typeof value === "string") {
+        // Never echo full user message / internal tokens into public plan args.
+        if (key === "message" || key === "q" || key === "query" || key === "prompt") {
+          safeArgs[key] = sanitizePublicText(value, "").slice(0, 40);
+          return;
+        }
+        safeArgs[key] = sanitizePublicText(value, "").slice(0, 80);
+      }
+    });
+    return {
+      toolName: sanitizePublicText(source.toolName || source.name || "", "").slice(0, 60),
+      args: safeArgs,
+      reason: sanitizePublicText(source.reason || source.reasonCode || "", "").slice(0, 40),
+    };
+  }).filter((step) => step.toolName);
+}
+
 function sanitizePublicResponse(response) {
   const evidence = buildPublicEvidence(response.evidence);
   const sourceSafety = response.safety || {};
@@ -479,6 +530,7 @@ function sanitizePublicResponse(response) {
     cards: (Array.isArray(response.cards) ? response.cards : []).map(sanitizePublicCard),
     suggestions: (Array.isArray(response.suggestions) ? response.suggestions : []).map((item) => sanitizePublicText(item, "")).filter(Boolean).slice(0, 6),
     toolCalls: (Array.isArray(response.toolCalls) ? response.toolCalls : []).map(sanitizePublicToolCall),
+    plan: sanitizePublicPlan(response.plan),
     skill: sanitizePublicSkill(response.skill),
     evidence,
     safety: {
@@ -566,8 +618,22 @@ function buildResponse(payload) {
     cards: payload.cards,
   });
   const taskSteps = payload.taskSteps || buildTaskSteps(payload.intent, rawToolCalls);
-  const evidence = payload.evidence || buildEvidence(rawToolCalls, payload.context, payload.intent);
+  let evidence = payload.evidence || buildEvidence(rawToolCalls, payload.context, payload.intent);
   const errors = (Array.isArray(payload.errors) ? payload.errors : []).concat(validation.errors || []);
+  // Kernel verification is authoritative for evidence completeness on fact tasks.
+  if (payload.verification && payload.verification.evidenceComplete === false) {
+    evidence = Object.assign({}, evidence, {
+      complete: false,
+      verified: false,
+      toolCount: 0,
+    });
+  } else if (errors.some((item) => item && item.code === "FACT_TOOL_EVIDENCE_REQUIRED")) {
+    evidence = Object.assign({}, evidence, {
+      complete: false,
+      verified: false,
+      toolCount: 0,
+    });
+  }
   const response = {
     protocolVersion: envelope.protocolVersion,
     requestId: envelope.requestId,
@@ -597,6 +663,16 @@ function buildResponse(payload) {
     evidence,
     evidenceItems: envelope.evidenceItems,
     suggestions: payload.suggestions,
+    // Presentation protocol (Response Composer) — required for mini-program one-focus UI
+    presentationMode: payload.presentationMode || "",
+    presentation: payload.presentation || null,
+    runSummary: payload.runSummary || null,
+    taskTrajectory: payload.taskTrajectory || null,
+    evidenceDisplay: payload.evidenceDisplay || null,
+    planMeta: agentProtocol.normalizeStructuredPlanMeta
+      ? agentProtocol.normalizeStructuredPlanMeta(payload.plan)
+      : null,
+    contextMeta: payload.contextMeta || null,
     contextSlots: payload.contextSlots || buildContextSlots(payload.intent, envelope.slots),
     fallback: payload.fallback === true,
     fallbackLayer: payload.fallbackLayer || (payload.fallback === true ? "server" : "none"),
@@ -654,6 +730,13 @@ function buildResponse(payload) {
       evidence: safeResponse.evidence,
       memory: safeResponse.memory,
       errors: safeResponse.errors,
+      presentationMode: safeResponse.presentationMode || payload.presentationMode || "",
+      presentation: safeResponse.presentation || payload.presentation || null,
+      runSummary: safeResponse.runSummary || payload.runSummary || null,
+      taskTrajectory: safeResponse.taskTrajectory || payload.taskTrajectory || null,
+      evidenceDisplay: safeResponse.evidenceDisplay || payload.evidenceDisplay || null,
+      planMeta: safeResponse.planMeta || null,
+      metrics: safeResponse.metrics,
     }));
   }
   return safeResponse;
@@ -963,6 +1046,17 @@ async function chat(input = {}) {
   const ruleResolution = resolveRuleBackedIntent(safeMessage, context);
   const intent = ruleResolution.intent;
   const localRuleMatch = ruleResolution.ruleMatch;
+
+  // Dedicated planner model adapter (trial/dev only). public never calls models.
+  const plannerGenerate = plannerModelAdapter.createModelGenerate({
+    runtimeMode: runtimeDecision.runtimeMode,
+    providerRuntimeConfig,
+    onEvent: (event) => emitChatEvent(eventInput, Object.assign({
+      runtimeMode: runtimeDecision.runtimeMode,
+      intentName: intent.name,
+    }, event)),
+  });
+
   const execution = await agentKernel.execute({
     message: safeMessage,
     context,
@@ -973,9 +1067,41 @@ async function chat(input = {}) {
     conversationId,
     runId,
     onEvent: input.onEvent,
+    modelGenerate: runtimeDecision.runtimeMode === "public" ? undefined : plannerGenerate,
   });
   const plan = execution.plan;
   const toolCalls = execution.toolCalls;
+  const plannerDiag = typeof plannerGenerate.getDiagnostics === "function"
+    ? plannerGenerate.getDiagnostics()
+    : { plannerProvider: "none", plannerLatency: 0, plannerFallback: false, plannerStatus: "not_called" };
+  // Prefer structured plan metadata when available (array plan loses plannerType).
+  const planType = (plan && plan.plannerType)
+    || (Array.isArray(plan) ? "" : "")
+    || "";
+  if (planType === "model" || planType === "model_replan" || plannerDiag.plannerStatus === "ok") {
+    plannerDiag.plannerFallback = false;
+    if (plannerDiag.plannerStatus === "not_called") plannerDiag.plannerStatus = "ok";
+    if (plan && plan.plannerProvider) plannerDiag.plannerProvider = plan.plannerProvider;
+    if (plan && plan.plannerLatencyMs) {
+      plannerDiag.plannerLatency = Math.max(
+        Number(plannerDiag.plannerLatency) || 0,
+        Number(plan.plannerLatencyMs) || 0
+      );
+    }
+    if (!planType && plannerDiag.successCount) {
+      plannerDiag.inferredPlannerType = "model";
+    } else if (planType) {
+      plannerDiag.inferredPlannerType = planType;
+    }
+  } else if (planType === "deterministic_fallback" || plannerDiag.plannerStatus === "failed") {
+    plannerDiag.plannerFallback = true;
+    plannerDiag.inferredPlannerType = planType || "deterministic_fallback";
+  } else if (runtimeDecision.runtimeMode === "public") {
+    plannerDiag.inferredPlannerType = "deterministic";
+    plannerDiag.plannerProvider = "none";
+  } else {
+    plannerDiag.inferredPlannerType = planType || "deterministic";
+  }
   const publicToolCalls = toolCalls.map((item) => ({
     name: safetyGuard.redactSensitiveText(item.name || "").slice(0, 60),
     status: safetyGuard.redactSensitiveText(item.status || "").slice(0, 20),
@@ -1019,12 +1145,29 @@ async function chat(input = {}) {
       intentName: intent.name,
       providerUsed: false,
     });
+    const publicPlain = responseComposer.compose({
+      answer: intent.name === "conversational_help"
+        ? "你好，我是小佛。正式版里我可以帮你查课表、空教室、教学周和产品使用说明。"
+        : "小佛目前只提供佛课小表、课表、课程查询和使用帮助。",
+      cards: [],
+      suggestions: [],
+      intentName: intent.name,
+      intent,
+      runtimeMode: "public",
+      toolCalls: publicToolCalls,
+      steps: [],
+      generalAssistant: false,
+    });
     const response = attachMemory(buildResponse({
       protocolVersion,
       runId,
-      answer: "小佛目前只提供佛课小表、课表、课程查询和使用帮助。",
-      cards: [],
-      suggestions: ["查今日课程", "查空教室", "佛课小表怎么用？"],
+      answer: publicPlain.answer,
+      cards: publicPlain.cards,
+      suggestions: publicPlain.suggestions,
+      presentationMode: publicPlain.presentationMode,
+      presentation: publicPlain,
+      runSummary: null,
+      taskTrajectory: null,
       toolCalls: publicToolCalls,
       provider: "mock",
       desiredProvider: "mock",
@@ -1053,8 +1196,12 @@ async function chat(input = {}) {
         externalProviderUsed: false,
         fallback: true,
         usedPersonalContext,
+        plannerType: plan && plan.plannerType || "deterministic",
+        plannerProvider: "none",
+        responseProvider: "mock",
       }),
       errors: execution.verification && execution.verification.errors || [],
+      verification: execution.verification || null,
     }), memoryBundle, {
       message: safeMessage,
       intentName: intent.name,
@@ -1087,21 +1234,40 @@ async function chat(input = {}) {
   // 体验/开发对话类意图始终注入公开产品知识，帮助模型做人设化表达；不含私密部署信息。
   const shouldInjectProjectKnowledge = isProjectKnowledgeIntent(intent)
     || runtimeDecision.runtimeMode !== "public";
+  const toolResultsForProvider = toolCalls.map((item) => ({
+    name: item.name,
+    status: item.status,
+    summary: safetyGuard.redactSensitiveText(item.summary || ""),
+    result: safetyGuard.sanitizeToolResult(item.result),
+  }));
+  const projectKnowledgeText = shouldInjectProjectKnowledge
+    ? projectKnowledgeService.getProjectKnowledgePrompt(context.assistantEnvironment || runtimeDecision.runtimeMode, safeMessage)
+    : "";
+  // Budgeted response context — never dump unbounded history or full schedule into provider.
+  const responseContext = assembleContext("response", {
+    message: safeMessage,
+    runtimeMode: runtimeDecision.runtimeMode,
+    currentTeachingWeek: context.currentTeachingWeek,
+    toolResults: toolResultsForProvider,
+    toolCalls: toolResultsForProvider,
+    projectKnowledge: projectKnowledgeText,
+    history: Array.isArray(context.recentMessages) ? context.recentMessages : [],
+    messages: Array.isArray(context.recentMessages) ? context.recentMessages : [],
+  });
   const providerInput = {
     message: safeMessage,
     context: buildMinimalProviderContext(context),
     intent,
     localRule: localRuleMatch && localRuleMatch.rule || null,
-    projectKnowledge: shouldInjectProjectKnowledge
-      ? projectKnowledgeService.getProjectKnowledgePrompt(context.assistantEnvironment || runtimeDecision.runtimeMode, safeMessage)
-      : "",
+    projectKnowledge: projectKnowledgeText,
     providerRuntimeConfig,
-    toolResults: toolCalls.map((item) => ({
-      name: item.name,
-      status: item.status,
-      summary: safetyGuard.redactSensitiveText(item.summary || ""),
-      result: safetyGuard.sanitizeToolResult(item.result),
-    })),
+    toolResults: toolResultsForProvider,
+    contextMeta: {
+      contextTokenEstimate: responseContext.contextTokenEstimate,
+      contextSections: responseContext.sections,
+      truncatedSections: responseContext.truncatedSections,
+      compressionUsed: responseContext.compressionUsed === true,
+    },
   };
   const deterministicGenerated = mockProvider.generate(providerInput);
   const deterministicPayload = stableGeneratedPayload(deterministicGenerated, {
@@ -1111,8 +1277,10 @@ async function chat(input = {}) {
   let externalProviderUsed = false;
   let fallback = !policyDecision.useExternal;
   let fallbackReason = "";
+  let responseLatencyMs = 0;
   const providerDecisionReason = policyDecision.reason || (policyDecision.useExternal ? "external provider selected" : "local provider selected");
   try {
+    const responseStartedAt = Date.now();
     const generated = policyDecision.useExternal
       ? await providerChainService.generateWithChain(providerInput, {
         runtimeMode: runtimeDecision.runtimeMode,
@@ -1124,6 +1292,7 @@ async function chat(input = {}) {
         }, event)),
       })
       : deterministicGenerated;
+    responseLatencyMs = Date.now() - responseStartedAt;
     if (!policyDecision.useExternal) {
       emitChatEvent(eventInput, {
         type: "response.composing",
@@ -1196,7 +1365,37 @@ async function chat(input = {}) {
   } else if (intent.name !== "clarify_missing_slot" && context.pendingClarification) {
     pendingPatch.clearPendingClarification = true;
   }
+  const composed = responseComposer.compose({
+    answer: stable.answer,
+    cards: stable.cards,
+    suggestions: stable.suggestions,
+    intentName: intent.name,
+    intent,
+    runtimeMode: runtimeDecision.runtimeMode,
+    toolCalls: publicToolCalls,
+    steps: execution.steps,
+    plan: execution.plan || plan,
+    needsClarification: intent.name === "clarify_missing_slot" || (execution.plan && execution.plan.needsClarification),
+    clarification: execution.plan && execution.plan.clarification,
+    generalAssistant: isGeneralAssistantEnabled(runtimeDecision.runtimeMode),
+    context,
+    message: safeMessage,
+    userMessage: safeMessage,
+    durationMs: Date.now() - startTime,
+    replanUsed: execution.replanUsed === true,
+    success: true,
+    status: fallbackReason ? "degraded" : "completed",
+    errors: execution.verification && execution.verification.errors || [],
+  });
   const response = attachMemory(buildResponse(Object.assign({}, stable, {
+    answer: composed.answer,
+    cards: composed.cards,
+    suggestions: composed.suggestions,
+    presentationMode: composed.presentationMode,
+    presentation: composed,
+    evidenceDisplay: composed.evidence,
+    runSummary: composed.runSummary,
+    feedback: composed.feedback,
     protocolVersion,
     runId,
     requestId,
@@ -1207,7 +1406,7 @@ async function chat(input = {}) {
     toolCalls: publicToolCalls,
     rawToolCalls: toolCalls,
     intent,
-    plan,
+    plan: execution.plan || plan,
     skill: execution.skill,
     steps: execution.steps,
     observations: execution.observations,
@@ -1225,6 +1424,7 @@ async function chat(input = {}) {
     pendingClarification: pendingPatch.pendingClarification,
     clearPendingClarification: pendingPatch.clearPendingClarification,
     errors: execution.verification && execution.verification.errors || [],
+    verification: execution.verification || null,
     metrics: buildMetrics({
       startTime,
       intent,
@@ -1232,7 +1432,16 @@ async function chat(input = {}) {
       externalProviderUsed,
       fallback,
       usedPersonalContext,
+      plannerProvider: plannerDiag.plannerProvider || (plan && plan.plannerProvider) || "none",
+      responseProvider: providerName,
+      plannerLatency: plannerDiag.plannerLatency || (plan && plan.plannerLatencyMs) || 0,
+      responseLatency: responseLatencyMs,
+      plannerFallback: plannerDiag.plannerFallback === true,
+      responseFallback: Boolean(fallbackReason),
+      plannerType: plannerDiag.inferredPlannerType || (plan && plan.plannerType) || "",
     }),
+    taskTrajectory: composed.taskTrajectory || null,
+    contextMeta: providerInput.contextMeta || null,
   })), memoryBundle, {
     message: safeMessage,
     intentName: intent.name,
@@ -1243,7 +1452,7 @@ async function chat(input = {}) {
     contextSlots: buildContextSlots(intent, intent.slots || {}),
     pendingClarification: pendingPatch.pendingClarification,
     clearPendingClarification: pendingPatch.clearPendingClarification,
-    answer: stable.answer,
+    answer: composed.answer,
     evidence: null,
     cloudSyncEnabled: context.cloudSyncEnabled === true,
   });
@@ -1253,6 +1462,8 @@ async function chat(input = {}) {
     fallbackLayer: fallbackReason ? "server" : "none",
     fallbackReason,
     evidenceComplete: response.evidence && response.evidence.complete === true,
+    plannerType: plan && plan.plannerType,
+    plannerProvider: plannerDiag.plannerProvider,
   });
   emitChatEvent(eventInput, {
     type: fallbackReason ? "run.degraded" : "run.completed",
@@ -1260,11 +1471,23 @@ async function chat(input = {}) {
     intentName: intent.name,
     providerUsed: externalProviderUsed,
     reasonCode: fallbackReason ? String(fallbackReason).slice(0, 80) : "",
+    plannerType: plan && plan.plannerType || "",
   });
   return response;
 }
 
 function attachMemory(response, memoryBundle, options = {}) {
+  const status = options.status || response.status;
+  if (status === "cancelled" || response.status === "cancelled") {
+    response.memory = memoryBundle && memoryBundle.memory || {
+      mode: "local_only",
+      authenticated: false,
+      persisted: false,
+      synced: false,
+      revision: 0,
+    };
+    return response;
+  }
   const memory = defaultMemoryService.persistAfterSuccess({
     principal: memoryBundle && memoryBundle.principal,
     state: memoryBundle && memoryBundle.state,
@@ -1276,13 +1499,14 @@ function attachMemory(response, memoryBundle, options = {}) {
     intentName: options.intentName || (response.intent && response.intent.name) || response.intent,
     context: options.context,
     runId: options.runId || response.runId,
-    status: options.status || response.status,
+    status,
     stepCount: options.stepCount || (Array.isArray(response.steps) ? response.steps.length : 0),
     contextSlots: options.contextSlots || response.contextSlots || response.slots,
     pendingClarification: options.pendingClarification,
     clearPendingClarification: options.clearPendingClarification,
     evidence: options.evidence || response.evidence,
     failed: response.success === false,
+    cancelled: status === "cancelled",
     securityBlocked: false,
   });
   response.memory = memory;

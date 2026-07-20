@@ -8,6 +8,11 @@ const EVENT_TYPES = Object.freeze([
   "request.sanitized",
   "intent.resolved",
   "skill.selected",
+  "plan.created",
+  "plan.replan",
+  "planner.started",
+  "planner.completed",
+  "planner.failed",
   "tool.started",
   "tool.completed",
   "tool.failed",
@@ -62,6 +67,18 @@ function loadingTextForEvent(event = {}, runtimeMode = "public") {
     case "intent.resolved":
     case "skill.selected":
       return "正在理解你的问题";
+    case "plan.created":
+      return enhanced && event.plannerType === "model"
+        ? "正在增强理解"
+        : "正在制定计划";
+    case "plan.replan":
+      return "正在调整方案";
+    case "planner.started":
+      return enhanced ? "正在进行增强分析" : "正在制定计划";
+    case "planner.completed":
+      return "计划已就绪";
+    case "planner.failed":
+      return "增强规划暂不可用，改用本地计划";
     case "tool.started":
       if (/weather/i.test(tool) || intent === "get_campus_weather") return "正在获取校区天气";
       if (/empty|classroom/i.test(tool) || /empty_classroom|search_classroom/.test(tool)) return "正在核验教室占用";
@@ -78,7 +95,8 @@ function loadingTextForEvent(event = {}, runtimeMode = "public") {
     case "provider.selected":
       return enhanced ? "正在准备增强理解" : "正在准备回答";
     case "provider.started":
-      return enhanced ? "Thinking · 正在使用增强理解" : "正在组织回答";
+      // Only show "enhanced analysis" when a real provider call started — never fake Thinking
+      return enhanced ? "正在进行增强分析" : "正在组织回答";
     case "provider.completed":
       return "正在组织回答";
     case "provider.failed":

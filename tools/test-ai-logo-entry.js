@@ -12,7 +12,7 @@ function read(file) {
 
 function run() {
   [
-    "miniprogram/pages/ai-assistant/ai-assistant.wxml",
+    "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml",
     "miniprogram/pages/index/index.wxml",
     "miniprogram/pages/school/school.wxml",
     "miniprogram/pages/today/today.wxml",

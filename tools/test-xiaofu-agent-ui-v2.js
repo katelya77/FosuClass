@@ -10,10 +10,10 @@ function read(rel) {
   return fs.readFileSync(path.join(ROOT, rel), "utf8");
 }
 
-const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
-const js = read("miniprogram/pages/ai-assistant/ai-assistant.js");
-const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
-const json = read("miniprogram/pages/ai-assistant/ai-assistant.json");
+const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
+const js = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
+const wxss = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss");
+const json = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.json");
 
 // 1. Copy no longer centers on 查询记录/新建查询/查询中
 assert(!wxml.includes("查询记录"), "UI must not use 查询记录");
@@ -21,7 +21,7 @@ assert(!wxml.includes("新建查询"), "UI must not use 新建查询");
 assert(!wxml.includes('{{sending ? "查询中" : "查询"}}'), "send button must not use old 查询/查询中 labels");
 assert(wxml.includes("icon-send") || wxml.includes("aria-label=\"{{sending ? '处理中' : '发送'}}\""), "send control should use icon/send semantics");
 assert(wxml.includes("对话") || wxml.includes("新建对话") || js.includes("新建对话"));
-assert(wxml.includes("今天想让小佛帮你完成什么"));
+assert(wxml.includes("今天想让小佛帮你完成什么") || wxml.includes("今天想完成什么"));
 
 // 2-3. V2 steps consumed; V1 taskSteps still present in pipeline
 assert(js.includes("displaySteps") || js.includes("normalizeDisplaySteps"));
@@ -72,7 +72,7 @@ assert(wxml.includes("voice-btn") || wxml.includes("voiceInputVisible"));
 assert(wxss.includes("safe-area") || wxml.includes("safe-area"));
 
 // Agent run component
-const runJs = read("miniprogram/components/xiaofu-agent-run/index.js");
+const runJs = read("miniprogram/packageXiaofu/components/xiaofu-agent-run/index.js");
 assert(runJs.includes("publicToolLabel") || runJs.includes("PUBLIC_TOOL_LABELS"));
 assert(runJs.includes("expanded"));
 assert(!runJs.includes("system prompt"));
