@@ -15,6 +15,8 @@ const agentTraceRecorder = require("./agentTraceRecorder");
 const { defaultMemoryService } = require("./conversation/conversationMemoryService");
 const agentRunEventService = require("./agentRunEventService");
 const { loadingTextForEvent } = require("./runEventCatalog");
+const responseComposer = require("./responseComposer");
+const { getPlannerPolicy, isGeneralAssistantEnabled } = require("./planner/plannerPolicy");
 
 function nowIso() {
   return new Date().toISOString();
@@ -470,6 +472,38 @@ function sanitizePublicSkill(skill) {
   };
 }
 
+function sanitizePublicPlan(plan) {
+  const list = Array.isArray(plan) ? plan : [];
+  return list.map((step) => {
+    const source = step && typeof step === "object" ? step : {};
+    const args = source.args && typeof source.args === "object" && !Array.isArray(source.args)
+      ? source.args
+      : {};
+    const safeArgs = {};
+    Object.keys(args).forEach((key) => {
+      const value = args[key];
+      if (value == null) return;
+      if (typeof value === "number" || typeof value === "boolean") {
+        safeArgs[key] = value;
+        return;
+      }
+      if (typeof value === "string") {
+        // Never echo full user message / internal tokens into public plan args.
+        if (key === "message" || key === "q" || key === "query" || key === "prompt") {
+          safeArgs[key] = sanitizePublicText(value, "").slice(0, 40);
+          return;
+        }
+        safeArgs[key] = sanitizePublicText(value, "").slice(0, 80);
+      }
+    });
+    return {
+      toolName: sanitizePublicText(source.toolName || source.name || "", "").slice(0, 60),
+      args: safeArgs,
+      reason: sanitizePublicText(source.reason || source.reasonCode || "", "").slice(0, 40),
+    };
+  }).filter((step) => step.toolName);
+}
+
 function sanitizePublicResponse(response) {
   const evidence = buildPublicEvidence(response.evidence);
   const sourceSafety = response.safety || {};
@@ -479,6 +513,7 @@ function sanitizePublicResponse(response) {
     cards: (Array.isArray(response.cards) ? response.cards : []).map(sanitizePublicCard),
     suggestions: (Array.isArray(response.suggestions) ? response.suggestions : []).map((item) => sanitizePublicText(item, "")).filter(Boolean).slice(0, 6),
     toolCalls: (Array.isArray(response.toolCalls) ? response.toolCalls : []).map(sanitizePublicToolCall),
+    plan: sanitizePublicPlan(response.plan),
     skill: sanitizePublicSkill(response.skill),
     evidence,
     safety: {
@@ -566,8 +601,22 @@ function buildResponse(payload) {
     cards: payload.cards,
   });
   const taskSteps = payload.taskSteps || buildTaskSteps(payload.intent, rawToolCalls);
-  const evidence = payload.evidence || buildEvidence(rawToolCalls, payload.context, payload.intent);
+  let evidence = payload.evidence || buildEvidence(rawToolCalls, payload.context, payload.intent);
   const errors = (Array.isArray(payload.errors) ? payload.errors : []).concat(validation.errors || []);
+  // Kernel verification is authoritative for evidence completeness on fact tasks.
+  if (payload.verification && payload.verification.evidenceComplete === false) {
+    evidence = Object.assign({}, evidence, {
+      complete: false,
+      verified: false,
+      toolCount: 0,
+    });
+  } else if (errors.some((item) => item && item.code === "FACT_TOOL_EVIDENCE_REQUIRED")) {
+    evidence = Object.assign({}, evidence, {
+      complete: false,
+      verified: false,
+      toolCount: 0,
+    });
+  }
   const response = {
     protocolVersion: envelope.protocolVersion,
     requestId: envelope.requestId,
@@ -1055,6 +1104,7 @@ async function chat(input = {}) {
         usedPersonalContext,
       }),
       errors: execution.verification && execution.verification.errors || [],
+      verification: execution.verification || null,
     }), memoryBundle, {
       message: safeMessage,
       intentName: intent.name,
@@ -1196,7 +1246,35 @@ async function chat(input = {}) {
   } else if (intent.name !== "clarify_missing_slot" && context.pendingClarification) {
     pendingPatch.clearPendingClarification = true;
   }
+  const composed = responseComposer.compose({
+    answer: stable.answer,
+    cards: stable.cards,
+    suggestions: stable.suggestions,
+    intentName: intent.name,
+    intent,
+    runtimeMode: runtimeDecision.runtimeMode,
+    toolCalls: publicToolCalls,
+    steps: execution.steps,
+    plan: execution.plan || plan,
+    needsClarification: intent.name === "clarify_missing_slot" || (execution.plan && execution.plan.needsClarification),
+    clarification: execution.plan && execution.plan.clarification,
+    generalAssistant: isGeneralAssistantEnabled(runtimeDecision.runtimeMode),
+    context,
+    durationMs: Date.now() - startTime,
+    replanUsed: execution.replanUsed === true,
+    success: true,
+    status: fallbackReason ? "degraded" : "completed",
+    errors: execution.verification && execution.verification.errors || [],
+  });
   const response = attachMemory(buildResponse(Object.assign({}, stable, {
+    answer: composed.answer,
+    cards: composed.cards,
+    suggestions: composed.suggestions,
+    presentationMode: composed.presentationMode,
+    presentation: composed,
+    evidenceDisplay: composed.evidence,
+    runSummary: composed.runSummary,
+    feedback: composed.feedback,
     protocolVersion,
     runId,
     requestId,
@@ -1207,7 +1285,7 @@ async function chat(input = {}) {
     toolCalls: publicToolCalls,
     rawToolCalls: toolCalls,
     intent,
-    plan,
+    plan: execution.plan || plan,
     skill: execution.skill,
     steps: execution.steps,
     observations: execution.observations,
@@ -1225,6 +1303,7 @@ async function chat(input = {}) {
     pendingClarification: pendingPatch.pendingClarification,
     clearPendingClarification: pendingPatch.clearPendingClarification,
     errors: execution.verification && execution.verification.errors || [],
+    verification: execution.verification || null,
     metrics: buildMetrics({
       startTime,
       intent,
@@ -1243,7 +1322,7 @@ async function chat(input = {}) {
     contextSlots: buildContextSlots(intent, intent.slots || {}),
     pendingClarification: pendingPatch.pendingClarification,
     clearPendingClarification: pendingPatch.clearPendingClarification,
-    answer: stable.answer,
+    answer: composed.answer,
     evidence: null,
     cloudSyncEnabled: context.cloudSyncEnabled === true,
   });
@@ -1265,6 +1344,17 @@ async function chat(input = {}) {
 }
 
 function attachMemory(response, memoryBundle, options = {}) {
+  const status = options.status || response.status;
+  if (status === "cancelled" || response.status === "cancelled") {
+    response.memory = memoryBundle && memoryBundle.memory || {
+      mode: "local_only",
+      authenticated: false,
+      persisted: false,
+      synced: false,
+      revision: 0,
+    };
+    return response;
+  }
   const memory = defaultMemoryService.persistAfterSuccess({
     principal: memoryBundle && memoryBundle.principal,
     state: memoryBundle && memoryBundle.state,
@@ -1276,13 +1366,14 @@ function attachMemory(response, memoryBundle, options = {}) {
     intentName: options.intentName || (response.intent && response.intent.name) || response.intent,
     context: options.context,
     runId: options.runId || response.runId,
-    status: options.status || response.status,
+    status,
     stepCount: options.stepCount || (Array.isArray(response.steps) ? response.steps.length : 0),
     contextSlots: options.contextSlots || response.contextSlots || response.slots,
     pendingClarification: options.pendingClarification,
     clearPendingClarification: options.clearPendingClarification,
     evidence: options.evidence || response.evidence,
     failed: response.success === false,
+    cancelled: status === "cancelled",
     securityBlocked: false,
   });
   response.memory = memory;

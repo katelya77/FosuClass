@@ -51,7 +51,7 @@
       <view>保留周期：会话状态约 7 天；同步对话约 30 天。关闭同步后可选择是否删除云端数据。</view>
     </view>
 
-    <view class="memory-actions">
+    <view class="memory-actions memory-actions-stack">
       <button class="memory-action" bindtap="onClearLocal">清空本机消息</button>
       <button class="memory-action" bindtap="onClearCurrent">清除服务端会话状态</button>
       <button class="memory-action danger" bindtap="onClearAll">清除全部云端记忆</button>

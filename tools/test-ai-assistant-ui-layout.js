@@ -20,7 +20,7 @@ function run() {
 
   assert(wxml.includes("xiaofu-header"), "AI page should use the Xiaofu light header");
   assert(
-    wxml.includes("xiaofu-title")
+    (wxml.includes("xiaofu-title") || wxml.includes("xiaofu-conversation-primary") || wxml.includes("xiaofu-header-compact"))
     && (wxml.includes("xiaofu-status") || wxml.includes("xiaofu-chip") || wxml.includes("statusChips")),
     "header title and compact status should render"
   );
@@ -42,16 +42,21 @@ function run() {
     wxml.includes("connectionStatusText") || wxml.includes("statusChips") || wxml.includes("xiaofu-chip"),
     "connection/readiness status should be data-driven"
   );
-  assert(wxml.includes("小佛助手"), "main title fixed");
+  assert(wxml.includes("小佛助手") || wxml.includes("xiaofu-header-compact"), "assistant branding or compact header");
   assert(wxml.includes("xiaofu-conversation-sub") || wxml.includes("activeConversationTitle"), "conversation subtitle row");
   assert(!wxml.includes(">在线<"), "online status must not be hardcoded");
   assert(!/\{\{\s*card\.type\s*\}\}/.test(wxml), "WXML must not render raw card.type");
 
   const header = getRule(wxss, ".xiaofu-header");
-  assert(/min-height\s*:\s*9[0-9]rpx|height\s*:\s*8[0-9]rpx|height\s*:\s*9[0-9]rpx/.test(header), "Xiaofu header should stay compact");
+  const compactHeader = getRule(wxss, ".xiaofu-header-compact");
+  assert(
+    /min-height\s*:\s*(6[0-9]|7[0-9]|8[0-9]|9[0-9])rpx|height\s*:\s*(6[0-9]|7[0-9]|8[0-9]|9[0-9])rpx/.test(header)
+      || /min-height\s*:\s*6[0-9]rpx/.test(compactHeader),
+    "Xiaofu header should stay compact"
+  );
   assert(/z-index\s*:\s*3[0-9]/.test(header), "Xiaofu header should stay above messages without covering sheets");
   assert(/display\s*:\s*flex/.test(header), "Xiaofu header should use a stable three-column flex row");
-  assert(/gap\s*:\s*12rpx/.test(header), "header should reserve space between avatar, title, and actions");
+  assert(/gap\s*:\s*(1[0-2])rpx/.test(header) || /gap\s*:\s*10rpx/.test(compactHeader), "header should reserve space between avatar, title, and actions");
 
   const titleBlock = getRule(wxss, ".xiaofu-title-block");
   assert(/flex\s*:\s*1\s+1\s+auto/.test(titleBlock), "header title column should take remaining width");

@@ -910,9 +910,101 @@ function getClassroomLocation(input = {}) {
 }
 
 function ragSearch(input = {}, context = {}) {
-  return knowledgeBaseService.searchKnowledge(Object.assign({}, input, {
-    environment: context.assistantEnvironment || context.runtimeMode || input.environment,
-  }));
+  const environment = context.assistantEnvironment || context.runtimeMode || input.environment || "public";
+  const query = String(input.q || input.query || input.message || "").trim();
+  // Hybrid RAG (sync path): rule + BM25 lexical. Vector is best-effort via optional cache.
+  try {
+    const { searchLexical } = require("./retrieval/lexicalIndex");
+    const { fuseRanks } = require("./retrieval/rankFusion");
+    const { verifyHits } = require("./retrieval/retrievalVerifier");
+    const { rewriteQueryDeterministic } = require("./retrieval/knowledgeRetriever");
+    const legacy = knowledgeBaseService.searchKnowledge(Object.assign({}, input, {
+      environment,
+      query,
+      q: query,
+    }));
+    const ruleHits = [];
+    const legacyHits = legacy && (legacy.hits || legacy.results || legacy.documents) || [];
+    (Array.isArray(legacyHits) ? legacyHits : []).forEach((hit, index) => {
+      ruleHits.push({
+        sourceId: hit.sourceId || hit.id || `rule-${index}`,
+        chunkId: hit.chunkId || hit.id || `rule-${index}`,
+        title: hit.title || "",
+        excerpt: hit.excerpt || hit.body || hit.reply || hit.text || "",
+        authorityLevel: hit.priority || hit.authorityLevel || 70,
+        sourcePublisher: hit.sourcePublisher || "",
+        sourceUrl: hit.sourceUrl || "",
+        updatedAt: hit.updatedAt || "",
+        score: Number(hit.score) || 1,
+      });
+    });
+    const docs = ruleHits.map((hit) => ({
+      sourceId: hit.sourceId,
+      chunkId: hit.chunkId,
+      title: hit.title,
+      body: hit.excerpt,
+      keywords: [],
+      authorityLevel: hit.authorityLevel,
+      updatedAt: hit.updatedAt,
+    }));
+    // also pull published docs if API exists
+    try {
+      if (typeof knowledgeBaseService.listPublishedDocuments === "function") {
+        const published = knowledgeBaseService.listPublishedDocuments({ environment }) || [];
+        published.forEach((doc) => {
+          docs.push({
+            sourceId: doc.sourceId || doc.id,
+            chunkId: doc.sourceId || doc.id,
+            title: doc.title,
+            body: doc.body || doc.text || doc.reply || "",
+            keywords: doc.keywords || [],
+            authorityLevel: doc.priority || 50,
+            updatedAt: doc.updatedAt,
+          });
+        });
+      }
+    } catch (_) {
+      // ignore
+    }
+    const rewritten = rewriteQueryDeterministic(query);
+    const lexicalHits = searchLexical(rewritten, docs, { limit: 8 });
+    const fused = fuseRanks([
+      { name: "rule", hits: ruleHits, weight: 1.2 },
+      { name: "bm25", hits: lexicalHits, weight: 1.0 },
+    ], { limit: 6 });
+    const verified = verifyHits(fused, { minConfidence: 0.08 });
+    if (verified.noAnswer) {
+      return {
+        success: true,
+        query,
+        rewrittenQuery: rewritten,
+        hits: [],
+        confidence: verified.confidence || 0,
+        noAnswer: true,
+        reason: verified.reason || "NO_RELIABLE_HIT",
+        summary: "暂未找到可靠的公开知识依据，请换个说法或查看使用说明。",
+        hybrid: true,
+      };
+    }
+    return {
+      success: true,
+      query,
+      rewrittenQuery: rewritten,
+      hits: verified.hits,
+      confidence: verified.confidence,
+      noAnswer: false,
+      reason: "OK",
+      summary: verified.hits[0] && (verified.hits[0].excerpt || verified.hits[0].title) || "已检索到相关说明。",
+      hybrid: true,
+      // preserve legacy fields for mock provider rendering
+      documents: verified.hits,
+      total: verified.hits.length,
+    };
+  } catch (error) {
+    return knowledgeBaseService.searchKnowledge(Object.assign({}, input, {
+      environment,
+    }));
+  }
 }
 
 function generateImage(input = {}, context = {}) {

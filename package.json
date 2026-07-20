@@ -583,7 +583,15 @@
     "test:provider-runtime-matrix": "node tools/test-provider-runtime-matrix.js",
     "test:coze-provider-v3": "node tools/test-coze-provider-v3.js",
     "test:xiaofu-runtime-ui": "node tools/test-xiaofu-runtime-ui.js",
-    "test:xiaofu-memory-integration": "node tools/test-xiaofu-memory-integration.js"
+    "test:xiaofu-memory-integration": "node tools/test-xiaofu-memory-integration.js",
+    "test:memory-upsert": "node tools/test-memory-upsert.js",
+    "test:agent-planner": "node tools/test-agent-planner.js",
+    "test:agent-observation-loop": "node tools/test-agent-observation-loop.js",
+    "test:hybrid-rag": "node tools/test-hybrid-rag.js",
+    "test:response-composer": "node tools/test-response-composer.js",
+    "test:xiaofu-final-ui": "node tools/test-xiaofu-final-ui.js",
+    "test:agent-e2e-matrix": "node tools/test-agent-e2e-matrix.js",
+    "test:agent-final-convergence": "node tools/run-agent-final-convergence-tests.js"
   },
   "repository": {
     "type": "git",
