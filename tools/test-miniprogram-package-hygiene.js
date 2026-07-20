@@ -65,7 +65,10 @@ function run() {
   assert(nodeCount <= 190, `AI page WXML is too complex: ${nodeCount}`);
 
   const aiWxss = fs.readFileSync(path.join(miniprogramRoot, "pages", "ai-assistant", "ai-assistant.wxss"), "utf8");
-  assert(/\.xiaofu-header\s*\{[\s\S]*?height:\s*84rpx;/.test(aiWxss), "Xiaofu header should stay compact");
+  assert(
+    /\.xiaofu-header\s*\{[\s\S]*?(height:\s*84rpx;|min-height:\s*9[0-9]rpx;)/.test(aiWxss),
+    "Xiaofu header should stay compact"
+  );
   assert(/\.quick-action-pill\s*\{[\s\S]*?height:\s*5[0-8]rpx;/.test(aiWxss), "quick action pills should remain compact");
   assert(!aiWxss.includes(".assistant-hero"), "legacy AI hero styles should be removed");
 

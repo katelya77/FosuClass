@@ -160,10 +160,46 @@ function splitDocChunks(entry = {}) {
   return chunks;
 }
 
+const AUTHORITY_LEVELS = Object.freeze([
+  "official",
+  "school_department",
+  "project_documentation",
+  "trusted_secondary",
+  "community",
+  "unknown",
+]);
+
+function normalizeAuthorityLevel(value) {
+  const level = normalizeText(value).toLowerCase();
+  return AUTHORITY_LEVELS.includes(level) ? level : "unknown";
+}
+
+function computeEntryContentHash(entry = {}) {
+  const material = {
+    type: entry.type,
+    title: entry.title,
+    body: entry.body,
+    scope: entry.scope,
+    keywords: entry.keywords,
+    tags: entry.tags,
+    intentName: entry.intentName,
+    toolName: entry.toolName,
+    reply: entry.reply,
+    sourceUrl: entry.sourceUrl,
+    authorityLevel: entry.authorityLevel,
+  };
+  return crypto.createHash("sha256").update(JSON.stringify(material)).digest("hex").slice(0, 32);
+}
+
 function normalizeEntry(input = {}, fallbackType = "doc") {
   const type = String(input.type || fallbackType || "doc").toLowerCase() === "rule" ? "rule" : "doc";
   const id = normalizeText(input.id || input.sourceId) || stableId(type, `${input.title || ""}:${input.body || input.content || ""}`);
   const body = normalizeText(input.body || input.content || input.answer || input.reply || "");
+  const authorityLevel = normalizeAuthorityLevel(input.authorityLevel);
+  // Never auto-promote missing sources to official.
+  const safeAuthority = authorityLevel === "official" && !normalizeText(input.sourceUrl || input.sourcePublisher)
+    ? "unknown"
+    : authorityLevel;
   const entry = {
     id,
     sourceId: normalizeText(input.sourceId || id).slice(0, 120),
@@ -179,7 +215,23 @@ function normalizeEntry(input = {}, fallbackType = "doc") {
     patterns: normalizeArray(input.patterns || input.regex).slice(0, 20),
     priority: Math.max(0, Math.min(999, Number(input.priority || 0) || 0)),
     body: body.slice(0, 30000),
+    revision: Math.max(1, Number(input.revision || 1) || 1),
+    updatedBy: normalizeText(input.updatedBy || "").slice(0, 80),
     updatedAt: normalizeText(input.updatedAt) || nowIso(),
+    // Source metadata (backward compatible)
+    sourceUrl: normalizeText(input.sourceUrl).slice(0, 500),
+    sourceTitle: normalizeText(input.sourceTitle).slice(0, 200),
+    sourcePublisher: normalizeText(input.sourcePublisher).slice(0, 120),
+    sourceType: normalizeText(input.sourceType).slice(0, 40),
+    retrievedAt: normalizeText(input.retrievedAt).slice(0, 40),
+    publishedAt: normalizeText(input.publishedAt).slice(0, 40),
+    effectiveFrom: normalizeText(input.effectiveFrom).slice(0, 40),
+    effectiveTo: normalizeText(input.effectiveTo).slice(0, 40),
+    authorityLevel: safeAuthority,
+    sourceHash: normalizeText(input.sourceHash).slice(0, 80),
+    language: normalizeText(input.language || "zh-CN").slice(0, 16),
+    campus: normalizeText(input.campus).slice(0, 40),
+    category: normalizeText(input.category).slice(0, 80),
   };
   if (type === "rule") {
     const card = normalizePlainObject(input.card);
@@ -202,6 +254,7 @@ function normalizeEntry(input = {}, fallbackType = "doc") {
       })).filter((chunk) => chunk.text)
       : splitDocChunks(entry);
   }
+  entry.contentHash = normalizeText(input.contentHash) || computeEntryContentHash(entry);
   return entry;
 }
 
@@ -350,12 +403,13 @@ function upsertDraftEntry(entry, mode = "upsert") {
 }
 
 function createEntry(input = {}) {
-  const entry = normalizeEntry(Object.assign({ status: "draft" }, input), input.type || "doc");
+  const entry = normalizeEntry(Object.assign({ status: "draft", revision: 1 }, input), input.type || "doc");
+  entry.contentHash = computeEntryContentHash(entry);
   const store = upsertDraftEntry(entry, "create");
   return { success: true, entry, store: listKnowledge().store };
 }
 
-function updateEntry(id, patch = {}) {
+function updateEntry(id, patch = {}, options = {}) {
   const store = readStore();
   const all = [
     { type: "rule", bucket: store.draft.rules },
@@ -364,11 +418,31 @@ function updateEntry(id, patch = {}) {
   for (const group of all) {
     const index = group.bucket.findIndex((item) => item.id === id || item.sourceId === id);
     if (index < 0) continue;
-    const next = normalizeEntry(Object.assign({}, group.bucket[index], patch, { id: group.bucket[index].id, updatedAt: nowIso() }), group.type);
+    const current = group.bucket[index];
+    const expectedRevision = options.expectedRevision != null
+      ? Number(options.expectedRevision)
+      : (patch.expectedRevision != null ? Number(patch.expectedRevision) : null);
+    if (expectedRevision != null && Number(current.revision || 1) !== expectedRevision) {
+      const error = new Error("Knowledge entry revision conflict.");
+      error.code = "ASSISTANT_KB_REVISION_CONFLICT";
+      error.statusCode = 409;
+      error.currentRevision = Number(current.revision || 1);
+      throw error;
+    }
+    const nextPatch = Object.assign({}, patch);
+    delete nextPatch.expectedRevision;
+    delete nextPatch.revision;
+    const next = normalizeEntry(Object.assign({}, current, nextPatch, {
+      id: current.id,
+      revision: Number(current.revision || 1) + 1,
+      updatedAt: nowIso(),
+      updatedBy: normalizeText(options.updatedBy || patch.updatedBy || current.updatedBy || ""),
+    }), group.type);
+    next.contentHash = computeEntryContentHash(next);
     assertSafeEntry(next);
     group.bucket[index] = next;
     saveStore(store);
-    return { success: true, entry: next };
+    return { success: true, entry: next, previousRevision: Number(current.revision || 1) };
   }
   const error = new Error("Knowledge entry not found.");
   error.code = "ASSISTANT_KB_NOT_FOUND";
@@ -813,9 +887,11 @@ function getIndexStatus() {
 
 module.exports = {
   ALL_SCOPES,
+  AUTHORITY_LEVELS,
   DATA_PATH,
   assertSafeEntry,
   buildImportPreview,
+  computeEntryContentHash,
   createEntry,
   deleteEntry,
   exportKnowledge,
@@ -825,6 +901,7 @@ module.exports = {
   listKnowledge,
   loadDocs,
   matchLocalRule,
+  normalizeAuthorityLevel,
   normalizeDocument,
   normalizeEntry,
   publish,

@@ -471,6 +471,9 @@ function buildClientContext(extra = {}) {
       contextSlots,
     },
     contextSlots,
+    memoryMode: extra.memoryMode || readStorage("FOSU_AI_MEMORY_MODE", "local_only") || "local_only",
+    cloudSyncEnabled: extra.cloudSyncEnabled === true
+      || (extra.memoryMode || readStorage("FOSU_AI_MEMORY_MODE", "local_only")) === "cloud_sync",
   };
 }
 

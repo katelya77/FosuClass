@@ -38,7 +38,29 @@ npm run test:agent-regression
 npm run test:ai-competition
 ```
 
+涉及会话记忆、知识库控制面或 MCP 时，额外运行：
+
+```text
+npm run test:agent-phase2
+```
+
+或按模块：
+
+```text
+npm run test:conversation-memory
+npm run test:kb-control-plane
+npm run test:kb-mcp
+npm run test:xiaofu-agent-ui
+```
+
 同时运行与修改模块直接相关的既有测试。若既有命令存在已确认的基线失败，必须保留失败证据并在交付报告中区分“改动引入”与“改动前已存在”；不得跳过、静默吞掉或削弱检查。需要真实 Provider 的验证必须单独说明环境和凭据条件，不能用 mock 代替。
+
+## 会话记忆与 MCP 边界（Phase 2）
+
+- 服务端不得信任客户端 `conversationId` 作为用户身份；Principal 仅由已验证 Session 派生。
+- 无有效 Session 不得假装云端同步成功；默认 `local_only`。
+- `cloud_sync` 必须用户显式开启。
+- 知识库 MCP（`tools/fosu-kb-mcp`）只走受保护后台 API，不直读写知识 JSON；不得注册 publish/rollback Tool。
 
 ## 变更与发布纪律
 

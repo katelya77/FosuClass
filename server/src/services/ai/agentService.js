@@ -12,6 +12,7 @@ const knowledgeBaseService = require("./knowledgeBaseService");
 const capabilityManifestService = require("./capabilityManifestService");
 const { defaultKernel: agentKernel } = require("./agentKernel");
 const agentTraceRecorder = require("./agentTraceRecorder");
+const { defaultMemoryService } = require("./conversation/conversationMemoryService");
 
 function nowIso() {
   return new Date().toISOString();
@@ -613,6 +614,16 @@ function buildResponse(payload) {
       fallback: payload.externalProviderUsed !== true,
       usedPersonalContext: payload.usedPersonalContext === true,
     }),
+    memory: payload.memory || {
+      mode: "local_only",
+      authenticated: false,
+      persisted: false,
+      synced: false,
+      revision: 0,
+      expiresAt: "",
+      summaryAvailable: false,
+      canClear: false,
+    },
     errors,
     serverTime: nowIso(),
   };
@@ -627,6 +638,7 @@ function buildResponse(payload) {
       steps: payload.steps || taskSteps,
       observations: payload.observations || safeResponse.observations,
       evidence: safeResponse.evidence,
+      memory: safeResponse.memory,
       errors: safeResponse.errors,
     }));
   }
@@ -659,6 +671,16 @@ function sensitiveCredentialResponse(message, context, startTime, providerRuntim
     providerPolicy: getProviderPolicy(providerRuntimeConfig),
     externalProviderUsed: false,
     fallbackReason: "检测到敏感凭证",
+    memory: metadata.memory || {
+      mode: "local_only",
+      authenticated: false,
+      persisted: false,
+      synced: false,
+      revision: 0,
+      expiresAt: "",
+      summaryAvailable: false,
+      canClear: false,
+    },
     metrics: buildMetrics({
       startTime,
       intentName: "sensitive_credential_response",
@@ -717,7 +739,7 @@ async function chat(input = {}) {
   const startTime = Date.now();
   const rawMessage = String(input.message || "").trim();
   const safeMessage = safetyGuard.redactSensitiveText(rawMessage).slice(0, 2000);
-  const context = safetyGuard.sanitizeAgentContext(input.context || {});
+  let context = safetyGuard.sanitizeAgentContext(input.context || {});
   const runtimeDecision = runtimeModeService.resolveRuntimeMode({
     context,
     serverSession: input.serverSession,
@@ -725,16 +747,57 @@ async function chat(input = {}) {
   });
   context.runtimeMode = runtimeDecision.runtimeMode;
   context.serverSession = input.serverSession || context.serverSession || null;
-  const providerRuntimeConfig = providerConfigService.resolveRuntimeProviderConfig({
-    context,
-    runtimeMode: runtimeDecision.runtimeMode,
-  });
-  context.assistantEnvironment = providerConfigService.getEnvironmentForContext(context, runtimeDecision.runtimeMode);
   const requestId = input.requestId || agentProtocol.createRequestId();
   const conversationId = input.conversationId || context.conversationId || "";
   const requestedProtocolVersion = input.protocolVersion || context.protocolVersion || agentProtocol.PROTOCOL_VERSION;
   const protocolVersion = agentProtocol.normalizeProtocolVersion(requestedProtocolVersion);
   const runId = input.runId || agentProtocol.createRunId();
+
+  let memoryBundle = {
+    principal: { authenticated: false, principalKey: "", runtimeMode: runtimeDecision.runtimeMode },
+    state: null,
+    memory: {
+      mode: "local_only",
+      authenticated: false,
+      persisted: false,
+      synced: false,
+      revision: 0,
+      expiresAt: "",
+      summaryAvailable: false,
+      canClear: false,
+    },
+    context,
+  };
+  try {
+    memoryBundle = defaultMemoryService.loadForChat({
+      serverSession: input.serverSession,
+      runtimeMode: runtimeDecision.runtimeMode,
+      conversationId,
+      message: safeMessage,
+      context,
+      memoryMode: context.memoryMode,
+    });
+    context = safetyGuard.sanitizeAgentContext(memoryBundle.context || context);
+    context.runtimeMode = runtimeDecision.runtimeMode;
+    context.serverSession = input.serverSession || null;
+  } catch (error) {
+    memoryBundle.memory = {
+      mode: "local_only",
+      authenticated: Boolean(input.serverSession && input.serverSession.openidHash),
+      persisted: false,
+      synced: false,
+      revision: 0,
+      expiresAt: "",
+      summaryAvailable: false,
+      canClear: false,
+    };
+  }
+
+  const providerRuntimeConfig = providerConfigService.resolveRuntimeProviderConfig({
+    context,
+    runtimeMode: runtimeDecision.runtimeMode,
+  });
+  context.assistantEnvironment = providerConfigService.getEnvironmentForContext(context, runtimeDecision.runtimeMode);
   if (!agentProtocol.isSupportedProtocolVersion(input.protocolVersion || context.protocolVersion || agentProtocol.PROTOCOL_VERSION)) {
     recordEarlyTrace({
       runId,
@@ -769,6 +832,7 @@ async function chat(input = {}) {
       errors: [{ code: "PROTOCOL_VERSION_UNSUPPORTED" }],
       intent: { name: "clarify_missing_slot", slots: {} },
       plan: [],
+      memory: memoryBundle.memory,
       metrics: buildMetrics({ startTime, intentName: "protocol_version_unsupported", toolCalls: [] }),
     });
   }
@@ -798,6 +862,7 @@ async function chat(input = {}) {
       fallback: true,
       fallbackLayer: "server",
       fallbackReason: "空消息",
+      memory: memoryBundle.memory,
       metrics: buildMetrics({
         startTime,
         intentName: "generic",
@@ -829,6 +894,7 @@ async function chat(input = {}) {
       runtimeMode: runtimeDecision.runtimeMode,
       requestedRuntimeMode: runtimeDecision.requestedMode,
       runId,
+      memory: memoryBundle.memory,
     });
     recordEarlyTrace({
       runId,
@@ -870,7 +936,7 @@ async function chat(input = {}) {
     !isProjectKnowledgeIntent(intent) &&
     intent.name !== "explain_personal_import" &&
     intent.name !== "clarify_missing_slot") {
-    const response = buildResponse({
+    const response = attachMemory(buildResponse({
       protocolVersion,
       runId,
       answer: "小佛目前只提供佛课小表、课表、课程查询和使用帮助。",
@@ -906,6 +972,17 @@ async function chat(input = {}) {
         usedPersonalContext,
       }),
       errors: execution.verification && execution.verification.errors || [],
+    }), memoryBundle, {
+      message: safeMessage,
+      intentName: intent.name,
+      context,
+      runId,
+      status: "completed",
+      stepCount: (execution.steps || []).length,
+      contextSlots: buildContextSlots(intent, intent.slots || {}),
+      pendingClarification: null,
+      clearPendingClarification: true,
+      evidence: null,
     });
     agentKernel.finalize(execution, {
       totalDurationMs: Date.now() - startTime,
@@ -999,7 +1076,7 @@ async function chat(input = {}) {
   } else if (intent.name !== "clarify_missing_slot" && context.pendingClarification) {
     pendingPatch.clearPendingClarification = true;
   }
-  const response = buildResponse(Object.assign({}, stable, {
+  const response = attachMemory(buildResponse(Object.assign({}, stable, {
     protocolVersion,
     runId,
     requestId,
@@ -1036,7 +1113,20 @@ async function chat(input = {}) {
       fallback,
       usedPersonalContext,
     }),
-  }));
+  })), memoryBundle, {
+    message: safeMessage,
+    intentName: intent.name,
+    context,
+    runId,
+    status: "completed",
+    stepCount: (execution.steps || []).length,
+    contextSlots: buildContextSlots(intent, intent.slots || {}),
+    pendingClarification: pendingPatch.pendingClarification,
+    clearPendingClarification: pendingPatch.clearPendingClarification,
+    answer: stable.answer,
+    evidence: null,
+    cloudSyncEnabled: context.cloudSyncEnabled === true,
+  });
   agentKernel.finalize(execution, {
     totalDurationMs: Date.now() - startTime,
     providerUsed: externalProviderUsed,
@@ -1044,6 +1134,34 @@ async function chat(input = {}) {
     fallbackReason,
     evidenceComplete: response.evidence && response.evidence.complete === true,
   });
+  return response;
+}
+
+function attachMemory(response, memoryBundle, options = {}) {
+  const memory = defaultMemoryService.persistAfterSuccess({
+    principal: memoryBundle && memoryBundle.principal,
+    state: memoryBundle && memoryBundle.state,
+    conversationId: response.conversationId,
+    memoryMode: memoryBundle && memoryBundle.memory && memoryBundle.memory.mode,
+    cloudSyncEnabled: options.cloudSyncEnabled === true,
+    message: options.message,
+    answer: options.answer || response.answer,
+    intentName: options.intentName || (response.intent && response.intent.name) || response.intent,
+    context: options.context,
+    runId: options.runId || response.runId,
+    status: options.status || response.status,
+    stepCount: options.stepCount || (Array.isArray(response.steps) ? response.steps.length : 0),
+    contextSlots: options.contextSlots || response.contextSlots || response.slots,
+    pendingClarification: options.pendingClarification,
+    clearPendingClarification: options.clearPendingClarification,
+    evidence: options.evidence || response.evidence,
+    failed: response.success === false,
+    securityBlocked: false,
+  });
+  response.memory = memory;
+  if (response.safety && typeof response.safety === "object") {
+    response.safety.memoryMode = memory.mode;
+  }
   return response;
 }
 
@@ -1111,6 +1229,16 @@ function buildServiceFailureResponse(input = {}, error = {}) {
     fallbackReason: errorCode,
     fallbackAllowed: true,
     errors: [{ code: errorCode }],
+    memory: {
+      mode: "local_only",
+      authenticated: Boolean(input.serverSession && input.serverSession.openidHash),
+      persisted: false,
+      synced: false,
+      revision: 0,
+      expiresAt: "",
+      summaryAvailable: false,
+      canClear: false,
+    },
     metrics: buildMetrics({
       startTime: input.startTime || Date.now(),
       intentName: "agent_service_failure",

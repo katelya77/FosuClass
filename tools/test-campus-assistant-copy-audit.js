@@ -64,25 +64,17 @@ const oldVisiblePhrases = [
   "未接入生成式AI",
   "未接入大模型",
   "深度合成",
-  "小佛能做什么",
   "这个小程序怎么用",
   "聊天记录",
-  "新建对话",
-  "清空当前对话",
-  "删除对话",
-  "重命名对话",
   "问 AI",
   "发送中",
   ">发送<",
-  "confirm-type=\"send\"",
 ];
 
 const requiredPhrases = [
-  "校园服务管家",
-  "小佛校园助手",
-  "校园事项 · 全校课表 · 常用入口",
-  "查询记录",
-  "输入校园事项、课表或入口关键词",
+  "小佛助手",
+  "今天想让小佛帮你完成什么",
+  "告诉小佛你想完成的校园任务",
   "请勿输入学号、密码、验证码等敏感信息",
   "可以查询什么",
   "正在匹配查询内容",
@@ -90,6 +82,14 @@ const requiredPhrases = [
   "小佛助手浮窗",
   "保存查询服务配置",
   "查询链路状态",
+  "新建对话",
+];
+
+// Phase-2 UI files must not keep the old query-centric labels.
+const phase2UiFiles = [
+  "miniprogram/pages/ai-assistant/ai-assistant.wxml",
+  "miniprogram/pages/ai-assistant/ai-assistant.js",
+  "miniprogram/components/xiaofu-conversation-sheet/index.wxml",
 ];
 
 function read(file) {
@@ -107,6 +107,12 @@ function run() {
 
   requiredPhrases.forEach((phrase) => {
     assert(combined.includes(phrase), `缺少整改后的关键文案: ${phrase}`);
+  });
+
+  phase2UiFiles.forEach((file) => {
+    const text = read(file);
+    assert(!text.includes("查询记录"), `${file} still contains 查询记录`);
+    assert(!text.includes("新建查询"), `${file} still contains 新建查询`);
   });
 
   console.log("campus assistant copy audit passed");

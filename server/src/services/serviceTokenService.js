@@ -17,6 +17,12 @@ const SCOPES = Object.freeze({
   CATALOG_WRITE: "catalog:write",
   QUALITY_WRITE: "quality:write",
   SETTINGS_WRITE: "settings:write",
+  ASSISTANT_KB_READ: "assistant-kb:read",
+  ASSISTANT_KB_DRAFT_WRITE: "assistant-kb:draft:write",
+  ASSISTANT_KB_VALIDATE: "assistant-kb:validate",
+  ASSISTANT_KB_AUDIT_READ: "assistant-kb:audit:read",
+  ASSISTANT_KB_PUBLISH: "assistant-kb:publish",
+  ASSISTANT_KB_ROLLBACK: "assistant-kb:rollback",
   ADMIN_FULL: "admin:full",
 });
 

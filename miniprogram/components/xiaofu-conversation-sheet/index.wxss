@@ -1,0 +1,125 @@
+.conversation-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  max-height: 78vh;
+  padding: 12rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
+  border-radius: 28rpx 28rpx 0 0;
+  background: #fbfaf8;
+  box-shadow: 0 -8rpx 40rpx rgba(40, 36, 32, 0.12);
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-handle {
+  width: 72rpx;
+  height: 8rpx;
+  margin: 8rpx auto 18rpx;
+  border-radius: 999rpx;
+  background: rgba(40, 36, 32, 0.12);
+}
+
+.task-panel-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16rpx;
+}
+
+.task-panel-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #2d2925;
+}
+
+.task-panel-subtitle {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #8a8178;
+}
+
+.sheet-close {
+  margin: 0;
+  padding: 8rpx 18rpx;
+  font-size: 22rpx;
+  color: #6b635a;
+  background: #efece7;
+  border-radius: 999rpx;
+}
+
+.sheet-close::after,
+.conversation-new-btn::after,
+.conversation-main::after,
+.conversation-actions button::after {
+  border: none;
+}
+
+.conversation-new-btn {
+  margin: 0 0 16rpx;
+  padding: 18rpx;
+  border-radius: 16rpx;
+  background: #c4302b;
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.conversation-scroll {
+  flex: 1;
+  max-height: 52vh;
+}
+
+.conversation-item {
+  margin-bottom: 12rpx;
+  padding: 8rpx;
+  border-radius: 18rpx;
+  background: #fff;
+  border: 1rpx solid rgba(40, 36, 32, 0.06);
+}
+
+.conversation-item.active {
+  border-color: rgba(196, 48, 43, 0.28);
+  background: #fff8f7;
+}
+
+.conversation-main {
+  margin: 0;
+  padding: 12rpx 14rpx;
+  text-align: left;
+  background: transparent;
+  line-height: 1.4;
+}
+
+.conversation-title {
+  font-size: 28rpx;
+  color: #2d2925;
+  font-weight: 600;
+}
+
+.conversation-meta {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #8a8178;
+}
+
+.conversation-actions {
+  display: flex;
+  gap: 8rpx;
+  padding: 0 8rpx 8rpx;
+}
+
+.conversation-actions button {
+  margin: 0;
+  padding: 8rpx 14rpx;
+  font-size: 22rpx;
+  color: #6b635a;
+  background: #f3f0eb;
+  border-radius: 999rpx;
+}
+
+.conversation-actions button.danger {
+  color: #c53030;
+  background: #fff5f5;
+}

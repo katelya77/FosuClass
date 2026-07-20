@@ -571,7 +571,12 @@
     "test:runtime-pointer": "node tools/test-runtime-pointer.js",
     "test:teaching-calendar": "node tools/test-teaching-calendar.js && node tools/test-miniprogram-calendar-date-fix.js",
     "test:semester-readiness-explain": "node tools/test-semester-readiness-explain.js",
-    "test:miniprogram-calendar-fallback": "node tools/test-miniprogram-calendar-fallback.js"
+    "test:miniprogram-calendar-fallback": "node tools/test-miniprogram-calendar-fallback.js",
+    "test:conversation-memory": "node tools/test-conversation-memory.js",
+    "test:kb-control-plane": "node tools/test-kb-control-plane-v2.js && node tools/test-knowledge-control-plane.js",
+    "test:kb-mcp": "node tools/test-kb-mcp.js",
+    "test:xiaofu-agent-ui": "node tools/test-xiaofu-agent-ui-v2.js && node tools/test-ai-assistant-minimal-ui.js && node tools/test-ai-assistant-ui-layout.js",
+    "test:agent-phase2": "node tools/run-agent-phase2-tests.js"
   },
   "repository": {
     "type": "git",

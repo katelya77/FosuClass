@@ -1,0 +1,92 @@
+.agent-run {
+  margin: 8rpx 0 12rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 18rpx;
+  background: #f6f4f1;
+  border: 1rpx solid rgba(40, 36, 32, 0.06);
+}
+
+.agent-run-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.agent-run-summary-main {
+  display: flex;
+  align-items: center;
+  gap: 10rpx;
+  min-width: 0;
+  flex: 1;
+}
+
+.agent-run-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #2f855a;
+  flex-shrink: 0;
+}
+
+.agent-run-dot.running {
+  background: #2b6cb0;
+}
+
+.agent-run-dot.failed {
+  background: #c05621;
+}
+
+.agent-run-dot.degraded {
+  background: #b7791f;
+}
+
+.agent-run-summary-text {
+  font-size: 24rpx;
+  color: #3f3a34;
+  line-height: 1.4;
+}
+
+.agent-run-toggle {
+  font-size: 22rpx;
+  color: #8a8178;
+  flex-shrink: 0;
+}
+
+.agent-run-preview {
+  margin-top: 12rpx;
+}
+
+.agent-run-preview-line {
+  font-size: 22rpx;
+  color: #6b635a;
+  line-height: 1.5;
+}
+
+.agent-run-detail {
+  margin-top: 14rpx;
+  padding-top: 12rpx;
+  border-top: 1rpx solid rgba(40, 36, 32, 0.06);
+}
+
+.agent-run-step {
+  padding: 8rpx 0;
+}
+
+.agent-run-step-title {
+  font-size: 24rpx;
+  color: #2d2925;
+  font-weight: 500;
+}
+
+.agent-run-step-meta {
+  margin-top: 4rpx;
+  font-size: 20rpx;
+  color: #8a8178;
+}
+
+.agent-run-evidence {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #2f855a;
+}

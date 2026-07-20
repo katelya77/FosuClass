@@ -245,7 +245,7 @@ function publicFosuGuard(req, res, next) {
 function validateJsonBody(allowedKeys) {
   const allowed = new Set(allowedKeys || []);
   return (req, res, next) => {
-    if (req.method !== "POST") return next();
+    if (!["POST", "PUT", "PATCH"].includes(req.method)) return next();
     const body = req.body || {};
     if (!body || typeof body !== "object" || Array.isArray(body)) {
       return res.status(400).json({ success: false, code: "INVALID_JSON_BODY", message: "请求体格式错误。" });

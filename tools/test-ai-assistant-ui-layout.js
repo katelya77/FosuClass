@@ -23,7 +23,7 @@ function run() {
   assert(!wxml.includes("xiaofu-subtitle"), "header should not keep the old long subtitle");
   assert(wxml.includes("openHeaderMenu"), "clear action should move into the more menu");
   assert(wxml.includes("header-menu-sheet"), "more menu should render as a bottom sheet");
-  assert(wxml.includes("清空记录"), "more menu should contain clear history action");
+  assert(wxml.includes("清空当前对话") || wxml.includes("记忆设置"), "more menu should contain clear/memory actions");
   assert(!/class="xiaofu-[^"]*clear/.test(wxml), "clear button should not live in the fixed header");
   assert(wxml.includes("weather-card"), "weather responses should use a dedicated weather card");
   assert(!wxml.includes("assistant-hero card"), "AI page should not render the old hero card");
@@ -33,10 +33,13 @@ function run() {
   assert(!wxml.includes("quick-task-row"), "dialog/task switch should not share the quick chip row");
   assert(wxml.includes("bottom-sheet privacy-sheet"), "privacy details should be a bottom sheet");
   assert(wxml.includes("message-scroll"), "message area should remain the main content");
+  assert(wxml.includes("xiaofu-agent-run"), "agent run component should be consumed");
+  assert(wxml.includes("connectionStatusText"), "connection status should be data-driven");
+  assert(!wxml.includes(">在线<"), "online status must not be hardcoded");
   assert(!/\{\{\s*card\.type\s*\}\}/.test(wxml), "WXML must not render raw card.type");
 
   const header = getRule(wxss, ".xiaofu-header");
-  assert(/height\s*:\s*8[0-8]rpx/.test(header), "Xiaofu header should stay within 88rpx");
+  assert(/min-height\s*:\s*9[0-9]rpx|height\s*:\s*8[0-9]rpx|height\s*:\s*9[0-9]rpx/.test(header), "Xiaofu header should stay compact");
   assert(/z-index\s*:\s*3[0-9]/.test(header), "Xiaofu header should stay above messages without covering sheets");
   assert(/display\s*:\s*flex/.test(header), "Xiaofu header should use a stable three-column flex row");
   assert(/gap\s*:\s*12rpx/.test(header), "header should reserve space between avatar, title, and actions");

@@ -1,0 +1,30 @@
+<view class="agent-run" wx:if="{{hasContent}}">
+  <view class="agent-run-summary" bindtap="onToggle">
+    <view class="agent-run-summary-main">
+      <text class="agent-run-dot {{statusClass}}"></text>
+      <text class="agent-run-summary-text">{{summaryText}}</text>
+    </view>
+    <text class="agent-run-toggle">{{expanded ? '收起' : '详情'}}</text>
+  </view>
+
+  <view class="agent-run-preview" wx:if="{{!expanded && previewLines.length}}">
+    <view wx:for="{{previewLines}}" wx:key="*this" class="agent-run-preview-line">{{item}}</view>
+  </view>
+
+  <view class="agent-run-detail" wx:if="{{expanded}}">
+    <view
+      wx:for="{{displaySteps}}"
+      wx:key="id"
+      class="agent-run-step status-{{item.statusClass}}"
+    >
+      <view class="agent-run-step-title">{{item.label}}</view>
+      <view class="agent-run-step-meta">
+        <text>{{item.statusText}}</text>
+        <text wx:if="{{item.sourceCategory}}"> · {{item.sourceCategory}}</text>
+        <text wx:if="{{item.durationText}}"> · {{item.durationText}}</text>
+        <text wx:if="{{item.degraded}}"> · 已降级</text>
+      </view>
+    </view>
+    <view class="agent-run-evidence" wx:if="{{evidenceText}}">{{evidenceText}}</view>
+  </view>
+</view>
