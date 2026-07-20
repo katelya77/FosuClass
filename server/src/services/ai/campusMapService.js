@@ -119,7 +119,7 @@ function buildMapActionUrl(place = {}) {
   const params = new URLSearchParams();
   params.set("map", getMapKey(place));
   if (place.id) params.set("placeId", place.id);
-  return `/pages/campus-map/campus-map?${params.toString()}`;
+  return `/packageMaps/pages/campus-map/campus-map?${params.toString()}`;
 }
 
 function scorePlace(place, query) {

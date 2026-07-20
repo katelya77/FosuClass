@@ -6,6 +6,7 @@ const tests = [
   "tools/test-memory-upsert.js",
   "tools/test-agent-planner.js",
   "tools/test-planner-model-adapter.js",
+  "tools/test-planner-model-adapter-http.js",
   "tools/test-agent-observation-loop.js",
   "tools/test-hybrid-rag.js",
   "tools/test-context-assembler.js",

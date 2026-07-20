@@ -43,10 +43,14 @@ User → Context Assembler → Runtime Policy → Planner
 
 ## 4. Planner 证据
 
-- trial 多步：`planner.started` / `completed` / `plan.created`
-- public：无 `planner.started`，`externalProviderUsed=false`
-- metrics：`plannerProvider` / `responseProvider` / latencies / fallback 分离
-- 产物：`{SCRATCH}/real-http-e2e/trial-multi-step.json`
+| 证明类型 | 结果 |
+|----------|------|
+| **Mock HTTP 接线** | `plannerType=model`，Tools 由模型 JSON 选择（`test-planner-model-adapter-http` → `planner-type-model-mock-http.json`） |
+| Live DeepSeek | 可因 Key 401 回退 `deterministic_fallback`；**任务仍完成**（空教室/天气 Tool 正常） |
+| public | 无 `planner.started`；`PLANNER_PUBLIC_FORBIDDEN` |
+| metrics 分离 | `plannerProvider` / `responseProvider` / latencies / fallback |
+
+诚实声明：不得把 live 401 fallback 标成 `plannerType=model` Observed 成功；Model 成功的强制证据是 Mock HTTP 路径。
 
 ## 5. RAG 证据
 

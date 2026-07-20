@@ -49,6 +49,19 @@ async function run() {
   assert.ok((multi.cards || []).length <= 2, "composite card max 2");
   const plannerEvents = events.filter((e) => /planner|plan\./.test(e.type));
   assert.ok(plannerEvents.length >= 1 || multi.metrics && multi.metrics.plannerType, "planner path exercised");
+  // Honest classification of live vs mock model success:
+  // Live DeepSeek may 401 → deterministic_fallback still tools. Model success is proven by
+  // tools/test-planner-model-adapter-http.js (mock HTTP) and written to planner-type-model-mock-http.json.
+  const liveModel = multi.metrics && multi.metrics.plannerType === "model";
+  save("trial-multi-step-live-classification.json", {
+    liveModelSuccess: liveModel === true,
+    plannerType: multi.metrics && multi.metrics.plannerType,
+    plannerProvider: multi.metrics && multi.metrics.plannerProvider,
+    plannerFallback: multi.metrics && multi.metrics.plannerFallback,
+    note: liveModel
+      ? "Live provider returned model plan."
+      : "Live provider did not yield plannerType=model (often 401/timeout). Wiring proven via mock-http test, not this live call.",
+  });
 
   // (b) public zero external model
   const publicEvents = [];

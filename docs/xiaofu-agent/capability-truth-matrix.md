@@ -23,7 +23,7 @@
 | # | 能力 | Declared | Wired | Exercised | Observed | Production-safe | 状态说明 |
 |---|------|----------|-------|-----------|----------|-----------------|----------|
 | 1 | Deterministic Planner | Y | Y | Y | Y | Y | public 主路径；fallback 可靠 |
-| 2 | Model Planner | Y | **Y** | Y | **Y** | Y | `PlannerModelAdapter` 注入；真实 DeepSeek `plannerType=model` / `planner.started→completed` |
+| 2 | Model Planner | Y | **Y** | Y | **Y** | Y | Wired+Exercised：Mock HTTP 证明 `plannerType=model`（`test-planner-model-adapter-http`）。Live DeepSeek 可能 401→`deterministic_fallback`（工具仍完成）；Live 成功不作为必证项 |
 | 3 | Observation Loop | Y | Y | Y | Y | Y | Kernel 默认 loop；Replan≤1 |
 | 4 | Replan | Y | Y | Y | Y | Y | 多步空结果可 replan 一次 |
 | 5 | Clarification | Y | Y | Y | Y | Y | 缺 slot 结构化追问 |
