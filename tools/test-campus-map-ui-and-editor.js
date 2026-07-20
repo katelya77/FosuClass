@@ -5,9 +5,9 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const read = (file) => fs.readFileSync(path.join(root, file), "utf8");
 
-const js = read("miniprogram/pages/campus-map/campus-map.js");
-const wxml = read("miniprogram/pages/campus-map/campus-map.wxml");
-const wxss = read("miniprogram/pages/campus-map/campus-map.wxss");
+const js = read("miniprogram/packageMaps/pages/campus-map/campus-map.js");
+const wxml = read("miniprogram/packageMaps/pages/campus-map/campus-map.wxml");
+const wxss = read("miniprogram/packageMaps/pages/campus-map/campus-map.wxss");
 
 const order = [
   js.indexOf('key: "xianxi"'),

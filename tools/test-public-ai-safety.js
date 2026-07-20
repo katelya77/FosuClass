@@ -49,7 +49,7 @@ async function run() {
   assertPublicSafe(summaryBlock, "miniprogram public knowledge summary");
   assert(!summaryBlock.includes("架构摘要"), "miniprogram public summary must not include architecture summary");
 
-  const aiPageSource = fs.readFileSync(path.join(root, "miniprogram/pages/ai-assistant/ai-assistant.js"), "utf8");
+  const aiPageSource = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js"), "utf8");
   assert(aiPageSource.includes("使用与数据"), "public task panel should use friendly label");
   assert(aiPageSource.includes("已核验课表数据"), "public provider status should be generic");
   assert(!aiPageSource.includes("已参与"), "public UI must not render provider participated copy");

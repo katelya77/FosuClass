@@ -3,7 +3,7 @@ const path = require("path");
 
 const servicePath = path.resolve(__dirname, "../miniprogram/services/campusMapDataService.js");
 const requestPath = path.resolve(__dirname, "../miniprogram/utils/request.js");
-const pagePath = path.resolve(__dirname, "../miniprogram/pages/campus-map/campus-map.js");
+const pagePath = path.resolve(__dirname, "../miniprogram/packageMaps/pages/campus-map/campus-map.js");
 
 function resetModule(filePath) {
   delete require.cache[require.resolve(filePath)];
@@ -105,7 +105,7 @@ function testPageImageFallbackChain() {
         title: "North",
         cdnUrl: "https://cloud.example.com/map.jpg",
         fallbackUrl: "https://oracle.example.com/map.jpg",
-        packageUrl: "/assets/maps/campus-map-xianxi-north.jpg",
+        packageUrl: "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
         assetVersion: "sha256-test",
         sha256: "abc",
       },
@@ -144,7 +144,7 @@ function testPageImageFallbackChain() {
 
   instance.onMapImageError();
   assert.strictEqual(instance.data.mapInfo.assetSource, "package", "Oracle failure should fall back to package image");
-  assert.strictEqual(instance.data.mapInfo.asset, "/assets/maps/campus-map-xianxi-north.jpg");
+  assert.strictEqual(instance.data.mapInfo.asset, "/packageMaps/assets/maps/campus-map-xianxi-north.jpg");
 
   instance.onMapImageError();
   assert.strictEqual(instance.data.imageError, true, "package image failure should surface image error");

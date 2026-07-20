@@ -972,7 +972,7 @@
         "action": {
           "type": "navigate",
           "label": "打开校园地图",
-          "url": "/pages/campus-map/campus-map",
+          "url": "/packageMaps/pages/campus-map/campus-map",
           "payload": {}
         },
         "card": {
@@ -988,7 +988,7 @@
             {
               "type": "navigate",
               "label": "打开校园地图",
-              "url": "/pages/campus-map/campus-map",
+              "url": "/packageMaps/pages/campus-map/campus-map",
               "payload": {}
             }
           ]
@@ -2775,7 +2775,7 @@
         "action": {
           "type": "navigate",
           "label": "打开校园地图",
-          "url": "/pages/campus-map/campus-map",
+          "url": "/packageMaps/pages/campus-map/campus-map",
           "payload": {}
         },
         "card": {
@@ -2791,7 +2791,7 @@
             {
               "type": "navigate",
               "label": "打开校园地图",
-              "url": "/pages/campus-map/campus-map",
+              "url": "/packageMaps/pages/campus-map/campus-map",
               "payload": {}
             }
           ]

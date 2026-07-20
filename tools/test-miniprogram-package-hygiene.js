@@ -33,11 +33,50 @@ function collectUsedComponentTags() {
   return tags;
 }
 
+function getSubpackageRoots(appJson) {
+  const packages = appJson.subPackages || appJson.subpackages || [];
+  return packages
+    .map((item) => String(item && item.root || "").replace(/\\/g, "/").replace(/\/+$/, ""))
+    .filter(Boolean)
+    .map((rel) => path.resolve(miniprogramRoot, rel));
+}
+
+function isUnderDir(filePath, dirPath) {
+  const rel = path.relative(dirPath, filePath);
+  return rel && !rel.startsWith("..") && !path.isAbsolute(rel);
+}
+
 function run() {
+  const appJsonPath = path.join(miniprogramRoot, "app.json");
+  assert(fs.existsSync(appJsonPath), "miniprogram/app.json must exist");
+  const appJson = readJson(appJsonPath);
+  const subpackageRoots = getSubpackageRoots(appJson);
+  assert(subpackageRoots.length >= 1, "AI/map heavy pages should live in subpackages");
+
   const usedTags = collectUsedComponentTags();
   const packageFiles = walkFiles(miniprogramRoot);
-  const sourceBytes = packageFiles.reduce((sum, filePath) => sum + fs.statSync(filePath).size, 0);
-  assert(sourceBytes <= 2 * 1024 * 1024, `miniprogram source package exceeds 2MB: ${sourceBytes} bytes`);
+  const totalBytes = packageFiles.reduce((sum, filePath) => sum + fs.statSync(filePath).size, 0);
+
+  // WeChat main-package gate: files NOT under any subpackage root.
+  const mainFiles = packageFiles.filter((filePath) => !subpackageRoots.some((rootDir) => isUnderDir(filePath, rootDir)));
+  const mainBytes = mainFiles.reduce((sum, filePath) => sum + fs.statSync(filePath).size, 0);
+  assert(
+    mainBytes <= 2 * 1024 * 1024,
+    `miniprogram main package exceeds 2MB: ${mainBytes} bytes (total project ${totalBytes} bytes; subpackages=${subpackageRoots.length})`
+  );
+
+  // Keep total project sanity (WeChat total limit is higher; soft guard for runaway assets).
+  assert(totalBytes <= 20 * 1024 * 1024, `miniprogram total package exceeds 20MB: ${totalBytes} bytes`);
+
+  // Main package must not still host AI assistant page or map JPG assets.
+  assert(
+    !mainFiles.some((filePath) => /[\\/]pages[\\/]ai-assistant[\\/]/.test(filePath)),
+    "ai-assistant page must not stay in main package"
+  );
+  assert(
+    !mainFiles.some((filePath) => /[\\/]assets[\\/]maps[\\/].*\.jpe?g$/i.test(filePath)),
+    "campus map JPGs must not stay in main package"
+  );
 
   const jsonFiles = walkFiles(miniprogramRoot, (filePath) => filePath.endsWith(".json"));
   jsonFiles.forEach((filePath) => {
@@ -47,8 +86,13 @@ function run() {
       assert(usedTags.has(tag), `${path.relative(root, filePath)} declares unused component ${tag}`);
       const ref = String(components[tag] || "");
       if (ref.startsWith("/")) {
-        const componentJson = path.join(miniprogramRoot, `${ref}.json`);
-        assert(fs.existsSync(componentJson), `${tag} component file should exist: ${componentJson}`);
+        const componentJson = path.join(miniprogramRoot, `${ref}.json`.replace(/^\//, ""));
+        // component path is absolute from miniprogram root
+        const resolved = path.join(miniprogramRoot, ref.replace(/^\//, "") + ".json");
+        assert(
+          fs.existsSync(resolved) || fs.existsSync(componentJson),
+          `${tag} component file should exist: ${resolved}`
+        );
       }
     });
   });
@@ -60,11 +104,16 @@ function run() {
     assert(size <= 200 * 1024, `${path.relative(root, filePath)} exceeds 200KB`);
   });
 
-  const aiWxml = fs.readFileSync(path.join(miniprogramRoot, "pages", "ai-assistant", "ai-assistant.wxml"), "utf8");
+  const aiWxmlPath = path.join(miniprogramRoot, "packageXiaofu", "pages", "ai-assistant", "ai-assistant.wxml");
+  assert(fs.existsSync(aiWxmlPath), "AI assistant page should live in packageXiaofu subpackage");
+  const aiWxml = fs.readFileSync(aiWxmlPath, "utf8");
   const nodeCount = (aiWxml.match(/<view\b|<button\b|<scroll-view\b|<textarea\b|<image\b|<switch\b/g) || []).length;
   assert(nodeCount <= 190, `AI page WXML is too complex: ${nodeCount}`);
 
-  const aiWxss = fs.readFileSync(path.join(miniprogramRoot, "pages", "ai-assistant", "ai-assistant.wxss"), "utf8");
+  const aiWxss = fs.readFileSync(
+    path.join(miniprogramRoot, "packageXiaofu", "pages", "ai-assistant", "ai-assistant.wxss"),
+    "utf8"
+  );
   assert(
     /\.xiaofu-header\s*\{[\s\S]*?(height:\s*84rpx;|min-height:\s*9[0-9]rpx;)/.test(aiWxss),
     "Xiaofu header should stay compact"
@@ -84,7 +133,9 @@ function run() {
   });
   assert(personalSyncWxml.includes("selection-dot"), "advanced course rows should expose a tap-friendly multi-select dot");
 
-  console.log("test-miniprogram-package-hygiene passed");
+  console.log(
+    `test-miniprogram-package-hygiene passed (main=${mainBytes} bytes, total=${totalBytes} bytes, subpackages=${subpackageRoots.length})`
+  );
 }
 
 run();

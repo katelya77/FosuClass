@@ -185,12 +185,13 @@
 }
 
 @media (min-width: 390px) {
-  .memory-actions {
-    flex-direction: row;
-    flex-wrap: wrap;
+  /* Keep danger actions stacked on all widths to avoid cramped small text */
+  .memory-actions,
+  .memory-actions-stack {
+    flex-direction: column;
   }
   .memory-action {
-    flex: 1 1 30%;
-    min-width: 0;
+    flex: 0 0 auto;
+    width: 100%;
   }
 }

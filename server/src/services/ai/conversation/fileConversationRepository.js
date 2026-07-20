@@ -214,6 +214,7 @@ class FileConversationRepository {
     return this.withPrincipalLock(principalKey, () => {
       const filePath = this.conversationPath(principalKey, conversationIdHash);
       let current = this.readConversationFile(filePath);
+      let wasCreated = false;
       if (!current || isExpired(current)) {
         if (options.createIfMissing) {
           current = createEmptyConversationState({
@@ -223,6 +224,9 @@ class FileConversationRepository {
             memoryMode: patch.memoryPolicy && patch.memoryPolicy.mode || options.memoryMode || "session_state",
             title: patch.title,
           });
+          // revision starts at 1 after first upsert write below
+          current.revision = 0;
+          wasCreated = true;
         } else {
           throw typedError("Conversation not found", "CONVERSATION_NOT_FOUND", 404);
         }
@@ -231,7 +235,8 @@ class FileConversationRepository {
         throw typedError("Conversation ownership mismatch", "CONVERSATION_FORBIDDEN", 403);
       }
       const expectedRevision = options.expectedRevision;
-      if (expectedRevision !== undefined && expectedRevision !== null
+      // Skip revision check on first create so client can pass local revision 0 safely.
+      if (!wasCreated && expectedRevision !== undefined && expectedRevision !== null
         && Number(expectedRevision) !== Number(current.revision)) {
         throw typedError("Conversation revision conflict", "CONVERSATION_REVISION_CONFLICT", 409);
       }
@@ -239,7 +244,7 @@ class FileConversationRepository {
         principalKey,
         conversationIdHash,
         clientConversationId: current.clientConversationId || conversationId,
-        revision: Number(current.revision || 0) + 1,
+        revision: wasCreated ? 1 : Number(current.revision || 0) + 1,
         updatedAt: nowIso(),
         lastAccessedAt: nowIso(),
       }), { conversationId, principalKey });

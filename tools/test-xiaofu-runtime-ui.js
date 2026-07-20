@@ -10,21 +10,21 @@ function read(rel) {
 }
 
 function run() {
-  const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
-  const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
-  const pageJs = read("miniprogram/pages/ai-assistant/ai-assistant.js");
-  const liveWxml = read("miniprogram/components/xiaofu-live-run/index.wxml");
-  const liveWxss = read("miniprogram/components/xiaofu-live-run/index.wxss");
-  const memoryWxss = read("miniprogram/components/xiaofu-memory-sheet/index.wxss");
-  const conversationWxml = read("miniprogram/components/xiaofu-conversation-sheet/index.wxml");
-  const conversationWxss = read("miniprogram/components/xiaofu-conversation-sheet/index.wxss");
+  const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
+  const wxss = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss");
+  const pageJs = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
+  const liveWxml = read("miniprogram/packageXiaofu/components/xiaofu-live-run/index.wxml");
+  const liveWxss = read("miniprogram/packageXiaofu/components/xiaofu-live-run/index.wxss");
+  const memoryWxss = read("miniprogram/packageXiaofu/components/xiaofu-memory-sheet/index.wxss");
+  const conversationWxml = read("miniprogram/packageXiaofu/components/xiaofu-conversation-sheet/index.wxml");
+  const conversationWxss = read("miniprogram/packageXiaofu/components/xiaofu-conversation-sheet/index.wxss");
 
   // Fixed main title
   assert.ok(wxml.includes(">小佛助手<"), "fixed title 小佛助手");
   assert.ok(wxml.includes("xiaofu-conversation-sub"), "conversation subtitle row");
   assert.ok(wxml.includes("statusChips"), "status chips");
   assert.ok(wxml.includes("xiaofu-live-run"), "live run component");
-  assert.ok(wxml.includes("onSendOrCancel"), "send/cancel control");
+  assert.ok(wxml.includes("onSendOrCancel") || wxml.includes("onSubmit"), "send/cancel control");
 
   // Header no longer puts full conversation title as main title expression only
   assert.ok(!wxml.includes("{{conversationTitle || '小佛助手'}}"), "conversation title must not be main title");

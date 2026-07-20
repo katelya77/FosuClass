@@ -6,22 +6,22 @@ const PACKAGE_MAPS = {
   jiangwan: {
     mapKey: "jiangwan",
     title: "江湾校区",
-    packageUrl: "/assets/maps/campus-map-jiangwan.jpg",
+    packageUrl: "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
   },
   xianxiNorth: {
     mapKey: "xianxiNorth",
     title: "仙溪校区北区",
-    packageUrl: "/assets/maps/campus-map-xianxi-north.jpg",
+    packageUrl: "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
   },
   xianxiSouth: {
     mapKey: "xianxiSouth",
     title: "仙溪校区南区",
-    packageUrl: "/assets/maps/campus-map-xianxi-south.jpg",
+    packageUrl: "/packageMaps/assets/maps/campus-map-xianxi-south.jpg",
   },
   hebin: {
     mapKey: "hebin",
     title: "河滨校区",
-    packageUrl: "/assets/maps/campus-map-hebin.jpg",
+    packageUrl: "/packageMaps/assets/maps/campus-map-hebin.jpg",
   },
 };
 

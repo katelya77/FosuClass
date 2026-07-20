@@ -11,7 +11,7 @@ global.Page = (config) => {
   global.__AI_ASSISTANT_PAGE__ = config;
 };
 
-const { normalizeMessagesForDisplay } = require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+const { normalizeMessagesForDisplay } = require("../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 
 function firstCard(rawCard, content) {
   const messages = normalizeMessagesForDisplay([{

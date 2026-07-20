@@ -282,7 +282,7 @@ router.delete("/agent/memory", scheduleLimiter, requireSessionGuard, (req, res) 
   }
 });
 
-router.post("/agent/memory-policy", scheduleLimiter, requireSessionGuard, validateJsonBody(["mode", "conversationId", "clearExisting", "expectedRevision"]), (req, res) => {
+router.post("/agent/memory-policy", scheduleLimiter, requireSessionGuard, validateJsonBody(["mode", "conversationId", "clearExisting", "expectedRevision", "title"]), (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
     const payload = defaultMemoryService.setMemoryPolicy({
@@ -290,6 +290,7 @@ router.post("/agent/memory-policy", scheduleLimiter, requireSessionGuard, valida
       runtimeMode: resolveMemoryRuntimeMode(req),
       mode: req.body && req.body.mode,
       conversationId: req.body && req.body.conversationId,
+      title: req.body && req.body.title,
       clearExisting: req.body && req.body.clearExisting === true,
       expectedRevision: req.body && req.body.expectedRevision,
     });

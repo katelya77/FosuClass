@@ -1,6 +1,6 @@
 const assert = require("assert");
 
-const demoData = require("../miniprogram/pages/ai-assistant/demo-data");
+const demoData = require("../miniprogram/packageXiaofu/pages/ai-assistant/demo-data");
 
 const MODES = ["empty-room", "today", "diagnosis", "guide", "teacher", "meeting"];
 const SENSITIVE_PATTERNS = [

@@ -195,7 +195,9 @@ class ConversationMemoryService {
     if (!principal.authenticated || !conversationId) {
       return publicMemoryStatus(null, { authenticated: principal.authenticated, mode: "local_only" });
     }
-    if (input.failed === true || input.securityBlocked === true) {
+    // Cancelled runs and failures must not write long-term memory.
+    if (input.failed === true || input.securityBlocked === true
+      || input.cancelled === true || input.status === "cancelled") {
       return publicMemoryStatus(input.state || null, {
         authenticated: true,
         mode: input.memoryMode || "session_state",
@@ -347,11 +349,24 @@ class ConversationMemoryService {
       error.statusCode = 401;
       throw error;
     }
-    const patch = {};
+    const conversationId = String(input.conversationId || "").trim();
+    if (!conversationId || conversationId.length > 80) {
+      const error = new Error("conversationId invalid");
+      error.code = "CONVERSATION_ID_INVALID";
+      error.statusCode = 400;
+      throw error;
+    }
+    const existing = this.repository.get(principal.principalKey, conversationId);
+    const created = !existing;
+    const patch = {
+      runtimeMode: principal.runtimeMode,
+    };
     if (input.title !== undefined) patch.title = safeText(input.title, 80);
+    else if (created && input.title) patch.title = safeText(input.title, 80);
     if (input.memoryMode || input.memoryPolicy) {
       const mode = this.resolveMemoryMode({
         principal,
+        existingMode: existing && existing.memoryPolicy && existing.memoryPolicy.mode,
         requestedMode: input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode,
         explicitCloudSync: (input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode) === "cloud_sync",
         allowCloudSyncRequest: (input.memoryMode || input.memoryPolicy && input.memoryPolicy.mode) === "cloud_sync",
@@ -369,11 +384,18 @@ class ConversationMemoryService {
         patch.conversationSummary = "";
       }
     }
-    const saved = this.repository.update(principal.principalKey, input.conversationId, patch, {
-      expectedRevision: input.expectedRevision,
+    // Safe upsert: first enable of session_state/cloud_sync for a local conversationId
+    // must create a minimal server conversation bound to the current principal.
+    const saved = this.repository.update(principal.principalKey, conversationId, patch, {
+      createIfMissing: true,
+      expectedRevision: created ? undefined : input.expectedRevision,
+      runtimeMode: principal.runtimeMode,
+      memoryMode: patch.memoryPolicy && patch.memoryPolicy.mode || "session_state",
     });
     return {
       success: true,
+      created,
+      upserted: true,
       conversation: publicConversationView(saved),
       memory: publicMemoryStatus(saved, {
         authenticated: true,
@@ -428,9 +450,10 @@ class ConversationMemoryService {
     if (input.conversationId) {
       return this.patchConversation({
         serverSession: input.serverSession,
-        runtimeMode: input.runtimeMode,
+        runtimeMode: principal.runtimeMode || input.runtimeMode,
         conversationId: input.conversationId,
         memoryMode: mode,
+        title: input.title,
         deleteCloudData: input.clearExisting === true,
         expectedRevision: input.expectedRevision,
       });

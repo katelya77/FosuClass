@@ -1,14 +1,15 @@
-﻿const aiAssistantService = require("../../services/aiAssistantService");
-const aiVoiceInputService = require("../../services/aiVoiceInputService");
-const conversationStore = require("../../services/conversationStore");
-const contextManager = require("../../services/xiaofuContextManager");
-const xiaofuFloatService = require("../../services/xiaofuFloatService");
-const agentMemoryClient = require("../../services/agentMemoryClient");
-const agentReadinessClient = require("../../services/agentReadinessClient");
-const agentRunClient = require("../../services/agentRunClient");
-const cloudbaseConfig = require("../../config/cloudbase");
+const aiAssistantService = require("../../../services/aiAssistantService");
+const aiVoiceInputService = require("../../../services/aiVoiceInputService");
+const conversationStore = require("../../../services/conversationStore");
+const contextManager = require("../../../services/xiaofuContextManager");
+const xiaofuFloatService = require("../../../services/xiaofuFloatService");
+const agentMemoryClient = require("../../../services/agentMemoryClient");
+const agentReadinessClient = require("../../../services/agentReadinessClient");
+const agentRunClient = require("../../../services/agentRunClient");
+const agentClientErrorMapper = require("../../../services/agentClientErrorMapper");
+const cloudbaseConfig = require("../../../config/cloudbase");
 const demoData = require("./demo-data");
-const { courseTimes } = require("../../data/courseTimes");
+const { courseTimes } = require("../../../data/courseTimes");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
@@ -195,7 +196,7 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.NAVIGATE,
     iconPath: ICONS.app,
     label: "仙溪南区地图",
-    url: "/pages/campus-map/campus-map?map=xianxiSouth",
+    url: "/packageMaps/pages/campus-map/campus-map?map=xianxiSouth",
   },
   {
     id: "jiangwanPlaces",
@@ -444,10 +445,11 @@ const WELCOME_EXAMPLES = [
 ];
 
 const WELCOME_TASK_CARDS = [
-  { id: "today", title: "看今天安排", desc: "整理今日课程与提醒", question: "今天有什么课" },
-  { id: "empty", title: "找连续空教室", desc: "按校区与节次核验占用", question: "现在有连续空教室吗" },
-  { id: "class", title: "查班级课表", desc: "按班级/教学周查询", question: "查班级本周课表" },
-  { id: "study", title: "规划自习时间", desc: "结合空教室与课表空档", question: "帮我规划今天下午自习时间" },
+  // Final UI: action-first, low text density
+  { id: "today", title: "今天安排", desc: "今日课程一览", question: "今天有什么课" },
+  { id: "empty", title: "连续空教室", desc: "找可自习时段", question: "现在有连续空教室吗" },
+  { id: "class", title: "班级课表", desc: "按班级查询", question: "查班级本周课表" },
+  { id: "study", title: "规划自习", desc: "课表 + 空教室", question: "帮我规划今天下午自习时间" },
 ];
 
 const MEMORY_MODE_LABELS = {
@@ -1190,7 +1192,7 @@ function buildDefaultCardActions(source, type, message) {
   }
   if (cardType === "school_knowledge") {
     const actions = [];
-    if (entryUrl && entryUrl !== sourceUrl && /^\/pages\//.test(entryUrl)) {
+    if (entryUrl && entryUrl !== sourceUrl && /^\/(pages|packageXiaofu|packageMaps)\//.test(entryUrl)) {
       actions.push({ type: "navigate", label: "相关入口", url: entryUrl });
     }
     actions.push({ type: "ask", label: "继续追问", payload: { message: `${title || "这个问题"}还有哪些相关入口` } });
@@ -1198,7 +1200,7 @@ function buildDefaultCardActions(source, type, message) {
   }
   if (["schedule_result", "schedule", "personal_schedule"].indexOf(cardType) >= 0) {
     const actions = [];
-    if (entryUrl && /^\/pages\//.test(entryUrl)) actions.push({ type: "navigate", label: "查看完整课表", url: entryUrl });
+    if (entryUrl && /^\/(pages|packageXiaofu|packageMaps)\//.test(entryUrl)) actions.push({ type: "navigate", label: "查看完整课表", url: entryUrl });
     else actions.push({ type: "navigate", label: "查看完整课表", url: "/pages/today/today" });
     actions.push({ type: "ask", label: "继续查本周", payload: { message: "本周课表" } });
     actions.push({ type: "ask", label: "继续查明天", payload: { message: "明天有什么课" } });
@@ -1355,50 +1357,108 @@ function normalizeDisplaySteps(source = {}) {
   });
 }
 
+function isGenericAssistantCard(card) {
+  if (!card) return true;
+  const type = String(card.type || "generic");
+  const title = String(card.title || "");
+  const subtitle = String(card.subtitle || "");
+  if (type === "generic" && /^(小佛助手|小佛校园助手|结果)$/.test(title)) return true;
+  if (/智能体表达层|来自智能体|自然对话/.test(subtitle)) return true;
+  return false;
+}
+
 function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
   const source = message || {};
   const id = source.id || `m-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-  const evidenceLabel = inferEvidenceLabel(source);
+  const presentationMode = safeText(source.presentationMode || (source.presentation && source.presentation.presentationMode) || "", 32);
+  const isPlain = presentationMode === "plain"
+    || (source.role !== "user" && (!source.toolCalls || !source.toolCalls.length)
+      && (!source.cards || !source.cards.length || source.cards.every(isGenericAssistantCard))
+      && /conversational|project_qa|generic|plain/i.test(String(source.intentName || source.intent && source.intent.name || presentationMode || "")));
+  const evidenceLabel = isPlain ? "" : inferEvidenceLabel(source);
   const normalizedSafety = source.safety ? normalizeSafety(source.safety) : null;
-  const displaySafety = normalizedSafety ? Object.assign(normalizedSafety, {
+  const displaySafety = !isPlain && normalizedSafety ? Object.assign(normalizedSafety, {
     text: evidenceLabel || normalizedSafety.text,
   }) : null;
   const metrics = normalizeMetrics(source.metrics);
   const role = source.role === "user" ? "user" : "assistant";
-  const displaySteps = normalizeDisplaySteps(source);
-  const displayTaskSteps = Array.isArray(source.taskSteps)
-    ? source.taskSteps.slice(0, 6).map(normalizeTaskStep)
-    : [];
-  const displayToolCalls = displaySteps.length
+  let rawCards = Array.isArray(source.cards) ? source.cards.filter((card) => !isGenericAssistantCard(card)) : [];
+  if (presentationMode === "plain" || isPlain) rawCards = [];
+  else if (presentationMode === "single_card") rawCards = rawCards.slice(0, 1);
+  else rawCards = rawCards.slice(0, 2);
+
+  const displaySteps = isPlain ? [] : normalizeDisplaySteps(source);
+  const displayTaskSteps = isPlain
+    ? []
+    : (Array.isArray(source.taskSteps)
+      ? source.taskSteps.slice(0, 6).map(normalizeTaskStep)
+      : []);
+  const displayToolCalls = isPlain || displaySteps.length
     ? []
     : (displayTaskSteps.length
       ? displayTaskSteps
       : (Array.isArray(source.toolCalls) ? source.toolCalls.slice(0, 4).map(normalizeToolCall) : []));
   const fallback = source.fallback === true || source.fallbackLayer === "client" || source.fallbackLayer === "server";
+  const evidenceText = isPlain ? "" : buildEvidenceText(source.evidence, evidenceLabel);
+  const runSummary = source.runSummary || (source.presentation && source.presentation.runSummary) || null;
+  const taskTrajectory = !isPlain
+    ? (source.taskTrajectory || (source.presentation && source.presentation.taskTrajectory) || null)
+    : null;
+  const hasTrajectory = Boolean(taskTrajectory && (
+    (taskTrajectory.plan && taskTrajectory.plan.length)
+    || (taskTrajectory.execution && taskTrajectory.execution.length)
+    || taskTrajectory.understanding
+  ));
+  const showFullRun = !isPlain && (displaySteps.length > 0 || hasTrajectory) && source.runExpanded === true;
+  const runCompactText = runSummary && runSummary.compact
+    ? runSummary.compact
+    : (displaySteps.length || hasTrajectory ? "已完成" : "");
+  const normalizedTrajectory = hasTrajectory ? {
+    understanding: safeText(taskTrajectory.understanding || "", 160),
+    plan: Array.isArray(taskTrajectory.plan) ? taskTrajectory.plan.slice(0, 5).map((p, i) => ({
+      index: p.index || i + 1,
+      label: safeText(p.label || "", 80),
+    })) : [],
+    execution: Array.isArray(taskTrajectory.execution) ? taskTrajectory.execution.slice(0, 6).map((e) => ({
+      label: safeText(e.label || "", 80),
+      status: e.status === "failed" ? "failed" : "success",
+      summary: safeText(e.summary || "", 80),
+    })) : [],
+    verification: safeText(taskTrajectory.verification || "", 160),
+    replanUsed: taskTrajectory.replanUsed === true,
+  } : null;
   return Object.assign({}, source, {
     id,
     role,
-    content: safeText(source.content || "", 1200),
-    cards: Array.isArray(source.cards) ? source.cards : [],
-    displayCards: Array.isArray(source.cards)
-      ? source.cards.slice(0, 5).map((card, index) => normalizeCard(card, id, index, expandedCards, source)).filter(Boolean)
-      : [],
-    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6).map((item) => safeText(item, 60)).filter(Boolean) : [],
+    content: safeText(source.content || "", 2000),
+    presentationMode: presentationMode || (isPlain ? "plain" : ""),
+    cards: rawCards,
+    displayCards: rawCards
+      .map((card, index) => normalizeCard(card, id, index, expandedCards, source)).filter(Boolean),
+    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 2).map((item) => safeText(item, 60)).filter(Boolean) : [],
     toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls : [],
     taskSteps: Array.isArray(source.taskSteps) ? source.taskSteps : [],
     steps: Array.isArray(source.steps) ? source.steps : [],
-    displaySteps,
-    evidence: source.evidence || null,
-    evidenceText: buildEvidenceText(source.evidence, evidenceLabel),
-    displayToolCalls,
+    displaySteps: showFullRun && !normalizedTrajectory ? displaySteps : [],
+    taskTrajectory: normalizedTrajectory,
+    trajectoryExpanded: showFullRun && Boolean(normalizedTrajectory),
+    runCompactText: !isPlain && !showFullRun ? runCompactText : "",
+    hasCollapsedRun: !isPlain && (displaySteps.length > 0 || hasTrajectory) && !showFullRun,
+    evidence: isPlain ? null : (source.evidence || null),
+    evidenceText,
+    evidenceExpanded: source.evidenceExpanded === true,
+    evidenceCompact: evidenceText ? (evidenceText.length > 36 ? evidenceText.slice(0, 36) + "…" : evidenceText) : "",
+    displayToolCalls: isPlain ? [] : displayToolCalls,
     safety: source.safety || null,
     displaySafety,
     metrics,
-    metricsText: metrics ? `耗时 ${metrics.latencyMs} ms` : "",
-    fallback,
-    fallbackBanner: fallback ? "网络暂不可用，已使用本地能力完成本次任务" : "",
+    metricsText: metrics && !isPlain ? `耗时 ${metrics.latencyMs} ms` : "",
+    fallback: fallback && !isPlain,
+    fallbackBanner: fallback && !isPlain ? "网络暂不可用，已使用本地能力完成本次任务" : "",
     runStatus: source.status || (fallback ? "degraded" : "completed"),
     memory: source.memory || null,
+    showCompactFeedback: role === "assistant" && !source.isStreaming,
+    feedbackOpen: source.feedbackOpen === true,
     showAvatar: role === "assistant" && (!previousMessage || previousMessage.role === "user"),
     timeText: source.timeText || timeText(),
   });
@@ -1467,22 +1527,21 @@ function buildConversationDisplayList(activeConversationId, mergedList) {
 
 function buildHeaderSubtitle(state) {
   const source = state || {};
+  // Final UI: avoid stacking "增强模式" chip + long "增强理解已就绪" line.
   if (source.statusMachine === "network_offline" || source.connectionStatusClass === "offline") {
-    return "网络离线，可使用本机缓存能力";
+    return "离线可用";
   }
   if (source.statusMachine === "server_unreachable") {
-    return "服务暂不可达，本机能力仍可用";
+    return "本机可用";
   }
   if (source.statusMachine === "enhanced_degraded") {
-    return "增强能力降级，事实任务仍可用";
+    return "增强降级";
   }
+  // When enhanced chip already shown, do not repeat readiness text.
   if (source.statusMachine === "enhanced_ready") {
-    return "增强理解已就绪";
+    return "";
   }
-  if (source.allowPersonalContext === true) {
-    return "稳定模式 · 课表摘要已开";
-  }
-  return "校园任务助手";
+  return "";
 }
 
 function isNewConversationCommand(text) {
@@ -1574,6 +1633,7 @@ Page({
     taskPanelGroups: [],
     taskPanelReady: false,
     taskPanelLoading: false,
+    memorySwitching: false,
     messages: [],
     conversations: [],
     activeConversationId: "",
@@ -1585,6 +1645,7 @@ Page({
     inputFocus: false,
     sending: false,
     sendingStatusText: "处理中",
+    showQuickTasks: false,
     showTaskPanel: false,
     showConversationSheet: false,
     showCapabilityGuide: false,
@@ -2384,7 +2445,7 @@ Page({
           toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
           taskSteps: Array.isArray(response.taskSteps) ? response.taskSteps : [],
           steps: Array.isArray(response.steps) ? response.steps : (Array.isArray(response.taskSteps) ? response.taskSteps : []),
-          evidence: response.evidence || null,
+          evidence: response.evidence || response.evidenceDisplay || null,
           safety,
           metrics: response.metrics || null,
           fallback: response.fallback === true,
@@ -2392,6 +2453,12 @@ Page({
           status: response.status || "completed",
           memory: response.memory || null,
           intent: response.intent || (response.metrics && response.metrics.canonicalIntent) || "",
+          intentName: (response.intent && response.intent.name) || response.intentName || "",
+          presentationMode: response.presentationMode || (response.presentation && response.presentation.presentationMode) || "",
+          presentation: response.presentation || null,
+          runSummary: response.runSummary || (response.presentation && response.presentation.runSummary) || null,
+          taskTrajectory: response.taskTrajectory || (response.presentation && response.presentation.taskTrajectory) || null,
+          plan: response.plan || null,
         });
         if (response.memory && response.memory.mode) {
           this.setData({
@@ -2661,19 +2728,29 @@ Page({
 
   async applyMemoryMode(mode, options = {}) {
     const previous = options.previous || this.data.memoryMode || "local_only";
+    if (this.data.memorySwitching) return;
+    this.setData({ memorySwitching: true });
+
     if (mode === "local_only") {
-      try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", mode); } catch (error) { /* ignore */ }
+      // local_only can apply immediately; cloud delete is best-effort and must not claim success on failure
       if (options.deleteCloudData === true) {
         const cleared = await agentMemoryClient.clearCloudMemory();
         if (!cleared.success) {
-          wx.showToast({ title: cleared.error || "云端清除失败", icon: "none" });
+          this.setData({ memorySwitching: false });
+          wx.showToast({
+            title: agentClientErrorMapper.userMessage(cleared, "云端清除失败，请稍后再试"),
+            icon: "none",
+          });
+          return;
         }
       }
+      try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", mode); } catch (error) { /* ignore */ }
       this.setData({
         memoryMode: mode,
         memoryStatusText: mapMemoryModeText(mode),
         memoryChipText: mapMemoryChip(mode),
         showMemorySheet: false,
+        memorySwitching: false,
       });
       this.refreshConnectionStatus();
       wx.showToast({ title: mapMemoryModeText(mode), icon: "none" });
@@ -2683,15 +2760,21 @@ Page({
     const result = await agentMemoryClient.updateMemoryPolicy({
       mode,
       conversationId: this.data.activeConversationId,
+      title: this.data.activeConversationTitle || this.data.conversationTitle || "新对话",
       clearExisting: options.deleteCloudData === true,
     });
     if (!result.success) {
+      // Server failed: keep previous mode and do not write local storage
       this.setData({
         memoryMode: previous,
         memoryStatusText: mapMemoryModeText(previous),
         memoryChipText: mapMemoryChip(previous),
+        memorySwitching: false,
       });
-      wx.showToast({ title: result.error || "记忆模式更新失败", icon: "none" });
+      wx.showToast({
+        title: agentClientErrorMapper.userMessage(result, "记忆模式更新失败，请稍后再试"),
+        icon: "none",
+      });
       return;
     }
     try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", mode); } catch (error) { /* ignore */ }
@@ -2700,6 +2783,7 @@ Page({
       memoryStatusText: mapMemoryModeText(mode),
       memoryChipText: mapMemoryChip(mode),
       showMemorySheet: false,
+      memorySwitching: false,
     });
     this.refreshConnectionStatus();
     wx.showToast({ title: mapMemoryModeText(mode), icon: "none" });
@@ -2746,7 +2830,10 @@ Page({
         if (!res.confirm) return;
         const result = await agentMemoryClient.clearCloudMemory();
         if (!result.success) {
-          wx.showToast({ title: result.error || "清除失败", icon: "none" });
+          wx.showToast({
+            title: agentClientErrorMapper.userMessage(result, "清除失败，请稍后再试"),
+            icon: "none",
+          });
           return;
         }
         this.setData({
@@ -2785,9 +2872,47 @@ Page({
     this.deleteConversation({ currentTarget: { dataset: { conversationId } } });
   },
 
+  onToggleEvidence(event) {
+    const messageId = event.currentTarget.dataset.messageId;
+    if (!messageId) return;
+    const messages = (this.data.messages || []).map((item) => {
+      if (item.id !== messageId) return item;
+      return Object.assign({}, item, { evidenceExpanded: !item.evidenceExpanded });
+    });
+    this.setData({ messages: normalizeMessagesForDisplay(messages, this.data.expandedCards || {}) });
+  },
+
+  onToggleRunDetails(event) {
+    const messageId = event.currentTarget.dataset.messageId;
+    if (!messageId) return;
+    const messages = (this.data.messages || []).map((item) => {
+      if (item.id !== messageId) return item;
+      return Object.assign({}, item, { runExpanded: !item.runExpanded });
+    });
+    this.setData({ messages: normalizeMessagesForDisplay(messages, this.data.expandedCards || {}) });
+  },
+
+  onToggleQuickTasks() {
+    this.setData({ showQuickTasks: !this.data.showQuickTasks });
+  },
+
+  onFeedbackMore(event) {
+    const messageId = event.currentTarget.dataset.messageId;
+    if (!messageId) return;
+    const messages = (this.data.messages || []).map((item) => {
+      if (item.id !== messageId) return item;
+      return Object.assign({}, item, { feedbackOpen: !item.feedbackOpen });
+    });
+    this.setData({ messages: normalizeMessagesForDisplay(messages, this.data.expandedCards || {}) });
+  },
+
   onMessageFeedback(event) {
     const feedback = event.currentTarget.dataset.feedback;
     const messageId = event.currentTarget.dataset.messageId;
+    if (feedback === "more") {
+      this.onFeedbackMore(event);
+      return;
+    }
     // Lightweight local acknowledgement only; never attach full schedule payloads.
     try {
       const key = "FOSU_AI_FEEDBACK_LOG";
@@ -2801,6 +2926,11 @@ Page({
     } catch (error) {
       // ignore
     }
+    const messages = (this.data.messages || []).map((item) => {
+      if (item.id !== messageId) return item;
+      return Object.assign({}, item, { feedbackOpen: false });
+    });
+    this.setData({ messages: normalizeMessagesForDisplay(messages, this.data.expandedCards || {}) });
     wx.showToast({ title: "已记录反馈", icon: "none" });
   },
 
@@ -2837,7 +2967,7 @@ Page({
 
   openCampusMapFromGuide() {
     this.setData({ showCapabilityGuide: false });
-    this.navigateByUrl("/pages/campus-map/campus-map");
+    this.navigateByUrl("/packageMaps/pages/campus-map/campus-map");
   },
 
   closeSheets() {

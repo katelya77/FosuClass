@@ -36,7 +36,10 @@
 npm run test:agent-foundation
 npm run test:agent-regression
 npm run test:ai-competition
+npm run test:agent-final-convergence
 ```
+
+Final Convergence（Planner / Observation Loop / Hybrid RAG / Response Composer / Memory Upsert / 最终 UI）相关改动必须额外保证 `test:agent-final-convergence` 通过。设计与交付文档见 `docs/xiaofu-agent/final-*.md`。
 
 涉及会话记忆、知识库控制面或 MCP 时，额外运行：
 
@@ -73,6 +76,15 @@ npm run test:xiaofu-memory-integration
 - 无有效 Session 不得假装云端同步成功；默认 `local_only`。
 - `cloud_sync` 必须用户显式开启。
 - 知识库 MCP（`tools/fosu-kb-mcp`）只走受保护后台 API，不直读写知识 JSON；不得注册 publish/rollback Tool。
+
+## Final Convergence（Agent V2 RC）
+
+- 在线决策核心仍是服务端 Agent Kernel；Planner 为受约束结构化计划（public 确定性，trial/dev 可模型规划且失败回退）。
+- Observation → Verify → Replan 最多 1 次；不得伪造 Thinking / Replan / Tool 状态。
+- Hybrid RAG 仅覆盖公开知识，禁止向量化课表事实；Embedding 不可用时自动 Lexical 退化。
+- Response Composer 决定展示层级：普通对话不得出现 generic「小佛助手」卡与 Evidence 堆叠。
+- 首次开启 session_state/cloud_sync 必须 Upsert 服务端会话；用户错误一律中文映射。
+- `AI_GENERAL_ASSISTANT_ENABLED` 仅 trial/dev；校园事实仍必须走 Tool。
 
 ## Runtime Truth Layer（Phase 3）
 

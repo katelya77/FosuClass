@@ -325,8 +325,8 @@ function buildSeedEntries() {
       priority: 144,
       body: "校园地图规则触发地图/地点工具；教室和楼栋位置以结构化地图数据为准。",
       suggestions: ["C7在哪？", "仙溪图书馆怎么走？"],
-      action: action("打开校园地图", "/pages/campus-map/campus-map"),
-      card: card("generic", "校园地图", "查询地点和教室位置", [action("打开校园地图", "/pages/campus-map/campus-map")]),
+      action: action("打开校园地图", "/packageMaps/pages/campus-map/campus-map"),
+      card: card("generic", "校园地图", "查询地点和教室位置", [action("打开校园地图", "/packageMaps/pages/campus-map/campus-map")]),
     }),
     rule({
       id: "assistant-rule-next-course-location",

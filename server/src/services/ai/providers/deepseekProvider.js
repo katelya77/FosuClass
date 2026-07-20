@@ -162,26 +162,39 @@ function buildProviderDiagnostics(options = {}) {
   };
 }
 
-function wrapTextResponse(content) {
+function wrapTextResponse(content, options = {}) {
   const answer = String(content || "").trim().slice(0, 1200);
   if (!answer) {
     const error = new Error("DeepSeek provider returned empty text.");
     error.code = "INVALID_PROVIDER_TEXT";
     throw error;
   }
-  return {
-    provider: "deepseek",
-    answer,
-    cards: [{
-      type: "generic",
-      title: "小佛助手",
-      subtitle: "来自智能体表达层，课程事实仍需工具核验",
-      badges: ["自然对话"],
-      items: [],
-      actions: [],
-    }],
-    suggestions: ["你能做什么", "怎么导入个人课表？", "现在有空教室吗？"],
-  };
+  // Final convergence: plain text only — no generic「小佛助手」expression card.
+  let suggestions = Array.isArray(options.suggestions) ? options.suggestions.slice(0, 3) : [];
+  try {
+    const responseComposer = require("../responseComposer");
+    const composed = responseComposer.wrapPlainText(answer, {
+      intentName: options.intentName || "conversational_help",
+      runtimeMode: options.runtimeMode || "trial",
+      generalAssistant: true,
+      suggestions,
+    });
+    return {
+      provider: "deepseek",
+      answer: composed.answer,
+      cards: [],
+      suggestions: composed.suggestions || suggestions,
+      presentationMode: composed.presentationMode || "plain",
+    };
+  } catch (_) {
+    return {
+      provider: "deepseek",
+      answer,
+      cards: [],
+      suggestions: suggestions.length ? suggestions : ["今天有什么课", "现在第几教学周"],
+      presentationMode: "plain",
+    };
+  }
 }
 
 function classifyHttpError(error) {

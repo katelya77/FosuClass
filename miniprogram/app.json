@@ -3,8 +3,6 @@
     "pages/index/index",
     "pages/school/school",
     "pages/today/today",
-    "pages/ai-assistant/ai-assistant",
-    "pages/campus-map/campus-map",
     "pages/calendar/calendar",
     "pages/settings/settings",
     "pages/custom-courses/custom-courses",
@@ -15,6 +13,32 @@
     "pages/contribute/contribute",
     "pages/personal-sync/personal-sync"
   ],
+  "subPackages": [
+    {
+      "root": "packageXiaofu",
+      "name": "xiaofu",
+      "pages": [
+        "pages/ai-assistant/ai-assistant"
+      ]
+    },
+    {
+      "root": "packageMaps",
+      "name": "maps",
+      "pages": [
+        "pages/campus-map/campus-map"
+      ]
+    }
+  ],
+  "preloadRule": {
+    "pages/index/index": {
+      "network": "wifi",
+      "packages": ["xiaofu"]
+    },
+    "pages/settings/settings": {
+      "network": "all",
+      "packages": ["maps"]
+    }
+  },
   "window": {
     "backgroundColor": "#f7f8fa",
     "backgroundTextStyle": "light",

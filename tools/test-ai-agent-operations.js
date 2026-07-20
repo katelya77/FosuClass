@@ -7,7 +7,7 @@ process.env.AI_ALLOW_PERSONAL_CONTEXT = "true";
 
 const agentService = require("../server/src/services/ai/agentService");
 const toolRegistry = require("../server/src/services/ai/toolRegistry");
-const demoData = require("../miniprogram/pages/ai-assistant/demo-data");
+const demoData = require("../miniprogram/packageXiaofu/pages/ai-assistant/demo-data");
 
 async function testAgentEvidenceAndSteps() {
   const response = await agentService.chat({
