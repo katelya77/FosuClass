@@ -21,6 +21,8 @@ const HIDDEN_ROUTE_PATTERNS = [
 
 const DIMMED_ROUTE_PATTERNS = [
   /pages\/campus-map\/campus-map/,
+  /packageMaps\/pages\/campus-map\/campus-map/,
+  /packageXiaofu\/pages\/ai-assistant\/ai-assistant/,
   /pages\/schedule-view\/schedule-view/,
   /pages\/timetable\/timetable/,
   /pages\/empty-room\/empty-room/,

@@ -9,7 +9,7 @@ global.wx = {
     storage[key] = value;
   },
 };
-global.getCurrentPages = () => [{ route: "pages/ai-assistant/ai-assistant" }];
+global.getCurrentPages = () => [{ route: "packageXiaofu/pages/ai-assistant/ai-assistant" }];
 global.getApp = () => ({
   globalData: {
     activeRelease: {

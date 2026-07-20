@@ -429,7 +429,7 @@ Page({
   goAiAssistant() {
     this.hideMoreMenu();
     wx.navigateTo({
-      url: "/pages/ai-assistant/ai-assistant",
+      url: "/packageXiaofu/pages/ai-assistant/ai-assistant",
     });
   },
 

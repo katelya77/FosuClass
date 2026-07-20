@@ -12,6 +12,7 @@ const tests = [
   "tools/test-response-composer.js",
   "tools/test-xiaofu-final-ui.js",
   "tools/test-agent-e2e-matrix.js",
+  "tools/test-agent-evaluation-120.js",
   "tools/test-agent-client-error-mapper.js",
 ];
 

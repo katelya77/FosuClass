@@ -1,9 +1,0 @@
-{
-  "navigationBarTitleText": "小佛助手",
-  "usingComponents": {
-    "xiaofu-agent-run": "/components/xiaofu-agent-run/index",
-    "xiaofu-live-run": "/components/xiaofu-live-run/index",
-    "xiaofu-memory-sheet": "/components/xiaofu-memory-sheet/index",
-    "xiaofu-conversation-sheet": "/components/xiaofu-conversation-sheet/index"
-  }
-}

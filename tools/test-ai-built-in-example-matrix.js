@@ -61,7 +61,7 @@ global.wx.mockRequest = (options) => {
 const aiAssistantService = require("../miniprogram/services/aiAssistantService");
 const contextManager = require("../miniprogram/services/xiaofuContextManager");
 const ragRetriever = require("../miniprogram/services/ragRetriever");
-const aiPage = require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+const aiPage = require("../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 
 function baseContext() {
   const contextSlots = contextManager.createEmptyContextSlots();

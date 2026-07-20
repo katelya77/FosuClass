@@ -408,7 +408,7 @@ Page({
 
   goCampusMap() {
     wx.navigateTo({
-      url: "/pages/campus-map/campus-map",
+      url: "/packageMaps/pages/campus-map/campus-map",
     });
   },
   

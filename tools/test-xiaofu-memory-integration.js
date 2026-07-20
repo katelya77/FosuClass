@@ -5,10 +5,10 @@ const path = require("path");
 
 const root = path.resolve(__dirname, "..");
 const memoryClient = fs.readFileSync(path.join(root, "miniprogram/services/agentMemoryClient.js"), "utf8");
-const assistant = fs.readFileSync(path.join(root, "miniprogram/pages/ai-assistant/ai-assistant.js"), "utf8");
-const memorySheet = fs.readFileSync(path.join(root, "miniprogram/components/xiaofu-memory-sheet/index.wxml"), "utf8");
-const memoryCss = fs.readFileSync(path.join(root, "miniprogram/components/xiaofu-memory-sheet/index.wxss"), "utf8");
-const conversationSheet = fs.readFileSync(path.join(root, "miniprogram/components/xiaofu-conversation-sheet/index.wxml"), "utf8");
+const assistant = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js"), "utf8");
+const memorySheet = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/components/xiaofu-memory-sheet/index.wxml"), "utf8");
+const memoryCss = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/components/xiaofu-memory-sheet/index.wxss"), "utf8");
+const conversationSheet = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/components/xiaofu-conversation-sheet/index.wxml"), "utf8");
 const transport = fs.readFileSync(path.join(root, "miniprogram/services/aiTransportRouter.js"), "utf8");
 const aiRoutes = fs.readFileSync(path.join(root, "server/src/routes/ai.js"), "utf8");
 

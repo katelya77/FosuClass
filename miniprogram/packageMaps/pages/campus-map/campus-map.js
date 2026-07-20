@@ -1,4 +1,4 @@
-const campusMapDataService = require("../../services/campusMapDataService");
+const campusMapDataService = require("../../../services/campusMapDataService");
 
 let campusData = campusMapDataService.getFallbackData();
 
@@ -19,28 +19,28 @@ const MAPS = {
     campus: "江湾校区",
     area: "江湾校区",
     title: "江湾校区",
-    asset: "/assets/maps/campus-map-jiangwan.jpg",
+    asset: "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
   },
   xianxiNorth: {
     key: "xianxiNorth",
     campus: "仙溪校区",
     area: "北区",
     title: "仙溪校区北区",
-    asset: "/assets/maps/campus-map-xianxi-north.jpg",
+    asset: "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
   },
   xianxiSouth: {
     key: "xianxiSouth",
     campus: "仙溪校区",
     area: "南区",
     title: "仙溪校区南区",
-    asset: "/assets/maps/campus-map-xianxi-south.jpg",
+    asset: "/packageMaps/assets/maps/campus-map-xianxi-south.jpg",
   },
   hebin: {
     key: "hebin",
     campus: "河滨校区",
     area: "河滨校区",
     title: "河滨校区",
-    asset: "/assets/maps/campus-map-hebin.jpg",
+    asset: "/packageMaps/assets/maps/campus-map-hebin.jpg",
   },
 };
 

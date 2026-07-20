@@ -1,4 +1,4 @@
-﻿const request = require("../utils/request");
+const request = require("../utils/request");
 const { getCurrentScheduleTarget } = require("../utils/storage");
 const releasePackService = require("./releasePackService");
 const { DEFAULT_TERM } = releasePackService;

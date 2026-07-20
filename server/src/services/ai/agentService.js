@@ -18,6 +18,7 @@ const { loadingTextForEvent } = require("./runEventCatalog");
 const responseComposer = require("./responseComposer");
 const { getPlannerPolicy, isGeneralAssistantEnabled } = require("./planner/plannerPolicy");
 const plannerModelAdapter = require("./planner/plannerModelAdapter");
+const { assemble: assembleContext } = require("./context/contextAssembler");
 
 function nowIso() {
   return new Date().toISOString();
@@ -671,6 +672,7 @@ function buildResponse(payload) {
     planMeta: agentProtocol.normalizeStructuredPlanMeta
       ? agentProtocol.normalizeStructuredPlanMeta(payload.plan)
       : null,
+    contextMeta: payload.contextMeta || null,
     contextSlots: payload.contextSlots || buildContextSlots(payload.intent, envelope.slots),
     fallback: payload.fallback === true,
     fallbackLayer: payload.fallbackLayer || (payload.fallback === true ? "server" : "none"),
@@ -1232,21 +1234,40 @@ async function chat(input = {}) {
   // 体验/开发对话类意图始终注入公开产品知识，帮助模型做人设化表达；不含私密部署信息。
   const shouldInjectProjectKnowledge = isProjectKnowledgeIntent(intent)
     || runtimeDecision.runtimeMode !== "public";
+  const toolResultsForProvider = toolCalls.map((item) => ({
+    name: item.name,
+    status: item.status,
+    summary: safetyGuard.redactSensitiveText(item.summary || ""),
+    result: safetyGuard.sanitizeToolResult(item.result),
+  }));
+  const projectKnowledgeText = shouldInjectProjectKnowledge
+    ? projectKnowledgeService.getProjectKnowledgePrompt(context.assistantEnvironment || runtimeDecision.runtimeMode, safeMessage)
+    : "";
+  // Budgeted response context — never dump unbounded history or full schedule into provider.
+  const responseContext = assembleContext("response", {
+    message: safeMessage,
+    runtimeMode: runtimeDecision.runtimeMode,
+    currentTeachingWeek: context.currentTeachingWeek,
+    toolResults: toolResultsForProvider,
+    toolCalls: toolResultsForProvider,
+    projectKnowledge: projectKnowledgeText,
+    history: Array.isArray(context.recentMessages) ? context.recentMessages : [],
+    messages: Array.isArray(context.recentMessages) ? context.recentMessages : [],
+  });
   const providerInput = {
     message: safeMessage,
     context: buildMinimalProviderContext(context),
     intent,
     localRule: localRuleMatch && localRuleMatch.rule || null,
-    projectKnowledge: shouldInjectProjectKnowledge
-      ? projectKnowledgeService.getProjectKnowledgePrompt(context.assistantEnvironment || runtimeDecision.runtimeMode, safeMessage)
-      : "",
+    projectKnowledge: projectKnowledgeText,
     providerRuntimeConfig,
-    toolResults: toolCalls.map((item) => ({
-      name: item.name,
-      status: item.status,
-      summary: safetyGuard.redactSensitiveText(item.summary || ""),
-      result: safetyGuard.sanitizeToolResult(item.result),
-    })),
+    toolResults: toolResultsForProvider,
+    contextMeta: {
+      contextTokenEstimate: responseContext.contextTokenEstimate,
+      contextSections: responseContext.sections,
+      truncatedSections: responseContext.truncatedSections,
+      compressionUsed: responseContext.compressionUsed === true,
+    },
   };
   const deterministicGenerated = mockProvider.generate(providerInput);
   const deterministicPayload = stableGeneratedPayload(deterministicGenerated, {
@@ -1420,6 +1441,7 @@ async function chat(input = {}) {
       plannerType: plannerDiag.inferredPlannerType || (plan && plan.plannerType) || "",
     }),
     taskTrajectory: composed.taskTrajectory || null,
+    contextMeta: providerInput.contextMeta || null,
   })), memoryBundle, {
     message: safeMessage,
     intentName: intent.name,

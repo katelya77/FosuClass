@@ -26,7 +26,7 @@ global.Page = (config) => {
 };
 
 const ROOT = path.resolve(__dirname, "..");
-const aiPage = require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+const aiPage = require("../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 const conversationStore = require("../miniprogram/services/conversationStore");
 
 function read(file) {
@@ -52,8 +52,8 @@ function firstCard(rawCard, content) {
 }
 
 function run() {
-  const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
-  const js = read("miniprogram/pages/ai-assistant/ai-assistant.js");
+  const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
+  const js = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 
   assert(!wxml.includes("onCopyMessage"), "assistant message copy handler should not be rendered");
   assert(!wxml.includes("复制回答"), "assistant message copy button should not be visible");

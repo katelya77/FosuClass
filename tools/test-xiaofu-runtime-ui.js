@@ -10,14 +10,14 @@ function read(rel) {
 }
 
 function run() {
-  const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
-  const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
-  const pageJs = read("miniprogram/pages/ai-assistant/ai-assistant.js");
-  const liveWxml = read("miniprogram/components/xiaofu-live-run/index.wxml");
-  const liveWxss = read("miniprogram/components/xiaofu-live-run/index.wxss");
-  const memoryWxss = read("miniprogram/components/xiaofu-memory-sheet/index.wxss");
-  const conversationWxml = read("miniprogram/components/xiaofu-conversation-sheet/index.wxml");
-  const conversationWxss = read("miniprogram/components/xiaofu-conversation-sheet/index.wxss");
+  const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
+  const wxss = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss");
+  const pageJs = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
+  const liveWxml = read("miniprogram/packageXiaofu/components/xiaofu-live-run/index.wxml");
+  const liveWxss = read("miniprogram/packageXiaofu/components/xiaofu-live-run/index.wxss");
+  const memoryWxss = read("miniprogram/packageXiaofu/components/xiaofu-memory-sheet/index.wxss");
+  const conversationWxml = read("miniprogram/packageXiaofu/components/xiaofu-conversation-sheet/index.wxml");
+  const conversationWxss = read("miniprogram/packageXiaofu/components/xiaofu-conversation-sheet/index.wxss");
 
   // Fixed main title
   assert.ok(wxml.includes(">小佛助手<"), "fixed title 小佛助手");

@@ -4,7 +4,7 @@ const mockEnv = require("./mock-env");
 mockEnv.clearStorage();
 global.getCurrentPages = () => [];
 
-require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+require("../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 const xiaofuFloatService = require("../miniprogram/services/xiaofuFloatService");
 
 function wait(ms) {

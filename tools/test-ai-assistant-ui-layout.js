@@ -15,8 +15,8 @@ function getRule(css, selector) {
 }
 
 function run() {
-  const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
-  const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
+  const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
+  const wxss = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss");
 
   assert(wxml.includes("xiaofu-header"), "AI page should use the Xiaofu light header");
   assert(
@@ -85,7 +85,7 @@ function run() {
   assert(/position\s*:\s*fixed/.test(sheet) && /z-index\s*:\s*40/.test(sheet), "bottom sheet should overlay content");
   assert(/max-height\s*:\s*72vh/.test(sheet), "bottom sheet should not exceed 72vh");
 
-  const aiJs = read("miniprogram/pages/ai-assistant/ai-assistant.js");
+  const aiJs = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
   assert(aiJs.includes("已获取天气数据"), "weather evidence should use weather label");
   assert(aiJs.includes("已核验课表数据"), "schedule evidence should keep schedule label");
   assert(aiJs.includes("已查询校园地图"), "map evidence should use map label");
