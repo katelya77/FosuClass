@@ -22,9 +22,9 @@ function run() {
   assert.strictEqual(hi.presentationMode, "plain");
   assert.strictEqual(hi.cards.length, 0);
   assert.strictEqual(hi.evidence, null);
-  assert.ok(hi.suggestions.length <= 3);
-  assert.ok(!hi.suggestions.every((s) => ["你能做什么", "怎么导入个人课表？", "现在有空教室吗？"].includes(s))
-    || hi.suggestions.length <= 3);
+  assert.ok(hi.suggestions.length <= 2, "plain chat suggestions capped");
+  assert.strictEqual(hi.taskTrajectory, null);
+  assert.ok(hi.runSummary == null);
 
   // deepseek wrap no generic card
   const wrapped = deepseekProvider.wrapTextResponse("这里是一段纯文本回答。");
@@ -47,6 +47,8 @@ function run() {
   assert.ok(fact.evidence);
   assert.ok(fact.evidence.defaultCollapsed === true);
   assert.ok(fact.runSummary);
+  assert.ok(fact.taskTrajectory);
+  assert.ok(fact.taskTrajectory.execution && fact.taskTrajectory.execution.length >= 1);
 
   // multi card max 2
   const multi = responseComposer.compose({

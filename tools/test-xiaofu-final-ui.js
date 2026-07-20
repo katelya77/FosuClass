@@ -54,6 +54,16 @@ assertIncludes(wxml, "evidence-collapsed", "wxml");
 assertIncludes(wxml, "onToggleEvidence", "wxml");
 assertIncludes(wxml, "run-compact", "wxml");
 
+// Explainable trajectory + quick tasks collapse after chat
+assertIncludes(wxml, "task-trajectory", "wxml");
+assertIncludes(wxml, "showQuickTasks", "wxml");
+assertIncludes(pageJs, "taskTrajectory", "pageJs");
+assertIncludes(pageJs, "onToggleQuickTasks", "pageJs");
+assertIncludes(wxss, ".task-trajectory", "wxss");
+
+// Composer stop control
+assertIncludes(wxml, 'aria-label="{{sending ? \'停止\' : \'发送\'}}"', "wxml");
+
 // Generic card stripping
 assertIncludes(pageJs, "isGenericAssistantCard", "pageJs");
 

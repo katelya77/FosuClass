@@ -6,11 +6,34 @@
 
 const crypto = require("crypto");
 
+/**
+ * Embedding config schema (env):
+ *   AI_EMBEDDING_ENABLED | AI_EMBEDDING_MODE | AI_EMBEDDING_PROVIDER
+ *   AI_EMBEDDING_BASE_URL | AI_EMBEDDING_MODEL | AI_EMBEDDING_API_KEY
+ *   AI_EMBEDDING_DIMENSIONS | AI_RAG_MIN_CONFIDENCE
+ * API keys must never be logged or written into vector index files.
+ */
 function getEmbeddingMode(env = process.env) {
-  const mode = String(env.AI_EMBEDDING_MODE || env.FOSU_EMBEDDING_MODE || "disabled").toLowerCase();
-  if (["disabled", "off", "none", "0", "false"].includes(mode)) return "disabled";
-  if (mode === "cloudbase") return "cloudbase";
-  if (mode === "openai" || mode === "openai-compatible" || mode === "compatible") return "openai-compatible";
+  const enabledRaw = env.AI_EMBEDDING_ENABLED;
+  if (enabledRaw === "0" || String(enabledRaw || "").toLowerCase() === "false") {
+    return "disabled";
+  }
+  const provider = String(env.AI_EMBEDDING_PROVIDER || "").toLowerCase();
+  const mode = String(env.AI_EMBEDDING_MODE || env.FOSU_EMBEDDING_MODE || provider || "disabled").toLowerCase();
+  if (["disabled", "off", "none", "0", "false", ""].includes(mode) && enabledRaw !== "1" && String(enabledRaw || "").toLowerCase() !== "true") {
+    return "disabled";
+  }
+  if (mode === "local-hash" || provider === "local-hash") return "local-hash";
+  if (mode === "cloudbase" || provider === "cloudbase") return "cloudbase";
+  if (mode === "openai" || mode === "openai-compatible" || mode === "compatible"
+    || provider === "openai" || provider === "openai-compatible") {
+    return "openai-compatible";
+  }
+  // Explicit enable without mode → try openai-compatible if base URL present
+  if (enabledRaw === "1" || String(enabledRaw || "").toLowerCase() === "true") {
+    if (env.AI_EMBEDDING_BASE_URL || env.OPENAI_BASE_URL) return "openai-compatible";
+    return "local-hash";
+  }
   return "disabled";
 }
 

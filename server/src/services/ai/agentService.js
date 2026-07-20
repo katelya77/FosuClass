@@ -17,6 +17,7 @@ const agentRunEventService = require("./agentRunEventService");
 const { loadingTextForEvent } = require("./runEventCatalog");
 const responseComposer = require("./responseComposer");
 const { getPlannerPolicy, isGeneralAssistantEnabled } = require("./planner/plannerPolicy");
+const plannerModelAdapter = require("./planner/plannerModelAdapter");
 
 function nowIso() {
   return new Date().toISOString();
@@ -304,6 +305,14 @@ function buildMetrics(options = {}) {
     fallback: options.fallback === true,
     itemCount: getItemCount(options.toolCalls),
     usedPersonalContext: options.usedPersonalContext === true,
+    // Planner vs Response diagnostics (no secrets)
+    plannerProvider: options.plannerProvider || "none",
+    responseProvider: options.responseProvider || options.provider || "none",
+    plannerLatency: Math.max(0, Number(options.plannerLatency || 0) || 0),
+    responseLatency: Math.max(0, Number(options.responseLatency || 0) || 0),
+    plannerFallback: options.plannerFallback === true,
+    responseFallback: options.responseFallback === true,
+    plannerType: options.plannerType || "",
   };
 }
 
@@ -317,6 +326,13 @@ function normalizeMetrics(metrics = {}, fallbackOptions = {}) {
     fallback: base.fallback === true,
     itemCount: Math.max(0, Number(base.itemCount || 0) || 0),
     usedPersonalContext: base.usedPersonalContext === true,
+    plannerProvider: String(base.plannerProvider || "none"),
+    responseProvider: String(base.responseProvider || "none"),
+    plannerLatency: Math.max(0, Number(base.plannerLatency || 0) || 0),
+    responseLatency: Math.max(0, Number(base.responseLatency || 0) || 0),
+    plannerFallback: base.plannerFallback === true,
+    responseFallback: base.responseFallback === true,
+    plannerType: String(base.plannerType || ""),
   };
 }
 
@@ -646,6 +662,15 @@ function buildResponse(payload) {
     evidence,
     evidenceItems: envelope.evidenceItems,
     suggestions: payload.suggestions,
+    // Presentation protocol (Response Composer) — required for mini-program one-focus UI
+    presentationMode: payload.presentationMode || "",
+    presentation: payload.presentation || null,
+    runSummary: payload.runSummary || null,
+    taskTrajectory: payload.taskTrajectory || null,
+    evidenceDisplay: payload.evidenceDisplay || null,
+    planMeta: agentProtocol.normalizeStructuredPlanMeta
+      ? agentProtocol.normalizeStructuredPlanMeta(payload.plan)
+      : null,
     contextSlots: payload.contextSlots || buildContextSlots(payload.intent, envelope.slots),
     fallback: payload.fallback === true,
     fallbackLayer: payload.fallbackLayer || (payload.fallback === true ? "server" : "none"),
@@ -703,6 +728,13 @@ function buildResponse(payload) {
       evidence: safeResponse.evidence,
       memory: safeResponse.memory,
       errors: safeResponse.errors,
+      presentationMode: safeResponse.presentationMode || payload.presentationMode || "",
+      presentation: safeResponse.presentation || payload.presentation || null,
+      runSummary: safeResponse.runSummary || payload.runSummary || null,
+      taskTrajectory: safeResponse.taskTrajectory || payload.taskTrajectory || null,
+      evidenceDisplay: safeResponse.evidenceDisplay || payload.evidenceDisplay || null,
+      planMeta: safeResponse.planMeta || null,
+      metrics: safeResponse.metrics,
     }));
   }
   return safeResponse;
@@ -1012,6 +1044,17 @@ async function chat(input = {}) {
   const ruleResolution = resolveRuleBackedIntent(safeMessage, context);
   const intent = ruleResolution.intent;
   const localRuleMatch = ruleResolution.ruleMatch;
+
+  // Dedicated planner model adapter (trial/dev only). public never calls models.
+  const plannerGenerate = plannerModelAdapter.createModelGenerate({
+    runtimeMode: runtimeDecision.runtimeMode,
+    providerRuntimeConfig,
+    onEvent: (event) => emitChatEvent(eventInput, Object.assign({
+      runtimeMode: runtimeDecision.runtimeMode,
+      intentName: intent.name,
+    }, event)),
+  });
+
   const execution = await agentKernel.execute({
     message: safeMessage,
     context,
@@ -1022,9 +1065,41 @@ async function chat(input = {}) {
     conversationId,
     runId,
     onEvent: input.onEvent,
+    modelGenerate: runtimeDecision.runtimeMode === "public" ? undefined : plannerGenerate,
   });
   const plan = execution.plan;
   const toolCalls = execution.toolCalls;
+  const plannerDiag = typeof plannerGenerate.getDiagnostics === "function"
+    ? plannerGenerate.getDiagnostics()
+    : { plannerProvider: "none", plannerLatency: 0, plannerFallback: false, plannerStatus: "not_called" };
+  // Prefer structured plan metadata when available (array plan loses plannerType).
+  const planType = (plan && plan.plannerType)
+    || (Array.isArray(plan) ? "" : "")
+    || "";
+  if (planType === "model" || planType === "model_replan" || plannerDiag.plannerStatus === "ok") {
+    plannerDiag.plannerFallback = false;
+    if (plannerDiag.plannerStatus === "not_called") plannerDiag.plannerStatus = "ok";
+    if (plan && plan.plannerProvider) plannerDiag.plannerProvider = plan.plannerProvider;
+    if (plan && plan.plannerLatencyMs) {
+      plannerDiag.plannerLatency = Math.max(
+        Number(plannerDiag.plannerLatency) || 0,
+        Number(plan.plannerLatencyMs) || 0
+      );
+    }
+    if (!planType && plannerDiag.successCount) {
+      plannerDiag.inferredPlannerType = "model";
+    } else if (planType) {
+      plannerDiag.inferredPlannerType = planType;
+    }
+  } else if (planType === "deterministic_fallback" || plannerDiag.plannerStatus === "failed") {
+    plannerDiag.plannerFallback = true;
+    plannerDiag.inferredPlannerType = planType || "deterministic_fallback";
+  } else if (runtimeDecision.runtimeMode === "public") {
+    plannerDiag.inferredPlannerType = "deterministic";
+    plannerDiag.plannerProvider = "none";
+  } else {
+    plannerDiag.inferredPlannerType = planType || "deterministic";
+  }
   const publicToolCalls = toolCalls.map((item) => ({
     name: safetyGuard.redactSensitiveText(item.name || "").slice(0, 60),
     status: safetyGuard.redactSensitiveText(item.status || "").slice(0, 20),
@@ -1068,12 +1143,29 @@ async function chat(input = {}) {
       intentName: intent.name,
       providerUsed: false,
     });
+    const publicPlain = responseComposer.compose({
+      answer: intent.name === "conversational_help"
+        ? "你好，我是小佛。正式版里我可以帮你查课表、空教室、教学周和产品使用说明。"
+        : "小佛目前只提供佛课小表、课表、课程查询和使用帮助。",
+      cards: [],
+      suggestions: [],
+      intentName: intent.name,
+      intent,
+      runtimeMode: "public",
+      toolCalls: publicToolCalls,
+      steps: [],
+      generalAssistant: false,
+    });
     const response = attachMemory(buildResponse({
       protocolVersion,
       runId,
-      answer: "小佛目前只提供佛课小表、课表、课程查询和使用帮助。",
-      cards: [],
-      suggestions: ["查今日课程", "查空教室", "佛课小表怎么用？"],
+      answer: publicPlain.answer,
+      cards: publicPlain.cards,
+      suggestions: publicPlain.suggestions,
+      presentationMode: publicPlain.presentationMode,
+      presentation: publicPlain,
+      runSummary: null,
+      taskTrajectory: null,
       toolCalls: publicToolCalls,
       provider: "mock",
       desiredProvider: "mock",
@@ -1102,6 +1194,9 @@ async function chat(input = {}) {
         externalProviderUsed: false,
         fallback: true,
         usedPersonalContext,
+        plannerType: plan && plan.plannerType || "deterministic",
+        plannerProvider: "none",
+        responseProvider: "mock",
       }),
       errors: execution.verification && execution.verification.errors || [],
       verification: execution.verification || null,
@@ -1161,8 +1256,10 @@ async function chat(input = {}) {
   let externalProviderUsed = false;
   let fallback = !policyDecision.useExternal;
   let fallbackReason = "";
+  let responseLatencyMs = 0;
   const providerDecisionReason = policyDecision.reason || (policyDecision.useExternal ? "external provider selected" : "local provider selected");
   try {
+    const responseStartedAt = Date.now();
     const generated = policyDecision.useExternal
       ? await providerChainService.generateWithChain(providerInput, {
         runtimeMode: runtimeDecision.runtimeMode,
@@ -1174,6 +1271,7 @@ async function chat(input = {}) {
         }, event)),
       })
       : deterministicGenerated;
+    responseLatencyMs = Date.now() - responseStartedAt;
     if (!policyDecision.useExternal) {
       emitChatEvent(eventInput, {
         type: "response.composing",
@@ -1260,6 +1358,8 @@ async function chat(input = {}) {
     clarification: execution.plan && execution.plan.clarification,
     generalAssistant: isGeneralAssistantEnabled(runtimeDecision.runtimeMode),
     context,
+    message: safeMessage,
+    userMessage: safeMessage,
     durationMs: Date.now() - startTime,
     replanUsed: execution.replanUsed === true,
     success: true,
@@ -1311,7 +1411,15 @@ async function chat(input = {}) {
       externalProviderUsed,
       fallback,
       usedPersonalContext,
+      plannerProvider: plannerDiag.plannerProvider || (plan && plan.plannerProvider) || "none",
+      responseProvider: providerName,
+      plannerLatency: plannerDiag.plannerLatency || (plan && plan.plannerLatencyMs) || 0,
+      responseLatency: responseLatencyMs,
+      plannerFallback: plannerDiag.plannerFallback === true,
+      responseFallback: Boolean(fallbackReason),
+      plannerType: plannerDiag.inferredPlannerType || (plan && plan.plannerType) || "",
     }),
+    taskTrajectory: composed.taskTrajectory || null,
   })), memoryBundle, {
     message: safeMessage,
     intentName: intent.name,
@@ -1332,6 +1440,8 @@ async function chat(input = {}) {
     fallbackLayer: fallbackReason ? "server" : "none",
     fallbackReason,
     evidenceComplete: response.evidence && response.evidence.complete === true,
+    plannerType: plan && plan.plannerType,
+    plannerProvider: plannerDiag.plannerProvider,
   });
   emitChatEvent(eventInput, {
     type: fallbackReason ? "run.degraded" : "run.completed",
@@ -1339,6 +1449,7 @@ async function chat(input = {}) {
     intentName: intent.name,
     providerUsed: externalProviderUsed,
     reasonCode: fallbackReason ? String(fallbackReason).slice(0, 80) : "",
+    plannerType: plan && plan.plannerType || "",
   });
   return response;
 }

@@ -22,6 +22,15 @@ const FIXED_SUGGESTIONS = new Set([
   "怎么导入个人课表？",
   "现在有空教室吗",
   "现在有空教室吗？",
+  "今天有什么课",
+  "现在第几教学周",
+  "现在第几教学周？",
+  "找空教室",
+  "查今日课程",
+  "查空教室",
+  "佛课小表怎么用？",
+  "查班级本周课表",
+  "仙溪校区今天会下雨吗",
 ]);
 
 function safeText(value, max = 1200) {
@@ -88,9 +97,10 @@ function relatedSuggestions(input = {}) {
     return (input.clarification && input.clarification.suggestions) || ["查班级课表", "查教师课表", "查空教室"];
   }
   if (isConversationalIntent(intentName)) {
-    return ["今天有什么课", "现在第几教学周", "找空教室"].slice(0, 3);
+    // Greetings: at most one light follow-up; never force the fixed campus trio.
+    return filtered.length ? filtered.slice(0, 2) : ["你能帮我做什么"].slice(0, 1);
   }
-  return ["今天有什么课", "现在第几教学周"].slice(0, 2);
+  return filtered.slice(0, 2);
 }
 
 function buildEvidenceSummary(input = {}) {
@@ -133,22 +143,93 @@ function buildEvidenceSummary(input = {}) {
   };
 }
 
-function buildRunSummary(input = {}) {
+const TOOL_PUBLIC_LABELS = Object.freeze({
+  get_today_courses: "读取今日课表",
+  get_tomorrow_courses: "读取明日课表",
+  get_next_course: "查询下一节课",
+  get_week_schedule: "读取本周课表",
+  get_teaching_week: "读取教学周",
+  search_empty_rooms: "查询空教室",
+  search_continuous_empty_rooms: "查询连续空教室",
+  get_campus_weather: "获取校区天气",
+  search_campus_place: "查找校园地点",
+  get_classroom_location: "查询教室位置",
+  search_school_index: "检索全校课表",
+  rag_search: "检索公开知识",
+  clarify_missing_slot: "确认缺失信息",
+  diagnose_data_status: "诊断数据状态",
+  explain_personal_import: "说明课表导入",
+});
+
+function publicToolLabel(name) {
+  const key = String(name || "");
+  return TOOL_PUBLIC_LABELS[key] || (key ? `执行 ${key}` : "执行步骤");
+}
+
+function buildTaskTrajectory(input = {}) {
+  const plan = input.plan || {};
   const steps = Array.isArray(input.steps) ? input.steps : [];
-  const durationMs = Number(input.durationMs || input.metrics && input.metrics.totalDurationMs || 0) || 0;
-  const seconds = durationMs > 0 ? (durationMs / 1000).toFixed(1) : "";
-  if (!steps.length && !input.replanUsed) {
+  const toolCalls = Array.isArray(input.toolCalls) ? input.toolCalls : [];
+  const message = safeText(input.userMessage || input.message || plan.goal || "", 120);
+  const intentName = String(input.intentName || (input.intent && input.intent.name) || plan.intent || "");
+  if (isConversationalIntent(intentName) && !steps.length && !toolCalls.length) {
     return null;
   }
+  const understanding = message
+    || (intentName ? `处理任务：${intentName}` : "理解你的需求");
+  const planSteps = (plan.steps || steps || []).slice(0, 5).map((step, index) => ({
+    index: index + 1,
+    label: publicToolLabel(step.toolName || step.tool || step.label || step.name),
+  }));
+  const execution = (steps.length ? steps : toolCalls).slice(0, 6).map((step) => {
+    const tool = step.tool || step.name || step.toolName || "";
+    const ok = step.status !== "failed" && step.status !== "error";
+    return {
+      label: publicToolLabel(tool || step.label),
+      status: ok ? "success" : "failed",
+      summary: safeText(step.summary || "", 80),
+    };
+  });
+  if (!planSteps.length && !execution.length) return null;
   return {
-    compact: seconds ? `已完成 · ${seconds} 秒` : "已完成",
-    status: input.status || "completed",
-    stepCount: steps.length,
+    understanding: safeText(understanding, 160),
+    plan: planSteps,
+    execution,
+    verification: execution.length
+      ? "结果来自对应校园工具，未使用模型编造事实。"
+      : "",
+    plannerType: plan.plannerType || "",
     replanUsed: input.replanUsed === true,
+  };
+}
+
+function buildRunSummary(input = {}) {
+  const steps = Array.isArray(input.steps) ? input.steps : [];
+  const toolCalls = Array.isArray(input.toolCalls) ? input.toolCalls : [];
+  const factTools = toolCalls.filter((c) => c && c.name && c.name !== "provider_chain" && c.status !== "failed");
+  const durationMs = Number(input.durationMs || input.metrics && input.metrics.totalDurationMs || 0) || 0;
+  const seconds = durationMs > 0 ? (durationMs / 1000).toFixed(1) : "";
+  const plan = input.plan || {};
+  const isModelPlan = plan.plannerType === "model" || plan.plannerType === "model_replan";
+  if (!steps.length && !input.replanUsed && !factTools.length) {
+    return null;
+  }
+  const parts = ["已完成"];
+  if (input.replanUsed) parts.push("调整过 1 次方案");
+  else if (isModelPlan) parts.push("增强规划");
+  if (steps.length) parts.push(`${steps.length} 个步骤`);
+  else if (factTools.length) parts.push(`查询了 ${factTools.length} 项校园数据`);
+  if (seconds) parts.push(`${seconds} 秒`);
+  return {
+    compact: parts.join(" · "),
+    status: input.status || "completed",
+    stepCount: steps.length || factTools.length,
+    replanUsed: input.replanUsed === true,
+    enhanced: isModelPlan,
     defaultCollapsed: true,
     steps: steps.map((step) => ({
       id: step.id,
-      label: safeText(step.label || step.tool, 80),
+      label: safeText(step.label || publicToolLabel(step.tool), 80),
       status: step.status,
       durationMs: step.durationMs,
     })),
@@ -249,6 +330,17 @@ function compose(input = {}) {
     detailOnNegative: ["unresolved", "stale", "misunderstood"],
   };
 
+  const taskTrajectory = presentationMode === "plain"
+    ? null
+    : buildTaskTrajectory({
+      ...input,
+      intentName,
+      plan: input.plan,
+      steps: input.steps,
+      toolCalls: input.toolCalls,
+      replanUsed: input.replanUsed,
+    });
+
   return {
     presentationMode: PRESENTATION_MODES.includes(presentationMode) ? presentationMode : "plain",
     answer,
@@ -257,6 +349,7 @@ function compose(input = {}) {
     actions,
     suggestions,
     runSummary,
+    taskTrajectory,
     feedback,
     meta: {
       intentName,
@@ -297,5 +390,7 @@ module.exports = {
   filterCards,
   relatedSuggestions,
   buildEvidenceSummary,
+  buildTaskTrajectory,
   buildRunSummary,
+  publicToolLabel,
 };

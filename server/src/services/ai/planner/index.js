@@ -4,6 +4,7 @@
 
 const deterministicPlanner = require("./deterministicPlanner");
 const modelPlanner = require("./modelPlanner");
+const plannerModelAdapter = require("./plannerModelAdapter");
 const { getPlannerPolicy } = require("./plannerPolicy");
 const { runObservationLoop } = require("./observationLoop");
 const { normalizePlan } = require("./planSchema");
@@ -34,4 +35,5 @@ module.exports = {
   validatePlan,
   deterministicPlanner,
   modelPlanner,
+  plannerModelAdapter,
 };

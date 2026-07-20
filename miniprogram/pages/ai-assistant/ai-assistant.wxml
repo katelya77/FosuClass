@@ -23,13 +23,23 @@
     </view>
   </view>
 
-  <view class="ai-mode-row ai-mode-row-slim">
+  <!-- Quick tasks only on empty state; after chat starts they hide to free space (reopen via 任务 / +) -->
+  <view class="ai-mode-row ai-mode-row-slim" wx:if="{{!messages.length || showQuickTasks}}">
     <view class="quick-nav-segment" aria-label="任务入口">
       <view class="quick-nav-option quick-more-button" bindtap="openTaskPanel"><text>任务工具</text></view>
+      <view class="quick-nav-option quick-more-button soft" wx:if="{{messages.length}}" bindtap="onToggleQuickTasks"><text>{{showQuickTasks ? '收起' : '快捷'}}</text></view>
     </view>
   </view>
 
-  <scroll-view class="quick-action-scroll" scroll-x enhanced enable-flex="{{true}}" scroll-with-animation="{{false}}" show-scrollbar="{{false}}">
+  <scroll-view
+    wx:if="{{!messages.length || showQuickTasks}}"
+    class="quick-action-scroll"
+    scroll-x
+    enhanced
+    enable-flex="{{true}}"
+    scroll-with-animation="{{false}}"
+    show-scrollbar="{{false}}"
+  >
     <view class="quick-action-list">
       <button
         wx:for="{{quickActions}}"
@@ -101,9 +111,32 @@
           wx:if="{{message.role == 'assistant' && message.hasCollapsedRun && message.runCompactText}}"
           data-message-id="{{message.id}}"
           bindtap="onToggleRunDetails"
-        >{{message.runCompactText}} · 详情</view>
+        >{{message.runCompactText}} · 展开</view>
+        <!-- Explainable task trajectory (no hidden CoT / prompts / secrets) -->
+        <view class="task-trajectory" wx:if="{{message.role == 'assistant' && message.trajectoryExpanded && message.taskTrajectory}}">
+          <view class="trajectory-section" wx:if="{{message.taskTrajectory.understanding}}">
+            <view class="trajectory-label">理解</view>
+            <view class="trajectory-body">「{{message.taskTrajectory.understanding}}」</view>
+          </view>
+          <view class="trajectory-section" wx:if="{{message.taskTrajectory.plan.length}}">
+            <view class="trajectory-label">计划</view>
+            <view class="trajectory-plan-item" wx:for="{{message.taskTrajectory.plan}}" wx:key="index" wx:for-item="p">{{p.index}}. {{p.label}}</view>
+          </view>
+          <view class="trajectory-section" wx:if="{{message.taskTrajectory.execution.length}}">
+            <view class="trajectory-label">执行</view>
+            <view class="trajectory-exec-item" wx:for="{{message.taskTrajectory.execution}}" wx:key="label" wx:for-item="e">
+              <text class="trajectory-mark">{{e.status == 'failed' ? '×' : '✓'}}</text>
+              <text>{{e.label}}</text>
+            </view>
+          </view>
+          <view class="trajectory-section" wx:if="{{message.taskTrajectory.verification}}">
+            <view class="trajectory-label">核验</view>
+            <view class="trajectory-body">{{message.taskTrajectory.verification}}</view>
+          </view>
+          <view class="trajectory-collapse" data-message-id="{{message.id}}" bindtap="onToggleRunDetails">收起</view>
+        </view>
         <xiaofu-agent-run
-          wx:if="{{message.role == 'assistant' && message.displaySteps.length}}"
+          wx:if="{{message.role == 'assistant' && message.displaySteps.length && !message.taskTrajectory}}"
           steps="{{message.displaySteps}}"
           taskSteps="{{message.taskSteps}}"
           evidenceText=""

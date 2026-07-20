@@ -909,101 +909,90 @@ function getClassroomLocation(input = {}) {
   return campusMapService.getClassroomLocation(input);
 }
 
-function ragSearch(input = {}, context = {}) {
+/**
+ * Hybrid RAG entry — always goes through KnowledgeRetriever (rule + BM25 + optional vector).
+ * Async; callers must use executeToolAsync (Agent Kernel does).
+ */
+async function ragSearch(input = {}, context = {}) {
   const environment = context.assistantEnvironment || context.runtimeMode || input.environment || "public";
   const query = String(input.q || input.query || input.message || "").trim();
-  // Hybrid RAG (sync path): rule + BM25 lexical. Vector is best-effort via optional cache.
   try {
-    const { searchLexical } = require("./retrieval/lexicalIndex");
-    const { fuseRanks } = require("./retrieval/rankFusion");
-    const { verifyHits } = require("./retrieval/retrievalVerifier");
-    const { rewriteQueryDeterministic } = require("./retrieval/knowledgeRetriever");
-    const legacy = knowledgeBaseService.searchKnowledge(Object.assign({}, input, {
-      environment,
+    const { retrieveKnowledge } = require("./retrieval/knowledgeRetriever");
+    const result = await retrieveKnowledge({
       query,
       q: query,
-    }));
-    const ruleHits = [];
-    const legacyHits = legacy && (legacy.hits || legacy.results || legacy.documents) || [];
-    (Array.isArray(legacyHits) ? legacyHits : []).forEach((hit, index) => {
-      ruleHits.push({
-        sourceId: hit.sourceId || hit.id || `rule-${index}`,
-        chunkId: hit.chunkId || hit.id || `rule-${index}`,
-        title: hit.title || "",
-        excerpt: hit.excerpt || hit.body || hit.reply || hit.text || "",
-        authorityLevel: hit.priority || hit.authorityLevel || 70,
-        sourcePublisher: hit.sourcePublisher || "",
-        sourceUrl: hit.sourceUrl || "",
-        updatedAt: hit.updatedAt || "",
-        score: Number(hit.score) || 1,
-      });
+      environment,
+      runtimeMode: environment,
+      campus: input.campus || (context && context.campus) || "",
+      category: input.category || "",
+      rewrittenQuery: input.rewrittenQuery || "",
     });
-    const docs = ruleHits.map((hit) => ({
-      sourceId: hit.sourceId,
-      chunkId: hit.chunkId,
-      title: hit.title,
-      body: hit.excerpt,
-      keywords: [],
-      authorityLevel: hit.authorityLevel,
-      updatedAt: hit.updatedAt,
-    }));
-    // also pull published docs if API exists
-    try {
-      if (typeof knowledgeBaseService.listPublishedDocuments === "function") {
-        const published = knowledgeBaseService.listPublishedDocuments({ environment }) || [];
-        published.forEach((doc) => {
-          docs.push({
-            sourceId: doc.sourceId || doc.id,
-            chunkId: doc.sourceId || doc.id,
-            title: doc.title,
-            body: doc.body || doc.text || doc.reply || "",
-            keywords: doc.keywords || [],
-            authorityLevel: doc.priority || 50,
-            updatedAt: doc.updatedAt,
-          });
-        });
-      }
-    } catch (_) {
-      // ignore
-    }
-    const rewritten = rewriteQueryDeterministic(query);
-    const lexicalHits = searchLexical(rewritten, docs, { limit: 8 });
-    const fused = fuseRanks([
-      { name: "rule", hits: ruleHits, weight: 1.2 },
-      { name: "bm25", hits: lexicalHits, weight: 1.0 },
-    ], { limit: 6 });
-    const verified = verifyHits(fused, { minConfidence: 0.08 });
-    if (verified.noAnswer) {
+    const hits = (result && result.hits) || [];
+    const vectorUsed = result && result.vectorUsed === true;
+    const lexicalFallback = !vectorUsed;
+    if (!result || result.noAnswer || !hits.length) {
       return {
         success: true,
-        query,
-        rewrittenQuery: rewritten,
+        query: result && result.query || query,
+        rewrittenQuery: result && result.rewrittenQuery || query,
         hits: [],
-        confidence: verified.confidence || 0,
+        confidence: result && result.confidence || 0,
+        citations: result && result.citations || [],
         noAnswer: true,
-        reason: verified.reason || "NO_RELIABLE_HIT",
+        reason: result && result.reason || "NO_RELIABLE_HIT",
         summary: "暂未找到可靠的公开知识依据，请换个说法或查看使用说明。",
         hybrid: true,
+        vectorUsed,
+        lexicalFallback,
+        lexicalCount: result && result.lexicalCount || 0,
+        vectorIndex: result && result.vectorIndex || null,
+        documents: [],
+        total: 0,
       };
     }
     return {
       success: true,
-      query,
-      rewrittenQuery: rewritten,
-      hits: verified.hits,
-      confidence: verified.confidence,
+      query: result.query || query,
+      rewrittenQuery: result.rewrittenQuery || query,
+      hits,
+      confidence: result.confidence || 0,
+      citations: result.citations || [],
       noAnswer: false,
-      reason: "OK",
-      summary: verified.hits[0] && (verified.hits[0].excerpt || verified.hits[0].title) || "已检索到相关说明。",
+      reason: result.reason || "OK",
+      summary: hits[0] && (hits[0].excerpt || hits[0].title) || "已检索到相关说明。",
       hybrid: true,
-      // preserve legacy fields for mock provider rendering
-      documents: verified.hits,
-      total: verified.hits.length,
+      vectorUsed,
+      lexicalFallback,
+      lexicalCount: result.lexicalCount || 0,
+      vectorIndex: result.vectorIndex || null,
+      documents: hits,
+      total: hits.length,
     };
   } catch (error) {
-    return knowledgeBaseService.searchKnowledge(Object.assign({}, input, {
-      environment,
-    }));
+    // Hard degrade to legacy KB search (lexical/rule only)
+    try {
+      const legacy = knowledgeBaseService.searchKnowledge(Object.assign({}, input, {
+        environment,
+        query,
+        q: query,
+      }));
+      return Object.assign({}, legacy, {
+        success: legacy && legacy.success !== false,
+        hybrid: true,
+        vectorUsed: false,
+        lexicalFallback: true,
+        reason: "RETRIEVER_FALLBACK",
+      });
+    } catch (legacyError) {
+      return {
+        success: false,
+        code: error.code || "RAG_FAILED",
+        message: "知识检索暂时不可用",
+        hybrid: true,
+        vectorUsed: false,
+        lexicalFallback: true,
+      };
+    }
   }
 }
 
