@@ -1401,10 +1401,32 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
   const fallback = source.fallback === true || source.fallbackLayer === "client" || source.fallbackLayer === "server";
   const evidenceText = isPlain ? "" : buildEvidenceText(source.evidence, evidenceLabel);
   const runSummary = source.runSummary || (source.presentation && source.presentation.runSummary) || null;
-  const showFullRun = !isPlain && displaySteps.length > 0 && source.runExpanded === true;
+  const taskTrajectory = !isPlain
+    ? (source.taskTrajectory || (source.presentation && source.presentation.taskTrajectory) || null)
+    : null;
+  const hasTrajectory = Boolean(taskTrajectory && (
+    (taskTrajectory.plan && taskTrajectory.plan.length)
+    || (taskTrajectory.execution && taskTrajectory.execution.length)
+    || taskTrajectory.understanding
+  ));
+  const showFullRun = !isPlain && (displaySteps.length > 0 || hasTrajectory) && source.runExpanded === true;
   const runCompactText = runSummary && runSummary.compact
     ? runSummary.compact
-    : (displaySteps.length && !isPlain ? "已完成" : "");
+    : (displaySteps.length || hasTrajectory ? "已完成" : "");
+  const normalizedTrajectory = hasTrajectory ? {
+    understanding: safeText(taskTrajectory.understanding || "", 160),
+    plan: Array.isArray(taskTrajectory.plan) ? taskTrajectory.plan.slice(0, 5).map((p, i) => ({
+      index: p.index || i + 1,
+      label: safeText(p.label || "", 80),
+    })) : [],
+    execution: Array.isArray(taskTrajectory.execution) ? taskTrajectory.execution.slice(0, 6).map((e) => ({
+      label: safeText(e.label || "", 80),
+      status: e.status === "failed" ? "failed" : "success",
+      summary: safeText(e.summary || "", 80),
+    })) : [],
+    verification: safeText(taskTrajectory.verification || "", 160),
+    replanUsed: taskTrajectory.replanUsed === true,
+  } : null;
   return Object.assign({}, source, {
     id,
     role,
@@ -1413,18 +1435,20 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
     cards: rawCards,
     displayCards: rawCards
       .map((card, index) => normalizeCard(card, id, index, expandedCards, source)).filter(Boolean),
-    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 3).map((item) => safeText(item, 60)).filter(Boolean) : [],
+    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 2).map((item) => safeText(item, 60)).filter(Boolean) : [],
     toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls : [],
     taskSteps: Array.isArray(source.taskSteps) ? source.taskSteps : [],
     steps: Array.isArray(source.steps) ? source.steps : [],
-    displaySteps: showFullRun ? displaySteps : [],
+    displaySteps: showFullRun && !normalizedTrajectory ? displaySteps : [],
+    taskTrajectory: normalizedTrajectory,
+    trajectoryExpanded: showFullRun && Boolean(normalizedTrajectory),
     runCompactText: !isPlain && !showFullRun ? runCompactText : "",
-    hasCollapsedRun: !isPlain && displaySteps.length > 0 && !showFullRun,
+    hasCollapsedRun: !isPlain && (displaySteps.length > 0 || hasTrajectory) && !showFullRun,
     evidence: isPlain ? null : (source.evidence || null),
     evidenceText,
     evidenceExpanded: source.evidenceExpanded === true,
     evidenceCompact: evidenceText ? (evidenceText.length > 36 ? evidenceText.slice(0, 36) + "…" : evidenceText) : "",
-    displayToolCalls,
+    displayToolCalls: isPlain ? [] : displayToolCalls,
     safety: source.safety || null,
     displaySafety,
     metrics,
@@ -1621,6 +1645,7 @@ Page({
     inputFocus: false,
     sending: false,
     sendingStatusText: "处理中",
+    showQuickTasks: false,
     showTaskPanel: false,
     showConversationSheet: false,
     showCapabilityGuide: false,
@@ -2420,7 +2445,7 @@ Page({
           toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
           taskSteps: Array.isArray(response.taskSteps) ? response.taskSteps : [],
           steps: Array.isArray(response.steps) ? response.steps : (Array.isArray(response.taskSteps) ? response.taskSteps : []),
-          evidence: response.evidence || null,
+          evidence: response.evidence || response.evidenceDisplay || null,
           safety,
           metrics: response.metrics || null,
           fallback: response.fallback === true,
@@ -2428,6 +2453,12 @@ Page({
           status: response.status || "completed",
           memory: response.memory || null,
           intent: response.intent || (response.metrics && response.metrics.canonicalIntent) || "",
+          intentName: (response.intent && response.intent.name) || response.intentName || "",
+          presentationMode: response.presentationMode || (response.presentation && response.presentation.presentationMode) || "",
+          presentation: response.presentation || null,
+          runSummary: response.runSummary || (response.presentation && response.presentation.runSummary) || null,
+          taskTrajectory: response.taskTrajectory || (response.presentation && response.presentation.taskTrajectory) || null,
+          plan: response.plan || null,
         });
         if (response.memory && response.memory.mode) {
           this.setData({
@@ -2859,6 +2890,10 @@ Page({
       return Object.assign({}, item, { runExpanded: !item.runExpanded });
     });
     this.setData({ messages: normalizeMessagesForDisplay(messages, this.data.expandedCards || {}) });
+  },
+
+  onToggleQuickTasks() {
+    this.setData({ showQuickTasks: !this.data.showQuickTasks });
   },
 
   onFeedbackMore(event) {

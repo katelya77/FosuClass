@@ -131,11 +131,41 @@ function buildPlanStep(toolName, args = {}, reason = "") {
 }
 
 function normalizePlan(plan = [], runtimeMode = "public") {
-  const list = Array.isArray(plan) ? plan : [];
+  // Accept legacy array of steps OR structured plan { steps, plannerType, ... }
+  let list = [];
+  if (Array.isArray(plan)) {
+    list = plan;
+  } else if (plan && typeof plan === "object" && Array.isArray(plan.steps)) {
+    list = plan.steps;
+  }
   return list
-    .map((item) => buildPlanStep(item.toolName || item.name, item.args || item.input || {}, item.reason || item.label || ""))
+    .map((item) => buildPlanStep(
+      item.toolName || item.name,
+      item.args || item.input || {},
+      item.reason || item.reasonCode || item.label || ""
+    ))
     .filter((item) => item.toolName && isAllowedToolForRuntime(item.toolName, runtimeMode))
     .slice(0, MAX_PLAN_STEPS);
+}
+
+/**
+ * Preserve structured planner metadata for diagnostics / UI trajectory.
+ * Does not include raw prompts or hidden reasoning.
+ */
+function normalizeStructuredPlanMeta(plan = {}) {
+  if (!plan || typeof plan !== "object" || Array.isArray(plan)) return null;
+  const plannerType = String(plan.plannerType || "").slice(0, 32);
+  if (!plannerType && !plan.goal && !Array.isArray(plan.steps)) return null;
+  return {
+    plannerType: plannerType || "deterministic",
+    goal: safeProtocolText(plan.goal || "", 160),
+    intent: safeProtocolText(plan.intent || "", 80),
+    replanCount: Math.max(0, Number(plan.replanCount || 0) || 0),
+    needsClarification: plan.needsClarification === true,
+    plannerProvider: safeProtocolText(plan.plannerProvider || "", 40),
+    plannerLatencyMs: Math.max(0, Number(plan.plannerLatencyMs || 0) || 0),
+    stepCount: Array.isArray(plan.steps) ? plan.steps.length : 0,
+  };
 }
 
 function summarizeEvidenceItem(call = {}) {
@@ -204,7 +234,10 @@ function validateResponse(payload = {}) {
     errors.push({ code: "CARD_NOT_ALLOWED_FOR_INTENT" });
   }
   const plan = normalizePlan(payload.plan || [], payload.runtimeMode);
-  const invalidPlan = (Array.isArray(payload.plan) ? payload.plan : []).filter((step) => !isKnownTool(step.toolName || step.name));
+  const rawPlanSteps = Array.isArray(payload.plan)
+    ? payload.plan
+    : (payload.plan && Array.isArray(payload.plan.steps) ? payload.plan.steps : []);
+  const invalidPlan = rawPlanSteps.filter((step) => !isKnownTool(step.toolName || step.name));
   if (invalidPlan.length) errors.push({ code: "TOOL_NOT_WHITELISTED" });
   if (!validateActions(cards)) errors.push({ code: "ACTION_NOT_WHITELISTED" });
   return { ok: errors.length === 0, errors, cards, plan };
@@ -286,6 +319,7 @@ function buildV2Response(payload = {}) {
       description: safeProtocolText(skill.description || "", 180),
     } : null,
     plan: stableV2Plan(payload.plan, envelope.canonicalRuntimeMode),
+    planMeta: normalizeStructuredPlanMeta(payload.plan) || payload.planMeta || null,
     steps: stableExecutionSteps(payload.steps || payload.taskSteps),
     toolCalls: (Array.isArray(payload.toolCalls) ? payload.toolCalls : []).slice(0, MAX_PLAN_STEPS).map((call) => ({
       name: safeProtocolText(call && (call.name || call.toolName), 80),
@@ -298,6 +332,26 @@ function buildV2Response(payload = {}) {
     suggestions: (Array.isArray(payload.suggestions) ? payload.suggestions : []).slice(0, 6)
       .map((item) => safeProtocolText(item, 120)).filter(Boolean),
     evidence: sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.evidence || {})),
+    // Presentation contract for mini-program (agent.v2 additive fields)
+    presentationMode: safeProtocolText(payload.presentationMode || "", 32),
+    presentation: payload.presentation && typeof payload.presentation === "object"
+      ? sanitizeProtocolValue(safetyGuard.sanitizeToolResult({
+        presentationMode: payload.presentation.presentationMode,
+        runSummary: payload.presentation.runSummary,
+        taskTrajectory: payload.presentation.taskTrajectory,
+        feedback: payload.presentation.feedback,
+        meta: payload.presentation.meta,
+      }))
+      : null,
+    runSummary: payload.runSummary && typeof payload.runSummary === "object"
+      ? sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.runSummary))
+      : null,
+    taskTrajectory: payload.taskTrajectory && typeof payload.taskTrajectory === "object"
+      ? sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.taskTrajectory))
+      : null,
+    evidenceDisplay: payload.evidenceDisplay && typeof payload.evidenceDisplay === "object"
+      ? sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.evidenceDisplay))
+      : null,
     safety: sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.safety || {})),
     metrics: sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.metrics || {})),
     errors: protocolErrors,
@@ -351,6 +405,7 @@ module.exports = {
   isPublicIntent,
   isSupportedProtocolVersion,
   normalizePlan,
+  normalizeStructuredPlanMeta,
   normalizeProtocolVersion,
   normalizeRuntimeMode,
   serializeRuntimeMode,

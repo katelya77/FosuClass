@@ -18,9 +18,11 @@ function rewriteQueryDeterministic(query) {
   let q = safetyGuard.redactSensitiveText(String(query || "")).slice(0, 200);
   const synonyms = [
     [/咋用|怎么用|如何使用/, "使用说明"],
-    [/隐私|安全吗|会不会泄露/, "隐私 个人课表"],
+    [/隐私|安全吗|会不会泄露|偷偷读取|偷看|收集课程/, "隐私 个人课表摘要 默认关闭"],
     [/导入课表|导课表/, "导入 个人课表"],
     [/你是谁|你是什么/, "小佛 能力介绍"],
+    [/读取我的课程|会不会看我课表|擅自读取|偷偷.*课程/, "隐私 个人课表摘要 默认关闭 不保存"],
+    [/系统会.*课程|会不会读取/, "隐私 个人课表 默认关闭"],
   ];
   synonyms.forEach(([pattern, repl]) => {
     if (pattern.test(q)) q = `${q} ${repl}`;
@@ -73,7 +75,11 @@ class KnowledgeRetriever {
   constructor(options = {}) {
     this.embedder = options.embedder || new EmbeddingAdapter(options.embedding || {});
     this.vectorIndex = options.vectorIndex || new VectorIndex(options.vector || {});
-    this.minConfidence = Number(options.minConfidence || 0.12);
+    this.minConfidence = Number(
+      options.minConfidence
+      || process.env.AI_RAG_MIN_CONFIDENCE
+      || 0.12
+    );
   }
 
   async ensureVectorIndex(docs) {

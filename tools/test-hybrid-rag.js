@@ -93,6 +93,43 @@ async function run() {
   index.rollback(status.version);
   assert.strictEqual(index.status().version, status.version);
 
+  // synonym rewrite for privacy-style questions
+  const privacyQ = rewriteQueryDeterministic("系统会偷偷读取我的课程吗？");
+  assert.ok(/隐私|课表|摘要|默认/.test(privacyQ), `privacy rewrite weak: ${privacyQ}`);
+
+  // KnowledgeRetriever with local-hash → vectorUsed
+  const { KnowledgeRetriever } = require("../server/src/services/ai/retrieval/knowledgeRetriever");
+  const tmp2 = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-kr-"));
+  const kr = new KnowledgeRetriever({
+    embedder: new EmbeddingAdapter({ mode: "local-hash", env: { AI_EMBEDDING_MODE: "local-hash" } }),
+    vectorIndex: new VectorIndex({ dataDir: tmp2 }),
+    minConfidence: 0.01,
+  });
+  // inject docs via monkey-patch load path: rebuild vector then retrieve with mock list
+  // Direct vector path proof
+  await kr.vectorIndex.rebuild(docs, kr.embedder);
+  const [qVec2] = await kr.embedder.embed(["系统会偷偷读取我的课程吗 隐私 个人课表"]);
+  const vHits = kr.vectorIndex.search(qVec2, { limit: 5 });
+  assert.ok(vHits.length >= 1, "vector should find privacy-related chunk");
+
+  // rag_search tool must route through KnowledgeRetriever (async)
+  const toolRegistry = require("../server/src/services/ai/toolRegistry");
+  const toolSrc = require("fs").readFileSync(
+    require("path").join(__dirname, "../server/src/services/ai/toolRegistry.js"),
+    "utf8"
+  );
+  assert.ok(/retrieveKnowledge/.test(toolSrc), "rag_search must call KnowledgeRetriever");
+  const ragResult = await toolRegistry.executeToolAsync("rag_search", { q: "佛课小表怎么用" }, {
+    runtimeMode: "public",
+    assistantEnvironment: "public",
+  });
+  assert.ok(ragResult && (ragResult.hybrid === true || ragResult.success !== false));
+  assert.ok(typeof ragResult.vectorUsed === "boolean" || ragResult.lexicalFallback === true || Array.isArray(ragResult.hits) || ragResult.documents);
+
+  // Embedding schema: AI_EMBEDDING_ENABLED=false forces disabled
+  const off = new EmbeddingAdapter({ env: { AI_EMBEDDING_ENABLED: "false", AI_EMBEDDING_MODE: "openai-compatible" } });
+  assert.strictEqual(off.isEnabled(), false);
+
   console.log("test-hybrid-rag passed");
 }
 

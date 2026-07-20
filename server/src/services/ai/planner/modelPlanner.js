@@ -10,6 +10,7 @@ const deterministicPlanner = require("./deterministicPlanner");
 const { normalizePlan } = require("./planSchema");
 const { validatePlan } = require("./planValidator");
 const { getPlannerPolicy, reasonCodeForTool } = require("./plannerPolicy");
+const { buildPlannerContext } = require("../context/plannerContextBuilder");
 
 function extractJsonObject(text) {
   const raw = String(text || "").trim();
@@ -40,30 +41,59 @@ function extractJsonObject(text) {
 }
 
 function buildPlannerPrompt(input = {}) {
-  const tools = (input.availableTools || []).slice(0, 40).join(", ");
-  const skills = (input.availableSkills || []).slice(0, 40).join(", ");
-  const observations = Array.isArray(input.previousObservations)
-    ? input.previousObservations.slice(0, 8).map((o) => ({
-      tool: o.tool,
-      status: o.status,
-      factCount: o.factCount,
-      code: o.code,
-      summary: String(o.summary || "").slice(0, 80),
-    }))
-    : [];
-  return [
-    "You are a constrained campus task planner for FosuClass.",
-    "Return ONLY a JSON object with fields: goal, intent, confidence, slots, needsClarification, clarification, steps, stopCondition.",
-    "steps[].toolName must be from the whitelist. Max 5 steps. reasonCode must be an enum.",
-    "Never invent campus facts. Never call admin or database tools. Never include chain-of-thought.",
-    `runtimeMode: ${input.runtimeMode}`,
-    `intent: ${input.intent && input.intent.name || ""}`,
-    `slots: ${JSON.stringify(input.slots || input.intent && input.intent.slots || {})}`,
-    `availableTools: ${tools}`,
-    `availableSkills: ${skills}`,
-    `previousObservations: ${JSON.stringify(observations)}`,
-    `userMessage: ${safetyGuard.redactSensitiveText(String(input.message || "")).slice(0, 500)}`,
-  ].join("\n");
+  // Prefer budgeted ContextAssembler; keep legacy flat string as fallback.
+  try {
+    const ctx = buildPlannerContext({
+      message: input.message,
+      runtimeMode: input.runtimeMode,
+      intent: input.intent,
+      slots: input.slots || (input.intent && input.intent.slots) || {},
+      availableTools: input.availableTools,
+      previousObservations: input.previousObservations,
+      context: input.context,
+      term: input.context && input.context.term,
+      currentTeachingWeek: input.context && input.context.currentTeachingWeek,
+      clientLocalTime: input.context && (input.context.clientLocalTime || input.context.todayDate),
+      currentPage: input.context && input.context.currentPage,
+      conversationSummary: input.conversationState && input.conversationState.summary,
+    });
+    return {
+      text: ctx.userContent,
+      system: ctx.system,
+      contextMeta: {
+        contextTokenEstimate: ctx.contextTokenEstimate,
+        contextSections: ctx.sections,
+        truncatedSections: ctx.truncatedSections,
+        compressionUsed: ctx.compressionUsed,
+      },
+    };
+  } catch (_) {
+    const tools = (input.availableTools || []).slice(0, 40).join(", ");
+    const skills = (input.availableSkills || []).slice(0, 40).join(", ");
+    const observations = Array.isArray(input.previousObservations)
+      ? input.previousObservations.slice(0, 8).map((o) => ({
+        tool: o.tool,
+        status: o.status,
+        factCount: o.factCount,
+        code: o.code,
+        summary: String(o.summary || "").slice(0, 80),
+      }))
+      : [];
+    const text = [
+      "You are a constrained campus task planner for FosuClass.",
+      "Return ONLY a JSON object with fields: goal, intent, confidence, slots, needsClarification, clarification, steps, stopCondition.",
+      "steps[].toolName must be from the whitelist. Max 5 steps. reasonCode must be an enum.",
+      "Never invent campus facts. Never call admin or database tools. Never include chain-of-thought.",
+      `runtimeMode: ${input.runtimeMode}`,
+      `intent: ${input.intent && input.intent.name || ""}`,
+      `slots: ${JSON.stringify(input.slots || input.intent && input.intent.slots || {})}`,
+      `availableTools: ${tools}`,
+      `availableSkills: ${skills}`,
+      `previousObservations: ${JSON.stringify(observations)}`,
+      `userMessage: ${safetyGuard.redactSensitiveText(String(input.message || "")).slice(0, 500)}`,
+    ].join("\n");
+    return { text, system: "Return only valid JSON plan. No markdown commentary.", contextMeta: null };
+  }
 }
 
 /**
@@ -99,10 +129,14 @@ async function plan(input = {}) {
       availableTools: allowedTools,
       availableSkills: input.availableSkills || (skill ? [skill.id] : []),
     });
+    const promptText = typeof prompt === "string" ? prompt : prompt.text;
+    const systemText = typeof prompt === "string"
+      ? "Return only valid JSON plan. No markdown commentary."
+      : (prompt.system || "Return only valid JSON plan. No markdown commentary.");
     const result = await input.modelGenerate({
       messages: [
-        { role: "system", content: "Return only valid JSON plan. No markdown commentary." },
-        { role: "user", content: prompt },
+        { role: "system", content: systemText },
+        { role: "user", content: promptText },
       ],
       maxTokens: 800,
     });
@@ -119,7 +153,7 @@ async function plan(input = {}) {
       stopOnFailure: step.stopOnFailure !== false,
     })) : [];
 
-    return validatePlan(normalizePlan({
+    const plan = validatePlan(normalizePlan({
       ...parsed,
       steps,
       plannerType: "model",
@@ -129,6 +163,14 @@ async function plan(input = {}) {
       skill,
       allowedTools,
     });
+    if (prompt && prompt.contextMeta) {
+      plan.contextMeta = prompt.contextMeta;
+    }
+    if (result && result.provider) {
+      plan.plannerProvider = result.provider;
+      plan.plannerLatencyMs = result.latencyMs || 0;
+    }
+    return plan;
   } catch (error) {
     return fallback();
   }
