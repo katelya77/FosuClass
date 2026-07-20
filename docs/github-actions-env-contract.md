@@ -61,10 +61,15 @@
 | `FOSU_IMPORT_CHANNEL_TIMEOUT_MS` | `25000` | 单个导入通道请求超时 | 使用默认值 |
 | `FOSU_IMPORT_ORACLE_FALLBACK` | `true` | CloudBase 可重试故障时是否回落 Oracle 通道 | 生产开启 Oracle fallback |
 | `AI_AGENT_ENABLED` | `false` | 是否启用外部 AI provider | 使用本地规则/mock，不调用外部模型 |
-| `AI_PROVIDER` | `mock` | provider 名称：`mock`、`deepseek`、`coze` | 使用 mock |
+| `AI_PROVIDER` | `mock` | provider 名称：`mock`、`deepseek`、`coze`、`cloudbase-openai` | 使用 mock |
 | `AI_PROVIDER_POLICY` | `auto` | 外部 provider 调用策略 | 使用 auto |
-| `AI_RUNTIME_MODE` | `public` | 运行模式：`public` 或 `competition` | 使用 public，正式版 fail-closed |
+| `AI_PROVIDER_CHAIN` | 空 | Provider 回退链，如 `deepseek,coze,mock`；public 强制 mock | 使用代码默认链 |
+| `AI_RUNTIME_MODE` | `public` | 运行模式：`public` / `trial` / `dev`（兼容 `competition`） | 使用 public，正式版 fail-closed |
 | `AI_PROVIDER_ACTIVE_ENV` | `public` | 后台默认查看/编辑的环境：`public`、`trial`、`dev` | 使用 public |
+| `COZE_ENABLED` | `false` | 是否启用临时 Coze Provider | 默认关闭 |
+| `COZE_EXPIRES_AT` | 空 | Coze 临时到期时间（ISO）；到期自动跳过 | 允许为空 |
+| `COZE_BOT_ID` | 空 | Coze Bot/Agent ID | 允许为空 |
+| `COZE_PROVIDER_ROLE` | `temporary` | Coze 角色标记，默认 temporary | 使用 temporary |
 | `AI_COMPETITION_ALLOW_TRIAL_ENV` | `true` | 微信体验版/开发版/devtools 是否允许进入增强模式 | 使用 true；release 仍强制 public |
 | `AI_MODEL` | `deepseek-v4-flash` | 默认模型 | 使用默认值 |
 | `AI_REASONING_MODEL` | `deepseek-v4-pro` | 推理模型 | 使用默认值 |
