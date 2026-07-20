@@ -453,7 +453,7 @@
       <button class="newline-btn" bindtap="onInsertNewline" disabled="{{sending}}" aria-label="换行">↵</button>
       <button
         class="send-btn icon-send {{!sending && !inputValue ? 'disabled' : ''}} {{sending ? 'cancel' : ''}}"
-        bindtap="onSendOrCancel"
+        bindtap="onSubmit"
         disabled="{{!sending && !inputValue}}"
         aria-label="{{sending ? '停止' : '发送'}}"
       >
