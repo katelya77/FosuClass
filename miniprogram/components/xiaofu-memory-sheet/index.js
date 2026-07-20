@@ -11,6 +11,9 @@ Component({
       const mode = event.currentTarget.dataset.mode;
       this.triggerEvent("change", { mode });
     },
+    onClearLocal() {
+      this.triggerEvent("clearlocal");
+    },
     onClearCurrent() {
       this.triggerEvent("clearcurrent");
     },
@@ -19,3 +22,4 @@ Component({
     },
   },
 });
+

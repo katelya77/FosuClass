@@ -6,16 +6,14 @@
     </view>
     <view class="xiaofu-title-block">
       <view class="xiaofu-title-line">
-        <text class="xiaofu-title">{{conversationTitle || '小佛助手'}}</text>
-        <text class="xiaofu-dot">·</text>
-        <text class="xiaofu-status status-{{connectionStatusClass}}">{{connectionStatusText}}</text>
+        <text class="xiaofu-title">小佛助手</text>
+      </view>
+      <view class="xiaofu-conversation-sub">{{activeConversationTitle || conversationTitle || '新对话'}}</view>
+      <view class="xiaofu-chip-row">
+        <text wx:for="{{statusChips}}" wx:key="*this" class="xiaofu-chip status-{{connectionStatusClass}}">{{item}}</text>
+        <text class="xiaofu-chip soft" wx:if="{{memoryChipText}}">{{memoryChipText}}</text>
       </view>
       <view class="xiaofu-capability">{{headerSubtitle}}</view>
-      <view class="xiaofu-meta-line">
-        <text>{{runtimeModeLabel}}</text>
-        <text class="xiaofu-dot">·</text>
-        <text>{{memoryStatusText}}</text>
-      </view>
     </view>
     <view class="xiaofu-actions">
       <button class="xiaofu-icon-btn" bindtap="openCapabilityGuide" aria-label="小佛助手说明">?</button>
@@ -272,7 +270,14 @@
     </view>
 
     <view class="slow-tip" wx:if="{{slowRequest}}">网络较慢，正在继续等待查询结果...</view>
-    <view class="sending-row" wx:if="{{sending}}">
+    <xiaofu-live-run
+      visible="{{sending && liveRunVisible}}"
+      events="{{liveRunEvents}}"
+      statusText="{{sendingStatusText}}"
+      expanded="{{liveRunExpanded}}"
+      bind:toggleexpand="onToggleLiveRunExpand"
+    />
+    <view class="sending-row" wx:if="{{sending && !liveRunVisible}}">
       <view class="sending-dot"></view>
       <view class="sending-text">{{sendingStatusText}}</view>
     </view>
@@ -297,6 +302,7 @@
     mode="{{memoryMode}}"
     bind:close="closeMemorySheet"
     bind:change="onMemoryModeChange"
+    bind:clearlocal="onClearLocalMemory"
     bind:clearcurrent="onClearCurrentMemory"
     bind:clearall="onClearAllMemory"
   />
@@ -445,8 +451,13 @@
         />
       </view>
       <button class="newline-btn" bindtap="onInsertNewline" disabled="{{sending}}" aria-label="换行">↵</button>
-      <button class="send-btn icon-send {{sending || !inputValue ? 'disabled' : ''}}" bindtap="onSubmit" disabled="{{sending || !inputValue}}" aria-label="{{sending ? '处理中' : '发送'}}">
-        {{sending ? "…" : "➤"}}
+      <button
+        class="send-btn icon-send {{!sending && !inputValue ? 'disabled' : ''}} {{sending ? 'cancel' : ''}}"
+        bindtap="onSendOrCancel"
+        disabled="{{!sending && !inputValue}}"
+        aria-label="{{sending ? '停止' : '发送'}}"
+      >
+        {{sending ? "■" : "➤"}}
       </button>
     </view>
     <view wx:if="{{voiceStatusText}}" class="voice-status">{{voiceStatusText}}</view>

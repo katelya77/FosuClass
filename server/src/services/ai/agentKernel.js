@@ -92,12 +92,28 @@ class AgentKernel {
     });
   }
 
-  async executePlan(plan, context) {
+  emit(input, event) {
+    if (typeof input.onEvent === "function") {
+      try {
+        input.onEvent(event);
+      } catch (error) {
+        // run events must never break the kernel
+      }
+    }
+  }
+
+  async executePlan(plan, context, input = {}) {
     const calls = [];
     const steps = [];
     for (let index = 0; index < plan.length; index += 1) {
       const item = plan[index];
       const toolName = String(item.toolName || item.name || "");
+      this.emit(input, {
+        type: "tool.started",
+        tool: toolName,
+        status: "started",
+        label: safetyGuard.redactSensitiveText(String(item.reason || item.label || `Execute ${toolName}`)).slice(0, 120),
+      });
       const started = Date.now();
       const result = await withTimeout(this.toolExecutor(toolName, item.args || item.input || {}, context), this.toolTimeoutMs);
       const durationMs = Date.now() - started;
@@ -117,11 +133,30 @@ class AgentKernel {
         errorCode: failed ? String(result && result.code || "TOOL_FAILED").slice(0, 80) : "",
         retried: false,
       });
+      this.emit(input, {
+        type: failed ? "tool.failed" : "tool.completed",
+        tool: toolName,
+        status: failed ? "failed" : "success",
+        reasonCode: failed ? String(result && result.code || "TOOL_FAILED").slice(0, 80) : "",
+      });
     }
     return { toolCalls: calls, steps };
   }
 
-  async executeToolChain(intent, message, context, skill) {
+  async executeToolChain(intent, message, context, skill, input = {}) {
+    const planPreview = skill.planBuilder
+      ? skill.planBuilder({ message, context, intent, runtimeMode: context.runtimeMode || "public" })
+      : [];
+    (Array.isArray(planPreview) ? planPreview : []).forEach((item) => {
+      const toolName = String(item.toolName || item.name || "");
+      if (toolName) {
+        this.emit(input, {
+          type: "tool.started",
+          tool: toolName,
+          status: "started",
+        });
+      }
+    });
     const started = Date.now();
     const toolCalls = await withTimeout(
       this.toolChainExecutor(intent, message, context),
@@ -142,6 +177,12 @@ class AgentKernel {
     const steps = calls.map((call, index) => {
       const result = call && call.result || {};
       const failed = call.status === "failed" || result.success === false;
+      this.emit(input, {
+        type: failed ? "tool.failed" : "tool.completed",
+        tool: String(call.name || ""),
+        status: failed ? "failed" : "success",
+        reasonCode: failed ? String(result.code || "TOOL_FAILED").slice(0, 80) : "",
+      });
       return {
         id: `step-${index + 1}`,
         label: String(call.summary || call.name || "").slice(0, 120),
@@ -175,11 +216,27 @@ class AgentKernel {
     if (missingSlots.length) {
       throw codedError("MISSING_REQUIRED_SLOTS", `Missing required slots: ${missingSlots.join(",")}`, { missingSlots });
     }
+    this.emit(input, {
+      type: "intent.resolved",
+      intentName: String(intent && intent.name || "").slice(0, 80),
+      status: "resolved",
+    });
+    this.emit(input, {
+      type: "skill.selected",
+      skillId: String(skill.id || "").slice(0, 80),
+      intentName: String(intent && intent.name || "").slice(0, 80),
+      status: "selected",
+    });
     const plan = skill.planBuilder({ message, context, intent, runtimeMode });
     this.validatePlan(skill, plan, runtimeMode);
     const execution = this.useToolChain
-      ? await this.executeToolChain(intent, message, context, skill)
-      : await this.executePlan(plan, context);
+      ? await this.executeToolChain(intent, message, context, skill, input)
+      : await this.executePlan(plan, context, input);
+    this.emit(input, {
+      type: "result.verifying",
+      intentName: String(intent && intent.name || "").slice(0, 80),
+      status: "verifying",
+    });
     const verification = skill.resultVerifier({ intent, toolCalls: execution.toolCalls, context, runtimeMode });
     const observations = execution.toolCalls.map(toObservation);
     return {

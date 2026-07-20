@@ -1,5 +1,6 @@
 const request = require("../utils/request");
 const agentCapabilityCompat = require("../shared/agentCapabilityCompat.generated");
+const agentRunClient = require("./agentRunClient");
 
 const METRICS_KEY = "FOSU_AI_GENERATIVE_METRICS";
 const INVALID_TEXT_TOKENS = new Set(["[object Object]", "undefined", "null", "NaN"]);
@@ -175,24 +176,111 @@ function shouldDisableGenerativeInClient() {
   return true;
 }
 
-async function callOracle(oracleChat, safeMessage, context, callbacks = {}, metadata = {}) {
-  if (callbacks.onStatus) callbacks.onStatus({ type: "query-tools", text: "正在查询课表" });
-  if (oracleChat) return oracleChat(safeMessage, context, metadata);
-  return request.post("/api/ai/agent/chat", {
+async function callOracleViaRuns(safeMessage, context, callbacks = {}, metadata = {}) {
+  const created = await agentRunClient.createRun({
     message: safeMessage,
     context,
     protocolVersion: metadata.protocolVersion || "agent.v2",
     requestId: metadata.requestId || "",
     conversationId: metadata.conversationId || "",
-  }, {
-    showLoading: false,
-    silentError: true,
-    timeout: 28000,
-    retries: 2,
-    retryBaseDelayMs: 420,
-    retryMaxDelayMs: 1800,
-    dedupe: false,
+    memoryMode: context.memoryMode || "local_only",
+    cloudSyncEnabled: context.cloudSyncEnabled === true,
   });
+  if (callbacks.onRunCreated) {
+    callbacks.onRunCreated({
+      runId: created.runId,
+      pollToken: created.pollToken,
+    });
+  }
+  if (callbacks.onStatus) {
+    callbacks.onStatus({ type: "run.accepted", text: "正在理解你的问题" });
+  }
+  const collectedEvents = [];
+  const done = await agentRunClient.pollRunUntilDone(created.runId, created.pollToken, {
+    maxWaitMs: 45000,
+    shouldCancel: () => callbacks.shouldCancel && callbacks.shouldCancel() === true,
+    onEvents: (events) => {
+      collectedEvents.push(...events);
+      if (callbacks.onRunEvents) callbacks.onRunEvents(events, collectedEvents.slice());
+    },
+    onStatus: (status) => {
+      if (callbacks.onStatus) callbacks.onStatus(status);
+    },
+  });
+  if (done.cancelled) {
+    return {
+      success: true,
+      status: "cancelled",
+      answer: "",
+      cards: [],
+      suggestions: [],
+      toolCalls: [],
+      taskSteps: [],
+      steps: [],
+      evidence: null,
+      safety: { provider: "mock", externalProviderUsed: false, mode: "cancelled" },
+      metrics: {},
+      runEvents: collectedEvents,
+    };
+  }
+  if (done.result) {
+    return Object.assign({}, done.result, { runEvents: collectedEvents });
+  }
+  // Fallback to legacy chat if run timed out without result.
+  if (done.timeout) {
+    if (callbacks.onStatus) callbacks.onStatus({ type: "understanding", text: "正在理解你的问题" });
+    return request.post("/api/ai/agent/chat", {
+      message: safeMessage,
+      context,
+      protocolVersion: metadata.protocolVersion || "agent.v2",
+      requestId: metadata.requestId || "",
+      conversationId: metadata.conversationId || "",
+      memoryMode: context.memoryMode || "local_only",
+      cloudSyncEnabled: context.cloudSyncEnabled === true,
+    }, {
+      showLoading: false,
+      silentError: true,
+      timeout: 28000,
+      retries: 1,
+      dedupe: false,
+    });
+  }
+  const error = new Error("RUN_FAILED");
+  error.code = "RUN_FAILED";
+  throw error;
+}
+
+async function callOracle(oracleChat, safeMessage, context, callbacks = {}, metadata = {}) {
+  // Never guess loading from client intent. Prefer real run events.
+  if (callbacks.onStatus) {
+    callbacks.onStatus({ type: "understanding", text: "正在理解你的问题" });
+  }
+  if (oracleChat) return oracleChat(safeMessage, context, metadata);
+  try {
+    return await callOracleViaRuns(safeMessage, context, callbacks, metadata);
+  } catch (error) {
+    // Compatibility path if run API unavailable.
+    if (callbacks.onStatus) {
+      callbacks.onStatus({ type: "understanding", text: "正在理解你的问题" });
+    }
+    return request.post("/api/ai/agent/chat", {
+      message: safeMessage,
+      context,
+      protocolVersion: metadata.protocolVersion || "agent.v2",
+      requestId: metadata.requestId || "",
+      conversationId: metadata.conversationId || "",
+      memoryMode: context.memoryMode || "local_only",
+      cloudSyncEnabled: context.cloudSyncEnabled === true,
+    }, {
+      showLoading: false,
+      silentError: true,
+      timeout: 28000,
+      retries: 2,
+      retryBaseDelayMs: 420,
+      retryMaxDelayMs: 1800,
+      dedupe: false,
+    });
+  }
 }
 
 // Phase 1 online entrypoint. Semantic requests always go to the server Agent

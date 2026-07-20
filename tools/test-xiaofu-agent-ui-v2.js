@@ -45,10 +45,20 @@ assert(js.includes("已查询校园地图"));
 assert(js.includes("来自已发布校园知识") || js.includes("使用说明"));
 assert(js.includes("本地能力结果"));
 
-// 10. Online status not hardcoded
-assert(wxml.includes("connectionStatusText"));
+// 10. Online status not hardcoded — Phase 3 uses readiness chips + status machine
+assert(
+  wxml.includes("connectionStatusText")
+  || wxml.includes("statusChips")
+  || wxml.includes("xiaofu-chip"),
+  "status must be data-driven (chips or connection text)"
+);
 assert(!/>在线</.test(wxml));
-assert(js.includes("getNetworkType") || js.includes("detectConnectionStatus"));
+assert(
+  js.includes("getNetworkType")
+  || js.includes("detectConnectionStatus")
+  || js.includes("agentReadinessClient")
+  || js.includes("probeAgentStatus")
+);
 
 // 11-13. fallback + memory
 assert(wxml.includes("fallback-banner") || js.includes("fallbackBanner"));

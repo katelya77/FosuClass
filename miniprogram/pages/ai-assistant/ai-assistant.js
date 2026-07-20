@@ -3,6 +3,9 @@ const aiVoiceInputService = require("../../services/aiVoiceInputService");
 const conversationStore = require("../../services/conversationStore");
 const contextManager = require("../../services/xiaofuContextManager");
 const xiaofuFloatService = require("../../services/xiaofuFloatService");
+const agentMemoryClient = require("../../services/agentMemoryClient");
+const agentReadinessClient = require("../../services/agentReadinessClient");
+const agentRunClient = require("../../services/agentRunClient");
 const cloudbaseConfig = require("../../config/cloudbase");
 const demoData = require("./demo-data");
 const { courseTimes } = require("../../data/courseTimes");
@@ -457,37 +460,42 @@ function mapMemoryModeText(mode) {
   return MEMORY_MODE_LABELS[String(mode || "local_only")] || MEMORY_MODE_LABELS.local_only;
 }
 
-function detectConnectionStatus() {
-  try {
-    const network = wx.getNetworkType ? null : null;
-  } catch (error) {
-    // ignore
-  }
-  return new Promise((resolve) => {
-    if (typeof wx === "undefined" || !wx.getNetworkType) {
-      resolve({ connectionStatusText: "状态未知", connectionStatusClass: "unknown" });
-      return;
-    }
-    wx.getNetworkType({
-      success: (res) => {
-        const type = String(res.networkType || "").toLowerCase();
-        if (!type || type === "none") {
-          resolve({ connectionStatusText: "离线", connectionStatusClass: "offline" });
-          return;
-        }
-        resolve({ connectionStatusText: "已连接", connectionStatusClass: "online" });
-      },
-      fail: () => resolve({ connectionStatusText: "状态未知", connectionStatusClass: "unknown" }),
-    });
-  });
+function mapMemoryChip(mode) {
+  const value = String(mode || "local_only");
+  if (value === "cloud_sync") return "已同步";
+  if (value === "session_state") return "会话记忆";
+  return "本地记忆";
 }
 
-function mapRuntimeModeLabel(mode, connectionClass) {
-  if (connectionClass === "offline") return "离线模式 · 使用本地能力";
-  const value = String(mode || "public").toLowerCase();
-  if (value === "trial" || value === "competition") return "体验模式 · 增强理解";
-  if (value === "dev") return "开发模式 · 增强理解";
-  return "稳定模式 · 已连接";
+async function detectConnectionStatus() {
+  const readiness = await agentReadinessClient.probeAgentStatus();
+  const statusMachine = readiness.statusMachine || "public_ready";
+  const className = readiness.className
+    || (statusMachine === "network_offline" ? "offline"
+      : (statusMachine === "server_unreachable" || statusMachine === "enhanced_degraded" ? "warn" : "online"));
+  return {
+    connectionStatusText: readiness.label || "稳定模式",
+    connectionStatusClass: className,
+    statusMachine,
+    runtimeMode: readiness.runtimeMode || "public",
+    enhancedMode: readiness.enhancedMode || "disabled",
+    statusChips: Array.isArray(readiness.chips) ? readiness.chips : ["稳定模式"],
+    reasonCode: readiness.reasonCode || "",
+    runEventsSupported: readiness.runEventsSupported !== false,
+  };
+}
+
+function mapRuntimeModeLabel(mode, connectionClass, readiness = {}) {
+  if (connectionClass === "offline" || readiness.statusMachine === "network_offline") {
+    return "本地模式";
+  }
+  if (readiness.statusMachine === "server_unreachable") return "服务不可达";
+  if (readiness.statusMachine === "enhanced_ready") return "增强模式";
+  if (readiness.statusMachine === "enhanced_degraded") return "增强降级";
+  const value = String(mode || readiness.runtimeMode || "public").toLowerCase();
+  if (value === "trial" || value === "competition") return "增强模式";
+  if (value === "dev") return "增强模式";
+  return "稳定模式";
 }
 
 function buildTaskPanelGroups() {
@@ -1437,18 +1445,44 @@ function formatConversationTime(value) {
   return `${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
 }
 
-function buildConversationDisplayList(activeConversationId) {
-  return conversationStore.getConversationList().map((item) => ({
+function buildConversationDisplayList(activeConversationId, mergedList) {
+  const source = Array.isArray(mergedList) && mergedList.length
+    ? mergedList
+    : conversationStore.getConversationList();
+  return source.map((item) => ({
     conversationId: item.conversationId,
     title: item.title,
     createdAt: item.createdAt,
     updatedAt: item.updatedAt,
     updatedAtText: formatConversationTime(item.updatedAt || item.createdAt),
     messageCount: item.messageCount,
-    active: item.conversationId === activeConversationId,
+    active: item.conversationId === activeConversationId || item.active === true,
+    memoryMode: item.memoryMode || "local_only",
     memoryModeText: mapMemoryModeText(item.memoryMode || "local_only"),
+    sourceBadge: item.sourceBadge || agentMemoryClient.sourceBadge(item.source || "local", item.memoryMode || "local_only", item.conflict),
+    conflict: item.conflict === true,
     lastTaskType: item.lastIntent || item.lastTaskType || "",
   }));
+}
+
+function buildHeaderSubtitle(state) {
+  const source = state || {};
+  if (source.statusMachine === "network_offline" || source.connectionStatusClass === "offline") {
+    return "网络离线，可使用本机缓存能力";
+  }
+  if (source.statusMachine === "server_unreachable") {
+    return "服务暂不可达，本机能力仍可用";
+  }
+  if (source.statusMachine === "enhanced_degraded") {
+    return "增强能力降级，事实任务仍可用";
+  }
+  if (source.statusMachine === "enhanced_ready") {
+    return "增强理解已就绪";
+  }
+  if (source.allowPersonalContext === true) {
+    return "稳定模式 · 课表摘要已开";
+  }
+  return "校园任务助手";
 }
 
 function isNewConversationCommand(text) {
@@ -1514,18 +1548,6 @@ function resolveProviderState(messages) {
   };
 }
 
-function buildHeaderSubtitle(state) {
-  const source = state || {};
-  if (source.connectionStatusClass === "offline" || source.lastFallbackReason) {
-    return "离线模式 · 使用本地能力";
-  }
-  if (source.runtimeModeLabel) return source.runtimeModeLabel;
-  if (source.allowPersonalContext === true) {
-    return "稳定模式 · 课表摘要已开";
-  }
-  return "稳定模式 · 校园任务助手";
-}
-
 function bottomScrollPatch(animated) {
   return {
     scrollTop: Date.now(),
@@ -1571,9 +1593,18 @@ Page({
     showPrivacySheet: false,
     connectionStatusText: "检测中",
     connectionStatusClass: "unknown",
-    runtimeModeLabel: "稳定模式 · 已连接",
+    statusMachine: "public_ready",
+    statusChips: ["稳定模式"],
+    runtimeModeLabel: "稳定模式",
+    conversationSubtitle: "新对话",
     memoryMode: "local_only",
     memoryStatusText: "记忆：仅本机",
+    memoryChipText: "本地记忆",
+    liveRunVisible: false,
+    liveRunEvents: [],
+    liveRunExpanded: false,
+    activeRunId: "",
+    activePollToken: "",
     slowRequest: false,
     showPrivacyTip: false,
     privacyExpanded: false,
@@ -1657,13 +1688,38 @@ Page({
   refreshConnectionStatus() {
     detectConnectionStatus().then((status) => {
       if (this._aiPageUnloaded) return;
-      const runtimeModeLabel = mapRuntimeModeLabel(this.data.runtimeMode || "public", status.connectionStatusClass);
+      const runtimeModeLabel = mapRuntimeModeLabel(status.runtimeMode || this.data.runtimeMode || "public", status.connectionStatusClass, status);
+      const chips = [].concat(status.statusChips || [runtimeModeLabel]);
+      if (this.data.memoryMode === "cloud_sync") chips.push("已同步");
+      else if (this.data.memoryMode === "session_state") chips.push("会话记忆");
       this.setData({
         connectionStatusText: status.connectionStatusText,
         connectionStatusClass: status.connectionStatusClass,
+        statusMachine: status.statusMachine || "public_ready",
+        statusChips: chips.slice(0, 2),
+        runtimeMode: status.runtimeMode || this.data.runtimeMode || "public",
         runtimeModeLabel,
+        memoryChipText: mapMemoryChip(this.data.memoryMode),
         headerSubtitle: buildHeaderSubtitle(Object.assign({}, this.data, status, { runtimeModeLabel })),
       });
+    });
+  },
+
+  async refreshConversationList() {
+    const activeId = this.data.activeConversationId;
+    const localList = conversationStore.getConversationList();
+    let merged = agentMemoryClient.mergeLocalAndCloudConversations(localList, [], activeId);
+    try {
+      const cloud = await agentMemoryClient.listCloudConversations();
+      if (cloud.success) {
+        merged = agentMemoryClient.mergeLocalAndCloudConversations(localList, cloud.conversations, activeId);
+      }
+    } catch (error) {
+      // offline / session missing: keep local
+    }
+    if (this._aiPageUnloaded) return;
+    this.setData({
+      conversations: buildConversationDisplayList(activeId, merged),
     });
   },
 
@@ -1696,6 +1752,7 @@ Page({
   },
 
   openConversationSheet() {
+    this.refreshConversationList();
     this.setData({
       showConversationSheet: true,
       showCapabilityGuide: false,
@@ -2168,12 +2225,18 @@ Page({
 
     const userMessage = appendUserMessage ? makeMessage("user", message) : null;
     const nextMessages = appendUserMessage ? baseMessages.concat(userMessage) : baseMessages;
+    this._cancelCurrentRun = false;
     this.setMessages(nextMessages, {
       inputValue: "",
       inputFocus: false,
       sending: true,
       slowRequest: false,
-      sendingStatusText: "小佛助手正在理解",
+      sendingStatusText: "正在理解你的问题",
+      liveRunVisible: true,
+      liveRunEvents: [],
+      liveRunExpanded: false,
+      activeRunId: "",
+      activePollToken: "",
     }, { save: !this.data.demoMode });
 
     if (this.data.demoMode) {
@@ -2260,6 +2323,21 @@ Page({
         const text = status && status.text || "";
         if (text) this.setData({ sendingStatusText: text });
       },
+      onRunCreated: (info) => {
+        if (!isRequestActive()) return;
+        this.setData({
+          activeRunId: info && info.runId || "",
+          activePollToken: info && info.pollToken || "",
+        });
+      },
+      onRunEvents: (events, allEvents) => {
+        if (!isRequestActive()) return;
+        this.setData({
+          liveRunEvents: Array.isArray(allEvents) ? allEvents.slice(-12) : [],
+          liveRunVisible: true,
+        });
+      },
+      shouldCancel: () => this._cancelCurrentRun === true || !isRequestActive(),
       onDelta: (delta, fullText) => {
         if (!isRequestActive()) return;
         streamContent = fullText || `${streamContent}${delta || ""}`;
@@ -2270,12 +2348,25 @@ Page({
     const clientContext = aiAssistantService.buildClientContext({
       conversationId: this.data.activeConversationId,
       contextSlots: this.data.activeConversationContext,
+      memoryMode: this.data.memoryMode,
     });
 
     aiAssistantService.chat(message, clientContext, { callbacks })
       .then((response) => {
         if (!isRequestActive()) return;
         flushStream(true);
+        if (response && response.status === "cancelled") {
+          this.setMessages(this.data.messages || nextMessages, {
+            sending: false,
+            slowRequest: false,
+            liveRunVisible: false,
+            liveRunEvents: [],
+            sendingStatusText: "已取消",
+            activeRunId: "",
+            activePollToken: "",
+          }, { save: true });
+          return;
+        }
         const safety = response && response.safety || {};
         if (safety.pendingClarification) {
           aiAssistantService.setPendingClarification(safety.pendingClarification);
@@ -2301,6 +2392,7 @@ Page({
           this.setData({
             memoryMode: response.memory.mode,
             memoryStatusText: mapMemoryModeText(response.memory.mode),
+            memoryChipText: mapMemoryChip(response.memory.mode),
           });
         }
         let finalMessages = (this.data.messages || []).slice();
@@ -2319,7 +2411,11 @@ Page({
           activeConversationContext: nextContext,
           sending: false,
           slowRequest: false,
-          sendingStatusText: "已生成卡片",
+          sendingStatusText: "已完成",
+          liveRunVisible: false,
+          liveRunEvents: [],
+          activeRunId: "",
+          activePollToken: "",
         }, { save: true });
       })
       .catch((error) => {
@@ -2357,6 +2453,10 @@ Page({
           sending: false,
           slowRequest: false,
           sendingStatusText: "已生成卡片",
+          liveRunVisible: false,
+          liveRunEvents: [],
+          activeRunId: "",
+          activePollToken: "",
         }, { save: true });
       })
       .finally(() => {
@@ -2499,8 +2599,42 @@ Page({
     this.setData({ showMemorySheet: false });
   },
 
+  onToggleLiveRunExpand() {
+    this.setData({ liveRunExpanded: !this.data.liveRunExpanded });
+  },
+
+  onSendOrCancel() {
+    if (this.data.sending) {
+      this.onCancelRun();
+      return;
+    }
+    this.onSubmit();
+  },
+
+  async onCancelRun() {
+    if (!this.data.sending) return;
+    this._cancelCurrentRun = true;
+    const runId = this.data.activeRunId;
+    const pollToken = this.data.activePollToken;
+    if (runId) {
+      try {
+        await agentRunClient.cancelRun(runId, pollToken);
+      } catch (error) {
+        // ignore
+      }
+    }
+    this.setData({
+      sendingStatusText: "正在取消",
+    });
+  },
+
   onMemoryModeChange(event) {
     const mode = event.detail && event.detail.mode || "local_only";
+    const previous = this.data.memoryMode || "local_only";
+    if (mode === previous) {
+      this.setData({ showMemorySheet: false });
+      return;
+    }
     if (mode === "cloud_sync") {
       wx.showModal({
         title: "开启同步脱敏对话",
@@ -2508,36 +2642,102 @@ Page({
         confirmText: "开启",
         success: (res) => {
           if (!res.confirm) return;
-          this.applyMemoryMode(mode);
+          this.applyMemoryMode(mode, { previous });
         },
       });
       return;
     }
-    this.applyMemoryMode(mode);
+    if (mode === "local_only" && previous === "cloud_sync") {
+      wx.showModal({
+        title: "关闭云端同步",
+        content: "是否同时删除云端已同步数据？选择取消仅关闭同步并保留云端数据。",
+        confirmText: "删除云端",
+        cancelText: "仅关闭",
+        success: (res) => {
+          this.applyMemoryMode(mode, { previous, deleteCloudData: res.confirm === true });
+        },
+      });
+      return;
+    }
+    this.applyMemoryMode(mode, { previous });
   },
 
-  applyMemoryMode(mode) {
-    try {
-      wx.setStorageSync("FOSU_AI_MEMORY_MODE", mode);
-    } catch (error) {
-      // best effort
+  async applyMemoryMode(mode, options = {}) {
+    const previous = options.previous || this.data.memoryMode || "local_only";
+    if (mode === "local_only") {
+      try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", mode); } catch (error) { /* ignore */ }
+      if (options.deleteCloudData === true) {
+        const cleared = await agentMemoryClient.clearCloudMemory();
+        if (!cleared.success) {
+          wx.showToast({ title: cleared.error || "云端清除失败", icon: "none" });
+        }
+      }
+      this.setData({
+        memoryMode: mode,
+        memoryStatusText: mapMemoryModeText(mode),
+        memoryChipText: mapMemoryChip(mode),
+        showMemorySheet: false,
+      });
+      this.refreshConnectionStatus();
+      wx.showToast({ title: mapMemoryModeText(mode), icon: "none" });
+      return;
     }
+
+    const result = await agentMemoryClient.updateMemoryPolicy({
+      mode,
+      conversationId: this.data.activeConversationId,
+      clearExisting: options.deleteCloudData === true,
+    });
+    if (!result.success) {
+      this.setData({
+        memoryMode: previous,
+        memoryStatusText: mapMemoryModeText(previous),
+        memoryChipText: mapMemoryChip(previous),
+      });
+      wx.showToast({ title: result.error || "记忆模式更新失败", icon: "none" });
+      return;
+    }
+    try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", mode); } catch (error) { /* ignore */ }
     this.setData({
       memoryMode: mode,
       memoryStatusText: mapMemoryModeText(mode),
+      memoryChipText: mapMemoryChip(mode),
       showMemorySheet: false,
     });
+    this.refreshConnectionStatus();
     wx.showToast({ title: mapMemoryModeText(mode), icon: "none" });
   },
 
-  onClearCurrentMemory() {
+  onClearLocalMemory() {
     const conversationId = this.data.activeConversationId;
     if (conversationId) conversationStore.clearConversation(conversationId);
     this.setData({
       messages: [],
       showMemorySheet: false,
     });
-    wx.showToast({ title: "已清除当前对话记忆", icon: "none" });
+    wx.showToast({ title: "已清空本机消息", icon: "none" });
+  },
+
+  onClearCurrentMemory() {
+    const conversationId = this.data.activeConversationId;
+    wx.showModal({
+      title: "清除服务端会话状态",
+      content: "将删除当前对话在服务端的结构化状态，本机消息可另选清空。",
+      confirmText: "清除",
+      success: async (res) => {
+        if (!res.confirm) return;
+        if (conversationId) {
+          const result = await agentMemoryClient.deleteCloudConversation(conversationId);
+          if (!result.success) {
+            wx.showToast({ title: result.error || "服务端清除失败", icon: "none" });
+            return;
+          }
+        }
+        this.setData({ showMemorySheet: false });
+        wx.showToast({ title: "已清除服务端会话状态", icon: "none" });
+        this.refreshConversationList();
+      },
+    });
   },
 
   onClearAllMemory() {
@@ -2545,11 +2745,22 @@ Page({
       title: "清除全部云端记忆",
       content: "将请求删除你账号下的服务端会话状态。本机对话列表仍可单独管理。",
       confirmText: "清除",
-      success: (res) => {
+      success: async (res) => {
         if (!res.confirm) return;
-        this.setData({ memoryMode: "local_only", memoryStatusText: mapMemoryModeText("local_only"), showMemorySheet: false });
+        const result = await agentMemoryClient.clearCloudMemory();
+        if (!result.success) {
+          wx.showToast({ title: result.error || "清除失败", icon: "none" });
+          return;
+        }
+        this.setData({
+          memoryMode: "local_only",
+          memoryStatusText: mapMemoryModeText("local_only"),
+          memoryChipText: mapMemoryChip("local_only"),
+          showMemorySheet: false,
+        });
         try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", "local_only"); } catch (error) { /* ignore */ }
-        wx.showToast({ title: "已切换为仅本机", icon: "none" });
+        wx.showToast({ title: "已清除云端记忆", icon: "none" });
+        this.refreshConversationList();
       },
     });
   },

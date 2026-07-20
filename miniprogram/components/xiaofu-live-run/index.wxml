@@ -1,0 +1,20 @@
+<view class="live-run" wx:if="{{visible}}">
+  <view class="live-run-rows">
+    <view
+      wx:for="{{displayRows}}"
+      wx:key="key"
+      class="live-run-row {{item.active ? 'active' : ''}} {{item.done ? 'done' : ''}}"
+    >
+      <view class="live-dot {{item.active ? 'pulse' : ''}}"></view>
+      <text class="live-label">{{item.label}}</text>
+    </view>
+  </view>
+  <view class="live-expand" wx:if="{{canExpand}}" bindtap="onToggleExpand">
+    {{expanded ? '收起步骤' : '展开安全步骤'}}
+  </view>
+  <view class="live-all" wx:if="{{expanded}}">
+    <view wx:for="{{events}}" wx:key="sequence" class="live-all-item">
+      <text>{{item.label || item.type}}</text>
+    </view>
+  </view>
+</view>
