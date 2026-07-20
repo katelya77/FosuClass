@@ -83,7 +83,7 @@ withEnv(
   {
     NODE_ENV: "production",
     ADMIN_PASSWORD: "prod-password-value",
-    ADMIN_API_TOKEN: "explicit-independent-token-value",
+    ADMIN_API_TOKEN: "test-explicit-independent-token-value",
     FOSU_CONFIG_HARD_FAIL: "true",
   },
   () => {
@@ -92,7 +92,7 @@ withEnv(
     const { validateStartupConfig } = require("../server/src/services/configValidation");
     const result = validateStartupConfig({ hardFail: true });
     assert.strictEqual(result.ok, true, result.errors.join("; "));
-    assert.ok(!JSON.stringify(result).includes("explicit-independent-token-value"), "no token leak");
+    assert.ok(!JSON.stringify(result).includes("test-explicit-independent-token-value"), "no token leak");
   }
 );
 

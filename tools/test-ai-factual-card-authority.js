@@ -22,7 +22,9 @@ process.env.AI_PROVIDER_ENVIRONMENTS = JSON.stringify({
 });
 
 const deepseekProvider = require("../server/src/services/ai/providers/deepseekProvider");
+let providerCallCount = 0;
 deepseekProvider.generate = async () => ({
+  ...(() => { providerCallCount += 1; return {}; })(),
   provider: "deepseek",
   answer: "每周一至周五第1-2节都可以，今天第1-2节有999间空教室。",
   cards: [{
@@ -60,7 +62,8 @@ async function run() {
     serverSession: { openidHash: "unit-test-openid" },
   });
   const text = JSON.stringify(response);
-  assert.strictEqual(response.safety.externalProviderUsed, true, "always policy should call mocked provider");
+  assert.strictEqual(providerCallCount, 0, "factual intents must never call the expression provider");
+  assert.strictEqual(response.safety.externalProviderUsed, false, "factual response remains deterministic");
   assert(!text.includes("伪造推荐卡"), "provider cards must not override deterministic cards");
   assert(!text.includes("伪造按钮"), "provider actions must not override deterministic actions");
   assert(!text.includes("999间"), "provider room facts must not override tool facts");

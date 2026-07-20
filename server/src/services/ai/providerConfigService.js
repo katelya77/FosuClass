@@ -705,13 +705,11 @@ function saveConfig(payload = {}) {
 }
 
 function getEnvironmentForContext(context = {}, runtimeMode) {
-  if (runtimeMode === "public") return "public";
-  const envVersion = String(context.envVersion || context.miniprogramVersion || "").trim().toLowerCase();
-  if (envVersion === "release" || envVersion === "public") return "public";
-  if (envVersion === "trial") return "trial";
-  if (envVersion === "develop" || envVersion === "development" || envVersion === "dev" || envVersion === "devtools") return "dev";
-  const active = normalizeEnvironment(getStatus().activeEnvironment);
-  return active === "dev" || active === "trial" ? active : "trial";
+  const mode = String(runtimeMode || "public").trim().toLowerCase();
+  if (mode === "public") return "public";
+  if (mode === "dev") return "dev";
+  if (mode === "trial" || mode === "competition") return "trial";
+  return "public";
 }
 
 function getRuntimeConfigForEnvironment(environment) {

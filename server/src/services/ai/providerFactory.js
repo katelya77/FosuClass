@@ -3,6 +3,7 @@ const deepseekProvider = require("./providers/deepseekProvider");
 const cozeProvider = require("./providers/cozeProvider");
 const cloudbaseOpenaiProvider = require("./providers/cloudbaseOpenaiProvider");
 const providerChainService = require("./providerChainService");
+const capabilityManifestService = require("./capabilityManifestService");
 
 function configValue(runtimeConfig, key, fallback = "") {
   const source = runtimeConfig || {};
@@ -15,9 +16,11 @@ function configValue(runtimeConfig, key, fallback = "") {
 
 function getRuntimeMode(runtimeConfig) {
   const raw = String(configValue(runtimeConfig, "AI_RUNTIME_MODE", "")).trim().toLowerCase();
-  if (raw === "public") return "public";
-  if (raw === "competition") return "competition";
-  return "public";
+  if (raw === "competition") {
+    const active = String(configValue(runtimeConfig, "AI_PROVIDER_ACTIVE_ENV", "trial")).trim().toLowerCase();
+    return active === "dev" ? "dev" : "trial";
+  }
+  return capabilityManifestService.normalizeRuntimeMode(raw);
 }
 
 function getProviderName(runtimeMode, runtimeConfig) {

@@ -464,6 +464,8 @@
     "test:server-docker-smoke": "node tools/test-server-docker-smoke.js",
     "test:deploy-workflow-preserves-ai-env": "node tools/test-deploy-workflow-preserves-ai-env.js",
     "test:ai-competition": "node tools/run-ai-competition-checks.js",
+    "test:agent-foundation": "node tools/run-agent-foundation-tests.js",
+    "test:agent-regression": "node tools/run-agent-regression-tests.js",
     "test:assistant-syntax": "node -c server/src/services/ai/knowledgeBaseService.js && node -c server/src/services/ai/agentService.js && node -c server/src/services/ai/providers/mockProvider.js && node -c server/src/routes/admin.js && node -c server/src/routes/adminPages.js && node -c miniprogram/services/aiAssistantService.js && node -c miniprogram/services/aiTransportRouter.js && node -c tools/seed-assistant-local-rules.js && node -c tools/test-live-ai-providers.js && node -c tools/test-assistant-env-version-routing.js",
     "test:assistant-mode-switch": "node tools/test-assistant-mode-switch.js",
     "test:assistant-env-routing": "node tools/test-assistant-env-version-routing.js",

@@ -162,6 +162,19 @@ function sanitizePendingClarification(value) {
   };
 }
 
+function sanitizeContextSlots(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  return {
+    lastIntent: sanitizeString(source.lastIntent || "", 80),
+    lastTargetType: sanitizeString(source.lastTargetType || "", 30),
+    lastTargetName: sanitizeString(source.lastTargetName || "", 80),
+    lastWeek: Number.isFinite(Number(source.lastWeek)) ? Number(source.lastWeek) : 0,
+    lastWeekday: Number.isFinite(Number(source.lastWeekday)) ? Number(source.lastWeekday) : 0,
+    lastQueryResult: typeof source.lastQueryResult === "string" ? sanitizeString(source.lastQueryResult, 120) : "",
+    lastSource: sanitizeString(source.lastSource || "", 60),
+  };
+}
+
 function sanitizeUserPreferences(value) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const campus = ["仙溪校区", "江湾校区"].includes(source.campus) ? source.campus : "";
@@ -171,6 +184,8 @@ function sanitizeUserPreferences(value) {
   const duration = Number(source.defaultEmptyRoomDurationSections);
   const answerDetail = ["brief", "normal", "detailed"].includes(source.answerDetail) ? source.answerDetail : "normal";
   return {
+    conversationId: sanitizeString(source.conversationId || source.conversation && source.conversation.conversationId || "", 80),
+    protocolVersion: sanitizeString(source.protocolVersion || "", 24),
     campus,
     favoriteBuildings,
     defaultEmptyRoomDurationSections: Number.isFinite(duration) && duration > 0 ? Math.min(12, Math.max(1, Math.round(duration))) : 2,
@@ -215,6 +230,7 @@ function sanitizeAgentContext(context) {
     currentScheduleSummary: sanitizeScheduleSummary(source.currentScheduleSummary),
     latestScheduleImport: sanitizeLatestScheduleImport(source.latestScheduleImport),
     pendingClarification: sanitizePendingClarification(source.pendingClarification),
+    contextSlots: sanitizeContextSlots(source.contextSlots || source.conversation && source.conversation.contextSlots),
     userPreferences: sanitizeUserPreferences(source.userPreferences),
   };
 }
@@ -271,5 +287,6 @@ module.exports = {
   hasSensitiveCredential,
   redactSensitiveText,
   sanitizeAgentContext,
+  sanitizeContextSlots,
   sanitizeToolResult,
 };

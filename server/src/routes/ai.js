@@ -6,6 +6,8 @@ const agentService = require("../services/ai/agentService");
 const campusMapService = require("../services/ai/campusMapService");
 const weatherService = require("../services/ai/weatherService");
 const { buildSafeLogPayload } = require("../services/ai/safetyGuard");
+const capabilityManifestService = require("../services/ai/capabilityManifestService");
+const runtimeModeService = require("../services/ai/runtimeModeService");
 
 const router = express.Router();
 
@@ -68,6 +70,19 @@ router.get("/weather", scheduleLimiter, async (req, res) => {
   }
 });
 
+router.get("/agent/capabilities", scheduleLimiter, optionalSessionGuard, (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  const runtimeMode = runtimeModeService.resolveConfiguredMode();
+  const enhancedModeEnabled = runtimeMode !== "public"
+    && String(process.env.AI_AGENT_ENABLED || "false").toLowerCase() === "true";
+  return res.json(Object.assign({ success: true }, capabilityManifestService.publicCapabilityView(
+    runtimeMode,
+    enhancedModeEnabled
+  ), {
+    serverTime: new Date().toISOString(),
+  }));
+});
+
 router.post("/agent/chat", scheduleLimiter, optionalSessionGuard, validateJsonBody(["message", "context", "protocolVersion", "requestId", "conversationId"]), async (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   res.setHeader("Pragma", "no-cache");
@@ -106,6 +121,17 @@ router.post("/agent/chat", scheduleLimiter, optionalSessionGuard, validateJsonBo
       provider: "mock",
       toolCalls: [{ name: "agentService", status: "failed", summary: error.message }],
     }));
+    return res.status(200).json(agentService.buildServiceFailureResponse({
+      message,
+      context: req.body && req.body.context || {},
+      protocolVersion: req.body && req.body.protocolVersion,
+      requestId: req.body && req.body.requestId,
+      conversationId: req.body && req.body.conversationId,
+      serverSession: req.fosuSession ? {
+        openidHash: req.fosuSession.openidHash || "",
+        sessionIdHash: req.fosuSession.sessionIdHash || "",
+      } : null,
+    }, error));
     const fallbackMetrics = {
       latencyMs: 0,
       intentName: "agentServiceFallback",

@@ -1,10 +1,7 @@
 const request = require("../utils/request");
-const cloudbaseConfig = require("../config/cloudbase");
-const { classifyAiRoute } = require("../shared/aiRouteClassifier");
-const cloudbaseHunyuanService = require("./cloudbaseHunyuanService");
+const agentCapabilityCompat = require("../shared/agentCapabilityCompat.generated");
 
 const METRICS_KEY = "FOSU_AI_GENERATIVE_METRICS";
-const GENERIC_SUGGESTIONS = ["如何导入个人课表", "查教室明天是否有课", "今天有什么课"];
 const INVALID_TEXT_TOKENS = new Set(["[object Object]", "undefined", "null", "NaN"]);
 
 function nowIso() {
@@ -71,6 +68,19 @@ function normalizeOracleResponse(response) {
   }, response || {});
 }
 
+function normalizeRequestMetadata(input = {}, context = {}) {
+  return {
+    protocolVersion: agentCapabilityCompat.PROTOCOL_VERSIONS.indexOf(input.protocolVersion) >= 0
+      ? input.protocolVersion
+      : "agent.v2",
+    requestId: safeText(input.requestId, 96),
+    conversationId: safeText(
+      input.conversationId || context.conversation && context.conversation.conversationId,
+      96
+    ),
+  };
+}
+
 function buildEvidence(context = {}, extra = {}) {
   return {
     term: context.term || context.selectedTerm || "",
@@ -115,41 +125,6 @@ function buildGenericCard(providerLabel, subtitle) {
   };
 }
 
-function buildLocalProjectFallback(message, context, startTime, intentName, reason) {
-  const answer = [
-    "暂未匹配到更完整的校园信息，已使用本地规则整理可用结果。",
-    "佛课小表可用于查课、找空教室、导入个人 XLS 课表和查看数据状态；课表事实以已有数据和工具结果为准。",
-    "课表信息仅供参考，以学校教务系统为准。",
-  ].join("\n");
-  recordMetric({
-    provider: "mock",
-    latencyMs: Date.now() - startTime,
-    totalTokens: 0,
-    success: true,
-    fallback: true,
-    errorCode: reason || "LOCAL_FALLBACK",
-    intentName,
-  });
-  return {
-    success: true,
-    answer,
-    cards: [buildGenericCard("本地规则", "校园工具仍可继续使用。")],
-    suggestions: GENERIC_SUGGESTIONS,
-    toolCalls: [],
-    taskSteps: [
-      { key: "understand", label: "已匹配查询内容", status: "done" },
-      { key: "verified", label: "已核验课表数据", status: "done" },
-    ],
-    evidence: buildEvidence(context, { sources: ["local-project-knowledge"] }),
-    safety: buildSafety("mock", {
-      mode: "fallback-mock",
-      fallbackReason: reason || "local_fallback",
-      providerDecisionReason: "local_fallback_available",
-    }),
-    metrics: buildMetrics(startTime, intentName, { fallback: true }),
-  };
-}
-
 function buildSensitiveFallback(context, startTime, intentName) {
   const answer = "请勿输入学号、密码、登录凭证、API Key 等敏感信息。查课和课表同步可以继续使用校园工具。";
   recordMetric({
@@ -162,36 +137,54 @@ function buildSensitiveFallback(context, startTime, intentName) {
     intentName,
   });
   return {
+    protocolVersion: "agent.v2",
     success: true,
+    status: "blocked",
+    fallback: true,
+    fallbackLayer: "client",
+    fallbackReason: "SENSITIVE_CREDENTIAL_REDACTED",
+    externalProviderUsed: false,
+    intent: "explain_personal_import",
+    confidence: 1,
+    slots: {},
+    skill: { id: "personal_schedule_import_help", version: "1.0.0" },
+    plan: [],
+    steps: [{ id: "client-safety", status: "done", tool: "safety_guard", durationMs: 0, errorCode: "", retried: false }],
+    observations: [],
     answer,
     cards: [buildGenericCard("安全提醒", "已拦截敏感信息，不会继续处理。")],
     suggestions: ["怎么导入个人课表？", "数据会上传吗？"],
     toolCalls: [{ name: "safety_guard", status: "skipped", summary: "敏感内容已脱敏" }],
     taskSteps: [{ key: "safety", label: "已完成安全拦截", status: "done" }],
     evidence: buildEvidence(context, { sources: ["client-safety-guard"] }),
-    safety: buildSafety("mock", { mode: "fallback", fallbackReason: "sensitive_redacted" }),
-    metrics: buildMetrics(startTime, intentName, { fallback: true }),
+    safety: Object.assign(buildSafety("mock", { mode: "fallback", fallbackReason: "sensitive_redacted" }), {
+      externalProviderUsed: false,
+    }),
+    metrics: Object.assign(buildMetrics(startTime, intentName, { fallback: true }), {
+      canonicalIntent: "explain_personal_import",
+      externalProviderUsed: false,
+    }),
+    errors: [],
+    serverTime: "",
   };
 }
 
 function shouldDisableGenerativeInClient() {
-  if (cloudbaseConfig.AI_CLIENT_EXPRESSION_LAYER_ENABLED !== true) return true;
-  if (cloudbaseConfig.AI_TOOL_ONLY_MODE === true) return true;
-  const envVersion = (() => {
-    try {
-      const info = wx.getAccountInfoSync && wx.getAccountInfoSync();
-      return info && info.miniProgram && info.miniProgram.envVersion || "";
-    } catch (error) {
-      return "";
-    }
-  })();
-  return !cloudbaseHunyuanService.isGenerativeAllowedForEnv(cloudbaseConfig, envVersion);
+  // Phase 1 moves all generative expression to the server Agent Kernel in
+  // every mini-program environment. Kept as a compatibility probe for callers.
+  return true;
 }
 
-async function callOracle(oracleChat, safeMessage, context, callbacks = {}) {
+async function callOracle(oracleChat, safeMessage, context, callbacks = {}, metadata = {}) {
   if (callbacks.onStatus) callbacks.onStatus({ type: "query-tools", text: "正在查询课表" });
-  if (oracleChat) return oracleChat(safeMessage, context);
-  return request.post("/api/ai/agent/chat", { message: safeMessage, context }, {
+  if (oracleChat) return oracleChat(safeMessage, context, metadata);
+  return request.post("/api/ai/agent/chat", {
+    message: safeMessage,
+    context,
+    protocolVersion: metadata.protocolVersion || "agent.v2",
+    requestId: metadata.requestId || "",
+    conversationId: metadata.conversationId || "",
+  }, {
     showLoading: false,
     silentError: true,
     timeout: 28000,
@@ -202,116 +195,36 @@ async function callOracle(oracleChat, safeMessage, context, callbacks = {}) {
   });
 }
 
-async function chat(input = {}) {
+// Phase 1 online entrypoint. Semantic requests always go to the server Agent
+// Kernel. The former client expression pipeline remains below as a temporary
+// compatibility implementation, but it is no longer exported or called here.
+async function serverFirstChat(input = {}) {
   const startTime = Date.now();
   const rawMessage = String(input.message || "");
   const redact = input.redactSensitiveText || ((text) => String(text || ""));
   const safeMessage = redact(rawMessage).slice(0, 2000);
   const context = input.context || {};
   const callbacks = input.options && input.options.callbacks || input.callbacks || {};
-  const history = input.history || [];
-  const route = classifyAiRoute(safeMessage, context);
-  if (callbacks.onStatus) callbacks.onStatus({ type: "understanding", text: "小佛助手正在理解", route });
+  const metadata = normalizeRequestMetadata(input, context);
 
-  if (safeMessage !== rawMessage && /\[已脱敏\]/.test(safeMessage)) {
-    return buildSensitiveFallback(context, startTime, route.intentName);
+  if (callbacks.onStatus) {
+    callbacks.onStatus({ type: "understanding", text: "小佛助手正在理解" });
   }
 
-  if (route.route === "oracle-tool") {
-    const response = normalizeOracleResponse(await callOracle(input.oracleChat, safeMessage, context, callbacks));
-    if (callbacks.onStatus) callbacks.onStatus({ type: "tool-used", text: "已核验课表数据" });
-    return response;
+  // Credentials stop before every network/provider boundary. The original
+  // secret is never required to return safe import guidance.
+  if (safeMessage !== rawMessage) {
+    return Object.assign(buildSensitiveFallback(context, startTime, "explain_personal_import"), metadata);
   }
 
-  if (shouldDisableGenerativeInClient()) {
-    try {
-      return normalizeOracleResponse(await callOracle(input.oracleChat, safeMessage, context, callbacks));
-    } catch (error) {
-      return buildLocalProjectFallback(safeMessage, context, startTime, route.intentName, "AI_CLIENT_EXPRESSION_LAYER_DISABLED");
-    }
-  }
-
-  try {
-    if (callbacks.onStatus) callbacks.onStatus({ type: "understanding", text: "小佛助手正在理解" });
-    const result = await cloudbaseHunyuanService.generate({
-      message: safeMessage,
-      context,
-      history,
-      intentName: route.intentName,
-    }, callbacks);
-    const answer = safeText(result.text, 1400) || "我已经整理好回答。";
-    recordMetric({
-      provider: "cloudbase-hunyuan",
-      latencyMs: Date.now() - startTime,
-      totalTokens: result.totalTokens || 0,
-      success: true,
-      fallback: false,
-      errorCode: "",
-      intentName: route.intentName,
-    });
-    return {
-      success: true,
-      answer,
-      cards: [buildGenericCard("校园查询结果", "说明内容仅用于帮助理解，不作为课表事实来源。")],
-      suggestions: GENERIC_SUGGESTIONS,
-      toolCalls: [],
-      taskSteps: [
-        { key: "understand", label: "小佛助手正在理解", status: "done" },
-        { key: "verified", label: "已核验课表数据", status: "done" },
-        { key: "complete", label: "已生成卡片", status: "done" },
-      ],
-      evidence: buildEvidence(context, { sources: ["cloudbase-hunyuan"] }),
-      safety: buildSafety("cloudbase-hunyuan", {
-        desiredProvider: "cloudbase-hunyuan",
-        externalProviderUsed: true,
-        providerDecisionReason: route.reason,
-      }),
-      metrics: buildMetrics(startTime, route.intentName, {
-        externalProviderUsed: true,
-        totalTokens: result.totalTokens || 0,
-      }),
-    };
-  } catch (hunyuanError) {
-    const errorCode = hunyuanError && (hunyuanError.code || hunyuanError.errCode || hunyuanError.message) || "CLOUDBASE_AI_FAILED";
-    if (callbacks.onStatus) {
-      callbacks.onStatus({
-        type: "fallback-oracle",
-        text: hunyuanError && hunyuanError.concurrentLimit
-          ? "小佛助手正在理解"
-          : "小佛助手正在理解",
-        errorCode,
-      });
-    }
-    try {
-      const oracle = normalizeOracleResponse(await callOracle(input.oracleChat, safeMessage, context, callbacks));
-      oracle.safety = Object.assign({}, oracle.safety || {}, {
-        fallbackReason: oracle.safety && oracle.safety.fallbackReason || errorCode,
-        hunyuanFallbackReason: errorCode,
-      });
-      oracle.metrics = Object.assign({}, oracle.metrics || {}, {
-        fallback: true,
-        intentName: oracle.metrics && oracle.metrics.intentName || route.intentName,
-      });
-      recordMetric({
-        provider: oracle.safety.resolvedProvider || oracle.safety.provider || "oracle",
-        latencyMs: Date.now() - startTime,
-        totalTokens: oracle.metrics.totalTokens || 0,
-        success: true,
-        fallback: true,
-        errorCode,
-        intentName: route.intentName,
-      });
-      return oracle;
-    } catch (oracleError) {
-      return buildLocalProjectFallback(safeMessage, context, startTime, route.intentName, oracleError && (oracleError.code || oracleError.message) || errorCode);
-    }
-  }
+  const response = await callOracle(input.oracleChat, safeMessage, context, callbacks, metadata);
+  return normalizeOracleResponse(response);
 }
 
 module.exports = {
   METRICS_KEY,
   buildGenericCard,
-  chat,
+  chat: serverFirstChat,
   recordMetric,
   safeText,
   shouldDisableGenerativeInClient,

@@ -46,6 +46,7 @@ COPY server/assets ./assets
 COPY server/data ./data
 COPY server/public ./public
 COPY server/config/admin-rollout-manifest.json ./config/admin-rollout-manifest.json
+COPY server/config/agent-capability-manifest.json ./config/agent-capability-manifest.json
 
 RUN mkdir -p /app/storage /app/data/backups \
     && chmod -R a+rX /app/src /app/public /app/scripts /app/assets /app/data \

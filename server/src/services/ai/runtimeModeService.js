@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const protocol = require("./agentProtocol");
+const capabilityManifestService = require("./capabilityManifestService");
 
 function boolEnv(name, fallback = false) {
   const value = process.env[name];
@@ -12,42 +12,42 @@ function hashToken(value) {
 }
 
 function splitList(value) {
-  return String(value || "")
-    .split(",")
-    .map((item) => item.trim())
-    .filter(Boolean);
+  return String(value || "").split(",").map((item) => item.trim()).filter(Boolean);
 }
 
 function isReleaseEnv(context = {}) {
   const envVersion = String(context.envVersion || context.miniprogramVersion || "").trim().toLowerCase();
-  return envVersion === "release";
+  return envVersion === "release" || envVersion === "public" || envVersion === "production";
 }
 
 function isDevelopOrTrial(context = {}) {
   const envVersion = String(context.envVersion || context.miniprogramVersion || "").trim().toLowerCase();
-  return envVersion === "develop" || envVersion === "trial" || envVersion === "devtools";
+  return ["develop", "development", "dev", "trial", "devtools"].includes(envVersion);
+}
+
+function resolveConfiguredMode() {
+  const raw = String(process.env.AI_RUNTIME_MODE || "public").trim().toLowerCase();
+  if (raw === "competition") {
+    const active = String(process.env.AI_PROVIDER_ACTIVE_ENV || "").trim().toLowerCase();
+    if (active === "trial" || active === "dev") return active;
+    return "public";
+  }
+  return capabilityManifestService.normalizeRuntimeMode(raw);
 }
 
 function trialEnvironmentAllowed(context = {}) {
-  return isDevelopOrTrial(context) && boolEnv("AI_COMPETITION_ALLOW_TRIAL_ENV", true);
+  return resolveConfiguredMode() !== "public" && isDevelopOrTrial(context) && boolEnv("AI_COMPETITION_ALLOW_TRIAL_ENV", false);
 }
 
 function sessionAllowed(session = {}) {
   if (session && session.adminProviderVerification === true) return true;
   const allowAll = boolEnv("AI_COMPETITION_ALLOW_ALL_SESSIONS", false) && process.env.NODE_ENV !== "production";
-  if (allowAll) return true;
+  const hasServerSession = Boolean(session && (session.openidHash || session.sessionIdHash));
+  if (allowAll && hasServerSession) return true;
   const prefixes = splitList(process.env.AI_COMPETITION_OPENID_HASH_PREFIXES);
   if (!prefixes.length) return false;
   const openidHash = String(session.openidHash || "").toLowerCase();
   return prefixes.some((prefix) => openidHash.startsWith(prefix.toLowerCase()));
-}
-
-function tokenAllowed(token) {
-  const configured = String(process.env.AI_COMPETITION_CAPABILITY_TOKEN_SHA256 || "").trim().toLowerCase();
-  if (!configured) return false;
-  if (isCompetitionCapabilityExpired()) return false;
-  const candidate = hashToken(token).toLowerCase();
-  return candidate === configured;
 }
 
 function getCompetitionCapabilityExpiry() {
@@ -67,19 +67,34 @@ function isCompetitionCapabilityExpired() {
   return !expiry.valid || expiry.expired;
 }
 
+function tokenAllowed(token) {
+  const configured = String(process.env.AI_COMPETITION_CAPABILITY_TOKEN_SHA256 || "").trim().toLowerCase();
+  const candidate = String(token || "").trim();
+  if (!configured || !candidate || isCompetitionCapabilityExpired()) return false;
+  return hashToken(candidate).toLowerCase() === configured;
+}
+
+function requiresEnhancedSession() {
+  return boolEnv("AI_ENHANCED_REQUIRE_SESSION", false) || boolEnv("AI_COMPETITION_REQUIRE_SESSION", false);
+}
+
 function getAuthorizationStatus() {
   const expiry = getCompetitionCapabilityExpiry();
+  const configuredMode = resolveConfiguredMode();
   const openidPrefixCount = splitList(process.env.AI_COMPETITION_OPENID_HASH_PREFIXES).length;
   const tokenConfigured = Boolean(String(process.env.AI_COMPETITION_CAPABILITY_TOKEN_SHA256 || "").trim());
   return {
-    trialEnhancedMode: protocol.normalizeRuntimeMode(process.env.AI_RUNTIME_MODE || "public") === "competition",
+    runtimeMode: configuredMode,
+    trialEnhancedMode: configuredMode === "trial",
+    devEnhancedMode: configuredMode === "dev",
+    sessionRequired: requiresEnhancedSession(),
     sessionAuthorizationConfigured: openidPrefixCount > 0,
     shortCredentialConfigured: tokenConfigured,
     shortCredentialExpiresAt: expiry.expiresAt,
     shortCredentialExpiryValid: tokenConfigured ? expiry.valid : false,
     shortCredentialExpired: tokenConfigured ? expiry.expired || !expiry.valid : false,
     allowUnknownEnv: boolEnv("AI_COMPETITION_ALLOW_UNKNOWN_ENV", false),
-    allowTrialEnv: boolEnv("AI_COMPETITION_ALLOW_TRIAL_ENV", true),
+    allowTrialEnv: boolEnv("AI_COMPETITION_ALLOW_TRIAL_ENV", false),
     allowAllSessionsNonProduction: boolEnv("AI_COMPETITION_ALLOW_ALL_SESSIONS", false) && process.env.NODE_ENV !== "production",
     authorizedAccountRuleCount: openidPrefixCount,
   };
@@ -87,55 +102,89 @@ function getAuthorizationStatus() {
 
 function resolveRuntimeMode(input = {}) {
   const context = input.context || {};
-  const session = input.serverSession || context.serverSession || {};
-  const configured = protocol.normalizeRuntimeMode(process.env.AI_RUNTIME_MODE || "public");
-  const requested = protocol.normalizeRuntimeMode(context.runtimeMode || input.runtimeMode || configured);
-  if (configured !== "competition" || requested !== "competition") {
+  // Only the server-owned session argument may grant session authorization. A
+  // similarly named object in client context is intentionally ignored.
+  const session = input.serverSession || {};
+  const configuredMode = resolveConfiguredMode();
+  const requestedRaw = context.runtimeMode || input.runtimeMode || configuredMode;
+  const requestedMode = capabilityManifestService.normalizeRuntimeMode(requestedRaw);
+
+  if (configuredMode === "public") {
     return {
       runtimeMode: "public",
-      requestedMode: requested,
+      configuredMode,
+      requestedMode,
       authorized: false,
-      reason: configured !== "competition" ? "server_runtime_public" : "client_requested_public",
+      reason: "server_runtime_public",
     };
   }
   if (isReleaseEnv(context)) {
     return {
       runtimeMode: "public",
-      requestedMode: requested,
+      configuredMode,
+      requestedMode,
       authorized: false,
       reason: "release_env_fail_closed",
     };
   }
-  if (!isDevelopOrTrial(context) && !boolEnv("AI_COMPETITION_ALLOW_UNKNOWN_ENV", false)) {
+
+  const sessionAuthorized = sessionAllowed(session);
+  const capabilityToken = input.capabilityToken
+    || input.competitionCapabilityToken
+    || session.competitionCapabilityToken
+    || context.competitionCapabilityToken;
+  const capabilityAuthorized = tokenAllowed(capabilityToken);
+  const explicitlyAuthorized = sessionAuthorized || capabilityAuthorized;
+  const knownClientEnvironment = isDevelopOrTrial(context);
+  const knownEnvironmentAllowed = trialEnvironmentAllowed(context);
+  const unknownEnvironmentAllowed = boolEnv("AI_COMPETITION_ALLOW_UNKNOWN_ENV", false);
+
+  if (!knownClientEnvironment && !unknownEnvironmentAllowed) {
     return {
       runtimeMode: "public",
-      requestedMode: requested,
+      configuredMode,
+      requestedMode,
       authorized: false,
       reason: "env_version_not_develop_or_trial",
     };
   }
-  if (trialEnvironmentAllowed(context)) {
+
+  if (requiresEnhancedSession() && !explicitlyAuthorized) {
     return {
-      runtimeMode: "competition",
-      requestedMode: requested,
-      authorized: true,
-      reason: "trial_env_authorized",
+      runtimeMode: "public",
+      configuredMode,
+      requestedMode,
+      authorized: false,
+      reason: "enhanced_session_not_authorized",
     };
   }
-  const capabilityToken = String(context.competitionCapabilityToken || "").trim();
-  if (sessionAllowed(session) || tokenAllowed(capabilityToken)) {
+
+  if (knownEnvironmentAllowed && !requiresEnhancedSession()) {
     return {
-      runtimeMode: "competition",
-      requestedMode: requested,
+      runtimeMode: configuredMode,
+      configuredMode,
+      requestedMode,
       authorized: true,
-      reason: sessionAllowed(session) ? "server_session_authorized" : "capability_token_authorized",
+      reason: `server_runtime_${configuredMode}`,
     };
   }
+
+  if (explicitlyAuthorized) {
+    return {
+      runtimeMode: configuredMode,
+      configuredMode,
+      requestedMode,
+      authorized: true,
+      reason: sessionAuthorized ? "server_session_authorized" : "capability_token_authorized",
+    };
+  }
+
   return {
     runtimeMode: "public",
-    requestedMode: requested,
+    configuredMode,
+    requestedMode,
     authorized: false,
-    reason: "competition_not_authorized",
+    reason: knownClientEnvironment ? "competition_not_authorized" : "unknown_env_requires_authorization",
   };
 }
 
@@ -143,6 +192,7 @@ module.exports = {
   getAuthorizationStatus,
   isDevelopOrTrial,
   isReleaseEnv,
+  resolveConfiguredMode,
   resolveRuntimeMode,
   sessionAllowed,
   trialEnvironmentAllowed,

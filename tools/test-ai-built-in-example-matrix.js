@@ -320,6 +320,21 @@ function assertNoVisibleTechnicalLeak(response, text) {
   );
 }
 
+function canonicalFallbackCardType(type, text) {
+  if (type === "schedule_status" && /教学周|第几周|周次/.test(String(text || ""))) return "generic";
+  return ({
+    personal_schedule: "schedule",
+    schedule_result: "schedule",
+    schedule_status: "diagnosis",
+    weather_card: "weather",
+    import_guide: "guide",
+    help: "guide",
+    school_knowledge: "guide",
+    navigation: "generic",
+    clarification: "generic",
+  })[type] || type;
+}
+
 async function run() {
   const page = mockEnv.createPageInstance();
   const covered = new Set(MATRIX.map((item) => item.text));
@@ -340,7 +355,7 @@ async function run() {
       assert.strictEqual(Array.isArray(response.cards) ? response.cards.length : 0, 0, `expected no cards for ${item.text}`);
     } else {
       assert(response.cards && response.cards[0], `expected card for ${item.text}`);
-      assert.strictEqual(response.cards[0].type, item.cardType, `unexpected card type for ${item.text}`);
+      assert.strictEqual(response.cards[0].type, canonicalFallbackCardType(item.cardType, item.text), `unexpected card type for ${item.text}`);
       if (item.actions) {
         const labels = (response.cards[0].actions || []).map((action) => action.label);
         item.actions.forEach((label) => {

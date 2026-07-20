@@ -25,8 +25,8 @@ function run() {
   );
   assert.strictEqual(
     agentService.shouldUseExternalProvider({ name: "diagnose_data_status" }, [{ name: "diagnose_data_status", result: { success: true } }], "always", "competition"),
-    true,
-    "always policy may ask the external provider for wording while keeping deterministic cards"
+    false,
+    "factual diagnosis must stay deterministic even under always policy"
   );
   assert.strictEqual(
     agentService.shouldUseExternalProvider({ name: "diagnose_data_status" }, [{ name: "diagnose_data_status", result: { success: true } }], "always", "public"),
@@ -49,8 +49,14 @@ function run() {
   process.env.AI_PROVIDER_POLICY = "always";
   assert.strictEqual(
     agentService.shouldUseExternalProvider({ name: "search_empty_rooms" }, [{ name: "search_empty_rooms", result: { rooms: [{ roomName: "C7-203" }] } }], "always", "competition"),
+    false,
+    "always cannot override the capability manifest for factual intents"
+  );
+
+  assert.strictEqual(
+    agentService.shouldUseExternalProvider({ name: "project_qa" }, [], "always", "competition"),
     true,
-    "always should call external provider when agent is enabled and provider is external"
+    "an explicitly allowed non-factual intent may use the trial expression provider"
   );
 
   console.log("test-ai-provider-policy passed");
