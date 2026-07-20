@@ -20,8 +20,8 @@ const mockProvider = require("../server/src/services/ai/providers/mockProvider")
   "campus-map-xianxi-south.jpg",
   "campus-map-hebin.jpg",
 ].forEach((name) => {
-  const file = path.join(root, "miniprogram/assets/maps", name);
-  assert(fs.existsSync(file), `${name} should exist`);
+  const file = path.join(root, "miniprogram/packageMaps/assets/maps", name);
+  assert(fs.existsSync(file), `${name} should exist under packageMaps subpackage`);
   assert(fs.statSync(file).size > 10 * 1024, `${name} should not be an empty placeholder`);
 });
 

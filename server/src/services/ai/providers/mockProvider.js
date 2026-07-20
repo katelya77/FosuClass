@@ -470,7 +470,7 @@ function buildCampusPlace(result = {}) {
 function buildCampusPlaceV2(result = {}) {
   const items = Array.isArray(result.items) ? result.items : [];
   const first = items[0] || {};
-  const actionUrl = first.actionUrl || result.actionUrl || "/pages/campus-map/campus-map";
+  const actionUrl = first.actionUrl || result.actionUrl || "/packageMaps/pages/campus-map/campus-map";
   const routeHint = result.routeAvailable === false || result.code === "ROUTE_DATA_INCOMPLETE"
     ? "目前可帮助定位校区和区域，暂不提供精确步行路线。"
     : "Q 版地图仅供校园位置参考，具体以学校现场指引为准。";
