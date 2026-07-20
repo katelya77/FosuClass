@@ -290,7 +290,8 @@ function resolveIntentChinese(message, context = {}) {
   if (/加载失败|数据失败|为什么.*数据|诊断|缓存|release|同步失败|打不开/.test(text)) {
     return { name: "diagnose_data_status", slots: {} };
   }
-  if (/自习时间|推荐.*时间|共同空闲|组会|会议|一起自习/.test(text)) {
+  // 连续自习 / 共同空闲时间：优先于泛化“教室”索引查询
+  if (/自习时间|推荐.*时间|共同空闲|组会|会议|一起自习|连续自习|自习.*[两二三四五六]节|适合.*自习|自习.*时间|找.*自习/.test(text)) {
     if (!hasScheduleContext(context)) {
       return { name: "clarify_missing_slot", slots: { slot: getMissingSlot("scheduleContext") } };
     }
@@ -302,7 +303,16 @@ function resolveIntentChinese(message, context = {}) {
       },
     };
   }
-  if (/空教室|空课室|找教室|可用教室|附近/.test(text)) {
+  if (/连续.*空教室|连着.*空教室|连堂.*空教室/.test(text)) {
+    return {
+      name: "search_continuous_empty_rooms",
+      slots: {
+        building: extractBuilding(text),
+        minFreeSections: parseChineseDuration(text, 2),
+      },
+    };
+  }
+  if (/空教室|空课室|找教室|可用教室|附近|找.*教室.*自习|自习.*教室/.test(text)) {
     return {
       name: "search_empty_rooms",
       slots: {
@@ -314,7 +324,9 @@ function resolveIntentChinese(message, context = {}) {
   if (/今天|今日|明天|下一节|还有课|上什么课/.test(text)) {
     return { name: "get_today_courses", slots: {} };
   }
-  if (/老师|教师|任课|教室|课室|课程|科目|查课|班级|行政班|专业|课表|课程表|占用|安排/.test(text)) {
+  // 排除自习/空教室场景，避免“教室”关键词抢占为全校索引查询
+  if (/老师|教师|任课|教室|课室|课程|科目|查课|班级|行政班|专业|课表|课程表|占用|安排/.test(text) &&
+    !/自习|空教室|空课室|可用教室|共同空闲/.test(text)) {
     const type = inferSearchTypeChinese(text);
     const q = stripChineseIntentWords(text);
     if (needsClarification(type, q)) {
@@ -423,12 +435,34 @@ function resolveModernChineseIntent(message, context = {}) {
   if (/隐私|使用说明|故障|小佛|佛课小表|校园服务|帮助|说明/.test(text)) {
     return { name: "rag_search", slots: { q: text } };
   }
+  // 连续自习/共同空闲时间推荐：优先于“连续空教室”与泛化教室搜索
+  if (/自习时间|推荐.*时间|共同空闲|组会|会议|一起自习|连续自习|自习.*[两二三四五六]节|适合.*自习|自习.*时间|找.*自习/.test(text)) {
+    if (!hasScheduleContext(context)) {
+      return { name: "clarify_missing_slot", slots: { slot: getMissingSlot("scheduleContext") } };
+    }
+    return {
+      name: "recommend_meeting_time",
+      slots: {
+        durationSections: /连续/.test(text) ? parseChineseDuration(text, 2) : 2,
+        building: extractBuilding(text),
+      },
+    };
+  }
   if (/连续.*空教室|连着.*空教室|连堂.*空教室/.test(text)) {
     return {
       name: "search_continuous_empty_rooms",
       slots: {
         building: extractBuilding(text),
         minFreeSections: parseChineseDuration(text, 2),
+      },
+    };
+  }
+  if (/空教室|空课室|找教室|可用教室|自习/.test(text)) {
+    return {
+      name: "search_empty_rooms",
+      slots: {
+        building: extractBuilding(text),
+        minFreeSections: /连续/.test(text) ? parseChineseDuration(text, 2) : 1,
       },
     };
   }
@@ -473,7 +507,7 @@ function resolveIntent(message, context = {}) {
   if (/加载失败|数据失败|为什么.*数据|诊断|缓存|release|同步失败|打不开/.test(text)) {
     return { name: "diagnose_data_status", slots: {} };
   }
-  if (/组会|会议|共同空闲|一起自习|自习时间|推荐时间/.test(text)) {
+  if (/组会|会议|共同空闲|一起自习|自习时间|推荐时间|连续自习|自习.*[两二三四五六]节|适合.*自习|自习.*时间|找.*自习/.test(text)) {
     if (!hasScheduleContext(context)) {
       return { name: "clarify_missing_slot", slots: { slot: getMissingSlot("scheduleContext") } };
     }
@@ -763,7 +797,7 @@ function searchEmptyRooms(input = {}, context = {}) {
     rooms,
     summary: result.success
       ? `${query.building || "全部楼栋"} ${query.sections} 共找到 ${result.total || rooms.length} 间可用教室`
-      : "当前没有可用的空教室索引，请先检查 Release Pack。",
+      : "当前没有可用的空教室索引，请先检查课表数据是否已发布或稍后重试。",
     updatedAt: result.updatedAt || "",
     actionUrl: buildActionUrl("/pages/empty-room/empty-room", query),
   });
@@ -994,31 +1028,36 @@ function recommendMeetingTimeV2(input = {}, context = {}) {
   });
 }
 
+const TOOL_HANDLERS = Object.freeze({
+  get_today_courses: getTodayCourses,
+  get_tomorrow_courses: getTomorrowCourses,
+  get_next_course: getNextCourse,
+  get_week_schedule: getWeekSchedule,
+  get_teaching_week: getTeachingWeek,
+  get_term_calendar: getTermCalendar,
+  search_empty_rooms: searchEmptyRooms,
+  search_continuous_empty_rooms: searchContinuousEmptyRooms,
+  search_school_index: searchSchoolIndex,
+  get_schedule_detail: getScheduleDetail,
+  diagnose_data_status: diagnoseDataStatus,
+  explain_personal_import: explainPersonalImport,
+  recommend_meeting_time: recommendMeetingTimeV2,
+  clarify_missing_slot: clarifyMissingSlot,
+  get_campus_weather: getCampusWeather,
+  get_course_weather_advice: getCourseWeatherAdvice,
+  search_campus_place: searchCampusPlace,
+  get_campus_route: getCampusRoute,
+  get_classroom_location: getClassroomLocation,
+  rag_search: ragSearch,
+  generate_image: generateImage,
+});
+
+function listToolNames() {
+  return Object.keys(TOOL_HANDLERS);
+}
+
 function executeTool(name, input = {}, context = {}) {
-  const tools = {
-    get_today_courses: getTodayCourses,
-    get_tomorrow_courses: getTomorrowCourses,
-    get_next_course: getNextCourse,
-    get_week_schedule: getWeekSchedule,
-    get_teaching_week: getTeachingWeek,
-    get_term_calendar: getTermCalendar,
-    search_empty_rooms: searchEmptyRooms,
-    search_continuous_empty_rooms: searchContinuousEmptyRooms,
-    search_school_index: searchSchoolIndex,
-    get_schedule_detail: getScheduleDetail,
-    diagnose_data_status: diagnoseDataStatus,
-    explain_personal_import: explainPersonalImport,
-    recommend_meeting_time: recommendMeetingTimeV2,
-    clarify_missing_slot: clarifyMissingSlot,
-    get_campus_weather: getCampusWeather,
-    get_course_weather_advice: getCourseWeatherAdvice,
-    search_campus_place: searchCampusPlace,
-    get_campus_route: getCampusRoute,
-    get_classroom_location: getClassroomLocation,
-    rag_search: ragSearch,
-    generate_image: generateImage,
-  };
-  const tool = tools[name];
+  const tool = TOOL_HANDLERS[name];
   if (!tool) {
     return { success: false, code: "TOOL_NOT_FOUND" };
   }
@@ -1038,30 +1077,7 @@ function executeTool(name, input = {}, context = {}) {
 }
 
 async function executeToolAsync(name, input = {}, context = {}) {
-  const tools = {
-    get_today_courses: getTodayCourses,
-    get_tomorrow_courses: getTomorrowCourses,
-    get_next_course: getNextCourse,
-    get_week_schedule: getWeekSchedule,
-    get_teaching_week: getTeachingWeek,
-    get_term_calendar: getTermCalendar,
-    search_empty_rooms: searchEmptyRooms,
-    search_continuous_empty_rooms: searchContinuousEmptyRooms,
-    search_school_index: searchSchoolIndex,
-    get_schedule_detail: getScheduleDetail,
-    diagnose_data_status: diagnoseDataStatus,
-    explain_personal_import: explainPersonalImport,
-    recommend_meeting_time: recommendMeetingTimeV2,
-    clarify_missing_slot: clarifyMissingSlot,
-    get_campus_weather: getCampusWeather,
-    get_course_weather_advice: getCourseWeatherAdvice,
-    search_campus_place: searchCampusPlace,
-    get_campus_route: getCampusRoute,
-    get_classroom_location: getClassroomLocation,
-    rag_search: ragSearch,
-    generate_image: generateImage,
-  };
-  const tool = tools[name];
+  const tool = TOOL_HANDLERS[name];
   if (!tool) return { success: false, code: "TOOL_NOT_FOUND" };
   try {
     return sanitizeToolResult(await tool(Object.assign({}, input, { message: input.message || "" }), context));
@@ -1292,6 +1308,7 @@ module.exports = {
   getCourseTimeStatus,
   inferSections,
   inferTargetDate,
+  listToolNames,
   parseClientDate,
   resolveIntent,
   buildPlanForIntent,

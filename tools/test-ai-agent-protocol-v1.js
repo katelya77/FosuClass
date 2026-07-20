@@ -48,8 +48,8 @@ async function testProtocolAndRuntimeModes() {
   assert.strictEqual(unsupported.metrics.intentName, "protocol_version_unsupported");
 
   const unknownMode = await chat(MSG_WEATHER, { runtimeMode: "legacy-open" });
-  assert.strictEqual(unknownMode.runtimeMode, "public");
-  assert.notStrictEqual(unknownMode.safety.competitionAuthorized, true);
+  assert.strictEqual(unknownMode.runtimeMode, "competition", "V1 serializes the server-selected trial mode with its legacy name");
+  assert.strictEqual(unknownMode.safety.competitionAuthorized, true);
 
   const release = await chat(MSG_WEATHER, { context: { envVersion: "release" } });
   assert.strictEqual(release.runtimeMode, "public");

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * 体验版/开发版优先走服务端 AI；正式版走本地多变体 mock。
+ * All online environments use the server Agent Kernel. Client rules are only
+ * entered after an explicit, protocol-compatible fallback condition.
  */
 const assert = require("assert");
 
@@ -58,7 +59,8 @@ function stubTransport(responseFactory) {
   aiTransportRouter.chat = async (input) => {
     agentCallCount += 1;
     lastTransportInput = input;
-    return typeof responseFactory === "function" ? responseFactory(input) : responseFactory;
+    const response = typeof responseFactory === "function" ? responseFactory(input) : responseFactory;
+    return Object.assign({ protocolVersion: "agent.v2" }, response || {});
   };
 }
 
@@ -93,22 +95,23 @@ async function run() {
 
   stubTransport({
     success: true,
-    answer: "这是不该出现的正式版服务端答案",
+    answer: "这是正式版服务端确定性 Agent 的答案",
     metrics: { intentName: "project_qa" },
   });
   const releaseHello = await aiAssistantService.chat("你好", {
     envVersion: "release",
     timezone: "Asia/Shanghai",
   });
-  assert.strictEqual(agentCallCount, 0, "release greeting must stay on local mock rules");
-  assert.match(releaseHello.answer || "", /小佛|课表|空教室|在|嗨|你好/);
-  assert.strictEqual(releaseHello.metrics && releaseHello.metrics.intentName, "smalltalk");
-  assert.strictEqual(releaseHello.safety && releaseHello.safety.externalProviderUsed, false);
+  assert.strictEqual(agentCallCount, 1, "release greeting must use the server Agent Kernel first");
+  assert.match(releaseHello.answer || "", /服务端确定性 Agent/);
+  assert.strictEqual(lastTransportInput.protocolVersion, "agent.v2");
 
   stubTransport({
     success: true,
     answer: "",
     cards: [],
+    fallbackAllowed: true,
+    fallbackReason: "SERVICE_UNAVAILABLE",
     metrics: { intentName: "conversational_help" },
   });
   const developFallback = await aiAssistantService.chat("随便问一句普通话", {
@@ -116,7 +119,8 @@ async function run() {
     timezone: "Asia/Shanghai",
   });
   assert.strictEqual(agentCallCount, 1, "develop should try server agent first");
-  assert.match(developFallback.answer || "", /普通话/, "empty server answer should fall back to local variant");
+  assert.match(developFallback.answer || "", /普通话/, "explicit server fallback should use the local variant");
+  assert.strictEqual(developFallback.fallbackLayer, "client");
 
   stubTransport({
     success: true,
@@ -134,14 +138,15 @@ async function run() {
 
   stubTransport({
     success: true,
-    answer: "服务端不应处理结构化导入帮助",
+    answer: "服务端返回结构化导入帮助",
+    cards: [{ type: "import_guide", title: "个人课表导入", items: [], actions: [] }],
   });
   const trialImportHelp = await aiAssistantService.chat("怎么导入个人课表", {
     envVersion: "trial",
     timezone: "Asia/Shanghai",
   });
-  assert.strictEqual(agentCallCount, 0, "structured import help should stay local for action cards");
-  assert.ok(trialImportHelp.cards && trialImportHelp.cards[0], "import help should keep local card");
+  assert.strictEqual(agentCallCount, 1, "structured import help should use the server Agent Kernel first");
+  assert.ok(trialImportHelp.cards && trialImportHelp.cards[0], "server import help should preserve action-card protocol");
 
   const mockA = mockProvider.generate({
     intent: { name: "conversational_help" },

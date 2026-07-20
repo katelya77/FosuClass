@@ -10,6 +10,7 @@ const scheduleAssistantService = require("./scheduleAssistantService");
 const teachingCalendarService = require("./teachingCalendarService");
 const weatherProvider = require("./weatherProvider");
 const contextManager = require("./xiaofuContextManager");
+const agentCapabilityCompat = require("../shared/agentCapabilityCompat.generated");
 const { courseTimes } = require("../data/courseTimes");
 const {
   getTodayTeachingInfo,
@@ -1245,10 +1246,270 @@ function buildSmalltalkResponse(message, clientContext = {}, route = {}) {
   };
 }
 
-function oracleAgentChat(message, context) {
+const OFFLINE_SKILL_BY_INTENT = Object.freeze({
+  get_today_courses: "today_schedule",
+  get_tomorrow_courses: "tomorrow_schedule",
+  get_next_course: "next_course",
+  next_course_location: "next_course_location",
+  get_week_schedule: "week_schedule",
+  search_school_index: "search_school_schedule",
+  search_empty_rooms: "find_empty_room",
+  search_continuous_empty_rooms: "find_continuous_empty_room",
+  recommend_meeting_time: "recommend_meeting_time",
+  campus_multi_step_advice: "campus_multi_step_advice",
+  diagnose_data_status: "schedule_data_diagnosis",
+  get_teaching_week: "schedule_data_diagnosis",
+  explain_personal_import: "personal_schedule_import_help",
+  get_campus_weather: "campus_weather",
+  get_course_weather_advice: "course_weather_advice",
+  search_campus_place: "campus_place_navigation",
+  get_campus_route: "campus_place_navigation",
+  get_classroom_location: "campus_place_navigation",
+  rag_search: "knowledge_search",
+  project_qa: "knowledge_search",
+  conversational_help: "knowledge_search",
+  clarify_missing_slot: "knowledge_search",
+});
+
+function createClientRunId(prefix) {
+  return `${prefix || "client"}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createAgentRequestMetadata(resolvedContext = {}, options = {}) {
+  const conversationId = safeText(
+    options.conversationId ||
+    resolvedContext.conversation && resolvedContext.conversation.conversationId ||
+    conversationStore.getActiveConversation().conversationId,
+    96
+  );
+  return {
+    protocolVersion: "agent.v2",
+    requestId: safeText(options.requestId, 96) || createClientRunId("req"),
+    conversationId,
+  };
+}
+
+function resolveOfflineCanonicalIntent(message, route = {}, response = {}) {
+  const compact = String(message || "").replace(/[，。！？；：、\s]+/g, "");
+  const localIntentName = response.metrics && response.metrics.intentName || "";
+  if (localIntentName === "navigation" || localIntentName === "navigation_followup") {
+    return "search_campus_place";
+  }
+  if (localIntentName === "school_knowledge") return "rag_search";
+  if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_STATUS) {
+    return /教学周|第几周|周次/.test(compact) ? "get_teaching_week" : "diagnose_data_status";
+  }
+  if (route.intent === xiaofuAgentRouter.INTENTS.HELP && /导入|同步|XLS|Excel/i.test(compact)) {
+    return "explain_personal_import";
+  }
+  if (route.intent === xiaofuAgentRouter.INTENTS.WEATHER) {
+    return route.entities && route.entities.needsPersonalSchedule
+      ? "get_course_weather_advice"
+      : "get_campus_weather";
+  }
+  if (route.intent === xiaofuAgentRouter.INTENTS.PERSONAL_SCHEDULE) {
+    if (/明天|明日/.test(compact)) return "get_tomorrow_courses";
+    if (/下一节|下节/.test(compact)) return "get_next_course";
+    if (/本周|这周|一周|周课表/.test(compact)) return "get_week_schedule";
+    return "get_today_courses";
+  }
+  if (route.intent === xiaofuAgentRouter.INTENTS.NAVIGATION) return "search_campus_place";
+  return agentCapabilityCompat.toCanonicalIntent(route.canonicalIntent || route.intent);
+}
+
+function normalizeClientFallbackSteps(response = {}) {
+  const taskSteps = Array.isArray(response.taskSteps) ? response.taskSteps : [];
+  if (taskSteps.length) {
+    return taskSteps.slice(0, 6).map((item, index) => ({
+      id: safeText(item.key || `offline-${index + 1}`, 48),
+      status: item.status === "failed" ? "failed" : "done",
+      tool: "",
+      durationMs: 0,
+      errorCode: "",
+      retried: false,
+    }));
+  }
+  return (Array.isArray(response.toolCalls) ? response.toolCalls : []).slice(0, 6).map((item, index) => ({
+    id: `offline-tool-${index + 1}`,
+    status: item.status === "failed" ? "failed" : "done",
+    tool: safeText(item.name, 80),
+    durationMs: 0,
+    errorCode: item.status === "failed" ? safeText(item.code, 80) : "",
+    retried: false,
+  }));
+}
+
+function canonicalizeFallbackCards(cards, canonicalIntent) {
+  const legacyTypeMap = {
+    personal_schedule: "schedule",
+    schedule_result: "schedule",
+    schedule_status: "diagnosis",
+    weather_card: "weather",
+    import_guide: "guide",
+    help: "guide",
+    school_knowledge: "guide",
+    navigation: "generic",
+    clarification: "generic",
+  };
+  const requiredTypeByIntent = {
+    get_today_courses: "schedule",
+    get_tomorrow_courses: "schedule",
+    get_next_course: "schedule",
+    get_week_schedule: "schedule",
+    next_course_location: "schedule",
+    diagnose_data_status: "diagnosis",
+    get_teaching_week: "generic",
+    get_term_calendar: "generic",
+    explain_personal_import: "guide",
+    get_campus_weather: "weather",
+    get_course_weather_advice: "weather",
+    search_campus_place: "generic",
+    get_campus_route: "generic",
+    get_classroom_location: "generic",
+    rag_search: "guide",
+    project_qa: "guide",
+    conversational_help: "guide",
+    clarify_missing_slot: "generic",
+  };
+  return (Array.isArray(cards) ? cards : []).map((card) => {
+    const source = card && typeof card === "object" && !Array.isArray(card) ? card : {};
+    const type = requiredTypeByIntent[canonicalIntent] || legacyTypeMap[source.type] || source.type || "generic";
+    return Object.assign({}, source, { type });
+  });
+}
+
+function standardizeClientFallback(response, message, route, reason, metadata) {
+  const source = response && typeof response === "object" ? response : {};
+  const canonicalIntent = resolveOfflineCanonicalIntent(message, route, source);
+  const fallbackReason = safeText(reason || "CLIENT_OFFLINE_FALLBACK", 120);
+  return Object.assign({}, source, {
+    protocolVersion: "agent.v2",
+    requestId: metadata.requestId,
+    conversationId: metadata.conversationId,
+    runId: createClientRunId("offline"),
+    status: source.success === false ? "failed" : "degraded",
+    success: source.success !== false,
+    fallback: true,
+    fallbackLayer: "client",
+    fallbackReason,
+    externalProviderUsed: false,
+    intent: canonicalIntent,
+    confidence: Number(route && route.confidence || 0),
+    slots: Object.assign({}, route && route.entities || {}),
+    skill: {
+      id: OFFLINE_SKILL_BY_INTENT[canonicalIntent] || "knowledge_search",
+      version: "1.0.0",
+    },
+    plan: [],
+    steps: normalizeClientFallbackSteps(source),
+    observations: [],
+    cards: canonicalizeFallbackCards(source.cards, canonicalIntent),
+    suggestions: Array.isArray(source.suggestions) ? source.suggestions : [],
+    toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls : [],
+    safety: Object.assign({}, source.safety || {}, {
+      externalProviderUsed: false,
+      fallbackReason,
+    }),
+    metrics: Object.assign({}, source.metrics || {}, {
+      canonicalIntent,
+      externalProviderUsed: false,
+      fallback: true,
+      fallbackLayer: "client",
+    }),
+    errors: source.errors && Array.isArray(source.errors)
+      ? source.errors
+      : [{ code: fallbackReason }],
+    serverTime: "",
+  });
+}
+
+function buildCachedPersonalScheduleResponse(message, clientContext = {}, route = {}) {
+  const summary = clientContext.currentScheduleSummary || {};
+  const courses = Array.isArray(summary.courses) ? summary.courses : [];
+  if (!summary.enabled || !courses.length) {
+    return buildPersonalScheduleClarificationResponse(message, clientContext, route);
+  }
+  const canonicalIntent = resolveOfflineCanonicalIntent(message, route);
+  const currentWeek = Number(clientContext.currentTeachingWeek || 0);
+  const todayWeekday = Number(clientContext.todayWeekday || 0);
+  let targetWeekday = todayWeekday;
+  let targetWeek = currentWeek;
+  if (canonicalIntent === "get_tomorrow_courses") {
+    targetWeekday = todayWeekday >= 7 ? 1 : todayWeekday + 1;
+    if (todayWeekday >= 7 && targetWeek) targetWeek += 1;
+  }
+  let matched = courses.filter((course) => courseMatchesTeachingWeek(course, targetWeek));
+  if (canonicalIntent === "get_today_courses" || canonicalIntent === "get_tomorrow_courses") {
+    matched = matched.filter((course) => Number(course.weekday || 0) === targetWeekday);
+  } else if (canonicalIntent === "get_next_course") {
+    const next = findNextCourseForWeather(clientContext);
+    matched = next ? [next] : [];
+  }
+  matched = matched.slice().sort((left, right) => {
+    const weekdayDiff = Number(left.weekday || 0) - Number(right.weekday || 0);
+    return weekdayDiff || Number(left.startSection || 0) - Number(right.startSection || 0);
+  });
+  const label = canonicalIntent === "get_tomorrow_courses"
+    ? "明天"
+    : (canonicalIntent === "get_week_schedule" ? "本周" : (canonicalIntent === "get_next_course" ? "下一节" : "今天"));
+  const items = matched.slice(0, 12).map((course) => ({
+    title: safeText(course.courseName || "课程", 80),
+    subtitle: [
+      Number(course.weekday || 0) ? `周${"一二三四五六日"[Number(course.weekday || 0) - 1] || course.weekday}` : "",
+      course.startSection ? `第${course.startSection}-${course.endSection || course.startSection}节` : "",
+      safeText(course.classroom || course.roomName, 60),
+      safeText(course.teacherName, 40),
+    ].filter(Boolean).join(" · "),
+    value: "",
+  }));
+  return {
+    success: true,
+    answer: matched.length
+      ? `已从本机缓存的个人课表中找到${label} ${matched.length} 条课程安排。`
+      : `本机缓存的个人课表中没有找到${label}的课程安排。`,
+    cards: [{
+      type: "personal_schedule",
+      title: `${label}个人课表`,
+      subtitle: "离线读取本机已缓存课表",
+      badges: ["离线降级", "本机缓存"],
+      items,
+      actions: [],
+    }],
+    suggestions: ["查看本周课表", "下一节课在哪里", "打开个人课表同步"],
+    toolCalls: [{ name: canonicalIntent, status: "success", summary: "读取本机脱敏课表缓存" }],
+    evidence: {
+      verified: true,
+      complete: true,
+      term: clientContext.term || clientContext.selectedTerm || summary.term || "",
+      currentWeek: targetWeek || "",
+      releaseVersion: clientContext.releaseVersion || "",
+      checkedAt: new Date().toISOString(),
+      sources: [summary.source || "local-personal-schedule-cache"],
+    },
+    safety: {
+      provider: "local-personal-schedule-cache",
+      resolvedProvider: "local-personal-schedule-cache",
+      externalProviderUsed: false,
+      mode: "offline-fallback",
+    },
+    metrics: {
+      intentName: "personal_schedule",
+      canonicalIntent,
+      latencyMs: 0,
+      externalProviderUsed: false,
+      resultCount: matched.length,
+      routeConfidence: route.confidence || 0,
+    },
+  };
+}
+
+function oracleAgentChat(message, context, metadata = {}) {
   return request.post("/api/ai/agent/chat", {
     message: redactSensitiveText(message).slice(0, 2000),
     context: context || buildClientContext(),
+    protocolVersion: metadata.protocolVersion || "agent.v2",
+    requestId: metadata.requestId || "",
+    conversationId: metadata.conversationId || "",
   }, {
     showLoading: false,
     silentError: true,
@@ -1262,35 +1523,21 @@ function oracleAgentChat(message, context) {
 
 async function callServerAgent(message, resolvedContext, options = {}) {
   const callbacks = options && options.callbacks || {};
+  const metadata = options.agentRequest || createAgentRequestMetadata(resolvedContext, options);
   reportPipelineStatus(callbacks, "正在调用小佛智能体…", "agent");
   return aiTransportRouter.chat({
     message,
     context: resolvedContext,
-    history: getAiHistory(resolvedContext.conversation && resolvedContext.conversation.conversationId),
+    protocolVersion: metadata.protocolVersion,
+    requestId: metadata.requestId,
+    conversationId: metadata.conversationId,
     oracleChat: oracleAgentChat,
     redactSensitiveText,
     options,
   });
 }
 
-async function tryServerAgentThenLocal(message, resolvedContext, options, localBuilder) {
-  try {
-    const serverResponse = await callServerAgent(message, resolvedContext, options);
-    if (hasUsableAgentAnswer(serverResponse)) {
-      const metrics = Object.assign({}, serverResponse.metrics || {}, {
-        clientAgentPreferred: true,
-        externalProviderUsed: serverResponse.metrics && serverResponse.metrics.externalProviderUsed === true
-          || serverResponse.safety && serverResponse.safety.externalProviderUsed === true,
-      });
-      return Object.assign({}, serverResponse, { metrics });
-    }
-  } catch (error) {
-    // Fall back to local mock rules when agent/provider is unavailable.
-  }
-  return localBuilder();
-}
-
-async function chat(message, context, options = {}) {
+async function offlineChat(message, context, options = {}) {
   const resolvedContext = context || buildClientContext();
   const localContext = Object.assign({}, resolvedContext, {
     contextSlots: resolvedContext.contextSlots ||
@@ -1299,8 +1546,6 @@ async function chat(message, context, options = {}) {
   });
   const callbacks = options && options.callbacks || {};
   const route = xiaofuAgentRouter.routeMessage(message, localContext);
-  const envVersion = resolvedContext.envVersion || getMiniProgramEnvVersion();
-  const aiEnhanced = isAiEnhancedClientEnv(envVersion);
   reportPipelineStatus(callbacks, "正在匹配查询内容…", "understand");
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_STATUS) {
@@ -1310,13 +1555,6 @@ async function chat(message, context, options = {}) {
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.HELP) {
-    // 体验版/开发版：通用帮助与自我介绍优先走服务端 AI；结构化导入/浮窗说明保留本地卡片。
-    if (aiEnhanced && !isStructuredLocalHelp(message)) {
-      return tryServerAgentThenLocal(message, resolvedContext, options, () => {
-        reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
-        return buildHelpResponse(message, localContext, route);
-      });
-    }
     reportPipelineStatus(callbacks, "正在查找使用说明…", "help");
     reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildHelpResponse(message, localContext, route);
@@ -1329,7 +1567,7 @@ async function chat(message, context, options = {}) {
   if (route.intent === xiaofuAgentRouter.INTENTS.PERSONAL_SCHEDULE) {
     reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
     if (route.shouldUsePersonalScheduleTool) {
-      return callServerAgent(message, resolvedContext, options);
+      return buildCachedPersonalScheduleResponse(message, localContext, route);
     }
     reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildPersonalScheduleClarificationResponse(message, localContext, route);
@@ -1346,7 +1584,7 @@ async function chat(message, context, options = {}) {
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_QUERY) {
     reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
     if (route.shouldUsePersonalScheduleTool) {
-      return callServerAgent(message, resolvedContext, options);
+      return buildCachedPersonalScheduleResponse(message, localContext, route);
     }
     const scheduleResponse = await scheduleAssistantService.tryHandleScheduleQuery(message, localContext);
     if (scheduleResponse) return scheduleResponse;
@@ -1358,10 +1596,7 @@ async function chat(message, context, options = {}) {
     if (navigationResponse) return navigationResponse;
     const knowledgeResponse = ragAnswerBuilder.tryBuildKnowledgeAnswer(message, localContext);
     if (knowledgeResponse) return knowledgeResponse;
-    // 体验版：本地知识未命中时交给服务端 agent 组织表达，避免直接模板化。
-    if (aiEnhanced) {
-      return tryServerAgentThenLocal(message, resolvedContext, options, () => buildSmalltalkResponse(message, localContext, route));
-    }
+    return buildSmalltalkResponse(message, localContext, route);
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.NAVIGATION) {
@@ -1374,18 +1609,122 @@ async function chat(message, context, options = {}) {
   }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SMALLTALK) {
-    // 体验版/开发版：寒暄、自我介绍、闲聊优先走 AI 模型；正式版走本地多变体 mock。
-    if (aiEnhanced) {
-      return tryServerAgentThenLocal(message, resolvedContext, options, () => {
-        reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
-        return buildSmalltalkResponse(message, localContext, route);
-      });
-    }
     reportPipelineStatus(callbacks, "正在整理查询结果…", "compose");
     return buildSmalltalkResponse(message, localContext, route);
   }
 
-  return callServerAgent(message, resolvedContext, options);
+  return buildSmalltalkResponse(message, localContext, route);
+}
+
+function isCompatibleAgentResponse(response) {
+  return Boolean(
+    response &&
+    typeof response === "object" &&
+    agentCapabilityCompat.PROTOCOL_VERSIONS.indexOf(response.protocolVersion) >= 0
+  );
+}
+
+function isClientFallbackTransportError(error) {
+  const code = String(error && (error.code || error.reasonCode || error.legacyCode) || "").toUpperCase();
+  if ([
+    "NETWORK",
+    "NETWORK_UNAVAILABLE",
+    "TIMEOUT",
+    "REQUEST_TIMEOUT",
+    "HTTP_5XX",
+    "SERVICE_UNAVAILABLE",
+    "ECONNRESET",
+    "ECONNREFUSED",
+  ].indexOf(code) >= 0) return true;
+  if (code) return false;
+  if (typeof wx === "undefined" || typeof wx.request !== "function") return true;
+  const message = String(error && (error.message || error.errMsg) || "").toLowerCase();
+  return /network|timeout|timed out|unavailable|offline|网络|超时|服务不可用/.test(message);
+}
+
+function resolveServerFallbackReason(response) {
+  const firstError = response && Array.isArray(response.errors) ? response.errors[0] : null;
+  return safeText(
+    response && response.fallbackReason ||
+    firstError && (firstError.code || firstError.message) ||
+    "SERVER_FALLBACK_ALLOWED",
+    120
+  );
+}
+
+function normalizeOnlineAgentResponse(response) {
+  const source = response || {};
+  const rawIntent = typeof source.intent === "string"
+    ? source.intent
+    : source.intent && source.intent.name || source.metrics && (source.metrics.canonicalIntent || source.metrics.intentName);
+  const canonicalIntent = agentCapabilityCompat.toCanonicalIntent(rawIntent);
+  const externalProviderUsed = source.externalProviderUsed === true ||
+    source.safety && source.safety.externalProviderUsed === true ||
+    source.metrics && source.metrics.externalProviderUsed === true;
+  return Object.assign({}, source, {
+    externalProviderUsed,
+    metrics: Object.assign({}, source.metrics || {}, {
+      canonicalIntent,
+      externalProviderUsed,
+    }),
+  });
+}
+
+async function buildClientFallback(message, resolvedContext, options, metadata, reason) {
+  const localContext = Object.assign({}, resolvedContext, {
+    contextSlots: resolvedContext.contextSlots ||
+      resolvedContext.conversation && resolvedContext.conversation.contextSlots ||
+      {},
+  });
+  const route = xiaofuAgentRouter.routeMessage(message, localContext);
+  let response;
+  try {
+    response = await offlineChat(message, resolvedContext, Object.assign({}, options, {
+      offlineReason: reason,
+    }));
+  } catch (offlineError) {
+    response = buildSmalltalkResponse(message, localContext, route);
+    response.answer = "当前服务端和本地数据工具暂时不可用。你仍可打开课表、个人课表同步、校园地图或空教室页面查看已缓存内容。";
+    response.suggestions = ["打开全校课表", "打开个人课表同步", "打开校园地图"];
+  }
+  return standardizeClientFallback(response, message, route, reason, metadata);
+}
+
+async function chat(message, context, options = {}) {
+  const resolvedContext = context || buildClientContext();
+  const metadata = createAgentRequestMetadata(resolvedContext, options);
+  let serverResponse;
+  try {
+    serverResponse = await callServerAgent(message, resolvedContext, Object.assign({}, options, {
+      agentRequest: metadata,
+    }));
+  } catch (error) {
+    if (!isClientFallbackTransportError(error)) throw error;
+    const reason = safeText(error && (error.code || error.reasonCode || error.legacyCode), 120) || "NETWORK_UNAVAILABLE";
+    return buildClientFallback(message, resolvedContext, options, metadata, reason);
+  }
+
+  // Client credential blocking is itself the terminal safe response and never
+  // crossed the server boundary.
+  if (serverResponse && serverResponse.fallbackLayer === "client") {
+    return normalizeOnlineAgentResponse(serverResponse);
+  }
+
+  if (!isCompatibleAgentResponse(serverResponse)) {
+    return buildClientFallback(message, resolvedContext, options, metadata, "PROTOCOL_INCOMPATIBLE");
+  }
+
+  if (serverResponse.fallbackAllowed === true) {
+    return buildClientFallback(
+      message,
+      resolvedContext,
+      options,
+      metadata,
+      resolveServerFallbackReason(serverResponse)
+    );
+  }
+
+  return normalizeOnlineAgentResponse(serverResponse);
 }
 
 module.exports = {
@@ -1411,6 +1750,7 @@ module.exports = {
   isAiEnhancedClientEnv,
   isPersonalContextAllowed,
   isStructuredLocalHelp,
+  offlineChat,
   pausePersonalization,
   pickResponseVariant,
   redactSensitiveText,

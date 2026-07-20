@@ -63,12 +63,12 @@ function normalizeProviderName(name) {
 }
 
 function getProviderChain(runtimeMode = "public", runtimeConfig = {}) {
-  if (runtimeMode !== "competition") return DEFAULT_PUBLIC_CHAIN.slice();
+  if (runtimeMode === "public") return DEFAULT_PUBLIC_CHAIN.slice();
   const explicit = parseChain(configValue(runtimeConfig, "AI_PROVIDER_CHAIN", process.env.AI_PROVIDER_CHAIN || ""), []);
   if (explicit.length) return explicit;
   const configured = normalizeProviderName(configValue(runtimeConfig, "AI_PROVIDER", ""));
   if (configured && configured !== "mock") {
-    return [configured].concat(DEFAULT_COMPETITION_CHAIN.filter((item) => item !== configured));
+    return [configured, "mock"];
   }
   return DEFAULT_COMPETITION_CHAIN.slice();
 }

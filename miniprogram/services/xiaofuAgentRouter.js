@@ -1,5 +1,9 @@
 ﻿const scheduleIntentParser = require("./scheduleIntentParser");
 const ragRetriever = require("./ragRetriever");
+const agentCapabilityCompat = require("../shared/agentCapabilityCompat.generated");
+
+// This module is the Offline Fallback / V1 Compatibility Router. Online
+// semantic decisions belong exclusively to the server Agent Kernel.
 
 const INTENTS = {
   SCHEDULE_QUERY: "schedule_query",
@@ -81,8 +85,9 @@ function getContextSlots(clientContext = {}) {
 }
 
 function baseRoute(intent, patch = {}) {
-  return Object.assign({
+  const route = Object.assign({
     intent,
+    canonicalIntent: agentCapabilityCompat.toCanonicalIntent(intent),
     confidence: 0.5,
     entities: {},
     missingFields: [],
@@ -94,6 +99,8 @@ function baseRoute(intent, patch = {}) {
     replyChannel: "chat",
     reason: "",
   }, patch || {});
+  route.canonicalIntent = agentCapabilityCompat.toCanonicalIntent(route.canonicalIntent || route.intent);
+  return route;
 }
 
 function isScheduleStatusQuery(message) {
@@ -296,4 +303,5 @@ module.exports = {
   isWeatherQuery,
   resolveWeatherEntities,
   routeMessage,
+  toCanonicalIntent: agentCapabilityCompat.toCanonicalIntent,
 };

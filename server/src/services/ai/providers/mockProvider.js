@@ -579,6 +579,7 @@ function buildMultiStep(toolResults = []) {
 }
 
 function buildLocalRuleReply(rule = {}, message = "", intentName = "") {
+  rule = rule && typeof rule === "object" && !Array.isArray(rule) ? rule : {};
   const answer = String(rule.reply || rule.body || "").trim();
   if (!answer) return null;
   // 对话类规则回复只作为候选之一，避免正式版每次同一模板。
@@ -640,6 +641,7 @@ function generate({ intent, toolResults, message, context, localRule }) {
     ? buildLocalRuleReply(localRule, message || "", name)
     : null;
   const payload = name === "search_empty_rooms" ? buildEmptyRoom(first || {}) :
+    name === "search_continuous_empty_rooms" ? buildEmptyRoom(first || {}) :
     name === "get_today_courses" ? buildTodayCourses(first || {}) :
     name === "get_tomorrow_courses" ? buildTomorrowCourses(first || {}) :
     name === "get_next_course" ? buildNextCourse(first || {}) :

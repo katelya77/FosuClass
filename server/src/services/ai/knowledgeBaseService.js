@@ -533,23 +533,30 @@ function scoreText(query, target, keywords = []) {
 function matchRule(rule, query) {
   const text = normalizeText(query);
   const normalized = text.toLowerCase();
-  let score = Number(rule.priority || 0) / 100;
+  let score = 0;
+  let matched = false;
   const matchedKeywords = [];
   normalizeArray(rule.keywords).concat(normalizeArray(rule.synonyms)).forEach((keyword) => {
     const key = keyword.toLowerCase();
     if (key && normalized.includes(key)) {
+      matched = true;
       matchedKeywords.push(keyword);
       score += 5;
     }
   });
   normalizeArray(rule.patterns).forEach((pattern) => {
     try {
-      if (new RegExp(pattern, "i").test(text)) score += 8;
+      if (new RegExp(pattern, "i").test(text)) {
+        matched = true;
+        score += 8;
+      }
     } catch (error) {
       // Ignore invalid admin-authored regex.
     }
   });
-  return score > 0.5 ? { rule, score, matchedKeywords } : null;
+  if (!matched) return null;
+  score += Math.max(0, Math.min(2, Number(rule.priority || 0) / 100));
+  return { rule, score, matchedKeywords };
 }
 
 function searchKnowledge(input = {}) {

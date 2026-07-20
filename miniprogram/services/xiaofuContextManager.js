@@ -1,4 +1,5 @@
 const conversationStore = require("./conversationStore");
+const agentCapabilityCompat = require("../shared/agentCapabilityCompat.generated");
 
 const SCHEDULE_TARGET_TYPES = ["class", "teacher", "room", "classroom", "course"];
 
@@ -78,12 +79,78 @@ function mergeContextSlots(current, patch) {
   return normalizeContextSlots(Object.assign({}, normalizeContextSlots(current), patch || {}));
 }
 
+function getResponseCanonicalIntent(response = {}) {
+  const metrics = response.metrics || {};
+  const rawIntent = typeof response.intent === "string"
+    ? response.intent
+    : response.intent && response.intent.name || metrics.canonicalIntent || metrics.intentName;
+  return agentCapabilityCompat.toCanonicalIntent(rawIntent);
+}
+
+function buildProtocolSlotPatch(slots, canonicalIntent, response = {}) {
+  const source = slots && typeof slots === "object" && !Array.isArray(slots) ? slots : {};
+  const patch = { lastIntent: canonicalIntent };
+  const targetType = normalizeTargetType(source.targetType || source.type);
+  const targetName = source.targetName || source.name || source.keyword || "";
+  if (targetType) patch.lastTargetType = targetType;
+  if (targetName) patch.lastTargetName = targetName;
+  if (Number.isFinite(Number(source.week))) patch.lastWeek = Number(source.week);
+  if (Number.isFinite(Number(source.weekday))) patch.lastWeekday = Number(source.weekday);
+  if (response.answer || response.cards) {
+    patch.lastQueryResult = {
+      title: String(source.title || targetName || "").slice(0, 120),
+      total: Number(response.metrics && response.metrics.resultCount || 0) || 0,
+      noCourse: response.metrics && Number(response.metrics.resultCount) === 0,
+    };
+  }
+  const evidence = response.evidence || {};
+  const evidenceSource = Array.isArray(evidence.sources) ? evidence.sources[0] : evidence.source;
+  if (evidenceSource) patch.lastSource = String(evidenceSource).slice(0, 160);
+  return patch;
+}
+
 function updateFromResponse(current, response) {
   const source = response || {};
   if (source.contextSlots) {
     return mergeContextSlots(current, source.contextSlots);
   }
   const metrics = source.metrics || {};
+  const canonicalIntent = getResponseCanonicalIntent(source);
+  const protocolSlots = source.slots && typeof source.slots === "object" && !Array.isArray(source.slots)
+    ? source.slots
+    : {};
+  const canonicalScheduleIntents = [
+    "get_today_courses",
+    "get_tomorrow_courses",
+    "get_next_course",
+    "get_week_schedule",
+    "search_school_index",
+    "get_schedule_detail",
+    "next_course_location",
+  ];
+  if (canonicalScheduleIntents.indexOf(canonicalIntent) >= 0) {
+    return mergeContextSlots(current, buildProtocolSlotPatch(protocolSlots, canonicalIntent, source));
+  }
+  if (["search_campus_place", "get_campus_route", "get_classroom_location"].indexOf(canonicalIntent) >= 0) {
+    const navigationSource = Object.assign({}, source, {
+      title: protocolSlots.placeName || protocolSlots.location || protocolSlots.targetName || "",
+      query: protocolSlots.query || "",
+    });
+    return mergeContextSlots(current, Object.assign(
+      buildNavigationPatch(navigationSource),
+      buildProtocolSlotPatch(protocolSlots, canonicalIntent, source)
+    ));
+  }
+  if (["rag_search", "project_qa"].indexOf(canonicalIntent) >= 0) {
+    const knowledgeSource = Object.assign({}, source, {
+      title: protocolSlots.title || protocolSlots.query || "",
+      query: protocolSlots.query || "",
+    });
+    return mergeContextSlots(current, Object.assign(
+      buildKnowledgePatch(knowledgeSource),
+      buildProtocolSlotPatch(protocolSlots, canonicalIntent, source)
+    ));
+  }
   if (["schedule_status", "help", "smalltalk", "ambiguous", "app_navigation", "personal_schedule", "quick_action"].indexOf(metrics.intentName) >= 0) {
     return normalizeContextSlots(current);
   }

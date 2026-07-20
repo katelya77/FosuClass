@@ -2,6 +2,8 @@ const assert = require("assert");
 
 process.env.AI_AGENT_ENABLED = "false";
 process.env.AI_PROVIDER = "mock";
+// 连续自习推荐依赖脱敏个人课表摘要；与线上 AI_ALLOW_PERSONAL_CONTEXT 闸门一致
+process.env.AI_ALLOW_PERSONAL_CONTEXT = "true";
 
 const agentService = require("../server/src/services/ai/agentService");
 const toolRegistry = require("../server/src/services/ai/toolRegistry");
@@ -31,12 +33,15 @@ async function testAgentEvidenceAndSteps() {
     },
   });
   assert.strictEqual(response.success, true);
+  assert.strictEqual(String(response.intent && response.intent.name || ""), "recommend_meeting_time");
   assert(Array.isArray(response.taskSteps), "AI response should include task steps");
   assert(response.taskSteps.some((item) => item.key === "understand"), "AI response should mark requirement understanding");
   assert(response.taskSteps.some((item) => item.key === "complete"), "AI response should mark completion");
   assert(response.evidence && response.evidence.term === "2025-2026-2", "AI evidence should include term");
   assert.strictEqual(response.evidence.releaseVersion, "test-release");
-  assert.strictEqual(response.evidence.toolCount, response.toolCalls.length);
+  // V2 Evidence.toolCount 只统计成功的事实工具，不等于公开展示的全部 toolCalls 条数
+  assert(response.evidence.toolCount >= 1, "AI evidence should count at least one successful fact tool");
+  assert(Array.isArray(response.toolCalls) && response.toolCalls.length >= response.evidence.toolCount);
   assert(!JSON.stringify(response).includes("[object Object]"), "AI response must not render object placeholders");
 }
 

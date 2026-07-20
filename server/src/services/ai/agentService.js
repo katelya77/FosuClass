@@ -9,9 +9,63 @@ const runtimeModeService = require("./runtimeModeService");
 const providerChainService = require("./providerChainService");
 const providerConfigService = require("./providerConfigService");
 const knowledgeBaseService = require("./knowledgeBaseService");
+const capabilityManifestService = require("./capabilityManifestService");
+const { defaultKernel: agentKernel } = require("./agentKernel");
+const agentTraceRecorder = require("./agentTraceRecorder");
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function recordEarlyTrace(payload = {}) {
+  return agentTraceRecorder.record({
+    runId: payload.runId,
+    requestId: payload.requestId,
+    conversationId: payload.conversationId,
+    runtimeMode: payload.runtimeMode || "public",
+    intent: payload.intent || "conversational_help",
+    selectedSkill: payload.selectedSkill || "",
+    stepCount: 0,
+    toolCalls: payload.toolCalls || [],
+    steps: [],
+    totalDurationMs: Math.max(0, Date.now() - (payload.startTime || Date.now())),
+    providerUsed: false,
+    fallbackLayer: payload.fallbackLayer || "server",
+    fallbackReason: payload.fallbackReason || "",
+    evidenceComplete: payload.evidenceComplete === true,
+    errorCode: payload.errorCode || "",
+  });
+}
+
+function buildMinimalProviderContext(context = {}) {
+  const summary = context.currentScheduleSummary || {};
+  return safetyGuard.sanitizeAgentContext({
+    term: context.term,
+    releaseVersion: context.releaseVersion,
+    envVersion: context.envVersion,
+    miniprogramVersion: context.miniprogramVersion,
+    currentPage: context.currentPage,
+    clientTime: context.clientTime,
+    clientLocalTime: context.clientLocalTime,
+    timezoneOffsetMinutes: context.timezoneOffsetMinutes,
+    clientTimestampMs: context.clientTimestampMs,
+    timezone: context.timezone,
+    currentTeachingWeek: context.currentTeachingWeek,
+    todayWeekday: context.todayWeekday,
+    todayDate: context.todayDate,
+    termStartDate: context.termStartDate,
+    totalWeeks: context.totalWeeks,
+    userPreferences: context.userPreferences,
+    currentScheduleSummary: {
+      enabled: false,
+      targetType: "personal-redacted",
+      targetName: "personal schedule",
+      term: summary.term || context.term || "",
+      source: summary.source || "",
+      courseCount: Number(summary.courseCount || (Array.isArray(summary.courses) ? summary.courses.length : 0)) || 0,
+      courses: [],
+    },
+  });
 }
 
 function stableAction(action) {
@@ -134,30 +188,9 @@ function getItemCount(toolCalls) {
   }, 0);
 }
 
-const FACT_TOOL_INTENTS = new Set([
-  "clarify_missing_slot",
-  "get_today_courses",
-  "get_tomorrow_courses",
-  "get_next_course",
-  "get_week_schedule",
-  "get_teaching_week",
-  "get_term_calendar",
-  "search_empty_rooms",
-  "search_continuous_empty_rooms",
-  "search_school_index",
-  "get_schedule_detail",
-  "recommend_meeting_time",
-  "diagnose_data_status",
-  "explain_personal_import",
-  "get_campus_weather",
-  "get_course_weather_advice",
-  "search_campus_place",
-  "get_campus_route",
-  "get_classroom_location",
-  "next_course_location",
-  "rag_search",
-  "campus_multi_step_advice",
-]);
+const FACT_TOOL_INTENTS = new Set(Object.values(capabilityManifestService.getManifest().intents)
+  .filter((item) => item.factualTask)
+  .map((item) => item.id));
 
 function isProjectKnowledgeIntent(intent) {
   const name = intent && intent.name;
@@ -214,6 +247,12 @@ function evaluateProviderPolicy(intent, toolCalls, policy, providerName, runtime
   const intentName = intent && intent.name || "generic";
   const agentEnabled = String(configValue(runtimeConfig, "AI_AGENT_ENABLED", "false")).toLowerCase() !== "false";
 
+  if (capabilityManifestService.normalizeRuntimeMode(runtimeMode) === "public") {
+    return { useExternal: false, reason: "public_runtime_forbids_external_provider" };
+  }
+  if (!capabilityManifestService.isExternalProviderAllowed(intentName, runtimeMode)) {
+    return { useExternal: false, reason: "capability_manifest_forbids_external_provider" };
+  }
   if (!agentEnabled) return { useExternal: false, reason: "AI_AGENT_ENABLED=false" };
   if (provider === "mock") return { useExternal: false, reason: "AI_PROVIDER=mock" };
   if (normalizedPolicy === "tool-only") return { useExternal: false, reason: "AI_PROVIDER_POLICY=tool-only" };
@@ -311,7 +350,15 @@ function collectEvidenceValue(result, keyNames, target, limit) {
   });
 }
 
-function buildEvidence(toolCalls = [], context = {}) {
+function buildEvidence(toolCalls = [], context = {}, intent = null) {
+  const calls = Array.isArray(toolCalls) ? toolCalls : [];
+  const successfulCalls = calls.filter((call) => {
+    const result = call && call.result;
+    return call && call.status !== "failed" && call.status !== "skipped" && (!result || result.success !== false);
+  });
+  // 只有该 intent 的事实工具成功才算证据；诊断类辅助工具成功不能冒充事实证据。
+  const successfulEvidenceCalls = successfulCalls.filter((call) =>
+    capabilityManifestService.isEvidenceToolCall(intent && intent.name || intent, call));
   const terms = [];
   const releaseVersions = [];
   const weeks = [];
@@ -327,7 +374,7 @@ function buildEvidence(toolCalls = [], context = {}) {
     collectEvidenceValue(context.currentScheduleSummary, ["term", "semester"], terms, 32);
     collectEvidenceValue(context.currentScheduleSummary, ["source"], sources, 80);
   }
-  (Array.isArray(toolCalls) ? toolCalls : []).forEach((call) => {
+  successfulCalls.forEach((call) => {
     const result = call && call.result;
     collectEvidenceValue(result, ["term", "semester"], terms, 32);
     collectEvidenceValue(result, ["releaseVersion", "version"], releaseVersions, 64);
@@ -340,7 +387,9 @@ function buildEvidence(toolCalls = [], context = {}) {
     releaseVersion: releaseVersions[0] || "",
     currentWeek: weeks[0] || "",
     sources: sources.slice(0, 6),
-    toolCount: Array.isArray(toolCalls) ? toolCalls.length : 0,
+    toolCount: successfulEvidenceCalls.length,
+    attemptedToolCount: calls.length,
+    complete: successfulEvidenceCalls.length > 0,
   };
 }
 
@@ -353,6 +402,11 @@ function buildPublicEvidence(evidence) {
     currentWeek: source.currentWeek || "",
     toolCount: Number(source.toolCount || 0) || 0,
     verified: Number(source.toolCount || 0) > 0,
+    complete: source.complete === true || Number(source.toolCount || 0) > 0,
+    sources: (Array.isArray(source.sources) ? source.sources : [])
+      .map((item) => safetyGuard.redactSensitiveText(String(item || "")).slice(0, 80))
+      .filter(Boolean)
+      .slice(0, 6),
   };
 }
 
@@ -392,6 +446,15 @@ function sanitizePublicToolCall(toolCall) {
   };
 }
 
+function sanitizePublicSkill(skill) {
+  if (!skill) return null;
+  return {
+    id: safetyGuard.redactSensitiveText(String(skill.id || skill)).slice(0, 80),
+    version: safetyGuard.redactSensitiveText(String(skill.version || "")).slice(0, 32),
+    description: sanitizePublicText(skill.description, "").slice(0, 180),
+  };
+}
+
 function sanitizePublicResponse(response) {
   const evidence = buildPublicEvidence(response.evidence);
   const sourceSafety = response.safety || {};
@@ -401,6 +464,7 @@ function sanitizePublicResponse(response) {
     cards: (Array.isArray(response.cards) ? response.cards : []).map(sanitizePublicCard),
     suggestions: (Array.isArray(response.suggestions) ? response.suggestions : []).map((item) => sanitizePublicText(item, "")).filter(Boolean).slice(0, 6),
     toolCalls: (Array.isArray(response.toolCalls) ? response.toolCalls : []).map(sanitizePublicToolCall),
+    skill: sanitizePublicSkill(response.skill),
     evidence,
     safety: {
       redacted: true,
@@ -408,6 +472,7 @@ function sanitizePublicResponse(response) {
       mode: sourceSafety.mode || "tool-grounded",
       externalProviderUsed: false,
       fallbackReason: sourceSafety.fallbackReason ? "已使用本地规则" : "",
+      fallbackLayer: response.fallbackLayer || "none",
       pendingClarification: sourceSafety.pendingClarification || null,
       clearPendingClarification: sourceSafety.clearPendingClarification === true,
     },
@@ -419,7 +484,9 @@ function sanitizePublicResponse(response) {
       fallback: sourceMetrics.fallback === true,
       itemCount: sourceMetrics.itemCount,
       usedPersonalContext: Boolean(sourceMetrics.usedPersonalContext),
+      canonicalIntent: sourceMetrics.intentName || "",
     },
+    externalProviderUsed: false,
   });
 }
 
@@ -450,9 +517,24 @@ function buildTaskSteps(intent = {}, toolCalls = []) {
   return steps.slice(0, 6);
 }
 
+function buildContextSlots(intent = {}, slots = {}) {
+  const source = slots && typeof slots === "object" ? slots : {};
+  return safetyGuard.sanitizeToolResult({
+    lastIntent: String(intent && intent.name || intent || "").slice(0, 80),
+    lastTargetType: String(source.type || source.targetType || "").slice(0, 30),
+    lastTargetName: String(source.q || source.targetName || source.classroom || source.courseName || source.teacherName || "").slice(0, 80),
+    lastWeek: Number(source.week || 0) || 0,
+    lastWeekday: Number(source.weekday || 0) || 0,
+    lastQueryResult: "",
+    lastSource: "server-agent-kernel",
+  });
+}
+
 function buildResponse(payload) {
   const rawToolCalls = payload.rawToolCalls || payload.toolCalls || [];
+  const requestedProtocolVersion = agentProtocol.normalizeProtocolVersion(payload.protocolVersion);
   const envelope = agentProtocol.buildProtocolEnvelope({
+    protocolVersion: requestedProtocolVersion,
     requestId: payload.requestId,
     conversationId: payload.conversationId,
     runtimeMode: payload.runtimeMode || "public",
@@ -462,28 +544,50 @@ function buildResponse(payload) {
     slots: payload.slots,
   });
   const validation = agentProtocol.validateResponse({
-    protocolVersion: envelope.protocolVersion,
-    runtimeMode: envelope.runtimeMode,
+    protocolVersion: requestedProtocolVersion,
+    runtimeMode: envelope.canonicalRuntimeMode,
     intent: payload.intent,
     plan: payload.plan,
     cards: payload.cards,
   });
+  const taskSteps = payload.taskSteps || buildTaskSteps(payload.intent, rawToolCalls);
+  const evidence = payload.evidence || buildEvidence(rawToolCalls, payload.context, payload.intent);
+  const errors = (Array.isArray(payload.errors) ? payload.errors : []).concat(validation.errors || []);
   const response = {
     protocolVersion: envelope.protocolVersion,
     requestId: envelope.requestId,
     conversationId: envelope.conversationId,
     runtimeMode: envelope.runtimeMode,
-    success: true,
+    runId: payload.runId || agentProtocol.createRunId(),
+    status: payload.status || (errors.length ? "partial" : "completed"),
+    success: payload.success !== false && errors.length === 0,
     answer: payload.answer,
     intent: payload.intent,
     slots: envelope.slots,
     plan: envelope.plan,
-    cards: validation.cards.length ? validation.cards : payload.cards,
+    cards: validation.cards,
     toolCalls: payload.toolCalls || [],
-    taskSteps: payload.taskSteps || buildTaskSteps(payload.intent, rawToolCalls),
-    evidence: payload.evidence || buildEvidence(rawToolCalls, payload.context),
+    taskSteps,
+    steps: payload.steps || taskSteps,
+    observations: payload.observations || rawToolCalls.map((item, index) => ({
+      id: `observation-${index + 1}`,
+      tool: item.name,
+      status: item.status,
+      code: item.result && item.result.code || "",
+      summary: item.summary || "",
+      sourceId: item.result && (item.result.sourceId || item.result.source) || "",
+      factCount: countResultItems(item.result),
+    })),
+    skill: payload.skill || null,
+    evidence,
     evidenceItems: envelope.evidenceItems,
     suggestions: payload.suggestions,
+    contextSlots: payload.contextSlots || buildContextSlots(payload.intent, envelope.slots),
+    fallback: payload.fallback === true,
+    fallbackLayer: payload.fallbackLayer || (payload.fallback === true ? "server" : "none"),
+    fallbackReason: payload.fallbackReason || "",
+    fallbackAllowed: payload.fallbackAllowed === true,
+    externalProviderUsed: payload.externalProviderUsed === true,
     safety: {
       redacted: true,
       usedPersonalContext: Boolean(payload.usedPersonalContext),
@@ -497,8 +601,8 @@ function buildResponse(payload) {
       fallbackReason: payload.fallbackReason || "",
       pendingClarification: payload.pendingClarification || null,
       clearPendingClarification: payload.clearPendingClarification === true,
-      runtimeMode: envelope.runtimeMode,
-      requestedRuntimeMode: payload.requestedRuntimeMode || envelope.runtimeMode,
+      runtimeMode: envelope.canonicalRuntimeMode,
+      requestedRuntimeMode: payload.requestedRuntimeMode || envelope.canonicalRuntimeMode,
       competitionAuthorized: payload.competitionAuthorized === true,
       validationOk: validation.ok,
     },
@@ -509,20 +613,45 @@ function buildResponse(payload) {
       fallback: payload.externalProviderUsed !== true,
       usedPersonalContext: payload.usedPersonalContext === true,
     }),
-    errors: validation.errors || [],
+    errors,
     serverTime: nowIso(),
   };
-  return isPublicRuntime(envelope.runtimeMode) ? sanitizePublicResponse(response) : response;
+  const safeResponse = isPublicRuntime(envelope.canonicalRuntimeMode) ? sanitizePublicResponse(response) : response;
+  if (requestedProtocolVersion === agentProtocol.PROTOCOL_V2) {
+    return agentProtocol.buildV2Response(Object.assign({}, safeResponse, {
+      protocolVersion: agentProtocol.PROTOCOL_V2,
+      runtimeMode: envelope.canonicalRuntimeMode,
+      intent: payload.intent,
+      plan: payload.plan,
+      skill: payload.skill,
+      steps: payload.steps || taskSteps,
+      observations: payload.observations || safeResponse.observations,
+      evidence: safeResponse.evidence,
+      errors: safeResponse.errors,
+    }));
+  }
+  return safeResponse;
 }
 
-function sensitiveCredentialResponse(message, context, startTime, providerRuntimeConfig) {
+function sensitiveCredentialResponse(message, context, startTime, providerRuntimeConfig, metadata = {}) {
   const guide = toolRegistry.executeTool("explain_personal_import", { mode: "xls", message }, context);
   const generated = mockProvider.generate({
     intent: { name: "explain_personal_import" },
     toolResults: [{ name: "explain_personal_import", status: "success", summary: "敏感信息拦截后返回安全导入指引", result: guide }],
   });
   const stable = stableGeneratedPayload(generated);
-  return buildResponse(Object.assign({}, stable, {
+  const response = buildResponse(Object.assign({}, stable, {
+    protocolVersion: metadata.protocolVersion,
+    requestId: metadata.requestId,
+    conversationId: metadata.conversationId,
+    runtimeMode: metadata.runtimeMode || "public",
+    requestedRuntimeMode: metadata.requestedRuntimeMode,
+    runId: metadata.runId,
+    intent: { name: "explain_personal_import", confidence: 1, slots: {} },
+    skill: metadata.skill || null,
+    fallback: true,
+    fallbackLayer: "server",
+    fallbackAllowed: false,
     answer: "系统不能接收或处理学号、密码、Cookie、token 等敏感信息。请不要在查询框里输入这些内容；如需导入个人课表，请打开个人课表同步页面。",
     toolCalls: [{ name: "safety_guard", status: "skipped", summary: "检测到敏感凭证，已拦截并脱敏" }],
     provider: "mock",
@@ -539,6 +668,7 @@ function sensitiveCredentialResponse(message, context, startTime, providerRuntim
       usedPersonalContext: false,
     }),
   }));
+  return response;
 }
 
 function mergeGeneratedPayloads(options = {}) {
@@ -602,8 +732,23 @@ async function chat(input = {}) {
   context.assistantEnvironment = providerConfigService.getEnvironmentForContext(context, runtimeDecision.runtimeMode);
   const requestId = input.requestId || agentProtocol.createRequestId();
   const conversationId = input.conversationId || context.conversationId || "";
+  const requestedProtocolVersion = input.protocolVersion || context.protocolVersion || agentProtocol.PROTOCOL_VERSION;
+  const protocolVersion = agentProtocol.normalizeProtocolVersion(requestedProtocolVersion);
+  const runId = input.runId || agentProtocol.createRunId();
   if (!agentProtocol.isSupportedProtocolVersion(input.protocolVersion || context.protocolVersion || agentProtocol.PROTOCOL_VERSION)) {
+    recordEarlyTrace({
+      runId,
+      requestId,
+      conversationId,
+      runtimeMode: "public",
+      startTime,
+      intent: "clarify_missing_slot",
+      fallbackReason: "PROTOCOL_VERSION_UNSUPPORTED",
+      errorCode: "PROTOCOL_VERSION_UNSUPPORTED",
+    });
     return buildResponse({
+      protocolVersion: agentProtocol.PROTOCOL_VERSION,
+      runId,
       requestId,
       conversationId,
       runtimeMode: "public",
@@ -617,6 +762,11 @@ async function chat(input = {}) {
       providerPolicy: "tool-only",
       externalProviderUsed: false,
       fallbackReason: "PROTOCOL_VERSION_UNSUPPORTED",
+      fallback: true,
+      fallbackLayer: "server",
+      fallbackAllowed: true,
+      success: false,
+      errors: [{ code: "PROTOCOL_VERSION_UNSUPPORTED" }],
       intent: { name: "clarify_missing_slot", slots: {} },
       plan: [],
       metrics: buildMetrics({ startTime, intentName: "protocol_version_unsupported", toolCalls: [] }),
@@ -630,7 +780,9 @@ async function chat(input = {}) {
   if (!rawMessage) {
     const generic = mockProvider.generate({ intent: { name: "generic" }, toolResults: [] });
     const stable = stableGeneratedPayload(generic);
-    return buildResponse(Object.assign({}, stable, {
+    const response = buildResponse(Object.assign({}, stable, {
+      protocolVersion,
+      runId,
       requestId,
       conversationId,
       runtimeMode: runtimeDecision.runtimeMode,
@@ -643,6 +795,8 @@ async function chat(input = {}) {
       usedPersonalContext,
       providerPolicy: getProviderPolicy(providerRuntimeConfig),
       externalProviderUsed: false,
+      fallback: true,
+      fallbackLayer: "server",
       fallbackReason: "空消息",
       metrics: buildMetrics({
         startTime,
@@ -653,23 +807,58 @@ async function chat(input = {}) {
         usedPersonalContext,
       }),
     }));
+    recordEarlyTrace({
+      runId,
+      requestId,
+      conversationId,
+      runtimeMode: runtimeDecision.runtimeMode,
+      startTime,
+      intent: "conversational_help",
+      selectedSkill: "knowledge_search",
+      fallbackReason: "EMPTY_MESSAGE",
+      errorCode: "EMPTY_MESSAGE",
+    });
+    return response;
   }
 
   if (safetyGuard.hasSensitiveCredential(rawMessage)) {
-    return sensitiveCredentialResponse(safeMessage, context, startTime, providerRuntimeConfig);
+    const response = sensitiveCredentialResponse(safeMessage, context, startTime, providerRuntimeConfig, {
+      protocolVersion,
+      requestId,
+      conversationId,
+      runtimeMode: runtimeDecision.runtimeMode,
+      requestedRuntimeMode: runtimeDecision.requestedMode,
+      runId,
+    });
+    recordEarlyTrace({
+      runId,
+      requestId,
+      conversationId,
+      runtimeMode: runtimeDecision.runtimeMode,
+      startTime,
+      intent: "explain_personal_import",
+      selectedSkill: "personal_schedule_import_help",
+      fallbackReason: "SENSITIVE_CREDENTIAL_BLOCKED",
+      errorCode: "SENSITIVE_CREDENTIAL_BLOCKED",
+    });
+    return response;
   }
 
   const ruleResolution = resolveRuleBackedIntent(safeMessage, context);
   const intent = ruleResolution.intent;
   const localRuleMatch = ruleResolution.ruleMatch;
-  const plan = typeof toolRegistry.buildPlanForIntent === "function"
-    ? toolRegistry.buildPlanForIntent(intent, safeMessage, context)
-    : [];
-  const toolCalls = typeof toolRegistry.runToolChainForIntentAsync === "function"
-    ? await toolRegistry.runToolChainForIntentAsync(intent, safeMessage, context)
-    : typeof toolRegistry.runToolChainForIntent === "function"
-      ? toolRegistry.runToolChainForIntent(intent, safeMessage, context)
-    : toolRegistry.runToolsForIntent(intent, safeMessage, context);
+  const execution = await agentKernel.execute({
+    message: safeMessage,
+    context,
+    contextAlreadySanitized: true,
+    runtimeDecision,
+    intent,
+    requestId,
+    conversationId,
+    runId,
+  });
+  const plan = execution.plan;
+  const toolCalls = execution.toolCalls;
   const publicToolCalls = toolCalls.map((item) => ({
     name: safetyGuard.redactSensitiveText(item.name || "").slice(0, 60),
     status: safetyGuard.redactSensitiveText(item.status || "").slice(0, 20),
@@ -681,7 +870,9 @@ async function chat(input = {}) {
     !isProjectKnowledgeIntent(intent) &&
     intent.name !== "explain_personal_import" &&
     intent.name !== "clarify_missing_slot") {
-    return buildResponse({
+    const response = buildResponse({
+      protocolVersion,
+      runId,
       answer: "小佛目前只提供佛课小表、课表、课程查询和使用帮助。",
       cards: [],
       suggestions: ["查今日课程", "查空教室", "佛课小表怎么用？"],
@@ -699,6 +890,13 @@ async function chat(input = {}) {
       competitionAuthorized: runtimeDecision.authorized,
       intent,
       plan,
+      skill: execution.skill,
+      steps: execution.steps,
+      observations: execution.observations,
+      context,
+      rawToolCalls: toolCalls,
+      fallback: true,
+      fallbackLayer: "server",
       metrics: buildMetrics({
         startTime,
         intentName: intent.name,
@@ -707,7 +905,16 @@ async function chat(input = {}) {
         fallback: true,
         usedPersonalContext,
       }),
+      errors: execution.verification && execution.verification.errors || [],
     });
+    agentKernel.finalize(execution, {
+      totalDurationMs: Date.now() - startTime,
+      providerUsed: false,
+      fallbackLayer: "server",
+      fallbackReason: "AI_RUNTIME_MODE=public",
+      evidenceComplete: response.evidence && response.evidence.complete === true,
+    });
+    return response;
   }
 
   const providerPolicy = getProviderPolicy(providerRuntimeConfig);
@@ -719,10 +926,10 @@ async function chat(input = {}) {
     : (intent.name === "clarify_missing_slot" ? "mock/template" : "mock");
   // 体验/开发对话类意图始终注入公开产品知识，帮助模型做人设化表达；不含私密部署信息。
   const shouldInjectProjectKnowledge = isProjectKnowledgeIntent(intent)
-    || runtimeDecision.runtimeMode === "competition";
+    || runtimeDecision.runtimeMode !== "public";
   const providerInput = {
     message: safeMessage,
-    context,
+    context: buildMinimalProviderContext(context),
     intent,
     localRule: localRuleMatch && localRuleMatch.rule || null,
     projectKnowledge: shouldInjectProjectKnowledge
@@ -792,7 +999,9 @@ async function chat(input = {}) {
   } else if (intent.name !== "clarify_missing_slot" && context.pendingClarification) {
     pendingPatch.clearPendingClarification = true;
   }
-  return buildResponse(Object.assign({}, stable, {
+  const response = buildResponse(Object.assign({}, stable, {
+    protocolVersion,
+    runId,
     requestId,
     conversationId,
     runtimeMode: runtimeDecision.runtimeMode,
@@ -802,6 +1011,9 @@ async function chat(input = {}) {
     rawToolCalls: toolCalls,
     intent,
     plan,
+    skill: execution.skill,
+    steps: execution.steps,
+    observations: execution.observations,
     context,
     provider: providerName,
     desiredProvider: desiredProviderName,
@@ -811,8 +1023,11 @@ async function chat(input = {}) {
     externalProviderUsed,
     providerDecisionReason,
     fallbackReason,
+    fallback: Boolean(fallbackReason),
+    fallbackLayer: fallbackReason ? "server" : "none",
     pendingClarification: pendingPatch.pendingClarification,
     clearPendingClarification: pendingPatch.clearPendingClarification,
+    errors: execution.verification && execution.verification.errors || [],
     metrics: buildMetrics({
       startTime,
       intent,
@@ -822,10 +1037,94 @@ async function chat(input = {}) {
       usedPersonalContext,
     }),
   }));
+  agentKernel.finalize(execution, {
+    totalDurationMs: Date.now() - startTime,
+    providerUsed: externalProviderUsed,
+    fallbackLayer: fallbackReason ? "server" : "none",
+    fallbackReason,
+    evidenceComplete: response.evidence && response.evidence.complete === true,
+  });
+  return response;
+}
+
+function buildServiceFailureResponse(input = {}, error = {}) {
+  const protocolVersion = agentProtocol.isSupportedProtocolVersion(input.protocolVersion)
+    ? agentProtocol.normalizeProtocolVersion(input.protocolVersion)
+    : agentProtocol.PROTOCOL_VERSION;
+  const requestId = input.requestId || agentProtocol.createRequestId();
+  const conversationId = String(input.conversationId || "").slice(0, 80);
+  const runId = input.runId || agentProtocol.createRunId();
+  const runtimeMode = runtimeModeService.resolveRuntimeMode({
+    context: safetyGuard.sanitizeAgentContext(input.context || {}),
+    serverSession: input.serverSession,
+  }).runtimeMode;
+  const errorCode = String(error.code || "AGENT_SERVICE_UNAVAILABLE").slice(0, 80);
+  recordEarlyTrace({
+    runId,
+    requestId,
+    conversationId,
+    runtimeMode,
+    startTime: input.startTime || Date.now(),
+    intent: "conversational_help",
+    selectedSkill: "knowledge_search",
+    fallbackReason: errorCode,
+    errorCode,
+  });
+  return buildResponse({
+    protocolVersion,
+    requestId,
+    conversationId,
+    runId,
+    runtimeMode,
+    success: false,
+    status: "failed",
+    answer: "服务端 Agent 暂时不可用，客户端可以切换到离线降级能力。",
+    cards: [{
+      type: "generic",
+      title: "服务暂不可用",
+      subtitle: "可继续使用已缓存课表和本地校园入口。",
+      badges: ["可降级"],
+      items: [],
+      actions: [],
+    }],
+    suggestions: ["查看今天课表", "打开全校课表", "打开空教室"],
+    toolCalls: [],
+    intent: { name: "conversational_help", confidence: 0, slots: {} },
+    skill: { id: "knowledge_search", version: "1.0.0", description: "服务异常降级" },
+    plan: [],
+    steps: [],
+    observations: [],
+    evidence: {
+      checkedAt: nowIso(),
+      term: "",
+      releaseVersion: "",
+      currentWeek: "",
+      sources: [],
+      toolCount: 0,
+      complete: false,
+    },
+    provider: "mock",
+    providerPolicy: "tool-only",
+    externalProviderUsed: false,
+    fallback: true,
+    fallbackLayer: "server",
+    fallbackReason: errorCode,
+    fallbackAllowed: true,
+    errors: [{ code: errorCode }],
+    metrics: buildMetrics({
+      startTime: input.startTime || Date.now(),
+      intentName: "agent_service_failure",
+      toolCalls: [],
+      fallback: true,
+    }),
+  });
 }
 
 module.exports = {
+  buildEvidence,
+  buildServiceFailureResponse,
   chat,
+  evaluateProviderPolicy,
   shouldUseExternalProvider,
   stableAction,
   stableCard,

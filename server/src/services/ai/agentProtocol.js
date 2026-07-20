@@ -1,75 +1,98 @@
 const crypto = require("crypto");
+const capabilityManifestService = require("./capabilityManifestService");
 const generatedPayloadContract = require("./generatedPayloadContract");
 const safetyGuard = require("./safetyGuard");
 
 const PROTOCOL_VERSION = "agent.v1";
+const PROTOCOL_V2 = "agent.v2";
+const LATEST_PROTOCOL_VERSION = PROTOCOL_V2;
+const SUPPORTED_PROTOCOL_VERSIONS = Object.freeze([PROTOCOL_VERSION, PROTOCOL_V2]);
+const manifest = capabilityManifestService.getManifest();
 
-const INTENT_DEFINITIONS = Object.freeze({
-  clarify_missing_slot: { public: true, fact: true },
-  get_today_courses: { public: true, fact: true },
-  get_tomorrow_courses: { public: true, fact: true },
-  get_next_course: { public: true, fact: true },
-  get_week_schedule: { public: true, fact: true },
-  get_teaching_week: { public: true, fact: true },
-  get_term_calendar: { public: true, fact: true },
-  search_empty_rooms: { public: true, fact: true },
-  search_continuous_empty_rooms: { public: true, fact: true },
-  search_school_index: { public: true, fact: true },
-  get_schedule_detail: { public: true, fact: true },
-  recommend_meeting_time: { public: true, fact: true },
-  diagnose_data_status: { public: true, fact: true },
-  explain_personal_import: { public: true, fact: true },
-  get_campus_weather: { public: true, fact: false },
-  get_course_weather_advice: { public: true, fact: false },
-  search_campus_place: { public: true, fact: true },
-  get_campus_route: { public: true, fact: true },
-  get_classroom_location: { public: true, fact: true },
-  next_course_location: { public: true, fact: true },
-  rag_search: { public: true, fact: false },
-  project_qa: { public: true, fact: false },
-  conversational_help: { public: false, fact: false },
-  generate_image: { public: false, competition: true, fact: false },
-  campus_multi_step_advice: { public: true, fact: true },
-});
+const INTENT_DEFINITIONS = Object.freeze(Object.values(manifest.intents).reduce((output, item) => {
+  output[item.id] = Object.freeze({
+    public: item.publicAllowed === true,
+    trial: item.runtimeModes.includes("trial"),
+    dev: item.runtimeModes.includes("dev"),
+    competition: item.runtimeModes.includes("trial"),
+    fact: item.factualTask === true,
+    skill: item.skill,
+    externalProviderAllowed: item.externalProviderAllowed === true,
+  });
+  return output;
+}, {}));
 
-const TOOL_DEFINITIONS = Object.freeze({
-  get_today_courses: { public: true },
-  get_tomorrow_courses: { public: true },
-  get_next_course: { public: true },
-  get_week_schedule: { public: true },
-  get_teaching_week: { public: true },
-  get_term_calendar: { public: true },
-  search_empty_rooms: { public: true },
-  search_continuous_empty_rooms: { public: true },
-  search_school_index: { public: true },
-  get_schedule_detail: { public: true },
-  diagnose_data_status: { public: true },
-  explain_personal_import: { public: true },
-  recommend_meeting_time: { public: true },
-  clarify_missing_slot: { public: true },
-  get_campus_weather: { public: true },
-  get_course_weather_advice: { public: true },
-  search_campus_place: { public: true },
-  get_campus_route: { public: true },
-  get_classroom_location: { public: true },
-  rag_search: { public: true },
-  generate_image: { public: false, competition: true },
-});
+const TOOL_DEFINITIONS = Object.freeze(Object.values(manifest.tools).reduce((output, item) => {
+  output[item.id] = Object.freeze({
+    public: item.runtimeModes.includes("public"),
+    trial: item.runtimeModes.includes("trial"),
+    dev: item.runtimeModes.includes("dev"),
+    competition: item.runtimeModes.includes("trial"),
+  });
+  return output;
+}, {}));
 
 const CARD_TYPES = new Set(generatedPayloadContract.ALLOWED_CARD_TYPES);
 const ACTION_TYPES = new Set(generatedPayloadContract.ALLOWED_ACTION_TYPES);
+const MAX_PLAN_STEPS = manifest.limits.maxPlanSteps;
+const BLOCKED_PROTOCOL_KEY = /(api.?key|secret|token|password|passwd|cookie|authorization|system.?prompt|internal.?url|base.?url|provider.?config|endpoint|deployment|whitelist)/i;
+
+function safeProtocolText(value, maxLength = 0) {
+  let text = safetyGuard.redactSensitiveText(String(value == null ? "" : value));
+  text = text
+    .replace(/\b(?:https?|wss?):\/\/[^\s，。；;"'<>]+/gi, "[链接已省略]")
+    .replace(/\b(?:javascript|data|file|wxfile):[^\s，。；;"'<>]*/gi, "[链接已省略]")
+    .replace(/\b(?:system\s*prompt|developer\s*prompt|internal\s*prompt)\b/gi, "[内部提示已省略]")
+    .replace(/系统(?:级)?提示(?:词)?|内部提示(?:词)?/g, "[内部提示已省略]");
+  const limit = Math.max(0, Number(maxLength || 0) || 0);
+  return limit > 0 ? text.slice(0, limit) : text;
+}
+
+function sanitizeProtocolValue(value, depth = 0) {
+  if (depth > 8) return "[已省略]";
+  if (value === null || value === undefined) return value;
+  if (typeof value === "string") return safeProtocolText(value);
+  if (typeof value !== "object") return value;
+  if (Array.isArray(value)) return value.slice(0, 100).map((item) => sanitizeProtocolValue(item, depth + 1));
+  const output = {};
+  Object.keys(value).forEach((key) => {
+    if (!BLOCKED_PROTOCOL_KEY.test(key)) {
+      output[key] = sanitizeProtocolValue(value[key], depth + 1);
+    }
+  });
+  return output;
+}
 
 function createRequestId() {
   if (crypto.randomUUID) return crypto.randomUUID();
   return crypto.randomBytes(16).toString("hex");
 }
 
+function createRunId() {
+  return `run_${createRequestId()}`;
+}
+
+function normalizeProtocolVersion(value) {
+  const version = String(value || "").trim();
+  return SUPPORTED_PROTOCOL_VERSIONS.includes(version) ? version : PROTOCOL_VERSION;
+}
+
 function isSupportedProtocolVersion(value) {
-  return !value || String(value) === PROTOCOL_VERSION;
+  return !value || SUPPORTED_PROTOCOL_VERSIONS.includes(String(value));
 }
 
 function normalizeRuntimeMode(value) {
-  return String(value || "").trim().toLowerCase() === "competition" ? "competition" : "public";
+  return capabilityManifestService.normalizeRuntimeMode(value);
+}
+
+function toLegacyRuntimeMode(value) {
+  return normalizeRuntimeMode(value) === "public" ? "public" : "competition";
+}
+
+function serializeRuntimeMode(value, protocolVersion) {
+  return normalizeProtocolVersion(protocolVersion) === PROTOCOL_VERSION
+    ? toLegacyRuntimeMode(value)
+    : normalizeRuntimeMode(value);
 }
 
 function isKnownIntent(name) {
@@ -91,14 +114,12 @@ function isFactIntent(name) {
 }
 
 function isAllowedToolForRuntime(name, runtimeMode) {
-  const item = TOOL_DEFINITIONS[String(name || "")];
-  if (!item) return false;
-  if (normalizeRuntimeMode(runtimeMode) === "competition") return true;
-  return item.public === true;
+  return capabilityManifestService.isToolAllowedForRuntime(name, runtimeMode);
 }
 
 function stableSlots(slots = {}) {
-  return safetyGuard.sanitizeToolResult(slots && typeof slots === "object" && !Array.isArray(slots) ? slots : {});
+  const source = slots && typeof slots === "object" && !Array.isArray(slots) ? slots : {};
+  return sanitizeProtocolValue(safetyGuard.sanitizeToolResult(source));
 }
 
 function buildPlanStep(toolName, args = {}, reason = "") {
@@ -112,9 +133,9 @@ function buildPlanStep(toolName, args = {}, reason = "") {
 function normalizePlan(plan = [], runtimeMode = "public") {
   const list = Array.isArray(plan) ? plan : [];
   return list
-    .map((item) => buildPlanStep(item.toolName || item.name, item.args || item.input || {}, item.reason || ""))
+    .map((item) => buildPlanStep(item.toolName || item.name, item.args || item.input || {}, item.reason || item.label || ""))
     .filter((item) => item.toolName && isAllowedToolForRuntime(item.toolName, runtimeMode))
-    .slice(0, 6);
+    .slice(0, MAX_PLAN_STEPS);
 }
 
 function summarizeEvidenceItem(call = {}) {
@@ -131,20 +152,21 @@ function summarizeEvidenceItem(call = {}) {
 }
 
 function buildProtocolEnvelope(payload = {}) {
-  const runtimeMode = normalizeRuntimeMode(payload.runtimeMode);
+  const protocolVersion = normalizeProtocolVersion(payload.protocolVersion);
+  const canonicalRuntimeMode = normalizeRuntimeMode(payload.runtimeMode);
   const toolCalls = Array.isArray(payload.rawToolCalls || payload.toolCalls)
     ? (payload.rawToolCalls || payload.toolCalls)
     : [];
-  const evidenceItems = toolCalls.map(summarizeEvidenceItem).filter((item) => item.toolName);
   return {
-    protocolVersion: PROTOCOL_VERSION,
+    protocolVersion,
     requestId: payload.requestId || createRequestId(),
     conversationId: String(payload.conversationId || "").slice(0, 80),
-    runtimeMode,
-    intent: payload.intent && payload.intent.name || "conversational_help",
+    runtimeMode: serializeRuntimeMode(canonicalRuntimeMode, protocolVersion),
+    canonicalRuntimeMode,
+    intent: payload.intent && payload.intent.name || payload.intent || "conversational_help",
     slots: stableSlots(payload.intent && payload.intent.slots || payload.slots || {}),
-    plan: normalizePlan(payload.plan || [], runtimeMode),
-    evidenceItems,
+    plan: normalizePlan(payload.plan || [], canonicalRuntimeMode),
+    evidenceItems: toolCalls.map(summarizeEvidenceItem).filter((item) => item.toolName),
   };
 }
 
@@ -152,8 +174,15 @@ function validateCards(cards = []) {
   return (Array.isArray(cards) ? cards : []).map((card) => {
     const stable = generatedPayloadContract.stableCard(card);
     if (!stable || !CARD_TYPES.has(stable.type)) return null;
-    return stable;
+    return sanitizeProtocolValue(stable);
   }).filter(Boolean).slice(0, 8);
+}
+
+function validateCardsForIntent(cards = [], intentName = "conversational_help") {
+  const capability = capabilityManifestService.getIntent(intentName);
+  if (!capability) return [];
+  const allowed = new Set(capability.allowedCardTypes || []);
+  return validateCards(cards).filter((card) => allowed.has(card.type));
 }
 
 function validateActions(cards = []) {
@@ -161,33 +190,142 @@ function validateActions(cards = []) {
 }
 
 function validateResponse(payload = {}) {
-  const cards = validateCards(payload.cards);
+  const intentName = payload.intent && payload.intent.name || payload.intent || "conversational_help";
+  const globallyValidCards = validateCards(payload.cards);
+  const cards = validateCardsForIntent(payload.cards, intentName);
   const errors = [];
   if (!isSupportedProtocolVersion(payload.protocolVersion || PROTOCOL_VERSION)) {
     errors.push({ code: "PROTOCOL_VERSION_UNSUPPORTED" });
   }
-  if (!isKnownIntent(payload.intent && payload.intent.name || payload.intent || "conversational_help")) {
+  if (!isKnownIntent(intentName)) {
     errors.push({ code: "INTENT_UNKNOWN" });
+  }
+  if (cards.length !== globallyValidCards.length) {
+    errors.push({ code: "CARD_NOT_ALLOWED_FOR_INTENT" });
   }
   const plan = normalizePlan(payload.plan || [], payload.runtimeMode);
   const invalidPlan = (Array.isArray(payload.plan) ? payload.plan : []).filter((step) => !isKnownTool(step.toolName || step.name));
   if (invalidPlan.length) errors.push({ code: "TOOL_NOT_WHITELISTED" });
   if (!validateActions(cards)) errors.push({ code: "ACTION_NOT_WHITELISTED" });
+  return { ok: errors.length === 0, errors, cards, plan };
+}
+
+function normalizeConfidence(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return 0;
+  return Math.max(0, Math.min(1, number));
+}
+
+function stableV2Plan(plan, runtimeMode) {
+  return normalizePlan(plan, runtimeMode).map((step, index) => ({
+    id: `plan-${index + 1}`,
+    label: safeProtocolText(step.reason || `执行 ${step.toolName}`, 120),
+    tool: step.toolName,
+    status: "planned",
+  }));
+}
+
+function stableExecutionSteps(steps = []) {
+  return (Array.isArray(steps) ? steps : []).slice(0, MAX_PLAN_STEPS).map((step, index) => ({
+    id: String(step.id || step.key || `step-${index + 1}`).slice(0, 80),
+    label: safeProtocolText(step.label || "", 120),
+    status: ["planned", "running", "success", "failed", "skipped", "done"].includes(step.status) ? step.status : "success",
+    tool: String(step.tool || step.toolName || "").slice(0, 80),
+    durationMs: Math.max(0, Number(step.durationMs || 0) || 0),
+    errorCode: safeProtocolText(step.errorCode || "", 80),
+    retried: step.retried === true,
+  }));
+}
+
+function stableObservations(observations = []) {
+  return (Array.isArray(observations) ? observations : []).slice(0, MAX_PLAN_STEPS).map((item, index) => ({
+    id: String(item.id || `observation-${index + 1}`).slice(0, 80),
+    tool: String(item.tool || item.toolName || item.name || "").slice(0, 80),
+    status: String(item.status || "success").slice(0, 24),
+    code: String(item.code || item.errorCode || "").slice(0, 80),
+    summary: safeProtocolText(item.summary || "", manifest.limits.maxObservationChars),
+    sourceId: safeProtocolText(item.sourceId || "", 120),
+    factCount: Math.max(0, Number(item.factCount || 0) || 0),
+  }));
+}
+
+function buildV2Response(payload = {}) {
+  const envelope = buildProtocolEnvelope(Object.assign({}, payload, { protocolVersion: PROTOCOL_V2 }));
+  const intent = payload.intent && typeof payload.intent === "object"
+    ? payload.intent
+    : { name: envelope.intent, slots: envelope.slots };
+  const skill = payload.skill || null;
+  const errors = Array.isArray(payload.errors) ? payload.errors.map((item) => ({
+    code: String(item && item.code || "UNKNOWN_ERROR").slice(0, 80),
+    message: safeProtocolText(item && item.message || "", 240),
+  })) : [];
+  const cardValidation = validateResponse({
+    protocolVersion: PROTOCOL_V2,
+    runtimeMode: envelope.canonicalRuntimeMode,
+    intent,
+    plan: payload.plan,
+    cards: payload.cards,
+  });
+  const protocolErrors = errors.concat(cardValidation.errors.filter((item) =>
+    !errors.some((existing) => existing.code === item.code)
+  ));
   return {
-    ok: errors.length === 0,
-    errors,
-    cards,
-    plan,
+    protocolVersion: PROTOCOL_V2,
+    requestId: envelope.requestId,
+    conversationId: envelope.conversationId,
+    runtimeMode: envelope.canonicalRuntimeMode,
+    runId: String(payload.runId || createRunId()).slice(0, 100),
+    status: payload.status || (protocolErrors.length ? "partial" : "completed"),
+    success: payload.success !== false,
+    intent: envelope.intent,
+    confidence: normalizeConfidence(intent.confidence),
+    slots: envelope.slots,
+    skill: skill ? {
+      id: String(skill.id || skill).slice(0, 80),
+      version: String(skill.version || "").slice(0, 32),
+      description: safeProtocolText(skill.description || "", 180),
+    } : null,
+    plan: stableV2Plan(payload.plan, envelope.canonicalRuntimeMode),
+    steps: stableExecutionSteps(payload.steps || payload.taskSteps),
+    toolCalls: (Array.isArray(payload.toolCalls) ? payload.toolCalls : []).slice(0, MAX_PLAN_STEPS).map((call) => ({
+      name: safeProtocolText(call && (call.name || call.toolName), 80),
+      status: safeProtocolText(call && call.status, 24),
+      summary: safeProtocolText(call && call.summary, 160),
+    })),
+    observations: stableObservations(payload.observations),
+    answer: safeProtocolText(payload.answer || "", 1600),
+    cards: cardValidation.cards,
+    suggestions: (Array.isArray(payload.suggestions) ? payload.suggestions : []).slice(0, 6)
+      .map((item) => safeProtocolText(item, 120)).filter(Boolean),
+    evidence: sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.evidence || {})),
+    safety: sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.safety || {})),
+    metrics: sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.metrics || {})),
+    errors: protocolErrors,
+    contextSlots: stableSlots(payload.contextSlots || {}),
+    fallback: payload.fallback === true,
+    fallbackLayer: String(payload.fallbackLayer || "none").slice(0, 24),
+    fallbackReason: safeProtocolText(payload.fallbackReason || "", 160),
+    fallbackAllowed: payload.fallbackAllowed === true,
+    externalProviderUsed: payload.externalProviderUsed === true,
+    serverTime: payload.serverTime || new Date().toISOString(),
   };
 }
 
 module.exports = {
-  PROTOCOL_VERSION,
+  ACTION_TYPES,
+  CARD_TYPES,
   INTENT_DEFINITIONS,
+  LATEST_PROTOCOL_VERSION,
+  MAX_PLAN_STEPS,
+  PROTOCOL_V2,
+  PROTOCOL_VERSION,
+  SUPPORTED_PROTOCOL_VERSIONS,
   TOOL_DEFINITIONS,
   buildPlanStep,
   buildProtocolEnvelope,
+  buildV2Response,
   createRequestId,
+  createRunId,
   isAllowedToolForRuntime,
   isFactIntent,
   isKnownIntent,
@@ -195,7 +333,12 @@ module.exports = {
   isPublicIntent,
   isSupportedProtocolVersion,
   normalizePlan,
+  normalizeProtocolVersion,
   normalizeRuntimeMode,
+  serializeRuntimeMode,
+  stableExecutionSteps,
+  stableObservations,
   stableSlots,
+  toLegacyRuntimeMode,
   validateResponse,
 };

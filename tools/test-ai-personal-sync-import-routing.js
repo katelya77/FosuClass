@@ -55,7 +55,7 @@ function wait(ms) {
 
 async function run() {
   const importResponse = await aiAssistantService.chat("如何导入个人课表", baseContext());
-  assert.strictEqual(importResponse.cards[0].type, "import_guide");
+  assert.strictEqual(importResponse.cards[0].type, "guide");
   const actions = importResponse.cards[0].actions || [];
   const syncAction = actions.find((item) => item.label === "打开个人课表同步");
   const xlsAction = actions.find((item) => item.label === "查看 XLS 文件导入");
@@ -73,15 +73,15 @@ async function run() {
   ], "card buttons should route main sync before explicit XLS");
 
   const openImportResponse = await aiAssistantService.chat("打开导入入口", baseContext());
-  assert.strictEqual(openImportResponse.cards[0].type, "navigation");
+  assert.strictEqual(openImportResponse.cards[0].type, "guide");
   assert.strictEqual(openImportResponse.cards[0].actions[0].url, "/pages/personal-sync/personal-sync");
 
   const openXlsResponse = await aiAssistantService.chat("打开 XLS导入", baseContext());
-  assert.strictEqual(openXlsResponse.cards[0].type, "navigation");
+  assert.strictEqual(openXlsResponse.cards[0].type, "guide");
   assert.strictEqual(openXlsResponse.cards[0].actions[0].url, "/pages/personal-sync/personal-sync?tab=xls");
 
   const explicitXlsHelpResponse = await aiAssistantService.chat("XLS文件导入怎么用？", baseContext());
-  assert.strictEqual(explicitXlsHelpResponse.cards[0].type, "import_guide", "explicit XLS help should not fall back to smalltalk");
+  assert.strictEqual(explicitXlsHelpResponse.cards[0].type, "guide", "explicit XLS help should not fall back to smalltalk");
   assert(/导入个人课表/.test(explicitXlsHelpResponse.answer), "explicit XLS help should answer the import guide");
 
   const page = mockEnv.createPageInstance();
