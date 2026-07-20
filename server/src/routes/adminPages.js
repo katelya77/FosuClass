@@ -7430,33 +7430,40 @@ const adminConsoleHtml = `<!doctype html>
           </div>
 
           <div class="card form-box">
-            <h3 class="card-title">运行状态与 Coze 适配</h3>
+            <h3 class="card-title">运行状态与 Coze 配置向导</h3>
+            <p class="ai-secret-note">Coze 为可选临时 Provider，未配置不影响主链路。请填写 Coze API Token，不要填写学校账号密码。Token 加密保存，不明文回显，不写日志。</p>
             <div class="ai-provider-status" id="aiProviderStatusGrid"></div>
 
             <div class="form-row full" style="margin-top: 14px;">
               <div>
-                <label>Coze Base URL</label>
-                <input id="cozeBaseUrl" placeholder="https://api.coze.cn">
+                <label>是否启用 Coze（由 Provider 链与 AI_PROVIDER 决定）</label>
+                <input id="cozeBaseUrl" placeholder="API Base URL，例如 https://api.coze.cn">
               </div>
             </div>
             <div class="form-row">
               <div>
-                <label>Coze Bot ID</label>
-                <input id="cozeBotId" autocomplete="off" placeholder="未配置则 fallback mock">
+                <label>Bot / Agent ID</label>
+                <input id="cozeBotId" autocomplete="off" placeholder="未配置则跳过 Coze">
               </div>
               <div>
-                <label>Coze API Key</label>
-                <input id="cozeApiKey" type="password" autocomplete="off" placeholder="留空则保留现有密钥">
+                <label>API Token（请填 Token，勿填学校账号密码）</label>
+                <input id="cozeApiKey" type="password" autocomplete="off" placeholder="留空则保留现有 Token，不回显明文">
               </div>
             </div>
             <div class="form-row">
               <div>
-                <label>Coze User ID</label>
-                <input id="cozeUserId" placeholder="fosuclass-user">
+                <label>调用 User ID（勿全员共用固定值）</label>
+                <input id="cozeUserId" placeholder="按会话派生，勿写真实学号">
               </div>
               <div>
                 <label>Chat Endpoint</label>
                 <input id="cozeChatEndpoint" placeholder="/v3/chat">
+              </div>
+            </div>
+            <div class="form-row full">
+              <div>
+                <label>Token 到期时间（可选 ISO，到期自动跳过）</label>
+                <input id="cozeTokenExpiresAt" placeholder="2026-12-31T00:00:00.000Z">
               </div>
             </div>
             <div class="form-row">

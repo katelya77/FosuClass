@@ -45,6 +45,152 @@ button::after {
   box-shadow: 0 10rpx 30rpx rgba(40, 36, 32, 0.06);
 }
 
+.xiaofu-header-compact {
+  min-height: 64rpx;
+  padding: 8rpx 10rpx;
+  gap: 10rpx;
+  box-shadow: 0 4rpx 14rpx rgba(40, 36, 32, 0.04);
+}
+
+.xiaofu-header-compact .xiaofu-avatar-wrap {
+  flex-basis: 44rpx;
+  width: 44rpx;
+  height: 44rpx;
+  border-radius: 12rpx;
+}
+
+.xiaofu-header-compact .xiaofu-avatar,
+.xiaofu-header-compact .xiaofu-avatar-text {
+  width: 40rpx;
+  height: 40rpx;
+  line-height: 40rpx;
+  font-size: 20rpx;
+  border-radius: 10rpx;
+}
+
+.xiaofu-conversation-primary {
+  margin-top: 0;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #2b2622;
+}
+
+/* Keep product name in DOM for accessibility/tests without repeating large header title */
+.xiaofu-title-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.ai-mode-row-slim {
+  margin-top: 8rpx;
+  margin-bottom: 4rpx;
+}
+
+.run-compact {
+  margin-top: 8rpx;
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  background: #f3f0eb;
+  color: #6b635a;
+  font-size: 20rpx;
+  line-height: 1.3;
+  align-self: flex-start;
+}
+
+.evidence-collapsed {
+  opacity: 0.85;
+}
+
+.evidence-collapse {
+  margin-top: 6rpx;
+  color: #8a8178;
+  font-size: 20rpx;
+}
+
+.feedback-compact {
+  gap: 8rpx;
+}
+
+.feedback-icon-btn {
+  min-width: 56rpx;
+  height: 48rpx;
+  padding: 0 10rpx;
+  border-radius: 999rpx;
+  background: #f7f4f0;
+  color: #4a433c;
+  font-size: 24rpx;
+  line-height: 48rpx;
+  text-align: center;
+}
+
+.feedback-detail-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-top: 8rpx;
+}
+
+.header-menu-list {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0 8rpx 24rpx;
+  box-sizing: border-box;
+}
+
+.header-menu-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 88rpx;
+  padding: 18rpx 16rpx;
+  margin: 0;
+  border-radius: 0;
+  border-bottom: 1rpx solid rgba(40, 36, 32, 0.06);
+  background: transparent;
+  text-align: left;
+}
+
+.header-menu-row-title {
+  flex: 1 1 auto;
+  color: #2b2622;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.header-menu-row-meta {
+  flex: 0 1 auto;
+  max-width: 40%;
+  margin-right: 8rpx;
+  overflow: hidden;
+  color: #8a8178;
+  font-size: 22rpx;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-menu-row-arrow {
+  flex: 0 0 auto;
+  color: #b0a8a0;
+  font-size: 32rpx;
+  line-height: 1;
+}
+
+.header-menu-row.danger .header-menu-row-title {
+  color: #c62828;
+}
+
+.header-menu-sheet-full .task-panel-head {
+  width: 100%;
+}
+
 .xiaofu-avatar-wrap {
   flex: 0 0 56rpx;
   display: flex;
@@ -144,45 +290,10 @@ button::after {
   background: rgba(192, 86, 33, 0.1);
 }
 
-.xiaofu-capability {
-  max-width: 100%;
-  margin-top: 6rpx;
-  overflow: hidden;
-  color: #667085;
-  font-size: 19rpx;
-  font-weight: 600;
-  line-height: 1.15;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.xiaofu-meta-line {
-  max-width: 100%;
-  margin-top: 4rpx;
-  overflow: hidden;
-  color: #8a8178;
-  font-size: 18rpx;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.xiaofu-status.status-online {
-  color: #2f855a;
-}
-
-.xiaofu-status.status-offline {
-  color: #c05621;
-}
-
 .send-btn.cancel {
   background: #4a433c !important;
   color: #fff !important;
   min-width: 72rpx;
-}
-
-.xiaofu-status.status-unknown {
-  color: #8a8178;
 }
 
 .task-card-grid {
@@ -261,37 +372,6 @@ button::after {
   font-size: 30rpx;
   font-weight: 900;
   line-height: 1;
-}
-
-.xiaofu-dot {
-  flex: 0 0 auto;
-  padding: 0 6rpx;
-  color: #6b7280;
-  font-size: 26rpx;
-  font-weight: 800;
-  line-height: 1;
-}
-
-.xiaofu-status {
-  display: inline-flex;
-  align-items: center;
-  flex: 0 1 auto;
-  gap: 6rpx;
-  min-width: 0;
-  overflow: hidden;
-  color: #2f6f4e;
-  font-size: 22rpx;
-  font-weight: 700;
-  line-height: 1;
-}
-
-.xiaofu-status::before {
-  content: "";
-  display: inline-block;
-  width: 10rpx;
-  height: 10rpx;
-  border-radius: 50%;
-  background: #2f6f4e;
 }
 
 .xiaofu-actions {
@@ -1402,51 +1482,6 @@ button::after {
   max-height: 36vh;
 }
 
-.header-menu-item {
-  width: 100%;
-  height: 72rpx;
-  margin-top: 10rpx;
-  border-radius: 14rpx;
-  background: #f8fafc;
-  color: #374151;
-  font-size: 25rpx;
-  font-weight: 900;
-  line-height: 72rpx;
-  text-align: center;
-}
-
-.header-menu-item.float-toggle {
-  height: 92rpx;
-  padding: 12rpx 18rpx;
-  line-height: 1.25;
-  text-align: left;
-}
-
-.header-menu-item.float-toggle.warning {
-  background: #fff8ed;
-  color: #a15c00;
-}
-
-.header-menu-title {
-  color: inherit;
-  font-size: 25rpx;
-  font-weight: 900;
-  line-height: 1.35;
-}
-
-.header-menu-desc {
-  margin-top: 4rpx;
-  color: #7a8494;
-  font-size: 19rpx;
-  font-weight: 700;
-  line-height: 1.3;
-}
-
-.header-menu-item.danger {
-  background: #fff1f1;
-  color: #c62828;
-}
-
 .capability-sheet {
   max-height: 76vh;
 }
@@ -1733,10 +1768,6 @@ button::after {
 
   .xiaofu-title {
     font-size: 28rpx;
-  }
-
-  .xiaofu-status {
-    font-size: 21rpx;
   }
 
   .xiaofu-actions {

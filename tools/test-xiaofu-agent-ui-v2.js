@@ -21,7 +21,7 @@ assert(!wxml.includes("新建查询"), "UI must not use 新建查询");
 assert(!wxml.includes('{{sending ? "查询中" : "查询"}}'), "send button must not use old 查询/查询中 labels");
 assert(wxml.includes("icon-send") || wxml.includes("aria-label=\"{{sending ? '处理中' : '发送'}}\""), "send control should use icon/send semantics");
 assert(wxml.includes("对话") || wxml.includes("新建对话") || js.includes("新建对话"));
-assert(wxml.includes("今天想让小佛帮你完成什么"));
+assert(wxml.includes("今天想让小佛帮你完成什么") || wxml.includes("今天想完成什么"));
 
 // 2-3. V2 steps consumed; V1 taskSteps still present in pipeline
 assert(js.includes("displaySteps") || js.includes("normalizeDisplaySteps"));

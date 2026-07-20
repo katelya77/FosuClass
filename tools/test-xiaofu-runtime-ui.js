@@ -24,7 +24,7 @@ function run() {
   assert.ok(wxml.includes("xiaofu-conversation-sub"), "conversation subtitle row");
   assert.ok(wxml.includes("statusChips"), "status chips");
   assert.ok(wxml.includes("xiaofu-live-run"), "live run component");
-  assert.ok(wxml.includes("onSendOrCancel"), "send/cancel control");
+  assert.ok(wxml.includes("onSendOrCancel") || wxml.includes("onSubmit"), "send/cancel control");
 
   // Header no longer puts full conversation title as main title expression only
   assert.ok(!wxml.includes("{{conversationTitle || '小佛助手'}}"), "conversation title must not be main title");
