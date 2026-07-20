@@ -8,7 +8,8 @@ function safeText(value, maxLength) {
 }
 
 function isLocalUrl(url) {
-  return /^\/pages\//.test(String(url || ""));
+  // Main package pages and subpackage roots (packageXiaofu / packageMaps)
+  return /^\/(pages|packageXiaofu|packageMaps)\//.test(String(url || ""));
 }
 
 function isExternalUrl(url) {
@@ -246,7 +247,7 @@ function tryBuildContextNavigationAnswer(message, clientContext = {}) {
           },
         ],
         actions: [
-          { label: "打开校园地图", type: "navigate", url: "/pages/campus-map/campus-map" },
+          { label: "打开校园地图", type: "navigate", url: "/packageMaps/pages/campus-map/campus-map" },
         ],
       },
     ],

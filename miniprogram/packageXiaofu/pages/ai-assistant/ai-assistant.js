@@ -1,15 +1,15 @@
-﻿const aiAssistantService = require("../../services/aiAssistantService");
-const aiVoiceInputService = require("../../services/aiVoiceInputService");
-const conversationStore = require("../../services/conversationStore");
-const contextManager = require("../../services/xiaofuContextManager");
-const xiaofuFloatService = require("../../services/xiaofuFloatService");
-const agentMemoryClient = require("../../services/agentMemoryClient");
-const agentReadinessClient = require("../../services/agentReadinessClient");
-const agentRunClient = require("../../services/agentRunClient");
-const agentClientErrorMapper = require("../../services/agentClientErrorMapper");
-const cloudbaseConfig = require("../../config/cloudbase");
+const aiAssistantService = require("../../../services/aiAssistantService");
+const aiVoiceInputService = require("../../../services/aiVoiceInputService");
+const conversationStore = require("../../../services/conversationStore");
+const contextManager = require("../../../services/xiaofuContextManager");
+const xiaofuFloatService = require("../../../services/xiaofuFloatService");
+const agentMemoryClient = require("../../../services/agentMemoryClient");
+const agentReadinessClient = require("../../../services/agentReadinessClient");
+const agentRunClient = require("../../../services/agentRunClient");
+const agentClientErrorMapper = require("../../../services/agentClientErrorMapper");
+const cloudbaseConfig = require("../../../config/cloudbase");
 const demoData = require("./demo-data");
-const { courseTimes } = require("../../data/courseTimes");
+const { courseTimes } = require("../../../data/courseTimes");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
@@ -196,7 +196,7 @@ const AI_CAPABILITY_REGISTRY = [
     kind: CAPABILITY_KINDS.NAVIGATE,
     iconPath: ICONS.app,
     label: "仙溪南区地图",
-    url: "/pages/campus-map/campus-map?map=xianxiSouth",
+    url: "/packageMaps/pages/campus-map/campus-map?map=xianxiSouth",
   },
   {
     id: "jiangwanPlaces",
@@ -1192,7 +1192,7 @@ function buildDefaultCardActions(source, type, message) {
   }
   if (cardType === "school_knowledge") {
     const actions = [];
-    if (entryUrl && entryUrl !== sourceUrl && /^\/pages\//.test(entryUrl)) {
+    if (entryUrl && entryUrl !== sourceUrl && /^\/(pages|packageXiaofu|packageMaps)\//.test(entryUrl)) {
       actions.push({ type: "navigate", label: "相关入口", url: entryUrl });
     }
     actions.push({ type: "ask", label: "继续追问", payload: { message: `${title || "这个问题"}还有哪些相关入口` } });
@@ -1200,7 +1200,7 @@ function buildDefaultCardActions(source, type, message) {
   }
   if (["schedule_result", "schedule", "personal_schedule"].indexOf(cardType) >= 0) {
     const actions = [];
-    if (entryUrl && /^\/pages\//.test(entryUrl)) actions.push({ type: "navigate", label: "查看完整课表", url: entryUrl });
+    if (entryUrl && /^\/(pages|packageXiaofu|packageMaps)\//.test(entryUrl)) actions.push({ type: "navigate", label: "查看完整课表", url: entryUrl });
     else actions.push({ type: "navigate", label: "查看完整课表", url: "/pages/today/today" });
     actions.push({ type: "ask", label: "继续查本周", payload: { message: "本周课表" } });
     actions.push({ type: "ask", label: "继续查明天", payload: { message: "明天有什么课" } });
@@ -2967,7 +2967,7 @@ Page({
 
   openCampusMapFromGuide() {
     this.setData({ showCapabilityGuide: false });
-    this.navigateByUrl("/pages/campus-map/campus-map");
+    this.navigateByUrl("/packageMaps/pages/campus-map/campus-map");
   },
 
   closeSheets() {

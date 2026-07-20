@@ -48,7 +48,7 @@ assert.strictEqual(route.code, "ROUTE_DATA_INCOMPLETE");
 assert(route.summary.includes("暂不提供精确步行路线"));
 
 const action = c7.items[0].actionUrl;
-assert(action.startsWith("/pages/campus-map/campus-map"));
+assert(action.startsWith("/packageMaps/pages/campus-map/campus-map"));
 assert(!/[?&]q=/.test(action), "map card action should not inject default search query");
 assert.strictEqual(payloadContract.isAllowedNavigationUrl(action), true, "map card action should be a safe mini program page");
 
@@ -58,7 +58,7 @@ const rendered = mockProvider.generate({
 });
 const visible = JSON.stringify({ answer: rendered.answer, cards: rendered.cards, suggestions: rendered.suggestions });
 assert(!visible.includes("/assets/maps"), "public AI output must not expose local asset paths");
-assert(visible.includes("/pages/campus-map/campus-map"), "map card should open the campus map page");
+assert(visible.includes("/packageMaps/pages/campus-map/campus-map"), "map card should open the campus map page");
 
 const context = {
   term: "2025-2026-2",

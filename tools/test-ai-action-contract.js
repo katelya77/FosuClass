@@ -37,7 +37,7 @@ global.Page = (config) => {
   global.__AI_ASSISTANT_PAGE__ = config;
 };
 
-const { normalizeCard } = require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+const { normalizeCard } = require("../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 const generatedPayloadContract = require("../server/src/services/ai/generatedPayloadContract");
 const xiaofuFloatService = require("../miniprogram/services/xiaofuFloatService");
 

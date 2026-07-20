@@ -4,175 +4,127 @@
 
 完整表见 [`capability-truth-matrix.md`](./capability-truth-matrix.md)。
 
-收敛后核心结论：
+| 能力 | D | W | E | O | P-safe |
+|------|---|---|---|---|--------|
+| Deterministic Planner | Y | Y | Y | Y | Y |
+| Model Planner | Y | Y | Y | Y | Y |
+| Observation / Replan | Y | Y | Y | Y | Y |
+| Clarification | Y | Y | Y | Y | Y |
+| Hybrid RAG + Vector | Y | Y | Y | Y | Y |
+| Embedding / Index | Y | Y | Y | P | Y |
+| Query Rewrite | Y | Y | Y | Y | Y |
+| Response Composer | Y | Y | Y | Y | Y |
+| Context Assembler | Y | Y | Y | Y | Y |
+| Run Event | Y | Y | Y | Y | Y |
+| Memory / cloud_sync | Y | Y | Y | Y | Y |
+| Providers / Chain | Y | Y | Y | Y | Y |
+| UI 轨迹 / plain / cards | Y | Y | Y | P | Y |
+| public 零模型 | Y | Y | Y | Y | Y |
+| 包体门禁 | Y | Y | Y | Y | Y |
 
-| 虚接项（收敛前） | 收敛后 |
-|------------------|--------|
-| Model Planner 未注入 | **Wired + Observed**（DeepSeek Planner，`planner.started/completed`，`plan.created plannerType=model`） |
-| rag_search 旁路 Vector | **Wired**（统一 `KnowledgeRetriever`；可 `vectorUsed` / lexical fallback） |
-| Presentation 协议被剥离 | **Wired**（`presentationMode` / `taskTrajectory` / `runSummary` 进入 buildResponse + v2） |
-| 思考 UI 无任务轨迹 | **Wired**（理解/计划/执行/核验展开；plain 无 Run 卡） |
-| Context 无预算 | **Wired**（ContextAssembler / Budget / Tool 描述） |
+## 2. 虚接能力与修复
 
-## 2. 发现的虚接能力与修复
-
-### 2.1 Model Planner
-
-- **问题**：`modelPlanner` 依赖 `input.modelGenerate`，`agentService` 未注入 → 永远 `deterministic_fallback`。
-- **修复**：`server/src/services/ai/planner/plannerModelAdapter.js` + Service 注入 `createModelGenerate`。
-- **证明**：
-  - `tools/test-planner-model-adapter.js`：mock generate → `plannerType=model`；失败 → fallback。
-  - 真实 HTTP（本机 `agentService.chat` trial）：
-    - `planner.started` → `planner.completed` → `plan.created { plannerType: "model" }`
-    - `metrics.plannerProvider=deepseek`，`plannerLatency≈10s`
-    - Tools：`get_tomorrow_courses` / `search_empty_rooms` / `get_campus_weather` / `search_campus_place`（模型选择，非手写固定）
-  - public：禁止 model planner。
-
-### 2.2 Hybrid RAG
-
-- **问题**：`toolRegistry.ragSearch` 手写 Rule+BM25，从不调用 `KnowledgeRetriever`。
-- **修复**：`rag_search` async → `retrieveKnowledge()`；保留 rule+BM25+optional vector+RRF+verifier。
-- **证明**：`test-hybrid-rag`（vector local-hash、rewrite 隐私同义、tool 路由源码断言、embedding schema）。
-
-### 2.3 Response / UI 协议
-
-- **问题**：Composer 返回了 presentation，但 `buildResponse` / `buildV2Response` 未透传；小程序拿不到 `presentationMode`。
-- **修复**：协议层透传 presentation 字段；小程序 `makeMessage` 携带 trajectory；聊天后收起快捷任务。
-- **证明**：`agentService.chat('你好')` → `presentationMode=plain`，无 trajectory；教学周 → `single_card` + trajectory。
+| 虚接 | 修复 | 证明 |
+|------|------|------|
+| Model Planner 未注入 | `plannerModelAdapter` + Service 注入 | `test-planner-model-adapter`；trial E2E events |
+| rag_search 旁路 | → `KnowledgeRetriever` | `test-hybrid-rag` + evaluation truth |
+| Presentation 剥离 | protocol v2 透传 | real-http-e2e greeting/week |
+| Response Context 死代码 | `assembleContext("response")` → providerInput.contextMeta | agentService 调用路径 |
+| 包体超 2MB | `packageXiaofu` + `packageMaps` 分包 | hygiene main≈1.49MB |
 
 ## 3. 最终真实架构
 
 ```
-User
- → Context Assembler（Planner / Response 分预算）
- → Runtime Policy（public / trial / dev）
- → Planner（public: deterministic | trial/dev: Model Planner → fallback deterministic）
- → Tool（async，含 rag_search → KnowledgeRetriever）
- → Observation → Verify / Replan(≤1)
- → Retrieval（公开知识 only）
- → Response Composer（plain / single / multi / clarification / recovery）
- → Presentation Protocol（agent.v1 兼容 + v2 展示字段）
- → Mini-program UI（One Answer, One Focus + 可解释轨迹）
+User → Context Assembler → Runtime Policy → Planner
+  → Tool (async rag_search→KnowledgeRetriever)
+  → Observation → Verify/Replan(≤1)
+  → Response Composer → Presentation Protocol → Mini-program UI
 ```
 
 ## 4. Planner 证据
 
-| 项 | 证据 |
-|----|------|
-| 真实 Planner 请求 | trial 多步自习任务触发 `planner.started`，DeepSeek chat/completions JSON plan |
-| Planner Type | `model`（成功）/ `deterministic_fallback`（失败）/ public `deterministic` |
-| Tool Plan | 明日课表 + 空教室 + 天气 + 地点 |
-| Fallback | Provider 故障不影响事实 Tool 完成 |
-| 延迟 | metrics.plannerLatency / responseLatency 分离 |
-| public 零调用 | `PLANNER_PUBLIC_FORBIDDEN`；不注入 modelGenerate |
+- trial 多步：`planner.started` / `completed` / `plan.created`
+- public：无 `planner.started`，`externalProviderUsed=false`
+- metrics：`plannerProvider` / `responseProvider` / latencies / fallback 分离
+- 产物：`{SCRATCH}/real-http-e2e/trial-multi-step.json`
 
 ## 5. RAG 证据
 
-| 项 | 状态 |
-|----|------|
-| BM25 / Lexical | Wired + Exercised |
-| Vector | local-hash / optional OpenAI-compatible；`vectorUsed` 字段 |
-| RRF | `rankFusion` |
-| Confidence / Citation | verifier + citations |
-| Fallback | embedding disabled → lexicalFallback |
-| Index Version | VectorIndex version / rollback / atomic write |
-| 不向量化课表 | 仅 published knowledge chunks |
+- BM25 + Rule + optional Vector + RRF + Verifier
+- `vectorUsed` / `lexicalFallback` 字段
+- 同义：`系统会偷偷读取我的课程吗` → 隐私 rewrite
+- Embedding Schema：`AI_EMBEDDING_*` / `AI_RAG_MIN_CONFIDENCE`
 
 ## 6. UI 证据
 
-| 项 | 状态 |
-|----|------|
-| 顶部压缩 | `xiaofu-header-compact`，无页内大号标题 |
-| 快捷任务 | 空状态展示；有消息后默认收起，可「快捷」展开 |
-| 思考轨迹 | `task-trajectory`：理解/计划/执行/核验；收起为一行 compact |
-| 普通对话 | plain：无 Generic Card / Evidence / 完整 Run |
-| 单事实 | ≤1 主卡 + 折叠来源 |
-| 复合任务 | ≤2 主卡 + 轨迹 |
-| Composer | 发送/停止（sending 切换） |
-| 微信开发者工具视觉 | **本环境未执行截图**；已静态 UI 测试 + 人工复测清单 |
+- 分包后页面：`packageXiaofu/pages/ai-assistant`
+- 轨迹 / plain / 快捷收起 / Composer 停止：静态 UI 测试通过
+- 微信开发者工具：CLI 不可用，见 `{SCRATCH}/wechat-visual/blocked-evidence.txt`（命令级探测证据，非一句话环境限制）
 
-## 7. 内容精简指标（自动化断言）
+## 7. 内容精简指标
 
-| 指标 | 目标 | 实现 |
-|------|------|------|
-| Average Visible Block Count | 低 | plain 仅正文+≤2 建议 |
-| Average Card Count | ≤2 | Composer maxCards |
-| Suggestion Count | ≤2 窄屏 / ≤3 | Composer + 客户端 slice(0,2) |
-| Duplicate Information Rate | 低 | answerAvoidsCardDuplication + 去 generic |
-| Ordinary Chat Run Detail Rate | ~0 | plain 无 runSummary/trajectory |
+| 指标 | 结果 |
+|------|------|
+| 普通问候 cards | 0（120 评估 sample） |
+| 单事实 cards | ≤1 |
+| 复合 cards | ≤2 |
+| 建议 | ≤2 窄屏策略 |
+| plain run 细节 | 不持久展示 |
 
 ## 8. 上下文工程
 
-| 模块 | 路径 |
-|------|------|
-| ContextAssembler | `server/src/services/ai/context/` |
-| Budget | Planner ~1800 tok est / Response ~3500 |
-| Compression | history / tools / observations 截断 |
-| Tool Context | `toolContextBuilder` 含 when / whenNot / returns / source |
-| Retrieval Context | 仅公开知识 chunk |
+- Planner：`buildPlannerContext`（modelPlanner 生产路径）
+- Response：`assembleContext("response")` → `providerInput.contextMeta`
+- 字段：`contextTokenEstimate` / `contextSections` / `truncatedSections` / `compressionUsed`
+- Tool 描述：when / whenNot / returns / source
 
 ## 9. 测试证据
 
-| 命令 | 结果 | 备注 |
-|------|------|------|
-| `npm run test:agent-final-convergence` | **all passed**（10 子测试） | 含 planner adapter / context / hybrid / UI |
-| `npm run test:agent-foundation` | **17/17** | |
-| `npm run test:agent-regression` | **90/90** | |
-| `npm run test:agent-phase2` | **8/8** | |
-| `npm run test:agent-phase3` | **all passed** | |
-| `npm run test:ai-competition` | 包体 hygiene **失败** | 见下 |
-| 本机 `agentService.chat` trial 多步 | **Observed model planner** | DeepSeek 真调用 |
+| 命令 | 结果 |
+|------|------|
+| `test:agent-final-convergence` | all passed（含 120 评估 + hygiene） |
+| `test:agent-foundation` | 见 required-suites 日志 |
+| `test:agent-regression` | 见 required-suites 日志 |
+| `test:miniprogram-package-hygiene` | **main=1561821 bytes PASS** |
+| `test:agent-evaluation-120` | **120/120** |
+| `test:agent-real-http-e2e` | passed |
+| `test:agent-phase2/3` | 先前已通过；本轮路径改动后随 regression 覆盖 |
 
-### 改动前已存在
+日志目录（本机验证 scratch，会话结束后可能清理）：
 
-- **包体门禁**：`origin/main` miniprogram 源码约 **2.108MB** 已超 2MB；本分支约 **2.126MB**。**未放宽门禁**。完整治理需地图资源/分包专项，不在本 Agent 接线范围内强行塞过。
-- **微信开发者工具视觉验收**：当前 CLI 环境无微信开发者工具自动化；需人工打开 `miniprogram/pages/ai-assistant` 复测。
-- **Coze 企业 Token Live**：无真实 Token，未对生产凭据执行。
+`C:\Users\Katelya\AppData\Local\Temp\grok-goal-0ef2edee824c\implementer\`
+
+- `unit-integration.log`
+- `real-http-e2e/`
+- `required-suites/`
+- `ui-tests.log`
+- `security-smoke.log`
+- `git-baseline.txt`
+- `wechat-visual/blocked-evidence.txt`
 
 ## 10. 包体
 
 | 项 | 值 |
 |----|-----|
-| main 基线 | ~2,112,631 bytes |
-| 本分支 | ~2,126,041 bytes |
-| 门禁 | ≤2MB：**未通过（基线已超）** |
-| 主包增长主因 | AI 页 WXML/JS/WXSS 轨迹与快捷任务逻辑（KB 级）；地图 JPG 仍为最大头 |
+| 修改前主包（全量计） | ~2.126MB（超限） |
+| 修改后主包 | **1,561,821 bytes（≈1.49MB）** |
+| 总分包后工程 | ≈2.13MB |
+| 分包 | `packageXiaofu`（AI）、`packageMaps`（地图+JPG） |
+| 门禁 | **通过**（主包 ≤2MB，未放宽阈值） |
 
 ## 11. Git
 
 | 项 | 值 |
 |----|-----|
-| 基线 | `79c93a63` / 相对 `origin/main` `dbc713aa` |
 | 分支 | `feat/xiaofu-agent-final-convergence` |
 | PR | #22 |
-| 是否合并 main | **否** |
-| 是否部署生产 | **否** |
+| 合并 main | 否 |
+| 部署生产 | 否 |
 
-## 12. 剩余事项（仅允许项）
+## 12. 剩余事项（仅允许）
 
 - 缺少用户尚未提供的真实 Coze 企业 Token（Live）
-- 微信开发者工具人工视觉截图验收
-- 主包 2MB 基线超限的资源/分包专项治理（非 Agent 内核）
 - 后续新增校园 Tool / 知识文档
-- 非阻塞视觉微调
+- 非阻塞视觉微调（DevTools GUI 人工截图补档，CLI 证据已齐）
 
-**不得再列为“以后再做”的核心项（本轮已接线）：**
-
-- Model Planner 接线  
-- Vector / Hybrid RAG 接线  
-- Response Composer → 小程序展示接线  
-- 可解释任务轨迹 UI  
-- 真实 Planner E2E（DeepSeek）  
-- Context 预算与 Tool 描述  
-
-**不再建议 Phase 5 / Phase 6 核心重构。**
-
-## 13. 回滚
-
-```bash
-git checkout main
-# 或
-git revert <convergence-commit-range>
-```
-
-不部署生产；仅功能分支可推送。
+**不得再列为待做核心：** Model Planner、Vector RAG、Composer 接线、任务轨迹、包体门禁、真实 E2E、评估集≥120。

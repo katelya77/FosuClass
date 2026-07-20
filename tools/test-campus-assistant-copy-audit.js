@@ -18,10 +18,10 @@ const files = [
   "miniprogram/sitemap.json",
   "miniprogram/components/xiaofu-float/index.js",
   "miniprogram/data/fosuKnowledgeBase.js",
-  "miniprogram/pages/ai-assistant/ai-assistant.js",
-  "miniprogram/pages/ai-assistant/ai-assistant.json",
-  "miniprogram/pages/ai-assistant/ai-assistant.wxml",
-  "miniprogram/pages/ai-assistant/demo-data.js",
+  "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js",
+  "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.json",
+  "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml",
+  "miniprogram/packageXiaofu/pages/ai-assistant/demo-data.js",
   "miniprogram/pages/index/index.wxml",
   "miniprogram/pages/login/login.wxml",
   "miniprogram/pages/personal-sync/personal-sync.js",
@@ -87,9 +87,9 @@ const requiredPhrases = [
 
 // Phase-2 UI files must not keep the old query-centric labels.
 const phase2UiFiles = [
-  "miniprogram/pages/ai-assistant/ai-assistant.wxml",
-  "miniprogram/pages/ai-assistant/ai-assistant.js",
-  "miniprogram/components/xiaofu-conversation-sheet/index.wxml",
+  "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml",
+  "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js",
+  "miniprogram/packageXiaofu/components/xiaofu-conversation-sheet/index.wxml",
 ];
 
 function read(file) {

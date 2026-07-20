@@ -9,9 +9,9 @@ function read(file) {
 }
 
 function run() {
-  const js = read("miniprogram/pages/ai-assistant/ai-assistant.js");
-  const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
-  const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
+  const js = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
+  const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
+  const wxss = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss");
   const knowledge = read("miniprogram/data/fosuKnowledgeBase.js");
   const helpCopy = read("miniprogram/services/aiAssistantService.js");
   const scheduleCopy = read("miniprogram/services/scheduleAssistantService.js");

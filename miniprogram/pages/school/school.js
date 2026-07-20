@@ -423,7 +423,7 @@ Page({
     if (mapCode) query.push(`q=${encodeURIComponent(mapCode)}`);
     return {
       label: mapCode ? `查看 ${mapCode} 地图位置` : "返回校园地图位置",
-      url: `/pages/campus-map/campus-map${query.length ? `?${query.join("&")}` : ""}`,
+      url: `/packageMaps/pages/campus-map/campus-map${query.length ? `?${query.join("&")}` : ""}`,
       code: mapCode,
       placeId,
     };
@@ -2107,14 +2107,14 @@ Page({
     const parsed = classroomSearch.parseClassroomQuery(keyword);
     const q = parsed.buildingCode || (parsed.queryType === "text" ? keyword : parsed.normalizedQuery);
     wx.navigateTo({
-      url: `/pages/campus-map/campus-map${q ? `?q=${encodeURIComponent(q)}` : ""}`,
+      url: `/packageMaps/pages/campus-map/campus-map${q ? `?q=${encodeURIComponent(q)}` : ""}`,
     });
   },
 
   returnClassroomMap() {
     const target = this.data.classroomMapReturn || null;
     wx.navigateTo({
-      url: target && target.url || "/pages/campus-map/campus-map",
+      url: target && target.url || "/packageMaps/pages/campus-map/campus-map",
     });
   },
 
@@ -2124,7 +2124,7 @@ Page({
       ? `帮我查${this.data.activeTab === "teacher" ? "老师" : (this.data.activeTab === "classroom" ? "教室" : "课程")} ${keyword}`
       : "帮我查老师课表";
     wx.navigateTo({
-      url: `/pages/ai-assistant/ai-assistant?q=${encodeURIComponent(question)}`,
+      url: `/packageXiaofu/pages/ai-assistant/ai-assistant?q=${encodeURIComponent(question)}`,
     });
   },
 

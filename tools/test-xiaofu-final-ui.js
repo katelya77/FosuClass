@@ -4,9 +4,9 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.join(__dirname, "..");
-const wxml = fs.readFileSync(path.join(root, "miniprogram/pages/ai-assistant/ai-assistant.wxml"), "utf8");
-const wxss = fs.readFileSync(path.join(root, "miniprogram/pages/ai-assistant/ai-assistant.wxss"), "utf8");
-const pageJs = fs.readFileSync(path.join(root, "miniprogram/pages/ai-assistant/ai-assistant.js"), "utf8");
+const wxml = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml"), "utf8");
+const wxss = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss"), "utf8");
+const pageJs = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js"), "utf8");
 const mapper = fs.readFileSync(path.join(root, "miniprogram/services/agentClientErrorMapper.js"), "utf8");
 const memoryClient = fs.readFileSync(path.join(root, "miniprogram/services/agentMemoryClient.js"), "utf8");
 

@@ -292,10 +292,10 @@ Component({
       if (/pages\/ai-assistant\/ai-assistant/.test(this.currentRoute())) return;
       floatService.savePendingContext(this.properties.context || {});
       wx.navigateTo({
-        url: "/pages/ai-assistant/ai-assistant?from=float",
+        url: "/packageXiaofu/pages/ai-assistant/ai-assistant?from=float",
         fail: () => {
           wx.redirectTo({
-            url: "/pages/ai-assistant/ai-assistant?from=float",
+            url: "/packageXiaofu/pages/ai-assistant/ai-assistant?from=float",
             fail: () => wx.showToast({ title: "暂时无法打开小佛校园助手", icon: "none" }),
           });
         },

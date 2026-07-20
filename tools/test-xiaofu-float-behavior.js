@@ -95,7 +95,7 @@ function run() {
 
   const indexPolicy = floatService.getRoutePolicy("pages/index/index");
   assert.strictEqual(indexPolicy.bottomAvoidPx, 58, "tabBar pages should avoid the tabBar without leaving a large blank area");
-  assert.strictEqual(floatService.getRoutePolicy("pages/ai-assistant/ai-assistant").hidden, true, "AI page float should stay hidden by default");
+  assert.strictEqual(floatService.getRoutePolicy("packageXiaofu/pages/ai-assistant/ai-assistant").hidden, true, "AI page float should stay hidden by default");
   assert(instance.data.visible, "float should be visible on regular pages when enabled");
 
   instance.onTouchStart({ touches: [makeTouch(340, 650)] });
@@ -164,7 +164,7 @@ function run() {
   assert(settingsWxml.includes('bindchange="onXiaofuFloatToggle"'), "settings page should expose the float switch");
 
   calls.navigateTo.length = 0;
-  routeRef.route = "pages/ai-assistant/ai-assistant";
+  routeRef.route = "packageXiaofu/pages/ai-assistant/ai-assistant";
   instance.refreshPosition();
   assert.strictEqual(instance.data.visible, false, "AI page should hide the float entry");
   instance.openAssistant();

@@ -45,7 +45,7 @@
 | 21 | Feedback | Y | Y | Y | Y | Y | 紧凑 👍👎 |
 | 22 | 会话恢复 | Y | Y | Y | Y | Y | 列表+记忆 API |
 | 23 | public 零模型调用 | Y | Y | Y | Y | Y | Planner 在 public 禁止；Provider mock |
-| 24 | 小程序包体门禁 | Y | Y | Y | Y | **P** | main 基线 2.108MB 已超 2MB；本分支约 2.126MB；未放宽门禁 |
+| 24 | 小程序包体门禁 | Y | Y | Y | Y | Y | **主包 1.49MB 通过**（`packageXiaofu` + `packageMaps` 分包；门禁改计主包，阈值仍 2MB） |
 
 ---
 

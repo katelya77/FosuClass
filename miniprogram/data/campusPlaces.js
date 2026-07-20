@@ -15,7 +15,7 @@ module.exports = {
         "江湾校区"
       ],
       "description": "佛山大学江湾校区总览，可查看校门、图书馆、体育馆、宿舍区和饭堂等位置。",
-      "mapAsset": "/assets/maps/campus-map-jiangwan.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
       "mapRegion": {
         "x": 0.02,
         "y": 0.08,
@@ -43,7 +43,7 @@ module.exports = {
         "江湾北门"
       ],
       "description": "江湾校区北侧校门，图中位于校园上方主路旁。",
-      "mapAsset": "/assets/maps/campus-map-jiangwan.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
       "mapRegion": {
         "x": 0.46,
         "y": 0.15,
@@ -70,7 +70,7 @@ module.exports = {
         "江湾主校门"
       ],
       "description": "江湾校区南侧入口，图中位于校园右下方。",
-      "mapAsset": "/assets/maps/campus-map-jiangwan.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
       "mapRegion": {
         "x": 0.55,
         "y": 0.79,
@@ -96,7 +96,7 @@ module.exports = {
         "江湾图书馆"
       ],
       "description": "江湾校区图书馆，图中位于校园中部偏左。",
-      "mapAsset": "/assets/maps/campus-map-jiangwan.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
       "mapRegion": {
         "x": 0.18,
         "y": 0.41,
@@ -123,7 +123,7 @@ module.exports = {
         "江湾体育馆"
       ],
       "description": "江湾校区体育馆，图中位于右上侧运动区域附近。",
-      "mapAsset": "/assets/maps/campus-map-jiangwan.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
       "mapRegion": {
         "x": 0.72,
         "y": 0.31,
@@ -150,7 +150,7 @@ module.exports = {
         "江湾运动场"
       ],
       "description": "江湾校区运动场与球场区域，图中位于右上侧。",
-      "mapAsset": "/assets/maps/campus-map-jiangwan.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
       "mapRegion": {
         "x": 0.77,
         "y": 0.22,
@@ -177,7 +177,7 @@ module.exports = {
         "江湾食堂"
       ],
       "description": "江湾校区图中标注的饭堂区域，位于校园中部。",
-      "mapAsset": "/assets/maps/campus-map-jiangwan.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
       "mapRegion": {
         "x": 0.38,
         "y": 0.38,
@@ -204,7 +204,7 @@ module.exports = {
         "医务室"
       ],
       "description": "江湾校区医疗服务点，图中位于校园左侧中部。",
-      "mapAsset": "/assets/maps/campus-map-jiangwan.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
       "mapRegion": {
         "x": 0.05,
         "y": 0.5,
@@ -230,7 +230,7 @@ module.exports = {
         "江湾行政楼"
       ],
       "description": "江湾校区图中标注的行政楼区域，位于北门附近。",
-      "mapAsset": "/assets/maps/campus-map-jiangwan.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
       "mapRegion": {
         "x": 0.41,
         "y": 0.21,
@@ -256,7 +256,7 @@ module.exports = {
         "江湾物流站"
       ],
       "description": "江湾校区图中标注的物流服务点，位于校园中下部。",
-      "mapAsset": "/assets/maps/campus-map-jiangwan.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
       "mapRegion": {
         "x": 0.38,
         "y": 0.65,
@@ -286,7 +286,7 @@ module.exports = {
         "江湾宿舍"
       ],
       "description": "江湾校区右侧宿舍区，图中标注 D20 至 D23。",
-      "mapAsset": "/assets/maps/campus-map-jiangwan.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
       "mapRegion": {
         "x": 0.62,
         "y": 0.45,
@@ -317,7 +317,7 @@ module.exports = {
         "D30"
       ],
       "description": "江湾校区右下侧宿舍区，图中标注 D24 至 D30。",
-      "mapAsset": "/assets/maps/campus-map-jiangwan.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-jiangwan.jpg",
       "mapRegion": {
         "x": 0.55,
         "y": 0.57,
@@ -346,7 +346,7 @@ module.exports = {
         "仙溪南区"
       ],
       "description": "仙溪校区包含北区和南区，两区在地图中分开展示。",
-      "mapAsset": "/assets/maps/campus-map-overview.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-overview.jpg",
       "mapRegion": {
         "x": 0.34,
         "y": 0.18,
@@ -374,7 +374,7 @@ module.exports = {
         "北区"
       ],
       "description": "仙溪校区北区总览，包含 C1 图书馆、B 区教学楼、D 区宿舍、体育馆和食堂等。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.02,
         "y": 0.08,
@@ -403,7 +403,7 @@ module.exports = {
         "南区"
       ],
       "description": "仙溪校区南区总览，包含 C7、B8、B6、B7、A6 校医院和 D 区宿舍等。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-south.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-south.jpg",
       "mapRegion": {
         "x": 0.02,
         "y": 0.12,
@@ -431,7 +431,7 @@ module.exports = {
         "仙溪北区北门"
       ],
       "description": "仙溪北区北侧校门，图中位于上方主路旁。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.72,
         "y": 0.13,
@@ -458,7 +458,7 @@ module.exports = {
         "仙溪北区南门"
       ],
       "description": "仙溪北区南侧校门，图中位于左下角附近。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.06,
         "y": 0.67,
@@ -487,7 +487,7 @@ module.exports = {
         "仙溪北区图书馆"
       ],
       "description": "仙溪北区图中标注的 C1 吕志和图书馆，位于北区右下侧。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.55,
         "y": 0.7,
@@ -515,7 +515,7 @@ module.exports = {
         "格言厅"
       ],
       "description": "仙溪北区图中标注的 C2 格言厅，位于 C1 图书馆附近。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.69,
         "y": 0.64,
@@ -543,7 +543,7 @@ module.exports = {
         "新明珠楼"
       ],
       "description": "仙溪北区图中标注的 C3 新明珠楼，位于 C 区南侧。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.68,
         "y": 0.6,
@@ -571,7 +571,7 @@ module.exports = {
         "电子北楼"
       ],
       "description": "仙溪北区图中标注的 C4 电子北楼，位于 C 区中部。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.7,
         "y": 0.48,
@@ -599,7 +599,7 @@ module.exports = {
         "天佑北楼"
       ],
       "description": "仙溪北区图中标注的 C5 天佑北楼，位于 C 区北侧。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.57,
         "y": 0.42,
@@ -627,7 +627,7 @@ module.exports = {
         "天佑高楼"
       ],
       "description": "仙溪北区图中标注的 C6 天佑高楼，位于 C5 附近。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.56,
         "y": 0.52,
@@ -655,7 +655,7 @@ module.exports = {
         "B1楼"
       ],
       "description": "仙溪北区图中标注的 B1 教学楼，正式楼名待进一步核验。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.48,
         "y": 0.8,
@@ -683,7 +683,7 @@ module.exports = {
         "锐进楼"
       ],
       "description": "仙溪北区图中标注的 B2 锐进楼，位于学院楼附近。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.82,
         "y": 0.78,
@@ -710,7 +710,7 @@ module.exports = {
         "总开楼"
       ],
       "description": "仙溪北区图中标注的 B3 总开楼，位于学院楼北侧。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.68,
         "y": 0.74,
@@ -738,7 +738,7 @@ module.exports = {
         "医和楼"
       ],
       "description": "仙溪北区图中标注的 B4 医和楼，位于北区中下部。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.28,
         "y": 0.66,
@@ -766,7 +766,7 @@ module.exports = {
         "B5楼"
       ],
       "description": "仙溪北区图中可见 B5 标注，正式楼名待进一步核验。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.48,
         "y": 0.73,
@@ -794,7 +794,7 @@ module.exports = {
         "学生食堂"
       ],
       "description": "仙溪北区图中标注的 D12 学生食堂，位于 D 区宿舍南侧。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.28,
         "y": 0.56,
@@ -831,7 +831,7 @@ module.exports = {
         "仙溪北区宿舍"
       ],
       "description": "仙溪北区 D1 至 D10 学生宿舍组团，图中位于左侧中部。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.12,
         "y": 0.36,
@@ -860,7 +860,7 @@ module.exports = {
         "学生活动中心"
       ],
       "description": "仙溪北区图中标注的 D11 学生活动中心，位于运动场和宿舍区之间。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.1,
         "y": 0.28,
@@ -890,7 +890,7 @@ module.exports = {
         "仙溪体育馆"
       ],
       "description": "仙溪北区图中标注的 E1 体育馆与校史展厅，位于北区上方中央。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.37,
         "y": 0.16,
@@ -918,7 +918,7 @@ module.exports = {
         "游泳馆"
       ],
       "description": "仙溪北区图中标注的 E2 游泳馆，位于北门附近。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.63,
         "y": 0.13,
@@ -946,7 +946,7 @@ module.exports = {
         "操场"
       ],
       "description": "仙溪北区运动场，图中位于左上侧。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.08,
         "y": 0.17,
@@ -973,7 +973,7 @@ module.exports = {
         "仙溪北区篮球场"
       ],
       "description": "仙溪北区篮球场，图中位于 D11 学生活动中心附近。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.33,
         "y": 0.27,
@@ -1001,7 +1001,7 @@ module.exports = {
         "仙溪行政楼"
       ],
       "description": "仙溪北区图中标注的 A1 行政楼，位于北区南侧。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.24,
         "y": 0.84,
@@ -1029,7 +1029,7 @@ module.exports = {
         "报告厅"
       ],
       "description": "仙溪北区图中标注的 A2 报告厅，位于 A1 行政楼附近。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.12,
         "y": 0.83,
@@ -1056,7 +1056,7 @@ module.exports = {
         "醒狮馆"
       ],
       "description": "仙溪北区图中标注的 A3 醒狮馆，位于北区左下侧。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.07,
         "y": 0.87,
@@ -1083,7 +1083,7 @@ module.exports = {
         "综合服务大楼"
       ],
       "description": "仙溪北区图中标注的 A4 综合服务大楼，位于南门附近。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-north.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-north.jpg",
       "mapRegion": {
         "x": 0.18,
         "y": 0.73,
@@ -1113,7 +1113,7 @@ module.exports = {
         "C7教学楼"
       ],
       "description": "仙溪南区图中标注的 C7 医学教学楼，位于南区右侧。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-south.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-south.jpg",
       "mapRegion": {
         "x": 0.78,
         "y": 0.43,
@@ -1142,7 +1142,7 @@ module.exports = {
         "B8教学楼"
       ],
       "description": "仙溪南区图中标注的 B8，位于 C7 附近的右下侧。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-south.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-south.jpg",
       "mapRegion": {
         "x": 0.78,
         "y": 0.65,
@@ -1170,7 +1170,7 @@ module.exports = {
         "经管楼"
       ],
       "description": "仙溪南区图中标注的 B6 经管楼，位于南区中部偏右。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-south.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-south.jpg",
       "mapRegion": {
         "x": 0.55,
         "y": 0.36,
@@ -1198,7 +1198,7 @@ module.exports = {
         "B7楼"
       ],
       "description": "仙溪南区图中可见 B7 标注，正式楼名待进一步核验。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-south.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-south.jpg",
       "mapRegion": {
         "x": 0.66,
         "y": 0.43,
@@ -1227,7 +1227,7 @@ module.exports = {
         "仙溪校医院"
       ],
       "description": "仙溪南区图中标注的 A6 校医院，位于南区中下部。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-south.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-south.jpg",
       "mapRegion": {
         "x": 0.46,
         "y": 0.63,
@@ -1262,7 +1262,7 @@ module.exports = {
         "仙溪南区宿舍"
       ],
       "description": "仙溪南区左侧学生宿舍组团，图中可见 D12 至 D19。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-south.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-south.jpg",
       "mapRegion": {
         "x": 0.08,
         "y": 0.24,
@@ -1290,7 +1290,7 @@ module.exports = {
         "南区门"
       ],
       "description": "仙溪南区下方校门，图中位于道路中部。",
-      "mapAsset": "/assets/maps/campus-map-xianxi-south.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-xianxi-south.jpg",
       "mapRegion": {
         "x": 0.43,
         "y": 0.72,
@@ -1318,7 +1318,7 @@ module.exports = {
         "河滨校区"
       ],
       "description": "佛山大学河滨校区总览，图中分为北区与南区，包含食堂、宿舍、图书馆、体育馆和运动场等。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.02,
         "y": 0.08,
@@ -1347,7 +1347,7 @@ module.exports = {
         "北区食堂"
       ],
       "description": "河滨校区北区饭堂，图中位于河滨校区上半部分左侧。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.08,
         "y": 0.16,
@@ -1375,7 +1375,7 @@ module.exports = {
         "南区食堂"
       ],
       "description": "河滨校区南区饭堂，图中位于河滨校区中下部左侧。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.08,
         "y": 0.44,
@@ -1402,7 +1402,7 @@ module.exports = {
         "河滨北区宿舍"
       ],
       "description": "河滨校区北区宿舍，图中位于北区右上侧。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.62,
         "y": 0.12,
@@ -1428,7 +1428,7 @@ module.exports = {
         "河滨南区宿舍"
       ],
       "description": "河滨校区南区宿舍，图中位于河滨校区底部右侧。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.76,
         "y": 0.75,
@@ -1456,7 +1456,7 @@ module.exports = {
         "旧宿舍"
       ],
       "description": "河滨校区图中标注的旧宿舍楼，位于体育馆附近。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.42,
         "y": 0.43,
@@ -1483,7 +1483,7 @@ module.exports = {
         "河滨体育馆"
       ],
       "description": "河滨校区体育馆，图中位于校区中部。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.47,
         "y": 0.55,
@@ -1511,7 +1511,7 @@ module.exports = {
         "河滨运动场"
       ],
       "description": "河滨校区运动场，图中位于右侧中部。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.57,
         "y": 0.62,
@@ -1539,7 +1539,7 @@ module.exports = {
         "医院"
       ],
       "description": "河滨校区图中标注的口腔医院，位于右下侧道路附近。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.66,
         "y": 0.7,
@@ -1566,7 +1566,7 @@ module.exports = {
         "河滨图书馆"
       ],
       "description": "河滨校区图书馆，图中位于南区中下部偏左。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.35,
         "y": 0.78,
@@ -1593,7 +1593,7 @@ module.exports = {
         "河滨科技楼"
       ],
       "description": "河滨校区图中标注的科技楼，位于南区中部。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.43,
         "y": 0.63,
@@ -1619,7 +1619,7 @@ module.exports = {
         "河滨小卖部"
       ],
       "description": "河滨校区图中标注的小卖部，位于北区饭堂附近。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.45,
         "y": 0.24,
@@ -1645,7 +1645,7 @@ module.exports = {
         "河滨办公楼"
       ],
       "description": "河滨校区图中可见办公楼标注，具体用途待进一步核验。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.36,
         "y": 0.83,
@@ -1672,7 +1672,7 @@ module.exports = {
         "河滨校区校门"
       ],
       "description": "河滨校区图中右下侧道路附近校门。",
-      "mapAsset": "/assets/maps/campus-map-hebin.jpg",
+      "mapAsset": "/packageMaps/assets/maps/campus-map-hebin.jpg",
       "mapRegion": {
         "x": 0.88,
         "y": 0.7,

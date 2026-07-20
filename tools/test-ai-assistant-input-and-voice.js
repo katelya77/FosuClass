@@ -45,9 +45,9 @@ function makeWxMock() {
 }
 
 async function run() {
-  const js = read("miniprogram/pages/ai-assistant/ai-assistant.js");
-  const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
-  const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
+  const js = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
+  const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
+  const wxss = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss");
 
   assert(wxml.includes('confirm-type="search"'), "textarea must request search confirm key");
   assert(wxml.includes('confirm-hold="{{false}}"'), "confirm-hold must be false");

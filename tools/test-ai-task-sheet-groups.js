@@ -9,9 +9,9 @@ function read(file) {
 }
 
 function run() {
-  const js = read("miniprogram/pages/ai-assistant/ai-assistant.js");
-  const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
-  const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
+  const js = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
+  const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
+  const wxss = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss");
 
   ["课表查询", "个人课表", "校园服务", "使用与数据"].forEach((title) => {
     assert(js.includes(`title: "${title}"`), `task group should include ${title}`);

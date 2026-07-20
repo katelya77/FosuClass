@@ -7,9 +7,7 @@
     </view>
     <view class="xiaofu-title-block">
       <!-- Visually compact: conversation title is primary; product name stays for a11y/tests without large duplicate branding -->
-      <view class="xiaofu-title-line xiaofu-title-sr">
-        <text class="xiaofu-title">小佛助手</text>
-      </view>
+      <view class="xiaofu-title-line xiaofu-title-sr"><text class="xiaofu-title">小佛助手</text></view>
       <view class="xiaofu-conversation-sub xiaofu-conversation-primary">{{activeConversationTitle || conversationTitle || '新对话'}}</view>
       <view class="xiaofu-chip-row">
         <text wx:for="{{statusChips}}" wx:key="*this" class="xiaofu-chip status-{{connectionStatusClass}}">{{item}}</text>
@@ -194,20 +192,13 @@
                   <view>体感 {{card.weather.apparentTemperatureText}}</view>
                   <view>{{card.weather.targetLabel}} {{card.weather.lowText}} / {{card.weather.highText}}</view>
                 </view>
-                <view class="weather-icon">
-                  <view class="sun-core"></view>
-                  <view class="cloud cloud-a"></view>
-                  <view class="cloud cloud-b"></view>
-                  <view class="drop drop-a"></view>
-                  <view class="drop drop-b"></view>
-                  <view class="drop drop-c"></view>
-                </view>
+                <view class="weather-icon weather-icon-css" aria-hidden="true"></view>
               </view>
               <view class="weather-metrics">
-                <view class="weather-metric"><text>湿度</text><view>{{card.weather.humidityText}}</view></view>
-                <view class="weather-metric"><text>风速</text><view>{{card.weather.windSpeedText}}</view></view>
-                <view class="weather-metric"><text>降水</text><view>{{card.weather.precipitationText}}</view></view>
-                <view class="weather-metric"><text>降雨</text><view>{{card.weather.rainProbabilityText}}</view></view>
+                <view class="weather-metric"><text>湿度</text><text class="weather-metric-value">{{card.weather.humidityText}}</text></view>
+                <view class="weather-metric"><text>风速</text><text class="weather-metric-value">{{card.weather.windSpeedText}}</text></view>
+                <view class="weather-metric"><text>降水</text><text class="weather-metric-value">{{card.weather.precipitationText}}</text></view>
+                <view class="weather-metric"><text>降雨</text><text class="weather-metric-value">{{card.weather.rainProbabilityText}}</text></view>
               </view>
               <view class="weather-timeline" wx:if="{{card.weather.next6Hours.length}}">
                 <view wx:for="{{card.weather.next6Hours}}" wx:for-item="hour" wx:key="key" class="weather-hour">

@@ -278,7 +278,7 @@ async function main() {
   const navigation = ragAnswerBuilder.tryBuildContextNavigationAnswer("这个在哪里", baseContext(followup.contextSlots));
   assert(navigation, "expected context navigation response");
   assert.match(navigation.answer, /A1-101/);
-  assert.strictEqual(navigation.cards[0].actions[0].url, "/pages/campus-map/campus-map");
+  assert.strictEqual(navigation.cards[0].actions[0].url, "/packageMaps/pages/campus-map/campus-map");
 
   await assertScheduleQuery("换成25动医6", {
     contextSlots: followup.contextSlots,

@@ -21,15 +21,15 @@ global.Page = (config) => {
 };
 
 const ROOT = path.resolve(__dirname, "..");
-const { normalizeCard } = require("../miniprogram/pages/ai-assistant/ai-assistant.js");
+const { normalizeCard } = require("../miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 
 function read(file) {
   return fs.readFileSync(path.join(ROOT, file), "utf8");
 }
 
 function run() {
-  const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
-  const js = read("miniprogram/pages/ai-assistant/ai-assistant.js");
+  const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
+  const js = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 
   const card = normalizeCard({
     type: "schedule",

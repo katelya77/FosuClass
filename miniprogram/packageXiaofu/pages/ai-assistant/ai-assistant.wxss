@@ -232,15 +232,7 @@ button::after {
   overflow: hidden;
 }
 
-.xiaofu-title-line {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-  white-space: nowrap;
-  line-height: 1;
-}
+
 
 .xiaofu-conversation-sub {
   max-width: 100%;
@@ -366,6 +358,12 @@ button::after {
   font-weight: 700;
 }
 
+
+.xiaofu-title-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .xiaofu-title {
   flex: 0 0 auto;
   color: #1f2937;
@@ -1102,68 +1100,19 @@ button::after {
   height: 74rpx;
 }
 
-.sun-core {
-  position: absolute;
-  right: 14rpx;
-  top: 10rpx;
-  width: 48rpx;
-  height: 48rpx;
-  border-radius: 50%;
-  background: rgba(245, 158, 11, 0.25);
-  animation: weatherBreath 3.8s ease-in-out infinite;
-}
 
-.cloud {
-  position: absolute;
-  display: none;
-  height: 28rpx;
-  border-radius: 999rpx;
-  background: rgba(148, 163, 184, 0.55);
-}
 
-.cloud-a {
-  left: 8rpx;
-  top: 26rpx;
-  width: 64rpx;
-  animation: weatherCloud 4.8s ease-in-out infinite;
-}
 
-.cloud-b {
-  left: 28rpx;
-  top: 12rpx;
-  width: 44rpx;
-  opacity: 0.72;
-  animation: weatherCloud 5.6s ease-in-out infinite reverse;
-}
 
-.drop {
-  position: absolute;
-  display: none;
-  top: 46rpx;
-  width: 6rpx;
-  height: 18rpx;
-  border-radius: 999rpx;
-  background: rgba(37, 99, 235, 0.5);
-  animation: weatherDrop 1.8s ease-in-out infinite;
-}
 
-.drop-a { left: 30rpx; }
-.drop-b { left: 48rpx; animation-delay: 0.2s; }
-.drop-c { left: 66rpx; animation-delay: 0.4s; }
 
-.card-weather-cloud .sun-core {
-  opacity: 0.4;
-}
 
-.card-weather-cloud .cloud,
-.card-weather-rain .cloud,
-.card-weather-rain .drop {
-  display: block;
-}
 
-.card-weather-rain .sun-core {
-  display: none;
-}
+
+
+
+
+.card-weather-rain 
 
 .weather-metrics {
   display: grid;
@@ -1824,7 +1773,13 @@ button::after {
     height: 52rpx;
   }
 
-  .xiaofu-title {
+  
+.xiaofu-title-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.xiaofu-title {
     font-size: 28rpx;
   }
 
@@ -1857,3 +1812,5 @@ button::after {
     width: 104rpx;
   }
 }
+
+.weather-icon-css{width:72rpx;height:72rpx;border-radius:50%;background:linear-gradient(160deg,#ffe08a,#ffb300);opacity:.9;}
