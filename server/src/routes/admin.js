@@ -15,6 +15,7 @@ const router = express.Router();
 try {
   router.use(require("../modules/audit/routes"));
   router.use(require("../modules/dashboard/routes"));
+  router.use(require("../modules/ai-provider/routes"));
 } catch (error) {
   // Domain modules must not prevent legacy admin routes from loading.
   console.warn("[admin] optional domain modules failed to load:", error.message);

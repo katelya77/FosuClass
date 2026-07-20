@@ -1,0 +1,62 @@
+#!/usr/bin/env node
+const assert = require("assert");
+const fs = require("fs");
+const path = require("path");
+
+const root = path.resolve(__dirname, "..");
+
+function read(rel) {
+  return fs.readFileSync(path.join(root, rel), "utf8");
+}
+
+function run() {
+  const wxml = read("miniprogram/pages/ai-assistant/ai-assistant.wxml");
+  const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
+  const pageJs = read("miniprogram/pages/ai-assistant/ai-assistant.js");
+  const liveWxml = read("miniprogram/components/xiaofu-live-run/index.wxml");
+  const liveWxss = read("miniprogram/components/xiaofu-live-run/index.wxss");
+  const memoryWxss = read("miniprogram/components/xiaofu-memory-sheet/index.wxss");
+  const conversationWxml = read("miniprogram/components/xiaofu-conversation-sheet/index.wxml");
+  const conversationWxss = read("miniprogram/components/xiaofu-conversation-sheet/index.wxss");
+
+  // Fixed main title
+  assert.ok(wxml.includes(">小佛助手<"), "fixed title 小佛助手");
+  assert.ok(wxml.includes("xiaofu-conversation-sub"), "conversation subtitle row");
+  assert.ok(wxml.includes("statusChips"), "status chips");
+  assert.ok(wxml.includes("xiaofu-live-run"), "live run component");
+  assert.ok(wxml.includes("onSendOrCancel"), "send/cancel control");
+
+  // Header no longer puts full conversation title as main title expression only
+  assert.ok(!wxml.includes("{{conversationTitle || '小佛助手'}}"), "conversation title must not be main title");
+
+  // Live run
+  assert.ok(liveWxml.includes("live-run"), "live run markup");
+  assert.ok(liveWxss.includes("live-pulse") || liveWxss.includes("@keyframes"), "subtle animation");
+  assert.ok(pageJs.includes("liveRunEvents"), "page tracks live events");
+  assert.ok(pageJs.includes("onCancelRun"), "cancel support");
+  assert.ok(pageJs.includes("agentReadinessClient"), "readiness client");
+
+  // Memory layout anti vertical squeeze
+  assert.ok(memoryWxss.includes("flex-direction: row"), "memory title row horizontal");
+  assert.ok(memoryWxss.includes("min-width: 0"), "memory min-width 0");
+  assert.ok(memoryWxss.includes("white-space: nowrap") || memoryWxss.includes("memory-mode-title"), "title row");
+
+  // Conversation hierarchy
+  assert.ok(conversationWxml.includes("conversation-meta"), "meta layer");
+  assert.ok(conversationWxml.includes("source-badge"), "badge layer");
+  assert.ok(conversationWxml.includes("conversation-more"), "overflow menu");
+  assert.ok(conversationWxss.includes("-webkit-line-clamp: 2") || conversationWxss.includes("line-clamp"), "title clamp");
+
+  // Responsive helpers
+  assert.ok(wxss.includes("xiaofu-chip"), "chip styles");
+  assert.ok(wxss.includes("send-btn.cancel") || wxss.includes(".cancel"), "cancel button style");
+
+  // Status machine not contradictory pair hardcode
+  assert.ok(pageJs.includes("statusMachine"), "status machine");
+  assert.ok(pageJs.includes("network_offline"), "offline machine");
+  assert.ok(pageJs.includes("enhanced_ready") || pageJs.includes("public_ready"), "ready states");
+
+  console.log("test-xiaofu-runtime-ui: PASS");
+}
+
+run();

@@ -13,9 +13,23 @@ const capabilityManifestService = require("./capabilityManifestService");
 const { defaultKernel: agentKernel } = require("./agentKernel");
 const agentTraceRecorder = require("./agentTraceRecorder");
 const { defaultMemoryService } = require("./conversation/conversationMemoryService");
+const agentRunEventService = require("./agentRunEventService");
+const { loadingTextForEvent } = require("./runEventCatalog");
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function emitChatEvent(input, event = {}) {
+  if (typeof input.onEvent !== "function") return;
+  try {
+    input.onEvent(Object.assign({
+      at: nowIso(),
+      label: event.label || loadingTextForEvent(event, event.runtimeMode || input.runtimeMode || "public"),
+    }, event));
+  } catch (error) {
+    // events are best-effort
+  }
 }
 
 function recordEarlyTrace(payload = {}) {
@@ -752,6 +766,42 @@ async function chat(input = {}) {
   const requestedProtocolVersion = input.protocolVersion || context.protocolVersion || agentProtocol.PROTOCOL_VERSION;
   const protocolVersion = agentProtocol.normalizeProtocolVersion(requestedProtocolVersion);
   const runId = input.runId || agentProtocol.createRunId();
+  const eventInput = Object.assign({}, input, {
+    runtimeMode: runtimeDecision.runtimeMode,
+    onEvent: input.onEvent,
+  });
+  emitChatEvent(eventInput, {
+    type: "request.sanitized",
+    runtimeMode: runtimeDecision.runtimeMode,
+    status: "sanitized",
+  });
+  if (input.runId && agentRunEventService.isCancelled(runId)) {
+    emitChatEvent(eventInput, { type: "run.cancelled", runtimeMode: runtimeDecision.runtimeMode });
+    return buildResponse({
+      protocolVersion,
+      runId,
+      requestId,
+      conversationId,
+      runtimeMode: runtimeDecision.runtimeMode,
+      requestedRuntimeMode: runtimeDecision.requestedMode,
+      competitionAuthorized: runtimeDecision.authorized,
+      answer: "",
+      cards: [],
+      suggestions: [],
+      toolCalls: [],
+      provider: "mock",
+      providerPolicy: "tool-only",
+      externalProviderUsed: false,
+      fallback: false,
+      fallbackLayer: "none",
+      success: true,
+      status: "cancelled",
+      intent: { name: "conversational_help", slots: {} },
+      plan: [],
+      steps: [],
+      metrics: buildMetrics({ startTime, intentName: "cancelled", toolCalls: [] }),
+    });
+  }
 
   let memoryBundle = {
     principal: { authenticated: false, principalKey: "", runtimeMode: runtimeDecision.runtimeMode },
@@ -922,6 +972,7 @@ async function chat(input = {}) {
     requestId,
     conversationId,
     runId,
+    onEvent: input.onEvent,
   });
   const plan = execution.plan;
   const toolCalls = execution.toolCalls;
@@ -931,11 +982,43 @@ async function chat(input = {}) {
     summary: safetyGuard.redactSensitiveText(item.summary || "").slice(0, 160),
   }));
 
+  if (input.runId && agentRunEventService.isCancelled(runId)) {
+    emitChatEvent(eventInput, { type: "run.cancelled", runtimeMode: runtimeDecision.runtimeMode });
+    return buildResponse({
+      protocolVersion,
+      runId,
+      requestId,
+      conversationId,
+      runtimeMode: runtimeDecision.runtimeMode,
+      requestedRuntimeMode: runtimeDecision.requestedMode,
+      competitionAuthorized: runtimeDecision.authorized,
+      answer: "",
+      cards: [],
+      suggestions: [],
+      toolCalls: publicToolCalls,
+      provider: "mock",
+      providerPolicy: "tool-only",
+      externalProviderUsed: false,
+      success: true,
+      status: "cancelled",
+      intent,
+      plan,
+      steps: execution.steps,
+      metrics: buildMetrics({ startTime, intent, toolCalls, fallback: false }),
+    });
+  }
+
   if (runtimeDecision.runtimeMode === "public" &&
     !isFactToolIntent(intent) &&
     !isProjectKnowledgeIntent(intent) &&
     intent.name !== "explain_personal_import" &&
     intent.name !== "clarify_missing_slot") {
+    emitChatEvent(eventInput, {
+      type: "response.composing",
+      runtimeMode: runtimeDecision.runtimeMode,
+      intentName: intent.name,
+      providerUsed: false,
+    });
     const response = attachMemory(buildResponse({
       protocolVersion,
       runId,
@@ -1031,8 +1114,24 @@ async function chat(input = {}) {
   const providerDecisionReason = policyDecision.reason || (policyDecision.useExternal ? "external provider selected" : "local provider selected");
   try {
     const generated = policyDecision.useExternal
-      ? await providerChainService.generateWithChain(providerInput, { runtimeMode: runtimeDecision.runtimeMode, providerRuntimeConfig })
+      ? await providerChainService.generateWithChain(providerInput, {
+        runtimeMode: runtimeDecision.runtimeMode,
+        providerRuntimeConfig,
+        principal: memoryBundle.principal,
+        onEvent: (event) => emitChatEvent(eventInput, Object.assign({
+          runtimeMode: runtimeDecision.runtimeMode,
+          intentName: intent.name,
+        }, event)),
+      })
       : deterministicGenerated;
+    if (!policyDecision.useExternal) {
+      emitChatEvent(eventInput, {
+        type: "response.composing",
+        runtimeMode: runtimeDecision.runtimeMode,
+        intentName: intent.name,
+        providerUsed: false,
+      });
+    }
     providerName = generated.provider || providerName;
     providerPayload = stableGeneratedPayload(generated);
     externalProviderUsed = policyDecision.useExternal && providerName !== "mock";
@@ -1046,6 +1145,13 @@ async function chat(input = {}) {
       });
       if (!externalProviderUsed) {
         fallbackReason = summarizeProviderChainFallback(generated.providerChain);
+        emitChatEvent(eventInput, {
+          type: "run.degraded",
+          runtimeMode: runtimeDecision.runtimeMode,
+          intentName: intent.name,
+          reasonCode: String(fallbackReason || "PROVIDER_FALLBACK").slice(0, 80),
+          providerUsed: false,
+        });
       }
     }
   } catch (error) {
@@ -1053,6 +1159,13 @@ async function chat(input = {}) {
     externalProviderUsed = false;
     fallback = true;
     fallbackReason = classifyProviderFailure(error);
+    emitChatEvent(eventInput, {
+      type: "provider.failed",
+      runtimeMode: runtimeDecision.runtimeMode,
+      intentName: intent.name,
+      reasonCode: String(fallbackReason || "provider_failed").slice(0, 80),
+      providerUsed: false,
+    });
     providerPayload = isProjectKnowledgeIntent(intent)
       ? stableGeneratedPayload(projectKnowledgeService.generateFallbackResponse(intent.name))
       : null;
@@ -1062,6 +1175,13 @@ async function chat(input = {}) {
       summary: fallbackReason,
     });
   }
+
+  emitChatEvent(eventInput, {
+    type: "response.composing",
+    runtimeMode: runtimeDecision.runtimeMode,
+    intentName: intent.name,
+    providerUsed: externalProviderUsed,
+  });
 
   const stable = mergeGeneratedPayloads({
     intent,
@@ -1118,7 +1238,7 @@ async function chat(input = {}) {
     intentName: intent.name,
     context,
     runId,
-    status: "completed",
+    status: fallbackReason ? "degraded" : "completed",
     stepCount: (execution.steps || []).length,
     contextSlots: buildContextSlots(intent, intent.slots || {}),
     pendingClarification: pendingPatch.pendingClarification,
@@ -1133,6 +1253,13 @@ async function chat(input = {}) {
     fallbackLayer: fallbackReason ? "server" : "none",
     fallbackReason,
     evidenceComplete: response.evidence && response.evidence.complete === true,
+  });
+  emitChatEvent(eventInput, {
+    type: fallbackReason ? "run.degraded" : "run.completed",
+    runtimeMode: runtimeDecision.runtimeMode,
+    intentName: intent.name,
+    providerUsed: externalProviderUsed,
+    reasonCode: fallbackReason ? String(fallbackReason).slice(0, 80) : "",
   });
   return response;
 }

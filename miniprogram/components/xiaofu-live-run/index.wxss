@@ -1,0 +1,80 @@
+.live-run {
+  margin: 8rpx 0 16rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 16rpx;
+  background: #f7f5f1;
+  border: 1rpx solid rgba(40, 36, 32, 0.06);
+}
+
+.live-run-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.live-run-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  min-width: 0;
+}
+
+.live-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 999rpx;
+  background: rgba(40, 36, 32, 0.18);
+  flex-shrink: 0;
+}
+
+.live-run-row.done .live-dot {
+  background: rgba(56, 142, 60, 0.55);
+}
+
+.live-run-row.active .live-dot,
+.live-dot.pulse {
+  background: #c4302b;
+  box-shadow: 0 0 0 0 rgba(196, 48, 43, 0.35);
+  animation: live-pulse 1.4s ease-out infinite;
+}
+
+.live-label {
+  min-width: 0;
+  flex: 1;
+  font-size: 24rpx;
+  line-height: 1.45;
+  color: #6b635a;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.live-run-row.active .live-label {
+  color: #2d2925;
+  font-weight: 500;
+}
+
+.live-expand {
+  margin-top: 10rpx;
+  font-size: 22rpx;
+  color: #8a8178;
+}
+
+.live-all {
+  margin-top: 10rpx;
+  padding-top: 8rpx;
+  border-top: 1rpx solid rgba(40, 36, 32, 0.06);
+}
+
+.live-all-item {
+  font-size: 22rpx;
+  color: #8a8178;
+  line-height: 1.5;
+  padding: 4rpx 0;
+}
+
+@keyframes live-pulse {
+  0% { box-shadow: 0 0 0 0 rgba(196, 48, 43, 0.35); }
+  70% { box-shadow: 0 0 0 12rpx rgba(196, 48, 43, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(196, 48, 43, 0); }
+}

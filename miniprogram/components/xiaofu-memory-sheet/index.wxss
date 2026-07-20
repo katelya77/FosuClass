@@ -5,10 +5,13 @@
   bottom: 0;
   z-index: 40;
   max-height: 78vh;
-  padding: 12rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
+  display: flex;
+  flex-direction: column;
+  padding: 12rpx 24rpx 0;
   border-radius: 28rpx 28rpx 0 0;
   background: #fbfaf8;
   box-shadow: 0 -8rpx 40rpx rgba(40, 36, 32, 0.12);
+  box-sizing: border-box;
 }
 
 .sheet-handle {
@@ -17,6 +20,7 @@
   margin: 8rpx auto 18rpx;
   border-radius: 999rpx;
   background: rgba(40, 36, 32, 0.12);
+  flex-shrink: 0;
 }
 
 .memory-head {
@@ -25,18 +29,27 @@
   align-items: flex-start;
   gap: 16rpx;
   margin-bottom: 18rpx;
+  flex-shrink: 0;
+}
+
+.memory-head-text {
+  min-width: 0;
+  flex: 1;
 }
 
 .memory-title {
   font-size: 32rpx;
   font-weight: 600;
   color: #2d2925;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
 .memory-subtitle {
   margin-top: 6rpx;
   font-size: 22rpx;
   color: #8a8178;
+  line-height: 1.4;
 }
 
 .sheet-close {
@@ -47,19 +60,31 @@
   background: #efece7;
   border-radius: 999rpx;
   line-height: 1.4;
+  flex-shrink: 0;
 }
 
 .sheet-close::after {
   border: none;
 }
 
+.memory-scroll {
+  flex: 1;
+  min-height: 0;
+  max-height: 62vh;
+  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+}
+
 .memory-mode-list {
   display: flex;
   flex-direction: column;
   gap: 12rpx;
+  width: 100%;
 }
 
 .memory-mode-item {
+  width: 100%;
+  box-sizing: border-box;
   margin: 0;
   padding: 18rpx 20rpx;
   text-align: left;
@@ -67,6 +92,7 @@
   background: #fff;
   border: 1rpx solid rgba(40, 36, 32, 0.08);
   line-height: 1.4;
+  min-height: 96rpx;
 }
 
 .memory-mode-item.active {
@@ -74,20 +100,50 @@
   background: #fff8f7;
 }
 
-.memory-mode-item::after {
-  border: none;
+.memory-mode-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 12rpx;
+  width: 100%;
+  min-width: 0;
+}
+
+.memory-mode-check {
+  width: 28rpx;
+  height: 28rpx;
+  border-radius: 999rpx;
+  border: 2rpx solid rgba(40, 36, 32, 0.22);
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.memory-mode-check.on {
+  border-color: #c4302b;
+  background: radial-gradient(circle at center, #c4302b 0 55%, transparent 58%);
 }
 
 .memory-mode-title {
+  flex: 1;
+  min-width: 0;
   font-size: 28rpx;
   color: #2d2925;
   font-weight: 600;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .memory-mode-desc {
-  margin-top: 8rpx;
+  margin-top: 10rpx;
+  margin-left: 40rpx;
   font-size: 22rpx;
   color: #6b635a;
+  line-height: 1.5;
+  white-space: normal;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .memory-note {
@@ -102,18 +158,21 @@
 
 .memory-actions {
   display: flex;
+  flex-direction: column;
   gap: 12rpx;
   margin-top: 18rpx;
 }
 
 .memory-action {
-  flex: 1;
+  width: 100%;
   margin: 0;
   padding: 16rpx 12rpx;
   font-size: 24rpx;
   border-radius: 16rpx;
   background: #efece7;
   color: #3f3a34;
+  line-height: 1.4;
+  box-sizing: border-box;
 }
 
 .memory-action.danger {
@@ -123,4 +182,15 @@
 
 .memory-action::after {
   border: none;
+}
+
+@media (min-width: 390px) {
+  .memory-actions {
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .memory-action {
+    flex: 1 1 30%;
+    min-width: 0;
+  }
 }

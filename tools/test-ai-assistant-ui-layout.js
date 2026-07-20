@@ -19,7 +19,11 @@ function run() {
   const wxss = read("miniprogram/pages/ai-assistant/ai-assistant.wxss");
 
   assert(wxml.includes("xiaofu-header"), "AI page should use the Xiaofu light header");
-  assert(wxml.includes("xiaofu-title") && wxml.includes("xiaofu-status"), "header title and compact status should render");
+  assert(
+    wxml.includes("xiaofu-title")
+    && (wxml.includes("xiaofu-status") || wxml.includes("xiaofu-chip") || wxml.includes("statusChips")),
+    "header title and compact status should render"
+  );
   assert(!wxml.includes("xiaofu-subtitle"), "header should not keep the old long subtitle");
   assert(wxml.includes("openHeaderMenu"), "clear action should move into the more menu");
   assert(wxml.includes("header-menu-sheet"), "more menu should render as a bottom sheet");
@@ -34,7 +38,12 @@ function run() {
   assert(wxml.includes("bottom-sheet privacy-sheet"), "privacy details should be a bottom sheet");
   assert(wxml.includes("message-scroll"), "message area should remain the main content");
   assert(wxml.includes("xiaofu-agent-run"), "agent run component should be consumed");
-  assert(wxml.includes("connectionStatusText"), "connection status should be data-driven");
+  assert(
+    wxml.includes("connectionStatusText") || wxml.includes("statusChips") || wxml.includes("xiaofu-chip"),
+    "connection/readiness status should be data-driven"
+  );
+  assert(wxml.includes("小佛助手"), "main title fixed");
+  assert(wxml.includes("xiaofu-conversation-sub") || wxml.includes("activeConversationTitle"), "conversation subtitle row");
   assert(!wxml.includes(">在线<"), "online status must not be hardcoded");
   assert(!/\{\{\s*card\.type\s*\}\}/.test(wxml), "WXML must not render raw card.type");
 

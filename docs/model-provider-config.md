@@ -29,15 +29,25 @@ DEEPSEEK_STRICT_JSON_MODE=false
 AI_MAX_CONTEXT_COURSES=80
 AI_LOG_PROMPTS=false
 AI_ALLOW_PERSONAL_CONTEXT=false
+AI_PROVIDER_CHAIN=deepseek,coze,mock
+COZE_ENABLED=false
+COZE_EXPIRES_AT=
+COZE_PROVIDER_ROLE=temporary
 COZE_API_BASE_URL=https://api.coze.cn
 COZE_API_KEY=
 COZE_BOT_ID=
-COZE_USER_ID=fosuclass-user
+COZE_AGENT_ID=
+COZE_USER_ID=
 COZE_CHAT_ENDPOINT=/v3/chat
+COZE_TIMEOUT_MS=15000
 COZE_POLL_ENABLED=true
 COZE_POLL_INTERVAL_MS=1000
-COZE_POLL_MAX_ATTEMPTS=8
+COZE_POLL_MAX_ATTEMPTS=12
 ```
+
+> Coze 仅接受官方 API Token。不要填写学校账户密码或浏览器 Cookie。
+> `COZE_USER_ID` 默认由服务端按 Principal 生成伪匿名 ID，不再使用全员共用的固定值。
+> 详见 `docs/xiaofu-agent/coze-temporary-provider.md`。
 
 ## CloudBase Hunyuan
 
