@@ -440,6 +440,56 @@ const WELCOME_EXAMPLES = [
   "可以查询什么",
 ];
 
+const WELCOME_TASK_CARDS = [
+  { id: "today", title: "看今天安排", desc: "整理今日课程与提醒", question: "今天有什么课" },
+  { id: "empty", title: "找连续空教室", desc: "按校区与节次核验占用", question: "现在有连续空教室吗" },
+  { id: "class", title: "查班级课表", desc: "按班级/教学周查询", question: "查班级本周课表" },
+  { id: "study", title: "规划自习时间", desc: "结合空教室与课表空档", question: "帮我规划今天下午自习时间" },
+];
+
+const MEMORY_MODE_LABELS = {
+  local_only: "记忆：仅本机",
+  session_state: "记忆：会话状态",
+  cloud_sync: "记忆：已同步",
+};
+
+function mapMemoryModeText(mode) {
+  return MEMORY_MODE_LABELS[String(mode || "local_only")] || MEMORY_MODE_LABELS.local_only;
+}
+
+function detectConnectionStatus() {
+  try {
+    const network = wx.getNetworkType ? null : null;
+  } catch (error) {
+    // ignore
+  }
+  return new Promise((resolve) => {
+    if (typeof wx === "undefined" || !wx.getNetworkType) {
+      resolve({ connectionStatusText: "状态未知", connectionStatusClass: "unknown" });
+      return;
+    }
+    wx.getNetworkType({
+      success: (res) => {
+        const type = String(res.networkType || "").toLowerCase();
+        if (!type || type === "none") {
+          resolve({ connectionStatusText: "离线", connectionStatusClass: "offline" });
+          return;
+        }
+        resolve({ connectionStatusText: "已连接", connectionStatusClass: "online" });
+      },
+      fail: () => resolve({ connectionStatusText: "状态未知", connectionStatusClass: "unknown" }),
+    });
+  });
+}
+
+function mapRuntimeModeLabel(mode, connectionClass) {
+  if (connectionClass === "offline") return "离线模式 · 使用本地能力";
+  const value = String(mode || "public").toLowerCase();
+  if (value === "trial" || value === "competition") return "体验模式 · 增强理解";
+  if (value === "dev") return "开发模式 · 增强理解";
+  return "稳定模式 · 已连接";
+}
+
 function buildTaskPanelGroups() {
   return [
     {
@@ -799,9 +849,9 @@ function inferCourseTimeRange(source) {
 
 function mapProviderLabel(provider) {
   const normalized = String(provider || "unknown").toLowerCase();
-  if (normalized.indexOf("mock") >= 0 || normalized.indexOf("local") >= 0) return "已核验课表数据";
-  if (normalized && normalized !== "unknown") return "已核验课表数据";
-  return "已生成卡片";
+  if (normalized.indexOf("mock") >= 0 || normalized.indexOf("local") >= 0) return "本地能力结果";
+  if (normalized && normalized !== "unknown") return "校园服务结果";
+  return "已生成结果";
 }
 
 function mapSafetyModeLabel(mode) {
@@ -825,25 +875,31 @@ function mapCardTypeLabel(type) {
 }
 
 function inferEvidenceLabel(source = {}) {
+  if (source.fallback === true || source.fallbackLayer === "client" || source.fallbackLayer === "server") {
+    if (!source.evidence || !source.evidence.complete) return "本地能力结果";
+  }
   const names = (Array.isArray(source.toolCalls) ? source.toolCalls : [])
-    .map((item) => String(item && (item.name || item.tool || item.type) || "").toLowerCase());
+    .concat(Array.isArray(source.steps) ? source.steps : [])
+    .map((item) => String(item && (item.name || item.tool || item.toolName || item.type || item.label) || "").toLowerCase());
   const cardTypes = (Array.isArray(source.cards) ? source.cards : [])
     .map((item) => String(item && item.type || "").toLowerCase());
-  const text = names.concat(cardTypes).join("|");
+  const intent = String(
+    (source.metrics && (source.metrics.canonicalIntent || source.metrics.intentName))
+    || source.intent
+    || ""
+  ).toLowerCase();
+  const text = names.concat(cardTypes).concat([intent]).join("|");
   if (/diagnose_data_status|schedule_status|数据状态/.test(text)) return "数据状态";
   if (/navigation|入口|官网/.test(text)) return "已找到校园入口";
   if (/weather|天气/.test(text)) return "已获取天气数据";
   if (/campus|map|route|location|地图|地点|位置/.test(text)) return "已查询校园地图";
-  if (/empty|空教室/.test(text)) return "已核验教室占用";
-  if (/fosu_rag_retrieve|school_knowledge|知识/.test(text)) return "校园信息";
-  if (/guide|import|help|说明|帮助|指引/.test(text)) return "使用说明";
+  if (/empty|空教室|continuous/.test(text)) return "已核验教室占用";
+  if (/fosu_rag_retrieve|school_knowledge|知识|project_qa|rag/.test(text)) return "来自已发布校园知识";
+  if (/guide|import|help|说明|帮助|指引|conversational_help/.test(text)) return "使用说明";
   if (/school|schedule|today|tomorrow|week|term|teacher|course|classroom|detail|课表|课程|教师|教室|教学周|校历|查询全校/.test(text)) {
     return "已核验课表数据";
   }
-  const intent = source.metrics && source.metrics.intentName || "";
-  if (/navigation/.test(String(intent).toLowerCase())) return "已找到校园入口";
-  if (/weather/.test(String(intent).toLowerCase())) return "已获取天气数据";
-  return "";
+  return "校园服务结果";
 }
 
 function statusText(status) {
@@ -875,12 +931,12 @@ function normalizeSafety(safety) {
   const fallbackReason = safeText(source.fallbackReason || "", 80);
   const providerDecisionReason = "";
   const externalUsed = source.externalProviderUsed === true;
-  const providerLabel = "已核验课表数据";
-  let text = "已核验课表数据";
+  const providerLabel = fallbackReason ? "本地能力结果" : (externalUsed ? "校园服务结果" : "已核验结果");
+  let text = providerLabel;
   if (fallbackReason) {
-    text = "已核验课表数据";
+    text = "本地能力结果";
   } else if (externalUsed) {
-    text = "已生成卡片";
+    text = "校园服务结果";
   }
   return {
     provider,
@@ -1241,7 +1297,7 @@ function normalizeCard(card, messageId, index, expandedCards, message) {
     ? "信息以知识库来源和学校官方页面为准"
     : (type === "schedule_status" ? "数据状态来自本机缓存和发布包元信息"
       : (type === "help" || type === "clarification" || type === "personal_schedule"
-        ? "结果会保留在当前查询中"
+        ? "结果会保留在当前对话中"
         : "课表以学校教务系统为准"));
   const primaryActions = actions.slice(0, 1);
   const secondaryActions = actions.slice(1, 4);
@@ -1270,6 +1326,27 @@ function normalizeCard(card, messageId, index, expandedCards, message) {
   });
 }
 
+function normalizeDisplaySteps(source = {}) {
+  const steps = Array.isArray(source.steps) && source.steps.length
+    ? source.steps
+    : (Array.isArray(source.taskSteps) ? source.taskSteps : []);
+  return steps.slice(0, 8).map((step, index) => {
+    const label = safeText(step.label || step.reason || step.name || `步骤 ${index + 1}`, 40);
+    const tool = safeText(step.tool || step.toolName || "", 40);
+    const publicLabel = /_/.test(label) && !/[\u4e00-\u9fff]/.test(label)
+      ? mapToolName(label)
+      : label;
+    return {
+      id: safeText(step.id || step.key || `step-${index + 1}`, 40),
+      label: publicLabel,
+      tool: /_/.test(tool) ? mapToolName(tool) : tool,
+      status: step.status || "success",
+      durationMs: Number(step.durationMs || 0) || 0,
+      errorCode: safeText(step.errorCode || "", 40),
+    };
+  });
+}
+
 function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
   const source = message || {};
   const id = source.id || `m-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
@@ -1280,12 +1357,16 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
   }) : null;
   const metrics = normalizeMetrics(source.metrics);
   const role = source.role === "user" ? "user" : "assistant";
+  const displaySteps = normalizeDisplaySteps(source);
   const displayTaskSteps = Array.isArray(source.taskSteps)
     ? source.taskSteps.slice(0, 6).map(normalizeTaskStep)
     : [];
-  const displayToolCalls = displayTaskSteps.length
-    ? displayTaskSteps
-    : (Array.isArray(source.toolCalls) ? source.toolCalls.slice(0, 4).map(normalizeToolCall) : []);
+  const displayToolCalls = displaySteps.length
+    ? []
+    : (displayTaskSteps.length
+      ? displayTaskSteps
+      : (Array.isArray(source.toolCalls) ? source.toolCalls.slice(0, 4).map(normalizeToolCall) : []));
+  const fallback = source.fallback === true || source.fallbackLayer === "client" || source.fallbackLayer === "server";
   return Object.assign({}, source, {
     id,
     role,
@@ -1297,6 +1378,8 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
     suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 6).map((item) => safeText(item, 60)).filter(Boolean) : [],
     toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls : [],
     taskSteps: Array.isArray(source.taskSteps) ? source.taskSteps : [],
+    steps: Array.isArray(source.steps) ? source.steps : [],
+    displaySteps,
     evidence: source.evidence || null,
     evidenceText: buildEvidenceText(source.evidence, evidenceLabel),
     displayToolCalls,
@@ -1304,6 +1387,10 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
     displaySafety,
     metrics,
     metricsText: metrics ? `耗时 ${metrics.latencyMs} ms` : "",
+    fallback,
+    fallbackBanner: fallback ? "网络暂不可用，已使用本地能力完成本次任务" : "",
+    runStatus: source.status || (fallback ? "degraded" : "completed"),
+    memory: source.memory || null,
     showAvatar: role === "assistant" && (!previousMessage || previousMessage.role === "user"),
     timeText: source.timeText || timeText(),
   });
@@ -1359,14 +1446,18 @@ function buildConversationDisplayList(activeConversationId) {
     updatedAtText: formatConversationTime(item.updatedAt || item.createdAt),
     messageCount: item.messageCount,
     active: item.conversationId === activeConversationId,
+    memoryModeText: mapMemoryModeText(item.memoryMode || "local_only"),
+    lastTaskType: item.lastIntent || item.lastTaskType || "",
   }));
 }
 
 function isNewConversationCommand(text) {
   const value = String(text || "").replace(/\s+/g, "");
-  return /^(新建|创建|新开|开启|开一个)(一个)?(新)?查询$/.test(value) ||
+  return /^(新建|创建|新开|开启|开一个)(一个)?(新)?(查询|对话)$/.test(value) ||
     value === "新建一个查询" ||
-    value === "创建新查询";
+    value === "创建新查询" ||
+    value === "新建对话" ||
+    value === "新建一个对话";
 }
 
 function parseActionUrl(url) {
@@ -1425,16 +1516,14 @@ function resolveProviderState(messages) {
 
 function buildHeaderSubtitle(state) {
   const source = state || {};
-  if (source.lastFallbackReason) {
-    return "本地规则可用";
+  if (source.connectionStatusClass === "offline" || source.lastFallbackReason) {
+    return "离线模式 · 使用本地能力";
   }
-  if (source.lastExternalProviderUsed) {
-    return "已生成卡片";
-  }
+  if (source.runtimeModeLabel) return source.runtimeModeLabel;
   if (source.allowPersonalContext === true) {
-    return "校园事项 · 全校课表 · 摘要已开";
+    return "稳定模式 · 课表摘要已开";
   }
-  return "校园事项 · 全校课表 · 常用入口";
+  return "稳定模式 · 校园任务助手";
 }
 
 function bottomScrollPatch(animated) {
@@ -1458,6 +1547,7 @@ Page({
   data: {
     quickActions: QUICK_ACTIONS,
     welcomeExamples: WELCOME_EXAMPLES,
+    welcomeTaskCards: WELCOME_TASK_CARDS,
     capabilityGuideGroups: CAPABILITY_GUIDE_GROUPS,
     taskPanelGroups: [],
     taskPanelReady: false,
@@ -1465,18 +1555,25 @@ Page({
     messages: [],
     conversations: [],
     activeConversationId: "",
-    activeConversationTitle: "新查询",
+    activeConversationTitle: "新对话",
+    conversationTitle: "新对话",
     activeConversationContext: contextManager.createEmptyContextSlots(),
     expandedCards: {},
     inputValue: "",
     inputFocus: false,
     sending: false,
-    sendingStatusText: "小佛助手正在理解",
+    sendingStatusText: "处理中",
     showTaskPanel: false,
     showConversationSheet: false,
     showCapabilityGuide: false,
     showHeaderMenu: false,
+    showMemorySheet: false,
     showPrivacySheet: false,
+    connectionStatusText: "检测中",
+    connectionStatusClass: "unknown",
+    runtimeModeLabel: "稳定模式 · 已连接",
+    memoryMode: "local_only",
+    memoryStatusText: "记忆：仅本机",
     slowRequest: false,
     showPrivacyTip: false,
     privacyExpanded: false,
@@ -1491,7 +1588,7 @@ Page({
     lastExternalProviderUsed: false,
     lastFallbackReason: "",
     lastProvider: "unknown",
-    headerSubtitle: "校园事项 · 全校课表 · 常用入口",
+    headerSubtitle: "稳定模式 · 校园任务助手",
     historyTrimNotice: false,
     hasHeroLogo: true,
     xiaofuFloatEnabled: true,
@@ -1542,15 +1639,32 @@ Page({
       activeConversationTitle: activeConversation.title,
       activeConversationContext: activeContextSlots,
     }, privacyState, providerState, buildXiaofuFloatState());
+    nextState.conversationTitle = activeConversation.title || "新对话";
+    nextState.memoryMode = wx.getStorageSync("FOSU_AI_MEMORY_MODE") || "local_only";
+    nextState.memoryStatusText = mapMemoryModeText(nextState.memoryMode);
     nextState.headerSubtitle = buildHeaderSubtitle(nextState);
 
     this.setData(Object.assign(nextState, bottomScrollPatch(false)));
     this.initVoiceInput();
+    this.refreshConnectionStatus();
 
     const question = decodeQuery(options && (options.q || options.question || ""));
     if (!demoMode && question) {
       setTimeout(() => this.sendMessage(question), 260);
     }
+  },
+
+  refreshConnectionStatus() {
+    detectConnectionStatus().then((status) => {
+      if (this._aiPageUnloaded) return;
+      const runtimeModeLabel = mapRuntimeModeLabel(this.data.runtimeMode || "public", status.connectionStatusClass);
+      this.setData({
+        connectionStatusText: status.connectionStatusText,
+        connectionStatusClass: status.connectionStatusClass,
+        runtimeModeLabel,
+        headerSubtitle: buildHeaderSubtitle(Object.assign({}, this.data, status, { runtimeModeLabel })),
+      });
+    });
   },
 
   onShow() {
@@ -1563,6 +1677,7 @@ Page({
     const nextState = Object.assign({}, privacyState, resolveProviderState(this.data.messages), buildXiaofuFloatState());
     nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
     this.setData(nextState);
+    this.refreshConnectionStatus();
   },
 
   onUnload() {
@@ -1619,7 +1734,7 @@ Page({
       scrollWithAnimation: false,
     });
     if (!options || options.toast !== false) {
-      wx.showToast({ title: "已新建查询", icon: "none" });
+      wx.showToast({ title: "已新建对话", icon: "none" });
     }
     return conversation;
   },
@@ -1680,7 +1795,7 @@ Page({
     const conversationId = event && event.currentTarget && event.currentTarget.dataset.conversationId || this.data.activeConversationId;
     wx.showModal({
       title: "清空当前查询",
-      content: "只清空这条查询记录的内容和结果，不影响其他记录和课表数据。",
+      content: "只清空这条对话的内容和结果，不影响其他对话和课表数据。",
       confirmText: "清空",
       success: (res) => {
         if (!res.confirm) return;
@@ -2069,9 +2184,12 @@ Page({
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
           toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
           taskSteps: Array.isArray(response.taskSteps) ? response.taskSteps : [],
+          steps: Array.isArray(response.steps) ? response.steps : (Array.isArray(response.taskSteps) ? response.taskSteps : []),
           evidence: response.evidence || null,
           safety: response.safety || null,
           metrics: response.metrics || null,
+          fallback: false,
+          status: "completed",
         });
         this.setMessages(nextMessages.concat(assistantMessage), {
           sending: false,
@@ -2164,15 +2282,27 @@ Page({
         } else if (safety.clearPendingClarification || response && response.metrics && response.metrics.intentName !== "clarify_missing_slot") {
           aiAssistantService.clearPendingClarification();
         }
-        const assistantMessage = makeMessage("assistant", response.answer || "已为你整理以下查询结果。", {
+        const assistantMessage = makeMessage("assistant", response.answer || "已为你整理以下结果。", {
           cards: Array.isArray(response.cards) ? response.cards : [],
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
           toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
           taskSteps: Array.isArray(response.taskSteps) ? response.taskSteps : [],
+          steps: Array.isArray(response.steps) ? response.steps : (Array.isArray(response.taskSteps) ? response.taskSteps : []),
           evidence: response.evidence || null,
           safety,
           metrics: response.metrics || null,
+          fallback: response.fallback === true,
+          fallbackLayer: response.fallbackLayer || "",
+          status: response.status || "completed",
+          memory: response.memory || null,
+          intent: response.intent || (response.metrics && response.metrics.canonicalIntent) || "",
         });
+        if (response.memory && response.memory.mode) {
+          this.setData({
+            memoryMode: response.memory.mode,
+            memoryStatusText: mapMemoryModeText(response.memory.mode),
+          });
+        }
         let finalMessages = (this.data.messages || []).slice();
         if (streamAssistantId) {
           const existingIndex = finalMessages.findIndex((item) => item.id === streamAssistantId);
@@ -2345,12 +2475,125 @@ Page({
       showTaskPanel: false,
       showPrivacySheet: false,
       showConversationSheet: false,
+      showMemorySheet: false,
       privacyExpanded: false,
     });
   },
 
   closeHeaderMenu() {
     this.setData({ showHeaderMenu: false });
+  },
+
+  openMemorySheet() {
+    this.setData({
+      showMemorySheet: true,
+      showHeaderMenu: false,
+      showConversationSheet: false,
+      showTaskPanel: false,
+      showCapabilityGuide: false,
+      showPrivacySheet: false,
+    });
+  },
+
+  closeMemorySheet() {
+    this.setData({ showMemorySheet: false });
+  },
+
+  onMemoryModeChange(event) {
+    const mode = event.detail && event.detail.mode || "local_only";
+    if (mode === "cloud_sync") {
+      wx.showModal({
+        title: "开启同步脱敏对话",
+        content: "将仅保存脱敏后的有限最近消息，不含学号密码、完整个人课表和隐藏推理。可随时关闭并清除。",
+        confirmText: "开启",
+        success: (res) => {
+          if (!res.confirm) return;
+          this.applyMemoryMode(mode);
+        },
+      });
+      return;
+    }
+    this.applyMemoryMode(mode);
+  },
+
+  applyMemoryMode(mode) {
+    try {
+      wx.setStorageSync("FOSU_AI_MEMORY_MODE", mode);
+    } catch (error) {
+      // best effort
+    }
+    this.setData({
+      memoryMode: mode,
+      memoryStatusText: mapMemoryModeText(mode),
+      showMemorySheet: false,
+    });
+    wx.showToast({ title: mapMemoryModeText(mode), icon: "none" });
+  },
+
+  onClearCurrentMemory() {
+    const conversationId = this.data.activeConversationId;
+    if (conversationId) conversationStore.clearConversation(conversationId);
+    this.setData({
+      messages: [],
+      showMemorySheet: false,
+    });
+    wx.showToast({ title: "已清除当前对话记忆", icon: "none" });
+  },
+
+  onClearAllMemory() {
+    wx.showModal({
+      title: "清除全部云端记忆",
+      content: "将请求删除你账号下的服务端会话状态。本机对话列表仍可单独管理。",
+      confirmText: "清除",
+      success: (res) => {
+        if (!res.confirm) return;
+        this.setData({ memoryMode: "local_only", memoryStatusText: mapMemoryModeText("local_only"), showMemorySheet: false });
+        try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", "local_only"); } catch (error) { /* ignore */ }
+        wx.showToast({ title: "已切换为仅本机", icon: "none" });
+      },
+    });
+  },
+
+  onConversationSheetSelect(event) {
+    const conversationId = event.detail && event.detail.conversationId;
+    if (conversationId) this.switchConversationById(conversationId);
+  },
+
+  onConversationSheetRename(event) {
+    const conversationId = event.detail && event.detail.conversationId;
+    if (!conversationId) return;
+    this.renameConversation({ currentTarget: { dataset: { conversationId } } });
+  },
+
+  onConversationSheetClear(event) {
+    const conversationId = event.detail && event.detail.conversationId;
+    if (!conversationId) return;
+    this.clearConversation({ currentTarget: { dataset: { conversationId } } });
+  },
+
+  onConversationSheetDelete(event) {
+    const conversationId = event.detail && event.detail.conversationId;
+    if (!conversationId) return;
+    this.deleteConversation({ currentTarget: { dataset: { conversationId } } });
+  },
+
+  onMessageFeedback(event) {
+    const feedback = event.currentTarget.dataset.feedback;
+    const messageId = event.currentTarget.dataset.messageId;
+    // Lightweight local acknowledgement only; never attach full schedule payloads.
+    try {
+      const key = "FOSU_AI_FEEDBACK_LOG";
+      const existing = wx.getStorageSync(key) || [];
+      const next = (Array.isArray(existing) ? existing : []).concat([{
+        feedback: String(feedback || "").slice(0, 32),
+        messageId: String(messageId || "").slice(0, 80),
+        at: new Date().toISOString(),
+      }]).slice(-50);
+      wx.setStorageSync(key, next);
+    } catch (error) {
+      // ignore
+    }
+    wx.showToast({ title: "已记录反馈", icon: "none" });
   },
 
   enableXiaofuFloat() {
@@ -2396,6 +2639,7 @@ Page({
       showPrivacySheet: false,
       showHeaderMenu: false,
       showConversationSheet: false,
+      showMemorySheet: false,
       privacyExpanded: false,
     });
   },
@@ -2439,7 +2683,7 @@ Page({
     this.setData({ showHeaderMenu: false });
     wx.showModal({
       title: "清空当前查询",
-      content: "仅清空当前查询记录的内容和结果，不影响其他记录和课表数据。",
+      content: "仅清空当前对话的内容和结果，不影响其他对话和课表数据。",
       confirmText: "清空",
       success: (res) => {
         if (!res.confirm) return;

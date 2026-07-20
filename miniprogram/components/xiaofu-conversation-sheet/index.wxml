@@ -1,0 +1,36 @@
+<view class="conversation-sheet" wx:if="{{visible}}">
+  <view class="sheet-handle"></view>
+  <view class="task-panel-head">
+    <view class="panel-title-wrap">
+      <view class="task-panel-title">对话</view>
+      <view class="task-panel-subtitle">本机与云端会话合并展示，不会重复条目</view>
+    </view>
+    <button class="sheet-close" bindtap="onClose">关闭</button>
+  </view>
+  <button class="conversation-new-btn" bindtap="onCreate">新建对话</button>
+  <scroll-view class="conversation-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <view
+      wx:for="{{conversations}}"
+      wx:key="conversationId"
+      class="conversation-item {{item.active ? 'active' : ''}}"
+    >
+      <button
+        class="conversation-main"
+        data-conversation-id="{{item.conversationId}}"
+        bindtap="onSelect"
+      >
+        <view class="conversation-title">{{item.title}}</view>
+        <view class="conversation-meta">
+          {{item.messageCount}} 条 · {{item.updatedAtText}}
+          <text wx:if="{{item.memoryModeText}}"> · {{item.memoryModeText}}</text>
+          <text wx:if="{{item.lastTaskType}}"> · {{item.lastTaskType}}</text>
+        </view>
+      </button>
+      <view class="conversation-actions">
+        <button catchtap="onRename" data-conversation-id="{{item.conversationId}}">重命名</button>
+        <button catchtap="onClear" data-conversation-id="{{item.conversationId}}">清空</button>
+        <button catchtap="onDelete" data-conversation-id="{{item.conversationId}}" class="danger">删除</button>
+      </view>
+    </view>
+  </scroll-view>
+</view>

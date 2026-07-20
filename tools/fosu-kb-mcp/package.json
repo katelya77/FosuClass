@@ -1,0 +1,17 @@
+{
+  "name": "fosu-kb-mcp",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Local stdio MCP server for FosuClass assistant knowledge base (draft-only tools).",
+  "main": "server.js",
+  "bin": {
+    "fosu-kb-mcp": "./server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "test": "node ../test-kb-mcp.js"
+  }
+}

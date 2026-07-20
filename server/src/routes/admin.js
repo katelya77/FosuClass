@@ -52,7 +52,9 @@ const aiProviderConfigService = require("../services/ai/providerConfigService");
 const providerChainService = require("../services/ai/providerChainService");
 const evaluationService = require("../services/ai/evaluationService");
 const knowledgeBaseService = require("../services/ai/knowledgeBaseService");
+const { createKnowledgeControlPlane } = require("../services/ai/knowledgeControlPlane");
 const agentProtocol = require("../services/ai/agentProtocol");
+const knowledgeControlPlane = createKnowledgeControlPlane();
 const campusMapService = require("../services/ai/campusMapService");
 const campusMapVersionService = require("../services/ai/campusMapVersionService");
 const campusMapAssetService = require("../services/campusMapAssetService");
@@ -820,12 +822,39 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
   }
 });
 
+function kbOperatorFromReq(req) {
+  const identity = req.adminAuth || req.serviceToken || {};
+  return {
+    requestId: req.requestId || req.headers["x-request-id"] || "",
+    operatorType: identity.kind || (req.adminUser ? "admin" : "service-token"),
+    operatorName: identity.name || (req.adminUser && req.adminUser.name) || "admin",
+    tokenName: identity.name || "",
+    scopes: identity.scopes || [],
+    authMethod: identity.kind || "admin-session",
+    clientName: String(req.headers["x-fosu-client"] || "admin-console").slice(0, 80),
+    idempotencyKey: String(req.headers["idempotency-key"] || req.headers["Idempotency-Key"] || "").slice(0, 120),
+  };
+}
+
 router.get("/assistant-kb", adminAuth.verifyAdminAccess, (req, res) => {
   try {
-    return res.json(knowledgeBaseService.listKnowledge({
-      status: req.query.status,
-      type: req.query.type,
-      environment: req.query.environment,
+    const status = req.query.status === "published" ? "published" : "draft";
+    const payload = status === "published"
+      ? knowledgeControlPlane.repository.listPublished({
+        type: req.query.type,
+        environment: req.query.environment,
+      })
+      : knowledgeControlPlane.repository.listDraft({
+        type: req.query.type,
+        environment: req.query.environment,
+      });
+    const version = knowledgeControlPlane.versionService.getCurrentVersion();
+    return res.json(Object.assign({}, payload, {
+      controlPlane: {
+        version,
+        auditRecent: knowledgeControlPlane.auditService.list(8),
+        mcpNote: "MCP 仅草稿读写与校验；发布/回滚仍须后台人工确认。",
+      },
     }));
   } catch (error) {
     safeLog("assistant-kb-list-failed", { error: error.message, code: error.code || "" });
@@ -846,6 +875,40 @@ router.get("/assistant-kb/export", adminAuth.verifyAdminAccess, (req, res) => {
   }
 });
 
+router.get("/assistant-kb/audit", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      entries: knowledgeControlPlane.auditService.list(Number(req.query.limit || 50) || 50),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, code: error.code || "ASSISTANT_KB_AUDIT_FAILED", message: error.message });
+  }
+});
+
+router.get("/assistant-kb/diff", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    return res.json({
+      success: true,
+      diff: knowledgeControlPlane.versionService.diffDraftToPublished(),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, code: error.code || "ASSISTANT_KB_DIFF_FAILED", message: error.message });
+  }
+});
+
+router.post("/assistant-kb/validate", adminAuth.verifyAdminAccess, (req, res) => {
+  try {
+    const body = req.body || {};
+    if (body.markdown || body.content) {
+      return res.json(Object.assign({ success: true }, knowledgeControlPlane.validationService.validateImport(body)));
+    }
+    return res.json(Object.assign({ success: true }, knowledgeControlPlane.validationService.validateEntry(body.entry || body)));
+  } catch (error) {
+    return res.status(400).json({ success: false, code: error.code || "ASSISTANT_KB_VALIDATE_FAILED", message: error.message });
+  }
+});
+
 router.post("/assistant-kb/test", adminAuth.verifyAdminAccess, (req, res) => {
   try {
     return res.json(knowledgeBaseService.testKnowledge(req.body || {}));
@@ -858,12 +921,14 @@ router.post("/assistant-kb/test", adminAuth.verifyAdminAccess, (req, res) => {
 router.post("/assistant-kb", verifyAdminWriteAccess, (req, res) => {
   try {
     createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
-    const payload = knowledgeBaseService.createEntry(req.body || {});
+    const operator = kbOperatorFromReq(req);
+    const payload = knowledgeControlPlane.repository.createDraft((req.body && req.body.type) || "doc", req.body || {}, operator);
     writeAuditLog(req, "create", "assistant-kb", payload.entry && payload.entry.id, `assistant kb entry created: ${payload.entry && payload.entry.title}`);
     return res.json(payload);
   } catch (error) {
     safeLog("assistant-kb-create-failed", { error: error.message, code: error.code || "" });
-    const statusCode = error.code === "ASSISTANT_KB_SECURITY_BLOCKED" ? 400 : 500;
+    const statusCode = error.code === "ASSISTANT_KB_SECURITY_BLOCKED" ? 400
+      : (error.code === "IDEMPOTENCY_KEY_CONFLICT" || error.code === "ASSISTANT_KB_CONFLICT" ? 409 : 500);
     return res.status(statusCode).json({ success: false, code: error.code || "ASSISTANT_KB_CREATE_FAILED", message: error.message, risks: error.risks || [] });
   }
 });
@@ -871,20 +936,35 @@ router.post("/assistant-kb", verifyAdminWriteAccess, (req, res) => {
 router.put("/assistant-kb/:id", verifyAdminWriteAccess, (req, res) => {
   try {
     createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
-    const payload = knowledgeBaseService.updateEntry(req.params.id, req.body || {});
+    const operator = kbOperatorFromReq(req);
+    const ifMatch = req.headers["if-match"] || req.body && req.body.expectedRevision;
+    const payload = knowledgeControlPlane.repository.updateDraft(
+      req.body && req.body.type,
+      req.params.id,
+      req.body || {},
+      Object.assign({}, operator, { ifMatch, expectedRevision: ifMatch })
+    );
     writeAuditLog(req, "update", "assistant-kb", req.params.id, `assistant kb entry updated: ${payload.entry && payload.entry.title}`);
     return res.json(payload);
   } catch (error) {
     safeLog("assistant-kb-update-failed", { error: error.message, code: error.code || "" });
-    const statusCode = error.code === "ASSISTANT_KB_NOT_FOUND" ? 404 : (error.code === "ASSISTANT_KB_SECURITY_BLOCKED" ? 400 : 500);
-    return res.status(statusCode).json({ success: false, code: error.code || "ASSISTANT_KB_UPDATE_FAILED", message: error.message, risks: error.risks || [] });
+    const statusCode = error.code === "ASSISTANT_KB_NOT_FOUND" ? 404
+      : (error.code === "ASSISTANT_KB_REVISION_CONFLICT" || error.code === "IDEMPOTENCY_KEY_CONFLICT" ? 409
+        : (error.code === "ASSISTANT_KB_SECURITY_BLOCKED" ? 400 : 500));
+    return res.status(statusCode).json({
+      success: false,
+      code: error.code || "ASSISTANT_KB_UPDATE_FAILED",
+      message: error.message,
+      risks: error.risks || [],
+      currentRevision: error.currentRevision,
+    });
   }
 });
 
 router.delete("/assistant-kb/:id", verifyAdminWriteAccess, (req, res) => {
   try {
     createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
-    const payload = knowledgeBaseService.deleteEntry(req.params.id);
+    const payload = knowledgeControlPlane.repository.deleteDraft(req.params.id, kbOperatorFromReq(req));
     writeAuditLog(req, "delete", "assistant-kb", req.params.id, `assistant kb entry deleted: ${payload.removed && payload.removed.title}`);
     return res.json(payload);
   } catch (error) {
@@ -897,7 +977,10 @@ router.delete("/assistant-kb/:id", verifyAdminWriteAccess, (req, res) => {
 router.post("/assistant-kb/import-md", verifyAdminWriteAccess, (req, res) => {
   try {
     if (req.body && req.body.commit === true) createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
-    const payload = knowledgeBaseService.importMarkdown(req.body || {});
+    const operator = kbOperatorFromReq(req);
+    const payload = req.body && req.body.commit === true
+      ? knowledgeControlPlane.repository.importDraft(req.body || {}, operator)
+      : knowledgeControlPlane.repository.previewImport(req.body || {});
     if (req.body && req.body.commit === true && !payload.skipped) {
       writeAuditLog(req, "import", "assistant-kb", payload.entry && payload.entry.id, `assistant kb markdown imported: ${payload.entry && payload.entry.title}`);
     }
@@ -912,7 +995,7 @@ router.post("/assistant-kb/import-md", verifyAdminWriteAccess, (req, res) => {
 router.post("/assistant-kb/publish", verifyAdminWriteAccess, (req, res) => {
   try {
     createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
-    const payload = knowledgeBaseService.publish(req.body || {});
+    const payload = knowledgeControlPlane.versionService.publish(Object.assign({}, req.body || {}, kbOperatorFromReq(req)));
     writeAuditLog(req, "publish", "assistant-kb", payload.store && payload.store.published && payload.store.published.versionId, "assistant kb published");
     return res.json(payload);
   } catch (error) {
@@ -925,7 +1008,7 @@ router.post("/assistant-kb/publish", verifyAdminWriteAccess, (req, res) => {
 router.post("/assistant-kb/rollback", verifyAdminWriteAccess, (req, res) => {
   try {
     createBackup("assistant-kb", knowledgeBaseService.DATA_PATH);
-    const payload = knowledgeBaseService.rollback(req.body && req.body.versionId);
+    const payload = knowledgeControlPlane.versionService.rollback(req.body && req.body.versionId, kbOperatorFromReq(req));
     writeAuditLog(req, "rollback", "assistant-kb", req.body && req.body.versionId, "assistant kb rolled back");
     return res.json(payload);
   } catch (error) {

@@ -6,21 +6,26 @@
     </view>
     <view class="xiaofu-title-block">
       <view class="xiaofu-title-line">
-        <text class="xiaofu-title">小佛校园助手</text>
+        <text class="xiaofu-title">{{conversationTitle || '小佛助手'}}</text>
         <text class="xiaofu-dot">·</text>
-        <text class="xiaofu-status">在线</text>
+        <text class="xiaofu-status status-{{connectionStatusClass}}">{{connectionStatusText}}</text>
       </view>
       <view class="xiaofu-capability">{{headerSubtitle}}</view>
+      <view class="xiaofu-meta-line">
+        <text>{{runtimeModeLabel}}</text>
+        <text class="xiaofu-dot">·</text>
+        <text>{{memoryStatusText}}</text>
+      </view>
     </view>
     <view class="xiaofu-actions">
-      <button class="xiaofu-icon-btn" bindtap="openCapabilityGuide" aria-label="小佛校园助手说明">?</button>
+      <button class="xiaofu-icon-btn" bindtap="openCapabilityGuide" aria-label="小佛助手说明">?</button>
       <button class="xiaofu-icon-btn" bindtap="openHeaderMenu" aria-label="更多操作">⋯</button>
     </view>
   </view>
 
   <view class="ai-mode-row">
-    <view class="quick-nav-segment" aria-label="查询与任务">
-      <view class="quick-nav-option active" bindtap="openConversationSheet"><text>查询</text></view>
+    <view class="quick-nav-segment" aria-label="对话与任务">
+      <view class="quick-nav-option active" bindtap="openConversationSheet"><text>对话</text></view>
       <view class="quick-nav-option quick-more-button" bindtap="openTaskPanel"><text>任务</text></view>
     </view>
   </view>
@@ -44,16 +49,19 @@
 
   <scroll-view class="message-scroll" scroll-y scroll-top="{{scrollTop}}" scroll-into-view="{{scrollIntoView}}" scroll-with-animation="{{scrollWithAnimation}}" scroll-anchoring="{{true}}" enhanced show-scrollbar="{{false}}" lower-threshold="80">
     <view class="empty-welcome" wx:if="{{!messages.length}}">
-      <view class="empty-title">问校园事项、查全校课表</view>
-      <view class="empty-desc">输入班级、教师、教室、课程或校园事项关键词，系统会匹配已有数据并返回对应结果。</view>
-      <view class="empty-example-list">
+      <view class="empty-title">今天想让小佛帮你完成什么？</view>
+      <view class="empty-desc">选择一个校园任务，小佛会理解目标、调用权威工具并给出可核验结果。</view>
+      <view class="task-card-grid">
         <button
-          wx:for="{{welcomeExamples}}"
-          wx:key="*this"
-          class="empty-example"
-          data-question="{{item}}"
+          wx:for="{{welcomeTaskCards}}"
+          wx:key="id"
+          class="task-entry-card"
+          data-question="{{item.question}}"
           bindtap="onWelcomeExampleTap"
-        >{{item}}</button>
+        >
+          <view class="task-entry-title">{{item.title}}</view>
+          <view class="task-entry-desc">{{item.desc}}</view>
+        </button>
       </view>
       <view class="empty-safe-note">请勿输入学号、密码、验证码等敏感信息。</view>
     </view>
@@ -88,7 +96,16 @@
           </view>
         </view>
 
-        <view class="tool-strip" wx:if="{{message.displayToolCalls.length}}">
+        <view class="fallback-banner" wx:if="{{message.fallbackBanner}}">{{message.fallbackBanner}}</view>
+        <xiaofu-agent-run
+          wx:if="{{message.role == 'assistant' && (message.displaySteps.length || message.evidenceText || message.fallback)}}"
+          steps="{{message.displaySteps}}"
+          taskSteps="{{message.taskSteps}}"
+          evidenceText="{{message.evidenceText}}"
+          fallback="{{message.fallback}}"
+          status="{{message.runStatus}}"
+        />
+        <view class="tool-strip" wx:if="{{message.displayToolCalls.length && !message.displaySteps.length}}">
           <view
             wx:for="{{message.displayToolCalls}}"
             wx:for-item="tool"
@@ -96,7 +113,13 @@
             class="tool-chip {{tool.statusClass}}"
           >{{tool.displayText}}</view>
         </view>
-        <view class="evidence-strip" wx:if="{{message.evidenceText}}">{{message.evidenceText}}</view>
+        <view class="evidence-strip" wx:if="{{message.evidenceText && !message.displaySteps.length}}">{{message.evidenceText}}</view>
+        <view class="feedback-row" wx:if="{{message.role == 'assistant' && message.content && !message.isStreaming}}">
+          <button class="feedback-btn" data-message-id="{{message.id}}" data-feedback="helpful" bindtap="onMessageFeedback">有帮助</button>
+          <button class="feedback-btn" data-message-id="{{message.id}}" data-feedback="unresolved" bindtap="onMessageFeedback">没解决</button>
+          <button class="feedback-btn" data-message-id="{{message.id}}" data-feedback="stale" bindtap="onMessageFeedback">结果过时</button>
+          <button class="feedback-btn" data-message-id="{{message.id}}" data-feedback="misunderstood" bindtap="onMessageFeedback">理解错误</button>
+        </view>
 
         <view class="ai-card-list" wx:if="{{message.displayCards.length}}">
           <view
@@ -256,40 +279,27 @@
     <view id="message-bottom-anchor" class="message-bottom-anchor"></view>
   </scroll-view>
 
-  <view class="sheet-mask" wx:if="{{showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu}}" bindtap="closeSheets"></view>
+  <view class="sheet-mask" wx:if="{{showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu || showMemorySheet}}" bindtap="closeSheets"></view>
 
-  <view class="bottom-sheet conversation-sheet" wx:if="{{showConversationSheet}}">
-    <view class="sheet-handle"></view>
-    <view class="task-panel-head">
-      <view class="panel-title-wrap">
-        <view class="task-panel-title">查询记录</view>
-        <view class="task-panel-subtitle">每条记录独立保存查询内容和结果</view>
-      </view>
-      <button class="sheet-close" bindtap="closeConversationSheet">关闭</button>
-    </view>
-    <button class="conversation-new-btn" bindtap="createNewConversation">新建查询</button>
-    <scroll-view class="conversation-scroll" scroll-y enhanced scroll-with-animation="{{false}}" show-scrollbar="{{false}}">
-      <view
-        wx:for="{{conversations}}"
-        wx:key="conversationId"
-        class="conversation-item {{item.active ? 'active' : ''}}"
-      >
-        <button
-          class="conversation-main"
-          data-conversation-id="{{item.conversationId}}"
-          bindtap="onConversationTap"
-        >
-          <view class="conversation-title">{{item.title}}</view>
-          <view class="conversation-meta">{{item.messageCount}} 条内容 · {{item.updatedAtText}}</view>
-        </button>
-        <view class="conversation-actions">
-          <button catchtap="renameConversation" data-conversation-id="{{item.conversationId}}">重命名</button>
-          <button catchtap="clearConversation" data-conversation-id="{{item.conversationId}}">清空</button>
-          <button catchtap="deleteConversation" data-conversation-id="{{item.conversationId}}" class="danger">删除</button>
-        </view>
-      </view>
-    </scroll-view>
-  </view>
+  <xiaofu-conversation-sheet
+    visible="{{showConversationSheet}}"
+    conversations="{{conversations}}"
+    bind:close="closeConversationSheet"
+    bind:create="createNewConversation"
+    bind:select="onConversationSheetSelect"
+    bind:rename="onConversationSheetRename"
+    bind:clear="onConversationSheetClear"
+    bind:delete="onConversationSheetDelete"
+  />
+
+  <xiaofu-memory-sheet
+    visible="{{showMemorySheet}}"
+    mode="{{memoryMode}}"
+    bind:close="closeMemorySheet"
+    bind:change="onMemoryModeChange"
+    bind:clearcurrent="onClearCurrentMemory"
+    bind:clearall="onClearAllMemory"
+  />
 
   <view class="bottom-sheet header-menu-sheet" wx:if="{{showHeaderMenu}}">
     <view class="sheet-handle"></view>
@@ -299,11 +309,15 @@
       </view>
       <button class="sheet-close" bindtap="closeHeaderMenu">关闭</button>
     </view>
+    <button class="header-menu-item" bindtap="openMemorySheet">
+      <view class="header-menu-title">记忆设置</view>
+      <view class="header-menu-desc">{{memoryStatusText}}</view>
+    </button>
     <button class="header-menu-item float-toggle {{xiaofuFloatEnabled ? 'warning' : ''}}" bindtap="toggleXiaofuFloat">
       <view class="header-menu-title">{{xiaofuFloatToggleText}}</view>
       <view class="header-menu-desc">{{xiaofuFloatToggleDesc}}</view>
     </button>
-    <button class="header-menu-item danger" bindtap="clearHistory">清空记录</button>
+    <button class="header-menu-item danger" bindtap="clearHistory">清空当前对话</button>
   </view>
 
   <view class="bottom-sheet task-sheet" wx:if="{{showTaskPanel}}">
@@ -349,8 +363,8 @@
     <view class="sheet-handle"></view>
     <view class="task-panel-head">
       <view class="panel-title-wrap">
-        <view class="task-panel-title">小佛校园助手可以查询什么？</view>
-        <view class="task-panel-subtitle">选择示例后，会在当前查询中整理结果</view>
+        <view class="task-panel-title">小佛助手可以帮你完成什么？</view>
+        <view class="task-panel-subtitle">选择示例后，会在当前对话中整理结果</view>
       </view>
       <button class="sheet-close" bindtap="closeCapabilityGuide">关闭</button>
     </view>
@@ -410,7 +424,7 @@
         {{voiceRecording ? "停" : "麦"}}
       </button>
       <view class="composer-input-wrap">
-        <view wx:if="{{!inputValue}}" class="composer-custom-placeholder">输入校园事项、课表或入口关键词</view>
+        <view wx:if="{{!inputValue}}" class="composer-custom-placeholder">告诉小佛你想完成的校园任务</view>
         <textarea
           class="composer-input"
           value="{{inputValue}}"
@@ -431,8 +445,8 @@
         />
       </view>
       <button class="newline-btn" bindtap="onInsertNewline" disabled="{{sending}}" aria-label="换行">↵</button>
-      <button class="send-btn {{sending || !inputValue ? 'disabled' : ''}}" bindtap="onSubmit" disabled="{{sending || !inputValue}}">
-        {{sending ? "查询中" : "查询"}}
+      <button class="send-btn icon-send {{sending || !inputValue ? 'disabled' : ''}}" bindtap="onSubmit" disabled="{{sending || !inputValue}}" aria-label="{{sending ? '处理中' : '发送'}}">
+        {{sending ? "…" : "➤"}}
       </button>
     </view>
     <view wx:if="{{voiceStatusText}}" class="voice-status">{{voiceStatusText}}</view>

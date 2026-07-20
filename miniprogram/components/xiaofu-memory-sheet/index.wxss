@@ -1,0 +1,126 @@
+.memory-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  max-height: 78vh;
+  padding: 12rpx 24rpx calc(24rpx + env(safe-area-inset-bottom));
+  border-radius: 28rpx 28rpx 0 0;
+  background: #fbfaf8;
+  box-shadow: 0 -8rpx 40rpx rgba(40, 36, 32, 0.12);
+}
+
+.sheet-handle {
+  width: 72rpx;
+  height: 8rpx;
+  margin: 8rpx auto 18rpx;
+  border-radius: 999rpx;
+  background: rgba(40, 36, 32, 0.12);
+}
+
+.memory-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin-bottom: 18rpx;
+}
+
+.memory-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #2d2925;
+}
+
+.memory-subtitle {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #8a8178;
+}
+
+.sheet-close {
+  margin: 0;
+  padding: 8rpx 18rpx;
+  font-size: 22rpx;
+  color: #6b635a;
+  background: #efece7;
+  border-radius: 999rpx;
+  line-height: 1.4;
+}
+
+.sheet-close::after {
+  border: none;
+}
+
+.memory-mode-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.memory-mode-item {
+  margin: 0;
+  padding: 18rpx 20rpx;
+  text-align: left;
+  border-radius: 18rpx;
+  background: #fff;
+  border: 1rpx solid rgba(40, 36, 32, 0.08);
+  line-height: 1.4;
+}
+
+.memory-mode-item.active {
+  border-color: rgba(196, 48, 43, 0.35);
+  background: #fff8f7;
+}
+
+.memory-mode-item::after {
+  border: none;
+}
+
+.memory-mode-title {
+  font-size: 28rpx;
+  color: #2d2925;
+  font-weight: 600;
+}
+
+.memory-mode-desc {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: #6b635a;
+}
+
+.memory-note {
+  margin-top: 18rpx;
+  padding: 16rpx 18rpx;
+  border-radius: 16rpx;
+  background: #f3f0eb;
+  font-size: 22rpx;
+  color: #6b635a;
+  line-height: 1.55;
+}
+
+.memory-actions {
+  display: flex;
+  gap: 12rpx;
+  margin-top: 18rpx;
+}
+
+.memory-action {
+  flex: 1;
+  margin: 0;
+  padding: 16rpx 12rpx;
+  font-size: 24rpx;
+  border-radius: 16rpx;
+  background: #efece7;
+  color: #3f3a34;
+}
+
+.memory-action.danger {
+  color: #c53030;
+  background: #fff5f5;
+}
+
+.memory-action::after {
+  border: none;
+}

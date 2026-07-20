@@ -8305,6 +8305,7 @@ const adminConsoleHtml = `<!doctype html>
         assistantKbTestQuery: "",
         assistantKbTestEnvironment: "public",
         assistantKbTestResult: null,
+        assistantKbDiffText: "",
         campusMap: null,
         campusMapDraft: null,
         campusMapSelectedId: "",
@@ -14838,7 +14839,7 @@ const adminConsoleHtml = `<!doctype html>
           });
       }
 
-      var KB_TAB_LABELS = { rules: "规则问答", docs: "文档知识库", test: "测试预览", versions: "版本发布" };
+      var KB_TAB_LABELS = { rules: "规则问答", docs: "文档知识库", test: "测试预览", versions: "版本发布", audit: "审计与 Diff" };
 
       function loadAssistantKb() {
         return api("/api/admin/assistant-kb?status=draft")
@@ -14860,7 +14861,8 @@ const adminConsoleHtml = `<!doctype html>
 
       function renderKbEntryCard(entry) {
         var active = state.assistantKbSelectedId === entry.id ? " active" : "";
-        return "<div class='kb-entry-card" + active + "' data-kb-id='" + escapeHtml(entry.id) + "'><div class='kb-entry-head'><div><div class='kb-entry-title'>" + escapeHtml(entry.title || entry.id) + "</div><div class='ai-secret-note'>" + escapeHtml(entry.id) + "</div></div><span class='badge " + (entry.status === "disabled" ? "muted" : "success") + "'>" + escapeHtml(entry.status || "draft") + "</span></div><div class='provider-metrics'><div class='kb-meta-pill'>环境<br><strong>" + escapeHtml((entry.scope || []).join(",")) + "</strong></div><div class='kb-meta-pill'>优先级<br><strong>" + escapeHtml(String(entry.priority || 0)) + "</strong></div></div><div class='ai-secret-note'>" + escapeHtml((entry.keywords || []).slice(0, 6).join(" / ") || "未设置关键词") + "</div></div>";
+        // revision/source shown in card body via existing fields when present
+        return "<div class='kb-entry-card" + active + "' data-kb-id='" + escapeHtml(entry.id) + "'><div class='kb-entry-head'><div><div class='kb-entry-title'>" + escapeHtml(entry.title || entry.id) + "</div><div class='ai-secret-note'>" + escapeHtml(entry.id) + " · rev " + escapeHtml(String(entry.revision || 1)) + "</div></div><span class='badge " + (entry.status === "disabled" ? "muted" : "success") + "'>" + escapeHtml(entry.status || "draft") + "</span></div><div class='provider-metrics'><div class='kb-meta-pill'>环境<br><strong>" + escapeHtml((entry.scope || []).join(",")) + "</strong></div><div class='kb-meta-pill'>优先级<br><strong>" + escapeHtml(String(entry.priority || 0)) + "</strong></div><div class='kb-meta-pill'>来源<br><strong>" + escapeHtml(entry.authorityLevel || "unknown") + "</strong></div></div><div class='ai-secret-note'>" + escapeHtml((entry.keywords || []).slice(0, 6).join(" / ") || "未设置关键词") + (entry.sourceUrl ? " · " + escapeHtml(String(entry.sourceUrl).slice(0, 60)) : "") + "</div></div>";
       }
 
       function selectedKbEntry(type) {
@@ -14896,14 +14898,29 @@ const adminConsoleHtml = `<!doctype html>
         if (!wrap) return;
         var tab = state.assistantKbTab || "rules";
         var kb = state.assistantKb || {};
-        var tabs = ["rules", "docs", "test", "versions"].map(function(key) { return "<button type='button' class='" + (tab === key ? "active" : "") + "' data-kb-tab='" + key + "'>" + KB_TAB_LABELS[key] + "</button>"; }).join("");
+        var tabs = ["rules", "docs", "test", "versions", "audit"].map(function(key) { return "<button type='button' class='" + (tab === key ? "active" : "") + "' data-kb-tab='" + key + "'>" + KB_TAB_LABELS[key] + "</button>"; }).join("");
         var rules = assistantKbEntries("rule");
         var docs = assistantKbEntries("doc");
-        wrap.innerHTML = "<div class='kb-hero'><div><h3>小佛助手知识库</h3><p>维护规则问答、RAG 文档和发布版本。保存会做安全校验；发布后小程序端通过后端已发布版本生效。</p></div><div class='kb-tabs'>" + tabs + "</div></div>" +
+        var cp = kb.controlPlane || {};
+        var cpVersion = cp.version || {};
+        var auditRecent = Array.isArray(cp.auditRecent) ? cp.auditRecent : [];
+        var auditRows = auditRecent.length
+          ? auditRecent.map(function(item) {
+            return "<tr><td>" + escapeHtml(item.action || "-") + "</td><td>" + escapeHtml(item.targetId || "-") + "</td><td>" + escapeHtml(item.operatorName || item.operatorType || "-") + "</td><td>" + (item.success === false ? "失败" : "成功") + "</td><td>" + escapeHtml(item.createdAt || "-") + "</td></tr>";
+          }).join("")
+          : "<tr><td colspan='5'>暂无审计记录</td></tr>";
+        wrap.innerHTML = "<div class='kb-hero'><div><h3>小佛助手知识库</h3><p>维护规则问答、文档草稿和发布版本。写入经 Knowledge Control Plane：安全校验、revision 并发、幂等与持久审计。发布/回滚仅后台人工确认；MCP 默认 stdio 且不含 publish/rollback。</p></div><div class='kb-tabs'>" + tabs + "</div></div>" +
+          "<div class='ai-provider-status' style='margin-bottom:12px;'>" +
+            renderHealthItem("已发布版本", "<code>" + escapeHtml(cpVersion.version || (kb.published && kb.published.versionId) || "-") + "</code>") +
+            renderHealthItem("草稿", "<strong>" + escapeHtml(String(kb.draft && kb.draft.ruleCount || 0)) + "</strong> rules / <strong>" + escapeHtml(String(kb.draft && kb.draft.docCount || 0)) + "</strong> docs") +
+            renderHealthItem("已发布", "<strong>" + escapeHtml(String(kb.published && kb.published.ruleCount || 0)) + "</strong> rules / <strong>" + escapeHtml(String(kb.published && kb.published.docCount || 0)) + "</strong> docs") +
+            renderHealthItem("最近更新", "<span>" + escapeHtml(kb.store && kb.store.updatedAt || kb.published && kb.published.publishedAt || "-") + "</span>") +
+          "</div>" +
           "<div class='kb-tab-panel " + (tab === "rules" ? "active" : "") + "'><div class='kb-two-column'><div><div class='kb-toolbar'><strong>规则问答</strong><button id='kbRefreshBtn' class='ghost'>刷新</button></div><div class='kb-list-grid'>" + rules.map(renderKbEntryCard).join("") + "</div></div>" + (tab === "rules" ? renderKbEditor("rule") : "") + "</div></div>" +
-          "<div class='kb-tab-panel " + (tab === "docs" ? "active" : "") + "'><div class='kb-two-column'><div><div class='kb-toolbar'><strong>文档知识库</strong><div class='kb-actions-row'><button id='kbExportJsonBtn' class='ghost'>导出 JSON</button><button id='kbExportMdBtn' class='ghost'>导出 MD</button></div></div><div class='kb-list-grid'>" + docs.map(renderKbEntryCard).join("") + "</div><div class='card' style='margin-top:12px;'><h3 class='card-title'>导入 Markdown</h3><textarea id='kbImportMarkdown' style='min-height:180px;' placeholder='支持 YAML frontmatter: title/tags/keywords/scope/priority'>" + escapeHtml(state.assistantKbImportText || "") + "</textarea><div id='kbImportPreview' class='ai-verify-box'>" + renderKbImportPreview() + "</div><div class='kb-actions-row'><button id='kbPreviewMdBtn' class='secondary'>预览解析</button><button id='kbCommitMdBtn' class='primary'>导入草稿</button></div></div></div>" + (tab === "docs" ? renderKbEditor("doc") : "") + "</div></div>" +
-          "<div class='kb-tab-panel " + (tab === "test" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>测试预览</h3><div class='form-row'><div><label>用户问题</label><input id='kbTestQuery' value='" + escapeHtml(state.assistantKbTestQuery || "") + "' placeholder='例如：小佛能做什么'></div><div><label>环境</label><select id='kbTestEnvironment'><option value='public'" + (state.assistantKbTestEnvironment === "public" ? " selected" : "") + ">public</option><option value='trial'" + (state.assistantKbTestEnvironment === "trial" ? " selected" : "") + ">trial</option><option value='dev'" + (state.assistantKbTestEnvironment === "dev" ? " selected" : "") + ">dev</option></select></div></div><button id='kbRunTestBtn' class='primary'>运行测试</button><div id='kbTestResult' class='ai-verify-box'>" + renderKbTestResult() + "</div></div></div>" +
-          "<div class='kb-tab-panel " + (tab === "versions" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>版本发布</h3><div class='ai-provider-status'>" + renderHealthItem("草稿", "<strong>" + escapeHtml(String(kb.draft && kb.draft.ruleCount || 0)) + "</strong> rules / <strong>" + escapeHtml(String(kb.draft && kb.draft.docCount || 0)) + "</strong> docs") + renderHealthItem("已发布", "<code>" + escapeHtml(kb.published && kb.published.versionId || "-") + "</code>") + renderHealthItem("备份", "<strong>" + escapeHtml(String(kb.store && kb.store.backupCount || 0)) + "</strong>") + "</div><div class='kb-actions-row'><button id='kbPublishBtn' class='primary'>发布草稿</button><button id='kbRefreshVersionsBtn' class='ghost'>刷新</button></div><div class='table-container'><table><thead><tr><th>版本</th><th>时间</th><th>数量</th><th>操作</th></tr></thead><tbody>" + renderKbBackups() + "</tbody></table></div></div></div>";
+          "<div class='kb-tab-panel " + (tab === "docs" ? "active" : "") + "'><div class='kb-two-column'><div><div class='kb-toolbar'><strong>文档知识库</strong><div class='kb-actions-row'><button id='kbExportJsonBtn' class='ghost'>导出 JSON</button><button id='kbExportMdBtn' class='ghost'>导出 MD</button></div></div><div class='kb-list-grid'>" + docs.map(renderKbEntryCard).join("") + "</div><div class='card' style='margin-top:12px;'><h3 class='card-title'>导入 Markdown</h3><textarea id='kbImportMarkdown' style='min-height:180px;' placeholder='支持 YAML frontmatter: title/tags/keywords/scope/priority/sourceUrl/authorityLevel'>" + escapeHtml(state.assistantKbImportText || "") + "</textarea><div id='kbImportPreview' class='ai-verify-box'>" + renderKbImportPreview() + "</div><div class='kb-actions-row'><button id='kbPreviewMdBtn' class='secondary'>预览解析</button><button id='kbCommitMdBtn' class='primary'>导入草稿</button></div></div></div>" + (tab === "docs" ? renderKbEditor("doc") : "") + "</div></div>" +
+          "<div class='kb-tab-panel " + (tab === "test" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>测试预览</h3><div class='form-row'><div><label>用户问题</label><input id='kbTestQuery' value='" + escapeHtml(state.assistantKbTestQuery || "") + "' placeholder='例如：小佛可以做什么'></div><div><label>环境</label><select id='kbTestEnvironment'><option value='public'" + (state.assistantKbTestEnvironment === "public" ? " selected" : "") + ">public</option><option value='trial'" + (state.assistantKbTestEnvironment === "trial" ? " selected" : "") + ">trial</option><option value='dev'" + (state.assistantKbTestEnvironment === "dev" ? " selected" : "") + ">dev</option></select></div></div><button id='kbRunTestBtn' class='primary'>运行测试</button><div id='kbTestResult' class='ai-verify-box'>" + renderKbTestResult() + "</div></div></div>" +
+          "<div class='kb-tab-panel " + (tab === "versions" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>版本发布</h3><div class='ai-provider-status'>" + renderHealthItem("草稿", "<strong>" + escapeHtml(String(kb.draft && kb.draft.ruleCount || 0)) + "</strong> rules / <strong>" + escapeHtml(String(kb.draft && kb.draft.docCount || 0)) + "</strong> docs") + renderHealthItem("已发布", "<code>" + escapeHtml(kb.published && kb.published.versionId || "-") + "</code>") + renderHealthItem("备份", "<strong>" + escapeHtml(String(kb.store && kb.store.backupCount || 0)) + "</strong>") + "</div><p class='ai-secret-note'>发布与回滚必须人工确认。MCP 不提供 publish/rollback 工具，也不会在此显示完整 service token。</p><div class='kb-actions-row'><button id='kbPublishBtn' class='primary'>发布草稿</button><button id='kbDiffBtn' class='secondary'>查看 Draft/Published Diff</button><button id='kbRefreshVersionsBtn' class='ghost'>刷新</button></div><div id='kbDiffBox' class='ai-verify-box' style='margin-top:12px;'>" + escapeHtml(state.assistantKbDiffText || "点击上方按钮加载字段级 Diff。") + "</div><div class='table-container'><table><thead><tr><th>版本</th><th>时间</th><th>数量</th><th>操作</th></tr></thead><tbody>" + renderKbBackups() + "</tbody></table></div></div></div>" +
+          "<div class='kb-tab-panel " + (tab === "audit" ? "active" : "") + "'><div class='card form-box'><h3 class='card-title'>最近审计</h3><p class='ai-secret-note'>" + escapeHtml(cp.mcpNote || "MCP 仅草稿读写与校验；发布/回滚仍须后台人工确认。") + "</p><div class='table-container'><table><thead><tr><th>动作</th><th>目标</th><th>操作者</th><th>结果</th><th>时间</th></tr></thead><tbody>" + auditRows + "</tbody></table></div></div></div>";
         bindAssistantKbEvents();
       }
 
@@ -14924,9 +14941,29 @@ const adminConsoleHtml = `<!doctype html>
         safeBind("kbTestQuery", "input", function() { state.assistantKbTestQuery = value("kbTestQuery"); });
         safeBind("kbTestEnvironment", "change", function() { state.assistantKbTestEnvironment = value("kbTestEnvironment") || "public"; });
         safeBind("kbPublishBtn", "click", publishAssistantKb);
+        safeBind("kbDiffBtn", "click", loadAssistantKbDiff);
         safeBind("kbExportJsonBtn", "click", function() { exportAssistantKb("json"); });
         safeBind("kbExportMdBtn", "click", function() { exportAssistantKb("md"); });
         document.querySelectorAll(".kb-rollback-btn").forEach(function(btn) { btn.addEventListener("click", function() { rollbackAssistantKb(btn.dataset.version); }); });
+      }
+
+      function loadAssistantKbDiff() {
+        return api("/api/admin/assistant-kb/diff")
+          .then(function(res) {
+            var diff = res && res.diff || {};
+            var summary = diff.summary || {};
+            state.assistantKbDiffText = "新增 " + String(summary.added || 0) +
+              " / 删除 " + String(summary.removed || 0) +
+              " / 修改 " + String(summary.modified || 0) +
+              " / 保留 " + String(summary.retained || 0) +
+              (diff.highRisk ? " · 含高风险变更" : " · 无高风险标记");
+            if (state.assistantKbTab !== "versions") state.assistantKbTab = "versions";
+            renderAssistantKb();
+          })
+          .catch(function(error) {
+            state.assistantKbDiffText = "Diff 加载失败：" + (error && error.message || "unknown");
+            renderAssistantKb();
+          });
       }
 
       function kbEntryPayload() {

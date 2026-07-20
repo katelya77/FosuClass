@@ -307,7 +307,25 @@ function buildV2Response(payload = {}) {
     fallbackReason: safeProtocolText(payload.fallbackReason || "", 160),
     fallbackAllowed: payload.fallbackAllowed === true,
     externalProviderUsed: payload.externalProviderUsed === true,
+    memory: stableMemory(payload.memory),
     serverTime: payload.serverTime || new Date().toISOString(),
+  };
+}
+
+function stableMemory(memory = {}) {
+  const source = memory && typeof memory === "object" && !Array.isArray(memory) ? memory : {};
+  const mode = ["local_only", "session_state", "cloud_sync"].includes(String(source.mode || ""))
+    ? String(source.mode)
+    : "local_only";
+  return {
+    mode,
+    authenticated: source.authenticated === true,
+    persisted: source.persisted === true,
+    synced: mode === "cloud_sync" && source.synced === true,
+    revision: Math.max(0, Number(source.revision || 0) || 0),
+    expiresAt: safeProtocolText(source.expiresAt || "", 40),
+    summaryAvailable: source.summaryAvailable === true,
+    canClear: source.canClear === true,
   };
 }
 
@@ -337,6 +355,7 @@ module.exports = {
   normalizeRuntimeMode,
   serializeRuntimeMode,
   stableExecutionSteps,
+  stableMemory,
   stableObservations,
   stableSlots,
   toLegacyRuntimeMode,

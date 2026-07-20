@@ -1,4 +1,8 @@
 {
-  "navigationBarTitleText": "校园服务管家",
-  "usingComponents": {}
+  "navigationBarTitleText": "小佛助手",
+  "usingComponents": {
+    "xiaofu-agent-run": "/components/xiaofu-agent-run/index",
+    "xiaofu-memory-sheet": "/components/xiaofu-memory-sheet/index",
+    "xiaofu-conversation-sheet": "/components/xiaofu-conversation-sheet/index"
+  }
 }

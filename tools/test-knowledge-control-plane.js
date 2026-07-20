@@ -43,7 +43,9 @@ try {
   assert.strictEqual(versions.getCurrentVersion().version, "kb-v1");
   assert.ok(search.search({ query: "agent-v2-test", environment: "public" }).items.length >= 1);
   assert.strictEqual(audit.list().some((item) => item.action === "rollback"), true);
-  assert.ok(!/token|password|api.?key/i.test(JSON.stringify(audit.list())));
+  const auditJson = JSON.stringify(audit.list());
+  assert.ok(!/Bearer\s+[A-Za-z0-9._~+/=-]{8,}|password\s*[:=]|api[_-]?key\s*[:=]/i.test(auditJson));
+  assert.ok(!/"token"\s*:\s*"[^"]{8,}"/i.test(auditJson));
 
   console.log("test-knowledge-control-plane passed");
 } finally {
