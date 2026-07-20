@@ -2145,6 +2145,11 @@ Page({
   },
 
   onSubmit() {
+    // While a run is in flight, the same control becomes stop/cancel.
+    if (this.data.sending) {
+      this.onCancelRun();
+      return;
+    }
     this.sendMessage(this.data.inputValue);
   },
 
@@ -2601,14 +2606,6 @@ Page({
 
   onToggleLiveRunExpand() {
     this.setData({ liveRunExpanded: !this.data.liveRunExpanded });
-  },
-
-  onSendOrCancel() {
-    if (this.data.sending) {
-      this.onCancelRun();
-      return;
-    }
-    this.onSubmit();
   },
 
   async onCancelRun() {
