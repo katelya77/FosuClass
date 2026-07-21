@@ -58,6 +58,105 @@ assert.ok(greeting.suggestions.length <= 2, "greeting suggestions <= 2");
 assert.strictEqual(greeting.showDefaultFeedback, false, "no default feedback flag");
 assert.strictEqual(greeting.showToolChips, false, "no tool chips");
 
+// --- 4b: REAL offline greeting path (must not fabricate intentName-only unit) ---
+// Mock mini-program globals before requiring page module
+global.wx = global.wx || {
+  getStorageSync() { return ""; },
+  setStorageSync() {},
+  removeStorageSync() {},
+  showToast() {},
+  showModal() {},
+  showActionSheet() {},
+  vibrateShort() {},
+  setClipboardData() {},
+  getNetworkType({ success }) { if (success) success({ networkType: "none" }); },
+  getRecorderManager() {
+    return { onStart() {}, onStop() {}, onError() {}, start() {}, stop() {} };
+  },
+};
+global.getCurrentPages = global.getCurrentPages || (() => []);
+global.getApp = global.getApp || (() => ({ globalData: {} }));
+global.Page = global.Page || ((config) => { global.__AI_ASSISTANT_PAGE__ = config; });
+
+const aiAssistantService = require(path.join(root, "miniprogram/services/aiAssistantService.js"));
+const pageModule = require(path.join(root, "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js"));
+
+// 1) Raw smalltalk builder
+const smalltalk = aiAssistantService.buildSmalltalkResponse("你好", {}, { confidence: 0.9 });
+assert.strictEqual(smalltalk.presentationMode, "plain", "buildSmalltalkResponse sets presentationMode plain");
+assert.ok(!smalltalk.evidence, "buildSmalltalkResponse must not emit evidence chrome payload");
+
+// 2) standardizeClientFallback (offline wrap) — the real offline greeting envelope
+const standardized = aiAssistantService.standardizeClientFallback(
+  smalltalk,
+  "你好",
+  { intent: "smalltalk", confidence: 0.9, entities: {} },
+  "NETWORK_UNAVAILABLE",
+  { requestId: "test-req", conversationId: "test-conv" }
+);
+assert.strictEqual(standardized.presentationMode, "plain", "standardizeClientFallback keeps plain for smalltalk");
+assert.ok(!standardized.evidence, "standardized offline greeting has no evidence");
+assert.ok(standardized.fallback === true, "offline still marks fallback for metrics");
+
+// 3) Page makeMessage + normalizeMessagesForDisplay (shipped display path)
+// intent may be string canonicalIntent after standardize — intentName must still resolve
+const intentNameFromResponse = (typeof standardized.intent === "string" && standardized.intent)
+  || (standardized.intent && standardized.intent.name)
+  || standardized.intentName
+  || (standardized.metrics && (standardized.metrics.intentName || standardized.metrics.canonicalIntent))
+  || "";
+const assistantRaw = pageModule.makeMessage("assistant", standardized.answer || "你好", {
+  cards: standardized.cards || [],
+  suggestions: standardized.suggestions || [],
+  toolCalls: standardized.toolCalls || [],
+  evidence: standardized.evidence,
+  metrics: standardized.metrics,
+  fallback: standardized.fallback === true,
+  fallbackLayer: standardized.fallbackLayer || "client",
+  intent: standardized.intent,
+  intentName: intentNameFromResponse,
+  userQuery: "你好",
+  presentationMode: standardized.presentationMode || "",
+});
+// Old bug: intentName was "" when intent was a string — ensure resolve works
+assert.ok(
+  adapter.resolveIntentName(assistantRaw)
+  || adapter.isPlainPresentation(Object.assign({}, assistantRaw, { userQuery: "你好" }), { lastUserText: "你好" }),
+  "intent resolution or greeting user text must mark plain"
+);
+
+const displayMessages = pageModule.normalizeMessagesForDisplay([
+  pageModule.makeMessage("user", "你好"),
+  assistantRaw,
+], {});
+const shown = displayMessages[1];
+assert.ok(shown, "assistant message rendered");
+assert.strictEqual(shown.presentationMode, "plain", "display path presentationMode is plain");
+assert.strictEqual((shown.displayCards || []).length, 0, "offline greeting: no result cards");
+assert.ok(!shown.evidenceText, "offline greeting: no evidenceText");
+assert.ok(!shown.fallbackBanner, "offline greeting: no 网络暂不可用 banner");
+assert.ok(!shown.hasCollapsedRun, "offline greeting: no collapsed task run");
+assert.ok(!(shown.taskTrajectory), "offline greeting: no task trajectory");
+assert.ok((shown.suggestions || []).length <= 2, "offline greeting suggestions <= 2");
+
+// String intent only (no intentName) — simulate pre-fix payload shape still
+const stringIntentOnly = pageModule.normalizeMessagesForDisplay([
+  pageModule.makeMessage("user", "你好啊"),
+  pageModule.makeMessage("assistant", "嗨，我在。", {
+    intent: "conversational_help",
+    intentName: "",
+    metrics: { intentName: "smalltalk" },
+    fallback: true,
+    fallbackLayer: "client",
+    evidence: { source: "local-smalltalk", verified: false },
+    cards: [],
+    toolCalls: [],
+    userQuery: "你好啊",
+  }),
+], {});
+assert.ok(!stringIntentOnly[1].evidenceText, "string intent + metrics.intentName smalltalk: no evidence");
+assert.ok(!stringIntentOnly[1].fallbackBanner, "string intent + metrics: no fallback banner");
+
 // --- 7: consecutive identical suggestion sets avoided ---
 const s1 = adapter.refineSuggestions(["查课表", "找空教室"], { userText: "你好" });
 const s2 = adapter.refineSuggestions(["查课表", "找空教室"], {
