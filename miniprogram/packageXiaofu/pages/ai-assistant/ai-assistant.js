@@ -1378,16 +1378,29 @@ function isGenericAssistantCard(card) {
   return false;
 }
 
+function resolveAssistantIntentName(source) {
+  return xiaofuPresentation.resolveIntentName(source || {});
+}
+
 function normalizeMessageForDisplay(message, expandedCards, previousMessage, displayContext) {
   const source = message || {};
   const ctx = displayContext || {};
   const id = source.id || `m-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const lastUserText = ctx.lastUserText || (() => {
+    if (previousMessage && previousMessage.role === "user") return previousMessage.content || "";
+    return "";
+  })();
+  const resolvedIntentName = resolveAssistantIntentName(source);
   const presentationMode = safeText(source.presentationMode || (source.presentation && source.presentation.presentationMode) || "", 32);
-  const isPlain = xiaofuPresentation.isPlainPresentation(source)
-    || presentationMode === "plain"
+  const plainProbe = Object.assign({}, source, {
+    intentName: resolvedIntentName,
+    userQuery: source.userQuery || source.query || lastUserText || "",
+  });
+  const isPlain = presentationMode === "plain"
+    || xiaofuPresentation.isPlainPresentation(plainProbe, { lastUserText })
     || (source.role !== "user" && (!source.toolCalls || !source.toolCalls.length)
       && (!source.cards || !source.cards.length || source.cards.every(isGenericAssistantCard))
-      && /conversational|project_qa|generic|plain|greeting|chitchat/i.test(String(source.intentName || source.intent && source.intent.name || presentationMode || "")));
+      && /conversational|project_qa|generic|plain|greeting|chitchat|smalltalk/i.test(resolvedIntentName || presentationMode || ""));
   const evidenceLabel = isPlain ? "" : inferEvidenceLabel(source);
   const normalizedSafety = source.safety ? normalizeSafety(source.safety) : null;
   const displaySafety = !isPlain && normalizedSafety ? Object.assign(normalizedSafety, {
@@ -1472,6 +1485,8 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage, dis
     id,
     role,
     content: safeText(source.content || "", 2000),
+    intentName: resolvedIntentName || source.intentName || "",
+    userQuery: source.userQuery || lastUserText || "",
     presentationMode: presentationMode || (isPlain ? "plain" : ""),
     cards: rawCards,
     displayCards,
@@ -2740,6 +2755,14 @@ Page({
         } else if (safety.clearPendingClarification || response && response.metrics && response.metrics.intentName !== "clarify_missing_slot") {
           aiAssistantService.clearPendingClarification();
         }
+        const resolvedIntentName = (typeof response.intent === "string" && response.intent)
+          || (response.intent && response.intent.name)
+          || response.intentName
+          || (response.metrics && (response.metrics.intentName || response.metrics.canonicalIntent))
+          || "";
+        const presentationMode = response.presentationMode
+          || (response.presentation && response.presentation.presentationMode)
+          || "";
         const assistantMessage = makeMessage("assistant", response.answer || "已为你整理以下结果。", {
           cards: Array.isArray(response.cards) ? response.cards : [],
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
@@ -2754,8 +2777,9 @@ Page({
           status: response.status || "completed",
           memory: response.memory || null,
           intent: response.intent || (response.metrics && response.metrics.canonicalIntent) || "",
-          intentName: (response.intent && response.intent.name) || response.intentName || "",
-          presentationMode: response.presentationMode || (response.presentation && response.presentation.presentationMode) || "",
+          intentName: resolvedIntentName,
+          userQuery: message,
+          presentationMode,
           presentation: response.presentation || null,
           runSummary: response.runSummary || (response.presentation && response.presentation.runSummary) || null,
           taskTrajectory: response.taskTrajectory || (response.presentation && response.presentation.taskTrajectory) || null,
@@ -3515,5 +3539,8 @@ if (typeof module !== "undefined") {
     normalizeCard,
     normalizeCardItem,
     normalizeMessagesForDisplay,
+    normalizeMessageForDisplay,
+    makeMessage,
+    resolveAssistantIntentName,
   };
 }

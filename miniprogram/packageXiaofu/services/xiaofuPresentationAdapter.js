@@ -57,24 +57,55 @@ function isGreetingOrPlainUtterance(text) {
   return GREETING_RE.test(value) || THANKS_RE.test(value);
 }
 
-function isPlainPresentation(source) {
+/**
+ * Resolve intent name from all shapes used by online + offline payloads:
+ * - intentName field
+ * - intent string (standardizeClientFallback sets intent: canonicalIntent string)
+ * - intent.name object
+ * - metrics.intentName / metrics.canonicalIntent
+ */
+function resolveIntentName(source) {
+  const src = source || {};
+  if (src.intentName) return String(src.intentName);
+  if (typeof src.intent === "string" && src.intent) return String(src.intent);
+  if (src.intent && typeof src.intent === "object" && src.intent.name) {
+    return String(src.intent.name);
+  }
+  if (src.metrics) {
+    if (src.metrics.intentName) return String(src.metrics.intentName);
+    if (src.metrics.canonicalIntent) return String(src.metrics.canonicalIntent);
+  }
+  return "";
+}
+
+const PLAIN_INTENT_RE = /^(smalltalk|conversational|conversational_help|project_qa|generic|plain|greeting|chitchat|help)$/i;
+
+function isPlainPresentation(source, options) {
+  const src = source || {};
+  const opts = options || {};
   const presentationMode = safeText(
-    source.presentationMode || (source.presentation && source.presentation.presentationMode) || "",
+    src.presentationMode || (src.presentation && src.presentation.presentationMode) || "",
     32
   );
   if (presentationMode === "plain") return true;
-  if (source.role === "user") return false;
-  const intentName = String(
-    source.intentName || (source.intent && source.intent.name) || presentationMode || ""
-  );
-  const noTools = !source.toolCalls || !source.toolCalls.length;
-  const noRealCards = !source.cards
-    || !source.cards.length
-    || source.cards.every(isGenericAssistantCard);
-  if (noTools && noRealCards && /conversational|project_qa|generic|plain|greeting|chitchat/i.test(intentName)) {
+  if (src.role === "user") return false;
+
+  const intentName = resolveIntentName(src) || presentationMode || "";
+  const noTools = !src.toolCalls || !src.toolCalls.length;
+  const noRealCards = !src.cards
+    || !src.cards.length
+    || src.cards.every(isGenericAssistantCard);
+
+  if (noTools && noRealCards && PLAIN_INTENT_RE.test(intentName)) {
     return true;
   }
-  if (noTools && noRealCards && isGreetingOrPlainUtterance(source.userQuery || source.query || "")) {
+  if (noTools && noRealCards && /conversational|project_qa|generic|plain|greeting|chitchat|smalltalk/i.test(intentName)) {
+    return true;
+  }
+
+  // Prior user turn (page passes lastUserText / userQuery on assistant message)
+  const userText = src.userQuery || src.query || opts.lastUserText || opts.userText || "";
+  if (noTools && noRealCards && isGreetingOrPlainUtterance(userText)) {
     return true;
   }
   return false;
@@ -258,7 +289,9 @@ function buildHeaderViewModel(state) {
 function presentAssistantMessage(message, options) {
   const source = message || {};
   const opts = options || {};
-  const plain = isPlainPresentation(source) || opts.forcePlain === true;
+  const plain = isPlainPresentation(source, {
+    lastUserText: opts.lastUserText || (opts.suggestionContext && opts.suggestionContext.userText) || "",
+  }) || opts.forcePlain === true;
   const presentationMode = plain
     ? "plain"
     : safeText(source.presentationMode || (source.presentation && source.presentation.presentationMode) || "", 32);
@@ -312,9 +345,11 @@ module.exports = {
   GREETING_RE,
   THANKS_RE,
   MEMORY_STATUS,
+  PLAIN_INTENT_RE,
   safeText,
   isGenericAssistantCard,
   isGreetingOrPlainUtterance,
+  resolveIntentName,
   isPlainPresentation,
   composeHeaderStatus,
   dedupeStatusChips,
