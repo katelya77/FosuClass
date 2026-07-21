@@ -475,7 +475,13 @@ function assertRecoveredOperation(preview, teacherName) {
 
 function assertCatalogCrashRecoveryContracts() {
   seedCatalogFixture();
-  process.env.FOSU_CATALOG_PREVIEW_TTL_MS = "200";
+  // CI runners can be slow between previewImport and applyImport; 200ms TTL
+  // flaked as "catalog preview expired" before the injected crash ran.
+  // Keep TTL long enough for apply + injection; recovery is driven by
+  // recoverOtherPendingOperations on the next apply, not by preview expiry.
+  const CRASH_PREVIEW_TTL_MS = "10000";
+  const CRASH_SETTLE_MS = 300;
+  process.env.FOSU_CATALOG_PREVIEW_TTL_MS = CRASH_PREVIEW_TTL_MS;
 
   const preparedPreview = catalog.previewImport(recoveryDocument("Prepared Recovery"));
   const originalCreateBackup = catalogRepository.createBackup;
@@ -484,12 +490,12 @@ function assertCatalogCrashRecoveryContracts() {
     assert.throws(() => catalog.applyImport(preparedPreview.previewId, { ifMatch: preparedPreview.baseVersion, confirm: true }), /injected before backup/);
   } finally { catalogRepository.createBackup = originalCreateBackup; }
   assert.strictEqual(catalogImportService.readOperation(preparedPreview.previewId).state, "prepared");
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 220);
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, CRASH_SETTLE_MS);
   applyExpectingRecoveryConflict(preparedPreview);
   assertRecoveredOperation(preparedPreview, "Prepared Recovery");
 
   for (const missing of ["manifest", "json"]) {
-    process.env.FOSU_CATALOG_PREVIEW_TTL_MS = "200";
+    process.env.FOSU_CATALOG_PREVIEW_TTL_MS = CRASH_PREVIEW_TTL_MS;
     const name = `Partial Backup ${missing}`;
     const preview = catalog.previewImport(recoveryDocument(name));
     catalogRepository.createBackup = (...args) => {
@@ -501,16 +507,16 @@ function assertCatalogCrashRecoveryContracts() {
       assert.throws(() => catalog.applyImport(preview.previewId, { ifMatch: preview.baseVersion, confirm: true }), /injected .*missing backup pair/);
     } finally { catalogRepository.createBackup = originalCreateBackup; }
     assert.strictEqual(catalogImportService.readOperation(preview.previewId).state, "prepared");
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 220);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, CRASH_SETTLE_MS);
     applyExpectingRecoveryConflict(preview);
     assertRecoveredOperation(preview, name);
   }
 
   const originalCommit = catalogRepository.commitPlannedGeneration;
   for (const boundary of ["before-manifest", "after-manifest", "before-rename"]) {
-    process.env.FOSU_CATALOG_PREVIEW_TTL_MS = "200";
+    process.env.FOSU_CATALOG_PREVIEW_TTL_MS = CRASH_PREVIEW_TTL_MS;
     const name = `Building Recovery ${boundary}`;
-    const preview = catalog.previewImport(recoveryDocument(name));
+    // Create preview immediately before apply to minimize wall-clock gap on slow CI.
     catalogRepository.commitPlannedGeneration = (plan) => {
       const building = path.join(catalogRepository.CATALOG_STAGING_DIR, `.building-${plan.generationId}-${plan.manifest.operationId}`);
       fs.mkdirSync(building, { recursive: false });
@@ -523,11 +529,12 @@ function assertCatalogCrashRecoveryContracts() {
       if (boundary === "before-rename") fs.unlinkSync(ownerPath);
       throw Object.assign(new Error(`injected generation crash ${boundary}`), { code: "INJECTED_BUILD_CRASH" });
     };
+    const preview = catalog.previewImport(recoveryDocument(name));
     try {
       assert.throws(() => catalog.applyImport(preview.previewId, { ifMatch: preview.baseVersion, confirm: true }), /injected generation crash/);
     } finally { catalogRepository.commitPlannedGeneration = originalCommit; }
     assert.strictEqual(catalogImportService.readOperation(preview.previewId).state, "backup_verified");
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 220);
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, CRASH_SETTLE_MS);
     applyExpectingRecoveryConflict(preview);
     const operation = assertRecoveredOperation(preview, name);
     const committed = catalogRepository.readGeneration(operation.result.generationId);
