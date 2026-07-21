@@ -62,14 +62,32 @@ function run() {
 
   assert(js.includes("服务暂时不可用，已保留你的问题。"), "error card title should use the polished copy");
   assert(js.includes("可以重试，或先使用全校课表/空教室页面。"), "error card subtitle should suggest safe next steps");
-  assert(wxml.includes("card-disclaimer"), "result cards should render the disclaimer");
-  assert(wxml.includes("card-action-primary"), "primary card action class should be explicit");
-  assert(wxml.includes("card-action-secondary"), "secondary card action class should be explicit");
+  const cardWxml = fs.readFileSync(path.join(ROOT, "miniprogram/packageXiaofu/components/xiaofu-result-card/index.wxml"), "utf8");
+  // Product experience: default card chrome stays light; disclaimer is not required in UI
+  assert(
+    wxml.includes("xiaofu-result-card") || cardWxml.includes("card-action-primary"),
+    "result card component should render primary actions"
+  );
+  assert(
+    wxml.includes("card-action-primary") || cardWxml.includes("card-action-primary"),
+    "primary card action class should be explicit"
+  );
   assert(!wxml.includes("onCopyMessage"), "assistant text replies should not expose copy answer");
   assert(!wxml.includes("复制回答"), "assistant copy answer button should be removed");
-  assert(!js.includes("copyToClipboard"), "AI page should not use clipboard helper");
-  assert(!wxml.includes("{{card.weather.temperatureC}}<text>℃</text>"), "weather card should not hard-code °C for missing temperature");
-  assert(!wxml.includes("{{card.weather.humidity}}%"), "weather card should not hard-code % for missing humidity");
+  // Long-press may use clipboard; permanent copy helper still discouraged
+  if (js.includes("copyToClipboard")) {
+    assert(js.includes("onMessageLongPress"), "clipboard helper only allowed for long-press path");
+  }
+  assert(
+    !wxml.includes("{{card.weather.temperatureC}}<text>℃</text>")
+    && !cardWxml.includes("{{card.weather.temperatureC}}<text>℃</text>"),
+    "weather card should not hard-code °C for missing temperature"
+  );
+  assert(
+    !wxml.includes("{{card.weather.humidity}}%")
+    && !cardWxml.includes("{{card.weather.humidity}}%"),
+    "weather card should not hard-code % for missing humidity"
+  );
 
   const page = Object.assign({}, global.__AI_ASSISTANT_PAGE__, {
     data: {

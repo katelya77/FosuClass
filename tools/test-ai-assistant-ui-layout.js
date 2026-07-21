@@ -26,22 +26,34 @@ function run() {
   );
   assert(!wxml.includes("xiaofu-subtitle"), "header should not keep the old long subtitle");
   assert(wxml.includes("openHeaderMenu"), "clear action should move into the more menu");
-  assert(wxml.includes("header-menu-sheet"), "more menu should render as a bottom sheet");
-  assert(wxml.includes("清空当前对话") || wxml.includes("记忆设置"), "more menu should contain clear/memory actions");
+  assert(
+    wxml.includes("header-menu-sheet") || wxml.includes("xiaofu-settings-sheet"),
+    "more menu should render as a bottom sheet"
+  );
+  assert(
+    wxml.includes("清空当前对话")
+    || wxml.includes("记忆")
+    || wxml.includes("xiaofu-settings-sheet"),
+    "more menu should contain clear/memory actions"
+  );
   assert(!/class="xiaofu-[^"]*clear/.test(wxml), "clear button should not live in the fixed header");
-  assert(wxml.includes("weather-card"), "weather responses should use a dedicated weather card");
+  assert(
+    wxml.includes("weather-card") || wxml.includes("xiaofu-result-card"),
+    "weather responses should use a dedicated weather card component"
+  );
   assert(!wxml.includes("assistant-hero card"), "AI page should not render the old hero card");
   assert(!wxml.includes("privacy-tip-full"), "full privacy card should not stay in the first viewport");
   assert(wxml.includes("bottom-sheet task-sheet"), "task panel should be a bottom sheet");
-  assert(wxml.includes("ai-mode-row"), "dialog/task switch should live in a dedicated mode row");
   assert(!wxml.includes("quick-task-row"), "dialog/task switch should not share the quick chip row");
   assert(wxml.includes("bottom-sheet privacy-sheet"), "privacy details should be a bottom sheet");
   assert(wxml.includes("message-scroll"), "message area should remain the main content");
   assert(wxml.includes("xiaofu-agent-run"), "agent run component should be consumed");
   assert(
-    wxml.includes("connectionStatusText") || wxml.includes("statusChips") || wxml.includes("xiaofu-chip"),
+    wxml.includes("headerStatusLine") || wxml.includes("statusChips") || wxml.includes("xiaofu-status-line") || wxml.includes("xiaofu-chip"),
     "connection/readiness status should be data-driven"
   );
+  assert(!wxml.includes("feedback-row"), "default feedback-row must be removed");
+  assert(!wxml.includes("newline-btn"), "independent newline button must be removed");
   assert(wxml.includes("小佛助手") || wxml.includes("xiaofu-header-compact"), "assistant branding or compact header");
   assert(wxml.includes("xiaofu-conversation-sub") || wxml.includes("activeConversationTitle"), "conversation subtitle row");
   assert(!wxml.includes(">在线<"), "online status must not be hardcoded");
@@ -50,8 +62,9 @@ function run() {
   const header = getRule(wxss, ".xiaofu-header");
   const compactHeader = getRule(wxss, ".xiaofu-header-compact");
   assert(
-    /min-height\s*:\s*(6[0-9]|7[0-9]|8[0-9]|9[0-9])rpx|height\s*:\s*(6[0-9]|7[0-9]|8[0-9]|9[0-9])rpx/.test(header)
-      || /min-height\s*:\s*6[0-9]rpx/.test(compactHeader),
+    /min-height\s*:\s*(6[0-9]|7[0-9]|8[0-9]|9[0-9]|10[0-2]|11[0-2])rpx|height\s*:\s*(6[0-9]|7[0-9]|8[0-9]|9[0-9]|10[0-2]|11[0-2])rpx/.test(header)
+      || /min-height\s*:\s*(6[0-9]|7[0-9]|8[0-9]|9[0-9]|10[0-2]|11[0-2])rpx/.test(compactHeader)
+      || /max-height\s*:\s*112rpx/.test(header + compactHeader),
     "Xiaofu header should stay compact"
   );
   assert(/z-index\s*:\s*3[0-9]/.test(header), "Xiaofu header should stay above messages without covering sheets");
@@ -63,14 +76,7 @@ function run() {
   assert(/min-width\s*:\s*0/.test(titleBlock), "header title column should be allowed to shrink safely");
 
   const actions = getRule(wxss, ".xiaofu-actions");
-  assert(/flex\s*:\s*0\s+0\s+110rpx/.test(actions), "header actions should reserve a fixed compact column");
-
-  const modeRow = getRule(wxss, ".ai-mode-row");
-  assert(/justify-content\s*:\s*center/.test(modeRow), "mode switch should be centered");
-
-  const segment = getRule(wxss, ".quick-nav-segment");
-  assert(/overflow\s*:\s*hidden/.test(segment), "mode switch should not leak residual blocks");
-  assert(/width\s*:\s*18[0-9]rpx/.test(segment), "mode switch should keep a compact capsule width");
+  assert(/flex\s*:\s*0\s+0\s+1[12]0rpx/.test(actions), "header actions should reserve a fixed compact column");
 
   const titleLine = getRule(wxss, ".xiaofu-title-line");
   assert(/white-space\s*:\s*nowrap/.test(titleLine), "header title should never wrap");

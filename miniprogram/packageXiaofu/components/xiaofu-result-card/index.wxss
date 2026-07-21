@@ -1,0 +1,143 @@
+.ai-result-card {
+  box-sizing: border-box;
+  margin-top: 12rpx;
+  padding: 18rpx 18rpx 16rpx;
+  border-radius: 16rpx;
+  background: #ffffff;
+  border: 1rpx solid rgba(42, 38, 34, 0.06);
+  box-shadow: none;
+}
+
+.card-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12rpx;
+}
+
+.card-title {
+  color: #2a2622;
+  font-size: 28rpx;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.card-subtitle {
+  margin-top: 6rpx;
+  color: #9a9188;
+  font-size: 22rpx;
+  line-height: 1.4;
+}
+
+.badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-top: 10rpx;
+}
+
+.badge {
+  padding: 4rpx 10rpx;
+  border-radius: 999rpx;
+  background: #f3f0eb;
+  color: #6b635a;
+  font-size: 18rpx;
+}
+
+.card-items {
+  margin-top: 12rpx;
+}
+
+.card-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12rpx;
+  padding: 10rpx 0;
+  border-top: 1rpx solid rgba(42, 38, 34, 0.05);
+}
+
+.item-title {
+  color: #2a2622;
+  font-size: 26rpx;
+  font-weight: 550;
+}
+
+.item-subtitle {
+  margin-top: 4rpx;
+  color: #9a9188;
+  font-size: 22rpx;
+}
+
+.item-value {
+  flex: 0 0 auto;
+  color: #6b635a;
+  font-size: 22rpx;
+}
+
+.card-overflow {
+  margin-top: 8rpx;
+  color: #8b3a32;
+  font-size: 22rpx;
+  background: transparent;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 14rpx;
+}
+
+.card-action-primary {
+  min-height: 64rpx;
+  padding: 0 20rpx;
+  border-radius: 12rpx;
+  background: #f3f0eb;
+  color: #2a2622;
+  font-size: 24rpx;
+  font-weight: 550;
+  line-height: 64rpx;
+}
+
+.filtered-hint {
+  margin-top: 8rpx;
+  color: #9a9188;
+  font-size: 20rpx;
+}
+
+.weather-campus {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #2a2622;
+}
+
+.weather-status {
+  margin-top: 4rpx;
+  color: #6b635a;
+  font-size: 22rpx;
+}
+
+.weather-temp {
+  margin-top: 12rpx;
+  font-size: 48rpx;
+  font-weight: 700;
+  color: #2a2622;
+}
+
+.weather-advice {
+  margin-top: 12rpx;
+  color: #6b635a;
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+
+.weather-updated {
+  color: #b0a8a0;
+  font-size: 18rpx;
+}
+
+.card-action-primary::after,
+.card-overflow::after {
+  border: none;
+}

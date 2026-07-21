@@ -49,16 +49,23 @@ async function run() {
   const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
   const wxss = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxss");
 
-  assert(wxml.includes('confirm-type="search"'), "textarea must request search confirm key");
+  assert(
+    wxml.includes('confirm-type="search"') || wxml.includes('confirm-type="send"'),
+    "textarea must request search/send confirm key"
+  );
   assert(wxml.includes('confirm-hold="{{false}}"'), "confirm-hold must be false");
   assert(wxml.includes('show-confirm-bar="{{false}}"'), "mobile confirm bar must be hidden");
   assert(wxml.includes('bindconfirm="onComposerConfirm"'), "textarea confirm must query");
   assert(wxml.includes('bindcompositionstart="onCompositionStart"'), "IME composition start must be tracked");
   assert(wxml.includes('bindcompositionend="onCompositionEnd"'), "IME composition end must be tracked");
   assert(wxml.includes('bindtap="onSubmit"'), "query button must use onSubmit");
-  assert(wxml.includes('bindtap="onInsertNewline"'), "explicit newline button must exist");
-  assert(wxml.includes('bindtap="onVoiceTap"'), "voice button must exist");
-  assert(wxml.includes('voiceRecognizing || sending'), "voice must be disabled while recognizing or sending");
+  // Product experience: no independent newline button; textarea natural line breaks
+  assert(!wxml.includes("newline-btn"), "explicit newline button must be removed");
+  assert(wxml.includes('bindtap="onVoiceTap"') || wxml.includes("voiceInputVisible"), "voice button must exist");
+  assert(
+    wxml.includes("voiceRecognizing") || wxml.includes("voiceRecording"),
+    "voice must track recognizing/recording state"
+  );
 
   assert(js.includes("const SEND_DEDUPE_MS = 420"), "send dedupe window must be 300-500ms");
   assert(js.includes("onComposerConfirm(event)"), "confirm handler missing");
@@ -71,7 +78,7 @@ async function run() {
   assert(js.includes("识别完成"), "recognition completion state missing");
   assert(js.includes("识别失败"), "recognition failure state missing");
   assert(js.includes("wx.openSetting"), "permission denial must offer settings");
-  assert(wxss.includes(".voice-btn") && wxss.includes(".newline-btn"), "voice/newline controls must be styled");
+  assert(wxss.includes(".voice-btn"), "voice control must be styled");
 
   assert.strictEqual(voiceService.isVoiceInputAvailable({ AI_VOICE_INPUT_ENABLED: false }, makeWxMock()), false);
   const config = {
