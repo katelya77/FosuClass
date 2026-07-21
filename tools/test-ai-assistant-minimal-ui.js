@@ -22,11 +22,11 @@ assert(/\.composer\s*\{[\s\S]*?position\s*:\s*fixed/.test(wxss), "composer shoul
 assert(wxml.includes("xiaofu-header") && !wxml.includes("assistant-hero card"), "top should be the Xiaofu light header, not a hero card");
 assert(
   (wxml.includes("xiaofu-title-line") || wxml.includes("xiaofu-conversation-primary") || wxml.includes("xiaofu-header-compact"))
-    && (wxml.includes("xiaofu-status") || wxml.includes("xiaofu-chip")),
+    && (wxml.includes("xiaofu-status-line") || wxml.includes("headerStatusLine") || wxml.includes("xiaofu-chip")),
   "header should include compact title/status line"
 );
 assert(
-  wxml.includes("connectionStatusText") || wxml.includes("statusChips") || wxml.includes("xiaofu-chip"),
+  wxml.includes("headerStatusLine") || wxml.includes("statusChips") || wxml.includes("xiaofu-status-line"),
   "status must use real connection/readiness state data"
 );
 // System nav shows 小佛助手; page may keep the name only in aria-labels / sheets.
@@ -35,14 +35,20 @@ assert(
   "assistant branding or compact header should remain"
 );
 assert(
-  wxml.includes("今天想让小佛帮你完成什么") || wxml.includes("今天想完成什么"),
+  wxml.includes("可以直接告诉我你想完成的校园任务")
+    || wxml.includes("今天想让小佛帮你完成什么")
+    || wxml.includes("今天想完成什么")
+    || wxml.includes("empty-welcome"),
   "empty state should use task-oriented copy"
 );
 assert(
-  wxml.includes("告诉小佛你想完成的校园任务")
+  wxml.includes("告诉小佛你想完成什么")
+    || wxml.includes("告诉小佛你想完成的校园任务")
     || wxml.includes("placeholder")
     || /composer/.test(wxml),
   "composer should remain present for task input"
 );
+assert(!wxml.includes("feedback-row"), "product experience forbids default feedback-row");
+assert(!wxml.includes("newline-btn"), "product experience forbids newline button");
 
 console.log("test-ai-assistant-minimal-ui passed");

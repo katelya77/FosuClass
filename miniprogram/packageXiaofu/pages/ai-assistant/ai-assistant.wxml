@@ -1,76 +1,42 @@
 <view class="page ai-page">
-  <!-- Compact status bar: system nav already shows 小佛助手; avoid repeating large title -->
+  <!-- Slim header: conversation title primary; ≤2 icon actions; no thick card chrome -->
   <view class="xiaofu-header xiaofu-header-compact">
-    <view class="xiaofu-avatar-wrap">
+    <view class="xiaofu-avatar-wrap" aria-hidden="true">
       <image wx:if="{{hasHeroLogo}}" class="xiaofu-avatar" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" binderror="onHeroLogoError" />
       <view wx:else class="xiaofu-avatar-text">佛</view>
     </view>
-    <view class="xiaofu-title-block">
-      <!-- Visually compact: conversation title is primary; product name stays for a11y/tests without large duplicate branding -->
+    <view class="xiaofu-title-block" bindtap="openConversationSheet" aria-label="打开对话列表">
       <view class="xiaofu-title-line xiaofu-title-sr"><text class="xiaofu-title">小佛助手</text></view>
       <view class="xiaofu-conversation-sub xiaofu-conversation-primary">{{activeConversationTitle || conversationTitle || '新对话'}}</view>
-      <view class="xiaofu-chip-row">
-        <text wx:for="{{statusChips}}" wx:key="*this" class="xiaofu-chip status-{{connectionStatusClass}}">{{item}}</text>
-        <text class="xiaofu-chip soft" wx:if="{{memoryChipText}}">{{memoryChipText}}</text>
-      </view>
+      <view class="xiaofu-status-line" wx:if="{{headerStatusLine}}">{{headerStatusLine}}</view>
     </view>
     <view class="xiaofu-actions">
-      <button class="xiaofu-icon-btn" bindtap="openConversationSheet" aria-label="对话列表">对话</button>
-      <button class="xiaofu-icon-btn" bindtap="openCapabilityGuide" aria-label="小佛助手说明">?</button>
-      <button class="xiaofu-icon-btn" bindtap="openHeaderMenu" aria-label="更多操作">⋯</button>
+      <button class="xiaofu-icon-btn" bindtap="openConversationSheet" aria-label="新建或对话列表">＋</button>
+      <button class="xiaofu-icon-btn" bindtap="openHeaderMenu" aria-label="更多">···</button>
     </view>
   </view>
-
-  <!-- Quick tasks only on empty state; after chat starts they hide to free space (reopen via 任务 / +) -->
-  <view class="ai-mode-row ai-mode-row-slim" wx:if="{{!messages.length || showQuickTasks}}">
-    <view class="quick-nav-segment" aria-label="任务入口">
-      <view class="quick-nav-option quick-more-button" bindtap="openTaskPanel"><text>任务工具</text></view>
-      <view class="quick-nav-option quick-more-button soft" wx:if="{{messages.length}}" bindtap="onToggleQuickTasks"><text>{{showQuickTasks ? '收起' : '快捷'}}</text></view>
-    </view>
-  </view>
-
-  <scroll-view
-    wx:if="{{!messages.length || showQuickTasks}}"
-    class="quick-action-scroll"
-    scroll-x
-    enhanced
-    enable-flex="{{true}}"
-    scroll-with-animation="{{false}}"
-    show-scrollbar="{{false}}"
-  >
-    <view class="quick-action-list">
-      <button
-        wx:for="{{quickActions}}"
-        wx:key="id"
-        class="quick-action-pill {{item.className}}"
-        data-action-id="{{item.id}}"
-        bindtap="onQuickAction"
-      >
-        <image class="quick-action-icon" src="{{item.iconPath}}" mode="aspectFit" />
-        <text class="quick-action-label">{{item.label}}</text>
-      </button>
-    </view>
-  </scroll-view>
 
   <view class="history-trim-tip" wx:if="{{historyTrimNotice}}">已仅保留最近 20 条</view>
 
   <scroll-view class="message-scroll" scroll-y scroll-top="{{scrollTop}}" scroll-into-view="{{scrollIntoView}}" scroll-with-animation="{{scrollWithAnimation}}" scroll-anchoring="{{true}}" enhanced show-scrollbar="{{false}}" lower-threshold="80">
+    <!-- Empty state: light entries, no heavy white cards grid -->
     <view class="empty-welcome" wx:if="{{!messages.length}}">
-      <view class="empty-title">今天想让小佛帮你完成什么？</view>
-      <view class="empty-desc">选一个校园任务，小佛会调用权威工具给出可核验结果。</view>
-      <view class="task-card-grid">
+      <view class="empty-brand">小佛助手</view>
+      <view class="empty-title">可以直接告诉我你想完成的校园任务。</view>
+      <view class="empty-entry-grid">
         <button
           wx:for="{{welcomeTaskCards}}"
           wx:key="id"
-          class="task-entry-card"
+          class="empty-entry"
           data-question="{{item.question}}"
           bindtap="onWelcomeExampleTap"
         >
-          <view class="task-entry-title">{{item.title}}</view>
-          <view class="task-entry-desc">{{item.desc}}</view>
+          <view class="empty-entry-title">{{item.title}}</view>
+          <view class="empty-entry-desc">{{item.desc}}</view>
         </button>
       </view>
-      <view class="empty-safe-note">请勿输入学号、密码、验证码等敏感信息。</view>
+      <view class="empty-example">试试问：“明天下午仙溪哪里适合自习？”</view>
+      <view class="empty-safe-note" wx:if="{{showPrivacyTip}}">请勿输入学号、密码等敏感信息</view>
     </view>
 
     <view
@@ -86,31 +52,40 @@
       </view>
       <view wx:elif="{{message.role == 'assistant'}}" class="assistant-avatar-spacer"></view>
 
-      <view class="message-body">
-        <view class="message-bubble" wx:if="{{message.content}}">
-            <view class="message-content">
-              <text
-                class="message-content-text"
-                selectable="{{message.role == 'assistant'}}"
-                user-select="{{message.role == 'assistant'}}"
-              >{{message.content}}</text>
-            </view>
-          <view class="message-meta">
-            <view class="message-meta-text">
-              <text>{{message.timeText}}</text>
-              <text wx:if="{{message.displaySafety && message.displaySafety.text}}"> · {{message.displaySafety.text}}</text>
-            </view>
+      <view
+        class="message-body"
+        data-message-id="{{message.id}}"
+        data-role="{{message.role}}"
+        bindlongpress="onMessageLongPress"
+      >
+        <!-- Assistant: flat text on page bg; User: soft brand bubble -->
+        <view
+          class="message-content-wrap {{message.role == 'user' ? 'user-bubble' : 'assistant-plain'}}"
+          wx:if="{{message.content}}"
+        >
+          <view class="message-content">
+            <text
+              class="message-content-text"
+              selectable="{{message.role == 'assistant'}}"
+              user-select="{{message.role == 'assistant'}}"
+            >{{message.content}}</text>
           </view>
+          <view class="message-meta" wx:if="{{message.timeText}}">
+            <text class="message-meta-text">{{message.timeText}}</text>
+          </view>
+          <view class="send-fail-retry" wx:if="{{message.role == 'user' && message.sendFailed}}" data-message-id="{{message.id}}" catchtap="onRetryUserMessage">重试</view>
         </view>
 
         <view class="fallback-banner" wx:if="{{message.fallbackBanner}}">{{message.fallbackBanner}}</view>
+
+        <!-- Collapsed task trace from real Run Events only -->
         <view
           class="run-compact"
           wx:if="{{message.role == 'assistant' && message.hasCollapsedRun && message.runCompactText}}"
           data-message-id="{{message.id}}"
           bindtap="onToggleRunDetails"
         >{{message.runCompactText}} · 展开</view>
-        <!-- Explainable task trajectory (no hidden CoT / prompts / secrets) -->
+
         <view class="task-trajectory" wx:if="{{message.role == 'assistant' && message.trajectoryExpanded && message.taskTrajectory}}">
           <view class="trajectory-section" wx:if="{{message.taskTrajectory.understanding}}">
             <view class="trajectory-label">理解</view>
@@ -133,6 +108,7 @@
           </view>
           <view class="trajectory-collapse" data-message-id="{{message.id}}" bindtap="onToggleRunDetails">收起</view>
         </view>
+
         <xiaofu-agent-run
           wx:if="{{message.role == 'assistant' && message.displaySteps.length && !message.taskTrajectory}}"
           steps="{{message.displaySteps}}"
@@ -141,14 +117,8 @@
           fallback="{{message.fallback}}"
           status="{{message.runStatus}}"
         />
-        <view class="tool-strip" wx:if="{{message.displayToolCalls.length && !message.displaySteps.length}}">
-          <view
-            wx:for="{{message.displayToolCalls}}"
-            wx:for-item="tool"
-            wx:key="key"
-            class="tool-chip {{tool.statusClass}}"
-          >{{tool.displayText}}</view>
-        </view>
+
+        <!-- Evidence progressive disclosure only -->
         <view
           class="evidence-strip evidence-collapsed"
           wx:if="{{message.evidenceText && !message.evidenceExpanded}}"
@@ -159,148 +129,22 @@
           <view>{{message.evidenceText}}</view>
           <view class="evidence-collapse" data-message-id="{{message.id}}" bindtap="onToggleEvidence">收起来源</view>
         </view>
-        <view class="feedback-row feedback-compact" wx:if="{{message.role == 'assistant' && message.content && !message.isStreaming}}">
-          <button class="feedback-icon-btn" data-message-id="{{message.id}}" data-feedback="helpful" bindtap="onMessageFeedback" aria-label="有帮助">👍</button>
-          <button class="feedback-icon-btn" data-message-id="{{message.id}}" data-feedback="unresolved" bindtap="onMessageFeedback" aria-label="没帮助">👎</button>
-          <button class="feedback-icon-btn" data-message-id="{{message.id}}" data-feedback="more" bindtap="onFeedbackMore" aria-label="更多反馈">···</button>
-        </view>
-        <view class="feedback-detail-row" wx:if="{{message.feedbackOpen}}">
-          <button class="feedback-btn" data-message-id="{{message.id}}" data-feedback="unresolved" bindtap="onMessageFeedback">没解决</button>
-          <button class="feedback-btn" data-message-id="{{message.id}}" data-feedback="stale" bindtap="onMessageFeedback">结果过时</button>
-          <button class="feedback-btn" data-message-id="{{message.id}}" data-feedback="misunderstood" bindtap="onMessageFeedback">理解错误</button>
-        </view>
 
         <view class="ai-card-list" wx:if="{{message.displayCards.length}}">
-          <view
+          <xiaofu-result-card
             wx:for="{{message.displayCards}}"
             wx:for-item="card"
             wx:for-index="cardIndex"
             wx:key="key"
-            class="ai-result-card card card-type-{{card.typeClass}} {{card.errorClass}}"
-          >
-            <view wx:if="{{card.typeClass === 'weather'}}" class="weather-card card-weather-{{card.weatherIconClass}}">
-              <view class="weather-card-head">
-                <view>
-                  <view class="weather-campus">{{card.weather.campus}}</view>
-                  <view class="weather-status">{{card.weather.weatherText}}</view>
-                </view>
-                <view class="weather-updated">{{card.weather.cachedText}}<text wx:if="{{card.weather.updatedLabel}}"> · {{card.weather.updatedLabel}}</text></view>
-              </view>
-              <view class="weather-main">
-                <view class="weather-temp {{card.weather.temperatureText === '暂无该项数据' ? 'missing' : ''}}">{{card.weather.temperatureText}}</view>
-                <view class="weather-facts">
-                  <view>体感 {{card.weather.apparentTemperatureText}}</view>
-                  <view>{{card.weather.targetLabel}} {{card.weather.lowText}} / {{card.weather.highText}}</view>
-                </view>
-                <view class="weather-icon weather-icon-css" aria-hidden="true"></view>
-              </view>
-              <view class="weather-metrics">
-                <view class="weather-metric"><text>湿度</text><text class="weather-metric-value">{{card.weather.humidityText}}</text></view>
-                <view class="weather-metric"><text>风速</text><text class="weather-metric-value">{{card.weather.windSpeedText}}</text></view>
-                <view class="weather-metric"><text>降水</text><text class="weather-metric-value">{{card.weather.precipitationText}}</text></view>
-                <view class="weather-metric"><text>降雨</text><text class="weather-metric-value">{{card.weather.rainProbabilityText}}</text></view>
-              </view>
-              <view class="weather-timeline" wx:if="{{card.weather.next6Hours.length}}">
-                <view wx:for="{{card.weather.next6Hours}}" wx:for-item="hour" wx:key="key" class="weather-hour">
-                  <view>{{hour.time}}</view>
-                  <text>{{hour.temperatureText}}</text>
-                  <text>{{hour.rainProbabilityText}}</text>
-                </view>
-              </view>
-              <view class="weather-advice">{{card.weather.advice}}</view>
-              <view class="weather-source" wx:if="{{card.weather.sourceText}}">数据来源：{{card.weather.sourceText}}</view>
-              <view class="card-actions {{card.actionLayoutClass}}" wx:if="{{card.primaryActions.length}}">
-                <button
-                  wx:for="{{card.primaryActions}}"
-                  wx:for-item="action"
-                  wx:key="label"
-                  class="card-action card-action-primary"
-                  data-message-index="{{messageIndex}}"
-                  data-card-index="{{cardIndex}}"
-                  data-action-index="{{action.originalIndex}}"
-                  bindtap="onCardAction"
-                >{{action.label}}</button>
-              </view>
-              <view class="secondary-action-row" wx:if="{{card.secondaryActions.length}}">
-                <button
-                  wx:for="{{card.secondaryActions}}"
-                  wx:for-item="action"
-                  wx:key="label"
-                  class="card-action-secondary"
-                  data-message-index="{{messageIndex}}"
-                  data-card-index="{{cardIndex}}"
-                  data-action-index="{{action.originalIndex}}"
-                  bindtap="onCardAction"
-                >{{action.label}}</button>
-              </view>
-            </view>
-
-            <block wx:else>
-            <view class="card-header-row">
-              <view class="card-title-block">
-                <view class="card-title">{{card.title}}</view>
-                <view class="card-subtitle" wx:if="{{card.subtitle}}">{{card.subtitle}}</view>
-              </view>
-              <view class="card-type">{{card.typeLabel}}</view>
-            </view>
-
-            <view class="badge-row" wx:if="{{card.badges.length}}">
-              <text wx:for="{{card.badges}}" wx:key="*this" class="badge">{{item}}</text>
-            </view>
-
-            <view class="card-items" wx:if="{{card.visibleItems.length}}">
-              <view
-                wx:for="{{card.visibleItems}}"
-                wx:for-item="cardItem"
-                wx:key="key"
-                class="card-item"
-              >
-                <view class="item-main">
-                  <view class="item-title">{{cardItem.title}}</view>
-                  <view class="item-subtitle" wx:if="{{cardItem.subtitle}}">{{cardItem.subtitle}}</view>
-                </view>
-                <view class="item-value" wx:if="{{cardItem.value}}">{{cardItem.value}}</view>
-              </view>
-              <button
-                class="card-overflow {{card.overflowExpanded ? 'expanded' : ''}}"
-                wx:if="{{card.hiddenItemCount || card.overflowExpanded}}"
-                data-card-key="{{card.key}}"
-                bindtap="onCardOverflow"
-              >{{card.overflowText}}</button>
-            </view>
-
-            <view class="card-actions {{card.actionLayoutClass}}" wx:if="{{card.primaryActions.length}}">
-              <button
-                wx:for="{{card.primaryActions}}"
-                wx:for-item="action"
-                wx:key="label"
-                class="card-action card-action-primary"
-                data-message-index="{{messageIndex}}"
-                data-card-index="{{cardIndex}}"
-                data-action-index="{{action.originalIndex}}"
-                bindtap="onCardAction"
-              >{{action.label}}</button>
-            </view>
-
-            <view class="secondary-action-row" wx:if="{{card.secondaryActions.length}}">
-              <button
-                wx:for="{{card.secondaryActions}}"
-                wx:for-item="action"
-                wx:key="label"
-                class="card-action-secondary"
-                data-message-index="{{messageIndex}}"
-                data-card-index="{{cardIndex}}"
-                data-action-index="{{action.originalIndex}}"
-                bindtap="onCardAction"
-              >{{action.label}}</button>
-            </view>
-
-            <view class="filtered-hint" wx:if="{{card.filteredHint}}">{{card.filteredHint}}</view>
-            <view class="card-disclaimer">{{card.disclaimer}}</view>
-            </block>
-          </view>
+            card="{{card}}"
+            messageIndex="{{messageIndex}}"
+            cardIndex="{{cardIndex}}"
+            bind:action="onResultCardAction"
+            bind:overflow="onResultCardOverflow"
+          />
         </view>
 
+        <!-- Compact suggestions: ≤2, text buttons not full-width pills -->
         <view class="suggestion-row" wx:if="{{message.suggestions.length}}">
           <button
             wx:for="{{message.suggestions}}"
@@ -328,7 +172,7 @@
     <view id="message-bottom-anchor" class="message-bottom-anchor"></view>
   </scroll-view>
 
-  <view class="sheet-mask" wx:if="{{showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu || showMemorySheet}}" bindtap="closeSheets"></view>
+  <view class="sheet-mask" wx:if="{{showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu || showMemorySheet || showComposerPlus}}" bindtap="closeSheets"></view>
 
   <xiaofu-conversation-sheet
     visible="{{showConversationSheet}}"
@@ -339,6 +183,7 @@
     bind:rename="onConversationSheetRename"
     bind:clear="onConversationSheetClear"
     bind:delete="onConversationSheetDelete"
+    bind:pin="onConversationSheetPin"
   />
 
   <xiaofu-memory-sheet
@@ -351,30 +196,34 @@
     bind:clearall="onClearAllMemory"
   />
 
-  <view class="bottom-sheet header-menu-sheet header-menu-sheet-full" wx:if="{{showHeaderMenu}}">
+  <xiaofu-settings-sheet
+    visible="{{showHeaderMenu}}"
+    memoryStatusText="{{memoryStatusText}}"
+    privacyStatusText="{{privacyStatusText}}"
+    floatEnabled="{{xiaofuFloatEnabled}}"
+    bind:close="closeHeaderMenu"
+    bind:conversations="openConversationSheetFromMenu"
+    bind:memory="openMemorySheet"
+    bind:privacy="openPrivacySheet"
+    bind:capability="openCapabilityGuide"
+    bind:privacyhelp="openPrivacyHelp"
+    bind:clear="clearHistory"
+    bind:floatchange="onFloatSwitchChangeFromSheet"
+  />
+
+  <!-- Composer + quick actions sheet -->
+  <view class="bottom-sheet composer-plus-sheet" wx:if="{{showComposerPlus}}">
     <view class="sheet-handle"></view>
-    <view class="task-panel-head">
-      <view class="panel-title-wrap">
-        <view class="task-panel-title">更多操作</view>
-      </view>
-      <button class="sheet-close" bindtap="closeHeaderMenu">关闭</button>
+    <view class="settings-sheet-head">
+      <view class="settings-sheet-title">快捷操作</view>
+      <button class="sheet-close-icon" bindtap="closeComposerPlus" aria-label="关闭">✕</button>
     </view>
-    <view class="header-menu-list">
-      <button class="header-menu-row" bindtap="openMemorySheet">
-        <text class="header-menu-row-title">记忆设置</text>
-        <text class="header-menu-row-meta">{{memoryStatusText || '本地记忆'}}</text>
-        <text class="header-menu-row-arrow">›</text>
-      </button>
-      <button class="header-menu-row" bindtap="toggleXiaofuFloat">
-        <text class="header-menu-row-title">{{xiaofuFloatToggleText}}</text>
-        <text class="header-menu-row-meta"></text>
-        <text class="header-menu-row-arrow">›</text>
-      </button>
-      <button class="header-menu-row danger" bindtap="clearHistory">
-        <text class="header-menu-row-title">清空当前对话</text>
-        <text class="header-menu-row-meta"></text>
-        <text class="header-menu-row-arrow">›</text>
-      </button>
+    <view class="plus-action-list">
+      <button class="plus-action-row" bindtap="openTaskPanelFromPlus">校园工具</button>
+      <button class="plus-action-row" bindtap="openPersonalSyncFromPlus">导入课表</button>
+      <button class="plus-action-row" bindtap="openCampusMapFromPlus">校园地图</button>
+      <button class="plus-action-row" bindtap="startVoiceFromPlus" wx:if="{{voiceInputVisible}}">语音输入</button>
+      <button class="plus-action-row" bindtap="createNewConversationFromPlus">新建对话</button>
     </view>
   </view>
 
@@ -385,7 +234,7 @@
         <view class="task-panel-title">校园工具</view>
         <view class="task-panel-subtitle">课表、校园信息和常用入口</view>
       </view>
-      <button class="sheet-close" bindtap="closeTaskPanel">关闭</button>
+      <button class="sheet-close-icon" bindtap="closeTaskPanel" aria-label="关闭">✕</button>
     </view>
     <scroll-view wx:if="{{taskPanelReady}}" class="task-section-scroll" scroll-y enhanced scroll-with-animation="{{false}}" show-scrollbar="{{false}}">
       <view
@@ -421,10 +270,10 @@
     <view class="sheet-handle"></view>
     <view class="task-panel-head">
       <view class="panel-title-wrap">
-        <view class="task-panel-title">小佛助手可以帮你完成什么？</view>
+        <view class="task-panel-title">小佛能做什么</view>
         <view class="task-panel-subtitle">选择示例后，会在当前对话中整理结果</view>
       </view>
-      <button class="sheet-close" bindtap="closeCapabilityGuide">关闭</button>
+      <button class="sheet-close-icon" bindtap="closeCapabilityGuide" aria-label="关闭">✕</button>
     </view>
     <scroll-view class="capability-scroll" scroll-y enhanced scroll-with-animation="{{false}}" show-scrollbar="{{false}}">
       <view
@@ -459,7 +308,7 @@
       <switch
         class="privacy-switch"
         checked="{{allowPersonalContext}}"
-        color="#2f855a"
+        color="#3d7a5a"
         bindchange="onPersonalContextToggle"
       />
     </view>
@@ -470,19 +319,12 @@
     </view>
   </view>
 
+  <!-- Single-layer composer: no newline btn, no permanent summary note -->
   <view class="composer">
     <view class="composer-inner">
-      <button
-        wx:if="{{voiceInputVisible}}"
-        class="voice-btn {{voiceRecording ? 'recording' : ''}} {{voiceRecognizing || sending ? 'disabled' : ''}}"
-        bindtap="onVoiceTap"
-        disabled="{{voiceRecognizing || sending}}"
-        aria-label="语音输入"
-      >
-        {{voiceRecording ? "停" : "麦"}}
-      </button>
+      <button class="composer-plus-btn" bindtap="openComposerPlus" disabled="{{sending}}" aria-label="快捷操作">＋</button>
       <view class="composer-input-wrap">
-        <view wx:if="{{!inputValue}}" class="composer-custom-placeholder">告诉小佛你想完成的校园任务</view>
+        <view wx:if="{{!inputValue}}" class="composer-custom-placeholder">告诉小佛你想完成什么…</view>
         <textarea
           class="composer-input"
           value="{{inputValue}}"
@@ -492,9 +334,10 @@
           fixed="{{true}}"
           cursor-spacing="16"
           focus="{{inputFocus}}"
-          confirm-type="search"
+          confirm-type="send"
           confirm-hold="{{false}}"
           show-confirm-bar="{{false}}"
+          adjust-position="{{true}}"
           bindinput="onInput"
           bindconfirm="onComposerConfirm"
           bindcompositionstart="onCompositionStart"
@@ -502,18 +345,23 @@
           disabled="{{sending}}"
         />
       </view>
-      <button class="newline-btn" bindtap="onInsertNewline" disabled="{{sending}}" aria-label="换行">↵</button>
+      <button
+        wx:if="{{voiceInputVisible && !sending}}"
+        class="voice-btn {{voiceRecording ? 'recording' : ''}} {{voiceRecognizing ? 'disabled' : ''}}"
+        bindtap="onVoiceTap"
+        disabled="{{voiceRecognizing}}"
+        aria-label="语音输入"
+      >麦</button>
       <button
         class="send-btn icon-send {{!sending && !inputValue ? 'disabled' : ''}} {{sending ? 'cancel' : ''}}"
         bindtap="onSubmit"
         disabled="{{!sending && !inputValue}}"
         aria-label="{{sending ? '停止' : '发送'}}"
       >
-        {{sending ? "■" : "➤"}}
+        {{sending ? "■" : "↑"}}
       </button>
     </view>
     <view wx:if="{{voiceStatusText}}" class="voice-status">{{voiceStatusText}}</view>
-    <button class="composer-note" bindtap="openPrivacySheet">{{composerNote}}</button>
   </view>
   <xiaofu-float />
 </view>

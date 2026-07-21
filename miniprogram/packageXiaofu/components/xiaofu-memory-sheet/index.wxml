@@ -2,10 +2,10 @@
   <view class="sheet-handle"></view>
   <view class="memory-head">
     <view class="memory-head-text">
-      <view class="memory-title">记忆设置</view>
-      <view class="memory-subtitle">控制小佛如何保存任务上下文</view>
+      <view class="memory-title">记忆</view>
+      <view class="memory-subtitle">选择小佛在后续对话中保留哪些上下文。</view>
     </view>
-    <button class="sheet-close" bindtap="onClose">关闭</button>
+    <button class="sheet-close-icon" bindtap="onClose" aria-label="关闭">✕</button>
   </view>
 
   <scroll-view class="memory-scroll" scroll-y enhanced show-scrollbar="{{false}}">
@@ -19,7 +19,7 @@
           <view class="memory-mode-check {{mode === 'local_only' ? 'on' : ''}}"></view>
           <view class="memory-mode-title">仅保存在本机</view>
         </view>
-        <view class="memory-mode-desc">完整对话只在手机本地。服务端不保存会话内容。</view>
+        <view class="memory-mode-desc">完整消息只留在当前设备。</view>
       </view>
       <view
         class="memory-mode-item {{mode === 'session_state' ? 'active' : ''}}"
@@ -28,9 +28,9 @@
       >
         <view class="memory-mode-row">
           <view class="memory-mode-check {{mode === 'session_state' ? 'on' : ''}}"></view>
-          <view class="memory-mode-title">保存会话状态</view>
+          <view class="memory-mode-title">保存任务状态</view>
         </view>
-        <view class="memory-mode-desc">登录后可保存结构化任务槽位与摘要，便于连续追问。不保存完整消息。</view>
+        <view class="memory-mode-desc">保存班级、教师、教室等必要信息，便于连续追问。</view>
       </view>
       <view
         class="memory-mode-item {{mode === 'cloud_sync' ? 'active' : ''}}"
@@ -39,13 +39,16 @@
       >
         <view class="memory-mode-row">
           <view class="memory-mode-check {{mode === 'cloud_sync' ? 'on' : ''}}"></view>
-          <view class="memory-mode-title">同步脱敏对话</view>
+          <view class="memory-mode-title">跨设备同步</view>
         </view>
-        <view class="memory-mode-desc">需主动开启。仅保存脱敏后的有限最近消息，可跨设备恢复，可随时关闭和清除。</view>
+        <view class="memory-mode-desc">保存少量脱敏消息，可在其他设备恢复。</view>
       </view>
     </view>
 
-    <view class="memory-note">
+    <view class="memory-privacy-toggle" bindtap="onTogglePrivacyDetail">
+      {{privacyExpanded ? '收起隐私说明' : '了解会保存什么'}}
+    </view>
+    <view class="memory-note" wx:if="{{privacyExpanded}}">
       <view>会保存：任务类型、班级/教师/教室等槽位、简短摘要、数据来源引用。</view>
       <view>不会保存：学号密码 Cookie Token、完整个人课表、原始 XLS、模型隐藏推理。</view>
       <view>保留周期：会话状态约 7 天；同步对话约 30 天。关闭同步后可选择是否删除云端数据。</view>
@@ -53,8 +56,8 @@
 
     <view class="memory-actions memory-actions-stack">
       <button class="memory-action" bindtap="onClearLocal">清空本机消息</button>
-      <button class="memory-action" bindtap="onClearCurrent">清除服务端会话状态</button>
-      <button class="memory-action danger" bindtap="onClearAll">清除全部云端记忆</button>
+      <button class="memory-action" bindtap="onClearCurrent">清除当前会话状态</button>
+      <button class="memory-action danger text-danger" bindtap="onClearAll">清除全部云端记忆</button>
     </view>
   </scroll-view>
 </view>
