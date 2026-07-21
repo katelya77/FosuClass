@@ -58,7 +58,23 @@
   flex-shrink: 0;
 }
 
+.sheet-close-icon {
+  margin: 0;
+  width: 64rpx;
+  height: 64rpx;
+  min-width: 64rpx;
+  padding: 0;
+  border-radius: 32rpx;
+  background: #efece7;
+  color: #6b635a;
+  font-size: 28rpx;
+  line-height: 64rpx;
+  text-align: center;
+  flex-shrink: 0;
+}
+
 .sheet-close::after,
+.sheet-close-icon::after,
 .conversation-new-btn::after,
 .conversation-main::after,
 .conversation-more::after,
@@ -66,14 +82,55 @@
   border: none;
 }
 
+.conversation-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.conversation-search {
+  flex: 1;
+  min-width: 0;
+  height: 72rpx;
+  padding: 0 20rpx;
+  border-radius: 14rpx;
+  background: #fff;
+  border: 1rpx solid rgba(40, 36, 32, 0.08);
+  font-size: 26rpx;
+  color: #2d2925;
+}
+
 .conversation-new-btn {
-  margin: 0 0 16rpx;
-  padding: 18rpx;
-  border-radius: 16rpx;
-  background: #c4302b;
+  margin: 0;
+  flex: 0 0 auto;
+  min-width: 120rpx;
+  height: 72rpx;
+  padding: 0 22rpx;
+  border-radius: 14rpx;
+  background: #c0392b;
   color: #fff;
-  font-size: 28rpx;
+  font-size: 26rpx;
   font-weight: 600;
+  line-height: 72rpx;
+  text-align: center;
+}
+
+.conversation-preview {
+  margin-top: 6rpx;
+  color: #9a9188;
+  font-size: 22rpx;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-empty {
+  padding: 40rpx 12rpx;
+  text-align: center;
+  color: #9a9188;
+  font-size: 24rpx;
 }
 
 .conversation-scroll {

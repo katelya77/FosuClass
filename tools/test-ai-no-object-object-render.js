@@ -33,7 +33,11 @@ function run() {
   const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
   assert(!/String\s*\(\s*action\.label/.test(js), "action.label must not be directly String() converted");
   assert(!/String\s*\(\s*source\.label/.test(js), "source.label must not be directly String() converted");
-  assert(wxml.includes("{{action.label}}"), "WXML should render normalized action label only");
+  const cardWxml = read("miniprogram/packageXiaofu/components/xiaofu-result-card/index.wxml");
+  assert(
+    wxml.includes("{{action.label}}") || cardWxml.includes("{{action.label}}"),
+    "WXML should render normalized action label only"
+  );
 
   const messages = pageModule.normalizeMessagesForDisplay([{
     id: "m1",
@@ -62,7 +66,12 @@ function run() {
   assert.strictEqual(card.title, "时间推荐");
   assert.strictEqual(card.subtitle, "对象副标题");
   assert.strictEqual(card.primaryActions[0].label, "查看详情");
-  assert.strictEqual(card.secondaryActions[0].label, "继续追问");
+  // Product experience: at most 2 visible primary actions; secondary row removed
+  assert.ok(
+    (card.primaryActions[1] && card.primaryActions[1].label === "继续追问")
+    || (card.actions || []).some((a) => a.label === "继续追问"),
+    "follow-up action should remain available"
+  );
   assert(!card.actions.some((action) => action.type === "copy"), "copy actions should be filtered");
   assert.deepStrictEqual(messages[0].suggestions, ["对象建议"]);
   assertNoBadText(messages);

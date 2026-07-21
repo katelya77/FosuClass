@@ -1,0 +1,66 @@
+<view class="ai-result-card card card-type-{{card.typeClass}} {{card.errorClass}}" wx:if="{{card}}">
+  <view wx:if="{{card.typeClass === 'weather'}}" class="weather-card card-weather-{{card.weatherIconClass}}">
+    <view class="weather-card-head">
+      <view>
+        <view class="weather-campus">{{card.weather.campus}}</view>
+        <view class="weather-status">{{card.weather.weatherText}}</view>
+      </view>
+      <view class="weather-updated">{{card.weather.cachedText}}<text wx:if="{{card.weather.updatedLabel}}"> · {{card.weather.updatedLabel}}</text></view>
+    </view>
+    <view class="weather-main">
+      <view class="weather-temp">{{card.weather.temperatureText}}</view>
+      <view class="weather-facts">
+        <view>{{card.weather.targetLabel}} {{card.weather.lowText}} / {{card.weather.highText}}</view>
+      </view>
+    </view>
+    <view class="weather-advice">{{card.weather.advice}}</view>
+    <view class="card-actions {{card.actionLayoutClass}}" wx:if="{{card.primaryActions.length}}">
+      <button
+        wx:for="{{card.primaryActions}}"
+        wx:for-item="action"
+        wx:key="label"
+        class="card-action card-action-primary"
+        data-action-index="{{action.originalIndex}}"
+        bindtap="onAction"
+      >{{action.label}}</button>
+    </view>
+  </view>
+
+  <block wx:else>
+    <view class="card-header-row">
+      <view class="card-title-block">
+        <view class="card-title">{{card.title}}</view>
+        <view class="card-subtitle" wx:if="{{card.subtitle}}">{{card.subtitle}}</view>
+      </view>
+    </view>
+    <view class="badge-row" wx:if="{{card.badges.length}}">
+      <text wx:for="{{card.badges}}" wx:key="*this" class="badge">{{item}}</text>
+    </view>
+    <view class="card-items" wx:if="{{card.visibleItems.length}}">
+      <view wx:for="{{card.visibleItems}}" wx:for-item="cardItem" wx:key="key" class="card-item">
+        <view class="item-main">
+          <view class="item-title">{{cardItem.title}}</view>
+          <view class="item-subtitle" wx:if="{{cardItem.subtitle}}">{{cardItem.subtitle}}</view>
+        </view>
+        <view class="item-value" wx:if="{{cardItem.value}}">{{cardItem.value}}</view>
+      </view>
+      <button
+        class="card-overflow {{card.overflowExpanded ? 'expanded' : ''}}"
+        wx:if="{{card.hiddenItemCount || card.overflowExpanded}}"
+        data-card-key="{{card.key}}"
+        bindtap="onOverflow"
+      >{{card.overflowText}}</button>
+    </view>
+    <view class="card-actions {{card.actionLayoutClass}}" wx:if="{{card.primaryActions.length}}">
+      <button
+        wx:for="{{card.primaryActions}}"
+        wx:for-item="action"
+        wx:key="label"
+        class="card-action card-action-primary"
+        data-action-index="{{action.originalIndex}}"
+        bindtap="onAction"
+      >{{action.label}}</button>
+    </view>
+    <view class="filtered-hint" wx:if="{{card.filteredHint}}">{{card.filteredHint}}</view>
+  </block>
+</view>

@@ -1,0 +1,135 @@
+.xiaofu-settings-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 40;
+  max-height: 78vh;
+  box-sizing: border-box;
+  padding: 12rpx 12rpx 0;
+  border-radius: 28rpx 28rpx 0 0;
+  background: #fbfaf8;
+  box-shadow: 0 -8rpx 32rpx rgba(40, 36, 32, 0.1);
+}
+
+.sheet-handle {
+  width: 72rpx;
+  height: 8rpx;
+  margin: 8rpx auto 12rpx;
+  border-radius: 999rpx;
+  background: rgba(40, 36, 32, 0.12);
+}
+
+.settings-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8rpx 8rpx 16rpx 20rpx;
+}
+
+.settings-sheet-title {
+  color: #2a2622;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.sheet-close-icon {
+  width: 64rpx;
+  height: 64rpx;
+  min-width: 64rpx;
+  border-radius: 32rpx;
+  background: #f3f0eb;
+  color: #6b635a;
+  font-size: 28rpx;
+  line-height: 64rpx;
+  text-align: center;
+  margin: 0;
+  padding: 0;
+}
+
+.sheet-close-icon::after,
+.header-menu-row::after {
+  border: none;
+}
+
+.settings-sheet-scroll {
+  max-height: 62vh;
+  padding-bottom: calc(16rpx + env(safe-area-inset-bottom));
+}
+
+.settings-section {
+  margin-bottom: 12rpx;
+  padding: 0 8rpx;
+}
+
+.settings-section-label {
+  padding: 12rpx 16rpx 8rpx;
+  color: #9a9188;
+  font-size: 22rpx;
+  font-weight: 600;
+}
+
+.settings-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 96rpx;
+  padding: 16rpx 12rpx;
+  gap: 14rpx;
+  border-bottom: 1rpx solid rgba(42, 38, 34, 0.06);
+  background: transparent;
+  text-align: left;
+  margin: 0;
+}
+
+.settings-row-icon {
+  flex: 0 0 48rpx;
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 12rpx;
+  background: #f3f0eb;
+  color: #6b635a;
+  font-size: 22rpx;
+  line-height: 48rpx;
+  text-align: center;
+}
+
+.settings-row-body {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.header-menu-row-title {
+  color: #2a2622;
+  font-size: 28rpx;
+  font-weight: 600;
+  white-space: normal;
+}
+
+.settings-row-desc {
+  margin-top: 4rpx;
+  color: #9a9188;
+  font-size: 22rpx;
+  line-height: 1.4;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.settings-row-switch {
+  padding-right: 8rpx;
+}
+
+.settings-switch {
+  flex: 0 0 auto;
+  transform: scale(0.9);
+}
+
+.header-menu-row-arrow {
+  flex: 0 0 auto;
+  color: #b0a8a0;
+  font-size: 32rpx;
+}
+
+.settings-section-danger .header-menu-row-title {
+  color: #b91c1c;
+}

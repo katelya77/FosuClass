@@ -3,14 +3,23 @@
   <view class="task-panel-head">
     <view class="panel-title-wrap">
       <view class="task-panel-title">对话</view>
-      <view class="task-panel-subtitle">本机优先；有会话时合并云端列表，失败不阻断本机</view>
+      <view class="task-panel-subtitle">管理本机对话；开启同步后可合并云端记录</view>
     </view>
-    <button class="sheet-close" bindtap="onClose">关闭</button>
+    <button class="sheet-close-icon" bindtap="onClose" aria-label="关闭">✕</button>
   </view>
-  <button class="conversation-new-btn" bindtap="onCreate">新建对话</button>
+  <view class="conversation-toolbar">
+    <input
+      class="conversation-search"
+      value="{{searchQuery}}"
+      placeholder="搜索对话"
+      confirm-type="search"
+      bindinput="onSearchInput"
+    />
+    <button class="conversation-new-btn" bindtap="onCreate">新建</button>
+  </view>
   <scroll-view class="conversation-scroll" scroll-y enhanced show-scrollbar="{{false}}">
     <view
-      wx:for="{{conversations}}"
+      wx:for="{{filteredConversations}}"
       wx:key="conversationId"
       class="conversation-item {{item.active ? 'active' : ''}}"
     >
@@ -24,29 +33,24 @@
             <view class="conversation-title">{{item.title}}</view>
             <text class="conversation-current" wx:if="{{item.active}}">当前</text>
           </view>
+          <view class="conversation-preview" wx:if="{{item.preview}}">{{item.preview}}</view>
         </button>
         <button
           class="conversation-more"
           data-conversation-id="{{item.conversationId}}"
           catchtap="onMore"
-        >⋯</button>
+        >···</button>
       </view>
       <view class="conversation-meta">
         <text>{{item.updatedAtText}}</text>
-        <text class="meta-dot">·</text>
-        <text>{{item.messageCount}} 条</text>
-        <text wx:if="{{item.lastTaskType}}" class="meta-dot">·</text>
-        <text wx:if="{{item.lastTaskType}}">{{item.lastTaskType}}</text>
-      </view>
-      <view class="conversation-badges">
-        <text class="source-badge">{{item.sourceBadge || item.memoryModeText || '本机'}}</text>
-        <text class="source-badge warn" wx:if="{{item.conflict}}">需确认冲突</text>
       </view>
       <view class="conversation-actions" wx:if="{{menuConversationId === item.conversationId}}">
         <button catchtap="onRename" data-conversation-id="{{item.conversationId}}">重命名</button>
+        <button catchtap="onPin" data-conversation-id="{{item.conversationId}}">{{item.pinned ? '取消置顶' : '置顶'}}</button>
         <button catchtap="onClear" data-conversation-id="{{item.conversationId}}">清空</button>
         <button catchtap="onDelete" data-conversation-id="{{item.conversationId}}" class="danger">删除</button>
       </view>
     </view>
+    <view class="conversation-empty" wx:if="{{!filteredConversations.length}}">暂无对话</view>
   </scroll-view>
 </view>

@@ -1,0 +1,80 @@
+<view class="bottom-sheet header-menu-sheet header-menu-sheet-full xiaofu-settings-sheet" wx:if="{{visible}}">
+  <view class="sheet-handle"></view>
+  <view class="settings-sheet-head">
+    <view class="settings-sheet-title">更多</view>
+    <button class="sheet-close-icon" bindtap="onClose" aria-label="关闭">✕</button>
+  </view>
+  <scroll-view class="settings-sheet-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+    <view class="settings-section">
+      <view class="settings-section-label">对话</view>
+      <button class="header-menu-row settings-row" bindtap="onConversations">
+        <view class="settings-row-icon">☰</view>
+        <view class="settings-row-body">
+          <view class="header-menu-row-title">对话记录</view>
+          <view class="settings-row-desc">查看、新建和管理对话</view>
+        </view>
+        <text class="header-menu-row-arrow">›</text>
+      </button>
+    </view>
+
+    <view class="settings-section">
+      <view class="settings-section-label">个性化</view>
+      <button class="header-menu-row settings-row" bindtap="onMemory">
+        <view class="settings-row-icon">◎</view>
+        <view class="settings-row-body">
+          <view class="header-menu-row-title">记忆</view>
+          <view class="settings-row-desc">{{memoryStatusText || '仅保存在本机'}}</view>
+        </view>
+        <text class="header-menu-row-arrow">›</text>
+      </button>
+      <view class="header-menu-row settings-row settings-row-switch">
+        <view class="settings-row-icon">◇</view>
+        <view class="settings-row-body">
+          <view class="header-menu-row-title">小佛浮窗</view>
+          <view class="settings-row-desc">在其他页面快速唤起</view>
+        </view>
+        <switch class="settings-switch" checked="{{floatEnabled}}" color="#c0392b" bindchange="onFloatChange" />
+      </view>
+      <button class="header-menu-row settings-row" bindtap="onPrivacy">
+        <view class="settings-row-icon">▤</view>
+        <view class="settings-row-body">
+          <view class="header-menu-row-title">课表摘要</view>
+          <view class="settings-row-desc">{{privacyStatusText || '默认不使用课表摘要'}}</view>
+        </view>
+        <text class="header-menu-row-arrow">›</text>
+      </button>
+    </view>
+
+    <view class="settings-section">
+      <view class="settings-section-label">帮助</view>
+      <button class="header-menu-row settings-row" bindtap="onCapability">
+        <view class="settings-row-icon">?</view>
+        <view class="settings-row-body">
+          <view class="header-menu-row-title">小佛能做什么</view>
+          <view class="settings-row-desc">校园任务示例</view>
+        </view>
+        <text class="header-menu-row-arrow">›</text>
+      </button>
+      <button class="header-menu-row settings-row" bindtap="onPrivacyHelp">
+        <view class="settings-row-icon">ⓘ</view>
+        <view class="settings-row-body">
+          <view class="header-menu-row-title">数据与隐私</view>
+          <view class="settings-row-desc">了解会保存什么</view>
+        </view>
+        <text class="header-menu-row-arrow">›</text>
+      </button>
+    </view>
+
+    <view class="settings-section settings-section-danger">
+      <view class="settings-section-label">危险操作</view>
+      <button class="header-menu-row settings-row danger" bindtap="onClear">
+        <view class="settings-row-icon">⊘</view>
+        <view class="settings-row-body">
+          <view class="header-menu-row-title">清空当前对话</view>
+          <view class="settings-row-desc">仅清除本对话消息</view>
+        </view>
+        <text class="header-menu-row-arrow">›</text>
+      </button>
+    </view>
+  </scroll-view>
+</view>
