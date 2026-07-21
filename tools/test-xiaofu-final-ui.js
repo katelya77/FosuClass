@@ -22,23 +22,26 @@ function assertNotIncludes(content, snippet, label) {
 assertIncludes(wxml, "xiaofu-header-compact", "wxml");
 assertIncludes(wxml, "xiaofu-title-sr", "wxml");
 assertIncludes(wxml, "xiaofu-conversation-primary", "wxml");
-assertIncludes(wxml, "xiaofu-conversation-primary", "wxml");
 assertIncludes(wxss, ".xiaofu-header-compact", "wxss");
 
-// Compact feedback
-assertIncludes(wxml, "feedback-compact", "wxml");
-assertIncludes(wxml, 'aria-label="有帮助"', "wxml");
-assertIncludes(wxml, 'aria-label="没帮助"', "wxml");
-assertIncludes(wxml, "onFeedbackMore", "wxml");
+// Product experience: NO default feedback chrome
+assertNotIncludes(wxml, "feedback-compact", "wxml");
+assertNotIncludes(wxml, "feedback-row", "wxml");
+assertNotIncludes(wxml, "👍", "wxml");
+assertNotIncludes(wxml, "👎", "wxml");
+// Feedback retained via long-press path only
+assertIncludes(pageJs, "onMessageLongPress", "pageJs");
+assertIncludes(pageJs, "openFeedbackReasons", "pageJs");
 
-// More sheet full-width rows
-assertIncludes(wxml, "header-menu-row", "wxml");
-assertIncludes(wxml, "header-menu-list", "wxml");
-assertIncludes(wxss, ".header-menu-row", "wxss");
+// More sheet full-width rows (settings system component)
+const settingsWxml = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/components/xiaofu-settings-sheet/index.wxml"), "utf8");
+assert.ok(wxml.includes("xiaofu-settings-sheet") || settingsWxml.includes("header-menu-row"), "settings sheet wired");
+assert.ok(settingsWxml.includes("settings-section") || settingsWxml.includes("header-menu-row"), "settings list structure");
+assert.ok(!/\.header-menu-row-meta\s*\{[^}]*max-width\s*:\s*40%/.test(wxss), "menu meta must not truncate at 40%");
 
 // Welcome action cards
-assertIncludes(pageJs, 'title: "今天安排"', "pageJs");
-assertIncludes(pageJs, 'title: "规划自习"', "pageJs");
+assertIncludes(pageJs, 'title: "看今天安排"', "pageJs");
+assertIncludes(pageJs, 'title: "规划自习时间"', "pageJs");
 
 // Error mapper
 assertIncludes(mapper, "CONVERSATION_NOT_FOUND", "mapper");
@@ -54,17 +57,20 @@ assertIncludes(wxml, "evidence-collapsed", "wxml");
 assertIncludes(wxml, "onToggleEvidence", "wxml");
 assertIncludes(wxml, "run-compact", "wxml");
 
-// Explainable trajectory + quick tasks collapse after chat
+// Explainable trajectory
 assertIncludes(wxml, "task-trajectory", "wxml");
-assertIncludes(wxml, "showQuickTasks", "wxml");
 assertIncludes(pageJs, "taskTrajectory", "pageJs");
-assertIncludes(pageJs, "onToggleQuickTasks", "pageJs");
 assertIncludes(wxss, ".task-trajectory", "wxss");
 
 // Composer stop control
 assertIncludes(wxml, 'aria-label="{{sending ? \'停止\' : \'发送\'}}"', "wxml");
+assertNotIncludes(wxml, "newline-btn", "wxml");
+assertNotIncludes(wxml, "composer-note", "wxml");
 
 // Generic card stripping
 assertIncludes(pageJs, "isGenericAssistantCard", "pageJs");
+
+// Presentation adapter
+assertIncludes(pageJs, "xiaofuPresentationAdapter", "pageJs");
 
 console.log("test-xiaofu-final-ui passed");

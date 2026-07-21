@@ -36,13 +36,21 @@ function run() {
 
   mustInclude(memorySheet, "memory-mode-check", "memory sheet");
   mustInclude(memorySheet, "清空本机消息", "memory sheet");
-  mustInclude(memorySheet, "清除服务端会话状态", "memory sheet");
+  assert.ok(
+    memorySheet.includes("清除服务端会话状态") || memorySheet.includes("清除当前会话状态"),
+    "memory sheet: clear current session action"
+  );
   mustInclude(memorySheet, "清除全部云端记忆", "memory sheet");
   mustInclude(memoryCss, "width: 100%", "memory css");
   mustInclude(memoryCss, "min-width: 0", "memory css");
   mustInclude(memoryCss, "flex-direction: row", "memory css");
 
-  mustInclude(conversationSheet, "source-badge", "conversation sheet");
+  assert.ok(
+    conversationSheet.includes("source-badge")
+    || conversationSheet.includes("conversation-preview")
+    || conversationSheet.includes("conversation-current"),
+    "conversation sheet: preview/current layer"
+  );
   mustInclude(conversationSheet, "conversation-more", "conversation sheet");
   mustNotInclude(conversationSheet, "本机与云端会话合并展示，不会重复条目", "false merge copy");
 

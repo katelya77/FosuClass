@@ -1,0 +1,83 @@
+/**
+ * Campus Copilot design tokens — single source for packageXiaofu surfaces.
+ * Brand red only for user bubbles, primary actions, critical emphasis.
+ */
+
+page {
+  /* Surfaces */
+  --xf-bg: #f6f4f1;
+  --xf-bg-elevated: #fbfaf8;
+  --xf-surface: #ffffff;
+  --xf-surface-soft: #f3f0eb;
+  --xf-surface-muted: #ebe7e1;
+
+  /* Brand / semantic */
+  --xf-primary: #c0392b;
+  --xf-primary-soft: #d45a4a;
+  --xf-primary-muted: rgba(192, 57, 43, 0.12);
+  --xf-success: #3d7a5a;
+  --xf-success-bg: #eef6f1;
+  --xf-warning: #b45309;
+  --xf-warning-bg: #fff7ed;
+  --xf-danger: #b91c1c;
+  --xf-danger-soft: #fef2f2;
+
+  /* Text */
+  --xf-text: #2a2622;
+  --xf-text-secondary: #6b635a;
+  --xf-text-tertiary: #9a9188;
+  --xf-text-on-primary: #ffffff;
+  --xf-text-link: #8b3a32;
+
+  /* Lines */
+  --xf-divider: rgba(42, 38, 34, 0.08);
+  --xf-border: rgba(42, 38, 34, 0.1);
+  --xf-border-strong: rgba(42, 38, 34, 0.16);
+
+  /* Radius */
+  --xf-radius-xs: 8rpx;
+  --xf-radius-sm: 12rpx;
+  --xf-radius-md: 16rpx;
+  --xf-radius-lg: 20rpx;
+  --xf-radius-xl: 24rpx;
+  --xf-radius-pill: 999rpx;
+  --xf-radius-user-bubble: 20rpx 20rpx 6rpx 20rpx;
+
+  /* Shadow — intentionally minimal */
+  --xf-shadow-none: none;
+  --xf-shadow-xs: 0 2rpx 8rpx rgba(40, 36, 32, 0.04);
+  --xf-shadow-sheet: 0 -8rpx 32rpx rgba(40, 36, 32, 0.1);
+
+  /* Spacing */
+  --xf-space-1: 4rpx;
+  --xf-space-2: 8rpx;
+  --xf-space-3: 12rpx;
+  --xf-space-4: 16rpx;
+  --xf-space-5: 20rpx;
+  --xf-space-6: 24rpx;
+  --xf-space-8: 32rpx;
+
+  /* Type */
+  --xf-font-xs: 20rpx;
+  --xf-font-sm: 22rpx;
+  --xf-font-md: 26rpx;
+  --xf-font-lg: 30rpx;
+  --xf-font-xl: 34rpx;
+  --xf-lh-tight: 1.35;
+  --xf-lh-body: 1.55;
+  --xf-lh-relaxed: 1.65;
+
+  /* Motion */
+  --xf-duration-fast: 120ms;
+  --xf-duration: 200ms;
+  --xf-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* Layout */
+  --xf-header-h: 100rpx;
+  --xf-tap-min: 88rpx;
+  --xf-composer-min: 72rpx;
+  --xf-safe-bottom: env(safe-area-inset-bottom);
+  --xf-safe-top: env(safe-area-inset-top);
+  --xf-user-bubble-max: 78%;
+  --xf-page-pad-x: 24rpx;
+}

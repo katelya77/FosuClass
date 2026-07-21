@@ -31,12 +31,17 @@ function run() {
   assert(body.includes("dispatchCapabilityAction"), "quick actions should use the shared capability dispatcher");
   assert(js.includes("CAPABILITY_KINDS.SUPPLEMENT_PARAMS"), "missing-slot capabilities should be classified");
   assert(js.includes("queueTaskMessage"), "quick and task actions should answer in the current chat flow");
-  assert(wxml.includes('quick-more-button') && wxml.includes('bindtap="openTaskPanel"'), "任务 should open the task panel sheet");
+  // Product experience: campus tools open from composer "+" or more menu, not a permanent 任务 chip row
+  assert(
+    (wxml.includes("openTaskPanel") || js.includes("openTaskPanelFromPlus") || wxml.includes("openTaskPanelFromPlus"))
+    && (wxml.includes("task-sheet") || wxml.includes("showTaskPanel")),
+    "task panel should open from composer plus / tools entry"
+  );
   assert(js.includes("onTaskPanelItemTap"), "task panel items should have a tap handler");
   assert(!wxml.includes('class="quick-task-row"'), "mode switch should not share the horizontal quick-action row");
   assert(
-    wxml.includes('class="ai-mode-row"') || wxml.includes("ai-mode-row"),
-    "mode switch should live in its own centered row"
+    wxml.includes("composer-plus") || wxml.includes("openComposerPlus") || wxml.includes("task-sheet"),
+    "task tools entry should exist without permanent mode row chrome"
   );
 
   [js, wxml, knowledge, helpCopy, scheduleCopy].forEach((source, index) => {

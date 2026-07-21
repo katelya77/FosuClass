@@ -1225,22 +1225,21 @@ function buildSmalltalkResponse(message, clientContext = {}, route = {}) {
       ["佛大有哪些校区", "查班级本周课表", "课表数据是否最新"],
       ["今天有什么课", "现在有空教室吗", "你能做什么"],
       ["仙溪校区今天会下雨吗", "怎么导入个人课表", "现在第几教学周"],
-    ], compact),
+    ], compact).slice(0, 2),
     toolCalls: [],
-    evidence: {
-      verified: false,
-      checkedAt: new Date().toISOString(),
-      source: "local-smalltalk",
-    },
+    // Product UX: greetings/smalltalk are plain conversation — no Evidence chrome
+    presentationMode: "plain",
+    evidence: null,
     safety: {
       provider: "smalltalk-handler",
       resolvedProvider: "smalltalk-handler",
       externalProviderUsed: false,
-      mode: "tool-grounded",
+      mode: "conversational",
       clearPendingClarification: true,
     },
     metrics: {
       intentName: "smalltalk",
+      canonicalIntent: "conversational_help",
       latencyMs: 0,
       externalProviderUsed: false,
       resultCount: 0,
@@ -1381,20 +1380,36 @@ function canonicalizeFallbackCards(cards, canonicalIntent) {
   });
 }
 
+function isPlainOfflineIntent(canonicalIntent, source) {
+  const intentName = String(
+    (source && source.metrics && source.metrics.intentName)
+    || (source && source.presentationMode)
+    || canonicalIntent
+    || ""
+  );
+  return /smalltalk|conversational|project_qa|chitchat|greeting|plain/i.test(intentName)
+    || source && source.presentationMode === "plain";
+}
+
 function standardizeClientFallback(response, message, route, reason, metadata) {
   const source = response && typeof response === "object" ? response : {};
   const canonicalIntent = resolveOfflineCanonicalIntent(message, route, source);
   const fallbackReason = safeText(reason || "CLIENT_OFFLINE_FALLBACK", 120);
+  const plain = isPlainOfflineIntent(canonicalIntent, source);
+  const meta = metadata || {};
   return Object.assign({}, source, {
     protocolVersion: "agent.v2",
-    requestId: metadata.requestId,
-    conversationId: metadata.conversationId,
+    requestId: meta.requestId,
+    conversationId: meta.conversationId,
     runId: createClientRunId("offline"),
-    status: source.success === false ? "failed" : "degraded",
+    status: source.success === false ? "failed" : (plain ? "completed" : "degraded"),
     success: source.success !== false,
     fallback: true,
     fallbackLayer: "client",
     fallbackReason,
+    // Product UX: plain offline greetings must not show task Evidence chrome
+    presentationMode: plain ? "plain" : (source.presentationMode || ""),
+    evidence: plain ? null : (source.evidence || null),
     externalProviderUsed: false,
     intent: canonicalIntent,
     confidence: Number(route && route.confidence || 0),
@@ -1403,18 +1418,19 @@ function standardizeClientFallback(response, message, route, reason, metadata) {
       id: OFFLINE_SKILL_BY_INTENT[canonicalIntent] || "knowledge_search",
       version: "1.0.0",
     },
-    plan: [],
-    steps: normalizeClientFallbackSteps(source),
+    plan: plain ? [] : (source.plan || []),
+    steps: plain ? [] : normalizeClientFallbackSteps(source),
     observations: [],
-    cards: canonicalizeFallbackCards(source.cards, canonicalIntent),
-    suggestions: Array.isArray(source.suggestions) ? source.suggestions : [],
-    toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls : [],
+    cards: plain ? [] : canonicalizeFallbackCards(source.cards, canonicalIntent),
+    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 2) : [],
+    toolCalls: plain ? [] : (Array.isArray(source.toolCalls) ? source.toolCalls : []),
     safety: Object.assign({}, source.safety || {}, {
       externalProviderUsed: false,
       fallbackReason,
     }),
     metrics: Object.assign({}, source.metrics || {}, {
       canonicalIntent,
+      intentName: (source.metrics && source.metrics.intentName) || (plain ? "smalltalk" : canonicalIntent),
       externalProviderUsed: false,
       fallback: true,
       fallbackLayer: "client",
@@ -1738,6 +1754,7 @@ module.exports = {
   USER_PREFERENCES_KEY,
   buildClientContext,
   buildSmalltalkResponse,
+  standardizeClientFallback,
   chat,
   clearPendingClarification,
   clearAiHistory,

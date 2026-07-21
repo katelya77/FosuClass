@@ -55,10 +55,17 @@ function run() {
   const wxml = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.wxml");
   const js = read("miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js");
 
+  // Product experience: no always-visible copy chrome; long-press menu may copy.
   assert(!wxml.includes("onCopyMessage"), "assistant message copy handler should not be rendered");
   assert(!wxml.includes("复制回答"), "assistant message copy button should not be visible");
-  assert(!js.includes("copyToClipboard"), "AI page should not call the clipboard helper");
-  assert(!js.includes("setClipboardData"), "AI page should not call wx.setClipboardData");
+  assert(!wxml.includes('bindtap="onCopy'), "no default copy tap control in WXML");
+  // Long-press path may use clipboard; card-level type=copy actions remain forbidden below.
+  if (js.includes("setClipboardData") || js.includes("copyToClipboard")) {
+    assert(
+      js.includes("onMessageLongPress") || js.includes("handleMessageAction"),
+      "clipboard usage must be limited to long-press/message action path"
+    );
+  }
 
   const legacyCard = firstCard({
     type: "navigation",

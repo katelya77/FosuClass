@@ -10,6 +10,9 @@ const agentClientErrorMapper = require("../../../services/agentClientErrorMapper
 const cloudbaseConfig = require("../../../config/cloudbase");
 const demoData = require("./demo-data");
 const { courseTimes } = require("../../../data/courseTimes");
+const xiaofuPresentation = require("../../services/xiaofuPresentationAdapter");
+const xiaofuMessageActions = require("../../services/xiaofuMessageActions");
+const xiaofuConversationViewModel = require("../../services/xiaofuConversationViewModel");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
@@ -445,28 +448,39 @@ const WELCOME_EXAMPLES = [
 ];
 
 const WELCOME_TASK_CARDS = [
-  // Final UI: action-first, low text density
-  { id: "today", title: "今天安排", desc: "今日课程一览", question: "今天有什么课" },
-  { id: "empty", title: "连续空教室", desc: "找可自习时段", question: "现在有连续空教室吗" },
-  { id: "class", title: "班级课表", desc: "按班级查询", question: "查班级本周课表" },
-  { id: "study", title: "规划自习", desc: "课表 + 空教室", question: "帮我规划今天下午自习时间" },
+  { id: "today", title: "看今天安排", desc: "今日课程一览", question: "今天有什么课" },
+  { id: "empty", title: "找空教室", desc: "连续可用时段", question: "现在有连续空教室吗" },
+  { id: "class", title: "查班级课表", desc: "按班级查询", question: "查班级本周课表" },
+  { id: "study", title: "规划自习时间", desc: "课表与空教室", question: "帮我规划今天下午自习时间" },
 ];
 
 const MEMORY_MODE_LABELS = {
-  local_only: "记忆：仅本机",
-  session_state: "记忆：会话状态",
-  cloud_sync: "记忆：已同步",
+  local_only: "仅保存在本机",
+  session_state: "已保存会话状态",
+  cloud_sync: "已开启跨设备同步",
 };
 
 function mapMemoryModeText(mode) {
-  return MEMORY_MODE_LABELS[String(mode || "local_only")] || MEMORY_MODE_LABELS.local_only;
+  return xiaofuPresentation.mapMemoryStatusText(mode, "menu")
+    || MEMORY_MODE_LABELS[String(mode || "local_only")]
+    || MEMORY_MODE_LABELS.local_only;
 }
 
 function mapMemoryChip(mode) {
-  const value = String(mode || "local_only");
-  if (value === "cloud_sync") return "已同步";
-  if (value === "session_state") return "会话记忆";
-  return "本地记忆";
+  // Product UX: memory is folded into headerStatusLine; never dual-chip.
+  return xiaofuPresentation.mapMemoryStatusText(mode, "chip") || "";
+}
+
+function applyHeaderStatusPatch(state) {
+  const source = state || {};
+  const header = xiaofuPresentation.buildHeaderViewModel(source);
+  return {
+    headerStatusLine: header.statusLine,
+    statusChips: header.statusChips,
+    memoryChipText: "",
+    memoryStatusText: header.memoryStatusText || mapMemoryModeText(source.memoryMode),
+    headerSubtitle: header.statusLine,
+  };
 }
 
 async function detectConnectionStatus() {
@@ -488,16 +502,12 @@ async function detectConnectionStatus() {
 }
 
 function mapRuntimeModeLabel(mode, connectionClass, readiness = {}) {
-  if (connectionClass === "offline" || readiness.statusMachine === "network_offline") {
-    return "本地模式";
-  }
-  if (readiness.statusMachine === "server_unreachable") return "服务不可达";
-  if (readiness.statusMachine === "enhanced_ready") return "增强模式";
-  if (readiness.statusMachine === "enhanced_degraded") return "增强降级";
-  const value = String(mode || readiness.runtimeMode || "public").toLowerCase();
-  if (value === "trial" || value === "competition") return "增强模式";
-  if (value === "dev") return "增强模式";
-  return "稳定模式";
+  return xiaofuPresentation.composeHeaderStatus({
+    runtimeMode: mode || readiness.runtimeMode,
+    connectionStatusClass: connectionClass,
+    statusMachine: readiness.statusMachine,
+    memoryMode: "local_only",
+  }).split(" · ")[0] || "校园助手";
 }
 
 function buildTaskPanelGroups() {
@@ -1296,7 +1306,7 @@ function normalizeCard(card, messageId, index, expandedCards, message) {
 
   const key = cardKey(messageId, source, index);
   const expanded = Boolean(expandedCards && expandedCards[key]);
-  const visibleLimit = expanded ? 12 : 5;
+  const visibleLimit = expanded ? 12 : 3;
   const visibleItems = items.slice(0, visibleLimit);
   const inactiveFilteredCount = Math.max(extractInactiveFilteredCount(source), rawItems.length - filteredRawItems.length);
   const filteredHint = inactiveFilteredCount > 0 ? `已过滤 ${inactiveFilteredCount} 门非本周课程` : "";
@@ -1309,8 +1319,9 @@ function normalizeCard(card, messageId, index, expandedCards, message) {
       : (type === "help" || type === "clarification" || type === "personal_schedule"
         ? "结果会保留在当前对话中"
         : "课表以学校教务系统为准"));
-  const primaryActions = actions.slice(0, 1);
-  const secondaryActions = actions.slice(1, 4);
+  // Product UX: at most 2 visible primary actions; keep full actions for handlers/tests
+  const primaryActions = xiaofuPresentation.limitCardActions(actions, 2);
+  const secondaryActions = [];
   const errorClass = source.variant === "error" || /服务暂时不可用|服务暂不可用/.test(title) ? "card-error" : "";
   return Object.assign({}, source, {
     key,
@@ -1367,14 +1378,29 @@ function isGenericAssistantCard(card) {
   return false;
 }
 
-function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
+function resolveAssistantIntentName(source) {
+  return xiaofuPresentation.resolveIntentName(source || {});
+}
+
+function normalizeMessageForDisplay(message, expandedCards, previousMessage, displayContext) {
   const source = message || {};
+  const ctx = displayContext || {};
   const id = source.id || `m-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  const lastUserText = ctx.lastUserText || (() => {
+    if (previousMessage && previousMessage.role === "user") return previousMessage.content || "";
+    return "";
+  })();
+  const resolvedIntentName = resolveAssistantIntentName(source);
   const presentationMode = safeText(source.presentationMode || (source.presentation && source.presentation.presentationMode) || "", 32);
+  const plainProbe = Object.assign({}, source, {
+    intentName: resolvedIntentName,
+    userQuery: source.userQuery || source.query || lastUserText || "",
+  });
   const isPlain = presentationMode === "plain"
+    || xiaofuPresentation.isPlainPresentation(plainProbe, { lastUserText })
     || (source.role !== "user" && (!source.toolCalls || !source.toolCalls.length)
       && (!source.cards || !source.cards.length || source.cards.every(isGenericAssistantCard))
-      && /conversational|project_qa|generic|plain/i.test(String(source.intentName || source.intent && source.intent.name || presentationMode || "")));
+      && /conversational|project_qa|generic|plain|greeting|chitchat|smalltalk/i.test(resolvedIntentName || presentationMode || ""));
   const evidenceLabel = isPlain ? "" : inferEvidenceLabel(source);
   const normalizedSafety = source.safety ? normalizeSafety(source.safety) : null;
   const displaySafety = !isPlain && normalizedSafety ? Object.assign(normalizedSafety, {
@@ -1383,21 +1409,14 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
   const metrics = normalizeMetrics(source.metrics);
   const role = source.role === "user" ? "user" : "assistant";
   let rawCards = Array.isArray(source.cards) ? source.cards.filter((card) => !isGenericAssistantCard(card)) : [];
-  if (presentationMode === "plain" || isPlain) rawCards = [];
-  else if (presentationMode === "single_card") rawCards = rawCards.slice(0, 1);
-  else rawCards = rawCards.slice(0, 2);
+  rawCards = xiaofuPresentation.limitDisplayCards(
+    rawCards,
+    presentationMode || (isPlain ? "plain" : (rawCards.length > 1 ? "composite" : "single_card"))
+  );
 
   const displaySteps = isPlain ? [] : normalizeDisplaySteps(source);
-  const displayTaskSteps = isPlain
-    ? []
-    : (Array.isArray(source.taskSteps)
-      ? source.taskSteps.slice(0, 6).map(normalizeTaskStep)
-      : []);
-  const displayToolCalls = isPlain || displaySteps.length
-    ? []
-    : (displayTaskSteps.length
-      ? displayTaskSteps
-      : (Array.isArray(source.toolCalls) ? source.toolCalls.slice(0, 4).map(normalizeToolCall) : []));
+  // Product UX: never dump tool chips into the default message area
+  const displayToolCalls = [];
   const fallback = source.fallback === true || source.fallbackLayer === "client" || source.fallbackLayer === "server";
   const evidenceText = isPlain ? "" : buildEvidenceText(source.evidence, evidenceLabel);
   const runSummary = source.runSummary || (source.presentation && source.presentation.runSummary) || null;
@@ -1412,7 +1431,7 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
   const showFullRun = !isPlain && (displaySteps.length > 0 || hasTrajectory) && source.runExpanded === true;
   const runCompactText = runSummary && runSummary.compact
     ? runSummary.compact
-    : (displaySteps.length || hasTrajectory ? "已完成" : "");
+    : (displaySteps.length || hasTrajectory ? "已核验" : "");
   const normalizedTrajectory = hasTrajectory ? {
     understanding: safeText(taskTrajectory.understanding || "", 160),
     plan: Array.isArray(taskTrajectory.plan) ? taskTrajectory.plan.slice(0, 5).map((p, i) => ({
@@ -1427,15 +1446,51 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
     verification: safeText(taskTrajectory.verification || "", 160),
     replanUsed: taskTrajectory.replanUsed === true,
   } : null;
+
+  const prevUser = previousMessage && previousMessage.role === "user" ? previousMessage.content : (ctx.lastUserText || "");
+  const turnCount = Number(ctx.turnCount || 0);
+  const suggestions = xiaofuPresentation.refineSuggestions(source.suggestions, {
+    userText: prevUser || source.userQuery || "",
+    isPlain,
+    isComposite: rawCards.length > 1 || presentationMode === "composite",
+    clickedSuggestions: ctx.clickedSuggestions || [],
+    previousSuggestionKey: ctx.previousSuggestionKey || "",
+    stableMultiTurn: turnCount >= 4,
+    turnCount,
+  });
+
+  const displayCards = rawCards
+    .map((card, index) => {
+      const normalized = normalizeCard(card, id, index, expandedCards, source);
+      if (!normalized) return null;
+      // Cap visible actions to 2
+      if (Array.isArray(normalized.primaryActions)) {
+        normalized.primaryActions = xiaofuPresentation.limitCardActions(normalized.primaryActions, 2);
+      }
+      if (Array.isArray(normalized.secondaryActions)) {
+        normalized.secondaryActions = [];
+      }
+      return normalized;
+    })
+    .filter(Boolean);
+
+  const rawTime = source.timeText || timeText();
+  const resolvedTime = xiaofuPresentation.resolveTimeText(
+    { timeText: rawTime },
+    previousMessage ? { timeText: previousMessage.timeText } : null,
+    rawTime
+  );
+
   return Object.assign({}, source, {
     id,
     role,
     content: safeText(source.content || "", 2000),
+    intentName: resolvedIntentName || source.intentName || "",
+    userQuery: source.userQuery || lastUserText || "",
     presentationMode: presentationMode || (isPlain ? "plain" : ""),
     cards: rawCards,
-    displayCards: rawCards
-      .map((card, index) => normalizeCard(card, id, index, expandedCards, source)).filter(Boolean),
-    suggestions: Array.isArray(source.suggestions) ? source.suggestions.slice(0, 2).map((item) => safeText(item, 60)).filter(Boolean) : [],
+    displayCards,
+    suggestions,
     toolCalls: Array.isArray(source.toolCalls) ? source.toolCalls : [],
     taskSteps: Array.isArray(source.taskSteps) ? source.taskSteps : [],
     steps: Array.isArray(source.steps) ? source.steps : [],
@@ -1448,25 +1503,46 @@ function normalizeMessageForDisplay(message, expandedCards, previousMessage) {
     evidenceText,
     evidenceExpanded: source.evidenceExpanded === true,
     evidenceCompact: evidenceText ? (evidenceText.length > 36 ? evidenceText.slice(0, 36) + "…" : evidenceText) : "",
-    displayToolCalls: isPlain ? [] : displayToolCalls,
+    displayToolCalls,
     safety: source.safety || null,
     displaySafety,
     metrics,
-    metricsText: metrics && !isPlain ? `耗时 ${metrics.latencyMs} ms` : "",
+    metricsText: "",
     fallback: fallback && !isPlain,
     fallbackBanner: fallback && !isPlain ? "网络暂不可用，已使用本地能力完成本次任务" : "",
     runStatus: source.status || (fallback ? "degraded" : "completed"),
     memory: source.memory || null,
-    showCompactFeedback: role === "assistant" && !source.isStreaming,
-    feedbackOpen: source.feedbackOpen === true,
-    showAvatar: role === "assistant" && (!previousMessage || previousMessage.role === "user"),
-    timeText: source.timeText || timeText(),
+    showCompactFeedback: false,
+    feedbackOpen: false,
+    showAvatar: xiaofuPresentation.shouldShowAssistantAvatar({ role }, previousMessage),
+    timeText: resolvedTime,
   });
 }
 
-function normalizeMessagesForDisplay(messages, expandedCards) {
+function normalizeMessagesForDisplay(messages, expandedCards, displayContext) {
   if (!Array.isArray(messages)) return [];
-  return messages.map((item, index) => normalizeMessageForDisplay(item, expandedCards, messages[index - 1]));
+  const ctx = displayContext || {};
+  let previousSuggestionKey = "";
+  const turnCount = messages.filter((m) => m && m.role === "user").length;
+  return messages.map((item, index) => {
+    const previous = messages[index - 1];
+    const lastUser = (() => {
+      for (let i = index - 1; i >= 0; i -= 1) {
+        if (messages[i] && messages[i].role === "user") return messages[i].content;
+      }
+      return "";
+    })();
+    const next = normalizeMessageForDisplay(item, expandedCards, previous, {
+      clickedSuggestions: ctx.clickedSuggestions || [],
+      previousSuggestionKey,
+      lastUserText: lastUser,
+      turnCount,
+    });
+    if (next.role === "assistant" && next.suggestions && next.suggestions.length) {
+      previousSuggestionKey = xiaofuPresentation.suggestionKey(next.suggestions);
+    }
+    return next;
+  });
 }
 
 function trimMessages(messages) {
@@ -1505,24 +1581,41 @@ function formatConversationTime(value) {
   return `${pad(date.getMonth() + 1)}/${pad(date.getDate())}`;
 }
 
+function readPinnedConversationIds() {
+  try {
+    const raw = wx.getStorageSync("FOSU_AI_PINNED_CONVERSATIONS") || [];
+    return new Set(Array.isArray(raw) ? raw : []);
+  } catch (error) {
+    return new Set();
+  }
+}
+
 function buildConversationDisplayList(activeConversationId, mergedList) {
   const source = Array.isArray(mergedList) && mergedList.length
     ? mergedList
     : conversationStore.getConversationList();
-  return source.map((item) => ({
-    conversationId: item.conversationId,
-    title: item.title,
-    createdAt: item.createdAt,
-    updatedAt: item.updatedAt,
-    updatedAtText: formatConversationTime(item.updatedAt || item.createdAt),
-    messageCount: item.messageCount,
-    active: item.conversationId === activeConversationId || item.active === true,
-    memoryMode: item.memoryMode || "local_only",
-    memoryModeText: mapMemoryModeText(item.memoryMode || "local_only"),
-    sourceBadge: item.sourceBadge || agentMemoryClient.sourceBadge(item.source || "local", item.memoryMode || "local_only", item.conflict),
-    conflict: item.conflict === true,
-    lastTaskType: item.lastIntent || item.lastTaskType || "",
-  }));
+  const pinned = readPinnedConversationIds();
+  return source.map((item) => {
+    const title = item.title && !/^(你好|你好啊|哈喽|hi|hello)$/i.test(String(item.title).trim())
+      ? item.title
+      : (item.title || "新对话");
+    return {
+      conversationId: item.conversationId,
+      title: title === "你好" || title === "你好啊" ? "校园助手问候" : title,
+      preview: item.preview || "",
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+      updatedAtText: formatConversationTime(item.updatedAt || item.createdAt),
+      messageCount: item.messageCount,
+      active: item.conversationId === activeConversationId || item.active === true,
+      memoryMode: item.memoryMode || "local_only",
+      memoryModeText: mapMemoryModeText(item.memoryMode || "local_only"),
+      sourceBadge: "本机",
+      conflict: item.conflict === true,
+      lastTaskType: "",
+      pinned: pinned.has(item.conversationId) || item.pinned === true,
+    };
+  });
 }
 
 function buildHeaderSubtitle(state) {
@@ -1578,7 +1671,7 @@ function buildPrivacyState(allowed, expanded, firstTipVisible) {
     privacyStatusText: enabled ? "仅使用脱敏课表摘要" : "默认不使用课表摘要",
     privacyCompactClass: enabled ? "enabled" : "disabled",
     privacyActionText: enabled ? "已允许" : "已关闭",
-    composerNote: enabled ? "摘要开启：仅使用脱敏课表摘要" : "摘要关闭：默认不使用个人课表摘要",
+    composerNote: "",
     privacyActionLabel: firstTipVisible ? "知道了" : (expanded ? "收起" : "说明"),
   };
 }
@@ -1619,8 +1712,8 @@ function buildXiaofuFloatState() {
   const enabled = xiaofuFloatService.isEnabled();
   return {
     xiaofuFloatEnabled: enabled,
-    xiaofuFloatToggleText: enabled ? "关闭小佛助手浮窗" : "开启小佛助手浮窗",
-    xiaofuFloatToggleDesc: enabled ? "关闭后不再显示，可在这里或设置页重新开启" : "恢复右下角可拖拽入口",
+    xiaofuFloatToggleText: "小佛浮窗",
+    xiaofuFloatToggleDesc: "在其他页面快速唤起",
   };
 }
 
@@ -1655,12 +1748,13 @@ Page({
     connectionStatusText: "检测中",
     connectionStatusClass: "unknown",
     statusMachine: "public_ready",
-    statusChips: ["稳定模式"],
-    runtimeModeLabel: "稳定模式",
+    statusChips: ["校园助手"],
+    headerStatusLine: "校园助手",
+    runtimeModeLabel: "校园助手",
     conversationSubtitle: "新对话",
     memoryMode: "local_only",
-    memoryStatusText: "记忆：仅本机",
-    memoryChipText: "本地记忆",
+    memoryStatusText: "仅保存在本机",
+    memoryChipText: "",
     liveRunVisible: false,
     liveRunEvents: [],
     liveRunExpanded: false,
@@ -1680,17 +1774,20 @@ Page({
     lastExternalProviderUsed: false,
     lastFallbackReason: "",
     lastProvider: "unknown",
-    headerSubtitle: "稳定模式 · 校园任务助手",
+    headerSubtitle: "校园助手",
     historyTrimNotice: false,
     hasHeroLogo: true,
     xiaofuFloatEnabled: true,
-    xiaofuFloatToggleText: "开启小佛助手浮窗",
-    xiaofuFloatToggleDesc: "恢复右下角可拖拽入口",
+    xiaofuFloatToggleText: "小佛浮窗",
+    xiaofuFloatToggleDesc: "在其他页面快速唤起",
     demoMode: "",
     scrollTop: 0,
     scrollIntoView: "",
     scrollWithAnimation: true,
-    composerNote: "摘要关闭：默认不使用个人课表摘要",
+    composerNote: "",
+    showComposerPlus: false,
+    clickedSuggestions: [],
+    previousSuggestionKey: "",
     voiceInputVisible: false,
     voiceRecording: false,
     voiceRecognizing: false,
@@ -1704,6 +1801,9 @@ Page({
     this._lastSubmitText = "";
     this._isComposing = false;
     this._recorderManager = null;
+    this._clickedSuggestions = [];
+    this._previousSuggestionKey = "";
+    this._draftInput = "";
     this.debouncedOpenTaskPanel = createDebounced(() => this.openTaskPanelNow(), TASK_PANEL_DEBOUNCE_MS);
     this.debouncedSendTaskMessage = createDebounced((message, sendOptions) => {
       this.sendMessage(message, sendOptions);
@@ -1733,8 +1833,7 @@ Page({
     }, privacyState, providerState, buildXiaofuFloatState());
     nextState.conversationTitle = activeConversation.title || "新对话";
     nextState.memoryMode = wx.getStorageSync("FOSU_AI_MEMORY_MODE") || "local_only";
-    nextState.memoryStatusText = mapMemoryModeText(nextState.memoryMode);
-    nextState.headerSubtitle = buildHeaderSubtitle(nextState);
+    Object.assign(nextState, applyHeaderStatusPatch(nextState));
 
     this.setData(Object.assign(nextState, bottomScrollPatch(false)));
     this.initVoiceInput();
@@ -1750,19 +1849,19 @@ Page({
     detectConnectionStatus().then((status) => {
       if (this._aiPageUnloaded) return;
       const runtimeModeLabel = mapRuntimeModeLabel(status.runtimeMode || this.data.runtimeMode || "public", status.connectionStatusClass, status);
-      const chips = [].concat(status.statusChips || [runtimeModeLabel]);
-      if (this.data.memoryMode === "cloud_sync") chips.push("已同步");
-      else if (this.data.memoryMode === "session_state") chips.push("会话记忆");
-      this.setData({
+      const headerPatch = applyHeaderStatusPatch({
+        runtimeMode: status.runtimeMode || this.data.runtimeMode || "public",
+        connectionStatusClass: status.connectionStatusClass,
+        statusMachine: status.statusMachine || "public_ready",
+        memoryMode: this.data.memoryMode || "local_only",
+      });
+      this.setData(Object.assign({
         connectionStatusText: status.connectionStatusText,
         connectionStatusClass: status.connectionStatusClass,
         statusMachine: status.statusMachine || "public_ready",
-        statusChips: chips.slice(0, 2),
         runtimeMode: status.runtimeMode || this.data.runtimeMode || "public",
         runtimeModeLabel,
-        memoryChipText: mapMemoryChip(this.data.memoryMode),
-        headerSubtitle: buildHeaderSubtitle(Object.assign({}, this.data, status, { runtimeModeLabel })),
-      });
+      }, headerPatch));
     });
   },
 
@@ -1982,12 +2081,208 @@ Page({
   },
 
   onInsertNewline() {
+    // Product UX: no dedicated newline control; textarea supports natural line breaks.
+  },
+
+  openComposerPlus() {
     if (this.data.sending) return;
-    const current = String(this.data.inputValue || "");
     this.setData({
-      inputValue: `${current}\n`,
-      inputFocus: true,
+      showComposerPlus: true,
+      showHeaderMenu: false,
+      showTaskPanel: false,
+      showCapabilityGuide: false,
+      showPrivacySheet: false,
+      showConversationSheet: false,
+      showMemorySheet: false,
     });
+  },
+
+  closeComposerPlus() {
+    this.setData({ showComposerPlus: false });
+  },
+
+  openTaskPanelFromPlus() {
+    this.setData({ showComposerPlus: false });
+    this.openTaskPanel();
+  },
+
+  openPersonalSyncFromPlus() {
+    this.setData({ showComposerPlus: false });
+    this.navigateByUrl(PERSONAL_SYNC_URL, { toast: "已打开课表导入" });
+  },
+
+  openCampusMapFromPlus() {
+    this.setData({ showComposerPlus: false });
+    this.navigateByUrl("/packageMaps/pages/campus-map/campus-map");
+  },
+
+  startVoiceFromPlus() {
+    this.setData({ showComposerPlus: false });
+    this.onVoiceTap();
+  },
+
+  createNewConversationFromPlus() {
+    this.setData({ showComposerPlus: false });
+    this.createNewConversation();
+  },
+
+  openConversationSheetFromMenu() {
+    this.setData({ showHeaderMenu: false });
+    this.openConversationSheet();
+  },
+
+  openPrivacyHelp() {
+    this.setData({ showHeaderMenu: false, showMemorySheet: true });
+  },
+
+  onFloatSwitchChange(event) {
+    const enabled = event && event.detail && event.detail.value === true;
+    if (enabled) xiaofuFloatService.enableEverywhere();
+    else xiaofuFloatService.setEnabled(false);
+    this.setData(Object.assign({ showHeaderMenu: false }, buildXiaofuFloatState()));
+    try { wx.vibrateShort({ type: "light" }); } catch (e) { /* ignore */ }
+    wx.showToast({ title: enabled ? "已开启浮窗" : "已关闭浮窗", icon: "none" });
+  },
+
+  onFloatSwitchChangeFromSheet(event) {
+    const enabled = event && event.detail && event.detail.value === true;
+    this.onFloatSwitchChange({ detail: { value: enabled } });
+  },
+
+  onResultCardAction(event) {
+    const detail = event.detail || {};
+    this.onCardAction({
+      currentTarget: {
+        dataset: {
+          messageIndex: detail.messageIndex,
+          cardIndex: detail.cardIndex,
+          actionIndex: detail.actionIndex,
+        },
+      },
+    });
+  },
+
+  onResultCardOverflow(event) {
+    const detail = event.detail || {};
+    this.onCardOverflow({
+      currentTarget: {
+        dataset: { cardKey: detail.cardKey },
+      },
+    });
+  },
+
+  onMessageLongPress(event) {
+    const messageId = event.currentTarget.dataset.messageId;
+    const role = event.currentTarget.dataset.role || "assistant";
+    if (!messageId) return;
+    const message = (this.data.messages || []).find((item) => item.id === messageId);
+    if (!message) return;
+    const itemList = xiaofuMessageActions.actionSheetItemList(role);
+    wx.showActionSheet({
+      itemList,
+      success: (res) => {
+        const label = itemList[res.tapIndex];
+        const action = xiaofuMessageActions.actionByLabel(role, label);
+        if (!action) return;
+        this.handleMessageAction(action.id, message);
+      },
+    });
+  },
+
+  handleMessageAction(actionId, message) {
+    const content = String(message && message.content || "");
+    if (actionId === "copy") {
+      wx.setClipboardData({
+        data: content,
+        success: () => {
+          try { wx.vibrateShort({ type: "light" }); } catch (e) { /* ignore */ }
+          wx.showToast({ title: "已复制", icon: "none" });
+        },
+      });
+      return;
+    }
+    if (actionId === "resend" || actionId === "regenerate") {
+      const userText = actionId === "regenerate"
+        ? (() => {
+          const list = this.data.messages || [];
+          const idx = list.findIndex((m) => m.id === message.id);
+          for (let i = idx - 1; i >= 0; i -= 1) {
+            if (list[i].role === "user") return list[i].content;
+          }
+          return "";
+        })()
+        : content;
+      if (userText) this.sendMessage(userText, { retryAssistantIndex: actionId === "regenerate" ? (this.data.messages || []).findIndex((m) => m.id === message.id) : undefined });
+      return;
+    }
+    if (actionId === "edit") {
+      this.setData({ inputValue: content, inputFocus: true });
+      return;
+    }
+    if (actionId === "followup") {
+      this.setData({ inputValue: "", inputFocus: true });
+      wx.showToast({ title: "继续追问吧", icon: "none" });
+      return;
+    }
+    if (actionId === "delete") {
+      const next = (this.data.messages || []).filter((m) => m.id !== message.id);
+      this.setMessages(next, {}, { save: true });
+      return;
+    }
+    if (actionId === "share") {
+      const share = xiaofuMessageActions.buildShareSummary(message);
+      if (!share.ok) {
+        wx.showToast({ title: share.reason || "无法分享", icon: "none" });
+        return;
+      }
+      wx.showModal({
+        title: share.title,
+        content: share.summary,
+        confirmText: "复制摘要",
+        success: (res) => {
+          if (!res.confirm) return;
+          wx.setClipboardData({ data: `${share.title}\n${share.summary}` });
+        },
+      });
+      return;
+    }
+    if (actionId === "feedback") {
+      this.openFeedbackReasons(message.id);
+    }
+  },
+
+  openFeedbackReasons(messageId) {
+    const reasons = xiaofuMessageActions.feedbackReasons();
+    wx.showActionSheet({
+      itemList: reasons.map((r) => r.label),
+      success: (res) => {
+        const reason = reasons[res.tapIndex];
+        if (!reason) return;
+        this.submitMessageFeedback(messageId, reason.id);
+      },
+    });
+  },
+
+  submitMessageFeedback(messageId, feedback) {
+    try {
+      const key = "FOSU_AI_FEEDBACK_LOG";
+      const existing = wx.getStorageSync(key) || [];
+      const next = (Array.isArray(existing) ? existing : []).concat([{
+        feedback: String(feedback || "").slice(0, 32),
+        messageId: String(messageId || "").slice(0, 80),
+        at: new Date().toISOString(),
+      }]).slice(-50);
+      wx.setStorageSync(key, next);
+    } catch (error) {
+      // ignore
+    }
+    wx.showToast({ title: "已记录反馈", icon: "none" });
+  },
+
+  onRetryUserMessage(event) {
+    const messageId = event.currentTarget.dataset.messageId;
+    const message = (this.data.messages || []).find((item) => item.id === messageId);
+    if (message && message.content) this.sendMessage(message.content);
   },
 
   initVoiceInput() {
@@ -2202,31 +2497,45 @@ Page({
 
   onSuggestionTap(event) {
     const suggestion = event.currentTarget.dataset.suggestion;
-    if (suggestion) this.queueTaskMessage(suggestion);
+    if (!suggestion) return;
+    this._clickedSuggestions = (this._clickedSuggestions || []).concat([String(suggestion)]).slice(-20);
+    this.setData({ clickedSuggestions: this._clickedSuggestions });
+    this.queueTaskMessage(suggestion);
   },
 
   onSubmit() {
     // While a run is in flight, the same control becomes stop/cancel.
     if (this.data.sending) {
       this.onCancelRun();
+      try { wx.vibrateShort({ type: "light" }); } catch (e) { /* ignore */ }
       return;
     }
+    try { wx.vibrateShort({ type: "light" }); } catch (e) { /* ignore */ }
     this.sendMessage(this.data.inputValue);
   },
 
   setMessages(nextMessages, patch, options) {
     const trimmed = Array.isArray(nextMessages) && nextMessages.length > MAX_MESSAGE_COUNT;
     const sourceMessages = trimMessages(nextMessages);
-    const messages = normalizeMessagesForDisplay(sourceMessages, this.data.expandedCards);
+    const messages = normalizeMessagesForDisplay(sourceMessages, this.data.expandedCards, {
+      clickedSuggestions: this._clickedSuggestions || this.data.clickedSuggestions || [],
+      previousSuggestionKey: this._previousSuggestionKey || this.data.previousSuggestionKey || "",
+    });
+    const lastAssistant = [...messages].reverse().find((m) => m.role === "assistant");
+    if (lastAssistant && lastAssistant.suggestions && lastAssistant.suggestions.length) {
+      this._previousSuggestionKey = xiaofuPresentation.suggestionKey(lastAssistant.suggestions);
+    }
     const providerState = resolveProviderState(messages);
+    const headerPatch = applyHeaderStatusPatch(Object.assign({}, this.data, patch || {}));
     const nextState = Object.assign({
       messages,
       scrollTop: Date.now(),
       scrollIntoView: "message-bottom-anchor",
       scrollWithAnimation: !(options && options.instantScroll),
       historyTrimNotice: this.data.historyTrimNotice || trimmed,
-    }, providerState, patch || {});
-    nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
+      previousSuggestionKey: this._previousSuggestionKey || "",
+      showQuickTasks: false,
+    }, providerState, headerPatch, patch || {});
     this.setData(nextState);
     if (options && options.save) {
       const savedConversation = conversationStore.saveConversationMessages(
@@ -2235,8 +2544,15 @@ Page({
         nextState.activeConversationContext || this.data.activeConversationContext
       );
       if (savedConversation) {
+        let title = savedConversation.title;
+        if (/^(你好|你好啊|哈喽|hi|hello)$/i.test(String(title || "").trim())) {
+          title = xiaofuConversationViewModel.deriveConversationTitle(sourceMessages, "校园助手问候");
+        } else if (!title || title === "新对话") {
+          title = xiaofuConversationViewModel.deriveConversationTitle(sourceMessages, title || "新对话");
+        }
         this.setData({
-          activeConversationTitle: savedConversation.title,
+          activeConversationTitle: title,
+          conversationTitle: title,
           activeConversationContext: contextManager.normalizeContextSlots(savedConversation.contextSlots),
           conversations: buildConversationDisplayList(savedConversation.conversationId),
         });
@@ -2439,6 +2755,14 @@ Page({
         } else if (safety.clearPendingClarification || response && response.metrics && response.metrics.intentName !== "clarify_missing_slot") {
           aiAssistantService.clearPendingClarification();
         }
+        const resolvedIntentName = (typeof response.intent === "string" && response.intent)
+          || (response.intent && response.intent.name)
+          || response.intentName
+          || (response.metrics && (response.metrics.intentName || response.metrics.canonicalIntent))
+          || "";
+        const presentationMode = response.presentationMode
+          || (response.presentation && response.presentation.presentationMode)
+          || "";
         const assistantMessage = makeMessage("assistant", response.answer || "已为你整理以下结果。", {
           cards: Array.isArray(response.cards) ? response.cards : [],
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
@@ -2453,19 +2777,20 @@ Page({
           status: response.status || "completed",
           memory: response.memory || null,
           intent: response.intent || (response.metrics && response.metrics.canonicalIntent) || "",
-          intentName: (response.intent && response.intent.name) || response.intentName || "",
-          presentationMode: response.presentationMode || (response.presentation && response.presentation.presentationMode) || "",
+          intentName: resolvedIntentName,
+          userQuery: message,
+          presentationMode,
           presentation: response.presentation || null,
           runSummary: response.runSummary || (response.presentation && response.presentation.runSummary) || null,
           taskTrajectory: response.taskTrajectory || (response.presentation && response.presentation.taskTrajectory) || null,
           plan: response.plan || null,
         });
         if (response.memory && response.memory.mode) {
-          this.setData({
+          this.setData(Object.assign({
             memoryMode: response.memory.mode,
-            memoryStatusText: mapMemoryModeText(response.memory.mode),
-            memoryChipText: mapMemoryChip(response.memory.mode),
-          });
+          }, applyHeaderStatusPatch(Object.assign({}, this.data, {
+            memoryMode: response.memory.mode,
+          }))));
         }
         let finalMessages = (this.data.messages || []).slice();
         if (streamAssistantId) {
@@ -2745,14 +3070,13 @@ Page({
         }
       }
       try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", mode); } catch (error) { /* ignore */ }
-      this.setData({
+      this.setData(Object.assign({
         memoryMode: mode,
-        memoryStatusText: mapMemoryModeText(mode),
-        memoryChipText: mapMemoryChip(mode),
         showMemorySheet: false,
         memorySwitching: false,
-      });
+      }, applyHeaderStatusPatch(Object.assign({}, this.data, { memoryMode: mode }))));
       this.refreshConnectionStatus();
+      try { wx.vibrateShort({ type: "light" }); } catch (e) { /* ignore */ }
       wx.showToast({ title: mapMemoryModeText(mode), icon: "none" });
       return;
     }
@@ -2765,27 +3089,24 @@ Page({
     });
     if (!result.success) {
       // Server failed: keep previous mode and do not write local storage
-      this.setData({
+      this.setData(Object.assign({
         memoryMode: previous,
-        memoryStatusText: mapMemoryModeText(previous),
-        memoryChipText: mapMemoryChip(previous),
         memorySwitching: false,
-      });
+      }, applyHeaderStatusPatch(Object.assign({}, this.data, { memoryMode: previous }))));
       wx.showToast({
-        title: agentClientErrorMapper.userMessage(result, "记忆模式更新失败，请稍后再试"),
+        title: agentClientErrorMapper.userMessage(result, "记忆模式更新失败，将继续保存在本机"),
         icon: "none",
       });
       return;
     }
     try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", mode); } catch (error) { /* ignore */ }
-    this.setData({
+    this.setData(Object.assign({
       memoryMode: mode,
-      memoryStatusText: mapMemoryModeText(mode),
-      memoryChipText: mapMemoryChip(mode),
       showMemorySheet: false,
       memorySwitching: false,
-    });
+    }, applyHeaderStatusPatch(Object.assign({}, this.data, { memoryMode: mode }))));
     this.refreshConnectionStatus();
+    try { wx.vibrateShort({ type: "light" }); } catch (e) { /* ignore */ }
     wx.showToast({ title: mapMemoryModeText(mode), icon: "none" });
   },
 
@@ -2836,13 +3157,12 @@ Page({
           });
           return;
         }
-        this.setData({
+        this.setData(Object.assign({
           memoryMode: "local_only",
-          memoryStatusText: mapMemoryModeText("local_only"),
-          memoryChipText: mapMemoryChip("local_only"),
           showMemorySheet: false,
-        });
+        }, applyHeaderStatusPatch(Object.assign({}, this.data, { memoryMode: "local_only" }))));
         try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", "local_only"); } catch (error) { /* ignore */ }
+        try { wx.vibrateShort({ type: "medium" }); } catch (e) { /* ignore */ }
         wx.showToast({ title: "已清除云端记忆", icon: "none" });
         this.refreshConversationList();
       },
@@ -2872,6 +3192,22 @@ Page({
     this.deleteConversation({ currentTarget: { dataset: { conversationId } } });
   },
 
+  onConversationSheetPin(event) {
+    const conversationId = event.detail && event.detail.conversationId;
+    if (!conversationId) return;
+    try {
+      const key = "FOSU_AI_PINNED_CONVERSATIONS";
+      const raw = wx.getStorageSync(key) || [];
+      const set = new Set(Array.isArray(raw) ? raw : []);
+      if (set.has(conversationId)) set.delete(conversationId);
+      else set.add(conversationId);
+      wx.setStorageSync(key, Array.from(set));
+    } catch (error) {
+      // ignore
+    }
+    this.refreshConversationList();
+  },
+
   onToggleEvidence(event) {
     const messageId = event.currentTarget.dataset.messageId;
     if (!messageId) return;
@@ -2898,12 +3234,7 @@ Page({
 
   onFeedbackMore(event) {
     const messageId = event.currentTarget.dataset.messageId;
-    if (!messageId) return;
-    const messages = (this.data.messages || []).map((item) => {
-      if (item.id !== messageId) return item;
-      return Object.assign({}, item, { feedbackOpen: !item.feedbackOpen });
-    });
-    this.setData({ messages: normalizeMessagesForDisplay(messages, this.data.expandedCards || {}) });
+    if (messageId) this.openFeedbackReasons(messageId);
   },
 
   onMessageFeedback(event) {
@@ -2913,25 +3244,7 @@ Page({
       this.onFeedbackMore(event);
       return;
     }
-    // Lightweight local acknowledgement only; never attach full schedule payloads.
-    try {
-      const key = "FOSU_AI_FEEDBACK_LOG";
-      const existing = wx.getStorageSync(key) || [];
-      const next = (Array.isArray(existing) ? existing : []).concat([{
-        feedback: String(feedback || "").slice(0, 32),
-        messageId: String(messageId || "").slice(0, 80),
-        at: new Date().toISOString(),
-      }]).slice(-50);
-      wx.setStorageSync(key, next);
-    } catch (error) {
-      // ignore
-    }
-    const messages = (this.data.messages || []).map((item) => {
-      if (item.id !== messageId) return item;
-      return Object.assign({}, item, { feedbackOpen: false });
-    });
-    this.setData({ messages: normalizeMessagesForDisplay(messages, this.data.expandedCards || {}) });
-    wx.showToast({ title: "已记录反馈", icon: "none" });
+    this.submitMessageFeedback(messageId, feedback);
   },
 
   enableXiaofuFloat() {
@@ -2978,6 +3291,7 @@ Page({
       showHeaderMenu: false,
       showConversationSheet: false,
       showMemorySheet: false,
+      showComposerPlus: false,
       privacyExpanded: false,
     });
   },
@@ -3225,5 +3539,8 @@ if (typeof module !== "undefined") {
     normalizeCard,
     normalizeCardItem,
     normalizeMessagesForDisplay,
+    normalizeMessageForDisplay,
+    makeMessage,
+    resolveAssistantIntentName,
   };
 }

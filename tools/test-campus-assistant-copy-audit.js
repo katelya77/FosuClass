@@ -73,13 +73,14 @@ const oldVisiblePhrases = [
 
 const requiredPhrases = [
   "小佛助手",
-  "今天想让小佛帮你完成什么",
-  "告诉小佛你想完成的校园任务",
-  "请勿输入学号、密码、验证码等敏感信息",
+  // Product experience empty/composer copy (conversation-first)
+  "可以直接告诉我你想完成的校园任务",
+  "告诉小佛你想完成什么",
+  "请勿输入学号、密码",
   "可以查询什么",
   "正在匹配查询内容",
   "正在查询校园信息",
-  "小佛助手浮窗",
+  "小佛浮窗",
   "保存查询服务配置",
   "查询链路状态",
   "新建对话",
