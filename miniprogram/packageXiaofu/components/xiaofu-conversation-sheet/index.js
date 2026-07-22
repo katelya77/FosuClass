@@ -1,16 +1,16 @@
-Component({
+﻿Component({
   properties: {
     visible: { type: Boolean, value: false },
     conversations: { type: Array, value: [] },
   },
   data: {
-    menuConversationId: "",
     searchQuery: "",
     filteredConversations: [],
+    openSwipeId: "",
   },
   observers: {
     visible(value) {
-      if (!value) this.setData({ menuConversationId: "", searchQuery: "" });
+      if (!value) this.setData({ openSwipeId: "", searchQuery: "" });
       this.recompute();
     },
     conversations() {
@@ -40,37 +40,53 @@ Component({
       this.recompute();
     },
     onClose() {
-      this.setData({ menuConversationId: "", searchQuery: "" });
+      this.setData({ openSwipeId: "", searchQuery: "" });
       this.triggerEvent("close");
     },
     onCreate() {
       this.triggerEvent("create");
     },
     onSelect(event) {
-      this.setData({ menuConversationId: "" });
+      this.setData({ openSwipeId: "" });
       this.triggerEvent("select", { conversationId: event.currentTarget.dataset.conversationId });
     },
-    onMore(event) {
-      const conversationId = event.currentTarget.dataset.conversationId;
-      this.setData({
-        menuConversationId: this.data.menuConversationId === conversationId ? "" : conversationId,
-      });
+    onTouchStart(event) {
+      const touch = event.changedTouches && event.changedTouches[0];
+      if (!touch) return;
+      this._touchStartX = touch.clientX;
+      this._touchStartY = touch.clientY;
+      this._touchId = event.currentTarget.dataset.conversationId;
     },
-    onRename(event) {
-      this.setData({ menuConversationId: "" });
-      this.triggerEvent("rename", { conversationId: event.currentTarget.dataset.conversationId });
+    onTouchEnd(event) {
+      const touch = event.changedTouches && event.changedTouches[0];
+      if (!touch || !this._touchId) return;
+      const dx = touch.clientX - Number(this._touchStartX || 0);
+      const dy = touch.clientY - Number(this._touchStartY || 0);
+      if (Math.abs(dx) < 36 || Math.abs(dx) < Math.abs(dy)) return;
+      if (dx < 0) {
+        this.setData({ openSwipeId: this._touchId });
+      } else if (this.data.openSwipeId === this._touchId) {
+        this.setData({ openSwipeId: "" });
+      }
+    },
+    closeSwipe() {
+      if (this.data.openSwipeId) this.setData({ openSwipeId: "" });
     },
     onPin(event) {
-      this.setData({ menuConversationId: "" });
+      this.setData({ openSwipeId: "" });
       this.triggerEvent("pin", { conversationId: event.currentTarget.dataset.conversationId });
     },
     onClear(event) {
-      this.setData({ menuConversationId: "" });
+      this.setData({ openSwipeId: "" });
       this.triggerEvent("clear", { conversationId: event.currentTarget.dataset.conversationId });
     },
     onDelete(event) {
-      this.setData({ menuConversationId: "" });
+      this.setData({ openSwipeId: "" });
       this.triggerEvent("delete", { conversationId: event.currentTarget.dataset.conversationId });
+    },
+    onRename(event) {
+      this.setData({ openSwipeId: "" });
+      this.triggerEvent("rename", { conversationId: event.currentTarget.dataset.conversationId });
     },
   },
 });

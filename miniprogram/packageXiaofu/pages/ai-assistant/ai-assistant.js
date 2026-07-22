@@ -1694,7 +1694,7 @@ function buildPrivacyState(allowed, expanded, firstTipVisible) {
   const enabled = allowed === true;
   return {
     allowPersonalContext: enabled,
-    privacyStatusText: enabled ? "仅使用脱敏课表摘要" : "默认不使用课表摘要",
+    privacyStatusText: enabled ? "已允许使用本机课表" : "未授权使用本机课表",
     privacyCompactClass: enabled ? "enabled" : "disabled",
     privacyActionText: enabled ? "已允许" : "已关闭",
     composerNote: "",
@@ -1781,7 +1781,7 @@ Page({
     headerStatusLine: "校园助手",
     agentActivityState: "idle",
     statusCapsuleText: "待命 · 校园工具可用",
-    statusCapsuleDetail: "课表事实由本机摘要、Release Pack 与校园工具核验。",
+    statusCapsuleDetail: "课表与提醒由本机课表、Release Pack 与校园工具核验。",
     statusCapsuleExpanded: false,
     inAppReminderBanner: null,
     inAppReminderAcknowledging: false,
@@ -1801,9 +1801,9 @@ Page({
     showPrivacyTip: false,
     privacyExpanded: false,
     privacyText: PRIVACY_SUMMARY_TEXT,
-    privacyStatusText: "课表摘要默认关闭",
+    privacyStatusText: "未授权使用本机课表",
     privacyCompactClass: "disabled",
-    privacyActionText: "摘要关闭",
+    privacyActionText: "未授权",
     privacyActionLabel: "说明",
     allowPersonalContext: false,
     providerLabel: "本地规则",
@@ -1869,6 +1869,7 @@ Page({
       activeConversationTitle: activeConversation.title,
       activeConversationContext: activeContextSlots,
       showReminderSheet: panelName === "reminders",
+      reminderSheetOpenCreate: panelName === "reminders",
     }, privacyState, providerState, buildXiaofuFloatState());
     nextState.conversationTitle = activeConversation.title || "新对话";
     nextState.memoryMode = wx.getStorageSync("FOSU_AI_MEMORY_MODE") || "local_only";
@@ -1878,6 +1879,7 @@ Page({
     this.refreshProactiveWorkspace();
     this.initVoiceInput();
     this.refreshConnectionStatus();
+    this.ensurePersonalContextFromSchedule();
 
     const question = decodeQuery(options && (options.q || options.question || ""));
     if (!demoMode && question) {
@@ -1907,12 +1909,10 @@ Page({
         } else {
           Object.assign(connectionPatch, {
             agentActivityState: "idle",
-            statusCapsuleText: status.statusMachine === "enhanced_degraded"
-              ? "待命 · 增强能力已降级"
-              : "待命 · 校园工具可用",
+            statusCapsuleText: "待命 · 校园工具可用",
             statusCapsuleDetail: status.statusMachine === "enhanced_degraded"
-              ? "课表任务仍由确定性校园工具完成。"
-              : "课表事实由本机摘要、Release Pack 与校园工具核验。",
+              ? "增强表达层暂不可用，课表与提醒仍由校园工具完成。"
+              : "课表与提醒由本机课表、Release Pack 与校园工具核验。",
             statusCapsuleExpanded: false,
           });
         }
@@ -1927,6 +1927,26 @@ Page({
     });
   },
 
+  
+  ensurePersonalContextFromSchedule() {
+    try {
+      if (aiAssistantService.isPersonalContextAllowed && aiAssistantService.isPersonalContextAllowed()) return;
+      const context = aiAssistantService.buildClientContext({
+        conversationId: this.data.activeConversationId,
+        contextSlots: this.data.activeConversationContext,
+        memoryMode: this.data.memoryMode,
+      });
+      const summary = context && context.currentScheduleSummary;
+      if (summary && summary.enabled && Array.isArray(summary.courses) && summary.courses.length) {
+        if (aiAssistantService.setPersonalContextAllowed) {
+          aiAssistantService.setPersonalContextAllowed(true);
+        }
+        this.setData(Object.assign({}, buildPrivacyState(true, this.data.privacyExpanded, this.data.showPrivacyTip)));
+      }
+    } catch (error) {
+      // ignore
+    }
+  },
   refreshProactiveWorkspace() {
     let workspace;
     let proactiveContext = null;
@@ -2058,6 +2078,13 @@ Page({
       this.navigateByUrl(action.url);
       return;
     }
+    if (action.actionType === "manageReminders" || action.type === "manageReminders") {
+      this.setData({
+        showReminderSheet: true,
+        reminderSheetOpenCreate: Boolean(!action.payload || action.payload.openCreate !== false),
+      });
+      return;
+    }
     if (action.message) this.queueTaskMessage(action.message);
   },
 
@@ -2068,7 +2095,7 @@ Page({
       this.setData({
         agentActivityState: "idle",
         statusCapsuleText: "待命 · 校园工具可用",
-        statusCapsuleDetail: "课表事实由本机摘要、Release Pack 与校园工具核验。",
+        statusCapsuleDetail: "课表与提醒由本机课表、Release Pack 与校园工具核验。",
         statusCapsuleExpanded: false,
       });
     }, 1800);
@@ -2103,6 +2130,7 @@ Page({
     nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
     this.setData(nextState);
     this.refreshConnectionStatus();
+    this.ensurePersonalContextFromSchedule();
     this.refreshProactiveWorkspace();
     this.refreshInAppReminders();
   },
@@ -2326,8 +2354,11 @@ Page({
   },
 
   createReminderFromPlus() {
-    this.setData({ showComposerPlus: false });
-    this.queueTaskMessage("以后上课前20分钟提醒我");
+    this.setData({
+      showComposerPlus: false,
+      showReminderSheet: true,
+      reminderSheetOpenCreate: true,
+    });
   },
 
   openRemindersFromPlus() {
@@ -3125,19 +3156,28 @@ Page({
       .catch((error) => {
         if (!isRequestActive()) return;
         flushStream(true);
+        const isReminderQuery = /提醒|通知/.test(String(message || ""));
         const assistantMessage = makeMessage("assistant", "", {
           cards: [{
             type: "generic",
             variant: "error",
-            title: "服务暂时不可用，已保留你的问题。",
-            subtitle: "可以重试，或先使用全校课表/空教室页面。",
+            title: isReminderQuery ? "在线助手暂不可用，可直接配置提醒。" : "服务暂时不可用，已保留你的问题。",
+            subtitle: isReminderQuery
+              ? "智能课程提醒不依赖增强表达层，可在配置页完成创建。"
+              : "可以重试，或先使用全校课表/空教室页面。",
             badges: [],
             items: [],
-            actions: [
-              { label: "重试", type: "retry", url: "", payload: { message } },
-              { label: "打开全校课表", type: "navigate", url: "/pages/school/school", payload: {} },
-              { label: "打开空教室", type: "navigate", url: "/pages/empty-room/empty-room", payload: {} },
-            ],
+            actions: isReminderQuery
+              ? [
+                { label: "配置课程提醒", type: "manageReminders", url: "", payload: { sheet: "reminders", openCreate: true } },
+                { label: "重试", type: "retry", url: "", payload: { message } },
+                { label: "打开全校课表", type: "navigate", url: "/pages/school/school", payload: {} },
+              ]
+              : [
+                { label: "重试", type: "retry", url: "", payload: { message } },
+                { label: "打开全校课表", type: "navigate", url: "/pages/school/school", payload: {} },
+                { label: "打开空教室", type: "navigate", url: "/pages/empty-room/empty-room", payload: {} },
+              ],
           }],
           suggestions: [],
           safety: { provider: "mock", mode: "fallback" },
@@ -3674,7 +3714,7 @@ Page({
       return;
     }
     wx.showModal({
-      title: "允许分析本机课表摘要？",
+      title: "允许使用本机课表？",
       content: PRIVACY_SUMMARY_TEXT,
       confirmText: "允许",
       cancelText: "取消",
@@ -3801,7 +3841,10 @@ Page({
       return;
     }
     if (type === "manageReminders") {
-      this.setData({ showReminderSheet: true });
+      this.setData({
+        showReminderSheet: true,
+        reminderSheetOpenCreate: Boolean(payload && payload.openCreate),
+      });
       return;
     }
     if (type === "confirmReminder") {
@@ -3880,12 +3923,14 @@ Page({
   },
 
   closeReminderSheet() {
-    this.setData({ showReminderSheet: false });
+    this.setData({ showReminderSheet: false, reminderSheetOpenCreate: false });
   },
 
   onReminderCreate() {
-    this.setData({ showReminderSheet: false });
-    this.queueTaskMessage("以后上课前20分钟提醒我");
+    this.setData({
+      showReminderSheet: true,
+      reminderSheetOpenCreate: true,
+    });
   },
 
   onReminderChange() {
@@ -3915,7 +3960,7 @@ Page({
       return;
     }
     if (["reminder", "reminders", "course-reminders"].indexOf(sheet) >= 0) {
-      this.setData({ showReminderSheet: true });
+      this.setData({ showReminderSheet: true, reminderSheetOpenCreate: true });
       return;
     }
     if (["menu", "more"].indexOf(sheet) >= 0) {
