@@ -49,7 +49,10 @@ async function run() {
   assert.strictEqual(typeof client.acknowledgeInAppEvent, "function");
   assert.strictEqual(typeof client.grantSubscriptionAuthorization, "function");
 
-  console.log("test-course-reminder-client: PASS");
+  assert.ok(source.includes("planReminder"), "client exports planReminder");
+assert.ok(source.includes("createReminderFromConfig"), "client exports createReminderFromConfig");
+assert.ok(source.includes("/api/ai/agent/reminders/plans"), "client plans endpoint");
+console.log("test-course-reminder-client: PASS");
 }
 
 run().catch((error) => {

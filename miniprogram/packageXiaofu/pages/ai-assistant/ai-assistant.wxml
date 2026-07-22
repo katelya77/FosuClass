@@ -252,6 +252,7 @@
 
   <xiaofu-reminder-sheet
     visible="{{showReminderSheet}}"
+    open-create="{{reminderSheetOpenCreate}}"
     bind:close="closeReminderSheet"
     bind:create="onReminderCreate"
     bind:change="onReminderChange"
@@ -387,7 +388,7 @@
     <view class="sheet-handle"></view>
     <view class="privacy-head">
       <view class="privacy-copy">
-        <view class="privacy-title">课表摘要</view>
+        <view class="privacy-title">个人课表授权</view>
         <view class="privacy-desc">{{privacyText}}</view>
       </view>
       <switch

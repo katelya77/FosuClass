@@ -1106,7 +1106,7 @@ function buildProactiveWorkspace(clientContext = {}) {
     && Number(course._startMinutes) >= nowMinutes - 5) || null;
 
   actions.push({ id: "next", label: "下一节课", message: "我下一节课在哪，什么时候该出发？" });
-  actions.push({ id: "reminder", label: "创建提醒", message: "以后上课前20分钟提醒我" });
+  actions.push({ id: "reminder", label: "配置提醒", message: "", actionType: "manageReminders", payload: { sheet: "reminders", openCreate: true } });
   actions.push({ id: "room", label: "找空教室", message: "现在帮我找附近空教室" });
 
   if (next) {

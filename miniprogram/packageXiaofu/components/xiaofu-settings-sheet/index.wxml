@@ -38,8 +38,8 @@
       <button class="header-menu-row settings-row" bindtap="onPrivacy">
         <view class="settings-row-icon">▤</view>
         <view class="settings-row-body">
-          <view class="header-menu-row-title">课表摘要</view>
-          <view class="settings-row-desc">{{privacyStatusText || '默认不使用课表摘要'}}</view>
+          <view class="header-menu-row-title">个人课表授权</view>
+          <view class="settings-row-desc">{{privacyStatusText || '未授权使用本机课表'}}</view>
         </view>
         <text class="header-menu-row-arrow">›</text>
       </button>

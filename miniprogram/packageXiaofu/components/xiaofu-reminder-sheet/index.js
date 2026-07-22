@@ -1,4 +1,5 @@
-const reminderClient = require("../../../services/courseReminderClient");
+﻿const reminderClient = require("../../../services/courseReminderClient");
+const aiAssistantService = require("../../../services/aiAssistantService");
 
 function safeText(value, max) {
   return String(value == null ? "" : value).trim().slice(0, max || 120);
@@ -27,6 +28,36 @@ function formatItem(item) {
   });
 }
 
+function formatPreview(plan) {
+  const source = plan || {};
+  const occurrence = source.nextOccurrence || {};
+  if (source.scope === "room_change" || source.eventDriven) {
+    return {
+      title: "教室变化提醒",
+      detail: "个人课表教室发生变化时触发应用内提醒",
+      leadLabel: "按变化触发",
+    };
+  }
+  if (!occurrence.date) {
+    return {
+      title: "上课提醒",
+      detail: "确认后按课表自动匹配下一节课",
+      leadLabel: `提前 ${Number(source.leadMinutes || 20)} 分钟`,
+    };
+  }
+  return {
+    title: safeText(occurrence.courseName || "下一节课", 40),
+    detail: [occurrence.date, occurrence.startTime, occurrence.classroom].filter(Boolean).join(" · "),
+    leadLabel: `提前 ${Number(source.leadMinutes || 20)} 分钟`,
+  };
+}
+
+const LEAD_OPTIONS = [10, 15, 20, 30, 45, 60];
+const SCOPE_OPTIONS = [
+  { id: "all_courses", label: "每节课前提醒", desc: "按个人课表循环提醒" },
+  { id: "room_change", label: "仅教室变化", desc: "换教室时通知" },
+];
+
 Component({
   properties: {
     visible: {
@@ -36,32 +67,95 @@ Component({
         if (value) this.refresh();
       },
     },
+    openCreate: {
+      type: Boolean,
+      value: false,
+      observer(value) {
+        if (value && this.properties.visible) {
+          this.setData({ mode: "create" });
+        }
+      },
+    },
   },
 
   data: {
     loading: false,
     operatingId: "",
     grantingId: "",
+    creating: false,
     items: [],
     errorText: "",
     capability: { configured: false, templateId: "" },
     disclosure: "微信服务通知使用一次性订阅：每次主动接受增加 1 次发送额度；额度不足时使用应用内提醒。",
+    mode: "list",
+    leadMinutes: 20,
+    leadOptions: LEAD_OPTIONS,
+    scope: "all_courses",
+    scopeOptions: SCOPE_OPTIONS,
+    preview: null,
+    createError: "",
+    scheduleReady: false,
   },
 
   methods: {
     stopPropagation() {},
 
     close() {
+      this.setData({ mode: "list", createError: "", preview: null });
       this.triggerEvent("close");
     },
 
+    openCreateMode() {
+      const prefs = aiAssistantService.getUserPreferences ? aiAssistantService.getUserPreferences() : {};
+      const lead = Number(prefs && prefs.defaultReminderLeadMinutes) || 20;
+      this.setData({
+        mode: "create",
+        leadMinutes: LEAD_OPTIONS.indexOf(lead) >= 0 ? lead : 20,
+        scope: "all_courses",
+        createError: "",
+        preview: null,
+      });
+      this.refreshScheduleReady();
+    },
+
+    backToList() {
+      this.setData({ mode: "list", createError: "", preview: null });
+    },
+
     create() {
-      this.triggerEvent("create");
+      this.openCreateMode();
+    },
+
+    onSelectLead(event) {
+      const lead = Number(event.currentTarget.dataset.lead || 20) || 20;
+      this.setData({ leadMinutes: lead, preview: null, createError: "" });
+    },
+
+    onSelectScope(event) {
+      const scope = safeText(event.currentTarget.dataset.scope, 32) || "all_courses";
+      this.setData({ scope, preview: null, createError: "" });
+    },
+
+    refreshScheduleReady() {
+      try {
+        const context = aiAssistantService.buildClientContext({});
+        const summary = context && context.currentScheduleSummary;
+        const ready = Boolean(summary && summary.enabled && Array.isArray(summary.courses) && summary.courses.length);
+        this.setData({ scheduleReady: ready });
+        return { context, ready };
+      } catch (error) {
+        this.setData({ scheduleReady: false });
+        return { context: null, ready: false };
+      }
     },
 
     async refresh() {
       if (this.data.loading) return;
       this.setData({ loading: true, errorText: "" });
+      if (this.properties.openCreate) {
+        this.openCreateMode();
+      }
+      this.refreshScheduleReady();
       const [result, capabilityResult] = await Promise.all([
         reminderClient.listReminders(),
         reminderClient.getCapability(),
@@ -82,6 +176,114 @@ Component({
           : "微信服务通知模板尚未配置；提醒会保留在应用内，配置完成后可在这里补充授权。",
         errorText: "",
       });
+    },
+
+    async onPreviewPlan() {
+      const { context, ready } = this.refreshScheduleReady();
+      if (this.data.scope !== "room_change" && !ready) {
+        this.setData({
+          createError: "需要先导入个人课表，才能预览下一节课提醒。",
+          preview: null,
+        });
+        return;
+      }
+      this.setData({ creating: true, createError: "" });
+      const result = await reminderClient.planReminder({
+        leadMinutes: this.data.leadMinutes,
+        scope: this.data.scope,
+        idempotencyKey: reminderClient.makeIdempotencyKey("preview", this.data.scope),
+        currentScheduleSummary: context && context.currentScheduleSummary,
+        todayDate: context && context.todayDate,
+        todayWeekday: context && context.todayWeekday,
+        currentTeachingWeek: context && context.currentTeachingWeek,
+        clientTimestampMs: context && context.clientTimestampMs,
+      });
+      this.setData({ creating: false });
+      if (!result.success) {
+        this.setData({
+          createError: result.error || "预览失败",
+          preview: null,
+        });
+        if (result.code === "SCHEDULE_REQUIRED" || result.needContext) {
+          wx.showModal({
+            title: "需要个人课表",
+            content: "导入个人课表后，才能按真实上课时间创建提醒。",
+            confirmText: "去导入",
+            success: (res) => {
+              if (res.confirm) {
+                wx.navigateTo({ url: "/pages/personal-sync/personal-sync" });
+              }
+            },
+          });
+        }
+        return;
+      }
+      this.setData({
+        preview: formatPreview(result.plan),
+        createError: "",
+        _pendingPlan: result,
+      });
+    },
+
+    async onConfirmCreate() {
+      if (this.data.creating) return;
+      const { context, ready } = this.refreshScheduleReady();
+      if (this.data.scope !== "room_change" && !ready) {
+        this.setData({ createError: "需要先导入个人课表，才能创建上课提醒。" });
+        wx.showModal({
+          title: "需要个人课表",
+          content: "导入个人课表后，才能按真实上课时间创建提醒。",
+          confirmText: "去导入",
+          success: (res) => {
+            if (res.confirm) wx.navigateTo({ url: "/pages/personal-sync/personal-sync" });
+          },
+        });
+        return;
+      }
+
+      this.setData({ creating: true, createError: "" });
+      try {
+        const prefs = aiAssistantService.getUserPreferences ? aiAssistantService.getUserPreferences() : {};
+        if (aiAssistantService.saveUserPreferences) {
+          aiAssistantService.saveUserPreferences(Object.assign({}, prefs, {
+            defaultReminderLeadMinutes: this.data.leadMinutes,
+          }));
+        }
+
+        const idempotencyKey = reminderClient.makeIdempotencyKey("create", this.data.scope);
+        const capability = this.data.capability || {};
+        const result = await reminderClient.createReminderFromConfig({
+          leadMinutes: this.data.leadMinutes,
+          scope: this.data.scope,
+          idempotencyKey,
+          capability,
+          currentScheduleSummary: context && context.currentScheduleSummary,
+          todayDate: context && context.todayDate,
+          todayWeekday: context && context.todayWeekday,
+          currentTeachingWeek: context && context.currentTeachingWeek,
+          clientTimestampMs: context && context.clientTimestampMs,
+        });
+        this.setData({ creating: false });
+        if (!result.success) {
+          this.setData({ createError: result.error || "创建失败，请稍后重试" });
+          wx.showToast({ title: result.error || "创建失败", icon: "none" });
+          return;
+        }
+        wx.showToast({
+          title: result.duplicate ? "提醒已存在" : "提醒已创建",
+          icon: "success",
+        });
+        this.setData({ mode: "list", preview: null, createError: "" });
+        this.triggerEvent("change", { reminder: result.reminder || null });
+        await this.refresh();
+      } catch (error) {
+        this.setData({ creating: false, createError: "创建失败，请稍后重试" });
+        wx.showToast({ title: "创建失败", icon: "none" });
+      }
+    },
+
+    openPersonalSync() {
+      wx.navigateTo({ url: "/pages/personal-sync/personal-sync" });
     },
 
     async onGrantSubscription(event) {
@@ -111,121 +313,122 @@ Component({
       });
       this.setData({ grantingId: "" });
       if (!result.success) {
-        wx.showToast({ title: result.error || "授权记录失败，请重试", icon: "none" });
+        wx.showToast({ title: result.error || "授权记录失败", icon: "none" });
         return;
       }
-      wx.showToast({ title: "已增加 1 次服务通知", icon: "success" });
-      this.refresh();
-      this.triggerEvent("change", { operation: "subscription_grant", reminder: result.reminder });
+      wx.showToast({ title: "已补充授权", icon: "success" });
+      this.triggerEvent("change", { reminder: result.reminder || null });
+      await this.refresh();
     },
 
-    onToggle(event) {
+    async onToggle(event) {
       const reminderId = safeText(event.currentTarget.dataset.id, 80);
-      const currentStatus = safeText(event.currentTarget.dataset.status, 20);
-      const nextStatus = currentStatus === "paused" ? "enabled" : "paused";
-      wx.showModal({
-        title: nextStatus === "enabled" ? "启用课程提醒" : "暂停课程提醒",
-        content: nextStatus === "enabled" ? "启用后会按当前通知方式继续触发。" : "暂停后不会发送，随时可以重新启用。",
-        confirmText: nextStatus === "enabled" ? "启用" : "暂停",
-        success: (result) => {
-          if (result.confirm) this.performUpdate(reminderId, { status: nextStatus });
-        },
-      });
-    },
-
-    onEditLead(event) {
-      const reminderId = safeText(event.currentTarget.dataset.id, 80);
-      wx.showActionSheet({
-        itemList: ["提前 10 分钟", "提前 20 分钟", "提前 30 分钟", "提前 45 分钟"],
-        success: (result) => {
-          const values = [10, 20, 30, 45];
-          const leadMinutes = values[Number(result.tapIndex)];
-          if (!leadMinutes) return;
-          wx.showModal({
-            title: "修改提醒时间",
-            content: `以后在课程开始前 ${leadMinutes} 分钟触发，确认修改吗？`,
-            confirmText: "修改",
-            success: (modalResult) => {
-              if (modalResult.confirm) this.performUpdate(reminderId, { leadMinutes });
-            },
-          });
-        },
-      });
-    },
-
-    async performUpdate(reminderId, patch) {
+      const status = safeText(event.currentTarget.dataset.status, 16);
       if (!reminderId || this.data.operatingId) return;
-      const idempotencyKey = reminderClient.makeIdempotencyKey("update", reminderId);
+      const nextStatus = status === "paused" ? "enabled" : "paused";
       this.setData({ operatingId: reminderId });
       const confirmation = await reminderClient.requestOperationConfirmation({
         reminderId,
         operation: "update",
-        patch,
-        idempotencyKey,
+        patch: { status: nextStatus },
+        idempotencyKey: reminderClient.makeIdempotencyKey("toggle", reminderId),
       });
       if (!confirmation.success) {
         this.setData({ operatingId: "" });
-        wx.showToast({ title: confirmation.error || "确认失败", icon: "none" });
+        wx.showToast({ title: confirmation.error || "操作失败", icon: "none" });
         return;
       }
       const result = await reminderClient.updateReminder({
         reminderId,
-        patch,
+        patch: { status: nextStatus },
         confirmationProof: confirmation.confirmationProof,
-        idempotencyKey,
+        idempotencyKey: reminderClient.makeIdempotencyKey("toggle-apply", reminderId),
       });
       this.setData({ operatingId: "" });
       if (!result.success) {
-        wx.showToast({ title: result.error || "修改失败", icon: "none" });
+        wx.showToast({ title: result.error || "更新失败", icon: "none" });
         return;
       }
-      wx.showToast({ title: "提醒已更新", icon: "success" });
-      this.refresh();
-      this.triggerEvent("change", { operation: "update", reminder: result.reminder });
+      this.triggerEvent("change", { reminder: result.reminder || null });
+      await this.refresh();
     },
 
-    onDelete(event) {
+    onEditLead(event) {
       const reminderId = safeText(event.currentTarget.dataset.id, 80);
-      const title = safeText(event.currentTarget.dataset.title, 40) || "这个提醒";
-      wx.showModal({
-        title: "删除课程提醒",
-        content: `确认删除“${title}”吗？删除后无法恢复。`,
-        confirmText: "删除",
-        confirmColor: "#C62828",
-        success: (result) => {
-          if (result.confirm) this.performDelete(reminderId);
+      if (!reminderId || this.data.operatingId) return;
+      const that = this;
+      wx.showActionSheet({
+        itemList: LEAD_OPTIONS.map((item) => `提前 ${item} 分钟`),
+        success: async (res) => {
+          const leadMinutes = LEAD_OPTIONS[res.tapIndex];
+          if (!leadMinutes) return;
+          that.setData({ operatingId: reminderId });
+          const confirmation = await reminderClient.requestOperationConfirmation({
+            reminderId,
+            operation: "update",
+            patch: { leadMinutes },
+            idempotencyKey: reminderClient.makeIdempotencyKey("lead", reminderId),
+          });
+          if (!confirmation.success) {
+            that.setData({ operatingId: "" });
+            wx.showToast({ title: confirmation.error || "操作失败", icon: "none" });
+            return;
+          }
+          const result = await reminderClient.updateReminder({
+            reminderId,
+            patch: { leadMinutes },
+            confirmationProof: confirmation.confirmationProof,
+            idempotencyKey: reminderClient.makeIdempotencyKey("lead-apply", reminderId),
+          });
+          that.setData({ operatingId: "" });
+          if (!result.success) {
+            wx.showToast({ title: result.error || "更新失败", icon: "none" });
+            return;
+          }
+          that.triggerEvent("change", { reminder: result.reminder || null });
+          await that.refresh();
         },
       });
     },
 
-    async performDelete(reminderId) {
+    onDelete(event) {
+      const reminderId = safeText(event.currentTarget.dataset.id, 80);
+      const title = safeText(event.currentTarget.dataset.title, 40) || "该提醒";
       if (!reminderId || this.data.operatingId) return;
-      const idempotencyKey = reminderClient.makeIdempotencyKey("delete", reminderId);
-      this.setData({ operatingId: reminderId });
-      const confirmation = await reminderClient.requestOperationConfirmation({
-        reminderId,
-        operation: "delete",
-        patch: {},
-        idempotencyKey,
+      const that = this;
+      wx.showModal({
+        title: "删除提醒",
+        content: `确认删除「${title}」？删除后不可恢复。`,
+        confirmText: "删除",
+        confirmColor: "#c0392b",
+        success: async (res) => {
+          if (!res.confirm) return;
+          that.setData({ operatingId: reminderId });
+          const confirmation = await reminderClient.requestOperationConfirmation({
+            reminderId,
+            operation: "delete",
+            patch: {},
+            idempotencyKey: reminderClient.makeIdempotencyKey("delete", reminderId),
+          });
+          if (!confirmation.success) {
+            that.setData({ operatingId: "" });
+            wx.showToast({ title: confirmation.error || "操作失败", icon: "none" });
+            return;
+          }
+          const result = await reminderClient.deleteReminder({
+            reminderId,
+            confirmationProof: confirmation.confirmationProof,
+            idempotencyKey: reminderClient.makeIdempotencyKey("delete-apply", reminderId),
+          });
+          that.setData({ operatingId: "" });
+          if (!result.success) {
+            wx.showToast({ title: result.error || "删除失败", icon: "none" });
+            return;
+          }
+          that.triggerEvent("change", { deleted: true, reminderId });
+          await that.refresh();
+        },
       });
-      if (!confirmation.success) {
-        this.setData({ operatingId: "" });
-        wx.showToast({ title: confirmation.error || "确认失败", icon: "none" });
-        return;
-      }
-      const result = await reminderClient.deleteReminder({
-        reminderId,
-        confirmationProof: confirmation.confirmationProof,
-        idempotencyKey,
-      });
-      this.setData({ operatingId: "" });
-      if (!result.success) {
-        wx.showToast({ title: result.error || "删除失败", icon: "none" });
-        return;
-      }
-      wx.showToast({ title: "提醒已删除", icon: "success" });
-      this.refresh();
-      this.triggerEvent("change", { operation: "delete", reminderId });
     },
   },
 });
