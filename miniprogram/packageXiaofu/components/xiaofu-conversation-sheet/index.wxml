@@ -1,9 +1,9 @@
-<view class="conversation-sheet" wx:if="{{visible}}">
+﻿<view class="conversation-sheet" wx:if="{{visible}}">
   <view class="sheet-handle"></view>
   <view class="task-panel-head">
     <view class="panel-title-wrap">
       <view class="task-panel-title">对话</view>
-      <view class="task-panel-subtitle">管理本机对话；开启同步后可合并云端记录</view>
+      <view class="task-panel-subtitle">管理本机对话；左滑可删除、置顶或清空</view>
     </view>
     <button class="sheet-close-icon" bindtap="onClose" aria-label="关闭">✕</button>
   </view>
@@ -17,13 +17,18 @@
     />
     <button class="conversation-new-btn" bindtap="onCreate">新建</button>
   </view>
-  <scroll-view class="conversation-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+  <scroll-view class="conversation-scroll" scroll-y enhanced show-scrollbar="{{false}}" bindtap="closeSwipe">
     <view
       wx:for="{{filteredConversations}}"
       wx:key="conversationId"
-      class="conversation-item {{item.active ? 'active' : ''}}"
+      class="conversation-swipe {{openSwipeId === item.conversationId ? 'open' : ''}} {{item.active ? 'active' : ''}}"
     >
-      <view class="conversation-top">
+      <view
+        class="conversation-item"
+        data-conversation-id="{{item.conversationId}}"
+        bindtouchstart="onTouchStart"
+        bindtouchend="onTouchEnd"
+      >
         <button
           class="conversation-main"
           data-conversation-id="{{item.conversationId}}"
@@ -32,23 +37,19 @@
           <view class="conversation-title-row">
             <view class="conversation-title">{{item.title}}</view>
             <text class="conversation-current" wx:if="{{item.active}}">当前</text>
+            <text class="conversation-pin" wx:if="{{item.pinned}}">置顶</text>
           </view>
-          <view class="conversation-preview" wx:if="{{item.preview}}">{{item.preview}}</view>
+          <view class="conversation-meta-row">
+            <text class="conversation-time">{{item.updatedAtText}}</text>
+            <text class="conversation-preview" wx:if="{{item.preview}}">{{item.preview}}</text>
+          </view>
         </button>
-        <button
-          class="conversation-more"
-          data-conversation-id="{{item.conversationId}}"
-          catchtap="onMore"
-        >···</button>
       </view>
-      <view class="conversation-meta">
-        <text>{{item.updatedAtText}}</text>
-      </view>
-      <view class="conversation-actions" wx:if="{{menuConversationId === item.conversationId}}">
-        <button catchtap="onRename" data-conversation-id="{{item.conversationId}}">重命名</button>
-        <button catchtap="onPin" data-conversation-id="{{item.conversationId}}">{{item.pinned ? '取消置顶' : '置顶'}}</button>
-        <button catchtap="onClear" data-conversation-id="{{item.conversationId}}">清空</button>
-        <button catchtap="onDelete" data-conversation-id="{{item.conversationId}}" class="danger">删除</button>
+      <view class="conversation-actions-rail">
+        <button class="rail-btn pin" catchtap="onPin" data-conversation-id="{{item.conversationId}}">{{item.pinned ? '取消置顶' : '置顶'}}</button>
+        <button class="rail-btn clear" catchtap="onClear" data-conversation-id="{{item.conversationId}}">清空</button>
+        <button class="rail-btn rename" catchtap="onRename" data-conversation-id="{{item.conversationId}}">重命名</button>
+        <button class="rail-btn danger" catchtap="onDelete" data-conversation-id="{{item.conversationId}}">删除</button>
       </view>
     </view>
     <view class="conversation-empty" wx:if="{{!filteredConversations.length}}">暂无对话</view>

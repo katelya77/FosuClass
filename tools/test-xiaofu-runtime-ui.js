@@ -45,14 +45,24 @@ function run() {
   assert.ok(memoryWxss.includes("white-space: nowrap") || memoryWxss.includes("memory-mode-title"), "title row");
 
   // Conversation hierarchy
-  assert.ok(conversationWxml.includes("conversation-meta"), "meta layer");
+  assert.ok(
+    conversationWxml.includes("conversation-meta")
+    || conversationWxml.includes("conversation-meta-row")
+    || conversationWxml.includes("conversation-time"),
+    "meta layer"
+  );
   assert.ok(
     conversationWxml.includes("source-badge")
     || conversationWxml.includes("conversation-preview")
     || conversationWxml.includes("conversation-current"),
     "badge or preview layer"
   );
-  assert.ok(conversationWxml.includes("conversation-more"), "overflow menu");
+  assert.ok(
+    conversationWxml.includes("conversation-more")
+    || conversationWxml.includes("conversation-actions-rail")
+    || conversationWxml.includes("onTouchStart"),
+    "overflow menu or swipe actions"
+  );
   assert.ok(
     conversationWxss.includes("-webkit-line-clamp: 2")
     || conversationWxss.includes("line-clamp")

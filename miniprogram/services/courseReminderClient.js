@@ -100,6 +100,48 @@ async function acknowledgeInAppEvent(eventId) {
   }
 }
 
+
+async function planReminder(input) {
+  const source = input || {};
+  try {
+    const response = await http.post(withEnv("/api/ai/agent/reminders/plans"), {
+      leadMinutes: Math.max(5, Math.min(180, Number(source.leadMinutes || 20) || 20)),
+      scope: safeText(source.scope, 32) || "all_courses",
+      idempotencyKey: safeText(source.idempotencyKey, 160),
+      currentScheduleSummary: source.currentScheduleSummary && typeof source.currentScheduleSummary === "object"
+        ? source.currentScheduleSummary
+        : { enabled: false, courses: [] },
+      todayDate: safeText(source.todayDate, 10),
+      todayWeekday: Math.max(1, Math.min(7, Number(source.todayWeekday || 1) || 1)),
+      currentTeachingWeek: Math.max(0, Number(source.currentTeachingWeek || 0) || 0),
+      clientTimestampMs: Number(source.clientTimestampMs || Date.now()) || Date.now(),
+    }, options({ retries: 0, timeout: 15000 }));
+    if (!response || response.success === false) return mapFailure(response, "REMINDER_PLAN_FAILED");
+    return Object.assign({ success: true }, response);
+  } catch (error) {
+    return mapFailure(error, "REMINDER_PLAN_FAILED");
+  }
+}
+
+async function createReminderFromConfig(input) {
+  const source = input || {};
+  const planResult = await planReminder(source);
+  if (!planResult.success) return planResult;
+  const subscription = source.subscriptionStatus
+    ? { status: safeText(source.subscriptionStatus, 32) }
+    : await requestWechatSubscription(source.capability || await getCapability());
+  const createResult = await createReminder({
+    confirmationProof: planResult.confirmationProof,
+    idempotencyKey: safeText(source.idempotencyKey, 160) || makeIdempotencyKey("create", "config"),
+    subscriptionStatus: subscription.status || "not_requested",
+  });
+  if (!createResult.success) return createResult;
+  return Object.assign({}, createResult, {
+    plan: planResult.plan || null,
+    subscription,
+  });
+}
+
 async function createReminder(input) {
   const source = input || {};
   try {
@@ -263,6 +305,8 @@ function makeIdempotencyKey(operation, reminderId) {
 module.exports = {
   acknowledgeInAppEvent,
   createReminder,
+  createReminderFromConfig,
+  planReminder,
   deleteReminder,
   getCapability,
   grantSubscriptionAuthorization,

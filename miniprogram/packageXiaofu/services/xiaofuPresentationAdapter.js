@@ -126,10 +126,12 @@ function composeHeaderStatus(input) {
 
   const runtime = String(source.runtimeMode || source.mode || "public").toLowerCase();
   let modeLabel = "校园助手";
-  if (source.statusMachine === "enhanced_ready" || runtime === "trial" || runtime === "competition" || runtime === "dev") {
+  if (source.statusMachine === "enhanced_ready") {
     modeLabel = "增强模式";
   } else if (source.statusMachine === "enhanced_degraded") {
-    modeLabel = "本地可用";
+    modeLabel = "校园助手";
+  } else if (runtime === "trial" || runtime === "competition" || runtime === "dev") {
+    modeLabel = "校园助手";
   } else if (runtime === "public") {
     modeLabel = "校园助手";
   }

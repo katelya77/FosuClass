@@ -1,3 +1,5 @@
+﻿@import "../../styles/xiaofu-tokens.wxss";
+
 .reminder-mask {
   position: fixed;
   inset: 0;
@@ -9,7 +11,7 @@
 
 .reminder-sheet {
   width: 100%;
-  max-height: 78vh;
+  max-height: 82vh;
   padding: 12rpx 20rpx calc(28rpx + env(safe-area-inset-bottom));
   box-sizing: border-box;
   border-radius: 30rpx 30rpx 0 0;
@@ -21,7 +23,7 @@
 .sheet-handle {
   width: 64rpx;
   height: 8rpx;
-  margin: 0 auto 22rpx;
+  margin: 0 auto 18rpx;
   border-radius: 8rpx;
   background: #b8b0a7;
 }
@@ -47,23 +49,28 @@
 
 .sheet-title {
   margin-top: 4rpx;
-  font-size: 38rpx;
+  font-size: 36rpx;
   font-weight: 700;
 }
 
 .close-button,
 .item-button,
 .primary-button,
-.secondary-button {
-  min-height: 88rpx;
+.secondary-button,
+.chip,
+.scope-card,
+.link-button,
+.grant-button {
+  min-height: 72rpx;
   margin: 0;
   line-height: 1.2;
 }
 
 .close-button {
-  width: 88rpx;
+  width: 72rpx;
+  min-height: 72rpx;
   padding: 0;
-  border-radius: 44rpx;
+  border-radius: 36rpx;
   background: transparent;
   color: #2a2622;
   font-size: 30rpx;
@@ -72,32 +79,178 @@
 .close-button::after,
 .item-button::after,
 .primary-button::after,
-.secondary-button::after {
+.secondary-button::after,
+.chip::after,
+.scope-card::after,
+.link-button::after,
+.grant-button::after {
   border: 0;
 }
 
 .disclosure {
-  margin-top: 20rpx;
-  padding: 18rpx 20rpx;
+  margin-top: 16rpx;
+  padding: 16rpx 18rpx;
   border-left: 6rpx solid #8a8178;
   background: #e8e3dc;
   color: #5d554e;
-  font-size: 24rpx;
-  line-height: 1.55;
+  font-size: 23rpx;
+  line-height: 1.5;
 }
 
 .reminder-list {
-  max-height: 58vh;
-  margin-top: 22rpx;
+  max-height: 60vh;
+  margin-top: 18rpx;
+}
+
+.create-section {
+  margin-bottom: 22rpx;
+}
+
+.section-label {
+  margin-bottom: 12rpx;
+  color: #514a44;
+  font-size: 24rpx;
+  font-weight: 650;
+}
+
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.chip {
+  min-width: 120rpx;
+  padding: 0 20rpx;
+  border-radius: 999rpx;
+  background: #fffdf9;
+  border: 1rpx solid rgba(42, 38, 34, 0.1);
+  color: #514a44;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.chip.active {
+  background: #c0392b;
+  border-color: #c0392b;
+  color: #fff;
+}
+
+.scope-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.scope-card {
+  width: 100%;
+  padding: 18rpx 20rpx;
+  border-radius: 16rpx;
+  background: #fffdf9;
+  border: 2rpx solid rgba(42, 38, 34, 0.08);
+  text-align: left;
+}
+
+.scope-card.active {
+  border-color: rgba(192, 57, 43, 0.45);
+  background: #fff8f7;
+}
+
+.scope-title {
+  color: #2a2622;
+  font-size: 28rpx;
+  font-weight: 650;
+}
+
+.scope-desc {
+  margin-top: 6rpx;
+  color: #8a8178;
+  font-size: 22rpx;
+}
+
+.schedule-hint {
+  padding: 18rpx 20rpx;
+  border-radius: 16rpx;
+  margin-bottom: 18rpx;
+}
+
+.schedule-hint.ready {
+  background: #eef6f1;
+  border: 1rpx solid rgba(61, 122, 90, 0.2);
+}
+
+.schedule-hint.warn {
+  background: #fff7ed;
+  border: 1rpx solid rgba(180, 83, 9, 0.2);
+}
+
+.hint-title {
+  font-size: 25rpx;
+  font-weight: 700;
+  color: #2a2622;
+}
+
+.hint-desc {
+  margin-top: 6rpx;
+  color: #6b635a;
+  font-size: 22rpx;
+  line-height: 1.45;
+}
+
+.link-button {
+  margin-top: 12rpx;
+  padding: 0;
+  min-height: 48rpx;
+  color: #8b3a32;
+  font-size: 24rpx;
+  font-weight: 650;
+  background: transparent;
+  text-align: left;
+}
+
+.preview-card {
+  margin-bottom: 18rpx;
+  padding: 18rpx 20rpx;
+  border-radius: 16rpx;
+  background: #fffdf9;
+  border: 1rpx solid rgba(42, 38, 34, 0.08);
+}
+
+.preview-kicker {
+  color: #8a8178;
+  font-size: 20rpx;
+  letter-spacing: 1rpx;
+}
+
+.preview-title {
+  margin-top: 6rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #2a2622;
+}
+
+.preview-detail,
+.preview-lead {
+  margin-top: 8rpx;
+  color: #6b635a;
+  font-size: 23rpx;
+  line-height: 1.45;
+}
+
+.create-error {
+  margin-bottom: 14rpx;
+  color: #b91c1c;
+  font-size: 23rpx;
+  line-height: 1.45;
 }
 
 .reminder-item {
   position: relative;
   display: flex;
-  margin-bottom: 16rpx;
+  margin-bottom: 14rpx;
   overflow: hidden;
   border: 2rpx solid #d8d1c9;
-  border-radius: 20rpx;
+  border-radius: 18rpx;
   background: #fffdf9;
 }
 
@@ -114,14 +267,14 @@
 .item-main {
   min-width: 0;
   flex: 1;
-  padding: 24rpx;
+  padding: 20rpx;
 }
 
 .item-title {
   min-width: 0;
   overflow: hidden;
   color: #2a2622;
-  font-size: 30rpx;
+  font-size: 28rpx;
   font-weight: 650;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -139,17 +292,17 @@
 }
 
 .item-schedule {
-  margin-top: 10rpx;
+  margin-top: 8rpx;
   color: #514a44;
-  font-size: 25rpx;
-  line-height: 1.5;
+  font-size: 24rpx;
+  line-height: 1.45;
 }
 
 .item-meta {
   gap: 10rpx;
-  margin-top: 10rpx;
+  margin-top: 8rpx;
   color: #8a8178;
-  font-size: 22rpx;
+  font-size: 21rpx;
 }
 
 .service-notice-row {
@@ -157,8 +310,8 @@
   align-items: center;
   justify-content: space-between;
   gap: 16rpx;
-  margin-top: 18rpx;
-  padding: 18rpx;
+  margin-top: 16rpx;
+  padding: 16rpx;
   border: 1rpx solid rgba(47, 111, 78, 0.18);
   border-radius: 14rpx;
   background: #f1f7f3;
@@ -171,12 +324,12 @@
 
 .service-notice-title {
   color: #2f6f4e;
-  font-size: 23rpx;
+  font-size: 22rpx;
   font-weight: 700;
 }
 
 .service-notice-detail {
-  margin-top: 6rpx;
+  margin-top: 4rpx;
   color: #66736b;
   font-size: 20rpx;
   line-height: 1.4;
@@ -184,20 +337,14 @@
 
 .grant-button {
   box-sizing: border-box;
-  min-width: 168rpx;
-  min-height: 72rpx;
-  margin: 0;
-  padding: 0 16rpx;
+  min-width: 160rpx;
+  min-height: 68rpx;
+  padding: 0 14rpx;
   border-radius: 12rpx;
   background: #2f6f4e;
   color: #ffffff;
-  font-size: 22rpx;
+  font-size: 21rpx;
   font-weight: 650;
-  line-height: 1.2;
-}
-
-.grant-button::after {
-  border: 0;
 }
 
 .service-notice-pending {
@@ -207,18 +354,18 @@
 }
 
 .item-actions {
-  gap: 12rpx;
-  margin-top: 20rpx;
+  gap: 10rpx;
+  margin-top: 16rpx;
 }
 
 .item-button {
-  min-width: 116rpx;
+  min-width: 108rpx;
   flex: 1;
-  padding: 0 16rpx;
+  padding: 0 12rpx;
   border-radius: 12rpx;
   background: #e8e3dc;
   color: #2a2622;
-  font-size: 24rpx;
+  font-size: 23rpx;
 }
 
 .item-button.danger {
@@ -231,6 +378,7 @@
   border-radius: 16rpx;
   font-size: 27rpx;
   font-weight: 650;
+  min-height: 88rpx;
 }
 
 .primary-button {
@@ -239,18 +387,18 @@
 }
 
 .secondary-button {
-  margin-top: 20rpx;
+  margin-top: 14rpx;
   background: #e8e3dc;
   color: #2a2622;
 }
 
 .create-more {
-  margin-top: 12rpx;
+  margin-top: 8rpx;
 }
 
 .empty,
 .loading {
-  padding: 72rpx 24rpx;
+  padding: 56rpx 20rpx;
   text-align: center;
 }
 
@@ -261,10 +409,10 @@
 
 .empty-copy,
 .loading {
-  margin-top: 12rpx;
+  margin-top: 10rpx;
   color: #746b63;
-  font-size: 25rpx;
-  line-height: 1.6;
+  font-size: 24rpx;
+  line-height: 1.55;
 }
 
 @keyframes reminder-sheet-in {
@@ -272,17 +420,19 @@
   to { transform: translateY(0); opacity: 1; }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .reminder-sheet { animation: none; }
+}
+
+
 @media (prefers-color-scheme: dark) {
   .reminder-sheet { background: #1f1d1b; color: #f4f0ea; }
-  .close-button, .item-title { color: #f4f0ea; }
-  .disclosure, .item-button, .secondary-button { background: #312d29; color: #d8d1c9; }
+  .close-button, .item-title, .scope-title, .preview-title, .hint-title { color: #f4f0ea; }
+  .disclosure, .item-button, .secondary-button, .scope-card, .chip, .preview-card { background: #312d29; color: #d8d1c9; }
+  .chip.active { background: #c0392b; color: #fff; }
   .reminder-item { border-color: #423c36; background: #272421; }
-  .item-schedule { color: #d8d1c9; }
+  .item-schedule, .scope-desc, .hint-desc, .preview-detail { color: #d8d1c9; }
   .service-notice-row { border-color: rgba(104, 169, 130, 0.28); background: #202820; }
   .service-notice-title { color: #79b58f; }
   .service-notice-detail { color: #aebbb2; }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .reminder-sheet { animation: none; }
 }

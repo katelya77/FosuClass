@@ -12,6 +12,7 @@ const runtimeModeService = require("../services/ai/runtimeModeService");
 const { defaultMemoryService } = require("../services/ai/conversation/conversationMemoryService");
 const { defaultUserPreferenceService } = require("../services/ai/conversation/userPreferenceService");
 const { defaultCourseReminderService, sanitizePatch: sanitizeReminderPatch } = require("../services/ai/reminders/courseReminderService");
+const { planCourseReminder, clampLead, sanitizeCourseTemplate } = require("../services/ai/reminders/courseReminderPlanner");
 const { defaultCourseReminderDispatchService } = require("../services/ai/reminders/courseReminderDispatchService");
 const { defaultWechatSubscriptionService } = require("../services/ai/reminders/wechatSubscriptionService");
 const scheduleAnalysisService = require("../services/ai/scheduleAnalysisService");
@@ -416,6 +417,111 @@ router.post("/agent/reminders/in-app-events/:eventId/acknowledge", scheduleLimit
       eventId: req.params.eventId,
     });
     return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+  } catch (error) {
+    return handleReminderError(res, error);
+  }
+});
+
+
+router.post("/agent/reminders/plans", scheduleLimiter, requireSessionGuard, validateJsonBody([
+  "leadMinutes",
+  "scope",
+  "idempotencyKey",
+  "currentScheduleSummary",
+  "todayDate",
+  "todayWeekday",
+  "currentTeachingWeek",
+  "clientTimestampMs",
+]), (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const principal = resolveReminderPrincipal(req);
+    if (!principal || !principal.authenticated) {
+      const error = new Error("Principal required");
+      error.code = "PRINCIPAL_REQUIRED";
+      error.statusCode = 401;
+      throw error;
+    }
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const leadMinutes = clampLead(body.leadMinutes, 20);
+    const scopeRaw = String(body.scope || "all_courses").trim();
+    const scope = ["all_courses", "room_change", "date_course"].includes(scopeRaw) ? scopeRaw : "all_courses";
+    const summarySource = body.currentScheduleSummary && typeof body.currentScheduleSummary === "object"
+      ? body.currentScheduleSummary
+      : {};
+    const courses = Array.isArray(summarySource.courses)
+      ? summarySource.courses.slice(0, 60).map(sanitizeCourseTemplate).filter(Boolean)
+      : [];
+    const currentScheduleSummary = {
+      enabled: summarySource.enabled === true && courses.length > 0,
+      fingerprint: String(summarySource.fingerprint || "").slice(0, 80),
+      courses,
+    };
+    const message = scope === "room_change"
+      ? "只有教室变化时才提醒我"
+      : `以后上课前${leadMinutes}分钟提醒我`;
+    const context = {
+      todayDate: String(body.todayDate || "").slice(0, 10),
+      todayWeekday: Math.max(1, Math.min(7, Number(body.todayWeekday || 1) || 1)),
+      currentTeachingWeek: Math.max(0, Number(body.currentTeachingWeek || 0) || 0),
+      clientTimestampMs: Number(body.clientTimestampMs || Date.now()) || Date.now(),
+      currentScheduleSummary,
+      userPreferences: { defaultReminderLeadMinutes: leadMinutes },
+    };
+    const plan = planCourseReminder(message, context);
+    if (!plan || plan.success !== true) {
+      const code = String(plan && plan.code || "REMINDER_PLAN_INVALID").slice(0, 80);
+      const statusCode = code === "SCHEDULE_REQUIRED" ? 409 : 400;
+      return res.status(statusCode).json({
+        success: false,
+        code,
+        needContext: plan && plan.needContext === true,
+        actionUrl: plan && plan.actionUrl || "",
+        message: code === "SCHEDULE_REQUIRED"
+          ? "需要先导入个人课表，才能创建上课提醒。"
+          : (code === "NO_MATCHING_COURSE"
+            ? "暂时找不到可提醒的下一节课，请检查课表后重试。"
+            : "无法生成提醒计划，请调整设置后重试。"),
+        serverTime: new Date().toISOString(),
+      });
+    }
+    plan.leadMinutes = leadMinutes;
+    plan.scope = scope;
+    plan.eventDriven = scope === "room_change";
+    plan.recurrence = scope === "room_change" ? "event" : (scope === "date_course" ? "once" : "weekly");
+    if (scope === "room_change") {
+      plan.nextOccurrence = null;
+      plan.nextTriggerAt = "";
+    } else if (plan.nextOccurrence && plan.nextOccurrence.startsAt) {
+      plan.nextOccurrence.triggerAt = new Date(
+        Date.parse(plan.nextOccurrence.startsAt) - leadMinutes * 60000
+      ).toISOString();
+      plan.nextTriggerAt = plan.nextOccurrence.triggerAt;
+    }
+    const confirmation = defaultCourseReminderService.createConfirmation({
+      principal,
+      operation: "create",
+      payload: plan,
+      idempotencyKey: body.idempotencyKey,
+    });
+    return res.json({
+      success: true,
+      plan: {
+        operation: plan.operation,
+        scope: plan.scope,
+        leadMinutes: plan.leadMinutes,
+        eventDriven: plan.eventDriven === true,
+        recurrence: plan.recurrence,
+        timezone: plan.timezone || "Asia/Shanghai",
+        nextOccurrence: plan.nextOccurrence || null,
+        nextTriggerAt: plan.nextTriggerAt || "",
+        requiresConfirmation: true,
+      },
+      confirmationProof: confirmation.token,
+      expiresAt: confirmation.expiresAt,
+      disclosure: "确认后才会创建提醒；可选择微信服务通知授权，未授权时保留应用内提醒。",
+      serverTime: new Date().toISOString(),
+    });
   } catch (error) {
     return handleReminderError(res, error);
   }

@@ -1,16 +1,73 @@
-<view class="reminder-mask" wx:if="{{visible}}" bindtap="close">
-  <view class="reminder-sheet" catchtap="stopPropagation" role="dialog" aria-label="课程提醒管理">
+﻿<view class="reminder-mask" wx:if="{{visible}}" bindtap="close">
+  <view class="reminder-sheet" catchtap="stopPropagation" role="dialog" aria-label="智能课程提醒">
     <view class="sheet-handle"></view>
     <view class="sheet-head">
       <view>
-        <view class="sheet-kicker">COURSE REMINDERS</view>
-        <view class="sheet-title">课程提醒</view>
+        <view class="sheet-kicker">SMART REMINDERS</view>
+        <view class="sheet-title">{{mode === 'create' ? '配置课程提醒' : '智能课程提醒'}}</view>
       </view>
       <button class="close-button" bindtap="close" aria-label="关闭提醒面板">✕</button>
     </view>
+
     <view class="disclosure">{{disclosure}}</view>
 
-    <scroll-view class="reminder-list" scroll-y enhanced show-scrollbar="{{false}}">
+    <!-- Create wizard -->
+    <scroll-view class="reminder-list" scroll-y enhanced show-scrollbar="{{false}}" wx:if="{{mode === 'create'}}">
+      <view class="create-section">
+        <view class="section-label">提前提醒</view>
+        <view class="chip-row">
+          <button
+            wx:for="{{leadOptions}}"
+            wx:key="*this"
+            class="chip {{leadMinutes === item ? 'active' : ''}}"
+            data-lead="{{item}}"
+            bindtap="onSelectLead"
+          >{{item}} 分钟</button>
+        </view>
+      </view>
+
+      <view class="create-section">
+        <view class="section-label">提醒范围</view>
+        <view class="scope-list">
+          <button
+            wx:for="{{scopeOptions}}"
+            wx:key="id"
+            class="scope-card {{scope === item.id ? 'active' : ''}}"
+            data-scope="{{item.id}}"
+            bindtap="onSelectScope"
+          >
+            <view class="scope-title">{{item.label}}</view>
+            <view class="scope-desc">{{item.desc}}</view>
+          </button>
+        </view>
+      </view>
+
+      <view class="create-section schedule-hint {{scheduleReady ? 'ready' : 'warn'}}">
+        <view class="hint-title">{{scheduleReady ? '已读取本机课表' : '尚未导入个人课表'}}</view>
+        <view class="hint-desc">
+          {{scheduleReady
+            ? '仅使用课程名、教室、节次等最小字段创建提醒。'
+            : '导入后才能按真实上课时间提醒；教室变化提醒可先配置。'}}
+        </view>
+        <button class="link-button" wx:if="{{!scheduleReady}}" bindtap="openPersonalSync">去导入课表</button>
+      </view>
+
+      <view class="preview-card" wx:if="{{preview}}">
+        <view class="preview-kicker">预览</view>
+        <view class="preview-title">{{preview.title}}</view>
+        <view class="preview-detail">{{preview.detail}}</view>
+        <view class="preview-lead">{{preview.leadLabel}}</view>
+      </view>
+
+      <view class="create-error" wx:if="{{createError}}">{{createError}}</view>
+
+      <button class="secondary-button" bindtap="onPreviewPlan" loading="{{creating}}" disabled="{{creating}}">预览下次提醒</button>
+      <button class="primary-button" bindtap="onConfirmCreate" loading="{{creating}}" disabled="{{creating}}">确认创建</button>
+      <button class="secondary-button" bindtap="backToList" disabled="{{creating}}">返回列表</button>
+    </scroll-view>
+
+    <!-- List mode -->
+    <scroll-view class="reminder-list" scroll-y enhanced show-scrollbar="{{false}}" wx:else>
       <view class="loading" wx:if="{{loading}}">正在读取提醒…</view>
       <view class="empty" wx:elif="{{errorText}}">
         <view class="empty-title">暂时无法读取</view>
@@ -19,8 +76,8 @@
       </view>
       <view class="empty" wx:elif="{{!items.length}}">
         <view class="empty-title">还没有课程提醒</view>
-        <view class="empty-copy">说“以后上课前20分钟提醒我”，小佛会先生成确认计划。</view>
-        <button class="primary-button" bindtap="create">创建提醒</button>
+        <view class="empty-copy">设置提前时间与范围，一键创建智能上课提醒。</view>
+        <button class="primary-button" bindtap="create">配置提醒</button>
       </view>
       <view wx:else>
         <view class="reminder-item" wx:for="{{items}}" wx:key="id">
@@ -59,7 +116,7 @@
             </view>
           </view>
         </view>
-        <button class="primary-button create-more" bindtap="create">再创建一个提醒</button>
+        <button class="primary-button create-more" bindtap="create">再配置一个提醒</button>
       </view>
     </scroll-view>
   </view>
