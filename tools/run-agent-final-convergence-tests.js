@@ -15,6 +15,10 @@ const tests = [
   "tools/test-agent-e2e-matrix.js",
   "tools/test-agent-evaluation-120.js",
   "tools/test-agent-client-error-mapper.js",
+  "tools/test-safe-markdown-renderer.js",
+  "tools/test-course-reminder-agent-integration.js",
+  "tools/test-course-action-agent.js",
+  "tools/test-xiaofu-proactive-workspace.js",
 ];
 
 let failed = 0;

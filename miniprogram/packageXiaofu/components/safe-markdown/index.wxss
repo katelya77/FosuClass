@@ -1,0 +1,211 @@
+.md-root {
+  width: 100%;
+  min-width: 0;
+  color: #2a2622;
+  font-size: 29rpx;
+  line-height: 1.72;
+  overflow-wrap: anywhere;
+}
+
+.md-block {
+  margin: 0 0 18rpx;
+}
+
+.md-block:last-child {
+  margin-bottom: 0;
+}
+
+.md-heading {
+  color: #211e1b;
+  font-weight: 700;
+  letter-spacing: -0.012em;
+  line-height: 1.35;
+}
+
+.md-h1 { margin-top: 10rpx; font-size: 38rpx; }
+.md-h2 { margin-top: 8rpx; font-size: 34rpx; }
+.md-h3 { font-size: 31rpx; }
+.md-h4,
+.md-h5,
+.md-h6 { font-size: 29rpx; }
+
+.md-paragraph {
+  white-space: pre-wrap;
+}
+
+.md-inline.is-bold { font-weight: 700; }
+.md-inline.is-italic { font-style: italic; }
+.md-inline.is-deleted { color: #8a8178; text-decoration: line-through; }
+.md-inline.is-code {
+  margin: 0 4rpx;
+  padding: 2rpx 8rpx;
+  border-radius: 7rpx;
+  color: #8b2925;
+  background: #f3f0eb;
+  font-family: Menlo, Monaco, Consolas, monospace;
+  font-size: 0.9em;
+}
+
+.md-link {
+  display: inline;
+  padding: 4rpx 2rpx;
+  color: #9f302a;
+  text-decoration: underline;
+  text-underline-offset: 5rpx;
+}
+
+.md-quote {
+  padding: 10rpx 0 10rpx 20rpx;
+  border-left: 5rpx solid #c62828;
+  color: #5f5750;
+}
+
+.md-divider {
+  height: 1rpx;
+  margin: 26rpx 0;
+  background: rgba(42, 38, 34, 0.14);
+}
+
+.md-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.md-list-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+}
+
+.md-list-marker {
+  width: 32rpx;
+  flex: 0 0 32rpx;
+  color: #8b2925;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.md-list-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.md-code-card {
+  overflow: hidden;
+  border: 1rpx solid #343a40;
+  border-radius: 17rpx;
+  background: #1f2328;
+}
+
+.md-code-head {
+  min-height: 70rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10rpx 0 22rpx;
+  border-bottom: 1rpx solid rgba(255, 255, 255, 0.1);
+}
+
+.md-code-language {
+  color: #aeb6bf;
+  font-family: Menlo, Monaco, Consolas, monospace;
+  font-size: 21rpx;
+  text-transform: lowercase;
+}
+
+.md-copy-button {
+  min-width: 88rpx;
+  min-height: 64rpx;
+  margin: 0;
+  padding: 0 18rpx;
+  color: #eef1f4;
+  font-size: 22rpx;
+  line-height: 64rpx;
+  background: transparent;
+}
+
+.md-copy-button::after { border: none; }
+
+.md-code-scroll {
+  width: 100%;
+  padding: 22rpx;
+  box-sizing: border-box;
+  white-space: pre;
+}
+
+.md-code-text {
+  display: inline-block;
+  min-width: 100%;
+  color: #eef1f4;
+  font-family: Menlo, Monaco, Consolas, monospace;
+  font-size: 24rpx;
+  line-height: 1.65;
+  white-space: pre;
+}
+
+.md-code-note,
+.md-truncated-note {
+  padding: 0 20rpx 16rpx;
+  color: #8a8178;
+  font-size: 21rpx;
+}
+
+.md-table-scroll {
+  width: 100%;
+  border: 1rpx solid rgba(42, 38, 34, 0.12);
+  border-radius: 15rpx;
+  background: #ffffff;
+}
+
+.md-table {
+  min-width: 720rpx;
+}
+
+.md-table-row {
+  display: flex;
+  border-bottom: 1rpx solid rgba(42, 38, 34, 0.09);
+}
+
+.md-table-row:last-child { border-bottom: none; }
+.md-table-head { background: #f3f0eb; font-weight: 650; }
+
+.md-table-cell {
+  min-width: 190rpx;
+  flex: 1;
+  padding: 14rpx 16rpx;
+  border-right: 1rpx solid rgba(42, 38, 34, 0.08);
+  box-sizing: border-box;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.md-table-cell:last-child { border-right: none; }
+.align-center { text-align: center; }
+.align-right { text-align: right; }
+
+.md-expand {
+  min-height: 80rpx;
+  margin: 8rpx 0 0;
+  padding: 0 12rpx;
+  color: #8b2925;
+  font-size: 24rpx;
+  line-height: 80rpx;
+  background: #f3f0eb;
+  border-radius: 14rpx;
+}
+
+.md-expand::after { border: none; }
+
+@media (prefers-color-scheme: dark) {
+  .md-root,
+  .md-heading { color: #f3f0eb; }
+  .md-inline.is-deleted,
+  .md-quote { color: #b8aea5; }
+  .md-inline.is-code,
+  .md-expand { color: #ffb4ad; background: #302a27; }
+  .md-table-scroll { border-color: rgba(255, 255, 255, 0.13); background: #211e1b; }
+  .md-table-head { background: #302a27; }
+  .md-table-row,
+  .md-table-cell { border-color: rgba(255, 255, 255, 0.09); }
+}

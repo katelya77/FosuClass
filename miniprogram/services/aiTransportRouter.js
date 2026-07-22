@@ -193,7 +193,7 @@ async function callOracleViaRuns(safeMessage, context, callbacks = {}, metadata 
     });
   }
   if (callbacks.onStatus) {
-    callbacks.onStatus({ type: "run.accepted", text: "正在理解你的问题" });
+    callbacks.onStatus({ type: "run.accepted", text: "任务已受理，等待服务端状态" });
   }
   const collectedEvents = [];
   const done = await agentRunClient.pollRunUntilDone(created.runId, created.pollToken, {
@@ -228,7 +228,7 @@ async function callOracleViaRuns(safeMessage, context, callbacks = {}, metadata 
   }
   // Fallback to legacy chat if run timed out without result.
   if (done.timeout) {
-    if (callbacks.onStatus) callbacks.onStatus({ type: "understanding", text: "正在理解你的问题" });
+    if (callbacks.onStatus) callbacks.onStatus({ type: "run.status_unavailable", text: "实时状态中断，正在请求最终结果" });
     return request.post("/api/ai/agent/chat", {
       message: safeMessage,
       context,
@@ -253,7 +253,7 @@ async function callOracleViaRuns(safeMessage, context, callbacks = {}, metadata 
 async function callOracle(oracleChat, safeMessage, context, callbacks = {}, metadata = {}) {
   // Never guess loading from client intent. Prefer real run events.
   if (callbacks.onStatus) {
-    callbacks.onStatus({ type: "understanding", text: "正在理解你的问题" });
+    callbacks.onStatus({ type: "request.submitted", text: "正在理解你的问题" });
   }
   if (oracleChat) return oracleChat(safeMessage, context, metadata);
   try {
@@ -261,7 +261,7 @@ async function callOracle(oracleChat, safeMessage, context, callbacks = {}, meta
   } catch (error) {
     // Compatibility path if run API unavailable.
     if (callbacks.onStatus) {
-      callbacks.onStatus({ type: "understanding", text: "正在理解你的问题" });
+      callbacks.onStatus({ type: "run.status_unavailable", text: "实时状态不可用，正在请求最终结果" });
     }
     return request.post("/api/ai/agent/chat", {
       message: safeMessage,
@@ -296,7 +296,7 @@ async function serverFirstChat(input = {}) {
   const metadata = normalizeRequestMetadata(input, context);
 
   if (callbacks.onStatus) {
-    callbacks.onStatus({ type: "understanding", text: "小佛助手正在理解" });
+    callbacks.onStatus({ type: "request.submitted", text: "正在理解你的问题" });
   }
 
   // Credentials stop before every network/provider boundary. The original

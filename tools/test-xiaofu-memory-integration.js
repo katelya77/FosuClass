@@ -7,6 +7,7 @@ const root = path.resolve(__dirname, "..");
 const memoryClient = fs.readFileSync(path.join(root, "miniprogram/services/agentMemoryClient.js"), "utf8");
 const assistant = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/pages/ai-assistant/ai-assistant.js"), "utf8");
 const memorySheet = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/components/xiaofu-memory-sheet/index.wxml"), "utf8");
+const memorySheetJs = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/components/xiaofu-memory-sheet/index.js"), "utf8");
 const memoryCss = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/components/xiaofu-memory-sheet/index.wxss"), "utf8");
 const conversationSheet = fs.readFileSync(path.join(root, "miniprogram/packageXiaofu/components/xiaofu-conversation-sheet/index.wxml"), "utf8");
 const transport = fs.readFileSync(path.join(root, "miniprogram/services/aiTransportRouter.js"), "utf8");
@@ -24,6 +25,8 @@ function run() {
   mustInclude(memoryClient, "listCloudConversations", "memory client");
   mustInclude(memoryClient, "updateMemoryPolicy", "memory client");
   mustInclude(memoryClient, "clearCloudMemory", "memory client");
+  mustInclude(memoryClient, "listCloudPreferences", "memory client");
+  mustInclude(memoryClient, "deleteCloudPreference", "memory client");
   mustInclude(memoryClient, "mergeLocalAndCloudConversations", "memory client");
   mustInclude(memoryClient, "/api/ai/agent/memory", "memory client");
 
@@ -32,9 +35,13 @@ function run() {
   mustInclude(assistant, "clearCloudMemory", "assistant");
   mustInclude(assistant, "refreshConversationList", "assistant");
   mustInclude(assistant, "onClearLocalMemory", "assistant");
+  mustInclude(assistant, "memoryPreferencePatch", "assistant preference patch");
+  mustInclude(assistant, "loadMemoryPreferences", "assistant preference panel");
   mustNotInclude(assistant, "applyMemoryMode(mode);\n    wx.showToast", "assistant no local-only success without server for session");
 
   mustInclude(memorySheet, "memory-mode-check", "memory sheet");
+  mustInclude(memorySheet, "memory-preference-list", "memory sheet preference list");
+  mustInclude(memorySheetJs, "deletepreference", "memory sheet preference delete event");
   mustInclude(memorySheet, "清空本机消息", "memory sheet");
   assert.ok(
     memorySheet.includes("清除服务端会话状态") || memorySheet.includes("清除当前会话状态"),
@@ -59,6 +66,7 @@ function run() {
   mustNotInclude(transport, 'text: "正在查询课表"', "transport hardcoded schedule loading");
 
   mustInclude(aiRoutes, "resolveMemoryRuntimeMode", "routes");
+  mustInclude(aiRoutes, '"/agent/memory/preferences"', "routes preference endpoint");
   mustInclude(aiRoutes, "/agent/readiness", "routes");
   mustInclude(aiRoutes, "/agent/runs", "routes");
   mustInclude(aiRoutes, "resolveRequestRuntimeDecision", "routes");

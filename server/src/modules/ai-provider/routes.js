@@ -8,8 +8,23 @@ const { safeLog } = require("../../utils/safeLogger");
 const agentService = require("../../services/ai/agentService");
 const providerReadinessService = require("../../services/ai/providerReadinessService");
 const agentReadinessService = require("../../services/ai/agentReadinessService");
+const providerConfigService = require("../../services/ai/providerConfigService");
+const cozeProvider = require("../../services/ai/providers/cozeProvider");
 
 const router = express.Router();
+
+function isAllowedCozeBaseUrl(value) {
+  try {
+    const parsed = new URL(String(value || ""));
+    if (process.env.NODE_ENV === "test" && parsed.protocol === "http:"
+      && ["127.0.0.1", "localhost"].includes(parsed.hostname)) return true;
+    return parsed.protocol === "https:"
+      && ["api.coze.cn", "api.coze.com"].includes(parsed.hostname)
+      && !parsed.username && !parsed.password;
+  } catch (error) {
+    return false;
+  }
+}
 
 router.get("/ai-provider/readiness-matrix", adminAuth.verifyAdminAccess, (req, res) => {
   res.setHeader("Cache-Control", "no-store");
@@ -17,6 +32,51 @@ router.get("/ai-provider/readiness-matrix", adminAuth.verifyAdminAccess, (req, r
     success: true,
     data: providerReadinessService.getAdminMatrix(),
   });
+});
+
+router.post("/ai-provider/test-coze", adminAuth.verifyAdminAccess, async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  const environment = providerConfigService.normalizeEnvironment(req.body && req.body.environment || "trial");
+  if (environment === "public") {
+    return res.status(400).json({
+      success: false,
+      code: "COZE_TEST_PUBLIC_FORBIDDEN",
+      message: "正式版禁止调用外部 Provider；请在 trial/dev 配置中测试。",
+    });
+  }
+  try {
+    const runtime = providerConfigService.getRuntimeConfigForEnvironment(environment);
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim().slice(0, 4096) : "";
+    const botId = typeof body.botId === "string" ? body.botId.trim().slice(0, 120) : "";
+    const requestedBaseUrl = typeof body.baseUrl === "string" && body.baseUrl.trim()
+      ? body.baseUrl.trim().replace(/\/+$/, "")
+      : String(runtime.COZE_API_BASE_URL || "https://api.coze.cn").replace(/\/+$/, "");
+    if (!isAllowedCozeBaseUrl(requestedBaseUrl)) {
+      return res.status(400).json({
+        success: false,
+        code: "COZE_BASE_URL_NOT_ALLOWED",
+        message: "仅允许 Coze 官方 API 域名。",
+      });
+    }
+    const diagnostic = await cozeProvider.testConnection({
+      principal: { principalKey: "admin-coze-diagnostic", runtimeMode: environment, deployEnv: environment },
+      providerRuntimeConfig: Object.assign({}, runtime, {
+        COZE_ENABLED: "true",
+        COZE_API_BASE_URL: requestedBaseUrl,
+        COZE_API_KEY: apiKey || runtime.COZE_API_KEY || "",
+        COZE_BOT_ID: botId || runtime.COZE_BOT_ID || runtime.COZE_AGENT_ID || "",
+        COZE_CHAT_ENDPOINT: "/v3/chat",
+      }),
+    });
+    return res.json({ success: true, data: diagnostic });
+  } catch (error) {
+    safeLog("coze-connection-diagnostic-failed", { code: String(error && error.code || "COZE_CONNECTION_FAILED").slice(0, 80) });
+    return res.status(200).json({
+      success: true,
+      data: Object.assign({ success: false }, cozeProvider.classifyConnectionError(error)),
+    });
+  }
 });
 
 router.post("/ai-provider/diagnose-enhanced", adminAuth.verifyAdminAccess, async (req, res) => {

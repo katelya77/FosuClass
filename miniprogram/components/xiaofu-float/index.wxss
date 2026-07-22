@@ -16,18 +16,6 @@
   opacity: 0.62;
 }
 
-.xiaofu-float-glow {
-  position: absolute;
-  left: 8%;
-  right: 8%;
-  top: 8%;
-  bottom: 8%;
-  border-radius: 999rpx;
-  background: rgba(198, 40, 40, 0.18);
-  box-shadow: 0 0 26rpx rgba(198, 40, 40, 0.24);
-  animation: xiaofuFloatBreath 2.8s ease-in-out infinite;
-}
-
 .xiaofu-float-ball {
   position: relative;
   z-index: 1;
@@ -36,10 +24,10 @@
   justify-content: center;
   width: 100%;
   height: 100%;
-  border: 1rpx solid rgba(255, 255, 255, 0.9);
+  border: 1rpx solid #d8d1c9;
   border-radius: 999rpx;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 14rpx 36rpx rgba(31, 41, 55, 0.18), 0 4rpx 12rpx rgba(198, 40, 40, 0.12);
+  background: #ffffff;
+  box-shadow: 0 10rpx 28rpx rgba(42, 38, 34, 0.18);
 }
 
 .xiaofu-float-logo {
@@ -60,25 +48,73 @@
   text-align: center;
 }
 
-.xiaofu-float-online {
+.xiaofu-float-hint {
   position: absolute;
-  right: 5rpx;
-  bottom: 7rpx;
-  width: 15rpx;
-  height: 15rpx;
-  border: 3rpx solid #ffffff;
-  border-radius: 50%;
-  background: #2f9e57;
-  box-shadow: 0 0 0 4rpx rgba(47, 158, 87, 0.12);
+  box-sizing: border-box;
+  top: 1px;
+  z-index: 0;
+  width: 196px;
+  min-height: 56px;
+  padding: 9px 13px;
+  border: 1px solid #d8d1c9;
+  border-radius: 15px;
+  background: #fffdf9;
+  box-shadow: 0 8px 22px rgba(42, 38, 34, 0.12);
+  pointer-events: none;
 }
 
-@keyframes xiaofuFloatBreath {
-  0%, 100% {
-    opacity: 0.55;
-    transform: scale(0.92);
+.xiaofu-float-hint.left {
+  right: 64px;
+  text-align: right;
+}
+
+.xiaofu-float-hint.right {
+  left: 64px;
+  text-align: left;
+}
+
+.xiaofu-float-hint-eyebrow {
+  overflow: hidden;
+  color: #9a5b2e;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.xiaofu-float-hint-text {
+  display: -webkit-box;
+  margin-top: 3px;
+  overflow: hidden;
+  color: #2a2622;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.35;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+@media (prefers-color-scheme: dark) {
+  .xiaofu-float-ball {
+    border-color: #4a433d;
+    background: #24211e;
   }
-  50% {
-    opacity: 0.92;
-    transform: scale(1.08);
+
+  .xiaofu-float-hint {
+    border-color: #4a433d;
+    background: #24211e;
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.26);
+  }
+
+  .xiaofu-float-hint-text {
+    color: #f4f0ea;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .xiaofu-float {
+    transition: none;
   }
 }

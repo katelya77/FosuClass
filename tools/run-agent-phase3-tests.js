@@ -10,6 +10,19 @@ const tests = [
   "tools/test-coze-provider-v3.js",
   "tools/test-xiaofu-runtime-ui.js",
   "tools/test-xiaofu-memory-integration.js",
+  "tools/test-course-reminders.js",
+  "tools/test-course-reminder-authorization-credits.js",
+  "tools/test-course-reminder-delivery-fallback.js",
+  "tools/test-wechat-reminder-subscription.js",
+  "tools/test-course-reminder-agent-integration.js",
+  "tools/test-course-reminder-api.js",
+  "tools/test-course-reminder-client.js",
+  "tools/test-course-reminder-ui.js",
+  "tools/test-course-action-agent.js",
+  "tools/test-schedule-change-tracker.js",
+  "tools/test-xiaofu-proactive-workspace.js",
+  "tools/test-xiaofu-full-width-reminder-entry.js",
+  "tools/test-coze-connection-config-ux.js",
 ];
 
 let failed = 0;

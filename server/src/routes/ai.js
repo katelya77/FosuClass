@@ -6,10 +6,15 @@ const { safeLog } = require("../utils/safeLogger");
 const agentService = require("../services/ai/agentService");
 const campusMapService = require("../services/ai/campusMapService");
 const weatherService = require("../services/ai/weatherService");
-const { buildSafeLogPayload } = require("../services/ai/safetyGuard");
+const { buildSafeLogPayload, sanitizeAgentContext } = require("../services/ai/safetyGuard");
 const capabilityManifestService = require("../services/ai/capabilityManifestService");
 const runtimeModeService = require("../services/ai/runtimeModeService");
 const { defaultMemoryService } = require("../services/ai/conversation/conversationMemoryService");
+const { defaultUserPreferenceService } = require("../services/ai/conversation/userPreferenceService");
+const { defaultCourseReminderService, sanitizePatch: sanitizeReminderPatch } = require("../services/ai/reminders/courseReminderService");
+const { defaultCourseReminderDispatchService } = require("../services/ai/reminders/courseReminderDispatchService");
+const { defaultWechatSubscriptionService } = require("../services/ai/reminders/wechatSubscriptionService");
+const scheduleAnalysisService = require("../services/ai/scheduleAnalysisService");
 const agentReadinessService = require("../services/ai/agentReadinessService");
 const agentRunEventService = require("../services/ai/agentRunEventService");
 const agentProtocol = require("../services/ai/agentProtocol");
@@ -48,6 +53,34 @@ function handleMemoryError(res, error) {
     code: error && error.code || "MEMORY_ERROR",
     message: error && error.message || "记忆操作失败",
     serverTime: new Date().toISOString(),
+  });
+}
+
+function handleReminderError(res, error) {
+  const status = Math.max(400, Math.min(503, Number(error && error.statusCode) || 400));
+  const code = String(error && error.code || "REMINDER_ERROR").slice(0, 80);
+  const messages = {
+    PRINCIPAL_REQUIRED: "需要有效小程序会话才能管理提醒。",
+    REMINDER_NOT_FOUND: "没有找到这个提醒，可能已经删除。",
+    REMINDER_CONFIRMATION_REQUIRED: "请先确认这次提醒操作。",
+    REMINDER_CONFIRMATION_INVALID: "确认已失效，请重新操作。",
+    REMINDER_CONFIRMATION_MISMATCH: "提醒内容已变化，请重新确认。",
+    REMINDER_SECRET_UNAVAILABLE: "提醒服务尚未配置，请稍后再试。",
+    IDEMPOTENCY_KEY_REQUIRED: "操作标识无效，请重新操作。",
+  };
+  safeLog("course-reminder-operation-failed", { code });
+  return res.status(status).json({
+    success: false,
+    code,
+    message: messages[code] || "提醒操作失败，请稍后重试。",
+    serverTime: new Date().toISOString(),
+  });
+}
+
+function resolveReminderPrincipal(req) {
+  return defaultMemoryService.resolvePrincipal({
+    serverSession: req.fosuSession,
+    runtimeMode: resolveMemoryRuntimeMode(req),
   });
 }
 
@@ -276,6 +309,42 @@ router.delete("/agent/memory", scheduleLimiter, requireSessionGuard, (req, res) 
       serverSession: req.fosuSession,
       runtimeMode: resolveMemoryRuntimeMode(req),
     });
+    const principal = defaultMemoryService.resolvePrincipal({
+      serverSession: req.fosuSession,
+      runtimeMode: resolveMemoryRuntimeMode(req),
+    });
+    const preferences = defaultUserPreferenceService.clear({ principal });
+    return res.json(Object.assign({ serverTime: new Date().toISOString(), preferences }, payload));
+  } catch (error) {
+    return handleMemoryError(res, error);
+  }
+});
+
+router.get("/agent/memory/preferences", scheduleLimiter, requireSessionGuard, (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const principal = defaultMemoryService.resolvePrincipal({
+      serverSession: req.fosuSession,
+      runtimeMode: resolveMemoryRuntimeMode(req),
+    });
+    const payload = defaultUserPreferenceService.list({ principal });
+    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+  } catch (error) {
+    return handleMemoryError(res, error);
+  }
+});
+
+router.delete("/agent/memory/preferences/:key", scheduleLimiter, requireSessionGuard, (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const principal = defaultMemoryService.resolvePrincipal({
+      serverSession: req.fosuSession,
+      runtimeMode: resolveMemoryRuntimeMode(req),
+    });
+    const payload = defaultUserPreferenceService.remove({
+      principal,
+      key: req.params.key,
+    });
     return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
   } catch (error) {
     return handleMemoryError(res, error);
@@ -297,6 +366,229 @@ router.post("/agent/memory-policy", scheduleLimiter, requireSessionGuard, valida
     return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
   } catch (error) {
     return handleMemoryError(res, error);
+  }
+});
+
+router.get("/agent/reminders/capability", scheduleLimiter, (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  return res.json(Object.assign({
+    success: true,
+    timezone: "Asia/Shanghai",
+    authenticated: Boolean(req.fosuSession && req.fosuSession.openidHash),
+  }, defaultWechatSubscriptionService.getCapability(), {
+    disclosure: "微信订阅消息需要每次按平台规则由用户点击授权；未授权时仅保留应用内提醒。",
+    serverTime: new Date().toISOString(),
+  }));
+});
+
+router.get("/agent/reminders", scheduleLimiter, requireSessionGuard, (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const payload = defaultCourseReminderService.list({ principal: resolveReminderPrincipal(req) });
+    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+  } catch (error) {
+    return handleReminderError(res, error);
+  }
+});
+
+router.get("/agent/reminders/in-app-events", scheduleLimiter, requireSessionGuard, (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const payload = defaultCourseReminderService.listInAppEvents({
+      principal: resolveReminderPrincipal(req),
+      limit: req.query && req.query.limit,
+    });
+    return res.json(Object.assign({
+      deliveryMode: "app_only",
+      disclosure: "这是应用内提醒收件箱；只有打开佛课小表时才能看到，不等同于微信后台推送。",
+      serverTime: new Date().toISOString(),
+    }, payload));
+  } catch (error) {
+    return handleReminderError(res, error);
+  }
+});
+
+router.post("/agent/reminders/in-app-events/:eventId/acknowledge", scheduleLimiter, requireSessionGuard, validateJsonBody([]), (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const payload = defaultCourseReminderService.acknowledgeInAppEvent({
+      principal: resolveReminderPrincipal(req),
+      eventId: req.params.eventId,
+    });
+    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+  } catch (error) {
+    return handleReminderError(res, error);
+  }
+});
+
+router.post("/agent/reminders", scheduleLimiter, requireSessionGuard, validateJsonBody(["confirmationProof", "idempotencyKey", "subscriptionStatus"]), (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const payload = defaultCourseReminderService.create({
+      principal: resolveReminderPrincipal(req),
+      confirmationToken: req.body && req.body.confirmationProof,
+      idempotencyKey: req.body && req.body.idempotencyKey,
+      subscriptionStatus: req.body && req.body.subscriptionStatus,
+    });
+    return res.json(Object.assign({
+      serverTime: new Date().toISOString(),
+      deliveryDisclosure: payload.reminder && payload.reminder.channel === "wechat_subscription"
+        ? "已记录本次微信订阅授权；微信仍可能按平台规则限制送达。"
+        : "未获得本次微信订阅授权，已降级为应用内提醒。",
+    }, payload));
+  } catch (error) {
+    return handleReminderError(res, error);
+  }
+});
+
+router.post("/agent/reminders/:reminderId/subscription-authorizations", scheduleLimiter, requireSessionGuard, validateJsonBody([
+  "subscriptionStatus",
+  "idempotencyKey",
+]), (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const payload = defaultCourseReminderService.grantSubscriptionAuthorization({
+      principal: resolveReminderPrincipal(req),
+      reminderId: req.params.reminderId,
+      subscriptionStatus: req.body && req.body.subscriptionStatus,
+      idempotencyKey: req.body && req.body.idempotencyKey,
+    });
+    return res.json(Object.assign({
+      serverTime: new Date().toISOString(),
+      deliveryDisclosure: "本次接受增加 1 次微信服务通知额度；额度按微信一次性订阅规则逐次消耗。",
+    }, payload));
+  } catch (error) {
+    return handleReminderError(res, error);
+  }
+});
+
+router.post("/agent/reminders/schedule-change-events", scheduleLimiter, requireSessionGuard, validateJsonBody([
+  "currentScheduleSummary",
+  "baselineScheduleSummary",
+  "todayDate",
+  "todayWeekday",
+  "currentTeachingWeek",
+  "idempotencyKey",
+]), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const sanitized = sanitizeAgentContext({
+      currentScheduleSummary: req.body && req.body.currentScheduleSummary,
+      scheduleChangeBaseline: req.body && req.body.baselineScheduleSummary,
+      todayDate: req.body && req.body.todayDate,
+      todayWeekday: req.body && req.body.todayWeekday,
+      currentTeachingWeek: req.body && req.body.currentTeachingWeek,
+    });
+    const analysis = scheduleAnalysisService.detectScheduleChanges({
+      currentScheduleSummary: sanitized.currentScheduleSummary,
+      baselineScheduleSummary: sanitized.scheduleChangeBaseline,
+    });
+    const roomChanges = (Array.isArray(analysis.changes) ? analysis.changes : [])
+      .filter((change) => change && change.type === "modified"
+        && Array.isArray(change.fields) && change.fields.includes("classroom"));
+    const principal = resolveReminderPrincipal(req);
+    const baseKey = String(req.body && req.body.idempotencyKey || "").trim().slice(0, 120);
+    if (!baseKey) {
+      const error = new Error("Idempotency key required");
+      error.code = "IDEMPOTENCY_KEY_REQUIRED";
+      error.statusCode = 400;
+      throw error;
+    }
+    let queued = 0;
+    let duplicate = roomChanges.length > 0;
+    roomChanges.forEach((change, index) => {
+      const result = defaultCourseReminderService.queueScheduleChangeEvent({
+        principal,
+        idempotencyKey: `${baseKey}:${index}`,
+        referenceDate: String(req.body && req.body.todayDate || "").slice(0, 10),
+        referenceWeekday: Number(req.body && req.body.todayWeekday || 0),
+        referenceTeachingWeek: Number(req.body && req.body.currentTeachingWeek || 0),
+        change,
+      });
+      queued += Number(result && result.queued || 0);
+      if (!result || result.duplicate !== true) duplicate = false;
+    });
+    const delivery = queued > 0
+      ? await defaultCourseReminderDispatchService.dispatchDue({ limit: 20 })
+      : { success: true, due: 0, sent: 0, failed: 0, retried: 0, appOnlyDue: 0 };
+    return res.json({
+      success: true,
+      changed: analysis.changed === true,
+      changeCount: Array.isArray(analysis.changes) ? analysis.changes.length : 0,
+      roomChangeCount: roomChanges.length,
+      queued,
+      duplicate: roomChanges.length > 0 && duplicate,
+      delivery,
+      disclosure: delivery.appOnlyDue > 0
+        ? "未获得可用微信订阅授权，课表变化已保留为应用内提醒。"
+        : "只有已确认的换教室提醒规则会接收本次变化事件。",
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    return handleReminderError(res, error);
+  }
+});
+
+router.post("/agent/reminders/:reminderId/confirmations", scheduleLimiter, requireSessionGuard, validateJsonBody(["operation", "patch", "idempotencyKey"]), (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const operation = String(req.body && req.body.operation || "");
+    if (!["update", "delete"].includes(operation)) {
+      const error = new Error("Reminder operation invalid");
+      error.code = "REMINDER_OPERATION_INVALID";
+      error.statusCode = 400;
+      throw error;
+    }
+    const payload = operation === "update" ? sanitizeReminderPatch(req.body && req.body.patch) : {};
+    const confirmation = defaultCourseReminderService.createConfirmation({
+      principal: resolveReminderPrincipal(req),
+      operation,
+      reminderId: req.params.reminderId,
+      payload,
+      idempotencyKey: req.body && req.body.idempotencyKey,
+    });
+    return res.json({
+      success: true,
+      operation,
+      reminderId: req.params.reminderId,
+      confirmationProof: confirmation.token,
+      expiresAt: confirmation.expiresAt,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    return handleReminderError(res, error);
+  }
+});
+
+router.patch("/agent/reminders/:reminderId", scheduleLimiter, requireSessionGuard, validateJsonBody(["patch", "confirmationProof", "idempotencyKey"]), (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const patch = sanitizeReminderPatch(req.body && req.body.patch);
+    const payload = defaultCourseReminderService.update({
+      principal: resolveReminderPrincipal(req),
+      reminderId: req.params.reminderId,
+      patch,
+      confirmationToken: req.body && req.body.confirmationProof,
+      idempotencyKey: req.body && req.body.idempotencyKey,
+    });
+    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+  } catch (error) {
+    return handleReminderError(res, error);
+  }
+});
+
+router.delete("/agent/reminders/:reminderId", scheduleLimiter, requireSessionGuard, validateJsonBody(["confirmationProof", "idempotencyKey"]), (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const payload = defaultCourseReminderService.remove({
+      principal: resolveReminderPrincipal(req),
+      reminderId: req.params.reminderId,
+      confirmationToken: req.body && req.body.confirmationProof,
+      idempotencyKey: req.body && req.body.idempotencyKey,
+    });
+    return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+  } catch (error) {
+    return handleReminderError(res, error);
   }
 });
 

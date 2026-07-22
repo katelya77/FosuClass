@@ -40,7 +40,6 @@ const AI_ENV_KEYS = [
   "COZE_API_KEY",
   "COZE_BOT_ID",
   "COZE_AGENT_ID",
-  "COZE_USER_ID",
   "COZE_CHAT_ENDPOINT",
   "COZE_TIMEOUT_MS",
   "COZE_POLL_ENABLED",
@@ -80,7 +79,6 @@ const DEFAULTS = {
   COZE_EXPIRES_AT: "",
   COZE_PROVIDER_ROLE: "temporary",
   COZE_API_BASE_URL: "https://api.coze.cn",
-  COZE_USER_ID: "",
   COZE_CHAT_ENDPOINT: "/v3/chat",
   COZE_TIMEOUT_MS: "15000",
   COZE_POLL_ENABLED: "true",
@@ -117,7 +115,6 @@ const PROFILE_FIELD_TO_ENV = {
   cozeBaseUrl: "COZE_API_BASE_URL",
   cozeBotId: "COZE_BOT_ID",
   cozeAgentId: "COZE_AGENT_ID",
-  cozeUserId: "COZE_USER_ID",
   cozeChatEndpoint: "COZE_CHAT_ENDPOINT",
   cozeTimeoutMs: "COZE_TIMEOUT_MS",
   cozePollEnabled: "COZE_POLL_ENABLED",
@@ -264,7 +261,6 @@ function defaultProfile(environment) {
     cozeBaseUrl: DEFAULTS.COZE_API_BASE_URL,
     cozeBotId: "",
     cozeAgentId: "",
-    cozeUserId: "",
     cozeChatEndpoint: DEFAULTS.COZE_CHAT_ENDPOINT,
     cozeTimeoutMs: DEFAULTS.COZE_TIMEOUT_MS,
     cozePollEnabled: true,
@@ -558,7 +554,7 @@ function providerCompleteness(provider, profile, keyStatus) {
   } else if (provider === "cloudbase-openai") {
     checks.push(["enabled", profile.cloudbaseOpenaiEnabled === true], ["baseUrl", Boolean(profile.cloudbaseOpenaiBaseUrl)], ["apiKey", Boolean(keyStatus.cloudbaseOpenaiKeyConfigured)], ["model", Boolean(profile.cloudbaseOpenaiTextModel)]);
   } else if (provider === "coze") {
-    checks.push(["baseUrl", Boolean(profile.cozeBaseUrl)], ["botId", Boolean(profile.cozeBotId)], ["apiKey", Boolean(keyStatus.cozeKeyConfigured)], ["userId", Boolean(profile.cozeUserId)], ["endpoint", Boolean(profile.cozeChatEndpoint)]);
+    checks.push(["baseUrl", Boolean(profile.cozeBaseUrl)], ["botId", Boolean(profile.cozeBotId)], ["apiKey", Boolean(keyStatus.cozeKeyConfigured)], ["endpoint", Boolean(profile.cozeChatEndpoint)]);
   }
   const passed = checks.filter((item) => item[1]).length;
   return {
@@ -654,7 +650,7 @@ function getStatus(requestedEnvironment) {
     cozeBaseUrl: activeProfile.cozeBaseUrl,
     cozeBotIdConfigured: Boolean(activeProfile.cozeBotId),
     cozeBotIdLast4: keyLast4(activeProfile.cozeBotId),
-    cozeUserId: activeProfile.cozeUserId,
+    cozeUserIdMode: "principal_hmac",
     cozeChatEndpoint: activeProfile.cozeChatEndpoint,
     cozePollEnabled: activeProfile.cozePollEnabled,
     cozePollIntervalMs: activeProfile.cozePollIntervalMs,

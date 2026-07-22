@@ -98,11 +98,17 @@ function conversationalFallbackAnswer(message = "", intentName = "conversational
       "没事，需要查课表、空教室或天气时直接说就好。",
     ], compact);
   }
-  if (/你是谁|介绍一下|自我介绍|你叫什么|小佛是谁/.test(compact) || intentName === "project_qa") {
+  if (/你是谁|介绍一下|自我介绍|你叫什么|小佛是谁/.test(compact)) {
     return pickVariant([
       "我是小佛，佛课小表里的校园助手。可以帮你查课表、空教室、教学周和校区天气，也能说明怎么导入个人课表。",
       "叫我小佛就好。我是佛课小表的校园服务助手，擅长课表与校园事项查询；具体课程事实会以工具数据为准。",
       "我是小佛助手。不是万能聊天机器人，但查佛大课表、找自习教室、看教学周和校园入口这些，我比较在行。",
+    ], compact);
+  }
+  if (intentName === "project_qa") {
+    return pickVariant([
+      "当前已发布的本地知识没有命中这个问题。佛课小表仍可提供课表查询、空教室、教学周与个人课表导入说明；具体课程事实必须以校园工具结果为准。",
+      "这个问题暂时没有可核验的本地答案。佛课小表支持课表查询、空教室和个人课表导入帮助，但不会用模型补写未经工具核验的校园事实。",
     ], compact);
   }
   if (/你好|您好|嗨|哈喽|在吗|早上好|中午好|晚上好|hello|hi/i.test(compact)) {

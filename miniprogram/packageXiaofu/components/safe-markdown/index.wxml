@@ -1,0 +1,75 @@
+<template name="md-inline">
+  <block wx:for="{{nodes}}" wx:key="index" wx:for-item="node">
+    <text
+      wx:if="{{node.link}}"
+      class="md-inline md-link"
+      data-href="{{node.href}}"
+      catchtap="onCopyLink"
+      role="button"
+      aria-label="复制链接"
+    >{{node.text}}</text>
+    <text
+      wx:else
+      class="md-inline {{node.bold ? 'is-bold' : ''}} {{node.italic ? 'is-italic' : ''}} {{node.deleted ? 'is-deleted' : ''}} {{node.code ? 'is-code' : ''}}"
+      user-select="{{selectable}}"
+    >{{node.text}}</text>
+  </block>
+</template>
+
+<view class="md-root">
+  <block wx:for="{{visibleBlocks}}" wx:key="id" wx:for-item="item" wx:for-index="blockIndex">
+    <view wx:if="{{item.type === 'heading'}}" class="md-block md-heading md-h{{item.level}}">
+      <template is="md-inline" data="{{nodes: item.inlines, selectable: selectable}}" />
+    </view>
+
+    <view wx:elif="{{item.type === 'paragraph'}}" class="md-block md-paragraph">
+      <template is="md-inline" data="{{nodes: item.inlines, selectable: selectable}}" />
+    </view>
+
+    <view wx:elif="{{item.type === 'quote'}}" class="md-block md-quote">
+      <template is="md-inline" data="{{nodes: item.inlines, selectable: selectable}}" />
+    </view>
+
+    <view wx:elif="{{item.type === 'divider'}}" class="md-block md-divider"></view>
+
+    <view wx:elif="{{item.type === 'list'}}" class="md-block md-list">
+      <view class="md-list-item" wx:for="{{item.items}}" wx:key="index" wx:for-item="listItem">
+        <text class="md-list-marker">{{listItem.marker}}</text>
+        <view class="md-list-copy">
+          <template is="md-inline" data="{{nodes: listItem.inlines, selectable: selectable}}" />
+        </view>
+      </view>
+    </view>
+
+    <view wx:elif="{{item.type === 'code'}}" class="md-block md-code-card">
+      <view class="md-code-head">
+        <text class="md-code-language">{{item.language}}</text>
+        <button class="md-copy-button" data-index="{{blockIndex}}" catchtap="onCopyCode" aria-label="复制代码">复制</button>
+      </view>
+      <scroll-view class="md-code-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+        <text class="md-code-text" user-select="{{selectable}}">{{item.text}}</text>
+      </scroll-view>
+      <view class="md-code-note" wx:if="{{item.truncated}}">代码过长，已安全截断</view>
+    </view>
+
+    <scroll-view wx:elif="{{item.type === 'table'}}" class="md-block md-table-scroll" scroll-x enhanced show-scrollbar="{{false}}">
+      <view class="md-table">
+        <view class="md-table-row md-table-head">
+          <view class="md-table-cell align-{{cell.align}}" wx:for="{{item.headers}}" wx:key="index" wx:for-item="cell">
+            <template is="md-inline" data="{{nodes: cell.inlines, selectable: selectable}}" />
+          </view>
+        </view>
+        <view class="md-table-row" wx:for="{{item.rows}}" wx:key="index" wx:for-item="row">
+          <view class="md-table-cell align-{{cell.align}}" wx:for="{{row}}" wx:key="index" wx:for-item="cell">
+            <template is="md-inline" data="{{nodes: cell.inlines, selectable: selectable}}" />
+          </view>
+        </view>
+      </view>
+    </scroll-view>
+  </block>
+
+  <view class="md-truncated-note" wx:if="{{truncated && expanded}}">内容超过安全长度，已截断显示</view>
+  <button class="md-expand" wx:if="{{collapsible}}" bindtap="onToggleExpanded">
+    {{expanded ? '收起长内容' : (hiddenCount ? '继续展开 · ' + hiddenCount + ' 段' : '继续展开')}}
+  </button>
+</view>

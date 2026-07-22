@@ -9,10 +9,12 @@
   bindtap="onTap"
   bindlongpress="onLongPress"
 >
-  <view class="xiaofu-float-glow"></view>
+  <view class="xiaofu-float-hint {{hintSide}}" wx:if="{{hintText && !moving}}">
+    <view class="xiaofu-float-hint-eyebrow">{{hintEyebrow}}</view>
+    <view class="xiaofu-float-hint-text">{{hintText}}</view>
+  </view>
   <view class="xiaofu-float-ball">
     <image class="xiaofu-float-logo" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" binderror="onLogoError" wx:if="{{logoReady}}" />
     <text wx:else class="xiaofu-float-text">佛</text>
-    <view class="xiaofu-float-online"></view>
   </view>
 </view>

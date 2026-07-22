@@ -18,6 +18,7 @@ const {
 const { resolvePrincipal } = require("./conversationPrincipalService");
 const { getConversationRepository } = require("./conversationRepository");
 const { buildConversationSummary, buildTitleFromMessage } = require("./conversationSummaryService");
+const { defaultUserPreferenceService } = require("./userPreferenceService");
 
 function isNewTaskMessage(message = "") {
   const text = String(message || "").trim();
@@ -102,6 +103,7 @@ function filterEvidenceRefsForRelease(refs, releaseVersion) {
 class ConversationMemoryService {
   constructor(options = {}) {
     this.repository = options.repository || getConversationRepository(options);
+    this.userPreferenceService = options.userPreferenceService || defaultUserPreferenceService;
   }
 
   resolvePrincipal(input = {}) {
@@ -169,6 +171,30 @@ class ConversationMemoryService {
     }
 
     let context = applyServerStateToContext(input.context || {}, state);
+    if (mode === "cloud_sync") {
+      const clientRecent = Array.isArray(context.recentMessages) ? context.recentMessages : [];
+      const serverRecent = state && Array.isArray(state.recentTurns)
+        ? state.recentTurns.map((turn) => ({ role: turn.role, content: turn.text }))
+        : [];
+      const mergedRecent = [];
+      clientRecent.concat(serverRecent).forEach((turn) => {
+        const role = turn && turn.role === "user" ? "user" : "assistant";
+        const content = safeText(turn && (turn.content || turn.text) || "", 400);
+        if (!content) return;
+        const previous = mergedRecent[mergedRecent.length - 1];
+        if (previous && previous.role === role && previous.content === content) return;
+        mergedRecent.push({ role, content });
+      });
+      context = Object.assign({}, context, { recentMessages: mergedRecent.slice(-8) });
+      try {
+        const cloudPreferences = this.userPreferenceService.getObject({ principal });
+        context.userPreferences = Object.assign({}, context.userPreferences || {}, cloudPreferences, {
+          localOnly: false,
+        });
+      } catch (_) {
+        // Preference storage is an optional privacy-preserving layer. Chat remains usable.
+      }
+    }
     if (state && state.evidenceRefs) {
       context = Object.assign({}, context, {
         serverEvidenceRefs: filterEvidenceRefsForRelease(

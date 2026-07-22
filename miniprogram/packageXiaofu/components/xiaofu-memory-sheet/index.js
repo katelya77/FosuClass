@@ -2,6 +2,8 @@ Component({
   properties: {
     visible: { type: Boolean, value: false },
     mode: { type: String, value: "local_only" },
+    preferences: { type: Array, value: [] },
+    preferencesLoading: { type: Boolean, value: false },
   },
   data: {
     privacyExpanded: false,
@@ -31,6 +33,10 @@ Component({
     },
     onClearAll() {
       this.triggerEvent("clearall");
+    },
+    onDeletePreference(event) {
+      const key = event.currentTarget.dataset.key || "";
+      if (key) this.triggerEvent("deletepreference", { key });
     },
   },
 });

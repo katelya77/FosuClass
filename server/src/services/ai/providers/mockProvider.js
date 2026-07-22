@@ -578,6 +578,194 @@ function buildMultiStep(toolResults = []) {
   };
 }
 
+function buildCourseReminder(result = {}, toolName = "") {
+  if (result.success === false) {
+    const needsSchedule = result.code === "SCHEDULE_REQUIRED" || result.needContext === true;
+    return {
+      answer: needsSchedule
+        ? "我还没有可核验的个人课表，不能猜测课程时间。先导入课表后，我再为你生成提醒计划。"
+        : (result.summary || "暂时无法生成提醒计划。"),
+      cards: [makeCard("guide", needsSchedule ? "需要个人课表" : "提醒暂不可用", result.summary || result.code || "请稍后再试", {
+        badges: ["未执行写入", "数据可核验"],
+        actions: needsSchedule
+          ? [makeAction("导入个人课表", "navigate", result.actionUrl || "/pages/personal-sync/personal-sync")]
+          : [],
+      })],
+      suggestions: needsSchedule ? ["怎么导入个人课表？"] : ["查看提醒"],
+    };
+  }
+  if (toolName === "list_course_reminders") {
+    const items = Array.isArray(result.items) ? result.items : [];
+    return {
+      answer: items.length ? `你目前有 ${items.length} 个课程提醒。` : "你还没有课程提醒。",
+      cards: [makeCard("reminder", "课程提醒", items.length ? "可在提醒面板暂停、修改或删除" : "创建和修改都会先向你确认", {
+        badges: [items.length ? `${items.length} 个` : "暂无提醒", "Asia/Shanghai"],
+        items: items.slice(0, 5).map((item) => ({
+          title: item.nextOccurrence && item.nextOccurrence.courseName || (item.scope === "room_change" ? "教室变化提醒" : "课程提醒"),
+          subtitle: item.nextOccurrence
+            ? [item.nextOccurrence.date, item.nextOccurrence.startTime, item.nextOccurrence.classroom].filter(Boolean).join(" · ")
+            : "课表教室变化时触发",
+          value: item.status === "paused" ? "已暂停" : `提前 ${item.leadMinutes} 分钟`,
+        })),
+        actions: [makeAction("管理提醒", "manageReminders", "", { sheet: "reminders" })],
+      })],
+      suggestions: ["以后上课前20分钟提醒我"],
+    };
+  }
+  if (toolName === "delete_course_reminder") {
+    const matches = Array.isArray(result.matches) ? result.matches : [];
+    const action = matches.length === 1 ? Object.assign(
+      makeAction("确认删除", "confirmReminder", "", { operation: "delete", reminderId: matches[0].id }),
+      { confirm: { title: "删除课程提醒", content: "删除后将不再触发该提醒。", confirmText: "删除", cancelText: "保留" } }
+    ) : makeAction("打开提醒管理", "manageReminders", "", { sheet: "reminders" });
+    return {
+      answer: result.summary || "已检查提醒列表。",
+      cards: [makeCard("reminder", "取消提醒", result.summary || "删除前需要确认", {
+        badges: ["未执行删除", `${matches.length} 个匹配`],
+        actions: [action],
+      })],
+      suggestions: matches.length ? [] : ["查看提醒"],
+    };
+  }
+  const occurrence = result.nextOccurrence || {};
+  const roomChange = result.scope === "room_change";
+  const description = roomChange
+    ? "仅当个人课表中检测到教室变化时触发"
+    : [occurrence.courseName, occurrence.date, occurrence.startTime, occurrence.classroom].filter(Boolean).join(" · ");
+  const confirmContent = roomChange
+    ? "仅在检测到教室变化时提醒；发送前仍受微信订阅授权限制。"
+    : `${description || "下一次课程"}，提前 ${result.leadMinutes} 分钟提醒。`;
+  const action = Object.assign(
+    makeAction("确认并选择通知方式", "confirmReminder", "", { operation: "create" }),
+    { confirm: { title: "确认课程提醒", content: confirmContent, confirmText: "继续", cancelText: "取消" } }
+  );
+  return {
+    answer: "提醒计划已经准备好，但还没有创建。请核对时间和范围，确认后再选择微信订阅或应用内提醒。",
+    cards: [makeCard("reminder", roomChange ? "教室变化提醒" : "上课提醒计划", description || "等待课程变化", {
+      badges: [roomChange ? "按变化触发" : `提前 ${result.leadMinutes} 分钟`, "未执行写入", "Asia/Shanghai"],
+      items: roomChange ? [] : [{
+        title: occurrence.courseName || "课程",
+        subtitle: [occurrence.teacherName, occurrence.classroom, occurrence.campus].filter(Boolean).join(" · "),
+        value: [occurrence.date, occurrence.startTime].filter(Boolean).join(" "),
+      }],
+      actions: [action],
+    })],
+    suggestions: ["查看提醒"],
+  };
+}
+
+function subtractClockMinutes(value, minutes) {
+  const match = String(value || "").match(/^(\d{1,2}):(\d{2})/);
+  if (!match) return String(value || "");
+  const total = (Number(match[1]) * 60 + Number(match[2]) - Number(minutes || 0) + 1440) % 1440;
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function buildCourseActionAdvice(toolResults = []) {
+  const find = (name) => {
+    const call = (Array.isArray(toolResults) ? toolResults : []).find((item) => item && item.name === name);
+    return call && call.result || null;
+  };
+  const schedule = find("get_tomorrow_courses") || find("get_next_course") || {};
+  const route = find("get_course_route") || {};
+  const weather = find("get_course_weather_advice") || {};
+  if (schedule.needContext || route.code === "SCHEDULE_REQUIRED") {
+    return buildTodayCourses(schedule);
+  }
+  const course = route.courseName ? {
+    courseName: route.courseName,
+    classroom: route.classroom,
+    campus: route.campus,
+    date: route.date,
+    startTime: route.startTime,
+  } : (schedule.nextCourse || (schedule.courses || [])[0] || {});
+  const rainy = weather.success === true && (Number(weather.rainProbabilityMax24h || 0) >= 50 || /雨|雷/.test(String(weather.weatherText || "")));
+  const departureTime = rainy ? subtractClockMinutes(route.departureTime, 10) : route.departureTime;
+  const assumptions = (Array.isArray(route.assumptions) ? route.assumptions : []).slice();
+  if (rainy) assumptions.push("天气工具显示降雨风险，展示建议额外提前 10 分钟。");
+  const items = [
+    {
+      title: course.courseName || "下一节课程",
+      subtitle: [course.classroom, course.campus].filter(Boolean).join(" · "),
+      value: [course.date, course.startTime].filter(Boolean).join(" "),
+    },
+    {
+      title: `建议 ${departureTime || "提前出发"}`,
+      subtitle: assumptions[0] || "当前没有精确步行路线，出发时间是保守缓冲建议。",
+      value: route.from ? `从${route.from}` : "",
+    },
+  ];
+  const cards = [makeCard("schedule", "下一节课行动建议", route.summary || "已根据课表和校园位置生成建议", {
+    badges: ["课表摘要", "非精确路线", rainy ? "雨天加 10 分钟" : "通用缓冲"],
+    items,
+    actions: [makeAction("打开校园地图", "navigate", route.actionUrl || "/packageMaps/pages/campus-map/campus-map")],
+  })];
+  if (weather && weather.success !== undefined) cards.push(buildWeather(weather).cards[0]);
+  return {
+    answer: `${course.courseName || "下一节课"}${course.classroom ? `在 ${course.classroom}` : "地点待核对"}，建议 ${departureTime || "预留足够时间"} 出发。${rainy ? "考虑到降雨风险，已额外预留 10 分钟。" : "该时间基于通用课前缓冲，不是精确路线测算。"}`,
+    cards: cards.filter(Boolean),
+    suggestions: ["检查本周连续赶课", "找附近空教室"],
+  };
+}
+
+function buildScheduleHealth(result = {}) {
+  if (result.needContext) return buildGuide({ summary: result.summary, actionUrl: result.actionUrl });
+  const items = [];
+  (result.timeConflicts || []).slice(0, 3).forEach((item) => items.push({
+    title: `周${item.weekday} 第${item.startSection}-${item.endSection}节冲突`,
+    subtitle: (item.courseNames || []).join(" / "),
+    value: "需核对",
+  }));
+  (result.rushedTransfers || []).slice(0, 3).forEach((item) => items.push({
+    title: `${item.fromBuilding} → ${item.toBuilding}`,
+    subtitle: `${item.fromCourse} 后紧接 ${item.toCourse}`,
+    value: "连续赶课",
+  }));
+  (result.missingClassrooms || []).slice(0, 2).forEach((item) => items.push({
+    title: item.courseName,
+    subtitle: `周${item.weekday} 第${item.startSection}-${item.endSection}节`,
+    value: "缺少教室",
+  }));
+  return {
+    answer: result.summary || "课表检查完成。",
+    cards: [makeCard("diagnosis", "课表健康检查", result.issueCount ? "建议先处理时间冲突和缺失教室" : "未发现明显异常", {
+      badges: [`${result.timeConflicts && result.timeConflicts.length || 0} 处冲突`, `${result.rushedTransfers && result.rushedTransfers.length || 0} 处赶课风险`],
+      items: items.length ? items : [{ title: "检查通过", subtitle: "未发现重复、冲突、缺失教室或异常周次", value: "正常" }],
+      actions: result.issueCount ? [makeAction("重新导入课表", "navigate", result.actionUrl || "/pages/personal-sync/personal-sync")] : [],
+    })],
+    suggestions: ["检测课表变化", "查看本周课表"],
+  };
+}
+
+function buildScheduleChanges(result = {}) {
+  if (result.needContext) return buildGuide({ summary: result.summary, actionUrl: result.actionUrl });
+  if (result.baselineRequired) {
+    return {
+      answer: result.summary,
+      cards: [makeCard("diagnosis", "课表变化基线", "当前只有一版摘要，不能伪造变化结论", {
+        badges: ["已建立基线", "等待下一版"],
+        actions: [makeAction("查看导入课表", "navigate", "/pages/personal-sync/personal-sync")],
+      })],
+      suggestions: ["检查本周课表冲突"],
+    };
+  }
+  const labels = { added: "新增", removed: "移除", modified: "变更" };
+  const fieldLabels = { teacherName: "教师", classroom: "教室", time: "时间", weeks: "周次" };
+  return {
+    answer: result.summary || "课表变化检测完成。",
+    cards: [makeCard("diagnosis", "课表变化摘要", result.changed ? "变化来自当前摘要与本机上一版摘要对比" : "未发现变化", {
+      badges: [result.changed ? `${result.changes.length} 项变化` : "摘要一致", "本机受控摘要"],
+      items: (result.changes || []).slice(0, 8).map((item) => ({
+        title: `${labels[item.type] || "变化"} · ${item.courseName}`,
+        subtitle: (item.fields || []).map((field) => fieldLabels[field] || field).join("、") || "课程记录",
+        value: labels[item.type] || "变化",
+      })),
+      actions: result.changed ? [makeAction("重新导入或核对", "navigate", result.actionUrl || "/pages/personal-sync/personal-sync")] : [],
+    })],
+    suggestions: ["检查时间冲突", "查看本周课表"],
+  };
+}
+
 function buildLocalRuleReply(rule = {}, message = "", intentName = "") {
   rule = rule && typeof rule === "object" && !Array.isArray(rule) ? rule : {};
   const answer = String(rule.reply || rule.body || "").trim();
@@ -658,6 +846,10 @@ function generate({ intent, toolResults, message, context, localRule }) {
     name === "search_campus_place" || name === "get_campus_route" || name === "get_classroom_location" ? buildCampusPlaceV2(first || {}) :
     name === "rag_search" ? buildKnowledge(first || {}) :
     name === "campus_multi_step_advice" ? buildMultiStep(toolResults || []) :
+    name === "manage_course_reminders" ? buildCourseReminder(first || {}, toolResults && toolResults[0] && toolResults[0].name || "") :
+    name === "course_action_advice" ? buildCourseActionAdvice(toolResults || []) :
+    name === "inspect_schedule_health" ? buildScheduleHealth(first || {}) :
+    name === "detect_schedule_changes" ? buildScheduleChanges(first || {}) :
     name === "generate_image" ? buildKnowledge({ items: [], summary: first && first.summary || "生图能力未启用" }) :
     rulePayload ? rulePayload :
     (name === "project_qa" || name === "conversational_help") ? projectKnowledgeService.generateFallbackResponse(name, message || "", context && context.assistantEnvironment || context && context.runtimeMode || "public") :

@@ -7431,35 +7431,20 @@ const adminConsoleHtml = `<!doctype html>
 
           <div class="card form-box">
             <h3 class="card-title">运行状态与 Coze 配置向导</h3>
-            <p class="ai-secret-note">Coze 为可选临时 Provider，未配置不影响主链路。请填写 Coze API Token，不要填写学校账号密码。Token 加密保存，不明文回显，不写日志。</p>
+            <p class="ai-secret-note">Coze 只需要服务端 PAT/API Token 和已发布 Bot ID。不要填写学校账号密码、浏览器 Cookie 或 User ID；Token 加密保存且不明文回显。</p>
             <div class="ai-provider-status" id="aiProviderStatusGrid"></div>
 
-            <div class="form-row full" style="margin-top: 14px;">
+            <div class="form-row" style="margin-top: 14px;">
               <div>
-                <label>是否启用 Coze（由 Provider 链与 AI_PROVIDER 决定）</label>
-                <input id="cozeBaseUrl" placeholder="API Base URL，例如 https://api.coze.cn">
-              </div>
-            </div>
-            <div class="form-row">
-              <div>
-                <label>Bot / Agent ID</label>
-                <input id="cozeBotId" autocomplete="off" placeholder="未配置则跳过 Coze">
+                <label>已发布 Bot ID</label>
+                <input id="cozeBotId" autocomplete="off" placeholder="从 Bot 构建页 URL 获取">
               </div>
               <div>
-                <label>API Token（请填 Token，勿填学校账号密码）</label>
+                <label>PAT / API Token</label>
                 <input id="cozeApiKey" type="password" autocomplete="off" placeholder="留空则保留现有 Token，不回显明文">
               </div>
             </div>
-            <div class="form-row">
-              <div>
-                <label>调用 User ID（勿全员共用固定值）</label>
-                <input id="cozeUserId" placeholder="按会话派生，勿写真实学号">
-              </div>
-              <div>
-                <label>Chat Endpoint</label>
-                <input id="cozeChatEndpoint" placeholder="/v3/chat">
-              </div>
-            </div>
+            <p class="ai-secret-note">匿名 user_id 由服务端按会话 Principal 自动生成。Bot 列表接口还需要 Workspace/Space ID，因此这里不伪造只凭 PAT 的选择器。</p>
             <div class="form-row full">
               <div>
                 <label>Token 到期时间（可选 ISO，到期自动跳过）</label>
@@ -14003,7 +13988,6 @@ const adminConsoleHtml = `<!doctype html>
         setSelectValue("aiAllowPersonalContext", cfg.allowPersonalContext ? "true" : "false");
         setValue("cozeBaseUrl", cfg.cozeBaseUrl || "https://api.coze.cn");
         setValue("cozeBotId", cfg.cozeBotIdConfigured ? "已配置" : "");
-        setValue("cozeUserId", cfg.cozeUserId || "fosuclass-user");
         setValue("cozeChatEndpoint", cfg.cozeChatEndpoint || "/v3/chat");
         setSelectValue("cozePollEnabled", cfg.cozePollEnabled === false ? "false" : "true");
         setValue("cozePollIntervalMs", cfg.cozePollIntervalMs || "1000");
@@ -14199,7 +14183,6 @@ const adminConsoleHtml = `<!doctype html>
           jsonRepair: boolValue("aiJsonRepair"),
           allowPersonalContext: boolValue("aiAllowPersonalContext"),
           cozeBaseUrl: value("cozeBaseUrl"),
-          cozeUserId: value("cozeUserId"),
           cozeChatEndpoint: value("cozeChatEndpoint"),
           cozePollEnabled: boolValue("cozePollEnabled"),
           cozePollIntervalMs: value("cozePollIntervalMs"),
@@ -14396,18 +14379,13 @@ const adminConsoleHtml = `<!doctype html>
         }
         if (providerName === "coze") {
           return "<div class='form-row'>" +
-            aiConfigInput("cozeBaseUrl", "Base URL", profile.cozeBaseUrl, "https://api.coze.cn") +
-            aiConfigInput("cozeBotId", "Bot ID", profile.cozeBotId || "", "留空则 fallback mock") +
-          "</div><div class='form-row'>" +
-            aiConfigInput("cozeUserId", "User ID", profile.cozeUserId, "fosuclass-user") +
-            aiConfigInput("cozeChatEndpoint", "Chat Endpoint", profile.cozeChatEndpoint, "/v3/chat") +
-          "</div><div class='form-row'>" +
-            "<div><label>轮询开关</label><select id='cozePollEnabled'><option value='true'>开启</option><option value='false'>关闭</option></select></div>" +
-            aiConfigInput("cozePollIntervalMs", "轮询间隔 / ms", profile.cozePollIntervalMs, "1000") +
-          "</div><div class='form-row'>" +
-            aiConfigInput("cozePollMaxAttempts", "最大轮询次数", profile.cozePollMaxAttempts, "8") +
-            aiConfigInput("cozeApiKey", "API Key", "", "留空表示保留原密钥", "password") +
-          "</div>";
+            aiConfigInput("cozeBotId", "已发布 Bot ID", profile.cozeBotId || "", "从 Bot 构建页 URL 获取") +
+            aiConfigInput("cozeApiKey", "PAT / API Token", "", "留空表示使用已保存 Token", "password") +
+          "</div><input id='cozeBaseUrl' type='hidden' value='" + escapeHtml(profile.cozeBaseUrl || "https://api.coze.cn") + "'>" +
+          "<div class='ai-secret-note'>只需要 PAT/API Token 与已发布 Bot ID；匿名 user_id 由服务端按 Principal 自动生成。Token 仅显示掩码状态，不回传完整值。</div>" +
+          "<div class='ai-secret-note'>官方 Bot 列表接口还需要 Workspace/Space ID，本项目不增加多余凭据，也不伪造只凭 PAT 的选择器。请在 Coze Bot 构建页 URL 中复制 Bot ID，并确认已发布为 API 服务。</div>" +
+          "<div class='provider-actions-row' style='margin-top:12px;'><button id='cozeTestConnectionBtn' class='secondary' type='button'>测试 Coze 连接</button></div>" +
+          "<div id='cozeConnectionResult' class='ai-verify-box'>尚未测试。会区分 Token、Bot、发布状态、权限、限流与超时。</div>";
         }
         return "<div class='form-row'>" +
           aiConfigInput("aiBaseUrl", "Base URL", profile.baseUrl, "https://api.deepseek.com") +
@@ -14469,6 +14447,7 @@ const adminConsoleHtml = `<!doctype html>
           });
         });
         safeBind("saveAiProviderBtn", "click", saveAiProviderConfig);
+        safeBind("cozeTestConnectionBtn", "click", testCozeConnection);
         safeBind("verifyAiProviderBtn", "click", verifyAiProviderConfig);
         safeBind("forceAiProviderChatBtn", "click", forceAiProviderChatTest);
         safeBind("reloadAiProviderBtn", "click", loadAiProviderConfig);
@@ -14516,7 +14495,7 @@ const adminConsoleHtml = `<!doctype html>
           Object.assign(payload, { cloudbaseOpenaiEnabled: boolValue("aiEnabled"), cloudbaseOpenaiBaseUrl: value("cloudbaseOpenaiBaseUrl"), cloudbaseOpenaiTextModel: value("cloudbaseOpenaiTextModel"), cloudbaseOpenaiTimeoutMs: value("cloudbaseOpenaiTimeoutMs"), cloudbaseOpenaiMaxTokens: value("cloudbaseOpenaiMaxTokens") });
           if (value("cloudbaseOpenaiApiKey")) payload.cloudbaseOpenaiApiKey = value("cloudbaseOpenaiApiKey");
         } else if (provider === "coze") {
-          Object.assign(payload, { cozeBaseUrl: value("cozeBaseUrl"), cozeBotId: value("cozeBotId"), cozeUserId: value("cozeUserId"), cozeChatEndpoint: value("cozeChatEndpoint"), cozePollEnabled: boolValue("cozePollEnabled"), cozePollIntervalMs: value("cozePollIntervalMs"), cozePollMaxAttempts: value("cozePollMaxAttempts") });
+          Object.assign(payload, { cozeBaseUrl: value("cozeBaseUrl") || profile.cozeBaseUrl || "https://api.coze.cn", cozeBotId: value("cozeBotId"), cozeChatEndpoint: "/v3/chat", cozePollEnabled: true, cozePollIntervalMs: profile.cozePollIntervalMs || "1000", cozePollMaxAttempts: profile.cozePollMaxAttempts || "12" });
           if (value("cozeApiKey")) payload.cozeApiKey = value("cozeApiKey");
         }
         return payload;
@@ -14524,7 +14503,7 @@ const adminConsoleHtml = `<!doctype html>
 
       function describeAiProviderChanges(payload) {
         var profile = activeAiProfile();
-        var fields = ["enabled", "provider", "providerPolicy", "model", "reasoningModel", "baseUrl", "temperature", "maxTokens", "cloudbaseOpenaiBaseUrl", "cloudbaseOpenaiTextModel", "cozeBaseUrl", "cozeBotId", "cozeUserId", "cozeChatEndpoint"];
+        var fields = ["enabled", "provider", "providerPolicy", "model", "reasoningModel", "baseUrl", "temperature", "maxTokens", "cloudbaseOpenaiBaseUrl", "cloudbaseOpenaiTextModel", "cozeBaseUrl", "cozeBotId", "cozeChatEndpoint"];
         var lines = ["将保存到：" + (AI_ENV_LABELS[payload.environment] || payload.environment)];
         fields.forEach(function(key) {
           if (!Object.prototype.hasOwnProperty.call(payload, key)) return;
@@ -14662,6 +14641,7 @@ const adminConsoleHtml = `<!doctype html>
           });
         });
         safeBind("saveAiProviderBtn", "click", saveAiProviderConfig);
+        safeBind("cozeTestConnectionBtn", "click", testCozeConnection);
         safeBind("verifyAiProviderBtn", "click", verifyAiProviderConfig);
         safeBind("forceAiProviderChatBtn", "click", forceAiProviderChatTest);
         safeBind("reloadAiProviderBtn", "click", loadAiProviderConfig);
@@ -14715,10 +14695,43 @@ const adminConsoleHtml = `<!doctype html>
           Object.assign(payload, { cloudbaseOpenaiEnabled: true, cloudbaseOpenaiBaseUrl: value("cloudbaseOpenaiBaseUrl"), cloudbaseOpenaiTextModel: value("cloudbaseOpenaiTextModel"), cloudbaseOpenaiTimeoutMs: value("cloudbaseOpenaiTimeoutMs"), cloudbaseOpenaiMaxTokens: value("cloudbaseOpenaiMaxTokens") });
           if (value("cloudbaseOpenaiApiKey")) payload.cloudbaseOpenaiApiKey = value("cloudbaseOpenaiApiKey");
         } else if (provider === "coze") {
-          Object.assign(payload, { cozeBaseUrl: value("cozeBaseUrl"), cozeBotId: value("cozeBotId"), cozeUserId: value("cozeUserId"), cozeChatEndpoint: value("cozeChatEndpoint"), cozePollEnabled: boolValue("cozePollEnabled"), cozePollIntervalMs: value("cozePollIntervalMs"), cozePollMaxAttempts: value("cozePollMaxAttempts") });
+          Object.assign(payload, { cozeBaseUrl: value("cozeBaseUrl") || profile.cozeBaseUrl || "https://api.coze.cn", cozeBotId: value("cozeBotId"), cozeChatEndpoint: "/v3/chat", cozePollEnabled: true, cozePollIntervalMs: profile.cozePollIntervalMs || "1000", cozePollMaxAttempts: profile.cozePollMaxAttempts || "12" });
           if (value("cozeApiKey")) payload.cozeApiKey = value("cozeApiKey");
         }
         return payload;
+      }
+
+      function testCozeConnection() {
+        var box = $("cozeConnectionResult") || $("aiVerifyResult");
+        var profile = activeAiProfile();
+        var payload = {
+          environment: aiExperienceEnvironment(),
+          baseUrl: value("cozeBaseUrl") || profile.cozeBaseUrl || "https://api.coze.cn",
+          botId: value("cozeBotId") || profile.cozeBotId || ""
+        };
+        var token = value("cozeApiKey");
+        if (token) payload.apiKey = token;
+        if (box) box.textContent = "正在校验 Token、Bot ID 与发布状态...";
+        api("/api/admin/ai-provider/test-coze", { method: "POST", body: JSON.stringify(payload) })
+          .then(function(res) {
+            var data = res.data || {};
+            var lines = [
+              "状态: " + (data.success ? "连接成功" : "连接失败"),
+              "分类: " + (data.code || "-"),
+              "说明: " + (data.message || "-"),
+              "延迟: " + String(data.latencyMs || 0) + "ms",
+              "Bot: " + (data.botIdMasked || "未配置"),
+              "已发布 API: " + (data.botPublished ? "是" : "未验证"),
+              "Bot 选择器: " + (data.botSelectorAvailable ? "可用" : "不提供"),
+              data.botSelectorReason || ""
+            ].filter(Boolean);
+            if (box) box.textContent = lines.join("\n");
+            showToast(data.success ? "Coze 连接验证通过。" : (data.message || "Coze 连接验证失败。"), data.success ? "success" : "warning");
+          })
+          .catch(function(error) {
+            if (box) box.textContent = "连接测试失败：" + error.message;
+            showToast(error.message, "error");
+          });
       }
 
       function saveAiProviderConfig() {
@@ -14734,7 +14747,10 @@ const adminConsoleHtml = `<!doctype html>
             showToast("配置已保存并立即生效。", "success");
             setStatus("小佛助手实际使用：" + aiProviderActualUseLabel());
             var saveAndVerifyEl = $("aiSaveAndVerify");
-            if (saveAndVerifyEl && saveAndVerifyEl.checked) verifyAiProviderConfig();
+            if (saveAndVerifyEl && saveAndVerifyEl.checked) {
+              if (payload.provider === "coze") testCozeConnection();
+              else verifyAiProviderConfig();
+            }
           })
           .catch(function(error) { showToast(error.message, "error"); });
       }

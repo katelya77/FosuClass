@@ -21,6 +21,7 @@ const termRegistryService = require("./services/termRegistryService");
 const runtimePointerService = require("./services/runtimePointerService");
 const performanceMonitorService = require("./services/performanceMonitorService");
 const campusMapAssetService = require("./services/campusMapAssetService");
+const { defaultCourseReminderDispatchService } = require("./services/ai/reminders/courseReminderDispatchService");
 
 // 路由引入
 const healthRouter = require("./routes/health");
@@ -312,6 +313,11 @@ function startServer(port = config.PORT) {
     storageLifecycleService.scheduleMaintenance();
   } catch (error) {
     safeLog("startup-maintenance-schedule-failed", { error: error.message });
+  }
+  try {
+    defaultCourseReminderDispatchService.schedule();
+  } catch (error) {
+    safeLog("startup-course-reminder-dispatch-failed", { code: error.code || "" });
   }
   if (process.env.STATIC_RELEASE_SYNC_ENABLED === "true") {
     const delayMs = Math.max(1000, Number(process.env.STATIC_RELEASE_RECONCILE_START_DELAY_MS || 5000) || 5000);

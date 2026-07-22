@@ -7,6 +7,8 @@ const agentMemoryClient = require("../../../services/agentMemoryClient");
 const agentReadinessClient = require("../../../services/agentReadinessClient");
 const agentRunClient = require("../../../services/agentRunClient");
 const agentClientErrorMapper = require("../../../services/agentClientErrorMapper");
+const courseReminderClient = require("../../../services/courseReminderClient");
+const scheduleChangeTracker = require("../../../services/scheduleChangeTracker");
 const cloudbaseConfig = require("../../../config/cloudbase");
 const demoData = require("./demo-data");
 const { courseTimes } = require("../../../data/courseTimes");
@@ -466,6 +468,26 @@ function mapMemoryModeText(mode) {
     || MEMORY_MODE_LABELS.local_only;
 }
 
+function normalizeMemoryPreferenceItems(items) {
+  const labels = {
+    preferredName: "称呼",
+    campus: "常用校区",
+    defaultReminderLeadMinutes: "默认提醒",
+  };
+  const map = {};
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const source = item && typeof item === "object" ? item : {};
+    if (!labels[source.key]) return;
+    map[source.key] = {
+      key: source.key,
+      value: source.value,
+      label: labels[source.key],
+      scope: source.scope || "local",
+    };
+  });
+  return Object.keys(labels).map((key) => map[key]).filter(Boolean);
+}
+
 function mapMemoryChip(mode) {
   // Product UX: memory is folded into headerStatusLine; never dual-chip.
   return xiaofuPresentation.mapMemoryStatusText(mode, "chip") || "";
@@ -663,6 +685,8 @@ const ACTION_LABEL_FALLBACKS = {
   ask: "继续追问",
   openSheet: "打开面板",
   toggleFloat: "调整浮窗",
+  confirmReminder: "确认提醒",
+  manageReminders: "管理提醒",
   noop: "查看",
 };
 
@@ -674,6 +698,8 @@ const ACTION_TYPE_ALIASES = {
   ask: "ask",
   opensheet: "openSheet",
   togglefloat: "toggleFloat",
+  confirmreminder: "confirmReminder",
+  managereminders: "manageReminders",
   noop: "noop",
 };
 const INVALID_DISPLAY_TEXT = new Set(["[object Object]", "undefined", "null", "NaN"]);
@@ -927,7 +953,7 @@ function statusText(status) {
   if (["success", "ok", "done"].includes(normalized)) return "已生成卡片";
   if (["failed", "error"].includes(normalized)) return "失败";
   if (normalized === "skipped") return "跳过";
-  if (normalized === "running") return "小佛助手正在理解";
+  if (normalized === "running") return "任务进行中";
   return "已生成卡片";
 }
 
@@ -1727,6 +1753,8 @@ Page({
     taskPanelReady: false,
     taskPanelLoading: false,
     memorySwitching: false,
+    memoryPreferences: [],
+    memoryPreferencesLoading: false,
     messages: [],
     conversations: [],
     activeConversationId: "",
@@ -1744,12 +1772,21 @@ Page({
     showCapabilityGuide: false,
     showHeaderMenu: false,
     showMemorySheet: false,
+    showReminderSheet: false,
     showPrivacySheet: false,
     connectionStatusText: "检测中",
     connectionStatusClass: "unknown",
     statusMachine: "public_ready",
     statusChips: ["校园助手"],
     headerStatusLine: "校园助手",
+    agentActivityState: "idle",
+    statusCapsuleText: "待命 · 校园工具可用",
+    statusCapsuleDetail: "课表事实由本机摘要、Release Pack 与校园工具核验。",
+    statusCapsuleExpanded: false,
+    inAppReminderBanner: null,
+    inAppReminderAcknowledging: false,
+    proactiveInsight: null,
+    contextualActions: [],
     runtimeModeLabel: "校园助手",
     conversationSubtitle: "新对话",
     memoryMode: "local_only",
@@ -1811,6 +1848,7 @@ Page({
     const showPrivacyTip = wx.getStorageSync(PRIVACY_TIP_KEY) !== true;
     const allowPersonalContext = aiAssistantService.isPersonalContextAllowed();
     const demoMode = demoData.normalizeDemoMode(options && options.demo);
+    const panelName = decodeQuery(options && options.panel).trim().toLowerCase();
     const activeConversation = conversationStore.getActiveConversation();
     const floatContext = options && options.from === "float" ? xiaofuFloatService.consumePendingContext() : null;
     const activeContextSlots = floatContext
@@ -1830,12 +1868,14 @@ Page({
       activeConversationId: activeConversation.conversationId,
       activeConversationTitle: activeConversation.title,
       activeConversationContext: activeContextSlots,
+      showReminderSheet: panelName === "reminders",
     }, privacyState, providerState, buildXiaofuFloatState());
     nextState.conversationTitle = activeConversation.title || "新对话";
     nextState.memoryMode = wx.getStorageSync("FOSU_AI_MEMORY_MODE") || "local_only";
     Object.assign(nextState, applyHeaderStatusPatch(nextState));
 
     this.setData(Object.assign(nextState, bottomScrollPatch(false)));
+    this.refreshProactiveWorkspace();
     this.initVoiceInput();
     this.refreshConnectionStatus();
 
@@ -1855,14 +1895,183 @@ Page({
         statusMachine: status.statusMachine || "public_ready",
         memoryMode: this.data.memoryMode || "local_only",
       });
+      const connectionPatch = {};
+      if (!this.data.sending && this.data.agentActivityState !== "waiting_confirmation") {
+        if (status.statusMachine === "network_offline" || status.connectionStatusClass === "offline") {
+          Object.assign(connectionPatch, {
+            agentActivityState: "network_error",
+            statusCapsuleText: "网络异常 · 可使用本机能力",
+            statusCapsuleDetail: "联网工具暂不可用；已缓存的个人课表和正式版规则仍可继续使用。",
+            statusCapsuleExpanded: false,
+          });
+        } else {
+          Object.assign(connectionPatch, {
+            agentActivityState: "idle",
+            statusCapsuleText: status.statusMachine === "enhanced_degraded"
+              ? "待命 · 增强能力已降级"
+              : "待命 · 校园工具可用",
+            statusCapsuleDetail: status.statusMachine === "enhanced_degraded"
+              ? "课表任务仍由确定性校园工具完成。"
+              : "课表事实由本机摘要、Release Pack 与校园工具核验。",
+            statusCapsuleExpanded: false,
+          });
+        }
+      }
       this.setData(Object.assign({
         connectionStatusText: status.connectionStatusText,
         connectionStatusClass: status.connectionStatusClass,
         statusMachine: status.statusMachine || "public_ready",
         runtimeMode: status.runtimeMode || this.data.runtimeMode || "public",
         runtimeModeLabel,
-      }, headerPatch));
+      }, headerPatch, connectionPatch));
     });
+  },
+
+  refreshProactiveWorkspace() {
+    let workspace;
+    let proactiveContext = null;
+    try {
+      proactiveContext = aiAssistantService.buildClientContext({
+        conversationId: this.data.activeConversationId,
+        contextSlots: this.data.activeConversationContext,
+        memoryMode: this.data.memoryMode,
+      });
+      workspace = aiAssistantService.buildProactiveWorkspace(proactiveContext);
+    } catch (error) {
+      workspace = aiAssistantService.buildProactiveWorkspace({
+        currentScheduleSummary: { enabled: false, courses: [] },
+      });
+    }
+    const insight = workspace && workspace.insight || null;
+    const contextualActions = Array.isArray(workspace && workspace.actions)
+      ? workspace.actions.slice(0, 3)
+      : [];
+    this.setData({ proactiveInsight: insight, contextualActions });
+    if (insight) xiaofuFloatService.setProactiveInsight(insight);
+    if (proactiveContext && proactiveContext.scheduleChangePending === true
+      && proactiveContext.scheduleChangeBaseline && proactiveContext.currentScheduleSummary) {
+      const baselineFingerprint = proactiveContext.scheduleChangeBaseline.fingerprint || "baseline";
+      const currentFingerprint = proactiveContext.currentScheduleSummary.fingerprint
+        || proactiveContext.scheduleChangeDetectedAt || "current";
+      const reportKey = `schedule-change:${baselineFingerprint}:${currentFingerprint}`.slice(0, 120);
+      if (this._reportedScheduleChangeKey !== reportKey) {
+        this._reportedScheduleChangeKey = reportKey;
+        courseReminderClient.reportScheduleChange({
+          currentScheduleSummary: proactiveContext.currentScheduleSummary,
+          baselineScheduleSummary: proactiveContext.scheduleChangeBaseline,
+          todayDate: proactiveContext.todayDate,
+          todayWeekday: proactiveContext.todayWeekday,
+          currentTeachingWeek: proactiveContext.currentTeachingWeek,
+          idempotencyKey: reportKey,
+        }).then((result) => {
+          if (!result || result.success !== true) this._reportedScheduleChangeKey = "";
+        }).catch(() => {
+          this._reportedScheduleChangeKey = "";
+        });
+      }
+    }
+  },
+
+  refreshInAppReminders() {
+    if (this._inAppReminderFetchPending) return;
+    this._inAppReminderFetchPending = true;
+    courseReminderClient.listInAppEvents(5).then((result) => {
+      if (this._aiPageUnloaded || !result || result.success !== true) return;
+      const source = Array.isArray(result.items) && result.items.length ? result.items[0] : null;
+      if (!source) {
+        this.setData({ inAppReminderBanner: null });
+        return;
+      }
+      const occurrence = source.occurrence && typeof source.occurrence === "object" ? source.occurrence : {};
+      const courseName = String(occurrence.courseName || "课程提醒").slice(0, 60);
+      const detail = [
+        occurrence.date,
+        occurrence.startTime,
+        occurrence.classroom,
+        occurrence.teacherName,
+        occurrence.campus,
+      ].filter(Boolean).map((item) => String(item).replace(/[\r\n]+/g, " ").slice(0, 60)).join(" · ");
+      this.setData({
+        inAppReminderBanner: {
+          id: String(source.id || "").slice(0, 80),
+          kind: source.kind === "schedule_change" ? "schedule_change" : "course_start",
+          eyebrow: source.kind === "schedule_change" ? "课表变化提醒" : "应用内课程提醒",
+          title: source.kind === "schedule_change" ? `${courseName} 的安排有变化` : courseName,
+          detail: detail || "打开今日课表查看详情",
+          actionLabel: "查看今日课表",
+        },
+      });
+    }).catch(() => {
+      // 离线或 Session 不可用时保持当前页面可用，不伪造提醒已送达。
+    }).finally(() => {
+      this._inAppReminderFetchPending = false;
+    });
+  },
+
+  async acknowledgeInAppReminder(navigateAfter) {
+    const banner = this.data.inAppReminderBanner || {};
+    if (!banner.id || this._inAppReminderAckRunning) return;
+    this._inAppReminderAckRunning = true;
+    this.setData({ inAppReminderAcknowledging: true });
+    try {
+      const result = await courseReminderClient.acknowledgeInAppEvent(banner.id);
+      if (!result || result.success !== true) {
+        wx.showToast({ title: result && result.error || "提醒状态更新失败", icon: "none" });
+        return;
+      }
+      this.setData({ inAppReminderBanner: null });
+      if (navigateAfter === true) this.navigateByUrl("/pages/today/today");
+    } catch (error) {
+      wx.showToast({ title: "提醒状态更新失败", icon: "none" });
+    } finally {
+      this._inAppReminderAckRunning = false;
+      if (!this._aiPageUnloaded) this.setData({ inAppReminderAcknowledging: false });
+    }
+  },
+
+  onOpenInAppReminder() {
+    this.acknowledgeInAppReminder(true);
+  },
+
+  onAcknowledgeInAppReminder() {
+    this.acknowledgeInAppReminder(false);
+  },
+
+  toggleStatusCapsule() {
+    this.setData({ statusCapsuleExpanded: !this.data.statusCapsuleExpanded });
+  },
+
+  onProactiveInsightTap() {
+    const insight = this.data.proactiveInsight || {};
+    if (insight.actionUrl) {
+      this.navigateByUrl(insight.actionUrl);
+      return;
+    }
+    if (insight.actionMessage) this.queueTaskMessage(insight.actionMessage);
+  },
+
+  onContextualActionTap(event) {
+    const index = Number(event && event.currentTarget && event.currentTarget.dataset && event.currentTarget.dataset.index);
+    const action = (this.data.contextualActions || [])[index];
+    if (!action) return;
+    if (action.url) {
+      this.navigateByUrl(action.url);
+      return;
+    }
+    if (action.message) this.queueTaskMessage(action.message);
+  },
+
+  scheduleStatusCapsuleReset() {
+    if (this._statusCapsuleResetTimer) clearTimeout(this._statusCapsuleResetTimer);
+    this._statusCapsuleResetTimer = setTimeout(() => {
+      if (this._aiPageUnloaded || this.data.sending || this.data.agentActivityState === "waiting_confirmation") return;
+      this.setData({
+        agentActivityState: "idle",
+        statusCapsuleText: "待命 · 校园工具可用",
+        statusCapsuleDetail: "课表事实由本机摘要、Release Pack 与校园工具核验。",
+        statusCapsuleExpanded: false,
+      });
+    }, 1800);
   },
 
   async refreshConversationList() {
@@ -1894,11 +2103,14 @@ Page({
     nextState.headerSubtitle = buildHeaderSubtitle(Object.assign({}, this.data, nextState));
     this.setData(nextState);
     this.refreshConnectionStatus();
+    this.refreshProactiveWorkspace();
+    this.refreshInAppReminders();
   },
 
   onUnload() {
     this._aiPageUnloaded = true;
     this._activeAiRequestId = "";
+    if (this._statusCapsuleResetTimer) clearTimeout(this._statusCapsuleResetTimer);
   },
 
   refreshConversationState(activeConversation) {
@@ -1953,6 +2165,7 @@ Page({
     if (!options || options.toast !== false) {
       wx.showToast({ title: "已新建对话", icon: "none" });
     }
+    this.refreshProactiveWorkspace();
     return conversation;
   },
 
@@ -2094,6 +2307,7 @@ Page({
       showPrivacySheet: false,
       showConversationSheet: false,
       showMemorySheet: false,
+      showReminderSheet: false,
     });
   },
 
@@ -2109,6 +2323,25 @@ Page({
   openPersonalSyncFromPlus() {
     this.setData({ showComposerPlus: false });
     this.navigateByUrl(PERSONAL_SYNC_URL, { toast: "已打开课表导入" });
+  },
+
+  createReminderFromPlus() {
+    this.setData({ showComposerPlus: false });
+    this.queueTaskMessage("以后上课前20分钟提醒我");
+  },
+
+  openRemindersFromPlus() {
+    this.setData({ showComposerPlus: false, showReminderSheet: true });
+  },
+
+  viewNextCourseFromPlus() {
+    this.setData({ showComposerPlus: false });
+    this.queueTaskMessage("我下一节课在哪，什么时候该出发？");
+  },
+
+  findEmptyRoomFromPlus() {
+    this.setData({ showComposerPlus: false });
+    this.queueTaskMessage("现在帮我找附近空教室");
   },
 
   openCampusMapFromPlus() {
@@ -2613,7 +2846,11 @@ Page({
       inputFocus: false,
       sending: true,
       slowRequest: false,
-      sendingStatusText: "正在理解你的问题",
+      sendingStatusText: "正在提交任务",
+      agentActivityState: "understanding",
+      statusCapsuleText: "正在提交校园任务",
+      statusCapsuleDetail: "等待服务端建立真实任务运行记录。",
+      statusCapsuleExpanded: true,
       liveRunVisible: true,
       liveRunEvents: [],
       liveRunExpanded: false,
@@ -2639,7 +2876,12 @@ Page({
         this.setMessages(nextMessages.concat(assistantMessage), {
           sending: false,
           slowRequest: false,
+          agentActivityState: "complete",
+          statusCapsuleText: "完成 · 演示结果已整理",
+          statusCapsuleDetail: "当前为本机演示数据。",
+          statusCapsuleExpanded: false,
         }, { save: false });
+        this.scheduleStatusCapsuleReset();
       }, 160);
       return;
     }
@@ -2703,7 +2945,45 @@ Page({
       onStatus: (status) => {
         if (!isRequestActive()) return;
         const text = status && status.text || "";
-        if (text) this.setData({ sendingStatusText: text });
+        const type = String(status && status.type || "");
+        const activityPatch = {};
+        if (status && status.type === "provider.started") {
+          Object.assign(activityPatch, {
+            agentActivityState: "thinking",
+            statusCapsuleText: text || "正在增强理解",
+            statusCapsuleDetail: "外部表达层已实际开始；校园事实仍只取自确定性工具。",
+          });
+        } else if (type === "tool.started") {
+          Object.assign(activityPatch, {
+            agentActivityState: "querying",
+            statusCapsuleText: text || "正在查询校园数据",
+            statusCapsuleDetail: "正在调用受控校园工具并记录可验证结果。",
+          });
+        } else if (type === "tool.completed" || type === "result.verifying" || type === "response.composing") {
+          Object.assign(activityPatch, {
+            agentActivityState: "composing",
+            statusCapsuleText: text || "正在组合工具结果",
+            statusCapsuleDetail: "正在核验并整理课表、地点或天气结果。",
+          });
+        } else if (type === "planner.started" || type === "plan.created" || type === "plan.replan") {
+          Object.assign(activityPatch, {
+            agentActivityState: "understanding",
+            statusCapsuleText: text || "正在理解任务",
+            statusCapsuleDetail: "正在生成受约束计划；不会直接改写校园事实。",
+          });
+        } else if (type === "run.degraded" || type === "provider.failed" || type === "run.status_unavailable") {
+          Object.assign(activityPatch, {
+            agentActivityState: "network_error",
+            statusCapsuleText: text || "增强能力异常 · 正在降级",
+            statusCapsuleDetail: "会保留确定性工具结果，不把 Provider 失败当作课表失败。",
+          });
+        }
+        if (text || Object.keys(activityPatch).length) {
+          this.setData(Object.assign({
+            sendingStatusText: text || this.data.sendingStatusText,
+            statusCapsuleExpanded: true,
+          }, activityPatch));
+        }
       },
       onRunCreated: (info) => {
         if (!isRequestActive()) return;
@@ -2744,12 +3024,25 @@ Page({
             liveRunVisible: false,
             liveRunEvents: [],
             sendingStatusText: "已取消",
+            agentActivityState: "idle",
+            statusCapsuleText: "任务已取消",
+            statusCapsuleDetail: "未继续执行后续工具或写操作。",
+            statusCapsuleExpanded: false,
             activeRunId: "",
             activePollToken: "",
           }, { save: true });
           return;
         }
         const safety = response && response.safety || {};
+        const memoryPreferencePatch = response && response.memoryPreferencePatch;
+        if (memoryPreferencePatch && typeof memoryPreferencePatch === "object" && Object.keys(memoryPreferencePatch).length) {
+          aiAssistantService.saveUserPreferences(Object.assign(
+            {},
+            aiAssistantService.getUserPreferences(),
+            memoryPreferencePatch
+          ));
+          this.loadMemoryPreferences();
+        }
         if (safety.pendingClarification) {
           aiAssistantService.setPendingClarification(safety.pendingClarification);
         } else if (safety.clearPendingClarification || response && response.metrics && response.metrics.intentName !== "clarify_missing_slot") {
@@ -2763,8 +3056,11 @@ Page({
         const presentationMode = response.presentationMode
           || (response.presentation && response.presentation.presentationMode)
           || "";
+        const responseCards = Array.isArray(response.cards) ? response.cards : [];
+        const waitingConfirmation = responseCards.some((card) => (Array.isArray(card && card.actions) ? card.actions : [])
+          .some((action) => action && action.type === "confirmReminder"));
         const assistantMessage = makeMessage("assistant", response.answer || "已为你整理以下结果。", {
-          cards: Array.isArray(response.cards) ? response.cards : [],
+          cards: responseCards,
           suggestions: Array.isArray(response.suggestions) ? response.suggestions : [],
           toolCalls: Array.isArray(response.toolCalls) ? response.toolCalls : [],
           taskSteps: Array.isArray(response.taskSteps) ? response.taskSteps : [],
@@ -2809,11 +3105,22 @@ Page({
           sending: false,
           slowRequest: false,
           sendingStatusText: "已完成",
+          agentActivityState: waitingConfirmation ? "waiting_confirmation" : "complete",
+          statusCapsuleText: waitingConfirmation ? "等待确认 · 尚未创建提醒" : "完成 · 结果已核验",
+          statusCapsuleDetail: waitingConfirmation
+            ? "写操作只有在你查看计划并点击确认后才会执行。"
+            : "已完成本次任务，可继续追问或执行卡片操作。",
+          statusCapsuleExpanded: waitingConfirmation,
           liveRunVisible: false,
           liveRunEvents: [],
           activeRunId: "",
           activePollToken: "",
         }, { save: true });
+        if (resolvedIntentName === "detect_schedule_changes") {
+          scheduleChangeTracker.acknowledge(clientContext.currentScheduleSummary);
+        }
+        this.refreshProactiveWorkspace();
+        if (!waitingConfirmation) this.scheduleStatusCapsuleReset();
       })
       .catch((error) => {
         if (!isRequestActive()) return;
@@ -2850,6 +3157,10 @@ Page({
           sending: false,
           slowRequest: false,
           sendingStatusText: "已生成卡片",
+          agentActivityState: "network_error",
+          statusCapsuleText: "服务异常 · 已提供降级入口",
+          statusCapsuleDetail: "问题已保留，可以重试或使用现有校园工具页面。",
+          statusCapsuleExpanded: true,
           liveRunVisible: false,
           liveRunEvents: [],
           activeRunId: "",
@@ -2990,6 +3301,29 @@ Page({
       showCapabilityGuide: false,
       showPrivacySheet: false,
     });
+    this.loadMemoryPreferences();
+  },
+
+  async loadMemoryPreferences() {
+    const localItems = aiAssistantService.getUserPreferenceItems();
+    if (this.data.memoryMode !== "cloud_sync") {
+      this.setData({
+        memoryPreferences: normalizeMemoryPreferenceItems(localItems),
+        memoryPreferencesLoading: false,
+      });
+      return;
+    }
+    this.setData({ memoryPreferencesLoading: true });
+    const cloud = await agentMemoryClient.listCloudPreferences();
+    const merged = {};
+    localItems.forEach((item) => { merged[item.key] = item; });
+    if (cloud.success) {
+      (cloud.items || []).forEach((item) => { merged[item.key] = item; });
+    }
+    this.setData({
+      memoryPreferences: normalizeMemoryPreferenceItems(Object.keys(merged).map((key) => merged[key])),
+      memoryPreferencesLoading: false,
+    });
   },
 
   closeMemorySheet() {
@@ -3113,11 +3447,36 @@ Page({
   onClearLocalMemory() {
     const conversationId = this.data.activeConversationId;
     if (conversationId) conversationStore.clearConversation(conversationId);
+    aiAssistantService.clearUserPreferences();
     this.setData({
       messages: [],
+      memoryPreferences: [],
       showMemorySheet: false,
     });
     wx.showToast({ title: "已清空本机消息", icon: "none" });
+  },
+
+  onDeleteMemoryPreference(event) {
+    const key = event.detail && event.detail.key || "";
+    if (!key) return;
+    wx.showModal({
+      title: "删除这项记忆",
+      content: "删除后，小佛不会再把它作为长期偏好使用。",
+      confirmText: "删除",
+      success: async (res) => {
+        if (!res.confirm) return;
+        if (this.data.memoryMode === "cloud_sync") {
+          const cloud = await agentMemoryClient.deleteCloudPreference(key);
+          if (!cloud.success) {
+            wx.showToast({ title: cloud.error || "云端删除失败", icon: "none" });
+            return;
+          }
+        }
+        aiAssistantService.deleteUserPreference(key);
+        await this.loadMemoryPreferences();
+        wx.showToast({ title: "已删除", icon: "none" });
+      },
+    });
   },
 
   onClearCurrentMemory() {
@@ -3160,7 +3519,9 @@ Page({
         this.setData(Object.assign({
           memoryMode: "local_only",
           showMemorySheet: false,
+          memoryPreferences: [],
         }, applyHeaderStatusPatch(Object.assign({}, this.data, { memoryMode: "local_only" }))));
+        aiAssistantService.clearUserPreferences();
         try { wx.setStorageSync("FOSU_AI_MEMORY_MODE", "local_only"); } catch (error) { /* ignore */ }
         try { wx.vibrateShort({ type: "medium" }); } catch (e) { /* ignore */ }
         wx.showToast({ title: "已清除云端记忆", icon: "none" });
@@ -3292,6 +3653,7 @@ Page({
       showConversationSheet: false,
       showMemorySheet: false,
       showComposerPlus: false,
+      showReminderSheet: false,
       privacyExpanded: false,
     });
   },
@@ -3438,7 +3800,96 @@ Page({
       this.openActionSheet(payload);
       return;
     }
+    if (type === "manageReminders") {
+      this.setData({ showReminderSheet: true });
+      return;
+    }
+    if (type === "confirmReminder") {
+      this.performReminderConfirmation(payload, context || {});
+      return;
+    }
     this.showActionFallback(action.toast || "暂时无法执行该操作");
+  },
+
+  async performReminderConfirmation(payload, context) {
+    const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+    if (source.operation !== "create" || !source.confirmationProof || !source.idempotencyKey) {
+      this.showActionFallback("确认已失效，请重新生成提醒计划");
+      return;
+    }
+    if (this._reminderActionRunning) return;
+    this._reminderActionRunning = true;
+    wx.showLoading({ title: "准备通知方式", mask: true });
+    try {
+      const capability = await courseReminderClient.getCapability();
+      const subscription = await courseReminderClient.requestWechatSubscription(
+        capability && capability.success ? capability : { configured: false, templateId: "" }
+      );
+      const result = await courseReminderClient.createReminder({
+        confirmationProof: source.confirmationProof,
+        idempotencyKey: source.idempotencyKey,
+        subscriptionStatus: subscription.status,
+      });
+      wx.hideLoading();
+      if (!result.success) {
+        this.showActionFallback(result.error || "提醒创建失败");
+        return;
+      }
+      const channelText = result.reminder && result.reminder.channel === "wechat_subscription"
+        ? "已创建微信订阅提醒"
+        : "已创建应用内提醒";
+      wx.showToast({ title: result.duplicate ? "提醒已经存在" : channelText, icon: "none", duration: 2400 });
+      this.setData({
+        agentActivityState: "complete",
+        statusCapsuleText: result.duplicate ? "完成 · 提醒已经存在" : "完成 · 提醒已创建",
+        statusCapsuleDetail: result.reminder && result.reminder.channel === "wechat_subscription"
+          ? "将按本次微信订阅授权和提醒计划尝试发送。"
+          : "当前使用应用内提醒；不会声称可绕过微信授权推送。",
+        statusCapsuleExpanded: false,
+      });
+      const messageIndex = Number(context.messageIndex);
+      const cardIndex = Number(context.cardIndex);
+      const actionIndex = Number(context.actionIndex);
+      if (Number.isFinite(messageIndex) && Number.isFinite(cardIndex) && Number.isFinite(actionIndex)) {
+        const base = `messages[${messageIndex}].displayCards[${cardIndex}]`;
+        const badges = ((context.card && context.card.badges) || []).filter((item) => item !== "未执行写入");
+        if (badges.indexOf("已创建") < 0) badges.unshift("已创建");
+        this.setData({
+          [`${base}.badges`]: badges,
+          [`${base}.actions[${actionIndex}]`]: {
+            label: "管理提醒",
+            type: "manageReminders",
+            url: "",
+            payload: { sheet: "reminders" },
+          },
+        });
+      }
+      this.scheduleStatusCapsuleReset();
+    } catch (error) {
+      try { wx.hideLoading(); } catch (_) { /* ignore */ }
+      this.setData({
+        agentActivityState: "network_error",
+        statusCapsuleText: "提醒创建失败",
+        statusCapsuleDetail: "没有执行不完整写入，可重新生成提醒计划后再确认。",
+        statusCapsuleExpanded: true,
+      });
+      this.showActionFallback("提醒创建失败，请稍后重试");
+    } finally {
+      this._reminderActionRunning = false;
+    }
+  },
+
+  closeReminderSheet() {
+    this.setData({ showReminderSheet: false });
+  },
+
+  onReminderCreate() {
+    this.setData({ showReminderSheet: false });
+    this.queueTaskMessage("以后上课前20分钟提醒我");
+  },
+
+  onReminderChange() {
+    // The reminder sheet refreshes itself; no optimistic timetable mutation is needed.
   },
 
   showActionFallback(title) {
@@ -3461,6 +3912,10 @@ Page({
     }
     if (["privacy", "schedule-summary"].indexOf(sheet) >= 0) {
       this.openPrivacySheet();
+      return;
+    }
+    if (["reminder", "reminders", "course-reminders"].indexOf(sheet) >= 0) {
+      this.setData({ showReminderSheet: true });
       return;
     }
     if (["menu", "more"].indexOf(sheet) >= 0) {

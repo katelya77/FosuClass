@@ -178,27 +178,53 @@ function sanitizeContextSlots(value) {
 function sanitizeUserPreferences(value) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const campus = ["仙溪校区", "江湾校区"].includes(source.campus) ? source.campus : "";
+  const preferredName = sanitizeString(source.preferredName || "", 24).replace(/[，。！？,.!?]+$/g, "");
   const favoriteBuildings = Array.isArray(source.favoriteBuildings)
     ? source.favoriteBuildings.map((item) => sanitizeString(item, 40)).filter(Boolean).slice(0, 8)
     : [];
   const duration = Number(source.defaultEmptyRoomDurationSections);
+  const reminderLead = Number(source.defaultReminderLeadMinutes);
   const answerDetail = ["brief", "normal", "detailed"].includes(source.answerDetail) ? source.answerDetail : "normal";
   return {
     conversationId: sanitizeString(source.conversationId || source.conversation && source.conversation.conversationId || "", 80),
     protocolVersion: sanitizeString(source.protocolVersion || "", 24),
+    preferredName: /^[\u3400-\u9fffA-Za-z0-9·\-\s]{1,24}$/.test(preferredName) ? preferredName : "",
     campus,
     favoriteBuildings,
     defaultEmptyRoomDurationSections: Number.isFinite(duration) && duration > 0 ? Math.min(12, Math.max(1, Math.round(duration))) : 2,
+    defaultReminderLeadMinutes: Number.isFinite(reminderLead) && reminderLead >= 5 && reminderLead <= 180
+      ? Math.round(reminderLead)
+      : 20,
     allowMinimalScheduleSummary: source.allowMinimalScheduleSummary === true,
     answerDetail,
     weatherAdviceEnabled: source.weatherAdviceEnabled !== false,
-    localOnly: true,
+    localOnly: source.localOnly !== false,
   };
+}
+
+function sanitizeRecentMessages(value) {
+  const list = Array.isArray(value) ? value : [];
+  return list.slice(-8).map((item) => {
+    const source = item && typeof item === "object" && !Array.isArray(item) ? item : {};
+    return {
+      role: source.role === "user" ? "user" : "assistant",
+      content: redactSensitiveText(source.content || source.text || "").slice(0, 400),
+    };
+  }).filter((item) => item.content);
 }
 
 function sanitizeAgentContext(context) {
   const source = context && typeof context === "object" && !Array.isArray(context) ? context : {};
+  const memoryMode = ["local_only", "session_state", "cloud_sync"].includes(source.memoryMode)
+    ? source.memoryMode
+    : "local_only";
   return {
+    conversationId: sanitizeString(source.conversationId || source.conversation && source.conversation.conversationId || "", 80),
+    protocolVersion: sanitizeString(source.protocolVersion || "", 24),
+    memoryMode,
+    cloudSyncEnabled: memoryMode === "cloud_sync" && source.cloudSyncEnabled === true,
+    conversationSummary: redactSensitiveText(source.conversationSummary || "").slice(0, 400),
+    recentMessages: sanitizeRecentMessages(source.recentMessages),
     term: sanitizeString(source.term || source.semester || "", 40),
     releaseVersion: sanitizeString(source.releaseVersion || source.version || "", 80),
     envVersion: sanitizeString(source.envVersion || source.miniprogramVersion || "", 24),
@@ -228,6 +254,7 @@ function sanitizeAgentContext(context) {
       }
       : undefined,
     currentScheduleSummary: sanitizeScheduleSummary(source.currentScheduleSummary),
+    scheduleChangeBaseline: sanitizeScheduleSummary(source.scheduleChangeBaseline || source.previousScheduleSummary),
     latestScheduleImport: sanitizeLatestScheduleImport(source.latestScheduleImport),
     pendingClarification: sanitizePendingClarification(source.pendingClarification),
     contextSlots: sanitizeContextSlots(source.contextSlots || source.conversation && source.conversation.contextSlots),

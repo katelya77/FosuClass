@@ -362,8 +362,27 @@ function buildV2Response(payload = {}) {
     fallbackAllowed: payload.fallbackAllowed === true,
     externalProviderUsed: payload.externalProviderUsed === true,
     memory: stableMemory(payload.memory),
+    memoryPreferencePatch: stableMemoryPreferencePatch(payload.memoryPreferencePatch),
     serverTime: payload.serverTime || new Date().toISOString(),
   };
+}
+
+function stableMemoryPreferencePatch(value) {
+  const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const output = {};
+  const preferredName = safeProtocolText(source.preferredName || "", 24)
+    .replace(/[，。！？,.!?]+$/g, "");
+  if (/^[\u3400-\u9fffA-Za-z0-9·\-\s]{1,24}$/.test(preferredName)) {
+    output.preferredName = preferredName;
+  }
+  if (["仙溪校区", "江湾校区"].includes(source.campus)) {
+    output.campus = source.campus;
+  }
+  const lead = Number(source.defaultReminderLeadMinutes);
+  if (Number.isFinite(lead) && lead >= 5 && lead <= 180) {
+    output.defaultReminderLeadMinutes = Math.round(lead);
+  }
+  return output;
 }
 
 function stableMemory(memory = {}) {
