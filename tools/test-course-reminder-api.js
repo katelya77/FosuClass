@@ -80,6 +80,38 @@ async function run() {
         }],
       },
     };
+    
+    const planResponse = await request(baseUrl, "/api/ai/agent/reminders/plans?envVersion=release", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        leadMinutes: 30,
+        scope: "all_courses",
+        idempotencyKey: "reminder-api-plan-1",
+        currentScheduleSummary: context.currentScheduleSummary,
+        todayDate: context.todayDate,
+        todayWeekday: context.todayWeekday,
+        currentTeachingWeek: context.currentTeachingWeek,
+        clientTimestampMs: context.clientTimestampMs,
+      }),
+    });
+    assert.strictEqual(planResponse.status, 200, JSON.stringify(planResponse.data));
+    assert.strictEqual(planResponse.data.success, true);
+    assert.strictEqual(planResponse.data.plan.leadMinutes, 30);
+    assert.ok(planResponse.data.confirmationProof);
+    const createdFromPlan = await request(baseUrl, "/api/ai/agent/reminders?envVersion=release", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        confirmationProof: planResponse.data.confirmationProof,
+        idempotencyKey: "reminder-api-plan-1",
+        subscriptionStatus: "reject",
+      }),
+    });
+    assert.strictEqual(createdFromPlan.status, 200, JSON.stringify(createdFromPlan.data));
+    assert.strictEqual(createdFromPlan.data.success, true);
+    assert.strictEqual(createdFromPlan.data.reminder.leadMinutes, 30);
+
     const plan = planCourseReminder("以后上课前20分钟提醒我", context);
     const principal = resolvePrincipal({ serverSession: session.payload, runtimeMode: "public" });
     const idempotencyKey = "reminder-api-create-1";
@@ -154,8 +186,10 @@ async function run() {
     assert.strictEqual(paused.data.reminder.status, "paused");
 
     const listed = await request(baseUrl, "/api/ai/agent/reminders?envVersion=release", { headers });
-    assert.strictEqual(listed.data.items.length, 1);
-    assert.strictEqual(listed.data.items[0].status, "paused");
+    assert.ok(listed.data.items.length >= 1);
+    const pausedItem = listed.data.items.find((item) => item.id === reminderId);
+    assert.ok(pausedItem, "paused reminder should remain listed");
+    assert.strictEqual(pausedItem.status, "paused");
 
     const roomPlan = planCourseReminder("只有换教室时提醒我", context);
     const roomKey = "reminder-api-room-change-1";

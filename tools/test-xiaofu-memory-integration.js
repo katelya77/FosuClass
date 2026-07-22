@@ -58,7 +58,12 @@ function run() {
     || conversationSheet.includes("conversation-current"),
     "conversation sheet: preview/current layer"
   );
-  mustInclude(conversationSheet, "conversation-more", "conversation sheet");
+  assert.ok(
+    conversationSheet.includes("conversation-more")
+    || conversationSheet.includes("conversation-actions-rail")
+    || conversationSheet.includes("删除"),
+    "conversation sheet: overflow menu or swipe delete actions"
+  );
   mustNotInclude(conversationSheet, "本机与云端会话合并展示，不会重复条目", "false merge copy");
 
   mustInclude(transport, "callOracleViaRuns", "transport");
