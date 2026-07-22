@@ -1,10 +1,27 @@
 const safetyGuard = require("../safetyGuard");
+const { COURSE_TIMES } = require("../../../shared/courseWeekRules");
 
-const COURSE_START_TIMES = Object.freeze({
-  1: "08:00", 2: "08:45", 3: "09:40", 4: "10:25", 5: "11:10",
-  6: "13:30", 7: "14:15", 8: "15:10", 9: "15:55", 10: "16:40",
-  11: "18:30", 12: "19:15", 13: "20:05", 14: "20:50",
-});
+const COURSE_START_TIMES = Object.freeze(COURSE_TIMES.reduce((output, item) => {
+  output[item.section] = item.start;
+  return output;
+}, {}));
+const COURSE_END_TIMES = Object.freeze(COURSE_TIMES.reduce((output, item) => {
+  output[item.section] = item.end;
+  return output;
+}, {}));
+
+function timeMinutes(value) {
+  const match = String(value || "").match(/^(\d{2}):(\d{2})$/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : 0;
+}
+
+function formatCourseDuration(minutes) {
+  const value = Math.max(0, Math.round(Number(minutes || 0) || 0));
+  if (!value) return "以课表为准";
+  const hours = Math.floor(value / 60);
+  const rest = value % 60;
+  return [hours ? `${hours}小时` : "", rest ? `${rest}分钟` : ""].filter(Boolean).join("");
+}
 
 function clampLead(value, fallback) {
   const number = Number(value);
@@ -85,7 +102,10 @@ function teachingWeekForOffset(baseWeek, baseWeekday, offset) {
 }
 
 function occurrenceForCourse(course, dateText, week, leadMinutes) {
-  const startsAt = shanghaiIso(dateText, COURSE_START_TIMES[course.startSection]);
+  const startTime = COURSE_START_TIMES[course.startSection];
+  const endTime = COURSE_END_TIMES[course.endSection] || COURSE_END_TIMES[course.startSection] || "";
+  const durationMinutes = Math.max(0, timeMinutes(endTime) - timeMinutes(startTime));
+  const startsAt = shanghaiIso(dateText, startTime);
   if (!startsAt) return null;
   return {
     courseName: course.courseName,
@@ -97,7 +117,10 @@ function occurrenceForCourse(course, dateText, week, leadMinutes) {
     endSection: course.endSection,
     date: dateText,
     teachingWeek: week,
-    startTime: COURSE_START_TIMES[course.startSection],
+    startTime,
+    endTime,
+    durationMinutes,
+    durationText: formatCourseDuration(durationMinutes),
     startsAt,
     triggerAt: new Date(Date.parse(startsAt) - leadMinutes * 60000).toISOString(),
     pagePath: "pages/today/today",
@@ -237,10 +260,12 @@ function planCourseReminder(message, context = {}) {
 }
 
 module.exports = {
+  COURSE_END_TIMES,
   COURSE_START_TIMES,
   addDays,
   clampLead,
   computeNextOccurrence,
+  formatCourseDuration,
   parseLeadMinutes,
   parseWeekday,
   planCourseReminder,

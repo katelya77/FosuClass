@@ -35,5 +35,10 @@ const afterDynamic = text.slice(dynamicIndex);
 assert(afterDynamic.includes("provider-mode-grid"), "dynamic render must use two mode cards");
 assert(afterDynamic.includes("aiExperienceEnabled"), "dynamic render must include experience switch");
 assert(afterDynamic.includes("formatAiProviderVerifyResult"), "dynamic diagnostics formatter missing");
+assert(afterDynamic.includes("buildAiProviderVerifyPayload"), "provider verification should bind to the selected environment");
+assert(afterDynamic.includes("environment: environment"), "provider verification payload should include environment");
+assert(afterDynamic.includes('environment === "dev" ? "develop" : "trial"'), "dev verification should use the develop envVersion");
+assert(afterDynamic.includes("data-ai-experience-env"), "trial/dev should be directly switchable in the provider console");
+assert(afterDynamic.includes('mirrorEnvironments: []'), "saving one experience environment must not overwrite the other profile");
 
 console.log("test-admin-ai-provider-ux passed");

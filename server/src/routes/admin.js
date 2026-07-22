@@ -703,16 +703,19 @@ router.post("/ai-provider/config", verifyAdminWriteAccess, (req, res) => {
 router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res) => {
   try {
     const startedAt = Date.now();
+    const requestedEnvironment = aiProviderConfigService.normalizeEnvironment(req.body && req.body.environment || "trial");
+    const requestedEnvVersion = requestedEnvironment === "dev" ? "develop" : (requestedEnvironment === "public" ? "release" : "trial");
+    const requestedRuntimeMode = requestedEnvironment === "public" ? "public" : "competition";
     const runProbe = async (message, contextPatch = {}, inputPatch = {}) => agentService.chat(Object.assign({
       message,
       context: Object.assign({
         currentPage: "admin-ai-provider",
         timezone: "Asia/Shanghai",
-        envVersion: "trial",
-        runtimeMode: "competition",
+        envVersion: requestedEnvVersion,
+        runtimeMode: requestedRuntimeMode,
         currentScheduleSummary: { enabled: false, targetType: "", targetName: "", courses: [] },
       }, contextPatch),
-      runtimeMode: "competition",
+      runtimeMode: requestedRuntimeMode,
       serverSession: { adminProviderVerification: true },
     }, inputPatch));
     const summarizeProbe = (payload) => ({
@@ -752,7 +755,7 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
     const payload = (req.body && req.body.mode === "project_qa")
       ? projectPayload
       : deterministicPayload;
-    const providerStatus = aiProviderConfigService.getStatus();
+    const providerStatus = aiProviderConfigService.getStatus(requestedEnvironment);
     const deterministicSummary = summarizeProbe(deterministicPayload);
     const projectSummary = summarizeProbe(projectPayload);
     const forceSummary = summarizeProbe(forcePayload);
@@ -760,6 +763,7 @@ router.post("/ai-provider/verify", adminAuth.verifyAdminAccess, async (req, res)
     return res.json({
       success: true,
       data: {
+        environment: requestedEnvironment,
         provider: payload.safety && payload.safety.provider || "mock",
         desiredProvider: payload.safety && payload.safety.desiredProvider || "",
         resolvedProvider: payload.safety && payload.safety.resolvedProvider || "",

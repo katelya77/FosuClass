@@ -80,7 +80,9 @@ function evaluateEnvironment(environment = "public") {
     coze: {
       enabled: boolish(configValue(runtimeConfig, "COZE_ENABLED", provider === "coze" ? "true" : "false")),
       role: String(configValue(runtimeConfig, "COZE_PROVIDER_ROLE", "temporary") || "temporary"),
+      apiMode: String(configValue(runtimeConfig, "COZE_API_MODE", "bot") || "bot"),
       botConfigured: Boolean(configValue(runtimeConfig, "COZE_BOT_ID", "")),
+      projectConfigured: Boolean(configValue(runtimeConfig, "COZE_WORKLOAD_ENDPOINT", "") && configValue(runtimeConfig, "COZE_PROJECT_ID", "")),
       keyConfigured: Boolean(configValue(runtimeConfig, "COZE_API_KEY", "")),
       expiresAt: String(configValue(runtimeConfig, "COZE_EXPIRES_AT", "")),
       expired: cozeExpired,

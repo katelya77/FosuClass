@@ -75,7 +75,7 @@
 | `COZE_BOT_ID` | 空 | Coze Bot/Agent ID | 允许为空 |
 | `COZE_PROVIDER_ROLE` | `temporary` | Coze 角色标记，默认 temporary | 使用 temporary |
 | `WECHAT_COURSE_REMINDER_TEMPLATE_ID` | 空 | 微信一次性订阅消息模板 ID | 空时只保留应用内提醒，不声称已获推送能力 |
-| `WECHAT_COURSE_REMINDER_DATA_FIELDS_JSON` | 空 | 课程名、时间、教室、教师、校区到模板字段的 JSON 映射 | 空时使用 `thing1/time2/thing3/name4/thing5`，须与实际模板核对 |
+| `WECHAT_COURSE_REMINDER_DATA_FIELDS_JSON` | 空 | 课程名、时间、时长、教师、地点到模板字段的 JSON 映射 | 当前模板默认使用 `thing8/time15/thing2/thing14/thing4`；校区与教室合并写入地点 |
 | `WECHAT_REMINDER_MINIPROGRAM_STATE` | `formal` | 订阅消息跳转的小程序版本 | 使用 formal；开发验收可显式改为 developer/trial |
 | `WECHAT_REMINDER_TIMEOUT_MS` | `5000` | 微信接口超时 | 使用默认值 |
 | `FOSU_COURSE_REMINDER_DISPATCH_ENABLED` | `false` | 是否启动安全定时发送器 | 默认关闭，模板、密钥和单实例调度确认完成后再开启 |
@@ -98,8 +98,11 @@
 | `CLOUDBASE_OPENAI_TIMEOUT_MS` | `15000` | CloudBase provider timeout | 使用默认值 |
 | `CLOUDBASE_OPENAI_MAX_TOKENS` | `1200` | CloudBase provider max output tokens | 使用默认值 |
 | `COZE_API_BASE_URL` | `https://api.coze.cn` | Coze API 地址 | 使用默认值 |
+| `COZE_API_MODE` | `bot` | `bot` 为标准 API；`workload` 为扣子编程已部署项目 API | 使用标准 API |
 | `COZE_BOT_ID` | 空 | Coze bot id | Coze 状态显示未配置，调用时 fallback |
 | `COZE_CHAT_ENDPOINT` | `/v3/chat` | Coze chat endpoint | 使用默认值 |
+| `COZE_WORKLOAD_ENDPOINT` | 空 | 扣子编程部署页生成的 `https://*.coze.site/stream_run` 入口 | workload 模式未配置并自动 fallback |
+| `COZE_PROJECT_ID` | 空 | 扣子编程部署项目 ID | workload 模式未配置并自动 fallback |
 
 ## 固定部署默认值
 

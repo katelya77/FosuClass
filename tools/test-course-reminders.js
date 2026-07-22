@@ -68,6 +68,9 @@ async function run() {
   assert.strictEqual(allCourses.requiresConfirmation, true);
   assert.strictEqual(allCourses.timezone, "Asia/Shanghai");
   assert.strictEqual(allCourses.nextOccurrence.courseName, "动物解剖学");
+  assert.strictEqual(allCourses.nextOccurrence.endTime, "14:55");
+  assert.strictEqual(allCourses.nextOccurrence.durationMinutes, 85);
+  assert.strictEqual(allCourses.nextOccurrence.durationText, "1小时25分钟");
   assert.strictEqual(allCourses.nextTriggerAt, "2026-07-23T05:10:00.000Z");
 
   const firstTomorrow = planCourseReminder("明天第一节课提前半小时通知", context);

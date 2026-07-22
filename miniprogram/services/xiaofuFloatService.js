@@ -3,6 +3,7 @@ const POSITION_KEY = "FOSU_XIAOFU_FLOAT_POSITION";
 const HIDDEN_ROUTES_KEY = "FOSU_XIAOFU_FLOAT_HIDDEN_ROUTES";
 const PENDING_CONTEXT_KEY = "FOSU_XIAOFU_FLOAT_PENDING_CONTEXT";
 const PROACTIVE_INSIGHT_KEY = "FOSU_XIAOFU_PROACTIVE_INSIGHT";
+const DISMISSED_INSIGHT_KEY = "FOSU_XIAOFU_DISMISSED_INSIGHT";
 
 const TABBAR_ROUTES = [
   "pages/index/index",
@@ -278,6 +279,31 @@ function setProactiveInsight(insight) {
   return payload;
 }
 
+function proactiveInsightFingerprint(insight) {
+  const source = insight && typeof insight === "object" && !Array.isArray(insight) ? insight : {};
+  return ["kind", "eyebrow", "title", "detail", "actionLabel", "actionUrl", "actionMessage"]
+    .map((key) => safeText(source[key], key === "detail" || key === "actionMessage" ? 160 : 100))
+    .join("\u001f");
+}
+
+function dismissProactiveInsight(insight) {
+  const fingerprint = proactiveInsightFingerprint(insight);
+  if (!fingerprint.replace(/\u001f/g, "")) return false;
+  return writeStorage(DISMISSED_INSIGHT_KEY, { fingerprint, dismissedAt: new Date().toISOString() });
+}
+
+function isProactiveInsightDismissed(insight, maxAgeMs) {
+  const value = readStorage(DISMISSED_INSIGHT_KEY, null);
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const dismissedAt = Date.parse(value.dismissedAt || "");
+  const ageLimit = Math.max(15 * 60 * 1000, Number(maxAgeMs || 24 * 60 * 60 * 1000));
+  if (!dismissedAt || Date.now() - dismissedAt > ageLimit) {
+    removeStorage(DISMISSED_INSIGHT_KEY);
+    return false;
+  }
+  return value.fingerprint === proactiveInsightFingerprint(insight);
+}
+
 function getProactiveInsight(maxAgeMs) {
   const value = readStorage(PROACTIVE_INSIGHT_KEY, null);
   if (!value || typeof value !== "object" || Array.isArray(value) || !safeText(value.title, 100)) return null;
@@ -298,6 +324,7 @@ function getProactiveInsight(maxAgeMs) {
 
 module.exports = {
   ENABLED_KEY,
+  DISMISSED_INSIGHT_KEY,
   HIDDEN_ROUTES_KEY,
   PENDING_CONTEXT_KEY,
   POSITION_KEY,
@@ -305,13 +332,16 @@ module.exports = {
   buildPageContext,
   clearHiddenRoutes,
   consumePendingContext,
+  dismissProactiveInsight,
   enableEverywhere,
   getPosition,
   getProactiveInsight,
   getRoutePolicy,
   isEnabled,
+  isProactiveInsightDismissed,
   isRouteHidden,
   normalizeRoute,
+  proactiveInsightFingerprint,
   savePendingContext,
   savePosition,
   setEnabled,
