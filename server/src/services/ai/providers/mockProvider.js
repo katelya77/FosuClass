@@ -632,25 +632,30 @@ function buildCourseReminder(result = {}, toolName = "") {
   const description = roomChange
     ? "仅当个人课表中检测到教室变化时触发"
     : [occurrence.courseName, occurrence.date, occurrence.startTime, occurrence.classroom].filter(Boolean).join(" · ");
-  const confirmContent = roomChange
-    ? "仅在检测到教室变化时提醒；发送前仍受微信订阅授权限制。"
-    : `${description || "下一次课程"}，提前 ${result.leadMinutes} 分钟提醒。`;
-  const action = Object.assign(
-    makeAction("确认并选择通知方式", "confirmReminder", "", { operation: "create" }),
-    { confirm: { title: "确认课程提醒", content: confirmContent, confirmText: "继续", cancelText: "取消" } }
-  );
+  // One-tap create: no extra modal (keeps WeChat requestSubscribeMessage gesture).
+  // Client configure path uses leadMinutes/scope; proof is attached later for fallback only.
+  const action = makeAction("一键创建并授权通知", "confirmReminder", "", {
+    operation: "create",
+    leadMinutes: Number(result.leadMinutes || 20) || 20,
+    scope: result.scope || (roomChange ? "room_change" : "all_courses"),
+  });
   return {
-    answer: "提醒计划已经准备好，但还没有创建。请核对时间和范围，确认后再选择微信订阅或应用内提醒。",
+    answer: roomChange
+      ? "已准备好教室变化提醒。点「一键创建并授权通知」即可完成创建；可选择微信服务通知，未授权时自动保留应用内提醒。"
+      : `已准备好上课前提前 ${result.leadMinutes || 20} 分钟的提醒。点「一键创建并授权通知」即可完成；可选择微信服务通知，未授权时自动保留应用内提醒。`,
     cards: [makeCard("reminder", roomChange ? "教室变化提醒" : "上课提醒计划", description || "等待课程变化", {
-      badges: [roomChange ? "按变化触发" : `提前 ${result.leadMinutes} 分钟`, "未执行写入", "Asia/Shanghai"],
+      badges: [roomChange ? "按变化触发" : `提前 ${result.leadMinutes} 分钟`, "待你一键确认", "Asia/Shanghai"],
       items: roomChange ? [] : [{
         title: occurrence.courseName || "课程",
         subtitle: [occurrence.teacherName, occurrence.classroom, occurrence.campus].filter(Boolean).join(" · "),
         value: [occurrence.date, occurrence.startTime].filter(Boolean).join(" "),
       }],
-      actions: [action],
+      actions: [
+        action,
+        makeAction("打开提醒面板", "manageReminders", "", { sheet: "reminders", openCreate: true }),
+      ],
     })],
-    suggestions: ["查看提醒"],
+    suggestions: ["查看提醒", "默认提前30分钟提醒我"],
   };
 }
 

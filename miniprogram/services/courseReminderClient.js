@@ -123,30 +123,58 @@ async function planReminder(input) {
   }
 }
 
+
+async function configureReminder(input) {
+  const source = input || {};
+  try {
+    const response = await http.post(withEnv("/api/ai/agent/reminders/configure"), {
+      leadMinutes: Math.max(5, Math.min(180, Number(source.leadMinutes || 20) || 20)),
+      scope: safeText(source.scope, 32) || "all_courses",
+      idempotencyKey: safeText(source.idempotencyKey, 160),
+      subscriptionStatus: safeText(source.subscriptionStatus, 32) || "not_requested",
+      currentScheduleSummary: source.currentScheduleSummary && typeof source.currentScheduleSummary === "object"
+        ? source.currentScheduleSummary
+        : { enabled: false, courses: [] },
+      todayDate: safeText(source.todayDate, 10),
+      todayWeekday: Math.max(1, Math.min(7, Number(source.todayWeekday || 1) || 1)),
+      currentTeachingWeek: Math.max(0, Number(source.currentTeachingWeek || 0) || 0),
+      clientTimestampMs: Number(source.clientTimestampMs || Date.now()) || Date.now(),
+    }, options({ retries: 0, timeout: 20000 }));
+    if (!response || response.success === false) return mapFailure(response, "REMINDER_CREATE_FAILED");
+    return Object.assign({ success: true }, response);
+  } catch (error) {
+    return mapFailure(error, "REMINDER_CREATE_FAILED");
+  }
+}
+
 async function createReminderFromConfig(input) {
   const source = input || {};
-  const planResult = await planReminder(source);
-  if (!planResult.success) return planResult;
-  const subscription = source.subscriptionStatus
-    ? { status: safeText(source.subscriptionStatus, 32) }
-    : await requestWechatSubscription(source.capability || await getCapability());
-  const createResult = await createReminder({
-    confirmationProof: planResult.confirmationProof,
-    idempotencyKey: safeText(source.idempotencyKey, 160) || makeIdempotencyKey("create", "config"),
+  const idempotencyKey = safeText(source.idempotencyKey, 160) || makeIdempotencyKey("create", "config");
+  // Must request subscription while still inside the user-tap call stack.
+  // If capability was explicitly provided (even when not configured), do NOT await
+  // another network round-trip — that breaks WeChat's gesture requirement.
+  let subscription;
+  if (source.subscriptionStatus) {
+    subscription = { status: safeText(source.subscriptionStatus, 32) };
+  } else if (source.capability && typeof source.capability === "object") {
+    subscription = await requestWechatSubscription(source.capability);
+  } else {
+    const capability = await getCapability();
+    subscription = await requestWechatSubscription(capability);
+  }
+  const result = await configureReminder(Object.assign({}, source, {
+    idempotencyKey,
     subscriptionStatus: subscription.status || "not_requested",
-  });
-  if (!createResult.success) return createResult;
-  return Object.assign({}, createResult, {
-    plan: planResult.plan || null,
-    subscription,
-  });
+  }));
+  if (!result.success) return result;
+  return Object.assign({}, result, { subscription });
 }
 
 async function createReminder(input) {
   const source = input || {};
   try {
     const response = await http.post(withEnv("/api/ai/agent/reminders"), {
-      confirmationProof: safeText(source.confirmationProof, 8000),
+      confirmationProof: String(source.confirmationProof == null ? "" : source.confirmationProof).trim().slice(0, 120000),
       idempotencyKey: safeText(source.idempotencyKey, 160),
       subscriptionStatus: safeText(source.subscriptionStatus, 32) || "not_requested",
     }, options({ retries: 0, timeout: 15000 }));
@@ -199,7 +227,7 @@ async function updateReminder(input) {
   try {
     const response = await http.request(withEnv(`/api/ai/agent/reminders/${reminderId}`), "PATCH", {
       patch: source.patch && typeof source.patch === "object" ? source.patch : {},
-      confirmationProof: safeText(source.confirmationProof, 8000),
+      confirmationProof: String(source.confirmationProof == null ? "" : source.confirmationProof).trim().slice(0, 120000),
       idempotencyKey: safeText(source.idempotencyKey, 160),
     }, options({ retries: 0 }));
     if (!response || response.success === false) return mapFailure(response, "REMINDER_UPDATE_FAILED");
@@ -214,7 +242,7 @@ async function deleteReminder(input) {
   const reminderId = encodeURIComponent(safeText(source.reminderId, 80));
   try {
     const response = await http.request(withEnv(`/api/ai/agent/reminders/${reminderId}`), "DELETE", {
-      confirmationProof: safeText(source.confirmationProof, 8000),
+      confirmationProof: String(source.confirmationProof == null ? "" : source.confirmationProof).trim().slice(0, 120000),
       idempotencyKey: safeText(source.idempotencyKey, 160),
     }, options({ retries: 0 }));
     if (!response || response.success === false) return mapFailure(response, "REMINDER_DELETE_FAILED");
@@ -306,6 +334,7 @@ module.exports = {
   acknowledgeInAppEvent,
   createReminder,
   createReminderFromConfig,
+  configureReminder,
   planReminder,
   deleteReminder,
   getCapability,

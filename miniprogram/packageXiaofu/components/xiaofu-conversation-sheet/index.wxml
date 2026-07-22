@@ -3,7 +3,7 @@
   <view class="task-panel-head">
     <view class="panel-title-wrap">
       <view class="task-panel-title">对话</view>
-      <view class="task-panel-subtitle">管理本机对话；左滑可删除、置顶或清空</view>
+      <view class="task-panel-subtitle">管理本机对话 · 左滑可删除/置顶/清空</view>
     </view>
     <button class="sheet-close-icon" bindtap="onClose" aria-label="关闭">✕</button>
   </view>
@@ -44,6 +44,8 @@
             <text class="conversation-preview" wx:if="{{item.preview}}">{{item.preview}}</text>
           </view>
         </button>
+        <view class="conversation-swipe-edge" aria-hidden="true"></view>
+        <text class="conversation-swipe-hint" aria-hidden="true">‹‹</text>
       </view>
       <view class="conversation-actions-rail">
         <button class="rail-btn pin" catchtap="onPin" data-conversation-id="{{item.conversationId}}">{{item.pinned ? '取消置顶' : '置顶'}}</button>
