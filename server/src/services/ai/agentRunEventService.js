@@ -8,6 +8,7 @@ const { publicEventSummary, loadingTextForEvent } = require("./runEventCatalog")
 const DEFAULT_TTL_MS = Math.max(30_000, Number(process.env.AI_AGENT_RUN_TTL_MS || 180_000) || 180_000);
 const DEFAULT_MAX_RUNS = Math.max(32, Number(process.env.AI_AGENT_RUN_MAX || 256) || 256);
 const DEFAULT_TOTAL_TIMEOUT_MS = Math.max(5_000, Number(process.env.AI_AGENT_RUN_TOTAL_TIMEOUT_MS || 45_000) || 45_000);
+const TERMINAL_EVENT_TYPES = new Set(["run.completed", "run.degraded", "run.failed", "run.cancelled"]);
 
 const runs = new Map();
 
@@ -105,6 +106,11 @@ function authorizeRunAccess(run, options = {}) {
 function appendEvent(runId, event = {}) {
   const run = getRunRecord(runId);
   if (!run || run.cancelled && !String(event.type || "").startsWith("run.")) return null;
+  const eventType = String(event.type || "");
+  if (TERMINAL_EVENT_TYPES.has(eventType)) {
+    const previousTerminal = run.events.find((item) => item && TERMINAL_EVENT_TYPES.has(item.type));
+    if (previousTerminal) return previousTerminal;
+  }
   run.sequence += 1;
   const payload = publicEventSummary(Object.assign({}, event, {
     sequence: run.sequence,
