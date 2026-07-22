@@ -71,6 +71,26 @@ function run() {
   assert.strictEqual(providerConfigService.getStatus().deepseekKeyConfigured, true);
   assert(!JSON.stringify(providerConfigService.getStatus()).includes(secret), "reloaded status must not expose key");
 
+  const rotatedCozeSecret = "rotated-coze-runtime-secret-not-real";
+  process.env.COZE_API_KEY = "deployment-coze-secret-not-real";
+  providerConfigService.saveConfig({
+    environment: "trial",
+    activeEnvironment: "trial",
+    enabled: true,
+    provider: "coze",
+    cozeEnabled: true,
+    cozeApiMode: "workload",
+    cozeWorkloadEndpoint: "https://runtime-test.coze.site/stream_run",
+    cozeProjectId: "7664956206057914406",
+    cozeApiKey: rotatedCozeSecret,
+  });
+  process.env.COZE_API_KEY = "deployment-coze-secret-not-real";
+  assert.strictEqual(
+    providerConfigService.getRuntimeConfigForEnvironment("trial").COZE_API_KEY,
+    rotatedCozeSecret,
+    "encrypted runtime Coze token must survive restart and override the older deployment token",
+  );
+
   const plaintextSecret = "legacy-plaintext-secret";
   fs.writeFileSync(configPath, `${JSON.stringify({ AI_PROVIDER: "deepseek", AI_API_KEY: plaintextSecret }, null, 2)}\n`, "utf8");
   const migrated = runtimeStore.readRuntimeConfig();

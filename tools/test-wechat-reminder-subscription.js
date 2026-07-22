@@ -8,11 +8,46 @@ const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "fosu-wechat-reminder-"));
 
 const { WechatRecipientVault } = require("../server/src/services/ai/reminders/wechatRecipientVault");
 const {
+  DEFAULT_FIELD_MAP,
   WechatSubscriptionService,
+  buildTemplateData,
+  loadFieldMap,
   mapWechatSendError,
 } = require("../server/src/services/ai/reminders/wechatSubscriptionService");
 
 async function run() {
+  assert.deepStrictEqual(DEFAULT_FIELD_MAP, {
+    courseName: "thing8",
+    startTime: "time15",
+    duration: "thing2",
+    teacherName: "thing14",
+    classroom: "thing4",
+  });
+  assert.deepStrictEqual(loadFieldMap({
+    courseName: "thing8",
+    startTime: "time15",
+    duration: "thing2",
+    teacherName: "thing14",
+    classroom: "thing4",
+    campus: "thing99",
+    unexpected: "thing100",
+  }), DEFAULT_FIELD_MAP, "only supported template fields should be emitted");
+  assert.deepStrictEqual(buildTemplateData({
+    courseName: "动物解剖学",
+    date: "2026-07-23",
+    startTime: "13:30",
+    durationText: "1小时25分钟",
+    teacherName: "张老师",
+    campus: "仙溪校区",
+    classroom: "B8-203",
+  }, DEFAULT_FIELD_MAP), {
+    thing8: { value: "动物解剖学" },
+    time15: { value: "2026-07-23 13:30" },
+    thing2: { value: "1小时25分钟" },
+    thing14: { value: "张老师" },
+    thing4: { value: "仙溪校区 B8-203" },
+  });
+
   const vault = new WechatRecipientVault({
     dataDir: path.join(tempDir, "recipients"),
     secret: "test-wechat-recipient-secret-32-bytes",
@@ -66,6 +101,9 @@ async function run() {
         startsAt: "2026-07-23T05:30:00.000Z",
         date: "2026-07-23",
         startTime: "13:30",
+        endTime: "14:55",
+        durationMinutes: 85,
+        durationText: "1小时25分钟",
         classroom: "B8-203",
         teacherName: "张老师",
         campus: "仙溪校区",
@@ -77,11 +115,13 @@ async function run() {
   assert.strictEqual(sentBody.touser, "oRawOpenidMustStayServerSide");
   assert.strictEqual(sentBody.template_id, "tmpl-course-reminder");
   assert.strictEqual(sentBody.page, "pages/today/today");
-  const fieldValues = Object.values(sentBody.data).map((item) => item.value).join("|");
-  assert.ok(fieldValues.includes("动物解剖学"));
-  assert.ok(fieldValues.includes("B8-203"));
-  assert.ok(fieldValues.includes("张老师"));
-  assert.ok(fieldValues.includes("仙溪校区"));
+  assert.deepStrictEqual(sentBody.data, {
+    thing8: { value: "动物解剖学" },
+    time15: { value: "2026-07-23 13:30" },
+    thing2: { value: "1小时25分钟" },
+    thing14: { value: "张老师" },
+    thing4: { value: "仙溪校区 B8-203" },
+  });
 
   assert.deepStrictEqual(mapWechatSendError({ errcode: 43101 }), {
     success: false,

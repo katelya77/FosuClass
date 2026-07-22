@@ -8,6 +8,7 @@ const tests = [
   "tools/test-provider-readiness.js",
   "tools/test-provider-runtime-matrix.js",
   "tools/test-coze-provider-v3.js",
+  "tools/test-coze-workload-bootstrap.js",
   "tools/test-xiaofu-runtime-ui.js",
   "tools/test-xiaofu-memory-integration.js",
   "tools/test-course-reminders.js",
@@ -22,6 +23,7 @@ const tests = [
   "tools/test-schedule-change-tracker.js",
   "tools/test-xiaofu-proactive-workspace.js",
   "tools/test-xiaofu-full-width-reminder-entry.js",
+  "tools/test-xiaofu-quick-actions-ui.js",
   "tools/test-coze-connection-config-ux.js",
 ];
 

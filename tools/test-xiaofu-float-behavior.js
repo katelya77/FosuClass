@@ -98,6 +98,26 @@ function run() {
   assert.strictEqual(floatService.getRoutePolicy("packageXiaofu/pages/ai-assistant/ai-assistant").hidden, true, "AI page float should stay hidden by default");
   assert(instance.data.visible, "float should be visible on regular pages when enabled");
 
+  const insight = floatService.setProactiveInsight({
+    kind: "next_course",
+    eyebrow: "下一节课",
+    title: "动物解剖学 · 13:30",
+    actionMessage: "查看下一节课",
+  });
+  instance.refreshPosition();
+  assert.strictEqual(instance.data.hintText, insight.title, "new proactive insight should be visible");
+  calls.navigateTo.length = 0;
+  instance.onHintTap();
+  assert.strictEqual(instance.data.hintText, "", "tapping the information hint should dismiss it");
+  assert.strictEqual(calls.navigateTo.length, 0, "dismissing the information hint must not open the assistant");
+  assert.strictEqual(floatService.isProactiveInsightDismissed(insight), true, "dismissal should persist for the same insight");
+  floatService.setProactiveInsight(Object.assign({}, insight, { capturedAt: undefined }));
+  instance.refreshPosition();
+  assert.strictEqual(instance.data.hintText, "", "refreshing the same insight must not make it reappear");
+  floatService.setProactiveInsight(Object.assign({}, insight, { title: "动物解剖学 · 14:15" }));
+  instance.refreshPosition();
+  assert.strictEqual(instance.data.hintText, "动物解剖学 · 14:15", "a genuinely new insight should become visible");
+
   instance.onTouchStart({ touches: [makeTouch(340, 650)] });
   instance.onTouchMove({ touches: [makeTouch(344, 653)] });
   instance.onTouchEnd({ changedTouches: [makeTouch(344, 653)] });
@@ -159,6 +179,10 @@ function run() {
 
   const settingsJs = fs.readFileSync(path.join(ROOT, "miniprogram/pages/settings/settings.js"), "utf8");
   const settingsWxml = fs.readFileSync(path.join(ROOT, "miniprogram/pages/settings/settings.wxml"), "utf8");
+  const floatWxml = fs.readFileSync(path.join(ROOT, "miniprogram/components/xiaofu-float/index.wxml"), "utf8");
+  const floatWxss = fs.readFileSync(path.join(ROOT, "miniprogram/components/xiaofu-float/index.wxss"), "utf8");
+  assert(floatWxml.includes('catchtap="onHintTap"'), "information hint should expose an explicit dismiss tap");
+  assert(!/\.xiaofu-float-hint\s*\{[^}]*pointer-events\s*:\s*none/s.test(floatWxss), "information hint must be tappable");
   assert(settingsJs.includes("xiaofuFloatService.enableEverywhere()"), "settings page should be able to re-enable the float");
   assert(settingsJs.includes("xiaofuFloatService.setEnabled(false)"), "settings page should be able to close the float");
   assert(settingsWxml.includes('bindchange="onXiaofuFloatToggle"'), "settings page should expose the float switch");
