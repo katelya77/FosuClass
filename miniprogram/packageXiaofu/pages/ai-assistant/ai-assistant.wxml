@@ -279,17 +279,37 @@
       <view class="settings-sheet-title">快捷操作</view>
       <button class="sheet-close-icon" bindtap="closeComposerPlus" aria-label="关闭">✕</button>
     </view>
-    <view class="plus-action-list">
-      <button class="plus-action-row" bindtap="openTaskPanelFromPlus">校园工具</button>
-      <button class="plus-action-row" bindtap="openPersonalSyncFromPlus">导入课表</button>
-      <button class="plus-action-row" bindtap="createReminderFromPlus">创建提醒</button>
-      <button class="plus-action-row" bindtap="openRemindersFromPlus">管理提醒</button>
-      <button class="plus-action-row" bindtap="viewNextCourseFromPlus">查看下一节课</button>
-      <button class="plus-action-row" bindtap="findEmptyRoomFromPlus">找空教室</button>
-      <button class="plus-action-row" bindtap="openCampusMapFromPlus">校园地图</button>
-      <button class="plus-action-row" bindtap="startVoiceFromPlus" wx:if="{{voiceInputVisible}}">语音输入</button>
-      <button class="plus-action-row" bindtap="createNewConversationFromPlus">新建对话</button>
-    </view>
+    <scroll-view class="plus-action-scroll" scroll-y enhanced show-scrollbar="{{false}}">
+      <view class="plus-action-list">
+        <view class="plus-action-section-label">现在就做</view>
+        <view class="plus-action-grid">
+          <button class="plus-action-card" bindtap="viewNextCourseFromPlus">
+            <image class="plus-action-icon" src="/assets/icons/ai-actions/next-course.svg" mode="aspectFit" />
+            <view class="plus-action-copy"><view class="plus-action-title">下一节课</view><view class="plus-action-desc">地点与出发建议</view></view>
+          </button>
+          <button class="plus-action-card" bindtap="createReminderFromPlus">
+            <image class="plus-action-icon" src="/assets/icons/ai-actions/reminder-add.svg" mode="aspectFit" />
+            <view class="plus-action-copy"><view class="plus-action-title">创建提醒</view><view class="plus-action-desc">先确认再开启</view></view>
+          </button>
+          <button class="plus-action-card" bindtap="findEmptyRoomFromPlus">
+            <image class="plus-action-icon" src="/assets/icons/ai-actions/room-search.svg" mode="aspectFit" />
+            <view class="plus-action-copy"><view class="plus-action-title">找空教室</view><view class="plus-action-desc">按时段核验占用</view></view>
+          </button>
+          <button class="plus-action-card" bindtap="openPersonalSyncFromPlus">
+            <image class="plus-action-icon" src="/assets/icons/ai-actions/schedule-import.svg" mode="aspectFit" />
+            <view class="plus-action-copy"><view class="plus-action-title">导入课表</view><view class="plus-action-desc">补全个人上下文</view></view>
+          </button>
+        </view>
+        <view class="plus-action-section-label plus-action-more-label">更多入口</view>
+        <view class="plus-action-secondary">
+          <button class="plus-action-row" bindtap="openRemindersFromPlus"><image class="plus-action-icon" src="/assets/icons/ai-actions/reminder-manage.svg" mode="aspectFit" /><view class="plus-action-title">管理提醒</view><view class="plus-action-arrow">›</view></button>
+          <button class="plus-action-row" bindtap="openTaskPanelFromPlus"><image class="plus-action-icon" src="/assets/icons/ai-actions/campus-tools.svg" mode="aspectFit" /><view class="plus-action-title">校园工具</view><view class="plus-action-arrow">›</view></button>
+          <button class="plus-action-row" bindtap="openCampusMapFromPlus"><image class="plus-action-icon" src="/assets/icons/ai-actions/campus-map.svg" mode="aspectFit" /><view class="plus-action-title">校园地图</view><view class="plus-action-arrow">›</view></button>
+          <button class="plus-action-row" bindtap="startVoiceFromPlus" wx:if="{{voiceInputVisible}}"><image class="plus-action-icon" src="/assets/icons/ai-actions/voice.svg" mode="aspectFit" /><view class="plus-action-title">语音输入</view><view class="plus-action-arrow">›</view></button>
+          <button class="plus-action-row" bindtap="createNewConversationFromPlus"><image class="plus-action-icon" src="/assets/icons/ai-actions/conversation-new.svg" mode="aspectFit" /><view class="plus-action-title">新建对话</view><view class="plus-action-arrow">›</view></button>
+        </view>
+      </view>
+    </scroll-view>
   </view>
 
   <view class="bottom-sheet task-sheet" wx:if="{{showTaskPanel}}">

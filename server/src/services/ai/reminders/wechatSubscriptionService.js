@@ -2,11 +2,11 @@ const axios = require("axios");
 const { defaultWechatRecipientVault } = require("./wechatRecipientVault");
 
 const DEFAULT_FIELD_MAP = Object.freeze({
-  courseName: "thing1",
-  startTime: "time2",
-  classroom: "thing3",
-  teacherName: "name4",
-  campus: "thing5",
+  courseName: "thing8",
+  startTime: "time15",
+  duration: "thing2",
+  teacherName: "thing14",
+  classroom: "thing4",
 });
 
 function mapWechatSendError(payload = {}) {
@@ -51,12 +51,20 @@ function fieldMax(field) {
 
 function buildTemplateData(occurrence, fieldMap) {
   const source = occurrence && typeof occurrence === "object" ? occurrence : {};
+  const location = [source.campus, source.classroom]
+    .map((item) => String(item || "").trim())
+    .filter((item, index, items) => item && items.indexOf(item) === index)
+    .join(" ");
+  const durationMinutes = Math.max(0, Number(source.durationMinutes || 0) || 0);
+  const durationFallback = durationMinutes
+    ? [Math.floor(durationMinutes / 60) ? `${Math.floor(durationMinutes / 60)}小时` : "", durationMinutes % 60 ? `${durationMinutes % 60}分钟` : ""].filter(Boolean).join("")
+    : "";
   const logical = {
     courseName: source.courseName || "课程提醒",
     startTime: [source.date, source.startTime].filter(Boolean).join(" "),
-    classroom: source.classroom || "教室待定",
+    duration: source.durationText || durationFallback || "以课表为准",
     teacherName: source.teacherName || "教师待定",
-    campus: source.campus || "校区待定",
+    classroom: location || "地点待定",
   };
   const output = {};
   Object.keys(fieldMap).forEach((key) => {

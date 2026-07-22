@@ -2,18 +2,21 @@
   wx:if="{{visible}}"
   class="xiaofu-float {{moving ? 'moving' : ''}} {{dimmed ? 'dimmed' : ''}}"
   style="left: {{x}}px; top: {{y}}px; width: {{size}}px; height: {{size}}px;"
-  catchtouchstart="onTouchStart"
-  catchtouchmove="onTouchMove"
-  catchtouchend="onTouchEnd"
-  catchtouchcancel="onTouchCancel"
-  bindtap="onTap"
-  bindlongpress="onLongPress"
 >
-  <view class="xiaofu-float-hint {{hintSide}}" wx:if="{{hintText && !moving}}">
+  <view class="xiaofu-float-hint {{hintSide}}" wx:if="{{hintText && !moving}}" catchtap="onHintTap" aria-label="收起小佛提示">
+    <view class="xiaofu-float-hint-close">×</view>
     <view class="xiaofu-float-hint-eyebrow">{{hintEyebrow}}</view>
     <view class="xiaofu-float-hint-text">{{hintText}}</view>
   </view>
-  <view class="xiaofu-float-ball">
+  <view
+    class="xiaofu-float-ball"
+    catchtouchstart="onTouchStart"
+    catchtouchmove="onTouchMove"
+    catchtouchend="onTouchEnd"
+    catchtouchcancel="onTouchCancel"
+    bindtap="onTap"
+    bindlongpress="onLongPress"
+  >
     <image class="xiaofu-float-logo" src="/assets/icons/ai-campus-butler.png" mode="aspectFit" binderror="onLogoError" wx:if="{{logoReady}}" />
     <text wx:else class="xiaofu-float-text">佛</text>
   </view>

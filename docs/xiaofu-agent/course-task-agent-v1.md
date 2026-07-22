@@ -36,7 +36,8 @@ FOSU_COURSE_REMINDER_DISPATCH_INTERVAL_MS=60000
 WECHAT_APPID=
 WECHAT_APPSECRET=
 WECHAT_COURSE_REMINDER_TEMPLATE_ID=
-WECHAT_COURSE_REMINDER_DATA_FIELDS_JSON={"courseName":"thing1","startTime":"time2","classroom":"thing3","teacherName":"name4","campus":"thing5"}
+WECHAT_COURSE_REMINDER_TEMPLATE_ID=f-m3xKVLJpRAe63Ao0WRFGspF7se_t1Fb1rbqJJWIcQ
+WECHAT_COURSE_REMINDER_DATA_FIELDS_JSON={"courseName":"thing8","startTime":"time15","duration":"thing2","teacherName":"thing14","classroom":"thing4"}
 WECHAT_REMINDER_MINIPROGRAM_STATE=formal
 WECHAT_REMINDER_TIMEOUT_MS=5000
 ```
@@ -46,7 +47,7 @@ WECHAT_REMINDER_TIMEOUT_MS=5000
 ## 微信后台手动配置
 
 1. 登录微信公众平台，在“小程序 → 功能 → 订阅消息 → 公共模板库”选择合规的课程/上课提醒模板；普通模板不得描述成免授权永久推送。
-2. 记录模板 ID、页面标注的模板类型和课程名称、开始时间、教室、教师、校区五个字段的实际键名/类型；把字段键写入 `WECHAT_COURSE_REMINDER_DATA_FIELDS_JSON`。
+2. 当前“日程提醒”（模板编号 17406）使用课程名称、开始时间、时长、教师、地点五个字段；校区与教室会合并到“地点”，不得额外发送模板不存在的字段。
 3. 将模板 ID 写入服务端；小程序从受控 capability 接口读取模板 ID，不维护第二份配置。用户必须在点击“确认并授权”按钮后由 `wx.requestSubscribeMessage` 发起授权。
 4. 配置订阅消息跳转页面 `pages/today/today` 并确认该页面已在对应版本发布。
 5. 在正式开启调度前，用开发版/体验版完成授权拒绝、单次接受、模板错误、限流和超时测试。

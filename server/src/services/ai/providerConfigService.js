@@ -10,6 +10,7 @@ const CLOUDBASE_CLIENT_CONFIG_PATH = path.resolve(SERVER_ROOT, "..", "miniprogra
 
 const ENVIRONMENTS = ["public", "trial", "dev"];
 const EXTERNAL_PROVIDERS = ["cloudbase-openai", "deepseek", "coze"];
+const RUNTIME_SECRET_OVERRIDE_KEYS = new Set(["COZE_API_KEY"]);
 
 const AI_ENV_KEYS = [
   "AI_AGENT_ENABLED",
@@ -38,9 +39,12 @@ const AI_ENV_KEYS = [
   "COZE_PROVIDER_ROLE",
   "COZE_API_BASE_URL",
   "COZE_API_KEY",
+  "COZE_API_MODE",
   "COZE_BOT_ID",
   "COZE_AGENT_ID",
   "COZE_CHAT_ENDPOINT",
+  "COZE_WORKLOAD_ENDPOINT",
+  "COZE_PROJECT_ID",
   "COZE_TIMEOUT_MS",
   "COZE_POLL_ENABLED",
   "COZE_POLL_INTERVAL_MS",
@@ -79,7 +83,10 @@ const DEFAULTS = {
   COZE_EXPIRES_AT: "",
   COZE_PROVIDER_ROLE: "temporary",
   COZE_API_BASE_URL: "https://api.coze.cn",
+  COZE_API_MODE: "bot",
   COZE_CHAT_ENDPOINT: "/v3/chat",
+  COZE_WORKLOAD_ENDPOINT: "",
+  COZE_PROJECT_ID: "",
   COZE_TIMEOUT_MS: "15000",
   COZE_POLL_ENABLED: "true",
   COZE_POLL_INTERVAL_MS: "1000",
@@ -113,9 +120,12 @@ const PROFILE_FIELD_TO_ENV = {
   cozeExpiresAt: "COZE_EXPIRES_AT",
   cozeProviderRole: "COZE_PROVIDER_ROLE",
   cozeBaseUrl: "COZE_API_BASE_URL",
+  cozeApiMode: "COZE_API_MODE",
   cozeBotId: "COZE_BOT_ID",
   cozeAgentId: "COZE_AGENT_ID",
   cozeChatEndpoint: "COZE_CHAT_ENDPOINT",
+  cozeWorkloadEndpoint: "COZE_WORKLOAD_ENDPOINT",
+  cozeProjectId: "COZE_PROJECT_ID",
   cozeTimeoutMs: "COZE_TIMEOUT_MS",
   cozePollEnabled: "COZE_POLL_ENABLED",
   cozePollIntervalMs: "COZE_POLL_INTERVAL_MS",
@@ -198,6 +208,7 @@ function readRuntimeValuesResult() {
 }
 
 function getEffectiveValue(envFileValues, runtimeValues, key) {
+  if (RUNTIME_SECRET_OVERRIDE_KEYS.has(key) && runtimeValues[key]) return runtimeValues[key];
   return process.env[key] || runtimeValues[key] || envFileValues[key] || DEFAULTS[key] || "";
 }
 
@@ -259,9 +270,12 @@ function defaultProfile(environment) {
     cozeExpiresAt: "",
     cozeProviderRole: "temporary",
     cozeBaseUrl: DEFAULTS.COZE_API_BASE_URL,
+    cozeApiMode: DEFAULTS.COZE_API_MODE,
     cozeBotId: "",
     cozeAgentId: "",
     cozeChatEndpoint: DEFAULTS.COZE_CHAT_ENDPOINT,
+    cozeWorkloadEndpoint: DEFAULTS.COZE_WORKLOAD_ENDPOINT,
+    cozeProjectId: DEFAULTS.COZE_PROJECT_ID,
     cozeTimeoutMs: DEFAULTS.COZE_TIMEOUT_MS,
     cozePollEnabled: true,
     cozePollIntervalMs: DEFAULTS.COZE_POLL_INTERVAL_MS,
@@ -295,6 +309,7 @@ function normalizeProfile(profile = {}, environment = "public") {
       base[field] = String(base[field] == null ? "" : base[field]).trim();
     }
   });
+  base.cozeApiMode = base.cozeApiMode === "workload" ? "workload" : "bot";
   if (env === "public") {
     base.enabled = false;
     base.provider = "mock";
@@ -535,11 +550,12 @@ function getCloudbaseHunyuanStatus() {
 }
 
 function getKeyStatus(envFileValues, runtimeValues) {
+  const cozeKey = runtimeValues.COZE_API_KEY || process.env.COZE_API_KEY || envFileValues.COZE_API_KEY || "";
   return {
     deepseekKeyConfigured: hasAnyDeepSeekKey(envFileValues, runtimeValues),
     deepseekKeyLast4: keyLast4(process.env.AI_API_KEY || process.env.DEEPSEEK_API_KEY || runtimeValues.AI_API_KEY || runtimeValues.DEEPSEEK_API_KEY || envFileValues.AI_API_KEY || envFileValues.DEEPSEEK_API_KEY),
-    cozeKeyConfigured: Boolean(process.env.COZE_API_KEY || runtimeValues.COZE_API_KEY || envFileValues.COZE_API_KEY),
-    cozeKeyLast4: keyLast4(process.env.COZE_API_KEY || runtimeValues.COZE_API_KEY || envFileValues.COZE_API_KEY),
+    cozeKeyConfigured: Boolean(cozeKey),
+    cozeKeyLast4: keyLast4(cozeKey),
     cloudbaseOpenaiKeyConfigured: hasCloudbaseOpenAiKey(envFileValues, runtimeValues),
     cloudbaseOpenaiKeyLast4: keyLast4(process.env.CLOUDBASE_OPENAI_API_KEY || runtimeValues.CLOUDBASE_OPENAI_API_KEY || envFileValues.CLOUDBASE_OPENAI_API_KEY),
   };
@@ -554,7 +570,11 @@ function providerCompleteness(provider, profile, keyStatus) {
   } else if (provider === "cloudbase-openai") {
     checks.push(["enabled", profile.cloudbaseOpenaiEnabled === true], ["baseUrl", Boolean(profile.cloudbaseOpenaiBaseUrl)], ["apiKey", Boolean(keyStatus.cloudbaseOpenaiKeyConfigured)], ["model", Boolean(profile.cloudbaseOpenaiTextModel)]);
   } else if (provider === "coze") {
-    checks.push(["baseUrl", Boolean(profile.cozeBaseUrl)], ["botId", Boolean(profile.cozeBotId)], ["apiKey", Boolean(keyStatus.cozeKeyConfigured)], ["endpoint", Boolean(profile.cozeChatEndpoint)]);
+    if (profile.cozeApiMode === "workload") {
+      checks.push(["workloadEndpoint", Boolean(profile.cozeWorkloadEndpoint)], ["projectId", Boolean(profile.cozeProjectId)], ["apiKey", Boolean(keyStatus.cozeKeyConfigured)]);
+    } else {
+      checks.push(["baseUrl", Boolean(profile.cozeBaseUrl)], ["botId", Boolean(profile.cozeBotId)], ["apiKey", Boolean(keyStatus.cozeKeyConfigured)], ["endpoint", Boolean(profile.cozeChatEndpoint)]);
+    }
   }
   const passed = checks.filter((item) => item[1]).length;
   return {
@@ -648,8 +668,12 @@ function getStatus(requestedEnvironment) {
     runtimeMode: activeUpdates.AI_RUNTIME_MODE,
     trialAuthorization: runtimeModeService.getAuthorizationStatus(),
     cozeBaseUrl: activeProfile.cozeBaseUrl,
+    cozeApiMode: activeProfile.cozeApiMode,
     cozeBotIdConfigured: Boolean(activeProfile.cozeBotId),
     cozeBotIdLast4: keyLast4(activeProfile.cozeBotId),
+    cozeWorkloadEndpointConfigured: Boolean(activeProfile.cozeWorkloadEndpoint),
+    cozeProjectIdConfigured: Boolean(activeProfile.cozeProjectId),
+    cozeProjectIdLast4: keyLast4(activeProfile.cozeProjectId),
     cozeUserIdMode: "principal_hmac",
     cozeChatEndpoint: activeProfile.cozeChatEndpoint,
     cozePollEnabled: activeProfile.cozePollEnabled,
@@ -727,7 +751,8 @@ function saveConfig(payload = {}) {
 function getEnvironmentForContext(context = {}, runtimeMode) {
   const mode = String(runtimeMode || "public").trim().toLowerCase();
   if (mode === "public") return "public";
-  if (mode === "dev") return "dev";
+  const envVersion = String(context.envVersion || context.deployEnv || "").trim().toLowerCase();
+  if (mode === "dev" || ["develop", "development", "dev", "devtools"].includes(envVersion)) return "dev";
   if (mode === "trial" || mode === "competition") return "trial";
   return "public";
 }

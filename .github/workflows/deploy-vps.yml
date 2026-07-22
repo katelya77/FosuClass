@@ -5,6 +5,12 @@ on:
     branches:
       - main
   workflow_dispatch:
+    inputs:
+      configure_coze_workload:
+        description: Configure trial/dev to use the deployed Coze project API and verify it
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   ci:
@@ -117,6 +123,7 @@ jobs:
           node --check src/workers/releaseWorker.js
           node --check scripts/security-postdeploy-check.js
           node --check scripts/reconcile-static-release.js
+          node --check scripts/configure-coze-workload.js
           node -e "require('./src/utils/courseNormalizer'); console.log('courseNormalizer ok')"
           node -e "require('./src/utils/scheduleNormalizer'); console.log('scheduleNormalizer ok')"
 
@@ -570,3 +577,16 @@ jobs:
           echo "Health: http://127.0.0.1:18318/api/health"
           echo "Public API: https://class.katelya.eu.org"
           echo "Static releases: https://class.katelya.eu.org/static/releases"
+
+      - name: Configure and verify Coze workload
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.configure_coze_workload }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            set -euo pipefail
+            cd '${{ secrets.VPS_APP_DIR }}/server'
+            sudo docker exec -e COZE_WORKLOAD_ENDPOINT='${{ vars.COZE_WORKLOAD_ENDPOINT }}' -e COZE_PROJECT_ID='${{ vars.COZE_PROJECT_ID }}' fosuclass-api sh -lc 'node scripts/configure-coze-workload.js --verify'
