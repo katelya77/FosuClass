@@ -86,8 +86,10 @@ async function run() {
   assert.ok(reminderCard, "reminder confirmation card required");
   const confirmAction = reminderCard.actions.find((action) => action.type === "confirmReminder");
   assert.ok(confirmAction, "confirmReminder action required");
-  assert.ok(confirmAction.confirm && confirmAction.confirm.content.includes("20"));
-  assert.ok(confirmAction.payload.confirmationProof);
+  // One-tap create: no secondary modal; lead/scope drive client configure path.
+  assert.strictEqual(Number(confirmAction.payload.leadMinutes), 20);
+  assert.ok(confirmAction.payload.scope);
+  assert.ok(confirmAction.payload.confirmationProof, "proof still attached as fallback");
   assert.ok(confirmAction.payload.idempotencyKey);
 
   const principal = resolvePrincipal({ serverSession, runtimeMode: "public" });

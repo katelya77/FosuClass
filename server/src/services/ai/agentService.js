@@ -86,12 +86,15 @@ function attachReminderConfirmation(response, execution, principal) {
       (Array.isArray(cards) ? cards : []).forEach((card) => {
         (Array.isArray(card && card.actions) ? card.actions : []).forEach((action) => {
           if (!action || action.type !== "confirmReminder") return;
+          // Keep lead/scope for one-tap client configure path; proof remains as secondary fallback.
           action.payload = Object.assign({}, action.payload || {}, {
             operation,
             reminderId,
             idempotencyKey,
             confirmationProof: confirmation.token,
             confirmationExpiresAt: confirmation.expiresAt,
+            leadMinutes: Number((payload && payload.leadMinutes) || (action.payload && action.payload.leadMinutes) || 20) || 20,
+            scope: String((payload && payload.scope) || (action.payload && action.payload.scope) || "all_courses").slice(0, 32),
           });
         });
       });
@@ -536,6 +539,38 @@ function buildPublicEvidence(evidence) {
   };
 }
 
+function sanitizePublicActionPayload(type, payload) {
+  const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
+  if (type === "manageReminders" || type === "openSheet") {
+    return {
+      sheet: String(source.sheet || source.name || source.target || "reminders").slice(0, 40),
+      openCreate: source.openCreate === true,
+    };
+  }
+  if (type === "confirmReminder") {
+    const lead = Number(source.leadMinutes);
+    return {
+      operation: ["create", "update", "delete"].includes(source.operation) ? source.operation : "create",
+      reminderId: String(source.reminderId || "").slice(0, 80),
+      leadMinutes: Number.isFinite(lead) ? Math.min(180, Math.max(5, Math.round(lead))) : 20,
+      scope: String(source.scope || "all_courses").slice(0, 32),
+      // confirmationProof is re-attached after buildResponse; keep empty here in public sanitize.
+      idempotencyKey: String(source.idempotencyKey || "").slice(0, 160),
+    };
+  }
+  if (type === "retry" || type === "ask") {
+    return {
+      message: sanitizePublicText(source.message || "", "").slice(0, 200),
+    };
+  }
+  if (type === "toggleFloat") {
+    return {
+      enabled: typeof source.enabled === "boolean" ? source.enabled : undefined,
+    };
+  }
+  return {};
+}
+
 function sanitizePublicAction(action) {
   const source = stableAction(action || {});
   const url = String(source.url || "");
@@ -543,7 +578,8 @@ function sanitizePublicAction(action) {
   return Object.assign({}, source, {
     label: sanitizePublicText(source.label, "查看"),
     url: safeUrl,
-    payload: {},
+    // Preserve allowlisted action payloads; do not blank manageReminders / confirmReminder / retry.
+    payload: sanitizePublicActionPayload(source.type, source.payload),
   });
 }
 
@@ -1159,6 +1195,20 @@ async function chat(input = {}) {
       confidence: 1,
       slots: personalMemoryTurn.preferencePatch || {},
     };
+    const preferenceActions = Array.isArray(personalMemoryTurn.actions) ? personalMemoryTurn.actions : [];
+    const preferenceCards = preferenceActions.length
+      ? [{
+        type: "reminder",
+        title: personalMemoryTurn.preferencePatch && personalMemoryTurn.preferencePatch.defaultReminderLeadMinutes
+          ? "默认提醒已更新"
+          : "提醒偏好",
+        subtitle: personalMemoryTurn.preferencePatch && personalMemoryTurn.preferencePatch.defaultReminderLeadMinutes
+          ? `上课前 ${personalMemoryTurn.preferencePatch.defaultReminderLeadMinutes} 分钟 · 可一键创建`
+          : "可直接点选，或打开智能课程提醒面板",
+        badges: ["智能配置", "本机偏好"],
+        actions: preferenceActions.slice(0, 3),
+      }]
+      : [];
     const response = attachMemory(buildResponse({
       protocolVersion,
       runId,
@@ -1168,9 +1218,9 @@ async function chat(input = {}) {
       requestedRuntimeMode: runtimeDecision.requestedMode,
       competitionAuthorized: runtimeDecision.authorized,
       answer: personalMemoryTurn.answer,
-      cards: [],
+      cards: preferenceCards,
       suggestions: personalMemoryTurn.intentName === "update_user_preference"
-        ? ["查看记忆", "设置默认提醒时间"]
+        ? ["打开智能课程提醒", "默认提前20分钟提醒我", "默认提前30分钟提醒我"]
         : [],
       toolCalls: [],
       intent: memoryIntent,
