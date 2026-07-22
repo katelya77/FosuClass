@@ -41,6 +41,7 @@ function run() {
   emitter({ type: "intent.resolved", intentName: "conversational_help" });
   emitter({ type: "response.composing", providerUsed: false });
   emitter({ type: "run.completed" });
+  emitter({ type: "run.completed" });
   agentRunEventService.setResult(created.runId, {
     success: true,
     answer: "你好，我是小佛助手。",
@@ -51,6 +52,11 @@ function run() {
   assert.strictEqual(view.ok, true);
   assert.strictEqual(view.status, "completed");
   assert.ok(view.events.some((item) => item.type === "run.accepted"));
+  assert.strictEqual(
+    view.events.filter((item) => item.type === "run.completed").length,
+    1,
+    "terminal run events must be idempotent"
+  );
   assert.ok(view.events.every((item) => !JSON.stringify(item).includes("openid")));
   assert.ok(view.result && view.result.answer);
 
