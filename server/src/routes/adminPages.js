@@ -14725,7 +14725,7 @@ const adminConsoleHtml = `<!doctype html>
               "Bot 选择器: " + (data.botSelectorAvailable ? "可用" : "不提供"),
               data.botSelectorReason || ""
             ].filter(Boolean);
-            if (box) box.textContent = lines.join("\n");
+            if (box) box.textContent = lines.join("\\n");
             showToast(data.success ? "Coze 连接验证通过。" : (data.message || "Coze 连接验证失败。"), data.success ? "success" : "warning");
           })
           .catch(function(error) {
