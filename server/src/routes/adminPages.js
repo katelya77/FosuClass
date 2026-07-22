@@ -14378,14 +14378,17 @@ const adminConsoleHtml = `<!doctype html>
           "</div>";
         }
         if (providerName === "coze") {
-          return "<div class='form-row'>" +
-            aiConfigInput("cozeBotId", "已发布 Bot ID", profile.cozeBotId || "", "从 Bot 构建页 URL 获取") +
-            aiConfigInput("cozeApiKey", "PAT / API Token", "", "留空表示使用已保存 Token", "password") +
-          "</div><input id='cozeBaseUrl' type='hidden' value='" + escapeHtml(profile.cozeBaseUrl || "https://api.coze.cn") + "'>" +
-          "<div class='ai-secret-note'>只需要 PAT/API Token 与已发布 Bot ID；匿名 user_id 由服务端按 Principal 自动生成。Token 仅显示掩码状态，不回传完整值。</div>" +
-          "<div class='ai-secret-note'>官方 Bot 列表接口还需要 Workspace/Space ID，本项目不增加多余凭据，也不伪造只凭 PAT 的选择器。请在 Coze Bot 构建页 URL 中复制 Bot ID，并确认已发布为 API 服务。</div>" +
+          return "<div class='form-row'><div><label>接入方式</label><select id='cozeApiMode'><option value='workload'>扣子编程 · 已部署项目 API</option><option value='bot'>标准 Coze Bot API</option></select></div>" +
+            aiConfigInput("cozeApiKey", "API Token", "", "留空表示使用已保存 Token", "password") +
+          "</div><div id='cozeWorkloadFields'>" +
+            "<div class='form-row'>" + aiConfigInput("cozeWorkloadEndpoint", "stream_run 部署入口", profile.cozeWorkloadEndpoint || "", "https://xxxx.coze.site/stream_run") + aiConfigInput("cozeProjectId", "项目 ID", profile.cozeProjectId || "", "部署页调用示例中的 project_id") + "</div>" +
+            "<div class='ai-secret-note'>适用于扣子编程部署页生成的项目 API：Bearer Token + stream_run + project_id。Token 只在服务端加密保存，可随时在这里留新值进行轮换。</div>" +
+          "</div><div id='cozeBotFields'>" +
+            "<div class='form-row'>" + aiConfigInput("cozeBotId", "已发布 Bot ID", profile.cozeBotId || "", "从 Bot 构建页 URL 获取") + aiConfigInput("cozeBaseUrl", "标准 API Base URL", profile.cozeBaseUrl || "https://api.coze.cn", "https://api.coze.cn") + "</div>" +
+            "<div class='ai-secret-note'>标准 Bot API 的匿名 user_id 由服务端按 Principal 自动生成。官方 Bot 列表接口还需要 Workspace/Space ID，本项目不伪造只凭 PAT 的选择器。</div>" +
+          "</div>" +
           "<div class='provider-actions-row' style='margin-top:12px;'><button id='cozeTestConnectionBtn' class='secondary' type='button'>测试 Coze 连接</button></div>" +
-          "<div id='cozeConnectionResult' class='ai-verify-box'>尚未测试。会区分 Token、Bot、发布状态、权限、限流与超时。</div>";
+          "<div id='cozeConnectionResult' class='ai-verify-box'>尚未测试。会区分 Token、项目/Bot、部署状态、权限、限流与超时。</div>";
         }
         return "<div class='form-row'>" +
           aiConfigInput("aiBaseUrl", "Base URL", profile.baseUrl, "https://api.deepseek.com") +
@@ -14399,7 +14402,15 @@ const adminConsoleHtml = `<!doctype html>
         "</div><div class='form-row'>" +
           "<div><label>json repair</label><select id='aiJsonRepair'><option value='true'>开启</option><option value='false'>关闭</option></select></div>" +
           "<div><label>Thinking</label><select id='aiThinkingEnabled'><option value='false'>关闭</option><option value='true'>开启</option></select></div>" +
-        "</div>";
+          "</div>";
+      }
+
+      function syncCozeModeFields() {
+        var mode = value("cozeApiMode") === "bot" ? "bot" : "workload";
+        var workload = $("cozeWorkloadFields");
+        var bot = $("cozeBotFields");
+        if (workload) workload.style.display = mode === "workload" ? "block" : "none";
+        if (bot) bot.style.display = mode === "bot" ? "block" : "none";
       }
 
       function renderAiProviderConfig() {
@@ -14565,6 +14576,7 @@ const adminConsoleHtml = `<!doctype html>
 
       function aiExperienceEnvironment() {
         var cfg = state.aiProviderConfig || {};
+        if (state.aiProviderEnvironment === "dev" || state.aiProviderEnvironment === "trial") return state.aiProviderEnvironment;
         return cfg.activeEnvironment === "dev" ? "dev" : "trial";
       }
 
@@ -14618,6 +14630,7 @@ const adminConsoleHtml = `<!doctype html>
             "</section>" +
             "<section class='provider-mode-card'>" +
               "<div class='provider-card-head'><div><div class='provider-card-title'>体验版 / 开发调试</div><div class='ai-secret-note'>只用于增强理解、槽位补全和表达组织；事实任务仍走工具链</div></div><span class='badge " + (experienceEnabled ? "warning" : "muted") + "'>" + (experienceEnabled ? "增强已启用" : "增强未启用") + "</span></div>" +
+              "<div class='env-tabs provider-experience-tabs'><button type='button' class='" + (experienceEnvName === "trial" ? "active" : "") + "' data-ai-experience-env='trial'>体验版</button><button type='button' class='" + (experienceEnvName === "dev" ? "active" : "") + "' data-ai-experience-env='dev'>开发版</button></div>" +
               "<label class='provider-switch-row'><span>启用增强理解能力</span><select id='aiExperienceEnabled'><option value='false'>关闭</option><option value='true'>开启</option></select></label>" +
               "<input id='aiProvider' type='hidden' value='" + escapeHtml(selectedProvider) + "'><input id='aiEnabled' type='hidden' value='" + (experienceEnabled ? "true" : "false") + "'><input id='aiProviderPolicy' type='hidden' value='auto'><input id='aiRuntimeMode' type='hidden' value='" + (experienceEnabled ? "competition" : "public") + "'>" +
               (experienceEnabled ? "<div class='provider-radio-group'>" + renderExperienceProviderRadios(selectedProvider) + "</div><div class='provider-selected-form'>" + renderProviderConfigFields(selectedProvider, experienceProfile) + "</div><label class='provider-checkbox-row'><input id='aiSaveAndVerify' type='checkbox' value='true'><span>保存后运行真实测试</span></label><div class='provider-actions-row'><button id='saveAiProviderBtn' class='primary'>保存并立即生效</button></div>" : "<div class='ai-secret-note'>关闭后会恢复正式版本地规则。需要调试时再开启并选择一个 Provider。</div>") +
@@ -14626,14 +14639,26 @@ const adminConsoleHtml = `<!doctype html>
           "<details class='diagnostic-panel'><summary>高级诊断</summary><div id='aiVerifyResult' class='ai-verify-box'>尚未测试。运行后会显示 resolvedProvider、latencyMs、fallback、toolCalls、answerSnippet。</div><div class='provider-actions-row' style='padding:12px;'><button id='verifyAiProviderBtn' class='secondary'>运行真实测试</button><button id='forceAiProviderChatBtn' class='secondary'>测试项目问答</button><button id='runAiGoldenEvalBtn' class='secondary'>黄金测试</button><button id='exportAiEvalReportBtn' class='ghost'>导出报告</button><button id='clearAiLocalMetricsBtn' class='ghost'>清除本地指标</button></div><div id='aiAgentStatusGrid' class='ai-provider-status' style='padding:0 12px 12px;'></div><div id='aiAgentEvalResult' class='ai-verify-box'>黄金测试尚未运行。</div></details>" +
         "</div>";
         setSelectValue("aiExperienceEnabled", experienceEnabled ? "true" : "false");
+        setSelectValue("cozeApiMode", experienceProfile.cozeApiMode === "bot" ? "bot" : "workload");
         setSelectValue("cozePollEnabled", experienceProfile.cozePollEnabled === false ? "false" : "true");
         setSelectValue("aiJsonRepair", experienceProfile.jsonRepair === false ? "false" : "true");
         setSelectValue("aiThinkingEnabled", experienceProfile.thinkingEnabled ? "true" : "false");
         bindAiProviderConsoleEvents();
+        syncCozeModeFields();
         renderAiAgentStatus();
       }
 
       function bindAiProviderConsoleEvents() {
+        document.querySelectorAll("[data-ai-experience-env]").forEach(function(button) {
+          button.addEventListener("click", function() {
+            var environment = button.dataset.aiExperienceEnv === "dev" ? "dev" : "trial";
+            state.aiProviderEnvironment = environment;
+            state.aiProviderDraftExperienceEnabled = false;
+            var envStatus = findAiEnvironment(environment) || {};
+            if (isExperienceProvider(envStatus.provider)) state.aiProviderSelectedProvider = envStatus.provider;
+            renderAiProviderConfig();
+          });
+        });
         document.querySelectorAll("[data-experience-provider]").forEach(function(input) {
           input.addEventListener("change", function() {
             state.aiProviderSelectedProvider = input.value || "cloudbase-openai";
@@ -14642,6 +14667,7 @@ const adminConsoleHtml = `<!doctype html>
         });
         safeBind("saveAiProviderBtn", "click", saveAiProviderConfig);
         safeBind("cozeTestConnectionBtn", "click", testCozeConnection);
+        safeBind("cozeApiMode", "change", syncCozeModeFields);
         safeBind("verifyAiProviderBtn", "click", verifyAiProviderConfig);
         safeBind("forceAiProviderChatBtn", "click", forceAiProviderChatTest);
         safeBind("reloadAiProviderBtn", "click", loadAiProviderConfig);
@@ -14681,12 +14707,12 @@ const adminConsoleHtml = `<!doctype html>
         var payload = {
           environment: aiExperienceEnvironment(),
           activeEnvironment: aiExperienceEnvironment(),
-          activeMode: "trial",
+          activeMode: aiExperienceEnvironment(),
           enabled: true,
           provider: provider,
           providerPolicy: "auto",
           runtimeMode: "competition",
-          mirrorEnvironments: ["trial", "dev"]
+          mirrorEnvironments: []
         };
         if (provider === "deepseek") {
           Object.assign(payload, { baseUrl: value("aiBaseUrl"), model: value("aiModel"), reasoningModel: value("aiReasoningModel"), temperature: value("aiTemperature"), maxTokens: value("aiMaxTokens"), jsonRepair: boolValue("aiJsonRepair"), thinkingEnabled: boolValue("aiThinkingEnabled") });
@@ -14695,7 +14721,13 @@ const adminConsoleHtml = `<!doctype html>
           Object.assign(payload, { cloudbaseOpenaiEnabled: true, cloudbaseOpenaiBaseUrl: value("cloudbaseOpenaiBaseUrl"), cloudbaseOpenaiTextModel: value("cloudbaseOpenaiTextModel"), cloudbaseOpenaiTimeoutMs: value("cloudbaseOpenaiTimeoutMs"), cloudbaseOpenaiMaxTokens: value("cloudbaseOpenaiMaxTokens") });
           if (value("cloudbaseOpenaiApiKey")) payload.cloudbaseOpenaiApiKey = value("cloudbaseOpenaiApiKey");
         } else if (provider === "coze") {
-          Object.assign(payload, { cozeBaseUrl: value("cozeBaseUrl") || profile.cozeBaseUrl || "https://api.coze.cn", cozeBotId: value("cozeBotId"), cozeChatEndpoint: "/v3/chat", cozePollEnabled: true, cozePollIntervalMs: profile.cozePollIntervalMs || "1000", cozePollMaxAttempts: profile.cozePollMaxAttempts || "12" });
+          var cozeApiMode = value("cozeApiMode") === "bot" ? "bot" : "workload";
+          Object.assign(payload, { cozeApiMode: cozeApiMode, cozePollEnabled: true, cozePollIntervalMs: profile.cozePollIntervalMs || "1000", cozePollMaxAttempts: profile.cozePollMaxAttempts || "12" });
+          if (cozeApiMode === "workload") {
+            Object.assign(payload, { cozeWorkloadEndpoint: value("cozeWorkloadEndpoint"), cozeProjectId: value("cozeProjectId") });
+          } else {
+            Object.assign(payload, { cozeBaseUrl: value("cozeBaseUrl") || profile.cozeBaseUrl || "https://api.coze.cn", cozeBotId: value("cozeBotId"), cozeChatEndpoint: "/v3/chat" });
+          }
           if (value("cozeApiKey")) payload.cozeApiKey = value("cozeApiKey");
         }
         return payload;
@@ -14704,14 +14736,18 @@ const adminConsoleHtml = `<!doctype html>
       function testCozeConnection() {
         var box = $("cozeConnectionResult") || $("aiVerifyResult");
         var profile = activeAiProfile();
+        var apiMode = value("cozeApiMode") === "bot" ? "bot" : "workload";
         var payload = {
           environment: aiExperienceEnvironment(),
+          apiMode: apiMode,
           baseUrl: value("cozeBaseUrl") || profile.cozeBaseUrl || "https://api.coze.cn",
-          botId: value("cozeBotId") || profile.cozeBotId || ""
+          botId: value("cozeBotId") || profile.cozeBotId || "",
+          workloadEndpoint: value("cozeWorkloadEndpoint") || profile.cozeWorkloadEndpoint || "",
+          projectId: value("cozeProjectId") || profile.cozeProjectId || ""
         };
         var token = value("cozeApiKey");
         if (token) payload.apiKey = token;
-        if (box) box.textContent = "正在校验 Token、Bot ID 与发布状态...";
+        if (box) box.textContent = apiMode === "workload" ? "正在校验 Token、项目 ID 与 stream_run 部署状态..." : "正在校验 Token、Bot ID 与发布状态...";
         api("/api/admin/ai-provider/test-coze", { method: "POST", body: JSON.stringify(payload) })
           .then(function(res) {
             var data = res.data || {};
@@ -14720,8 +14756,8 @@ const adminConsoleHtml = `<!doctype html>
               "分类: " + (data.code || "-"),
               "说明: " + (data.message || "-"),
               "延迟: " + String(data.latencyMs || 0) + "ms",
-              "Bot: " + (data.botIdMasked || "未配置"),
-              "已发布 API: " + (data.botPublished ? "是" : "未验证"),
+              (data.apiMode === "workload" ? "Project: " + (data.projectIdMasked || "未配置") : "Bot: " + (data.botIdMasked || "未配置")),
+              (data.apiMode === "workload" ? "项目已部署: " + (data.projectDeployed ? "是" : "未验证") : "已发布 API: " + (data.botPublished ? "是" : "未验证")),
               "Bot 选择器: " + (data.botSelectorAvailable ? "可用" : "不提供"),
               data.botSelectorReason || ""
             ].filter(Boolean);
@@ -14831,10 +14867,19 @@ const adminConsoleHtml = `<!doctype html>
         return lines.join("\\n");
       }
 
+      function buildAiProviderVerifyPayload(mode) {
+        var environment = aiExperienceEnvironment();
+        return {
+          mode: mode || "default",
+          environment: environment,
+          envVersion: environment === "dev" ? "develop" : "trial"
+        };
+      }
+
       function verifyAiProviderConfig() {
         var box = $("aiVerifyResult");
         if (box) box.textContent = "正在运行真实测试...";
-        api("/api/admin/ai-provider/verify", { method: "POST", body: "{}" })
+        api("/api/admin/ai-provider/verify", { method: "POST", body: JSON.stringify(buildAiProviderVerifyPayload("default")) })
           .then(function(res) {
             var data = res.data || {};
             if (box) box.textContent = formatAiProviderVerifyResult(data);
@@ -14849,7 +14894,7 @@ const adminConsoleHtml = `<!doctype html>
       function forceAiProviderChatTest() {
         var box = $("aiVerifyResult");
         if (box) box.textContent = "正在测试项目问答...";
-        api("/api/admin/ai-provider/verify", { method: "POST", body: JSON.stringify({ mode: "project_qa" }) })
+        api("/api/admin/ai-provider/verify", { method: "POST", body: JSON.stringify(buildAiProviderVerifyPayload("project_qa")) })
           .then(function(res) {
             var data = res.data || {};
             var project = data.projectQaProviderTest || data;

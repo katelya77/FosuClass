@@ -88,7 +88,9 @@ function isProviderConfigured(name, runtimeConfig = {}) {
       return false;
     }
     const cfg = cozeProvider.getConfig(runtimeConfig);
-    return Boolean(cfg.apiKey && cfg.botId);
+    return cfg.apiMode === "workload"
+      ? Boolean(cfg.apiKey && cfg.workloadEndpoint && cfg.projectId)
+      : Boolean(cfg.apiKey && cfg.botId);
   }
   if (name === "cloudbase-openai") {
     return configValue(runtimeConfig, "CLOUDBASE_OPENAI_ENABLED", "false") === "true" && Boolean(cloudbaseOpenaiProvider.firstConfiguredKey(runtimeConfig));

@@ -13,11 +13,17 @@ const cozeProvider = require("../../services/ai/providers/cozeProvider");
 
 const router = express.Router();
 
-function isAllowedCozeBaseUrl(value) {
+function isAllowedCozeBaseUrl(value, apiMode = "bot") {
   try {
     const parsed = new URL(String(value || ""));
     if (process.env.NODE_ENV === "test" && parsed.protocol === "http:"
       && ["127.0.0.1", "localhost"].includes(parsed.hostname)) return true;
+    if (apiMode === "workload") {
+      return parsed.protocol === "https:"
+        && parsed.hostname.endsWith(".coze.site")
+        && parsed.pathname === "/stream_run"
+        && !parsed.username && !parsed.password;
+    }
     return parsed.protocol === "https:"
       && ["api.coze.cn", "api.coze.com"].includes(parsed.hostname)
       && !parsed.username && !parsed.password;
@@ -48,25 +54,36 @@ router.post("/ai-provider/test-coze", adminAuth.verifyAdminAccess, async (req, r
     const runtime = providerConfigService.getRuntimeConfigForEnvironment(environment);
     const body = req.body && typeof req.body === "object" ? req.body : {};
     const apiKey = typeof body.apiKey === "string" ? body.apiKey.trim().slice(0, 4096) : "";
+    const apiMode = Object.prototype.hasOwnProperty.call(body, "apiMode")
+      ? (body.apiMode === "workload" ? "workload" : "bot")
+      : (runtime.COZE_API_MODE === "workload" ? "workload" : "bot");
     const botId = typeof body.botId === "string" ? body.botId.trim().slice(0, 120) : "";
+    const projectId = typeof body.projectId === "string" ? body.projectId.trim().slice(0, 120) : "";
+    const workloadEndpoint = typeof body.workloadEndpoint === "string" && body.workloadEndpoint.trim()
+      ? body.workloadEndpoint.trim().replace(/\/+$/, "")
+      : String(runtime.COZE_WORKLOAD_ENDPOINT || "").trim().replace(/\/+$/, "");
     const requestedBaseUrl = typeof body.baseUrl === "string" && body.baseUrl.trim()
       ? body.baseUrl.trim().replace(/\/+$/, "")
       : String(runtime.COZE_API_BASE_URL || "https://api.coze.cn").replace(/\/+$/, "");
-    if (!isAllowedCozeBaseUrl(requestedBaseUrl)) {
+    const requestedTarget = apiMode === "workload" ? workloadEndpoint : requestedBaseUrl;
+    if (!isAllowedCozeBaseUrl(requestedTarget, apiMode)) {
       return res.status(400).json({
         success: false,
         code: "COZE_BASE_URL_NOT_ALLOWED",
-        message: "仅允许 Coze 官方 API 域名。",
+        message: apiMode === "workload" ? "仅允许 HTTPS 的 Coze 官方 *.coze.site/stream_run 部署入口。" : "仅允许 Coze 官方 API 域名。",
       });
     }
     const diagnostic = await cozeProvider.testConnection({
       principal: { principalKey: "admin-coze-diagnostic", runtimeMode: environment, deployEnv: environment },
       providerRuntimeConfig: Object.assign({}, runtime, {
         COZE_ENABLED: "true",
+        COZE_API_MODE: apiMode,
         COZE_API_BASE_URL: requestedBaseUrl,
         COZE_API_KEY: apiKey || runtime.COZE_API_KEY || "",
         COZE_BOT_ID: botId || runtime.COZE_BOT_ID || runtime.COZE_AGENT_ID || "",
-        COZE_CHAT_ENDPOINT: "/v3/chat",
+        COZE_CHAT_ENDPOINT: runtime.COZE_CHAT_ENDPOINT || "/v3/chat",
+        COZE_WORKLOAD_ENDPOINT: workloadEndpoint,
+        COZE_PROJECT_ID: projectId || runtime.COZE_PROJECT_ID || "",
       }),
     });
     return res.json({ success: true, data: diagnostic });

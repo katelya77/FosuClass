@@ -56,6 +56,10 @@ try {
   const devEnv = devSaved.environments.find((item) => item.environment === "dev");
   assert.strictEqual(devEnv.providerPolicy, "always");
   assert.strictEqual(devEnv.runtimeMode, "competition");
+  assert.strictEqual(providerConfigService.getEnvironmentForContext({ envVersion: "trial" }, "trial"), "trial");
+  assert.strictEqual(providerConfigService.getEnvironmentForContext({ envVersion: "develop" }, "trial"), "dev");
+  assert.strictEqual(providerConfigService.getEnvironmentForContext({ envVersion: "devtools" }, "competition"), "dev");
+  assert.strictEqual(providerConfigService.getEnvironmentForContext({ envVersion: "release" }, "public"), "public");
 
   console.log("test-ai-provider-environment-profiles passed");
 } finally {

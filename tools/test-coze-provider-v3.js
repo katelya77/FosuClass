@@ -30,6 +30,13 @@ async function run() {
     COZE_BOT_ID: "b",
     COZE_EXPIRES_AT: "2000-01-01T00:00:00.000Z",
   }), false);
+  assert.strictEqual(cozeProvider.isEnabled({
+    COZE_ENABLED: "true",
+    COZE_API_MODE: "workload",
+    COZE_API_KEY: "k",
+    COZE_WORKLOAD_ENDPOINT: "https://demo.coze.site/stream_run",
+    COZE_PROJECT_ID: "7664956206057914406",
+  }), true);
 
   // principal-based user id isolation
   const u1 = cozeProvider.buildPseudoUserId({ principalKey: "p1", runtimeMode: "trial", deployEnv: "test" });
@@ -129,6 +136,66 @@ async function run() {
     assert.strictEqual(connection.botPublished, true);
     assert.strictEqual(connection.botSelectorAvailable, false);
     assert.ok(!JSON.stringify(connection).includes("test-token"));
+
+    // Coze Coding deployed project API: /stream_run + SSE.
+    let workloadRequest = null;
+    const { server: workloadServer, baseUrl: workloadBaseUrl } = await startMockServer(async (req, res) => {
+      if (req.method !== "POST" || req.url !== "/stream_run") {
+        res.writeHead(404);
+        res.end("missing");
+        return;
+      }
+      workloadRequest = JSON.parse(await readBody(req));
+      assert.strictEqual(req.headers.authorization, "Bearer workload-token");
+      res.writeHead(200, { "Content-Type": "text/event-stream; charset=utf-8" });
+      res.end([
+        "id: 0",
+        "event: Message",
+        'data: {"content":"{\\"answer\\":\\"WORKLOAD_OK\\"}","node_is_finish":true,"node_seq_id":"0"}',
+        "",
+        "id: 1",
+        "event: Done",
+        "data: {}",
+        "",
+      ].join("\n"));
+    });
+    try {
+      const workloadConfig = {
+        COZE_ENABLED: "true",
+        COZE_API_MODE: "workload",
+        COZE_API_KEY: "workload-token",
+        COZE_WORKLOAD_ENDPOINT: `${workloadBaseUrl}/stream_run`,
+        COZE_PROJECT_ID: "7664956206057914406",
+        COZE_TIMEOUT_MS: "3000",
+      };
+      const workloadResult = await cozeProvider.generate({
+        message: "hello workload",
+        intent: { name: "conversational_help" },
+        toolResults: [],
+        principal: { principalKey: "principal-workload", runtimeMode: "trial", deployEnv: "test" },
+        providerRuntimeConfig: workloadConfig,
+      });
+      assert.strictEqual(workloadResult.provider, "coze");
+      assert.strictEqual(workloadResult.answer, "WORKLOAD_OK");
+      assert.strictEqual(workloadRequest.type, "query");
+      assert.strictEqual(workloadRequest.project_id, "7664956206057914406");
+      assert.ok(String(workloadRequest.session_id).startsWith("fosu-"));
+      assert.strictEqual(workloadRequest.content.query.prompt[0].type, "text");
+      assert.ok(workloadRequest.content.query.prompt[0].content.text.includes("hello workload"));
+
+      const workloadConnection = await cozeProvider.testConnection({
+        principal: { principalKey: "admin-workload", runtimeMode: "dev", deployEnv: "test" },
+        providerRuntimeConfig: workloadConfig,
+      });
+      assert.strictEqual(workloadConnection.success, true);
+      assert.strictEqual(workloadConnection.code, "COZE_CONNECTION_OK");
+      assert.strictEqual(workloadConnection.apiMode, "workload");
+      assert.strictEqual(workloadConnection.projectDeployed, true);
+      assert.strictEqual(workloadConnection.projectIdMasked, "****4406");
+      assert.ok(!JSON.stringify(workloadConnection).includes("workload-token"));
+    } finally {
+      workloadServer.close();
+    }
 
     // 401 mapping
     const { server: s401, baseUrl: b401 } = await startMockServer((req, res) => {

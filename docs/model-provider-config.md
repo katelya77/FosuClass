@@ -35,9 +35,12 @@ COZE_EXPIRES_AT=
 COZE_PROVIDER_ROLE=temporary
 COZE_API_BASE_URL=https://api.coze.cn
 COZE_API_KEY=
+COZE_API_MODE=bot
 COZE_BOT_ID=
 COZE_AGENT_ID=
 COZE_CHAT_ENDPOINT=/v3/chat
+COZE_WORKLOAD_ENDPOINT=
+COZE_PROJECT_ID=
 COZE_TIMEOUT_MS=15000
 COZE_POLL_ENABLED=true
 COZE_POLL_INTERVAL_MS=1000
@@ -46,6 +49,7 @@ COZE_POLL_MAX_ATTEMPTS=12
 
 > Coze 仅接受官方 API Token。不要填写学校账户密码或浏览器 Cookie。
 > Coze `user_id` 不是配置项，由服务端按已验证 Principal、运行模式和部署环境生成伪匿名 HMAC ID，不使用全员共用固定值，也不发送 OpenID 明文。
+> 扣子编程部署项目使用 `COZE_API_MODE=workload`、部署页给出的 `COZE_WORKLOAD_ENDPOINT` 和 `COZE_PROJECT_ID`；同一 `COZE_API_KEY` 作为可轮换 Bearer Token。后台保存时加密且不回显明文。
 > 详见 `docs/xiaofu-agent/coze-temporary-provider.md`。
 
 ## CloudBase Hunyuan

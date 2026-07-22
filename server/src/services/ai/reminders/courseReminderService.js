@@ -103,6 +103,9 @@ function publicOccurrence(value) {
     endSection: Math.max(0, Math.min(14, Number(source.endSection || source.startSection || 0) || 0)),
     date: String(source.date || "").slice(0, 10),
     startTime: String(source.startTime || "").slice(0, 8),
+    endTime: String(source.endTime || "").slice(0, 8),
+    durationMinutes: Math.max(0, Math.min(24 * 60, Number(source.durationMinutes || 0) || 0)),
+    durationText: String(source.durationText || "").slice(0, 20),
     startsAt: String(source.startsAt || "").slice(0, 40),
     pagePath: "pages/today/today",
   };

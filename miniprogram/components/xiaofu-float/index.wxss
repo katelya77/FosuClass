@@ -55,12 +55,25 @@
   z-index: 0;
   width: 196px;
   min-height: 56px;
-  padding: 9px 13px;
+  padding: 9px 28px 9px 13px;
   border: 1px solid #d8d1c9;
   border-radius: 15px;
   background: #fffdf9;
   box-shadow: 0 8px 22px rgba(42, 38, 34, 0.12);
-  pointer-events: none;
+  pointer-events: auto;
+}
+
+.xiaofu-float-hint-close {
+  position: absolute;
+  top: 5px;
+  right: 8px;
+  width: 20px;
+  height: 20px;
+  color: #8b8178;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 20px;
+  text-align: center;
 }
 
 .xiaofu-float-hint.left {

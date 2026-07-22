@@ -168,6 +168,8 @@ Component({
       } catch (error) {
         // Keep the latest short-lived, sanitized insight when local context is unavailable.
       }
+      if (insight && floatService.isProactiveInsightDismissed(insight)) insight = null;
+      this._currentInsight = insight;
       this.setData({
         visible: true,
         dimmed: policy.dimmed,
@@ -193,10 +195,16 @@ Component({
         const occurrence = event.occurrence && typeof event.occurrence === "object" ? event.occurrence : {};
         const courseName = String(occurrence.courseName || "课程提醒").replace(/[\r\n]+/g, " ").slice(0, 32);
         const startTime = String(occurrence.startTime || "").slice(0, 8);
-        this.setData({
-          hintEyebrow: event.kind === "schedule_change" ? "课表变化提醒" : "应用内提醒",
-          hintText: [courseName, startTime].filter(Boolean).join(" · "),
+        const insight = floatService.setProactiveInsight({
+          kind: event.kind === "schedule_change" ? "schedule_change" : "course_start",
+          eyebrow: event.kind === "schedule_change" ? "课表变化提醒" : "应用内提醒",
+          title: [courseName, startTime].filter(Boolean).join(" · "),
+          detail: String(event.id || "").slice(0, 80),
+          actionUrl: "/pages/today/today",
         });
+        if (!insight || floatService.isProactiveInsightDismissed(insight)) return;
+        this._currentInsight = insight;
+        this.setData({ hintEyebrow: insight.eyebrow, hintText: insight.title });
       }).catch(() => {
         // 浮窗不承担在线决策；收件箱不可用时保留本机主动洞察。
       }).finally(() => {
@@ -304,6 +312,16 @@ Component({
       if (Date.now() - Number(this._tapOpenedAt || 0) < TAP_DEDUPE_MS) return;
       this._tapOpenedAt = Date.now();
       this.openAssistant();
+    },
+
+    onHintTap() {
+      const insight = this._currentInsight || {
+        eyebrow: this.data.hintEyebrow,
+        title: this.data.hintText,
+      };
+      floatService.dismissProactiveInsight(insight);
+      this._currentInsight = null;
+      this.setData({ hintEyebrow: "", hintText: "" });
     },
 
     onLongPress() {
