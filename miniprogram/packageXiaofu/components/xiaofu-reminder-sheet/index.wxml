@@ -62,7 +62,7 @@
       <view class="create-error" wx:if="{{createError}}">{{createError}}</view>
 
       <button class="secondary-button" bindtap="onPreviewPlan" loading="{{creating}}" disabled="{{creating}}">预览下次提醒</button>
-      <button class="primary-button" bindtap="onConfirmCreate" loading="{{creating}}" disabled="{{creating}}">确认创建</button>
+      <button class="primary-button" bindtap="onConfirmCreate" loading="{{creating}}" disabled="{{creating}}">一键创建并授权微信通知</button>
       <button class="secondary-button" bindtap="backToList" disabled="{{creating}}">返回列表</button>
     </scroll-view>
 

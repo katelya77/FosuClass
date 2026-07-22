@@ -250,8 +250,12 @@ Component({
           }));
         }
 
+        // gesture-safe: capability already loaded in refresh(); pass it explicitly so
+        // createReminderFromConfig does not await another network hop before WeChat sheet.
         const idempotencyKey = reminderClient.makeIdempotencyKey("create", this.data.scope);
-        const capability = this.data.capability || {};
+        const capability = this.data.capability && typeof this.data.capability === "object"
+          ? this.data.capability
+          : { configured: false, templateId: "" };
         const result = await reminderClient.createReminderFromConfig({
           leadMinutes: this.data.leadMinutes,
           scope: this.data.scope,
@@ -265,20 +269,29 @@ Component({
         });
         this.setData({ creating: false });
         if (!result.success) {
-          this.setData({ createError: result.error || "创建失败，请稍后重试" });
-          wx.showToast({ title: result.error || "创建失败", icon: "none" });
+          const err = result.error || "创建失败，请稍后重试";
+          // Never strand the user on opaque confirmation codes after they already tapped.
+          const friendly = /请先确认|确认已失效|确认/.test(err)
+            ? "创建未完成，请再点一次「一键创建并授权微信通知」"
+            : err;
+          this.setData({ createError: friendly });
+          wx.showToast({ title: friendly.slice(0, 24), icon: "none" });
           return;
         }
+        const channelOk = result.reminder && result.reminder.channel === "wechat_subscription";
         wx.showToast({
-          title: result.duplicate ? "提醒已存在" : "提醒已创建",
+          title: result.duplicate
+            ? "提醒已存在"
+            : (channelOk ? "已创建并获得微信授权" : "提醒已创建（应用内）"),
           icon: "success",
+          duration: 2400,
         });
         this.setData({ mode: "list", preview: null, createError: "" });
         this.triggerEvent("change", { reminder: result.reminder || null });
         await this.refresh();
       } catch (error) {
-        this.setData({ creating: false, createError: "创建失败，请稍后重试" });
-        wx.showToast({ title: "创建失败", icon: "none" });
+        this.setData({ creating: false, createError: "创建失败，请再点一次重试" });
+        wx.showToast({ title: "创建失败，请重试", icon: "none" });
       }
     },
 

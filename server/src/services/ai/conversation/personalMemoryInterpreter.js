@@ -16,7 +16,10 @@ function parsePersonalMemoryCommands(message) {
   const text = safetyGuard.redactSensitiveText(String(message || "")).trim();
   if (!text || safetyGuard.hasSensitiveCredential(String(message || ""))) return [];
   const explicit = /(?:请|帮我)?(?:记住|记一下|以后叫我|以后称呼我)/.test(text);
-  if (!explicit && isNameQuestion(text)) return [];
+  const reminderPref = /(?:设置|设定|改成|改为|调整)?\s*(?:默认)?\s*(?:提醒时间|上课提醒|课程提醒)/.test(text)
+    || /默认\s*(?:提前|上课前)\s*\d{1,3}\s*分钟/.test(text)
+    || /(?:提醒我|提醒时间)\s*(?:改成|改为|设置成|设为)?\s*(?:提前)?\s*\d{1,3}\s*分钟/.test(text);
+  if (!explicit && !reminderPref && isNameQuestion(text)) return [];
   const output = [];
 
   const nameMatch = explicit
@@ -32,10 +35,17 @@ function parsePersonalMemoryCommands(message) {
     const campusMatch = text.match(/(?:常用|默认|主要在)?\s*(仙溪校区|江湾校区)/);
     const campusItem = campusMatch && command("campus", campusMatch[1], true, "preference");
     if (campusItem) output.push(campusItem);
+  }
 
-    const leadMatch = text.match(/(?:默认)?(?:提前|上课前)\s*(\d{1,3})\s*分钟(?:提醒)?/);
+  if (explicit || reminderPref) {
+    const leadMatch = text.match(/(?:默认)?(?:提前|上课前)\s*(\d{1,3})\s*分钟(?:提醒)?/)
+      || text.match(/(?:提醒时间|上课提醒|课程提醒|默认提醒).*?(\d{1,3})\s*分钟/)
+      || text.match(/(\d{1,3})\s*分钟(?:后)?(?:提醒|上课前提醒)/);
     const leadItem = leadMatch && command("defaultReminderLeadMinutes", Number(leadMatch[1]), true, "preference");
     if (leadItem) output.push(leadItem);
+    else if (reminderPref && !/\d/.test(text)) {
+      // "设置默认提醒时间" without minutes → handled by resolvePersonalMemoryTurn clarify branch below
+    }
   }
 
   const seen = new Set();
@@ -117,6 +127,47 @@ function resolvePersonalMemoryTurn(input = {}) {
       preferencePatch: {},
       persisted: false,
       source: "recent_messages",
+    };
+  }
+
+  // Auto-apply a sensible default (20 min) when user asks to set default reminder time without a number.
+  // Keeps Xiaofu agent "do it for me" instead of only dumping a manual panel.
+  if (/(?:设置|设定|调整)?\s*(?:默认)?\s*(?:提醒时间|上课提醒|课程提醒)/.test(message)
+    && !/\d{1,3}\s*分钟/.test(message)
+    && !/(?:取消|删除|关闭|暂停).*(?:提醒|通知)/.test(message)) {
+    const defaultLead = 20;
+    let persisted = false;
+    if (input.preferenceService) {
+      try {
+        const saved = input.preferenceService.upsert({
+          principal: input.principal,
+          memoryMode: input.memoryMode,
+          explicit: true,
+          values: { defaultReminderLeadMinutes: defaultLead },
+        });
+        persisted = saved.persisted === true;
+      } catch (_) {
+        persisted = false;
+      }
+    }
+    return {
+      handled: true,
+      intentName: "update_user_preference",
+      answer: persisted
+        ? `已把默认提醒时间设为上课前 ${defaultLead} 分钟，并同步到云端记忆。可以说“以后上课前${defaultLead}分钟提醒我”直接创建，或点下方按钮一键创建并授权微信服务通知。`
+        : `已把默认提醒时间设为上课前 ${defaultLead} 分钟。可以说“以后上课前${defaultLead}分钟提醒我”直接创建，或点下方按钮一键创建并授权微信服务通知。想改成 30/45/60 分钟直接告诉我即可。`,
+      preferencePatch: { defaultReminderLeadMinutes: defaultLead },
+      persisted,
+      source: persisted ? "cloud_preference" : "local_preference_patch",
+      actions: [
+        {
+          label: "一键创建并授权通知",
+          type: "confirmReminder",
+          payload: { operation: "create", leadMinutes: defaultLead, scope: "all_courses" },
+        },
+        { label: "默认改成30分钟", type: "retry", payload: { message: "记住默认提前30分钟提醒我" } },
+        { label: "打开提醒面板", type: "manageReminders", payload: { sheet: "reminders", openCreate: true } },
+      ],
     };
   }
 
