@@ -116,6 +116,16 @@
   <!-- 3. 今日提醒 -->
   <view class="settings-card card">
     <view class="group-title">今日提醒</view>
+    <view class="setting-row smart-reminder-entry" bindtap="goSmartCourseReminders" role="button" aria-label="打开智能课程提醒设置">
+      <view class="smart-reminder-copy">
+        <view class="row-title-line">
+          <view class="row-title">智能课程提醒</view>
+          <view class="service-notice-chip">服务通知</view>
+        </view>
+        <view class="row-desc">管理上课前提醒、微信服务通知与应用内兜底</view>
+      </view>
+      <view class="row-arrow">›</view>
+    </view>
     <view class="setting-row">
       <view>
         <view class="row-title">打开小程序时显示今日提醒</view>

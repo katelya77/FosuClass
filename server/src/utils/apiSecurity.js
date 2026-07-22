@@ -160,6 +160,36 @@ function verifySessionToken(token, options = {}) {
   return result.valid ? result.payload : null;
 }
 
+function storeWechatReminderRecipient(input = {}) {
+  const openid = String(input.openid || "");
+  const sessionPayload = input.sessionPayload && typeof input.sessionPayload === "object"
+    ? input.sessionPayload
+    : null;
+  if (!openid || !sessionPayload || !sessionPayload.openidHash) return { stored: false };
+  try {
+    const { resolvePrincipal } = require("../services/ai/conversation/conversationPrincipalService");
+    const { defaultWechatRecipientVault } = require("../services/ai/reminders/wechatRecipientVault");
+    if (!defaultWechatRecipientVault.isConfigured()) return { stored: false };
+    let stored = false;
+    ["public", "trial", "dev"].forEach((runtimeMode) => {
+      const principal = resolvePrincipal({ serverSession: sessionPayload, runtimeMode });
+      if (!principal.authenticated) return;
+      const result = defaultWechatRecipientVault.store({
+        principalKey: principal.principalKey,
+        openid,
+        appid: sessionPayload.appid || input.appid || "",
+      });
+      if (result.stored) stored = true;
+    });
+    return { stored };
+  } catch (error) {
+    safeLog("wechat-reminder-recipient-vault-unavailable", {
+      code: String(error && error.code || "RECIPIENT_VAULT_UNAVAILABLE").slice(0, 80),
+    });
+    return { stored: false };
+  }
+}
+
 async function bootstrapFosuSession(code) {
   const jsCode = String(code || "").trim();
   if (!jsCode) {
@@ -198,6 +228,7 @@ async function bootstrapFosuSession(code) {
   }
 
   const created = createSessionToken({ appid, openid });
+  storeWechatReminderRecipient({ openid, appid, sessionPayload: created.payload });
   const security = getSecurityMode();
   return {
     sessionToken: created.token,
@@ -292,6 +323,7 @@ function optionalSessionGuard(req, res, next) {
 
 module.exports = {
   bootstrapFosuSession,
+  storeWechatReminderRecipient,
   createSessionToken,
   getSecurityStatus,
   optionalSessionGuard,

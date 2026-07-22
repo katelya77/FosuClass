@@ -50,6 +50,9 @@ jobs:
             ["ADMIN_API_TOKEN"]="${{ secrets.ADMIN_API_TOKEN }}"
             ["ADMIN_PASSWORD"]="${{ secrets.ADMIN_PASSWORD }}"
             ["FOSU_AI_CONFIG_ENCRYPTION_KEY"]="${{ secrets.FOSU_AI_CONFIG_ENCRYPTION_KEY }}"
+            ["FOSU_AGENT_MEMORY_SECRET"]="${{ secrets.FOSU_AGENT_MEMORY_SECRET }}"
+            ["FOSU_AGENT_REMINDER_SECRET"]="${{ secrets.FOSU_AGENT_REMINDER_SECRET }}"
+            ["FOSU_WECHAT_RECIPIENT_SECRET"]="${{ secrets.FOSU_WECHAT_RECIPIENT_SECRET }}"
           )
 
           has_missing_required=false
@@ -156,13 +159,13 @@ jobs:
 
             sanitize() {
               sed -E \
-                -e 's/(ADMIN_PASSWORD|ADMIN_TOKEN|ADMIN_API_TOKEN|FOSU_PASSWORD|WECHAT_APPSECRET|FOSU_CSRF_SECRET|FOSU_SESSION_SECRET(_CURRENT|_PREVIOUS)?|FOSU_STATIC_TICKET_SECRET(_CURRENT|_PREVIOUS)?|FOSU_AI_CONFIG_ENCRYPTION_KEY|AI_API_KEY|DEEPSEEK_API_KEY|CLOUDBASE_OPENAI_API_KEY|COZE_API_KEY)=([^[:space:]]*)/\1=***/g' \
+                -e 's/(ADMIN_PASSWORD|ADMIN_TOKEN|ADMIN_API_TOKEN|FOSU_PASSWORD|WECHAT_APPSECRET|FOSU_CSRF_SECRET|FOSU_SESSION_SECRET(_CURRENT|_PREVIOUS)?|FOSU_STATIC_TICKET_SECRET(_CURRENT|_PREVIOUS)?|FOSU_AI_CONFIG_ENCRYPTION_KEY|FOSU_AGENT_MEMORY_SECRET|FOSU_AGENT_REMINDER_SECRET|FOSU_WECHAT_RECIPIENT_SECRET|AI_API_KEY|DEEPSEEK_API_KEY|CLOUDBASE_OPENAI_API_KEY|COZE_API_KEY)=([^[:space:]]*)/\1=***/g' \
                 -e 's/(Authorization: Bearer )[A-Za-z0-9._~+\/=-]+/\1***/gi' \
                 -e 's/(token|password|secret|key)["=: ]+[A-Za-z0-9._\/+=-]+/\1=***/gi'
             }
 
             on_error() {
-              echo "::error::Remote deploy failed. Sanitized diagnostics follow."
+              echo "::error::Remote deploy failed"
               sudo docker compose ps 2>&1 | sanitize || true
               sudo docker inspect "$CONTAINER_NAME" --format '{{json .State}}' 2>&1 | sanitize || true
               sudo docker inspect "$CONTAINER_NAME" --format '{{range .State.Health.Log}}{{println .Output}}{{end}}' 2>&1 | tail -n 10 | sanitize || true
@@ -231,7 +234,6 @@ jobs:
             ADMIN_API_TOKEN=${{ secrets.ADMIN_API_TOKEN }}
             ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
             ADMIN_TOKEN=${{ secrets.ADMIN_TOKEN }}
-            # Shared API rollout gates remain; the only admin UI is Legacy.
             FOSU_ADMIN_NEXT_WRITE_MODULES=content,feedback,audit,backups
             FOSU_CONFIG_HARD_FAIL=false
             FOSU_BASE_URL=https://100.fosu.edu.cn
@@ -268,6 +270,15 @@ jobs:
             FOSU_SESSION_SECRET_KID=${{ secrets.FOSU_SESSION_SECRET_KID }}
             FOSU_SESSION_TTL_SECONDS=${{ vars.FOSU_SESSION_TTL_SECONDS || '7200' }}
             FOSU_CSRF_SECRET=${{ secrets.FOSU_CSRF_SECRET }}
+            FOSU_AGENT_MEMORY_SECRET=${{ secrets.FOSU_AGENT_MEMORY_SECRET }}
+            FOSU_AGENT_REMINDER_SECRET=${{ secrets.FOSU_AGENT_REMINDER_SECRET }}
+            FOSU_WECHAT_RECIPIENT_SECRET=${{ secrets.FOSU_WECHAT_RECIPIENT_SECRET }}
+            FOSU_COURSE_REMINDER_DISPATCH_ENABLED=${{ vars.FOSU_COURSE_REMINDER_DISPATCH_ENABLED || 'false' }}
+            FOSU_COURSE_REMINDER_DISPATCH_INTERVAL_MS=${{ vars.FOSU_COURSE_REMINDER_DISPATCH_INTERVAL_MS || '60000' }}
+            WECHAT_COURSE_REMINDER_TEMPLATE_ID=${{ vars.WECHAT_COURSE_REMINDER_TEMPLATE_ID || '' }}
+            WECHAT_COURSE_REMINDER_DATA_FIELDS_JSON=${{ vars.WECHAT_COURSE_REMINDER_DATA_FIELDS_JSON || '' }}
+            WECHAT_REMINDER_MINIPROGRAM_STATE=${{ vars.WECHAT_REMINDER_MINIPROGRAM_STATE || 'formal' }}
+            WECHAT_REMINDER_TIMEOUT_MS=${{ vars.WECHAT_REMINDER_TIMEOUT_MS || '5000' }}
 
             OPENRESTY_HOST_RELEASE_DIR=/opt/1panel/www/sites/class.katelya.eu.org/index/static/releases
             OPENRESTY_HOST_RUNTIME_DIR=/opt/1panel/www/sites/class.katelya.eu.org/index/static/runtime
@@ -350,7 +361,6 @@ jobs:
             append_ai_env "COZE_API_BASE_URL" "${{ vars.COZE_API_BASE_URL }}" "https://api.coze.cn"
             append_ai_env "COZE_API_KEY" "${{ secrets.COZE_API_KEY }}" ""
             append_ai_env "COZE_BOT_ID" "${{ vars.COZE_BOT_ID }}" ""
-            append_ai_env "COZE_USER_ID" "${{ vars.COZE_USER_ID }}" "fosuclass-user"
             append_ai_env "COZE_CHAT_ENDPOINT" "${{ vars.COZE_CHAT_ENDPOINT }}" "/v3/chat"
             append_ai_env "COZE_POLL_ENABLED" "" "true"
             append_ai_env "COZE_POLL_INTERVAL_MS" "" "1000"
@@ -492,11 +502,17 @@ jobs:
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/verify-ai-provider.js --mode=status' 2>&1 | sanitize
 
             sudo docker exec "$CONTAINER_NAME" sh -lc 'node scripts/reconcile-static-release.js > /tmp/fosu-static-reconcile.json'
-            active_release="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.releaseVersion||'')")"
-            synced_release="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.syncedReleaseVersion||'')")"
-            files_copied="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.filesCopied||0)")"
-            retained_releases="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log((d.staticSync.retainedReleases||[]).join(','))")"
-            runtime_status_from_reconcile="$(sudo docker exec "$CONTAINER_NAME" node -e "const fs=require('fs');const d=JSON.parse(fs.readFileSync('/tmp/fosu-static-reconcile.json','utf8'));console.log(d.staticSync.runtimeActiveStatus||d.staticSync.verifiedRuntimeUrl&&d.staticSync.verifiedRuntimeUrl.status||'')")"
+            read_reconcile() {
+              sudo docker exec "$CONTAINER_NAME" node -e 'const d=require("/tmp/fosu-static-reconcile.json").staticSync||{},v=process.argv[1].split(".").reduce((o,k)=>o?.[k],d);process.stdout.write(Array.isArray(v)?v.join(","):String(v??""))' "$1"
+            }
+            active_release="$(read_reconcile releaseVersion)"
+            synced_release="$(read_reconcile syncedReleaseVersion)"
+            files_copied="$(read_reconcile filesCopied)"
+            retained_releases="$(read_reconcile retainedReleases)"
+            runtime_status_from_reconcile="$(read_reconcile runtimeActiveStatus)"
+            if [ -z "$runtime_status_from_reconcile" ]; then
+              runtime_status_from_reconcile="$(read_reconcile verifiedRuntimeUrl.status)"
+            fi
 
             if [ -z "$active_release" ]; then
               echo "::error::No active release found during postdeploy static reconcile"
@@ -533,9 +549,9 @@ jobs:
             url_status="${url_status}$(verify_url empty-room/index.json)"
 
             elapsed="$(( $(date +%s) - STARTED_AT ))"
-            echo "=================================================="
+            echo "================================"
             echo "Deployment summary"
-            echo "=================================================="
+            echo "================================"
             echo "commit_sha=${COMMIT_SHA}"
             echo "container_health=${container_health}"
             echo "active_release=${active_release}"
@@ -545,7 +561,7 @@ jobs:
             echo "runtime_status=${runtime_status} reconcile=${runtime_status_from_reconcile}"
             echo "url_status=${url_status}"
             echo "elapsed_seconds=${elapsed}"
-            echo "=================================================="
+            echo "================================"
 
       - name: Show Deployment Info
         run: |

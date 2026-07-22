@@ -20,7 +20,9 @@ const tests = [
   "tools/test-ai-clarification-followup.js",
   "tools/test-ai-context-week-fields.js",
   "tools/test-ai-conversation-rag-schedule.js",
-  "tools/test-assistant-kb-service.js"
+  "tools/test-assistant-kb-service.js",
+  "tools/test-agent-personal-memory.js",
+  "tools/test-agent-context-memory-flow.js"
 ];
 
 let passed = 0;

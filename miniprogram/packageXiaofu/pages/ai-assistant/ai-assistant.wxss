@@ -7,7 +7,7 @@
   min-height: 100vh;
   flex-direction: column;
   overflow: hidden;
-  padding: calc(8rpx + env(safe-area-inset-top)) 20rpx 200rpx;
+  padding: calc(8rpx + env(safe-area-inset-top)) 16rpx 200rpx;
   padding-bottom: 200rpx;
   background: #f6f4f1;
 }
@@ -72,6 +72,181 @@ button::after {
   line-height: 40rpx;
   font-size: 20rpx;
   border-radius: 12rpx;
+}
+
+.agent-status-capsule {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  align-self: stretch;
+  width: 100%;
+  min-height: 88rpx;
+  margin: 4rpx 0 2rpx;
+  padding: 18rpx 22rpx;
+  border: 1rpx solid rgba(255, 255, 255, 0.08);
+  border-radius: 44rpx;
+  background: #2a2622;
+  color: #ffffff;
+  box-shadow: 0 8rpx 22rpx rgba(42, 38, 34, 0.14);
+  transition: min-height 180ms ease, border-radius 180ms ease, background-color 180ms ease;
+}
+
+.agent-status-capsule.expanded {
+  min-height: 116rpx;
+  border-radius: 28rpx;
+}
+
+.agent-status-capsule.waiting_confirmation {
+  background: #6c3d2e;
+}
+
+.agent-status-capsule.complete {
+  background: #2f6f4e;
+}
+
+.agent-status-capsule.network_error {
+  background: #7d302e;
+}
+
+.in-app-reminder-banner {
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  width: 100%;
+  min-height: 128rpx;
+  margin: 14rpx 0 2rpx;
+  padding: 18rpx 18rpx 18rpx 20rpx;
+  border: 1rpx solid rgba(47, 111, 78, 0.2);
+  border-left: 6rpx solid #2f6f4e;
+  border-radius: 18rpx;
+  background: #f3f7f4;
+}
+
+.in-app-reminder-banner.schedule_change {
+  border-color: rgba(198, 40, 40, 0.2);
+  border-left-color: #c62828;
+  background: #fff6f4;
+}
+
+.in-app-reminder-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.in-app-reminder-eyebrow {
+  color: #2f6f4e;
+  font-size: 19rpx;
+  font-weight: 650;
+  line-height: 1.3;
+}
+
+.in-app-reminder-banner.schedule_change .in-app-reminder-eyebrow {
+  color: #a82121;
+}
+
+.in-app-reminder-title {
+  overflow: hidden;
+  margin-top: 5rpx;
+  color: #2a2622;
+  font-size: 26rpx;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.in-app-reminder-detail {
+  overflow: hidden;
+  margin-top: 5rpx;
+  color: #766f67;
+  font-size: 20rpx;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.in-app-reminder-actions {
+  flex: 0 0 auto;
+  margin-left: 16rpx;
+  text-align: right;
+}
+
+.in-app-reminder-link {
+  color: #2f6f4e;
+  font-size: 19rpx;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.in-app-reminder-dismiss {
+  min-width: 104rpx;
+  min-height: 64rpx;
+  margin: 8rpx 0 0;
+  padding: 0 14rpx;
+  border: 0;
+  border-radius: 12rpx;
+  background: #ffffff;
+  color: #5f5851;
+  font-size: 20rpx;
+  line-height: 64rpx;
+}
+
+.in-app-reminder-dismiss::after {
+  border: 1rpx solid rgba(42, 38, 34, 0.1);
+  border-radius: 12rpx;
+}
+
+.agent-status-dot {
+  flex: 0 0 14rpx;
+  width: 14rpx;
+  height: 14rpx;
+  margin-right: 16rpx;
+  border: 3rpx solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  background: #d8d1c9;
+}
+
+.agent-status-capsule.querying .agent-status-dot,
+.agent-status-capsule.composing .agent-status-dot,
+.agent-status-capsule.thinking .agent-status-dot,
+.agent-status-capsule.understanding .agent-status-dot {
+  background: #f3b34c;
+}
+
+.agent-status-capsule.complete .agent-status-dot {
+  background: #d7f0df;
+}
+
+.agent-status-copy {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.agent-status-text {
+  overflow: hidden;
+  font-size: 23rpx;
+  font-weight: 650;
+  line-height: 1.35;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-status-detail {
+  margin-top: 7rpx;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 19rpx;
+  line-height: 1.45;
+}
+
+.agent-status-chevron {
+  flex: 0 0 40rpx;
+  width: 40rpx;
+  margin-left: 12rpx;
+  color: rgba(255, 255, 255, 0.64);
+  font-size: 28rpx;
+  text-align: center;
 }
 
 .xiaofu-conversation-primary {
@@ -519,6 +694,8 @@ button::after {
 }
 
 .message-scroll {
+  box-sizing: border-box;
+  width: 100%;
   flex: 1;
   min-height: 0;
   margin-top: 10rpx;
@@ -532,9 +709,10 @@ button::after {
 
 .empty-welcome {
   box-sizing: border-box;
+  width: 100%;
   max-height: none;
-  margin: 48rpx 8rpx 24rpx;
-  padding: 12rpx 8rpx 8rpx;
+  margin: 48rpx 0 24rpx;
+  padding: 12rpx 0 8rpx;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
@@ -563,41 +741,79 @@ button::after {
   line-height: 1.45;
 }
 
-.empty-entry-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12rpx;
-  margin-top: 28rpx;
-}
-
-.empty-entry {
-  margin: 0;
-  padding: 18rpx 16rpx;
-  border-radius: 16rpx;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1rpx solid rgba(42, 38, 34, 0.06);
-  box-shadow: none;
+button.proactive-insight {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  max-width: none;
+  min-height: 210rpx;
+  margin: 30rpx 0 0;
+  padding: 26rpx 28rpx 24rpx;
+  border: 1rpx solid #e5dfd7;
+  border-left: 8rpx solid #c62828;
+  border-radius: 18rpx;
+  background: #ffffff;
+  box-shadow: 0 8rpx 24rpx rgba(42, 38, 34, 0.06);
   text-align: left;
-  line-height: 1.35;
 }
 
-.empty-entry-title {
-  font-size: 26rpx;
-  font-weight: 650;
-  color: #2a2622;
+.proactive-insight.schedule_change {
+  border-left-color: #9a5b2e;
 }
 
-.empty-entry-desc {
-  margin-top: 6rpx;
+.proactive-insight.free_day,
+.proactive-insight.day_finished {
+  border-left-color: #2f6f4e;
+}
+
+.proactive-eyebrow {
+  color: #8a8178;
   font-size: 20rpx;
-  color: #9a9188;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  line-height: 1.3;
 }
 
-.empty-example {
-  margin-top: 28rpx;
-  color: #9a9188;
+.proactive-title {
+  margin-top: 12rpx;
+  color: #2a2622;
+  font-size: 31rpx;
+  font-weight: 700;
+  line-height: 1.38;
+}
+
+.proactive-detail {
+  margin-top: 12rpx;
+  color: #6b635a;
+  font-size: 23rpx;
+  line-height: 1.58;
+}
+
+.proactive-link {
+  margin-top: 18rpx;
+  color: #a51f1f;
+  font-size: 23rpx;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.contextual-action-row {
+  display: flex;
+  gap: 10rpx;
+  margin-top: 16rpx;
+}
+
+.contextual-action {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 88rpx;
+  padding: 20rpx 10rpx;
+  border-bottom: 2rpx solid #d8d1c9;
+  color: #4f4841;
   font-size: 22rpx;
-  line-height: 1.45;
+  font-weight: 600;
+  line-height: 1.35;
+  text-align: center;
 }
 
 .empty-safe-note {
@@ -2001,9 +2217,116 @@ button::after {
     max-width: 84%;
   }
 
+  .in-app-reminder-banner {
+    align-items: flex-start;
+  }
+
+  .in-app-reminder-actions {
+    margin-left: 8rpx;
+  }
+
+  .in-app-reminder-link {
+    display: none;
+  }
+
+  .in-app-reminder-dismiss {
+    min-width: 88rpx;
+    margin-top: 0;
+  }
+
   .send-btn {
     width: 104rpx;
   }
 }
 
-.weather-icon-css{width:72rpx;height:72rpx;border-radius:50%;background:linear-gradient(160deg,#ffe08a,#ffb300);opacity:.9;}
+.weather-icon-css{width:72rpx;height:72rpx;border-radius:50%;background:#f5b942;opacity:.9;}
+
+@media (prefers-color-scheme: dark) {
+  .ai-page {
+    background: #181614;
+  }
+
+  .xiaofu-header-compact {
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .xiaofu-conversation-primary,
+  .empty-brand,
+  .proactive-title,
+  .contextual-action {
+    color: #f4f0ea;
+  }
+
+  .empty-title,
+  .proactive-detail {
+    color: #bcb3aa;
+  }
+
+  .proactive-insight {
+    border-color: #3d3833;
+    border-left-color: #e05b55;
+    background: #24211e;
+    box-shadow: none;
+  }
+
+  .proactive-insight.schedule_change {
+    border-left-color: #c58350;
+  }
+
+  .proactive-insight.free_day,
+  .proactive-insight.day_finished {
+    border-left-color: #68a982;
+  }
+
+  .proactive-link {
+    color: #ef7771;
+  }
+
+  .in-app-reminder-banner {
+    border-color: rgba(104, 169, 130, 0.3);
+    border-left-color: #68a982;
+    background: #202620;
+  }
+
+  .in-app-reminder-banner.schedule_change {
+    border-color: rgba(224, 91, 85, 0.28);
+    border-left-color: #e05b55;
+    background: #2a1e1d;
+  }
+
+  .in-app-reminder-eyebrow,
+  .in-app-reminder-link {
+    color: #86c49e;
+  }
+
+  .in-app-reminder-banner.schedule_change .in-app-reminder-eyebrow {
+    color: #ef7771;
+  }
+
+  .in-app-reminder-title {
+    color: #f4f0ea;
+  }
+
+  .in-app-reminder-detail {
+    color: #bcb3aa;
+  }
+
+  .in-app-reminder-dismiss {
+    background: #312c27;
+    color: #e5ded6;
+  }
+
+  .contextual-action {
+    border-bottom-color: #4a433d;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-status-capsule,
+  .composer,
+  .send-btn,
+  .voice-btn {
+    transition: none !important;
+    animation: none !important;
+  }
+}

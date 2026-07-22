@@ -16,26 +16,71 @@
     </view>
   </view>
 
+  <view
+    class="agent-status-capsule {{agentActivityState}} {{statusCapsuleExpanded ? 'expanded' : ''}}"
+    bindtap="toggleStatusCapsule"
+    role="button"
+    aria-label="{{statusCapsuleText}}"
+  >
+    <view class="agent-status-dot" aria-hidden="true"></view>
+    <view class="agent-status-copy">
+      <view class="agent-status-text">{{statusCapsuleText}}</view>
+      <view class="agent-status-detail" wx:if="{{statusCapsuleExpanded}}">{{statusCapsuleDetail}}</view>
+    </view>
+    <view class="agent-status-chevron" aria-hidden="true">{{statusCapsuleExpanded ? '−' : '+'}}</view>
+  </view>
+
+  <view
+    class="in-app-reminder-banner {{inAppReminderBanner.kind}}"
+    wx:if="{{inAppReminderBanner}}"
+    bindtap="onOpenInAppReminder"
+    role="button"
+    aria-label="{{inAppReminderBanner.title}}，{{inAppReminderBanner.actionLabel}}"
+  >
+    <view class="in-app-reminder-copy">
+      <view class="in-app-reminder-eyebrow">{{inAppReminderBanner.eyebrow || '应用内提醒'}}</view>
+      <view class="in-app-reminder-title">{{inAppReminderBanner.title}}</view>
+      <view class="in-app-reminder-detail">{{inAppReminderBanner.detail}}</view>
+    </view>
+    <view class="in-app-reminder-actions">
+      <view class="in-app-reminder-link">{{inAppReminderBanner.actionLabel}} →</view>
+      <button
+        class="in-app-reminder-dismiss"
+        catchtap="onAcknowledgeInAppReminder"
+        loading="{{inAppReminderAcknowledging}}"
+        disabled="{{inAppReminderAcknowledging}}"
+        aria-label="知道了，不再显示这条应用内提醒"
+      >知道了</button>
+    </view>
+  </view>
+
   <view class="history-trim-tip" wx:if="{{historyTrimNotice}}">已仅保留最近 20 条</view>
 
   <scroll-view class="message-scroll" scroll-y scroll-top="{{scrollTop}}" scroll-into-view="{{scrollIntoView}}" scroll-with-animation="{{scrollWithAnimation}}" scroll-anchoring="{{true}}" enhanced show-scrollbar="{{false}}" lower-threshold="80">
-    <!-- Empty state: light entries, no heavy white cards grid -->
+    <!-- Empty state: one verified contextual insight and at most three actions -->
     <view class="empty-welcome" wx:if="{{!messages.length}}">
       <view class="empty-brand">小佛助手</view>
       <view class="empty-title">可以直接告诉我你想完成的校园任务。</view>
-      <view class="empty-entry-grid">
+      <button
+        wx:if="{{proactiveInsight}}"
+        class="proactive-insight {{proactiveInsight.kind}}"
+        bindtap="onProactiveInsightTap"
+        aria-label="{{proactiveInsight.title}}"
+      >
+        <view class="proactive-eyebrow">{{proactiveInsight.eyebrow}}</view>
+        <view class="proactive-title">{{proactiveInsight.title}}</view>
+        <view class="proactive-detail">{{proactiveInsight.detail}}</view>
+        <view class="proactive-link" wx:if="{{proactiveInsight.actionLabel}}">{{proactiveInsight.actionLabel}} →</view>
+      </button>
+      <view class="contextual-action-row" wx:if="{{contextualActions.length}}">
         <button
-          wx:for="{{welcomeTaskCards}}"
+          wx:for="{{contextualActions}}"
           wx:key="id"
-          class="empty-entry"
-          data-question="{{item.question}}"
-          bindtap="onWelcomeExampleTap"
-        >
-          <view class="empty-entry-title">{{item.title}}</view>
-          <view class="empty-entry-desc">{{item.desc}}</view>
-        </button>
+          class="contextual-action"
+          data-index="{{index}}"
+          bindtap="onContextualActionTap"
+        >{{item.label}}</button>
       </view>
-      <view class="empty-example">试试问：“明天下午仙溪哪里适合自习？”</view>
       <view class="empty-safe-note" wx:if="{{showPrivacyTip}}">请勿输入学号、密码等敏感信息</view>
     </view>
 
@@ -64,10 +109,16 @@
           wx:if="{{message.content}}"
         >
           <view class="message-content">
+            <safe-markdown
+              wx:if="{{message.role == 'assistant'}}"
+              content="{{message.content}}"
+              selectable="{{true}}"
+            />
             <text
+              wx:else
               class="message-content-text"
-              selectable="{{message.role == 'assistant'}}"
-              user-select="{{message.role == 'assistant'}}"
+              selectable="{{false}}"
+              user-select="{{false}}"
             >{{message.content}}</text>
           </view>
           <view class="message-meta" wx:if="{{message.timeText}}">
@@ -189,11 +240,21 @@
   <xiaofu-memory-sheet
     visible="{{showMemorySheet}}"
     mode="{{memoryMode}}"
+    preferences="{{memoryPreferences}}"
+    preferences-loading="{{memoryPreferencesLoading}}"
     bind:close="closeMemorySheet"
     bind:change="onMemoryModeChange"
     bind:clearlocal="onClearLocalMemory"
     bind:clearcurrent="onClearCurrentMemory"
     bind:clearall="onClearAllMemory"
+    bind:deletepreference="onDeleteMemoryPreference"
+  />
+
+  <xiaofu-reminder-sheet
+    visible="{{showReminderSheet}}"
+    bind:close="closeReminderSheet"
+    bind:create="onReminderCreate"
+    bind:change="onReminderChange"
   />
 
   <xiaofu-settings-sheet
@@ -221,6 +282,10 @@
     <view class="plus-action-list">
       <button class="plus-action-row" bindtap="openTaskPanelFromPlus">校园工具</button>
       <button class="plus-action-row" bindtap="openPersonalSyncFromPlus">导入课表</button>
+      <button class="plus-action-row" bindtap="createReminderFromPlus">创建提醒</button>
+      <button class="plus-action-row" bindtap="openRemindersFromPlus">管理提醒</button>
+      <button class="plus-action-row" bindtap="viewNextCourseFromPlus">查看下一节课</button>
+      <button class="plus-action-row" bindtap="findEmptyRoomFromPlus">找空教室</button>
       <button class="plus-action-row" bindtap="openCampusMapFromPlus">校园地图</button>
       <button class="plus-action-row" bindtap="startVoiceFromPlus" wx:if="{{voiceInputVisible}}">语音输入</button>
       <button class="plus-action-row" bindtap="createNewConversationFromPlus">新建对话</button>

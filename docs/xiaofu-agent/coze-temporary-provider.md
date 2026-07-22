@@ -20,14 +20,12 @@ Coze 是 **临时可选** 表达层 Provider，不是长期主 Provider，也不
 1. 在 Coze 控制台创建并发布 Agent/Bot（需支持 Open API）
 2. 获取 Bot/Agent ID
 3. 创建 API Token（PAT 或服务凭证）
-4. 在 FosuClass Legacy 后台“查询服务”填写：
+4. 在 FosuClass 后台“AI 模型”填写：
    - 是否启用
-   - API Base URL（默认 `https://api.coze.cn`）
-   - Bot/Agent ID
+   - 已发布 Bot ID
    - API Token（输入后不明文回显，加密保存）
-   - 到期时间 `COZE_EXPIRES_AT`
-   - Provider Chain 位置（建议 trial/dev：`primary,coze,mock`）
-5. 使用“测试连接 / 一键诊断增强能力”
+   - 可选到期时间 `COZE_EXPIRES_AT`
+5. 使用“测试 Coze 连接”。成功响应必须完成一次官方 Chat API 校验，而不是只检查字段非空。
 
 说明文案：**请填写 API Token，不要填写学校账户密码。**
 
@@ -37,6 +35,12 @@ Coze 是 **临时可选** 表达层 Provider，不是长期主 Provider，也不
 - 到期：自动跳过，不再请求，进入下一 Provider 或本地能力
 - `user_id`：`fosu-<HMAC>`，按 Principal + runtimeMode + deployEnv 隔离，永不传 OpenID 明文
 - 仅传入脱敏问题、Intent、工具摘要、裁剪知识、最小会话摘要
+- 连接诊断：区分 `TOKEN_INVALID`、`BOT_NOT_FOUND`、`BOT_NOT_PUBLISHED`、`PERMISSION_DENIED`、`RATE_LIMITED` 与 `TIMEOUT`
+- Token：接口只返回“是否已配置”，输入后只显示掩码状态；不回传或记录完整值
+
+## Bot 选择器边界
+
+官方 Bot 列表接口需要 Workspace/Space ID，PAT 本身不足以确定查询范围。本轮因此不提供虚假的自动选择器；管理员从已发布 Bot 页面复制 Bot ID，再用连接测试实时验证。
 
 ## 企业权限不足
 

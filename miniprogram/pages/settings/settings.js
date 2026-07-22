@@ -411,6 +411,12 @@ Page({
       url: "/packageMaps/pages/campus-map/campus-map",
     });
   },
+
+  goSmartCourseReminders() {
+    wx.navigateTo({
+      url: "/packageXiaofu/pages/ai-assistant/ai-assistant?panel=reminders",
+    });
+  },
   
   goContribute() {
     wx.navigateTo({

@@ -1,0 +1,66 @@
+<view class="reminder-mask" wx:if="{{visible}}" bindtap="close">
+  <view class="reminder-sheet" catchtap="stopPropagation" role="dialog" aria-label="课程提醒管理">
+    <view class="sheet-handle"></view>
+    <view class="sheet-head">
+      <view>
+        <view class="sheet-kicker">COURSE REMINDERS</view>
+        <view class="sheet-title">课程提醒</view>
+      </view>
+      <button class="close-button" bindtap="close" aria-label="关闭提醒面板">✕</button>
+    </view>
+    <view class="disclosure">{{disclosure}}</view>
+
+    <scroll-view class="reminder-list" scroll-y enhanced show-scrollbar="{{false}}">
+      <view class="loading" wx:if="{{loading}}">正在读取提醒…</view>
+      <view class="empty" wx:elif="{{errorText}}">
+        <view class="empty-title">暂时无法读取</view>
+        <view class="empty-copy">{{errorText}}</view>
+        <button class="secondary-button" bindtap="refresh">重新加载</button>
+      </view>
+      <view class="empty" wx:elif="{{!items.length}}">
+        <view class="empty-title">还没有课程提醒</view>
+        <view class="empty-copy">说“以后上课前20分钟提醒我”，小佛会先生成确认计划。</view>
+        <button class="primary-button" bindtap="create">创建提醒</button>
+      </view>
+      <view wx:else>
+        <view class="reminder-item" wx:for="{{items}}" wx:key="id">
+          <view class="item-accent {{item.active ? 'active' : ''}}"></view>
+          <view class="item-main">
+            <view class="item-title-row">
+              <view class="item-title">{{item.title}}</view>
+              <view class="status-label {{item.active ? 'active' : ''}}">{{item.statusLabel}}</view>
+            </view>
+            <view class="item-schedule">{{item.schedule}}</view>
+            <view class="item-meta">
+              <text>{{item.leadLabel}}</text>
+              <text>·</text>
+              <text>{{item.channelLabel}}</text>
+            </view>
+            <view class="service-notice-row" wx:if="{{item.canEdit}}">
+              <view class="service-notice-copy">
+                <view class="service-notice-title">微信服务通知</view>
+                <view class="service-notice-detail" wx:if="{{item.authorizationCredits > 0}}">剩余 {{item.authorizationCredits}} 次；每次发送后消耗 1 次</view>
+                <view class="service-notice-detail" wx:else>暂无可用额度，提醒仍有应用内兜底</view>
+              </view>
+              <button
+                wx:if="{{capability.configured}}"
+                class="grant-button"
+                data-id="{{item.id}}"
+                bindtap="onGrantSubscription"
+                loading="{{grantingId === item.id}}"
+                disabled="{{grantingId || operatingId}}"
+              >补充微信授权</button>
+              <view class="service-notice-pending" wx:else>待后台配置</view>
+            </view>
+            <view class="item-actions" wx:if="{{item.canEdit}}">
+              <button class="item-button" data-id="{{item.id}}" data-status="{{item.status}}" bindtap="onToggle" loading="{{operatingId === item.id}}">{{item.statusAction}}</button>
+              <button class="item-button" data-id="{{item.id}}" bindtap="onEditLead" disabled="{{item.eventDriven}}">修改时间</button>
+              <button class="item-button danger" data-id="{{item.id}}" data-title="{{item.title}}" bindtap="onDelete">删除</button>
+            </view>
+          </view>
+        </view>
+        <button class="primary-button create-more" bindtap="create">再创建一个提醒</button>
+      </view>
+    </scroll-view>
+  </view>
+</view>

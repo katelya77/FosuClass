@@ -1,4 +1,6 @@
 const floatService = require("../../services/xiaofuFloatService");
+const courseReminderClient = require("../../services/courseReminderClient");
+const securitySessionService = require("../../services/securitySessionService");
 
 const FLOAT_SIZE = 58;
 const EDGE_MARGIN = 6;
@@ -58,6 +60,9 @@ Component({
     x: 0,
     y: 0,
     size: FLOAT_SIZE,
+    hintEyebrow: "",
+    hintText: "",
+    hintSide: "left",
   },
 
   lifetimes: {
@@ -155,11 +160,47 @@ Component({
       const bounds = this.getBounds(policy);
       const saved = floatService.getPosition();
       const position = this.clampPosition(saved || { x: bounds.maxX, y: bounds.maxY - 18 }, bounds);
+      let insight = floatService.getProactiveInsight();
+      try {
+        const aiAssistantService = require("../../services/aiAssistantService");
+        const workspace = aiAssistantService.buildProactiveWorkspace(aiAssistantService.buildClientContext({}));
+        if (workspace && workspace.insight) insight = floatService.setProactiveInsight(workspace.insight);
+      } catch (error) {
+        // Keep the latest short-lived, sanitized insight when local context is unavailable.
+      }
       this.setData({
         visible: true,
         dimmed: policy.dimmed,
         x: Math.round(position.x),
         y: Math.round(position.y),
+        hintEyebrow: insight && insight.eyebrow || "",
+        hintText: insight && insight.title || "",
+        hintSide: position.x + FLOAT_SIZE / 2 < bounds.width / 2 ? "right" : "left",
+      });
+      this.refreshInAppReminderHint();
+    },
+
+    refreshInAppReminderHint() {
+      const now = Date.now();
+      if (this._inAppReminderCheckPending
+        || now - Number(this._lastInAppReminderCheckAt || 0) < 30000
+        || !securitySessionService.isSessionAvailable({ refreshSkewMs: 0 })) return;
+      this._inAppReminderCheckPending = true;
+      this._lastInAppReminderCheckAt = now;
+      courseReminderClient.listInAppEvents(1).then((result) => {
+        if (!result || result.success !== true || !Array.isArray(result.items) || !result.items.length) return;
+        const event = result.items[0] || {};
+        const occurrence = event.occurrence && typeof event.occurrence === "object" ? event.occurrence : {};
+        const courseName = String(occurrence.courseName || "课程提醒").replace(/[\r\n]+/g, " ").slice(0, 32);
+        const startTime = String(occurrence.startTime || "").slice(0, 8);
+        this.setData({
+          hintEyebrow: event.kind === "schedule_change" ? "课表变化提醒" : "应用内提醒",
+          hintText: [courseName, startTime].filter(Boolean).join(" · "),
+        });
+      }).catch(() => {
+        // 浮窗不承担在线决策；收件箱不可用时保留本机主动洞察。
+      }).finally(() => {
+        this._inAppReminderCheckPending = false;
       });
     },
 
@@ -209,6 +250,7 @@ Component({
         moving: true,
         x: Math.round(next.x),
         y: Math.round(next.y),
+        hintSide: next.x + FLOAT_SIZE / 2 < bounds.width / 2 ? "right" : "left",
       });
     },
 
@@ -247,6 +289,7 @@ Component({
         moving: false,
         x: Math.round(next.x),
         y: Math.round(next.y),
+        hintSide: next.x + FLOAT_SIZE / 2 < bounds.width / 2 ? "right" : "left",
       });
     },
 

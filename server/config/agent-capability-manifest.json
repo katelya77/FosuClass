@@ -39,6 +39,123 @@
     "search_campus_place": { "runtimeModes": ["public", "trial", "dev"], "safetyLevel": "low" },
     "get_campus_route": { "runtimeModes": ["public", "trial", "dev"], "safetyLevel": "low" },
     "get_classroom_location": { "runtimeModes": ["public", "trial", "dev"], "safetyLevel": "low" },
+    "get_today_schedule": {
+      "runtimeModes": ["public", "trial", "dev"], "safetyLevel": "medium", "operation": "read", "confirmation": "none", "idempotent": true, "timeoutMs": 3000,
+      "errorCodes": ["SCHEDULE_REQUIRED"],
+      "inputSchema": { "type": "object", "additionalProperties": false, "properties": { "date": { "type": "string", "maxLength": 10 } } }
+    },
+    "get_course_route": {
+      "runtimeModes": ["public", "trial", "dev"], "safetyLevel": "medium", "operation": "read", "confirmation": "none", "idempotent": true, "timeoutMs": 5000,
+      "errorCodes": ["SCHEDULE_REQUIRED", "NO_MATCHING_COURSE", "COURSE_TIME_REQUIRED", "ROUTE_DATA_INCOMPLETE"],
+      "inputSchema": {
+        "type": "object", "additionalProperties": false,
+        "properties": {
+          "message": { "type": "string", "maxLength": 240 },
+          "from": { "type": "string", "maxLength": 40 },
+          "dateHint": { "type": "string", "maxLength": 20 },
+          "walkingBufferMinutes": { "type": "integer", "minimum": 5, "maximum": 90 }
+        }
+      }
+    },
+    "inspect_schedule_conflicts": {
+      "runtimeModes": ["public", "trial", "dev"], "safetyLevel": "medium", "operation": "read", "confirmation": "none", "idempotent": true, "timeoutMs": 3000,
+      "errorCodes": ["SCHEDULE_REQUIRED"],
+      "inputSchema": { "type": "object", "additionalProperties": false, "properties": { "week": { "type": "integer", "minimum": 1, "maximum": 30 } } }
+    },
+    "detect_schedule_changes": {
+      "runtimeModes": ["public", "trial", "dev"], "safetyLevel": "medium", "operation": "read", "confirmation": "none", "idempotent": true, "timeoutMs": 3000,
+      "errorCodes": ["SCHEDULE_REQUIRED", "SCHEDULE_BASELINE_REQUIRED"],
+      "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} }
+    },
+    "navigate_miniprogram_page": {
+      "runtimeModes": ["public", "trial", "dev"], "safetyLevel": "low", "operation": "read", "confirmation": "none", "idempotent": true, "timeoutMs": 1000,
+      "errorCodes": ["NAVIGATION_URL_NOT_ALLOWED"],
+      "inputSchema": { "type": "object", "additionalProperties": false, "required": ["url"], "properties": { "url": { "type": "string", "maxLength": 240 } } }
+    },
+    "create_course_reminder": {
+      "runtimeModes": ["public", "trial", "dev"],
+      "safetyLevel": "high",
+      "operation": "write",
+      "confirmation": "required",
+      "idempotent": true,
+      "timeoutMs": 3000,
+      "errorCodes": ["PRINCIPAL_REQUIRED", "SCHEDULE_REQUIRED", "NO_MATCHING_COURSE", "REMINDER_CONFIRMATION_REQUIRED", "REMINDER_SECRET_UNAVAILABLE"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["message"],
+        "properties": {
+          "message": { "type": "string", "minLength": 2, "maxLength": 240 },
+          "leadMinutes": { "type": "integer", "minimum": 5, "maximum": 180 },
+          "scope": { "type": "string", "enum": ["all_courses", "date_course", "room_change"] }
+        }
+      }
+    },
+    "update_course_reminder": {
+      "runtimeModes": ["public", "trial", "dev"],
+      "safetyLevel": "high",
+      "operation": "write",
+      "confirmation": "required",
+      "idempotent": true,
+      "timeoutMs": 3000,
+      "errorCodes": ["PRINCIPAL_REQUIRED", "REMINDER_NOT_FOUND", "REMINDER_CONFIRMATION_REQUIRED", "REMINDER_CONFIRMATION_INVALID"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["reminderId"],
+        "properties": {
+          "reminderId": { "type": "string", "minLength": 8, "maxLength": 80 },
+          "status": { "type": "string", "enum": ["enabled", "paused"] },
+          "leadMinutes": { "type": "integer", "minimum": 5, "maximum": 180 }
+        }
+      }
+    },
+    "delete_course_reminder": {
+      "runtimeModes": ["public", "trial", "dev"],
+      "safetyLevel": "high",
+      "operation": "write",
+      "confirmation": "required",
+      "idempotent": true,
+      "timeoutMs": 3000,
+      "errorCodes": ["PRINCIPAL_REQUIRED", "REMINDER_NOT_FOUND", "REMINDER_CONFIRMATION_REQUIRED", "REMINDER_CONFIRMATION_INVALID"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "reminderId": { "type": "string", "minLength": 8, "maxLength": 80 },
+          "weekday": { "type": "integer", "minimum": 1, "maximum": 7 },
+          "period": { "type": "string", "enum": ["morning", "afternoon", "evening"] }
+        }
+      }
+    },
+    "list_course_reminders": {
+      "runtimeModes": ["public", "trial", "dev"],
+      "safetyLevel": "medium",
+      "operation": "read",
+      "confirmation": "none",
+      "idempotent": true,
+      "timeoutMs": 3000,
+      "errorCodes": ["PRINCIPAL_REQUIRED", "REMINDER_SECRET_UNAVAILABLE"],
+      "inputSchema": { "type": "object", "additionalProperties": false, "properties": {} }
+    },
+    "update_user_preference": {
+      "runtimeModes": ["public", "trial", "dev"],
+      "safetyLevel": "medium",
+      "operation": "write",
+      "confirmation": "explicit_user_command",
+      "idempotent": true,
+      "timeoutMs": 3000,
+      "errorCodes": ["PRINCIPAL_REQUIRED", "PREFERENCE_INVALID", "EXPLICIT_USER_COMMAND_REQUIRED", "MEMORY_SECRET_UNAVAILABLE"],
+      "inputSchema": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "preferredName": { "type": "string", "maxLength": 24 },
+          "campus": { "type": "string", "enum": ["仙溪校区", "江湾校区"] },
+          "defaultReminderLeadMinutes": { "type": "integer", "minimum": 5, "maximum": 180 }
+        }
+      }
+    },
     "rag_search": { "runtimeModes": ["public", "trial", "dev"], "safetyLevel": "low" },
     "generate_image": { "runtimeModes": ["trial", "dev"], "safetyLevel": "medium" }
   },
@@ -54,12 +171,16 @@
     "find_empty_room": { "version": "1.0.0", "description": "查询空教室", "supportedIntents": ["search_empty_rooms"], "requiredSlots": [], "optionalSlots": ["week", "weekday", "sections", "campus", "building"], "allowedTools": ["search_empty_rooms", "diagnose_data_status"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "last-known-good-release-pack", "outputCardTypes": ["empty_room", "diagnosis"] },
     "find_continuous_empty_room": { "version": "1.0.0", "description": "查询连续空闲教室", "supportedIntents": ["search_continuous_empty_rooms"], "requiredSlots": [], "optionalSlots": ["week", "weekday", "duration", "campus", "building"], "allowedTools": ["search_continuous_empty_rooms", "diagnose_data_status"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "last-known-good-release-pack", "outputCardTypes": ["empty_room", "diagnosis"] },
     "recommend_meeting_time": { "version": "1.0.0", "description": "基于课表与空教室推荐会议时间", "supportedIntents": ["recommend_meeting_time"], "requiredSlots": [], "optionalSlots": ["week", "weekday", "duration", "campus"], "allowedTools": ["recommend_meeting_time", "search_empty_rooms"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "deterministic-schedule-only", "outputCardTypes": ["reminder", "empty_room", "guide"] },
-    "campus_multi_step_advice": { "version": "1.0.0", "description": "组合课表、空教室、天气和地点建议", "supportedIntents": ["campus_multi_step_advice"], "requiredSlots": [], "optionalSlots": ["week", "weekday", "campus", "building"], "allowedTools": ["get_tomorrow_courses", "search_empty_rooms", "get_campus_weather", "search_campus_place"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "partial-deterministic-results", "outputCardTypes": ["schedule", "empty_room", "weather", "generic", "reminder"] },
+    "campus_multi_step_advice": { "version": "1.0.0", "description": "组合课表、空教室、天气和地点建议", "supportedIntents": ["campus_multi_step_advice"], "requiredSlots": [], "optionalSlots": ["week", "weekday", "campus", "building"], "allowedTools": ["get_today_courses", "get_tomorrow_courses", "search_empty_rooms", "get_campus_weather", "search_campus_place"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "partial-deterministic-results", "outputCardTypes": ["schedule", "empty_room", "weather", "generic", "reminder"] },
     "schedule_data_diagnosis": { "version": "1.0.0", "description": "诊断课表发布数据状态", "supportedIntents": ["diagnose_data_status"], "requiredSlots": [], "optionalSlots": ["term", "releaseVersion"], "allowedTools": ["diagnose_data_status"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "local-status-entry", "outputCardTypes": ["diagnosis"] },
     "personal_schedule_import_help": { "version": "1.0.0", "description": "安全说明个人课表导入", "supportedIntents": ["explain_personal_import"], "requiredSlots": [], "optionalSlots": ["mode"], "allowedTools": ["explain_personal_import"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "local-import-entry", "outputCardTypes": ["guide"] },
     "campus_weather": { "version": "1.0.0", "description": "查询校区天气", "supportedIntents": ["get_campus_weather"], "requiredSlots": [], "optionalSlots": ["campus", "dateHint"], "allowedTools": ["get_campus_weather"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "weather-unavailable-notice", "outputCardTypes": ["weather", "generic"] },
     "course_weather_advice": { "version": "1.0.0", "description": "结合课程地点提供天气建议", "supportedIntents": ["get_course_weather_advice"], "requiredSlots": [], "optionalSlots": ["campus", "dateHint"], "allowedTools": ["get_course_weather_advice"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "schedule-with-weather-unavailable-notice", "outputCardTypes": ["weather", "schedule", "generic"] },
     "campus_place_navigation": { "version": "1.0.0", "description": "查询校内地点、路线和教室位置", "supportedIntents": ["search_campus_place", "get_campus_route", "get_classroom_location"], "requiredSlots": [], "optionalSlots": ["q", "from", "to", "classroom"], "allowedTools": ["search_campus_place", "get_campus_route", "get_classroom_location"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "local-campus-map-entry", "outputCardTypes": ["generic"] },
+    "course_reminders": { "version": "1.0.0", "description": "规划、查看和管理上课提醒；所有写操作必须先确认", "supportedIntents": ["manage_course_reminders"], "requiredSlots": [], "optionalSlots": ["leadMinutes", "scope", "date", "weekday", "period", "reminderId"], "allowedTools": ["create_course_reminder", "update_course_reminder", "delete_course_reminder", "list_course_reminders"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "app-only-reminder", "outputCardTypes": ["reminder", "guide", "generic"] },
+    "course_action_advice": { "version": "1.0.0", "description": "组合下一节/明日课程、校园位置和天气，生成带明确假设的出发建议", "supportedIntents": ["course_action_advice"], "requiredSlots": [], "optionalSlots": ["dateHint", "from", "campus"], "allowedTools": ["get_next_course", "get_tomorrow_courses", "get_course_route", "get_course_weather_advice", "navigate_miniprogram_page"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "schedule-with-explicit-route-assumption", "outputCardTypes": ["schedule", "weather", "guide", "generic"] },
+    "schedule_health": { "version": "1.0.0", "description": "检查个人课表中的冲突、重复、缺失教室、异常周次和连续赶课", "supportedIntents": ["inspect_schedule_health", "detect_schedule_changes"], "requiredSlots": [], "optionalSlots": ["week"], "allowedTools": ["inspect_schedule_conflicts", "detect_schedule_changes", "navigate_miniprogram_page"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "local-schedule-summary-only", "outputCardTypes": ["diagnosis", "schedule", "guide", "generic"] },
+    "personal_memory": { "version": "1.0.0", "description": "管理用户明确要求记住的偏好，并在当前对话中恢复最近上下文", "supportedIntents": ["conversation_memory", "update_user_preference"], "requiredSlots": [], "optionalSlots": ["preferredName", "campus", "defaultReminderLeadMinutes"], "allowedTools": ["update_user_preference"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "local-memory-only", "outputCardTypes": ["generic"] },
     "knowledge_search": { "version": "1.0.0", "description": "检索已发布校园知识和项目帮助", "supportedIntents": ["rag_search", "project_qa", "conversational_help"], "requiredSlots": [], "optionalSlots": ["q"], "allowedTools": ["rag_search"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "allowed-expression-only", "fallbackPolicy": "published-lexical-search-or-help", "outputCardTypes": ["guide", "generic"] },
     "clarify_query": { "version": "1.0.0", "description": "追问缺失查询条件", "supportedIntents": ["clarify_missing_slot"], "requiredSlots": [], "optionalSlots": ["slot"], "allowedTools": ["clarify_missing_slot"], "runtimeModes": ["public", "trial", "dev"], "providerPolicy": "never", "fallbackPolicy": "local-clarification", "outputCardTypes": ["generic"] },
     "image_generation": { "version": "1.0.0", "description": "体验环境受控图片生成", "supportedIntents": ["generate_image"], "requiredSlots": [], "optionalSlots": ["prompt"], "allowedTools": ["generate_image"], "runtimeModes": ["trial", "dev"], "providerPolicy": "allowed", "fallbackPolicy": "unsupported-in-public", "outputCardTypes": ["generic"] }
@@ -85,11 +206,17 @@
     "get_campus_route": { "displayName": "校园路线", "factualTask": true, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "campus_place_navigation", "allowedTools": ["get_campus_route"], "requiredSlots": [], "optionalSlots": ["from", "to"], "allowedCardTypes": ["generic"], "needsPersonalScheduleSummary": false, "safetyLevel": "low", "publicAllowed": true, "fallbackPolicy": "local-campus-map-entry" },
     "get_classroom_location": { "displayName": "教室位置", "factualTask": true, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "campus_place_navigation", "allowedTools": ["get_classroom_location"], "requiredSlots": [], "optionalSlots": ["classroom"], "allowedCardTypes": ["generic"], "needsPersonalScheduleSummary": false, "safetyLevel": "low", "publicAllowed": true, "fallbackPolicy": "local-campus-map-entry" },
     "next_course_location": { "displayName": "下一节课地点", "factualTask": true, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "next_course_location", "allowedTools": ["get_next_course", "get_classroom_location"], "requiredSlots": [], "optionalSlots": ["classroom"], "allowedCardTypes": ["schedule", "generic"], "needsPersonalScheduleSummary": true, "safetyLevel": "medium", "publicAllowed": true, "fallbackPolicy": "schedule-with-navigation-entry" },
+    "manage_course_reminders": { "displayName": "课程提醒管理", "factualTask": true, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "course_reminders", "allowedTools": ["create_course_reminder", "update_course_reminder", "delete_course_reminder", "list_course_reminders"], "requiredSlots": [], "optionalSlots": ["leadMinutes", "scope", "date", "weekday", "period", "reminderId"], "allowedCardTypes": ["reminder", "guide", "generic"], "needsPersonalScheduleSummary": false, "safetyLevel": "high", "publicAllowed": true, "fallbackPolicy": "app-only-reminder" },
+    "course_action_advice": { "displayName": "课程出发建议", "factualTask": true, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "course_action_advice", "allowedTools": ["get_next_course", "get_tomorrow_courses", "get_course_route", "get_course_weather_advice", "navigate_miniprogram_page"], "requiredSlots": [], "optionalSlots": ["dateHint", "from", "campus"], "allowedCardTypes": ["schedule", "weather", "guide", "generic"], "needsPersonalScheduleSummary": true, "safetyLevel": "medium", "publicAllowed": true, "fallbackPolicy": "schedule-with-explicit-route-assumption" },
+    "inspect_schedule_health": { "displayName": "课表健康检查", "factualTask": true, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "schedule_health", "allowedTools": ["inspect_schedule_conflicts", "navigate_miniprogram_page"], "requiredSlots": [], "optionalSlots": ["week"], "allowedCardTypes": ["diagnosis", "schedule", "guide", "generic"], "needsPersonalScheduleSummary": true, "safetyLevel": "medium", "publicAllowed": true, "fallbackPolicy": "local-schedule-summary-only" },
+    "detect_schedule_changes": { "displayName": "课表变化检测", "factualTask": true, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "schedule_health", "allowedTools": ["detect_schedule_changes", "navigate_miniprogram_page"], "requiredSlots": [], "optionalSlots": [], "allowedCardTypes": ["diagnosis", "schedule", "guide", "generic"], "needsPersonalScheduleSummary": true, "safetyLevel": "medium", "publicAllowed": true, "fallbackPolicy": "local-schedule-summary-only" },
+    "conversation_memory": { "displayName": "会话记忆", "factualTask": false, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "personal_memory", "allowedTools": [], "requiredSlots": [], "optionalSlots": ["preferredName"], "allowedCardTypes": ["generic"], "needsPersonalScheduleSummary": false, "safetyLevel": "low", "publicAllowed": true, "fallbackPolicy": "local-memory-only" },
+    "update_user_preference": { "displayName": "更新用户偏好", "factualTask": false, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "personal_memory", "allowedTools": ["update_user_preference"], "requiredSlots": [], "optionalSlots": ["preferredName", "campus", "defaultReminderLeadMinutes"], "allowedCardTypes": ["generic"], "needsPersonalScheduleSummary": false, "safetyLevel": "medium", "publicAllowed": true, "fallbackPolicy": "local-memory-only" },
     "rag_search": { "displayName": "校园知识检索", "factualTask": true, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "knowledge_search", "allowedTools": ["rag_search"], "requiredSlots": [], "optionalSlots": ["q"], "allowedCardTypes": ["guide", "generic"], "needsPersonalScheduleSummary": false, "safetyLevel": "low", "publicAllowed": true, "fallbackPolicy": "published-lexical-search" },
     "project_qa": { "displayName": "项目帮助问答", "factualTask": false, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": true, "skill": "knowledge_search", "allowedTools": [], "requiredSlots": [], "optionalSlots": ["q"], "allowedCardTypes": ["guide", "generic"], "needsPersonalScheduleSummary": false, "safetyLevel": "low", "publicAllowed": true, "fallbackPolicy": "published-project-help" },
     "conversational_help": { "displayName": "对话与能力帮助", "factualTask": false, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": true, "skill": "knowledge_search", "allowedTools": [], "requiredSlots": [], "optionalSlots": [], "allowedCardTypes": ["guide", "generic"], "needsPersonalScheduleSummary": false, "safetyLevel": "low", "publicAllowed": true, "fallbackPolicy": "deterministic-help" },
     "generate_image": { "displayName": "图片生成", "factualTask": false, "runtimeModes": ["trial", "dev"], "externalProviderAllowed": true, "skill": "image_generation", "allowedTools": ["generate_image"], "requiredSlots": [], "optionalSlots": ["prompt"], "allowedCardTypes": ["generic"], "needsPersonalScheduleSummary": false, "safetyLevel": "medium", "publicAllowed": false, "fallbackPolicy": "unsupported-in-public" },
-    "campus_multi_step_advice": { "displayName": "校园多步骤建议", "factualTask": true, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "campus_multi_step_advice", "allowedTools": ["get_tomorrow_courses", "search_empty_rooms", "get_campus_weather", "search_campus_place"], "requiredSlots": [], "optionalSlots": ["week", "weekday", "campus", "building"], "allowedCardTypes": ["schedule", "empty_room", "weather", "generic", "reminder"], "needsPersonalScheduleSummary": true, "safetyLevel": "medium", "publicAllowed": true, "fallbackPolicy": "partial-deterministic-results" }
+    "campus_multi_step_advice": { "displayName": "校园多步骤建议", "factualTask": true, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "campus_multi_step_advice", "allowedTools": ["get_today_courses", "get_tomorrow_courses", "search_empty_rooms", "get_campus_weather", "search_campus_place"], "requiredSlots": [], "optionalSlots": ["week", "weekday", "campus", "building"], "allowedCardTypes": ["schedule", "empty_room", "weather", "generic", "reminder"], "needsPersonalScheduleSummary": true, "safetyLevel": "medium", "publicAllowed": true, "fallbackPolicy": "partial-deterministic-results" }
   },
   "clientCompatibility": {
     "schedule_query": "search_school_index",

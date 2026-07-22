@@ -12,6 +12,9 @@ const tests = [
   "tools/test-ai-assistant-minimal-ui.js",
   "tools/test-ai-assistant-ui-layout.js",
   "tools/test-campus-assistant-copy-audit.js",
+  "tools/test-agent-personal-memory.js",
+  "tools/test-agent-context-memory-flow.js",
+  "tools/test-safe-markdown-renderer.js",
 ];
 
 let failed = 0;

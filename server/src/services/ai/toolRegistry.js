@@ -14,6 +14,12 @@ const classroomSearch = require("./classroomSearch");
 const knowledgeBaseService = require("./knowledgeBaseService");
 const imageGenerationGateService = require("./imageGenerationGateService");
 const agentProtocol = require("./agentProtocol");
+const generatedPayloadContract = require("./generatedPayloadContract");
+const { planCourseReminder } = require("./reminders/courseReminderPlanner");
+const { defaultCourseReminderService } = require("./reminders/courseReminderService");
+const { resolvePrincipal } = require("./conversation/conversationPrincipalService");
+const { defaultUserPreferenceService } = require("./conversation/userPreferenceService");
+const scheduleAnalysisService = require("./scheduleAnalysisService");
 
 const MAX_SECTION = 14;
 const termRegistryService = require("../termRegistryService");
@@ -363,6 +369,13 @@ function inferCampusFromText(text) {
 function resolveModernChineseIntent(message, context = {}) {
   const text = normalizeText(message);
   if (!text) return null;
+  if (/(?:提醒|通知)/.test(text)) {
+    let operation = "create";
+    if (/(?:取消|删除|关闭).*(?:提醒|通知)/.test(text)) operation = "delete";
+    else if (/(?:查看|管理|列出|有哪些|多少个).*(?:提醒|通知)|(?:提醒|通知)(?:列表|管理)/.test(text)) operation = "list";
+    else if (/(?:暂停|启用|恢复|修改|调整).*(?:提醒|通知)/.test(text)) operation = "update";
+    return { name: "manage_course_reminders", slots: { operation } };
+  }
   const campus = inferCampusFromText(text);
   const hasWeather = /\u5929\u6c14|\u4e0b\u96e8|\u964d\u96e8|\u9ad8\u6e29|\u96f7\u66b4|\u5e26\u4f1e|\u51fa\u884c/.test(text);
   const hasEmptyRoom = /\u7a7a\u6559\u5ba4|\u81ea\u4e60|\u6ca1\u8bfe/.test(text);
@@ -371,6 +384,36 @@ function resolveModernChineseIntent(message, context = {}) {
     /\u5728\u54ea|\u54ea\u91cc|\u4f4d\u7f6e|\u6559\u5b66\u697c|\u5730\u56fe|\u600e\u4e48\u8d70/.test(text);
   const hasCampusMapQuery = /\u5730\u56fe|\u5730\u70b9|\u4f4d\u7f6e|\u5728\u54ea|\u54ea\u91cc|\u56fe\u4e66\u9986|\u996d\u5802|\u98df\u5802|\u5bbf\u820d|\u4f53\u80b2\u9986|\u6821\u95e8|\u533b\u9662|\u533b\u52a1|\u6559\u5b66\u697c|\u4e3b\u8981\u5730\u70b9|\b[A-Z]\d{1,2}\b/i.test(text);
   const hasCampusScope = /\u6c5f\u6e7e|\u4ed9\u6eaa|\u6cb3\u6ee8|\u6821\u533a|\u6821\u56ed|\b[A-Z]\d{1,2}\b/i.test(text);
+  const wantsDeparture = /(?:几点|什么时候|何时).*(?:出发|走)|(?:出发|走).*(?:几点|什么时候|何时)|该出发|出发建议/.test(text);
+  if (wantsDeparture && /下一节|下节|明天|上课|课程|宿舍/.test(text)) {
+    const fromMatch = text.match(/从\s*([^，。！？?]{1,16}?)(?:出发|走)/);
+    return {
+      name: "course_action_advice",
+      slots: {
+        from: fromMatch ? fromMatch[1] : (/宿舍/.test(text) ? "宿舍" : "当前位置"),
+        campus,
+        dateHint: /明天/.test(text) ? "tomorrow" : "today",
+        wantsWeather: hasWeather,
+      },
+    };
+  }
+  if (/时间冲突|课程冲突|重复课程|连续赶课|课表异常|缺失教室|检查.*课表/.test(text)) {
+    return { name: "inspect_schedule_health", slots: {} };
+  }
+  if (/课表.*(?:变化|变更|改动)|(?:变化|变更|改动).*课表|换教室|教师变化|周次异常/.test(text)) {
+    return { name: "detect_schedule_changes", slots: {} };
+  }
+  if (/两节课中间|课程中间|课间.*(?:一小时|空档)|空档.*(?:空教室|自习)|规划.*(?:上课|课程).*(?:自习|空教室)/.test(text)) {
+    return {
+      name: "campus_multi_step_advice",
+      slots: {
+        campus,
+        date: inferTargetDate(text, context),
+        sections: inferSections(text, context),
+        building: extractBuilding(text),
+      },
+    };
+  }
   if (hasNextCourseLocation) {
     return { name: "next_course_location", slots: {} };
   }
@@ -909,6 +952,176 @@ function getClassroomLocation(input = {}) {
   return campusMapService.getClassroomLocation(input);
 }
 
+function resolveReminderPrincipal(context = {}) {
+  return resolvePrincipal({
+    serverSession: context.serverSession || null,
+    runtimeMode: context.runtimeMode || context.assistantEnvironment || "public",
+  });
+}
+
+function createCourseReminder(input = {}, context = {}) {
+  const principal = resolveReminderPrincipal(context);
+  if (!principal.authenticated) {
+    return {
+      success: false,
+      code: "PRINCIPAL_REQUIRED",
+      requiresConfirmation: false,
+      summary: "需要有效小程序会话后才能创建提醒。",
+    };
+  }
+  const plan = planCourseReminder(input.message || "", context);
+  if (plan.success !== true) return plan;
+  return Object.assign({}, plan, {
+    canConfirm: true,
+    writeExecuted: false,
+    summary: plan.scope === "room_change"
+      ? "已生成仅在教室变化时提醒的待确认计划。"
+      : `已生成提前 ${plan.leadMinutes} 分钟的待确认提醒计划。`,
+  });
+}
+
+function listCourseReminders(input = {}, context = {}) {
+  const principal = resolveReminderPrincipal(context);
+  return defaultCourseReminderService.list({ principal });
+}
+
+function deleteCourseReminder(input = {}, context = {}) {
+  const principal = resolveReminderPrincipal(context);
+  const parsed = planCourseReminder(input.message || "取消提醒", context);
+  const listed = defaultCourseReminderService.list({ principal });
+  const filter = parsed && parsed.filter || {};
+  const matches = asArray(listed.items).filter((item) => {
+    const occurrence = item.nextOccurrence || {};
+    if (filter.weekday && Number(occurrence.weekday || 0) !== Number(filter.weekday)) return false;
+    if (filter.period) {
+      const section = Number(occurrence.startSection || 0);
+      if (filter.period === "morning" && section > 5) return false;
+      if (filter.period === "afternoon" && (section < 6 || section > 10)) return false;
+      if (filter.period === "evening" && section < 11) return false;
+    }
+    return true;
+  });
+  return {
+    success: true,
+    operation: "delete",
+    filter,
+    matches,
+    requiresConfirmation: matches.length === 1,
+    writeExecuted: false,
+    summary: matches.length === 1
+      ? "已找到 1 个匹配提醒，删除前需要确认。"
+      : (matches.length ? `找到 ${matches.length} 个匹配提醒，请在提醒面板逐项确认。` : "没有找到匹配的提醒。"),
+  };
+}
+
+function updateCourseReminder(input = {}, context = {}) {
+  const principal = resolveReminderPrincipal(context);
+  const listed = defaultCourseReminderService.list({ principal });
+  const reminderId = normalizeText(input.reminderId);
+  const reminder = asArray(listed.items).find((item) => item.id === reminderId) || null;
+  return {
+    success: Boolean(reminder),
+    code: reminder ? "" : "REMINDER_NOT_FOUND",
+    operation: "update",
+    reminder,
+    patch: {
+      status: ["enabled", "paused"].includes(input.status) ? input.status : undefined,
+      leadMinutes: input.leadMinutes === undefined ? undefined : Number(input.leadMinutes),
+    },
+    requiresConfirmation: Boolean(reminder),
+    writeExecuted: false,
+    summary: reminder ? "已生成提醒修改计划，执行前需要确认。" : "未找到要修改的提醒。",
+  };
+}
+
+function updateUserPreference(input = {}, context = {}) {
+  const message = normalizeText(input.message);
+  if (!/(?:记住|记一下|以后叫我|以后称呼我)/.test(message)) {
+    return {
+      success: false,
+      code: "EXPLICIT_USER_COMMAND_REQUIRED",
+      writeExecuted: false,
+      summary: "只有用户明确要求记住时才能更新长期偏好。",
+    };
+  }
+  const values = {};
+  if (input.preferredName !== undefined) values.preferredName = input.preferredName;
+  if (input.campus !== undefined) values.campus = input.campus;
+  if (input.defaultReminderLeadMinutes !== undefined) {
+    values.defaultReminderLeadMinutes = input.defaultReminderLeadMinutes;
+  }
+  if (!Object.keys(values).length) {
+    return { success: false, code: "PREFERENCE_INVALID", writeExecuted: false, summary: "没有可更新的偏好。" };
+  }
+  const principal = resolveReminderPrincipal(context);
+  const saved = defaultUserPreferenceService.upsert({
+    principal,
+    memoryMode: context.memoryMode || "local_only",
+    explicit: true,
+    values,
+  });
+  return {
+    success: true,
+    persisted: saved.persisted === true,
+    memoryMode: saved.memoryMode || context.memoryMode || "local_only",
+    updatedKeys: Object.keys(values),
+    writeExecuted: true,
+    summary: saved.persisted === true ? "用户明确偏好已安全保存。" : "偏好已返回客户端，仅保存在本机。",
+  };
+}
+
+function getCourseRoute(input = {}, context = {}) {
+  const message = normalizeText(input.message);
+  const scheduleResult = /明天/.test(message) || input.dateHint === "tomorrow"
+    ? getTomorrowCourses(input, context)
+    : getNextCourse(input, context);
+  if (scheduleResult.needContext) return scheduleResult;
+  const course = scheduleResult.nextCourse || asArray(scheduleResult.courses)[0] || null;
+  if (!course) {
+    return { success: false, code: "NO_MATCHING_COURSE", summary: "没有找到匹配的后续课程。" };
+  }
+  const fromMatch = message.match(/从\s*([^，。！？?]{1,16}?)(?:出发|走)/);
+  const from = input.from || (fromMatch ? fromMatch[1] : (/宿舍/.test(message) ? "宿舍" : "当前位置"));
+  const classroom = course.classroom || course.roomName || "";
+  const location = classroom ? campusMapService.getClassroomLocation({ classroom }) : null;
+  const advice = scheduleAnalysisService.buildDepartureAdvice({
+    course: Object.assign({}, course, { date: scheduleResult.date }),
+    from,
+    date: scheduleResult.date,
+    walkingBufferMinutes: input.walkingBufferMinutes || context.userPreferences && context.userPreferences.walkingBufferMinutes || 20,
+  });
+  if (!advice.success) return advice;
+  return Object.assign({}, advice, {
+    locationEvidence: location,
+    sourceId: location && location.sourceId || "campus-map:v2",
+    actionUrl: location && location.items && location.items[0] && location.items[0].actionUrl
+      || "/packageMaps/pages/campus-map/campus-map",
+  });
+}
+
+function inspectScheduleConflicts(input = {}, context = {}) {
+  return scheduleAnalysisService.inspectScheduleConflicts({
+    currentScheduleSummary: context.currentScheduleSummary,
+    totalWeeks: input.totalWeeks || context.totalWeeks || 22,
+    currentTeachingWeek: input.week || context.currentTeachingWeek,
+  });
+}
+
+function detectScheduleChanges(input = {}, context = {}) {
+  return scheduleAnalysisService.detectScheduleChanges({
+    currentScheduleSummary: context.currentScheduleSummary,
+    baselineScheduleSummary: context.scheduleChangeBaseline || context.previousScheduleSummary,
+  });
+}
+
+function navigateMiniprogramPage(input = {}) {
+  const url = normalizeText(input.url);
+  if (!generatedPayloadContract.isAllowedNavigationUrl(url)) {
+    return { success: false, code: "NAVIGATION_URL_NOT_ALLOWED", summary: "页面入口未通过白名单校验。" };
+  }
+  return { success: true, url, actionUrl: url, summary: "页面入口已通过白名单校验。" };
+}
+
 /**
  * Hybrid RAG entry — always goes through KnowledgeRetriever (rule + BM25 + optional vector).
  * Async; callers must use executeToolAsync (Agent Kernel does).
@@ -1111,6 +1324,7 @@ function recommendMeetingTimeV2(input = {}, context = {}) {
 
 const TOOL_HANDLERS = Object.freeze({
   get_today_courses: getTodayCourses,
+  get_today_schedule: getTodayCourses,
   get_tomorrow_courses: getTomorrowCourses,
   get_next_course: getNextCourse,
   get_week_schedule: getWeekSchedule,
@@ -1129,6 +1343,15 @@ const TOOL_HANDLERS = Object.freeze({
   search_campus_place: searchCampusPlace,
   get_campus_route: getCampusRoute,
   get_classroom_location: getClassroomLocation,
+  get_course_route: getCourseRoute,
+  inspect_schedule_conflicts: inspectScheduleConflicts,
+  detect_schedule_changes: detectScheduleChanges,
+  navigate_miniprogram_page: navigateMiniprogramPage,
+  create_course_reminder: createCourseReminder,
+  update_course_reminder: updateCourseReminder,
+  delete_course_reminder: deleteCourseReminder,
+  list_course_reminders: listCourseReminders,
+  update_user_preference: updateUserPreference,
   rag_search: ragSearch,
   generate_image: generateImage,
 });
@@ -1176,6 +1399,7 @@ function getToolSummary(name, result) {
   if (name === "search_empty_rooms") return result.summary || `找到 ${result.total || 0} 间空教室`;
   if (name === "search_continuous_empty_rooms") return result.summary || `连续空教室 ${result.total || 0} 间`;
   if (name === "get_today_courses") return result.needContext ? "需要当前课表上下文" : `今日课程 ${result.courseCount || 0} 门`;
+  if (name === "get_today_schedule") return result.needContext ? "需要当前课表上下文" : `今日课程 ${result.courseCount || 0} 门`;
   if (name === "get_tomorrow_courses") return result.needContext ? "需要当前课表上下文" : `明日课程 ${result.courseCount || 0} 门`;
   if (name === "get_next_course") return result.nextCourse ? "已找到下一节课" : "没有后续课程";
   if (name === "get_week_schedule") return result.needContext ? "需要当前课表上下文" : `本周课程 ${result.courseCount || 0} 节`;
@@ -1184,6 +1408,14 @@ function getToolSummary(name, result) {
   if (name === "search_school_index") return `${result.type || "index"} 命中 ${result.total || 0} 项`;
   if (name === "diagnose_data_status") return `Release ${result.activeReleaseVersion || "未发布"}`;
   if (name === "recommend_meeting_time") return result.summary || "已计算候选时间";
+  if (name === "create_course_reminder") return result.summary || "已生成待确认提醒计划";
+  if (name === "update_course_reminder") return result.summary || "已生成待确认提醒修改";
+  if (name === "delete_course_reminder") return result.summary || "已生成待确认提醒删除";
+  if (name === "list_course_reminders") return `课程提醒 ${asArray(result.items).length} 个`;
+  if (name === "get_course_route") return result.summary || "已生成出发建议";
+  if (name === "inspect_schedule_conflicts") return result.summary || "已检查课表冲突";
+  if (name === "detect_schedule_changes") return result.summary || "已检测课表变化";
+  if (name === "navigate_miniprogram_page") return result.summary || "已校验页面入口";
   if (name === "explain_personal_import") return "已返回导入指引";
   if (name === "clarify_missing_slot") return "缺少必要关键词";
   return "工具调用完成";
@@ -1225,18 +1457,52 @@ function buildPlanForIntent(intent, message, context = {}) {
     releaseVersion: context.releaseVersion,
   });
   if (intent && intent.name === "campus_multi_step_advice") {
-    return [
-      agentProtocol.buildPlanStep("get_tomorrow_courses", slots, "读取明日个人课程"),
+    const scheduleTool = /明天|明日/.test(message) ? "get_tomorrow_courses" : "get_today_courses";
+    const steps = [
+      agentProtocol.buildPlanStep(scheduleTool, slots, scheduleTool === "get_tomorrow_courses" ? "读取明日个人课程" : "读取今日个人课程"),
       agentProtocol.buildPlanStep("search_empty_rooms", slots, "查询空闲节次对应空教室"),
-      agentProtocol.buildPlanStep("get_campus_weather", slots, "查询校区天气"),
-      agentProtocol.buildPlanStep("search_campus_place", { q: slots.building || slots.campus || "C7", message }, "补充地点信息"),
     ];
+    if (/天气|下雨|降雨|带伞|高温|雷暴/.test(message)) {
+      steps.push(agentProtocol.buildPlanStep("get_campus_weather", slots, "查询校区天气"));
+    }
+    if (/附近|位置|地点|路线|哪里/.test(message) || slots.building) {
+      steps.push(agentProtocol.buildPlanStep("search_campus_place", { q: slots.building || slots.campus || "C7", message }, "补充地点信息"));
+    }
+    return steps;
   }
   if (intent && intent.name === "next_course_location") {
     return [
       agentProtocol.buildPlanStep("get_next_course", slots, "读取下一节课程"),
       agentProtocol.buildPlanStep("get_classroom_location", { message }, "查询教室楼栋位置"),
     ];
+  }
+  if (intent && intent.name === "manage_course_reminders") {
+    const operation = intent.slots && intent.slots.operation || "create";
+    const toolName = operation === "list"
+      ? "list_course_reminders"
+      : (operation === "delete" ? "delete_course_reminder"
+        : (operation === "update" ? "update_course_reminder" : "create_course_reminder"));
+    return [agentProtocol.buildPlanStep(toolName, slots, operation === "list" ? "读取课程提醒" : "生成待确认提醒操作")];
+  }
+  if (intent && intent.name === "course_action_advice") {
+    const tomorrow = intent.slots && intent.slots.dateHint === "tomorrow" || /明天/.test(message);
+    const steps = [
+      agentProtocol.buildPlanStep(tomorrow ? "get_tomorrow_courses" : "get_next_course", slots, tomorrow ? "读取明日课程" : "读取下一节课程"),
+      agentProtocol.buildPlanStep("get_course_route", slots, "定位课程并计算带假设的出发缓冲"),
+    ];
+    if (intent.slots && intent.slots.wantsWeather || /天气|下雨|降雨|带伞/.test(message)) {
+      steps.push(agentProtocol.buildPlanStep("get_course_weather_advice", slots, "查询校区天气并调整出发建议"));
+    }
+    steps.push(agentProtocol.buildPlanStep("navigate_miniprogram_page", {
+      url: "/packageMaps/pages/campus-map/campus-map",
+    }, "校验校园地图入口"));
+    return steps;
+  }
+  if (intent && intent.name === "inspect_schedule_health") {
+    return [agentProtocol.buildPlanStep("inspect_schedule_conflicts", slots, "检查课表冲突与异常")];
+  }
+  if (intent && intent.name === "detect_schedule_changes") {
+    return [agentProtocol.buildPlanStep("detect_schedule_changes", slots, "对比受控个人课表摘要")];
   }
   if (!intent || intent.name === "generic" || intent.name === "project_qa" || intent.name === "conversational_help") return [];
   if (intent.name === "clarify_missing_slot") {

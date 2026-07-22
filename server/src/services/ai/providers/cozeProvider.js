@@ -53,12 +53,46 @@ function mapHttpError(error) {
   mapped.status = status;
   mapped.statusCode = status;
   if (status === 401) mapped.code = "unauthorized";
-  else if (status === 403) mapped.code = "forbidden";
   else if (status === 429) mapped.code = "rate_limited";
-  else if (/timeout/i.test(String(error.code || "")) || /timeout/i.test(message)) mapped.code = "timeout";
-  else if (/not.?publish|unpublished|bot/i.test(message)) mapped.code = "bot_not_published";
+  else if (/timeout|ECONNABORTED|ETIMEDOUT/i.test(`${String(error.code || "")} ${message}`)) mapped.code = "timeout";
+  else if (/not\s+(?:been\s+)?publish|unpublished|未发布|publish.*api/i.test(message)) mapped.code = "bot_not_published";
+  else if (status === 404 || /bot.*not\s*found|agent.*not\s*found|不存在/i.test(message)) mapped.code = "bot_not_found";
+  else if (status === 403) mapped.code = "forbidden";
   else mapped.code = code || "provider_failed";
   return mapped;
+}
+
+function classifyConnectionError(error) {
+  const status = Number(error && (error.status || error.statusCode || error.response && error.response.status) || 0) || 0;
+  const data = error && error.response && error.response.data || {};
+  const providerCode = String(data.code || data.error_code || error && error.code || "");
+  const rawMessage = String(data.msg || data.message || error && error.message || "");
+  const text = `${providerCode} ${rawMessage}`.toLowerCase();
+  if (/timeout|econnaborted|etimedout/.test(text) || status === 408) {
+    return { code: "COZE_TIMEOUT", reason: "timeout", message: "连接 Coze 超时，请检查网络、区域域名或稍后重试。", retryable: true };
+  }
+  if (status === 401 || providerCode === "4100" || /unauthori[sz]ed|invalid.*token|token.*invalid|鉴权|令牌无效/.test(text)) {
+    return { code: "COZE_TOKEN_INVALID", reason: "token_invalid", message: "Coze Token 无效或已过期。", retryable: false };
+  }
+  if (status === 429 || providerCode === "4013" || /rate.?limit|too many requests|限流/.test(text)) {
+    return { code: "COZE_RATE_LIMITED", reason: "rate_limited", message: "Coze 当前触发限流，请稍后重试。", retryable: true };
+  }
+  if (/not\s+(?:been\s+)?publish|unpublished|not.?publish|未发布|publish.*api/.test(text)) {
+    return { code: "COZE_BOT_NOT_PUBLISHED", reason: "bot_not_published", message: "该 Bot 尚未发布为 API 服务。", retryable: false };
+  }
+  if (status === 404 || providerCode === "4200" || /bot.*not\s*found|agent.*not\s*found|bot.*不存在/.test(text)) {
+    return { code: "COZE_BOT_NOT_FOUND", reason: "bot_not_found", message: "找不到该 Coze Bot，请核对 Bot ID 和区域域名。", retryable: false };
+  }
+  if (status === 403 || providerCode === "4101" || /forbidden|permission|no access|无权限/.test(text)) {
+    return { code: "COZE_PERMISSION_DENIED", reason: "permission_denied", message: "当前 Token 无权访问该 Bot 或工作空间。", retryable: false };
+  }
+  if (providerCode === "PROVIDER_EXPIRED") {
+    return { code: "COZE_TOKEN_EXPIRED", reason: "configured_expiry", message: "配置的 Coze 临时凭证已到期。", retryable: false };
+  }
+  if (providerCode === "COZE_RESPONSE_UNSUPPORTED") {
+    return { code: "COZE_RESPONSE_INVALID", reason: "response_invalid", message: "Coze 已响应，但返回结构无法识别。", retryable: false };
+  }
+  return { code: "COZE_CONNECTION_FAILED", reason: "provider_failed", message: "Coze 连接测试失败，请核对配置。", retryable: status >= 500 || status === 0 };
 }
 
 function getConfig(overrides = {}) {
@@ -305,9 +339,59 @@ async function generate(input = {}) {
   return Object.assign({ provider: "coze" }, parsed);
 }
 
+async function testConnection(input = {}) {
+  const overrides = Object.assign({}, input.providerRuntimeConfig || input.overrides || {}, {
+    COZE_ENABLED: "true",
+  });
+  const config = getConfig(overrides);
+  const common = {
+    checkedAt: new Date().toISOString(),
+    botIdMasked: config.botId ? `****${String(config.botId).slice(-4)}` : "",
+    botSelectorAvailable: false,
+    botSelectorReason: "Coze 的 Bot 列表接口还需要 Workspace/Space ID；本项目不伪造只凭 PAT 的选择器。",
+  };
+  if (!config.apiKey) {
+    return Object.assign({}, common, { success: false, code: "COZE_TOKEN_REQUIRED", reason: "token_missing", message: "请填写 Coze PAT/API Token。", retryable: false });
+  }
+  if (!config.botId) {
+    return Object.assign({}, common, { success: false, code: "COZE_BOT_ID_REQUIRED", reason: "bot_id_missing", message: "请填写已发布的 Coze Bot ID。", retryable: false });
+  }
+  if (isExpired(overrides)) {
+    return Object.assign({}, common, classifyConnectionError(expiredError()), { success: false });
+  }
+  const startedAt = Date.now();
+  try {
+    await generate({
+      message: "连接测试：仅回复 OK。",
+      intent: { name: "conversational_help" },
+      toolResults: [],
+      projectKnowledge: "",
+      context: { conversationSummary: "" },
+      principal: input.principal || { principalKey: "admin-coze-diagnostic", runtimeMode: "trial", deployEnv: "admin" },
+      providerRuntimeConfig: overrides,
+    });
+    return Object.assign({}, common, {
+      success: true,
+      code: "COZE_CONNECTION_OK",
+      reason: "connected",
+      message: "Token、Bot ID 和已发布 API 链路验证通过。",
+      botPublished: true,
+      latencyMs: Date.now() - startedAt,
+      retryable: false,
+    });
+  } catch (error) {
+    return Object.assign({}, common, classifyConnectionError(error), {
+      success: false,
+      botPublished: false,
+      latencyMs: Date.now() - startedAt,
+    });
+  }
+}
+
 module.exports = {
   buildPseudoUserId,
   buildSafeUserContent,
+  classifyConnectionError,
   extractAnswer,
   extractPollInfo,
   generate,
@@ -317,4 +401,5 @@ module.exports = {
   listMessages,
   name: "coze",
   retrieveChat,
+  testConnection,
 };

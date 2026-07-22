@@ -172,6 +172,44 @@ async function clearCloudMemory() {
   }
 }
 
+async function listCloudPreferences() {
+  try {
+    const response = await http.get(withEnvQuery("/api/ai/agent/memory/preferences"), {}, requestOptions());
+    if (!response || response.success === false) {
+      const mapped = mapError(response, "LIST_PREFERENCES_FAILED");
+      return { success: false, items: [], error: mapped.error, code: mapped.code };
+    }
+    return {
+      success: true,
+      items: Array.isArray(response.items) ? response.items : [],
+    };
+  } catch (error) {
+    const mapped = mapError(error, "LIST_PREFERENCES_FAILED");
+    return { success: false, items: [], error: mapped.error, code: mapped.code };
+  }
+}
+
+async function deleteCloudPreference(key) {
+  const safeKey = safeText(key, 48);
+  if (!safeKey) return { success: false, code: "PREFERENCE_KEY_REQUIRED", error: "请选择要删除的记忆" };
+  try {
+    const response = await http.request(
+      withEnvQuery(`/api/ai/agent/memory/preferences/${encodeURIComponent(safeKey)}`),
+      "DELETE",
+      {},
+      requestOptions()
+    );
+    if (!response || response.success === false) {
+      const mapped = mapError(response, "DELETE_PREFERENCE_FAILED");
+      return { success: false, error: mapped.error, code: mapped.code };
+    }
+    return { success: true, deleted: response.deleted === true };
+  } catch (error) {
+    const mapped = mapError(error, "DELETE_PREFERENCE_FAILED");
+    return { success: false, error: mapped.error, code: mapped.code };
+  }
+}
+
 function toTime(value) {
   const ms = Date.parse(String(value || ""));
   return Number.isFinite(ms) ? ms : 0;
@@ -259,10 +297,12 @@ function mergeLocalAndCloudConversations(localList = [], cloudList = [], activeC
 
 module.exports = {
   clearCloudMemory,
+  deleteCloudPreference,
   deleteCloudConversation,
   getCloudConversation,
   getEnvVersion,
   listCloudConversations,
+  listCloudPreferences,
   mergeLocalAndCloudConversations,
   patchCloudConversation,
   renameCloudConversation,
