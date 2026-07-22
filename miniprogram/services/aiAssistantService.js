@@ -10,6 +10,7 @@ const scheduleAssistantService = require("./scheduleAssistantService");
 const teachingCalendarService = require("./teachingCalendarService");
 const weatherProvider = require("./weatherProvider");
 const contextManager = require("./xiaofuContextManager");
+const scheduleChangeTracker = require("./scheduleChangeTracker");
 const agentCapabilityCompat = require("../shared/agentCapabilityCompat.generated");
 const { courseTimes } = require("../data/courseTimes");
 const {
@@ -180,6 +181,7 @@ function setPersonalContextAllowed(allowed) {
 function normalizeUserPreferences(value) {
   const source = value && typeof value === "object" && !Array.isArray(value) ? value : {};
   const campus = ["仙溪校区", "江湾校区"].indexOf(source.campus) >= 0 ? source.campus : "";
+  const preferredName = String(source.preferredName || "").trim().replace(/[，。！？,.!?]+$/g, "").slice(0, 24);
   const favoriteBuildings = Array.isArray(source.favoriteBuildings)
     ? source.favoriteBuildings
         .map((item) => redactSensitiveText(item).trim().slice(0, 40))
@@ -187,13 +189,18 @@ function normalizeUserPreferences(value) {
         .slice(0, 8)
     : [];
   const duration = Number(source.defaultEmptyRoomDurationSections);
+  const reminderLead = Number(source.defaultReminderLeadMinutes);
   const answerDetail = ["brief", "normal", "detailed"].indexOf(source.answerDetail) >= 0
     ? source.answerDetail
     : "normal";
   return {
+    preferredName: /^[\u3400-\u9fffA-Za-z0-9·\-\s]{1,24}$/.test(preferredName) ? preferredName : "",
     campus,
     favoriteBuildings,
     defaultEmptyRoomDurationSections: Number.isFinite(duration) && duration > 0 ? Math.min(12, Math.max(1, Math.round(duration))) : 2,
+    defaultReminderLeadMinutes: Number.isFinite(reminderLead) && reminderLead >= 5 && reminderLead <= 180
+      ? Math.round(reminderLead)
+      : 20,
     allowMinimalScheduleSummary: source.allowMinimalScheduleSummary === true || isPersonalContextAllowed(),
     answerDetail,
     weatherAdviceEnabled: source.weatherAdviceEnabled !== false,
@@ -221,6 +228,29 @@ function clearUserPreferences() {
     // best effort
   }
   return getUserPreferences();
+}
+
+function getUserPreferenceItems() {
+  const raw = readStorage(USER_PREFERENCES_KEY, {});
+  const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
+  return ["preferredName", "campus", "defaultReminderLeadMinutes"].filter((key) => (
+    Object.prototype.hasOwnProperty.call(source, key)
+    && source[key] !== ""
+    && source[key] !== null
+    && source[key] !== undefined
+  )).map((key) => ({ key, value: source[key], scope: "local" }));
+}
+
+function deleteUserPreference(key) {
+  const allowed = ["preferredName", "campus", "defaultReminderLeadMinutes"];
+  if (allowed.indexOf(key) < 0) return getUserPreferenceItems();
+  const raw = readStorage(USER_PREFERENCES_KEY, {});
+  const next = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? Object.assign({}, raw)
+    : {};
+  delete next[key];
+  writeStorage(USER_PREFERENCES_KEY, next);
+  return getUserPreferenceItems();
 }
 
 function formatLocalIsoWithOffset(date) {
@@ -382,6 +412,7 @@ function buildClientContext(extra = {}) {
   const manifest = activeRelease.manifest || {};
   const appConfig = (app.globalData && app.globalData.appConfig) || {};
   const scheduleSummary = sanitizeLocalScheduleForAI(target);
+  const scheduleChangeState = scheduleChangeTracker.capture(scheduleSummary);
   const latestImport = getLatestScheduleImport();
   const manifestTermConfig = manifest.termConfig && typeof manifest.termConfig === "object" ? manifest.termConfig : null;
   const appTermConfig = appConfig.termConfig && typeof appConfig.termConfig === "object" ? appConfig.termConfig : null;
@@ -412,6 +443,21 @@ function buildClientContext(extra = {}) {
     ? extra.conversation
     : {};
   const conversationId = extra.conversationId || extra.activeConversationId || extraConversation.conversationId || "";
+  const recentSource = Array.isArray(extra.recentMessages)
+    ? extra.recentMessages
+    : getAiHistory(conversationId);
+  const recentMessages = recentSource.slice(-8).map((item) => {
+    const source = item && typeof item === "object" ? item : {};
+    let content = redactSensitiveText(source.content || source.text || "").slice(0, 400);
+    content = content.replace(
+      /((?:password|passwd|pwd|密码|cookie|authorization|token|secret|api[-_\s]?key|学号)\s*[:=：]?\s*)[^\s，。；;,&]+/gi,
+      "$1[已脱敏]"
+    );
+    return {
+      role: source.role === "user" ? "user" : "assistant",
+      content,
+    };
+  }).filter((item) => item.content);
   const contextSlots = contextManager.normalizeContextSlots(
     extra.contextSlots ||
     extra.conversationContextSlots ||
@@ -463,9 +509,14 @@ function buildClientContext(extra = {}) {
     assistantRuntimeMaxAgeMs: 5000,
     timezone: "Asia/Shanghai",
     currentScheduleSummary: scheduleSummary,
+    scheduleChangeBaseline: scheduleChangeState.pending ? scheduleChangeState.baseline : null,
+    scheduleChangePending: scheduleChangeState.pending === true,
+    scheduleChangeDetectedAt: scheduleChangeState.detectedAt || "",
     latestScheduleImport: latestImport,
     pendingClarification: getPendingClarification(),
     userPreferences,
+    recentMessages,
+    conversationSummary: redactSensitiveText(extra.conversationSummary || extraConversation.conversationSummary || "").slice(0, 400),
     conversation: {
       conversationId,
       contextSlots,
@@ -893,9 +944,9 @@ function reportPipelineStatus(callbacks, text, type) {
       ? "正在查询课表"
       : normalizedType === "compose"
         ? "已生成卡片"
-        : normalizedType === "tool-used"
+      : normalizedType === "tool-used"
           ? "已核验课表数据"
-          : "小佛助手正在理解";
+          : "正在处理本机结果";
     callbacks.onStatus({ type: normalizedType, text: friendlyText });
   }
 }
@@ -988,6 +1039,110 @@ function findNextCourseForWeather(clientContext = {}) {
     if (Number(candidates[index]._startMinutes) + 5 >= nowMinutes) return candidates[index];
   }
   return candidates[0] || null;
+}
+
+function formatMinutesOfDay(value) {
+  const total = (Number(value || 0) + 24 * 60) % (24 * 60);
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function buildProactiveWorkspace(clientContext = {}) {
+  const summary = clientContext.currentScheduleSummary || {};
+  const actions = [];
+  if (!summary.enabled || !Array.isArray(summary.courses) || !summary.courses.length) {
+    return {
+      insight: {
+        kind: "import",
+        eyebrow: "课表未连接",
+        title: "导入个人课表后，小佛才能给出下一节课和提醒建议",
+        detail: "只读取受控课程摘要，不需要把学号、密码或原始文件交给模型。",
+        actionLabel: "导入课表",
+        actionUrl: PERSONAL_SYNC_URL,
+        actionMessage: "",
+      },
+      actions: [
+        { id: "import", label: "导入课表", url: PERSONAL_SYNC_URL },
+        { id: "school", label: "查全校课表", message: "查询全校课表" },
+      ],
+    };
+  }
+
+  if (clientContext.scheduleChangePending === true && clientContext.scheduleChangeBaseline) {
+    return {
+      insight: {
+        kind: "schedule_change",
+        eyebrow: "课表有新版本",
+        title: "检测到个人课表摘要发生变化",
+        detail: "可核对课程时间、教室、教师和周次；确认后再决定是否重新导入。",
+        actionLabel: "查看变化",
+        actionMessage: "检测我的课表有没有变化",
+        actionUrl: "",
+      },
+      actions: [
+        { id: "changes", label: "查看变化", message: "检测我的课表有没有变化" },
+        { id: "conflicts", label: "检查冲突", message: "检查我本周有没有时间冲突或连续赶课" },
+        { id: "import", label: "重新导入", url: PERSONAL_SYNC_URL },
+      ],
+    };
+  }
+
+  const weekday = Number(clientContext.todayWeekday || 0);
+  const teachingWeek = Number(clientContext.currentTeachingWeek || 0);
+  const nowMinutes = getCurrentLocalMinutes(clientContext);
+  const dayCourses = summary.courses
+    .filter((course) => Number(course.weekday || 0) === weekday)
+    .filter((course) => courseMatchesTeachingWeek(course, teachingWeek))
+    .map((course) => Object.assign({}, course, {
+      _startMinutes: getSectionStartMinutes(course.startSection || course.sectionStart),
+      _endMinutes: (() => {
+        const endSection = Number(course.endSection || course.startSection || 0);
+        const entry = (courseTimes || []).find((item) => Number(item.section) === endSection);
+        return entry ? minutesFromTime(entry.end) : null;
+      })(),
+    }))
+    .filter((course) => Number.isFinite(Number(course._startMinutes)))
+    .sort((left, right) => Number(left._startMinutes) - Number(right._startMinutes));
+  const next = dayCourses.find((course) => Number(course._endMinutes || course._startMinutes) >= nowMinutes
+    && Number(course._startMinutes) >= nowMinutes - 5) || null;
+
+  actions.push({ id: "next", label: "下一节课", message: "我下一节课在哪，什么时候该出发？" });
+  actions.push({ id: "reminder", label: "创建提醒", message: "以后上课前20分钟提醒我" });
+  actions.push({ id: "room", label: "找空教室", message: "现在帮我找附近空教室" });
+
+  if (next) {
+    const courseName = safeText(next.courseName || next.name || "下一节课", 60);
+    const classroom = safeText(next.classroom || next.roomName || "", 60);
+    const startTime = formatMinutesOfDay(next._startMinutes);
+    const departureTime = formatMinutesOfDay(next._startMinutes - 20);
+    return {
+      insight: {
+        kind: "next_course",
+        eyebrow: "下一节课",
+        title: `${courseName} · ${startTime}${classroom ? ` · ${classroom}` : ""}`,
+        detail: classroom
+          ? `建议 ${departureTime} 左右出发（按 20 分钟通用缓冲，非精确路线时长）。`
+          : "教室信息缺失，建议先核对或重新导入课表。",
+        actionLabel: "查看行动建议",
+        actionMessage: "我下一节课在哪，什么时候该出发？",
+        actionUrl: "",
+      },
+      actions: actions.slice(0, 3),
+    };
+  }
+
+  const hadToday = dayCourses.length > 0;
+  return {
+    insight: {
+      kind: hadToday ? "day_finished" : "free_day",
+      eyebrow: hadToday ? "今日课程已结束" : "今天暂无课程",
+      title: hadToday ? "可以安排复习或找一段连续自习时间" : "今天可以按空闲节次规划自习",
+      detail: "空教室结果会从当前 Release Pack 查询，不会凭空推荐教室。",
+      actionLabel: "规划自习",
+      actionMessage: "帮我规划今天下午的上课和自习安排",
+      actionUrl: "",
+    },
+    actions: actions.slice(0, 3),
+  };
 }
 
 function buildWeatherAdvice(weather, route, nextCourse) {
@@ -1753,6 +1908,7 @@ module.exports = {
   PENDING_CLARIFICATION_KEY,
   USER_PREFERENCES_KEY,
   buildClientContext,
+  buildProactiveWorkspace,
   buildSmalltalkResponse,
   standardizeClientFallback,
   chat,
@@ -1760,12 +1916,14 @@ module.exports = {
   clearAiHistory,
   clearPersonalization,
   clearUserPreferences,
+  deleteUserPreference,
   formatLocalIsoWithOffset,
   getAiHistory,
   getLatestScheduleImport,
   getPendingClarification,
   getRememberedPersonalization,
   getUserPreferences,
+  getUserPreferenceItems,
   hasUsableAgentAnswer,
   isAiEnhancedClientEnv,
   isPersonalContextAllowed,

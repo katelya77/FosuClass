@@ -1,0 +1,288 @@
+.reminder-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(26, 23, 21, 0.44);
+}
+
+.reminder-sheet {
+  width: 100%;
+  max-height: 78vh;
+  padding: 12rpx 20rpx calc(28rpx + env(safe-area-inset-bottom));
+  box-sizing: border-box;
+  border-radius: 30rpx 30rpx 0 0;
+  background: #f3f0eb;
+  color: #2a2622;
+  animation: reminder-sheet-in 180ms ease-out both;
+}
+
+.sheet-handle {
+  width: 64rpx;
+  height: 8rpx;
+  margin: 0 auto 22rpx;
+  border-radius: 8rpx;
+  background: #b8b0a7;
+}
+
+.sheet-head,
+.item-title-row,
+.item-meta,
+.item-actions {
+  display: flex;
+  align-items: center;
+}
+
+.sheet-head,
+.item-title-row {
+  justify-content: space-between;
+}
+
+.sheet-kicker {
+  color: #8a8178;
+  font-size: 20rpx;
+  letter-spacing: 2rpx;
+}
+
+.sheet-title {
+  margin-top: 4rpx;
+  font-size: 38rpx;
+  font-weight: 700;
+}
+
+.close-button,
+.item-button,
+.primary-button,
+.secondary-button {
+  min-height: 88rpx;
+  margin: 0;
+  line-height: 1.2;
+}
+
+.close-button {
+  width: 88rpx;
+  padding: 0;
+  border-radius: 44rpx;
+  background: transparent;
+  color: #2a2622;
+  font-size: 30rpx;
+}
+
+.close-button::after,
+.item-button::after,
+.primary-button::after,
+.secondary-button::after {
+  border: 0;
+}
+
+.disclosure {
+  margin-top: 20rpx;
+  padding: 18rpx 20rpx;
+  border-left: 6rpx solid #8a8178;
+  background: #e8e3dc;
+  color: #5d554e;
+  font-size: 24rpx;
+  line-height: 1.55;
+}
+
+.reminder-list {
+  max-height: 58vh;
+  margin-top: 22rpx;
+}
+
+.reminder-item {
+  position: relative;
+  display: flex;
+  margin-bottom: 16rpx;
+  overflow: hidden;
+  border: 2rpx solid #d8d1c9;
+  border-radius: 20rpx;
+  background: #fffdf9;
+}
+
+.item-accent {
+  width: 8rpx;
+  flex: 0 0 auto;
+  background: #8a8178;
+}
+
+.item-accent.active {
+  background: #2f6f4e;
+}
+
+.item-main {
+  min-width: 0;
+  flex: 1;
+  padding: 24rpx;
+}
+
+.item-title {
+  min-width: 0;
+  overflow: hidden;
+  color: #2a2622;
+  font-size: 30rpx;
+  font-weight: 650;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-label {
+  flex: 0 0 auto;
+  margin-left: 16rpx;
+  color: #746b63;
+  font-size: 22rpx;
+}
+
+.status-label.active {
+  color: #2f6f4e;
+}
+
+.item-schedule {
+  margin-top: 10rpx;
+  color: #514a44;
+  font-size: 25rpx;
+  line-height: 1.5;
+}
+
+.item-meta {
+  gap: 10rpx;
+  margin-top: 10rpx;
+  color: #8a8178;
+  font-size: 22rpx;
+}
+
+.service-notice-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-top: 18rpx;
+  padding: 18rpx;
+  border: 1rpx solid rgba(47, 111, 78, 0.18);
+  border-radius: 14rpx;
+  background: #f1f7f3;
+}
+
+.service-notice-copy {
+  min-width: 0;
+  flex: 1;
+}
+
+.service-notice-title {
+  color: #2f6f4e;
+  font-size: 23rpx;
+  font-weight: 700;
+}
+
+.service-notice-detail {
+  margin-top: 6rpx;
+  color: #66736b;
+  font-size: 20rpx;
+  line-height: 1.4;
+}
+
+.grant-button {
+  box-sizing: border-box;
+  min-width: 168rpx;
+  min-height: 72rpx;
+  margin: 0;
+  padding: 0 16rpx;
+  border-radius: 12rpx;
+  background: #2f6f4e;
+  color: #ffffff;
+  font-size: 22rpx;
+  font-weight: 650;
+  line-height: 1.2;
+}
+
+.grant-button::after {
+  border: 0;
+}
+
+.service-notice-pending {
+  flex: 0 0 auto;
+  color: #8a8178;
+  font-size: 21rpx;
+}
+
+.item-actions {
+  gap: 12rpx;
+  margin-top: 20rpx;
+}
+
+.item-button {
+  min-width: 116rpx;
+  flex: 1;
+  padding: 0 16rpx;
+  border-radius: 12rpx;
+  background: #e8e3dc;
+  color: #2a2622;
+  font-size: 24rpx;
+}
+
+.item-button.danger {
+  color: #c62828;
+}
+
+.primary-button,
+.secondary-button {
+  width: 100%;
+  border-radius: 16rpx;
+  font-size: 27rpx;
+  font-weight: 650;
+}
+
+.primary-button {
+  background: #c62828;
+  color: #fff;
+}
+
+.secondary-button {
+  margin-top: 20rpx;
+  background: #e8e3dc;
+  color: #2a2622;
+}
+
+.create-more {
+  margin-top: 12rpx;
+}
+
+.empty,
+.loading {
+  padding: 72rpx 24rpx;
+  text-align: center;
+}
+
+.empty-title {
+  font-size: 30rpx;
+  font-weight: 650;
+}
+
+.empty-copy,
+.loading {
+  margin-top: 12rpx;
+  color: #746b63;
+  font-size: 25rpx;
+  line-height: 1.6;
+}
+
+@keyframes reminder-sheet-in {
+  from { transform: translateY(24rpx); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@media (prefers-color-scheme: dark) {
+  .reminder-sheet { background: #1f1d1b; color: #f4f0ea; }
+  .close-button, .item-title { color: #f4f0ea; }
+  .disclosure, .item-button, .secondary-button { background: #312d29; color: #d8d1c9; }
+  .reminder-item { border-color: #423c36; background: #272421; }
+  .item-schedule { color: #d8d1c9; }
+  .service-notice-row { border-color: rgba(104, 169, 130, 0.28); background: #202820; }
+  .service-notice-title { color: #79b58f; }
+  .service-notice-detail { color: #aebbb2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .reminder-sheet { animation: none; }
+}

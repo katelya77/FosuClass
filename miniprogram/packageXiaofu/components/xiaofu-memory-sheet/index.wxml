@@ -45,6 +45,24 @@
       </view>
     </view>
 
+    <view class="memory-preference-section">
+      <view class="memory-section-head">
+        <view class="memory-section-title">已记住的偏好</view>
+        <view class="memory-section-meta">只有你明确要求记住的内容</view>
+      </view>
+      <view class="memory-preference-loading" wx:if="{{preferencesLoading}}">正在读取…</view>
+      <view class="memory-preference-empty" wx:elif="{{!preferences.length}}">暂无长期偏好</view>
+      <view class="memory-preference-list" wx:else>
+        <view class="memory-preference-item" wx:for="{{preferences}}" wx:key="key">
+          <view class="memory-preference-copy">
+            <view class="memory-preference-label">{{item.key === 'preferredName' ? '称呼' : (item.key === 'campus' ? '常用校区' : '默认提醒')}}</view>
+            <view class="memory-preference-value">{{item.key === 'defaultReminderLeadMinutes' ? '提前 ' + item.value + ' 分钟' : item.value}}</view>
+          </view>
+          <button class="memory-preference-delete" data-key="{{item.key}}" bindtap="onDeletePreference" aria-label="删除这项记忆">删除</button>
+        </view>
+      </view>
+    </view>
+
     <view class="memory-privacy-toggle" bindtap="onTogglePrivacyDetail">
       {{privacyExpanded ? '收起隐私说明' : '了解会保存什么'}}
     </view>

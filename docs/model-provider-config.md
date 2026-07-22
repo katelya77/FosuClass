@@ -37,7 +37,6 @@ COZE_API_BASE_URL=https://api.coze.cn
 COZE_API_KEY=
 COZE_BOT_ID=
 COZE_AGENT_ID=
-COZE_USER_ID=
 COZE_CHAT_ENDPOINT=/v3/chat
 COZE_TIMEOUT_MS=15000
 COZE_POLL_ENABLED=true
@@ -46,7 +45,7 @@ COZE_POLL_MAX_ATTEMPTS=12
 ```
 
 > Coze 仅接受官方 API Token。不要填写学校账户密码或浏览器 Cookie。
-> `COZE_USER_ID` 默认由服务端按 Principal 生成伪匿名 ID，不再使用全员共用的固定值。
+> Coze `user_id` 不是配置项，由服务端按已验证 Principal、运行模式和部署环境生成伪匿名 HMAC ID，不使用全员共用固定值，也不发送 OpenID 明文。
 > 详见 `docs/xiaofu-agent/coze-temporary-provider.md`。
 
 ## CloudBase Hunyuan
@@ -121,7 +120,9 @@ DEEPSEEK_STRICT_JSON_MODE=true
 
 ## Coze
 
-`AI_PROVIDER=coze` 是可选适配器。缺少 `COZE_API_KEY` 或 `COZE_BOT_ID` 时抛出 `NOT_CONFIGURED`，主流程 fallback mock。不同 Coze API 响应结构会尝试从 `answer/content/messages/data.messages/data.output` 中提取答案，必要时按 `chat_id` 轮询。
+`AI_PROVIDER=coze` 是可选适配器。后台只要求 PAT/API Token 与已发布 Bot ID；缺少任一项时抛出 `NOT_CONFIGURED`，主流程继续回退其他 Provider 或确定性回答。专用“测试连接”会区分 Token 无效、Bot 不存在、Bot 未发布、无权限、限流和超时，且只返回 Token 配置状态与 Bot ID 掩码。不同 Coze API 响应结构会尝试从 `answer/content/messages/data.messages/data.output` 中提取答案，必要时按 `chat_id` 轮询。
+
+当前不提供仅凭 PAT 的 Bot 选择器：官方 Bot 列表接口还需要 Workspace/Space ID。后台保留 Bot ID 实时连接校验与获取引导，不伪造可用列表。
 
 ## 后台在线管理
 

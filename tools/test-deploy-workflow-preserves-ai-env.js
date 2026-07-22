@@ -46,6 +46,18 @@ assert(runtimeReader, "read_runtime_env_value function should exist");
 assert(runtimeReader[0].includes("node -e"), "read_runtime_env_value should parse JSON with Node");
 assert(!/grep\s+-E\s+"\\"/.test(runtimeReader[0]), "read_runtime_env_value must not grep JSON");
 
+const requiredSecretsBlock = workflow.slice(
+  workflow.indexOf("declare -A required_secrets"),
+  workflow.indexOf("has_missing_required=false")
+);
+[
+  "FOSU_AGENT_MEMORY_SECRET",
+  "FOSU_AGENT_REMINDER_SECRET",
+  "FOSU_WECHAT_RECIPIENT_SECRET",
+].forEach((needle) => {
+  assert(requiredSecretsBlock.includes(needle), `required secrets must include ${needle}`);
+});
+
 [
   "AI_API_KEY",
   "DEEPSEEK_API_KEY",

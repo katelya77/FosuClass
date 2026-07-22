@@ -2,6 +2,7 @@ const ENABLED_KEY = "FOSU_XIAOFU_FLOAT_ENABLED";
 const POSITION_KEY = "FOSU_XIAOFU_FLOAT_POSITION";
 const HIDDEN_ROUTES_KEY = "FOSU_XIAOFU_FLOAT_HIDDEN_ROUTES";
 const PENDING_CONTEXT_KEY = "FOSU_XIAOFU_FLOAT_PENDING_CONTEXT";
+const PROACTIVE_INSIGHT_KEY = "FOSU_XIAOFU_PROACTIVE_INSIGHT";
 
 const TABBAR_ROUTES = [
   "pages/index/index",
@@ -257,16 +258,56 @@ function enableEverywhere() {
   return true;
 }
 
+function setProactiveInsight(insight) {
+  const source = insight && typeof insight === "object" && !Array.isArray(insight) ? insight : {};
+  const payload = {
+    kind: safeText(source.kind, 32),
+    eyebrow: safeText(source.eyebrow, 32),
+    title: safeText(source.title, 100),
+    detail: safeText(source.detail, 160),
+    actionLabel: safeText(source.actionLabel, 32),
+    actionUrl: safeText(source.actionUrl, 160),
+    actionMessage: safeText(source.actionMessage, 160),
+    capturedAt: new Date().toISOString(),
+  };
+  if (!payload.title) {
+    removeStorage(PROACTIVE_INSIGHT_KEY);
+    return null;
+  }
+  writeStorage(PROACTIVE_INSIGHT_KEY, payload);
+  return payload;
+}
+
+function getProactiveInsight(maxAgeMs) {
+  const value = readStorage(PROACTIVE_INSIGHT_KEY, null);
+  if (!value || typeof value !== "object" || Array.isArray(value) || !safeText(value.title, 100)) return null;
+  const capturedAt = Date.parse(value.capturedAt || "");
+  const ageLimit = Math.max(60 * 1000, Number(maxAgeMs || 15 * 60 * 1000));
+  if (!capturedAt || Date.now() - capturedAt > ageLimit) return null;
+  return {
+    kind: safeText(value.kind, 32),
+    eyebrow: safeText(value.eyebrow, 32),
+    title: safeText(value.title, 100),
+    detail: safeText(value.detail, 160),
+    actionLabel: safeText(value.actionLabel, 32),
+    actionUrl: safeText(value.actionUrl, 160),
+    actionMessage: safeText(value.actionMessage, 160),
+    capturedAt: value.capturedAt,
+  };
+}
+
 module.exports = {
   ENABLED_KEY,
   HIDDEN_ROUTES_KEY,
   PENDING_CONTEXT_KEY,
   POSITION_KEY,
+  PROACTIVE_INSIGHT_KEY,
   buildPageContext,
   clearHiddenRoutes,
   consumePendingContext,
   enableEverywhere,
   getPosition,
+  getProactiveInsight,
   getRoutePolicy,
   isEnabled,
   isRouteHidden,
@@ -274,5 +315,6 @@ module.exports = {
   savePendingContext,
   savePosition,
   setEnabled,
+  setProactiveInsight,
   setRouteHidden,
 };

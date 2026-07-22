@@ -1,3 +1,4 @@
+const crypto = require("crypto");
 const providerFactory = require("./providerFactory");
 const generatedPayloadContract = require("./generatedPayloadContract");
 const mockProvider = require("./providers/mockProvider");
@@ -13,15 +14,106 @@ const capabilityManifestService = require("./capabilityManifestService");
 const { defaultKernel: agentKernel } = require("./agentKernel");
 const agentTraceRecorder = require("./agentTraceRecorder");
 const { defaultMemoryService } = require("./conversation/conversationMemoryService");
+const { defaultUserPreferenceService } = require("./conversation/userPreferenceService");
+const { resolvePersonalMemoryTurn } = require("./conversation/personalMemoryInterpreter");
 const agentRunEventService = require("./agentRunEventService");
 const { loadingTextForEvent } = require("./runEventCatalog");
 const responseComposer = require("./responseComposer");
 const { getPlannerPolicy, isGeneralAssistantEnabled } = require("./planner/plannerPolicy");
 const plannerModelAdapter = require("./planner/plannerModelAdapter");
 const { assemble: assembleContext } = require("./context/contextAssembler");
+const { defaultCourseReminderService } = require("./reminders/courseReminderService");
 
 function nowIso() {
   return new Date().toISOString();
+}
+
+function reminderIdempotencyKey(principal, operation, payload, reminderId) {
+  const courseTemplates = Array.isArray(payload && payload.courseTemplates)
+    ? payload.courseTemplates.map((course) => ({
+      name: course.courseName || "",
+      weekday: Number(course.weekday || 0),
+      startSection: Number(course.startSection || 0),
+      weeks: Array.isArray(course.weeks) ? course.weeks : [],
+    }))
+    : [];
+  const digest = crypto.createHash("sha256").update(JSON.stringify({
+    principal: principal && principal.principalKey || "",
+    operation,
+    reminderId: reminderId || "",
+    scope: payload && payload.scope || "",
+    leadMinutes: payload && payload.leadMinutes || 0,
+    targetDate: payload && payload.targetDate || "",
+    scheduleFingerprint: payload && payload.scheduleFingerprint || "",
+    courseTemplates,
+  })).digest("hex").slice(0, 40);
+  return `course-reminder:${operation}:${digest}`;
+}
+
+/**
+ * Confirmation capabilities are attached only after response/provider composition.
+ * They never enter tool observations, model context, conversation memory, or trace logs.
+ */
+function attachReminderConfirmation(response, execution, principal) {
+  if (!response || !execution || !principal || principal.authenticated !== true) return response;
+  const calls = Array.isArray(execution.toolCalls) ? execution.toolCalls : [];
+  const createCall = calls.find((item) => item && item.name === "create_course_reminder");
+  const deleteCall = calls.find((item) => item && item.name === "delete_course_reminder");
+  let operation = "";
+  let payload = null;
+  let reminderId = "";
+  if (createCall && createCall.result && createCall.result.success === true && createCall.result.requiresConfirmation === true) {
+    operation = "create";
+    payload = createCall.result;
+  } else if (deleteCall && deleteCall.result && deleteCall.result.requiresConfirmation === true
+    && Array.isArray(deleteCall.result.matches) && deleteCall.result.matches.length === 1) {
+    operation = "delete";
+    payload = {};
+    reminderId = String(deleteCall.result.matches[0].id || "");
+  }
+  if (!operation || operation === "delete" && !reminderId) return response;
+
+  try {
+    const idempotencyKey = reminderIdempotencyKey(principal, operation, payload, reminderId);
+    const confirmation = defaultCourseReminderService.createConfirmation({
+      principal,
+      operation,
+      reminderId,
+      payload,
+      idempotencyKey,
+    });
+    const attachToCards = (cards) => {
+      (Array.isArray(cards) ? cards : []).forEach((card) => {
+        (Array.isArray(card && card.actions) ? card.actions : []).forEach((action) => {
+          if (!action || action.type !== "confirmReminder") return;
+          action.payload = Object.assign({}, action.payload || {}, {
+            operation,
+            reminderId,
+            idempotencyKey,
+            confirmationProof: confirmation.token,
+            confirmationExpiresAt: confirmation.expiresAt,
+          });
+        });
+      });
+    };
+    attachToCards(response.cards);
+    if (response.presentation && response.presentation.cards !== response.cards) {
+      attachToCards(response.presentation.cards);
+    }
+  } catch (error) {
+    (Array.isArray(response.cards) ? response.cards : []).forEach((card) => {
+      (Array.isArray(card && card.actions) ? card.actions : []).forEach((action) => {
+        if (action && action.type === "confirmReminder") {
+          action.type = "noop";
+          action.toast = error && error.code === "REMINDER_SECRET_UNAVAILABLE"
+            ? "提醒服务尚未配置，请稍后再试"
+            : "暂时无法确认提醒";
+          action.payload = {};
+        }
+      });
+    });
+  }
+  return response;
 }
 
 function emitChatEvent(input, event = {}) {
@@ -447,7 +539,7 @@ function buildPublicEvidence(evidence) {
 function sanitizePublicAction(action) {
   const source = stableAction(action || {});
   const url = String(source.url || "");
-  const safeUrl = url.startsWith("/pages/") && !/admin|debug|provider|token|oracle|cloudbase/i.test(url) ? url : "";
+  const safeUrl = generatedPayloadContract.isAllowedNavigationUrl(url) ? url : "";
   return Object.assign({}, source, {
     label: sanitizePublicText(source.label, "查看"),
     url: safeUrl,
@@ -457,7 +549,9 @@ function sanitizePublicAction(action) {
 
 function sanitizePublicCard(card) {
   const source = stableCard(card || {});
-  const urlOptionalActionTypes = new Set(["noop", "retry", "ask", "openSheet", "toggleFloat"]);
+  const urlOptionalActionTypes = new Set([
+    "noop", "retry", "ask", "openSheet", "toggleFloat", "confirmReminder", "manageReminders",
+  ]);
   return Object.assign({}, source, {
     title: sanitizePublicText(source.title, "结果"),
     subtitle: sanitizePublicText(source.subtitle, ""),
@@ -717,6 +811,9 @@ function buildResponse(payload) {
     errors,
     serverTime: nowIso(),
   };
+  if (requestedProtocolVersion === agentProtocol.PROTOCOL_V2) {
+    response.memoryPreferencePatch = payload.memoryPreferencePatch || {};
+  }
   const safeResponse = isPublicRuntime(envelope.canonicalRuntimeMode) ? sanitizePublicResponse(response) : response;
   if (requestedProtocolVersion === agentProtocol.PROTOCOL_V2) {
     return agentProtocol.buildV2Response(Object.assign({}, safeResponse, {
@@ -1039,6 +1136,96 @@ async function chat(input = {}) {
       selectedSkill: "personal_schedule_import_help",
       fallbackReason: "SENSITIVE_CREDENTIAL_BLOCKED",
       errorCode: "SENSITIVE_CREDENTIAL_BLOCKED",
+    });
+    return response;
+  }
+
+  const personalMemoryTurn = resolvePersonalMemoryTurn({
+    message: safeMessage,
+    context,
+    principal: memoryBundle.principal,
+    memoryMode: memoryBundle.memory && memoryBundle.memory.mode || context.memoryMode,
+    preferenceService: defaultUserPreferenceService,
+  });
+  if (personalMemoryTurn.handled) {
+    emitChatEvent(eventInput, {
+      type: "response.composing",
+      runtimeMode: runtimeDecision.runtimeMode,
+      intentName: personalMemoryTurn.intentName,
+      providerUsed: false,
+    });
+    const memoryIntent = {
+      name: personalMemoryTurn.intentName,
+      confidence: 1,
+      slots: personalMemoryTurn.preferencePatch || {},
+    };
+    const response = attachMemory(buildResponse({
+      protocolVersion,
+      runId,
+      requestId,
+      conversationId,
+      runtimeMode: runtimeDecision.runtimeMode,
+      requestedRuntimeMode: runtimeDecision.requestedMode,
+      competitionAuthorized: runtimeDecision.authorized,
+      answer: personalMemoryTurn.answer,
+      cards: [],
+      suggestions: personalMemoryTurn.intentName === "update_user_preference"
+        ? ["查看记忆", "设置默认提醒时间"]
+        : [],
+      toolCalls: [],
+      intent: memoryIntent,
+      plan: [],
+      steps: [],
+      observations: [],
+      skill: {
+        id: "personal_memory",
+        version: "1.0.0",
+        description: "显式偏好与会话上下文",
+      },
+      provider: "mock",
+      desiredProvider: "mock",
+      resolvedProvider: "mock",
+      providerPolicy: "tool-only",
+      externalProviderUsed: false,
+      fallback: false,
+      fallbackLayer: "none",
+      memory: memoryBundle.memory,
+      memoryPreferencePatch: personalMemoryTurn.preferencePatch || {},
+      context,
+      metrics: buildMetrics({
+        startTime,
+        intentName: personalMemoryTurn.intentName,
+        toolCalls: [],
+        externalProviderUsed: false,
+        fallback: false,
+        usedPersonalContext: Boolean(personalMemoryTurn.source && personalMemoryTurn.source !== "none"),
+      }),
+    }), memoryBundle, {
+      message: safeMessage,
+      answer: personalMemoryTurn.answer,
+      intentName: personalMemoryTurn.intentName,
+      context,
+      runId,
+      status: "completed",
+      stepCount: 0,
+      contextSlots: buildContextSlots(memoryIntent, personalMemoryTurn.preferencePatch || {}),
+      clearPendingClarification: false,
+      cloudSyncEnabled: context.cloudSyncEnabled === true,
+    });
+    recordEarlyTrace({
+      runId,
+      requestId,
+      conversationId,
+      runtimeMode: runtimeDecision.runtimeMode,
+      startTime,
+      intent: personalMemoryTurn.intentName,
+      selectedSkill: "personal_memory",
+    });
+    emitChatEvent(eventInput, {
+      type: "run.completed",
+      runtimeMode: runtimeDecision.runtimeMode,
+      intentName: personalMemoryTurn.intentName,
+      providerUsed: false,
     });
     return response;
   }
@@ -1456,6 +1643,7 @@ async function chat(input = {}) {
     evidence: null,
     cloudSyncEnabled: context.cloudSyncEnabled === true,
   });
+  attachReminderConfirmation(response, execution, memoryBundle.principal);
   agentKernel.finalize(execution, {
     totalDurationMs: Date.now() - startTime,
     providerUsed: externalProviderUsed,

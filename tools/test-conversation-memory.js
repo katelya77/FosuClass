@@ -14,6 +14,7 @@ process.env.NODE_ENV = "test";
 const { resolvePrincipal } = require("../server/src/services/ai/conversation/conversationPrincipalService");
 const { FileConversationRepository } = require("../server/src/services/ai/conversation/fileConversationRepository");
 const { ConversationMemoryService } = require("../server/src/services/ai/conversation/conversationMemoryService");
+const { UserPreferenceService } = require("../server/src/services/ai/conversation/userPreferenceService");
 const {
   migrateConversationState,
   normalizeContextSlots,
@@ -27,6 +28,7 @@ function session(openidHash, appid = "wx-test") {
 function run() {
   const repo = new FileConversationRepository({ dataDir: process.env.FOSU_CONVERSATION_DATA_DIR });
   const memory = new ConversationMemoryService({ repository: repo });
+  const preferenceService = new UserPreferenceService({ dataDir: path.join(tempDir, "preferences") });
 
   // 1-2. Same openid, different sessions share principal
   const p1 = resolvePrincipal({ serverSession: session("abc123openidhash"), runtimeMode: "public" });
@@ -113,6 +115,44 @@ function run() {
     allowCloudSyncRequest: true,
   });
   assert.strictEqual(cloudOk, "cloud_sync");
+
+  // cloud_sync restores explicitly saved preferences and bounded recent turns.
+  preferenceService.upsert({
+    principal: p1,
+    memoryMode: "cloud_sync",
+    explicit: true,
+    values: { preferredName: "王奕章" },
+  });
+  const cloudConversation = repo.create(p1.principalKey, {
+    conversationId: "xf-cloud-name",
+    runtimeMode: "public",
+    memoryMode: "cloud_sync",
+  });
+  const memoryWithPreferences = new ConversationMemoryService({
+    repository: repo,
+    userPreferenceService: preferenceService,
+  });
+  memoryWithPreferences.persistAfterSuccess({
+    principal: p1,
+    state: cloudConversation,
+    conversationId: "xf-cloud-name",
+    memoryMode: "cloud_sync",
+    cloudSyncEnabled: true,
+    message: "记住我叫王奕章",
+    answer: "已记住。",
+    intentName: "update_user_preference",
+    context: {},
+  });
+  const restoredCloud = memoryWithPreferences.loadForChat({
+    serverSession: session("abc123openidhash"),
+    runtimeMode: "public",
+    conversationId: "xf-cloud-name",
+    message: "我叫什么？",
+    memoryMode: "cloud_sync",
+    context: { memoryMode: "cloud_sync", cloudSyncEnabled: true, recentMessages: [] },
+  });
+  assert.strictEqual(restoredCloud.context.userPreferences.preferredName, "王奕章");
+  assert.ok(restoredCloud.context.recentMessages.some((item) => item.content.includes("王奕章")));
 
   // 9-10. Sensitive / full schedule not stored
   const sensitiveSaved = memory.persistAfterSuccess({

@@ -111,6 +111,25 @@ async function run() {
     assert.ok(sawUserId.startsWith("fosu-"));
     assert.notStrictEqual(sawUserId, "fosuclass-user");
 
+    const connection = await cozeProvider.testConnection({
+      principal: { principalKey: "admin-test", runtimeMode: "trial", deployEnv: "test" },
+      providerRuntimeConfig: {
+        COZE_ENABLED: "true",
+        COZE_API_KEY: "test-token",
+        COZE_BOT_ID: "bot-1",
+        COZE_API_BASE_URL: baseUrl,
+        COZE_CHAT_ENDPOINT: "/v3/chat",
+        COZE_POLL_INTERVAL_MS: "50",
+        COZE_POLL_MAX_ATTEMPTS: "5",
+        COZE_TIMEOUT_MS: "3000",
+      },
+    });
+    assert.strictEqual(connection.success, true);
+    assert.strictEqual(connection.code, "COZE_CONNECTION_OK");
+    assert.strictEqual(connection.botPublished, true);
+    assert.strictEqual(connection.botSelectorAvailable, false);
+    assert.ok(!JSON.stringify(connection).includes("test-token"));
+
     // 401 mapping
     const { server: s401, baseUrl: b401 } = await startMockServer((req, res) => {
       res.writeHead(401, { "Content-Type": "application/json" });
@@ -134,6 +153,19 @@ async function run() {
     } finally {
       s401.close();
     }
+
+    const tokenFailure = cozeProvider.classifyConnectionError({ response: { status: 401, data: { msg: "unauthorized" } } });
+    assert.strictEqual(tokenFailure.code, "COZE_TOKEN_INVALID");
+    const missingBot = cozeProvider.classifyConnectionError({ response: { status: 404, data: { msg: "bot not found" } } });
+    assert.strictEqual(missingBot.code, "COZE_BOT_NOT_FOUND");
+    const unpublished = cozeProvider.classifyConnectionError({ response: { status: 400, data: { msg: "Bot has not been published as API service" } } });
+    assert.strictEqual(unpublished.code, "COZE_BOT_NOT_PUBLISHED");
+    const permission = cozeProvider.classifyConnectionError({ response: { status: 403, data: { msg: "permission denied" } } });
+    assert.strictEqual(permission.code, "COZE_PERMISSION_DENIED");
+    const rateLimited = cozeProvider.classifyConnectionError({ response: { status: 429, data: { msg: "too many requests" } } });
+    assert.strictEqual(rateLimited.code, "COZE_RATE_LIMITED");
+    const timeout = cozeProvider.classifyConnectionError({ code: "ECONNABORTED", message: "timeout of 1000ms exceeded" });
+    assert.strictEqual(timeout.code, "COZE_TIMEOUT");
 
     // expired throws
     try {

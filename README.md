@@ -21,6 +21,11 @@
 - 小程序新增 `pages/ai-assistant/ai-assistant` 页面，支持快捷查询、查询输入、结构化结果卡片和一键跳转操作。
 - 后端新增 `POST /api/ai/agent/chat`，响应稳定包含 `answer`、`cards`、`toolCalls`、`suggestions`、`safety` 和 `serverTime`。
 - 校园服务管家采用“工具优先”架构：先识别意图和槽位，再调用 Release Pack、全校索引、空教室、今日课表摘要、数据诊断等确定性工具，最后整理中文卡片。
+- 小佛助手现在支持四层上下文：最近消息、会话摘要、当前任务槽位，以及仅在用户明确说“记住”后写入的长期偏好；云端记忆仍需用户主动开启。
+- 课程提醒采用“计划 → 确认卡 → 用户点击订阅授权 → 幂等执行”的写入链路，并提供查看、暂停、修改和删除面板；未授权或模板未配置时如实降级为应用内提醒。
+- 课程任务可组合下一节课、出发建议、路线、天气、空教室、冲突与课表变化检测；所有课程事实继续来自 Release Pack 和确定性工具。
+- 助手消息使用受控 Markdown AST 渲染，支持标题、列表、引用、代码块、表格和白名单链接，不执行任意 HTML。
+- 首页与小佛浮窗展示基于真实个人课表得出的下一节课、空档或导入提示；顶部状态胶囊只消费真实 Run Events，不伪造 Thinking 状态。
 - 课程类卡片会优先展示具体上课时间段，例如 `08:00-09:25`，节次信息保留在副标题中，避免只显示“第几节”。
 - 默认 `mockProvider` 可在无外部 Provider 凭证的情况下演示“现在有空教室吗”“今天还有课吗”“查老师课表”“怎么导入个人课表”“为什么数据加载失败”等核心场景；配置 DeepSeek/Coze 后，项目知识说明和复杂解释会调用外部 Provider，课程事实仍只来自工具结果。
 
@@ -78,6 +83,7 @@ npm run test:ai-competition
 - [校园查询合规说明](docs/ai-agent-compliance.md)
 - [5 分钟演示脚本](docs/demo-script-5min.md)
 - [Provider 配置](docs/model-provider-config.md)
+- [课程任务 Agent V1 交付与配置](docs/xiaofu-agent/course-task-agent-v1.md)
 - [Oracle ARM / Docker Provider 部署说明](docs/oracle-arm-deploy-ai.md)
 - [CloudBase 混合架构](docs/cloudbase-hybrid-architecture.md)
 - [CloudBase Release Pack 发布手册](docs/cloudbase-release-deploy.md)

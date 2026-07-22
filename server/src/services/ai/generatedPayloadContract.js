@@ -12,7 +12,10 @@ const ALLOWED_CARD_TYPES = new Set([
   "generic",
 ]);
 
-const ALLOWED_ACTION_TYPES = new Set(["navigate", "switchTab", "retry", "ask", "openSheet", "toggleFloat", "noop"]);
+const ALLOWED_ACTION_TYPES = new Set([
+  "navigate", "switchTab", "retry", "ask", "openSheet", "toggleFloat",
+  "confirmReminder", "manageReminders", "noop",
+]);
 
 const ALLOWED_NAVIGATION_URLS = new Set([
   "/pages/school/school",
@@ -47,6 +50,8 @@ const ACTION_LABEL_FALLBACKS = {
   ask: "继续追问",
   openSheet: "打开面板",
   toggleFloat: "调整浮窗",
+  confirmReminder: "确认提醒",
+  manageReminders: "管理提醒",
   noop: "查看",
 };
 
@@ -94,6 +99,8 @@ function normalizeActionType(type) {
   if (value === "switchtab") return "switchTab";
   if (value === "opensheet") return "openSheet";
   if (value === "togglefloat") return "toggleFloat";
+  if (value === "confirmreminder") return "confirmReminder";
+  if (value === "managereminders") return "manageReminders";
   return ALLOWED_ACTION_TYPES.has(value) ? value : "noop";
 }
 
