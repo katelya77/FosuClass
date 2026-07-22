@@ -1880,6 +1880,7 @@ Page({
     this.initVoiceInput();
     this.refreshConnectionStatus();
     this.ensurePersonalContextFromSchedule();
+    this.prefetchReminderCapability();
 
     const question = decodeQuery(options && (options.q || options.question || ""));
     if (!demoMode && question) {
@@ -1928,6 +1929,17 @@ Page({
   },
 
   
+  async prefetchReminderCapability() {
+    try {
+      const capability = await courseReminderClient.getCapability();
+      if (capability && capability.success) {
+        this.setData({ reminderCapability: capability });
+      }
+    } catch (error) {
+      // ignore
+    }
+  },
+
   ensurePersonalContextFromSchedule() {
     try {
       if (aiAssistantService.isPersonalContextAllowed && aiAssistantService.isPersonalContextAllowed()) return;
@@ -3156,14 +3168,14 @@ Page({
       .catch((error) => {
         if (!isRequestActive()) return;
         flushStream(true);
-        const isReminderQuery = /提醒|通知/.test(String(message || ""));
+        const isReminderQuery = /提醒|通知|默认提醒/.test(String(message || ""));
         const assistantMessage = makeMessage("assistant", "", {
           cards: [{
             type: "generic",
-            variant: "error",
-            title: isReminderQuery ? "在线助手暂不可用，可直接配置提醒。" : "服务暂时不可用，已保留你的问题。",
+            variant: isReminderQuery ? "reminder" : "error",
+            title: isReminderQuery ? "可用智能课程提醒继续" : "服务暂时不可用，已保留你的问题。",
             subtitle: isReminderQuery
-              ? "智能课程提醒不依赖增强表达层，可在配置页完成创建。"
+              ? "已为你保留本机提醒配置入口；确认后会创建提醒并可申请微信服务通知。"
               : "可以重试，或先使用全校课表/空教室页面。",
             badges: [],
             items: [],
@@ -3779,7 +3791,15 @@ Page({
 
   executeCardAction(action, context) {
     const safeAction = action && typeof action === "object" && !Array.isArray(action) ? action : {};
-    if (safeAction.confirm) {
+    const payload = safeAction.payload && typeof safeAction.payload === "object" && !Array.isArray(safeAction.payload)
+      ? safeAction.payload
+      : {};
+    // Create/authorize must stay inside the user-tap gesture for requestSubscribeMessage.
+    // Extra wx.showModal here breaks the gesture chain and leaves users stuck on
+    // "请先确认这次提醒操作" after they already accepted the WeChat sheet.
+    const skipModalForReminderCreate = safeAction.type === "confirmReminder"
+      && String(payload.operation || "create") === "create";
+    if (safeAction.confirm && !skipModalForReminderCreate) {
       wx.showModal({
         title: safeAction.confirm.title || "确认操作",
         content: safeAction.confirm.content || "",
@@ -3854,69 +3874,141 @@ Page({
     this.showActionFallback(action.toast || "暂时无法执行该操作");
   },
 
+  markReminderCardCreated(context, result) {
+    const messageIndex = Number(context && context.messageIndex);
+    const cardIndex = Number(context && context.cardIndex);
+    const actionIndex = Number(context && context.actionIndex);
+    if (!Number.isFinite(messageIndex) || !Number.isFinite(cardIndex) || !Number.isFinite(actionIndex)) return;
+    const base = `messages[${messageIndex}].displayCards[${cardIndex}]`;
+    const badges = ((context.card && context.card.badges) || []).filter((item) => item !== "未执行写入");
+    if (badges.indexOf("已创建") < 0) badges.unshift("已创建");
+    if (result && result.duplicate && badges.indexOf("已存在") < 0) badges.unshift("已存在");
+    this.setData({
+      [`${base}.badges`]: badges,
+      [`${base}.actions[${actionIndex}]`]: {
+        label: "管理提醒",
+        type: "manageReminders",
+        url: "",
+        payload: { sheet: "reminders" },
+      },
+      [`${base}.primaryActions`]: [{
+        label: "管理提醒",
+        type: "manageReminders",
+        url: "",
+        payload: { sheet: "reminders" },
+        originalIndex: actionIndex,
+      }],
+    });
+  },
+
+  async performReminderCreateFromConfig(source) {
+    const leadMinutes = Math.max(5, Math.min(180, Number(source.leadMinutes || 20) || 20));
+    const scope = safeText(source.scope, 32) || "all_courses";
+    const clientContext = aiAssistantService.buildClientContext({
+      conversationId: this.data.activeConversationId,
+      contextSlots: this.data.activeConversationContext,
+      memoryMode: this.data.memoryMode,
+    });
+    // Gesture-safe: only use already-prefetched capability so requestSubscribeMessage
+    // stays in the user-tap stack. Never await network before the WeChat sheet.
+    const cached = this.data.reminderCapability;
+    const capability = cached && cached.configured && cached.templateId
+      ? cached
+      : { configured: false, templateId: "" };
+    try {
+      const prefs = aiAssistantService.getUserPreferences ? aiAssistantService.getUserPreferences() : {};
+      if (aiAssistantService.saveUserPreferences) {
+        aiAssistantService.saveUserPreferences(Object.assign({}, prefs, {
+          defaultReminderLeadMinutes: leadMinutes,
+        }));
+      }
+    } catch (_) { /* ignore preference write */ }
+    return courseReminderClient.createReminderFromConfig({
+      leadMinutes,
+      scope,
+      idempotencyKey: safeText(source.idempotencyKey, 160)
+        || courseReminderClient.makeIdempotencyKey("create", scope),
+      capability,
+      currentScheduleSummary: clientContext && clientContext.currentScheduleSummary,
+      todayDate: clientContext && clientContext.todayDate,
+      todayWeekday: clientContext && clientContext.todayWeekday,
+      currentTeachingWeek: clientContext && clientContext.currentTeachingWeek,
+      clientTimestampMs: clientContext && clientContext.clientTimestampMs,
+    });
+  },
+
   async performReminderConfirmation(payload, context) {
     const source = payload && typeof payload === "object" && !Array.isArray(payload) ? payload : {};
-    if (source.operation !== "create" || !source.confirmationProof || !source.idempotencyKey) {
-      this.showActionFallback("确认已失效，请重新生成提醒计划");
+    const operation = safeText(source.operation, 16) || "create";
+    if (operation !== "create") {
+      this.showActionFallback("请在提醒面板完成该操作");
       return;
     }
     if (this._reminderActionRunning) return;
     this._reminderActionRunning = true;
-    wx.showLoading({ title: "准备通知方式", mask: true });
+    wx.showLoading({ title: "正在创建提醒", mask: true });
     try {
-      const capability = await courseReminderClient.getCapability();
-      const subscription = await courseReminderClient.requestWechatSubscription(
-        capability && capability.success ? capability : { configured: false, templateId: "" }
-      );
-      const result = await courseReminderClient.createReminder({
-        confirmationProof: source.confirmationProof,
-        idempotencyKey: source.idempotencyKey,
-        subscriptionStatus: subscription.status,
-      });
-      wx.hideLoading();
-      if (!result.success) {
-        this.showActionFallback(result.error || "提醒创建失败");
+      // One-shot configure path: the button tap is the confirmation.
+      // Avoids fragile confirmationProof tokens that break after card storage / double dialogs.
+      let result = await this.performReminderCreateFromConfig(source);
+      if (!result.success
+        && source.confirmationProof
+        && source.idempotencyKey
+        && result.code !== "SCHEDULE_REQUIRED"
+        && result.code !== "NO_MATCHING_COURSE"
+      ) {
+        let capability = this.data.reminderCapability && this.data.reminderCapability.configured
+          ? this.data.reminderCapability
+          : { configured: false, templateId: "" };
+        const subscription = await courseReminderClient.requestWechatSubscription(capability);
+        const proofResult = await courseReminderClient.createReminder({
+          confirmationProof: source.confirmationProof,
+          idempotencyKey: source.idempotencyKey,
+          subscriptionStatus: subscription.status,
+        });
+        if (proofResult && proofResult.success) result = proofResult;
+      }
+
+      try { wx.hideLoading(); } catch (_) { /* ignore */ }
+      if (!result || !result.success) {
+        const errText = (result && result.error) || "提醒创建失败";
+        if (result && result.code === "SCHEDULE_REQUIRED") {
+          wx.showModal({
+            title: "需要个人课表",
+            content: "导入个人课表后，才能按真实上课时间创建提醒。",
+            confirmText: "去导入",
+            success: (res) => {
+              if (res.confirm) this.navigateByUrl(PERSONAL_SYNC_URL, { toast: "已打开课表导入" });
+            },
+          });
+          return;
+        }
+        this.showActionFallback(errText);
         return;
       }
       const channelText = result.reminder && result.reminder.channel === "wechat_subscription"
-        ? "已创建微信订阅提醒"
+        ? "已创建微信服务通知提醒"
         : "已创建应用内提醒";
       wx.showToast({ title: result.duplicate ? "提醒已经存在" : channelText, icon: "none", duration: 2400 });
       this.setData({
         agentActivityState: "complete",
         statusCapsuleText: result.duplicate ? "完成 · 提醒已经存在" : "完成 · 提醒已创建",
         statusCapsuleDetail: result.reminder && result.reminder.channel === "wechat_subscription"
-          ? "将按本次微信订阅授权和提醒计划尝试发送。"
-          : "当前使用应用内提醒；不会声称可绕过微信授权推送。",
+          ? "已记录本次微信订阅授权；额度按平台一次性规则消耗。"
+          : "当前使用应用内提醒；可在提醒面板补充微信服务通知授权。",
         statusCapsuleExpanded: false,
       });
-      const messageIndex = Number(context.messageIndex);
-      const cardIndex = Number(context.cardIndex);
-      const actionIndex = Number(context.actionIndex);
-      if (Number.isFinite(messageIndex) && Number.isFinite(cardIndex) && Number.isFinite(actionIndex)) {
-        const base = `messages[${messageIndex}].displayCards[${cardIndex}]`;
-        const badges = ((context.card && context.card.badges) || []).filter((item) => item !== "未执行写入");
-        if (badges.indexOf("已创建") < 0) badges.unshift("已创建");
-        this.setData({
-          [`${base}.badges`]: badges,
-          [`${base}.actions[${actionIndex}]`]: {
-            label: "管理提醒",
-            type: "manageReminders",
-            url: "",
-            payload: { sheet: "reminders" },
-          },
-        });
-      }
+      this.markReminderCardCreated(context || {}, result);
       this.scheduleStatusCapsuleReset();
     } catch (error) {
       try { wx.hideLoading(); } catch (_) { /* ignore */ }
       this.setData({
         agentActivityState: "network_error",
         statusCapsuleText: "提醒创建失败",
-        statusCapsuleDetail: "没有执行不完整写入，可重新生成提醒计划后再确认。",
+        statusCapsuleDetail: "没有执行不完整写入。可打开智能课程提醒面板一键重试。",
         statusCapsuleExpanded: true,
       });
-      this.showActionFallback("提醒创建失败，请稍后重试");
+      this.showActionFallback("提醒创建失败，请打开提醒面板重试");
     } finally {
       this._reminderActionRunning = false;
     }

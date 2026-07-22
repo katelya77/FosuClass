@@ -369,6 +369,18 @@ function inferCampusFromText(text) {
 function resolveModernChineseIntent(message, context = {}) {
   const text = normalizeText(message);
   if (!text) return null;
+  // Preference-style default lead time is personal memory, not a write to reminder rules.
+  if (/(?:设置|设定|改成|改为|调整)?\s*(?:默认)?\s*(?:提醒时间|上课提醒|课程提醒)/.test(text)
+    || /默认\s*(?:提前|上课前)\s*\d{1,3}\s*分钟/.test(text)
+    || /(?:提醒我|提醒时间)\s*(?:改成|改为|设置成|设为)?\s*(?:提前)?\s*\d{1,3}\s*分钟/.test(text)) {
+    if (!/(?:以后上课|每节课|教室变化|创建提醒|取消|删除|关闭|暂停|启用|查看提醒|管理提醒)/.test(text)) {
+      const leadMatch = text.match(/(?:提前|上课前)\s*(\d{1,3})\s*分钟/)
+        || text.match(/(\d{1,3})\s*分钟/);
+      const slots = {};
+      if (leadMatch) slots.defaultReminderLeadMinutes = Math.min(180, Math.max(5, Number(leadMatch[1]) || 20));
+      return { name: "update_user_preference", slots };
+    }
+  }
   if (/(?:提醒|通知)/.test(text)) {
     let operation = "create";
     if (/(?:取消|删除|关闭).*(?:提醒|通知)/.test(text)) operation = "delete";
@@ -1036,7 +1048,10 @@ function updateCourseReminder(input = {}, context = {}) {
 
 function updateUserPreference(input = {}, context = {}) {
   const message = normalizeText(input.message);
-  if (!/(?:记住|记一下|以后叫我|以后称呼我)/.test(message)) {
+  const reminderPref = /(?:设置|设定|改成|改为|调整)?\s*(?:默认)?\s*(?:提醒时间|上课提醒|课程提醒)/.test(message)
+    || /默认\s*(?:提前|上课前)\s*\d{1,3}\s*分钟/.test(message)
+    || input.defaultReminderLeadMinutes !== undefined;
+  if (!/(?:记住|记一下|以后叫我|以后称呼我)/.test(message) && !reminderPref) {
     return {
       success: false,
       code: "EXPLICIT_USER_COMMAND_REQUIRED",
@@ -1047,8 +1062,17 @@ function updateUserPreference(input = {}, context = {}) {
   const values = {};
   if (input.preferredName !== undefined) values.preferredName = input.preferredName;
   if (input.campus !== undefined) values.campus = input.campus;
-  if (input.defaultReminderLeadMinutes !== undefined) {
-    values.defaultReminderLeadMinutes = input.defaultReminderLeadMinutes;
+  let lead = input.defaultReminderLeadMinutes;
+  if (lead === undefined && message) {
+    const leadMatch = message.match(/(?:提前|上课前)\s*(\d{1,3})\s*分钟/)
+      || message.match(/(?:提醒时间|上课提醒|课程提醒|默认提醒).*?(\d{1,3})\s*分钟/)
+      || message.match(/(\d{1,3})\s*分钟(?:后)?(?:提醒|上课前提醒)/);
+    if (leadMatch) lead = Number(leadMatch[1]);
+    else if (reminderPref && !/\d{1,3}\s*分钟/.test(message)) lead = 20;
+  }
+  if (lead !== undefined) {
+    const n = Number(lead);
+    if (Number.isFinite(n)) values.defaultReminderLeadMinutes = Math.min(180, Math.max(5, Math.round(n)));
   }
   if (!Object.keys(values).length) {
     return { success: false, code: "PREFERENCE_INVALID", writeExecuted: false, summary: "没有可更新的偏好。" };
@@ -1475,6 +1499,9 @@ function buildPlanForIntent(intent, message, context = {}) {
       agentProtocol.buildPlanStep("get_next_course", slots, "读取下一节课程"),
       agentProtocol.buildPlanStep("get_classroom_location", { message }, "查询教室楼栋位置"),
     ];
+  }
+  if (intent && intent.name === "update_user_preference") {
+    return [agentProtocol.buildPlanStep("update_user_preference", Object.assign({}, slots, { message }), "更新用户提醒/称呼偏好")];
   }
   if (intent && intent.name === "manage_course_reminders") {
     const operation = intent.slots && intent.slots.operation || "create";

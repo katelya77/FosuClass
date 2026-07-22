@@ -1711,6 +1711,87 @@ async function callServerAgent(message, resolvedContext, options = {}) {
   });
 }
 
+
+function parseLeadMinutesFromMessage(message, fallback) {
+  const text = String(message || "");
+  if (/半(?:个)?小时/.test(text)) return 30;
+  const hour = text.match(/提前\s*(\d+(?:\.\d+)?)\s*(?:个)?小时/);
+  if (hour) return Math.min(180, Math.max(5, Math.round(Number(hour[1]) * 60)));
+  const minutes = text.match(/(?:上课前|提前|默认)\s*(\d{1,3})\s*分钟/);
+  if (minutes) return Math.min(180, Math.max(5, Number(minutes[1]) || fallback || 20));
+  const alt = text.match(/(\d{1,3})\s*分钟(?:后)?(?:提醒|上课前提醒)/);
+  if (alt) return Math.min(180, Math.max(5, Number(alt[1]) || fallback || 20));
+  return fallback || 0;
+}
+
+function isReminderAssistMessage(message) {
+  const text = String(message || "");
+  return /提醒|通知/.test(text) || /默认提醒|上课提醒|课程提醒|提醒时间/.test(text);
+}
+
+function buildLocalReminderAssistResponse(message, clientContext = {}) {
+  const text = String(message || "").trim();
+  const prefs = getUserPreferences();
+  const lead = parseLeadMinutesFromMessage(text, Number(prefs.defaultReminderLeadMinutes || 20) || 20);
+  const wantsDefaultOnly = /默认提醒|提醒时间|设置.*提醒|设定.*提醒|调整.*提醒时间/.test(text)
+    && !/创建|以后上课|以后每|每节课|教室变化|取消|删除|关闭/.test(text);
+  if (wantsDefaultOnly) {
+    const appliedLead = lead >= 5 ? lead : 20;
+    saveUserPreferences(Object.assign({}, prefs, { defaultReminderLeadMinutes: appliedLead }));
+    return standardizeClientFallback({
+      answer: lead >= 5
+        ? `已把默认提醒时间设为上课前 ${appliedLead} 分钟。点「一键创建并授权通知」可直接按该时间创建上课提醒；也可说“以后上课前${appliedLead}分钟提醒我”。`
+        : `已智能设为上课前 ${appliedLead} 分钟（常用默认）。点「一键创建并授权通知」可立刻创建；想改成 30/45/60 分钟直接告诉我即可。`,
+      cards: [{
+        type: "reminder",
+        title: "默认提醒已更新",
+        subtitle: `上课前 ${appliedLead} 分钟`,
+        actions: [
+          {
+            label: "一键创建并授权通知",
+            type: "confirmReminder",
+            payload: { operation: "create", leadMinutes: appliedLead, scope: "all_courses" },
+          },
+          { label: "打开提醒面板", type: "manageReminders", payload: { sheet: "reminders", openCreate: true } },
+          { label: "默认改成30分钟", type: "retry", payload: { message: "默认提前30分钟提醒我" } },
+        ],
+      }],
+      suggestions: [`以后上课前${appliedLead}分钟提醒我`, "默认提前30分钟提醒我", "查看今日课表"],
+      toolCalls: [{ name: "update_user_preference", status: "success", summary: `defaultReminderLeadMinutes=${appliedLead}` }],
+      metrics: { intentName: "update_user_preference", fallback: true },
+      presentationMode: "single_card",
+    }, message, { intent: "update_user_preference" }, "LOCAL_REMINDER_PREF", {});
+  }
+
+  const summary = clientContext.currentScheduleSummary || {};
+  const hasSchedule = summary.enabled === true && Array.isArray(summary.courses) && summary.courses.length > 0;
+  return standardizeClientFallback({
+    answer: hasSchedule
+      ? `可以按你的课表创建上课前提醒（默认提前 ${lead >= 5 ? lead : 20} 分钟）。点“配置课程提醒”可直接完成创建与微信服务通知授权。`
+      : "创建上课提醒需要先导入个人课表。导入后可一键配置提前提醒，并可选微信服务通知。",
+    cards: [{
+      type: "reminder",
+      title: hasSchedule ? "智能课程提醒" : "需要个人课表",
+      subtitle: hasSchedule ? "确定性工具创建，不依赖增强表达层" : "导入后即可配置提醒",
+      actions: hasSchedule
+        ? [
+          { label: "配置课程提醒", type: "manageReminders", payload: { sheet: "reminders", openCreate: true } },
+          { label: "管理已有提醒", type: "manageReminders", payload: { sheet: "reminders" } },
+        ]
+        : [
+          { label: "导入课表", type: "navigate", url: "/pages/personal-sync/personal-sync", payload: {} },
+          { label: "打开提醒面板", type: "manageReminders", payload: { sheet: "reminders", openCreate: true } },
+        ],
+    }],
+    suggestions: hasSchedule
+      ? ["打开智能课程提醒", "查看今日课表", "默认提前30分钟提醒我"]
+      : ["如何导入个人课表", "打开智能课程提醒"],
+    toolCalls: [{ name: "manage_course_reminders", status: hasSchedule ? "success" : "need_context", summary: "local-reminder-assist" }],
+    metrics: { intentName: "manage_course_reminders", fallback: true },
+    presentationMode: "single_card",
+  }, message, { intent: "manage_course_reminders" }, "LOCAL_REMINDER_ASSIST", {});
+}
+
 async function offlineChat(message, context, options = {}) {
   const resolvedContext = context || buildClientContext();
   const localContext = Object.assign({}, resolvedContext, {
@@ -1721,6 +1802,11 @@ async function offlineChat(message, context, options = {}) {
   const callbacks = options && options.callbacks || {};
   const route = xiaofuAgentRouter.routeMessage(message, localContext);
   reportPipelineStatus(callbacks, "正在匹配查询内容…", "understand");
+
+  if (isReminderAssistMessage(message)) {
+    reportPipelineStatus(callbacks, "正在整理提醒方案…", "compose");
+    return buildLocalReminderAssistResponse(message, localContext);
+  }
 
   if (route.intent === xiaofuAgentRouter.INTENTS.SCHEDULE_STATUS) {
     reportPipelineStatus(callbacks, "正在查询课表数据…", "schedule");
@@ -1873,8 +1959,10 @@ async function chat(message, context, options = {}) {
       agentRequest: metadata,
     }));
   } catch (error) {
+    // Only transport/network/5xx fall into offline tools; client/server 4xx must surface.
     if (!isClientFallbackTransportError(error)) throw error;
     const reason = safeText(error && (error.code || error.reasonCode || error.legacyCode), 120) || "NETWORK_UNAVAILABLE";
+    // Offline path still smart-handles reminder preference / create assists.
     return buildClientFallback(message, resolvedContext, options, metadata, reason);
   }
 
@@ -1910,6 +1998,8 @@ module.exports = {
   buildClientContext,
   buildProactiveWorkspace,
   buildSmalltalkResponse,
+  buildLocalReminderAssistResponse,
+  isReminderAssistMessage,
   standardizeClientFallback,
   chat,
   clearPendingClarification,

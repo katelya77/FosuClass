@@ -51,6 +51,8 @@ playwright-report/
 server/storage/relay/
 server/storage/staging-uploads/
 server/data/backups/
+server/data/ai/kb-audit.jsonl
+.tmp/
 # Keep empty structure placeholders only when explicitly force-added
 !server/storage/relay/.gitkeep
 !server/storage/staging-uploads/.gitkeep
