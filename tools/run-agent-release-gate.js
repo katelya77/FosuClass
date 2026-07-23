@@ -29,11 +29,7 @@ function runNpm(script) {
     cwd: ROOT,
     encoding: "utf8",
     stdio: "inherit",
-    env: Object.assign({}, process.env, {
-      // Keep competition/trial suite semantics stable across clean CI shells.
-      AI_COMPETITION_ALLOW_ALL_SESSIONS: process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS || "true",
-      AI_PROVIDER_ACTIVE_ENV: process.env.AI_PROVIDER_ACTIVE_ENV || "trial",
-    }),
+    env: process.env,
     shell: isWin,
   });
   return result.status === 0;
