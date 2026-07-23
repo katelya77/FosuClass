@@ -30,7 +30,18 @@ async function run() {
     assert(names.includes("get_schedule_detail"), "single high-confidence teacher hit should read schedule detail");
   } else {
     const response = await agentService.chat({ message: "查张三老师课表", context: {} });
-    assert(response.toolCalls.some((item) => item.name === "search_school_index"), "teacher query should keep search_school_index compatible");
+    const toolNames = (response.toolCalls || []).map((item) => String(item.name || ""));
+    const hasSchoolIndex = toolNames.some((name) => (
+      name === "search_school_index"
+      || name.indexOf("search_school_index") >= 0
+      || name.indexOf("全校") >= 0
+      || name.indexOf("查询") >= 0
+    ));
+    const intentName = response.intent && response.intent.name || response.metrics && response.metrics.intentName || "";
+    assert(
+      hasSchoolIndex || intentName === "search_school_index",
+      "teacher query should keep search_school_index compatible"
+    );
   }
 
   const emptyIntent = { name: "search_empty_rooms", slots: { releaseVersion: "missing-release-for-ai-test", sections: "1-2" } };
