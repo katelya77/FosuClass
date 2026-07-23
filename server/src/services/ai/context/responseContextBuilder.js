@@ -30,7 +30,9 @@ function buildResponseContext(input = {}) {
     if (cut.truncated) truncatedSections.push("tools");
   }
 
-  const hist = compressMessages(input.messages || input.history || [], 3, 100);
+  // Thread window: 8–12 desensitized turns (default 10), not a hard 3-message cap.
+  const historyLimit = Math.min(12, Math.max(8, Number(input.historyLimit) || 10));
+  const hist = compressMessages(input.messages || input.history || [], historyLimit, 120);
   sections.conversation = JSON.stringify(hist.messages);
   if (hist.compressionUsed) truncatedSections.push("conversation");
 

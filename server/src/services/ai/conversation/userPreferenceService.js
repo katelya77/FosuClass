@@ -1,8 +1,9 @@
 /**
- * Principal-scoped explicit preferences.
+ * Principal-scoped low-risk preferences.
  *
- * Only values the user explicitly asks the assistant to remember are accepted.
  * Values are encrypted at rest and are never keyed by a client supplied id.
+ * Enabling session_state / cloud_sync is functional authorization for low-risk
+ * auto memory (name, campus, reminder lead, etc.). Sensitive credentials are never accepted.
  */
 const crypto = require("crypto");
 const fs = require("fs");
@@ -15,6 +16,10 @@ const ALLOWED_KEYS = Object.freeze([
   "preferredName",
   "campus",
   "defaultReminderLeadMinutes",
+  "preferredBuilding",
+  "answerDetailLevel",
+  "preferredClassName",
+  "preferPersonalSchedule",
 ]);
 
 function typedError(message, code, statusCode) {
@@ -39,6 +44,23 @@ function normalizeValue(key, value) {
     return Number.isFinite(minutes) && minutes >= 5 && minutes <= 180
       ? Math.round(minutes)
       : null;
+  }
+  if (key === "preferredBuilding") {
+    const building = String(value || "").trim().slice(0, 24);
+    return /^[A-Za-z0-9\u3400-\u9fff\-]{1,24}$/.test(building) ? building : null;
+  }
+  if (key === "answerDetailLevel") {
+    const level = String(value || "").trim().toLowerCase();
+    return ["concise", "detailed", "normal"].includes(level) ? level : null;
+  }
+  if (key === "preferredClassName") {
+    const name = String(value || "").trim().slice(0, 40);
+    return name && /班/.test(name) ? name : null;
+  }
+  if (key === "preferPersonalSchedule") {
+    if (value === true || value === "true" || value === 1) return true;
+    if (value === false || value === "false" || value === 0) return false;
+    return null;
   }
   return null;
 }
@@ -183,8 +205,11 @@ class UserPreferenceService {
 
   upsert(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
-    if (input.explicit !== true || input.memoryMode !== "cloud_sync") {
-      return { success: true, persisted: false, reason: "cloud_sync_not_enabled" };
+    const mode = String(input.memoryMode || "local_only");
+    // Functional authorization: session_state or cloud_sync may persist low-risk prefs.
+    // local_only never writes durable preferences.
+    if (input.explicit !== true || (mode !== "cloud_sync" && mode !== "session_state")) {
+      return { success: true, persisted: false, reason: mode === "local_only" ? "local_only" : "not_authorized" };
     }
     const entries = input.values && typeof input.values === "object" && !Array.isArray(input.values)
       ? input.values

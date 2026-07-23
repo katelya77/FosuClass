@@ -1,50 +1,72 @@
 const safetyGuard = require("../safetyGuard");
 const { normalizeValue } = require("./userPreferenceService");
+const { extractFromMessage } = require("../memory/memoryCandidateExtractor");
+const { mayAutoPersistUserMemory, filterAndMergeCandidates } = require("../memory/memoryPolicy");
 
 function command(key, value, persist, kind) {
   const normalized = normalizeValue(key, value);
-  if (normalized === null) return null;
+  if (normalized === null && key !== "preferPersonalSchedule") return null;
   return {
     kind: kind || (persist ? "preference" : "session_fact"),
     key,
-    value: normalized,
+    value: normalized !== null ? normalized : value,
     persist: persist === true,
   };
 }
 
-function parsePersonalMemoryCommands(message) {
+/**
+ * Parse personal memory statements.
+ * Low-risk facts (name, campus, reminder) no longer require the keyword “记住”
+ * when the user has enabled session_state / cloud_sync (functional authorization).
+ */
+function parsePersonalMemoryCommands(message, options = {}) {
   const text = safetyGuard.redactSensitiveText(String(message || "")).trim();
   if (!text || safetyGuard.hasSensitiveCredential(String(message || ""))) return [];
+  const memoryMode = options.memoryMode || "local_only";
+  // Pure name questions never create preference commands.
+  if (isNameQuestion(text)) return [];
   const explicit = /(?:请|帮我)?(?:记住|记一下|以后叫我|以后称呼我)/.test(text);
   const reminderPref = /(?:设置|设定|改成|改为|调整)?\s*(?:默认)?\s*(?:提醒时间|上课提醒|课程提醒)/.test(text)
     || /默认\s*(?:提前|上课前)\s*\d{1,3}\s*分钟/.test(text)
-    || /(?:提醒我|提醒时间)\s*(?:改成|改为|设置成|设为)?\s*(?:提前)?\s*\d{1,3}\s*分钟/.test(text);
-  if (!explicit && !reminderPref && isNameQuestion(text)) return [];
+    || /(?:提醒我|提醒时间)\s*(?:改成|改为|设置成|设为)?\s*(?:提前)?\s*\d{1,3}\s*分钟/.test(text)
+    || /以后上课前\s*\d{1,3}\s*分钟/.test(text);
+
+  if (!explicit && !reminderPref
+    && !/我叫|我的名字|常用|校区|提醒|优先|以后主要|不对|纠正|仙溪|江湾|默认提前|上课前/.test(text)) {
+    return [];
+  }
+
+  const candidates = filterAndMergeCandidates(extractFromMessage(text), {
+    memoryMode,
+    autoMemoryEnabled: options.autoMemoryEnabled !== false,
+  });
+
   const output = [];
-
-  const nameMatch = explicit
-    ? text.match(/(?:记住(?:我)?(?:的名字)?(?:是|叫)?|以后(?:叫我|称呼我))\s*([\u3400-\u9fffA-Za-z0-9·\-\s]{1,24})/)
-    : text.match(/^(?:我的名字(?:是|叫)|我叫)\s*([\u3400-\u9fffA-Za-z0-9·\-\s]{1,24})[，。！？,.!?]?$/);
-  if (nameMatch) {
-    const value = String(nameMatch[1] || "").replace(/(?:，|,).*/, "").trim();
-    const item = command("preferredName", value, explicit, explicit ? "preference" : "session_fact");
+  candidates.forEach((c) => {
+    if (c.scope === "working" || c.reasonCode === "one_off_study_spot") return;
+    const canPersist = explicit
+      || mayAutoPersistUserMemory(memoryMode, c)
+      || (reminderPref && c.key === "defaultReminderLeadMinutes");
+    // session_fact always for same-conversation; durable when authorized
+    const item = command(
+      c.key,
+      c.value,
+      canPersist && memoryMode !== "local_only",
+      canPersist && memoryMode !== "local_only" ? "preference" : "session_fact"
+    );
     if (item) output.push(item);
-  }
+  });
 
-  if (explicit) {
-    const campusMatch = text.match(/(?:常用|默认|主要在)?\s*(仙溪校区|江湾校区)/);
-    const campusItem = campusMatch && command("campus", campusMatch[1], true, "preference");
-    if (campusItem) output.push(campusItem);
-  }
-
-  if (explicit || reminderPref) {
-    const leadMatch = text.match(/(?:默认)?(?:提前|上课前)\s*(\d{1,3})\s*分钟(?:提醒)?/)
-      || text.match(/(?:提醒时间|上课提醒|课程提醒|默认提醒).*?(\d{1,3})\s*分钟/)
-      || text.match(/(\d{1,3})\s*分钟(?:后)?(?:提醒|上课前提醒)/);
-    const leadItem = leadMatch && command("defaultReminderLeadMinutes", Number(leadMatch[1]), true, "preference");
-    if (leadItem) output.push(leadItem);
-    else if (reminderPref && !/\d/.test(text)) {
-      // "设置默认提醒时间" without minutes → handled by resolvePersonalMemoryTurn clarify branch below
+  // Fallback legacy name parse if extractor missed
+  if (!output.some((item) => item.key === "preferredName")) {
+    const nameMatch = explicit
+      ? text.match(/(?:记住(?:我)?(?:的名字)?(?:是|叫)?|以后(?:叫我|称呼我))\s*([\u3400-\u9fffA-Za-z0-9·\-\s]{1,24})/)
+      : text.match(/^(?:我的名字(?:是|叫)|我叫)\s*([\u3400-\u9fffA-Za-z0-9·\-\s]{1,24})[，。！？,.!?]?$/);
+    if (nameMatch) {
+      const value = String(nameMatch[1] || "").replace(/(?:，|,).*/, "").trim();
+      const persist = memoryMode === "session_state" || memoryMode === "cloud_sync" || explicit;
+      const item = command("preferredName", value, persist && memoryMode !== "local_only", persist ? "preference" : "session_fact");
+      if (item) output.push(item);
     }
   }
 
@@ -56,13 +78,13 @@ function parsePersonalMemoryCommands(message) {
   });
 }
 
-function parsePersonalMemoryCommand(message) {
-  return parsePersonalMemoryCommands(message)[0] || null;
+function parsePersonalMemoryCommand(message, options = {}) {
+  return parsePersonalMemoryCommands(message, options)[0] || null;
 }
 
 function isNameQuestion(message) {
   const text = String(message || "").replace(/\s+/g, "");
-  return /(?:我叫(?:什么|啥)|我的名字(?:是)?(?:什么|叫啥)|你(?:还)?记得我叫(?:什么|啥))/.test(text);
+  return /(?:我叫(?:什么|啥)|我的名字(?:是)?(?:什么|叫啥)|你(?:还)?记得我叫(?:什么|啥)|我刚刚说我叫(?:什么|啥)|我叫什么名字)/.test(text);
 }
 
 function findRecentName(messages) {
@@ -70,7 +92,7 @@ function findRecentName(messages) {
   for (let index = list.length - 1; index >= 0; index -= 1) {
     const item = list[index] || {};
     if (item.role !== "user") continue;
-    const parsed = parsePersonalMemoryCommands(item.content || item.text || "");
+    const parsed = parsePersonalMemoryCommands(item.content || item.text || "", { memoryMode: "local_only" });
     const name = parsed.find((entry) => entry.key === "preferredName");
     if (name) return name.value;
   }
@@ -80,10 +102,19 @@ function findRecentName(messages) {
 function resolvePersonalMemoryTurn(input = {}) {
   const message = String(input.message || "").trim();
   const context = input.context && typeof input.context === "object" ? input.context : {};
-  const commands = parsePersonalMemoryCommands(message);
+  const memoryMode = input.memoryMode || context.memoryMode || "local_only";
+  const commands = parsePersonalMemoryCommands(message, {
+    memoryMode,
+    autoMemoryEnabled: input.autoMemoryEnabled !== false,
+  });
   const preferencePatch = {};
   commands.filter((item) => item.persist).forEach((item) => {
     preferencePatch[item.key] = item.value;
+  });
+  // Also keep session-visible name even when local_only (non-durable patch for working memory)
+  const sessionFacts = {};
+  commands.forEach((item) => {
+    if (!item.persist) sessionFacts[item.key] = item.value;
   });
 
   if (commands.length) {
@@ -92,8 +123,9 @@ function resolvePersonalMemoryTurn(input = {}) {
       try {
         const saved = input.preferenceService.upsert({
           principal: input.principal,
-          memoryMode: input.memoryMode,
+          memoryMode,
           explicit: true,
+          autoMemory: true,
           values: preferencePatch,
         });
         persisted = saved.persisted === true;
@@ -108,41 +140,53 @@ function resolvePersonalMemoryTurn(input = {}) {
       if (preferencePatch.defaultReminderLeadMinutes) {
         labels.push(`默认提前 ${preferencePatch.defaultReminderLeadMinutes} 分钟提醒`);
       }
+      if (preferencePatch.preferredBuilding) labels.push(`常用楼栋“${preferencePatch.preferredBuilding}”`);
       return {
         handled: true,
         intentName: "update_user_preference",
         answer: persisted
-          ? `已记住${labels.join("、")}，并同步到你的云端记忆。`
-          : `已记住${labels.join("、")}。当前仅保存在本机；开启云端记忆后才能跨设备恢复。`,
+          ? `已记住${labels.join("、")}，并保存到你的记忆（可在记忆设置中修改）。`
+          : memoryMode === "local_only"
+            ? `好的，这次对话里我知道${labels.join("、")}。开启「保存任务状态」或「跨设备同步」后可自动保留。`
+            : `已记住${labels.join("、")}。`,
         preferencePatch,
+        sessionFacts,
         persisted,
         source: persisted ? "cloud_preference" : "local_preference_patch",
+        autoMemoryHint: persisted && preferencePatch.campus
+          ? "已记住你的常用校区，可在记忆设置中修改。"
+          : (persisted && preferencePatch.preferredName
+            ? "已记住你的称呼，可在记忆设置中修改。"
+            : ""),
       };
     }
     const sessionName = commands.find((item) => item.key === "preferredName");
-    return {
-      handled: true,
-      intentName: "conversation_memory",
-      answer: `好的，这次对话里我知道你叫${sessionName.value}。如果要跨会话保留，请明确说“记住我叫${sessionName.value}”。`,
-      preferencePatch: {},
-      persisted: false,
-      source: "recent_messages",
-    };
+    if (sessionName) {
+      return {
+        handled: true,
+        intentName: "conversation_memory",
+        answer: `好的，这次对话里我知道你叫${sessionName.value}。`,
+        preferencePatch: {},
+        sessionFacts: { preferredName: sessionName.value },
+        persisted: false,
+        source: "recent_messages",
+      };
+    }
   }
 
   // Auto-apply a sensible default (20 min) when user asks to set default reminder time without a number.
-  // Keeps Xiaofu agent "do it for me" instead of only dumping a manual panel.
   if (/(?:设置|设定|调整)?\s*(?:默认)?\s*(?:提醒时间|上课提醒|课程提醒)/.test(message)
     && !/\d{1,3}\s*分钟/.test(message)
     && !/(?:取消|删除|关闭|暂停).*(?:提醒|通知)/.test(message)) {
     const defaultLead = 20;
     let persisted = false;
-    if (input.preferenceService) {
+    if (input.preferenceService && (memoryMode === "session_state" || memoryMode === "cloud_sync")) {
       try {
         const saved = input.preferenceService.upsert({
           principal: input.principal,
-          memoryMode: input.memoryMode,
+          memoryMode,
           explicit: true,
+          autoMemory: true,
           values: { defaultReminderLeadMinutes: defaultLead },
         });
         persisted = saved.persisted === true;
@@ -154,7 +198,7 @@ function resolvePersonalMemoryTurn(input = {}) {
       handled: true,
       intentName: "update_user_preference",
       answer: persisted
-        ? `已把默认提醒时间设为上课前 ${defaultLead} 分钟，并同步到云端记忆。可以说“以后上课前${defaultLead}分钟提醒我”直接创建，或点下方按钮一键创建并授权微信服务通知。`
+        ? `已把默认提醒时间设为上课前 ${defaultLead} 分钟，并保存到记忆。可以说“以后上课前${defaultLead}分钟提醒我”直接创建，或点下方按钮一键创建并授权微信服务通知。`
         : `已把默认提醒时间设为上课前 ${defaultLead} 分钟。可以说“以后上课前${defaultLead}分钟提醒我”直接创建，或点下方按钮一键创建并授权微信服务通知。想改成 30/45/60 分钟直接告诉我即可。`,
       preferencePatch: { defaultReminderLeadMinutes: defaultLead },
       persisted,
@@ -165,7 +209,7 @@ function resolvePersonalMemoryTurn(input = {}) {
           type: "confirmReminder",
           payload: { operation: "create", leadMinutes: defaultLead, scope: "all_courses" },
         },
-        { label: "默认改成30分钟", type: "retry", payload: { message: "记住默认提前30分钟提醒我" } },
+        { label: "默认改成30分钟", type: "retry", payload: { message: "默认提前30分钟提醒我" } },
         { label: "打开提醒面板", type: "manageReminders", payload: { sheet: "reminders", openCreate: true } },
       ],
     };
@@ -178,15 +222,19 @@ function resolvePersonalMemoryTurn(input = {}) {
     : {};
   let preferredName = normalizeValue("preferredName", contextPreferences.preferredName) || "";
   let source = preferredName ? "local_preference" : "";
+  if (!preferredName && context.workingMemory && context.workingMemory.preferredName) {
+    preferredName = normalizeValue("preferredName", context.workingMemory.preferredName) || "";
+    if (preferredName) source = "working_memory";
+  }
   if (!preferredName) {
     preferredName = findRecentName(context.recentMessages);
     if (preferredName) source = "recent_messages";
   }
-  if (!preferredName && input.memoryMode === "cloud_sync" && input.preferenceService) {
+  if (!preferredName && (memoryMode === "cloud_sync" || memoryMode === "session_state") && input.preferenceService) {
     try {
       const cloud = input.preferenceService.getObject({ principal: input.principal });
       preferredName = normalizeValue("preferredName", cloud.preferredName) || "";
-      if (preferredName) source = "cloud_preference";
+      if (preferredName) source = memoryMode === "cloud_sync" ? "cloud_preference" : "session_preference";
     } catch (_) {
       preferredName = "";
     }
@@ -196,7 +244,7 @@ function resolvePersonalMemoryTurn(input = {}) {
     intentName: "conversation_memory",
     answer: preferredName
       ? `你叫${preferredName}。`
-      : "我还不知道你的名字。你可以说“我的名字叫……”；只有明确说“记住我叫……”时，我才会把称呼保存为长期偏好。",
+      : "我还不知道你的名字。你可以说“我的名字叫……”，开启任务状态或跨设备同步后会自动记住称呼。",
     preferencePatch: {},
     persisted: false,
     source: source || "none",

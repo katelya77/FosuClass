@@ -12,18 +12,25 @@ function shouldReplan(verification, observations, plan) {
   if (Number(plan.replanCount || 0) >= MAX_REPLAN) return false;
 
   const steps = plan.steps || [];
-  // Replan only for multi-step campus tasks or empty-room recovery — not every
-  // single-tool "no personal schedule" reply (those already have deterministic UX).
-  const isMultiStep = steps.length > 1 || plan.intent === "campus_multi_step_advice";
+  // Replan for multi-step campus tasks, empty-room recovery, weather/route soft failures.
+  // Still skip pure single-tool "no personal schedule" UX paths.
+  const isMultiStep = steps.length > 1
+    || plan.intent === "campus_multi_step_advice"
+    || plan.intent === "course_action_advice";
   const isEmptyRoomPlan = steps.some((s) => /empty_room/.test(String(s.toolName || "")));
+  const isRecoverableCampus = steps.some((s) => /weather|route|empty_room|courses/.test(String(s.toolName || "")));
 
-  if (!isMultiStep && !isEmptyRoomPlan) return false;
+  if (!isMultiStep && !isEmptyRoomPlan && !isRecoverableCampus) return false;
+  if (!isMultiStep && !isEmptyRoomPlan && steps.length === 1 && /get_today|get_tomorrow|get_next/.test(String(steps[0].toolName || ""))) {
+    return false;
+  }
 
   const emptyFacts = (observations || []).filter((obs) => {
     const tool = String(obs.tool || "");
     if (!tool) return false;
     if (obs.status === "failed") return true;
     if (/empty_room/.test(tool) && Number(obs.factCount || 0) === 0) return true;
+    if (/weather/.test(tool) && (obs.status === "failed" || /UNAVAILABLE|FAILED/.test(String(obs.code || "")))) return true;
     if (isMultiStep && /courses|schedule/.test(tool)
       && (Number(obs.factCount || 0) === 0
         || /NO_PERSONAL|EMPTY_RESULT|未导入|无个人/.test(String(obs.code || obs.summary || "")))) {
@@ -112,23 +119,34 @@ async function runObservationLoop(input = {}) {
     : { ok: true, errors: [], evidenceComplete: true };
 
   let replanUsed = false;
-  if (shouldReplan(verification, observations, plan)
-    && (Date.now() - startedAt) < policy.totalRunTimeoutMs) {
+  let replanCount = Number(plan.replanCount || 0) || 0;
+  // Up to MAX_REPLAN (2) recovery attempts — never infinite.
+  while (
+    replanCount < MAX_REPLAN
+    && shouldReplan(verification, observations, Object.assign({}, plan, { replanCount }))
+    && (Date.now() - startedAt) < policy.totalRunTimeoutMs
+  ) {
     if (typeof input.emit === "function") {
-      input.emit({ type: "plan.replan", reason: "empty_or_failed_observation" });
+      input.emit({ type: "plan.replan", reason: "empty_or_failed_observation", replanCount: replanCount + 1 });
     }
     const nextPlan = await replanFn({
       message: input.message,
       runtimeMode,
       intent: input.intent,
-      previousPlan: plan,
+      previousPlan: Object.assign({}, plan, { replanCount }),
       previousObservations: observations,
       skill: input.skill,
       context: input.context,
+      conversationState: input.conversationState,
+      availableTools: input.availableTools,
+      availableSkills: input.availableSkills,
       modelGenerate: input.modelGenerate,
     });
     replanUsed = true;
-    plan = nextPlan;
+    replanCount += 1;
+    plan = Object.assign({}, nextPlan, {
+      replanCount: Math.max(replanCount, Number(nextPlan.replanCount || 0) || 0),
+    });
     if (plan.steps && plan.steps.length && typeof input.executePlan === "function") {
       const reExec = await input.executePlan(plan.steps, { plan, runtimeMode, isReplan: true });
       execution = {
@@ -138,7 +156,7 @@ async function runObservationLoop(input = {}) {
       observations = typeof input.toObservations === "function"
         ? input.toObservations(execution.toolCalls || [])
         : observations.concat((reExec.toolCalls || []).map((call, index) => ({
-          id: `observation-replan-${index + 1}`,
+          id: `observation-replan-${replanCount}-${index + 1}`,
           tool: call.name,
           status: call.status,
           code: call.result && call.result.code || "",
@@ -155,6 +173,8 @@ async function runObservationLoop(input = {}) {
           plan,
         })
         : verification;
+    } else {
+      break;
     }
   }
 
@@ -164,6 +184,7 @@ async function runObservationLoop(input = {}) {
     observations,
     verification,
     replanUsed,
+    replanCount,
     durationMs: Date.now() - startedAt,
     stopCondition: plan.stopCondition || "all_steps_done",
   };

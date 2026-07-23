@@ -61,6 +61,48 @@ function buildPlannerContext(input = {}) {
   sections.conversation = conversation.text;
   if (conversation.truncated) truncatedSections.push("conversation");
 
+  // Working memory (entities / week / class) — compact JSON
+  const wm = input.workingMemory && typeof input.workingMemory === "object" ? input.workingMemory : null;
+  if (wm) {
+    const wmPayload = {
+      goal: wm.currentGoal || "",
+      className: wm.className || "",
+      campus: wm.campus || "",
+      week: wm.teachingWeek,
+      weekday: wm.weekday,
+      period: wm.periodHint || "",
+      tools: Array.isArray(wm.executedTools) ? wm.executedTools.slice(-6) : [],
+    };
+    const wmCut = truncateToBudget(JSON.stringify(wmPayload), budget.workingMemory || 200);
+    sections.workingMemory = wmCut.text;
+    if (wmCut.truncated) truncatedSections.push("workingMemory");
+  } else {
+    sections.workingMemory = "";
+  }
+
+  // ≤5 relevant user memories
+  const memories = Array.isArray(input.userMemories) ? input.userMemories.slice(0, 5) : [];
+  if (memories.length) {
+    const memText = JSON.stringify(memories.map((m) => ({
+      key: m.key,
+      value: m.value,
+      conf: m.confidence,
+    })));
+    const memCut = truncateToBudget(memText, budget.userMemories || 150);
+    sections.userMemories = memCut.text;
+    if (memCut.truncated) truncatedSections.push("userMemories");
+  } else {
+    sections.userMemories = "";
+  }
+
+  // Short recent thread (roles only, truncated)
+  const recent = Array.isArray(input.recentMessages) ? input.recentMessages.slice(-6) : [];
+  if (recent.length && !sections.conversation) {
+    const recentText = recent.map((t) => `${t.role}:${String(t.content || t.text || "").slice(0, 60)}`).join(" | ");
+    const rCut = truncateToBudget(recentText, 200);
+    sections.conversation = rCut.text;
+  }
+
   const userMessage = safetyGuard.redactSensitiveText(String(input.message || "")).slice(0, 500);
   const assembled = [
     sections.stable,
@@ -69,6 +111,8 @@ function buildPlannerContext(input = {}) {
     `## Tools\n${sections.tools}`,
     `## PreviousObservations\n${sections.observations}`,
     sections.conversation ? `## ConversationSummary\n${sections.conversation}` : "",
+    sections.workingMemory ? `## WorkingMemory\n${sections.workingMemory}` : "",
+    sections.userMemories ? `## UserMemories\n${sections.userMemories}` : "",
     `## UserMessage\n${userMessage}`,
   ].filter(Boolean).join("\n\n");
 
