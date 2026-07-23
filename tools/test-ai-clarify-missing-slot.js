@@ -3,6 +3,7 @@ const assert = require("assert");
 process.env.AI_AGENT_ENABLED = "false";
 process.env.AI_PROVIDER_POLICY = "auto";
 process.env.AI_RUNTIME_MODE = "competition";
+process.env.AI_PROVIDER_ACTIVE_ENV = process.env.AI_PROVIDER_ACTIVE_ENV || "trial";
 process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
 process.env.NODE_ENV = "development";
 

@@ -30,6 +30,7 @@ let providerFactory = reload("../server/src/services/ai/providerFactory");
 assert.strictEqual(providerFactory.getProviderName(), "mock", "public runtime must force mock provider");
 
 process.env.AI_RUNTIME_MODE = "competition";
+process.env.AI_PROVIDER_ACTIVE_ENV = process.env.AI_PROVIDER_ACTIVE_ENV || "trial";
 process.env.AI_AGENT_ENABLED = "true";
 process.env.AI_PROVIDER = "cloudbase-openai";
 process.env.CLOUDBASE_OPENAI_ENABLED = "true";
