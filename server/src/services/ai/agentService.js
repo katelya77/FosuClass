@@ -724,15 +724,78 @@ function buildTaskSteps(intent = {}, toolCalls = []) {
 
 function buildContextSlots(intent = {}, slots = {}) {
   const source = slots && typeof slots === "object" ? slots : {};
+  const weekRaw = source.week != null ? source.week : source.lastWeek;
+  const weekdayRaw = source.weekday != null ? source.weekday : source.lastWeekday;
+  const week = Number(weekRaw);
+  const weekday = Number(weekdayRaw);
   return safetyGuard.sanitizeToolResult({
     lastIntent: String(intent && intent.name || intent || "").slice(0, 80),
-    lastTargetType: String(source.type || source.targetType || "").slice(0, 30),
-    lastTargetName: String(source.q || source.targetName || source.classroom || source.courseName || source.teacherName || "").slice(0, 80),
-    lastWeek: Number(source.week || 0) || 0,
-    lastWeekday: Number(source.weekday || 0) || 0,
+    lastTargetType: String(source.type || source.targetType || source.lastTargetType || "").slice(0, 30),
+    lastTargetName: String(
+      source.q || source.targetName || source.className || source.classroom
+      || source.courseName || source.teacherName || source.lastTargetName || ""
+    ).replace(/\s+/g, "").slice(0, 80),
+    // Keep null when unset — never coerce missing week/weekday to 0 (pollutes working memory).
+    lastWeek: Number.isFinite(week) && week >= 1 ? week : null,
+    lastWeekday: Number.isFinite(weekday) && weekday >= 1 && weekday <= 7 ? weekday : null,
+    className: String(source.className || (source.type === "class" ? source.q : "") || "").replace(/\s+/g, "").slice(0, 80),
+    teacherName: String(source.teacherName || "").slice(0, 80),
+    week: Number.isFinite(week) && week >= 1 ? week : null,
+    weekday: Number.isFinite(weekday) && weekday >= 1 && weekday <= 7 ? weekday : null,
     lastQueryResult: "",
     lastSource: "server-agent-kernel",
   });
+}
+
+/**
+ * Soft-fill intent slots from Working Memory for follow-ups and incomplete queries.
+ */
+function enrichIntentFromWorkingMemory(intent, context = {}, conversationState = null) {
+  if (!intent || typeof intent !== "object") return intent;
+  const wm = (conversationState && conversationState.workingMemory)
+    || context.workingMemory
+    || {};
+  const slots = Object.assign({}, intent.slots || {});
+  const className = String(wm.className || slots.className || "").replace(/\s+/g, "");
+  const teacherName = String(wm.teacherName || slots.teacherName || "").replace(/\s+/g, "");
+
+  if (intent.name === "search_school_index" || intent.followUp === true) {
+    if (!slots.q) {
+      if (className) {
+        slots.q = className;
+        slots.type = slots.type || "class";
+        slots.className = className;
+      } else if (teacherName) {
+        slots.q = teacherName;
+        slots.type = slots.type || "teacher";
+      }
+    } else {
+      slots.q = String(slots.q).replace(/\s+/g, "");
+      if (!slots.type && /班/.test(slots.q)) slots.type = "class";
+    }
+    if ((slots.week == null || slots.week === "" || Number(slots.week) === 0)
+      && wm.teachingWeek != null && Number(wm.teachingWeek) >= 1) {
+      slots.week = Number(wm.teachingWeek);
+    }
+    if ((slots.weekday == null || slots.weekday === "" || Number(slots.weekday) === 0)
+      && wm.weekday != null && Number(wm.weekday) >= 1) {
+      slots.weekday = Number(wm.weekday);
+    }
+    if (!slots.periodHint && wm.periodHint) slots.periodHint = wm.periodHint;
+  }
+
+  if (/get_today_courses|get_tomorrow_courses|get_week_schedule|search_empty_rooms|search_continuous_empty_rooms/.test(String(intent.name || ""))) {
+    if ((slots.week == null || Number(slots.week) === 0) && wm.teachingWeek != null && Number(wm.teachingWeek) >= 1) {
+      slots.week = Number(wm.teachingWeek);
+    }
+    if ((slots.weekday == null || Number(slots.weekday) === 0) && wm.weekday != null && Number(wm.weekday) >= 1) {
+      slots.weekday = Number(wm.weekday);
+    }
+    if (!slots.campus && wm.campus) slots.campus = wm.campus;
+    if (!slots.periodHint && wm.periodHint) slots.periodHint = wm.periodHint;
+  }
+
+  return Object.assign({}, intent, { slots });
 }
 
 function buildResponse(payload) {
@@ -1306,7 +1369,8 @@ async function chat(input = {}) {
   }
 
   const ruleResolution = resolveRuleBackedIntent(safeMessage, context);
-  const intent = ruleResolution.intent;
+  // Follow-up inheritance: “那周三呢 / 下午呢 / 换成第17周” reuses working memory entities.
+  const intent = enrichIntentFromWorkingMemory(ruleResolution.intent, context, conversationState);
   const localRuleMatch = ruleResolution.ruleMatch;
 
   // Dedicated planner model adapter (trial/dev only). public never calls models.
@@ -1799,11 +1863,14 @@ function attachMemory(response, memoryBundle, options = {}) {
     response.autoMemoryHint = commitResult.autoMemoryHints[0];
   }
   if (commitResult.workingMemory) {
+    const tw = commitResult.workingMemory.teachingWeek;
+    const wd = commitResult.workingMemory.weekday;
     response.workingMemory = {
       className: commitResult.workingMemory.className || "",
       campus: commitResult.workingMemory.campus || "",
-      teachingWeek: commitResult.workingMemory.teachingWeek,
-      weekday: commitResult.workingMemory.weekday,
+      teachingWeek: tw != null && Number(tw) >= 1 ? Number(tw) : null,
+      weekday: wd != null && Number(wd) >= 1 ? Number(wd) : null,
+      periodHint: commitResult.workingMemory.periodHint || "",
       preferredName: commitResult.workingMemory.preferredName || "",
       currentGoal: commitResult.workingMemory.currentGoal || "",
     };
