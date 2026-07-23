@@ -16,6 +16,8 @@ const agentTraceRecorder = require("./agentTraceRecorder");
 const { defaultMemoryService } = require("./conversation/conversationMemoryService");
 const { defaultUserPreferenceService } = require("./conversation/userPreferenceService");
 const { resolvePersonalMemoryTurn } = require("./conversation/personalMemoryInterpreter");
+const { defaultMemoryController } = require("./memory/memoryController");
+const { evaluateProactive, factsFromToolCalls } = require("./proactiveEngine");
 const agentRunEventService = require("./agentRunEventService");
 const { loadingTextForEvent } = require("./runEventCatalog");
 const responseComposer = require("./responseComposer");
@@ -695,23 +697,29 @@ function buildTaskSteps(intent = {}, toolCalls = []) {
       steps.push({ key, label, status: "done" });
     }
   };
-  if (names.some((name) => /today|schedule|meeting|personal/.test(name))) {
+  if (names.some((name) => /today|tomorrow|next_course|schedule|meeting|personal|recommend_meeting/.test(name))) {
     addStep("schedule", "已读取课表");
   }
-  if (names.some((name) => /empty|room/.test(name))) {
+  if (names.some((name) => /empty_room|empty-room|空教室/.test(name))) {
     addStep("empty-room", "已核验空教室");
   }
-  if (names.some((name) => /school|detail|search/.test(name))) {
+  // Avoid matching search_empty_rooms as school-index search.
+  if (names.some((name) => /school_index|schedule_detail|search_school|全校|课表详情/.test(name))) {
     addStep("search", "已查询校园索引");
   }
   if (names.some((name) => /recommend|plan|meeting/.test(name)) || /recommend|plan|meeting/.test(String(intent && intent.name || ""))) {
     addStep("decision", "已生成建议");
   }
-  if (names.some((name) => /diagnose|status/.test(name))) {
+  if (names.some((name) => /diagnose|data_status|数据状态/.test(name))) {
     addStep("diagnose", "已检查数据状态");
   }
-  addStep("complete", "已完成");
-  return steps.slice(0, 6);
+  if (names.some((name) => /weather|天气/.test(name))) {
+    addStep("weather", "已查询天气");
+  }
+  // Always keep “complete” as the final visible process step (max 6).
+  const body = steps.slice(0, 5);
+  body.push({ key: "complete", label: "已完成", status: "done" });
+  return body;
 }
 
 function buildContextSlots(intent = {}, slots = {}) {
@@ -1034,8 +1042,10 @@ async function chat(input = {}) {
     },
     context,
   };
+  let conversationState = null;
   try {
-    memoryBundle = defaultMemoryService.loadForChat({
+    // Unified MemoryController: working + thread + user memory (single authoritative path).
+    memoryBundle = defaultMemoryController.load({
       serverSession: input.serverSession,
       runtimeMode: runtimeDecision.runtimeMode,
       conversationId,
@@ -1043,9 +1053,16 @@ async function chat(input = {}) {
       context,
       memoryMode: context.memoryMode,
     });
+    conversationState = memoryBundle.conversationState || null;
     context = safetyGuard.sanitizeAgentContext(memoryBundle.context || context);
     context.runtimeMode = runtimeDecision.runtimeMode;
     context.serverSession = input.serverSession || null;
+    if (conversationState) {
+      context.conversationSummary = conversationState.conversationSummary || context.conversationSummary;
+      context.workingMemory = conversationState.workingMemory || context.workingMemory;
+      context.userMemories = conversationState.userMemories || context.userMemories || [];
+      context.recentMessages = conversationState.recentMessages || context.recentMessages;
+    }
   } catch (error) {
     memoryBundle.memory = {
       mode: "local_only",
@@ -1057,6 +1074,7 @@ async function chat(input = {}) {
       summaryAvailable: false,
       canClear: false,
     };
+    conversationState = null;
   }
 
   const providerRuntimeConfig = providerConfigService.resolveRuntimeProviderConfig({
@@ -1261,7 +1279,14 @@ async function chat(input = {}) {
       contextSlots: buildContextSlots(memoryIntent, personalMemoryTurn.preferencePatch || {}),
       clearPendingClarification: false,
       cloudSyncEnabled: context.cloudSyncEnabled === true,
+      preferencePatch: personalMemoryTurn.preferencePatch || {},
+      preferredName: (personalMemoryTurn.preferencePatch && personalMemoryTurn.preferencePatch.preferredName)
+        || (personalMemoryTurn.sessionFacts && personalMemoryTurn.sessionFacts.preferredName)
+        || "",
     });
+    if (personalMemoryTurn.autoMemoryHint && !response.autoMemoryHint) {
+      response.autoMemoryHint = personalMemoryTurn.autoMemoryHint;
+    }
     recordEarlyTrace({
       runId,
       requestId,
@@ -1300,6 +1325,15 @@ async function chat(input = {}) {
     contextAlreadySanitized: true,
     runtimeDecision,
     intent,
+    conversationState: conversationState || {
+      conversationSummary: context.conversationSummary || "",
+      summary: context.conversationSummary || "",
+      recentMessages: context.recentMessages || [],
+      workingMemory: context.workingMemory || null,
+      userMemories: context.userMemories || [],
+      pendingClarification: context.pendingClarification || null,
+      contextSlots: context.conversationSlots || {},
+    },
     requestId,
     conversationId,
     runId,
@@ -1490,6 +1524,9 @@ async function chat(input = {}) {
     projectKnowledge: projectKnowledgeText,
     history: Array.isArray(context.recentMessages) ? context.recentMessages : [],
     messages: Array.isArray(context.recentMessages) ? context.recentMessages : [],
+    historyLimit: 10,
+    conversationSummary: context.conversationSummary || "",
+    userMemories: context.userMemories || [],
   });
   const providerInput = {
     message: safeMessage,
@@ -1726,9 +1763,11 @@ function attachMemory(response, memoryBundle, options = {}) {
     };
     return response;
   }
-  const memory = defaultMemoryService.persistAfterSuccess({
+  // Unified commit path: working + thread + user memory candidates.
+  const commitResult = defaultMemoryController.commit({
     principal: memoryBundle && memoryBundle.principal,
     state: memoryBundle && memoryBundle.state,
+    memoryBundle,
     conversationId: response.conversationId,
     memoryMode: memoryBundle && memoryBundle.memory && memoryBundle.memory.mode,
     cloudSyncEnabled: options.cloudSyncEnabled === true,
@@ -1740,14 +1779,35 @@ function attachMemory(response, memoryBundle, options = {}) {
     status,
     stepCount: options.stepCount || (Array.isArray(response.steps) ? response.steps.length : 0),
     contextSlots: options.contextSlots || response.contextSlots || response.slots,
+    slots: options.slots || response.slots,
     pendingClarification: options.pendingClarification,
     clearPendingClarification: options.clearPendingClarification,
     evidence: options.evidence || response.evidence,
     failed: response.success === false,
     cancelled: status === "cancelled",
     securityBlocked: false,
+    toolCalls: options.toolCalls || response.toolCalls,
+    observations: options.observations || response.observations,
+    preferencePatch: options.preferencePatch || response.memoryPreferencePatch,
+    preferredName: options.preferredName,
+    providerPayload: options.providerPayload || null,
+    autoMemoryEnabled: options.autoMemoryEnabled !== false,
   });
+  const memory = commitResult.memory;
   response.memory = memory;
+  if (commitResult.autoMemoryHints && commitResult.autoMemoryHints.length) {
+    response.autoMemoryHint = commitResult.autoMemoryHints[0];
+  }
+  if (commitResult.workingMemory) {
+    response.workingMemory = {
+      className: commitResult.workingMemory.className || "",
+      campus: commitResult.workingMemory.campus || "",
+      teachingWeek: commitResult.workingMemory.teachingWeek,
+      weekday: commitResult.workingMemory.weekday,
+      preferredName: commitResult.workingMemory.preferredName || "",
+      currentGoal: commitResult.workingMemory.currentGoal || "",
+    };
+  }
   if (response.safety && typeof response.safety === "object") {
     response.safety.memoryMode = memory.mode;
   }

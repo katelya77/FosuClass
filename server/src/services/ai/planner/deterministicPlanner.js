@@ -134,11 +134,12 @@ function expandMultiStepPlan(message, intent, context) {
     }
   }
 
-  // "周三下午有课吗？没有的话帮我找教室"
-  if (/有课吗|没.*找教室|没有.*教室/.test(text) && wantsEmpty) {
+  // "周三下午有课吗？没有的话帮我找教室" / multi-goal free-time + rooms + weather
+  if ((/有课吗|有没有课|没.*找教室|没有.*教室|没课的话/.test(text) && wantsEmpty)
+    || (wantsSchedule && wantsEmpty && wantsWeather)) {
     if (!steps.some((s) => /courses|schedule/.test(s.toolName))) {
       steps.unshift({
-        toolName: "get_today_courses",
+        toolName: /明天|明日/.test(text) ? "get_tomorrow_courses" : "get_today_courses",
         args: {},
         reasonCode: "NEED_CURRENT_SCHEDULE",
         stopOnFailure: false,
@@ -146,9 +147,19 @@ function expandMultiStepPlan(message, intent, context) {
     }
     if (!steps.some((s) => /empty_room/.test(s.toolName))) {
       steps.push({
-        toolName: "search_empty_rooms",
-        args: {},
+        toolName: /连续/.test(text) ? "search_continuous_empty_rooms" : "search_empty_rooms",
+        args: {
+          duration: /四节|4节/.test(text) ? 4 : 2,
+        },
         reasonCode: "NEED_EMPTY_ROOM_RESULTS",
+        stopOnFailure: false,
+      });
+    }
+    if (wantsWeather && !steps.some((s) => /weather/.test(s.toolName))) {
+      steps.push({
+        toolName: "get_campus_weather",
+        args: {},
+        reasonCode: "NEED_WEATHER",
         stopOnFailure: false,
       });
     }
@@ -215,12 +226,17 @@ function plan(input = {}) {
     }));
   }
 
-  // Enrich skill plan with extra multi-step tools only when skill allowlist permits.
+  // Enrich skill plan with multi-step tools within Capability Router candidate set
+  // (falls back to primary skill allowlist when availableTools not provided).
   if (rawSteps.length && multi.length) {
-    const skillAllowed = new Set((skill && skill.allowedTools) || []);
+    const routeAllowed = new Set(
+      (Array.isArray(input.availableTools) && input.availableTools.length
+        ? input.availableTools
+        : (skill && skill.allowedTools) || [])
+    );
     const existing = new Set(rawSteps.map((s) => s.toolName));
     multi.forEach((step) => {
-      if (!existing.has(step.toolName) && (!skillAllowed.size || skillAllowed.has(step.toolName))) {
+      if (!existing.has(step.toolName) && (!routeAllowed.size || routeAllowed.has(step.toolName))) {
         rawSteps.push({
           id: `step-${rawSteps.length + 1}`,
           skillId: skill && skill.id || "campus_multi_step_advice",
@@ -233,6 +249,26 @@ function plan(input = {}) {
         existing.add(step.toolName);
       }
     });
+  }
+
+  // Pure multi-goal when skill plan is empty/single but message needs composition.
+  if (multi.length > 1 && rawSteps.length <= 1) {
+    const routeAllowed = new Set(
+      (Array.isArray(input.availableTools) && input.availableTools.length
+        ? input.availableTools
+        : multi.map((s) => s.toolName))
+    );
+    rawSteps = multi
+      .filter((step) => routeAllowed.has(step.toolName))
+      .map((step, index) => ({
+        id: `step-${index + 1}`,
+        skillId: "campus_multi_step_advice",
+        toolName: step.toolName,
+        args: step.args || {},
+        reasonCode: step.reasonCode || reasonCodeForTool(step.toolName),
+        dependsOn: step.dependsOn || [],
+        stopOnFailure: step.stopOnFailure !== false,
+      }));
   }
 
   // Conversational / knowledge without tools
@@ -262,27 +298,35 @@ function plan(input = {}) {
     });
   }
 
+  // Always include primary skill tools; Capability Router candidates expand, never shrink.
   const allowed = new Set((skill && skill.allowedTools) || []);
+  if (Array.isArray(input.availableTools)) {
+    input.availableTools.forEach((tool) => allowed.add(tool));
+  }
   multi.forEach((s) => allowed.add(s.toolName));
   if (rawSteps.some((s) => s.toolName === "rag_search")) allowed.add("rag_search");
   // Multi-step study plans may use tools beyond single skill whitelist
-  if (multi.length > 1) {
+  if (multi.length > 1 || rawSteps.length > 1) {
     ["get_today_courses", "get_tomorrow_courses", "search_empty_rooms", "search_continuous_empty_rooms",
-      "get_campus_weather", "search_campus_place"].forEach((t) => allowed.add(t));
+      "get_campus_weather", "search_campus_place", "clarify_missing_slot"].forEach((t) => allowed.add(t));
   }
 
   return validatePlan(normalizePlan({
     goal: safeGoal(intent),
-    intent: multi.length > 1 ? "campus_multi_step_advice" : (intent.name || ""),
+    intent: (multi.length > 1 || rawSteps.length > 1) && /空教室|天气|自习|有课/.test(message)
+      ? "campus_multi_step_advice"
+      : (intent.name || ""),
     confidence: Number(intent.confidence) || 0,
-    slots: Object.assign({}, intent.slots || {}, context.conversationSlots || {}),
+    slots: Object.assign({}, intent.slots || {}, context.conversationSlots || {}, input.conversationState && input.conversationState.contextSlots || {}),
     needsClarification: false,
     steps: rawSteps,
     stopCondition: "all_steps_done",
     plannerType: "deterministic",
   }), {
     runtimeMode,
-    skill,
+    skill: (multi.length > 1 || rawSteps.length > 1)
+      ? (skillRegistry.getSkill("campus_multi_step_advice") || skill)
+      : skill,
     allowedTools: Array.from(allowed),
   });
 }
@@ -292,10 +336,11 @@ function safeGoal(intent) {
 }
 
 function replan(input = {}) {
+  const { MAX_REPLAN } = require("./planSchema");
   const previous = input.previousPlan || emptyPlan();
   const observations = Array.isArray(input.previousObservations) ? input.previousObservations : [];
   const replanCount = Math.max(0, Number(previous.replanCount) || 0) + 1;
-  if (replanCount > 1) {
+  if (replanCount > MAX_REPLAN) {
     return validatePlan(normalizePlan({
       ...previous,
       replanCount,

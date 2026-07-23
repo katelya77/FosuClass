@@ -5,19 +5,21 @@
 
 const BUDGETS = Object.freeze({
   planner: {
-    total: 1800,
+    total: 2200,
     system: 400,
     runtime: 200,
-    conversation: 200,
+    conversation: 400,
     task: 400,
-    tools: 400,
+    tools: 450,
+    workingMemory: 200,
+    userMemories: 150,
     retrieved: 0,
   },
   response: {
-    total: 3500,
+    total: 4000,
     system: 500,
     runtime: 200,
-    conversation: 400,
+    conversation: 900,
     task: 300,
     tools: 1200,
     retrieved: 600,

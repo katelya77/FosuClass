@@ -29,8 +29,8 @@ const STOP_CONDITIONS = Object.freeze([
   "budget_exhausted",
 ]);
 
-const MAX_STEPS = 5;
-const MAX_REPLAN = 1;
+const MAX_STEPS = 6;
+const MAX_REPLAN = 2;
 
 function safeText(value, max = 120) {
   return String(value == null ? "" : value).trim().slice(0, max);

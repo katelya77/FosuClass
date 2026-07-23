@@ -47,18 +47,19 @@
 
     <view class="memory-preference-section">
       <view class="memory-section-head">
-        <view class="memory-section-title">已记住的偏好</view>
-        <view class="memory-section-meta">只有你明确要求记住的内容</view>
+        <view class="memory-section-title">小佛记得的内容</view>
+        <view class="memory-section-meta">开启任务状态/同步后自动记住低风险偏好；可单项修改或遗忘</view>
       </view>
       <view class="memory-preference-loading" wx:if="{{preferencesLoading}}">正在读取…</view>
-      <view class="memory-preference-empty" wx:elif="{{!preferences.length}}">暂无长期偏好</view>
+      <view class="memory-preference-empty" wx:elif="{{!preferences.length}}">暂无已保存的内容</view>
       <view class="memory-preference-list" wx:else>
         <view class="memory-preference-item" wx:for="{{preferences}}" wx:key="key">
           <view class="memory-preference-copy">
-            <view class="memory-preference-label">{{item.key === 'preferredName' ? '称呼' : (item.key === 'campus' ? '常用校区' : '默认提醒')}}</view>
+            <view class="memory-preference-label">{{item.label || (item.key === 'preferredName' ? '称呼' : (item.key === 'campus' ? '常用校区' : (item.key === 'preferredBuilding' ? '常用楼栋' : (item.key === 'preferredClassName' ? '常用班级' : (item.key === 'answerDetailLevel' ? '回答偏好' : '提醒偏好')))))}}</view>
             <view class="memory-preference-value">{{item.key === 'defaultReminderLeadMinutes' ? '提前 ' + item.value + ' 分钟' : item.value}}</view>
+            <view class="memory-preference-source" wx:if="{{item.sourceText}}">{{item.sourceText}}</view>
           </view>
-          <button class="memory-preference-delete" data-key="{{item.key}}" bindtap="onDeletePreference" aria-label="删除这项记忆">删除</button>
+          <button class="memory-preference-delete" data-key="{{item.key}}" bindtap="onDeletePreference" aria-label="删除这项记忆">遗忘</button>
         </view>
       </view>
     </view>

@@ -181,6 +181,7 @@ function createEmptyConversationState(input = {}) {
     pendingClarification: null,
     conversationSummary: "",
     recentTurns: [],
+    workingMemory: null,
     memoryPolicy: {
       mode: memoryMode,
       cloudSyncEnabled: memoryMode === "cloud_sync",
@@ -217,9 +218,13 @@ function migrateConversationState(raw = {}, options = {}) {
     contextSlots: normalizeContextSlots(raw.contextSlots || {}),
     pendingClarification: normalizePendingClarification(raw.pendingClarification),
     conversationSummary: safeText(raw.conversationSummary || "", MAX_SUMMARY),
-    recentTurns: memoryMode === "cloud_sync"
-      ? (Array.isArray(raw.recentTurns) ? raw.recentTurns : []).map(normalizeRecentTurn).filter((item) => item.text).slice(-MAX_RECENT_TURNS)
-      : [],
+    // session_state and cloud_sync both keep desensitized recent turns (≤12).
+    recentTurns: memoryMode === "local_only"
+      ? []
+      : (Array.isArray(raw.recentTurns) ? raw.recentTurns : []).map(normalizeRecentTurn).filter((item) => item.text).slice(-MAX_RECENT_TURNS),
+    workingMemory: raw.workingMemory && typeof raw.workingMemory === "object" && !Array.isArray(raw.workingMemory)
+      ? raw.workingMemory
+      : null,
     memoryPolicy: {
       mode: memoryMode,
       cloudSyncEnabled: memoryMode === "cloud_sync",

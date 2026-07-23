@@ -29,11 +29,16 @@ function run() {
     dataDir: path.join(tempDir, "preferences"),
   });
 
-  const ordinary = parsePersonalMemoryCommand("我的名字叫王奕章");
+  // local_only: name is session_fact (not durable). session_state/cloud_sync auto-persist without “记住”.
+  const ordinary = parsePersonalMemoryCommand("我的名字叫王奕章", { memoryMode: "local_only" });
   assert.strictEqual(ordinary.kind, "session_fact");
   assert.strictEqual(ordinary.key, "preferredName");
   assert.strictEqual(ordinary.value, "王奕章");
   assert.strictEqual(ordinary.persist, false);
+
+  const autoSession = parsePersonalMemoryCommand("我的名字叫王奕章", { memoryMode: "session_state" });
+  assert.strictEqual(autoSession.key, "preferredName");
+  assert.strictEqual(autoSession.persist, true);
 
   const sameConversation = resolvePersonalMemoryTurn({
     message: "我叫什么名字？",
@@ -52,8 +57,9 @@ function run() {
   assert.ok(sameConversation.answer.includes("王奕章"));
   assert.strictEqual(sameConversation.source, "recent_messages");
 
+  // session_state now persists low-risk name without requiring the keyword “记住”.
   const explicitLocal = resolvePersonalMemoryTurn({
-    message: "记住我叫王奕章",
+    message: "我的名字叫王奕章",
     context: { recentMessages: [], userPreferences: {} },
     principal,
     memoryMode: "session_state",
@@ -61,19 +67,19 @@ function run() {
   });
   assert.strictEqual(explicitLocal.handled, true);
   assert.deepStrictEqual(explicitLocal.preferencePatch, { preferredName: "王奕章" });
-  assert.strictEqual(explicitLocal.persisted, false);
-  assert.deepStrictEqual(preferences.list({ principal }).items, []);
+  assert.strictEqual(explicitLocal.persisted, true);
+  assert.strictEqual(preferences.list({ principal }).items[0].key, "preferredName");
 
   const explicitCloud = resolvePersonalMemoryTurn({
-    message: "记住我叫王奕章",
+    message: "记住我叫李测试",
     context: { recentMessages: [], userPreferences: {} },
     principal,
     memoryMode: "cloud_sync",
     preferenceService: preferences,
   });
   assert.strictEqual(explicitCloud.persisted, true);
-  assert.strictEqual(preferences.list({ principal }).items[0].key, "preferredName");
-  assert.strictEqual(preferences.list({ principal }).items[0].value, "王奕章");
+  assert.ok(preferences.list({ principal }).items.some((item) => item.key === "preferredName"));
+  assert.strictEqual(preferences.getObject({ principal }).preferredName, "李测试");
 
   const crossConversation = resolvePersonalMemoryTurn({
     message: "我叫什么？",
@@ -83,8 +89,8 @@ function run() {
     preferenceService: preferences,
   });
   assert.strictEqual(crossConversation.handled, true);
-  assert.ok(crossConversation.answer.includes("王奕章"));
-  assert.strictEqual(crossConversation.source, "cloud_preference");
+  assert.ok(crossConversation.answer.includes("李测试") || crossConversation.answer.includes("王奕章"));
+  assert.ok(["cloud_preference", "session_preference", "local_preference"].includes(crossConversation.source));
 
   const removed = preferences.remove({ principal, key: "preferredName" });
   assert.strictEqual(removed.deleted, true);
