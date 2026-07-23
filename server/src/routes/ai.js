@@ -335,6 +335,52 @@ router.get("/agent/memory/preferences", scheduleLimiter, requireSessionGuard, (r
   }
 });
 
+router.patch("/agent/memory/preferences", scheduleLimiter, requireSessionGuard, validateJsonBody(["key", "value", "values", "autoMemoryEnabled"]), (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const principal = defaultMemoryService.resolvePrincipal({
+      serverSession: req.fosuSession,
+      runtimeMode: resolveMemoryRuntimeMode(req),
+    });
+    const body = req.body || {};
+    if (typeof body.autoMemoryEnabled === "boolean") {
+      // Persist pause flag as preferPersonalSchedule-adjacent meta via dedicated key when present.
+      // Stored as answerDetailLevel-style free preference not required — use explicit values map.
+    }
+    const values = body.values && typeof body.values === "object" && !Array.isArray(body.values)
+      ? body.values
+      : (body.key ? { [body.key]: body.value } : {});
+    if (typeof body.autoMemoryEnabled === "boolean") {
+      // Represent pause via non-listed key only if ALLOWED — otherwise return flag for client storage.
+      // Client keeps autoMemoryEnabled locally; server stores nothing secret.
+    }
+    if (!Object.keys(values).length && typeof body.autoMemoryEnabled !== "boolean") {
+      return res.status(400).json({
+        success: false,
+        code: "PREFERENCE_INVALID",
+        message: "请提供要修改的记忆项。",
+        serverTime: new Date().toISOString(),
+      });
+    }
+    let payload = { success: true, persisted: false };
+    if (Object.keys(values).length) {
+      payload = defaultUserPreferenceService.upsert({
+        principal,
+        memoryMode: "cloud_sync",
+        explicit: true,
+        autoMemory: true,
+        values,
+      });
+    }
+    return res.json(Object.assign({
+      serverTime: new Date().toISOString(),
+      autoMemoryEnabled: typeof body.autoMemoryEnabled === "boolean" ? body.autoMemoryEnabled : undefined,
+    }, payload));
+  } catch (error) {
+    return handleMemoryError(res, error);
+  }
+});
+
 router.delete("/agent/memory/preferences/:key", scheduleLimiter, requireSessionGuard, (req, res) => {
   res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
   try {
@@ -347,6 +393,39 @@ router.delete("/agent/memory/preferences/:key", scheduleLimiter, requireSessionG
       key: req.params.key,
     });
     return res.json(Object.assign({ serverTime: new Date().toISOString() }, payload));
+  } catch (error) {
+    return handleMemoryError(res, error);
+  }
+});
+
+router.post("/agent/proactive/evaluate", scheduleLimiter, optionalSessionGuard, validateJsonBody(["event", "context", "facts"]), (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const event = String(req.body && req.body.event || "").trim();
+    if (!event) {
+      return res.status(400).json({
+        success: false,
+        code: "EVENT_REQUIRED",
+        message: "缺少主动建议事件类型。",
+        serverTime: new Date().toISOString(),
+      });
+    }
+    const context = Object.assign({}, req.body.context || {});
+    if (req.body.memoryMode) context.memoryMode = req.body.memoryMode;
+    const payload = agentService.evaluateProactiveForRequest({
+      event,
+      context,
+      facts: req.body.facts || {},
+      conversationId: req.body.conversationId,
+      memoryMode: req.body.memoryMode || context.memoryMode,
+      serverSession: req.fosuSession ? {
+        openidHash: req.fosuSession.openidHash || "",
+        sessionIdHash: req.fosuSession.sessionIdHash || "",
+        appid: req.fosuSession.appid || "",
+      } : null,
+      runtimeMode: resolveMemoryRuntimeMode(req),
+    });
+    return res.json(payload);
   } catch (error) {
     return handleMemoryError(res, error);
   }

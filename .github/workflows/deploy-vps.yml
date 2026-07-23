@@ -37,6 +37,9 @@ jobs:
       - name: Release preflight
         run: npm run release:preflight
 
+      - name: Xiaofu Agent release gate
+        run: npm run test:agent-release-gate
+
   deploy:
     needs: ci
     runs-on: ubuntu-latest

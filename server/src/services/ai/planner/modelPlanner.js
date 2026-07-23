@@ -55,7 +55,20 @@ function buildPlannerPrompt(input = {}) {
       currentTeachingWeek: input.context && input.context.currentTeachingWeek,
       clientLocalTime: input.context && (input.context.clientLocalTime || input.context.todayDate),
       currentPage: input.context && input.context.currentPage,
-      conversationSummary: input.conversationState && input.conversationState.summary,
+      conversationSummary: (input.conversationState && (
+        input.conversationState.conversationSummary || input.conversationState.summary
+      )) || input.conversationSummary || (input.context && input.context.conversationSummary) || "",
+      workingMemory: (input.conversationState && input.conversationState.workingMemory)
+        || input.workingMemory
+        || (input.context && input.context.workingMemory),
+      userMemories: (input.conversationState && input.conversationState.userMemories)
+        || input.userMemories
+        || (input.context && input.context.userMemories)
+        || [],
+      recentMessages: (input.conversationState && input.conversationState.recentMessages)
+        || input.recentMessages
+        || (input.context && input.context.recentMessages)
+        || [],
     });
     return {
       text: ctx.userContent,

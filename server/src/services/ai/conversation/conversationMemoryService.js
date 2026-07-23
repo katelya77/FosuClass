@@ -171,7 +171,8 @@ class ConversationMemoryService {
     }
 
     let context = applyServerStateToContext(input.context || {}, state);
-    if (mode === "cloud_sync") {
+    // session_state and cloud_sync both restore recent turns + working memory.
+    if (mode === "cloud_sync" || mode === "session_state") {
       const clientRecent = Array.isArray(context.recentMessages) ? context.recentMessages : [];
       const serverRecent = state && Array.isArray(state.recentTurns)
         ? state.recentTurns.map((turn) => ({ role: turn.role, content: turn.text }))
@@ -185,11 +186,14 @@ class ConversationMemoryService {
         if (previous && previous.role === role && previous.content === content) return;
         mergedRecent.push({ role, content });
       });
-      context = Object.assign({}, context, { recentMessages: mergedRecent.slice(-8) });
+      context = Object.assign({}, context, {
+        recentMessages: mergedRecent.slice(-12),
+        workingMemory: state && state.workingMemory || context.workingMemory || null,
+      });
       try {
         const cloudPreferences = this.userPreferenceService.getObject({ principal });
         context.userPreferences = Object.assign({}, context.userPreferences || {}, cloudPreferences, {
-          localOnly: false,
+          localOnly: mode === "session_state",
         });
       } catch (_) {
         // Preference storage is an optional privacy-preserving layer. Chat remains usable.
@@ -265,13 +269,16 @@ class ConversationMemoryService {
       input.context && input.context.releaseVersion || ""
     );
 
-    const summary = buildConversationSummary({
-      intent: input.intentName || mergedSlots.lastIntent,
-      targetName: mergedSlots.lastTargetName || mergedSlots.q,
-      week: mergedSlots.lastWeek || mergedSlots.week,
-      weekday: mergedSlots.lastWeekday || mergedSlots.weekday,
-      toolSource: mergedSlots.lastSource || "deterministic-tools",
-    });
+    // Prefer semantic summary from MemoryController; fall back to template.
+    const summary = input.conversationSummary
+      ? safeText(input.conversationSummary, 240)
+      : buildConversationSummary({
+        intent: input.intentName || mergedSlots.lastIntent,
+        targetName: mergedSlots.lastTargetName || mergedSlots.q,
+        week: mergedSlots.lastWeek || mergedSlots.week,
+        weekday: mergedSlots.lastWeekday || mergedSlots.weekday,
+        toolSource: mergedSlots.lastSource || "deterministic-tools",
+      });
 
     const patch = {
       runtimeMode: principal.runtimeMode,
@@ -294,18 +301,26 @@ class ConversationMemoryService {
       },
       expiresAt: new Date(Date.now() + (mode === "cloud_sync" ? DEFAULT_CLOUD_SYNC_TTL_MS : DEFAULT_SESSION_TTL_MS)).toISOString(),
       recentTurns: [],
+      workingMemory: input.workingMemory && typeof input.workingMemory === "object"
+        ? input.workingMemory
+        : (input.state && input.state.workingMemory) || null,
     };
 
-    if (mode === "cloud_sync") {
-      const previousTurns = input.state && Array.isArray(input.state.recentTurns) ? input.state.recentTurns : [];
-      const turns = previousTurns.slice();
-      if (input.message) {
-        turns.push(normalizeRecentTurn({ role: "user", text: input.message, intent: input.intentName, at: nowIso() }));
+    // session_state + cloud_sync both keep desensitized recent turns (≤12).
+    if (mode === "cloud_sync" || mode === "session_state" || input.forceRecentTurns) {
+      if (Array.isArray(input.recentTurns) && input.recentTurns.length) {
+        patch.recentTurns = input.recentTurns.slice(-12).map(normalizeRecentTurn).filter((t) => t.text);
+      } else {
+        const previousTurns = input.state && Array.isArray(input.state.recentTurns) ? input.state.recentTurns : [];
+        const turns = previousTurns.slice();
+        if (input.message) {
+          turns.push(normalizeRecentTurn({ role: "user", text: input.message, intent: input.intentName, at: nowIso() }));
+        }
+        if (input.answer) {
+          turns.push(normalizeRecentTurn({ role: "assistant", text: input.answer, intent: input.intentName, at: nowIso() }));
+        }
+        patch.recentTurns = turns.slice(-12);
       }
-      if (input.answer) {
-        turns.push(normalizeRecentTurn({ role: "assistant", text: input.answer, intent: input.intentName, at: nowIso() }));
-      }
-      patch.recentTurns = turns.slice(-12);
     }
 
     try {

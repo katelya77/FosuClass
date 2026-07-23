@@ -7,6 +7,8 @@ const defaultSkillRegistry = require("./skillRegistry");
 const toolRegistry = require("./toolRegistry");
 const planner = require("./planner");
 const { runObservationLoop } = require("./planner/observationLoop");
+const { routeCapabilities, getToolSafetyMeta } = require("./capabilityRouter");
+const { updateWorkingMemory } = require("./memory/workingMemory");
 
 function codedError(code, message, extra = {}) {
   const error = new Error(message || code);
@@ -81,17 +83,30 @@ class AgentKernel {
     });
   }
 
-  validatePlan(skill, plan, runtimeMode) {
+  validatePlan(skill, plan, runtimeMode, allowedToolsOverride = null) {
     if (plan.length > this.maxPlanSteps) {
       throw codedError("PLAN_STEP_LIMIT_EXCEEDED", `Plan exceeds ${this.maxPlanSteps} steps`);
     }
+    // Union of primary skill tools and Capability Router candidates.
+    const allow = new Set((skill && skill.allowedTools) || []);
+    if (Array.isArray(allowedToolsOverride)) {
+      allowedToolsOverride.forEach((tool) => allow.add(tool));
+    }
     plan.forEach((step) => {
       const toolName = String(step.toolName || step.name || "");
-      if (!skill.allowedTools.includes(toolName)) {
-        throw codedError("TOOL_NOT_ALLOWED_FOR_SKILL", `Tool ${toolName} is not allowed for ${skill.id}`, { toolName });
+      if (!allow.has(toolName)) {
+        throw codedError("TOOL_NOT_ALLOWED_FOR_SKILL", `Tool ${toolName} is not allowed for ${skill && skill.id || "route"}`, { toolName });
       }
       if (this.skillRegistry === defaultSkillRegistry && !capabilityManifestService.isToolAllowedForRuntime(toolName, runtimeMode)) {
         throw codedError("TOOL_NOT_ALLOWED_FOR_RUNTIME", `Tool ${toolName} is not available in ${runtimeMode}`, { toolName });
+      }
+      // Level 3–4 write/delete tools must not auto-execute without confirmation flag in args/context.
+      const meta = getToolSafetyMeta(toolName);
+      if (meta.requiresDoubleConfirm || meta.autonomyLevel >= 4) {
+        const args = step.args || step.input || {};
+        if (args.confirmed !== true && args.doubleConfirmed !== true) {
+          // Allowed in plan for confirmation UX; execution layer enforces write gate.
+        }
       }
     });
   }
@@ -289,6 +304,40 @@ class AgentKernel {
       };
     }
 
+    // Capability Router: 1–3 skills, ≤8–12 candidate tools for Planner.
+    const conversationState = input.conversationState || {
+      conversationSummary: context.conversationSummary || "",
+      summary: context.conversationSummary || "",
+      recentMessages: context.recentMessages || [],
+      workingMemory: context.workingMemory || null,
+      userMemories: context.userMemories || [],
+      pendingClarification: context.pendingClarification || null,
+      contextSlots: context.conversationSlots || {},
+    };
+    if (!conversationState.workingMemory) {
+      conversationState.workingMemory = updateWorkingMemory(null, {
+        message,
+        intentName: intent && intent.name,
+        slots,
+        contextSlots: context.conversationSlots || {},
+        campus: context.campus,
+      });
+    }
+    const capabilityRoute = routeCapabilities({
+      message,
+      intent,
+      skill,
+      runtimeMode,
+      workingMemory: conversationState.workingMemory,
+      context,
+    });
+    const candidateTools = capabilityRoute.candidateTools && capabilityRoute.candidateTools.length
+      ? capabilityRoute.candidateTools
+      : skill.allowedTools;
+    const availableSkills = capabilityRoute.skillIds && capabilityRoute.skillIds.length
+      ? capabilityRoute.skillIds
+      : [skill.id];
+
     const loop = await runObservationLoop({
       message,
       runtimeMode,
@@ -296,14 +345,20 @@ class AgentKernel {
       slots,
       skill,
       context,
-      availableTools: skill.allowedTools,
-      availableSkills: [skill.id],
+      conversationState,
+      availableTools: candidateTools,
+      availableSkills,
       modelGenerate: input.modelGenerate,
       emit: (event) => this.emit(input, event),
       planFn: async (args) => {
         let structured;
         try {
-          structured = await planner.plan(Object.assign({}, args, { skill }));
+          structured = await planner.plan(Object.assign({}, args, {
+            skill,
+            conversationState,
+            availableTools: candidateTools,
+            availableSkills,
+          }));
         } catch (error) {
           // Hard policy errors must surface; soft planner failures fall back.
           if (error && [
@@ -315,7 +370,7 @@ class AgentKernel {
             throw error;
           }
           const fallbackPlan = skill.planBuilder({ message, context, intent, runtimeMode });
-          this.validatePlan(skill, fallbackPlan, runtimeMode);
+          this.validatePlan(skill, fallbackPlan, runtimeMode, candidateTools);
           structured = {
             goal: intent.name,
             intent: intent.name,
@@ -350,12 +405,17 @@ class AgentKernel {
               if (!capabilityManifestService.isToolAllowedForRuntime(step.toolName, runtimeMode)) {
                 throw codedError("TOOL_NOT_ALLOWED_FOR_RUNTIME", `Tool ${step.toolName} not in ${runtimeMode}`);
               }
+              // Cross-skill tools must still be inside capability route whitelist.
+              if (!candidateTools.includes(step.toolName)
+                && !(skill.allowedTools || []).includes(step.toolName)) {
+                throw codedError("TOOL_NOT_ALLOWED_FOR_SKILL", `Tool ${step.toolName} not in capability route`);
+              }
             });
             if (legacyPlan.length > this.maxPlanSteps) {
               throw codedError("PLAN_STEP_LIMIT_EXCEEDED", `Plan exceeds ${this.maxPlanSteps} steps`);
             }
           } else {
-            this.validatePlan(skill, legacyPlan, runtimeMode);
+            this.validatePlan(skill, legacyPlan, runtimeMode, candidateTools);
           }
         }
         return structured;
@@ -370,18 +430,18 @@ class AgentKernel {
       },
       toObservations: (calls) => (calls || []).map(toObservation),
       verify: ({ toolCalls, plan: verifyPlan }) => {
-        const skillAllowed = new Set(skill.allowedTools || []);
-        // Recovery tools from replan sit outside the original skill allowlist —
-        // exclude them from skill allowlist checks; only skill tools count as evidence.
+        const routeAllowed = new Set(candidateTools.concat(skill.allowedTools || []));
+        // Recovery tools from replan may sit outside primary skill but inside route.
         const scopedCalls = (Array.isArray(toolCalls) ? toolCalls : []).filter((call) => {
           const name = String(call && call.name || "");
-          return skillAllowed.has(name);
+          return routeAllowed.has(name) || (skill.allowedTools || []).includes(name);
         });
         const base = skill.resultVerifier({
           intent,
-          toolCalls: scopedCalls,
+          toolCalls: scopedCalls.length ? scopedCalls : toolCalls,
           context,
           runtimeMode,
+          allowedTools: Array.from(routeAllowed),
         });
         if (verifyPlan && Number(verifyPlan.replanCount || 0) > 0 && !base.evidenceComplete) {
           const errors = (base.errors || []).slice();
@@ -397,7 +457,6 @@ class AgentKernel {
             evidenceComplete: false,
           };
         }
-        // If skill tools produced evidence but recovery tools were also run, keep base.
         return base;
       },
     });
@@ -432,6 +491,12 @@ class AgentKernel {
       observations,
       verification,
       replanUsed: loop.replanUsed === true,
+      replanCount: loop.replanCount || 0,
+      replanReason: loop.replanReason || "",
+      partialCompletion: loop.partialCompletion === true,
+      goalContract: loop.goalContract || null,
+      reusedToolCount: loop.reusedToolCount || 0,
+      avoidedDuplicateCalls: loop.avoidedDuplicateCalls || 0,
       evidenceComplete: verification.evidenceComplete === true,
       usedPersonalContext: Boolean(context.currentScheduleSummary && context.currentScheduleSummary.enabled && context.currentScheduleSummary.courses && context.currentScheduleSummary.courses.length),
       startedAt,

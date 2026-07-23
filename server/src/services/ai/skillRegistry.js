@@ -22,9 +22,13 @@ function defaultResultVerifier(skill, input = {}) {
     return call && call.status !== "failed" && call.status !== "skipped" && (!result || result.success !== false);
   });
   const errors = [];
+  // Capability Router may expand tools beyond primary skill; honor input.allowedTools when provided.
+  const allowedList = Array.isArray(input.allowedTools) && input.allowedTools.length
+    ? input.allowedTools
+    : skill.allowedTools;
   calls.forEach((call) => {
     const name = normalizeToolCallName(call);
-    if (!skill.allowedTools.includes(name)) {
+    if (!allowedList.includes(name)) {
       errors.push({ code: "TOOL_NOT_ALLOWED_FOR_SKILL", toolName: name });
     }
   });

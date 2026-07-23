@@ -20,6 +20,7 @@ keys.forEach((key) => {
 
 try {
   process.env.AI_RUNTIME_MODE = "competition";
+process.env.AI_PROVIDER_ACTIVE_ENV = process.env.AI_PROVIDER_ACTIVE_ENV || "trial";
   process.env.AI_PROVIDER_ACTIVE_ENV = "trial";
   process.env.AI_COMPETITION_ALLOW_TRIAL_ENV = "true";
   const runtimeModeService = require("../server/src/services/ai/runtimeModeService");

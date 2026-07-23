@@ -472,20 +472,47 @@ function normalizeMemoryPreferenceItems(items) {
   const labels = {
     preferredName: "称呼",
     campus: "常用校区",
+    preferredBuilding: "常用楼栋",
     defaultReminderLeadMinutes: "默认提醒",
+    answerDetailLevel: "回答偏好",
+  };
+  const scopeLabels = {
+    cloud_sync: "跨设备",
+    session_state: "当前对话",
+    local: "本机",
+    user: "跨设备",
   };
   const map = {};
   (Array.isArray(items) ? items : []).forEach((item) => {
     const source = item && typeof item === "object" ? item : {};
-    if (!labels[source.key]) return;
-    map[source.key] = {
-      key: source.key,
+    if (!labels[source.key] && !source.label && !source.category) return;
+    const key = source.key;
+    if (!key) return;
+    let displayValue = source.value;
+    if (key === "defaultReminderLeadMinutes") displayValue = `提前 ${source.value} 分钟`;
+    let updatedAtText = "";
+    if (source.updatedAt) {
+      const ms = Date.parse(String(source.updatedAt));
+      if (Number.isFinite(ms)) {
+        const d = new Date(ms);
+        updatedAtText = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+      }
+    }
+    map[key] = {
+      key,
       value: source.value,
-      label: labels[source.key],
+      displayValue,
+      label: labels[key] || source.label || source.category || key,
+      category: source.category || labels[key] || key,
       scope: source.scope || "local",
+      scopeText: scopeLabels[source.scope] || scopeLabels.local,
+      updatedAt: source.updatedAt || "",
+      updatedAtText,
+      editable: source.editable !== false && Boolean(labels[key]),
     };
   });
-  return Object.keys(labels).map((key) => map[key]).filter(Boolean);
+  return Object.keys(labels).map((key) => map[key]).filter(Boolean)
+    .concat(Object.keys(map).filter((k) => !labels[k]).map((k) => map[k]));
 }
 
 function mapMemoryChip(mode) {
@@ -1755,6 +1782,8 @@ Page({
     memorySwitching: false,
     memoryPreferences: [],
     memoryPreferencesLoading: false,
+    autoMemoryEnabled: true,
+    serverProactiveSuggestion: null,
     messages: [],
     conversations: [],
     activeConversationId: "",
@@ -1974,12 +2003,28 @@ Page({
         currentScheduleSummary: { enabled: false, courses: [] },
       });
     }
-    const insight = workspace && workspace.insight || null;
+    // Prefer server proactiveSuggestion when available; fall back to local insight.
+    const serverSuggestion = this.data.serverProactiveSuggestion;
+    let insight = workspace && workspace.insight || null;
+    if (serverSuggestion && serverSuggestion.title) {
+      insight = {
+        kind: serverSuggestion.type || "suggestion",
+        eyebrow: "小佛建议",
+        title: serverSuggestion.title,
+        detail: serverSuggestion.body || "",
+        actionLabel: serverSuggestion.actions && serverSuggestion.actions[0]
+          ? serverSuggestion.actions[0].label
+          : "知道了",
+        server: true,
+        raw: serverSuggestion,
+      };
+    }
     const contextualActions = Array.isArray(workspace && workspace.actions)
       ? workspace.actions.slice(0, 3)
       : [];
     this.setData({ proactiveInsight: insight, contextualActions });
     if (insight) xiaofuFloatService.setProactiveInsight(insight);
+    this.evaluateServerProactive("assistant_open", proactiveContext);
     if (proactiveContext && proactiveContext.scheduleChangePending === true
       && proactiveContext.scheduleChangeBaseline && proactiveContext.currentScheduleSummary) {
       const baselineFingerprint = proactiveContext.scheduleChangeBaseline.fingerprint || "baseline";
@@ -3529,6 +3574,128 @@ Page({
         wx.showToast({ title: "已删除", icon: "none" });
       },
     });
+  },
+
+  onToggleAutoMemory(event) {
+    const enabled = event.detail && event.detail.autoMemoryEnabled !== false;
+    try {
+      wx.setStorageSync("xiaofu_auto_memory_enabled", enabled ? "1" : "0");
+    } catch (_) { /* ignore */ }
+    this.setData({ autoMemoryEnabled: enabled });
+    if (this.data.memoryMode === "cloud_sync") {
+      agentMemoryClient.patchCloudPreference({ autoMemoryEnabled: enabled }).catch(() => {});
+    }
+    wx.showToast({
+      title: enabled ? "已恢复自动记忆" : "已暂停自动记忆",
+      icon: "none",
+    });
+  },
+
+  onEditMemoryPreference(event) {
+    const key = event.detail && event.detail.key || "";
+    const current = event.detail && event.detail.value;
+    if (!key) return;
+    const titles = {
+      preferredName: "修改称呼",
+      campus: "修改常用校区（仙溪校区/江湾校区）",
+      preferredBuilding: "修改常用楼栋",
+      defaultReminderLeadMinutes: "修改默认提醒（分钟）",
+      answerDetailLevel: "修改回答偏好（简洁/详细）",
+    };
+    wx.showModal({
+      title: titles[key] || "修改记忆",
+      editable: true,
+      placeholderText: String(current == null ? "" : current).slice(0, 40),
+      content: String(current == null ? "" : current),
+      success: async (res) => {
+        if (!res.confirm) return;
+        const nextValue = res.content != null ? String(res.content).trim() : "";
+        if (!nextValue) {
+          wx.showToast({ title: "内容不能为空", icon: "none" });
+          return;
+        }
+        let value = nextValue;
+        if (key === "defaultReminderLeadMinutes") {
+          const minutes = Number(nextValue.replace(/[^\d]/g, ""));
+          if (!Number.isFinite(minutes) || minutes < 5 || minutes > 180) {
+            wx.showToast({ title: "请输入 5–180 分钟", icon: "none" });
+            return;
+          }
+          value = minutes;
+        }
+        if (key === "campus" && !/仙溪|江湾/.test(value)) {
+          wx.showToast({ title: "请输入仙溪校区或江湾校区", icon: "none" });
+          return;
+        }
+        if (key === "campus" && value.indexOf("校区") < 0) value = `${value}校区`;
+        if (this.data.memoryMode === "cloud_sync") {
+          const cloud = await agentMemoryClient.patchCloudPreference({ key, value });
+          if (!cloud.success) {
+            wx.showToast({ title: cloud.error || "保存失败", icon: "none" });
+            return;
+          }
+        }
+        try {
+          aiAssistantService.setUserPreference && aiAssistantService.setUserPreference(key, value);
+        } catch (_) { /* ignore */ }
+        await this.loadMemoryPreferences();
+        wx.showToast({ title: "已更新", icon: "none" });
+      },
+    });
+  },
+
+  async evaluateServerProactive(eventName, clientContext) {
+    if (this._proactiveEvaluating) return;
+    const event = String(eventName || "assistant_open");
+    // Low-frequency: once per open per event type in this page lifetime.
+    this._proactiveShownEvents = this._proactiveShownEvents || {};
+    if (this._proactiveShownEvents[event]) return;
+    this._proactiveEvaluating = true;
+    try {
+      const optOut = [];
+      try {
+        const raw = wx.getStorageSync("xiaofu_proactive_opt_out");
+        if (Array.isArray(raw)) optOut.push(...raw);
+      } catch (_) { /* ignore */ }
+      const result = await agentMemoryClient.evaluateProactive({
+        event,
+        conversationId: this.data.activeConversationId,
+        memoryMode: this.data.memoryMode,
+        context: Object.assign({}, clientContext || {}, {
+          proactiveOptOut: optOut,
+          disabledProactiveTypes: optOut,
+          reminderEnabled: clientContext && clientContext.courseReminderEnabled,
+        }),
+        facts: {
+          reminderEnabled: clientContext && clientContext.courseReminderEnabled === false
+            ? false
+            : undefined,
+          nextCourse: clientContext && clientContext.nextCourse,
+          weather: clientContext && clientContext.weather,
+        },
+      });
+      if (result && result.success && result.proactiveSuggestion) {
+        this._proactiveShownEvents[event] = true;
+        this.setData({ serverProactiveSuggestion: result.proactiveSuggestion });
+        // Refresh UI strip with server suggestion
+        const s = result.proactiveSuggestion;
+        const insight = {
+          kind: s.type || "suggestion",
+          eyebrow: "小佛建议",
+          title: s.title,
+          detail: s.body || "",
+          actionLabel: s.actions && s.actions[0] ? s.actions[0].label : "知道了",
+          server: true,
+          raw: s,
+        };
+        this.setData({ proactiveInsight: insight });
+        xiaofuFloatService.setProactiveInsight(insight);
+      }
+    } catch (_) {
+      // ignore network
+    } finally {
+      this._proactiveEvaluating = false;
+    }
   },
 
   onClearCurrentMemory() {

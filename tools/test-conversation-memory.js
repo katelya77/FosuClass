@@ -97,8 +97,10 @@ function run() {
   const stolen = repo.get(other.principalKey, conversationId);
   assert.strictEqual(stolen, null);
 
-  // 7. session_state does not store full recent turns
-  assert.deepStrictEqual(loaded.state.recentTurns, []);
+  // 7. session_state keeps desensitized recent turns (≤12), not full history dumps
+  assert.ok(Array.isArray(loaded.state.recentTurns));
+  assert.ok(loaded.state.recentTurns.length <= 12);
+  assert.ok(loaded.state.recentTurns.every((turn) => turn.text && turn.text.length <= 400));
 
   // 8. cloud_sync must be explicit
   const cloudDenied = memory.resolveMemoryMode({
