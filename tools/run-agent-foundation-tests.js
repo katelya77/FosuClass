@@ -30,7 +30,12 @@ for (const file of tests) {
   console.log(`\n[agent-foundation] ${file}`);
   const result = spawnSync(process.execPath, [path.join(root, file)], {
     cwd: root,
-    env: Object.assign({}, process.env, { AI_AGENT_ENABLED: "false" }),
+    env: Object.assign({}, process.env, {
+      AI_AGENT_ENABLED: "false",
+      AI_COMPETITION_ALLOW_ALL_SESSIONS: "true",
+      // When suite inherits AI_RUNTIME_MODE=competition without active env, map to trial.
+      AI_PROVIDER_ACTIVE_ENV: process.env.AI_PROVIDER_ACTIVE_ENV || "trial",
+    }),
     stdio: "inherit",
   });
   if (result.status !== 0) {
