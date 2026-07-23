@@ -28,9 +28,12 @@ function isDevelopOrTrial(context = {}) {
 function resolveConfiguredMode() {
   const raw = String(process.env.AI_RUNTIME_MODE || "public").trim().toLowerCase();
   if (raw === "competition") {
+    // Compat alias: competition maps to a canonical enhanced mode (trial by default).
+    // AI_PROVIDER_ACTIVE_ENV may pin trial|dev; bare "competition" must not collapse to public
+    // or V1 legacy serialization and trial-gated suites fail in clean CI shells.
     const active = String(process.env.AI_PROVIDER_ACTIVE_ENV || "").trim().toLowerCase();
     if (active === "trial" || active === "dev") return active;
-    return "public";
+    return "trial";
   }
   return capabilityManifestService.normalizeRuntimeMode(raw);
 }
