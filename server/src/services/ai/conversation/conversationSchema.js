@@ -135,6 +135,8 @@ function normalizeRecentTurn(turn = {}) {
     text: safeText(turn.text || turn.content || "", MAX_TURN_TEXT),
     intent: safeText(turn.intent || "", 80),
     at: safeText(turn.at || turn.createdAt || nowIso(), 40),
+    // Stable turn id for dedupe (migration-compatible: optional on old files)
+    turnId: safeText(turn.turnId || turn.id || "", 64),
   };
 }
 

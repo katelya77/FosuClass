@@ -53,7 +53,8 @@ class UserMemoryStore {
     if (!principal || principal.authenticated !== true) {
       return { items: [], values: {} };
     }
-    if (memoryMode === "local_only") {
+    // User Memory is cloud_sync only; session_state must not restore cross-conversation prefs.
+    if (memoryMode !== "cloud_sync") {
       return { items: [], values: {} };
     }
     try {
@@ -66,8 +67,8 @@ class UserMemoryStore {
   }
 
   /**
-   * Commit durable candidates under session_state / cloud_sync.
-   * Uses functional authorization (mode), not per-utterance “记住”.
+   * Commit durable candidates under cloud_sync only.
+   * session_state keeps thread/working only — no cross-conversation User Memory.
    */
   commit(input = {}) {
     const principal = input.principal;
@@ -76,8 +77,8 @@ class UserMemoryStore {
     if (!principal || principal.authenticated !== true) {
       return { persisted: false, keys: [], items: [] };
     }
-    if (memoryMode === "local_only" || !autoMemoryEnabled) {
-      return { persisted: false, keys: [], items: [] };
+    if (memoryMode !== "cloud_sync" || !autoMemoryEnabled) {
+      return { persisted: false, keys: [], items: [], reason: memoryMode === "session_state" ? "session_state_no_user_memory" : "not_authorized" };
     }
 
     const filtered = filterAndMergeCandidates(input.candidates || [], {

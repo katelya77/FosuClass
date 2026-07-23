@@ -200,7 +200,7 @@ async function runUnitWiring() {
     className: wm.className, weekday: wm.weekday, week: wm.teachingWeek, period: wm.periodHint,
   }));
 
-  // 11. Proactive cooldown
+  // 11. Proactive cooldown (durable store)
   clearCooldowns("principal_proactive");
   const first = evaluateProactive({
     event: "assistant_open",
@@ -208,6 +208,7 @@ async function runUnitWiring() {
     facts: { reminderEnabled: false },
   });
   assert.ok(first.suggestion, "first proactive tip");
+  assert.ok(first.suggestion.expiresAt, "suggestion has expiresAt");
   const second = evaluateProactive({
     event: "assistant_open",
     principalKey: "principal_proactive",
@@ -215,6 +216,48 @@ async function runUnitWiring() {
   });
   assert.ok(!second.suggestion, "cooldown suppresses duplicate");
   record("proactive cooldown", true, first.suggestion.type);
+
+  // 11b. Tool result cache reuses successful reads on replan
+  const { createToolResultCache, buildCacheKey } = require("../server/src/services/ai/planner/toolResultCache");
+  const { filterStepsForReplan } = require("../server/src/services/ai/planner/observationLoop");
+  const { verifyGoalContract } = require("../server/src/services/ai/planner/goalContract");
+  const cache = createToolResultCache();
+  const ctx = { releaseVersion: "r1", term: "2025-2026-1" };
+  cache.set("get_tomorrow_courses", { day: "tomorrow" }, ctx, null, {
+    name: "get_tomorrow_courses",
+    status: "success",
+    result: { success: true, courseCount: 0, total: 0 },
+  });
+  cache.set("get_campus_weather", {}, ctx, null, {
+    name: "get_campus_weather",
+    status: "success",
+    result: { success: true, summary: "晴" },
+  });
+  const replanSteps = [
+    { toolName: "get_tomorrow_courses", args: { day: "tomorrow" } },
+    { toolName: "search_empty_rooms", args: { duration: 2 } },
+    { toolName: "get_campus_weather", args: {} },
+  ];
+  const filtered = filterStepsForReplan(replanSteps, cache, ctx, null);
+  assert.strictEqual(filtered.reused.length, 2, "schedule+weather reused");
+  assert.strictEqual(filtered.toRun.length, 1, "only empty room re-run");
+  assert.strictEqual(filtered.toRun[0].toolName, "search_empty_rooms");
+  assert.ok(cache.metrics().avoidedDuplicateCalls >= 2);
+  record("tool cache replan reuse", true, JSON.stringify(cache.metrics()));
+
+  // 11c. Goal contract multi-outcome
+  const goal = verifyGoalContract({
+    message: "明天下午没课的话找两节连续空教室，顺便看看天气。",
+    toolCalls: [
+      { name: "get_tomorrow_courses", status: "success", result: { success: true, courseCount: 0, total: 0, code: "NO_COURSES" } },
+      { name: "search_continuous_empty_rooms", status: "success", result: { success: true, total: 2, rooms: [{ room: "C7-101" }] } },
+      { name: "get_campus_weather", status: "success", result: { success: true, summary: "多云" } },
+    ],
+  });
+  assert.ok(goal.requiredOutcomes.length >= 3, "multi outcomes");
+  assert.ok(goal.complete || goal.partialCompletion || goal.satisfied.length >= 3, "outcomes satisfied");
+  record("goal contract multi-outcome", true, JSON.stringify(goal.requiredOutcomes));
+  assert.ok(buildCacheKey("get_today_courses", { a: 1 }, ctx).length > 8);
 
   // 12. Fast path: greeting should not force multi tools (via agentService)
   const hi = await agentService.chat({
@@ -228,9 +271,9 @@ async function runUnitWiring() {
 }
 
 async function runAutoMemoryModes() {
-  const prefs = new UserPreferenceService({
-    dataDir: path.join(tempDir, "prefs-auto"),
-  });
+  // Use the same default preference service that MemoryController commits through.
+  const { defaultUserPreferenceService } = require("../server/src/services/ai/conversation/userPreferenceService");
+  const prefs = defaultUserPreferenceService;
   const principal = makePrincipal("name");
 
   // Without 记住 — local_only: session only
@@ -239,7 +282,7 @@ async function runAutoMemoryModes() {
   assert.strictEqual(ordinary.value, "王奕章");
   assert.strictEqual(ordinary.persist, false);
 
-  // session_state auto-persist without 记住
+  // session_state: session fact only — no User Memory cross-conversation write
   const sessionTurn = resolvePersonalMemoryTurn({
     message: "我的名字叫王奕章",
     context: { recentMessages: [], userPreferences: {} },
@@ -248,8 +291,13 @@ async function runAutoMemoryModes() {
     preferenceService: prefs,
   });
   assert.strictEqual(sessionTurn.handled, true);
-  assert.strictEqual(sessionTurn.preferencePatch.preferredName, "王奕章");
-  assert.strictEqual(sessionTurn.persisted, true, "session_state should persist low-risk name");
+  assert.ok(
+    (sessionTurn.sessionFacts && sessionTurn.sessionFacts.preferredName === "王奕章")
+    || (sessionTurn.preferencePatch && sessionTurn.preferencePatch.preferredName === "王奕章"),
+    "session_state should capture name as session fact"
+  );
+  assert.strictEqual(sessionTurn.persisted, false, "interpreter never writes directly");
+  assert.deepStrictEqual(prefs.getObject({ principal }), {}, "session_state must not write UserPreference file");
 
   // Same conversation recall without 记住
   const ask = resolvePersonalMemoryTurn({
@@ -268,26 +316,62 @@ async function runAutoMemoryModes() {
   assert.ok(ask.answer.includes("王奕章"));
   record("auto name without 记住", true, "session + recent recall");
 
-  // Correction
-  resolvePersonalMemoryTurn({
+  // Correction via MemoryController (sole write path) under cloud_sync
+  const campusTurn = resolvePersonalMemoryTurn({
     message: "我常用仙溪校区",
     context: {},
     principal,
     memoryMode: "cloud_sync",
     preferenceService: prefs,
   });
-  resolvePersonalMemoryTurn({
+  assert.ok(campusTurn.preferencePatch && campusTurn.preferencePatch.campus);
+  defaultMemoryController.commit({
+    principal,
+    memoryMode: "cloud_sync",
+    message: "我常用仙溪校区",
+    answer: campusTurn.answer,
+    intentName: campusTurn.intentName,
+    preferencePatch: campusTurn.preferencePatch,
+    status: "completed",
+  });
+  const fixTurn = resolvePersonalMemoryTurn({
     message: "不对，以后主要在江湾",
     context: {},
     principal,
     memoryMode: "cloud_sync",
     preferenceService: prefs,
   });
+  defaultMemoryController.commit({
+    principal,
+    memoryMode: "cloud_sync",
+    message: "不对，以后主要在江湾",
+    answer: fixTurn.answer,
+    intentName: fixTurn.intentName,
+    preferencePatch: fixTurn.preferencePatch,
+    status: "completed",
+  });
   const stored = prefs.getObject({ principal });
   assert.strictEqual(stored.campus, "江湾校区");
   record("memory correction override", true, stored.campus);
 
-  // cloud_sync new conversation restore
+  // cloud_sync name via MemoryController then cross-conversation restore
+  const nameCloud = resolvePersonalMemoryTurn({
+    message: "我的名字叫王奕章",
+    context: {},
+    principal,
+    memoryMode: "cloud_sync",
+    preferenceService: prefs,
+  });
+  defaultMemoryController.commit({
+    principal,
+    memoryMode: "cloud_sync",
+    message: "我的名字叫王奕章",
+    answer: nameCloud.answer,
+    intentName: nameCloud.intentName,
+    preferencePatch: nameCloud.preferencePatch,
+    preferredName: "王奕章",
+    status: "completed",
+  });
   const cross = resolvePersonalMemoryTurn({
     message: "我叫什么？",
     context: { recentMessages: [], userPreferences: {} },
@@ -297,6 +381,36 @@ async function runAutoMemoryModes() {
   });
   assert.ok(cross.answer.includes("王奕章"));
   record("cloud_sync cross-conversation name", true, cross.source);
+
+  // session_state must NOT restore User Memory across conversations
+  const sessionOnlyPrincipal = makePrincipal("sessiononly");
+  const sessionName = resolvePersonalMemoryTurn({
+    message: "我的名字叫会话甲",
+    context: {},
+    principal: sessionOnlyPrincipal,
+    memoryMode: "session_state",
+    preferenceService: prefs,
+  });
+  defaultMemoryController.commit({
+    principal: sessionOnlyPrincipal,
+    memoryMode: "session_state",
+    message: "我的名字叫会话甲",
+    answer: sessionName.answer,
+    intentName: sessionName.intentName,
+    preferredName: "会话甲",
+    preferencePatch: {},
+    status: "completed",
+  });
+  assert.deepStrictEqual(prefs.getObject({ principal: sessionOnlyPrincipal }), {});
+  const sessionCross = resolvePersonalMemoryTurn({
+    message: "我叫什么？",
+    context: { recentMessages: [], userPreferences: {}, workingMemory: {} },
+    principal: sessionOnlyPrincipal,
+    memoryMode: "session_state",
+    preferenceService: prefs,
+  });
+  assert.ok(!sessionCross.answer.includes("会话甲"), "session_state must not cross-conversation restore name from User Memory");
+  record("session_state no cross-conversation user memory", true, sessionCross.source);
 
   // local_only does not upload
   const localPrincipal = makePrincipal("local");

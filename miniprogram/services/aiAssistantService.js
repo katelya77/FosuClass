@@ -230,20 +230,38 @@ function clearUserPreferences() {
   return getUserPreferences();
 }
 
+const MEMORY_PREF_KEYS = [
+  "preferredName",
+  "campus",
+  "preferredBuilding",
+  "defaultReminderLeadMinutes",
+  "answerDetailLevel",
+];
+
 function getUserPreferenceItems() {
   const raw = readStorage(USER_PREFERENCES_KEY, {});
   const source = raw && typeof raw === "object" && !Array.isArray(raw) ? raw : {};
-  return ["preferredName", "campus", "defaultReminderLeadMinutes"].filter((key) => (
+  return MEMORY_PREF_KEYS.filter((key) => (
     Object.prototype.hasOwnProperty.call(source, key)
     && source[key] !== ""
     && source[key] !== null
     && source[key] !== undefined
-  )).map((key) => ({ key, value: source[key], scope: "local" }));
+  )).map((key) => ({ key, value: source[key], scope: "local", editable: true }));
+}
+
+function setUserPreference(key, value) {
+  if (MEMORY_PREF_KEYS.indexOf(key) < 0) return getUserPreferenceItems();
+  const raw = readStorage(USER_PREFERENCES_KEY, {});
+  const next = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? Object.assign({}, raw)
+    : {};
+  next[key] = value;
+  writeStorage(USER_PREFERENCES_KEY, next);
+  return getUserPreferenceItems();
 }
 
 function deleteUserPreference(key) {
-  const allowed = ["preferredName", "campus", "defaultReminderLeadMinutes"];
-  if (allowed.indexOf(key) < 0) return getUserPreferenceItems();
+  if (MEMORY_PREF_KEYS.indexOf(key) < 0) return getUserPreferenceItems();
   const raw = readStorage(USER_PREFERENCES_KEY, {});
   const next = raw && typeof raw === "object" && !Array.isArray(raw)
     ? Object.assign({}, raw)
@@ -2007,6 +2025,7 @@ module.exports = {
   clearPersonalization,
   clearUserPreferences,
   deleteUserPreference,
+  setUserPreference,
   formatLocalIsoWithOffset,
   getAiHistory,
   getLatestScheduleImport,

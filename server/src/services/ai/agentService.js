@@ -17,7 +17,12 @@ const { defaultMemoryService } = require("./conversation/conversationMemoryServi
 const { defaultUserPreferenceService } = require("./conversation/userPreferenceService");
 const { resolvePersonalMemoryTurn } = require("./conversation/personalMemoryInterpreter");
 const { defaultMemoryController } = require("./memory/memoryController");
-const { evaluateProactive, factsFromToolCalls } = require("./proactiveEngine");
+const {
+  evaluateProactive,
+  factsFromToolCalls,
+  factsFromContext,
+  TRIGGER_EVENTS: PROACTIVE_TRIGGER_EVENTS,
+} = require("./proactiveEngine");
 const agentRunEventService = require("./agentRunEventService");
 const { loadingTextForEvent } = require("./runEventCatalog");
 const responseComposer = require("./responseComposer");
@@ -585,6 +590,94 @@ function sanitizePublicAction(action) {
   });
 }
 
+function normalizeProactiveSuggestion(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const type = String(raw.type || "").slice(0, 40);
+  const title = safetyGuard.redactSensitiveText(String(raw.title || "")).slice(0, 40);
+  const body = safetyGuard.redactSensitiveText(String(raw.body || "")).slice(0, 120);
+  if (!type || !title) return null;
+  return {
+    type,
+    title,
+    body,
+    actions: (Array.isArray(raw.actions) ? raw.actions : []).slice(0, 2).map((action) => ({
+      label: String(action && action.label || "").slice(0, 24),
+      type: String(action && action.type || "noop").slice(0, 32),
+      payload: action && action.payload && typeof action.payload === "object" ? action.payload : {},
+    })),
+    source: String(raw.source || "proactive_engine").slice(0, 40),
+    expiresAt: String(raw.expiresAt || "").slice(0, 40),
+  };
+}
+
+/**
+ * Optional proactive evaluation when client supplies a validated event on context.
+ */
+function maybeAttachProactive(response, input = {}, memoryBundle = null, toolCalls = []) {
+  const context = input.context || {};
+  const event = String(context.proactiveEvent || input.proactiveEvent || "").slice(0, 64);
+  if (!event || !PROACTIVE_TRIGGER_EVENTS.includes(event)) return response;
+  try {
+    const principal = memoryBundle && memoryBundle.principal;
+    const facts = Object.assign(
+      {},
+      factsFromContext(context),
+      factsFromToolCalls(toolCalls || response.toolCalls || [])
+    );
+    const result = evaluateProactive({
+      event,
+      principal,
+      principalKey: principal && principal.principalKey || "",
+      context: {
+        disabledProactiveTypes: context.disabledProactiveTypes || context.proactiveOptOut,
+        proactiveOptOut: context.proactiveOptOut,
+      },
+      facts,
+    });
+    if (result && result.suggestion) {
+      response.proactiveSuggestion = normalizeProactiveSuggestion(result.suggestion);
+    }
+  } catch (_) {
+    // Proactive must never break the main chat path.
+  }
+  return response;
+}
+
+/**
+ * Public evaluate entry used by POST /api/ai/agent/proactive/evaluate
+ */
+function evaluateProactiveForRequest(input = {}) {
+  const context = safetyGuard.sanitizeAgentContext(input.context || {});
+  const event = String(input.event || context.proactiveEvent || "").slice(0, 64);
+  const memoryBundle = defaultMemoryController.load({
+    message: "",
+    context,
+    conversationId: input.conversationId,
+    serverSession: input.serverSession,
+    runtimeMode: input.runtimeMode,
+    memoryMode: context.memoryMode || input.memoryMode,
+    cloudSyncEnabled: context.cloudSyncEnabled === true,
+  });
+  const facts = Object.assign({}, factsFromContext(context), input.facts && typeof input.facts === "object" ? input.facts : {});
+  const result = evaluateProactive({
+    event,
+    principal: memoryBundle.principal,
+    principalKey: memoryBundle.principal && memoryBundle.principal.principalKey || "",
+    context: {
+      disabledProactiveTypes: context.disabledProactiveTypes || context.proactiveOptOut,
+      proactiveOptOut: context.proactiveOptOut,
+    },
+    facts,
+  });
+  return {
+    success: true,
+    event: result.event || event,
+    reason: result.reason || "",
+    proactiveSuggestion: result.suggestion ? normalizeProactiveSuggestion(result.suggestion) : null,
+    serverTime: nowIso(),
+  };
+}
+
 function sanitizePublicCard(card) {
   const source = stableCard(card || {});
   const urlOptionalActionTypes = new Set([
@@ -921,6 +1014,14 @@ function buildResponse(payload) {
   if (requestedProtocolVersion === agentProtocol.PROTOCOL_V2) {
     response.memoryPreferencePatch = payload.memoryPreferencePatch || {};
   }
+  if (payload.proactiveSuggestion) {
+    response.proactiveSuggestion = normalizeProactiveSuggestion(payload.proactiveSuggestion);
+  }
+  if (payload.reusedToolCount != null) response.reusedToolCount = Number(payload.reusedToolCount) || 0;
+  if (payload.avoidedDuplicateCalls != null) response.avoidedDuplicateCalls = Number(payload.avoidedDuplicateCalls) || 0;
+  if (payload.replanReason) response.replanReason = String(payload.replanReason).slice(0, 120);
+  if (payload.partialCompletion === true) response.partialCompletion = true;
+  if (payload.goalContract) response.goalContract = payload.goalContract;
   const safeResponse = isPublicRuntime(envelope.canonicalRuntimeMode) ? sanitizePublicResponse(response) : response;
   if (requestedProtocolVersion === agentProtocol.PROTOCOL_V2) {
     return agentProtocol.buildV2Response(Object.assign({}, safeResponse, {
@@ -1339,17 +1440,24 @@ async function chat(input = {}) {
       runId,
       status: "completed",
       stepCount: 0,
-      contextSlots: buildContextSlots(memoryIntent, personalMemoryTurn.preferencePatch || {}),
+      contextSlots: buildContextSlots(memoryIntent, Object.assign(
+        {},
+        personalMemoryTurn.sessionFacts || {},
+        personalMemoryTurn.preferencePatch || {}
+      )),
       clearPendingClarification: false,
-      cloudSyncEnabled: context.cloudSyncEnabled === true,
+      cloudSyncEnabled: context.cloudSyncEnabled === true || (memoryBundle.memory && memoryBundle.memory.mode === "cloud_sync"),
       preferencePatch: personalMemoryTurn.preferencePatch || {},
+      memoryCandidates: personalMemoryTurn.memoryCandidates || [],
       preferredName: (personalMemoryTurn.preferencePatch && personalMemoryTurn.preferencePatch.preferredName)
         || (personalMemoryTurn.sessionFacts && personalMemoryTurn.sessionFacts.preferredName)
         || "",
+      autoMemoryEnabled: context.autoMemoryEnabled !== false,
     });
     if (personalMemoryTurn.autoMemoryHint && !response.autoMemoryHint) {
       response.autoMemoryHint = personalMemoryTurn.autoMemoryHint;
     }
+    maybeAttachProactive(response, { context, proactiveEvent: context.proactiveEvent }, memoryBundle, []);
     recordEarlyTrace({
       runId,
       requestId,
@@ -1763,6 +1871,11 @@ async function chat(input = {}) {
     clearPendingClarification: pendingPatch.clearPendingClarification,
     errors: execution.verification && execution.verification.errors || [],
     verification: execution.verification || null,
+    reusedToolCount: execution.reusedToolCount || 0,
+    avoidedDuplicateCalls: execution.avoidedDuplicateCalls || 0,
+    replanReason: execution.replanReason || "",
+    partialCompletion: execution.partialCompletion === true,
+    goalContract: execution.goalContract || (execution.verification && execution.verification.goalContract) || null,
     metrics: buildMetrics({
       startTime,
       intent,
@@ -1785,15 +1898,18 @@ async function chat(input = {}) {
     intentName: intent.name,
     context,
     runId,
-    status: fallbackReason ? "degraded" : "completed",
+    status: fallbackReason ? "degraded" : (execution.partialCompletion ? "partial" : "completed"),
     stepCount: (execution.steps || []).length,
     contextSlots: buildContextSlots(intent, intent.slots || {}),
     pendingClarification: pendingPatch.pendingClarification,
     clearPendingClarification: pendingPatch.clearPendingClarification,
     answer: composed.answer,
     evidence: null,
-    cloudSyncEnabled: context.cloudSyncEnabled === true,
+    cloudSyncEnabled: context.cloudSyncEnabled === true || (memoryBundle.memory && memoryBundle.memory.mode === "cloud_sync"),
+    allowPartialCommit: true,
+    autoMemoryEnabled: context.autoMemoryEnabled !== false,
   });
+  maybeAttachProactive(response, { context, proactiveEvent: context.proactiveEvent }, memoryBundle, toolCalls);
   attachReminderConfirmation(response, execution, memoryBundle.principal);
   agentKernel.finalize(execution, {
     totalDurationMs: Date.now() - startTime,
@@ -1854,8 +1970,10 @@ function attachMemory(response, memoryBundle, options = {}) {
     observations: options.observations || response.observations,
     preferencePatch: options.preferencePatch || response.memoryPreferencePatch,
     preferredName: options.preferredName,
+    memoryCandidates: options.memoryCandidates || [],
     providerPayload: options.providerPayload || null,
     autoMemoryEnabled: options.autoMemoryEnabled !== false,
+    allowPartialCommit: options.allowPartialCommit === true,
   });
   const memory = commitResult.memory;
   response.memory = memory;
@@ -1969,9 +2087,11 @@ module.exports = {
   buildServiceFailureResponse,
   chat,
   evaluateProviderPolicy,
+  evaluateProactiveForRequest,
   shouldUseExternalProvider,
   stableAction,
   stableCard,
   stableGeneratedPayload,
   classifyProviderFailure,
+  normalizeProactiveSuggestion,
 };

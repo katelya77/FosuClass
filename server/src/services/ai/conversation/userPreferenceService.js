@@ -2,8 +2,9 @@
  * Principal-scoped low-risk preferences.
  *
  * Values are encrypted at rest and are never keyed by a client supplied id.
- * Enabling session_state / cloud_sync is functional authorization for low-risk
- * auto memory (name, campus, reminder lead, etc.). Sensitive credentials are never accepted.
+ * Enabling cloud_sync is functional authorization for low-risk User Memory
+ * (name, campus, reminder lead, etc.). session_state does not write user prefs.
+ * Sensitive credentials are never accepted.
  */
 const crypto = require("crypto");
 const fs = require("fs");
@@ -193,12 +194,21 @@ class UserPreferenceService {
 
   list(input = {}) {
     const values = this.getObject(input);
+    const updatedAt = new Date().toISOString();
     return {
       success: true,
       items: ALLOWED_KEYS.filter((key) => Object.prototype.hasOwnProperty.call(values, key)).map((key) => ({
         key,
         value: values[key],
         scope: "cloud_sync",
+        category: key === "preferredName" ? "称呼"
+          : key === "campus" ? "校区"
+            : key === "preferredBuilding" ? "常用楼栋"
+              : key === "defaultReminderLeadMinutes" ? "默认提醒"
+                : key === "answerDetailLevel" ? "回答偏好"
+                  : "偏好",
+        updatedAt,
+        editable: true,
       })),
     };
   }
@@ -206,10 +216,14 @@ class UserPreferenceService {
   upsert(input = {}) {
     const principalKey = this.assertPrincipal(input.principal);
     const mode = String(input.memoryMode || "local_only");
-    // Functional authorization: session_state or cloud_sync may persist low-risk prefs.
-    // local_only never writes durable preferences.
-    if (input.explicit !== true || (mode !== "cloud_sync" && mode !== "session_state")) {
-      return { success: true, persisted: false, reason: mode === "local_only" ? "local_only" : "not_authorized" };
+    // Durable User Memory only under cloud_sync (cross-conversation / cross-device).
+    // session_state and local_only never write preference files.
+    if (input.explicit !== true || mode !== "cloud_sync") {
+      return {
+        success: true,
+        persisted: false,
+        reason: mode === "local_only" ? "local_only" : (mode === "session_state" ? "session_state_no_user_memory" : "not_authorized"),
+      };
     }
     const entries = input.values && typeof input.values === "object" && !Array.isArray(input.values)
       ? input.values
