@@ -235,13 +235,27 @@ class MemoryController {
       ? []
       : mergeRecentTurns(prevTurns, input.message, input.answer, input.intentName);
 
-    const contextSlots = Object.assign(
-      {},
-      workingMemoryToSlots(workingMemory),
-      input.contextSlots || {}
-    );
+    // Working memory is authoritative for entity continuity; input slots fill gaps only.
+    const fromWorking = workingMemoryToSlots(workingMemory);
+    const fromInput = input.contextSlots && typeof input.contextSlots === "object" ? input.contextSlots : {};
+    const contextSlots = Object.assign({}, fromInput, fromWorking);
+    // Never let stale 0 week/weekday from callers overwrite real working values.
+    ["lastWeek", "lastWeekday", "week", "weekday", "sectionStart", "sectionEnd"].forEach((key) => {
+      if (contextSlots[key] === 0 || contextSlots[key] === "0") {
+        contextSlots[key] = fromWorking[key] != null ? fromWorking[key] : null;
+      }
+    });
     if (workingMemory.preferredName) {
       contextSlots.preferredName = workingMemory.preferredName;
+    }
+    if (workingMemory.className) {
+      contextSlots.className = workingMemory.className;
+      contextSlots.lastTargetName = workingMemory.className;
+      contextSlots.lastTargetType = "class";
+      contextSlots.q = workingMemory.className;
+    }
+    if (workingMemory.periodHint) {
+      contextSlots.periodHint = workingMemory.periodHint;
     }
 
     const memory = this.conversationMemory.persistAfterSuccess({

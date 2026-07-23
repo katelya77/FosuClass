@@ -43,12 +43,16 @@ function pickNumber(...values) {
     const raw = values[i];
     if (raw === null || raw === undefined || raw === "") continue;
     const n = Number(raw);
-    // Reject pure Number(null)/Number("") style zeros from empty inputs; allow real 0 only if raw is 0/"0".
     if (!Number.isFinite(n)) continue;
-    if (n === 0 && raw !== 0 && raw !== "0") continue;
+    // Week/weekday/section never use 0 as a valid value in FosuClass schemas.
+    if (n === 0) continue;
     return n;
   }
   return null;
+}
+
+function normalizeClassName(value) {
+  return safeText(value, 80).replace(/\s+/g, "");
 }
 
 function normalizeWorkingMemory(raw = {}) {
@@ -63,7 +67,7 @@ function normalizeWorkingMemory(raw = {}) {
       return acc;
     }, {})
     : {};
-  next.className = safeText(raw.className || raw.confirmedEntities && raw.confirmedEntities.className, 80);
+  next.className = normalizeClassName(raw.className || raw.confirmedEntities && raw.confirmedEntities.className);
   next.teacherName = safeText(raw.teacherName, 80);
   next.courseName = safeText(raw.courseName, 80);
   next.classroom = safeText(raw.classroom, 40);
@@ -122,11 +126,11 @@ function updateWorkingMemory(previous, input = {}) {
   const next = Object.assign({}, prev);
 
   // Inherit unless this turn explicitly changes a field.
-  const className = safeText(
-    slots.className || slots.q && /班/.test(String(slots.q)) && slots.q
-    || contextSlots.className || contextSlots.lastTargetName && /班/.test(contextSlots.lastTargetName) && contextSlots.lastTargetName
-    || prev.className,
-    80
+  const className = normalizeClassName(
+    slots.className || (slots.q && /班/.test(String(slots.q)) ? slots.q : "")
+    || contextSlots.className
+    || (contextSlots.lastTargetName && /班/.test(contextSlots.lastTargetName) ? contextSlots.lastTargetName : "")
+    || prev.className
   );
   const teacherName = safeText(slots.teacherName || contextSlots.teacherName || prev.teacherName, 80);
   const courseName = safeText(slots.courseName || contextSlots.courseName || prev.courseName, 80);
@@ -137,6 +141,7 @@ function updateWorkingMemory(previous, input = {}) {
   let weekday = pickNumber(slots.weekday, slots.lastWeekday, contextSlots.weekday, contextSlots.lastWeekday, prev.weekday);
 
   // Follow-up phrases: "那周三呢" / "下午呢" / "换成第17周"
+  // Prefer explicit message modifiers; otherwise keep previous (never overwrite with 0).
   if (/周[一二三四五六日天1-7]/.test(message) || /星期[一二三四五六日天]/.test(message)) {
     const map = {
       一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7,
@@ -147,12 +152,20 @@ function updateWorkingMemory(previous, input = {}) {
   }
   if (/第\s*(\d{1,2})\s*周/.test(message) || /换成.*?(\d{1,2})\s*周/.test(message)) {
     const wm = message.match(/第\s*(\d{1,2})\s*周/) || message.match(/(\d{1,2})\s*周/);
-    if (wm) teachingWeek = Number(wm[1]);
+    if (wm) {
+      const parsed = Number(wm[1]);
+      if (Number.isFinite(parsed) && parsed >= 1) teachingWeek = parsed;
+    }
   }
-  let periodHint = prev.periodHint;
+  // Slots may ship invalid 0 from older buildContextSlots — fall back to prev.
+  if (weekday == null || weekday < 1) weekday = prev.weekday;
+  if (teachingWeek == null || teachingWeek < 1) teachingWeek = prev.teachingWeek;
+
+  let periodHint = prev.periodHint || "";
   if (/上午|早上/.test(message)) periodHint = "morning";
-  if (/下午/.test(message)) periodHint = "afternoon";
-  if (/晚上|夜间/.test(message)) periodHint = "evening";
+  else if (/下午/.test(message)) periodHint = "afternoon";
+  else if (/晚上|夜间/.test(message)) periodHint = "evening";
+  else if (slots.periodHint) periodHint = safeText(slots.periodHint, 40);
 
   next.className = className;
   next.teacherName = teacherName;

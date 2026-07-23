@@ -164,8 +164,11 @@ function inferSearchType(message) {
   const text = normalizeText(message);
   if (/老师|教师|任课/.test(text)) return "teacher";
   if (/教室|课室|自习室/.test(text)) return "classroom";
-  if (/课程|科目|查课/.test(text)) return "course";
-  if (/班级|行政班|专业/.test(text)) return "class";
+  if (/课程|科目|查课/.test(text) && !/班/.test(text)) return "course";
+  // “25动医6班课表” must be class, not default teacher.
+  if (/班级|行政班|专业|\d\s*[\u3400-\u9fff]{0,8}班|[\u3400-\u9fff]+\d+\s*班/.test(text) || (/班/.test(text) && !/老师|教师|教室/.test(text))) {
+    return "class";
+  }
   return "teacher";
 }
 
@@ -173,7 +176,7 @@ function stripIntentWords(message) {
   return normalizeText(message)
     .replace(/帮我|帮|我|请问|查询|查找|查一下|查|看看|看|找|占用|使用情况|课表|课程表|老师|教师|教室|课室|自习室|课程|安排|班级|行政班|专业|佛山大学|佛大|的/g, " ")
     .replace(/[？?，,。.!！]/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/\s+/g, "")
     .trim();
 }
 
@@ -270,8 +273,10 @@ function inferSearchTypeChinese(message) {
   const text = normalizeText(message);
   if (/老师|教师|任课/.test(text)) return "teacher";
   if (/教室|课室|自习室|楼栋|占用|使用情况/.test(text)) return "classroom";
-  if (/课程|科目|查课|安排/.test(text)) return "course";
-  if (/班级|行政班|专业/.test(text)) return "class";
+  if (/课程|科目|查课|安排/.test(text) && !/班/.test(text)) return "course";
+  if (/班级|行政班|专业|\d\s*[\u3400-\u9fff]{0,8}班|[\u3400-\u9fff]+\d+\s*班/.test(text) || (/班/.test(text) && !/老师|教师|教室/.test(text))) {
+    return "class";
+  }
   return "teacher";
 }
 
@@ -280,7 +285,7 @@ function stripChineseIntentWords(message) {
     .replace(/帮我|请|麻烦|查询|查找|查一下|查一查|查|找|看看|看|一下|佛山大学|佛大|的/g, " ")
     .replace(/老师|教师|任课|教室|课室|自习室|课程|科目|班级|行政班|专业|课表|课程表|安排|占用|使用情况/g, " ")
     .replace(/[，。！？、,.!?]/g, " ")
-    .replace(/\s+/g, " ")
+    .replace(/\s+/g, "")
     .trim();
 }
 
@@ -545,6 +550,108 @@ function resolveModernChineseIntent(message, context = {}) {
   return null;
 }
 
+function weekdayFromFollowUpText(text) {
+  const map = {
+    一: 1, 二: 2, 三: 3, 四: 4, 五: 5, 六: 6, 日: 7, 天: 7,
+    1: 1, 2: 2, 3: 3, 4: 4, 5: 5, 6: 6, 7: 7,
+  };
+  const compact = normalizeText(text).replace(/\s+/g, "");
+  const match = compact.match(/周([一二三四五六日天1-7])/) || compact.match(/星期([一二三四五六日天])/);
+  return match && map[match[1]] != null ? map[match[1]] : null;
+}
+
+function weekFromFollowUpText(text) {
+  const compact = normalizeText(text).replace(/\s+/g, "");
+  const match = compact.match(/第(\d{1,2})周/) || compact.match(/换成(\d{1,2})周/) || compact.match(/(\d{1,2})周/);
+  if (!match) return null;
+  const week = Number(match[1]);
+  return Number.isFinite(week) && week >= 1 && week <= 30 ? week : null;
+}
+
+function periodFromFollowUpText(text) {
+  const compact = normalizeText(text).replace(/\s+/g, "");
+  if (/上午|早上/.test(compact)) return "morning";
+  if (/下午/.test(compact)) return "afternoon";
+  if (/晚上|夜间/.test(compact)) return "evening";
+  return "";
+}
+
+function isFollowUpModifierMessage(message) {
+  const compact = normalizeText(message).replace(/\s+/g, "");
+  if (!compact || compact.length > 28) return false;
+  // Short slot refinements only — not full new questions.
+  if (/^(那|换成|改成|还是|继续|再)?(周[一二三四五六日天1-7]|星期[一二三四五六日天]|第?\d{1,2}周|上午|下午|晚上|早上)(呢|啊|呀)?[？?！!。.]?$/.test(compact)) {
+    return true;
+  }
+  if (/^(那)?(周[一二三四五六日天1-7]|下午|上午|晚上)呢[？?]?$/.test(compact)) return true;
+  if (/^换成第?\d{1,2}周$/.test(compact)) return true;
+  return false;
+}
+
+/**
+ * Multi-turn follow-ups: “那周三呢 / 下午呢 / 换成第17周”
+ * inherit last schedule/index task entities from working memory / slots.
+ */
+function resolveFollowUpIntent(message, context = {}) {
+  if (!isFollowUpModifierMessage(message)) return null;
+  const wm = context.workingMemory && typeof context.workingMemory === "object" ? context.workingMemory : {};
+  const conversationSlots = context.conversationSlots && typeof context.conversationSlots === "object"
+    ? context.conversationSlots
+    : {};
+  const lastIntent = String(
+    wm.currentGoal || conversationSlots.lastIntent || context.lastIntent || ""
+  );
+  const className = String(wm.className || conversationSlots.className || "").replace(/\s+/g, "");
+  const teacherName = String(wm.teacherName || conversationSlots.teacherName || "").replace(/\s+/g, "");
+  const lastTarget = String(conversationSlots.lastTargetName || conversationSlots.q || "").replace(/\s+/g, "");
+  const q = className || teacherName || lastTarget;
+  const type = className || /班/.test(lastTarget)
+    ? "class"
+    : (teacherName || conversationSlots.lastTargetType === "teacher" ? "teacher" : (conversationSlots.lastTargetType || "class"));
+
+  const weekday = weekdayFromFollowUpText(message);
+  const week = weekFromFollowUpText(message);
+  const periodHint = periodFromFollowUpText(message);
+  const inheritedWeek = week != null
+    ? week
+    : (Number(wm.teachingWeek || conversationSlots.lastWeek || conversationSlots.week) || null);
+  const inheritedWeekday = weekday != null
+    ? weekday
+    : (Number(wm.weekday || conversationSlots.lastWeekday || conversationSlots.weekday) || null);
+  const inheritedPeriod = periodHint || wm.periodHint || "";
+
+  const scheduleLike = /search_school_index|get_schedule_detail|get_week_schedule|get_today|get_tomorrow|search_class|课表/.test(lastIntent)
+    || Boolean(q);
+  if (!scheduleLike || !q) return null;
+
+  const personalScheduleIntent = /get_today_courses|get_tomorrow_courses|get_week_schedule|get_next_course/.test(lastIntent);
+  if (personalScheduleIntent && !className) {
+    return {
+      name: lastIntent,
+      slots: {
+        week: inheritedWeek && inheritedWeek >= 1 ? inheritedWeek : undefined,
+        weekday: inheritedWeekday && inheritedWeekday >= 1 ? inheritedWeekday : undefined,
+        periodHint: inheritedPeriod || undefined,
+      },
+      followUp: true,
+      confidence: 0.92,
+    };
+  }
+
+  return {
+    name: "search_school_index",
+    slots: {
+      type: type || "class",
+      q,
+      week: inheritedWeek && inheritedWeek >= 1 ? inheritedWeek : undefined,
+      weekday: inheritedWeekday && inheritedWeekday >= 1 ? inheritedWeekday : undefined,
+      periodHint: inheritedPeriod || undefined,
+    },
+    followUp: true,
+    confidence: 0.94,
+  };
+}
+
 function resolveIntent(message, context = {}) {
   const text = normalizeText(message);
   if (isProjectQaMessage(text)) {
@@ -554,6 +661,9 @@ function resolveIntent(message, context = {}) {
   if (modernIntent) return modernIntent;
   const pendingIntent = resolvePendingClarificationIntent(text, context);
   if (pendingIntent) return pendingIntent;
+  // Multi-turn slot refinements before generic conversational fallback.
+  const followUpIntent = resolveFollowUpIntent(text, context);
+  if (followUpIntent) return followUpIntent;
   const chineseIntent = resolveIntentChinese(text, context);
   if (chineseIntent) return chineseIntent;
   if (/导入|XLS|excel|个人课表|账号|登录|密码/.test(text)) {
