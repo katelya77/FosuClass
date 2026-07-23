@@ -210,6 +210,65 @@ async function deleteCloudPreference(key) {
   }
 }
 
+async function patchCloudPreference(input = {}) {
+  const body = {};
+  if (input.values && typeof input.values === "object") body.values = input.values;
+  if (input.key) {
+    body.key = safeText(input.key, 48);
+    body.value = input.value;
+  }
+  if (typeof input.autoMemoryEnabled === "boolean") body.autoMemoryEnabled = input.autoMemoryEnabled;
+  try {
+    const response = await http.request(
+      withEnvQuery("/api/ai/agent/memory/preferences"),
+      "PATCH",
+      body,
+      requestOptions()
+    );
+    if (!response || response.success === false) {
+      const mapped = mapError(response, "PATCH_PREFERENCE_FAILED");
+      return { success: false, error: mapped.error, code: mapped.code };
+    }
+    return {
+      success: true,
+      persisted: response.persisted === true,
+      keys: response.keys || [],
+      autoMemoryEnabled: response.autoMemoryEnabled,
+    };
+  } catch (error) {
+    const mapped = mapError(error, "PATCH_PREFERENCE_FAILED");
+    return { success: false, error: mapped.error, code: mapped.code };
+  }
+}
+
+/**
+ * Server-side proactive evaluate — no model call; at most one suggestion.
+ */
+async function evaluateProactive(input = {}) {
+  const event = safeText(input.event, 64);
+  if (!event) return { success: false, proactiveSuggestion: null, code: "EVENT_REQUIRED" };
+  try {
+    const response = await http.post(withEnvQuery("/api/ai/agent/proactive/evaluate"), {
+      event,
+      context: input.context && typeof input.context === "object" ? input.context : {},
+      facts: input.facts && typeof input.facts === "object" ? input.facts : {},
+      conversationId: safeText(input.conversationId, 96),
+      memoryMode: safeText(input.memoryMode, 32),
+    }, requestOptions({ timeout: 8000, retries: 0 }));
+    if (!response || response.success === false) {
+      return { success: false, proactiveSuggestion: null, reason: response && response.reason || "failed" };
+    }
+    return {
+      success: true,
+      proactiveSuggestion: response.proactiveSuggestion || null,
+      reason: response.reason || "",
+      event: response.event || event,
+    };
+  } catch (error) {
+    return { success: false, proactiveSuggestion: null, reason: "network" };
+  }
+}
+
 function toTime(value) {
   const ms = Date.parse(String(value || ""));
   return Number.isFinite(ms) ? ms : 0;
@@ -299,12 +358,14 @@ module.exports = {
   clearCloudMemory,
   deleteCloudPreference,
   deleteCloudConversation,
+  evaluateProactive,
   getCloudConversation,
   getEnvVersion,
   listCloudConversations,
   listCloudPreferences,
   mergeLocalAndCloudConversations,
   patchCloudConversation,
+  patchCloudPreference,
   renameCloudConversation,
   sourceBadge,
   updateMemoryPolicy,

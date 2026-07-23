@@ -242,12 +242,15 @@
     mode="{{memoryMode}}"
     preferences="{{memoryPreferences}}"
     preferences-loading="{{memoryPreferencesLoading}}"
+    auto-memory-enabled="{{autoMemoryEnabled}}"
     bind:close="closeMemorySheet"
     bind:change="onMemoryModeChange"
     bind:clearlocal="onClearLocalMemory"
     bind:clearcurrent="onClearCurrentMemory"
     bind:clearall="onClearAllMemory"
     bind:deletepreference="onDeleteMemoryPreference"
+    bind:editpreference="onEditMemoryPreference"
+    bind:toggleautomemory="onToggleAutoMemory"
   />
 
   <xiaofu-reminder-sheet

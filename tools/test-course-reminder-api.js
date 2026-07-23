@@ -15,6 +15,8 @@ process.env.FOSU_SESSION_SECRET = "test-reminder-api-session-secret";
 process.env.FOSU_AGENT_REMINDER_SECRET = "test-reminder-api-encryption-secret";
 process.env.FOSU_AGENT_MEMORY_SECRET = "test-reminder-api-memory-secret-32";
 process.env.FOSU_DYNAMIC_API_SESSION_REQUIRED = "true";
+// This suite issues many sequential reminder API calls; keep scheduleLimiter from flaking.
+process.env.FOSU_SCHEDULE_RATE_LIMIT_MAX = "200";
 delete process.env.WECHAT_COURSE_REMINDER_TEMPLATE_ID;
 delete process.env.WECHAT_APPID;
 delete process.env.WECHAT_APPSECRET;
@@ -210,6 +212,28 @@ async function run() {
     });
     assert.strictEqual(roomCreated.data.reminder.eventDriven, true);
 
+    // Pause the lead-30 all_courses reminder so dispatchDue only counts the room-change event.
+    // Without this, its nextTriggerAt can also be due and inflate appOnlyDue (date-dependent flake).
+    const planReminderId = createdFromPlan.data.reminder && createdFromPlan.data.reminder.id;
+    if (planReminderId) {
+      const pauseKey = "reminder-api-pause-plan-before-event";
+      const pauseConf = await request(baseUrl, `/api/ai/agent/reminders/${planReminderId}/confirmations?envVersion=release`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ operation: "update", patch: { status: "paused" }, idempotencyKey: pauseKey }),
+      });
+      assert.ok(pauseConf.data && pauseConf.data.confirmationProof, JSON.stringify(pauseConf.data));
+      await request(baseUrl, `/api/ai/agent/reminders/${planReminderId}?envVersion=release`, {
+        method: "PATCH",
+        headers,
+        body: JSON.stringify({
+          patch: { status: "paused" },
+          confirmationProof: pauseConf.data.confirmationProof,
+          idempotencyKey: pauseKey,
+        }),
+      });
+    }
+
     const changedSummary = Object.assign({}, context.currentScheduleSummary, {
       fingerprint: "api-schedule-v2",
       courses: [Object.assign({}, context.currentScheduleSummary.courses[0], { classroom: "B9-301" })],
@@ -249,7 +273,9 @@ async function run() {
     assert.strictEqual(emptyInAppEvents.data.items.length, 0);
 
     const afterEvent = await request(baseUrl, "/api/ai/agent/reminders?envVersion=release", { headers });
-    const roomAfterEvent = afterEvent.data.items.find((item) => item.id === roomCreated.data.reminder.id);
+    assert.strictEqual(afterEvent.status, 200, JSON.stringify(afterEvent.data));
+    const roomAfterEvent = (afterEvent.data.items || []).find((item) => item.id === roomCreated.data.reminder.id);
+    assert.ok(roomAfterEvent, "room reminder missing after event");
     assert.ok(roomAfterEvent.sendLog.some((item) => item.code === "APP_ONLY_DUE"));
     assert.strictEqual(roomAfterEvent.status, "enabled");
 
@@ -259,11 +285,14 @@ async function run() {
       headers,
       body: JSON.stringify({ operation: "delete", patch: {}, idempotencyKey: deleteKey }),
     });
+    assert.strictEqual(deleteConfirmation.status, 200, JSON.stringify(deleteConfirmation.data));
+    assert.ok(deleteConfirmation.data.confirmationProof, JSON.stringify(deleteConfirmation.data));
     const removed = await request(baseUrl, `/api/ai/agent/reminders/${reminderId}?envVersion=release`, {
       method: "DELETE",
       headers,
       body: JSON.stringify({ confirmationProof: deleteConfirmation.data.confirmationProof, idempotencyKey: deleteKey }),
     });
+    assert.strictEqual(removed.status, 200, JSON.stringify(removed.data));
     assert.strictEqual(removed.data.deleted, true);
 
     console.log("test-course-reminder-api: PASS");

@@ -598,7 +598,8 @@
     "test:xiaofu-final-ui": "node tools/test-xiaofu-final-ui.js",
     "test:xiaofu-product-experience": "node tools/test-xiaofu-product-experience.js",
     "test:agent-e2e-matrix": "node tools/test-agent-e2e-matrix.js",
-    "test:agent-final-convergence": "node tools/run-agent-final-convergence-tests.js"
+    "test:agent-final-convergence": "node tools/run-agent-final-convergence-tests.js",
+    "test:agent-release-gate": "node tools/run-agent-release-gate.js"
   },
   "repository": {
     "type": "git",

@@ -69,18 +69,19 @@ function isSensitiveCandidate(candidate = {}) {
 }
 
 /**
- * Functional authorization: enabling session_state / cloud_sync is consent
- * for low-risk auto memory. local_only never writes durable user memory.
+ * Functional authorization for cross-conversation User Memory:
+ * only cloud_sync may auto-persist durable user preferences.
+ * session_state keeps Working/Thread for the current conversation only.
+ * local_only never writes durable user memory.
  */
 function mayAutoPersistUserMemory(memoryMode, candidate = {}) {
   const mode = String(memoryMode || "local_only");
-  if (mode === "local_only") return false;
+  if (mode !== "cloud_sync") return false;
   if (isSensitiveCandidate(candidate)) return false;
   if (isTemporaryCandidate(candidate)) return false;
   if (!isLowRiskKey(candidate.key)) return false;
   if (Number(candidate.confidence || 0) < MIN_CONFIDENCE) return false;
-  if (mode === "session_state" || mode === "cloud_sync") return true;
-  return false;
+  return true;
 }
 
 function mayKeepInWorkingMemory(candidate = {}) {

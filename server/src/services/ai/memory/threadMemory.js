@@ -77,24 +77,42 @@ function buildSemanticSummary(input = {}) {
   return safeText(parts.join("。") + "。", 240);
 }
 
-function mergeRecentTurns(previousTurns, userMessage, assistantAnswer, intentName) {
+function makeTurnId(role, text, at, intentName) {
+  const crypto = require("crypto");
+  const base = `${role}|${String(text || "").slice(0, 200)}|${at || ""}|${intentName || ""}`;
+  return `t_${crypto.createHash("sha256").update(base).digest("hex").slice(0, 16)}`;
+}
+
+/**
+ * Merge turns with stable turnId dedupe (not only adjacent text equality).
+ */
+function mergeRecentTurns(previousTurns, userMessage, assistantAnswer, intentName, options = {}) {
   const turns = desensitizeTurns(previousTurns, MAX_RECENT_TURNS);
-  if (userMessage) {
+  const seen = new Set(turns.map((t) => t.turnId).filter(Boolean));
+  const runId = options.runId || "";
+
+  function pushTurn(role, text) {
+    if (!text) return;
+    const at = nowIso();
+    const redacted = safetyGuard.redactSensitiveText(String(text)).slice(0, 400);
+    const turnId = options.turnIds && options.turnIds[role]
+      || makeTurnId(role, redacted, runId || at, intentName);
+    if (seen.has(turnId)) return;
+    // Also skip exact same role+text already present (compat for pre-turnId files)
+    const duplicate = turns.some((t) => t.role === role && t.text === redacted);
+    if (duplicate) return;
+    seen.add(turnId);
     turns.push(normalizeRecentTurn({
-      role: "user",
-      text: safetyGuard.redactSensitiveText(String(userMessage)).slice(0, 400),
+      role,
+      text: redacted,
       intent: intentName,
-      at: nowIso(),
+      at,
+      turnId,
     }));
   }
-  if (assistantAnswer) {
-    turns.push(normalizeRecentTurn({
-      role: "assistant",
-      text: safetyGuard.redactSensitiveText(String(assistantAnswer)).slice(0, 400),
-      intent: intentName,
-      at: nowIso(),
-    }));
-  }
+
+  pushTurn("user", userMessage);
+  pushTurn("assistant", assistantAnswer);
   return turns.slice(-MAX_RECENT_TURNS);
 }
 
@@ -102,6 +120,7 @@ function turnsToRecentMessages(turns = []) {
   return desensitizeTurns(turns, MAX_WINDOW).map((turn) => ({
     role: turn.role,
     content: turn.text,
+    turnId: turn.turnId || "",
   }));
 }
 
@@ -114,4 +133,5 @@ module.exports = {
   buildSemanticSummary,
   mergeRecentTurns,
   turnsToRecentMessages,
+  makeTurnId,
 };

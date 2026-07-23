@@ -64,21 +64,25 @@ class MemoryController {
     if (serverTurns.length && memoryMode !== "local_only") {
       const fromServer = turnsToRecentMessages(serverTurns);
       const merged = [];
+      const seenTurnIds = new Set();
       recentMessages.concat(fromServer).forEach((turn) => {
         const role = turn && turn.role === "user" ? "user" : "assistant";
         const content = safetyGuard.redactSensitiveText(String(turn && (turn.content || turn.text) || "")).slice(0, 400);
         if (!content) return;
+        const turnId = String(turn.turnId || "").slice(0, 64);
+        if (turnId && seenTurnIds.has(turnId)) return;
+        if (turnId) seenTurnIds.add(turnId);
         const prev = merged[merged.length - 1];
-        if (prev && prev.role === role && prev.content === content) return;
-        merged.push({ role, content });
+        if (!turnId && prev && prev.role === role && prev.content === content) return;
+        merged.push({ role, content, turnId: turnId || undefined });
       });
       recentMessages = merged.slice(-12);
     }
 
-    // Merge cloud/session preferences into context for interpreters.
-    if (memoryMode !== "local_only" && userLoaded.values && Object.keys(userLoaded.values).length) {
+    // User preferences only when cloud_sync loaded them.
+    if (memoryMode === "cloud_sync" && userLoaded.values && Object.keys(userLoaded.values).length) {
       context.userPreferences = Object.assign({}, context.userPreferences || {}, userLoaded.values, {
-        localOnly: memoryMode === "local_only",
+        localOnly: false,
       });
     }
 
@@ -139,6 +143,7 @@ class MemoryController {
 
   /**
    * Commit after a successful turn: working + thread + optional user memory.
+   * cancelled / security blocked / true failure do not write.
    */
   commit(input = {}) {
     const memoryMode = input.memoryMode
@@ -148,6 +153,46 @@ class MemoryController {
       || (input.memoryBundle && input.memoryBundle.principal);
     const prevState = input.state || (input.memoryBundle && input.memoryBundle.state) || null;
     const autoMemoryEnabled = input.autoMemoryEnabled !== false;
+
+    if (input.cancelled === true || input.securityBlocked === true) {
+      return {
+        memory: input.memoryBundle && input.memoryBundle.memory || {
+          mode: memoryMode,
+          authenticated: Boolean(principal && principal.authenticated),
+          persisted: false,
+          synced: false,
+          revision: prevState && prevState.revision || 0,
+        },
+        skipped: true,
+        skipReason: input.securityBlocked ? "security_blocked" : "cancelled",
+        workingMemory: normalizeWorkingMemory(prevState && prevState.workingMemory || emptyWorkingMemory()),
+        conversationSummary: (prevState && prevState.conversationSummary) || "",
+        recentTurns: (prevState && prevState.recentTurns) || [],
+        candidates: [],
+        userCommit: { persisted: false, keys: [] },
+        autoMemoryHints: [],
+      };
+    }
+    // True hard failure without allowed partial success: do not commit.
+    if (input.failed === true && input.allowPartialCommit !== true && input.status !== "partial" && input.status !== "completed") {
+      return {
+        memory: input.memoryBundle && input.memoryBundle.memory || {
+          mode: memoryMode,
+          authenticated: Boolean(principal && principal.authenticated),
+          persisted: false,
+          synced: false,
+          revision: prevState && prevState.revision || 0,
+        },
+        skipped: true,
+        skipReason: "failed",
+        workingMemory: normalizeWorkingMemory(prevState && prevState.workingMemory || emptyWorkingMemory()),
+        conversationSummary: (prevState && prevState.conversationSummary) || "",
+        recentTurns: (prevState && prevState.recentTurns) || [],
+        candidates: [],
+        userCommit: { persisted: false, keys: [] },
+        autoMemoryHints: [],
+      };
+    }
 
     const prevWorking = normalizeWorkingMemory(
       prevState && prevState.workingMemory
@@ -230,10 +275,12 @@ class MemoryController {
     });
 
     const prevTurns = prevState && Array.isArray(prevState.recentTurns) ? prevState.recentTurns : [];
-    // Persist recent turns for both session_state and cloud_sync (desensitized).
+    // Persist recent turns for both session_state and cloud_sync (desensitized); turnId dedupe.
     const recentTurns = memoryMode === "local_only"
       ? []
-      : mergeRecentTurns(prevTurns, input.message, input.answer, input.intentName);
+      : mergeRecentTurns(prevTurns, input.message, input.answer, input.intentName, {
+        runId: input.runId || "",
+      });
 
     // Working memory is authoritative for entity continuity; input slots fill gaps only.
     const fromWorking = workingMemoryToSlots(workingMemory);

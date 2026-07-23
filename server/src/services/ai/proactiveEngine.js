@@ -1,9 +1,10 @@
 /**
  * Event-driven proactive suggestions — no background model polling.
- * Deterministic rules + cooldown; facts must come from tools/context.
+ * Deterministic rules + durable cooldown; facts must come from tools/context.
  */
 
 const safetyGuard = require("./safetyGuard");
+const { defaultProactiveCooldownStore } = require("./proactiveCooldownStore");
 
 const COOLDOWN_MS = Object.freeze({
   next_course: 30 * 60 * 1000,
@@ -21,34 +22,52 @@ const TRIGGER_EVENTS = Object.freeze([
   "today_schedule_open",
   "personal_schedule_imported",
   "release_pack_changed",
-  "schedule_conflict_detected",
-  "reminder_due_soon",
   "campus_task_completed",
 ]);
 
-// In-process cooldown store (per principal hash key). Durable enough for single instance.
-const cooldownStore = new Map();
+// Legacy alias events accepted for compatibility → mapped to allowed events.
+const EVENT_ALIASES = Object.freeze({
+  schedule_conflict_detected: "campus_task_completed",
+  reminder_due_soon: "assistant_open",
+});
 
-function cooldownKey(principalKey, suggestionType) {
-  return `${String(principalKey || "anon").slice(0, 64)}:${suggestionType}`;
+let cooldownStore = defaultProactiveCooldownStore;
+
+function setCooldownStore(store) {
+  cooldownStore = store || defaultProactiveCooldownStore;
+}
+
+function normalizeEvent(event) {
+  const raw = String(event || "");
+  if (TRIGGER_EVENTS.includes(raw)) return raw;
+  if (EVENT_ALIASES[raw]) return EVENT_ALIASES[raw];
+  return "";
 }
 
 function isCooledDown(principalKey, suggestionType, now = Date.now()) {
-  const key = cooldownKey(principalKey, suggestionType);
-  const until = cooldownStore.get(key) || 0;
-  return now < until;
+  try {
+    return cooldownStore.isCooledDown(principalKey, suggestionType, now) === true;
+  } catch (_) {
+    return false;
+  }
 }
 
 function markShown(principalKey, suggestionType, now = Date.now()) {
   const ttl = COOLDOWN_MS[suggestionType] || 60 * 60 * 1000;
-  cooldownStore.set(cooldownKey(principalKey, suggestionType), now + ttl);
+  try {
+    cooldownStore.markShown(principalKey, suggestionType, ttl, now);
+  } catch (_) {
+    // best effort
+  }
 }
 
 function clearCooldowns(principalKey) {
-  const prefix = `${String(principalKey || "anon").slice(0, 64)}:`;
-  Array.from(cooldownStore.keys()).forEach((key) => {
-    if (key.startsWith(prefix)) cooldownStore.delete(key);
-  });
+  try {
+    if (principalKey) cooldownStore.clearPrincipal(principalKey);
+    else if (typeof cooldownStore.clearAll === "function") cooldownStore.clearAll();
+  } catch (_) {
+    // best effort
+  }
 }
 
 function disabledTypes(context = {}) {
@@ -56,13 +75,14 @@ function disabledTypes(context = {}) {
   return new Set(Array.isArray(list) ? list.map(String) : []);
 }
 
-function buildSuggestion(type, title, body, actions = []) {
+function buildSuggestion(type, title, body, actions = [], expiresInMs = 60 * 60 * 1000) {
   return {
     type,
     title: safetyGuard.redactSensitiveText(String(title || "")).slice(0, 40),
     body: safetyGuard.redactSensitiveText(String(body || "")).slice(0, 120),
     actions: (Array.isArray(actions) ? actions : []).slice(0, 2),
     source: "proactive_engine",
+    expiresAt: new Date(Date.now() + Math.max(60 * 1000, expiresInMs)).toISOString(),
   };
 }
 
@@ -71,8 +91,8 @@ function buildSuggestion(type, title, body, actions = []) {
  * Never invents schedule facts — only uses provided tool/context facts.
  */
 function evaluateProactive(input = {}) {
-  const event = String(input.event || "");
-  if (!TRIGGER_EVENTS.includes(event)) {
+  const event = normalizeEvent(input.event);
+  if (!event) {
     return { suggestion: null, reason: "unknown_event" };
   }
   const principalKey = input.principal && input.principal.principalKey || input.principalKey || "";
@@ -91,7 +111,8 @@ function evaluateProactive(input = {}) {
         "next_course",
         "下一节课提醒",
         `${facts.nextCourse.name}${facts.nextCourse.room ? ` · ${facts.nextCourse.room}` : ""}${facts.nextCourse.leaveBy ? `，建议 ${facts.nextCourse.leaveBy} 前出发` : ""}`,
-        [{ label: "查看今日课表", type: "navigate", payload: { url: "/pages/index/index" } }]
+        [{ label: "查看今日课表", type: "navigate", payload: { url: "/pages/index/index" } }],
+        COOLDOWN_MS.next_course
       ),
     });
   }
@@ -104,7 +125,8 @@ function evaluateProactive(input = {}) {
         "room_change",
         "教室有变化",
         `${facts.roomChanged.courseName} 教室调整为 ${facts.roomChanged.newRoom || "见课表"}`,
-        []
+        [],
+        COOLDOWN_MS.room_change
       ),
     });
   }
@@ -113,7 +135,7 @@ function evaluateProactive(input = {}) {
     candidates.push({
       type: "back_to_back",
       priority: 80,
-      suggestion: buildSuggestion("back_to_back", "连续赶课", "今天有连续课程，预留换教室时间。", []),
+      suggestion: buildSuggestion("back_to_back", "连续赶课", "今天有连续课程，预留换教室时间。", [], COOLDOWN_MS.back_to_back),
     });
   }
 
@@ -125,7 +147,8 @@ function evaluateProactive(input = {}) {
         "free_gap",
         "今日有空档",
         `大约 ${facts.freeGap.sections} 有空档，需要的话我可以帮你找附近空教室。`,
-        [{ label: "找空教室", type: "retry", payload: { message: "帮我找现在空教室" } }]
+        [{ label: "找空教室", type: "retry", payload: { message: "帮我找现在空教室" } }],
+        COOLDOWN_MS.free_gap
       ),
     });
   }
@@ -138,7 +161,8 @@ function evaluateProactive(input = {}) {
         "rain_commute",
         "出行提醒",
         `天气：${String(facts.weather.summary || facts.weather.text).slice(0, 40)}，出门记得带伞。`,
-        []
+        [],
+        COOLDOWN_MS.rain_commute
       ),
     });
   }
@@ -151,7 +175,8 @@ function evaluateProactive(input = {}) {
         "nearby_empty_room",
         "空档可用教室",
         `${facts.nearbyEmptyRoom.room} 当前空闲`,
-        []
+        [],
+        COOLDOWN_MS.nearby_empty_room
       ),
     });
   }
@@ -164,7 +189,8 @@ function evaluateProactive(input = {}) {
         "schedule_conflict",
         "课表需留意",
         facts.scheduleConflict ? "检测到课表冲突，建议打开课表核对。" : "有课程缺少教室信息。",
-        [{ label: "检查课表", type: "retry", payload: { message: "帮我检查课表冲突" } }]
+        [{ label: "检查课表", type: "retry", payload: { message: "帮我检查课表冲突" } }],
+        COOLDOWN_MS.schedule_conflict
       ),
     });
   }
@@ -177,12 +203,12 @@ function evaluateProactive(input = {}) {
         "reminder_not_enabled",
         "尚未开启课程提醒",
         "可以让我在上课前提醒你，需要的话说“上课前20分钟提醒我”。",
-        [{ label: "设置提醒", type: "manageReminders", payload: { openCreate: true } }]
+        [{ label: "设置提醒", type: "manageReminders", payload: { openCreate: true } }],
+        COOLDOWN_MS.reminder_not_enabled
       ),
     });
   }
 
-  // Post-task soft follow-ups only when event is campus_task_completed
   if (event === "campus_task_completed" && facts.followUpHint) {
     candidates.push({
       type: "free_gap",
@@ -191,7 +217,8 @@ function evaluateProactive(input = {}) {
         "free_gap",
         "还需要帮忙吗",
         safetyGuard.redactSensitiveText(String(facts.followUpHint)).slice(0, 80),
-        []
+        [],
+        COOLDOWN_MS.free_gap
       ),
     });
   }
@@ -202,7 +229,7 @@ function evaluateProactive(input = {}) {
     .sort((a, b) => b.priority - a.priority);
 
   if (!ranked.length) {
-    return { suggestion: null, reason: "no_candidate_or_cooled_down" };
+    return { suggestion: null, reason: "no_candidate_or_cooled_down", event };
   }
 
   const top = ranked[0];
@@ -261,12 +288,42 @@ function factsFromToolCalls(toolCalls = []) {
   return facts;
 }
 
+/**
+ * Build facts from client context without inventing schedule details.
+ */
+function factsFromContext(context = {}) {
+  const facts = {};
+  const next = context.nextCourse || context.upcomingCourse;
+  if (next && (next.name || next.courseName)) {
+    facts.nextCourse = {
+      name: next.name || next.courseName,
+      room: next.room || next.classroom || "",
+      leaveBy: next.leaveBy || next.suggestedLeaveTime || "",
+    };
+  }
+  if (context.reminderEnabled === false || context.courseReminderEnabled === false) {
+    facts.reminderEnabled = false;
+  }
+  if (context.scheduleConflict === true) facts.scheduleConflict = true;
+  if (context.weather && (context.weather.summary || context.weather.text)) {
+    facts.weather = {
+      summary: context.weather.summary || context.weather.text || "",
+      text: context.weather.text || "",
+    };
+  }
+  if (context.followUpHint) facts.followUpHint = String(context.followUpHint).slice(0, 80);
+  return facts;
+}
+
 module.exports = {
   TRIGGER_EVENTS,
   COOLDOWN_MS,
   evaluateProactive,
   factsFromToolCalls,
+  factsFromContext,
   isCooledDown,
   markShown,
   clearCooldowns,
+  setCooldownStore,
+  normalizeEvent,
 };
