@@ -175,6 +175,7 @@ function withProviderEnv(provider, fn) {
   process.env.AI_PROVIDER = provider.name;
   process.env.AI_PROVIDER_POLICY = "auto";
   process.env.AI_RUNTIME_MODE = "competition";
+process.env.AI_PROVIDER_ACTIVE_ENV = process.env.AI_PROVIDER_ACTIVE_ENV || "trial";
   process.env.AI_COMPETITION_ALLOW_TRIAL_ENV = "true";
   Object.assign(process.env, runtimeConfig);
   return Promise.resolve()

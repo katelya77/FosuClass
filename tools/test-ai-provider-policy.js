@@ -3,6 +3,7 @@ const assert = require("assert");
 process.env.AI_AGENT_ENABLED = "true";
 process.env.AI_PROVIDER = "deepseek";
 process.env.AI_RUNTIME_MODE = "competition";
+process.env.AI_PROVIDER_ACTIVE_ENV = process.env.AI_PROVIDER_ACTIVE_ENV || "trial";
 
 const agentService = require("../server/src/services/ai/agentService");
 
