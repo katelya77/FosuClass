@@ -28,6 +28,8 @@ function isDevelopOrTrial(context = {}) {
 function resolveConfiguredMode() {
   const raw = String(process.env.AI_RUNTIME_MODE || "public").trim().toLowerCase();
   if (raw === "competition") {
+    // Compat alias only: competition must be paired with AI_PROVIDER_ACTIVE_ENV=trial|dev.
+    // Bare competition without an active enhanced env fails closed to public.
     const active = String(process.env.AI_PROVIDER_ACTIVE_ENV || "").trim().toLowerCase();
     if (active === "trial" || active === "dev") return active;
     return "public";

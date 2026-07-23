@@ -30,7 +30,7 @@
           <view class="memory-mode-check {{mode === 'session_state' ? 'on' : ''}}"></view>
           <view class="memory-mode-title">保存任务状态</view>
         </view>
-        <view class="memory-mode-desc">保存班级、教师、教室等必要信息，便于连续追问。</view>
+        <view class="memory-mode-desc">保存当前对话的班级、摘要与工作记忆，约 7 天；不跨对话形成个人偏好。</view>
       </view>
       <view
         class="memory-mode-item {{mode === 'cloud_sync' ? 'active' : ''}}"
@@ -41,24 +41,46 @@
           <view class="memory-mode-check {{mode === 'cloud_sync' ? 'on' : ''}}"></view>
           <view class="memory-mode-title">跨设备同步</view>
         </view>
-        <view class="memory-mode-desc">保存少量脱敏消息，可在其他设备恢复。</view>
+        <view class="memory-mode-desc">在任务状态基础上，保存低风险偏好，可跨对话与设备恢复。</view>
       </view>
+    </view>
+
+    <view class="memory-auto-row" bindtap="onToggleAutoMemory">
+      <view class="memory-auto-copy">
+        <view class="memory-mode-title">自动记忆低风险偏好</view>
+        <view class="memory-mode-desc">仅在跨设备同步开启时写入称呼/校区等；可随时暂停。</view>
+      </view>
+      <view class="memory-mode-check {{autoMemoryEnabled ? 'on' : ''}}"></view>
     </view>
 
     <view class="memory-preference-section">
       <view class="memory-section-head">
-        <view class="memory-section-title">已记住的偏好</view>
-        <view class="memory-section-meta">只有你明确要求记住的内容</view>
+        <view class="memory-section-title">小佛记得的内容</view>
+        <view class="memory-section-meta">展示类别、作用域与更新时间；可修改或单项遗忘</view>
       </view>
       <view class="memory-preference-loading" wx:if="{{preferencesLoading}}">正在读取…</view>
-      <view class="memory-preference-empty" wx:elif="{{!preferences.length}}">暂无长期偏好</view>
+      <view class="memory-preference-empty" wx:elif="{{!preferences.length}}">暂无已保存的内容</view>
       <view class="memory-preference-list" wx:else>
         <view class="memory-preference-item" wx:for="{{preferences}}" wx:key="key">
           <view class="memory-preference-copy">
-            <view class="memory-preference-label">{{item.key === 'preferredName' ? '称呼' : (item.key === 'campus' ? '常用校区' : '默认提醒')}}</view>
-            <view class="memory-preference-value">{{item.key === 'defaultReminderLeadMinutes' ? '提前 ' + item.value + ' 分钟' : item.value}}</view>
+            <view class="memory-preference-label">{{item.label || item.category || item.key}}</view>
+            <view class="memory-preference-value">{{item.displayValue || item.value}}</view>
+            <view class="memory-preference-meta" wx:if="{{item.scopeText || item.updatedAtText}}">
+              <text wx:if="{{item.scopeText}}">{{item.scopeText}}</text>
+              <text wx:if="{{item.updatedAtText}}"> · {{item.updatedAtText}}</text>
+            </view>
           </view>
-          <button class="memory-preference-delete" data-key="{{item.key}}" bindtap="onDeletePreference" aria-label="删除这项记忆">删除</button>
+          <view class="memory-preference-actions">
+            <button
+              class="memory-preference-edit"
+              wx:if="{{item.editable !== false}}"
+              data-key="{{item.key}}"
+              data-value="{{item.value}}"
+              bindtap="onEditPreference"
+              aria-label="修改这项记忆"
+            >修改</button>
+            <button class="memory-preference-delete" data-key="{{item.key}}" bindtap="onDeletePreference" aria-label="删除这项记忆">遗忘</button>
+          </view>
         </view>
       </view>
     </view>

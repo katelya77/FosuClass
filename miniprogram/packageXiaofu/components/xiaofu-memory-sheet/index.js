@@ -4,6 +4,7 @@ Component({
     mode: { type: String, value: "local_only" },
     preferences: { type: Array, value: [] },
     preferencesLoading: { type: Boolean, value: false },
+    autoMemoryEnabled: { type: Boolean, value: true },
   },
   data: {
     privacyExpanded: false,
@@ -25,6 +26,11 @@ Component({
     onTogglePrivacyDetail() {
       this.setData({ privacyExpanded: !this.data.privacyExpanded });
     },
+    onToggleAutoMemory() {
+      this.triggerEvent("toggleautomemory", {
+        autoMemoryEnabled: !this.data.autoMemoryEnabled,
+      });
+    },
     onClearLocal() {
       this.triggerEvent("clearlocal");
     },
@@ -37,6 +43,12 @@ Component({
     onDeletePreference(event) {
       const key = event.currentTarget.dataset.key || "";
       if (key) this.triggerEvent("deletepreference", { key });
+    },
+    onEditPreference(event) {
+      const key = event.currentTarget.dataset.key || "";
+      const value = event.currentTarget.dataset.value;
+      if (!key) return;
+      this.triggerEvent("editpreference", { key, value });
     },
   },
 });

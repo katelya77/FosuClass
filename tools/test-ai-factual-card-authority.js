@@ -12,6 +12,7 @@ process.env.AI_PROVIDER_IGNORE_ENV_FILE = "true";
 process.env.FOSU_AI_PROVIDER_CONFIG_PATH = path.join(tempRoot, "ai-provider-config.json");
 process.env.AI_API_KEY = "test-provider-key-not-real";
 process.env.AI_RUNTIME_MODE = "competition";
+process.env.AI_PROVIDER_ACTIVE_ENV = process.env.AI_PROVIDER_ACTIVE_ENV || "trial";
 process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
 process.env.AI_PROVIDER_CHAIN = "deepseek,mock";
 process.env.NODE_ENV = "development";

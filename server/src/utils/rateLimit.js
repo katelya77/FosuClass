@@ -25,7 +25,7 @@ const globalLimiter = rateLimit({
  */
 const scheduleLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 分钟
-  max: 20,
+  max: Math.max(20, Number(process.env.FOSU_SCHEDULE_RATE_LIMIT_MAX || 20) || 20),
   message: {
     success: false,
     message: "请求过于频繁，请稍后再试",

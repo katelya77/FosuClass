@@ -1,0 +1,79 @@
+name: Xiaofu Agent CI
+
+on:
+  pull_request:
+    paths:
+      - "server/src/services/ai/**"
+      - "server/src/routes/ai.js"
+      - "miniprogram/packageXiaofu/**"
+      - "miniprogram/services/agentMemoryClient.js"
+      - "miniprogram/services/aiAssistantService.js"
+      - "miniprogram/services/xiaofuAgentRouter.js"
+      - "server/config/agent-capability-manifest.json"
+      - "tools/test-agent-*.js"
+      - "tools/run-agent-*.js"
+      - "tools/run-ai-competition-checks.js"
+      - "package.json"
+      - "package-lock.json"
+      - "server/package.json"
+      - "server/package-lock.json"
+      - ".github/workflows/xiaofu-agent-ci.yml"
+      - "docs/xiaofu-agent/**"
+  push:
+    branches:
+      - main
+    paths:
+      - "server/src/services/ai/**"
+      - "server/src/routes/ai.js"
+      - "miniprogram/packageXiaofu/**"
+      - "miniprogram/services/agentMemoryClient.js"
+      - "miniprogram/services/aiAssistantService.js"
+      - "miniprogram/services/xiaofuAgentRouter.js"
+      - "server/config/agent-capability-manifest.json"
+      - "tools/test-agent-*.js"
+      - "tools/run-agent-*.js"
+      - "tools/run-ai-competition-checks.js"
+      - "package.json"
+      - "package-lock.json"
+      - "server/package.json"
+      - "server/package-lock.json"
+      - ".github/workflows/xiaofu-agent-ci.yml"
+      - "docs/xiaofu-agent/**"
+  workflow_dispatch:
+
+jobs:
+  agent-release-gate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+
+      - name: Install root dependencies
+        run: npm ci
+
+      - name: Install server dependencies
+        run: npm --prefix server ci
+
+      - name: Agent release gate
+        run: npm run test:agent-release-gate
+
+      - name: Upload gate logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xiaofu-agent-gate-logs
+          path: |
+            tools/**
+            server/data/**
+          if-no-files-found: ignore
+          retention-days: 7

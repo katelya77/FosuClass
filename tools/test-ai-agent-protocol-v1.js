@@ -1,7 +1,10 @@
 const assert = require("assert");
 
 process.env.AI_AGENT_ENABLED = "false";
+// "competition" config maps to public unless AI_PROVIDER_ACTIVE_ENV is trial/dev.
+// Pin trial so V1 legacy serialization stays stable in clean CI environments.
 process.env.AI_RUNTIME_MODE = "competition";
+process.env.AI_PROVIDER_ACTIVE_ENV = process.env.AI_PROVIDER_ACTIVE_ENV || "trial";
 process.env.AI_COMPETITION_ALLOW_ALL_SESSIONS = "true";
 process.env.NODE_ENV = "development";
 process.env.AI_WEATHER_ENABLED = "false";
