@@ -10,6 +10,7 @@
  *   4. server/config/coze-tool-gateway.openapi.json              Coze Tool Gateway OpenAPI 3.0 Schema
  *   5. docs/xiaofu-agent/capability-contract.generated.md        能力文档
  *   6. tools/capability-contract/contract-matrix.generated.json  机器可读测试矩阵
+ *   7. miniprogram/shared/aiCapabilityRegistry.generated.js      小佛助手能力注册表（UI 快捷动作/任务面板）
  *
  * 用法:
  *   node tools/generate-capability-contract.js           生成全部产物
@@ -34,6 +35,7 @@ const OUTPUTS = [
   path.join(root, "server", "config", "coze-tool-gateway.openapi.json"),
   path.join(root, "docs", "xiaofu-agent", "capability-contract.generated.md"),
   path.join(root, "tools", "capability-contract", "contract-matrix.generated.json"),
+  path.join(root, "miniprogram", "shared", "aiCapabilityRegistry.generated.js"),
 ];
 
 // ---------- 1. 小程序 Intent 兼容映射（历史产物，必须与旧生成器字节一致） ----------
@@ -313,6 +315,60 @@ function renderMatrix() {
   return `${JSON.stringify(matrix, null, 2)}\n`;
 }
 
+// ---------- 7. 小佛助手能力注册表（ai-assistant 页面 UI 能力单一事实源） ----------
+function renderMiniprogramRegistry() {
+  const mini = manifest.miniprogram || {};
+  const kinds = mini.capabilityKinds || {};
+  const capabilities = Array.isArray(mini.capabilities) ? mini.capabilities : [];
+  const quick = Array.isArray(mini.quickActions) ? mini.quickActions : [];
+  const quickLines = quick.map((item) => {
+    const args = item.quickId && item.quickId !== item.id
+      ? `${JSON.stringify(item.id)}, ${JSON.stringify(item.quickId)}`
+      : JSON.stringify(item.id);
+    return `  buildQuickAction(${args}),`;
+  });
+  return [
+    HEADER,
+    "// 小佛助手能力注册表：图标、文案、任务面板与快捷动作全部由 manifest.miniprogram 驱动。",
+    `const CAPABILITY_KINDS = Object.freeze(${JSON.stringify(kinds, null, 2)});`,
+    "",
+    `const AI_CAPABILITY_REGISTRY = Object.freeze(${JSON.stringify(capabilities, null, 2)});`,
+    "",
+    "const AI_CAPABILITY_BY_ID = AI_CAPABILITY_REGISTRY.reduce((map, item) => {",
+    "  map[item.id] = item;",
+    "  return map;",
+    "}, {});",
+    "",
+    "function buildQuickAction(id, quickId) {",
+    "  const ability = AI_CAPABILITY_BY_ID[id] || {};",
+    "  return {",
+    "    id: quickId || id,",
+    "    abilityId: id,",
+    "    iconPath: ability.iconPath,",
+    "    label: ability.quickLabel || ability.label,",
+    "    message: ability.message,",
+    "    draft: ability.draft,",
+    "    url: ability.url,",
+    "    className: ability.className || \"\",",
+    "    kind: ability.kind,",
+    "  };",
+    "}",
+    "",
+    "const QUICK_ACTIONS = Object.freeze([",
+    ...quickLines,
+    "]);",
+    "",
+    "module.exports = {",
+    "  AI_CAPABILITY_BY_ID,",
+    "  AI_CAPABILITY_REGISTRY,",
+    "  CAPABILITY_KINDS,",
+    "  QUICK_ACTIONS,",
+    "  buildQuickAction,",
+    "};",
+    "",
+  ].join("\n");
+}
+
 const RENDERERS = [
   renderClientCompat,
   renderToolSchemas,
@@ -320,6 +376,7 @@ const RENDERERS = [
   renderCozeOpenapi,
   renderDoc,
   renderMatrix,
+  renderMiniprogramRegistry,
 ];
 
 function main() {
