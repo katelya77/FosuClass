@@ -1,0 +1,10 @@
+{
+  "name": "ai-voice-transcribe",
+  "version": "1.0.0",
+  "main": "index.js",
+  "private": true,
+  "dependencies": {
+    "tencentcloud-sdk-nodejs": "^4.0.0",
+    "wx-server-sdk": "^2.6.3"
+  }
+}
