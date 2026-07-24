@@ -10,7 +10,8 @@
 - 协议：`agent.v1`、`agent.v2`
 - 规范模式：`public`、`trial`、`dev`
 - 兼容模式：`competition -> trial`（当活动 Provider 环境为 dev 时映射为 dev）
-- 规模：25 个 Intent、20 个 Skill、21 个 Tool
+- 规模：31 个 Intent、24 个 Skill、31 个 Tool、8 类端上 Action、9 类卡片动作、32 条小程序能力注册（含 5 个快捷动作）
+- 端上执行：`xiaofuActionBus`（小程序）+ `actionCommandContract`（服务端）双层白名单校验，详见 `capability-contract-design.md` 与 `capability-contract.generated.md`
 - 服务端 Card 白名单：`empty_room`、`schedule`、`teacher`、`course`、`weather`、`diagnosis`、`guide`、`reminder`、`generic`
 
 下表中 `P/T/D` 表示 public/trial/dev 均可执行；“Provider”表示外部生成式表达层权限，而不是 Tool 是否可用。
