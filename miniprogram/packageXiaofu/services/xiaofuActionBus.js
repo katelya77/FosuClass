@@ -145,7 +145,11 @@ function createActionBus(options = {}) {
         if (!wxApi) return reject(id, "WX_UNAVAILABLE");
         const url = buildUrl(input.url, input.params);
         if (isTabPage(input.url) && typeof wxApi.switchTab === "function") {
-          // tabBar 页面必须走 switchTab，且 switchTab 不允许携带 query
+          // tabBar 页面必须走 switchTab，且 switchTab 不允许携带 query；
+          // query 的交接（如 pending query）由页面层可选钩子处理。
+          if (typeof context.storeTabPendingQuery === "function") {
+            context.storeTabPendingQuery(String(input.url));
+          }
           wxApi.switchTab({ url: String(input.url).split("?")[0], fail: noop });
         } else if (typeof wxApi.navigateTo === "function") {
           wxApi.navigateTo({ url, fail: noop });
