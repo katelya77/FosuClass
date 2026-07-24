@@ -96,3 +96,39 @@
 |------|-----|------|
 | 2026-07-21 | 79c93a63 | 初始真实性审计（收敛前） |
 | 2026-07-21 | （本收敛提交） | Model Planner / Hybrid RAG / Context / Presentation 真实接线；本地 HTTP E2E 观察 planner.started→model |
+| 2026-07-24 | a3d65473 | Phase A–F：契约生成链、Action Command Bus、Tool Gateway、语音转写、知识摄取、注册表 manifest 化、设计令牌 |
+exicalFallback`。
+
+### V3. Context Engineering 缺失
+
+- **证据**：无 ContextAssembler / Budget；Planner prompt 与 Composer 上下文各自散落。
+- **修复**：新增 `context/*` 分层组装与 Token 预算字段。
+
+### V4. UI 可解释轨迹不完整
+
+- **证据**：有 `runCompactText` / steps，但缺「理解 / 计划 / 执行 / 核验」结构化展开；快捷任务聊天后仍占位。
+- **修复**：Composer 输出 `taskTrajectory`；小程序折叠交互与 plain 抑制。
+
+### V5. Planner / Response 指标未分离
+
+- **证据**：metrics 仅 latency/toolCount；无 `plannerProvider` / `responseLatency`。
+- **修复**：metrics 扩展诊断字段（不暴露密钥）。
+
+---
+
+## 收敛后验收锚点
+
+1. trial/dev Trace：`plannerType=model`（有 Provider 时）或明确 `deterministic_fallback`（失败时任务仍完成）
+2. public：`plannerType=deterministic`，外部 Provider 调用次数 = 0
+3. `rag_search` 结果含 `hybrid:true` 与 `vectorUsed` 布尔
+4. 小程序 plain 对话无 Generic Card / Evidence / 完整 Run 卡
+5. 包体门禁：主包超限须有基线说明与治理动作，不得静默放宽
+
+---
+
+## 修订记录
+
+| 日期 | SHA | 说明 |
+|------|-----|------|
+| 2026-07-21 | 79c93a63 | 初始真实性审计（收敛前） |
+| 2026-07-21 | （本收敛提交） | Model Planner / Hybrid RAG / Context / Presentation 真实接线；本地 HTTP E2E 观察 planner.started→model |
