@@ -34,6 +34,7 @@ const personalRouter = require("./routes/personal");
 const fosuApaasImportRouter = require("./routes/fosuApaasImport");
 const relayRouter = require("./routes/relay");
 const aiRouter = require("./routes/ai");
+const cozeToolGatewayRouter = require("./routes/cozeToolGateway");
 
 const app = express();
 
@@ -229,6 +230,7 @@ app.use("/api/fosu", fosuRouter);
 app.use("/api/fosu/personal", personalRouter);
 app.use("/api/schedule-import/fosu", fosuApaasImportRouter);
 app.use("/api/ai", aiRouter);
+app.use("/api/coze/tools", cozeToolGatewayRouter);
 app.use("/api/admin", adminRouter);
 
 function redirectAdminAlias(prefix) {
