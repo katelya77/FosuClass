@@ -12,8 +12,13 @@ function arrayBody(name) {
   return match ? match[1] : "";
 }
 
-const quickActionCount = (js.match(/buildQuickAction\(/g) || []).length - 1;
+// 快捷动作的单一事实源是 manifest.miniprogram.quickActions（渲染进生成注册表）。
+// 页面只消费生成物，禁止恢复内联 buildQuickAction 列表。
+const registry = require(path.join(ROOT, "miniprogram/shared/aiCapabilityRegistry.generated.js"));
+const quickActionCount = (registry.QUICK_ACTIONS || []).length;
 assert.strictEqual(quickActionCount, 5, `quick actions should be 5, got ${quickActionCount}`);
+assert(js.includes("aiCapabilityRegistry.generated.js"), "page should consume the generated capability registry");
+assert(!/const\s+QUICK_ACTIONS\s*=\s*\[/.test(js), "page must not keep an inline QUICK_ACTIONS copy");
 
 assert(!wxml.includes("privacy-tip-full"), "privacy-tip-full must not be a first-viewport card");
 assert(wxml.includes("bottom-sheet") || wxml.includes("sheet-mask"), "bottom sheet / overlay should exist");
