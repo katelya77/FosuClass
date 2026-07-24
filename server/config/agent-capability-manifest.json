@@ -218,6 +218,137 @@
     "generate_image": { "displayName": "图片生成", "factualTask": false, "runtimeModes": ["trial", "dev"], "externalProviderAllowed": true, "skill": "image_generation", "allowedTools": ["generate_image"], "requiredSlots": [], "optionalSlots": ["prompt"], "allowedCardTypes": ["generic"], "needsPersonalScheduleSummary": false, "safetyLevel": "medium", "publicAllowed": false, "fallbackPolicy": "unsupported-in-public" },
     "campus_multi_step_advice": { "displayName": "校园多步骤建议", "factualTask": true, "runtimeModes": ["public", "trial", "dev"], "externalProviderAllowed": false, "skill": "campus_multi_step_advice", "allowedTools": ["get_today_courses", "get_tomorrow_courses", "search_empty_rooms", "get_campus_weather", "search_campus_place"], "requiredSlots": [], "optionalSlots": ["week", "weekday", "campus", "building"], "allowedCardTypes": ["schedule", "empty_room", "weather", "generic", "reminder"], "needsPersonalScheduleSummary": true, "safetyLevel": "medium", "publicAllowed": true, "fallbackPolicy": "partial-deterministic-results" }
   },
+  "actions": {
+    "navigate": {
+      "displayName": "页面跳转",
+      "description": "跳转到白名单内的小程序页面，禁止任意 URL",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": ["public", "trial", "dev"],
+      "targetPolicy": "page_url_whitelist",
+      "inputSchema": {
+        "type": "object", "additionalProperties": false, "required": ["url"],
+        "properties": {
+          "url": { "type": "string", "maxLength": 240 },
+          "params": { "type": "object", "additionalProperties": { "type": "string", "maxLength": 120 }, "maxProperties": 8 }
+        }
+      }
+    },
+    "openSheet": {
+      "displayName": "打开面板",
+      "description": "打开助手内的提醒、记忆、对话或工具面板",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": ["public", "trial", "dev"],
+      "targetPolicy": "sheet_enum_whitelist",
+      "allowedSheets": ["reminders", "memory", "conversations", "tasks"],
+      "inputSchema": {
+        "type": "object", "additionalProperties": false, "required": ["sheet"],
+        "properties": { "sheet": { "type": "string", "enum": ["reminders", "memory", "conversations", "tasks"] } }
+      }
+    },
+    "fillComposer": {
+      "displayName": "填入待发送文本",
+      "description": "把文本填入输入框，绝不自动发送",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": ["public", "trial", "dev"],
+      "targetPolicy": "none",
+      "inputSchema": {
+        "type": "object", "additionalProperties": false, "required": ["text"],
+        "properties": { "text": { "type": "string", "minLength": 1, "maxLength": 500 } }
+      }
+    },
+    "fillForm": {
+      "displayName": "填写表单字段",
+      "description": "填写白名单表单字段，绝不自动提交",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "medium",
+      "runtimeModes": ["public", "trial", "dev"],
+      "targetPolicy": "form_field_whitelist",
+      "allowedForms": ["reminder_create", "personal_import_help", "preference"],
+      "inputSchema": {
+        "type": "object", "additionalProperties": false, "required": ["form", "fields"],
+        "properties": {
+          "form": { "type": "string", "enum": ["reminder_create", "personal_import_help", "preference"] },
+          "fields": { "type": "object", "additionalProperties": { "type": ["string", "integer", "boolean"] }, "maxProperties": 12 }
+        }
+      }
+    },
+    "requestSubscribe": {
+      "displayName": "请求订阅授权",
+      "description": "请求微信订阅消息授权，仅用于课程提醒",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "high",
+      "runtimeModes": ["public", "trial", "dev"],
+      "targetPolicy": "subscribe_scene_whitelist",
+      "allowedScenes": ["course_reminder"],
+      "inputSchema": {
+        "type": "object", "additionalProperties": false, "required": ["scene"],
+        "properties": { "scene": { "type": "string", "enum": ["course_reminder"] } }
+      }
+    },
+    "confirmWrite": {
+      "displayName": "写操作确认",
+      "description": "展示写操作确认卡，由用户明确点击后才执行",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "high",
+      "runtimeModes": ["public", "trial", "dev"],
+      "targetPolicy": "write_intent_whitelist",
+      "inputSchema": {
+        "type": "object", "additionalProperties": false, "required": ["intent", "summary"],
+        "properties": {
+          "intent": { "type": "string", "maxLength": 80 },
+          "summary": { "type": "string", "minLength": 2, "maxLength": 240 },
+          "dangerLevel": { "type": "string", "enum": ["normal", "high"] }
+        }
+      }
+    },
+    "copy": {
+      "displayName": "复制结果",
+      "description": "把文本结果复制到剪贴板",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": ["public", "trial", "dev"],
+      "targetPolicy": "none",
+      "inputSchema": {
+        "type": "object", "additionalProperties": false, "required": ["text"],
+        "properties": { "text": { "type": "string", "minLength": 1, "maxLength": 2000 } }
+      }
+    },
+    "retry": {
+      "displayName": "重试安全任务",
+      "description": "重新执行一个原本就安全的只读任务",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "medium",
+      "runtimeModes": ["public", "trial", "dev"],
+      "targetPolicy": "retryable_task_whitelist",
+      "inputSchema": {
+        "type": "object", "additionalProperties": false, "required": ["taskId"],
+        "properties": { "taskId": { "type": "string", "minLength": 4, "maxLength": 120 } }
+      }
+    }
+  },
+  "cardActions": {
+    "_comment": "消息卡片按钮白名单（generatedPayloadContract.ALLOWED_ACTION_TYPES 的权威登记）。command 字段给出与 Action Command 的映射；无 command 的是协议层特殊类型。",
+    "navigate": { "command": "navigate", "description": "跳转白名单页面" },
+    "switchTab": { "command": "navigate", "description": "跳转 tabBar 页面（navigate 的 tab 变体）" },
+    "retry": { "command": "retry", "description": "重试安全任务" },
+    "openSheet": { "command": "openSheet", "description": "打开面板" },
+    "toggleFloat": { "command": "openSheet", "description": "切换悬浮助手（面板类 UI 控制）" },
+    "confirmReminder": { "command": "confirmWrite", "description": "提醒写确认（confirmWrite 的特化）" },
+    "manageReminders": { "command": "openSheet", "description": "管理提醒（openSheet reminders 的特化）" },
+    "ask": { "command": null, "description": "追问按钮，纯对话交互" },
+    "noop": { "command": null, "description": "空操作占位" }
+  },
   "clientCompatibility": {
     "schedule_query": "search_school_index",
     "personal_schedule": "get_today_courses",
