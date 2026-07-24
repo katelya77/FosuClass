@@ -15,6 +15,15 @@
     "maxTraceEntries": 500,
     "traceRetentionMs": 604800000
   },
+  "toolGateway": {
+    "_comment": "Coze Tool Gateway：供 Coze Agent（coze-native 模式，仅 trial/dev）通过 OpenAPI 调用工具。默认关闭，需 COZE_TOOL_GATEWAY_ENABLED=true + COZE_TOOL_GATEWAY_TOKEN。",
+    "baseUrl": "https://class.katelya.eu.org/api/coze",
+    "pathPrefix": "/tools",
+    "runtimeMode": "trial",
+    "enabledEnv": "COZE_TOOL_GATEWAY_ENABLED",
+    "tokenEnv": "COZE_TOOL_GATEWAY_TOKEN",
+    "maxBodyBytes": 16384
+  },
   "cardTypes": [
     "empty_room", "schedule", "teacher", "course", "weather",
     "diagnosis", "guide", "reminder", "generic"

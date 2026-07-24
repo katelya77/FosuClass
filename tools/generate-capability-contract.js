@@ -210,7 +210,7 @@ function renderCozeOpenapi() {
       description: `${JSON_HEADER_NOTE} Coze 只能调用当前 Runtime Mode 允许的工具；写操作只返回确认请求。`,
       version: manifest.schemaVersion,
     },
-    servers: [{ url: "/api/ai/agent/tool-gateway" }],
+    servers: [{ url: (manifest.toolGateway && manifest.toolGateway.baseUrl) || "/api/coze" }],
     paths,
     components: {
       securitySchemes: {

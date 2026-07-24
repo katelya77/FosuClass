@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "/api/ai/agent/tool-gateway"
+      "url": "https://class.katelya.eu.org/api/coze"
     }
   ],
   "paths": {
