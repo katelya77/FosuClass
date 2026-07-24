@@ -227,6 +227,18 @@
       "safetyLevel": "low",
       "runtimeModes": ["public", "trial", "dev"],
       "targetPolicy": "page_url_whitelist",
+      "allowedPages": [
+        "/pages/school/school",
+        "/pages/today/today",
+        "/pages/empty-room/empty-room",
+        "/pages/schedule-view/schedule-view",
+        "/pages/personal-sync/personal-sync",
+        "/packageXiaofu/pages/ai-assistant/ai-assistant",
+        "/packageMaps/pages/campus-map/campus-map",
+        "/pages/ai-assistant/ai-assistant",
+        "/pages/campus-map/campus-map"
+      ],
+      "tabPages": ["/pages/school/school", "/pages/today/today"],
       "inputSchema": {
         "type": "object", "additionalProperties": false, "required": ["url"],
         "properties": {

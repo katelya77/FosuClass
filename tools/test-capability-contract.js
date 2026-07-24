@@ -67,6 +67,18 @@ assert.strictEqual(manifest.actions.openSheet.targetPolicy, "sheet_enum_whitelis
 assert.strictEqual(manifest.actions.fillForm.targetPolicy, "form_field_whitelist");
 assert.strictEqual(manifest.actions.requestSubscribe.targetPolicy, "subscribe_scene_whitelist");
 
+// navigate 页面白名单必须与 generatedPayloadContract.ALLOWED_NAVIGATION_URLS 同源（漂移门禁）
+const generatedPayloadContractForPages = require("../server/src/services/ai/generatedPayloadContract");
+const manifestPages = [...(manifest.actions.navigate.allowedPages || [])].sort();
+const contractPages = [...generatedPayloadContractForPages.ALLOWED_NAVIGATION_URLS].sort();
+assert.deepStrictEqual(
+  manifestPages, contractPages,
+  "manifest.actions.navigate.allowedPages must exactly match generatedPayloadContract.ALLOWED_NAVIGATION_URLS; update both or neither"
+);
+manifestPages.forEach((page) => {
+  assert.ok(page.startsWith("/") && !page.includes("://"), `page whitelist entry must be a local path: ${page}`);
+});
+
 // ---------- 2b. 卡片按钮白名单与 Manifest 登记一致（漂移门禁） ----------
 const generatedPayloadContract = require("../server/src/services/ai/generatedPayloadContract");
 const cardActionIds = Object.keys(manifest.cardActions || {}).filter((id) => !id.startsWith("_")).sort();

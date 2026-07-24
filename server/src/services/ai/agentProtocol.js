@@ -1,4 +1,5 @@
 const crypto = require("crypto");
+const actionCommandContract = require("./actionCommandContract");
 const capabilityManifestService = require("./capabilityManifestService");
 const generatedPayloadContract = require("./generatedPayloadContract");
 const safetyGuard = require("./safetyGuard");
@@ -329,6 +330,9 @@ function buildV2Response(payload = {}) {
     observations: stableObservations(payload.observations),
     answer: safeProtocolText(payload.answer || "", 1600),
     cards: cardValidation.cards,
+    // Action Command Bus 协议字段：模型只能引用 manifest.actions 中的 command，
+    // 写操作只携带确认请求，由小程序端在用户确认后执行。
+    actions: actionCommandContract.stableActionCommands(payload.actions, envelope.canonicalRuntimeMode),
     suggestions: (Array.isArray(payload.suggestions) ? payload.suggestions : []).slice(0, 6)
       .map((item) => safeProtocolText(item, 120)).filter(Boolean),
     evidence: sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.evidence || {})),
@@ -428,6 +432,7 @@ module.exports = {
   normalizeProtocolVersion,
   normalizeRuntimeMode,
   serializeRuntimeMode,
+  stableActionCommands: actionCommandContract.stableActionCommands,
   stableExecutionSteps,
   stableMemory,
   stableObservations,
