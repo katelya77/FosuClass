@@ -1,0 +1,578 @@
+{
+  "schemaVersion": "agent-capabilities.v1",
+  "note": "Generated from server/config/agent-capability-manifest.json. Do not edit by hand.",
+  "counts": {
+    "intents": 31,
+    "skills": 24,
+    "tools": 31,
+    "actions": 8
+  },
+  "intents": [
+    "clarify_missing_slot",
+    "get_today_courses",
+    "get_tomorrow_courses",
+    "get_next_course",
+    "get_week_schedule",
+    "get_teaching_week",
+    "get_term_calendar",
+    "search_empty_rooms",
+    "search_continuous_empty_rooms",
+    "search_school_index",
+    "get_schedule_detail",
+    "recommend_meeting_time",
+    "diagnose_data_status",
+    "explain_personal_import",
+    "get_campus_weather",
+    "get_course_weather_advice",
+    "search_campus_place",
+    "get_campus_route",
+    "get_classroom_location",
+    "next_course_location",
+    "manage_course_reminders",
+    "course_action_advice",
+    "inspect_schedule_health",
+    "detect_schedule_changes",
+    "conversation_memory",
+    "update_user_preference",
+    "rag_search",
+    "project_qa",
+    "conversational_help",
+    "generate_image",
+    "campus_multi_step_advice"
+  ],
+  "skills": [
+    "today_schedule",
+    "tomorrow_schedule",
+    "next_course",
+    "next_course_location",
+    "week_schedule",
+    "teaching_week",
+    "term_calendar",
+    "search_school_schedule",
+    "find_empty_room",
+    "find_continuous_empty_room",
+    "recommend_meeting_time",
+    "campus_multi_step_advice",
+    "schedule_data_diagnosis",
+    "personal_schedule_import_help",
+    "campus_weather",
+    "course_weather_advice",
+    "campus_place_navigation",
+    "course_reminders",
+    "course_action_advice",
+    "schedule_health",
+    "personal_memory",
+    "knowledge_search",
+    "clarify_query",
+    "image_generation"
+  ],
+  "tools": [
+    {
+      "id": "get_today_courses",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "get_tomorrow_courses",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "get_next_course",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "get_week_schedule",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "get_teaching_week",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "get_term_calendar",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "search_empty_rooms",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "search_continuous_empty_rooms",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "search_school_index",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "get_schedule_detail",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "diagnose_data_status",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "explain_personal_import",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "medium",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "recommend_meeting_time",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "clarify_missing_slot",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "get_campus_weather",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "get_course_weather_advice",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "search_campus_place",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "get_campus_route",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "get_classroom_location",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "get_today_schedule",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "medium",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": true
+    },
+    {
+      "id": "get_course_route",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "medium",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": true
+    },
+    {
+      "id": "inspect_schedule_conflicts",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "medium",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": true
+    },
+    {
+      "id": "detect_schedule_changes",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "medium",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": true
+    },
+    {
+      "id": "navigate_miniprogram_page",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": true
+    },
+    {
+      "id": "create_course_reminder",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "high",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": true
+    },
+    {
+      "id": "update_course_reminder",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "high",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": true
+    },
+    {
+      "id": "delete_course_reminder",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "high",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": true
+    },
+    {
+      "id": "list_course_reminders",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "medium",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": true
+    },
+    {
+      "id": "update_user_preference",
+      "operation": "write",
+      "confirmation": "explicit_user_command",
+      "safetyLevel": "medium",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": true
+    },
+    {
+      "id": "rag_search",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    },
+    {
+      "id": "generate_image",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "medium",
+      "runtimeModes": [
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": false
+    }
+  ],
+  "actions": [
+    {
+      "id": "navigate",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "targetPolicy": "page_url_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "openSheet",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "targetPolicy": "sheet_enum_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "fillComposer",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "targetPolicy": "none",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "fillForm",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "medium",
+      "targetPolicy": "form_field_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "requestSubscribe",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "high",
+      "targetPolicy": "subscribe_scene_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "confirmWrite",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "high",
+      "targetPolicy": "write_intent_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "copy",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "targetPolicy": "none",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "retry",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "medium",
+      "targetPolicy": "retryable_task_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    }
+  ],
+  "cardActions": [
+    {
+      "id": "navigate",
+      "command": "navigate"
+    },
+    {
+      "id": "switchTab",
+      "command": "navigate"
+    },
+    {
+      "id": "retry",
+      "command": "retry"
+    },
+    {
+      "id": "openSheet",
+      "command": "openSheet"
+    },
+    {
+      "id": "toggleFloat",
+      "command": "openSheet"
+    },
+    {
+      "id": "confirmReminder",
+      "command": "confirmWrite"
+    },
+    {
+      "id": "manageReminders",
+      "command": "openSheet"
+    },
+    {
+      "id": "ask",
+      "command": null
+    },
+    {
+      "id": "noop",
+      "command": null
+    }
+  ]
+}

@@ -18,7 +18,12 @@ npm run test:agent-phase3
 npm run test:ai-competition
 npm run security:acceptance
 node tools/generate-agent-capability-compat.js --check
+node tools/generate-capability-contract.js --check
+npm run test:agent-release-gate
 ```
+
+> 2026-07-24 增补：`generate-capability-contract.js` 为契约主生成器（7 份产物，含 compat 字节兼容输出）；
+> 旧 `generate-agent-capability-compat.js` 仍被 `test-agent-capability-manifest.js` 引用，二者同源 manifest，无平行列表。
 
 ## 关键门禁
 

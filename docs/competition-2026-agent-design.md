@@ -33,6 +33,15 @@ flowchart TD
   K --> A
 ```
 
+### 架构升级（2026-07-24）
+
+- **Capability Contract 生成链**：`server/config/agent-capability-manifest.json` 为唯一事实源，统一生成服务端 Tool Schema、小程序 Action Catalog 与能力注册表、Coze OpenAPI、能力文档与测试矩阵（7 份产物），CI 漂移检查禁止手工维护平行能力列表。
+- **Action Command Bus**：卡片一键操作收敛为 8 类白名单安全 Action（navigate / openSheet / fillComposer / fillForm / requestSubscribe / confirmWrite / copy / retry），服务端 `actionCommandContract` 与小程序 `xiaofuActionBus` 双层校验；写操作必须用户确认。
+- **Tool Gateway**：`/api/coze/tools` 把同一套校园工具以 OpenAPI 暴露给外部智能体，令牌保护与运行模式隔离（public 恒零外部模型调用）。
+- **语音输入闭环**：`aiVoiceTranscribe` 云函数复用 CloudBase，ASR 密钥只在服务端环境变量。
+- **佛大知识流水线**：26 条通用流程指引种子，摄取脚本只允许草稿导入，人工审核后手动发布。
+- **设计令牌统一**：`xiaofu-tokens.wxss` 单一视觉事实源，助手页 90 处色值归源 `var(--xf-*)`，零视觉变化。
+
 ## 工具工作流
 
 1. 理解需求：用规则优先识别“空教室、今日课程、教师/教室/课程查询、导入指引、数据诊断、组会时间”等意图。

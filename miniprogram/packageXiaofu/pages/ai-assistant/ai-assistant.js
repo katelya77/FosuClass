@@ -15,6 +15,7 @@ const { courseTimes } = require("../../../data/courseTimes");
 const xiaofuPresentation = require("../../services/xiaofuPresentationAdapter");
 const xiaofuMessageActions = require("../../services/xiaofuMessageActions");
 const xiaofuConversationViewModel = require("../../services/xiaofuConversationViewModel");
+const { createActionBus } = require("../../services/xiaofuActionBus");
 
 const PRIVACY_TIP_KEY = "FOSU_AI_PRIVACY_TIP_CONFIRMED";
 const TASK_PANEL_CACHE_KEY = "FOSU_AI_TASK_PANEL_GROUPS_CACHE";
@@ -40,405 +41,12 @@ const ICONS = {
   term: `${ICON_BASE}/term.svg`,
 };
 
-const CAPABILITY_KINDS = {
-  DIRECT_TOOL: "direct_tool",
-  SUPPLEMENT_PARAMS: "supplement_params",
-  NAVIGATE: "navigate",
-  GENERATIVE_QA: "generative_qa",
-  LOCAL_ACTION: "local_action",
-};
-
-const AI_CAPABILITY_REGISTRY = [
-  {
-    id: "today",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.today,
-    label: "今日课表",
-    quickLabel: "今日课表",
-    className: "today",
-    taskGroup: "个人课表",
-    taskLabel: "今日安排",
-    taskDesc: "需要个人课表或指定对象",
-    guideGroup: "个人课表",
-    guideExamples: ["今天有什么课"],
-    welcomeExample: "今天有什么课",
-    message: "今天有什么课",
-  },
-  {
-    id: "tomorrow",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.today,
-    label: "明日课表",
-    guideGroup: "个人课表",
-    guideExamples: ["明天有什么课"],
-    message: "明天有什么课？",
-  },
-  {
-    id: "nextCourse",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.today,
-    label: "下一节课",
-    guideGroup: "个人课表",
-    guideExamples: ["下一节课"],
-    message: "下一节课",
-  },
-  {
-    id: "weekSchedule",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.today,
-    label: "本周课表",
-    guideGroup: "个人课表",
-    guideExamples: ["本周课表"],
-    message: "本周课表",
-  },
-  {
-    id: "gapBetweenCourses",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.study,
-    label: "课间间隔",
-    message: "两节课之间有多久？",
-  },
-  {
-    id: "emptyRoomNow",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.room,
-    label: "空教室",
-    quickLabel: "空教室",
-    className: "room",
-    taskGroup: "课表查询",
-    taskLabel: "查教室占用",
-    taskDesc: "先说明时间或教室",
-    message: "现在有空教室吗？",
-  },
-  {
-    id: "continuousEmptyRoom",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.room,
-    label: "连续空教室",
-    message: "找连续两节空教室",
-  },
-  {
-    id: "meetingTime",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.study,
-    label: "共同空闲",
-    taskGroup: "个人课表",
-    taskLabel: "自习时间推荐",
-    taskDesc: "需要开启课表摘要",
-    message: "帮我推荐连续 2 节自习时间",
-  },
-  {
-    id: "teacherSchedule",
-    kind: CAPABILITY_KINDS.SUPPLEMENT_PARAMS,
-    iconPath: ICONS.teacher,
-    label: "查老师",
-    quickLabel: "查老师",
-    className: "teacher",
-    taskGroup: "课表查询",
-    taskLabel: "查教师课表",
-    taskDesc: "输入教师姓名更准确",
-    guideGroup: "课表查询",
-    guideExamples: ["查教师课表"],
-    message: "查教师课表",
-    draft: "查教师课表",
-    missingText: "请补充教师姓名后查询",
-  },
-  {
-    id: "classSchedule",
-    kind: CAPABILITY_KINDS.SUPPLEMENT_PARAMS,
-    iconPath: ICONS.classroom,
-    label: "查班级课表",
-    quickLabel: "查班级",
-    className: "classroom",
-    taskGroup: "课表查询",
-    taskLabel: "查班级课表",
-    taskDesc: "输入完整班级更准确",
-    guideGroup: "课表查询",
-    guideExamples: ["查班级本周课表"],
-    message: "查班级本周课表",
-    draft: "查班级本周课表",
-    missingText: "请补充班级名称后查询",
-  },
-  {
-    id: "classroomOccupancy",
-    kind: CAPABILITY_KINDS.SUPPLEMENT_PARAMS,
-    iconPath: ICONS.classroom,
-    label: "查教室占用",
-    quickLabel: "查教室",
-    className: "room",
-    taskGroup: "课表查询",
-    taskLabel: "查教室占用",
-    taskDesc: "输入教室和时间",
-    guideGroup: "课表查询",
-    guideExamples: ["查教室明天是否有课"],
-    message: "查教室明天是否有课",
-    draft: "查教室明天是否有课",
-    missingText: "请补充教室或楼栋后查询",
-  },
-  {
-    id: "courseSchedule",
-    kind: CAPABILITY_KINDS.SUPPLEMENT_PARAMS,
-    iconPath: ICONS.course,
-    label: "查课程安排",
-    taskGroup: "课表查询",
-    taskLabel: "查课程安排",
-    taskDesc: "输入课程名称更准确",
-    guideGroup: "课表查询",
-    guideExamples: ["查课程安排"],
-    message: "查课程安排",
-    draft: "查课程安排",
-    missingText: "请补充课程名称后查询",
-  },
-  {
-    id: "placeC7",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.app,
-    label: "教学楼位置",
-    message: "某教学楼在哪里？",
-  },
-  {
-    id: "xianxiSouthMap",
-    kind: CAPABILITY_KINDS.NAVIGATE,
-    iconPath: ICONS.app,
-    label: "仙溪南区地图",
-    url: "/packageMaps/pages/campus-map/campus-map?map=xianxiSouth",
-  },
-  {
-    id: "jiangwanPlaces",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.app,
-    label: "江湾地点",
-    message: "江湾校区主要地点",
-  },
-  {
-    id: "nextCourseLocation",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.app,
-    label: "下一节课位置",
-    message: "下一节课在哪里？",
-  },
-  {
-    id: "campusWeather",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.term,
-    label: "校区天气",
-    taskGroup: "校园服务",
-    taskLabel: "校区天气",
-    taskDesc: "下雨、温度、带伞和出行建议",
-    guideGroup: "校园服务",
-    guideExamples: ["仙溪校区今天会下雨吗"],
-    welcomeExample: "仙溪校区今天会下雨吗",
-    message: "仙溪校区今天会下雨吗？",
-  },
-  {
-    id: "umbrellaAdvice",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.term,
-    label: "带伞建议",
-    taskGroup: "校园服务",
-    taskLabel: "今天要不要带伞",
-    taskDesc: "优先查询天气，不走学校官网概况",
-    guideGroup: "校园服务",
-    guideExamples: ["今天要不要带伞", "下一节课要带伞吗"],
-    welcomeExample: "今天要不要带伞",
-    message: "今天要不要带伞",
-  },
-  {
-    id: "teachingWeek",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.term,
-    label: "教学周",
-    taskGroup: "个人课表",
-    taskLabel: "当前教学周",
-    taskDesc: "查看当前是第几周",
-    guideGroup: "个人课表",
-    guideExamples: ["当前是第几教学周"],
-    message: "当前是第几教学周？",
-  },
-  {
-    id: "dataStatus",
-    kind: CAPABILITY_KINDS.DIRECT_TOOL,
-    iconPath: ICONS.diagnosis,
-    label: "数据状态",
-    taskGroup: "个人课表",
-    taskLabel: "课表数据状态",
-    taskDesc: "查看学期、版本和更新时间",
-    guideGroup: "个人课表",
-    guideExamples: ["课表数据更新到什么时候", "当前是第几教学周"],
-    message: "课表数据是否最新？",
-  },
-  {
-    id: "personalSync",
-    kind: CAPABILITY_KINDS.NAVIGATE,
-    iconPath: ICONS.xls,
-    label: "个人课表同步",
-    quickLabel: "导入课表",
-    className: "sync",
-    taskGroup: "个人课表",
-    taskLabel: "导入个人课表",
-    taskDesc: "打开同步主入口",
-    guideGroup: "个人课表",
-    guideExamples: ["如何导入个人课表"],
-    url: PERSONAL_SYNC_URL,
-    message: "如何导入个人课表",
-    fallbackMessage: "如何导入个人课表",
-  },
-  {
-    id: "xlsImport",
-    kind: CAPABILITY_KINDS.NAVIGATE,
-    iconPath: ICONS.xls,
-    label: "XLS 文件导入",
-    quickLabel: "XLS导入",
-    className: "xls",
-    taskGroup: "个人课表",
-    taskLabel: "XLS 文件导入",
-    taskDesc: "表格/文件导入入口",
-    url: PERSONAL_SYNC_XLS_URL,
-    message: "XLS文件导入怎么用？",
-    fallbackMessage: "如何导入个人课表",
-  },
-  {
-    id: "appHelp",
-    kind: CAPABILITY_KINDS.GENERATIVE_QA,
-    iconPath: ICONS.app,
-    label: "怎么使用",
-    taskGroup: "使用帮助",
-    taskLabel: "可以查询什么",
-    taskDesc: "查看范围和关键词",
-    guideGroup: "使用帮助",
-    guideExamples: ["可以查询什么", "如何问得更准确"],
-    welcomeExample: "如何使用校园查询",
-    message: "如何使用校园查询",
-  },
-  {
-    id: "enableFloat",
-    kind: CAPABILITY_KINDS.LOCAL_ACTION,
-    iconPath: ICONS.app,
-    label: "开启浮窗",
-    taskGroup: "使用帮助",
-    taskLabel: "开启小佛助手浮窗",
-    taskDesc: "恢复右下角可拖拽小佛入口",
-    message: "开启小佛助手浮窗",
-  },
-  {
-    id: "termSync",
-    kind: CAPABILITY_KINDS.GENERATIVE_QA,
-    iconPath: ICONS.term,
-    label: "数据来源",
-    taskGroup: "使用帮助",
-    taskLabel: "数据来源说明",
-    taskDesc: "了解课表与知识来源",
-    guideGroup: "使用帮助",
-    guideExamples: ["数据来源说明"],
-    message: "数据来源说明",
-  },
-  {
-    id: "jwcEntry",
-    kind: CAPABILITY_KINDS.GENERATIVE_QA,
-    iconPath: ICONS.app,
-    label: "教务入口",
-    taskGroup: "校园服务",
-    taskLabel: "教务系统入口",
-    taskDesc: "查看教务相关入口",
-    guideGroup: "校园服务",
-    guideExamples: ["教务系统在哪里"],
-    message: "教务系统在哪里进？",
-  },
-  {
-    id: "campusLocations",
-    kind: CAPABILITY_KINDS.GENERATIVE_QA,
-    iconPath: ICONS.app,
-    label: "校区与地图",
-    taskGroup: "校园服务",
-    taskLabel: "校区与地图",
-    taskDesc: "了解校区和位置",
-    guideGroup: "校园服务",
-    guideExamples: ["佛大有哪些校区"],
-    message: "佛大有哪些校区？",
-  },
-  {
-    id: "collegeDepartments",
-    kind: CAPABILITY_KINDS.GENERATIVE_QA,
-    iconPath: ICONS.study,
-    label: "学院部门",
-    taskGroup: "校园服务",
-    taskLabel: "学院与部门",
-    taskDesc: "查看学院部门入口",
-    guideGroup: "校园服务",
-    guideExamples: ["佛大有哪些学院和部门"],
-    message: "佛大有哪些学院和部门？",
-  },
-  {
-    id: "libraryService",
-    kind: CAPABILITY_KINDS.GENERATIVE_QA,
-    iconPath: ICONS.term,
-    label: "图书馆服务",
-    taskGroup: "校园服务",
-    taskLabel: "图书馆服务",
-    taskDesc: "查图书馆入口与服务边界",
-    guideGroup: "校园服务",
-    guideExamples: ["图书馆服务"],
-    message: "图书馆服务",
-  },
-  {
-    id: "commonSystems",
-    kind: CAPABILITY_KINDS.GENERATIVE_QA,
-    iconPath: ICONS.app,
-    label: "常用系统",
-    taskGroup: "校园服务",
-    taskLabel: "常用系统入口",
-    taskDesc: "查教务、门户等公开入口",
-    guideGroup: "校园服务",
-    guideExamples: ["常用系统入口"],
-    message: "常用系统入口",
-  },
-  {
-    id: "serviceGuide",
-    kind: CAPABILITY_KINDS.GENERATIVE_QA,
-    iconPath: ICONS.term,
-    label: "办事指南",
-    message: "常用办事指南在哪里？",
-  },
-  {
-    id: "askBetter",
-    kind: CAPABILITY_KINDS.GENERATIVE_QA,
-    iconPath: ICONS.study,
-    label: "问法建议",
-    taskGroup: "使用帮助",
-    taskLabel: "如何问得更准确",
-    taskDesc: "获得更稳的回答",
-    guideGroup: "使用帮助",
-    guideExamples: ["如何问得更准确"],
-    message: "如何问得更准确？",
-  },
-];
-
-const AI_CAPABILITY_BY_ID = AI_CAPABILITY_REGISTRY.reduce((map, item) => {
-  map[item.id] = item;
-  return map;
-}, {});
-
-function buildQuickAction(id, quickId) {
-  const ability = AI_CAPABILITY_BY_ID[id] || {};
-  return {
-    id: quickId || id,
-    abilityId: id,
-    iconPath: ability.iconPath,
-    label: ability.quickLabel || ability.label,
-    message: ability.message,
-    draft: ability.draft,
-    url: ability.url,
-    className: ability.className || "",
-    kind: ability.kind,
-  };
-}
-const QUICK_ACTIONS = [
-  buildQuickAction("today"),
-  buildQuickAction("classSchedule", "class"),
-  buildQuickAction("classroomOccupancy", "room"),
-  buildQuickAction("campusWeather", "weather"),
-  buildQuickAction("personalSync", "sync"),
-];
+const {
+  AI_CAPABILITY_BY_ID,
+  AI_CAPABILITY_REGISTRY,
+  CAPABILITY_KINDS,
+  QUICK_ACTIONS,
+} = require("../../../shared/aiCapabilityRegistry.generated.js");
 
 const WELCOME_EXAMPLES = [
   "查班级本周课表",
@@ -3982,11 +3590,124 @@ Page({
     this.performCardAction(safeAction, context || {});
   },
 
+  // 小佛助手 Action Command Bus（懒加载单例）。context 承载真正干活的 UI 能力，
+  // 写操作在 executeCardAction 完成用户确认后才到达这里（confirmed: true）。
+  getXiaofuActionBus() {
+    if (this._xiaofuActionBus) return this._xiaofuActionBus;
+    if (typeof createActionBus !== "function") return null;
+    const page = this;
+    this._xiaofuActionBus = createActionBus({
+      context: {
+        openSheet(sheet) {
+          const name = String(sheet || "");
+          if (name === "memory") {
+            page.setData({ showMemorySheet: true });
+            return;
+          }
+          page.openActionSheet({ sheet: name });
+        },
+        fillComposer(text) {
+          page.setData({ inputValue: String(text || ""), inputFocus: true });
+        },
+        fillForm(form) {
+          if (String(form || "") === "reminder_create") {
+            page.setData({ showReminderSheet: true, reminderSheetOpenCreate: true });
+          }
+        },
+        storeTabPendingQuery(rawUrl) {
+          // 复刻 legacy navigateByUrl 行为：bus 跳 tab 页前把 query 暂存到对应 storage key，
+          // 供目标页 onShow 拾取（switchTab 本身不能携带 query）。
+          const parsed = parseActionUrl(String(rawUrl || ""));
+          const storageKey = TABBAR_PENDING_QUERY[parsed.path];
+          if (!storageKey || !parsed.query || !Object.keys(parsed.query).length) return;
+          try {
+            wx.setStorageSync(
+              storageKey,
+              Object.assign({}, parsed.query, { fromAiAssistant: true, ts: Date.now() })
+            );
+          } catch (error) {
+            // 存储失败不阻断跳转。
+          }
+        },
+        confirmWrite() {
+          // 复用既有提醒写入链路（含订阅消息手势与结果徽标），仅改入口不改行为。
+          const pending = page._pendingCardAction || {};
+          page.performReminderConfirmation(pending.payload || {}, pending.context || {});
+        },
+        retry() {
+          const pending = page._pendingCardAction || {};
+          const pendingPayload = pending.payload || {};
+          const message = firstActionText([
+            pendingPayload.message,
+            pending.action && pending.action.fallbackText,
+            page.findLastUserMessage(),
+          ]);
+          if (!message) {
+            page.showActionFallback("暂无可重试的问题");
+            return;
+          }
+          page.sendMessage(message, {
+            retryAssistantIndex: Number(pending.context && pending.context.messageIndex),
+          });
+        },
+        resolveSubscribeTemplateIds() {
+          // 卡片动作当前不触发 requestSubscribe；保留接口供未来 Agent 指令使用。
+          return [];
+        },
+      },
+    });
+    return this._xiaofuActionBus;
+  },
+
+  buildActionBusInput(command, type, action, payload) {
+    const source = payload && typeof payload === "object" ? payload : {};
+    if (command === "navigate") {
+      return { url: String((action && action.url) || source.url || ""), params: {} };
+    }
+    if (command === "openSheet") {
+      return { sheet: type === "manageReminders" ? "reminders" : String(source.sheet || "") };
+    }
+    if (command === "retry") {
+      return { taskId: String(source.taskId || `card-${Date.now()}`).slice(0, 120) };
+    }
+    if (command === "confirmWrite") {
+      const operation = String(source.operation || "create");
+      return {
+        intent: `course_reminder_${operation}`.slice(0, 80),
+        summary: String((action && action.label) || source.summary || "课程提醒写入").slice(0, 240),
+        dangerLevel: operation === "delete" ? "high" : "normal",
+      };
+    }
+    return {};
+  },
+
+  tryExecuteCardActionViaBus(type, action, payload) {
+    // manageReminders / toggleFloat 有页面特有语义（创建表单开关、浮窗服务），保留既有路径。
+    if (type === "manageReminders" || type === "toggleFloat") return null;
+    const bus = this.getXiaofuActionBus();
+    if (!bus) return null;
+    const command = bus.resolveCardAction(type);
+    if (!command) return null;
+    return bus.execute(
+      {
+        command,
+        input: this.buildActionBusInput(command, type, action, payload),
+        confirmationRequest: (action && action.confirm) || null,
+      },
+      { runtimeMode: "public", confirmed: true }
+    );
+  },
+
   performCardAction(action, context) {
     const type = action.type || "noop";
     const payload = action.payload && typeof action.payload === "object" && !Array.isArray(action.payload)
       ? action.payload
       : {};
+    // Action Command Bus：manifest 登记的卡片动作优先走白名单执行器（端上二次校验）。
+    // 未登记或校验拒绝时回落到下面的既有处理逻辑，行为保持兼容。
+    this._pendingCardAction = { action, payload, context: context || {} };
+    const busResult = this.tryExecuteCardActionViaBus(type, action, payload);
+    if (busResult && busResult.executed) return;
     if (type === "retry") {
       const message = firstActionText([payload.message, action.fallbackText, this.findLastUserMessage()]);
       if (!message) {
