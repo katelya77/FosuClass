@@ -1,6 +1,8 @@
 /**
  * Campus Copilot design tokens — single source for packageXiaofu surfaces.
  * Brand red only for user bubbles, primary actions, critical emphasis.
+ * 2026-07 增补：ai-assistant 页历史色值归源令牌（strong/soft/faint/gray 系列），
+ * 新增/修改样式一律使用 var(--xf-*)，禁止再写死色值。
  */
 
 page {
@@ -28,6 +30,15 @@ page {
   --xf-text-tertiary: #9a9188;
   --xf-text-on-primary: #ffffff;
   --xf-text-link: #8b3a32;
+
+  /* Extended palette — ai-assistant 页历史色值归源（2026-07） */
+  --xf-primary-strong: #c62828;
+  --xf-success-strong: #2f6f4e;
+  --xf-text-strong: #1f2937;
+  --xf-text-soft: #4a433c;
+  --xf-text-faint: #8a8178;
+  --xf-gray: #667085;
+  --xf-gray-light: #6b7280;
 
   /* Lines */
   --xf-divider: rgba(42, 38, 34, 0.08);

@@ -9,6 +9,7 @@ const tests = [
   "tools/test-coze-tool-gateway.js",
   "tools/test-ai-voice-transcribe.js",
   "tools/test-fosu-knowledge-ingest.js",
+  "tools/test-xiaofu-capability-registry.js",
   "tools/test-agent-capability-manifest.js",
   "tools/test-agent-protocol-v2.js",
   "tools/test-agent-runtime-boundaries.js",
