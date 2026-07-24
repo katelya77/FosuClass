@@ -3614,6 +3614,21 @@ Page({
             page.setData({ showReminderSheet: true, reminderSheetOpenCreate: true });
           }
         },
+        storeTabPendingQuery(rawUrl) {
+          // 复刻 legacy navigateByUrl 行为：bus 跳 tab 页前把 query 暂存到对应 storage key，
+          // 供目标页 onShow 拾取（switchTab 本身不能携带 query）。
+          const parsed = parseActionUrl(String(rawUrl || ""));
+          const storageKey = TABBAR_PENDING_QUERY[parsed.path];
+          if (!storageKey || !parsed.query || !Object.keys(parsed.query).length) return;
+          try {
+            wx.setStorageSync(
+              storageKey,
+              Object.assign({}, parsed.query, { fromAiAssistant: true, ts: Date.now() })
+            );
+          } catch (error) {
+            // 存储失败不阻断跳转。
+          }
+        },
         confirmWrite() {
           // 复用既有提醒写入链路（含订阅消息手势与结果徽标），仅改入口不改行为。
           const pending = page._pendingCardAction || {};
