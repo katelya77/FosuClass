@@ -72,10 +72,13 @@ goal=open_schedule, entityType=class, entity=24动物医学1班
 
 ### 教师学院
 
+- **读路径派生**：`readActiveIndex('teacher')` 在索引缺学院字段时，从教师课表明细 courses 的 collegeCode/collegeName + 班级索引派生（`enrichTeacherIndexItemsOnRead`），不依赖重建 Release Pack。  
+- 实测（active `26.05.29.22`）：全校 20 人；`collegeCode=04`（动物科技学院）→ 3 人（白银山/白志红/曹嫦妤）；`collegeCode=02` → 3 人；未选学院 → 20；假学院 → 0。  
 - searchActiveIndex 支持 collegeCode / collegeCodes[]  
 - 缓存键含 collegeCode（stableParamHash）  
 - 切换学院清 teachersResult  
 - 无职称数据时 `titleFilterEnabled=false` 隐藏控件  
+- 证据：`tools/test-teacher-college-filter.js` + scratch `teacher-college.log`
 
 ### UI
 
