@@ -3497,14 +3497,26 @@ function matchesTitle(item, titleCode) {
 
 /**
  * 纯函数索引过滤（searchActiveIndex 核心），可对内存 items 单测学院 A/B/空对照。
+ * 教师：有学院筛选时排除「学院待确认」/无 collegeCodes；精确姓名优先于模糊。
  */
 function filterActiveIndexItems(kind, sourceItems, query, options = {}) {
-  const q = String(query || "").trim().toLowerCase();
+  const rawQ = String(query || "").trim();
+  const q = rawQ.toLowerCase();
   const limit = Math.min(Math.max(parseInt(options.limit || "30", 10) || 30, 1), 100);
   const offset = Math.max(parseInt(options.offset || "0", 10) || 0, 0);
   const source = Array.isArray(sourceItems) ? sourceItems : [];
+  const collegeCode = String(options.collegeCode || "").trim();
+  const collegeName = String(options.collegeName || "").trim();
   const scoped = source.filter((item) => {
     if (!matchesIndexField(item, options.semester, ["semester"])) return false;
+    if (kind === "teacher" && (collegeCode || collegeName)) {
+      const label = String(item.collegeName || item.college || "").trim();
+      const codes = Array.isArray(item.collegeCodes) ? item.collegeCodes.filter(Boolean) : [];
+      // 有学院筛选时：学院待确认且无 codes → 排除
+      if ((label === "学院待确认" || !label) && !codes.length && !String(item.collegeCode || "").trim()) {
+        return false;
+      }
+    }
     if (!matchesCollege(item, options.collegeCode, options.collegeName)) return false;
     if (kind === "teacher" && !matchesTitle(item, options.titleCode)) return false;
     if (!matchesIndexField(item, options.grade, ["grade"])) return false;
@@ -3513,26 +3525,50 @@ function filterActiveIndexItems(kind, sourceItems, query, options = {}) {
     if (!matchesIndexField(item, options.campus, ["campus", "campusName"])) return false;
     return true;
   });
-  const filtered = q
-    ? scoped.filter((item) => {
+  let filtered;
+  if (!q) {
+    filtered = scoped;
+  } else if (kind === "teacher") {
+    const exact = scoped.filter((item) => {
+      const name = String(item.name || item.teacherName || item.displayName || "").trim().toLowerCase();
+      return name === q;
+    });
+    if (exact.length) {
+      filtered = exact;
+    } else {
+      filtered = scoped.filter((item) => {
         const haystack = [
           item.id,
           item.name,
-          item.className,
           item.teacherName,
-          item.roomName,
-          item.classroomName,
-          item.courseName,
+          item.displayName,
           item.collegeName,
-          item.majorName,
-          item.grade,
-          item.firstCourseName,
           Array.isArray(item.collegeNames) ? item.collegeNames.join(" ") : "",
           Array.isArray(item.collegeCodes) ? item.collegeCodes.join(" ") : "",
         ].join(" ").toLowerCase();
         return haystack.includes(q);
-      })
-    : scoped;
+      });
+    }
+  } else {
+    filtered = scoped.filter((item) => {
+      const haystack = [
+        item.id,
+        item.name,
+        item.className,
+        item.teacherName,
+        item.roomName,
+        item.classroomName,
+        item.courseName,
+        item.collegeName,
+        item.majorName,
+        item.grade,
+        item.firstCourseName,
+        Array.isArray(item.collegeNames) ? item.collegeNames.join(" ") : "",
+        Array.isArray(item.collegeCodes) ? item.collegeCodes.join(" ") : "",
+      ].join(" ").toLowerCase();
+      return haystack.includes(q);
+    });
+  }
   return {
     query: q,
     total: filtered.length,

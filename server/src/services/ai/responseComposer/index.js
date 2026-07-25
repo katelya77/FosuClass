@@ -144,26 +144,100 @@ function buildEvidenceSummary(input = {}) {
 }
 
 const TOOL_PUBLIC_LABELS = Object.freeze({
-  get_today_courses: "读取今日课表",
-  get_tomorrow_courses: "读取明日课表",
-  get_next_course: "查询下一节课",
-  get_week_schedule: "读取本周课表",
-  get_teaching_week: "读取教学周",
-  search_empty_rooms: "查询空教室",
-  search_continuous_empty_rooms: "查询连续空教室",
-  get_campus_weather: "获取校区天气",
-  search_campus_place: "查找校园地点",
-  get_classroom_location: "查询教室位置",
-  search_school_index: "检索全校课表",
-  rag_search: "检索公开知识",
-  clarify_missing_slot: "确认缺失信息",
-  diagnose_data_status: "诊断数据状态",
+  get_today_courses: "正在读取今日课表",
+  get_tomorrow_courses: "正在读取明日课表",
+  get_next_course: "正在查询下一节课",
+  get_week_schedule: "正在读取本周课表",
+  get_teaching_week: "正在读取教学周",
+  search_empty_rooms: "正在查询空教室",
+  search_continuous_empty_rooms: "正在查询连续空教室",
+  get_campus_weather: "正在获取校区天气",
+  search_campus_place: "正在查找校园地点",
+  get_classroom_location: "正在查询教室位置",
+  search_school_index: "正在匹配课表目标",
+  get_schedule_detail: "正在读取课表",
+  set_current_schedule: "正在设置首页课表",
+  open_schedule: "正在打开课表",
+  rag_search: "正在检索公开知识",
+  clarify_missing_slot: "需要补充信息",
+  diagnose_data_status: "正在诊断数据状态",
   explain_personal_import: "说明课表导入",
+  campus_multi_step_advice: "正在组合校园建议",
+});
+
+const DOMAIN_FAILURE_MESSAGES = Object.freeze({
+  CLASS_NOT_FOUND: "未匹配到班级，请换个班级名称再试。",
+  MULTIPLE_CANDIDATES: "找到多个候选，请选择其中一个。",
+  MISSING_DETAIL_ID: "缺少课表详情编号，无法继续打开。",
+  ACTION_NOT_EXECUTED: "客户端尚未执行该操作。",
+  RECEIPT_TIMEOUT: "等待操作回执超时，请重试一次。",
+  RELEASE_VERSION_MISMATCH: "数据版本不一致，请下拉刷新后重试。",
+  TEACHER_NOT_FOUND: "未匹配到教师，请检查姓名或学院筛选。",
+  TOOL_FAILED: "校园工具执行失败，请稍后重试。",
 });
 
 function publicToolLabel(name) {
   const key = String(name || "");
-  return TOOL_PUBLIC_LABELS[key] || (key ? `执行 ${key}` : "执行步骤");
+  if (TOOL_PUBLIC_LABELS[key]) return TOOL_PUBLIC_LABELS[key];
+  // Never surface raw snake_case tool names to users.
+  if (/^[a-z0-9_]+$/.test(key)) {
+    if (/class|schedule/.test(key)) return "正在处理课表";
+    if (/teacher/.test(key)) return "正在匹配教师";
+    if (/weather/.test(key)) return "正在获取天气";
+    if (/room/.test(key)) return "正在查询教室";
+    return "正在处理校园任务";
+  }
+  return key ? safeText(key, 40) : "执行步骤";
+}
+
+function domainFailureMessage(code, fallback) {
+  const key = String(code || "");
+  return DOMAIN_FAILURE_MESSAGES[key] || safeText(fallback || DOMAIN_FAILURE_MESSAGES.TOOL_FAILED, 120);
+}
+
+function stripZeroMeaningPartitions(cards) {
+  return (Array.isArray(cards) ? cards : []).map((card) => {
+    if (!card || typeof card !== "object") return card;
+    const next = Object.assign({}, card);
+    if (Array.isArray(next.items)) {
+      next.items = next.items.filter((item) => {
+        if (!item) return false;
+        const value = item.value != null ? item.value : item.count;
+        const title = String(item.title || item.label || "");
+        // Hide "明日课程 0 / 空教室 0 / 地点 0" style noise with no business meaning.
+        if ((value === 0 || value === "0") && /课程|空教室|地点|教室|结果/.test(title)) {
+          return false;
+        }
+        return true;
+      });
+    }
+    if (Array.isArray(next.sections)) {
+      next.sections = next.sections.filter((sec) => {
+        const count = Number(sec && (sec.count != null ? sec.count : sec.total));
+        if (count === 0 && !sec.keepEmpty) return false;
+        return true;
+      });
+    }
+    return next;
+  }).filter((card) => {
+    if (!card) return false;
+    if (Array.isArray(card.items) && !card.items.length && !card.title) return false;
+    return true;
+  });
+}
+
+function countIndependentSuccessfulGoals(input = {}) {
+  const toolCalls = Array.isArray(input.toolCalls) ? input.toolCalls : [];
+  const success = toolCalls.filter((c) => c && c.name && c.name !== "provider_chain" && c.status !== "failed" && !(c.result && c.result.success === false));
+  const goals = new Set(success.map((c) => {
+    const n = String(c.name || "");
+    if (/weather/.test(n)) return "weather";
+    if (/empty_room/.test(n)) return "empty_room";
+    if (/schedule|school_index|today|tomorrow|next_course/.test(n)) return "schedule";
+    if (/place|location|map/.test(n)) return "place";
+    return n;
+  }));
+  return goals.size;
 }
 
 function buildTaskTrajectory(input = {}) {
@@ -176,7 +250,7 @@ function buildTaskTrajectory(input = {}) {
     return null;
   }
   const understanding = message
-    || (intentName ? `处理任务：${intentName}` : "理解你的需求");
+    || (intentName ? publicToolLabel(intentName) : "理解你的需求");
   const planSteps = (plan.steps || steps || []).slice(0, 5).map((step, index) => ({
     index: index + 1,
     label: publicToolLabel(step.toolName || step.tool || step.label || step.name),
@@ -198,7 +272,8 @@ function buildTaskTrajectory(input = {}) {
     verification: execution.length
       ? "结果来自对应校园工具，未使用模型编造事实。"
       : "",
-    plannerType: plan.plannerType || "",
+    // Do not expose plannerType / Evidence labels to default UI.
+    plannerType: "",
     replanUsed: input.replanUsed === true,
   };
 }
@@ -273,11 +348,21 @@ function compose(input = {}) {
 
   // Strip provider generic expression cards always
   cards = filterCards(cards, { stripGeneric: true, maxCards: 6 });
+  cards = stripZeroMeaningPartitions(cards);
 
-  if (hasError && !answer) {
+  // Domain failure answers — never dump generic capability cards on tool failure.
+  if (hasError || (input.toolFailure && input.toolFailure.code)) {
+    const failCode = (input.toolFailure && input.toolFailure.code)
+      || (errors[0] && (errors[0].code || errors[0].reasonCode))
+      || "";
+    if (!answer || /小佛可以|你能做什么|校园工具/.test(answer)) {
+      answer = domainFailureMessage(failCode, input.recoveryMessage || input.answer);
+    }
     presentationMode = "recovery";
-    answer = safeText(input.recoveryMessage || "刚才出了点问题，可以换个说法再试一次。", 200);
-    cards = filterCards(cards, { stripGeneric: true, maxCards: 1 });
+    cards = filterCards(cards.filter((c) => c && !isGenericExpressionCard(c) && c.type !== "guide"), {
+      stripGeneric: true,
+      maxCards: 1,
+    });
   } else if (isClarification) {
     presentationMode = "clarification";
     cards = filterCards(cards, { stripGeneric: true, maxCards: 1 });
@@ -290,20 +375,32 @@ function compose(input = {}) {
     evidence = null;
     runSummary = null;
   } else if (isFactIntent(intentName) || cards.length) {
-    const factCards = cards.filter((c) => c && c.type !== "guide" || (c.items && c.items.length));
-    if (factCards.length > 1 || (input.toolCalls || []).filter((t) => t && t.name !== "provider_chain").length > 1) {
+    const independentGoals = countIndependentSuccessfulGoals(input);
+    const factTools = (input.toolCalls || []).filter((t) => t && t.name !== "provider_chain" && t.status !== "failed");
+    // 「组合任务」仅当 ≥2 个独立目标成功；纯天气不得挂课程/空教室 0 分区。
+    const allowMulti = independentGoals >= 2;
+    if (allowMulti && (cards.length > 1 || factTools.length > 1)) {
       presentationMode = "multi_card";
       cards = filterCards(cards, { stripGeneric: true, maxCards: 2 });
     } else {
       presentationMode = "single_card";
       cards = filterCards(cards, { stripGeneric: true, maxCards: 1 });
     }
+    // Weather-only: drop unrelated empty partitions
+    if (intentName === "get_campus_weather" || (factTools.length === 1 && /weather/.test(String(factTools[0].name || "")))) {
+      cards = cards.filter((c) => {
+        const t = `${c.type || ""}${c.title || ""}`;
+        return !/明日课程|空教室|地点|课程\s*0/.test(t);
+      });
+      presentationMode = "single_card";
+    }
     answer = answerAvoidsCardDuplication(answer, cards);
-    evidence = buildEvidenceSummary({
-      ...input,
-      intentName,
-      showEvidence: true,
-    });
+    // Evidence stays in payload for optional expand; client defaults collapsed.
+    // Never force Planner/Evidence chrome for single-goal weather etc.
+    evidence = input.showEvidence === false
+      ? null
+      : buildEvidenceSummary({ ...input, intentName, showEvidence: true });
+    // Keep runSummary for factual runs (collapsed in UI); multi_card only when ≥2 goals.
     runSummary = buildRunSummary(input);
   } else {
     presentationMode = "plain";
@@ -393,4 +490,8 @@ module.exports = {
   buildTaskTrajectory,
   buildRunSummary,
   publicToolLabel,
+  domainFailureMessage,
+  stripZeroMeaningPartitions,
+  countIndependentSuccessfulGoals,
+  DOMAIN_FAILURE_MESSAGES,
 };

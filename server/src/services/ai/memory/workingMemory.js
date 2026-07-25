@@ -10,6 +10,27 @@ function emptyWorkingMemory() {
   return {
     currentGoal: "",
     currentSubtask: "",
+    // Typed conversation working state (thread-scoped; not long-term user memory)
+    activeGoal: "",
+    lastEntityType: "",
+    lastEntity: "",
+    lastResolvedEntity: null,
+    lastConstraints: {
+      date: "",
+      dateOffset: null,
+      dateHint: "",
+      teachingWeek: null,
+      weekday: null,
+      periodHint: "",
+      campus: "",
+      collegeCode: "",
+      continuousSections: null,
+      building: "",
+      sections: "",
+    },
+    lastSuccessfulTools: [],
+    lastResultRefs: [],
+    pendingAction: null,
     confirmedEntities: {},
     className: "",
     teacherName: "",
@@ -17,6 +38,7 @@ function emptyWorkingMemory() {
     classroom: "",
     campus: "",
     dateHint: "",
+    dateOffset: null,
     teachingWeek: null,
     weekday: null,
     sectionStart: null,
@@ -56,6 +78,18 @@ function pickNumber(...values) {
   return null;
 }
 
+/** Like pickNumber but allows 0 (e.g. dateOffset for "今天"). */
+function pickNumberAllowZero(...values) {
+  for (let i = 0; i < values.length; i += 1) {
+    const raw = values[i];
+    if (raw === null || raw === undefined || raw === "") continue;
+    const n = Number(raw);
+    if (!Number.isFinite(n)) continue;
+    return n;
+  }
+  return null;
+}
+
 function normalizeClassName(value) {
   return safeText(value, 80).replace(/\s+/g, "");
 }
@@ -64,8 +98,37 @@ function normalizeWorkingMemory(raw = {}) {
   const base = emptyWorkingMemory();
   if (!raw || typeof raw !== "object") return base;
   const next = Object.assign({}, base);
-  next.currentGoal = safeText(raw.currentGoal, 160);
+  next.currentGoal = safeText(raw.currentGoal || raw.activeGoal, 160);
+  next.activeGoal = safeText(raw.activeGoal || raw.currentGoal, 160);
   next.currentSubtask = safeText(raw.currentSubtask, 120);
+  next.lastEntityType = safeText(raw.lastEntityType, 40);
+  next.lastEntity = safeText(raw.lastEntity, 120);
+  next.lastResolvedEntity = raw.lastResolvedEntity && typeof raw.lastResolvedEntity === "object"
+    ? {
+      type: safeText(raw.lastResolvedEntity.type, 40),
+      id: safeText(raw.lastResolvedEntity.id || raw.lastResolvedEntity.detailId, 128),
+      name: safeText(raw.lastResolvedEntity.name, 120),
+    }
+    : null;
+  const lc = raw.lastConstraints && typeof raw.lastConstraints === "object" ? raw.lastConstraints : {};
+  next.lastConstraints = {
+    date: safeText(lc.date, 40),
+    dateOffset: pickNumberAllowZero(lc.dateOffset, raw.dateOffset),
+    dateHint: safeText(lc.dateHint || raw.dateHint, 40),
+    teachingWeek: pickNumber(lc.teachingWeek, raw.teachingWeek),
+    weekday: pickNumber(lc.weekday, raw.weekday),
+    periodHint: safeText(lc.periodHint || raw.periodHint, 40),
+    campus: safeText(lc.campus || raw.campus, 40),
+    collegeCode: safeText(lc.collegeCode, 24),
+    continuousSections: pickNumber(lc.continuousSections),
+    building: safeText(lc.building, 40),
+    sections: safeText(lc.sections, 40),
+  };
+  next.lastSuccessfulTools = Array.isArray(raw.lastSuccessfulTools)
+    ? raw.lastSuccessfulTools.map((item) => safeText(item, 80)).filter(Boolean).slice(0, 12)
+    : [];
+  next.lastResultRefs = Array.isArray(raw.lastResultRefs) ? raw.lastResultRefs.slice(0, 8) : [];
+  next.pendingAction = raw.pendingAction || null;
   next.confirmedEntities = raw.confirmedEntities && typeof raw.confirmedEntities === "object"
     ? Object.keys(raw.confirmedEntities).slice(0, 12).reduce((acc, key) => {
       acc[safeText(key, 40)] = safeText(raw.confirmedEntities[key], 80);
@@ -76,8 +139,9 @@ function normalizeWorkingMemory(raw = {}) {
   next.teacherName = safeText(raw.teacherName, 80);
   next.courseName = safeText(raw.courseName, 80);
   next.classroom = safeText(raw.classroom, 40);
-  next.campus = safeText(raw.campus, 40);
-  next.dateHint = safeText(raw.dateHint, 40);
+  next.campus = safeText(raw.campus || (next.lastConstraints && next.lastConstraints.campus), 40);
+  next.dateHint = safeText(raw.dateHint || (next.lastConstraints && next.lastConstraints.dateHint), 40);
+  next.dateOffset = pickNumberAllowZero(raw.dateOffset, next.lastConstraints && next.lastConstraints.dateOffset);
   next.teachingWeek = pickNumber(raw.teachingWeek, raw.week, raw.lastWeek);
   next.weekday = pickNumber(raw.weekday, raw.lastWeekday);
   next.sectionStart = pickNumber(raw.sectionStart);
@@ -203,9 +267,46 @@ function updateWorkingMemory(previous, input = {}) {
 
   if (intentName && !/conversational_help|conversation_memory/.test(intentName)) {
     next.currentGoal = intentName;
+    next.activeGoal = intentName;
   } else if (message && !prev.currentGoal) {
     next.currentGoal = message.slice(0, 80);
+    next.activeGoal = next.currentGoal;
+  } else {
+    next.activeGoal = next.activeGoal || prev.activeGoal || next.currentGoal;
   }
+
+  // Typed entity + constraints inheritance for follow-ups
+  if (teacherName) {
+    next.lastEntityType = "teacher";
+    next.lastEntity = teacherName;
+  } else if (className) {
+    next.lastEntityType = "class";
+    next.lastEntity = className;
+  } else if (classroom) {
+    next.lastEntityType = "classroom";
+    next.lastEntity = classroom;
+  } else if (courseName) {
+    next.lastEntityType = "course";
+    next.lastEntity = courseName;
+  }
+  const dateOffset = pickNumberAllowZero(slots.dateOffset, slots.dayOffset, input.dateOffset, prev.dateOffset);
+  const dateHint = safeText(slots.dateHint || input.dateHint || prev.dateHint, 40);
+  const continuousSections = pickNumber(slots.continuousSections, slots.minFreeSections, prev.lastConstraints && prev.lastConstraints.continuousSections);
+  next.dateOffset = dateOffset;
+  next.dateHint = dateHint || next.dateHint;
+  next.lastConstraints = {
+    date: safeText(slots.date || (prev.lastConstraints && prev.lastConstraints.date), 40),
+    dateOffset,
+    dateHint: dateHint || (prev.lastConstraints && prev.lastConstraints.dateHint) || "",
+    teachingWeek,
+    weekday,
+    periodHint: periodHint || (prev.lastConstraints && prev.lastConstraints.periodHint) || "",
+    campus,
+    collegeCode: safeText(slots.collegeCode || (prev.lastConstraints && prev.lastConstraints.collegeCode), 24),
+    continuousSections,
+    building: safeText(slots.building || (prev.lastConstraints && prev.lastConstraints.building), 40),
+    sections: safeText(slots.sections || (prev.lastConstraints && prev.lastConstraints.sections), 40),
+  };
 
   if (className) next.confirmedEntities.className = className;
   if (teacherName) next.confirmedEntities.teacherName = teacherName;
@@ -230,6 +331,9 @@ function updateWorkingMemory(previous, input = {}) {
   if (Array.isArray(input.executedTools) && input.executedTools.length) {
     const merged = prev.executedTools.concat(input.executedTools.map((t) => safeText(t, 80)));
     next.executedTools = Array.from(new Set(merged)).slice(-12);
+    next.lastSuccessfulTools = Array.from(new Set(
+      (prev.lastSuccessfulTools || []).concat(input.executedTools.map((t) => safeText(t, 80)))
+    )).slice(-12);
   }
   if (Array.isArray(input.observations) && input.observations.length) {
     next.lastObservations = input.observations.slice(0, 8).map((obs) => ({

@@ -1138,10 +1138,72 @@ function matchesScopedFilter(type, item, expected, keys, options = {}) {
   const values = keys
     .map((key) => String(item[key] || "").trim())
     .filter(Boolean);
+  // collegeCodes / collegeNames arrays (teacher index)
+  if (Array.isArray(item.collegeCodes) && keys.includes("collegeCode")) {
+    if (item.collegeCodes.some((c) => String(c || "").trim() === value)) return true;
+  }
+  if (Array.isArray(item.collegeNames) && (keys.includes("collegeName") || keys.includes("college"))) {
+    if (item.collegeNames.some((n) => String(n || "").trim() === value || normalizeSearchText(n) === normalizeSearchText(value))) {
+      return true;
+    }
+  }
   if (!values.length && options.allowMissing) {
     return true;
   }
   return matchesExact(item, value, keys);
+}
+
+/**
+ * Teacher college filter (strict):
+ * - With collegeCode/Name selected: item must include it in collegeCode or collegeCodes[];
+ * - 「学院待确认」 / empty college excluded under filter;
+ * - Without filter: all items (including 待确认) may show.
+ */
+function matchesTeacherCollegeFilter(item, collegeCode, collegeName) {
+  const code = String(collegeCode || "").trim();
+  const name = String(collegeName || "").trim();
+  if (!code && !name) return true;
+  const collegeLabel = String(item.collegeName || item.college || "").trim();
+  const codes = Array.isArray(item.collegeCodes)
+    ? item.collegeCodes.map((c) => String(c || "").trim()).filter(Boolean)
+    : [];
+  const names = Array.isArray(item.collegeNames)
+    ? item.collegeNames.map((n) => String(n || "").trim()).filter(Boolean)
+    : [];
+  if (collegeLabel === "学院待确认" || names.every((n) => n === "学院待确认")) {
+    if (!codes.length && !String(item.collegeCode || "").trim()) return false;
+  }
+  if (code) {
+    if (String(item.collegeCode || "").trim() === code) return true;
+    if (codes.includes(code)) return true;
+    return false;
+  }
+  if (name) {
+    if (collegeLabel === name || normalizeSearchText(collegeLabel) === normalizeSearchText(name)) return true;
+    if (names.some((n) => n === name || normalizeSearchText(n) === normalizeSearchText(name))) return true;
+    return false;
+  }
+  return true;
+}
+
+function teacherDisplayName(item) {
+  return String(item.teacherName || item.name || item.displayName || item.canonicalName || "").trim();
+}
+
+/** Prefer exact name hits; only fall back to fuzzy substring when no exact match. */
+function filterTeachersByKeyword(items, q) {
+  const keyword = String(q || "").trim();
+  if (!keyword) return items.slice();
+  const normalizedQ = normalizeSearchText(keyword);
+  const exact = items.filter((item) => {
+    const name = normalizeSearchText(teacherDisplayName(item));
+    return name === normalizedQ;
+  });
+  if (exact.length) return exact;
+  return items.filter((item) => {
+    const haystack = normalizeSearchText(collectSearchFields(item).join(" "));
+    return haystack.includes(normalizedQ);
+  });
 }
 
 function getTeacherFilterDebug(index, params, q, scopedItems, filteredItems) {
@@ -1153,8 +1215,7 @@ function getTeacherFilterDebug(index, params, q, scopedItems, filteredItems) {
       semester: index.semester || index.term,
     }, item || {});
     if (!matchesScopedFilter("teacher", comparable, term, ["semester", "term"])) return false;
-    if (!matchesScopedFilter("teacher", comparable, params.collegeCode, ["collegeCode"], { allowMissing: true })) return false;
-    if (!matchesScopedFilter("teacher", comparable, params.collegeName, ["collegeName", "college"], { allowMissing: true })) return false;
+    if (!matchesTeacherCollegeFilter(comparable, params.collegeCode, params.collegeName)) return false;
     return true;
   });
   return {
@@ -1171,6 +1232,7 @@ function getTeacherFilterDebug(index, params, q, scopedItems, filteredItems) {
       name: item.name || item.teacherName || item.displayName || "",
       teacherName: item.teacherName || item.name || "",
       collegeName: item.collegeName || item.college || "",
+      collegeCodes: Array.isArray(item.collegeCodes) ? item.collegeCodes : [],
       title: item.title || item.teacherTitle || item.professionalTitle || "",
       courseCount: Number(item.courseCount || 0) || 0,
     })),
@@ -1179,31 +1241,38 @@ function getTeacherFilterDebug(index, params, q, scopedItems, filteredItems) {
 
 function filterIndexPayload(type, payload, params = {}) {
   const index = normalizeIndexPayload(type, payload);
-  const q = normalizeSearchText(params.q || params.keyword);
+  const rawQ = String(params.q || params.keyword || "").trim();
+  const q = normalizeSearchText(rawQ);
   const limit = Math.min(Math.max(parseInt(params.limit || "30", 10) || 30, 1), 100);
   const offset = Math.max(parseInt(params.offset || "0", 10) || 0, 0);
-  const teacherLooseFilter = type === "teacher";
+  // Title may be missing on many teachers; college must never use allowMissing under filter.
   const scoped = (index.items || []).filter((item) => {
     const comparable = Object.assign({
       term: index.term,
       semester: index.semester || index.term,
     }, item || {});
     if (!matchesScopedFilter(type, comparable, params.semester || params.term, ["semester", "term"])) return false;
-    if (!matchesScopedFilter(type, comparable, params.collegeCode, ["collegeCode"], { allowMissing: teacherLooseFilter })) return false;
-    if (!matchesScopedFilter(type, comparable, params.collegeName, ["collegeName", "college"], { allowMissing: teacherLooseFilter })) return false;
+    if (type === "teacher") {
+      if (!matchesTeacherCollegeFilter(comparable, params.collegeCode, params.collegeName)) return false;
+    } else {
+      if (!matchesScopedFilter(type, comparable, params.collegeCode, ["collegeCode"])) return false;
+      if (!matchesScopedFilter(type, comparable, params.collegeName, ["collegeName", "college"])) return false;
+    }
     if (!matchesScopedFilter(type, comparable, params.grade, ["grade"])) return false;
     if (!matchesScopedFilter(type, comparable, params.majorCode, ["majorCode"])) return false;
     if (!matchesScopedFilter(type, comparable, params.majorName, ["majorName"])) return false;
     if (!matchesScopedFilter(type, comparable, params.campus, ["campus", "campusName"])) return false;
-    if (!matchesScopedFilter(type, comparable, params.titleCode || params.title, ["titleCode", "title", "teacherTitle", "professionalTitle"], { allowMissing: teacherLooseFilter })) return false;
+    if (!matchesScopedFilter(type, comparable, params.titleCode || params.title, ["titleCode", "title", "teacherTitle", "professionalTitle"], { allowMissing: type === "teacher" })) return false;
     return true;
   });
-  const filtered = q
-    ? scoped.filter((item) => {
-        const haystack = normalizeSearchText(collectSearchFields(item).join(" "));
-        return haystack.includes(q);
-      })
-    : scoped;
+  const filtered = type === "teacher"
+    ? filterTeachersByKeyword(scoped, rawQ)
+    : (q
+      ? scoped.filter((item) => {
+          const haystack = normalizeSearchText(collectSearchFields(item).join(" "));
+          return haystack.includes(q);
+        })
+      : scoped);
   const debug = type === "teacher"
     ? getTeacherFilterDebug(index, params, q, scoped, filtered)
     : undefined;
@@ -1824,6 +1893,8 @@ module.exports = {
   clearOldReleaseCaches,
   filterIndexPayload,
   filterEmptyRoomIndex,
+  matchesTeacherCollegeFilter,
+  filterTeachersByKeyword,
   normalizeSearchText,
   resolveIndexUrl,
   resolveDetailUrl,

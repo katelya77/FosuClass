@@ -1,6 +1,8 @@
 const STORAGE_KEY = "FOSU_CLASS_SETTINGS";
 const BOOTSTRAP_CACHE_KEY = "FOSU_BOOTSTRAP_CACHE";
-const SCHOOL_CACHE_SCHEMA_VERSION = 5;
+const SCHOOL_CACHE_SCHEMA_VERSION = 6;
+/** Bumped when teacher college filter / index semantics change; invalidates stale client caches. */
+const TEACHER_INDEX_SCHEMA_VERSION = 2;
 const SCHOOL_INDEX_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const PERSONAL_SCHEDULE_CACHE_KEY = "FOSU_PERSONAL_SCHEDULE_CACHE";
 const PERSONAL_SCHEDULE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -383,7 +385,14 @@ function getSchoolIndexCacheKey(term, releaseVersion, type, params = {}) {
   const safeTerm = encodeURIComponent(String(term || "unknown"));
   const safeVersion = encodeURIComponent(String(releaseVersion || "unknown"));
   const safeType = encodeURIComponent(String(type || "unknown"));
-  return `school:v${SCHOOL_CACHE_SCHEMA_VERSION}:index:${safeTerm}:${safeVersion}:${safeType}:${stableParamHash(params)}`;
+  const teacherSchema = String(type || "") === "teacher"
+    ? `:tidx${TEACHER_INDEX_SCHEMA_VERSION}`
+    : "";
+  // Include teacherIndexSchemaVersion in key so college-filter upgrades invalidate old results.
+  const hashParams = String(type || "") === "teacher"
+    ? Object.assign({}, params || {}, { teacherIndexSchemaVersion: TEACHER_INDEX_SCHEMA_VERSION })
+    : params;
+  return `school:v${SCHOOL_CACHE_SCHEMA_VERSION}:index:${safeTerm}:${safeVersion}:${safeType}${teacherSchema}:${stableParamHash(hashParams)}`;
 }
 
 function getSchoolFilterCacheKey(term, releaseVersion) {
@@ -478,6 +487,7 @@ module.exports = {
   RECENT_SCHEDULES_KEY,
   SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY,
   SCHOOL_CACHE_SCHEMA_VERSION,
+  TEACHER_INDEX_SCHEMA_VERSION,
   SCHOOL_INDEX_CACHE_TTL,
   SCHOOL_FILTER_CACHE_KEY,
   STORAGE_KEY,
