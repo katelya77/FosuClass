@@ -3,7 +3,9 @@
 // 密钥：TENCENT_ASR_SECRET_ID / TENCENT_ASR_SECRET_KEY 只在云函数环境变量配置。
 
 const cloud = require("wx-server-sdk");
-const { AsrClient } = require("tencentcloud-sdk-nodejs/tencentcloud/services/asr/v20190614/asr_client");
+// tencentcloud-sdk-nodejs 导出名为 Client（兼容旧别名 AsrClient）
+const asrClientModule = require("tencentcloud-sdk-nodejs/tencentcloud/services/asr/v20190614/asr_client");
+const AsrClient = asrClientModule.AsrClient || asrClientModule.Client;
 const { transcribeEvent } = require("./handler");
 
 cloud.init({ env: cloud.DYNAMIC_CURRENT_ENV });
