@@ -793,11 +793,16 @@ function normalizeCardItem(item, index, cardType) {
   if (timeRange && section && displaySubtitle.indexOf(section) < 0) {
     displaySubtitle = [section, displaySubtitle].filter(Boolean).join(" · ");
   }
+  const itemUrl = safeText(source.url || source.actionUrl || source.openUrl || "", 240);
+  const canOpen = Boolean(itemUrl && /^\/(pages|packageXiaofu|packageMaps)\//.test(itemUrl));
   const normalized = {
     key: `${safeText(source.title || source.name || "item", 60, "item")}-${index}`,
     title: safeText(source.title || source.name || "", 80),
     subtitle: safeText(displaySubtitle, 140),
-    value,
+    value: canOpen && !value ? "打开 ›" : value,
+    url: canOpen ? itemUrl : "",
+    tappable: canOpen,
+    actionLabel: safeText(source.actionLabel || "", 30),
   };
   return normalized.title || normalized.subtitle || normalized.value ? normalized : null;
 }
@@ -3839,6 +3844,13 @@ Page({
     const card = (message.displayCards || [])[cardIndex] || {};
     const action = (card.actions || [])[actionIndex] || {};
     this.executeCardAction(action, { messageIndex, cardIndex, actionIndex, message, card });
+  },
+
+  onResultCardItemTap(event) {
+    const detail = (event && event.detail) || {};
+    const url = String(detail.url || "").trim();
+    if (!url || !/^\/(pages|packageXiaofu|packageMaps)\//.test(url)) return;
+    this.navigateByUrl(url);
   },
 
   executeCardAction(action, context) {

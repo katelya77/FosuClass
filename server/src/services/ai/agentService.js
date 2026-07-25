@@ -855,21 +855,30 @@ function deriveActionCommands(toolCalls = []) {
       return;
     }
 
-    // Unique search hit for any schedule type (open_schedule goal OR plain teacher/class search)
+    // Schedule search: unique → open schedule-view; multi → top candidates open + school fallback
     if (call.name === "search_school_index") {
       const items = Array.isArray(result.items) ? result.items : [];
       const type = String(result.type || result.lockedEntityType || "class").slice(0, 20);
       const isScheduleType = ["class", "teacher", "classroom", "course", "room"].includes(type);
       if (!isScheduleType) return;
+      const meta = {
+        releaseVersion: result.releaseVersion,
+        term: result.term || result.semester,
+      };
       if (items.length === 1) {
-        derived.push(buildScheduleNavigateAction(type, items[0], {
-          releaseVersion: result.releaseVersion,
-          term: result.term || result.semester,
-        }));
-      } else if (items.length > 1 && items.length <= 5) {
-        // Multi-candidate: first action opens school with pending; row clicks handled client-side
-        const first = items[0] || {};
-        const name = String(first.name || first.teacherName || result.q || "").slice(0, 80);
+        derived.push(buildScheduleNavigateAction(type, items[0], meta));
+      } else if (items.length > 1) {
+        // Prefer per-candidate open actions so users can click a teacher card row / button
+        items.slice(0, 3).forEach((item) => {
+          const action = buildScheduleNavigateAction(type, item, meta);
+          if (action && action.input && action.input.url && String(action.input.url).includes("schedule-view")) {
+            const nm = String(item.name || item.teacherName || item.className || item.roomName || item.courseName || "").slice(0, 8);
+            derived.push(Object.assign({}, action, {
+              label: nm ? `打开${nm}${nm.length >= 8 ? "…" : ""}` : action.label,
+            }));
+          }
+        });
+        const q = String(result.q || (items[0] && (items[0].name || items[0].teacherName)) || "").slice(0, 80);
         derived.push({
           command: "navigate",
           label: "打开全校查询",
@@ -877,8 +886,8 @@ function deriveActionCommands(toolCalls = []) {
             url: "/pages/school/school",
             params: {
               type,
-              keyword: name || String(result.q || "").slice(0, 80),
-              q: name || String(result.q || "").slice(0, 80),
+              keyword: q,
+              q,
               term: String(result.term || result.semester || "").slice(0, 40),
               releaseVersion: String(result.releaseVersion || "").slice(0, 40),
             },
@@ -887,7 +896,8 @@ function deriveActionCommands(toolCalls = []) {
       }
     }
   });
-  return derived.slice(0, 2);
+  // Allow up to 4 derived actions so multi-teacher open + school remain available
+  return derived.slice(0, 4);
 }
 
 function sanitizePublicResponse(response) {

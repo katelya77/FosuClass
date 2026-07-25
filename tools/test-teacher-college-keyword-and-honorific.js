@@ -256,6 +256,75 @@ const payload = {
     actions[0] && actions[0].label === "打开教师课表"
       && actions[0].input && actions[0].input.url.includes("schedule-view")
   );
+  const multiActions = agentService.deriveActionCommands([{
+    name: "search_school_index",
+    status: "success",
+    result: {
+      type: "teacher",
+      q: "芳",
+      releaseVersion: "fix",
+      term: "2025-2026-2",
+      items: [
+        { id: "t-chenfang", teacherName: "陈芳", name: "陈芳" },
+        { id: "t-limei", teacherName: "覃丽梅", name: "覃丽梅" },
+      ],
+    },
+  }]);
+  check(
+    "多教师可点开 schedule-view",
+    multiActions.some((a) => a.input && String(a.input.url || "").includes("schedule-view"))
+      && multiActions.some((a) => a.label === "打开全校查询"),
+    JSON.stringify(multiActions.map((a) => a.label))
+  );
+  // mockProvider 卡片：唯一命中含打开教师课表
+  const mockProvider = require(path.join(ROOT, "server/src/services/ai/providers/mockProvider"));
+  const cardOut = mockProvider.generate({
+    intent: { name: "search_school_index" },
+    toolResults: [{
+      name: "search_school_index",
+      result: {
+        type: "teacher",
+        q: "陈芳",
+        total: 1,
+        releaseVersion: "fix",
+        term: "2025-2026-2",
+        items: [{ id: "t-chenfang", teacherName: "陈芳", name: "陈芳", collegeName: "动物科技学院" }],
+      },
+    }],
+    message: "查陈芳老师课表",
+  });
+  const card0 = cardOut.cards && cardOut.cards[0];
+  check(
+    "mock 卡片打开教师课表 URL",
+    card0
+      && Array.isArray(card0.actions)
+      && card0.actions.some((a) => /打开教师课表/.test(a.label) && /schedule-view/.test(a.url))
+      && card0.items && card0.items[0] && /schedule-view/.test(card0.items[0].url || ""),
+    JSON.stringify(card0 && card0.actions)
+  );
+  const multiCard = mockProvider.generate({
+    intent: { name: "search_school_index" },
+    toolResults: [{
+      name: "search_school_index",
+      result: {
+        type: "teacher",
+        q: "芳",
+        total: 2,
+        items: [
+          { id: "t1", teacherName: "陈芳", collegeName: "动科" },
+          { id: "t2", teacherName: "李芳", collegeName: "人文" },
+        ],
+      },
+    }],
+    message: "查芳老师",
+  });
+  const mc = multiCard.cards && multiCard.cards[0];
+  check(
+    "多命中卡片行可点开",
+    mc && mc.items && mc.items.length >= 2
+      && mc.items.every((it) => /schedule-view/.test(it.url || "")),
+    JSON.stringify(mc && mc.items)
+  );
 }
 
 // --- 4) school 检索路径标志 ---
@@ -265,6 +334,13 @@ const payload = {
   check("js college 时 forceServerSearch", /forceServerSearch:\s*collegeActive/.test(js));
   check("resetFilters 班级学院回到 -1", /resetFilters\s*\(\)\s*\{[\s\S]*?selectedCollegeIndex:\s*-1/.test(js));
   check("restore 缺学院时 selectedCollegeIndex:-1", /selectedCollegeIndex:\s*-1/.test(js));
+  check(
+    "切换院系有关键词时自动重搜",
+    /onTeacherCollegeChange[\s\S]{0,600}?searchTeacherSchedule/.test(js)
+  );
+  const cardJs = fs.readFileSync(path.join(ROOT, "miniprogram/packageXiaofu/components/xiaofu-result-card/index.js"), "utf8");
+  const cardWxml = fs.readFileSync(path.join(ROOT, "miniprogram/packageXiaofu/components/xiaofu-result-card/index.wxml"), "utf8");
+  check("结果卡支持行点击 onItemTap", /onItemTap/.test(cardJs) && /bindtap="onItemTap"/.test(cardWxml));
 }
 
 const summary = `\n${pass} passed, ${fail} failed\n`;

@@ -215,32 +215,126 @@ function emptySchoolCopy(type, q) {
   return "没有找到匹配结果，可以换一个更短的关键词再试。";
 }
 
+function buildScheduleViewUrl(type, item, meta = {}) {
+  const id = String((item && (item.id || item.detailId)) || "").trim();
+  const name = encodeURIComponent(String(itemName(item, type) || meta.q || "").slice(0, 80));
+  const term = encodeURIComponent(String((item && (item.term || item.semester)) || meta.term || "").slice(0, 40));
+  const releaseVersion = encodeURIComponent(String(
+    (item && item.releaseVersion) || meta.releaseVersion || ""
+  ).slice(0, 40));
+  const safeType = encodeURIComponent(String(type || "teacher").slice(0, 20));
+  if (!id) return "";
+  return `/pages/schedule-view/schedule-view?type=${safeType}&id=${encodeURIComponent(id)}&name=${name}&term=${term}&releaseVersion=${releaseVersion}`;
+}
+
 function buildSchoolIndex(result, detailResult) {
   const type = result.type || "teacher";
   const typeText = { teacher: "教师", classroom: "教室", course: "课程", class: "班级" }[type] || "课表";
   const items = Array.isArray(result.items) ? result.items : [];
   const detailCourses = detailResult && Array.isArray(detailResult.courses) ? detailResult.courses : [];
-  const primaryActionUrl = detailResult && detailResult.success && detailResult.actionUrl
-    ? detailResult.actionUrl
-    : (result.actionUrl || "/pages/school/school");
+  const meta = {
+    q: result.q || "",
+    term: result.term || result.semester || "",
+    releaseVersion: result.releaseVersion || result.version || "",
+  };
+  const schoolUrl = result.actionUrl || "/pages/school/school";
+  const openLabel = {
+    teacher: "打开教师课表",
+    classroom: "打开教室课表",
+    course: "打开课程课表",
+    class: "打开班级课表",
+  }[type] || "打开课表";
+
+  // Unique hit: one primary open action into schedule-view
+  if (items.length === 1 && !detailCourses.length) {
+    const only = items[0] || {};
+    const openUrl = buildScheduleViewUrl(type, only, meta) || schoolUrl;
+    const name = itemName(only, type) || "未命名";
+    return {
+      answer: `在全校索引里命中 1 位${typeText}「${name}」。可点卡片打开课表核对，事实来自 Release Pack。`,
+      cards: [makeCard(type === "teacher" ? "teacher" : (type === "course" ? "course" : "generic"), `${typeText}：${name}`, [
+        only.college || only.collegeName,
+        only.campus,
+        only.majorName,
+        result.q ? `关键词：${result.q}` : "",
+      ].filter(Boolean).join(" · ") || "可打开课表详情", {
+        badges: metaBadges(result),
+        items: [{
+          title: name,
+          subtitle: [only.college || only.collegeName, only.campus, only.majorName].filter(Boolean).join(" · "),
+          value: only.courseCount || only.count ? `${only.courseCount || only.count} 条课程` : "查看课表",
+          url: openUrl,
+          actionLabel: openLabel,
+        }],
+        actions: [
+          makeAction(openLabel, "navigate", openUrl),
+          makeAction("打开全校查询", "navigate", schoolUrl),
+        ].filter((a) => a.url),
+      })],
+      suggestions: type === "teacher"
+        ? ["换一位老师", "查空教室", "今天有什么课"]
+        : ["查老师课表", "查教室占用", "查课程安排"],
+    };
+  }
+
+  if (detailCourses.length) {
+    const primaryActionUrl = detailResult && detailResult.success && detailResult.actionUrl
+      ? detailResult.actionUrl
+      : (items[0] ? (buildScheduleViewUrl(type, items[0], meta) || schoolUrl) : schoolUrl);
+    return {
+      answer: `在全校索引里命中 1 条${typeText}结果，并读取到课表详情。事实来自 Release Pack 索引和详情缓存。`,
+      cards: [makeCard(type === "teacher" ? "teacher" : (type === "course" ? "course" : "generic"), `${typeText}课表摘要`, result.q ? `关键词：${result.q}` : "课表详情", {
+        badges: metaBadges(result),
+        items: detailCourses.slice(0, 6).map((course) => ({
+          title: course.courseName || "未命名课程",
+          subtitle: [course.teacherName, course.classroom || course.roomName, course.weekday ? `星期${course.weekday}` : "", courseSectionText(course)].filter(Boolean).join(" · "),
+          value: courseTimeValue(course),
+        })),
+        actions: [makeAction("查看课表详情", "navigate", primaryActionUrl)],
+      })],
+      suggestions: ["查老师课表", "查教室占用", "查课程安排"],
+    };
+  }
+
+  // Multi-hit: list card with per-row open URLs + up to 3 named open buttons
+  if (items.length > 1) {
+    const listed = items.slice(0, 8);
+    const openActions = listed.slice(0, 3).map((item) => {
+      const name = itemName(item, type) || "未命名";
+      const url = buildScheduleViewUrl(type, item, meta);
+      if (!url) return null;
+      const short = name.length > 6 ? `${name.slice(0, 6)}…` : name;
+      return makeAction(`打开${short}`, "navigate", url);
+    }).filter(Boolean);
+    return {
+      answer: `在全校索引里找到 ${result.total || items.length} 条${typeText}相关结果。可点下方某一位打开课表，或到全校页继续筛选。事实来自 Release Pack。`,
+      cards: [makeCard(type === "teacher" ? "teacher" : (type === "course" ? "course" : "generic"), `${typeText}查询结果（${result.total || items.length}）`, result.q ? `关键词：${result.q} · 点选一位打开课表` : "点选一位打开课表", {
+        badges: metaBadges(result),
+        items: listed.map((item) => {
+          const name = itemName(item, type) || "未命名";
+          const url = buildScheduleViewUrl(type, item, meta);
+          return {
+            title: name,
+            subtitle: [item.college || item.collegeName, item.campus, item.majorName].filter(Boolean).join(" · "),
+            value: item.courseCount || item.count ? `${item.courseCount || item.count} 条` : (url ? "打开 ›" : "课程数据"),
+            url: url || "",
+            actionLabel: openLabel,
+          };
+        }),
+        actions: openActions.concat([makeAction("打开全校查询", "navigate", schoolUrl)]).slice(0, 4),
+      })],
+      suggestions: type === "teacher"
+        ? ["补充学院再查", "换短一点的姓名", "打开全校查询"]
+        : ["查老师课表", "查教室占用", "查课程安排"],
+    };
+  }
+
   return {
-    answer: items.length
-      ? (detailCourses.length
-        ? `在全校索引里命中 1 条${typeText}结果，并读取到课表详情。事实来自 Release Pack 索引和详情缓存。`
-        : `在全校索引里找到 ${result.total || items.length} 条${typeText}相关结果。事实来自 Release Pack 索引。`)
-      : emptySchoolCopy(type, result.q),
-    cards: [makeCard(type === "teacher" ? "teacher" : (type === "course" ? "course" : "generic"), `${typeText}查询结果`, result.q ? `关键词：${result.q}` : "可继续补充关键词", {
+    answer: emptySchoolCopy(type, result.q),
+    cards: [makeCard(type === "teacher" ? "teacher" : "generic", `${typeText}查询结果`, result.q ? `关键词：${result.q}` : "可继续补充关键词", {
       badges: metaBadges(result),
-      items: (detailCourses.length ? detailCourses.slice(0, 6).map((course) => ({
-        title: course.courseName || "未命名课程",
-        subtitle: [course.teacherName, course.classroom || course.roomName, course.weekday ? `星期${course.weekday}` : "", courseSectionText(course)].filter(Boolean).join(" · "),
-        value: courseTimeValue(course),
-      })) : items.slice(0, 6).map((item) => ({
-        title: itemName(item, type) || "未命名",
-        subtitle: [item.college || item.collegeName, item.campus, item.majorName].filter(Boolean).join(" · "),
-        value: item.courseCount || item.count ? `${item.courseCount || item.count} 条课程数据` : "课程数据",
-      }))),
-      actions: [makeAction(detailCourses.length ? "查看课表详情" : "打开全校查询", "navigate", primaryActionUrl)],
+      items: [],
+      actions: [makeAction("打开全校查询", "navigate", schoolUrl)],
     })],
     suggestions: ["查老师课表", "查教室占用", "查课程安排"],
   };
