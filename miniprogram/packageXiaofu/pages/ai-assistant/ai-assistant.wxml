@@ -62,7 +62,6 @@
 
   <scroll-view
     class="message-scroll"
-    style="padding-bottom: {{composerInsetPx || 120}}px;"
     scroll-y="{{!(showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu || showMemorySheet || showComposerPlus || showReminderSheet)}}"
     scroll-top="{{scrollTop}}"
     scroll-into-view="{{scrollIntoView}}"

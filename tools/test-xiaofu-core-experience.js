@@ -267,9 +267,9 @@ const teacherFixture = [
   const keyA = storage.getSchoolIndexCacheKey("2025-2026-2", "26.05.29.22", "teacher", { q: "陈芳", collegeCode: "04" });
   const keyB = storage.getSchoolIndexCacheKey("2025-2026-2", "26.05.29.22", "teacher", { q: "陈芳", collegeCode: "02" });
   check("cache key college isolates", keyA !== keyB);
-  check("cache key teacher schema bumped", /tidx3|teacherIndexSchemaVersion|v7/.test(keyA) || storage.TEACHER_INDEX_SCHEMA_VERSION >= 3);
-  check("SCHOOL_CACHE_SCHEMA_VERSION >= 7", storage.SCHOOL_CACHE_SCHEMA_VERSION >= 7);
-  check("TEACHER_INDEX_SCHEMA_VERSION === 3", storage.TEACHER_INDEX_SCHEMA_VERSION === 3);
+  check("cache key teacher schema bumped", /tidx4|teacherIndexSchemaVersion|v8/.test(keyA) || storage.TEACHER_INDEX_SCHEMA_VERSION >= 4);
+  check("SCHOOL_CACHE_SCHEMA_VERSION >= 8", storage.SCHOOL_CACHE_SCHEMA_VERSION >= 8);
+  check("TEACHER_INDEX_SCHEMA_VERSION >= 4", storage.TEACHER_INDEX_SCHEMA_VERSION >= 4);
 }
 
 // --- 3) Voice state machine
@@ -419,7 +419,6 @@ function mockWx(script) {
     const appJson = JSON.parse(fs.readFileSync(path.join(ROOT, "miniprogram/app.json"), "utf8"));
     check("ui status island wrapper", wxml.includes("agent-status-island-wrap"));
     check("ui composer pill", wxml.includes("composer-pill"));
-    check("ui composerInset binding", wxml.includes("composerInsetPx"));
     check("ui no 麦 text button", !/>麦</.test(wxml));
     check("ui no ↑ send glyph", !/{{sending \? "■" : "↑"}}/.test(wxml) && !/>↑</.test(wxml));
     check("ui svg mic", wxml.includes("composer/microphone.svg"));
@@ -427,7 +426,9 @@ function mockWx(script) {
     check("ui capsule width 100%", /\.agent-status-capsule\s*\{[^}]*width:\s*100%/.test(wxss));
     check("ui capsule no width auto", !/\.agent-status-capsule\s*\{[^}]*width:\s*auto/.test(wxss));
     check("ui composer align center", /\.composer-pill\s*\{[^}]*align-items:\s*center/.test(wxss));
-    check("ui composer absolute float", /\.composer\s*\{[^}]*position:\s*absolute/.test(wxss));
+    check("ui composer in-flow relative", /\.composer\s*\{[^}]*position:\s*relative/.test(wxss));
+    check("ui composer not absolute overlay", !/\.composer\s*\{[^}]*position:\s*absolute/.test(wxss));
+    check("ui message-scroll tight bottom pad", /\.message-scroll\s*\{[^}]*padding:\s*4rpx\s+0\s+12rpx/.test(wxss));
     check("ui reduced-motion", /prefers-reduced-motion/.test(wxss));
     check("app.json record permission", appJson.permission && appJson.permission["scope.record"] && /语音转文字/.test(appJson.permission["scope.record"].desc));
     check("svg files exist", fs.existsSync(path.join(ROOT, "miniprogram/assets/icons/composer/plus.svg")));

@@ -37,6 +37,7 @@ const {
   removeRecentSchedule,
   clearRecentSchedules,
   clearAllSchoolCaches,
+  clearLegacyTeacherIndexCaches,
   getSchoolCatalogCacheKey,
   getSchoolFilterCacheKey,
   getSchoolIndexCacheKey,
@@ -317,6 +318,10 @@ Page({
     this._lastInitAt = 0;
     this.resetPagedResultStore();
     this._lastSchoolMapQuery = this.buildMapReturnFromOptions(options || {});
+    // Drop poisoned teacher full-index caches (filtered search hits written as full index).
+    try {
+      if (typeof clearLegacyTeacherIndexCaches === "function") clearLegacyTeacherIndexCaches();
+    } catch (e) { /* ignore */ }
     this.initPageData({ reason: "onLoad" });
   },
 
@@ -1817,20 +1822,22 @@ Page({
       this.setSimplePagedResults("teacher", "teachersResult", teachers, "teacherHitCount", "hasMoreTeachers");
       this.setData({
         titleFilterEnabled,
-        teacherDataSourceText: "本地静态索引",
+        teacherDataSourceText: data.degradedSchema ? "索引待升级" : "教师索引",
         teacherDiagnosticText: "",
         dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",
         updatedAtText: teachers.length
-          ? `${teachers.length} 个命中 · 本地静态索引${formatTime ? " · 更新于 " + formatTime : ""}`
-          : "未找到相关教师，请检查姓名或切换关键词",
+          ? `${teachers.length} 个命中${collegeName ? " · " + collegeName : ""}${formatTime ? " · 更新于 " + formatTime : ""}`
+          : (collegeName
+            ? `在「${collegeName}」下未找到「${keyword.trim()}」，可清空学院后再搜`
+            : "未找到相关教师，请检查姓名或切换关键词"),
       });
     };
 
     const catchFn = () => {
       this.clearPagedResults("teacher");
       this.setData({
-        teacherDataSourceText: "本地静态索引",
-        updatedAtText: "未找到相关教师，请检查姓名或切换关键词",
+        teacherDataSourceText: "教师索引",
+        updatedAtText: "教师查询失败，请检查网络后重试",
         dataVersionText: "",
       });
     };
@@ -3439,61 +3446,29 @@ Page({
         this.retryFn = () => doNetworkRequest(true);
       }
 
-      // Teacher Search Contract: prefer server /api/fosu/search-index when schema stale
-      // or college filter is active — never strict-filter incomplete static teacher rows.
+      // Teacher Search Contract: full local/static index + client filter first.
+      // Server is fallback only (never used to overwrite full teacher index cache).
       const requestIndex = () => {
-        const collegeFilterActive = Boolean(
-          String(query.collegeCode || "").trim() || String(query.collegeName || "").trim()
-        );
-        const teacherServerFirst = type === "teacher" && (
-          collegeFilterActive || query.forceServerSearch === true
-        );
-        const serverSearch = () => request.get("/api/fosu/search-index", Object.assign({}, query, {
-          type,
-          schemaVersion: 3,
-          teacherIndexSchemaVersion: 3,
-        }), {
-          showLoading: false,
-          silentError: true,
-          timeout: SCHOOL_REQUEST_TIMEOUT,
-        });
-        if (teacherServerFirst) {
-          return serverSearch().catch((serverError) => releasePackService.searchIndex(type, query, {
+        if (type === "teacher") {
+          return releasePackService.searchIndex(type, query, {
             forceNetwork: true,
-            forceServerSearch: false,
-            preferServerSearch: false,
             timeout: SCHOOL_REQUEST_TIMEOUT,
-          }).then((payload) => {
-            const schema = releasePackService.detectTeacherIndexSchemaVersion
-              ? releasePackService.detectTeacherIndexSchemaVersion(payload)
-              : 0;
-            if (collegeFilterActive && schema < 2) {
-              return Object.assign({}, payload, {
-                items: [],
-                total: 0,
-                reasonCode: "TEACHER_INDEX_SCHEMA_STALE",
-                teacherIndexSchemaVersion: schema,
-              });
-            }
-            return payload;
-          }).catch(() => {
-            throw serverError;
-          }));
+            preferServerSearch: true,
+            allowServerFallback: true,
+          });
         }
         return releasePackService.searchIndex(type, query, {
           forceNetwork: true,
           timeout: SCHOOL_REQUEST_TIMEOUT,
-          preferServerSearch: type === "teacher",
-        }).catch((packError) => {
-          if (type === "teacher") {
-            return serverSearch().catch(() => {
-              throw packError;
-            });
-          }
-          return serverSearch().catch(() => {
-            throw packError;
-          });
-        });
+        }).catch((packError) => request.get("/api/fosu/search-index", Object.assign({}, query, {
+          type,
+        }), {
+          showLoading: false,
+          silentError: true,
+          timeout: SCHOOL_REQUEST_TIMEOUT,
+        }).catch(() => {
+          throw packError;
+        }));
       };
 
       requestIndex()

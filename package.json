@@ -616,7 +616,8 @@
     "test:agent-task-gates": "node tools/test-ai-goal-first-parser.js && node tools/test-ai-goal-intent-regression.js && node tools/test-ai-set-current-schedule-receipt.js && node tools/test-ai-manifest-actions-behavior.js && node tools/test-ai-memory-semantics.js && node tools/test-ai-voice-handler.js && node tools/test-ai-kb-seed-verify.js && node tools/test-ai-kb-published-smoke.js && node tools/test-ai-ui-polish.js",
     "test:coze-gateway-live": "node tools/test-coze-gateway-live.js",
     "test:xiaofu-final-product-convergence": "node tools/test-xiaofu-final-product-convergence.js",
-    "upload:wechat-trial": "node tools/upload-wechat-trial.js"
+    "upload:wechat-trial": "node tools/upload-wechat-trial.js",
+    "test:teacher-index-cache-no-poison": "node tools/test-teacher-index-cache-no-poison.js"
   },
   "repository": {
     "type": "git",

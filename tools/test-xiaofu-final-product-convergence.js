@@ -131,14 +131,14 @@ const payloadV3 = {
 
 // Cache keys
 {
-  check("TEACHER_INDEX_SCHEMA_VERSION=3", storage.TEACHER_INDEX_SCHEMA_VERSION === 3);
-  check("SCHOOL_CACHE_SCHEMA_VERSION>=7", storage.SCHOOL_CACHE_SCHEMA_VERSION >= 7);
+  check("TEACHER_INDEX_SCHEMA_VERSION>=4", storage.TEACHER_INDEX_SCHEMA_VERSION >= 4);
+  check("SCHOOL_CACHE_SCHEMA_VERSION>=8", storage.SCHOOL_CACHE_SCHEMA_VERSION >= 8);
   const k = storage.getSchoolIndexCacheKey("2025-2026-2", "26.05.29.22", "teacher", {
     q: "陈芳",
     collegeCode: "04",
   });
-  check("cache key has tidx3", /tidx3/.test(k));
-  check("cache key has school v7", /school:v7:/.test(k));
+  check("cache key has tidx4", /tidx4/.test(k));
+  check("cache key has school v8", /school:v8:/.test(k));
   const k2 = storage.getSchoolIndexCacheKey("2025-2026-2", "26.05.29.22", "teacher", {
     q: "陈芳",
     collegeCode: "01",
@@ -273,9 +273,12 @@ const payloadV3 = {
     check("wxss no wrapper extra 8rpx", wrapBlock && !/padding:\s*0\s+8rpx/.test(wrapBlock[0]) && /padding:\s*0\s*;/.test(wrapBlock[0]));
   }
   check("wxss composer-pill center", /\.composer-pill\s*\{[\s\S]*?align-items:\s*center/.test(wxss));
-  check("wxss composer absolute", /\.composer\s*\{[\s\S]*?position:\s*absolute/.test(wxss));
-  check("wxml composerInsetPx", wxml.includes("composerInsetPx"));
-  check("js syncComposerInset", pageJs.includes("syncComposerInset"));
+  {
+    const composerBlock = (wxss.match(/^\.composer\s*\{[^}]*\}/m) || [""])[0];
+    check("wxss composer relative in-flow", /position:\s*relative/.test(composerBlock));
+    check("wxss no absolute composer overlay", !/position:\s*absolute/.test(composerBlock));
+  }
+  check("wxss message-scroll no large inset var", !/\.message-scroll\s*\{[\s\S]*?--composer-inset/.test(wxss));
   check("js scrollMessagesToBottom", pageJs.includes("scrollMessagesToBottom"));
 }
 
