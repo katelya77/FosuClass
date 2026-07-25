@@ -56,3 +56,8 @@ server/data/ai/kb-audit.jsonl
 # Keep empty structure placeholders only when explicitly force-added
 !server/storage/relay/.gitkeep
 !server/storage/staging-uploads/.gitkeep
+
+# WeChat miniprogram-ci code upload key (never commit)
+private.key
+*.private.key
+

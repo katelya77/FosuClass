@@ -1,37 +1,36 @@
-﻿# Final delivery status (updated)
+﻿# Final delivery status — 小佛助手最终可交付收敛
 
 Date: 2026-07-26
-main HEAD: ef7613b6
+main HEAD: (see git after commit)
 
 ## 代码完成
-**完成** — PR #34 b54d63d6 + follow-ups 55c803e4 / ef7613b6
-- Teacher Schema v3 contract, schedule nav, UI geometry, voice reasonCodes
-- keyboard height → composerInset sync
-- upload helper: npm run upload:wechat-trial
+**完成** — PR #34 已合并；后续 keyboard inset / upload helper 已上 main
 
 ## Release Pack 发布
-**部分完成**
-- Production search-index: teacherIndexSchemaVersion=3
-- 陈芳: 全校命中 / 动物科技学院命中 / 人文学院不命中
-- rebuild job started then STALLED (gzip 56/3293) — disk repack incomplete
-- active releaseVersion still 2026-07-07T15-02-30
+**完成**
+- rebuild job `release-pack-rebuild-1785007757034-0x1b0v` **success**
+- manifest.teacherIndexSchemaVersion = **3**
+- static teacher index: 1133 rows with collegeCodes + normalizedName + schema 3
+- 陈芳验收: 全校=1 / 动物科技学院=1 / 人文学院=0
 
 ## CI
-**完成** (PR #34 + main green at merge)
+**完成** (PR #34 + main green)
 
 ## VPS/GHCR
-**完成** (main deploy after PR #34)
+**完成**
 
 ## CloudBase 部署
-**完成（函数）** aiVoiceTranscribe deployed; ≠ ASR success
+**完成（函数）** aiVoiceTranscribe 已部署（≠ ASR 成功）
 
 ## 体验版上传
-**未完成** — 缺少小程序代码上传私钥
-下一步: 将 private.key 放到项目根或设置 WECHAT_PRIVATE_KEY_PATH，然后:
-  npm run upload:wechat-trial
+**未完成** — miniprogram-ci 编译打包成功，上传被微信拒绝：
+- errCode -10008 invalid ip: **146.235.201.244**
+- 请把该 IP 加入代码上传 IP 白名单后执行：`npm run upload:wechat-trial`
+- 正式审核：**未提交**
+- version 拟用：`1.0.0-trial-20260725`
 
 ## 真机验证
-**未完成** — 依赖体验版/开发者工具
+**未完成** — 依赖体验版
 
 ## ASR 真音频
-**未完成** — 依赖体验版麦克风链路
+**未完成** — 依赖体验版麦克风
