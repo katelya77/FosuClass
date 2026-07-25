@@ -1,8 +1,10 @@
 const STORAGE_KEY = "FOSU_CLASS_SETTINGS";
 const BOOTSTRAP_CACHE_KEY = "FOSU_BOOTSTRAP_CACHE";
-const SCHOOL_CACHE_SCHEMA_VERSION = 6;
+const SCHOOL_CACHE_SCHEMA_VERSION = 7;
 /** Bumped when teacher college filter / index semantics change; invalidates stale client caches. */
-const TEACHER_INDEX_SCHEMA_VERSION = 2;
+const TEACHER_INDEX_SCHEMA_VERSION = 3;
+/** Teacher Index Schema v3: id/detailId, teacherName, normalizedName, collegeCode(s), courseCount, term, releaseVersion. */
+const TEACHER_INDEX_SCHEMA_V3 = 3;
 const SCHOOL_INDEX_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const PERSONAL_SCHEDULE_CACHE_KEY = "FOSU_PERSONAL_SCHEDULE_CACHE";
 const PERSONAL_SCHEDULE_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -444,6 +446,36 @@ function writeSameVersionIndexCache(term, releaseVersion, type, data, params = {
   }
 }
 
+/**
+ * Drop legacy teacher index caches (v2/v6 keys and any school:v* without tidx3).
+ * Safe to call on app launch / after schema bump.
+ */
+function clearLegacyTeacherIndexCaches() {
+  try {
+    const info = wx.getStorageInfoSync();
+    const keys = info.keys || [];
+    keys.forEach((key) => {
+      const isSchoolTeacherIndex =
+        key.startsWith("school:v") && key.includes(":index:") && key.includes("teacher");
+      const isLegacyTeacher =
+        isSchoolTeacherIndex &&
+        (key.includes(":tidx1") ||
+          key.includes(":tidx2") ||
+          key.includes("school:v5:") ||
+          key.includes("school:v6:") ||
+          !key.includes(`:tidx${TEACHER_INDEX_SCHEMA_VERSION}`));
+      const isFosuLegacyIndex =
+        (key.startsWith("fosu:v5:index:") || key.startsWith("fosu:v6:index:")) &&
+        key.includes("teacher");
+      if (isLegacyTeacher || isFosuLegacyIndex) {
+        wx.removeStorageSync(key);
+      }
+    });
+  } catch (e) {
+    // ignore storage race
+  }
+}
+
 function clearAllSchoolCaches() {
   try {
     const info = wx.getStorageInfoSync();
@@ -488,6 +520,8 @@ module.exports = {
   SCHOOL_ACTIVE_SNAPSHOT_CACHE_KEY,
   SCHOOL_CACHE_SCHEMA_VERSION,
   TEACHER_INDEX_SCHEMA_VERSION,
+  TEACHER_INDEX_SCHEMA_V3,
+  clearLegacyTeacherIndexCaches,
   SCHOOL_INDEX_CACHE_TTL,
   SCHOOL_FILTER_CACHE_KEY,
   STORAGE_KEY,

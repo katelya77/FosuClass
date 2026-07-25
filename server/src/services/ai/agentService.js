@@ -746,9 +746,67 @@ function sanitizePublicPlan(plan) {
   }).filter((step) => step.toolName);
 }
 
+const SCHEDULE_TYPE_LABELS = {
+  class: "班级课表",
+  teacher: "教师课表",
+  classroom: "教室课表",
+  course: "课程课表",
+  room: "教室课表",
+};
+
+function scheduleOpenLabel(type) {
+  const key = String(type || "class").trim();
+  return `打开${SCHEDULE_TYPE_LABELS[key] || "课表"}`;
+}
+
+function buildScheduleNavigateAction(type, item, meta = {}) {
+  const id = String((item && (item.id || item.detailId)) || meta.id || "").slice(0, 128);
+  const name = String(
+    (item && (item.name || item.teacherName || item.className || item.roomName || item.courseName || item.displayName))
+    || meta.name
+    || ""
+  ).slice(0, 120);
+  const releaseVersion = String(
+    (item && item.releaseVersion) || meta.releaseVersion || ""
+  ).slice(0, 40);
+  const term = String((item && (item.term || item.semester)) || meta.term || "").slice(0, 40);
+  const safeType = String(type || meta.type || "class").slice(0, 20);
+  if (!id) {
+    // detailId missing → school page with pending query
+    return {
+      command: "navigate",
+      label: "打开全校查询",
+      input: {
+        url: "/pages/school/school",
+        params: {
+          type: safeType,
+          keyword: name,
+          q: name,
+          term,
+          releaseVersion,
+        },
+      },
+    };
+  }
+  return {
+    command: "navigate",
+    label: scheduleOpenLabel(safeType),
+    input: {
+      url: "/pages/schedule-view/schedule-view",
+      params: {
+        type: safeType,
+        id,
+        name,
+        term,
+        releaseVersion,
+      },
+    },
+  };
+}
+
 // 从工具结果确定性派生 Action Command（模型不参与生成）。
 // 1) set_current_schedule → setCurrentSchedule（需 explicitCommand + 索引校验）
-// 2) open_schedule 链路 get_schedule_detail / 唯一 search_school_index → navigate 打开课表
+// 2) 四类课表：唯一 search / get_schedule_detail → navigate 打开 schedule-view
 // 无 success Receipt 不得声称写操作成功。
 function deriveActionCommands(toolCalls = []) {
   const derived = [];
@@ -782,48 +840,50 @@ function deriveActionCommands(toolCalls = []) {
       return;
     }
 
-    // open_schedule：详情成功或唯一索引命中 → 导航打开课表
-    const isOpenGoal = result.goalAction === "open_schedule"
-      || (call.name === "get_schedule_detail" && result.type && result.id);
-    if (!isOpenGoal && call.name !== "get_schedule_detail") return;
-    if (call.name === "get_schedule_detail" && result.success !== false && result.id && result.type) {
-      const id = String(result.id).slice(0, 128);
-      const type = String(result.type).slice(0, 20);
-      const releaseVersion = String(result.releaseVersion || "").slice(0, 40);
-      derived.push({
-        command: "navigate",
-        label: "打开课表",
-        input: {
-          url: "/pages/schedule-view/schedule-view",
-          params: {
-            type,
-            id,
-            releaseVersion,
-          },
-        },
-      });
+    if (call.name === "get_schedule_detail" && result.success !== false && (result.id || result.detailId) && result.type) {
+      const item = {
+        id: result.id || result.detailId,
+        detailId: result.detailId || result.id,
+        name: result.name || result.displayName || "",
+        term: result.term || result.semester || "",
+        releaseVersion: result.releaseVersion || "",
+      };
+      derived.push(buildScheduleNavigateAction(result.type, item, {
+        releaseVersion: result.releaseVersion,
+        term: result.term || result.semester,
+      }));
       return;
     }
-    if (call.name === "search_school_index" && result.goalAction === "open_schedule") {
+
+    // Unique search hit for any schedule type (open_schedule goal OR plain teacher/class search)
+    if (call.name === "search_school_index") {
       const items = Array.isArray(result.items) ? result.items : [];
+      const type = String(result.type || result.lockedEntityType || "class").slice(0, 20);
+      const isScheduleType = ["class", "teacher", "classroom", "course", "room"].includes(type);
+      if (!isScheduleType) return;
       if (items.length === 1) {
-        const item = items[0] || {};
-        const id = String(item.id || item.detailId || "").slice(0, 128);
-        const type = String(result.type || result.lockedEntityType || "class").slice(0, 20);
-        if (id) {
-          derived.push({
-            command: "navigate",
-            label: "打开课表",
-            input: {
-              url: "/pages/schedule-view/schedule-view",
-              params: {
-                type,
-                id,
-                releaseVersion: String(result.releaseVersion || "").slice(0, 40),
-              },
+        derived.push(buildScheduleNavigateAction(type, items[0], {
+          releaseVersion: result.releaseVersion,
+          term: result.term || result.semester,
+        }));
+      } else if (items.length > 1 && items.length <= 5) {
+        // Multi-candidate: first action opens school with pending; row clicks handled client-side
+        const first = items[0] || {};
+        const name = String(first.name || first.teacherName || result.q || "").slice(0, 80);
+        derived.push({
+          command: "navigate",
+          label: "打开全校查询",
+          input: {
+            url: "/pages/school/school",
+            params: {
+              type,
+              keyword: name || String(result.q || "").slice(0, 80),
+              q: name || String(result.q || "").slice(0, 80),
+              term: String(result.term || result.semester || "").slice(0, 40),
+              releaseVersion: String(result.releaseVersion || "").slice(0, 40),
             },
-          });
-        }
+          },
+        });
       }
     }
   });
@@ -2182,4 +2242,7 @@ module.exports = {
   stableGeneratedPayload,
   classifyProviderFailure,
   normalizeProactiveSuggestion,
+  deriveActionCommands,
+  buildScheduleNavigateAction,
+  scheduleOpenLabel,
 };

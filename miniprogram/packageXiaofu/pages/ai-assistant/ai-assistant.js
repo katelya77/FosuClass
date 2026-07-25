@@ -1493,6 +1493,8 @@ Page({
     voiceRecording: false,
     voiceRecognizing: false,
     voiceStatusText: "",
+    voiceReasonCode: "",
+    composerInsetPx: 120,
   },
 
   onLoad(options) {
@@ -1502,6 +1504,11 @@ Page({
     this._lastSubmitText = "";
     this._isComposing = false;
     this._recorderManager = null;
+    this._composerInsetSyncTimer = null;
+    try {
+      const storage = require("../../../utils/storage");
+      if (storage.clearLegacyTeacherIndexCaches) storage.clearLegacyTeacherIndexCaches();
+    } catch (e) { /* ignore */ }
     this._clickedSuggestions = [];
     this._previousSuggestionKey = "";
     this._draftInput = "";
@@ -1811,6 +1818,11 @@ Page({
     });
   },
 
+  onReady() {
+    this.syncComposerInset();
+    this.scrollMessagesToBottom(false);
+  },
+
   onShow() {
     this._aiPageUnloaded = false;
     const privacyState = buildPrivacyState(
@@ -1825,12 +1837,28 @@ Page({
     this.ensurePersonalContextFromSchedule();
     this.refreshProactiveWorkspace();
     this.refreshInAppReminders();
+    this.syncComposerInset();
+    // Resume voice if user returned from settings
+    if (this._voiceAuthState && this._voiceAuthState.resumeAfterSetting) {
+      voiceAuthStateMachine.resumeAfterOpenSetting(this._voiceAuthState, { wx }).then((after) => {
+        this._voiceAuthState = after.state || this._voiceAuthState;
+        if (after.ok && after.shouldResume && this._pendingVoiceStart) {
+          this._pendingVoiceStart = false;
+          this.startVoiceRecording();
+        }
+      });
+    }
+  },
+
+  onResize() {
+    this.syncComposerInset();
   },
 
   onUnload() {
     this._aiPageUnloaded = true;
     this._activeAiRequestId = "";
     if (this._statusCapsuleResetTimer) clearTimeout(this._statusCapsuleResetTimer);
+    if (this._composerInsetSyncTimer) clearTimeout(this._composerInsetSyncTimer);
   },
 
   refreshConversationState(activeConversation) {
@@ -1997,6 +2025,11 @@ Page({
 
   onInput(event) {
     this.setData({ inputValue: event.detail.value });
+    // Textarea auto-height changes composer size → remeasure single inset
+    if (this._composerInsetSyncTimer) clearTimeout(this._composerInsetSyncTimer);
+    this._composerInsetSyncTimer = setTimeout(() => {
+      this.syncComposerInset();
+    }, 32);
   },
 
   onCompositionStart() {
@@ -2254,15 +2287,24 @@ Page({
       this.setData({ voiceRecording: true, voiceRecognizing: false, voiceStatusText: "正在录音" });
     });
     recorder.onStop && recorder.onStop((res) => this.handleVoiceRecordStop(res));
-    recorder.onError && recorder.onError(() => {
-      this.setData({ voiceRecording: false, voiceRecognizing: false, voiceStatusText: "识别失败" });
-      wx.showToast({ title: "录音失败", icon: "none" });
+    recorder.onError && recorder.onError((err) => {
+      this._voiceAuthState = voiceAuthStateMachine.markRecorderStartFailed(
+        this._voiceAuthState || {},
+        err && (err.errMsg || err.message)
+      );
+      this.setData({
+        voiceRecording: false,
+        voiceRecognizing: false,
+        voiceStatusText: this._voiceAuthState.lastError || "录音失败",
+        voiceReasonCode: this._voiceAuthState.reasonCode || "RECORDER_START_FAILED",
+      });
+      wx.showToast({ title: this._voiceAuthState.lastError || "录音失败", icon: "none" });
     });
   },
 
   /**
-   * Privacy → record authorization state machine.
-   * Never opens settings on first undecided authorize fail.
+   * Privacy → record authorization state machine with reasonCode recovery.
+   * Undecided: offer retry authorize. Denied: openSetting. ASR separate.
    */
   ensureRecordPermission() {
     if (!this._voiceAuthState) {
@@ -2270,37 +2312,75 @@ Page({
     }
     return voiceAuthStateMachine.ensureVoiceReady(this._voiceAuthState, { wx }).then((result) => {
       this._voiceAuthState = result.state || this._voiceAuthState;
+      const reasonCode = result.reasonCode || (result.state && result.state.reasonCode) || "";
+      this.setData({ voiceReasonCode: reasonCode, voiceStatusText: result.userMessage || "" });
       if (result.ok) return true;
-      if (result.openSettingSuggested) {
+
+      if (result.canRetryAuthorize || reasonCode === "WECHAT_RECORD_UNDECIDED") {
         return new Promise((resolve) => {
           wx.showModal({
-            title: "需要录音权限",
-            content: "语音只用于本次转文字，识别完成后会删除临时文件。可在设置中开启麦克风权限。",
-            confirmText: "打开设置",
+            title: "需要麦克风权限",
+            content: "语音只用于本次转文字。请点击「继续授权」允许麦克风，识别完成后会删除临时文件。",
+            confirmText: "继续授权",
             cancelText: "取消",
             success: (res) => {
               if (!res.confirm) return resolve(false);
-              voiceAuthStateMachine.openSettingAndResume({ wx }).then((granted) => {
-                if (!granted) {
-                  return voiceAuthStateMachine.resumeAfterOpenSetting(this._voiceAuthState, { wx }).then((after) => {
-                    this._voiceAuthState = after.state || this._voiceAuthState;
-                    resolve(Boolean(after.ok));
-                  });
-                }
-                return voiceAuthStateMachine.resumeAfterOpenSetting(this._voiceAuthState, { wx }).then((after) => {
-                  this._voiceAuthState = after.state || this._voiceAuthState;
-                  resolve(Boolean(after.ok));
+              // Retry authorize path without forcing settings
+              voiceAuthStateMachine.ensureVoiceReady(this._voiceAuthState, { wx }).then((retry) => {
+                this._voiceAuthState = retry.state || this._voiceAuthState;
+                this.setData({
+                  voiceReasonCode: retry.reasonCode || "",
+                  voiceStatusText: retry.userMessage || "",
                 });
+                if (retry.ok) return resolve(true);
+                if (retry.openSettingSuggested) {
+                  return this.promptOpenRecordSetting().then(resolve);
+                }
+                if (retry.userMessage) {
+                  wx.showToast({ title: retry.userMessage, icon: "none" });
+                }
+                resolve(false);
               });
             },
             fail: () => resolve(false),
           });
         });
       }
+
+      if (result.openSettingSuggested) {
+        return this.promptOpenRecordSetting();
+      }
+
       if (result.state && result.state.lastError) {
         wx.showToast({ title: result.state.lastError, icon: "none" });
       }
       return false;
+    });
+  },
+
+  promptOpenRecordSetting() {
+    return new Promise((resolve) => {
+      wx.showModal({
+        title: "需要录音权限",
+        content: "麦克风权限已被关闭。可在设置中开启后返回继续录音。",
+        confirmText: "打开设置",
+        cancelText: "取消",
+        success: (res) => {
+          if (!res.confirm) return resolve(false);
+          this._pendingVoiceStart = true;
+          voiceAuthStateMachine.openSettingAndResume({ wx }).then(() => {
+            return voiceAuthStateMachine.resumeAfterOpenSetting(this._voiceAuthState, { wx }).then((after) => {
+              this._voiceAuthState = after.state || this._voiceAuthState;
+              this.setData({
+                voiceReasonCode: after.reasonCode || "",
+                voiceStatusText: after.userMessage || "",
+              });
+              resolve(Boolean(after.ok));
+            });
+          });
+        },
+        fail: () => resolve(false),
+      });
     });
   },
 
@@ -2322,15 +2402,27 @@ Page({
     this.ensureRecordPermission().then((allowed) => {
       if (!allowed || !this._recorderManager) return;
       this._voiceAuthState = voiceAuthStateMachine.markRecording(this._voiceAuthState || voiceAuthStateMachine.createInitialState());
-      this.setData({ voiceStatusText: "正在录音", voiceRecording: true });
+      this.setData({ voiceStatusText: "正在录音", voiceRecording: true, voiceReasonCode: "" });
       this._voiceRecordStartedAt = Date.now();
-      this._recorderManager.start({
-        duration: Number(cloudbaseConfig.AI_VOICE_MAX_DURATION_MS || 15000) || 15000,
-        sampleRate: 16000,
-        numberOfChannels: 1,
-        encodeBitRate: 48000,
-        format: "mp3",
-      });
+      try {
+        this._recorderManager.start({
+          duration: Number(cloudbaseConfig.AI_VOICE_MAX_DURATION_MS || 15000) || 15000,
+          sampleRate: 16000,
+          numberOfChannels: 1,
+          encodeBitRate: 48000,
+          format: "mp3",
+        });
+      } catch (err) {
+        this._voiceAuthState = voiceAuthStateMachine.markRecorderStartFailed(
+          this._voiceAuthState || {},
+          err && (err.errMsg || err.message)
+        );
+        this.setData({
+          voiceRecording: false,
+          voiceStatusText: this._voiceAuthState.lastError || "无法启动录音",
+          voiceReasonCode: this._voiceAuthState.reasonCode || "RECORDER_START_FAILED",
+        });
+      }
     });
   },
 
@@ -2378,16 +2470,70 @@ Page({
         voiceRecognizing: false,
         voiceStatusText: "识别完成",
       });
-    }).catch(() => {
-      this._voiceAuthState = voiceAuthStateMachine.markError(this._voiceAuthState || {}, "识别失败");
-      this.setData({ voiceRecognizing: false, voiceStatusText: "识别失败" });
-      wx.showToast({ title: "识别失败，可继续文字输入", icon: "none" });
+    }).catch((error) => {
+      const code = String(error && (error.code || error.reasonCode || error.message) || "").toUpperCase();
+      const asrCode = /NOT_ENABLED|ASR_DISABLED|VOICE_DISABLED/.test(code)
+        ? "ASR_NOT_ENABLED"
+        : "ASR_FAILED";
+      this._voiceAuthState = voiceAuthStateMachine.markAsrError
+        ? voiceAuthStateMachine.markAsrError(this._voiceAuthState || {}, asrCode)
+        : voiceAuthStateMachine.markError(this._voiceAuthState || {}, "识别失败", asrCode);
+      this.setData({
+        voiceRecognizing: false,
+        voiceStatusText: this._voiceAuthState.lastError || "识别失败",
+        voiceReasonCode: asrCode,
+      });
+      wx.showToast({
+        title: asrCode === "ASR_NOT_ENABLED" ? "语音识别未开通" : "识别失败，可继续文字输入",
+        icon: "none",
+      });
     });
   },
 
   /**
+   * Measure real composer height and write a single composerInsetPx for message-scroll.
+   */
+  syncComposerInset() {
+    if (typeof wx === "undefined" || !wx.createSelectorQuery) {
+      return Promise.resolve(this.data.composerInsetPx || 120);
+    }
+    return new Promise((resolve) => {
+      const query = wx.createSelectorQuery();
+      query.select("#composer-shell").boundingClientRect();
+      query.selectViewport().boundingClientRect();
+      query.exec((rects) => {
+        const composer = rects && rects[0] || {};
+        const height = Math.ceil(Number(composer.height) || 0);
+        // 12–24rpx visual gap ≈ 6–12px on 375-wide devices; use 10px floor gap inside inset
+        const inset = height > 0 ? height + 8 : (this.data.composerInsetPx || 120);
+        if (Math.abs(inset - Number(this.data.composerInsetPx || 0)) >= 1) {
+          this.setData({ composerInsetPx: inset });
+        }
+        resolve(inset);
+      });
+    });
+  },
+
+  scrollMessagesToBottom(animated) {
+    const apply = () => {
+      this.setData(bottomScrollPatch(animated));
+    };
+    apply();
+    // Second pass after card async layout
+    if (typeof wx !== "undefined" && typeof wx.nextTick === "function") {
+      wx.nextTick(() => {
+        this.syncComposerInset().then(() => apply());
+      });
+    } else {
+      setTimeout(() => {
+        this.syncComposerInset().then(() => apply());
+      }, 48);
+    }
+  },
+
+  /**
    * selectorQuery geometry probe for status island centering + message/composer gaps.
-   * Used in real-device QA; safe no-op when query APIs unavailable.
+   * Also closes the layout loop by syncing composerInsetPx from real height.
    */
   measureXiaofuGeometry() {
     if (typeof wx === "undefined" || !wx.createSelectorQuery) {
@@ -2414,16 +2560,25 @@ Page({
           composerTop: composer.top,
           lastMessageBottom: lastMsg.bottom,
         });
+        const height = Math.ceil(Number(composer.height) || 0);
+        if (height > 0) {
+          const inset = height + 8;
+          if (Math.abs(inset - Number(this.data.composerInsetPx || 0)) >= 1) {
+            this.setData({ composerInsetPx: inset });
+          }
+        }
         const report = {
           island,
           gaps,
           viewportBottom: scroll.bottom,
           composerTop: composer.top,
           composerBottom: composer.bottom,
+          composerHeight: height,
           lastMessageBottom: lastMsg.bottom,
           scrollViewTop: scroll.top,
           scrollViewBottom: scroll.bottom,
           safeAreaBottom: null,
+          composerInsetPx: this.data.composerInsetPx,
         };
         this._lastGeometryReport = report;
         resolve(report);
@@ -2556,14 +2711,13 @@ Page({
     const headerPatch = applyHeaderStatusPatch(Object.assign({}, this.data, patch || {}));
     const nextState = Object.assign({
       messages,
-      scrollTop: Date.now(),
-      scrollIntoView: "message-bottom-anchor",
-      scrollWithAnimation: !(options && options.instantScroll),
       historyTrimNotice: this.data.historyTrimNotice || trimmed,
       previousSuggestionKey: this._previousSuggestionKey || "",
       showQuickTasks: false,
     }, providerState, headerPatch, patch || {});
     this.setData(nextState);
+    // Single geometry loop: remeasure composer, then nextTick scroll to real anchor
+    this.scrollMessagesToBottom(!(options && options.instantScroll));
     if (options && options.save) {
       const savedConversation = conversationStore.saveConversationMessages(
         this.data.activeConversationId,
@@ -3661,10 +3815,8 @@ Page({
     this.setData({
       expandedCards,
       messages,
-      scrollTop: Date.now(),
-      scrollIntoView: "message-bottom-anchor",
-      scrollWithAnimation: true,
     });
+    this.scrollMessagesToBottom(true);
   },
 
   onCardAction(event) {
