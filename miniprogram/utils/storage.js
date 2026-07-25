@@ -1,9 +1,9 @@
 const STORAGE_KEY = "FOSU_CLASS_SETTINGS";
 const BOOTSTRAP_CACHE_KEY = "FOSU_BOOTSTRAP_CACHE";
-const SCHOOL_CACHE_SCHEMA_VERSION = 7;
+const SCHOOL_CACHE_SCHEMA_VERSION = 8;
 /** Bumped when teacher college filter / index semantics change; invalidates stale client caches. */
-const TEACHER_INDEX_SCHEMA_VERSION = 3;
-/** Teacher Index Schema v3: id/detailId, teacherName, normalizedName, collegeCode(s), courseCount, term, releaseVersion. */
+const TEACHER_INDEX_SCHEMA_VERSION = 4;
+/** Teacher Index Schema v3+ on pack; client cache key v4 clears poisoned full-index caches. */
 const TEACHER_INDEX_SCHEMA_V3 = 3;
 const SCHOOL_INDEX_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const PERSONAL_SCHEDULE_CACHE_KEY = "FOSU_PERSONAL_SCHEDULE_CACHE";
@@ -461,11 +461,15 @@ function clearLegacyTeacherIndexCaches() {
         isSchoolTeacherIndex &&
         (key.includes(":tidx1") ||
           key.includes(":tidx2") ||
+          key.includes(":tidx3") ||
           key.includes("school:v5:") ||
           key.includes("school:v6:") ||
+          key.includes("school:v7:") ||
           !key.includes(`:tidx${TEACHER_INDEX_SCHEMA_VERSION}`));
       const isFosuLegacyIndex =
-        (key.startsWith("fosu:v5:index:") || key.startsWith("fosu:v6:index:")) &&
+        (key.startsWith("fosu:v5:index:") ||
+          key.startsWith("fosu:v6:index:") ||
+          key.startsWith("fosu:v7:index:")) &&
         key.includes("teacher");
       if (isLegacyTeacher || isFosuLegacyIndex) {
         wx.removeStorageSync(key);

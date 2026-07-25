@@ -7,9 +7,10 @@ const platformDataService = require("./platformDataService");
 const staticOriginService = require("./staticOriginService");
 
 const DEFAULT_TERM = "";
-const CACHE_PREFIX = "fosu:v7";
-const LEGACY_CACHE_PREFIX = "fosu:v6";
-const TEACHER_INDEX_SCHEMA_VERSION = 3;
+const CACHE_PREFIX = "fosu:v8";
+const LEGACY_CACHE_PREFIX = "fosu:v7";
+/** Client cache epoch; bump when full-index cache semantics change (poison fix). */
+const TEACHER_INDEX_SCHEMA_VERSION = 4;
 const INDEX_TYPES = ["class", "teacher", "classroom", "course"];
 const INDEX_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const DETAIL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -1391,92 +1392,92 @@ function readCachedSearchIndex(type, params = {}) {
 }
 
 /**
- * Teacher Search Contract: same params as server /api/fosu/search-index.
- * When static index schema is pre-v3 and college filter is active, prefer server
- * enriched index instead of strictly filtering incomplete static rows.
+ * Teacher Search Contract:
+ * 1) Prefer FULL static/local teacher index + client filter (q + collegeCodes).
+ * 2) Never write filtered search hits into the full index cache (cache poison).
+ * 3) When college filter is active and static schema is stale, fall back to
+ *    /api/fosu/search-index for that query only (do not cache as full index).
  */
+function searchTeacherViaServer(params = {}, options = {}) {
+  return request.get("/api/fosu/search-index", {
+    type: "teacher",
+    q: params.q || params.keyword || "",
+    keyword: params.q || params.keyword || "",
+    collegeCode: params.collegeCode || "",
+    collegeName: params.collegeName || "",
+    term: params.term || params.semester || "",
+    semester: params.semester || params.term || "",
+    releaseVersion: params.releaseVersion || params.version || "",
+    schemaVersion: TEACHER_INDEX_SCHEMA_VERSION,
+    teacherIndexSchemaVersion: TEACHER_INDEX_SCHEMA_VERSION,
+    titleCode: params.titleCode || params.title || "",
+    limit: params.limit || 100,
+    offset: params.offset || 0,
+  }, {
+    showLoading: false,
+    silentError: true,
+    timeout: options.timeout || 7500,
+    retries: options.retries === undefined ? 1 : options.retries,
+    skipSession: options.skipSession === true,
+  }).then((payload) => {
+    const normalized = normalizeIndexPayload("teacher", payload, {
+      term: params.term || params.semester,
+      releaseVersion: params.releaseVersion || params.version,
+    });
+    // Server may already filter; re-apply client contract for exact-name + college.
+    // DO NOT writeIndexCache here — items are query hits, not the full index.
+    return filterIndexPayload("teacher", Object.assign({}, normalized, {
+      teacherIndexSchemaVersion: Number(normalized.teacherIndexSchemaVersion) || TEACHER_INDEX_SCHEMA_VERSION,
+    }), params);
+  });
+}
+
 function searchIndex(type, params = {}, options = {}) {
   const collegeFilterActive = Boolean(
     String(params.collegeCode || "").trim() || String(params.collegeName || "").trim()
   );
-  if (type === "teacher" && options.preferServerSearch !== false) {
-    const tryServer = () => request.get("/api/fosu/search-index", Object.assign({
-      type: "teacher",
-      q: params.q || params.keyword || "",
-      keyword: params.q || params.keyword || "",
-      collegeCode: params.collegeCode || "",
-      collegeName: params.collegeName || "",
-      term: params.term || params.semester || "",
-      semester: params.semester || params.term || "",
-      releaseVersion: params.releaseVersion || params.version || "",
-      schemaVersion: TEACHER_INDEX_SCHEMA_VERSION,
-      teacherIndexSchemaVersion: TEACHER_INDEX_SCHEMA_VERSION,
-      titleCode: params.titleCode || params.title || "",
-      limit: params.limit || 30,
-      offset: params.offset || 0,
-    }, params.type ? { type: params.type } : { type: "teacher" }), {
-      showLoading: false,
-      silentError: true,
-      timeout: options.timeout || 7500,
-      retries: options.retries === undefined ? 1 : options.retries,
-      skipSession: options.skipSession === true,
-    }).then((payload) => {
-      const normalized = normalizeIndexPayload("teacher", payload, {
-        term: params.term || params.semester,
-        releaseVersion: params.releaseVersion || params.version,
-      });
-      // Server already filtered; re-apply client contract for exact-name + college consistency.
-      return filterIndexPayload("teacher", Object.assign({}, normalized, {
-        teacherIndexSchemaVersion: TEACHER_INDEX_SCHEMA_VERSION,
-      }), params);
-    });
 
-    if (options.forceServerSearch || collegeFilterActive) {
-      return tryServer().catch(() => loadIndex(type, params, options).then((payload) => {
-        const schema = detectTeacherIndexSchemaVersion(payload);
-        if (collegeFilterActive && schema < 2) {
-          // Never strict-filter incomplete static index: return empty rather than wrong cross-college hits.
-          const empty = filterIndexPayload(type, payload, params);
-          return Object.assign({}, empty, {
-            items: [],
-            total: 0,
-            degradedSchema: true,
-            teacherIndexSchemaVersion: schema,
-            reasonCode: "TEACHER_INDEX_SCHEMA_STALE",
-          });
-        }
-        return filterIndexPayload(type, payload, params);
+  if (type !== "teacher") {
+    return loadIndex(type, params, options)
+      .then((payload) => filterIndexPayload(type, payload, params));
+  }
+
+  // Explicit force: query server only (still never poison full index cache).
+  if (options.forceServerSearch === true) {
+    return searchTeacherViaServer(params, options);
+  }
+
+  // Default: full local/static index + client filter (same semantics as Agent).
+  return loadIndex(type, params, options).then((payload) => {
+    const schema = detectTeacherIndexSchemaVersion(payload);
+    const filtered = filterIndexPayload(type, payload, params);
+
+    // Stale static schema + college filter: server is authority for this query.
+    if (collegeFilterActive && schema < 2) {
+      return searchTeacherViaServer(params, options).catch(() => Object.assign({}, filtered, {
+        items: [],
+        total: 0,
+        degradedSchema: true,
+        teacherIndexSchemaVersion: schema,
+        reasonCode: "TEACHER_INDEX_SCHEMA_STALE",
       }));
     }
 
-    return loadIndex(type, params, options).then((payload) => {
-      const schema = detectTeacherIndexSchemaVersion(payload);
-      if (collegeFilterActive && schema < 2) {
-        return tryServer().catch(() => Object.assign({}, filterIndexPayload(type, payload, params), {
-          items: [],
-          total: 0,
-          degradedSchema: true,
-          teacherIndexSchemaVersion: schema,
-          reasonCode: "TEACHER_INDEX_SCHEMA_STALE",
-        }));
-      }
-      if (schema < TEACHER_INDEX_SCHEMA_VERSION && options.upgradeViaServer !== false) {
-        // Background-friendly: still filter locally, but attempt server upgrade for cache.
-        tryServer().then((upgraded) => {
-          try {
-            writeIndexCache("teacher", Object.assign({}, upgraded, {
-              teacherIndexSchemaVersion: TEACHER_INDEX_SCHEMA_VERSION,
-              items: upgraded.items || payload.items,
-            }));
-          } catch (e) { /* ignore */ }
-        }).catch(() => {});
-      }
-      return filterIndexPayload(type, payload, params);
-    });
-  }
+    // If local filter returned empty but we have a keyword, try server once as
+    // recovery (network index may be richer) — still do not overwrite full cache.
+    const q = String(params.q || params.keyword || "").trim();
+    if (q && filtered.total === 0 && options.preferServerSearch !== false && options.allowServerFallback !== false) {
+      return searchTeacherViaServer(params, options).catch(() => filtered);
+    }
 
-  return loadIndex(type, params, options)
-    .then((payload) => filterIndexPayload(type, payload, params));
+    return filtered;
+  }).catch((packError) => {
+    // Static pack failed: last resort server query.
+    if (options.preferServerSearch === false) throw packError;
+    return searchTeacherViaServer(params, options).catch(() => {
+      throw packError;
+    });
+  });
 }
 
 function normalizeDetailPayload(type, id, payload, fallback = {}) {
