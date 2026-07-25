@@ -1,36 +1,38 @@
 ﻿# Final delivery status — 小佛助手最终可交付收敛
 
 Date: 2026-07-26
-main HEAD: (see git after commit)
+main: db167cac (+ trial upload evidence)
 
 ## 代码完成
-**完成** — PR #34 已合并；后续 keyboard inset / upload helper 已上 main
+**完成** — PR #34 合并；Teacher Schema v3 / 课表直开 / UI 几何 / 麦克风 reasonCode / keyboard inset
 
 ## Release Pack 发布
 **完成**
-- rebuild job `release-pack-rebuild-1785007757034-0x1b0v` **success**
-- manifest.teacherIndexSchemaVersion = **3**
-- static teacher index: 1133 rows with collegeCodes + normalizedName + schema 3
-- 陈芳验收: 全校=1 / 动物科技学院=1 / 人文学院=0
+- job `release-pack-rebuild-1785007757034-0x1b0v` success
+- manifest.teacherIndexSchemaVersion=3
+- static teachers: 1133 with collegeCodes/normalizedName
+- 陈芳: 全校1 / 动物科技学院1 / 人文学院0
 
 ## CI
-**完成** (PR #34 + main green)
+**完成**
 
 ## VPS/GHCR
 **完成**
 
 ## CloudBase 部署
-**完成（函数）** aiVoiceTranscribe 已部署（≠ ASR 成功）
+**完成（函数）** — aiVoiceTranscribe 已部署（≠ ASR 成功）
 
 ## 体验版上传
-**未完成** — miniprogram-ci 编译打包成功，上传被微信拒绝：
-- errCode -10008 invalid ip: **146.235.201.244**
-- 请把该 IP 加入代码上传 IP 白名单后执行：`npm run upload:wechat-trial`
-- 正式审核：**未提交**
-- version 拟用：`1.0.0-trial-20260725`
+**完成**
+- appid wx450dc86653f5907b
+- version **1.0.0-trial-20260725**
+- uploadedAt 2026-07-25T19:32:56.329Z
+- formal review: **未提交**
+- full package ~1.72MB
 
 ## 真机验证
-**未完成** — 依赖体验版
+**未完成（需手机体验版）** — 代码与体验版已上传；需在手机打开体验版核对：
+状态岛收展 / 滚底间距 / 胶囊居中 / 陈芳三组 / 打开教师课表 / 麦克风授权
 
 ## ASR 真音频
-**未完成** — 依赖体验版麦克风
+**未完成（需手机）** — 云函数已部署；需真机：录音→aiVoiceTranscribe→填框不发送
