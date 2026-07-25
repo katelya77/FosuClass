@@ -129,8 +129,15 @@ async function run() {
     releaseVersion: version,
     q: "蔡",
     collegeCode: "02",
-  }, { forceNetwork: false, retries: 0, skipFallback: true, allowServerFallback: false });
-  assert.strictEqual(college.total, 1);
+  }, {
+    forceNetwork: false,
+    retries: 0,
+    skipFallback: true,
+    // Prefer local full index for this unit (mock server only exact-matches q)
+    preferServerSearch: false,
+    allowServerFallback: false,
+  });
+  assert.strictEqual(college.total, 1, "蔡+college 02 should hit 蔡晨晖 via local filter");
   assert.strictEqual(college.items[0].name, "蔡晨晖");
 
   const wrongCollege = await releasePackService.searchIndex("teacher", {
@@ -138,7 +145,13 @@ async function run() {
     releaseVersion: version,
     q: "陈芳",
     collegeCode: "02",
-  }, { forceNetwork: false, retries: 0, skipFallback: true, allowServerFallback: false });
+  }, {
+    forceNetwork: false,
+    retries: 0,
+    skipFallback: true,
+    preferServerSearch: false,
+    allowServerFallback: false,
+  });
   assert.strictEqual(wrongCollege.total, 0, "陈芳 not in college 02");
 
   console.log("test-teacher-index-cache-no-poison passed", { serverCalls });

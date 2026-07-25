@@ -1239,10 +1239,11 @@ function matchesScopedFilter(type, item, expected, keys, options = {}) {
 }
 
 /**
- * Teacher college filter (strict):
- * - With collegeCode/Name selected: item must include it in collegeCode or collegeCodes[];
- * - 「学院待确认」 / empty college excluded under filter;
- * - Without filter: all items (including 待确认) may show.
+ * Teacher college filter:
+ * - No code/name → pass (全校 / 所有院系)
+ * - code and/or name provided → match if EITHER code or name hits
+ *   (catalog code and index fields may drift; name is a valid signal)
+ * - 「学院待确认」 / empty college excluded when any filter is set
  */
 function matchesTeacherCollegeFilter(item, collegeCode, collegeName) {
   const code = String(collegeCode || "").trim();
@@ -1255,20 +1256,24 @@ function matchesTeacherCollegeFilter(item, collegeCode, collegeName) {
   const names = Array.isArray(item.collegeNames)
     ? item.collegeNames.map((n) => String(n || "").trim()).filter(Boolean)
     : [];
-  if (collegeLabel === "学院待确认" || names.every((n) => n === "学院待确认")) {
+  if (collegeLabel === "学院待确认" || (names.length && names.every((n) => n === "学院待确认"))) {
     if (!codes.length && !String(item.collegeCode || "").trim()) return false;
   }
+  let codeOk = false;
   if (code) {
-    if (String(item.collegeCode || "").trim() === code) return true;
-    if (codes.includes(code)) return true;
-    return false;
+    codeOk = String(item.collegeCode || "").trim() === code || codes.includes(code);
   }
+  let nameOk = false;
   if (name) {
-    if (collegeLabel === name || normalizeSearchText(collegeLabel) === normalizeSearchText(name)) return true;
-    if (names.some((n) => n === name || normalizeSearchText(n) === normalizeSearchText(name))) return true;
-    return false;
+    const want = normalizeSearchText(name);
+    nameOk = collegeLabel === name
+      || normalizeSearchText(collegeLabel) === want
+      || names.some((n) => n === name || normalizeSearchText(n) === want);
   }
-  return true;
+  // Both provided: accept either match (resilient to code/name source mismatch)
+  if (code && name) return codeOk || nameOk;
+  if (code) return codeOk;
+  return nameOk;
 }
 
 function teacherDisplayName(item) {
@@ -1436,43 +1441,47 @@ function searchIndex(type, params = {}, options = {}) {
   const collegeFilterActive = Boolean(
     String(params.collegeCode || "").trim() || String(params.collegeName || "").trim()
   );
+  const q = String(params.q || params.keyword || "").trim();
 
   if (type !== "teacher") {
     return loadIndex(type, params, options)
       .then((payload) => filterIndexPayload(type, payload, params));
   }
 
-  // Explicit force: query server only (still never poison full index cache).
-  if (options.forceServerSearch === true) {
-    return searchTeacherViaServer(params, options);
+  // College + keyword (or forceServerSearch): try server first, then local full-index.
+  // Prefer whichever returns hits — empty server must not hide local partial-name hits.
+  // Never write server query hits into the full teacher index cache.
+  if (collegeFilterActive || options.forceServerSearch === true) {
+    if (options.preferServerSearch === false && !options.forceServerSearch) {
+      // unit tests may force pure local
+    } else {
+      const localCollegeFilter = () => loadIndex(type, params, options).then((payload) => {
+        const filtered = filterIndexPayload(type, payload, params);
+        if (filtered.total > 0) return filtered;
+        const schema = detectTeacherIndexSchemaVersion(payload);
+        return Object.assign({}, filtered, {
+          items: [],
+          total: 0,
+          degradedSchema: schema < 2,
+          teacherIndexSchemaVersion: schema,
+          reasonCode: schema < 2 ? "TEACHER_INDEX_SCHEMA_STALE" : "TEACHER_COLLEGE_NO_MATCH",
+        });
+      });
+      return searchTeacherViaServer(params, options).then((serverResult) => {
+        if (serverResult && serverResult.total > 0) return serverResult;
+        return localCollegeFilter().catch(() => serverResult);
+      }).catch(() => localCollegeFilter());
+    }
   }
 
-  // Default: full local/static index + client filter (same semantics as Agent).
+  // No college: full local/static index + client keyword filter.
   return loadIndex(type, params, options).then((payload) => {
-    const schema = detectTeacherIndexSchemaVersion(payload);
     const filtered = filterIndexPayload(type, payload, params);
-
-    // Stale static schema + college filter: server is authority for this query.
-    if (collegeFilterActive && schema < 2) {
-      return searchTeacherViaServer(params, options).catch(() => Object.assign({}, filtered, {
-        items: [],
-        total: 0,
-        degradedSchema: true,
-        teacherIndexSchemaVersion: schema,
-        reasonCode: "TEACHER_INDEX_SCHEMA_STALE",
-      }));
-    }
-
-    // If local filter returned empty but we have a keyword, try server once as
-    // recovery (network index may be richer) — still do not overwrite full cache.
-    const q = String(params.q || params.keyword || "").trim();
-    if (q && filtered.total === 0 && options.preferServerSearch !== false && options.allowServerFallback !== false) {
+    if (q && filtered.total === 0 && options.allowServerFallback !== false && options.preferServerSearch !== false) {
       return searchTeacherViaServer(params, options).catch(() => filtered);
     }
-
     return filtered;
   }).catch((packError) => {
-    // Static pack failed: last resort server query.
     if (options.preferServerSearch === false) throw packError;
     return searchTeacherViaServer(params, options).catch(() => {
       throw packError;

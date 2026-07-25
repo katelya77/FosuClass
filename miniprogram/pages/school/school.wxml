@@ -320,7 +320,7 @@
           <view class="filter-item">
             <text class="filter-label">院系：</text>
             <picker mode="selector" range="{{colleges}}" range-key="name" bindchange="onCollegeChange">
-              <view class="filter-pill">{{colleges[selectedCollegeIndex].name || "所有学院 (可选)"}}</view>
+              <view class="filter-pill">{{colleges[selectedCollegeIndex].name || "所有院系"}}</view>
             </picker>
           </view>
 
