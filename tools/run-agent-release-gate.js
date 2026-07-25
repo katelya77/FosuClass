@@ -9,7 +9,8 @@ const path = require("path");
 const ROOT = path.resolve(__dirname, "..");
 
 const STEPS = [
-  ["test:xiaofu-final-suite", "Open-schedule / AG-UI / Coze / college / UI final"],
+  ["test:xiaofu-final-suite", "Open-schedule / AG-UI / Coze / college / UI final + core experience"],
+  ["test:xiaofu-core-experience", "Core experience: follow-up / college A-B / voice / geometry"],
   ["test:agent-memory-autonomy", "Memory + autonomy wiring"],
   ["test:agent-foundation", "Agent foundation"],
   ["test:agent-regression", "Agent regression"],
