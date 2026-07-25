@@ -7,8 +7,9 @@ const platformDataService = require("./platformDataService");
 const staticOriginService = require("./staticOriginService");
 
 const DEFAULT_TERM = "";
-const CACHE_PREFIX = "fosu:v6";
-const LEGACY_CACHE_PREFIX = "fosu:v5";
+const CACHE_PREFIX = "fosu:v7";
+const LEGACY_CACHE_PREFIX = "fosu:v6";
+const TEACHER_INDEX_SCHEMA_VERSION = 3;
 const INDEX_TYPES = ["class", "teacher", "classroom", "course"];
 const INDEX_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const DETAIL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -797,6 +798,78 @@ function getLocalActiveRelease(term) {
   return getLastKnownGood(requestedTerm);
 }
 
+function normalizeTeacherIndexItem(item, meta = {}) {
+  const source = item && typeof item === "object" ? item : {};
+  const teacherName = String(
+    source.teacherName || source.name || source.displayName || source.canonicalName || ""
+  ).trim();
+  const id = String(source.id || source.detailId || source.teacherId || "").trim();
+  const collegeCodes = Array.isArray(source.collegeCodes)
+    ? source.collegeCodes.map((c) => String(c || "").trim()).filter(Boolean)
+    : (source.collegeCode ? [String(source.collegeCode).trim()].filter(Boolean) : []);
+  const collegeNames = Array.isArray(source.collegeNames)
+    ? source.collegeNames.map((n) => String(n || "").trim()).filter(Boolean)
+    : (source.collegeName || source.college
+      ? [String(source.collegeName || source.college).trim()].filter(Boolean)
+      : []);
+  const normalizedName = String(
+    source.normalizedName || source.searchableName || normalizeSearchText(teacherName)
+  ).trim();
+  return Object.assign({}, source, {
+    id,
+    detailId: String(source.detailId || id).trim(),
+    teacherName,
+    name: teacherName || String(source.name || "").trim(),
+    normalizedName,
+    collegeCode: String(source.collegeCode || collegeCodes[0] || "").trim(),
+    collegeCodes,
+    collegeName: String(source.collegeName || source.college || collegeNames[0] || "").trim(),
+    collegeNames,
+    courseCount: Number(source.courseCount || 0) || 0,
+    term: String(source.term || source.semester || meta.term || "").trim(),
+    releaseVersion: String(source.releaseVersion || meta.releaseVersion || "").trim(),
+    teacherIndexSchemaVersion: Number(
+      source.teacherIndexSchemaVersion || meta.teacherIndexSchemaVersion || 0
+    ) || 0,
+  });
+}
+
+/**
+ * Detect whether teacher index items are Schema v3-complete for strict college filter.
+ * Old static indexes often omit collegeCodes entirely.
+ */
+function detectTeacherIndexSchemaVersion(payload) {
+  const source = payload && payload.data ? payload.data : payload;
+  if (!source || typeof source !== "object") return 0;
+  const declared = Number(
+    source.teacherIndexSchemaVersion ||
+    source.schemaVersion ||
+    (source.meta && source.meta.teacherIndexSchemaVersion) ||
+    0
+  );
+  if (declared >= TEACHER_INDEX_SCHEMA_VERSION) return declared;
+  const items = Array.isArray(source.items) ? source.items : (Array.isArray(source) ? source : []);
+  if (!items.length) return declared || 0;
+  const sample = items.slice(0, Math.min(items.length, 20));
+  const withCodes = sample.filter((item) => {
+    const codes = Array.isArray(item && item.collegeCodes) ? item.collegeCodes.filter(Boolean) : [];
+    return codes.length > 0 || Boolean(item && item.collegeCode);
+  }).length;
+  const withNormalized = sample.filter((item) => item && (item.normalizedName || item.searchableName)).length;
+  // v3: majority of sample has college fields and normalized names (or declared)
+  if (withCodes >= Math.ceil(sample.length * 0.5) && withNormalized >= Math.ceil(sample.length * 0.3)) {
+    return TEACHER_INDEX_SCHEMA_VERSION;
+  }
+  // Partial enrich (codes only) still safer than raw v1
+  if (withCodes >= Math.ceil(sample.length * 0.5)) return 2;
+  return declared || 1;
+}
+
+function teacherIndexSupportsStrictCollegeFilter(payload) {
+  return detectTeacherIndexSchemaVersion(payload) >= TEACHER_INDEX_SCHEMA_VERSION
+    || detectTeacherIndexSchemaVersion(payload) >= 2;
+}
+
 function normalizeIndexPayload(type, payload, fallback = {}) {
   const source = payload && payload.data ? payload.data : payload;
   const sourceItems = Array.isArray(source) ? source : source && source.items;
@@ -808,6 +881,16 @@ function normalizeIndexPayload(type, payload, fallback = {}) {
   const releaseVersion = source.releaseVersion || source.version || fallback.releaseVersion || "";
   const term = source.term || source.semester || fallback.term || DEFAULT_TERM;
   assertTermMatch(term, fallback.term || "", "INDEX_TERM_MISMATCH");
+  const teacherSchema = type === "teacher"
+    ? (Number(source.teacherIndexSchemaVersion) || detectTeacherIndexSchemaVersion(source) || 0)
+    : undefined;
+  const items = type === "teacher"
+    ? sourceItems.map((item) => normalizeTeacherIndexItem(item, {
+      term,
+      releaseVersion,
+      teacherIndexSchemaVersion: teacherSchema,
+    }))
+    : sourceItems;
   return Object.assign({}, Array.isArray(source) ? {} : source, {
     success: true,
     type,
@@ -816,7 +899,8 @@ function normalizeIndexPayload(type, payload, fallback = {}) {
     releaseVersion,
     version: source.version || releaseVersion,
     total: Number(source.total || sourceItems.length) || sourceItems.length,
-    items: sourceItems,
+    items,
+    teacherIndexSchemaVersion: teacherSchema,
   });
 }
 
@@ -1190,8 +1274,12 @@ function teacherDisplayName(item) {
   return String(item.teacherName || item.name || item.displayName || item.canonicalName || "").trim();
 }
 
-/** Prefer exact name hits; only fall back to fuzzy substring when no exact match. */
-function filterTeachersByKeyword(items, q) {
+/**
+ * Prefer exact name hits; only fall back to fuzzy substring when no exact match
+ * exists in the candidate set. When `exactOnly` is true (global exact exists),
+ * never fuzzy-expand — college filters may correctly return empty.
+ */
+function filterTeachersByKeyword(items, q, options = {}) {
   const keyword = String(q || "").trim();
   if (!keyword) return items.slice();
   const normalizedQ = normalizeSearchText(keyword);
@@ -1200,6 +1288,7 @@ function filterTeachersByKeyword(items, q) {
     return name === normalizedQ;
   });
   if (exact.length) return exact;
+  if (options.exactOnly) return [];
   return items.filter((item) => {
     const haystack = normalizeSearchText(collectSearchFields(item).join(" "));
     return haystack.includes(normalizedQ);
@@ -1265,14 +1354,22 @@ function filterIndexPayload(type, payload, params = {}) {
     if (!matchesScopedFilter(type, comparable, params.titleCode || params.title, ["titleCode", "title", "teacherTitle", "professionalTitle"], { allowMissing: type === "teacher" })) return false;
     return true;
   });
-  const filtered = type === "teacher"
-    ? filterTeachersByKeyword(scoped, rawQ)
-    : (q
+  // Exact-name isolation: if any teacher in the full index matches the name exactly,
+  // only exact rows may appear (college filter can correctly yield empty).
+  let filtered;
+  if (type === "teacher") {
+    const globalExactExists = rawQ
+      ? (index.items || []).some((item) => normalizeSearchText(teacherDisplayName(item)) === q)
+      : false;
+    filtered = filterTeachersByKeyword(scoped, rawQ, { exactOnly: globalExactExists });
+  } else {
+    filtered = q
       ? scoped.filter((item) => {
           const haystack = normalizeSearchText(collectSearchFields(item).join(" "));
           return haystack.includes(q);
         })
-      : scoped);
+      : scoped;
+  }
   const debug = type === "teacher"
     ? getTeacherFilterDebug(index, params, q, scoped, filtered)
     : undefined;
@@ -1293,7 +1390,91 @@ function readCachedSearchIndex(type, params = {}) {
   return filterIndexPayload(type, cached, params);
 }
 
+/**
+ * Teacher Search Contract: same params as server /api/fosu/search-index.
+ * When static index schema is pre-v3 and college filter is active, prefer server
+ * enriched index instead of strictly filtering incomplete static rows.
+ */
 function searchIndex(type, params = {}, options = {}) {
+  const collegeFilterActive = Boolean(
+    String(params.collegeCode || "").trim() || String(params.collegeName || "").trim()
+  );
+  if (type === "teacher" && options.preferServerSearch !== false) {
+    const tryServer = () => request.get("/api/fosu/search-index", Object.assign({
+      type: "teacher",
+      q: params.q || params.keyword || "",
+      keyword: params.q || params.keyword || "",
+      collegeCode: params.collegeCode || "",
+      collegeName: params.collegeName || "",
+      term: params.term || params.semester || "",
+      semester: params.semester || params.term || "",
+      releaseVersion: params.releaseVersion || params.version || "",
+      schemaVersion: TEACHER_INDEX_SCHEMA_VERSION,
+      teacherIndexSchemaVersion: TEACHER_INDEX_SCHEMA_VERSION,
+      titleCode: params.titleCode || params.title || "",
+      limit: params.limit || 30,
+      offset: params.offset || 0,
+    }, params.type ? { type: params.type } : { type: "teacher" }), {
+      showLoading: false,
+      silentError: true,
+      timeout: options.timeout || 7500,
+      retries: options.retries === undefined ? 1 : options.retries,
+      skipSession: options.skipSession === true,
+    }).then((payload) => {
+      const normalized = normalizeIndexPayload("teacher", payload, {
+        term: params.term || params.semester,
+        releaseVersion: params.releaseVersion || params.version,
+      });
+      // Server already filtered; re-apply client contract for exact-name + college consistency.
+      return filterIndexPayload("teacher", Object.assign({}, normalized, {
+        teacherIndexSchemaVersion: TEACHER_INDEX_SCHEMA_VERSION,
+      }), params);
+    });
+
+    if (options.forceServerSearch || collegeFilterActive) {
+      return tryServer().catch(() => loadIndex(type, params, options).then((payload) => {
+        const schema = detectTeacherIndexSchemaVersion(payload);
+        if (collegeFilterActive && schema < 2) {
+          // Never strict-filter incomplete static index: return empty rather than wrong cross-college hits.
+          const empty = filterIndexPayload(type, payload, params);
+          return Object.assign({}, empty, {
+            items: [],
+            total: 0,
+            degradedSchema: true,
+            teacherIndexSchemaVersion: schema,
+            reasonCode: "TEACHER_INDEX_SCHEMA_STALE",
+          });
+        }
+        return filterIndexPayload(type, payload, params);
+      }));
+    }
+
+    return loadIndex(type, params, options).then((payload) => {
+      const schema = detectTeacherIndexSchemaVersion(payload);
+      if (collegeFilterActive && schema < 2) {
+        return tryServer().catch(() => Object.assign({}, filterIndexPayload(type, payload, params), {
+          items: [],
+          total: 0,
+          degradedSchema: true,
+          teacherIndexSchemaVersion: schema,
+          reasonCode: "TEACHER_INDEX_SCHEMA_STALE",
+        }));
+      }
+      if (schema < TEACHER_INDEX_SCHEMA_VERSION && options.upgradeViaServer !== false) {
+        // Background-friendly: still filter locally, but attempt server upgrade for cache.
+        tryServer().then((upgraded) => {
+          try {
+            writeIndexCache("teacher", Object.assign({}, upgraded, {
+              teacherIndexSchemaVersion: TEACHER_INDEX_SCHEMA_VERSION,
+              items: upgraded.items || payload.items,
+            }));
+          } catch (e) { /* ignore */ }
+        }).catch(() => {});
+      }
+      return filterIndexPayload(type, payload, params);
+    });
+  }
+
   return loadIndex(type, params, options)
     .then((payload) => filterIndexPayload(type, payload, params));
 }
@@ -1803,7 +1984,7 @@ function queryEmptyRooms(params = {}, options = {}) {
 
 function getVersionFromCacheKey(key) {
   const parts = String(key || "").split(":");
-  if (parts[0] !== "fosu" || (parts[1] !== "v6" && parts[1] !== "v5")) return "";
+  if (parts[0] !== "fosu" || !/^v\d+$/.test(parts[1] || "")) return "";
   if (parts[2] === "index" || parts[2] === "detail" || parts[2] === "empty-room") {
     return decodeURIComponent(parts[4] || "");
   }
@@ -1895,6 +2076,10 @@ module.exports = {
   filterEmptyRoomIndex,
   matchesTeacherCollegeFilter,
   filterTeachersByKeyword,
+  normalizeTeacherIndexItem,
+  detectTeacherIndexSchemaVersion,
+  teacherIndexSupportsStrictCollegeFilter,
+  TEACHER_INDEX_SCHEMA_VERSION,
   normalizeSearchText,
   resolveIndexUrl,
   resolveDetailUrl,

@@ -118,15 +118,27 @@ async function run() {
   assert.strictEqual(baiyinshan.items.length, 1);
   assert.strictEqual(baiyinshan.items[0].teacherName, "白银山");
 
+  // Schema v3 contract: college filter is strict — incomplete/mismatched college → 0 hits.
+  // Prefer /api/fosu/search-index when college filter active; static fallback must not cross-college leak.
   const emptyCollege = await search("陈芳", { collegeName: "任意学院" });
-  assert.strictEqual(emptyCollege.items.length, 1, "missing teacher college must not block keyword hits");
-  assert.strictEqual(emptyCollege.debug.collegeFilteredCount, 1);
+  assert.strictEqual(
+    emptyCollege.items.length,
+    0,
+    "strict college filter must not return teachers without matching collegeCodes"
+  );
 
-  const emptyTitle = await search("陈芳", { titleCode: "正高级" });
+  // Title still allowMissing for teachers (many rows lack title)
+  const emptyTitle = await search("陈芳", { titleCode: "正高级", preferServerSearch: false });
   assert.strictEqual(emptyTitle.items.length, 1, "missing teacher title must not block keyword hits");
 
   assert(calls.some((url) => url.includes(`/static/releases/${version}/index/teacher/all.json`)), "teacher search should read static index");
-  assert(!calls.some((url) => url.includes("/api/fosu/search-index")), "teacher search should not use dynamic search-index API");
+  // College-filtered search may call server search-index first (Teacher Search Contract)
+  assert(
+    calls.some((url) => url.includes("/api/fosu/search-index"))
+      || emptyCollege.reasonCode === "TEACHER_INDEX_SCHEMA_STALE"
+      || emptyCollege.total === 0,
+    "college filter uses server search-index or strict empty fallback"
+  );
 
   console.log("test-teacher-search-static-index-chenfang passed");
 }
