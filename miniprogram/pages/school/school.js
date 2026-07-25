@@ -232,14 +232,17 @@ Page({
     COURSE_SEARCH_PLACEHOLDER,
     CLASS_SEARCH_PLACEHOLDER,
     
-    // 下拉选择选项（教师院系默认「所有院系」）
+    // 班级 Tab：colleges 为真实学院列表，未选为 -1（必须选具体学院）
+    // 教师 Tab：teacherColleges 含首项「所有院系」，与班级状态隔离
     semesters: [],
-    colleges: [{ code: "", name: "所有院系" }],
+    colleges: [],
+    teacherColleges: [{ code: "", name: "所有院系" }],
     grades: [],
     majors: [],
     
     selectedSemesterIndex: 0,
-    selectedCollegeIndex: 0,
+    selectedCollegeIndex: -1,
+    selectedTeacherCollegeIndex: 0,
     selectedGradeIndex: -1,
     selectedMajorIndex: -1,
     
@@ -822,21 +825,56 @@ Page({
       newSelectedIndex = grades.indexOf(prevSelectedGrade);
     }
 
-    // Teacher tab needs explicit「所有院系」; keep code empty so filter is off.
+    // Class tab: real colleges only (no synthetic「所有院系」).
+    // Teacher tab: separate list with leading「所有院系」so class UX stays intact.
     const ALL_COLLEGE = { code: "", name: "所有院系" };
     const rawColleges = Array.isArray(data.colleges) ? data.colleges : [];
-    const colleges = rawColleges.length && rawColleges[0] && rawColleges[0].name === "所有院系"
-      ? rawColleges
-      : [ALL_COLLEGE].concat(rawColleges);
+    const colleges = rawColleges.filter((c) => {
+      if (!c) return false;
+      const name = String(c.name || "").trim();
+      if (name === "所有院系" || name === "所有学院") return false;
+      return Boolean(String(c.code || "").trim() || name);
+    });
+    const teacherColleges = [ALL_COLLEGE].concat(colleges);
+
+    // Preserve class college selection by code when catalog reshapes; else -1 (not selected).
     let selectedCollegeIndex = this.data.selectedCollegeIndex;
-    // Migrate legacy -1 (all) → 0 (所有院系); clamp if list reshaped
-    if (selectedCollegeIndex < 0) selectedCollegeIndex = 0;
-    if (selectedCollegeIndex >= colleges.length) selectedCollegeIndex = 0;
+    if (selectedCollegeIndex >= 0) {
+      const prev = this.data.colleges[selectedCollegeIndex];
+      const prevCode = prev && String(prev.code || "").trim();
+      if (prevCode) {
+        const remapped = colleges.findIndex((c) => String(c.code || "").trim() === prevCode);
+        selectedCollegeIndex = remapped;
+      } else if (selectedCollegeIndex >= colleges.length) {
+        selectedCollegeIndex = -1;
+      }
+    }
+    if (selectedCollegeIndex >= colleges.length) selectedCollegeIndex = -1;
+
+    // Teacher college: keep by code when possible; default 0 = 所有院系
+    let selectedTeacherCollegeIndex = this.data.selectedTeacherCollegeIndex;
+    if (selectedTeacherCollegeIndex > 0) {
+      const prevT = this.data.teacherColleges[selectedTeacherCollegeIndex];
+      const prevTCode = prevT && String(prevT.code || "").trim();
+      if (prevTCode) {
+        const remappedT = teacherColleges.findIndex((c) => String(c.code || "").trim() === prevTCode);
+        selectedTeacherCollegeIndex = remappedT >= 0 ? remappedT : 0;
+      } else if (selectedTeacherCollegeIndex >= teacherColleges.length) {
+        selectedTeacherCollegeIndex = 0;
+      }
+    } else {
+      selectedTeacherCollegeIndex = 0;
+    }
+    if (selectedTeacherCollegeIndex < 0 || selectedTeacherCollegeIndex >= teacherColleges.length) {
+      selectedTeacherCollegeIndex = 0;
+    }
 
     this.setData({
       semesters: data.semesters || [],
       colleges,
+      teacherColleges,
       selectedCollegeIndex,
+      selectedTeacherCollegeIndex,
       grades: grades,
       selectedGradeIndex: newSelectedIndex,
       // 如果年级索引越界重置为 -1，需连带清空之前联动的专业
@@ -1308,19 +1346,25 @@ Page({
       this.applySharedQueryIfNeeded();
     };
 
+    // Class cache only: empty collegeCode means not selected (-1), never force index 0.
     const collegeIdx = cache.collegeCode
       ? this.data.colleges.findIndex(c => c.code === cache.collegeCode)
-      : 0;
+      : -1;
     if (collegeIdx < 0) {
       this.setData({
         selectedSemesterIndex,
-        selectedCollegeIndex: 0,
+        selectedCollegeIndex: -1,
         selectedGradeIndex: -1,
         selectedMajorIndex: -1,
         selectedClassIndex: -1,
         majors: [],
         classesOptions: [],
-      }, () => finishDowngrade("semester", `college missing: ${cache.collegeName || cache.collegeCode || "-"}`));
+      }, () => finishDowngrade(
+        cache.collegeCode ? "semester" : "semester",
+        cache.collegeCode
+          ? `college missing: ${cache.collegeName || cache.collegeCode || "-"}`
+          : "no class college in cache"
+      ));
       return;
     }
 
@@ -1445,7 +1489,7 @@ Page({
     this.clearPagedResults(["classAdmin", "classAggregate"]);
     this.setData({
       selectedSemesterIndex: 0,
-      selectedCollegeIndex: 0,
+      selectedCollegeIndex: -1,
       selectedGradeIndex: -1,
       selectedMajorIndex: -1,
       selectedClassIndex: -1,
@@ -1493,11 +1537,10 @@ Page({
     });
   },
 
-  // 3. 学院选择改变
+  // 3. 班级 Tab 学院选择改变（不影响教师院系）
   onCollegeChange(event) {
     const index = Number(event.detail.value);
-    // 切换学院立即清除旧结果（含教师），缓存键含 collegeCode 避免串味
-    this.clearPagedResults(["classAdmin", "classAggregate", "teacher"]);
+    this.clearPagedResults(["classAdmin", "classAggregate"]);
     this.setData({
       selectedCollegeIndex: index,
       selectedGradeIndex: -1,
@@ -1508,12 +1551,21 @@ Page({
       classesResult: [],
       classAdminResults: [],
       classAggregateResults: [],
-      teachersResult: [],
-      teacherHitCount: 0,
-      updatedAtText: "",
       classNoticeText: "",
     }, () => {
       this.saveFilterCache();
+    });
+  },
+
+  // 教师 Tab 院系选择（独立于班级 selectedCollegeIndex）
+  onTeacherCollegeChange(event) {
+    const index = Number(event.detail.value);
+    this.clearPagedResults(["teacher"]);
+    this.setData({
+      selectedTeacherCollegeIndex: index,
+      teachersResult: [],
+      teacherHitCount: 0,
+      updatedAtText: "",
     });
   },
 
@@ -1799,7 +1851,15 @@ Page({
   },
 
   searchTeacherSchedule() {
-    const { semesters, selectedSemesterIndex, colleges, selectedCollegeIndex, titleOptions, selectedTitleIndex, keyword } = this.data;
+    const {
+      semesters,
+      selectedSemesterIndex,
+      teacherColleges,
+      selectedTeacherCollegeIndex,
+      titleOptions,
+      selectedTitleIndex,
+      keyword,
+    } = this.data;
 
     if (!keyword.trim()) {
       wx.showToast({
@@ -1810,8 +1870,10 @@ Page({
     }
 
     const semester = semesters[selectedSemesterIndex]?.value || getFallbackTerm();
-    const college = selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex] : null;
-    // 「所有院系」或未选：不按学院过滤
+    const college = selectedTeacherCollegeIndex >= 0
+      ? teacherColleges[selectedTeacherCollegeIndex]
+      : null;
+    // 「所有院系」或未选：不按学院过滤（仅教师 Tab 列表含该选项）
     const isAllColleges = !college || !String(college.code || "").trim()
       || college.name === "所有院系" || college.name === "所有学院";
     const collegeCode = isAllColleges ? "" : String(college.code || "").trim();
