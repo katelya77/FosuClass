@@ -18,6 +18,31 @@
         "FOSU_APAAS_PAGE_SIZE": "500",
         "FOSU_APAAS_PAGE_CONCURRENCY": "3"
       }
+    },
+    {
+      "name": "aiVoiceTranscribe",
+      "handler": "index.main",
+      "runtime": "Nodejs18.15",
+      "timeout": 30,
+      "memorySize": 256,
+      "description": "Xiaofu voice to Tencent ASR transcribe",
+      "envVariables": {
+        "NODE_ENV": "production"
+      },
+      "installDependency": true
+    },
+    {
+      "name": "xiaofuAgentGateway",
+      "handler": "index.main",
+      "runtime": "Nodejs18.15",
+      "timeout": 60,
+      "memorySize": 256,
+      "description": "AG-UI gateway for Xiaofu Agent",
+      "envVariables": {
+        "NODE_ENV": "production",
+        "FOSU_AGENT_TIMEOUT_MS": "25000"
+      },
+      "installDependency": true
     }
   ]
 }

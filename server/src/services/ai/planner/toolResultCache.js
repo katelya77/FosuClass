@@ -1,6 +1,7 @@
 /**
  * Run-scoped tool result cache — replan reuses successful read observations.
- * Key: toolName + canonical JSON args + releaseVersion + term + principal scope.
+ * Key dimensions (must not collapse class→teacher):
+ * toolName + entityType + normalizedArgs + term + releaseVersion + conversation/run scope.
  */
 
 const crypto = require("crypto");
@@ -20,7 +21,37 @@ function principalScope(context = {}, principal = null) {
   if (principal && principal.principalKey) return String(principal.principalKey).slice(0, 64);
   if (context.principalKey) return String(context.principalKey).slice(0, 64);
   if (context.conversationId) return `conv:${String(context.conversationId).slice(0, 48)}`;
+  if (context.runId) return `run:${String(context.runId).slice(0, 48)}`;
   return "anon";
+}
+
+function resolveEntityType(args = {}, context = {}) {
+  const fromArgs = String(
+    args.lockedEntityType
+    || args.entityType
+    || args.type
+    || ""
+  ).trim();
+  if (fromArgs) return fromArgs.slice(0, 24);
+  return String(context.lockedEntityType || context.entityType || "").slice(0, 24);
+}
+
+function normalizeArgsForCache(args = {}) {
+  const source = args && typeof args === "object" ? args : {};
+  // Drop volatile / non-semantic fields that must not create false cache hits
+  const skip = new Set(["message", "abortSignal", "onEvent", "principal"]);
+  const out = {};
+  Object.keys(source).sort().forEach((key) => {
+    if (skip.has(key)) return;
+    const value = source[key];
+    if (value === undefined || value === null || value === "") return;
+    if (typeof value === "object") {
+      out[key] = value;
+      return;
+    }
+    out[key] = value;
+  });
+  return out;
 }
 
 function buildCacheKey(toolName, args, context = {}, principal = null) {
@@ -36,8 +67,10 @@ function buildCacheKey(toolName, args, context = {}, principal = null) {
     || context.termCode
     || ""
   ).slice(0, 40);
+  const entityType = resolveEntityType(args, context);
   const scope = principalScope(context, principal);
-  const payload = `${toolName}|${stableStringify(args || {})}|${releaseVersion}|${term}|${scope}`;
+  const normalizedArgs = normalizeArgsForCache(args);
+  const payload = `${toolName}|et:${entityType}|${stableStringify(normalizedArgs)}|${releaseVersion}|${term}|${scope}`;
   return crypto.createHash("sha256").update(payload).digest("hex").slice(0, 40);
 }
 
@@ -101,6 +134,8 @@ function createToolResultCache() {
 module.exports = {
   stableStringify,
   buildCacheKey,
+  resolveEntityType,
+  normalizeArgsForCache,
   isWriteTool,
   isSuccessfulReadCall,
   ToolResultCache,

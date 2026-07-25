@@ -246,9 +246,10 @@ Page({
     classesOptions: [],
     selectedClassIndex: -1,
     
-    // 教师筛选项
+    // 教师筛选项（无可靠职称数据时 titleFilterEnabled=false，隐藏无效控件）
     titleOptions: ["正高级", "副高级", "中级", "助理级", "员级", "其他"],
     selectedTitleIndex: -1,
+    titleFilterEnabled: false,
     
     // 教室/课程筛选项
     campusOptions: ["仙溪校区", "江湾校区", "河滨校区"],
@@ -1476,7 +1477,8 @@ Page({
   // 3. 学院选择改变
   onCollegeChange(event) {
     const index = Number(event.detail.value);
-    this.clearPagedResults(["classAdmin", "classAggregate"]);
+    // 切换学院立即清除旧结果（含教师），缓存键含 collegeCode 避免串味
+    this.clearPagedResults(["classAdmin", "classAggregate", "teacher"]);
     this.setData({
       selectedCollegeIndex: index,
       selectedGradeIndex: -1,
@@ -1487,6 +1489,9 @@ Page({
       classesResult: [],
       classAdminResults: [],
       classAggregateResults: [],
+      teachersResult: [],
+      teacherHitCount: 0,
+      updatedAtText: "",
       classNoticeText: "",
     }, () => {
       this.saveFilterCache();
@@ -1788,8 +1793,11 @@ Page({
     const semester = semesters[selectedSemesterIndex]?.value || getFallbackTerm();
     const collegeCode = selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex].code : "";
     const collegeName = selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex].name : "";
-    const titleCode = selectedTitleIndex >= 0 ? titleOptions[selectedTitleIndex] : "";
+    const titleCode = this.data.titleFilterEnabled && selectedTitleIndex >= 0
+      ? titleOptions[selectedTitleIndex]
+      : "";
 
+    // 切换学院时缓存键含 collegeCode/titleCode，避免跨学院结果污染
     const params = {
       semester,
       collegeCode,
@@ -1803,8 +1811,12 @@ Page({
       const formatTime = formatUpdateTime(data.updatedAt);
       const teachers = (data.items || []).map(item => normalizeIndexedScheduleItem("teacher", item, data.version));
       this.lastTeacherSearchDebug = data.debug || null;
+      // 职称数据可靠时才启用职称筛选：至少 20% 条目有 title
+      const titled = teachers.filter((t) => t.title || t.teacherTitle || t.professionalTitle || t.titleCode).length;
+      const titleFilterEnabled = teachers.length >= 5 && titled / teachers.length >= 0.2;
       this.setSimplePagedResults("teacher", "teachersResult", teachers, "teacherHitCount", "hasMoreTeachers");
       this.setData({
+        titleFilterEnabled,
         teacherDataSourceText: "本地静态索引",
         teacherDiagnosticText: "",
         dataVersionText: formatTime ? `数据更新于 ${formatTime}` : "",

@@ -106,18 +106,38 @@ function classifyConnectionError(error) {
   return { code: "COZE_CONNECTION_FAILED", reason: "provider_failed", message: "Coze 连接测试失败，请核对配置。", retryable: status >= 500 || status === 0 };
 }
 
+function normalizeApiToken(raw) {
+  let value = String(raw || "").replace(/^\uFEFF/, "").trim();
+  if (/^Bearer\s+/i.test(value)) value = value.replace(/^Bearer\s+/i, "").trim();
+  return value.replace(/\r?\n/g, "").trim();
+}
+
 function getConfig(overrides = {}) {
-  const workloadEndpoint = String(configuredEnv("COZE_WORKLOAD_ENDPOINT", "", overrides) || "").trim();
+  const agentBase = String(configuredEnv("COZE_AGENT_BASE_URL", "", overrides) || "").replace(/\/+$/, "");
+  const streamPath = String(configuredEnv("COZE_STREAM_PATH", "/stream_run", overrides) || "/stream_run");
+  let workloadEndpoint = String(configuredEnv("COZE_WORKLOAD_ENDPOINT", "", overrides) || "").trim();
+  // Prefer explicit workload endpoint; else compose from COZE_AGENT_BASE_URL + stream path
+  if (!workloadEndpoint && agentBase) {
+    workloadEndpoint = `${agentBase}${streamPath.startsWith("/") ? streamPath : `/${streamPath}`}`;
+  }
+  const apiKey = normalizeApiToken(
+    configuredEnv("COZE_API_TOKEN", "", overrides)
+    || configuredEnv("COZE_API_KEY", "", overrides)
+  );
   return {
     enabled: boolEnv("COZE_ENABLED", true, overrides),
     expiresAt: String(configuredEnv("COZE_EXPIRES_AT", "", overrides) || "").trim(),
     providerRole: String(configuredEnv("COZE_PROVIDER_ROLE", "temporary", overrides) || "temporary"),
-    baseUrl: String(configuredEnv("COZE_API_BASE_URL", "https://api.coze.cn", overrides)).replace(/\/+$/, ""),
-    apiKey: configuredEnv("COZE_API_KEY", "", overrides),
+    baseUrl: String(configuredEnv("COZE_API_BASE_URL", agentBase || "https://api.coze.cn", overrides)).replace(/\/+$/, ""),
+    agentBaseUrl: agentBase,
+    apiKey,
     botId: configuredEnv("COZE_BOT_ID", "", overrides) || configuredEnv("COZE_AGENT_ID", "", overrides),
     apiMode: normalizeApiMode(configuredEnv("COZE_API_MODE", "", overrides), workloadEndpoint),
     workloadEndpoint,
     projectId: String(configuredEnv("COZE_PROJECT_ID", "", overrides) || "").trim(),
+    streamPath,
+    asyncPath: String(configuredEnv("COZE_ASYNC_PATH", "/async_run", overrides) || "/async_run"),
+    taskPath: String(configuredEnv("COZE_TASK_PATH", "/task/{task_id}", overrides) || "/task/{task_id}"),
     chatEndpoint: configuredEnv("COZE_CHAT_ENDPOINT", "/v3/chat", overrides),
     pollIntervalMs: numberEnv("COZE_POLL_INTERVAL_MS", 1000, 200, 10000, overrides),
     pollMaxAttempts: numberEnv("COZE_POLL_MAX_ATTEMPTS", 12, 1, 40, overrides),
