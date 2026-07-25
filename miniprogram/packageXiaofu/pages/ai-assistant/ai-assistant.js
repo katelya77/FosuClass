@@ -1821,6 +1821,15 @@ Page({
   onReady() {
     this.syncComposerInset();
     this.scrollMessagesToBottom(false);
+    if (typeof wx !== "undefined" && typeof wx.onKeyboardHeightChange === "function") {
+      this._onKeyboardHeightChange = (res) => {
+        const h = Number(res && res.height) || 0;
+        this._keyboardHeight = h;
+        this.syncComposerInset();
+        if (h > 0) this.scrollMessagesToBottom(false);
+      };
+      wx.onKeyboardHeightChange(this._onKeyboardHeightChange);
+    }
   },
 
   onShow() {
@@ -1859,6 +1868,9 @@ Page({
     this._activeAiRequestId = "";
     if (this._statusCapsuleResetTimer) clearTimeout(this._statusCapsuleResetTimer);
     if (this._composerInsetSyncTimer) clearTimeout(this._composerInsetSyncTimer);
+    if (this._onKeyboardHeightChange && typeof wx !== "undefined" && typeof wx.offKeyboardHeightChange === "function") {
+      try { wx.offKeyboardHeightChange(this._onKeyboardHeightChange); } catch (e) { /* ignore */ }
+    }
   },
 
   refreshConversationState(activeConversation) {
