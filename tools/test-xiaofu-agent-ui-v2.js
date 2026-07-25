@@ -73,8 +73,10 @@ assert(js.includes("memoryMode") || wxml.includes("memoryStatusText"));
 assert(js.includes("cloud_sync"));
 assert(json.includes("xiaofu-memory-sheet"));
 
-// 14-16. Composer remains fixed + safe area
-assert(/\.composer\s*\{[\s\S]*?position\s*:\s*fixed/.test(wxss));
+// 14-16. Composer flex 贴底（禁止 fixed 双占位）+ safe area
+const composerBlock = (wxss.match(/\.composer\s*\{[\s\S]*?\n\}/) || [""])[0];
+assert(!/position\s*:\s*fixed/.test(composerBlock), "composer must not be fixed");
+assert(/flex\s*:\s*0\s+0\s+auto|flex-shrink\s*:\s*0/.test(composerBlock), "composer flex-shrink 0");
 assert(wxml.includes("voice-btn") || wxml.includes("voiceInputVisible"));
 assert(wxss.includes("safe-area") || wxml.includes("safe-area"));
 

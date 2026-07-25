@@ -1,0 +1,8 @@
+{
+  "name": "xiaofu-agent-gateway",
+  "version": "1.0.0",
+  "main": "index.js",
+  "private": true,
+  "description": "CloudBase HTTP gateway mapping Xiaofu Agent runs to AG-UI-compatible events",
+  "dependencies": {}
+}

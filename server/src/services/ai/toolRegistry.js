@@ -360,6 +360,151 @@ function resolveIntentChinese(message, context = {}) {
 }
 
 /**
+ * open_schedule 目标构建：
+ * “打开24动物医学1班的课表” → entityType=class → search class index → get_schedule_detail
+ * 实体类型一旦锁定（lockedEntityType），后续 plan/replan/cache 不得改写。
+ * 多候选 → 澄清卡；禁止静默猜 teacher。
+ */
+function buildOpenScheduleIntent(goal, context = {}) {
+  const entity = normalizeText(goal.entity || "");
+  let entityType = String(goal.entityType || "").trim();
+  if (!entityType && entity) {
+    entityType = goalParser.inferEntityType(entity) || "";
+  }
+  // 无实体：澄清
+  if (!entity && !goal.deictic) {
+    return {
+      name: "clarify_missing_slot",
+      slots: {
+        slot: { missing: "entity", type: "", prompt: "想打开谁的课表？可以说班级、老师、教室或课程名称。" },
+        goalAction: "open_schedule",
+      },
+    };
+  }
+  // 指代：沿用上下文 lastTarget
+  if (!entity && goal.deictic) {
+    const wm = (context && context.workingMemory) || {};
+    const slots = (context && (context.contextSlots || context.slots)) || {};
+    const lastType = wm.lastTargetType || slots.lastTargetType || "";
+    const lastName = wm.lastTargetName || slots.lastTargetName || "";
+    const lastId = wm.lastTargetId || slots.lastTargetId || "";
+    if (lastType && lastId) {
+      return {
+        name: "get_schedule_detail",
+        slots: {
+          type: lastType,
+          id: lastId,
+          q: lastName,
+          lockedEntityType: lastType,
+          goalAction: "open_schedule",
+          explicitCommand: goal.explicitCommand === true,
+        },
+      };
+    }
+    if (lastType && lastName) {
+      return {
+        name: "search_school_index",
+        slots: {
+          type: lastType,
+          q: lastName,
+          lockedEntityType: lastType,
+          goalAction: "open_schedule",
+          explicitCommand: goal.explicitCommand === true,
+        },
+      };
+    }
+    return {
+      name: "clarify_missing_slot",
+      slots: {
+        slot: { missing: "entity", type: "", prompt: "刚才没有可打开的课表目标。请告诉我班级、老师、教室或课程名。" },
+        goalAction: "open_schedule",
+      },
+    };
+  }
+
+  // 班级：别名解析 → 唯一则 search+detail 链，多候选澄清，零匹配澄清
+  if (entityType === "class" || (!entityType && /班|\d{2}[\u3400-\u9fff]{2,}/.test(entity))) {
+    const index = releaseService.readActiveIndex("class") || {};
+    const items = Array.isArray(index.items) ? index.items : (Array.isArray(index) ? index : []);
+    const resolution = classAliasResolver.resolveClass(entity, items);
+    if (resolution.status === "unique" && resolution.match) {
+      const m = resolution.match;
+      const canonical = String(m.name || m.className || entity);
+      return {
+        name: "search_school_index",
+        slots: {
+          type: "class",
+          q: canonical,
+          preferredId: String(m.id || m.detailId || ""),
+          lockedEntityType: "class",
+          goalAction: "open_schedule",
+          explicitCommand: goal.explicitCommand === true,
+        },
+      };
+    }
+    if (resolution.status === "ambiguous") {
+      const candidates = (resolution.candidates || []).slice(0, 5).map((c) => ({
+        detailId: String(c.id || c.detailId || ""),
+        name: String(c.name || c.className || ""),
+        term: c.semester || "",
+        type: "class",
+      }));
+      return {
+        name: "clarify_missing_slot",
+        slots: {
+          slot: { missing: "className", type: "class", prompt: "找到多个候选班级，你想打开哪一个的课表？" },
+          type: "class",
+          q: entity,
+          goalAction: "open_schedule",
+          lockedEntityType: "class",
+          candidates,
+        },
+      };
+    }
+    // not_found for class-looking entity: still try search with locked type, never fall to teacher
+    return {
+      name: "search_school_index",
+      slots: {
+        type: "class",
+        q: entity,
+        lockedEntityType: "class",
+        goalAction: "open_schedule",
+        explicitCommand: goal.explicitCommand === true,
+      },
+    };
+  }
+
+  // 教师 / 教室 / 课程
+  const allowed = ["teacher", "classroom", "course"];
+  const type = allowed.includes(entityType) ? entityType : "";
+  if (!type) {
+    // 无法判定类型：澄清，禁止默认 teacher
+    return {
+      name: "clarify_missing_slot",
+      slots: {
+        slot: {
+          missing: "entityType",
+          type: "",
+          prompt: `「${entity}」是班级、老师、教室还是课程？请补充一下，例如「打开${entity}班的课表」或「打开${entity}老师的课表」。`,
+        },
+        q: entity,
+        goalAction: "open_schedule",
+      },
+    };
+  }
+  return {
+    name: "search_school_index",
+    slots: {
+      type,
+      q: entity,
+      lockedEntityType: type,
+      goalAction: "open_schedule",
+      explicitCommand: goal.explicitCommand === true,
+    },
+  };
+}
+
+/**
  * set_current_schedule 目标构建：
  * - 显式实体（“24动医1”）→ 全校班级索引 + 别名字典解析
  * - 指代（“把刚刚查到的班级设为我的课表”）→ workingMemory/contextSlots 的 lastTarget
@@ -755,9 +900,13 @@ function resolveIntent(message, context = {}) {
   if (modernIntent) return modernIntent;
   // Goal-first：操作类意图优先于查询类——“将24动医1的课表设为当前首页课表”
   // 必须解析成 set_current_schedule，而不是落入全校查询兜底（断点1修复）
+  // “打开24动物医学1班的课表” → open_schedule + entityType=class（禁止误判 teacher）
   const goal = goalParser.parseGoal(text, context);
   if (goal && goal.goal === "set_current_schedule") {
     return buildSetCurrentScheduleIntent(goal, context);
+  }
+  if (goal && goal.goal === "open_schedule") {
+    return buildOpenScheduleIntent(goal, context);
   }
   const pendingIntent = resolvePendingClarificationIntent(text, context);
   if (pendingIntent) return pendingIntent;
@@ -1069,30 +1218,54 @@ function searchEmptyRooms(input = {}, context = {}) {
 }
 
 function searchSchoolIndex(input = {}, context = {}) {
-  const type = ["class", "teacher", "classroom", "course"].includes(input.type) ? input.type : "teacher";
+  // lockedEntityType 优先：一旦实体类型确认，禁止回落默认 teacher
+  const locked = ["class", "teacher", "classroom", "course"].includes(input.lockedEntityType)
+    ? input.lockedEntityType
+    : "";
+  const type = locked
+    || (["class", "teacher", "classroom", "course"].includes(input.type) ? input.type : "teacher");
   const query = normalizeText(input.q || input.message || "");
+  const preferredId = normalizeText(input.preferredId || input.detailId || "");
   const classroomQuery = type === "classroom" ? classroomSearch.parseClassroomQuery(query) : null;
   const result = releaseService.searchActiveIndex(type, query, {
     term: input.term || context.term || getDefaultTerm(),
     semester: input.term || context.term || getDefaultTerm(),
     releaseVersion: input.releaseVersion || context.releaseVersion || "",
+    collegeCode: input.collegeCode || "",
+    collegeName: input.collegeName || "",
+    titleCode: input.titleCode || "",
     limit: type === "classroom" && classroomQuery && classroomQuery.queryType !== "text" ? 500 : (input.limit || 8),
   });
-  const rawItems = asArray(result.items);
+  let rawItems = asArray(result.items);
+  // preferredId：别名解析后的权威 detailId，强制唯一命中
+  if (preferredId) {
+    const byId = rawItems.find((item) => String(item.id || item.detailId || "") === preferredId);
+    if (byId) {
+      rawItems = [byId];
+    } else {
+      const index = releaseService.readActiveIndex(type, input.releaseVersion || context.releaseVersion || "") || {};
+      const all = Array.isArray(index.items) ? index.items : [];
+      const hit = all.find((item) => String(item.id || item.detailId || "") === preferredId);
+      if (hit) rawItems = [hit];
+    }
+  }
   const filteredItems = type === "classroom"
     ? classroomSearch.filterAndSortClassrooms(rawItems, classroomQuery)
     : rawItems;
   return {
-    success: Boolean(result.success),
+    success: Boolean(result.success !== false || filteredItems.length > 0),
     type,
     q: query,
+    lockedEntityType: locked || type,
+    goalAction: input.goalAction || "",
+    preferredId: preferredId || "",
     term: result.term || result.semester || input.term || context.term || getDefaultTerm(),
     queryType: classroomQuery && classroomQuery.queryType || "",
     buildingCode: classroomQuery && classroomQuery.buildingCode || "",
     roomNumber: classroomQuery && classroomQuery.roomNumber || "",
     normalizedQuery: classroomQuery && classroomQuery.normalizedQuery || query,
     items: filteredItems.slice(0, Number(input.limit || 8) || 8),
-    total: filteredItems.length,
+    total: preferredId && filteredItems.length ? filteredItems.length : filteredItems.length,
     updatedAt: result.updatedAt || "",
     releaseVersion: result.releaseVersion || result.version || context.releaseVersion || "",
     actionUrl: buildActionUrl("/pages/school/school", { type, q: query }),
@@ -1712,8 +1885,13 @@ function normalizeComparable(value) {
 
 function isHighConfidenceIndexHit(result = {}) {
   const items = asArray(result.items);
+  if (items.length !== 1) return false;
+  // 权威 preferredId 命中：直接信任唯一候选
+  if (result.preferredId && String(items[0].id || items[0].detailId || "") === String(result.preferredId)) {
+    return true;
+  }
   const q = normalizeComparable(result.q);
-  if (!q || items.length !== 1) return false;
+  if (!q) return false;
   const itemName = normalizeComparable(getItemComparableName(items[0], result.type));
   return itemName === q || q.length >= 2;
 }
@@ -1936,4 +2114,6 @@ module.exports = {
   goalParser,
   classAliasResolver,
   buildSetCurrentScheduleIntent,
+  buildOpenScheduleIntent,
+  isHighConfidenceIndexHit,
 };

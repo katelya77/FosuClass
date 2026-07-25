@@ -247,7 +247,9 @@ assert.ok(!wxml.includes("composer-note"), "no permanent composer summary note")
 assert.ok(wxml.includes("composer-plus-btn") || wxml.includes("openComposerPlus"), "composer + entry");
 assert.ok(/class="composer"/.test(wxml), "composer exists");
 const composerRule = getRule(wxss, ".composer");
-assert.ok(/position\s*:\s*fixed/.test(composerRule), "composer fixed");
+// flex 贴底：避免 fixed + page padding-bottom 双占位截断
+assert.ok(!/position\s*:\s*fixed/.test(composerRule), "composer must not be fixed");
+assert.ok(/flex\s*:\s*0\s+0\s+auto|flex-shrink\s*:\s*0/.test(composerRule), "composer flex-shrink 0");
 
 // --- 18: danger confirm ---
 assert.ok(pageJs.includes("clearHistory") && pageJs.includes("showModal"), "danger clear uses confirm");

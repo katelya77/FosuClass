@@ -21,6 +21,7 @@ const scheduleAnalysisService = require("../services/ai/scheduleAnalysisService"
 const agentReadinessService = require("../services/ai/agentReadinessService");
 const agentRunEventService = require("../services/ai/agentRunEventService");
 const agentProtocol = require("../services/ai/agentProtocol");
+const aguiAdapter = require("../services/ai/aguiAdapter");
 
 const router = express.Router();
 
@@ -242,6 +243,102 @@ router.post("/agent/chat", scheduleLimiter, optionalSessionGuard, validateJsonBo
         appid: req.fosuSession.appid || "",
       } : null,
     }, error));
+  }
+});
+
+/**
+ * AG-UI compatible gateway — maps Run Events to AG-UI event stream.
+ * Does not replace custom miniprogram UI; cards/actions travel in STATE_SNAPSHOT.
+ * threadId = conversationId; runId = agent runId.
+ */
+router.post("/agent/agui", scheduleLimiter, optionalSessionGuard, validateJsonBody(["message", "context", "protocolVersion", "requestId", "conversationId", "memoryMode", "cloudSyncEnabled", "stream"]), async (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  const message = String(req.body && req.body.message || "").trim();
+  if (!message) {
+    return res.status(400).json({
+      success: false,
+      code: "MESSAGE_REQUIRED",
+      message: "请输入要咨询的问题。",
+      serverTime: new Date().toISOString(),
+    });
+  }
+  const conversationId = String(req.body.conversationId || "").slice(0, 120);
+  const wantStream = req.body.stream === true || String(req.headers.accept || "").includes("text/event-stream");
+  const collectedEvents = [];
+  try {
+    const context = Object.assign({}, req.body.context || {});
+    if (req.body.memoryMode) context.memoryMode = req.body.memoryMode;
+    if (req.body.cloudSyncEnabled === true) context.cloudSyncEnabled = true;
+    const payload = await agentService.chat({
+      message,
+      context,
+      protocolVersion: req.body.protocolVersion,
+      requestId: req.body.requestId,
+      conversationId,
+      serverSession: req.fosuSession ? {
+        openidHash: req.fosuSession.openidHash || "",
+        sessionIdHash: req.fosuSession.sessionIdHash || "",
+        appid: req.fosuSession.appid || "",
+      } : null,
+      onEvent: (event) => {
+        collectedEvents.push(event);
+      },
+    });
+    const runId = String(payload.runId || payload.requestId || req.body.requestId || "").slice(0, 120);
+    const aguiEvents = aguiAdapter.mapRunToAguiEvents({
+      conversationId: conversationId || payload.conversationId,
+      runId: runId || "agui-run",
+      events: collectedEvents,
+      response: payload,
+      answer: payload.answer,
+      cards: payload.cards,
+      actionCommands: payload.actionCommands,
+      runtimeMode: payload.runtimeMode || (payload.safety && payload.safety.runtimeMode),
+    });
+    safeLog("ai-agent-agui", {
+      eventCount: aguiEvents.length,
+      runId: runId || "",
+      provider: payload.safety && payload.safety.provider,
+    });
+    if (wantStream) {
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      res.setHeader("X-Accel-Buffering", "no");
+      res.status(200).send(aguiAdapter.serializeSse(aguiEvents));
+      return;
+    }
+    return res.json({
+      success: true,
+      protocol: "ag-ui",
+      threadId: conversationId || payload.conversationId || "",
+      runId: runId || "",
+      events: aguiEvents,
+      // Keep existing custom protocol for miniprogram dual-read
+      response: payload,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    safeLog("ai-agent-agui-failed", { code: String(error && error.code || "AGUI_FAILED").slice(0, 80) });
+    const runId = String(req.body && req.body.requestId || "agui-error").slice(0, 120);
+    const events = aguiAdapter.mapRunToAguiEvents({
+      conversationId,
+      runId,
+      events: collectedEvents,
+      failed: true,
+      error,
+    });
+    if (wantStream) {
+      res.setHeader("Content-Type", "text/event-stream; charset=utf-8");
+      return res.status(200).send(aguiAdapter.serializeSse(events));
+    }
+    return res.status(200).json({
+      success: false,
+      protocol: "ag-ui",
+      threadId: conversationId,
+      runId,
+      events,
+      message: "AG-UI 请求失败，已返回错误事件。",
+      serverTime: new Date().toISOString(),
+    });
   }
 });
 

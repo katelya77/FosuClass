@@ -85,7 +85,9 @@ function run() {
   assert(/width\s*:\s*5[0-9]rpx/.test(iconButton) && /height\s*:\s*5[0-9]rpx/.test(iconButton), "header icons should have equal compact tap areas");
 
   const composer = getRule(wxss, ".composer");
-  assert(/position\s*:\s*fixed/.test(composer), "composer must stay fixed");
+  // 2026-07 final：flex 贴底，禁止 fixed + page padding-bottom 双占位导致底部截断/大块空白
+  assert(!/position\s*:\s*fixed/.test(composer), "composer must not be position:fixed");
+  assert(/flex\s*:\s*0\s+0\s+auto/.test(composer) || /flex-shrink\s*:\s*0/.test(composer), "composer should flex-shrink:0");
 
   const sheet = getRule(wxss, ".bottom-sheet");
   assert(/position\s*:\s*fixed/.test(sheet) && /z-index\s*:\s*40/.test(sheet), "bottom sheet should overlay content");
@@ -99,7 +101,11 @@ function run() {
   assert(aiJs.includes("normalizeWeatherPayload"), "weather card payload should be normalized for display");
 
   const page = getRule(wxss, ".ai-page");
-  assert(/padding-bottom\s*:\s*(2[0-9]{2}|[3-9][0-9]{2})rpx/.test(page), "page should reserve room for fixed composer");
+  assert(/display\s*:\s*flex/.test(page) && /flex-direction\s*:\s*column/.test(page), "ai-page should be column flex");
+  assert(!/padding-bottom\s*:\s*200rpx/.test(page), "page must not double-pad 200rpx for fixed composer");
+
+  const messageScroll = getRule(wxss, ".message-scroll");
+  assert(/flex\s*:\s*1/.test(messageScroll) && /min-height\s*:\s*0/.test(messageScroll), "message-scroll should flex-grow with min-height 0");
 
   console.log("test-ai-assistant-ui-layout passed");
 }

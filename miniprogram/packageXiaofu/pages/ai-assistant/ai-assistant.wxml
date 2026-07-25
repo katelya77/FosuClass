@@ -56,7 +56,17 @@
 
   <view class="history-trim-tip" wx:if="{{historyTrimNotice}}">已仅保留最近 20 条</view>
 
-  <scroll-view class="message-scroll" scroll-y scroll-top="{{scrollTop}}" scroll-into-view="{{scrollIntoView}}" scroll-with-animation="{{scrollWithAnimation}}" scroll-anchoring="{{true}}" enhanced show-scrollbar="{{false}}" lower-threshold="80">
+  <scroll-view
+    class="message-scroll"
+    scroll-y="{{!(showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu || showMemorySheet || showComposerPlus || showReminderSheet)}}"
+    scroll-top="{{scrollTop}}"
+    scroll-into-view="{{scrollIntoView}}"
+    scroll-with-animation="{{scrollWithAnimation}}"
+    scroll-anchoring="{{true}}"
+    enhanced
+    show-scrollbar="{{false}}"
+    lower-threshold="80"
+  >
     <!-- Empty state: one verified contextual insight and at most three actions -->
     <view class="empty-welcome" wx:if="{{!messages.length}}">
       <view class="empty-brand">小佛助手</view>
@@ -223,7 +233,12 @@
     <view id="message-bottom-anchor" class="message-bottom-anchor"></view>
   </scroll-view>
 
-  <view class="sheet-mask" wx:if="{{showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu || showMemorySheet || showComposerPlus}}" bindtap="closeSheets"></view>
+  <view
+    class="sheet-mask"
+    wx:if="{{showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu || showMemorySheet || showComposerPlus || showReminderSheet}}"
+    catchtap="closeSheets"
+    catchtouchmove="preventScrollPassThrough"
+  ></view>
 
   <xiaofu-conversation-sheet
     visible="{{showConversationSheet}}"

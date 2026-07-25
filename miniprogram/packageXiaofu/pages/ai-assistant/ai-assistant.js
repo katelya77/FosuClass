@@ -72,6 +72,28 @@ const MEMORY_MODE_LABELS = {
   cloud_sync: "已开启跨设备同步",
 };
 
+/** 任意记忆/提醒/设置/会话/能力面板打开时锁定 message-scroll，防滑动穿透 */
+const SHEET_MODAL_FLAGS = [
+  "showTaskPanel",
+  "showConversationSheet",
+  "showCapabilityGuide",
+  "showPrivacySheet",
+  "showHeaderMenu",
+  "showMemorySheet",
+  "showComposerPlus",
+  "showReminderSheet",
+];
+
+function computeModalOpen(source = {}) {
+  return SHEET_MODAL_FLAGS.some((key) => Boolean(source[key]));
+}
+
+function withModalOpen(patch, currentData = {}) {
+  const next = Object.assign({}, currentData, patch || {});
+  const modalOpen = computeModalOpen(next);
+  return Object.assign({}, patch || {}, { modalOpen });
+}
+
 function mapMemoryModeText(mode) {
   return xiaofuPresentation.mapMemoryStatusText(mode, "menu")
     || MEMORY_MODE_LABELS[String(mode || "local_only")]
@@ -1462,6 +1484,7 @@ Page({
     scrollWithAnimation: true,
     composerNote: "",
     showComposerPlus: false,
+    modalOpen: false,
     clickedSuggestions: [],
     previousSuggestionKey: "",
     voiceInputVisible: false,
@@ -3477,7 +3500,8 @@ Page({
   },
 
   closeSheets() {
-    this.setData({
+    // 关闭后恢复 scroll；modalOpen=false 重新开启 message-scroll 的 scroll-y
+    this.setData(withModalOpen({
       showTaskPanel: false,
       showCapabilityGuide: false,
       showPrivacySheet: false,
@@ -3487,7 +3511,18 @@ Page({
       showComposerPlus: false,
       showReminderSheet: false,
       privacyExpanded: false,
-    });
+    }, this.data));
+  },
+
+  preventScrollPassThrough() {
+    // catchtouchmove 空处理：阻止遮罩层下的 message-scroll 穿透滚动
+  },
+
+  /**
+   * 统一设置面板显隐并同步 modalOpen（任意 sheet 打开时锁定 message-scroll）。
+   */
+  setSheetState(patch) {
+    this.setData(withModalOpen(patch || {}, this.data));
   },
 
   applyPersonalContextAllowed(allowed) {
