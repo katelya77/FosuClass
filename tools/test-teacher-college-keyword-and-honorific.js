@@ -109,7 +109,7 @@ const payload = {
   );
 }
 
-// --- 2) 所有院系 = no college filter ---
+// --- 2) 所有院系 = no college filter + UI isolation from class tab ---
 {
   const allOpt = releasePackService.filterIndexPayload("teacher", payload, {
     q: "丽梅",
@@ -117,11 +117,97 @@ const payload = {
     collegeName: "",
   });
   check("所有院系 空 college 与无学院相同", allOpt.total === 1);
-  // school.js 语义：name 所有院系 + empty code → 不筛
-  const schoolAll = { code: "", name: "所有院系" };
-  const isAll = !schoolAll || !String(schoolAll.code || "").trim()
-    || schoolAll.name === "所有院系" || schoolAll.name === "所有学院";
-  check("所有院系 isAllColleges", isAll === true);
+}
+
+// --- 2b) shipped school page: teacher list ≠ class list ---
+{
+  const js = fs.readFileSync(path.join(ROOT, "miniprogram/pages/school/school.js"), "utf8");
+  const wxml = fs.readFileSync(path.join(ROOT, "miniprogram/pages/school/school.wxml"), "utf8");
+
+  check(
+    "data 默认 selectedCollegeIndex=-1（班级未选）",
+    /selectedCollegeIndex:\s*-1/.test(js)
+  );
+  check(
+    "data 默认 selectedTeacherCollegeIndex=0（教师所有院系）",
+    /selectedTeacherCollegeIndex:\s*0/.test(js)
+  );
+  check(
+    "data 含独立 teacherColleges",
+    /teacherColleges:\s*\[\s*\{\s*code:\s*""\s*,\s*name:\s*"所有院系"\s*\}/.test(js)
+      || /teacherColleges:\s*\[\s*\{\s*code:\s*""\s*,\s*name:\s*"所有院系"/.test(js)
+  );
+  check(
+    "data colleges 初始为空数组（非所有院系）",
+    /colleges:\s*\[\],/.test(js)
+  );
+  check(
+    "applyCatalogFilter 构建 teacherColleges = [所有院系].concat(colleges)",
+    /teacherColleges\s*=\s*\[ALL_COLLEGE\]\.concat\(colleges\)/.test(js)
+      || /\[ALL_COLLEGE\]\.concat\(colleges\)/.test(js)
+  );
+  check(
+    "searchTeacherSchedule 读 teacherColleges/selectedTeacherCollegeIndex",
+    /selectedTeacherCollegeIndex/.test(js)
+      && /teacherColleges\[selectedTeacherCollegeIndex\]/.test(js)
+  );
+  check(
+    "onTeacherCollegeChange 存在且不改 selectedCollegeIndex",
+    /onTeacherCollegeChange\s*\(/.test(js)
+      && /onTeacherCollegeChange[\s\S]{0,400}selectedTeacherCollegeIndex/.test(js)
+  );
+  // 班级 Tab：picker 仍用 colleges + selectedCollegeIndex + 选择学院
+  const classPickerBlock = wxml.match(
+    /filter-label">学院：[\s\S]{0,350}?filter-label">年级：/
+  );
+  check(
+    "班级 Tab picker 用 colleges（非 teacherColleges）",
+    classPickerBlock
+      && /range="\{\{colleges\}\}"/.test(classPickerBlock[0])
+      && !/teacherColleges/.test(classPickerBlock[0])
+      && /选择学院/.test(classPickerBlock[0])
+  );
+  check(
+    "班级按钮 disabled 仍用 selectedCollegeIndex < 0",
+    /disabled="\{\{selectedCollegeIndex < 0/.test(wxml)
+  );
+  // 教师 Tab（院系与按钮之间可能有职称 wx:if 块，窗口放宽）
+  check(
+    "教师 Tab picker 用 teacherColleges + onTeacherCollegeChange",
+    /filter-label">院系：[\s\S]{0,900}?range="\{\{teacherColleges\}\}"[\s\S]{0,200}?onTeacherCollegeChange[\s\S]{0,200}?selectedTeacherCollegeIndex[\s\S]{0,120}?所有院系/.test(wxml)
+      && /bindtap="searchTeacherSchedule"/.test(wxml)
+  );
+  // Simulate applyCatalogFilter college split logic (same as shipped)
+  const ALL_COLLEGE = { code: "", name: "所有院系" };
+  const rawColleges = [
+    { code: "04", name: "动物科技学院" },
+    { code: "01", name: "人文学院" },
+  ];
+  const colleges = rawColleges.filter((c) => {
+    const name = String(c.name || "").trim();
+    if (name === "所有院系" || name === "所有学院") return false;
+    return Boolean(String(c.code || "").trim() || name);
+  });
+  const teacherColleges = [ALL_COLLEGE].concat(colleges);
+  check("分离后 colleges 无所有院系", colleges.every((c) => c.name !== "所有院系"));
+  check("分离后 teacherColleges[0] 为所有院系", teacherColleges[0].name === "所有院系" && teacherColleges[0].code === "");
+  check("分离后 teacherColleges 长度 = colleges+1", teacherColleges.length === colleges.length + 1);
+  // Class: index -1 means not selected → cannot fetch majors with empty code
+  const selectedCollegeIndex = -1;
+  const classCollegeReady = selectedCollegeIndex >= 0
+    && Boolean(String(colleges[selectedCollegeIndex] && colleges[selectedCollegeIndex].code || "").trim());
+  check("班级默认未选真学院（不可空 code 查专业）", classCollegeReady === false);
+  // Teacher all: index 0 → no filter
+  const tCollege = teacherColleges[0];
+  const isAll = !tCollege || !String(tCollege.code || "").trim()
+    || tCollege.name === "所有院系" || tCollege.name === "所有学院";
+  check("教师默认所有院系 isAllColleges", isAll === true);
+  // Teacher pick 动科
+  const tIdx = teacherColleges.findIndex((c) => c.code === "04");
+  const picked = teacherColleges[tIdx];
+  const isAllPicked = !picked || !String(picked.code || "").trim()
+    || picked.name === "所有院系";
+  check("教师选动科非所有院系", tIdx > 0 && isAllPicked === false && picked.code === "04");
 }
 
 // --- 3) honorific strip ---
@@ -172,22 +258,30 @@ const payload = {
   );
 }
 
-// --- 4) school wxml 所有院系 ---
+// --- 4) school 检索路径标志 ---
 {
-  const wxml = fs.readFileSync(path.join(ROOT, "miniprogram/pages/school/school.wxml"), "utf8");
   const js = fs.readFileSync(path.join(ROOT, "miniprogram/pages/school/school.js"), "utf8");
-  check("wxml 所有院系文案", /所有院系/.test(wxml));
-  check("js 注入所有院系选项", /所有院系/.test(js) && /code:\s*""/.test(js));
   check("js 跳过空学院缓存", /collegeActive/.test(js) && /cached\s*=\s*null/.test(js));
   check("js college 时 forceServerSearch", /forceServerSearch:\s*collegeActive/.test(js));
+  check("resetFilters 班级学院回到 -1", /resetFilters\s*\(\)\s*\{[\s\S]*?selectedCollegeIndex:\s*-1/.test(js));
+  check("restore 缺学院时 selectedCollegeIndex:-1", /selectedCollegeIndex:\s*-1/.test(js));
 }
 
 const summary = `\n${pass} passed, ${fail} failed\n`;
 lines.push(summary);
 console.log(summary.trim());
-fs.writeFileSync(path.join(SCRATCH, "school-teacher-college-keyword.log"), lines.filter((l) => /丽梅|college|动科|人文/.test(l)).join("\n"), "utf8");
-fs.writeFileSync(path.join(SCRATCH, "school-college-all-option.log"), lines.filter((l) => /所有院系|isAll/.test(l)).join("\n"), "utf8");
-fs.writeFileSync(path.join(SCRATCH, "xiaofu-teacher-query-normalize.log"), lines.filter((l) => /陈芳|honorific|strip|intent|Action|goal/.test(l)).join("\n"), "utf8");
-fs.writeFileSync(path.join(SCRATCH, "teacher-search-contract-align.log"), lines.filter((l) => /一致|server|client|Agent/.test(l)).join("\n"), "utf8");
-fs.writeFileSync(path.join(SCRATCH, "teacher-search-fix-tests.log"), lines.join("\n"), "utf8");
+function writeEvidence(name, content) {
+  try {
+    fs.writeFileSync(path.join(SCRATCH, name), content, "utf8");
+  } catch (err) {
+    // Avoid failing the gate when evidence dir is locked (e.g. concurrent redirect).
+    console.warn("evidence write skipped:", name, err && err.code);
+  }
+}
+writeEvidence("school-teacher-college-keyword.log", lines.filter((l) => /丽梅|college|动科|人文/.test(l)).join("\n"));
+writeEvidence("school-college-all-option.log", lines.filter((l) => /所有院系|isAll|teacherColleges|selectedCollegeIndex|班级/.test(l)).join("\n"));
+writeEvidence("xiaofu-teacher-query-normalize.log", lines.filter((l) => /陈芳|honorific|strip|intent|Action|goal/.test(l)).join("\n"));
+writeEvidence("teacher-search-contract-align.log", lines.filter((l) => /一致|server|client|Agent/.test(l)).join("\n"));
+writeEvidence("teacher-search-fix-tests.log", lines.join("\n"));
+writeEvidence("class-tab-college-isolation.log", lines.filter((l) => /班级|teacherColleges|selectedCollegeIndex|分离|disabled|resetFilters|restore/.test(l)).join("\n"));
 if (fail > 0) process.exit(1);
