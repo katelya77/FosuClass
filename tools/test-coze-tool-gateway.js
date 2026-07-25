@@ -16,6 +16,12 @@ const ENV = {
 };
 const AUTH_HEADERS = { authorization: "Bearer test-gateway-token-123" };
 
+// 测试隔离：server/src/config.js 会经依赖链执行 dotenv 加载 server/.env，
+// 本机若已配置网关开关/Token 会污染 process.env，导致"未配置必须关闭"场景失真。
+// 这里在 require 之后清掉，后续所有启用场景一律通过显式 overrides (ENV) 传入。
+delete process.env.COZE_TOOL_GATEWAY_ENABLED;
+delete process.env.COZE_TOOL_GATEWAY_TOKEN;
+
 // ---------- 1. 默认关闭 ----------
 {
   assert.strictEqual(gateway.isGatewayEnabled({}), false, "未配置环境变量时必须关闭");

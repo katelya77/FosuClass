@@ -30,6 +30,11 @@ function emptyWorkingMemory() {
     lastRecommendation: null,
     pendingWriteOps: [],
     preferredName: "",
+    // 当前首页课表目标（仅在客户端 Action 执行成功且 Receipt 验证通过后提交）。
+    currentScheduleTarget: null,
+    // 类型化关系记忆（"我妈妈叫X"）：relation 为机器可读的稳定标识，
+    // displayRelation 为用户原始表述，name 为关系人称呼。
+    namedRelations: [],
     updatedAt: "",
   };
 }
@@ -109,6 +114,24 @@ function normalizeWorkingMemory(raw = {}) {
     }))
     : [];
   next.preferredName = safeText(raw.preferredName, 24);
+  next.currentScheduleTarget = raw.currentScheduleTarget && typeof raw.currentScheduleTarget === "object"
+    ? {
+      type: safeText(raw.currentScheduleTarget.type, 24),
+      detailId: safeText(raw.currentScheduleTarget.detailId, 128),
+      name: safeText(raw.currentScheduleTarget.name, 120),
+      term: safeText(raw.currentScheduleTarget.term, 40),
+    }
+    : null;
+  if (next.currentScheduleTarget && (!next.currentScheduleTarget.detailId || !next.currentScheduleTarget.name)) {
+    next.currentScheduleTarget = null;
+  }
+  next.namedRelations = Array.isArray(raw.namedRelations)
+    ? raw.namedRelations.slice(0, 8).map((item) => ({
+      relation: safeText(item && item.relation, 40),
+      displayRelation: safeText(item && item.displayRelation, 40),
+      name: safeText(item && item.name, 60),
+    })).filter((item) => item.relation && item.name)
+    : [];
   next.updatedAt = safeText(raw.updatedAt || "", 40);
   return next;
 }
@@ -193,6 +216,13 @@ function updateWorkingMemory(previous, input = {}) {
   if (weekday != null) next.confirmedEntities.weekday = String(weekday);
 
   if (input.preferredName) next.preferredName = safeText(input.preferredName, 24);
+  // 仅在显式给定（Receipt 提交 / 用户纠正）时更新；否则继承 prev。
+  if (input.currentScheduleTarget !== undefined) {
+    next.currentScheduleTarget = input.currentScheduleTarget;
+  }
+  if (Array.isArray(input.namedRelations)) {
+    next.namedRelations = input.namedRelations;
+  }
   if (input.pendingClarification !== undefined) {
     next.pendingClarification = input.pendingClarification;
   }
@@ -255,6 +285,10 @@ function summarizeWorkingMemory(working) {
   if (wm.weekday != null) parts.push(`周${wm.weekday}`);
   if (wm.periodHint) parts.push(wm.periodHint === "afternoon" ? "下午" : wm.periodHint);
   if (wm.preferredName) parts.push(`称呼 ${wm.preferredName}`);
+  if (wm.currentScheduleTarget && wm.currentScheduleTarget.name) parts.push(`当前课表 ${wm.currentScheduleTarget.name}`);
+  if (wm.namedRelations.length) {
+    parts.push(`关系 ${wm.namedRelations.map((r) => `${r.displayRelation || r.relation}=${r.name}`).join("，")}`);
+  }
   if (wm.executedTools.length) parts.push(`已用工具 ${wm.executedTools.slice(-4).join("/")}`);
   return parts.join("；").slice(0, 200);
 }

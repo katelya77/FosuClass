@@ -20,6 +20,8 @@ const { defaultCourseReminderService } = require("./reminders/courseReminderServ
 const { resolvePrincipal } = require("./conversation/conversationPrincipalService");
 const { defaultUserPreferenceService } = require("./conversation/userPreferenceService");
 const scheduleAnalysisService = require("./scheduleAnalysisService");
+const goalParser = require("./planner/goalParser");
+const classAliasResolver = require("./classAliasResolver");
 
 const MAX_SECTION = 14;
 const termRegistryService = require("../termRegistryService");
@@ -169,7 +171,10 @@ function inferSearchType(message) {
   if (/班级|行政班|专业|\d\s*[\u3400-\u9fff]{0,8}班|[\u3400-\u9fff]+\d+\s*班/.test(text) || (/班/.test(text) && !/老师|教师|教室/.test(text))) {
     return "class";
   }
-  return "teacher";
+  // “24动医1的课表”：年级+专业简称+班号（无“班”字）也识别为班级课表
+  if (/课表/.test(text) && /\d{2,4}\s*[\u3400-\u9fff]{1,8}\s*\d{1,2}\s*班?/.test(text)) return "class";
+  // 无法识别不默认 teacher，返回空串走 clarify
+  return "";
 }
 
 function stripIntentWords(message) {
@@ -193,10 +198,13 @@ function getMissingSlot(type) {
     class: { missing: "className", type: "class", prompt: "你想查哪个班级或专业？" },
     scheduleContext: { missing: "scheduleContext", type: "schedule", prompt: "需要先提供课表摘要，才能推荐共同空闲时间。" },
   };
-  return map[type] || map.teacher;
+  // 类型无法识别时不再默认 teacher，而是澄清查询类型
+  return map[type] || { missing: "searchType", type: "", prompt: "你想查老师、教室、课程，还是班级课表？" };
 }
 
 function needsClarification(type, q) {
+  // 类型无法识别时必须澄清，禁止落入默认 teacher 搜索
+  if (!type) return true;
   const keyword = normalizeText(q).replace(/\s+/g, "");
   if (!keyword) return true;
   if (type === "teacher") return keyword.length < 2;
@@ -277,7 +285,10 @@ function inferSearchTypeChinese(message) {
   if (/班级|行政班|专业|\d\s*[\u3400-\u9fff]{0,8}班|[\u3400-\u9fff]+\d+\s*班/.test(text) || (/班/.test(text) && !/老师|教师|教室/.test(text))) {
     return "class";
   }
-  return "teacher";
+  // “24动医1的课表”：年级+专业简称+班号（无“班”字）也识别为班级课表
+  if (/课表/.test(text) && /\d{2,4}\s*[\u3400-\u9fff]{1,8}\s*\d{1,2}\s*班?/.test(text)) return "class";
+  // 无法识别时不再默认 teacher：返回空串，让上层走 clarify（避免把操作类/模糊查询误路由成教师搜索）
+  return "";
 }
 
 function stripChineseIntentWords(message) {
@@ -346,6 +357,89 @@ function resolveIntentChinese(message, context = {}) {
     return { name: "search_school_index", slots: { type, q } };
   }
   return null;
+}
+
+/**
+ * set_current_schedule 目标构建：
+ * - 显式实体（“24动医1”）→ 全校班级索引 + 别名字典解析
+ * - 指代（“把刚刚查到的班级设为我的课表”）→ workingMemory/contextSlots 的 lastTarget
+ * - 唯一匹配 → set_current_schedule intent（slots 带 detailId/name/term/releaseVersion）
+ * - 多候选 → clarify_missing_slot 带候选列表，禁止静默猜测
+ * - 零匹配 → clarify_missing_slot 提示换说法
+ */
+function buildSetCurrentScheduleIntent(goal, context = {}) {
+  let entity = normalizeText(goal.entity || "");
+  if (!entity && goal.deictic) {
+    const wm = (context && context.workingMemory) || {};
+    const slots = (context && (context.contextSlots || context.slots)) || {};
+    const lastType = wm.lastTargetType || slots.lastTargetType || "";
+    const lastName = wm.lastTargetName || slots.lastTargetName || "";
+    if (lastType === "class" && lastName) entity = lastName;
+  }
+  if (!entity) {
+    return {
+      name: "clarify_missing_slot",
+      slots: {
+        slot: { missing: "className", type: "class", prompt: "想把哪个班级设为首页课表？告诉我班级名称，比如 24动医1。" },
+        type: "class",
+        q: "",
+        goalAction: "set_current_schedule",
+      },
+    };
+  }
+  if (goal.entityType && goal.entityType !== "class") {
+    return {
+      name: "clarify_missing_slot",
+      slots: {
+        slot: { missing: "className", type: "class", prompt: "目前只支持把班级课表设为首页。想设置哪个班级？" },
+        type: "class",
+        q: "",
+        goalAction: "set_current_schedule",
+      },
+    };
+  }
+  const index = releaseService.readActiveIndex("class") || {};
+  const items = Array.isArray(index.items) ? index.items : (Array.isArray(index) ? index : []);
+  const resolution = classAliasResolver.resolveClass(entity, items);
+  if (resolution.status === "unique" && resolution.match) {
+    const m = resolution.match;
+    return {
+      name: "set_current_schedule",
+      slots: {
+        detailId: String(m.id || m.detailId || ""),
+        name: String(m.name || m.className || entity),
+        term: m.semester || context.term || "",
+        releaseVersion: m.releaseVersion || context.releaseVersion || "",
+        explicitCommand: goal.explicitCommand === true,
+      },
+    };
+  }
+  if (resolution.status === "ambiguous") {
+    const candidates = (resolution.candidates || []).slice(0, 5).map((c) => ({
+      detailId: String(c.id || c.detailId || ""),
+      name: String(c.name || c.className || ""),
+      term: c.semester || "",
+    }));
+    return {
+      name: "clarify_missing_slot",
+      slots: {
+        slot: { missing: "className", type: "class", prompt: "找到多个候选班级，你想设置哪一个？" },
+        type: "class",
+        q: entity,
+        goalAction: "set_current_schedule",
+        candidates,
+      },
+    };
+  }
+  return {
+    name: "clarify_missing_slot",
+    slots: {
+      slot: { missing: "className", type: "class", prompt: `没有找到「${entity}」对应的班级。可以说完整班级名，比如 24动物医学1班。` },
+      type: "class",
+      q: entity,
+      goalAction: "set_current_schedule",
+    },
+  };
 }
 
 function isProjectQaMessage(text) {
@@ -659,6 +753,12 @@ function resolveIntent(message, context = {}) {
   }
   const modernIntent = resolveModernChineseIntent(text, context);
   if (modernIntent) return modernIntent;
+  // Goal-first：操作类意图优先于查询类——“将24动医1的课表设为当前首页课表”
+  // 必须解析成 set_current_schedule，而不是落入全校查询兜底（断点1修复）
+  const goal = goalParser.parseGoal(text, context);
+  if (goal && goal.goal === "set_current_schedule") {
+    return buildSetCurrentScheduleIntent(goal, context);
+  }
   const pendingIntent = resolvePendingClarificationIntent(text, context);
   if (pendingIntent) return pendingIntent;
   // Multi-turn slot refinements before generic conversational fallback.
@@ -1488,7 +1588,40 @@ const TOOL_HANDLERS = Object.freeze({
   update_user_preference: updateUserPreference,
   rag_search: ragSearch,
   generate_image: generateImage,
+  set_current_schedule: setCurrentSchedule,
 });
+
+/**
+ * set_current_schedule：服务端不执行写入——校验目标真实存在于当前索引后，
+ * 返回 actionRequired=setCurrentSchedule 与目标描述，由客户端 Action 执行器
+ * 完成真实切换并回传 Receipt（无 success Receipt 不得声称成功）。
+ */
+function setCurrentSchedule(input = {}, context = {}) {
+  const detailId = normalizeText(input.detailId || "");
+  const name = normalizeText(input.name || "");
+  if (!detailId || !name) {
+    return { success: false, code: "SCHEDULE_TARGET_MISSING", summary: "缺少课表目标信息" };
+  }
+  const index = releaseService.readActiveIndex("class") || {};
+  const items = Array.isArray(index.items) ? index.items : (Array.isArray(index) ? index : []);
+  const found = items.find((item) => String(item.id || item.detailId || "") === detailId);
+  if (!found) {
+    return { success: false, code: "SCHEDULE_TARGET_NOT_FOUND", summary: "目标班级不在当前课表索引中" };
+  }
+  return {
+    success: true,
+    actionRequired: "setCurrentSchedule",
+    explicitCommand: input.explicitCommand === true,
+    target: {
+      type: "class",
+      detailId,
+      name: String(found.name || found.className || name),
+      term: found.semester || input.term || context.term || "",
+      releaseVersion: index.releaseVersion || input.releaseVersion || context.releaseVersion || "",
+    },
+    summary: `已确认目标班级：${found.name || found.className || name}`,
+  };
+}
 
 function listToolNames() {
   return Object.keys(TOOL_HANDLERS);
@@ -1552,6 +1685,7 @@ function getToolSummary(name, result) {
   if (name === "navigate_miniprogram_page") return result.summary || "已校验页面入口";
   if (name === "explain_personal_import") return "已返回导入指引";
   if (name === "clarify_missing_slot") return "缺少必要关键词";
+  if (name === "set_current_schedule") return result.summary || "已确认课表目标";
   return "工具调用完成";
 }
 
@@ -1799,4 +1933,7 @@ module.exports = {
   runToolChainForIntent,
   runToolChainForIntentAsync,
   runToolsForIntent,
+  goalParser,
+  classAliasResolver,
+  buildSetCurrentScheduleIntent,
 };

@@ -10,6 +10,8 @@ const { buildSafeLogPayload, sanitizeAgentContext } = require("../services/ai/sa
 const capabilityManifestService = require("../services/ai/capabilityManifestService");
 const runtimeModeService = require("../services/ai/runtimeModeService");
 const { defaultMemoryService } = require("../services/ai/conversation/conversationMemoryService");
+const { defaultMemoryController } = require("../services/ai/memory/memoryController");
+const releaseService = require("../services/releaseService");
 const { defaultUserPreferenceService } = require("../services/ai/conversation/userPreferenceService");
 const { defaultCourseReminderService, sanitizePatch: sanitizeReminderPatch } = require("../services/ai/reminders/courseReminderService");
 const { planCourseReminder, clampLead, sanitizeCourseTemplate } = require("../services/ai/reminders/courseReminderPlanner");
@@ -240,6 +242,103 @@ router.post("/agent/chat", scheduleLimiter, optionalSessionGuard, validateJsonBo
         appid: req.fosuSession.appid || "",
       } : null,
     }, error));
+  }
+});
+
+/**
+ * 客户端 Action 执行回执（Receipt）。
+ * 闭环约定：Action 在客户端真实执行后回报结果；仅当服务端验证通过
+ * （command 合法 + status=success + appliedTarget 仍存在于当前激活索引）
+ * 才提交工作记忆（cloud_sync 持久化）。失败回执仅记录，不提交记忆。
+ */
+router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, validateJsonBody(["command", "runId", "conversationId", "status", "appliedTarget", "errorCode", "memoryMode", "cloudSyncEnabled"]), (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const body = req.body || {};
+    const command = String(body.command || "").slice(0, 40);
+    const status = String(body.status || "").slice(0, 24);
+    if (command !== "setCurrentSchedule") {
+      return res.status(400).json({
+        success: false,
+        code: "COMMAND_UNKNOWN",
+        message: "未知的 Action 回执类型。",
+        serverTime: new Date().toISOString(),
+      });
+    }
+    if (status !== "success") {
+      safeLog("ai-agent-action-receipt-failed", buildSafeLogPayload({
+        provider: "action-receipt",
+        toolCalls: [{ name: command, status: "failed", summary: String(body.errorCode || "").slice(0, 60) }],
+      }));
+      return res.json({
+        success: true,
+        committed: false,
+        reason: "ACTION_FAILED",
+        serverTime: new Date().toISOString(),
+      });
+    }
+    const appliedTarget = body.appliedTarget && typeof body.appliedTarget === "object" ? body.appliedTarget : {};
+    const detailId = String(appliedTarget.detailId || "").slice(0, 128);
+    const name = String(appliedTarget.name || "").slice(0, 120);
+    if (!detailId || !name) {
+      return res.status(400).json({
+        success: false,
+        code: "TARGET_MISSING",
+        message: "回执缺少已应用目标标识。",
+        serverTime: new Date().toISOString(),
+      });
+    }
+    // 目标必须仍存在于当前激活课表索引（防伪造回执/防过期数据）。
+    const index = releaseService.readActiveIndex("class") || {};
+    const items = Array.isArray(index.items) ? index.items : (Array.isArray(index) ? index : []);
+    const found = items.find((item) => String(item.id || item.detailId || "") === detailId);
+    if (!found) {
+      return res.status(409).json({
+        success: false,
+        code: "SCHEDULE_TARGET_NOT_FOUND",
+        message: "目标课表已不在当前版本中。",
+        serverTime: new Date().toISOString(),
+      });
+    }
+    const principal = defaultMemoryService.resolvePrincipal({
+      serverSession: req.fosuSession,
+      runtimeMode: resolveMemoryRuntimeMode(req),
+    });
+    const memoryMode = String(body.memoryMode || "").slice(0, 24) === "cloud_sync" ? "cloud_sync" : "local_only";
+    const conversationId = String(body.conversationId || "").slice(0, 100);
+    const bundle = defaultMemoryService.loadForChat({
+      principal,
+      conversationId,
+      memoryMode,
+      context: {},
+    });
+    const commitResult = defaultMemoryController.commitActionReceipt({
+      principal,
+      state: bundle && bundle.state,
+      conversationId,
+      memoryMode,
+      runId: String(body.runId || "").slice(0, 100),
+      appliedTarget: {
+        type: "class",
+        detailId,
+        name: String(found.name || found.className || name).slice(0, 120),
+        term: String(appliedTarget.term || "").slice(0, 40),
+      },
+    });
+    safeLog("ai-agent-action-receipt", buildSafeLogPayload({
+      provider: "action-receipt",
+      toolCalls: [{ name: command, status: "success", summary: commitResult.committed ? "committed" : (commitResult.reason || "skipped") }],
+      memoryMode,
+    }));
+    return res.json({
+      success: true,
+      committed: commitResult.committed === true,
+      reason: commitResult.reason || "",
+      memory: commitResult.memory || null,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    return handleMemoryError(res, error);
   }
 });
 

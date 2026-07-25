@@ -31,7 +31,11 @@ const EXPECTED_ACTIONS = [
   "requestSubscribe", "confirmWrite", "copy", "retry",
 ];
 const AUTO_ACTIONS = ["navigate", "openSheet", "fillComposer", "fillForm", "copy", "retry"];
-const CONFIRM_ACTIONS = ["requestSubscribe", "confirmWrite"];
+const CONFIRM_ACTIONS = [
+  "confirmWrite", "requestSubscribe", "importStudentSchedule", "resyncStudentSchedule",
+  "saveCustomCourse", "deleteCustomCourse", "saveStudentArrangement", "clearLocalCache",
+  "resetToNewUser", "submitFeedback", "createCourseReminder", "deleteReminder", "clearAgentMemory",
+];
 
 EXPECTED_ACTIONS.forEach((id) => {
   const action = manifest.actions[id];
@@ -58,7 +62,16 @@ Object.keys(manifest.actions).forEach((id) => {
   if (action.operation !== "read") {
     assert.notStrictEqual(action.confirmation, "none", `write action ${id} must never be auto-executable`);
   }
-  assert.ok(["none", "required", "double"].includes(action.confirmation), `${id} confirmation must be none|required|double`);
+  assert.ok(["none", "required", "double", "explicit_user_command"].includes(action.confirmation), `${id} confirmation must be none|required|double|explicit_user_command`);
+});
+
+// explicit_user_command（指令即确认）模式：仅允许写操作 + 白名单目标策略 + 真实回执，三者缺一不可
+Object.keys(manifest.actions).forEach((id) => {
+  const action = manifest.actions[id];
+  if (action.confirmation !== "explicit_user_command") return;
+  assert.strictEqual(action.operation, "write", `${id} explicit_user_command only allowed on write actions`);
+  assert.ok(action.targetPolicy && /whitelist/.test(action.targetPolicy), `${id} explicit_user_command requires a whitelist targetPolicy`);
+  assert.strictEqual(action.receiptRequired, true, `${id} explicit_user_command requires receiptRequired=true`);
 });
 
 // 模型不得生成任意 URL：navigate 必须有页面白名单策略，且 url 禁止出现协议头
@@ -169,7 +182,7 @@ const matrix = JSON.parse(
 );
 assert.strictEqual(matrix.counts.tools, manifestToolIds.length);
 assert.strictEqual(matrix.counts.intents, Object.keys(manifest.intents).length);
-assert.strictEqual(matrix.counts.actions, EXPECTED_ACTIONS.length);
+assert.strictEqual(matrix.counts.actions, Object.keys(manifest.actions).length);
 assert.strictEqual(matrix.schemaVersion, manifest.schemaVersion);
 
 console.log("test-capability-contract passed");

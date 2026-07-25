@@ -746,6 +746,42 @@ function sanitizePublicPlan(plan) {
   }).filter((step) => step.toolName);
 }
 
+// 从工具结果确定性派生 Action Command（模型不参与生成）。
+// 当前仅支持 set_current_schedule → setCurrentSchedule：仅当用户消息明确携带
+// 操作动词（explicitCommand=true，由 goal-first 路由标记）且服务端索引校验通过时
+// 生成；客户端执行后必须回传 Receipt（POST /agent/action-receipts），
+// 无 success Receipt 不得声称设置成功。载荷只携带 type/detailId/name/term/
+// releaseVersion，不传整份 courses。
+function deriveActionCommands(toolCalls = []) {
+  const derived = [];
+  (Array.isArray(toolCalls) ? toolCalls : []).forEach((call) => {
+    if (!call || call.name !== "set_current_schedule" || call.status !== "success") return;
+    const result = call.result && typeof call.result === "object" ? call.result : call;
+    if (result.actionRequired !== "setCurrentSchedule" || result.explicitCommand !== true) return;
+    const target = result.target && typeof result.target === "object" ? result.target : {};
+    if (!target.detailId || !target.name) return;
+    const safeName = String(target.name).slice(0, 120);
+    derived.push({
+      command: "setCurrentSchedule",
+      label: "设为首页课表",
+      input: {
+        type: "class",
+        detailId: String(target.detailId).slice(0, 128),
+        name: safeName,
+        term: String(target.term || "").slice(0, 40),
+        releaseVersion: String(target.releaseVersion || "").slice(0, 40),
+      },
+      confirmationRequest: {
+        title: "设置首页课表",
+        summary: `将首页课表切换为「${safeName.slice(0, 60)}」${target.term ? `（${String(target.term).slice(0, 40)}）` : ""}？`,
+        confirmText: "确认设置",
+        cancelText: "取消",
+      },
+    });
+  });
+  return derived.slice(0, 1);
+}
+
 function sanitizePublicResponse(response) {
   const evidence = buildPublicEvidence(response.evidence);
   const sourceSafety = response.safety || {};
@@ -957,6 +993,9 @@ function buildResponse(payload) {
     evidence,
     evidenceItems: envelope.evidenceItems,
     suggestions: payload.suggestions,
+    // Action Command Bus：由服务端按工具结果确定性派生（见 deriveActionCommands），
+    // 仅引用 manifest.actions 中的 command，写操作由客户端执行后回传 Receipt。
+    actions: Array.isArray(payload.actions) ? payload.actions : [],
     // Presentation protocol (Response Composer) — required for mini-program one-focus UI
     presentationMode: payload.presentationMode || "",
     presentation: payload.presentation || null,
@@ -1856,6 +1895,7 @@ async function chat(input = {}) {
     skill: execution.skill,
     steps: execution.steps,
     observations: execution.observations,
+    actions: deriveActionCommands(toolCalls),
     context,
     provider: providerName,
     desiredProvider: desiredProviderName,

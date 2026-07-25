@@ -766,6 +766,50 @@ const TOOL_SCHEMAS = Object.freeze({
       "idempotent": false,
       "timeoutMs": 8000
     }
+  },
+  "set_current_schedule": {
+    "name": "set_current_schedule",
+    "description": "set_current_schedule",
+    "parameters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "detailId",
+        "name"
+      ],
+      "properties": {
+        "detailId": {
+          "type": "string",
+          "minLength": 8,
+          "maxLength": 80
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "term": {
+          "type": "string",
+          "maxLength": 20
+        },
+        "releaseVersion": {
+          "type": "string",
+          "maxLength": 40
+        }
+      }
+    },
+    "x-fosu-safety": {
+      "operation": "write",
+      "confirmation": "explicit_user_command",
+      "safetyLevel": "medium",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "idempotent": true,
+      "timeoutMs": 3000
+    }
   }
 });
 
