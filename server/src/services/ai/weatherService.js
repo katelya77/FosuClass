@@ -69,6 +69,15 @@ function resolveCampus(input = {}) {
 }
 
 function resolveTargetDay(input = {}) {
+  // Explicit numeric offset from GoalContract / follow-up inheritance wins.
+  const explicitOffset = Number(input.dateOffset != null ? input.dateOffset : input.dayOffset);
+  if ((input.dateOffset != null || input.dayOffset != null) && Number.isFinite(explicitOffset)) {
+    if (explicitOffset === 2) return { dateHint: "day_after_tomorrow", dayOffset: 2, label: "后天" };
+    if (explicitOffset === 1) return { dateHint: "tomorrow", dayOffset: 1, label: "明天" };
+    if (explicitOffset === 0) return { dateHint: "today", dayOffset: 0, label: "今天" };
+    if (explicitOffset === 3) return { dateHint: "in_3_days", dayOffset: 3, label: "大后天" };
+    return { dateHint: `offset_${explicitOffset}`, dayOffset: explicitOffset, label: `${explicitOffset}天后` };
+  }
   const text = fullWidthToHalfWidth(`${input.dateHint || ""} ${input.message || ""}`).trim().toLowerCase();
   if (/day_after_tomorrow|后天/.test(text)) return { dateHint: "day_after_tomorrow", dayOffset: 2, label: "后天" };
   if (/tomorrow|明天|明日/.test(text)) return { dateHint: "tomorrow", dayOffset: 1, label: "明天" };

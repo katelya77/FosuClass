@@ -77,8 +77,16 @@ async function run() {
   assert(js.includes("录音时间太短"), "short recording message missing");
   assert(js.includes("识别完成"), "recognition completion state missing");
   assert(js.includes("识别失败"), "recognition failure state missing");
-  assert(js.includes("wx.openSetting"), "permission denial must offer settings");
+  assert(
+    js.includes("wx.openSetting")
+      || js.includes("openSettingAndResume")
+      || js.includes("openSettingSuggested"),
+    "permission denial must offer settings"
+  );
+  assert(js.includes("voiceAuthStateMachine") || js.includes("ensureVoiceReady"), "voice privacy→record state machine must be wired");
   assert(wxss.includes(".voice-btn"), "voice control must be styled");
+  assert(!wxml.includes(">麦<"), "voice button must not show text 麦");
+  assert(wxml.includes("composer-pill") || wxml.includes("composer-icon"), "composer must be unified pill");
 
   assert.strictEqual(voiceService.isVoiceInputAvailable({ AI_VOICE_INPUT_ENABLED: false }, makeWxMock()), false);
   const config = {

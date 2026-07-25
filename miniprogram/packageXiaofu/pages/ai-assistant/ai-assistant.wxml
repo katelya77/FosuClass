@@ -16,18 +16,22 @@
     </view>
   </view>
 
-  <view
-    class="agent-status-capsule {{agentActivityState}} {{statusCapsuleExpanded ? 'expanded' : ''}}"
-    bindtap="toggleStatusCapsule"
-    role="button"
-    aria-label="{{statusCapsuleText}}"
-  >
-    <view class="agent-status-dot" aria-hidden="true"></view>
-    <view class="agent-status-copy">
-      <view class="agent-status-text">{{statusCapsuleText}}</view>
-      <view class="agent-status-detail" wx:if="{{statusCapsuleExpanded}}">{{statusCapsuleDetail}}</view>
+  <!-- Full-width wrapper centers the status island; capsule width is content-adaptive when idle. -->
+  <view class="agent-status-island-wrap" id="agent-status-island-wrap">
+    <view
+      id="agent-status-capsule"
+      class="agent-status-capsule {{agentActivityState}} {{statusCapsuleExpanded ? 'expanded' : ''}}"
+      bindtap="toggleStatusCapsule"
+      role="button"
+      aria-label="{{statusCapsuleText}}"
+    >
+      <view class="agent-status-dot" aria-hidden="true"></view>
+      <view class="agent-status-copy">
+        <view class="agent-status-text">{{statusCapsuleText}}</view>
+        <view class="agent-status-detail" wx:if="{{statusCapsuleExpanded}}">{{statusCapsuleDetail}}</view>
+      </view>
+      <view class="agent-status-chevron" aria-hidden="true">{{statusCapsuleExpanded ? '−' : '+'}}</view>
     </view>
-    <view class="agent-status-chevron" aria-hidden="true">{{statusCapsuleExpanded ? '−' : '+'}}</view>
   </view>
 
   <view
@@ -423,10 +427,12 @@
     </view>
   </view>
 
-  <!-- Single-layer composer: no newline btn, no permanent summary note -->
-  <view class="composer">
-    <view class="composer-inner">
-      <button class="composer-plus-btn" bindtap="openComposerPlus" disabled="{{sending}}" aria-label="快捷操作">＋</button>
+  <!-- Unified floating pill composer: [+] [input] [mic/stop] [send]; safe-area only on outer shell -->
+  <view class="composer" id="composer-shell">
+    <view class="composer-pill" id="composer-pill">
+      <button class="composer-icon-btn composer-plus-btn" bindtap="openComposerPlus" disabled="{{sending}}" aria-label="快捷操作">
+        <image class="composer-icon" src="/assets/icons/composer/plus.svg" mode="aspectFit" aria-hidden="true" />
+      </button>
       <view class="composer-input-wrap">
         <view wx:if="{{!inputValue}}" class="composer-custom-placeholder">告诉小佛你想完成什么…</view>
         <textarea
@@ -435,8 +441,8 @@
           placeholder=""
           auto-height="{{true}}"
           maxlength="600"
-          fixed="{{true}}"
-          cursor-spacing="16"
+          fixed="{{false}}"
+          cursor-spacing="12"
           focus="{{inputFocus}}"
           confirm-type="send"
           confirm-hold="{{false}}"
@@ -451,18 +457,32 @@
       </view>
       <button
         wx:if="{{voiceInputVisible && !sending}}"
-        class="voice-btn {{voiceRecording ? 'recording' : ''}} {{voiceRecognizing ? 'disabled' : ''}}"
+        class="composer-icon-btn voice-btn {{voiceRecording ? 'recording' : ''}} {{voiceRecognizing ? 'disabled' : ''}}"
         bindtap="onVoiceTap"
         disabled="{{voiceRecognizing}}"
-        aria-label="语音输入"
-      >麦</button>
+        aria-label="{{voiceRecording ? '停止录音' : '语音输入'}}"
+      >
+        <image
+          class="composer-icon"
+          src="{{voiceRecording ? '/assets/icons/composer/stop-wave.svg' : '/assets/icons/composer/microphone.svg'}}"
+          mode="aspectFit"
+          aria-hidden="true"
+        />
+      </button>
       <button
-        class="send-btn icon-send {{!sending && !inputValue ? 'disabled' : ''}} {{sending ? 'cancel' : ''}}"
+        class="composer-icon-btn send-btn icon-send {{!sending && !inputValue ? 'disabled' : ''}} {{sending ? 'cancel' : ''}}"
         bindtap="onSubmit"
         disabled="{{!sending && !inputValue}}"
         aria-label="{{sending ? '停止' : '发送'}}"
       >
-        {{sending ? "■" : "↑"}}
+        <image
+          wx:if="{{!sending}}"
+          class="composer-icon composer-icon-send"
+          src="/assets/icons/composer/send.svg"
+          mode="aspectFit"
+          aria-hidden="true"
+        />
+        <view wx:else class="composer-stop-mark" aria-hidden="true"></view>
       </button>
     </view>
     <view wx:if="{{voiceStatusText}}" class="voice-status">{{voiceStatusText}}</view>
