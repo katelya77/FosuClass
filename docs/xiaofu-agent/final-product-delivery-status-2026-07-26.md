@@ -1,17 +1,14 @@
 ﻿# Final delivery status — 小佛助手最终可交付收敛
 
 Date: 2026-07-26
-main: db167cac (+ trial upload evidence)
+main: 07c33a8d+
+trial: 1.0.0-trial-20260725
 
 ## 代码完成
-**完成** — PR #34 合并；Teacher Schema v3 / 课表直开 / UI 几何 / 麦克风 reasonCode / keyboard inset
+**完成**
 
 ## Release Pack 发布
-**完成**
-- job `release-pack-rebuild-1785007757034-0x1b0v` success
-- manifest.teacherIndexSchemaVersion=3
-- static teachers: 1133 with collegeCodes/normalizedName
-- 陈芳: 全校1 / 动物科技学院1 / 人文学院0
+**完成** (teacherIndexSchemaVersion=3; 陈芳 动科/人文/全校)
 
 ## CI
 **完成**
@@ -20,19 +17,16 @@ main: db167cac (+ trial upload evidence)
 **完成**
 
 ## CloudBase 部署
-**完成（函数）** — aiVoiceTranscribe 已部署（≠ ASR 成功）
+**完成（函数）** — aiVoiceTranscribe 已部署；≠ ASR 真音频成功
 
 ## 体验版上传
-**完成**
-- appid wx450dc86653f5907b
-- version **1.0.0-trial-20260725**
-- uploadedAt 2026-07-25T19:32:56.329Z
-- formal review: **未提交**
-- full package ~1.72MB
+**完成** — version 1.0.0-trial-20260725；正式审核未提交
 
 ## 真机验证
-**未完成（需手机体验版）** — 代码与体验版已上传；需在手机打开体验版核对：
-状态岛收展 / 滚底间距 / 胶囊居中 / 陈芳三组 / 打开教师课表 / 麦克风授权
+**部分完成**
+- 自动化门禁 23/23 PASS（生产 API + 源码几何/导航/语音 reasonCode）
+- DevTools CLI 服务端口未开启，无法在本机模拟器自动截图
+- 手机体验版 UI/麦 交互仍需人工点验（清单见 device-evidence）
 
 ## ASR 真音频
-**未完成（需手机）** — 云函数已部署；需真机：录音→aiVoiceTranscribe→填框不发送
+**未完成** — 需体验版真机录音链路
