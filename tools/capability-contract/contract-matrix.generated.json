@@ -2,10 +2,10 @@
   "schemaVersion": "agent-capabilities.v1",
   "note": "Generated from server/config/agent-capability-manifest.json. Do not edit by hand.",
   "counts": {
-    "intents": 31,
-    "skills": 24,
-    "tools": 31,
-    "actions": 8
+    "intents": 32,
+    "skills": 25,
+    "tools": 32,
+    "actions": 21
   },
   "intents": [
     "clarify_missing_slot",
@@ -38,7 +38,8 @@
     "project_qa",
     "conversational_help",
     "generate_image",
-    "campus_multi_step_advice"
+    "campus_multi_step_advice",
+    "set_current_schedule"
   ],
   "skills": [
     "today_schedule",
@@ -64,7 +65,8 @@
     "personal_memory",
     "knowledge_search",
     "clarify_query",
-    "image_generation"
+    "image_generation",
+    "schedule_target_action"
   ],
   "tools": [
     {
@@ -437,6 +439,18 @@
         "dev"
       ],
       "hasInputSchema": false
+    },
+    {
+      "id": "set_current_schedule",
+      "operation": "write",
+      "confirmation": "explicit_user_command",
+      "safetyLevel": "medium",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ],
+      "hasInputSchema": true
     }
   ],
   "actions": [
@@ -530,6 +544,162 @@
       "confirmation": "none",
       "safetyLevel": "medium",
       "targetPolicy": "retryable_task_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "setCurrentSchedule",
+      "operation": "write",
+      "confirmation": "explicit_user_command",
+      "safetyLevel": "medium",
+      "targetPolicy": "schedule_target_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "importStudentSchedule",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "high",
+      "targetPolicy": "personal_import_session",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "resyncStudentSchedule",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "medium",
+      "targetPolicy": "personal_import_session",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "saveCustomCourse",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "medium",
+      "targetPolicy": "custom_course_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "deleteCustomCourse",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "medium",
+      "targetPolicy": "custom_course_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "saveStudentArrangement",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "medium",
+      "targetPolicy": "personal_arrangement_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "clearLocalCache",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "medium",
+      "targetPolicy": "cache_scope_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "resetToNewUser",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "high",
+      "targetPolicy": "local_data_reset",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "submitFeedback",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "low",
+      "targetPolicy": "feedback_channel",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "refreshBootstrapData",
+      "operation": "read",
+      "confirmation": "none",
+      "safetyLevel": "low",
+      "targetPolicy": "bootstrap_refresh",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "createCourseReminder",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "medium",
+      "targetPolicy": "reminder_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "deleteReminder",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "medium",
+      "targetPolicy": "reminder_whitelist",
+      "runtimeModes": [
+        "public",
+        "trial",
+        "dev"
+      ]
+    },
+    {
+      "id": "clearAgentMemory",
+      "operation": "write",
+      "confirmation": "required",
+      "safetyLevel": "high",
+      "targetPolicy": "agent_memory_scope",
       "runtimeModes": [
         "public",
         "trial",

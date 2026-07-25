@@ -128,7 +128,10 @@ function createActionBus(options = {}) {
     if (!inputCheck.ok) return reject(id, inputCheck.reason);
 
     const confirmation = definition.confirmation || "none";
-    if (confirmation !== "none" && execOptions.confirmed !== true) {
+    // explicit_user_command：用户消息本身就是确认（服务端仅在检测到明确操作动词
+    // 且目标唯一匹配时才生成该 action），端上不再弹确认卡，直接执行。
+    const instructionIsConfirmation = confirmation === "explicit_user_command";
+    if (confirmation !== "none" && !instructionIsConfirmation && execOptions.confirmed !== true) {
       // 写操作未确认：绝不执行，返回确认请求交给 UI 弹卡。
       return {
         executed: false,
@@ -186,6 +189,13 @@ function createActionBus(options = {}) {
         if (typeof context.confirmWrite !== "function") return reject(id, "CONTEXT_HANDLER_MISSING");
         context.confirmWrite(input, source.confirmationRequest || null);
         return done(id, "confirmWrite");
+      }
+      case "setCurrentSchedule": {
+        // 到达此处说明用户指令即确认（explicit_user_command）：由页面层复用
+        // currentScheduleService 完成真实切换，成功后回传 Receipt。
+        if (typeof context.setCurrentSchedule !== "function") return reject(id, "CONTEXT_HANDLER_MISSING");
+        context.setCurrentSchedule(input, source.confirmationRequest || null);
+        return done(id, "setCurrentSchedule");
       }
       case "copy": {
         if (!wxApi || typeof wxApi.setClipboardData !== "function") return reject(id, "WX_UNAVAILABLE");

@@ -128,9 +128,46 @@ async function pollRunUntilDone(runId, pollToken, options = {}) {
   };
 }
 
+/**
+ * 回传客户端 Action 执行回执（Receipt）。服务端凭此验证真实执行结果并提交
+ * 记忆变更（workingMemory.currentScheduleTarget / contextSlots 等）。
+ * 无 success Receipt 时服务端不得声称设置成功。
+ */
+async function postActionReceipt(payload = {}) {
+  const target = payload.appliedTarget && typeof payload.appliedTarget === "object"
+    ? payload.appliedTarget
+    : {};
+  try {
+    return await request.post("/api/ai/agent/action-receipts", {
+      command: safeText(payload.command, 40),
+      runId: safeText(payload.runId, 100),
+      conversationId: safeText(payload.conversationId, 100),
+      status: safeText(payload.status, 24),
+      appliedTarget: {
+        type: safeText(target.type, 24),
+        detailId: safeText(target.detailId, 128),
+        name: safeText(target.name, 120),
+        term: safeText(target.term, 40),
+      },
+      errorCode: safeText(payload.errorCode, 80),
+      memoryMode: safeText(payload.memoryMode, 24),
+      cloudSyncEnabled: payload.cloudSyncEnabled === true,
+    }, {
+      showLoading: false,
+      silentError: true,
+      timeout: 8000,
+      retries: 0,
+      dedupe: false,
+    });
+  } catch (error) {
+    return { success: false, error: error && error.message || "RECEIPT_FAILED" };
+  }
+}
+
 module.exports = {
   cancelRun,
   createRun,
   getRun,
   pollRunUntilDone,
+  postActionReceipt,
 };
