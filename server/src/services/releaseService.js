@@ -3455,60 +3455,62 @@ function readActiveIndex(kind, version, options = {}) {
   return value;
 }
 
-function searchActiveIndex(kind, query, options = {}) {
-  const version = options.releaseVersion || options.version;
-  const index = readActiveIndex(kind, version, options);
-  if (!index.success) {
-    return index;
+function matchesIndexField(item, optionValue, keys) {
+  const expected = String(optionValue || "").trim();
+  if (!expected) return true;
+  return keys.some((key) => String(item[key] || "").trim() === expected);
+}
+
+/** 学院过滤：单值 collegeCode/collegeName 或数组 collegeCodes/collegeNames */
+function matchesCollege(item, collegeCode, collegeName) {
+  const code = String(collegeCode || "").trim();
+  const name = String(collegeName || "").trim();
+  if (!code && !name) return true;
+  if (code) {
+    if (String(item.collegeCode || "").trim() === code) return true;
+    const codes = Array.isArray(item.collegeCodes) ? item.collegeCodes : [];
+    if (codes.some((c) => String(c || "").trim() === code)) return true;
+    return false;
   }
+  if (name) {
+    if (String(item.collegeName || item.college || "").trim() === name) return true;
+    const names = Array.isArray(item.collegeNames) ? item.collegeNames : [];
+    if (names.some((n) => String(n || "").trim() === name)) return true;
+    return false;
+  }
+  return true;
+}
+
+function matchesTitle(item, titleCode) {
+  const expected = String(titleCode || "").trim();
+  if (!expected) return true;
+  const candidates = [
+    item.title,
+    item.teacherTitle,
+    item.professionalTitle,
+    item.titleCode,
+    item.titleName,
+  ].map((v) => String(v || "").trim()).filter(Boolean);
+  if (!candidates.length) return false;
+  return candidates.some((v) => v === expected || v.includes(expected));
+}
+
+/**
+ * 纯函数索引过滤（searchActiveIndex 核心），可对内存 items 单测学院 A/B/空对照。
+ */
+function filterActiveIndexItems(kind, sourceItems, query, options = {}) {
   const q = String(query || "").trim().toLowerCase();
   const limit = Math.min(Math.max(parseInt(options.limit || "30", 10) || 30, 1), 100);
   const offset = Math.max(parseInt(options.offset || "0", 10) || 0, 0);
-  const source = index.items || [];
-  const matchesField = (item, optionValue, keys) => {
-    const expected = String(optionValue || "").trim();
-    if (!expected) return true;
-    return keys.some((key) => String(item[key] || "").trim() === expected);
-  };
-  const matchesCollege = (item, collegeCode, collegeName) => {
-    const code = String(collegeCode || "").trim();
-    const name = String(collegeName || "").trim();
-    if (!code && !name) return true;
-    if (code) {
-      if (String(item.collegeCode || "").trim() === code) return true;
-      const codes = Array.isArray(item.collegeCodes) ? item.collegeCodes : [];
-      if (codes.some((c) => String(c || "").trim() === code)) return true;
-      return false;
-    }
-    if (name) {
-      if (String(item.collegeName || item.college || "").trim() === name) return true;
-      const names = Array.isArray(item.collegeNames) ? item.collegeNames : [];
-      if (names.some((n) => String(n || "").trim() === name)) return true;
-      return false;
-    }
-    return true;
-  };
-  const matchesTitle = (item, titleCode) => {
-    const expected = String(titleCode || "").trim();
-    if (!expected) return true;
-    const candidates = [
-      item.title,
-      item.teacherTitle,
-      item.professionalTitle,
-      item.titleCode,
-      item.titleName,
-    ].map((v) => String(v || "").trim()).filter(Boolean);
-    if (!candidates.length) return false;
-    return candidates.some((v) => v === expected || v.includes(expected));
-  };
+  const source = Array.isArray(sourceItems) ? sourceItems : [];
   const scoped = source.filter((item) => {
-    if (!matchesField(item, options.semester, ["semester"])) return false;
+    if (!matchesIndexField(item, options.semester, ["semester"])) return false;
     if (!matchesCollege(item, options.collegeCode, options.collegeName)) return false;
     if (kind === "teacher" && !matchesTitle(item, options.titleCode)) return false;
-    if (!matchesField(item, options.grade, ["grade"])) return false;
-    if (!matchesField(item, options.majorCode, ["majorCode"])) return false;
-    if (!matchesField(item, options.majorName, ["majorName"])) return false;
-    if (!matchesField(item, options.campus, ["campus", "campusName"])) return false;
+    if (!matchesIndexField(item, options.grade, ["grade"])) return false;
+    if (!matchesIndexField(item, options.majorCode, ["majorCode"])) return false;
+    if (!matchesIndexField(item, options.majorName, ["majorName"])) return false;
+    if (!matchesIndexField(item, options.campus, ["campus", "campusName"])) return false;
     return true;
   });
   const filtered = q
@@ -3525,17 +3527,43 @@ function searchActiveIndex(kind, query, options = {}) {
           item.majorName,
           item.grade,
           item.firstCourseName,
+          Array.isArray(item.collegeNames) ? item.collegeNames.join(" ") : "",
+          Array.isArray(item.collegeCodes) ? item.collegeCodes.join(" ") : "",
         ].join(" ").toLowerCase();
         return haystack.includes(q);
       })
     : scoped;
-  return Object.assign({}, index, {
+  return {
     query: q,
     total: filtered.length,
     limit,
     offset,
     items: filtered.slice(offset, offset + limit),
-  });
+  };
+}
+
+function searchActiveIndex(kind, query, options = {}) {
+  const version = options.releaseVersion || options.version;
+  // 测试注入：options._items 跳过磁盘读，直接过滤内存列表（验证学院过滤真实函数）
+  let index;
+  if (Array.isArray(options._items)) {
+    index = {
+      success: true,
+      items: options._items,
+      version: version || "test",
+      releaseVersion: version || "test",
+      term: options.semester || options.term || "",
+      semester: options.semester || options.term || "",
+    };
+  } else {
+    index = readActiveIndex(kind, version, options);
+  }
+  if (!index.success) {
+    return index;
+  }
+  const source = index.items || [];
+  const page = filterActiveIndexItems(kind, source, query, options);
+  return Object.assign({}, index, page);
 }
 
 function readActiveSchedule(kind, id, version, options = {}) {
@@ -3993,4 +4021,6 @@ module.exports = {
   enrichTeacherCollegeFields,
   enrichTeacherIndexItemsOnRead,
   teacherNeedsCollegeEnrichment,
+  matchesCollege,
+  filterActiveIndexItems,
 };
