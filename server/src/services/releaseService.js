@@ -1543,6 +1543,8 @@ function writeDerivedIndexes(snapshot, files, onlyIndexes = false) {
 /**
  * 从班级索引与教师课表课程中的班级名，派生教师学院关联。
  * 不得伪造：无可靠关联时 collegeName=学院待确认，collegeCode 为空。
+ * resources.teacherSchedules 可为空；此时可用 resources.scheduleByTeacherId 或
+ * resources.loadTeacherCourses(id) 在读路径补齐。
  */
 function enrichTeacherCollegeFields(teachers, classes, resources = {}) {
   const classList = Array.isArray(classes) ? classes : [];
@@ -1550,8 +1552,13 @@ function enrichTeacherCollegeFields(teachers, classes, resources = {}) {
   classList.forEach((item) => {
     const name = String(item.name || item.className || "").trim();
     if (!name) return;
+    const compactName = name.replace(/\s+/g, "");
     classByName.set(name, item);
-    classByName.set(name.replace(/\s+/g, ""), item);
+    classByName.set(compactName, item);
+    // 去掉“班”后缀再挂一份，兼容课表里 “25动医1” vs 索引 “25动医1班”
+    if (/班$/.test(compactName)) {
+      classByName.set(compactName.replace(/班$/, ""), item);
+    }
   });
   const teacherSchedules = asArray(resources.teacherSchedules);
   const scheduleByTeacher = new Map();
@@ -1559,38 +1566,61 @@ function enrichTeacherCollegeFields(teachers, classes, resources = {}) {
     const tName = getFirstText(schedule, ["teacherName", "name", "title"]);
     if (tName) scheduleByTeacher.set(tName, schedule);
   });
+  const scheduleByTeacherId = resources.scheduleByTeacherId && typeof resources.scheduleByTeacherId === "object"
+    ? resources.scheduleByTeacherId
+    : null;
+  const loadTeacherCourses = typeof resources.loadTeacherCourses === "function"
+    ? resources.loadTeacherCourses
+    : null;
 
   return (Array.isArray(teachers) ? teachers : []).map((teacher) => {
     const existingCodes = Array.isArray(teacher.collegeCodes) ? teacher.collegeCodes.slice() : [];
     const existingNames = Array.isArray(teacher.collegeNames) ? teacher.collegeNames.slice() : [];
-    if (teacher.collegeCode) existingCodes.push(teacher.collegeCode);
-    if (teacher.collegeName) existingNames.push(teacher.collegeName);
+    if (teacher.collegeCode && teacher.collegeName !== "学院待确认") {
+      existingCodes.push(teacher.collegeCode);
+    }
+    if (teacher.collegeName && teacher.collegeName !== "学院待确认") {
+      existingNames.push(teacher.collegeName);
+    }
 
-    const schedule = scheduleByTeacher.get(teacher.name || teacher.teacherName) || null;
-    const courses = asArray(schedule && schedule.courses);
+    let courses = [];
+    const byId = scheduleByTeacherId && (scheduleByTeacherId[teacher.id] || scheduleByTeacherId[teacher.teacherId]);
+    if (byId) {
+      courses = asArray(byId.courses || byId);
+    } else {
+      const schedule = scheduleByTeacher.get(teacher.name || teacher.teacherName) || null;
+      courses = asArray(schedule && schedule.courses);
+    }
+    if (!courses.length && loadTeacherCourses) {
+      courses = asArray(loadTeacherCourses(teacher));
+    }
+
     courses.forEach((course) => {
-      const className = String(course.className || course.class || course.teachingClass || "").trim();
+      // 课表行上的学院字段优先（Release Pack 详情已带）
+      if (course.collegeCode) existingCodes.push(course.collegeCode);
+      if (course.collegeName || course.college) existingNames.push(course.collegeName || course.college);
+      const className = String(course.className || course.class || course.teachingClass || course.adminClass || "").trim();
       if (!className) return;
-      const cls = classByName.get(className) || classByName.get(className.replace(/\s+/g, ""));
+      const compactName = className.replace(/\s+/g, "");
+      const cls = classByName.get(className)
+        || classByName.get(compactName)
+        || classByName.get(compactName.replace(/班$/, ""))
+        || classByName.get(`${compactName}班`);
       if (!cls) return;
       if (cls.collegeCode) existingCodes.push(cls.collegeCode);
       if (cls.collegeName || cls.college) existingNames.push(cls.collegeName || cls.college);
     });
 
-    // 也从教师课表 courses 的 college 字段取（若有）
-    courses.forEach((course) => {
-      if (course.collegeCode) existingCodes.push(course.collegeCode);
-      if (course.collegeName || course.college) existingNames.push(course.collegeName || course.college);
-    });
-
     const collegeCodes = Array.from(new Set(existingCodes.map((c) => String(c || "").trim()).filter(Boolean)));
-    const collegeNames = Array.from(new Set(existingNames.map((n) => String(n || "").trim()).filter(Boolean)));
+    const collegeNames = Array.from(new Set(
+      existingNames.map((n) => String(n || "").trim()).filter((n) => n && n !== "学院待确认")
+    ));
     const hasCollege = collegeCodes.length > 0 || collegeNames.length > 0;
     return Object.assign({}, teacher, {
       teacherId: teacher.teacherId || teacher.id,
       canonicalName: teacher.canonicalName || teacher.name || teacher.teacherName || "",
       aliases: Array.isArray(teacher.aliases) ? teacher.aliases : [],
-      collegeCode: collegeCodes[0] || teacher.collegeCode || "",
+      collegeCode: collegeCodes[0] || "",
       collegeName: hasCollege
         ? (collegeNames[0] || teacher.collegeName || "")
         : "学院待确认",
@@ -1599,8 +1629,51 @@ function enrichTeacherCollegeFields(teachers, classes, resources = {}) {
       title: teacher.title || teacher.teacherTitle || teacher.professionalTitle || "",
       term: teacher.term || teacher.semester || "",
       releaseVersion: teacher.releaseVersion || "",
+      collegeEnriched: true,
     });
   });
+}
+
+function teacherNeedsCollegeEnrichment(item) {
+  if (!item || typeof item !== "object") return true;
+  if (item.collegeEnriched === true) return false;
+  const codes = Array.isArray(item.collegeCodes) ? item.collegeCodes.filter(Boolean) : [];
+  if (codes.length > 0) return false;
+  if (item.collegeCode && String(item.collegeName || "") !== "学院待确认") return false;
+  return true;
+}
+
+/**
+ * 读路径：当磁盘教师索引缺少学院字段时，从教师课表明细 + 班级索引派生并缓存。
+ * 不写回磁盘（避免污染静态 pack）；结果进入 derivedCache。
+ */
+function enrichTeacherIndexItemsOnRead(items, version) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return list;
+  if (!list.some(teacherNeedsCollegeEnrichment)) return list;
+
+  const files = getReleaseFiles(version);
+  const classInfo = getDerivedFileInfo("class", files);
+  const classItems = classInfo && fs.existsSync(classInfo.indexPath)
+    ? (readSmallJsonFile(classInfo.indexPath, []) || [])
+    : [];
+  const teacherInfo = getDerivedFileInfo("teacher", files);
+  const scheduleDir = teacherInfo && teacherInfo.scheduleDir;
+
+  const loadTeacherCourses = (teacher) => {
+    if (!scheduleDir || !teacher || !teacher.id) return [];
+    const filePath = path.join(scheduleDir, `${teacher.id}.json`);
+    if (!fs.existsSync(filePath)) return [];
+    const payload = readSmallJsonFile(filePath, null);
+    if (!payload) return [];
+    // 详情文件可能是 { courses } 或完整 schedule 包装
+    if (Array.isArray(payload.courses)) return payload.courses;
+    if (payload.schedule && Array.isArray(payload.schedule.courses)) return payload.schedule.courses;
+    if (Array.isArray(payload)) return payload;
+    return [];
+  };
+
+  return enrichTeacherCollegeFields(list, classItems, { loadTeacherCourses });
 }
 
 function hasCourseTiming(course) {
@@ -3355,12 +3428,18 @@ function readActiveIndex(kind, version, options = {}) {
     };
   }
   const stat = fs.statSync(info.indexPath);
-  const cacheKey = `${active.version}:${kind}:index`;
+  // teacher 读路径学院派生后单独缓存键，避免与原始磁盘索引串味
+  const cacheKey = kind === "teacher"
+    ? `${active.version}:${kind}:index:college-enriched-v1`
+    : `${active.version}:${kind}:index`;
   const cached = derivedCache.get(cacheKey);
   if (cached && cached.mtimeMs === stat.mtimeMs) {
     return cached.value;
   }
-  const items = readSmallJsonFile(info.indexPath, []) || [];
+  let items = readSmallJsonFile(info.indexPath, []) || [];
+  if (kind === "teacher") {
+    items = enrichTeacherIndexItemsOnRead(Array.isArray(items) ? items : [], active.version);
+  }
   const value = {
     success: true,
     dataSource: active.source === "legacy-current" ? "legacy-current-index" : (version ? "release-isolated-index" : "release-index"),
@@ -3911,4 +3990,7 @@ module.exports = {
   mirrorStaticReleaseFilesAsync,
   clearDerivedCache,
   getActiveReleaseInfoFast,
+  enrichTeacherCollegeFields,
+  enrichTeacherIndexItemsOnRead,
+  teacherNeedsCollegeEnrichment,
 };
