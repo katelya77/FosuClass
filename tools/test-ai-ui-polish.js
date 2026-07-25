@@ -17,7 +17,7 @@ const pageJs = fs.readFileSync(path.join(__dirname, "../miniprogram/packageXiaof
 const capsuleBlock = (wxss.match(/\.agent-status-capsule \{[\s\S]*?\n\}/) || [""])[0];
 const wrapBlock = (wxss.match(/\.agent-status-island-wrap \{[\s\S]*?\n\}/) || [""])[0];
 check("状态岛：全宽 wrapper 居中", /justify-content:\s*center/.test(wrapBlock) && /width:\s*100%/.test(wrapBlock));
-check("状态岛：宽度自适应（width: auto）", /width:\s*auto/.test(capsuleBlock));
+check("状态岛：真正长胶囊（width: 100%）", /width:\s*100%/.test(capsuleBlock));
 check("状态岛：不使用 align-self:flex-start 偏左", !/align-self:\s*flex-start/.test(capsuleBlock));
 check("状态岛：浅底（rgba(42, 38, 34, 0.05)）", capsuleBlock.includes("rgba(42, 38, 34, 0.05)"));
 check("状态岛：黑色胶囊背景已移除", !/background:\s*var\(--xf-text\)/.test(capsuleBlock));

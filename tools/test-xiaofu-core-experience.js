@@ -267,8 +267,9 @@ const teacherFixture = [
   const keyA = storage.getSchoolIndexCacheKey("2025-2026-2", "26.05.29.22", "teacher", { q: "陈芳", collegeCode: "04" });
   const keyB = storage.getSchoolIndexCacheKey("2025-2026-2", "26.05.29.22", "teacher", { q: "陈芳", collegeCode: "02" });
   check("cache key college isolates", keyA !== keyB);
-  check("cache key teacher schema bumped", /tidx2|teacherIndexSchemaVersion|v6/.test(keyA) || storage.TEACHER_INDEX_SCHEMA_VERSION === 2);
-  check("SCHOOL_CACHE_SCHEMA_VERSION >= 6", storage.SCHOOL_CACHE_SCHEMA_VERSION >= 6);
+  check("cache key teacher schema bumped", /tidx3|teacherIndexSchemaVersion|v7/.test(keyA) || storage.TEACHER_INDEX_SCHEMA_VERSION >= 3);
+  check("SCHOOL_CACHE_SCHEMA_VERSION >= 7", storage.SCHOOL_CACHE_SCHEMA_VERSION >= 7);
+  check("TEACHER_INDEX_SCHEMA_VERSION === 3", storage.TEACHER_INDEX_SCHEMA_VERSION === 3);
 }
 
 // --- 3) Voice state machine
@@ -324,7 +325,20 @@ function mockWx(script) {
     });
     const res = await voiceAuth.ensureVoiceReady(voiceAuth.createInitialState(), host);
     check("voice denied suggests setting", res.ok === false && res.openSettingSuggested === true);
+    check("voice denied reasonCode", res.reasonCode === "WECHAT_RECORD_DENIED");
     check("voice denied did not auto openSetting", !host.calls.includes("openSetting"));
+  }
+  {
+    // Undecided: authorize fail + still no scope.record key
+    const host = mockWx({
+      privacy: { needAuthorization: false },
+      authSetting: {},
+      authorizeOk: false,
+    });
+    const res = await voiceAuth.ensureVoiceReady(voiceAuth.createInitialState(), host);
+    check("voice undecided reasonCode", res.reasonCode === "WECHAT_RECORD_UNDECIDED");
+    check("voice undecided can retry", res.canRetryAuthorize === true);
+    check("voice undecided no openSetting", res.openSettingSuggested === false);
   }
   {
     const host = mockWx({
@@ -335,25 +349,33 @@ function mockWx(script) {
     check("voice resume after setting", res.ok === true && res.shouldResume === true);
   }
 
-  // --- 4) Geometry helpers
+  // --- 4) Geometry helpers (real DOM snapshot-shaped inputs)
   const geometry = require(path.join(ROOT, "miniprogram/utils/xiaofuGeometry"));
   {
-    const centered = geometry.measureStatusIslandGaps(
-      { left: 120, width: 200 },
-      { left: 0, width: 440 }
+    // Full-width capsule: same left as wrap, almost full width
+    const full = geometry.measureStatusIslandGaps(
+      { left: 16, width: 343 },
+      { left: 16, width: 343 }
     );
-    check("geometry centered absDiff<=8", centered.absDiff <= 8 && centered.centered);
+    check("geometry full-width absDiff<=4rpx", full.absDiff <= 2 && full.centered && full.fullWidth);
     const off = geometry.measureStatusIslandGaps(
       { left: 0, width: 200 },
       { left: 0, width: 440 }
     );
-    check("geometry left-aligned detected", off.absDiff > 8 && !off.centered);
+    check("geometry left-aligned detected", off.absDiff > 2 && !off.fullWidth);
+    // 12–24rpx @0.5 → 6–12px
     const gaps = geometry.measureComposerMessageGaps({
       scrollViewBottom: 600,
       composerTop: 612,
-      lastMessageBottom: 590,
+      lastMessageBottom: 600,
+      pxPerRpx: 0.5,
     });
     check("geometry message-composer gap in range", gaps.messageComposerOk === true);
+    check("geometry composerInset from height", geometry.computeComposerInsetPx(96, 8) === 104);
+    check(
+      "geometry collapse/expand same width",
+      geometry.assertCollapsedExpandedSameWidth({ width: 343 }, { width: 343 })
+    );
   }
 
   // --- 5) Response composer domain language / no raw tool names / zero partitions
@@ -397,14 +419,20 @@ function mockWx(script) {
     const appJson = JSON.parse(fs.readFileSync(path.join(ROOT, "miniprogram/app.json"), "utf8"));
     check("ui status island wrapper", wxml.includes("agent-status-island-wrap"));
     check("ui composer pill", wxml.includes("composer-pill"));
+    check("ui composerInset binding", wxml.includes("composerInsetPx"));
     check("ui no 麦 text button", !/>麦</.test(wxml));
     check("ui no ↑ send glyph", !/{{sending \? "■" : "↑"}}/.test(wxml) && !/>↑</.test(wxml));
     check("ui svg mic", wxml.includes("composer/microphone.svg"));
     check("ui svg send", wxml.includes("composer/send.svg"));
-    check("ui wrapper justify center", /agent-status-island-wrap[\s\S]*justify-content:\s*center/.test(wxss));
-    check("ui capsule not flex-start alone", !/\.agent-status-capsule\s*\{[^}]*align-self:\s*flex-start/.test(wxss));
+    check("ui capsule width 100%", /\.agent-status-capsule\s*\{[^}]*width:\s*100%/.test(wxss));
+    check("ui capsule no width auto", !/\.agent-status-capsule\s*\{[^}]*width:\s*auto/.test(wxss));
+    check("ui composer align center", /\.composer-pill\s*\{[^}]*align-items:\s*center/.test(wxss));
+    check("ui composer absolute float", /\.composer\s*\{[^}]*position:\s*absolute/.test(wxss));
+    check("ui reduced-motion", /prefers-reduced-motion/.test(wxss));
     check("app.json record permission", appJson.permission && appJson.permission["scope.record"] && /语音转文字/.test(appJson.permission["scope.record"].desc));
     check("svg files exist", fs.existsSync(path.join(ROOT, "miniprogram/assets/icons/composer/plus.svg")));
+    check("scheduleNavigationService exists", fs.existsSync(path.join(ROOT, "miniprogram/services/scheduleNavigationService.js")));
+    check("audit doc exists", fs.existsSync(path.join(ROOT, "docs/xiaofu-agent/final-product-convergence-audit.md")));
   }
 
   // --- 7) public mode zero external provider structural (capability / runtime)

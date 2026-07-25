@@ -956,8 +956,11 @@ function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names,
       ...(Array.isArray(source.collegeNames) ? source.collegeNames : []),
       ...(Array.isArray(schedule.collegeNames) ? schedule.collegeNames : []),
     ].map((n) => String(n || "").trim()).filter(Boolean)));
-    index.push({
+    const termValue = schedule.semester || snapshot.semester || "";
+    const releaseValue = normalizeVersion(snapshot.version || snapshot.releaseVersion || "");
+    const row = {
       id,
+      detailId: id,
       name,
       [`${kind}Name`]: name,
       displayName: source.displayName || schedule.displayName || name,
@@ -968,7 +971,7 @@ function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names,
       titleCode: source.titleCode || schedule.titleCode || "",
       searchableName: normalizeSearchText(name),
       keywords,
-      semester: schedule.semester || snapshot.semester || "",
+      semester: termValue,
       collegeCode: collegeCode || collegeCodes[0] || "",
       collegeName: collegeName || collegeNames[0] || "",
       collegeCodes,
@@ -979,15 +982,18 @@ function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names,
       courseCount: summary.courseCount,
       firstCourseName: summary.firstCourseName,
       updatedAt: schedule.updatedAt || snapshot.updatedAt || "",
-      // 教师专用规范字段（Release Pack 构建阶段填充）
+      // 教师专用规范字段（Release Pack 构建阶段填充 / Teacher Index Schema v3）
       teacherId: kind === "teacher" ? id : undefined,
       canonicalName: kind === "teacher" ? name : undefined,
+      normalizedName: kind === "teacher" ? normalizeSearchText(name) : undefined,
       aliases: kind === "teacher"
         ? compactKeywordList([name, source.displayName, source.rawName, schedule.displayName]).slice(0, 8)
         : undefined,
-      term: schedule.semester || snapshot.semester || "",
-      releaseVersion: normalizeVersion(snapshot.version || snapshot.releaseVersion || ""),
-    });
+      term: termValue,
+      releaseVersion: releaseValue,
+      teacherIndexSchemaVersion: kind === "teacher" ? 3 : undefined,
+    };
+    index.push(row);
   };
 
   asArray(names).forEach(addItem);
@@ -1616,9 +1622,16 @@ function enrichTeacherCollegeFields(teachers, classes, resources = {}) {
       existingNames.map((n) => String(n || "").trim()).filter((n) => n && n !== "学院待确认")
     ));
     const hasCollege = collegeCodes.length > 0 || collegeNames.length > 0;
+    const teacherName = String(teacher.teacherName || teacher.name || teacher.displayName || teacher.canonicalName || "").trim();
+    const id = String(teacher.id || teacher.detailId || teacher.teacherId || "").trim();
     return Object.assign({}, teacher, {
-      teacherId: teacher.teacherId || teacher.id,
-      canonicalName: teacher.canonicalName || teacher.name || teacher.teacherName || "",
+      id,
+      detailId: String(teacher.detailId || id).trim(),
+      teacherId: teacher.teacherId || id,
+      teacherName,
+      name: teacherName || String(teacher.name || "").trim(),
+      canonicalName: teacher.canonicalName || teacherName,
+      normalizedName: teacher.normalizedName || normalizeSearchText(teacherName),
       aliases: Array.isArray(teacher.aliases) ? teacher.aliases : [],
       collegeCode: collegeCodes[0] || "",
       collegeName: hasCollege
@@ -1626,10 +1639,16 @@ function enrichTeacherCollegeFields(teachers, classes, resources = {}) {
         : "学院待确认",
       collegeCodes,
       collegeNames: hasCollege ? collegeNames : ["学院待确认"],
+      courseCount: Number(teacher.courseCount || 0) || 0,
       title: teacher.title || teacher.teacherTitle || teacher.professionalTitle || "",
       term: teacher.term || teacher.semester || "",
       releaseVersion: teacher.releaseVersion || "",
+      teacherIndexSchemaVersion: 3,
       collegeEnriched: true,
+      collegeSource: hasCollege
+        ? (courses.length ? "course_college_relation" : "index_or_class")
+        : "pending",
+      collegeConfidence: hasCollege ? (courses.length ? "derived" : "partial") : "unknown",
     });
   });
 }
@@ -1858,6 +1877,7 @@ function buildManifest(snapshot, version, counts, validation, files, derived, ca
     success: true,
     schemaVersion: 2,
     releasePackSchemaVersion: 1,
+    teacherIndexSchemaVersion: 3,
     term: termConfig.term,
     releaseVersion: version,
     version,
@@ -3430,7 +3450,7 @@ function readActiveIndex(kind, version, options = {}) {
   const stat = fs.statSync(info.indexPath);
   // teacher 读路径学院派生后单独缓存键，避免与原始磁盘索引串味
   const cacheKey = kind === "teacher"
-    ? `${active.version}:${kind}:index:college-enriched-v1`
+    ? `${active.version}:${kind}:index:college-enriched-v3`
     : `${active.version}:${kind}:index`;
   const cached = derivedCache.get(cacheKey);
   if (cached && cached.mtimeMs === stat.mtimeMs) {
@@ -3449,6 +3469,7 @@ function readActiveIndex(kind, version, options = {}) {
     semester: active.semester,
     updatedAt: active.updatedAt,
     etag: `"${active.version}-${kind}-${Math.floor(stat.mtimeMs)}-${stat.size}"`,
+    teacherIndexSchemaVersion: kind === "teacher" ? 3 : undefined,
     items: Array.isArray(items) ? items : [],
   };
   derivedCache.set(cacheKey, { mtimeMs: stat.mtimeMs, value });
@@ -3529,25 +3550,30 @@ function filterActiveIndexItems(kind, sourceItems, query, options = {}) {
   if (!q) {
     filtered = scoped;
   } else if (kind === "teacher") {
-    const exact = scoped.filter((item) => {
-      const name = String(item.name || item.teacherName || item.displayName || "").trim().toLowerCase();
-      return name === q;
-    });
-    if (exact.length) {
-      filtered = exact;
+    const teacherNameOf = (item) => String(item.name || item.teacherName || item.displayName || "").trim().toLowerCase();
+    const exactInScope = scoped.filter((item) => teacherNameOf(item) === q);
+    if (exactInScope.length) {
+      filtered = exactInScope;
     } else {
-      filtered = scoped.filter((item) => {
-        const haystack = [
-          item.id,
-          item.name,
-          item.teacherName,
-          item.displayName,
-          item.collegeName,
-          Array.isArray(item.collegeNames) ? item.collegeNames.join(" ") : "",
-          Array.isArray(item.collegeCodes) ? item.collegeCodes.join(" ") : "",
-        ].join(" ").toLowerCase();
-        return haystack.includes(q);
-      });
+      // Global exact isolation: if the full index has an exact name hit, do not fuzzy
+      // into other teachers (e.g. 陈芳 vs 陈芳人文 under wrong college).
+      const globalExactExists = source.some((item) => teacherNameOf(item) === q);
+      if (globalExactExists) {
+        filtered = [];
+      } else {
+        filtered = scoped.filter((item) => {
+          const haystack = [
+            item.id,
+            item.name,
+            item.teacherName,
+            item.displayName,
+            item.collegeName,
+            Array.isArray(item.collegeNames) ? item.collegeNames.join(" ") : "",
+            Array.isArray(item.collegeCodes) ? item.collegeCodes.join(" ") : "",
+          ].join(" ").toLowerCase();
+          return haystack.includes(q);
+        });
+      }
     }
   } else {
     filtered = scoped.filter((item) => {

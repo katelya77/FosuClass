@@ -16,7 +16,7 @@
     </view>
   </view>
 
-  <!-- Full-width wrapper centers the status island; capsule width is content-adaptive when idle. -->
+  <!-- Full content-width long capsule; collapsed/expanded share the same width. -->
   <view class="agent-status-island-wrap" id="agent-status-island-wrap">
     <view
       id="agent-status-capsule"
@@ -62,6 +62,7 @@
 
   <scroll-view
     class="message-scroll"
+    style="padding-bottom: {{composerInsetPx || 120}}px;"
     scroll-y="{{!(showTaskPanel || showConversationSheet || showCapabilityGuide || showPrivacySheet || showHeaderMenu || showMemorySheet || showComposerPlus || showReminderSheet)}}"
     scroll-top="{{scrollTop}}"
     scroll-into-view="{{scrollIntoView}}"

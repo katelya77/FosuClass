@@ -2141,6 +2141,29 @@ Page({
   },
 
   navigateToScheduleView(type, name, courses, scheduleMeta) {
+    // Prefer shared scheduleNavigationService URL builder (no courses in query).
+    try {
+      const scheduleNavigationService = require("../../services/scheduleNavigationService");
+      const meta = scheduleMeta || {};
+      const resolved = scheduleNavigationService.resolveScheduleNavigation({
+        type,
+        id: meta.detailId || meta.id,
+        detailId: meta.detailId || meta.id,
+        name,
+        term: meta.semester || meta.term,
+        releaseVersion: meta.scheduleVersion || meta.releaseVersion || meta.version,
+        displayType: meta.displayType,
+        isAggregated: meta.isAggregated,
+        allowMissingReleaseVersion: true,
+      });
+      if (resolved.mode === "schedule-view" && resolved.url) {
+        // Keep courses in memory path only when caller already loaded detail — schedule-view loads by id.
+        wx.navigateTo({ url: resolved.url });
+        return;
+      }
+    } catch (e) {
+      // fall through to legacy builder
+    }
     const semester = this.data.semesters[this.data.selectedSemesterIndex]?.value || getFallbackTerm();
     const meta = scheduleMeta || {};
     const displayType = meta.displayType || "";
@@ -3416,21 +3439,62 @@ Page({
         this.retryFn = () => doNetworkRequest(true);
       }
 
-      const requestIndex = () => releasePackService.searchIndex(type, query, {
-        forceNetwork: true,
-        timeout: SCHOOL_REQUEST_TIMEOUT,
-      }).catch((packError) => {
-        if (type === "teacher") {
-          throw packError;
-        }
-        return request.get("/api/fosu/search-index", query, {
+      // Teacher Search Contract: prefer server /api/fosu/search-index when schema stale
+      // or college filter is active — never strict-filter incomplete static teacher rows.
+      const requestIndex = () => {
+        const collegeFilterActive = Boolean(
+          String(query.collegeCode || "").trim() || String(query.collegeName || "").trim()
+        );
+        const teacherServerFirst = type === "teacher" && (
+          collegeFilterActive || query.forceServerSearch === true
+        );
+        const serverSearch = () => request.get("/api/fosu/search-index", Object.assign({}, query, {
+          type,
+          schemaVersion: 3,
+          teacherIndexSchemaVersion: 3,
+        }), {
           showLoading: false,
           silentError: true,
           timeout: SCHOOL_REQUEST_TIMEOUT,
-        }).catch(() => {
-          throw packError;
         });
-      });
+        if (teacherServerFirst) {
+          return serverSearch().catch((serverError) => releasePackService.searchIndex(type, query, {
+            forceNetwork: true,
+            forceServerSearch: false,
+            preferServerSearch: false,
+            timeout: SCHOOL_REQUEST_TIMEOUT,
+          }).then((payload) => {
+            const schema = releasePackService.detectTeacherIndexSchemaVersion
+              ? releasePackService.detectTeacherIndexSchemaVersion(payload)
+              : 0;
+            if (collegeFilterActive && schema < 2) {
+              return Object.assign({}, payload, {
+                items: [],
+                total: 0,
+                reasonCode: "TEACHER_INDEX_SCHEMA_STALE",
+                teacherIndexSchemaVersion: schema,
+              });
+            }
+            return payload;
+          }).catch(() => {
+            throw serverError;
+          }));
+        }
+        return releasePackService.searchIndex(type, query, {
+          forceNetwork: true,
+          timeout: SCHOOL_REQUEST_TIMEOUT,
+          preferServerSearch: type === "teacher",
+        }).catch((packError) => {
+          if (type === "teacher") {
+            return serverSearch().catch(() => {
+              throw packError;
+            });
+          }
+          return serverSearch().catch(() => {
+            throw packError;
+          });
+        });
+      };
 
       requestIndex()
         .then((data) => {
