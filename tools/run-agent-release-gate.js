@@ -13,6 +13,7 @@ const STEPS = [
   ["test:agent-foundation", "Agent foundation"],
   ["test:agent-regression", "Agent regression"],
   ["test:agent-final-convergence", "Final convergence"],
+  ["test:agent-task-gates", "Task book chapter gates"],
   ["test:agent-phase3", "Runtime truth / phase3"],
   ["test:ai-competition", "AI competition suite"],
   ["test:miniprogram-package-hygiene", "Miniprogram package hygiene"],

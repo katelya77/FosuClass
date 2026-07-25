@@ -36,6 +36,10 @@ function extractFromMessage(message, options = {}) {
   const text = redact(message);
   if (!text || safetyGuard.hasSensitiveCredential(String(message || ""))) return [];
   if (/(学号|密码|cookie|token|authorization)/i.test(text)) return [];
+  // 隐私黑名单：电话/身份证/住址类内容不提取任何记忆候选
+  if (/1[3-9]\d{9}/.test(text)) return [];
+  if (/\d{17}[\dXx]/.test(text)) return [];
+  if (/(家庭住址|家庭地址|收货地址|住在.{1,20}(路|街|号|栋|室))/.test(text)) return [];
 
   const output = [];
   const turnId = options.turnId || "";
@@ -44,7 +48,8 @@ function extractFromMessage(message, options = {}) {
   // Preferred name — no longer requires “记住”. Skip pure name questions.
   const isNameQuestion = /(?:我叫(?:什么|啥)|我的名字(?:是)?(?:什么|叫啥)|你(?:还)?记得我叫(?:什么|啥)|我刚刚说我叫(?:什么|啥))/.test(text.replace(/\s+/g, ""));
   if (!isNameQuestion) {
-    const nameMatch = text.match(/(?:我的名字(?:是|叫)|我叫|以后(?:叫我|称呼我)|记住(?:我)?(?:的名字)?(?:是|叫)?)\s*([\u3400-\u9fffA-Za-z0-9·\-\s]{1,24})/);
+    // 仅匹配明确自称句式：我叫X / 我的名字叫X / 以后叫我X（含"称呼我"变体）
+    const nameMatch = text.match(/(?:我的名字叫|我叫|以后(?:叫我|称呼我))\s*([\u3400-\u9fffA-Za-z0-9·\-\s]{1,24})/);
     if (nameMatch) {
       const value = normalizeValue("preferredName", nameMatch[1]);
       // Reject interrogative placeholders mistaken as names
@@ -182,6 +187,56 @@ function extractFromMessage(message, options = {}) {
         scope: "user",
         confidence: 0.87,
         reasonCode: "class_preference",
+        sourceTurnIds: turnId ? [turnId] : [],
+        rawText: text.slice(0, 80),
+      }));
+    }
+  }
+
+  // Named relation（类型化关系记忆）：第三方人物信息默认仅进 Working Memory，不进长期 User Memory。
+  // 例："我妈妈叫刘秀英" → { relation: "mother", displayRelation: "妈妈", name: "刘秀英" }
+  const RELATION_MAP = {
+    妈妈: "mother", 母亲: "mother", 老妈: "mother", 妈: "mother",
+    爸爸: "father", 父亲: "father", 老爸: "father", 爸: "father",
+    姐姐: "sister", 姐: "sister", 妹妹: "sister", 妹: "sister",
+    哥哥: "brother", 哥: "brother", 弟弟: "brother", 弟: "brother",
+    老婆: "wife", 妻子: "wife", 老公: "husband", 丈夫: "husband",
+    儿子: "son", 女儿: "daughter",
+    辅导员: "counselor", 班主任: "head_teacher", 导师: "mentor",
+    室友: "roommate", 同学: "classmate",
+    女朋友: "girlfriend", 男朋友: "boyfriend", 朋友: "friend",
+  };
+  const relWord = `(妈妈|母亲|老妈|妈|爸爸|父亲|老爸|爸|姐姐|姐|妹妹|妹|哥哥|哥|弟弟|弟|老婆|妻子|老公|丈夫|儿子|女儿|辅导员|班主任|导师|室友|同学|女朋友|男朋友|朋友)`;
+
+  // 遗忘："忘掉我妈妈" / "删除我妈妈的称呼"
+  const forgetRel = text.match(new RegExp(`(?:忘掉|忘记|删除|不要记住)\\s*(?:我的?)?${relWord}`));
+  if (forgetRel) {
+    output.push(candidate({
+      type: "named_relation_forget",
+      key: `namedRelationForget:${RELATION_MAP[forgetRel[1]]}`,
+      value: { relation: RELATION_MAP[forgetRel[1]] },
+      scope: "working",
+      confidence: 0.95,
+      reasonCode: "named_relation_forget",
+      sourceTurnIds: turnId ? [turnId] : [],
+      rawText: text.slice(0, 80),
+    }));
+  } else {
+    // 陈述："我妈妈叫刘秀英" / "我爸是李刚"；名字后必须句末/标点/空格，防"叫我去吃饭"误匹配
+    const relMatch = text.match(new RegExp(`(?:我的)?${relWord}(?:叫|是|的名字叫)\\s*([\\u3400-\\u9fff·]{2,4})(?=$|[\\s，。！？、,.!?])`));
+    if (relMatch && !/^(什么|啥|谁|哪|怎么|如何|我|你|他|她|它|去|来|回)/.test(relMatch[2])) {
+      output.push(candidate({
+        type: "named_relation",
+        key: `namedRelation:${RELATION_MAP[relMatch[1]]}`,
+        value: {
+          relation: RELATION_MAP[relMatch[1]],
+          displayRelation: relMatch[1],
+          name: relMatch[2],
+        },
+        scope: "working",
+        confidence: isCorrection ? 0.95 : 0.85,
+        reasonCode: isCorrection ? "user_correction" : "named_relation_statement",
+        correction: isCorrection,
         sourceTurnIds: turnId ? [turnId] : [],
         rawText: text.slice(0, 80),
       }));

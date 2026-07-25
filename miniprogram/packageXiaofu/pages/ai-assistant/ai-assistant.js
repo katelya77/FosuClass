@@ -8,6 +8,7 @@ const agentReadinessClient = require("../../../services/agentReadinessClient");
 const agentRunClient = require("../../../services/agentRunClient");
 const agentClientErrorMapper = require("../../../services/agentClientErrorMapper");
 const courseReminderClient = require("../../../services/courseReminderClient");
+const currentScheduleService = require("../../../services/currentScheduleService");
 const scheduleChangeTracker = require("../../../services/scheduleChangeTracker");
 const cloudbaseConfig = require("../../../config/cloudbase");
 const demoData = require("./demo-data");
@@ -58,6 +59,7 @@ const WELCOME_EXAMPLES = [
 ];
 
 const WELCOME_TASK_CARDS = [
+  { id: "setup", title: "设置我的课表", desc: "导入教务课表并设为当前课表", question: "怎么导入个人课表？" },
   { id: "today", title: "看今天安排", desc: "今日课程一览", question: "今天有什么课" },
   { id: "empty", title: "找空教室", desc: "连续可用时段", question: "现在有连续空教室吗" },
   { id: "class", title: "查班级课表", desc: "按班级查询", question: "查班级本周课表" },
@@ -2815,6 +2817,9 @@ Page({
         if (resolvedIntentName === "detect_schedule_changes") {
           scheduleChangeTracker.acknowledge(clientContext.currentScheduleSummary);
         }
+        // Action Command Bus：服务端确定性派生的顶层动作（当前仅 setCurrentSchedule）。
+        // explicit_user_command 级别到达即执行；真实切换完成后自动回传 Receipt。
+        this.executeResponseActions(response);
         this.refreshProactiveWorkspace();
         if (!waitingConfirmation) this.scheduleStatusCapsuleReset();
       })
@@ -3634,6 +3639,54 @@ Page({
           const pending = page._pendingCardAction || {};
           page.performReminderConfirmation(pending.payload || {}, pending.context || {});
         },
+        setCurrentSchedule(input) {
+          // explicit_user_command：用户消息即确认，直接执行真实切换。
+          // 复用 currentScheduleService.setNewCurrentScheduleTarget（与刷新链路同一套
+          // 加载→校验→构建→写入逻辑，真实写入仍由 storage.setCurrentScheduleTarget 完成），
+          // 成功后回传 Receipt；无 success Receipt 服务端不会声称设置成功。
+          const target = {
+            type: "class",
+            detailId: String((input && input.detailId) || ""),
+            name: String((input && input.name) || ""),
+            term: String((input && input.term) || ""),
+            releaseVersion: String((input && input.releaseVersion) || ""),
+          };
+          if (!target.detailId || !target.name) return;
+          currentScheduleService.setNewCurrentScheduleTarget(target)
+            .then((result) => {
+              if (result && result.success) {
+                const applied = result.target || target;
+                wx.showToast({ title: "已设为首页课表", icon: "success", duration: 1800 });
+                page.postAgentActionReceipt({
+                  command: "setCurrentSchedule",
+                  status: "success",
+                  appliedTarget: {
+                    type: "class",
+                    detailId: String(applied.detailId || target.detailId),
+                    name: String(applied.name || target.name),
+                    term: String(applied.term || target.term),
+                  },
+                });
+                return;
+              }
+              page.showActionFallback("课表切换未完成，请稍后重试");
+              page.postAgentActionReceipt({
+                command: "setCurrentSchedule",
+                status: "failed",
+                errorCode: String((result && (result.code || result.status)) || "FAILED").slice(0, 80),
+                appliedTarget: target,
+              });
+            })
+            .catch(() => {
+              page.showActionFallback("课表切换未完成，请稍后重试");
+              page.postAgentActionReceipt({
+                command: "setCurrentSchedule",
+                status: "failed",
+                errorCode: "CLIENT_EXCEPTION",
+                appliedTarget: target,
+              });
+            });
+        },
         retry() {
           const pending = page._pendingCardAction || {};
           const pendingPayload = pending.payload || {};
@@ -3657,6 +3710,42 @@ Page({
       },
     });
     return this._xiaofuActionBus;
+  },
+
+  // 执行服务端派生的顶层 Action Commands（response.actions）。
+  // explicit_user_command 级别的动作到达即执行（用户消息本身就是确认）；
+  // 执行结果由 context handler 负责回传 Receipt。
+  executeResponseActions(response) {
+    const actions = Array.isArray(response && response.actions) ? response.actions : [];
+    if (!actions.length) return;
+    const bus = this.getXiaofuActionBus();
+    if (!bus) return;
+    const runId = String(response.runId || this.data.activeRunId || "");
+    actions.slice(0, 2).forEach((action) => {
+      if (!action || !action.command) return;
+      this._responseActionRunId = runId;
+      bus.execute(
+        {
+          command: action.command,
+          label: action.label || "",
+          input: action.input && typeof action.input === "object" ? action.input : {},
+          confirmationRequest: action.confirmationRequest || null,
+        },
+        { runtimeMode: "public", confirmed: false }
+      );
+    });
+  },
+
+  // 回传 Action 执行回执（Receipt）。服务端验证通过后才会提交记忆变更；
+  // 失败静默（不影响用户已完成的本地切换，下次会话会以本地目标为准）。
+  postAgentActionReceipt(receipt) {
+    if (!agentRunClient || typeof agentRunClient.postActionReceipt !== "function") return;
+    agentRunClient.postActionReceipt(Object.assign({}, receipt, {
+      runId: receipt.runId || this._responseActionRunId || "",
+      conversationId: this.data.activeConversationId || "",
+      memoryMode: this.data.memoryMode || "local_only",
+      cloudSyncEnabled: this.data.memoryMode === "cloud_sync",
+    })).catch(() => {});
   },
 
   buildActionBusInput(command, type, action, payload) {

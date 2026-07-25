@@ -35,7 +35,8 @@ const CANONICAL_INTENTS = Object.freeze([
   "project_qa",
   "conversational_help",
   "generate_image",
-  "campus_multi_step_advice"
+  "campus_multi_step_advice",
+  "set_current_schedule"
 ]);
 const OFFLINE_INTENT_MAP = Object.freeze({
   "schedule_query": "search_school_index",
