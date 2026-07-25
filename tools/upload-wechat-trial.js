@@ -134,6 +134,14 @@ async function main() {
 }
 
 main().catch((err) => {
-  console.error("upload failed", err && (err.message || err));
+  const msg = String(err && (err.message || err) || "");
+  console.error("upload failed", msg);
+  if (/invalid ip|errCode.:-10008|-10008/i.test(msg)) {
+    console.error([
+      "IP whitelist blocked this upload.",
+      "Add this machine public IP to 微信公众平台 → 开发管理 → 开发设置 → 小程序代码上传 → IP白名单",
+      "Then re-run: npm run upload:wechat-trial",
+    ].join("\n"));
+  }
   process.exit(1);
 });
