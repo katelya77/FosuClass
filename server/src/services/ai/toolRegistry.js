@@ -203,6 +203,16 @@ function stripIntentWords(message) {
     .trim();
 }
 
+/** 「陈芳老师的课表」→ 姓名「陈芳」；禁止整串精确匹配失败 */
+function stripPersonHonorifics(name) {
+  return normalizeText(name)
+    .replace(/\s+/g, "")
+    .replace(/(?:的)?(?:课表|课程表)$/g, "")
+    .replace(/(?:老师|教师|任课老师|教授|讲师|导师)+$/g, "")
+    .replace(/^(?:老师|教师)/, "")
+    .trim();
+}
+
 function hasScheduleContext(context = {}) {
   const summary = context.currentScheduleSummary || {};
   return Boolean(summary.enabled && Array.isArray(summary.courses) && summary.courses.length);
@@ -260,14 +270,17 @@ function extractPendingQuery(message, type) {
   const text = normalizeText(message);
   if (!text) return "";
   const stripped = stripIntentWords(text);
-  if (stripped) return stripped;
+  if (stripped) {
+    return type === "teacher" ? (stripPersonHonorifics(stripped) || stripped) : stripped;
+  }
   const cleanupPatterns = {
     teacher: /老师|教师|任课|课表|查询|查|帮我|请|一下|的/g,
     classroom: /教室|课室|占用|使用情况|查询|查|帮我|请|一下|的/g,
     course: /课程|安排|查课|查询|查|帮我|请|一下|的/g,
     class: /班级|行政班|专业|课表|查询|查|帮我|请|一下|的/g,
   };
-  return text.replace(cleanupPatterns[type] || /查询|查|帮我|请|一下|的/g, " ").replace(/\s+/g, " ").trim();
+  const cleaned = text.replace(cleanupPatterns[type] || /查询|查|帮我|请|一下|的/g, " ").replace(/\s+/g, " ").trim();
+  return type === "teacher" ? (stripPersonHonorifics(cleaned) || cleaned) : cleaned;
 }
 
 function resolvePendingClarificationIntent(message, context = {}) {
@@ -510,11 +523,12 @@ function buildOpenScheduleIntent(goal, context = {}) {
       },
     };
   }
+  const q = type === "teacher" ? (stripPersonHonorifics(entity) || entity) : entity;
   return {
     name: "search_school_index",
     slots: {
       type,
-      q: entity,
+      q,
       lockedEntityType: type,
       goalAction: "open_schedule",
       explicitCommand: goal.explicitCommand === true,
@@ -1251,7 +1265,11 @@ function searchSchoolIndex(input = {}, context = {}) {
     : "";
   const type = locked
     || (["class", "teacher", "classroom", "course"].includes(input.type) ? input.type : "teacher");
-  const query = normalizeText(input.q || input.message || "");
+  let query = normalizeText(input.q || input.message || "");
+  // 教师：剥离「老师/教师」称谓，避免精确姓名把「陈芳老师」当成姓名
+  if (type === "teacher") {
+    query = stripPersonHonorifics(query) || query;
+  }
   const preferredId = normalizeText(input.preferredId || input.detailId || "");
   const classroomQuery = type === "classroom" ? classroomSearch.parseClassroomQuery(query) : null;
   const result = releaseService.searchActiveIndex(type, query, {
@@ -2143,4 +2161,5 @@ module.exports = {
   buildSetCurrentScheduleIntent,
   buildOpenScheduleIntent,
   isHighConfidenceIndexHit,
+  stripPersonHonorifics,
 };

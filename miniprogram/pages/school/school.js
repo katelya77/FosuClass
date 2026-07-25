@@ -232,14 +232,14 @@ Page({
     COURSE_SEARCH_PLACEHOLDER,
     CLASS_SEARCH_PLACEHOLDER,
     
-    // 下拉选择选项
+    // 下拉选择选项（教师院系默认「所有院系」）
     semesters: [],
-    colleges: [],
+    colleges: [{ code: "", name: "所有院系" }],
     grades: [],
     majors: [],
     
     selectedSemesterIndex: 0,
-    selectedCollegeIndex: -1,
+    selectedCollegeIndex: 0,
     selectedGradeIndex: -1,
     selectedMajorIndex: -1,
     
@@ -822,9 +822,21 @@ Page({
       newSelectedIndex = grades.indexOf(prevSelectedGrade);
     }
 
+    // Teacher tab needs explicit「所有院系」; keep code empty so filter is off.
+    const ALL_COLLEGE = { code: "", name: "所有院系" };
+    const rawColleges = Array.isArray(data.colleges) ? data.colleges : [];
+    const colleges = rawColleges.length && rawColleges[0] && rawColleges[0].name === "所有院系"
+      ? rawColleges
+      : [ALL_COLLEGE].concat(rawColleges);
+    let selectedCollegeIndex = this.data.selectedCollegeIndex;
+    // Migrate legacy -1 (all) → 0 (所有院系); clamp if list reshaped
+    if (selectedCollegeIndex < 0) selectedCollegeIndex = 0;
+    if (selectedCollegeIndex >= colleges.length) selectedCollegeIndex = 0;
+
     this.setData({
       semesters: data.semesters || [],
-      colleges: data.colleges || [],
+      colleges,
+      selectedCollegeIndex,
       grades: grades,
       selectedGradeIndex: newSelectedIndex,
       // 如果年级索引越界重置为 -1，需连带清空之前联动的专业
@@ -1296,11 +1308,13 @@ Page({
       this.applySharedQueryIfNeeded();
     };
 
-    const collegeIdx = this.data.colleges.findIndex(c => c.code === cache.collegeCode);
+    const collegeIdx = cache.collegeCode
+      ? this.data.colleges.findIndex(c => c.code === cache.collegeCode)
+      : 0;
     if (collegeIdx < 0) {
       this.setData({
         selectedSemesterIndex,
-        selectedCollegeIndex: -1,
+        selectedCollegeIndex: 0,
         selectedGradeIndex: -1,
         selectedMajorIndex: -1,
         selectedClassIndex: -1,
@@ -1431,7 +1445,7 @@ Page({
     this.clearPagedResults(["classAdmin", "classAggregate"]);
     this.setData({
       selectedSemesterIndex: 0,
-      selectedCollegeIndex: -1,
+      selectedCollegeIndex: 0,
       selectedGradeIndex: -1,
       selectedMajorIndex: -1,
       selectedClassIndex: -1,
@@ -1796,8 +1810,12 @@ Page({
     }
 
     const semester = semesters[selectedSemesterIndex]?.value || getFallbackTerm();
-    const collegeCode = selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex].code : "";
-    const collegeName = selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex].name : "";
+    const college = selectedCollegeIndex >= 0 ? colleges[selectedCollegeIndex] : null;
+    // 「所有院系」或未选：不按学院过滤
+    const isAllColleges = !college || !String(college.code || "").trim()
+      || college.name === "所有院系" || college.name === "所有学院";
+    const collegeCode = isAllColleges ? "" : String(college.code || "").trim();
+    const collegeName = isAllColleges ? "" : String(college.name || "").trim();
     const titleCode = this.data.titleFilterEnabled && selectedTitleIndex >= 0
       ? titleOptions[selectedTitleIndex]
       : "";
@@ -3425,8 +3443,18 @@ Page({
     }
 
     const seq = ++this._schoolRequestSeq;
-    const cached = releasePackService.readCachedSearchIndex(type, query) ||
+    let cached = releasePackService.readCachedSearchIndex(type, query) ||
       readSameVersionIndexCache(term, releaseVersion, type, query);
+    // Never trust empty teacher+college cache (stale offline empties poison UX).
+    const collegeActive = Boolean(String(query.collegeCode || "").trim() || String(query.collegeName || "").trim());
+    if (
+      type === "teacher"
+      && collegeActive
+      && cached
+      && (!cached.items || !cached.items.length)
+    ) {
+      cached = null;
+    }
     const isRuntimeCircuitOpen = () => Boolean(
       releasePackService.readRuntimeCircuit && releasePackService.readRuntimeCircuit()
     );
@@ -3446,12 +3474,12 @@ Page({
         this.retryFn = () => doNetworkRequest(true);
       }
 
-      // Teacher Search Contract: full local/static index + client filter first.
-      // Server is fallback only (never used to overwrite full teacher index cache).
+      // Teacher: college filter → server-first; no college → full index + keyword.
       const requestIndex = () => {
         if (type === "teacher") {
           return releasePackService.searchIndex(type, query, {
             forceNetwork: true,
+            forceServerSearch: collegeActive,
             timeout: SCHOOL_REQUEST_TIMEOUT,
             preferServerSearch: true,
             allowServerFallback: true,

@@ -106,7 +106,7 @@ function extractEntity(message, goal) {
       .replace(/[的地得]/g, " ")
       .replace(/\s+/g, "")
       .trim();
-    // 剥离纯语气残留
+    // 剥离纯语气残留（保留「老师」供 inferEntityType 识别 teacher，q 在 toolRegistry 再剥离称谓）
     entity = entity.replace(/^(?:一下|下|下下)+|(?:一下|下)$/g, "").trim();
     return entity;
   }

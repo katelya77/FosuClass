@@ -3482,24 +3482,26 @@ function matchesIndexField(item, optionValue, keys) {
   return keys.some((key) => String(item[key] || "").trim() === expected);
 }
 
-/** 学院过滤：单值 collegeCode/collegeName 或数组 collegeCodes/collegeNames */
+/** 学院过滤：code 与 name 任一命中即可（catalog code 与索引字段可能不完全同步） */
 function matchesCollege(item, collegeCode, collegeName) {
   const code = String(collegeCode || "").trim();
   const name = String(collegeName || "").trim();
   if (!code && !name) return true;
+  let codeOk = false;
   if (code) {
-    if (String(item.collegeCode || "").trim() === code) return true;
+    if (String(item.collegeCode || "").trim() === code) codeOk = true;
     const codes = Array.isArray(item.collegeCodes) ? item.collegeCodes : [];
-    if (codes.some((c) => String(c || "").trim() === code)) return true;
-    return false;
+    if (codes.some((c) => String(c || "").trim() === code)) codeOk = true;
   }
+  let nameOk = false;
   if (name) {
-    if (String(item.collegeName || item.college || "").trim() === name) return true;
+    if (String(item.collegeName || item.college || "").trim() === name) nameOk = true;
     const names = Array.isArray(item.collegeNames) ? item.collegeNames : [];
-    if (names.some((n) => String(n || "").trim() === name)) return true;
-    return false;
+    if (names.some((n) => String(n || "").trim() === name)) nameOk = true;
   }
-  return true;
+  if (code && name) return codeOk || nameOk;
+  if (code) return codeOk;
+  return nameOk;
 }
 
 function matchesTitle(item, titleCode) {

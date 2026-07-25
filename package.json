@@ -617,7 +617,8 @@
     "test:coze-gateway-live": "node tools/test-coze-gateway-live.js",
     "test:xiaofu-final-product-convergence": "node tools/test-xiaofu-final-product-convergence.js",
     "upload:wechat-trial": "node tools/upload-wechat-trial.js",
-    "test:teacher-index-cache-no-poison": "node tools/test-teacher-index-cache-no-poison.js"
+    "test:teacher-index-cache-no-poison": "node tools/test-teacher-index-cache-no-poison.js",
+    "test:teacher-college-keyword": "node tools/test-teacher-college-keyword-and-honorific.js"
   },
   "repository": {
     "type": "git",
