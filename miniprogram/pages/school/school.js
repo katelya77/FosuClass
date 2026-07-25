@@ -1566,6 +1566,12 @@ Page({
       teachersResult: [],
       teacherHitCount: 0,
       updatedAtText: "",
+    }, () => {
+      // 已有关键词时切换院系立即重搜，保证「选院系 + 关键词」流畅闭环
+      const kw = String(this.data.keyword || "").trim();
+      if (kw && this.data.activeTab === "teacher") {
+        this.searchTeacherSchedule();
+      }
     });
   },
 

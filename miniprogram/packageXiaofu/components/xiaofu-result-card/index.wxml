@@ -37,7 +37,15 @@
       <text wx:for="{{card.badges}}" wx:key="*this" class="badge">{{item}}</text>
     </view>
     <view class="card-items" wx:if="{{card.visibleItems.length}}">
-      <view wx:for="{{card.visibleItems}}" wx:for-item="cardItem" wx:key="key" class="card-item">
+      <view
+        wx:for="{{card.visibleItems}}"
+        wx:for-item="cardItem"
+        wx:key="key"
+        class="card-item {{cardItem.tappable ? 'card-item-tappable' : ''}}"
+        data-url="{{cardItem.url}}"
+        data-tappable="{{cardItem.tappable}}"
+        bindtap="onItemTap"
+      >
         <view class="item-main">
           <view class="item-title">{{cardItem.title}}</view>
           <view class="item-subtitle" wx:if="{{cardItem.subtitle}}">{{cardItem.subtitle}}</view>
