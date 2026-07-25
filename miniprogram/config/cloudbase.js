@@ -15,8 +15,9 @@ const AI_CLIENT_EXPRESSION_LAYER_ENABLED = false;
 const AI_MAX_HISTORY_MESSAGES = 6;
 const AI_MAX_USER_MESSAGE_LENGTH = 1200;
 const AI_MAX_DAILY_GENERATIVE_REQUESTS = 20;
-const AI_VOICE_INPUT_ENABLED = false;
-const AI_VOICE_PROVIDER = "";
+// 语音走 CloudBase 云函数 aiVoiceTranscribe → 腾讯 ASR；密钥仅在云函数环境
+const AI_VOICE_INPUT_ENABLED = true;
+const AI_VOICE_PROVIDER = "cloudbase-function";
 const AI_VOICE_MAX_DURATION_MS = 15000;
 const AI_VOICE_DAILY_LIMIT = 30;
 

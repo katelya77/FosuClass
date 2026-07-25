@@ -40,7 +40,8 @@
       "description": "AG-UI gateway for Xiaofu Agent",
       "envVariables": {
         "NODE_ENV": "production",
-        "FOSU_AGENT_TIMEOUT_MS": "25000"
+        "FOSU_AGENT_TIMEOUT_MS": "25000",
+        "FOSU_AGENT_API_BASE": "https://class.katelya.eu.org"
       },
       "installDependency": true
     }
