@@ -21,6 +21,7 @@ const { resolvePrincipal } = require("./conversation/conversationPrincipalServic
 const { defaultUserPreferenceService } = require("./conversation/userPreferenceService");
 const scheduleAnalysisService = require("./scheduleAnalysisService");
 const goalParser = require("./planner/goalParser");
+const followUpResolver = require("./planner/followUpResolver");
 const classAliasResolver = require("./classAliasResolver");
 
 const MAX_SECTION = 14;
@@ -156,10 +157,27 @@ function inferSections(message, clientTime) {
 
 function inferTargetDate(message, context) {
   const date = parseClientDate(context, new Date());
-  if (/明天|翌日/.test(message || "")) {
-    date.setDate(date.getDate() + 1);
-  }
+  const text = String(message || "");
+  const offsetInfo = followUpResolver.parseDateOffset(text);
+  const offset = offsetInfo && Number.isFinite(offsetInfo.dateOffset)
+    ? offsetInfo.dateOffset
+    : (/明天|翌日|明日/.test(text) ? 1 : 0);
+  if (offset) date.setDate(date.getDate() + offset);
   return formatDate(date);
+}
+
+function buildWeatherSlots(message, context = {}) {
+  const campus = inferCampusFromText(message);
+  const offsetInfo = followUpResolver.parseDateOffset(message);
+  const slots = { campus };
+  if (offsetInfo) {
+    slots.dateOffset = offsetInfo.dateOffset;
+    slots.dateHint = offsetInfo.dateHint;
+    slots.dayOffset = offsetInfo.dateOffset;
+  }
+  // Absolute date for tools that still expect YYYY-MM-DD
+  slots.date = inferTargetDate(message, context);
+  return slots;
 }
 
 function inferSearchType(message) {
@@ -676,19 +694,23 @@ function resolveModernChineseIntent(message, context = {}) {
   if (/\u751f\u56fe|\u56fe\u7247|\u6d77\u62a5|\u5206\u4eab\u56fe|\u914d\u56fe|\u5c55\u793a\u7d20\u6750|\u751f\u6210.*\u56fe/.test(text)) {
     return { name: "generate_image", slots: { scene: "competition_demo_asset" } };
   }
-  if (hasWeather && (hasEmptyRoom || hasTravel || /\u660e\u5929|\u4e0b\u5348|\u540e\u5929|\u4e0b\u5468/.test(text))) {
+  // Pure weather (incl. 后天/明天 + campus) must NOT become multi_step.
+  // Multi-step only when weather is combined with empty-room or travel tasks.
+  if (hasWeather && (hasEmptyRoom || hasTravel)) {
     return {
       name: "campus_multi_step_advice",
       slots: {
         campus,
         date: inferTargetDate(text, context),
+        dateOffset: (followUpResolver.parseDateOffset(text) || {}).dateOffset,
         sections: inferSections(text, context),
         building: extractBuilding(text),
+        wantsWeather: true,
       },
     };
   }
   if (hasWeather) {
-    return { name: "get_campus_weather", slots: { campus } };
+    return { name: "get_campus_weather", slots: buildWeatherSlots(text, context) };
   }
   if (hasCampusMapQuery && hasCampusScope) {
     const classroom = (text.match(/[A-Z]\d{1,2}(?:[-\u680b\u697c]?\d{0,4})?/i) || [""])[0];
@@ -896,8 +918,6 @@ function resolveIntent(message, context = {}) {
   if (isProjectQaMessage(text)) {
     return { name: "project_qa", slots: {} };
   }
-  const modernIntent = resolveModernChineseIntent(text, context);
-  if (modernIntent) return modernIntent;
   // Goal-first：操作类意图优先于查询类——“将24动医1的课表设为当前首页课表”
   // 必须解析成 set_current_schedule，而不是落入全校查询兜底（断点1修复）
   // “打开24动物医学1班的课表” → open_schedule + entityType=class（禁止误判 teacher）
@@ -910,9 +930,16 @@ function resolveIntent(message, context = {}) {
   }
   const pendingIntent = resolvePendingClarificationIntent(text, context);
   if (pendingIntent) return pendingIntent;
-  // Multi-turn slot refinements before generic conversational fallback.
+  // Unified follow-up (campus swap / continuous rooms / bare entity fill) before modern multi-step & RAG.
+  const unifiedFollowUp = followUpResolver.resolveFollowUp(text, context.conversationWorkingState || context.workingMemory || {}, context);
+  if (unifiedFollowUp && unifiedFollowUp.intent) {
+    return unifiedFollowUp.intent;
+  }
+  // Legacy week/period follow-ups.
   const followUpIntent = resolveFollowUpIntent(text, context);
   if (followUpIntent) return followUpIntent;
+  const modernIntent = resolveModernChineseIntent(text, context);
+  if (modernIntent) return modernIntent;
   const chineseIntent = resolveIntentChinese(text, context);
   if (chineseIntent) return chineseIntent;
   if (/导入|XLS|excel|个人课表|账号|登录|密码/.test(text)) {

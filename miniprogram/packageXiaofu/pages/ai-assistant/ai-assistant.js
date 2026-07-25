@@ -1,5 +1,7 @@
 const aiAssistantService = require("../../../services/aiAssistantService");
 const aiVoiceInputService = require("../../../services/aiVoiceInputService");
+const voiceAuthStateMachine = require("../../../utils/voiceAuthStateMachine");
+const xiaofuGeometry = require("../../../utils/xiaofuGeometry");
 const conversationStore = require("../../../services/conversationStore");
 const contextManager = require("../../../services/xiaofuContextManager");
 const xiaofuFloatService = require("../../../services/xiaofuFloatService");
@@ -2258,28 +2260,47 @@ Page({
     });
   },
 
+  /**
+   * Privacy → record authorization state machine.
+   * Never opens settings on first undecided authorize fail.
+   */
   ensureRecordPermission() {
-    return new Promise((resolve) => {
-      wx.authorize({
-        scope: "scope.record",
-        success: () => resolve(true),
-        fail: () => {
+    if (!this._voiceAuthState) {
+      this._voiceAuthState = voiceAuthStateMachine.createInitialState();
+    }
+    return voiceAuthStateMachine.ensureVoiceReady(this._voiceAuthState, { wx }).then((result) => {
+      this._voiceAuthState = result.state || this._voiceAuthState;
+      if (result.ok) return true;
+      if (result.openSettingSuggested) {
+        return new Promise((resolve) => {
           wx.showModal({
             title: "需要录音权限",
-            content: "语音只用于本次转文字，识别完成后会删除临时文件。",
+            content: "语音只用于本次转文字，识别完成后会删除临时文件。可在设置中开启麦克风权限。",
             confirmText: "打开设置",
             cancelText: "取消",
             success: (res) => {
               if (!res.confirm) return resolve(false);
-              wx.openSetting({
-                success: (setting) => resolve(Boolean(setting.authSetting && setting.authSetting["scope.record"])),
-                fail: () => resolve(false),
+              voiceAuthStateMachine.openSettingAndResume({ wx }).then((granted) => {
+                if (!granted) {
+                  return voiceAuthStateMachine.resumeAfterOpenSetting(this._voiceAuthState, { wx }).then((after) => {
+                    this._voiceAuthState = after.state || this._voiceAuthState;
+                    resolve(Boolean(after.ok));
+                  });
+                }
+                return voiceAuthStateMachine.resumeAfterOpenSetting(this._voiceAuthState, { wx }).then((after) => {
+                  this._voiceAuthState = after.state || this._voiceAuthState;
+                  resolve(Boolean(after.ok));
+                });
               });
             },
             fail: () => resolve(false),
           });
-        },
-      });
+        });
+      }
+      if (result.state && result.state.lastError) {
+        wx.showToast({ title: result.state.lastError, icon: "none" });
+      }
+      return false;
     });
   },
 
@@ -2300,7 +2321,8 @@ Page({
     if (this.data.voiceRecording || this.data.sending) return;
     this.ensureRecordPermission().then((allowed) => {
       if (!allowed || !this._recorderManager) return;
-      this.setData({ voiceStatusText: "正在录音" });
+      this._voiceAuthState = voiceAuthStateMachine.markRecording(this._voiceAuthState || voiceAuthStateMachine.createInitialState());
+      this.setData({ voiceStatusText: "正在录音", voiceRecording: true });
       this._voiceRecordStartedAt = Date.now();
       this._recorderManager.start({
         duration: Number(cloudbaseConfig.AI_VOICE_MAX_DURATION_MS || 15000) || 15000,
@@ -2333,10 +2355,12 @@ Page({
     const durationMs = Number(res && res.duration || 0) || Math.max(0, Date.now() - Number(this._voiceRecordStartedAt || Date.now()));
     this.setData({ voiceRecording: false });
     if (durationMs < aiVoiceInputService.MIN_DURATION_MS) {
+      this._voiceAuthState = voiceAuthStateMachine.markError(this._voiceAuthState || {}, "录音时间太短");
       this.setData({ voiceRecognizing: false, voiceStatusText: "录音时间太短" });
       wx.showToast({ title: "录音时间太短", icon: "none" });
       return;
     }
+    this._voiceAuthState = voiceAuthStateMachine.markTranscribing(this._voiceAuthState || {});
     this.setData({ voiceRecognizing: true, voiceStatusText: "正在识别" });
     aiVoiceInputService.transcribeRecording({
       tempFilePath: res && res.tempFilePath,
@@ -2346,6 +2370,8 @@ Page({
     }).then((result) => {
       const text = String(result && result.text || "").trim();
       if (!text) throw new Error("EMPTY_VOICE_TEXT");
+      // Fill input only — never auto-send.
+      this._voiceAuthState = voiceAuthStateMachine.markSuccess(this._voiceAuthState || {});
       this.setData({
         inputValue: text,
         inputFocus: true,
@@ -2353,8 +2379,55 @@ Page({
         voiceStatusText: "识别完成",
       });
     }).catch(() => {
+      this._voiceAuthState = voiceAuthStateMachine.markError(this._voiceAuthState || {}, "识别失败");
       this.setData({ voiceRecognizing: false, voiceStatusText: "识别失败" });
       wx.showToast({ title: "识别失败，可继续文字输入", icon: "none" });
+    });
+  },
+
+  /**
+   * selectorQuery geometry probe for status island centering + message/composer gaps.
+   * Used in real-device QA; safe no-op when query APIs unavailable.
+   */
+  measureXiaofuGeometry() {
+    if (typeof wx === "undefined" || !wx.createSelectorQuery) {
+      return Promise.resolve(null);
+    }
+    return new Promise((resolve) => {
+      const query = wx.createSelectorQuery();
+      query.select("#agent-status-island-wrap").boundingClientRect();
+      query.select("#agent-status-capsule").boundingClientRect();
+      query.select("#composer-shell").boundingClientRect();
+      query.select("#composer-pill").boundingClientRect();
+      query.select(".message-scroll").boundingClientRect();
+      query.select("#message-bottom-anchor").boundingClientRect();
+      query.selectViewport().scrollOffset();
+      query.exec((rects) => {
+        const wrap = rects && rects[0] || {};
+        const capsule = rects && rects[1] || {};
+        const composer = rects && rects[2] || {};
+        const scroll = rects && rects[4] || {};
+        const lastMsg = rects && rects[5] || {};
+        const island = xiaofuGeometry.measureStatusIslandGaps(capsule, wrap);
+        const gaps = xiaofuGeometry.measureComposerMessageGaps({
+          scrollViewBottom: scroll.bottom,
+          composerTop: composer.top,
+          lastMessageBottom: lastMsg.bottom,
+        });
+        const report = {
+          island,
+          gaps,
+          viewportBottom: scroll.bottom,
+          composerTop: composer.top,
+          composerBottom: composer.bottom,
+          lastMessageBottom: lastMsg.bottom,
+          scrollViewTop: scroll.top,
+          scrollViewBottom: scroll.bottom,
+          safeAreaBottom: null,
+        };
+        this._lastGeometryReport = report;
+        resolve(report);
+      });
     });
   },
 
