@@ -935,6 +935,13 @@ router.get("/search-index", scheduleLimiter, (req, res) => {
       college: item.college || item.collegeName || "",
       collegeCode: item.collegeCode || "",
       collegeName: item.collegeName || "",
+      collegeCodes: Array.isArray(item.collegeCodes) ? item.collegeCodes : (item.collegeCode ? [item.collegeCode] : []),
+      collegeNames: Array.isArray(item.collegeNames) ? item.collegeNames : (item.collegeName ? [item.collegeName] : []),
+      title: item.title || item.teacherTitle || item.professionalTitle || "",
+      titleCode: item.titleCode || "",
+      teacherId: item.teacherId || (type === "teacher" ? item.id : undefined),
+      canonicalName: item.canonicalName || "",
+      aliases: Array.isArray(item.aliases) ? item.aliases : [],
       grade: item.grade || "",
       majorCode: item.majorCode || "",
       majorName: item.majorName || "",
@@ -946,6 +953,8 @@ router.get("/search-index", scheduleLimiter, (req, res) => {
       isAggregated: Boolean(item.isAggregated),
       updatedAt: item.updatedAt || "",
       semester: item.semester || result.semester || "",
+      term: item.term || item.semester || result.semester || "",
+      releaseVersion: item.releaseVersion || result.releaseVersion || result.version || "",
     }));
 
     // Standardized meta block

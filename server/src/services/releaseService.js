@@ -944,6 +944,18 @@ function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names,
     if (!onlyIndexes) {
       writeJsonAtomic(path.join(dirPath, `${id}.json`), buildSchedulePayload(schedule, { id }));
     }
+    const collegeCode = source.collegeCode || schedule.collegeCode || "";
+    const collegeName = source.collegeName || schedule.collegeName || "";
+    const collegeCodes = Array.from(new Set([
+      collegeCode,
+      ...(Array.isArray(source.collegeCodes) ? source.collegeCodes : []),
+      ...(Array.isArray(schedule.collegeCodes) ? schedule.collegeCodes : []),
+    ].map((c) => String(c || "").trim()).filter(Boolean)));
+    const collegeNames = Array.from(new Set([
+      collegeName,
+      ...(Array.isArray(source.collegeNames) ? source.collegeNames : []),
+      ...(Array.isArray(schedule.collegeNames) ? schedule.collegeNames : []),
+    ].map((n) => String(n || "").trim()).filter(Boolean)));
     index.push({
       id,
       name,
@@ -953,17 +965,28 @@ function buildNamedScheduleDerivedFiles(snapshot, files, kind, schedules, names,
       title: source.title || schedule.title || "",
       teacherTitle: source.teacherTitle || schedule.teacherTitle || "",
       professionalTitle: source.professionalTitle || schedule.professionalTitle || "",
+      titleCode: source.titleCode || schedule.titleCode || "",
       searchableName: normalizeSearchText(name),
       keywords,
       semester: schedule.semester || snapshot.semester || "",
-      collegeCode: source.collegeCode || schedule.collegeCode || "",
-      collegeName: source.collegeName || schedule.collegeName || "",
+      collegeCode: collegeCode || collegeCodes[0] || "",
+      collegeName: collegeName || collegeNames[0] || "",
+      collegeCodes,
+      collegeNames,
       campus: source.campus || schedule.campus || "",
       source: source.source || schedule.source || "derived",
       hasDetail: !onlyIndexes,
       courseCount: summary.courseCount,
       firstCourseName: summary.firstCourseName,
       updatedAt: schedule.updatedAt || snapshot.updatedAt || "",
+      // 教师专用规范字段（Release Pack 构建阶段填充）
+      teacherId: kind === "teacher" ? id : undefined,
+      canonicalName: kind === "teacher" ? name : undefined,
+      aliases: kind === "teacher"
+        ? compactKeywordList([name, source.displayName, source.rawName, schedule.displayName]).slice(0, 8)
+        : undefined,
+      term: schedule.semester || snapshot.semester || "",
+      releaseVersion: normalizeVersion(snapshot.version || snapshot.releaseVersion || ""),
     });
   };
 
@@ -1502,8 +1525,82 @@ function writeDerivedIndexes(snapshot, files, onlyIndexes = false) {
     onlyIndexes
   );
   const emptyRooms = buildEmptyRoomDerivedFiles(snapshot, files, classrooms);
-  const shards = writeIndexShardFiles(snapshot, files, { classes, teachers, classrooms, courses });
-  return { classes, teachers, classrooms, courses, emptyRooms, shards };
+  // 教师学院字段派生：根据课程对应班级/专业/学院关系补齐，跨学院可多值；无法确定标“学院待确认”
+  const enrichedTeachers = enrichTeacherCollegeFields(teachers, classes, resources);
+  const shards = writeIndexShardFiles(snapshot, files, {
+    classes,
+    teachers: enrichedTeachers,
+    classrooms,
+    courses,
+  });
+  // 回写教师索引（含学院补齐）
+  if (files.teachersIndexPath) {
+    writeJsonAtomic(files.teachersIndexPath, enrichedTeachers);
+  }
+  return { classes, teachers: enrichedTeachers, classrooms, courses, emptyRooms, shards };
+}
+
+/**
+ * 从班级索引与教师课表课程中的班级名，派生教师学院关联。
+ * 不得伪造：无可靠关联时 collegeName=学院待确认，collegeCode 为空。
+ */
+function enrichTeacherCollegeFields(teachers, classes, resources = {}) {
+  const classList = Array.isArray(classes) ? classes : [];
+  const classByName = new Map();
+  classList.forEach((item) => {
+    const name = String(item.name || item.className || "").trim();
+    if (!name) return;
+    classByName.set(name, item);
+    classByName.set(name.replace(/\s+/g, ""), item);
+  });
+  const teacherSchedules = asArray(resources.teacherSchedules);
+  const scheduleByTeacher = new Map();
+  teacherSchedules.forEach((schedule) => {
+    const tName = getFirstText(schedule, ["teacherName", "name", "title"]);
+    if (tName) scheduleByTeacher.set(tName, schedule);
+  });
+
+  return (Array.isArray(teachers) ? teachers : []).map((teacher) => {
+    const existingCodes = Array.isArray(teacher.collegeCodes) ? teacher.collegeCodes.slice() : [];
+    const existingNames = Array.isArray(teacher.collegeNames) ? teacher.collegeNames.slice() : [];
+    if (teacher.collegeCode) existingCodes.push(teacher.collegeCode);
+    if (teacher.collegeName) existingNames.push(teacher.collegeName);
+
+    const schedule = scheduleByTeacher.get(teacher.name || teacher.teacherName) || null;
+    const courses = asArray(schedule && schedule.courses);
+    courses.forEach((course) => {
+      const className = String(course.className || course.class || course.teachingClass || "").trim();
+      if (!className) return;
+      const cls = classByName.get(className) || classByName.get(className.replace(/\s+/g, ""));
+      if (!cls) return;
+      if (cls.collegeCode) existingCodes.push(cls.collegeCode);
+      if (cls.collegeName || cls.college) existingNames.push(cls.collegeName || cls.college);
+    });
+
+    // 也从教师课表 courses 的 college 字段取（若有）
+    courses.forEach((course) => {
+      if (course.collegeCode) existingCodes.push(course.collegeCode);
+      if (course.collegeName || course.college) existingNames.push(course.collegeName || course.college);
+    });
+
+    const collegeCodes = Array.from(new Set(existingCodes.map((c) => String(c || "").trim()).filter(Boolean)));
+    const collegeNames = Array.from(new Set(existingNames.map((n) => String(n || "").trim()).filter(Boolean)));
+    const hasCollege = collegeCodes.length > 0 || collegeNames.length > 0;
+    return Object.assign({}, teacher, {
+      teacherId: teacher.teacherId || teacher.id,
+      canonicalName: teacher.canonicalName || teacher.name || teacher.teacherName || "",
+      aliases: Array.isArray(teacher.aliases) ? teacher.aliases : [],
+      collegeCode: collegeCodes[0] || teacher.collegeCode || "",
+      collegeName: hasCollege
+        ? (collegeNames[0] || teacher.collegeName || "")
+        : "学院待确认",
+      collegeCodes,
+      collegeNames: hasCollege ? collegeNames : ["学院待确认"],
+      title: teacher.title || teacher.teacherTitle || teacher.professionalTitle || "",
+      term: teacher.term || teacher.semester || "",
+      releaseVersion: teacher.releaseVersion || "",
+    });
+  });
 }
 
 function hasCourseTiming(course) {
@@ -3294,10 +3391,41 @@ function searchActiveIndex(kind, query, options = {}) {
     if (!expected) return true;
     return keys.some((key) => String(item[key] || "").trim() === expected);
   };
+  const matchesCollege = (item, collegeCode, collegeName) => {
+    const code = String(collegeCode || "").trim();
+    const name = String(collegeName || "").trim();
+    if (!code && !name) return true;
+    if (code) {
+      if (String(item.collegeCode || "").trim() === code) return true;
+      const codes = Array.isArray(item.collegeCodes) ? item.collegeCodes : [];
+      if (codes.some((c) => String(c || "").trim() === code)) return true;
+      return false;
+    }
+    if (name) {
+      if (String(item.collegeName || item.college || "").trim() === name) return true;
+      const names = Array.isArray(item.collegeNames) ? item.collegeNames : [];
+      if (names.some((n) => String(n || "").trim() === name)) return true;
+      return false;
+    }
+    return true;
+  };
+  const matchesTitle = (item, titleCode) => {
+    const expected = String(titleCode || "").trim();
+    if (!expected) return true;
+    const candidates = [
+      item.title,
+      item.teacherTitle,
+      item.professionalTitle,
+      item.titleCode,
+      item.titleName,
+    ].map((v) => String(v || "").trim()).filter(Boolean);
+    if (!candidates.length) return false;
+    return candidates.some((v) => v === expected || v.includes(expected));
+  };
   const scoped = source.filter((item) => {
     if (!matchesField(item, options.semester, ["semester"])) return false;
-    if (!matchesField(item, options.collegeCode, ["collegeCode"])) return false;
-    if (!matchesField(item, options.collegeName, ["collegeName", "college"])) return false;
+    if (!matchesCollege(item, options.collegeCode, options.collegeName)) return false;
+    if (kind === "teacher" && !matchesTitle(item, options.titleCode)) return false;
     if (!matchesField(item, options.grade, ["grade"])) return false;
     if (!matchesField(item, options.majorCode, ["majorCode"])) return false;
     if (!matchesField(item, options.majorName, ["majorName"])) return false;

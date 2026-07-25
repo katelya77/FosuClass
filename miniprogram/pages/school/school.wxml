@@ -324,7 +324,7 @@
             </picker>
           </view>
 
-          <view class="filter-item">
+          <view class="filter-item" wx:if="{{titleFilterEnabled}}">
             <text class="filter-label">职称：</text>
             <picker mode="selector" range="{{titleOptions}}" bindchange="onTitleChange">
               <view class="filter-pill">{{titleOptions[selectedTitleIndex] || "所有职称 (可选)"}}</view>

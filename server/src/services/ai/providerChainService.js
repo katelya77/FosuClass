@@ -10,7 +10,8 @@ const PROVIDERS = {
   "cloudbase-openai": cloudbaseOpenaiProvider,
 };
 
-const DEFAULT_COMPETITION_CHAIN = ["cloudbase-openai", "deepseek", "coze", "mock"];
+// trial/dev 推荐：Coze Agent → CloudBase 内置模型 → DeepSeek → 确定性 mock
+const DEFAULT_COMPETITION_CHAIN = ["coze", "cloudbase-openai", "deepseek", "mock"];
 const DEFAULT_PUBLIC_CHAIN = ["mock"];
 const state = new Map();
 
