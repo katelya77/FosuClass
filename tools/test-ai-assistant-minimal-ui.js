@@ -23,7 +23,15 @@ assert(!/const\s+QUICK_ACTIONS\s*=\s*\[/.test(js), "page must not keep an inline
 assert(!wxml.includes("privacy-tip-full"), "privacy-tip-full must not be a first-viewport card");
 assert(wxml.includes("bottom-sheet") || wxml.includes("sheet-mask"), "bottom sheet / overlay should exist");
 assert(/class="composer"/.test(wxml), "composer should exist");
-assert(/\.composer\s*\{[\s\S]*?position\s*:\s*fixed/.test(wxss), "composer should stay fixed");
+// 2026-07 final: flex 贴底 composer，禁止 fixed + page padding-bottom:200rpx 双占位截断
+const composerBlock = (wxss.match(/\.composer\s*\{[\s\S]*?\n\}/) || [""])[0];
+const pageBlock = (wxss.match(/\.ai-page\s*\{[\s\S]*?\n\}/) || [""])[0];
+assert(
+  /flex:\s*0\s+0\s+auto/.test(composerBlock) || /flex-shrink:\s*0/.test(composerBlock),
+  "composer should be flex-shrink:0 (not fixed double-pad)"
+);
+assert(!/position\s*:\s*fixed/.test(composerBlock), "composer must not be position:fixed (truncation regression)");
+assert(!/padding-bottom:\s*200rpx/.test(pageBlock), "ai-page must not double-pad 200rpx for fixed composer");
 assert(wxml.includes("xiaofu-header") && !wxml.includes("assistant-hero card"), "top should be the Xiaofu light header, not a hero card");
 assert(
   (wxml.includes("xiaofu-title-line") || wxml.includes("xiaofu-conversation-primary") || wxml.includes("xiaofu-header-compact"))

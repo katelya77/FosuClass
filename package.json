@@ -605,6 +605,13 @@
     "test:agent-e2e-matrix": "node tools/test-agent-e2e-matrix.js",
     "test:agent-final-convergence": "node tools/run-agent-final-convergence-tests.js",
     "test:agent-release-gate": "node tools/run-agent-release-gate.js",
+    "test:open-schedule-goal": "node tools/test-open-schedule-goal.js",
+    "test:agui-adapter": "node tools/test-agui-adapter.js",
+    "test:coze-agent-adapter": "node tools/test-coze-agent-adapter.js",
+    "test:teacher-college-filter": "node tools/test-teacher-college-filter.js",
+    "test:ai-ui-layout-final": "node tools/test-ai-ui-layout-final.js",
+    "test:public-zero-provider": "node tools/test-public-zero-provider.js",
+    "test:xiaofu-final-suite": "node tools/test-open-schedule-goal.js && node tools/test-agui-adapter.js && node tools/test-coze-agent-adapter.js && node tools/test-teacher-college-filter.js && node tools/test-ai-ui-layout-final.js && node tools/test-public-zero-provider.js",
     "test:agent-task-gates": "node tools/test-ai-goal-first-parser.js && node tools/test-ai-goal-intent-regression.js && node tools/test-ai-set-current-schedule-receipt.js && node tools/test-ai-manifest-actions-behavior.js && node tools/test-ai-memory-semantics.js && node tools/test-ai-voice-handler.js && node tools/test-ai-kb-seed-verify.js && node tools/test-ai-kb-published-smoke.js && node tools/test-ai-ui-polish.js",
     "test:coze-gateway-live": "node tools/test-coze-gateway-live.js"
   },

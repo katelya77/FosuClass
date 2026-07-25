@@ -24,8 +24,9 @@ const OPERATION_PATTERNS = [
     objects: /(?:当前)?(?:首页)?课表|首页|当前课表|我的课表/,
   },
   {
+    // 仅“打开/查看/显示”类动词；裸“查…课表”仍走查询澄清/索引，避免与 search 链路抢意图
     goal: "open_schedule",
-    verbs: /(?:打开|看看|看一下|查看|查|显示)/,
+    verbs: /(?:打开|看看|看一下|查看|显示)/,
     objects: /(?:课表|课程表)/,
   },
   {
@@ -56,13 +57,22 @@ function inferEntityType(text) {
   if (!value) return "";
   if (/老师|教师|任课/.test(value)) return "teacher";
   if (/教室|课室|自习室|楼栋/.test(value)) return "classroom";
+  // 教室编号：C7-305 / A1-101 / 教1-201 等
+  if (/^[A-Za-z]\d{0,2}[-–—]?\d{2,4}$/.test(value) || /[A-Za-z]\d{1,2}[-–—]\d{2,4}/.test(value)) {
+    return "classroom";
+  }
+  if (/^(?:教|实验|实训|机房)/.test(value) && /\d/.test(value)) return "classroom";
   // 班级：含“班”字，或 年级+专业+数字 模式（24动医1 / 24动物医学1班 / 2024级动物医学1班）
   if (/班级|行政班|专业|\d{2,4}级/.test(value)) return "class";
   if (/(?:^|\D)(\d{2})[\u3400-\u9fff]{2,10}\d{1,2}(?:班)?(?:$|\D)/.test(value)) return "class";
   if (/[\u3400-\u9fff]{2,12}\d{1,2}班/.test(value)) return "class";
   if (/班/.test(value) && !/老师|教师|教室/.test(value)) return "class";
-  // 课程：出现“课程/科目/课”但不构成班级模式
+  // 课程：出现“课程/科目”或纯中文课程名（无班号/老师/教室特征）
   if (/课程|科目/.test(value)) return "course";
+  // 纯中文 2～12 字且无数字班号 → 倾向课程（如“有机化学”）
+  if (/^[\u3400-\u9fff]{2,12}$/.test(value) && !/老师|教师|教室|课室|班/.test(value)) {
+    return "course";
+  }
   return "";
 }
 
@@ -87,13 +97,27 @@ function extractEntity(message, goal) {
     return text.replace(/^(?:将|把)/, "").trim();
   }
   if (goal === "open_schedule") {
-    return text
-      .replace(/(?:打开|看看|看一下|查看|查|显示)/g, " ")
+    let entity = text
+      .replace(/^(?:请|帮我|麻烦|给我|我要|我想|把)/g, "")
+      .replace(/(?:打开|看看|看一下|查看|显示)/g, " ")
+      // “查” alone often means “查询” without a concrete entity — strip carefully
+      .replace(/(?:^|[\s，,])查(?:一下|下|询)?/g, " ")
       .replace(/课表|课程表/g, " ")
+      .replace(/[的地得]/g, " ")
       .replace(/\s+/g, "")
       .trim();
+    // 剥离纯语气残留
+    entity = entity.replace(/^(?:一下|下|下下)+|(?:一下|下)$/g, "").trim();
+    return entity;
   }
   return text;
+}
+
+/** 仅类型词、无具体名称 → 不算可执行实体 */
+function isGenericTypeEntity(entity) {
+  const value = compact(entity);
+  if (!value) return true;
+  return /^(?:老师|教师|任课老师|教室|课室|班级|行政班|课程|科目|课表|课程表)$/.test(value);
 }
 
 // “把刚刚查到的班级设为我的课表”这类无显式实体、依赖上下文的指令。
@@ -121,19 +145,32 @@ function parseGoal(message, context = {}) {
       return null;
     }
     const deictic = isDeicticReference(text);
-    const entity = deictic ? "" : extractEntity(raw, goal);
+    let entity = deictic ? "" : extractEntity(raw, goal);
+    // 泛型实体（“老师/教室/课表”本身）不算可执行对象 → 留给后续 clarify
+    if (entity && isGenericTypeEntity(entity)) {
+      if (goal === "open_schedule") {
+        // “帮我查老师课表” 不是打开具体老师；返回 null 走查询澄清链路
+        return null;
+      }
+      entity = "";
+    }
     const entityType = entity ? inferEntityType(entity) : (deictic ? "class" : "");
     // 操作指令必须能落到实体或上下文指代，否则不算明确操作
     if (!entity && !deictic) return null;
 
+    const resolvedEntityType = entityType || (goal === "set_current_schedule" ? "class" : "");
     return {
       goal,
-      entityType: entityType || (goal === "set_current_schedule" ? "class" : ""),
+      entityType: resolvedEntityType,
       entity,
+      normalizedEntity: compact(entity),
       constraints: {},
+      confidence: resolvedEntityType ? 0.92 : (entity ? 0.7 : 0.5),
+      needsClarification: !resolvedEntityType && !deictic,
+      source: "rule_parser",
       desiredOutcome: goal === "set_current_schedule"
         ? "首页当前课表切换为目标班级课表"
-        : goal,
+        : (goal === "open_schedule" ? "打开目标课表并展示卡片" : goal),
       // explicit_user_command：消息本身就是用户明确指令，无需二次确认
       explicitCommand: true,
       deictic,
@@ -147,4 +184,5 @@ module.exports = {
   inferEntityType,
   extractEntity,
   isDeicticReference,
+  isGenericTypeEntity,
 };

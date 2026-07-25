@@ -747,39 +747,87 @@ function sanitizePublicPlan(plan) {
 }
 
 // 从工具结果确定性派生 Action Command（模型不参与生成）。
-// 当前仅支持 set_current_schedule → setCurrentSchedule：仅当用户消息明确携带
-// 操作动词（explicitCommand=true，由 goal-first 路由标记）且服务端索引校验通过时
-// 生成；客户端执行后必须回传 Receipt（POST /agent/action-receipts），
-// 无 success Receipt 不得声称设置成功。载荷只携带 type/detailId/name/term/
-// releaseVersion，不传整份 courses。
+// 1) set_current_schedule → setCurrentSchedule（需 explicitCommand + 索引校验）
+// 2) open_schedule 链路 get_schedule_detail / 唯一 search_school_index → navigate 打开课表
+// 无 success Receipt 不得声称写操作成功。
 function deriveActionCommands(toolCalls = []) {
   const derived = [];
-  (Array.isArray(toolCalls) ? toolCalls : []).forEach((call) => {
-    if (!call || call.name !== "set_current_schedule" || call.status !== "success") return;
+  const calls = Array.isArray(toolCalls) ? toolCalls : [];
+  calls.forEach((call) => {
+    if (!call || call.status !== "success") return;
     const result = call.result && typeof call.result === "object" ? call.result : call;
-    if (result.actionRequired !== "setCurrentSchedule" || result.explicitCommand !== true) return;
-    const target = result.target && typeof result.target === "object" ? result.target : {};
-    if (!target.detailId || !target.name) return;
-    const safeName = String(target.name).slice(0, 120);
-    derived.push({
-      command: "setCurrentSchedule",
-      label: "设为首页课表",
-      input: {
-        type: "class",
-        detailId: String(target.detailId).slice(0, 128),
-        name: safeName,
-        term: String(target.term || "").slice(0, 40),
-        releaseVersion: String(target.releaseVersion || "").slice(0, 40),
-      },
-      confirmationRequest: {
-        title: "设置首页课表",
-        summary: `将首页课表切换为「${safeName.slice(0, 60)}」${target.term ? `（${String(target.term).slice(0, 40)}）` : ""}？`,
-        confirmText: "确认设置",
-        cancelText: "取消",
-      },
-    });
+
+    if (call.name === "set_current_schedule") {
+      if (result.actionRequired !== "setCurrentSchedule" || result.explicitCommand !== true) return;
+      const target = result.target && typeof result.target === "object" ? result.target : {};
+      if (!target.detailId || !target.name) return;
+      const safeName = String(target.name).slice(0, 120);
+      derived.push({
+        command: "setCurrentSchedule",
+        label: "设为首页课表",
+        input: {
+          type: "class",
+          detailId: String(target.detailId).slice(0, 128),
+          name: safeName,
+          term: String(target.term || "").slice(0, 40),
+          releaseVersion: String(target.releaseVersion || "").slice(0, 40),
+        },
+        confirmationRequest: {
+          title: "设置首页课表",
+          summary: `将首页课表切换为「${safeName.slice(0, 60)}」${target.term ? `（${String(target.term).slice(0, 40)}）` : ""}？`,
+          confirmText: "确认设置",
+          cancelText: "取消",
+        },
+      });
+      return;
+    }
+
+    // open_schedule：详情成功或唯一索引命中 → 导航打开课表
+    const isOpenGoal = result.goalAction === "open_schedule"
+      || (call.name === "get_schedule_detail" && result.type && result.id);
+    if (!isOpenGoal && call.name !== "get_schedule_detail") return;
+    if (call.name === "get_schedule_detail" && result.success !== false && result.id && result.type) {
+      const id = String(result.id).slice(0, 128);
+      const type = String(result.type).slice(0, 20);
+      const releaseVersion = String(result.releaseVersion || "").slice(0, 40);
+      derived.push({
+        command: "navigate",
+        label: "打开课表",
+        input: {
+          url: "/pages/schedule-view/schedule-view",
+          params: {
+            type,
+            id,
+            releaseVersion,
+          },
+        },
+      });
+      return;
+    }
+    if (call.name === "search_school_index" && result.goalAction === "open_schedule") {
+      const items = Array.isArray(result.items) ? result.items : [];
+      if (items.length === 1) {
+        const item = items[0] || {};
+        const id = String(item.id || item.detailId || "").slice(0, 128);
+        const type = String(result.type || result.lockedEntityType || "class").slice(0, 20);
+        if (id) {
+          derived.push({
+            command: "navigate",
+            label: "打开课表",
+            input: {
+              url: "/pages/schedule-view/schedule-view",
+              params: {
+                type,
+                id,
+                releaseVersion: String(result.releaseVersion || "").slice(0, 40),
+              },
+            },
+          });
+        }
+      }
+    }
   });
-  return derived.slice(0, 1);
+  return derived.slice(0, 2);
 }
 
 function sanitizePublicResponse(response) {
