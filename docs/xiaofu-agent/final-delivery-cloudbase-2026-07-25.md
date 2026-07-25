@@ -39,8 +39,10 @@
 
 ## SHA
 
-- feature SHA：见本分支最新 commit（push 后填入）  
-- merge SHA：合并 main 后填入  
+- feature SHA：`719148c963962748638116475fa14c2c12ab1271`  
+- merge SHA：`7b3df6ffb02f60a8c6e874bb96051ad75415f477`（PR #32）  
+- PR：https://github.com/katelya77/FosuClass/pull/32  
+- CI：Admin CI ✅ · Xiaofu Agent CI ✅ · Deploy to VPS ✅ · GHCR ✅
 
 ## 关键验收
 
