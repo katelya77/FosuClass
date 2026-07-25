@@ -365,6 +365,60 @@ function buildUpdatedTarget(target, active, loaded, validated) {
   });
 }
 
+// 供小佛助手 Action Bus 调用：切换到一个调用方显式给定的新当前课表目标。
+// 复用与 refreshCurrentSchedule 完全相同的 加载→校验→构建→写入→最近使用 链路，
+// 仅目标来源不同（这里是显式新目标，refresh 是已设置的当前目标）；
+// 不引入任何平行的写入逻辑，真实写入仍由 storage.setCurrentScheduleTarget 完成。
+async function setNewCurrentScheduleTarget(target = {}, options = {}) {
+  const sourceTarget = target && typeof target === "object" && !Array.isArray(target) ? target : {};
+  if (!sourceTarget.type || (!sourceTarget.detailId && !sourceTarget.id && !sourceTarget.name)) {
+    return { success: false, status: "TARGET_MISSING", target: sourceTarget };
+  }
+  let active;
+  try {
+    active = await resolveActiveSnapshot(options);
+  } catch (error) {
+    return { success: false, status: "ACTIVE_UNAVAILABLE", target: sourceTarget, error };
+  }
+  const normalizedTerm = sourceTarget.term || sourceTarget.semester || active.term || "";
+  const targetWithTerm = Object.assign({}, sourceTarget, {
+    term: normalizedTerm,
+    semester: normalizedTerm,
+  });
+  const oldReleaseVersion = targetWithTerm.releaseVersion || "";
+  try {
+    let loaded;
+    try {
+      loaded = await loadDetailByStableId(targetWithTerm, active, options);
+    } catch (stableError) {
+      loaded = await loadDetailByExactName(targetWithTerm, active, options);
+    }
+    const validated = validateDetail(targetWithTerm, active, loaded);
+    const nextTarget = buildUpdatedTarget(targetWithTerm, active, loaded, validated);
+    if (!setCurrentScheduleTarget(nextTarget)) {
+      return { success: false, status: "FAILED", code: "CURRENT_SCHEDULE_SAVE_FAILED", target: targetWithTerm };
+    }
+    addRecentSchedule(nextTarget);
+    cleanupOldDetailCache(targetWithTerm, oldReleaseVersion, active);
+    rememberRefreshState(nextTarget, active, "UPDATED");
+    return {
+      success: true,
+      status: "UPDATED",
+      target: nextTarget,
+      activeSnapshot: active,
+    };
+  } catch (error) {
+    rememberRefreshState(targetWithTerm, active, error && error.code || "FAILED");
+    return {
+      success: false,
+      status: error && error.code === "CURRENT_SCHEDULE_AMBIGUOUS_MATCH" ? "AMBIGUOUS" : "FAILED",
+      target: targetWithTerm,
+      error,
+      matches: error && error.matches || [],
+    };
+  }
+}
+
 async function refreshCurrentSchedule(options = {}) {
   const target = getCurrentScheduleTarget();
   if (!target) {
@@ -474,5 +528,6 @@ module.exports = {
   REFRESHABLE_TYPES,
   ensureCurrentScheduleFresh,
   resolveActiveSnapshot,
+  setNewCurrentScheduleTarget,
   __resetForTest,
 };

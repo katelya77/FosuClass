@@ -1521,6 +1521,74 @@
           }
         }
       }
+    },
+    "/tools/set_current_schedule": {
+      "post": {
+        "operationId": "set_current_schedule",
+        "summary": "set_current_schedule",
+        "description": "operation: write\nconfirmation: explicit_user_command\nruntimeModes: public, trial, dev\nThis tool performs a write and only returns a confirmation request; it never executes the write directly.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "detailId",
+                  "name"
+                ],
+                "properties": {
+                  "detailId": {
+                    "type": "string",
+                    "minLength": 8,
+                    "maxLength": 80
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 80
+                  },
+                  "term": {
+                    "type": "string",
+                    "maxLength": 20
+                  },
+                  "releaseVersion": {
+                    "type": "string",
+                    "maxLength": 40
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Tool result or confirmation request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "code": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "type": "object"
+                    },
+                    "confirmationRequest": {
+                      "type": "object"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {

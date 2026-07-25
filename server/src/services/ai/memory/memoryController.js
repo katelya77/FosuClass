@@ -257,6 +257,23 @@ class MemoryController {
         workingMemory.classroom = c.value;
         workingMemory.confirmedEntities.tempStudySpot = c.value;
       }
+      if (c.type === "named_relation" && c.value && c.value.relation && c.value.name) {
+        // 类型化关系记忆仅入 Working Memory（第三方人物默认不进长期 User Memory）；同 relation 覆盖即纠正
+        const rel = {
+          relation: String(c.value.relation).slice(0, 24),
+          displayRelation: String(c.value.displayRelation || c.value.relation).slice(0, 16),
+          name: String(c.value.name).slice(0, 24),
+        };
+        const list = Array.isArray(workingMemory.namedRelations) ? workingMemory.namedRelations.slice() : [];
+        const idx = list.findIndex((r) => r && r.relation === rel.relation);
+        if (idx >= 0) list[idx] = rel;
+        else list.push(rel);
+        workingMemory.namedRelations = list.slice(0, 8);
+      }
+      if (c.type === "named_relation_forget" && c.value && c.value.relation) {
+        const list = Array.isArray(workingMemory.namedRelations) ? workingMemory.namedRelations.slice() : [];
+        workingMemory.namedRelations = list.filter((r) => r && r.relation !== c.value.relation);
+      }
     });
 
     const userCommit = this.userMemory.commit({
@@ -350,6 +367,70 @@ class MemoryController {
         }).filter(Boolean).slice(0, 1)
         : [],
     };
+  }
+
+  /**
+   * 提交客户端 Action Receipt 带来的记忆变更（当前仅 setCurrentSchedule）。
+   * 调用前提：路由层已完成 command/status 校验与目标存在性验证。
+   * 持久化仅在 cloud_sync 模式生效；local_only 模式工作记忆由客户端本地持有，
+   * 服务端返回规范化结果但不落盘。
+   */
+  commitActionReceipt(input = {}) {
+    const memoryMode = input.memoryMode === "cloud_sync" ? "cloud_sync" : "local_only";
+    const target = input.appliedTarget && typeof input.appliedTarget === "object"
+      ? input.appliedTarget
+      : null;
+    if (!target || !target.detailId || !target.name) {
+      return { committed: false, reason: "TARGET_MISSING" };
+    }
+    const prevState = input.state || null;
+    const prevWorking = normalizeWorkingMemory(
+      prevState && prevState.workingMemory || emptyWorkingMemory()
+    );
+    const workingMemory = updateWorkingMemory(prevWorking, {
+      message: "",
+      currentScheduleTarget: {
+        type: target.type === "class" ? "class" : "class",
+        detailId: String(target.detailId).slice(0, 128),
+        name: String(target.name).slice(0, 120),
+        term: String(target.term || "").slice(0, 40),
+      },
+    });
+    const contextSlots = Object.assign({}, workingMemoryToSlots(workingMemory), {
+      lastTargetType: "class",
+      lastTargetName: workingMemory.currentScheduleTarget.name,
+      className: workingMemory.currentScheduleTarget.name,
+      preferredClassName: workingMemory.currentScheduleTarget.name,
+      q: workingMemory.currentScheduleTarget.name,
+    });
+    if (memoryMode !== "cloud_sync") {
+      return {
+        committed: false,
+        reason: "LOCAL_ONLY_NO_PERSIST",
+        workingMemory,
+        contextSlots,
+      };
+    }
+    const memory = this.conversationMemory.persistAfterSuccess({
+      principal: input.principal,
+      state: prevState,
+      conversationId: input.conversationId,
+      memoryMode,
+      cloudSyncEnabled: true,
+      message: "",
+      answer: "",
+      intentName: "set_current_schedule",
+      context: input.context || {},
+      runId: input.runId || "",
+      status: "completed",
+      stepCount: 0,
+      contextSlots,
+      // 沿用既有摘要与最近轮次，避免 Receipt 提交污染对话痕迹。
+      conversationSummary: (prevState && prevState.conversationSummary) || "",
+      recentTurns: (prevState && Array.isArray(prevState.recentTurns)) ? prevState.recentTurns : [],
+      workingMemory,
+    });
+    return { committed: true, reason: "", workingMemory, contextSlots, memory };
   }
 
   buildConversationState(bundle) {

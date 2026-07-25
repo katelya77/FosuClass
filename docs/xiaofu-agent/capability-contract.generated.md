@@ -48,6 +48,7 @@
 | conversational_help | 对话与能力帮助 | 否 | knowledge_search | - | 允许 | deterministic-help |
 | generate_image | 图片生成 | 否 | image_generation | generate_image | 禁止 | unsupported-in-public |
 | campus_multi_step_advice | 校园多步骤建议 | 是 | campus_multi_step_advice | get_today_courses, get_tomorrow_courses, search_empty_rooms, get_campus_weather, search_campus_place | 允许 | partial-deterministic-results |
+| set_current_schedule | 设置首页课表 | 否 | schedule_target_action | set_current_schedule | 允许 | explicit-user-command-required |
 
 ## Tools
 
@@ -84,6 +85,7 @@
 | update_user_preference | write | explicit_user_command | medium | public/trial/dev | 是 |
 | rag_search | read | none | low | public/trial/dev | 否 |
 | generate_image | read | none | medium | trial/dev | 否 |
+| set_current_schedule | write | explicit_user_command | medium | public/trial/dev | 是 |
 
 ## Actions（Action Command）
 
@@ -97,6 +99,19 @@
 | confirmWrite | 写操作确认 | write | required | write_intent_whitelist |
 | copy | 复制结果 | read | none | none |
 | retry | 重试安全任务 | read | none | retryable_task_whitelist |
+| setCurrentSchedule | 设置首页课表 | write | explicit_user_command | schedule_target_whitelist |
+| importStudentSchedule | 导入个人课表 | write | required | personal_import_session |
+| resyncStudentSchedule | 重新同步个人课表 | write | required | personal_import_session |
+| saveCustomCourse | 保存自定义课程 | write | required | custom_course_whitelist |
+| deleteCustomCourse | 删除自定义课程 | write | required | custom_course_whitelist |
+| saveStudentArrangement | 保存调课编辑 | write | required | personal_arrangement_whitelist |
+| clearLocalCache | 清除本地缓存 | write | required | cache_scope_whitelist |
+| resetToNewUser | 重置为新用户 | write | required | local_data_reset |
+| submitFeedback | 提交意见反馈 | write | required | feedback_channel |
+| refreshBootstrapData | 刷新基础数据 | read | none | bootstrap_refresh |
+| createCourseReminder | 创建课程提醒 | write | required | reminder_whitelist |
+| deleteReminder | 删除课程提醒 | write | required | reminder_whitelist |
+| clearAgentMemory | 清除小佛记忆 | write | required | agent_memory_scope |
 
 ## Card Actions（卡片按钮 → Action Command 映射）
 
@@ -140,3 +155,4 @@
 | knowledge_search | 1.0.0 | 检索已发布校园知识和项目帮助 | allowed-expression-only |
 | clarify_query | 1.0.0 | 追问缺失查询条件 | never |
 | image_generation | 1.0.0 | 体验环境受控图片生成 | allowed |
+| schedule_target_action | 1.0.0 | 设置首页当前课表：解析班级目标（唯一匹配才执行，多候选澄清），由客户端执行真实切换并回传回执，服务端收到成功回执才提交记忆与最终答复 | never |
