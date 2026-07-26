@@ -68,7 +68,7 @@ function mapRunEventToAgui(event = {}, context = {}) {
   }
   if (aguiType === "RUN_FINISHED") {
     return [Object.assign({}, base, {
-      status: type === "run.degraded" ? "degraded" : "completed",
+      status: safeText(event.status || (type === "run.degraded" ? "degraded" : "completed"), 24),
       message: safeText(event.loadingText || event.summary || "run finished", 200),
     })];
   }

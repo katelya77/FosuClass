@@ -3046,7 +3046,10 @@ Page({
           finalMessages.push(assistantMessage);
         }
         const nextContext = contextManager.updateFromResponse(this.data.activeConversationContext, response);
-        this.setMessages(finalMessages, {
+        const terminalActivity = agentActivityState.activityPatchForResponse(response, {
+          waitingConfirmation,
+        });
+        this.setMessages(finalMessages, Object.assign({
           activeConversationContext: nextContext,
           sending: false,
           slowRequest: false,
@@ -3061,7 +3064,7 @@ Page({
           liveRunEvents: [],
           activeRunId: "",
           activePollToken: "",
-        }, { save: true });
+        }, terminalActivity), { save: true });
         if (resolvedIntentName === "detect_schedule_changes") {
           scheduleChangeTracker.acknowledge(clientContext.currentScheduleSummary);
         }

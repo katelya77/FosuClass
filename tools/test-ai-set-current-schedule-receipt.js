@@ -62,6 +62,18 @@ async function runChecks() {
 
   const { MemoryController } = require("../server/src/services/ai/memory/memoryController");
 
+  await check("pendingAction 绑定 runId、目标与过期时间", () => {
+    const { derivePendingAction } = require("../server/src/services/ai/agentService");
+    const pending = derivePendingAction([{
+      command: "setCurrentSchedule",
+      input: { type: "class", detailId: "d123", name: "24动物医学1班", term: "2025-2026-2" },
+      confirmationRequest: { title: "确认" },
+    }], { runId: "run-bound", ttlMs: 60000 });
+    assert.strictEqual(pending.runId, "run-bound");
+    assert.strictEqual(pending.target.detailId, "d123");
+    assert.ok(pending.expiresAt > pending.createdAt);
+  });
+
   await check("commitActionReceipt: cloud_sync 提交 workingMemory + contextSlots（preferredClassName）", () => {
     const persisted = [];
     const controller = new MemoryController({
@@ -75,13 +87,21 @@ async function runChecks() {
     const result = controller.commitActionReceipt({
       principal: { principalKey: "test", authenticated: true },
       state: {
+        memoryPolicy: { mode: "cloud_sync", cloudSyncEnabled: true },
         workingMemory: wm.updateWorkingMemory(wm.emptyWorkingMemory(), {
-          pendingAction: { command: "setCurrentSchedule", status: "awaiting_receipt", target: { detailId: "d123", name: "24动物医学1班" } },
+          pendingAction: {
+            command: "setCurrentSchedule",
+            status: "awaiting_receipt",
+            runId: "run1",
+            expiresAt: Date.now() + 60000,
+            target: { type: "class", detailId: "d123", name: "24动物医学1班" },
+          },
         }),
         contextSlots: {}, recentTurns: [], conversationSummary: "旧摘要",
       },
       conversationId: "conv1",
       memoryMode: "cloud_sync",
+      command: "setCurrentSchedule",
       runId: "run1",
       appliedTarget: { type: "class", detailId: "d123", name: "24动物医学1班", term: "2025-2026-2" },
     });
@@ -120,6 +140,64 @@ async function runChecks() {
     assert.strictEqual(result.committed, false);
     assert.strictEqual(result.reason, "LOCAL_ONLY_NO_PERSIST");
     assert.strictEqual(persisted.length, 0);
+  });
+
+  await check("commitActionReceipt: 客户端不得把未授权会话提升为 cloud_sync", () => {
+    const controller = new MemoryController({ conversationMemory: { persistAfterSuccess() { throw new Error("should not persist"); } } });
+    const result = controller.commitActionReceipt({
+      principal: { principalKey: "test", authenticated: true },
+      state: {
+        memoryPolicy: { mode: "session_state", cloudSyncEnabled: false },
+        workingMemory: {
+          pendingAction: {
+            command: "setCurrentSchedule",
+            status: "awaiting_receipt",
+            runId: "run1",
+            expiresAt: Date.now() + 60000,
+            target: { type: "class", detailId: "d123", name: "24动物医学1班" },
+          },
+        },
+      },
+      conversationId: "conv1",
+      memoryMode: "cloud_sync",
+      runId: "run1",
+      appliedTarget: { type: "class", detailId: "d123", name: "24动物医学1班" },
+    });
+    assert.strictEqual(result.committed, false);
+    assert.strictEqual(result.reason, "CLOUD_SYNC_NOT_AUTHORIZED");
+  });
+
+  await check("commitActionReceipt: Receipt 必须绑定 pendingAction 的 run/command/target", () => {
+    const controller = new MemoryController({ conversationMemory: { persistAfterSuccess() { throw new Error("should not persist"); } } });
+    const state = {
+      memoryPolicy: { mode: "cloud_sync", cloudSyncEnabled: true },
+      workingMemory: {
+        pendingAction: {
+          command: "setCurrentSchedule",
+          status: "awaiting_receipt",
+          runId: "run-authorized",
+          expiresAt: Date.now() + 60000,
+          target: { type: "class", detailId: "d123", name: "24动物医学1班" },
+        },
+      },
+    };
+    const wrongRun = controller.commitActionReceipt({
+      principal: { principalKey: "test", authenticated: true }, state, conversationId: "conv1", memoryMode: "cloud_sync",
+      command: "setCurrentSchedule", runId: "run-forged", appliedTarget: { type: "class", detailId: "d123", name: "24动物医学1班" },
+    });
+    assert.strictEqual(wrongRun.reason, "ACTION_RECEIPT_RUN_MISMATCH");
+    const wrongTarget = controller.commitActionReceipt({
+      principal: { principalKey: "test", authenticated: true }, state, conversationId: "conv1", memoryMode: "cloud_sync",
+      command: "setCurrentSchedule", runId: "run-authorized", appliedTarget: { type: "class", detailId: "forged", name: "伪造班级" },
+    });
+    assert.strictEqual(wrongTarget.reason, "ACTION_RECEIPT_TARGET_MISMATCH");
+    const expiredState = JSON.parse(JSON.stringify(state));
+    expiredState.workingMemory.pendingAction.expiresAt = Date.now() - 1;
+    const expired = controller.commitActionReceipt({
+      principal: { principalKey: "test", authenticated: true }, state: expiredState, conversationId: "conv1", memoryMode: "cloud_sync",
+      command: "setCurrentSchedule", runId: "run-authorized", appliedTarget: { type: "class", detailId: "d123", name: "24动物医学1班" },
+    });
+    assert.strictEqual(expired.reason, "ACTION_RECEIPT_EXPIRED");
   });
 
   await check("commitActionReceipt: 缺 detailId/name 拒绝", () => {

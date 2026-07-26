@@ -136,6 +136,9 @@ function normalizeWorkingMemory(raw = {}) {
     ? {
       command: safeText(raw.pendingAction.command, 40),
       status: safeText(raw.pendingAction.status, 40),
+      runId: safeText(raw.pendingAction.runId, 100),
+      createdAt: Math.max(0, Number(raw.pendingAction.createdAt || 0) || 0),
+      expiresAt: Math.max(0, Number(raw.pendingAction.expiresAt || 0) || 0),
       target: raw.pendingAction.target && typeof raw.pendingAction.target === "object"
         ? {
           type: safeText(raw.pendingAction.target.type, 24),

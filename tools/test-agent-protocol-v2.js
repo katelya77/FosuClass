@@ -41,7 +41,7 @@ async function run() {
     "requestId", "conversationId", "runtimeMode", "runId", "status", "intent",
     "confidence", "slots", "skill", "plan", "steps", "toolCalls", "observations",
     "answer", "cards", "suggestions", "evidence", "safety", "metrics", "errors",
-    "serverTime", "goalContract", "verificationGoalContract", "understanding",
+    "serverTime", "goalContract", "verificationGoalContract",
   ].forEach((field) => assert.ok(Object.prototype.hasOwnProperty.call(v2, field), `V2 field missing: ${field}`));
   assert.strictEqual(typeof v2.intent, "string");
   assert.ok(v2.skill && v2.skill.id, "V2 exposes the selected skill");
@@ -53,9 +53,12 @@ async function run() {
     "followUpMode", "confidence", "needsClarification",
   ]);
   assert.ok(v2.workingMemory && typeof v2.workingMemory === "object", "V2 exposes the unified working state view");
-  ["activeGoal", "pendingClarification", "lastResolvedEntity", "constraints", "pendingAction", "providerUsed"].forEach((field) => {
+  ["activeGoal", "pendingClarification", "lastResolvedEntity", "constraints", "pendingAction"].forEach((field) => {
     assert.ok(Object.prototype.hasOwnProperty.call(v2.workingMemory, field), `V2 working state field missing: ${field}`);
   });
+  assert.ok(!Object.prototype.hasOwnProperty.call(v2, "understanding"), "public V2 must omit model diagnostics");
+  assert.ok(!Object.prototype.hasOwnProperty.call(v2, "providerStages"), "public V2 must omit Provider stage diagnostics");
+  assert.ok(!Object.prototype.hasOwnProperty.call(v2.workingMemory, "providerUsed"), "public working state must be Provider opaque");
   assert.strictEqual(v2.safety.externalProviderUsed, false);
   assert.ok(!/api[-_ ]?key|system prompt|internal url/i.test(JSON.stringify(v2)));
 
@@ -88,6 +91,15 @@ async function run() {
   assert.ok(!/secret-api-key|secret-token-value|https?:\/\/|hidden prompt|forged fact/i.test(maliciousSerialized));
   assert.deepStrictEqual(malicious.cards, []);
   assert.deepStrictEqual(Object.keys(malicious.toolCalls[0]).sort(), ["name", "status", "summary"]);
+
+  const trialDiagnostics = agentProtocol.buildV2Response({
+    runtimeMode: "trial",
+    intent: { name: "conversational_help", slots: {} },
+    understanding: { source: "model", providerUsed: "deepseek", externalProviderUsed: true },
+    providerStages: { understanding: { attempted: true, completed: true } },
+  });
+  assert.strictEqual(trialDiagnostics.understanding.source, "model");
+  assert.strictEqual(trialDiagnostics.providerStages.understanding.completed, true);
 
   console.log("test-agent-protocol-v2 passed");
 }

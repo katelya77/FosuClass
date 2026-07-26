@@ -140,6 +140,7 @@ function loadingTextForEvent(event = {}, runtimeMode = "public") {
 
 function publicEventSummary(event = {}) {
   const type = EVENT_TYPES.includes(String(event.type || "")) ? String(event.type) : "run.accepted";
+  const publicMode = String(event.runtimeMode || "public") === "public";
   return {
     type,
     sequence: Math.max(0, Number(event.sequence || 0) || 0),
@@ -148,12 +149,17 @@ function publicEventSummary(event = {}) {
     skillId: safeText(event.skillId || "", 80),
     tool: safeText(event.tool || event.toolName || "", 80),
     status: safeText(event.status || "", 32),
-    reasonCode: safeText(event.reasonCode || "", 80),
-    provider: safeText(event.provider || "", 40),
-    purpose: safeText(event.purpose || "", 32),
-    understandingSource: safeText(event.understandingSource || "", 40),
+    reasonCode: publicMode ? "" : safeText(event.reasonCode || "", 80),
+    provider: publicMode ? "" : safeText(event.provider || "", 40),
+    purpose: publicMode ? "" : safeText(event.purpose || "", 32),
+    understandingSource: publicMode ? "" : safeText(event.understandingSource || "", 40),
     latencyMs: Math.max(0, Number(event.latencyMs || 0) || 0),
-    providerUsed: event.providerUsed === true,
+    providerUsed: publicMode ? false : event.providerUsed === true,
+    success: event.success !== false,
+    fallback: event.fallback === true,
+    partialCompletion: event.partialCompletion === true,
+    verificationOk: event.verificationOk === false ? false : (event.verificationOk === true ? true : null),
+    errorCount: Math.max(0, Number(event.errorCount || 0) || 0),
     label: safeText(event.label || loadingTextForEvent(event, event.runtimeMode || "public"), 120),
   };
 }

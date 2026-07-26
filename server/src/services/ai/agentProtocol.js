@@ -303,7 +303,7 @@ function buildV2Response(payload = {}) {
   const protocolErrors = errors.concat(cardValidation.errors.filter((item) =>
     !errors.some((existing) => existing.code === item.code)
   ));
-  return {
+  const response = {
     protocolVersion: PROTOCOL_V2,
     requestId: envelope.requestId,
     conversationId: envelope.conversationId,
@@ -342,6 +342,16 @@ function buildV2Response(payload = {}) {
         fallback: payload.understanding.fallback === true,
         reasonCode: payload.understanding.reasonCode || "",
         latencyMs: Math.max(0, Number(payload.understanding.latencyMs || 0) || 0),
+      }))
+      : null,
+    providerStages: payload.providerStages && typeof payload.providerStages === "object"
+      ? sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.providerStages))
+      : null,
+    verification: payload.verification && typeof payload.verification === "object"
+      ? sanitizeProtocolValue(safetyGuard.sanitizeToolResult({
+        ok: payload.verification.ok !== false,
+        evidenceComplete: payload.verification.evidenceComplete !== false,
+        errors: Array.isArray(payload.verification.errors) ? payload.verification.errors.slice(0, 8) : [],
       }))
       : null,
     answer: safeProtocolText(payload.answer || "", 1600),
@@ -385,6 +395,15 @@ function buildV2Response(payload = {}) {
     memoryPreferencePatch: stableMemoryPreferencePatch(payload.memoryPreferencePatch),
     serverTime: payload.serverTime || new Date().toISOString(),
   };
+  if (envelope.canonicalRuntimeMode === "public") {
+    delete response.understanding;
+    delete response.providerStages;
+    if (response.planMeta && typeof response.planMeta === "object") {
+      response.planMeta = Object.assign({}, response.planMeta);
+      delete response.planMeta.plannerProvider;
+    }
+  }
+  return response;
 }
 
 function stableMemoryPreferencePatch(value) {

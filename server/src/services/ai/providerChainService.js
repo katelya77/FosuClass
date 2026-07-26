@@ -292,6 +292,47 @@ async function runShadowEvaluation(input = {}, options = {}, primaryName = "") {
   }
 }
 
+/**
+ * Schedule diagnostic shadow work without extending the user-facing request.
+ * Results are observable only through safe events / an optional diagnostic hook.
+ */
+function scheduleShadowEvaluation(input = {}, options = {}, primaryName = "") {
+  const runtimeConfig = options.providerRuntimeConfig || input.providerRuntimeConfig || {};
+  const configuredName = String(configValue(runtimeConfig, "AI_PROVIDER_SHADOW", "")).trim();
+  const displayName = publicProviderName(normalizeProviderName(configuredName) || configuredName.toLowerCase());
+  const enabled = String(configValue(runtimeConfig, "AI_PROVIDER_SHADOW_ENABLED", "false")).toLowerCase();
+  if (String(options.runtimeMode || "public") === "public") {
+    return { provider: "", status: "skipped", latencyMs: 0, reason: "public_forbidden" };
+  }
+  if (enabled !== "true" && enabled !== "1") {
+    return { provider: "", status: "skipped", latencyMs: 0, reason: "disabled" };
+  }
+
+  Promise.resolve()
+    .then(() => runShadowEvaluation(input, options, primaryName))
+    .then((result) => {
+      if (typeof options.onShadowEvaluation === "function") {
+        try {
+          options.onShadowEvaluation(result);
+        } catch (error) {
+          // Diagnostics must never affect the primary request.
+        }
+      }
+    })
+    .catch((error) => {
+      emitProviderEvent(options, {
+        type: "provider.shadow.failed",
+        status: "failed",
+        provider: displayName,
+        purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
+        reasonCode: String(classifyFailure(error)).slice(0, 80),
+        providerUsed: false,
+      });
+    });
+
+  return { provider: displayName, status: "scheduled", latencyMs: 0, reason: "background" };
+}
+
 /** Explicit, bounded health probe for admin/readiness jobs; never runs in public. */
 async function probeProvider(name, input = {}) {
   const runtimeMode = String(input.runtimeMode || "public");
@@ -408,7 +449,7 @@ async function generateWithChain(input = {}, options = {}) {
         latencyMs,
         providerUsed: true,
       });
-      const shadowEvaluation = await runShadowEvaluation(input, options, name);
+      const shadowEvaluation = scheduleShadowEvaluation(input, options, name);
       return Object.assign({}, payload, {
         provider: payload.provider || name,
         providerChain: attempts.concat({ provider: name, status: "success", latencyMs }),
@@ -469,5 +510,6 @@ module.exports = {
   normalizeProviderName,
   probeProvider,
   runShadowEvaluation,
+  scheduleShadowEvaluation,
   resetForTest,
 };

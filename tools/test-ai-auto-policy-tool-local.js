@@ -84,11 +84,15 @@ async function run() {
   });
   assert.deepStrictEqual(structuredPurposes, ["understanding", "planning"], "recommendation must understand first, then use the constrained planner boundary");
   assert.strictEqual(responseProviderCalls, 0, "factual recommendation must not use DeepSeek as its response fact source");
-  assert.strictEqual(recommendation.safety.externalProviderUsed, false);
+  assert.strictEqual(recommendation.safety.externalProviderUsed, true, "final truth must include Understanding/Planner Provider calls");
   assert.strictEqual(recommendation.safety.desiredProvider, "deepseek");
   assert.strictEqual(recommendation.safety.resolvedProvider, "mock");
+  assert.strictEqual(recommendation.providerStages.understanding.completed, true);
+  assert.strictEqual(recommendation.providerStages.planner.attempted, true);
+  assert.strictEqual(recommendation.providerStages.planner.fallback, true);
+  assert.strictEqual(recommendation.providerStages.response.attempted, false, "facts remain deterministic at the response stage");
   assert(recommendation.toolCalls.length >= 2, "recommendation should still have multiple deterministic tool calls");
-  assert.strictEqual(recommendation.metrics.externalProviderUsed, false);
+  assert.strictEqual(recommendation.metrics.externalProviderUsed, true);
 
   const qa = await agentService.chat({
     message: "如何使用校园查询？",

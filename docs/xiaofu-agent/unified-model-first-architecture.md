@@ -63,6 +63,8 @@ Protocol / Cancel / Credential Guard
 
 Provider 状态记录健康度、成功/失败时间、P50/P95、熔断、降级和 Shadow 统计；`probeProvider` 只允许在非 public 的显式运维检查中调用。Coze 只接受 PAT / Service Token / 官方 API Token。
 
+Shadow 评估在主 Provider 返回后异步调度，不阻塞用户响应。`trial/dev` 的 `providerStages` 分别记录 Understanding、Planner、Response 的 attempted/completed/fallback；整轮 Provider 真值由三阶段聚合，不能再用“回复阶段未调用”覆盖前两阶段。`public` 保留 `externalProviderUsed=false` 安全信号，但省略 Provider/Understanding 诊断字段和实现名称。
+
 ## 4. Working State Tree
 
 线程级状态由现有 Working Memory 扩展，不创建第二套记忆系统：
@@ -72,13 +74,13 @@ activeGoal
 pendingClarification
 lastResolvedEntity { type, id, name }
 lastConstraints { date/dateOffset/week/weekday/period/campus/college/continuousSections/... }
-pendingAction { command, status=awaiting_receipt, target }
+pendingAction { command, status=awaiting_receipt, runId, createdAt, expiresAt, target }
 providerUsed
 understandingSource
 lastGoalContract
 ```
 
-Follow-up 只从该树继承缺失字段：换校区保留日期、连续空教室保留校区/星期、设置当前课表复用上一条已解析班级。`setCurrentSchedule` 在 Action 发出后只写 `pendingAction`；只有服务端验证成功 Receipt 后才提交 `currentScheduleTarget` 并清空 Pending，失败不得声称已完成。
+Follow-up 只从该树继承缺失字段：换校区保留日期、连续空教室保留校区/星期、设置当前课表复用上一条已解析班级。`setCurrentSchedule` 在 Action 发出后只写 `pendingAction`；只有服务端确认会话已由用户开启 `cloud_sync`，并校验 Receipt 的 Principal、command、runId、有效期和目标一致后，才提交 `currentScheduleTarget` 并清空 Pending。失败或过期 Receipt 返回拒绝，不得声称已完成。
 
 ## 5. Teacher Search Contract
 
@@ -107,7 +109,15 @@ npm run check:teacher-search-contract
 - 发送前 UI 只显示中性 `submitting`；`understanding.started` 后才显示理解，只有真实 `provider.started` 才显示 Thinking。
 - 状态岛全宽居中；Composer 是唯一底部胶囊并处于 Flex 流中；消息区与真实测量的 `composerInsetPx` 同步，不保留覆盖式大底部空白。
 
-## 7. 模块处置
+## 7. Runtime Truth 与完成语义
+
+- `run.completed / run.degraded / run.failed` 在最终协议/Card 校验后，由工具执行、验证结果、Provider 降级和错误数共同推导；异步 Run 不得把既有 partial/degraded 终态覆盖成 completed，客户端也不得硬编码“完成/已验证”。
+- Action 完成必须有受服务端状态约束的 Receipt；只有 `verification.ok=true` 才能展示“结果已核验”。
+- 部分完成显示 degraded，硬失败显示 network_error，Provider 降级仍保留确定性事实但明确为 degraded。
+- RunEvent、Action、Card 和最终回复消费同一终态摘要；后台 Shadow 事件不回写已结束 Run。
+- public RunEvent 仅保留用户可理解的状态与标签，清空 Provider、purpose、understandingSource 和内部 reasonCode；trial/dev 才提供安全裁剪后的诊断。
+
+## 8. 模块处置
 
 | 处置 | 模块 |
 | --- | --- |
@@ -115,6 +125,6 @@ npm run check:teacher-search-contract
 | 重构 | Provider Chain、Planner Provider Adapter、AgentService 入口、Working Memory、RunEvent Reducer、Teacher Search Contract、Voice 状态可观测层 |
 | 删除/替代 | 在线规则优先入口、Planner 私有 Provider HTTP 分支、重复 Teacher Schema 常量、客户端预猜 Understanding、旧 UI V2/V3/迁移阶段文档 |
 
-## 8. 回滚
+## 9. 回滚
 
 代码回滚以本次合并提交的父提交为目标；不要删除 Release Pack、缓存或 last-known-good。紧急降级只需在 trial/dev 把 `AI_UNDERSTANDING_ENABLED=false` 或 Provider Chain 末端保留 `mock`；`public` 本来就是确定性路径。部署回滚使用既有 GHCR 镜像标签、VPS Compose 版本和 CloudBase 函数历史版本，禁止用清空数据目录作为回滚手段。

@@ -96,8 +96,11 @@ async function run() {
       serverSession: { openidHash: "unit-test-openid" },
     });
     assert.strictEqual(response.success, true);
-    assert.strictEqual(response.safety.externalProviderUsed, false);
-    const fallbackReasons = String(response.safety.fallbackReason || "")
+    assert.strictEqual(response.safety.externalProviderUsed, true, "the run-level truth must include model-first Provider attempts");
+    assert.strictEqual(response.providerStages.response.attempted, true, "the response Provider was attempted before deterministic fallback");
+    assert.strictEqual(response.providerStages.response.completed, false);
+    assert.strictEqual(response.providerStages.response.fallback, true);
+    const fallbackReasons = String(response.providerStages.response.reasonCode || "")
       .replace(/^provider_chain_fallback:/, "")
       .split(",")
       .filter(Boolean);
