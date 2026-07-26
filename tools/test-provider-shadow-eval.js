@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 const assert = require("assert");
 const providerChain = require("../server/src/services/ai/providerChainService");
+const cozeProvider = require("../server/src/services/ai/providers/cozeProvider");
 
 async function run() {
   const events = [];
@@ -52,6 +53,26 @@ async function run() {
     probeGenerate: async () => { throw new Error("must not run"); },
   });
   assert.strictEqual(publicHealth.health, "forbidden");
+
+  const originalCozeTestConnection = cozeProvider.testConnection;
+  cozeProvider.testConnection = async () => ({
+    success: false,
+    code: "COZE_CONNECTION_REJECTED",
+  });
+  try {
+    const rejectedHealth = await providerChain.probeProvider("coze", {
+      runtimeMode: "trial",
+      providerRuntimeConfig: {
+        COZE_ENABLED: "true",
+        COZE_API_TOKEN: "unit-test-placeholder-not-real",
+        COZE_BOT_ID: "unit-test-bot",
+      },
+    });
+    assert.strictEqual(rejectedHealth.health, "degraded", "a failed adapter probe must never be reported healthy");
+    assert.strictEqual(rejectedHealth.reasonCode, "COZE_CONNECTION_REJECTED");
+  } finally {
+    cozeProvider.testConnection = originalCozeTestConnection;
+  }
 
   console.log("test-provider-shadow-eval: PASS");
 }
