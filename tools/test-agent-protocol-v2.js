@@ -33,6 +33,7 @@ async function run() {
   assert.strictEqual(v1.success, true);
   assert.ok(v1.intent && typeof v1.intent === "object", "V1 keeps the legacy intent object");
   assert.ok(Array.isArray(v1.taskSteps), "V1 keeps taskSteps");
+  assert.strictEqual(Object.prototype.hasOwnProperty.call(v1, "goalContract"), false, "V1 must not grow V2 GoalContract fields");
 
   const v2 = await agentService.chat(Object.assign({}, base, { protocolVersion: "agent.v2" }));
   assert.strictEqual(v2.protocolVersion, "agent.v2");
@@ -40,13 +41,21 @@ async function run() {
     "requestId", "conversationId", "runtimeMode", "runId", "status", "intent",
     "confidence", "slots", "skill", "plan", "steps", "toolCalls", "observations",
     "answer", "cards", "suggestions", "evidence", "safety", "metrics", "errors",
-    "serverTime",
+    "serverTime", "goalContract", "verificationGoalContract", "understanding",
   ].forEach((field) => assert.ok(Object.prototype.hasOwnProperty.call(v2, field), `V2 field missing: ${field}`));
   assert.strictEqual(typeof v2.intent, "string");
   assert.ok(v2.skill && v2.skill.id, "V2 exposes the selected skill");
   assert.ok(Array.isArray(v2.steps));
   assert.ok(Array.isArray(v2.observations));
   assert.ok(v2.evidence && v2.evidence.checkedAt);
+  assert.deepStrictEqual(Object.keys(v2.goalContract), [
+    "goal", "entityType", "entity", "normalizedEntity", "constraints",
+    "followUpMode", "confidence", "needsClarification",
+  ]);
+  assert.ok(v2.workingMemory && typeof v2.workingMemory === "object", "V2 exposes the unified working state view");
+  ["activeGoal", "pendingClarification", "lastResolvedEntity", "constraints", "pendingAction", "providerUsed"].forEach((field) => {
+    assert.ok(Object.prototype.hasOwnProperty.call(v2.workingMemory, field), `V2 working state field missing: ${field}`);
+  });
   assert.strictEqual(v2.safety.externalProviderUsed, false);
   assert.ok(!/api[-_ ]?key|system prompt|internal url/i.test(JSON.stringify(v2)));
 

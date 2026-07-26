@@ -74,7 +74,12 @@ async function runChecks() {
     });
     const result = controller.commitActionReceipt({
       principal: { principalKey: "test", authenticated: true },
-      state: { workingMemory: wm.emptyWorkingMemory(), contextSlots: {}, recentTurns: [], conversationSummary: "旧摘要" },
+      state: {
+        workingMemory: wm.updateWorkingMemory(wm.emptyWorkingMemory(), {
+          pendingAction: { command: "setCurrentSchedule", status: "awaiting_receipt", target: { detailId: "d123", name: "24动物医学1班" } },
+        }),
+        contextSlots: {}, recentTurns: [], conversationSummary: "旧摘要",
+      },
       conversationId: "conv1",
       memoryMode: "cloud_sync",
       runId: "run1",
@@ -82,6 +87,12 @@ async function runChecks() {
     });
     assert.strictEqual(result.committed, true);
     assert.strictEqual(result.workingMemory.currentScheduleTarget.detailId, "d123");
+    assert.strictEqual(result.workingMemory.pendingAction, null, "成功 Receipt 后才清除 pendingAction");
+    assert.deepStrictEqual(result.workingMemory.lastResolvedEntity, {
+      type: "class",
+      id: "d123",
+      name: "24动物医学1班",
+    });
     assert.strictEqual(result.contextSlots.preferredClassName, "24动物医学1班");
     assert.strictEqual(result.contextSlots.lastTargetType, "class");
     assert.strictEqual(persisted.length, 1);

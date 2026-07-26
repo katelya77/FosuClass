@@ -5,6 +5,7 @@
 
 const safetyGuard = require("../safetyGuard");
 const { normalizeContextSlots } = require("../conversation/conversationSchema");
+const { normalizeGoalContract } = require("../understanding/goalContract");
 
 function emptyWorkingMemory() {
   return {
@@ -31,6 +32,9 @@ function emptyWorkingMemory() {
     lastSuccessfulTools: [],
     lastResultRefs: [],
     pendingAction: null,
+    providerUsed: "",
+    understandingSource: "",
+    lastGoalContract: null,
     confirmedEntities: {},
     className: "",
     teacherName: "",
@@ -128,7 +132,29 @@ function normalizeWorkingMemory(raw = {}) {
     ? raw.lastSuccessfulTools.map((item) => safeText(item, 80)).filter(Boolean).slice(0, 12)
     : [];
   next.lastResultRefs = Array.isArray(raw.lastResultRefs) ? raw.lastResultRefs.slice(0, 8) : [];
-  next.pendingAction = raw.pendingAction || null;
+  next.pendingAction = raw.pendingAction && typeof raw.pendingAction === "object"
+    ? {
+      command: safeText(raw.pendingAction.command, 40),
+      status: safeText(raw.pendingAction.status, 40),
+      target: raw.pendingAction.target && typeof raw.pendingAction.target === "object"
+        ? {
+          type: safeText(raw.pendingAction.target.type, 24),
+          detailId: safeText(raw.pendingAction.target.detailId || raw.pendingAction.target.id, 128),
+          name: safeText(raw.pendingAction.target.name, 120),
+          term: safeText(raw.pendingAction.target.term, 40),
+        }
+        : null,
+    }
+    : null;
+  next.providerUsed = safeText(raw.providerUsed, 40);
+  next.understandingSource = safeText(raw.understandingSource, 40);
+  try {
+    next.lastGoalContract = raw.lastGoalContract
+      ? normalizeGoalContract(raw.lastGoalContract)
+      : null;
+  } catch (error) {
+    next.lastGoalContract = null;
+  }
   next.confirmedEntities = raw.confirmedEntities && typeof raw.confirmedEntities === "object"
     ? Object.keys(raw.confirmedEntities).slice(0, 12).reduce((acc, key) => {
       acc[safeText(key, 40)] = safeText(raw.confirmedEntities[key], 80);
@@ -326,6 +352,25 @@ function updateWorkingMemory(previous, input = {}) {
   }
   if (input.pendingClarification !== undefined) {
     next.pendingClarification = input.pendingClarification;
+  }
+  if (input.pendingAction !== undefined) {
+    next.pendingAction = input.pendingAction;
+  }
+  if (input.lastResolvedEntity !== undefined) {
+    next.lastResolvedEntity = input.lastResolvedEntity;
+  }
+  if (input.providerUsed !== undefined) {
+    next.providerUsed = safeText(input.providerUsed, 40);
+  }
+  if (input.understandingSource !== undefined) {
+    next.understandingSource = safeText(input.understandingSource, 40);
+  }
+  if (input.goalContract !== undefined) {
+    try {
+      next.lastGoalContract = input.goalContract ? normalizeGoalContract(input.goalContract) : null;
+    } catch (error) {
+      next.lastGoalContract = prev.lastGoalContract;
+    }
   }
 
   if (Array.isArray(input.executedTools) && input.executedTools.length) {

@@ -59,6 +59,29 @@ async function run() {
   );
 
   const originalGenerate = deepseekProvider.generate;
+  const originalGenerateStructured = deepseekProvider.generateStructured;
+  deepseekProvider.generateStructured = async (input) => ({
+    provider: "deepseek",
+    content: JSON.stringify(input.purpose === "understanding" ? {
+      goal: "project_qa",
+      entityType: "none",
+      entity: "",
+      normalizedEntity: "",
+      constraints: {},
+      followUpMode: "new_goal",
+      confidence: 0.99,
+      needsClarification: false,
+    } : {
+      goal: "回答 FosuClass 项目问题",
+      intent: "project_qa",
+      confidence: 0.99,
+      slots: {},
+      needsClarification: false,
+      clarification: null,
+      steps: [{ toolName: "rag_search", args: { q: "FosuClass" }, reasonCode: "NEED_KNOWLEDGE" }],
+      stopCondition: "all_steps_done",
+    }),
+  });
   deepseekProvider.generate = async () => {
     const error = new Error("upstream rejected request");
     error.code = "ERR_BAD_REQUEST";
@@ -74,15 +97,20 @@ async function run() {
     });
     assert.strictEqual(response.success, true);
     assert.strictEqual(response.safety.externalProviderUsed, false);
+    const fallbackReasons = String(response.safety.fallbackReason || "")
+      .replace(/^provider_chain_fallback:/, "")
+      .split(",")
+      .filter(Boolean);
     assert(
-      ["", "invalid_payload", "bad_request"].includes(response.safety.fallbackReason) ||
-      /^provider_chain_fallback:(invalid_payload|bad_request)(,|$)/.test(response.safety.fallbackReason)
+      response.safety.fallbackReason === "" || fallbackReasons.some((item) => ["invalid_payload", "bad_request"].includes(item)),
+      `unexpected fallback diagnosis: ${response.safety.fallbackReason}`
     );
     const text = JSON.stringify(response);
     assert(!text.includes(process.env.AI_API_KEY), "response must not leak provider key");
     assert(!/thinking parameter is invalid/.test(text), "response must not expose upstream error detail");
   } finally {
     deepseekProvider.generate = originalGenerate;
+    deepseekProvider.generateStructured = originalGenerateStructured;
   }
 
   console.log("test-ai-provider-bad-request-diagnosis passed");

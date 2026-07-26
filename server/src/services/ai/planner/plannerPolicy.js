@@ -22,7 +22,9 @@ function getPlannerPolicy(runtimeMode, env = process.env) {
   const maxReplan = Math.min(1, Math.max(0, Number(env.AI_PLANNER_MAX_REPLAN || 1) || 1));
   const toolTimeoutMs = Math.max(10, Number(env.AI_TOOL_TIMEOUT_MS || limits.toolTimeoutMs || 8000) || 8000);
   const totalRunTimeoutMs = Math.max(toolTimeoutMs, Number(env.AI_RUN_TIMEOUT_MS || 25000) || 25000);
+  const agentEnabled = !["false", "0"].includes(String(env.AI_AGENT_ENABLED == null ? "true" : env.AI_AGENT_ENABLED).toLowerCase());
   const modelPlannerEnabled = mode !== "public"
+    && agentEnabled
     && (env.AI_MODEL_PLANNER_ENABLED === "1" || env.AI_MODEL_PLANNER_ENABLED === "true"
       || mode === "trial" || mode === "dev");
 

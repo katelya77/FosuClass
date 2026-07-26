@@ -6,6 +6,9 @@
 const EVENT_TYPES = Object.freeze([
   "run.accepted",
   "request.sanitized",
+  "understanding.started",
+  "understanding.completed",
+  "understanding.fallback",
   "intent.resolved",
   "skill.selected",
   "plan.created",
@@ -20,6 +23,9 @@ const EVENT_TYPES = Object.freeze([
   "provider.started",
   "provider.completed",
   "provider.failed",
+  "provider.shadow.started",
+  "provider.shadow.completed",
+  "provider.shadow.failed",
   "response.composing",
   "result.verifying",
   "run.completed",
@@ -64,6 +70,12 @@ function loadingTextForEvent(event = {}, runtimeMode = "public") {
         : (intent && /course|课|classroom|教室|week|周/.test(intent)
           ? "正在理解你的任务"
           : "正在理解你的问题");
+    case "understanding.started":
+      return "正在理解你的目标";
+    case "understanding.completed":
+      return "已理解任务目标";
+    case "understanding.fallback":
+      return "增强理解暂不可用，已切换确定性理解";
     case "intent.resolved":
     case "skill.selected":
       return "正在理解你的问题";
@@ -101,6 +113,12 @@ function loadingTextForEvent(event = {}, runtimeMode = "public") {
       return "正在组织回答";
     case "provider.failed":
       return "增强理解暂不可用";
+    case "provider.shadow.started":
+      return "正在执行推理层影子评估";
+    case "provider.shadow.completed":
+      return "推理层影子评估已完成";
+    case "provider.shadow.failed":
+      return "推理层影子评估未完成";
     case "response.composing":
       return enhanced && event.providerUsed === true
         ? "正在组织回答"
@@ -131,6 +149,10 @@ function publicEventSummary(event = {}) {
     tool: safeText(event.tool || event.toolName || "", 80),
     status: safeText(event.status || "", 32),
     reasonCode: safeText(event.reasonCode || "", 80),
+    provider: safeText(event.provider || "", 40),
+    purpose: safeText(event.purpose || "", 32),
+    understandingSource: safeText(event.understandingSource || "", 40),
+    latencyMs: Math.max(0, Number(event.latencyMs || 0) || 0),
     providerUsed: event.providerUsed === true,
     label: safeText(event.label || loadingTextForEvent(event, event.runtimeMode || "public"), 120),
   };

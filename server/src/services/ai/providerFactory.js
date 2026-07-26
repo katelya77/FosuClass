@@ -32,7 +32,7 @@ function getProviderName(runtimeMode, runtimeConfig) {
   }
   const configured = String(configValue(runtimeConfig, "AI_PROVIDER", "")).trim().toLowerCase();
   if (configured === "mock") return "mock";
-  if (configured === "cloudbase-openai") return "cloudbase-openai";
+  if (["cloudbase-openai", "hunyuan3", "hunyuan-3", "tencent-hunyuan3"].includes(configured)) return "cloudbase-openai";
   if (configured === "coze") return "coze";
   if (configured === "deepseek") return "deepseek";
   if (cloudbaseOpenaiProvider.firstConfiguredKey(runtimeConfig) && String(configValue(runtimeConfig, "CLOUDBASE_OPENAI_ENABLED", "false")).toLowerCase() === "true") return "cloudbase-openai";

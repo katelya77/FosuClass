@@ -55,8 +55,8 @@ function shouldReplan(verification, observations, plan, goalCheck) {
   return false;
 }
 
-function selectPlanner(runtimeMode) {
-  const policy = getPlannerPolicy(runtimeMode);
+function selectPlanner(runtimeMode, plannerEnv) {
+  const policy = getPlannerPolicy(runtimeMode, plannerEnv || process.env);
   if (policy.useModelPlanner) return modelPlanner;
   return deterministicPlanner;
 }
@@ -95,8 +95,8 @@ function filterStepsForReplan(steps, toolCache, context, principal) {
  */
 async function runObservationLoop(input = {}) {
   const runtimeMode = input.runtimeMode || "public";
-  const policy = getPlannerPolicy(runtimeMode);
-  const planner = selectPlanner(runtimeMode);
+  const policy = getPlannerPolicy(runtimeMode, input.plannerEnv || process.env);
+  const planner = selectPlanner(runtimeMode, input.plannerEnv);
   const planFn = input.planFn || ((args) => planner.plan(args));
   const replanFn = input.replanFn || ((args) => planner.replan(args));
   const toolCache = input.toolCache || createToolResultCache();
@@ -117,6 +117,7 @@ async function runObservationLoop(input = {}) {
     skill: input.skill,
     context: input.context,
     modelGenerate: input.modelGenerate,
+    plannerEnv: input.plannerEnv,
   });
 
   // Attach Goal Contract for multi-skill / multi-goal messages
@@ -127,6 +128,13 @@ async function runObservationLoop(input = {}) {
       requiredOutcomes: plan.requiredOutcomes,
     });
   }
+  const initialPlan = Object.assign({}, plan, {
+    steps: (plan.steps || []).map((step) => Object.assign({}, step, {
+      args: Object.assign({}, step.args || {}),
+      dependsOn: Array.isArray(step.dependsOn) ? step.dependsOn.slice() : [],
+    })),
+    requiredOutcomes: Array.isArray(plan.requiredOutcomes) ? plan.requiredOutcomes.slice() : [],
+  });
 
   if (typeof input.emit === "function") {
     input.emit({ type: "plan.created", plannerType: plan.plannerType, stepCount: (plan.steps || []).length });
@@ -229,6 +237,7 @@ async function runObservationLoop(input = {}) {
       availableTools: input.availableTools,
       availableSkills: input.availableSkills,
       modelGenerate: input.modelGenerate,
+      plannerEnv: input.plannerEnv,
       goalCheck,
     });
     replanUsed = true;
@@ -280,6 +289,7 @@ async function runObservationLoop(input = {}) {
 
   const cacheMetrics = toolCache.metrics();
   return {
+    initialPlan,
     plan,
     execution,
     observations,

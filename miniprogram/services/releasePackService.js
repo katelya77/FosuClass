@@ -5,12 +5,13 @@ const { BOOTSTRAP_CACHE_KEY } = require("../utils/storage");
 const appConfigService = require("./appConfigService");
 const platformDataService = require("./platformDataService");
 const staticOriginService = require("./staticOriginService");
+const teacherSearchContract = require("../shared/teacherSearchContract.generated");
 
 const DEFAULT_TERM = "";
 const CACHE_PREFIX = "fosu:v8";
 const LEGACY_CACHE_PREFIX = "fosu:v7";
 /** Client cache epoch; bump when full-index cache semantics change (poison fix). */
-const TEACHER_INDEX_SCHEMA_VERSION = 4;
+const TEACHER_INDEX_SCHEMA_VERSION = teacherSearchContract.CONTRACT.indexSchemaVersion;
 const INDEX_TYPES = ["class", "teacher", "classroom", "course"];
 const INDEX_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
 const DETAIL_CACHE_TTL = 30 * 24 * 60 * 60 * 1000;
@@ -800,39 +801,7 @@ function getLocalActiveRelease(term) {
 }
 
 function normalizeTeacherIndexItem(item, meta = {}) {
-  const source = item && typeof item === "object" ? item : {};
-  const teacherName = String(
-    source.teacherName || source.name || source.displayName || source.canonicalName || ""
-  ).trim();
-  const id = String(source.id || source.detailId || source.teacherId || "").trim();
-  const collegeCodes = Array.isArray(source.collegeCodes)
-    ? source.collegeCodes.map((c) => String(c || "").trim()).filter(Boolean)
-    : (source.collegeCode ? [String(source.collegeCode).trim()].filter(Boolean) : []);
-  const collegeNames = Array.isArray(source.collegeNames)
-    ? source.collegeNames.map((n) => String(n || "").trim()).filter(Boolean)
-    : (source.collegeName || source.college
-      ? [String(source.collegeName || source.college).trim()].filter(Boolean)
-      : []);
-  const normalizedName = String(
-    source.normalizedName || source.searchableName || normalizeSearchText(teacherName)
-  ).trim();
-  return Object.assign({}, source, {
-    id,
-    detailId: String(source.detailId || id).trim(),
-    teacherName,
-    name: teacherName || String(source.name || "").trim(),
-    normalizedName,
-    collegeCode: String(source.collegeCode || collegeCodes[0] || "").trim(),
-    collegeCodes,
-    collegeName: String(source.collegeName || source.college || collegeNames[0] || "").trim(),
-    collegeNames,
-    courseCount: Number(source.courseCount || 0) || 0,
-    term: String(source.term || source.semester || meta.term || "").trim(),
-    releaseVersion: String(source.releaseVersion || meta.releaseVersion || "").trim(),
-    teacherIndexSchemaVersion: Number(
-      source.teacherIndexSchemaVersion || meta.teacherIndexSchemaVersion || 0
-    ) || 0,
-  });
+  return teacherSearchContract.normalizeItem(item, meta);
 }
 
 /**
@@ -1379,13 +1348,16 @@ function filterIndexPayload(type, payload, params = {}) {
   const debug = type === "teacher"
     ? getTeacherFilterDebug(index, params, q, scoped, filtered)
     : undefined;
-  return Object.assign({}, index, {
+  const result = Object.assign({}, index, {
     query: q,
     total: filtered.length,
     limit,
     offset,
     items: filtered.slice(offset, offset + limit),
   }, debug ? { debug } : {});
+  return type === "teacher"
+    ? teacherSearchContract.normalizeResponse(result, params)
+    : result;
 }
 
 function readCachedSearchIndex(type, params = {}) {

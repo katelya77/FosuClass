@@ -1,5 +1,6 @@
 const axios = require("axios");
 const deepseekProvider = require("./deepseekProvider");
+const openaiStructuredProvider = require("./openaiStructuredProvider");
 
 const DEFAULT_BASE_URL = "https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase";
 const DEFAULT_MODEL = "hy3-preview";
@@ -112,9 +113,39 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   return Object.assign({ provider: "cloudbase-openai" }, parsed);
 }
 
+async function generateStructured(input = {}) {
+  const runtimeConfig = input.providerRuntimeConfig || {};
+  if (!boolEnv("CLOUDBASE_OPENAI_ENABLED", false, runtimeConfig)) {
+    const error = new Error("CloudBase OpenAI provider is disabled.");
+    error.code = "NOT_CONFIGURED";
+    throw error;
+  }
+  const apiKey = firstConfiguredKey(runtimeConfig);
+  if (!apiKey) {
+    const error = new Error("CloudBase OpenAI provider is not configured.");
+    error.code = "NOT_CONFIGURED";
+    throw error;
+  }
+  return openaiStructuredProvider.generateStructured({
+    baseUrl: configuredEnv("CLOUDBASE_OPENAI_BASE_URL", DEFAULT_BASE_URL, runtimeConfig),
+    apiKey,
+    model: configuredEnv(
+      input.purpose === "understanding" ? "AI_UNDERSTANDING_MODEL" : "AI_PLANNER_MODEL",
+      configuredEnv("CLOUDBASE_OPENAI_TEXT_MODEL", DEFAULT_MODEL, runtimeConfig),
+      runtimeConfig
+    ),
+    messages: input.messages,
+    maxTokens: input.maxTokens || numberEnv("CLOUDBASE_OPENAI_STRUCTURED_MAX_TOKENS", 800, 128, 2000, runtimeConfig),
+    timeoutMs: input.timeoutMs || numberEnv("CLOUDBASE_OPENAI_STRUCTURED_TIMEOUT_MS", 8000, 1000, 30000, runtimeConfig),
+    provider: "cloudbase-openai",
+    classifyError: classifyHttpError,
+  });
+}
+
 module.exports = {
   classifyHttpError,
   firstConfiguredKey,
   generate,
+  generateStructured,
   name: "cloudbase-openai",
 };
