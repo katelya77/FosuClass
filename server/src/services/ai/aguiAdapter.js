@@ -8,6 +8,9 @@
 const EVENT_MAP = Object.freeze({
   "run.accepted": "RUN_STARTED",
   "request.sanitized": "STEP_STARTED",
+  "understanding.started": "STEP_STARTED",
+  "understanding.completed": "STEP_FINISHED",
+  "understanding.fallback": "STEP_FINISHED",
   "intent.resolved": "STEP_FINISHED",
   "skill.selected": "STEP_FINISHED",
   "plan.created": "STEP_FINISHED",
@@ -22,6 +25,9 @@ const EVENT_MAP = Object.freeze({
   "provider.started": "STEP_STARTED",
   "provider.completed": "STEP_FINISHED",
   "provider.failed": "STEP_FINISHED",
+  "provider.shadow.started": "STEP_STARTED",
+  "provider.shadow.completed": "STEP_FINISHED",
+  "provider.shadow.failed": "STEP_FINISHED",
   "response.composing": "TEXT_MESSAGE_START",
   "result.verifying": "STEP_STARTED",
   "run.completed": "RUN_FINISHED",
@@ -62,7 +68,7 @@ function mapRunEventToAgui(event = {}, context = {}) {
   }
   if (aguiType === "RUN_FINISHED") {
     return [Object.assign({}, base, {
-      status: type === "run.degraded" ? "degraded" : "completed",
+      status: safeText(event.status || (type === "run.degraded" ? "degraded" : "completed"), 24),
       message: safeText(event.loadingText || event.summary || "run finished", 200),
     })];
   }

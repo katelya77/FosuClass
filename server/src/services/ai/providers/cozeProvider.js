@@ -536,6 +536,30 @@ async function generate(input = {}) {
   return Object.assign({ provider: "coze" }, parsed);
 }
 
+async function generateStructured(input = {}) {
+  const result = await generate(Object.assign({}, input, {
+    message: JSON.stringify({
+      purpose: String(input.purpose || "structured").slice(0, 32),
+      instruction: "Return only the strict JSON object requested by the supplied system and user messages.",
+      messages: Array.isArray(input.messages) ? input.messages.slice(0, 4) : [],
+    }),
+    intent: { name: "conversational_help" },
+    toolResults: [],
+    projectKnowledge: "",
+  }));
+  const content = result && (result.answer || result.content || result.text);
+  if (!String(content || "").trim()) {
+    const error = new Error("Coze structured response was empty");
+    error.code = "INVALID_PROVIDER_JSON";
+    throw error;
+  }
+  return {
+    content: String(content),
+    text: String(content),
+    provider: "coze",
+  };
+}
+
 async function testConnection(input = {}) {
   const overrides = Object.assign({}, input.providerRuntimeConfig || input.overrides || {}, {
     COZE_ENABLED: "true",
@@ -604,6 +628,7 @@ module.exports = {
   extractAnswer,
   extractPollInfo,
   generate,
+  generateStructured,
   getConfig,
   isEnabled,
   isExpired,

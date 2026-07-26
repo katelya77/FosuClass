@@ -18,7 +18,20 @@ function assertPublicProviderHidden(response) {
 
 async function run() {
   await assert.rejects(
-    () => cozeProvider.generate({ message: "hello", toolResults: [] }),
+    () => cozeProvider.generate({
+      message: "hello",
+      toolResults: [],
+      // Explicit request scope keeps this unit test isolated from a developer's
+      // local runtime/.env Provider credentials and prevents accidental live calls.
+      providerRuntimeConfig: {
+        COZE_API_TOKEN: "",
+        COZE_API_KEY: "",
+        COZE_BOT_ID: "",
+        COZE_AGENT_ID: "",
+        COZE_WORKLOAD_ENDPOINT: "",
+        COZE_AGENT_BASE_URL: "",
+      },
+    }),
     (error) => error && error.code === "NOT_CONFIGURED"
   );
 

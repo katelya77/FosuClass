@@ -1,8 +1,10 @@
+const teacherSearchContract = require("../shared/teacherSearchContract.generated");
+
 const STORAGE_KEY = "FOSU_CLASS_SETTINGS";
 const BOOTSTRAP_CACHE_KEY = "FOSU_BOOTSTRAP_CACHE";
 const SCHOOL_CACHE_SCHEMA_VERSION = 8;
 /** Bumped when teacher college filter / index semantics change; invalidates stale client caches. */
-const TEACHER_INDEX_SCHEMA_VERSION = 4;
+const TEACHER_INDEX_SCHEMA_VERSION = teacherSearchContract.CONTRACT.indexSchemaVersion;
 /** Teacher Index Schema v3+ on pack; client cache key v4 clears poisoned full-index caches. */
 const TEACHER_INDEX_SCHEMA_V3 = 3;
 const SCHOOL_INDEX_CACHE_TTL = 7 * 24 * 60 * 60 * 1000;
@@ -387,13 +389,17 @@ function getSchoolIndexCacheKey(term, releaseVersion, type, params = {}) {
   const safeTerm = encodeURIComponent(String(term || "unknown"));
   const safeVersion = encodeURIComponent(String(releaseVersion || "unknown"));
   const safeType = encodeURIComponent(String(type || "unknown"));
-  const teacherSchema = String(type || "") === "teacher"
-    ? `:tidx${TEACHER_INDEX_SCHEMA_VERSION}`
-    : "";
+  if (String(type || "") === "teacher") {
+    const semanticKey = teacherSearchContract.buildCacheKey(Object.assign({}, params || {}, {
+      type: "teacher",
+      term,
+      releaseVersion,
+    }));
+    return `school:v${SCHOOL_CACHE_SCHEMA_VERSION}:index:tidx${TEACHER_INDEX_SCHEMA_VERSION}:${semanticKey}`;
+  }
+  const teacherSchema = "";
   // Include teacherIndexSchemaVersion in key so college-filter upgrades invalidate old results.
-  const hashParams = String(type || "") === "teacher"
-    ? Object.assign({}, params || {}, { teacherIndexSchemaVersion: TEACHER_INDEX_SCHEMA_VERSION })
-    : params;
+  const hashParams = params;
   return `school:v${SCHOOL_CACHE_SCHEMA_VERSION}:index:${safeTerm}:${safeVersion}:${safeType}${teacherSchema}:${stableParamHash(hashParams)}`;
 }
 

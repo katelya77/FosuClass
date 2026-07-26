@@ -1,6 +1,7 @@
 const axios = require("axios");
 const fs = require("fs");
 const path = require("path");
+const openaiStructuredProvider = require("./openaiStructuredProvider");
 
 const DEFAULT_BASE_URL = "https://api.deepseek.com";
 const DEFAULT_MODEL = "deepseek-v4-flash";
@@ -310,12 +311,37 @@ async function generate({ message, intent, toolResults, projectKnowledge, provid
   return Object.assign({ provider: "deepseek" }, parsed);
 }
 
+async function generateStructured(input = {}) {
+  const runtimeConfig = input.providerRuntimeConfig || {};
+  const apiKey = firstConfiguredKey(runtimeConfig);
+  if (!apiKey) {
+    const error = new Error("DeepSeek provider is not configured.");
+    error.code = "NOT_CONFIGURED";
+    throw error;
+  }
+  return openaiStructuredProvider.generateStructured({
+    baseUrl: configuredEnv("AI_BASE_URL", DEFAULT_BASE_URL, runtimeConfig),
+    apiKey,
+    model: configuredEnv(
+      input.purpose === "understanding" ? "AI_UNDERSTANDING_MODEL" : "AI_PLANNER_MODEL",
+      configuredEnv("AI_MODEL", DEFAULT_MODEL, runtimeConfig),
+      runtimeConfig
+    ),
+    messages: input.messages,
+    maxTokens: input.maxTokens || numberEnv("AI_STRUCTURED_MAX_TOKENS", 800, 128, 2000, runtimeConfig),
+    timeoutMs: input.timeoutMs || numberEnv("AI_STRUCTURED_TIMEOUT_MS", 8000, 1000, 30000, runtimeConfig),
+    provider: "deepseek",
+    classifyError: classifyHttpError,
+  });
+}
+
 module.exports = {
   buildProviderDiagnostics,
   buildSystemPrompt,
   classifyHttpError,
   firstConfiguredKey,
   generate,
+  generateStructured,
   name: "deepseek",
   parseJsonCodeBlock,
   parseJsonFromText,

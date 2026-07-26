@@ -9,6 +9,11 @@ const PROVIDERS = {
   coze: cozeProvider,
   "cloudbase-openai": cloudbaseOpenaiProvider,
 };
+const PROVIDER_ALIASES = Object.freeze({
+  hunyuan3: "cloudbase-openai",
+  "hunyuan-3": "cloudbase-openai",
+  "tencent-hunyuan3": "cloudbase-openai",
+});
 
 // trial/dev 推荐：Coze Agent → CloudBase 内置模型 → DeepSeek → 确定性 mock
 const DEFAULT_COMPETITION_CHAIN = ["coze", "cloudbase-openai", "deepseek", "mock"];
@@ -45,6 +50,10 @@ function readState(name) {
       callCount: 0,
       fallbackCount: 0,
       latencies: [],
+      shadowCallCount: 0,
+      shadowSuccessCount: 0,
+      shadowFailureCount: 0,
+      shadowLatencyMs: 0,
     });
   }
   return state.get(name);
@@ -53,22 +62,38 @@ function readState(name) {
 function parseChain(value, fallback) {
   const items = String(value || "")
     .split(",")
-    .map((item) => item.trim().toLowerCase())
-    .filter((item) => PROVIDERS[item]);
-  return items.length ? items : fallback.slice();
+    .map((item) => normalizeProviderName(item))
+    .filter(Boolean);
+  return items.length ? Array.from(new Set(items)) : fallback.slice();
 }
 
 function normalizeProviderName(name) {
   const provider = String(name || "").trim().toLowerCase();
-  return PROVIDERS[provider] ? provider : "";
+  const canonical = PROVIDER_ALIASES[provider] || provider;
+  return PROVIDERS[canonical] ? canonical : "";
 }
 
 function getProviderChain(runtimeMode = "public", runtimeConfig = {}) {
   if (runtimeMode === "public") return DEFAULT_PUBLIC_CHAIN.slice();
-  const explicit = parseChain(configValue(runtimeConfig, "AI_PROVIDER_CHAIN", process.env.AI_PROVIDER_CHAIN || ""), []);
-  if (explicit.length) return explicit;
-  const configured = normalizeProviderName(configValue(runtimeConfig, "AI_PROVIDER", ""));
-  if (configured && configured !== "mock") {
+  const request = runtimeConfig || {};
+  const hasRequestChain = Object.prototype.hasOwnProperty.call(request, "AI_PROVIDER_CHAIN");
+  const hasRequestProvider = Object.prototype.hasOwnProperty.call(request, "AI_PROVIDER");
+  if (hasRequestChain) {
+    const requestChain = parseChain(request.AI_PROVIDER_CHAIN, []);
+    if (requestChain.length) return requestChain;
+  }
+  if (hasRequestProvider) {
+    const requestProvider = normalizeProviderName(request.AI_PROVIDER);
+    if (requestProvider === "mock") return ["mock"];
+    if (requestProvider) return [requestProvider, "mock"];
+  }
+  if (!hasRequestChain) {
+    const processChain = parseChain(process.env.AI_PROVIDER_CHAIN || "", []);
+    if (processChain.length) return processChain;
+  }
+  const configured = normalizeProviderName(process.env.AI_PROVIDER || "");
+  if (configured === "mock") return ["mock"];
+  if (configured) {
     return [configured, "mock"];
   }
   return DEFAULT_COMPETITION_CHAIN.slice();
@@ -79,6 +104,7 @@ function getProviderModule(name) {
 }
 
 function isProviderConfigured(name, runtimeConfig = {}) {
+  name = normalizeProviderName(name);
   if (name === "mock") return true;
   if (name === "deepseek") return Boolean(deepseekProvider.firstConfiguredKey(runtimeConfig));
   if (name === "coze") {
@@ -170,6 +196,198 @@ function emitProviderEvent(options, event) {
   }
 }
 
+function publicProviderName(name) {
+  return name === "cloudbase-openai" ? "hunyuan3" : String(name || "");
+}
+
+function withTimeout(promise, timeoutMs) {
+  let timer = null;
+  return Promise.race([
+    Promise.resolve(promise),
+    new Promise((resolve, reject) => {
+      timer = setTimeout(() => {
+        const error = new Error("Shadow provider timed out");
+        error.code = "SHADOW_TIMEOUT";
+        reject(error);
+      }, timeoutMs);
+    }),
+  ]).finally(() => {
+    if (timer) clearTimeout(timer);
+  });
+}
+
+/**
+ * Optional trial/dev shadow evaluation. The shadow result is diagnostic only:
+ * its content is never returned to Planner, Tool Router, Response Composer, or memory.
+ */
+async function runShadowEvaluation(input = {}, options = {}, primaryName = "") {
+  const runtimeMode = String(options.runtimeMode || "public");
+  if (runtimeMode === "public") {
+    return { provider: "", status: "skipped", latencyMs: 0, reason: "public_forbidden" };
+  }
+  const runtimeConfig = options.providerRuntimeConfig || input.providerRuntimeConfig || {};
+  const enabled = String(configValue(runtimeConfig, "AI_PROVIDER_SHADOW_ENABLED", "false")).toLowerCase();
+  if (enabled !== "true" && enabled !== "1") {
+    return { provider: "", status: "skipped", latencyMs: 0, reason: "disabled" };
+  }
+  const configuredName = String(configValue(runtimeConfig, "AI_PROVIDER_SHADOW", "")).trim();
+  const shadowName = normalizeProviderName(configuredName);
+  const displayName = publicProviderName(shadowName || configuredName.toLowerCase());
+  if (!shadowName || shadowName === "mock") {
+    return { provider: displayName, status: "skipped", latencyMs: 0, reason: "not_configured" };
+  }
+  if (shadowName === normalizeProviderName(primaryName)) {
+    return { provider: displayName, status: "skipped", latencyMs: 0, reason: "same_provider" };
+  }
+  if (typeof options.shadowGenerate !== "function" && !isProviderConfigured(shadowName, runtimeConfig)) {
+    return { provider: displayName, status: "skipped", latencyMs: 0, reason: "not_configured" };
+  }
+
+  const shadowState = readState(shadowName);
+  shadowState.shadowCallCount += 1;
+  const started = Date.now();
+  emitProviderEvent(options, {
+    type: "provider.shadow.started",
+    status: "started",
+    provider: displayName,
+    purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
+    providerUsed: true,
+  });
+  try {
+    const provider = getProviderModule(shadowName);
+    const invoke = typeof options.shadowGenerate === "function"
+      ? options.shadowGenerate({ provider: displayName, canonicalProvider: shadowName, input })
+      : (options.structured === true && typeof provider.generateStructured === "function"
+        ? provider.generateStructured(Object.assign({}, input, { providerRuntimeConfig: runtimeConfig }))
+        : provider.generate(Object.assign({}, input, { providerRuntimeConfig: runtimeConfig })));
+    const timeoutMs = Math.max(250, Math.min(10000, Number(configValue(runtimeConfig, "AI_PROVIDER_SHADOW_TIMEOUT_MS", "3000")) || 3000));
+    await withTimeout(invoke, timeoutMs);
+    const latencyMs = Date.now() - started;
+    shadowState.shadowSuccessCount += 1;
+    shadowState.shadowLatencyMs = latencyMs;
+    emitProviderEvent(options, {
+      type: "provider.shadow.completed",
+      status: "success",
+      provider: displayName,
+      purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
+      latencyMs,
+      providerUsed: true,
+    });
+    return { provider: displayName, status: "success", latencyMs, reason: "" };
+  } catch (error) {
+    const latencyMs = Date.now() - started;
+    const reason = classifyFailure(error);
+    shadowState.shadowFailureCount += 1;
+    shadowState.shadowLatencyMs = latencyMs;
+    emitProviderEvent(options, {
+      type: "provider.shadow.failed",
+      status: "failed",
+      provider: displayName,
+      purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
+      latencyMs,
+      reasonCode: String(reason).slice(0, 80),
+      providerUsed: false,
+    });
+    return { provider: displayName, status: "failed", latencyMs, reason };
+  }
+}
+
+/**
+ * Schedule diagnostic shadow work without extending the user-facing request.
+ * Results are observable only through safe events / an optional diagnostic hook.
+ */
+function scheduleShadowEvaluation(input = {}, options = {}, primaryName = "") {
+  const runtimeConfig = options.providerRuntimeConfig || input.providerRuntimeConfig || {};
+  const configuredName = String(configValue(runtimeConfig, "AI_PROVIDER_SHADOW", "")).trim();
+  const displayName = publicProviderName(normalizeProviderName(configuredName) || configuredName.toLowerCase());
+  const enabled = String(configValue(runtimeConfig, "AI_PROVIDER_SHADOW_ENABLED", "false")).toLowerCase();
+  if (String(options.runtimeMode || "public") === "public") {
+    return { provider: "", status: "skipped", latencyMs: 0, reason: "public_forbidden" };
+  }
+  if (enabled !== "true" && enabled !== "1") {
+    return { provider: "", status: "skipped", latencyMs: 0, reason: "disabled" };
+  }
+
+  Promise.resolve()
+    .then(() => runShadowEvaluation(input, options, primaryName))
+    .then((result) => {
+      if (typeof options.onShadowEvaluation === "function") {
+        try {
+          options.onShadowEvaluation(result);
+        } catch (error) {
+          // Diagnostics must never affect the primary request.
+        }
+      }
+    })
+    .catch((error) => {
+      emitProviderEvent(options, {
+        type: "provider.shadow.failed",
+        status: "failed",
+        provider: displayName,
+        purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
+        reasonCode: String(classifyFailure(error)).slice(0, 80),
+        providerUsed: false,
+      });
+    });
+
+  return { provider: displayName, status: "scheduled", latencyMs: 0, reason: "background" };
+}
+
+/** Explicit, bounded health probe for admin/readiness jobs; never runs in public. */
+async function probeProvider(name, input = {}) {
+  const runtimeMode = String(input.runtimeMode || "public");
+  const canonical = normalizeProviderName(name);
+  const displayName = publicProviderName(canonical || name);
+  if (runtimeMode === "public") {
+    return { provider: displayName, health: "forbidden", latencyMs: 0, reasonCode: "PUBLIC_PROVIDER_FORBIDDEN" };
+  }
+  if (!canonical || canonical === "mock") {
+    return { provider: displayName, health: canonical === "mock" ? "ok" : "disabled", latencyMs: 0, reasonCode: canonical ? "" : "PROVIDER_UNKNOWN" };
+  }
+  const runtimeConfig = input.providerRuntimeConfig || {};
+  if (typeof input.probeGenerate !== "function" && !isProviderConfigured(canonical, runtimeConfig)) {
+    markFailure(canonical, "not_configured");
+    return { provider: displayName, health: "disabled", latencyMs: 0, reasonCode: "NOT_CONFIGURED" };
+  }
+  const started = Date.now();
+  try {
+    const provider = getProviderModule(canonical);
+    if (typeof input.probeGenerate === "function") {
+      await input.probeGenerate({ provider: displayName, canonicalProvider: canonical });
+    } else if (typeof provider.testConnection === "function") {
+      const result = await provider.testConnection({ providerRuntimeConfig: runtimeConfig });
+      if (!result || result.ok === false || result.success === false) {
+        const error = new Error("Provider health probe failed");
+        error.code = result && result.code || "PROVIDER_HEALTH_FAILED";
+        throw error;
+      }
+    } else if (typeof provider.generateStructured === "function") {
+      await provider.generateStructured({
+        purpose: "health",
+        messages: [
+          { role: "system", content: "Return only {\"ok\":true}." },
+          { role: "user", content: "health-check" },
+        ],
+        maxTokens: 32,
+        timeoutMs: Math.max(1000, Math.min(5000, Number(input.timeoutMs || 2500) || 2500)),
+        providerRuntimeConfig: runtimeConfig,
+      });
+    } else {
+      const error = new Error("Provider has no health probe");
+      error.code = "PROVIDER_HEALTH_UNSUPPORTED";
+      throw error;
+    }
+    const latencyMs = Date.now() - started;
+    markSuccess(canonical, latencyMs);
+    return { provider: displayName, health: "ok", latencyMs, reasonCode: "" };
+  } catch (error) {
+    const reasonCode = classifyFailure(error);
+    const latencyMs = Date.now() - started;
+    markFailure(canonical, reasonCode);
+    return { provider: displayName, health: "degraded", latencyMs, reasonCode };
+  }
+}
+
 async function generateWithChain(input = {}, options = {}) {
   const runtimeMode = options.runtimeMode || "public";
   const runtimeConfig = options.providerRuntimeConfig || input.providerRuntimeConfig || {};
@@ -202,27 +420,40 @@ async function generateWithChain(input = {}, options = {}) {
     emitProviderEvent(options, {
       type: "provider.selected",
       status: "selected",
+      provider: name === "cloudbase-openai" ? "hunyuan3" : name,
+      purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
       reasonCode: name === "coze" ? "PROVIDER_TEMPORARY" : "PROVIDER_SELECTED",
     });
     emitProviderEvent(options, {
       type: "provider.started",
       status: "started",
+      provider: name === "cloudbase-openai" ? "hunyuan3" : name,
+      purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
       providerUsed: true,
     });
     try {
-      const payload = await provider.generate(Object.assign({}, input, {
+      const generate = options.structured === true && typeof provider.generateStructured === "function"
+        ? provider.generateStructured
+        : provider.generate;
+      const payload = await generate(Object.assign({}, input, {
         providerRuntimeConfig: runtimeConfig,
         principal: input.principal || options.principal || null,
       }));
-      markSuccess(name, Date.now() - started);
+      const latencyMs = Date.now() - started;
+      markSuccess(name, latencyMs);
       emitProviderEvent(options, {
         type: "provider.completed",
         status: "success",
+        provider: name === "cloudbase-openai" ? "hunyuan3" : name,
+        purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
+        latencyMs,
         providerUsed: true,
       });
+      const shadowEvaluation = scheduleShadowEvaluation(input, options, name);
       return Object.assign({}, payload, {
         provider: payload.provider || name,
-        providerChain: attempts.concat({ provider: name, status: "success", latencyMs: Date.now() - started }),
+        providerChain: attempts.concat({ provider: name, status: "success", latencyMs }),
+        shadowEvaluation,
       });
     } catch (error) {
       const reason = classifyFailure(error);
@@ -231,6 +462,9 @@ async function generateWithChain(input = {}, options = {}) {
       emitProviderEvent(options, {
         type: "provider.failed",
         status: "failed",
+        provider: name === "cloudbase-openai" ? "hunyuan3" : name,
+        purpose: String(options.purpose || input.purpose || "response").slice(0, 32),
+        latencyMs: Date.now() - started,
         reasonCode: String(reason || "provider_failed").slice(0, 80),
         providerUsed: false,
       });
@@ -273,5 +507,9 @@ module.exports = {
   getStatus,
   isCircuitOpen,
   isProviderConfigured,
+  normalizeProviderName,
+  probeProvider,
+  runShadowEvaluation,
+  scheduleShadowEvaluation,
   resetForTest,
 };

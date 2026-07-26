@@ -64,7 +64,8 @@ async function run() {
   });
   const text = JSON.stringify(response);
   assert.strictEqual(providerCallCount, 0, "factual intents must never call the expression provider");
-  assert.strictEqual(response.safety.externalProviderUsed, false, "factual response remains deterministic");
+  assert.strictEqual(response.safety.externalProviderUsed, true, "final Provider truth includes model-first Understanding/Planner attempts");
+  assert.strictEqual(response.providerStages.response.attempted, false, "the factual response stage remains deterministic");
   assert(!text.includes("伪造推荐卡"), "provider cards must not override deterministic cards");
   assert(!text.includes("伪造按钮"), "provider actions must not override deterministic actions");
   assert(!text.includes("999间"), "provider room facts must not override tool facts");

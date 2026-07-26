@@ -11,6 +11,8 @@ async function run() {
   const publicPolicy = getPlannerPolicy("public");
   assert.strictEqual(publicPolicy.useModelPlanner, false);
   assert.strictEqual(publicPolicy.generalAssistantEnabled, false);
+  assert.strictEqual(getPlannerPolicy("trial", { AI_AGENT_ENABLED: "false" }).useModelPlanner, false);
+  assert.strictEqual(getPlannerPolicy("trial", { AI_AGENT_ENABLED: "true" }).useModelPlanner, true);
 
   // clarification for teacher query without name
   const clarify = deterministicPlanner.plan({

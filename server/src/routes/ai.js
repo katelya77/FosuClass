@@ -401,19 +401,38 @@ router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, vali
       serverSession: req.fosuSession,
       runtimeMode: resolveMemoryRuntimeMode(req),
     });
-    const memoryMode = String(body.memoryMode || "").slice(0, 24) === "cloud_sync" ? "cloud_sync" : "local_only";
+    const requestedCloudSync = String(body.memoryMode || "").slice(0, 24) === "cloud_sync";
     const conversationId = String(body.conversationId || "").slice(0, 100);
     const bundle = defaultMemoryService.loadForChat({
-      principal,
+      serverSession: req.fosuSession,
+      runtimeMode: resolveMemoryRuntimeMode(req),
       conversationId,
-      memoryMode,
+      memoryMode: requestedCloudSync ? "cloud_sync" : "local_only",
       context: {},
     });
+    const cloudSyncAuthorized = Boolean(
+      requestedCloudSync
+      && bundle && bundle.memory && bundle.memory.mode === "cloud_sync"
+      && bundle.state && bundle.state.memoryPolicy
+      && bundle.state.memoryPolicy.mode === "cloud_sync"
+      && bundle.state.memoryPolicy.cloudSyncEnabled === true
+    );
+    if (requestedCloudSync && !cloudSyncAuthorized) {
+      return res.status(409).json({
+        success: false,
+        committed: false,
+        code: "CLOUD_SYNC_NOT_AUTHORIZED",
+        reason: "CLOUD_SYNC_NOT_AUTHORIZED",
+        serverTime: new Date().toISOString(),
+      });
+    }
+    const memoryMode = cloudSyncAuthorized ? "cloud_sync" : "local_only";
     const commitResult = defaultMemoryController.commitActionReceipt({
       principal,
       state: bundle && bundle.state,
       conversationId,
       memoryMode,
+      command,
       runId: String(body.runId || "").slice(0, 100),
       appliedTarget: {
         type: "class",
@@ -422,6 +441,15 @@ router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, vali
         term: String(appliedTarget.term || "").slice(0, 40),
       },
     });
+    if (memoryMode === "cloud_sync" && commitResult.committed !== true) {
+      return res.status(409).json({
+        success: false,
+        committed: false,
+        code: commitResult.reason || "ACTION_RECEIPT_REJECTED",
+        reason: commitResult.reason || "ACTION_RECEIPT_REJECTED",
+        serverTime: new Date().toISOString(),
+      });
+    }
     safeLog("ai-agent-action-receipt", buildSafeLogPayload({
       provider: "action-receipt",
       toolCalls: [{ name: command, status: "success", summary: commitResult.committed ? "committed" : (commitResult.reason || "skipped") }],
@@ -1170,12 +1198,19 @@ router.post("/agent/runs", scheduleLimiter, optionalSessionGuard, validateJsonBo
         agentRunEventService.setResult(created.runId, null, "cancelled");
         return;
       }
-      const status = payload && payload.status === "cancelled"
-        ? "cancelled"
-        : (payload && (payload.fallback || payload.status === "degraded") ? "degraded" : (payload && payload.success === false ? "failed" : "completed"));
-      if (status === "completed") onEvent({ type: "run.completed", runtimeMode: runtimeDecision.runtimeMode });
-      else if (status === "degraded") onEvent({ type: "run.degraded", runtimeMode: runtimeDecision.runtimeMode, reasonCode: String(payload.fallbackReason || "").slice(0, 80) });
-      else if (status === "failed") onEvent({ type: "run.failed", runtimeMode: runtimeDecision.runtimeMode });
+      const status = agentRunEventService.statusFromResult(payload || {});
+      const terminalSummary = {
+        runtimeMode: runtimeDecision.runtimeMode,
+        status: payload && payload.status || status,
+        success: payload ? payload.success !== false : status !== "failed",
+        fallback: Boolean(payload && payload.fallback),
+        partialCompletion: Boolean(payload && (payload.partialCompletion === true || payload.status === "partial")),
+        verificationOk: payload && payload.verification && payload.verification.ok === true,
+        errorCount: payload && Array.isArray(payload.errors) ? payload.errors.length : 0,
+      };
+      if (status === "completed") onEvent(Object.assign({ type: "run.completed" }, terminalSummary));
+      else if (status === "degraded") onEvent(Object.assign({ type: "run.degraded", reasonCode: String(payload && payload.fallbackReason || "").slice(0, 80) }, terminalSummary));
+      else if (status === "failed") onEvent(Object.assign({ type: "run.failed" }, terminalSummary));
       agentRunEventService.setResult(created.runId, payload, status);
     }).catch((error) => {
       onEvent({

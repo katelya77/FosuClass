@@ -349,6 +349,7 @@ class AgentKernel {
       availableTools: candidateTools,
       availableSkills,
       modelGenerate: input.modelGenerate,
+      plannerEnv: input.plannerEnv,
       emit: (event) => this.emit(input, event),
       planFn: async (args) => {
         let structured;
@@ -484,6 +485,7 @@ class AgentKernel {
       confidence: Number(intent && intent.confidence || plan.confidence || 0) || 0,
       slots,
       skill,
+      initialPlan: loop.initialPlan && loop.initialPlan.steps || [],
       plan: plan.steps || plan,
       structuredPlan: plan,
       steps: execution.steps,

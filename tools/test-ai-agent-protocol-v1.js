@@ -77,7 +77,7 @@ async function testPlannerToolEvidenceResponse() {
     "search_empty_rooms",
     "get_campus_weather",
     "search_campus_place",
-  ]);
+  ], JSON.stringify({ intent: response.intent, plan: response.plan, tools: response.toolCalls }));
   assert(response.toolCalls.length >= 4);
   assert(response.evidenceItems.length >= 4);
   assert.strictEqual(response.safety.validationOk, true);
