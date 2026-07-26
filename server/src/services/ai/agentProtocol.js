@@ -328,6 +328,22 @@ function buildV2Response(payload = {}) {
       summary: safeProtocolText(call && call.summary, 160),
     })),
     observations: stableObservations(payload.observations),
+    goalContract: payload.goalContract && typeof payload.goalContract === "object"
+      ? sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.goalContract))
+      : null,
+    verificationGoalContract: payload.verificationGoalContract && typeof payload.verificationGoalContract === "object"
+      ? sanitizeProtocolValue(safetyGuard.sanitizeToolResult(payload.verificationGoalContract))
+      : null,
+    understanding: payload.understanding && typeof payload.understanding === "object"
+      ? sanitizeProtocolValue(safetyGuard.sanitizeToolResult({
+        source: payload.understanding.source,
+        providerUsed: payload.understanding.providerUsed || false,
+        externalProviderUsed: payload.understanding.externalProviderUsed === true,
+        fallback: payload.understanding.fallback === true,
+        reasonCode: payload.understanding.reasonCode || "",
+        latencyMs: Math.max(0, Number(payload.understanding.latencyMs || 0) || 0),
+      }))
+      : null,
     answer: safeProtocolText(payload.answer || "", 1600),
     cards: cardValidation.cards,
     // Action Command Bus 协议字段：模型只能引用 manifest.actions 中的 command，

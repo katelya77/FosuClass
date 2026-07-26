@@ -13,7 +13,7 @@ const files = [
   "docs/demo-script-5min.md",
   "docs/fosu-ai-knowledge-base.md",
   "docs/manual-wechat-release-checklist.md",
-  "docs/ui-ux-cache-pr-plan.md",
+  "docs/xiaofu-agent/unified-model-first-root-cause.md",
   "miniprogram/app.json",
   "miniprogram/sitemap.json",
   "miniprogram/components/xiaofu-float/index.js",

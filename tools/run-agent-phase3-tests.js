@@ -5,6 +5,8 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const tests = [
   "tools/test-agent-run-events.js",
+  "tools/test-agent-activity-state.js",
+  "tools/test-voice-state-sequence.js",
   "tools/test-provider-readiness.js",
   "tools/test-provider-runtime-matrix.js",
   "tools/test-coze-provider-v3.js",

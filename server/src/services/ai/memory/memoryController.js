@@ -221,6 +221,11 @@ class MemoryController {
       executedTools: toolNames,
       observations,
       pendingWriteOps: writeOps,
+      pendingAction: input.pendingAction,
+      lastResolvedEntity: input.lastResolvedEntity,
+      providerUsed: input.providerUsed,
+      understandingSource: input.understandingSource,
+      goalContract: input.goalContract,
       lastRecommendation: input.lastRecommendation || (
         input.answer
           ? { summary: String(input.answer).slice(0, 120), count: toolNames.length }
@@ -394,6 +399,12 @@ class MemoryController {
         detailId: String(target.detailId).slice(0, 128),
         name: String(target.name).slice(0, 120),
         term: String(target.term || "").slice(0, 40),
+      },
+      pendingAction: null,
+      lastResolvedEntity: {
+        type: "class",
+        id: String(target.detailId).slice(0, 128),
+        name: String(target.name).slice(0, 120),
       },
     });
     const contextSlots = Object.assign({}, workingMemoryToSlots(workingMemory), {

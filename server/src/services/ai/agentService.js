@@ -30,6 +30,7 @@ const { getPlannerPolicy, isGeneralAssistantEnabled } = require("./planner/plann
 const plannerModelAdapter = require("./planner/plannerModelAdapter");
 const { assemble: assembleContext } = require("./context/contextAssembler");
 const { defaultCourseReminderService } = require("./reminders/courseReminderService");
+const { defaultUnderstandingService } = require("./understanding/understandingService");
 
 function nowIso() {
   return new Date().toISOString();
@@ -900,6 +901,50 @@ function deriveActionCommands(toolCalls = []) {
   return derived.slice(0, 4);
 }
 
+function deriveLastResolvedEntity(toolCalls = []) {
+  const calls = Array.isArray(toolCalls) ? toolCalls : [];
+  for (let index = calls.length - 1; index >= 0; index -= 1) {
+    const call = calls[index];
+    if (!call || call.status !== "success") continue;
+    const result = call.result && typeof call.result === "object" ? call.result : {};
+    let type = String(result.type || result.lockedEntityType || "").trim();
+    let item = null;
+    if (call.name === "get_schedule_detail") item = result;
+    if (call.name === "search_school_index" && Array.isArray(result.items) && result.items.length === 1) {
+      item = result.items[0];
+    }
+    if (!item && call.name === "set_current_schedule" && result.target) {
+      item = result.target;
+      type = "class";
+    }
+    if (!item || !["class", "teacher", "classroom", "course"].includes(type)) continue;
+    const id = String(item.id || item.detailId || "").slice(0, 128);
+    const name = String(
+      item.name || item.teacherName || item.className || item.roomName || item.classroomName || item.courseName || ""
+    ).slice(0, 120);
+    if (id && name) return { type, id, name };
+  }
+  return undefined;
+}
+
+function derivePendingAction(actions = []) {
+  const action = (Array.isArray(actions) ? actions : []).find((item) =>
+    item && item.command === "setCurrentSchedule" && item.confirmationRequest
+  );
+  if (!action) return undefined;
+  const target = action.input && typeof action.input === "object" ? action.input : {};
+  return {
+    command: "setCurrentSchedule",
+    status: "awaiting_receipt",
+    target: {
+      type: "class",
+      detailId: String(target.detailId || "").slice(0, 128),
+      name: String(target.name || "").slice(0, 120),
+      term: String(target.term || "").slice(0, 40),
+    },
+  };
+}
+
 function sanitizePublicResponse(response) {
   const evidence = buildPublicEvidence(response.evidence);
   const sourceSafety = response.safety || {};
@@ -1178,7 +1223,11 @@ function buildResponse(payload) {
   if (payload.avoidedDuplicateCalls != null) response.avoidedDuplicateCalls = Number(payload.avoidedDuplicateCalls) || 0;
   if (payload.replanReason) response.replanReason = String(payload.replanReason).slice(0, 120);
   if (payload.partialCompletion === true) response.partialCompletion = true;
-  if (payload.goalContract) response.goalContract = payload.goalContract;
+  if (requestedProtocolVersion === agentProtocol.PROTOCOL_V2 && payload.goalContract) {
+    response.goalContract = payload.goalContract;
+    response.verificationGoalContract = payload.verificationGoalContract || null;
+    response.understanding = payload.understanding || null;
+  }
   const safeResponse = isPublicRuntime(envelope.canonicalRuntimeMode) ? sanitizePublicResponse(response) : response;
   if (requestedProtocolVersion === agentProtocol.PROTOCOL_V2) {
     return agentProtocol.buildV2Response(Object.assign({}, safeResponse, {
@@ -1199,6 +1248,9 @@ function buildResponse(payload) {
       evidenceDisplay: safeResponse.evidenceDisplay || payload.evidenceDisplay || null,
       planMeta: safeResponse.planMeta || null,
       metrics: safeResponse.metrics,
+      goalContract: safeResponse.goalContract || null,
+      verificationGoalContract: safeResponse.verificationGoalContract || null,
+      understanding: safeResponse.understanding || null,
     }));
   }
   return safeResponse;
@@ -1515,6 +1567,29 @@ async function chat(input = {}) {
     return response;
   }
 
+  // The model-first boundary starts only after protocol, empty-input, cancellation,
+  // and credential guards. public uses the same GoalContract boundary without any
+  // external Provider call; trial/dev use the unified structured Provider chain.
+  const understanding = await defaultUnderstandingService.understand({
+    message: safeMessage,
+    context,
+    conversationState: conversationState || {
+      conversationSummary: context.conversationSummary || "",
+      recentMessages: context.recentMessages || [],
+      workingMemory: context.workingMemory || null,
+      pendingClarification: context.pendingClarification || null,
+      contextSlots: context.conversationSlots || {},
+    },
+    runtimeMode: runtimeDecision.runtimeMode,
+    providerRuntimeConfig,
+    principal: memoryBundle.principal,
+    conversationId,
+    deterministicResolve: (message, safeContext) => resolveRuleBackedIntent(message, safeContext).intent,
+    onEvent: (event) => emitChatEvent(eventInput, Object.assign({
+      runtimeMode: runtimeDecision.runtimeMode,
+    }, event)),
+  });
+
   const personalMemoryTurn = resolvePersonalMemoryTurn({
     message: safeMessage,
     context,
@@ -1576,6 +1651,8 @@ async function chat(input = {}) {
       resolvedProvider: "mock",
       providerPolicy: "tool-only",
       externalProviderUsed: false,
+      understanding,
+      goalContract: understanding.contract,
       fallback: false,
       fallbackLayer: "none",
       memory: memoryBundle.memory,
@@ -1610,6 +1687,9 @@ async function chat(input = {}) {
         || (personalMemoryTurn.sessionFacts && personalMemoryTurn.sessionFacts.preferredName)
         || "",
       autoMemoryEnabled: context.autoMemoryEnabled !== false,
+      providerUsed: understanding.providerUsed || "",
+      understandingSource: understanding.source,
+      goalContract: understanding.contract,
     });
     if (personalMemoryTurn.autoMemoryHint && !response.autoMemoryHint) {
       response.autoMemoryHint = personalMemoryTurn.autoMemoryHint;
@@ -1633,10 +1713,11 @@ async function chat(input = {}) {
     return response;
   }
 
-  const ruleResolution = resolveRuleBackedIntent(safeMessage, context);
-  // Follow-up inheritance: “那周三呢 / 下午呢 / 换成第17周” reuses working memory entities.
-  const intent = enrichIntentFromWorkingMemory(ruleResolution.intent, context, conversationState);
-  const localRuleMatch = ruleResolution.ruleMatch;
+  // GoalContract resolves to a Manifest intent before Planner/Router can select a
+  // whitelisted capability. Local rules are consulted only after Understanding,
+  // and only as grounded response context; they no longer choose the online goal.
+  const intent = enrichIntentFromWorkingMemory(understanding.intent, context, conversationState);
+  const localRuleMatch = resolveRuleBackedIntent(safeMessage, context).ruleMatch;
 
   // Dedicated planner model adapter (trial/dev only). public never calls models.
   const plannerGenerate = plannerModelAdapter.createModelGenerate({
@@ -1668,6 +1749,7 @@ async function chat(input = {}) {
     runId,
     onEvent: input.onEvent,
     modelGenerate: runtimeDecision.runtimeMode === "public" ? undefined : plannerGenerate,
+    plannerEnv: providerRuntimeConfig,
   });
   const plan = execution.plan;
   const toolCalls = execution.toolCalls;
@@ -1725,6 +1807,8 @@ async function chat(input = {}) {
       provider: "mock",
       providerPolicy: "tool-only",
       externalProviderUsed: false,
+      understanding,
+      goalContract: understanding.contract,
       success: true,
       status: "cancelled",
       intent,
@@ -1813,6 +1897,9 @@ async function chat(input = {}) {
       pendingClarification: null,
       clearPendingClarification: true,
       evidence: null,
+      providerUsed: understanding.providerUsed || "",
+      understandingSource: understanding.source,
+      goalContract: understanding.contract,
     });
     agentKernel.finalize(execution, {
       totalDurationMs: Date.now() - startTime,
@@ -1963,9 +2050,13 @@ async function chat(input = {}) {
     externalProviderUsed,
   });
   const pendingPatch = buildClarificationPatch(intent);
+  const pendingExpiresAt = Number(context.pendingClarification && context.pendingClarification.expiresAt || 0);
+  const pendingExpired = Boolean(context.pendingClarification && pendingExpiresAt && pendingExpiresAt < Date.now());
   if (intent.name !== "clarify_missing_slot" && intent.slots && intent.slots.filledFromPendingClarification) {
     pendingPatch.clearPendingClarification = true;
   } else if (intent.name !== "clarify_missing_slot" && context.pendingClarification) {
+    pendingPatch.clearPendingClarification = true;
+  } else if (pendingExpired && !pendingPatch.pendingClarification) {
     pendingPatch.clearPendingClarification = true;
   }
   const composed = responseComposer.compose({
@@ -1990,6 +2081,12 @@ async function chat(input = {}) {
     status: fallbackReason ? "degraded" : "completed",
     errors: execution.verification && execution.verification.errors || [],
   });
+  const actionCommands = deriveActionCommands(toolCalls);
+  const lastResolvedEntity = deriveLastResolvedEntity(toolCalls);
+  const pendingAction = derivePendingAction(actionCommands);
+  const responsePlan = protocolVersion === agentProtocol.PROTOCOL_VERSION
+    ? (execution.initialPlan && execution.initialPlan.length ? execution.initialPlan : plan)
+    : (execution.plan || plan);
   const response = attachMemory(buildResponse(Object.assign({}, stable, {
     answer: composed.answer,
     cards: composed.cards,
@@ -2009,11 +2106,11 @@ async function chat(input = {}) {
     toolCalls: publicToolCalls,
     rawToolCalls: toolCalls,
     intent,
-    plan: execution.plan || plan,
+    plan: responsePlan,
     skill: execution.skill,
     steps: execution.steps,
     observations: execution.observations,
-    actions: deriveActionCommands(toolCalls),
+    actions: actionCommands,
     context,
     provider: providerName,
     desiredProvider: desiredProviderName,
@@ -2033,7 +2130,9 @@ async function chat(input = {}) {
     avoidedDuplicateCalls: execution.avoidedDuplicateCalls || 0,
     replanReason: execution.replanReason || "",
     partialCompletion: execution.partialCompletion === true,
-    goalContract: execution.goalContract || (execution.verification && execution.verification.goalContract) || null,
+    goalContract: understanding.contract,
+    verificationGoalContract: execution.goalContract || (execution.verification && execution.verification.goalContract) || null,
+    understanding,
     metrics: buildMetrics({
       startTime,
       intent,
@@ -2066,6 +2165,11 @@ async function chat(input = {}) {
     cloudSyncEnabled: context.cloudSyncEnabled === true || (memoryBundle.memory && memoryBundle.memory.mode === "cloud_sync"),
     allowPartialCommit: true,
     autoMemoryEnabled: context.autoMemoryEnabled !== false,
+    providerUsed: understanding.providerUsed || "",
+    understandingSource: understanding.source,
+    goalContract: understanding.contract,
+    pendingAction,
+    lastResolvedEntity,
   });
   maybeAttachProactive(response, { context, proactiveEvent: context.proactiveEvent }, memoryBundle, toolCalls);
   attachReminderConfirmation(response, execution, memoryBundle.principal);
@@ -2130,6 +2234,11 @@ function attachMemory(response, memoryBundle, options = {}) {
     preferredName: options.preferredName,
     memoryCandidates: options.memoryCandidates || [],
     providerPayload: options.providerPayload || null,
+    pendingAction: options.pendingAction,
+    lastResolvedEntity: options.lastResolvedEntity,
+    providerUsed: options.providerUsed,
+    understandingSource: options.understandingSource,
+    goalContract: options.goalContract,
     autoMemoryEnabled: options.autoMemoryEnabled !== false,
     allowPartialCommit: options.allowPartialCommit === true,
   });
@@ -2141,7 +2250,7 @@ function attachMemory(response, memoryBundle, options = {}) {
   if (commitResult.workingMemory) {
     const tw = commitResult.workingMemory.teachingWeek;
     const wd = commitResult.workingMemory.weekday;
-    response.workingMemory = {
+    const workingMemoryView = {
       className: commitResult.workingMemory.className || "",
       campus: commitResult.workingMemory.campus || "",
       teachingWeek: tw != null && Number(tw) >= 1 ? Number(tw) : null,
@@ -2150,6 +2259,18 @@ function attachMemory(response, memoryBundle, options = {}) {
       preferredName: commitResult.workingMemory.preferredName || "",
       currentGoal: commitResult.workingMemory.currentGoal || "",
     };
+    if (response.protocolVersion === agentProtocol.PROTOCOL_V2) {
+      Object.assign(workingMemoryView, {
+        activeGoal: commitResult.workingMemory.activeGoal || commitResult.workingMemory.currentGoal || "",
+        pendingClarification: commitResult.workingMemory.pendingClarification || null,
+        providerUsed: commitResult.workingMemory.providerUsed || "",
+        understandingSource: commitResult.workingMemory.understandingSource || "",
+        lastResolvedEntity: commitResult.workingMemory.lastResolvedEntity || null,
+        constraints: commitResult.workingMemory.lastConstraints || {},
+        pendingAction: commitResult.workingMemory.pendingAction || null,
+      });
+    }
+    response.workingMemory = workingMemoryView;
   }
   if (response.safety && typeof response.safety === "object") {
     response.safety.memoryMode = memory.mode;

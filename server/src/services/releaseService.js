@@ -10,6 +10,7 @@ const teachingCalendarService = require("./teachingCalendarService");
 const runtimePointerService = require("./runtimePointerService");
 const releaseSummaryStore = require("./releaseSummaryStore");
 const { SmallJsonCache } = require("../utils/jsonFileStore");
+const teacherSearchContract = require("../shared/teacherSearchContract.generated");
 const {
   buildResourceCountContract,
   deriveLegacyResourceCountContract,
@@ -3627,7 +3628,16 @@ function searchActiveIndex(kind, query, options = {}) {
   }
   const source = index.items || [];
   const page = filterActiveIndexItems(kind, source, query, options);
-  return Object.assign({}, index, page);
+  const result = Object.assign({}, index, page);
+  if (kind === "teacher") {
+    return teacherSearchContract.normalizeResponse(result, Object.assign({}, options, {
+      type: "teacher",
+      q: query,
+      term: options.term || options.semester || index.term || index.semester,
+      releaseVersion: options.releaseVersion || options.version || index.releaseVersion || index.version,
+    }));
+  }
+  return result;
 }
 
 function readActiveSchedule(kind, id, version, options = {}) {

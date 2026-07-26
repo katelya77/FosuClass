@@ -8,12 +8,10 @@
  * - On any failure: throws so modelPlanner falls back to deterministic
  */
 
-const axios = require("axios");
 const capabilityManifestService = require("../capabilityManifestService");
 const providerFactory = require("../providerFactory");
-const deepseekProvider = require("../providers/deepseekProvider");
-const cloudbaseOpenaiProvider = require("../providers/cloudbaseOpenaiProvider");
 const safetyGuard = require("../safetyGuard");
+const structuredInferenceService = require("../structuredInferenceService");
 
 const DEFAULT_PLANNER_TIMEOUT_MS = 8000;
 const DEFAULT_PLANNER_MAX_TOKENS = 800;
@@ -86,101 +84,6 @@ function selectPlannerProviderName(runtimeMode, runtimeConfig = {}) {
 }
 
 /**
- * Low-level OpenAI-compatible chat completion for planner JSON only.
- */
-async function callOpenAICompatible(options = {}) {
-  const {
-    baseUrl,
-    apiKey,
-    model,
-    messages,
-    maxTokens,
-    timeoutMs,
-    temperature = 0,
-    providerLabel = "planner",
-  } = options;
-  if (!baseUrl || !apiKey) {
-    const error = new Error("Planner provider not configured");
-    error.code = "PLANNER_NOT_CONFIGURED";
-    throw error;
-  }
-  const url = `${String(baseUrl).replace(/\/+$/, "")}/chat/completions`;
-  const body = {
-    model: model || "deepseek-v4-flash",
-    stream: false,
-    max_tokens: maxTokens || DEFAULT_PLANNER_MAX_TOKENS,
-    temperature,
-    messages: Array.isArray(messages) ? messages : [],
-    response_format: { type: "json_object" },
-  };
-  const started = Date.now();
-  try {
-    const response = await axios.post(url, body, {
-      timeout: timeoutMs || DEFAULT_PLANNER_TIMEOUT_MS,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-    });
-    const content = response.data
-      && response.data.choices
-      && response.data.choices[0]
-      && response.data.choices[0].message
-      && response.data.choices[0].message.content;
-    return {
-      content: String(content || ""),
-      provider: providerLabel,
-      latencyMs: Date.now() - started,
-      usage: response.data && response.data.usage || null,
-    };
-  } catch (error) {
-    const wrapped = new Error("Planner model request failed");
-    wrapped.code = deepseekProvider.classifyHttpError
-      ? deepseekProvider.classifyHttpError(error)
-      : "PLANNER_REQUEST_FAILED";
-    wrapped.status = error && error.response && error.response.status;
-    wrapped.latencyMs = Date.now() - started;
-    throw wrapped;
-  }
-}
-
-function resolveProviderCredentials(providerName, runtimeConfig = {}) {
-  if (providerName === "deepseek") {
-    return {
-      baseUrl: String(
-        runtimeConfig.AI_BASE_URL
-        || process.env.AI_BASE_URL
-        || "https://api.deepseek.com"
-      ).replace(/\/+$/, ""),
-      apiKey: deepseekProvider.firstConfiguredKey(runtimeConfig),
-      model: runtimeConfig.AI_PLANNER_MODEL
-        || process.env.AI_PLANNER_MODEL
-        || runtimeConfig.AI_MODEL
-        || process.env.AI_MODEL
-        || "deepseek-v4-flash",
-      label: "deepseek",
-    };
-  }
-  if (providerName === "cloudbase-openai") {
-    return {
-      baseUrl: String(
-        runtimeConfig.CLOUDBASE_OPENAI_BASE_URL
-        || process.env.CLOUDBASE_OPENAI_BASE_URL
-        || "https://cloud1-d3g17rpe7566d3d5c.api.tcloudbasegateway.com/v1/ai/cloudbase"
-      ).replace(/\/+$/, ""),
-      apiKey: cloudbaseOpenaiProvider.firstConfiguredKey(runtimeConfig),
-      model: runtimeConfig.AI_PLANNER_MODEL
-        || process.env.AI_PLANNER_MODEL
-        || runtimeConfig.CLOUDBASE_OPENAI_TEXT_MODEL
-        || process.env.CLOUDBASE_OPENAI_TEXT_MODEL
-        || "hy3-preview",
-      label: "cloudbase-openai",
-    };
-  }
-  return null;
-}
-
-/**
  * Sanitize messages before sending to provider — strip secrets, truncate.
  */
 function sanitizeMessages(messages = []) {
@@ -243,14 +146,6 @@ async function generate(input = {}) {
     throw error;
   }
 
-  const creds = resolveProviderCredentials(providerName, runtimeConfig);
-  if (!creds || !creds.apiKey) {
-    const error = new Error("Planner provider credentials missing");
-    error.code = "PLANNER_NOT_CONFIGURED";
-    error.plannerMeta = Object.assign({}, meta, { provider: providerName, status: "not_configured", fallback: true });
-    throw error;
-  }
-
   const messages = sanitizeMessages(input.messages || []);
   if (!messages.length) {
     messages.push({ role: "system", content: PLANNER_SYSTEM });
@@ -273,16 +168,21 @@ async function generate(input = {}) {
 
   const started = Date.now();
   try {
-    const result = await callOpenAICompatible({
-      baseUrl: creds.baseUrl,
-      apiKey: creds.apiKey,
-      model: creds.model,
+    const settings = Object.assign({}, env || {}, runtimeConfig || {});
+    const result = await structuredInferenceService.generateStructured({
+      purpose: "planning",
       messages,
       maxTokens: input.maxTokens || getPlannerMaxTokens(env),
-      timeoutMs: getPlannerTimeoutMs(env),
-      temperature: 0,
-      providerLabel: creds.label,
+      timeoutMs: getPlannerTimeoutMs(settings),
+      runtimeMode,
+      providerRuntimeConfig: runtimeConfig,
+      onEvent: input.onEvent,
     });
+    if (!result || !result.provider || result.provider === "mock") {
+      const error = new Error("No external planner provider completed");
+      error.code = "PLANNER_NOT_CONFIGURED";
+      throw error;
+    }
     markPlannerSuccess();
     const out = {
       content: result.content,

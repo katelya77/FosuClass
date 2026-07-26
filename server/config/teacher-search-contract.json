@@ -1,0 +1,39 @@
+{
+  "contractVersion": "teacher-search.v1",
+  "entityType": "teacher",
+  "indexSchemaVersion": 4,
+  "cacheNamespace": "fosu-teacher-search",
+  "requestFields": [
+    "type",
+    "q",
+    "term",
+    "releaseVersion",
+    "collegeCode",
+    "collegeName",
+    "titleCode",
+    "limit",
+    "offset"
+  ],
+  "responseFields": [
+    "success",
+    "type",
+    "contractVersion",
+    "teacherIndexSchemaVersion",
+    "term",
+    "semester",
+    "releaseVersion",
+    "version",
+    "query",
+    "total",
+    "limit",
+    "offset",
+    "items",
+    "cacheKey",
+    "reasonCode",
+    "degradedSchema",
+    "fromStorage",
+    "source",
+    "updatedAt",
+    "debug"
+  ]
+}
