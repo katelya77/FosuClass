@@ -65,6 +65,16 @@ async function run() {
   assert.strictEqual(response.safety.externalProviderUsed, false, "public safety payload must explicitly disable external provider use");
   assert.strictEqual(response.metrics.externalProviderUsed, false, "public metrics must explicitly disable external provider use");
 
+  const v2Response = await agentService.chat({
+    message: "请介绍你能做什么",
+    context: {},
+    protocolVersion: "agent.v2",
+  });
+  const serializedV2 = JSON.stringify(v2Response).replace(/externalProviderUsed/g, "externalModelUsed");
+  assertPublicSafe(serializedV2, "public agent.v2 response");
+  assert(!("providerStages" in v2Response), "public agent.v2 response must omit provider diagnostics");
+  assert(!("understanding" in v2Response), "public agent.v2 response must omit model understanding diagnostics");
+
   const tools = require("../server/src/services/ai/toolRegistry");
   const expectedTools = [
     "get_today_courses",

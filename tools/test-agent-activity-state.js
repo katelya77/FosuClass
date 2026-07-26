@@ -3,6 +3,7 @@ const assert = require("assert");
 
 const {
   activityPatchForRunEvent,
+  activityPatchForResponse,
   createSubmittingActivityPatch,
 } = require("../miniprogram/services/agentActivityState");
 
@@ -44,6 +45,23 @@ function run() {
     activityPatchForRunEvent({ type: "run.completed", text: "已完成" }).agentActivityState,
     "complete"
   );
+  assert.strictEqual(
+    activityPatchForRunEvent({ type: "run.completed", status: "partial", partialCompletion: true }).agentActivityState,
+    "degraded",
+    "partial terminal events must never become complete"
+  );
+  assert.strictEqual(
+    activityPatchForRunEvent({ type: "run.completed", status: "failed", success: false, errorCount: 1 }).agentActivityState,
+    "network_error",
+    "failed terminal events must never become complete"
+  );
+
+  assert.strictEqual(activityPatchForResponse({ status: "partial", success: false, partialCompletion: true }).agentActivityState, "degraded");
+  assert.strictEqual(activityPatchForResponse({ status: "failed", success: false, errors: [{ code: "VERIFY_FAILED" }] }).agentActivityState, "network_error");
+  assert.strictEqual(activityPatchForResponse({ status: "degraded", success: true, fallback: true }).agentActivityState, "degraded");
+  const unverifiedSuccess = activityPatchForResponse({ status: "completed", success: true });
+  assert.strictEqual(unverifiedSuccess.agentActivityState, "complete");
+  assert.ok(!/核验/.test(unverifiedSuccess.statusCapsuleText), "an unverified response must not claim verification");
 
   console.log("test-agent-activity-state: PASS");
 }

@@ -111,6 +111,14 @@ async function run() {
     assert.strictEqual(response.understanding.source, "model");
     assert.strictEqual(response.understanding.providerUsed, "deepseek");
     assert.strictEqual(response.understanding.externalProviderUsed, true);
+    assert.strictEqual(response.externalProviderUsed, true, "Understanding/Planner usage must survive a tool-only response stage");
+    assert.strictEqual(response.providerStages.understanding.attempted, true);
+    assert.strictEqual(response.providerStages.understanding.completed, true);
+    assert.strictEqual(response.providerStages.planner.attempted, true);
+    assert.strictEqual(response.providerStages.response.attempted, false);
+    const terminalEvent = events.filter((event) => /^run\.(completed|degraded|failed)$/.test(event.type)).pop();
+    assert.ok(terminalEvent, "missing terminal run event");
+    assert.strictEqual(terminalEvent.providerUsed, true, "terminal event must aggregate all Provider stages");
 
     const callsBeforePublic = requests.length;
     const publicEvents = [];
@@ -122,8 +130,9 @@ async function run() {
       onEvent: (event) => publicEvents.push(event),
     });
     assert.strictEqual(requests.length, callsBeforePublic, "public must not call the model endpoint");
-    assert.strictEqual(publicResponse.understanding.source, "deterministic_policy");
-    assert.strictEqual(publicResponse.understanding.externalProviderUsed, false);
+    assert.strictEqual(publicResponse.externalProviderUsed, false);
+    assert.ok(!("understanding" in publicResponse), "public must not expose model diagnostics");
+    assert.ok(!("providerStages" in publicResponse), "public must not expose Provider stage diagnostics");
     assert.ok(publicEvents.some((event) => event.type === "understanding.started"));
     assert.ok(publicEvents.some((event) => event.type === "understanding.completed"));
     assert.ok(!publicEvents.some((event) => event.type === "provider.started"));

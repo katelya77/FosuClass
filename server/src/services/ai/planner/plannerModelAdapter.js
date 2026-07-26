@@ -265,6 +265,8 @@ function createModelGenerate(options = {}) {
       return result;
     } catch (error) {
       const provider = (error.plannerMeta && error.plannerMeta.provider) || diagnostics.plannerProvider;
+      diagnostics.failureCount = (diagnostics.failureCount || 0) + 1;
+      diagnostics.lastFailureReason = String(error && error.code || error && error.plannerMeta && error.plannerMeta.code || "PLANNER_FAILED").slice(0, 80);
       diagnostics.plannerProvider = provider || diagnostics.plannerProvider;
       diagnostics.plannerLatency = (Number(diagnostics.plannerLatency) || 0)
         + ((error.plannerMeta && error.plannerMeta.latencyMs) || 0);

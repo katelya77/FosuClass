@@ -56,10 +56,28 @@ async function testStrictGoalContract() {
     confidence: 1.5,
   })), "GOAL_CONTRACT_CONFIDENCE_INVALID");
   assertCode(() => normalizeGoalContract(contract({
+    confidence: "0.9",
+  })), "GOAL_CONTRACT_CONFIDENCE_INVALID");
+  assertCode(() => normalizeGoalContract(contract({
+    entity: { name: "must-not-coerce" },
+  })), "GOAL_CONTRACT_FIELD_TYPE_INVALID");
+  assertCode(() => normalizeGoalContract(contract({
+    entityType: ["teacher"],
+  })), "GOAL_CONTRACT_FIELD_TYPE_INVALID");
+  assertCode(() => normalizeGoalContract(contract({
     constraints: { apiKey: "must-not-pass" },
   })), "GOAL_CONTRACT_CONSTRAINT_NOT_ALLOWED");
   assertCode(() => normalizeGoalContract(contract({
+    constraints: { continuousSections: "2" },
+  })), "GOAL_CONTRACT_CONSTRAINT_INVALID");
+  assertCode(() => normalizeGoalContract(contract({
+    constraints: { campus: 42 },
+  })), "GOAL_CONTRACT_CONSTRAINT_INVALID");
+  assertCode(() => normalizeGoalContract(contract({
     constraints: { sections: [0, 2] },
+  })), "GOAL_CONTRACT_CONSTRAINT_INVALID");
+  assertCode(() => normalizeGoalContract(contract({
+    constraints: { sections: ["1", "2"] },
   })), "GOAL_CONTRACT_CONSTRAINT_INVALID");
 
   const parsed = parseGoalContractJson(JSON.stringify(contract()));
@@ -283,6 +301,26 @@ async function testModelFirstAndPublicPolicy() {
   assert.strictEqual(fallback.fallback, true);
   assert.strictEqual(fallback.contract.goal, "get_campus_weather");
   assert.strictEqual(Object.prototype.hasOwnProperty.call(fallback.contract, "toolName"), false);
+
+  const invalidEvents = [];
+  const invalidModel = new UnderstandingService({
+    structuredGenerate: async (input) => {
+      input.onEvent({ type: "provider.started", provider: "deepseek" });
+      input.onEvent({ type: "provider.completed", provider: "deepseek" });
+      return { provider: "deepseek", content: "{}" };
+    },
+  });
+  const invalidFallback = await invalidModel.understand({
+    message: "查看老师课表",
+    runtimeMode: "trial",
+    providerRuntimeConfig: { AI_AGENT_ENABLED: "true" },
+    deterministicIntent: { name: "clarify_missing_slot", slots: { slot: { missing: "teacherName", type: "teacher" } } },
+    onEvent: (event) => invalidEvents.push(event),
+  });
+  assert.strictEqual(invalidFallback.source, "deterministic_fallback");
+  assert.strictEqual(invalidFallback.externalProviderUsed, true, "invalid model JSON still counts as a real Provider call");
+  assert.strictEqual(invalidFallback.providerUsed, "deepseek");
+  assert.strictEqual(invalidEvents.filter((event) => event.type === "understanding.fallback").pop().providerUsed, true);
 
   let disabledProviderCalls = 0;
   const disabledService = new UnderstandingService({

@@ -153,8 +153,27 @@ class UnderstandingService {
     }
 
     const started = Date.now();
+    let generated = null;
+    const providerAttempts = [];
+    const providerEventHandler = (event) => {
+      if (event && event.type === "provider.started" && event.provider) {
+        providerAttempts.push({ provider: providerStateName(event.provider), status: "failed", reason: "provider_interrupted" });
+      } else if (event && (event.type === "provider.completed" || event.type === "provider.failed") && event.provider) {
+        const provider = providerStateName(event.provider);
+        for (let index = providerAttempts.length - 1; index >= 0; index -= 1) {
+          if (providerAttempts[index].provider !== provider) continue;
+          providerAttempts[index] = {
+            provider,
+            status: event.type === "provider.completed" ? "success" : "failed",
+            reason: String(event.reasonCode || "").slice(0, 80),
+          };
+          break;
+        }
+      }
+      emit(onEvent, event);
+    };
     try {
-      const generated = await this.structuredGenerate({
+      generated = await this.structuredGenerate({
         purpose: "understanding",
         messages: buildUnderstandingMessages(input.message, input.conversationState || {}),
         message: input.message,
@@ -162,7 +181,7 @@ class UnderstandingService {
         providerRuntimeConfig: input.providerRuntimeConfig || {},
         principal: input.principal || null,
         conversationId: input.conversationId || "",
-        onEvent,
+        onEvent: providerEventHandler,
       });
       const provider = String(generated && generated.provider || "").toLowerCase();
       if (!provider || provider === "mock") {
@@ -208,13 +227,28 @@ class UnderstandingService {
       const reasonCode = String(error && error.code || "UNDERSTANDING_FAILED").slice(0, 80);
       const result = this.deterministicResult(input, "deterministic_fallback", reasonCode);
       result.latencyMs = Date.now() - started;
+      const generatedChain = generated && Array.isArray(generated.providerChain) ? generated.providerChain : [];
+      const generatedProvider = providerStateName(generated && generated.provider || "");
+      result.providerChain = generatedChain.length
+        ? generatedChain
+        : (providerAttempts.length ? providerAttempts : (generatedProvider && generatedProvider !== "mock"
+          ? [{ provider: generatedProvider, status: "success", reason: "invalid_structured_output" }]
+          : []));
+      const externalAttempts = result.providerChain.filter((item) => item
+        && String(item.provider || "").toLowerCase() !== "mock"
+        && ["success", "failed"].includes(String(item.status || "").toLowerCase()));
+      if (externalAttempts.length) {
+        result.externalProviderUsed = true;
+        result.providerUsed = providerStateName(externalAttempts[externalAttempts.length - 1].provider);
+      }
       emit(onEvent, {
         type: "understanding.fallback",
         status: "degraded",
         runtimeMode,
         understandingSource: result.source,
         reasonCode,
-        providerUsed: false,
+        provider: result.providerUsed || "",
+        providerUsed: result.externalProviderUsed === true,
         latencyMs: result.latencyMs,
       });
       return result;

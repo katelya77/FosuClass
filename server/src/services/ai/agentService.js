@@ -467,6 +467,162 @@ function summarizeProviderChainFallback(chain = []) {
   return reasons.length ? `provider_chain_fallback:${reasons.join(",")}` : "provider_chain_fallback";
 }
 
+function providerChainAttempts(chain = []) {
+  return (Array.isArray(chain) ? chain : []).filter((item) => item
+    && String(item.provider || "").toLowerCase() !== "mock"
+    && ["success", "failed"].includes(String(item.status || "").toLowerCase()));
+}
+
+function safeProviderStage(input = {}) {
+  return {
+    provider: String(input.provider || "none").slice(0, 40),
+    attempted: input.attempted === true,
+    completed: input.completed === true,
+    fallback: input.fallback === true,
+    reasonCode: String(input.reasonCode || "").slice(0, 80),
+    latencyMs: Math.max(0, Number(input.latencyMs || 0) || 0),
+  };
+}
+
+function deriveProviderRunTruth(input = {}) {
+  const runtimeMode = capabilityManifestService.normalizeRuntimeMode(input.runtimeMode || "public");
+  const understanding = input.understanding || {};
+  const planner = input.planner || {};
+  const response = input.response || {};
+  const understandingAttempts = providerChainAttempts(understanding.providerChain);
+  const responseAttempts = providerChainAttempts(response.providerChain);
+  const understandingAttempted = understanding.externalProviderUsed === true || understandingAttempts.length > 0;
+  const plannerNamed = String(planner.plannerProvider || "none").toLowerCase();
+  const plannerAttempted = Number(planner.successCount || 0) > 0
+    || Number(planner.failureCount || 0) > 0
+    || (planner.plannerStatus === "ok" && plannerNamed !== "none" && plannerNamed !== "mock");
+  const responseAttempted = response.externalProviderUsed === true || responseAttempts.length > 0;
+  const understandingProvider = understanding.providerUsed
+    || (understandingAttempts[understandingAttempts.length - 1] && understandingAttempts[understandingAttempts.length - 1].provider)
+    || "none";
+  const responseProvider = response.provider
+    || (responseAttempts[responseAttempts.length - 1] && responseAttempts[responseAttempts.length - 1].provider)
+    || "none";
+  const stages = {
+    understanding: safeProviderStage({
+      provider: understandingProvider,
+      attempted: understandingAttempted,
+      completed: understanding.source === "model" && understanding.externalProviderUsed === true,
+      fallback: runtimeMode !== "public" && understanding.fallback === true,
+      reasonCode: understanding.reasonCode,
+      latencyMs: understanding.latencyMs,
+    }),
+    planner: safeProviderStage({
+      provider: planner.plannerProvider || "none",
+      attempted: plannerAttempted,
+      completed: Number(planner.successCount || 0) > 0 || planner.plannerStatus === "ok",
+      fallback: runtimeMode !== "public" && (planner.plannerFallback === true || Number(planner.failureCount || 0) > 0),
+      reasonCode: planner.lastFailureReason || (planner.plannerFallback ? planner.plannerStatus : ""),
+      latencyMs: planner.plannerLatency,
+    }),
+    response: safeProviderStage({
+      provider: responseProvider,
+      attempted: responseAttempted,
+      completed: response.externalProviderUsed === true,
+      fallback: runtimeMode !== "public" && Boolean(response.fallbackReason),
+      reasonCode: response.fallbackReason,
+      latencyMs: response.latencyMs,
+    }),
+  };
+  const fallbackParts = Object.keys(stages).filter((name) => stages[name].fallback).map((name) => {
+    const reason = stages[name].reasonCode || "provider_fallback";
+    return `${name}:${reason}`;
+  });
+  return {
+    externalProviderUsed: Object.keys(stages).some((name) => stages[name].attempted),
+    fallback: fallbackParts.length > 0,
+    fallbackReason: fallbackParts.join(";").slice(0, 240),
+    stages,
+  };
+}
+
+function deriveExecutionOutcome(input = {}) {
+  const execution = input.execution || {};
+  const verification = execution.verification && typeof execution.verification === "object"
+    ? execution.verification
+    : { ok: true, errors: [] };
+  const errors = Array.isArray(verification.errors) ? verification.errors : [];
+  const partialCompletion = execution.partialCompletion === true;
+  const verificationOk = verification.ok !== false;
+  let status = "completed";
+  let eventType = "run.completed";
+  if (partialCompletion) {
+    status = "partial";
+    eventType = "run.degraded";
+  } else if (!verificationOk || errors.length > 0) {
+    status = "failed";
+    eventType = "run.failed";
+  } else if (input.providerTruth && input.providerTruth.fallback === true) {
+    status = "degraded";
+    eventType = "run.degraded";
+  }
+  return {
+    status,
+    success: status !== "failed" && execution.success !== false,
+    eventType,
+    partialCompletion,
+    verificationOk,
+    errors,
+  };
+}
+
+function deriveValidatedResponseStatus(payload = {}, errors = []) {
+  const requested = String(payload.status || "").toLowerCase();
+  if (requested === "cancelled") return "cancelled";
+  if (requested === "failed" || requested === "error") return "failed";
+  if (payload.partialCompletion === true || requested === "partial" || (Array.isArray(errors) && errors.length > 0)) {
+    return "partial";
+  }
+  if (payload.success === false) return "failed";
+  if (requested === "degraded" || payload.fallback === true) return "degraded";
+  return "completed";
+}
+
+function deriveFinalResponseOutcome(response = {}, providerTruth = {}) {
+  const errors = Array.isArray(response.errors) ? response.errors : [];
+  const verification = response.verification && typeof response.verification === "object"
+    ? response.verification
+    : {};
+  const partialCompletion = response.partialCompletion === true || response.status === "partial";
+  return deriveExecutionOutcome({
+    execution: {
+      success: response.success !== false,
+      partialCompletion,
+      verification: {
+        ok: response.success !== false && verification.ok !== false && errors.length === 0,
+        errors,
+      },
+    },
+    providerTruth,
+  });
+}
+
+function applyFinalResponseOutcome(response, outcome) {
+  if (!response || !outcome) return response;
+  response.status = outcome.status;
+  response.success = outcome.success;
+  if (outcome.partialCompletion) response.partialCompletion = true;
+  const statusLabel = outcome.status === "partial"
+    ? "部分完成"
+    : (outcome.status === "failed" ? "未完成" : (outcome.status === "degraded" ? "已安全降级" : "已完成"));
+  const reconcileSummary = (summary) => {
+    if (!summary || typeof summary !== "object") return;
+    summary.status = outcome.status;
+    const parts = String(summary.compact || "").split(" · ").filter(Boolean);
+    summary.compact = [statusLabel].concat(parts.slice(1)).join(" · ");
+  };
+  reconcileSummary(response.runSummary);
+  if (response.presentation && typeof response.presentation === "object") {
+    reconcileSummary(response.presentation.runSummary);
+  }
+  return response;
+}
+
 function addUniqueText(target, value, limit) {
   const text = safetyGuard.redactSensitiveText(String(value || "").trim()).slice(0, limit || 80);
   if (text && target.indexOf(text) < 0) target.push(text);
@@ -927,15 +1083,19 @@ function deriveLastResolvedEntity(toolCalls = []) {
   return undefined;
 }
 
-function derivePendingAction(actions = []) {
+function derivePendingAction(actions = [], metadata = {}) {
   const action = (Array.isArray(actions) ? actions : []).find((item) =>
     item && item.command === "setCurrentSchedule" && item.confirmationRequest
   );
   if (!action) return undefined;
   const target = action.input && typeof action.input === "object" ? action.input : {};
+  const createdAt = Date.now();
   return {
     command: "setCurrentSchedule",
     status: "awaiting_receipt",
+    runId: String(metadata.runId || "").slice(0, 100),
+    createdAt,
+    expiresAt: createdAt + Math.max(60000, Math.min(3600000, Number(metadata.ttlMs || 15 * 60 * 1000) || 15 * 60 * 1000)),
     target: {
       type: "class",
       detailId: String(target.detailId || "").slice(0, 128),
@@ -949,7 +1109,7 @@ function sanitizePublicResponse(response) {
   const evidence = buildPublicEvidence(response.evidence);
   const sourceSafety = response.safety || {};
   const sourceMetrics = response.metrics || {};
-  return Object.assign({}, response, {
+  const publicResponse = Object.assign({}, response, {
     answer: sanitizePublicText(response.answer, ""),
     cards: (Array.isArray(response.cards) ? response.cards : []).map(sanitizePublicCard),
     suggestions: (Array.isArray(response.suggestions) ? response.suggestions : []).map((item) => sanitizePublicText(item, "")).filter(Boolean).slice(0, 6),
@@ -979,6 +1139,15 @@ function sanitizePublicResponse(response) {
     },
     externalProviderUsed: false,
   });
+  // public is deliberately model/provider opaque. Keep the explicit boolean
+  // safety signal, but do not expose diagnostic stage names or implementations.
+  delete publicResponse.providerStages;
+  delete publicResponse.understanding;
+  if (publicResponse.planMeta && typeof publicResponse.planMeta === "object") {
+    publicResponse.planMeta = Object.assign({}, publicResponse.planMeta);
+    delete publicResponse.planMeta.plannerProvider;
+  }
+  return publicResponse;
 }
 
 function buildTaskSteps(intent = {}, toolCalls = []) {
@@ -1113,6 +1282,7 @@ function buildResponse(payload) {
   const taskSteps = payload.taskSteps || buildTaskSteps(payload.intent, rawToolCalls);
   let evidence = payload.evidence || buildEvidence(rawToolCalls, payload.context, payload.intent);
   const errors = (Array.isArray(payload.errors) ? payload.errors : []).concat(validation.errors || []);
+  const responseStatus = deriveValidatedResponseStatus(payload, errors);
   // Kernel verification is authoritative for evidence completeness on fact tasks.
   if (payload.verification && payload.verification.evidenceComplete === false) {
     evidence = Object.assign({}, evidence, {
@@ -1133,8 +1303,8 @@ function buildResponse(payload) {
     conversationId: envelope.conversationId,
     runtimeMode: envelope.runtimeMode,
     runId: payload.runId || agentProtocol.createRunId(),
-    status: payload.status || (errors.length ? "partial" : "completed"),
-    success: payload.success !== false && errors.length === 0,
+    status: responseStatus,
+    success: payload.success !== false && errors.length === 0 && responseStatus !== "failed",
     answer: payload.answer,
     intent: payload.intent,
     slots: envelope.slots,
@@ -1175,6 +1345,16 @@ function buildResponse(payload) {
     fallbackReason: payload.fallbackReason || "",
     fallbackAllowed: payload.fallbackAllowed === true,
     externalProviderUsed: payload.externalProviderUsed === true,
+    providerStages: payload.providerStages && typeof payload.providerStages === "object"
+      ? safetyGuard.sanitizeToolResult(payload.providerStages)
+      : null,
+    verification: payload.verification && typeof payload.verification === "object"
+      ? safetyGuard.sanitizeToolResult({
+        ok: payload.verification.ok !== false,
+        evidenceComplete: payload.verification.evidenceComplete !== false,
+        errors: Array.isArray(payload.verification.errors) ? payload.verification.errors.slice(0, 8) : [],
+      })
+      : null,
     safety: {
       redacted: true,
       usedPersonalContext: Boolean(payload.usedPersonalContext),
@@ -1251,6 +1431,8 @@ function buildResponse(payload) {
       goalContract: safeResponse.goalContract || null,
       verificationGoalContract: safeResponse.verificationGoalContract || null,
       understanding: safeResponse.understanding || null,
+      providerStages: safeResponse.providerStages || null,
+      verification: safeResponse.verification || null,
     }));
   }
   return safeResponse;
@@ -1598,11 +1780,21 @@ async function chat(input = {}) {
     preferenceService: defaultUserPreferenceService,
   });
   if (personalMemoryTurn.handled) {
+    const personalProviderTruth = deriveProviderRunTruth({
+      runtimeMode: runtimeDecision.runtimeMode,
+      understanding,
+      planner: {},
+      response: { provider: "mock", externalProviderUsed: false, providerChain: [], fallbackReason: "" },
+    });
+    const personalOutcome = deriveExecutionOutcome({
+      execution: { verification: { ok: true, errors: [] }, partialCompletion: false },
+      providerTruth: personalProviderTruth,
+    });
     emitChatEvent(eventInput, {
       type: "response.composing",
       runtimeMode: runtimeDecision.runtimeMode,
       intentName: personalMemoryTurn.intentName,
-      providerUsed: false,
+      providerUsed: personalProviderTruth.externalProviderUsed,
     });
     const memoryIntent = {
       name: personalMemoryTurn.intentName,
@@ -1650,11 +1842,15 @@ async function chat(input = {}) {
       desiredProvider: "mock",
       resolvedProvider: "mock",
       providerPolicy: "tool-only",
-      externalProviderUsed: false,
+      externalProviderUsed: personalProviderTruth.externalProviderUsed,
+      providerStages: personalProviderTruth.stages,
       understanding,
       goalContract: understanding.contract,
-      fallback: false,
-      fallbackLayer: "none",
+      fallback: personalProviderTruth.fallback,
+      fallbackReason: personalProviderTruth.fallbackReason,
+      fallbackLayer: personalProviderTruth.fallback ? "server" : "none",
+      status: personalOutcome.status,
+      success: personalOutcome.success,
       memory: memoryBundle.memory,
       memoryPreferencePatch: personalMemoryTurn.preferencePatch || {},
       context,
@@ -1662,8 +1858,8 @@ async function chat(input = {}) {
         startTime,
         intentName: personalMemoryTurn.intentName,
         toolCalls: [],
-        externalProviderUsed: false,
-        fallback: false,
+        externalProviderUsed: personalProviderTruth.externalProviderUsed,
+        fallback: personalProviderTruth.fallback,
         usedPersonalContext: Boolean(personalMemoryTurn.source && personalMemoryTurn.source !== "none"),
       }),
     }), memoryBundle, {
@@ -1672,7 +1868,7 @@ async function chat(input = {}) {
       intentName: personalMemoryTurn.intentName,
       context,
       runId,
-      status: "completed",
+      status: personalOutcome.status,
       stepCount: 0,
       contextSlots: buildContextSlots(memoryIntent, Object.assign(
         {},
@@ -1705,10 +1901,15 @@ async function chat(input = {}) {
       selectedSkill: "personal_memory",
     });
     emitChatEvent(eventInput, {
-      type: "run.completed",
+      type: personalOutcome.eventType,
       runtimeMode: runtimeDecision.runtimeMode,
       intentName: personalMemoryTurn.intentName,
-      providerUsed: false,
+      providerUsed: personalProviderTruth.externalProviderUsed,
+      status: personalOutcome.status,
+      success: personalOutcome.success,
+      fallback: personalProviderTruth.fallback,
+      verificationOk: personalOutcome.verificationOk,
+      errorCount: personalOutcome.errors.length,
     });
     return response;
   }
@@ -1791,6 +1992,12 @@ async function chat(input = {}) {
   }));
 
   if (input.runId && agentRunEventService.isCancelled(runId)) {
+    const cancelledProviderTruth = deriveProviderRunTruth({
+      runtimeMode: runtimeDecision.runtimeMode,
+      understanding,
+      planner: plannerDiag,
+      response: { provider: "mock", externalProviderUsed: false, providerChain: [], fallbackReason: "" },
+    });
     emitChatEvent(eventInput, { type: "run.cancelled", runtimeMode: runtimeDecision.runtimeMode });
     return buildResponse({
       protocolVersion,
@@ -1806,7 +2013,8 @@ async function chat(input = {}) {
       toolCalls: publicToolCalls,
       provider: "mock",
       providerPolicy: "tool-only",
-      externalProviderUsed: false,
+      externalProviderUsed: cancelledProviderTruth.externalProviderUsed,
+      providerStages: cancelledProviderTruth.stages,
       understanding,
       goalContract: understanding.contract,
       success: true,
@@ -1814,7 +2022,13 @@ async function chat(input = {}) {
       intent,
       plan,
       steps: execution.steps,
-      metrics: buildMetrics({ startTime, intent, toolCalls, fallback: false }),
+      metrics: buildMetrics({
+        startTime,
+        intent,
+        toolCalls,
+        externalProviderUsed: cancelledProviderTruth.externalProviderUsed,
+        fallback: cancelledProviderTruth.fallback,
+      }),
     });
   }
 
@@ -1965,9 +2179,9 @@ async function chat(input = {}) {
   });
   let providerPayload = null;
   let externalProviderUsed = false;
-  let fallback = !policyDecision.useExternal;
   let fallbackReason = "";
   let responseLatencyMs = 0;
+  let responseProviderChain = [];
   const providerDecisionReason = policyDecision.reason || (policyDecision.useExternal ? "external provider selected" : "local provider selected");
   try {
     const responseStartedAt = Date.now();
@@ -1992,9 +2206,9 @@ async function chat(input = {}) {
       });
     }
     providerName = generated.provider || providerName;
+    responseProviderChain = Array.isArray(generated.providerChain) ? generated.providerChain : [];
     providerPayload = stableGeneratedPayload(generated);
     externalProviderUsed = policyDecision.useExternal && providerName !== "mock";
-    fallback = !externalProviderUsed;
     if (externalProviderUsed) fallbackReason = "";
     if (generated.providerChain) {
       publicToolCalls.push({
@@ -2004,19 +2218,11 @@ async function chat(input = {}) {
       });
       if (!externalProviderUsed) {
         fallbackReason = summarizeProviderChainFallback(generated.providerChain);
-        emitChatEvent(eventInput, {
-          type: "run.degraded",
-          runtimeMode: runtimeDecision.runtimeMode,
-          intentName: intent.name,
-          reasonCode: String(fallbackReason || "PROVIDER_FALLBACK").slice(0, 80),
-          providerUsed: false,
-        });
       }
     }
   } catch (error) {
     providerName = "mock";
     externalProviderUsed = false;
-    fallback = true;
     fallbackReason = classifyProviderFailure(error);
     emitChatEvent(eventInput, {
       type: "provider.failed",
@@ -2035,11 +2241,26 @@ async function chat(input = {}) {
     });
   }
 
+  const responseExternalProviderUsed = externalProviderUsed;
+  const providerTruth = deriveProviderRunTruth({
+    runtimeMode: runtimeDecision.runtimeMode,
+    understanding,
+    planner: plannerDiag,
+    response: {
+      provider: providerName,
+      externalProviderUsed: responseExternalProviderUsed,
+      providerChain: responseProviderChain,
+      fallbackReason,
+      latencyMs: responseLatencyMs,
+    },
+  });
+  const runOutcome = deriveExecutionOutcome({ execution, providerTruth });
+
   emitChatEvent(eventInput, {
     type: "response.composing",
     runtimeMode: runtimeDecision.runtimeMode,
     intentName: intent.name,
-    providerUsed: externalProviderUsed,
+    providerUsed: providerTruth.externalProviderUsed,
   });
 
   const stable = mergeGeneratedPayloads({
@@ -2047,7 +2268,7 @@ async function chat(input = {}) {
     providerPolicy,
     deterministicPayload,
     providerPayload,
-    externalProviderUsed,
+    externalProviderUsed: responseExternalProviderUsed,
   });
   const pendingPatch = buildClarificationPatch(intent);
   const pendingExpiresAt = Number(context.pendingClarification && context.pendingClarification.expiresAt || 0);
@@ -2077,17 +2298,17 @@ async function chat(input = {}) {
     userMessage: safeMessage,
     durationMs: Date.now() - startTime,
     replanUsed: execution.replanUsed === true,
-    success: true,
-    status: fallbackReason ? "degraded" : "completed",
-    errors: execution.verification && execution.verification.errors || [],
+    success: runOutcome.success,
+    status: runOutcome.status,
+    errors: runOutcome.errors,
   });
   const actionCommands = deriveActionCommands(toolCalls);
   const lastResolvedEntity = deriveLastResolvedEntity(toolCalls);
-  const pendingAction = derivePendingAction(actionCommands);
+  const pendingAction = derivePendingAction(actionCommands, { runId });
   const responsePlan = protocolVersion === agentProtocol.PROTOCOL_VERSION
     ? (execution.initialPlan && execution.initialPlan.length ? execution.initialPlan : plan)
     : (execution.plan || plan);
-  const response = attachMemory(buildResponse(Object.assign({}, stable, {
+  const builtResponse = buildResponse(Object.assign({}, stable, {
     answer: composed.answer,
     cards: composed.cards,
     suggestions: composed.suggestions,
@@ -2117,14 +2338,17 @@ async function chat(input = {}) {
     resolvedProvider: providerName,
     usedPersonalContext,
     providerPolicy,
-    externalProviderUsed,
+    externalProviderUsed: providerTruth.externalProviderUsed,
+    providerStages: providerTruth.stages,
     providerDecisionReason,
-    fallbackReason,
-    fallback: Boolean(fallbackReason),
-    fallbackLayer: fallbackReason ? "server" : "none",
+    fallbackReason: providerTruth.fallbackReason,
+    fallback: providerTruth.fallback,
+    fallbackLayer: providerTruth.fallback ? "server" : "none",
+    success: runOutcome.success,
+    status: runOutcome.status,
     pendingClarification: pendingPatch.pendingClarification,
     clearPendingClarification: pendingPatch.clearPendingClarification,
-    errors: execution.verification && execution.verification.errors || [],
+    errors: runOutcome.errors,
     verification: execution.verification || null,
     reusedToolCount: execution.reusedToolCount || 0,
     avoidedDuplicateCalls: execution.avoidedDuplicateCalls || 0,
@@ -2137,25 +2361,28 @@ async function chat(input = {}) {
       startTime,
       intent,
       toolCalls,
-      externalProviderUsed,
-      fallback,
+      externalProviderUsed: providerTruth.externalProviderUsed,
+      fallback: providerTruth.fallback,
       usedPersonalContext,
       plannerProvider: plannerDiag.plannerProvider || (plan && plan.plannerProvider) || "none",
       responseProvider: providerName,
       plannerLatency: plannerDiag.plannerLatency || (plan && plan.plannerLatencyMs) || 0,
       responseLatency: responseLatencyMs,
-      plannerFallback: plannerDiag.plannerFallback === true,
-      responseFallback: Boolean(fallbackReason),
+      plannerFallback: providerTruth.stages.planner.fallback,
+      responseFallback: providerTruth.stages.response.fallback,
       plannerType: plannerDiag.inferredPlannerType || (plan && plan.plannerType) || "",
     }),
     taskTrajectory: composed.taskTrajectory || null,
     contextMeta: providerInput.contextMeta || null,
-  })), memoryBundle, {
+  }));
+  const finalOutcome = deriveFinalResponseOutcome(builtResponse, providerTruth);
+  applyFinalResponseOutcome(builtResponse, finalOutcome);
+  const response = attachMemory(builtResponse, memoryBundle, {
     message: safeMessage,
     intentName: intent.name,
     context,
     runId,
-    status: fallbackReason ? "degraded" : (execution.partialCompletion ? "partial" : "completed"),
+    status: finalOutcome.status,
     stepCount: (execution.steps || []).length,
     contextSlots: buildContextSlots(intent, intent.slots || {}),
     pendingClarification: pendingPatch.pendingClarification,
@@ -2163,7 +2390,7 @@ async function chat(input = {}) {
     answer: composed.answer,
     evidence: null,
     cloudSyncEnabled: context.cloudSyncEnabled === true || (memoryBundle.memory && memoryBundle.memory.mode === "cloud_sync"),
-    allowPartialCommit: true,
+    allowPartialCommit: finalOutcome.status === "partial",
     autoMemoryEnabled: context.autoMemoryEnabled !== false,
     providerUsed: understanding.providerUsed || "",
     understandingSource: understanding.source,
@@ -2175,19 +2402,25 @@ async function chat(input = {}) {
   attachReminderConfirmation(response, execution, memoryBundle.principal);
   agentKernel.finalize(execution, {
     totalDurationMs: Date.now() - startTime,
-    providerUsed: externalProviderUsed,
-    fallbackLayer: fallbackReason ? "server" : "none",
-    fallbackReason,
+    providerUsed: providerTruth.externalProviderUsed,
+    fallbackLayer: providerTruth.fallback ? "server" : "none",
+    fallbackReason: providerTruth.fallbackReason,
     evidenceComplete: response.evidence && response.evidence.complete === true,
     plannerType: plan && plan.plannerType,
     plannerProvider: plannerDiag.plannerProvider,
   });
   emitChatEvent(eventInput, {
-    type: fallbackReason ? "run.degraded" : "run.completed",
+    type: finalOutcome.eventType,
     runtimeMode: runtimeDecision.runtimeMode,
     intentName: intent.name,
-    providerUsed: externalProviderUsed,
-    reasonCode: fallbackReason ? String(fallbackReason).slice(0, 80) : "",
+    providerUsed: providerTruth.externalProviderUsed,
+    reasonCode: providerTruth.fallbackReason ? String(providerTruth.fallbackReason).slice(0, 80) : "",
+    status: finalOutcome.status,
+    success: finalOutcome.success,
+    fallback: providerTruth.fallback,
+    partialCompletion: finalOutcome.partialCompletion,
+    verificationOk: finalOutcome.verificationOk,
+    errorCount: finalOutcome.errors.length,
     plannerType: plan && plan.plannerType || "",
   });
   return response;
@@ -2263,12 +2496,14 @@ function attachMemory(response, memoryBundle, options = {}) {
       Object.assign(workingMemoryView, {
         activeGoal: commitResult.workingMemory.activeGoal || commitResult.workingMemory.currentGoal || "",
         pendingClarification: commitResult.workingMemory.pendingClarification || null,
-        providerUsed: commitResult.workingMemory.providerUsed || "",
-        understandingSource: commitResult.workingMemory.understandingSource || "",
         lastResolvedEntity: commitResult.workingMemory.lastResolvedEntity || null,
         constraints: commitResult.workingMemory.lastConstraints || {},
         pendingAction: commitResult.workingMemory.pendingAction || null,
       });
+      if (!isPublicRuntime(response.runtimeMode)) {
+        workingMemoryView.providerUsed = commitResult.workingMemory.providerUsed || "";
+        workingMemoryView.understandingSource = commitResult.workingMemory.understandingSource || "";
+      }
     }
     response.workingMemory = workingMemoryView;
   }
@@ -2372,8 +2607,13 @@ module.exports = {
   stableCard,
   stableGeneratedPayload,
   classifyProviderFailure,
+  deriveExecutionOutcome,
+  deriveFinalResponseOutcome,
+  deriveProviderRunTruth,
+  deriveValidatedResponseStatus,
   normalizeProactiveSuggestion,
   deriveActionCommands,
+  derivePendingAction,
   buildScheduleNavigateAction,
   scheduleOpenLabel,
 };

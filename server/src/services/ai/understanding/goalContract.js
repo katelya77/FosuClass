@@ -78,7 +78,6 @@ function allowedGoalSet(options = {}) {
 }
 
 function normalizeConstraints(value) {
-  if (value == null) return {};
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw contractError("GOAL_CONTRACT_CONSTRAINTS_INVALID", "constraints must be an object");
   }
@@ -89,7 +88,10 @@ function normalizeConstraints(value) {
   const output = {};
   keys.forEach((key) => {
     if (key === "sections" && Array.isArray(value[key])) {
-      const sections = Array.from(new Set(value[key].map(Number)))
+      if (!value[key].every((item) => typeof item === "number" && Number.isInteger(item))) {
+        throw contractError("GOAL_CONTRACT_CONSTRAINT_INVALID", "invalid section constraint", key);
+      }
+      const sections = Array.from(new Set(value[key]))
         .filter((item) => Number.isInteger(item) && item >= 1 && item <= 20)
         .sort((a, b) => a - b)
         .slice(0, 20);
@@ -100,16 +102,17 @@ function normalizeConstraints(value) {
       return;
     }
     if (Object.prototype.hasOwnProperty.call(NUMBER_CONSTRAINTS, key)) {
-      const numberValue = Number(value[key]);
+      const numberValue = value[key];
       const range = NUMBER_CONSTRAINTS[key];
-      if (!Number.isFinite(numberValue) || numberValue < range[0] || numberValue > range[1]) {
+      if (typeof numberValue !== "number" || !Number.isFinite(numberValue)
+        || numberValue < range[0] || numberValue > range[1]) {
         throw contractError("GOAL_CONTRACT_CONSTRAINT_INVALID", `invalid numeric constraint: ${key}`, key);
       }
       output[key] = numberValue;
       return;
     }
     if (STRING_CONSTRAINTS.has(key)) {
-      if (value[key] == null || typeof value[key] === "string" || typeof value[key] === "number") {
+      if (typeof value[key] === "string") {
         output[key] = safeText(value[key], key === "q" ? 120 : 80);
         return;
       }
@@ -134,6 +137,12 @@ function normalizeGoalContract(value, options = {}) {
     throw contractError("GOAL_CONTRACT_MISSING_FIELD", `missing GoalContract field: ${missing[0]}`, missing[0]);
   }
 
+  ["goal", "entityType", "entity", "normalizedEntity", "followUpMode"].forEach((key) => {
+    if (typeof value[key] !== "string") {
+      throw contractError("GOAL_CONTRACT_FIELD_TYPE_INVALID", `${key} must be a string`, key);
+    }
+  });
+
   const goal = safeText(value.goal, 80);
   if (!allowedGoalSet(options).has(goal)) {
     throw contractError("GOAL_CONTRACT_GOAL_NOT_ALLOWED", `goal is not in the Capability Manifest: ${goal}`, goal);
@@ -146,8 +155,8 @@ function normalizeGoalContract(value, options = {}) {
   if (!FOLLOW_UP_MODES.has(followUpMode)) {
     throw contractError("GOAL_CONTRACT_FOLLOW_UP_MODE_INVALID", `invalid followUpMode: ${followUpMode}`, followUpMode);
   }
-  const confidence = Number(value.confidence);
-  if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+  const confidence = value.confidence;
+  if (typeof confidence !== "number" || !Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
     throw contractError("GOAL_CONTRACT_CONFIDENCE_INVALID", "confidence must be between 0 and 1");
   }
   if (typeof value.needsClarification !== "boolean") {
@@ -197,10 +206,17 @@ function constraintsFromSlots(slots = {}) {
   Object.keys(slots || {}).forEach((key) => {
     const value = slots[key];
     if (value === undefined || value === null || value === "" || (Array.isArray(value) && !value.length)) return;
-    if (key === "minFreeSections") candidate.continuousSections = slots[key];
-    else if (key === "name") candidate.className = slots[key];
-    else if (Object.prototype.hasOwnProperty.call(NUMBER_CONSTRAINTS, key) || STRING_CONSTRAINTS.has(key)) {
-      candidate[key] = slots[key];
+    if (key === "minFreeSections") {
+      const numeric = Number(slots[key]);
+      if (Number.isFinite(numeric)) candidate.continuousSections = numeric;
+    } else if (key === "name") candidate.className = String(slots[key]);
+    else if (key === "sections" && Array.isArray(value)) {
+      candidate[key] = value.map(Number);
+    } else if (Object.prototype.hasOwnProperty.call(NUMBER_CONSTRAINTS, key)) {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) candidate[key] = numeric;
+    } else if (STRING_CONSTRAINTS.has(key)) {
+      candidate[key] = String(value);
     }
   });
   return normalizeConstraints(candidate);
@@ -219,8 +235,8 @@ function intentToGoalContract(intent = {}, options = {}) {
   return normalizeGoalContract({
     goal,
     entityType: entity.type,
-    entity: entity.value,
-    normalizedEntity: entity.value,
+    entity: String(entity.value == null ? "" : entity.value),
+    normalizedEntity: String(entity.value == null ? "" : entity.value),
     constraints: constraintsFromSlots(slots),
     followUpMode: intent.followUp === true ? "inherit_active_goal" : "new_goal",
     confidence,

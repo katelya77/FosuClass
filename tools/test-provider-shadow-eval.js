@@ -2,6 +2,7 @@
 const assert = require("assert");
 const providerChain = require("../server/src/services/ai/providerChainService");
 const cozeProvider = require("../server/src/services/ai/providers/cozeProvider");
+const deepseekProvider = require("../server/src/services/ai/providers/deepseekProvider");
 
 async function run() {
   const events = [];
@@ -72,6 +73,38 @@ async function run() {
     assert.strictEqual(rejectedHealth.reasonCode, "COZE_CONNECTION_REJECTED");
   } finally {
     cozeProvider.testConnection = originalCozeTestConnection;
+  }
+
+  const originalDeepseekGenerate = deepseekProvider.generate;
+  deepseekProvider.generate = async () => ({ answer: "primary", provider: "deepseek" });
+  let shadowFinished = false;
+  try {
+    const started = Date.now();
+    const primary = await providerChain.generateWithChain({ message: "non-blocking-shadow" }, {
+      runtimeMode: "trial",
+      providerRuntimeConfig: {
+        AI_PROVIDER_CHAIN: "deepseek,mock",
+        DEEPSEEK_API_KEY: "unit-test-placeholder-not-real",
+        AI_PROVIDER_SHADOW_ENABLED: "true",
+        AI_PROVIDER_SHADOW: "coze",
+        AI_PROVIDER_SHADOW_TIMEOUT_MS: "1000",
+      },
+      shadowGenerate: () => new Promise((resolve) => {
+        setTimeout(() => {
+          shadowFinished = true;
+          resolve({ content: "diagnostic-only" });
+        }, 300);
+      }),
+    });
+    const elapsed = Date.now() - started;
+    assert.strictEqual(primary.provider, "deepseek");
+    assert.ok(elapsed < 150, `shadow evaluation blocked the primary response for ${elapsed}ms`);
+    assert.strictEqual(shadowFinished, false, "primary response must return before shadow completion");
+    assert.strictEqual(primary.shadowEvaluation.status, "scheduled");
+    await new Promise((resolve) => setTimeout(resolve, 350));
+    assert.strictEqual(shadowFinished, true);
+  } finally {
+    deepseekProvider.generate = originalDeepseekGenerate;
   }
 
   console.log("test-provider-shadow-eval: PASS");
