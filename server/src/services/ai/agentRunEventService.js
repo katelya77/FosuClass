@@ -9,6 +9,12 @@ const DEFAULT_TTL_MS = Math.max(30_000, Number(process.env.AI_AGENT_RUN_TTL_MS |
 const DEFAULT_MAX_RUNS = Math.max(32, Number(process.env.AI_AGENT_RUN_MAX || 256) || 256);
 const DEFAULT_TOTAL_TIMEOUT_MS = Math.max(5_000, Number(process.env.AI_AGENT_RUN_TOTAL_TIMEOUT_MS || 45_000) || 45_000);
 const TERMINAL_EVENT_TYPES = new Set(["run.completed", "run.degraded", "run.failed", "run.cancelled"]);
+const TERMINAL_STATUS_BY_EVENT = Object.freeze({
+  "run.completed": "completed",
+  "run.degraded": "degraded",
+  "run.failed": "failed",
+  "run.cancelled": "cancelled",
+});
 
 const runs = new Map();
 
@@ -127,11 +133,25 @@ function appendEvent(runId, event = {}) {
   return payload;
 }
 
+function statusFromResult(result = {}) {
+  const status = String(result && (result.status || result.runStatus) || "").toLowerCase();
+  if (status === "cancelled") return "cancelled";
+  if (status === "partial" || result.partialCompletion === true) return "degraded";
+  if (status === "failed" || status === "error" || result.success === false) return "failed";
+  if (status === "degraded" || result.fallback === true) return "degraded";
+  return "completed";
+}
+
 function setResult(runId, result, status) {
   const run = getRunRecord(runId);
   if (!run) return null;
   run.result = result || null;
-  if (status) run.status = status;
+  const previousTerminal = run.events.slice().reverse().find((item) => item && TERMINAL_EVENT_TYPES.has(item.type));
+  if (previousTerminal) {
+    run.status = TERMINAL_STATUS_BY_EVENT[previousTerminal.type] || run.status;
+  } else if (status || result && (result.status || result.runStatus || result.partialCompletion === true || result.success === false)) {
+    run.status = statusFromResult(Object.assign({}, result || {}, { status: status || result && result.status }));
+  }
   run.expiresAtMs = Date.now() + Math.min(DEFAULT_TTL_MS, 120_000);
   return run;
 }
@@ -202,4 +222,5 @@ module.exports = {
   principalFingerprint,
   resetForTests,
   setResult,
+  statusFromResult,
 };

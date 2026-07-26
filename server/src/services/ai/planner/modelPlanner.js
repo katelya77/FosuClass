@@ -115,7 +115,7 @@ function buildPlannerPrompt(input = {}) {
  */
 async function plan(input = {}) {
   const runtimeMode = capabilityManifestService.normalizeRuntimeMode(input.runtimeMode || "public");
-  const policy = getPlannerPolicy(runtimeMode);
+  const policy = getPlannerPolicy(runtimeMode, input.plannerEnv || input.providerRuntimeConfig || process.env);
   if (runtimeMode === "public" || !policy.useModelPlanner) {
     return deterministicPlanner.plan(input);
   }

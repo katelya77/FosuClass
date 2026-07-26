@@ -17,6 +17,13 @@ const AI_ENV_KEYS = [
   "AI_PROVIDER",
   "AI_PROVIDER_POLICY",
   "AI_PROVIDER_CHAIN",
+  "AI_UNDERSTANDING_ENABLED",
+  "AI_UNDERSTANDING_MODEL",
+  "AI_STRUCTURED_TIMEOUT_MS",
+  "AI_STRUCTURED_MAX_TOKENS",
+  "AI_PROVIDER_SHADOW_ENABLED",
+  "AI_PROVIDER_SHADOW",
+  "AI_PROVIDER_SHADOW_TIMEOUT_MS",
   "AI_MODEL",
   "AI_REASONING_MODEL",
   "AI_BASE_URL",
@@ -64,6 +71,13 @@ const DEFAULTS = {
   AI_PROVIDER: "mock",
   AI_PROVIDER_POLICY: "auto",
   AI_PROVIDER_CHAIN: "",
+  AI_UNDERSTANDING_ENABLED: "true",
+  AI_UNDERSTANDING_MODEL: "",
+  AI_STRUCTURED_TIMEOUT_MS: "8000",
+  AI_STRUCTURED_MAX_TOKENS: "800",
+  AI_PROVIDER_SHADOW_ENABLED: "false",
+  AI_PROVIDER_SHADOW: "",
+  AI_PROVIDER_SHADOW_TIMEOUT_MS: "3000",
   AI_MODEL: "deepseek-v4-flash",
   AI_REASONING_MODEL: "deepseek-v4-pro",
   AI_BASE_URL: "https://api.deepseek.com",
@@ -104,6 +118,13 @@ const PROFILE_FIELD_TO_ENV = {
   provider: "AI_PROVIDER",
   providerPolicy: "AI_PROVIDER_POLICY",
   providerChain: "AI_PROVIDER_CHAIN",
+  understandingEnabled: "AI_UNDERSTANDING_ENABLED",
+  understandingModel: "AI_UNDERSTANDING_MODEL",
+  structuredTimeoutMs: "AI_STRUCTURED_TIMEOUT_MS",
+  structuredMaxTokens: "AI_STRUCTURED_MAX_TOKENS",
+  shadowEnabled: "AI_PROVIDER_SHADOW_ENABLED",
+  shadowProvider: "AI_PROVIDER_SHADOW",
+  shadowTimeoutMs: "AI_PROVIDER_SHADOW_TIMEOUT_MS",
   model: "AI_MODEL",
   reasoningModel: "AI_REASONING_MODEL",
   baseUrl: "AI_BASE_URL",
@@ -146,6 +167,8 @@ const BOOLEAN_PROFILE_FIELDS = new Set([
   "cozeEnabled",
   "cozePollEnabled",
   "cloudbaseOpenaiEnabled",
+  "understandingEnabled",
+  "shadowEnabled",
 ]);
 
 function parseEnv(text) {
@@ -219,6 +242,9 @@ function keyLast4(value) {
 
 function normalizeProvider(value) {
   const provider = String(value || "mock").trim().toLowerCase();
+  if (["hunyuan3", "hunyuan-3", "tencent-hunyuan3"].includes(provider)) {
+    return "cloudbase-openai";
+  }
   return ["mock", "deepseek", "coze", "cloudbase-openai"].includes(provider) ? provider : "mock";
 }
 
@@ -253,7 +279,14 @@ function defaultProfile(environment) {
     enabled: false,
     provider: "mock",
     providerPolicy: env === "public" ? "tool-only" : "auto",
-    providerChain: env === "public" ? "mock" : (env === "trial" || env === "dev" ? "deepseek,coze,mock" : ""),
+    providerChain: env === "public" ? "mock" : (env === "trial" || env === "dev" ? "hunyuan3,deepseek,coze,mock" : ""),
+    understandingEnabled: true,
+    understandingModel: DEFAULTS.AI_UNDERSTANDING_MODEL,
+    structuredTimeoutMs: DEFAULTS.AI_STRUCTURED_TIMEOUT_MS,
+    structuredMaxTokens: DEFAULTS.AI_STRUCTURED_MAX_TOKENS,
+    shadowEnabled: false,
+    shadowProvider: "",
+    shadowTimeoutMs: DEFAULTS.AI_PROVIDER_SHADOW_TIMEOUT_MS,
     model: DEFAULTS.AI_MODEL,
     reasoningModel: DEFAULTS.AI_REASONING_MODEL,
     baseUrl: DEFAULTS.AI_BASE_URL,
@@ -316,6 +349,7 @@ function normalizeProfile(profile = {}, environment = "public") {
     base.providerPolicy = "tool-only";
     base.allowPersonalContext = false;
     base.thinkingEnabled = false;
+    base.shadowEnabled = false;
     base.runtimeMode = "public";
   }
   if (base.provider === "mock") {
@@ -774,6 +808,14 @@ function getRuntimeConfigForEnvironment(environment) {
     AI_PROVIDER_ENVIRONMENTS: serializeEnvironmentProfiles(status.environmentProfiles || {}),
     AI_RUNTIME_MODE: runtimeModeForEnvironment(env),
   });
+  // Process-level explicit false is the emergency kill switch. Environment
+  // profiles may enable providers, but they must never override an operator stop.
+  if (["false", "0"].includes(String(process.env.AI_AGENT_ENABLED || "").toLowerCase())) {
+    values.AI_AGENT_ENABLED = "false";
+  }
+  if (["false", "0"].includes(String(process.env.AI_UNDERSTANDING_ENABLED || "").toLowerCase())) {
+    values.AI_UNDERSTANDING_ENABLED = "false";
+  }
   if (env === "public") {
     values.AI_AGENT_ENABLED = "false";
     values.AI_PROVIDER = "mock";

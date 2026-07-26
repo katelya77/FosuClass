@@ -2,6 +2,7 @@ const aiAssistantService = require("../../../services/aiAssistantService");
 const aiVoiceInputService = require("../../../services/aiVoiceInputService");
 const voiceAuthStateMachine = require("../../../utils/voiceAuthStateMachine");
 const xiaofuGeometry = require("../../../utils/xiaofuGeometry");
+const agentActivityState = require("../../../services/agentActivityState");
 const conversationStore = require("../../../services/conversationStore");
 const contextManager = require("../../../services/xiaofuContextManager");
 const xiaofuFloatService = require("../../../services/xiaofuFloatService");
@@ -1499,6 +1500,7 @@ Page({
     voiceRecognizing: false,
     voiceStatusText: "",
     voiceReasonCode: "",
+    voicePhase: "unknown",
     composerInsetPx: 120,
   },
 
@@ -2327,10 +2329,25 @@ Page({
     if (!this._voiceAuthState) {
       this._voiceAuthState = voiceAuthStateMachine.createInitialState();
     }
-    return voiceAuthStateMachine.ensureVoiceReady(this._voiceAuthState, { wx }).then((result) => {
+    return voiceAuthStateMachine.ensureVoiceReady(this._voiceAuthState, {
+      wx,
+      requireRecorder: true,
+      onTransition: (state) => {
+        const labels = {
+          privacy_authorization: "正在确认隐私授权",
+          record_authorization: "正在确认麦克风权限",
+          ready: "麦克风已就绪",
+        };
+        this.setData({ voicePhase: state.phase, voiceStatusText: labels[state.phase] || this.data.voiceStatusText });
+      },
+    }).then((result) => {
       this._voiceAuthState = result.state || this._voiceAuthState;
       const reasonCode = result.reasonCode || (result.state && result.state.reasonCode) || "";
-      this.setData({ voiceReasonCode: reasonCode, voiceStatusText: result.userMessage || "" });
+      this.setData({
+        voicePhase: this._voiceAuthState && this._voiceAuthState.phase || "error",
+        voiceReasonCode: reasonCode,
+        voiceStatusText: result.userMessage || (result.ok ? "麦克风已就绪" : ""),
+      });
       if (result.ok) return true;
 
       if (result.canRetryAuthorize || reasonCode === "WECHAT_RECORD_UNDECIDED") {
@@ -2419,7 +2436,7 @@ Page({
     this.ensureRecordPermission().then((allowed) => {
       if (!allowed || !this._recorderManager) return;
       this._voiceAuthState = voiceAuthStateMachine.markRecording(this._voiceAuthState || voiceAuthStateMachine.createInitialState());
-      this.setData({ voiceStatusText: "正在录音", voiceRecording: true, voiceReasonCode: "" });
+      this.setData({ voicePhase: "recording", voiceStatusText: "正在录音", voiceRecording: true, voiceReasonCode: "" });
       this._voiceRecordStartedAt = Date.now();
       try {
         this._recorderManager.start({
@@ -2470,7 +2487,7 @@ Page({
       return;
     }
     this._voiceAuthState = voiceAuthStateMachine.markTranscribing(this._voiceAuthState || {});
-    this.setData({ voiceRecognizing: true, voiceStatusText: "正在识别" });
+    this.setData({ voicePhase: "transcribing", voiceRecognizing: true, voiceStatusText: "正在识别" });
     aiVoiceInputService.transcribeRecording({
       tempFilePath: res && res.tempFilePath,
       durationMs,
@@ -2480,10 +2497,11 @@ Page({
       const text = String(result && result.text || "").trim();
       if (!text) throw new Error("EMPTY_VOICE_TEXT");
       // Fill input only — never auto-send.
-      this._voiceAuthState = voiceAuthStateMachine.markSuccess(this._voiceAuthState || {});
+      this._voiceAuthState = voiceAuthStateMachine.markComposerFilled(this._voiceAuthState || {});
       this.setData({
         inputValue: text,
         inputFocus: true,
+        voicePhase: "composer_filled",
         voiceRecognizing: false,
         voiceStatusText: "识别完成",
       });
@@ -2806,22 +2824,17 @@ Page({
     const userMessage = appendUserMessage ? makeMessage("user", message) : null;
     const nextMessages = appendUserMessage ? baseMessages.concat(userMessage) : baseMessages;
     this._cancelCurrentRun = false;
-    this.setMessages(nextMessages, {
+    this.setMessages(nextMessages, Object.assign({
       inputValue: "",
       inputFocus: false,
       sending: true,
       slowRequest: false,
-      sendingStatusText: "正在提交任务",
-      agentActivityState: "understanding",
-      statusCapsuleText: "正在提交校园任务",
-      statusCapsuleDetail: "等待服务端建立真实任务运行记录。",
-      statusCapsuleExpanded: true,
       liveRunVisible: true,
       liveRunEvents: [],
       liveRunExpanded: false,
       activeRunId: "",
       activePollToken: "",
-    }, { save: !this.data.demoMode });
+    }, agentActivityState.createSubmittingActivityPatch()), { save: !this.data.demoMode });
 
     if (this.data.demoMode) {
       setTimeout(() => {
@@ -2910,39 +2923,7 @@ Page({
       onStatus: (status) => {
         if (!isRequestActive()) return;
         const text = status && status.text || "";
-        const type = String(status && status.type || "");
-        const activityPatch = {};
-        if (status && status.type === "provider.started") {
-          Object.assign(activityPatch, {
-            agentActivityState: "thinking",
-            statusCapsuleText: text || "正在增强理解",
-            statusCapsuleDetail: "外部表达层已实际开始；校园事实仍只取自确定性工具。",
-          });
-        } else if (type === "tool.started") {
-          Object.assign(activityPatch, {
-            agentActivityState: "querying",
-            statusCapsuleText: text || "正在查询校园数据",
-            statusCapsuleDetail: "正在调用受控校园工具并记录可验证结果。",
-          });
-        } else if (type === "tool.completed" || type === "result.verifying" || type === "response.composing") {
-          Object.assign(activityPatch, {
-            agentActivityState: "composing",
-            statusCapsuleText: text || "正在组合工具结果",
-            statusCapsuleDetail: "正在核验并整理课表、地点或天气结果。",
-          });
-        } else if (type === "planner.started" || type === "plan.created" || type === "plan.replan") {
-          Object.assign(activityPatch, {
-            agentActivityState: "understanding",
-            statusCapsuleText: text || "正在理解任务",
-            statusCapsuleDetail: "正在生成受约束计划；不会直接改写校园事实。",
-          });
-        } else if (type === "run.degraded" || type === "provider.failed" || type === "run.status_unavailable") {
-          Object.assign(activityPatch, {
-            agentActivityState: "network_error",
-            statusCapsuleText: text || "增强能力异常 · 正在降级",
-            statusCapsuleDetail: "会保留确定性工具结果，不把 Provider 失败当作课表失败。",
-          });
-        }
+        const activityPatch = agentActivityState.activityPatchForRunEvent(status);
         if (text || Object.keys(activityPatch).length) {
           this.setData(Object.assign({
             sendingStatusText: text || this.data.sendingStatusText,
@@ -3065,7 +3046,10 @@ Page({
           finalMessages.push(assistantMessage);
         }
         const nextContext = contextManager.updateFromResponse(this.data.activeConversationContext, response);
-        this.setMessages(finalMessages, {
+        const terminalActivity = agentActivityState.activityPatchForResponse(response, {
+          waitingConfirmation,
+        });
+        this.setMessages(finalMessages, Object.assign({
           activeConversationContext: nextContext,
           sending: false,
           slowRequest: false,
@@ -3080,7 +3064,7 @@ Page({
           liveRunEvents: [],
           activeRunId: "",
           activePollToken: "",
-        }, { save: true });
+        }, terminalActivity), { save: true });
         if (resolvedIntentName === "detect_schedule_changes") {
           scheduleChangeTracker.acknowledge(clientContext.currentScheduleSummary);
         }

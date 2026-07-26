@@ -7,6 +7,8 @@ const tests = [
   "tools/test-agent-planner.js",
   "tools/test-planner-model-adapter.js",
   "tools/test-planner-model-adapter-http.js",
+  "tools/test-planner-unified-provider-layer.js",
+  "tools/test-agent-model-first-integration.js",
   "tools/test-agent-observation-loop.js",
   "tools/test-hybrid-rag.js",
   "tools/test-context-assembler.js",

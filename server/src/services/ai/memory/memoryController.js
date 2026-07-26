@@ -221,6 +221,11 @@ class MemoryController {
       executedTools: toolNames,
       observations,
       pendingWriteOps: writeOps,
+      pendingAction: input.pendingAction,
+      lastResolvedEntity: input.lastResolvedEntity,
+      providerUsed: input.providerUsed,
+      understandingSource: input.understandingSource,
+      goalContract: input.goalContract,
       lastRecommendation: input.lastRecommendation || (
         input.answer
           ? { summary: String(input.answer).slice(0, 120), count: toolNames.length }
@@ -387,6 +392,39 @@ class MemoryController {
     const prevWorking = normalizeWorkingMemory(
       prevState && prevState.workingMemory || emptyWorkingMemory()
     );
+    if (memoryMode === "cloud_sync") {
+      const authorized = Boolean(
+        input.principal && input.principal.authenticated === true
+        && prevState && prevState.memoryPolicy
+        && prevState.memoryPolicy.mode === "cloud_sync"
+        && prevState.memoryPolicy.cloudSyncEnabled === true
+      );
+      if (!authorized) {
+        return { committed: false, reason: "CLOUD_SYNC_NOT_AUTHORIZED", workingMemory: prevWorking };
+      }
+      const pending = prevWorking.pendingAction;
+      if (!pending || pending.status !== "awaiting_receipt") {
+        return { committed: false, reason: "ACTION_RECEIPT_NOT_PENDING", workingMemory: prevWorking };
+      }
+      const command = String(input.command || "");
+      if (pending.command !== "setCurrentSchedule" || command !== pending.command) {
+        return { committed: false, reason: "ACTION_RECEIPT_COMMAND_MISMATCH", workingMemory: prevWorking };
+      }
+      const runId = String(input.runId || "");
+      if (!runId || !pending.runId || runId !== pending.runId) {
+        return { committed: false, reason: "ACTION_RECEIPT_RUN_MISMATCH", workingMemory: prevWorking };
+      }
+      if (pending.expiresAt && Number(pending.expiresAt) < Date.now()) {
+        return { committed: false, reason: "ACTION_RECEIPT_EXPIRED", workingMemory: prevWorking };
+      }
+      const pendingTarget = pending.target || {};
+      if (!pendingTarget.detailId || String(pendingTarget.detailId) !== String(target.detailId)) {
+        return { committed: false, reason: "ACTION_RECEIPT_TARGET_MISMATCH", workingMemory: prevWorking };
+      }
+      if (pendingTarget.term && target.term && String(pendingTarget.term) !== String(target.term)) {
+        return { committed: false, reason: "ACTION_RECEIPT_TARGET_MISMATCH", workingMemory: prevWorking };
+      }
+    }
     const workingMemory = updateWorkingMemory(prevWorking, {
       message: "",
       currentScheduleTarget: {
@@ -394,6 +432,12 @@ class MemoryController {
         detailId: String(target.detailId).slice(0, 128),
         name: String(target.name).slice(0, 120),
         term: String(target.term || "").slice(0, 40),
+      },
+      pendingAction: null,
+      lastResolvedEntity: {
+        type: "class",
+        id: String(target.detailId).slice(0, 128),
+        name: String(target.name).slice(0, 120),
       },
     });
     const contextSlots = Object.assign({}, workingMemoryToSlots(workingMemory), {

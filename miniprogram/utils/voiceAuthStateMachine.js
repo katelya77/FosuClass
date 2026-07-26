@@ -21,6 +21,7 @@ const STATES = Object.freeze({
   RECORDING: "recording",
   TRANSCRIBING: "transcribing",
   SUCCESS: "success",
+  COMPOSER_FILLED: "composer_filled",
   ERROR: "error",
 });
 
@@ -66,6 +67,14 @@ function getWx(host) {
 
 function canUse(wxLike, method) {
   return Boolean(wxLike && typeof wxLike[method] === "function");
+}
+
+function transition(next, phase, host = {}) {
+  next.phase = phase;
+  if (typeof host.onTransition === "function") {
+    try { host.onTransition(Object.assign({}, next)); } catch (error) { /* UI observer is non-authoritative */ }
+  }
+  return next;
 }
 
 function failResult(next, reasonCode, extra = {}) {
@@ -182,7 +191,7 @@ async function ensureVoiceReady(state = createInitialState(), host = {}) {
   next.reasonCode = "";
   next.canRetryAuthorize = false;
   next.openSettingSuggested = false;
-  next.phase = STATES.PRIVACY_AUTHORIZATION;
+  transition(next, STATES.PRIVACY_AUTHORIZATION, host);
 
   if (!wxLike) {
     return failResult(next, REASON.API_UNAVAILABLE);
@@ -205,7 +214,7 @@ async function ensureVoiceReady(state = createInitialState(), host = {}) {
     next.privacyAuthorized = true;
   }
 
-  next.phase = STATES.RECORD_AUTHORIZATION;
+  transition(next, STATES.RECORD_AUTHORIZATION, host);
   let setting = await getRecordAuthSetting(wxLike);
 
   if (setting.apiUnavailable && !canUse(wxLike, "authorize")) {
@@ -214,7 +223,7 @@ async function ensureVoiceReady(state = createInitialState(), host = {}) {
 
   if (setting.authorized) {
     next.recordAuthorized = true;
-    next.phase = STATES.READY;
+    transition(next, STATES.READY, host);
     return {
       ok: true,
       state: next,
@@ -229,7 +238,7 @@ async function ensureVoiceReady(state = createInitialState(), host = {}) {
     const authResult = await authorizeRecord(wxLike);
     if (authResult.ok) {
       next.recordAuthorized = true;
-      next.phase = STATES.READY;
+      transition(next, STATES.READY, host);
       return {
         ok: true,
         state: next,
@@ -242,7 +251,7 @@ async function ensureVoiceReady(state = createInitialState(), host = {}) {
     setting = await getRecordAuthSetting(wxLike);
     if (setting.authorized) {
       next.recordAuthorized = true;
-      next.phase = STATES.READY;
+      transition(next, STATES.READY, host);
       return {
         ok: true,
         state: next,
@@ -316,6 +325,14 @@ function markSuccess(state) {
   });
 }
 
+function markComposerFilled(state) {
+  return Object.assign({}, state, {
+    phase: STATES.COMPOSER_FILLED,
+    lastError: "",
+    reasonCode: "",
+  });
+}
+
 function markError(state, message, reasonCode) {
   const code = reasonCode || REASON.RECORDER_START_FAILED;
   return Object.assign({}, state, {
@@ -354,6 +371,7 @@ module.exports = {
   markRecording,
   markTranscribing,
   markSuccess,
+  markComposerFilled,
   markError,
   markAsrError,
   markRecorderStartFailed,

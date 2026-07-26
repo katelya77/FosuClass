@@ -241,6 +241,7 @@ async function runTruthAssertions() {
   const plan = await modelPlanner.plan({
     message: "明天下午仙溪哪里适合自习，顺便看看天气",
     runtimeMode: "trial",
+    plannerEnv: { AI_AGENT_ENABLED: "true" },
     intent: { name: "campus_multi_step_advice", slots: { campus: "仙溪" }, confidence: 0.9 },
     availableTools: ["get_tomorrow_courses", "search_empty_rooms", "get_campus_weather"],
     skill: {

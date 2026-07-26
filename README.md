@@ -84,6 +84,8 @@ npm run test:ai-competition
 - [5 分钟演示脚本](docs/demo-script-5min.md)
 - [Provider 配置](docs/model-provider-config.md)
 - [课程任务 Agent V1 交付与配置](docs/xiaofu-agent/course-task-agent-v1.md)
+- [小佛助手统一模型优先架构](docs/xiaofu-agent/unified-model-first-architecture.md)
+- [小佛助手代码审计与根因](docs/xiaofu-agent/unified-model-first-root-cause.md)
 - [Oracle ARM / Docker Provider 部署说明](docs/oracle-arm-deploy-ai.md)
 - [CloudBase 混合架构](docs/cloudbase-hybrid-architecture.md)
 - [CloudBase Release Pack 发布手册](docs/cloudbase-release-deploy.md)

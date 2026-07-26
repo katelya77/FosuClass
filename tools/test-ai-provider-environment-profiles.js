@@ -52,6 +52,14 @@ try {
   assert.strictEqual(trialSaved.deepseekKeyConfigured, true);
   assert(!JSON.stringify(trialSaved).includes("unit-test-key-not-real"), "status must not expose plaintext secret");
 
+  process.env.AI_AGENT_ENABLED = "false";
+  process.env.AI_UNDERSTANDING_ENABLED = "0";
+  const killedTrialConfig = providerConfigService.getRuntimeConfigForEnvironment("trial");
+  assert.strictEqual(killedTrialConfig.AI_AGENT_ENABLED, "false", "process kill switch must override an enabled trial profile");
+  assert.strictEqual(killedTrialConfig.AI_UNDERSTANDING_ENABLED, "false", "understanding kill switch must override the profile");
+  delete process.env.AI_AGENT_ENABLED;
+  delete process.env.AI_UNDERSTANDING_ENABLED;
+
   const devSaved = providerConfigService.saveConfig({ preset: "dev-full", environment: "dev" });
   const devEnv = devSaved.environments.find((item) => item.environment === "dev");
   assert.strictEqual(devEnv.providerPolicy, "always");

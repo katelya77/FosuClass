@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 const assert = require("assert");
 const agentRunEventService = require("../server/src/services/ai/agentRunEventService");
-const { loadingTextForEvent, EVENT_TYPES } = require("../server/src/services/ai/runEventCatalog");
+const { loadingTextForEvent, publicEventSummary, EVENT_TYPES } = require("../server/src/services/ai/runEventCatalog");
 
 function run() {
   agentRunEventService.resetForTests();
@@ -59,6 +59,38 @@ function run() {
   );
   assert.ok(view.events.every((item) => !JSON.stringify(item).includes("openid")));
   assert.ok(view.result && view.result.answer);
+
+  const publicDiagnostic = publicEventSummary({
+    type: "provider.failed",
+    runtimeMode: "public",
+    provider: "deepseek",
+    purpose: "understanding",
+    understandingSource: "model",
+    reasonCode: "UPSTREAM_DETAIL",
+    providerUsed: true,
+  });
+  assert.strictEqual(publicDiagnostic.provider, "", "public events must not expose Provider implementations");
+  assert.strictEqual(publicDiagnostic.purpose, "");
+  assert.strictEqual(publicDiagnostic.understandingSource, "");
+  assert.strictEqual(publicDiagnostic.reasonCode, "");
+  assert.strictEqual(publicDiagnostic.providerUsed, false);
+  const trialDiagnostic = publicEventSummary({
+    type: "provider.completed",
+    runtimeMode: "trial",
+    provider: "deepseek",
+    purpose: "understanding",
+    understandingSource: "model",
+    providerUsed: true,
+  });
+  assert.strictEqual(trialDiagnostic.provider, "deepseek", "trial/dev keep safe Provider diagnostics");
+
+  const partialRun = agentRunEventService.createRun({ runtimeMode: "trial" });
+  const partialEmitter = agentRunEventService.createEventEmitter(partialRun.runId, "trial");
+  partialEmitter({ type: "run.degraded", status: "partial", partialCompletion: true });
+  agentRunEventService.setResult(partialRun.runId, { status: "partial", success: false }, "completed");
+  const partialView = agentRunEventService.getRunView(partialRun.runId, { pollToken: partialRun.pollToken });
+  assert.strictEqual(partialView.status, "degraded", "setResult must not overwrite an existing degraded terminal event");
+  assert.strictEqual(agentRunEventService.statusFromResult({ status: "partial", success: false }), "degraded");
 
   // Foreign principal cannot access without poll token
   const denied = agentRunEventService.getRunView(created.runId, {
