@@ -315,7 +315,7 @@ async function probeProvider(name, input = {}) {
       await input.probeGenerate({ provider: displayName, canonicalProvider: canonical });
     } else if (typeof provider.testConnection === "function") {
       const result = await provider.testConnection({ providerRuntimeConfig: runtimeConfig });
-      if (!result || result.ok === false) {
+      if (!result || result.ok === false || result.success === false) {
         const error = new Error("Provider health probe failed");
         error.code = result && result.code || "PROVIDER_HEALTH_FAILED";
         throw error;
