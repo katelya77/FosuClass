@@ -596,6 +596,7 @@
     "test:provider-readiness": "node tools/test-provider-readiness.js",
     "test:provider-shadow-eval": "node tools/test-provider-shadow-eval.js",
     "test:provider-runtime-matrix": "node tools/test-provider-runtime-matrix.js",
+    "test:provider-control-plane": "node tools/test-provider-control-plane.js",
     "test:coze-provider-v3": "node tools/test-coze-provider-v3.js",
     "test:coze-connection-config-ux": "node tools/test-coze-connection-config-ux.js",
     "test:xiaofu-runtime-ui": "node tools/test-xiaofu-runtime-ui.js",
