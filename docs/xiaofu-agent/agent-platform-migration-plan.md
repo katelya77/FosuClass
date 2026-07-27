@@ -456,5 +456,6 @@
 
 | 里程碑 | 状态 | 证据 |
 |---|---|---|
-| M0 | 进行中 | `output/agent-platform-m0-baseline.md` |
-| M1–M7 | 未开始 | — |
+| M0 | ✅ 完成（064de232） | `output/agent-platform-m0-baseline.md`，五门禁全绿 |
+| M1 | ✅ 完成（c6c2b301） | `output/agent-platform-m1-progress.md`，`tools/test-provider-control-plane.js` 11/11 PASS，已接入 foundation 套件；未发现真实缺陷，M1-T3 跳过 |
+| M2–M7 | 未开始 | — |
