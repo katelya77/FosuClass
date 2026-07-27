@@ -57,7 +57,43 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [
+          "courses"
+        ],
+        "fields": {
+          "courses": "array",
+          "courseCount": "number",
+          "nextCourse": "object",
+          "date": "string",
+          "currentWeek": "number"
+        }
+      },
+      "successPostconditions": [
+        "numericRange:courseCount:0:20"
+      ],
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "NO_COURSES",
+          "EMPTY_RESULT",
+          "NO_PERSONAL"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "无课、未导入课表或周次不确定均为合法空态。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "courses",
+          "nextCourse",
+          "date",
+          "currentWeek"
+        ],
+        "approximateFlags": []
+      }
     },
     "get_tomorrow_courses": {
       "runtimeModes": [
@@ -65,7 +101,41 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [
+          "courses"
+        ],
+        "fields": {
+          "courses": "array",
+          "courseCount": "number",
+          "date": "string",
+          "currentWeek": "number"
+        }
+      },
+      "successPostconditions": [
+        "numericRange:courseCount:0:20"
+      ],
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "NO_COURSES",
+          "EMPTY_RESULT",
+          "NO_PERSONAL"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "明天无课是合法空态。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "courses",
+          "date",
+          "currentWeek"
+        ],
+        "approximateFlags": []
+      }
     },
     "get_next_course": {
       "runtimeModes": [
@@ -73,7 +143,40 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [
+          "courseCount"
+        ],
+        "fields": {
+          "courseCount": "number",
+          "nextCourse": "object",
+          "date": "string"
+        }
+      },
+      "successPostconditions": [
+        "numericRange:courseCount:0:1"
+      ],
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "NO_COURSES",
+          "EMPTY_RESULT",
+          "NO_PERSONAL"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "今天没有后续课程是合法空态。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "nextCourse",
+          "date",
+          "currentWeek"
+        ],
+        "approximateFlags": []
+      }
     },
     "get_week_schedule": {
       "runtimeModes": [
@@ -81,7 +184,40 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [
+          "days"
+        ],
+        "fields": {
+          "days": "array",
+          "courseCount": "number",
+          "currentWeek": "number"
+        }
+      },
+      "successPostconditions": [
+        "numericRange:courseCount:0:60"
+      ],
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "NO_COURSES",
+          "EMPTY_RESULT",
+          "NO_PERSONAL"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "本周无课或未导入课表是合法空态。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "days",
+          "currentWeek",
+          "week"
+        ],
+        "approximateFlags": []
+      }
     },
     "get_teaching_week": {
       "runtimeModes": [
@@ -89,7 +225,30 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [
+          "term"
+        ],
+        "fields": {
+          "term": "string",
+          "currentWeek": "number",
+          "totalWeeks": "number",
+          "todayDate": "string"
+        }
+      },
+      "successPostconditions": [
+        "fieldNonEmpty:term",
+        "numericRange:currentWeek:0:40"
+      ],
+      "evidencePolicy": {
+        "evidenceFields": [
+          "term",
+          "currentWeek",
+          "totalWeeks"
+        ],
+        "approximateFlags": []
+      }
     },
     "get_term_calendar": {
       "runtimeModes": [
@@ -105,7 +264,37 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [
+          "rooms"
+        ],
+        "fields": {
+          "rooms": "array",
+          "total": "number",
+          "updatedAt": "string"
+        }
+      },
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "EMPTY",
+          "NO_ROOM",
+          "EMPTY_RESULT"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "无可用教室是合法空态。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "rooms",
+          "updatedAt",
+          "actionUrl"
+        ],
+        "approximateFlags": []
+      }
     },
     "search_continuous_empty_rooms": {
       "runtimeModes": [
@@ -113,7 +302,37 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [
+          "rooms"
+        ],
+        "fields": {
+          "rooms": "array",
+          "total": "number",
+          "minFreeSections": "number"
+        }
+      },
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "EMPTY",
+          "NO_ROOM",
+          "EMPTY_RESULT"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "无连续空教室是合法空态。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "rooms",
+          "minFreeSections",
+          "updatedAt"
+        ],
+        "approximateFlags": []
+      }
     },
     "search_school_index": {
       "runtimeModes": [
@@ -121,7 +340,35 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [
+          "items"
+        ],
+        "fields": {
+          "items": "array",
+          "type": "string"
+        }
+      },
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "EMPTY_RESULT",
+          "NO_MATCH",
+          "NOT_FOUND"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "检索无命中是合法空态。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "items",
+          "type"
+        ],
+        "approximateFlags": []
+      }
     },
     "get_schedule_detail": {
       "runtimeModes": [
@@ -129,7 +376,35 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [],
+        "fields": {
+          "items": "array",
+          "course": "object",
+          "detail": "object"
+        }
+      },
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "EMPTY_RESULT",
+          "NOT_FOUND",
+          "NO_MATCH"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "详情未命中是合法空态。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "items",
+          "course",
+          "detail"
+        ],
+        "approximateFlags": []
+      }
     },
     "diagnose_data_status": {
       "runtimeModes": [
@@ -169,7 +444,48 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [
+          "weatherText",
+          "campus"
+        ],
+        "fields": {
+          "weatherText": "string",
+          "campus": "string",
+          "temperatureC": "number",
+          "rainProbabilityMax24h": "number",
+          "updatedAt": "string"
+        }
+      },
+      "successPostconditions": [
+        "fieldNonEmpty:weatherText"
+      ],
+      "emptyResultPolicy": {
+        "mode": "partial",
+        "codes": [
+          "WEATHER_PROVIDER_FAILED",
+          "WEATHER_DISABLED",
+          "CAMPUS_WEATHER_LOCATION_UNCONFIGURED",
+          "WEATHER_PROVIDER_FAILED_USING_STALE",
+          "UNAVAILABLE",
+          "WEATHER_UNAVAILABLE"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "天气不可用或使用过期数据只降级，不影响课表事实。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "weatherText",
+          "temperatureC",
+          "rainProbabilityMax24h",
+          "campus",
+          "updatedAt"
+        ],
+        "approximateFlags": []
+      }
     },
     "get_course_weather_advice": {
       "runtimeModes": [
@@ -177,7 +493,47 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [
+          "weatherText",
+          "campus"
+        ],
+        "fields": {
+          "weatherText": "string",
+          "campus": "string",
+          "temperatureC": "number",
+          "rainProbabilityMax24h": "number",
+          "advice": "string"
+        }
+      },
+      "successPostconditions": [
+        "fieldNonEmpty:weatherText"
+      ],
+      "emptyResultPolicy": {
+        "mode": "partial",
+        "codes": [
+          "WEATHER_PROVIDER_FAILED",
+          "WEATHER_DISABLED",
+          "CAMPUS_WEATHER_LOCATION_UNCONFIGURED",
+          "WEATHER_PROVIDER_FAILED_USING_STALE",
+          "UNAVAILABLE",
+          "WEATHER_UNAVAILABLE"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "天气不可用或使用过期数据只降级，不影响课表事实。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "weatherText",
+          "advice",
+          "rainProbabilityMax24h",
+          "campus"
+        ],
+        "approximateFlags": []
+      }
     },
     "search_campus_place": {
       "runtimeModes": [
@@ -185,7 +541,33 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [
+          "items"
+        ],
+        "fields": {
+          "items": "array"
+        }
+      },
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "EMPTY_RESULT",
+          "PLACE_NOT_FOUND",
+          "NO_MATCH"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "地点无命中是合法空态。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "items"
+        ],
+        "approximateFlags": []
+      }
     },
     "get_campus_route": {
       "runtimeModes": [
@@ -193,7 +575,35 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [],
+        "fields": {
+          "from": "object",
+          "to": "object",
+          "candidates": "array"
+        }
+      },
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "ROUTE_DATA_INCOMPLETE",
+          "PLACE_NOT_FOUND",
+          "EMPTY_RESULT"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "校园地图暂无精确路线数据，返回候选地点是合法降级。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "from",
+          "to",
+          "candidates"
+        ],
+        "approximateFlags": []
+      }
     },
     "get_classroom_location": {
       "runtimeModes": [
@@ -201,7 +611,36 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [
+          "classroom"
+        ],
+        "fields": {
+          "classroom": "string",
+          "building": "string",
+          "items": "array"
+        }
+      },
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "EMPTY_RESULT",
+          "PLACE_NOT_FOUND"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "教室无法定位到楼栋是合法空态。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "classroom",
+          "building",
+          "items"
+        ],
+        "approximateFlags": []
+      }
     },
     "get_today_schedule": {
       "runtimeModes": [
@@ -267,6 +706,57 @@
             "maximum": 90
           }
         }
+      },
+      "outputSchema": {
+        "required": [
+          "courseName",
+          "startTime",
+          "departureTime"
+        ],
+        "fields": {
+          "courseName": "string",
+          "classroom": "string",
+          "campus": "string",
+          "startTime": "time",
+          "departureTime": "time",
+          "walkingBufferMinutes": "integer",
+          "totalBufferMinutes": "integer",
+          "preciseRouteAvailable": "boolean"
+        }
+      },
+      "successPostconditions": [
+        "fieldNonEmpty:courseName",
+        "timeOrder:departureTime:startTime",
+        "numericRange:totalBufferMinutes:5:180"
+      ],
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "NO_MATCHING_COURSE",
+          "SCHEDULE_REQUIRED",
+          "COURSE_TIME_REQUIRED",
+          "ROUTE_DATA_INCOMPLETE"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "缺少精确定位时仍返回通用缓冲建议，但必须标注近似。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "courseName",
+          "classroom",
+          "startTime",
+          "departureTime",
+          "locationEvidence",
+          "actionUrl"
+        ],
+        "approximateFlags": [
+          {
+            "field": "walkingBufferMinutes",
+            "label": "APPROXIMATE_BUFFER_NOT_PRECISE_NAV"
+          }
+        ]
       }
     },
     "inspect_schedule_conflicts": {
@@ -543,7 +1033,38 @@
         "trial",
         "dev"
       ],
-      "safetyLevel": "low"
+      "safetyLevel": "low",
+      "outputSchema": {
+        "required": [],
+        "fields": {
+          "hits": "array",
+          "citations": "array",
+          "confidence": "number"
+        }
+      },
+      "successPostconditions": [
+        "numericRange:confidence:0:1"
+      ],
+      "emptyResultPolicy": {
+        "mode": "accept",
+        "codes": [
+          "NO_RELIABLE_HIT",
+          "RAG_FAILED",
+          "EMPTY_RESULT"
+        ]
+      },
+      "partialCompletionPolicy": {
+        "allowPartial": true,
+        "note": "知识检索无可靠命中是合法空态。"
+      },
+      "evidencePolicy": {
+        "evidenceFields": [
+          "hits",
+          "citations",
+          "confidence"
+        ],
+        "approximateFlags": []
+      }
     },
     "generate_image": {
       "runtimeModes": [

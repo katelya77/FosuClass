@@ -69,7 +69,7 @@ function markPlannerFailure(env = process.env) {
 function selectPlannerProviderName(runtimeMode, runtimeConfig = {}) {
   const mode = capabilityManifestService.normalizeRuntimeMode(runtimeMode);
   if (mode === "public") return "none";
-  const chain = providerFactory.providerChainService.getProviderChain(mode, runtimeConfig);
+  const chain = providerFactory.providerChainService.resolveStageChain("planner", runtimeConfig, mode);
   for (let i = 0; i < chain.length; i += 1) {
     const name = chain[i];
     if (name === "mock") continue;
@@ -171,6 +171,7 @@ async function generate(input = {}) {
     const settings = Object.assign({}, env || {}, runtimeConfig || {});
     const result = await structuredInferenceService.generateStructured({
       purpose: "planning",
+      stage: "planner",
       messages,
       maxTokens: input.maxTokens || getPlannerMaxTokens(env),
       timeoutMs: getPlannerTimeoutMs(settings),

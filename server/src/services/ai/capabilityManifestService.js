@@ -1,4 +1,5 @@
 const rawManifest = require("../../../config/agent-capability-manifest.json");
+const { validateToolVerificationPolicy } = require("./verification/verificationPolicy");
 
 function deepFreeze(value) {
   if (!value || typeof value !== "object" || Object.isFrozen(value)) return value;
@@ -25,6 +26,26 @@ const manifest = deepFreeze(Object.assign({}, rawManifest, {
   tools: withIds(rawManifest.tools),
   skills: withIds(rawManifest.skills),
 }));
+
+/**
+ * Phase 5: tool verification strategy fields (outputSchema / successPostconditions /
+ * emptyResultPolicy / partialCompletionPolicy / evidencePolicy) are validated at load
+ * time — an invalid policy is a startup error, not a runtime surprise.
+ */
+function validateVerificationPolicies(tools) {
+  const source = tools && typeof tools === "object" ? tools : manifest.tools;
+  return Object.keys(source).reduce((errors, toolId) => {
+    return errors.concat(validateToolVerificationPolicy(toolId, source[toolId]));
+  }, []);
+}
+
+const loadTimePolicyErrors = validateVerificationPolicies(rawManifest.tools);
+if (loadTimePolicyErrors.length) {
+  const error = new Error(`Invalid tool verification policies: ${loadTimePolicyErrors.map((item) => `${item.code}(${item.detail})`).join(", ")}`);
+  error.code = "MANIFEST_VERIFICATION_POLICY_INVALID";
+  error.errors = loadTimePolicyErrors;
+  throw error;
+}
 
 function getManifest() {
   return manifest;
@@ -154,6 +175,10 @@ function assertConsistency(dependencies = {}) {
     pushMissing(errors, Boolean(getIntent(compatMap[key])), "CLIENT_COMPAT_INTENT_MISSING", `${key}:${compatMap[key]}`);
   });
 
+  validateVerificationPolicies().forEach((item) => {
+    pushMissing(errors, false, item.code, item.detail);
+  });
+
   return {
     ok: errors.length === 0,
     errors,
@@ -175,4 +200,5 @@ module.exports = {
   isToolAllowedForRuntime,
   normalizeRuntimeMode,
   publicCapabilityView,
+  validateVerificationPolicies,
 };
