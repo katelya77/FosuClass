@@ -1,3 +1,8 @@
+// GoalContract V1 compatibility layer.
+// The runtime internally standardizes on GoalContract V2 (goalContractV2.js);
+// this module remains the model-facing V1 JSON schema (Understanding still
+// emits V1 JSON this phase) and serves legacy consumers. Do not remove while
+// V1 JSON is still produced or consumed.
 const capabilityManifestService = require("../capabilityManifestService");
 const safetyGuard = require("../safetyGuard");
 

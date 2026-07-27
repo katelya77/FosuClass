@@ -11,17 +11,27 @@ const agentServiceSource = require("fs").readFileSync(
   require("path").join(__dirname, "../server/src/services/ai/agentService.js"),
   "utf8"
 );
+// Phase-3 runtime split: planner model wiring lives in the runtime
+// PlannerCoordinator; agentService composes it. Assert both layers.
+const plannerCoordinatorSource = require("fs").readFileSync(
+  require("path").join(__dirname, "../server/src/services/ai/runtime/plannerCoordinator.js"),
+  "utf8"
+);
 
 async function run() {
-  // Source wiring: agentService must inject modelGenerate via plannerModelAdapter
+  // Source wiring: the runtime pipeline must inject modelGenerate via plannerModelAdapter
   assert.ok(
-    /plannerModelAdapter\.createModelGenerate/.test(agentServiceSource),
-    "agentService must create planner model generate"
+    /plannerCoordinator/.test(agentServiceSource),
+    "agentService must compose the runtime PlannerCoordinator"
   );
   assert.ok(
-    /modelGenerate:\s*runtimeDecision\.runtimeMode === "public" \? undefined : plannerGenerate/.test(agentServiceSource)
-    || /modelGenerate:[\s\S]{0,80}plannerGenerate/.test(agentServiceSource),
-    "agentService must pass modelGenerate into kernel (non-public)"
+    /plannerModelAdapter\.createModelGenerate/.test(plannerCoordinatorSource),
+    "plannerCoordinator must create planner model generate"
+  );
+  assert.ok(
+    /modelGenerate:\s*runtimeMode === "public" \? undefined : plannerGenerate/.test(plannerCoordinatorSource)
+    || /modelGenerate:[\s\S]{0,80}plannerGenerate/.test(plannerCoordinatorSource),
+    "plannerCoordinator must pass modelGenerate into kernel (non-public)"
   );
 
   // public policy

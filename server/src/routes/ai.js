@@ -1141,6 +1141,8 @@ router.get("/agent/readiness", scheduleLimiter, optionalSessionGuard, (req, res)
       enhancedMode: "disabled",
       authorization: "allowed",
       providerConfigured: false,
+      configuredAvailable: false,
+      providerVerified: false,
       providerReachable: false,
       memoryAvailable: false,
       runEventsSupported: true,

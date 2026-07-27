@@ -77,6 +77,10 @@ function evaluateEnvironment(environment = "public") {
     thinkingEnabled: env === "public" ? false : thinkingEnabled,
     keyConfigured: env === "public" ? false : keyConfigured,
     providerConfigured: env === "public" ? false : keyConfigured && (provider !== "mock" || agentEnabled),
+    configuredAvailable: env === "public"
+      ? false
+      : keyConfigured && !(provider === "coze" && cozeExpired) && !providerChainService.isCircuitOpen(provider),
+    verified: env === "public" ? false : providerChainService.isProviderVerified(provider),
     coze: {
       enabled: boolish(configValue(runtimeConfig, "COZE_ENABLED", provider === "coze" ? "true" : "false")),
       role: String(configValue(runtimeConfig, "COZE_PROVIDER_ROLE", "temporary") || "temporary"),
@@ -114,7 +118,9 @@ function publicProviderFlags(runtimeMode, runtimeConfig) {
   if (mode === "public") {
     return {
       providerConfigured: false,
+      configuredAvailable: false,
       providerReachable: false,
+      verified: false,
       reasonCode: "SERVER_RUNTIME_PUBLIC",
     };
   }
@@ -131,9 +137,15 @@ function publicProviderFlags(runtimeMode, runtimeConfig) {
   } else if (expired) {
     reasonCode = "PROVIDER_EXPIRED";
   }
+  // configuredAvailable：已配置 && 未到期 && 熔断未打开（不代表真实触达）。
+  const configuredAvailable = configured && !expired && !providerChainService.isCircuitOpen(name);
   return {
     providerConfigured: configured && !expired,
-    providerReachable: configured && !expired && !providerChainService.isCircuitOpen(name),
+    configuredAvailable,
+    // 向后兼容别名：旧客户端读 providerReachable，语义等同 configuredAvailable。
+    providerReachable: configuredAvailable,
+    // verified：本进程内有真实成功调用或 probe 成功。
+    verified: providerChainService.isProviderVerified(name),
     reasonCode,
   };
 }

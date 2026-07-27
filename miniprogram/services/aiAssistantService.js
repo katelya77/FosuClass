@@ -1714,9 +1714,7 @@ function oracleAgentChat(message, context, metadata = {}) {
 }
 
 async function callServerAgent(message, resolvedContext, options = {}) {
-  const callbacks = options && options.callbacks || {};
   const metadata = options.agentRequest || createAgentRequestMetadata(resolvedContext, options);
-  reportPipelineStatus(callbacks, "正在调用小佛智能体…", "agent");
   return aiTransportRouter.chat({
     message,
     context: resolvedContext,

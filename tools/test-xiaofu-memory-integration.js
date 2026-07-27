@@ -67,7 +67,7 @@ function run() {
   mustNotInclude(conversationSheet, "本机与云端会话合并展示，不会重复条目", "false merge copy");
 
   mustInclude(transport, "callOracleViaRuns", "transport");
-  mustInclude(transport, "正在理解你的问题", "transport");
+  mustInclude(transport, "正在建立校园任务", "transport");
   mustNotInclude(transport, 'text: "正在查询课表"', "transport hardcoded schedule loading");
 
   mustInclude(aiRoutes, "resolveMemoryRuntimeMode", "routes");

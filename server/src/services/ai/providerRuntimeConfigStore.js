@@ -245,7 +245,10 @@ function writeRuntimeConfig(updates = {}, configPath = getConfigPath()) {
   }
   const current = fs.existsSync(configPath) ? readRuntimeConfig(configPath) : {};
   const next = Object.assign({}, current, sanitizeRuntimeConfig(updates));
-  next.AI_PROVIDER_RUNTIME_VERSION = String(Date.now());
+  // Monotonic config version: every save must change it, even within the same millisecond.
+  const previousVersion = Number(current.AI_PROVIDER_RUNTIME_VERSION || 0) || 0;
+  const now = Date.now();
+  next.AI_PROVIDER_RUNTIME_VERSION = String(now > previousVersion ? now : previousVersion + 1);
   next.AI_PROVIDER_RUNTIME_UPDATED_AT = new Date().toISOString();
   writeRawRuntimeConfig(configPath, serializeRuntimeConfig(next));
   return next;

@@ -650,15 +650,19 @@ router.get("/ai-agent/status", adminAuth.verifyAdminAccess, (req, res) => {
       protocolVersion: "agent.v1",
       enabledTools: Object.keys(require("../services/ai/agentProtocol").TOOL_DEFINITIONS),
       providerChain: providerChainService.getStatus(runtimeMode, runtimeConfig),
+      authoritative: aiProviderConfigService.getAuthoritativeProviderConfig(status.activeEnvironment),
+      lastExternalCall: providerChainService.getLastExternalCall(),
       knowledgeIndex: knowledgeBaseService.getIndexStatus(),
       campusMap: campusMapService.getMapStatus(),
       imageGeneration: imageGenerationGateService.getStatus(runtimeMode),
       metrics: {
         fallbackCount: providerChainService.getStatus("competition", runtimeConfig).reduce((sum, item) => sum + Number(item.fallbackCount || 0), 0),
-        toolCallCount: 0,
-        factualQuestionCount: 0,
-        generativeQuestionCount: 0,
-        safetyInterceptCount: 0,
+        // 以下四项本进程没有真实计数源：如实输出 null，后台 UI 显示"暂无统计"，禁止保留假 0。
+        toolCallCount: null,
+        factualQuestionCount: null,
+        generativeQuestionCount: null,
+        safetyInterceptCount: null,
+        countersAvailable: false,
       },
     },
   });

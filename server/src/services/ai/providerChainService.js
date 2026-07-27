@@ -18,6 +18,12 @@ const PROVIDER_ALIASES = Object.freeze({
 // trial/dev 推荐：Coze Agent → CloudBase 内置模型 → DeepSeek → 确定性 mock
 const DEFAULT_COMPETITION_CHAIN = ["coze", "cloudbase-openai", "deepseek", "mock"];
 const DEFAULT_PUBLIC_CHAIN = ["mock"];
+// 阶段显式分配：Profile 字段（空 = 跟随主链）对应的运行时配置键。
+const STAGE_CONFIG_KEYS = Object.freeze({
+  understanding: "AI_UNDERSTANDING_PROVIDER",
+  planner: "AI_PLANNER_PROVIDER",
+  response: "AI_RESPONSE_PROVIDER",
+});
 const state = new Map();
 
 function configValue(runtimeConfig, key, fallback = "") {
@@ -101,6 +107,42 @@ function getProviderChain(runtimeMode = "public", runtimeConfig = {}) {
 
 function getProviderModule(name) {
   return PROVIDERS[name] || mockProvider;
+}
+
+/**
+ * 阶段显式链路：stage 字段非空 → [stageProvider, ...主链剔除它]；空 → 主链。
+ * public 一律 ["mock"]，绝不触达外部 Provider。
+ */
+function resolveStageChain(stage, runtimeConfig = {}, runtimeMode = "") {
+  const mode = String(
+    runtimeMode || configValue(runtimeConfig, "AI_RUNTIME_MODE", "public")
+  ).trim().toLowerCase();
+  if (mode === "public") return DEFAULT_PUBLIC_CHAIN.slice();
+  const mainChain = getProviderChain(mode, runtimeConfig);
+  const key = STAGE_CONFIG_KEYS[String(stage || "").trim().toLowerCase()];
+  if (!key) return mainChain;
+  const stageProvider = normalizeProviderName(configValue(runtimeConfig, key, ""));
+  if (!stageProvider) return mainChain;
+  return [stageProvider].concat(mainChain.filter((name) => name !== stageProvider));
+}
+
+/** 本进程内是否有真实成功调用（真实请求或 probe 成功）。 */
+function isProviderVerified(name) {
+  const canonical = normalizeProviderName(name);
+  if (!canonical) return false;
+  return Boolean(readState(canonical).lastSuccessAt);
+}
+
+/** 最近一次真实外部（非 mock）成功调用，用于后台"实际使用"横幅。 */
+function getLastExternalCall() {
+  let best = null;
+  state.forEach((item, name) => {
+    if (name === "mock" || !item.lastSuccessAt) return;
+    if (!best || item.lastSuccessAt > best.at) {
+      best = { provider: publicProviderName(name), at: item.lastSuccessAt };
+    }
+  });
+  return best;
 }
 
 function isProviderConfigured(name, runtimeConfig = {}) {
@@ -342,6 +384,7 @@ async function probeProvider(name, input = {}) {
     return { provider: displayName, health: "forbidden", latencyMs: 0, reasonCode: "PUBLIC_PROVIDER_FORBIDDEN" };
   }
   if (!canonical || canonical === "mock") {
+    if (canonical === "mock") markSuccess("mock", 0);
     return { provider: displayName, health: canonical === "mock" ? "ok" : "disabled", latencyMs: 0, reasonCode: canonical ? "" : "PROVIDER_UNKNOWN" };
   }
   const runtimeConfig = input.providerRuntimeConfig || {};
@@ -391,7 +434,9 @@ async function probeProvider(name, input = {}) {
 async function generateWithChain(input = {}, options = {}) {
   const runtimeMode = options.runtimeMode || "public";
   const runtimeConfig = options.providerRuntimeConfig || input.providerRuntimeConfig || {};
-  const names = getProviderChain(runtimeMode, runtimeConfig);
+  const names = options.stage
+    ? resolveStageChain(options.stage, runtimeConfig, runtimeMode)
+    : getProviderChain(runtimeMode, runtimeConfig);
   const attempts = [];
   for (const name of names) {
     if (name === "coze" && typeof cozeProvider.isExpired === "function" && cozeProvider.isExpired(runtimeConfig)) {
@@ -487,8 +532,16 @@ function percentile(values, p) {
 function getStatus(runtimeMode = "competition", runtimeConfig = {}) {
   return getProviderChain(runtimeMode, runtimeConfig).map((name) => {
     const item = readState(name);
+    const configured = isProviderConfigured(name, runtimeConfig);
+    const expired = name === "coze"
+      && typeof cozeProvider.isExpired === "function"
+      && cozeProvider.isExpired(runtimeConfig);
     return Object.assign({}, item, {
-      enabled: isProviderConfigured(name, runtimeConfig),
+      enabled: configured,
+      // configuredAvailable = 已配置 && 未到期 && 熔断未打开（从不等于"真实触达"）
+      configuredAvailable: configured && !expired && !isCircuitOpen(name),
+      // verified = 本进程内有真实成功调用或 probe 成功
+      verified: Boolean(item.lastSuccessAt),
       p50LatencyMs: percentile(item.latencies, 50),
       p95LatencyMs: percentile(item.latencies, 95),
     });
@@ -502,13 +555,16 @@ function resetForTest() {
 module.exports = {
   classifyFailure,
   generateWithChain,
+  getLastExternalCall,
   getProviderChain,
   getProviderModule,
   getStatus,
   isCircuitOpen,
   isProviderConfigured,
+  isProviderVerified,
   normalizeProviderName,
   probeProvider,
+  resolveStageChain,
   runShadowEvaluation,
   scheduleShadowEvaluation,
   resetForTest,

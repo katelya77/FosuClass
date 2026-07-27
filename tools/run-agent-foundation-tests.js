@@ -12,6 +12,7 @@ const tests = [
   "tools/test-xiaofu-capability-registry.js",
   "tools/test-agent-capability-manifest.js",
   "tools/test-agent-model-first-understanding.js",
+  "tools/test-goal-contract-v2.js",
   "tools/test-provider-request-scope.js",
   "tools/test-provider-shadow-eval.js",
   "tools/test-agent-model-first-integration.js",
