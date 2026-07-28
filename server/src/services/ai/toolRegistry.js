@@ -16,6 +16,7 @@ const classroomSearch = require("./classroomSearch");
 const knowledgeBaseService = require("./knowledgeBaseService");
 const imageGenerationGateService = require("./imageGenerationGateService");
 const agentProtocol = require("./agentProtocol");
+const capabilityManifestService = require("./capabilityManifestService");
 const generatedPayloadContract = require("./generatedPayloadContract");
 const { planCourseReminder } = require("./reminders/courseReminderPlanner");
 const { defaultCourseReminderService } = require("./reminders/courseReminderService");
@@ -1901,68 +1902,149 @@ function isHighConfidenceIndexHit(result = {}) {
   return itemName === q || q.length >= 2;
 }
 
+// 执行层硬性要求已认证 Principal 的工具（createCourseReminder 的 PRINCIPAL_REQUIRED
+// 与 courseReminderService / userPreferenceService 的 assertPrincipal）。
+// 计划期仅在调用方显式携带 context.principal 时按此收窄；未携带时维持
+// 执行层鉴权语义（登录/确认 UX 由工具结果驱动），不在这里推断缺省身份。
+const PRINCIPAL_REQUIRED_TOOLS = new Set([
+  "create_course_reminder",
+  "update_course_reminder",
+  "delete_course_reminder",
+  "list_course_reminders",
+  "update_user_preference",
+]);
+
+/**
+ * M6-T1：意图→工具映射单源化。规划候选工具集 = Intent ∩ Skill ∩ Runtime ∩ Principal ∩ Environment，
+ * 五因子全部求交集（只收不放的收窄语义），不以并集放宽：
+ * - Intent：capability manifest 的 intent.allowedTools（唯一映射权威源，manifest 本体只读）；
+ * - Skill：manifest 中 intent.skill 指向 skill 的 allowedTools；
+ * - Runtime：TOOL_HANDLERS 内真实注册可执行；
+ * - Principal：context.principal 显式存在且未认证时，剔除执行需认证 Principal 的工具；
+ * - Environment：context.runtimeMode 对应的工具 runtimeModes 政策（缺省 public，最严口径）。
+ * 交集为空返回 []，调用方按空计划回退（与原实现对 generic/无工具意图的空计划语义一致）。
+ */
+function resolveManifestAllowedTools(intent, context = {}) {
+  const manifestIntent = capabilityManifestService.getIntent(intent && intent.name);
+  if (!manifestIntent || !Array.isArray(manifestIntent.allowedTools) || !manifestIntent.allowedTools.length) {
+    return [];
+  }
+  const manifestSkill = capabilityManifestService.getManifest().skills[manifestIntent.skill];
+  const skillTools = new Set((manifestSkill && Array.isArray(manifestSkill.allowedTools)) ? manifestSkill.allowedTools : []);
+  const runtimeMode = capabilityManifestService.normalizeRuntimeMode(
+    context.runtimeMode || context.assistantEnvironment || "public"
+  );
+  const principal = context.principal && typeof context.principal === "object" ? context.principal : null;
+  const principalRestricted = Boolean(principal) && principal.authenticated !== true;
+  return manifestIntent.allowedTools
+    .map((toolName) => String(toolName))
+    .filter((toolName) => {
+      if (!skillTools.has(toolName)) return false;
+      if (!Object.prototype.hasOwnProperty.call(TOOL_HANDLERS, toolName)) return false;
+      if (!capabilityManifestService.isToolAllowedForRuntime(toolName, runtimeMode)) return false;
+      if (principalRestricted && PRINCIPAL_REQUIRED_TOOLS.has(toolName)) return false;
+      return true;
+    });
+}
+
 function buildPlanForIntent(intent, message, context = {}) {
   const slots = Object.assign({}, intent && intent.slots || {}, {
     message,
     term: context.term,
     releaseVersion: context.releaseVersion,
   });
-  if (intent && intent.name === "campus_multi_step_advice") {
-    const scheduleTool = /明天|明日/.test(message) ? "get_tomorrow_courses" : "get_today_courses";
-    const steps = [
-      agentProtocol.buildPlanStep(scheduleTool, slots, scheduleTool === "get_tomorrow_courses" ? "读取明日个人课程" : "读取今日个人课程"),
-      agentProtocol.buildPlanStep("search_empty_rooms", slots, "查询空闲节次对应空教室"),
-    ];
-    if (/天气|下雨|降雨|带伞|高温|雷暴/.test(message)) {
+  // 候选工具集唯一来源：capability manifest 五因子交集；以下分支只做
+  // 消息/槽位驱动的步骤编排，任何步骤都不会超出该交集。
+  const allowed = resolveManifestAllowedTools(intent, context);
+  if (!allowed.length) return [];
+  const has = (toolName) => allowed.includes(toolName);
+  const intentName = intent && intent.name || "";
+
+  if (intentName === "campus_multi_step_advice") {
+    const preferTomorrow = /明天|明日/.test(message);
+    const scheduleTool = (preferTomorrow
+      ? ["get_tomorrow_courses", "get_today_courses"]
+      : ["get_today_courses", "get_tomorrow_courses"]).find(has);
+    const steps = [];
+    if (scheduleTool) {
+      steps.push(agentProtocol.buildPlanStep(scheduleTool, slots, scheduleTool === "get_tomorrow_courses" ? "读取明日个人课程" : "读取今日个人课程"));
+    }
+    if (has("search_empty_rooms")) {
+      steps.push(agentProtocol.buildPlanStep("search_empty_rooms", slots, "查询空闲节次对应空教室"));
+    }
+    if (has("get_campus_weather") && /天气|下雨|降雨|带伞|高温|雷暴/.test(message)) {
       steps.push(agentProtocol.buildPlanStep("get_campus_weather", slots, "查询校区天气"));
     }
-    if (/附近|位置|地点|路线|哪里/.test(message) || slots.building) {
+    if (has("search_campus_place") && (/附近|位置|地点|路线|哪里/.test(message) || slots.building)) {
       steps.push(agentProtocol.buildPlanStep("search_campus_place", { q: slots.building || slots.campus || "C7", message }, "补充地点信息"));
     }
     return steps;
   }
-  if (intent && intent.name === "next_course_location") {
-    return [
-      agentProtocol.buildPlanStep("get_next_course", slots, "读取下一节课程"),
-      agentProtocol.buildPlanStep("get_classroom_location", { message }, "查询教室楼栋位置"),
-    ];
+  if (intentName === "next_course_location") {
+    const steps = [];
+    if (has("get_next_course")) {
+      steps.push(agentProtocol.buildPlanStep("get_next_course", slots, "读取下一节课程"));
+    }
+    if (has("get_classroom_location")) {
+      steps.push(agentProtocol.buildPlanStep("get_classroom_location", { message }, "查询教室楼栋位置"));
+    }
+    return steps;
   }
-  if (intent && intent.name === "update_user_preference") {
-    return [agentProtocol.buildPlanStep("update_user_preference", Object.assign({}, slots, { message }), "更新用户提醒/称呼偏好")];
+  if (intentName === "update_user_preference") {
+    return has("update_user_preference")
+      ? [agentProtocol.buildPlanStep("update_user_preference", Object.assign({}, slots, { message }), "更新用户提醒/称呼偏好")]
+      : [];
   }
-  if (intent && intent.name === "manage_course_reminders") {
+  if (intentName === "manage_course_reminders") {
+    // 槽位 operation 在 manifest 允许集内分派具体提醒工具；目标工具被交集剔除时不做替代放大。
     const operation = intent.slots && intent.slots.operation || "create";
     const toolName = operation === "list"
       ? "list_course_reminders"
       : (operation === "delete" ? "delete_course_reminder"
         : (operation === "update" ? "update_course_reminder" : "create_course_reminder"));
-    return [agentProtocol.buildPlanStep(toolName, slots, operation === "list" ? "读取课程提醒" : "生成待确认提醒操作")];
+    return has(toolName)
+      ? [agentProtocol.buildPlanStep(toolName, slots, operation === "list" ? "读取课程提醒" : "生成待确认提醒操作")]
+      : [];
   }
-  if (intent && intent.name === "course_action_advice") {
+  if (intentName === "course_action_advice") {
     const tomorrow = intent.slots && intent.slots.dateHint === "tomorrow" || /明天/.test(message);
-    const steps = [
-      agentProtocol.buildPlanStep(tomorrow ? "get_tomorrow_courses" : "get_next_course", slots, tomorrow ? "读取明日课程" : "读取下一节课程"),
-      agentProtocol.buildPlanStep("get_course_route", slots, "定位课程并计算带假设的出发缓冲"),
-    ];
-    if (intent.slots && intent.slots.wantsWeather || /天气|下雨|降雨|带伞/.test(message)) {
+    const courseTool = (tomorrow
+      ? ["get_tomorrow_courses", "get_next_course"]
+      : ["get_next_course", "get_tomorrow_courses"]).find(has);
+    const steps = [];
+    if (courseTool) {
+      steps.push(agentProtocol.buildPlanStep(courseTool, slots, courseTool === "get_tomorrow_courses" ? "读取明日课程" : "读取下一节课程"));
+    }
+    if (has("get_course_route")) {
+      steps.push(agentProtocol.buildPlanStep("get_course_route", slots, "定位课程并计算带假设的出发缓冲"));
+    }
+    if (has("get_course_weather_advice") && (intent.slots && intent.slots.wantsWeather || /天气|下雨|降雨|带伞/.test(message))) {
       steps.push(agentProtocol.buildPlanStep("get_course_weather_advice", slots, "查询校区天气并调整出发建议"));
     }
-    steps.push(agentProtocol.buildPlanStep("navigate_miniprogram_page", {
-      url: "/packageMaps/pages/campus-map/campus-map",
-    }, "校验校园地图入口"));
+    if (has("navigate_miniprogram_page")) {
+      steps.push(agentProtocol.buildPlanStep("navigate_miniprogram_page", {
+        url: "/packageMaps/pages/campus-map/campus-map",
+      }, "校验校园地图入口"));
+    }
     return steps;
   }
-  if (intent && intent.name === "inspect_schedule_health") {
-    return [agentProtocol.buildPlanStep("inspect_schedule_conflicts", slots, "检查课表冲突与异常")];
+  if (intentName === "inspect_schedule_health") {
+    return has("inspect_schedule_conflicts")
+      ? [agentProtocol.buildPlanStep("inspect_schedule_conflicts", slots, "检查课表冲突与异常")]
+      : [];
   }
-  if (intent && intent.name === "detect_schedule_changes") {
-    return [agentProtocol.buildPlanStep("detect_schedule_changes", slots, "对比受控个人课表摘要")];
+  if (intentName === "detect_schedule_changes") {
+    return has("detect_schedule_changes")
+      ? [agentProtocol.buildPlanStep("detect_schedule_changes", slots, "对比受控个人课表摘要")]
+      : [];
   }
-  if (!intent || intent.name === "generic" || intent.name === "project_qa" || intent.name === "conversational_help") return [];
-  if (intent.name === "clarify_missing_slot") {
-    return [agentProtocol.buildPlanStep("clarify_missing_slot", slots, "补全缺失槽位")];
+  if (intentName === "clarify_missing_slot") {
+    return has("clarify_missing_slot")
+      ? [agentProtocol.buildPlanStep("clarify_missing_slot", slots, "补全缺失槽位")]
+      : [];
   }
-  return [agentProtocol.buildPlanStep(intent.name, slots, "执行权威工具")];
+  // 单工具意图：取交集首个工具（manifest allowedTools 以主工具在前排序）。
+  return [agentProtocol.buildPlanStep(allowed[0], slots, "执行权威工具")];
 }
 
 function runToolsForIntent(intent, message, context) {

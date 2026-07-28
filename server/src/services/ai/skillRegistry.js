@@ -1,6 +1,25 @@
 const capabilityManifestService = require("./capabilityManifestService");
 const toolRegistry = require("./toolRegistry");
 
+// Skill-level business recovery declarations. agentKernel.executePlan runs them
+// through a generic mechanism; business recovery rules live here, not in the kernel.
+const EMPTY_ROOM_DIAGNOSE_RULE = Object.freeze({
+  id: "empty_room_diagnose",
+  when: Object.freeze({ tools: Object.freeze(["search_empty_rooms", "search_continuous_empty_rooms"]) }),
+  callOnEmptyOrFailure: Object.freeze({ tool: "diagnose_data_status", label: "诊断课表数据状态" }),
+});
+const MEETING_EMPTY_ROOM_SIDECAR_RULE = Object.freeze({
+  id: "recommend_meeting_time_empty_rooms",
+  when: Object.freeze({ tools: Object.freeze(["recommend_meeting_time"]) }),
+  attachResult: Object.freeze({ resultKey: "emptyRoomResult", tool: "search_empty_rooms", label: "附带空教室候选" }),
+});
+const SKILL_RECOVERY_RULES = Object.freeze({
+  find_empty_room: Object.freeze([EMPTY_ROOM_DIAGNOSE_RULE]),
+  find_continuous_empty_room: Object.freeze([EMPTY_ROOM_DIAGNOSE_RULE]),
+  recommend_meeting_time: Object.freeze([MEETING_EMPTY_ROOM_SIDECAR_RULE, EMPTY_ROOM_DIAGNOSE_RULE]),
+  campus_multi_step_advice: Object.freeze([EMPTY_ROOM_DIAGNOSE_RULE]),
+});
+
 function cloneList(value) {
   return Array.isArray(value) ? value.slice() : [];
 }
@@ -60,6 +79,7 @@ function createSkill(definition) {
     providerPolicy: definition.providerPolicy,
     fallbackPolicy: definition.fallbackPolicy,
     outputCardTypes: cloneList(definition.outputCardTypes),
+    recoveryRules: cloneList(SKILL_RECOVERY_RULES[definition.id]),
   };
   skill.planBuilder = (input) => defaultPlanBuilder(skill, input);
   skill.resultVerifier = (input) => defaultResultVerifier(skill, input);

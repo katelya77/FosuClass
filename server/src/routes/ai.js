@@ -23,6 +23,7 @@ const agentRunEventService = require("../services/ai/agentRunEventService");
 const agentProtocol = require("../services/ai/agentProtocol");
 const aguiAdapter = require("../services/ai/aguiAdapter");
 const actionCommandContract = require("../services/ai/actionCommandContract");
+const { resumeDurableTask, completeReminderReceiptWait } = require("../services/ai/durable/resume");
 
 const router = express.Router();
 
@@ -86,6 +87,26 @@ function resolveReminderPrincipal(req) {
   return defaultMemoryService.resolvePrincipal({
     serverSession: req.fosuSession,
     runtimeMode: resolveMemoryRuntimeMode(req),
+  });
+}
+
+function handleDurableError(res, error) {
+  const status = Math.max(400, Math.min(503, Number(error && error.statusCode) || 400));
+  const code = String(error && error.code || "DURABLE_ERROR").slice(0, 80);
+  const messages = {
+    PRINCIPAL_REQUIRED: "需要有效小程序会话才能恢复等待中的任务。",
+    DURABLE_TASK_NOT_FOUND: "没有找到对应的等待任务，可能已完成或过期。",
+    DURABLE_TOKEN_INVALID: "恢复凭证无效，请重新发起操作。",
+    DURABLE_TASK_EXPIRED: "等待任务已过期，请重新发起操作。",
+    DURABLE_STATUS_CONFLICT: "任务当前状态不允许恢复。",
+    DURABLE_PRINCIPAL_MISMATCH: "该任务不属于当前会话主体。",
+  };
+  safeLog("ai-agent-durable-operation-failed", { code });
+  return res.status(status).json({
+    success: false,
+    code,
+    message: messages[code] || "等待任务操作失败，请稍后重试。",
+    serverTime: new Date().toISOString(),
   });
 }
 
@@ -519,6 +540,22 @@ router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, vali
       toolCalls: [{ name: command, status: "success", summary: commitResult.committed ? "committed" : (commitResult.reason || "skipped") }],
       memoryMode,
     }));
+    // M6-T4 durable 兜底：提醒回执被接受后，将对应 receipt_wait 持久任务置 done。
+    // 纯附加、best-effort：找不到任务或置 done 失败均不改变 M5 回执语义与响应。
+    if (isReminderReceipt) {
+      try {
+        completeReminderReceiptWait({
+          principal,
+          command,
+          runId: String(body.runId || "").slice(0, 100),
+          detailId,
+        });
+      } catch (durableError) {
+        safeLog("ai-agent-durable-complete-failed", {
+          code: String(durableError && durableError.code || "DURABLE_COMPLETE_FAILED").slice(0, 60),
+        });
+      }
+    }
     return res.json({
       success: true,
       committed: commitResult.committed === true,
@@ -528,6 +565,29 @@ router.post("/agent/action-receipts", scheduleLimiter, requireSessionGuard, vali
     });
   } catch (error) {
     return handleMemoryError(res, error);
+  }
+});
+
+// M6-T4 轻量 Durable Execution：凭 resumeToken + 会话 Principal 恢复等待中的任务
+// （提醒回执等待 / 审批 / 通用等待事件）。无有效会话不得 resume（requireSessionGuard）。
+router.post("/agent/durable/resume", scheduleLimiter, requireSessionGuard, validateJsonBody(["taskId", "resumeToken"]), (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate");
+  try {
+    const body = req.body || {};
+    const principal = resolveReminderPrincipal(req);
+    const result = resumeDurableTask({
+      taskId: String(body.taskId || "").slice(0, 64),
+      resumeToken: String(body.resumeToken || ""),
+      principal,
+    });
+    return res.json({
+      success: true,
+      task: result.task,
+      context: result.context,
+      serverTime: new Date().toISOString(),
+    });
+  } catch (error) {
+    return handleDurableError(res, error);
   }
 });
 

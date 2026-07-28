@@ -24,6 +24,7 @@ const skillRouter = require("./runtime/skillRouter");
 const verificationCoordinator = require("./runtime/verificationCoordinator");
 const memoryCoordinator = require("./runtime/memoryCoordinator");
 const actionReceiptCoordinator = require("./runtime/actionReceiptCoordinator");
+const { registerReminderReceiptWaitBestEffort } = require("./durable/waitForEvent");
 const responseComposerBridge = require("./runtime/responseComposerBridge");
 const { isFactToolIntent, isProjectKnowledgeIntent, resolveRuleBackedIntent } = understandingCoordinator;
 const { deriveProviderRunTruth, getProviderPolicy } = providerOrchestrator;
@@ -568,6 +569,9 @@ async function chat(input = {}) {
   const lastResolvedEntity = deriveLastResolvedEntity(toolCalls);
   const pendingAction = derivePendingAction(actionCommands, { runId })
     || deriveReminderPendingAction(toolCalls, memoryBundle && memoryBundle.principal, { runId });
+  // M6-T4 durable 兜底：提醒 pendingAction 登记 receipt_wait 持久任务（进程重启可恢复）。
+  // best-effort 纯附加：不改写 pendingAction、不回传 resumeToken、失败不影响主链。
+  registerReminderReceiptWaitBestEffort(pendingAction, memoryBundle && memoryBundle.principal);
   const responsePlan = protocolVersion === agentProtocol.PROTOCOL_VERSION
     ? (execution.initialPlan && execution.initialPlan.length ? execution.initialPlan : plan)
     : (execution.plan || plan);

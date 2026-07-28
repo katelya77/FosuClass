@@ -1,51 +1,102 @@
 /**
  * Capability Router: lightweight scoring over manifest skills/tools.
- * Hard-coded hints are small weights only — not the sole capability source.
+ *
+ * M6-T2：工具候选唯一来源是 capability manifest——本文件不再手工列举任何
+ * 工具 id。每个 intent 的候选工具经 manifestToolsForIntent 派生：
+ * manifest intents[*].allowedTools ∩ 对应 skill.allowedTools ∩ 已注册执行 ∩
+ * runtime 政策，与 T1 resolveManifestAllowedTools 同一口径，不旁路交集。
+ * （Principal 因子在本层惰性：路由输入不含 principal——sanitizeAgentContext
+ * 白名单不带该字段；计划/执行层由 buildPlanForIntent 与工具执行鉴权再次收口。）
+ * 下方正则/权重仅是 Understanding 结构化意图未覆盖消息次级目标时的兜底匹配层：
+ * 命中后只产出 intent 名，工具集仍经同一 manifest 派生交集获得。
  */
 
 const capabilityManifestService = require("./capabilityManifestService");
 const skillRegistry = require("./skillRegistry");
+const toolRegistry = require("./toolRegistry");
 
 const MAX_SKILLS = 3;
 const MAX_TOOLS = 12;
 
-const ALWAYS_TOOLS = Object.freeze([
-  "clarify_missing_slot",
-  "rag_search",
+/** 始终可用的兜底能力，以 intent 名声明；工具由 manifest 派生。 */
+const BASELINE_INTENTS = Object.freeze(["clarify_missing_slot", "rag_search"]);
+
+/**
+ * 兜底匹配层：正则命中只映射到 intent 名（第二份手工工具 id 表已删除）。
+ * skillBoost 仅是消息驱动的 skill 权重，不是能力来源。
+ */
+const MESSAGE_FALLBACK_HINTS = Object.freeze([
+  { re: /天气|下雨|雨|穿什么/, intents: ["get_campus_weather", "get_course_weather_advice"], skillBoost: { campus_weather: 25 } },
+  { re: /空教室|自习|空闲教室/, intents: ["search_empty_rooms", "search_continuous_empty_rooms", "diagnose_data_status"], skillBoost: { find_empty_room: 30, find_continuous_empty_room: 20 } },
+  { re: /连续四节|连续两节|连续\s*[24]节/, intents: ["search_continuous_empty_rooms", "search_empty_rooms"], skillBoost: { find_continuous_empty_room: 35 } },
+  { re: /明天|明日/, intents: ["get_tomorrow_courses"], skillBoost: { tomorrow_schedule: 25 } },
+  { re: /今天|今日|下一节|有没有课|有课吗/, intents: ["get_today_courses", "get_next_course"], skillBoost: { today_schedule: 20, next_course: 15 } },
+  { re: /路线|怎么走|怎么去|在哪里/, intents: ["get_campus_route", "search_campus_place", "get_classroom_location"], skillBoost: { campus_place_navigation: 30 } },
+  { re: /提醒|上课前/, intents: ["manage_course_reminders"], skillBoost: { course_reminders: 35 } },
+  { re: /冲突|课表变化|缺教室/, intents: ["inspect_schedule_health", "detect_schedule_changes"], skillBoost: { schedule_health: 30 } },
+  { re: /教学周|第几周/, intents: ["get_teaching_week", "get_term_calendar"], skillBoost: {} },
+  { re: /导入|个人课表|同步课表/, intents: ["explain_personal_import"], skillBoost: { personal_schedule_import_help: 30 } },
 ]);
 
-/** Compat weights only — not exclusive capability source. */
-const INTENT_HINT_WEIGHTS = Object.freeze({
-  campus_multi_step_advice: { campus_multi_step_advice: 40, today_schedule: 20, tomorrow_schedule: 20, find_empty_room: 20, campus_weather: 15 },
-  get_today_courses: { today_schedule: 50, find_empty_room: 15, campus_weather: 10 },
-  get_tomorrow_courses: { tomorrow_schedule: 50, find_empty_room: 20, campus_weather: 15, campus_multi_step_advice: 25 },
-  get_next_course: { next_course: 50, campus_place_navigation: 15, campus_weather: 10 },
-  search_empty_rooms: { find_empty_room: 50, today_schedule: 15, campus_weather: 10 },
-  search_continuous_empty_rooms: { find_continuous_empty_room: 50, find_empty_room: 25, today_schedule: 15 },
-  get_campus_weather: { campus_weather: 50, today_schedule: 10 },
-  recommend_meeting_time: { recommend_meeting_time: 50, find_empty_room: 20, today_schedule: 15 },
-  search_school_index: { search_school_schedule: 50 },
-  get_schedule_detail: { search_school_schedule: 50 },
-  manage_course_reminders: { course_reminders: 50, today_schedule: 15 },
-  create_course_reminder: { course_reminders: 50, today_schedule: 15 },
-  conversational_help: { knowledge_search: 40 },
-  project_qa: { knowledge_search: 40 },
-  course_action_advice: { course_action_advice: 45, next_course: 20, campus_weather: 15 },
-  inspect_schedule_health: { schedule_health: 50, today_schedule: 15 },
-});
+/**
+ * 单个 intent 的候选工具 = Intent ∩ Skill ∩ 已注册执行 ∩ Runtime 政策
+ * （与 toolRegistry resolveManifestAllowedTools 同口径；Principal 因子见文件头说明）。
+ * manifest 之外或未注册可执行的工具一律剔除（只收不放）。
+ */
+function manifestToolsForIntent(intentName, runtimeMode) {
+  const intent = capabilityManifestService.getIntent(intentName && intentName.name || intentName);
+  if (!intent || !Array.isArray(intent.allowedTools) || !intent.allowedTools.length) return [];
+  const skill = capabilityManifestService.getManifest().skills[intent.skill];
+  const skillTools = new Set(skill && Array.isArray(skill.allowedTools) ? skill.allowedTools : []);
+  const registered = new Set(toolRegistry.listToolNames());
+  return intent.allowedTools
+    .map((toolName) => String(toolName))
+    .filter((toolName) => skillTools.has(toolName)
+      && registered.has(toolName)
+      && capabilityManifestService.isToolAllowedForRuntime(toolName, runtimeMode));
+}
 
-const MESSAGE_HINTS = Object.freeze([
-  { re: /天气|下雨|雨|穿什么/, tools: ["get_campus_weather", "get_course_weather_advice"], skillBoost: { campus_weather: 25 } },
-  { re: /空教室|自习|空闲教室/, tools: ["search_empty_rooms", "search_continuous_empty_rooms", "diagnose_data_status"], skillBoost: { find_empty_room: 30, find_continuous_empty_room: 20 } },
-  { re: /连续四节|连续两节|连续\s*[24]节/, tools: ["search_continuous_empty_rooms", "search_empty_rooms"], skillBoost: { find_continuous_empty_room: 35 } },
-  { re: /明天|明日/, tools: ["get_tomorrow_courses"], skillBoost: { tomorrow_schedule: 25 } },
-  { re: /今天|今日|下一节|有没有课|有课吗/, tools: ["get_today_courses", "get_next_course"], skillBoost: { today_schedule: 20, next_course: 15 } },
-  { re: /路线|怎么走|怎么去|在哪里/, tools: ["get_campus_route", "search_campus_place", "get_classroom_location"], skillBoost: { campus_place_navigation: 30 } },
-  { re: /提醒|上课前/, tools: ["create_course_reminder", "list_course_reminders"], skillBoost: { course_reminders: 35 } },
-  { re: /冲突|课表变化|缺教室/, tools: ["inspect_schedule_conflicts", "detect_schedule_changes"], skillBoost: { schedule_health: 30 } },
-  { re: /教学周|第几周/, tools: ["get_teaching_week", "get_term_calendar"], skillBoost: {} },
-  { re: /导入|个人课表|同步课表/, tools: ["explain_personal_import"], skillBoost: { personal_schedule_import_help: 30 } },
-]);
+/** 兜底基线工具：BASELINE_INTENTS 经 manifest 派生。 */
+function baselineTools(runtimeMode) {
+  const tools = [];
+  BASELINE_INTENTS.forEach((intentName) => {
+    manifestToolsForIntent(intentName, runtimeMode).forEach((toolName) => {
+      if (!tools.includes(toolName)) tools.push(toolName);
+    });
+  });
+  return tools;
+}
+
+/** 个人课表相关工具：manifest 中 needsPersonalScheduleSummary 意图的主工具（allowedTools 首项）。 */
+function personalSchedulePrimaryTools(runtimeMode) {
+  const manifest = capabilityManifestService.getManifest();
+  const tools = [];
+  Object.values(manifest.intents).forEach((intent) => {
+    if (!intent || intent.needsPersonalScheduleSummary !== true) return;
+    const primary = Array.isArray(intent.allowedTools) && intent.allowedTools.length
+      ? String(intent.allowedTools[0])
+      : "";
+    if (primary && manifestToolsForIntent(intent.id, runtimeMode).includes(primary) && !tools.includes(primary)) {
+      tools.push(primary);
+    }
+  });
+  return tools;
+}
+
+/**
+ * 全部 manifest intent 映射的工具并集（每个 intent 均过 Skill∩已注册∩Runtime 交集）。
+ * skill 扩展路径的工具也必须落在该并集内：任何候选工具都可追溯到至少一条
+ * manifest intent 映射，不存在游离的第二份语义表。真实 manifest 中 skill 工具
+ * 集合与 intent 工具集合相等，因此该过滤对现状为零行为变化、只收不放。
+ */
+function manifestRoutableToolSet(runtimeMode) {
+  const manifest = capabilityManifestService.getManifest();
+  const set = new Set();
+  Object.values(manifest.intents).forEach((intent) => {
+    manifestToolsForIntent(intent && intent.id, runtimeMode).forEach((tool) => set.add(tool));
+  });
+  return set;
+}
 
 function listManifestSkills() {
   try {
@@ -141,12 +192,8 @@ function scoreSkill(skill, input = {}) {
   if (hasPersonal && /today|tomorrow|next_course|reminder|schedule_health/.test(skill.id)) score += 18;
   if (!hasPersonal && /personal_import/.test(skill.id) && /导入|个人课表/.test(message)) score += 25;
 
-  // Compat intent hint weights (small relative to primary match)
-  const hintMap = INTENT_HINT_WEIGHTS[intentName] || {};
-  if (hintMap[skill.id]) score += Math.min(40, Number(hintMap[skill.id]) || 0);
-
-  // Message hint skill boosts
-  MESSAGE_HINTS.forEach((hint) => {
+  // 兜底消息权重（仅 skill 打分，不改变能力来源）
+  MESSAGE_FALLBACK_HINTS.forEach((hint) => {
     if (hint.re.test(message) && hint.skillBoost && hint.skillBoost[skill.id]) {
       score += Number(hint.skillBoost[skill.id]) || 0;
     }
@@ -207,17 +254,19 @@ function routeCapabilities(input = {}) {
     if (fallback) selectedSkills.push(fallback);
   }
 
-  // Tool scores
+  // Tool scores —— 所有来源均为 manifest 派生，无手工工具 id
   const toolScores = new Map();
-  ALWAYS_TOOLS.forEach((t) => {
-    if (toolAllowedInMode(t, runtimeMode) && toolHealthy(t, input)) toolScores.set(t, 100);
+  const baselineSet = new Set(baselineTools(runtimeMode));
+  const routableSet = manifestRoutableToolSet(runtimeMode);
+  baselineSet.forEach((t) => {
+    if (toolHealthy(t, input)) toolScores.set(t, 100);
   });
 
   selectedSkills.forEach((skill, skillIndex) => {
     const skillWeight = 40 - skillIndex * 10;
     (skill.allowedTools || []).forEach((tool) => {
-      if (!toolAllowedInMode(tool, runtimeMode) || !toolHealthy(tool, input)) return;
-      if (!toolPrereqsMet(tool, input) && !ALWAYS_TOOLS.includes(tool)) {
+      if (!routableSet.has(tool) || !toolAllowedInMode(tool, runtimeMode) || !toolHealthy(tool, input)) return;
+      if (!toolPrereqsMet(tool, input) && !baselineSet.has(tool)) {
         // still allow but lower score
         toolScores.set(tool, Math.max(toolScores.get(tool) || 0, skillWeight - 15));
         return;
@@ -226,19 +275,22 @@ function routeCapabilities(input = {}) {
     });
   });
 
-  MESSAGE_HINTS.forEach((hint) => {
+  // 兜底层：正则命中 intent 名，工具经 manifest 派生交集获得
+  MESSAGE_FALLBACK_HINTS.forEach((hint) => {
     if (!hint.re.test(message)) return;
-    hint.tools.forEach((tool) => {
-      if (toolAllowedInMode(tool, runtimeMode) && toolHealthy(tool, input)) {
-        toolScores.set(tool, Math.max(toolScores.get(tool) || 0, 28));
-      }
+    (hint.intents || []).forEach((intentName) => {
+      manifestToolsForIntent(intentName, runtimeMode).forEach((tool) => {
+        if (toolHealthy(tool, input)) {
+          toolScores.set(tool, Math.max(toolScores.get(tool) || 0, 28));
+        }
+      });
     });
   });
 
   if (input.context && input.context.currentScheduleSummary
     && input.context.currentScheduleSummary.enabled) {
-    ["get_today_courses", "get_tomorrow_courses", "get_next_course"].forEach((t) => {
-      if (toolAllowedInMode(t, runtimeMode)) {
+    personalSchedulePrimaryTools(runtimeMode).forEach((t) => {
+      if (toolHealthy(t, input)) {
         toolScores.set(t, Math.max(toolScores.get(t) || 0, 22));
       }
     });
@@ -253,7 +305,7 @@ function routeCapabilities(input = {}) {
   if (primarySkill && candidateTools.length < MAX_TOOLS) {
     (primarySkill.allowedTools || []).forEach((t) => {
       if (candidateTools.length >= MAX_TOOLS) return;
-      if (toolAllowedInMode(t, runtimeMode) && !candidateTools.includes(t) && toolHealthy(t, input)) {
+      if (routableSet.has(t) && toolAllowedInMode(t, runtimeMode) && !candidateTools.includes(t) && toolHealthy(t, input)) {
         candidateTools.push(t);
       }
     });
