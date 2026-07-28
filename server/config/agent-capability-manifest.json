@@ -50,6 +50,17 @@
     "reminder",
     "generic"
   ],
+  "cardTypeLabels": {
+    "empty_room": "空教室",
+    "schedule": "课表",
+    "teacher": "教师",
+    "course": "课程",
+    "weather": "校区天气",
+    "diagnosis": "数据状态",
+    "guide": "指引",
+    "reminder": "提醒",
+    "generic": "结果"
+  },
   "tools": {
     "get_today_courses": {
       "runtimeModes": [
@@ -407,6 +418,7 @@
       }
     },
     "diagnose_data_status": {
+      "displayName": "数据状态",
       "runtimeModes": [
         "public",
         "trial",
@@ -415,6 +427,7 @@
       "safetyLevel": "low"
     },
     "explain_personal_import": {
+      "displayName": "导入指引",
       "runtimeModes": [
         "public",
         "trial",
@@ -423,6 +436,7 @@
       "safetyLevel": "medium"
     },
     "recommend_meeting_time": {
+      "displayName": "时间推荐",
       "runtimeModes": [
         "public",
         "trial",
@@ -431,6 +445,7 @@
       "safetyLevel": "low"
     },
     "clarify_missing_slot": {
+      "displayName": "追问",
       "runtimeModes": [
         "public",
         "trial",
@@ -439,6 +454,7 @@
       "safetyLevel": "low"
     },
     "get_campus_weather": {
+      "displayName": "天气",
       "runtimeModes": [
         "public",
         "trial",
@@ -488,6 +504,7 @@
       }
     },
     "get_course_weather_advice": {
+      "displayName": "天气建议",
       "runtimeModes": [
         "public",
         "trial",
@@ -536,6 +553,7 @@
       }
     },
     "search_campus_place": {
+      "displayName": "校园地图",
       "runtimeModes": [
         "public",
         "trial",
@@ -570,6 +588,7 @@
       }
     },
     "get_campus_route": {
+      "displayName": "校园地图",
       "runtimeModes": [
         "public",
         "trial",
@@ -606,6 +625,7 @@
       }
     },
     "get_classroom_location": {
+      "displayName": "校园地图",
       "runtimeModes": [
         "public",
         "trial",
@@ -643,6 +663,7 @@
       }
     },
     "get_today_schedule": {
+      "displayName": "今日课表",
       "runtimeModes": [
         "public",
         "trial",
@@ -668,6 +689,7 @@
       }
     },
     "get_course_route": {
+      "displayName": "课程路线",
       "runtimeModes": [
         "public",
         "trial",
@@ -760,6 +782,7 @@
       }
     },
     "inspect_schedule_conflicts": {
+      "displayName": "课表冲突检查",
       "runtimeModes": [
         "public",
         "trial",
@@ -807,6 +830,7 @@
       }
     },
     "navigate_miniprogram_page": {
+      "displayName": "页面跳转",
       "runtimeModes": [
         "public",
         "trial",
@@ -835,6 +859,7 @@
       }
     },
     "create_course_reminder": {
+      "displayName": "创建课程提醒",
       "runtimeModes": [
         "public",
         "trial",
@@ -881,6 +906,7 @@
       }
     },
     "update_course_reminder": {
+      "displayName": "更新课程提醒",
       "runtimeModes": [
         "public",
         "trial",
@@ -925,6 +951,7 @@
       }
     },
     "delete_course_reminder": {
+      "displayName": "删除课程提醒",
       "runtimeModes": [
         "public",
         "trial",
@@ -967,6 +994,7 @@
       }
     },
     "list_course_reminders": {
+      "displayName": "课程提醒列表",
       "runtimeModes": [
         "public",
         "trial",

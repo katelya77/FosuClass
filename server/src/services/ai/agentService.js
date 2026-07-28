@@ -46,6 +46,52 @@ const {
   maybeAttachProactive,
 } = responseComposerBridge;
 
+// 提醒确认卡（confirmReminder）不产生顶层 Action Command，derivePendingAction 不会覆盖；
+// 这里从工具结果确定性派生提醒类 pendingAction，供客户端 ActionReceipt 四重校验绑定。
+// 与 attachReminderConfirmation 使用同一 reminderIdempotencyKey 纯函数、同一工具结果输入，
+// 因此派生键与卡片载荷 idempotencyKey 必然一致（模型不参与生成）。
+function deriveReminderPendingAction(toolCalls, principal, metadata = {}) {
+  if (!principal || principal.authenticated !== true) return undefined;
+  const calls = Array.isArray(toolCalls) ? toolCalls : [];
+  const createCall = calls.find((item) => item && item.name === "create_course_reminder");
+  const deleteCall = calls.find((item) => item && item.name === "delete_course_reminder");
+  let command = "";
+  let operation = "";
+  let payload = null;
+  let reminderId = "";
+  if (createCall && createCall.result && createCall.result.success === true
+    && createCall.result.requiresConfirmation === true) {
+    command = "createCourseReminder";
+    operation = "create";
+    payload = createCall.result;
+  } else if (deleteCall && deleteCall.result && deleteCall.result.requiresConfirmation === true
+    && Array.isArray(deleteCall.result.matches) && deleteCall.result.matches.length === 1) {
+    command = "deleteReminder";
+    operation = "delete";
+    payload = {};
+    reminderId = String(deleteCall.result.matches[0].id || "");
+  }
+  if (!command || (operation === "delete" && !reminderId)) return undefined;
+  const detailId = operation === "create"
+    ? actionReceiptCoordinator.reminderIdempotencyKey(principal, operation, payload, "")
+    : reminderId;
+  if (!detailId) return undefined;
+  const createdAt = Date.now();
+  return {
+    command,
+    status: "awaiting_receipt",
+    runId: String(metadata.runId || "").slice(0, 100),
+    createdAt,
+    expiresAt: createdAt + Math.max(60000, Math.min(3600000, Number(metadata.ttlMs || 15 * 60 * 1000) || 15 * 60 * 1000)),
+    target: {
+      type: "reminder",
+      detailId: String(detailId).slice(0, 128),
+      name: "课程提醒",
+      term: "",
+    },
+  };
+}
+
 /**
  * Public evaluate entry used by POST /api/ai/agent/proactive/evaluate
  */
@@ -520,7 +566,8 @@ async function chat(input = {}) {
   });
   const actionCommands = deriveActionCommands(toolCalls);
   const lastResolvedEntity = deriveLastResolvedEntity(toolCalls);
-  const pendingAction = derivePendingAction(actionCommands, { runId });
+  const pendingAction = derivePendingAction(actionCommands, { runId })
+    || deriveReminderPendingAction(toolCalls, memoryBundle && memoryBundle.principal, { runId });
   const responsePlan = protocolVersion === agentProtocol.PROTOCOL_VERSION
     ? (execution.initialPlan && execution.initialPlan.length ? execution.initialPlan : plan)
     : (execution.plan || plan);
@@ -743,6 +790,7 @@ module.exports = {
   normalizeProactiveSuggestion,
   deriveActionCommands,
   derivePendingAction,
+  deriveReminderPendingAction,
   buildScheduleNavigateAction: actionReceiptCoordinator.buildScheduleNavigateAction,
   scheduleOpenLabel: actionReceiptCoordinator.scheduleOpenLabel,
 };
