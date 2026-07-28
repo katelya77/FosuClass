@@ -26,6 +26,11 @@ on:
         required: false
         type: boolean
         default: false
+      verify_custom_openai:
+        description: E2E-verify a custom OpenAI-compatible provider (register DeepSeek endpoint, fetch models, chat, probe, restore)
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   ci:
@@ -700,3 +705,16 @@ jobs:
             echo "=== readiness after configure (develop) ==="
             curl -s http://127.0.0.1:18318/api/ai/agent/readiness -H "X-Fosu-Env-Version: develop" || true
             echo ""
+
+      - name: E2E verify custom OpenAI-compatible provider
+        if: ${{ github.event_name == 'workflow_dispatch' && inputs.verify_custom_openai }}
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: 22
+          script: |
+            set -euo pipefail
+            cd '${{ secrets.VPS_APP_DIR }}/server'
+            sudo docker exec -e DEEPSEEK_API_KEY='${{ secrets.DEEPSEEK_API_KEY }}' fosuclass-api sh -lc 'node scripts/verify-custom-provider.js'
