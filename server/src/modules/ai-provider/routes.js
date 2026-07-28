@@ -11,6 +11,8 @@ const agentReadinessService = require("../../services/ai/agentReadinessService")
 const providerConfigService = require("../../services/ai/providerConfigService");
 const providerChainService = require("../../services/ai/providerChainService");
 const cozeProvider = require("../../services/ai/providers/cozeProvider");
+const { buildAiProviderAdminPayload } = require("./payload");
+const { verifyAdminWriteAccess, writeAuditLog } = require("../../services/adminWriteGuard");
 
 const router = express.Router();
 
@@ -223,6 +225,41 @@ router.post("/ai-provider/diagnose-enhanced", adminAuth.verifyAdminAccess, async
       code: error.code || "DIAGNOSE_FAILED",
       message: "增强能力诊断失败。",
     });
+  }
+});
+
+// 自定义 Provider（CCSwitch 式）：新增/更新。apiKey 留空 = 保留旧密钥，绝不回显明文。
+router.post("/ai-provider/custom-provider/save", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const status = providerConfigService.saveCustomProvider(req.body || {});
+    writeAuditLog(req, "save", "ai-provider-custom", String((req.body && req.body.entry && req.body.entry.label) || ""), "Custom AI provider saved");
+    return res.json({ success: true, data: buildAiProviderAdminPayload(status.activeEnvironment) });
+  } catch (error) {
+    safeLog("ai-provider-custom-save-failed", { error: error.message, code: error.code || "" });
+    const statusCode = error.code === "CUSTOM_PROVIDER_INVALID" || error.code === "AI_CONFIG_ENCRYPTION_KEY_REQUIRED" ? 400 : 500;
+    return res.status(statusCode).json({ success: false, code: error.code || "CUSTOM_PROVIDER_SAVE_FAILED", message: "自定义 Provider 保存失败。" });
+  }
+});
+
+router.post("/ai-provider/custom-provider/delete", verifyAdminWriteAccess, (req, res) => {
+  try {
+    const status = providerConfigService.deleteCustomProvider(req.body || {});
+    writeAuditLog(req, "delete", "ai-provider-custom", String((req.body && req.body.id) || ""), "Custom AI provider deleted");
+    return res.json({ success: true, data: buildAiProviderAdminPayload(status.activeEnvironment) });
+  } catch (error) {
+    safeLog("ai-provider-custom-delete-failed", { error: error.message, code: error.code || "" });
+    return res.status(500).json({ success: false, code: error.code || "CUSTOM_PROVIDER_DELETE_FAILED", message: "自定义 Provider 删除失败。" });
+  }
+});
+
+// 拉取端点模型列表（OpenAI GET /models；Anthropic GET /v1/models）。密钥仅用于本次出站请求。
+router.post("/ai-provider/fetch-models", adminAuth.verifyAdminAccess, async (req, res) => {
+  try {
+    const result = await providerConfigService.fetchCustomProviderModels(req.body || {});
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    safeLog("ai-provider-fetch-models-failed", { error: error.message, code: error.code || "" });
+    return res.status(200).json({ success: false, code: error.code || "FETCH_MODELS_FAILED", message: "获取模型列表失败，请检查 Base URL 与密钥。" });
   }
 });
 

@@ -187,34 +187,8 @@ function commitWithBackup({ type, sourceFile, fallbackData, commit }) {
   }
 }
 
-/**
- * 审计日志写入（记录明确身份：会话 / 服务令牌名 / scope）
- */
-function writeAuditLog(req, action, moduleName, target, summary) {
-  try {
-    const ipInfo = getClientIpInfo(req);
-    const identity = adminAuth.getAuditIdentity(req);
-    const logItem = {
-      time: new Date().toISOString(),
-      action,
-      module: moduleName,
-      target: target || "",
-      operator: identity.operator || "admin",
-      operatorName: identity.operator || "admin",
-      tokenName: identity.tokenName || "",
-      scopes: Array.isArray(identity.scopes) ? identity.scopes : [],
-      sessionIdPrefix: identity.sessionIdPrefix || "",
-      summary: summary || "",
-      ip: ipInfo.anonymizedIp,
-      authMethod: identity.authMethod || adminAuth.getAdminAuthMethod(req) || "unknown",
-      legacyToken: Boolean(identity.legacy),
-      requestId: req.headers["x-request-id"] || ""
-    };
-    adminAuditService.append(logItem);
-  } catch (error) {
-    safeLog("write-audit-log-failed", { error: error.message });
-  }
-}
+// 写访问中间件与审计日志写入已提取为共享件（供本文件与 modules/* 管理路由共用）。
+const { verifyAdminWriteAccess, writeAuditLog } = require("../services/adminWriteGuard");
 
 function catalogAuditContext(req) {
   const identity = adminAuth.getAuditIdentity(req);
@@ -284,55 +258,6 @@ function verifyAdminToken(req, res, next) {
     authMethod: identity.kind === "static-admin-token" ? "admin-token" : "service-token",
   });
   return next();
-}
-
-function verifyAdminWriteAccess(req, res, next) {
-  if (!adminAuth.isAdminConfiguredForCurrentEnv()) {
-    safeLog("admin-write-auth-failed", { reason: "ADMIN_TOKEN or ADMIN_PASSWORD not configured" });
-    return res.status(503).json({
-      success: false,
-      message: "生产环境未配置 ADMIN_TOKEN 或 ADMIN_PASSWORD，后台已关闭",
-    });
-  }
-
-  const identity = adminAuth.resolveAdminIdentity(req);
-  if (identity) {
-    if (!["GET", "HEAD", "OPTIONS"].includes(String(req.method || "GET").toUpperCase()) && !adminAuth.isAdminOriginAllowed(req)) {
-      safeLog("admin-write-origin-rejected", { origin: req.headers.origin || "", path: req.path });
-      recordSecurityEvent("security-origin-rejected", {
-        route: req.path,
-        method: req.method,
-        anonymizedIp: getClientIpInfo(req).anonymizedIp,
-        reasonCode: "ADMIN_ORIGIN_REJECTED",
-      });
-      return res.status(403).json({
-        success: false,
-        code: "ADMIN_ORIGIN_REJECTED",
-        message: "Admin request origin is not allowed.",
-      });
-    }
-    if (!adminAuth.verifyAdminCsrf(req)) {
-      recordSecurityEvent("security-csrf-rejected", {
-        route: req.path,
-        method: req.method,
-        anonymizedIp: getClientIpInfo(req).anonymizedIp,
-        reasonCode: "ADMIN_CSRF_REJECTED",
-      });
-      return res.status(403).json({
-        success: false,
-        code: "ADMIN_CSRF_REJECTED",
-        message: "Admin CSRF token is invalid.",
-      });
-    }
-    adminAuth.attachIdentity(req, identity);
-    return adminAuth.enforceRouteScopes(req, res, next);
-  }
-
-  safeLog("admin-write-auth-failed", { reason: "missing cookie session or ADMIN_API_TOKEN" });
-  return res.status(401).json({
-    success: false,
-    message: "请先登录后台或提供有效 ADMIN_API_TOKEN",
-  });
 }
 
 /** Scope-aware middleware factory (admin:full always passes). */
@@ -589,46 +514,7 @@ router.post("/security/events/cleanup", adminAuth.verifyAdminAccess, (req, res) 
   return res.json(clearExpiredSecurityEvents());
 });
 
-function buildAiProviderAdminPayload(environment) {
-  const status = aiProviderConfigService.getStatus(environment);
-  const enabledTools = Object.keys(agentProtocol.TOOL_DEFINITIONS || {});
-  const environments = (status.environments || []).map((item) => {
-    const runtimeConfig = aiProviderConfigService.getRuntimeConfigForEnvironment(item.environment);
-    const chain = providerChainService.getStatus(item.environment === "public" ? "public" : "competition", runtimeConfig);
-    const chainByName = new Map(chain.map((state) => [state.name, state]));
-    return Object.assign({}, item, {
-      providerChain: chain,
-      providers: (item.providers || []).map((provider) => {
-        const metrics = chainByName.get(provider.name) || {};
-        return Object.assign({}, provider, {
-          health: metrics.health || (provider.enabled ? "unknown" : "disabled"),
-          lastSuccessAt: metrics.lastSuccessAt || "",
-          lastFailureAt: metrics.lastFailureAt || "",
-          latencyMs: Number(metrics.latencyMs || 0) || 0,
-          p50LatencyMs: Number(metrics.p50LatencyMs || 0) || 0,
-          p95LatencyMs: Number(metrics.p95LatencyMs || 0) || 0,
-          fallbackCount: Number(metrics.fallbackCount || 0) || 0,
-          fallbackReason: metrics.fallbackReason || "",
-          circuitBreaker: metrics.circuitBreaker || { state: "closed" },
-        });
-      }),
-    });
-  });
-  const activeRuntimeConfig = aiProviderConfigService.getRuntimeConfigForEnvironment(status.activeEnvironment);
-  const activeRuntimeMode = status.activeEnvironment === "public" ? "public" : "competition";
-  return Object.assign({}, status, {
-    environments,
-    protocolVersion: "agent.v1",
-    enabledTools,
-    toolCount: enabledTools.length,
-    enabledToolCount: enabledTools.length,
-    protocolToolCount: enabledTools.length,
-    providerChain: providerChainService.getStatus(activeRuntimeMode, activeRuntimeConfig),
-    knowledgeIndex: knowledgeBaseService.getIndexStatus(),
-    campusMap: campusMapService.getMapStatus(),
-    imageGeneration: imageGenerationGateService.getStatus(activeRuntimeMode),
-  });
-}
+const { buildAiProviderAdminPayload } = require("../modules/ai-provider/payload");
 
 router.get("/ai-provider/config", adminAuth.verifyAdminAccess, (req, res) => {
   res.setHeader("Cache-Control", "no-store");
@@ -651,40 +537,7 @@ router.get("/ai-provider/call-log", adminAuth.verifyAdminAccess, (req, res) => {
   });
 });
 
-// 自定义 Provider（CCSwitch 式）：新增/更新。apiKey 留空 = 保留旧密钥，绝不回显明文。
-router.post("/ai-provider/custom-provider/save", verifyAdminWriteAccess, (req, res) => {
-  try {
-    const status = aiProviderConfigService.saveCustomProvider(req.body || {});
-    writeAuditLog(req, "save", "ai-provider-custom", String((req.body && req.body.entry && req.body.entry.label) || ""), "Custom AI provider saved");
-    return res.json({ success: true, data: buildAiProviderAdminPayload(status.activeEnvironment) });
-  } catch (error) {
-    safeLog("ai-provider-custom-save-failed", { error: error.message, code: error.code || "" });
-    const statusCode = error.code === "CUSTOM_PROVIDER_INVALID" || error.code === "AI_CONFIG_ENCRYPTION_KEY_REQUIRED" ? 400 : 500;
-    return res.status(statusCode).json({ success: false, code: error.code || "CUSTOM_PROVIDER_SAVE_FAILED", message: "自定义 Provider 保存失败。" });
-  }
-});
-
-router.post("/ai-provider/custom-provider/delete", verifyAdminWriteAccess, (req, res) => {
-  try {
-    const status = aiProviderConfigService.deleteCustomProvider(req.body || {});
-    writeAuditLog(req, "delete", "ai-provider-custom", String((req.body && req.body.id) || ""), "Custom AI provider deleted");
-    return res.json({ success: true, data: buildAiProviderAdminPayload(status.activeEnvironment) });
-  } catch (error) {
-    safeLog("ai-provider-custom-delete-failed", { error: error.message, code: error.code || "" });
-    return res.status(500).json({ success: false, code: error.code || "CUSTOM_PROVIDER_DELETE_FAILED", message: "自定义 Provider 删除失败。" });
-  }
-});
-
-// 拉取端点模型列表（OpenAI GET /models；Anthropic GET /v1/models）。密钥仅用于本次出站请求。
-router.post("/ai-provider/fetch-models", adminAuth.verifyAdminAccess, async (req, res) => {
-  try {
-    const result = await aiProviderConfigService.fetchCustomProviderModels(req.body || {});
-    return res.json({ success: true, data: result });
-  } catch (error) {
-    safeLog("ai-provider-fetch-models-failed", { error: error.message, code: error.code || "" });
-    return res.status(200).json({ success: false, code: error.code || "FETCH_MODELS_FAILED", message: "获取模型列表失败，请检查 Base URL 与密钥。" });
-  }
-});
+// 自定义 Provider（CCSwitch 式）CRUD 与模型拉取已迁入 modules/ai-provider/routes.js。
 
 router.get("/ai-agent/status", adminAuth.verifyAdminAccess, (req, res) => {
   const status = aiProviderConfigService.getStatus();
